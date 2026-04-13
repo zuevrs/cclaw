@@ -103,6 +103,21 @@ jobs:
           target_commitish: ${{ github.sha }}
           generate_release_notes: true
 
+      - name: Build package tarball
+        run: npm pack
+
+      - name: Upload package artifact
+        uses: actions/upload-artifact@v4
+        with:
+          name: cclaw-package
+          path: "*.tgz"
+
+      - name: Upload plugin manifests artifact
+        uses: actions/upload-artifact@v4
+        with:
+          name: plugin-manifests
+          path: release-artifacts/plugin-manifests
+
       - name: Print release summary
         run: |
           echo "Package: ${{ steps.meta.outputs.package_name }}@${{ steps.meta.outputs.package_version }}"
