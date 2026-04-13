@@ -295,10 +295,15 @@ describe("hooks lifecycle rehydration", () => {
 
   it("opencode plugin rehydrates on multiple lifecycle events", () => {
     const plugin = opencodePluginJs();
+    expect(plugin).toContain("event: async");
     expect(plugin).toContain('"session.created"');
+    expect(plugin).toContain('"session.updated"');
     expect(plugin).toContain('"session.resumed"');
-    expect(plugin).toContain('"session.compacted"');
     expect(plugin).toContain('"session.cleared"');
+    expect(plugin).toContain('"session.compacted"');
+    expect(plugin).toContain('"session.idle"');
+    expect(plugin).toContain('"tool.execute.before"');
+    expect(plugin).toContain('"tool.execute.after"');
     expect(plugin).toContain('"experimental.chat.system.transform"');
     expect(plugin).toContain("activeRunId");
     expect(plugin).toContain(".cclaw/runs/");

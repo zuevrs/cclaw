@@ -165,7 +165,8 @@ export async function policyChecks(projectRoot: string): Promise<PolicyCheck[]> 
     { file: runtimeFile("hooks/context-monitor.sh"), needle: "remaining is", name: "hooks:context:threshold_warning" },
     { file: runtimeFile("hooks/observe.sh"), needle: "stage-activity.jsonl", name: "hooks:observe:activity_write" },
     { file: runtimeFile("hooks/summarize-observations.mjs"), needle: "frequent-errors-", name: "hooks:summarize:runtime_module" },
-    { file: runtimeFile("hooks/opencode-plugin.mjs"), needle: "activeRunId", name: "hooks:opencode:active_run" }
+    { file: runtimeFile("hooks/opencode-plugin.mjs"), needle: "activeRunId", name: "hooks:opencode:active_run" },
+    { file: ".opencode/plugins/cclaw-plugin.mjs", needle: "\"tool.execute.before\"", name: "hooks:opencode:deployed_tool_hook" }
   ];
 
   for (const check of utilitySkillChecks) {
