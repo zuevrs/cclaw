@@ -10,6 +10,7 @@ import { writeConfig, createDefaultConfig, readConfig, configPath } from "./conf
 import { commandContract } from "./content/contracts.js";
 import { autoplanSkillMarkdown, autoplanCommandContract } from "./content/autoplan.js";
 import { learnSkillMarkdown, learnCommandContract } from "./content/learnings.js";
+import { nextCommandContract, nextCommandSkillMarkdown } from "./content/next-command.js";
 import { subagentDrivenDevSkill, parallelAgentsSkill } from "./content/subagents.js";
 import { sessionHooksSkillMarkdown } from "./content/session-hooks.js";
 import {
@@ -90,6 +91,10 @@ async function writeSkills(projectRoot: string): Promise<void> {
     runtimePath(projectRoot, "skills", "autoplan", "SKILL.md"),
     autoplanSkillMarkdown()
   );
+  await writeFileSafe(
+    runtimePath(projectRoot, "skills", "flow-next-step", "SKILL.md"),
+    nextCommandSkillMarkdown()
+  );
 
   await writeFileSafe(
     runtimePath(projectRoot, "skills", "subagent-dev", "SKILL.md"),
@@ -117,6 +122,8 @@ async function writeSkills(projectRoot: string): Promise<void> {
 async function writeUtilityCommands(projectRoot: string): Promise<void> {
   await writeFileSafe(runtimePath(projectRoot, "commands", "learn.md"), learnCommandContract());
   await writeFileSafe(runtimePath(projectRoot, "commands", "autoplan.md"), autoplanCommandContract());
+  await writeFileSafe(runtimePath(projectRoot, "commands", "next.md"), nextCommandContract());
+
 }
 
 function toObject(value: unknown): Record<string, unknown> | null {
@@ -306,7 +313,8 @@ async function writeHooks(projectRoot: string, harnesses: HarnessId[]): Promise<
   await writeFileSafe(path.join(hooksDir, "observe.sh"), observeScript());
   await writeFileSafe(path.join(hooksDir, "summarize-observations.sh"), summarizeObservationsScript());
   await writeFileSafe(path.join(hooksDir, "summarize-observations.mjs"), summarizeObservationsRuntimeModule());
-  await writeFileSafe(path.join(hooksDir, "opencode-plugin.mjs"), opencodePluginJs());
+  const opencodePluginSource = opencodePluginJs();
+  await writeFileSafe(path.join(hooksDir, "opencode-plugin.mjs"), opencodePluginSource);
 
   try {
     for (const script of [
@@ -323,6 +331,18 @@ async function writeHooks(projectRoot: string, harnesses: HarnessId[]): Promise<
     }
   } catch {
     // chmod may fail on some filesystems
+  }
+
+  if (harnesses.includes("opencode")) {
+    const opencodePluginsDir = path.join(projectRoot, ".opencode/plugins");
+    const opencodePluginPath = path.join(opencodePluginsDir, "cclaw-plugin.mjs");
+    await ensureDir(opencodePluginsDir);
+    await writeFileSafe(opencodePluginPath, opencodePluginSource);
+    try {
+      await fs.chmod(opencodePluginPath, 0o755);
+    } catch {
+      // chmod may fail on some filesystems
+    }
   }
 
   for (const harness of harnesses) {
@@ -446,10 +466,24 @@ async function cleanLegacyArtifacts(projectRoot: string): Promise<void> {
   } catch {
     // best-effort cleanup
   }
+
+  for (const legacyPlugin of [
+    path.join(projectRoot, ".opencode/plugins/viby-plugin.mjs"),
+    path.join(projectRoot, ".opencode/plugins/opencode-plugin.mjs"),
+    path.join(projectRoot, ".opencode/plugins/cclaw-plugin.mjs")
+  ]) {
+    try {
+      await fs.rm(legacyPlugin, { force: true });
+    } catch {
+      // best-effort cleanup
+    }
+  }
 }
 
 async function cleanStaleFiles(projectRoot: string): Promise<void> {
   const expectedShimFiles = new Set<string>([
+    ...COMMAND_FILE_ORDER.map((stage) => `viby-${stage}.md`),
+    ...UTILITY_COMMANDS.map((cmd) => `viby-${cmd}.md`),
     ...COMMAND_FILE_ORDER.map((stage) => `cc-${stage}.md`),
     ...UTILITY_COMMANDS.map((cmd) => `cc-${cmd}.md`)
   ]);
@@ -656,12 +690,24 @@ export async function uninstallCclaw(projectRoot: string): Promise<void> {
     try {
       const entries = await fs.readdir(fullDir);
       for (const entry of entries) {
-        if (/^cc-.*\.md$/u.test(entry)) {
+        if (/^(?:viby|cc)-.*\.md$/u.test(entry)) {
           await fs.rm(path.join(fullDir, entry), { force: true });
         }
       }
     } catch {
       // directory not present
+    }
+  }
+
+  for (const pluginPath of [
+    path.join(projectRoot, ".opencode/plugins/viby-plugin.mjs"),
+    path.join(projectRoot, ".opencode/plugins/opencode-plugin.mjs"),
+    path.join(projectRoot, ".opencode/plugins/cclaw-plugin.mjs")
+  ]) {
+    try {
+      await fs.rm(pluginPath, { force: true });
+    } catch {
+      // best-effort cleanup
     }
   }
 }

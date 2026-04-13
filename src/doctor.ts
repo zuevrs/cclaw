@@ -235,14 +235,14 @@ export async function doctorChecks(projectRoot: string): Promise<DoctorCheck[]> 
     const hasAllCommands = COMMAND_FILE_ORDER.every((stage) => content.includes(`/cc-${stage}`));
     const hasRouting = content.includes("Intent → Stage Routing") || content.includes("Intent → Stage");
     const hasVerification = content.includes("Verification Discipline");
-    const hasDetailLevel = content.includes("Detail Level");
-
-    agentsBlockOk = hasMarkers && hasAllCommands && hasRouting && hasVerification && hasDetailLevel;
+    const hasMinimalMarker = content.includes("intentionally minimal for cross-project use");
+    const hasMetaSkillPointer = content.includes(".cclaw/skills/using-cclaw/SKILL.md");
+    agentsBlockOk = hasMarkers && hasAllCommands && hasRouting && hasVerification && hasMinimalMarker && hasMetaSkillPointer;
   }
   checks.push({
     name: "agents:cclaw_block",
     ok: agentsBlockOk,
-    details: `${agentsFile} must contain cclaw marker block with compact routing and verification guidance`
+    details: `${agentsFile} must contain the managed cclaw marker block with routing, verification, and minimal detail pointer`
   });
 
   // Utility commands
@@ -364,11 +364,16 @@ export async function doctorChecks(projectRoot: string): Promise<DoctorCheck[]> 
     }
   }
 
-  // OpenCode plugin
+  // OpenCode plugin source + deployed path
   checks.push({
-    name: "hook:opencode_plugin",
+    name: "hook:opencode_plugin_source",
     ok: await exists(path.join(projectRoot, RUNTIME_ROOT, "hooks", "opencode-plugin.mjs")),
     details: `${RUNTIME_ROOT}/hooks/opencode-plugin.mjs`
+  });
+  checks.push({
+    name: "hook:opencode_plugin_deployed",
+    ok: await exists(path.join(projectRoot, ".opencode/plugins/cclaw-plugin.mjs")),
+    details: ".opencode/plugins/cclaw-plugin.mjs"
   });
 
   if (configuredHarnesses.includes("claude")) {
@@ -473,21 +478,24 @@ export async function doctorChecks(projectRoot: string): Promise<DoctorCheck[]> 
   }
 
   if (configuredHarnesses.includes("opencode")) {
-    const file = path.join(projectRoot, RUNTIME_ROOT, "hooks", "opencode-plugin.mjs");
+    const file = path.join(projectRoot, ".opencode/plugins/cclaw-plugin.mjs");
     let ok = false;
     if (await exists(file)) {
       const content = await fs.readFile(file, "utf8");
       ok =
-        content.includes('"session.created"') &&
+        content.includes("event: async") &&
+        content.includes('"tool.execute.before"') &&
+        content.includes('"tool.execute.after"') &&
+        content.includes('"session.idle"') &&
+        content.includes('"session.updated"') &&
         content.includes('"session.resumed"') &&
-        content.includes('"session.compacted"') &&
         content.includes('"session.cleared"') &&
         content.includes('"experimental.chat.system.transform"');
     }
     checks.push({
       name: "lifecycle:opencode:rehydration_events",
       ok,
-      details: `${file} must include created/resumed/compacted/cleared and transform rehydration handlers`
+      details: `${file} must include event lifecycle handler, tool.execute.before/after, session.idle summarization, and transform rehydration`
     });
   }
 

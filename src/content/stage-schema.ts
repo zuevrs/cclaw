@@ -78,13 +78,19 @@ export interface StageSchema {
   artifactValidation: ArtifactValidation[];
   namedAntiPattern?: NamedAntiPattern;
   decisionRecordFormat?: string;
+  /** When true, stage skill includes wave auto-execute guidance (test/build). */
+  waveExecutionAllowed?: boolean;
+  /** Agent names that MUST be dispatched (or waived) before stage transition — derived from mandatory auto-subagent rows. */
+  mandatoryDelegations: string[];
 }
 
 // ---------------------------------------------------------------------------
 // BRAINSTORM — reference: superpowers brainstorming
 // ---------------------------------------------------------------------------
 
-const BRAINSTORM: StageSchema = {
+type StageSchemaInput = Omit<StageSchema, "mandatoryDelegations">;
+
+const BRAINSTORM: StageSchemaInput = {
   stage: "brainstorm",
   skillFolder: "brainstorming",
   skillName: "brainstorming",
@@ -216,7 +222,7 @@ const BRAINSTORM: StageSchema = {
 // SCOPE — reference: gstack CEO review
 // ---------------------------------------------------------------------------
 
-const SCOPE: StageSchema = {
+const SCOPE: StageSchemaInput = {
   stage: "scope",
   skillFolder: "scope-shaping",
   skillName: "scope-shaping",
@@ -393,7 +399,7 @@ const SCOPE: StageSchema = {
 // DESIGN — reference: gstack Eng review
 // ---------------------------------------------------------------------------
 
-const DESIGN: StageSchema = {
+const DESIGN: StageSchemaInput = {
   stage: "design",
   skillFolder: "engineering-design-lock",
   skillName: "engineering-design-lock",
@@ -602,7 +608,7 @@ const DESIGN: StageSchema = {
 // SPEC
 // ---------------------------------------------------------------------------
 
-const SPEC: StageSchema = {
+const SPEC: StageSchemaInput = {
   stage: "spec",
   skillFolder: "specification-authoring",
   skillName: "specification-authoring",
@@ -718,7 +724,7 @@ const SPEC: StageSchema = {
 // PLAN
 // ---------------------------------------------------------------------------
 
-const PLAN: StageSchema = {
+const PLAN: StageSchemaInput = {
   stage: "plan",
   skillFolder: "planning-and-task-breakdown",
   skillName: "planning-and-task-breakdown",
@@ -834,7 +840,7 @@ const PLAN: StageSchema = {
 // TEST — TDD RED stage
 // ---------------------------------------------------------------------------
 
-const TEST: StageSchema = {
+const TEST: StageSchemaInput = {
   stage: "test",
   skillFolder: "red-first-testing",
   skillName: "red-first-testing",
@@ -930,14 +936,15 @@ const TEST: StageSchema = {
     { section: "RED Evidence", required: true, validationRule: "Failing test output captured per slice." },
     { section: "Acceptance Mapping", required: true, validationRule: "Each RED test links to a plan task and spec criterion." },
     { section: "Failure Analysis", required: true, validationRule: "Failure reason matches expected missing behavior." }
-  ]
+  ],
+  waveExecutionAllowed: true
 };
 
 // ---------------------------------------------------------------------------
 // BUILD — TDD GREEN + REFACTOR stage
 // ---------------------------------------------------------------------------
 
-const BUILD: StageSchema = {
+const BUILD: StageSchemaInput = {
   stage: "build",
   skillFolder: "incremental-implementation",
   skillName: "incremental-implementation",
@@ -1034,14 +1041,15 @@ const BUILD: StageSchema = {
     { section: "GREEN Evidence", required: true, validationRule: "Full suite pass output captured." },
     { section: "REFACTOR Notes", required: true, validationRule: "What changed, why, behavior preservation confirmed." },
     { section: "Traceability", required: true, validationRule: "Plan task ID and spec criterion linked." }
-  ]
+  ],
+  waveExecutionAllowed: true
 };
 
 // ---------------------------------------------------------------------------
 // REVIEW — reference: superpowers code-review + gstack /review
 // ---------------------------------------------------------------------------
 
-const REVIEW: StageSchema = {
+const REVIEW: StageSchemaInput = {
   stage: "review",
   skillFolder: "two-layer-review",
   skillName: "two-layer-review",
@@ -1245,7 +1253,7 @@ const REVIEW: StageSchema = {
 // SHIP — reference: superpowers finishing-a-development-branch + gstack /ship
 // ---------------------------------------------------------------------------
 
-const SHIP: StageSchema = {
+const SHIP: StageSchemaInput = {
   stage: "ship",
   skillFolder: "shipping-and-handoff",
   skillName: "shipping-and-handoff",
@@ -1265,14 +1273,14 @@ const SHIP: StageSchema = {
     "Generate release notes — summarize what changed, why, and what it affects. Reference spec criteria. Include: breaking changes, new dependencies, migration steps if any.",
     "Write rollback plan — trigger conditions (what tells you it is broken), rollback steps (exact commands/git operations), and verification (how to confirm rollback worked).",
     "Monitoring checklist — what should be watched after deploy? Error rates, latency, key business metrics. If no monitoring exists, flag it as a risk.",
-    "Select finalization mode — exactly ONE of: (A) merge to main locally, (B) create PR with description, (C) keep branch for later, (D) discard branch. For discard: list what will be deleted, require typed confirmation.",
+    "Select finalization mode — exactly ONE enum: (A) FINALIZE_MERGE_LOCAL, (B) FINALIZE_OPEN_PR, (C) FINALIZE_KEEP_BRANCH, (D) FINALIZE_DISCARD_BRANCH. For discard: list what will be deleted, require typed confirmation.",
     "Execute finalization — perform the selected action. For merge: verify clean merge. For PR: include structured body (summary, test plan, rollback). For discard: verify deletion.",
     "Worktree cleanup — if using git worktrees, clean up the worktree after merge/discard. Keep it only for 'keep branch' mode."
   ],
   interactionProtocol: [
     "Run preflight checks before any release action.",
     "Document release notes and rollback plan explicitly.",
-    "For finalization mode: use the Decision Protocol — present modes as labeled options (A/B/C) with consequences, mark one as (recommended), use AskQuestion/AskUserQuestion tool when available.",
+    "For finalization mode: use the Decision Protocol — present modes as labeled options (A/B/C/D) with consequences, mark one as (recommended), use AskQuestion/AskUserQuestion tool when available.",
     "Do not proceed if critical blockers remain from review.",
     "Execute the selected finalization action and verify."
   ],
@@ -1280,7 +1288,7 @@ const SHIP: StageSchema = {
     "Validate review and test gates.",
     "Run preflight: build, test, lint, uncommitted-changes check.",
     "Generate release notes and rollback procedure.",
-    "Choose one finalization mode: merge, PR, keep branch, discard branch.",
+    "Choose one finalization enum: FINALIZE_MERGE_LOCAL, FINALIZE_OPEN_PR, FINALIZE_KEEP_BRANCH, or FINALIZE_DISCARD_BRANCH.",
     "Execute finalization action.",
     "Write ship artifact with decision, rationale, and execution result."
   ],
@@ -1296,7 +1304,7 @@ const SHIP: StageSchema = {
     "Artifact written to `.cclaw/artifacts/08-ship.md`.",
     "Release notes section is complete.",
     "Rollback section includes trigger conditions, steps, and verification.",
-    "Finalization mode shows exactly one selected.",
+    "Finalization section shows exactly one selected enum token.",
     "Execution result documented."
   ],
   inputs: ["review verdict", "test/build outputs", "release context"],
@@ -1336,7 +1344,10 @@ const SHIP: StageSchema = {
     "Pre-Ship Checks",
     "Release Notes",
     "Rollback Plan",
-    "merge / PR / keep branch / discard branch"
+    "FINALIZE_MERGE_LOCAL",
+    "FINALIZE_OPEN_PR",
+    "FINALIZE_KEEP_BRANCH",
+    "FINALIZE_DISCARD_BRANCH"
   ],
   artifactFile: "08-ship.md",
   next: "done",
@@ -1381,7 +1392,7 @@ const SHIP: StageSchema = {
     { section: "Release Notes", required: true, validationRule: "What changed, why, impact. References spec criteria. Breaking changes flagged." },
     { section: "Rollback Plan", required: true, validationRule: "Trigger conditions, rollback steps (exact commands), verification steps." },
     { section: "Monitoring", required: false, validationRule: "If applicable: what metrics/logs to watch post-deploy. Risk note if no monitoring." },
-    { section: "Finalization", required: true, validationRule: "Exactly one mode selected. Execution result documented. Worktree cleaned if applicable." }
+    { section: "Finalization", required: true, validationRule: "Exactly one finalization enum token selected. Execution result documented. Worktree cleaned if applicable." }
   ]
 };
 
@@ -1389,7 +1400,7 @@ const SHIP: StageSchema = {
 // Stage map and accessors
 // ---------------------------------------------------------------------------
 
-const STAGE_SCHEMA_MAP: Record<FlowStage, StageSchema> = {
+const STAGE_SCHEMA_MAP: Record<FlowStage, StageSchemaInput> = {
   brainstorm: BRAINSTORM,
   scope: SCOPE,
   design: DESIGN,
@@ -1520,8 +1531,19 @@ const STAGE_AUTO_SUBAGENT_DISPATCH: Record<FlowStage, StageAutoSubagentDispatch[
   ]
 };
 
+/** Transition guard: agents with `mode: "mandatory"` in auto-subagent dispatch for this stage. */
+export function mandatoryDelegationsForStage(stage: FlowStage): string[] {
+  return STAGE_AUTO_SUBAGENT_DISPATCH[stage]
+    .filter((d) => d.mode === "mandatory")
+    .map((d) => d.agent);
+}
+
 export function stageSchema(stage: FlowStage): StageSchema {
-  return STAGE_SCHEMA_MAP[stage];
+  const base = STAGE_SCHEMA_MAP[stage];
+  return {
+    ...base,
+    mandatoryDelegations: mandatoryDelegationsForStage(stage)
+  };
 }
 
 export function orderedStageSchemas(): StageSchema[] {
