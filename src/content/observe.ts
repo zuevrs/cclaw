@@ -189,6 +189,39 @@ rotate_file() {
   fi
 }
 
+sync_run_artifacts() {
+  if [ "$PHASE" != "post" ]; then
+    return
+  fi
+  [ -n "$ACTIVE_RUN" ] || return
+  if [ "$ACTIVE_RUN" = "none" ]; then
+    return
+  fi
+
+  local tool_lower
+  tool_lower=$(printf '%s' "$TOOL" | tr '[:upper:]' '[:lower:]')
+  case "$tool_lower" in
+    write|edit|multiedit|multi_edit|delete|applypatch|runcommand|shell|terminal|execcommand) ;;
+    *) return ;;
+  esac
+
+  local active_dir="$ROOT/${RUNTIME_ROOT}/artifacts"
+  local run_dir="$ROOT/${RUNTIME_ROOT}/runs/$ACTIVE_RUN/artifacts"
+  [ -d "$active_dir" ] || return
+  mkdir -p "$run_dir" 2>/dev/null || return
+
+  for file in "$run_dir"/*; do
+    [ -e "$file" ] || continue
+    [ -f "$file" ] && rm -f "$file" 2>/dev/null || true
+  done
+
+  for file in "$active_dir"/*; do
+    [ -e "$file" ] || continue
+    [ -f "$file" ] || continue
+    cp "$file" "$run_dir/" 2>/dev/null || true
+  done
+}
+
 # Read stdin (hook JSON)
 INPUT=$(cat 2>/dev/null || echo '{}')
 [ -z "$INPUT" ] && exit 0
@@ -318,6 +351,8 @@ if acquire_lock; then
   release_lock
   trap - EXIT INT TERM
 fi
+
+sync_run_artifacts
 
 exit 0
 `;
