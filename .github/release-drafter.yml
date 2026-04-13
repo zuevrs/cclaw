@@ -1,0 +1,55 @@
+name-template: "v$RESOLVED_VERSION"
+tag-template: "v$RESOLVED_VERSION"
+change-template: "- $TITLE ([#$NUMBER]($URL)) by @$AUTHOR"
+change-title-escapes: '\<*_&'
+
+categories:
+  - title: "Features"
+    labels:
+      - "feature"
+      - "enhancement"
+  - title: "Fixes"
+    labels:
+      - "fix"
+      - "bug"
+  - title: "Documentation"
+    labels:
+      - "docs"
+  - title: "Maintenance"
+    labels:
+      - "chore"
+      - "refactor"
+      - "test"
+
+exclude-labels:
+  - "skip-changelog"
+
+version-resolver:
+  major:
+    labels:
+      - "breaking"
+      - "semver:major"
+  minor:
+    labels:
+      - "feature"
+      - "enhancement"
+      - "semver:minor"
+  patch:
+    labels:
+      - "fix"
+      - "bug"
+      - "docs"
+      - "chore"
+      - "refactor"
+      - "test"
+      - "semver:patch"
+  default: patch
+
+template: |
+  ## Summary
+
+  $CHANGES
+
+  ## Contributors
+
+  $CONTRIBUTORS

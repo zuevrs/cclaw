@@ -1,0 +1,15 @@
+node_modules/
+dist/
+coverage/
+*.log
+*.tgz
+.DS_Store
+release-artifacts/
+docs/
+
+# cclaw generated artifacts
+.cclaw/
+.claude/commands/cc-*.md
+.cursor/commands/cc-*.md
+.opencode/commands/cc-*.md
+.codex/commands/cc-*.md

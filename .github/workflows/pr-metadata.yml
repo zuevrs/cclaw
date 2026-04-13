@@ -1,0 +1,67 @@
+name: PR Metadata Guard
+
+on:
+  pull_request:
+    types:
+      - opened
+      - edited
+      - synchronize
+      - labeled
+      - unlabeled
+      - ready_for_review
+
+permissions:
+  contents: read
+  pull-requests: read
+
+jobs:
+  pr-metadata:
+    name: Validate PR Labels and Release Notes
+    runs-on: ubuntu-latest
+    if: github.event.pull_request.draft == false
+
+    steps:
+      - name: Validate required metadata
+        uses: actions/github-script@v7
+        with:
+          script: |
+            const allowedLabels = new Set([
+              "feature",
+              "enhancement",
+              "fix",
+              "bug",
+              "docs",
+              "chore",
+              "refactor",
+              "test",
+              "breaking",
+              "semver:major",
+              "semver:minor",
+              "semver:patch"
+            ]);
+
+            const pr = context.payload.pull_request;
+            const labels = (pr.labels || []).map((item) => item.name);
+            const hasAllowedLabel = labels.some((name) => allowedLabels.has(name));
+
+            const body = pr.body || "";
+            const hasReleaseSection = /##\s*Release Notes Draft/i.test(body);
+            const hasReleaseBullets = /##\s*Release Notes Draft[\s\S]*?\n-\s+\S+/i.test(body);
+
+            const failures = [];
+
+            if (!hasAllowedLabel) {
+              failures.push(
+                "Add at least one release label: feature, enhancement, fix, bug, docs, chore, refactor, test, breaking, semver:*."
+              );
+            }
+
+            if (!hasReleaseSection || !hasReleaseBullets) {
+              failures.push(
+                "Fill out `## Release Notes Draft` in the PR body with at least one bullet."
+              );
+            }
+
+            if (failures.length > 0) {
+              core.setFailed(failures.join("\n"));
+            }

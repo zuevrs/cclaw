@@ -1,0 +1,47 @@
+{
+  "name": "cclaw",
+  "version": "0.1.0",
+  "description": "Installer-first flow toolkit for coding agents",
+  "type": "module",
+  "bin": {
+    "cclaw": "dist/cli.js"
+  },
+  "files": [
+    "dist",
+    "README.md",
+    "LICENSE"
+  ],
+  "publishConfig": {
+    "access": "public"
+  },
+  "scripts": {
+    "clean:dist": "node -e \"import('node:fs/promises').then((fs) => fs.rm('dist', { recursive: true, force: true }))\"",
+    "build": "npm run clean:dist && tsc -p tsconfig.json",
+    "test": "vitest run",
+    "test:watch": "vitest",
+    "smoke:runtime": "npm run build && node scripts/smoke-init.mjs",
+    "lint:hooks": "npm run build && node scripts/lint-generated-hooks.mjs",
+    "build:plugin-manifests": "npm run build && node scripts/build-plugin-manifests.mjs",
+    "release:check": "npm run build && npm run test && node scripts/lint-generated-hooks.mjs && node scripts/build-plugin-manifests.mjs && npm pack --dry-run && node scripts/smoke-init.mjs",
+    "release:bundle": "npm run release:check && npm pack"
+  },
+  "keywords": [
+    "cli",
+    "agent",
+    "workflow",
+    "tdd",
+    "npx"
+  ],
+  "license": "MIT",
+  "engines": {
+    "node": ">=20.0.0"
+  },
+  "dependencies": {
+    "yaml": "^2.8.1"
+  },
+  "devDependencies": {
+    "@types/node": "^24.7.2",
+    "typescript": "^5.9.3",
+    "vitest": "^3.2.4"
+  }
+}

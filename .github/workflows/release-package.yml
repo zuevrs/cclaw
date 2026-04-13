@@ -1,0 +1,50 @@
+name: Release Package
+
+on:
+  release:
+    types:
+      - published
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: release-package-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  package:
+    name: Build Release Package
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Setup Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: "20.x"
+          cache: npm
+
+      - name: Install dependencies
+        run: npm ci
+
+      - name: Validate release build
+        run: npm run release:check
+
+      - name: Build package tarball
+        run: npm pack
+
+      - name: Upload package artifact
+        uses: actions/upload-artifact@v4
+        with:
+          name: cclaw-package
+          path: "*.tgz"
+
+      - name: Upload plugin manifests artifact
+        uses: actions/upload-artifact@v4
+        with:
+          name: plugin-manifests
+          path: release-artifacts/plugin-manifests
