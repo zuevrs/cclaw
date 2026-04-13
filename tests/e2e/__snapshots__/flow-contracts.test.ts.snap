@@ -1,0 +1,326 @@
+// Vitest Snapshot v1, https://vitest.dev/guide/snapshot.html
+
+exports[`flow command contracts > matches golden snapshots for strict-stage content > brainstorm-skill 1`] = `
+"---
+name: brainstorming
+description: "Design-first stage. Clarify intent, compare options, and get explicit approval before implementation planning."
+---
+
+# brainstorming
+
+## Quick Start (minimum compliance)
+
+> **Even if you read nothing else, do these 3 things:**
+> 1. Obey the HARD-GATE below — violating it invalidates the entire stage.
+> 2. Complete every checklist step in order and write the artifact to \`.cclaw/artifacts/01-brainstorm.md\` (canonical run copy: \`.cclaw/runs/<activeRunId>/artifacts/01-brainstorm.md\`).
+> 3. Do not claim completion without satisfying gates: \`brainstorm_context_explored\`, \`brainstorm_options_compared\`, \`brainstorm_design_approved\` (+2 more).
+>
+> **Next command after this stage:** /cc-scope
+
+## Overview
+Turn a rough request into an approved design direction with clear assumptions and boundaries.
+
+## When to Use
+- Starting a new feature or behavior change
+- Requirements are ambiguous or solution path is unclear
+- Before any implementation-stage command
+
+## Inputs
+- problem statement
+- constraints
+- success criteria
+
+## Required Context
+- existing project docs and patterns
+- current behavior of affected area
+- business and delivery constraints
+
+## Context Loading
+
+Before starting stage execution:
+1. Read \`.cclaw/state/flow-state.json\` and capture \`activeRunId\`.
+2. Resolve canonical run artifact root: \`.cclaw/runs/<activeRunId>/artifacts/\`.
+3. Load upstream artifacts required by this stage:
+- (first stage — no upstream artifacts)
+4. If canonical run artifact is missing, fallback to the \`.cclaw/artifacts/\` mirror and record that fallback.
+
+## Automatic Subagent Dispatch
+
+Machine-only work should be delegated to specialist agents automatically according to the matrix below.
+
+| Agent | Mode | When | Purpose | User Gate |
+|---|---|---|---|---|
+| planner | proactive | When request is ambiguous, multi-surface, or spans multiple modules. | Map scope and alternatives before direction lock. | not required |
+
+**Gate rule:** user interaction is required only for approval/override decisions. Do not ask the user to manually trigger machine-only specialist checks.
+
+## Outputs
+- approved design direction
+- alternatives and trade-off table
+- brainstorm artifact
+
+## HARD-GATE
+Do NOT invoke any implementation skill, write any code, scaffold any project, or take any implementation action until you have presented a design and the user has approved it. This applies to EVERY project regardless of perceived simplicity.
+
+## Checklist
+
+You MUST complete these steps in order:
+
+1. Explore project context — check files, docs, recent commits, existing behavior.
+2. Assess scope — if the request describes multiple independent subsystems, flag for decomposition before detailed questions.
+3. Ask clarifying questions — one at a time, understand purpose, constraints, success criteria. Prefer multiple choice.
+4. Propose 2-3 approaches — with trade-offs and your explicit recommendation with reasoning.
+5. Present design — in sections scaled to their complexity (few sentences if simple, up to 300 words if nuanced). Get approval after each section.
+6. Write design doc — save to \`.cclaw/artifacts/01-brainstorm.md\`.
+7. Self-review — scan for placeholders, TBDs, contradictions, ambiguity, scope creep. Fix inline.
+8. User reviews written artifact — ask user to review before proceeding. Wait for response.
+9. Transition — invoke /cc-scope only after explicit user approval.
+
+## Examples
+
+Concrete samples of what good output looks like for this stage.
+
+### Alternatives comparison
+
+| Approach | Pros | Cons | Effort | Recommendation |
+| --- | --- | --- | --- | --- |
+| REST + polling | Simple to deploy; works through strict proxies; easy to cache | Higher latency; wasted requests; battery use on mobile | Low | Good default when real-time is not required |
+| WebSocket | Lowest latency; bidirectional; efficient for bursts | More ops complexity; reconnect/state sync; harder through some gateways | Medium | Prefer when server must push frequently or conversationally |
+| SSE | One-way server push over HTTP; simpler than WebSockets for “notify only” | Unidirectional; browser connection limits; proxy buffering quirks | Low–Medium | Prefer for live dashboards and one-way event streams |
+
+### Approved Direction
+
+We will ship **SSE for server-originated notifications** to the web client first, because the UX requires timely delivery without bidirectional chat. We will keep a **REST fallback** for environments where SSE is unreliable, and we will defer WebSockets until we have a concrete bidirectional requirement (collaborative editing).
+
+### Open Questions
+
+- Do we need guaranteed delivery semantics (at-least-once vs best-effort) for in-app banners?
+- What is the maximum event rate we must support per user session without degrading the UI thread?
+- Should mobile clients reuse the same event channel contract or expose a separate polling endpoint?
+
+### Assumptions (explicit)
+
+- Users are authenticated; anonymous traffic does not receive personalized streams.
+- “Notification” means **account-scoped operational messages**, not third-party ads.
+- The first release optimizes for **web**; native clients can lag by one sprint.
+
+### Constraints
+
+- No new infrastructure class (managed broker) unless latency goals are missed in a spike.
+- Compliance requires auditability: who saw what, when — at least at coarse granularity.
+
+### Notes for the next stage
+
+Capture the chosen direction as a **single paragraph decision** (above) and ensure open questions are either answered in scope or explicitly deferred with an owner + date.
+
+## Anti-Pattern: "This Is Too Simple To Need A Design"
+
+Every project goes through this process. A todo list, a single-function utility, a config change — all of them. 'Simple' projects are where unexamined assumptions cause the most wasted work. The design can be short (a few sentences for truly simple projects), but you MUST present it and get approval.
+
+## Cognitive Patterns
+
+These are thinking instincts, not a checklist. Let them shape your perspective throughout the stage.
+
+1. **Divergent-Convergent Thinking** — First expand the solution space widely, then converge on the strongest option. Do not skip the divergent phase.
+2. **YAGNI Ruthlessness** — Remove unnecessary features from all designs. Every feature must earn its place against the cost of complexity.
+3. **Decomposition Instinct** — When a request describes multiple independent subsystems, decompose before refining. Each sub-project gets its own cycle.
+4. **Isolation Preference** — Break the system into units that each have one clear purpose, communicate through well-defined interfaces, and can be understood and tested independently.
+
+## Interaction Protocol
+1. Explore context first (files, docs, existing behavior).
+2. Ask one clarifying question per message. Do NOT combine questions.
+3. For approach selection: use the Decision Protocol — present labeled options (A/B/C) with trade-offs, mark one as (recommended), use AskQuestion/AskUserQuestion tool when available.
+4. Get section-by-section approval before finalizing the design direction.
+5. Run a self-review pass (ambiguity, placeholders, contradictions) before handoff.
+6. Wait for explicit user approval after writing the artifact. Do NOT auto-advance.
+
+## Required Gates
+- \`brainstorm_context_explored\` — Project context and constraints have been reviewed.
+- \`brainstorm_options_compared\` — At least two alternatives were compared with trade-offs.
+- \`brainstorm_design_approved\` — User approved a concrete design direction.
+- \`brainstorm_self_review_passed\` — Design doc passed placeholder/ambiguity/consistency checks.
+- \`brainstorm_user_reviewed_artifact\` — User reviewed the written artifact and confirmed readiness.
+
+## Required Evidence
+- [ ] Artifact written to \`.cclaw/artifacts/01-brainstorm.md\`.
+- [ ] Approved direction captured in artifact.
+- [ ] Open questions explicitly listed (if any).
+- [ ] Self-review pass completed with no unresolved issues.
+
+## Process
+1. Capture problem statement, users, constraints, and success criteria.
+2. Identify whether request should be decomposed into smaller sub-problems.
+3. Offer alternatives and recommendation with rationale.
+4. Present design in sections, ask after each section whether it looks right.
+5. Write artifact with validated design.
+6. Run self-review: placeholder scan, internal consistency, scope check, ambiguity check.
+7. Ask user to review the written spec. Wait for changes or approval.
+8. Handoff to scope stage only after approval is explicit.
+
+
+
+## Cross-Stage Traceability
+
+**Reads from:**
+- (first stage — no upstream artifacts)
+
+**Writes to:**
+- .cclaw/artifacts/01-brainstorm.md
+
+**Rule:** Every approved direction must be traceable forward through scope and design. Downstream stages must reference brainstorm decisions.
+
+## Artifact Validation
+
+| Section | Status | Validation Rule |
+|---|---|---|
+| Problem Statement | REQUIRED | Must describe the user problem, not the solution. |
+| Alternatives Table | REQUIRED | At least 2 approaches with trade-offs and recommendation. |
+| Approved Direction | REQUIRED | Must contain explicit approval marker from user. |
+| Open Questions | REQUIRED | If empty, state 'None' explicitly. Do not omit. |
+
+
+## Common Rationalizations
+| Rationalization | Reality |
+|---|---|
+| This is too simple for design. | Simple tasks fail fast when assumptions are wrong; a short design pass prevents rework. |
+| We can figure it out while coding. | Coding before alignment creates churn and hidden scope growth. |
+| There is only one obvious approach. | Without alternatives, trade-offs stay implicit and risk goes unexamined. |
+| The user already knows what they want. | Unstated assumptions diverge during implementation; explicit design surfaces them early. |
+
+## Blockers
+- no explicit approval
+- critical ambiguity unresolved
+- scope too broad and not decomposed
+
+## Anti-Patterns
+- Skipping design because task seems simple
+- Asking many questions in one message
+- Jumping directly into implementation
+- Combining visual companion offer with a clarifying question
+- Invoking implementation skills before writing plans
+
+## Red Flags
+- No alternatives documented
+- No explicit approval checkpoint
+- Implementation-related actions before approval
+- Self-review skipped or glossed over
+- Artifact has TBD or placeholder sections
+
+## Completion Status
+
+When this stage ends, report one of:
+- **DONE**
+- **DONE_WITH_CONCERNS**
+- **BLOCKED**
+
+## Verification
+- [ ] approved design direction documented
+- [ ] required gates marked satisfied
+- [ ] no implementation action taken
+- [ ] self-review completed with fixes applied
+
+## Operational Self-Improvement
+
+After completing this stage, reflect briefly:
+- Did any command fail unexpectedly?
+- Did you backtrack or retry something that a hint would have prevented?
+- Did you discover a project quirk (unusual config, naming convention, gotcha)?
+
+If an insight would save **5+ minutes next time**, log it:
+
+\`\`\`bash
+echo '{"skill":"brainstorm","type":"operational","key":"[kebab-case-key]","insight":"[one sentence]","confidence":7,"source":"observed","ts":"'$(date -u +%Y-%m-%dT%H:%M:%SZ)'"}' >> .cclaw/learnings.jsonl
+\`\`\`
+
+Guidelines:
+- Skip transient errors (network blips, typos). Log structural insights only.
+- Use consistent keys so future entries dedup correctly.
+- **\`ts\` is required** on every line — the example uses \`date -u +%Y-%m-%dT%H:%M:%SZ\` (UTC). If nested quoting is awkward, build JSON in the agent and \`printf '%s\\n' '<one-line-json>'\` instead.
+- Confidence 1-3: uncertain pattern. 4-6: likely pattern. 7-9: confirmed pattern. 10: absolute rule.
+
+## Handoff
+- Next command: /cc-scope
+- Required artifact: \`.cclaw/artifacts/01-brainstorm.md\` (canonical: \`.cclaw/runs/<activeRunId>/artifacts/01-brainstorm.md\`)
+- Stage stays blocked if any required gate is unsatisfied
+"
+`;
+
+exports[`flow command contracts > matches golden snapshots for strict-stage content > review-contract 1`] = `
+"# /cc-review
+
+Load and follow **.cclaw/skills/two-layer-review/SKILL.md** — it contains the full checklist, examples, interaction protocol, and verification discipline.
+
+## HARD-GATE
+Do NOT ship, merge, or release until both review layers complete with an explicit verdict. No exceptions for urgency. Critical blockers MUST be resolved before handoff.
+
+## In / Out
+- **Reads:** .cclaw/artifacts/06-tdd.md, .cclaw/artifacts/04-spec.md, .cclaw/artifacts/05-plan.md
+- **Writes:** \`.cclaw/artifacts/07-review.md\` (canonical run copy: \`.cclaw/runs/<activeRunId>/artifacts/07-review.md\`)
+- **Next:** /cc-ship
+
+## Context Hydration (mandatory before stage work)
+1. Read \`.cclaw/state/flow-state.json\` and capture \`activeRunId\`.
+2. Resolve canonical artifact root: \`.cclaw/runs/<activeRunId>/artifacts/\`.
+3. Load required upstream artifacts for this stage:
+- Canonical: \`.cclaw/runs/<activeRunId>/artifacts/06-tdd.md\` (fallback: \`.cclaw/artifacts/06-tdd.md\`)
+- Canonical: \`.cclaw/runs/<activeRunId>/artifacts/04-spec.md\` (fallback: \`.cclaw/artifacts/04-spec.md\`)
+- Canonical: \`.cclaw/runs/<activeRunId>/artifacts/05-plan.md\` (fallback: \`.cclaw/artifacts/05-plan.md\`)
+4. If a canonical run artifact is missing, fallback to the matching file under \`.cclaw/artifacts/\` and record that fallback in the stage artifact.
+5. Write stage output to \`.cclaw/artifacts/07-review.md\` and keep canonical run copy aligned at \`.cclaw/runs/<activeRunId>/artifacts/07-review.md\`.
+
+## Gates
+\`review_layer1_spec_compliance\`, \`review_layer2_correctness\`, \`review_layer2_security\`, \`review_layer2_performance\`, \`review_layer2_architecture\`, \`review_severity_classified\`, \`review_criticals_resolved\`
+
+## Exit
+- both layers completed
+- all review sections evaluated
+- critical blockers resolved
+- ship readiness explicitly stated
+
+## Anchors
+- Layer 1
+- Layer 2
+- Critical
+- Review Army
+- Ready to Ship
+- One issue at a time
+"
+`;
+
+exports[`flow command contracts > matches golden snapshots for strict-stage content > ship-contract 1`] = `
+"# /cc-ship
+
+Load and follow **.cclaw/skills/shipping-and-handoff/SKILL.md** — it contains the full checklist, examples, interaction protocol, and verification discipline.
+
+## HARD-GATE
+Do NOT merge, push, or finalize without a passed preflight check, written rollback plan, and exactly one explicit finalization mode selected. No exceptions for urgency.
+
+## In / Out
+- **Reads:** .cclaw/artifacts/07-review.md, .cclaw/artifacts/06-tdd.md
+- **Writes:** \`.cclaw/artifacts/08-ship.md\` (canonical run copy: \`.cclaw/runs/<activeRunId>/artifacts/08-ship.md\`)
+- **Next:** none
+
+## Context Hydration (mandatory before stage work)
+1. Read \`.cclaw/state/flow-state.json\` and capture \`activeRunId\`.
+2. Resolve canonical artifact root: \`.cclaw/runs/<activeRunId>/artifacts/\`.
+3. Load required upstream artifacts for this stage:
+- Canonical: \`.cclaw/runs/<activeRunId>/artifacts/07-review.md\` (fallback: \`.cclaw/artifacts/07-review.md\`)
+- Canonical: \`.cclaw/runs/<activeRunId>/artifacts/06-tdd.md\` (fallback: \`.cclaw/artifacts/06-tdd.md\`)
+4. If a canonical run artifact is missing, fallback to the matching file under \`.cclaw/artifacts/\` and record that fallback in the stage artifact.
+5. Write stage output to \`.cclaw/artifacts/08-ship.md\` and keep canonical run copy aligned at \`.cclaw/runs/<activeRunId>/artifacts/08-ship.md\`.
+
+## Gates
+\`ship_review_verdict_valid\`, \`ship_preflight_passed\`, \`ship_release_notes_written\`, \`ship_rollback_plan_ready\`, \`ship_finalization_mode_selected\`, \`ship_finalization_executed\`
+
+## Exit
+- preflight completed
+- rollback and release notes complete
+- finalization action explicitly chosen and executed
+
+## Anchors
+- Pre-Ship Checks
+- Release Notes
+- Rollback Plan
+- merge / PR / keep branch / discard branch
+"
+`;
