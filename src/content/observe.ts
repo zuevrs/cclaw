@@ -76,7 +76,7 @@ case "$TOOL_LOWER" in
     ;;
 esac
 
-if printf '%s' "$PAYLOAD_LOWER" | grep -Eq '(rm[[:space:]]+-rf[[:space:]]+\.cclaw|curl[[:space:]].*https?://|wget[[:space:]].*https?://|base64[[:space:]]+-d|eval\\(|python[[:space:]]+-c)'; then
+if printf '%s' "$PAYLOAD_LOWER" | grep -Eq '(rm[[:space:]]+-rf[[:space:]]+\.cclaw|curl[[:space:]].*https?://|wget[[:space:]].*https?://|base64[[:space:]]+-d|eval[(]|python[[:space:]]+-c)'; then
   if [ -n "$REASONS" ]; then
     REASONS="$REASONS,suspicious_payload_pattern"
   else
@@ -684,6 +684,135 @@ for (const [tool, count] of longPayload.entries()) {
   });
 }
 
+const toolFilePathCounts = new Map();
+function extractFilePathsFromPayload(dataVal) {
+  const text = toText(dataVal);
+  if (!text) return [];
+  const found = [];
+  const seen = new Set();
+  try {
+    const obj = JSON.parse(text);
+    if (obj && typeof obj === "object" && !Array.isArray(obj)) {
+      const keys = [
+        "path",
+        "file_path",
+        "filePath",
+        "target_file",
+        "file",
+        "filepath",
+        "old_path",
+        "new_path",
+        "targetPath"
+      ];
+      for (const k of keys) {
+        if (!Object.prototype.hasOwnProperty.call(obj, k)) continue;
+        const v = obj[k];
+        if (typeof v === "string" && v.length > 1 && (v.includes("/") || v.includes("\\\\"))) {
+          const norm = v.replace(/\\\\/g, "/").replace(/\\/+/g, "/");
+          if (!seen.has(norm)) {
+            seen.add(norm);
+            found.push(norm);
+          }
+        }
+      }
+    }
+  } catch {
+    // ignore JSON parse errors
+  }
+  return found;
+}
+
+for (const obs of observations) {
+  const toolRaw = typeof obs.tool === "string" ? obs.tool : "unknown";
+  const tool = toolRaw.trim().replace(/[^A-Za-z0-9._-]+/g, "-") || "unknown";
+  for (const filePath of extractFilePathsFromPayload(obs.data)) {
+    const pairKey = JSON.stringify([tool, filePath]);
+    toolFilePathCounts.set(pairKey, (toolFilePathCounts.get(pairKey) || 0) + 1);
+  }
+}
+
+for (const [pairKey, uses] of toolFilePathCounts.entries()) {
+  if (uses < 5) continue;
+  let tool = "unknown";
+  let filePath = "";
+  try {
+    const parsed = JSON.parse(pairKey);
+    if (!Array.isArray(parsed) || parsed.length !== 2) continue;
+    if (typeof parsed[0] === "string") tool = parsed[0];
+    if (typeof parsed[1] === "string") filePath = parsed[1];
+  } catch {
+    continue;
+  }
+  if (!filePath) continue;
+  const parts = filePath.split(/[/\\\\]/);
+  let basename = parts[parts.length - 1] || filePath;
+  basename = basename.trim().replace(/[^A-Za-z0-9._-]+/g, "-") || "file";
+  const key = "file-affinity-" + tool + "-" + basename;
+  if (!keyPattern.test(key)) continue;
+  candidates.push({
+    ts: timestamp,
+    skill: "observation",
+    type: "pattern",
+    key: key,
+    insight:
+      "Tool " +
+      tool +
+      " frequently targets " +
+      filePath +
+      "; consider pre-loading it for this stage.",
+    confidence: 4,
+    source: "observed"
+  });
+}
+
+if (observations.length >= 10) {
+  const stages = new Set();
+  for (const obs of observations) {
+    const s = typeof obs.stage === "string" ? obs.stage.trim() : "none";
+    stages.add(s || "none");
+  }
+  if (stages.size === 1) {
+    const onlyStage = [...stages][0];
+    if (onlyStage && onlyStage !== "none") {
+      const stageSan = onlyStage.replace(/[^A-Za-z0-9._-]+/g, "-") || "none";
+      const times = [];
+      for (const obs of observations) {
+        if (typeof obs.ts === "string") {
+          const ms = Date.parse(obs.ts);
+          if (!Number.isNaN(ms)) times.push(ms);
+        }
+      }
+      times.sort((a, b) => a - b);
+      if (times.length >= 2) {
+        const spanMin = Math.max(
+          1,
+          Math.round((times[times.length - 1] - times[0]) / 60000)
+        );
+        const M = observations.length;
+        const velKey = "stage-velocity-" + stageSan;
+        if (keyPattern.test(velKey)) {
+          candidates.push({
+            ts: timestamp,
+            skill: "observation",
+            type: "operational",
+            key: velKey,
+            insight:
+              "Stage " +
+              onlyStage +
+              " took approximately " +
+              spanMin +
+              " minutes with " +
+              M +
+              " tool calls.",
+            confidence: 3,
+            source: "observed"
+          });
+        }
+      }
+    }
+  }
+}
+
 const valid = [];
 const bestCandidate = new Map();
 for (const candidate of candidates) {
@@ -1004,6 +1133,25 @@ for file in $ARCHIVE_LIST; do
     rm -f "$file" 2>/dev/null || true
   fi
 done
+
+# Write session digest for cross-session context
+STATE_FILE="$ROOT/${RUNTIME_ROOT}/state/flow-state.json"
+DIGEST_FILE="$ROOT/${RUNTIME_ROOT}/state/session-digest.md"
+STAGE_NOW="none"
+RUN_DIGEST_ID="none"
+if [ -f "$STATE_FILE" ]; then
+  if command -v jq >/dev/null 2>&1; then
+    STAGE_NOW=$(jq -r '.currentStage // "none"' "$STATE_FILE" 2>/dev/null || echo "none")
+    RUN_DIGEST_ID=$(jq -r '.activeRunId // "none"' "$STATE_FILE" 2>/dev/null || echo "none")
+  fi
+fi
+{
+  printf '%s\\n' "# Session Digest"
+  printf '%s\\n' "- Stage: $STAGE_NOW"
+  printf '%s\\n' "- Observations: $OBS_COUNT"
+  printf '%s\\n' "- Timestamp: $TS"
+  printf '%s\\n' "- Run: $RUN_DIGEST_ID"
+} > "$DIGEST_FILE" 2>/dev/null || true
 
 # Keep stage activity bounded by line count.
 rotate_file "$ACTIVITY_FILE" 2000
