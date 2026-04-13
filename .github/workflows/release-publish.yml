@@ -62,18 +62,30 @@ jobs:
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
         run: |
-          RELEASE_HTTP_CODE=$(curl -sS -o /dev/null -w "%{http_code}" \
+          RELEASE_RESPONSE=$(curl -sS -w "\n%{http_code}" \
             -H "Authorization: Bearer ${GITHUB_TOKEN}" \
             -H "Accept: application/vnd.github+json" \
             "https://api.github.com/repos/${GITHUB_REPOSITORY}/releases/tags/${{ steps.meta.outputs.tag }}")
 
+          RELEASE_HTTP_CODE=$(printf "%s" "${RELEASE_RESPONSE}" | tail -n 1)
+          RELEASE_BODY=$(printf "%s" "${RELEASE_RESPONSE}" | sed '$d')
+
           if [ "${RELEASE_HTTP_CODE}" = "200" ]; then
-            echo "already_released=true" >> "$GITHUB_OUTPUT"
-          elif [ "${RELEASE_HTTP_CODE}" = "404" ]; then
-            echo "already_released=false" >> "$GITHUB_OUTPUT"
+            RELEASE_ID=$(printf "%s" "${RELEASE_BODY}" | node -e "const fs=require('node:fs'); const payload=JSON.parse(fs.readFileSync(0,'utf8')); process.stdout.write(String(payload.id));")
+            RELEASE_IS_DRAFT=$(printf "%s" "${RELEASE_BODY}" | node -e "const fs=require('node:fs'); const payload=JSON.parse(fs.readFileSync(0,'utf8')); process.stdout.write(payload.draft ? 'true' : 'false');")
+
+            echo "exists=true" >> "$GITHUB_OUTPUT"
+            echo "release_id=${RELEASE_ID}" >> "$GITHUB_OUTPUT"
+            echo "is_draft=${RELEASE_IS_DRAFT}" >> "$GITHUB_OUTPUT"
           else
-            echo "Failed to query release state (HTTP ${RELEASE_HTTP_CODE})." >&2
-            exit 1
+            if [ "${RELEASE_HTTP_CODE}" = "404" ]; then
+              echo "exists=false" >> "$GITHUB_OUTPUT"
+              echo "release_id=" >> "$GITHUB_OUTPUT"
+              echo "is_draft=false" >> "$GITHUB_OUTPUT"
+            else
+              echo "Failed to query release state (HTTP ${RELEASE_HTTP_CODE})." >&2
+              exit 1
+            fi
           fi
 
       - name: Ensure NPM_TOKEN is configured
@@ -94,8 +106,20 @@ jobs:
           NODE_AUTH_TOKEN: ${{ secrets.NPM_TOKEN }}
         run: npm publish --access public
 
+      - name: Publish existing draft release
+        if: steps.release_state.outputs.exists == 'true' && steps.release_state.outputs.is_draft == 'true'
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        run: |
+          curl -sS -X PATCH \
+            -H "Authorization: Bearer ${GITHUB_TOKEN}" \
+            -H "Accept: application/vnd.github+json" \
+            -H "Content-Type: application/json" \
+            "https://api.github.com/repos/${GITHUB_REPOSITORY}/releases/${{ steps.release_state.outputs.release_id }}" \
+            -d '{"draft":false}' >/dev/null
+
       - name: Create GitHub release
-        if: steps.release_state.outputs.already_released != 'true'
+        if: steps.release_state.outputs.exists != 'true'
         uses: softprops/action-gh-release@v2
         with:
           tag_name: ${{ steps.meta.outputs.tag }}
@@ -122,4 +146,5 @@ jobs:
         run: |
           echo "Package: ${{ steps.meta.outputs.package_name }}@${{ steps.meta.outputs.package_version }}"
           echo "npm published now: ${{ steps.npm_state.outputs.already_published != 'true' }}"
-          echo "GitHub release created now: ${{ steps.release_state.outputs.already_released != 'true' }}"
+          echo "GitHub draft published now: ${{ steps.release_state.outputs.exists == 'true' && steps.release_state.outputs.is_draft == 'true' }}"
+          echo "GitHub release created now: ${{ steps.release_state.outputs.exists != 'true' }}"
