@@ -13,7 +13,8 @@ const SUPPORTED_HARNESSES_TEXT = HARNESS_IDS.join(", ");
 function configFixExample(): string {
   return `harnesses:
   - claude
-  - cursor`;
+  - cursor
+`;
 }
 
 function configValidationError(configFilePath: string, reason: string): Error {

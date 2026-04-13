@@ -4,6 +4,7 @@
   "description": "Installer-first flow toolkit for coding agents",
   "type": "module",
   "bin": {
+    "cclaw-cli": "dist/cli.js",
     "cclaw": "dist/cli.js"
   },
   "files": [
