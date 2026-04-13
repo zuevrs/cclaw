@@ -235,19 +235,14 @@ export async function doctorChecks(projectRoot: string): Promise<DoctorCheck[]> 
     const hasAllCommands = COMMAND_FILE_ORDER.every((stage) => content.includes(`/cc-${stage}`));
     const hasRouting = content.includes("Intent → Stage Routing") || content.includes("Intent → Stage");
     const hasVerification = content.includes("Verification Discipline");
-    const hasFileMap = content.includes("File Map");
-    const hasLearnings = content.includes("Learnings Store");
-    const hasAutoplan = content.includes("Autoplan Orchestrator");
-    const hasAgents = content.includes("Agent Specialists");
-    const hasSubagents = content.includes("Subagent Orchestration");
-    const hasSessionProtocols = content.includes("Session Guidelines");
-    const hasHooks = content.includes("Hooks");
-    agentsBlockOk = hasMarkers && hasAllCommands && hasRouting && hasVerification && hasFileMap && hasLearnings && hasAutoplan && hasAgents && hasSubagents && hasSessionProtocols && hasHooks;
+    const hasDetailLevel = content.includes("Detail Level");
+
+    agentsBlockOk = hasMarkers && hasAllCommands && hasRouting && hasVerification && hasDetailLevel;
   }
   checks.push({
     name: "agents:cclaw_block",
     ok: agentsBlockOk,
-    details: `${agentsFile} must contain cclaw marker block with routing, verification, and file map`
+    details: `${agentsFile} must contain cclaw marker block with compact routing and verification guidance`
   });
 
   // Utility commands

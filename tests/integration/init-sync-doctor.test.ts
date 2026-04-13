@@ -34,6 +34,13 @@ describe("install lifecycle", () => {
       await fs.readFile(path.join(root, ".claude/hooks/hooks.json"), "utf8")
     ) as { hooks: { SessionStart: Array<{ matcher?: string }> } };
     expect(claudeHooks.hooks.SessionStart[0]?.matcher).toBe("startup|resume|clear|compact");
+
+    const agentsMd = await fs.readFile(path.join(root, "AGENTS.md"), "utf8");
+    expect(agentsMd).toContain("## Cclaw — Workflow Adapter");
+    expect(agentsMd).toContain("intentionally minimal for cross-project use");
+    expect(agentsMd).not.toContain("### Agent Specialists");
+    expect(agentsMd).not.toContain("### Hooks (real lifecycle integration)");
+    expect(agentsMd).not.toContain("### Runtime Details (full mode)");
   });
 
   it("sync regenerates shim files", async () => {
