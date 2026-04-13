@@ -77,6 +77,34 @@ npx cclaw-cli upgrade
 npx cclaw-cli uninstall
 ```
 
+## PR-First Ship Flow
+
+`cclaw` does not run hidden git automation. It enforces release discipline inside the harness and keeps repository actions explicit.
+
+Recommended shipping path:
+
+```bash
+git checkout main
+git pull origin main
+git checkout -b feat/<topic>
+# implement with cclaw stages in the harness
+git add .
+git commit -m "..."
+git push -u origin HEAD
+gh pr create
+```
+
+After merge to `main`, CI handles release lifecycle:
+
+- `Release Drafter` updates draft notes from merged PRs.
+- `Release Publish` validates the build, publishes to npm (if version is new), and creates GitHub Release with generated notes.
+- `Release Package` runs on published release and uploads `.tgz` and plugin manifests as artifacts.
+- To trigger a new publish, bump `package.json` version in the PR before merge.
+
+Required repository secret:
+
+- `NPM_TOKEN` with publish access to the npm package.
+
 ## What Gets Generated
 
 ```text

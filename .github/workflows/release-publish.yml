@@ -1,0 +1,110 @@
+name: Release Publish
+
+on:
+  push:
+    branches:
+      - main
+  workflow_dispatch:
+
+permissions:
+  contents: write
+
+concurrency:
+  group: release-publish-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  publish:
+    name: Publish Release (GitHub + npm)
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+
+      - name: Setup Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: "20.x"
+          cache: npm
+          registry-url: "https://registry.npmjs.org"
+
+      - name: Install dependencies
+        run: npm ci
+
+      - name: Validate release build
+        run: npm run release:check
+
+      - name: Resolve package metadata
+        id: meta
+        run: |
+          PACKAGE_NAME=$(node -p "JSON.parse(require('node:fs').readFileSync('package.json','utf8')).name")
+          PACKAGE_VERSION=$(node -p "JSON.parse(require('node:fs').readFileSync('package.json','utf8')).version")
+          TAG="v${PACKAGE_VERSION}"
+
+          echo "package_name=${PACKAGE_NAME}" >> "$GITHUB_OUTPUT"
+          echo "package_version=${PACKAGE_VERSION}" >> "$GITHUB_OUTPUT"
+          echo "tag=${TAG}" >> "$GITHUB_OUTPUT"
+
+      - name: Check npm publish state
+        id: npm_state
+        run: |
+          if npm view "${{ steps.meta.outputs.package_name }}@${{ steps.meta.outputs.package_version }}" version >/dev/null 2>&1; then
+            echo "already_published=true" >> "$GITHUB_OUTPUT"
+          else
+            echo "already_published=false" >> "$GITHUB_OUTPUT"
+          fi
+
+      - name: Check GitHub release state
+        id: release_state
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        run: |
+          RELEASE_HTTP_CODE=$(curl -sS -o /dev/null -w "%{http_code}" \
+            -H "Authorization: Bearer ${GITHUB_TOKEN}" \
+            -H "Accept: application/vnd.github+json" \
+            "https://api.github.com/repos/${GITHUB_REPOSITORY}/releases/tags/${{ steps.meta.outputs.tag }}")
+
+          if [ "${RELEASE_HTTP_CODE}" = "200" ]; then
+            echo "already_released=true" >> "$GITHUB_OUTPUT"
+          elif [ "${RELEASE_HTTP_CODE}" = "404" ]; then
+            echo "already_released=false" >> "$GITHUB_OUTPUT"
+          else
+            echo "Failed to query release state (HTTP ${RELEASE_HTTP_CODE})." >&2
+            exit 1
+          fi
+
+      - name: Ensure NPM_TOKEN is configured
+        if: steps.npm_state.outputs.already_published != 'true'
+        env:
+          NPM_TOKEN: ${{ secrets.NPM_TOKEN }}
+          PACKAGE_NAME: ${{ steps.meta.outputs.package_name }}
+          PACKAGE_VERSION: ${{ steps.meta.outputs.package_version }}
+        run: |
+          if [ -z "${NPM_TOKEN:-}" ]; then
+            echo "NPM_TOKEN secret is required to publish ${PACKAGE_NAME}@${PACKAGE_VERSION}." >&2
+            exit 1
+          fi
+
+      - name: Publish package to npm
+        if: steps.npm_state.outputs.already_published != 'true'
+        env:
+          NODE_AUTH_TOKEN: ${{ secrets.NPM_TOKEN }}
+        run: npm publish --access public
+
+      - name: Create GitHub release
+        if: steps.release_state.outputs.already_released != 'true'
+        uses: softprops/action-gh-release@v2
+        with:
+          tag_name: ${{ steps.meta.outputs.tag }}
+          name: ${{ steps.meta.outputs.tag }}
+          target_commitish: ${{ github.sha }}
+          generate_release_notes: true
+
+      - name: Print release summary
+        run: |
+          echo "Package: ${{ steps.meta.outputs.package_name }}@${{ steps.meta.outputs.package_version }}"
+          echo "npm published now: ${{ steps.npm_state.outputs.already_published != 'true' }}"
+          echo "GitHub release created now: ${{ steps.release_state.outputs.already_released != 'true' }}"
