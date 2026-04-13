@@ -36,7 +36,7 @@ import { ensureDir, exists, writeFileSafe } from "./fs-utils.js";
 import { ensureGitignore, removeGitignorePatterns } from "./gitignore.js";
 import { HARNESS_ADAPTERS, syncHarnessShims, removeCclawFromAgentsMd } from "./harness-adapters.js";
 import { ensureRunSystem, readFlowState } from "./runs.js";
-import type { HarnessId } from "./types.js";
+import type { AgentsMdMode, HarnessId } from "./types.js";
 
 export interface InitOptions {
   projectRoot: string;
@@ -475,7 +475,12 @@ async function cleanStaleFiles(projectRoot: string): Promise<void> {
   // Legacy managed removals happen in cleanLegacyArtifacts() with explicit paths.
 }
 
-async function materializeRuntime(projectRoot: string, harnesses: HarnessId[], forceStateReset: boolean): Promise<void> {
+async function materializeRuntime(
+  projectRoot: string,
+  harnesses: HarnessId[],
+  forceStateReset: boolean,
+  agentsMdMode: AgentsMdMode
+): Promise<void> {
   await ensureStructure(projectRoot);
   await cleanLegacyArtifacts(projectRoot);
   await cleanStaleFiles(projectRoot);
@@ -490,29 +495,29 @@ async function materializeRuntime(projectRoot: string, harnesses: HarnessId[], f
   await writeAdapterManifest(projectRoot, harnesses);
   await ensureLearningsStore(projectRoot);
   await writeHooks(projectRoot, harnesses);
-  await syncHarnessShims(projectRoot, harnesses);
+  await syncHarnessShims(projectRoot, harnesses, agentsMdMode);
   await ensureGitignore(projectRoot);
 }
 
 export async function initCclaw(options: InitOptions): Promise<void> {
   const config = createDefaultConfig(options.harnesses);
   await writeConfig(options.projectRoot, config);
-  await materializeRuntime(options.projectRoot, config.harnesses, true);
+  await materializeRuntime(options.projectRoot, config.harnesses, true, config.agentsMdMode);
 }
 
 export async function syncCclaw(projectRoot: string): Promise<void> {
   const config = await readConfig(projectRoot);
   if (!(await exists(configPath(projectRoot)))) {
-    await writeConfig(projectRoot, createDefaultConfig(config.harnesses));
+    await writeConfig(projectRoot, createDefaultConfig(config.harnesses, config.agentsMdMode));
   }
-  await materializeRuntime(projectRoot, config.harnesses, false);
+  await materializeRuntime(projectRoot, config.harnesses, false, config.agentsMdMode);
 }
 
 export async function upgradeCclaw(projectRoot: string): Promise<void> {
   const config = await readConfig(projectRoot);
-  const upgradedConfig = createDefaultConfig(config.harnesses);
+  const upgradedConfig = createDefaultConfig(config.harnesses, config.agentsMdMode);
   await writeConfig(projectRoot, upgradedConfig);
-  await materializeRuntime(projectRoot, upgradedConfig.harnesses, false);
+  await materializeRuntime(projectRoot, upgradedConfig.harnesses, false, upgradedConfig.agentsMdMode);
 }
 
 function stripManagedHookCommands(value: unknown): { updated: unknown; changed: boolean } {

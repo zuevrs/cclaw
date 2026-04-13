@@ -235,19 +235,24 @@ export async function doctorChecks(projectRoot: string): Promise<DoctorCheck[]> 
     const hasAllCommands = COMMAND_FILE_ORDER.every((stage) => content.includes(`/cc-${stage}`));
     const hasRouting = content.includes("Intent → Stage Routing") || content.includes("Intent → Stage");
     const hasVerification = content.includes("Verification Discipline");
-    const hasFileMap = content.includes("File Map");
+    const hasDetailLevel = content.includes("Detail Level");
+
+    const usesFullMode = content.includes("Runtime Details (full mode)");
+    const hasFileMap = content.includes("| Path | Purpose |");
     const hasLearnings = content.includes("Learnings Store");
     const hasAutoplan = content.includes("Autoplan Orchestrator");
     const hasAgents = content.includes("Agent Specialists");
     const hasSubagents = content.includes("Subagent Orchestration");
     const hasSessionProtocols = content.includes("Session Guidelines");
-    const hasHooks = content.includes("Hooks");
-    agentsBlockOk = hasMarkers && hasAllCommands && hasRouting && hasVerification && hasFileMap && hasLearnings && hasAutoplan && hasAgents && hasSubagents && hasSessionProtocols && hasHooks;
+    const hasHooks = content.includes("Hooks (real lifecycle integration)");
+    const hasFullSections = hasFileMap && hasLearnings && hasAutoplan && hasAgents && hasSubagents && hasSessionProtocols && hasHooks;
+
+    agentsBlockOk = hasMarkers && hasAllCommands && hasRouting && hasVerification && hasDetailLevel && (!usesFullMode || hasFullSections);
   }
   checks.push({
     name: "agents:cclaw_block",
     ok: agentsBlockOk,
-    details: `${agentsFile} must contain cclaw marker block with routing, verification, and file map`
+    details: `${agentsFile} must contain cclaw marker block with minimal routing/verification and valid full-mode sections when enabled`
   });
 
   // Utility commands
