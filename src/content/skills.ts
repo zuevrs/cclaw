@@ -1,6 +1,8 @@
+import { RUNTIME_ROOT } from "../constants.js";
 import type { FlowStage } from "../types.js";
 import { stageExamples } from "./examples.js";
 import { selfImprovementBlock } from "./learnings.js";
+import type { StageSchema } from "./stage-schema.js";
 import { nextCclawCommand, stageAutoSubagentDispatch, stageSchema } from "./stage-schema.js";
 
 function artifactFileName(artifactPath: string): string {
@@ -108,6 +110,11 @@ function autoSubagentDispatchBlock(stage: FlowStage): string {
     })
     .join("\n");
 
+  const mandatory = stageSchema(stage).mandatoryDelegations;
+  const mandatoryList =
+    mandatory.length > 0 ? mandatory.map((a) => `\`${a}\``).join(", ") : "(none — only proactive dispatch applies)";
+  const delegationLogRel = `${RUNTIME_ROOT}/runs/<activeRunId>/delegation-log.json`;
+
   return `## Automatic Subagent Dispatch
 
 Machine-only work should be delegated to specialist agents automatically according to the matrix below.
@@ -117,10 +124,67 @@ Machine-only work should be delegated to specialist agents automatically accordi
 ${rows}
 
 **Gate rule:** user interaction is required only for approval/override decisions. Do not ask the user to manually trigger machine-only specialist checks.
+
+## Delegation Enforcement
+
+Before completing this stage, verify that ALL mandatory delegations are recorded. If using a harness that supports Task/delegate tools, each mandatory agent must have been invoked. If the harness does not support delegation, record a waiver with reason \`harness_limitation\` in the delegation log.
+
+Mandatory agents for this stage: ${mandatoryList}. Stage transition is BLOCKED until all are **completed** or **explicitly waived** by the user (waived entries must name the agent and carry an explicit waiver reason).
+
+On session stop or stage completion, the agent should write delegation entries to \`${delegationLogRel}\` for audit.
 `;
 }
 
 const VERIFICATION_STAGES: FlowStage[] = ["build", "review", "ship"];
+
+function waveExecutionModeBlock(stage: FlowStage): string {
+  const schema = stageSchema(stage);
+  if (!schema.waveExecutionAllowed) {
+    return "";
+  }
+  return `## Wave Execution Mode
+
+After plan approval (**WAIT_FOR_CONFIRM** / \`plan_wait_for_confirm\` satisfied), process **all tasks in the current dependency wave** sequentially: **RED → GREEN → REFACTOR** per task, recording evidence per slice. **Stop** only on **BLOCKED**, a test failure that **requires user input**, or **wave completion** (every task in the wave has the required RED / GREEN / REFACTOR evidence per the plan artifact).
+
+`;
+}
+
+function stageRequiresExplicitPause(schema: StageSchema): boolean {
+  const pauseRules = [
+    /\bWAIT_FOR_CONFIRM\b/,
+    /Do NOT auto-advance/i,
+    /wait for explicit user approval/i,
+    /wait for explicit approval/i,
+    /explicitly pause/i
+  ];
+  const stageText = [
+    schema.hardGate,
+    ...schema.checklist,
+    ...schema.interactionProtocol,
+    ...schema.process,
+    ...schema.exitCriteria
+  ];
+
+  return stageText.some((line) => pauseRules.some((rule) => rule.test(line)));
+}
+
+function stageTransitionAutoAdvanceBlock(schema: StageSchema, nextCommand: string): string {
+  if (schema.next === "done") {
+    return "";
+  }
+  if (stageRequiresExplicitPause(schema)) {
+    return `## Stage transition (autoAdvance)
+
+If project config at \`${RUNTIME_ROOT}/config.yaml\` has \`autoAdvance: true\`, treat it as advisory only. This stage has an explicit pause or confirmation rule, so do NOT auto-advance after the gates pass. Suggest the next command (\`${nextCommand}\`) only after the required confirmation is satisfied, then wait.
+
+`;
+  }
+  return `## Stage transition (autoAdvance)
+
+If project config at \`${RUNTIME_ROOT}/config.yaml\` has \`autoAdvance: true\`, proceed to the next stage automatically after all gates pass for this stage. Otherwise, suggest the next command (\`${nextCommand}\`) and wait.
+
+`;
+}
 
 function verificationBlock(stage: FlowStage): string {
   if (!VERIFICATION_STAGES.includes(stage)) return "";
@@ -234,6 +298,7 @@ ${cognitivePatternsList(stage)}
 ## Interaction Protocol
 ${schema.interactionProtocol.map((item, i) => `${i + 1}. ${item}`).join("\n")}
 
+${waveExecutionModeBlock(stage)}
 ## Required Gates
 ${gateList}
 
@@ -264,6 +329,7 @@ ${completionStatusBlock(stage)}
 ## Verification
 ${schema.exitCriteria.map((item) => `- [ ] ${item}`).join("\n")}
 
+${stageTransitionAutoAdvanceBlock(schema, nextCommand)}
 ${selfImprovementBlock(stage)}
 ## Handoff
 - Next command: ${nextCommand}

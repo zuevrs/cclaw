@@ -54,6 +54,14 @@ Machine-only work should be delegated to specialist agents automatically accordi
 
 **Gate rule:** user interaction is required only for approval/override decisions. Do not ask the user to manually trigger machine-only specialist checks.
 
+## Delegation Enforcement
+
+Before completing this stage, verify that ALL mandatory delegations are recorded. If using a harness that supports Task/delegate tools, each mandatory agent must have been invoked. If the harness does not support delegation, record a waiver with reason \`harness_limitation\` in the delegation log.
+
+Mandatory agents for this stage: (none — only proactive dispatch applies). Stage transition is BLOCKED until all are **completed** or **explicitly waived** by the user (waived entries must name the agent and carry an explicit waiver reason).
+
+On session stop or stage completion, the agent should write delegation entries to \`.cclaw/runs/<activeRunId>/delegation-log.json\` for audit.
+
 ## Outputs
 - approved design direction
 - alternatives and trade-off table
@@ -133,6 +141,7 @@ These are thinking instincts, not a checklist. Let them shape your perspective t
 4. Get section-by-section approval before finalizing the design direction.
 5. Run a self-review pass (ambiguity, placeholders, contradictions) before handoff.
 6. Wait for explicit user approval after writing the artifact. Do NOT auto-advance.
+
 
 ## Required Gates
 - \`brainstorm_context_explored\` — Project context and constraints have been reviewed.
@@ -218,6 +227,11 @@ When this stage ends, report one of:
 - [ ] required gates marked satisfied
 - [ ] no implementation action taken
 - [ ] self-review completed with fixes applied
+
+## Stage transition (autoAdvance)
+
+If project config at \`.cclaw/config.yaml\` has \`autoAdvance: true\`, treat it as advisory only. This stage has an explicit pause or confirmation rule, so do NOT auto-advance after the gates pass. Suggest the next command (\`/cc-scope\`) only after the required confirmation is satisfied, then wait.
+
 
 ## Operational Self-Improvement
 
