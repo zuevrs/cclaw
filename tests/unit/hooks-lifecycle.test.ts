@@ -1,6 +1,7 @@
 import fs from "node:fs/promises";
 import os from "node:os";
 import path from "node:path";
+import { pathToFileURL } from "node:url";
 import { spawn } from "node:child_process";
 import { describe, expect, it } from "vitest";
 import { opencodePluginJs, sessionStartScript, stopCheckpointScript } from "../../src/content/hooks.js";
@@ -11,6 +12,7 @@ import {
   cursorHooksJsonWithObservation,
   observeScript,
   promptGuardScript,
+  summarizeObservationsRuntimeModule,
   summarizeObservationsScript
 } from "../../src/content/observe.js";
 
@@ -219,6 +221,28 @@ describe("hooks lifecycle rehydration", () => {
     expect(log).toContain("write_to_cclaw_runtime");
   });
 
+  it("prompt guard flags eval payloads with a valid ERE", async () => {
+    const root = await fs.mkdtemp(path.join(os.tmpdir(), "cclaw-prompt-guard-eval-runtime-"));
+    await fs.mkdir(path.join(root, ".cclaw/state"), { recursive: true });
+    const result = await runScript(
+      root,
+      "prompt-guard-eval.sh",
+      promptGuardScript(),
+      [],
+      JSON.stringify({
+        tool_name: "RunCommand",
+        tool_input: {
+          cmd: "node -e 'eval(foo)'"
+        }
+      })
+    );
+    expect(result.code).toBe(0);
+    expect(result.stderr).toContain("suspicious_payload_pattern");
+
+    const log = await fs.readFile(path.join(root, ".cclaw/state/prompt-guard.jsonl"), "utf8");
+    expect(log).toContain("suspicious_payload_pattern");
+  });
+
   it("context monitor emits threshold warnings once per band", async () => {
     const root = await fs.mkdtemp(path.join(os.tmpdir(), "cclaw-context-monitor-runtime-"));
     await fs.mkdir(path.join(root, ".cclaw/state"), { recursive: true });
@@ -293,17 +317,73 @@ describe("hooks lifecycle rehydration", () => {
     }
   });
 
+  it("opencode plugin appends observations and summarizes on idle", async () => {
+    const root = await fs.mkdtemp(path.join(os.tmpdir(), "cclaw-opencode-runtime-"));
+    await fs.mkdir(path.join(root, ".cclaw/hooks"), { recursive: true });
+    await fs.mkdir(path.join(root, ".cclaw/state"), { recursive: true });
+    await fs.writeFile(path.join(root, ".cclaw/state/flow-state.json"), JSON.stringify({
+      currentStage: "build",
+      activeRunId: "run-opencode",
+      completedStages: ["brainstorm", "scope", "design", "spec", "plan", "test"]
+    }, null, 2), "utf8");
+    await fs.writeFile(path.join(root, ".cclaw/learnings.jsonl"), "", "utf8");
+
+    const pluginPath = path.join(root, ".cclaw/hooks/opencode-plugin.mjs");
+    const summarizerPath = path.join(root, ".cclaw/hooks/summarize-observations.mjs");
+    await fs.writeFile(pluginPath, opencodePluginJs(), "utf8");
+    await fs.writeFile(summarizerPath, summarizeObservationsRuntimeModule(), "utf8");
+
+    const imported = await import(`${pathToFileURL(pluginPath).href}?t=${Date.now()}`);
+    const pluginFactory = imported.default as (ctx: { directory: string }) => {
+      event: (name: string, data?: unknown) => Promise<void>;
+    };
+    const plugin = pluginFactory({ directory: root });
+
+    for (let i = 0; i < 3; i += 1) {
+      await plugin.event("tool.execute.before", {
+        tool: "RunCommand",
+        arguments: { cmd: `echo pre-${i}` }
+      });
+      await plugin.event("tool.execute.after", {
+        tool: "RunCommand",
+        output: `error at step ${i}`
+      });
+    }
+
+    const observations = await fs.readFile(path.join(root, ".cclaw/observations.jsonl"), "utf8");
+    const observationLines = observations.split("\n").filter(Boolean);
+    expect(observationLines.length).toBe(6);
+    const parsed = observationLines.map((line) => JSON.parse(line) as {
+      event: string;
+      phase: string;
+      tool: string;
+      stage: string;
+      runId: string;
+      data: string;
+    });
+    expect(parsed[0]?.event).toBe("tool_start");
+    expect(parsed[0]?.phase).toBe("pre");
+    expect(parsed[0]?.tool).toBe("RunCommand");
+    expect(parsed[0]?.stage).toBe("build");
+    expect(parsed[0]?.runId).toBe("run-opencode");
+    expect(parsed.some((entry) => entry.event === "tool_complete" && entry.data.includes("error at step"))).toBe(true);
+
+    await plugin.event("session.idle", {});
+
+    const learnings = await fs.readFile(path.join(root, ".cclaw/learnings.jsonl"), "utf8");
+    expect(learnings).toContain("frequent-errors-RunCommand");
+  });
+
   it("opencode plugin rehydrates on multiple lifecycle events", () => {
     const plugin = opencodePluginJs();
     expect(plugin).toContain("event: async");
     expect(plugin).toContain('"session.created"');
-    expect(plugin).toContain('"session.updated"');
     expect(plugin).toContain('"session.resumed"');
-    expect(plugin).toContain('"session.cleared"');
     expect(plugin).toContain('"session.compacted"');
-    expect(plugin).toContain('"session.idle"');
+    expect(plugin).toContain('"session.cleared"');
     expect(plugin).toContain('"tool.execute.before"');
     expect(plugin).toContain('"tool.execute.after"');
+    expect(plugin).toContain('"session.idle"');
     expect(plugin).toContain('"experimental.chat.system.transform"');
     expect(plugin).toContain("activeRunId");
     expect(plugin).toContain(".cclaw/runs/");
