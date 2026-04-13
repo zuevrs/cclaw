@@ -97,7 +97,7 @@ gh pr create
 After merge to `main`, CI handles release lifecycle:
 
 - `Release Drafter` updates draft notes from merged PRs.
-- `Release Publish` validates the build, publishes to npm (if version is new), creates GitHub Release with generated notes, and uploads `.tgz` + plugin manifest artifacts.
+- `Release Publish` validates the build, publishes to npm (if version is new), publishes an existing release draft or creates a new GitHub Release, and uploads `.tgz` + plugin manifest artifacts.
 - `Release Package` remains available for manual release/event-driven packaging flows.
 - To trigger a new publish, bump `package.json` version in the PR before merge.
 
