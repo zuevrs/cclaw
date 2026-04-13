@@ -59,7 +59,7 @@ sequenceDiagram
 ## 60-Second Start
 
 ```bash
-npx cclaw init
+npx cclaw-cli init
 ```
 
 Then run in your harness:
@@ -71,10 +71,10 @@ Then run in your harness:
 Core installer lifecycle:
 
 ```bash
-npx cclaw sync
-npx cclaw doctor
-npx cclaw upgrade
-npx cclaw uninstall
+npx cclaw-cli sync
+npx cclaw-cli doctor
+npx cclaw-cli upgrade
+npx cclaw-cli uninstall
 ```
 
 ## What Gets Generated
