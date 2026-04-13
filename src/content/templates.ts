@@ -5,24 +5,36 @@ export const ARTIFACT_TEMPLATES: Record<string, string> = {
   "01-brainstorm.md": `# Brainstorm Artifact
 
 ## Problem Statement
-- 
+- User problem:
+- Success signal:
+- Constraints:
 
-## Clarifying Questions
-- 
+## Alternatives Table
+| Option | Summary | Trade-offs | Recommendation |
+|---|---|---|---|
+| A |  |  |  |
+| B |  |  |  |
+| C |  |  |  |
 
-## Approaches (2-3)
-- Approach A:
-- Approach B:
-- Approach C:
+## Approved Direction
+- Selected option:
+- Why selected:
+- Approval marker:
 
-## Chosen Direction
-- 
-
-## Approval
-- Approved by:
-- Date:
+## Open Questions
+- None
 `,
   "02-scope.md": `# Scope Artifact
+
+## Prime Directives
+- Zero silent failures:
+- Every error has a name:
+- Four paths per data flow:
+
+## Premise Challenge
+- Is this the right problem?
+- Why this path?
+- What if we do nothing?
 
 ## Scope Mode
 - [ ] expand
@@ -30,61 +42,93 @@ export const ARTIFACT_TEMPLATES: Record<string, string> = {
 - [ ] hold
 - [ ] reduce
 
-## In Scope
+## In Scope / Out of Scope
+
+### In Scope
 - 
 
-## Out of Scope
+### Out of Scope
 - 
 
-## Strategic Risks
-- 
+## Deferred Items
+| Item | Rationale |
+|---|---|
+|  |  |
 
-## Scope Contract
-- Decision owner:
-- Decision date:
+## Error & Rescue Registry
+| Capability | Failure mode | Detection | Fallback |
+|---|---|---|---|
+|  |  |  |  |
+
+## Scope Summary
+- Selected mode:
+- Accepted scope:
+- Deferred:
+- Explicitly excluded:
 `,
   "03-design.md": `# Design Artifact
 
-## Architecture
-- 
+## Architecture Boundaries
+| Component | Responsibility | Owner |
+|---|---|---|
+|  |  |  |
 
 ## Data Flow
-- 
+- Happy path:
+- Nil/empty input path:
+- Upstream error path:
+- Timeout/downstream path:
 
-## State Transitions
-- 
-
-## Failure Modes and Mitigation
-- 
+## Failure Mode Table
+| Failure mode | Trigger | Detection | Mitigation | User impact |
+|---|---|---|---|---|
+|  |  |  |  |  |
 
 ## Test Strategy
 - Unit:
 - Integration:
 - E2E:
 
-## Performance Budget
+## NOT in scope
 - 
+
+## Parallelization Strategy
+- Parallel lanes:
+- Conflict risks:
+
+## Unresolved Decisions
+| Decision | Missing info | Owner | Default |
+|---|---|---|---|
+|  |  |  |  |
 `,
   "04-spec.md": `# Specification Artifact
 
 ## Acceptance Criteria
-- 
-
-## Constraints
-- 
-
-## Assumptions
-- 
+| ID | Criterion (observable/measurable/falsifiable) |
+|---|---|
+| AC-1 |  |
 
 ## Edge Cases
-- 
+| Criterion ID | Boundary case | Error case |
+|---|---|---|
+| AC-1 |  |  |
 
-## Testability Notes
-- 
+## Constraints and Assumptions
+- Constraints:
+- Assumptions:
+
+## Testability Map
+| Criterion ID | Verification approach | Command/manual steps |
+|---|---|---|
+| AC-1 |  |  |
+
+## Approval
+- Approved by:
+- Date:
 `,
   "05-plan.md": `# Plan Artifact
 
-## Task Graph
+## Dependency Graph
 - 
 
 ## Dependency Waves
@@ -105,51 +149,73 @@ export const ARTIFACT_TEMPLATES: Record<string, string> = {
 
 Execution rule: complete and verify each wave before starting the next wave.
 
-## Ordered Tasks
-1. 
-2. 
+## Task List
+| Task ID | Description | Acceptance criterion | Verification command |
+|---|---|---|---|
+| T-1 |  |  |  |
 
 ## Acceptance Mapping
-- Task 1 -> Criteria:
+| Criterion ID | Task IDs |
+|---|---|
+| AC-1 | T-1 |
 
-## Checkpoints
-- 
-
-## User Confirmation
+## WAIT_FOR_CONFIRM
 - Status: pending
 - Confirmed by:
 `,
   "06-tdd.md": `# TDD Artifact
 
 ## RED Evidence
-- Test:
-- Failure output:
+| Slice | Test name | Command | Failure output summary |
+|---|---|---|---|
+| S-1 |  |  |  |
 
-## GREEN Result
-- Passing suite summary:
+## Acceptance Mapping
+| Slice | Plan task ID | Spec criterion ID |
+|---|---|---|
+| S-1 | T-1 | AC-1 |
+
+## Failure Analysis
+| Slice | Expected missing behavior | Actual failure reason |
+|---|---|---|
+| S-1 |  |  |
+
+## GREEN Evidence
+- Full suite command:
+- Full suite result:
 
 ## REFACTOR Notes
-- 
+- What changed:
+- Why:
+- Behavior preserved:
+
+## Traceability
+- Plan task IDs:
+- Spec criterion IDs:
 `,
   "07-review.md": `# Review Artifact
 
-## Spec Compliance
-- Status:
-- Findings:
+## Layer 1 Verdict
+| Criterion | Verdict | Evidence |
+|---|---|---|
+| AC-1 | PASS/FAIL |  |
 
-## Code Quality
-- Status:
-- Security:
-- Performance:
-- Maintainability:
+## Layer 2 Findings
+| ID | Severity | Category | Description | Status |
+|---|---|---|---|---|
+| R-1 | Critical/Important/Suggestion | correctness/security/performance/architecture |  | open/resolved |
 
-## Severity Log
+## Review Army Contract
+- See \`07-review-army.json\`
+- Reconciliation summary:
+
+## Severity Summary
 - Critical:
 - Important:
-- Minor:
+- Suggestion:
 
-## Ready to Ship
-- yes/no
+## Final Verdict
+- APPROVED | APPROVED_WITH_CONCERNS | BLOCKED
 `,
   "07-review-army.json": `{
   "version": 1,
@@ -186,22 +252,35 @@ Execution rule: complete and verify each wave before starting the next wave.
 `,
   "08-ship.md": `# Ship Artifact
 
-## Pre-Ship Checks
-- Review pass:
-- Tests pass:
+## Preflight Results
+- Review verdict:
+- Build:
+- Tests:
+- Lint:
+- Type-check:
+- Working tree clean:
 
 ## Release Notes
-- 
+-
 
 ## Rollback Plan
 - Trigger conditions:
 - Rollback steps:
+- Verification steps:
 
-## Branch Finalization
-- [ ] merge
-- [ ] pull request
-- [ ] keep branch
-- [ ] discard branch
+## Monitoring
+- Metrics/logs to watch:
+- Risk note (if no monitoring):
+
+## Finalization
+- Selected enum (exactly one):
+  - FINALIZE_MERGE_LOCAL
+  - FINALIZE_OPEN_PR
+  - FINALIZE_KEEP_BRANCH
+  - FINALIZE_DISCARD_BRANCH
+- Selected label (A/B/C/D):
+- Execution result:
+- PR URL / merge commit / kept branch / discard confirmation:
 `
 };
 

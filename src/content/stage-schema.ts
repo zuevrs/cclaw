@@ -1265,14 +1265,14 @@ const SHIP: StageSchema = {
     "Generate release notes — summarize what changed, why, and what it affects. Reference spec criteria. Include: breaking changes, new dependencies, migration steps if any.",
     "Write rollback plan — trigger conditions (what tells you it is broken), rollback steps (exact commands/git operations), and verification (how to confirm rollback worked).",
     "Monitoring checklist — what should be watched after deploy? Error rates, latency, key business metrics. If no monitoring exists, flag it as a risk.",
-    "Select finalization mode — exactly ONE of: (A) merge to main locally, (B) create PR with description, (C) keep branch for later, (D) discard branch. For discard: list what will be deleted, require typed confirmation.",
+    "Select finalization mode — exactly ONE enum: (A) FINALIZE_MERGE_LOCAL, (B) FINALIZE_OPEN_PR, (C) FINALIZE_KEEP_BRANCH, (D) FINALIZE_DISCARD_BRANCH. For discard: list what will be deleted, require typed confirmation.",
     "Execute finalization — perform the selected action. For merge: verify clean merge. For PR: include structured body (summary, test plan, rollback). For discard: verify deletion.",
     "Worktree cleanup — if using git worktrees, clean up the worktree after merge/discard. Keep it only for 'keep branch' mode."
   ],
   interactionProtocol: [
     "Run preflight checks before any release action.",
     "Document release notes and rollback plan explicitly.",
-    "For finalization mode: use the Decision Protocol — present modes as labeled options (A/B/C) with consequences, mark one as (recommended), use AskQuestion/AskUserQuestion tool when available.",
+    "For finalization mode: use the Decision Protocol — present modes as labeled options (A/B/C/D) with consequences, mark one as (recommended), use AskQuestion/AskUserQuestion tool when available.",
     "Do not proceed if critical blockers remain from review.",
     "Execute the selected finalization action and verify."
   ],
@@ -1280,7 +1280,7 @@ const SHIP: StageSchema = {
     "Validate review and test gates.",
     "Run preflight: build, test, lint, uncommitted-changes check.",
     "Generate release notes and rollback procedure.",
-    "Choose one finalization mode: merge, PR, keep branch, discard branch.",
+    "Choose one finalization enum: FINALIZE_MERGE_LOCAL, FINALIZE_OPEN_PR, FINALIZE_KEEP_BRANCH, or FINALIZE_DISCARD_BRANCH.",
     "Execute finalization action.",
     "Write ship artifact with decision, rationale, and execution result."
   ],
@@ -1296,7 +1296,7 @@ const SHIP: StageSchema = {
     "Artifact written to `.cclaw/artifacts/08-ship.md`.",
     "Release notes section is complete.",
     "Rollback section includes trigger conditions, steps, and verification.",
-    "Finalization mode shows exactly one selected.",
+    "Finalization section shows exactly one selected enum token.",
     "Execution result documented."
   ],
   inputs: ["review verdict", "test/build outputs", "release context"],
@@ -1336,7 +1336,10 @@ const SHIP: StageSchema = {
     "Pre-Ship Checks",
     "Release Notes",
     "Rollback Plan",
-    "merge / PR / keep branch / discard branch"
+    "FINALIZE_MERGE_LOCAL",
+    "FINALIZE_OPEN_PR",
+    "FINALIZE_KEEP_BRANCH",
+    "FINALIZE_DISCARD_BRANCH"
   ],
   artifactFile: "08-ship.md",
   next: "done",
@@ -1381,7 +1384,7 @@ const SHIP: StageSchema = {
     { section: "Release Notes", required: true, validationRule: "What changed, why, impact. References spec criteria. Breaking changes flagged." },
     { section: "Rollback Plan", required: true, validationRule: "Trigger conditions, rollback steps (exact commands), verification steps." },
     { section: "Monitoring", required: false, validationRule: "If applicable: what metrics/logs to watch post-deploy. Risk note if no monitoring." },
-    { section: "Finalization", required: true, validationRule: "Exactly one mode selected. Execution result documented. Worktree cleaned if applicable." }
+    { section: "Finalization", required: true, validationRule: "Exactly one finalization enum token selected. Execution result documented. Worktree cleaned if applicable." }
   ]
 };
 

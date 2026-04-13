@@ -321,6 +321,9 @@ Do NOT merge, push, or finalize without a passed preflight check, written rollba
 - Pre-Ship Checks
 - Release Notes
 - Rollback Plan
-- merge / PR / keep branch / discard branch
+- FINALIZE_MERGE_LOCAL
+- FINALIZE_OPEN_PR
+- FINALIZE_KEEP_BRANCH
+- FINALIZE_DISCARD_BRANCH
 "
 `;
