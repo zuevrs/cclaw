@@ -237,22 +237,12 @@ export async function doctorChecks(projectRoot: string): Promise<DoctorCheck[]> 
     const hasVerification = content.includes("Verification Discipline");
     const hasDetailLevel = content.includes("Detail Level");
 
-    const usesFullMode = content.includes("Runtime Details (full mode)");
-    const hasFileMap = content.includes("| Path | Purpose |");
-    const hasLearnings = content.includes("Learnings Store");
-    const hasAutoplan = content.includes("Autoplan Orchestrator");
-    const hasAgents = content.includes("Agent Specialists");
-    const hasSubagents = content.includes("Subagent Orchestration");
-    const hasSessionProtocols = content.includes("Session Guidelines");
-    const hasHooks = content.includes("Hooks (real lifecycle integration)");
-    const hasFullSections = hasFileMap && hasLearnings && hasAutoplan && hasAgents && hasSubagents && hasSessionProtocols && hasHooks;
-
-    agentsBlockOk = hasMarkers && hasAllCommands && hasRouting && hasVerification && hasDetailLevel && (!usesFullMode || hasFullSections);
+    agentsBlockOk = hasMarkers && hasAllCommands && hasRouting && hasVerification && hasDetailLevel;
   }
   checks.push({
     name: "agents:cclaw_block",
     ok: agentsBlockOk,
-    details: `${agentsFile} must contain cclaw marker block with minimal routing/verification and valid full-mode sections when enabled`
+    details: `${agentsFile} must contain cclaw marker block with compact routing and verification guidance`
   });
 
   // Utility commands

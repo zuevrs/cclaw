@@ -40,27 +40,7 @@ describe("install lifecycle", () => {
     expect(agentsMd).toContain("intentionally minimal for cross-project use");
     expect(agentsMd).not.toContain("### Agent Specialists");
     expect(agentsMd).not.toContain("### Hooks (real lifecycle integration)");
-  });
-
-  it("sync writes full AGENTS block when agentsMdMode is full", async () => {
-    const root = await fs.mkdtemp(path.join(os.tmpdir(), "cclaw-agents-full-"));
-    await initCclaw({ projectRoot: root });
-
-    const configFile = path.join(root, ".cclaw/config.yaml");
-    const configRaw = await fs.readFile(configFile, "utf8");
-    expect(configRaw).toContain("agentsMdMode: minimal");
-    await fs.writeFile(
-      configFile,
-      configRaw.replace("agentsMdMode: minimal", "agentsMdMode: full"),
-      "utf8"
-    );
-
-    await syncCclaw(root);
-
-    const agentsMd = await fs.readFile(path.join(root, "AGENTS.md"), "utf8");
-    expect(agentsMd).toContain("### Runtime Details (full mode)");
-    expect(agentsMd).toContain("### Agent Specialists");
-    expect(agentsMd).toContain("### Hooks (real lifecycle integration)");
+    expect(agentsMd).not.toContain("### Runtime Details (full mode)");
   });
 
   it("sync regenerates shim files", async () => {

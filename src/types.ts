@@ -15,14 +15,10 @@ export type FlowStage = (typeof FLOW_STAGES)[number];
 export const HARNESS_IDS = ["claude", "cursor", "opencode", "codex"] as const;
 export type HarnessId = (typeof HARNESS_IDS)[number];
 
-export const AGENTS_MD_MODES = ["minimal", "full"] as const;
-export type AgentsMdMode = (typeof AGENTS_MD_MODES)[number];
-
 export interface CclawConfig {
   version: string;
   flowVersion: string;
   harnesses: HarnessId[];
-  agentsMdMode: AgentsMdMode;
 }
 
 export interface TransitionRule {
