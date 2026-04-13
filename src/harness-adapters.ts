@@ -84,6 +84,7 @@ Before responding to a coding request:
 ${stageList}
 | \`/cc-learn\` | \`.cclaw/skills/learnings/SKILL.md\` + \`.cclaw/commands/learn.md\` |
 | \`/cc-autoplan\` | \`.cclaw/skills/autoplan/SKILL.md\` + \`.cclaw/commands/autoplan.md\` |
+| \`/cc-next\` | \`.cclaw/skills/flow-next-step/SKILL.md\` + \`.cclaw/commands/next.md\` |
 
 **Stage order:** brainstorm > scope > design > spec > plan > test > build > review > ship.
 One stage per invocation. Gates must pass before handoff.
@@ -190,6 +191,10 @@ export async function syncHarnessShims(projectRoot: string, harnesses: HarnessId
     await writeFileSafe(
       path.join(commandDir, "cc-autoplan.md"),
       utilityShimContent(harness, "autoplan", "autoplan", "autoplan.md")
+    );
+    await writeFileSafe(
+      path.join(commandDir, "cc-next.md"),
+      utilityShimContent(harness, "next", "flow-next-step", "next.md")
     );
   }
 
