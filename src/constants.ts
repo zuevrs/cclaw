@@ -3,7 +3,7 @@ import type { FlowStage, HarnessId } from "./types.js";
 /** Hidden runtime directory at project root (dot-prefixed). */
 export const RUNTIME_ROOT = ".cclaw";
 
-export const CCLAW_VERSION = "0.1.0";
+export const CCLAW_VERSION = "0.1.1";
 export const FLOW_VERSION = "1.0.0";
 
 export const DEFAULT_HARNESSES: HarnessId[] = [
@@ -36,7 +36,8 @@ export const REQUIRED_GITIGNORE_PATTERNS = [
   ".codex/commands/cc-*.md",
   ".claude/hooks/hooks.json",
   ".cursor/hooks.json",
-  ".codex/hooks.json"
+  ".codex/hooks.json",
+  ".opencode/plugins/cclaw-plugin.mjs"
 ] as const;
 
 export const COMMAND_FILE_ORDER: FlowStage[] = [
@@ -51,7 +52,7 @@ export const COMMAND_FILE_ORDER: FlowStage[] = [
   "ship"
 ];
 
-export const UTILITY_COMMANDS = ["learn", "autoplan"] as const;
+export const UTILITY_COMMANDS = ["learn", "autoplan", "next"] as const;
 
 export const SUBAGENT_SKILL_FOLDERS = [
   "subagent-dev",

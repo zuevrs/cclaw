@@ -15,10 +15,12 @@ export type FlowStage = (typeof FLOW_STAGES)[number];
 export const HARNESS_IDS = ["claude", "cursor", "opencode", "codex"] as const;
 export type HarnessId = (typeof HARNESS_IDS)[number];
 
-export interface CclawConfig {
+export interface VibyConfig {
   version: string;
   flowVersion: string;
   harnesses: HarnessId[];
+  /** When true, stage skills instruct the agent to continue to the following stage after gates pass. */
+  autoAdvance?: boolean;
 }
 
 export interface TransitionRule {

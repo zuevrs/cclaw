@@ -1,10 +1,10 @@
 import fs from "node:fs/promises";
 import path from "node:path";
 import { parse, stringify } from "yaml";
-import { DEFAULT_HARNESSES, FLOW_VERSION, RUNTIME_ROOT, CCLAW_VERSION } from "./constants.js";
+import { CCLAW_VERSION, DEFAULT_HARNESSES, FLOW_VERSION, RUNTIME_ROOT } from "./constants.js";
 import { exists, writeFileSafe } from "./fs-utils.js";
 import { HARNESS_IDS } from "./types.js";
-import type { HarnessId, CclawConfig } from "./types.js";
+import type { HarnessId, VibyConfig } from "./types.js";
 
 const CONFIG_PATH = `${RUNTIME_ROOT}/config.yaml`;
 const HARNESS_ID_SET = new Set<string>(HARNESS_IDS);
@@ -13,8 +13,7 @@ const SUPPORTED_HARNESSES_TEXT = HARNESS_IDS.join(", ");
 function configFixExample(): string {
   return `harnesses:
   - claude
-  - cursor
-`;
+  - cursor`;
 }
 
 function configValidationError(configFilePath: string, reason: string): Error {
@@ -30,15 +29,16 @@ export function configPath(projectRoot: string): string {
   return path.join(projectRoot, CONFIG_PATH);
 }
 
-export function createDefaultConfig(harnesses: HarnessId[] = DEFAULT_HARNESSES): CclawConfig {
+export function createDefaultConfig(harnesses: HarnessId[] = DEFAULT_HARNESSES): VibyConfig {
   return {
     version: CCLAW_VERSION,
     flowVersion: FLOW_VERSION,
-    harnesses
+    harnesses,
+    autoAdvance: false
   };
 }
 
-export async function readConfig(projectRoot: string): Promise<CclawConfig> {
+export async function readConfig(projectRoot: string): Promise<VibyConfig> {
   const fullPath = configPath(projectRoot);
   if (!(await exists(fullPath))) {
     return createDefaultConfig();
@@ -53,7 +53,7 @@ export async function readConfig(projectRoot: string): Promise<CclawConfig> {
 
   const parsed = (parsedUnknown && typeof parsedUnknown === "object"
     ? parsedUnknown
-    : {}) as Partial<CclawConfig>;
+    : {}) as Partial<VibyConfig>;
   const hasHarnessesField = Object.prototype.hasOwnProperty.call(parsed, "harnesses");
   if (hasHarnessesField && !Array.isArray(parsed.harnesses)) {
     throw configValidationError(fullPath, `"harnesses" must be an array`);
@@ -75,13 +75,17 @@ export async function readConfig(projectRoot: string): Promise<CclawConfig> {
     ? [...new Set(validatedHarnesses)]
     : DEFAULT_HARNESSES;
 
+  const autoAdvanceRaw = parsed.autoAdvance;
+  const autoAdvance = typeof autoAdvanceRaw === "boolean" ? autoAdvanceRaw : false;
+
   return {
     version: parsed.version ?? CCLAW_VERSION,
     flowVersion: parsed.flowVersion ?? FLOW_VERSION,
-    harnesses
+    harnesses,
+    autoAdvance
   };
 }
 
-export async function writeConfig(projectRoot: string, config: CclawConfig): Promise<void> {
+export async function writeConfig(projectRoot: string, config: VibyConfig): Promise<void> {
   await writeFileSafe(configPath(projectRoot), stringify(config));
 }
