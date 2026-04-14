@@ -172,6 +172,26 @@ Build fails
 └── OOM / timeout? → Check input size, increase limits
 \`\`\`
 
+## Testing-Specific Anti-Patterns
+
+When debugging test failures, treat these as root-cause signals, not noise:
+
+- **Blind snapshot updates** (\`-u\`/accept-all) without verifying intent. This hides regressions.
+- **Mocking internals instead of boundaries** (private functions, implementation details) which creates brittle tests.
+- **Time-based sleeps** (\`setTimeout\`, arbitrary waits) instead of deterministic synchronization (\`await\` actual signal/event).
+- **Shared mutable fixtures** reused across tests, causing order-dependent failures.
+- **Unseeded randomness** in tests without fixed seeds or deterministic fixtures.
+- **Leaking global state** (env vars, fake timers, singleton caches) between tests without teardown.
+- **Disabling flaky tests** rather than isolating and fixing the non-determinism.
+
+### CI-only failure checklist
+
+If a test fails only in CI:
+1. Compare runtime versions (Node/Java/Python), OS, and locale/timezone.
+2. Check parallelism differences (worker count, test sharding, race conditions).
+3. Check filesystem/network assumptions (case sensitivity, permissions, ephemeral ports).
+4. Re-run locally with CI-like env vars and concurrency settings before changing production code.
+
 ## Anti-Patterns
 
 - Fixing the symptom (adding a null check) instead of the root cause (why is it null?)

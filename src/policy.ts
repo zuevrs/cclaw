@@ -142,6 +142,7 @@ export async function policyChecks(projectRoot: string): Promise<PolicyCheck[]> 
     { file: runtimeFile("skills/debugging/SKILL.md"), needle: "## HARD-GATE", name: "utility_skill:debugging:hard_gate" },
     { file: runtimeFile("skills/debugging/SKILL.md"), needle: "## The Protocol", name: "utility_skill:debugging:protocol" },
     { file: runtimeFile("skills/debugging/SKILL.md"), needle: "Step 1 — Reproduce", name: "utility_skill:debugging:reproduce" },
+    { file: runtimeFile("skills/debugging/SKILL.md"), needle: "## Testing-Specific Anti-Patterns", name: "utility_skill:debugging:test_antipatterns" },
 
     { file: runtimeFile("skills/performance/SKILL.md"), needle: "## HARD-GATE", name: "utility_skill:performance:hard_gate" },
     { file: runtimeFile("skills/performance/SKILL.md"), needle: "## Workflow", name: "utility_skill:performance:workflow" },
