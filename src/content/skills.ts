@@ -190,10 +190,18 @@ When all required gates are satisfied and the artifact is written:
 
 1. **Update \`${RUNTIME_ROOT}/state/flow-state.json\`:**
 ${stateUpdate}
+   - For each passed gate, add an entry to \`guardEvidence\`: \`"<gate_id>": "<artifact path or excerpt proving the gate>"\`. Do NOT leave \`guardEvidence\` empty.
 2. **Sync artifact** to \`${RUNTIME_ROOT}/runs/<activeRunId>/artifacts/${schema.artifactFile}\`
 ${nextAction}
 
 **STOP.** Do not load the next stage skill yourself. The user will run \`/cc-next\` when ready (same session or new session).
+
+## Resume Protocol
+
+When resuming a stage in a NEW session (artifact exists but gates are not all passed in flow-state):
+1. Read the existing artifact and check which gates can be verified from artifact evidence.
+2. For each unverified gate, ask the user to confirm ONE gate at a time. Do NOT batch multiple gate confirmations in a single message.
+3. Update \`guardEvidence\` for each confirmed gate before proceeding.
 `;
 }
 
