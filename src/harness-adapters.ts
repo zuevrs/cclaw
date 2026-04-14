@@ -2,7 +2,6 @@ import fs from "node:fs/promises";
 import path from "node:path";
 import { COMMAND_FILE_ORDER, RUNTIME_ROOT } from "./constants.js";
 import { CCLAW_AGENTS, agentMarkdown, agentsAgentsMdBlock } from "./content/agents.js";
-import { autoplanAgentsMdBlock } from "./content/autoplan.js";
 import { learningsAgentsMdBlock } from "./content/learnings.js";
 import { sessionHooksAgentsMdBlock } from "./content/session-hooks.js";
 import { hooksAgentsMdBlock } from "./content/hooks.js";
@@ -83,7 +82,6 @@ Before responding to a coding request:
 |---|---|
 ${stageList}
 | \`/cc-learn\` | \`.cclaw/skills/learnings/SKILL.md\` + \`.cclaw/commands/learn.md\` |
-| \`/cc-autoplan\` | \`.cclaw/skills/autoplan/SKILL.md\` + \`.cclaw/commands/autoplan.md\` |
 | \`/cc-next\` | \`.cclaw/skills/flow-next-step/SKILL.md\` + \`.cclaw/commands/next.md\` |
 
 **Stage order:** brainstorm > scope > design > spec > plan > test > build > review > ship.
@@ -187,10 +185,6 @@ export async function syncHarnessShims(projectRoot: string, harnesses: HarnessId
     await writeFileSafe(
       path.join(commandDir, "cc-learn.md"),
       utilityShimContent(harness, "learn", "learnings", "learn.md")
-    );
-    await writeFileSafe(
-      path.join(commandDir, "cc-autoplan.md"),
-      utilityShimContent(harness, "autoplan", "autoplan", "autoplan.md")
     );
     await writeFileSafe(
       path.join(commandDir, "cc-next.md"),

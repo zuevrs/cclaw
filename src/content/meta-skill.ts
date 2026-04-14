@@ -38,7 +38,6 @@ Task arrives
     |
     +-- Cross-cutting:
     |   +-- Want to check/add project learnings?  --> /cc-learn
-    |   +-- Want full brainstorm-to-plan in one shot?  --> /cc-autoplan
     |
     +-- No cclaw stage applies?  --> Respond normally
 \`\`\`
@@ -120,8 +119,6 @@ Use this loading order to keep context lean while preserving depth:
 ### See also
 - \`.cclaw/skills/session/SKILL.md\` for session start/stop/resume behavior
 - \`.cclaw/skills/learnings/SKILL.md\` for durable memory capture and reuse
-- \`.cclaw/skills/autoplan/SKILL.md\` when user requests multi-stage orchestration
-
 ## Decision Protocol
 
 When a stage requires user input (approval, choice, direction), use this structured pattern:
