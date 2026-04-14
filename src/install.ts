@@ -1,5 +1,8 @@
+import { execFile } from "node:child_process";
 import fs from "node:fs/promises";
+import os from "node:os";
 import path from "node:path";
+import { promisify } from "node:util";
 import {
   COMMAND_FILE_ORDER,
   REQUIRED_DIRS,
@@ -9,6 +12,7 @@ import {
 import { writeConfig, createDefaultConfig, readConfig, configPath } from "./config.js";
 import { commandContract } from "./content/contracts.js";
 import { autoplanSkillMarkdown, autoplanCommandContract } from "./content/autoplan.js";
+import { contextModeFiles, createInitialContextModeState } from "./content/contexts.js";
 import { learnSkillMarkdown, learnCommandContract } from "./content/learnings.js";
 import { nextCommandContract, nextCommandSkillMarkdown } from "./content/next-command.js";
 import { subagentDrivenDevSkill, parallelAgentsSkill } from "./content/subagents.js";
@@ -25,27 +29,176 @@ import {
   contextMonitorScript,
   observeScript,
   promptGuardScript,
+  workflowGuardScript,
   summarizeObservationsRuntimeModule,
   summarizeObservationsScript
 } from "./content/observe.js";
 import { META_SKILL_NAME, usingCclawSkillMarkdown } from "./content/meta-skill.js";
-import { ARTIFACT_TEMPLATES, RULEBOOK_MARKDOWN, buildRulesJson } from "./content/templates.js";
+import {
+  ARTIFACT_TEMPLATES,
+  CURSOR_WORKFLOW_RULE_MDC,
+  RULEBOOK_MARKDOWN,
+  buildRulesJson
+} from "./content/templates.js";
 import { stageSkillFolder, stageSkillMarkdown } from "./content/skills.js";
 import { UTILITY_SKILL_FOLDERS, UTILITY_SKILL_MAP } from "./content/utility-skills.js";
 import { createInitialFlowState } from "./flow-state.js";
 import { ensureDir, exists, writeFileSafe } from "./fs-utils.js";
 import { ensureGitignore, removeGitignorePatterns } from "./gitignore.js";
 import { HARNESS_ADAPTERS, syncHarnessShims, removeCclawFromAgentsMd } from "./harness-adapters.js";
+import { validateHookDocument } from "./hook-schema.js";
 import { ensureRunSystem, readFlowState } from "./runs.js";
-import type { HarnessId } from "./types.js";
+import type { HarnessId, VibyConfig } from "./types.js";
 
 export interface InitOptions {
   projectRoot: string;
   harnesses?: HarnessId[];
 }
 
+const OPENCODE_PLUGIN_REL_PATH = ".opencode/plugins/cclaw-plugin.mjs";
+const CURSOR_RULE_REL_PATH = ".cursor/rules/cclaw-workflow.mdc";
+const GIT_HOOK_MANAGED_MARKER = "cclaw-managed-git-hook";
+const GIT_HOOK_RUNTIME_REL_DIR = `${RUNTIME_ROOT}/hooks/git`;
+const execFileAsync = promisify(execFile);
+
 function runtimePath(projectRoot: string, ...segments: string[]): string {
   return path.join(projectRoot, RUNTIME_ROOT, ...segments);
+}
+
+function resolveGlobalLearningsPath(projectRoot: string, config: VibyConfig): string | null {
+  if (config.globalLearnings !== true) {
+    return null;
+  }
+  const raw = config.globalLearningsPath?.trim() ?? "";
+  if (raw.length === 0) {
+    return path.join(os.homedir(), ".cclaw-global-learnings.jsonl");
+  }
+  if (raw.startsWith("~/")) {
+    return path.join(os.homedir(), raw.slice(2));
+  }
+  if (path.isAbsolute(raw)) {
+    return raw;
+  }
+  return path.join(projectRoot, raw);
+}
+
+async function resolveGitHooksDir(projectRoot: string): Promise<string | null> {
+  try {
+    const { stdout } = await execFileAsync("git", ["rev-parse", "--git-path", "hooks"], {
+      cwd: projectRoot
+    });
+    const rel = stdout.trim();
+    if (rel.length === 0) {
+      return null;
+    }
+    return path.resolve(projectRoot, rel);
+  } catch {
+    return null;
+  }
+}
+
+function managedGitRuntimeScript(hookName: "pre-commit" | "pre-push"): string {
+  const rangeExpression = hookName === "pre-commit"
+    ? 'git diff --cached --name-only'
+    : 'git diff --name-only @{upstream}...HEAD || git diff --name-only HEAD~1...HEAD';
+  return `#!/usr/bin/env bash
+# ${GIT_HOOK_MANAGED_MARKER}: runtime ${hookName}
+set -euo pipefail
+
+ROOT=$(git rev-parse --show-toplevel 2>/dev/null || pwd)
+GUARD_SCRIPT="$ROOT/${RUNTIME_ROOT}/hooks/prompt-guard.sh"
+[ -x "$GUARD_SCRIPT" ] || exit 0
+
+FILES=$(${rangeExpression} 2>/dev/null || true)
+[ -n "$FILES" ] || exit 0
+
+printf '%s\n' "$FILES" | bash "$GUARD_SCRIPT"
+`;
+}
+
+function managedGitRelayHook(hookName: "pre-commit" | "pre-push"): string {
+  return `#!/usr/bin/env bash
+# ${GIT_HOOK_MANAGED_MARKER}: relay ${hookName}
+set -euo pipefail
+
+ROOT=$(git rev-parse --show-toplevel 2>/dev/null || pwd)
+RUNTIME_HOOK="$ROOT/${GIT_HOOK_RUNTIME_REL_DIR}/${hookName}.sh"
+[ -x "$RUNTIME_HOOK" ] || exit 0
+exec bash "$RUNTIME_HOOK" "$@"
+`;
+}
+
+async function removeManagedGitHookRelays(projectRoot: string): Promise<void> {
+  const hooksDir = await resolveGitHooksDir(projectRoot);
+  if (!hooksDir) {
+    return;
+  }
+  for (const hookName of ["pre-commit", "pre-push"] as const) {
+    const hookPath = path.join(hooksDir, hookName);
+    if (!(await exists(hookPath))) continue;
+    let content = "";
+    try {
+      content = await fs.readFile(hookPath, "utf8");
+    } catch {
+      content = "";
+    }
+    if (!content.includes(GIT_HOOK_MANAGED_MARKER)) {
+      continue;
+    }
+    await fs.rm(hookPath, { force: true });
+  }
+}
+
+async function syncManagedGitHooks(projectRoot: string, config: VibyConfig): Promise<void> {
+  const hooksDir = await resolveGitHooksDir(projectRoot);
+  if (!hooksDir) {
+    return;
+  }
+
+  if (config.gitHookGuards !== true) {
+    await removeManagedGitHookRelays(projectRoot);
+    try {
+      await fs.rm(path.join(projectRoot, GIT_HOOK_RUNTIME_REL_DIR), { recursive: true, force: true });
+    } catch {
+      // best-effort cleanup
+    }
+    return;
+  }
+
+  const runtimeGitHooksDir = path.join(projectRoot, GIT_HOOK_RUNTIME_REL_DIR);
+  await ensureDir(runtimeGitHooksDir);
+  for (const hookName of ["pre-commit", "pre-push"] as const) {
+    const runtimePathForHook = path.join(runtimeGitHooksDir, `${hookName}.sh`);
+    await writeFileSafe(runtimePathForHook, managedGitRuntimeScript(hookName));
+    try {
+      await fs.chmod(runtimePathForHook, 0o755);
+    } catch {
+      // best effort on constrained filesystems
+    }
+  }
+
+  await ensureDir(hooksDir);
+  for (const hookName of ["pre-commit", "pre-push"] as const) {
+    const hookPath = path.join(hooksDir, hookName);
+    let canWriteRelay = true;
+    if (await exists(hookPath)) {
+      try {
+        const existing = await fs.readFile(hookPath, "utf8");
+        canWriteRelay = existing.includes(GIT_HOOK_MANAGED_MARKER);
+      } catch {
+        canWriteRelay = false;
+      }
+    }
+    if (!canWriteRelay) {
+      continue;
+    }
+    await writeFileSafe(hookPath, managedGitRelayHook(hookName));
+    try {
+      await fs.chmod(hookPath, 0o755);
+    } catch {
+      // best effort on constrained filesystems
+    }
+  }
 }
 
 async function ensureStructure(projectRoot: string): Promise<void> {
@@ -197,10 +350,116 @@ function tryParseHookDocument(raw: string): { parsed: unknown; recovered: boolea
   }
 }
 
+function opencodeConfigCandidates(projectRoot: string): string[] {
+  return [
+    path.join(projectRoot, "opencode.json"),
+    path.join(projectRoot, "opencode.jsonc"),
+    path.join(projectRoot, ".opencode", "opencode.json"),
+    path.join(projectRoot, ".opencode", "opencode.jsonc")
+  ];
+}
+
+function normalizeOpenCodePluginEntry(entry: unknown): string | null {
+  if (typeof entry === "string" && entry.trim().length > 0) {
+    return entry.trim();
+  }
+  if (!entry || typeof entry !== "object" || Array.isArray(entry)) {
+    return null;
+  }
+  const obj = entry as Record<string, unknown>;
+  for (const key of ["path", "src", "plugin"] as const) {
+    const value = obj[key];
+    if (typeof value === "string" && value.trim().length > 0) {
+      return value.trim();
+    }
+  }
+  return null;
+}
+
+function mergeOpenCodePluginConfig(
+  existingDoc: unknown,
+  pluginRelPath: string
+): { merged: Record<string, unknown>; changed: boolean } {
+  const root = toObject(existingDoc) ?? {};
+  const pluginsRaw = Array.isArray(root.plugins) ? [...root.plugins] : [];
+  const normalized = new Set(pluginsRaw.map((entry) => normalizeOpenCodePluginEntry(entry)).filter(Boolean));
+  if (!normalized.has(pluginRelPath)) {
+    pluginsRaw.push(pluginRelPath);
+  }
+  const changed = !normalized.has(pluginRelPath) || !Array.isArray(root.plugins);
+  return {
+    merged: {
+      ...root,
+      plugins: pluginsRaw
+    },
+    changed
+  };
+}
+
+async function resolveOpenCodeConfigPath(projectRoot: string): Promise<string> {
+  for (const candidate of opencodeConfigCandidates(projectRoot)) {
+    if (await exists(candidate)) {
+      return candidate;
+    }
+  }
+  return path.join(projectRoot, "opencode.json");
+}
+
+async function writeMergedOpenCodePluginConfig(
+  projectRoot: string,
+  pluginRelPath: string
+): Promise<void> {
+  const configPath = await resolveOpenCodeConfigPath(projectRoot);
+  await ensureDir(path.dirname(configPath));
+  let existingDoc: unknown = {};
+  if (await exists(configPath)) {
+    try {
+      const raw = await fs.readFile(configPath, "utf8");
+      const parsed = tryParseHookDocument(raw);
+      existingDoc = parsed?.parsed ?? {};
+    } catch {
+      existingDoc = {};
+    }
+  }
+  const { merged, changed } = mergeOpenCodePluginConfig(existingDoc, pluginRelPath);
+  if (changed || !(await exists(configPath))) {
+    await writeFileSafe(configPath, `${JSON.stringify(merged, null, 2)}\n`);
+  }
+}
+
+async function removeManagedOpenCodePluginConfig(projectRoot: string, pluginRelPath: string): Promise<void> {
+  for (const configPath of opencodeConfigCandidates(projectRoot)) {
+    if (!(await exists(configPath))) continue;
+    let parsed: unknown = null;
+    try {
+      const raw = await fs.readFile(configPath, "utf8");
+      parsed = tryParseHookDocument(raw)?.parsed ?? null;
+    } catch {
+      parsed = null;
+    }
+    const root = toObject(parsed);
+    if (!root || !Array.isArray(root.plugins)) continue;
+    const filtered = root.plugins.filter((entry) => normalizeOpenCodePluginEntry(entry) !== pluginRelPath);
+    if (filtered.length === root.plugins.length) {
+      continue;
+    }
+    root.plugins = filtered;
+    await writeFileSafe(configPath, `${JSON.stringify(root, null, 2)}\n`);
+  }
+}
+
 function backupFileNameForHook(projectRoot: string, hookFilePath: string): string {
   const rel = path.relative(projectRoot, hookFilePath).replace(/[\\/]/gu, "__");
   const ts = new Date().toISOString().replace(/[:.]/gu, "-");
   return `${rel}.${ts}.bak`;
+}
+
+function harnessForHookFile(projectRoot: string, hookFilePath: string): "claude" | "cursor" | "codex" | null {
+  const rel = path.relative(projectRoot, hookFilePath).replace(/\\/gu, "/");
+  if (rel === ".claude/hooks/hooks.json") return "claude";
+  if (rel === ".cursor/hooks.json") return "cursor";
+  if (rel === ".codex/hooks.json") return "codex";
+  return null;
 }
 
 async function pruneOldHookBackups(backupsDir: string, maxBackups = 20): Promise<void> {
@@ -298,22 +557,50 @@ async function writeMergedHookJson(
   }
 
   const generatedDoc = JSON.parse(generatedJson) as Record<string, unknown>;
+  const harness = harnessForHookFile(projectRoot, hookFilePath);
+  if (harness) {
+    const generatedSchema = validateHookDocument(harness, generatedDoc);
+    if (!generatedSchema.ok) {
+      throw new Error(
+        `Generated ${harness} hook document failed schema validation: ${generatedSchema.errors.join("; ")}`
+      );
+    }
+  }
+
   const mergedDoc = mergeHookDocuments(existingDoc, generatedDoc);
+  if (harness) {
+    const mergedSchema = validateHookDocument(harness, mergedDoc);
+    if (!mergedSchema.ok) {
+      throw new Error(
+        `Merged ${harness} hook document failed schema validation: ${mergedSchema.errors.join("; ")}`
+      );
+    }
+  }
   await writeFileSafe(hookFilePath, `${JSON.stringify(mergedDoc, null, 2)}\n`);
 }
 
-async function writeHooks(projectRoot: string, harnesses: HarnessId[]): Promise<void> {
+async function writeHooks(projectRoot: string, config: VibyConfig): Promise<void> {
+  const harnesses = config.harnesses;
   const hooksDir = runtimePath(projectRoot, "hooks");
   await ensureDir(hooksDir);
 
-  await writeFileSafe(path.join(hooksDir, "session-start.sh"), sessionStartScript());
+  await writeFileSafe(path.join(hooksDir, "session-start.sh"), sessionStartScript({
+    globalLearningsEnabled: config.globalLearnings === true,
+    globalLearningsPath: config.globalLearningsPath
+  }));
   await writeFileSafe(path.join(hooksDir, "stop-checkpoint.sh"), stopCheckpointScript());
-  await writeFileSafe(path.join(hooksDir, "prompt-guard.sh"), promptGuardScript());
+  await writeFileSafe(path.join(hooksDir, "prompt-guard.sh"), promptGuardScript({
+    strictMode: config.promptGuardMode === "strict"
+  }));
+  await writeFileSafe(path.join(hooksDir, "workflow-guard.sh"), workflowGuardScript());
   await writeFileSafe(path.join(hooksDir, "context-monitor.sh"), contextMonitorScript());
   await writeFileSafe(path.join(hooksDir, "observe.sh"), observeScript());
   await writeFileSafe(path.join(hooksDir, "summarize-observations.sh"), summarizeObservationsScript());
   await writeFileSafe(path.join(hooksDir, "summarize-observations.mjs"), summarizeObservationsRuntimeModule());
-  const opencodePluginSource = opencodePluginJs();
+  const opencodePluginSource = opencodePluginJs({
+    globalLearningsEnabled: config.globalLearnings === true,
+    globalLearningsPath: config.globalLearningsPath
+  });
   await writeFileSafe(path.join(hooksDir, "opencode-plugin.mjs"), opencodePluginSource);
 
   try {
@@ -321,6 +608,7 @@ async function writeHooks(projectRoot: string, harnesses: HarnessId[]): Promise<
       "session-start.sh",
       "stop-checkpoint.sh",
       "prompt-guard.sh",
+      "workflow-guard.sh",
       "context-monitor.sh",
       "observe.sh",
       "summarize-observations.sh",
@@ -335,9 +623,10 @@ async function writeHooks(projectRoot: string, harnesses: HarnessId[]): Promise<
 
   if (harnesses.includes("opencode")) {
     const opencodePluginsDir = path.join(projectRoot, ".opencode/plugins");
-    const opencodePluginPath = path.join(opencodePluginsDir, "cclaw-plugin.mjs");
+    const opencodePluginPath = path.join(projectRoot, OPENCODE_PLUGIN_REL_PATH);
     await ensureDir(opencodePluginsDir);
     await writeFileSafe(opencodePluginPath, opencodePluginSource);
+    await writeMergedOpenCodePluginConfig(projectRoot, OPENCODE_PLUGIN_REL_PATH);
     try {
       await fs.chmod(opencodePluginPath, 0o755);
     } catch {
@@ -359,7 +648,7 @@ async function writeHooks(projectRoot: string, harnesses: HarnessId[]): Promise<
       await ensureDir(dir);
       await writeMergedHookJson(projectRoot, path.join(dir, "hooks.json"), codexHooksJson());
     }
-    // OpenCode: plugin.mjs is in .cclaw/hooks/ — user registers in opencode.json
+    // OpenCode registration is auto-managed via opencode.json/opencode.jsonc.
   }
 }
 
@@ -367,6 +656,17 @@ async function ensureLearningsStore(projectRoot: string): Promise<void> {
   const storePath = runtimePath(projectRoot, "learnings.jsonl");
   if (!(await exists(storePath))) {
     await writeFileSafe(storePath, "");
+  }
+}
+
+async function ensureGlobalLearningsStore(projectRoot: string, config: VibyConfig): Promise<void> {
+  const globalPath = resolveGlobalLearningsPath(projectRoot, config);
+  if (!globalPath) {
+    return;
+  }
+  await ensureDir(path.dirname(globalPath));
+  if (!(await exists(globalPath))) {
+    await writeFileSafe(globalPath, "");
   }
 }
 
@@ -404,6 +704,14 @@ async function ensureSessionStateFiles(projectRoot: string): Promise<void> {
     };
     await writeFileSafe(suggestionMemoryPath, `${JSON.stringify(suggestionMemory, null, 2)}\n`);
   }
+
+  const contextModePath = path.join(stateDir, "context-mode.json");
+  if (!(await exists(contextModePath))) {
+    await writeFileSafe(
+      contextModePath,
+      `${JSON.stringify(createInitialContextModeState(), null, 2)}\n`
+    );
+  }
 }
 
 async function writeRulebook(projectRoot: string): Promise<void> {
@@ -412,6 +720,49 @@ async function writeRulebook(projectRoot: string): Promise<void> {
     runtimePath(projectRoot, "rules", "rules.json"),
     `${JSON.stringify(buildRulesJson(), null, 2)}\n`
   );
+}
+
+async function writeContextModes(projectRoot: string): Promise<void> {
+  for (const [mode, content] of Object.entries(contextModeFiles())) {
+    await writeFileSafe(runtimePath(projectRoot, "contexts", `${mode}.md`), content);
+  }
+}
+
+async function writeCursorWorkflowRule(projectRoot: string, harnesses: HarnessId[]): Promise<void> {
+  const rulePath = path.join(projectRoot, CURSOR_RULE_REL_PATH);
+  if (!harnesses.includes("cursor")) {
+    try {
+      await fs.rm(rulePath, { force: true });
+    } catch {
+      // best-effort cleanup
+    }
+    return;
+  }
+  await ensureDir(path.dirname(rulePath));
+  await writeFileSafe(rulePath, CURSOR_WORKFLOW_RULE_MDC);
+}
+
+async function syncDisabledHarnessArtifacts(projectRoot: string, harnesses: HarnessId[]): Promise<void> {
+  const enabled = new Set<HarnessId>(harnesses);
+  const managedHookFiles: Array<{ harness: HarnessId; hookPath: string }> = [
+    { harness: "claude", hookPath: path.join(projectRoot, ".claude/hooks/hooks.json") },
+    { harness: "cursor", hookPath: path.join(projectRoot, ".cursor/hooks.json") },
+    { harness: "codex", hookPath: path.join(projectRoot, ".codex/hooks.json") }
+  ];
+
+  for (const entry of managedHookFiles) {
+    if (enabled.has(entry.harness)) continue;
+    await removeManagedHookEntries(entry.hookPath);
+  }
+
+  if (!enabled.has("opencode")) {
+    try {
+      await fs.rm(path.join(projectRoot, OPENCODE_PLUGIN_REL_PATH), { force: true });
+    } catch {
+      // best-effort cleanup
+    }
+    await removeManagedOpenCodePluginConfig(projectRoot, OPENCODE_PLUGIN_REL_PATH);
+  }
 }
 
 async function writeState(projectRoot: string, forceReset = false): Promise<void> {
@@ -470,7 +821,7 @@ async function cleanLegacyArtifacts(projectRoot: string): Promise<void> {
   for (const legacyPlugin of [
     path.join(projectRoot, ".opencode/plugins/viby-plugin.mjs"),
     path.join(projectRoot, ".opencode/plugins/opencode-plugin.mjs"),
-    path.join(projectRoot, ".opencode/plugins/cclaw-plugin.mjs")
+    path.join(projectRoot, OPENCODE_PLUGIN_REL_PATH)
   ]) {
     try {
       await fs.rm(legacyPlugin, { force: true });
@@ -509,13 +860,15 @@ async function cleanStaleFiles(projectRoot: string): Promise<void> {
   // Legacy managed removals happen in cleanLegacyArtifacts() with explicit paths.
 }
 
-async function materializeRuntime(projectRoot: string, harnesses: HarnessId[], forceStateReset: boolean): Promise<void> {
+async function materializeRuntime(projectRoot: string, config: VibyConfig, forceStateReset: boolean): Promise<void> {
+  const harnesses = config.harnesses;
   await ensureStructure(projectRoot);
   await cleanLegacyArtifacts(projectRoot);
   await cleanStaleFiles(projectRoot);
   await writeCommandContracts(projectRoot);
   await writeUtilityCommands(projectRoot);
   await writeSkills(projectRoot);
+  await writeContextModes(projectRoot);
   await writeArtifactTemplates(projectRoot);
   await writeRulebook(projectRoot);
   await writeState(projectRoot, forceStateReset);
@@ -523,15 +876,19 @@ async function materializeRuntime(projectRoot: string, harnesses: HarnessId[], f
   await ensureSessionStateFiles(projectRoot);
   await writeAdapterManifest(projectRoot, harnesses);
   await ensureLearningsStore(projectRoot);
-  await writeHooks(projectRoot, harnesses);
+  await ensureGlobalLearningsStore(projectRoot, config);
+  await writeHooks(projectRoot, config);
+  await syncDisabledHarnessArtifacts(projectRoot, harnesses);
+  await syncManagedGitHooks(projectRoot, config);
   await syncHarnessShims(projectRoot, harnesses);
+  await writeCursorWorkflowRule(projectRoot, harnesses);
   await ensureGitignore(projectRoot);
 }
 
 export async function initCclaw(options: InitOptions): Promise<void> {
   const config = createDefaultConfig(options.harnesses);
   await writeConfig(options.projectRoot, config);
-  await materializeRuntime(options.projectRoot, config.harnesses, true);
+  await materializeRuntime(options.projectRoot, config, true);
 }
 
 export async function syncCclaw(projectRoot: string): Promise<void> {
@@ -539,14 +896,14 @@ export async function syncCclaw(projectRoot: string): Promise<void> {
   if (!(await exists(configPath(projectRoot)))) {
     await writeConfig(projectRoot, createDefaultConfig(config.harnesses));
   }
-  await materializeRuntime(projectRoot, config.harnesses, false);
+  await materializeRuntime(projectRoot, config, false);
 }
 
 export async function upgradeCclaw(projectRoot: string): Promise<void> {
   const config = await readConfig(projectRoot);
   const upgradedConfig = createDefaultConfig(config.harnesses);
   await writeConfig(projectRoot, upgradedConfig);
-  await materializeRuntime(projectRoot, upgradedConfig.harnesses, false);
+  await materializeRuntime(projectRoot, upgradedConfig, false);
 }
 
 function stripManagedHookCommands(value: unknown): { updated: unknown; changed: boolean } {
@@ -616,7 +973,7 @@ function stripManagedHookCommands(value: unknown): { updated: unknown; changed: 
 
 function isManagedRuntimeHookCommand(command: string): boolean {
   const normalized = command.trim().replace(/\s+/gu, " ");
-  return /(^|\s)(?:bash\s+)?(?:\.\/)?\.cclaw\/hooks\/(?:session-start|stop-checkpoint|prompt-guard|context-monitor|observe|summarize-observations)\.sh(?:\s|$)/u.test(
+  return /(^|\s)(?:bash\s+)?(?:\.\/)?\.cclaw\/hooks\/(?:session-start|stop-checkpoint|prompt-guard|workflow-guard|context-monitor|observe|summarize-observations)\.sh(?:\s|$)/u.test(
     normalized
   );
 }
@@ -646,7 +1003,9 @@ async function removeManagedHookEntries(hookFilePath: string): Promise<void> {
     Object.keys(hooks as Record<string, unknown>).length > 0;
 
   if (!hasHooks) {
-    const onlyHooksShell = Object.keys(root).every((key) => key === "hooks" || key === "version");
+    const onlyHooksShell = Object.keys(root).every(
+      (key) => key === "hooks" || key === "version" || key === "cclawHookSchemaVersion"
+    );
     if (onlyHooksShell) {
       await fs.rm(hookFilePath, { force: true });
       return;
@@ -667,6 +1026,7 @@ export async function uninstallCclaw(projectRoot: string): Promise<void> {
 
   await removeCclawFromAgentsMd(projectRoot);
   await removeGitignorePatterns(projectRoot);
+  await removeManagedGitHookRelays(projectRoot);
 
   // Clean hook files
   const hookFiles = [
@@ -702,12 +1062,19 @@ export async function uninstallCclaw(projectRoot: string): Promise<void> {
   for (const pluginPath of [
     path.join(projectRoot, ".opencode/plugins/viby-plugin.mjs"),
     path.join(projectRoot, ".opencode/plugins/opencode-plugin.mjs"),
-    path.join(projectRoot, ".opencode/plugins/cclaw-plugin.mjs")
+    path.join(projectRoot, OPENCODE_PLUGIN_REL_PATH)
   ]) {
     try {
       await fs.rm(pluginPath, { force: true });
     } catch {
       // best-effort cleanup
     }
+  }
+
+  await removeManagedOpenCodePluginConfig(projectRoot, OPENCODE_PLUGIN_REL_PATH);
+  try {
+    await fs.rm(path.join(projectRoot, CURSOR_RULE_REL_PATH), { force: true });
+  } catch {
+    // best-effort cleanup
   }
 }

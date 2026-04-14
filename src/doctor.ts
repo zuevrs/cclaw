@@ -10,7 +10,14 @@ import { gitignoreHasRequiredPatterns } from "./gitignore.js";
 import { HARNESS_ADAPTERS, CCLAW_MARKER_START, CCLAW_MARKER_END } from "./harness-adapters.js";
 import { policyChecks } from "./policy.js";
 import { readFlowState } from "./runs.js";
+import { checkMandatoryDelegations } from "./delegation.js";
+import { buildTraceMatrix } from "./trace-matrix.js";
+import { reconcileAndWriteCurrentStageGateCatalog, verifyCurrentStageGateEvidence } from "./gate-evidence.js";
 import { stageSkillFolder } from "./content/skills.js";
+import { UTILITY_SKILL_FOLDERS } from "./content/utility-skills.js";
+import { CONTEXT_MODES, DEFAULT_CONTEXT_MODE } from "./content/contexts.js";
+import { validateHookDocument } from "./hook-schema.js";
+import type { HarnessId } from "./types.js";
 
 const execFileAsync = promisify(execFile);
 
@@ -20,12 +27,30 @@ export interface DoctorCheck {
   details: string;
 }
 
+export interface DoctorOptions {
+  /** When true, normalize current-stage gate catalog and persist reconciliation before checks. */
+  reconcileCurrentStageGates?: boolean;
+}
+
 async function isGitRepo(projectRoot: string): Promise<boolean> {
   try {
     await execFileAsync("git", ["rev-parse", "--is-inside-work-tree"], { cwd: projectRoot });
     return true;
   } catch {
     return false;
+  }
+}
+
+async function resolveGitHooksDir(projectRoot: string): Promise<string | null> {
+  try {
+    const { stdout } = await execFileAsync("git", ["rev-parse", "--git-path", "hooks"], { cwd: projectRoot });
+    const rel = stdout.trim();
+    if (rel.length === 0) {
+      return null;
+    }
+    return path.resolve(projectRoot, rel);
+  } catch {
+    return null;
   }
 }
 
@@ -131,7 +156,48 @@ async function readHookDocument(filePath: string): Promise<Record<string, unknow
   }
 }
 
-export async function doctorChecks(projectRoot: string): Promise<DoctorCheck[]> {
+function normalizeOpenCodePluginEntry(entry: unknown): string | null {
+  if (typeof entry === "string" && entry.trim().length > 0) return entry.trim();
+  if (!entry || typeof entry !== "object" || Array.isArray(entry)) return null;
+  const obj = entry as Record<string, unknown>;
+  for (const key of ["path", "src", "plugin"] as const) {
+    const value = obj[key];
+    if (typeof value === "string" && value.trim().length > 0) {
+      return value.trim();
+    }
+  }
+  return null;
+}
+
+async function opencodeRegistrationCheck(projectRoot: string): Promise<{ ok: boolean; details: string }> {
+  const expected = ".opencode/plugins/cclaw-plugin.mjs";
+  const candidates = [
+    path.join(projectRoot, "opencode.json"),
+    path.join(projectRoot, "opencode.jsonc"),
+    path.join(projectRoot, ".opencode/opencode.json"),
+    path.join(projectRoot, ".opencode/opencode.jsonc")
+  ];
+
+  for (const configPath of candidates) {
+    if (!(await exists(configPath))) {
+      continue;
+    }
+    const parsed = await readHookDocument(configPath);
+    if (!parsed) {
+      continue;
+    }
+    const plugins = Array.isArray(parsed.plugins) ? parsed.plugins : [];
+    const registered = plugins.some((entry) => normalizeOpenCodePluginEntry(entry) === expected);
+    if (registered) {
+      return { ok: true, details: `${path.relative(projectRoot, configPath)} registers ${expected}` };
+    }
+    return { ok: false, details: `${path.relative(projectRoot, configPath)} missing plugin ${expected}` };
+  }
+
+  return { ok: false, details: `No opencode.json/opencode.jsonc found with plugin ${expected}` };
+}
+
+export async function doctorChecks(projectRoot: string, options: DoctorOptions = {}): Promise<DoctorCheck[]> {
   const checks: DoctorCheck[] = [];
 
   for (const dir of REQUIRED_DIRS) {
@@ -177,9 +243,11 @@ export async function doctorChecks(projectRoot: string): Promise<DoctorCheck[]> 
     details: ".gitignore must include cclaw ignore block"
   });
 
-  let configuredHarnesses: string[] = [];
+  let configuredHarnesses: HarnessId[] = [];
+  let parsedConfig: Awaited<ReturnType<typeof readConfig>> | null = null;
   try {
     const config = await readConfig(projectRoot);
+    parsedConfig = config;
     configuredHarnesses = config.harnesses;
     checks.push({
       name: "config:valid",
@@ -192,6 +260,57 @@ export async function doctorChecks(projectRoot: string): Promise<DoctorCheck[]> 
       ok: false,
       details: error instanceof Error ? error.message : "Invalid config"
     });
+  }
+
+  if (parsedConfig) {
+    const expectedMode = parsedConfig.promptGuardMode === "strict" ? "strict" : "advisory";
+    const promptGuardPath = path.join(projectRoot, RUNTIME_ROOT, "hooks", "prompt-guard.sh");
+    let promptGuardModeOk = false;
+    if (await exists(promptGuardPath)) {
+      const promptGuardContent = await fs.readFile(promptGuardPath, "utf8");
+      promptGuardModeOk = promptGuardContent.includes(`PROMPT_GUARD_MODE="${expectedMode}"`);
+    }
+    checks.push({
+      name: "hook:prompt_guard:mode",
+      ok: promptGuardModeOk,
+      details: `${promptGuardPath} must match promptGuardMode=${expectedMode}`
+    });
+
+    if (parsedConfig.gitHookGuards === true) {
+      const runtimePreCommit = path.join(projectRoot, RUNTIME_ROOT, "hooks", "git", "pre-commit.sh");
+      const runtimePrePush = path.join(projectRoot, RUNTIME_ROOT, "hooks", "git", "pre-push.sh");
+      const runtimeScriptsOk = (await exists(runtimePreCommit)) && (await exists(runtimePrePush));
+      checks.push({
+        name: "git_hooks:managed:runtime_scripts",
+        ok: runtimeScriptsOk,
+        details: `${RUNTIME_ROOT}/hooks/git/pre-commit.sh and pre-push.sh must exist when gitHookGuards=true`
+      });
+
+      const gitHooksDir = await resolveGitHooksDir(projectRoot);
+      if (!gitHooksDir) {
+        checks.push({
+          name: "git_hooks:managed:relays",
+          ok: true,
+          details: "git repository not detected; relay hook check skipped"
+        });
+      } else {
+        const preCommitHookPath = path.join(gitHooksDir, "pre-commit");
+        const prePushHookPath = path.join(gitHooksDir, "pre-push");
+        let relaysOk = false;
+        if ((await exists(preCommitHookPath)) && (await exists(prePushHookPath))) {
+          const preCommitHook = await fs.readFile(preCommitHookPath, "utf8");
+          const prePushHook = await fs.readFile(prePushHookPath, "utf8");
+          relaysOk =
+            preCommitHook.includes("cclaw-managed-git-hook") &&
+            prePushHook.includes("cclaw-managed-git-hook");
+        }
+        checks.push({
+          name: "git_hooks:managed:relays",
+          ok: relaysOk,
+          details: `${path.relative(projectRoot, gitHooksDir)}/pre-commit and pre-push must contain managed relay marker`
+        });
+      }
+    }
   }
 
   for (const harness of configuredHarnesses) {
@@ -272,14 +391,8 @@ export async function doctorChecks(projectRoot: string): Promise<DoctorCheck[]> 
     });
   }
 
-  // New utility skills (security, debugging, performance, ci-cd, docs)
-  for (const folder of [
-    "security",
-    "debugging",
-    "performance",
-    "ci-cd",
-    "docs"
-  ]) {
+  // Extended utility skills generated from utility skill map.
+  for (const folder of UTILITY_SKILL_FOLDERS) {
     const skillPath = path.join(projectRoot, RUNTIME_ROOT, "skills", folder, "SKILL.md");
     checks.push({
       name: `utility_skill:${folder}`,
@@ -308,6 +421,7 @@ export async function doctorChecks(projectRoot: string): Promise<DoctorCheck[]> 
     "session-start.sh",
     "stop-checkpoint.sh",
     "prompt-guard.sh",
+    "workflow-guard.sh",
     "context-monitor.sh",
     "observe.sh",
     "summarize-observations.sh",
@@ -361,6 +475,16 @@ export async function doctorChecks(projectRoot: string): Promise<DoctorCheck[]> 
         ok: hookOk,
         details: fullPath
       });
+      if (harness === "claude" || harness === "cursor" || harness === "codex") {
+        const schema = validateHookDocument(harness, parsed);
+        checks.push({
+          name: `hook:schema:${harness}`,
+          ok: schema.ok,
+          details: schema.ok
+            ? `${fullPath} matches cclaw hook schema v1`
+            : `${fullPath} schema issues: ${schema.errors.join("; ")}`
+        });
+      }
     }
   }
 
@@ -370,10 +494,14 @@ export async function doctorChecks(projectRoot: string): Promise<DoctorCheck[]> 
     ok: await exists(path.join(projectRoot, RUNTIME_ROOT, "hooks", "opencode-plugin.mjs")),
     details: `${RUNTIME_ROOT}/hooks/opencode-plugin.mjs`
   });
+  const opencodeEnabled = configuredHarnesses.includes("opencode");
+  const opencodeDeployed = await exists(path.join(projectRoot, ".opencode/plugins/cclaw-plugin.mjs"));
   checks.push({
     name: "hook:opencode_plugin_deployed",
-    ok: await exists(path.join(projectRoot, ".opencode/plugins/cclaw-plugin.mjs")),
-    details: ".opencode/plugins/cclaw-plugin.mjs"
+    ok: opencodeEnabled ? opencodeDeployed : true,
+    details: opencodeEnabled
+      ? ".opencode/plugins/cclaw-plugin.mjs"
+      : "opencode harness disabled; deployed plugin check skipped"
   });
 
   if (configuredHarnesses.includes("claude")) {
@@ -395,6 +523,7 @@ export async function doctorChecks(projectRoot: string): Promise<DoctorCheck[]> 
     const wiringOk =
       sessionCommands.some((cmd) => cmd.includes("session-start.sh")) &&
       preCommands.some((cmd) => cmd.includes("prompt-guard.sh")) &&
+      preCommands.some((cmd) => cmd.includes("workflow-guard.sh")) &&
       preCommands.some((cmd) => cmd.includes("observe.sh pre")) &&
       postCommands.some((cmd) => cmd.includes("observe.sh post")) &&
       postCommands.some((cmd) => cmd.includes("context-monitor.sh")) &&
@@ -403,7 +532,7 @@ export async function doctorChecks(projectRoot: string): Promise<DoctorCheck[]> 
     checks.push({
       name: "hook:wiring:claude",
       ok: wiringOk,
-      details: `${file} must wire session-start/prompt-guard/observe/context-monitor/summarize/stop-checkpoint`
+      details: `${file} must wire session-start/prompt-guard/workflow-guard/observe/context-monitor/summarize/stop-checkpoint`
     });
   }
 
@@ -434,6 +563,7 @@ export async function doctorChecks(projectRoot: string): Promise<DoctorCheck[]> 
     const wiringOk =
       sessionCommands.some((cmd) => cmd.includes("session-start.sh")) &&
       preCommands.some((cmd) => cmd.includes("prompt-guard.sh")) &&
+      preCommands.some((cmd) => cmd.includes("workflow-guard.sh")) &&
       preCommands.some((cmd) => cmd.includes("observe.sh pre")) &&
       postCommands.some((cmd) => cmd.includes("observe.sh post")) &&
       postCommands.some((cmd) => cmd.includes("context-monitor.sh")) &&
@@ -442,7 +572,22 @@ export async function doctorChecks(projectRoot: string): Promise<DoctorCheck[]> 
     checks.push({
       name: "hook:wiring:cursor",
       ok: wiringOk,
-      details: `${file} must wire session-start/prompt-guard/observe/context-monitor/summarize/stop-checkpoint`
+      details: `${file} must wire session-start/prompt-guard/workflow-guard/observe/context-monitor/summarize/stop-checkpoint`
+    });
+
+    const cursorRulePath = path.join(projectRoot, ".cursor/rules/cclaw-workflow.mdc");
+    let cursorRuleOk = false;
+    if (await exists(cursorRulePath)) {
+      const content = await fs.readFile(cursorRulePath, "utf8");
+      cursorRuleOk =
+        content.includes("cclaw-managed-cursor-workflow-rule") &&
+        content.includes(".cclaw/state/flow-state.json") &&
+        content.includes("/cc-next");
+    }
+    checks.push({
+      name: "rules:cursor:workflow",
+      ok: cursorRuleOk,
+      details: `${cursorRulePath} must include managed marker and core cclaw workflow guardrails`
     });
   }
 
@@ -465,6 +610,7 @@ export async function doctorChecks(projectRoot: string): Promise<DoctorCheck[]> 
     const wiringOk =
       sessionCommands.some((cmd) => cmd.includes("session-start.sh")) &&
       preCommands.some((cmd) => cmd.includes("prompt-guard.sh")) &&
+      preCommands.some((cmd) => cmd.includes("workflow-guard.sh")) &&
       preCommands.some((cmd) => cmd.includes("observe.sh pre")) &&
       postCommands.some((cmd) => cmd.includes("observe.sh post")) &&
       postCommands.some((cmd) => cmd.includes("context-monitor.sh")) &&
@@ -473,7 +619,7 @@ export async function doctorChecks(projectRoot: string): Promise<DoctorCheck[]> 
     checks.push({
       name: "hook:wiring:codex",
       ok: wiringOk,
-      details: `${file} must wire session-start/prompt-guard/observe/context-monitor/summarize/stop-checkpoint`
+      details: `${file} must wire session-start/prompt-guard/workflow-guard/observe/context-monitor/summarize/stop-checkpoint`
     });
   }
 
@@ -486,6 +632,9 @@ export async function doctorChecks(projectRoot: string): Promise<DoctorCheck[]> 
         content.includes("event: async") &&
         content.includes('"tool.execute.before"') &&
         content.includes('"tool.execute.after"') &&
+        content.includes("prompt-guard.sh") &&
+        content.includes("workflow-guard.sh") &&
+        content.includes("context-monitor.sh") &&
         content.includes('"session.idle"') &&
         content.includes('"session.updated"') &&
         content.includes('"session.resumed"') &&
@@ -495,7 +644,13 @@ export async function doctorChecks(projectRoot: string): Promise<DoctorCheck[]> 
     checks.push({
       name: "lifecycle:opencode:rehydration_events",
       ok,
-      details: `${file} must include event lifecycle handler, tool.execute.before/after, session.idle summarization, and transform rehydration`
+      details: `${file} must include event lifecycle handler, tool.execute.before/after with prompt/workflow/context hooks, session.idle summarization, and transform rehydration`
+    });
+    const registration = await opencodeRegistrationCheck(projectRoot);
+    checks.push({
+      name: "hook:opencode:config_registration",
+      ok: registration.ok,
+      details: registration.details
     });
   }
 
@@ -551,8 +706,56 @@ export async function doctorChecks(projectRoot: string): Promise<DoctorCheck[]> 
     ok: await exists(path.join(projectRoot, RUNTIME_ROOT, "state", "suggestion-memory.json")),
     details: `${RUNTIME_ROOT}/state/suggestion-memory.json must exist for proactive suggestion memory`
   });
+  const contextModeStatePath = path.join(projectRoot, RUNTIME_ROOT, "state", "context-mode.json");
+  checks.push({
+    name: "state:context_mode_exists",
+    ok: await exists(contextModeStatePath),
+    details: `${RUNTIME_ROOT}/state/context-mode.json must exist for context mode switching`
+  });
+  if (await exists(contextModeStatePath)) {
+    let contextModeOk = false;
+    try {
+      const parsed = JSON.parse(await fs.readFile(contextModeStatePath, "utf8")) as Record<string, unknown>;
+      const activeMode = typeof parsed.activeMode === "string" ? parsed.activeMode : "";
+      contextModeOk = activeMode.length > 0 && Object.prototype.hasOwnProperty.call(CONTEXT_MODES, activeMode);
+    } catch {
+      contextModeOk = false;
+    }
+    checks.push({
+      name: "state:context_mode_valid",
+      ok: contextModeOk,
+      details: `${RUNTIME_ROOT}/state/context-mode.json must reference one of: ${Object.keys(CONTEXT_MODES).join(", ")} (default=${DEFAULT_CONTEXT_MODE})`
+    });
+  }
+  for (const mode of Object.keys(CONTEXT_MODES)) {
+    const modePath = path.join(projectRoot, RUNTIME_ROOT, "contexts", `${mode}.md`);
+    checks.push({
+      name: `contexts:mode:${mode}`,
+      ok: await exists(modePath),
+      details: modePath
+    });
+  }
 
-  const flowState = await readFlowState(projectRoot);
+  let flowState = await readFlowState(projectRoot);
+  if (options.reconcileCurrentStageGates === true) {
+    const reconciliation = await reconcileAndWriteCurrentStageGateCatalog(projectRoot);
+    if (reconciliation.wrote) {
+      flowState = {
+        ...flowState,
+        stageGateCatalog: {
+          ...flowState.stageGateCatalog,
+          [reconciliation.stage]: reconciliation.after
+        }
+      };
+    }
+    checks.push({
+      name: "gates:reconcile:writeback",
+      ok: true,
+      details: reconciliation.wrote
+        ? `reconciled gate catalog for stage "${reconciliation.stage}": ${reconciliation.notes.join("; ")}`
+        : `no gate reconciliation changes needed for stage "${reconciliation.stage}"`
+    });
+  }
   checks.push({
     name: "flow_state:active_run_id",
     ok: typeof flowState.activeRunId === "string" && flowState.activeRunId.trim().length > 0,
@@ -572,6 +775,59 @@ export async function doctorChecks(projectRoot: string): Promise<DoctorCheck[]> 
     name: "run:active_handoff",
     ok: await exists(path.join(projectRoot, RUNTIME_ROOT, "runs", flowState.activeRunId, "00-handoff.md")),
     details: `${RUNTIME_ROOT}/runs/${flowState.activeRunId}/00-handoff.md must exist`
+  });
+
+  const delegation = await checkMandatoryDelegations(projectRoot, flowState.currentStage);
+  checks.push({
+    name: "delegation:mandatory:current_stage",
+    ok: delegation.satisfied,
+    details: delegation.satisfied
+      ? `All mandatory delegations satisfied for stage "${flowState.currentStage}"`
+      : `Missing mandatory delegations for stage "${flowState.currentStage}": ${delegation.missing.join(", ")}`
+  });
+  checks.push({
+    name: "warning:delegation:waived",
+    ok: true,
+    details: delegation.waived.length > 0
+      ? `warning: waived mandatory delegations for stage "${flowState.currentStage}": ${delegation.waived.join(", ")}`
+      : "no waived mandatory delegations for current stage"
+  });
+
+  const trace = await buildTraceMatrix(projectRoot);
+  const traceHasSignal =
+    trace.entries.length > 0 ||
+    trace.orphanedCriteria.length > 0 ||
+    trace.orphanedTasks.length > 0 ||
+    trace.orphanedTests.length > 0;
+  checks.push({
+    name: "trace:criteria_coverage",
+    ok: !traceHasSignal || trace.orphanedCriteria.length === 0,
+    details: trace.orphanedCriteria.length === 0
+      ? "all spec criteria are linked to plan tasks"
+      : `orphaned criteria: ${trace.orphanedCriteria.join(", ")}`
+  });
+  checks.push({
+    name: "trace:task_to_test_coverage",
+    ok: !traceHasSignal || trace.orphanedTasks.length === 0,
+    details: trace.orphanedTasks.length === 0
+      ? "all plan tasks are linked to test slices"
+      : `orphaned tasks: ${trace.orphanedTasks.join(", ")}`
+  });
+  checks.push({
+    name: "trace:test_to_criteria_coverage",
+    ok: !traceHasSignal || trace.orphanedTests.length === 0,
+    details: trace.orphanedTests.length === 0
+      ? "all test slices map to acceptance-linked tasks"
+      : `orphaned test slices: ${trace.orphanedTests.join(", ")}`
+  });
+
+  const gateEvidence = await verifyCurrentStageGateEvidence(projectRoot, flowState);
+  checks.push({
+    name: "gates:evidence:current_stage",
+    ok: gateEvidence.ok,
+    details: gateEvidence.ok
+      ? `stage "${gateEvidence.stage}" gate evidence is consistent (required=${gateEvidence.requiredCount}, passed=${gateEvidence.passedCount}, blocked=${gateEvidence.blockedCount})`
+      : gateEvidence.issues.join(" ")
   });
 
   // Utility shims in harness dirs
@@ -646,7 +902,7 @@ export async function doctorChecks(projectRoot: string): Promise<DoctorCheck[]> 
     details: rulesJsonPath
   });
 
-  const policy = await policyChecks(projectRoot);
+  const policy = await policyChecks(projectRoot, { harnesses: configuredHarnesses });
   checks.push(...policy);
 
   return checks;

@@ -1,9 +1,14 @@
+import { execFile } from "node:child_process";
 import fs from "node:fs/promises";
 import os from "node:os";
 import path from "node:path";
+import { promisify } from "node:util";
 import { describe, expect, it } from "vitest";
+import { readConfig, writeConfig } from "../../src/config.js";
 import { doctorChecks, doctorSucceeded } from "../../src/doctor.js";
 import { initCclaw, syncCclaw, uninstallCclaw } from "../../src/install.js";
+
+const execFileAsync = promisify(execFile);
 
 function countOccurrences(value: string, needle: string): number {
   const escaped = needle.replace(/[.*+?^${}()|[\]\\]/gu, "\\$&");
@@ -12,6 +17,17 @@ function countOccurrences(value: string, needle: string): number {
 }
 
 describe("install lifecycle", () => {
+  it("doctor passes for claude-only harness installs", async () => {
+    const root = await fs.mkdtemp(path.join(os.tmpdir(), "cclaw-claude-only-"));
+    await initCclaw({ projectRoot: root, harnesses: ["claude"] });
+
+    const checks = await doctorChecks(root);
+    expect(doctorSucceeded(checks)).toBe(true);
+
+    await expect(fs.stat(path.join(root, ".cursor/rules/cclaw-workflow.mdc"))).rejects.toBeDefined();
+    await expect(fs.stat(path.join(root, ".opencode/plugins/cclaw-plugin.mjs"))).rejects.toBeDefined();
+  });
+
   it("initializes runtime and passes doctor checks", async () => {
     const root = await fs.mkdtemp(path.join(os.tmpdir(), "cclaw-init-"));
     await initCclaw({ projectRoot: root });
@@ -34,6 +50,16 @@ describe("install lifecycle", () => {
       await fs.readFile(path.join(root, ".claude/hooks/hooks.json"), "utf8")
     ) as { hooks: { SessionStart: Array<{ matcher?: string }> } };
     expect(claudeHooks.hooks.SessionStart[0]?.matcher).toBe("startup|resume|clear|compact");
+
+    const opencodeConfig = JSON.parse(
+      await fs.readFile(path.join(root, "opencode.json"), "utf8")
+    ) as { plugins?: unknown[] };
+    expect(Array.isArray(opencodeConfig.plugins)).toBe(true);
+    expect(opencodeConfig.plugins).toContain(".opencode/plugins/cclaw-plugin.mjs");
+
+    const cursorRule = await fs.readFile(path.join(root, ".cursor/rules/cclaw-workflow.mdc"), "utf8");
+    expect(cursorRule).toContain("cclaw-managed-cursor-workflow-rule");
+    expect(cursorRule).toContain("/cc-next");
 
     const agentsMd = await fs.readFile(path.join(root, "AGENTS.md"), "utf8");
     expect(agentsMd).toContain("## Cclaw — Workflow Adapter");
@@ -94,6 +120,65 @@ describe("install lifecycle", () => {
     await expect(fs.stat(legacySkillDir)).rejects.toBeDefined();
     await expect(fs.stat(legacyBrowserQaDir)).rejects.toBeDefined();
     await expect(fs.stat(configPath)).resolves.toBeDefined();
+  });
+
+  it("sync installs managed git hooks when opt-in is enabled", async () => {
+    const root = await fs.mkdtemp(path.join(os.tmpdir(), "cclaw-git-hooks-"));
+    await execFileAsync("git", ["init"], { cwd: root });
+    await initCclaw({ projectRoot: root });
+
+    const current = await readConfig(root);
+    await writeConfig(root, {
+      ...current,
+      promptGuardMode: "strict",
+      gitHookGuards: true
+    });
+    await syncCclaw(root);
+
+    const preCommitRelay = await fs.readFile(path.join(root, ".git/hooks/pre-commit"), "utf8");
+    const prePushRelay = await fs.readFile(path.join(root, ".git/hooks/pre-push"), "utf8");
+    expect(preCommitRelay).toContain("cclaw-managed-git-hook");
+    expect(prePushRelay).toContain("cclaw-managed-git-hook");
+
+    const runtimePreCommit = await fs.readFile(path.join(root, ".cclaw/hooks/git/pre-commit.sh"), "utf8");
+    const runtimePrePush = await fs.readFile(path.join(root, ".cclaw/hooks/git/pre-push.sh"), "utf8");
+    expect(runtimePreCommit).toContain("prompt-guard.sh");
+    expect(runtimePrePush).toContain("prompt-guard.sh");
+
+    const promptGuard = await fs.readFile(path.join(root, ".cclaw/hooks/prompt-guard.sh"), "utf8");
+    expect(promptGuard).toContain('PROMPT_GUARD_MODE="strict"');
+  });
+
+  it("sync removes managed artifacts for harnesses removed from config", async () => {
+    const root = await fs.mkdtemp(path.join(os.tmpdir(), "cclaw-harness-remove-"));
+    await initCclaw({ projectRoot: root });
+
+    const current = await readConfig(root);
+    await writeConfig(root, {
+      ...current,
+      harnesses: ["claude", "codex"]
+    });
+    await syncCclaw(root);
+
+    await expect(fs.stat(path.join(root, ".opencode/plugins/cclaw-plugin.mjs"))).rejects.toBeDefined();
+    await expect(fs.stat(path.join(root, ".cursor/rules/cclaw-workflow.mdc"))).rejects.toBeDefined();
+
+    const opencodeConfigPath = path.join(root, "opencode.json");
+    const opencodeConfigExists = await fs.stat(opencodeConfigPath).then(() => true).catch(() => false);
+    if (opencodeConfigExists) {
+      const opencodeConfigRaw = await fs.readFile(opencodeConfigPath, "utf8");
+      expect(opencodeConfigRaw).not.toContain(".opencode/plugins/cclaw-plugin.mjs");
+    }
+
+    const cursorHooksPath = path.join(root, ".cursor/hooks.json");
+    const cursorHooksExists = await fs.stat(cursorHooksPath).then(() => true).catch(() => false);
+    if (cursorHooksExists) {
+      const cursorHooksRaw = await fs.readFile(cursorHooksPath, "utf8");
+      expect(cursorHooksRaw).not.toContain(".cclaw/hooks/");
+    }
+
+    const checks = await doctorChecks(root);
+    expect(doctorSucceeded(checks)).toBe(true);
   });
 
   it("sync merges generated hooks with user hooks without duplication", async () => {
@@ -202,6 +287,7 @@ describe("install lifecycle", () => {
     await expect(fs.stat(path.join(root, ".cclaw"))).rejects.toBeDefined();
     await expect(fs.stat(path.join(root, ".claude/commands/cc-brainstorm.md"))).rejects.toBeDefined();
     await expect(fs.stat(path.join(root, ".cursor/hooks.json"))).rejects.toBeDefined();
+    await expect(fs.stat(path.join(root, ".cursor/rules/cclaw-workflow.mdc"))).rejects.toBeDefined();
   });
 
   it("uninstall strips only cclaw hooks and preserves user hooks", async () => {

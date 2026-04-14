@@ -25,6 +25,12 @@ Turn a rough request into an approved design direction with clear assumptions an
 - Requirements are ambiguous or solution path is unclear
 - Before any implementation-stage command
 
+## When Not to Use
+- An approved design, spec, and plan already exist and work is in execution stages
+- The request is strictly branch finalization or release handoff work
+- The task is purely retrospective after ship with no new design decisions needed
+
+
 ## Inputs
 - problem statement
 - constraints
@@ -232,6 +238,21 @@ When this stage ends, report one of:
 
 If project config at \`.cclaw/config.yaml\` has \`autoAdvance: true\`, treat it as advisory only. This stage has an explicit pause or confirmation rule, so do NOT auto-advance after the gates pass. Suggest the next command (\`/cc-scope\`) only after the required confirmation is satisfied, then wait.
 
+
+## Progressive Disclosure
+
+### Depth
+- Primary stage procedure (this file): \`.cclaw/skills/brainstorming/SKILL.md\`
+- Orchestrator contract (gate language and handoff): \`.cclaw/commands/brainstorm.md\`
+- Artifact structure baseline: \`.cclaw/templates/01-brainstorm.md\`
+- Runtime state truth source: \`.cclaw/state/flow-state.json\` + \`.cclaw/runs/<activeRunId>/\`
+
+### See also
+- Meta routing and activation rules: \`.cclaw/skills/using-cclaw/SKILL.md\`
+- Session continuity and checkpoint behavior: \`.cclaw/skills/session/SKILL.md\`
+- \`.cclaw/skills/autoplan/SKILL.md\` — when the user wants brainstorm→plan orchestration in one flow
+- \`.cclaw/skills/learnings/SKILL.md\` — to capture durable framing insights early
+- Next-stage handoff command: \`/cc-scope\`
 
 ## Operational Self-Improvement
 

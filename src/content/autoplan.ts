@@ -69,10 +69,17 @@ This skill describes **what the agent must do when invoked as \`/cc-autoplan\`**
 ### Phase 2 — Scope (always runs)
 
 - Follow \`.cclaw/skills/scope-shaping/SKILL.md\` at **full depth**.
-- **Default mode selection:**
-  - **SELECTIVE_EXPANSION** for **greenfield** work (new capability, new subsystem, new user-facing flow with meaningful net-new behavior).
-  - **HOLD** for **enhancement/bugfix** work (tight blast radius, correctness/perf/regression risk dominates).
+- **Run scope-mode heuristics** (see dedicated section below), then select exactly one:
+  - **SCOPE_EXPANSION** (dream big)
+  - **SELECTIVE_EXPANSION** (hold core scope, cherry-pick high-value expansions)
+  - **HOLD** (maximum rigor on requested scope)
+  - **SCOPE_REDUCTION** (strip to essentials)
+- **Default recommendation (before scoring):**
+  - Greenfield/product-bet starts at **SELECTIVE_EXPANSION**.
+  - Enhancement/bugfix starts at **HOLD**.
+  - If predicted blast radius is **>15 files** or introduces new infra under tight constraints, bias toward **SCOPE_REDUCTION**.
 - **Auto-answer** scope boundary questions when they are **mechanical** or **taste** (never user challenges).
+- **Surface requirement:** write a **Scope Mode Heuristics** table and final selected mode rationale in \`02-scope.md\`.
 - **Artifact:** \`.cclaw/artifacts/02-scope.md\`
 
 ### Phase 3 — Design (always runs)
@@ -151,6 +158,34 @@ Present a **structured summary** to the user and **do not proceed** to implement
   - why (repo evidence + reasoning)
   - cost if the agent is wrong
 - **Gate:** Wait for explicit user resolution before treating that thread as decided.
+
+## Scope Mode Heuristics (Phase 2)
+
+Score each signal as **+1** (expansion bias), **0** (neutral), or **-1** (contraction bias), then total.
+Record the scoring table in \`.cclaw/artifacts/02-scope.md\`.
+
+| Signal | +1 Expansion Bias | 0 Neutral | -1 Contraction Bias |
+|---|---|---|---|
+| Product novelty | Net-new workflow/subsystem | Moderate feature extension | Bugfix or narrow patch |
+| User value upside | Material step-function in UX/DX/business value | Incremental improvement | Marginal gain only |
+| Blast radius | Limited, coherent module set | Mixed | Wide cross-cutting changes |
+| Delivery risk | Low dependency and integration risk | Moderate | High regression or unknown coupling |
+| Time/constraint pressure | Flexible timeline | Manageable | Tight deadline or strict compliance window |
+| Operability burden | Existing observability/release path supports growth | Partial readiness | Missing guardrails; expansion would outpace controls |
+
+**Mode recommendation by score:**
+- **+3 or higher:** recommend **SCOPE_EXPANSION**
+- **+1 to +2:** recommend **SELECTIVE_EXPANSION**
+- **0 to -2:** recommend **HOLD**
+- **-3 or lower:** recommend **SCOPE_REDUCTION**
+
+**Override heuristics (higher priority):**
+- If user asks for immediate bugfix/hotfix with reliability urgency, floor mode at **HOLD**.
+- If expansion requires new infra/service boundaries without prior operational readiness, prefer **SCOPE_REDUCTION** or **HOLD**.
+- If user explicitly requests an ambitious bet and constraints are flexible, allow **SCOPE_EXPANSION** even when score is borderline (must log risk assumptions).
+
+**Surfacing rule:**
+- Final Approval Gate must include: selected mode, score summary, and top 2 signals that drove the choice.
 
 ## Decision Audit Trail (running table)
 
@@ -237,7 +272,7 @@ Run **brainstorm → scope → design → spec → plan** as a single orchestrat
 
 1. **Phase 0 — Intake:** restore point + context scan + UI/DX scope flags + read all five stage skills.
 2. **Phase 1 — Brainstorm:** full \`brainstorming\` skill depth → \`.cclaw/artifacts/01-brainstorm.md\`.
-3. **Phase 2 — Scope:** full \`scope-shaping\` skill depth (greenfield default **SELECTIVE_EXPANSION**, enhancement/bug default **HOLD**) → \`02-scope.md\`.
+3. **Phase 2 — Scope:** full \`scope-shaping\` skill depth + scope-mode heuristic scoring (EXPANSION / SELECTIVE / HOLD / REDUCTION) → \`02-scope.md\`.
 4. **Phase 3 — Design:** full \`engineering-design-lock\` skill depth; all review sections evaluated → \`03-design.md\`.
 5. **Phase 4 — Spec:** full \`specification-authoring\` skill depth → \`04-spec.md\`.
 6. **Phase 5 — Plan:** full \`planning-and-task-breakdown\` skill depth; maintain audit trail table → \`05-plan.md\`.
@@ -259,6 +294,17 @@ Run **brainstorm → scope → design → spec → plan** as a single orchestrat
 - **Mechanical:** one clearly right answer → auto-decide silently + **audit log row**.
 - **Taste:** reasonable disagreement → auto-decide with recommendation + **audit log row** + **surface at gate** with **one-line rejected-alternative impact**.
 - **User Challenge:** agent recommends changing user direction → **never** auto-decide; present evidence + costs; await user.
+
+## Scope Mode Heuristics (Phase 2)
+
+- Score six scope signals (+1 / 0 / -1): novelty, value upside, blast radius, delivery risk, time pressure, operability burden.
+- Map total score to recommendation:
+  - **+3+** → **SCOPE_EXPANSION**
+  - **+1..+2** → **SELECTIVE_EXPANSION**
+  - **0..-2** → **HOLD**
+  - **-3-** → **SCOPE_REDUCTION**
+- Apply overrides: urgent bugfixes floor at **HOLD**; high-risk infra expansion biases **HOLD/REDUCTION**.
+- Persist scoring + selected mode in \`02-scope.md\`, then surface it again in the Final Approval Gate summary.
 
 ## Final Approval Gate (options A-E)
 
@@ -291,6 +337,7 @@ export function autoplanAgentsMdBlock(): string {
 
 Use \`/cc-autoplan\` to run brainstorm→scope→design→spec→plan in one shot with auto-decisions.
 - Mechanical questions are auto-answered using 6 principles
+- Scope mode (EXPANSION / SELECTIVE / HOLD / REDUCTION) is selected via explicit heuristic scoring in Phase 2
 - Taste decisions are auto-answered but surfaced at a single final approval gate
 - User challenges are NEVER auto-answered
 - Restore point is created before any work begins
