@@ -330,8 +330,14 @@ describe("hooks lifecycle rehydration", () => {
 
     const pluginPath = path.join(root, ".cclaw/hooks/opencode-plugin.mjs");
     const summarizerPath = path.join(root, ".cclaw/hooks/summarize-observations.mjs");
+    const summarizeScriptPath = path.join(root, ".cclaw/hooks/summarize-observations.sh");
+    const stopScriptPath = path.join(root, ".cclaw/hooks/stop-checkpoint.sh");
     await fs.writeFile(pluginPath, opencodePluginJs(), "utf8");
     await fs.writeFile(summarizerPath, summarizeObservationsRuntimeModule(), "utf8");
+    await fs.writeFile(summarizeScriptPath, summarizeObservationsScript(), "utf8");
+    await fs.writeFile(stopScriptPath, stopCheckpointScript(), "utf8");
+    await fs.chmod(summarizeScriptPath, 0o755);
+    await fs.chmod(stopScriptPath, 0o755);
 
     const imported = await import(`${pathToFileURL(pluginPath).href}?t=${Date.now()}`);
     const pluginFactory = imported.default as (ctx: { directory: string }) => {
@@ -372,6 +378,12 @@ describe("hooks lifecycle rehydration", () => {
 
     const learnings = await fs.readFile(path.join(root, ".cclaw/learnings.jsonl"), "utf8");
     expect(learnings).toContain("frequent-errors-RunCommand");
+    const checkpoint = JSON.parse(await fs.readFile(path.join(root, ".cclaw/state/checkpoint.json"), "utf8")) as {
+      runId?: string;
+      stage?: string;
+    };
+    expect(checkpoint.runId).toBe("run-opencode");
+    expect(checkpoint.stage).toBe("build");
   });
 
   it("opencode plugin rehydrates on multiple lifecycle events", () => {

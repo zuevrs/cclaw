@@ -900,6 +900,22 @@ export default function cclawPlugin(ctx) {
     }
   }
 
+  async function runHookScript(scriptFileName, payload = {}) {
+    const { spawnSync } = await import("node:child_process");
+    const scriptPath = join(root, "${RUNTIME_ROOT}/hooks/" + scriptFileName);
+    const input = typeof payload === "string" ? payload : JSON.stringify(payload ?? {});
+    try {
+      spawnSync("bash", [scriptPath], {
+        cwd: root,
+        timeout: 20000,
+        stdio: ["pipe", "ignore", "ignore"],
+        input
+      });
+    } catch {
+      // advisory-only runtime path
+    }
+  }
+
   function toText(value) {
     if (typeof value === "string") return value;
     try {
@@ -975,17 +991,8 @@ export default function cclawPlugin(ctx) {
       }
       if (name === "session.idle") {
         if (!observationEnabled()) return;
-        const { spawnSync } = await import("node:child_process");
-        const summarize = join(root, "${RUNTIME_ROOT}/hooks/summarize-observations.mjs");
-        try {
-          spawnSync("node", [summarize, observationsPath, learningsPath, new Date().toISOString()], {
-            cwd: root,
-            timeout: 15000,
-            stdio: "ignore"
-          });
-        } catch {
-          // ignore
-        }
+        await runHookScript("summarize-observations.sh");
+        await runHookScript("stop-checkpoint.sh", { loop_count: 0 });
       }
       if (name === "tool.execute.before") {
         recordToolEvent("pre", data);
