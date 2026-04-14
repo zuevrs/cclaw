@@ -1220,34 +1220,34 @@ export function cursorHooksJsonWithObservation(): string {
     version: 1,
     hooks: {
       sessionStart: [{
-        command: `${RUNTIME_ROOT}/hooks/session-start.sh`
+        command: `bash ${RUNTIME_ROOT}/hooks/session-start.sh`
       }],
       sessionResume: [{
-        command: `${RUNTIME_ROOT}/hooks/session-start.sh`
+        command: `bash ${RUNTIME_ROOT}/hooks/session-start.sh`
       }],
       sessionClear: [{
-        command: `${RUNTIME_ROOT}/hooks/session-start.sh`
+        command: `bash ${RUNTIME_ROOT}/hooks/session-start.sh`
       }],
       sessionCompact: [{
-        command: `${RUNTIME_ROOT}/hooks/session-start.sh`
+        command: `bash ${RUNTIME_ROOT}/hooks/session-start.sh`
       }],
       preToolUse: [{
         matcher: "*",
-        command: `${RUNTIME_ROOT}/hooks/prompt-guard.sh`
+        command: `bash ${RUNTIME_ROOT}/hooks/prompt-guard.sh`
       }, {
         matcher: "*",
-        command: `${RUNTIME_ROOT}/hooks/observe.sh pre`
+        command: `bash ${RUNTIME_ROOT}/hooks/observe.sh pre`
       }],
       postToolUse: [{
         matcher: "*",
-        command: `${RUNTIME_ROOT}/hooks/context-monitor.sh`
+        command: `bash ${RUNTIME_ROOT}/hooks/context-monitor.sh`
       }, {
         matcher: "*",
-        command: `${RUNTIME_ROOT}/hooks/observe.sh post`
+        command: `bash ${RUNTIME_ROOT}/hooks/observe.sh post`
       }],
       stop: [
-        { command: `${RUNTIME_ROOT}/hooks/summarize-observations.sh`, timeout: 15 },
-        { command: `${RUNTIME_ROOT}/hooks/stop-checkpoint.sh`, timeout: 10 }
+        { command: `bash ${RUNTIME_ROOT}/hooks/summarize-observations.sh`, timeout: 15 },
+        { command: `bash ${RUNTIME_ROOT}/hooks/stop-checkpoint.sh`, timeout: 10 }
       ]
     }
   }, null, 2);
