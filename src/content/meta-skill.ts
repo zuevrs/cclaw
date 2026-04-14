@@ -21,26 +21,19 @@ This meta-skill helps you discover and apply the right cclaw stage for the curre
 
 ## Skill Discovery Flowchart
 
-When a task arrives, identify the development phase and invoke the matching command:
+Use \`/cc\` to start or \`/cc-next\` to continue:
 
 \`\`\`
 Task arrives
     |
-    +-- Vague idea / needs exploration?  --> /cc-brainstorm
-    +-- Need to shape scope / challenge premises?  --> /cc-scope
-    +-- Have scope, need architecture / design lock?  --> /cc-design
-    +-- Have design, need formal specification?  --> /cc-spec
-    +-- Have spec, need task breakdown / plan?  --> /cc-plan
-    +-- Have plan, need to write tests first?  --> /cc-test
-    +-- Have failing tests, need implementation?  --> /cc-build
-    +-- Have implementation, need review?  --> /cc-review
-    +-- Reviewed and approved, need to ship?  --> /cc-ship
-    |
-    +-- Cross-cutting:
-    |   +-- Want to check/add project learnings?  --> /cc-learn
-    |
+    +-- New idea / starting fresh?  --> /cc <idea>  (starts brainstorm)
+    +-- Resuming / continuing?  --> /cc  or  /cc-next
+    +-- Want to check/add project learnings?  --> /cc-learn
     +-- No cclaw stage applies?  --> Respond normally
 \`\`\`
+
+Stage progression is handled automatically by \`/cc-next\`. The flow moves through:
+brainstorm → scope → design → spec → plan → test → build → review → ship
 
 ## Flow State Check
 
@@ -57,7 +50,7 @@ Before starting work, ALWAYS:
 3. **One stage at a time.** Complete the current stage before advancing to the next.
 4. **Gates must pass.** Every stage has required gates — the agent cannot claim completion without satisfying them.
 5. **Artifacts are mandatory.** Each stage writes to \`.cclaw/artifacts/\` and keeps the active run copy in \`.cclaw/runs/<activeRunId>/artifacts/\` — this is the evidence trail.
-6. **When in doubt, start with brainstorm.** If the task is non-trivial and there's no prior artifact, begin with \`/cc-brainstorm\`.
+6. **When in doubt, use \`/cc\`.** If the task is non-trivial and there's no prior artifact, run \`/cc <idea>\` to start brainstorming.
 
 ## Stage Quick Reference
 
@@ -75,7 +68,7 @@ Before starting work, ALWAYS:
 
 ## Skill Loading
 
-Each \`/cc-*\` command loads:
+\`/cc-next\` (and \`/cc\`) automatically loads the right stage files:
 1. **\`.cclaw/skills/<stage>/SKILL.md\`** — the full procedural guide (read this first and follow it)
 2. **\`.cclaw/commands/<stage>.md\`** — thin orchestrator (entry/exit summary, gates, anchors)
 
