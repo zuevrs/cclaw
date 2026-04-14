@@ -91,7 +91,7 @@ When creating a checkpoint at session boundaries:
 
 \`\`\`json
 {
-  "stage": "build",
+  "stage": "tdd",
   "status": "in_progress",
   "lastCompletedStep": "GREEN for task T2",
   "remainingSteps": ["REFACTOR T2", "RED T3", "GREEN T3", "REFACTOR T3"],

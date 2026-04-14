@@ -294,8 +294,8 @@ Execution rule: complete and verify each wave before starting the next wave.
 export const RULEBOOK_MARKDOWN = `# Cclaw Rulebook
 
 ## MUST_ALWAYS
-- Follow flow order: brainstorm -> scope -> design -> spec -> plan -> test -> build -> review -> ship
-- Require explicit user confirmation after /plan before /test or /build
+- Follow flow order: brainstorm -> scope -> design -> spec -> plan -> tdd -> review -> ship
+- Require explicit user confirmation after plan before TDD
 - Keep evidence artifacts in \`.cclaw/artifacts/\`
 - Enforce RED before GREEN in TDD
 - Run two-layer review (spec_compliance and code_quality) before ship
@@ -306,7 +306,7 @@ export const RULEBOOK_MARKDOWN = `# Cclaw Rulebook
 - Use conventional commits: \`type(scope): description\` (feat, fix, refactor, test, docs, chore)
 
 ## MUST_NEVER
-- Skip /test and jump directly to /build
+- Skip RED phase and jump directly to GREEN in TDD
 - Ship with critical review findings
 - Start implementation during /brainstorm
 - Modify generated cclaw files manually when CLI can regenerate them
@@ -336,11 +336,11 @@ alwaysApply: true
 
 # Cclaw Workflow Guardrails
 
-- Follow stage order: brainstorm -> scope -> design -> spec -> plan -> test -> build -> review -> ship.
+- Follow stage order: brainstorm -> scope -> design -> spec -> plan -> tdd -> review -> ship.
 - Read \`.cclaw/state/flow-state.json\` before acting; continue from current stage when active.
 - Use \`/cc-next\` only after required gates pass; never bypass explicit pause/approval rules.
 - Keep evidence in \`.cclaw/artifacts/\` and canonical run copies in \`.cclaw/runs/<activeRunId>/artifacts/\`.
-- For machine-only checks in design/plan/test/build/review/ship, dispatch required specialists automatically when tooling supports it.
+- For machine-only checks in design/plan/tdd/review/ship, dispatch required specialists automatically when tooling supports it.
 - Ask for user input only at explicit approval gates (scope mode, plan approval, user challenge resolution, ship finalization).
 - Treat \`.cclaw/skills/using-cclaw/SKILL.md\` as routing source of truth; load contextual utility skills only when their triggers apply.
 `;

@@ -146,7 +146,7 @@ On session stop or stage completion, the agent should write delegation entries t
 `;
 }
 
-const VERIFICATION_STAGES: FlowStage[] = ["build", "review", "ship"];
+const VERIFICATION_STAGES: FlowStage[] = ["tdd", "review", "ship"];
 
 function waveExecutionModeBlock(stage: FlowStage): string {
   const schema = stageSchema(stage);
@@ -222,12 +222,9 @@ function progressiveDisclosureBlock(stage: FlowStage): string {
       "- `.cclaw/skills/subagent-dev/SKILL.md` — for specialist delegation prompts by task slice",
       "- `.cclaw/skills/parallel-dispatch/SKILL.md` — for multi-agent review planning and reconciliation setup"
     ],
-    test: [
-      "- `.cclaw/skills/debugging/SKILL.md` — when RED behavior is unclear or flakes appear",
-      "- `.cclaw/skills/subagent-dev/SKILL.md` — for machine-only test-slice delegation"
-    ],
-    build: [
-      "- `.cclaw/skills/debugging/SKILL.md` — for root-cause workflow when implementation fails tests",
+    tdd: [
+      "- `.cclaw/skills/debugging/SKILL.md` — when RED behavior is unclear, flakes appear, or implementation fails tests",
+      "- `.cclaw/skills/subagent-dev/SKILL.md` — for machine-only test-slice delegation",
       "- `.cclaw/skills/performance/SKILL.md` — when implementation choices impact latency/throughput"
     ],
     review: [

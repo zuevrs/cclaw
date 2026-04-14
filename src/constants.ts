@@ -52,8 +52,7 @@ export const COMMAND_FILE_ORDER: FlowStage[] = [
   "design",
   "spec",
   "plan",
-  "test",
-  "build",
+  "tdd",
   "review",
   "ship"
 ];

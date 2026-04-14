@@ -269,7 +269,7 @@ is_preimplementation_stage() {
 
 detect_target_stage() {
   local text="$1"
-  for stage in brainstorm scope design spec plan test build review ship; do
+  for stage in brainstorm scope design spec plan tdd review ship; do
     if printf '%s' "$text" | grep -Eq "(/cc-$stage|cc-$stage)\\b"; then
       printf '%s' "$stage"
       return 0
