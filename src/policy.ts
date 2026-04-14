@@ -173,7 +173,9 @@ export async function policyChecks(projectRoot: string): Promise<PolicyCheck[]> 
     { file: runtimeFile("hooks/observe.sh"), needle: "stage-activity.jsonl", name: "hooks:observe:activity_write" },
     { file: runtimeFile("hooks/summarize-observations.mjs"), needle: "frequent-errors-", name: "hooks:summarize:runtime_module" },
     { file: runtimeFile("hooks/opencode-plugin.mjs"), needle: "activeRunId", name: "hooks:opencode:active_run" },
-    { file: ".opencode/plugins/cclaw-plugin.mjs", needle: "\"tool.execute.before\"", name: "hooks:opencode:deployed_tool_hook" }
+    { file: ".opencode/plugins/cclaw-plugin.mjs", needle: "\"tool.execute.before\"", name: "hooks:opencode:deployed_tool_hook" },
+    { file: ".cursor/rules/cclaw-workflow.mdc", needle: "cclaw-managed-cursor-workflow-rule", name: "rules:cursor:managed_marker" },
+    { file: ".cursor/rules/cclaw-workflow.mdc", needle: "/cc-next", name: "rules:cursor:next_command_guidance" }
   ];
 
   for (const check of utilitySkillChecks) {

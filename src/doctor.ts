@@ -565,6 +565,21 @@ export async function doctorChecks(projectRoot: string): Promise<DoctorCheck[]> 
       ok: wiringOk,
       details: `${file} must wire session-start/prompt-guard/observe/context-monitor/summarize/stop-checkpoint`
     });
+
+    const cursorRulePath = path.join(projectRoot, ".cursor/rules/cclaw-workflow.mdc");
+    let cursorRuleOk = false;
+    if (await exists(cursorRulePath)) {
+      const content = await fs.readFile(cursorRulePath, "utf8");
+      cursorRuleOk =
+        content.includes("cclaw-managed-cursor-workflow-rule") &&
+        content.includes(".cclaw/state/flow-state.json") &&
+        content.includes("/cc-next");
+    }
+    checks.push({
+      name: "rules:cursor:workflow",
+      ok: cursorRuleOk,
+      details: `${cursorRulePath} must include managed marker and core cclaw workflow guardrails`
+    });
   }
 
   if (configuredHarnesses.includes("codex")) {

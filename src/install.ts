@@ -32,7 +32,12 @@ import {
   summarizeObservationsScript
 } from "./content/observe.js";
 import { META_SKILL_NAME, usingCclawSkillMarkdown } from "./content/meta-skill.js";
-import { ARTIFACT_TEMPLATES, RULEBOOK_MARKDOWN, buildRulesJson } from "./content/templates.js";
+import {
+  ARTIFACT_TEMPLATES,
+  CURSOR_WORKFLOW_RULE_MDC,
+  RULEBOOK_MARKDOWN,
+  buildRulesJson
+} from "./content/templates.js";
 import { stageSkillFolder, stageSkillMarkdown } from "./content/skills.js";
 import { UTILITY_SKILL_FOLDERS, UTILITY_SKILL_MAP } from "./content/utility-skills.js";
 import { createInitialFlowState } from "./flow-state.js";
@@ -49,6 +54,7 @@ export interface InitOptions {
 }
 
 const OPENCODE_PLUGIN_REL_PATH = ".opencode/plugins/cclaw-plugin.mjs";
+const CURSOR_RULE_REL_PATH = ".cursor/rules/cclaw-workflow.mdc";
 const GIT_HOOK_MANAGED_MARKER = "cclaw-managed-git-hook";
 const GIT_HOOK_RUNTIME_REL_DIR = `${RUNTIME_ROOT}/hooks/git`;
 const execFileAsync = promisify(execFile);
@@ -704,6 +710,20 @@ async function writeRulebook(projectRoot: string): Promise<void> {
   );
 }
 
+async function writeCursorWorkflowRule(projectRoot: string, harnesses: HarnessId[]): Promise<void> {
+  const rulePath = path.join(projectRoot, CURSOR_RULE_REL_PATH);
+  if (!harnesses.includes("cursor")) {
+    try {
+      await fs.rm(rulePath, { force: true });
+    } catch {
+      // best-effort cleanup
+    }
+    return;
+  }
+  await ensureDir(path.dirname(rulePath));
+  await writeFileSafe(rulePath, CURSOR_WORKFLOW_RULE_MDC);
+}
+
 async function writeState(projectRoot: string, forceReset = false): Promise<void> {
   const statePath = runtimePath(projectRoot, "state", "flow-state.json");
   if (!forceReset && (await exists(statePath))) {
@@ -818,6 +838,7 @@ async function materializeRuntime(projectRoot: string, config: VibyConfig, force
   await writeHooks(projectRoot, config);
   await syncManagedGitHooks(projectRoot, config);
   await syncHarnessShims(projectRoot, harnesses);
+  await writeCursorWorkflowRule(projectRoot, harnesses);
   await ensureGitignore(projectRoot);
 }
 
@@ -1008,4 +1029,9 @@ export async function uninstallCclaw(projectRoot: string): Promise<void> {
   }
 
   await removeManagedOpenCodePluginConfig(projectRoot, OPENCODE_PLUGIN_REL_PATH);
+  try {
+    await fs.rm(path.join(projectRoot, CURSOR_RULE_REL_PATH), { force: true });
+  } catch {
+    // best-effort cleanup
+  }
 }

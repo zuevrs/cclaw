@@ -325,6 +325,26 @@ delegate to a specialized agent or skill if the harness supports it. The primary
 3. Evaluate the specialist output before acting on it — do not blindly apply recommendations
 `;
 
+export const CURSOR_WORKFLOW_RULE_MDC = `---
+description: cclaw workflow guardrails for Cursor agent sessions
+globs:
+  - "**/*"
+alwaysApply: true
+---
+
+<!-- cclaw-managed-cursor-workflow-rule -->
+
+# Cclaw Workflow Guardrails
+
+- Follow stage order: brainstorm -> scope -> design -> spec -> plan -> test -> build -> review -> ship.
+- Read \`.cclaw/state/flow-state.json\` before acting; continue from current stage when active.
+- Use \`/cc-next\` only after required gates pass; never bypass explicit pause/approval rules.
+- Keep evidence in \`.cclaw/artifacts/\` and canonical run copies in \`.cclaw/runs/<activeRunId>/artifacts/\`.
+- For machine-only checks in design/plan/test/build/review/ship, dispatch required specialists automatically when tooling supports it.
+- Ask for user input only at explicit approval gates (scope mode, plan approval, user challenge resolution, ship finalization).
+- Treat \`.cclaw/skills/using-cclaw/SKILL.md\` as routing source of truth; load contextual utility skills only when their triggers apply.
+`;
+
 export function buildRulesJson(): Record<string, unknown> {
   return {
     version: 1,

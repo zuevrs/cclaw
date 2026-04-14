@@ -46,6 +46,10 @@ describe("install lifecycle", () => {
     expect(Array.isArray(opencodeConfig.plugins)).toBe(true);
     expect(opencodeConfig.plugins).toContain(".opencode/plugins/cclaw-plugin.mjs");
 
+    const cursorRule = await fs.readFile(path.join(root, ".cursor/rules/cclaw-workflow.mdc"), "utf8");
+    expect(cursorRule).toContain("cclaw-managed-cursor-workflow-rule");
+    expect(cursorRule).toContain("/cc-next");
+
     const agentsMd = await fs.readFile(path.join(root, "AGENTS.md"), "utf8");
     expect(agentsMd).toContain("## Cclaw — Workflow Adapter");
     expect(agentsMd).toContain("intentionally minimal for cross-project use");
@@ -240,6 +244,7 @@ describe("install lifecycle", () => {
     await expect(fs.stat(path.join(root, ".cclaw"))).rejects.toBeDefined();
     await expect(fs.stat(path.join(root, ".claude/commands/cc-brainstorm.md"))).rejects.toBeDefined();
     await expect(fs.stat(path.join(root, ".cursor/hooks.json"))).rejects.toBeDefined();
+    await expect(fs.stat(path.join(root, ".cursor/rules/cclaw-workflow.mdc"))).rejects.toBeDefined();
   });
 
   it("uninstall strips only cclaw hooks and preserves user hooks", async () => {

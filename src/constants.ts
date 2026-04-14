@@ -37,7 +37,8 @@ export const REQUIRED_GITIGNORE_PATTERNS = [
   ".claude/hooks/hooks.json",
   ".cursor/hooks.json",
   ".codex/hooks.json",
-  ".opencode/plugins/cclaw-plugin.mjs"
+  ".opencode/plugins/cclaw-plugin.mjs",
+  ".cursor/rules/cclaw-workflow.mdc"
 ] as const;
 
 export const COMMAND_FILE_ORDER: FlowStage[] = [
