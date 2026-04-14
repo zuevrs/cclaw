@@ -10,6 +10,7 @@ import { gitignoreHasRequiredPatterns } from "./gitignore.js";
 import { HARNESS_ADAPTERS, CCLAW_MARKER_START, CCLAW_MARKER_END } from "./harness-adapters.js";
 import { policyChecks } from "./policy.js";
 import { readFlowState } from "./runs.js";
+import { checkMandatoryDelegations } from "./delegation.js";
 import { stageSkillFolder } from "./content/skills.js";
 
 const execFileAsync = promisify(execFile);
@@ -572,6 +573,22 @@ export async function doctorChecks(projectRoot: string): Promise<DoctorCheck[]> 
     name: "run:active_handoff",
     ok: await exists(path.join(projectRoot, RUNTIME_ROOT, "runs", flowState.activeRunId, "00-handoff.md")),
     details: `${RUNTIME_ROOT}/runs/${flowState.activeRunId}/00-handoff.md must exist`
+  });
+
+  const delegation = await checkMandatoryDelegations(projectRoot, flowState.currentStage);
+  checks.push({
+    name: "delegation:mandatory:current_stage",
+    ok: delegation.satisfied,
+    details: delegation.satisfied
+      ? `All mandatory delegations satisfied for stage "${flowState.currentStage}"`
+      : `Missing mandatory delegations for stage "${flowState.currentStage}": ${delegation.missing.join(", ")}`
+  });
+  checks.push({
+    name: "warning:delegation:waived",
+    ok: true,
+    details: delegation.waived.length > 0
+      ? `warning: waived mandatory delegations for stage "${flowState.currentStage}": ${delegation.waived.join(", ")}`
+      : "no waived mandatory delegations for current stage"
   });
 
   // Utility shims in harness dirs
