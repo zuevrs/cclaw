@@ -116,8 +116,8 @@ const BRAINSTORM: StageSchemaInput = {
     "Present design — in sections scaled to their complexity (few sentences if simple, up to 300 words if nuanced). Get approval after each section.",
     "Write design doc — save to `.cclaw/artifacts/01-brainstorm.md`.",
     "Self-review — scan for placeholders, TBDs, contradictions, ambiguity, scope creep. Fix inline.",
-    "User reviews written artifact — ask user to review before proceeding. Wait for response.",
-    "Transition — invoke /cc-scope only after explicit user approval."
+    "User reviews written artifact — ask user to review before proceeding. **STOP.** Do NOT proceed until user responds.",
+    "Transition — invoke /cc-scope only after explicit user approval. **STOP.** Do NOT auto-advance to scope."
   ],
   interactionProtocol: [
     "Explore context first (files, docs, existing behavior).",
@@ -125,7 +125,7 @@ const BRAINSTORM: StageSchemaInput = {
     "For approach selection: use the Decision Protocol — present labeled options (A/B/C) with trade-offs and mark one as (recommended). If AskQuestion/AskUserQuestion is available, send exactly ONE question per call, validate fields against runtime schema, and on schema error immediately fall back to plain-text question instead of retrying guessed payloads.",
     "Get section-by-section approval before finalizing the design direction.",
     "Run a self-review pass (ambiguity, placeholders, contradictions) before handoff.",
-    "Wait for explicit user approval after writing the artifact. Do NOT auto-advance."
+    "**STOP.** Wait for explicit user approval after writing the artifact. Do NOT auto-advance to the next stage."
   ],
   process: [
     "Capture problem statement, users, constraints, and success criteria.",
@@ -261,7 +261,8 @@ const SCOPE: StageSchemaInput = {
     "Present one structural scope issue at a time for decision. Do NOT batch. Use structured options for each scope boundary question.",
     "Record explicit in-scope and out-of-scope contract.",
     "Once the user accepts or rejects a recommendation, commit fully. Do not re-argue.",
-    "Produce a clean scope summary after all issues are resolved."
+    "Produce a clean scope summary after all issues are resolved.",
+    "**STOP.** Wait for explicit user approval of scope contract before advancing to design."
   ],
   process: [
     "Run premise challenge and existing-solution leverage check.",
@@ -446,7 +447,7 @@ const DESIGN: StageSchemaInput = {
     "Only proceed to the next review section after ALL issues in the current section are resolved.",
     "If a section has no issues, say 'No issues found' and move on.",
     "Do not skip failure-mode mapping.",
-    "For design baseline approval: present the full baseline and wait for explicit user approval."
+    "For design baseline approval: present the full baseline. **STOP.** Do NOT proceed until user explicitly approves the design."
   ],
   process: [
     "Read upstream artifacts (brainstorm, scope).",
@@ -653,7 +654,7 @@ const SPEC: StageSchemaInput = {
     "Express each requirement in observable terms.",
     "Resolve ambiguity before moving to plan. Challenge vague language.",
     "Capture assumptions explicitly, not implicitly.",
-    "Require user confirmation on the written spec.",
+    "Require user confirmation on the written spec. **STOP.** Do NOT proceed to plan until user approves.",
     "For each criterion, ask: how would you test this? If the answer is unclear, rewrite."
   ],
   process: [
@@ -769,7 +770,7 @@ const PLAN: StageSchemaInput = {
     "Slice into vertical tasks — each task targets 2-5 minutes, produces one testable outcome, and touches one coherent area.",
     "Attach verification — every task has an acceptance criterion mapping and a concrete verification command.",
     "Define checkpoints — mark points where progress should be validated before continuing.",
-    "WAIT_FOR_CONFIRM — write plan artifact and explicitly pause. Do NOT proceed to /cc-test until user confirms."
+    "WAIT_FOR_CONFIRM — write plan artifact and explicitly pause. **STOP.** Do NOT proceed to /cc-test until user confirms."
   ],
   interactionProtocol: [
     "Plan in read-only mode relative to implementation.",
@@ -777,7 +778,7 @@ const PLAN: StageSchemaInput = {
     "Publish explicit dependency waves with entry and exit checks for each wave.",
     "Attach verification step to every task.",
     "Enforce WAIT_FOR_CONFIRM before moving to /cc-test. Use AskQuestion/AskUserQuestion tool: present the plan summary with options (A) Approve / (B) Revise / (C) Reject.",
-    "Wait for explicit approval. Do not auto-advance."
+    "**STOP.** Do NOT proceed to /cc-test until user explicitly approves. Do not auto-advance."
   ],
   process: [
     "Build dependency graph and ordered slices.",
@@ -1123,7 +1124,8 @@ const REVIEW: StageSchemaInput = {
     "Classify every finding as Critical, Important, or Suggestion.",
     "For each Critical finding: use the Decision Protocol — present resolution options (A/B/C) with trade-offs and mark one as (recommended). If AskQuestion/AskUserQuestion is available, send exactly ONE question per call, validate fields against runtime schema, and on schema error immediately fall back to plain-text question instead of retrying guessed payloads.",
     "Resolve all critical blockers before ship.",
-    "For final verdict: use AskQuestion/AskUserQuestion only if runtime schema is confirmed; otherwise collect verdict with a plain-text single-choice prompt (APPROVED / APPROVED_WITH_CONCERNS / BLOCKED)."
+    "For final verdict: use AskQuestion/AskUserQuestion only if runtime schema is confirmed; otherwise collect verdict with a plain-text single-choice prompt (APPROVED / APPROVED_WITH_CONCERNS / BLOCKED).",
+    "**STOP.** Do NOT proceed to ship until the user provides an explicit verdict."
   ],
   process: [
     "Layer 1: check acceptance criteria and requirement coverage.",
@@ -1329,7 +1331,7 @@ const SHIP: StageSchemaInput = {
     "Document release notes and rollback plan explicitly.",
     "For finalization mode: use the Decision Protocol — present modes as labeled options (A/B/C/D) with consequences and mark one as (recommended). If AskQuestion/AskUserQuestion is available, send exactly ONE question per call, validate fields against runtime schema, and on schema error immediately fall back to plain-text question instead of retrying guessed payloads.",
     "Do not proceed if critical blockers remain from review.",
-    "Execute the selected finalization action and verify."
+    "**STOP.** Present finalization options and wait for user selection before executing any finalization action."
   ],
   process: [
     "Validate review and test gates.",
