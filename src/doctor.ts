@@ -530,6 +530,8 @@ export async function doctorChecks(projectRoot: string): Promise<DoctorCheck[]> 
         content.includes("event: async") &&
         content.includes('"tool.execute.before"') &&
         content.includes('"tool.execute.after"') &&
+        content.includes("prompt-guard.sh") &&
+        content.includes("context-monitor.sh") &&
         content.includes('"session.idle"') &&
         content.includes('"session.updated"') &&
         content.includes('"session.resumed"') &&
@@ -539,7 +541,7 @@ export async function doctorChecks(projectRoot: string): Promise<DoctorCheck[]> 
     checks.push({
       name: "lifecycle:opencode:rehydration_events",
       ok,
-      details: `${file} must include event lifecycle handler, tool.execute.before/after, session.idle summarization, and transform rehydration`
+      details: `${file} must include event lifecycle handler, tool.execute.before/after with prompt/context hooks, session.idle summarization, and transform rehydration`
     });
     const registration = await opencodeRegistrationCheck(projectRoot);
     checks.push({

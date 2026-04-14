@@ -995,9 +995,11 @@ export default function cclawPlugin(ctx) {
         await runHookScript("stop-checkpoint.sh", { loop_count: 0 });
       }
       if (name === "tool.execute.before") {
+        await runHookScript("prompt-guard.sh", data ?? {});
         recordToolEvent("pre", data);
       }
       if (name === "tool.execute.after") {
+        await runHookScript("context-monitor.sh", data ?? {});
         recordToolEvent("post", data);
       }
     },

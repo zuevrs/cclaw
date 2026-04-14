@@ -332,12 +332,18 @@ describe("hooks lifecycle rehydration", () => {
     const summarizerPath = path.join(root, ".cclaw/hooks/summarize-observations.mjs");
     const summarizeScriptPath = path.join(root, ".cclaw/hooks/summarize-observations.sh");
     const stopScriptPath = path.join(root, ".cclaw/hooks/stop-checkpoint.sh");
+    const promptGuardPath = path.join(root, ".cclaw/hooks/prompt-guard.sh");
+    const contextMonitorPath = path.join(root, ".cclaw/hooks/context-monitor.sh");
     await fs.writeFile(pluginPath, opencodePluginJs(), "utf8");
     await fs.writeFile(summarizerPath, summarizeObservationsRuntimeModule(), "utf8");
     await fs.writeFile(summarizeScriptPath, summarizeObservationsScript(), "utf8");
     await fs.writeFile(stopScriptPath, stopCheckpointScript(), "utf8");
+    await fs.writeFile(promptGuardPath, promptGuardScript(), "utf8");
+    await fs.writeFile(contextMonitorPath, contextMonitorScript(), "utf8");
     await fs.chmod(summarizeScriptPath, 0o755);
     await fs.chmod(stopScriptPath, 0o755);
+    await fs.chmod(promptGuardPath, 0o755);
+    await fs.chmod(contextMonitorPath, 0o755);
 
     const imported = await import(`${pathToFileURL(pluginPath).href}?t=${Date.now()}`);
     const pluginFactory = imported.default as (ctx: { directory: string }) => {
@@ -374,6 +380,21 @@ describe("hooks lifecycle rehydration", () => {
     expect(parsed[0]?.runId).toBe("run-opencode");
     expect(parsed.some((entry) => entry.event === "tool_complete" && entry.data.includes("error at step"))).toBe(true);
 
+    await plugin.event("tool.execute.before", {
+      tool: "Write",
+      tool_input: { path: ".cclaw/state/flow-state.json" }
+    });
+    await plugin.event("tool.execute.after", {
+      tool: "RunCommand",
+      context: { remaining_percent: 15 },
+      output: "ok"
+    });
+
+    const guardLog = await fs.readFile(path.join(root, ".cclaw/state/prompt-guard.jsonl"), "utf8");
+    expect(guardLog).toContain("write_to_cclaw_runtime");
+    const contextWarnings = await fs.readFile(path.join(root, ".cclaw/state/context-warnings.jsonl"), "utf8");
+    expect(contextWarnings).toContain("context remaining");
+
     await plugin.event("session.idle", {});
 
     const learnings = await fs.readFile(path.join(root, ".cclaw/learnings.jsonl"), "utf8");
@@ -395,6 +416,8 @@ describe("hooks lifecycle rehydration", () => {
     expect(plugin).toContain('"session.cleared"');
     expect(plugin).toContain('"tool.execute.before"');
     expect(plugin).toContain('"tool.execute.after"');
+    expect(plugin).toContain("prompt-guard.sh");
+    expect(plugin).toContain("context-monitor.sh");
     expect(plugin).toContain('"session.idle"');
     expect(plugin).toContain('"experimental.chat.system.transform"');
     expect(plugin).toContain("activeRunId");
