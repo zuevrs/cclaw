@@ -96,6 +96,28 @@ These skills live in \`.cclaw/skills/\` but have no slash commands. They activat
 
 **Activation rule:** When a contextual skill applies, read its SKILL.md and follow it as a supplementary lens alongside the current stage. Do not skip the stage workflow — the contextual skill adds depth, not a detour.
 
+## Progressive Disclosure (Depth / See Also)
+
+Use this loading order to keep context lean while preserving depth:
+
+1. Start with the active stage skill in \`.cclaw/skills/<stage>/SKILL.md\`.
+2. Load exactly one contextual utility skill only if its trigger appears.
+3. Open command contract (\`.cclaw/commands/<stage>.md\`) only for gate/handoff wording.
+4. Expand to adjacent stage skills only when transition ambiguity exists.
+
+### Depth triggers
+- **Flaky/failing tests:** \`.cclaw/skills/debugging/SKILL.md\`
+- **Security-sensitive change:** \`.cclaw/skills/security/SKILL.md\`
+- **Performance risk:** \`.cclaw/skills/performance/SKILL.md\`
+- **Release/deploy concerns:** \`.cclaw/skills/ci-cd/SKILL.md\`
+- **Public API/docs impact:** \`.cclaw/skills/docs/SKILL.md\`
+- **Specialist delegation needed:** \`.cclaw/skills/subagent-dev/SKILL.md\` and \`.cclaw/skills/parallel-dispatch/SKILL.md\`
+
+### See also
+- \`.cclaw/skills/session/SKILL.md\` for session start/stop/resume behavior
+- \`.cclaw/skills/learnings/SKILL.md\` for durable memory capture and reuse
+- \`.cclaw/skills/autoplan/SKILL.md\` when user requests multi-stage orchestration
+
 ## Decision Protocol
 
 When a stage requires user input (approval, choice, direction), use this structured pattern:

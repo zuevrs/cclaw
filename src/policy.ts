@@ -133,7 +133,9 @@ export async function policyChecks(projectRoot: string): Promise<PolicyCheck[]> 
     { file: runtimeFile("skills/using-cclaw/SKILL.md"), needle: "## Failure Modes", name: "meta_skill:failure_modes" },
     { file: runtimeFile("skills/using-cclaw/SKILL.md"), needle: "## Contextual Skills", name: "meta_skill:contextual_skills" },
     { file: runtimeFile("skills/using-cclaw/SKILL.md"), needle: "## Decision Protocol", name: "meta_skill:decision_protocol" },
+    { file: runtimeFile("skills/using-cclaw/SKILL.md"), needle: "## Progressive Disclosure (Depth / See Also)", name: "meta_skill:progressive_disclosure" },
     { file: runtimeFile("skills/session/SKILL.md"), needle: "## Session Resume Protocol", name: "utility_skill:session:resume" },
+    { file: runtimeFile("skills/brainstorming/SKILL.md"), needle: "## Progressive Disclosure", name: "stage_skill:progressive_disclosure" },
 
     { file: runtimeFile("skills/security/SKILL.md"), needle: "## HARD-GATE", name: "utility_skill:security:hard_gate" },
     { file: runtimeFile("skills/security/SKILL.md"), needle: "## Checklist", name: "utility_skill:security:checklist" },
