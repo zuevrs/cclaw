@@ -460,33 +460,82 @@ elif awk "BEGIN { exit !($REMAINING_PERCENT <= 35) }"; then
   BAND="warning"
 fi
 
-[ "$BAND" != "none" ] || exit 0
+TTL_SECONDS_RAW="\${CCLAW_CONTEXT_MONITOR_TTL_SEC:-900}"
+if printf '%s' "$TTL_SECONDS_RAW" | grep -Eq '^[0-9]+$'; then
+  TTL_SECONDS="$TTL_SECONDS_RAW"
+else
+  TTL_SECONDS="900"
+fi
 
 LAST_BAND="none"
+LAST_ADVISORY_BAND="none"
+LAST_ADVISORY_AT=""
+LAST_ADVISORY_EPOCH="0"
 if [ -f "$MONITOR_STATE" ]; then
   if command -v jq >/dev/null 2>&1; then
     LAST_BAND=$(jq -r '.lastBand // "none"' "$MONITOR_STATE" 2>/dev/null || echo "none")
+    LAST_ADVISORY_BAND=$(jq -r '.lastAdvisoryBand // .lastBand // "none"' "$MONITOR_STATE" 2>/dev/null || echo "none")
+    LAST_ADVISORY_AT=$(jq -r '.lastAdvisoryAt // ""' "$MONITOR_STATE" 2>/dev/null || echo "")
+    LAST_ADVISORY_EPOCH=$(jq -r 'try ((.lastAdvisoryAt // "" | fromdateiso8601)) catch 0' "$MONITOR_STATE" 2>/dev/null || echo "0")
   elif command -v python3 >/dev/null 2>&1; then
-    LAST_BAND=$(python3 - "$MONITOR_STATE" <<'PY'
+    STATE_META=$(python3 - "$MONITOR_STATE" <<'PY'
 import json
 import sys
 try:
     with open(sys.argv[1], "r", encoding="utf-8") as handle:
         value = json.load(handle)
-    band = value.get("lastBand")
-    if isinstance(band, str):
-        print(band)
-    else:
-        print("none")
+    last_band = value.get("lastBand")
+    if not isinstance(last_band, str):
+        last_band = "none"
+    advisory_band = value.get("lastAdvisoryBand")
+    if not isinstance(advisory_band, str):
+        advisory_band = last_band
+    advisory_at = value.get("lastAdvisoryAt")
+    if not isinstance(advisory_at, str):
+        advisory_at = ""
+    advisory_epoch = 0
+    if advisory_at:
+        try:
+            from datetime import datetime
+            normalized = advisory_at.replace("Z", "+00:00")
+            advisory_epoch = int(datetime.fromisoformat(normalized).timestamp())
+        except Exception:
+            advisory_epoch = 0
+    print(f"{last_band}|{advisory_band}|{advisory_at}|{advisory_epoch}")
 except Exception:
-    print("none")
+    print("none|none||0")
 PY
 )
+    LAST_BAND=$(printf '%s' "$STATE_META" | cut -d'|' -f1)
+    LAST_ADVISORY_BAND=$(printf '%s' "$STATE_META" | cut -d'|' -f2)
+    LAST_ADVISORY_AT=$(printf '%s' "$STATE_META" | cut -d'|' -f3)
+    LAST_ADVISORY_EPOCH=$(printf '%s' "$STATE_META" | cut -d'|' -f4)
   fi
 fi
 
 TS=$(date -u +"%Y-%m-%dT%H:%M:%SZ" 2>/dev/null || echo "")
-if [ "$BAND" != "$LAST_BAND" ]; then
+NOW_EPOCH=$(date +%s 2>/dev/null || echo "0")
+if ! printf '%s' "$LAST_ADVISORY_EPOCH" | grep -Eq '^[0-9]+$'; then
+  LAST_ADVISORY_EPOCH="0"
+fi
+
+SHOULD_EMIT="false"
+if [ "$BAND" != "none" ]; then
+  if [ "$BAND" != "$LAST_ADVISORY_BAND" ]; then
+    SHOULD_EMIT="true"
+  elif [ "$TTL_SECONDS" -eq 0 ]; then
+    SHOULD_EMIT="true"
+  else
+    ELAPSED=$((NOW_EPOCH - LAST_ADVISORY_EPOCH))
+    if [ "$ELAPSED" -ge "$TTL_SECONDS" ]; then
+      SHOULD_EMIT="true"
+    fi
+  fi
+fi
+
+NEXT_ADVISORY_BAND="$LAST_ADVISORY_BAND"
+NEXT_ADVISORY_AT="$LAST_ADVISORY_AT"
+if [ "$SHOULD_EMIT" = "true" ]; then
   NOTE="Cclaw advisory: context remaining is \${REMAINING_PERCENT}% (\${BAND}). Consider checkpointing or compacting soon."
   if command -v jq >/dev/null 2>&1; then
     ENTRY=$(jq -n -c \
@@ -504,6 +553,8 @@ if [ "$BAND" != "$LAST_BAND" ]; then
     printf '%s\n' "$ENTRY" >> "$WARNINGS_FILE" 2>/dev/null || true
   fi
   printf '[cclaw] %s\n' "$NOTE" >&2
+  NEXT_ADVISORY_BAND="$BAND"
+  NEXT_ADVISORY_AT="$TS"
 fi
 
 TMP_STATE="$MONITOR_STATE.tmp.$$"
@@ -511,12 +562,14 @@ if command -v jq >/dev/null 2>&1; then
   jq -n \
     --arg ts "$TS" \
     --arg band "$BAND" \
+    --arg advisoryBand "$NEXT_ADVISORY_BAND" \
+    --arg advisoryAt "$NEXT_ADVISORY_AT" \
     --arg remaining "$REMAINING_PERCENT" \
     --arg harness "$HARNESS" \
-    '{lastUpdated:$ts,lastBand:$band,lastRemainingPercent:($remaining|tonumber),harness:$harness}' > "$TMP_STATE" 2>/dev/null || true
+    '{lastUpdated:$ts,lastBand:$band,lastRemainingPercent:($remaining|tonumber),harness:$harness,lastAdvisoryBand:$advisoryBand,lastAdvisoryAt:$advisoryAt}' > "$TMP_STATE" 2>/dev/null || true
 else
-  printf '{\n  "lastUpdated": "%s",\n  "lastBand": "%s",\n  "lastRemainingPercent": %s,\n  "harness": "%s"\n}\n' \
-    "$TS" "$BAND" "$REMAINING_PERCENT" "$HARNESS" > "$TMP_STATE" 2>/dev/null || true
+  printf '{\n  "lastUpdated": "%s",\n  "lastBand": "%s",\n  "lastRemainingPercent": %s,\n  "harness": "%s",\n  "lastAdvisoryBand": "%s",\n  "lastAdvisoryAt": "%s"\n}\n' \
+    "$TS" "$BAND" "$REMAINING_PERCENT" "$HARNESS" "$NEXT_ADVISORY_BAND" "$NEXT_ADVISORY_AT" > "$TMP_STATE" 2>/dev/null || true
 fi
 if [ -s "$TMP_STATE" ]; then
   mv "$TMP_STATE" "$MONITOR_STATE" 2>/dev/null || rm -f "$TMP_STATE" 2>/dev/null || true

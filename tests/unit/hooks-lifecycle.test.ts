@@ -243,7 +243,7 @@ describe("hooks lifecycle rehydration", () => {
     expect(log).toContain("suspicious_payload_pattern");
   });
 
-  it("context monitor emits threshold warnings once per band", async () => {
+  it("context monitor debounces warnings per band and respects TTL override", async () => {
     const root = await fs.mkdtemp(path.join(os.tmpdir(), "cclaw-context-monitor-runtime-"));
     await fs.mkdir(path.join(root, ".cclaw/state"), { recursive: true });
 
@@ -261,8 +261,28 @@ describe("hooks lifecycle rehydration", () => {
     expect(second.code).toBe(0);
     expect(second.stderr).toBe("");
 
+    const forced = await runScript(
+      root,
+      "context-monitor.sh",
+      contextMonitorScript(),
+      [],
+      payload,
+      { CCLAW_CONTEXT_MONITOR_TTL_SEC: "0" }
+    );
+    expect(forced.code).toBe(0);
+    expect(forced.stderr).toContain("Cclaw advisory");
+
     const warnings = await fs.readFile(path.join(root, ".cclaw/state/context-warnings.jsonl"), "utf8");
-    expect(warnings.split("\n").filter(Boolean).length).toBe(1);
+    expect(warnings.split("\n").filter(Boolean).length).toBe(2);
+    const state = JSON.parse(
+      await fs.readFile(path.join(root, ".cclaw/state/context-monitor.json"), "utf8")
+    ) as {
+      lastAdvisoryBand?: string;
+      lastAdvisoryAt?: string;
+    };
+    expect(state.lastAdvisoryBand).toBe("critical");
+    expect(typeof state.lastAdvisoryAt).toBe("string");
+    expect((state.lastAdvisoryAt ?? "").length).toBeGreaterThan(0);
   });
 
   it("observe and summarize scripts execute end-to-end", async () => {
