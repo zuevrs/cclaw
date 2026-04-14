@@ -53,9 +53,9 @@ describe("install lifecycle", () => {
 
     const opencodeConfig = JSON.parse(
       await fs.readFile(path.join(root, "opencode.json"), "utf8")
-    ) as { plugins?: unknown[] };
-    expect(Array.isArray(opencodeConfig.plugins)).toBe(true);
-    expect(opencodeConfig.plugins).toContain(".opencode/plugins/cclaw-plugin.mjs");
+    ) as { plugin?: unknown[] };
+    expect(Array.isArray(opencodeConfig.plugin)).toBe(true);
+    expect(opencodeConfig.plugin).toContain(".opencode/plugins/cclaw-plugin.mjs");
 
     const cursorRule = await fs.readFile(path.join(root, ".cursor/rules/cclaw-workflow.mdc"), "utf8");
     expect(cursorRule).toContain("cclaw-managed-cursor-workflow-rule");
@@ -288,6 +288,38 @@ describe("install lifecycle", () => {
     await expect(fs.stat(path.join(root, ".claude/commands/cc-brainstorm.md"))).rejects.toBeDefined();
     await expect(fs.stat(path.join(root, ".cursor/hooks.json"))).rejects.toBeDefined();
     await expect(fs.stat(path.join(root, ".cursor/rules/cclaw-workflow.mdc"))).rejects.toBeDefined();
+  });
+
+  it("uninstall removes empty harness directories created by cclaw", async () => {
+    const root = await fs.mkdtemp(path.join(os.tmpdir(), "cclaw-uninstall-dirs-"));
+    await initCclaw({ projectRoot: root });
+
+    await expect(fs.stat(path.join(root, ".claude"))).resolves.toBeDefined();
+    await expect(fs.stat(path.join(root, ".cursor"))).resolves.toBeDefined();
+    await expect(fs.stat(path.join(root, ".codex"))).resolves.toBeDefined();
+    await expect(fs.stat(path.join(root, ".opencode"))).resolves.toBeDefined();
+
+    await uninstallCclaw(root);
+
+    await expect(fs.stat(path.join(root, ".claude"))).rejects.toBeDefined();
+    await expect(fs.stat(path.join(root, ".cursor"))).rejects.toBeDefined();
+    await expect(fs.stat(path.join(root, ".codex"))).rejects.toBeDefined();
+    await expect(fs.stat(path.join(root, ".opencode"))).rejects.toBeDefined();
+  });
+
+  it("uninstall preserves harness directories that contain user files", async () => {
+    const root = await fs.mkdtemp(path.join(os.tmpdir(), "cclaw-uninstall-preserve-"));
+    await initCclaw({ projectRoot: root });
+
+    await fs.writeFile(path.join(root, ".claude/commands/my-custom.md"), "# user\n", "utf8");
+    await fs.writeFile(path.join(root, ".cursor/settings.json"), "{}", "utf8");
+
+    await uninstallCclaw(root);
+
+    await expect(fs.stat(path.join(root, ".claude/commands/my-custom.md"))).resolves.toBeDefined();
+    await expect(fs.stat(path.join(root, ".cursor/settings.json"))).resolves.toBeDefined();
+    await expect(fs.stat(path.join(root, ".codex"))).rejects.toBeDefined();
+    await expect(fs.stat(path.join(root, ".opencode"))).rejects.toBeDefined();
   });
 
   it("uninstall strips only cclaw hooks and preserves user hooks", async () => {
