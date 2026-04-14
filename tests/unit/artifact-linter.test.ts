@@ -96,6 +96,39 @@ describe("artifact linter heuristics", () => {
     expect(finalization?.found).toBe(false);
     expect(finalization?.details).toContain("exactly one selected token");
   });
+
+  it("requires review readiness dashboard section for review artifacts", async () => {
+    const root = await fs.mkdtemp(path.join(os.tmpdir(), "cclaw-artifact-lint-review-readiness-"));
+    await writeRuntimeArtifact(root, "07-review.md", `# Review Artifact
+
+## Layer 1 Verdict
+| Criterion | Verdict | Evidence |
+|---|---|---|
+| AC-1 | PASS | src/a.ts |
+
+## Layer 2 Findings
+| ID | Severity | Category | Description | Status |
+|---|---|---|---|---|
+| R-1 | Suggestion | correctness | tighten naming | open |
+
+## Review Army Contract
+- See \`07-review-army.json\`
+- Reconciliation summary: none
+
+## Severity Summary
+- Critical: 0
+- Important: 0
+- Suggestion: 1
+
+## Final Verdict
+- APPROVED
+`);
+
+    const result = await lintArtifact(root, "review");
+    const readiness = result.findings.find((finding) => finding.section === "Review Readiness Dashboard");
+    expect(result.passed).toBe(false);
+    expect(readiness?.found).toBe(false);
+  });
 });
 
 describe("review army schema validation", () => {

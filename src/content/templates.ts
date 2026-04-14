@@ -209,6 +209,13 @@ Execution rule: complete and verify each wave before starting the next wave.
 - See \`07-review-army.json\`
 - Reconciliation summary:
 
+## Review Readiness Dashboard
+- Layer 1 complete:
+- Layer 2 complete:
+- Review army schema valid:
+- Open critical blockers:
+- Ship recommendation:
+
 ## Severity Summary
 - Critical:
 - Important:

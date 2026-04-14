@@ -1,4 +1,4 @@
-import { lintArtifact } from "./artifact-linter.js";
+import { lintArtifact, validateReviewArmy } from "./artifact-linter.js";
 import { stageSchema } from "./content/stage-schema.js";
 import type { FlowState } from "./flow-state.js";
 import type { FlowStage } from "./types.js";
@@ -66,6 +66,12 @@ export async function verifyCurrentStageGateEvidence(
         .map((finding) => finding.section);
       if (failedRequired.length > 0) {
         issues.push(`artifact validation failed for required sections: ${failedRequired.join(", ")}.`);
+      }
+    }
+    if (stage === "review") {
+      const reviewArmy = await validateReviewArmy(projectRoot);
+      if (!reviewArmy.valid) {
+        issues.push(`review-army validation failed: ${reviewArmy.errors.join("; ")}`);
       }
     }
   }

@@ -1281,6 +1281,7 @@ const REVIEW: StageSchemaInput = {
     { section: "Layer 1 Verdict", required: true, validationRule: "Per-criterion pass/fail with references." },
     { section: "Layer 2 Findings", required: true, validationRule: "Each finding has severity, description, and resolution status." },
     { section: "Review Army Contract", required: true, validationRule: "Structured findings include id/severity/confidence/fingerprint/reportedBy/status with dedup reconciliation summary." },
+    { section: "Review Readiness Dashboard", required: true, validationRule: "At least 4 readiness checklist lines including blocker and recommendation status." },
     { section: "Severity Summary", required: true, validationRule: "Counts: N critical, N important, N suggestion." },
     { section: "Final Verdict", required: true, validationRule: "Exactly one of: APPROVED, APPROVED_WITH_CONCERNS, BLOCKED." }
   ],

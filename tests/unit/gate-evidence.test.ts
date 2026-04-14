@@ -56,4 +56,71 @@ describe("gate evidence verification", () => {
     expect(result.ok).toBe(true);
     expect(result.issues).toEqual([]);
   });
+
+  it("fails review stage when review-army payload is invalid", async () => {
+    const root = await fs.mkdtemp(path.join(os.tmpdir(), "cclaw-gate-evidence-review-army-"));
+    await prepareRoot(root);
+    await fs.writeFile(path.join(root, ".cclaw/artifacts/07-review.md"), `# Review Artifact
+
+## Layer 1 Verdict
+| Criterion | Verdict | Evidence |
+|---|---|---|
+| AC-1 | PASS | src/a.ts |
+
+## Layer 2 Findings
+| ID | Severity | Category | Description | Status |
+|---|---|---|---|---|
+| F-1 | Critical | security | missing auth check | open |
+
+## Review Army Contract
+- See \`07-review-army.json\`
+- Reconciliation summary: pending
+
+## Review Readiness Dashboard
+- Layer 1 complete: yes
+- Layer 2 complete: yes
+- Review army schema valid: pending
+- Open critical blockers: 1
+- Ship recommendation: blocked
+
+## Severity Summary
+- Critical: 1
+- Important: 0
+- Suggestion: 0
+
+## Final Verdict
+- BLOCKED
+`, "utf8");
+
+    await fs.writeFile(path.join(root, ".cclaw/artifacts/07-review-army.json"), JSON.stringify({
+      version: 1,
+      generatedAt: "2026-01-01T00:00:00Z",
+      scope: { base: "main", head: "feature", files: ["src/a.ts"] },
+      findings: [{
+        id: "F-1",
+        severity: "Critical",
+        confidence: 9,
+        fingerprint: "fp-1",
+        reportedBy: ["security-reviewer"],
+        status: "open",
+        recommendation: "Patch before merge"
+      }],
+      reconciliation: {
+        duplicatesCollapsed: 0,
+        conflicts: [],
+        multiSpecialistConfirmed: [],
+        shipBlockers: []
+      }
+    }, null, 2), "utf8");
+
+    const state = createInitialFlowState("run-review");
+    state.currentStage = "review";
+    const firstReviewGate = stageSchema("review").requiredGates[0]!.id;
+    state.stageGateCatalog.review.passed = [firstReviewGate];
+    state.guardEvidence[firstReviewGate] = "review gate evidence present";
+
+    const result = await verifyCurrentStageGateEvidence(root, state);
+    expect(result.ok).toBe(false);
+    expect(result.issues.join("\n")).toContain("review-army validation failed");
+  });
 });
