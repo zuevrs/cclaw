@@ -133,8 +133,8 @@ const BRAINSTORM: StageSchemaInput = {
   checklist: [
     "Explore project context — check files, docs, recent commits, existing behavior. Summarize what you found (even for seemingly simple projects).",
     "Assess scope — if the request describes multiple independent subsystems, flag for decomposition before detailed questions.",
-    "Restate the problem — before any questions, summarize what you understood the user wants and why. Ask the user to confirm or correct your understanding.",
-    "Ask clarifying questions — one at a time, understand purpose, constraints, success criteria, target users, and edge cases. Continue until you can confidently describe the solution space. Minimum: understand the WHY, WHO, WHAT, and boundary conditions.",
+    "Restate the problem — in a SEPARATE message (no questions in this message), summarize what you understood the user wants and why. **STOP and wait** for user to confirm or correct before asking any clarifying questions.",
+    "Ask clarifying questions — one at a time, one per message. You MUST cover these categories before proposing approaches: (a) PURPOSE — why this project exists, who it serves; (b) SCOPE — what it must do, what it must NOT do; (c) BOUNDARIES — error handling, edge cases, failure modes; (d) ENVIRONMENT — how it runs, deploys, installs; (e) CONSTRAINTS — performance, compatibility, dependencies. Skip a category only if the user already provided that info. Do NOT rush — 3 generic questions are never enough for a non-trivial project.",
     "Propose 2-3 approaches — with real trade-offs (not cosmetic differences) and your explicit recommendation with reasoning. Explain WHY you recommend this option over others.",
     "Present design — in sections. After each section, explicitly state what you are asking the user to approve: 'Do you approve [specific thing]?' Never ask a bare 'одобряете?/approve?' without context.",
     "Write design doc — save to `.cclaw/artifacts/01-brainstorm.md`.",
@@ -144,8 +144,8 @@ const BRAINSTORM: StageSchemaInput = {
   ],
   interactionProtocol: [
     "Explore context first (files, docs, existing behavior). Share a brief summary of what you found.",
-    "Restate the problem in your own words. Ask user to confirm before proceeding to questions.",
-    "Ask one clarifying question per message. Do NOT combine questions. Continue until you understand purpose, constraints, users, success criteria, and edge cases.",
+    "Restate the problem in your own words in a SEPARATE message. Do NOT add any questions to this message. Wait for user to confirm or correct.",
+    "Ask clarifying questions — one per message. Cover mandatory categories: PURPOSE, SCOPE, BOUNDARIES, ENVIRONMENT, CONSTRAINTS. Do NOT combine questions. Do NOT propose approaches until all categories are addressed.",
     "For approach selection: use the Decision Protocol — present labeled options (A/B/C) with REAL trade-offs (not cosmetic) and mark one as (recommended) with clear reasoning. If AskQuestion/AskUserQuestion is available, send exactly ONE question per call, validate fields against runtime schema, and on schema error immediately fall back to plain-text question instead of retrying guessed payloads.",
     "Every approval question MUST state what exactly is being approved: 'Do you approve [the architecture / the API shape / the dependency choice]?' Never ask a bare 'approve?' or 'looks good?'.",
     "Get section-by-section approval before finalizing the design direction.",
@@ -154,8 +154,8 @@ const BRAINSTORM: StageSchemaInput = {
   ],
   process: [
     "Explore project context — files, docs, behavior, recent changes. Share findings.",
-    "Restate the problem — summarize what the user wants and why. Get confirmation.",
-    "Clarify iteratively — ask questions one at a time until you understand WHY, WHO, WHAT, success criteria, and boundaries.",
+    "Restate the problem — summarize what the user wants and why in a SEPARATE message. Wait for confirmation before questions.",
+    "Clarify iteratively — ask questions one at a time covering mandatory categories: PURPOSE, SCOPE, BOUNDARIES, ENVIRONMENT, CONSTRAINTS. Do not skip to approaches early.",
     "Identify whether request should be decomposed into smaller sub-problems.",
     "Offer 2-3 alternatives with real trade-offs and recommendation with rationale.",
     "Present design in sections. After each section explicitly name what you ask the user to approve.",
@@ -208,7 +208,8 @@ const BRAINSTORM: StageSchemaInput = {
     "Invoking implementation skills before writing plans",
     "Asking bare 'approve?' or 'одобряете?' without stating WHAT is being approved",
     "Presenting a single summary and asking for blanket approval instead of section-by-section review",
-    "Rushing through clarification — asking 1-2 generic questions then jumping to design"
+    "Rushing through clarification — asking 1-2 generic questions then jumping to design",
+    "Batching multiple gate confirmations in one message when resuming a session"
   ],
   rationalizations: [
     { claim: "This is too simple for design.", reality: "Simple tasks fail fast when assumptions are wrong; a short design pass prevents rework." },
