@@ -421,6 +421,7 @@ export async function doctorChecks(projectRoot: string, options: DoctorOptions =
     "session-start.sh",
     "stop-checkpoint.sh",
     "prompt-guard.sh",
+    "workflow-guard.sh",
     "context-monitor.sh",
     "observe.sh",
     "summarize-observations.sh",
@@ -522,6 +523,7 @@ export async function doctorChecks(projectRoot: string, options: DoctorOptions =
     const wiringOk =
       sessionCommands.some((cmd) => cmd.includes("session-start.sh")) &&
       preCommands.some((cmd) => cmd.includes("prompt-guard.sh")) &&
+      preCommands.some((cmd) => cmd.includes("workflow-guard.sh")) &&
       preCommands.some((cmd) => cmd.includes("observe.sh pre")) &&
       postCommands.some((cmd) => cmd.includes("observe.sh post")) &&
       postCommands.some((cmd) => cmd.includes("context-monitor.sh")) &&
@@ -530,7 +532,7 @@ export async function doctorChecks(projectRoot: string, options: DoctorOptions =
     checks.push({
       name: "hook:wiring:claude",
       ok: wiringOk,
-      details: `${file} must wire session-start/prompt-guard/observe/context-monitor/summarize/stop-checkpoint`
+      details: `${file} must wire session-start/prompt-guard/workflow-guard/observe/context-monitor/summarize/stop-checkpoint`
     });
   }
 
@@ -561,6 +563,7 @@ export async function doctorChecks(projectRoot: string, options: DoctorOptions =
     const wiringOk =
       sessionCommands.some((cmd) => cmd.includes("session-start.sh")) &&
       preCommands.some((cmd) => cmd.includes("prompt-guard.sh")) &&
+      preCommands.some((cmd) => cmd.includes("workflow-guard.sh")) &&
       preCommands.some((cmd) => cmd.includes("observe.sh pre")) &&
       postCommands.some((cmd) => cmd.includes("observe.sh post")) &&
       postCommands.some((cmd) => cmd.includes("context-monitor.sh")) &&
@@ -569,7 +572,7 @@ export async function doctorChecks(projectRoot: string, options: DoctorOptions =
     checks.push({
       name: "hook:wiring:cursor",
       ok: wiringOk,
-      details: `${file} must wire session-start/prompt-guard/observe/context-monitor/summarize/stop-checkpoint`
+      details: `${file} must wire session-start/prompt-guard/workflow-guard/observe/context-monitor/summarize/stop-checkpoint`
     });
 
     const cursorRulePath = path.join(projectRoot, ".cursor/rules/cclaw-workflow.mdc");
@@ -607,6 +610,7 @@ export async function doctorChecks(projectRoot: string, options: DoctorOptions =
     const wiringOk =
       sessionCommands.some((cmd) => cmd.includes("session-start.sh")) &&
       preCommands.some((cmd) => cmd.includes("prompt-guard.sh")) &&
+      preCommands.some((cmd) => cmd.includes("workflow-guard.sh")) &&
       preCommands.some((cmd) => cmd.includes("observe.sh pre")) &&
       postCommands.some((cmd) => cmd.includes("observe.sh post")) &&
       postCommands.some((cmd) => cmd.includes("context-monitor.sh")) &&
@@ -615,7 +619,7 @@ export async function doctorChecks(projectRoot: string, options: DoctorOptions =
     checks.push({
       name: "hook:wiring:codex",
       ok: wiringOk,
-      details: `${file} must wire session-start/prompt-guard/observe/context-monitor/summarize/stop-checkpoint`
+      details: `${file} must wire session-start/prompt-guard/workflow-guard/observe/context-monitor/summarize/stop-checkpoint`
     });
   }
 
@@ -629,6 +633,7 @@ export async function doctorChecks(projectRoot: string, options: DoctorOptions =
         content.includes('"tool.execute.before"') &&
         content.includes('"tool.execute.after"') &&
         content.includes("prompt-guard.sh") &&
+        content.includes("workflow-guard.sh") &&
         content.includes("context-monitor.sh") &&
         content.includes('"session.idle"') &&
         content.includes('"session.updated"') &&
@@ -639,7 +644,7 @@ export async function doctorChecks(projectRoot: string, options: DoctorOptions =
     checks.push({
       name: "lifecycle:opencode:rehydration_events",
       ok,
-      details: `${file} must include event lifecycle handler, tool.execute.before/after with prompt/context hooks, session.idle summarization, and transform rehydration`
+      details: `${file} must include event lifecycle handler, tool.execute.before/after with prompt/workflow/context hooks, session.idle summarization, and transform rehydration`
     });
     const registration = await opencodeRegistrationCheck(projectRoot);
     checks.push({

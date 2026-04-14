@@ -1152,6 +1152,7 @@ export default function cclawPlugin(ctx) {
       }
       if (name === "tool.execute.before") {
         await runHookScript("prompt-guard.sh", data ?? {});
+        await runHookScript("workflow-guard.sh", data ?? {});
         recordToolEvent("pre", data);
       }
       if (name === "tool.execute.after") {

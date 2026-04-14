@@ -12,6 +12,7 @@ import {
   cursorHooksJsonWithObservation,
   observeScript,
   promptGuardScript,
+  workflowGuardScript,
   summarizeObservationsRuntimeModule,
   summarizeObservationsScript
 } from "../../src/content/observe.js";
@@ -84,8 +85,10 @@ describe("hooks lifecycle rehydration", () => {
     expect((claude as { cclawHookSchemaVersion?: number }).cclawHookSchemaVersion).toBe(1);
     expect((codex as { cclawHookSchemaVersion?: number }).cclawHookSchemaVersion).toBe(1);
     expect(JSON.stringify(claude)).toContain("prompt-guard.sh");
+    expect(JSON.stringify(claude)).toContain("workflow-guard.sh");
     expect(JSON.stringify(claude)).toContain("context-monitor.sh");
     expect(JSON.stringify(codex)).toContain("prompt-guard.sh");
+    expect(JSON.stringify(codex)).toContain("workflow-guard.sh");
     expect(JSON.stringify(codex)).toContain("context-monitor.sh");
   });
 
@@ -99,6 +102,7 @@ describe("hooks lifecycle rehydration", () => {
     expect(Array.isArray(cursor.hooks.sessionCompact)).toBe(true);
     expect((cursor as { cclawHookSchemaVersion?: number }).cclawHookSchemaVersion).toBe(1);
     expect(JSON.stringify(cursor)).toContain("prompt-guard.sh");
+    expect(JSON.stringify(cursor)).toContain("workflow-guard.sh");
     expect(JSON.stringify(cursor)).toContain("context-monitor.sh");
   });
 
@@ -308,6 +312,35 @@ describe("hooks lifecycle rehydration", () => {
     expect(log).toContain("suspicious_payload_pattern");
   });
 
+  it("workflow guard warns on stage jumps without recent flow read", async () => {
+    const root = await fs.mkdtemp(path.join(os.tmpdir(), "cclaw-workflow-guard-runtime-"));
+    await fs.mkdir(path.join(root, ".cclaw/state"), { recursive: true });
+    await fs.writeFile(path.join(root, ".cclaw/state/flow-state.json"), JSON.stringify({
+      currentStage: "scope",
+      activeRunId: "run-guard",
+      completedStages: ["brainstorm"]
+    }, null, 2), "utf8");
+
+    const result = await runScript(
+      root,
+      "workflow-guard.sh",
+      workflowGuardScript(),
+      [],
+      JSON.stringify({
+        tool_name: "RunCommand",
+        tool_input: {
+          cmd: "/cc-build"
+        }
+      })
+    );
+    expect(result.code).toBe(0);
+    expect(result.stderr).toContain("workflow guard");
+
+    const log = await fs.readFile(path.join(root, ".cclaw/state/workflow-guard.jsonl"), "utf8");
+    expect(log).toContain("stage_jump_scope_to_build");
+    expect(log).toContain("stage_invocation_without_recent_flow_read");
+  });
+
   it("context monitor debounces warnings per band and respects TTL override", async () => {
     const root = await fs.mkdtemp(path.join(os.tmpdir(), "cclaw-context-monitor-runtime-"));
     await fs.mkdir(path.join(root, ".cclaw/state"), { recursive: true });
@@ -465,16 +498,19 @@ describe("hooks lifecycle rehydration", () => {
     const summarizeScriptPath = path.join(root, ".cclaw/hooks/summarize-observations.sh");
     const stopScriptPath = path.join(root, ".cclaw/hooks/stop-checkpoint.sh");
     const promptGuardPath = path.join(root, ".cclaw/hooks/prompt-guard.sh");
+    const workflowGuardPath = path.join(root, ".cclaw/hooks/workflow-guard.sh");
     const contextMonitorPath = path.join(root, ".cclaw/hooks/context-monitor.sh");
     await fs.writeFile(pluginPath, opencodePluginJs(), "utf8");
     await fs.writeFile(summarizerPath, summarizeObservationsRuntimeModule(), "utf8");
     await fs.writeFile(summarizeScriptPath, summarizeObservationsScript(), "utf8");
     await fs.writeFile(stopScriptPath, stopCheckpointScript(), "utf8");
     await fs.writeFile(promptGuardPath, promptGuardScript(), "utf8");
+    await fs.writeFile(workflowGuardPath, workflowGuardScript(), "utf8");
     await fs.writeFile(contextMonitorPath, contextMonitorScript(), "utf8");
     await fs.chmod(summarizeScriptPath, 0o755);
     await fs.chmod(stopScriptPath, 0o755);
     await fs.chmod(promptGuardPath, 0o755);
+    await fs.chmod(workflowGuardPath, 0o755);
     await fs.chmod(contextMonitorPath, 0o755);
 
     const imported = await import(`${pathToFileURL(pluginPath).href}?t=${Date.now()}`);
@@ -516,6 +552,10 @@ describe("hooks lifecycle rehydration", () => {
       tool: "Write",
       tool_input: { path: ".cclaw/state/flow-state.json" }
     });
+    await plugin.event("tool.execute.before", {
+      tool: "RunCommand",
+      tool_input: { cmd: "/cc-review" }
+    });
     await plugin.event("tool.execute.after", {
       tool: "RunCommand",
       context: { remaining_percent: 15 },
@@ -524,6 +564,8 @@ describe("hooks lifecycle rehydration", () => {
 
     const guardLog = await fs.readFile(path.join(root, ".cclaw/state/prompt-guard.jsonl"), "utf8");
     expect(guardLog).toContain("write_to_cclaw_runtime");
+    const workflowGuardLog = await fs.readFile(path.join(root, ".cclaw/state/workflow-guard.jsonl"), "utf8");
+    expect(workflowGuardLog).toContain("stage_invocation_without_recent_flow_read");
     const contextWarnings = await fs.readFile(path.join(root, ".cclaw/state/context-warnings.jsonl"), "utf8");
     expect(contextWarnings).toContain("context remaining");
 
@@ -549,6 +591,7 @@ describe("hooks lifecycle rehydration", () => {
     expect(plugin).toContain('"tool.execute.before"');
     expect(plugin).toContain('"tool.execute.after"');
     expect(plugin).toContain("prompt-guard.sh");
+    expect(plugin).toContain("workflow-guard.sh");
     expect(plugin).toContain("context-monitor.sh");
     expect(plugin).toContain('"session.idle"');
     expect(plugin).toContain('"experimental.chat.system.transform"');

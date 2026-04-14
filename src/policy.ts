@@ -195,6 +195,8 @@ export async function policyChecks(projectRoot: string, options: PolicyOptions =
     { file: runtimeFile("hooks/session-start.sh"), needle: "context-warnings.jsonl", name: "hooks:session_start:context_warning_ref" },
     { file: runtimeFile("hooks/stop-checkpoint.sh"), needle: "checkpoint.json", name: "hooks:stop:checkpoint_write" },
     { file: runtimeFile("hooks/prompt-guard.sh"), needle: "write_to_cclaw_runtime", name: "hooks:guard:risky_write_advisory" },
+    { file: runtimeFile("hooks/workflow-guard.sh"), needle: "stage_invocation_without_recent_flow_read", name: "hooks:workflow_guard:flow_read_reason" },
+    { file: runtimeFile("hooks/workflow-guard.sh"), needle: "stage_jump_", name: "hooks:workflow_guard:stage_jump_reason" },
     { file: runtimeFile("hooks/context-monitor.sh"), needle: "remaining is", name: "hooks:context:threshold_warning" },
     { file: runtimeFile("hooks/observe.sh"), needle: "stage-activity.jsonl", name: "hooks:observe:activity_write" },
     { file: runtimeFile("hooks/summarize-observations.mjs"), needle: "frequent-errors-", name: "hooks:summarize:runtime_module" },
@@ -205,6 +207,11 @@ export async function policyChecks(projectRoot: string, options: PolicyOptions =
       file: ".opencode/plugins/cclaw-plugin.mjs",
       needle: "\"tool.execute.before\"",
       name: "hooks:opencode:deployed_tool_hook"
+    });
+    utilitySkillChecks.push({
+      file: ".opencode/plugins/cclaw-plugin.mjs",
+      needle: "workflow-guard.sh",
+      name: "hooks:opencode:deployed_workflow_guard"
     });
   }
   if (activeHarnesses.has("cursor")) {

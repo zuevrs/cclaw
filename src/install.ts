@@ -29,6 +29,7 @@ import {
   contextMonitorScript,
   observeScript,
   promptGuardScript,
+  workflowGuardScript,
   summarizeObservationsRuntimeModule,
   summarizeObservationsScript
 } from "./content/observe.js";
@@ -591,6 +592,7 @@ async function writeHooks(projectRoot: string, config: VibyConfig): Promise<void
   await writeFileSafe(path.join(hooksDir, "prompt-guard.sh"), promptGuardScript({
     strictMode: config.promptGuardMode === "strict"
   }));
+  await writeFileSafe(path.join(hooksDir, "workflow-guard.sh"), workflowGuardScript());
   await writeFileSafe(path.join(hooksDir, "context-monitor.sh"), contextMonitorScript());
   await writeFileSafe(path.join(hooksDir, "observe.sh"), observeScript());
   await writeFileSafe(path.join(hooksDir, "summarize-observations.sh"), summarizeObservationsScript());
@@ -606,6 +608,7 @@ async function writeHooks(projectRoot: string, config: VibyConfig): Promise<void
       "session-start.sh",
       "stop-checkpoint.sh",
       "prompt-guard.sh",
+      "workflow-guard.sh",
       "context-monitor.sh",
       "observe.sh",
       "summarize-observations.sh",
@@ -970,7 +973,7 @@ function stripManagedHookCommands(value: unknown): { updated: unknown; changed: 
 
 function isManagedRuntimeHookCommand(command: string): boolean {
   const normalized = command.trim().replace(/\s+/gu, " ");
-  return /(^|\s)(?:bash\s+)?(?:\.\/)?\.cclaw\/hooks\/(?:session-start|stop-checkpoint|prompt-guard|context-monitor|observe|summarize-observations)\.sh(?:\s|$)/u.test(
+  return /(^|\s)(?:bash\s+)?(?:\.\/)?\.cclaw\/hooks\/(?:session-start|stop-checkpoint|prompt-guard|workflow-guard|context-monitor|observe|summarize-observations)\.sh(?:\s|$)/u.test(
     normalized
   );
 }
