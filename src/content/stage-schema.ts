@@ -165,7 +165,11 @@ const BRAINSTORM: StageSchemaInput = {
     "Handoff to scope stage only after approval is explicit."
   ],
   requiredGates: [
-    { id: "brainstorm_context_explored", description: "Project context and constraints have been reviewed and summarized." },
+    { id: "brainstorm_discovery_purpose", description: "Discovery captured WHY this project exists and WHO it serves, with explicit user confirmation." },
+    { id: "brainstorm_discovery_scope", description: "Discovery captured explicit in-scope and out-of-scope boundaries before approach selection." },
+    { id: "brainstorm_discovery_boundaries", description: "Discovery captured failure modes, edge cases, and error-handling boundaries." },
+    { id: "brainstorm_discovery_environment", description: "Discovery captured runtime/install/deployment environment assumptions." },
+    { id: "brainstorm_discovery_constraints", description: "Discovery captured constraints (performance, compatibility, dependency limits) before deciding architecture." },
     { id: "brainstorm_problem_restated", description: "Problem was restated in agent's words and user confirmed the understanding." },
     { id: "brainstorm_options_compared", description: "At least two alternatives were compared with real trade-offs." },
     { id: "brainstorm_design_approved", description: "User approved a concrete design direction (with explicit statement of what was approved)." },
