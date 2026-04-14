@@ -120,6 +120,25 @@ function countListItems(sectionBody: string): number {
   return Math.max(bullets, tableDataRows);
 }
 
+function parseMarkdownTableRow(line: string): string[] {
+  return line
+    .trim()
+    .split("|")
+    .map((cell) => cell.trim())
+    .filter((cell) => cell.length > 0);
+}
+
+function tableHeaderCells(sectionBody: string): string[] | null {
+  const lines = sectionBody.split(/\r?\n/).map((line) => line.trim());
+  const headerIndex = lines.findIndex((line) => /^\|.*\|$/u.test(line));
+  if (headerIndex < 0) return null;
+  const separator = lines[headerIndex + 1];
+  if (!separator || !/^\|[-:| ]+\|$/u.test(separator)) {
+    return null;
+  }
+  return parseMarkdownTableRow(lines[headerIndex]);
+}
+
 function extractMinItemsFromRule(rule: string): number | null {
   const match = /at least\s+(\d+)/iu.exec(rule);
   if (!match) return null;
@@ -166,6 +185,28 @@ function validateSectionBody(
       return {
         ok: false,
         details: `Rule expects at least ${minItems} item(s), found ${count}.`
+      };
+    }
+  }
+
+  if (/table must use 4 columns/iu.test(rule)) {
+    const header = tableHeaderCells(sectionBody);
+    if (!header) {
+      return {
+        ok: false,
+        details: "Rule expects a markdown table header with a separator row."
+      };
+    }
+    const expected = ["Category", "Question asked", "User answer", "Evidence note"];
+    const normalizedHeader = header.map((cell) => cell.toLowerCase());
+    const normalizedExpected = expected.map((cell) => cell.toLowerCase());
+    const matches =
+      normalizedHeader.length === normalizedExpected.length &&
+      normalizedHeader.every((cell, index) => cell === normalizedExpected[index]);
+    if (!matches) {
+      return {
+        ok: false,
+        details: `Rule expects Clarification Log header: ${expected.join(" | ")}.`
       };
     }
   }

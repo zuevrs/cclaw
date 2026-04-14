@@ -258,7 +258,11 @@ const BRAINSTORM: StageSchemaInput = {
   artifactValidation: [
     { section: "Problem Statement", required: true, validationRule: "Must describe the user problem, not the solution. Include WHO and WHY and success signal." },
     { section: "Known Context", required: true, validationRule: "Files, patterns, constraints discovered during exploration. Evidence that context was actually explored." },
-    { section: "Clarification Log", required: true, validationRule: "At least 5 rows covering PURPOSE, SCOPE, BOUNDARIES, ENVIRONMENT, CONSTRAINTS." },
+    {
+      section: "Clarification Log",
+      required: true,
+      validationRule: "At least 5 rows covering PURPOSE, SCOPE, BOUNDARIES, ENVIRONMENT, CONSTRAINTS. Table must use 4 columns: Category, Question asked, User answer, Evidence note."
+    },
     { section: "Purpose & Beneficiaries", required: true, validationRule: "At least 3 meaningful lines describing why this exists and who benefits." },
     { section: "Scope Boundaries", required: true, validationRule: "At least 2 scope items including explicit out-of-scope boundaries." },
     { section: "Failure Boundaries", required: true, validationRule: "At least 2 failure/edge-case expectations and error visibility behavior." },
