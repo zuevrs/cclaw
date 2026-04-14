@@ -9,12 +9,47 @@ export const ARTIFACT_TEMPLATES: Record<string, string> = {
 - **Who benefits:**
 - **Why now:**
 - **Success signal:**
-- **Constraints:**
 
 ## Known Context
 - **Explored files/patterns:**
 - **Existing behavior:**
 - **Relevant dependencies:**
+
+## Clarification Log
+| Category | Question asked | User answer | Evidence note |
+|---|---|---|---|
+| PURPOSE |  |  |  |
+| SCOPE |  |  |  |
+| BOUNDARIES |  |  |  |
+| ENVIRONMENT |  |  |  |
+| CONSTRAINTS |  |  |  |
+
+## Purpose & Beneficiaries
+- **Project purpose:**
+- **Primary users:**
+- **Value outcome:**
+
+## Scope Boundaries
+### In Scope
+- 
+
+### Out of Scope
+- 
+
+## Failure Boundaries
+- **Edge cases to handle:**
+- **Expected failures and behavior:**
+- **Error visibility expectations:**
+
+## Runtime Environment
+- **Runtime/platform:**
+- **Install/distribution model:**
+- **Execution context (local/CI/deploy):**
+
+## Constraints
+- **Performance constraints:**
+- **Compatibility constraints:**
+- **Dependency constraints:**
 
 ## Alternatives Table
 | Option | Summary | Trade-offs | Recommendation |
