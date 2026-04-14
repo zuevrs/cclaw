@@ -133,7 +133,7 @@ const BRAINSTORM: StageSchemaInput = {
   checklist: [
     "Explore project context — check files, docs, recent commits, existing behavior. Summarize what you found (even for seemingly simple projects).",
     "Assess scope — if the request describes multiple independent subsystems, flag for decomposition before detailed questions.",
-    "Restate the problem — in a SEPARATE message (no questions in this message), summarize what you understood the user wants and why. **STOP and wait** for user to confirm or correct before asking any clarifying questions.",
+    "Restate the problem — in a SEPARATE message (no questions in this message), summarize what you understood the user wants and why. The restatement message must contain zero clarifying questions and no option prompts. **STOP and wait** for user to confirm or correct before asking any clarifying questions.",
     "Ask clarifying questions — one at a time, one per message. You MUST cover these categories before proposing approaches: (a) PURPOSE — why this project exists, who it serves; (b) SCOPE — what it must do, what it must NOT do; (c) BOUNDARIES — error handling, edge cases, failure modes; (d) ENVIRONMENT — how it runs, deploys, installs; (e) CONSTRAINTS — performance, compatibility, dependencies. Skip a category only if the user already provided that info. Do NOT rush — 3 generic questions are never enough for a non-trivial project.",
     "Propose 2-3 approaches — with real trade-offs (not cosmetic differences) and your explicit recommendation with reasoning. Explain WHY you recommend this option over others.",
     "Present design — in sections. After each section, explicitly state what you are asking the user to approve: 'Do you approve [specific thing]?' Never ask a bare 'одобряете?/approve?' without context.",
@@ -144,7 +144,7 @@ const BRAINSTORM: StageSchemaInput = {
   ],
   interactionProtocol: [
     "Explore context first (files, docs, existing behavior). Share a brief summary of what you found.",
-    "Restate the problem in your own words in a SEPARATE message. Do NOT add any questions to this message. Wait for user to confirm or correct.",
+    "Restate the problem in your own words in a SEPARATE message. Do NOT add any questions, options, or approval asks to this message. Wait for user to confirm or correct.",
     "Ask clarifying questions — one per message. Cover mandatory categories: PURPOSE, SCOPE, BOUNDARIES, ENVIRONMENT, CONSTRAINTS. Do NOT combine questions. Do NOT propose approaches until all categories are addressed.",
     "For approach selection: use the Decision Protocol — present labeled options (A/B/C) with REAL trade-offs (not cosmetic) and mark one as (recommended) with clear reasoning. If AskQuestion/AskUserQuestion is available, send exactly ONE question per call, validate fields against runtime schema, and on schema error immediately fall back to plain-text question instead of retrying guessed payloads.",
     "Every approval question MUST state what exactly is being approved: 'Do you approve [the architecture / the API shape / the dependency choice]?' Never ask a bare 'approve?' or 'looks good?'.",
@@ -154,7 +154,7 @@ const BRAINSTORM: StageSchemaInput = {
   ],
   process: [
     "Explore project context — files, docs, behavior, recent changes. Share findings.",
-    "Restate the problem — summarize what the user wants and why in a SEPARATE message. Wait for confirmation before questions.",
+    "Restate the problem — summarize what the user wants and why in a SEPARATE message. Keep this message declarative only; no questions. Wait for confirmation before questions.",
     "Clarify iteratively — ask questions one at a time covering mandatory categories: PURPOSE, SCOPE, BOUNDARIES, ENVIRONMENT, CONSTRAINTS. Do not skip to approaches early.",
     "Identify whether request should be decomposed into smaller sub-problems.",
     "Offer 2-3 alternatives with real trade-offs and recommendation with rationale.",
@@ -170,7 +170,10 @@ const BRAINSTORM: StageSchemaInput = {
     { id: "brainstorm_discovery_boundaries", description: "Discovery captured failure modes, edge cases, and error-handling boundaries." },
     { id: "brainstorm_discovery_environment", description: "Discovery captured runtime/install/deployment environment assumptions." },
     { id: "brainstorm_discovery_constraints", description: "Discovery captured constraints (performance, compatibility, dependency limits) before deciding architecture." },
-    { id: "brainstorm_problem_restated", description: "Problem was restated in agent's words and user confirmed the understanding." },
+    {
+      id: "brainstorm_problem_restated",
+      description: "Problem was restated in agent's words in a standalone non-question message, and user confirmed the understanding."
+    },
     { id: "brainstorm_options_compared", description: "At least two alternatives were compared with real trade-offs." },
     { id: "brainstorm_design_approved", description: "User approved a concrete design direction (with explicit statement of what was approved)." },
     { id: "brainstorm_self_review_passed", description: "Design doc passed placeholder/ambiguity/consistency checks." },
@@ -181,6 +184,7 @@ const BRAINSTORM: StageSchemaInput = {
     "Clarification log explicitly records PURPOSE, SCOPE, BOUNDARIES, ENVIRONMENT, and CONSTRAINTS coverage.",
     "Discovery sections include explicit in-scope/out-of-scope boundaries and failure handling boundaries.",
     "Approved direction captured in artifact.",
+    "Restatement evidence shows a standalone non-question restatement message before clarification Q&A.",
     "Open questions explicitly listed (if any).",
     "Self-review pass completed with no unresolved issues."
   ],
@@ -212,6 +216,7 @@ const BRAINSTORM: StageSchemaInput = {
     "Jumping directly into implementation",
     "Combining visual companion offer with a clarifying question",
     "Invoking implementation skills before writing plans",
+    "Appending clarifying questions to the restatement message instead of waiting for confirmation",
     "Asking bare 'approve?' or 'одобряете?' without stating WHAT is being approved",
     "Presenting a single summary and asking for blanket approval instead of section-by-section review",
     "Rushing through clarification — asking 1-2 generic questions then jumping to design",
@@ -230,6 +235,7 @@ const BRAINSTORM: StageSchemaInput = {
     "Implementation-related actions before approval",
     "Self-review skipped or glossed over",
     "Artifact has TBD or placeholder sections",
+    "Restatement step includes clarifying questions or option prompts",
     "Fewer than 3 clarifying questions asked for any non-trivial project",
     "Approval requested without stating what exactly is being approved"
   ],
