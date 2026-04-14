@@ -12,6 +12,7 @@ import { policyChecks } from "./policy.js";
 import { readFlowState } from "./runs.js";
 import { checkMandatoryDelegations } from "./delegation.js";
 import { buildTraceMatrix } from "./trace-matrix.js";
+import { verifyCurrentStageGateEvidence } from "./gate-evidence.js";
 import { stageSkillFolder } from "./content/skills.js";
 
 const execFileAsync = promisify(execFile);
@@ -618,6 +619,15 @@ export async function doctorChecks(projectRoot: string): Promise<DoctorCheck[]> 
     details: trace.orphanedTests.length === 0
       ? "all test slices map to acceptance-linked tasks"
       : `orphaned test slices: ${trace.orphanedTests.join(", ")}`
+  });
+
+  const gateEvidence = await verifyCurrentStageGateEvidence(projectRoot, flowState);
+  checks.push({
+    name: "gates:evidence:current_stage",
+    ok: gateEvidence.ok,
+    details: gateEvidence.ok
+      ? `stage "${gateEvidence.stage}" gate evidence is consistent (required=${gateEvidence.requiredCount}, passed=${gateEvidence.passedCount}, blocked=${gateEvidence.blockedCount})`
+      : gateEvidence.issues.join(" ")
   });
 
   // Utility shims in harness dirs
