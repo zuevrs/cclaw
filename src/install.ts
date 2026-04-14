@@ -381,16 +381,16 @@ function mergeOpenCodePluginConfig(
   pluginRelPath: string
 ): { merged: Record<string, unknown>; changed: boolean } {
   const root = toObject(existingDoc) ?? {};
-  const pluginsRaw = Array.isArray(root.plugins) ? [...root.plugins] : [];
+  const pluginsRaw = Array.isArray(root.plugin) ? [...root.plugin] : [];
   const normalized = new Set(pluginsRaw.map((entry) => normalizeOpenCodePluginEntry(entry)).filter(Boolean));
   if (!normalized.has(pluginRelPath)) {
     pluginsRaw.push(pluginRelPath);
   }
-  const changed = !normalized.has(pluginRelPath) || !Array.isArray(root.plugins);
+  const changed = !normalized.has(pluginRelPath) || !Array.isArray(root.plugin);
   return {
     merged: {
       ...root,
-      plugins: pluginsRaw
+      plugin: pluginsRaw
     },
     changed
   };
@@ -438,13 +438,21 @@ async function removeManagedOpenCodePluginConfig(projectRoot: string, pluginRelP
       parsed = null;
     }
     const root = toObject(parsed);
-    if (!root || !Array.isArray(root.plugins)) continue;
-    const filtered = root.plugins.filter((entry) => normalizeOpenCodePluginEntry(entry) !== pluginRelPath);
-    if (filtered.length === root.plugins.length) {
+    if (!root || !Array.isArray(root.plugin)) continue;
+    const filtered = root.plugin.filter((entry) => normalizeOpenCodePluginEntry(entry) !== pluginRelPath);
+    if (filtered.length === root.plugin.length) {
       continue;
     }
-    root.plugins = filtered;
-    await writeFileSafe(configPath, `${JSON.stringify(root, null, 2)}\n`);
+    root.plugin = filtered;
+    const remainingKeys = Object.keys(root).filter((k) => k !== "plugin" || filtered.length > 0);
+    if (remainingKeys.length === 0 || (remainingKeys.length === 1 && remainingKeys[0] === "plugin" && filtered.length === 0)) {
+      await fs.rm(configPath, { force: true });
+    } else {
+      if (filtered.length === 0) {
+        delete root.plugin;
+      }
+      await writeFileSafe(configPath, `${JSON.stringify(root, null, 2)}\n`);
+    }
   }
 }
 
@@ -1016,6 +1024,17 @@ async function removeManagedHookEntries(hookFilePath: string): Promise<void> {
   await writeFileSafe(hookFilePath, `${JSON.stringify(root, null, 2)}\n`);
 }
 
+async function removeIfEmpty(dirPath: string): Promise<void> {
+  try {
+    const entries = await fs.readdir(dirPath);
+    if (entries.length === 0) {
+      await fs.rmdir(dirPath);
+    }
+  } catch {
+    // directory not present or not removable
+  }
+}
+
 export async function uninstallCclaw(projectRoot: string): Promise<void> {
   const fullRuntimePath = path.join(projectRoot, RUNTIME_ROOT);
   try {
@@ -1028,7 +1047,6 @@ export async function uninstallCclaw(projectRoot: string): Promise<void> {
   await removeGitignorePatterns(projectRoot);
   await removeManagedGitHookRelays(projectRoot);
 
-  // Clean hook files
   const hookFiles = [
     ".claude/hooks/hooks.json",
     ".cursor/hooks.json",
@@ -1076,5 +1094,22 @@ export async function uninstallCclaw(projectRoot: string): Promise<void> {
     await fs.rm(path.join(projectRoot, CURSOR_RULE_REL_PATH), { force: true });
   } catch {
     // best-effort cleanup
+  }
+
+  const managedDirs = [
+    ".claude/hooks",
+    ".claude/commands",
+    ".claude",
+    ".cursor/rules",
+    ".cursor/commands",
+    ".cursor",
+    ".codex/commands",
+    ".codex",
+    ".opencode/plugins",
+    ".opencode/commands",
+    ".opencode"
+  ];
+  for (const relDir of managedDirs) {
+    await removeIfEmpty(path.join(projectRoot, relDir));
   }
 }

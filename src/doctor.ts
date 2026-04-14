@@ -186,7 +186,7 @@ async function opencodeRegistrationCheck(projectRoot: string): Promise<{ ok: boo
     if (!parsed) {
       continue;
     }
-    const plugins = Array.isArray(parsed.plugins) ? parsed.plugins : [];
+    const plugins = Array.isArray(parsed.plugin) ? parsed.plugin : [];
     const registered = plugins.some((entry) => normalizeOpenCodePluginEntry(entry) === expected);
     if (registered) {
       return { ok: true, details: `${path.relative(projectRoot, configPath)} registers ${expected}` };
