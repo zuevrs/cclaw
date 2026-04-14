@@ -63,7 +63,7 @@ export const CCLAW_AGENTS: AgentDefinition[] = [
   {
     name: "spec-reviewer",
     description:
-      "MANDATORY after implementation: MUST BE USED during `/cc-review` (and any review gate) to verify acceptance criteria against the actual codebase — not against claims.",
+      "MANDATORY after implementation: MUST BE USED during the review stage (via `/cc-next`) to verify acceptance criteria against the actual codebase — not against claims.",
     tools: ["Read", "Grep", "Glob"],
     model: "balanced",
     activation: "mandatory",
@@ -87,7 +87,7 @@ export const CCLAW_AGENTS: AgentDefinition[] = [
   {
     name: "code-reviewer",
     description:
-      "MANDATORY for all code changes: MUST BE USED during `/cc-review` for any diff/PR-sized work — correctness, maintainability, and ship risk.",
+      "MANDATORY for all code changes: MUST BE USED during the review stage (via `/cc-next`) for any diff/PR-sized work — correctness, maintainability, and ship risk.",
     tools: ["Read", "Grep", "Glob"],
     model: "balanced",
     activation: "mandatory",
@@ -241,19 +241,16 @@ ${taskDelegation}
 }
 
 /**
- * Markdown table mapping Cclaw slash commands to recommended specialist agents.
+ * Markdown table mapping Cclaw stage entry points to specialist agents.
  */
 export function agentRoutingTable(): string {
-  return `| Command | Primary Agent | Supporting Agents |
+  return `| Stage Entry | Primary Agent | Supporting Agents |
 |---|---|---|
-| /cc-brainstorm | planner | — |
-| /cc-scope | planner | — |
-| /cc-design | planner, security-reviewer | — |
-| /cc-spec | planner | spec-reviewer |
-| /cc-plan | planner | — |
-| tdd (via /cc-next) | test-author | doc-updater |
-| /cc-review | spec-reviewer, code-reviewer | security-reviewer |
-| /cc-ship | — | doc-updater |
+| Brainstorm (start with \`/cc <idea>\`) | planner | — |
+| Scope / Design / Spec / Plan (advance via \`/cc-next\`) | planner | security-reviewer on design, spec-reviewer on spec |
+| TDD (via \`/cc-next\`) | test-author | doc-updater |
+| Review (via \`/cc-next\`) | spec-reviewer, code-reviewer | security-reviewer |
+| Ship (via \`/cc-next\`) | — | doc-updater |
 `;
 }
 
@@ -268,7 +265,7 @@ Cclaw provides specialist agents under \`.cclaw/agents/\` for targeted delegatio
 ${agentRoutingTable()}
 
 **Activation modes:**
-- **Mandatory:** MUST be used when the related stage runs (spec-reviewer, code-reviewer during /review)
+- **Mandatory:** MUST be used when the related stage runs (spec-reviewer, code-reviewer during review)
 - **Proactive:** Should be used automatically when context matches (planner for complex features, security-reviewer for auth code)
 - **On-demand:** Invoked only when explicitly requested
 

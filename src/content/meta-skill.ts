@@ -33,14 +33,14 @@ Task arrives
 \`\`\`
 
 Stage progression is handled automatically by \`/cc-next\`. The flow moves through:
-brainstorm → scope → design → spec → plan → test → build → review → ship
+brainstorm → scope → design → spec → plan → tdd → review → ship
 
 ## Flow State Check
 
 Before starting work, ALWAYS:
 
 1. Read \`.cclaw/state/flow-state.json\` for the current stage.
-2. If a stage is active, invoke the matching \`/cc-*\` command.
+2. If a stage is active, continue with \`/cc\` or \`/cc-next\` (do not jump directly to per-stage commands).
 3. If no stage applies (e.g. simple question, unrelated task), respond normally.
 
 ## Activation Rules
@@ -54,16 +54,16 @@ Before starting work, ALWAYS:
 
 ## Stage Quick Reference
 
-| Stage | Command | HARD-GATE | Artifact |
-|-------|---------|-----------|----------|
-| Brainstorm | \`/cc-brainstorm\` | No implementation planning | \`01-brainstorm.md\` |
-| Scope | \`/cc-scope\` | Challenge premises first | \`02-scope.md\` |
-| Design | \`/cc-design\` | Search before building | \`03-design.md\` |
-| Spec | \`/cc-spec\` | Observable + testable criteria | \`04-spec.md\` |
-| Plan | \`/cc-plan\` | One task = one purpose | \`05-plan.md\` |
-| TDD | (via \`/cc-next\`) | RED → GREEN → REFACTOR per slice | \`06-tdd.md\` |
-| Review | \`/cc-review\` | Two-layer review | \`07-review.md\` |
-| Ship | \`/cc-ship\` | All tests green on merge | \`08-ship.md\` |
+| Stage | How to enter | HARD-GATE | Artifact |
+|-------|--------------|-----------|----------|
+| Brainstorm | \`/cc <idea>\` (or \`/cc\` on fresh flow) | No implementation planning | \`01-brainstorm.md\` |
+| Scope | via \`/cc-next\` | Challenge premises first | \`02-scope.md\` |
+| Design | via \`/cc-next\` | Search before building | \`03-design.md\` |
+| Spec | via \`/cc-next\` | Observable + testable criteria | \`04-spec.md\` |
+| Plan | via \`/cc-next\` | One task = one purpose | \`05-plan.md\` |
+| TDD | via \`/cc-next\` | RED → GREEN → REFACTOR per slice | \`06-tdd.md\` |
+| Review | via \`/cc-next\` | Two-layer review | \`07-review.md\` |
+| Ship | via \`/cc-next\` | All tests green on merge | \`08-ship.md\` |
 
 ## Skill Loading
 
@@ -134,7 +134,7 @@ When a stage requires user input (approval, choice, direction), use this structu
 ## Failure Modes
 
 Watch for these anti-patterns:
-- **Skipping stages** — jumping from brainstorm to build without design/spec/plan
+- **Skipping stages** — jumping from brainstorm to tdd without design/spec/plan
 - **Ignoring gates** — claiming completion without evidence
 - **Premature implementation** — writing code before RED tests exist
 - **Hollow reviews** — "looks good" without checking spec compliance

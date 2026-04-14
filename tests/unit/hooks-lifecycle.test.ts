@@ -338,6 +338,7 @@ describe("hooks lifecycle rehydration", () => {
 
     const log = await fs.readFile(path.join(root, ".cclaw/state/workflow-guard.jsonl"), "utf8");
     expect(log).toContain("non_safe_tool_in_plan_stage_scope");
+    expect(log).toContain("stage_invocation_without_recent_flow_read");
   });
 
   it("workflow guard blocks source file writes during pre-implementation stages", async () => {

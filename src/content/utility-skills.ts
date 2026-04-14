@@ -27,7 +27,7 @@ Do not approve code with known Critical security issues. No exceptions.
 - Before shipping any user-facing feature
 - When adding authentication, authorization, or secrets handling
 - When handling user input, file uploads, or external API data
-- During the review stage (\`/cc-review\`) as a specialist lens
+- During the review stage (entered via \`/cc-next\`) as a specialist lens
 - When the security-reviewer agent persona is activated
 
 ## Checklist
@@ -541,7 +541,7 @@ Do not keep stale or oversized context loaded when task intent changes. Context 
 
 Modes are stored in \`.cclaw/contexts/\`:
 - \`default\` — balanced execution
-- \`execution\` — fast plan/test/build throughput
+- \`execution\` — fast plan/tdd throughput
 - \`review\` — defect/risk discovery
 - \`incident\` — stabilization and recovery
 
