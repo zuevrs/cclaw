@@ -30,7 +30,7 @@ describe("prompt-contract regression harness", () => {
 
     expect(planSkill).toContain("Dependency Waves");
     expect(planSkill).toContain("WAIT_FOR_CONFIRM");
-    expect(planSkill).toContain("/cc-test");
+    expect(planSkill).toContain("/cc-next");
     expect(planContract).toContain("Dependency Waves");
     expect(planContract).toContain("Context Hydration");
 

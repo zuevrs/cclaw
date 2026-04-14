@@ -3,7 +3,7 @@ import type { FlowStage } from "../types.js";
 import { stageExamples } from "./examples.js";
 import { selfImprovementBlock } from "./learnings.js";
 import type { StageSchema } from "./stage-schema.js";
-import { nextCclawCommand, QUESTION_FORMAT_SPEC, ERROR_BUDGET_SPEC, stageAutoSubagentDispatch, stageSchema } from "./stage-schema.js";
+import { QUESTION_FORMAT_SPEC, ERROR_BUDGET_SPEC, stageAutoSubagentDispatch, stageSchema } from "./stage-schema.js";
 
 function artifactFileName(artifactPath: string): string {
   const parts = artifactPath.split("/");
@@ -160,58 +160,49 @@ After plan approval (**WAIT_FOR_CONFIRM** / \`plan_wait_for_confirm\` satisfied)
 `;
 }
 
-function stageRequiresExplicitPause(schema: StageSchema): boolean {
-  const pauseRules = [
-    /\bWAIT_FOR_CONFIRM\b/,
-    /\*\*STOP\.\*\*/,
-    /Do NOT auto-advance/i,
-    /Do NOT proceed until user/i,
-    /wait for explicit user approval/i,
-    /wait for explicit approval/i,
-    /explicitly pause/i
-  ];
-  const stageText = [
-    schema.hardGate,
-    ...schema.checklist,
-    ...schema.interactionProtocol,
-    ...schema.process,
-    ...schema.exitCriteria
-  ];
+function stageCompletionProtocol(schema: StageSchema): string {
+  const stage = schema.stage;
+  const gateIds = schema.requiredGates.map((g) => g.id);
+  const gateList = gateIds.map((id) => `\`${id}\``).join(", ");
+  const nextStage = schema.next === "done" ? null : schema.next;
 
-  return stageText.some((line) => pauseRules.some((rule) => rule.test(line)));
-}
+  const stateUpdate = nextStage
+    ? `   - Set \`currentStage\` to \`"${nextStage}"\`
+   - Add \`"${stage}"\` to \`completedStages\` array
+   - Move all gate IDs for this stage (${gateList}) into \`stageGateCatalog.${stage}.passed\`
+   - Clear \`stageGateCatalog.${stage}.blocked\``
+    : `   - Add \`"${stage}"\` to \`completedStages\` array
+   - Move all gate IDs for this stage (${gateList}) into \`stageGateCatalog.${stage}.passed\`
+   - Clear \`stageGateCatalog.${stage}.blocked\``;
 
-function stageTransitionAutoAdvanceBlock(schema: StageSchema, nextCommand: string): string {
-  if (schema.next === "done") {
-    return "";
-  }
-  if (stageRequiresExplicitPause(schema)) {
-    return `## Stage transition (gate chain)
+  const nextAction = nextStage
+    ? `3. Tell the user: **"Stage \`${stage}\` complete. Next stage: \`${nextStage}\`. Run \`/cc-next\` to continue."**`
+    : `3. Tell the user: **"Flow complete. All stages finished."**`;
 
-**STOP.** This stage requires explicit user confirmation before advancing.
-Even if project config has \`autoAdvance: true\`, this stage's pause rule takes precedence.
-Do NOT auto-advance after gates pass. Present a summary of completed gates and suggest \`${nextCommand}\`, then wait for explicit user approval.
+  return `## Stage Completion Protocol
 
-`;
-  }
-  return `## Stage transition (gate chain)
+When all required gates are satisfied and the artifact is written:
 
-After all gates pass, suggest the next command (\`${nextCommand}\`).
-If project config at \`${RUNTIME_ROOT}/config.yaml\` has \`autoAdvance: true\`, proceed automatically.
-Otherwise, **STOP** and wait for user confirmation before advancing.
+1. **Update \`${RUNTIME_ROOT}/state/flow-state.json\`:**
+${stateUpdate}
+2. **Sync artifact** to \`${RUNTIME_ROOT}/runs/<activeRunId>/artifacts/${schema.artifactFile}\`
+${nextAction}
 
+**STOP.** Do not load the next stage skill yourself. The user will run \`/cc-next\` when ready (same session or new session).
 `;
 }
 
-function progressiveDisclosureBlock(stage: FlowStage, nextCommand: string): string {
+function stageTransitionAutoAdvanceBlock(schema: StageSchema): string {
+  return stageCompletionProtocol(schema);
+}
+
+function progressiveDisclosureBlock(stage: FlowStage): string {
   const schema = stageSchema(stage);
   const stageSpecificRefs: Record<FlowStage, string[]> = {
     brainstorm: [
-      "- `.cclaw/skills/autoplan/SKILL.md` — when the user wants brainstorm→plan orchestration in one flow",
       "- `.cclaw/skills/learnings/SKILL.md` — to capture durable framing insights early"
     ],
     scope: [
-      "- `.cclaw/skills/autoplan/SKILL.md` — for coordinated premise challenge across early stages",
       "- `.cclaw/skills/learnings/SKILL.md` — to persist rejected assumptions and constraints"
     ],
     design: [
@@ -256,7 +247,7 @@ function progressiveDisclosureBlock(stage: FlowStage, nextCommand: string): stri
 - Meta routing and activation rules: \`.cclaw/skills/using-cclaw/SKILL.md\`
 - Session continuity and checkpoint behavior: \`.cclaw/skills/session/SKILL.md\`
 ${stageSpecificRefs[stage].join("\n")}
-- Next-stage handoff command: \`${nextCommand}\`
+- Progression command: \`/cc-next\` (reads flow-state, loads the next stage)
 `;
 }
 
@@ -303,7 +294,6 @@ export function stageSkillFolder(stage: FlowStage): string {
 
 function quickStartBlock(stage: FlowStage): string {
   const schema = stageSchema(stage);
-  const nextCommand = nextCclawCommand(stage);
   const topGates = schema.requiredGates.slice(0, 3).map((g) => `\`${g.id}\``).join(", ");
   return `## Quick Start (minimum compliance)
 
@@ -312,13 +302,12 @@ function quickStartBlock(stage: FlowStage): string {
 > 2. Complete every checklist step in order and write the artifact to \`.cclaw/artifacts/${schema.artifactFile}\` (canonical run copy: \`.cclaw/runs/<activeRunId>/artifacts/${schema.artifactFile}\`).
 > 3. Do not claim completion without satisfying gates: ${topGates}${schema.requiredGates.length > 3 ? ` (+${schema.requiredGates.length - 3} more)` : ""}.
 >
-> **Next command after this stage:** ${nextCommand}
+> **After this stage:** update \`flow-state.json\` and tell the user to run \`/cc-next\`.
 `;
 }
 
 export function stageSkillMarkdown(stage: FlowStage): string {
   const schema = stageSchema(stage);
-  const nextCommand = nextCclawCommand(stage);
 
   const gateList = schema.requiredGates
     .map((g) => `- \`${g.id}\` — ${g.description}`)
@@ -408,11 +397,11 @@ ${completionStatusBlock(stage)}
 ## Verification
 ${schema.exitCriteria.map((item) => `- [ ] ${item}`).join("\n")}
 
-${stageTransitionAutoAdvanceBlock(schema, nextCommand)}
-${progressiveDisclosureBlock(stage, nextCommand)}
+${stageTransitionAutoAdvanceBlock(schema)}
+${progressiveDisclosureBlock(stage)}
 ${selfImprovementBlock(stage)}
 ## Handoff
-- Next command: ${nextCommand}
+- Next command: \`/cc-next\` (loads whatever stage is current in flow-state)
 - Required artifact: \`.cclaw/artifacts/${schema.artifactFile}\` (canonical: \`.cclaw/runs/<activeRunId>/artifacts/${schema.artifactFile}\`)
 - Stage stays blocked if any required gate is unsatisfied
 `;
