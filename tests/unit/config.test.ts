@@ -36,4 +36,15 @@ describe("config", () => {
     await expect(readConfig(root)).rejects.toThrow(/"harnesses" must be an array/);
     await expect(readConfig(root)).rejects.toThrow(/Example config:/);
   });
+
+  it("rejects unknown top-level config keys", async () => {
+    const root = await fs.mkdtemp(path.join(os.tmpdir(), "cclaw-config-unknown-key-"));
+    await fs.mkdir(path.join(root, ".cclaw"), { recursive: true });
+    await fs.writeFile(
+      configPath(root),
+      "harnesses:\n  - claude\nsurpriseMode: true\n",
+      "utf8"
+    );
+    await expect(readConfig(root)).rejects.toThrow(/unknown top-level key\(s\): surpriseMode/);
+  });
 });

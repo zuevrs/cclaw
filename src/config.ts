@@ -9,6 +9,7 @@ import type { HarnessId, VibyConfig } from "./types.js";
 const CONFIG_PATH = `${RUNTIME_ROOT}/config.yaml`;
 const HARNESS_ID_SET = new Set<string>(HARNESS_IDS);
 const SUPPORTED_HARNESSES_TEXT = HARNESS_IDS.join(", ");
+const ALLOWED_CONFIG_KEYS = new Set<string>(["version", "flowVersion", "harnesses", "autoAdvance"]);
 
 function configFixExample(): string {
   return `harnesses:
@@ -54,6 +55,11 @@ export async function readConfig(projectRoot: string): Promise<VibyConfig> {
   const parsed = (parsedUnknown && typeof parsedUnknown === "object"
     ? parsedUnknown
     : {}) as Partial<VibyConfig>;
+  const unknownKeys = Object.keys(parsed).filter((key) => !ALLOWED_CONFIG_KEYS.has(key));
+  if (unknownKeys.length > 0) {
+    throw configValidationError(fullPath, `unknown top-level key(s): ${unknownKeys.join(", ")}`);
+  }
+
   const hasHarnessesField = Object.prototype.hasOwnProperty.call(parsed, "harnesses");
   if (hasHarnessesField && !Array.isArray(parsed.harnesses)) {
     throw configValidationError(fullPath, `"harnesses" must be an array`);
