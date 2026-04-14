@@ -9,7 +9,7 @@ const FLOW_STATE_REL_PATH = `${RUNTIME_ROOT}/state/flow-state.json`;
 const RUNS_DIR_REL_PATH = `${RUNTIME_ROOT}/runs`;
 const ACTIVE_ARTIFACTS_REL_PATH = `${RUNTIME_ROOT}/artifacts`;
 const RUN_META_FILE = "run.json";
-const RUN_HANDOFF_FILE = "00-handoff.md";
+const RUN_HANDOFF_FILE = "handoff.md";
 const FLOW_STAGE_SET = new Set<string>(COMMAND_FILE_ORDER);
 
 export interface CclawRunMeta {

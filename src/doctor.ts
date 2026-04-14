@@ -760,8 +760,8 @@ export async function doctorChecks(projectRoot: string, options: DoctorOptions =
   });
   checks.push({
     name: "run:active_handoff",
-    ok: await exists(path.join(projectRoot, RUNTIME_ROOT, "runs", flowState.activeRunId, "00-handoff.md")),
-    details: `${RUNTIME_ROOT}/runs/${flowState.activeRunId}/00-handoff.md must exist`
+    ok: await exists(path.join(projectRoot, RUNTIME_ROOT, "runs", flowState.activeRunId, "handoff.md")),
+    details: `${RUNTIME_ROOT}/runs/${flowState.activeRunId}/handoff.md must exist`
   });
 
   const delegation = await checkMandatoryDelegations(projectRoot, flowState.currentStage);

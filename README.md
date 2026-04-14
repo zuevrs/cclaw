@@ -119,7 +119,7 @@ Required repository secret:
 │   └── <activeRunId>/
 │       ├── artifacts/        # canonical run artifacts
 │       ├── run.json
-│       └── 00-handoff.md
+│       └── handoff.md
 └── learnings.jsonl
 ```
 

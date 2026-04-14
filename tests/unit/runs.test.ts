@@ -22,7 +22,7 @@ describe("runs system", () => {
     expect(state.currentStage).toBe("brainstorm");
 
     const runMetaPath = path.join(root, ".cclaw/runs", state.activeRunId, "run.json");
-    const handoffPath = path.join(root, ".cclaw/runs", state.activeRunId, "00-handoff.md");
+    const handoffPath = path.join(root, ".cclaw/runs", state.activeRunId, "handoff.md");
     await expect(fs.readFile(runMetaPath, "utf8")).resolves.toContain(`"id": "${state.activeRunId}"`);
     await expect(fs.readFile(handoffPath, "utf8")).resolves.toContain(`ID: ${state.activeRunId}`);
   });
