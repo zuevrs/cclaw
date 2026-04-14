@@ -55,6 +55,7 @@ export interface StageSchema {
   hardGate: string;
   purpose: string;
   whenToUse: string[];
+  whenNotToUse: string[];
   interactionProtocol: string[];
   process: string[];
   requiredGates: StageGate[];
@@ -101,6 +102,11 @@ const BRAINSTORM: StageSchemaInput = {
     "Starting a new feature or behavior change",
     "Requirements are ambiguous or solution path is unclear",
     "Before any implementation-stage command"
+  ],
+  whenNotToUse: [
+    "An approved design, spec, and plan already exist and work is in execution stages",
+    "The request is strictly branch finalization or release handoff work",
+    "The task is purely retrospective after ship with no new design decisions needed"
   ],
   checklist: [
     "Explore project context — check files, docs, recent commits, existing behavior.",
@@ -233,6 +239,11 @@ const SCOPE: StageSchemaInput = {
     "After brainstorm approval",
     "Before architecture/design lock-in",
     "When ambition vs feasibility trade-off is unclear"
+  ],
+  whenNotToUse: [
+    "Brainstorm has not been approved yet",
+    "Scope boundaries are already locked and user requested no scope changes",
+    "The work is a pure implementation or debugging pass within existing scope"
   ],
   checklist: [
     "Prime Directives — Zero silent failures (every failure mode visible). Every error has a name (not 'handle errors' — name the exception). Every data flow has four paths: happy, nil input, upstream error, downstream timeout. Observability is a scope deliverable, not a post-launch add-on.",
@@ -410,6 +421,11 @@ const DESIGN: StageSchemaInput = {
     "After scope contract approval",
     "Before writing final spec and execution plan",
     "When architecture risks need explicit treatment"
+  ],
+  whenNotToUse: [
+    "Scope mode and boundaries are still unresolved",
+    "The change is docs-only or metadata-only with no architecture impact",
+    "Implementation has already started and requires review instead of design lock"
   ],
   checklist: [
     "Design Doc Check — read existing design docs, scope artifact, brainstorm artifact. If a design doc exists that covers this area, check for 'Supersedes:' and use the latest. Use upstream artifacts as source of truth.",
@@ -620,6 +636,11 @@ const SPEC: StageSchemaInput = {
     "Before planning and implementation",
     "When acceptance criteria must be measurable"
   ],
+  whenNotToUse: [
+    "Design decisions are still unresolved or disputed",
+    "The task is implementation-only cleanup with unchanged behavior",
+    "You still need to challenge scope rather than author requirements"
+  ],
   checklist: [
     "Read upstream — load design artifact and scope contract. Cross-reference architecture decisions.",
     "Define measurable acceptance criteria — each criterion must be observable and falsifiable. No vague adjectives.",
@@ -735,6 +756,11 @@ const PLAN: StageSchemaInput = {
     "After spec approval",
     "Before writing tests or implementation",
     "When delivery path and dependency order are needed"
+  ],
+  whenNotToUse: [
+    "Specification is unapproved or lacks measurable acceptance criteria",
+    "Execution is already in test/build stages with active slice evidence",
+    "The request is only release packaging with no task decomposition needed"
   ],
   checklist: [
     "Read upstream — load spec, design, and scope artifacts. Cross-reference acceptance criteria.",
@@ -852,6 +878,11 @@ const TEST: StageSchemaInput = {
     "Before /cc-build",
     "For every behavior change in scope"
   ],
+  whenNotToUse: [
+    "Plan approval is still pending WAIT_FOR_CONFIRM",
+    "The change is docs-only and does not alter behavior",
+    "GREEN implementation has started before RED evidence"
+  ],
   checklist: [
     "Select plan slice — pick one task from the plan. Do not batch multiple tasks.",
     "Map to acceptance criterion — identify the specific spec criterion this test proves.",
@@ -955,6 +986,11 @@ const BUILD: StageSchemaInput = {
     "After RED evidence is complete",
     "For one accepted plan slice at a time",
     "Before review stage"
+  ],
+  whenNotToUse: [
+    "RED evidence is missing or failure reason is unverified",
+    "Multiple unrelated slices are being merged into one build pass",
+    "The stage intent is review/ship sign-off rather than implementation"
   ],
   checklist: [
     "Minimal GREEN change — implement the smallest code change that makes the RED tests pass. No extra features.",
@@ -1060,6 +1096,11 @@ const REVIEW: StageSchemaInput = {
     "After build stage completes",
     "Before any ship action",
     "When release risk must be assessed explicitly"
+  ],
+  whenNotToUse: [
+    "There is no implementation diff to review",
+    "Build stage evidence is missing or stale",
+    "The goal is direct release execution without layered quality checks"
   ],
   checklist: [
     "Diff Scope — Run `git diff` against base branch. If no diff, exit early with APPROVED (no changes to review). Scope the review to changed files unless blast-radius analysis requires wider inspection.",
@@ -1264,6 +1305,11 @@ const SHIP: StageSchemaInput = {
     "After review passes with APPROVED or APPROVED_WITH_CONCERNS verdict",
     "Before creating PR/merge/final branch action",
     "When release notes and rollback plan are required"
+  ],
+  whenNotToUse: [
+    "Review verdict is BLOCKED or unresolved critical findings remain",
+    "Preflight checks cannot run and no approved exception exists",
+    "The request is still design/spec/implementation work, not release handoff"
   ],
   checklist: [
     "Validate upstream gates — verify review verdict is APPROVED or APPROVED_WITH_CONCERNS. If BLOCKED, stop immediately.",

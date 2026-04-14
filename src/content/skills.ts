@@ -100,6 +100,17 @@ ${readLines}
 `;
 }
 
+function whenNotToUseBlock(stage: FlowStage): string {
+  const schema = stageSchema(stage);
+  if (!schema.whenNotToUse || schema.whenNotToUse.length === 0) {
+    return "";
+  }
+  return `## When Not to Use
+${schema.whenNotToUse.map((item) => `- ${item}`).join("\n")}
+
+`;
+}
+
 function autoSubagentDispatchBlock(stage: FlowStage): string {
   const rules = stageAutoSubagentDispatch(stage);
   if (rules.length === 0) return "";
@@ -272,6 +283,7 @@ ${schema.purpose}
 ## When to Use
 ${schema.whenToUse.map((item) => `- ${item}`).join("\n")}
 
+${whenNotToUseBlock(stage)}
 ## Inputs
 ${schema.inputs.length > 0 ? schema.inputs.map((item) => `- ${item}`).join("\n") : "- (first stage — no required inputs)"}
 
