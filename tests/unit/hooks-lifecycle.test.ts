@@ -599,16 +599,18 @@ describe("hooks lifecycle rehydration", () => {
 
     const imported = await import(`${pathToFileURL(pluginPath).href}?t=${Date.now()}`);
     const pluginFactory = imported.default as (ctx: { directory: string }) => {
-      event: (name: string, data?: unknown) => Promise<void>;
+      event: (payload: unknown) => Promise<void>;
+      "tool.execute.before": (input: unknown, output?: unknown) => Promise<void>;
+      "tool.execute.after": (input: unknown, output?: unknown) => Promise<void>;
     };
     const plugin = pluginFactory({ directory: root });
 
     for (let i = 0; i < 3; i += 1) {
-      await plugin.event("tool.execute.before", {
+      await plugin["tool.execute.before"]({
         tool: "RunCommand",
         arguments: { cmd: `echo pre-${i}` }
       });
-      await plugin.event("tool.execute.after", {
+      await plugin["tool.execute.after"]({
         tool: "RunCommand",
         output: `error at step ${i}`
       });
@@ -632,15 +634,15 @@ describe("hooks lifecycle rehydration", () => {
     expect(parsed[0]?.runId).toBe("run-opencode");
     expect(parsed.some((entry) => entry.event === "tool_complete" && entry.data.includes("error at step"))).toBe(true);
 
-    await plugin.event("tool.execute.before", {
+    await plugin["tool.execute.before"]({
       tool: "Write",
       tool_input: { path: ".cclaw/state/flow-state.json" }
     });
-    await plugin.event("tool.execute.before", {
+    await plugin["tool.execute.before"]({
       tool: "RunCommand",
       tool_input: { cmd: "/cc-review" }
     });
-    await plugin.event("tool.execute.after", {
+    await plugin["tool.execute.after"]({
       tool: "RunCommand",
       context: { remaining_percent: 15 },
       output: "ok"
@@ -653,7 +655,7 @@ describe("hooks lifecycle rehydration", () => {
     const contextWarnings = await fs.readFile(path.join(root, ".cclaw/state/context-warnings.jsonl"), "utf8");
     expect(contextWarnings).toContain("context remaining");
 
-    await plugin.event("session.idle", {});
+    await plugin.event({ event: { type: "session.idle", data: {} } });
 
     const learnings = await fs.readFile(path.join(root, ".cclaw/learnings.jsonl"), "utf8");
     expect(learnings).toContain("frequent-errors-RunCommand");
