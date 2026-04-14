@@ -47,25 +47,160 @@ function normalizeHeadingTitle(title: string): string {
   return title.trim().replace(/\s+/g, " ");
 }
 
-/** Collect H2 titles from markdown (`## Section Name`). */
-function extractH2Headings(markdown: string): Set<string> {
-  const set = new Set<string>();
-  const re = /^##\s+(.+)$/gm;
-  let m: RegExpExecArray | null;
-  while ((m = re.exec(markdown)) !== null) {
-    set.add(normalizeHeadingTitle(m[1] ?? ""));
+type H2SectionMap = Map<string, string>;
+
+/** Collect H2 sections and body content (`## Section Name`). */
+function extractH2Sections(markdown: string): H2SectionMap {
+  const sections = new Map<string, string>();
+  const lines = markdown.split(/\r?\n/);
+  let currentHeading: string | null = null;
+  let buffer: string[] = [];
+
+  const flush = (): void => {
+    if (currentHeading === null) return;
+    sections.set(currentHeading, buffer.join("\n"));
+  };
+
+  for (const line of lines) {
+    const match = /^##\s+(.+)$/u.exec(line);
+    if (match) {
+      flush();
+      currentHeading = normalizeHeadingTitle(match[1] ?? "");
+      buffer = [];
+      continue;
+    }
+    if (currentHeading !== null) {
+      buffer.push(line);
+    }
   }
-  return set;
+  flush();
+  return sections;
 }
 
-function headingPresent(headings: Set<string>, section: string): boolean {
+function headingPresent(sections: H2SectionMap, section: string): boolean {
   const want = normalizeHeadingTitle(section).toLowerCase();
-  for (const h of headings) {
+  for (const h of sections.keys()) {
     if (h.toLowerCase() === want) {
       return true;
     }
   }
   return false;
+}
+
+function sectionBodyByName(sections: H2SectionMap, section: string): string | null {
+  const want = normalizeHeadingTitle(section).toLowerCase();
+  for (const [heading, body] of sections.entries()) {
+    if (heading.toLowerCase() === want) {
+      return body;
+    }
+  }
+  return null;
+}
+
+function meaningfulLineCount(sectionBody: string): number {
+  return sectionBody
+    .split(/\r?\n/)
+    .map((line) => line.trim())
+    .filter((line) => line.length > 0)
+    .filter((line) => !line.startsWith("<!--"))
+    .filter((line) => !/^[-:| ]+$/u.test(line))
+    .filter((line) => /[A-Za-z0-9]/u.test(line))
+    .length;
+}
+
+function lineHasToken(line: string, token: string): boolean {
+  return new RegExp(`\\b${token}\\b`, "u").test(line);
+}
+
+function countListItems(sectionBody: string): number {
+  const lines = sectionBody.split(/\r?\n/).map((line) => line.trim());
+  const bullets = lines.filter((line) => /^[-*]\s+\S+/u.test(line)).length;
+  const tableRows = lines.filter((line) => /^\|.*\|$/u.test(line) && !/^\|[-:| ]+\|$/u.test(line));
+  const tableDataRows = tableRows.length > 0 ? Math.max(0, tableRows.length - 1) : 0;
+  return Math.max(bullets, tableDataRows);
+}
+
+function extractMinItemsFromRule(rule: string): number | null {
+  const match = /at least\s+(\d+)/iu.exec(rule);
+  if (!match) return null;
+  const parsed = Number.parseInt(match[1] ?? "", 10);
+  return Number.isFinite(parsed) ? parsed : null;
+}
+
+function tokensFromRule(rule: string): string[] {
+  const allCaps = rule.match(/\b[A-Z][A-Z0-9_]{2,}\b/g) ?? [];
+  if (allCaps.length > 0) {
+    return [...new Set(allCaps)];
+  }
+  if (/finalization enum token/iu.test(rule)) {
+    return [
+      "FINALIZE_MERGE_LOCAL",
+      "FINALIZE_OPEN_PR",
+      "FINALIZE_KEEP_BRANCH",
+      "FINALIZE_DISCARD_BRANCH"
+    ];
+  }
+  if (/final verdict/iu.test(rule)) {
+    return ["APPROVED", "APPROVED_WITH_CONCERNS", "BLOCKED"];
+  }
+  return [];
+}
+
+function validateSectionBody(
+  sectionBody: string,
+  rule: string
+): { ok: boolean; details: string } {
+  const bodyLines = sectionBody.split(/\r?\n/).map((line) => line.trim());
+  const meaningful = meaningfulLineCount(sectionBody);
+  if (meaningful === 0) {
+    return {
+      ok: false,
+      details: "Section exists but has no meaningful content yet."
+    };
+  }
+
+  const minItems = extractMinItemsFromRule(rule);
+  if (minItems !== null) {
+    const count = countListItems(sectionBody);
+    if (count < minItems) {
+      return {
+        ok: false,
+        details: `Rule expects at least ${minItems} item(s), found ${count}.`
+      };
+    }
+  }
+
+  if (/exactly one/iu.test(rule)) {
+    const tokens = tokensFromRule(rule);
+    if (tokens.length > 0) {
+      const selected = new Set<string>();
+      const tokenLines: Array<{ line: string; token: string }> = [];
+      for (const line of bodyLines) {
+        if (!line) continue;
+        for (const token of tokens) {
+          if (!lineHasToken(line, token)) continue;
+          tokenLines.push({ line, token });
+          if (/\[x\]/iu.test(line) || /selected|verdict|enum|execution result|status/iu.test(line)) {
+            selected.add(token);
+          }
+        }
+      }
+      if (selected.size === 0 && tokenLines.length === 1 && !tokenLines[0]!.line.includes("|")) {
+        selected.add(tokenLines[0]!.token);
+      }
+      if (selected.size !== 1) {
+        return {
+          ok: false,
+          details: `Rule expects exactly one selected token (${tokens.join(", ")}); found ${selected.size}.`
+        };
+      }
+    }
+  }
+
+  return {
+    ok: true,
+    details: "Section heading and content satisfy lint heuristics."
+  };
 }
 
 export async function lintArtifact(projectRoot: string, stage: FlowStage): Promise<LintResult> {
@@ -92,18 +227,23 @@ export async function lintArtifact(projectRoot: string, stage: FlowStage): Promi
   }
 
   const raw = await fs.readFile(absFile, "utf8");
-  const headings = extractH2Headings(raw);
+  const sections = extractH2Sections(raw);
 
   for (const v of schema.artifactValidation) {
-    const found = headingPresent(headings, v.section);
+    const hasHeading = headingPresent(sections, v.section);
+    const body = hasHeading ? sectionBodyByName(sections, v.section) : null;
+    const validation = body === null
+      ? { ok: false, details: `No ## heading matching required section "${v.section}".` }
+      : validateSectionBody(body, v.validationRule);
+    const found = hasHeading && validation.ok;
     findings.push({
       section: v.section,
       required: v.required,
       rule: v.validationRule,
       found,
       details: found
-        ? `H2 heading found matching "${v.section}".`
-        : `No ## heading matching required section "${v.section}".`
+        ? validation.details
+        : validation.details
     });
   }
 
