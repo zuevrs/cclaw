@@ -365,7 +365,7 @@ export async function doctorChecks(projectRoot: string, options: DoctorOptions =
   });
 
   // Utility commands
-  for (const cmd of ["learn", "autoplan"]) {
+  for (const cmd of ["learn"]) {
     const cmdPath = path.join(projectRoot, RUNTIME_ROOT, "commands", `${cmd}.md`);
     checks.push({
       name: `utility_command:${cmd}`,
@@ -377,7 +377,6 @@ export async function doctorChecks(projectRoot: string, options: DoctorOptions =
   // Utility skills
   for (const [folder, label] of [
     ["learnings", "learnings"],
-    ["autoplan", "autoplan"],
     ["subagent-dev", "sdd"],
     ["parallel-dispatch", "parallel-agents"],
     ["session", "session"],
@@ -841,7 +840,7 @@ export async function doctorChecks(projectRoot: string, options: DoctorOptions =
       });
       continue;
     }
-    for (const cmd of ["learn", "autoplan"]) {
+    for (const cmd of ["learn"]) {
       const shimPath = path.join(projectRoot, adapter.commandDir, `cc-${cmd}.md`);
       checks.push({
         name: `shim:${harness}:${cmd}`,

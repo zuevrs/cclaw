@@ -11,7 +11,6 @@ import {
 } from "./constants.js";
 import { writeConfig, createDefaultConfig, readConfig, configPath } from "./config.js";
 import { commandContract } from "./content/contracts.js";
-import { autoplanSkillMarkdown, autoplanCommandContract } from "./content/autoplan.js";
 import { contextModeFiles, createInitialContextModeState } from "./content/contexts.js";
 import { learnSkillMarkdown, learnCommandContract } from "./content/learnings.js";
 import { nextCommandContract, nextCommandSkillMarkdown } from "./content/next-command.js";
@@ -241,10 +240,6 @@ async function writeSkills(projectRoot: string): Promise<void> {
     learnSkillMarkdown()
   );
   await writeFileSafe(
-    runtimePath(projectRoot, "skills", "autoplan", "SKILL.md"),
-    autoplanSkillMarkdown()
-  );
-  await writeFileSafe(
     runtimePath(projectRoot, "skills", "flow-next-step", "SKILL.md"),
     nextCommandSkillMarkdown()
   );
@@ -274,7 +269,6 @@ async function writeSkills(projectRoot: string): Promise<void> {
 
 async function writeUtilityCommands(projectRoot: string): Promise<void> {
   await writeFileSafe(runtimePath(projectRoot, "commands", "learn.md"), learnCommandContract());
-  await writeFileSafe(runtimePath(projectRoot, "commands", "autoplan.md"), autoplanCommandContract());
   await writeFileSafe(runtimePath(projectRoot, "commands", "next.md"), nextCommandContract());
 
 }
@@ -802,6 +796,7 @@ async function cleanLegacyArtifacts(projectRoot: string): Promise<void> {
   for (const legacyFolder of [
     "project-learnings",
     "auto-orchestration",
+    "autoplan",
     "subagent-driven-development",
     "dispatching-parallel-agents",
     "session-guidelines",
