@@ -258,7 +258,11 @@ When all required gates are satisfied and the artifact is written:
    - Move all gate IDs for this stage (\`brainstorm_context_explored\`, \`brainstorm_options_compared\`, \`brainstorm_design_approved\`, \`brainstorm_self_review_passed\`, \`brainstorm_user_reviewed_artifact\`) into \`stageGateCatalog.brainstorm.passed\`
    - Clear \`stageGateCatalog.brainstorm.blocked\`
 2. **Sync artifact** to \`.cclaw/runs/<activeRunId>/artifacts/01-brainstorm.md\`
-3. Tell the user: **"Stage \`brainstorm\` complete. Next stage: \`scope\`. Run \`/cc-next\` to continue."**
+3. Tell the user:
+
+   > **Stage \`brainstorm\` complete.** Next: **scope** — strategic scope stage. Challenge premise and lock explicit in-scope/out-of-scope boundaries using CEO-level thinking.
+   >
+   > Run \`/cc-next\` to continue.
 
 **STOP.** Do not load the next stage skill yourself. The user will run \`/cc-next\` when ready (same session or new session).
 
