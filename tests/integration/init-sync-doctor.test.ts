@@ -73,7 +73,7 @@ describe("install lifecycle", () => {
     const root = await fs.mkdtemp(path.join(os.tmpdir(), "cclaw-sync-"));
     await initCclaw({ projectRoot: root });
 
-    const shim = path.join(root, ".claude/commands/cc-brainstorm.md");
+    const shim = path.join(root, ".claude/commands/cc.md");
     const contract = path.join(root, ".cclaw/commands/plan.md");
     const skill = path.join(root, ".cclaw/skills/planning-and-task-breakdown/SKILL.md");
     await fs.rm(shim);
@@ -84,7 +84,7 @@ describe("install lifecycle", () => {
     const restored = await fs.readFile(shim, "utf8");
     const restoredContract = await fs.readFile(contract, "utf8");
     const restoredSkill = await fs.readFile(skill, "utf8");
-    expect(restored).toContain(".cclaw/commands/brainstorm.md");
+    expect(restored).toContain(".cclaw/skills/flow-start/SKILL.md");
     expect(restoredContract).toContain("WAIT_FOR_CONFIRM");
     expect(restoredSkill).toContain("## Required Gates");
   });

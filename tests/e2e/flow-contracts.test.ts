@@ -53,20 +53,16 @@ describe("flow command contracts", () => {
       expect(content).toContain("## Red Flags");
     }
 
-    const stageCommand = await fs.readFile(path.join(root, ".claude/commands/cc-design.md"), "utf8");
-    expect(stageCommand).toContain(".cclaw/skills/engineering-design-lock/SKILL.md");
-    expect(stageCommand).toContain(".cclaw/commands/design.md");
-
     for (const harnessDir of [
       ".claude/commands",
       ".cursor/commands",
       ".opencode/commands",
       ".codex/commands"
     ]) {
-      for (const stage of COMMAND_FILE_ORDER) {
-        const shimPath = path.join(root, harnessDir, `cc-${stage}.md`);
-        const shim = await fs.readFile(shimPath, "utf8");
-        expect(shim).toContain(`.cclaw/commands/${stage}.md`);
+      for (const shim of ["cc.md", "cc-next.md", "cc-learn.md"]) {
+        const shimPath = path.join(root, harnessDir, shim);
+        const content = await fs.readFile(shimPath, "utf8");
+        expect(content).toContain(".cclaw/skills/");
       }
     }
   });

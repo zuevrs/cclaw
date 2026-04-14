@@ -1,14 +1,9 @@
 import fs from "node:fs/promises";
 import path from "node:path";
-import { COMMAND_FILE_ORDER, RUNTIME_ROOT } from "./constants.js";
-import { CCLAW_AGENTS, agentMarkdown, agentsAgentsMdBlock } from "./content/agents.js";
-import { learningsAgentsMdBlock } from "./content/learnings.js";
-import { sessionHooksAgentsMdBlock } from "./content/session-hooks.js";
-import { hooksAgentsMdBlock } from "./content/hooks.js";
-import { subagentsAgentsMdBlock } from "./content/subagents.js";
-import { stageSkillFolder } from "./content/skills.js";
+import { RUNTIME_ROOT } from "./constants.js";
+import { CCLAW_AGENTS, agentMarkdown } from "./content/agents.js";
 import { ensureDir, exists, writeFileSafe } from "./fs-utils.js";
-import type { FlowStage, HarnessId } from "./types.js";
+import type { HarnessId } from "./types.js";
 
 export const CCLAW_MARKER_START = "<!-- cclaw-start -->";
 export const CCLAW_MARKER_END = "<!-- cclaw-end -->";
@@ -34,35 +29,7 @@ export const HARNESS_ADAPTERS: Record<HarnessId, HarnessAdapter> = {
   codex: { id: "codex", commandDir: ".codex/commands" }
 };
 
-function shimFileName(stage: FlowStage): string {
-  return `cc-${stage}.md`;
-}
-
-function shimContent(harness: HarnessId, stage: FlowStage): string {
-  const skillFolder = stageSkillFolder(stage);
-  return `---
-name: cc-${stage}
-description: Generated shim for ${harness}. Runs one flow stage with command+skill context.
-source: generated-by-cclaw
----
-
-# cclaw ${stage}
-
-Load and execute:
-1. \`.cclaw/skills/${skillFolder}/SKILL.md\`
-2. \`.cclaw/commands/${stage}.md\`
-
-This command is stage-scoped: do only this stage and then hand off to the next one.
-Use \`.cclaw/state/flow-state.json\` for transition guards and status tracking.
-Do not skip required handoff gates.
-`;
-}
-
 function agentsMdBlock(): string {
-  const stageList = COMMAND_FILE_ORDER.map(
-    (s) => `| \`/cc-${s}\` | \`.cclaw/skills/${stageSkillFolder(s)}/SKILL.md\` + \`.cclaw/commands/${s}.md\` |`
-  ).join("\n");
-
   return `${CCLAW_MARKER_START}
 ## Cclaw — Workflow Adapter
 
@@ -73,20 +40,19 @@ function agentsMdBlock(): string {
 
 Before responding to a coding request:
 1. Read \`.cclaw/state/flow-state.json\` for the current stage.
-2. If a stage applies, invoke the matching \`/cc-*\` command.
+2. Use \`/cc\` to start or \`/cc-next\` to continue the flow.
 3. If no stage applies, respond normally.
 
-### Intent → Stage Routing
+### Commands (3 total)
 
-| Command | Loads |
+| Command | Purpose |
 |---|---|
-${stageList}
-| \`/cc\` | \`.cclaw/skills/flow-start/SKILL.md\` + \`.cclaw/commands/start.md\` — **entry point** |
-| \`/cc-next\` | \`.cclaw/skills/flow-next-step/SKILL.md\` + \`.cclaw/commands/next.md\` |
-| \`/cc-learn\` | \`.cclaw/skills/learnings/SKILL.md\` + \`.cclaw/commands/learn.md\` |
+| \`/cc\` | **Entry point.** No args = resume current stage. With prompt = start brainstorm with idea. |
+| \`/cc-next\` | **Progression.** Advances to the next stage when current is complete. |
+| \`/cc-learn\` | **Cross-cutting.** Capture or review project learnings. |
 
 **Stage order:** brainstorm > scope > design > spec > plan > test > build > review > ship.
-One stage per invocation. Gates must pass before handoff.
+\`/cc-next\` loads the right stage skill automatically. Gates must pass before handoff.
 
 ### Verification Discipline
 
@@ -177,23 +143,17 @@ export async function syncHarnessShims(projectRoot: string, harnesses: HarnessId
     const commandDir = path.join(projectRoot, adapter.commandDir);
     await ensureDir(commandDir);
 
-    for (const stage of COMMAND_FILE_ORDER) {
-      const fullPath = path.join(commandDir, shimFileName(stage));
-      await writeFileSafe(fullPath, shimContent(harness, stage));
-    }
-
-    // Utility command shims
     await writeFileSafe(
-      path.join(commandDir, "cc-learn.md"),
-      utilityShimContent(harness, "learn", "learnings", "learn.md")
+      path.join(commandDir, "cc.md"),
+      utilityShimContent(harness, "cc", "flow-start", "start.md")
     );
     await writeFileSafe(
       path.join(commandDir, "cc-next.md"),
       utilityShimContent(harness, "next", "flow-next-step", "next.md")
     );
     await writeFileSafe(
-      path.join(commandDir, "cc.md"),
-      utilityShimContent(harness, "cc", "flow-start", "start.md")
+      path.join(commandDir, "cc-learn.md"),
+      utilityShimContent(harness, "learn", "learnings", "learn.md")
     );
   }
 
