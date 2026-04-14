@@ -323,25 +323,12 @@ export async function doctorChecks(projectRoot: string, options: DoctorOptions =
       });
       continue;
     }
-    for (const stage of COMMAND_FILE_ORDER) {
-      const shimPath = path.join(projectRoot, adapter.commandDir, `cc-${stage}.md`);
-      let shimOk = await exists(shimPath);
-      let details = shimPath;
-
-      if (shimOk) {
-        const content = await fs.readFile(shimPath, "utf8");
-        const hasSkillReference = content.includes(`.cclaw/skills/${stageSkillFolder(stage)}/SKILL.md`);
-        const hasCommandReference = content.includes(`.cclaw/commands/${stage}.md`);
-        shimOk = hasSkillReference && hasCommandReference;
-        details = hasSkillReference && hasCommandReference
-          ? `${shimPath} aligned`
-          : `${shimPath} missing stage references`;
-      }
-
+    for (const shim of ["cc.md", "cc-next.md", "cc-learn.md"]) {
+      const shimPath = path.join(projectRoot, adapter.commandDir, shim);
       checks.push({
-        name: `shim:${harness}:${stage}`,
-        ok: shimOk,
-        details
+        name: `shim:${harness}:${shim.replace(".md", "")}`,
+        ok: await exists(shimPath),
+        details: shimPath
       });
     }
   }
@@ -351,12 +338,13 @@ export async function doctorChecks(projectRoot: string, options: DoctorOptions =
   if (await exists(agentsFile)) {
     const content = await fs.readFile(agentsFile, "utf8");
     const hasMarkers = content.includes(CCLAW_MARKER_START) && content.includes(CCLAW_MARKER_END);
-    const hasAllCommands = COMMAND_FILE_ORDER.every((stage) => content.includes(`/cc-${stage}`));
-    const hasRouting = content.includes("Intent → Stage Routing") || content.includes("Intent → Stage");
+    const hasCcCommand = content.includes("/cc");
+    const hasCcNext = content.includes("/cc-next");
+    const hasCcLearn = content.includes("/cc-learn");
     const hasVerification = content.includes("Verification Discipline");
     const hasMinimalMarker = content.includes("intentionally minimal for cross-project use");
     const hasMetaSkillPointer = content.includes(".cclaw/skills/using-cclaw/SKILL.md");
-    agentsBlockOk = hasMarkers && hasAllCommands && hasRouting && hasVerification && hasMinimalMarker && hasMetaSkillPointer;
+    agentsBlockOk = hasMarkers && hasCcCommand && hasCcNext && hasCcLearn && hasVerification && hasMinimalMarker && hasMetaSkillPointer;
   }
   checks.push({
     name: "agents:cclaw_block",
@@ -828,27 +816,6 @@ export async function doctorChecks(projectRoot: string, options: DoctorOptions =
       ? `stage "${gateEvidence.stage}" gate evidence is consistent (required=${gateEvidence.requiredCount}, passed=${gateEvidence.passedCount}, blocked=${gateEvidence.blockedCount})`
       : gateEvidence.issues.join(" ")
   });
-
-  // Utility shims in harness dirs
-  for (const harness of configuredHarnesses) {
-    const adapter = (HARNESS_ADAPTERS as Record<string, { commandDir: string }>)[harness];
-    if (!adapter) {
-      checks.push({
-        name: `harness:${harness}:supported`,
-        ok: false,
-        details: `Unsupported harness "${harness}" in ${RUNTIME_ROOT}/config.yaml`
-      });
-      continue;
-    }
-    for (const cmd of ["learn"]) {
-      const shimPath = path.join(projectRoot, adapter.commandDir, `cc-${cmd}.md`);
-      checks.push({
-        name: `shim:${harness}:${cmd}`,
-        ok: await exists(shimPath),
-        details: shimPath
-      });
-    }
-  }
 
   // Self-improvement block in stage skills
   for (const stage of COMMAND_FILE_ORDER) {
