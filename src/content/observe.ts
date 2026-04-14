@@ -248,6 +248,18 @@ is_mutating_tool() {
   esac
 }
 
+is_plan_mode_safe_tool() {
+  case "$1" in
+    read|readfile|open|view|cat|head|tail) return 0 ;;
+    grep|glob|search|semanticsearch|ripgrep|rg|find|list_directory|ls) return 0 ;;
+    askquestion|askuserquestion|ask_question|ask_user_question|question) return 0 ;;
+    todowrite|todoread|todo_write|todo_read) return 0 ;;
+    webfetch|websearch|web_fetch|web_search|fetchmcpresource) return 0 ;;
+    switchmode|switch_mode) return 0 ;;
+    *) return 1 ;;
+  esac
+}
+
 is_preimplementation_stage() {
   case "$1" in
     brainstorm|scope|design|spec|plan) return 0 ;;
@@ -284,6 +296,18 @@ if is_preimplementation_stage "$CURRENT_STAGE" && is_mutating_tool "$TOOL_LOWER"
       REASONS="$REASONS,implementation_write_before_\${CURRENT_STAGE}_completion"
     else
       REASONS="implementation_write_before_\${CURRENT_STAGE}_completion"
+    fi
+  fi
+fi
+
+if is_preimplementation_stage "$CURRENT_STAGE" && ! is_plan_mode_safe_tool "$TOOL_LOWER"; then
+  if ! is_mutating_tool "$TOOL_LOWER"; then
+    if ! printf '%s' "$PAYLOAD_LOWER" | grep -Eq '\.cclaw/'; then
+      if [ -n "$REASONS" ]; then
+        REASONS="$REASONS,non_safe_tool_in_plan_stage_\${CURRENT_STAGE}"
+      else
+        REASONS="non_safe_tool_in_plan_stage_\${CURRENT_STAGE}"
+      fi
     fi
   fi
 fi
