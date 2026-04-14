@@ -4,8 +4,7 @@ export const FLOW_STAGES = [
   "design",
   "spec",
   "plan",
-  "test",
-  "build",
+  "tdd",
   "review",
   "ship"
 ] as const;

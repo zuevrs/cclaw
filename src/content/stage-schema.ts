@@ -782,7 +782,7 @@ const PLAN: StageSchemaInput = {
   ],
   whenNotToUse: [
     "Specification is unapproved or lacks measurable acceptance criteria",
-    "Execution is already in test/build stages with active slice evidence",
+    "Execution is already in TDD stage with active slice evidence",
     "The request is only release packaging with no task decomposition needed"
   ],
   checklist: [
@@ -863,7 +863,7 @@ const PLAN: StageSchemaInput = {
   ],
   policyNeedles: ["WAIT_FOR_CONFIRM", "Task Graph", "Dependency Waves", "Acceptance Mapping", "verification steps"],
   artifactFile: "05-plan.md",
-  next: "test",
+  next: "tdd",
   cognitivePatterns: [
     { name: "Vertical Slice Thinking", description: "Each task delivers one thin end-to-end slice of value. Horizontal layers (all models, then all controllers) create integration risk. Vertical slices (one feature through all layers) reduce it." },
     { name: "Two-Minute Smell Test", description: "If a competent engineer cannot understand and start a task in two minutes, the task is too large or too vague. Break it down further." },
@@ -886,205 +886,125 @@ const PLAN: StageSchemaInput = {
 };
 
 // ---------------------------------------------------------------------------
-// TEST — TDD RED stage
+// TDD — RED → GREEN → REFACTOR cycle (merged test + build)
 // ---------------------------------------------------------------------------
 
-const TEST: StageSchemaInput = {
-  stage: "test",
-  skillFolder: "red-first-testing",
-  skillName: "red-first-testing",
-  skillDescription: "TDD RED stage. Establish failing tests as proof before implementation changes.",
-  hardGate: "Do NOT change implementation code. This stage writes failing tests ONLY. If you find yourself editing non-test files, STOP — you have left the RED stage.",
-  purpose: "Create RED evidence tied to acceptance criteria before any implementation.",
+const TDD: StageSchemaInput = {
+  stage: "tdd",
+  skillFolder: "test-driven-development",
+  skillName: "test-driven-development",
+  skillDescription: "Full TDD cycle: RED (failing tests), GREEN (minimal implementation), REFACTOR (cleanup). One plan slice at a time with strict traceability.",
+  hardGate: "Do NOT merge, ship, or skip review. Follow RED → GREEN → REFACTOR strictly for each plan slice. Do NOT write implementation code before RED tests exist. Do NOT skip the REFACTOR step.",
+  purpose: "Implement features through the TDD cycle: write failing tests, make them pass with minimal code, then refactor.",
   whenToUse: [
     "After plan confirmation",
-    "After RED evidence from test stage (user runs /cc-next)",
-    "For every behavior change in scope"
+    "For every behavior change in scope",
+    "Before review stage"
   ],
   whenNotToUse: [
     "Plan approval is still pending WAIT_FOR_CONFIRM",
     "The change is docs-only and does not alter behavior",
-    "GREEN implementation has started before RED evidence"
+    "The stage intent is review/ship sign-off rather than implementation"
   ],
   checklist: [
     "Select plan slice — pick one task from the plan. Do not batch multiple tasks.",
     "Map to acceptance criterion — identify the specific spec criterion this test proves.",
-    "Write behavior-focused test — test the expected behavior, not implementation details. Name tests descriptively.",
-    "Run tests and observe failure — tests MUST fail. If they pass, either the behavior already exists or the test is wrong.",
-    "Capture failure output — copy the exact failure output as RED evidence. Record in artifact.",
+    "RED: Write behavior-focused test — test the expected behavior, not implementation details. Tests MUST fail.",
+    "RED: Capture failure output — copy the exact failure output as RED evidence. Record in artifact.",
+    "GREEN: Minimal implementation — write the smallest code change that makes the RED tests pass. No extra features.",
+    "GREEN: Run full suite — execute ALL tests, not just the ones you wrote. The full suite must be GREEN.",
+    "GREEN: Verify no regressions — if any existing test breaks, fix the regression before proceeding.",
+    "REFACTOR: Improve code quality — without changing behavior. Document what you changed and why.",
+    "Record evidence — capture RED failure, GREEN output, and REFACTOR notes in the TDD artifact.",
+    "Annotate traceability — link to plan task ID and spec criterion.",
     "Repeat for each slice — return to step 1 for the next plan slice."
   ],
   interactionProtocol: [
     "Pick one planned slice at a time.",
-    "Write behavior-focused tests before changing implementation.",
+    "Write behavior-focused tests before changing implementation (RED).",
     "Capture and store failing output as RED evidence.",
-    "Do not proceed to build without RED evidence.",
+    "Apply minimal change to satisfy RED tests (GREEN).",
+    "Run full suite, not partial checks, for GREEN validation.",
+    "Refactor without changing behavior and document rationale (REFACTOR).",
+    "Stop if regressions appear and fix before proceeding.",
     "If a test passes unexpectedly, investigate: does the behavior already exist, or is the test wrong?"
   ],
   process: [
     "Select slice and map to acceptance criterion.",
-    "Write test(s) that fail for expected reason.",
+    "Write test(s) that fail for expected reason (RED).",
     "Run tests and capture failure output.",
-    "Record RED evidence in TDD artifact.",
-    "Verify failure reason matches expected missing behavior."
+    "Implement smallest change needed for GREEN.",
+    "Run full tests and build checks.",
+    "Perform refactor pass preserving behavior.",
+    "Record RED, GREEN, and REFACTOR evidence in artifact.",
+    "Annotate traceability to plan task and spec criterion."
   ],
   requiredGates: [
     { id: "tdd_red_test_written", description: "Failing tests exist before implementation changes." },
     { id: "tdd_red_failure_captured", description: "Failure output is captured as evidence." },
     { id: "tdd_trace_to_acceptance", description: "RED tests trace to explicit acceptance criteria." },
-    { id: "tdd_red_failure_reason_verified", description: "Failure is for the expected reason, not an unrelated error." }
+    { id: "tdd_red_failure_reason_verified", description: "Failure is for the expected reason, not an unrelated error." },
+    { id: "tdd_green_full_suite", description: "Full relevant suite passes in GREEN state." },
+    { id: "tdd_refactor_completed", description: "Refactor pass completed with behavior preservation verified." },
+    { id: "tdd_refactor_notes_written", description: "Refactor decisions and outcomes are documented." },
+    { id: "tdd_traceable_to_plan", description: "Change traceability to plan slice is explicit." }
   ],
   requiredEvidence: [
-    "Artifact updated at `.cclaw/artifacts/06-tdd.md` RED section.",
-    "Failing command output captured.",
+    "Artifact updated at `.cclaw/artifacts/06-tdd.md` with RED, GREEN, and REFACTOR sections.",
+    "Failing command output captured (RED).",
+    "Full test/build output recorded (GREEN).",
     "Acceptance mapping documented.",
-    "Failure reason analysis recorded."
+    "Failure reason analysis recorded.",
+    "Refactor rationale captured.",
+    "Traceability to task identifier is documented."
   ],
-  inputs: ["approved plan slice", "spec acceptance criterion", "test harness configuration"],
+  inputs: ["approved plan slice", "spec acceptance criterion", "test harness configuration", "coding standards and constraints"],
   requiredContext: ["plan artifact", "spec artifact", "existing test patterns"],
-  outputs: ["failing test set", "captured RED evidence", "ready signal for GREEN stage"],
+  outputs: ["failing test set", "passing implementation", "refactor evidence", "review-ready change set"],
   blockers: [
-    "tests pass before behavior change",
-    "failure reason does not match expected behavior",
+    "tests pass before behavior change (RED failure missing)",
+    "full suite not green",
+    "behavior changed during refactor",
     "no evidence recorded"
   ],
   exitCriteria: [
     "RED evidence exists and is traceable",
-    "required gates marked satisfied",
-    "no implementation changes made in this stage",
-    "failure reason verified for each test"
-  ],
-  antiPatterns: [
-    "Writing code before failing test",
-    "Asserting implementation details instead of behavior",
-    "Skipping evidence capture",
-    "Testing multiple slices without recording evidence for each"
-  ],
-  rationalizations: [
-    { claim: "This change is obvious, tests can be added later.", reality: "Without RED proof, regressions hide behind optimistic assumptions." },
-    { claim: "A passing baseline is enough to continue.", reality: "Baseline pass does not prove new behavior requirements." },
-    { claim: "One broad integration test is enough.", reality: "Slice-level RED tests are required for precise failure signal." }
-  ],
-  redFlags: [
-    "No failing test output",
-    "No acceptance linkage",
-    "Implementation edits appear before RED evidence",
-    "Test passes without behavior change"
-  ],
-  policyNeedles: ["RED", "failing test", "acceptance criteria", "no implementation changes"],
-  artifactFile: "06-tdd.md",
-  next: "build",
-  cognitivePatterns: [
-    { name: "Behavior Over Implementation", description: "Tests describe WHAT the system does, not HOW. Test the observable behavior from outside the unit. If you need to test internals, the design needs work." },
-    { name: "Failure-First Thinking", description: "The failing test IS the specification. Until you see the right failure, you do not understand what you are building. Wrong failures are information." },
-    { name: "Proof Before Claim", description: "Do not claim a feature works without evidence. RED output is proof of what is missing. GREEN output is proof it was added. Both are required." }
-  ],
-  reviewSections: [],
-  completionStatus: ["DONE", "DONE_WITH_CONCERNS", "BLOCKED"],
-  crossStageTrace: {
-    readsFrom: [".cclaw/artifacts/05-plan.md", ".cclaw/artifacts/04-spec.md"],
-    writesTo: [".cclaw/artifacts/06-tdd.md"],
-    traceabilityRule: "Every RED test traces to a plan task. Every plan task traces to a spec criterion. Evidence chain: spec -> plan -> RED test -> failure output."
-  },
-  artifactValidation: [
-    { section: "RED Evidence", required: true, validationRule: "Failing test output captured per slice." },
-    { section: "Acceptance Mapping", required: true, validationRule: "Each RED test links to a plan task and spec criterion." },
-    { section: "Failure Analysis", required: true, validationRule: "Failure reason matches expected missing behavior." }
-  ],
-  waveExecutionAllowed: true
-};
-
-// ---------------------------------------------------------------------------
-// BUILD — TDD GREEN + REFACTOR stage
-// ---------------------------------------------------------------------------
-
-const BUILD: StageSchemaInput = {
-  stage: "build",
-  skillFolder: "incremental-implementation",
-  skillName: "incremental-implementation",
-  skillDescription: "TDD GREEN and REFACTOR stage with strict traceability to plan slices.",
-  hardGate: "Do NOT merge, ship, or skip review. This stage produces GREEN and REFACTOR evidence for one plan slice at a time. If you are touching files unrelated to the current slice, STOP.",
-  purpose: "Implement minimal passing change, run full suite GREEN, then refactor safely.",
-  whenToUse: [
-    "After RED evidence is complete",
-    "For one accepted plan slice at a time",
-    "Before review stage"
-  ],
-  whenNotToUse: [
-    "RED evidence is missing or failure reason is unverified",
-    "Multiple unrelated slices are being merged into one build pass",
-    "The stage intent is review/ship sign-off rather than implementation"
-  ],
-  checklist: [
-    "Minimal GREEN change — implement the smallest code change that makes the RED tests pass. No extra features.",
-    "Run full suite — execute ALL tests, not just the ones you wrote. The full suite must be GREEN.",
-    "Verify no regressions — if any existing test breaks, fix the regression before proceeding.",
-    "Refactor pass — improve code quality without changing behavior. Document what you changed and why.",
-    "Record evidence — capture GREEN output and REFACTOR notes in the TDD artifact.",
-    "Annotate traceability — link the implementation to the plan task ID and spec criterion."
-  ],
-  interactionProtocol: [
-    "Apply minimal change to satisfy RED tests.",
-    "Run full suite, not partial checks, for GREEN validation.",
-    "Refactor without changing behavior and document rationale.",
-    "Stop if regressions appear and return to prior step.",
-    "Record traceability to plan slice explicitly."
-  ],
-  process: [
-    "Implement smallest change needed for GREEN.",
-    "Run full tests and build checks.",
-    "Perform refactor pass preserving behavior.",
-    "Record GREEN and REFACTOR evidence in artifact.",
-    "Annotate traceability to plan task and spec criterion."
-  ],
-  requiredGates: [
-    { id: "build_minimal_change_applied", description: "Implementation matches a single plan slice." },
-    { id: "tdd_green_full_suite", description: "Full relevant suite passes in GREEN state." },
-    { id: "tdd_refactor_completed", description: "Refactor pass completed with behavior preservation verified." },
-    { id: "tdd_refactor_notes_written", description: "Refactor decisions and outcomes are documented." },
-    { id: "build_traceable_to_plan", description: "Change traceability to plan slice is explicit." }
-  ],
-  requiredEvidence: [
-    "Artifact `.cclaw/artifacts/06-tdd.md` includes GREEN and REFACTOR sections.",
-    "Full test/build output recorded.",
-    "Traceability to task identifier is documented.",
-    "Refactor rationale captured."
-  ],
-  inputs: ["RED evidence", "approved plan slice", "coding standards and constraints"],
-  requiredContext: ["tdd artifact", "plan artifact", "spec acceptance criteria"],
-  outputs: ["passing implementation", "refactor evidence", "review-ready change set"],
-  blockers: [
-    "no RED evidence",
-    "full suite not green",
-    "behavior changed during refactor"
-  ],
-  exitCriteria: [
-    "GREEN evidence captured",
+    "GREEN evidence captured with full suite pass",
     "REFACTOR evidence captured",
     "required gates marked satisfied",
     "traceability annotated"
   ],
   antiPatterns: [
+    "Writing code before failing test",
+    "Asserting implementation details instead of behavior",
     "Big-bang implementation across multiple slices",
     "Partial test runs presented as GREEN",
+    "Skipping evidence capture",
     "Undocumented refactor changes",
     "Adding features beyond what RED tests require"
   ],
   rationalizations: [
+    { claim: "This change is obvious, tests can be added later.", reality: "Without RED proof, regressions hide behind optimistic assumptions." },
+    { claim: "A passing baseline is enough to continue.", reality: "Baseline pass does not prove new behavior requirements." },
+    { claim: "One broad integration test is enough.", reality: "Slice-level RED tests are required for precise failure signal." },
     { claim: "Refactor can be skipped for speed.", reality: "Skipping refactor accumulates debt and weakens maintainability." },
     { claim: "Only changed tests need to pass.", reality: "Full-suite checks are needed to detect regressions." },
     { claim: "Traceability is implied by commit diff.", reality: "Explicit mapping avoids ambiguity in review and rollback." }
   ],
   redFlags: [
+    "No failing test output (RED missing)",
+    "Implementation edits appear before RED evidence",
     "No full-suite GREEN evidence",
     "No refactor notes",
     "Multiple tasks implemented in one pass without justification",
     "Files changed outside current slice scope"
   ],
-  policyNeedles: ["GREEN", "full test suite", "REFACTOR", "traceable to plan slice"],
+  policyNeedles: ["RED", "GREEN", "REFACTOR", "failing test", "full test suite", "acceptance criteria", "traceable to plan slice"],
   artifactFile: "06-tdd.md",
   next: "review",
   cognitivePatterns: [
+    { name: "Behavior Over Implementation", description: "Tests describe WHAT the system does, not HOW. Test the observable behavior from outside the unit. If you need to test internals, the design needs work." },
+    { name: "Failure-First Thinking", description: "The failing test IS the specification. Until you see the right failure, you do not understand what you are building. Wrong failures are information." },
     { name: "Minimal Viable Change", description: "The best implementation is the smallest one that passes all RED tests. Every extra line is risk. Resist the urge to 'improve while you are here.'" },
     { name: "Regression Paranoia", description: "Assume every change breaks something until the full suite proves otherwise. Partial test runs are lies of omission." },
     { name: "Refactor-as-Hygiene", description: "Refactoring is not optional cleanup — it is the third leg of TDD. GREEN without REFACTOR accumulates mess. REFACTOR without GREEN breaks things." }
@@ -1092,11 +1012,14 @@ const BUILD: StageSchemaInput = {
   reviewSections: [],
   completionStatus: ["DONE", "DONE_WITH_CONCERNS", "BLOCKED"],
   crossStageTrace: {
-    readsFrom: [".cclaw/artifacts/06-tdd.md", ".cclaw/artifacts/05-plan.md"],
+    readsFrom: [".cclaw/artifacts/05-plan.md", ".cclaw/artifacts/04-spec.md"],
     writesTo: [".cclaw/artifacts/06-tdd.md"],
-    traceabilityRule: "Every GREEN change traces to a RED test. Every RED test traces to a plan task. Evidence chain must be unbroken."
+    traceabilityRule: "Every RED test traces to a plan task. Every GREEN change traces to a RED test. Every plan task traces to a spec criterion. Evidence chain must be unbroken."
   },
   artifactValidation: [
+    { section: "RED Evidence", required: true, validationRule: "Failing test output captured per slice." },
+    { section: "Acceptance Mapping", required: true, validationRule: "Each RED test links to a plan task and spec criterion." },
+    { section: "Failure Analysis", required: true, validationRule: "Failure reason matches expected missing behavior." },
     { section: "GREEN Evidence", required: true, validationRule: "Full suite pass output captured." },
     { section: "REFACTOR Notes", required: true, validationRule: "What changed, why, behavior preservation confirmed." },
     { section: "Traceability", required: true, validationRule: "Plan task ID and spec criterion linked." }
@@ -1116,13 +1039,13 @@ const REVIEW: StageSchemaInput = {
   hardGate: "Do NOT ship, merge, or release until both review layers complete with an explicit verdict. No exceptions for urgency. Critical blockers MUST be resolved before handoff.",
   purpose: "Validate that implementation matches spec and meets quality/security/performance bar through structured two-layer review.",
   whenToUse: [
-    "After build stage completes",
+    "After TDD stage completes",
     "Before any ship action",
     "When release risk must be assessed explicitly"
   ],
   whenNotToUse: [
     "There is no implementation diff to review",
-    "Build stage evidence is missing or stale",
+    "TDD stage evidence is missing or stale",
     "The goal is direct release execution without layered quality checks"
   ],
   checklist: [
@@ -1477,8 +1400,7 @@ const STAGE_SCHEMA_MAP: Record<FlowStage, StageSchemaInput> = {
   design: DESIGN,
   spec: SPEC,
   plan: PLAN,
-  test: TEST,
-  build: BUILD,
+  tdd: TDD,
   review: REVIEW,
   ship: SHIP
 };
@@ -1536,21 +1458,12 @@ const STAGE_AUTO_SUBAGENT_DISPATCH: Record<FlowStage, StageAutoSubagentDispatch[
       requiresUserGate: false
     }
   ],
-  test: [
+  tdd: [
     {
       agent: "test-author",
       mode: "mandatory",
-      when: "Always during RED stage.",
-      purpose: "Guarantee failing tests are created before implementation.",
-      requiresUserGate: false
-    }
-  ],
-  build: [
-    {
-      agent: "test-author",
-      mode: "mandatory",
-      when: "Always during GREEN + REFACTOR.",
-      purpose: "Keep implementation traceable to RED evidence and full-suite verification.",
+      when: "Always during TDD cycle (RED → GREEN → REFACTOR).",
+      purpose: "Guarantee failing tests, traceable implementation, and full-suite verification.",
       requiresUserGate: false
     },
     {

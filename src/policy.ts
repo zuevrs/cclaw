@@ -94,7 +94,7 @@ export async function policyChecks(projectRoot: string, options: PolicyOptions =
     }
 
     // --- verification section for build/review/ship skills ---
-    if (["build", "review", "ship"].includes(stage)) {
+    if (["tdd", "review", "ship"].includes(stage)) {
       rules.push({
         filePath: skillFile,
         needle: "## Verification Before Completion",
