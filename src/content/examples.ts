@@ -28,6 +28,12 @@ const STAGE_EXAMPLES: Record<FlowStage, string> = {
 
 **Then next turn:** "Should we treat 'stdlib-only' as a hard dependency constraint?"
 
+### Premise challenge and boundary stress-test
+
+**Premise challenge:** "If the goal is only to demonstrate filesystem I/O, why is a CLI better than a tiny script or notebook for this demo?"
+
+**Boundary stress-test:** "When a write fails midway (permissions or partial path issues), what outcome should NEVER happen?"
+
 ### Alternatives comparison
 
 | Approach | Pros | Cons | Effort | Recommendation |
