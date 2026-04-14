@@ -79,7 +79,7 @@ export interface StageSchema {
   artifactValidation: ArtifactValidation[];
   namedAntiPattern?: NamedAntiPattern;
   decisionRecordFormat?: string;
-  /** When true, stage skill includes wave auto-execute guidance (test/build). */
+  /** When true, stage skill includes wave auto-execute guidance (tdd). */
   waveExecutionAllowed?: boolean;
   /** Agent names that MUST be dispatched (or waived) before stage transition — derived from mandatory auto-subagent rows. */
   mandatoryDelegations: string[];

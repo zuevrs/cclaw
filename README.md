@@ -3,7 +3,7 @@
 **A focused, installer-first workflow that turns AI coding sessions into predictable shipped outcomes.**
 
 `cclaw` gives your agent one clear path:
-**brainstorm -> scope -> design -> spec -> plan -> test -> build -> review -> ship**
+**brainstorm -> scope -> design -> spec -> plan -> tdd -> review -> ship**
 
 No giant command jungle. No runtime daemon. No process theater.
 Just a disciplined flow that stays lightweight and works across major coding harnesses.
@@ -17,10 +17,9 @@ flowchart LR
     C --> D[Design]
     D --> E[Spec]
     E --> F[Plan]
-    F --> G[Test]
-    G --> H[Build]
-    H --> I[Review]
-    I --> J[Ship]
+    F --> G[TDD]
+    G --> H[Review]
+    H --> I[Ship]
 ```
 
 ```mermaid
@@ -29,7 +28,7 @@ sequenceDiagram
     participant H as Harness
     participant V as cclaw Hooks + Skills
     participant S as State + Learnings
-    U->>H: /cc-brainstorm
+    U->>H: /cc <idea>
     H->>V: Load stage contract + HARD-GATE
     V->>S: Read context (state/learnings)
     V-->>H: Structured execution guidance
@@ -65,7 +64,8 @@ npx cclaw-cli init
 Then run in your harness:
 
 ```text
-/cc-brainstorm
+/cc <idea>
+/cc-next
 ```
 
 Core installer lifecycle:

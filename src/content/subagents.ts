@@ -38,7 +38,7 @@ This pattern is intentionally **Superpowers-style**: cheap parallelism where it 
 For cclaw flow stages, machine-only specialist work should auto-dispatch without waiting for a manual user request:
 
 - **design/plan:** planner
-- **test/build:** test-author
+- **tdd:** test-author
 - **review:** spec-reviewer + code-reviewer (security-reviewer when trust boundaries moved)
 - **ship:** doc-updater
 
@@ -300,7 +300,7 @@ Implementation that touches shared source trees must remain **sequential** unles
   - **3–4:** appendix / “worth tracking” section (not merge-blocking alone)
   - **1–2:** suppress from primary narrative unless paired with stronger evidence
 
-### Review Army Artifact Contract (required in /cc-review)
+### Review Army Artifact Contract (required in review stage via /cc-next)
 
 Write a structured reconciliation artifact at \`.cclaw/artifacts/07-review-army.json\` using this schema:
 
@@ -633,7 +633,7 @@ Status contract: DONE | DONE_WITH_CONCERNS | NEEDS_CONTEXT | BLOCKED.
 - Controller sequentially dispatches **implementer → reviewer** loops per task.
 - HARD-GATE: paste **self-contained task text**; never point subagents at plan files to “discover” scope.
 - **Spec fixers** are **fresh agents** after failed spec reviews — avoids parent-context pollution.
-- **Machine-only flow checks auto-dispatch** by stage (design/plan/test/build/review/ship) without asking the user to trigger each specialist manually.
+- **Machine-only flow checks auto-dispatch** by stage (design/plan/tdd/review/ship) without asking the user to trigger each specialist manually.
 
 ### Parallel Agents (\`dispatching-parallel-agents\` skill)
 

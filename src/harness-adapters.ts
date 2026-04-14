@@ -51,7 +51,7 @@ Before responding to a coding request:
 | \`/cc-next\` | **Progression.** Advances to the next stage when current is complete. |
 | \`/cc-learn\` | **Cross-cutting.** Capture or review project learnings. |
 
-**Stage order:** brainstorm > scope > design > spec > plan > test > build > review > ship.
+**Stage order:** brainstorm > scope > design > spec > plan > tdd > review > ship.
 \`/cc-next\` loads the right stage skill automatically. Gates must pass before handoff.
 
 ### Verification Discipline
@@ -107,8 +107,9 @@ export async function removeCclawFromAgentsMd(projectRoot: string): Promise<void
 }
 
 function utilityShimContent(harness: HarnessId, command: string, skillFolder: string, commandFile: string): string {
+  const shimName = command === "cc" ? "cc" : `cc-${command}`;
   return `---
-name: cc-${command}
+name: ${shimName}
 description: Generated shim for ${harness}. Utility command — not a flow stage.
 source: generated-by-cclaw
 ---

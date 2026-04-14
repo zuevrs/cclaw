@@ -233,10 +233,9 @@ stage_index() {
     design) echo 3 ;;
     spec) echo 4 ;;
     plan) echo 5 ;;
-    test) echo 6 ;;
-    build) echo 7 ;;
-    review) echo 8 ;;
-    ship) echo 9 ;;
+    tdd) echo 6 ;;
+    review) echo 7 ;;
+    ship) echo 8 ;;
     *) echo 0 ;;
   esac
 }
@@ -270,7 +269,7 @@ is_preimplementation_stage() {
 detect_target_stage() {
   local text="$1"
   for stage in brainstorm scope design spec plan tdd review ship; do
-    if printf '%s' "$text" | grep -Eq "(/cc-$stage|cc-$stage)\\b"; then
+    if printf '%s' "$text" | grep -Eq "(/cc-$stage|cc-$stage)([^[:alnum:]_-]|$)"; then
       printf '%s' "$stage"
       return 0
     fi
@@ -279,7 +278,22 @@ detect_target_stage() {
   return 0
 }
 
+is_flow_progression_command() {
+  local text="$1"
+  if printf '%s' "$text" | grep -Eq '(/cc-next|cc-next)([^[:alnum:]_-]|$)'; then
+    return 0
+  fi
+  if printf '%s' "$text" | grep -Eq '/cc([^[:alnum:]_-]|$)'; then
+    return 0
+  fi
+  return 1
+}
+
 TARGET_STAGE=$(detect_target_stage "$PAYLOAD_LOWER")
+FLOW_COMMAND_INVOKED=0
+if is_flow_progression_command "$PAYLOAD_LOWER"; then
+  FLOW_COMMAND_INVOKED=1
+fi
 if [ -n "$TARGET_STAGE" ] && [ "$CURRENT_STAGE" != "none" ]; then
   CURRENT_IDX=$(stage_index "$CURRENT_STAGE")
   TARGET_IDX=$(stage_index "$TARGET_STAGE")
@@ -312,7 +326,7 @@ if is_preimplementation_stage "$CURRENT_STAGE" && ! is_plan_mode_safe_tool "$TOO
   fi
 fi
 
-if [ -n "$TARGET_STAGE" ]; then
+if [ -n "$TARGET_STAGE" ] || [ "$FLOW_COMMAND_INVOKED" -eq 1 ]; then
   if [ "$LAST_FLOW_READ_AT" -le 0 ] || [ "$NOW_EPOCH" -le 0 ] || [ $((NOW_EPOCH - LAST_FLOW_READ_AT)) -gt "$MAX_FLOW_READ_AGE_SEC" ]; then
     if [ -n "$REASONS" ]; then
       REASONS="$REASONS,stage_invocation_without_recent_flow_read"
@@ -364,7 +378,7 @@ PY
 fi
 
 if [ -n "$REASONS" ]; then
-  NOTE="Cclaw workflow guard: detected potential flow violation (\${REASONS}). Re-read ${RUNTIME_ROOT}/state/flow-state.json, avoid source edits before build/test stages, and continue from current stage ordering."
+  NOTE="Cclaw workflow guard: detected potential flow violation (\${REASONS}). Re-read ${RUNTIME_ROOT}/state/flow-state.json, avoid source edits before tdd stage, and continue from current stage ordering."
   if command -v jq >/dev/null 2>&1; then
     ENTRY=$(jq -n -c \
       --arg ts "$TS" \

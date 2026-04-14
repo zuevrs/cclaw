@@ -281,8 +281,7 @@ if [ "$SUGGESTIONS_ENABLED" = "true" ] && [ "$STAGE_MUTED" != "true" ]; then
     design) STAGE_SUGGESTION="Suggestion: map failure modes per new codepath and confirm architecture boundaries before moving forward." ;;
     spec) STAGE_SUGGESTION="Suggestion: ensure every acceptance criterion is measurable and mapped to a concrete test." ;;
     plan) STAGE_SUGGESTION="Suggestion: group tasks into dependency waves and keep WAIT_FOR_CONFIRM pending until approval." ;;
-    test) STAGE_SUGGESTION="Suggestion: RED only in this stage — capture failing output for each selected slice." ;;
-    build) STAGE_SUGGESTION="Suggestion: apply minimal GREEN change, run full suite, then document REFACTOR notes." ;;
+    tdd) STAGE_SUGGESTION="Suggestion: execute RED → GREEN → REFACTOR for each selected slice and capture evidence per cycle." ;;
     review) STAGE_SUGGESTION="Suggestion: run Layer 1 before Layer 2 and reconcile findings into 07-review-army.json." ;;
     ship) STAGE_SUGGESTION="Suggestion: verify preflight + rollback plan before selecting exactly one finalization mode." ;;
     *) STAGE_SUGGESTION="" ;;
@@ -412,7 +411,7 @@ if [ "$STAGE" != "none" ] && [ -n "$STAGE_LEARNING_LINES" ] && command -v jq >/d
 fi
 
 # --- Build context message ---
-CTX="cclaw loaded. Flow: stage=$STAGE ($COMPLETED/9 completed, run=$ACTIVE_RUN). Active run artifacts: ${RUNTIME_ROOT}/runs/$ACTIVE_RUN/artifacts/"
+CTX="cclaw loaded. Flow: stage=$STAGE ($COMPLETED/8 completed, run=$ACTIVE_RUN). Active run artifacts: ${RUNTIME_ROOT}/runs/$ACTIVE_RUN/artifacts/"
 if [ -n "$CONTEXT_MODE_NOTE" ]; then
   CTX="$CTX
 $CONTEXT_MODE_NOTE"
@@ -948,8 +947,7 @@ export default function cclawPlugin(ctx) {
       design: "Suggestion: map failure modes per new codepath and confirm architecture boundaries before moving forward.",
       spec: "Suggestion: ensure every acceptance criterion is measurable and mapped to a concrete test.",
       plan: "Suggestion: group tasks into dependency waves and keep WAIT_FOR_CONFIRM pending until approval.",
-      test: "Suggestion: RED only in this stage — capture failing output for each selected slice.",
-      build: "Suggestion: apply minimal GREEN change, run full suite, then document REFACTOR notes.",
+      tdd: "Suggestion: execute RED → GREEN → REFACTOR for each selected slice and capture evidence per cycle.",
       review: "Suggestion: run Layer 1 before Layer 2 and reconcile findings into 07-review-army.json.",
       ship: "Suggestion: verify preflight + rollback plan before selecting exactly one finalization mode."
     };
@@ -1011,7 +1009,7 @@ export default function cclawPlugin(ctx) {
     const contextMode = readContextMode();
     const stageSuggestion = readStageSuggestion(stage);
     const stageLearnings = readStageLearnings(stage);
-    const parts = [\`cclaw loaded. Flow: stage=\${stage} (\${completed}/9 completed, run=\${activeRunId}). Active run artifacts: ${RUNTIME_ROOT}/runs/\${activeRunId}/artifacts/\`];
+    const parts = [\`cclaw loaded. Flow: stage=\${stage} (\${completed}/8 completed, run=\${activeRunId}). Active run artifacts: ${RUNTIME_ROOT}/runs/\${activeRunId}/artifacts/\`];
     parts.push(
       contextMode.guide
         ? \`Context mode: \${contextMode.mode} (guide: \${contextMode.guide})\`
