@@ -11,6 +11,7 @@ import { HARNESS_ADAPTERS, CCLAW_MARKER_START, CCLAW_MARKER_END } from "./harnes
 import { policyChecks } from "./policy.js";
 import { readFlowState } from "./runs.js";
 import { checkMandatoryDelegations } from "./delegation.js";
+import { buildTraceMatrix } from "./trace-matrix.js";
 import { stageSkillFolder } from "./content/skills.js";
 
 const execFileAsync = promisify(execFile);
@@ -589,6 +590,34 @@ export async function doctorChecks(projectRoot: string): Promise<DoctorCheck[]> 
     details: delegation.waived.length > 0
       ? `warning: waived mandatory delegations for stage "${flowState.currentStage}": ${delegation.waived.join(", ")}`
       : "no waived mandatory delegations for current stage"
+  });
+
+  const trace = await buildTraceMatrix(projectRoot);
+  const traceHasSignal =
+    trace.entries.length > 0 ||
+    trace.orphanedCriteria.length > 0 ||
+    trace.orphanedTasks.length > 0 ||
+    trace.orphanedTests.length > 0;
+  checks.push({
+    name: "trace:criteria_coverage",
+    ok: !traceHasSignal || trace.orphanedCriteria.length === 0,
+    details: trace.orphanedCriteria.length === 0
+      ? "all spec criteria are linked to plan tasks"
+      : `orphaned criteria: ${trace.orphanedCriteria.join(", ")}`
+  });
+  checks.push({
+    name: "trace:task_to_test_coverage",
+    ok: !traceHasSignal || trace.orphanedTasks.length === 0,
+    details: trace.orphanedTasks.length === 0
+      ? "all plan tasks are linked to test slices"
+      : `orphaned tasks: ${trace.orphanedTasks.join(", ")}`
+  });
+  checks.push({
+    name: "trace:test_to_criteria_coverage",
+    ok: !traceHasSignal || trace.orphanedTests.length === 0,
+    details: trace.orphanedTests.length === 0
+      ? "all test slices map to acceptance-linked tasks"
+      : `orphaned test slices: ${trace.orphanedTests.join(", ")}`
   });
 
   // Utility shims in harness dirs
