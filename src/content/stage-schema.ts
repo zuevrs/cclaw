@@ -131,38 +131,44 @@ const BRAINSTORM: StageSchemaInput = {
     "The task is purely retrospective after ship with no new design decisions needed"
   ],
   checklist: [
-    "Explore project context — check files, docs, recent commits, existing behavior.",
+    "Explore project context — check files, docs, recent commits, existing behavior. Summarize what you found (even for seemingly simple projects).",
     "Assess scope — if the request describes multiple independent subsystems, flag for decomposition before detailed questions.",
-    "Ask clarifying questions — one at a time, understand purpose, constraints, success criteria. For straightforward requests, ask no more than 1-2 clarifying questions before presenting options.",
-    "Propose 2-3 approaches — with trade-offs and your explicit recommendation with reasoning.",
-    "Present design — in sections scaled to their complexity (few sentences if simple, up to 300 words if nuanced). Get approval after each section.",
+    "Restate the problem — before any questions, summarize what you understood the user wants and why. Ask the user to confirm or correct your understanding.",
+    "Ask clarifying questions — one at a time, understand purpose, constraints, success criteria, target users, and edge cases. Continue until you can confidently describe the solution space. Minimum: understand the WHY, WHO, WHAT, and boundary conditions.",
+    "Propose 2-3 approaches — with real trade-offs (not cosmetic differences) and your explicit recommendation with reasoning. Explain WHY you recommend this option over others.",
+    "Present design — in sections. After each section, explicitly state what you are asking the user to approve: 'Do you approve [specific thing]?' Never ask a bare 'одобряете?/approve?' without context.",
     "Write design doc — save to `.cclaw/artifacts/01-brainstorm.md`.",
     "Self-review — scan for placeholders, TBDs, contradictions, ambiguity, scope creep. Fix inline.",
-    "User reviews written artifact — ask user to review before proceeding. **STOP.** Do NOT proceed until user responds.",
+    "User reviews written artifact — ask user to review the written artifact (not the chat summary). **STOP.** Do NOT proceed until user responds.",
     "Stage complete — update `flow-state.json` per the Stage Completion Protocol. Tell user to run `/cc-next` to continue to scope."
   ],
   interactionProtocol: [
-    "Explore context first (files, docs, existing behavior).",
-    "Ask one clarifying question per message. Do NOT combine questions.",
-    "For approach selection: use the Decision Protocol — present labeled options (A/B/C) with trade-offs and mark one as (recommended). If AskQuestion/AskUserQuestion is available, send exactly ONE question per call, validate fields against runtime schema, and on schema error immediately fall back to plain-text question instead of retrying guessed payloads.",
+    "Explore context first (files, docs, existing behavior). Share a brief summary of what you found.",
+    "Restate the problem in your own words. Ask user to confirm before proceeding to questions.",
+    "Ask one clarifying question per message. Do NOT combine questions. Continue until you understand purpose, constraints, users, success criteria, and edge cases.",
+    "For approach selection: use the Decision Protocol — present labeled options (A/B/C) with REAL trade-offs (not cosmetic) and mark one as (recommended) with clear reasoning. If AskQuestion/AskUserQuestion is available, send exactly ONE question per call, validate fields against runtime schema, and on schema error immediately fall back to plain-text question instead of retrying guessed payloads.",
+    "Every approval question MUST state what exactly is being approved: 'Do you approve [the architecture / the API shape / the dependency choice]?' Never ask a bare 'approve?' or 'looks good?'.",
     "Get section-by-section approval before finalizing the design direction.",
     "Run a self-review pass (ambiguity, placeholders, contradictions) before handoff.",
     "**STOP.** Wait for explicit user approval after writing the artifact. Do NOT auto-advance to the next stage."
   ],
   process: [
-    "Capture problem statement, users, constraints, and success criteria.",
+    "Explore project context — files, docs, behavior, recent changes. Share findings.",
+    "Restate the problem — summarize what the user wants and why. Get confirmation.",
+    "Clarify iteratively — ask questions one at a time until you understand WHY, WHO, WHAT, success criteria, and boundaries.",
     "Identify whether request should be decomposed into smaller sub-problems.",
-    "Offer alternatives and recommendation with rationale.",
-    "Present design in sections, ask after each section whether it looks right.",
-    "Write artifact with validated design.",
+    "Offer 2-3 alternatives with real trade-offs and recommendation with rationale.",
+    "Present design in sections. After each section explicitly name what you ask the user to approve.",
+    "Write artifact to `.cclaw/artifacts/01-brainstorm.md`.",
     "Run self-review: placeholder scan, internal consistency, scope check, ambiguity check.",
-    "Ask user to review the written spec. Wait for changes or approval.",
+    "Ask user to review the written artifact. Wait for changes or approval.",
     "Handoff to scope stage only after approval is explicit."
   ],
   requiredGates: [
-    { id: "brainstorm_context_explored", description: "Project context and constraints have been reviewed." },
-    { id: "brainstorm_options_compared", description: "At least two alternatives were compared with trade-offs." },
-    { id: "brainstorm_design_approved", description: "User approved a concrete design direction." },
+    { id: "brainstorm_context_explored", description: "Project context and constraints have been reviewed and summarized." },
+    { id: "brainstorm_problem_restated", description: "Problem was restated in agent's words and user confirmed the understanding." },
+    { id: "brainstorm_options_compared", description: "At least two alternatives were compared with real trade-offs." },
+    { id: "brainstorm_design_approved", description: "User approved a concrete design direction (with explicit statement of what was approved)." },
     { id: "brainstorm_self_review_passed", description: "Design doc passed placeholder/ambiguity/consistency checks." },
     { id: "brainstorm_user_reviewed_artifact", description: "User reviewed the written artifact and confirmed readiness." }
   ],
@@ -199,24 +205,32 @@ const BRAINSTORM: StageSchemaInput = {
     "Asking many questions in one message",
     "Jumping directly into implementation",
     "Combining visual companion offer with a clarifying question",
-    "Invoking implementation skills before writing plans"
+    "Invoking implementation skills before writing plans",
+    "Asking bare 'approve?' or 'одобряете?' without stating WHAT is being approved",
+    "Presenting a single summary and asking for blanket approval instead of section-by-section review",
+    "Rushing through clarification — asking 1-2 generic questions then jumping to design"
   ],
   rationalizations: [
     { claim: "This is too simple for design.", reality: "Simple tasks fail fast when assumptions are wrong; a short design pass prevents rework." },
     { claim: "We can figure it out while coding.", reality: "Coding before alignment creates churn and hidden scope growth." },
     { claim: "There is only one obvious approach.", reality: "Without alternatives, trade-offs stay implicit and risk goes unexamined." },
-    { claim: "The user already knows what they want.", reality: "Unstated assumptions diverge during implementation; explicit design surfaces them early." }
+    { claim: "The user already knows what they want.", reality: "Unstated assumptions diverge during implementation; explicit design surfaces them early." },
+    { claim: "This is straightforward, 1-2 questions are enough.", reality: "Even simple projects have hidden constraints (error handling, edge cases, deployment). A few extra questions now prevent rework later." }
   ],
   redFlags: [
     "No alternatives documented",
     "No explicit approval checkpoint",
     "Implementation-related actions before approval",
     "Self-review skipped or glossed over",
-    "Artifact has TBD or placeholder sections"
+    "Artifact has TBD or placeholder sections",
+    "Fewer than 3 clarifying questions asked for any non-trivial project",
+    "Approval requested without stating what exactly is being approved"
   ],
   policyNeedles: [
+    "Restate problem before questions",
     "One clarifying question per message",
-    "2-3 approaches with trade-offs",
+    "2-3 approaches with real trade-offs",
+    "State what is being approved",
     "Do NOT implement, scaffold, or modify behavior"
   ],
   artifactFile: "01-brainstorm.md",
@@ -235,9 +249,11 @@ const BRAINSTORM: StageSchemaInput = {
     traceabilityRule: "Every approved direction must be traceable forward through scope and design. Downstream stages must reference brainstorm decisions."
   },
   artifactValidation: [
-    { section: "Problem Statement", required: true, validationRule: "Must describe the user problem, not the solution." },
-    { section: "Alternatives Table", required: true, validationRule: "At least 2 approaches with trade-offs and recommendation." },
-    { section: "Approved Direction", required: true, validationRule: "Must contain explicit approval marker from user." },
+    { section: "Problem Statement", required: true, validationRule: "Must describe the user problem, not the solution. Include WHO and WHY." },
+    { section: "Known Context", required: true, validationRule: "Files, patterns, constraints discovered during exploration. Evidence that context was actually explored." },
+    { section: "Alternatives Table", required: true, validationRule: "At least 2 approaches with real trade-offs (not cosmetic) and recommendation with reasoning." },
+    { section: "Approved Direction", required: true, validationRule: "Must contain explicit approval marker from user. State what was approved." },
+    { section: "Assumptions & Risks", required: true, validationRule: "Explicit assumptions made during design. Known risks. If none, state 'None'." },
     { section: "Open Questions", required: true, validationRule: "If empty, state 'None' explicitly. Do not omit." }
   ],
   namedAntiPattern: {

@@ -13,7 +13,7 @@ description: "Design-first stage. Clarify intent, compare options, and get expli
 > **Even if you read nothing else, do these 3 things:**
 > 1. Obey the HARD-GATE below — violating it invalidates the entire stage.
 > 2. Complete every checklist step in order and write the artifact to \`.cclaw/artifacts/01-brainstorm.md\` (canonical run copy: \`.cclaw/runs/<activeRunId>/artifacts/01-brainstorm.md\`).
-> 3. Do not claim completion without satisfying gates: \`brainstorm_context_explored\`, \`brainstorm_options_compared\`, \`brainstorm_design_approved\` (+2 more).
+> 3. Do not claim completion without satisfying gates: \`brainstorm_context_explored\`, \`brainstorm_problem_restated\`, \`brainstorm_options_compared\` (+3 more).
 >
 > **After this stage:** update \`flow-state.json\` and tell the user to run \`/cc-next\`.
 
@@ -80,15 +80,16 @@ Do NOT invoke any implementation skill, write any code, scaffold any project, or
 
 You MUST complete these steps in order:
 
-1. Explore project context — check files, docs, recent commits, existing behavior.
+1. Explore project context — check files, docs, recent commits, existing behavior. Summarize what you found (even for seemingly simple projects).
 2. Assess scope — if the request describes multiple independent subsystems, flag for decomposition before detailed questions.
-3. Ask clarifying questions — one at a time, understand purpose, constraints, success criteria. For straightforward requests, ask no more than 1-2 clarifying questions before presenting options.
-4. Propose 2-3 approaches — with trade-offs and your explicit recommendation with reasoning.
-5. Present design — in sections scaled to their complexity (few sentences if simple, up to 300 words if nuanced). Get approval after each section.
-6. Write design doc — save to \`.cclaw/artifacts/01-brainstorm.md\`.
-7. Self-review — scan for placeholders, TBDs, contradictions, ambiguity, scope creep. Fix inline.
-8. User reviews written artifact — ask user to review before proceeding. **STOP.** Do NOT proceed until user responds.
-9. Stage complete — update \`flow-state.json\` per the Stage Completion Protocol. Tell user to run \`/cc-next\` to continue to scope.
+3. Restate the problem — before any questions, summarize what you understood the user wants and why. Ask the user to confirm or correct your understanding.
+4. Ask clarifying questions — one at a time, understand purpose, constraints, success criteria, target users, and edge cases. Continue until you can confidently describe the solution space. Minimum: understand the WHY, WHO, WHAT, and boundary conditions.
+5. Propose 2-3 approaches — with real trade-offs (not cosmetic differences) and your explicit recommendation with reasoning. Explain WHY you recommend this option over others.
+6. Present design — in sections. After each section, explicitly state what you are asking the user to approve: 'Do you approve [specific thing]?' Never ask a bare 'одобряете?/approve?' without context.
+7. Write design doc — save to \`.cclaw/artifacts/01-brainstorm.md\`.
+8. Self-review — scan for placeholders, TBDs, contradictions, ambiguity, scope creep. Fix inline.
+9. User reviews written artifact — ask user to review the written artifact (not the chat summary). **STOP.** Do NOT proceed until user responds.
+10. Stage complete — update \`flow-state.json\` per the Stage Completion Protocol. Tell user to run \`/cc-next\` to continue to scope.
 
 ## Examples
 
@@ -141,12 +142,14 @@ These are thinking instincts, not a checklist. Let them shape your perspective t
 4. **Isolation Preference** — Break the system into units that each have one clear purpose, communicate through well-defined interfaces, and can be understood and tested independently.
 
 ## Interaction Protocol
-1. Explore context first (files, docs, existing behavior).
-2. Ask one clarifying question per message. Do NOT combine questions.
-3. For approach selection: use the Decision Protocol — present labeled options (A/B/C) with trade-offs and mark one as (recommended). If AskQuestion/AskUserQuestion is available, send exactly ONE question per call, validate fields against runtime schema, and on schema error immediately fall back to plain-text question instead of retrying guessed payloads.
-4. Get section-by-section approval before finalizing the design direction.
-5. Run a self-review pass (ambiguity, placeholders, contradictions) before handoff.
-6. **STOP.** Wait for explicit user approval after writing the artifact. Do NOT auto-advance to the next stage.
+1. Explore context first (files, docs, existing behavior). Share a brief summary of what you found.
+2. Restate the problem in your own words. Ask user to confirm before proceeding to questions.
+3. Ask one clarifying question per message. Do NOT combine questions. Continue until you understand purpose, constraints, users, success criteria, and edge cases.
+4. For approach selection: use the Decision Protocol — present labeled options (A/B/C) with REAL trade-offs (not cosmetic) and mark one as (recommended) with clear reasoning. If AskQuestion/AskUserQuestion is available, send exactly ONE question per call, validate fields against runtime schema, and on schema error immediately fall back to plain-text question instead of retrying guessed payloads.
+5. Every approval question MUST state what exactly is being approved: 'Do you approve [the architecture / the API shape / the dependency choice]?' Never ask a bare 'approve?' or 'looks good?'.
+6. Get section-by-section approval before finalizing the design direction.
+7. Run a self-review pass (ambiguity, placeholders, contradictions) before handoff.
+8. **STOP.** Wait for explicit user approval after writing the artifact. Do NOT auto-advance to the next stage.
 
 **AskUserQuestion Format (when tool is available):**
 1. **Re-ground:** State the project, current stage, and current task. (1-2 sentences)
@@ -164,9 +167,10 @@ These are thinking instincts, not a checklist. Let them shape your perspective t
 
 
 ## Required Gates
-- \`brainstorm_context_explored\` — Project context and constraints have been reviewed.
-- \`brainstorm_options_compared\` — At least two alternatives were compared with trade-offs.
-- \`brainstorm_design_approved\` — User approved a concrete design direction.
+- \`brainstorm_context_explored\` — Project context and constraints have been reviewed and summarized.
+- \`brainstorm_problem_restated\` — Problem was restated in agent's words and user confirmed the understanding.
+- \`brainstorm_options_compared\` — At least two alternatives were compared with real trade-offs.
+- \`brainstorm_design_approved\` — User approved a concrete design direction (with explicit statement of what was approved).
 - \`brainstorm_self_review_passed\` — Design doc passed placeholder/ambiguity/consistency checks.
 - \`brainstorm_user_reviewed_artifact\` — User reviewed the written artifact and confirmed readiness.
 
@@ -177,14 +181,16 @@ These are thinking instincts, not a checklist. Let them shape your perspective t
 - [ ] Self-review pass completed with no unresolved issues.
 
 ## Process
-1. Capture problem statement, users, constraints, and success criteria.
-2. Identify whether request should be decomposed into smaller sub-problems.
-3. Offer alternatives and recommendation with rationale.
-4. Present design in sections, ask after each section whether it looks right.
-5. Write artifact with validated design.
-6. Run self-review: placeholder scan, internal consistency, scope check, ambiguity check.
-7. Ask user to review the written spec. Wait for changes or approval.
-8. Handoff to scope stage only after approval is explicit.
+1. Explore project context — files, docs, behavior, recent changes. Share findings.
+2. Restate the problem — summarize what the user wants and why. Get confirmation.
+3. Clarify iteratively — ask questions one at a time until you understand WHY, WHO, WHAT, success criteria, and boundaries.
+4. Identify whether request should be decomposed into smaller sub-problems.
+5. Offer 2-3 alternatives with real trade-offs and recommendation with rationale.
+6. Present design in sections. After each section explicitly name what you ask the user to approve.
+7. Write artifact to \`.cclaw/artifacts/01-brainstorm.md\`.
+8. Run self-review: placeholder scan, internal consistency, scope check, ambiguity check.
+9. Ask user to review the written artifact. Wait for changes or approval.
+10. Handoff to scope stage only after approval is explicit.
 
 
 
@@ -202,9 +208,11 @@ These are thinking instincts, not a checklist. Let them shape your perspective t
 
 | Section | Status | Validation Rule |
 |---|---|---|
-| Problem Statement | REQUIRED | Must describe the user problem, not the solution. |
-| Alternatives Table | REQUIRED | At least 2 approaches with trade-offs and recommendation. |
-| Approved Direction | REQUIRED | Must contain explicit approval marker from user. |
+| Problem Statement | REQUIRED | Must describe the user problem, not the solution. Include WHO and WHY. |
+| Known Context | REQUIRED | Files, patterns, constraints discovered during exploration. Evidence that context was actually explored. |
+| Alternatives Table | REQUIRED | At least 2 approaches with real trade-offs (not cosmetic) and recommendation with reasoning. |
+| Approved Direction | REQUIRED | Must contain explicit approval marker from user. State what was approved. |
+| Assumptions & Risks | REQUIRED | Explicit assumptions made during design. Known risks. If none, state 'None'. |
 | Open Questions | REQUIRED | If empty, state 'None' explicitly. Do not omit. |
 
 
@@ -215,6 +223,7 @@ These are thinking instincts, not a checklist. Let them shape your perspective t
 | We can figure it out while coding. | Coding before alignment creates churn and hidden scope growth. |
 | There is only one obvious approach. | Without alternatives, trade-offs stay implicit and risk goes unexamined. |
 | The user already knows what they want. | Unstated assumptions diverge during implementation; explicit design surfaces them early. |
+| This is straightforward, 1-2 questions are enough. | Even simple projects have hidden constraints (error handling, edge cases, deployment). A few extra questions now prevent rework later. |
 
 ## Blockers
 - no explicit approval
@@ -227,6 +236,9 @@ These are thinking instincts, not a checklist. Let them shape your perspective t
 - Jumping directly into implementation
 - Combining visual companion offer with a clarifying question
 - Invoking implementation skills before writing plans
+- Asking bare 'approve?' or 'одобряете?' without stating WHAT is being approved
+- Presenting a single summary and asking for blanket approval instead of section-by-section review
+- Rushing through clarification — asking 1-2 generic questions then jumping to design
 
 ## Red Flags
 - No alternatives documented
@@ -234,6 +246,8 @@ These are thinking instincts, not a checklist. Let them shape your perspective t
 - Implementation-related actions before approval
 - Self-review skipped or glossed over
 - Artifact has TBD or placeholder sections
+- Fewer than 3 clarifying questions asked for any non-trivial project
+- Approval requested without stating what exactly is being approved
 
 ## Completion Status
 
@@ -255,7 +269,7 @@ When all required gates are satisfied and the artifact is written:
 1. **Update \`.cclaw/state/flow-state.json\`:**
    - Set \`currentStage\` to \`"scope"\`
    - Add \`"brainstorm"\` to \`completedStages\` array
-   - Move all gate IDs for this stage (\`brainstorm_context_explored\`, \`brainstorm_options_compared\`, \`brainstorm_design_approved\`, \`brainstorm_self_review_passed\`, \`brainstorm_user_reviewed_artifact\`) into \`stageGateCatalog.brainstorm.passed\`
+   - Move all gate IDs for this stage (\`brainstorm_context_explored\`, \`brainstorm_problem_restated\`, \`brainstorm_options_compared\`, \`brainstorm_design_approved\`, \`brainstorm_self_review_passed\`, \`brainstorm_user_reviewed_artifact\`) into \`stageGateCatalog.brainstorm.passed\`
    - Clear \`stageGateCatalog.brainstorm.blocked\`
 2. **Sync artifact** to \`.cclaw/runs/<activeRunId>/artifacts/01-brainstorm.md\`
 3. Tell the user:

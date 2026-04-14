@@ -36,6 +36,12 @@ describe("gate evidence verification", () => {
 
 ## Problem Statement
 - User problem: harden release flow
+- Who benefits: release engineers
+- Why now: frequent release failures
+
+## Known Context
+- Explored files: src/release.ts, .github/workflows
+- Existing behavior: manual publish steps
 
 ## Alternatives Table
 | Option | Summary | Trade-offs | Recommendation |
@@ -45,7 +51,11 @@ describe("gate evidence verification", () => {
 
 ## Approved Direction
 - Selected option: B
+- What was approved: broader refactor approach
 - Approval marker: approved
+
+## Assumptions & Risks
+- CI pipeline is stable
 
 ## Open Questions
 - None

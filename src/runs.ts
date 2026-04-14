@@ -1,7 +1,6 @@
 import fs from "node:fs/promises";
 import path from "node:path";
 import { COMMAND_FILE_ORDER, RUNTIME_ROOT } from "./constants.js";
-import { ARTIFACT_TEMPLATES } from "./content/templates.js";
 import { createInitialFlowState, type FlowState } from "./flow-state.js";
 import { ensureDir, exists, withDirectoryLock, writeFileSafe } from "./fs-utils.js";
 import type { FlowStage } from "./types.js";
@@ -350,12 +349,6 @@ async function persistRunStateSnapshot(projectRoot: string, runId: string, state
   });
 }
 
-async function seedArtifactsFromTemplates(targetDir: string): Promise<void> {
-  await ensureDir(targetDir);
-  for (const [fileName, content] of Object.entries(ARTIFACT_TEMPLATES)) {
-    await writeFileSafe(path.join(targetDir, fileName), content);
-  }
-}
 
 async function syncActiveArtifactsToRun(projectRoot: string, runId: string): Promise<void> {
   const fromDir = activeArtifactsPath(projectRoot);
@@ -384,11 +377,9 @@ async function createRun(projectRoot: string, options?: CreateRunOptions): Promi
   await ensureDir(runRoot(projectRoot, runId));
   await ensureRunMetadata(projectRoot, meta);
   const runArtifactsDir = runArtifactsPath(projectRoot, runId);
+  await ensureDir(runArtifactsDir);
   if (options?.seedFromActiveArtifacts && (await exists(activeArtifactsPath(projectRoot)))) {
-    await ensureDir(runArtifactsDir);
     await copyImmediateFiles(activeArtifactsPath(projectRoot), runArtifactsDir);
-  } else {
-    await seedArtifactsFromTemplates(runArtifactsDir);
   }
 
   return meta;
@@ -422,9 +413,7 @@ export async function ensureRunSystem(projectRoot: string): Promise<FlowState> {
   }
 
   const runArtifactsDir = runArtifactsPath(projectRoot, activeRunId);
-  if ((await listImmediateFiles(runArtifactsDir)).length === 0) {
-    await seedArtifactsFromTemplates(runArtifactsDir);
-  }
+  await ensureDir(runArtifactsDir);
 
   if ((await listImmediateFiles(activeArtifactsPath(projectRoot))).length === 0) {
     await loadRunArtifactsToActive(projectRoot, activeRunId);
