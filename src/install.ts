@@ -14,6 +14,7 @@ import { commandContract } from "./content/contracts.js";
 import { contextModeFiles, createInitialContextModeState } from "./content/contexts.js";
 import { learnSkillMarkdown, learnCommandContract } from "./content/learnings.js";
 import { nextCommandContract, nextCommandSkillMarkdown } from "./content/next-command.js";
+import { startCommandContract, startCommandSkillMarkdown } from "./content/start-command.js";
 import { subagentDrivenDevSkill, parallelAgentsSkill } from "./content/subagents.js";
 import { sessionHooksSkillMarkdown } from "./content/session-hooks.js";
 import {
@@ -243,6 +244,10 @@ async function writeSkills(projectRoot: string): Promise<void> {
     runtimePath(projectRoot, "skills", "flow-next-step", "SKILL.md"),
     nextCommandSkillMarkdown()
   );
+  await writeFileSafe(
+    runtimePath(projectRoot, "skills", "flow-start", "SKILL.md"),
+    startCommandSkillMarkdown()
+  );
 
   await writeFileSafe(
     runtimePath(projectRoot, "skills", "subagent-dev", "SKILL.md"),
@@ -270,6 +275,7 @@ async function writeSkills(projectRoot: string): Promise<void> {
 async function writeUtilityCommands(projectRoot: string): Promise<void> {
   await writeFileSafe(runtimePath(projectRoot, "commands", "learn.md"), learnCommandContract());
   await writeFileSafe(runtimePath(projectRoot, "commands", "next.md"), nextCommandContract());
+  await writeFileSafe(runtimePath(projectRoot, "commands", "start.md"), startCommandContract());
 
 }
 
@@ -839,7 +845,8 @@ async function cleanStaleFiles(projectRoot: string): Promise<void> {
     ...COMMAND_FILE_ORDER.map((stage) => `viby-${stage}.md`),
     ...UTILITY_COMMANDS.map((cmd) => `viby-${cmd}.md`),
     ...COMMAND_FILE_ORDER.map((stage) => `cc-${stage}.md`),
-    ...UTILITY_COMMANDS.map((cmd) => `cc-${cmd}.md`)
+    ...UTILITY_COMMANDS.map((cmd) => `cc-${cmd}.md`),
+    "cc.md"
   ]);
 
   for (const adapter of Object.values(HARNESS_ADAPTERS)) {
@@ -854,7 +861,7 @@ async function cleanStaleFiles(projectRoot: string): Promise<void> {
     }
 
     for (const entry of entries) {
-      if (!/^cc-.*\.md$/u.test(entry)) continue;
+      if (!/^cc(?:-.*)?\.md$/u.test(entry)) continue;
       if (expectedShimFiles.has(entry)) continue;
       await fs.rm(path.join(commandDir, entry), { force: true });
     }
@@ -1063,7 +1070,7 @@ export async function uninstallCclaw(projectRoot: string): Promise<void> {
     try {
       const entries = await fs.readdir(fullDir);
       for (const entry of entries) {
-        if (/^(?:viby|cc)-.*\.md$/u.test(entry)) {
+        if (/^(?:viby|cc)(?:-.*)?\.md$/u.test(entry)) {
           await fs.rm(path.join(fullDir, entry), { force: true });
         }
       }

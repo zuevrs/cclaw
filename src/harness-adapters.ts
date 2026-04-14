@@ -81,8 +81,9 @@ Before responding to a coding request:
 | Command | Loads |
 |---|---|
 ${stageList}
-| \`/cc-learn\` | \`.cclaw/skills/learnings/SKILL.md\` + \`.cclaw/commands/learn.md\` |
+| \`/cc\` | \`.cclaw/skills/flow-start/SKILL.md\` + \`.cclaw/commands/start.md\` — **entry point** |
 | \`/cc-next\` | \`.cclaw/skills/flow-next-step/SKILL.md\` + \`.cclaw/commands/next.md\` |
+| \`/cc-learn\` | \`.cclaw/skills/learnings/SKILL.md\` + \`.cclaw/commands/learn.md\` |
 
 **Stage order:** brainstorm > scope > design > spec > plan > test > build > review > ship.
 One stage per invocation. Gates must pass before handoff.
@@ -189,6 +190,10 @@ export async function syncHarnessShims(projectRoot: string, harnesses: HarnessId
     await writeFileSafe(
       path.join(commandDir, "cc-next.md"),
       utilityShimContent(harness, "next", "flow-next-step", "next.md")
+    );
+    await writeFileSafe(
+      path.join(commandDir, "cc.md"),
+      utilityShimContent(harness, "cc", "flow-start", "start.md")
     );
   }
 
