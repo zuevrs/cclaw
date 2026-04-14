@@ -49,7 +49,7 @@ Before starting work, ALWAYS:
 2. **Stages are workflows, not suggestions.** Follow the skill steps in order. Do not skip verification steps.
 3. **One stage at a time.** Complete the current stage before advancing to the next.
 4. **Gates must pass.** Every stage has required gates — the agent cannot claim completion without satisfying them.
-5. **Artifacts are mandatory.** Each stage writes to \`.cclaw/artifacts/\` and keeps the active run copy in \`.cclaw/runs/<activeRunId>/artifacts/\` — this is the evidence trail.
+5. **Artifacts are mandatory.** Each stage writes to \`.cclaw/artifacts/\`; cclaw sync/runtime keeps run snapshots in \`.cclaw/runs/<activeRunId>/artifacts/\` aligned as the evidence trail.
 6. **When in doubt, use \`/cc\`.** If the task is non-trivial and there's no prior artifact, run \`/cc <idea>\` to start brainstorming.
 
 ## Stage Quick Reference

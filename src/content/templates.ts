@@ -385,7 +385,7 @@ alwaysApply: true
 - Follow stage order: brainstorm -> scope -> design -> spec -> plan -> tdd -> review -> ship.
 - Read \`.cclaw/state/flow-state.json\` before acting; continue from current stage when active.
 - Use \`/cc-next\` only after required gates pass; never bypass explicit pause/approval rules.
-- Keep evidence in \`.cclaw/artifacts/\` and canonical run copies in \`.cclaw/runs/<activeRunId>/artifacts/\`.
+- Keep evidence in \`.cclaw/artifacts/\`; cclaw sync/runtime maintains run snapshots in \`.cclaw/runs/<activeRunId>/artifacts/\`.
 - For machine-only checks in design/plan/tdd/review/ship, dispatch required specialists automatically when tooling supports it.
 - Ask for user input only at explicit approval gates (scope mode, plan approval, user challenge resolution, ship finalization).
 - Treat \`.cclaw/skills/using-cclaw/SKILL.md\` as routing source of truth; load contextual utility skills only when their triggers apply.
