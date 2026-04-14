@@ -93,6 +93,10 @@ These skills live in \`.cclaw/skills/\` but have no slash commands. They activat
 | Performance | \`performance/\` | During review; when code is perf-sensitive (DB queries, rendering, bundle size) |
 | CI/CD | \`ci-cd/\` | During ship; when pipeline config or deployment is involved |
 | Documentation | \`docs/\` | During ship; when adding public APIs, architecture changes, or breaking changes |
+| Executing Plans | \`executing-plans/\` | After plan approval during sustained task execution waves |
+| Context Engineering | \`context-engineering/\` | When work mode changes (execution, review, incident) or context pressure rises |
+| Source-Driven Development | \`source-driven-development/\` | Before introducing new patterns/helpers; when deciding reuse vs net-new structure |
+| Frontend Accessibility | \`frontend-accessibility/\` | For user-facing UI changes and accessibility quality gates |
 
 **Activation rule:** When a contextual skill applies, read its SKILL.md and follow it as a supplementary lens alongside the current stage. Do not skip the stage workflow — the contextual skill adds depth, not a detour.
 

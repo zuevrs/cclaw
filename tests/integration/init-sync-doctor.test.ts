@@ -17,6 +17,17 @@ function countOccurrences(value: string, needle: string): number {
 }
 
 describe("install lifecycle", () => {
+  it("doctor passes for claude-only harness installs", async () => {
+    const root = await fs.mkdtemp(path.join(os.tmpdir(), "cclaw-claude-only-"));
+    await initCclaw({ projectRoot: root, harnesses: ["claude"] });
+
+    const checks = await doctorChecks(root);
+    expect(doctorSucceeded(checks)).toBe(true);
+
+    await expect(fs.stat(path.join(root, ".cursor/rules/cclaw-workflow.mdc"))).rejects.toBeDefined();
+    await expect(fs.stat(path.join(root, ".opencode/plugins/cclaw-plugin.mjs"))).rejects.toBeDefined();
+  });
+
   it("initializes runtime and passes doctor checks", async () => {
     const root = await fs.mkdtemp(path.join(os.tmpdir(), "cclaw-init-"));
     await initCclaw({ projectRoot: root });
@@ -136,6 +147,38 @@ describe("install lifecycle", () => {
 
     const promptGuard = await fs.readFile(path.join(root, ".cclaw/hooks/prompt-guard.sh"), "utf8");
     expect(promptGuard).toContain('PROMPT_GUARD_MODE="strict"');
+  });
+
+  it("sync removes managed artifacts for harnesses removed from config", async () => {
+    const root = await fs.mkdtemp(path.join(os.tmpdir(), "cclaw-harness-remove-"));
+    await initCclaw({ projectRoot: root });
+
+    const current = await readConfig(root);
+    await writeConfig(root, {
+      ...current,
+      harnesses: ["claude", "codex"]
+    });
+    await syncCclaw(root);
+
+    await expect(fs.stat(path.join(root, ".opencode/plugins/cclaw-plugin.mjs"))).rejects.toBeDefined();
+    await expect(fs.stat(path.join(root, ".cursor/rules/cclaw-workflow.mdc"))).rejects.toBeDefined();
+
+    const opencodeConfigPath = path.join(root, "opencode.json");
+    const opencodeConfigExists = await fs.stat(opencodeConfigPath).then(() => true).catch(() => false);
+    if (opencodeConfigExists) {
+      const opencodeConfigRaw = await fs.readFile(opencodeConfigPath, "utf8");
+      expect(opencodeConfigRaw).not.toContain(".opencode/plugins/cclaw-plugin.mjs");
+    }
+
+    const cursorHooksPath = path.join(root, ".cursor/hooks.json");
+    const cursorHooksExists = await fs.stat(cursorHooksPath).then(() => true).catch(() => false);
+    if (cursorHooksExists) {
+      const cursorHooksRaw = await fs.readFile(cursorHooksPath, "utf8");
+      expect(cursorHooksRaw).not.toContain(".cclaw/hooks/");
+    }
+
+    const checks = await doctorChecks(root);
+    expect(doctorSucceeded(checks)).toBe(true);
   });
 
   it("sync merges generated hooks with user hooks without duplication", async () => {

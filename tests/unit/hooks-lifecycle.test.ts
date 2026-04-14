@@ -107,12 +107,15 @@ describe("hooks lifecycle rehydration", () => {
     expect(script).toContain("ACTIVE_RUN=");
     expect(script).toContain("checkpoint.json");
     expect(script).toContain("stage-activity.jsonl");
+    expect(script).toContain("context-mode.json");
+    expect(script).toContain("Context mode:");
     expect(script).toContain("Active run artifacts: .cclaw/runs/$ACTIVE_RUN/artifacts/");
   });
 
   it("session-start script executes and emits bootstrap payload", async () => {
     const root = await fs.mkdtemp(path.join(os.tmpdir(), "cclaw-session-start-runtime-"));
     await fs.mkdir(path.join(root, ".cclaw/state"), { recursive: true });
+    await fs.mkdir(path.join(root, ".cclaw/contexts"), { recursive: true });
     await fs.mkdir(path.join(root, ".cclaw/skills/using-cclaw"), { recursive: true });
     await fs.writeFile(path.join(root, ".cclaw/state/flow-state.json"), JSON.stringify({
       currentStage: "review",
@@ -131,6 +134,12 @@ describe("hooks lifecycle rehydration", () => {
     await fs.writeFile(path.join(root, ".cclaw/learnings.jsonl"), [
       JSON.stringify({ ts: "2026-01-01T00:00:00Z", key: "prefer-small-diffs", type: "pitfall", insight: "Split broad changes", confidence: 6, source: "observed" })
     ].join("\n"), "utf8");
+    await fs.writeFile(path.join(root, ".cclaw/state/context-mode.json"), JSON.stringify({
+      activeMode: "review",
+      updatedAt: "2026-01-01T00:00:00Z",
+      availableModes: ["default", "execution", "review", "incident"]
+    }, null, 2), "utf8");
+    await fs.writeFile(path.join(root, ".cclaw/contexts/review.md"), "# Context Mode: review\n", "utf8");
     await fs.writeFile(path.join(root, ".cclaw/skills/using-cclaw/SKILL.md"), "# Using Cclaw\n", "utf8");
 
     const result = await runScript(root, "session-start.sh", sessionStartScript());
@@ -142,6 +151,7 @@ describe("hooks lifecycle rehydration", () => {
     const context = payload.hookSpecificOutput?.additionalContext ?? payload.additional_context ?? "";
     expect(context).toContain("cclaw loaded. Flow: stage=review");
     expect(context).toContain("run=run-session");
+    expect(context).toContain("Context mode: review");
     expect(context).toContain("Checkpoint: stage=review");
   });
 

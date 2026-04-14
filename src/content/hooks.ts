@@ -71,6 +71,8 @@ CHECKPOINT_FILE="$ROOT/${RUNTIME_ROOT}/state/checkpoint.json"
 ACTIVITY_FILE="$ROOT/${RUNTIME_ROOT}/state/stage-activity.jsonl"
 SUGGESTION_MEMORY_FILE="$ROOT/${RUNTIME_ROOT}/state/suggestion-memory.json"
 CONTEXT_WARNINGS_FILE="$ROOT/${RUNTIME_ROOT}/state/context-warnings.jsonl"
+CONTEXT_MODE_FILE="$ROOT/${RUNTIME_ROOT}/state/context-mode.json"
+CONTEXTS_DIR="$ROOT/${RUNTIME_ROOT}/contexts"
 LEARNINGS_FILE="$ROOT/${RUNTIME_ROOT}/learnings.jsonl"
 GLOBAL_LEARNINGS_ENABLED="${globalLearningsEnabledLiteral}"
 GLOBAL_LEARNINGS_FILE="${globalLearningsPathLiteral}"
@@ -83,6 +85,8 @@ META_SKILL="$ROOT/${RUNTIME_ROOT}/skills/${META_SKILL_NAME}/SKILL.md"
 STAGE="none"
 COMPLETED="0"
 ACTIVE_RUN="none"
+ACTIVE_CONTEXT_MODE="default"
+CONTEXT_MODE_NOTE=""
 if [ -f "$STATE_FILE" ]; then
   if command -v jq >/dev/null 2>&1; then
     STAGE=$(jq -r '.currentStage // "none"' "$STATE_FILE" 2>/dev/null || echo "none")
@@ -149,6 +153,34 @@ PY
       ACTIVE_RUN=$(grep -o '"activeRunId"[[:space:]]*:[[:space:]]*"[^"]*"' "$STATE_FILE" 2>/dev/null | head -1 | sed 's/.*"\\([^"]*\\)"$/\\1/' || echo "none")
     fi
   fi
+fi
+
+if [ -f "$CONTEXT_MODE_FILE" ]; then
+  if command -v jq >/dev/null 2>&1; then
+    ACTIVE_CONTEXT_MODE=$(jq -r '.activeMode // "default"' "$CONTEXT_MODE_FILE" 2>/dev/null || echo "default")
+  elif command -v python3 >/dev/null 2>&1; then
+    ACTIVE_CONTEXT_MODE=$(python3 - "$CONTEXT_MODE_FILE" <<'PY'
+import json
+import sys
+mode = "default"
+try:
+    with open(sys.argv[1], "r", encoding="utf-8") as fh:
+        data = json.load(fh)
+    value = data.get("activeMode")
+    if isinstance(value, str) and value:
+        mode = value
+except Exception:
+    pass
+print(mode)
+PY
+)
+  fi
+fi
+
+if [ -f "$CONTEXTS_DIR/$ACTIVE_CONTEXT_MODE.md" ]; then
+  CONTEXT_MODE_NOTE="Context mode: $ACTIVE_CONTEXT_MODE (guide: ${RUNTIME_ROOT}/contexts/$ACTIVE_CONTEXT_MODE.md)"
+else
+  CONTEXT_MODE_NOTE="Context mode: $ACTIVE_CONTEXT_MODE"
 fi
 
 # --- Checkpoint summary ---
@@ -381,6 +413,10 @@ fi
 
 # --- Build context message ---
 CTX="cclaw loaded. Flow: stage=$STAGE ($COMPLETED/9 completed, run=$ACTIVE_RUN). Active run artifacts: ${RUNTIME_ROOT}/runs/$ACTIVE_RUN/artifacts/"
+if [ -n "$CONTEXT_MODE_NOTE" ]; then
+  CTX="$CTX
+$CONTEXT_MODE_NOTE"
+fi
 if [ -n "$CHECKPOINT_SUMMARY" ]; then
   CTX="$CTX
 $CHECKPOINT_SUMMARY"
@@ -721,6 +757,8 @@ export default function cclawPlugin(ctx) {
   const activityPath = join(root, "${RUNTIME_ROOT}/state/stage-activity.jsonl");
   const suggestionMemoryPath = join(root, "${RUNTIME_ROOT}/state/suggestion-memory.json");
   const contextWarningsPath = join(root, "${RUNTIME_ROOT}/state/context-warnings.jsonl");
+  const contextModePath = join(root, "${RUNTIME_ROOT}/state/context-mode.json");
+  const contextsDir = join(root, "${RUNTIME_ROOT}/contexts");
   const sessionDigestPath = join(root, "${RUNTIME_ROOT}/state/session-digest.md");
   const observeDisabledPath = join(root, "${RUNTIME_ROOT}/.observe-disabled");
   const globalLearningsEnabled = ${globalLearningsEnabledLiteral};
@@ -844,6 +882,22 @@ export default function cclawPlugin(ctx) {
     }
   }
 
+  function readContextMode() {
+    let mode = "default";
+    try {
+      const raw = readFileSync(contextModePath, "utf8");
+      const parsed = JSON.parse(raw);
+      if (parsed && typeof parsed.activeMode === "string" && parsed.activeMode.trim().length > 0) {
+        mode = parsed.activeMode.trim();
+      }
+    } catch {
+      // use default mode
+    }
+    const guidePath = join(contextsDir, mode + ".md");
+    const guide = existsSync(guidePath) ? "${RUNTIME_ROOT}/contexts/" + mode + ".md" : "";
+    return { mode, guide };
+  }
+
   function readRecentActivity() {
     try {
       const lines = readTailLines(activityPath, 5, 32768);
@@ -954,9 +1008,15 @@ export default function cclawPlugin(ctx) {
     const activity = readRecentActivity();
     const digest = readSessionDigest();
     const warning = readLatestContextWarning();
+    const contextMode = readContextMode();
     const stageSuggestion = readStageSuggestion(stage);
     const stageLearnings = readStageLearnings(stage);
     const parts = [\`cclaw loaded. Flow: stage=\${stage} (\${completed}/9 completed, run=\${activeRunId}). Active run artifacts: ${RUNTIME_ROOT}/runs/\${activeRunId}/artifacts/\`];
+    parts.push(
+      contextMode.guide
+        ? \`Context mode: \${contextMode.mode} (guide: \${contextMode.guide})\`
+        : \`Context mode: \${contextMode.mode}\`
+    );
     if (checkpoint) parts.push(checkpoint);
     if (digest) parts.push("Last session:", digest);
     if (activity.length > 0) parts.push("Recent stage activity:", ...activity);

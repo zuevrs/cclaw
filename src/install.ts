@@ -12,6 +12,7 @@ import {
 import { writeConfig, createDefaultConfig, readConfig, configPath } from "./config.js";
 import { commandContract } from "./content/contracts.js";
 import { autoplanSkillMarkdown, autoplanCommandContract } from "./content/autoplan.js";
+import { contextModeFiles, createInitialContextModeState } from "./content/contexts.js";
 import { learnSkillMarkdown, learnCommandContract } from "./content/learnings.js";
 import { nextCommandContract, nextCommandSkillMarkdown } from "./content/next-command.js";
 import { subagentDrivenDevSkill, parallelAgentsSkill } from "./content/subagents.js";
@@ -700,6 +701,14 @@ async function ensureSessionStateFiles(projectRoot: string): Promise<void> {
     };
     await writeFileSafe(suggestionMemoryPath, `${JSON.stringify(suggestionMemory, null, 2)}\n`);
   }
+
+  const contextModePath = path.join(stateDir, "context-mode.json");
+  if (!(await exists(contextModePath))) {
+    await writeFileSafe(
+      contextModePath,
+      `${JSON.stringify(createInitialContextModeState(), null, 2)}\n`
+    );
+  }
 }
 
 async function writeRulebook(projectRoot: string): Promise<void> {
@@ -708,6 +717,12 @@ async function writeRulebook(projectRoot: string): Promise<void> {
     runtimePath(projectRoot, "rules", "rules.json"),
     `${JSON.stringify(buildRulesJson(), null, 2)}\n`
   );
+}
+
+async function writeContextModes(projectRoot: string): Promise<void> {
+  for (const [mode, content] of Object.entries(contextModeFiles())) {
+    await writeFileSafe(runtimePath(projectRoot, "contexts", `${mode}.md`), content);
+  }
 }
 
 async function writeCursorWorkflowRule(projectRoot: string, harnesses: HarnessId[]): Promise<void> {
@@ -722,6 +737,29 @@ async function writeCursorWorkflowRule(projectRoot: string, harnesses: HarnessId
   }
   await ensureDir(path.dirname(rulePath));
   await writeFileSafe(rulePath, CURSOR_WORKFLOW_RULE_MDC);
+}
+
+async function syncDisabledHarnessArtifacts(projectRoot: string, harnesses: HarnessId[]): Promise<void> {
+  const enabled = new Set<HarnessId>(harnesses);
+  const managedHookFiles: Array<{ harness: HarnessId; hookPath: string }> = [
+    { harness: "claude", hookPath: path.join(projectRoot, ".claude/hooks/hooks.json") },
+    { harness: "cursor", hookPath: path.join(projectRoot, ".cursor/hooks.json") },
+    { harness: "codex", hookPath: path.join(projectRoot, ".codex/hooks.json") }
+  ];
+
+  for (const entry of managedHookFiles) {
+    if (enabled.has(entry.harness)) continue;
+    await removeManagedHookEntries(entry.hookPath);
+  }
+
+  if (!enabled.has("opencode")) {
+    try {
+      await fs.rm(path.join(projectRoot, OPENCODE_PLUGIN_REL_PATH), { force: true });
+    } catch {
+      // best-effort cleanup
+    }
+    await removeManagedOpenCodePluginConfig(projectRoot, OPENCODE_PLUGIN_REL_PATH);
+  }
 }
 
 async function writeState(projectRoot: string, forceReset = false): Promise<void> {
@@ -827,6 +865,7 @@ async function materializeRuntime(projectRoot: string, config: VibyConfig, force
   await writeCommandContracts(projectRoot);
   await writeUtilityCommands(projectRoot);
   await writeSkills(projectRoot);
+  await writeContextModes(projectRoot);
   await writeArtifactTemplates(projectRoot);
   await writeRulebook(projectRoot);
   await writeState(projectRoot, forceStateReset);
@@ -836,6 +875,7 @@ async function materializeRuntime(projectRoot: string, config: VibyConfig, force
   await ensureLearningsStore(projectRoot);
   await ensureGlobalLearningsStore(projectRoot, config);
   await writeHooks(projectRoot, config);
+  await syncDisabledHarnessArtifacts(projectRoot, harnesses);
   await syncManagedGitHooks(projectRoot, config);
   await syncHarnessShims(projectRoot, harnesses);
   await writeCursorWorkflowRule(projectRoot, harnesses);

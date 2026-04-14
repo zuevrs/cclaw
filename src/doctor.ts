@@ -14,7 +14,10 @@ import { checkMandatoryDelegations } from "./delegation.js";
 import { buildTraceMatrix } from "./trace-matrix.js";
 import { reconcileAndWriteCurrentStageGateCatalog, verifyCurrentStageGateEvidence } from "./gate-evidence.js";
 import { stageSkillFolder } from "./content/skills.js";
+import { UTILITY_SKILL_FOLDERS } from "./content/utility-skills.js";
+import { CONTEXT_MODES, DEFAULT_CONTEXT_MODE } from "./content/contexts.js";
 import { validateHookDocument } from "./hook-schema.js";
+import type { HarnessId } from "./types.js";
 
 const execFileAsync = promisify(execFile);
 
@@ -240,7 +243,7 @@ export async function doctorChecks(projectRoot: string, options: DoctorOptions =
     details: ".gitignore must include cclaw ignore block"
   });
 
-  let configuredHarnesses: string[] = [];
+  let configuredHarnesses: HarnessId[] = [];
   let parsedConfig: Awaited<ReturnType<typeof readConfig>> | null = null;
   try {
     const config = await readConfig(projectRoot);
@@ -388,14 +391,8 @@ export async function doctorChecks(projectRoot: string, options: DoctorOptions =
     });
   }
 
-  // New utility skills (security, debugging, performance, ci-cd, docs)
-  for (const folder of [
-    "security",
-    "debugging",
-    "performance",
-    "ci-cd",
-    "docs"
-  ]) {
+  // Extended utility skills generated from utility skill map.
+  for (const folder of UTILITY_SKILL_FOLDERS) {
     const skillPath = path.join(projectRoot, RUNTIME_ROOT, "skills", folder, "SKILL.md");
     checks.push({
       name: `utility_skill:${folder}`,
@@ -496,10 +493,14 @@ export async function doctorChecks(projectRoot: string, options: DoctorOptions =
     ok: await exists(path.join(projectRoot, RUNTIME_ROOT, "hooks", "opencode-plugin.mjs")),
     details: `${RUNTIME_ROOT}/hooks/opencode-plugin.mjs`
   });
+  const opencodeEnabled = configuredHarnesses.includes("opencode");
+  const opencodeDeployed = await exists(path.join(projectRoot, ".opencode/plugins/cclaw-plugin.mjs"));
   checks.push({
     name: "hook:opencode_plugin_deployed",
-    ok: await exists(path.join(projectRoot, ".opencode/plugins/cclaw-plugin.mjs")),
-    details: ".opencode/plugins/cclaw-plugin.mjs"
+    ok: opencodeEnabled ? opencodeDeployed : true,
+    details: opencodeEnabled
+      ? ".opencode/plugins/cclaw-plugin.mjs"
+      : "opencode harness disabled; deployed plugin check skipped"
   });
 
   if (configuredHarnesses.includes("claude")) {
@@ -700,6 +701,35 @@ export async function doctorChecks(projectRoot: string, options: DoctorOptions =
     ok: await exists(path.join(projectRoot, RUNTIME_ROOT, "state", "suggestion-memory.json")),
     details: `${RUNTIME_ROOT}/state/suggestion-memory.json must exist for proactive suggestion memory`
   });
+  const contextModeStatePath = path.join(projectRoot, RUNTIME_ROOT, "state", "context-mode.json");
+  checks.push({
+    name: "state:context_mode_exists",
+    ok: await exists(contextModeStatePath),
+    details: `${RUNTIME_ROOT}/state/context-mode.json must exist for context mode switching`
+  });
+  if (await exists(contextModeStatePath)) {
+    let contextModeOk = false;
+    try {
+      const parsed = JSON.parse(await fs.readFile(contextModeStatePath, "utf8")) as Record<string, unknown>;
+      const activeMode = typeof parsed.activeMode === "string" ? parsed.activeMode : "";
+      contextModeOk = activeMode.length > 0 && Object.prototype.hasOwnProperty.call(CONTEXT_MODES, activeMode);
+    } catch {
+      contextModeOk = false;
+    }
+    checks.push({
+      name: "state:context_mode_valid",
+      ok: contextModeOk,
+      details: `${RUNTIME_ROOT}/state/context-mode.json must reference one of: ${Object.keys(CONTEXT_MODES).join(", ")} (default=${DEFAULT_CONTEXT_MODE})`
+    });
+  }
+  for (const mode of Object.keys(CONTEXT_MODES)) {
+    const modePath = path.join(projectRoot, RUNTIME_ROOT, "contexts", `${mode}.md`);
+    checks.push({
+      name: `contexts:mode:${mode}`,
+      ok: await exists(modePath),
+      details: modePath
+    });
+  }
 
   let flowState = await readFlowState(projectRoot);
   if (options.reconcileCurrentStageGates === true) {
@@ -867,7 +897,7 @@ export async function doctorChecks(projectRoot: string, options: DoctorOptions =
     details: rulesJsonPath
   });
 
-  const policy = await policyChecks(projectRoot);
+  const policy = await policyChecks(projectRoot, { harnesses: configuredHarnesses });
   checks.push(...policy);
 
   return checks;

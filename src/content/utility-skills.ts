@@ -477,12 +477,198 @@ For public APIs:
 `;
 }
 
+export function executingPlansSkill(): string {
+  return `---
+name: executing-plans
+description: "Execute approved plans with disciplined batching, explicit checkpoints, and gate-safe progress tracking."
+---
+
+# Executing Plans
+
+## Quick Start
+
+> 1. Confirm the plan and stage gates are approved before execution.
+> 2. Execute in batches (waves), not as one giant untracked stream.
+> 3. Stop at checkpoint boundaries for verification and user visibility.
+
+## HARD-GATE
+
+Do not start implementation execution without an approved plan artifact and explicit gate satisfaction for the current stage.
+
+## Execution Protocol
+
+1. **Load plan source of truth** from \`.cclaw/artifacts/05-plan.md\` (canonical run copy when available).
+2. **Group tasks into waves** by dependency order and risk.
+3. **Run one wave at a time** with evidence after each task (tests, build, lint, or review evidence as applicable).
+4. **Checkpoint each wave** by updating stage artifact evidence and unresolved blockers.
+5. **Stop immediately** on any hard blocker, failing gate, or unresolved critical finding.
+
+## Wave Checklist
+
+- Wave scope is explicit (task IDs + expected outputs).
+- Verification command for each task is predetermined.
+- Machine-only checks are delegated to subagents when supported.
+- User approvals are requested only at required gate boundaries.
+
+## Anti-Patterns
+
+- Executing all tasks in one pass without intermediate verification.
+- Marking tasks done without command evidence.
+- Reordering critical dependencies for speed.
+- Continuing after a gate failure hoping later tasks fix it.
+`;
+}
+
+export function contextEngineeringSkill(): string {
+  return `---
+name: context-engineering
+description: "Manage context modes and payload hygiene to keep agent execution reliable across long sessions."
+---
+
+# Context Engineering
+
+## Quick Start
+
+> 1. Read current mode from \`.cclaw/state/context-mode.json\`.
+> 2. Load only the context needed for the current stage/task.
+> 3. Switch modes intentionally when work type changes.
+
+## HARD-GATE
+
+Do not keep stale or oversized context loaded when task intent changes. Context must match current stage purpose.
+
+## Context Modes
+
+Modes are stored in \`.cclaw/contexts/\`:
+- \`default\` — balanced execution
+- \`execution\` — fast plan/test/build throughput
+- \`review\` — defect/risk discovery
+- \`incident\` — stabilization and recovery
+
+## Mode Switching Protocol
+
+1. Determine target mode based on current objective.
+2. Update \`.cclaw/state/context-mode.json\`:
+   - \`activeMode\`: target mode id
+   - \`updatedAt\`: current ISO timestamp
+3. Announce mode change in-session with one-line reason.
+4. Continue using the corresponding \`.cclaw/contexts/<mode>.md\` guidance.
+
+## Payload Hygiene Rules
+
+- Prefer stage artifacts + current diff over full-repo dumps.
+- Reference exact files/symbols, not broad vague prompts.
+- For subagents, pass self-contained instructions and expected output schema.
+- Trim or rotate outdated context after each major checkpoint.
+
+## Anti-Patterns
+
+- Staying in execution mode while doing deep review triage.
+- Switching mode without updating state.
+- Shipping decisions based on stale pre-compaction context.
+`;
+}
+
+export function sourceDrivenDevelopmentSkill(): string {
+  return `---
+name: source-driven-development
+description: "Drive implementation decisions from existing source patterns before introducing new abstractions."
+---
+
+# Source-Driven Development
+
+## Quick Start
+
+> 1. Search the repo for existing patterns before writing new code.
+> 2. Reuse proven modules/contracts unless a clear incompatibility is documented.
+> 3. Record deviations with rationale when creating net-new patterns.
+
+## HARD-GATE
+
+Do not introduce new architecture patterns or helper layers without first checking whether an equivalent source pattern already exists.
+
+## Protocol
+
+1. **Discover**: inspect related modules, adapters, tests, and conventions.
+2. **Compare**: list at least two in-repo pattern candidates.
+3. **Select**: choose reuse/extension/new with explicit rationale.
+4. **Implement**: follow selected pattern consistently across touched files.
+5. **Verify**: ensure tests and docs reflect the adopted pattern.
+
+## Selection Heuristics
+
+- Prefer extension over duplication.
+- Prefer explicit local adaptation over global abstraction when scope is narrow.
+- Prefer tested, production-used patterns over speculative design.
+
+## Required Evidence
+
+- Paths of source references reused.
+- Rationale for any intentional divergence.
+- Tests proving behavior compatibility.
+
+## Anti-Patterns
+
+- Creating “better” abstractions without source comparison.
+- Duplicating utility logic under a new name.
+- Mixing incompatible patterns in the same change set.
+`;
+}
+
+export function frontendAccessibilitySkill(): string {
+  return `---
+name: frontend-accessibility
+description: "Frontend quality lens for usability and accessibility (WCAG-oriented) during implementation and review."
+---
+
+# Frontend Accessibility
+
+## Quick Start
+
+> 1. Validate keyboard navigation and focus order first.
+> 2. Confirm semantic roles/labels and screen-reader announcements.
+> 3. Check contrast, motion, and responsive behavior before ship.
+
+## HARD-GATE
+
+Do not approve user-facing UI changes that break basic keyboard navigation or remove accessible name/role/value semantics.
+
+## Checklist
+
+1. Interactive elements are reachable and usable via keyboard only.
+2. Focus indicators are visible and logical after navigation and dialogs.
+3. Form fields have labels, error messages, and instructions tied programmatically.
+4. Color contrast meets WCAG AA expectations for text and controls.
+5. Dynamic updates (toasts/modals/async states) are announced accessibly.
+6. Motion/animation respects reduced-motion preferences where relevant.
+7. Mobile and narrow layouts preserve readability and interaction targets.
+
+## Output Format
+
+- **Issue**: concise defect description
+- **Impact**: affected users and severity
+- **Evidence**: file/component path and failing behavior
+- **Fix**: concrete remediation guidance
+
+## Anti-Patterns
+
+- Relying on placeholder text as the only form label.
+- Click-only interactions without keyboard fallback.
+- Hiding focus ring without accessible replacement.
+- Color-only status indicators with no text/aria support.
+`;
+}
+
 export const UTILITY_SKILL_FOLDERS = [
   "security",
   "debugging",
   "performance",
   "ci-cd",
-  "docs"
+  "docs",
+  "executing-plans",
+  "context-engineering",
+  "source-driven-development",
+  "frontend-accessibility"
 ] as const;
 
 export const UTILITY_SKILL_MAP: Record<string, () => string> = {
@@ -490,5 +676,9 @@ export const UTILITY_SKILL_MAP: Record<string, () => string> = {
   debugging: debuggingSkill,
   performance: performanceSkill,
   "ci-cd": ciCdSkill,
-  docs: docsSkill
+  docs: docsSkill,
+  "executing-plans": executingPlansSkill,
+  "context-engineering": contextEngineeringSkill,
+  "source-driven-development": sourceDrivenDevelopmentSkill,
+  "frontend-accessibility": frontendAccessibilitySkill
 };
