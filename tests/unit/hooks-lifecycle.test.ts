@@ -254,6 +254,25 @@ describe("hooks lifecycle rehydration", () => {
     expect(log).toContain("write_to_cclaw_runtime");
   });
 
+  it("prompt guard blocks risky writes in strict mode", async () => {
+    const root = await fs.mkdtemp(path.join(os.tmpdir(), "cclaw-prompt-guard-strict-runtime-"));
+    await fs.mkdir(path.join(root, ".cclaw/state"), { recursive: true });
+    const result = await runScript(
+      root,
+      "prompt-guard-strict.sh",
+      promptGuardScript({ strictMode: true }),
+      [],
+      JSON.stringify({
+        tool_name: "Write",
+        tool_input: {
+          path: ".cclaw/state/flow-state.json"
+        }
+      })
+    );
+    expect(result.code).toBe(1);
+    expect(result.stderr).toContain("blocked by strict mode");
+  });
+
   it("prompt guard flags eval payloads with a valid ERE", async () => {
     const root = await fs.mkdtemp(path.join(os.tmpdir(), "cclaw-prompt-guard-eval-runtime-"));
     await fs.mkdir(path.join(root, ".cclaw/state"), { recursive: true });

@@ -15,7 +15,9 @@ const ALLOWED_CONFIG_KEYS = new Set<string>([
   "harnesses",
   "autoAdvance",
   "globalLearnings",
-  "globalLearningsPath"
+  "globalLearningsPath",
+  "promptGuardMode",
+  "gitHookGuards"
 ]);
 
 function configFixExample(): string {
@@ -43,7 +45,9 @@ export function createDefaultConfig(harnesses: HarnessId[] = DEFAULT_HARNESSES):
     flowVersion: FLOW_VERSION,
     harnesses,
     autoAdvance: false,
-    globalLearnings: false
+    globalLearnings: false,
+    promptGuardMode: "advisory",
+    gitHookGuards: false
   };
 }
 
@@ -112,13 +116,34 @@ export async function readConfig(projectRoot: string): Promise<VibyConfig> {
     ? globalLearningsPathRaw.trim()
     : undefined;
 
+  const promptGuardModeRaw = parsed.promptGuardMode;
+  if (
+    Object.prototype.hasOwnProperty.call(parsed, "promptGuardMode") &&
+    promptGuardModeRaw !== "advisory" &&
+    promptGuardModeRaw !== "strict"
+  ) {
+    throw configValidationError(fullPath, `"promptGuardMode" must be "advisory" or "strict"`);
+  }
+  const promptGuardMode = promptGuardModeRaw === "strict" ? "strict" : "advisory";
+
+  const gitHookGuardsRaw = parsed.gitHookGuards;
+  if (
+    Object.prototype.hasOwnProperty.call(parsed, "gitHookGuards") &&
+    typeof gitHookGuardsRaw !== "boolean"
+  ) {
+    throw configValidationError(fullPath, `"gitHookGuards" must be a boolean`);
+  }
+  const gitHookGuards = typeof gitHookGuardsRaw === "boolean" ? gitHookGuardsRaw : false;
+
   return {
     version: parsed.version ?? CCLAW_VERSION,
     flowVersion: parsed.flowVersion ?? FLOW_VERSION,
     harnesses,
     autoAdvance,
     globalLearnings,
-    globalLearningsPath
+    globalLearningsPath,
+    promptGuardMode,
+    gitHookGuards
   };
 }
 

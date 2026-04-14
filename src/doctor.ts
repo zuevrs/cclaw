@@ -32,6 +32,19 @@ async function isGitRepo(projectRoot: string): Promise<boolean> {
   }
 }
 
+async function resolveGitHooksDir(projectRoot: string): Promise<string | null> {
+  try {
+    const { stdout } = await execFileAsync("git", ["rev-parse", "--git-path", "hooks"], { cwd: projectRoot });
+    const rel = stdout.trim();
+    if (rel.length === 0) {
+      return null;
+    }
+    return path.resolve(projectRoot, rel);
+  } catch {
+    return null;
+  }
+}
+
 async function gitIgnoresRuntime(projectRoot: string): Promise<boolean> {
   try {
     await execFileAsync("git", ["check-ignore", "-q", `${RUNTIME_ROOT}/`], { cwd: projectRoot });
@@ -222,8 +235,10 @@ export async function doctorChecks(projectRoot: string): Promise<DoctorCheck[]> 
   });
 
   let configuredHarnesses: string[] = [];
+  let parsedConfig: Awaited<ReturnType<typeof readConfig>> | null = null;
   try {
     const config = await readConfig(projectRoot);
+    parsedConfig = config;
     configuredHarnesses = config.harnesses;
     checks.push({
       name: "config:valid",
@@ -236,6 +251,57 @@ export async function doctorChecks(projectRoot: string): Promise<DoctorCheck[]> 
       ok: false,
       details: error instanceof Error ? error.message : "Invalid config"
     });
+  }
+
+  if (parsedConfig) {
+    const expectedMode = parsedConfig.promptGuardMode === "strict" ? "strict" : "advisory";
+    const promptGuardPath = path.join(projectRoot, RUNTIME_ROOT, "hooks", "prompt-guard.sh");
+    let promptGuardModeOk = false;
+    if (await exists(promptGuardPath)) {
+      const promptGuardContent = await fs.readFile(promptGuardPath, "utf8");
+      promptGuardModeOk = promptGuardContent.includes(`PROMPT_GUARD_MODE="${expectedMode}"`);
+    }
+    checks.push({
+      name: "hook:prompt_guard:mode",
+      ok: promptGuardModeOk,
+      details: `${promptGuardPath} must match promptGuardMode=${expectedMode}`
+    });
+
+    if (parsedConfig.gitHookGuards === true) {
+      const runtimePreCommit = path.join(projectRoot, RUNTIME_ROOT, "hooks", "git", "pre-commit.sh");
+      const runtimePrePush = path.join(projectRoot, RUNTIME_ROOT, "hooks", "git", "pre-push.sh");
+      const runtimeScriptsOk = (await exists(runtimePreCommit)) && (await exists(runtimePrePush));
+      checks.push({
+        name: "git_hooks:managed:runtime_scripts",
+        ok: runtimeScriptsOk,
+        details: `${RUNTIME_ROOT}/hooks/git/pre-commit.sh and pre-push.sh must exist when gitHookGuards=true`
+      });
+
+      const gitHooksDir = await resolveGitHooksDir(projectRoot);
+      if (!gitHooksDir) {
+        checks.push({
+          name: "git_hooks:managed:relays",
+          ok: true,
+          details: "git repository not detected; relay hook check skipped"
+        });
+      } else {
+        const preCommitHookPath = path.join(gitHooksDir, "pre-commit");
+        const prePushHookPath = path.join(gitHooksDir, "pre-push");
+        let relaysOk = false;
+        if ((await exists(preCommitHookPath)) && (await exists(prePushHookPath))) {
+          const preCommitHook = await fs.readFile(preCommitHookPath, "utf8");
+          const prePushHook = await fs.readFile(prePushHookPath, "utf8");
+          relaysOk =
+            preCommitHook.includes("cclaw-managed-git-hook") &&
+            prePushHook.includes("cclaw-managed-git-hook");
+        }
+        checks.push({
+          name: "git_hooks:managed:relays",
+          ok: relaysOk,
+          details: `${path.relative(projectRoot, gitHooksDir)}/pre-commit and pre-push must contain managed relay marker`
+        });
+      }
+    }
   }
 
   for (const harness of configuredHarnesses) {

@@ -1,6 +1,8 @@
+import { execFile } from "node:child_process";
 import fs from "node:fs/promises";
 import os from "node:os";
 import path from "node:path";
+import { promisify } from "node:util";
 import {
   COMMAND_FILE_ORDER,
   REQUIRED_DIRS,
@@ -46,6 +48,9 @@ export interface InitOptions {
 }
 
 const OPENCODE_PLUGIN_REL_PATH = ".opencode/plugins/cclaw-plugin.mjs";
+const GIT_HOOK_MANAGED_MARKER = "cclaw-managed-git-hook";
+const GIT_HOOK_RUNTIME_REL_DIR = `${RUNTIME_ROOT}/hooks/git`;
+const execFileAsync = promisify(execFile);
 
 function runtimePath(projectRoot: string, ...segments: string[]): string {
   return path.join(projectRoot, RUNTIME_ROOT, ...segments);
@@ -66,6 +71,125 @@ function resolveGlobalLearningsPath(projectRoot: string, config: VibyConfig): st
     return raw;
   }
   return path.join(projectRoot, raw);
+}
+
+async function resolveGitHooksDir(projectRoot: string): Promise<string | null> {
+  try {
+    const { stdout } = await execFileAsync("git", ["rev-parse", "--git-path", "hooks"], {
+      cwd: projectRoot
+    });
+    const rel = stdout.trim();
+    if (rel.length === 0) {
+      return null;
+    }
+    return path.resolve(projectRoot, rel);
+  } catch {
+    return null;
+  }
+}
+
+function managedGitRuntimeScript(hookName: "pre-commit" | "pre-push"): string {
+  const rangeExpression = hookName === "pre-commit"
+    ? 'git diff --cached --name-only'
+    : 'git diff --name-only @{upstream}...HEAD || git diff --name-only HEAD~1...HEAD';
+  return `#!/usr/bin/env bash
+# ${GIT_HOOK_MANAGED_MARKER}: runtime ${hookName}
+set -euo pipefail
+
+ROOT=$(git rev-parse --show-toplevel 2>/dev/null || pwd)
+GUARD_SCRIPT="$ROOT/${RUNTIME_ROOT}/hooks/prompt-guard.sh"
+[ -x "$GUARD_SCRIPT" ] || exit 0
+
+FILES=$(${rangeExpression} 2>/dev/null || true)
+[ -n "$FILES" ] || exit 0
+
+printf '%s\n' "$FILES" | bash "$GUARD_SCRIPT"
+`;
+}
+
+function managedGitRelayHook(hookName: "pre-commit" | "pre-push"): string {
+  return `#!/usr/bin/env bash
+# ${GIT_HOOK_MANAGED_MARKER}: relay ${hookName}
+set -euo pipefail
+
+ROOT=$(git rev-parse --show-toplevel 2>/dev/null || pwd)
+RUNTIME_HOOK="$ROOT/${GIT_HOOK_RUNTIME_REL_DIR}/${hookName}.sh"
+[ -x "$RUNTIME_HOOK" ] || exit 0
+exec bash "$RUNTIME_HOOK" "$@"
+`;
+}
+
+async function removeManagedGitHookRelays(projectRoot: string): Promise<void> {
+  const hooksDir = await resolveGitHooksDir(projectRoot);
+  if (!hooksDir) {
+    return;
+  }
+  for (const hookName of ["pre-commit", "pre-push"] as const) {
+    const hookPath = path.join(hooksDir, hookName);
+    if (!(await exists(hookPath))) continue;
+    let content = "";
+    try {
+      content = await fs.readFile(hookPath, "utf8");
+    } catch {
+      content = "";
+    }
+    if (!content.includes(GIT_HOOK_MANAGED_MARKER)) {
+      continue;
+    }
+    await fs.rm(hookPath, { force: true });
+  }
+}
+
+async function syncManagedGitHooks(projectRoot: string, config: VibyConfig): Promise<void> {
+  const hooksDir = await resolveGitHooksDir(projectRoot);
+  if (!hooksDir) {
+    return;
+  }
+
+  if (config.gitHookGuards !== true) {
+    await removeManagedGitHookRelays(projectRoot);
+    try {
+      await fs.rm(path.join(projectRoot, GIT_HOOK_RUNTIME_REL_DIR), { recursive: true, force: true });
+    } catch {
+      // best-effort cleanup
+    }
+    return;
+  }
+
+  const runtimeGitHooksDir = path.join(projectRoot, GIT_HOOK_RUNTIME_REL_DIR);
+  await ensureDir(runtimeGitHooksDir);
+  for (const hookName of ["pre-commit", "pre-push"] as const) {
+    const runtimePathForHook = path.join(runtimeGitHooksDir, `${hookName}.sh`);
+    await writeFileSafe(runtimePathForHook, managedGitRuntimeScript(hookName));
+    try {
+      await fs.chmod(runtimePathForHook, 0o755);
+    } catch {
+      // best effort on constrained filesystems
+    }
+  }
+
+  await ensureDir(hooksDir);
+  for (const hookName of ["pre-commit", "pre-push"] as const) {
+    const hookPath = path.join(hooksDir, hookName);
+    let canWriteRelay = true;
+    if (await exists(hookPath)) {
+      try {
+        const existing = await fs.readFile(hookPath, "utf8");
+        canWriteRelay = existing.includes(GIT_HOOK_MANAGED_MARKER);
+      } catch {
+        canWriteRelay = false;
+      }
+    }
+    if (!canWriteRelay) {
+      continue;
+    }
+    await writeFileSafe(hookPath, managedGitRelayHook(hookName));
+    try {
+      await fs.chmod(hookPath, 0o755);
+    } catch {
+      // best effort on constrained filesystems
+    }
+  }
 }
 
 async function ensureStructure(projectRoot: string): Promise<void> {
@@ -430,7 +554,9 @@ async function writeHooks(projectRoot: string, config: VibyConfig): Promise<void
     globalLearningsPath: config.globalLearningsPath
   }));
   await writeFileSafe(path.join(hooksDir, "stop-checkpoint.sh"), stopCheckpointScript());
-  await writeFileSafe(path.join(hooksDir, "prompt-guard.sh"), promptGuardScript());
+  await writeFileSafe(path.join(hooksDir, "prompt-guard.sh"), promptGuardScript({
+    strictMode: config.promptGuardMode === "strict"
+  }));
   await writeFileSafe(path.join(hooksDir, "context-monitor.sh"), contextMonitorScript());
   await writeFileSafe(path.join(hooksDir, "observe.sh"), observeScript());
   await writeFileSafe(path.join(hooksDir, "summarize-observations.sh"), summarizeObservationsScript());
@@ -663,6 +789,7 @@ async function materializeRuntime(projectRoot: string, config: VibyConfig, force
   await ensureLearningsStore(projectRoot);
   await ensureGlobalLearningsStore(projectRoot, config);
   await writeHooks(projectRoot, config);
+  await syncManagedGitHooks(projectRoot, config);
   await syncHarnessShims(projectRoot, harnesses);
   await ensureGitignore(projectRoot);
 }
@@ -806,6 +933,7 @@ export async function uninstallCclaw(projectRoot: string): Promise<void> {
 
   await removeCclawFromAgentsMd(projectRoot);
   await removeGitignorePatterns(projectRoot);
+  await removeManagedGitHookRelays(projectRoot);
 
   // Clean hook files
   const hookFiles = [

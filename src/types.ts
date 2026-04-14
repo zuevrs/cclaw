@@ -25,6 +25,10 @@ export interface VibyConfig {
   globalLearnings?: boolean;
   /** Optional absolute or project-relative path to global learnings JSONL. */
   globalLearningsPath?: string;
+  /** Prompt guard behavior for runtime write-risk detection hooks. */
+  promptGuardMode?: "advisory" | "strict";
+  /** When true, cclaw installs managed git pre-commit/pre-push wrappers. */
+  gitHookGuards?: boolean;
 }
 
 export interface TransitionRule {

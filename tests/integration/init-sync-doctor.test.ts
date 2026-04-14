@@ -1,9 +1,14 @@
+import { execFile } from "node:child_process";
 import fs from "node:fs/promises";
 import os from "node:os";
 import path from "node:path";
+import { promisify } from "node:util";
 import { describe, expect, it } from "vitest";
+import { readConfig, writeConfig } from "../../src/config.js";
 import { doctorChecks, doctorSucceeded } from "../../src/doctor.js";
 import { initCclaw, syncCclaw, uninstallCclaw } from "../../src/install.js";
+
+const execFileAsync = promisify(execFile);
 
 function countOccurrences(value: string, needle: string): number {
   const escaped = needle.replace(/[.*+?^${}()|[\]\\]/gu, "\\$&");
@@ -100,6 +105,33 @@ describe("install lifecycle", () => {
     await expect(fs.stat(legacySkillDir)).rejects.toBeDefined();
     await expect(fs.stat(legacyBrowserQaDir)).rejects.toBeDefined();
     await expect(fs.stat(configPath)).resolves.toBeDefined();
+  });
+
+  it("sync installs managed git hooks when opt-in is enabled", async () => {
+    const root = await fs.mkdtemp(path.join(os.tmpdir(), "cclaw-git-hooks-"));
+    await execFileAsync("git", ["init"], { cwd: root });
+    await initCclaw({ projectRoot: root });
+
+    const current = await readConfig(root);
+    await writeConfig(root, {
+      ...current,
+      promptGuardMode: "strict",
+      gitHookGuards: true
+    });
+    await syncCclaw(root);
+
+    const preCommitRelay = await fs.readFile(path.join(root, ".git/hooks/pre-commit"), "utf8");
+    const prePushRelay = await fs.readFile(path.join(root, ".git/hooks/pre-push"), "utf8");
+    expect(preCommitRelay).toContain("cclaw-managed-git-hook");
+    expect(prePushRelay).toContain("cclaw-managed-git-hook");
+
+    const runtimePreCommit = await fs.readFile(path.join(root, ".cclaw/hooks/git/pre-commit.sh"), "utf8");
+    const runtimePrePush = await fs.readFile(path.join(root, ".cclaw/hooks/git/pre-push.sh"), "utf8");
+    expect(runtimePreCommit).toContain("prompt-guard.sh");
+    expect(runtimePrePush).toContain("prompt-guard.sh");
+
+    const promptGuard = await fs.readFile(path.join(root, ".cclaw/hooks/prompt-guard.sh"), "utf8");
+    expect(promptGuard).toContain('PROMPT_GUARD_MODE="strict"');
   });
 
   it("sync merges generated hooks with user hooks without duplication", async () => {
