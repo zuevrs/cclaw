@@ -2,7 +2,7 @@ import fs from "node:fs/promises";
 import os from "node:os";
 import path from "node:path";
 import { describe, expect, it } from "vitest";
-import { lintArtifact } from "../../src/artifact-linter.js";
+import { lintArtifact, validateReviewArmy } from "../../src/artifact-linter.js";
 
 async function writeRuntimeArtifact(root: string, fileName: string, content: string): Promise<void> {
   await fs.mkdir(path.join(root, ".cclaw/state"), { recursive: true });
@@ -95,5 +95,78 @@ describe("artifact linter heuristics", () => {
     const finalization = result.findings.find((f) => f.section === "Finalization");
     expect(finalization?.found).toBe(false);
     expect(finalization?.details).toContain("exactly one selected token");
+  });
+});
+
+describe("review army schema validation", () => {
+  it("accepts structured review-army payload with consistent blockers", async () => {
+    const root = await fs.mkdtemp(path.join(os.tmpdir(), "cclaw-review-army-valid-"));
+    await fs.mkdir(path.join(root, ".cclaw/state"), { recursive: true });
+    await fs.mkdir(path.join(root, ".cclaw/artifacts"), { recursive: true });
+    await fs.writeFile(path.join(root, ".cclaw/state/flow-state.json"), JSON.stringify({
+      currentStage: "review",
+      activeRunId: "run-review",
+      completedStages: []
+    }, null, 2), "utf8");
+    await fs.writeFile(path.join(root, ".cclaw/artifacts/07-review-army.json"), JSON.stringify({
+      version: 1,
+      generatedAt: "2026-01-01T00:00:00Z",
+      scope: { base: "main", head: "feature", files: ["src/a.ts"] },
+      findings: [{
+        id: "F-1",
+        severity: "Critical",
+        confidence: 8,
+        fingerprint: "fp-1",
+        reportedBy: ["spec-reviewer", "code-reviewer"],
+        status: "open",
+        location: { file: "src/a.ts", line: 10 },
+        recommendation: "Add guard"
+      }],
+      reconciliation: {
+        duplicatesCollapsed: 0,
+        conflicts: [],
+        multiSpecialistConfirmed: ["F-1"],
+        shipBlockers: ["F-1"]
+      }
+    }, null, 2), "utf8");
+
+    const result = await validateReviewArmy(root);
+    expect(result.valid).toBe(true);
+    expect(result.errors).toEqual([]);
+  });
+
+  it("rejects open critical findings that are not listed as ship blockers", async () => {
+    const root = await fs.mkdtemp(path.join(os.tmpdir(), "cclaw-review-army-invalid-"));
+    await fs.mkdir(path.join(root, ".cclaw/state"), { recursive: true });
+    await fs.mkdir(path.join(root, ".cclaw/artifacts"), { recursive: true });
+    await fs.writeFile(path.join(root, ".cclaw/state/flow-state.json"), JSON.stringify({
+      currentStage: "review",
+      activeRunId: "run-review",
+      completedStages: []
+    }, null, 2), "utf8");
+    await fs.writeFile(path.join(root, ".cclaw/artifacts/07-review-army.json"), JSON.stringify({
+      version: 1,
+      generatedAt: "2026-01-01T00:00:00Z",
+      scope: { base: "main", head: "feature", files: ["src/a.ts"] },
+      findings: [{
+        id: "F-1",
+        severity: "Critical",
+        confidence: 9,
+        fingerprint: "fp-1",
+        reportedBy: ["security-reviewer"],
+        status: "open",
+        recommendation: "Patch before merge"
+      }],
+      reconciliation: {
+        duplicatesCollapsed: 0,
+        conflicts: [],
+        multiSpecialistConfirmed: [],
+        shipBlockers: []
+      }
+    }, null, 2), "utf8");
+
+    const result = await validateReviewArmy(root);
+    expect(result.valid).toBe(false);
+    expect(result.errors.join("\n")).toContain("shipBlockers must include open Critical finding");
   });
 });

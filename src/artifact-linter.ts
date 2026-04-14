@@ -267,6 +267,14 @@ function isFiniteNumber(v: unknown): v is number {
   return typeof v === "number" && Number.isFinite(v);
 }
 
+function isNonNegativeInteger(v: unknown): v is number {
+  return Number.isInteger(v) && (v as number) >= 0;
+}
+
+function isStringArray(v: unknown): v is string[] {
+  return Array.isArray(v) && v.every((item) => typeof item === "string");
+}
+
 export async function validateReviewArmy(
   projectRoot: string
 ): Promise<{ valid: boolean; errors: string[] }> {
@@ -291,9 +299,32 @@ export async function validateReviewArmy(
 
   const root = parsed as Record<string, unknown>;
 
-  if (!("version" in root) || !isFiniteNumber(root.version)) {
-    errors.push('Field "version" must be a finite number.');
+  if (!("version" in root) || !isFiniteNumber(root.version) || root.version < 1) {
+    errors.push('Field "version" must be a finite number >= 1.');
   }
+  if (!isNonEmptyString(root.generatedAt)) {
+    errors.push('Field "generatedAt" must be a non-empty string.');
+  }
+
+  if (!("scope" in root) || root.scope === null || typeof root.scope !== "object" || Array.isArray(root.scope)) {
+    errors.push('Field "scope" must be an object.');
+  } else {
+    const scope = root.scope as Record<string, unknown>;
+    if (!isNonEmptyString(scope.base)) {
+      errors.push("scope.base must be a non-empty string.");
+    }
+    if (!isNonEmptyString(scope.head)) {
+      errors.push("scope.head must be a non-empty string.");
+    }
+    if (!isStringArray(scope.files)) {
+      errors.push("scope.files must be an array of strings.");
+    }
+  }
+
+  const severitySet = new Set(["Critical", "Important", "Suggestion"]);
+  const statusSet = new Set(["open", "accepted", "resolved"]);
+  const findingIds = new Set<string>();
+  const openCriticalIds = new Set<string>();
 
   if (!Array.isArray(root.findings)) {
     errors.push('Field "findings" must be an array.');
@@ -306,15 +337,47 @@ export async function validateReviewArmy(
       const o = f as Record<string, unknown>;
       if (!isNonEmptyString(o.id)) {
         errors.push(`findings[${i}].id must be a non-empty string.`);
+      } else if (findingIds.has(o.id)) {
+        errors.push(`findings[${i}].id must be unique.`);
+      } else {
+        findingIds.add(o.id);
       }
-      if (!isNonEmptyString(o.severity)) {
-        errors.push(`findings[${i}].severity must be a non-empty string.`);
+      if (!isNonEmptyString(o.severity) || !severitySet.has(o.severity)) {
+        errors.push(`findings[${i}].severity must be one of: Critical, Important, Suggestion.`);
       }
-      if (!isNonEmptyString(o.status)) {
-        errors.push(`findings[${i}].status must be a non-empty string.`);
+      if (!isNonEmptyString(o.status) || !statusSet.has(o.status)) {
+        errors.push(`findings[${i}].status must be one of: open, accepted, resolved.`);
       }
       if (!isNonEmptyString(o.fingerprint)) {
         errors.push(`findings[${i}].fingerprint must be a non-empty string.`);
+      }
+      if (!isFiniteNumber(o.confidence) || o.confidence < 1 || o.confidence > 10) {
+        errors.push(`findings[${i}].confidence must be a number in [1,10].`);
+      }
+      if (!isStringArray(o.reportedBy) || o.reportedBy.length === 0) {
+        errors.push(`findings[${i}].reportedBy must be a non-empty string array.`);
+      }
+      if (o.location !== undefined) {
+        if (o.location === null || typeof o.location !== "object" || Array.isArray(o.location)) {
+          errors.push(`findings[${i}].location must be an object when present.`);
+        } else {
+          const loc = o.location as Record<string, unknown>;
+          if (!isNonEmptyString(loc.file)) {
+            errors.push(`findings[${i}].location.file must be a non-empty string.`);
+          }
+          if (!isFiniteNumber(loc.line) || loc.line < 1) {
+            errors.push(`findings[${i}].location.line must be a positive number.`);
+          }
+        }
+      }
+      if (o.recommendation !== undefined && !isNonEmptyString(o.recommendation)) {
+        errors.push(`findings[${i}].recommendation must be a non-empty string when present.`);
+      }
+      if (o.severity === "Critical" && o.status === "open" && !isNonEmptyString(o.recommendation)) {
+        errors.push(`findings[${i}] open Critical finding must include recommendation.`);
+      }
+      if (o.id && o.severity === "Critical" && o.status === "open" && typeof o.id === "string") {
+        openCriticalIds.add(o.id);
       }
     });
   }
@@ -323,8 +386,37 @@ export async function validateReviewArmy(
     errors.push('Field "reconciliation" must be an object.');
   } else {
     const rec = root.reconciliation as Record<string, unknown>;
-    if (!Array.isArray(rec.shipBlockers)) {
-      errors.push('reconciliation.shipBlockers must be an array.');
+    if (!isNonNegativeInteger(rec.duplicatesCollapsed)) {
+      errors.push("reconciliation.duplicatesCollapsed must be a non-negative integer.");
+    }
+    if (!Array.isArray(rec.conflicts)) {
+      errors.push("reconciliation.conflicts must be an array.");
+    }
+    if (!isStringArray(rec.multiSpecialistConfirmed)) {
+      errors.push("reconciliation.multiSpecialistConfirmed must be an array of finding ids.");
+    }
+    if (!isStringArray(rec.shipBlockers)) {
+      errors.push("reconciliation.shipBlockers must be an array of finding ids.");
+    } else {
+      const blockers = new Set(rec.shipBlockers);
+      for (const id of rec.shipBlockers) {
+        if (!findingIds.has(id)) {
+          errors.push(`reconciliation.shipBlockers references unknown finding id "${id}".`);
+        }
+      }
+      for (const criticalId of openCriticalIds) {
+        if (!blockers.has(criticalId)) {
+          errors.push(`reconciliation.shipBlockers must include open Critical finding "${criticalId}".`);
+        }
+      }
+    }
+
+    if (isStringArray(rec.multiSpecialistConfirmed)) {
+      for (const id of rec.multiSpecialistConfirmed) {
+        if (!findingIds.has(id)) {
+          errors.push(`reconciliation.multiSpecialistConfirmed references unknown finding id "${id}".`);
+        }
+      }
     }
   }
 
