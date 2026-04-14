@@ -18,6 +18,16 @@ const STAGE_EXAMPLES: Record<FlowStage, string> = {
 **Q5 (CONSTRAINTS):** "What constraints are non-negotiable (runtime deps, latency, compatibility, policy)?"  
 **A5:** "No new runtime dependencies; checks should stay under 2 minutes; compatible with current workflow."
 
+### One-question-per-message discipline
+
+**Bad (bundled):** "Where will this run? Which Python version? Stdlib only? Any perf limits?"
+
+**Good (single ask):** "Where will this run in practice: local only, CI only, or both?"
+
+**Then next turn:** "Which runtime version should we lock as minimum?"
+
+**Then next turn:** "Should we treat 'stdlib-only' as a hard dependency constraint?"
+
 ### Alternatives comparison
 
 | Approach | Pros | Cons | Effort | Recommendation |
