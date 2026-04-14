@@ -14,6 +14,7 @@ import { checkMandatoryDelegations } from "./delegation.js";
 import { buildTraceMatrix } from "./trace-matrix.js";
 import { verifyCurrentStageGateEvidence } from "./gate-evidence.js";
 import { stageSkillFolder } from "./content/skills.js";
+import { validateHookDocument } from "./hook-schema.js";
 
 const execFileAsync = promisify(execFile);
 
@@ -471,6 +472,16 @@ export async function doctorChecks(projectRoot: string): Promise<DoctorCheck[]> 
         ok: hookOk,
         details: fullPath
       });
+      if (harness === "claude" || harness === "cursor" || harness === "codex") {
+        const schema = validateHookDocument(harness, parsed);
+        checks.push({
+          name: `hook:schema:${harness}`,
+          ok: schema.ok,
+          details: schema.ok
+            ? `${fullPath} matches cclaw hook schema v1`
+            : `${fullPath} schema issues: ${schema.errors.join("; ")}`
+        });
+      }
     }
   }
 

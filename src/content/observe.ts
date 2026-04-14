@@ -1249,6 +1249,7 @@ exit 0
 
 export function claudeHooksJsonWithObservation(): string {
   return JSON.stringify({
+    cclawHookSchemaVersion: 1,
     hooks: {
       SessionStart: [{
         matcher: "startup|resume|clear|compact",
@@ -1297,6 +1298,7 @@ export function claudeHooksJsonWithObservation(): string {
 
 export function cursorHooksJsonWithObservation(): string {
   return JSON.stringify({
+    cclawHookSchemaVersion: 1,
     version: 1,
     hooks: {
       sessionStart: [{
@@ -1335,6 +1337,7 @@ export function cursorHooksJsonWithObservation(): string {
 
 export function codexHooksJsonWithObservation(): string {
   return JSON.stringify({
+    cclawHookSchemaVersion: 1,
     hooks: {
       SessionStart: [{
         matcher: "startup|resume|clear|compact",

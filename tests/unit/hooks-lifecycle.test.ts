@@ -81,6 +81,8 @@ describe("hooks lifecycle rehydration", () => {
 
     expect(claude.hooks.SessionStart[0]?.matcher).toBe("startup|resume|clear|compact");
     expect(codex.hooks.SessionStart[0]?.matcher).toBe("startup|resume|clear|compact");
+    expect((claude as { cclawHookSchemaVersion?: number }).cclawHookSchemaVersion).toBe(1);
+    expect((codex as { cclawHookSchemaVersion?: number }).cclawHookSchemaVersion).toBe(1);
     expect(JSON.stringify(claude)).toContain("prompt-guard.sh");
     expect(JSON.stringify(claude)).toContain("context-monitor.sh");
     expect(JSON.stringify(codex)).toContain("prompt-guard.sh");
@@ -95,6 +97,7 @@ describe("hooks lifecycle rehydration", () => {
     expect(Array.isArray(cursor.hooks.sessionResume)).toBe(true);
     expect(Array.isArray(cursor.hooks.sessionClear)).toBe(true);
     expect(Array.isArray(cursor.hooks.sessionCompact)).toBe(true);
+    expect((cursor as { cclawHookSchemaVersion?: number }).cclawHookSchemaVersion).toBe(1);
     expect(JSON.stringify(cursor)).toContain("prompt-guard.sh");
     expect(JSON.stringify(cursor)).toContain("context-monitor.sh");
   });

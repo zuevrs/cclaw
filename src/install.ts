@@ -39,6 +39,7 @@ import { createInitialFlowState } from "./flow-state.js";
 import { ensureDir, exists, writeFileSafe } from "./fs-utils.js";
 import { ensureGitignore, removeGitignorePatterns } from "./gitignore.js";
 import { HARNESS_ADAPTERS, syncHarnessShims, removeCclawFromAgentsMd } from "./harness-adapters.js";
+import { validateHookDocument } from "./hook-schema.js";
 import { ensureRunSystem, readFlowState } from "./runs.js";
 import type { HarnessId, VibyConfig } from "./types.js";
 
@@ -445,6 +446,14 @@ function backupFileNameForHook(projectRoot: string, hookFilePath: string): strin
   return `${rel}.${ts}.bak`;
 }
 
+function harnessForHookFile(projectRoot: string, hookFilePath: string): "claude" | "cursor" | "codex" | null {
+  const rel = path.relative(projectRoot, hookFilePath).replace(/\\/gu, "/");
+  if (rel === ".claude/hooks/hooks.json") return "claude";
+  if (rel === ".cursor/hooks.json") return "cursor";
+  if (rel === ".codex/hooks.json") return "codex";
+  return null;
+}
+
 async function pruneOldHookBackups(backupsDir: string, maxBackups = 20): Promise<void> {
   let entries: string[] = [];
   try {
@@ -540,7 +549,25 @@ async function writeMergedHookJson(
   }
 
   const generatedDoc = JSON.parse(generatedJson) as Record<string, unknown>;
+  const harness = harnessForHookFile(projectRoot, hookFilePath);
+  if (harness) {
+    const generatedSchema = validateHookDocument(harness, generatedDoc);
+    if (!generatedSchema.ok) {
+      throw new Error(
+        `Generated ${harness} hook document failed schema validation: ${generatedSchema.errors.join("; ")}`
+      );
+    }
+  }
+
   const mergedDoc = mergeHookDocuments(existingDoc, generatedDoc);
+  if (harness) {
+    const mergedSchema = validateHookDocument(harness, mergedDoc);
+    if (!mergedSchema.ok) {
+      throw new Error(
+        `Merged ${harness} hook document failed schema validation: ${mergedSchema.errors.join("; ")}`
+      );
+    }
+  }
   await writeFileSafe(hookFilePath, `${JSON.stringify(mergedDoc, null, 2)}\n`);
 }
 
@@ -912,7 +939,9 @@ async function removeManagedHookEntries(hookFilePath: string): Promise<void> {
     Object.keys(hooks as Record<string, unknown>).length > 0;
 
   if (!hasHooks) {
-    const onlyHooksShell = Object.keys(root).every((key) => key === "hooks" || key === "version");
+    const onlyHooksShell = Object.keys(root).every(
+      (key) => key === "hooks" || key === "version" || key === "cclawHookSchemaVersion"
+    );
     if (onlyHooksShell) {
       await fs.rm(hookFilePath, { force: true });
       return;
