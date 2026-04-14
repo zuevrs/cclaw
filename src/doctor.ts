@@ -134,6 +134,47 @@ async function readHookDocument(filePath: string): Promise<Record<string, unknow
   }
 }
 
+function normalizeOpenCodePluginEntry(entry: unknown): string | null {
+  if (typeof entry === "string" && entry.trim().length > 0) return entry.trim();
+  if (!entry || typeof entry !== "object" || Array.isArray(entry)) return null;
+  const obj = entry as Record<string, unknown>;
+  for (const key of ["path", "src", "plugin"] as const) {
+    const value = obj[key];
+    if (typeof value === "string" && value.trim().length > 0) {
+      return value.trim();
+    }
+  }
+  return null;
+}
+
+async function opencodeRegistrationCheck(projectRoot: string): Promise<{ ok: boolean; details: string }> {
+  const expected = ".opencode/plugins/cclaw-plugin.mjs";
+  const candidates = [
+    path.join(projectRoot, "opencode.json"),
+    path.join(projectRoot, "opencode.jsonc"),
+    path.join(projectRoot, ".opencode/opencode.json"),
+    path.join(projectRoot, ".opencode/opencode.jsonc")
+  ];
+
+  for (const configPath of candidates) {
+    if (!(await exists(configPath))) {
+      continue;
+    }
+    const parsed = await readHookDocument(configPath);
+    if (!parsed) {
+      continue;
+    }
+    const plugins = Array.isArray(parsed.plugins) ? parsed.plugins : [];
+    const registered = plugins.some((entry) => normalizeOpenCodePluginEntry(entry) === expected);
+    if (registered) {
+      return { ok: true, details: `${path.relative(projectRoot, configPath)} registers ${expected}` };
+    }
+    return { ok: false, details: `${path.relative(projectRoot, configPath)} missing plugin ${expected}` };
+  }
+
+  return { ok: false, details: `No opencode.json/opencode.jsonc found with plugin ${expected}` };
+}
+
 export async function doctorChecks(projectRoot: string): Promise<DoctorCheck[]> {
   const checks: DoctorCheck[] = [];
 
@@ -499,6 +540,12 @@ export async function doctorChecks(projectRoot: string): Promise<DoctorCheck[]> 
       name: "lifecycle:opencode:rehydration_events",
       ok,
       details: `${file} must include event lifecycle handler, tool.execute.before/after, session.idle summarization, and transform rehydration`
+    });
+    const registration = await opencodeRegistrationCheck(projectRoot);
+    checks.push({
+      name: "hook:opencode:config_registration",
+      ok: registration.ok,
+      details: registration.details
     });
   }
 

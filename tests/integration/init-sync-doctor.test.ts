@@ -35,6 +35,12 @@ describe("install lifecycle", () => {
     ) as { hooks: { SessionStart: Array<{ matcher?: string }> } };
     expect(claudeHooks.hooks.SessionStart[0]?.matcher).toBe("startup|resume|clear|compact");
 
+    const opencodeConfig = JSON.parse(
+      await fs.readFile(path.join(root, "opencode.json"), "utf8")
+    ) as { plugins?: unknown[] };
+    expect(Array.isArray(opencodeConfig.plugins)).toBe(true);
+    expect(opencodeConfig.plugins).toContain(".opencode/plugins/cclaw-plugin.mjs");
+
     const agentsMd = await fs.readFile(path.join(root, "AGENTS.md"), "utf8");
     expect(agentsMd).toContain("## Cclaw — Workflow Adapter");
     expect(agentsMd).toContain("intentionally minimal for cross-project use");

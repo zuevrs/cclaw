@@ -44,6 +44,8 @@ export interface InitOptions {
   harnesses?: HarnessId[];
 }
 
+const OPENCODE_PLUGIN_REL_PATH = ".opencode/plugins/cclaw-plugin.mjs";
+
 function runtimePath(projectRoot: string, ...segments: string[]): string {
   return path.join(projectRoot, RUNTIME_ROOT, ...segments);
 }
@@ -197,6 +199,104 @@ function tryParseHookDocument(raw: string): { parsed: unknown; recovered: boolea
   }
 }
 
+function opencodeConfigCandidates(projectRoot: string): string[] {
+  return [
+    path.join(projectRoot, "opencode.json"),
+    path.join(projectRoot, "opencode.jsonc"),
+    path.join(projectRoot, ".opencode", "opencode.json"),
+    path.join(projectRoot, ".opencode", "opencode.jsonc")
+  ];
+}
+
+function normalizeOpenCodePluginEntry(entry: unknown): string | null {
+  if (typeof entry === "string" && entry.trim().length > 0) {
+    return entry.trim();
+  }
+  if (!entry || typeof entry !== "object" || Array.isArray(entry)) {
+    return null;
+  }
+  const obj = entry as Record<string, unknown>;
+  for (const key of ["path", "src", "plugin"] as const) {
+    const value = obj[key];
+    if (typeof value === "string" && value.trim().length > 0) {
+      return value.trim();
+    }
+  }
+  return null;
+}
+
+function mergeOpenCodePluginConfig(
+  existingDoc: unknown,
+  pluginRelPath: string
+): { merged: Record<string, unknown>; changed: boolean } {
+  const root = toObject(existingDoc) ?? {};
+  const pluginsRaw = Array.isArray(root.plugins) ? [...root.plugins] : [];
+  const normalized = new Set(pluginsRaw.map((entry) => normalizeOpenCodePluginEntry(entry)).filter(Boolean));
+  if (!normalized.has(pluginRelPath)) {
+    pluginsRaw.push(pluginRelPath);
+  }
+  const changed = !normalized.has(pluginRelPath) || !Array.isArray(root.plugins);
+  return {
+    merged: {
+      ...root,
+      plugins: pluginsRaw
+    },
+    changed
+  };
+}
+
+async function resolveOpenCodeConfigPath(projectRoot: string): Promise<string> {
+  for (const candidate of opencodeConfigCandidates(projectRoot)) {
+    if (await exists(candidate)) {
+      return candidate;
+    }
+  }
+  return path.join(projectRoot, "opencode.json");
+}
+
+async function writeMergedOpenCodePluginConfig(
+  projectRoot: string,
+  pluginRelPath: string
+): Promise<void> {
+  const configPath = await resolveOpenCodeConfigPath(projectRoot);
+  await ensureDir(path.dirname(configPath));
+  let existingDoc: unknown = {};
+  if (await exists(configPath)) {
+    try {
+      const raw = await fs.readFile(configPath, "utf8");
+      const parsed = tryParseHookDocument(raw);
+      existingDoc = parsed?.parsed ?? {};
+    } catch {
+      existingDoc = {};
+    }
+  }
+  const { merged, changed } = mergeOpenCodePluginConfig(existingDoc, pluginRelPath);
+  if (changed || !(await exists(configPath))) {
+    await writeFileSafe(configPath, `${JSON.stringify(merged, null, 2)}\n`);
+  }
+}
+
+async function removeManagedOpenCodePluginConfig(projectRoot: string, pluginRelPath: string): Promise<void> {
+  for (const configPath of opencodeConfigCandidates(projectRoot)) {
+    if (!(await exists(configPath))) continue;
+    let parsed: unknown = null;
+    try {
+      const raw = await fs.readFile(configPath, "utf8");
+      parsed = tryParseHookDocument(raw)?.parsed ?? null;
+    } catch {
+      parsed = null;
+    }
+    const root = toObject(parsed);
+    if (!root || !Array.isArray(root.plugins)) continue;
+    const filtered = root.plugins.filter((entry) => normalizeOpenCodePluginEntry(entry) !== pluginRelPath);
+    if (filtered.length === root.plugins.length) {
+      continue;
+    }
+    root.plugins = filtered;
+    await writeFileSafe(configPath, `${JSON.stringify(root, null, 2)}\n`);
+  }
+}
+
 function backupFileNameForHook(projectRoot: string, hookFilePath: string): string {
   const rel = path.relative(projectRoot, hookFilePath).replace(/[\\/]/gu, "__");
   const ts = new Date().toISOString().replace(/[:.]/gu, "-");
@@ -335,9 +435,10 @@ async function writeHooks(projectRoot: string, harnesses: HarnessId[]): Promise<
 
   if (harnesses.includes("opencode")) {
     const opencodePluginsDir = path.join(projectRoot, ".opencode/plugins");
-    const opencodePluginPath = path.join(opencodePluginsDir, "cclaw-plugin.mjs");
+    const opencodePluginPath = path.join(projectRoot, OPENCODE_PLUGIN_REL_PATH);
     await ensureDir(opencodePluginsDir);
     await writeFileSafe(opencodePluginPath, opencodePluginSource);
+    await writeMergedOpenCodePluginConfig(projectRoot, OPENCODE_PLUGIN_REL_PATH);
     try {
       await fs.chmod(opencodePluginPath, 0o755);
     } catch {
@@ -359,7 +460,7 @@ async function writeHooks(projectRoot: string, harnesses: HarnessId[]): Promise<
       await ensureDir(dir);
       await writeMergedHookJson(projectRoot, path.join(dir, "hooks.json"), codexHooksJson());
     }
-    // OpenCode: plugin.mjs is in .cclaw/hooks/ — user registers in opencode.json
+    // OpenCode registration is auto-managed via opencode.json/opencode.jsonc.
   }
 }
 
@@ -470,7 +571,7 @@ async function cleanLegacyArtifacts(projectRoot: string): Promise<void> {
   for (const legacyPlugin of [
     path.join(projectRoot, ".opencode/plugins/viby-plugin.mjs"),
     path.join(projectRoot, ".opencode/plugins/opencode-plugin.mjs"),
-    path.join(projectRoot, ".opencode/plugins/cclaw-plugin.mjs")
+    path.join(projectRoot, OPENCODE_PLUGIN_REL_PATH)
   ]) {
     try {
       await fs.rm(legacyPlugin, { force: true });
@@ -702,7 +803,7 @@ export async function uninstallCclaw(projectRoot: string): Promise<void> {
   for (const pluginPath of [
     path.join(projectRoot, ".opencode/plugins/viby-plugin.mjs"),
     path.join(projectRoot, ".opencode/plugins/opencode-plugin.mjs"),
-    path.join(projectRoot, ".opencode/plugins/cclaw-plugin.mjs")
+    path.join(projectRoot, OPENCODE_PLUGIN_REL_PATH)
   ]) {
     try {
       await fs.rm(pluginPath, { force: true });
@@ -710,4 +811,6 @@ export async function uninstallCclaw(projectRoot: string): Promise<void> {
       // best-effort cleanup
     }
   }
+
+  await removeManagedOpenCodePluginConfig(projectRoot, OPENCODE_PLUGIN_REL_PATH);
 }
