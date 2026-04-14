@@ -44,6 +44,25 @@ For cclaw flow stages, machine-only specialist work should auto-dispatch without
 
 Human input remains mandatory only at explicit approval gates (plan approval, user challenge resolution, release finalization mode).
 
+## Model & Harness Routing Notes
+
+### Harness routing
+
+| Harness | Delegation tool | Structured ask tool | Routing note |
+|---|---|---|---|
+| Claude | Task/delegate | AskUserQuestion | Preferred for rich multi-step delegation + explicit approvals. |
+| Cursor | Task | AskQuestion | Use option-based asks for mode/waiver decisions; keep subagent payloads concise. |
+| Codex | Task (if available) | None native | Use numbered choices in chat for approvals; keep prompts fully self-contained. |
+| OpenCode | Task (if available) | None native | Log delegation outcomes in artifacts/state explicitly; do not assume built-in ask workflows. |
+
+If delegation tooling is unavailable in the active harness, run the same controller protocol in-thread and record a delegation waiver with reason \`harness_limitation\`.
+
+### Model routing
+
+- **Use a faster model** for bounded, deterministic tasks (single slice implementation, mechanical refactors, straightforward lint/test fixes).
+- **Use a more capable model** for high-ambiguity or high-risk analysis (security review, architecture conflicts, spec contradiction resolution).
+- During review-heavy stages, prefer **mixed routing**: faster first-pass triage + escalate only high-severity/low-confidence findings.
+
 ## HARD-GATE
 
 **Never dispatch a subagent without a concrete, self-contained task description pasted into the prompt. Do not pass file references the subagent must read to understand its task.**
@@ -245,6 +264,20 @@ Implementation that touches shared source trees must remain **sequential** unles
 - **Independent investigations** (perf vs correctness vs dependency hygiene) with separated code neighborhoods.
 - **Multi-specialist review** where reviewers must not contaminate each other’s first impressions.
 - **Parallel test/log analysis** across unrelated failures (distinct subsystems).
+
+## Model & Harness Routing Notes
+
+### Harness routing
+
+- Launch all parallel Task calls in a **single message** only on harnesses that support concurrent delegation.
+- If the harness cannot safely fan out parallel delegations, run lenses sequentially and preserve the same reconciliation schema.
+- For harnesses without structured ask tools, put reconciliation decisions as explicit numbered options in chat and wait for user selection on blockers.
+
+### Model routing
+
+- **Faster model:** broad first-pass scans, duplicate detection, low-risk normalization.
+- **More capable model:** conflict reconciliation, architectural contradiction analysis, security-critical tie-breaks.
+- Escalation trigger: any finding that is \`Critical\`, contradictory across specialists, or confidence <5 with potential ship impact.
 
 ## Dispatch Protocol
 

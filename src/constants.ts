@@ -17,6 +17,7 @@ export const REQUIRED_DIRS = [
   RUNTIME_ROOT,
   `${RUNTIME_ROOT}/commands`,
   `${RUNTIME_ROOT}/skills`,
+  `${RUNTIME_ROOT}/contexts`,
   `${RUNTIME_ROOT}/templates`,
   `${RUNTIME_ROOT}/artifacts`,
   `${RUNTIME_ROOT}/state`,
@@ -37,7 +38,8 @@ export const REQUIRED_GITIGNORE_PATTERNS = [
   ".claude/hooks/hooks.json",
   ".cursor/hooks.json",
   ".codex/hooks.json",
-  ".opencode/plugins/cclaw-plugin.mjs"
+  ".opencode/plugins/cclaw-plugin.mjs",
+  ".cursor/rules/cclaw-workflow.mdc"
 ] as const;
 
 export const COMMAND_FILE_ORDER: FlowStage[] = [

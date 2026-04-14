@@ -1,5 +1,6 @@
 import { describe, expect, it } from "vitest";
 import { stageSchema } from "../../src/content/stage-schema.js";
+import { stageSkillMarkdown } from "../../src/content/skills.js";
 import { enhancedAgentBody } from "../../src/content/subagents.js";
 
 describe("stage schema and subagent alignment", () => {
@@ -23,5 +24,12 @@ describe("stage schema and subagent alignment", () => {
     const review = stageSchema("review");
     expect(review.requiredEvidence).toContain("Artifact written to `.cclaw/artifacts/07-review-army.json`.");
     expect(review.policyNeedles).toContain("Review Army");
+  });
+
+  it("stage skills render explicit when-not-to-use guidance", () => {
+    const review = stageSchema("review");
+    expect(review.whenNotToUse.length).toBeGreaterThan(0);
+    const markdown = stageSkillMarkdown("review");
+    expect(markdown).toContain("## When Not to Use");
   });
 });

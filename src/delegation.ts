@@ -1,7 +1,7 @@
 import fs from "node:fs/promises";
 import path from "node:path";
 import { RUNTIME_ROOT } from "./constants.js";
-import { exists, writeFileSafe } from "./fs-utils.js";
+import { exists, withDirectoryLock, writeFileSafe } from "./fs-utils.js";
 import { readFlowState } from "./runs.js";
 import { stageSchema } from "./content/stage-schema.js";
 import type { FlowStage } from "./types.js";
@@ -23,6 +23,10 @@ export type DelegationLedger = {
 
 function delegationLogPath(projectRoot: string, runId: string): string {
   return path.join(projectRoot, RUNTIME_ROOT, "runs", runId, "delegation-log.json");
+}
+
+function delegationLockPath(projectRoot: string, runId: string): string {
+  return path.join(projectRoot, RUNTIME_ROOT, "runs", runId, ".delegation.lock");
 }
 
 function isDelegationEntry(value: unknown): value is DelegationEntry {
@@ -79,13 +83,15 @@ export async function readDelegationLedger(projectRoot: string): Promise<Delegat
 
 export async function appendDelegation(projectRoot: string, entry: DelegationEntry): Promise<void> {
   const { activeRunId } = await readFlowState(projectRoot);
-  const filePath = delegationLogPath(projectRoot, activeRunId);
-  const prior = await readDelegationLedger(projectRoot);
-  const ledger: DelegationLedger = {
-    runId: activeRunId,
-    entries: [...prior.entries, entry]
-  };
-  await writeFileSafe(filePath, `${JSON.stringify(ledger, null, 2)}\n`);
+  await withDirectoryLock(delegationLockPath(projectRoot, activeRunId), async () => {
+    const filePath = delegationLogPath(projectRoot, activeRunId);
+    const prior = await readDelegationLedger(projectRoot);
+    const ledger: DelegationLedger = {
+      runId: activeRunId,
+      entries: [...prior.entries, entry]
+    };
+    await writeFileSafe(filePath, `${JSON.stringify(ledger, null, 2)}\n`);
+  });
 }
 
 export async function checkMandatoryDelegations(

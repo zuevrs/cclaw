@@ -100,6 +100,17 @@ ${readLines}
 `;
 }
 
+function whenNotToUseBlock(stage: FlowStage): string {
+  const schema = stageSchema(stage);
+  if (!schema.whenNotToUse || schema.whenNotToUse.length === 0) {
+    return "";
+  }
+  return `## When Not to Use
+${schema.whenNotToUse.map((item) => `- ${item}`).join("\n")}
+
+`;
+}
+
 function autoSubagentDispatchBlock(stage: FlowStage): string {
   const rules = stageAutoSubagentDispatch(stage);
   if (rules.length === 0) return "";
@@ -183,6 +194,63 @@ If project config at \`${RUNTIME_ROOT}/config.yaml\` has \`autoAdvance: true\`, 
 
 If project config at \`${RUNTIME_ROOT}/config.yaml\` has \`autoAdvance: true\`, proceed to the next stage automatically after all gates pass for this stage. Otherwise, suggest the next command (\`${nextCommand}\`) and wait.
 
+`;
+}
+
+function progressiveDisclosureBlock(stage: FlowStage, nextCommand: string): string {
+  const schema = stageSchema(stage);
+  const stageSpecificRefs: Record<FlowStage, string[]> = {
+    brainstorm: [
+      "- `.cclaw/skills/autoplan/SKILL.md` — when the user wants brainstorm→plan orchestration in one flow",
+      "- `.cclaw/skills/learnings/SKILL.md` — to capture durable framing insights early"
+    ],
+    scope: [
+      "- `.cclaw/skills/autoplan/SKILL.md` — for coordinated premise challenge across early stages",
+      "- `.cclaw/skills/learnings/SKILL.md` — to persist rejected assumptions and constraints"
+    ],
+    design: [
+      "- `.cclaw/skills/performance/SKILL.md` — when architectural choices carry perf trade-offs",
+      "- `.cclaw/skills/security/SKILL.md` — when design choices touch auth/secrets/trust boundaries"
+    ],
+    spec: [
+      "- `.cclaw/skills/docs/SKILL.md` — for API/contract wording quality and ADR-style decision capture",
+      "- `.cclaw/skills/learnings/SKILL.md` — to preserve acceptance criteria traps and edge-case learnings"
+    ],
+    plan: [
+      "- `.cclaw/skills/subagent-dev/SKILL.md` — for specialist delegation prompts by task slice",
+      "- `.cclaw/skills/parallel-dispatch/SKILL.md` — for multi-agent review planning and reconciliation setup"
+    ],
+    test: [
+      "- `.cclaw/skills/debugging/SKILL.md` — when RED behavior is unclear or flakes appear",
+      "- `.cclaw/skills/subagent-dev/SKILL.md` — for machine-only test-slice delegation"
+    ],
+    build: [
+      "- `.cclaw/skills/debugging/SKILL.md` — for root-cause workflow when implementation fails tests",
+      "- `.cclaw/skills/performance/SKILL.md` — when implementation choices impact latency/throughput"
+    ],
+    review: [
+      "- `.cclaw/skills/security/SKILL.md` — mandatory lens for exploitable risk detection",
+      "- `.cclaw/skills/parallel-dispatch/SKILL.md` — for review-army dispatch and reconciliation discipline"
+    ],
+    ship: [
+      "- `.cclaw/skills/ci-cd/SKILL.md` — for release gates, pipeline health, and deployment guardrails",
+      "- `.cclaw/skills/docs/SKILL.md` — for release docs, migration notes, and ADR/public API updates"
+    ]
+  };
+
+  return `## Progressive Disclosure
+
+### Depth
+- Primary stage procedure (this file): \`.cclaw/skills/${schema.skillFolder}/SKILL.md\`
+- Orchestrator contract (gate language and handoff): \`.cclaw/commands/${stage}.md\`
+- Artifact structure baseline: \`.cclaw/templates/${schema.artifactFile}\`
+- Runtime state truth source: \`.cclaw/state/flow-state.json\` + \`.cclaw/runs/<activeRunId>/\`
+
+### See also
+- Meta routing and activation rules: \`.cclaw/skills/using-cclaw/SKILL.md\`
+- Session continuity and checkpoint behavior: \`.cclaw/skills/session/SKILL.md\`
+${stageSpecificRefs[stage].join("\n")}
+- Next-stage handoff command: \`${nextCommand}\`
 `;
 }
 
@@ -272,6 +340,7 @@ ${schema.purpose}
 ## When to Use
 ${schema.whenToUse.map((item) => `- ${item}`).join("\n")}
 
+${whenNotToUseBlock(stage)}
 ## Inputs
 ${schema.inputs.length > 0 ? schema.inputs.map((item) => `- ${item}`).join("\n") : "- (first stage — no required inputs)"}
 
@@ -330,6 +399,7 @@ ${completionStatusBlock(stage)}
 ${schema.exitCriteria.map((item) => `- [ ] ${item}`).join("\n")}
 
 ${stageTransitionAutoAdvanceBlock(schema, nextCommand)}
+${progressiveDisclosureBlock(stage, nextCommand)}
 ${selfImprovementBlock(stage)}
 ## Handoff
 - Next command: ${nextCommand}

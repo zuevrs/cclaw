@@ -15,6 +15,7 @@ const INSTALLER_COMMANDS: CommandName[] = ["init", "sync", "doctor", "upgrade", 
 interface ParsedArgs {
   command?: CommandName;
   harnesses?: HarnessId[];
+  reconcileGates?: boolean;
 }
 
 function usage(): string {
@@ -23,7 +24,7 @@ function usage(): string {
 Usage:
   cclaw init [--harnesses=claude,cursor,opencode,codex]
   cclaw sync
-  cclaw doctor
+  cclaw doctor [--reconcile-gates]
   cclaw upgrade
   cclaw uninstall
 `;
@@ -53,6 +54,10 @@ function parseArgs(argv: string[]): ParsedArgs {
   for (const flag of flags) {
     if (flag.startsWith("--harnesses=")) {
       parsed.harnesses = parseHarnesses(flag.replace("--harnesses=", ""));
+      continue;
+    }
+    if (flag === "--reconcile-gates") {
+      parsed.reconcileGates = true;
     }
   }
 
@@ -82,7 +87,9 @@ async function runCommand(parsed: ParsedArgs, ctx: CliContext): Promise<number> 
   }
 
   if (command === "doctor") {
-    const checks = await doctorChecks(ctx.cwd);
+    const checks = await doctorChecks(ctx.cwd, {
+      reconcileCurrentStageGates: parsed.reconcileGates === true
+    });
     for (const check of checks) {
       ctx.stdout.write(`${check.ok ? "PASS" : "FAIL"} ${check.name} :: ${check.details}\n`);
     }

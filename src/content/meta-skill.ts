@@ -93,8 +93,34 @@ These skills live in \`.cclaw/skills/\` but have no slash commands. They activat
 | Performance | \`performance/\` | During review; when code is perf-sensitive (DB queries, rendering, bundle size) |
 | CI/CD | \`ci-cd/\` | During ship; when pipeline config or deployment is involved |
 | Documentation | \`docs/\` | During ship; when adding public APIs, architecture changes, or breaking changes |
+| Executing Plans | \`executing-plans/\` | After plan approval during sustained task execution waves |
+| Context Engineering | \`context-engineering/\` | When work mode changes (execution, review, incident) or context pressure rises |
+| Source-Driven Development | \`source-driven-development/\` | Before introducing new patterns/helpers; when deciding reuse vs net-new structure |
+| Frontend Accessibility | \`frontend-accessibility/\` | For user-facing UI changes and accessibility quality gates |
 
 **Activation rule:** When a contextual skill applies, read its SKILL.md and follow it as a supplementary lens alongside the current stage. Do not skip the stage workflow — the contextual skill adds depth, not a detour.
+
+## Progressive Disclosure (Depth / See Also)
+
+Use this loading order to keep context lean while preserving depth:
+
+1. Start with the active stage skill in \`.cclaw/skills/<stage>/SKILL.md\`.
+2. Load exactly one contextual utility skill only if its trigger appears.
+3. Open command contract (\`.cclaw/commands/<stage>.md\`) only for gate/handoff wording.
+4. Expand to adjacent stage skills only when transition ambiguity exists.
+
+### Depth triggers
+- **Flaky/failing tests:** \`.cclaw/skills/debugging/SKILL.md\`
+- **Security-sensitive change:** \`.cclaw/skills/security/SKILL.md\`
+- **Performance risk:** \`.cclaw/skills/performance/SKILL.md\`
+- **Release/deploy concerns:** \`.cclaw/skills/ci-cd/SKILL.md\`
+- **Public API/docs impact:** \`.cclaw/skills/docs/SKILL.md\`
+- **Specialist delegation needed:** \`.cclaw/skills/subagent-dev/SKILL.md\` and \`.cclaw/skills/parallel-dispatch/SKILL.md\`
+
+### See also
+- \`.cclaw/skills/session/SKILL.md\` for session start/stop/resume behavior
+- \`.cclaw/skills/learnings/SKILL.md\` for durable memory capture and reuse
+- \`.cclaw/skills/autoplan/SKILL.md\` when user requests multi-stage orchestration
 
 ## Decision Protocol
 

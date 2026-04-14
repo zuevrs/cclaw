@@ -4,6 +4,7 @@ import { COMMAND_FILE_ORDER, RUNTIME_ROOT } from "./constants.js";
 import { stageSchema, stagePolicyNeedles } from "./content/stage-schema.js";
 import { stageSkillFolder } from "./content/skills.js";
 import { exists } from "./fs-utils.js";
+import type { HarnessId } from "./types.js";
 
 interface PolicyRule {
   filePath: string;
@@ -19,9 +20,18 @@ export interface PolicyCheck {
   details: string;
 }
 
-export async function policyChecks(projectRoot: string): Promise<PolicyCheck[]> {
+export interface PolicyOptions {
+  harnesses?: HarnessId[];
+}
+
+const ALL_HARNESSES: HarnessId[] = ["claude", "cursor", "opencode", "codex"];
+
+export async function policyChecks(projectRoot: string, options: PolicyOptions = {}): Promise<PolicyCheck[]> {
   const checks: PolicyCheck[] = [];
   const rules = [...POLICY_RULES];
+  const activeHarnesses = new Set<HarnessId>(
+    options.harnesses && options.harnesses.length > 0 ? options.harnesses : ALL_HARNESSES
+  );
 
   for (const stage of COMMAND_FILE_ORDER) {
     const folder = stageSkillFolder(stage);
@@ -114,15 +124,19 @@ export async function policyChecks(projectRoot: string): Promise<PolicyCheck[]> 
     { file: runtimeFile("skills/autoplan/SKILL.md"), needle: "## Decision Taxonomy", name: "utility_skill:autoplan:taxonomy" },
     { file: runtimeFile("skills/autoplan/SKILL.md"), needle: "## HARD-GATE", name: "utility_skill:autoplan:hard_gate" },
     { file: runtimeFile("skills/autoplan/SKILL.md"), needle: "## Restore Points", name: "utility_skill:autoplan:restore_points" },
+    { file: runtimeFile("skills/autoplan/SKILL.md"), needle: "## Scope Mode Heuristics (Phase 2)", name: "utility_skill:autoplan:scope_heuristics" },
     { file: runtimeFile("commands/learn.md"), needle: "## Subcommands", name: "utility_command:learn:subcommands" },
     { file: runtimeFile("commands/autoplan.md"), needle: "## Phase Sequence", name: "utility_command:autoplan:phases" },
     { file: runtimeFile("commands/autoplan.md"), needle: "## Decision Principles", name: "utility_command:autoplan:principles" },
+    { file: runtimeFile("commands/autoplan.md"), needle: "## Scope Mode Heuristics (Phase 2)", name: "utility_command:autoplan:scope_heuristics" },
     { file: runtimeFile("skills/subagent-dev/SKILL.md"), needle: "## HARD-GATE", name: "utility_skill:sdd:hard_gate" },
     { file: runtimeFile("skills/subagent-dev/SKILL.md"), needle: "## Status Contract", name: "utility_skill:sdd:status_contract" },
     { file: runtimeFile("skills/subagent-dev/SKILL.md"), needle: "Implementer", name: "utility_skill:sdd:implementer_template" },
+    { file: runtimeFile("skills/subagent-dev/SKILL.md"), needle: "## Model & Harness Routing Notes", name: "utility_skill:sdd:routing_notes" },
     { file: runtimeFile("skills/parallel-dispatch/SKILL.md"), needle: "## HARD-GATE", name: "utility_skill:parallel:hard_gate" },
     { file: runtimeFile("skills/parallel-dispatch/SKILL.md"), needle: "Review Army", name: "utility_skill:parallel:review_army" },
     { file: runtimeFile("skills/parallel-dispatch/SKILL.md"), needle: "Reconciliation", name: "utility_skill:parallel:reconciliation" },
+    { file: runtimeFile("skills/parallel-dispatch/SKILL.md"), needle: "## Model & Harness Routing Notes", name: "utility_skill:parallel:routing_notes" },
     { file: runtimeFile("skills/session/SKILL.md"), needle: "## HARD-GATE", name: "utility_skill:session:hard_gate" },
     { file: runtimeFile("skills/session/SKILL.md"), needle: "## Session Start Protocol", name: "utility_skill:session:start" },
     { file: runtimeFile("skills/session/SKILL.md"), needle: "## Session Stop Protocol", name: "utility_skill:session:stop" },
@@ -133,7 +147,9 @@ export async function policyChecks(projectRoot: string): Promise<PolicyCheck[]> 
     { file: runtimeFile("skills/using-cclaw/SKILL.md"), needle: "## Failure Modes", name: "meta_skill:failure_modes" },
     { file: runtimeFile("skills/using-cclaw/SKILL.md"), needle: "## Contextual Skills", name: "meta_skill:contextual_skills" },
     { file: runtimeFile("skills/using-cclaw/SKILL.md"), needle: "## Decision Protocol", name: "meta_skill:decision_protocol" },
+    { file: runtimeFile("skills/using-cclaw/SKILL.md"), needle: "## Progressive Disclosure (Depth / See Also)", name: "meta_skill:progressive_disclosure" },
     { file: runtimeFile("skills/session/SKILL.md"), needle: "## Session Resume Protocol", name: "utility_skill:session:resume" },
+    { file: runtimeFile("skills/brainstorming/SKILL.md"), needle: "## Progressive Disclosure", name: "stage_skill:progressive_disclosure" },
 
     { file: runtimeFile("skills/security/SKILL.md"), needle: "## HARD-GATE", name: "utility_skill:security:hard_gate" },
     { file: runtimeFile("skills/security/SKILL.md"), needle: "## Checklist", name: "utility_skill:security:checklist" },
@@ -142,6 +158,7 @@ export async function policyChecks(projectRoot: string): Promise<PolicyCheck[]> 
     { file: runtimeFile("skills/debugging/SKILL.md"), needle: "## HARD-GATE", name: "utility_skill:debugging:hard_gate" },
     { file: runtimeFile("skills/debugging/SKILL.md"), needle: "## The Protocol", name: "utility_skill:debugging:protocol" },
     { file: runtimeFile("skills/debugging/SKILL.md"), needle: "Step 1 — Reproduce", name: "utility_skill:debugging:reproduce" },
+    { file: runtimeFile("skills/debugging/SKILL.md"), needle: "## Testing-Specific Anti-Patterns", name: "utility_skill:debugging:test_antipatterns" },
 
     { file: runtimeFile("skills/performance/SKILL.md"), needle: "## HARD-GATE", name: "utility_skill:performance:hard_gate" },
     { file: runtimeFile("skills/performance/SKILL.md"), needle: "## Workflow", name: "utility_skill:performance:workflow" },
@@ -154,6 +171,22 @@ export async function policyChecks(projectRoot: string): Promise<PolicyCheck[]> 
     { file: runtimeFile("skills/docs/SKILL.md"), needle: "## HARD-GATE", name: "utility_skill:docs:hard_gate" },
     { file: runtimeFile("skills/docs/SKILL.md"), needle: "## ADR (Architecture Decision Record)", name: "utility_skill:docs:adr" },
     { file: runtimeFile("skills/docs/SKILL.md"), needle: "## README Guidance", name: "utility_skill:docs:readme" },
+    { file: runtimeFile("skills/executing-plans/SKILL.md"), needle: "## HARD-GATE", name: "utility_skill:executing_plans:hard_gate" },
+    { file: runtimeFile("skills/executing-plans/SKILL.md"), needle: "## Execution Protocol", name: "utility_skill:executing_plans:protocol" },
+    { file: runtimeFile("skills/executing-plans/SKILL.md"), needle: "## Wave Checklist", name: "utility_skill:executing_plans:waves" },
+    { file: runtimeFile("skills/context-engineering/SKILL.md"), needle: "## HARD-GATE", name: "utility_skill:context_engineering:hard_gate" },
+    { file: runtimeFile("skills/context-engineering/SKILL.md"), needle: "## Context Modes", name: "utility_skill:context_engineering:modes" },
+    { file: runtimeFile("skills/context-engineering/SKILL.md"), needle: "## Mode Switching Protocol", name: "utility_skill:context_engineering:switch" },
+    { file: runtimeFile("skills/source-driven-development/SKILL.md"), needle: "## HARD-GATE", name: "utility_skill:source_driven:hard_gate" },
+    { file: runtimeFile("skills/source-driven-development/SKILL.md"), needle: "## Protocol", name: "utility_skill:source_driven:protocol" },
+    { file: runtimeFile("skills/source-driven-development/SKILL.md"), needle: "## Selection Heuristics", name: "utility_skill:source_driven:heuristics" },
+    { file: runtimeFile("skills/frontend-accessibility/SKILL.md"), needle: "## HARD-GATE", name: "utility_skill:frontend_accessibility:hard_gate" },
+    { file: runtimeFile("skills/frontend-accessibility/SKILL.md"), needle: "## Checklist", name: "utility_skill:frontend_accessibility:checklist" },
+    { file: runtimeFile("skills/frontend-accessibility/SKILL.md"), needle: "## Anti-Patterns", name: "utility_skill:frontend_accessibility:anti_patterns" },
+    { file: runtimeFile("contexts/default.md"), needle: "Context Mode: default", name: "context_mode:default" },
+    { file: runtimeFile("contexts/execution.md"), needle: "Context Mode: execution", name: "context_mode:execution" },
+    { file: runtimeFile("contexts/review.md"), needle: "Context Mode: review", name: "context_mode:review" },
+    { file: runtimeFile("contexts/incident.md"), needle: "Context Mode: incident", name: "context_mode:incident" },
 
     { file: runtimeFile("hooks/session-start.sh"), needle: "ACTIVE_RUN=", name: "hooks:session_start:active_run" },
     { file: runtimeFile("hooks/session-start.sh"), needle: "checkpoint.json", name: "hooks:session_start:checkpoint_ref" },
@@ -162,12 +195,37 @@ export async function policyChecks(projectRoot: string): Promise<PolicyCheck[]> 
     { file: runtimeFile("hooks/session-start.sh"), needle: "context-warnings.jsonl", name: "hooks:session_start:context_warning_ref" },
     { file: runtimeFile("hooks/stop-checkpoint.sh"), needle: "checkpoint.json", name: "hooks:stop:checkpoint_write" },
     { file: runtimeFile("hooks/prompt-guard.sh"), needle: "write_to_cclaw_runtime", name: "hooks:guard:risky_write_advisory" },
+    { file: runtimeFile("hooks/workflow-guard.sh"), needle: "stage_invocation_without_recent_flow_read", name: "hooks:workflow_guard:flow_read_reason" },
+    { file: runtimeFile("hooks/workflow-guard.sh"), needle: "stage_jump_", name: "hooks:workflow_guard:stage_jump_reason" },
     { file: runtimeFile("hooks/context-monitor.sh"), needle: "remaining is", name: "hooks:context:threshold_warning" },
     { file: runtimeFile("hooks/observe.sh"), needle: "stage-activity.jsonl", name: "hooks:observe:activity_write" },
     { file: runtimeFile("hooks/summarize-observations.mjs"), needle: "frequent-errors-", name: "hooks:summarize:runtime_module" },
-    { file: runtimeFile("hooks/opencode-plugin.mjs"), needle: "activeRunId", name: "hooks:opencode:active_run" },
-    { file: ".opencode/plugins/cclaw-plugin.mjs", needle: "\"tool.execute.before\"", name: "hooks:opencode:deployed_tool_hook" }
+    { file: runtimeFile("hooks/opencode-plugin.mjs"), needle: "activeRunId", name: "hooks:opencode:active_run" }
   ];
+  if (activeHarnesses.has("opencode")) {
+    utilitySkillChecks.push({
+      file: ".opencode/plugins/cclaw-plugin.mjs",
+      needle: "\"tool.execute.before\"",
+      name: "hooks:opencode:deployed_tool_hook"
+    });
+    utilitySkillChecks.push({
+      file: ".opencode/plugins/cclaw-plugin.mjs",
+      needle: "workflow-guard.sh",
+      name: "hooks:opencode:deployed_workflow_guard"
+    });
+  }
+  if (activeHarnesses.has("cursor")) {
+    utilitySkillChecks.push({
+      file: ".cursor/rules/cclaw-workflow.mdc",
+      needle: "cclaw-managed-cursor-workflow-rule",
+      name: "rules:cursor:managed_marker"
+    });
+    utilitySkillChecks.push({
+      file: ".cursor/rules/cclaw-workflow.mdc",
+      needle: "/cc-next",
+      name: "rules:cursor:next_command_guidance"
+    });
+  }
 
   for (const check of utilitySkillChecks) {
     rules.push({

@@ -36,4 +36,37 @@ describe("config", () => {
     await expect(readConfig(root)).rejects.toThrow(/"harnesses" must be an array/);
     await expect(readConfig(root)).rejects.toThrow(/Example config:/);
   });
+
+  it("rejects unknown top-level config keys", async () => {
+    const root = await fs.mkdtemp(path.join(os.tmpdir(), "cclaw-config-unknown-key-"));
+    await fs.mkdir(path.join(root, ".cclaw"), { recursive: true });
+    await fs.writeFile(
+      configPath(root),
+      "harnesses:\n  - claude\nsurpriseMode: true\n",
+      "utf8"
+    );
+    await expect(readConfig(root)).rejects.toThrow(/unknown top-level key\(s\): surpriseMode/);
+  });
+
+  it("parses global learnings settings", async () => {
+    const root = await fs.mkdtemp(path.join(os.tmpdir(), "cclaw-config-global-learnings-"));
+    await fs.mkdir(path.join(root, ".cclaw"), { recursive: true });
+    await fs.writeFile(
+      configPath(root),
+      "harnesses:\n  - claude\nglobalLearnings: true\nglobalLearningsPath: ./shared/learnings.jsonl\npromptGuardMode: strict\ngitHookGuards: true\n",
+      "utf8"
+    );
+    const config = await readConfig(root);
+    expect(config.globalLearnings).toBe(true);
+    expect(config.globalLearningsPath).toBe("./shared/learnings.jsonl");
+    expect(config.promptGuardMode).toBe("strict");
+    expect(config.gitHookGuards).toBe(true);
+  });
+
+  it("rejects invalid prompt guard modes", async () => {
+    const root = await fs.mkdtemp(path.join(os.tmpdir(), "cclaw-config-invalid-guard-mode-"));
+    await fs.mkdir(path.join(root, ".cclaw"), { recursive: true });
+    await fs.writeFile(configPath(root), "promptGuardMode: hard\n", "utf8");
+    await expect(readConfig(root)).rejects.toThrow(/"promptGuardMode" must be "advisory" or "strict"/);
+  });
 });

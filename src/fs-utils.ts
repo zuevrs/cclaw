@@ -5,6 +5,66 @@ export async function ensureDir(dirPath: string): Promise<void> {
   await fs.mkdir(dirPath, { recursive: true });
 }
 
+function sleep(ms: number): Promise<void> {
+  return new Promise((resolve) => setTimeout(resolve, ms));
+}
+
+export interface DirectoryLockOptions {
+  retries?: number;
+  retryDelayMs?: number;
+  staleAfterMs?: number;
+}
+
+/**
+ * Acquire a lightweight lock by creating a directory.
+ * The lock is removed in a finally block.
+ */
+export async function withDirectoryLock<T>(
+  lockPath: string,
+  fn: () => Promise<T>,
+  options: DirectoryLockOptions = {}
+): Promise<T> {
+  const retries = options.retries ?? 200;
+  const retryDelayMs = options.retryDelayMs ?? 20;
+  const staleAfterMs = options.staleAfterMs ?? 60_000;
+  await ensureDir(path.dirname(lockPath));
+
+  let acquired = false;
+  for (let attempt = 0; attempt < retries; attempt += 1) {
+    try {
+      await fs.mkdir(lockPath);
+      acquired = true;
+      break;
+    } catch (error) {
+      const code = (error as NodeJS.ErrnoException | undefined)?.code;
+      if (code !== "EEXIST") {
+        throw error;
+      }
+
+      try {
+        const stat = await fs.stat(lockPath);
+        if (Date.now() - stat.mtimeMs > staleAfterMs) {
+          await fs.rm(lockPath, { recursive: true, force: true });
+          continue;
+        }
+      } catch {
+        // Lock directory disappeared between retries.
+      }
+      await sleep(retryDelayMs);
+    }
+  }
+
+  if (!acquired) {
+    throw new Error(`Failed to acquire lock: ${lockPath}`);
+  }
+
+  try {
+    return await fn();
+  } finally {
+    await fs.rm(lockPath, { recursive: true, force: true }).catch(() => {});
+  }
+}
+
 export async function writeFileSafe(filePath: string, content: string): Promise<void> {
   await ensureDir(path.dirname(filePath));
   const tempPath = path.join(

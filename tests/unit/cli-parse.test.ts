@@ -18,4 +18,10 @@ describe("cli parser", () => {
     expect(parseArgs(["resume"]).command).toBeUndefined();
     expect(parseArgs(["archive"]).command).toBeUndefined();
   });
+
+  it("parses doctor reconcile gates flag", () => {
+    const parsed = parseArgs(["doctor", "--reconcile-gates"]);
+    expect(parsed.command).toBe("doctor");
+    expect(parsed.reconcileGates).toBe(true);
+  });
 });

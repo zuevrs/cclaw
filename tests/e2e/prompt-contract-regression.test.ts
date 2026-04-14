@@ -42,7 +42,7 @@ describe("prompt-contract regression harness", () => {
     expect(reviewContract).toContain("Review Army");
   });
 
-  it("keeps advisory hooks wired for guard, context monitor, and suggestion memory", async () => {
+  it("keeps advisory hooks wired for guards, context monitor, and suggestion memory", async () => {
     const root = await fs.mkdtemp(path.join(os.tmpdir(), "cclaw-behavior-hooks-"));
     await initCclaw({ projectRoot: root });
 
@@ -50,16 +50,20 @@ describe("prompt-contract regression harness", () => {
     const cursorHooks = await fs.readFile(path.join(root, ".cursor/hooks.json"), "utf8");
     const sessionStart = await fs.readFile(path.join(root, ".cclaw/hooks/session-start.sh"), "utf8");
     const promptGuard = await fs.readFile(path.join(root, ".cclaw/hooks/prompt-guard.sh"), "utf8");
+    const workflowGuard = await fs.readFile(path.join(root, ".cclaw/hooks/workflow-guard.sh"), "utf8");
     const contextMonitor = await fs.readFile(path.join(root, ".cclaw/hooks/context-monitor.sh"), "utf8");
     const summarizeRuntime = await fs.readFile(path.join(root, ".cclaw/hooks/summarize-observations.mjs"), "utf8");
 
     expect(claudeHooks).toContain("prompt-guard.sh");
+    expect(claudeHooks).toContain("workflow-guard.sh");
     expect(claudeHooks).toContain("context-monitor.sh");
     expect(cursorHooks).toContain("prompt-guard.sh");
+    expect(cursorHooks).toContain("workflow-guard.sh");
     expect(cursorHooks).toContain("context-monitor.sh");
     expect(sessionStart).toContain("suggestion-memory.json");
     expect(sessionStart).toContain("context-warnings.jsonl");
     expect(promptGuard).toContain("write_to_cclaw_runtime");
+    expect(workflowGuard).toContain("stage_invocation_without_recent_flow_read");
     expect(contextMonitor).toContain("remaining is");
     expect(summarizeRuntime).toContain("frequent-errors-");
   });
