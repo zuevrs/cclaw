@@ -191,7 +191,7 @@ When all required gates are satisfied and the artifact is written:
 1. **Update \`${RUNTIME_ROOT}/state/flow-state.json\`:**
 ${stateUpdate}
    - For each passed gate, add an entry to \`guardEvidence\`: \`"<gate_id>": "<artifact path or excerpt proving the gate>"\`. Do NOT leave \`guardEvidence\` empty.
-2. **Sync artifact** to \`${RUNTIME_ROOT}/runs/<activeRunId>/artifacts/${schema.artifactFile}\`
+2. **Persist artifact** at \`${RUNTIME_ROOT}/artifacts/${schema.artifactFile}\`. Do NOT manually copy into run directories; cclaw sync/runtime keeps \`${RUNTIME_ROOT}/runs/<activeRunId>/artifacts/\` aligned.
 ${nextAction}
 
 **STOP.** Do not load the next stage skill yourself. The user will run \`/cc-next\` when ready (same session or new session).
@@ -309,7 +309,7 @@ function quickStartBlock(stage: FlowStage): string {
 
 > **Even if you read nothing else, do these 3 things:**
 > 1. Obey the HARD-GATE below — violating it invalidates the entire stage.
-> 2. Complete every checklist step in order and write the artifact to \`.cclaw/artifacts/${schema.artifactFile}\` (canonical run copy: \`.cclaw/runs/<activeRunId>/artifacts/${schema.artifactFile}\`).
+> 2. Complete every checklist step in order and write the artifact to \`.cclaw/artifacts/${schema.artifactFile}\`. Run snapshots in \`.cclaw/runs/<activeRunId>/artifacts/\` are synchronized by cclaw runtime.
 > 3. Do not claim completion without satisfying gates: ${topGates}${schema.requiredGates.length > 3 ? ` (+${schema.requiredGates.length - 3} more)` : ""}.
 >
 > **After this stage:** update \`flow-state.json\` and tell the user to run \`/cc-next\`.
@@ -412,7 +412,7 @@ ${progressiveDisclosureBlock(stage)}
 ${selfImprovementBlock(stage)}
 ## Handoff
 - Next command: \`/cc-next\` (loads whatever stage is current in flow-state)
-- Required artifact: \`.cclaw/artifacts/${schema.artifactFile}\` (canonical: \`.cclaw/runs/<activeRunId>/artifacts/${schema.artifactFile}\`)
+- Required artifact: \`.cclaw/artifacts/${schema.artifactFile}\` (run snapshot at \`.cclaw/runs/<activeRunId>/artifacts/${schema.artifactFile}\`, synchronized by cclaw runtime)
 - Stage stays blocked if any required gate is unsatisfied
 `;
 }

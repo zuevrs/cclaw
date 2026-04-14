@@ -1,7 +1,24 @@
 import type { FlowStage } from "../types.js";
 
 const STAGE_EXAMPLES: Record<FlowStage, string> = {
-  brainstorm: `### Alternatives comparison
+  brainstorm: `### Clarification sequence (Socratic)
+
+**Q1 (PURPOSE):** "What decision will this demo help your audience make, and who exactly is that audience?"  
+**A1:** "Internal platform team; they should see whether our release flow can be trusted."
+
+**Q2 (SCOPE):** "Which outcomes are explicitly OUT of scope for this demo so we avoid accidental expansion?"  
+**A2:** "No production rollout automation; only release metadata validation + publish safety checks."
+
+**Q3 (BOUNDARIES):** "When release metadata is missing or invalid, what should happen and what should NEVER happen?"  
+**A3:** "Must block release with a clear reason; must never auto-publish anyway."
+
+**Q4 (ENVIRONMENT):** "Where will this run in practice: local only, CI only, or both? How is it installed and invoked?"  
+**A4:** "CI-first in GitHub Actions, but reproducible locally with npm scripts."
+
+**Q5 (CONSTRAINTS):** "What constraints are non-negotiable (runtime deps, latency, compatibility, policy)?"  
+**A5:** "No new runtime dependencies; checks should stay under 2 minutes; compatible with current workflow."
+
+### Alternatives comparison
 
 | Approach | Pros | Cons | Effort | Recommendation |
 | --- | --- | --- | --- | --- |

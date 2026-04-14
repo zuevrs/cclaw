@@ -12,8 +12,8 @@ description: "Design-first stage. Clarify intent, compare options, and get expli
 
 > **Even if you read nothing else, do these 3 things:**
 > 1. Obey the HARD-GATE below — violating it invalidates the entire stage.
-> 2. Complete every checklist step in order and write the artifact to \`.cclaw/artifacts/01-brainstorm.md\` (canonical run copy: \`.cclaw/runs/<activeRunId>/artifacts/01-brainstorm.md\`).
-> 3. Do not claim completion without satisfying gates: \`brainstorm_context_explored\`, \`brainstorm_problem_restated\`, \`brainstorm_options_compared\` (+3 more).
+> 2. Complete every checklist step in order and write the artifact to \`.cclaw/artifacts/01-brainstorm.md\`. Run snapshots in \`.cclaw/runs/<activeRunId>/artifacts/\` are synchronized by cclaw runtime.
+> 3. Do not claim completion without satisfying gates: \`brainstorm_discovery_purpose\`, \`brainstorm_discovery_scope\`, \`brainstorm_discovery_boundaries\` (+7 more).
 >
 > **After this stage:** update \`flow-state.json\` and tell the user to run \`/cc-next\`.
 
@@ -95,6 +95,23 @@ You MUST complete these steps in order:
 
 Concrete samples of what good output looks like for this stage.
 
+### Clarification sequence (Socratic)
+
+**Q1 (PURPOSE):** "What decision will this demo help your audience make, and who exactly is that audience?"  
+**A1:** "Internal platform team; they should see whether our release flow can be trusted."
+
+**Q2 (SCOPE):** "Which outcomes are explicitly OUT of scope for this demo so we avoid accidental expansion?"  
+**A2:** "No production rollout automation; only release metadata validation + publish safety checks."
+
+**Q3 (BOUNDARIES):** "When release metadata is missing or invalid, what should happen and what should NEVER happen?"  
+**A3:** "Must block release with a clear reason; must never auto-publish anyway."
+
+**Q4 (ENVIRONMENT):** "Where will this run in practice: local only, CI only, or both? How is it installed and invoked?"  
+**A4:** "CI-first in GitHub Actions, but reproducible locally with npm scripts."
+
+**Q5 (CONSTRAINTS):** "What constraints are non-negotiable (runtime deps, latency, compatibility, policy)?"  
+**A5:** "No new runtime dependencies; checks should stay under 2 minutes; compatible with current workflow."
+
 ### Alternatives comparison
 
 | Approach | Pros | Cons | Effort | Recommendation |
@@ -167,7 +184,11 @@ These are thinking instincts, not a checklist. Let them shape your perspective t
 
 
 ## Required Gates
-- \`brainstorm_context_explored\` — Project context and constraints have been reviewed and summarized.
+- \`brainstorm_discovery_purpose\` — Discovery captured WHY this project exists and WHO it serves, with explicit user confirmation.
+- \`brainstorm_discovery_scope\` — Discovery captured explicit in-scope and out-of-scope boundaries before approach selection.
+- \`brainstorm_discovery_boundaries\` — Discovery captured failure modes, edge cases, and error-handling boundaries.
+- \`brainstorm_discovery_environment\` — Discovery captured runtime/install/deployment environment assumptions.
+- \`brainstorm_discovery_constraints\` — Discovery captured constraints (performance, compatibility, dependency limits) before deciding architecture.
 - \`brainstorm_problem_restated\` — Problem was restated in agent's words and user confirmed the understanding.
 - \`brainstorm_options_compared\` — At least two alternatives were compared with real trade-offs.
 - \`brainstorm_design_approved\` — User approved a concrete design direction (with explicit statement of what was approved).
@@ -176,6 +197,8 @@ These are thinking instincts, not a checklist. Let them shape your perspective t
 
 ## Required Evidence
 - [ ] Artifact written to \`.cclaw/artifacts/01-brainstorm.md\`.
+- [ ] Clarification log explicitly records PURPOSE, SCOPE, BOUNDARIES, ENVIRONMENT, and CONSTRAINTS coverage.
+- [ ] Discovery sections include explicit in-scope/out-of-scope boundaries and failure handling boundaries.
 - [ ] Approved direction captured in artifact.
 - [ ] Open questions explicitly listed (if any).
 - [ ] Self-review pass completed with no unresolved issues.
@@ -208,8 +231,14 @@ These are thinking instincts, not a checklist. Let them shape your perspective t
 
 | Section | Status | Validation Rule |
 |---|---|---|
-| Problem Statement | REQUIRED | Must describe the user problem, not the solution. Include WHO and WHY. |
+| Problem Statement | REQUIRED | Must describe the user problem, not the solution. Include WHO and WHY and success signal. |
 | Known Context | REQUIRED | Files, patterns, constraints discovered during exploration. Evidence that context was actually explored. |
+| Clarification Log | REQUIRED | At least 5 rows covering PURPOSE, SCOPE, BOUNDARIES, ENVIRONMENT, CONSTRAINTS. |
+| Purpose & Beneficiaries | REQUIRED | At least 3 meaningful lines describing why this exists and who benefits. |
+| Scope Boundaries | REQUIRED | At least 2 scope items including explicit out-of-scope boundaries. |
+| Failure Boundaries | REQUIRED | At least 2 failure/edge-case expectations and error visibility behavior. |
+| Runtime Environment | REQUIRED | At least 2 lines describing runtime, install/distribution, and execution environment. |
+| Constraints | REQUIRED | At least 2 concrete constraints (performance, compatibility, dependency, or policy). |
 | Alternatives Table | REQUIRED | At least 2 approaches with real trade-offs (not cosmetic) and recommendation with reasoning. |
 | Approved Direction | REQUIRED | Must contain explicit approval marker from user. State what was approved. |
 | Assumptions & Risks | REQUIRED | Explicit assumptions made during design. Known risks. If none, state 'None'. |
@@ -270,10 +299,10 @@ When all required gates are satisfied and the artifact is written:
 1. **Update \`.cclaw/state/flow-state.json\`:**
    - Set \`currentStage\` to \`"scope"\`
    - Add \`"brainstorm"\` to \`completedStages\` array
-   - Move all gate IDs for this stage (\`brainstorm_context_explored\`, \`brainstorm_problem_restated\`, \`brainstorm_options_compared\`, \`brainstorm_design_approved\`, \`brainstorm_self_review_passed\`, \`brainstorm_user_reviewed_artifact\`) into \`stageGateCatalog.brainstorm.passed\`
+   - Move all gate IDs for this stage (\`brainstorm_discovery_purpose\`, \`brainstorm_discovery_scope\`, \`brainstorm_discovery_boundaries\`, \`brainstorm_discovery_environment\`, \`brainstorm_discovery_constraints\`, \`brainstorm_problem_restated\`, \`brainstorm_options_compared\`, \`brainstorm_design_approved\`, \`brainstorm_self_review_passed\`, \`brainstorm_user_reviewed_artifact\`) into \`stageGateCatalog.brainstorm.passed\`
    - Clear \`stageGateCatalog.brainstorm.blocked\`
    - For each passed gate, add an entry to \`guardEvidence\`: \`"<gate_id>": "<artifact path or excerpt proving the gate>"\`. Do NOT leave \`guardEvidence\` empty.
-2. **Sync artifact** to \`.cclaw/runs/<activeRunId>/artifacts/01-brainstorm.md\`
+2. **Persist artifact** at \`.cclaw/artifacts/01-brainstorm.md\`. Do NOT manually copy into run directories; cclaw sync/runtime keeps \`.cclaw/runs/<activeRunId>/artifacts/\` aligned.
 3. Tell the user:
 
    > **Stage \`brainstorm\` complete.** Next: **scope** — strategic scope stage. Challenge premise and lock explicit in-scope/out-of-scope boundaries using CEO-level thinking.
@@ -324,7 +353,7 @@ Guidelines:
 
 ## Handoff
 - Next command: \`/cc-next\` (loads whatever stage is current in flow-state)
-- Required artifact: \`.cclaw/artifacts/01-brainstorm.md\` (canonical: \`.cclaw/runs/<activeRunId>/artifacts/01-brainstorm.md\`)
+- Required artifact: \`.cclaw/artifacts/01-brainstorm.md\` (run snapshot at \`.cclaw/runs/<activeRunId>/artifacts/01-brainstorm.md\`, synchronized by cclaw runtime)
 - Stage stays blocked if any required gate is unsatisfied
 "
 `;
@@ -339,7 +368,7 @@ Do NOT ship, merge, or release until both review layers complete with an explici
 
 ## In / Out
 - **Reads:** .cclaw/artifacts/06-tdd.md, .cclaw/artifacts/04-spec.md, .cclaw/artifacts/05-plan.md
-- **Writes:** \`.cclaw/artifacts/07-review.md\` (canonical run copy: \`.cclaw/runs/<activeRunId>/artifacts/07-review.md\`)
+- **Writes:** \`.cclaw/artifacts/07-review.md\` (run snapshot under \`.cclaw/runs/<activeRunId>/artifacts/07-review.md\` is synchronized by cclaw runtime)
 - **Next:** \`/cc-next\` (updates flow-state and loads the next stage)
 
 ## Context Hydration (mandatory before stage work)
@@ -350,7 +379,7 @@ Do NOT ship, merge, or release until both review layers complete with an explici
 - Canonical: \`.cclaw/runs/<activeRunId>/artifacts/04-spec.md\` (fallback: \`.cclaw/artifacts/04-spec.md\`)
 - Canonical: \`.cclaw/runs/<activeRunId>/artifacts/05-plan.md\` (fallback: \`.cclaw/artifacts/05-plan.md\`)
 4. If a canonical run artifact is missing, fallback to the matching file under \`.cclaw/artifacts/\` and record that fallback in the stage artifact.
-5. Write stage output to \`.cclaw/artifacts/07-review.md\` and keep canonical run copy aligned at \`.cclaw/runs/<activeRunId>/artifacts/07-review.md\`.
+5. Write stage output to \`.cclaw/artifacts/07-review.md\`. Do NOT manually copy into run directories; cclaw sync/runtime keeps run snapshots aligned.
 
 ## Gates
 \`review_layer1_spec_compliance\`, \`review_layer2_correctness\`, \`review_layer2_security\`, \`review_layer2_performance\`, \`review_layer2_architecture\`, \`review_severity_classified\`, \`review_criticals_resolved\`
@@ -381,7 +410,7 @@ Do NOT merge, push, or finalize without a passed preflight check, written rollba
 
 ## In / Out
 - **Reads:** .cclaw/artifacts/07-review.md, .cclaw/artifacts/06-tdd.md
-- **Writes:** \`.cclaw/artifacts/08-ship.md\` (canonical run copy: \`.cclaw/runs/<activeRunId>/artifacts/08-ship.md\`)
+- **Writes:** \`.cclaw/artifacts/08-ship.md\` (run snapshot under \`.cclaw/runs/<activeRunId>/artifacts/08-ship.md\` is synchronized by cclaw runtime)
 - **Next:** \`/cc-next\` (updates flow-state and loads the next stage)
 
 ## Context Hydration (mandatory before stage work)
@@ -391,7 +420,7 @@ Do NOT merge, push, or finalize without a passed preflight check, written rollba
 - Canonical: \`.cclaw/runs/<activeRunId>/artifacts/07-review.md\` (fallback: \`.cclaw/artifacts/07-review.md\`)
 - Canonical: \`.cclaw/runs/<activeRunId>/artifacts/06-tdd.md\` (fallback: \`.cclaw/artifacts/06-tdd.md\`)
 4. If a canonical run artifact is missing, fallback to the matching file under \`.cclaw/artifacts/\` and record that fallback in the stage artifact.
-5. Write stage output to \`.cclaw/artifacts/08-ship.md\` and keep canonical run copy aligned at \`.cclaw/runs/<activeRunId>/artifacts/08-ship.md\`.
+5. Write stage output to \`.cclaw/artifacts/08-ship.md\`. Do NOT manually copy into run directories; cclaw sync/runtime keeps run snapshots aligned.
 
 ## Gates
 \`ship_review_verdict_valid\`, \`ship_preflight_passed\`, \`ship_release_notes_written\`, \`ship_rollback_plan_ready\`, \`ship_finalization_mode_selected\`, \`ship_finalization_executed\`
