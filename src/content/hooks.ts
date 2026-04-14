@@ -1094,11 +1094,49 @@ export default function cclawPlugin(ctx) {
       payload?.command,
       payload?.tool?.name,
       payload?.tool?.id,
+      payload?.input?.tool,
+      payload?.input?.toolName,
+      payload?.input?.tool_name,
+      payload?.input?.name,
+      payload?.input?.id,
+      payload?.input?.command,
+      payload?.input?.tool?.name,
+      payload?.input?.tool?.id
     ];
     for (const value of candidates) {
       if (typeof value === "string" && value.trim()) return value.trim();
     }
     return "unknown";
+  }
+
+  function normalizeToolPayload(input, output) {
+    if (typeof output === "undefined") {
+      return input ?? {};
+    }
+    return {
+      input: input ?? {},
+      output: output ?? {}
+    };
+  }
+
+  function resolveEventType(payload) {
+    if (typeof payload === "string") return payload;
+    if (payload && typeof payload === "object") {
+      if (typeof payload.type === "string") return payload.type;
+      if (typeof payload.name === "string") return payload.name;
+      if (payload.event && typeof payload.event === "object") {
+        if (typeof payload.event.type === "string") return payload.event.type;
+        if (typeof payload.event.name === "string") return payload.event.name;
+      }
+    }
+    return "";
+  }
+
+  function resolveEventData(payload) {
+    if (payload && typeof payload === "object" && payload.event && typeof payload.event === "object") {
+      return payload.event;
+    }
+    return payload;
   }
 
   function appendJsonLine(filePath, value) {
@@ -1136,27 +1174,42 @@ export default function cclawPlugin(ctx) {
   }
 
   return {
-    event: async (name, data) => {
-      if (name === "session.created" || name === "session.resumed" || name === "session.compacted" || name === "session.cleared") {
+    event: async (payload) => {
+      const eventType = resolveEventType(payload);
+      const eventData = resolveEventData(payload);
+      if (eventType === "session.created" || eventType === "session.resumed" || eventType === "session.compacted" || eventType === "session.cleared") {
         emitBootstrap();
       }
-      if (name === "session.updated") {
+      if (eventType === "session.updated") {
         // no-op: tracked via activity log
       }
-      if (name === "session.idle") {
+      if (eventType === "session.idle") {
         if (!observationEnabled()) return;
         await runHookScript("summarize-observations.sh");
         await runHookScript("stop-checkpoint.sh", { loop_count: 0 });
       }
-      if (name === "tool.execute.before") {
-        await runHookScript("prompt-guard.sh", data ?? {});
-        await runHookScript("workflow-guard.sh", data ?? {});
-        recordToolEvent("pre", data);
+      if (eventType === "tool.execute.before") {
+        const toolPayload = normalizeToolPayload(eventData, undefined);
+        await runHookScript("prompt-guard.sh", toolPayload);
+        await runHookScript("workflow-guard.sh", toolPayload);
+        recordToolEvent("pre", toolPayload);
       }
-      if (name === "tool.execute.after") {
-        await runHookScript("context-monitor.sh", data ?? {});
-        recordToolEvent("post", data);
+      if (eventType === "tool.execute.after") {
+        const toolPayload = normalizeToolPayload(eventData, undefined);
+        await runHookScript("context-monitor.sh", toolPayload);
+        recordToolEvent("post", toolPayload);
       }
+    },
+    "tool.execute.before": async (input, output) => {
+      const payload = normalizeToolPayload(input, output);
+      await runHookScript("prompt-guard.sh", payload);
+      await runHookScript("workflow-guard.sh", payload);
+      recordToolEvent("pre", payload);
+    },
+    "tool.execute.after": async (input, output) => {
+      const payload = normalizeToolPayload(input, output);
+      await runHookScript("context-monitor.sh", payload);
+      recordToolEvent("post", payload);
     },
     "experimental.chat.system.transform": (payload) => {
       const bootstrap = buildBootstrap();
