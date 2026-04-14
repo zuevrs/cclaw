@@ -43,6 +43,43 @@ describe("gate evidence verification", () => {
 - Explored files: src/release.ts, .github/workflows
 - Existing behavior: manual publish steps
 
+## Clarification Log
+| Category | Question asked | User answer | Evidence note |
+|---|---|---|---|
+| PURPOSE | Why is this needed? | release hardening | user confirm |
+| SCOPE | What is excluded? | no infra migration | user confirm |
+| BOUNDARIES | Failure behavior? | fail-fast with clear logs | user confirm |
+| ENVIRONMENT | Where run? | GitHub Actions + npm | user confirm |
+| CONSTRAINTS | Constraints? | limited dependencies | user confirm |
+
+## Purpose & Beneficiaries
+- Why this exists: reduce release regressions
+- Primary users: release engineers
+- Value outcome: repeatable release flow
+
+## Scope Boundaries
+### In Scope
+- release metadata checks
+- publish workflow stability
+
+### Out of Scope
+- product feature development
+
+## Failure Boundaries
+- Edge cases: missing labels or release notes block completion
+- Failure mode: npm publish failure must stop release and preserve state
+- Error visibility: all blockers must be surfaced in CI output
+
+## Runtime Environment
+- Runtime/platform: Node.js workflow in GitHub Actions
+- Install/distribution model: npm public registry
+- Execution context: CI pipeline and release automation
+
+## Constraints
+- Performance constraints: keep release checks fast
+- Compatibility constraints: stay compatible with existing workflows
+- Dependency constraints: avoid introducing extra runtime packages
+
 ## Alternatives Table
 | Option | Summary | Trade-offs | Recommendation |
 |---|---|---|---|

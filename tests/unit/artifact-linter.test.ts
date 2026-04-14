@@ -56,6 +56,43 @@ describe("artifact linter heuristics", () => {
 - Explored files: src/release.ts, CI workflow
 - Existing behavior: manual release steps
 
+## Clarification Log
+| Category | Question asked | User answer | Evidence note |
+|---|---|---|---|
+| PURPOSE | Why now? | release quality | user message 1 |
+| SCOPE | What is out-of-scope? | no CI rewrite | user message 2 |
+| BOUNDARIES | What to do on failure? | stop + surface error | user message 3 |
+| ENVIRONMENT | Where runs? | GitHub Actions + npm | user message 4 |
+| CONSTRAINTS | Dependency limits? | no extra runtime deps | user message 5 |
+
+## Purpose & Beneficiaries
+- Why this exists: reduce release incidents
+- Primary users: release engineers
+- Value outcome: predictable cutover
+
+## Scope Boundaries
+### In Scope
+- automate publish checks
+- enforce release metadata
+
+### Out of Scope
+- no migration of deployment platform
+
+## Failure Boundaries
+- Edge case: metadata missing should block release
+- Error visibility: failed checks must be explicit in logs
+- Fallback: release stays draft until issues fixed
+
+## Runtime Environment
+- Runtime/platform: Node.js 20 in GitHub Actions
+- Install/distribution model: npm publish public package
+- Execution context: CI gate and manual release flow
+
+## Constraints
+- Performance constraints: keep release validation under 2 minutes
+- Compatibility constraints: support current GitHub Actions setup
+- Dependency constraints: avoid adding new runtime dependencies
+
 ## Alternatives Table
 | Option | Summary | Trade-offs | Recommendation |
 |---|---|---|---|

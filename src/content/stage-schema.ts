@@ -178,6 +178,8 @@ const BRAINSTORM: StageSchemaInput = {
   ],
   requiredEvidence: [
     "Artifact written to `.cclaw/artifacts/01-brainstorm.md`.",
+    "Clarification log explicitly records PURPOSE, SCOPE, BOUNDARIES, ENVIRONMENT, and CONSTRAINTS coverage.",
+    "Discovery sections include explicit in-scope/out-of-scope boundaries and failure handling boundaries.",
     "Approved direction captured in artifact.",
     "Open questions explicitly listed (if any).",
     "Self-review pass completed with no unresolved issues."
@@ -254,8 +256,14 @@ const BRAINSTORM: StageSchemaInput = {
     traceabilityRule: "Every approved direction must be traceable forward through scope and design. Downstream stages must reference brainstorm decisions."
   },
   artifactValidation: [
-    { section: "Problem Statement", required: true, validationRule: "Must describe the user problem, not the solution. Include WHO and WHY." },
+    { section: "Problem Statement", required: true, validationRule: "Must describe the user problem, not the solution. Include WHO and WHY and success signal." },
     { section: "Known Context", required: true, validationRule: "Files, patterns, constraints discovered during exploration. Evidence that context was actually explored." },
+    { section: "Clarification Log", required: true, validationRule: "At least 5 rows covering PURPOSE, SCOPE, BOUNDARIES, ENVIRONMENT, CONSTRAINTS." },
+    { section: "Purpose & Beneficiaries", required: true, validationRule: "At least 3 meaningful lines describing why this exists and who benefits." },
+    { section: "Scope Boundaries", required: true, validationRule: "At least 2 scope items including explicit out-of-scope boundaries." },
+    { section: "Failure Boundaries", required: true, validationRule: "At least 2 failure/edge-case expectations and error visibility behavior." },
+    { section: "Runtime Environment", required: true, validationRule: "At least 2 lines describing runtime, install/distribution, and execution environment." },
+    { section: "Constraints", required: true, validationRule: "At least 2 concrete constraints (performance, compatibility, dependency, or policy)." },
     { section: "Alternatives Table", required: true, validationRule: "At least 2 approaches with real trade-offs (not cosmetic) and recommendation with reasoning." },
     { section: "Approved Direction", required: true, validationRule: "Must contain explicit approval marker from user. State what was approved." },
     { section: "Assumptions & Risks", required: true, validationRule: "Explicit assumptions made during design. Known risks. If none, state 'None'." },
