@@ -31,7 +31,7 @@ export function nextCommandContract(): string {
 - **Current stage complete (all gates passed)** → advance \`currentStage\` and load the next skill.
 - **Flow complete** → report done.
 
-This is the only command the user needs to drive the entire flow. Individual \`/cc-<stage>\` commands are shortcuts for jumping to a specific stage.
+This is the only progression command the user needs to drive the entire flow. Stage command contracts are internal implementation details loaded by \`/cc-next\`.
 
 ## HARD-GATE
 
