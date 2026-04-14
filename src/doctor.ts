@@ -794,25 +794,39 @@ export async function doctorChecks(projectRoot: string, options: DoctorOptions =
         : `no gate reconciliation changes needed for stage "${reconciliation.stage}"`
     });
   }
+  const activeRunId = typeof flowState.activeRunId === "string" ? flowState.activeRunId.trim() : "";
+  const runActivationDeferred = activeRunId === "run-pending";
   checks.push({
     name: "flow_state:active_run_id",
-    ok: typeof flowState.activeRunId === "string" && flowState.activeRunId.trim().length > 0,
-    details: `${RUNTIME_ROOT}/state/flow-state.json must include activeRunId`
+    ok: activeRunId.length > 0,
+    details: `${RUNTIME_ROOT}/state/flow-state.json must include activeRunId (run-pending is allowed before first active run is materialized)`
   });
   checks.push({
     name: "run:active_artifacts",
-    ok: await exists(path.join(projectRoot, RUNTIME_ROOT, "runs", flowState.activeRunId, "artifacts")),
-    details: `${RUNTIME_ROOT}/runs/${flowState.activeRunId}/artifacts must exist`
+    ok: runActivationDeferred
+      ? true
+      : await exists(path.join(projectRoot, RUNTIME_ROOT, "runs", activeRunId, "artifacts")),
+    details: runActivationDeferred
+      ? "active run artifacts are deferred until first feature run activation"
+      : `${RUNTIME_ROOT}/runs/${activeRunId}/artifacts must exist`
   });
   checks.push({
     name: "run:active_metadata",
-    ok: await exists(path.join(projectRoot, RUNTIME_ROOT, "runs", flowState.activeRunId, "run.json")),
-    details: `${RUNTIME_ROOT}/runs/${flowState.activeRunId}/run.json must exist`
+    ok: runActivationDeferred
+      ? true
+      : await exists(path.join(projectRoot, RUNTIME_ROOT, "runs", activeRunId, "run.json")),
+    details: runActivationDeferred
+      ? "active run metadata is deferred until first feature run activation"
+      : `${RUNTIME_ROOT}/runs/${activeRunId}/run.json must exist`
   });
   checks.push({
     name: "run:active_handoff",
-    ok: await exists(path.join(projectRoot, RUNTIME_ROOT, "runs", flowState.activeRunId, "handoff.md")),
-    details: `${RUNTIME_ROOT}/runs/${flowState.activeRunId}/handoff.md must exist`
+    ok: runActivationDeferred
+      ? true
+      : await exists(path.join(projectRoot, RUNTIME_ROOT, "runs", activeRunId, "handoff.md")),
+    details: runActivationDeferred
+      ? "active run handoff is deferred until first feature run activation"
+      : `${RUNTIME_ROOT}/runs/${activeRunId}/handoff.md must exist`
   });
 
   const delegation = await checkMandatoryDelegations(projectRoot, flowState.currentStage);

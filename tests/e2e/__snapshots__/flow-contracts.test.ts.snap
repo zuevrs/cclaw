@@ -82,14 +82,15 @@ You MUST complete these steps in order:
 
 1. Explore project context — check files, docs, recent commits, existing behavior. Summarize what you found (even for seemingly simple projects).
 2. Assess scope — if the request describes multiple independent subsystems, flag for decomposition before detailed questions.
-3. Restate the problem — in a SEPARATE message (no questions in this message), summarize what you understood the user wants and why. **STOP and wait** for user to confirm or correct before asking any clarifying questions.
-4. Ask clarifying questions — one at a time, one per message. You MUST cover these categories before proposing approaches: (a) PURPOSE — why this project exists, who it serves; (b) SCOPE — what it must do, what it must NOT do; (c) BOUNDARIES — error handling, edge cases, failure modes; (d) ENVIRONMENT — how it runs, deploys, installs; (e) CONSTRAINTS — performance, compatibility, dependencies. Skip a category only if the user already provided that info. Do NOT rush — 3 generic questions are never enough for a non-trivial project.
-5. Propose 2-3 approaches — with real trade-offs (not cosmetic differences) and your explicit recommendation with reasoning. Explain WHY you recommend this option over others.
-6. Present design — in sections. After each section, explicitly state what you are asking the user to approve: 'Do you approve [specific thing]?' Never ask a bare 'одобряете?/approve?' without context.
-7. Write design doc — save to \`.cclaw/artifacts/01-brainstorm.md\`.
-8. Self-review — scan for placeholders, TBDs, contradictions, ambiguity, scope creep. Fix inline.
-9. User reviews written artifact — ask user to review the written artifact (not the chat summary). **STOP.** Do NOT proceed until user responds.
-10. Stage complete — update \`flow-state.json\` per the Stage Completion Protocol. Tell user to run \`/cc-next\` to continue to scope.
+3. Restate the problem — in a SEPARATE message (no questions in this message), summarize what you understood the user wants and why. The restatement message must contain zero clarifying questions and no option prompts. **STOP and wait** for user to confirm or correct before asking any clarifying questions.
+4. Ask clarifying questions — one at a time, one per message. Each clarification message must ask exactly one decision-seeking question (no bundled sub-questions). You MUST cover these categories before proposing approaches: (a) PURPOSE — why this project exists, who it serves; (b) SCOPE — what it must do, what it must NOT do; (c) BOUNDARIES — error handling, edge cases, failure modes; (d) ENVIRONMENT — how it runs, deploys, installs; (e) CONSTRAINTS — performance, compatibility, dependencies. Skip a category only if the user already provided that info. If user answers 'I don't know' / 'не знаю', convert it into explicit assumptions and ask for confirmation before moving on. Do NOT rush — 3 generic questions are never enough for a non-trivial project.
+5. Before proposing approaches, perform at least one premise-challenge question ("Is this the right problem framing?") and at least one boundary stress-test question ("What should never happen even on failure?").
+6. Propose 2-3 approaches — with real trade-offs (not cosmetic differences) and your explicit recommendation with reasoning. Explain WHY you recommend this option over others.
+7. Present design — in sections. After each section, explicitly state what you are asking the user to approve: 'Do you approve [specific thing]?' Never ask a bare 'одобряете?/approve?' without context.
+8. Write design doc — save to \`.cclaw/artifacts/01-brainstorm.md\`.
+9. Self-review — scan for placeholders, TBDs, contradictions, ambiguity, scope creep. Fix inline.
+10. User reviews written artifact — ask user to review the written artifact (not the chat summary). **STOP.** Do NOT proceed until user responds.
+11. Stage complete — update \`flow-state.json\` per the Stage Completion Protocol. Tell user to run \`/cc-next\` to continue to scope.
 
 ## Examples
 
@@ -111,6 +112,22 @@ Concrete samples of what good output looks like for this stage.
 
 **Q5 (CONSTRAINTS):** "What constraints are non-negotiable (runtime deps, latency, compatibility, policy)?"  
 **A5:** "No new runtime dependencies; checks should stay under 2 minutes; compatible with current workflow."
+
+### One-question-per-message discipline
+
+**Bad (bundled):** "Where will this run? Which Python version? Stdlib only? Any perf limits?"
+
+**Good (single ask):** "Where will this run in practice: local only, CI only, or both?"
+
+**Then next turn:** "Which runtime version should we lock as minimum?"
+
+**Then next turn:** "Should we treat 'stdlib-only' as a hard dependency constraint?"
+
+### Premise challenge and boundary stress-test
+
+**Premise challenge:** "If the goal is only to demonstrate filesystem I/O, why is a CLI better than a tiny script or notebook for this demo?"
+
+**Boundary stress-test:** "When a write fails midway (permissions or partial path issues), what outcome should NEVER happen?"
 
 ### Alternatives comparison
 
@@ -160,13 +177,16 @@ These are thinking instincts, not a checklist. Let them shape your perspective t
 
 ## Interaction Protocol
 1. Explore context first (files, docs, existing behavior). Share a brief summary of what you found.
-2. Restate the problem in your own words in a SEPARATE message. Do NOT add any questions to this message. Wait for user to confirm or correct.
+2. Restate the problem in your own words in a SEPARATE message. Do NOT add any questions, options, or approval asks to this message. Wait for user to confirm or correct.
 3. Ask clarifying questions — one per message. Cover mandatory categories: PURPOSE, SCOPE, BOUNDARIES, ENVIRONMENT, CONSTRAINTS. Do NOT combine questions. Do NOT propose approaches until all categories are addressed.
-4. For approach selection: use the Decision Protocol — present labeled options (A/B/C) with REAL trade-offs (not cosmetic) and mark one as (recommended) with clear reasoning. If AskQuestion/AskUserQuestion is available, send exactly ONE question per call, validate fields against runtime schema, and on schema error immediately fall back to plain-text question instead of retrying guessed payloads.
-5. Every approval question MUST state what exactly is being approved: 'Do you approve [the architecture / the API shape / the dependency choice]?' Never ask a bare 'approve?' or 'looks good?'.
-6. Get section-by-section approval before finalizing the design direction.
-7. Run a self-review pass (ambiguity, placeholders, contradictions) before handoff.
-8. **STOP.** Wait for explicit user approval after writing the artifact. Do NOT auto-advance to the next stage.
+4. Do not package multiple asks as bullet points in one message; split them into separate turns even if related.
+5. When user answer is ambiguous or unknown (for example: 'не знаю'), propose explicit defaults as assumptions and get a one-message confirmation before treating that category as closed.
+6. Include at least one premise-challenge and one boundary stress-test question before locking options. Do not accept 'simple demo' framing without challenge.
+7. For approach selection: use the Decision Protocol — present labeled options (A/B/C) with REAL trade-offs (not cosmetic) and mark one as (recommended) with clear reasoning. If AskQuestion/AskUserQuestion is available, send exactly ONE question per call, validate fields against runtime schema, and on schema error immediately fall back to plain-text question instead of retrying guessed payloads.
+8. Every approval question MUST state what exactly is being approved: 'Do you approve [the architecture / the API shape / the dependency choice]?' Never ask a bare 'approve?' or 'looks good?'.
+9. Get section-by-section approval before finalizing the design direction.
+10. Run a self-review pass (ambiguity, placeholders, contradictions) before handoff.
+11. **STOP.** Wait for explicit user approval after writing the artifact. Do NOT auto-advance to the next stage.
 
 **AskUserQuestion Format (when tool is available):**
 1. **Re-ground:** State the project, current stage, and current task. (1-2 sentences)
@@ -189,7 +209,7 @@ These are thinking instincts, not a checklist. Let them shape your perspective t
 - \`brainstorm_discovery_boundaries\` — Discovery captured failure modes, edge cases, and error-handling boundaries.
 - \`brainstorm_discovery_environment\` — Discovery captured runtime/install/deployment environment assumptions.
 - \`brainstorm_discovery_constraints\` — Discovery captured constraints (performance, compatibility, dependency limits) before deciding architecture.
-- \`brainstorm_problem_restated\` — Problem was restated in agent's words and user confirmed the understanding.
+- \`brainstorm_problem_restated\` — Problem was restated in agent's words in a standalone non-question message, and user confirmed the understanding.
 - \`brainstorm_options_compared\` — At least two alternatives were compared with real trade-offs.
 - \`brainstorm_design_approved\` — User approved a concrete design direction (with explicit statement of what was approved).
 - \`brainstorm_self_review_passed\` — Design doc passed placeholder/ambiguity/consistency checks.
@@ -198,22 +218,27 @@ These are thinking instincts, not a checklist. Let them shape your perspective t
 ## Required Evidence
 - [ ] Artifact written to \`.cclaw/artifacts/01-brainstorm.md\`.
 - [ ] Clarification log explicitly records PURPOSE, SCOPE, BOUNDARIES, ENVIRONMENT, and CONSTRAINTS coverage.
+- [ ] Clarification sequence evidence shows one explicit question per message (no bundled multi-question turns).
+- [ ] Clarification log includes at least one premise-challenge question and one boundary stress-test question before approach selection.
+- [ ] Unknown or ambiguous user answers are converted into explicit assumptions and confirmed (or explicitly waived) before closure.
 - [ ] Discovery sections include explicit in-scope/out-of-scope boundaries and failure handling boundaries.
 - [ ] Approved direction captured in artifact.
+- [ ] Restatement evidence shows a standalone non-question restatement message before clarification Q&A.
 - [ ] Open questions explicitly listed (if any).
 - [ ] Self-review pass completed with no unresolved issues.
 
 ## Process
 1. Explore project context — files, docs, behavior, recent changes. Share findings.
-2. Restate the problem — summarize what the user wants and why in a SEPARATE message. Wait for confirmation before questions.
+2. Restate the problem — summarize what the user wants and why in a SEPARATE message. Keep this message declarative only; no questions. Wait for confirmation before questions.
 3. Clarify iteratively — ask questions one at a time covering mandatory categories: PURPOSE, SCOPE, BOUNDARIES, ENVIRONMENT, CONSTRAINTS. Do not skip to approaches early.
-4. Identify whether request should be decomposed into smaller sub-problems.
-5. Offer 2-3 alternatives with real trade-offs and recommendation with rationale.
-6. Present design in sections. After each section explicitly name what you ask the user to approve.
-7. Write artifact to \`.cclaw/artifacts/01-brainstorm.md\`.
-8. Run self-review: placeholder scan, internal consistency, scope check, ambiguity check.
-9. Ask user to review the written artifact. Wait for changes or approval.
-10. Handoff to scope stage only after approval is explicit.
+4. Convert unknown answers into explicit assumptions and confirm them before approaches.
+5. Identify whether request should be decomposed into smaller sub-problems.
+6. Offer 2-3 alternatives with real trade-offs and recommendation with rationale.
+7. Present design in sections. After each section explicitly name what you ask the user to approve.
+8. Write artifact to \`.cclaw/artifacts/01-brainstorm.md\`.
+9. Run self-review: placeholder scan, internal consistency, scope check, ambiguity check.
+10. Ask user to review the written artifact. Wait for changes or approval.
+11. Handoff to scope stage only after approval is explicit.
 
 
 
@@ -233,7 +258,7 @@ These are thinking instincts, not a checklist. Let them shape your perspective t
 |---|---|---|
 | Problem Statement | REQUIRED | Must describe the user problem, not the solution. Include WHO and WHY and success signal. |
 | Known Context | REQUIRED | Files, patterns, constraints discovered during exploration. Evidence that context was actually explored. |
-| Clarification Log | REQUIRED | At least 5 rows covering PURPOSE, SCOPE, BOUNDARIES, ENVIRONMENT, CONSTRAINTS. |
+| Clarification Log | REQUIRED | At least 5 rows covering PURPOSE, SCOPE, BOUNDARIES, ENVIRONMENT, CONSTRAINTS. Table must use 4 columns: Category, Question asked, User answer, Evidence note. |
 | Purpose & Beneficiaries | REQUIRED | At least 3 meaningful lines describing why this exists and who benefits. |
 | Scope Boundaries | REQUIRED | At least 2 scope items including explicit out-of-scope boundaries. |
 | Failure Boundaries | REQUIRED | At least 2 failure/edge-case expectations and error visibility behavior. |
@@ -265,6 +290,10 @@ These are thinking instincts, not a checklist. Let them shape your perspective t
 - Jumping directly into implementation
 - Combining visual companion offer with a clarifying question
 - Invoking implementation skills before writing plans
+- Appending clarifying questions to the restatement message instead of waiting for confirmation
+- Packing multiple clarifying questions into one message (including bullet-list question bundles)
+- Silently filling defaults after 'не знаю'/'I don't know' without explicit assumption confirmation
+- Accepting 'simple/test/demo' framing without premise challenge or failure stress testing
 - Asking bare 'approve?' or 'одобряете?' without stating WHAT is being approved
 - Presenting a single summary and asking for blanket approval instead of section-by-section review
 - Rushing through clarification — asking 1-2 generic questions then jumping to design
@@ -276,6 +305,10 @@ These are thinking instincts, not a checklist. Let them shape your perspective t
 - Implementation-related actions before approval
 - Self-review skipped or glossed over
 - Artifact has TBD or placeholder sections
+- Restatement step includes clarifying questions or option prompts
+- Clarification turns repeatedly include multi-question bundles instead of single asks
+- Unknown user answers are treated as settled requirements without explicit assumption confirmation
+- No evidence of premise challenge or failure stress-test questions before options
 - Fewer than 3 clarifying questions asked for any non-trivial project
 - Approval requested without stating what exactly is being approved
 

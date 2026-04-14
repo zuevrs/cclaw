@@ -241,6 +241,46 @@ describe("hooks lifecycle rehydration", () => {
     expect(checkpoint.blockers).toEqual(["need answer from user"]);
   });
 
+  it("stop script refreshes active run snapshot and handoff", async () => {
+    const root = await fs.mkdtemp(path.join(os.tmpdir(), "cclaw-stop-run-sync-"));
+    await fs.mkdir(path.join(root, ".cclaw/state"), { recursive: true });
+    await fs.mkdir(path.join(root, ".cclaw/runs/run-abc"), { recursive: true });
+    await fs.writeFile(path.join(root, ".cclaw/state/flow-state.json"), JSON.stringify({
+      currentStage: "scope",
+      activeRunId: "run-abc",
+      completedStages: ["brainstorm"],
+      guardEvidence: { brainstorm_problem_restated: "01-brainstorm.md" },
+      stageGateCatalog: {}
+    }, null, 2), "utf8");
+    await fs.writeFile(path.join(root, ".cclaw/runs/run-abc/run.json"), JSON.stringify({
+      id: "run-abc",
+      title: "Demo run",
+      createdAt: "2026-01-01T00:00:00.000Z",
+      stateSnapshot: {
+        currentStage: "brainstorm",
+        completedStages: [],
+        guardEvidence: {},
+        stageGateCatalog: {}
+      }
+    }, null, 2), "utf8");
+    await fs.writeFile(path.join(root, ".cclaw/runs/run-abc/handoff.md"), "# stale\n", "utf8");
+
+    const result = await runScript(root, "stop-checkpoint.sh", stopCheckpointScript(), [], '{"loop_count":0}');
+    expect(result.code).toBe(0);
+
+    const runMeta = JSON.parse(
+      await fs.readFile(path.join(root, ".cclaw/runs/run-abc/run.json"), "utf8")
+    ) as {
+      stateSnapshot?: { currentStage?: string; completedStages?: string[] };
+    };
+    expect(runMeta.stateSnapshot?.currentStage).toBe("scope");
+    expect(runMeta.stateSnapshot?.completedStages).toEqual(["brainstorm"]);
+
+    const handoff = await fs.readFile(path.join(root, ".cclaw/runs/run-abc/handoff.md"), "utf8");
+    expect(handoff).toContain("Active stage: scope");
+    expect(handoff).toContain("Completed stages: brainstorm");
+  });
+
   it("observe script appends stage activity entries", () => {
     const script = observeScript();
     expect(script).toContain("ACTIVITY_FILE=");
@@ -374,6 +414,34 @@ describe("hooks lifecycle rehydration", () => {
       })
     );
     expect(allowCclaw.code).toBe(0);
+  });
+
+  it("workflow guard resolves nested opencode payload tool names", async () => {
+    const root = await fs.mkdtemp(path.join(os.tmpdir(), "cclaw-wg-nested-tool-"));
+    await fs.mkdir(path.join(root, ".cclaw/state"), { recursive: true });
+    await fs.writeFile(path.join(root, ".cclaw/state/flow-state.json"), JSON.stringify({
+      currentStage: "brainstorm",
+      activeRunId: "run-nested",
+      completedStages: []
+    }, null, 2), "utf8");
+
+    const result = await runScript(
+      root,
+      "workflow-guard.sh",
+      workflowGuardScript(),
+      [],
+      JSON.stringify({
+        input: {
+          tool: "Write",
+          tool_input: { file_path: "src/main.ts", content: "hello" }
+        },
+        output: {}
+      })
+    );
+    expect(result.code).toBe(1);
+    const log = await fs.readFile(path.join(root, ".cclaw/state/workflow-guard.jsonl"), "utf8");
+    expect(log).toContain('"tool":"Write"');
+    expect(log).toContain("implementation_write_before");
   });
 
   it("workflow guard warns on non-safe tools during pre-implementation stages", async () => {

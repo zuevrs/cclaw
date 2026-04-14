@@ -45,7 +45,7 @@ INPUT=$(cat 2>/dev/null || echo '{}')
 TOOL="unknown"
 PAYLOAD=""
 if command -v jq >/dev/null 2>&1; then
-  TOOL=$(printf '%s' "$INPUT" | jq -r '.tool_name // .tool // "unknown"' 2>/dev/null || echo "unknown")
+  TOOL=$(printf '%s' "$INPUT" | jq -r '.tool_name // .tool // .toolName // .name // .id // .command // .tool.name // .tool.id // .input.tool_name // .input.tool // .input.toolName // .input.name // .input.id // .input.command // .input.tool.name // .input.tool.id // "unknown"' 2>/dev/null || echo "unknown")
   PAYLOAD=$(printf '%s' "$INPUT" | jq -r '.tool_input // .input // .arguments // .params // .payload // {} | tostring' 2>/dev/null || echo "")
 elif command -v python3 >/dev/null 2>&1; then
   TOOL=$(INPUT_JSON="$INPUT" python3 - <<'PY'
@@ -56,8 +56,40 @@ try:
     value = json.loads(os.environ.get("INPUT_JSON", "{}"))
 except Exception:
     value = {}
-tool = value.get("tool_name") or value.get("tool") or "unknown"
-print(tool if isinstance(tool, str) else "unknown")
+
+def pick_tool(payload):
+    if not isinstance(payload, dict):
+        return "unknown"
+    candidates = [
+        payload.get("tool_name"),
+        payload.get("tool"),
+        payload.get("toolName"),
+        payload.get("name"),
+        payload.get("id"),
+        payload.get("command")
+    ]
+    top_tool = payload.get("tool")
+    if isinstance(top_tool, dict):
+        candidates.extend([top_tool.get("name"), top_tool.get("id")])
+    nested = payload.get("input")
+    if isinstance(nested, dict):
+        candidates.extend([
+            nested.get("tool_name"),
+            nested.get("tool"),
+            nested.get("toolName"),
+            nested.get("name"),
+            nested.get("id"),
+            nested.get("command")
+        ])
+        nested_tool = nested.get("tool")
+        if isinstance(nested_tool, dict):
+            candidates.extend([nested_tool.get("name"), nested_tool.get("id")])
+    for candidate in candidates:
+        if isinstance(candidate, str) and candidate.strip():
+            return candidate.strip()
+    return "unknown"
+
+print(pick_tool(value))
 PY
 )
   PAYLOAD=$(printf '%s' "$INPUT")
@@ -153,7 +185,7 @@ INPUT=$(cat 2>/dev/null || echo '{}')
 TOOL="unknown"
 PAYLOAD=""
 if command -v jq >/dev/null 2>&1; then
-  TOOL=$(printf '%s' "$INPUT" | jq -r '.tool_name // .tool // "unknown"' 2>/dev/null || echo "unknown")
+  TOOL=$(printf '%s' "$INPUT" | jq -r '.tool_name // .tool // .toolName // .name // .id // .command // .tool.name // .tool.id // .input.tool_name // .input.tool // .input.toolName // .input.name // .input.id // .input.command // .input.tool.name // .input.tool.id // "unknown"' 2>/dev/null || echo "unknown")
   PAYLOAD=$(printf '%s' "$INPUT" | jq -r '.tool_input // .input // .arguments // .params // .payload // {} | tostring' 2>/dev/null || echo "")
 elif command -v python3 >/dev/null 2>&1; then
   TOOL=$(INPUT_JSON="$INPUT" python3 - <<'PY'
@@ -163,8 +195,40 @@ try:
     value = json.loads(os.environ.get("INPUT_JSON", "{}"))
 except Exception:
     value = {}
-tool = value.get("tool_name") or value.get("tool") or "unknown"
-print(tool if isinstance(tool, str) else "unknown")
+
+def pick_tool(payload):
+    if not isinstance(payload, dict):
+        return "unknown"
+    candidates = [
+        payload.get("tool_name"),
+        payload.get("tool"),
+        payload.get("toolName"),
+        payload.get("name"),
+        payload.get("id"),
+        payload.get("command")
+    ]
+    top_tool = payload.get("tool")
+    if isinstance(top_tool, dict):
+        candidates.extend([top_tool.get("name"), top_tool.get("id")])
+    nested = payload.get("input")
+    if isinstance(nested, dict):
+        candidates.extend([
+            nested.get("tool_name"),
+            nested.get("tool"),
+            nested.get("toolName"),
+            nested.get("name"),
+            nested.get("id"),
+            nested.get("command")
+        ])
+        nested_tool = nested.get("tool")
+        if isinstance(nested_tool, dict):
+            candidates.extend([nested_tool.get("name"), nested_tool.get("id")])
+    for candidate in candidates:
+        if isinstance(candidate, str) and candidate.strip():
+            return candidate.strip()
+    return "unknown"
+
+print(pick_tool(value))
 PY
 )
   PAYLOAD=$(printf '%s' "$INPUT")
@@ -535,7 +599,7 @@ INPUT=$(cat 2>/dev/null || echo '{}')
 TOOL="unknown"
 PAYLOAD=""
 if command -v jq >/dev/null 2>&1; then
-  TOOL=$(echo "$INPUT" | jq -r '.tool_name // .tool // "unknown"' 2>/dev/null || echo "unknown")
+  TOOL=$(echo "$INPUT" | jq -r '.tool_name // .tool // .toolName // .name // .id // .command // .tool.name // .tool.id // .input.tool_name // .input.tool // .input.toolName // .input.name // .input.id // .input.command // .input.tool.name // .input.tool.id // "unknown"' 2>/dev/null || echo "unknown")
   if [ "$PHASE" = "pre" ]; then
     PAYLOAD=$(echo "$INPUT" | jq -r --arg max "$MAX_LEN" '.tool_input // .input // {} | tostring | .[0:($max|tonumber)]' 2>/dev/null || echo "")
   else
