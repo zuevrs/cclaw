@@ -285,6 +285,53 @@ describe("hooks lifecycle rehydration", () => {
     expect((state.lastAdvisoryAt ?? "").length).toBeGreaterThan(0);
   });
 
+  it("observe post syncs run artifacts incrementally", async () => {
+    const root = await fs.mkdtemp(path.join(os.tmpdir(), "cclaw-observe-run-sync-"));
+    await fs.mkdir(path.join(root, ".cclaw/state"), { recursive: true });
+    await fs.mkdir(path.join(root, ".cclaw/artifacts"), { recursive: true });
+    await fs.mkdir(path.join(root, ".cclaw/runs/run-sync/artifacts"), { recursive: true });
+    await fs.writeFile(path.join(root, ".cclaw/state/flow-state.json"), JSON.stringify({
+      currentStage: "build",
+      activeRunId: "run-sync",
+      completedStages: ["brainstorm", "scope", "design", "spec", "plan", "test"]
+    }, null, 2), "utf8");
+
+    const activeKeep = path.join(root, ".cclaw/artifacts/keep.md");
+    const activeUpdated = path.join(root, ".cclaw/artifacts/updated.md");
+    const activeAdded = path.join(root, ".cclaw/artifacts/added.md");
+    await fs.writeFile(activeKeep, "same", "utf8");
+    await fs.writeFile(activeUpdated, "new-content", "utf8");
+    await fs.writeFile(activeAdded, "added-content", "utf8");
+
+    const runKeep = path.join(root, ".cclaw/runs/run-sync/artifacts/keep.md");
+    const runUpdated = path.join(root, ".cclaw/runs/run-sync/artifacts/updated.md");
+    const runStale = path.join(root, ".cclaw/runs/run-sync/artifacts/stale.md");
+    await fs.writeFile(runKeep, "same", "utf8");
+    await fs.writeFile(runUpdated, "old-content", "utf8");
+    await fs.writeFile(runStale, "stale-content", "utf8");
+
+    const fixedTime = new Date("2001-01-01T00:00:00Z");
+    await fs.utimes(runKeep, fixedTime, fixedTime);
+    const keepBefore = await fs.stat(runKeep);
+
+    const result = await runScript(
+      root,
+      "observe-run-sync.sh",
+      observeScript(),
+      ["post"],
+      JSON.stringify({ tool_name: "Write", tool_output: "sync" })
+    );
+    expect(result.code).toBe(0);
+
+    const keepAfter = await fs.stat(runKeep);
+    expect(Math.abs(keepAfter.mtimeMs - keepBefore.mtimeMs)).toBeLessThan(5);
+    const updatedAfter = await fs.readFile(runUpdated, "utf8");
+    expect(updatedAfter).toBe("new-content");
+    const addedAfter = await fs.readFile(path.join(root, ".cclaw/runs/run-sync/artifacts/added.md"), "utf8");
+    expect(addedAfter).toBe("added-content");
+    await expect(fs.stat(runStale)).rejects.toThrow();
+  });
+
   it("observe and summarize scripts execute end-to-end", async () => {
     const root = await fs.mkdtemp(path.join(os.tmpdir(), "cclaw-observe-runtime-"));
     await fs.mkdir(path.join(root, ".cclaw/state"), { recursive: true });

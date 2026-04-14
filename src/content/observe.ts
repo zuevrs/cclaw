@@ -210,15 +210,32 @@ sync_run_artifacts() {
   [ -d "$active_dir" ] || return
   mkdir -p "$run_dir" 2>/dev/null || return
 
-  for file in "$run_dir"/*; do
-    [ -e "$file" ] || continue
-    [ -f "$file" ] && rm -f "$file" 2>/dev/null || true
+  for run_file in "$run_dir"/*; do
+    [ -e "$run_file" ] || continue
+    [ -f "$run_file" ] || continue
+    local base_name
+    base_name=$(basename "$run_file")
+    local active_file="$active_dir/$base_name"
+    if [ ! -f "$active_file" ]; then
+      rm -f "$run_file" 2>/dev/null || true
+      continue
+    fi
+    if command -v cmp >/dev/null 2>&1 && cmp -s "$active_file" "$run_file" 2>/dev/null; then
+      continue
+    fi
+    cp "$active_file" "$run_file" 2>/dev/null || true
   done
 
-  for file in "$active_dir"/*; do
-    [ -e "$file" ] || continue
-    [ -f "$file" ] || continue
-    cp "$file" "$run_dir/" 2>/dev/null || true
+  for active_file in "$active_dir"/*; do
+    [ -e "$active_file" ] || continue
+    [ -f "$active_file" ] || continue
+    local base_name
+    base_name=$(basename "$active_file")
+    local run_file="$run_dir/$base_name"
+    if [ -f "$run_file" ] && command -v cmp >/dev/null 2>&1 && cmp -s "$active_file" "$run_file" 2>/dev/null; then
+      continue
+    fi
+    cp "$active_file" "$run_file" 2>/dev/null || true
   done
 }
 
