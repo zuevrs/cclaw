@@ -15,7 +15,7 @@ description: "Design-first stage. Clarify intent, compare options, and get expli
 > 2. Complete every checklist step in order and write the artifact to \`.cclaw/artifacts/01-brainstorm.md\` (canonical run copy: \`.cclaw/runs/<activeRunId>/artifacts/01-brainstorm.md\`).
 > 3. Do not claim completion without satisfying gates: \`brainstorm_context_explored\`, \`brainstorm_options_compared\`, \`brainstorm_design_approved\` (+2 more).
 >
-> **Next command after this stage:** /cc-scope
+> **After this stage:** update \`flow-state.json\` and tell the user to run \`/cc-next\`.
 
 ## Overview
 Turn a rough request into an approved design direction with clear assumptions and boundaries.
@@ -88,7 +88,7 @@ You MUST complete these steps in order:
 6. Write design doc — save to \`.cclaw/artifacts/01-brainstorm.md\`.
 7. Self-review — scan for placeholders, TBDs, contradictions, ambiguity, scope creep. Fix inline.
 8. User reviews written artifact — ask user to review before proceeding. **STOP.** Do NOT proceed until user responds.
-9. Transition — invoke /cc-scope only after explicit user approval. **STOP.** Do NOT auto-advance to scope.
+9. Stage complete — update \`flow-state.json\` per the Stage Completion Protocol. Tell user to run \`/cc-next\` to continue to scope.
 
 ## Examples
 
@@ -248,12 +248,19 @@ When this stage ends, report one of:
 - [ ] no implementation action taken
 - [ ] self-review completed with fixes applied
 
-## Stage transition (gate chain)
+## Stage Completion Protocol
 
-**STOP.** This stage requires explicit user confirmation before advancing.
-Even if project config has \`autoAdvance: true\`, this stage's pause rule takes precedence.
-Do NOT auto-advance after gates pass. Present a summary of completed gates and suggest \`/cc-scope\`, then wait for explicit user approval.
+When all required gates are satisfied and the artifact is written:
 
+1. **Update \`.cclaw/state/flow-state.json\`:**
+   - Set \`currentStage\` to \`"scope"\`
+   - Add \`"brainstorm"\` to \`completedStages\` array
+   - Move all gate IDs for this stage (\`brainstorm_context_explored\`, \`brainstorm_options_compared\`, \`brainstorm_design_approved\`, \`brainstorm_self_review_passed\`, \`brainstorm_user_reviewed_artifact\`) into \`stageGateCatalog.brainstorm.passed\`
+   - Clear \`stageGateCatalog.brainstorm.blocked\`
+2. **Sync artifact** to \`.cclaw/runs/<activeRunId>/artifacts/01-brainstorm.md\`
+3. Tell the user: **"Stage \`brainstorm\` complete. Next stage: \`scope\`. Run \`/cc-next\` to continue."**
+
+**STOP.** Do not load the next stage skill yourself. The user will run \`/cc-next\` when ready (same session or new session).
 
 ## Progressive Disclosure
 
@@ -266,9 +273,8 @@ Do NOT auto-advance after gates pass. Present a summary of completed gates and s
 ### See also
 - Meta routing and activation rules: \`.cclaw/skills/using-cclaw/SKILL.md\`
 - Session continuity and checkpoint behavior: \`.cclaw/skills/session/SKILL.md\`
-- \`.cclaw/skills/autoplan/SKILL.md\` — when the user wants brainstorm→plan orchestration in one flow
 - \`.cclaw/skills/learnings/SKILL.md\` — to capture durable framing insights early
-- Next-stage handoff command: \`/cc-scope\`
+- Progression command: \`/cc-next\` (reads flow-state, loads the next stage)
 
 ## Operational Self-Improvement
 
@@ -290,7 +296,7 @@ Guidelines:
 - Confidence 1-3: uncertain pattern. 4-6: likely pattern. 7-9: confirmed pattern. 10: absolute rule.
 
 ## Handoff
-- Next command: /cc-scope
+- Next command: \`/cc-next\` (loads whatever stage is current in flow-state)
 - Required artifact: \`.cclaw/artifacts/01-brainstorm.md\` (canonical: \`.cclaw/runs/<activeRunId>/artifacts/01-brainstorm.md\`)
 - Stage stays blocked if any required gate is unsatisfied
 "
@@ -307,7 +313,7 @@ Do NOT ship, merge, or release until both review layers complete with an explici
 ## In / Out
 - **Reads:** .cclaw/artifacts/06-tdd.md, .cclaw/artifacts/04-spec.md, .cclaw/artifacts/05-plan.md
 - **Writes:** \`.cclaw/artifacts/07-review.md\` (canonical run copy: \`.cclaw/runs/<activeRunId>/artifacts/07-review.md\`)
-- **Next:** /cc-ship
+- **Next:** \`/cc-next\` (updates flow-state and loads the next stage)
 
 ## Context Hydration (mandatory before stage work)
 1. Read \`.cclaw/state/flow-state.json\` and capture \`activeRunId\`.
@@ -349,7 +355,7 @@ Do NOT merge, push, or finalize without a passed preflight check, written rollba
 ## In / Out
 - **Reads:** .cclaw/artifacts/07-review.md, .cclaw/artifacts/06-tdd.md
 - **Writes:** \`.cclaw/artifacts/08-ship.md\` (canonical run copy: \`.cclaw/runs/<activeRunId>/artifacts/08-ship.md\`)
-- **Next:** none
+- **Next:** \`/cc-next\` (updates flow-state and loads the next stage)
 
 ## Context Hydration (mandatory before stage work)
 1. Read \`.cclaw/state/flow-state.json\` and capture \`activeRunId\`.

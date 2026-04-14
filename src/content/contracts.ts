@@ -1,10 +1,9 @@
 import type { FlowStage } from "../types.js";
-import { nextCclawCommand, stageSchema } from "./stage-schema.js";
+import { stageSchema } from "./stage-schema.js";
 import { stageSkillFolder } from "./skills.js";
 
 export function commandContract(stage: FlowStage): string {
   const schema = stageSchema(stage);
-  const nextCommand = nextCclawCommand(stage);
   const skillPath = `.cclaw/skills/${stageSkillFolder(stage)}/SKILL.md`;
   const reads = schema.crossStageTrace.readsFrom;
   const readsLine = reads.length > 0 ? reads.join(", ") : "(first stage)";
@@ -32,7 +31,7 @@ ${schema.hardGate}
 ## In / Out
 - **Reads:** ${readsLine}
 - **Writes:** \`.cclaw/artifacts/${schema.artifactFile}\` (canonical run copy: \`.cclaw/runs/<activeRunId>/artifacts/${schema.artifactFile}\`)
-- **Next:** ${nextCommand}
+- **Next:** \`/cc-next\` (updates flow-state and loads the next stage)
 
 ## Context Hydration (mandatory before stage work)
 1. Read \`.cclaw/state/flow-state.json\` and capture \`activeRunId\`.
