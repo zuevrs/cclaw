@@ -1,6 +1,7 @@
 import fs from "node:fs/promises";
 import path from "node:path";
 import { execFile } from "node:child_process";
+import { pathToFileURL } from "node:url";
 import { promisify } from "node:util";
 import { COMMAND_FILE_ORDER, REQUIRED_DIRS, RUNTIME_ROOT } from "./constants.js";
 import { CCLAW_AGENTS } from "./content/agents.js";
@@ -195,6 +196,50 @@ async function opencodeRegistrationCheck(projectRoot: string): Promise<{ ok: boo
   }
 
   return { ok: false, details: `No opencode.json/opencode.jsonc found with plugin ${expected}` };
+}
+
+async function opencodePluginRuntimeShapeCheck(projectRoot: string): Promise<{ ok: boolean; details: string }> {
+  const pluginPath = path.join(projectRoot, ".opencode/plugins/cclaw-plugin.mjs");
+  if (!(await exists(pluginPath))) {
+    return { ok: false, details: `${path.relative(projectRoot, pluginPath)} not found` };
+  }
+
+  try {
+    const moduleUrl = `${pathToFileURL(pluginPath).href}?doctor=${Date.now()}`;
+    const imported = await import(moduleUrl) as { default?: unknown };
+    if (typeof imported.default !== "function") {
+      return {
+        ok: false,
+        details: `${path.relative(projectRoot, pluginPath)} must export a default plugin factory function`
+      };
+    }
+
+    const plugin = imported.default({ directory: projectRoot }) as Record<string, unknown>;
+    const requiredHandlers = [
+      "event",
+      "tool.execute.before",
+      "tool.execute.after",
+      "experimental.chat.system.transform"
+    ];
+    const missing = requiredHandlers.filter((name) => typeof plugin?.[name] !== "function");
+    if (missing.length > 0) {
+      return {
+        ok: false,
+        details: `${path.relative(projectRoot, pluginPath)} missing runtime handlers: ${missing.join(", ")}`
+      };
+    }
+
+    await (plugin.event as (payload: unknown) => Promise<void>)({ event: { type: "session.updated", data: {} } });
+    return {
+      ok: true,
+      details: `${path.relative(projectRoot, pluginPath)} exports compatible runtime handler shape`
+    };
+  } catch (error) {
+    return {
+      ok: false,
+      details: `runtime load failed for .opencode/plugins/cclaw-plugin.mjs: ${error instanceof Error ? error.message : String(error)}`
+    };
+  }
 }
 
 export async function doctorChecks(projectRoot: string, options: DoctorOptions = {}): Promise<DoctorCheck[]> {
@@ -633,6 +678,12 @@ export async function doctorChecks(projectRoot: string, options: DoctorOptions =
       ok,
       details: `${file} must include event lifecycle handler, tool.execute.before/after with prompt/workflow/context hooks, session.idle summarization, and transform rehydration`
     });
+    const runtimeShape = await opencodePluginRuntimeShapeCheck(projectRoot);
+    checks.push({
+      name: "hook:opencode:runtime_shape",
+      ok: runtimeShape.ok,
+      details: runtimeShape.details
+    });
     const registration = await opencodeRegistrationCheck(projectRoot);
     checks.push({
       name: "hook:opencode:config_registration",
@@ -760,8 +811,8 @@ export async function doctorChecks(projectRoot: string, options: DoctorOptions =
   });
   checks.push({
     name: "run:active_handoff",
-    ok: await exists(path.join(projectRoot, RUNTIME_ROOT, "runs", flowState.activeRunId, "00-handoff.md")),
-    details: `${RUNTIME_ROOT}/runs/${flowState.activeRunId}/00-handoff.md must exist`
+    ok: await exists(path.join(projectRoot, RUNTIME_ROOT, "runs", flowState.activeRunId, "handoff.md")),
+    details: `${RUNTIME_ROOT}/runs/${flowState.activeRunId}/handoff.md must exist`
   });
 
   const delegation = await checkMandatoryDelegations(projectRoot, flowState.currentStage);

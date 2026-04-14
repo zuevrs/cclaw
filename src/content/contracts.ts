@@ -30,7 +30,7 @@ ${schema.hardGate}
 
 ## In / Out
 - **Reads:** ${readsLine}
-- **Writes:** \`.cclaw/artifacts/${schema.artifactFile}\` (canonical run copy: \`.cclaw/runs/<activeRunId>/artifacts/${schema.artifactFile}\`)
+- **Writes:** \`.cclaw/artifacts/${schema.artifactFile}\` (run snapshot under \`.cclaw/runs/<activeRunId>/artifacts/${schema.artifactFile}\` is synchronized by cclaw runtime)
 - **Next:** \`/cc-next\` (updates flow-state and loads the next stage)
 
 ## Context Hydration (mandatory before stage work)
@@ -39,7 +39,7 @@ ${schema.hardGate}
 3. Load required upstream artifacts for this stage:
 ${hydrationLines}
 4. If a canonical run artifact is missing, fallback to the matching file under \`.cclaw/artifacts/\` and record that fallback in the stage artifact.
-5. Write stage output to \`.cclaw/artifacts/${schema.artifactFile}\` and keep canonical run copy aligned at \`.cclaw/runs/<activeRunId>/artifacts/${schema.artifactFile}\`.
+5. Write stage output to \`.cclaw/artifacts/${schema.artifactFile}\`. Do NOT manually copy into run directories; cclaw sync/runtime keeps run snapshots aligned.
 
 ## Gates
 ${gateIds}
