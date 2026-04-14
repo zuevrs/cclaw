@@ -115,6 +115,78 @@ describe("artifact linter heuristics", () => {
     expect(result.passed).toBe(true);
   });
 
+  it("fails brainstorm clarification log when evidence note column is missing", async () => {
+    const root = await fs.mkdtemp(path.join(os.tmpdir(), "cclaw-artifact-lint-clarification-columns-"));
+    await writeRuntimeArtifact(root, "01-brainstorm.md", `# Brainstorm Artifact
+
+## Problem Statement
+- User problem: add robust automation
+- Who benefits: platform team
+- Why now: reliability incidents increasing
+
+## Known Context
+- Explored files: src/release.ts, CI workflow
+- Existing behavior: manual release steps
+
+## Clarification Log
+| Category | Question asked | User answer |
+|---|---|---|
+| PURPOSE | Why now? | release quality |
+| SCOPE | What is out-of-scope? | no CI rewrite |
+| BOUNDARIES | What to do on failure? | stop + surface error |
+| ENVIRONMENT | Where runs? | GitHub Actions + npm |
+| CONSTRAINTS | Dependency limits? | no extra runtime deps |
+
+## Purpose & Beneficiaries
+- Why this exists: reduce release incidents
+- Primary users: release engineers
+- Value outcome: predictable cutover
+
+## Scope Boundaries
+### In Scope
+- automate publish checks
+- enforce release metadata
+
+### Out of Scope
+- no migration of deployment platform
+
+## Failure Boundaries
+- Edge case: metadata missing should block release
+- Error visibility: failed checks must be explicit in logs
+
+## Runtime Environment
+- Runtime/platform: Node.js 20 in GitHub Actions
+- Install/distribution model: npm publish public package
+
+## Constraints
+- Performance constraints: keep release validation under 2 minutes
+- Compatibility constraints: support current GitHub Actions setup
+
+## Alternatives Table
+| Option | Summary | Trade-offs | Recommendation |
+|---|---|---|---|
+| A | conservative | low risk |  |
+| B | broader | higher blast radius | recommended |
+
+## Approved Direction
+- Selected option: B
+- What was approved: broader refactor approach
+- Approval marker: approved by user
+
+## Assumptions & Risks
+- Assumes CI pipeline is stable
+
+## Open Questions
+- None
+`);
+
+    const result = await lintArtifact(root, "brainstorm");
+    const clarification = result.findings.find((finding) => finding.section === "Clarification Log");
+    expect(result.passed).toBe(false);
+    expect(clarification?.found).toBe(false);
+    expect(clarification?.details).toContain("Clarification Log header");
+  });
+
   it("enforces exactly one selected enum token in finalization", async () => {
     const root = await fs.mkdtemp(path.join(os.tmpdir(), "cclaw-artifact-lint-enum-"));
     await writeRuntimeArtifact(root, "08-ship.md", `# Ship Artifact

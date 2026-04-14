@@ -25,6 +25,10 @@ interface CreateRunOptions {
   seedFromActiveArtifacts?: boolean;
 }
 
+interface EnsureRunSystemOptions {
+  createIfMissing?: boolean;
+}
+
 function flowStatePath(projectRoot: string): string {
   return path.join(projectRoot, FLOW_STATE_REL_PATH);
 }
@@ -392,16 +396,23 @@ async function ensureRunHandoff(projectRoot: string, runId: string): Promise<voi
   await writeFileSafe(runHandoffPath(projectRoot, runId), handoffMarkdown(meta, state));
 }
 
-export async function ensureRunSystem(projectRoot: string): Promise<FlowState> {
+export async function ensureRunSystem(
+  projectRoot: string,
+  options: EnsureRunSystemOptions = {}
+): Promise<FlowState> {
   await ensureDir(runsRoot(projectRoot));
   await ensureDir(activeArtifactsPath(projectRoot));
 
   let state = await readFlowState(projectRoot);
   let activeRunId = state.activeRunId;
+  const createIfMissing = options.createIfMissing !== false;
 
   const activeRunExists =
     activeRunId.trim().length > 0 && (await exists(runArtifactsPath(projectRoot, activeRunId)));
   if (!activeRunExists) {
+    if (!createIfMissing) {
+      return state;
+    }
     const activeHasArtifacts = (await listImmediateFiles(activeArtifactsPath(projectRoot))).length > 0;
     const initialRun = await createRun(projectRoot, {
       title: activeHasArtifacts ? "Migrated active run" : "Initial feature run",

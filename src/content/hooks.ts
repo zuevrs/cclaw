@@ -690,9 +690,98 @@ if [ "$CHECKPOINT_WRITTEN" -eq 0 ]; then
   CHECKPOINT_NOTE="Checkpoint update failed. Review ${RUNTIME_ROOT}/state/checkpoint.json manually."
 fi
 
+RUN_SYNC_NOTE="Run metadata sync skipped."
+if [ -n "$ACTIVE_RUN" ] && [ "$ACTIVE_RUN" != "none" ] && [ "$ACTIVE_RUN" != "run-pending" ]; then
+  RUN_DIR="$ROOT/${RUNTIME_ROOT}/runs/$ACTIVE_RUN"
+  RUN_META_FILE="$RUN_DIR/run.json"
+  RUN_HANDOFF_FILE="$RUN_DIR/handoff.md"
+  if [ -f "$RUN_META_FILE" ] && [ -f "$STATE_FILE" ] && command -v python3 >/dev/null 2>&1; then
+    if python3 - "$STATE_FILE" "$RUN_META_FILE" "$RUN_HANDOFF_FILE" "$ACTIVE_RUN" "$TS" <<'PY'
+import json
+import sys
+from pathlib import Path
+
+state_path, run_meta_path, handoff_path, active_run, timestamp = sys.argv[1:6]
+
+try:
+    state = json.loads(Path(state_path).read_text(encoding="utf-8"))
+except Exception:
+    raise SystemExit(1)
+
+try:
+    meta = json.loads(Path(run_meta_path).read_text(encoding="utf-8"))
+except Exception:
+    raise SystemExit(1)
+
+if not isinstance(state, dict) or not isinstance(meta, dict):
+    raise SystemExit(1)
+
+completed = state.get("completedStages")
+if not isinstance(completed, list):
+    completed = []
+completed = [stage for stage in completed if isinstance(stage, str)]
+
+guard_evidence = state.get("guardEvidence")
+if not isinstance(guard_evidence, dict):
+    guard_evidence = {}
+guard_evidence = {k: v for k, v in guard_evidence.items() if isinstance(k, str) and isinstance(v, str)}
+
+stage_gate_catalog = state.get("stageGateCatalog")
+if not isinstance(stage_gate_catalog, dict):
+    stage_gate_catalog = {}
+
+snapshot = {
+    "currentStage": state.get("currentStage") if isinstance(state.get("currentStage"), str) else "brainstorm",
+    "completedStages": completed,
+    "guardEvidence": guard_evidence,
+    "stageGateCatalog": stage_gate_catalog,
+}
+meta["stateSnapshot"] = snapshot
+Path(run_meta_path).write_text(json.dumps(meta, indent=2) + "\\n", encoding="utf-8")
+
+title = meta.get("title") if isinstance(meta.get("title"), str) and meta.get("title") else active_run
+created_at = meta.get("createdAt") if isinstance(meta.get("createdAt"), str) and meta.get("createdAt") else "unknown"
+archived_at = meta.get("archivedAt") if isinstance(meta.get("archivedAt"), str) and meta.get("archivedAt") else None
+completed_display = ", ".join(completed) if completed else "(none)"
+
+handoff_lines = [
+    "# Run Handoff",
+    "",
+    f"- ID: {active_run}",
+    f"- Title: {title}",
+    f"- Created: {created_at}",
+    f"- Archived: {archived_at if archived_at else 'active'}",
+    "",
+    "## Flow Snapshot",
+    f"- Active stage: {snapshot['currentStage']}",
+    f"- Completed stages: {completed_display}",
+    f"- Active run ID in flow-state: {state.get('activeRunId') if isinstance(state.get('activeRunId'), str) else active_run}",
+    "",
+    "## Paths",
+    f"- Active artifacts: ${RUNTIME_ROOT}/artifacts/",
+    f"- Run artifacts snapshot: ${RUNTIME_ROOT}/runs/{active_run}/artifacts/",
+    f"- Flow state: ${RUNTIME_ROOT}/state/flow-state.json",
+    "",
+    "## Resume",
+    "1. Open ${RUNTIME_ROOT}/state/flow-state.json and verify current stage.",
+    "2. Review ${RUNTIME_ROOT}/artifacts/ for the latest working artifacts.",
+    "3. Continue using /cc or /cc-next from the current stage.",
+    "",
+    f"- Last updated: {timestamp}",
+]
+Path(handoff_path).write_text("\\n".join(handoff_lines) + "\\n", encoding="utf-8")
+PY
+    then
+      RUN_SYNC_NOTE="Run metadata synchronized for $ACTIVE_RUN."
+    else
+      RUN_SYNC_NOTE="Run metadata sync failed for $ACTIVE_RUN."
+    fi
+  fi
+fi
+
 # --- Escape for JSON ---
 ${ESCAPE_FN}
-MSG=$(escape_json "Cclaw: session ending (stage=$STAGE, run=$ACTIVE_RUN). $CHECKPOINT_NOTE Before stopping: (1) confirm flow-state reflects reality, (2) ensure artifact changes match active run intent, (3) log reusable learnings, (4) commit or revert pending changes.")
+MSG=$(escape_json "Cclaw: session ending (stage=$STAGE, run=$ACTIVE_RUN). $CHECKPOINT_NOTE $RUN_SYNC_NOTE Before stopping: (1) confirm flow-state reflects reality, (2) ensure artifact changes match active run intent, (3) log reusable learnings, (4) commit or revert pending changes.")
 
 # --- Output harness-specific JSON ---
 case "$HARNESS" in

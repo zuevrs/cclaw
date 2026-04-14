@@ -39,10 +39,10 @@ describe("install lifecycle", () => {
       await fs.readFile(path.join(root, ".cclaw/state/flow-state.json"), "utf8")
     ) as { activeRunId?: string };
     expect(typeof flow.activeRunId).toBe("string");
-    expect(flow.activeRunId).toMatch(/^run-/);
+    expect(flow.activeRunId).toBe("run-pending");
     await expect(
       fs.stat(path.join(root, ".cclaw/runs", flow.activeRunId as string, "run.json"))
-    ).resolves.toBeDefined();
+    ).rejects.toBeDefined();
     await expect(fs.stat(path.join(root, ".cclaw/state/checkpoint.json"))).resolves.toBeDefined();
     await expect(fs.stat(path.join(root, ".cclaw/state/stage-activity.jsonl"))).resolves.toBeDefined();
 
