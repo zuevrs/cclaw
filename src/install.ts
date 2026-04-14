@@ -880,7 +880,7 @@ async function materializeRuntime(projectRoot: string, config: VibyConfig, force
   await writeArtifactTemplates(projectRoot);
   await writeRulebook(projectRoot);
   await writeState(projectRoot, forceStateReset);
-  await ensureRunSystem(projectRoot);
+  await ensureRunSystem(projectRoot, { createIfMissing: false });
   await ensureSessionStateFiles(projectRoot);
   await writeAdapterManifest(projectRoot, harnesses);
   await ensureLearningsStore(projectRoot);
