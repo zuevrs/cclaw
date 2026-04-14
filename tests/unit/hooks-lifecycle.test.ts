@@ -341,6 +341,90 @@ describe("hooks lifecycle rehydration", () => {
     expect(log).toContain("stage_invocation_without_recent_flow_read");
   });
 
+  it("workflow guard blocks source file writes during pre-implementation stages", async () => {
+    const root = await fs.mkdtemp(path.join(os.tmpdir(), "cclaw-wg-block-write-"));
+    await fs.mkdir(path.join(root, ".cclaw/state"), { recursive: true });
+    await fs.writeFile(path.join(root, ".cclaw/state/flow-state.json"), JSON.stringify({
+      currentStage: "brainstorm",
+      activeRunId: "run-block",
+      completedStages: []
+    }, null, 2), "utf8");
+
+    const result = await runScript(
+      root,
+      "workflow-guard.sh",
+      workflowGuardScript(),
+      [],
+      JSON.stringify({
+        tool_name: "Write",
+        tool_input: { file_path: "src/main.ts", content: "hello" }
+      })
+    );
+    expect(result.code).toBe(1);
+    expect(result.stderr).toContain("blocked by workflow guard");
+
+    const allowCclaw = await runScript(
+      root,
+      "workflow-guard.sh",
+      workflowGuardScript(),
+      [],
+      JSON.stringify({
+        tool_name: "Write",
+        tool_input: { file_path: ".cclaw/artifacts/01-brainstorm.md", content: "# Design" }
+      })
+    );
+    expect(allowCclaw.code).toBe(0);
+  });
+
+  it("workflow guard warns on non-safe tools during pre-implementation stages", async () => {
+    const root = await fs.mkdtemp(path.join(os.tmpdir(), "cclaw-wg-plan-safe-"));
+    await fs.mkdir(path.join(root, ".cclaw/state"), { recursive: true });
+    await fs.writeFile(path.join(root, ".cclaw/state/flow-state.json"), JSON.stringify({
+      currentStage: "design",
+      activeRunId: "run-safe",
+      completedStages: ["brainstorm", "scope"]
+    }, null, 2), "utf8");
+
+    const shellResult = await runScript(
+      root,
+      "workflow-guard.sh",
+      workflowGuardScript(),
+      [],
+      JSON.stringify({
+        tool_name: "Shell",
+        tool_input: { command: "npm run build" }
+      })
+    );
+    expect(shellResult.code).toBe(0);
+    expect(shellResult.stderr).toContain("non_safe_tool_in_plan_stage");
+
+    const readResult = await runScript(
+      root,
+      "workflow-guard.sh",
+      workflowGuardScript(),
+      [],
+      JSON.stringify({
+        tool_name: "Read",
+        tool_input: { path: "src/main.ts" }
+      })
+    );
+    expect(readResult.code).toBe(0);
+    expect(readResult.stderr).toBe("");
+
+    const askResult = await runScript(
+      root,
+      "workflow-guard.sh",
+      workflowGuardScript(),
+      [],
+      JSON.stringify({
+        tool_name: "AskQuestion",
+        tool_input: { question: "Which approach?" }
+      })
+    );
+    expect(askResult.code).toBe(0);
+    expect(askResult.stderr).toBe("");
+  });
+
   it("context monitor debounces warnings per band and respects TTL override", async () => {
     const root = await fs.mkdtemp(path.join(os.tmpdir(), "cclaw-context-monitor-runtime-"));
     await fs.mkdir(path.join(root, ".cclaw/state"), { recursive: true });

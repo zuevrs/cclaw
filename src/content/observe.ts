@@ -241,6 +241,32 @@ stage_index() {
   esac
 }
 
+is_mutating_tool() {
+  case "$1" in
+    write|edit|multiedit|multi_edit|delete|applypatch|apply_patch) return 0 ;;
+    *) return 1 ;;
+  esac
+}
+
+is_plan_mode_safe_tool() {
+  case "$1" in
+    read|readfile|open|view|cat|head|tail) return 0 ;;
+    grep|glob|search|semanticsearch|ripgrep|rg|find|list_directory|ls) return 0 ;;
+    askquestion|askuserquestion|ask_question|ask_user_question|question) return 0 ;;
+    todowrite|todoread|todo_write|todo_read) return 0 ;;
+    webfetch|websearch|web_fetch|web_search|fetchmcpresource) return 0 ;;
+    switchmode|switch_mode) return 0 ;;
+    *) return 1 ;;
+  esac
+}
+
+is_preimplementation_stage() {
+  case "$1" in
+    brainstorm|scope|design|spec|plan) return 0 ;;
+    *) return 1 ;;
+  esac
+}
+
 detect_target_stage() {
   local text="$1"
   for stage in brainstorm scope design spec plan test build review ship; do
@@ -260,6 +286,28 @@ if [ -n "$TARGET_STAGE" ] && [ "$CURRENT_STAGE" != "none" ]; then
   if [ "$CURRENT_IDX" -gt 0 ] && [ "$TARGET_IDX" -gt 0 ]; then
     if [ "$TARGET_IDX" -gt $((CURRENT_IDX + 1)) ]; then
       REASONS="stage_jump_\${CURRENT_STAGE}_to_\${TARGET_STAGE}"
+    fi
+  fi
+fi
+
+if is_preimplementation_stage "$CURRENT_STAGE" && is_mutating_tool "$TOOL_LOWER"; then
+  if ! printf '%s' "$PAYLOAD_LOWER" | grep -Eq '\.cclaw/'; then
+    if [ -n "$REASONS" ]; then
+      REASONS="$REASONS,implementation_write_before_\${CURRENT_STAGE}_completion"
+    else
+      REASONS="implementation_write_before_\${CURRENT_STAGE}_completion"
+    fi
+  fi
+fi
+
+if is_preimplementation_stage "$CURRENT_STAGE" && ! is_plan_mode_safe_tool "$TOOL_LOWER"; then
+  if ! is_mutating_tool "$TOOL_LOWER"; then
+    if ! printf '%s' "$PAYLOAD_LOWER" | grep -Eq '\.cclaw/'; then
+      if [ -n "$REASONS" ]; then
+        REASONS="$REASONS,non_safe_tool_in_plan_stage_\${CURRENT_STAGE}"
+      else
+        REASONS="non_safe_tool_in_plan_stage_\${CURRENT_STAGE}"
+      fi
     fi
   fi
 fi
@@ -316,7 +364,7 @@ PY
 fi
 
 if [ -n "$REASONS" ]; then
-  NOTE="Cclaw workflow guard: detected potential flow violation (\${REASONS}). Re-read ${RUNTIME_ROOT}/state/flow-state.json and continue from current stage ordering."
+  NOTE="Cclaw workflow guard: detected potential flow violation (\${REASONS}). Re-read ${RUNTIME_ROOT}/state/flow-state.json, avoid source edits before build/test stages, and continue from current stage ordering."
   if command -v jq >/dev/null 2>&1; then
     ENTRY=$(jq -n -c \
       --arg ts "$TS" \
@@ -332,8 +380,12 @@ if [ -n "$REASONS" ]; then
   if [ -n "$ENTRY" ]; then
     printf '%s\n' "$ENTRY" >> "$GUARD_LOG" 2>/dev/null || true
   fi
-  if [ "$WORKFLOW_GUARD_MODE" = "strict" ]; then
-    printf '[cclaw] %s (blocked by strict mode)\n' "$NOTE" >&2
+  SHOULD_BLOCK="false"
+  if printf '%s' "$REASONS" | grep -Eq 'implementation_write_before_'; then
+    SHOULD_BLOCK="true"
+  fi
+  if [ "$WORKFLOW_GUARD_MODE" = "strict" ] || [ "$SHOULD_BLOCK" = "true" ]; then
+    printf '[cclaw] %s (blocked by workflow guard)\n' "$NOTE" >&2
     exit 1
   fi
   printf '[cclaw] %s\n' "$NOTE" >&2
