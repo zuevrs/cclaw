@@ -3,7 +3,7 @@ import type { FlowStage } from "../types.js";
 import { stageExamples } from "./examples.js";
 import { selfImprovementBlock } from "./learnings.js";
 import type { StageSchema } from "./stage-schema.js";
-import { nextCclawCommand, QUESTION_FORMAT_SPEC, stageAutoSubagentDispatch, stageSchema } from "./stage-schema.js";
+import { nextCclawCommand, QUESTION_FORMAT_SPEC, ERROR_BUDGET_SPEC, stageAutoSubagentDispatch, stageSchema } from "./stage-schema.js";
 
 function artifactFileName(artifactPath: string): string {
   const parts = artifactPath.split("/");
@@ -374,6 +374,8 @@ ${cognitivePatternsList(stage)}
 ${schema.interactionProtocol.map((item, i) => `${i + 1}. ${item}`).join("\n")}
 
 ${QUESTION_FORMAT_SPEC}
+
+${ERROR_BUDGET_SPEC}
 
 ${waveExecutionModeBlock(stage)}
 ## Required Gates
