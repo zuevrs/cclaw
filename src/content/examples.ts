@@ -174,7 +174,7 @@ T1 ──▶ T2 ──▶ T3
 
 If T3 grows too large, split “transport” vs “UI state machine” into two tasks while keeping the dependency graph acyclic.`,
 
-  test: `### RED test (Vitest) — written before production code
+  tdd: `### RED test (Vitest) — written before production code
 
 \`\`\`typescript
 import { describe, it, expect } from "vitest";
@@ -211,9 +211,9 @@ Error: Cannot find module '../notificationFeed' imported from src/notificationFe
 ### Common mistakes to avoid
 
 - “GREEN” that secretly imports a helper that already implements the behavior (that is skipping RED).
-- Assertions that pass because the function returns \`undefined\` and the matcher is too loose.`,
+- Assertions that pass because the function returns \`undefined\` and the matcher is too loose.
 
-  build: `### GREEN (minimal implementation to pass RED)
+### GREEN (minimal implementation to pass RED)
 
 \`\`\`typescript
 export type FeedItem = { dedupeKey: string; read: boolean };

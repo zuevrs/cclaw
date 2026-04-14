@@ -329,7 +329,7 @@ describe("hooks lifecycle rehydration", () => {
       JSON.stringify({
         tool_name: "RunCommand",
         tool_input: {
-          cmd: "/cc-build"
+          cmd: "/cc-next"
         }
       })
     );
@@ -337,8 +337,7 @@ describe("hooks lifecycle rehydration", () => {
     expect(result.stderr).toContain("workflow guard");
 
     const log = await fs.readFile(path.join(root, ".cclaw/state/workflow-guard.jsonl"), "utf8");
-    expect(log).toContain("stage_jump_scope_to_build");
-    expect(log).toContain("stage_invocation_without_recent_flow_read");
+    expect(log).toContain("non_safe_tool_in_plan_stage_scope");
   });
 
   it("workflow guard blocks source file writes during pre-implementation stages", async () => {

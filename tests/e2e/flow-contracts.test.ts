@@ -28,13 +28,12 @@ describe("flow command contracts", () => {
     const root = await fs.mkdtemp(path.join(os.tmpdir(), "cclaw-tdd-"));
     await initCclaw({ projectRoot: root });
 
-    const testSkill = await fs.readFile(path.join(root, ".cclaw/skills/red-first-testing/SKILL.md"), "utf8");
-    const buildSkill = await fs.readFile(path.join(root, ".cclaw/skills/incremental-implementation/SKILL.md"), "utf8");
+    const tddSkill = await fs.readFile(path.join(root, ".cclaw/skills/test-driven-development/SKILL.md"), "utf8");
     const reviewSkill = await fs.readFile(path.join(root, ".cclaw/skills/two-layer-review/SKILL.md"), "utf8");
     const shipSkill = await fs.readFile(path.join(root, ".cclaw/skills/shipping-and-handoff/SKILL.md"), "utf8");
 
-    expect(testSkill).toContain("RED");
-    expect(buildSkill).toContain("GREEN");
+    expect(tddSkill).toContain("RED");
+    expect(tddSkill).toContain("GREEN");
     expect(reviewSkill).toContain("Layer 1");
     expect(reviewSkill).toContain("Layer 2");
     expect(shipSkill).toContain("finalization mode");

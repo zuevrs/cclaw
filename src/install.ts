@@ -803,6 +803,8 @@ async function cleanLegacyArtifacts(projectRoot: string): Promise<void> {
     "project-learnings",
     "auto-orchestration",
     "autoplan",
+    "red-first-testing",
+    "incremental-implementation",
     "subagent-driven-development",
     "dispatching-parallel-agents",
     "session-guidelines",

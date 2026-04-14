@@ -80,7 +80,7 @@ export function nextCommandSkillMarkdown(): string {
   const flowPath = flowStatePath();
   const delegationPath = delegationLogPathLine();
 
-  const stageRows = (["brainstorm", "scope", "design", "spec", "plan", "test", "build", "review", "ship"] as const)
+  const stageRows = (["brainstorm", "scope", "design", "spec", "plan", "tdd", "review", "ship"] as const)
     .map((stage) => {
       const schema = stageSchema(stage);
       const next = schema.next === "done" ? "(terminal)" : schema.next;

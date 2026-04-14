@@ -61,8 +61,7 @@ Before starting work, ALWAYS:
 | Design | \`/cc-design\` | Search before building | \`03-design.md\` |
 | Spec | \`/cc-spec\` | Observable + testable criteria | \`04-spec.md\` |
 | Plan | \`/cc-plan\` | One task = one purpose | \`05-plan.md\` |
-| Test | \`/cc-test\` | RED tests fail first | \`06-tdd.md\` |
-| Build | \`/cc-build\` | Minimal code to pass RED | \`06-tdd.md\` (shared with test) |
+| TDD | (via \`/cc-next\`) | RED → GREEN → REFACTOR per slice | \`06-tdd.md\` |
 | Review | \`/cc-review\` | Two-layer review | \`07-review.md\` |
 | Ship | \`/cc-ship\` | All tests green on merge | \`08-ship.md\` |
 

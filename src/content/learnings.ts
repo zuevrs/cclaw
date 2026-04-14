@@ -47,7 +47,7 @@ Treat learnings as durable project memory: patterns, pitfalls, preferences, arch
 **Minimal valid example (conceptual):**
 
 \`\`\`json
-{"ts":"2026-04-11T12:00:00Z","skill":"build","type":"pattern","key":"run-migrations-before-seed","insight":"Seed scripts assume schema v7; run sqlx migrate before npm run seed.","confidence":8,"source":"observed","files":["scripts/seed.ts"]}
+{"ts":"2026-04-11T12:00:00Z","skill":"tdd","type":"pattern","key":"run-migrations-before-seed","insight":"Seed scripts assume schema v7; run sqlx migrate before npm run seed.","confidence":8,"source":"observed","files":["scripts/seed.ts"]}
 \`\`\`
 
 ## Confidence Decay Rules

@@ -5,7 +5,7 @@ import { describe, expect, it } from "vitest";
 import { initCclaw } from "../../src/install.js";
 
 describe("prompt-contract regression harness", () => {
-  it("keeps stage behavior contracts for plan/review/test/build", async () => {
+  it("keeps stage behavior contracts for plan/review/tdd", async () => {
     const root = await fs.mkdtemp(path.join(os.tmpdir(), "cclaw-behavior-contract-"));
     await initCclaw({ projectRoot: root });
 
@@ -17,12 +17,8 @@ describe("prompt-contract regression harness", () => {
       path.join(root, ".cclaw/skills/two-layer-review/SKILL.md"),
       "utf8"
     );
-    const testSkill = await fs.readFile(
-      path.join(root, ".cclaw/skills/red-first-testing/SKILL.md"),
-      "utf8"
-    );
-    const buildSkill = await fs.readFile(
-      path.join(root, ".cclaw/skills/incremental-implementation/SKILL.md"),
+    const tddSkill = await fs.readFile(
+      path.join(root, ".cclaw/skills/test-driven-development/SKILL.md"),
       "utf8"
     );
     const planContract = await fs.readFile(path.join(root, ".cclaw/commands/plan.md"), "utf8");
@@ -34,8 +30,10 @@ describe("prompt-contract regression harness", () => {
     expect(planContract).toContain("Dependency Waves");
     expect(planContract).toContain("Context Hydration");
 
-    expect(testSkill).toContain("Do NOT change implementation code");
-    expect(buildSkill).toContain("Run full suite");
+    expect(tddSkill).toContain("RED");
+    expect(tddSkill).toContain("GREEN");
+    expect(tddSkill).toContain("REFACTOR");
+    expect(tddSkill).toContain("Run full suite");
     expect(reviewSkill).toContain("Layer 1");
     expect(reviewSkill).toContain("Layer 2");
     expect(reviewSkill).toContain("07-review-army.json");

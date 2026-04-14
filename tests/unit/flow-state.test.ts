@@ -17,13 +17,13 @@ describe("flow state", () => {
     expect(createInitialFlowState("run-custom").activeRunId).toBe("run-custom");
   });
 
-  it("allows test -> build and blocks test -> review", () => {
-    expect(canTransition("test", "build")).toBe(true);
-    expect(canTransition("test", "review")).toBe(false);
+  it("allows tdd -> review and blocks tdd -> ship", () => {
+    expect(canTransition("tdd", "review")).toBe(true);
+    expect(canTransition("tdd", "ship")).toBe(false);
   });
 
-  it("enforces guard list for plan -> test", () => {
-    expect(getTransitionGuards("plan", "test")).toContain("plan_wait_for_confirm");
+  it("enforces guard list for plan -> tdd", () => {
+    expect(getTransitionGuards("plan", "tdd")).toContain("plan_wait_for_confirm");
   });
 
   it("builds per-stage gate catalog in initial state", () => {

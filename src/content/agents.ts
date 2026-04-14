@@ -153,7 +153,7 @@ export const CCLAW_AGENTS: AgentDefinition[] = [
     tools: ["Read", "Write", "Edit", "Grep", "Glob", "Bash"],
     model: "balanced",
     activation: "proactive",
-    relatedStages: ["test", "build"],
+    relatedStages: ["tdd"],
     body: [
       "You are a **test-driven development** guide and implementer.",
       "",
@@ -183,7 +183,7 @@ export const CCLAW_AGENTS: AgentDefinition[] = [
     tools: ["Read", "Write", "Edit", "Grep", "Glob"],
     model: "fast",
     activation: "proactive",
-    relatedStages: ["build", "ship"],
+    relatedStages: ["tdd", "ship"],
     body: [
       "You are a **documentation and comment maintenance** specialist.",
       "",
@@ -251,8 +251,7 @@ export function agentRoutingTable(): string {
 | /cc-design | planner, security-reviewer | — |
 | /cc-spec | planner | spec-reviewer |
 | /cc-plan | planner | — |
-| /cc-test | test-author | — |
-| /cc-build | test-author | doc-updater |
+| tdd (via /cc-next) | test-author | doc-updater |
 | /cc-review | spec-reviewer, code-reviewer | security-reviewer |
 | /cc-ship | — | doc-updater |
 `;

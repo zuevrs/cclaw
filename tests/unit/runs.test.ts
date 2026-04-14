@@ -54,8 +54,8 @@ describe("runs system", () => {
     await writeFlowState(root, {
       ...createInitialFlowState(initial.activeRunId),
       activeRunId: initial.activeRunId,
-      currentStage: "build",
-      completedStages: ["brainstorm", "scope", "design", "spec", "plan", "test"]
+      currentStage: "tdd",
+      completedStages: ["brainstorm", "scope", "design", "spec", "plan"]
     });
 
     await startNewFeatureRun(root, "Second feature");
@@ -63,7 +63,7 @@ describe("runs system", () => {
     const restored = await readFlowState(root);
 
     expect(restored.activeRunId).toBe(initial.activeRunId);
-    expect(restored.currentStage).toBe("build");
+    expect(restored.currentStage).toBe("tdd");
     expect(restored.completedStages).toContain("plan");
   });
 
