@@ -142,6 +142,39 @@ describe("hooks lifecycle rehydration", () => {
     expect(context).toContain("Checkpoint: stage=review");
   });
 
+  it("session-start merges project and global learnings when enabled", async () => {
+    const root = await fs.mkdtemp(path.join(os.tmpdir(), "cclaw-session-global-learnings-"));
+    await fs.mkdir(path.join(root, ".cclaw/state"), { recursive: true });
+    await fs.mkdir(path.join(root, ".cclaw/skills/using-cclaw"), { recursive: true });
+    await fs.writeFile(path.join(root, ".cclaw/state/flow-state.json"), JSON.stringify({
+      currentStage: "build",
+      activeRunId: "run-global",
+      completedStages: ["brainstorm", "scope", "design", "spec", "plan", "test"]
+    }, null, 2), "utf8");
+    await fs.writeFile(path.join(root, ".cclaw/learnings.jsonl"), [
+      JSON.stringify({ ts: "2026-01-01T00:00:00Z", key: "local-learning", type: "pattern", insight: "local insight", confidence: 3, source: "observed" })
+    ].join("\n"), "utf8");
+    const globalLearningsPath = path.join(root, "global-learnings.jsonl");
+    await fs.writeFile(globalLearningsPath, [
+      JSON.stringify({ ts: "2026-01-01T00:00:00Z", key: "global-learning", type: "pattern", insight: "global insight", confidence: 9, source: "user-stated" })
+    ].join("\n"), "utf8");
+    await fs.writeFile(path.join(root, ".cclaw/skills/using-cclaw/SKILL.md"), "# Using Cclaw\n", "utf8");
+
+    const result = await runScript(
+      root,
+      "session-start-global.sh",
+      sessionStartScript({ globalLearningsEnabled: true, globalLearningsPath })
+    );
+    expect(result.code).toBe(0);
+    const payload = JSON.parse(result.stdout) as {
+      hookSpecificOutput?: { additionalContext?: string };
+      additional_context?: string;
+    };
+    const context = payload.hookSpecificOutput?.additionalContext ?? payload.additional_context ?? "";
+    expect(context).toContain("global-learning");
+    expect(context).toContain("local-learning");
+  });
+
   it("stop script writes checkpoint with run id", () => {
     const script = stopCheckpointScript();
     expect(script).toContain("CHECKPOINT_FILE=");

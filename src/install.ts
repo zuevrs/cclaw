@@ -1,4 +1,5 @@
 import fs from "node:fs/promises";
+import os from "node:os";
 import path from "node:path";
 import {
   COMMAND_FILE_ORDER,
@@ -37,7 +38,7 @@ import { ensureDir, exists, writeFileSafe } from "./fs-utils.js";
 import { ensureGitignore, removeGitignorePatterns } from "./gitignore.js";
 import { HARNESS_ADAPTERS, syncHarnessShims, removeCclawFromAgentsMd } from "./harness-adapters.js";
 import { ensureRunSystem, readFlowState } from "./runs.js";
-import type { HarnessId } from "./types.js";
+import type { HarnessId, VibyConfig } from "./types.js";
 
 export interface InitOptions {
   projectRoot: string;
@@ -48,6 +49,23 @@ const OPENCODE_PLUGIN_REL_PATH = ".opencode/plugins/cclaw-plugin.mjs";
 
 function runtimePath(projectRoot: string, ...segments: string[]): string {
   return path.join(projectRoot, RUNTIME_ROOT, ...segments);
+}
+
+function resolveGlobalLearningsPath(projectRoot: string, config: VibyConfig): string | null {
+  if (config.globalLearnings !== true) {
+    return null;
+  }
+  const raw = config.globalLearningsPath?.trim() ?? "";
+  if (raw.length === 0) {
+    return path.join(os.homedir(), ".cclaw-global-learnings.jsonl");
+  }
+  if (raw.startsWith("~/")) {
+    return path.join(os.homedir(), raw.slice(2));
+  }
+  if (path.isAbsolute(raw)) {
+    return raw;
+  }
+  return path.join(projectRoot, raw);
 }
 
 async function ensureStructure(projectRoot: string): Promise<void> {
@@ -402,18 +420,25 @@ async function writeMergedHookJson(
   await writeFileSafe(hookFilePath, `${JSON.stringify(mergedDoc, null, 2)}\n`);
 }
 
-async function writeHooks(projectRoot: string, harnesses: HarnessId[]): Promise<void> {
+async function writeHooks(projectRoot: string, config: VibyConfig): Promise<void> {
+  const harnesses = config.harnesses;
   const hooksDir = runtimePath(projectRoot, "hooks");
   await ensureDir(hooksDir);
 
-  await writeFileSafe(path.join(hooksDir, "session-start.sh"), sessionStartScript());
+  await writeFileSafe(path.join(hooksDir, "session-start.sh"), sessionStartScript({
+    globalLearningsEnabled: config.globalLearnings === true,
+    globalLearningsPath: config.globalLearningsPath
+  }));
   await writeFileSafe(path.join(hooksDir, "stop-checkpoint.sh"), stopCheckpointScript());
   await writeFileSafe(path.join(hooksDir, "prompt-guard.sh"), promptGuardScript());
   await writeFileSafe(path.join(hooksDir, "context-monitor.sh"), contextMonitorScript());
   await writeFileSafe(path.join(hooksDir, "observe.sh"), observeScript());
   await writeFileSafe(path.join(hooksDir, "summarize-observations.sh"), summarizeObservationsScript());
   await writeFileSafe(path.join(hooksDir, "summarize-observations.mjs"), summarizeObservationsRuntimeModule());
-  const opencodePluginSource = opencodePluginJs();
+  const opencodePluginSource = opencodePluginJs({
+    globalLearningsEnabled: config.globalLearnings === true,
+    globalLearningsPath: config.globalLearningsPath
+  });
   await writeFileSafe(path.join(hooksDir, "opencode-plugin.mjs"), opencodePluginSource);
 
   try {
@@ -468,6 +493,17 @@ async function ensureLearningsStore(projectRoot: string): Promise<void> {
   const storePath = runtimePath(projectRoot, "learnings.jsonl");
   if (!(await exists(storePath))) {
     await writeFileSafe(storePath, "");
+  }
+}
+
+async function ensureGlobalLearningsStore(projectRoot: string, config: VibyConfig): Promise<void> {
+  const globalPath = resolveGlobalLearningsPath(projectRoot, config);
+  if (!globalPath) {
+    return;
+  }
+  await ensureDir(path.dirname(globalPath));
+  if (!(await exists(globalPath))) {
+    await writeFileSafe(globalPath, "");
   }
 }
 
@@ -610,7 +646,8 @@ async function cleanStaleFiles(projectRoot: string): Promise<void> {
   // Legacy managed removals happen in cleanLegacyArtifacts() with explicit paths.
 }
 
-async function materializeRuntime(projectRoot: string, harnesses: HarnessId[], forceStateReset: boolean): Promise<void> {
+async function materializeRuntime(projectRoot: string, config: VibyConfig, forceStateReset: boolean): Promise<void> {
+  const harnesses = config.harnesses;
   await ensureStructure(projectRoot);
   await cleanLegacyArtifacts(projectRoot);
   await cleanStaleFiles(projectRoot);
@@ -624,7 +661,8 @@ async function materializeRuntime(projectRoot: string, harnesses: HarnessId[], f
   await ensureSessionStateFiles(projectRoot);
   await writeAdapterManifest(projectRoot, harnesses);
   await ensureLearningsStore(projectRoot);
-  await writeHooks(projectRoot, harnesses);
+  await ensureGlobalLearningsStore(projectRoot, config);
+  await writeHooks(projectRoot, config);
   await syncHarnessShims(projectRoot, harnesses);
   await ensureGitignore(projectRoot);
 }
@@ -632,7 +670,7 @@ async function materializeRuntime(projectRoot: string, harnesses: HarnessId[], f
 export async function initCclaw(options: InitOptions): Promise<void> {
   const config = createDefaultConfig(options.harnesses);
   await writeConfig(options.projectRoot, config);
-  await materializeRuntime(options.projectRoot, config.harnesses, true);
+  await materializeRuntime(options.projectRoot, config, true);
 }
 
 export async function syncCclaw(projectRoot: string): Promise<void> {
@@ -640,14 +678,14 @@ export async function syncCclaw(projectRoot: string): Promise<void> {
   if (!(await exists(configPath(projectRoot)))) {
     await writeConfig(projectRoot, createDefaultConfig(config.harnesses));
   }
-  await materializeRuntime(projectRoot, config.harnesses, false);
+  await materializeRuntime(projectRoot, config, false);
 }
 
 export async function upgradeCclaw(projectRoot: string): Promise<void> {
   const config = await readConfig(projectRoot);
   const upgradedConfig = createDefaultConfig(config.harnesses);
   await writeConfig(projectRoot, upgradedConfig);
-  await materializeRuntime(projectRoot, upgradedConfig.harnesses, false);
+  await materializeRuntime(projectRoot, upgradedConfig, false);
 }
 
 function stripManagedHookCommands(value: unknown): { updated: unknown; changed: boolean } {

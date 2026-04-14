@@ -9,7 +9,14 @@ import type { HarnessId, VibyConfig } from "./types.js";
 const CONFIG_PATH = `${RUNTIME_ROOT}/config.yaml`;
 const HARNESS_ID_SET = new Set<string>(HARNESS_IDS);
 const SUPPORTED_HARNESSES_TEXT = HARNESS_IDS.join(", ");
-const ALLOWED_CONFIG_KEYS = new Set<string>(["version", "flowVersion", "harnesses", "autoAdvance"]);
+const ALLOWED_CONFIG_KEYS = new Set<string>([
+  "version",
+  "flowVersion",
+  "harnesses",
+  "autoAdvance",
+  "globalLearnings",
+  "globalLearningsPath"
+]);
 
 function configFixExample(): string {
   return `harnesses:
@@ -35,7 +42,8 @@ export function createDefaultConfig(harnesses: HarnessId[] = DEFAULT_HARNESSES):
     version: CCLAW_VERSION,
     flowVersion: FLOW_VERSION,
     harnesses,
-    autoAdvance: false
+    autoAdvance: false,
+    globalLearnings: false
   };
 }
 
@@ -84,11 +92,33 @@ export async function readConfig(projectRoot: string): Promise<VibyConfig> {
   const autoAdvanceRaw = parsed.autoAdvance;
   const autoAdvance = typeof autoAdvanceRaw === "boolean" ? autoAdvanceRaw : false;
 
+  const globalLearningsRaw = parsed.globalLearnings;
+  if (
+    Object.prototype.hasOwnProperty.call(parsed, "globalLearnings") &&
+    typeof globalLearningsRaw !== "boolean"
+  ) {
+    throw configValidationError(fullPath, `"globalLearnings" must be a boolean`);
+  }
+  const globalLearnings = typeof globalLearningsRaw === "boolean" ? globalLearningsRaw : false;
+
+  const globalLearningsPathRaw = parsed.globalLearningsPath;
+  if (
+    Object.prototype.hasOwnProperty.call(parsed, "globalLearningsPath") &&
+    typeof globalLearningsPathRaw !== "string"
+  ) {
+    throw configValidationError(fullPath, `"globalLearningsPath" must be a string`);
+  }
+  const globalLearningsPath = typeof globalLearningsPathRaw === "string" && globalLearningsPathRaw.trim().length > 0
+    ? globalLearningsPathRaw.trim()
+    : undefined;
+
   return {
     version: parsed.version ?? CCLAW_VERSION,
     flowVersion: parsed.flowVersion ?? FLOW_VERSION,
     harnesses,
-    autoAdvance
+    autoAdvance,
+    globalLearnings,
+    globalLearningsPath
   };
 }
 

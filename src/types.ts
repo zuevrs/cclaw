@@ -21,6 +21,10 @@ export interface VibyConfig {
   harnesses: HarnessId[];
   /** When true, stage skills instruct the agent to continue to the following stage after gates pass. */
   autoAdvance?: boolean;
+  /** Merge project bootstrap learnings with a global learnings file. */
+  globalLearnings?: boolean;
+  /** Optional absolute or project-relative path to global learnings JSONL. */
+  globalLearningsPath?: string;
 }
 
 export interface TransitionRule {

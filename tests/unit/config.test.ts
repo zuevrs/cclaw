@@ -47,4 +47,17 @@ describe("config", () => {
     );
     await expect(readConfig(root)).rejects.toThrow(/unknown top-level key\(s\): surpriseMode/);
   });
+
+  it("parses global learnings settings", async () => {
+    const root = await fs.mkdtemp(path.join(os.tmpdir(), "cclaw-config-global-learnings-"));
+    await fs.mkdir(path.join(root, ".cclaw"), { recursive: true });
+    await fs.writeFile(
+      configPath(root),
+      "harnesses:\n  - claude\nglobalLearnings: true\nglobalLearningsPath: ./shared/learnings.jsonl\n",
+      "utf8"
+    );
+    const config = await readConfig(root);
+    expect(config.globalLearnings).toBe(true);
+    expect(config.globalLearningsPath).toBe("./shared/learnings.jsonl");
+  });
 });
