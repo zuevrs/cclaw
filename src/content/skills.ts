@@ -175,9 +175,14 @@ function stageCompletionProtocol(schema: StageSchema): string {
    - Move all gate IDs for this stage (${gateList}) into \`stageGateCatalog.${stage}.passed\`
    - Clear \`stageGateCatalog.${stage}.blocked\``;
 
-  const nextAction = nextStage
-    ? `3. Tell the user: **"Stage \`${stage}\` complete. Next stage: \`${nextStage}\`. Run \`/cc-next\` to continue."**`
-    : `3. Tell the user: **"Flow complete. All stages finished."**`;
+  let nextAction: string;
+  if (nextStage) {
+    const nextSchema = stageSchema(nextStage);
+    const nextDescription = nextSchema.skillDescription.charAt(0).toLowerCase() + nextSchema.skillDescription.slice(1);
+    nextAction = `3. Tell the user:\n\n   > **Stage \`${stage}\` complete.** Next: **${nextStage}** — ${nextDescription}\n   >\n   > Run \`/cc-next\` to continue.`;
+  } else {
+    nextAction = `3. Tell the user:\n\n   > **Flow complete.** All stages finished. The project is ready for release.`;
+  }
 
   return `## Stage Completion Protocol
 
