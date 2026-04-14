@@ -376,6 +376,34 @@ describe("hooks lifecycle rehydration", () => {
     expect(allowCclaw.code).toBe(0);
   });
 
+  it("workflow guard resolves nested opencode payload tool names", async () => {
+    const root = await fs.mkdtemp(path.join(os.tmpdir(), "cclaw-wg-nested-tool-"));
+    await fs.mkdir(path.join(root, ".cclaw/state"), { recursive: true });
+    await fs.writeFile(path.join(root, ".cclaw/state/flow-state.json"), JSON.stringify({
+      currentStage: "brainstorm",
+      activeRunId: "run-nested",
+      completedStages: []
+    }, null, 2), "utf8");
+
+    const result = await runScript(
+      root,
+      "workflow-guard.sh",
+      workflowGuardScript(),
+      [],
+      JSON.stringify({
+        input: {
+          tool: "Write",
+          tool_input: { file_path: "src/main.ts", content: "hello" }
+        },
+        output: {}
+      })
+    );
+    expect(result.code).toBe(1);
+    const log = await fs.readFile(path.join(root, ".cclaw/state/workflow-guard.jsonl"), "utf8");
+    expect(log).toContain('"tool":"Write"');
+    expect(log).toContain("implementation_write_before");
+  });
+
   it("workflow guard warns on non-safe tools during pre-implementation stages", async () => {
     const root = await fs.mkdtemp(path.join(os.tmpdir(), "cclaw-wg-plan-safe-"));
     await fs.mkdir(path.join(root, ".cclaw/state"), { recursive: true });
