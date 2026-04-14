@@ -139,7 +139,7 @@ const BRAINSTORM: StageSchemaInput = {
     "Write design doc — save to `.cclaw/artifacts/01-brainstorm.md`.",
     "Self-review — scan for placeholders, TBDs, contradictions, ambiguity, scope creep. Fix inline.",
     "User reviews written artifact — ask user to review before proceeding. **STOP.** Do NOT proceed until user responds.",
-    "Transition — invoke /cc-scope only after explicit user approval. **STOP.** Do NOT auto-advance to scope."
+    "Stage complete — update `flow-state.json` per the Stage Completion Protocol. Tell user to run `/cc-next` to continue to scope."
   ],
   interactionProtocol: [
     "Explore context first (files, docs, existing behavior).",
@@ -792,15 +792,15 @@ const PLAN: StageSchemaInput = {
     "Slice into vertical tasks — each task targets 2-5 minutes, produces one testable outcome, and touches one coherent area.",
     "Attach verification — every task has an acceptance criterion mapping and a concrete verification command.",
     "Define checkpoints — mark points where progress should be validated before continuing.",
-    "WAIT_FOR_CONFIRM — write plan artifact and explicitly pause. **STOP.** Do NOT proceed to /cc-test until user confirms."
+    "WAIT_FOR_CONFIRM — write plan artifact and explicitly pause. **STOP.** Do NOT proceed until user confirms. Then update `flow-state.json` and tell user to run `/cc-next`."
   ],
   interactionProtocol: [
     "Plan in read-only mode relative to implementation.",
     "Split work into small vertical slices (target 2-5 minute tasks).",
     "Publish explicit dependency waves with entry and exit checks for each wave.",
     "Attach verification step to every task.",
-    "Enforce WAIT_FOR_CONFIRM before moving to /cc-test. Use AskQuestion/AskUserQuestion tool: present the plan summary with options (A) Approve / (B) Revise / (C) Reject.",
-    "**STOP.** Do NOT proceed to /cc-test until user explicitly approves. Do not auto-advance."
+    "Enforce WAIT_FOR_CONFIRM: present the plan summary with options (A) Approve / (B) Revise / (C) Reject.",
+    "**STOP.** Do NOT proceed until user explicitly approves. Then update `flow-state.json` and tell user to run `/cc-next`."
   ],
   process: [
     "Build dependency graph and ordered slices.",
@@ -898,7 +898,7 @@ const TEST: StageSchemaInput = {
   purpose: "Create RED evidence tied to acceptance criteria before any implementation.",
   whenToUse: [
     "After plan confirmation",
-    "Before /cc-build",
+    "After RED evidence from test stage (user runs /cc-next)",
     "For every behavior change in scope"
   ],
   whenNotToUse: [
