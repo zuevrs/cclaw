@@ -658,6 +658,9 @@ export default function cclawPlugin(ctx) {
   const learningsPath = join(root, "${RUNTIME_ROOT}/learnings.jsonl");
   const checkpointPath = join(root, "${RUNTIME_ROOT}/state/checkpoint.json");
   const activityPath = join(root, "${RUNTIME_ROOT}/state/stage-activity.jsonl");
+  const suggestionMemoryPath = join(root, "${RUNTIME_ROOT}/state/suggestion-memory.json");
+  const contextWarningsPath = join(root, "${RUNTIME_ROOT}/state/context-warnings.jsonl");
+  const sessionDigestPath = join(root, "${RUNTIME_ROOT}/state/session-digest.md");
   const observeDisabledPath = join(root, "${RUNTIME_ROOT}/.observe-disabled");
 
   function readFlowState() {
@@ -761,18 +764,116 @@ export default function cclawPlugin(ctx) {
     }
   }
 
+  function readSessionDigest() {
+    try {
+      const digest = readFileSync(sessionDigestPath, "utf8").trim();
+      return digest;
+    } catch {
+      return "";
+    }
+  }
+
+  function readLatestContextWarning() {
+    try {
+      const line = readTailLines(contextWarningsPath, 1, 8192)[0];
+      if (!line) return "";
+      try {
+        const parsed = JSON.parse(line);
+        if (parsed && typeof parsed.note === "string") {
+          return parsed.note;
+        }
+      } catch {
+        // non-json line fallback
+      }
+      return line;
+    } catch {
+      return "";
+    }
+  }
+
+  function stageSuggestionFor(stage) {
+    const map = {
+      brainstorm: "Suggestion: list 2-3 alternatives and ask a single focused clarifying question before direction lock.",
+      scope: "Suggestion: lock explicit in-scope/out-of-scope boundaries and choose one scope mode.",
+      design: "Suggestion: map failure modes per new codepath and confirm architecture boundaries before moving forward.",
+      spec: "Suggestion: ensure every acceptance criterion is measurable and mapped to a concrete test.",
+      plan: "Suggestion: group tasks into dependency waves and keep WAIT_FOR_CONFIRM pending until approval.",
+      test: "Suggestion: RED only in this stage — capture failing output for each selected slice.",
+      build: "Suggestion: apply minimal GREEN change, run full suite, then document REFACTOR notes.",
+      review: "Suggestion: run Layer 1 before Layer 2 and reconcile findings into 07-review-army.json.",
+      ship: "Suggestion: verify preflight + rollback plan before selecting exactly one finalization mode."
+    };
+    return map[stage] || "";
+  }
+
+  function readStageSuggestion(stage) {
+    let memory = { enabled: true, mutedStages: [] };
+    try {
+      const parsed = JSON.parse(readFileSync(suggestionMemoryPath, "utf8"));
+      if (parsed && typeof parsed === "object") {
+        memory = {
+          enabled: typeof parsed.enabled === "boolean" ? parsed.enabled : true,
+          mutedStages: Array.isArray(parsed.mutedStages)
+            ? parsed.mutedStages.filter((item) => typeof item === "string")
+            : []
+        };
+      }
+    } catch {
+      // use defaults
+    }
+    if (!memory.enabled || memory.mutedStages.includes(stage)) {
+      return "";
+    }
+    return stageSuggestionFor(stage);
+  }
+
+  function readStageLearnings(stage) {
+    try {
+      const lines = readTailLines(learningsPath, 60, 131072);
+      const entries = lines
+        .map((line) => {
+          try {
+            return JSON.parse(line);
+          } catch {
+            return null;
+          }
+        })
+        .filter(Boolean);
+      if (entries.length === 0) return [];
+      return entries
+        .filter((entry) => typeof entry.key === "string" && entry.key.toLowerCase().includes(stage.toLowerCase()))
+        .sort((a, b) => (Number(b.confidence) || 0) - (Number(a.confidence) || 0))
+        .slice(0, 2)
+        .map((entry) => "- [stage] " + entry.key + ": " + entry.insight);
+    } catch {
+      return [];
+    }
+  }
+
   function buildBootstrap() {
     const { stage, completed, activeRunId } = readFlowState();
     const meta = readMetaSkill();
     const learnings = readTopLearnings();
     const checkpoint = readCheckpointSummary();
     const activity = readRecentActivity();
+    const digest = readSessionDigest();
+    const warning = readLatestContextWarning();
+    const stageSuggestion = readStageSuggestion(stage);
+    const stageLearnings = readStageLearnings(stage);
     const parts = [\`cclaw loaded. Flow: stage=\${stage} (\${completed}/9 completed, run=\${activeRunId}). Active run artifacts: ${RUNTIME_ROOT}/runs/\${activeRunId}/artifacts/\`];
     if (checkpoint) parts.push(checkpoint);
+    if (digest) parts.push("Last session:", digest);
     if (activity.length > 0) parts.push("Recent stage activity:", ...activity);
+    if (warning) parts.push("Latest context warning:", warning);
+    if (stageSuggestion) {
+      parts.push(stageSuggestion, "To disable suggestions persistently set .cclaw/state/suggestion-memory.json -> enabled=false.");
+    }
     if (learnings.length > 0) {
       parts.push("Top learnings:");
       for (const l of learnings) parts.push(\`- \${l.key} (conf \${l.effective_confidence}): \${l.insight}\`);
+    }
+    if (stageLearnings.length > 0) {
+      parts.push(\`Stage learnings (\${stage}):\`, ...stageLearnings);
     }
     if (meta) parts.push("", meta);
     return parts.join("\\n");
@@ -917,14 +1018,14 @@ export function hooksAgentsMdBlock(): string {
 
 Cclaw generates real hook integrations across harnesses:
 - **Claude/Cursor/Codex:** lifecycle rehydration + PreToolUse/PostToolUse + Stop
-- **OpenCode:** session lifecycle + system transform rehydration in plugin
+- **OpenCode:** session lifecycle + system transform rehydration + bootstrap parity (digest/warnings/suggestions/stage learnings)
 
 | Harness | Hook file | Events |
 |---------|-----------|--------|
 | Claude Code | \`.claude/hooks/hooks.json\` | SessionStart(startup/resume/clear/compact), PreToolUse, PostToolUse, Stop |
 | Cursor | \`.cursor/hooks.json\` | sessionStart/sessionResume/sessionClear/sessionCompact, preToolUse, postToolUse, stop |
 | Codex | \`.codex/hooks.json\` | SessionStart(startup/resume/clear/compact), PreToolUse, PostToolUse, Stop |
-| OpenCode | \`${RUNTIME_ROOT}/hooks/opencode-plugin.mjs\` | session.created/resumed/compacted/cleared + system transform |
+| OpenCode | \`${RUNTIME_ROOT}/hooks/opencode-plugin.mjs\` | session.created/updated/resumed/cleared/compacted/idle, tool.execute.before/after, system transform |
 
 Hook state files:
 - \`${RUNTIME_ROOT}/state/stage-activity.jsonl\`

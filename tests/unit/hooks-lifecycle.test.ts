@@ -387,5 +387,9 @@ describe("hooks lifecycle rehydration", () => {
     expect(plugin).toContain('"experimental.chat.system.transform"');
     expect(plugin).toContain("activeRunId");
     expect(plugin).toContain(".cclaw/runs/");
+    expect(plugin).toContain("Last session:");
+    expect(plugin).toContain("Latest context warning:");
+    expect(plugin).toContain("Stage learnings (");
+    expect(plugin).toContain("suggestion-memory.json");
   });
 });
