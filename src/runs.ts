@@ -3,7 +3,7 @@ import path from "node:path";
 import { COMMAND_FILE_ORDER, RUNTIME_ROOT } from "./constants.js";
 import { ARTIFACT_TEMPLATES } from "./content/templates.js";
 import { createInitialFlowState, type FlowState } from "./flow-state.js";
-import { ensureDir, exists, writeFileSafe } from "./fs-utils.js";
+import { ensureDir, exists, withDirectoryLock, writeFileSafe } from "./fs-utils.js";
 import type { FlowStage } from "./types.js";
 
 const FLOW_STATE_REL_PATH = `${RUNTIME_ROOT}/state/flow-state.json`;
@@ -28,6 +28,10 @@ interface CreateRunOptions {
 
 function flowStatePath(projectRoot: string): string {
   return path.join(projectRoot, FLOW_STATE_REL_PATH);
+}
+
+function flowStateLockPath(projectRoot: string): string {
+  return path.join(projectRoot, RUNTIME_ROOT, "state", ".flow-state.lock");
 }
 
 function runsRoot(projectRoot: string): string {
@@ -291,8 +295,10 @@ export async function readFlowState(projectRoot: string): Promise<FlowState> {
 }
 
 export async function writeFlowState(projectRoot: string, state: FlowState): Promise<void> {
-  const safe = coerceFlowState({ ...(state as unknown as Record<string, unknown>) }, state.activeRunId);
-  await writeFileSafe(flowStatePath(projectRoot), `${JSON.stringify(safe, null, 2)}\n`);
+  await withDirectoryLock(flowStateLockPath(projectRoot), async () => {
+    const safe = coerceFlowState({ ...(state as unknown as Record<string, unknown>) }, state.activeRunId);
+    await writeFileSafe(flowStatePath(projectRoot), `${JSON.stringify(safe, null, 2)}\n`);
+  });
 }
 
 export async function listRuns(projectRoot: string): Promise<CclawRunMeta[]> {

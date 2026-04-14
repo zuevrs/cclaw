@@ -399,6 +399,7 @@ STATE_DIR="$ROOT/${RUNTIME_ROOT}/state"
 STATE_FILE="$STATE_DIR/flow-state.json"
 CHECKPOINT_FILE="$STATE_DIR/checkpoint.json"
 CHECKPOINT_TMP="$STATE_DIR/checkpoint.json.tmp.$$"
+CHECKPOINT_LOCK_DIR="$STATE_DIR/.checkpoint.lock"
 STAGE="none"
 ACTIVE_RUN="none"
 LOOP_COUNT=""
@@ -478,7 +479,30 @@ CHECKPOINT_WRITTEN=0
 cleanup_checkpoint_tmp() {
   rm -f "$CHECKPOINT_TMP" 2>/dev/null || true
 }
-trap cleanup_checkpoint_tmp EXIT INT TERM
+
+acquire_checkpoint_lock() {
+  local attempt=0
+  while ! mkdir "$CHECKPOINT_LOCK_DIR" 2>/dev/null; do
+    attempt=$((attempt + 1))
+    if [ "$attempt" -ge 200 ]; then
+      return 1
+    fi
+    sleep 0.02
+  done
+  return 0
+}
+
+release_checkpoint_lock() {
+  rmdir "$CHECKPOINT_LOCK_DIR" 2>/dev/null || true
+}
+
+cleanup_checkpoint_state() {
+  cleanup_checkpoint_tmp
+  release_checkpoint_lock
+}
+trap cleanup_checkpoint_state EXIT INT TERM
+
+acquire_checkpoint_lock || exit 0
 
 if command -v jq >/dev/null 2>&1; then
   EXISTING_JSON="{}"
@@ -565,7 +589,7 @@ if [ "$CHECKPOINT_WRITTEN" -eq 0 ]; then
   fi
 fi
 
-cleanup_checkpoint_tmp
+cleanup_checkpoint_state
 trap - EXIT INT TERM
 
 CHECKPOINT_NOTE="Checkpoint updated at ${RUNTIME_ROOT}/state/checkpoint.json."
