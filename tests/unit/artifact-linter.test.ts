@@ -49,6 +49,12 @@ describe("artifact linter heuristics", () => {
 
 ## Problem Statement
 - User problem: add robust automation
+- Who benefits: platform team
+- Why now: reliability incidents increasing
+
+## Known Context
+- Explored files: src/release.ts, CI workflow
+- Existing behavior: manual release steps
 
 ## Alternatives Table
 | Option | Summary | Trade-offs | Recommendation |
@@ -58,7 +64,11 @@ describe("artifact linter heuristics", () => {
 
 ## Approved Direction
 - Selected option: B
+- What was approved: broader refactor approach
 - Approval marker: approved by user
+
+## Assumptions & Risks
+- Assumes CI pipeline is stable
 
 ## Open Questions
 - None

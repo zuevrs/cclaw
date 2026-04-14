@@ -219,10 +219,6 @@ async function writeCommandContracts(projectRoot: string): Promise<void> {
 async function writeArtifactTemplates(projectRoot: string): Promise<void> {
   for (const [fileName, content] of Object.entries(ARTIFACT_TEMPLATES)) {
     await writeFileSafe(runtimePath(projectRoot, "templates", fileName), content);
-    const artifactPath = runtimePath(projectRoot, "artifacts", fileName);
-    if (!(await exists(artifactPath))) {
-      await writeFileSafe(artifactPath, content);
-    }
   }
 }
 

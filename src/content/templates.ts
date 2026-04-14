@@ -5,9 +5,16 @@ export const ARTIFACT_TEMPLATES: Record<string, string> = {
   "01-brainstorm.md": `# Brainstorm Artifact
 
 ## Problem Statement
-- User problem:
-- Success signal:
-- Constraints:
+- **User problem:**
+- **Who benefits:**
+- **Why now:**
+- **Success signal:**
+- **Constraints:**
+
+## Known Context
+- **Explored files/patterns:**
+- **Existing behavior:**
+- **Relevant dependencies:**
 
 ## Alternatives Table
 | Option | Summary | Trade-offs | Recommendation |
@@ -17,9 +24,13 @@ export const ARTIFACT_TEMPLATES: Record<string, string> = {
 | C |  |  |  |
 
 ## Approved Direction
-- Selected option:
-- Why selected:
-- Approval marker:
+- **Selected option:**
+- **Why selected:**
+- **What was approved:** (state the specific decision)
+- **Approval marker:**
+
+## Assumptions & Risks
+- 
 
 ## Open Questions
 - None
