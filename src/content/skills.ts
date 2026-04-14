@@ -163,7 +163,9 @@ After plan approval (**WAIT_FOR_CONFIRM** / \`plan_wait_for_confirm\` satisfied)
 function stageRequiresExplicitPause(schema: StageSchema): boolean {
   const pauseRules = [
     /\bWAIT_FOR_CONFIRM\b/,
+    /\*\*STOP\.\*\*/,
     /Do NOT auto-advance/i,
+    /Do NOT proceed until user/i,
     /wait for explicit user approval/i,
     /wait for explicit approval/i,
     /explicitly pause/i
@@ -184,15 +186,19 @@ function stageTransitionAutoAdvanceBlock(schema: StageSchema, nextCommand: strin
     return "";
   }
   if (stageRequiresExplicitPause(schema)) {
-    return `## Stage transition (autoAdvance)
+    return `## Stage transition (gate chain)
 
-If project config at \`${RUNTIME_ROOT}/config.yaml\` has \`autoAdvance: true\`, treat it as advisory only. This stage has an explicit pause or confirmation rule, so do NOT auto-advance after the gates pass. Suggest the next command (\`${nextCommand}\`) only after the required confirmation is satisfied, then wait.
+**STOP.** This stage requires explicit user confirmation before advancing.
+Even if project config has \`autoAdvance: true\`, this stage's pause rule takes precedence.
+Do NOT auto-advance after gates pass. Present a summary of completed gates and suggest \`${nextCommand}\`, then wait for explicit user approval.
 
 `;
   }
-  return `## Stage transition (autoAdvance)
+  return `## Stage transition (gate chain)
 
-If project config at \`${RUNTIME_ROOT}/config.yaml\` has \`autoAdvance: true\`, proceed to the next stage automatically after all gates pass for this stage. Otherwise, suggest the next command (\`${nextCommand}\`) and wait.
+After all gates pass, suggest the next command (\`${nextCommand}\`).
+If project config at \`${RUNTIME_ROOT}/config.yaml\` has \`autoAdvance: true\`, proceed automatically.
+Otherwise, **STOP** and wait for user confirmation before advancing.
 
 `;
 }

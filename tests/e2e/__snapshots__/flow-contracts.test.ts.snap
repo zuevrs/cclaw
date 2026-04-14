@@ -241,9 +241,11 @@ When this stage ends, report one of:
 - [ ] no implementation action taken
 - [ ] self-review completed with fixes applied
 
-## Stage transition (autoAdvance)
+## Stage transition (gate chain)
 
-If project config at \`.cclaw/config.yaml\` has \`autoAdvance: true\`, treat it as advisory only. This stage has an explicit pause or confirmation rule, so do NOT auto-advance after the gates pass. Suggest the next command (\`/cc-scope\`) only after the required confirmation is satisfied, then wait.
+**STOP.** This stage requires explicit user confirmation before advancing.
+Even if project config has \`autoAdvance: true\`, this stage's pause rule takes precedence.
+Do NOT auto-advance after gates pass. Present a summary of completed gates and suggest \`/cc-scope\`, then wait for explicit user approval.
 
 
 ## Progressive Disclosure
