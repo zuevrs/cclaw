@@ -12,7 +12,7 @@ import { policyChecks } from "./policy.js";
 import { readFlowState } from "./runs.js";
 import { checkMandatoryDelegations } from "./delegation.js";
 import { buildTraceMatrix } from "./trace-matrix.js";
-import { verifyCurrentStageGateEvidence } from "./gate-evidence.js";
+import { reconcileAndWriteCurrentStageGateCatalog, verifyCurrentStageGateEvidence } from "./gate-evidence.js";
 import { stageSkillFolder } from "./content/skills.js";
 import { validateHookDocument } from "./hook-schema.js";
 
@@ -22,6 +22,11 @@ export interface DoctorCheck {
   name: string;
   ok: boolean;
   details: string;
+}
+
+export interface DoctorOptions {
+  /** When true, normalize current-stage gate catalog and persist reconciliation before checks. */
+  reconcileCurrentStageGates?: boolean;
 }
 
 async function isGitRepo(projectRoot: string): Promise<boolean> {
@@ -189,7 +194,7 @@ async function opencodeRegistrationCheck(projectRoot: string): Promise<{ ok: boo
   return { ok: false, details: `No opencode.json/opencode.jsonc found with plugin ${expected}` };
 }
 
-export async function doctorChecks(projectRoot: string): Promise<DoctorCheck[]> {
+export async function doctorChecks(projectRoot: string, options: DoctorOptions = {}): Promise<DoctorCheck[]> {
   const checks: DoctorCheck[] = [];
 
   for (const dir of REQUIRED_DIRS) {
@@ -696,7 +701,26 @@ export async function doctorChecks(projectRoot: string): Promise<DoctorCheck[]> 
     details: `${RUNTIME_ROOT}/state/suggestion-memory.json must exist for proactive suggestion memory`
   });
 
-  const flowState = await readFlowState(projectRoot);
+  let flowState = await readFlowState(projectRoot);
+  if (options.reconcileCurrentStageGates === true) {
+    const reconciliation = await reconcileAndWriteCurrentStageGateCatalog(projectRoot);
+    if (reconciliation.wrote) {
+      flowState = {
+        ...flowState,
+        stageGateCatalog: {
+          ...flowState.stageGateCatalog,
+          [reconciliation.stage]: reconciliation.after
+        }
+      };
+    }
+    checks.push({
+      name: "gates:reconcile:writeback",
+      ok: true,
+      details: reconciliation.wrote
+        ? `reconciled gate catalog for stage "${reconciliation.stage}": ${reconciliation.notes.join("; ")}`
+        : `no gate reconciliation changes needed for stage "${reconciliation.stage}"`
+    });
+  }
   checks.push({
     name: "flow_state:active_run_id",
     ok: typeof flowState.activeRunId === "string" && flowState.activeRunId.trim().length > 0,

@@ -4,7 +4,11 @@ import path from "node:path";
 import { describe, expect, it } from "vitest";
 import { stageSchema } from "../../src/content/stage-schema.js";
 import { createInitialFlowState } from "../../src/flow-state.js";
-import { verifyCurrentStageGateEvidence } from "../../src/gate-evidence.js";
+import {
+  reconcileAndWriteCurrentStageGateCatalog,
+  reconcileCurrentStageGateCatalog,
+  verifyCurrentStageGateEvidence
+} from "../../src/gate-evidence.js";
 
 async function prepareRoot(root: string): Promise<void> {
   await fs.mkdir(path.join(root, ".cclaw/state"), { recursive: true });
@@ -122,5 +126,50 @@ describe("gate evidence verification", () => {
     const result = await verifyCurrentStageGateEvidence(root, state);
     expect(result.ok).toBe(false);
     expect(result.issues.join("\n")).toContain("review-army validation failed");
+  });
+});
+
+describe("gate evidence reconciliation", () => {
+  it("normalizes current-stage gate catalog and demotes passed gates without evidence", () => {
+    const state = createInitialFlowState("run-reconcile");
+    const required = stageSchema("brainstorm").requiredGates.map((gate) => gate.id);
+    const firstGate = required[0]!;
+
+    state.stageGateCatalog.brainstorm.required = [...required, "unexpected_gate"];
+    state.stageGateCatalog.brainstorm.passed = [firstGate, "unexpected_gate"];
+    state.stageGateCatalog.brainstorm.blocked = [firstGate];
+
+    const { reconciliation } = reconcileCurrentStageGateCatalog(state);
+    expect(reconciliation.changed).toBe(true);
+    expect(reconciliation.after.required).toEqual(required);
+    expect(reconciliation.after.passed).toEqual([]);
+    expect(reconciliation.after.blocked).toContain(firstGate);
+    expect(reconciliation.notes.join("\n")).toContain("missing evidence");
+  });
+
+  it("writes reconciled catalog back to flow-state", async () => {
+    const root = await fs.mkdtemp(path.join(os.tmpdir(), "cclaw-gate-reconcile-writeback-"));
+    await prepareRoot(root);
+
+    const state = createInitialFlowState("run-reconcile");
+    const firstGate = stageSchema("brainstorm").requiredGates[0]!.id;
+    state.stageGateCatalog.brainstorm.passed = [firstGate];
+    await fs.writeFile(
+      path.join(root, ".cclaw/state/flow-state.json"),
+      `${JSON.stringify(state, null, 2)}\n`,
+      "utf8"
+    );
+
+    const result = await reconcileAndWriteCurrentStageGateCatalog(root);
+    expect(result.changed).toBe(true);
+    expect(result.wrote).toBe(true);
+    expect(result.after.passed).toEqual([]);
+    expect(result.after.blocked).toContain(firstGate);
+
+    const persisted = JSON.parse(
+      await fs.readFile(path.join(root, ".cclaw/state/flow-state.json"), "utf8")
+    ) as typeof state;
+    expect(persisted.stageGateCatalog.brainstorm.passed).toEqual([]);
+    expect(persisted.stageGateCatalog.brainstorm.blocked).toContain(firstGate);
   });
 });
