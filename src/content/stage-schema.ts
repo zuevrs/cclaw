@@ -86,6 +86,19 @@ export interface StageSchema {
 }
 
 // ---------------------------------------------------------------------------
+// Shared AskUserQuestion format spec — reference: gstack, GSD
+// ---------------------------------------------------------------------------
+
+export const QUESTION_FORMAT_SPEC = [
+  "**AskUserQuestion Format (when tool is available):**",
+  "1. **Re-ground:** State the project, current stage, and current task. (1-2 sentences)",
+  "2. **Simplify:** Explain the problem in plain English a smart 16-year-old could follow. No jargon, no internal function names. Use concrete examples.",
+  "3. **Recommend:** `RECOMMENDATION: Choose [X] because [one-line reason]`",
+  "4. **Options:** Lettered options: `A) ... B) ... C) ...` — 2-4 options max. Headers must be ≤12 characters.",
+  "**Rules:** One question per call. Never batch multiple questions. If user selects 'Other' or gives a freeform reply, STOP using the question tool — ask follow-ups as plain text, then resume the tool after processing their response. On schema error, immediately fall back to plain-text question."
+].join("\n");
+
+// ---------------------------------------------------------------------------
 // BRAINSTORM — reference: superpowers brainstorming
 // ---------------------------------------------------------------------------
 
