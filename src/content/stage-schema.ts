@@ -606,7 +606,10 @@ const DESIGN: StageSchemaInput = {
     { name: "Essential vs Accidental Complexity", description: "Before adding anything: is this solving a real problem or one we created? Distinguish essential complexity from accidental." },
     { name: "Blast Radius Instinct", description: "Every decision evaluated through: what is the worst case and how many systems/people does it affect?" },
     { name: "Completeness Push", description: "AI effort is cheap. Push for completeness in plans: cover all files in blast radius, all edge cases in touched code, all affected tests. Favor doing it now over creating a TODO." },
-    { name: "Owner Preference Alignment", description: "Every recommendation must align with project conventions (DRY, test style, minimal diff, edge-case rigor). Read existing patterns before recommending new ones." }
+    { name: "Owner Preference Alignment", description: "Every recommendation must align with project conventions (DRY, test style, minimal diff, edge-case rigor). Read existing patterns before recommending new ones." },
+    { name: "Failure Is Information", description: "A design that fails fast and visibly is better than one that silently degrades. Map every failure mode and make it observable. Undetected failures compound." },
+    { name: "Search Breadth Before Depth", description: "Before committing to a design path, survey the full solution space: stdlib, existing code, open-source, prior art. A 30-minute search can save a 30-hour custom build." },
+    { name: "Outside Voice", description: "When confidence is high and options seem obvious, that is exactly when to seek contradiction. Ask: what would a skeptical reviewer challenge here? What assumption am I not questioning?" }
   ],
   reviewSections: [
     {
