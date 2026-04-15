@@ -115,9 +115,8 @@ export async function policyChecks(projectRoot: string, options: PolicyOptions =
   // --- utility skill checks ---
   const runtimeFile = (relativePath: string): string => `${RUNTIME_ROOT}/${relativePath}`;
   const utilitySkillChecks: Array<{ file: string; needle: string; name: string }> = [
-    { file: runtimeFile("skills/learnings/SKILL.md"), needle: "## Learning Entry Schema", name: "utility_skill:learnings:schema" },
+    { file: runtimeFile("skills/learnings/SKILL.md"), needle: "## Entry format (append-only)", name: "utility_skill:learnings:entry_format" },
     { file: runtimeFile("skills/learnings/SKILL.md"), needle: "## Subcommands", name: "utility_skill:learnings:subcommands" },
-    { file: runtimeFile("skills/learnings/SKILL.md"), needle: "## Confidence Decay", name: "utility_skill:learnings:decay" },
     { file: runtimeFile("skills/learnings/SKILL.md"), needle: "## HARD-GATE", name: "utility_skill:learnings:hard_gate" },
     { file: runtimeFile("commands/learn.md"), needle: "## Subcommands", name: "utility_command:learn:subcommands" },
     { file: runtimeFile("skills/subagent-dev/SKILL.md"), needle: "## HARD-GATE", name: "utility_skill:sdd:hard_gate" },
@@ -189,8 +188,6 @@ export async function policyChecks(projectRoot: string, options: PolicyOptions =
     { file: runtimeFile("hooks/workflow-guard.sh"), needle: "stage_invocation_without_recent_flow_read", name: "hooks:workflow_guard:flow_read_reason" },
     { file: runtimeFile("hooks/workflow-guard.sh"), needle: "stage_jump_", name: "hooks:workflow_guard:stage_jump_reason" },
     { file: runtimeFile("hooks/context-monitor.sh"), needle: "remaining is", name: "hooks:context:threshold_warning" },
-    { file: runtimeFile("hooks/observe.sh"), needle: "stage-activity.jsonl", name: "hooks:observe:activity_write" },
-    { file: runtimeFile("hooks/summarize-observations.mjs"), needle: "frequent-errors-", name: "hooks:summarize:runtime_module" },
     { file: runtimeFile("hooks/opencode-plugin.mjs"), needle: "activeRunId", name: "hooks:opencode:active_run" }
   ];
   if (activeHarnesses.has("opencode")) {

@@ -34,68 +34,49 @@ describe("gate evidence verification", () => {
     await prepareRoot(root);
     await fs.writeFile(path.join(root, ".cclaw/artifacts/01-brainstorm.md"), `# Brainstorm Artifact
 
-## Problem Statement
+## Problem Framing
 - User problem: harden release flow
-- Who benefits: release engineers
-- Why now: frequent release failures
+- Desired outcome: prevent unsafe publishes
+- Success signal: invalid release metadata blocks publish
 
-## Known Context
-- Explored files: src/release.ts, .github/workflows
-- Existing behavior: manual publish steps
+## Routing Decision
+- Route: complex
+- Reasoning: touches release checks, CI, and publish behavior
 
-## Clarification Log
-| Category | Question asked | User answer | Evidence note |
+## Grounding Checkpoints
+### Round 1 grounding
+- What is fixed now: release reliability objective
+- What is still unknown: rollback runbook details
+
+### Round 2 grounding
+- What is fixed now: hard-block behavior and no new runtime dependencies
+- What is still unknown: machine-readable status format
+
+### Round 3 grounding
+- What is fixed now: prioritize speed over configurability for v1
+- What is still unknown: None
+
+## Forcing Questions Log
+| Round | Question | User answer | Decision impact |
 |---|---|---|---|
-| PURPOSE | Why is this needed? | release hardening | user confirm |
-| SCOPE | What is excluded? | no infra migration | user confirm |
-| BOUNDARIES | Failure behavior? | fail-fast with clear logs | user confirm |
-| ENVIRONMENT | Where run? | GitHub Actions + npm | user confirm |
-| CONSTRAINTS | Constraints? | limited dependencies | user confirm |
+| 2 | Block invalid metadata or warn? | Block | enforce mandatory gate |
+| 2 | Add runtime dependencies? | No | keep existing runtime stack |
+| 3 | Speed or configurability first? | Speed | keep v1 surface minimal |
 
-## Purpose & Beneficiaries
-- Why this exists: reduce release regressions
-- Primary users: release engineers
-- Value outcome: repeatable release flow
-
-## Scope Boundaries
-### In Scope
-- release metadata checks
-- publish workflow stability
-
-### Out of Scope
-- product feature development
-
-## Failure Boundaries
-- Edge cases: missing labels or release notes block completion
-- Failure mode: npm publish failure must stop release and preserve state
-- Error visibility: all blockers must be surfaced in CI output
-
-## Runtime Environment
-- Runtime/platform: Node.js workflow in GitHub Actions
-- Install/distribution model: npm public registry
-- Execution context: CI pipeline and release automation
-
-## Constraints
-- Performance constraints: keep release checks fast
-- Compatibility constraints: stay compatible with existing workflows
-- Dependency constraints: avoid introducing extra runtime packages
-
-## Alternatives Table
+## Options Comparison
 | Option | Summary | Trade-offs | Recommendation |
 |---|---|---|---|
-| A | narrow fix | low risk |  |
-| B | broader refactor | medium risk | recommended |
+| A | narrow fix | lower risk, weaker reuse |  |
+| B | reusable validation module | moderate effort, stronger reuse | recommended |
 
 ## Approved Direction
 - Selected option: B
-- What was approved: broader refactor approach
+- What was approved: reusable validation module
 - Approval marker: approved
 
-## Assumptions & Risks
-- CI pipeline is stable
-
-## Open Questions
-- None
+## Assumptions and Open Questions
+- Assumptions: CI pipeline is stable
+- Open questions (or "None"): None
 `, "utf8");
 
     const state = createInitialFlowState("run-gate");

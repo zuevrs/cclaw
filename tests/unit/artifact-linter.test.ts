@@ -9,182 +9,143 @@ async function writeRuntimeArtifact(root: string, fileName: string, content: str
   await fs.mkdir(path.join(root, ".cclaw/artifacts"), { recursive: true });
   await fs.writeFile(path.join(root, ".cclaw/state/flow-state.json"), JSON.stringify({
     currentStage: "brainstorm",
-    activeRunId: "run-lint",
+    activeRunId: "active",
     completedStages: []
   }, null, 2), "utf8");
   await fs.writeFile(path.join(root, ".cclaw/artifacts", fileName), content, "utf8");
 }
 
 describe("artifact linter heuristics", () => {
-  it("fails rules that require at least N list/table items", async () => {
-    const root = await fs.mkdtemp(path.join(os.tmpdir(), "cclaw-artifact-lint-"));
+  it("fails when required brainstorm sections are missing", async () => {
+    const root = await fs.mkdtemp(path.join(os.tmpdir(), "cclaw-artifact-lint-missing-"));
     await writeRuntimeArtifact(root, "01-brainstorm.md", `# Brainstorm Artifact
 
-## Problem Statement
+## Problem Framing
 - User problem: add robust automation
+- Desired outcome: reduce release regressions
+- Success signal: invalid metadata blocked before publish
 
-## Alternatives Table
-| Option | Summary | Trade-offs | Recommendation |
+## Routing Decision
+- Route: complex
+- Reasoning: touches CI and release behavior
+
+## Grounding Checkpoints
+- Round 1 fixed: reliability target
+- Round 2 fixed: hard-block behavior
+
+## Forcing Questions Log
+| Round | Question | User answer | Decision impact |
 |---|---|---|---|
-| A |  |  |  |
-
-## Approved Direction
-- Selected option: A
-- Approval marker: approved
-
-## Open Questions
-- None
-`);
-
-    const result = await lintArtifact(root, "brainstorm");
-    const alternatives = result.findings.find((f) => f.section === "Alternatives Table");
-    expect(result.passed).toBe(false);
-    expect(alternatives?.found).toBe(false);
-    expect(alternatives?.details).toContain("at least 2");
-  });
-
-  it("passes when required section depth is satisfied", async () => {
-    const root = await fs.mkdtemp(path.join(os.tmpdir(), "cclaw-artifact-lint-pass-"));
-    await writeRuntimeArtifact(root, "01-brainstorm.md", `# Brainstorm Artifact
-
-## Problem Statement
-- User problem: add robust automation
-- Who benefits: platform team
-- Why now: reliability incidents increasing
-
-## Known Context
-- Explored files: src/release.ts, CI workflow
-- Existing behavior: manual release steps
-
-## Clarification Log
-| Category | Question asked | User answer | Evidence note |
-|---|---|---|---|
-| PURPOSE | Why now? | release quality | user message 1 |
-| SCOPE | What is out-of-scope? | no CI rewrite | user message 2 |
-| BOUNDARIES | What to do on failure? | stop + surface error | user message 3 |
-| ENVIRONMENT | Where runs? | GitHub Actions + npm | user message 4 |
-| CONSTRAINTS | Dependency limits? | no extra runtime deps | user message 5 |
-
-## Purpose & Beneficiaries
-- Why this exists: reduce release incidents
-- Primary users: release engineers
-- Value outcome: predictable cutover
-
-## Scope Boundaries
-### In Scope
-- automate publish checks
-- enforce release metadata
-
-### Out of Scope
-- no migration of deployment platform
-
-## Failure Boundaries
-- Edge case: metadata missing should block release
-- Error visibility: failed checks must be explicit in logs
-- Fallback: release stays draft until issues fixed
-
-## Runtime Environment
-- Runtime/platform: Node.js 20 in GitHub Actions
-- Install/distribution model: npm publish public package
-- Execution context: CI gate and manual release flow
-
-## Constraints
-- Performance constraints: keep release validation under 2 minutes
-- Compatibility constraints: support current GitHub Actions setup
-- Dependency constraints: avoid adding new runtime dependencies
-
-## Alternatives Table
-| Option | Summary | Trade-offs | Recommendation |
-|---|---|---|---|
-| A | conservative | low risk |  |
-| B | broader | higher blast radius | recommended |
+| 2 | Block or warn? | Block | enforce hard gate |
 
 ## Approved Direction
 - Selected option: B
-- What was approved: broader refactor approach
+- What was approved: reusable validation module
+- Approval marker: approved
+
+## Assumptions and Open Questions
+- Assumptions: CI remains source of truth
+- Open questions (or "None"): None
+`);
+
+    const result = await lintArtifact(root, "brainstorm");
+    const options = result.findings.find((finding) => finding.section === "Options Comparison");
+    expect(result.passed).toBe(false);
+    expect(options?.found).toBe(false);
+  });
+
+  it("passes brainstorm artifact when required sections are present", async () => {
+    const root = await fs.mkdtemp(path.join(os.tmpdir(), "cclaw-artifact-lint-pass-"));
+    await writeRuntimeArtifact(root, "01-brainstorm.md", `# Brainstorm Artifact
+
+## Problem Framing
+- User problem: add robust automation
+- Desired outcome: reduce release regressions
+- Success signal: invalid metadata blocked before publish
+
+## Routing Decision
+- Route: complex
+- Reasoning: multi-surface impact across CI and release flow
+
+## Grounding Checkpoints
+### Round 1 grounding
+- What is fixed now: reliability objective
+- What is still unknown: rollback details
+
+### Round 2 grounding
+- What is fixed now: hard-block behavior and no new runtime dependencies
+- What is still unknown: reporting details
+
+### Round 3 grounding
+- What is fixed now: prioritize fast delivery over configurability
+- What is still unknown: None
+
+## Forcing Questions Log
+| Round | Question | User answer | Decision impact |
+|---|---|---|---|
+| 2 | Block invalid metadata or warn? | Block | hard gate required |
+| 2 | Add runtime dependencies? | No | stay on existing runtime stack |
+| 3 | Speed or configurability first? | Speed | keep minimal v1 design |
+
+## Options Comparison
+| Option | Summary | Trade-offs | Recommendation |
+|---|---|---|---|
+| A | script-only checks | faster but weaker reuse |  |
+| B | reusable validation module | slightly more effort, better long-term reuse | recommended |
+
+## Approved Direction
+- Selected option: B
+- What was approved: reusable validation module
 - Approval marker: approved by user
 
-## Assumptions & Risks
-- Assumes CI pipeline is stable
-
-## Open Questions
-- None
+## Assumptions and Open Questions
+- Assumptions: CI remains primary release path
+- Open questions (or "None"): None
 `);
 
     const result = await lintArtifact(root, "brainstorm");
     expect(result.passed).toBe(true);
   });
 
-  it("fails brainstorm clarification log when evidence note column is missing", async () => {
-    const root = await fs.mkdtemp(path.join(os.tmpdir(), "cclaw-artifact-lint-clarification-columns-"));
+  it("fails brainstorm forcing questions section when empty", async () => {
+    const root = await fs.mkdtemp(path.join(os.tmpdir(), "cclaw-artifact-lint-empty-forcing-"));
     await writeRuntimeArtifact(root, "01-brainstorm.md", `# Brainstorm Artifact
 
-## Problem Statement
+## Problem Framing
 - User problem: add robust automation
-- Who benefits: platform team
-- Why now: reliability incidents increasing
+- Desired outcome: reduce release regressions
+- Success signal: invalid metadata blocked before publish
 
-## Known Context
-- Explored files: src/release.ts, CI workflow
-- Existing behavior: manual release steps
+## Routing Decision
+- Route: complex
+- Reasoning: touches CI and release behavior
 
-## Clarification Log
-| Category | Question asked | User answer |
-|---|---|---|
-| PURPOSE | Why now? | release quality |
-| SCOPE | What is out-of-scope? | no CI rewrite |
-| BOUNDARIES | What to do on failure? | stop + surface error |
-| ENVIRONMENT | Where runs? | GitHub Actions + npm |
-| CONSTRAINTS | Dependency limits? | no extra runtime deps |
+## Grounding Checkpoints
+- Round 1 fixed: reliability target
 
-## Purpose & Beneficiaries
-- Why this exists: reduce release incidents
-- Primary users: release engineers
-- Value outcome: predictable cutover
+## Forcing Questions Log
 
-## Scope Boundaries
-### In Scope
-- automate publish checks
-- enforce release metadata
-
-### Out of Scope
-- no migration of deployment platform
-
-## Failure Boundaries
-- Edge case: metadata missing should block release
-- Error visibility: failed checks must be explicit in logs
-
-## Runtime Environment
-- Runtime/platform: Node.js 20 in GitHub Actions
-- Install/distribution model: npm publish public package
-
-## Constraints
-- Performance constraints: keep release validation under 2 minutes
-- Compatibility constraints: support current GitHub Actions setup
-
-## Alternatives Table
+## Options Comparison
 | Option | Summary | Trade-offs | Recommendation |
 |---|---|---|---|
-| A | conservative | low risk |  |
-| B | broader | higher blast radius | recommended |
+| A | script-only checks | quick but weaker reuse |  |
+| B | reusable validation module | more effort, better reuse | recommended |
 
 ## Approved Direction
 - Selected option: B
-- What was approved: broader refactor approach
-- Approval marker: approved by user
+- What was approved: reusable validation module
+- Approval marker: approved
 
-## Assumptions & Risks
-- Assumes CI pipeline is stable
-
-## Open Questions
-- None
+## Assumptions and Open Questions
+- Assumptions: CI remains source of truth
+- Open questions (or "None"): None
 `);
 
     const result = await lintArtifact(root, "brainstorm");
-    const clarification = result.findings.find((finding) => finding.section === "Clarification Log");
+    const forcingLog = result.findings.find((finding) => finding.section === "Forcing Questions Log");
     expect(result.passed).toBe(false);
-    expect(clarification?.found).toBe(false);
-    expect(clarification?.details).toContain("Clarification Log header");
+    expect(forcingLog?.found).toBe(false);
+    expect(forcingLog?.details).toContain("no meaningful content");
   });
 
   it("enforces exactly one selected enum token in finalization", async () => {
@@ -257,7 +218,7 @@ describe("review army schema validation", () => {
     await fs.mkdir(path.join(root, ".cclaw/artifacts"), { recursive: true });
     await fs.writeFile(path.join(root, ".cclaw/state/flow-state.json"), JSON.stringify({
       currentStage: "review",
-      activeRunId: "run-review",
+      activeRunId: "active",
       completedStages: []
     }, null, 2), "utf8");
     await fs.writeFile(path.join(root, ".cclaw/artifacts/07-review-army.json"), JSON.stringify({
@@ -293,7 +254,7 @@ describe("review army schema validation", () => {
     await fs.mkdir(path.join(root, ".cclaw/artifacts"), { recursive: true });
     await fs.writeFile(path.join(root, ".cclaw/state/flow-state.json"), JSON.stringify({
       currentStage: "review",
-      activeRunId: "run-review",
+      activeRunId: "active",
       completedStages: []
     }, null, 2), "utf8");
     await fs.writeFile(path.join(root, ".cclaw/artifacts/07-review-army.json"), JSON.stringify({

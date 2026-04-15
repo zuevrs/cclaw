@@ -27,7 +27,7 @@ These are prompt-discipline guidelines that complement the real hooks cclaw gene
 When a new session begins in any harness:
 
 1. **Read flow state:** Load \`.cclaw/state/flow-state.json\` to find the current stage and completed stages.
-2. **Load learnings:** Run \`tail -n 20 .cclaw/learnings.jsonl 2>/dev/null\` and surface the top 3 highest-confidence entries (see learnings skill for dedup/decay).
+2. **Load knowledge:** Review recent entries from \`.cclaw/knowledge.md\` and surface the most relevant rules/patterns.
 3. **Check for in-progress work:** If the last stage is incomplete, remind the user and offer to resume.
 4. **Load suggestion memory:** Read \`.cclaw/state/suggestion-memory.json\` and honor \`enabled=false\` opt-out.
 5. **Read AGENTS.md:** The cclaw block contains routing and rules — follow them.
@@ -36,7 +36,7 @@ When a new session begins in any harness:
 
 \`\`\`
 Cclaw flow state: [current stage] ([N] of 9 stages completed)
-Top learnings: [key1] (confidence N), [key2] (confidence N), [key3] (confidence N)
+Knowledge highlights: [rule/pattern 1], [rule/pattern 2], [rule/pattern 3]
 Next action: /cc-[stage] to continue, or describe what you'd like to do.
 \`\`\`
 
@@ -46,7 +46,7 @@ Before ending a session or when context is full:
 
 1. **Verify no pending changes:** All modified files must be either committed or explicitly reverted.
 2. **Update flow state:** Mark the current stage as its actual status (DONE / DONE_WITH_CONCERNS / BLOCKED).
-3. **Write learnings:** If any insight from this session would save 5+ minutes next time, append to \`.cclaw/learnings.jsonl\`.
+3. **Write knowledge:** If any non-obvious reusable insight appears, append to \`.cclaw/knowledge.md\` with type \`rule\`, \`pattern\`, or \`lesson\`.
 4. **Create checkpoint:** Write a brief status note to the current artifact or as a comment in flow-state.json.
 
 ### Stop conditions (agent must halt and report)
@@ -62,7 +62,7 @@ When resuming work after a break:
 
 1. Re-read \`.cclaw/state/flow-state.json\` (may have changed externally).
 2. Re-read the current stage's artifact to verify it matches your last checkpoint.
-3. Re-load top learnings.
+3. Re-load recent knowledge entries.
 4. Continue from the last incomplete step — do not restart the stage.
 
 ## Proactive Suggestion Memory
@@ -122,7 +122,7 @@ When approaching context limits:
 - Ending a session with modified but uncommitted files
 - No flow state update after completing work
 - Restarting a stage from scratch instead of resuming from checkpoint
-- Ignoring learnings from prior sessions
+- Ignoring knowledge from prior sessions
 `;
 }
 
@@ -130,9 +130,9 @@ export function sessionHooksAgentsMdBlock(): string {
   return `### Session Guidelines
 
 Session boundary behavior (real hooks inject context automatically; guidelines cover manual steps):
-- **Start:** Hooks inject flow state + top learnings. Check for in-progress work, show status.
-- **Stop:** Hooks remind about checkpoint. Verify no pending changes, update flow state, write learnings.
-- **Resume:** Re-read state, verify artifact, re-load learnings, continue from last step.
+- **Start:** Hooks inject flow state + knowledge snapshot. Check for in-progress work, show status.
+- **Stop:** Hooks remind about checkpoint. Verify no pending changes, update flow state, append useful knowledge.
+- **Resume:** Re-read state, verify artifact, re-load knowledge, continue from last step.
 
 Skill: \`.cclaw/skills/session/SKILL.md\`
 `;

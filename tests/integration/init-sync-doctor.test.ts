@@ -39,10 +39,7 @@ describe("install lifecycle", () => {
       await fs.readFile(path.join(root, ".cclaw/state/flow-state.json"), "utf8")
     ) as { activeRunId?: string };
     expect(typeof flow.activeRunId).toBe("string");
-    expect(flow.activeRunId).toBe("run-pending");
-    await expect(
-      fs.stat(path.join(root, ".cclaw/runs", flow.activeRunId as string, "run.json"))
-    ).rejects.toBeDefined();
+    expect(flow.activeRunId).toBe("active");
     await expect(fs.stat(path.join(root, ".cclaw/state/checkpoint.json"))).resolves.toBeDefined();
     await expect(fs.stat(path.join(root, ".cclaw/state/stage-activity.jsonl"))).resolves.toBeDefined();
 
@@ -215,14 +212,16 @@ describe("install lifecycle", () => {
 
     expect(mergedClaude).toContain("user-stop-hook");
     expect(mergedClaude).toContain("user-prompt-submit");
-    expect(countOccurrences(mergedClaude, "bash .cclaw/hooks/observe.sh pre")).toBe(1);
-    expect(countOccurrences(mergedClaude, "bash .cclaw/hooks/observe.sh post")).toBe(1);
+    expect(countOccurrences(mergedClaude, "bash .cclaw/hooks/prompt-guard.sh")).toBe(1);
+    expect(countOccurrences(mergedClaude, "bash .cclaw/hooks/workflow-guard.sh")).toBe(1);
+    expect(countOccurrences(mergedClaude, "bash .cclaw/hooks/context-monitor.sh")).toBe(1);
     expect(countOccurrences(mergedClaude, "bash .cclaw/hooks/stop-checkpoint.sh")).toBe(1);
 
     expect(mergedCursor).toContain("cursor-user-stop");
     expect(mergedCursor).toContain("cursor-user-pre");
-    expect(countOccurrences(mergedCursor, ".cclaw/hooks/observe.sh pre")).toBe(1);
-    expect(countOccurrences(mergedCursor, ".cclaw/hooks/observe.sh post")).toBe(1);
+    expect(countOccurrences(mergedCursor, ".cclaw/hooks/prompt-guard.sh")).toBe(1);
+    expect(countOccurrences(mergedCursor, ".cclaw/hooks/workflow-guard.sh")).toBe(1);
+    expect(countOccurrences(mergedCursor, ".cclaw/hooks/context-monitor.sh")).toBe(1);
     expect(countOccurrences(mergedCursor, ".cclaw/hooks/stop-checkpoint.sh")).toBe(1);
   });
 
@@ -246,7 +245,7 @@ describe("install lifecycle", () => {
     await syncCclaw(root);
     const merged = await fs.readFile(claudeHooksPath, "utf8");
     expect(merged).toContain("user-relaxed-stop");
-    expect(countOccurrences(merged, "bash .cclaw/hooks/observe.sh pre")).toBe(1);
+    expect(countOccurrences(merged, "bash .cclaw/hooks/prompt-guard.sh")).toBe(1);
 
     const backupsDir = path.join(root, ".cclaw/backups/hooks");
     const backups = await fs.readdir(backupsDir);
@@ -339,7 +338,7 @@ describe("install lifecycle", () => {
         PostToolUse: [{
           matcher: "*",
           hooks: [
-            { type: "command", command: "bash .cclaw/hooks/observe.sh post" },
+            { type: "command", command: "bash .cclaw/hooks/context-monitor.sh" },
             { type: "command", command: "echo user-post-hook" }
           ]
         }]

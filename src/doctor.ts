@@ -454,10 +454,7 @@ export async function doctorChecks(projectRoot: string, options: DoctorOptions =
     "stop-checkpoint.sh",
     "prompt-guard.sh",
     "workflow-guard.sh",
-    "context-monitor.sh",
-    "observe.sh",
-    "summarize-observations.sh",
-    "summarize-observations.mjs"
+    "context-monitor.sh"
   ]) {
     const scriptPath = path.join(projectRoot, RUNTIME_ROOT, "hooks", script);
     const scriptExists = await exists(scriptPath);
@@ -556,15 +553,12 @@ export async function doctorChecks(projectRoot: string, options: DoctorOptions =
       sessionCommands.some((cmd) => cmd.includes("session-start.sh")) &&
       preCommands.some((cmd) => cmd.includes("prompt-guard.sh")) &&
       preCommands.some((cmd) => cmd.includes("workflow-guard.sh")) &&
-      preCommands.some((cmd) => cmd.includes("observe.sh pre")) &&
-      postCommands.some((cmd) => cmd.includes("observe.sh post")) &&
       postCommands.some((cmd) => cmd.includes("context-monitor.sh")) &&
-      stopCommands.some((cmd) => cmd.includes("summarize-observations.sh")) &&
       stopCommands.some((cmd) => cmd.includes("stop-checkpoint.sh"));
     checks.push({
       name: "hook:wiring:claude",
       ok: wiringOk,
-      details: `${file} must wire session-start/prompt-guard/workflow-guard/observe/context-monitor/summarize/stop-checkpoint`
+      details: `${file} must wire session-start/prompt-guard/workflow-guard/context-monitor/stop-checkpoint`
     });
   }
 
@@ -596,15 +590,12 @@ export async function doctorChecks(projectRoot: string, options: DoctorOptions =
       sessionCommands.some((cmd) => cmd.includes("session-start.sh")) &&
       preCommands.some((cmd) => cmd.includes("prompt-guard.sh")) &&
       preCommands.some((cmd) => cmd.includes("workflow-guard.sh")) &&
-      preCommands.some((cmd) => cmd.includes("observe.sh pre")) &&
-      postCommands.some((cmd) => cmd.includes("observe.sh post")) &&
       postCommands.some((cmd) => cmd.includes("context-monitor.sh")) &&
-      stopCommands.some((cmd) => cmd.includes("summarize-observations.sh")) &&
       stopCommands.some((cmd) => cmd.includes("stop-checkpoint.sh"));
     checks.push({
       name: "hook:wiring:cursor",
       ok: wiringOk,
-      details: `${file} must wire session-start/prompt-guard/workflow-guard/observe/context-monitor/summarize/stop-checkpoint`
+      details: `${file} must wire session-start/prompt-guard/workflow-guard/context-monitor/stop-checkpoint`
     });
 
     const cursorRulePath = path.join(projectRoot, ".cursor/rules/cclaw-workflow.mdc");
@@ -643,15 +634,12 @@ export async function doctorChecks(projectRoot: string, options: DoctorOptions =
       sessionCommands.some((cmd) => cmd.includes("session-start.sh")) &&
       preCommands.some((cmd) => cmd.includes("prompt-guard.sh")) &&
       preCommands.some((cmd) => cmd.includes("workflow-guard.sh")) &&
-      preCommands.some((cmd) => cmd.includes("observe.sh pre")) &&
-      postCommands.some((cmd) => cmd.includes("observe.sh post")) &&
       postCommands.some((cmd) => cmd.includes("context-monitor.sh")) &&
-      stopCommands.some((cmd) => cmd.includes("summarize-observations.sh")) &&
       stopCommands.some((cmd) => cmd.includes("stop-checkpoint.sh"));
     checks.push({
       name: "hook:wiring:codex",
       ok: wiringOk,
-      details: `${file} must wire session-start/prompt-guard/workflow-guard/observe/context-monitor/summarize/stop-checkpoint`
+      details: `${file} must wire session-start/prompt-guard/workflow-guard/context-monitor/stop-checkpoint`
     });
   }
 
@@ -668,7 +656,6 @@ export async function doctorChecks(projectRoot: string, options: DoctorOptions =
         content.includes("workflow-guard.sh") &&
         content.includes("context-monitor.sh") &&
         content.includes('"session.idle"') &&
-        content.includes('"session.updated"') &&
         content.includes('"session.resumed"') &&
         content.includes('"session.cleared"') &&
         content.includes('"experimental.chat.system.transform"');
@@ -676,7 +663,7 @@ export async function doctorChecks(projectRoot: string, options: DoctorOptions =
     checks.push({
       name: "lifecycle:opencode:rehydration_events",
       ok,
-      details: `${file} must include event lifecycle handler, tool.execute.before/after with prompt/workflow/context hooks, session.idle summarization, and transform rehydration`
+      details: `${file} must include event lifecycle handler, tool.execute.before/after with prompt/workflow/context hooks, session.idle checkpoint, and transform rehydration`
     });
     const runtimeShape = await opencodePluginRuntimeShapeCheck(projectRoot);
     checks.push({
@@ -722,11 +709,11 @@ export async function doctorChecks(projectRoot: string, options: DoctorOptions =
     details: hasPython ? "python3 available" : "warning: python3 not found, jq/node paths must stay healthy"
   });
 
-  // Learnings store exists
+  // Knowledge store exists
   checks.push({
-    name: "learnings:store_exists",
-    ok: await exists(path.join(projectRoot, RUNTIME_ROOT, "learnings.jsonl")),
-    details: `${RUNTIME_ROOT}/learnings.jsonl must exist (can be empty)`
+    name: "knowledge:store_exists",
+    ok: await exists(path.join(projectRoot, RUNTIME_ROOT, "knowledge.md")),
+    details: `${RUNTIME_ROOT}/knowledge.md must exist`
   });
 
   checks.push({

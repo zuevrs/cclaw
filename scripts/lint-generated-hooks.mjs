@@ -5,10 +5,7 @@ import { spawnSync } from "node:child_process";
 import { opencodePluginJs, sessionStartScript, stopCheckpointScript } from "../dist/content/hooks.js";
 import {
   contextMonitorScript,
-  observeScript,
   promptGuardScript,
-  summarizeObservationsRuntimeModule,
-  summarizeObservationsScript
 } from "../dist/content/observe.js";
 
 const tempDir = mkdtempSync(join(tmpdir(), "cclaw-hook-lint-"));
@@ -27,8 +24,6 @@ try {
     ["stop-checkpoint.sh", stopCheckpointScript()],
     ["prompt-guard.sh", promptGuardScript()],
     ["context-monitor.sh", contextMonitorScript()],
-    ["observe.sh", observeScript()],
-    ["summarize-observations.sh", summarizeObservationsScript()]
   ];
 
   for (const [name, content] of shellScripts) {
@@ -37,10 +32,7 @@ try {
     assertSuccess("bash", ["-n", scriptPath], scriptPath);
   }
 
-  const nodeScripts = [
-    ["summarize-observations.mjs", summarizeObservationsRuntimeModule()],
-    ["opencode-plugin.mjs", opencodePluginJs()]
-  ];
+  const nodeScripts = [["opencode-plugin.mjs", opencodePluginJs()]];
   for (const [name, content] of nodeScripts) {
     const scriptPath = join(tempDir, name);
     writeFileSync(scriptPath, content, "utf8");

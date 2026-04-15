@@ -32,8 +32,9 @@ ${schema.hardGate}
 2. Resolve active artifact root: \`.cclaw/artifacts/\`.
 3. Load required upstream artifacts for this stage:
 ${hydrationLines}
-4. Write stage output to \`.cclaw/artifacts/${schema.artifactFile}\`.
-5. Do NOT copy artifacts into \`.cclaw/runs/\`; archival is handled only by \`cclaw archive\`.
+4. Load \`.cclaw/knowledge.md\` and apply relevant entries.
+5. Write stage output to \`.cclaw/artifacts/${schema.artifactFile}\`.
+6. Do NOT copy artifacts into \`.cclaw/runs/\`; archival is handled only by \`cclaw archive\`.
 
 ## Gates
 ${gateIds}

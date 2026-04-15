@@ -49,7 +49,7 @@ Before responding to a coding request:
 |---|---|
 | \`/cc\` | **Entry point.** No args = resume current stage. With prompt = start brainstorm with idea. |
 | \`/cc-next\` | **Progression.** Advances to the next stage when current is complete. |
-| \`/cc-learn\` | **Cross-cutting.** Capture or review project learnings. |
+| \`/cc-learn\` | **Cross-cutting.** Capture or review project knowledge. |
 
 **Stage order:** brainstorm > scope > design > spec > plan > tdd > review > ship.
 \`/cc-next\` loads the right stage skill automatically. Gates must pass before handoff.

@@ -16,7 +16,13 @@ describe("cli parser", () => {
     expect(parseArgs(["new"]).command).toBeUndefined();
     expect(parseArgs(["runs"]).command).toBeUndefined();
     expect(parseArgs(["resume"]).command).toBeUndefined();
-    expect(parseArgs(["archive"]).command).toBeUndefined();
+    expect(parseArgs(["archive"]).command).toBe("archive");
+  });
+
+  it("parses archive name flag", () => {
+    const parsed = parseArgs(["archive", "--name=release-safety"]);
+    expect(parsed.command).toBe("archive");
+    expect(parsed.archiveName).toBe("release-safety");
   });
 
   it("parses doctor reconcile gates flag", () => {
