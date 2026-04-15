@@ -486,6 +486,7 @@ const DESIGN: StageSchemaInput = {
   checklist: [
     "Trivial-Change Escape Hatch — If scope artifact shows ≤3 files, zero new interfaces, and no cross-module data flow, skip full review sections. Produce a mini-design: one paragraph of rationale, list of changed files, one risk to watch. Proceed to spec.",
     "Design Doc Check — read existing design docs, scope artifact, brainstorm artifact. If a design doc exists that covers this area, check for 'Supersedes:' and use the latest. Use upstream artifacts as source of truth.",
+    "Codebase Investigation — Before any design decision, read the actual code in the blast radius. List every file that will be touched, its current responsibilities, and existing patterns (error handling, naming, test style). Design must conform to discovered patterns, not impose new ones without justification.",
     "Step 0: Scope Challenge — what existing code solves sub-problems? Minimum change set? Complexity check: 8+ files or 2+ new services = complexity smell → flag for possible scope reduction.",
     "Search Before Building — For each technical choice (library, pattern, architecture), search for existing solutions. Label findings: Layer 1 (exact match), Layer 2 (partial match, needs adaptation), Layer 3 (inspiration only), EUREKA (unexpected perfect solution). Default to existing before custom.",
     "Architecture Review — system design, component boundaries, data flow, scaling, security architecture. For each new codepath: one realistic production failure scenario. **Mandatory:** produce at least one architecture diagram (ASCII, Mermaid, or tool-generated) showing component boundaries and data flow direction.",
@@ -510,6 +511,7 @@ const DESIGN: StageSchemaInput = {
   ],
   process: [
     "Read upstream artifacts (brainstorm, scope).",
+    "Investigate codebase: read files in blast radius, catalogue current patterns and responsibilities.",
     "Run Step 0 scope challenge: existing code leverage, minimum change set, complexity check.",
     "Walk through each review section interactively.",
     "Define architecture boundaries and ownership.",
@@ -521,6 +523,7 @@ const DESIGN: StageSchemaInput = {
     "Write design lock artifact for downstream spec/plan."
   ],
   requiredGates: [
+    { id: "design_codebase_investigated", description: "Blast-radius files read and current patterns catalogued." },
     { id: "design_scope_challenge_done", description: "Step 0 scope challenge completed with existing-code mapping." },
     { id: "design_architecture_locked", description: "Architecture boundaries are explicit and approved." },
     { id: "design_data_flow_mapped", description: "Data/state flow includes edge-case paths." },
@@ -583,7 +586,8 @@ const DESIGN: StageSchemaInput = {
     "No defined test/perf baseline",
     "Review sections skipped or condensed",
     "No NOT-in-scope output section",
-    "No What-already-exists output section"
+    "No What-already-exists output section",
+    "Design decisions made without reading the actual code first"
   ],
   policyNeedles: [
     "Architecture",
