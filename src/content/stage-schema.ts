@@ -517,6 +517,7 @@ const DESIGN: StageSchemaInput = {
     "Map failure modes and recovery strategy.",
     "Define test coverage strategy and performance budget.",
     "Produce required outputs: NOT-in-scope section, What-already-exists section, diagrams, failure mode table.",
+    "Produce completion dashboard: list every review section with status (clear / issues-found-resolved / issues-open), count of decisions made, and list of unresolved items.",
     "Write design lock artifact for downstream spec/plan."
   ],
   requiredGates: [
@@ -531,7 +532,8 @@ const DESIGN: StageSchemaInput = {
     "Failure-mode table exists with mitigations.",
     "Test strategy includes unit/integration/e2e expectations.",
     "NOT-in-scope section produced.",
-    "What-already-exists section produced."
+    "What-already-exists section produced.",
+    "Completion dashboard lists every review section status, decision count, and unresolved items (or 'None')."
   ],
   inputs: ["scope contract", "system constraints", "non-functional requirements"],
   requiredContext: [
@@ -544,7 +546,8 @@ const DESIGN: StageSchemaInput = {
     "risk and failure map",
     "test and performance baseline",
     "NOT-in-scope section",
-    "What-already-exists section"
+    "What-already-exists section",
+    "design completion dashboard"
   ],
   blockers: [
     "architecture ambiguity remains",
@@ -555,6 +558,7 @@ const DESIGN: StageSchemaInput = {
     "design baseline approved",
     "all review sections completed",
     "required gates marked satisfied",
+    "completion dashboard present with all review-section statuses",
     "artifact complete for spec handoff"
   ],
   antiPatterns: [
@@ -666,7 +670,8 @@ const DESIGN: StageSchemaInput = {
     { section: "Test Strategy", required: true, validationRule: "Must define unit/integration/e2e expectations with coverage targets." },
     { section: "NOT in scope", required: true, validationRule: "Work considered and explicitly deferred with one-line rationale." },
     { section: "Parallelization Strategy", required: false, validationRule: "If multi-module: dependency table, parallel lanes, conflict flags." },
-    { section: "Unresolved Decisions", required: false, validationRule: "If any: what info is missing, who provides it, default if unanswered." }
+    { section: "Unresolved Decisions", required: false, validationRule: "If any: what info is missing, who provides it, default if unanswered." },
+    { section: "Completion Dashboard", required: true, validationRule: "Lists every review section with status (clear / issues-found-resolved / issues-open), decision count, and unresolved items (or 'None')." }
   ],
   namedAntiPattern: {
     title: "Architecture Will Emerge While Coding",
