@@ -287,12 +287,12 @@ const SCOPE: StageSchemaInput = {
     "**Dream State Mapping** — (complex projects only) describe the ideal state 12 months out using `CURRENT STATE -> THIS PLAN -> 12-MONTH IDEAL`, then verify this scope moves toward that target.",
     "**Implementation Alternatives** — Produce 2-3 distinct approaches. For each: Name, Summary, Effort (S/M/L/XL), Risk (Low/Med/High), 2-3 Pros, 2-3 Cons, and explicit Reuses. One option must be minimal viable, one must be ideal architecture.",
     "**Temporal Interrogation** — (complex projects only) simulate implementation timeline: HOUR 1 foundations, HOUR 2-3 core logic, HOUR 4-5 integration surprises, HOUR 6+ polish/tests. Decide what must be locked now vs safely deferred.",
-    "**Mode Selection** — Present expand/selective/hold/reduce with recommendation.",
+    "**Mode Selection** — Present expand/selective/hold/reduce with recommendation and default heuristic: greenfield -> expand, feature enhancement -> selective, bugfix/hotfix/refactor -> hold, broad blast radius (>15 files or multi-team impact) -> reduce.",
     "**Mode-Specific Analysis** — After mode is selected, run the matching analysis: EXPAND (10x and delight opportunities), SELECTIVE (hold-scope rigor then cherry-picked expansions), HOLD (minimum-change-set hardening), REDUCE (ruthless cuts and follow-up split).",
     "**Error and Rescue Registry** — For each capability: what breaks, how detected, what fallback."
   ],
   interactionProtocol: [
-    "For scope mode selection: use the Decision Protocol — present expand/selective/hold/reduce as labeled options with trade-offs and mark one as (recommended). If AskQuestion/AskUserQuestion is available, send exactly ONE question per call, validate fields against runtime schema, and on schema error immediately fall back to plain-text question instead of retrying guessed payloads.",
+    "For scope mode selection: use the Decision Protocol — present expand/selective/hold/reduce as labeled options with trade-offs and mark one as (recommended). Base your recommendation on default heuristics: greenfield -> expand, enhancement -> selective, bugfix/hotfix/refactor -> hold, broad blast radius -> reduce. If AskQuestion/AskUserQuestion is available, send exactly ONE question per call, validate fields against runtime schema, and on schema error immediately fall back to plain-text question instead of retrying guessed payloads.",
     "Walk through the scope checklist interactively. Each checklist item that surfaces a decision should be presented to the user as a question, not as a monologue. Do not dump all items at once.",
     "Challenge premise and verify the problem framing before anything else.",
     "Present one structural scope issue at a time for decision. Do NOT batch. Use structured options for each scope boundary question.",
@@ -357,6 +357,7 @@ const SCOPE: StageSchemaInput = {
   ],
   redFlags: [
     "No selected mode in artifact",
+    "Mode selected without heuristic justification",
     "No deferred/not-in-scope section",
     "No user approval marker",
     "Premise challenge missing or superficial",
