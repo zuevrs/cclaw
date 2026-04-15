@@ -1,6 +1,5 @@
 import { execFile } from "node:child_process";
 import fs from "node:fs/promises";
-import os from "node:os";
 import path from "node:path";
 import { promisify } from "node:util";
 import {
@@ -27,11 +26,8 @@ import {
 } from "./content/hooks.js";
 import {
   contextMonitorScript,
-  observeScript,
   promptGuardScript,
-  workflowGuardScript,
-  summarizeObservationsRuntimeModule,
-  summarizeObservationsScript
+  workflowGuardScript
 } from "./content/observe.js";
 import { META_SKILL_NAME, usingCclawSkillMarkdown } from "./content/meta-skill.js";
 import {
@@ -63,23 +59,6 @@ const execFileAsync = promisify(execFile);
 
 function runtimePath(projectRoot: string, ...segments: string[]): string {
   return path.join(projectRoot, RUNTIME_ROOT, ...segments);
-}
-
-function resolveGlobalLearningsPath(projectRoot: string, config: VibyConfig): string | null {
-  if (config.globalLearnings !== true) {
-    return null;
-  }
-  const raw = config.globalLearningsPath?.trim() ?? "";
-  if (raw.length === 0) {
-    return path.join(os.homedir(), ".cclaw-global-learnings.jsonl");
-  }
-  if (raw.startsWith("~/")) {
-    return path.join(os.homedir(), raw.slice(2));
-  }
-  if (path.isAbsolute(raw)) {
-    return raw;
-  }
-  return path.join(projectRoot, raw);
 }
 
 async function resolveGitHooksDir(projectRoot: string): Promise<string | null> {
@@ -588,23 +567,14 @@ async function writeHooks(projectRoot: string, config: VibyConfig): Promise<void
   const hooksDir = runtimePath(projectRoot, "hooks");
   await ensureDir(hooksDir);
 
-  await writeFileSafe(path.join(hooksDir, "session-start.sh"), sessionStartScript({
-    globalLearningsEnabled: config.globalLearnings === true,
-    globalLearningsPath: config.globalLearningsPath
-  }));
+  await writeFileSafe(path.join(hooksDir, "session-start.sh"), sessionStartScript());
   await writeFileSafe(path.join(hooksDir, "stop-checkpoint.sh"), stopCheckpointScript());
   await writeFileSafe(path.join(hooksDir, "prompt-guard.sh"), promptGuardScript({
     strictMode: config.promptGuardMode === "strict"
   }));
   await writeFileSafe(path.join(hooksDir, "workflow-guard.sh"), workflowGuardScript());
   await writeFileSafe(path.join(hooksDir, "context-monitor.sh"), contextMonitorScript());
-  await writeFileSafe(path.join(hooksDir, "observe.sh"), observeScript());
-  await writeFileSafe(path.join(hooksDir, "summarize-observations.sh"), summarizeObservationsScript());
-  await writeFileSafe(path.join(hooksDir, "summarize-observations.mjs"), summarizeObservationsRuntimeModule());
-  const opencodePluginSource = opencodePluginJs({
-    globalLearningsEnabled: config.globalLearnings === true,
-    globalLearningsPath: config.globalLearningsPath
-  });
+  const opencodePluginSource = opencodePluginJs();
   await writeFileSafe(path.join(hooksDir, "opencode-plugin.mjs"), opencodePluginSource);
 
   try {
@@ -614,9 +584,6 @@ async function writeHooks(projectRoot: string, config: VibyConfig): Promise<void
       "prompt-guard.sh",
       "workflow-guard.sh",
       "context-monitor.sh",
-      "observe.sh",
-      "summarize-observations.sh",
-      "summarize-observations.mjs",
       "opencode-plugin.mjs"
     ]) {
       await fs.chmod(path.join(hooksDir, script), 0o755);
@@ -656,21 +623,10 @@ async function writeHooks(projectRoot: string, config: VibyConfig): Promise<void
   }
 }
 
-async function ensureLearningsStore(projectRoot: string): Promise<void> {
-  const storePath = runtimePath(projectRoot, "learnings.jsonl");
+async function ensureKnowledgeStore(projectRoot: string): Promise<void> {
+  const storePath = runtimePath(projectRoot, "knowledge.md");
   if (!(await exists(storePath))) {
-    await writeFileSafe(storePath, "");
-  }
-}
-
-async function ensureGlobalLearningsStore(projectRoot: string, config: VibyConfig): Promise<void> {
-  const globalPath = resolveGlobalLearningsPath(projectRoot, config);
-  if (!globalPath) {
-    return;
-  }
-  await ensureDir(path.dirname(globalPath));
-  if (!(await exists(globalPath))) {
-    await writeFileSafe(globalPath, "");
+    await writeFileSafe(storePath, "# Project Knowledge\n\n");
   }
 }
 
@@ -836,6 +792,20 @@ async function cleanLegacyArtifacts(projectRoot: string): Promise<void> {
       // best-effort cleanup
     }
   }
+
+  for (const legacyRuntimeFile of [
+    runtimePath(projectRoot, "learnings.jsonl"),
+    runtimePath(projectRoot, "observations.jsonl"),
+    runtimePath(projectRoot, "hooks", "observe.sh"),
+    runtimePath(projectRoot, "hooks", "summarize-observations.sh"),
+    runtimePath(projectRoot, "hooks", "summarize-observations.mjs")
+  ]) {
+    try {
+      await fs.rm(legacyRuntimeFile, { force: true });
+    } catch {
+      // best-effort cleanup
+    }
+  }
 }
 
 async function cleanStaleFiles(projectRoot: string): Promise<void> {
@@ -883,8 +853,7 @@ async function materializeRuntime(projectRoot: string, config: VibyConfig, force
   await ensureRunSystem(projectRoot, { createIfMissing: false });
   await ensureSessionStateFiles(projectRoot);
   await writeAdapterManifest(projectRoot, harnesses);
-  await ensureLearningsStore(projectRoot);
-  await ensureGlobalLearningsStore(projectRoot, config);
+  await ensureKnowledgeStore(projectRoot);
   await writeHooks(projectRoot, config);
   await syncDisabledHarnessArtifacts(projectRoot, harnesses);
   await syncManagedGitHooks(projectRoot, config);
@@ -981,7 +950,7 @@ function stripManagedHookCommands(value: unknown): { updated: unknown; changed: 
 
 function isManagedRuntimeHookCommand(command: string): boolean {
   const normalized = command.trim().replace(/\s+/gu, " ");
-  return /(^|\s)(?:bash\s+)?(?:\.\/)?\.cclaw\/hooks\/(?:session-start|stop-checkpoint|prompt-guard|workflow-guard|context-monitor|observe|summarize-observations)\.sh(?:\s|$)/u.test(
+  return /(^|\s)(?:bash\s+)?(?:\.\/)?\.cclaw\/hooks\/(?:session-start|stop-checkpoint|prompt-guard|workflow-guard|context-monitor)\.sh(?:\s|$)/u.test(
     normalized
   );
 }

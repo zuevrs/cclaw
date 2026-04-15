@@ -27,10 +27,10 @@ sequenceDiagram
     participant U as User
     participant H as Harness
     participant V as cclaw Hooks + Skills
-    participant S as State + Learnings
+    participant S as State + Knowledge
     U->>H: /cc <idea>
     H->>V: Load stage contract + HARD-GATE
-    V->>S: Read context (state/learnings)
+    V->>S: Read context (state/knowledge)
     V-->>H: Structured execution guidance
     H->>S: Write artifacts + checkpoint
     S-->>U: Next stage is explicit
@@ -42,8 +42,8 @@ sequenceDiagram
 - **Installer-first architecture:** generates files and hooks; does not run a hidden control plane.
 - **Hard-gated quality:** each stage has non-skippable constraints that reduce AI drift.
 - **Cross-harness parity:** same behavior model across Claude Code, Cursor, Codex, OpenCode.
-- **Compounding context:** flow state + learnings get rehydrated on new sessions automatically.
-- **Run-scoped execution:** each flow works against an active run with explicit handoff state.
+- **Compounding context:** flow state + project knowledge get rehydrated on new sessions automatically.
+- **Incremental delivery:** active artifacts stay in one place; `cclaw archive` snapshots completed features into dated run folders.
 
 ## Compared To Top References
 
@@ -73,6 +73,7 @@ Core installer lifecycle:
 ```bash
 npx cclaw-cli sync
 npx cclaw-cli doctor
+npx cclaw-cli archive --name <feature-name>
 npx cclaw-cli upgrade
 npx cclaw-cli uninstall
 ```
@@ -113,14 +114,10 @@ Required repository secret:
 ├── commands/
 ├── hooks/
 ├── templates/
-├── artifacts/                # active mirror for current run (fallback path)
+├── artifacts/                # active feature artifacts
 ├── state/
-├── runs/
-│   └── <activeRunId>/
-│       ├── artifacts/        # canonical run artifacts
-│       ├── run.json
-│       └── handoff.md
-└── learnings.jsonl
+├── knowledge.md              # append-only rule/pattern/lesson log
+└── runs/                     # archived feature snapshots (YYYY-MM-DD-feature-name)
 ```
 
 ## License

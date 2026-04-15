@@ -8,121 +8,70 @@ import {
   ensureRunSystem,
   listRuns,
   readFlowState,
-  resumeRun,
-  startNewFeatureRun,
   writeFlowState
 } from "../../src/runs.js";
 
 describe("runs system", () => {
-  it("bootstraps active run and flow state", async () => {
+  it("bootstraps active artifacts root and flow state", async () => {
     const root = await fs.mkdtemp(path.join(os.tmpdir(), "cclaw-runs-bootstrap-"));
     const state = await ensureRunSystem(root);
 
-    expect(state.activeRunId).toMatch(/^run-/);
+    expect(state.activeRunId).toBe("active");
     expect(state.currentStage).toBe("brainstorm");
-
-    const runMetaPath = path.join(root, ".cclaw/runs", state.activeRunId, "run.json");
-    const handoffPath = path.join(root, ".cclaw/runs", state.activeRunId, "handoff.md");
-    await expect(fs.readFile(runMetaPath, "utf8")).resolves.toContain(`"id": "${state.activeRunId}"`);
-    await expect(fs.readFile(handoffPath, "utf8")).resolves.toContain(`ID: ${state.activeRunId}`);
+    await expect(fs.stat(path.join(root, ".cclaw/artifacts"))).resolves.toBeTruthy();
+    await expect(fs.stat(path.join(root, ".cclaw/runs"))).resolves.toBeTruthy();
   });
 
-  it("creates a new feature run and resets active flow state", async () => {
-    const root = await fs.mkdtemp(path.join(os.tmpdir(), "cclaw-runs-new-"));
-    const initial = await ensureRunSystem(root);
-
+  it("archives active artifacts into dated run folder and resets flow", async () => {
+    const root = await fs.mkdtemp(path.join(os.tmpdir(), "cclaw-runs-archive-"));
+    await ensureRunSystem(root);
+    await fs.writeFile(path.join(root, ".cclaw/artifacts/01-brainstorm.md"), "# draft\n", "utf8");
     await writeFlowState(root, {
-      ...createInitialFlowState(initial.activeRunId),
-      activeRunId: initial.activeRunId,
+      ...createInitialFlowState("active"),
       currentStage: "design",
       completedStages: ["brainstorm", "scope"]
     });
 
-    const next = await startNewFeatureRun(root, "Payments revamp");
-    const flow = await readFlowState(root);
-
-    expect(next.title).toBe("Payments revamp");
-    expect(flow.activeRunId).toBe(next.id);
-    expect(flow.currentStage).toBe("brainstorm");
-    expect(flow.completedStages).toEqual([]);
-  });
-
-  it("resumes a run and restores state snapshot", async () => {
-    const root = await fs.mkdtemp(path.join(os.tmpdir(), "cclaw-runs-resume-"));
-    const initial = await ensureRunSystem(root);
-
-    await writeFlowState(root, {
-      ...createInitialFlowState(initial.activeRunId),
-      activeRunId: initial.activeRunId,
-      currentStage: "tdd",
-      completedStages: ["brainstorm", "scope", "design", "spec", "plan"]
-    });
-
-    await startNewFeatureRun(root, "Second feature");
-    await resumeRun(root, initial.activeRunId);
-    const restored = await readFlowState(root);
-
-    expect(restored.activeRunId).toBe(initial.activeRunId);
-    expect(restored.currentStage).toBe("tdd");
-    expect(restored.completedStages).toContain("plan");
-  });
-
-  it("resets to clean flow state when run snapshot is missing", async () => {
-    const root = await fs.mkdtemp(path.join(os.tmpdir(), "cclaw-runs-resume-nosnapshot-"));
-    const initial = await ensureRunSystem(root);
-    await startNewFeatureRun(root, "Other run");
-
-    const runMetaPath = path.join(root, ".cclaw/runs", initial.activeRunId, "run.json");
-    const runMeta = JSON.parse(await fs.readFile(runMetaPath, "utf8")) as {
-      id: string;
-      title: string;
-      createdAt: string;
-      archivedAt?: string;
-      stateSnapshot?: unknown;
-    };
-    delete runMeta.stateSnapshot;
-    await fs.writeFile(runMetaPath, `${JSON.stringify(runMeta, null, 2)}\n`, "utf8");
-
-    await resumeRun(root, initial.activeRunId);
-    const restored = await readFlowState(root);
-    expect(restored.activeRunId).toBe(initial.activeRunId);
-    expect(restored.currentStage).toBe("brainstorm");
-    expect(restored.completedStages).toEqual([]);
-  });
-
-  it("archives active run and rolls forward to a new active run", async () => {
-    const root = await fs.mkdtemp(path.join(os.tmpdir(), "cclaw-runs-archive-"));
-    const initial = await ensureRunSystem(root);
-    const result = await archiveRun(root);
-    const state = await readFlowState(root);
-    const runs = await listRuns(root);
-
-    expect(result.archived.id).toBe(initial.activeRunId);
-    expect(result.archived.archivedAt).toBeTruthy();
-    expect(result.active.id).not.toBe(initial.activeRunId);
-    expect(state.activeRunId).toBe(result.active.id);
-    expect(runs.length).toBeGreaterThanOrEqual(2);
-  });
-
-  it("archives non-active run without switching active run", async () => {
-    const root = await fs.mkdtemp(path.join(os.tmpdir(), "cclaw-runs-archive-non-active-"));
-    const first = await ensureRunSystem(root);
-    const second = await startNewFeatureRun(root, "Second run");
-
-    const result = await archiveRun(root, first.activeRunId);
+    const archived = await archiveRun(root, "Payments Revamp");
     const state = await readFlowState(root);
 
-    expect(result.archived.id).toBe(first.activeRunId);
-    expect(result.archived.archivedAt).toBeTruthy();
-    expect(result.active.id).toBe(second.id);
-    expect(state.activeRunId).toBe(second.id);
+    expect(archived.archiveId).toMatch(/^\d{4}-\d{2}-\d{2}-payments-revamp/);
+    await expect(
+      fs.readFile(path.join(archived.archivePath, "artifacts", "01-brainstorm.md"), "utf8")
+    ).resolves.toContain("# draft");
+
+    const activeArtifacts = await fs.readdir(path.join(root, ".cclaw/artifacts"));
+    expect(activeArtifacts).toEqual([]);
+    expect(state.currentStage).toBe("brainstorm");
+    expect(state.completedStages).toEqual([]);
+    expect(state.activeRunId).toBe("active");
   });
 
-  it("rejects unsafe run ids", async () => {
-    const root = await fs.mkdtemp(path.join(os.tmpdir(), "cclaw-runs-safe-id-"));
+  it("creates unique archive ids for same-day feature names", async () => {
+    const root = await fs.mkdtemp(path.join(os.tmpdir(), "cclaw-runs-archive-unique-"));
     await ensureRunSystem(root);
-    await expect(resumeRun(root, "../escape")).rejects.toThrow(/Invalid run id/);
-    await expect(archiveRun(root, "../escape")).rejects.toThrow(/Invalid run id/);
+    await fs.writeFile(path.join(root, ".cclaw/artifacts/00-idea.md"), "# Payments\n", "utf8");
+    const first = await archiveRun(root, "Payments");
+
+    await fs.writeFile(path.join(root, ".cclaw/artifacts/00-idea.md"), "# Payments\n", "utf8");
+    const second = await archiveRun(root, "Payments");
+
+    expect(second.archiveId).not.toBe(first.archiveId);
+    expect(second.archiveId).toMatch(/-2$/);
+  });
+
+  it("lists archived run folders", async () => {
+    const root = await fs.mkdtemp(path.join(os.tmpdir(), "cclaw-runs-list-"));
+    await ensureRunSystem(root);
+    await fs.writeFile(path.join(root, ".cclaw/artifacts/00-idea.md"), "# Alpha\n", "utf8");
+    const first = await archiveRun(root, "Alpha");
+    await fs.writeFile(path.join(root, ".cclaw/artifacts/00-idea.md"), "# Beta\n", "utf8");
+    const second = await archiveRun(root, "Beta");
+
+    const runs = await listRuns(root);
+    const ids = runs.map((run) => run.id);
+    expect(ids).toContain(first.archiveId);
+    expect(ids).toContain(second.archiveId);
   });
 
   it("sanitizes malformed flow state values", async () => {
@@ -141,8 +90,8 @@ describe("runs system", () => {
       stageGateCatalog: {
         brainstorm: {
           required: ["tampered"],
-          passed: ["brainstorm_discovery_purpose", "tampered"],
-          blocked: ["brainstorm_design_approved", 1]
+          passed: ["brainstorm_route_selected", "tampered"],
+          blocked: ["brainstorm_direction_approved", 1]
         }
       }
     }, null, 2), "utf8");
@@ -152,9 +101,9 @@ describe("runs system", () => {
     expect(state.currentStage).toBe("brainstorm");
     expect(state.completedStages).toEqual(["brainstorm"]);
     expect(state.guardEvidence).toEqual({ ok: "yes" });
-    expect(state.stageGateCatalog.brainstorm.required).toContain("brainstorm_discovery_purpose");
+    expect(state.stageGateCatalog.brainstorm.required).toContain("brainstorm_route_selected");
     expect(state.stageGateCatalog.brainstorm.required).not.toContain("tampered");
-    expect(state.stageGateCatalog.brainstorm.passed).toEqual(["brainstorm_discovery_purpose"]);
-    expect(state.stageGateCatalog.brainstorm.blocked).toEqual(["brainstorm_design_approved"]);
+    expect(state.stageGateCatalog.brainstorm.passed).toEqual(["brainstorm_route_selected"]);
+    expect(state.stageGateCatalog.brainstorm.blocked).toEqual(["brainstorm_direction_approved"]);
   });
 });

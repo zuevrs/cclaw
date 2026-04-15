@@ -5,11 +5,6 @@ import { selfImprovementBlock } from "./learnings.js";
 import type { StageSchema } from "./stage-schema.js";
 import { QUESTION_FORMAT_SPEC, ERROR_BUDGET_SPEC, stageAutoSubagentDispatch, stageSchema } from "./stage-schema.js";
 
-function artifactFileName(artifactPath: string): string {
-  const parts = artifactPath.split("/");
-  return parts[parts.length - 1] ?? artifactPath;
-}
-
 function rationalizationTable(stage: FlowStage): string {
   const schema = stageSchema(stage);
   return `| Rationalization | Reality |
@@ -82,21 +77,18 @@ function contextLoadingBlock(stage: FlowStage): string {
   const trace = stageSchema(stage).crossStageTrace;
   const readLines = trace.readsFrom.length > 0
     ? trace.readsFrom
-      .map((value) => {
-        const fileName = artifactFileName(value);
-        return `- Canonical: \`.cclaw/runs/<activeRunId>/artifacts/${fileName}\` (fallback: \`${value}\`)`;
-      })
+      .map((value) => `- \`${value}\``)
       .join("\n")
     : "- (first stage — no upstream artifacts)";
 
   return `## Context Loading
 
 Before starting stage execution:
-1. Read \`.cclaw/state/flow-state.json\` and capture \`activeRunId\`.
-2. Resolve canonical run artifact root: \`.cclaw/runs/<activeRunId>/artifacts/\`.
+1. Read \`.cclaw/state/flow-state.json\`.
+2. Resolve active artifact root: \`.cclaw/artifacts/\`.
 3. Load upstream artifacts required by this stage:
 ${readLines}
-4. If canonical run artifact is missing, fallback to the \`.cclaw/artifacts/\` mirror and record that fallback.
+4. Read \`.cclaw/knowledge.md\` and apply relevant entries before making decisions.
 `;
 }
 
@@ -124,7 +116,7 @@ function autoSubagentDispatchBlock(stage: FlowStage): string {
   const mandatory = stageSchema(stage).mandatoryDelegations;
   const mandatoryList =
     mandatory.length > 0 ? mandatory.map((a) => `\`${a}\``).join(", ") : "(none — only proactive dispatch applies)";
-  const delegationLogRel = `${RUNTIME_ROOT}/runs/<activeRunId>/delegation-log.json`;
+  const delegationLogRel = `${RUNTIME_ROOT}/state/delegation-log.json`;
 
   return `## Automatic Subagent Dispatch
 
@@ -191,7 +183,7 @@ When all required gates are satisfied and the artifact is written:
 1. **Update \`${RUNTIME_ROOT}/state/flow-state.json\`:**
 ${stateUpdate}
    - For each passed gate, add an entry to \`guardEvidence\`: \`"<gate_id>": "<artifact path or excerpt proving the gate>"\`. Do NOT leave \`guardEvidence\` empty.
-2. **Persist artifact** at \`${RUNTIME_ROOT}/artifacts/${schema.artifactFile}\`. Do NOT manually copy into run directories; cclaw sync/runtime keeps \`${RUNTIME_ROOT}/runs/<activeRunId>/artifacts/\` aligned.
+2. **Persist artifact** at \`${RUNTIME_ROOT}/artifacts/${schema.artifactFile}\`. Do NOT manually copy into \`${RUNTIME_ROOT}/runs/\`; archival is handled by \`cclaw archive\`.
 ${nextAction}
 
 **STOP.** Do not load the next stage skill yourself. The user will run \`/cc-next\` when ready (same session or new session).
@@ -251,7 +243,7 @@ function progressiveDisclosureBlock(stage: FlowStage): string {
 - Primary stage procedure (this file): \`.cclaw/skills/${schema.skillFolder}/SKILL.md\`
 - Orchestrator contract (gate language and handoff): \`.cclaw/commands/${stage}.md\`
 - Artifact structure baseline: \`.cclaw/templates/${schema.artifactFile}\`
-- Runtime state truth source: \`.cclaw/state/flow-state.json\` + \`.cclaw/runs/<activeRunId>/\`
+- Runtime state truth source: \`.cclaw/state/flow-state.json\` + \`.cclaw/artifacts/\` + \`.cclaw/knowledge.md\`
 
 ### See also
 - Meta routing and activation rules: \`.cclaw/skills/using-cclaw/SKILL.md\`
@@ -309,7 +301,7 @@ function quickStartBlock(stage: FlowStage): string {
 
 > **Even if you read nothing else, do these 3 things:**
 > 1. Obey the HARD-GATE below — violating it invalidates the entire stage.
-> 2. Complete every checklist step in order and write the artifact to \`.cclaw/artifacts/${schema.artifactFile}\`. Run snapshots in \`.cclaw/runs/<activeRunId>/artifacts/\` are synchronized by cclaw runtime.
+> 2. Complete every checklist step in order and write the artifact to \`.cclaw/artifacts/${schema.artifactFile}\`.
 > 3. Do not claim completion without satisfying gates: ${topGates}${schema.requiredGates.length > 3 ? ` (+${schema.requiredGates.length - 3} more)` : ""}.
 >
 > **After this stage:** update \`flow-state.json\` and tell the user to run \`/cc-next\`.
@@ -412,7 +404,7 @@ ${progressiveDisclosureBlock(stage)}
 ${selfImprovementBlock(stage)}
 ## Handoff
 - Next command: \`/cc-next\` (loads whatever stage is current in flow-state)
-- Required artifact: \`.cclaw/artifacts/${schema.artifactFile}\` (run snapshot at \`.cclaw/runs/<activeRunId>/artifacts/${schema.artifactFile}\`, synchronized by cclaw runtime)
+- Required artifact: \`.cclaw/artifacts/${schema.artifactFile}\`
 - Stage stays blocked if any required gate is unsatisfied
 `;
 }

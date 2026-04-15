@@ -4,71 +4,50 @@ import { orderedStageSchemas } from "./stage-schema.js";
 export const ARTIFACT_TEMPLATES: Record<string, string> = {
   "01-brainstorm.md": `# Brainstorm Artifact
 
-## Problem Statement
+## Problem Framing
 - **User problem:**
-- **Who benefits:**
-- **Why now:**
+- **Desired outcome:**
 - **Success signal:**
 
-## Known Context
-- **Explored files/patterns:**
-- **Existing behavior:**
-- **Relevant dependencies:**
+## Routing Decision
+- **Route:** simple | complex
+- **Reasoning:**
 
-## Clarification Log
-| Category | Question asked | User answer | Evidence note |
+## Grounding Checkpoints
+### Round 1 grounding
+- **What is fixed now:**
+- **What is still unknown:**
+
+### Round 2 grounding
+- **What is fixed now:**
+- **What is still unknown:**
+
+### Round 3 grounding
+- **What is fixed now:**
+- **What is still unknown:**
+
+## Forcing Questions Log
+| Round | Question | User answer | Decision impact |
 |---|---|---|---|
-| PURPOSE |  |  |  |
-| SCOPE |  |  |  |
-| BOUNDARIES |  |  |  |
-| ENVIRONMENT |  |  |  |
-| CONSTRAINTS |  |  |  |
+| 2 |  |  |  |
+| 2 |  |  |  |
+| 3 |  |  |  |
 
-## Purpose & Beneficiaries
-- **Project purpose:**
-- **Primary users:**
-- **Value outcome:**
-
-## Scope Boundaries
-### In Scope
-- 
-
-### Out of Scope
-- 
-
-## Failure Boundaries
-- **Edge cases to handle:**
-- **Expected failures and behavior:**
-- **Error visibility expectations:**
-
-## Runtime Environment
-- **Runtime/platform:**
-- **Install/distribution model:**
-- **Execution context (local/CI/deploy):**
-
-## Constraints
-- **Performance constraints:**
-- **Compatibility constraints:**
-- **Dependency constraints:**
-
-## Alternatives Table
+## Options Comparison
 | Option | Summary | Trade-offs | Recommendation |
 |---|---|---|---|
 | A |  |  |  |
 | B |  |  |  |
-| C |  |  |  |
 
 ## Approved Direction
 - **Selected option:**
 - **Why selected:**
-- **What was approved:** (state the specific decision)
+- **What was approved:**
 - **Approval marker:**
 
-## Assumptions & Risks
-- 
-
-## Open Questions
-- None
+## Assumptions and Open Questions
+- **Assumptions:**
+- **Open questions (or "None"):**
 `,
   "02-scope.md": `# Scope Artifact
 
@@ -385,7 +364,7 @@ alwaysApply: true
 - Follow stage order: brainstorm -> scope -> design -> spec -> plan -> tdd -> review -> ship.
 - Read \`.cclaw/state/flow-state.json\` before acting; continue from current stage when active.
 - Use \`/cc-next\` only after required gates pass; never bypass explicit pause/approval rules.
-- Keep evidence in \`.cclaw/artifacts/\`; cclaw sync/runtime maintains run snapshots in \`.cclaw/runs/<activeRunId>/artifacts/\`.
+- Keep evidence in \`.cclaw/artifacts/\`; archive completed feature artifacts only via \`cclaw archive\`.
 - For machine-only checks in design/plan/tdd/review/ship, dispatch required specialists automatically when tooling supports it.
 - Ask for user input only at explicit approval gates (scope mode, plan approval, user challenge resolution, ship finalization).
 - Treat \`.cclaw/skills/using-cclaw/SKILL.md\` as routing source of truth; load contextual utility skills only when their triggers apply.

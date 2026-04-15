@@ -3,7 +3,6 @@ import path from "node:path";
 import { RUNTIME_ROOT } from "./constants.js";
 import { exists } from "./fs-utils.js";
 import { orderedStageSchemas, stageSchema } from "./content/stage-schema.js";
-import { readFlowState } from "./runs.js";
 import type { FlowStage } from "./types.js";
 
 export interface LintFinding {
@@ -27,20 +26,9 @@ interface ResolvedArtifactPath {
 }
 
 async function resolveArtifactPath(projectRoot: string, fileName: string): Promise<ResolvedArtifactPath> {
-  const fallbackRelPath = path.join(RUNTIME_ROOT, "artifacts", fileName);
-  const fallbackAbsPath = path.join(projectRoot, fallbackRelPath);
-  const { activeRunId } = await readFlowState(projectRoot);
-  const runId = activeRunId.trim();
-
-  if (runId.length > 0) {
-    const canonicalRelPath = path.join(RUNTIME_ROOT, "runs", runId, "artifacts", fileName);
-    const canonicalAbsPath = path.join(projectRoot, canonicalRelPath);
-    if (await exists(canonicalAbsPath)) {
-      return { absPath: canonicalAbsPath, relPath: canonicalRelPath };
-    }
-  }
-
-  return { absPath: fallbackAbsPath, relPath: fallbackRelPath };
+  const relPath = path.join(RUNTIME_ROOT, "artifacts", fileName);
+  const absPath = path.join(projectRoot, relPath);
+  return { absPath, relPath };
 }
 
 function normalizeHeadingTitle(title: string): string {

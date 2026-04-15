@@ -1,12 +1,9 @@
 /**
- * Tool observation system — captures PreToolUse/PostToolUse events
- * to .cclaw/observations.jsonl for continuous learning.
+ * Hook helper scripts and harness hook JSON generators.
  *
- * observe.sh: reads hook JSON from stdin, extracts tool name + truncated I/O,
- * appends a JSONL line to .cclaw/observations.jsonl.
- *
- * summarize-observations.sh: run at session stop, reads recent observations,
- * identifies patterns, and appends new learnings to .cclaw/learnings.jsonl.
+ * This module still provides prompt/workflow/context guard scripts and
+ * cross-harness hook wiring. Observation pipeline scripts are retained only
+ * for backward compatibility and are not wired by default runtime generation.
  */
 
 import { RUNTIME_ROOT } from "../constants.js";
@@ -108,7 +105,7 @@ REASONS=""
 
 case "$TOOL_LOWER" in
   write|edit|multiedit|delete|applypatch|runcommand|shell|terminal|execcommand)
-    if printf '%s' "$PAYLOAD_LOWER" | grep -Eq '\.cclaw/(state|artifacts|hooks|skills|commands|agents|runs|learnings)'; then
+    if printf '%s' "$PAYLOAD_LOWER" | grep -Eq '\.cclaw/(state|artifacts|hooks|skills|commands|agents|runs|knowledge)'; then
       REASONS="write_to_cclaw_runtime"
     fi
     ;;
@@ -1608,9 +1605,6 @@ export function claudeHooksJsonWithObservation(): string {
         }, {
           type: "command",
           command: `bash ${RUNTIME_ROOT}/hooks/workflow-guard.sh`
-        }, {
-          type: "command",
-          command: `bash ${RUNTIME_ROOT}/hooks/observe.sh pre`
         }]
       }],
       PostToolUse: [{
@@ -1618,24 +1612,14 @@ export function claudeHooksJsonWithObservation(): string {
         hooks: [{
           type: "command",
           command: `bash ${RUNTIME_ROOT}/hooks/context-monitor.sh`
-        }, {
-          type: "command",
-          command: `bash ${RUNTIME_ROOT}/hooks/observe.sh post`
         }]
       }],
       Stop: [{
-        hooks: [
-          {
-            type: "command",
-            command: `bash ${RUNTIME_ROOT}/hooks/summarize-observations.sh`,
-            timeout: 15
-          },
-          {
-            type: "command",
-            command: `bash ${RUNTIME_ROOT}/hooks/stop-checkpoint.sh`,
-            timeout: 10
-          }
-        ]
+        hooks: [{
+          type: "command",
+          command: `bash ${RUNTIME_ROOT}/hooks/stop-checkpoint.sh`,
+          timeout: 10
+        }]
       }]
     }
   }, null, 2);
@@ -1664,21 +1648,12 @@ export function cursorHooksJsonWithObservation(): string {
       }, {
         matcher: "*",
         command: `bash ${RUNTIME_ROOT}/hooks/workflow-guard.sh`
-      }, {
-        matcher: "*",
-        command: `bash ${RUNTIME_ROOT}/hooks/observe.sh pre`
       }],
       postToolUse: [{
         matcher: "*",
         command: `bash ${RUNTIME_ROOT}/hooks/context-monitor.sh`
-      }, {
-        matcher: "*",
-        command: `bash ${RUNTIME_ROOT}/hooks/observe.sh post`
       }],
-      stop: [
-        { command: `bash ${RUNTIME_ROOT}/hooks/summarize-observations.sh`, timeout: 15 },
-        { command: `bash ${RUNTIME_ROOT}/hooks/stop-checkpoint.sh`, timeout: 10 }
-      ]
+      stop: [{ command: `bash ${RUNTIME_ROOT}/hooks/stop-checkpoint.sh`, timeout: 10 }]
     }
   }, null, 2);
 }
@@ -1703,9 +1678,6 @@ export function codexHooksJsonWithObservation(): string {
         }, {
           type: "command",
           command: `bash ${RUNTIME_ROOT}/hooks/workflow-guard.sh`
-        }, {
-          type: "command",
-          command: `bash ${RUNTIME_ROOT}/hooks/observe.sh pre`
         }]
       }],
       PostToolUse: [{
@@ -1713,24 +1685,14 @@ export function codexHooksJsonWithObservation(): string {
         hooks: [{
           type: "command",
           command: `bash ${RUNTIME_ROOT}/hooks/context-monitor.sh`
-        }, {
-          type: "command",
-          command: `bash ${RUNTIME_ROOT}/hooks/observe.sh post`
         }]
       }],
       Stop: [{
-        hooks: [
-          {
-            type: "command",
-            command: `bash ${RUNTIME_ROOT}/hooks/summarize-observations.sh`,
-            timeout: 15
-          },
-          {
-            type: "command",
-            command: `bash ${RUNTIME_ROOT}/hooks/stop-checkpoint.sh`,
-            timeout: 10
-          }
-        ]
+        hooks: [{
+          type: "command",
+          command: `bash ${RUNTIME_ROOT}/hooks/stop-checkpoint.sh`,
+          timeout: 10
+        }]
       }]
     }
   }, null, 2);

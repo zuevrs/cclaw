@@ -117,185 +117,144 @@ const BRAINSTORM: StageSchemaInput = {
   stage: "brainstorm",
   skillFolder: "brainstorming",
   skillName: "brainstorming",
-  skillDescription: "Design-first stage. Clarify intent, compare options, and get explicit approval before implementation planning.",
-  hardGate: "Do NOT invoke any implementation skill, write any code, scaffold any project, or take any implementation action until you have presented a design and the user has approved it. This applies to EVERY project regardless of perceived simplicity.",
-  purpose: "Turn a rough request into an approved design direction with clear assumptions and boundaries.",
+  skillDescription: "Design-first stage. Route request complexity, run phased forcing questions, and lock an approved direction before scope/design work.",
+  hardGate: "Do NOT invoke implementation skills, write code, scaffold projects, or mutate product behavior until a concrete direction is approved by the user.",
+  purpose: "Turn an initial idea into an approved direction through routing, phased grounding, and decision-forcing questions.",
   whenToUse: [
     "Starting a new feature or behavior change",
-    "Requirements are ambiguous or solution path is unclear",
-    "Before any implementation-stage command"
+    "Requirements are ambiguous or trade-offs are unclear",
+    "Before any implementation-stage command or architecture commitment"
   ],
   whenNotToUse: [
-    "An approved design, spec, and plan already exist and work is in execution stages",
-    "The request is strictly branch finalization or release handoff work",
-    "The task is purely retrospective after ship with no new design decisions needed"
+    "A valid approved direction already exists and only execution remains",
+    "The request is a pure release/finalization action with no new product decisions",
+    "The task is retrospective only (post-ship audit with no new solution choices)"
   ],
   checklist: [
-    "Explore project context — check files, docs, recent commits, existing behavior. Summarize what you found (even for seemingly simple projects).",
-    "Assess scope — if the request describes multiple independent subsystems, flag for decomposition before detailed questions.",
-    "Restate the problem — in a SEPARATE message (no questions in this message), summarize what you understood the user wants and why. The restatement message must contain zero clarifying questions and no option prompts. **STOP and wait** for user to confirm or correct before asking any clarifying questions.",
-    "Ask clarifying questions — one at a time, one per message. Each clarification message must ask exactly one decision-seeking question (no bundled sub-questions). You MUST cover these categories before proposing approaches: (a) PURPOSE — why this project exists, who it serves; (b) SCOPE — what it must do, what it must NOT do; (c) BOUNDARIES — error handling, edge cases, failure modes; (d) ENVIRONMENT — how it runs, deploys, installs; (e) CONSTRAINTS — performance, compatibility, dependencies. Skip a category only if the user already provided that info. If user answers 'I don't know' / 'не знаю', convert it into explicit assumptions and ask for confirmation before moving on. Do NOT rush — 3 generic questions are never enough for a non-trivial project.",
-    "Before proposing approaches, perform at least one premise-challenge question (\"Is this the right problem framing?\") and at least one boundary stress-test question (\"What should never happen even on failure?\").",
-    "Propose 2-3 approaches — with real trade-offs (not cosmetic differences) and your explicit recommendation with reasoning. Explain WHY you recommend this option over others.",
-    "Present design — in sections. After each section, explicitly state what you are asking the user to approve: 'Do you approve [specific thing]?' Never ask a bare 'одобряете?/approve?' without context.",
-    "Write design doc — save to `.cclaw/artifacts/01-brainstorm.md`.",
-    "Self-review — scan for placeholders, TBDs, contradictions, ambiguity, scope creep. Fix inline.",
-    "User reviews written artifact — ask user to review the written artifact (not the chat summary). **STOP.** Do NOT proceed until user responds.",
-    "Stage complete — update `flow-state.json` per the Stage Completion Protocol. Tell user to run `/cc-next` to continue to scope."
+    "Principles (one line): one decision-forcing question at a time, grounding summary between rounds, and no implementation before approval.",
+    "Route the work: classify as Simple Route (single-surface, low-risk) or Complex Route (multi-surface, high-uncertainty); explain why.",
+    "Round 1 grounding: restate the problem, desired outcome, and success signal in your own words; get confirmation before deeper questioning.",
+    "Round 2 forcing questions: ask one decision-forcing question per turn about boundaries and constraints; each answer must change a concrete design decision.",
+    "Grounding checkpoint: summarize what is fixed vs still unknown after Round 2; confirm this summary before moving to solution options.",
+    "Round 3 forcing questions: ask trade-off questions that force prioritization (for example speed vs flexibility), then lock assumptions.",
+    "Propose multiple viable approaches with real trade-offs and one explicit recommendation tied to the forced decisions.",
+    "Write `.cclaw/artifacts/01-brainstorm.md` with route, grounding checkpoints, forcing-question log, options, and approved direction; run a contradiction pass.",
+    "Ask the user to review the written artifact and explicitly approve or request changes; only then complete stage and point to `/cc-next`."
   ],
   interactionProtocol: [
-    "Explore context first (files, docs, existing behavior). Share a brief summary of what you found.",
-    "Restate the problem in your own words in a SEPARATE message. Do NOT add any questions, options, or approval asks to this message. Wait for user to confirm or correct.",
-    "Ask clarifying questions — one per message. Cover mandatory categories: PURPOSE, SCOPE, BOUNDARIES, ENVIRONMENT, CONSTRAINTS. Do NOT combine questions. Do NOT propose approaches until all categories are addressed.",
-    "Do not package multiple asks as bullet points in one message; split them into separate turns even if related.",
-    "When user answer is ambiguous or unknown (for example: 'не знаю'), propose explicit defaults as assumptions and get a one-message confirmation before treating that category as closed.",
-    "Include at least one premise-challenge and one boundary stress-test question before locking options. Do not accept 'simple demo' framing without challenge.",
-    "For approach selection: use the Decision Protocol — present labeled options (A/B/C) with REAL trade-offs (not cosmetic) and mark one as (recommended) with clear reasoning. If AskQuestion/AskUserQuestion is available, send exactly ONE question per call, validate fields against runtime schema, and on schema error immediately fall back to plain-text question instead of retrying guessed payloads.",
-    "Every approval question MUST state what exactly is being approved: 'Do you approve [the architecture / the API shape / the dependency choice]?' Never ask a bare 'approve?' or 'looks good?'.",
-    "Get section-by-section approval before finalizing the design direction.",
-    "Run a self-review pass (ambiguity, placeholders, contradictions) before handoff.",
-    "**STOP.** Wait for explicit user approval after writing the artifact. Do NOT auto-advance to the next stage."
+    "Start with routing (Simple Route vs Complex Route) so question depth matches real complexity.",
+    "Use phased questioning: Round 1 grounding -> Round 2 constraints/boundaries -> grounding checkpoint -> Round 3 trade-off forcing.",
+    "Ask exactly one decision-forcing question per turn; avoid bundled or purely informational questions.",
+    "After each round, publish a short grounding summary (fixed decisions vs unknowns) before continuing.",
+    "Use the Decision Protocol for option selection, with explicit recommendation and rationale.",
+    "State explicitly what is being approved when requesting approval.",
+    "Run a brief contradiction and ambiguity pass before handoff.",
+    "**STOP.** Wait for explicit user approval after writing the artifact. Do NOT auto-advance."
   ],
   process: [
-    "Explore project context — files, docs, behavior, recent changes. Share findings.",
-    "Restate the problem — summarize what the user wants and why in a SEPARATE message. Keep this message declarative only; no questions. Wait for confirmation before questions.",
-    "Clarify iteratively — ask questions one at a time covering mandatory categories: PURPOSE, SCOPE, BOUNDARIES, ENVIRONMENT, CONSTRAINTS. Do not skip to approaches early.",
-    "Convert unknown answers into explicit assumptions and confirm them before approaches.",
-    "Identify whether request should be decomposed into smaller sub-problems.",
-    "Offer 2-3 alternatives with real trade-offs and recommendation with rationale.",
-    "Present design in sections. After each section explicitly name what you ask the user to approve.",
-    "Write artifact to `.cclaw/artifacts/01-brainstorm.md`.",
-    "Run self-review: placeholder scan, internal consistency, scope check, ambiguity check.",
-    "Ask user to review the written artifact. Wait for changes or approval.",
-    "Handoff to scope stage only after approval is explicit."
+    "Route request complexity (Simple Route or Complex Route) and capture rationale.",
+    "Round 1 grounding: restate problem, outcome, and success signal; confirm alignment.",
+    "Round 2 forcing questions: boundaries and constraints one question at a time.",
+    "Grounding checkpoint: summarize fixed decisions and remaining unknowns.",
+    "Round 3 forcing questions: trade-offs and priorities; lock explicit assumptions.",
+    "Offer multiple approaches with recommendation and rationale.",
+    "Capture approved direction in `.cclaw/artifacts/01-brainstorm.md`.",
+    "Run contradiction/ambiguity pass and request explicit user approval.",
+    "Handoff to scope only after approval is explicit."
   ],
   requiredGates: [
-    { id: "brainstorm_discovery_purpose", description: "Discovery captured WHY this project exists and WHO it serves, with explicit user confirmation." },
-    { id: "brainstorm_discovery_scope", description: "Discovery captured explicit in-scope and out-of-scope boundaries before approach selection." },
-    { id: "brainstorm_discovery_boundaries", description: "Discovery captured failure modes, edge cases, and error-handling boundaries." },
-    { id: "brainstorm_discovery_environment", description: "Discovery captured runtime/install/deployment environment assumptions." },
-    { id: "brainstorm_discovery_constraints", description: "Discovery captured constraints (performance, compatibility, dependency limits) before deciding architecture." },
-    {
-      id: "brainstorm_problem_restated",
-      description: "Problem was restated in agent's words in a standalone non-question message, and user confirmed the understanding."
-    },
-    { id: "brainstorm_options_compared", description: "At least two alternatives were compared with real trade-offs." },
-    { id: "brainstorm_design_approved", description: "User approved a concrete design direction (with explicit statement of what was approved)." },
-    { id: "brainstorm_self_review_passed", description: "Design doc passed placeholder/ambiguity/consistency checks." },
-    { id: "brainstorm_user_reviewed_artifact", description: "User reviewed the written artifact and confirmed readiness." }
+    { id: "brainstorm_route_selected", description: "Simple vs Complex route was selected with explicit rationale." },
+    { id: "brainstorm_round1_grounded", description: "Round 1 grounding (problem, outcome, success signal) was confirmed by the user." },
+    { id: "brainstorm_round2_forcing_questions", description: "Round 2 forcing questions captured boundaries and constraints that changed real decisions." },
+    { id: "brainstorm_round3_tradeoff_decisions", description: "Round 3 forcing questions locked explicit trade-off priorities and assumptions." },
+    { id: "brainstorm_options_compared", description: "Multiple solution approaches were compared with real trade-offs and a recommendation." },
+    { id: "brainstorm_direction_approved", description: "User approved a concrete direction and what exactly was approved is stated." },
+    { id: "brainstorm_artifact_reviewed", description: "User reviewed the written brainstorm artifact and confirmed readiness." }
   ],
   requiredEvidence: [
     "Artifact written to `.cclaw/artifacts/01-brainstorm.md`.",
-    "Clarification log explicitly records PURPOSE, SCOPE, BOUNDARIES, ENVIRONMENT, and CONSTRAINTS coverage.",
-    "Clarification sequence evidence shows one explicit question per message (no bundled multi-question turns).",
-    "Clarification log includes at least one premise-challenge question and one boundary stress-test question before approach selection.",
-    "Unknown or ambiguous user answers are converted into explicit assumptions and confirmed (or explicitly waived) before closure.",
-    "Discovery sections include explicit in-scope/out-of-scope boundaries and failure handling boundaries.",
-    "Approved direction captured in artifact.",
-    "Restatement evidence shows a standalone non-question restatement message before clarification Q&A.",
-    "Open questions explicitly listed (if any).",
-    "Self-review pass completed with no unresolved issues."
+    "Routing decision (`simple` or `complex`) with rationale is recorded.",
+    "Grounding checkpoints between rounds are recorded (fixed decisions vs unknowns).",
+    "Forcing-question log captures question, answer, and decision impact.",
+    "Approaches and recommendation are recorded with explicit trade-offs.",
+    "Approved direction and approval marker are present.",
+    "Assumptions and open questions are captured (or explicitly marked as none)."
   ],
   inputs: ["problem statement", "constraints", "success criteria"],
   requiredContext: [
-    "existing project docs and patterns",
+    "existing project context and patterns",
     "current behavior of affected area",
     "business and delivery constraints"
   ],
   outputs: [
     "approved design direction",
-    "alternatives and trade-off table",
+    "alternatives with trade-offs",
     "brainstorm artifact"
   ],
   blockers: [
     "no explicit approval",
     "critical ambiguity unresolved",
-    "scope too broad and not decomposed"
+    "route cannot be determined due to missing context"
   ],
   exitCriteria: [
     "approved design direction documented",
     "required gates marked satisfied",
     "no implementation action taken",
-    "self-review completed with fixes applied"
+    "artifact reviewed by user"
   ],
   antiPatterns: [
-    "Skipping design because task seems simple",
-    "Asking many questions in one message",
+    "Skipping route selection and treating all requests with the same question depth",
+    "Asking non-forcing or bundled questions",
+    "Skipping grounding checkpoints between rounds",
     "Jumping directly into implementation",
-    "Combining visual companion offer with a clarifying question",
-    "Invoking implementation skills before writing plans",
-    "Appending clarifying questions to the restatement message instead of waiting for confirmation",
-    "Packing multiple clarifying questions into one message (including bullet-list question bundles)",
-    "Silently filling defaults after 'не знаю'/'I don't know' without explicit assumption confirmation",
-    "Accepting 'simple/test/demo' framing without premise challenge or failure stress testing",
-    "Asking bare 'approve?' or 'одобряете?' without stating WHAT is being approved",
-    "Presenting a single summary and asking for blanket approval instead of section-by-section review",
-    "Rushing through clarification — asking 1-2 generic questions then jumping to design",
-    "Batching multiple gate confirmations in one message when resuming a session"
+    "Requesting approval without stating what decision is being approved"
   ],
   rationalizations: [
-    { claim: "This is too simple for design.", reality: "Simple tasks fail fast when assumptions are wrong; a short design pass prevents rework." },
-    { claim: "We can figure it out while coding.", reality: "Coding before alignment creates churn and hidden scope growth." },
-    { claim: "There is only one obvious approach.", reality: "Without alternatives, trade-offs stay implicit and risk goes unexamined." },
-    { claim: "The user already knows what they want.", reality: "Unstated assumptions diverge during implementation; explicit design surfaces them early." },
-    { claim: "This is straightforward, 1-2 questions are enough.", reality: "Even simple projects have hidden constraints (error handling, edge cases, deployment). A few extra questions now prevent rework later." }
+    { claim: "This is straightforward so routing is unnecessary.", reality: "Explicit routing prevents under-questioning complex work and over-questioning simple work." },
+    { claim: "Any question is useful context.", reality: "Only forcing questions that change decisions improve design quality." },
+    { claim: "Grounding summaries slow us down.", reality: "Grounding checkpoints prevent hidden drift and reduce expensive rework later." }
   ],
   redFlags: [
-    "No alternatives documented",
-    "No explicit approval checkpoint",
-    "Implementation-related actions before approval",
-    "Self-review skipped or glossed over",
-    "Artifact has TBD or placeholder sections",
-    "Restatement step includes clarifying questions or option prompts",
-    "Clarification turns repeatedly include multi-question bundles instead of single asks",
-    "Unknown user answers are treated as settled requirements without explicit assumption confirmation",
-    "No evidence of premise challenge or failure stress-test questions before options",
-    "Fewer than 3 clarifying questions asked for any non-trivial project",
-    "Approval requested without stating what exactly is being approved"
+    "Route is missing or unjustified",
+    "No grounding checkpoint between question rounds",
+    "Questions do not force concrete decisions",
+    "Approval requested without explicit decision context"
   ],
   policyNeedles: [
-    "Restate problem before questions",
-    "One clarifying question per message",
-    "2-3 approaches with real trade-offs",
+    "Simple Route / Complex Route",
+    "One forcing question per message",
+    "Grounding checkpoint between rounds",
+    "Multiple approaches with trade-offs",
     "State what is being approved",
     "Do NOT implement, scaffold, or modify behavior"
   ],
   artifactFile: "01-brainstorm.md",
   next: "scope",
   cognitivePatterns: [
-    { name: "Divergent-Convergent Thinking", description: "First expand the solution space widely, then converge on the strongest option. Do not skip the divergent phase." },
-    { name: "YAGNI Ruthlessness", description: "Remove unnecessary features from all designs. Every feature must earn its place against the cost of complexity." },
-    { name: "Decomposition Instinct", description: "When a request describes multiple independent subsystems, decompose before refining. Each sub-project gets its own cycle." },
-    { name: "Isolation Preference", description: "Break the system into units that each have one clear purpose, communicate through well-defined interfaces, and can be understood and tested independently." }
+    { name: "Route Before Depth", description: "Choose question depth using simple-vs-complex routing before diving into details." },
+    { name: "Forcing Question Discipline", description: "Each question must force a concrete decision, not just gather trivia." },
+    { name: "Grounding Cadence", description: "After each question round, re-ground on fixed decisions vs unknowns before continuing." },
+    { name: "Diverge Then Commit", description: "Explore multiple viable options first, then commit only after explicit approval." }
   ],
   reviewSections: [],
   completionStatus: ["DONE", "DONE_WITH_CONCERNS", "BLOCKED"],
   crossStageTrace: {
     readsFrom: [],
     writesTo: [".cclaw/artifacts/01-brainstorm.md"],
-    traceabilityRule: "Every approved direction must be traceable forward through scope and design. Downstream stages must reference brainstorm decisions."
+    traceabilityRule: "Scope and design decisions must trace back to routed question rounds and approved brainstorm direction."
   },
   artifactValidation: [
-    { section: "Problem Statement", required: true, validationRule: "Must describe the user problem, not the solution. Include WHO and WHY and success signal." },
-    { section: "Known Context", required: true, validationRule: "Files, patterns, constraints discovered during exploration. Evidence that context was actually explored." },
-    {
-      section: "Clarification Log",
-      required: true,
-      validationRule: "At least 5 rows covering PURPOSE, SCOPE, BOUNDARIES, ENVIRONMENT, CONSTRAINTS. Table must use 4 columns: Category, Question asked, User answer, Evidence note."
-    },
-    { section: "Purpose & Beneficiaries", required: true, validationRule: "At least 3 meaningful lines describing why this exists and who benefits." },
-    { section: "Scope Boundaries", required: true, validationRule: "At least 2 scope items including explicit out-of-scope boundaries." },
-    { section: "Failure Boundaries", required: true, validationRule: "At least 2 failure/edge-case expectations and error visibility behavior." },
-    { section: "Runtime Environment", required: true, validationRule: "At least 2 lines describing runtime, install/distribution, and execution environment." },
-    { section: "Constraints", required: true, validationRule: "At least 2 concrete constraints (performance, compatibility, dependency, or policy)." },
-    { section: "Alternatives Table", required: true, validationRule: "At least 2 approaches with real trade-offs (not cosmetic) and recommendation with reasoning." },
-    { section: "Approved Direction", required: true, validationRule: "Must contain explicit approval marker from user. State what was approved." },
-    { section: "Assumptions & Risks", required: true, validationRule: "Explicit assumptions made during design. Known risks. If none, state 'None'." },
-    { section: "Open Questions", required: true, validationRule: "If empty, state 'None' explicitly. Do not omit." }
+    { section: "Problem Framing", required: true, validationRule: "Must define the user problem, desired outcome, and success signal." },
+    { section: "Routing Decision", required: true, validationRule: "Must state simple vs complex route and explain why." },
+    { section: "Grounding Checkpoints", required: true, validationRule: "Must capture fixed decisions and remaining unknowns between rounds." },
+    { section: "Forcing Questions Log", required: true, validationRule: "Must capture question, answer, and decision impact for each forcing question." },
+    { section: "Options Comparison", required: true, validationRule: "Must compare multiple distinct options with real trade-offs and recommendation." },
+    { section: "Approved Direction", required: true, validationRule: "Must include explicit approval marker and what was approved." },
+    { section: "Assumptions and Open Questions", required: true, validationRule: "Must capture unresolved assumptions/open questions, or explicitly state none." }
   ],
   namedAntiPattern: {
-    title: "This Is Too Simple To Need A Design",
-    description: "Every project goes through this process. A todo list, a single-function utility, a config change — all of them. 'Simple' projects are where unexamined assumptions cause the most wasted work. The design can be short (a few sentences for truly simple projects), but you MUST present it and get approval."
+    title: "This Is Too Simple To Brainstorm",
+    description: "Skipping routing and forcing questions because a task looks simple creates silent assumption debt. Even simple-route work needs explicit grounding and approval."
   }
 };
 
