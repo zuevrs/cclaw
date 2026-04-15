@@ -295,6 +295,8 @@ const SCOPE: StageSchemaInput = {
     "For scope mode selection: use the Decision Protocol — present expand/selective/hold/reduce as labeled options with trade-offs and mark one as (recommended). Base your recommendation on default heuristics: greenfield -> expand, enhancement -> selective, bugfix/hotfix/refactor -> hold, broad blast radius -> reduce. If AskQuestion/AskUserQuestion is available, send exactly ONE question per call, validate fields against runtime schema, and on schema error immediately fall back to plain-text question instead of retrying guessed payloads.",
     "Walk through the scope checklist interactively. Each checklist item that surfaces a decision should be presented to the user as a question, not as a monologue. Do not dump all items at once.",
     "Challenge premise and verify the problem framing before anything else.",
+    "Take a position on every scope decision. Avoid hedging phrases like 'this could work' or 'there are many ways'; state your recommendation and one concrete condition that would change it.",
+    "Use pushback patterns when framing is weak: vague scope -> force a specific user/problem, platform vision -> force a narrowest viable wedge, social proof -> demand behavioral evidence.",
     "Present one structural scope issue at a time for decision. Do NOT batch. Use structured options for each scope boundary question.",
     "Record explicit in-scope and out-of-scope contract.",
     "Once the user accepts or rejects a recommendation, commit fully. Do not re-argue.",
@@ -346,6 +348,8 @@ const SCOPE: StageSchemaInput = {
     "Scope silently expanded during discussion",
     "No explicit out-of-scope section",
     "Premise accepted without challenge",
+    "Sycophantic agreement without evidence-based pushback",
+    "Hedged recommendations that avoid taking a position",
     "Batching multiple scope issues into one question",
     "Re-arguing for smaller scope after user rejects reduction"
   ],
@@ -353,7 +357,8 @@ const SCOPE: StageSchemaInput = {
     { claim: "Scope can be finalized during implementation.", reality: "Late scope decisions create architecture churn and missed deadlines." },
     { claim: "Mode selection is unnecessary overhead.", reality: "Mode selection makes trade-offs explicit and prevents silent drift." },
     { claim: "Out-of-scope is obvious.", reality: "Unwritten exclusions return later as hidden requirements." },
-    { claim: "We do not need alternatives for a clear request.", reality: "Even clear requests benefit from a minimal-viable vs ideal comparison." }
+    { claim: "We do not need alternatives for a clear request.", reality: "Even clear requests benefit from a minimal-viable vs ideal comparison." },
+    { claim: "Pushback risks sounding confrontational, so I should stay neutral.", reality: "Respectful pushback catches framing errors before they become expensive implementation mistakes." }
   ],
   redFlags: [
     "No selected mode in artifact",
