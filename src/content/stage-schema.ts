@@ -502,7 +502,10 @@ const DESIGN: StageSchemaInput = {
     "Only proceed to the next review section after ALL issues in the current section are resolved.",
     "If a section has no issues, say 'No issues found' and move on.",
     "Do not skip failure-mode mapping.",
-    "For design baseline approval: present the full baseline. **STOP.** Do NOT proceed until user explicitly approves the design."
+    "For design baseline approval: present the full baseline. **STOP.** Do NOT proceed until user explicitly approves the design.",
+    "Take a firm position on every recommendation. Do NOT hedge with 'it depends' or 'you could do either'. State your opinion, then justify it.",
+    "Use pushback patterns for weak framing: if the user says 'it's just a small change', respond with 'small changes to shared interfaces have outsized blast radius — let's map it'. If 'we'll refactor later', respond with 'later never comes — show me the refactor ticket or do it now'.",
+    "When the user's proposed architecture is suboptimal, say so directly. Offer the alternative with concrete trade-offs, do not bury criticism in praise."
   ],
   process: [
     "Read upstream artifacts (brainstorm, scope).",
@@ -558,13 +561,16 @@ const DESIGN: StageSchemaInput = {
     "Missing data-flow edge cases",
     "No performance budget for critical path",
     "Batching multiple design issues into one question",
-    "Skipping review sections because plan seems simple"
+    "Skipping review sections because plan seems simple",
+    "Agreeing with user's architecture choice without evaluating alternatives",
+    "Hedging every recommendation with 'it depends' instead of taking a position"
   ],
   rationalizations: [
     { claim: "Architecture can emerge incrementally while coding.", reality: "Unplanned architecture decisions cause incompatible module boundaries." },
     { claim: "Failure modes are edge cases we can ignore for now.", reality: "Production incidents usually come from unplanned edge paths." },
     { claim: "Performance can be optimized after launch.", reality: "Missing performance budgets make regressions invisible until late." },
-    { claim: "This is a strategy doc so implementation sections do not apply.", reality: "Implementation details are where strategy breaks down. Every section must be evaluated." }
+    { claim: "This is a strategy doc so implementation sections do not apply.", reality: "Implementation details are where strategy breaks down. Every section must be evaluated." },
+    { claim: "The user preferred approach A, so we should go with it.", reality: "User preference is an input, not a conclusion. Evaluate on engineering merit. If approach B is objectively better, recommend B with evidence." }
   ],
   redFlags: [
     "No explicit architecture boundary section",
