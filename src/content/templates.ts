@@ -86,7 +86,7 @@ export const ARTIFACT_TEMPLATES: Record<string, string> = {
 - 
 
 ## Discretion Areas
-- (or `None`)
+- (or \`None\`)
 
 ## Deferred Items
 | Item | Rationale |
@@ -101,7 +101,7 @@ export const ARTIFACT_TEMPLATES: Record<string, string> = {
 ## Completion Dashboard
 - Checklist findings:
 - Resolved decisions count:
-- Unresolved decisions (or `None`):
+- Unresolved decisions (or \`None\`):
 
 ## Scope Summary
 - Selected mode:
