@@ -310,7 +310,7 @@ const SCOPE: StageSchemaInput = {
     "Run mode-specific analysis that matches the selected scope mode.",
     "Walk through scope review sections one at a time.",
     "Write explicit scope contract, discretion areas, and deferred items.",
-    "Produce scope summary with mode, in-scope, out-of-scope, and deferred."
+    "Produce scope summary plus completion dashboard (checklist findings, number of resolved decisions, unresolved items or `None`)."
   ],
   requiredGates: [
     { id: "scope_premise_challenged", description: "Problem framing and assumptions were challenged." },
@@ -326,7 +326,8 @@ const SCOPE: StageSchemaInput = {
     "Discretion areas are explicit (or marked as `None`).",
     "Selected mode and rationale are documented.",
     "Premise challenge findings documented.",
-    "Deferred items list with one-line rationale for each."
+    "Deferred items list with one-line rationale for each.",
+    "Completion dashboard lists checklist findings, decision count, and unresolved items (or `None`)."
   ],
   inputs: ["brainstorm artifact", "timeline constraints", "product priorities"],
   requiredContext: [
@@ -334,7 +335,7 @@ const SCOPE: StageSchemaInput = {
     "existing capabilities and reusable components",
     "delivery deadlines and risk tolerance"
   ],
-  outputs: ["scope mode decision", "scope contract", "discretion areas list", "deferred scope list", "scope summary"],
+  outputs: ["scope mode decision", "scope contract", "discretion areas list", "deferred scope list", "scope summary", "scope completion dashboard"],
   blockers: [
     "scope mode not selected",
     "in/out boundaries ambiguous",
@@ -346,6 +347,7 @@ const SCOPE: StageSchemaInput = {
     "discretion areas recorded explicitly",
     "required gates marked satisfied",
     "deferred list recorded explicitly",
+    "completion dashboard produced",
     "scope summary produced"
   ],
   antiPatterns: [
@@ -451,6 +453,7 @@ const SCOPE: StageSchemaInput = {
     { section: "Discretion Areas", required: true, validationRule: "Explicit list of implementer decision zones, or 'None' if scope is fully locked." },
     { section: "Deferred Items", required: true, validationRule: "Each item has one-line rationale. If empty, state 'None' explicitly." },
     { section: "Error & Rescue Registry", required: true, validationRule: "Each scoped capability has: failure mode, detection method, fallback decision." },
+    { section: "Completion Dashboard", required: true, validationRule: "Lists checklist findings, count of resolved decisions, and unresolved decisions (or 'None')." },
     { section: "Scope Summary", required: true, validationRule: "Clean summary: mode, strongest challenges, recommended path, accepted scope, deferred, excluded." }
   ],
   namedAntiPattern: {
