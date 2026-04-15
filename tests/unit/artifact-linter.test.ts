@@ -20,28 +20,29 @@ describe("artifact linter heuristics", () => {
     const root = await fs.mkdtemp(path.join(os.tmpdir(), "cclaw-artifact-lint-missing-"));
     await writeRuntimeArtifact(root, "01-brainstorm.md", `# Brainstorm Artifact
 
-## Problem Framing
-- User problem: add robust automation
-- Desired outcome: reduce release regressions
-- Success signal: invalid metadata blocked before publish
+## Context
+- Project state: monorepo with CI
+- Relevant existing code/patterns: pre-publish.sh
 
-## Routing Decision
-- Route: complex
-- Reasoning: touches CI and release behavior
+## Problem
+- What we're solving: reduce release regressions
+- Success criteria: invalid metadata blocked before publish
+- Constraints: no new runtime dependencies
 
-## Grounding Checkpoints
-- Round 1 fixed: reliability target
-- Round 2 fixed: hard-block behavior
-
-## Forcing Questions Log
-| Round | Question | User answer | Decision impact |
+## Clarifying Questions
+| # | Question | Answer | Decision impact |
 |---|---|---|---|
-| 2 | Block or warn? | Block | enforce hard gate |
+| 1 | Block or warn? | Block | enforce hard gate |
 
-## Approved Direction
-- Selected option: B
-- What was approved: reusable validation module
-- Approval marker: approved
+## Selected Direction
+- Approach: B
+- Rationale: reusable module
+- Approval: approved
+
+## Design
+- Architecture: shared validation module
+- Key components: validator
+- Data flow: metadata -> checks -> result
 
 ## Assumptions and Open Questions
 - Assumptions: CI remains source of truth
@@ -49,54 +50,45 @@ describe("artifact linter heuristics", () => {
 `);
 
     const result = await lintArtifact(root, "brainstorm");
-    const options = result.findings.find((finding) => finding.section === "Options Comparison");
+    const approaches = result.findings.find((finding) => finding.section === "Approaches");
     expect(result.passed).toBe(false);
-    expect(options?.found).toBe(false);
+    expect(approaches?.found).toBe(false);
   });
 
   it("passes brainstorm artifact when required sections are present", async () => {
     const root = await fs.mkdtemp(path.join(os.tmpdir(), "cclaw-artifact-lint-pass-"));
     await writeRuntimeArtifact(root, "01-brainstorm.md", `# Brainstorm Artifact
 
-## Problem Framing
-- User problem: add robust automation
-- Desired outcome: reduce release regressions
-- Success signal: invalid metadata blocked before publish
+## Context
+- Project state: monorepo with CI pipeline and custom release scripts
+- Relevant existing code/patterns: scripts/pre-publish.sh does metadata checks
 
-## Routing Decision
-- Route: complex
-- Reasoning: multi-surface impact across CI and release flow
+## Problem
+- What we're solving: reduce release regressions
+- Success criteria: invalid metadata blocked before publish
+- Constraints: no new runtime dependencies
 
-## Grounding Checkpoints
-### Round 1 grounding
-- What is fixed now: reliability objective
-- What is still unknown: rollback details
-
-### Round 2 grounding
-- What is fixed now: hard-block behavior and no new runtime dependencies
-- What is still unknown: reporting details
-
-### Round 3 grounding
-- What is fixed now: prioritize fast delivery over configurability
-- What is still unknown: None
-
-## Forcing Questions Log
-| Round | Question | User answer | Decision impact |
+## Clarifying Questions
+| # | Question | Answer | Decision impact |
 |---|---|---|---|
-| 2 | Block invalid metadata or warn? | Block | hard gate required |
+| 1 | Block invalid metadata or warn? | Block | hard gate required |
 | 2 | Add runtime dependencies? | No | stay on existing runtime stack |
-| 3 | Speed or configurability first? | Speed | keep minimal v1 design |
 
-## Options Comparison
-| Option | Summary | Trade-offs | Recommendation |
+## Approaches
+| Approach | Architecture | Trade-offs | Recommendation |
 |---|---|---|---|
 | A | script-only checks | faster but weaker reuse |  |
 | B | reusable validation module | slightly more effort, better long-term reuse | recommended |
 
-## Approved Direction
-- Selected option: B
-- What was approved: reusable validation module
-- Approval marker: approved by user
+## Selected Direction
+- Approach: B — reusable validation module
+- Rationale: best balance of reuse and delivery speed
+- Approval: approved by user
+
+## Design
+- Architecture: shared TS module with typed validators imported by CI and local CLI
+- Key components: validateMetadata, validateChangelog, validateVersion, runAll
+- Data flow: package.json + CHANGELOG.md -> validator module -> structured result
 
 ## Assumptions and Open Questions
 - Assumptions: CI remains primary release path
@@ -107,34 +99,36 @@ describe("artifact linter heuristics", () => {
     expect(result.passed).toBe(true);
   });
 
-  it("fails brainstorm forcing questions section when empty", async () => {
-    const root = await fs.mkdtemp(path.join(os.tmpdir(), "cclaw-artifact-lint-empty-forcing-"));
+  it("fails brainstorm clarifying questions section when empty", async () => {
+    const root = await fs.mkdtemp(path.join(os.tmpdir(), "cclaw-artifact-lint-empty-questions-"));
     await writeRuntimeArtifact(root, "01-brainstorm.md", `# Brainstorm Artifact
 
-## Problem Framing
-- User problem: add robust automation
-- Desired outcome: reduce release regressions
-- Success signal: invalid metadata blocked before publish
+## Context
+- Project state: monorepo
+- Relevant existing code/patterns: pre-publish.sh
 
-## Routing Decision
-- Route: complex
-- Reasoning: touches CI and release behavior
+## Problem
+- What we're solving: reduce release regressions
+- Success criteria: invalid metadata blocked before publish
+- Constraints: none
 
-## Grounding Checkpoints
-- Round 1 fixed: reliability target
+## Clarifying Questions
 
-## Forcing Questions Log
-
-## Options Comparison
-| Option | Summary | Trade-offs | Recommendation |
+## Approaches
+| Approach | Architecture | Trade-offs | Recommendation |
 |---|---|---|---|
 | A | script-only checks | quick but weaker reuse |  |
 | B | reusable validation module | more effort, better reuse | recommended |
 
-## Approved Direction
-- Selected option: B
-- What was approved: reusable validation module
-- Approval marker: approved
+## Selected Direction
+- Approach: B
+- Rationale: reusable module
+- Approval: approved
+
+## Design
+- Architecture: shared module
+- Key components: validator
+- Data flow: metadata -> checks -> result
 
 ## Assumptions and Open Questions
 - Assumptions: CI remains source of truth
@@ -142,10 +136,10 @@ describe("artifact linter heuristics", () => {
 `);
 
     const result = await lintArtifact(root, "brainstorm");
-    const forcingLog = result.findings.find((finding) => finding.section === "Forcing Questions Log");
+    const questions = result.findings.find((finding) => finding.section === "Clarifying Questions");
     expect(result.passed).toBe(false);
-    expect(forcingLog?.found).toBe(false);
-    expect(forcingLog?.details).toContain("no meaningful content");
+    expect(questions?.found).toBe(false);
+    expect(questions?.details).toContain("no meaningful content");
   });
 
   it("enforces exactly one selected enum token in finalization", async () => {

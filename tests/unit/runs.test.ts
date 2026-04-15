@@ -90,7 +90,7 @@ describe("runs system", () => {
       stageGateCatalog: {
         brainstorm: {
           required: ["tampered"],
-          passed: ["brainstorm_route_selected", "tampered"],
+          passed: ["brainstorm_context_explored", "tampered"],
           blocked: ["brainstorm_direction_approved", 1]
         }
       }
@@ -101,9 +101,9 @@ describe("runs system", () => {
     expect(state.currentStage).toBe("brainstorm");
     expect(state.completedStages).toEqual(["brainstorm"]);
     expect(state.guardEvidence).toEqual({ ok: "yes" });
-    expect(state.stageGateCatalog.brainstorm.required).toContain("brainstorm_route_selected");
+    expect(state.stageGateCatalog.brainstorm.required).toContain("brainstorm_context_explored");
     expect(state.stageGateCatalog.brainstorm.required).not.toContain("tampered");
-    expect(state.stageGateCatalog.brainstorm.passed).toEqual(["brainstorm_route_selected"]);
+    expect(state.stageGateCatalog.brainstorm.passed).toEqual(["brainstorm_context_explored"]);
     expect(state.stageGateCatalog.brainstorm.blocked).toEqual(["brainstorm_direction_approved"]);
   });
 });

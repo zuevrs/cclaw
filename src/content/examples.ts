@@ -1,71 +1,53 @@
 import type { FlowStage } from "../types.js";
 
 const STAGE_EXAMPLES: Record<FlowStage, string> = {
-  brainstorm: `### Route selection
+  brainstorm: `### Context
 
-- **Route:** Complex Route
-- **Why:** touches CI behavior, release checks, and CLI flow across multiple components.
+- **Project state:** Monorepo with CI pipeline using custom release scripts. Release checks are scattered across shell scripts with no shared validation logic.
+- **Relevant existing code/patterns:** \`scripts/pre-publish.sh\` does metadata checks. \`src/release/\` has partial validation helpers.
 
-### Round 1 grounding
+### Problem
 
-- **Grounding summary:** "We are improving release reliability for the platform team. Success means invalid release preconditions are caught before publish with explicit operator feedback."
-- **User confirmation:** confirmed.
+- **What we're solving:** release checks are fragile and inconsistent between CI and local runs. Invalid metadata sometimes reaches npm publish.
+- **Success criteria:** invalid release preconditions are caught before publish with explicit operator feedback, in both CI and local workflows.
+- **Constraints:** no new runtime dependencies; must work within existing CI pipeline structure.
 
-### Round 2 forcing questions (boundaries/constraints)
+### Clarifying Questions
 
-**Q1:** "If release metadata is invalid, do we block publishing hard or only warn?"  
-**A1:** "Block hard."
+| # | Question | Answer | Decision impact |
+| --- | --- | --- | --- |
+| 1 | If release metadata is invalid, should we block publishing hard or only warn? | Block hard. | Validation becomes a mandatory gate — no warning-only fallback. |
+| 2 | Should the validation logic live in a reusable module or stay as shell scripts? | Reusable module. | Architecture: shared TypeScript module imported by CI and local tooling, not duplicated shell scripts. |
+| 3 | For v1, prioritize rapid delivery or maximum configurability? | Rapid delivery. | Minimal deterministic validation surface; defer plugin/config system to v2. |
 
-**Decision impact:** release checks become mandatory gates with no warning-only fallback.
+### Approaches
 
-**Q2:** "Do we allow new runtime dependencies for speed, or keep runtime dependency set unchanged?"  
-**A2:** "Keep runtime dependencies unchanged."
+| Approach | Architecture | Trade-offs | Recommendation |
+| --- | --- | --- | --- |
+| A: Reusable validation module | Shared TS module with typed validators, imported by CI scripts and local CLI. Existing \`pre-publish.sh\` calls the module. | Medium upfront effort, high reuse. Requires test coverage for the module. | **Recommended** — best balance of reuse and delivery speed. |
+| B: Hardened shell scripts | Keep existing script approach, add stricter checks and error messages. | Lowest effort. Weak reuse, CI/local divergence risk grows over time. | Viable fallback if TS module is blocked. |
+| C: Full release framework | New release orchestrator with plugin system, config files, rollback commands. | Maximum flexibility. High risk, delivery delay, over-engineered for current needs. | Not recommended for v1. |
 
-**Decision impact:** implementation should reuse existing tooling and built-in capabilities.
+### Selected Direction
 
-### Grounding checkpoint after Round 2
+- **Approach:** A — Reusable validation module
+- **Rationale:** shared TS module gives consistent behavior in CI and local, avoids script duplication, and stays within the no-new-dependency constraint.
+- **Approval:** approved
 
-- **Fixed:** hard-block behavior, no new runtime dependencies.
-- **Unknown:** rollback command details and status reporting format.
+### Design
 
-### Round 3 forcing questions (trade-offs)
+- **Architecture:** single \`release-validator\` module in \`src/release/\` exporting typed check functions. CI script and local CLI both import and run the same checks.
+- **Key components:** \`validateMetadata()\`, \`validateChangelog()\`, \`validateVersion()\` — each returns a typed result with error details. A \`runAll()\` orchestrator runs checks and exits non-zero on any failure.
+- **Data flow:** package.json + CHANGELOG.md → validator module → structured result → CI/CLI renders human-readable report.
 
-**Q3:** "For v1, prioritize rapid delivery or maximum configurability?"  
-**A3:** "Rapid delivery."
+### Assumptions and Open Questions
 
-**Decision impact:** choose a minimal deterministic validation surface; defer advanced configuration.
-
-### Options comparison
-
-| Option | Pros | Cons | Effort | Recommendation |
-| --- | --- | --- | --- | --- |
-| Script-only checks | Lowest implementation cost | Weak reuse and long-term maintainability | Low | Useful fallback, not preferred |
-| Reusable validation module | Reusable across CI and local runs | Slightly higher upfront design effort | Medium | **Recommended** |
-| Full release framework rewrite | Highest long-term flexibility | High risk and delivery delay | High | Not recommended for v1 |
-
-### Approved Direction
-
-We will implement a **reusable release validation module** used by CI and local tooling, aligned with hard-block safety and no-new-runtime-dependency constraints.
-
-### Open Questions
-
-- What exact rollback command sequence should be documented for failed publish attempts?
-- Should status output include machine-readable JSON in addition to markdown?
-
-### Assumptions (explicit)
-
-- CI remains the primary execution path; local flow mirrors CI checks.
-- Existing release metadata files remain the source of truth.
-- v1 prioritizes deterministic behavior over broad customization.
-
-### Constraints
-
-- No additional runtime dependencies in validation path.
-- Validation overhead should remain acceptable for routine CI execution.
+- **Assumptions:** CI remains the primary execution path; existing release metadata files remain the source of truth; v1 prioritizes determinism over customization.
+- **Open questions:** What exact rollback sequence for failed publish? Should status output include machine-readable JSON alongside markdown?
 
 ### Notes for the next stage
 
-Carry fixed trade-off decisions directly into scope in/out boundaries and deferred list.`,
+Carry the no-new-dependency constraint and hard-block behavior directly into scope in/out boundaries.`,
 
   scope: `### Scope contract
 

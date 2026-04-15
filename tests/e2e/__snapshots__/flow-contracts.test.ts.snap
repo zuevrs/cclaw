@@ -3,7 +3,7 @@
 exports[`flow command contracts > matches golden snapshots for strict-stage content > brainstorm-skill 1`] = `
 "---
 name: brainstorming
-description: "Design-first stage. Route request complexity, run phased forcing questions, and lock an approved direction before scope/design work."
+description: "Design-first stage. Explore context, understand intent through collaborative dialogue, propose distinct approaches, and lock an approved direction before scope/design work."
 ---
 
 # brainstorming
@@ -13,12 +13,12 @@ description: "Design-first stage. Route request complexity, run phased forcing q
 > **Even if you read nothing else, do these 3 things:**
 > 1. Obey the HARD-GATE below — violating it invalidates the entire stage.
 > 2. Complete every checklist step in order and write the artifact to \`.cclaw/artifacts/01-brainstorm.md\`.
-> 3. Do not claim completion without satisfying gates: \`brainstorm_route_selected\`, \`brainstorm_round1_grounded\`, \`brainstorm_round2_forcing_questions\` (+4 more).
+> 3. Do not claim completion without satisfying gates: \`brainstorm_context_explored\`, \`brainstorm_idea_understood\`, \`brainstorm_approaches_compared\` (+2 more).
 >
 > **After this stage:** update \`flow-state.json\` and tell the user to run \`/cc-next\`.
 
 ## Overview
-Turn an initial idea into an approved direction through routing, phased grounding, and decision-forcing questions.
+Turn an initial idea into an approved design direction through natural collaborative dialogue — understanding the problem before proposing solutions.
 
 ## When to Use
 - Starting a new feature or behavior change
@@ -80,107 +80,89 @@ Do NOT invoke implementation skills, write code, scaffold projects, or mutate pr
 
 You MUST complete these steps in order:
 
-1. Principles (one line): one decision-forcing question at a time, grounding summary between rounds, and no implementation before approval.
-2. Route the work: classify as Simple Route (single-surface, low-risk) or Complex Route (multi-surface, high-uncertainty); explain why.
-3. Round 1 grounding: restate the problem, desired outcome, and success signal in your own words; get confirmation before deeper questioning.
-4. Round 2 forcing questions: ask one decision-forcing question per turn about boundaries and constraints; each answer must change a concrete design decision.
-5. Grounding checkpoint: summarize what is fixed vs still unknown after Round 2; confirm this summary before moving to solution options.
-6. Round 3 forcing questions: ask trade-off questions that force prioritization (for example speed vs flexibility), then lock assumptions.
-7. Propose multiple viable approaches with real trade-offs and one explicit recommendation tied to the forced decisions.
-8. Write \`.cclaw/artifacts/01-brainstorm.md\` with route, grounding checkpoints, forcing-question log, options, and approved direction; run a contradiction pass.
-9. Ask the user to review the written artifact and explicitly approve or request changes; only then complete stage and point to \`/cc-next\`.
+1. **Explore project context** — check files, docs, recent commits to understand what already exists.
+2. **Assess scope** — if the request covers multiple independent subsystems, flag it and help decompose before deep-diving. Each sub-project gets its own brainstorm cycle.
+3. **Ask clarifying questions** — one at a time, understand purpose, constraints, and success criteria. Prefer multiple choice when possible. Each question should change what we build, not just gather trivia.
+4. **Propose 2-3 architecturally distinct approaches** — with real trade-offs and your recommendation. Lead with the recommended option and explain why.
+5. **Present design by sections** — scale each section to its complexity. Ask after each section whether it looks right so far. Cover: architecture, key components, data flow.
+6. **Write artifact** to \`.cclaw/artifacts/01-brainstorm.md\`.
+7. **Self-review** — scan for placeholders/TODOs, check internal consistency, verify scope is focused, resolve any ambiguity.
+8. **User reviews artifact** — ask the user to review the written artifact and explicitly approve or request changes.
+9. **Handoff** — only then complete stage and point to \`/cc-next\`.
 
 ## Examples
 
 Concrete samples of what good output looks like for this stage.
 
-### Route selection
+### Context
 
-- **Route:** Complex Route
-- **Why:** touches CI behavior, release checks, and CLI flow across multiple components.
+- **Project state:** Monorepo with CI pipeline using custom release scripts. Release checks are scattered across shell scripts with no shared validation logic.
+- **Relevant existing code/patterns:** \`scripts/pre-publish.sh\` does metadata checks. \`src/release/\` has partial validation helpers.
 
-### Round 1 grounding
+### Problem
 
-- **Grounding summary:** "We are improving release reliability for the platform team. Success means invalid release preconditions are caught before publish with explicit operator feedback."
-- **User confirmation:** confirmed.
+- **What we're solving:** release checks are fragile and inconsistent between CI and local runs. Invalid metadata sometimes reaches npm publish.
+- **Success criteria:** invalid release preconditions are caught before publish with explicit operator feedback, in both CI and local workflows.
+- **Constraints:** no new runtime dependencies; must work within existing CI pipeline structure.
 
-### Round 2 forcing questions (boundaries/constraints)
+### Clarifying Questions
 
-**Q1:** "If release metadata is invalid, do we block publishing hard or only warn?"  
-**A1:** "Block hard."
+| # | Question | Answer | Decision impact |
+| --- | --- | --- | --- |
+| 1 | If release metadata is invalid, should we block publishing hard or only warn? | Block hard. | Validation becomes a mandatory gate — no warning-only fallback. |
+| 2 | Should the validation logic live in a reusable module or stay as shell scripts? | Reusable module. | Architecture: shared TypeScript module imported by CI and local tooling, not duplicated shell scripts. |
+| 3 | For v1, prioritize rapid delivery or maximum configurability? | Rapid delivery. | Minimal deterministic validation surface; defer plugin/config system to v2. |
 
-**Decision impact:** release checks become mandatory gates with no warning-only fallback.
+### Approaches
 
-**Q2:** "Do we allow new runtime dependencies for speed, or keep runtime dependency set unchanged?"  
-**A2:** "Keep runtime dependencies unchanged."
+| Approach | Architecture | Trade-offs | Recommendation |
+| --- | --- | --- | --- |
+| A: Reusable validation module | Shared TS module with typed validators, imported by CI scripts and local CLI. Existing \`pre-publish.sh\` calls the module. | Medium upfront effort, high reuse. Requires test coverage for the module. | **Recommended** — best balance of reuse and delivery speed. |
+| B: Hardened shell scripts | Keep existing script approach, add stricter checks and error messages. | Lowest effort. Weak reuse, CI/local divergence risk grows over time. | Viable fallback if TS module is blocked. |
+| C: Full release framework | New release orchestrator with plugin system, config files, rollback commands. | Maximum flexibility. High risk, delivery delay, over-engineered for current needs. | Not recommended for v1. |
 
-**Decision impact:** implementation should reuse existing tooling and built-in capabilities.
+### Selected Direction
 
-### Grounding checkpoint after Round 2
+- **Approach:** A — Reusable validation module
+- **Rationale:** shared TS module gives consistent behavior in CI and local, avoids script duplication, and stays within the no-new-dependency constraint.
+- **Approval:** approved
 
-- **Fixed:** hard-block behavior, no new runtime dependencies.
-- **Unknown:** rollback command details and status reporting format.
+### Design
 
-### Round 3 forcing questions (trade-offs)
+- **Architecture:** single \`release-validator\` module in \`src/release/\` exporting typed check functions. CI script and local CLI both import and run the same checks.
+- **Key components:** \`validateMetadata()\`, \`validateChangelog()\`, \`validateVersion()\` — each returns a typed result with error details. A \`runAll()\` orchestrator runs checks and exits non-zero on any failure.
+- **Data flow:** package.json + CHANGELOG.md → validator module → structured result → CI/CLI renders human-readable report.
 
-**Q3:** "For v1, prioritize rapid delivery or maximum configurability?"  
-**A3:** "Rapid delivery."
+### Assumptions and Open Questions
 
-**Decision impact:** choose a minimal deterministic validation surface; defer advanced configuration.
-
-### Options comparison
-
-| Option | Pros | Cons | Effort | Recommendation |
-| --- | --- | --- | --- | --- |
-| Script-only checks | Lowest implementation cost | Weak reuse and long-term maintainability | Low | Useful fallback, not preferred |
-| Reusable validation module | Reusable across CI and local runs | Slightly higher upfront design effort | Medium | **Recommended** |
-| Full release framework rewrite | Highest long-term flexibility | High risk and delivery delay | High | Not recommended for v1 |
-
-### Approved Direction
-
-We will implement a **reusable release validation module** used by CI and local tooling, aligned with hard-block safety and no-new-runtime-dependency constraints.
-
-### Open Questions
-
-- What exact rollback command sequence should be documented for failed publish attempts?
-- Should status output include machine-readable JSON in addition to markdown?
-
-### Assumptions (explicit)
-
-- CI remains the primary execution path; local flow mirrors CI checks.
-- Existing release metadata files remain the source of truth.
-- v1 prioritizes deterministic behavior over broad customization.
-
-### Constraints
-
-- No additional runtime dependencies in validation path.
-- Validation overhead should remain acceptable for routine CI execution.
+- **Assumptions:** CI remains the primary execution path; existing release metadata files remain the source of truth; v1 prioritizes determinism over customization.
+- **Open questions:** What exact rollback sequence for failed publish? Should status output include machine-readable JSON alongside markdown?
 
 ### Notes for the next stage
 
-Carry fixed trade-off decisions directly into scope in/out boundaries and deferred list.
+Carry the no-new-dependency constraint and hard-block behavior directly into scope in/out boundaries.
 
-## Anti-Pattern: "This Is Too Simple To Brainstorm"
+## Anti-Pattern: "This Is Too Simple To Need A Design"
 
-Skipping routing and forcing questions because a task looks simple creates silent assumption debt. Even simple-route work needs explicit grounding and approval.
+Every project goes through this process. Simple projects are where unexamined assumptions cause the most wasted work. The design can be short, but you MUST present it and get approval.
 
 ## Cognitive Patterns
 
 These are thinking instincts, not a checklist. Let them shape your perspective throughout the stage.
 
-1. **Route Before Depth** — Choose question depth using simple-vs-complex routing before diving into details.
-2. **Forcing Question Discipline** — Each question must force a concrete decision, not just gather trivia.
-3. **Grounding Cadence** — After each question round, re-ground on fixed decisions vs unknowns before continuing.
-4. **Diverge Then Commit** — Explore multiple viable options first, then commit only after explicit approval.
+1. **Context Before Questions** — Understand what exists before asking what to build.
+2. **Depth Matches Complexity** — Brief design for simple tasks, thorough exploration for complex ones.
+3. **Diverge Then Commit** — Explore multiple architecturally distinct options first, commit only after explicit approval.
+4. **Question Quality Over Quantity** — Each question should change what we build, not just gather trivia.
 
 ## Interaction Protocol
-1. Start with routing (Simple Route vs Complex Route) so question depth matches real complexity.
-2. Use phased questioning: Round 1 grounding -> Round 2 constraints/boundaries -> grounding checkpoint -> Round 3 trade-off forcing.
-3. Ask exactly one decision-forcing question per turn; avoid bundled or purely informational questions.
-4. After each round, publish a short grounding summary (fixed decisions vs unknowns) before continuing.
-5. Use the Decision Protocol for option selection, with explicit recommendation and rationale.
+1. Explore what exists before asking what to build — check project files first.
+2. Ask exactly one question per turn. Prefer multiple choice. No bundled questions.
+3. Each question should change a concrete design decision. If a question only gathers trivia, skip it.
+4. Present design in sections scaled to their complexity — a few sentences for simple aspects, detailed for nuanced ones. Get approval after each section.
+5. When proposing approaches, lead with your recommendation and explain why.
 6. State explicitly what is being approved when requesting approval.
-7. Run a brief contradiction and ambiguity pass before handoff.
+7. Run a brief self-review (placeholders, contradictions, scope, ambiguity) before presenting the artifact.
 8. **STOP.** Wait for explicit user approval after writing the artifact. Do NOT auto-advance.
 
 **AskUserQuestion Format (when tool is available):**
@@ -199,32 +181,29 @@ These are thinking instincts, not a checklist. Let them shape your perspective t
 
 
 ## Required Gates
-- \`brainstorm_route_selected\` — Simple vs Complex route was selected with explicit rationale.
-- \`brainstorm_round1_grounded\` — Round 1 grounding (problem, outcome, success signal) was confirmed by the user.
-- \`brainstorm_round2_forcing_questions\` — Round 2 forcing questions captured boundaries and constraints that changed real decisions.
-- \`brainstorm_round3_tradeoff_decisions\` — Round 3 forcing questions locked explicit trade-off priorities and assumptions.
-- \`brainstorm_options_compared\` — Multiple solution approaches were compared with real trade-offs and a recommendation.
+- \`brainstorm_context_explored\` — Project context (files, docs, existing patterns) was checked before asking questions.
+- \`brainstorm_idea_understood\` — Agent and user share the same understanding of the problem, constraints, and success criteria.
+- \`brainstorm_approaches_compared\` — 2-3 architecturally distinct approaches were compared with real trade-offs and a recommendation.
 - \`brainstorm_direction_approved\` — User approved a concrete direction and what exactly was approved is stated.
 - \`brainstorm_artifact_reviewed\` — User reviewed the written brainstorm artifact and confirmed readiness.
 
 ## Required Evidence
 - [ ] Artifact written to \`.cclaw/artifacts/01-brainstorm.md\`.
-- [ ] Routing decision (\`simple\` or \`complex\`) with rationale is recorded.
-- [ ] Grounding checkpoints between rounds are recorded (fixed decisions vs unknowns).
-- [ ] Forcing-question log captures question, answer, and decision impact.
-- [ ] Approaches and recommendation are recorded with explicit trade-offs.
+- [ ] Project context was explored (files, docs, or recent activity referenced).
+- [ ] Clarifying questions and their answers are captured.
+- [ ] 2-3 approaches with trade-offs and recommendation are recorded.
 - [ ] Approved direction and approval marker are present.
 - [ ] Assumptions and open questions are captured (or explicitly marked as none).
 
 ## Process
-1. Route request complexity (Simple Route or Complex Route) and capture rationale.
-2. Round 1 grounding: restate problem, outcome, and success signal; confirm alignment.
-3. Round 2 forcing questions: boundaries and constraints one question at a time.
-4. Grounding checkpoint: summarize fixed decisions and remaining unknowns.
-5. Round 3 forcing questions: trade-offs and priorities; lock explicit assumptions.
-6. Offer multiple approaches with recommendation and rationale.
-7. Capture approved direction in \`.cclaw/artifacts/01-brainstorm.md\`.
-8. Run contradiction/ambiguity pass and request explicit user approval.
+1. Explore project context: check files, docs, recent activity.
+2. Assess scope: flag if request is too broad, help decompose first.
+3. Ask clarifying questions one at a time — focus on purpose, constraints, success criteria.
+4. Propose 2-3 architecturally distinct approaches with trade-offs and a recommendation.
+5. Present design sections incrementally, get approval after each.
+6. Write approved direction to \`.cclaw/artifacts/01-brainstorm.md\`.
+7. Self-review: placeholder scan, internal consistency, scope check, ambiguity check.
+8. Request explicit user approval of the artifact.
 9. Handoff to scope only after approval is explicit.
 
 
@@ -237,44 +216,44 @@ These are thinking instincts, not a checklist. Let them shape your perspective t
 **Writes to:**
 - .cclaw/artifacts/01-brainstorm.md
 
-**Rule:** Scope and design decisions must trace back to routed question rounds and approved brainstorm direction.
+**Rule:** Scope and design decisions must trace back to explored context and approved brainstorm direction.
 
 ## Artifact Validation
 
 | Section | Status | Validation Rule |
 |---|---|---|
-| Problem Framing | REQUIRED | Must define the user problem, desired outcome, and success signal. |
-| Routing Decision | REQUIRED | Must state simple vs complex route and explain why. |
-| Grounding Checkpoints | REQUIRED | Must capture fixed decisions and remaining unknowns between rounds. |
-| Forcing Questions Log | REQUIRED | Must capture question, answer, and decision impact for each forcing question. |
-| Options Comparison | REQUIRED | Must compare multiple distinct options with real trade-offs and recommendation. |
-| Approved Direction | REQUIRED | Must include explicit approval marker and what was approved. |
+| Context | REQUIRED | Must reference project state and relevant existing code or patterns. |
+| Problem | REQUIRED | Must define what we're solving, success criteria, and constraints. |
+| Clarifying Questions | REQUIRED | Must capture question, answer, and decision impact for each clarifying question. |
+| Approaches | REQUIRED | Must compare 2-3 architecturally distinct options with real trade-offs and recommendation. |
+| Selected Direction | REQUIRED | Must include the selected approach, rationale, and explicit approval marker. |
+| Design | REQUIRED | Must cover architecture, key components, and data flow scaled to complexity. |
 | Assumptions and Open Questions | REQUIRED | Must capture unresolved assumptions/open questions, or explicitly state none. |
 
 
 ## Common Rationalizations
 | Rationalization | Reality |
 |---|---|
-| This is straightforward so routing is unnecessary. | Explicit routing prevents under-questioning complex work and over-questioning simple work. |
-| Any question is useful context. | Only forcing questions that change decisions improve design quality. |
-| Grounding summaries slow us down. | Grounding checkpoints prevent hidden drift and reduce expensive rework later. |
+| I already know what to build, so exploration is unnecessary. | Checking files and context catches wrong assumptions that waste hours later. |
+| Any question is useful context. | Only questions whose answers change what we build improve the design. |
+| Two options that differ only in tooling count as distinct approaches. | Distinct means different architecture, not different libraries for the same approach. |
 
 ## Blockers
 - no explicit approval
 - critical ambiguity unresolved
-- route cannot be determined due to missing context
+- project context not explored
 
 ## Anti-Patterns
-- Skipping route selection and treating all requests with the same question depth
-- Asking non-forcing or bundled questions
-- Skipping grounding checkpoints between rounds
+- Asking questions without exploring existing project context first
+- Asking bundled or purely informational questions that don't change decisions
+- Proposing cosmetic option variants instead of architecturally distinct approaches
 - Jumping directly into implementation
 - Requesting approval without stating what decision is being approved
 
 ## Red Flags
-- Route is missing or unjustified
-- No grounding checkpoint between question rounds
-- Questions do not force concrete decisions
+- No project context exploration before questions
+- Questions that only gather preferences without design impact
+- Options that are variants of one approach, not distinct alternatives
 - Approval requested without explicit decision context
 
 ## Completion Status
@@ -297,7 +276,7 @@ When all required gates are satisfied and the artifact is written:
 1. **Update \`.cclaw/state/flow-state.json\`:**
    - Set \`currentStage\` to \`"scope"\`
    - Add \`"brainstorm"\` to \`completedStages\` array
-   - Move all gate IDs for this stage (\`brainstorm_route_selected\`, \`brainstorm_round1_grounded\`, \`brainstorm_round2_forcing_questions\`, \`brainstorm_round3_tradeoff_decisions\`, \`brainstorm_options_compared\`, \`brainstorm_direction_approved\`, \`brainstorm_artifact_reviewed\`) into \`stageGateCatalog.brainstorm.passed\`
+   - Move all gate IDs for this stage (\`brainstorm_context_explored\`, \`brainstorm_idea_understood\`, \`brainstorm_approaches_compared\`, \`brainstorm_direction_approved\`, \`brainstorm_artifact_reviewed\`) into \`stageGateCatalog.brainstorm.passed\`
    - Clear \`stageGateCatalog.brainstorm.blocked\`
    - For each passed gate, add an entry to \`guardEvidence\`: \`"<gate_id>": "<artifact path or excerpt proving the gate>"\`. Do NOT leave \`guardEvidence\` empty.
 2. **Persist artifact** at \`.cclaw/artifacts/01-brainstorm.md\`. Do NOT manually copy into \`.cclaw/runs/\`; archival is handled by \`cclaw archive\`.

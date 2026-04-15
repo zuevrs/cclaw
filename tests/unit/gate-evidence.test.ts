@@ -34,45 +34,36 @@ describe("gate evidence verification", () => {
     await prepareRoot(root);
     await fs.writeFile(path.join(root, ".cclaw/artifacts/01-brainstorm.md"), `# Brainstorm Artifact
 
-## Problem Framing
-- User problem: harden release flow
-- Desired outcome: prevent unsafe publishes
-- Success signal: invalid release metadata blocks publish
+## Context
+- Project state: monorepo with CI pipeline
+- Relevant existing code/patterns: scripts/pre-publish.sh does metadata checks
 
-## Routing Decision
-- Route: complex
-- Reasoning: touches release checks, CI, and publish behavior
+## Problem
+- What we're solving: harden release flow to prevent unsafe publishes
+- Success criteria: invalid release metadata blocks publish
+- Constraints: no new runtime dependencies
 
-## Grounding Checkpoints
-### Round 1 grounding
-- What is fixed now: release reliability objective
-- What is still unknown: rollback runbook details
-
-### Round 2 grounding
-- What is fixed now: hard-block behavior and no new runtime dependencies
-- What is still unknown: machine-readable status format
-
-### Round 3 grounding
-- What is fixed now: prioritize speed over configurability for v1
-- What is still unknown: None
-
-## Forcing Questions Log
-| Round | Question | User answer | Decision impact |
+## Clarifying Questions
+| # | Question | Answer | Decision impact |
 |---|---|---|---|
-| 2 | Block invalid metadata or warn? | Block | enforce mandatory gate |
+| 1 | Block invalid metadata or warn? | Block | enforce mandatory gate |
 | 2 | Add runtime dependencies? | No | keep existing runtime stack |
-| 3 | Speed or configurability first? | Speed | keep v1 surface minimal |
 
-## Options Comparison
-| Option | Summary | Trade-offs | Recommendation |
+## Approaches
+| Approach | Architecture | Trade-offs | Recommendation |
 |---|---|---|---|
 | A | narrow fix | lower risk, weaker reuse |  |
 | B | reusable validation module | moderate effort, stronger reuse | recommended |
 
-## Approved Direction
-- Selected option: B
-- What was approved: reusable validation module
-- Approval marker: approved
+## Selected Direction
+- Approach: B — reusable validation module
+- Rationale: best balance of reuse and delivery speed
+- Approval: approved
+
+## Design
+- Architecture: shared TS module with typed validators
+- Key components: validateMetadata, validateChangelog, validateVersion
+- Data flow: package.json + CHANGELOG.md -> validator module -> result
 
 ## Assumptions and Open Questions
 - Assumptions: CI pipeline is stable

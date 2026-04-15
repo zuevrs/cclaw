@@ -4,46 +4,35 @@ import { orderedStageSchemas } from "./stage-schema.js";
 export const ARTIFACT_TEMPLATES: Record<string, string> = {
   "01-brainstorm.md": `# Brainstorm Artifact
 
-## Problem Framing
-- **User problem:**
-- **Desired outcome:**
-- **Success signal:**
+## Context
+- **Project state:**
+- **Relevant existing code/patterns:**
 
-## Routing Decision
-- **Route:** simple | complex
-- **Reasoning:**
+## Problem
+- **What we're solving:**
+- **Success criteria:**
+- **Constraints:**
 
-## Grounding Checkpoints
-### Round 1 grounding
-- **What is fixed now:**
-- **What is still unknown:**
-
-### Round 2 grounding
-- **What is fixed now:**
-- **What is still unknown:**
-
-### Round 3 grounding
-- **What is fixed now:**
-- **What is still unknown:**
-
-## Forcing Questions Log
-| Round | Question | User answer | Decision impact |
+## Clarifying Questions
+| # | Question | Answer | Decision impact |
 |---|---|---|---|
-| 2 |  |  |  |
-| 2 |  |  |  |
-| 3 |  |  |  |
+| 1 |  |  |  |
 
-## Options Comparison
-| Option | Summary | Trade-offs | Recommendation |
+## Approaches
+| Approach | Architecture | Trade-offs | Recommendation |
 |---|---|---|---|
 | A |  |  |  |
 | B |  |  |  |
 
-## Approved Direction
-- **Selected option:**
-- **Why selected:**
-- **What was approved:**
-- **Approval marker:**
+## Selected Direction
+- **Approach:**
+- **Rationale:**
+- **Approval:** pending
+
+## Design
+- **Architecture:**
+- **Key components:**
+- **Data flow:**
 
 ## Assumptions and Open Questions
 - **Assumptions:**
