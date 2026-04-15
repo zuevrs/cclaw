@@ -795,38 +795,20 @@ export async function doctorChecks(projectRoot: string, options: DoctorOptions =
     });
   }
   const activeRunId = typeof flowState.activeRunId === "string" ? flowState.activeRunId.trim() : "";
-  const runActivationDeferred = activeRunId === "run-pending";
   checks.push({
     name: "flow_state:active_run_id",
     ok: activeRunId.length > 0,
-    details: `${RUNTIME_ROOT}/state/flow-state.json must include activeRunId (run-pending is allowed before first active run is materialized)`
+    details: `${RUNTIME_ROOT}/state/flow-state.json must include activeRunId`
   });
   checks.push({
-    name: "run:active_artifacts",
-    ok: runActivationDeferred
-      ? true
-      : await exists(path.join(projectRoot, RUNTIME_ROOT, "runs", activeRunId, "artifacts")),
-    details: runActivationDeferred
-      ? "active run artifacts are deferred until first feature run activation"
-      : `${RUNTIME_ROOT}/runs/${activeRunId}/artifacts must exist`
+    name: "artifacts:active_root",
+    ok: await exists(path.join(projectRoot, RUNTIME_ROOT, "artifacts")),
+    details: `${RUNTIME_ROOT}/artifacts must exist as the active artifact root`
   });
   checks.push({
-    name: "run:active_metadata",
-    ok: runActivationDeferred
-      ? true
-      : await exists(path.join(projectRoot, RUNTIME_ROOT, "runs", activeRunId, "run.json")),
-    details: runActivationDeferred
-      ? "active run metadata is deferred until first feature run activation"
-      : `${RUNTIME_ROOT}/runs/${activeRunId}/run.json must exist`
-  });
-  checks.push({
-    name: "run:active_handoff",
-    ok: runActivationDeferred
-      ? true
-      : await exists(path.join(projectRoot, RUNTIME_ROOT, "runs", activeRunId, "handoff.md")),
-    details: runActivationDeferred
-      ? "active run handoff is deferred until first feature run activation"
-      : `${RUNTIME_ROOT}/runs/${activeRunId}/handoff.md must exist`
+    name: "runs:archive_root",
+    ok: await exists(path.join(projectRoot, RUNTIME_ROOT, "runs")),
+    details: `${RUNTIME_ROOT}/runs must exist for archived feature snapshots`
   });
 
   const delegation = await checkMandatoryDelegations(projectRoot, flowState.currentStage);
