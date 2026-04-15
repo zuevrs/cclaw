@@ -154,16 +154,19 @@ These are thinking instincts, not a checklist. Let them shape your perspective t
 2. **Depth Matches Complexity** — Brief design for simple tasks, thorough exploration for complex ones.
 3. **Diverge Then Commit** — Explore multiple architecturally distinct options first, commit only after explicit approval.
 4. **Question Quality Over Quantity** — Each question should change what we build, not just gather trivia.
+5. **Know When To Move On** — Stop asking when problem, constraints, and success criteria are clear enough to compare approaches.
 
 ## Interaction Protocol
 1. Explore what exists before asking what to build — check project files first.
-2. Ask exactly one question per turn. Prefer multiple choice. No bundled questions.
-3. Each question should change a concrete design decision. If a question only gathers trivia, skip it.
-4. Present design in sections scaled to their complexity — a few sentences for simple aspects, detailed for nuanced ones. Get approval after each section.
-5. When proposing approaches, lead with your recommendation and explain why.
-6. State explicitly what is being approved when requesting approval.
-7. Run a brief self-review (placeholders, contradictions, scope, ambiguity) before presenting the artifact.
-8. **STOP.** Wait for explicit user approval after writing the artifact. Do NOT auto-advance.
+2. If the idea is vague or could mean many different things, your FIRST question narrows to a specific kind of project. Do not ask detail questions until the project type is clear.
+3. Ask exactly one question per turn. Prefer multiple choice. No bundled questions.
+4. After 2-3 questions, summarize your emerging understanding before continuing so the user can correct course early.
+5. Each question should change a concrete design decision. Litmus test: if the two most likely answers do not lead to different architectures, make the choice yourself and state it.
+6. Present design in sections scaled to their complexity — a few sentences for simple aspects, detailed for nuanced ones. Get approval after each section.
+7. When proposing approaches, lead with your recommendation and explain why.
+8. State explicitly what is being approved when requesting approval.
+9. Run a brief self-review (placeholders, contradictions, scope, ambiguity) before presenting the artifact.
+10. **STOP.** Wait for explicit user approval after writing the artifact. Do NOT auto-advance.
 
 **AskUserQuestion Format (when tool is available):**
 1. **Re-ground:** State the project, current stage, and current task. (1-2 sentences)
