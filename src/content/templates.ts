@@ -50,6 +50,27 @@ export const ARTIFACT_TEMPLATES: Record<string, string> = {
 - Why this path?
 - What if we do nothing?
 
+## Dream State Mapping
+- CURRENT STATE:
+- THIS PLAN:
+- 12-MONTH IDEAL:
+- Alignment verdict:
+
+## Implementation Alternatives
+| Option | Summary | Effort (S/M/L/XL) | Risk (Low/Med/High) | Pros | Cons | Reuses |
+|---|---|---|---|---|---|---|
+| A (minimum viable) |  |  |  |  |  |  |
+| B (ideal architecture) |  |  |  |  |  |  |
+| C (optional) |  |  |  |  |  |  |
+
+## Temporal Interrogation
+| Time slice | Likely decision pressure | Lock now or defer? | Reason |
+|---|---|---|---|
+| HOUR 1 (foundations) |  |  |  |
+| HOUR 2-3 (core logic) |  |  |  |
+| HOUR 4-5 (integration) |  |  |  |
+| HOUR 6+ (polish/tests) |  |  |  |
+
 ## Scope Mode
 - [ ] expand
 - [ ] selective
@@ -64,6 +85,9 @@ export const ARTIFACT_TEMPLATES: Record<string, string> = {
 ### Out of Scope
 - 
 
+## Discretion Areas
+- (or `None`)
+
 ## Deferred Items
 | Item | Rationale |
 |---|---|
@@ -73,6 +97,11 @@ export const ARTIFACT_TEMPLATES: Record<string, string> = {
 | Capability | Failure mode | Detection | Fallback |
 |---|---|---|---|
 |  |  |  |  |
+
+## Completion Dashboard
+- Checklist findings:
+- Resolved decisions count:
+- Unresolved decisions (or `None`):
 
 ## Scope Summary
 - Selected mode:
