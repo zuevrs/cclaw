@@ -488,7 +488,7 @@ const DESIGN: StageSchemaInput = {
     "Design Doc Check — read existing design docs, scope artifact, brainstorm artifact. If a design doc exists that covers this area, check for 'Supersedes:' and use the latest. Use upstream artifacts as source of truth.",
     "Step 0: Scope Challenge — what existing code solves sub-problems? Minimum change set? Complexity check: 8+ files or 2+ new services = complexity smell → flag for possible scope reduction.",
     "Search Before Building — For each technical choice (library, pattern, architecture), search for existing solutions. Label findings: Layer 1 (exact match), Layer 2 (partial match, needs adaptation), Layer 3 (inspiration only), EUREKA (unexpected perfect solution). Default to existing before custom.",
-    "Architecture Review — system design, component boundaries, data flow, scaling, security architecture. For each new codepath: one realistic production failure scenario.",
+    "Architecture Review — system design, component boundaries, data flow, scaling, security architecture. For each new codepath: one realistic production failure scenario. **Mandatory:** produce at least one architecture diagram (ASCII, Mermaid, or tool-generated) showing component boundaries and data flow direction.",
     "Code Quality Review — code organization, DRY violations, error handling patterns, over/under-engineering assessment.",
     "Test Review — diagram every new flow, data path, error path. For each: what test type covers it? Does one exist? What is the gap? Produce test plan artifact.",
     "Performance Review — N+1 queries, memory concerns, caching opportunities, slow code paths. What breaks at 10x load? At 100x?",
@@ -666,6 +666,7 @@ const DESIGN: StageSchemaInput = {
   },
   artifactValidation: [
     { section: "Architecture Boundaries", required: true, validationRule: "Must list component boundaries with ownership." },
+    { section: "Architecture Diagram", required: true, validationRule: "At least one diagram (ASCII, Mermaid, or image) showing component boundaries and data flow direction." },
     { section: "Data Flow", required: true, validationRule: "Must include happy path, nil input, empty input, upstream error paths." },
     { section: "Failure Mode Table", required: true, validationRule: "Each failure mode has: trigger, detection, mitigation, user impact." },
     { section: "Test Strategy", required: true, validationRule: "Must define unit/integration/e2e expectations with coverage targets." },
