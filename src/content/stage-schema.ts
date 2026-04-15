@@ -285,7 +285,7 @@ const SCOPE: StageSchemaInput = {
     "**Premise Challenge** — Is this the right problem? What if we do nothing? What are we optimizing for?",
     "**Existing Code Leverage** — Search for existing solutions before deciding to build new.",
     "**Dream State Mapping** — (complex projects only) describe the ideal state 12 months out using `CURRENT STATE -> THIS PLAN -> 12-MONTH IDEAL`, then verify this scope moves toward that target.",
-    "**Implementation Alternatives** — 2-3 approaches: minimal viable + ideal architecture + effort/risk.",
+    "**Implementation Alternatives** — Produce 2-3 distinct approaches. For each: Name, Summary, Effort (S/M/L/XL), Risk (Low/Med/High), 2-3 Pros, 2-3 Cons, and explicit Reuses. One option must be minimal viable, one must be ideal architecture.",
     "**Temporal Interrogation** — (complex projects only) simulate implementation timeline: HOUR 1 foundations, HOUR 2-3 core logic, HOUR 4-5 integration surprises, HOUR 6+ polish/tests. Decide what must be locked now vs safely deferred.",
     "**Mode Selection** — Present expand/selective/hold/reduce with recommendation.",
     "**Error and Rescue Registry** — For each capability: what breaks, how detected, what fallback."
@@ -302,7 +302,7 @@ const SCOPE: StageSchemaInput = {
   ],
   process: [
     "Run premise challenge and existing-solution leverage check.",
-    "Produce 2-3 scope alternatives (minimum viable + ideal included).",
+    "Produce 2-3 scope alternatives in a structured format (Name, Summary, Effort, Risk, Pros, Cons, Reuses) with minimum viable and ideal architecture options included.",
     "Choose scope mode with user approval.",
     "Walk through scope review sections one at a time.",
     "Write explicit scope contract and deferred items.",
@@ -310,7 +310,7 @@ const SCOPE: StageSchemaInput = {
   ],
   requiredGates: [
     { id: "scope_premise_challenged", description: "Problem framing and assumptions were challenged." },
-    { id: "scope_alternatives_produced", description: "At least 2 implementation alternatives with effort/risk evaluated." },
+    { id: "scope_alternatives_produced", description: "At least 2 implementation alternatives were evaluated with explicit effort/risk and reuse fields." },
     { id: "scope_mode_selected", description: "One scope mode was explicitly selected." },
     { id: "scope_contract_written", description: "In-scope/out-of-scope contract is documented." },
     { id: "scope_user_approved", description: "User approved the final scope direction." }
@@ -432,6 +432,7 @@ const SCOPE: StageSchemaInput = {
   artifactValidation: [
     { section: "Prime Directives", required: true, validationRule: "For each scoped capability: named failure modes, explicit error surface, four data-flow paths, interaction edge cases, observability expectations, and deferred-item handling." },
     { section: "Premise Challenge", required: true, validationRule: "Must contain explicit answers to: right problem? direct path? what if nothing?" },
+    { section: "Implementation Alternatives", required: true, validationRule: "2-3 options with Name, Summary, Effort, Risk, Pros, Cons, and Reuses. Must include minimal viable and ideal architecture options." },
     { section: "Scope Mode", required: true, validationRule: "Must state selected mode and rationale with default heuristic justification." },
     { section: "In Scope / Out of Scope", required: true, validationRule: "Two separate explicit lists. Out-of-scope must not be empty." },
     { section: "Deferred Items", required: true, validationRule: "Each item has one-line rationale. If empty, state 'None' explicitly." },
