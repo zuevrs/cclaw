@@ -111,10 +111,33 @@ export const ARTIFACT_TEMPLATES: Record<string, string> = {
 `,
   "03-design.md": `# Design Artifact
 
+## Codebase Investigation
+| File | Current responsibility | Patterns discovered |
+|---|---|---|
+|  |  |  |
+
+## Search Before Building
+| Layer | Label | What to reuse first |
+|---|---|---|
+| Layer 1 |  |  |
+| Layer 2 |  |  |
+| Layer 3 |  |  |
+
 ## Architecture Boundaries
 | Component | Responsibility | Owner |
 |---|---|---|
 |  |  |  |
+
+## Architecture Diagram
+
+\\\`\\\`\\\`
+(ASCII, Mermaid, or tool-generated diagram showing component boundaries and data flow direction)
+\\\`\\\`\\\`
+
+## What Already Exists
+| Sub-problem | Existing code/library | Layer | Reuse decision |
+|---|---|---|---|
+|  |  |  |  |
 
 ## Data Flow
 - Happy path:
@@ -143,6 +166,17 @@ export const ARTIFACT_TEMPLATES: Record<string, string> = {
 | Decision | Missing info | Owner | Default |
 |---|---|---|---|
 |  |  |  |  |
+
+## Completion Dashboard
+| Review Section | Status | Issues |
+|---|---|---|
+| Architecture Review |  |  |
+| Code Quality Review |  |  |
+| Test Review |  |  |
+| Performance Review |  |  |
+| Distribution & Delivery Review |  |  |
+
+**Decisions made:** 0 | **Unresolved:** 0
 `,
   "04-spec.md": `# Specification Artifact
 
