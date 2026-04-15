@@ -52,8 +52,46 @@ Carry the no-new-dependency constraint and hard-block behavior directly into sco
   scope: `### Scope contract
 
 **Mode selected:** SELECTIVE EXPANSION
+**Default heuristic used:** feature enhancement -> selective
+**Mode-specific analysis result:** hold-scope baseline accepted first; one expansion accepted (degraded-state UX), one deferred (real-time channel upgrade).
 
-**Premise challenge result:** The original premise (“add notifications”) was reframed to **“ensure users know when an action requires follow-up”**, which expands the solution space beyond toast spam to include durable inbox items, empty states, and recovery paths when delivery fails.
+### Prime Directives (applied)
+
+- Zero silent failures: every delivery failure maps to a visible degraded state.
+- Named error surfaces: stream disconnect, auth drift, and publisher timeout are explicit.
+- Four-path data flow mapped: happy, nil payload, empty payload, upstream publish error.
+- Interaction edge cases in scope: double-open panel, reconnect after sleep, stale tab state.
+- Observability in scope: stream error counter, publish-to-visible lag metric, and alert threshold.
+
+### Premise challenge result
+
+The original premise (“add notifications”) was reframed to **“ensure users know when an action requires follow-up”**, which expands the solution space beyond toast spam to include durable inbox items, empty states, and recovery paths when delivery fails.
+
+### Dream State Mapping
+
+| Stage | Statement |
+| --- | --- |
+| **CURRENT STATE** | Users miss time-sensitive follow-ups because alerts are ephemeral and not recoverable. |
+| **THIS PLAN** | Introduce durable in-app feed + live updates + explicit degraded mode fallback. |
+| **12-MONTH IDEAL** | Unified notification center with reliable multi-channel fan-out and user-level routing preferences. |
+| **Alignment verdict** | Aligned: this scope builds the durability foundation without prematurely committing to channel expansion. |
+
+### Implementation Alternatives
+
+| Option | Summary | Effort (S/M/L/XL) | Risk | Pros | Cons | Reuses |
+| --- | --- | --- | --- | --- | --- | --- |
+| **A (minimum viable)** | Polling-only feed with no live stream | S | Low | Fastest ship, low infra risk | Weaker UX, delayed visibility | Existing REST snapshot endpoint |
+| **B (recommended)** | SSE live updates + REST fallback snapshot | M | Med | Better timeliness, graceful degradation | Requires reconnect handling | Existing event publisher + REST path |
+| **C (ideal architecture)** | Event bus + WebSocket channel + feed projection | XL | High | Strong long-term scalability | Overbuilt for current demand | Partial reuse of publisher only |
+
+### Temporal Interrogation
+
+| Time slice | Likely decision pressure | Lock now or defer? | Reason |
+| --- | --- | --- | --- |
+| **HOUR 1 (foundations)** | Canonical event schema and dedupe key policy | **Lock now** | Prevent downstream rework in storage and UI merge behavior |
+| **HOUR 2-3 (core logic)** | Retry/backoff semantics for stream loss | **Lock now** | Impacts both backend signaling and client state machine |
+| **HOUR 4-5 (integration)** | Handling gaps between snapshot and stream cursor | **Lock now** | Prevent silent data loss during reconnect windows |
+| **HOUR 6+ (polish/tests)** | Banner copy tone and polling cadence tuning | **Defer** | Safe to iterate after baseline reliability is proven |
 
 ### In scope / out of scope / deferred
 
@@ -63,22 +101,28 @@ Carry the no-new-dependency constraint and hard-block behavior directly into sco
 | **Out of scope** | Email/SMS/push providers; marketing campaigns; per-user notification preferences beyond on/off |
 | **Deferred** | WebSocket channel; rich media attachments in notifications; full-text search across historical events |
 
+### Discretion Areas
+
+- Client-side badge rendering strategy (optimistic vs server-confirmed) is implementation discretion.
+- Polling fallback backoff curve is implementation discretion if degraded-state UX remains explicit.
+
 ### Error & Rescue Registry (sample entry)
 
 | Capability | Failure mode | Detection | Fallback |
 | --- | --- | --- | --- |
 | Event delivery | SSE connection drops mid-session | Client \`EventSource\` error event + heartbeat timeout | Fall back to REST polling every 30s until SSE reconnect succeeds; show subtle “live updates paused” banner |
 
-### Non-goals (guardrails)
+### Completion Dashboard
 
-- No “infinite history” guarantee in v1; retention policy can be time-bounded.
-- No cross-tenant fan-out optimizations until multi-tenant load tests exist.
+- Checklist findings: 9/9 complete (complex path)
+- Resolved decisions count: 7
+- Unresolved decisions: None
 
-### Owners & checkpoints
+### Scope Summary
 
-- **Product:** confirms reframed premise and acceptance of deferred items.
-- **Engineering:** confirms SSE + REST snapshot split is feasible behind current gateway.
-- **Checkpoint:** scope sign-off happens before detailed component design changes land in the repo.`,
+- Accepted scope: durable feed + SSE + explicit degraded UX.
+- Deferred: WebSocket channel and rich-media/search enhancements.
+- Explicitly excluded: outbound channels and marketing workflows for v1.`,
 
   design: `### Search Before Building (sample result)
 
