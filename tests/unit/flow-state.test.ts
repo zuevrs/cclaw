@@ -13,7 +13,7 @@ describe("flow state", () => {
   });
 
   it("initializes with active run id", () => {
-    expect(createInitialFlowState().activeRunId).toBe("run-pending");
+    expect(createInitialFlowState().activeRunId).toBe("active");
     expect(createInitialFlowState("run-custom").activeRunId).toBe("run-custom");
   });
 

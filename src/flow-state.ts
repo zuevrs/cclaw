@@ -18,7 +18,7 @@ export interface FlowState {
   stageGateCatalog: Record<FlowStage, StageGateState>;
 }
 
-export function createInitialFlowState(activeRunId = "run-pending"): FlowState {
+export function createInitialFlowState(activeRunId = "active"): FlowState {
   const stageGateCatalog = {} as Record<FlowStage, StageGateState>;
   for (const schema of orderedStageSchemas()) {
     stageGateCatalog[schema.stage] = {

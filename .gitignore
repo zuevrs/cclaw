@@ -13,3 +13,12 @@ docs/
 .cursor/commands/cc-*.md
 .opencode/commands/cc-*.md
 .codex/commands/cc-*.md
+.claude/commands/cc.md
+.cursor/commands/cc.md
+.opencode/commands/cc.md
+.codex/commands/cc.md
+.claude/hooks/hooks.json
+.cursor/hooks.json
+.codex/hooks.json
+.opencode/plugins/cclaw-plugin.mjs
+.cursor/rules/cclaw-workflow.mdc

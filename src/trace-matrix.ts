@@ -2,7 +2,6 @@ import fs from "node:fs/promises";
 import path from "node:path";
 import { RUNTIME_ROOT } from "./constants.js";
 import { exists } from "./fs-utils.js";
-import { readFlowState } from "./runs.js";
 
 export interface TraceEntry {
   criterionId: string;
@@ -22,20 +21,10 @@ function activeArtifactPath(projectRoot: string, name: string): string {
   return path.join(projectRoot, RUNTIME_ROOT, "artifacts", name);
 }
 
-function canonicalRunArtifactPath(projectRoot: string, runId: string, name: string): string {
-  return path.join(projectRoot, RUNTIME_ROOT, "runs", runId, "artifacts", name);
-}
-
-async function readArtifact(projectRoot: string, name: string, activeRunId: string): Promise<string | null> {
-  const runId = activeRunId.trim();
-  const candidates = runId.length > 0
-    ? [canonicalRunArtifactPath(projectRoot, runId, name), activeArtifactPath(projectRoot, name)]
-    : [activeArtifactPath(projectRoot, name)];
-
-  for (const candidate of candidates) {
-    if (await exists(candidate)) {
-      return fs.readFile(candidate, "utf8");
-    }
+async function readArtifact(projectRoot: string, name: string): Promise<string | null> {
+  const candidate = activeArtifactPath(projectRoot, name);
+  if (await exists(candidate)) {
+    return fs.readFile(candidate, "utf8");
   }
   return null;
 }
@@ -150,11 +139,10 @@ function layer1LinesForCriterion(layer1: string, criterionId: string): string[] 
 }
 
 export async function buildTraceMatrix(projectRoot: string): Promise<TraceMatrix> {
-  const { activeRunId } = await readFlowState(projectRoot);
-  const spec = await readArtifact(projectRoot, "04-spec.md", activeRunId);
-  const plan = await readArtifact(projectRoot, "05-plan.md", activeRunId);
-  const tdd = await readArtifact(projectRoot, "06-tdd.md", activeRunId);
-  const review = await readArtifact(projectRoot, "07-review.md", activeRunId);
+  const spec = await readArtifact(projectRoot, "04-spec.md");
+  const plan = await readArtifact(projectRoot, "05-plan.md");
+  const tdd = await readArtifact(projectRoot, "06-tdd.md");
+  const review = await readArtifact(projectRoot, "07-review.md");
 
   const criterionIds = spec ? parseAcceptanceCriterionIds(spec) : [];
   const taskToAcs = plan ? parsePlanTaskAcLinks(plan) : new Map<string, string[]>();

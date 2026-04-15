@@ -21,12 +21,12 @@ export type DelegationLedger = {
   entries: DelegationEntry[];
 };
 
-function delegationLogPath(projectRoot: string, runId: string): string {
-  return path.join(projectRoot, RUNTIME_ROOT, "runs", runId, "delegation-log.json");
+function delegationLogPath(projectRoot: string): string {
+  return path.join(projectRoot, RUNTIME_ROOT, "state", "delegation-log.json");
 }
 
-function delegationLockPath(projectRoot: string, runId: string): string {
-  return path.join(projectRoot, RUNTIME_ROOT, "runs", runId, ".delegation.lock");
+function delegationLockPath(projectRoot: string): string {
+  return path.join(projectRoot, RUNTIME_ROOT, "state", ".delegation.lock");
 }
 
 function isDelegationEntry(value: unknown): value is DelegationEntry {
@@ -68,7 +68,7 @@ function parseLedger(raw: unknown, runId: string): DelegationLedger {
 
 export async function readDelegationLedger(projectRoot: string): Promise<DelegationLedger> {
   const { activeRunId } = await readFlowState(projectRoot);
-  const filePath = delegationLogPath(projectRoot, activeRunId);
+  const filePath = delegationLogPath(projectRoot);
   if (!(await exists(filePath))) {
     return { runId: activeRunId, entries: [] };
   }
@@ -83,8 +83,8 @@ export async function readDelegationLedger(projectRoot: string): Promise<Delegat
 
 export async function appendDelegation(projectRoot: string, entry: DelegationEntry): Promise<void> {
   const { activeRunId } = await readFlowState(projectRoot);
-  await withDirectoryLock(delegationLockPath(projectRoot, activeRunId), async () => {
-    const filePath = delegationLogPath(projectRoot, activeRunId);
+  await withDirectoryLock(delegationLockPath(projectRoot), async () => {
+    const filePath = delegationLogPath(projectRoot);
     const prior = await readDelegationLedger(projectRoot);
     const ledger: DelegationLedger = {
       runId: activeRunId,

@@ -28,7 +28,7 @@ Task arrives
     |
     +-- New idea / starting fresh?  --> /cc <idea>  (starts brainstorm)
     +-- Resuming / continuing?  --> /cc  or  /cc-next
-    +-- Want to check/add project learnings?  --> /cc-learn
+    +-- Want to check/add project knowledge?  --> /cc-learn
     +-- No cclaw stage applies?  --> Respond normally
 \`\`\`
 
@@ -49,7 +49,7 @@ Before starting work, ALWAYS:
 2. **Stages are workflows, not suggestions.** Follow the skill steps in order. Do not skip verification steps.
 3. **One stage at a time.** Complete the current stage before advancing to the next.
 4. **Gates must pass.** Every stage has required gates — the agent cannot claim completion without satisfying them.
-5. **Artifacts are mandatory.** Each stage writes to \`.cclaw/artifacts/\`; cclaw sync/runtime keeps run snapshots in \`.cclaw/runs/<activeRunId>/artifacts/\` aligned as the evidence trail.
+5. **Artifacts are mandatory.** Each stage writes to \`.cclaw/artifacts/\`; completed features are archived later with \`cclaw archive\`.
 6. **When in doubt, use \`/cc\`.** If the task is non-trivial and there's no prior artifact, run \`/cc <idea>\` to start brainstorming.
 
 ## Stage Quick Reference
@@ -110,7 +110,7 @@ Use this loading order to keep context lean while preserving depth:
 
 ### See also
 - \`.cclaw/skills/session/SKILL.md\` for session start/stop/resume behavior
-- \`.cclaw/skills/learnings/SKILL.md\` for durable memory capture and reuse
+- \`.cclaw/skills/learnings/SKILL.md\` for durable knowledge capture and reuse
 ## Decision Protocol
 
 When a stage requires user input (approval, choice, direction), use this structured pattern:
@@ -140,15 +140,12 @@ Watch for these anti-patterns:
 - **Hollow reviews** — "looks good" without checking spec compliance
 - **Cargo-cult artifacts** — filling templates without real thought
 
-## Learnings Integration
+## Knowledge Integration
 
-At session start, check \`.cclaw/learnings.jsonl\` for project-specific knowledge:
-- Run \`tail -n 20 .cclaw/learnings.jsonl\` and surface the top 3 highest-confidence entries
-- Apply relevant learnings to the current task
-- After each stage, reflect: did anything happen that would save 5+ minutes next time? If so, log it.
+At session start and stage transitions, check \`.cclaw/knowledge.md\` for project-specific knowledge:
+- Review recent entries and apply relevant rules/patterns to the current task
+- If you discover a non-obvious reusable rule or pattern, append a new entry with type \`rule\`, \`pattern\`, or \`lesson\`
 
-## Observation Hooks
-
-If tool observation is enabled, cclaw captures tool usage patterns (PreToolUse/PostToolUse) to \`.cclaw/observations.jsonl\`. At session stop, observations are analyzed and valuable patterns are promoted to learnings. This is automatic — you do not need to manage it.
+Knowledge capture is append-only and should preserve historical context rather than rewriting prior entries.
 `;
 }

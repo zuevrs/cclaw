@@ -8,14 +8,16 @@ import { doctorChecks, doctorSucceeded } from "./doctor.js";
 import { initCclaw, syncCclaw, uninstallCclaw, upgradeCclaw } from "./install.js";
 import { error, info } from "./logger.js";
 import type { CliContext, HarnessId } from "./types.js";
+import { archiveRun } from "./runs.js";
 
-type CommandName = "init" | "sync" | "doctor" | "upgrade" | "uninstall";
-const INSTALLER_COMMANDS: CommandName[] = ["init", "sync", "doctor", "upgrade", "uninstall"];
+type CommandName = "init" | "sync" | "doctor" | "upgrade" | "uninstall" | "archive";
+const INSTALLER_COMMANDS: CommandName[] = ["init", "sync", "doctor", "upgrade", "uninstall", "archive"];
 
 interface ParsedArgs {
   command?: CommandName;
   harnesses?: HarnessId[];
   reconcileGates?: boolean;
+  archiveName?: string;
 }
 
 function usage(): string {
@@ -25,6 +27,7 @@ Usage:
   cclaw init [--harnesses=claude,cursor,opencode,codex]
   cclaw sync
   cclaw doctor [--reconcile-gates]
+  cclaw archive [--name=feature-name]
   cclaw upgrade
   cclaw uninstall
 `;
@@ -58,6 +61,10 @@ function parseArgs(argv: string[]): ParsedArgs {
     }
     if (flag === "--reconcile-gates") {
       parsed.reconcileGates = true;
+      continue;
+    }
+    if (flag.startsWith("--name=")) {
+      parsed.archiveName = flag.replace("--name=", "").trim();
     }
   }
 
@@ -99,6 +106,15 @@ async function runCommand(parsed: ParsedArgs, ctx: CliContext): Promise<number> 
   if (command === "upgrade") {
     await upgradeCclaw(ctx.cwd);
     info(ctx, "Upgraded .cclaw runtime and regenerated generated files");
+    return 0;
+  }
+
+  if (command === "archive") {
+    const archived = await archiveRun(ctx.cwd, parsed.archiveName);
+    info(
+      ctx,
+      `Archived active artifacts to ${archived.archivePath}. Flow state reset to brainstorm.`
+    );
     return 0;
   }
 

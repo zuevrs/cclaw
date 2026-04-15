@@ -3,7 +3,7 @@
 exports[`flow command contracts > matches golden snapshots for strict-stage content > brainstorm-skill 1`] = `
 "---
 name: brainstorming
-description: "Design-first stage. Clarify intent, compare options, and get explicit approval before implementation planning."
+description: "Design-first stage. Route request complexity, run phased forcing questions, and lock an approved direction before scope/design work."
 ---
 
 # brainstorming
@@ -12,23 +12,23 @@ description: "Design-first stage. Clarify intent, compare options, and get expli
 
 > **Even if you read nothing else, do these 3 things:**
 > 1. Obey the HARD-GATE below — violating it invalidates the entire stage.
-> 2. Complete every checklist step in order and write the artifact to \`.cclaw/artifacts/01-brainstorm.md\`. Run snapshots in \`.cclaw/runs/<activeRunId>/artifacts/\` are synchronized by cclaw runtime.
-> 3. Do not claim completion without satisfying gates: \`brainstorm_discovery_purpose\`, \`brainstorm_discovery_scope\`, \`brainstorm_discovery_boundaries\` (+7 more).
+> 2. Complete every checklist step in order and write the artifact to \`.cclaw/artifacts/01-brainstorm.md\`.
+> 3. Do not claim completion without satisfying gates: \`brainstorm_route_selected\`, \`brainstorm_round1_grounded\`, \`brainstorm_round2_forcing_questions\` (+4 more).
 >
 > **After this stage:** update \`flow-state.json\` and tell the user to run \`/cc-next\`.
 
 ## Overview
-Turn a rough request into an approved design direction with clear assumptions and boundaries.
+Turn an initial idea into an approved direction through routing, phased grounding, and decision-forcing questions.
 
 ## When to Use
 - Starting a new feature or behavior change
-- Requirements are ambiguous or solution path is unclear
-- Before any implementation-stage command
+- Requirements are ambiguous or trade-offs are unclear
+- Before any implementation-stage command or architecture commitment
 
 ## When Not to Use
-- An approved design, spec, and plan already exist and work is in execution stages
-- The request is strictly branch finalization or release handoff work
-- The task is purely retrospective after ship with no new design decisions needed
+- A valid approved direction already exists and only execution remains
+- The request is a pure release/finalization action with no new product decisions
+- The task is retrospective only (post-ship audit with no new solution choices)
 
 
 ## Inputs
@@ -37,18 +37,18 @@ Turn a rough request into an approved design direction with clear assumptions an
 - success criteria
 
 ## Required Context
-- existing project docs and patterns
+- existing project context and patterns
 - current behavior of affected area
 - business and delivery constraints
 
 ## Context Loading
 
 Before starting stage execution:
-1. Read \`.cclaw/state/flow-state.json\` and capture \`activeRunId\`.
-2. Resolve canonical run artifact root: \`.cclaw/runs/<activeRunId>/artifacts/\`.
+1. Read \`.cclaw/state/flow-state.json\`.
+2. Resolve active artifact root: \`.cclaw/artifacts/\`.
 3. Load upstream artifacts required by this stage:
 - (first stage — no upstream artifacts)
-4. If canonical run artifact is missing, fallback to the \`.cclaw/artifacts/\` mirror and record that fallback.
+4. Read \`.cclaw/knowledge.md\` and apply relevant entries before making decisions.
 
 ## Automatic Subagent Dispatch
 
@@ -66,127 +66,122 @@ Before completing this stage, verify that ALL mandatory delegations are recorded
 
 Mandatory agents for this stage: (none — only proactive dispatch applies). Stage transition is BLOCKED until all are **completed** or **explicitly waived** by the user (waived entries must name the agent and carry an explicit waiver reason).
 
-On session stop or stage completion, the agent should write delegation entries to \`.cclaw/runs/<activeRunId>/delegation-log.json\` for audit.
+On session stop or stage completion, the agent should write delegation entries to \`.cclaw/state/delegation-log.json\` for audit.
 
 ## Outputs
 - approved design direction
-- alternatives and trade-off table
+- alternatives with trade-offs
 - brainstorm artifact
 
 ## HARD-GATE
-Do NOT invoke any implementation skill, write any code, scaffold any project, or take any implementation action until you have presented a design and the user has approved it. This applies to EVERY project regardless of perceived simplicity.
+Do NOT invoke implementation skills, write code, scaffold projects, or mutate product behavior until a concrete direction is approved by the user.
 
 ## Checklist
 
 You MUST complete these steps in order:
 
-1. Explore project context — check files, docs, recent commits, existing behavior. Summarize what you found (even for seemingly simple projects).
-2. Assess scope — if the request describes multiple independent subsystems, flag for decomposition before detailed questions.
-3. Restate the problem — in a SEPARATE message (no questions in this message), summarize what you understood the user wants and why. The restatement message must contain zero clarifying questions and no option prompts. **STOP and wait** for user to confirm or correct before asking any clarifying questions.
-4. Ask clarifying questions — one at a time, one per message. Each clarification message must ask exactly one decision-seeking question (no bundled sub-questions). You MUST cover these categories before proposing approaches: (a) PURPOSE — why this project exists, who it serves; (b) SCOPE — what it must do, what it must NOT do; (c) BOUNDARIES — error handling, edge cases, failure modes; (d) ENVIRONMENT — how it runs, deploys, installs; (e) CONSTRAINTS — performance, compatibility, dependencies. Skip a category only if the user already provided that info. If user answers 'I don't know' / 'не знаю', convert it into explicit assumptions and ask for confirmation before moving on. Do NOT rush — 3 generic questions are never enough for a non-trivial project.
-5. Before proposing approaches, perform at least one premise-challenge question ("Is this the right problem framing?") and at least one boundary stress-test question ("What should never happen even on failure?").
-6. Propose 2-3 approaches — with real trade-offs (not cosmetic differences) and your explicit recommendation with reasoning. Explain WHY you recommend this option over others.
-7. Present design — in sections. After each section, explicitly state what you are asking the user to approve: 'Do you approve [specific thing]?' Never ask a bare 'одобряете?/approve?' without context.
-8. Write design doc — save to \`.cclaw/artifacts/01-brainstorm.md\`.
-9. Self-review — scan for placeholders, TBDs, contradictions, ambiguity, scope creep. Fix inline.
-10. User reviews written artifact — ask user to review the written artifact (not the chat summary). **STOP.** Do NOT proceed until user responds.
-11. Stage complete — update \`flow-state.json\` per the Stage Completion Protocol. Tell user to run \`/cc-next\` to continue to scope.
+1. Principles (one line): one decision-forcing question at a time, grounding summary between rounds, and no implementation before approval.
+2. Route the work: classify as Simple Route (single-surface, low-risk) or Complex Route (multi-surface, high-uncertainty); explain why.
+3. Round 1 grounding: restate the problem, desired outcome, and success signal in your own words; get confirmation before deeper questioning.
+4. Round 2 forcing questions: ask one decision-forcing question per turn about boundaries and constraints; each answer must change a concrete design decision.
+5. Grounding checkpoint: summarize what is fixed vs still unknown after Round 2; confirm this summary before moving to solution options.
+6. Round 3 forcing questions: ask trade-off questions that force prioritization (for example speed vs flexibility), then lock assumptions.
+7. Propose multiple viable approaches with real trade-offs and one explicit recommendation tied to the forced decisions.
+8. Write \`.cclaw/artifacts/01-brainstorm.md\` with route, grounding checkpoints, forcing-question log, options, and approved direction; run a contradiction pass.
+9. Ask the user to review the written artifact and explicitly approve or request changes; only then complete stage and point to \`/cc-next\`.
 
 ## Examples
 
 Concrete samples of what good output looks like for this stage.
 
-### Clarification sequence (Socratic)
+### Route selection
 
-**Q1 (PURPOSE):** "What decision will this demo help your audience make, and who exactly is that audience?"  
-**A1:** "Internal platform team; they should see whether our release flow can be trusted."
+- **Route:** Complex Route
+- **Why:** touches CI behavior, release checks, and CLI flow across multiple components.
 
-**Q2 (SCOPE):** "Which outcomes are explicitly OUT of scope for this demo so we avoid accidental expansion?"  
-**A2:** "No production rollout automation; only release metadata validation + publish safety checks."
+### Round 1 grounding
 
-**Q3 (BOUNDARIES):** "When release metadata is missing or invalid, what should happen and what should NEVER happen?"  
-**A3:** "Must block release with a clear reason; must never auto-publish anyway."
+- **Grounding summary:** "We are improving release reliability for the platform team. Success means invalid release preconditions are caught before publish with explicit operator feedback."
+- **User confirmation:** confirmed.
 
-**Q4 (ENVIRONMENT):** "Where will this run in practice: local only, CI only, or both? How is it installed and invoked?"  
-**A4:** "CI-first in GitHub Actions, but reproducible locally with npm scripts."
+### Round 2 forcing questions (boundaries/constraints)
 
-**Q5 (CONSTRAINTS):** "What constraints are non-negotiable (runtime deps, latency, compatibility, policy)?"  
-**A5:** "No new runtime dependencies; checks should stay under 2 minutes; compatible with current workflow."
+**Q1:** "If release metadata is invalid, do we block publishing hard or only warn?"  
+**A1:** "Block hard."
 
-### One-question-per-message discipline
+**Decision impact:** release checks become mandatory gates with no warning-only fallback.
 
-**Bad (bundled):** "Where will this run? Which Python version? Stdlib only? Any perf limits?"
+**Q2:** "Do we allow new runtime dependencies for speed, or keep runtime dependency set unchanged?"  
+**A2:** "Keep runtime dependencies unchanged."
 
-**Good (single ask):** "Where will this run in practice: local only, CI only, or both?"
+**Decision impact:** implementation should reuse existing tooling and built-in capabilities.
 
-**Then next turn:** "Which runtime version should we lock as minimum?"
+### Grounding checkpoint after Round 2
 
-**Then next turn:** "Should we treat 'stdlib-only' as a hard dependency constraint?"
+- **Fixed:** hard-block behavior, no new runtime dependencies.
+- **Unknown:** rollback command details and status reporting format.
 
-### Premise challenge and boundary stress-test
+### Round 3 forcing questions (trade-offs)
 
-**Premise challenge:** "If the goal is only to demonstrate filesystem I/O, why is a CLI better than a tiny script or notebook for this demo?"
+**Q3:** "For v1, prioritize rapid delivery or maximum configurability?"  
+**A3:** "Rapid delivery."
 
-**Boundary stress-test:** "When a write fails midway (permissions or partial path issues), what outcome should NEVER happen?"
+**Decision impact:** choose a minimal deterministic validation surface; defer advanced configuration.
 
-### Alternatives comparison
+### Options comparison
 
-| Approach | Pros | Cons | Effort | Recommendation |
+| Option | Pros | Cons | Effort | Recommendation |
 | --- | --- | --- | --- | --- |
-| REST + polling | Simple to deploy; works through strict proxies; easy to cache | Higher latency; wasted requests; battery use on mobile | Low | Good default when real-time is not required |
-| WebSocket | Lowest latency; bidirectional; efficient for bursts | More ops complexity; reconnect/state sync; harder through some gateways | Medium | Prefer when server must push frequently or conversationally |
-| SSE | One-way server push over HTTP; simpler than WebSockets for “notify only” | Unidirectional; browser connection limits; proxy buffering quirks | Low–Medium | Prefer for live dashboards and one-way event streams |
+| Script-only checks | Lowest implementation cost | Weak reuse and long-term maintainability | Low | Useful fallback, not preferred |
+| Reusable validation module | Reusable across CI and local runs | Slightly higher upfront design effort | Medium | **Recommended** |
+| Full release framework rewrite | Highest long-term flexibility | High risk and delivery delay | High | Not recommended for v1 |
 
 ### Approved Direction
 
-We will ship **SSE for server-originated notifications** to the web client first, because the UX requires timely delivery without bidirectional chat. We will keep a **REST fallback** for environments where SSE is unreliable, and we will defer WebSockets until we have a concrete bidirectional requirement (collaborative editing).
+We will implement a **reusable release validation module** used by CI and local tooling, aligned with hard-block safety and no-new-runtime-dependency constraints.
 
 ### Open Questions
 
-- Do we need guaranteed delivery semantics (at-least-once vs best-effort) for in-app banners?
-- What is the maximum event rate we must support per user session without degrading the UI thread?
-- Should mobile clients reuse the same event channel contract or expose a separate polling endpoint?
+- What exact rollback command sequence should be documented for failed publish attempts?
+- Should status output include machine-readable JSON in addition to markdown?
 
 ### Assumptions (explicit)
 
-- Users are authenticated; anonymous traffic does not receive personalized streams.
-- “Notification” means **account-scoped operational messages**, not third-party ads.
-- The first release optimizes for **web**; native clients can lag by one sprint.
+- CI remains the primary execution path; local flow mirrors CI checks.
+- Existing release metadata files remain the source of truth.
+- v1 prioritizes deterministic behavior over broad customization.
 
 ### Constraints
 
-- No new infrastructure class (managed broker) unless latency goals are missed in a spike.
-- Compliance requires auditability: who saw what, when — at least at coarse granularity.
+- No additional runtime dependencies in validation path.
+- Validation overhead should remain acceptable for routine CI execution.
 
 ### Notes for the next stage
 
-Capture the chosen direction as a **single paragraph decision** (above) and ensure open questions are either answered in scope or explicitly deferred with an owner + date.
+Carry fixed trade-off decisions directly into scope in/out boundaries and deferred list.
 
-## Anti-Pattern: "This Is Too Simple To Need A Design"
+## Anti-Pattern: "This Is Too Simple To Brainstorm"
 
-Every project goes through this process. A todo list, a single-function utility, a config change — all of them. 'Simple' projects are where unexamined assumptions cause the most wasted work. The design can be short (a few sentences for truly simple projects), but you MUST present it and get approval.
+Skipping routing and forcing questions because a task looks simple creates silent assumption debt. Even simple-route work needs explicit grounding and approval.
 
 ## Cognitive Patterns
 
 These are thinking instincts, not a checklist. Let them shape your perspective throughout the stage.
 
-1. **Divergent-Convergent Thinking** — First expand the solution space widely, then converge on the strongest option. Do not skip the divergent phase.
-2. **YAGNI Ruthlessness** — Remove unnecessary features from all designs. Every feature must earn its place against the cost of complexity.
-3. **Decomposition Instinct** — When a request describes multiple independent subsystems, decompose before refining. Each sub-project gets its own cycle.
-4. **Isolation Preference** — Break the system into units that each have one clear purpose, communicate through well-defined interfaces, and can be understood and tested independently.
+1. **Route Before Depth** — Choose question depth using simple-vs-complex routing before diving into details.
+2. **Forcing Question Discipline** — Each question must force a concrete decision, not just gather trivia.
+3. **Grounding Cadence** — After each question round, re-ground on fixed decisions vs unknowns before continuing.
+4. **Diverge Then Commit** — Explore multiple viable options first, then commit only after explicit approval.
 
 ## Interaction Protocol
-1. Explore context first (files, docs, existing behavior). Share a brief summary of what you found.
-2. Restate the problem in your own words in a SEPARATE message. Do NOT add any questions, options, or approval asks to this message. Wait for user to confirm or correct.
-3. Ask clarifying questions — one per message. Cover mandatory categories: PURPOSE, SCOPE, BOUNDARIES, ENVIRONMENT, CONSTRAINTS. Do NOT combine questions. Do NOT propose approaches until all categories are addressed.
-4. Do not package multiple asks as bullet points in one message; split them into separate turns even if related.
-5. When user answer is ambiguous or unknown (for example: 'не знаю'), propose explicit defaults as assumptions and get a one-message confirmation before treating that category as closed.
-6. Include at least one premise-challenge and one boundary stress-test question before locking options. Do not accept 'simple demo' framing without challenge.
-7. For approach selection: use the Decision Protocol — present labeled options (A/B/C) with REAL trade-offs (not cosmetic) and mark one as (recommended) with clear reasoning. If AskQuestion/AskUserQuestion is available, send exactly ONE question per call, validate fields against runtime schema, and on schema error immediately fall back to plain-text question instead of retrying guessed payloads.
-8. Every approval question MUST state what exactly is being approved: 'Do you approve [the architecture / the API shape / the dependency choice]?' Never ask a bare 'approve?' or 'looks good?'.
-9. Get section-by-section approval before finalizing the design direction.
-10. Run a self-review pass (ambiguity, placeholders, contradictions) before handoff.
-11. **STOP.** Wait for explicit user approval after writing the artifact. Do NOT auto-advance to the next stage.
+1. Start with routing (Simple Route vs Complex Route) so question depth matches real complexity.
+2. Use phased questioning: Round 1 grounding -> Round 2 constraints/boundaries -> grounding checkpoint -> Round 3 trade-off forcing.
+3. Ask exactly one decision-forcing question per turn; avoid bundled or purely informational questions.
+4. After each round, publish a short grounding summary (fixed decisions vs unknowns) before continuing.
+5. Use the Decision Protocol for option selection, with explicit recommendation and rationale.
+6. State explicitly what is being approved when requesting approval.
+7. Run a brief contradiction and ambiguity pass before handoff.
+8. **STOP.** Wait for explicit user approval after writing the artifact. Do NOT auto-advance.
 
 **AskUserQuestion Format (when tool is available):**
 1. **Re-ground:** State the project, current stage, and current task. (1-2 sentences)
@@ -204,41 +199,33 @@ These are thinking instincts, not a checklist. Let them shape your perspective t
 
 
 ## Required Gates
-- \`brainstorm_discovery_purpose\` — Discovery captured WHY this project exists and WHO it serves, with explicit user confirmation.
-- \`brainstorm_discovery_scope\` — Discovery captured explicit in-scope and out-of-scope boundaries before approach selection.
-- \`brainstorm_discovery_boundaries\` — Discovery captured failure modes, edge cases, and error-handling boundaries.
-- \`brainstorm_discovery_environment\` — Discovery captured runtime/install/deployment environment assumptions.
-- \`brainstorm_discovery_constraints\` — Discovery captured constraints (performance, compatibility, dependency limits) before deciding architecture.
-- \`brainstorm_problem_restated\` — Problem was restated in agent's words in a standalone non-question message, and user confirmed the understanding.
-- \`brainstorm_options_compared\` — At least two alternatives were compared with real trade-offs.
-- \`brainstorm_design_approved\` — User approved a concrete design direction (with explicit statement of what was approved).
-- \`brainstorm_self_review_passed\` — Design doc passed placeholder/ambiguity/consistency checks.
-- \`brainstorm_user_reviewed_artifact\` — User reviewed the written artifact and confirmed readiness.
+- \`brainstorm_route_selected\` — Simple vs Complex route was selected with explicit rationale.
+- \`brainstorm_round1_grounded\` — Round 1 grounding (problem, outcome, success signal) was confirmed by the user.
+- \`brainstorm_round2_forcing_questions\` — Round 2 forcing questions captured boundaries and constraints that changed real decisions.
+- \`brainstorm_round3_tradeoff_decisions\` — Round 3 forcing questions locked explicit trade-off priorities and assumptions.
+- \`brainstorm_options_compared\` — Multiple solution approaches were compared with real trade-offs and a recommendation.
+- \`brainstorm_direction_approved\` — User approved a concrete direction and what exactly was approved is stated.
+- \`brainstorm_artifact_reviewed\` — User reviewed the written brainstorm artifact and confirmed readiness.
 
 ## Required Evidence
 - [ ] Artifact written to \`.cclaw/artifacts/01-brainstorm.md\`.
-- [ ] Clarification log explicitly records PURPOSE, SCOPE, BOUNDARIES, ENVIRONMENT, and CONSTRAINTS coverage.
-- [ ] Clarification sequence evidence shows one explicit question per message (no bundled multi-question turns).
-- [ ] Clarification log includes at least one premise-challenge question and one boundary stress-test question before approach selection.
-- [ ] Unknown or ambiguous user answers are converted into explicit assumptions and confirmed (or explicitly waived) before closure.
-- [ ] Discovery sections include explicit in-scope/out-of-scope boundaries and failure handling boundaries.
-- [ ] Approved direction captured in artifact.
-- [ ] Restatement evidence shows a standalone non-question restatement message before clarification Q&A.
-- [ ] Open questions explicitly listed (if any).
-- [ ] Self-review pass completed with no unresolved issues.
+- [ ] Routing decision (\`simple\` or \`complex\`) with rationale is recorded.
+- [ ] Grounding checkpoints between rounds are recorded (fixed decisions vs unknowns).
+- [ ] Forcing-question log captures question, answer, and decision impact.
+- [ ] Approaches and recommendation are recorded with explicit trade-offs.
+- [ ] Approved direction and approval marker are present.
+- [ ] Assumptions and open questions are captured (or explicitly marked as none).
 
 ## Process
-1. Explore project context — files, docs, behavior, recent changes. Share findings.
-2. Restate the problem — summarize what the user wants and why in a SEPARATE message. Keep this message declarative only; no questions. Wait for confirmation before questions.
-3. Clarify iteratively — ask questions one at a time covering mandatory categories: PURPOSE, SCOPE, BOUNDARIES, ENVIRONMENT, CONSTRAINTS. Do not skip to approaches early.
-4. Convert unknown answers into explicit assumptions and confirm them before approaches.
-5. Identify whether request should be decomposed into smaller sub-problems.
-6. Offer 2-3 alternatives with real trade-offs and recommendation with rationale.
-7. Present design in sections. After each section explicitly name what you ask the user to approve.
-8. Write artifact to \`.cclaw/artifacts/01-brainstorm.md\`.
-9. Run self-review: placeholder scan, internal consistency, scope check, ambiguity check.
-10. Ask user to review the written artifact. Wait for changes or approval.
-11. Handoff to scope stage only after approval is explicit.
+1. Route request complexity (Simple Route or Complex Route) and capture rationale.
+2. Round 1 grounding: restate problem, outcome, and success signal; confirm alignment.
+3. Round 2 forcing questions: boundaries and constraints one question at a time.
+4. Grounding checkpoint: summarize fixed decisions and remaining unknowns.
+5. Round 3 forcing questions: trade-offs and priorities; lock explicit assumptions.
+6. Offer multiple approaches with recommendation and rationale.
+7. Capture approved direction in \`.cclaw/artifacts/01-brainstorm.md\`.
+8. Run contradiction/ambiguity pass and request explicit user approval.
+9. Handoff to scope only after approval is explicit.
 
 
 
@@ -250,67 +237,45 @@ These are thinking instincts, not a checklist. Let them shape your perspective t
 **Writes to:**
 - .cclaw/artifacts/01-brainstorm.md
 
-**Rule:** Every approved direction must be traceable forward through scope and design. Downstream stages must reference brainstorm decisions.
+**Rule:** Scope and design decisions must trace back to routed question rounds and approved brainstorm direction.
 
 ## Artifact Validation
 
 | Section | Status | Validation Rule |
 |---|---|---|
-| Problem Statement | REQUIRED | Must describe the user problem, not the solution. Include WHO and WHY and success signal. |
-| Known Context | REQUIRED | Files, patterns, constraints discovered during exploration. Evidence that context was actually explored. |
-| Clarification Log | REQUIRED | At least 5 rows covering PURPOSE, SCOPE, BOUNDARIES, ENVIRONMENT, CONSTRAINTS. Table must use 4 columns: Category, Question asked, User answer, Evidence note. |
-| Purpose & Beneficiaries | REQUIRED | At least 3 meaningful lines describing why this exists and who benefits. |
-| Scope Boundaries | REQUIRED | At least 2 scope items including explicit out-of-scope boundaries. |
-| Failure Boundaries | REQUIRED | At least 2 failure/edge-case expectations and error visibility behavior. |
-| Runtime Environment | REQUIRED | At least 2 lines describing runtime, install/distribution, and execution environment. |
-| Constraints | REQUIRED | At least 2 concrete constraints (performance, compatibility, dependency, or policy). |
-| Alternatives Table | REQUIRED | At least 2 approaches with real trade-offs (not cosmetic) and recommendation with reasoning. |
-| Approved Direction | REQUIRED | Must contain explicit approval marker from user. State what was approved. |
-| Assumptions & Risks | REQUIRED | Explicit assumptions made during design. Known risks. If none, state 'None'. |
-| Open Questions | REQUIRED | If empty, state 'None' explicitly. Do not omit. |
+| Problem Framing | REQUIRED | Must define the user problem, desired outcome, and success signal. |
+| Routing Decision | REQUIRED | Must state simple vs complex route and explain why. |
+| Grounding Checkpoints | REQUIRED | Must capture fixed decisions and remaining unknowns between rounds. |
+| Forcing Questions Log | REQUIRED | Must capture question, answer, and decision impact for each forcing question. |
+| Options Comparison | REQUIRED | Must compare multiple distinct options with real trade-offs and recommendation. |
+| Approved Direction | REQUIRED | Must include explicit approval marker and what was approved. |
+| Assumptions and Open Questions | REQUIRED | Must capture unresolved assumptions/open questions, or explicitly state none. |
 
 
 ## Common Rationalizations
 | Rationalization | Reality |
 |---|---|
-| This is too simple for design. | Simple tasks fail fast when assumptions are wrong; a short design pass prevents rework. |
-| We can figure it out while coding. | Coding before alignment creates churn and hidden scope growth. |
-| There is only one obvious approach. | Without alternatives, trade-offs stay implicit and risk goes unexamined. |
-| The user already knows what they want. | Unstated assumptions diverge during implementation; explicit design surfaces them early. |
-| This is straightforward, 1-2 questions are enough. | Even simple projects have hidden constraints (error handling, edge cases, deployment). A few extra questions now prevent rework later. |
+| This is straightforward so routing is unnecessary. | Explicit routing prevents under-questioning complex work and over-questioning simple work. |
+| Any question is useful context. | Only forcing questions that change decisions improve design quality. |
+| Grounding summaries slow us down. | Grounding checkpoints prevent hidden drift and reduce expensive rework later. |
 
 ## Blockers
 - no explicit approval
 - critical ambiguity unresolved
-- scope too broad and not decomposed
+- route cannot be determined due to missing context
 
 ## Anti-Patterns
-- Skipping design because task seems simple
-- Asking many questions in one message
+- Skipping route selection and treating all requests with the same question depth
+- Asking non-forcing or bundled questions
+- Skipping grounding checkpoints between rounds
 - Jumping directly into implementation
-- Combining visual companion offer with a clarifying question
-- Invoking implementation skills before writing plans
-- Appending clarifying questions to the restatement message instead of waiting for confirmation
-- Packing multiple clarifying questions into one message (including bullet-list question bundles)
-- Silently filling defaults after 'не знаю'/'I don't know' without explicit assumption confirmation
-- Accepting 'simple/test/demo' framing without premise challenge or failure stress testing
-- Asking bare 'approve?' or 'одобряете?' without stating WHAT is being approved
-- Presenting a single summary and asking for blanket approval instead of section-by-section review
-- Rushing through clarification — asking 1-2 generic questions then jumping to design
-- Batching multiple gate confirmations in one message when resuming a session
+- Requesting approval without stating what decision is being approved
 
 ## Red Flags
-- No alternatives documented
-- No explicit approval checkpoint
-- Implementation-related actions before approval
-- Self-review skipped or glossed over
-- Artifact has TBD or placeholder sections
-- Restatement step includes clarifying questions or option prompts
-- Clarification turns repeatedly include multi-question bundles instead of single asks
-- Unknown user answers are treated as settled requirements without explicit assumption confirmation
-- No evidence of premise challenge or failure stress-test questions before options
-- Fewer than 3 clarifying questions asked for any non-trivial project
-- Approval requested without stating what exactly is being approved
+- Route is missing or unjustified
+- No grounding checkpoint between question rounds
+- Questions do not force concrete decisions
+- Approval requested without explicit decision context
 
 ## Completion Status
 
@@ -323,7 +288,7 @@ When this stage ends, report one of:
 - [ ] approved design direction documented
 - [ ] required gates marked satisfied
 - [ ] no implementation action taken
-- [ ] self-review completed with fixes applied
+- [ ] artifact reviewed by user
 
 ## Stage Completion Protocol
 
@@ -332,10 +297,10 @@ When all required gates are satisfied and the artifact is written:
 1. **Update \`.cclaw/state/flow-state.json\`:**
    - Set \`currentStage\` to \`"scope"\`
    - Add \`"brainstorm"\` to \`completedStages\` array
-   - Move all gate IDs for this stage (\`brainstorm_discovery_purpose\`, \`brainstorm_discovery_scope\`, \`brainstorm_discovery_boundaries\`, \`brainstorm_discovery_environment\`, \`brainstorm_discovery_constraints\`, \`brainstorm_problem_restated\`, \`brainstorm_options_compared\`, \`brainstorm_design_approved\`, \`brainstorm_self_review_passed\`, \`brainstorm_user_reviewed_artifact\`) into \`stageGateCatalog.brainstorm.passed\`
+   - Move all gate IDs for this stage (\`brainstorm_route_selected\`, \`brainstorm_round1_grounded\`, \`brainstorm_round2_forcing_questions\`, \`brainstorm_round3_tradeoff_decisions\`, \`brainstorm_options_compared\`, \`brainstorm_direction_approved\`, \`brainstorm_artifact_reviewed\`) into \`stageGateCatalog.brainstorm.passed\`
    - Clear \`stageGateCatalog.brainstorm.blocked\`
    - For each passed gate, add an entry to \`guardEvidence\`: \`"<gate_id>": "<artifact path or excerpt proving the gate>"\`. Do NOT leave \`guardEvidence\` empty.
-2. **Persist artifact** at \`.cclaw/artifacts/01-brainstorm.md\`. Do NOT manually copy into run directories; cclaw sync/runtime keeps \`.cclaw/runs/<activeRunId>/artifacts/\` aligned.
+2. **Persist artifact** at \`.cclaw/artifacts/01-brainstorm.md\`. Do NOT manually copy into \`.cclaw/runs/\`; archival is handled by \`cclaw archive\`.
 3. Tell the user:
 
    > **Stage \`brainstorm\` complete.** Next: **scope** — strategic scope stage. Challenge premise and lock explicit in-scope/out-of-scope boundaries using CEO-level thinking.
@@ -357,7 +322,7 @@ When resuming a stage in a NEW session (artifact exists but gates are not all pa
 - Primary stage procedure (this file): \`.cclaw/skills/brainstorming/SKILL.md\`
 - Orchestrator contract (gate language and handoff): \`.cclaw/commands/brainstorm.md\`
 - Artifact structure baseline: \`.cclaw/templates/01-brainstorm.md\`
-- Runtime state truth source: \`.cclaw/state/flow-state.json\` + \`.cclaw/runs/<activeRunId>/\`
+- Runtime state truth source: \`.cclaw/state/flow-state.json\` + \`.cclaw/artifacts/\` + \`.cclaw/knowledge.md\`
 
 ### See also
 - Meta routing and activation rules: \`.cclaw/skills/using-cclaw/SKILL.md\`
@@ -367,26 +332,28 @@ When resuming a stage in a NEW session (artifact exists but gates are not all pa
 
 ## Operational Self-Improvement
 
-After completing this stage, reflect briefly:
-- Did any command fail unexpectedly?
-- Did you backtrack or retry something that a hint would have prevented?
-- Did you discover a project quirk (unusual config, naming convention, gotcha)?
+After this stage, ask:
+- Did I discover a non-obvious reusable **rule** or **pattern**?
+- Did a failure reveal a reusable **lesson**?
 
-If an insight would save **5+ minutes next time**, log it:
+If yes, append one concise entry to \`.cclaw/knowledge.md\`:
 
 \`\`\`bash
-echo '{"skill":"brainstorm","type":"operational","key":"[kebab-case-key]","insight":"[one sentence]","confidence":7,"source":"observed","ts":"'$(date -u +%Y-%m-%dT%H:%M:%SZ)'"}' >> .cclaw/learnings.jsonl
+TS="$(date -u +%Y-%m-%dT%H:%M:%SZ)"
+cat >> .cclaw/knowledge.md <<EOF
+### $TS [pattern] short-title
+- Stage: brainstorm
+- Context: what situation triggered this
+- Insight: what should be remembered
+- Reuse: how to apply this next time
+EOF
 \`\`\`
 
-Guidelines:
-- Skip transient errors (network blips, typos). Log structural insights only.
-- Use consistent keys so future entries dedup correctly.
-- **\`ts\` is required** on every line — the example uses \`date -u +%Y-%m-%dT%H:%M:%SZ\` (UTC). If nested quoting is awkward, build JSON in the agent and \`printf '%s\\n' '<one-line-json>'\` instead.
-- Confidence 1-3: uncertain pattern. 4-6: likely pattern. 7-9: confirmed pattern. 10: absolute rule.
+Type must be exactly one of: \`rule\`, \`pattern\`, \`lesson\`.
 
 ## Handoff
 - Next command: \`/cc-next\` (loads whatever stage is current in flow-state)
-- Required artifact: \`.cclaw/artifacts/01-brainstorm.md\` (run snapshot at \`.cclaw/runs/<activeRunId>/artifacts/01-brainstorm.md\`, synchronized by cclaw runtime)
+- Required artifact: \`.cclaw/artifacts/01-brainstorm.md\`
 - Stage stays blocked if any required gate is unsatisfied
 "
 `;
@@ -401,18 +368,19 @@ Do NOT ship, merge, or release until both review layers complete with an explici
 
 ## In / Out
 - **Reads:** .cclaw/artifacts/06-tdd.md, .cclaw/artifacts/04-spec.md, .cclaw/artifacts/05-plan.md
-- **Writes:** \`.cclaw/artifacts/07-review.md\` (run snapshot under \`.cclaw/runs/<activeRunId>/artifacts/07-review.md\` is synchronized by cclaw runtime)
+- **Writes:** \`.cclaw/artifacts/07-review.md\`
 - **Next:** \`/cc-next\` (updates flow-state and loads the next stage)
 
 ## Context Hydration (mandatory before stage work)
-1. Read \`.cclaw/state/flow-state.json\` and capture \`activeRunId\`.
-2. Resolve canonical artifact root: \`.cclaw/runs/<activeRunId>/artifacts/\`.
+1. Read \`.cclaw/state/flow-state.json\`.
+2. Resolve active artifact root: \`.cclaw/artifacts/\`.
 3. Load required upstream artifacts for this stage:
-- Canonical: \`.cclaw/runs/<activeRunId>/artifacts/06-tdd.md\` (fallback: \`.cclaw/artifacts/06-tdd.md\`)
-- Canonical: \`.cclaw/runs/<activeRunId>/artifacts/04-spec.md\` (fallback: \`.cclaw/artifacts/04-spec.md\`)
-- Canonical: \`.cclaw/runs/<activeRunId>/artifacts/05-plan.md\` (fallback: \`.cclaw/artifacts/05-plan.md\`)
-4. If a canonical run artifact is missing, fallback to the matching file under \`.cclaw/artifacts/\` and record that fallback in the stage artifact.
-5. Write stage output to \`.cclaw/artifacts/07-review.md\`. Do NOT manually copy into run directories; cclaw sync/runtime keeps run snapshots aligned.
+- \`.cclaw/artifacts/06-tdd.md\`
+- \`.cclaw/artifacts/04-spec.md\`
+- \`.cclaw/artifacts/05-plan.md\`
+4. Load \`.cclaw/knowledge.md\` and apply relevant entries.
+5. Write stage output to \`.cclaw/artifacts/07-review.md\`.
+6. Do NOT copy artifacts into \`.cclaw/runs/\`; archival is handled only by \`cclaw archive\`.
 
 ## Gates
 \`review_layer1_spec_compliance\`, \`review_layer2_correctness\`, \`review_layer2_security\`, \`review_layer2_performance\`, \`review_layer2_architecture\`, \`review_severity_classified\`, \`review_criticals_resolved\`
@@ -443,17 +411,18 @@ Do NOT merge, push, or finalize without a passed preflight check, written rollba
 
 ## In / Out
 - **Reads:** .cclaw/artifacts/07-review.md, .cclaw/artifacts/06-tdd.md
-- **Writes:** \`.cclaw/artifacts/08-ship.md\` (run snapshot under \`.cclaw/runs/<activeRunId>/artifacts/08-ship.md\` is synchronized by cclaw runtime)
+- **Writes:** \`.cclaw/artifacts/08-ship.md\`
 - **Next:** \`/cc-next\` (updates flow-state and loads the next stage)
 
 ## Context Hydration (mandatory before stage work)
-1. Read \`.cclaw/state/flow-state.json\` and capture \`activeRunId\`.
-2. Resolve canonical artifact root: \`.cclaw/runs/<activeRunId>/artifacts/\`.
+1. Read \`.cclaw/state/flow-state.json\`.
+2. Resolve active artifact root: \`.cclaw/artifacts/\`.
 3. Load required upstream artifacts for this stage:
-- Canonical: \`.cclaw/runs/<activeRunId>/artifacts/07-review.md\` (fallback: \`.cclaw/artifacts/07-review.md\`)
-- Canonical: \`.cclaw/runs/<activeRunId>/artifacts/06-tdd.md\` (fallback: \`.cclaw/artifacts/06-tdd.md\`)
-4. If a canonical run artifact is missing, fallback to the matching file under \`.cclaw/artifacts/\` and record that fallback in the stage artifact.
-5. Write stage output to \`.cclaw/artifacts/08-ship.md\`. Do NOT manually copy into run directories; cclaw sync/runtime keeps run snapshots aligned.
+- \`.cclaw/artifacts/07-review.md\`
+- \`.cclaw/artifacts/06-tdd.md\`
+4. Load \`.cclaw/knowledge.md\` and apply relevant entries.
+5. Write stage output to \`.cclaw/artifacts/08-ship.md\`.
+6. Do NOT copy artifacts into \`.cclaw/runs/\`; archival is handled only by \`cclaw archive\`.
 
 ## Gates
 \`ship_review_verdict_valid\`, \`ship_preflight_passed\`, \`ship_release_notes_written\`, \`ship_rollback_plan_ready\`, \`ship_finalization_mode_selected\`, \`ship_finalization_executed\`

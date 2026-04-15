@@ -50,7 +50,6 @@ describe("prompt-contract regression harness", () => {
     const promptGuard = await fs.readFile(path.join(root, ".cclaw/hooks/prompt-guard.sh"), "utf8");
     const workflowGuard = await fs.readFile(path.join(root, ".cclaw/hooks/workflow-guard.sh"), "utf8");
     const contextMonitor = await fs.readFile(path.join(root, ".cclaw/hooks/context-monitor.sh"), "utf8");
-    const summarizeRuntime = await fs.readFile(path.join(root, ".cclaw/hooks/summarize-observations.mjs"), "utf8");
 
     expect(claudeHooks).toContain("prompt-guard.sh");
     expect(claudeHooks).toContain("workflow-guard.sh");
@@ -60,9 +59,9 @@ describe("prompt-contract regression harness", () => {
     expect(cursorHooks).toContain("context-monitor.sh");
     expect(sessionStart).toContain("suggestion-memory.json");
     expect(sessionStart).toContain("context-warnings.jsonl");
+    expect(sessionStart).toContain("knowledge.md");
     expect(promptGuard).toContain("write_to_cclaw_runtime");
     expect(workflowGuard).toContain("stage_invocation_without_recent_flow_read");
     expect(contextMonitor).toContain("remaining is");
-    expect(summarizeRuntime).toContain("frequent-errors-");
   });
 });

@@ -14,8 +14,6 @@ const ALLOWED_CONFIG_KEYS = new Set<string>([
   "flowVersion",
   "harnesses",
   "autoAdvance",
-  "globalLearnings",
-  "globalLearningsPath",
   "promptGuardMode",
   "gitHookGuards"
 ]);
@@ -45,7 +43,6 @@ export function createDefaultConfig(harnesses: HarnessId[] = DEFAULT_HARNESSES):
     flowVersion: FLOW_VERSION,
     harnesses,
     autoAdvance: false,
-    globalLearnings: false,
     promptGuardMode: "advisory",
     gitHookGuards: false
   };
@@ -96,26 +93,6 @@ export async function readConfig(projectRoot: string): Promise<VibyConfig> {
   const autoAdvanceRaw = parsed.autoAdvance;
   const autoAdvance = typeof autoAdvanceRaw === "boolean" ? autoAdvanceRaw : false;
 
-  const globalLearningsRaw = parsed.globalLearnings;
-  if (
-    Object.prototype.hasOwnProperty.call(parsed, "globalLearnings") &&
-    typeof globalLearningsRaw !== "boolean"
-  ) {
-    throw configValidationError(fullPath, `"globalLearnings" must be a boolean`);
-  }
-  const globalLearnings = typeof globalLearningsRaw === "boolean" ? globalLearningsRaw : false;
-
-  const globalLearningsPathRaw = parsed.globalLearningsPath;
-  if (
-    Object.prototype.hasOwnProperty.call(parsed, "globalLearningsPath") &&
-    typeof globalLearningsPathRaw !== "string"
-  ) {
-    throw configValidationError(fullPath, `"globalLearningsPath" must be a string`);
-  }
-  const globalLearningsPath = typeof globalLearningsPathRaw === "string" && globalLearningsPathRaw.trim().length > 0
-    ? globalLearningsPathRaw.trim()
-    : undefined;
-
   const promptGuardModeRaw = parsed.promptGuardMode;
   if (
     Object.prototype.hasOwnProperty.call(parsed, "promptGuardMode") &&
@@ -140,8 +117,6 @@ export async function readConfig(projectRoot: string): Promise<VibyConfig> {
     flowVersion: parsed.flowVersion ?? FLOW_VERSION,
     harnesses,
     autoAdvance,
-    globalLearnings,
-    globalLearningsPath,
     promptGuardMode,
     gitHookGuards
   };

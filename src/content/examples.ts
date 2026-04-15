@@ -1,71 +1,71 @@
 import type { FlowStage } from "../types.js";
 
 const STAGE_EXAMPLES: Record<FlowStage, string> = {
-  brainstorm: `### Clarification sequence (Socratic)
+  brainstorm: `### Route selection
 
-**Q1 (PURPOSE):** "What decision will this demo help your audience make, and who exactly is that audience?"  
-**A1:** "Internal platform team; they should see whether our release flow can be trusted."
+- **Route:** Complex Route
+- **Why:** touches CI behavior, release checks, and CLI flow across multiple components.
 
-**Q2 (SCOPE):** "Which outcomes are explicitly OUT of scope for this demo so we avoid accidental expansion?"  
-**A2:** "No production rollout automation; only release metadata validation + publish safety checks."
+### Round 1 grounding
 
-**Q3 (BOUNDARIES):** "When release metadata is missing or invalid, what should happen and what should NEVER happen?"  
-**A3:** "Must block release with a clear reason; must never auto-publish anyway."
+- **Grounding summary:** "We are improving release reliability for the platform team. Success means invalid release preconditions are caught before publish with explicit operator feedback."
+- **User confirmation:** confirmed.
 
-**Q4 (ENVIRONMENT):** "Where will this run in practice: local only, CI only, or both? How is it installed and invoked?"  
-**A4:** "CI-first in GitHub Actions, but reproducible locally with npm scripts."
+### Round 2 forcing questions (boundaries/constraints)
 
-**Q5 (CONSTRAINTS):** "What constraints are non-negotiable (runtime deps, latency, compatibility, policy)?"  
-**A5:** "No new runtime dependencies; checks should stay under 2 minutes; compatible with current workflow."
+**Q1:** "If release metadata is invalid, do we block publishing hard or only warn?"  
+**A1:** "Block hard."
 
-### One-question-per-message discipline
+**Decision impact:** release checks become mandatory gates with no warning-only fallback.
 
-**Bad (bundled):** "Where will this run? Which Python version? Stdlib only? Any perf limits?"
+**Q2:** "Do we allow new runtime dependencies for speed, or keep runtime dependency set unchanged?"  
+**A2:** "Keep runtime dependencies unchanged."
 
-**Good (single ask):** "Where will this run in practice: local only, CI only, or both?"
+**Decision impact:** implementation should reuse existing tooling and built-in capabilities.
 
-**Then next turn:** "Which runtime version should we lock as minimum?"
+### Grounding checkpoint after Round 2
 
-**Then next turn:** "Should we treat 'stdlib-only' as a hard dependency constraint?"
+- **Fixed:** hard-block behavior, no new runtime dependencies.
+- **Unknown:** rollback command details and status reporting format.
 
-### Premise challenge and boundary stress-test
+### Round 3 forcing questions (trade-offs)
 
-**Premise challenge:** "If the goal is only to demonstrate filesystem I/O, why is a CLI better than a tiny script or notebook for this demo?"
+**Q3:** "For v1, prioritize rapid delivery or maximum configurability?"  
+**A3:** "Rapid delivery."
 
-**Boundary stress-test:** "When a write fails midway (permissions or partial path issues), what outcome should NEVER happen?"
+**Decision impact:** choose a minimal deterministic validation surface; defer advanced configuration.
 
-### Alternatives comparison
+### Options comparison
 
-| Approach | Pros | Cons | Effort | Recommendation |
+| Option | Pros | Cons | Effort | Recommendation |
 | --- | --- | --- | --- | --- |
-| REST + polling | Simple to deploy; works through strict proxies; easy to cache | Higher latency; wasted requests; battery use on mobile | Low | Good default when real-time is not required |
-| WebSocket | Lowest latency; bidirectional; efficient for bursts | More ops complexity; reconnect/state sync; harder through some gateways | Medium | Prefer when server must push frequently or conversationally |
-| SSE | One-way server push over HTTP; simpler than WebSockets for “notify only” | Unidirectional; browser connection limits; proxy buffering quirks | Low–Medium | Prefer for live dashboards and one-way event streams |
+| Script-only checks | Lowest implementation cost | Weak reuse and long-term maintainability | Low | Useful fallback, not preferred |
+| Reusable validation module | Reusable across CI and local runs | Slightly higher upfront design effort | Medium | **Recommended** |
+| Full release framework rewrite | Highest long-term flexibility | High risk and delivery delay | High | Not recommended for v1 |
 
 ### Approved Direction
 
-We will ship **SSE for server-originated notifications** to the web client first, because the UX requires timely delivery without bidirectional chat. We will keep a **REST fallback** for environments where SSE is unreliable, and we will defer WebSockets until we have a concrete bidirectional requirement (collaborative editing).
+We will implement a **reusable release validation module** used by CI and local tooling, aligned with hard-block safety and no-new-runtime-dependency constraints.
 
 ### Open Questions
 
-- Do we need guaranteed delivery semantics (at-least-once vs best-effort) for in-app banners?
-- What is the maximum event rate we must support per user session without degrading the UI thread?
-- Should mobile clients reuse the same event channel contract or expose a separate polling endpoint?
+- What exact rollback command sequence should be documented for failed publish attempts?
+- Should status output include machine-readable JSON in addition to markdown?
 
 ### Assumptions (explicit)
 
-- Users are authenticated; anonymous traffic does not receive personalized streams.
-- “Notification” means **account-scoped operational messages**, not third-party ads.
-- The first release optimizes for **web**; native clients can lag by one sprint.
+- CI remains the primary execution path; local flow mirrors CI checks.
+- Existing release metadata files remain the source of truth.
+- v1 prioritizes deterministic behavior over broad customization.
 
 ### Constraints
 
-- No new infrastructure class (managed broker) unless latency goals are missed in a spike.
-- Compliance requires auditability: who saw what, when — at least at coarse granularity.
+- No additional runtime dependencies in validation path.
+- Validation overhead should remain acceptable for routine CI execution.
 
 ### Notes for the next stage
 
-Capture the chosen direction as a **single paragraph decision** (above) and ensure open questions are either answered in scope or explicitly deferred with an owner + date.`,
+Carry fixed trade-off decisions directly into scope in/out boundaries and deferred list.`,
 
   scope: `### Scope contract
 
