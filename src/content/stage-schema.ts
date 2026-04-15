@@ -284,7 +284,7 @@ const SCOPE: StageSchemaInput = {
     "**Prime Directives** — Zero silent failures. For each in-scope capability, name concrete failure modes, the exact error surface, and trace all four data-flow paths (happy, nil, empty, upstream error). Include interaction edge cases (double-click, navigate-away, stale state), observability commitments, and explicit deferred-item logging.",
     "**Premise Challenge** — Is this the right problem? What if we do nothing? What are we optimizing for?",
     "**Existing Code Leverage** — Search for existing solutions before deciding to build new.",
-    "**Dream State Mapping** — (complex projects only) describe the ideal end state and check alignment.",
+    "**Dream State Mapping** — (complex projects only) describe the ideal state 12 months out using `CURRENT STATE -> THIS PLAN -> 12-MONTH IDEAL`, then verify this scope moves toward that target.",
     "**Implementation Alternatives** — 2-3 approaches: minimal viable + ideal architecture + effort/risk.",
     "**Temporal Interrogation** — (complex projects only) map time slices and lock-now vs defer decisions.",
     "**Mode Selection** — Present expand/selective/hold/reduce with recommendation.",
