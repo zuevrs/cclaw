@@ -309,7 +309,7 @@ const SCOPE: StageSchemaInput = {
     "Choose scope mode with user approval.",
     "Run mode-specific analysis that matches the selected scope mode.",
     "Walk through scope review sections one at a time.",
-    "Write explicit scope contract and deferred items.",
+    "Write explicit scope contract, discretion areas, and deferred items.",
     "Produce scope summary with mode, in-scope, out-of-scope, and deferred."
   ],
   requiredGates: [
@@ -317,11 +317,13 @@ const SCOPE: StageSchemaInput = {
     { id: "scope_alternatives_produced", description: "At least 2 implementation alternatives were evaluated with explicit effort/risk and reuse fields." },
     { id: "scope_mode_selected", description: "One scope mode was explicitly selected." },
     { id: "scope_contract_written", description: "In-scope/out-of-scope contract is documented." },
+    { id: "scope_discretion_documented", description: "Discretion areas are documented (or explicitly marked as none)." },
     { id: "scope_user_approved", description: "User approved the final scope direction." }
   ],
   requiredEvidence: [
     "Artifact written to `.cclaw/artifacts/02-scope.md`.",
     "In-scope and out-of-scope lists are explicit.",
+    "Discretion areas are explicit (or marked as `None`).",
     "Selected mode and rationale are documented.",
     "Premise challenge findings documented.",
     "Deferred items list with one-line rationale for each."
@@ -332,14 +334,16 @@ const SCOPE: StageSchemaInput = {
     "existing capabilities and reusable components",
     "delivery deadlines and risk tolerance"
   ],
-  outputs: ["scope mode decision", "scope contract", "deferred scope list", "scope summary"],
+  outputs: ["scope mode decision", "scope contract", "discretion areas list", "deferred scope list", "scope summary"],
   blockers: [
     "scope mode not selected",
     "in/out boundaries ambiguous",
+    "discretion areas undefined",
     "critical premise disagreement unresolved"
   ],
   exitCriteria: [
     "scope contract approved by user",
+    "discretion areas recorded explicitly",
     "required gates marked satisfied",
     "deferred list recorded explicitly",
     "scope summary produced"
@@ -363,12 +367,13 @@ const SCOPE: StageSchemaInput = {
   redFlags: [
     "No selected mode in artifact",
     "Mode selected without heuristic justification",
+    "No discretion section (or explicit `None`) in artifact",
     "No deferred/not-in-scope section",
     "No user approval marker",
     "Premise challenge missing or superficial",
     "No implementation alternatives evaluated"
   ],
-  policyNeedles: ["Scope mode", "In Scope", "Out of Scope", "NOT in scope", "Premise Challenge"],
+  policyNeedles: ["Scope mode", "In Scope", "Out of Scope", "Discretion Areas", "NOT in scope", "Premise Challenge"],
   artifactFile: "02-scope.md",
   next: "design",
   cognitivePatterns: [
@@ -443,6 +448,7 @@ const SCOPE: StageSchemaInput = {
     { section: "Implementation Alternatives", required: true, validationRule: "2-3 options with Name, Summary, Effort, Risk, Pros, Cons, and Reuses. Must include minimal viable and ideal architecture options." },
     { section: "Scope Mode", required: true, validationRule: "Must state selected mode and rationale with default heuristic justification." },
     { section: "In Scope / Out of Scope", required: true, validationRule: "Two separate explicit lists. Out-of-scope must not be empty." },
+    { section: "Discretion Areas", required: true, validationRule: "Explicit list of implementer decision zones, or 'None' if scope is fully locked." },
     { section: "Deferred Items", required: true, validationRule: "Each item has one-line rationale. If empty, state 'None' explicitly." },
     { section: "Error & Rescue Registry", required: true, validationRule: "Each scoped capability has: failure mode, detection method, fallback decision." },
     { section: "Scope Summary", required: true, validationRule: "Clean summary: mode, strongest challenges, recommended path, accepted scope, deferred, excluded." }
