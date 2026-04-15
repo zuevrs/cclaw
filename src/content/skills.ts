@@ -27,7 +27,7 @@ function reviewSectionsBlock(stage: FlowStage): string {
   const sections = schema.reviewSections.map((sec) => {
     const points = sec.evaluationPoints.map((p) => `- ${p}`).join("\n");
     const stop = sec.stopGate
-      ? "\n\n**STOP.** For each issue found in this section, present it ONE AT A TIME. Describe the problem concretely, present 2-3 options, state your recommendation, and explain WHY. Only proceed to the next section after ALL issues in this section are resolved."
+      ? "\n\n**STOP.** Present the most important question from this section to the user, even if your recommendation is clear. If no issues are found, state your assessment in one sentence and ask the user to confirm before moving on. If issues exist, present them ONE AT A TIME: describe the problem concretely, present 2-3 options, state your recommendation, and explain WHY."
       : "";
     return `### ${sec.title}\n\nEvaluate:\n${points}${stop}`;
   }).join("\n\n");

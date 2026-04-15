@@ -143,8 +143,10 @@ const BRAINSTORM: StageSchemaInput = {
   ],
   interactionProtocol: [
     "Explore what exists before asking what to build — check project files first.",
+    "If the idea is vague or could mean many different things, your FIRST question narrows to a specific kind of project. Do not ask detail questions until the project type is clear.",
     "Ask exactly one question per turn. Prefer multiple choice. No bundled questions.",
-    "Each question should change a concrete design decision. If a question only gathers trivia, skip it.",
+    "After 2-3 questions, summarize your emerging understanding before continuing so the user can correct course early.",
+    "Each question should change a concrete design decision. Litmus test: if the two most likely answers do not lead to different architectures, make the choice yourself and state it.",
     "Present design in sections scaled to their complexity — a few sentences for simple aspects, detailed for nuanced ones. Get approval after each section.",
     "When proposing approaches, lead with your recommendation and explain why.",
     "State explicitly what is being approved when requesting approval.",
@@ -231,7 +233,8 @@ const BRAINSTORM: StageSchemaInput = {
     { name: "Context Before Questions", description: "Understand what exists before asking what to build." },
     { name: "Depth Matches Complexity", description: "Brief design for simple tasks, thorough exploration for complex ones." },
     { name: "Diverge Then Commit", description: "Explore multiple architecturally distinct options first, commit only after explicit approval." },
-    { name: "Question Quality Over Quantity", description: "Each question should change what we build, not just gather trivia." }
+    { name: "Question Quality Over Quantity", description: "Each question should change what we build, not just gather trivia." },
+    { name: "Know When To Move On", description: "Stop asking when problem, constraints, and success criteria are clear enough to compare approaches." }
   ],
   reviewSections: [],
   completionStatus: ["DONE", "DONE_WITH_CONCERNS", "BLOCKED"],
@@ -277,17 +280,19 @@ const SCOPE: StageSchemaInput = {
     "The work is a pure implementation or debugging pass within existing scope"
   ],
   checklist: [
-    "Prime Directives — Zero silent failures (every failure mode visible). Every error has a name (not 'handle errors' — name the exception). Every data flow has four paths: happy, nil input, upstream error, downstream timeout. Observability is a scope deliverable, not a post-launch add-on.",
-    "Premise Challenge — Is this the right problem? Could a different framing yield a simpler or more impactful solution? What happens if we do nothing? What are we optimizing for — speed, quality, cost, user experience?",
-    "Existing Code Leverage — Map every sub-problem to existing code. Run searches (grep, codebase exploration) BEFORE deciding to build new. If built-in or library solutions exist, default to them.",
-    "Dream State Mapping — Describe the ideal end state 12 months from now. Does this plan move toward that state or away from it?",
-    "Implementation Alternatives (MANDATORY) — Produce 2-3 distinct approaches. One must be 'minimal viable', one must be 'ideal architecture'. Include effort/risk/reversibility for each.",
-    "Temporal Interrogation — Think in time slices: HOUR 1 (foundation, what must exist first), HOURS 2-3 (core logic, what builds on foundation), HOURS 4-5 (integration, what connects the pieces), HOUR 6+ (polish, what can wait). What decisions must be locked NOW vs deferred to implementation?",
-    "Mode Selection with Default Heuristic — Present four options: SCOPE EXPANSION (dream big), SELECTIVE EXPANSION (hold scope + cherry-pick), HOLD SCOPE (maximum rigor), SCOPE REDUCTION (strip to essentials). Suggest default: greenfield → EXPANSION, bug/hotfix → HOLD, >15 files touched → suggest REDUCTION. Once selected, commit fully.",
-    "Error & Rescue Registry — For every new capability in scope: what breaks if it fails? How is the failure detected? What is the fallback? This is scope, not design — decide WHAT to protect, not HOW."
+    "**Assess complexity** — Read the brainstorm artifact. If project is simple (single component, clear architecture, personal/prototype), run light-touch scope: mode selection, 3-5 key in/out boundaries, deferred items. Skip Dream State Mapping and Temporal Interrogation. If project is complex (multi-component, team delivery, production), run the full checklist.",
+    "**Prime Directives** — Name error modes and data-flow paths for each capability in scope.",
+    "**Premise Challenge** — Is this the right problem? What if we do nothing? What are we optimizing for?",
+    "**Existing Code Leverage** — Search for existing solutions before deciding to build new.",
+    "**Dream State Mapping** — (complex projects only) describe the ideal end state and check alignment.",
+    "**Implementation Alternatives** — 2-3 approaches: minimal viable + ideal architecture + effort/risk.",
+    "**Temporal Interrogation** — (complex projects only) map time slices and lock-now vs defer decisions.",
+    "**Mode Selection** — Present expand/selective/hold/reduce with recommendation.",
+    "**Error and Rescue Registry** — For each capability: what breaks, how detected, what fallback."
   ],
   interactionProtocol: [
     "For scope mode selection: use the Decision Protocol — present expand/selective/hold/reduce as labeled options with trade-offs and mark one as (recommended). If AskQuestion/AskUserQuestion is available, send exactly ONE question per call, validate fields against runtime schema, and on schema error immediately fall back to plain-text question instead of retrying guessed payloads.",
+    "Walk through the scope checklist interactively. Each checklist item that surfaces a decision should be presented to the user as a question, not as a monologue. Do not dump all items at once.",
     "Challenge premise and verify the problem framing before anything else.",
     "Present one structural scope issue at a time for decision. Do NOT batch. Use structured options for each scope boundary question.",
     "Record explicit in-scope and out-of-scope contract.",
@@ -359,6 +364,7 @@ const SCOPE: StageSchemaInput = {
   artifactFile: "02-scope.md",
   next: "design",
   cognitivePatterns: [
+    { name: "Depth Matches Complexity", description: "Scale each section to project complexity: concise for simple prototypes, deep for production systems." },
     { name: "Classification Instinct", description: "Categorize every decision by reversibility x magnitude. Most things are two-way doors — move fast. Only slow down for irreversible + high-magnitude decisions." },
     { name: "Inversion Reflex", description: "For every 'how do we win?' also ask 'what would make us fail?' Map failure modes before committing to scope." },
     { name: "Focus as Subtraction", description: "Primary value-add is what to NOT do. Default: do fewer things, better. Every feature must earn its place." },
