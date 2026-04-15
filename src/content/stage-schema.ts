@@ -117,9 +117,9 @@ const BRAINSTORM: StageSchemaInput = {
   stage: "brainstorm",
   skillFolder: "brainstorming",
   skillName: "brainstorming",
-  skillDescription: "Design-first stage. Route request complexity, run phased forcing questions, and lock an approved direction before scope/design work.",
+  skillDescription: "Design-first stage. Explore context, understand intent through collaborative dialogue, propose distinct approaches, and lock an approved direction before scope/design work.",
   hardGate: "Do NOT invoke implementation skills, write code, scaffold projects, or mutate product behavior until a concrete direction is approved by the user.",
-  purpose: "Turn an initial idea into an approved direction through routing, phased grounding, and decision-forcing questions.",
+  purpose: "Turn an initial idea into an approved design direction through natural collaborative dialogue — understanding the problem before proposing solutions.",
   whenToUse: [
     "Starting a new feature or behavior change",
     "Requirements are ambiguous or trade-offs are unclear",
@@ -131,52 +131,49 @@ const BRAINSTORM: StageSchemaInput = {
     "The task is retrospective only (post-ship audit with no new solution choices)"
   ],
   checklist: [
-    "Principles (one line): one decision-forcing question at a time, grounding summary between rounds, and no implementation before approval.",
-    "Route the work: classify as Simple Route (single-surface, low-risk) or Complex Route (multi-surface, high-uncertainty); explain why.",
-    "Round 1 grounding: restate the problem, desired outcome, and success signal in your own words; get confirmation before deeper questioning.",
-    "Round 2 forcing questions: ask one decision-forcing question per turn about boundaries and constraints; each answer must change a concrete design decision.",
-    "Grounding checkpoint: summarize what is fixed vs still unknown after Round 2; confirm this summary before moving to solution options.",
-    "Round 3 forcing questions: ask trade-off questions that force prioritization (for example speed vs flexibility), then lock assumptions.",
-    "Propose multiple viable approaches with real trade-offs and one explicit recommendation tied to the forced decisions.",
-    "Write `.cclaw/artifacts/01-brainstorm.md` with route, grounding checkpoints, forcing-question log, options, and approved direction; run a contradiction pass.",
-    "Ask the user to review the written artifact and explicitly approve or request changes; only then complete stage and point to `/cc-next`."
+    "**Explore project context** — check files, docs, recent commits to understand what already exists.",
+    "**Assess scope** — if the request covers multiple independent subsystems, flag it and help decompose before deep-diving. Each sub-project gets its own brainstorm cycle.",
+    "**Ask clarifying questions** — one at a time, understand purpose, constraints, and success criteria. Prefer multiple choice when possible. Each question should change what we build, not just gather trivia.",
+    "**Propose 2-3 architecturally distinct approaches** — with real trade-offs and your recommendation. Lead with the recommended option and explain why.",
+    "**Present design by sections** — scale each section to its complexity. Ask after each section whether it looks right so far. Cover: architecture, key components, data flow.",
+    "**Write artifact** to `.cclaw/artifacts/01-brainstorm.md`.",
+    "**Self-review** — scan for placeholders/TODOs, check internal consistency, verify scope is focused, resolve any ambiguity.",
+    "**User reviews artifact** — ask the user to review the written artifact and explicitly approve or request changes.",
+    "**Handoff** — only then complete stage and point to `/cc-next`."
   ],
   interactionProtocol: [
-    "Start with routing (Simple Route vs Complex Route) so question depth matches real complexity.",
-    "Use phased questioning: Round 1 grounding -> Round 2 constraints/boundaries -> grounding checkpoint -> Round 3 trade-off forcing.",
-    "Ask exactly one decision-forcing question per turn; avoid bundled or purely informational questions.",
-    "After each round, publish a short grounding summary (fixed decisions vs unknowns) before continuing.",
-    "Use the Decision Protocol for option selection, with explicit recommendation and rationale.",
+    "Explore what exists before asking what to build — check project files first.",
+    "Ask exactly one question per turn. Prefer multiple choice. No bundled questions.",
+    "Each question should change a concrete design decision. If a question only gathers trivia, skip it.",
+    "Present design in sections scaled to their complexity — a few sentences for simple aspects, detailed for nuanced ones. Get approval after each section.",
+    "When proposing approaches, lead with your recommendation and explain why.",
     "State explicitly what is being approved when requesting approval.",
-    "Run a brief contradiction and ambiguity pass before handoff.",
+    "Run a brief self-review (placeholders, contradictions, scope, ambiguity) before presenting the artifact.",
     "**STOP.** Wait for explicit user approval after writing the artifact. Do NOT auto-advance."
   ],
   process: [
-    "Route request complexity (Simple Route or Complex Route) and capture rationale.",
-    "Round 1 grounding: restate problem, outcome, and success signal; confirm alignment.",
-    "Round 2 forcing questions: boundaries and constraints one question at a time.",
-    "Grounding checkpoint: summarize fixed decisions and remaining unknowns.",
-    "Round 3 forcing questions: trade-offs and priorities; lock explicit assumptions.",
-    "Offer multiple approaches with recommendation and rationale.",
-    "Capture approved direction in `.cclaw/artifacts/01-brainstorm.md`.",
-    "Run contradiction/ambiguity pass and request explicit user approval.",
+    "Explore project context: check files, docs, recent activity.",
+    "Assess scope: flag if request is too broad, help decompose first.",
+    "Ask clarifying questions one at a time — focus on purpose, constraints, success criteria.",
+    "Propose 2-3 architecturally distinct approaches with trade-offs and a recommendation.",
+    "Present design sections incrementally, get approval after each.",
+    "Write approved direction to `.cclaw/artifacts/01-brainstorm.md`.",
+    "Self-review: placeholder scan, internal consistency, scope check, ambiguity check.",
+    "Request explicit user approval of the artifact.",
     "Handoff to scope only after approval is explicit."
   ],
   requiredGates: [
-    { id: "brainstorm_route_selected", description: "Simple vs Complex route was selected with explicit rationale." },
-    { id: "brainstorm_round1_grounded", description: "Round 1 grounding (problem, outcome, success signal) was confirmed by the user." },
-    { id: "brainstorm_round2_forcing_questions", description: "Round 2 forcing questions captured boundaries and constraints that changed real decisions." },
-    { id: "brainstorm_round3_tradeoff_decisions", description: "Round 3 forcing questions locked explicit trade-off priorities and assumptions." },
-    { id: "brainstorm_options_compared", description: "Multiple solution approaches were compared with real trade-offs and a recommendation." },
+    { id: "brainstorm_context_explored", description: "Project context (files, docs, existing patterns) was checked before asking questions." },
+    { id: "brainstorm_idea_understood", description: "Agent and user share the same understanding of the problem, constraints, and success criteria." },
+    { id: "brainstorm_approaches_compared", description: "2-3 architecturally distinct approaches were compared with real trade-offs and a recommendation." },
     { id: "brainstorm_direction_approved", description: "User approved a concrete direction and what exactly was approved is stated." },
     { id: "brainstorm_artifact_reviewed", description: "User reviewed the written brainstorm artifact and confirmed readiness." }
   ],
   requiredEvidence: [
     "Artifact written to `.cclaw/artifacts/01-brainstorm.md`.",
-    "Routing decision (`simple` or `complex`) with rationale is recorded.",
-    "Grounding checkpoints between rounds are recorded (fixed decisions vs unknowns).",
-    "Forcing-question log captures question, answer, and decision impact.",
-    "Approaches and recommendation are recorded with explicit trade-offs.",
+    "Project context was explored (files, docs, or recent activity referenced).",
+    "Clarifying questions and their answers are captured.",
+    "2-3 approaches with trade-offs and recommendation are recorded.",
     "Approved direction and approval marker are present.",
     "Assumptions and open questions are captured (or explicitly marked as none)."
   ],
@@ -194,7 +191,7 @@ const BRAINSTORM: StageSchemaInput = {
   blockers: [
     "no explicit approval",
     "critical ambiguity unresolved",
-    "route cannot be determined due to missing context"
+    "project context not explored"
   ],
   exitCriteria: [
     "approved design direction documented",
@@ -203,58 +200,58 @@ const BRAINSTORM: StageSchemaInput = {
     "artifact reviewed by user"
   ],
   antiPatterns: [
-    "Skipping route selection and treating all requests with the same question depth",
-    "Asking non-forcing or bundled questions",
-    "Skipping grounding checkpoints between rounds",
+    "Asking questions without exploring existing project context first",
+    "Asking bundled or purely informational questions that don't change decisions",
+    "Proposing cosmetic option variants instead of architecturally distinct approaches",
     "Jumping directly into implementation",
     "Requesting approval without stating what decision is being approved"
   ],
   rationalizations: [
-    { claim: "This is straightforward so routing is unnecessary.", reality: "Explicit routing prevents under-questioning complex work and over-questioning simple work." },
-    { claim: "Any question is useful context.", reality: "Only forcing questions that change decisions improve design quality." },
-    { claim: "Grounding summaries slow us down.", reality: "Grounding checkpoints prevent hidden drift and reduce expensive rework later." }
+    { claim: "I already know what to build, so exploration is unnecessary.", reality: "Checking files and context catches wrong assumptions that waste hours later." },
+    { claim: "Any question is useful context.", reality: "Only questions whose answers change what we build improve the design." },
+    { claim: "Two options that differ only in tooling count as distinct approaches.", reality: "Distinct means different architecture, not different libraries for the same approach." }
   ],
   redFlags: [
-    "Route is missing or unjustified",
-    "No grounding checkpoint between question rounds",
-    "Questions do not force concrete decisions",
+    "No project context exploration before questions",
+    "Questions that only gather preferences without design impact",
+    "Options that are variants of one approach, not distinct alternatives",
     "Approval requested without explicit decision context"
   ],
   policyNeedles: [
-    "Simple Route / Complex Route",
-    "One forcing question per message",
-    "Grounding checkpoint between rounds",
-    "Multiple approaches with trade-offs",
+    "Explore project context",
+    "One question at a time",
+    "2-3 architecturally distinct approaches",
     "State what is being approved",
+    "Self-review before handoff",
     "Do NOT implement, scaffold, or modify behavior"
   ],
   artifactFile: "01-brainstorm.md",
   next: "scope",
   cognitivePatterns: [
-    { name: "Route Before Depth", description: "Choose question depth using simple-vs-complex routing before diving into details." },
-    { name: "Forcing Question Discipline", description: "Each question must force a concrete decision, not just gather trivia." },
-    { name: "Grounding Cadence", description: "After each question round, re-ground on fixed decisions vs unknowns before continuing." },
-    { name: "Diverge Then Commit", description: "Explore multiple viable options first, then commit only after explicit approval." }
+    { name: "Context Before Questions", description: "Understand what exists before asking what to build." },
+    { name: "Depth Matches Complexity", description: "Brief design for simple tasks, thorough exploration for complex ones." },
+    { name: "Diverge Then Commit", description: "Explore multiple architecturally distinct options first, commit only after explicit approval." },
+    { name: "Question Quality Over Quantity", description: "Each question should change what we build, not just gather trivia." }
   ],
   reviewSections: [],
   completionStatus: ["DONE", "DONE_WITH_CONCERNS", "BLOCKED"],
   crossStageTrace: {
     readsFrom: [],
     writesTo: [".cclaw/artifacts/01-brainstorm.md"],
-    traceabilityRule: "Scope and design decisions must trace back to routed question rounds and approved brainstorm direction."
+    traceabilityRule: "Scope and design decisions must trace back to explored context and approved brainstorm direction."
   },
   artifactValidation: [
-    { section: "Problem Framing", required: true, validationRule: "Must define the user problem, desired outcome, and success signal." },
-    { section: "Routing Decision", required: true, validationRule: "Must state simple vs complex route and explain why." },
-    { section: "Grounding Checkpoints", required: true, validationRule: "Must capture fixed decisions and remaining unknowns between rounds." },
-    { section: "Forcing Questions Log", required: true, validationRule: "Must capture question, answer, and decision impact for each forcing question." },
-    { section: "Options Comparison", required: true, validationRule: "Must compare multiple distinct options with real trade-offs and recommendation." },
-    { section: "Approved Direction", required: true, validationRule: "Must include explicit approval marker and what was approved." },
+    { section: "Context", required: true, validationRule: "Must reference project state and relevant existing code or patterns." },
+    { section: "Problem", required: true, validationRule: "Must define what we're solving, success criteria, and constraints." },
+    { section: "Clarifying Questions", required: true, validationRule: "Must capture question, answer, and decision impact for each clarifying question." },
+    { section: "Approaches", required: true, validationRule: "Must compare 2-3 architecturally distinct options with real trade-offs and recommendation." },
+    { section: "Selected Direction", required: true, validationRule: "Must include the selected approach, rationale, and explicit approval marker." },
+    { section: "Design", required: true, validationRule: "Must cover architecture, key components, and data flow scaled to complexity." },
     { section: "Assumptions and Open Questions", required: true, validationRule: "Must capture unresolved assumptions/open questions, or explicitly state none." }
   ],
   namedAntiPattern: {
-    title: "This Is Too Simple To Brainstorm",
-    description: "Skipping routing and forcing questions because a task looks simple creates silent assumption debt. Even simple-route work needs explicit grounding and approval."
+    title: "This Is Too Simple To Need A Design",
+    description: "Every project goes through this process. Simple projects are where unexamined assumptions cause the most wasted work. The design can be short, but you MUST present it and get approval."
   }
 };
 
