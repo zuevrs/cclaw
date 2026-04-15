@@ -500,7 +500,7 @@ const DESIGN: StageSchemaInput = {
   interactionProtocol: [
     "Review architecture decisions section-by-section.",
     "For EACH issue found in a review section, present it ONE AT A TIME. Do NOT batch multiple issues.",
-    "For each issue: use the Decision Protocol — describe concretely with file/line references, present labeled options (A/B/C) with trade-offs and mark one as (recommended). If AskQuestion/AskUserQuestion is available, send exactly ONE question per call, validate fields against runtime schema, and on schema error immediately fall back to plain-text question instead of retrying guessed payloads.",
+    "For each issue: use the Decision Protocol — describe concretely with file/line references, present labeled options (A/B/C) with trade-offs, effort estimate (S/M/L/XL), risk level (Low/Med/High), and mark one as (recommended). If AskQuestion/AskUserQuestion is available, send exactly ONE question per call, validate fields against runtime schema, and on schema error immediately fall back to plain-text question instead of retrying guessed payloads.",
     "Only proceed to the next review section after ALL issues in the current section are resolved.",
     "If a section has no issues, say 'No issues found' and move on.",
     "Do not skip failure-mode mapping.",
@@ -578,7 +578,8 @@ const DESIGN: StageSchemaInput = {
     { claim: "Failure modes are edge cases we can ignore for now.", reality: "Production incidents usually come from unplanned edge paths." },
     { claim: "Performance can be optimized after launch.", reality: "Missing performance budgets make regressions invisible until late." },
     { claim: "This is a strategy doc so implementation sections do not apply.", reality: "Implementation details are where strategy breaks down. Every section must be evaluated." },
-    { claim: "The user preferred approach A, so we should go with it.", reality: "User preference is an input, not a conclusion. Evaluate on engineering merit. If approach B is objectively better, recommend B with evidence." }
+    { claim: "The user preferred approach A, so we should go with it.", reality: "User preference is an input, not a conclusion. Evaluate on engineering merit. If approach B is objectively better, recommend B with evidence." },
+    { claim: "Both options are roughly equivalent.", reality: "Options are never equivalent once you quantify effort (S/M/L/XL) and risk (Low/Med/High). If you cannot distinguish them, you have not investigated deeply enough." }
   ],
   redFlags: [
     "No explicit architecture boundary section",
