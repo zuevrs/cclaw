@@ -124,7 +124,18 @@ The original premise (“add notifications”) was reframed to **“ensure users
 - Deferred: WebSocket channel and rich-media/search enhancements.
 - Explicitly excluded: outbound channels and marketing workflows for v1.`,
 
-  design: `### Search Before Building (sample result)
+  design: `### Codebase Investigation (blast-radius files)
+
+| File | Current responsibility | Patterns discovered |
+| --- | --- | --- |
+| \`src/api/routes/user.ts\` | User CRUD endpoints | Express router, Zod validation, throws \`AppError\` |
+| \`src/services/event-bus.ts\` | In-process pub/sub | EventEmitter wrapper, typed channels, no persistence |
+| \`src/middleware/auth.ts\` | JWT verification | Extracts user from token, attaches to \`req.context\` |
+| \`tests/integration/user.test.ts\` | User route tests | Supertest, factory helpers, \`beforeEach\` DB reset |
+
+Discovery: existing EventEmitter-based bus has no durability — notifications must add persistence layer on top, not replace the bus.
+
+### Search Before Building (sample result)
 
 | Layer | Label | What to reuse first |
 | --- | --- | --- |
@@ -132,7 +143,7 @@ The original premise (“add notifications”) was reframed to **“ensure users
 | Layer 2 | existing codebase | Existing auth middleware, existing API client wrapper, existing feature flags helper |
 | Layer 3 | npm | A small, well-maintained SSE helper (only if Layer 1–2 cannot cover framing/reconnect ergonomics) |
 
-### Minimal component diagram (ASCII)
+### Architecture Diagram (mandatory)
 
 \`\`\`
 ┌─────────────┐      ┌──────────────┐      ┌────────────────┐
@@ -146,23 +157,59 @@ The original premise (“add notifications”) was reframed to **“ensure users
                      └──────────────┘
 \`\`\`
 
-### Unresolved Decision (sample entry)
+Data flow: Gateway → Service (validate + enrich) → Publisher (fan-out) → Queue (persist) → Read Model (project).
 
-- **Decision:** Should the feed be modeled as append-only events or as CRUD “notification rows”?
-- **Status:** OPEN
-- **Options:** (A) append-only event log + projection, (B) mutable rows with status fields, (C) hybrid with compaction job
-- **Deadline:** Decide before implementation of persistence migrations (end of week)
+### What Already Exists
+
+| Sub-problem | Existing code/library | Layer | Reuse decision |
+| --- | --- | --- | --- |
+| Auth context extraction | \`src/middleware/auth.ts\` | Layer 1 | Reuse as-is |
+| Event fan-out | \`src/services/event-bus.ts\` | Layer 2 | Wrap with persistence adapter |
+| SSE framing | None | Layer 3 | Evaluate \`better-sse\` npm package |
+| Notification schema | None | — | New: define in \`src/schemas/notification.ts\` |
+
+### Failure Mode Table
+
+| Failure | Trigger | Detection | Mitigation | User impact |
+| --- | --- | --- | --- | --- |
+| SSE connection drop | Network interruption | Client heartbeat timeout (30s) | Auto-reconnect with exponential backoff + snapshot fallback | Brief delay (≤10s), no data loss |
+| Duplicate publish | Retry after timeout | Dedupe key check in outbox | Upsert with idempotency key | None (transparent) |
+| Queue backpressure | Spike >1000 events/s | Queue depth metric alarm | Back-pressure signal to publisher, shed non-critical events | Delayed delivery of low-priority notifications |
+
+### NOT in scope
+
+- Outbound channels (email, push, SMS) — deferred to v2.
+- Admin notification management UI — separate workstream.
+- Notification preferences / mute rules — requires user settings redesign.
+
+### Unresolved Decisions
+
+| Decision | Status | Options | Missing info | Default if unanswered |
+| --- | --- | --- | --- | --- |
+| Feed storage model | OPEN | (A) append-only event log, (B) mutable rows, (C) hybrid | Load testing results on read patterns | (A) append-only — safest for audit trail |
 
 ### Interface sketch (non-binding)
 
 - **Client → server:** \`GET /api/me/notifications/snapshot?limit=50\` plus optional cursor parameters (if adopted).
 - **Server → client:** \`GET /api/me/notifications/stream\` as SSE with periodic heartbeats.
 
+### Completion Dashboard
+
+| Review Section | Status | Issues |
+| --- | --- | --- |
+| Architecture Review | issues-found-resolved | Decided on outbox pattern over direct pub/sub |
+| Code Quality Review | clear | — |
+| Test Review | issues-found-resolved | Added integration test gap for SSE reconnect |
+| Performance Review | clear | — |
+| Distribution & Delivery Review | clear | — |
+
+**Decisions made:** 4 | **Unresolved:** 1 (feed storage model)
+
 ### Quality bar for this stage
 
 Design output should be **reviewable by someone who did not attend brainstorming**: they can trace from constraints → components → open decisions without reading code.`,
 
-  spec: `### Acceptance criteria (Given / When / Then)
+    spec: `### Acceptance criteria (Given / When / Then)
 
 **Criterion 1 — delivery**
 
