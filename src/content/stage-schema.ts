@@ -288,6 +288,7 @@ const SCOPE: StageSchemaInput = {
     "**Implementation Alternatives** — Produce 2-3 distinct approaches. For each: Name, Summary, Effort (S/M/L/XL), Risk (Low/Med/High), 2-3 Pros, 2-3 Cons, and explicit Reuses. One option must be minimal viable, one must be ideal architecture.",
     "**Temporal Interrogation** — (complex projects only) simulate implementation timeline: HOUR 1 foundations, HOUR 2-3 core logic, HOUR 4-5 integration surprises, HOUR 6+ polish/tests. Decide what must be locked now vs safely deferred.",
     "**Mode Selection** — Present expand/selective/hold/reduce with recommendation.",
+    "**Mode-Specific Analysis** — After mode is selected, run the matching analysis: EXPAND (10x and delight opportunities), SELECTIVE (hold-scope rigor then cherry-picked expansions), HOLD (minimum-change-set hardening), REDUCE (ruthless cuts and follow-up split).",
     "**Error and Rescue Registry** — For each capability: what breaks, how detected, what fallback."
   ],
   interactionProtocol: [
@@ -304,6 +305,7 @@ const SCOPE: StageSchemaInput = {
     "Run premise challenge and existing-solution leverage check.",
     "Produce 2-3 scope alternatives in a structured format (Name, Summary, Effort, Risk, Pros, Cons, Reuses) with minimum viable and ideal architecture options included.",
     "Choose scope mode with user approval.",
+    "Run mode-specific analysis that matches the selected scope mode.",
     "Walk through scope review sections one at a time.",
     "Write explicit scope contract and deferred items.",
     "Produce scope summary with mode, in-scope, out-of-scope, and deferred."
