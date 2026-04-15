@@ -281,7 +281,7 @@ const SCOPE: StageSchemaInput = {
   ],
   checklist: [
     "**Assess complexity** — Read the brainstorm artifact. If project is simple (single component, clear architecture, personal/prototype), run light-touch scope: mode selection, 3-5 key in/out boundaries, deferred items. Skip Dream State Mapping and Temporal Interrogation. If project is complex (multi-component, team delivery, production), run the full checklist.",
-    "**Prime Directives** — Name error modes and data-flow paths for each capability in scope.",
+    "**Prime Directives** — Zero silent failures. For each in-scope capability, name concrete failure modes, the exact error surface, and trace all four data-flow paths (happy, nil, empty, upstream error). Include interaction edge cases (double-click, navigate-away, stale state), observability commitments, and explicit deferred-item logging.",
     "**Premise Challenge** — Is this the right problem? What if we do nothing? What are we optimizing for?",
     "**Existing Code Leverage** — Search for existing solutions before deciding to build new.",
     "**Dream State Mapping** — (complex projects only) describe the ideal end state and check alignment.",
@@ -430,7 +430,7 @@ const SCOPE: StageSchemaInput = {
     traceabilityRule: "Every scope boundary must be traceable to a brainstorm decision. Every downstream design choice must stay within the scope contract."
   },
   artifactValidation: [
-    { section: "Prime Directives", required: true, validationRule: "Named error modes for each capability. Four paths per data flow." },
+    { section: "Prime Directives", required: true, validationRule: "For each scoped capability: named failure modes, explicit error surface, four data-flow paths, interaction edge cases, observability expectations, and deferred-item handling." },
     { section: "Premise Challenge", required: true, validationRule: "Must contain explicit answers to: right problem? direct path? what if nothing?" },
     { section: "Scope Mode", required: true, validationRule: "Must state selected mode and rationale with default heuristic justification." },
     { section: "In Scope / Out of Scope", required: true, validationRule: "Two separate explicit lists. Out-of-scope must not be empty." },
