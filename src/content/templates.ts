@@ -265,9 +265,9 @@ export const ARTIFACT_TEMPLATES: Record<string, string> = {
 Execution rule: complete and verify each wave before starting the next wave.
 
 ## Task List
-| Task ID | Description | Acceptance criterion | Verification command |
-|---|---|---|---|
-| T-1 |  |  |  |
+| Task ID | Description | Acceptance criterion | Verification command | Effort |
+|---|---|---|---|---|
+| T-1 |  |  |  |  |
 
 ## Acceptance Mapping
 | Criterion ID | Task IDs |

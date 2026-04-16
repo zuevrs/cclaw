@@ -303,8 +303,8 @@ Execution rule: complete and verify each wave before starting the next wave.
 
 ### Task List
 
-| Task ID | Description | Acceptance criterion | Verification command |
-| --- | --- | --- | --- |
+| Task ID | Description | Acceptance criterion | Verification command | Effort |
+| --- | --- | --- | --- | --- |
 | T-1 | Define notification event schema + dedupe key rules | AC-1, AC-2: schema contract + fixtures | \`\`\`pnpm vitest run tests/unit/notification-schema.test.ts\`\`\` |
 | T-2 | Implement publisher + outbox write path | AC-1: integration test (happy path publish) | \`\`\`pnpm vitest run tests/integration/publisher.test.ts\`\`\` |
 | T-3 | Implement client feed + SSE subscribe + REST fallback | AC-1, AC-2, AC-3: e2e tests including degraded mode | \`\`\`pnpm playwright test tests/e2e/notification-feed.spec.ts\`\`\` |
