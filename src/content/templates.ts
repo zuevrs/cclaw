@@ -279,6 +279,11 @@ Execution rule: complete and verify each wave before starting the next wave.
 |---|---|---|---|---|
 |  |  |  |  |  |
 
+## Boundary Map
+| Task/Wave | Produces (exports) | Consumes (imports from) |
+|---|---|---|
+|  |  |  |
+
 ## WAIT_FOR_CONFIRM
 - Status: pending
 - Confirmed by:
@@ -312,6 +317,17 @@ Execution rule: complete and verify each wave before starting the next wave.
 ## Traceability
 - Plan task IDs:
 - Spec criterion IDs:
+
+
+## Verification Ladder
+| Slice | Tier reached | Evidence |
+|---|---|---|
+| S-1 |  |  |
+
+## Coverage Targets
+| Code type | Target | Current | Command |
+|---|---|---|---|
+|  |  |  |  |
 `,
   "07-review.md": `# Review Artifact
 

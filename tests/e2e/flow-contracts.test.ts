@@ -194,4 +194,21 @@ describe("flow command contracts", () => {
     expect(reviewContract).toMatchSnapshot("review-contract");
     expect(shipContract).toMatchSnapshot("ship-contract");
   });
+
+  it("matches golden snapshots for plan and tdd skills", async () => {
+    const root = await fs.mkdtemp(path.join(os.tmpdir(), "cclaw-golden-plan-tdd-"));
+    await initCclaw({ projectRoot: root });
+
+    const planSkill = await fs.readFile(
+      path.join(root, ".cclaw/skills/planning-and-task-breakdown/SKILL.md"),
+      "utf8"
+    );
+    const tddSkill = await fs.readFile(
+      path.join(root, ".cclaw/skills/test-driven-development/SKILL.md"),
+      "utf8"
+    );
+
+    expect(planSkill).toMatchSnapshot("plan-skill");
+    expect(tddSkill).toMatchSnapshot("tdd-skill");
+  });
 });

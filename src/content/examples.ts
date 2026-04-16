@@ -317,107 +317,56 @@ Execution rule: complete and verify each wave before starting the next wave.
 | AC-2 (idempotency) | T-1, T-2 |
 | AC-3 (failure visibility) | T-3 |
 
+### Risk Assessment
+
+| Task/Wave | Risk | Likelihood | Impact | Mitigation |
+| --- | --- | --- | --- | --- |
+| T-3 (Wave 3) | SSE reconnect logic complex | Medium | High | Spike reconnect in isolation before integrating with feed UI |
+| Wave 2 → 3 | Publisher API contract may shift | Low | Medium | Pin contract in T-1 schema; T-2 integration test validates |
+
 ### WAIT_FOR_CONFIRM
 - Status: pending
 - Confirmed by:`,
 
-  tdd: `### RED test (Vitest) — written before production code
+  tdd: `### RED Evidence
 
-\`\`\`typescript
-import { describe, it, expect } from "vitest";
-import { summarizeDedupedFeed } from "../notificationFeed";
+| Slice | Test name | Command | Failure output summary |
+| --- | --- | --- | --- |
+| S-1 (event schema + dedupe) | counts unique keys and unread items | \`\`\`pnpm vitest run tests/unit/dedupe-feed.test.ts\`\`\` | Cannot find module '../notificationFeed' |
+| S-2 (publisher outbox) | publishes event to outbox with dedupe key | \`\`\`pnpm vitest run tests/integration/publisher.test.ts\`\`\` | publishToOutbox is not a function |
+| S-3 (client feed + fallback) | shows notification within 5s via SSE | \`\`\`pnpm playwright test tests/e2e/notification-feed.spec.ts\`\`\` | Element [data-testid="feed-item"] not found |
 
-describe("summarizeDedupedFeed", () => {
-  it("counts unique keys and unread items", () => {
-    const summary = summarizeDedupedFeed([
-      { dedupeKey: "a", read: false },
-      { dedupeKey: "a", read: true },
-      { dedupeKey: "b", read: false },
-    ]);
+### Acceptance Mapping
 
-    expect(summary).toEqual({ uniqueKeys: 2, unread: 1 });
-  });
-});
-\`\`\`
+| Slice | Plan task ID | Spec criterion ID |
+| --- | --- | --- |
+| S-1 | T-1 | AC-1, AC-2 |
+| S-2 | T-2 | AC-1 |
+| S-3 | T-3 | AC-1, AC-2, AC-3 |
 
-### Expected output (FAIL)
+### Failure Analysis
 
-\`\`\`bash
- FAIL  src/notificationFeed.test.ts
-Error: Cannot find module '../notificationFeed' imported from src/notificationFeed.test.ts
-\`\`\`
+| Slice | Expected missing behavior | Actual failure reason |
+| --- | --- | --- |
+| S-1 | notificationFeed module does not exist yet | Module import fails — correct: implementation missing |
+| S-2 | publishToOutbox function not implemented | Function not found — correct: write path missing |
+| S-3 | Feed UI not rendered, SSE not connected | DOM element missing — correct: client component not built |
 
-> **Annotation:** This test MUST fail before any production code is written.
+### GREEN Evidence
 
-### Iron Law verification
+- Full suite command: \`\`\`pnpm vitest run && pnpm playwright test\`\`\`
+- Full suite result: 47 tests passed (3 new + 44 existing), 0 failed, 0 skipped
 
-1. **Run** the test command (for example: \`pnpm vitest run src/notificationFeed.test.ts\`).
-2. **Read output** and confirm the failure is due to the module/function not existing (or the function throwing “not implemented”), not due to a typo in assertions.
-3. **Confirm** the failure reason matches the intentional gap: **missing implementation**, not a flaky environment or misconfigured test runner.
+### REFACTOR Notes
 
-### Common mistakes to avoid
+- What changed: Extracted \`\`\`mergeLatestByDedupeKey\`\`\` helper from inline loop in \`\`\`summarizeDedupedFeed\`\`\`; moved SSE reconnect logic into \`\`\`useSSEConnection\`\`\` hook.
+- Why: Dedupe merge logic is reused by both publisher and client; reconnect logic was duplicated across components.
+- Behavior preserved: Full suite re-run confirms 47/47 pass after refactor.
 
-- “GREEN” that secretly imports a helper that already implements the behavior (that is skipping RED).
-- Assertions that pass because the function returns \`undefined\` and the matcher is too loose.
+### Traceability
 
-### GREEN (minimal implementation to pass RED)
-
-\`\`\`typescript
-export type FeedItem = { dedupeKey: string; read: boolean };
-
-export function summarizeDedupedFeed(items: FeedItem[]) {
-  // Last write wins per dedupeKey (stable ordering: later items override earlier ones).
-  const latestReadByKey = new Map<string, boolean>();
-
-  for (const item of items) {
-    latestReadByKey.set(item.dedupeKey, item.read);
-  }
-
-  let unread = 0;
-  for (const read of latestReadByKey.values()) {
-    if (!read) unread += 1;
-  }
-
-  return { uniqueKeys: latestReadByKey.size, unread };
-}
-\`\`\`
-
-### REFACTOR (keep tests green)
-
-Keep semantics identical, but make the merge step explicit and easier to unit test in isolation:
-
-\`\`\`typescript
-export type FeedItem = { dedupeKey: string; read: boolean };
-
-function mergeLatestByDedupeKey(items: FeedItem[]) {
-  const latestReadByKey = new Map<string, boolean>();
-  for (const item of items) latestReadByKey.set(item.dedupeKey, item.read);
-  return latestReadByKey;
-}
-
-export function summarizeDedupedFeed(items: FeedItem[]) {
-  const latestReadByKey = mergeLatestByDedupeKey(items);
-
-  let unread = 0;
-  for (const read of latestReadByKey.values()) {
-    if (!read) unread += 1;
-  }
-
-  return { uniqueKeys: latestReadByKey.size, unread };
-}
-\`\`\`
-
-### Sample terminal output (GREEN)
-
-\`\`\`bash
- RUN  v2.1.0 /Users/dev/app
-
- ✓ src/notificationFeed.test.ts (1 test) 12ms
-
- Test Files  1 passed (1)
-      Tests  1 passed (1)
- Tests: 1 passed.
-\`\`\``,
+- Plan task IDs: T-1, T-2, T-3
+- Spec criterion IDs: AC-1, AC-2, AC-3`,
 
   review: `### Layer 1 — Spec compliance (per-criterion)
 

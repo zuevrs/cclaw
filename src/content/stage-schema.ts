@@ -1010,6 +1010,7 @@ const PLAN: StageSchemaInput = {
     { section: "Task List", required: true, validationRule: "Each task: ID, description, acceptance criterion link, verification command, and effort estimate (S/M/L)." },
     { section: "Acceptance Mapping", required: true, validationRule: "Every spec criterion is covered by at least one task." },
     { section: "Risk Assessment", required: false, validationRule: "If present: per-task or per-wave risk identification with likelihood, impact, and mitigation strategy." },
+    { section: "Boundary Map", required: false, validationRule: "If present: per-wave or per-task interface contracts listing what each task produces (exports) and consumes (imports) from other tasks." },
     { section: "WAIT_FOR_CONFIRM", required: true, validationRule: "Explicit marker present. Status: pending until user approves." }
   ],
   namedAntiPattern: {
@@ -1140,14 +1141,38 @@ const TDD: StageSchemaInput = {
     { name: "Failure-First Thinking", description: "The failing test IS the specification. Until you see the right failure, you do not understand what you are building. Wrong failures are information." },
     { name: "Minimal Viable Change", description: "The best implementation is the smallest one that passes all RED tests. Every extra line is risk. Resist the urge to 'improve while you are here.'" },
     { name: "Regression Paranoia", description: "Assume every change breaks something until the full suite proves otherwise. Partial test runs are lies of omission." },
-    { name: "Refactor-as-Hygiene", description: "Refactoring is not optional cleanup — it is the third leg of TDD. GREEN without REFACTOR accumulates mess. REFACTOR without GREEN breaks things." }
+    { name: "Refactor-as-Hygiene", description: "Refactoring is not optional cleanup — it is the third leg of TDD. GREEN without REFACTOR accumulates mess. REFACTOR without GREEN breaks things." },
+    { name: "Evidence Over Anecdote", description: "Every claim about test state must be backed by captured output. 'It passed' without terminal evidence is not evidence. 'I saw it fail' without the failure output is not RED. Capture commands, outputs, and results — not summaries from memory." }
   ],
-  reviewSections: [],
+  reviewSections: [
+    {
+      title: "RED Evidence Audit",
+      evaluationPoints: [
+        "Does every slice have a captured failing test output?",
+        "Does each failure reason match the expected missing behavior (not a typo or config error)?",
+        "Were tests written BEFORE any production code for that slice?",
+        "Does each RED test assert observable behavior, not implementation details?",
+        "Is there a test for each acceptance criterion mapped in the plan?"
+      ],
+      stopGate: true
+    },
+    {
+      title: "GREEN/REFACTOR Audit",
+      evaluationPoints: [
+        "Does GREEN evidence show a FULL suite pass (not partial)?",
+        "Is the GREEN implementation minimal — no features beyond what RED tests require?",
+        "Does the REFACTOR step preserve all existing behavior (no new failures)?",
+        "Are REFACTOR notes documented with rationale?",
+        "Is traceability complete: every change links to plan task ID and spec criterion?"
+      ],
+      stopGate: true
+    }
+  ],
   completionStatus: ["DONE", "DONE_WITH_CONCERNS", "BLOCKED"],
   crossStageTrace: {
-    readsFrom: [".cclaw/artifacts/05-plan.md", ".cclaw/artifacts/04-spec.md"],
+    readsFrom: [".cclaw/artifacts/05-plan.md", ".cclaw/artifacts/04-spec.md", ".cclaw/artifacts/03-design.md"],
     writesTo: [".cclaw/artifacts/06-tdd.md"],
-    traceabilityRule: "Every RED test traces to a plan task. Every GREEN change traces to a RED test. Every plan task traces to a spec criterion. Evidence chain must be unbroken."
+    traceabilityRule: "Every RED test traces to a plan task. Every GREEN change traces to a RED test. Every plan task traces to a spec criterion. Design decisions inform test strategy. Evidence chain must be unbroken."
   },
   artifactValidation: [
     { section: "RED Evidence", required: true, validationRule: "Failing test output captured per slice." },
@@ -1155,8 +1180,14 @@ const TDD: StageSchemaInput = {
     { section: "Failure Analysis", required: true, validationRule: "Failure reason matches expected missing behavior." },
     { section: "GREEN Evidence", required: true, validationRule: "Full suite pass output captured." },
     { section: "REFACTOR Notes", required: true, validationRule: "What changed, why, behavior preservation confirmed." },
-    { section: "Traceability", required: true, validationRule: "Plan task ID and spec criterion linked." }
+    { section: "Traceability", required: true, validationRule: "Plan task ID and spec criterion linked." },
+    { section: "Verification Ladder", required: false, validationRule: "If present: per-slice verification tier (static, command, behavioral, human) with evidence for highest tier reached." },
+    { section: "Coverage Targets", required: false, validationRule: "If present: per-module or per-code-type coverage thresholds with current values and measurement commands." }
   ],
+  namedAntiPattern: {
+    title: "Code Before Failing Test",
+    description: "Production code written before a failing test is not TDD — it is guessing validated after the fact. Tests written after implementation confirm assumptions, not behavior. If you wrote code first, delete it and start with RED. Delete means delete — not 'keep as reference.' The failing test IS the specification."
+  },
   waveExecutionAllowed: true
 };
 
