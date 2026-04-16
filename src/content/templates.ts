@@ -312,6 +312,12 @@ Execution rule: complete and verify each wave before starting the next wave.
 ## Traceability
 - Plan task IDs:
 - Spec criterion IDs:
+
+
+## Verification Ladder
+| Slice | Tier reached | Evidence |
+|---|---|---|
+| S-1 |  |  |
 `,
   "07-review.md": `# Review Artifact
 

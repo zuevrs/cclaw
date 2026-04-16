@@ -1178,7 +1178,8 @@ const TDD: StageSchemaInput = {
     { section: "Failure Analysis", required: true, validationRule: "Failure reason matches expected missing behavior." },
     { section: "GREEN Evidence", required: true, validationRule: "Full suite pass output captured." },
     { section: "REFACTOR Notes", required: true, validationRule: "What changed, why, behavior preservation confirmed." },
-    { section: "Traceability", required: true, validationRule: "Plan task ID and spec criterion linked." }
+    { section: "Traceability", required: true, validationRule: "Plan task ID and spec criterion linked." },
+    { section: "Verification Ladder", required: false, validationRule: "If present: per-slice verification tier (static, command, behavioral, human) with evidence for highest tier reached." }
   ],
   namedAntiPattern: {
     title: "Code Before Failing Test",
