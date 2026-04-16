@@ -131,13 +131,27 @@ When a stage requires user input (approval, choice, direction), use this structu
 2. **Present options** as labeled choices (A, B, C...) with:
    - One-line description of each option
    - Trade-off or consequence
+   - **\`Completeness: X/10\`** — how thoroughly does this option cover the dimensions the stage cares about (failure modes, data flow, blast radius, observability, rollback, etc. — pick the dimensions that matter for *this* decision and subtract for each gap). Force a numeric score; vague text scores ≤ 5.
    - Mark one as **(recommended)** with brief why
-3. **Use the harness ask-user tool** when available:
+3. **Pick the highest-scoring option as the recommendation.** If scores tie, prefer the option with the smallest blast radius (review/ship), the lowest risk (design/spec), or the most reversible outcome (ship finalization).
+4. **Use the harness ask-user tool** when available:
    - Claude Code: \`AskUserQuestion\` tool
    - Cursor: \`AskQuestion\` tool with options array
    - Codex/OpenCode: numbered list in message (no native ask tool)
-4. **Wait for response.** Do not proceed until the user picks.
-5. **Commit to the choice.** Once decided, do not re-argue.
+5. **Wait for response.** Do not proceed until the user picks.
+6. **Commit to the choice.** Once decided, do not re-argue.
+
+### Completeness scoring rubric (apply per option)
+
+| Score | Meaning |
+|---|---|
+| 9-10 | Closes the decision with no carry-over risk; covers every dimension stage cares about. |
+| 7-8 | Closes the decision with a small named follow-up; one dimension partially covered. |
+| 5-6 | Plausible but leaves at least one dimension visibly open; needs follow-up before next stage. |
+| 3-4 | Workaround, not a solution; defers the real problem. |
+| 0-2 | Wishful thinking; do not recommend. |
+
+Always show the score next to the option label, e.g. \`(B) [Completeness: 8/10]\`.
 
 ### When to use structured asks vs conversational
 - **Structured (tool):** Architecture choices, scope decisions, approval gates, mode selection, scope boundary issues

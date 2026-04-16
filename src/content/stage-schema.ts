@@ -294,7 +294,7 @@ const SCOPE: StageSchemaInput = {
     "**Error and Rescue Registry** — For each capability: what breaks, how detected, what fallback."
   ],
   interactionProtocol: [
-    "For scope mode selection: use the Decision Protocol — present expand/selective/hold/reduce as labeled options with trade-offs and mark one as (recommended). Base your recommendation on default heuristics: greenfield -> expand, enhancement -> selective, bugfix/hotfix/refactor -> hold, broad blast radius -> reduce. If AskQuestion/AskUserQuestion is available, send exactly ONE question per call, validate fields against runtime schema, and on schema error immediately fall back to plain-text question instead of retrying guessed payloads.",
+    "For scope mode selection: use the Decision Protocol — present expand/selective/hold/reduce as labeled options with trade-offs and mark one as (recommended). **Score each option `Completeness: X/10`** (10 = covers every prime-directive failure mode, four data-flow paths, observability, and deferred handling for the in-scope set; subtract for each gap). Recommend the highest-scoring option; if scores tie, pick the lowest blast radius. Base your recommendation on default heuristics: greenfield -> expand, enhancement -> selective, bugfix/hotfix/refactor -> hold, broad blast radius -> reduce. If AskQuestion/AskUserQuestion is available, send exactly ONE question per call, validate fields against runtime schema, and on schema error immediately fall back to plain-text question instead of retrying guessed payloads.",
     "Walk through the scope checklist interactively. Each checklist item that surfaces a decision should be presented to the user as a question, not as a monologue. Do not dump all items at once.",
     "Challenge premise and verify the problem framing before anything else.",
     "Take a position on every scope decision. Avoid hedging phrases like 'this could work' or 'there are many ways'; state your recommendation and one concrete condition that would change it.",
@@ -506,7 +506,7 @@ const DESIGN: StageSchemaInput = {
   interactionProtocol: [
     "Review architecture decisions section-by-section.",
     "For EACH issue found in a review section, present it ONE AT A TIME. Do NOT batch multiple issues.",
-    "For each issue: use the Decision Protocol — describe concretely with file/line references, present labeled options (A/B/C) with trade-offs, effort estimate (S/M/L/XL), risk level (Low/Med/High), and mark one as (recommended). If AskQuestion/AskUserQuestion is available, send exactly ONE question per call, validate fields against runtime schema, and on schema error immediately fall back to plain-text question instead of retrying guessed payloads.",
+    "For each issue: use the Decision Protocol — describe concretely with file/line references, present labeled options (A/B/C) with trade-offs, effort estimate (S/M/L/XL), risk level (Low/Med/High), **`Completeness: X/10` per option** (10 = fully addresses architecture/data-flow/failure-modes/test+perf review concerns for the issue, subtract for each unaddressed dimension), and mark one as (recommended). Prefer the highest-scoring option; if scores tie, prefer the lower-risk one. If AskQuestion/AskUserQuestion is available, send exactly ONE question per call, validate fields against runtime schema, and on schema error immediately fall back to plain-text question instead of retrying guessed payloads.",
     "Only proceed to the next review section after ALL issues in the current section are resolved.",
     "If a section has no issues, say 'No issues found' and move on.",
     "Do not skip failure-mode mapping.",
@@ -1233,7 +1233,7 @@ const REVIEW: StageSchemaInput = {
     "Run Layer 1 (spec compliance) completely before starting Layer 2.",
     "In each review section, present findings ONE AT A TIME. Do NOT batch.",
     "Classify every finding as Critical, Important, or Suggestion.",
-    "For each Critical finding: use the Decision Protocol — present resolution options (A/B/C) with trade-offs and mark one as (recommended). If AskQuestion/AskUserQuestion is available, send exactly ONE question per call, validate fields against runtime schema, and on schema error immediately fall back to plain-text question instead of retrying guessed payloads.",
+    "For each Critical finding: use the Decision Protocol — present resolution options (A/B/C) with trade-offs, **score each option `Completeness: X/10`** (10 = fully closes the finding with no carry-over risk; subtract for partial fixes, deferred follow-ups, or new risk introduced), and mark one as (recommended). Prefer the highest-scoring option; if scores tie, prefer the option with the smallest blast radius. If AskQuestion/AskUserQuestion is available, send exactly ONE question per call, validate fields against runtime schema, and on schema error immediately fall back to plain-text question instead of retrying guessed payloads.",
     "Resolve all critical blockers before ship.",
     "For final verdict: use AskQuestion/AskUserQuestion only if runtime schema is confirmed; otherwise collect verdict with a plain-text single-choice prompt (APPROVED / APPROVED_WITH_CONCERNS / BLOCKED).",
     "**STOP.** Do NOT proceed to ship until the user provides an explicit verdict."
@@ -1445,7 +1445,7 @@ const SHIP: StageSchemaInput = {
   interactionProtocol: [
     "Run preflight checks before any release action.",
     "Document release notes and rollback plan explicitly.",
-    "For finalization mode: use the Decision Protocol — present modes as labeled options (A/B/C/D) with consequences and mark one as (recommended). If AskQuestion/AskUserQuestion is available, send exactly ONE question per call, validate fields against runtime schema, and on schema error immediately fall back to plain-text question instead of retrying guessed payloads.",
+    "For finalization mode: use the Decision Protocol — present modes as labeled options (A/B/C/D) with consequences, **score each option `Completeness: X/10`** (10 = fully addresses release blast-radius, rollback readiness, observability, and stakeholder communication), and mark one as (recommended). Prefer the highest-scoring option; if scores tie, prefer the most reversible one. If AskQuestion/AskUserQuestion is available, send exactly ONE question per call, validate fields against runtime schema, and on schema error immediately fall back to plain-text question instead of retrying guessed payloads.",
     "Do not proceed if critical blockers remain from review.",
     "**STOP.** Present finalization options and wait for user selection before executing any finalization action."
   ],
