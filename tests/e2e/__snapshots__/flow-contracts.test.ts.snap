@@ -472,7 +472,7 @@ description: "Release handoff stage with preflight checks, rollback readiness, a
 > **Even if you read nothing else, do these 3 things:**
 > 1. Obey the HARD-GATE below — violating it invalidates the entire stage.
 > 2. Complete every checklist step in order and write the artifact to \`.cclaw/artifacts/08-ship.md\`.
-> 3. Do not claim completion without satisfying gates: \`ship_review_verdict_valid\`, \`ship_preflight_passed\`, \`ship_release_notes_written\` (+3 more).
+> 3. Do not claim completion without satisfying gates: \`ship_review_verdict_valid\`, \`ship_preflight_passed\`, \`ship_release_notes_written\` (+4 more).
 >
 > **After this stage:** update \`flow-state.json\` and tell the user to run \`/cc-next\`.
 
@@ -635,6 +635,7 @@ These are thinking instincts, not a checklist. Let them shape your perspective t
 - \`ship_rollback_plan_ready\` — Rollback trigger, steps, and verification are documented.
 - \`ship_finalization_mode_selected\` — Exactly one finalization action is selected.
 - \`ship_finalization_executed\` — Selected finalization action was executed and verified.
+- \`ship_post_merge_tests\` — Full test suite re-run on the merged result (not just the branch). Post-merge failures caught before release.
 
 ## Required Evidence
 - [ ] Artifact written to \`.cclaw/artifacts/08-ship.md\`.
@@ -787,7 +788,7 @@ When all required gates are satisfied and the artifact is written:
    - **Do NOT proceed to step 1 until every mandatory agent has an entry in the delegation log.**
 1. **Update \`.cclaw/state/flow-state.json\`:**
    - Add \`"ship"\` to \`completedStages\` array
-   - Move all gate IDs for this stage (\`ship_review_verdict_valid\`, \`ship_preflight_passed\`, \`ship_release_notes_written\`, \`ship_rollback_plan_ready\`, \`ship_finalization_mode_selected\`, \`ship_finalization_executed\`) into \`stageGateCatalog.ship.passed\`
+   - Move all gate IDs for this stage (\`ship_review_verdict_valid\`, \`ship_preflight_passed\`, \`ship_release_notes_written\`, \`ship_rollback_plan_ready\`, \`ship_finalization_mode_selected\`, \`ship_finalization_executed\`, \`ship_post_merge_tests\`) into \`stageGateCatalog.ship.passed\`
    - Clear \`stageGateCatalog.ship.blocked\`
    - For each passed gate, add an entry to \`guardEvidence\`: \`"<gate_id>": "<artifact path or excerpt proving the gate>"\`. Do NOT leave \`guardEvidence\` empty.
 2. **Persist artifact** at \`.cclaw/artifacts/08-ship.md\`. Do NOT manually copy into \`.cclaw/runs/\`; archival is handled by \`cclaw archive\`.
@@ -2060,7 +2061,7 @@ Do NOT merge, push, or finalize without a passed preflight check, written rollba
 6. Do NOT copy artifacts into \`.cclaw/runs/\`; archival is handled only by \`cclaw archive\`.
 
 ## Gates
-\`ship_review_verdict_valid\`, \`ship_preflight_passed\`, \`ship_release_notes_written\`, \`ship_rollback_plan_ready\`, \`ship_finalization_mode_selected\`, \`ship_finalization_executed\`
+\`ship_review_verdict_valid\`, \`ship_preflight_passed\`, \`ship_release_notes_written\`, \`ship_rollback_plan_ready\`, \`ship_finalization_mode_selected\`, \`ship_finalization_executed\`, \`ship_post_merge_tests\`
 
 ## Exit
 - preflight completed

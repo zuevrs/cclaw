@@ -1461,7 +1461,8 @@ const SHIP: StageSchemaInput = {
     { id: "ship_release_notes_written", description: "Release notes are complete and accurate." },
     { id: "ship_rollback_plan_ready", description: "Rollback trigger, steps, and verification are documented." },
     { id: "ship_finalization_mode_selected", description: "Exactly one finalization action is selected." },
-    { id: "ship_finalization_executed", description: "Selected finalization action was executed and verified." }
+    { id: "ship_finalization_executed", description: "Selected finalization action was executed and verified." },
+    { id: "ship_post_merge_tests", description: "Full test suite re-run on the merged result (not just the branch). Post-merge failures caught before release." }
   ],
   requiredEvidence: [
     "Artifact written to `.cclaw/artifacts/08-ship.md`.",
