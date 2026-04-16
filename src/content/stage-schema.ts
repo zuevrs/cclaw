@@ -694,6 +694,7 @@ const DESIGN: StageSchemaInput = {
     { section: "Parallelization Strategy", required: false, validationRule: "If multi-module: dependency table, parallel lanes, conflict flags." },
     { section: "Unresolved Decisions", required: false, validationRule: "If any: what info is missing, who provides it, default if unanswered." },
     { section: "Interface Contracts", required: false, validationRule: "If present: for each module boundary list produces (outputs) and consumes (inputs) with data types." },
+    { section: "Patterns to Mirror", required: false, validationRule: "If present: list discovered codebase patterns to follow, with file references and rationale for each." },
     { section: "Completion Dashboard", required: true, validationRule: "Lists every review section with status (clear / issues-found-resolved / issues-open), decision count, and unresolved items (or 'None')." }
   ],
   trivialOverrideSections: ["Architecture Boundaries", "NOT in scope", "Completion Dashboard"],

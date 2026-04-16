@@ -175,6 +175,11 @@ export const ARTIFACT_TEMPLATES: Record<string, string> = {
 - Parallel lanes:
 - Conflict risks:
 
+## Patterns to Mirror
+| Pattern | Source file | Rationale |
+|---|---|---|
+|  |  |  |
+
 ## Interface Contracts
 | Module | Produces | Consumes |
 |---|---|---|
