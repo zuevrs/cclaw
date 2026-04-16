@@ -605,6 +605,7 @@ These are thinking instincts, not a checklist. Let them shape your perspective t
 3. **Explicit Over Implicit Finalization** — Merge, PR, keep, discard — each has different consequences. Pick one. Say it out loud. Write it down. Never let finalization be 'whatever the default is.'
 4. **Post-Merge Paranoia** — The merge itself can introduce failures even when both branches pass independently. Always run the full suite AFTER merge, not just before.
 5. **Observability Before Ship** — If you cannot monitor the change in production, you cannot know if it is broken. Monitoring/logging is a ship prerequisite, not a follow-up.
+6. **Release Blast Radius** — Before shipping, map the blast radius: how many users are affected if this breaks? Is it one endpoint or the entire app? Scale rollback urgency and monitoring to the blast radius, not the diff size. A 3-line auth change can have infinite blast radius.
 
 ## Interaction Protocol
 1. Run preflight checks before any release action.

@@ -1523,7 +1523,8 @@ const SHIP: StageSchemaInput = {
     { name: "Rollback-First Thinking", description: "Before shipping, answer: what tells me this is broken? How do I undo it? How do I verify the undo worked? If you cannot answer all three, you are not ready." },
     { name: "Explicit Over Implicit Finalization", description: "Merge, PR, keep, discard — each has different consequences. Pick one. Say it out loud. Write it down. Never let finalization be 'whatever the default is.'" },
     { name: "Post-Merge Paranoia", description: "The merge itself can introduce failures even when both branches pass independently. Always run the full suite AFTER merge, not just before." },
-    { name: "Observability Before Ship", description: "If you cannot monitor the change in production, you cannot know if it is broken. Monitoring/logging is a ship prerequisite, not a follow-up." }
+    { name: "Observability Before Ship", description: "If you cannot monitor the change in production, you cannot know if it is broken. Monitoring/logging is a ship prerequisite, not a follow-up." },
+    { name: "Release Blast Radius", description: "Before shipping, map the blast radius: how many users are affected if this breaks? Is it one endpoint or the entire app? Scale rollback urgency and monitoring to the blast radius, not the diff size. A 3-line auth change can have infinite blast radius." }
   ],
   reviewSections: [
     {
