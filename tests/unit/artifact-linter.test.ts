@@ -529,14 +529,14 @@ API -> Service -> DB
     expect(required.every((f) => f.found)).toBe(true);
   });
 
-  it("fails spec artifact when namedAntiPattern language appears in AC", async () => {
-    const root = await createTempProject("spec-anti");
+  it("rejects spec artifact when an acceptance criterion uses vague adjectives", async () => {
+    const root = await createTempProject("spec-vague-ac");
     await writeRuntimeArtifact(root, "04-spec.md", `# Specification Artifact
 
 ## Acceptance Criteria
 | ID | Criterion (observable/measurable/falsifiable) | Design Decision Ref |
 |---|---|---|
-| AC-1 | The system should be fast and intuitive |  |
+| AC-1 | The system should be fast and intuitive | D-1 |
 
 ## Edge Cases
 | Criterion ID | Boundary case | Error case |
@@ -551,6 +551,41 @@ API -> Service -> DB
 | Criterion ID | Verification approach | Command/manual steps |
 |---|---|---|
 | AC-1 | manual | Check it works |
+
+## Approval
+- Approved by: user
+- Date: 2026-04-14
+`);
+
+    const result = await lintArtifact(root, "spec");
+    expect(result.passed).toBe(false);
+    const acFinding = result.findings.find((f) => f.section === "Acceptance Criteria");
+    expect(acFinding?.found).toBe(false);
+    expect(acFinding?.details.toLowerCase()).toMatch(/vague adjective/);
+  });
+
+  it("accepts spec artifact with a measurable acceptance criterion", async () => {
+    const root = await createTempProject("spec-measurable-ac");
+    await writeRuntimeArtifact(root, "04-spec.md", `# Specification Artifact
+
+## Acceptance Criteria
+| ID | Criterion (observable/measurable/falsifiable) | Design Decision Ref |
+|---|---|---|
+| AC-1 | Publish blocks when package.json version differs from CHANGELOG heading | D-1 |
+
+## Edge Cases
+| Criterion ID | Boundary case | Error case |
+|---|---|---|
+| AC-1 | Empty changelog | Mismatched version |
+
+## Constraints and Assumptions
+- Constraints: Node 20+ only
+- Assumptions: Release automation runs on CI
+
+## Testability Map
+| Criterion ID | Verification approach | Command/manual steps |
+|---|---|---|
+| AC-1 | unit | npm run test -- publish-guard |
 
 ## Approval
 - Approved by: user

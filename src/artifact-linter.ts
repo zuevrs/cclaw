@@ -168,9 +168,65 @@ function extractRequiredKeywords(rule: string): string[] {
   return phrases;
 }
 
+const VAGUE_AC_ADJECTIVES = [
+  "fast",
+  "quick",
+  "slow",
+  "fast enough",
+  "quickly",
+  "intuitive",
+  "robust",
+  "reliable",
+  "scalable",
+  "simple",
+  "easy",
+  "user-friendly",
+  "user friendly",
+  "nice",
+  "good",
+  "clean",
+  "secure enough",
+  "responsive",
+  "efficient",
+  "performant",
+  "smooth",
+  "seamless",
+  "modern"
+];
+
+function isSeparatorRow(line: string): boolean {
+  return /^\|[-:| ]+\|$/u.test(line);
+}
+
+function getMarkdownTableRows(sectionBody: string): string[][] {
+  const lines = sectionBody.split(/\r?\n/).map((line) => line.trim());
+  const rows: string[][] = [];
+  let sawSeparator = false;
+  for (const line of lines) {
+    if (!/^\|.*\|$/u.test(line)) continue;
+    if (isSeparatorRow(line)) {
+      sawSeparator = true;
+      continue;
+    }
+    if (!sawSeparator) continue;
+    rows.push(parseMarkdownTableRow(line));
+  }
+  return rows;
+}
+
+function lineContainsVagueAdjective(text: string): string | null {
+  const lower = text.toLowerCase();
+  for (const adjective of VAGUE_AC_ADJECTIVES) {
+    const pattern = new RegExp(`(?:^|[^A-Za-z])${adjective.replace(/ /g, "\\s+")}(?:[^A-Za-z]|$)`, "iu");
+    if (pattern.test(lower)) return adjective;
+  }
+  return null;
+}
+
 function validateSectionBody(
   sectionBody: string,
-  rule: string
+  rule: string,
+  sectionName: string
 ): { ok: boolean; details: string } {
   const bodyLines = sectionBody.split(/\r?\n/).map((line) => line.trim());
   const meaningful = meaningfulLineCount(sectionBody);
@@ -273,6 +329,23 @@ function validateSectionBody(
     }
   }
 
+  if (
+    normalizeHeadingTitle(sectionName).toLowerCase() === "acceptance criteria" &&
+    /observable[\s,]*measurable[\s,]+(and )?falsifiable/iu.test(rule)
+  ) {
+    const rows = getMarkdownTableRows(sectionBody);
+    for (const row of rows) {
+      const criterionText = row[1] ?? row[0] ?? "";
+      const adjective = lineContainsVagueAdjective(criterionText);
+      if (adjective) {
+        return {
+          ok: false,
+          details: `Acceptance criterion uses vague adjective "${adjective}" without a measurable predicate: "${criterionText.slice(0, 140)}". Rewrite with a numeric threshold or boolean outcome.`
+        };
+      }
+    }
+  }
+
   return {
     ok: true,
     details: "Section heading and content satisfy lint heuristics."
@@ -321,7 +394,7 @@ export async function lintArtifact(projectRoot: string, stage: FlowStage): Promi
     const body = hasHeading ? sectionBodyByName(sections, v.section) : null;
     const validation = body === null
       ? { ok: false, details: `No ## heading matching required section "${v.section}".` }
-      : validateSectionBody(body, v.validationRule);
+      : validateSectionBody(body, v.validationRule, v.section);
     const found = hasHeading && validation.ok;
     findings.push({
       section: v.section,
