@@ -148,6 +148,21 @@ describe("gate evidence verification", () => {
     expect(result.issues.join("\n")).toContain("review-army validation failed");
   });
 
+  it("lints artifact eagerly when file exists even before any gate is passed", async () => {
+    const root = await createTempProject("gate-evidence-artifact-eager");
+    await prepareRoot(root);
+    await fs.writeFile(
+      path.join(root, ".cclaw/artifacts/01-brainstorm.md"),
+      "# Malformed artifact without required H2 sections\n",
+      "utf8"
+    );
+
+    const state = createInitialFlowState("run-eager");
+    const result = await verifyCurrentStageGateEvidence(root, state);
+    expect(result.ok).toBe(false);
+    expect(result.issues.join("\n")).toContain("artifact validation failed");
+  });
+
   it("reports missing required gates via missingRequired while stage is active", async () => {
     const root = await createTempProject("gate-evidence-missing");
     await prepareRoot(root);

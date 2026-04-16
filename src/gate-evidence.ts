@@ -1,8 +1,30 @@
+import fs from "node:fs/promises";
+import path from "node:path";
 import { lintArtifact, validateReviewArmy } from "./artifact-linter.js";
+import { RUNTIME_ROOT } from "./constants.js";
 import { stageSchema } from "./content/stage-schema.js";
 import type { FlowState, StageGateState } from "./flow-state.js";
+import { exists } from "./fs-utils.js";
 import { readFlowState, writeFlowState } from "./runs.js";
 import type { FlowStage } from "./types.js";
+
+async function currentStageArtifactExists(projectRoot: string, stage: FlowStage): Promise<boolean> {
+  const artifactFile = stageSchema(stage).artifactFile;
+  const candidates = [
+    path.join(projectRoot, RUNTIME_ROOT, "artifacts", artifactFile),
+    path.join(projectRoot, artifactFile)
+  ];
+  for (const candidate of candidates) {
+    if (await exists(candidate)) return true;
+  }
+  // Artifact-linter also accepts the file under current working directory fallback; stat once more.
+  try {
+    await fs.access(path.join(projectRoot, artifactFile));
+    return true;
+  } catch {
+    return false;
+  }
+}
 
 export interface GateEvidenceCheckResult {
   ok: boolean;
@@ -77,7 +99,9 @@ export async function verifyCurrentStageGateEvidence(
     }
   }
 
-  const shouldValidateArtifact = catalog.passed.length > 0 || flowState.completedStages.includes(stage);
+  const artifactPresent = await currentStageArtifactExists(projectRoot, stage);
+  const shouldValidateArtifact =
+    artifactPresent || catalog.passed.length > 0 || flowState.completedStages.includes(stage);
   if (shouldValidateArtifact) {
     const lint = await lintArtifact(projectRoot, stage);
     if (!lint.passed) {
