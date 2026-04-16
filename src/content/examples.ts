@@ -184,11 +184,33 @@ Data flow: Gateway → Service (validate + enrich) → Publisher (fan-out) → Q
 | Duplicate publish | Retry after timeout | Dedupe key check in outbox | Upsert with idempotency key | None (transparent) |
 | Queue backpressure | Spike >1000 events/s | Queue depth metric alarm | Back-pressure signal to publisher, shed non-critical events | Delayed delivery of low-priority notifications |
 
+### Test Strategy
+
+- **Unit:** validator functions, dedupe-key logic, event schema factories — target 90%+ line coverage.
+- **Integration:** publisher → outbox → read-model pipeline via in-memory DB; SSE reconnect with simulated drops.
+- **E2E:** one happy-path browser test (publish → feed visible) and one degraded-path test (SSE down → REST fallback + banner).
+
+### Performance Budget
+
+| Critical path | Metric | Target | Measurement method |
+| --- | --- | --- | --- |
+| Publish → visible in feed | p95 latency | ≤ 5 s | Integration test with deterministic clock + production Datadog SLO |
+| Feed snapshot load | p99 response time | ≤ 200 ms | Load test with 1 000 items per user |
+| SSE reconnect | Time to first event after drop | ≤ 3 s | Simulated disconnect in integration suite |
+
 ### NOT in scope
 
 - Outbound channels (email, push, SMS) — deferred to v2.
 - Admin notification management UI — separate workstream.
 - Notification preferences / mute rules — requires user settings redesign.
+
+### Parallelization Strategy
+
+| Module | Depends on | Parallel lane | Conflict risk |
+| --- | --- | --- | --- |
+| Notification schema (T1) | — | Lane A | None |
+| Publisher + outbox (T2) | T1 | Lane A | None |
+| Client feed + SSE (T3) | T1, T2 | Lane B (after T1) | Shared event type definitions |
 
 ### Unresolved Decisions
 
