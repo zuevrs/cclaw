@@ -984,7 +984,11 @@ const PLAN: StageSchemaInput = {
     { section: "Task List", required: true, validationRule: "Each task: ID, description, acceptance criterion link, verification command." },
     { section: "Acceptance Mapping", required: true, validationRule: "Every spec criterion is covered by at least one task." },
     { section: "WAIT_FOR_CONFIRM", required: true, validationRule: "Explicit marker present. Status: pending until user approves." }
-  ]
+  ],
+  namedAntiPattern: {
+    title: "Task Details Can Be Finalized During Coding",
+    description: "Underspecified tasks do not become clear during implementation — they become context thrash, broken sequencing, and rework. Every task needs an acceptance criterion, a verification command, and a wave assignment before execution starts. If you cannot describe what 'done' looks like for a task, the task is not ready."
+  }
 };
 
 // ---------------------------------------------------------------------------
