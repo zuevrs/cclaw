@@ -346,6 +346,8 @@ When fixing a bug:
 | Severity labels are unnecessary. | Without severity, release decisions become inconsistent. |
 | Critical issues can be fixed after ship. | Critical blockers must be resolved before release handoff. |
 | Security review is not needed for internal tools. | Internal tools become external surface area. Security is always in scope. |
+| A quick skim is sufficient for small diffs. | Small diffs hide high-impact changes. A 3-line auth bypass is still critical. Every diff gets layered review regardless of size. |
+| The author already reviewed their own code. | Self-review misses blind spots by definition. Independent review exists precisely because authors cannot objectively evaluate their own assumptions. |
 
 ## Blockers
 - layer 1 failed

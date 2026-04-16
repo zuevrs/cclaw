@@ -1288,7 +1288,9 @@ const REVIEW: StageSchemaInput = {
     { claim: "Passing tests mean spec compliance by default.", reality: "Tests can miss requirement mismatches; explicit spec review is mandatory." },
     { claim: "Severity labels are unnecessary.", reality: "Without severity, release decisions become inconsistent." },
     { claim: "Critical issues can be fixed after ship.", reality: "Critical blockers must be resolved before release handoff." },
-    { claim: "Security review is not needed for internal tools.", reality: "Internal tools become external surface area. Security is always in scope." }
+    { claim: "Security review is not needed for internal tools.", reality: "Internal tools become external surface area. Security is always in scope." },
+    { claim: "A quick skim is sufficient for small diffs.", reality: "Small diffs hide high-impact changes. A 3-line auth bypass is still critical. Every diff gets layered review regardless of size." },
+    { claim: "The author already reviewed their own code.", reality: "Self-review misses blind spots by definition. Independent review exists precisely because authors cannot objectively evaluate their own assumptions." }
   ],
   redFlags: [
     "No separate Layer 1/Layer 2 outcomes",
