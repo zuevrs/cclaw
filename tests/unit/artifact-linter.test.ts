@@ -564,6 +564,40 @@ API -> Service -> DB
     expect(acFinding?.details.toLowerCase()).toMatch(/vague adjective/);
   });
 
+  it("rejects acceptance criterion that has no observable verb and no number", async () => {
+    const root = await createTempProject("spec-no-predicate");
+    await writeRuntimeArtifact(root, "04-spec.md", `# Specification Artifact
+
+## Acceptance Criteria
+| ID | Criterion (observable/measurable/falsifiable) | Design Decision Ref |
+|---|---|---|
+| AC-1 | The system has a release validator module for metadata | D-1 |
+
+## Edge Cases
+| Criterion ID | Boundary case | Error case |
+|---|---|---|
+| AC-1 | Missing fields | Corrupt data |
+
+## Constraints and Assumptions
+- Constraints: None
+- Assumptions: None
+
+## Testability Map
+| Criterion ID | Verification approach | Command/manual steps |
+|---|---|---|
+| AC-1 | unit | npm test |
+
+## Approval
+- Approved by: user
+- Date: 2026-04-14
+`);
+
+    const result = await lintArtifact(root, "spec");
+    expect(result.passed).toBe(false);
+    const ac = result.findings.find((f) => f.section === "Acceptance Criteria");
+    expect(ac?.details.toLowerCase()).toMatch(/measurable predicate/);
+  });
+
   it("accepts spec artifact with a measurable acceptance criterion", async () => {
     const root = await createTempProject("spec-measurable-ac");
     await writeRuntimeArtifact(root, "04-spec.md", `# Specification Artifact
