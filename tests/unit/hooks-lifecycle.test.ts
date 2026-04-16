@@ -270,6 +270,42 @@ describe("hooks lifecycle rehydration", () => {
     expect(log).toContain("stage_invocation_without_recent_flow_read");
   });
 
+  it("workflow guard exempts cclaw doctor from non-safe-tool in plan stage", async () => {
+    const root = await fs.mkdtemp(path.join(os.tmpdir(), "cclaw-guard-cclaw-cli-"));
+    await fs.mkdir(path.join(root, ".cclaw/state"), { recursive: true });
+    await fs.writeFile(path.join(root, ".cclaw/state/flow-state.json"), JSON.stringify({
+      currentStage: "design",
+      activeRunId: "active",
+      completedStages: ["brainstorm", "scope"]
+    }, null, 2), "utf8");
+
+    const epoch = Math.floor(Date.now() / 1000);
+    await fs.writeFile(path.join(root, ".cclaw/state/workflow-guard.json"), JSON.stringify({
+      lastFlowReadAt: new Date().toISOString(),
+      lastFlowReadAtEpoch: epoch
+    }, null, 2), "utf8");
+
+    const result = await runScript(
+      root,
+      "workflow-guard.sh",
+      workflowGuardScript(),
+      [],
+      JSON.stringify({
+        tool_name: "Shell",
+        tool_input: {
+          command: "npx cclaw doctor"
+        }
+      })
+    );
+    expect(result.code).toBe(0);
+    const logPath = path.join(root, ".cclaw/state/workflow-guard.jsonl");
+    const logExists = await fs.stat(logPath).then(() => true).catch(() => false);
+    if (logExists) {
+      const log = await fs.readFile(logPath, "utf8");
+      expect(log).not.toContain("non_safe_tool_in_plan_stage");
+    }
+  });
+
   it("context monitor debounces warnings per band and respects TTL override", async () => {
     const root = await fs.mkdtemp(path.join(os.tmpdir(), "cclaw-context-monitor-runtime-"));
     await fs.mkdir(path.join(root, ".cclaw/state"), { recursive: true });
