@@ -1997,7 +1997,7 @@ Do NOT ship, merge, or release until both review layers complete with an explici
 
 ## In / Out
 - **Reads:** .cclaw/artifacts/06-tdd.md, .cclaw/artifacts/04-spec.md, .cclaw/artifacts/05-plan.md
-- **Writes:** \`.cclaw/artifacts/07-review.md\`
+- **Writes:** \`.cclaw/artifacts/07-review.md\`, \`.cclaw/artifacts/07-review-army.json\`
 - **Next:** \`/cc-next\` (updates flow-state and loads the next stage)
 
 ## Context Hydration (mandatory before stage work)
@@ -2008,7 +2008,7 @@ Do NOT ship, merge, or release until both review layers complete with an explici
 - \`.cclaw/artifacts/04-spec.md\`
 - \`.cclaw/artifacts/05-plan.md\`
 4. Load \`.cclaw/knowledge.md\` and apply relevant entries.
-5. Write stage output to \`.cclaw/artifacts/07-review.md\`.
+5. Write stage output to \`.cclaw/artifacts/07-review.md\` and \`.cclaw/artifacts/07-review-army.json\`.
 6. Do NOT copy artifacts into \`.cclaw/runs/\`; archival is handled only by \`cclaw archive\`.
 
 ## Gates
