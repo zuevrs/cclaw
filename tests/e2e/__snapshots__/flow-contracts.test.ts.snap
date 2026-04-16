@@ -454,7 +454,7 @@ cat >> .cclaw/knowledge.md <<EOF
 EOF
 \`\`\`
 
-Type must be exactly one of: \`rule\`, \`pattern\`, \`lesson\`.
+Type must be exactly one of: \`rule\`, \`pattern\`, \`lesson\`, \`compound\`.
 
 ## Handoff
 - Next command: \`/cc-next\` (loads whatever stage is current in flow-state)
@@ -740,6 +740,7 @@ When fixing a bug:
 | Monitoring | optional | If applicable: what metrics/logs to watch post-deploy. Risk note if no monitoring. |
 | Finalization | REQUIRED | Exactly one finalization enum token selected. Execution result documented. Worktree cleaned if applicable. |
 | Completion Status | optional | If present: exactly one of SHIPPED, SHIPPED_WITH_EXCEPTIONS, BLOCKED. Exceptions documented when applicable. |
+| Compound Step | optional | Optional retrospective: at least one bullet of the form 'Insight: ... | Action: append [compound] entry to .cclaw/knowledge.md', or an explicit 'No compound insight this run.' line. |
 
 
 ## Common Rationalizations
@@ -848,7 +849,7 @@ cat >> .cclaw/knowledge.md <<EOF
 EOF
 \`\`\`
 
-Type must be exactly one of: \`rule\`, \`pattern\`, \`lesson\`.
+Type must be exactly one of: \`rule\`, \`pattern\`, \`lesson\`, \`compound\`.
 
 ## Handoff
 - Next command: \`/cc-next\` (loads whatever stage is current in flow-state)
@@ -1227,7 +1228,7 @@ cat >> .cclaw/knowledge.md <<EOF
 EOF
 \`\`\`
 
-Type must be exactly one of: \`rule\`, \`pattern\`, \`lesson\`.
+Type must be exactly one of: \`rule\`, \`pattern\`, \`lesson\`, \`compound\`.
 
 ## Handoff
 - Next command: \`/cc-next\` (loads whatever stage is current in flow-state)
@@ -1654,7 +1655,7 @@ cat >> .cclaw/knowledge.md <<EOF
 EOF
 \`\`\`
 
-Type must be exactly one of: \`rule\`, \`pattern\`, \`lesson\`.
+Type must be exactly one of: \`rule\`, \`pattern\`, \`lesson\`, \`compound\`.
 
 ## Handoff
 - Next command: \`/cc-next\` (loads whatever stage is current in flow-state)
@@ -1997,7 +1998,7 @@ cat >> .cclaw/knowledge.md <<EOF
 EOF
 \`\`\`
 
-Type must be exactly one of: \`rule\`, \`pattern\`, \`lesson\`.
+Type must be exactly one of: \`rule\`, \`pattern\`, \`lesson\`, \`compound\`.
 
 ## Handoff
 - Next command: \`/cc-next\` (loads whatever stage is current in flow-state)

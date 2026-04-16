@@ -510,12 +510,45 @@ Do not start implementation execution without an approved plan artifact and expl
 - Machine-only checks are delegated to subagents when supported.
 - User approvals are requested only at required gate boundaries.
 
+## Fresh Context Protocol (between waves)
+
+After a wave completes — especially after long agent turns — context drift is
+the #1 cause of degraded execution quality. Before starting the **next wave**,
+prefer a **fresh agent context** over continuing in a saturated session:
+
+1. **Snapshot wave outcome** — append a short summary to the plan artifact
+   (\`### Wave <N> outcome\` with: tasks done, evidence files, blockers, next-wave inputs).
+2. **Capture handoff facts** — the minimum information the next agent needs:
+   - Stage and run id (from \`.cclaw/state/flow-state.json\`)
+   - List of completed task IDs from the plan
+   - Open blockers / failing gates by name
+   - File paths the next wave will touch (no full diffs)
+3. **Decide: continue or rotate**
+   - **Rotate** (start a new agent session) when: prior wave consumed > ~50% of the context budget, the prior wave required deep investigation that the next wave does not need, or you are about to cross a stage boundary.
+   - **Continue** when: next wave is a tiny follow-up (≤ 1 task) and the prior context is directly relevant.
+4. **Resume** in the new session via \`/cc-next\` — the session-start hook will restore flow state, checkpoint, and digest automatically.
+
+This is the same intuition as Compound Engineering's "fresh context per iteration": every wave starts with a clean, intentionally-loaded context, not a degraded carry-over.
+
+### Handoff template (paste into next session)
+
+\`\`\`markdown
+## Wave <N> handoff
+- Stage: <stage>
+- Run: <runId>
+- Completed task IDs: <list>
+- Blockers: <list or none>
+- Files next wave will touch: <list>
+- Verification command(s) used: <list>
+\`\`\`
+
 ## Anti-Patterns
 
 - Executing all tasks in one pass without intermediate verification.
 - Marking tasks done without command evidence.
 - Reordering critical dependencies for speed.
 - Continuing after a gate failure hoping later tasks fix it.
+- Carrying a saturated context across wave boundaries because "it has all the history" — saturated context is a liability, not an asset.
 `;
 }
 
@@ -723,6 +756,101 @@ candidates exist).
 - Ecosystem search is empty when a well-known primitive obviously applies.
 - "Fit" scores without evidence (no file:line, no cited OSS repo, no framework docs reference).
 - The in-repo candidate was never read before being dismissed.
+`;
+}
+
+export function knowledgeCurationSkill(): string {
+  return `---
+name: knowledge-curation
+description: "Read-only curation pass over .cclaw/knowledge.md. Surfaces stale, duplicate, or low-confidence entries and proposes a soft-archive plan; never deletes without explicit user approval."
+---
+
+# Knowledge Curation
+
+## Quick Start
+
+> 1. This is a **read-only audit** of \`.cclaw/knowledge.md\`. Never delete or rewrite entries here.
+> 2. Surface candidates for soft-archive when the active file > 50 entries OR contains stale/duplicate/superseded entries.
+> 3. Propose a single archive plan and require explicit user approval before any move.
+
+## HARD-GATE
+
+- Do not modify \`.cclaw/knowledge.md\` from this skill except via an explicit
+  user-approved archive plan that **moves** entries to
+  \`.cclaw/knowledge.archive.md\` (never deletes them).
+- Do not silently rewrite or summarize entries — preserve original wording.
+
+## When to run
+
+- Triggered automatically by **\`/cc-learn curate\`**.
+- Recommended after \`cclaw archive\` of a feature run, when knowledge has grown.
+- Recommended when active entry count exceeds **50**.
+
+## Audit dimensions
+
+For each entry in \`.cclaw/knowledge.md\` produce a row with:
+
+| Field | Source |
+|---|---|
+| Title | \`### <ts> [type] <title>\` heading |
+| Type | \`rule\` / \`pattern\` / \`lesson\` / \`compound\` |
+| Stage | \`Stage:\` field (or \`unknown\`) |
+| Age | days since timestamp |
+| Confidence | \`Confidence:\` field if present, else \`unstated\` |
+| Domain | \`Domain:\` field if present |
+| Supersedes | \`Supersedes:\` field if present |
+| Status hint | one of: keep / supersede-candidate / archive-candidate / duplicate |
+
+### Status rules
+
+- **supersede-candidate**: another entry has \`Supersedes: <this-title>\`.
+- **duplicate**: title or insight ≈ another entry's (caller's judgment, not regex).
+- **archive-candidate**:
+  - Type \`lesson\` AND age > 180 days AND no \`Supersedes\` chain points to it; OR
+  - Stage = \`brainstorm\` AND age > 90 days; OR
+  - Confidence = \`low\` AND age > 60 days; OR
+  - Total active entries > 50 and entry has lowest reuse signal.
+- **keep**: everything else.
+
+## Output format
+
+Produce two artifacts as **chat output only** (do not write files):
+
+### 1. Audit table
+
+\`\`\`markdown
+| # | Title | Type | Stage | Age | Confidence | Status hint |
+|---|---|---|---|---|---|---|
+| 1 | … | … | … | … | … | … |
+\`\`\`
+
+### 2. Soft-archive proposal
+
+\`\`\`markdown
+## Proposed archive (requires user approval)
+
+Threshold reasoning: <why entries below were selected>
+
+Entries to archive:
+1. <title> — reason
+2. <title> — reason
+
+Action plan if approved:
+1. Append a header to \`.cclaw/knowledge.archive.md\` with today's UTC date.
+2. Move (cut/paste) selected entries verbatim from \`.cclaw/knowledge.md\` into the archive file.
+3. Append a single supersession line to \`.cclaw/knowledge.md\`:
+   \\\`### <ts> [pattern] knowledge-curation-<date> — archived <N> entries, see knowledge.archive.md\\\`
+
+After approval: ask the user to run the move themselves, or — if they explicitly grant write access — perform the move atomically and report the new active count.
+\`\`\`
+
+## Anti-patterns
+
+- Deleting entries instead of archiving — knowledge must be append-only.
+- Rewriting an entry to "clean it up" — preserve original wording verbatim.
+- Auto-archiving without user approval, even when above threshold.
+- Removing \`compound\` entries — these are the highest-leverage records.
+- Treating high age as a proxy for low value — a 2-year-old security rule may be the most important entry in the file.
 `;
 }
 
@@ -967,7 +1095,8 @@ export const UTILITY_SKILL_FOLDERS = [
   "frontend-accessibility",
   "landscape-check",
   "adversarial-review",
-  "security-audit"
+  "security-audit",
+  "knowledge-curation"
 ] as const;
 
 export const UTILITY_SKILL_MAP: Record<string, () => string> = {
@@ -982,5 +1111,6 @@ export const UTILITY_SKILL_MAP: Record<string, () => string> = {
   "frontend-accessibility": frontendAccessibilitySkill,
   "landscape-check": landscapeCheckSkill,
   "adversarial-review": adversarialReviewSkill,
-  "security-audit": securityAuditSkill
+  "security-audit": securityAuditSkill,
+  "knowledge-curation": knowledgeCurationSkill
 };
