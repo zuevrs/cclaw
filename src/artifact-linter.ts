@@ -153,6 +153,21 @@ function tokensFromRule(rule: string): string[] {
   return [];
 }
 
+/**
+ * Extract required keywords from validation rules that contain comma-separated
+ * concept lists. Activates only for rules with structured enumerations like
+ * "failure modes, error surface, data-flow paths" — not for short rules.
+ */
+function extractRequiredKeywords(rule: string): string[] {
+  const colonMatch = /:\s*(.+)$/u.exec(rule);
+  if (!colonMatch) return [];
+  const tail = colonMatch[1]!;
+  const parts = tail.split(/,\s*(?:and\s+)?/u).map((p) => p.trim().replace(/\.$/u, ""));
+  const phrases = parts.filter((p) => p.length >= 4 && !/^(must|should|at least|if |or )/iu.test(p));
+  if (phrases.length < 3) return [];
+  return phrases;
+}
+
 function validateSectionBody(
   sectionBody: string,
   rule: string
@@ -223,6 +238,20 @@ function validateSectionBody(
           details: `Rule expects exactly one selected token (${tokens.join(", ")}); found ${selected.size}.`
         };
       }
+    }
+  }
+
+  const keywords = extractRequiredKeywords(rule);
+  if (keywords.length > 0) {
+    const bodyLower = sectionBody.toLowerCase();
+    const found = keywords.filter((kw) => bodyLower.includes(kw.toLowerCase()));
+    const threshold = Math.ceil(keywords.length * 0.5);
+    if (found.length < threshold) {
+      const missing = keywords.filter((kw) => !bodyLower.includes(kw.toLowerCase()));
+      return {
+        ok: false,
+        details: `Rule expects keywords (${threshold}/${keywords.length} minimum): missing ${missing.join(", ")}.`
+      };
     }
   }
 
