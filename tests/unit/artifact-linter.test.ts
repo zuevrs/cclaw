@@ -1052,6 +1052,77 @@ API -> Service -> DB
     expect(result.passed).toBe(true);
   });
 
+  it("fails review when Layer 1 Verdict is missing", async () => {
+    const root = await fs.mkdtemp(path.join(os.tmpdir(), "cclaw-review-no-l1-"));
+    await writeRuntimeArtifact(root, "07-review.md", `# Review Artifact
+
+## Layer 2 Findings
+| ID | Severity | Category | Description | Status |
+|---|---|---|---|---|
+| R-1 | Suggestion | correctness | Minor naming | open |
+
+## Review Army Contract
+- See \`07-review-army.json\`
+- Reconciliation summary: none
+
+## Review Readiness Dashboard
+- Layer 1 complete: no
+- Layer 2 complete: yes
+- Review army schema valid: yes
+- Open critical blockers: 0
+
+## Severity Summary
+- Critical: 0
+- Important: 0
+- Suggestion: 1
+
+## Final Verdict
+- APPROVED
+`);
+
+    const result = await lintArtifact(root, "review");
+    expect(result.passed).toBe(false);
+    const l1 = result.findings.find((f) => f.section === "Layer 1 Verdict");
+    expect(l1?.found).toBe(false);
+    expect(l1?.required).toBe(true);
+  });
+
+  it("fails review when Review Army Contract is missing", async () => {
+    const root = await fs.mkdtemp(path.join(os.tmpdir(), "cclaw-review-no-army-"));
+    await writeRuntimeArtifact(root, "07-review.md", `# Review Artifact
+
+## Layer 1 Verdict
+| Criterion | Verdict | Evidence |
+|---|---|---|
+| AC-1 | PASS | test evidence |
+
+## Layer 2 Findings
+| ID | Severity | Category | Description | Status |
+|---|---|---|---|---|
+| R-1 | Suggestion | correctness | Minor naming | open |
+
+## Review Readiness Dashboard
+- Layer 1 complete: yes
+- Layer 2 complete: yes
+- Review army schema valid: no
+- Open critical blockers: 0
+
+## Severity Summary
+- Critical: 0
+- Important: 0
+- Suggestion: 1
+
+## Final Verdict
+- APPROVED
+`);
+
+    const result = await lintArtifact(root, "review");
+    expect(result.passed).toBe(false);
+    const army = result.findings.find((f) => f.section === "Review Army Contract");
+    expect(army?.found).toBe(false);
+    expect(army?.required).toBe(true);
+  });
+
   it("fails review when Layer 2 Findings is missing", async () => {
     const root = await fs.mkdtemp(path.join(os.tmpdir(), "cclaw-review-no-l2-"));
     await writeRuntimeArtifact(root, "07-review.md", `# Review Artifact
