@@ -5,7 +5,8 @@ coverage/
 *.tgz
 .DS_Store
 release-artifacts/
-docs/
+docs/*
+!docs/harnesses.md
 
 # cclaw generated artifacts
 .cclaw/
