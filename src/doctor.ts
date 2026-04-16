@@ -21,7 +21,7 @@ import {
   verifyCurrentStageGateEvidence
 } from "./gate-evidence.js";
 import { stageSkillFolder } from "./content/skills.js";
-import { UTILITY_SKILL_FOLDERS } from "./content/utility-skills.js";
+import { LANGUAGE_RULE_PACK_FOLDERS, UTILITY_SKILL_FOLDERS } from "./content/utility-skills.js";
 import { CONTEXT_MODES, DEFAULT_CONTEXT_MODE } from "./content/contexts.js";
 import { validateHookDocument } from "./hook-schema.js";
 import type { HarnessId } from "./types.js";
@@ -434,6 +434,18 @@ export async function doctorChecks(projectRoot: string, options: DoctorOptions =
     const skillPath = path.join(projectRoot, RUNTIME_ROOT, "skills", folder, "SKILL.md");
     checks.push({
       name: `utility_skill:${folder}`,
+      ok: await exists(skillPath),
+      details: skillPath
+    });
+  }
+
+  // Opt-in language rule packs: only check presence for packs the user enabled.
+  for (const pack of parsedConfig?.languageRulePacks ?? []) {
+    const folder = LANGUAGE_RULE_PACK_FOLDERS[pack];
+    if (!folder) continue;
+    const skillPath = path.join(projectRoot, RUNTIME_ROOT, "skills", folder, "SKILL.md");
+    checks.push({
+      name: `language_rule_pack:${pack}`,
       ok: await exists(skillPath),
       details: skillPath
     });

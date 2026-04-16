@@ -39,7 +39,12 @@ import {
   buildRulesJson
 } from "./content/templates.js";
 import { stageSkillFolder, stageSkillMarkdown } from "./content/skills.js";
-import { UTILITY_SKILL_FOLDERS, UTILITY_SKILL_MAP } from "./content/utility-skills.js";
+import {
+  LANGUAGE_RULE_PACK_FOLDERS,
+  LANGUAGE_RULE_PACK_GENERATORS,
+  UTILITY_SKILL_FOLDERS,
+  UTILITY_SKILL_MAP
+} from "./content/utility-skills.js";
 import { createInitialFlowState } from "./flow-state.js";
 import { ensureDir, exists, writeFileSafe } from "./fs-utils.js";
 import { ensureGitignore, removeGitignorePatterns } from "./gitignore.js";
@@ -206,7 +211,7 @@ async function writeArtifactTemplates(projectRoot: string): Promise<void> {
   }
 }
 
-async function writeSkills(projectRoot: string): Promise<void> {
+async function writeSkills(projectRoot: string, config?: VibyConfig): Promise<void> {
   for (const stage of COMMAND_FILE_ORDER) {
     const folder = stageSkillFolder(stage);
     await writeFileSafe(
@@ -252,6 +257,14 @@ async function writeSkills(projectRoot: string): Promise<void> {
 
   for (const folder of UTILITY_SKILL_FOLDERS) {
     const generator = UTILITY_SKILL_MAP[folder];
+    await writeFileSafe(runtimePath(projectRoot, "skills", folder, "SKILL.md"), generator());
+  }
+
+  const enabledPacks = config?.languageRulePacks ?? [];
+  for (const pack of enabledPacks) {
+    const folder = LANGUAGE_RULE_PACK_FOLDERS[pack];
+    const generator = LANGUAGE_RULE_PACK_GENERATORS[folder];
+    if (!folder || !generator) continue;
     await writeFileSafe(runtimePath(projectRoot, "skills", folder, "SKILL.md"), generator());
   }
 }
@@ -1005,7 +1018,7 @@ async function materializeRuntime(projectRoot: string, config: VibyConfig, force
   await cleanStaleFiles(projectRoot);
   await writeCommandContracts(projectRoot);
   await writeUtilityCommands(projectRoot);
-  await writeSkills(projectRoot);
+  await writeSkills(projectRoot, config);
   await writeContextModes(projectRoot);
   await writeArtifactTemplates(projectRoot);
   await writeRulebook(projectRoot);

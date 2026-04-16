@@ -3,14 +3,16 @@ import path from "node:path";
 import { parse, stringify } from "yaml";
 import { CCLAW_VERSION, DEFAULT_HARNESSES, FLOW_VERSION, RUNTIME_ROOT } from "./constants.js";
 import { exists, writeFileSafe } from "./fs-utils.js";
-import { FLOW_TRACKS, HARNESS_IDS } from "./types.js";
-import type { FlowTrack, HarnessId, InitProfile, VibyConfig } from "./types.js";
+import { FLOW_TRACKS, HARNESS_IDS, LANGUAGE_RULE_PACKS } from "./types.js";
+import type { FlowTrack, HarnessId, InitProfile, LanguageRulePack, VibyConfig } from "./types.js";
 
 const CONFIG_PATH = `${RUNTIME_ROOT}/config.yaml`;
 const HARNESS_ID_SET = new Set<string>(HARNESS_IDS);
 const FLOW_TRACK_SET = new Set<string>(FLOW_TRACKS);
+const LANGUAGE_RULE_PACK_SET = new Set<string>(LANGUAGE_RULE_PACKS);
 const SUPPORTED_HARNESSES_TEXT = HARNESS_IDS.join(", ");
 const SUPPORTED_TRACKS_TEXT = FLOW_TRACKS.join(", ");
+const SUPPORTED_LANGUAGE_RULE_PACKS_TEXT = LANGUAGE_RULE_PACKS.join(", ");
 const ALLOWED_CONFIG_KEYS = new Set<string>([
   "version",
   "flowVersion",
@@ -18,7 +20,8 @@ const ALLOWED_CONFIG_KEYS = new Set<string>([
   "autoAdvance",
   "promptGuardMode",
   "gitHookGuards",
-  "defaultTrack"
+  "defaultTrack",
+  "languageRulePacks"
 ]);
 
 function configFixExample(): string {
@@ -32,6 +35,7 @@ function configValidationError(configFilePath: string, reason: string): Error {
     `Invalid cclaw config at ${configFilePath}: ${reason}\n` +
       `Supported harnesses: ${SUPPORTED_HARNESSES_TEXT}\n` +
       `Supported tracks: ${SUPPORTED_TRACKS_TEXT}\n` +
+      `Supported languageRulePacks: ${SUPPORTED_LANGUAGE_RULE_PACKS_TEXT}\n` +
       `Example config:\n${configFixExample()}\n` +
       `After fixing, run: cclaw sync`
   );
@@ -52,7 +56,8 @@ export function createDefaultConfig(
     autoAdvance: false,
     promptGuardMode: "advisory",
     gitHookGuards: false,
-    defaultTrack
+    defaultTrack,
+    languageRulePacks: []
   };
 }
 
@@ -63,7 +68,11 @@ export function createDefaultConfig(
  */
 export function createProfileConfig(
   profile: InitProfile,
-  overrides: { harnesses?: HarnessId[]; defaultTrack?: FlowTrack } = {}
+  overrides: {
+    harnesses?: HarnessId[];
+    defaultTrack?: FlowTrack;
+    languageRulePacks?: LanguageRulePack[];
+  } = {}
 ): VibyConfig {
   const base = createDefaultConfig();
   switch (profile) {
@@ -74,7 +83,8 @@ export function createProfileConfig(
         autoAdvance: false,
         promptGuardMode: "advisory",
         gitHookGuards: false,
-        defaultTrack: overrides.defaultTrack ?? "quick"
+        defaultTrack: overrides.defaultTrack ?? "quick",
+        languageRulePacks: overrides.languageRulePacks ?? []
       };
     case "standard":
       return {
@@ -83,7 +93,8 @@ export function createProfileConfig(
         autoAdvance: false,
         promptGuardMode: "advisory",
         gitHookGuards: false,
-        defaultTrack: overrides.defaultTrack ?? "standard"
+        defaultTrack: overrides.defaultTrack ?? "standard",
+        languageRulePacks: overrides.languageRulePacks ?? []
       };
     case "full":
       return {
@@ -92,7 +103,8 @@ export function createProfileConfig(
         autoAdvance: false,
         promptGuardMode: "strict",
         gitHookGuards: true,
-        defaultTrack: overrides.defaultTrack ?? "standard"
+        defaultTrack: overrides.defaultTrack ?? "standard",
+        languageRulePacks: overrides.languageRulePacks ?? [...LANGUAGE_RULE_PACKS]
       };
   }
 }
@@ -173,6 +185,23 @@ export async function readConfig(projectRoot: string): Promise<VibyConfig> {
       ? (defaultTrackRaw as FlowTrack)
       : "standard";
 
+  const languageRulePacksRaw = (parsed as { languageRulePacks?: unknown }).languageRulePacks;
+  const hasLanguageRulePacksField = Object.prototype.hasOwnProperty.call(parsed, "languageRulePacks");
+  if (hasLanguageRulePacksField && !Array.isArray(languageRulePacksRaw)) {
+    throw configValidationError(fullPath, `"languageRulePacks" must be an array`);
+  }
+  const rawPacks = (languageRulePacksRaw ?? []) as unknown[];
+  const invalidPacks = rawPacks.filter(
+    (pack) => typeof pack !== "string" || !LANGUAGE_RULE_PACK_SET.has(pack)
+  );
+  if (invalidPacks.length > 0) {
+    const formatted = invalidPacks
+      .map((item) => (typeof item === "string" ? item : JSON.stringify(item)))
+      .join(", ");
+    throw configValidationError(fullPath, `unknown languageRulePacks id(s): ${formatted}`);
+  }
+  const languageRulePacks = [...new Set(rawPacks as LanguageRulePack[])];
+
   return {
     version: parsed.version ?? CCLAW_VERSION,
     flowVersion: parsed.flowVersion ?? FLOW_VERSION,
@@ -180,7 +209,8 @@ export async function readConfig(projectRoot: string): Promise<VibyConfig> {
     autoAdvance,
     promptGuardMode,
     gitHookGuards,
-    defaultTrack
+    defaultTrack,
+    languageRulePacks
   };
 }
 

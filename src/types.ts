@@ -43,6 +43,17 @@ export type HarnessId = (typeof HARNESS_IDS)[number];
 export const INIT_PROFILES = ["minimal", "standard", "full"] as const;
 export type InitProfile = (typeof INIT_PROFILES)[number];
 
+/**
+ * Opt-in language rule packs. When enabled in config, `cclaw sync` installs the
+ * corresponding utility skill so the meta-skill router can load language-specific
+ * anti-patterns, idioms, and review heuristics during review/tdd stages.
+ *
+ * Opt-in intentional: cclaw stays language-agnostic by default; rule packs are
+ * additive context that the user must explicitly enable.
+ */
+export const LANGUAGE_RULE_PACKS = ["typescript", "python", "go"] as const;
+export type LanguageRulePack = (typeof LANGUAGE_RULE_PACKS)[number];
+
 export interface VibyConfig {
   version: string;
   flowVersion: string;
@@ -55,6 +66,13 @@ export interface VibyConfig {
   gitHookGuards?: boolean;
   /** Default flow track for new runs (quick = shortened path, standard = full pipeline). */
   defaultTrack?: FlowTrack;
+  /**
+   * Opt-in language rule packs. Each enabled pack materializes a matching utility
+   * skill under `.cclaw/skills/language-<id>/SKILL.md` on next `cclaw sync`. The
+   * meta-skill router loads the pack during review/tdd when the diff touches the
+   * language in question.
+   */
+  languageRulePacks?: LanguageRulePack[];
 }
 
 export interface TransitionRule {

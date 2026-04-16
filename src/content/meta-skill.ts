@@ -91,6 +91,23 @@ These skills live in \`.cclaw/skills/\` but have no slash commands. They activat
 
 **Activation rule:** When a contextual skill applies, read its SKILL.md and follow it as a supplementary lens alongside the current stage. Do not skip the stage workflow — the contextual skill adds depth, not a detour.
 
+### Opt-in language rule packs
+
+cclaw stays language-agnostic by default. Projects that want language-specific
+review lenses can enable opt-in rule packs in \`.cclaw/config.yaml\`:
+
+\`\`\`yaml
+languageRulePacks:
+  - typescript   # → skills/language-typescript/SKILL.md
+  - python       # → skills/language-python/SKILL.md
+  - go           # → skills/language-go/SKILL.md
+\`\`\`
+
+After editing the list, run \`cclaw sync\` to materialize the enabled pack SKILL.md
+files. Packs activate during \`tdd\` and \`review\` when the diff touches files in
+their language. They are additive lenses — Tier-1 rules block merge, Tier-2 rules
+require a named follow-up. Never silently override them.
+
 ## Custom Skills (project-owned, sync-safe)
 
 \`.cclaw/custom-skills/\` is a sync-safe directory. \`cclaw sync\` and \`cclaw upgrade\` **never overwrite** files there.
