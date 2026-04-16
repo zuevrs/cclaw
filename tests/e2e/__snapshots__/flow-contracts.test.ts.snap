@@ -733,6 +733,7 @@ When fixing a bug:
 | Rollback Plan | REQUIRED | Trigger conditions, rollback steps (exact commands), verification steps. |
 | Monitoring | optional | If applicable: what metrics/logs to watch post-deploy. Risk note if no monitoring. |
 | Finalization | REQUIRED | Exactly one finalization enum token selected. Execution result documented. Worktree cleaned if applicable. |
+| Completion Status | optional | If present: exactly one of SHIPPED, SHIPPED_WITH_EXCEPTIONS, BLOCKED. Exceptions documented when applicable. |
 
 
 ## Common Rationalizations

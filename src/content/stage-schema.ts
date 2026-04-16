@@ -1560,7 +1560,8 @@ const SHIP: StageSchemaInput = {
     { section: "Release Notes", required: true, validationRule: "What changed, why, impact. References spec criteria. Breaking changes flagged." },
     { section: "Rollback Plan", required: true, validationRule: "Trigger conditions, rollback steps (exact commands), verification steps." },
     { section: "Monitoring", required: false, validationRule: "If applicable: what metrics/logs to watch post-deploy. Risk note if no monitoring." },
-    { section: "Finalization", required: true, validationRule: "Exactly one finalization enum token selected. Execution result documented. Worktree cleaned if applicable." }
+    { section: "Finalization", required: true, validationRule: "Exactly one finalization enum token selected. Execution result documented. Worktree cleaned if applicable." },
+    { section: "Completion Status", required: false, validationRule: "If present: exactly one of SHIPPED, SHIPPED_WITH_EXCEPTIONS, BLOCKED. Exceptions documented when applicable." }
   ],
   namedAntiPattern: {
     title: "Green CI Means Safe to Merge",
