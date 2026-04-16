@@ -530,13 +530,30 @@ export function stageGoodBadExamples(stage: FlowStage): string {
   ].join("\n");
 }
 
-export function stageExamples(stage: FlowStage): string {
+export const STAGE_EXAMPLES_REFERENCE_DIR = "references/stages";
+
+export function stageExamplesReferencePath(stage: FlowStage): string {
+  return `.cclaw/${STAGE_EXAMPLES_REFERENCE_DIR}/${stage}-examples.md`;
+}
+
+/**
+ * Returns the full example artifact body as a standalone reference markdown
+ * file. Materialized under .cclaw/references/stages/<stage>-examples.md so
+ * the always-rendered skill body can link instead of inlining.
+ */
+export function stageExamplesReferenceMarkdown(stage: FlowStage): string | null {
   const examples = STAGE_EXAMPLES[stage];
-  if (!examples) return "";
+  if (!examples) return null;
   return [
-    "## Examples",
+    `---`,
+    `stage: ${stage}`,
+    `name: ${stage}-stage-examples`,
+    `description: "Full sample artifact for the ${stage} stage. Loaded only when an agent explicitly needs a complete example; the stage skill links here rather than inlining."`,
+    `---`,
     "",
-    "Concrete artifact samples. These mirror the exact heading levels agents must use when authoring the stage artifact (all H2 `##` sections), so they are presented inside a markdown fence to avoid collapsing into the SKILL outline.",
+    `# ${stage} stage — full artifact sample`,
+    "",
+    `This file is linked from \`.cclaw/skills/<${stage}-stage>/SKILL.md\` under **Examples → See also**. The sample uses H2 headings that mirror the artifact a cclaw session must produce, so the markdown is wrapped in a fence to avoid collapsing into the outline.`,
     "",
     "```markdown",
     examples,
@@ -544,6 +561,88 @@ export function stageExamples(stage: FlowStage): string {
     ""
   ].join("\n");
 }
+
+/**
+ * Returns the short inline pointer rendered directly inside the stage skill.
+ * Replaces the previous always-inline ~50-100 line fenced block and
+ * delivers true progressive disclosure: the full example lives in a
+ * reference file loaded on demand.
+ */
+export function stageExamples(stage: FlowStage): string {
+  const examples = STAGE_EXAMPLES[stage];
+  if (!examples) return "";
+  return [
+    "## Examples",
+    "",
+    `Full artifact sample for this stage lives at \`${stageExamplesReferencePath(stage)}\`. Open it when you need a complete reference; do NOT paste the example into the artifact verbatim — it is a shape guide, not a template.`,
+    "",
+    "Summary of what the reference covers:",
+    ...exampleSummaryBullets(stage),
+    ""
+  ].join("\n");
+}
+
+function exampleSummaryBullets(stage: FlowStage): string[] {
+  const headings = STAGE_EXAMPLE_SECTION_HEADINGS[stage] ?? [];
+  if (headings.length === 0) return ["- Full artifact structure."];
+  return headings.map((heading) => `- ${heading}`);
+}
+
+// Kept in sync with STAGE_EXAMPLES above so the inline summary matches the
+// reference file without duplicating the heavy text. Update whenever the
+// sample in STAGE_EXAMPLES gains or loses a top-level section.
+const STAGE_EXAMPLE_SECTION_HEADINGS: Record<FlowStage, string[]> = {
+  brainstorm: [
+    "Problem framing (problem, success, constraints)",
+    "Candidate approaches with trade-offs",
+    "Recommended direction + open questions",
+    "Clarification log and decision record"
+  ],
+  scope: [
+    "In-scope / out-of-scope / deferred lists with concrete capabilities",
+    "Requirements table with stable R# IDs",
+    "Boundary stress-tests and non-negotiables",
+    "Decision record for premise challenges"
+  ],
+  design: [
+    "Blast-radius file list",
+    "Mandatory architecture diagram (Mermaid)",
+    "Failure-mode table with detection + mitigation",
+    "Test strategy + performance budget",
+    "Completion dashboard + unresolved decisions"
+  ],
+  spec: [
+    "Acceptance-criteria table (observable, measurable, falsifiable)",
+    "Requirement-ref column tying each AC back to an R# from scope",
+    "Verification-approach column",
+    "Approval block"
+  ],
+  plan: [
+    "Dependency graph + dependency waves",
+    "Task list with effort + minutes estimate per task",
+    "Acceptance mapping (every AC → task IDs)",
+    "No-Placeholder scan row + WAIT_FOR_CONFIRM marker"
+  ],
+  tdd: [
+    "RED evidence per slice (failing test output)",
+    "Acceptance mapping per slice",
+    "GREEN evidence (full-suite pass)",
+    "REFACTOR notes with behavior-preservation confirmation",
+    "Test-pyramid shape + prove-it reproduction when applicable"
+  ],
+  review: [
+    "Spec-compliance findings (Layer 1)",
+    "Code-quality findings (Layer 2)",
+    "Severity, evidence, and status per finding",
+    "Go / no-go verdict"
+  ],
+  ship: [
+    "Release checklist (version, changelog, tag, artifacts)",
+    "Rollback plan with trigger, steps, verification",
+    "Runbook (how to verify the release post-deploy)",
+    "Sign-off block"
+  ]
+};
 
 // ---------------------------------------------------------------------------
 // Domain-specific living examples (A.2#30).

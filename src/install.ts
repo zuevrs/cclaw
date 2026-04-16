@@ -40,6 +40,10 @@ import {
 } from "./content/templates.js";
 import { stageSkillFolder, stageSkillMarkdown } from "./content/skills.js";
 import {
+  STAGE_EXAMPLES_REFERENCE_DIR,
+  stageExamplesReferenceMarkdown
+} from "./content/examples.js";
+import {
   LANGUAGE_RULE_PACK_DIR,
   LANGUAGE_RULE_PACK_FILES,
   LANGUAGE_RULE_PACK_GENERATORS,
@@ -225,6 +229,18 @@ async function writeSkills(projectRoot: string, config?: VibyConfig): Promise<vo
       runtimePath(projectRoot, "skills", folder, "SKILL.md"),
       stageSkillMarkdown(stage)
     );
+
+    // Progressive disclosure (A.2#8): materialize the full example artifact as
+    // a sibling reference file. The stage skill only links to it; agents load
+    // the reference on demand.
+    const referenceMarkdown = stageExamplesReferenceMarkdown(stage);
+    if (referenceMarkdown) {
+      const referenceDir = STAGE_EXAMPLES_REFERENCE_DIR.split("/");
+      await writeFileSafe(
+        runtimePath(projectRoot, ...referenceDir, `${stage}-examples.md`),
+        referenceMarkdown
+      );
+    }
   }
 
   // Utility skills (not flow stages)

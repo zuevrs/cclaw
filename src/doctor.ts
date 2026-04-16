@@ -363,6 +363,19 @@ export async function doctorChecks(projectRoot: string, options: DoctorOptions =
     });
   }
 
+  // Per-stage example references (A.2#8, progressive disclosure). Each stage
+  // skill's Examples section points here; the file MUST exist or the pointer
+  // is a dangling link.
+  const stageRefDir = path.join(projectRoot, RUNTIME_ROOT, "references", "stages");
+  for (const stage of COMMAND_FILE_ORDER) {
+    const refPath = path.join(stageRefDir, `${stage}-examples.md`);
+    checks.push({
+      name: `stage_examples_ref:${stage}`,
+      ok: await exists(refPath),
+      details: refPath
+    });
+  }
+
   checks.push({
     name: "gitignore:required_patterns",
     ok: await gitignoreHasRequiredPatterns(projectRoot),
