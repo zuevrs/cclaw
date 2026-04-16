@@ -73,6 +73,25 @@ function decisionRecordBlock(stage: FlowStage): string {
   return `## Decision Record Template\n\nUse this format for every non-trivial architecture or scope decision made during this stage:\n\n\`\`\`\n${fmt}\n\`\`\`\n`;
 }
 
+function visualCommunicationBlock(stage: FlowStage): string {
+  if (stage !== "design") return "";
+  return `## Visual Communication Rules
+
+Diagrams are load-bearing artifacts in the design stage, not decoration. A diagram that encodes structure wrongly (or hides structure behind generic labels) misleads every downstream reader. Apply these rules to **every** diagram in the design artifact:
+
+1. **Concrete names, never generic.** "Service A → Service B" is not a diagram; it is a shape. Every node must name a real component the team will build or touch (\`NotificationPublisher\`, \`FeedReadModel\`, \`Stripe webhook handler\`). If you cannot name it concretely, the design is not ready.
+2. **Every arrow is labeled.** Label with the message, action, or protocol it carries (\`publishEvent(user_id, payload)\`, \`GET /snapshot\`, \`dedupe-key upsert\`). Unlabeled arrows silently lose the contract between components.
+3. **Direction is explicit.** Use arrowheads, not bare lines; draw the flow of *data* (not "dependency") unless the diagram type is explicitly a dependency graph, in which case say so in a one-line caption.
+4. **Distinguish sync vs async.** Use a convention and state it once in a legend: e.g. solid arrow = synchronous request/response, dashed arrow = async message via queue/bus, double arrow = two-way. Async edges always name the queue or topic.
+5. **Show at least one failure edge.** Every non-trivial diagram needs one branch that represents the degraded or error path (timeout, reconnect, fallback to cache, poison-message routing). A diagram with only the happy path hides the interesting half of the design.
+6. **One level of detail per diagram.** Do not mix "service-level" and "class-level" on the same canvas. If you need both, produce two diagrams — one at the system boundary, one at the internal module — and cross-reference them.
+7. **Caption, not decoration.** Each diagram gets a one-sentence caption below it stating what the reader should take away ("*Publish path with idempotent outbox; SSE stream reads the projection, not the bus directly*"). If you cannot write the caption in one sentence, the diagram is doing two things at once.
+8. **Prefer text-based formats** (Mermaid, ASCII) over binary images in \`.cclaw/artifacts/\` so diffs stay reviewable. Binary/SVG is allowed when the diagram is already the source of truth elsewhere (e.g. \`docs/architecture/\`) and the artifact embeds a link plus a text-based summary.
+
+If a diagram cannot satisfy rules 1–5, do NOT include it — a missing diagram is honest; a misleading diagram is worse. Surface the gap in **Unresolved Decisions** and proceed without the diagram until the decisions that would populate it are locked.
+`;
+}
+
 function contextLoadingBlock(stage: FlowStage): string {
   const trace = stageSchema(stage).crossStageTrace;
   const readLines = trace.readsFrom.length > 0
@@ -395,6 +414,7 @@ ${reviewSectionsBlock(stage)}
 ${verificationBlock(stage)}
 ${crossStageTraceBlock(stage)}
 ${artifactValidationBlock(stage)}
+${visualCommunicationBlock(stage)}
 ${decisionRecordBlock(stage)}
 ## Common Rationalizations
 ${rationalizationTable(stage)}

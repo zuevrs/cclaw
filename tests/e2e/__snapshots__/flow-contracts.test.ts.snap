@@ -349,6 +349,7 @@ When fixing a bug:
 | Final Verdict | REQUIRED | Exactly one of: APPROVED, APPROVED_WITH_CONCERNS, BLOCKED. |
 
 
+
 ## Common Rationalizations
 | Rationalization | Reality |
 |---|---|
@@ -745,6 +746,7 @@ When fixing a bug:
 | Compound Step | optional | Optional retrospective: at least one bullet of the form 'Insight: ... | Action: append [compound] entry to .cclaw/knowledge.jsonl', or an explicit 'No compound insight this run.' line. |
 
 
+
 ## Common Rationalizations
 | Rationalization | Reality |
 |---|---|
@@ -1119,6 +1121,7 @@ Evaluate:
 | Risk Assessment | optional | If present: per-task or per-wave risk identification with likelihood, impact, and mitigation strategy. |
 | Boundary Map | optional | If present: per-wave or per-task interface contracts listing what each task produces (exports) and consumes (imports) from other tasks. |
 | WAIT_FOR_CONFIRM | REQUIRED | Explicit marker present. Status: pending until user approves. |
+
 
 
 ## Common Rationalizations
@@ -1556,6 +1559,7 @@ When fixing a bug:
 | Prove-It Reproduction | optional | Required for bug-fix slices: original failing reproduction test (RED without fix), passing output with fix (GREEN), and a note confirming the test fails again if the fix is reverted. |
 
 
+
 ## Common Rationalizations
 | Rationalization | Reality |
 |---|---|
@@ -1912,6 +1916,7 @@ These are thinking instincts, not a checklist. Let them shape your perspective t
 | Selected Direction | REQUIRED | Must include the selected approach, rationale, and explicit approval marker. |
 | Design | REQUIRED | Must cover architecture, key components, and data flow scaled to complexity. |
 | Assumptions and Open Questions | REQUIRED | Must capture unresolved assumptions/open questions, or explicitly state none. |
+
 
 
 ## Common Rationalizations
