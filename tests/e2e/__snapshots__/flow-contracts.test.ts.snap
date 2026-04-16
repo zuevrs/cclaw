@@ -101,6 +101,20 @@ You MUST complete these steps in order:
 13. Classify findings — Critical (blocks ship), Important (should fix), Suggestion (optional improvement).
 14. Produce verdict — APPROVED, APPROVED_WITH_CONCERNS, or BLOCKED.
 
+## Good vs Bad (at-a-glance)
+
+Contrasting samples to calibrate the quality bar for this stage. Read before writing the artifact — mirror the **Good** shape, avoid the **Bad** shape.
+
+**Good**
+
+> R-1 Critical: snapshot endpoint returns newest N rows but does not guarantee consistency with stream cursor — users can miss items between snapshot and subscribe. Evidence: integration test \`notification-consistency.test.ts:22-58\`. Status: open.
+
+**Bad**
+
+> Looks good overall. A few small things could be polished, maybe refactor the merge logic. LGTM.
+
+**Why it matters:** "LGTM" is not a review — it is a signature on whatever the author shipped. Every finding needs a severity, a falsifiable description, evidence, and a status.
+
 ## Examples
 
 Concrete artifact samples. These mirror the exact heading levels agents must use when authoring the stage artifact (all H2 \`##\` sections), so they are presented inside a markdown fence to avoid collapsing into the SKILL outline.
@@ -544,6 +558,20 @@ You MUST complete these steps in order:
 9. Execute finalization — perform the selected action. For merge: verify clean merge. For PR: include structured body (summary, test plan, rollback). For discard: verify deletion.
 10. Worktree cleanup — if using git worktrees, clean up the worktree after merge/discard. Keep it only for 'keep branch' mode.
 
+## Good vs Bad (at-a-glance)
+
+Contrasting samples to calibrate the quality bar for this stage. Read before writing the artifact — mirror the **Good** shape, avoid the **Bad** shape.
+
+**Good**
+
+> Rollback trigger: error rate on \`/notifications/stream\` >5% for 5 minutes, or p95 publish-to-visible lag >10s. Steps: \`git revert <merge-sha> && git push origin main\` then redeploy; run \`2026_04_12_notifications_cursor_down.sql\` before traffic. Verification: error rate returns to baseline within 10 minutes.
+
+**Bad**
+
+> Rollback plan: revert the commit if anything goes wrong.
+
+**Why it matters:** "Revert if anything goes wrong" leaves the on-call engineer to invent the plan at 2 a.m. The rollback trigger is an operational contract: state the signal, the command, and the verification.
+
 ## Examples
 
 Concrete artifact samples. These mirror the exact heading levels agents must use when authoring the stage artifact (all H2 \`##\` sections), so they are presented inside a markdown fence to avoid collapsing into the SKILL outline.
@@ -918,6 +946,20 @@ You MUST complete these steps in order:
 6. Define checkpoints — mark points where progress should be validated before continuing.
 7. WAIT_FOR_CONFIRM — write plan artifact and explicitly pause. **STOP.** Do NOT proceed until user confirms. Then update \`flow-state.json\` and tell user to run \`/cc-next\`.
 
+## Good vs Bad (at-a-glance)
+
+Contrasting samples to calibrate the quality bar for this stage. Read before writing the artifact — mirror the **Good** shape, avoid the **Bad** shape.
+
+**Good**
+
+> T-2: Implement publisher + outbox write path. Acceptance: AC-1. Verification: \`pnpm vitest run tests/integration/publisher.test.ts\`. Depends on: T-1. Effort: M.
+
+**Bad**
+
+> T-2: Build the backend. Verify: manual testing. Effort: a few days.
+
+**Why it matters:** A task without a single acceptance criterion and a reproducible verification command is a wish. If you cannot say how you will know it is done, you cannot ship it.
+
 ## Examples
 
 Concrete artifact samples. These mirror the exact heading levels agents must use when authoring the stage artifact (all H2 \`##\` sections), so they are presented inside a markdown fence to avoid collapsing into the SKILL outline.
@@ -1285,6 +1327,20 @@ You MUST complete these steps in order:
 9. Record evidence — capture RED failure, GREEN output, and REFACTOR notes in the TDD artifact.
 10. Annotate traceability — link to plan task ID and spec criterion.
 11. Repeat for each slice — return to step 1 for the next plan slice.
+
+## Good vs Bad (at-a-glance)
+
+Contrasting samples to calibrate the quality bar for this stage. Read before writing the artifact — mirror the **Good** shape, avoid the **Bad** shape.
+
+**Good**
+
+> RED: \`pnpm vitest run tests/unit/dedupe-feed.test.ts\` → \`publishToOutbox is not a function\`. GREEN (after minimal impl): same command, 47/47 pass, full suite. REFACTOR: extracted \`mergeLatestByDedupeKey\`; suite still 47/47.
+
+**Bad**
+
+> Wrote the publisher code. Tests pass now. Will add unit tests later when I have time.
+
+**Why it matters:** Code written before a failing test is guessing validated after the fact. The RED failure IS the specification — without it, the GREEN pass proves nothing about the intended behavior.
 
 ## Examples
 
@@ -1709,6 +1765,20 @@ You MUST complete these steps in order:
 7. **Self-review** — scan for placeholders/TODOs, check internal consistency, verify scope is focused, resolve any ambiguity.
 8. **User reviews artifact** — ask the user to review the written artifact and explicitly approve or request changes.
 9. **Handoff** — only then complete stage and point to \`/cc-next\`.
+
+## Good vs Bad (at-a-glance)
+
+Contrasting samples to calibrate the quality bar for this stage. Read before writing the artifact — mirror the **Good** shape, avoid the **Bad** shape.
+
+**Good**
+
+> Problem: release checks are fragile and inconsistent between CI and local runs; invalid metadata sometimes reaches npm publish. Success: invalid release preconditions are caught before publish with explicit operator feedback, in both CI and local workflows. Constraints: no new runtime dependencies.
+
+**Bad**
+
+> Problem: releases are broken. Success: make them better. Constraints: be careful.
+
+**Why it matters:** "Make it better" is not a success criterion — an agent cannot know when it is done. State the observable condition that proves success.
 
 ## Examples
 
