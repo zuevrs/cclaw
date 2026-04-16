@@ -131,5 +131,21 @@ describe("flow tracks", () => {
       expect(nextStage("spec")).toBe("plan");
       expect(previousStage("tdd")).toBe("plan");
     });
+
+    it("nextStage fallback returns the standard successor for stages absent from the active track", () => {
+      // brainstorm is not on the quick track, but fallback walks the full standard order
+      expect(nextStage("brainstorm", "quick")).toBe("scope");
+      expect(nextStage("design", "quick")).toBe("spec");
+      expect(nextStage("plan", "quick")).toBe("tdd");
+    });
+
+    it("previousStage fallback walks back through the standard order for off-track stages", () => {
+      // brainstorm is at index 0 of the standard order — no predecessor exists at all
+      expect(previousStage("brainstorm", "quick")).toBeNull();
+      // scope/design/plan are off the quick track but have standard predecessors
+      expect(previousStage("scope", "quick")).toBe("brainstorm");
+      expect(previousStage("design", "quick")).toBe("scope");
+      expect(previousStage("plan", "quick")).toBe("spec");
+    });
   });
 });
