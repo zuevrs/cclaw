@@ -677,6 +677,8 @@ const DESIGN: StageSchemaInput = {
     traceabilityRule: "Every architecture decision must trace to a scope boundary. Every downstream spec requirement must trace to a design decision."
   },
   artifactValidation: [
+    { section: "Codebase Investigation", required: true, validationRule: "Must list blast-radius files with current responsibilities and discovered patterns." },
+    { section: "Search Before Building", required: true, validationRule: "For each technical choice: Layer 1 (exact match), Layer 2 (partial match), Layer 3 (inspiration), EUREKA labels with reuse-first default." },
     { section: "Architecture Boundaries", required: true, validationRule: "Must list component boundaries with ownership." },
     { section: "Architecture Diagram", required: true, validationRule: "At least one diagram (ASCII, Mermaid, or image) showing component boundaries and data flow direction." },
     { section: "Data Flow", required: true, validationRule: "Must include happy path, nil input, empty input, upstream error paths." },
