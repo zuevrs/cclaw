@@ -1083,6 +1083,90 @@ Escalate to the main review-army under the matching severity (Critical / Importa
 `;
 }
 
+export function retrospectiveSkill(): string {
+  return `---
+name: retrospective
+description: "Post-ship retrospective lens. Use after a ship to extract durable lessons (rules, patterns, accelerators) before context fades. Distinct from the inline ship Compound Step — this is a deeper, optional sweep across the whole run."
+---
+
+# Retrospective
+
+## Quick Start
+
+> 1. Run **after** the ship stage closes (PR merged or release tagged), while the run is still loaded in memory.
+> 2. Walk the four lenses below; harvest concrete entries for \`.cclaw/knowledge.md\`.
+> 3. Stop when you have at least one durable entry **or** an explicit "no new lesson this run".
+
+## HARD-GATE
+
+Do **not** run retrospective before ship gates pass. The goal is to learn from
+a *closed* loop, not to evaluate work-in-progress.
+Do **not** invent generic platitudes ("write more tests"). Every entry must cite
+a concrete moment in *this* run (file, decision, blocker, surprise).
+
+## When to use
+
+- Right after \`/cc-next\` reports the ship stage complete.
+- Before starting the next \`/cc <idea>\` — fresh context, lessons captured.
+- After an incident or surprise during ship (rollback, hotfix, regression).
+
+## When NOT to use
+
+- Mid-flow (use the per-stage Operational Self-Improvement block instead).
+- For trivial changes (typo fix, config bump) — the Compound Step in the
+  ship template is enough.
+
+## Four Lenses
+
+For each lens, write either a knowledge entry **or** the explicit string
+"no new lesson". Skipping a lens silently is forbidden.
+
+### 1. What surprised us?
+
+- A bug that hid in a place no one suspected → \`[lesson]\`.
+- A test that passed but missed a real failure mode → \`[lesson]\`.
+- A library/API behavior that contradicted our mental model → \`[rule]\`.
+
+### 2. What slowed us down?
+
+- Repeated context loss between waves → \`[compound]\` accelerator.
+- Re-derivation of a fact already in upstream artifacts → \`[pattern]\` "re-read X first".
+- Tooling friction (slow test loop, flaky CI) → \`[compound]\` follow-up.
+
+### 3. What worked unreasonably well?
+
+- A refactor that unlocked the next 3 tasks → \`[pattern]\`.
+- A skill/agent invocation that nailed it on first try → \`[pattern]\` (record the prompt shape).
+- Adopting an existing solution instead of building → \`[rule]\` reinforcement.
+
+### 4. What would we do differently next time?
+
+- Architectural decision that aged poorly within the same run → \`[lesson]\`.
+- Scope mode chosen incorrectly → \`[rule]\` heuristic update.
+- Order-of-operations mistake (e.g. spec drift before tdd) → \`[pattern]\` ordering.
+
+## Output protocol
+
+For every harvested insight, append one entry to \`.cclaw/knowledge.md\` using
+the standard format (see \`learnings\` skill). Prefer:
+
+- \`[compound]\` for process/speed accelerators.
+- \`[lesson]\` for "we learned this the hard way".
+- \`[pattern]\` for repeatable shapes that worked.
+- \`[rule]\` only for hard constraints that must always hold.
+
+Then write a one-paragraph **Run Summary** at the top of the next
+\`/cc <idea>\` brainstorm context citing the lessons in scope.
+
+## Anti-patterns
+
+- Retrospective as performance review — frame is *system improvement*, not blame.
+- Harvesting only positive ("what worked") and skipping uncomfortable lessons.
+- Writing entries so generic they could apply to any project.
+- Letting the retrospective drift into a re-design of the shipped feature.
+`;
+}
+
 export const UTILITY_SKILL_FOLDERS = [
   "security",
   "debugging",
@@ -1096,7 +1180,8 @@ export const UTILITY_SKILL_FOLDERS = [
   "landscape-check",
   "adversarial-review",
   "security-audit",
-  "knowledge-curation"
+  "knowledge-curation",
+  "retrospective"
 ] as const;
 
 export const UTILITY_SKILL_MAP: Record<string, () => string> = {
@@ -1112,5 +1197,6 @@ export const UTILITY_SKILL_MAP: Record<string, () => string> = {
   "landscape-check": landscapeCheckSkill,
   "adversarial-review": adversarialReviewSkill,
   "security-audit": securityAuditSkill,
-  "knowledge-curation": knowledgeCurationSkill
+  "knowledge-curation": knowledgeCurationSkill,
+  retrospective: retrospectiveSkill
 };
