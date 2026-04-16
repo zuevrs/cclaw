@@ -1157,6 +1157,10 @@ const TDD: StageSchemaInput = {
     { section: "REFACTOR Notes", required: true, validationRule: "What changed, why, behavior preservation confirmed." },
     { section: "Traceability", required: true, validationRule: "Plan task ID and spec criterion linked." }
   ],
+  namedAntiPattern: {
+    title: "Code Before Failing Test",
+    description: "Production code written before a failing test is not TDD — it is guessing validated after the fact. Tests written after implementation confirm assumptions, not behavior. If you wrote code first, delete it and start with RED. Delete means delete — not 'keep as reference.' The failing test IS the specification."
+  },
   waveExecutionAllowed: true
 };
 
