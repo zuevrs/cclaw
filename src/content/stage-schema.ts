@@ -1385,7 +1385,7 @@ const REVIEW: StageSchemaInput = {
   completionStatus: ["APPROVED", "APPROVED_WITH_CONCERNS", "BLOCKED"],
   crossStageTrace: {
     readsFrom: [".cclaw/artifacts/06-tdd.md", ".cclaw/artifacts/04-spec.md", ".cclaw/artifacts/05-plan.md"],
-    writesTo: [".cclaw/artifacts/07-review.md"],
+    writesTo: [".cclaw/artifacts/07-review.md", ".cclaw/artifacts/07-review-army.json"],
     traceabilityRule: "Review verdict must reference specific spec criteria and TDD evidence. Downstream ship stage must reference review verdict."
   },
   artifactValidation: [
