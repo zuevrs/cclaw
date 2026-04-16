@@ -285,7 +285,11 @@ export async function doctorChecks(projectRoot: string, options: DoctorOptions =
       const skillContent = await fs.readFile(skillPath, "utf8");
       const lineCount = skillContent.split("\n").length;
       const MIN_SKILL_LINES = 110;
-      const MAX_SKILL_LINES = 650;
+      // Soft max tightened in wave 3 from 650 → 500 after externalising the
+      // TDD wave-execution walkthrough and collapsing the duplicate "what
+      // goes wrong" lists. Stage skills beyond 500 lines drift into unread
+      // bloat; long-form content belongs under `.cclaw/references/` instead.
+      const MAX_SKILL_LINES = 500;
       checks.push({
         name: `skill:${stage}:min_lines`,
         ok: lineCount >= MIN_SKILL_LINES,
@@ -299,12 +303,13 @@ export async function doctorChecks(projectRoot: string, options: DoctorOptions =
 
       const canonicalSections: Array<{ id: string; pattern: RegExp; label: string }> = [
         { id: "frontmatter", pattern: /^---\nname: [\w-]+\ndescription: /m, label: "YAML frontmatter (name + description)" },
+        { id: "iron_law", pattern: /^\*\*IRON LAW — [A-Z]+:\*\* .+$/m, label: "Iron Law punchcard (<EXTREMELY-IMPORTANT> wrapper)" },
         { id: "hard_gate", pattern: /^## HARD-GATE$/m, label: "## HARD-GATE" },
         { id: "checklist", pattern: /^## Checklist$/m, label: "## Checklist" },
         { id: "completion_protocol", pattern: /^## Stage Completion Protocol$/m, label: "## Stage Completion Protocol" },
         { id: "handoff_menu", pattern: /^### Handoff Menu$/m, label: "### Handoff Menu" },
         { id: "good_vs_bad", pattern: /Good vs Bad/i, label: "Good vs Bad examples" },
-        { id: "anti_patterns", pattern: /^## Anti-Patterns$/m, label: "## Anti-Patterns" }
+        { id: "anti_patterns", pattern: /^## Anti-Patterns & Red Flags$/m, label: "## Anti-Patterns & Red Flags" }
       ];
       const missingSections = canonicalSections
         .filter((section) => !section.pattern.test(skillContent))

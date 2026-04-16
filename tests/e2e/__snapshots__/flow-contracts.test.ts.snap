@@ -8,6 +8,14 @@ description: "Two-layer review stage: spec compliance first, then code quality a
 
 # two-layer-review
 
+<EXTREMELY-IMPORTANT>
+
+**IRON LAW — REVIEW:** NO SHIP VERDICT UNTIL BOTH REVIEW LAYERS COMPLETE AND EVERY CRITICAL IS RESOLVED OR EXPLICITLY ACCEPTED.
+
+If you are about to violate the Iron Law, STOP. No amount of urgency, partial progress, or clever reinterpretation overrides it. Escalate via the Decision Protocol or abandon the stage.
+
+</EXTREMELY-IMPORTANT>
+
 ## Quick Start (minimum compliance)
 
 > **Even if you read nothing else, do these 3 things:**
@@ -103,7 +111,9 @@ You MUST complete these steps in order:
 
 ## Good vs Bad (at-a-glance)
 
-Contrasting samples to calibrate the quality bar for this stage. Read before writing the artifact — mirror the **Good** shape, avoid the **Bad** shape.
+Contrasting samples to calibrate the quality bar for this stage. Read before writing the artifact — mirror the **Good** shape, avoid the **Bad** shape. Each block targets a different axis of the stage so you can spot-check more than one dimension of your draft.
+
+### 1. Critical finding
 
 **Good**
 
@@ -114,6 +124,18 @@ Contrasting samples to calibrate the quality bar for this stage. Read before wri
 > Looks good overall. A few small things could be polished, maybe refactor the merge logic. LGTM.
 
 **Why it matters:** "LGTM" is not a review — it is a signature on whatever the author shipped. Every finding needs a severity, a falsifiable description, evidence, and a status.
+
+### 2. Security review row
+
+**Good**
+
+> R-4 High (sec): SSE endpoint accepts any user_id in the query string; a logged-in attacker can subscribe to another user's stream. Evidence: \`curl\` repro in \`docs/notes/sec-r4.md\`. Fix: require auth cookie, filter events by session.user.id server-side. Status: fix in T-11; verified in \`notifications-auth.test.ts\`.
+
+**Bad**
+
+> Might want to double-check auth on the SSE endpoint.
+
+**Why it matters:** Security findings without a reproduction step and a tied fix-task are suggestions, not reviews. Attach the curl (or equivalent), the fix task ID, and the verification test.
 
 
 ## Examples
@@ -326,7 +348,13 @@ When fixing a bug:
 | A quick skim is sufficient for small diffs. | Small diffs hide high-impact changes. A 3-line auth bypass is still critical. Every diff gets layered review regardless of size. |
 | The author already reviewed their own code. | Self-review misses blind spots by definition. Independent review exists precisely because authors cannot objectively evaluate their own assumptions. |
 
-## Anti-Patterns
+## Anti-Patterns & Red Flags
+
+> One consolidated list of observable failure modes for this stage. Mix of
+> behavioural anti-patterns (things you might do wrong) and red-flag
+> signals (things you might notice going wrong). Dedup-merged so no item
+> appears twice.
+
 - Single generic review without layered structure
 - No severity classification
 - Shipping with open criticals
@@ -335,8 +363,6 @@ When fixing a bug:
 - layer 1 failed
 - critical findings unresolved
 - missing regression evidence
-
-## Red Flags
 - No separate Layer 1/Layer 2 outcomes
 - No structured review-army reconciliation artifact
 - No critical bucket
@@ -441,6 +467,14 @@ description: "Release handoff stage with preflight checks, rollback readiness, a
 
 # shipping-and-handoff
 
+<EXTREMELY-IMPORTANT>
+
+**IRON LAW — SHIP:** NO MERGE WITHOUT GREEN CI, A WRITTEN ROLLBACK, AND EXACTLY ONE SELECTED FINALIZATION MODE.
+
+If you are about to violate the Iron Law, STOP. No amount of urgency, partial progress, or clever reinterpretation overrides it. Escalate via the Decision Protocol or abandon the stage.
+
+</EXTREMELY-IMPORTANT>
+
 ## Quick Start (minimum compliance)
 
 > **Even if you read nothing else, do these 3 things:**
@@ -530,7 +564,9 @@ You MUST complete these steps in order:
 
 ## Good vs Bad (at-a-glance)
 
-Contrasting samples to calibrate the quality bar for this stage. Read before writing the artifact — mirror the **Good** shape, avoid the **Bad** shape.
+Contrasting samples to calibrate the quality bar for this stage. Read before writing the artifact — mirror the **Good** shape, avoid the **Bad** shape. Each block targets a different axis of the stage so you can spot-check more than one dimension of your draft.
+
+### 1. Rollback contract
 
 **Good**
 
@@ -541,6 +577,18 @@ Contrasting samples to calibrate the quality bar for this stage. Read before wri
 > Rollback plan: revert the commit if anything goes wrong.
 
 **Why it matters:** "Revert if anything goes wrong" leaves the on-call engineer to invent the plan at 2 a.m. The rollback trigger is an operational contract: state the signal, the command, and the verification.
+
+### 2. Preflight check
+
+**Good**
+
+> Preflight: \`pnpm release:check\` ✅ (package metadata ok, changeset captured), \`pnpm test\` ✅ 195/195, \`pnpm build\` ✅, CI green on feat/notifications @ \`abc1234\`, rollback plan captured, migration reviewed. Finalization mode: Merge via squash.
+
+**Bad**
+
+> All good, shipping it.
+
+**Why it matters:** A preflight is a checklist that names each gate and the command that proved it. "All good" is a vibe — it cannot be audited after the fact when the deploy misbehaves.
 
 ## Living Examples by Domain
 
@@ -708,7 +756,13 @@ When fixing a bug:
 | A small merge does not need post-merge testing. | Small merges on diverged bases cause silent conflicts. Post-merge suite runs catch what branch-only CI misses. |
 | Release notes are internal documentation, not a ship gate. | Release notes are the rollback decision input. Without them, the team cannot assess what changed or why a rollback is needed. |
 
-## Anti-Patterns
+## Anti-Patterns & Red Flags
+
+> One consolidated list of observable failure modes for this stage. Mix of
+> behavioural anti-patterns (things you might do wrong) and red-flag
+> signals (things you might notice going wrong). Dedup-merged so no item
+> appears twice.
+
 - Shipping without rollback strategy
 - Implicit finalization decision
 - Bypassing preflight due to urgency
@@ -718,8 +772,6 @@ When fixing a bug:
 - critical review blockers remain
 - rollback plan missing
 - finalization mode not selected
-
-## Red Flags
 - No rollback trigger/steps
 - More than one finalization mode implied
 - No explicit preflight result
@@ -822,6 +874,14 @@ description: "Execution planning stage with strict confirmation gate before impl
 
 # planning-and-task-breakdown
 
+<EXTREMELY-IMPORTANT>
+
+**IRON LAW — PLAN:** EVERY TASK IS 2–5 MINUTES, FULLY SPELLED OUT, AND CARRIES A STABLE ID — NO PLACEHOLDERS, NO ‘ETC.’.
+
+If you are about to violate the Iron Law, STOP. No amount of urgency, partial progress, or clever reinterpretation overrides it. Escalate via the Decision Protocol or abandon the stage.
+
+</EXTREMELY-IMPORTANT>
+
 ## Quick Start (minimum compliance)
 
 > **Even if you read nothing else, do these 3 things:**
@@ -907,17 +967,31 @@ You MUST complete these steps in order:
 
 ## Good vs Bad (at-a-glance)
 
-Contrasting samples to calibrate the quality bar for this stage. Read before writing the artifact — mirror the **Good** shape, avoid the **Bad** shape.
+Contrasting samples to calibrate the quality bar for this stage. Read before writing the artifact — mirror the **Good** shape, avoid the **Bad** shape. Each block targets a different axis of the stage so you can spot-check more than one dimension of your draft.
+
+### 1. Single task row
 
 **Good**
 
-> T-2: Implement publisher + outbox write path. Acceptance: AC-1. Verification: \`pnpm vitest run tests/integration/publisher.test.ts\`. Depends on: T-1. Effort: M.
+> T-2: Implement publisher + outbox write path. Acceptance: AC-1. Verification: \`pnpm vitest run tests/integration/publisher.test.ts\`. Depends on: T-1. Effort: M (≈4 min).
 
 **Bad**
 
 > T-2: Build the backend. Verify: manual testing. Effort: a few days.
 
 **Why it matters:** A task without a single acceptance criterion and a reproducible verification command is a wish. If you cannot say how you will know it is done, you cannot ship it.
+
+### 2. Dependency graph entry
+
+**Good**
+
+> T-5 (consume SSE client) depends on T-3 (stream endpoint) and T-4 (auth cookie forwarding). Parallelizable with T-6 (read-state persistence). Blocks T-8 (end-to-end happy-path e2e).
+
+**Bad**
+
+> T-5 depends on other tasks.
+
+**Why it matters:** The value of a dependency graph is mechanical scheduling. "Depends on other tasks" is a shrug — list the IDs so the execution order is unambiguous.
 
 ## Living Examples by Domain
 
@@ -1062,7 +1136,13 @@ Evaluate:
 | Dependency map is overkill for this change. | Missing dependencies are a major source of blocked execution. |
 | We can assume approval and continue. | Explicit confirmation is the contract boundary between planning and execution. |
 
-## Anti-Patterns
+## Anti-Patterns & Red Flags
+
+> One consolidated list of observable failure modes for this stage. Mix of
+> behavioural anti-patterns (things you might do wrong) and red-flag
+> signals (things you might notice going wrong). Dedup-merged so no item
+> appears twice.
+
 - Horizontal decomposition without end-to-end slices
 - Tasks without verification steps
 - Starting execution before approval
@@ -1071,8 +1151,6 @@ Evaluate:
 - dependency uncertainty unresolved
 - wave boundaries are unclear
 - no explicit confirmation
-
-## Red Flags
 - No dependency graph
 - No WAIT_FOR_CONFIRM marker
 - No explicit dependency waves
@@ -1176,6 +1254,14 @@ description: "Full TDD cycle: RED (failing tests), GREEN (minimal implementation
 
 # test-driven-development
 
+<EXTREMELY-IMPORTANT>
+
+**IRON LAW — TDD:** NO PRODUCTION CODE WITHOUT A FAILING TEST FIRST — THE RED FAILURE IS THE SPEC.
+
+If you are about to violate the Iron Law, STOP. No amount of urgency, partial progress, or clever reinterpretation overrides it. Escalate via the Decision Protocol or abandon the stage.
+
+</EXTREMELY-IMPORTANT>
+
 ## Quick Start (minimum compliance)
 
 > **Even if you read nothing else, do these 3 things:**
@@ -1267,7 +1353,9 @@ You MUST complete these steps in order:
 
 ## Good vs Bad (at-a-glance)
 
-Contrasting samples to calibrate the quality bar for this stage. Read before writing the artifact — mirror the **Good** shape, avoid the **Bad** shape.
+Contrasting samples to calibrate the quality bar for this stage. Read before writing the artifact — mirror the **Good** shape, avoid the **Bad** shape. Each block targets a different axis of the stage so you can spot-check more than one dimension of your draft.
+
+### 1. RED → GREEN → REFACTOR slice
 
 **Good**
 
@@ -1278,6 +1366,30 @@ Contrasting samples to calibrate the quality bar for this stage. Read before wri
 > Wrote the publisher code. Tests pass now. Will add unit tests later when I have time.
 
 **Why it matters:** Code written before a failing test is guessing validated after the fact. The RED failure IS the specification — without it, the GREEN pass proves nothing about the intended behavior.
+
+### 2. Bug-fix reproduction test
+
+**Good**
+
+> Bug B-17: dedup fails when two events arrive in the same ms. Prove-It RED: added \`tests/unit/dedupe-feed.test.ts > dedupes when timestamps collide\`; run → \`expected 1 item, received 2\`. Fix applied; same test passes; full suite still 47/47.
+
+**Bad**
+
+> Fixed the duplicate rendering issue.
+
+**Why it matters:** A bug without a reproducing test is a bug that comes back. Ship the RED test as part of the fix — it is the contract that prevents regression.
+
+### 3. Refactor-only slice (state-based)
+
+**Good**
+
+> Refactor: moved heartbeat logic into \`useHeartbeat()\` hook. No behavior change intended. Evidence: no new tests; existing state-based tests \`feed-state.test.ts\` (42 assertions) still pass; coverage unchanged at 94%.
+
+**Bad**
+
+> Refactored the component. Added some interaction mocks to check the new hook is called.
+
+**Why it matters:** A refactor should assert on state, not on call shape. If you had to rewrite your mocks, it was not a refactor — it was a redesign dressed as one.
 
 ## Living Examples by Domain
 
@@ -1339,50 +1451,19 @@ These are thinking instincts, not a checklist. Let them shape your perspective t
 
 After plan approval (**WAIT_FOR_CONFIRM** / \`plan_wait_for_confirm\` satisfied), process **all tasks in the current dependency wave** sequentially: **RED → GREEN → REFACTOR** per task, recording evidence per slice. **Stop** only on **BLOCKED**, a test failure that **requires user input**, or **wave completion** (every task in the wave has the required RED / GREEN / REFACTOR evidence per the plan artifact).
 
-### Walkthrough — Wave 1 with 3 tasks
+**Wave gate check (before marking a wave complete):**
 
-The example below is **illustrative only** — do not copy the command names blindly, match them to your stack.
+1. Run the **full suite** one final time → PASS, captured as wave-exit evidence.
+2. Verify the TDD artifact contains RED, GREEN, and REFACTOR evidence for every task in the wave. No partial waves.
+3. Only then declare the wave complete. The next wave cannot start until this step.
 
-Assume Wave 1 from the plan artifact contains three tasks:
+**When to stop mid-wave (do NOT push through):**
 
-| Task ID | Description | AC | Verification |
-|---|---|---|---|
-| T-1 \`[~3m]\` | Add \`User.emailNormalized\` column | AC-1 | \`npm test -- users/schema\` |
-| T-2 \`[~4m]\` | Normalize on write in \`UserRepo.save\` | AC-1 | \`npm test -- users/repo\` |
-| T-3 \`[~3m]\` | Reject duplicates in \`UserService.signup\` | AC-2 | \`npm test -- users/service\` |
+- A RED test fails for an unpredicted reason (e.g. an unrelated flaky test) → **pause**, diagnose, log an operational-self-improvement entry.
+- A GREEN step would require touching code outside the task's acceptance criterion → **pause**, the task is scoped wrong.
+- The same RED failure reappears after a GREEN change → **escalate** per the 3-attempts rule.
 
-**Execution transcript** (one slice at a time, evidence captured per step):
-
-**T-1 — RED**
-
-> Run: \`npm test -- users/schema\` → **FAIL** (missing column: \`emailNormalized\`). Captured the failure stack as RED evidence. No production code touched yet.
-
-**T-1 — GREEN**
-
-> Added the column in the schema module. Re-ran \`npm test -- users/schema\` → **PASS**. Ran the full suite \`npm test\` → **PASS**. Captured both outputs as GREEN evidence.
-
-**T-1 — REFACTOR**
-
-> Extracted the column definition into a shared \`NormalizedEmail\` type used by T-2/T-3. Re-ran \`npm test\` → **PASS**. Captured REFACTOR note: "Extracted NormalizedEmail type to keep T-2/T-3 DRY; zero behavior change, all tests still green."
-
-**T-2 — RED / GREEN / REFACTOR**: same shape — write the repo test that expects normalised writes, watch it fail (RED), implement normalisation inside \`UserRepo.save\` only (GREEN), then refactor the normaliser out of the repo into a helper shared with T-3 (REFACTOR).
-
-**T-3 — RED / GREEN / REFACTOR**: write the service-level duplicate test that expects a rejection, watch it fail (RED), add the duplicate check in \`UserService.signup\` (GREEN), refactor the error message into a named constant (REFACTOR).
-
-**Wave gate check**
-
-After T-3 REFACTOR, before declaring Wave 1 done:
-
-1. Run the **full suite** (\`npm test\`) one final time → **PASS** captured as wave-exit evidence.
-2. Verify the TDD artifact contains RED, GREEN, and REFACTOR evidence for T-1, T-2, **and** T-3. No partial waves.
-3. Only now mark Wave 1 complete. Wave 2 cannot start until this step.
-
-**When to stop mid-wave (do NOT push through)**
-
-- A RED test fails for a reason you did not predict (e.g. an unrelated flaky test) → **pause**, diagnose, log an operational-self-improvement entry, and decide with the user before proceeding.
-- A GREEN step would require touching code outside the task's acceptance criterion → **pause**, the task is scoped wrong; adjust the plan or open a follow-up task.
-- The same RED failure reappears after a GREEN change → **escalate** per the 3-attempts rule; do not keep patching.
-
+> **Full 3-task walkthrough transcript** (RED/GREEN/REFACTOR per slice, with wave gate check): see \`.cclaw/references/stages/tdd-wave-walkthrough.md\`.
 
 ## Required Gates
 - \`tdd_red_test_written\` — Failing tests exist before implementation changes.
@@ -1537,7 +1618,13 @@ When fixing a bug:
 | Traceability is implied by commit diff. | Explicit mapping avoids ambiguity in review and rollback. |
 | Tests written after implementation achieve the same goals. | Post-hoc tests confirm assumptions, not behavior. They test what you built, not what you should have built. TDD forces you to think about behavior before you have an implementation to be anchored by. |
 
-## Anti-Patterns
+## Anti-Patterns & Red Flags
+
+> One consolidated list of observable failure modes for this stage. Mix of
+> behavioural anti-patterns (things you might do wrong) and red-flag
+> signals (things you might notice going wrong). Dedup-merged so no item
+> appears twice.
+
 - Writing code before failing test
 - Asserting implementation details instead of behavior
 - Big-bang implementation across multiple slices
@@ -1549,8 +1636,6 @@ When fixing a bug:
 - full suite not green
 - behavior changed during refactor
 - no evidence recorded
-
-## Red Flags
 - No failing test output (RED missing)
 - Implementation edits appear before RED evidence
 - No full-suite GREEN evidence
@@ -1657,6 +1742,14 @@ description: "Design-first stage. Explore context, understand intent through col
 
 # brainstorming
 
+<EXTREMELY-IMPORTANT>
+
+**IRON LAW — BRAINSTORM:** NO ARTIFACT IS COMPLETE WITHOUT AN EXPLICITLY APPROVED DIRECTION — SILENCE IS NOT APPROVAL.
+
+If you are about to violate the Iron Law, STOP. No amount of urgency, partial progress, or clever reinterpretation overrides it. Escalate via the Decision Protocol or abandon the stage.
+
+</EXTREMELY-IMPORTANT>
+
 ## Quick Start (minimum compliance)
 
 > **Even if you read nothing else, do these 3 things:**
@@ -1706,6 +1799,8 @@ Machine-only work should be delegated to specialist agents automatically accordi
 | Agent | Mode | When | Purpose | User Gate |
 |---|---|---|---|---|
 | planner | proactive | When request is ambiguous, multi-surface, or spans multiple modules. | Map scope and alternatives before direction lock. | not required |
+| repo-research-analyst | proactive | When the user's idea touches an unfamiliar module, stack, or integration surface. | Parallel fan-out: summarise existing code paths, tech stack, and similar features already present — feeds the alternatives list. | not required |
+| learnings-researcher | proactive | On every non-trivial brainstorm where \`.cclaw/knowledge.jsonl\` has entries. | Surface prior learnings and anti-patterns that apply to the current task before direction lock. | not required |
 
 **Gate rule:** user interaction is required only for approval/override decisions. Do not ask the user to manually trigger machine-only specialist checks.
 
@@ -1741,7 +1836,9 @@ You MUST complete these steps in order:
 
 ## Good vs Bad (at-a-glance)
 
-Contrasting samples to calibrate the quality bar for this stage. Read before writing the artifact — mirror the **Good** shape, avoid the **Bad** shape.
+Contrasting samples to calibrate the quality bar for this stage. Read before writing the artifact — mirror the **Good** shape, avoid the **Bad** shape. Each block targets a different axis of the stage so you can spot-check more than one dimension of your draft.
+
+### 1. Problem / success statement
 
 **Good**
 
@@ -1752,6 +1849,30 @@ Contrasting samples to calibrate the quality bar for this stage. Read before wri
 > Problem: releases are broken. Success: make them better. Constraints: be careful.
 
 **Why it matters:** "Make it better" is not a success criterion — an agent cannot know when it is done. State the observable condition that proves success.
+
+### 2. Alternative direction (one of 2–3)
+
+**Good**
+
+> Option B: Pre-publish verifier script invoked from \`release.yml\` and a \`pnpm release:check\` target. Pros: one enforcement surface; fails fast locally. Cons: adds a script to maintain; must stay in sync with \`package.json\`. Rejected alternative: relying on npm lifecycle hooks only — they run too late to block publish.
+
+**Bad**
+
+> We could also use a script, or hooks, or something in CI. We'll pick whichever is easier later.
+
+**Why it matters:** Alternatives are only useful if they are concrete and comparable. Name each one, call out pros/cons, and say what was rejected — otherwise "later" becomes "never" and the choice is made by accident.
+
+### 3. Clarifying question
+
+**Good**
+
+> Before I lock direction: should a failed release:check block the CI job (hard failure) or only warn and continue? The former is safer but costs a revert cycle when the check itself is wrong; the latter preserves velocity but can let bad metadata through. Recommend A (block). Pick: A) Block  B) Warn-only  C) Block in CI, warn locally.
+
+**Bad**
+
+> Do you want it to fail or warn? Let me know.
+
+**Why it matters:** A good question gives the user context, a recommendation, and lettered options they can answer with one keystroke. "Let me know" shifts the framing cost back to the user.
 
 
 ## Examples
@@ -1852,7 +1973,13 @@ These are thinking instincts, not a checklist. Let them shape your perspective t
 | Any question is useful context. | Only questions whose answers change what we build improve the design. |
 | Two options that differ only in tooling count as distinct approaches. | Distinct means different architecture, not different libraries for the same approach. |
 
-## Anti-Patterns
+## Anti-Patterns & Red Flags
+
+> One consolidated list of observable failure modes for this stage. Mix of
+> behavioural anti-patterns (things you might do wrong) and red-flag
+> signals (things you might notice going wrong). Dedup-merged so no item
+> appears twice.
+
 - Asking questions without exploring existing project context first
 - Asking bundled or purely informational questions that don't change decisions
 - Proposing cosmetic option variants instead of architecturally distinct approaches
@@ -1861,8 +1988,6 @@ These are thinking instincts, not a checklist. Let them shape your perspective t
 - no explicit approval
 - critical ambiguity unresolved
 - project context not explored
-
-## Red Flags
 - No project context exploration before questions
 - Questions that only gather preferences without design impact
 - Options that are variants of one approach, not distinct alternatives

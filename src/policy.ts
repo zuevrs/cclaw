@@ -67,7 +67,7 @@ export async function policyChecks(projectRoot: string, options: PolicyOptions =
       "## Verification",
       "## Interaction Protocol",
       "## Common Rationalizations",
-      "## Red Flags",
+      "## Anti-Patterns & Red Flags",
       "## HARD-GATE",
       "## Checklist",
       "## Context Loading",

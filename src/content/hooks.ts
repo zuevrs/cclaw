@@ -316,14 +316,60 @@ if [ -f "$META_SKILL" ]; then
   META_CONTENT=$(cat "$META_SKILL" 2>/dev/null || echo "")
 fi
 
-# --- Load knowledge snapshot (canonical JSONL tail) ---
+# --- Load knowledge snapshot (canonical JSONL tail + total count) ---
 KNOWLEDGE_SUMMARY=""
+LEARNINGS_COUNT=0
 if [ -f "$KNOWLEDGE_FILE" ] && [ -s "$KNOWLEDGE_FILE" ]; then
   KNOWLEDGE_SUMMARY=$(tail -n 30 "$KNOWLEDGE_FILE" 2>/dev/null || echo "")
+  LEARNINGS_COUNT=$(grep -c '^{' "$KNOWLEDGE_FILE" 2>/dev/null || echo "0")
+fi
+
+# --- Installed cclaw-cli version vs. project's recorded version (one-block
+# upgrade-check, gstack-style). Purely informational — we never block. ---
+VERSION_NOTE=""
+INSTALLED_VERSION=""
+PROJECT_VERSION=""
+# Version lookup is skipped by default — spawning the cli on every session
+# start adds ~10s on Node-based installs. Opt-in via CCLAW_HOOK_VERSION_CHECK=1.
+if [ "\${CCLAW_HOOK_VERSION_CHECK:-0}" = "1" ] && command -v cclaw >/dev/null 2>&1; then
+  INSTALLED_VERSION=$(cclaw --version 2>/dev/null | head -1 | awk '{print $NF}' || echo "")
+fi
+CONFIG_FILE="$ROOT/${RUNTIME_ROOT}/config.json"
+if [ -f "$CONFIG_FILE" ]; then
+  if command -v jq >/dev/null 2>&1; then
+    PROJECT_VERSION=$(jq -r '.version // ""' "$CONFIG_FILE" 2>/dev/null || echo "")
+  else
+    PROJECT_VERSION=$(grep -o '"version"[[:space:]]*:[[:space:]]*"[^"]*"' "$CONFIG_FILE" 2>/dev/null | head -1 | sed 's/.*"\\([^"]*\\)"$/\\1/' || echo "")
+  fi
+fi
+if [ -n "$INSTALLED_VERSION" ] && [ -n "$PROJECT_VERSION" ] && [ "$INSTALLED_VERSION" != "$PROJECT_VERSION" ]; then
+  VERSION_NOTE="cclaw-cli $INSTALLED_VERSION installed; project recorded $PROJECT_VERSION — run 'cclaw sync' to realign."
+fi
+
+# --- Routing-check: AGENTS.md / CLAUDE.md must contain the cclaw block. ---
+ROUTING_NOTE=""
+ROUTING_MISSING=""
+for routing_file in "$ROOT/AGENTS.md" "$ROOT/CLAUDE.md"; do
+  if [ -f "$routing_file" ]; then
+    if ! grep -q "cclaw-start" "$routing_file" 2>/dev/null; then
+      ROUTING_MISSING="$ROUTING_MISSING $(basename "$routing_file")"
+    fi
+  fi
+done
+if [ -n "$ROUTING_MISSING" ]; then
+  ROUTING_NOTE="Routing block missing from:\${ROUTING_MISSING}. Run 'cclaw sync' to re-inject."
 fi
 
 # --- Build context message ---
-CTX="cclaw loaded. Flow: stage=$STAGE ($COMPLETED/8 completed, run=$ACTIVE_RUN). Active artifacts: ${RUNTIME_ROOT}/artifacts/"
+CTX="cclaw loaded. Flow: stage=$STAGE ($COMPLETED/8 completed, run=$ACTIVE_RUN). Active artifacts: ${RUNTIME_ROOT}/artifacts/. Learnings: $LEARNINGS_COUNT entries."
+if [ -n "$VERSION_NOTE" ]; then
+  CTX="$CTX
+$VERSION_NOTE"
+fi
+if [ -n "$ROUTING_NOTE" ]; then
+  CTX="$CTX
+$ROUTING_NOTE"
+fi
 if [ -n "$CONTEXT_MODE_NOTE" ]; then
   CTX="$CTX
 $CONTEXT_MODE_NOTE"
