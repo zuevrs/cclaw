@@ -1,12 +1,12 @@
 import { execFile } from "node:child_process";
 import fs from "node:fs/promises";
-import os from "node:os";
 import path from "node:path";
 import { promisify } from "node:util";
 import { describe, expect, it } from "vitest";
 import { readConfig, writeConfig } from "../../src/config.js";
 import { doctorChecks, doctorSucceeded } from "../../src/doctor.js";
 import { initCclaw, syncCclaw, uninstallCclaw } from "../../src/install.js";
+import { createTempProject } from "../helpers/index.js";
 
 const execFileAsync = promisify(execFile);
 
@@ -18,7 +18,7 @@ function countOccurrences(value: string, needle: string): number {
 
 describe("install lifecycle", () => {
   it("doctor passes for claude-only harness installs", async () => {
-    const root = await fs.mkdtemp(path.join(os.tmpdir(), "cclaw-claude-only-"));
+    const root = await createTempProject("claude-only");
     await initCclaw({ projectRoot: root, harnesses: ["claude"] });
 
     const checks = await doctorChecks(root);
@@ -29,7 +29,7 @@ describe("install lifecycle", () => {
   });
 
   it("initializes runtime and passes doctor checks", async () => {
-    const root = await fs.mkdtemp(path.join(os.tmpdir(), "cclaw-init-"));
+    const root = await createTempProject("init");
     await initCclaw({ projectRoot: root });
 
     const checks = await doctorChecks(root);
@@ -67,7 +67,7 @@ describe("install lifecycle", () => {
   });
 
   it("sync regenerates shim files", async () => {
-    const root = await fs.mkdtemp(path.join(os.tmpdir(), "cclaw-sync-"));
+    const root = await createTempProject("sync");
     await initCclaw({ projectRoot: root });
 
     const shim = path.join(root, ".claude/commands/cc.md");
@@ -87,7 +87,7 @@ describe("install lifecycle", () => {
   });
 
   it("sync removes stale generated shims, persists config, and keeps user-owned assets", async () => {
-    const root = await fs.mkdtemp(path.join(os.tmpdir(), "cclaw-cleanup-"));
+    const root = await createTempProject("cleanup");
     await initCclaw({ projectRoot: root });
 
     const staleShim = path.join(root, ".claude/commands/cc-obsolete.md");
@@ -120,7 +120,7 @@ describe("install lifecycle", () => {
   });
 
   it("sync installs managed git hooks when opt-in is enabled", async () => {
-    const root = await fs.mkdtemp(path.join(os.tmpdir(), "cclaw-git-hooks-"));
+    const root = await createTempProject("git-hooks");
     await execFileAsync("git", ["init"], { cwd: root });
     await initCclaw({ projectRoot: root });
 
@@ -147,7 +147,7 @@ describe("install lifecycle", () => {
   });
 
   it("sync removes managed artifacts for harnesses removed from config", async () => {
-    const root = await fs.mkdtemp(path.join(os.tmpdir(), "cclaw-harness-remove-"));
+    const root = await createTempProject("harness-remove");
     await initCclaw({ projectRoot: root });
 
     const current = await readConfig(root);
@@ -179,7 +179,7 @@ describe("install lifecycle", () => {
   });
 
   it("sync merges generated hooks with user hooks without duplication", async () => {
-    const root = await fs.mkdtemp(path.join(os.tmpdir(), "cclaw-hooks-merge-"));
+    const root = await createTempProject("hooks-merge");
     await initCclaw({ projectRoot: root });
 
     const claudeHooksPath = path.join(root, ".claude/hooks/hooks.json");
@@ -226,7 +226,7 @@ describe("install lifecycle", () => {
   });
 
   it("sync recovers relaxed JSON hooks and preserves user commands", async () => {
-    const root = await fs.mkdtemp(path.join(os.tmpdir(), "cclaw-hooks-recover-"));
+    const root = await createTempProject("hooks-recover");
     await initCclaw({ projectRoot: root });
 
     const claudeHooksPath = path.join(root, ".claude/hooks/hooks.json");
@@ -253,7 +253,7 @@ describe("install lifecycle", () => {
   });
 
   it("sync backs up unrecoverable hook json before rewriting", async () => {
-    const root = await fs.mkdtemp(path.join(os.tmpdir(), "cclaw-hooks-backup-"));
+    const root = await createTempProject("hooks-backup");
     await initCclaw({ projectRoot: root });
 
     const cursorHooksPath = path.join(root, ".cursor/hooks.json");
@@ -278,7 +278,7 @@ describe("install lifecycle", () => {
   });
 
   it("uninstall removes runtime and generated shim files", async () => {
-    const root = await fs.mkdtemp(path.join(os.tmpdir(), "cclaw-uninstall-"));
+    const root = await createTempProject("uninstall");
     await initCclaw({ projectRoot: root });
 
     await uninstallCclaw(root);
@@ -290,7 +290,7 @@ describe("install lifecycle", () => {
   });
 
   it("uninstall removes empty harness directories created by cclaw", async () => {
-    const root = await fs.mkdtemp(path.join(os.tmpdir(), "cclaw-uninstall-dirs-"));
+    const root = await createTempProject("uninstall-dirs");
     await initCclaw({ projectRoot: root });
 
     await expect(fs.stat(path.join(root, ".claude"))).resolves.toBeDefined();
@@ -307,7 +307,7 @@ describe("install lifecycle", () => {
   });
 
   it("uninstall preserves harness directories that contain user files", async () => {
-    const root = await fs.mkdtemp(path.join(os.tmpdir(), "cclaw-uninstall-preserve-"));
+    const root = await createTempProject("uninstall-preserve");
     await initCclaw({ projectRoot: root });
 
     await fs.writeFile(path.join(root, ".claude/commands/my-custom.md"), "# user\n", "utf8");
@@ -322,7 +322,7 @@ describe("install lifecycle", () => {
   });
 
   it("uninstall strips only cclaw hooks and preserves user hooks", async () => {
-    const root = await fs.mkdtemp(path.join(os.tmpdir(), "cclaw-uninstall-hooks-"));
+    const root = await createTempProject("uninstall-hooks");
     await initCclaw({ projectRoot: root });
 
     const claudeHooksPath = path.join(root, ".claude/hooks/hooks.json");

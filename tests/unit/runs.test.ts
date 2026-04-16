@@ -1,5 +1,4 @@
 import fs from "node:fs/promises";
-import os from "node:os";
 import path from "node:path";
 import { describe, expect, it } from "vitest";
 import { createInitialFlowState } from "../../src/flow-state.js";
@@ -11,10 +10,11 @@ import {
   readFlowState,
   writeFlowState
 } from "../../src/runs.js";
+import { createTempProject } from "../helpers/index.js";
 
 describe("runs system", () => {
   it("bootstraps active artifacts root and flow state", async () => {
-    const root = await fs.mkdtemp(path.join(os.tmpdir(), "cclaw-runs-bootstrap-"));
+    const root = await createTempProject("runs-bootstrap");
     const state = await ensureRunSystem(root);
 
     expect(state.activeRunId).toBe("active");
@@ -24,7 +24,7 @@ describe("runs system", () => {
   });
 
   it("archives active artifacts into dated run folder and resets flow", async () => {
-    const root = await fs.mkdtemp(path.join(os.tmpdir(), "cclaw-runs-archive-"));
+    const root = await createTempProject("runs-archive");
     await ensureRunSystem(root);
     await fs.writeFile(path.join(root, ".cclaw/artifacts/01-brainstorm.md"), "# draft\n", "utf8");
     await writeFlowState(root, {
@@ -49,7 +49,7 @@ describe("runs system", () => {
   });
 
   it("creates unique archive ids for same-day feature names", async () => {
-    const root = await fs.mkdtemp(path.join(os.tmpdir(), "cclaw-runs-archive-unique-"));
+    const root = await createTempProject("runs-archive-unique");
     await ensureRunSystem(root);
     await fs.writeFile(path.join(root, ".cclaw/artifacts/00-idea.md"), "# Payments\n", "utf8");
     const first = await archiveRun(root, "Payments");
@@ -62,7 +62,7 @@ describe("runs system", () => {
   });
 
   it("lists archived run folders", async () => {
-    const root = await fs.mkdtemp(path.join(os.tmpdir(), "cclaw-runs-list-"));
+    const root = await createTempProject("runs-list");
     await ensureRunSystem(root);
     await fs.writeFile(path.join(root, ".cclaw/artifacts/00-idea.md"), "# Alpha\n", "utf8");
     const first = await archiveRun(root, "Alpha");
@@ -76,7 +76,7 @@ describe("runs system", () => {
   });
 
   it("sanitizes malformed flow state values", async () => {
-    const root = await fs.mkdtemp(path.join(os.tmpdir(), "cclaw-runs-sanitize-"));
+    const root = await createTempProject("runs-sanitize");
     await ensureRunSystem(root);
     const flowPath = path.join(root, ".cclaw/state/flow-state.json");
 
@@ -109,7 +109,7 @@ describe("runs system", () => {
   });
 
   it("quarantines corrupt flow-state.json and throws CorruptFlowStateError", async () => {
-    const root = await fs.mkdtemp(path.join(os.tmpdir(), "cclaw-runs-corrupt-"));
+    const root = await createTempProject("runs-corrupt");
     await ensureRunSystem(root);
     const flowPath = path.join(root, ".cclaw/state/flow-state.json");
     await fs.writeFile(flowPath, "this is not { json", "utf8");
@@ -128,7 +128,7 @@ describe("runs system", () => {
   });
 
   it("archive snapshots state/ (flow-state, delegation-log) and writes a manifest", async () => {
-    const root = await fs.mkdtemp(path.join(os.tmpdir(), "cclaw-runs-archive-state-"));
+    const root = await createTempProject("runs-archive-state");
     await ensureRunSystem(root);
     await fs.writeFile(path.join(root, ".cclaw/artifacts/00-idea.md"), "# Search Revamp\n", "utf8");
     await writeFlowState(root, {
@@ -196,7 +196,7 @@ describe("runs system", () => {
   });
 
   it("quarantines flow-state.json when top-level value is not an object", async () => {
-    const root = await fs.mkdtemp(path.join(os.tmpdir(), "cclaw-runs-corrupt-array-"));
+    const root = await createTempProject("runs-corrupt-array");
     await ensureRunSystem(root);
     const flowPath = path.join(root, ".cclaw/state/flow-state.json");
     await fs.writeFile(flowPath, "[1,2,3]", "utf8");

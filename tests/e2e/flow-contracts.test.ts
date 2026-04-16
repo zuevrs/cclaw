@@ -1,14 +1,14 @@
 import fs from "node:fs/promises";
-import os from "node:os";
 import path from "node:path";
 import { describe, expect, it } from "vitest";
 import { COMMAND_FILE_ORDER } from "../../src/constants.js";
 import { stageSkillFolder } from "../../src/content/skills.js";
 import { initCclaw } from "../../src/install.js";
+import { createTempProject } from "../helpers/index.js";
 
 describe("flow command contracts", () => {
   it("creates thin command contracts with required sections", async () => {
-    const root = await fs.mkdtemp(path.join(os.tmpdir(), "cclaw-flow-"));
+    const root = await createTempProject("flow");
     await initCclaw({ projectRoot: root });
 
     for (const stage of COMMAND_FILE_ORDER) {
@@ -25,7 +25,7 @@ describe("flow command contracts", () => {
   });
 
   it("enforces TDD and two-layer review semantics in skills", async () => {
-    const root = await fs.mkdtemp(path.join(os.tmpdir(), "cclaw-tdd-"));
+    const root = await createTempProject("tdd");
     await initCclaw({ projectRoot: root });
 
     const tddSkill = await fs.readFile(path.join(root, ".cclaw/skills/test-driven-development/SKILL.md"), "utf8");
@@ -40,7 +40,7 @@ describe("flow command contracts", () => {
   });
 
   it("generates full skill set and harness flow commands", async () => {
-    const root = await fs.mkdtemp(path.join(os.tmpdir(), "cclaw-skills-"));
+    const root = await createTempProject("skills");
     await initCclaw({ projectRoot: root });
 
     for (const stage of COMMAND_FILE_ORDER) {
@@ -67,7 +67,7 @@ describe("flow command contracts", () => {
   });
 
   it("includes delegation pre-flight in completion protocol for stages with mandatory agents", async () => {
-    const root = await fs.mkdtemp(path.join(os.tmpdir(), "cclaw-delegation-protocol-"));
+    const root = await createTempProject("delegation-protocol");
     await initCclaw({ projectRoot: root });
 
     const scopeSkill = await fs.readFile(
@@ -92,7 +92,7 @@ describe("flow command contracts", () => {
   });
 
   it("includes doctor pre-flight in completion protocol", async () => {
-    const root = await fs.mkdtemp(path.join(os.tmpdir(), "cclaw-doctor-protocol-"));
+    const root = await createTempProject("doctor-protocol");
     await initCclaw({ projectRoot: root });
 
     const scopeSkill = await fs.readFile(
@@ -104,7 +104,7 @@ describe("flow command contracts", () => {
   });
 
   it("includes namedAntiPattern in spec skill", async () => {
-    const root = await fs.mkdtemp(path.join(os.tmpdir(), "cclaw-spec-anti-"));
+    const root = await createTempProject("spec-anti");
     await initCclaw({ projectRoot: root });
 
     const specSkill = await fs.readFile(
@@ -115,7 +115,7 @@ describe("flow command contracts", () => {
   });
 
   it("includes namedAntiPattern in plan skill", async () => {
-    const root = await fs.mkdtemp(path.join(os.tmpdir(), "cclaw-plan-anti-"));
+    const root = await createTempProject("plan-anti");
     await initCclaw({ projectRoot: root });
 
     const planSkill = await fs.readFile(
@@ -126,7 +126,7 @@ describe("flow command contracts", () => {
   });
 
   it("includes review sections in spec and plan skills", async () => {
-    const root = await fs.mkdtemp(path.join(os.tmpdir(), "cclaw-review-sections-"));
+    const root = await createTempProject("review-sections");
     await initCclaw({ projectRoot: root });
 
     const specSkill = await fs.readFile(
@@ -145,7 +145,7 @@ describe("flow command contracts", () => {
   });
 
   it("includes Risk-First and Diagnose Before Fix cognitive patterns in plan", async () => {
-    const root = await fs.mkdtemp(path.join(os.tmpdir(), "cclaw-plan-cognitive-"));
+    const root = await createTempProject("plan-cognitive");
     await initCclaw({ projectRoot: root });
 
     const planSkill = await fs.readFile(
@@ -158,7 +158,7 @@ describe("flow command contracts", () => {
   });
 
   it("includes Ambiguity Classification in design and spec skills", async () => {
-    const root = await fs.mkdtemp(path.join(os.tmpdir(), "cclaw-ambiguity-"));
+    const root = await createTempProject("ambiguity");
     await initCclaw({ projectRoot: root });
 
     const designSkill = await fs.readFile(
@@ -174,7 +174,7 @@ describe("flow command contracts", () => {
   });
 
   it("matches golden snapshots for strict-stage content", async () => {
-    const root = await fs.mkdtemp(path.join(os.tmpdir(), "cclaw-golden-"));
+    const root = await createTempProject("golden");
     await initCclaw({ projectRoot: root });
 
     const brainstormSkill = await fs.readFile(
@@ -196,7 +196,7 @@ describe("flow command contracts", () => {
   });
 
   it("matches golden snapshots for plan and tdd skills", async () => {
-    const root = await fs.mkdtemp(path.join(os.tmpdir(), "cclaw-golden-plan-tdd-"));
+    const root = await createTempProject("golden-plan-tdd");
     await initCclaw({ projectRoot: root });
 
     const planSkill = await fs.readFile(
@@ -213,7 +213,7 @@ describe("flow command contracts", () => {
   });
 
   it("matches golden snapshot for review skill", async () => {
-    const root = await fs.mkdtemp(path.join(os.tmpdir(), "cclaw-golden-review-"));
+    const root = await createTempProject("golden-review");
     await initCclaw({ projectRoot: root });
 
     const reviewSkill = await fs.readFile(
@@ -225,7 +225,7 @@ describe("flow command contracts", () => {
   });
 
   it("matches golden snapshot for ship skill", async () => {
-    const root = await fs.mkdtemp(path.join(os.tmpdir(), "cclaw-golden-ship-"));
+    const root = await createTempProject("golden-ship");
     await initCclaw({ projectRoot: root });
 
     const shipSkill = await fs.readFile(

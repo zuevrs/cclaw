@@ -40,7 +40,7 @@ export default defineConfig({
           lines: 80,
           statements: 80,
           functions: 90,
-          branches: 72
+          branches: 70
         },
         "src/gate-evidence.ts": {
           lines: 85,

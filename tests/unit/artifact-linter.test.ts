@@ -1,8 +1,8 @@
 import fs from "node:fs/promises";
-import os from "node:os";
 import path from "node:path";
 import { describe, expect, it } from "vitest";
 import { lintArtifact, validateReviewArmy } from "../../src/artifact-linter.js";
+import { createTempProject } from "../helpers/index.js";
 
 async function writeRuntimeArtifact(root: string, fileName: string, content: string): Promise<void> {
   await fs.mkdir(path.join(root, ".cclaw/state"), { recursive: true });
@@ -17,7 +17,7 @@ async function writeRuntimeArtifact(root: string, fileName: string, content: str
 
 describe("artifact linter heuristics", () => {
   it("fails when required brainstorm sections are missing", async () => {
-    const root = await fs.mkdtemp(path.join(os.tmpdir(), "cclaw-artifact-lint-missing-"));
+    const root = await createTempProject("artifact-lint-missing");
     await writeRuntimeArtifact(root, "01-brainstorm.md", `# Brainstorm Artifact
 
 ## Context
@@ -56,7 +56,7 @@ describe("artifact linter heuristics", () => {
   });
 
   it("passes brainstorm artifact when required sections are present", async () => {
-    const root = await fs.mkdtemp(path.join(os.tmpdir(), "cclaw-artifact-lint-pass-"));
+    const root = await createTempProject("artifact-lint-pass");
     await writeRuntimeArtifact(root, "01-brainstorm.md", `# Brainstorm Artifact
 
 ## Context
@@ -100,7 +100,7 @@ describe("artifact linter heuristics", () => {
   });
 
   it("fails brainstorm clarifying questions section when empty", async () => {
-    const root = await fs.mkdtemp(path.join(os.tmpdir(), "cclaw-artifact-lint-empty-questions-"));
+    const root = await createTempProject("artifact-lint-empty-questions");
     await writeRuntimeArtifact(root, "01-brainstorm.md", `# Brainstorm Artifact
 
 ## Context
@@ -143,7 +143,7 @@ describe("artifact linter heuristics", () => {
   });
 
   it("enforces exactly one selected enum token in finalization", async () => {
-    const root = await fs.mkdtemp(path.join(os.tmpdir(), "cclaw-artifact-lint-enum-"));
+    const root = await createTempProject("artifact-lint-enum");
     await writeRuntimeArtifact(root, "08-ship.md", `# Ship Artifact
 
 ## Preflight Results
@@ -172,7 +172,7 @@ describe("artifact linter heuristics", () => {
   });
 
   it("passes complete ship artifact", async () => {
-    const root = await fs.mkdtemp(path.join(os.tmpdir(), "cclaw-ship-full-pass-"));
+    const root = await createTempProject("ship-full-pass");
     await writeRuntimeArtifact(root, "08-ship.md", `# Ship Artifact
 
 ## Preflight Results
@@ -205,7 +205,7 @@ describe("artifact linter heuristics", () => {
   });
 
   it("fails ship when Preflight Results is missing", async () => {
-    const root = await fs.mkdtemp(path.join(os.tmpdir(), "cclaw-ship-no-preflight-"));
+    const root = await createTempProject("ship-no-preflight");
     await writeRuntimeArtifact(root, "08-ship.md", `# Ship Artifact
 
 ## Release Notes
@@ -229,7 +229,7 @@ describe("artifact linter heuristics", () => {
   });
 
   it("fails ship when Rollback Plan is missing", async () => {
-    const root = await fs.mkdtemp(path.join(os.tmpdir(), "cclaw-ship-no-rollback-"));
+    const root = await createTempProject("ship-no-rollback");
     await writeRuntimeArtifact(root, "08-ship.md", `# Ship Artifact
 
 ## Preflight Results
@@ -252,7 +252,7 @@ describe("artifact linter heuristics", () => {
   });
 
   it("fails ship when Finalization has invalid single token", async () => {
-    const root = await fs.mkdtemp(path.join(os.tmpdir(), "cclaw-ship-bad-finalize-"));
+    const root = await createTempProject("ship-bad-finalize");
     await writeRuntimeArtifact(root, "08-ship.md", `# Ship Artifact
 
 ## Preflight Results
@@ -279,7 +279,7 @@ describe("artifact linter heuristics", () => {
   });
 
   it("requires review readiness dashboard section for review artifacts", async () => {
-    const root = await fs.mkdtemp(path.join(os.tmpdir(), "cclaw-artifact-lint-review-readiness-"));
+    const root = await createTempProject("artifact-lint-review-readiness");
     await writeRuntimeArtifact(root, "07-review.md", `# Review Artifact
 
 ## Layer 1 Verdict
@@ -312,7 +312,7 @@ describe("artifact linter heuristics", () => {
   });
 
   it("fails scope artifact missing Mode-Specific Analysis section", async () => {
-    const root = await fs.mkdtemp(path.join(os.tmpdir(), "cclaw-scope-missing-mode-"));
+    const root = await createTempProject("scope-missing-mode");
     await writeRuntimeArtifact(root, "02-scope.md", `# Scope Artifact
 
 ## Prime Directives
@@ -378,7 +378,7 @@ describe("artifact linter heuristics", () => {
   });
 
   it("fails design artifact when Codebase Investigation is missing", async () => {
-    const root = await fs.mkdtemp(path.join(os.tmpdir(), "cclaw-design-missing-cbi-"));
+    const root = await createTempProject("design-missing-cbi");
     await writeRuntimeArtifact(root, "03-design.md", `# Design Artifact
 
 ## Search Before Building
@@ -441,7 +441,7 @@ API -> Service -> DB
   });
 
   it("fails design artifact when Performance Budget is missing", async () => {
-    const root = await fs.mkdtemp(path.join(os.tmpdir(), "cclaw-design-missing-perf-"));
+    const root = await createTempProject("design-missing-perf");
     await writeRuntimeArtifact(root, "03-design.md", `# Design Artifact
 
 ## Codebase Investigation
@@ -504,7 +504,7 @@ API -> Service -> DB
   });
 
   it("design trivial-change escape hatch downgrades most sections to optional", async () => {
-    const root = await fs.mkdtemp(path.join(os.tmpdir(), "cclaw-design-trivial-"));
+    const root = await createTempProject("design-trivial");
     await writeRuntimeArtifact(root, "03-design.md", `# Design Artifact — Trivial Change / Escape Hatch
 
 ## Architecture Boundaries
@@ -530,7 +530,7 @@ API -> Service -> DB
   });
 
   it("fails spec artifact when namedAntiPattern language appears in AC", async () => {
-    const root = await fs.mkdtemp(path.join(os.tmpdir(), "cclaw-spec-anti-"));
+    const root = await createTempProject("spec-anti");
     await writeRuntimeArtifact(root, "04-spec.md", `# Specification Artifact
 
 ## Acceptance Criteria
@@ -562,7 +562,7 @@ API -> Service -> DB
   });
 
   it("passes complete plan artifact", async () => {
-    const root = await fs.mkdtemp(path.join(os.tmpdir(), "cclaw-plan-full-pass-"));
+    const root = await createTempProject("plan-full-pass");
     await writeRuntimeArtifact(root, "05-plan.md", `# Plan Artifact
 
 ## Dependency Graph
@@ -601,7 +601,7 @@ API -> Service -> DB
   });
 
   it("fails plan when Dependency Graph is missing", async () => {
-    const root = await fs.mkdtemp(path.join(os.tmpdir(), "cclaw-plan-no-dg-"));
+    const root = await createTempProject("plan-no-dg");
     await writeRuntimeArtifact(root, "05-plan.md", `# Plan Artifact
 
 ## Dependency Waves
@@ -633,7 +633,7 @@ API -> Service -> DB
   });
 
   it("fails plan when Task List is empty", async () => {
-    const root = await fs.mkdtemp(path.join(os.tmpdir(), "cclaw-plan-empty-tasks-"));
+    const root = await createTempProject("plan-empty-tasks");
     await writeRuntimeArtifact(root, "05-plan.md", `# Plan Artifact
 
 ## Dependency Graph
@@ -664,7 +664,7 @@ API -> Service -> DB
   });
 
   it("fails plan WAIT_FOR_CONFIRM when Status is missing", async () => {
-    const root = await fs.mkdtemp(path.join(os.tmpdir(), "cclaw-plan-wfc-missing-"));
+    const root = await createTempProject("plan-wfc-missing");
     await writeRuntimeArtifact(root, "05-plan.md", `# Plan Artifact
 
 ## Dependency Graph
@@ -697,7 +697,7 @@ API -> Service -> DB
   });
 
   it("passes plan WAIT_FOR_CONFIRM when Status is pending", async () => {
-    const root = await fs.mkdtemp(path.join(os.tmpdir(), "cclaw-plan-wfc-ok-"));
+    const root = await createTempProject("plan-wfc-ok");
     await writeRuntimeArtifact(root, "05-plan.md", `# Plan Artifact
 
 ## Dependency Graph
@@ -730,7 +730,7 @@ API -> Service -> DB
   });
 
   it("fails plan WAIT_FOR_CONFIRM when Status is invalid value", async () => {
-    const root = await fs.mkdtemp(path.join(os.tmpdir(), "cclaw-plan-wfc-invalid-"));
+    const root = await createTempProject("plan-wfc-invalid");
     await writeRuntimeArtifact(root, "05-plan.md", `# Plan Artifact
 
 ## Dependency Graph
@@ -764,7 +764,7 @@ API -> Service -> DB
   });
 
   it("passes complete tdd artifact", async () => {
-    const root = await fs.mkdtemp(path.join(os.tmpdir(), "cclaw-tdd-full-pass-"));
+    const root = await createTempProject("tdd-full-pass");
     await writeRuntimeArtifact(root, "06-tdd.md", `# TDD Artifact
 
 ## RED Evidence
@@ -801,7 +801,7 @@ API -> Service -> DB
   });
 
   it("fails tdd when RED Evidence is missing", async () => {
-    const root = await fs.mkdtemp(path.join(os.tmpdir(), "cclaw-tdd-no-red-"));
+    const root = await createTempProject("tdd-no-red");
     await writeRuntimeArtifact(root, "06-tdd.md", `# TDD Artifact
 
 ## Acceptance Mapping
@@ -836,7 +836,7 @@ API -> Service -> DB
   });
 
   it("fails tdd when GREEN Evidence is empty", async () => {
-    const root = await fs.mkdtemp(path.join(os.tmpdir(), "cclaw-tdd-empty-green-"));
+    const root = await createTempProject("tdd-empty-green");
     await writeRuntimeArtifact(root, "06-tdd.md", `# TDD Artifact
 
 ## RED Evidence
@@ -873,7 +873,7 @@ API -> Service -> DB
   });
 
   it("fails tdd when Acceptance Mapping is missing", async () => {
-    const root = await fs.mkdtemp(path.join(os.tmpdir(), "cclaw-tdd-no-am-"));
+    const root = await createTempProject("tdd-no-am");
     await writeRuntimeArtifact(root, "06-tdd.md", `# TDD Artifact
 
 ## RED Evidence
@@ -908,7 +908,7 @@ API -> Service -> DB
   });
 
   it("fails tdd when Failure Analysis is missing", async () => {
-    const root = await fs.mkdtemp(path.join(os.tmpdir(), "cclaw-tdd-no-fa-"));
+    const root = await createTempProject("tdd-no-fa");
     await writeRuntimeArtifact(root, "06-tdd.md", `# TDD Artifact
 
 ## RED Evidence
@@ -943,7 +943,7 @@ API -> Service -> DB
   });
 
   it("fails tdd when REFACTOR Notes is missing", async () => {
-    const root = await fs.mkdtemp(path.join(os.tmpdir(), "cclaw-tdd-no-refactor-"));
+    const root = await createTempProject("tdd-no-refactor");
     await writeRuntimeArtifact(root, "06-tdd.md", `# TDD Artifact
 
 ## RED Evidence
@@ -978,7 +978,7 @@ API -> Service -> DB
   });
 
   it("fails tdd when Traceability is missing", async () => {
-    const root = await fs.mkdtemp(path.join(os.tmpdir(), "cclaw-tdd-no-trace-"));
+    const root = await createTempProject("tdd-no-trace");
     await writeRuntimeArtifact(root, "06-tdd.md", `# TDD Artifact
 
 ## RED Evidence
@@ -1014,7 +1014,7 @@ API -> Service -> DB
   });
 
   it("passes complete review artifact", async () => {
-    const root = await fs.mkdtemp(path.join(os.tmpdir(), "cclaw-review-full-pass-"));
+    const root = await createTempProject("review-full-pass");
     await writeRuntimeArtifact(root, "07-review.md", `# Review Artifact
 
 ## Layer 1 Verdict
@@ -1053,7 +1053,7 @@ API -> Service -> DB
   });
 
   it("fails review when Layer 1 Verdict is missing", async () => {
-    const root = await fs.mkdtemp(path.join(os.tmpdir(), "cclaw-review-no-l1-"));
+    const root = await createTempProject("review-no-l1");
     await writeRuntimeArtifact(root, "07-review.md", `# Review Artifact
 
 ## Layer 2 Findings
@@ -1088,7 +1088,7 @@ API -> Service -> DB
   });
 
   it("fails review when Review Army Contract is missing", async () => {
-    const root = await fs.mkdtemp(path.join(os.tmpdir(), "cclaw-review-no-army-"));
+    const root = await createTempProject("review-no-army");
     await writeRuntimeArtifact(root, "07-review.md", `# Review Artifact
 
 ## Layer 1 Verdict
@@ -1124,7 +1124,7 @@ API -> Service -> DB
   });
 
   it("fails review when Layer 2 Findings is missing", async () => {
-    const root = await fs.mkdtemp(path.join(os.tmpdir(), "cclaw-review-no-l2-"));
+    const root = await createTempProject("review-no-l2");
     await writeRuntimeArtifact(root, "07-review.md", `# Review Artifact
 
 ## Layer 1 Verdict
@@ -1159,7 +1159,7 @@ API -> Service -> DB
   });
 
   it("fails review when Final Verdict is invalid enum value", async () => {
-    const root = await fs.mkdtemp(path.join(os.tmpdir(), "cclaw-review-bad-verdict-"));
+    const root = await createTempProject("review-bad-verdict");
     await writeRuntimeArtifact(root, "07-review.md", `# Review Artifact
 
 ## Layer 1 Verdict
@@ -1198,7 +1198,7 @@ API -> Service -> DB
   });
 
   it("fails review when Severity Summary is missing", async () => {
-    const root = await fs.mkdtemp(path.join(os.tmpdir(), "cclaw-review-no-severity-"));
+    const root = await createTempProject("review-no-severity");
     await writeRuntimeArtifact(root, "07-review.md", `# Review Artifact
 
 ## Layer 1 Verdict
@@ -1233,7 +1233,7 @@ API -> Service -> DB
   });
 
   it("fails Prime Directives when required keywords are missing", async () => {
-    const root = await fs.mkdtemp(path.join(os.tmpdir(), "cclaw-scope-keywords-"));
+    const root = await createTempProject("scope-keywords");
     await writeRuntimeArtifact(root, "02-scope.md", `# Scope Artifact
 
 ## Prime Directives
@@ -1299,7 +1299,7 @@ API -> Service -> DB
 
 describe("review army schema validation", () => {
   it("accepts structured review-army payload with consistent blockers", async () => {
-    const root = await fs.mkdtemp(path.join(os.tmpdir(), "cclaw-review-army-valid-"));
+    const root = await createTempProject("review-army-valid");
     await fs.mkdir(path.join(root, ".cclaw/state"), { recursive: true });
     await fs.mkdir(path.join(root, ".cclaw/artifacts"), { recursive: true });
     await fs.writeFile(path.join(root, ".cclaw/state/flow-state.json"), JSON.stringify({
@@ -1335,7 +1335,7 @@ describe("review army schema validation", () => {
   });
 
   it("rejects malformed conflicts entries", async () => {
-    const root = await fs.mkdtemp(path.join(os.tmpdir(), "cclaw-review-army-bad-conflict-"));
+    const root = await createTempProject("review-army-bad-conflict");
     await fs.mkdir(path.join(root, ".cclaw/state"), { recursive: true });
     await fs.mkdir(path.join(root, ".cclaw/artifacts"), { recursive: true });
     await fs.writeFile(path.join(root, ".cclaw/state/flow-state.json"), JSON.stringify({
@@ -1371,7 +1371,7 @@ describe("review army schema validation", () => {
   });
 
   it("rejects multiSpecialistConfirmed referencing unknown finding id", async () => {
-    const root = await fs.mkdtemp(path.join(os.tmpdir(), "cclaw-review-army-bad-ms-"));
+    const root = await createTempProject("review-army-bad-ms");
     await fs.mkdir(path.join(root, ".cclaw/state"), { recursive: true });
     await fs.mkdir(path.join(root, ".cclaw/artifacts"), { recursive: true });
     await fs.writeFile(path.join(root, ".cclaw/state/flow-state.json"), JSON.stringify({
@@ -1405,7 +1405,7 @@ describe("review army schema validation", () => {
   });
 
   it("rejects duplicate finding IDs", async () => {
-    const root = await fs.mkdtemp(path.join(os.tmpdir(), "cclaw-review-army-dup-id-"));
+    const root = await createTempProject("review-army-dup-id");
     await fs.mkdir(path.join(root, ".cclaw/state"), { recursive: true });
     await fs.mkdir(path.join(root, ".cclaw/artifacts"), { recursive: true });
     await fs.writeFile(path.join(root, ".cclaw/state/flow-state.json"), JSON.stringify({
@@ -1449,7 +1449,7 @@ describe("review army schema validation", () => {
   });
 
   it("rejects open critical findings that are not listed as ship blockers", async () => {
-    const root = await fs.mkdtemp(path.join(os.tmpdir(), "cclaw-review-army-invalid-"));
+    const root = await createTempProject("review-army-invalid");
     await fs.mkdir(path.join(root, ".cclaw/state"), { recursive: true });
     await fs.mkdir(path.join(root, ".cclaw/artifacts"), { recursive: true });
     await fs.writeFile(path.join(root, ".cclaw/state/flow-state.json"), JSON.stringify({

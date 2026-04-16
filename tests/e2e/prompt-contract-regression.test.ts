@@ -1,12 +1,12 @@
 import fs from "node:fs/promises";
-import os from "node:os";
 import path from "node:path";
 import { describe, expect, it } from "vitest";
 import { initCclaw } from "../../src/install.js";
+import { createTempProject } from "../helpers/index.js";
 
 describe("prompt-contract regression harness", () => {
   it("keeps stage behavior contracts for plan/review/tdd", async () => {
-    const root = await fs.mkdtemp(path.join(os.tmpdir(), "cclaw-behavior-contract-"));
+    const root = await createTempProject("behavior-contract");
     await initCclaw({ projectRoot: root });
 
     const planSkill = await fs.readFile(
@@ -41,7 +41,7 @@ describe("prompt-contract regression harness", () => {
   });
 
   it("keeps advisory hooks wired for guards, context monitor, and suggestion memory", async () => {
-    const root = await fs.mkdtemp(path.join(os.tmpdir(), "cclaw-behavior-hooks-"));
+    const root = await createTempProject("behavior-hooks");
     await initCclaw({ projectRoot: root });
 
     const claudeHooks = await fs.readFile(path.join(root, ".claude/hooks/hooks.json"), "utf8");
