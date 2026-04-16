@@ -318,6 +318,11 @@ Execution rule: complete and verify each wave before starting the next wave.
 | Slice | Tier reached | Evidence |
 |---|---|---|
 | S-1 |  |  |
+
+## Coverage Targets
+| Code type | Target | Current | Command |
+|---|---|---|---|
+|  |  |  |  |
 `,
   "07-review.md": `# Review Artifact
 

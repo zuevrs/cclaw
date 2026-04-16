@@ -1179,7 +1179,8 @@ const TDD: StageSchemaInput = {
     { section: "GREEN Evidence", required: true, validationRule: "Full suite pass output captured." },
     { section: "REFACTOR Notes", required: true, validationRule: "What changed, why, behavior preservation confirmed." },
     { section: "Traceability", required: true, validationRule: "Plan task ID and spec criterion linked." },
-    { section: "Verification Ladder", required: false, validationRule: "If present: per-slice verification tier (static, command, behavioral, human) with evidence for highest tier reached." }
+    { section: "Verification Ladder", required: false, validationRule: "If present: per-slice verification tier (static, command, behavioral, human) with evidence for highest tier reached." },
+    { section: "Coverage Targets", required: false, validationRule: "If present: per-module or per-code-type coverage thresholds with current values and measurement commands." }
   ],
   namedAntiPattern: {
     title: "Code Before Failing Test",
