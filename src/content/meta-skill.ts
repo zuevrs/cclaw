@@ -240,6 +240,50 @@ If the same approach fails three times in a row (same verification command, same
 
 ## </EXTREMELY-IMPORTANT>
 
+## Invocation Preamble (per turn, non-trivial tasks)
+
+Before starting substantive work in a non-trivial turn, emit a **one-paragraph preamble** (maximum 4 short lines, no headings) that grounds the session. This is NOT the same as the stage artifact; it is a runtime orientation statement. Skip the preamble entirely for pure questions, trivial edits, spawned-subagent invocations, and continuations that repeat an already-stated plan.
+
+Preamble template (fill each bullet inline, separated by commas — do not render as a markdown list):
+
+- **Stage** — current cclaw stage, or "ad-hoc" if no flow is active.
+- **Goal** — the user's immediate request in one clause.
+- **Plan** — the next 1–3 concrete actions you will take.
+- **Guardrails** — the HARD-GATE(s) or user constraints that will stop you from over-reaching.
+
+<EXTREMELY-IMPORTANT>
+The preamble exists to prevent silent drift from the user's ask. If the preamble cannot be written truthfully (because the goal is ambiguous, or guardrails conflict), do NOT proceed — surface a Decision Protocol question first. A preamble that lies (e.g. claims a stage you are not in) is worse than no preamble at all.
+</EXTREMELY-IMPORTANT>
+
+Do not re-emit the preamble on every subsequent tool call — once per user turn is sufficient. If the user message changes the goal mid-execution, emit a fresh preamble before acting on the new direction.
+
+## Operational Self-Improvement (auto-learn)
+
+cclaw treats **lived friction** as first-class knowledge. When you observe one of the triggers below during a session, append a single JSONL line to \`.cclaw/knowledge.jsonl\` via \`/cc-learn add\` (or queue it for the next \`/cc-learn\` call) — do NOT let the signal evaporate when the session ends.
+
+**Triggers that REQUIRE a learnings entry:**
+
+1. **Repeated tool failure** — any tool fails the same way twice in one stage (schema error, timeout, permission issue). Record the tool, the triggering pattern, and the fallback that worked.
+2. **User correction** — the user rejects an approach, overrides a gate, or corrects a misclassification. Record the misread and the correction.
+3. **Gate drift** — a stage gate almost let something slip through (caught in review, CI, or by the document-review skill). Record the gap and the tightening.
+4. **Reclassification** — a task was re-routed between trivial / bugfix / standard mid-flow. Record the original signal, the new signal, and the evidence that flipped it.
+5. **Escalation (3 attempts)** — whenever the 3-attempt escalation rule fires. Record what was attempted, what evidence accumulated, and how the user unblocked it.
+
+**Entry shape** (append-only JSON line, strict schema — see the learnings skill for field-level rules):
+
+\`\`\`json
+{"type":"lesson","trigger":"<observable pattern>","action":"<what to do next time>","confidence":"low|medium|high","domain":"<short-tag>","stage":"<stage-or-global>","created":"<ISO-date>","project":"<project-name>"}
+\`\`\`
+
+**Discipline:**
+- One entry per distinct trigger — do NOT batch unrelated lessons.
+- Keep \`trigger\` phrased as a detectable pattern, not a narrative (good: "AskUserQuestion returns schema error when options > 4"; bad: "the tool was weird").
+- \`action\` must be an instruction a future agent can act on mechanically.
+- Never rewrite or delete existing entries — corrections are new lines whose \`trigger\` supersedes the earlier one.
+- If a learning would reveal confidential project data, redact before writing.
+
+This is how cclaw compounds: every session leaves the next one slightly better informed, without waiting for a human to distill a retro.
+
 ### When to use structured asks vs conversational
 - **Structured (tool):** architecture choices, scope decisions, approval gates, mode selection, scope boundary issues.
 - **Conversational:** clarifying questions, yes/no confirmations, "anything else?".
