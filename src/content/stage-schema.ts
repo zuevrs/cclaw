@@ -825,7 +825,7 @@ const SPEC: StageSchemaInput = {
     { section: "Acceptance Criteria", required: true, validationRule: "Each criterion is observable, measurable, and falsifiable. Table should include a Design Decision Ref column tracing back to design artifact." },
     { section: "Edge Cases", required: true, validationRule: "At least one boundary and one error condition per criterion." },
     { section: "Constraints and Assumptions", required: true, validationRule: "All implicit assumptions surfaced. Constraints have sources." },
-    { section: "Testability Map", required: true, validationRule: "Each criterion maps to a concrete test description." },
+    { section: "Testability Map", required: true, validationRule: "Each criterion maps to a concrete test description with verification approach (unit, integration, e2e, manual) and command or manual steps." },
     { section: "Approval", required: true, validationRule: "Explicit user approval marker present." }
   ],
   namedAntiPattern: {
