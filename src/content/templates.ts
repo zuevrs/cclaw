@@ -279,6 +279,11 @@ Execution rule: complete and verify each wave before starting the next wave.
 |---|---|---|---|---|
 |  |  |  |  |  |
 
+## Boundary Map
+| Task/Wave | Produces (exports) | Consumes (imports from) |
+|---|---|---|
+|  |  |  |
+
 ## WAIT_FOR_CONFIRM
 - Status: pending
 - Confirmed by:

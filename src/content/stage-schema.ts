@@ -1010,6 +1010,7 @@ const PLAN: StageSchemaInput = {
     { section: "Task List", required: true, validationRule: "Each task: ID, description, acceptance criterion link, verification command, and effort estimate (S/M/L)." },
     { section: "Acceptance Mapping", required: true, validationRule: "Every spec criterion is covered by at least one task." },
     { section: "Risk Assessment", required: false, validationRule: "If present: per-task or per-wave risk identification with likelihood, impact, and mitigation strategy." },
+    { section: "Boundary Map", required: false, validationRule: "If present: per-wave or per-task interface contracts listing what each task produces (exports) and consumes (imports) from other tasks." },
     { section: "WAIT_FOR_CONFIRM", required: true, validationRule: "Explicit marker present. Status: pending until user approves." }
   ],
   namedAntiPattern: {
