@@ -1,6 +1,6 @@
 import { RUNTIME_ROOT } from "../constants.js";
 import type { FlowStage } from "../types.js";
-import { stageExamples, stageGoodBadExamples } from "./examples.js";
+import { stageDomainExamples, stageExamples, stageGoodBadExamples } from "./examples.js";
 import { selfImprovementBlock } from "./learnings.js";
 import type { StageSchema } from "./stage-schema.js";
 import { stageAutoSubagentDispatch, stageSchema } from "./stage-schema.js";
@@ -413,6 +413,7 @@ You MUST complete these steps in order:
 ${checklistItems}
 
 ${stageGoodBadExamples(stage)}
+${stageDomainExamples(stage)}
 ${stageExamples(stage)}
 ${namedAntiPatternBlock(stage)}
 ${cognitivePatternsList(stage)}

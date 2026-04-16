@@ -115,6 +115,7 @@ Contrasting samples to calibrate the quality bar for this stage. Read before wri
 
 **Why it matters:** "LGTM" is not a review — it is a signature on whatever the author shipped. Every finding needs a severity, a falsifiable description, evidence, and a status.
 
+
 ## Examples
 
 Concrete artifact samples. These mirror the exact heading levels agents must use when authoring the stage artifact (all H2 \`##\` sections), so they are presented inside a markdown fence to avoid collapsing into the SKILL outline.
@@ -576,6 +577,18 @@ Contrasting samples to calibrate the quality bar for this stage. Read before wri
 
 **Why it matters:** "Revert if anything goes wrong" leaves the on-call engineer to invent the plan at 2 a.m. The rollback trigger is an operational contract: state the signal, the command, and the verification.
 
+## Living Examples by Domain
+
+Use the row matching your project shape to calibrate voice, specificity, and command choice. The rows are deliberately terse — copy the **shape**, not the text.
+
+**Web app (full-stack) — Rollback:** Trigger: error rate on \`/api/orders/stream\` > 2% for 5 minutes, or p95 latency > 1.5s for 10 minutes. Steps: \`vercel rollback <deployment>\`; run \`2026_04_14_revert_orders_stream.sql\` before traffic returns. Verify: error rate returns to baseline within 10 minutes on the \`orders-live\` dashboard.
+
+**CLI tool — Rollback:** Trigger: \`cclaw init --claude\` exits non-zero on a fresh tmp dir, OR \`cclaw doctor\` regresses (FAIL count increases) on the smoke matrix. Steps: \`npm unpublish cclaw-cli@<version>\` (within the 72h window) or \`npm deprecate cclaw-cli@<version> '<reason>'\`; publish the previous patch. Verify: \`npx cclaw-cli@latest --version\` prints the previous version.
+
+**Library / SDK — Rollback:** Trigger: any consumer reports \`validateHookDocument\` no longer exported, OR the CI \`dual-package-check\` job fails. Steps: \`npm deprecate cclaw-cli@<version> 'broken package export — use <prev>'\`; publish the previous minor with a patch bump; emit changelog \`## Rollback\` entry. Verify: a smoke consumer project \`pnpm add cclaw-cli@latest\` imports cleanly.
+
+**Data pipeline / ETL — Rollback:** Trigger: \`dbt test --select fact_orders\` fails on production run, OR downstream dashboard MAU count drops >10% week-over-week. Steps: disable the new model via \`dbt_project.yml\` + \`dbt run --select state:modified\` with the previous git SHA; rerun backfill \`dagster asset materialize fact_orders --partition <yesterday>\`. Verify: \`fact_orders\` row count within ±1% of the previous week's baseline.
+
 ## Examples
 
 Concrete artifact samples. These mirror the exact heading levels agents must use when authoring the stage artifact (all H2 \`##\` sections), so they are presented inside a markdown fence to avoid collapsing into the SKILL outline.
@@ -970,6 +983,18 @@ Contrasting samples to calibrate the quality bar for this stage. Read before wri
 > T-2: Build the backend. Verify: manual testing. Effort: a few days.
 
 **Why it matters:** A task without a single acceptance criterion and a reproducible verification command is a wish. If you cannot say how you will know it is done, you cannot ship it.
+
+## Living Examples by Domain
+
+Use the row matching your project shape to calibrate voice, specificity, and command choice. The rows are deliberately terse — copy the **shape**, not the text.
+
+**Web app (full-stack) — Task:** T-W-3 \`[~4m]\`: Wire SSE endpoint \`/api/orders/stream\` into \`useOrderFeed\` hook. AC-W1. Verify: \`pnpm playwright test orders-live.spec.ts\`. Depends on: T-W-2.
+
+**CLI tool — Task:** T-C-2 \`[~3m]\`: Add \`--dry-run\` flag to \`cclaw archive\` that prints the would-be-archived run IDs to stdout and exits 0. AC-C3. Verify: \`node dist/cli.js archive --dry-run\` + \`tests/unit/cli-parse.test.ts\`.
+
+**Library / SDK — Task:** T-L-1 \`[~5m]\`: Expose \`validateHookDocument\` from the package root and re-export its types. AC-L1. Verify: \`pnpm build && node -e "console.log(require('./dist').validateHookDocument)"\`.
+
+**Data pipeline / ETL — Task:** T-D-2 \`[~5m]\`: Add dedup step keyed on \`(order_id, event_ts)\` between \`raw.orders\` and \`fact_orders\`. AC-D1. Verify: \`dbt run --select fact_orders+ && dbt test --select fact_orders\`.
 
 ## Examples
 
@@ -1369,6 +1394,18 @@ Contrasting samples to calibrate the quality bar for this stage. Read before wri
 > Wrote the publisher code. Tests pass now. Will add unit tests later when I have time.
 
 **Why it matters:** Code written before a failing test is guessing validated after the fact. The RED failure IS the specification — without it, the GREEN pass proves nothing about the intended behavior.
+
+## Living Examples by Domain
+
+Use the row matching your project shape to calibrate voice, specificity, and command choice. The rows are deliberately terse — copy the **shape**, not the text.
+
+**Web app (full-stack) — RED→GREEN→REFACTOR:** RED: \`pnpm playwright test orders-live.spec.ts\` → timeout waiting for row update. GREEN: wired SSE event → row rerenders via \`useOrderFeed\`. REFACTOR: extracted \`applyOrderEvent(row, event)\` pure helper; 87/87 tests still pass.
+
+**CLI tool — RED→GREEN→REFACTOR:** RED: \`tests/unit/cli-parse.test.ts\` expects \`--dry-run\` flag → \`unknown option\` error. GREEN: added to the Zod parser; 19/19 pass. REFACTOR: hoisted the dry-run formatter into \`src/cli/format.ts\` shared with \`status\`.
+
+**Library / SDK — RED→GREEN→REFACTOR:** RED: \`tests/unit/hook-schema.test.ts\` imports \`validateHookDocument\` from package root → \`export not found\`. GREEN: added re-export + types. REFACTOR: renamed internal \`__validate\` to \`validateHookDocument\` so the export name matches the source.
+
+**Data pipeline / ETL — RED→GREEN→REFACTOR:** RED: \`dbt test --select fact_orders\` → \`unique test on (order_id, event_ts)\` fails on re-run. GREEN: added \`row_number()\` dedup in the staging model. REFACTOR: extracted the dedup CTE into \`int_orders_deduped\` for reuse by \`fact_returns\`.
 
 ## Examples
 
@@ -1866,6 +1903,7 @@ Contrasting samples to calibrate the quality bar for this stage. Read before wri
 > Problem: releases are broken. Success: make them better. Constraints: be careful.
 
 **Why it matters:** "Make it better" is not a success criterion — an agent cannot know when it is done. State the observable condition that proves success.
+
 
 ## Examples
 
