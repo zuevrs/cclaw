@@ -294,6 +294,40 @@ The preamble exists to prevent silent drift from the user's ask. If the preamble
 
 Do not re-emit the preamble on every subsequent tool call — once per user turn is sufficient. If the user message changes the goal mid-execution, emit a fresh preamble before acting on the new direction.
 
+## Engineering Ethos
+
+Three guardrails apply to every stage, every turn. Internalise them — they trump speed, cleverness, and novelty:
+
+### Search Before Building
+
+Before writing new code, a new skill, a new abstraction, or a new artifact section, spend 60–120 seconds checking whether the thing already exists. Order of search:
+
+1. **Project artifacts** — \`.cclaw/artifacts/**\`, \`docs/**\`, root-level \`README.md\` / \`SPEC.md\` / \`DESIGN.md\`.
+2. **Project knowledge** — \`.cclaw/knowledge.jsonl\` (lessons with matching \`domain\` / \`trigger\`).
+3. **Codebase** — \`rg\` / \`Grep\` for the symbol, function, test, or comment that describes what you're about to add.
+4. **Framework/library primitives** — prefer a stdlib or framework-native affordance over a handwritten helper.
+5. **Existing skill or stage rule** — \`.cclaw/skills/**/SKILL.md\` and \`.cclaw/commands/**/*.md\`.
+
+Only after the first four turn up nothing do you build. Every duplicate helper, redefined type, parallel-but-incompatible artifact section, or re-discovered lesson is a tax on the next five sessions. Record the negative search result (what you looked for, where, and why nothing fit) in the turn's preamble or the stage artifact so future agents don't repeat the hunt.
+
+### Boil the Lake (scoped minimum-sweep rule)
+
+"Boil the lake" normally means wasteful, exhaustive work. **cclaw inverts the phrase**: within the current stage, you are expected to sweep *the defined surface exhaustively* — not to stop at the first plausible answer.
+
+- In \`brainstorm\` / \`scope\` — enumerate every viable approach in the defined option space; name the ones you rejected and why.
+- In \`design\` — trace every data-flow and failure edge across the chosen component boundary, not just the happy path.
+- In \`spec\` — list every acceptance criterion for the in-scope surface; "and similar" / "etc." is banned.
+- In \`tdd\` — exercise every branch / error path / boundary of the slice under test, not only the canonical case.
+- In \`review\` — audit every file touched in the diff, not just the files named in the spec.
+
+The sweep is bounded by the stage's declared surface. Expanding the surface is a Decision Protocol question, not a silent enlargement.
+
+### Do Less, Prove More
+
+When in doubt between adding code / scope / artifact sections and cutting them, cut. The flow already forces you to justify each stage's output — volume is never a proxy for quality. One acceptance criterion with captured evidence beats five without; one labeled architecture diagram beats three generic boxes-and-arrows; one REFACTOR note explaining a concrete trade-off beats a paragraph of filler.
+
+If a rule, template section, or agent feels ornamental, flag it in \`Operational Self-Improvement\` and propose removal — cclaw's invariant is that every section must pay its tokens back by preventing a specific failure mode.
+
 ## Operational Self-Improvement (auto-learn)
 
 cclaw treats **lived friction** as first-class knowledge. When you observe one of the triggers below during a session, append a single JSONL line to \`.cclaw/knowledge.jsonl\` via \`/cc-learn add\` (or queue it for the next \`/cc-learn\` call) — do NOT let the signal evaporate when the session ends.
