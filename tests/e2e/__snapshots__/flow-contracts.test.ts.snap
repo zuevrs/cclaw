@@ -531,6 +531,7 @@ These are thinking instincts, not a checklist. Let them shape your perspective t
 3. **Minimal Viable Change** — The best implementation is the smallest one that passes all RED tests. Every extra line is risk. Resist the urge to 'improve while you are here.'
 4. **Regression Paranoia** — Assume every change breaks something until the full suite proves otherwise. Partial test runs are lies of omission.
 5. **Refactor-as-Hygiene** — Refactoring is not optional cleanup — it is the third leg of TDD. GREEN without REFACTOR accumulates mess. REFACTOR without GREEN breaks things.
+6. **Evidence Over Anecdote** — Every claim about test state must be backed by captured output. 'It passed' without terminal evidence is not evidence. 'I saw it fail' without the failure output is not RED. Capture commands, outputs, and results — not summaries from memory.
 
 ## Interaction Protocol
 1. Pick one planned slice at a time.

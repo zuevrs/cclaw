@@ -1141,7 +1141,8 @@ const TDD: StageSchemaInput = {
     { name: "Failure-First Thinking", description: "The failing test IS the specification. Until you see the right failure, you do not understand what you are building. Wrong failures are information." },
     { name: "Minimal Viable Change", description: "The best implementation is the smallest one that passes all RED tests. Every extra line is risk. Resist the urge to 'improve while you are here.'" },
     { name: "Regression Paranoia", description: "Assume every change breaks something until the full suite proves otherwise. Partial test runs are lies of omission." },
-    { name: "Refactor-as-Hygiene", description: "Refactoring is not optional cleanup — it is the third leg of TDD. GREEN without REFACTOR accumulates mess. REFACTOR without GREEN breaks things." }
+    { name: "Refactor-as-Hygiene", description: "Refactoring is not optional cleanup — it is the third leg of TDD. GREEN without REFACTOR accumulates mess. REFACTOR without GREEN breaks things." },
+    { name: "Evidence Over Anecdote", description: "Every claim about test state must be backed by captured output. 'It passed' without terminal evidence is not evidence. 'I saw it fail' without the failure output is not RED. Capture commands, outputs, and results — not summaries from memory." }
   ],
   reviewSections: [
     {
