@@ -68,6 +68,14 @@ export interface StageSchema {
   skillName: string;
   skillDescription: string;
   hardGate: string;
+  /**
+   * One-line "Iron Law" punchcard — the single rule that, if broken,
+   * invalidates the stage outright. Rendered in ALL-CAPS wrapped in
+   * <EXTREMELY-IMPORTANT> XML markers at the very top of the skill body.
+   * Reference: Superpowers (obra) "NO PRODUCTION CODE WITHOUT A FAILING
+   * TEST FIRST".
+   */
+  ironLaw: string;
   purpose: string;
   whenToUse: string[];
   whenNotToUse: string[];
@@ -121,6 +129,7 @@ const BRAINSTORM: StageSchemaInput = {
   skillName: "brainstorming",
   skillDescription: "Design-first stage. Explore context, understand intent through collaborative dialogue, propose distinct approaches, and lock an approved direction before scope/design work.",
   hardGate: "Do NOT invoke implementation skills, write code, scaffold projects, or mutate product behavior until a concrete direction is approved by the user.",
+  ironLaw: "NO ARTIFACT IS COMPLETE WITHOUT AN EXPLICITLY APPROVED DIRECTION — SILENCE IS NOT APPROVAL.",
   purpose: "Turn an initial idea into an approved design direction through natural collaborative dialogue — understanding the problem before proposing solutions.",
   whenToUse: [
     "Starting a new feature or behavior change",
@@ -270,6 +279,7 @@ const SCOPE: StageSchemaInput = {
   skillName: "scope-shaping",
   skillDescription: "Strategic scope stage. Challenge premise and lock explicit in-scope/out-of-scope boundaries using CEO-level thinking.",
   hardGate: "Do NOT begin architecture, design, or code. This stage produces scope decisions only. Do not silently add or remove scope — every change is an explicit user opt-in.",
+  ironLaw: "EVERY SCOPE CHANGE IS AN EXPLICIT USER OPT-IN — NEVER A SILENT ENLARGEMENT OR TRIM.",
   purpose: "Decide the right scope before technical lock-in using explicit mode selection and rigorous premise challenge.",
   whenToUse: [
     "After brainstorm approval",
@@ -478,6 +488,7 @@ const DESIGN: StageSchemaInput = {
   skillName: "engineering-design-lock",
   skillDescription: "Engineering lock-in stage. Build a concrete technical spine before spec and planning, with section-by-section interactive review.",
   hardGate: "Do NOT write implementation code. This stage produces design decisions and architecture documents only. No code changes, no scaffolding, no test files.",
+  ironLaw: "NO DESIGN DECISION WITHOUT A LABELED DIAGRAM, A REJECTED ALTERNATIVE, AND A NAMED FAILURE MODE.",
   purpose: "Lock architecture, data flow, failure modes, and test/performance expectations through rigorous interactive review.",
   whenToUse: [
     "After scope contract approval",
@@ -724,6 +735,7 @@ const SPEC: StageSchemaInput = {
   skillName: "specification-authoring",
   skillDescription: "Specification stage. Produce measurable, testable requirements without ambiguity.",
   hardGate: "Do NOT plan tasks or write implementation code. This stage produces a specification document only. Every requirement must be expressed in observable, testable terms.",
+  ironLaw: "EVERY ACCEPTANCE CRITERION MUST BE OBSERVABLE AND TESTABLE — OR IT DOES NOT EXIST.",
   purpose: "Create a testable specification aligned with approved design and constraints.",
   whenToUse: [
     "After design lock",
@@ -877,6 +889,7 @@ const PLAN: StageSchemaInput = {
   skillName: "planning-and-task-breakdown",
   skillDescription: "Execution planning stage with strict confirmation gate before implementation.",
   hardGate: "Do NOT write code or tests. Planning only. This stage produces a task graph and execution order. WAIT_FOR_CONFIRM before any handoff to implementation.",
+  ironLaw: "EVERY TASK IS 2–5 MINUTES, FULLY SPELLED OUT, AND CARRIES A STABLE ID — NO PLACEHOLDERS, NO ‘ETC.’.",
   purpose: "Create small executable tasks with dependencies and pause for explicit user confirmation.",
   whenToUse: [
     "After spec approval",
@@ -1043,6 +1056,7 @@ const TDD: StageSchemaInput = {
   skillName: "test-driven-development",
   skillDescription: "Full TDD cycle: RED (failing tests), GREEN (minimal implementation), REFACTOR (cleanup). One plan slice at a time with strict traceability.",
   hardGate: "Do NOT merge, ship, or skip review. Follow RED → GREEN → REFACTOR strictly for each plan slice. Do NOT write implementation code before RED tests exist. Do NOT skip the REFACTOR step.",
+  ironLaw: "NO PRODUCTION CODE WITHOUT A FAILING TEST FIRST — THE RED FAILURE IS THE SPEC.",
   purpose: "Implement features through the TDD cycle: write failing tests, make them pass with minimal code, then refactor.",
   whenToUse: [
     "After plan confirmation",
@@ -1255,6 +1269,7 @@ const REVIEW: StageSchemaInput = {
   skillName: "two-layer-review",
   skillDescription: "Two-layer review stage: spec compliance first, then code quality and production readiness. Section-by-section with severity discipline.",
   hardGate: "Do NOT ship, merge, or release until both review layers complete with an explicit verdict. No exceptions for urgency. Critical blockers MUST be resolved before handoff.",
+  ironLaw: "NO SHIP VERDICT UNTIL BOTH REVIEW LAYERS COMPLETE AND EVERY CRITICAL IS RESOLVED OR EXPLICITLY ACCEPTED.",
   purpose: "Validate that implementation matches spec and meets quality/security/performance bar through structured two-layer review.",
   whenToUse: [
     "After TDD stage completes",
@@ -1473,6 +1488,7 @@ const SHIP: StageSchemaInput = {
   skillName: "shipping-and-handoff",
   skillDescription: "Release handoff stage with preflight checks, rollback readiness, and explicit finalization mode.",
   hardGate: "Do NOT merge, push, or finalize without a passed preflight check, written rollback plan, and exactly one explicit finalization mode selected. No exceptions for urgency.",
+  ironLaw: "NO MERGE WITHOUT GREEN CI, A WRITTEN ROLLBACK, AND EXACTLY ONE SELECTED FINALIZATION MODE.",
   purpose: "Prepare a safe release handoff with clear rollback and branch finalization decision.",
   whenToUse: [
     "After review passes with APPROVED or APPROVED_WITH_CONCERNS verdict",

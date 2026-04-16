@@ -384,6 +384,14 @@ description: "${schema.skillDescription}"
 
 # ${schema.skillName}
 
+<EXTREMELY-IMPORTANT>
+
+**IRON LAW — ${stage.toUpperCase()}:** ${schema.ironLaw}
+
+If you are about to violate the Iron Law, STOP. No amount of urgency, partial progress, or clever reinterpretation overrides it. Escalate via the Decision Protocol or abandon the stage.
+
+</EXTREMELY-IMPORTANT>
+
 ${quickStartBlock(stage)}
 ## Overview
 ${schema.purpose}

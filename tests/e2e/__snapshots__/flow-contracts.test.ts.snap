@@ -8,6 +8,14 @@ description: "Two-layer review stage: spec compliance first, then code quality a
 
 # two-layer-review
 
+<EXTREMELY-IMPORTANT>
+
+**IRON LAW — REVIEW:** NO SHIP VERDICT UNTIL BOTH REVIEW LAYERS COMPLETE AND EVERY CRITICAL IS RESOLVED OR EXPLICITLY ACCEPTED.
+
+If you are about to violate the Iron Law, STOP. No amount of urgency, partial progress, or clever reinterpretation overrides it. Escalate via the Decision Protocol or abandon the stage.
+
+</EXTREMELY-IMPORTANT>
+
 ## Quick Start (minimum compliance)
 
 > **Even if you read nothing else, do these 3 things:**
@@ -441,6 +449,14 @@ description: "Release handoff stage with preflight checks, rollback readiness, a
 
 # shipping-and-handoff
 
+<EXTREMELY-IMPORTANT>
+
+**IRON LAW — SHIP:** NO MERGE WITHOUT GREEN CI, A WRITTEN ROLLBACK, AND EXACTLY ONE SELECTED FINALIZATION MODE.
+
+If you are about to violate the Iron Law, STOP. No amount of urgency, partial progress, or clever reinterpretation overrides it. Escalate via the Decision Protocol or abandon the stage.
+
+</EXTREMELY-IMPORTANT>
+
 ## Quick Start (minimum compliance)
 
 > **Even if you read nothing else, do these 3 things:**
@@ -822,6 +838,14 @@ description: "Execution planning stage with strict confirmation gate before impl
 
 # planning-and-task-breakdown
 
+<EXTREMELY-IMPORTANT>
+
+**IRON LAW — PLAN:** EVERY TASK IS 2–5 MINUTES, FULLY SPELLED OUT, AND CARRIES A STABLE ID — NO PLACEHOLDERS, NO ‘ETC.’.
+
+If you are about to violate the Iron Law, STOP. No amount of urgency, partial progress, or clever reinterpretation overrides it. Escalate via the Decision Protocol or abandon the stage.
+
+</EXTREMELY-IMPORTANT>
+
 ## Quick Start (minimum compliance)
 
 > **Even if you read nothing else, do these 3 things:**
@@ -1175,6 +1199,14 @@ description: "Full TDD cycle: RED (failing tests), GREEN (minimal implementation
 ---
 
 # test-driven-development
+
+<EXTREMELY-IMPORTANT>
+
+**IRON LAW — TDD:** NO PRODUCTION CODE WITHOUT A FAILING TEST FIRST — THE RED FAILURE IS THE SPEC.
+
+If you are about to violate the Iron Law, STOP. No amount of urgency, partial progress, or clever reinterpretation overrides it. Escalate via the Decision Protocol or abandon the stage.
+
+</EXTREMELY-IMPORTANT>
 
 ## Quick Start (minimum compliance)
 
@@ -1656,6 +1688,14 @@ description: "Design-first stage. Explore context, understand intent through col
 ---
 
 # brainstorming
+
+<EXTREMELY-IMPORTANT>
+
+**IRON LAW — BRAINSTORM:** NO ARTIFACT IS COMPLETE WITHOUT AN EXPLICITLY APPROVED DIRECTION — SILENCE IS NOT APPROVAL.
+
+If you are about to violate the Iron Law, STOP. No amount of urgency, partial progress, or clever reinterpretation overrides it. Escalate via the Decision Protocol or abandon the stage.
+
+</EXTREMELY-IMPORTANT>
 
 ## Quick Start (minimum compliance)
 

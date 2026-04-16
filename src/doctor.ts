@@ -299,6 +299,7 @@ export async function doctorChecks(projectRoot: string, options: DoctorOptions =
 
       const canonicalSections: Array<{ id: string; pattern: RegExp; label: string }> = [
         { id: "frontmatter", pattern: /^---\nname: [\w-]+\ndescription: /m, label: "YAML frontmatter (name + description)" },
+        { id: "iron_law", pattern: /^\*\*IRON LAW — [A-Z]+:\*\* .+$/m, label: "Iron Law punchcard (<EXTREMELY-IMPORTANT> wrapper)" },
         { id: "hard_gate", pattern: /^## HARD-GATE$/m, label: "## HARD-GATE" },
         { id: "checklist", pattern: /^## Checklist$/m, label: "## Checklist" },
         { id: "completion_protocol", pattern: /^## Stage Completion Protocol$/m, label: "## Stage Completion Protocol" },
