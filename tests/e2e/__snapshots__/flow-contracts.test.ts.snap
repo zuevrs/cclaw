@@ -13,7 +13,7 @@ description: "Two-layer review stage: spec compliance first, then code quality a
 > **Even if you read nothing else, do these 3 things:**
 > 1. Obey the HARD-GATE below — violating it invalidates the entire stage.
 > 2. Complete every checklist step in order and write the artifact to \`.cclaw/artifacts/07-review.md\`.
-> 3. Do not claim completion without satisfying gates: \`review_layer1_spec_compliance\`, \`review_layer2_correctness\`, \`review_layer2_security\` (+4 more).
+> 3. Do not claim completion without satisfying gates: \`review_layer1_spec_compliance\`, \`review_layer2_correctness\`, \`review_layer2_security\` (+5 more).
 >
 > **After this stage:** update \`flow-state.json\` and tell the user to run \`/cc-next\`.
 
@@ -189,6 +189,7 @@ These are thinking instincts, not a checklist. Let them shape your perspective t
 - \`review_layer2_architecture\` — Architecture fit review completed.
 - \`review_severity_classified\` — All findings are severity-tagged.
 - \`review_criticals_resolved\` — No unresolved critical blockers remain.
+- \`review_army_json_valid\` — 07-review-army.json passes schema validation (validateReviewArmy).
 
 ## Required Evidence
 - [ ] Artifact written to \`.cclaw/artifacts/07-review.md\`.
@@ -395,7 +396,7 @@ When all required gates are satisfied and the artifact is written:
 1. **Update \`.cclaw/state/flow-state.json\`:**
    - Set \`currentStage\` to \`"ship"\`
    - Add \`"review"\` to \`completedStages\` array
-   - Move all gate IDs for this stage (\`review_layer1_spec_compliance\`, \`review_layer2_correctness\`, \`review_layer2_security\`, \`review_layer2_performance\`, \`review_layer2_architecture\`, \`review_severity_classified\`, \`review_criticals_resolved\`) into \`stageGateCatalog.review.passed\`
+   - Move all gate IDs for this stage (\`review_layer1_spec_compliance\`, \`review_layer2_correctness\`, \`review_layer2_security\`, \`review_layer2_performance\`, \`review_layer2_architecture\`, \`review_severity_classified\`, \`review_criticals_resolved\`, \`review_army_json_valid\`) into \`stageGateCatalog.review.passed\`
    - Clear \`stageGateCatalog.review.blocked\`
    - For each passed gate, add an entry to \`guardEvidence\`: \`"<gate_id>": "<artifact path or excerpt proving the gate>"\`. Do NOT leave \`guardEvidence\` empty.
 2. **Persist artifact** at \`.cclaw/artifacts/07-review.md\`. Do NOT manually copy into \`.cclaw/runs/\`; archival is handled by \`cclaw archive\`.
@@ -1626,7 +1627,7 @@ Do NOT ship, merge, or release until both review layers complete with an explici
 6. Do NOT copy artifacts into \`.cclaw/runs/\`; archival is handled only by \`cclaw archive\`.
 
 ## Gates
-\`review_layer1_spec_compliance\`, \`review_layer2_correctness\`, \`review_layer2_security\`, \`review_layer2_performance\`, \`review_layer2_architecture\`, \`review_severity_classified\`, \`review_criticals_resolved\`
+\`review_layer1_spec_compliance\`, \`review_layer2_correctness\`, \`review_layer2_security\`, \`review_layer2_performance\`, \`review_layer2_architecture\`, \`review_severity_classified\`, \`review_criticals_resolved\`, \`review_army_json_valid\`
 
 ## Exit
 - both layers completed

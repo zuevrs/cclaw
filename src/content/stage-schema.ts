@@ -1255,7 +1255,8 @@ const REVIEW: StageSchemaInput = {
     { id: "review_layer2_performance", description: "Performance review completed." },
     { id: "review_layer2_architecture", description: "Architecture fit review completed." },
     { id: "review_severity_classified", description: "All findings are severity-tagged." },
-    { id: "review_criticals_resolved", description: "No unresolved critical blockers remain." }
+    { id: "review_criticals_resolved", description: "No unresolved critical blockers remain." },
+    { id: "review_army_json_valid", description: "07-review-army.json passes schema validation (validateReviewArmy)." }
   ],
   requiredEvidence: [
     "Artifact written to `.cclaw/artifacts/07-review.md`.",
