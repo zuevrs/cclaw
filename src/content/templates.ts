@@ -423,6 +423,10 @@ Execution rule: complete and verify each wave before starting the next wave.
 - Selected label (A/B/C/D):
 - Execution result:
 - PR URL / merge commit / kept branch / discard confirmation:
+
+## Completion Status
+- SHIPPED | SHIPPED_WITH_EXCEPTIONS | BLOCKED
+- Exceptions (if any):
 `
 };
 

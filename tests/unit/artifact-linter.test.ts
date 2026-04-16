@@ -171,6 +171,113 @@ describe("artifact linter heuristics", () => {
     expect(finalization?.details).toContain("exactly one selected token");
   });
 
+  it("passes complete ship artifact", async () => {
+    const root = await fs.mkdtemp(path.join(os.tmpdir(), "cclaw-ship-full-pass-"));
+    await writeRuntimeArtifact(root, "08-ship.md", `# Ship Artifact
+
+## Preflight Results
+- Review verdict: APPROVED
+- Build: pass
+- Tests: pass (47 passed, 0 failed)
+- Lint: pass
+- Type-check: pass
+- Working tree clean: yes
+
+## Release Notes
+- Added: notification feed with SSE
+- Breaking changes: None
+
+## Rollback Plan
+- Trigger conditions: error rate >5%
+- Rollback steps: git revert <sha> && git push
+- Verification steps: confirm error rate baseline
+
+## Monitoring
+- Metrics/logs to watch: error rate for 24h
+
+## Finalization
+- Selected enum: FINALIZE_OPEN_PR
+- Execution result: PR #42 merged
+`);
+
+    const result = await lintArtifact(root, "ship");
+    expect(result.passed).toBe(true);
+  });
+
+  it("fails ship when Preflight Results is missing", async () => {
+    const root = await fs.mkdtemp(path.join(os.tmpdir(), "cclaw-ship-no-preflight-"));
+    await writeRuntimeArtifact(root, "08-ship.md", `# Ship Artifact
+
+## Release Notes
+- Added: notification feed
+
+## Rollback Plan
+- Trigger conditions: error rate >5%
+- Rollback steps: revert
+- Verification steps: smoke test
+
+## Finalization
+- Selected enum: FINALIZE_OPEN_PR
+- Execution result: PR merged
+`);
+
+    const result = await lintArtifact(root, "ship");
+    expect(result.passed).toBe(false);
+    const pf = result.findings.find((f) => f.section === "Preflight Results");
+    expect(pf?.found).toBe(false);
+    expect(pf?.required).toBe(true);
+  });
+
+  it("fails ship when Rollback Plan is missing", async () => {
+    const root = await fs.mkdtemp(path.join(os.tmpdir(), "cclaw-ship-no-rollback-"));
+    await writeRuntimeArtifact(root, "08-ship.md", `# Ship Artifact
+
+## Preflight Results
+- Build: pass
+- Tests: pass
+
+## Release Notes
+- Added: notification feed
+
+## Finalization
+- Selected enum: FINALIZE_MERGE_LOCAL
+- Execution result: merged locally
+`);
+
+    const result = await lintArtifact(root, "ship");
+    expect(result.passed).toBe(false);
+    const rb = result.findings.find((f) => f.section === "Rollback Plan");
+    expect(rb?.found).toBe(false);
+    expect(rb?.required).toBe(true);
+  });
+
+  it("fails ship when Finalization has invalid single token", async () => {
+    const root = await fs.mkdtemp(path.join(os.tmpdir(), "cclaw-ship-bad-finalize-"));
+    await writeRuntimeArtifact(root, "08-ship.md", `# Ship Artifact
+
+## Preflight Results
+- Build: pass
+- Tests: pass
+
+## Release Notes
+- Added: notification feed
+
+## Rollback Plan
+- Trigger conditions: error rate >5%
+- Rollback steps: revert
+- Verification steps: smoke test
+
+## Finalization
+- Selected enum: DEPLOY_NOW
+- Execution result: deployed
+`);
+
+    const result = await lintArtifact(root, "ship");
+    const fin = result.findings.find((f) => f.section === "Finalization");
+    expect(fin?.found).toBe(false);
+    expect(fin?.details).toContain("exactly one selected token");
+  });
+
   it("requires review readiness dashboard section for review artifacts", async () => {
     const root = await fs.mkdtemp(path.join(os.tmpdir(), "cclaw-artifact-lint-review-readiness-"));
     await writeRuntimeArtifact(root, "07-review.md", `# Review Artifact
@@ -945,6 +1052,77 @@ API -> Service -> DB
     expect(result.passed).toBe(true);
   });
 
+  it("fails review when Layer 1 Verdict is missing", async () => {
+    const root = await fs.mkdtemp(path.join(os.tmpdir(), "cclaw-review-no-l1-"));
+    await writeRuntimeArtifact(root, "07-review.md", `# Review Artifact
+
+## Layer 2 Findings
+| ID | Severity | Category | Description | Status |
+|---|---|---|---|---|
+| R-1 | Suggestion | correctness | Minor naming | open |
+
+## Review Army Contract
+- See \`07-review-army.json\`
+- Reconciliation summary: none
+
+## Review Readiness Dashboard
+- Layer 1 complete: no
+- Layer 2 complete: yes
+- Review army schema valid: yes
+- Open critical blockers: 0
+
+## Severity Summary
+- Critical: 0
+- Important: 0
+- Suggestion: 1
+
+## Final Verdict
+- APPROVED
+`);
+
+    const result = await lintArtifact(root, "review");
+    expect(result.passed).toBe(false);
+    const l1 = result.findings.find((f) => f.section === "Layer 1 Verdict");
+    expect(l1?.found).toBe(false);
+    expect(l1?.required).toBe(true);
+  });
+
+  it("fails review when Review Army Contract is missing", async () => {
+    const root = await fs.mkdtemp(path.join(os.tmpdir(), "cclaw-review-no-army-"));
+    await writeRuntimeArtifact(root, "07-review.md", `# Review Artifact
+
+## Layer 1 Verdict
+| Criterion | Verdict | Evidence |
+|---|---|---|
+| AC-1 | PASS | test evidence |
+
+## Layer 2 Findings
+| ID | Severity | Category | Description | Status |
+|---|---|---|---|---|
+| R-1 | Suggestion | correctness | Minor naming | open |
+
+## Review Readiness Dashboard
+- Layer 1 complete: yes
+- Layer 2 complete: yes
+- Review army schema valid: no
+- Open critical blockers: 0
+
+## Severity Summary
+- Critical: 0
+- Important: 0
+- Suggestion: 1
+
+## Final Verdict
+- APPROVED
+`);
+
+    const result = await lintArtifact(root, "review");
+    expect(result.passed).toBe(false);
+    const army = result.findings.find((f) => f.section === "Review Army Contract");
+    expect(army?.found).toBe(false);
+    expect(army?.required).toBe(true);
+  });
+
   it("fails review when Layer 2 Findings is missing", async () => {
     const root = await fs.mkdtemp(path.join(os.tmpdir(), "cclaw-review-no-l2-"));
     await writeRuntimeArtifact(root, "07-review.md", `# Review Artifact
@@ -1224,6 +1402,50 @@ describe("review army schema validation", () => {
     const result = await validateReviewArmy(root);
     expect(result.valid).toBe(false);
     expect(result.errors.join("\n")).toContain("multiSpecialistConfirmed references unknown finding id");
+  });
+
+  it("rejects duplicate finding IDs", async () => {
+    const root = await fs.mkdtemp(path.join(os.tmpdir(), "cclaw-review-army-dup-id-"));
+    await fs.mkdir(path.join(root, ".cclaw/state"), { recursive: true });
+    await fs.mkdir(path.join(root, ".cclaw/artifacts"), { recursive: true });
+    await fs.writeFile(path.join(root, ".cclaw/state/flow-state.json"), JSON.stringify({
+      currentStage: "review",
+      activeRunId: "active",
+      completedStages: []
+    }, null, 2), "utf8");
+    await fs.writeFile(path.join(root, ".cclaw/artifacts/07-review-army.json"), JSON.stringify({
+      version: 1,
+      generatedAt: "2026-01-01T00:00:00Z",
+      scope: { base: "main", head: "feature", files: ["src/a.ts"] },
+      findings: [
+        {
+          id: "F-1",
+          severity: "Suggestion",
+          confidence: 5,
+          fingerprint: "fp-1",
+          reportedBy: ["code-reviewer"],
+          status: "open"
+        },
+        {
+          id: "F-1",
+          severity: "Important",
+          confidence: 6,
+          fingerprint: "fp-2",
+          reportedBy: ["security-reviewer"],
+          status: "open"
+        }
+      ],
+      reconciliation: {
+        duplicatesCollapsed: 0,
+        conflicts: [],
+        multiSpecialistConfirmed: [],
+        shipBlockers: []
+      }
+    }, null, 2), "utf8");
+
+    const result = await validateReviewArmy(root);
+    expect(result.valid).toBe(false);
+    expect(result.errors.join("\n")).toContain("must be unique");
   });
 
   it("rejects open critical findings that are not listed as ship blockers", async () => {

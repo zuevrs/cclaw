@@ -15,6 +15,13 @@ export function commandContract(stage: FlowStage): string {
     .map((g) => `\`${g.id}\``)
     .join(", ");
 
+  const writes = schema.crossStageTrace.writesTo;
+  const writesLine = writes.map((w) => `\`${w}\``).join(", ");
+  const primaryArtifact = `.cclaw/artifacts/${schema.artifactFile}`;
+  const writeStepPaths = writes.length > 1
+    ? writes.map((w) => `\`${w}\``).join(" and ")
+    : `\`${primaryArtifact}\``;
+
   return `# /cc-${stage}
 
 Load and follow **${skillPath}** — it contains the full checklist, examples, interaction protocol, and verification discipline.
@@ -24,7 +31,7 @@ ${schema.hardGate}
 
 ## In / Out
 - **Reads:** ${readsLine}
-- **Writes:** \`.cclaw/artifacts/${schema.artifactFile}\`
+- **Writes:** ${writesLine}
 - **Next:** \`/cc-next\` (updates flow-state and loads the next stage)
 
 ## Context Hydration (mandatory before stage work)
@@ -33,7 +40,7 @@ ${schema.hardGate}
 3. Load required upstream artifacts for this stage:
 ${hydrationLines}
 4. Load \`.cclaw/knowledge.md\` and apply relevant entries.
-5. Write stage output to \`.cclaw/artifacts/${schema.artifactFile}\`.
+5. Write stage output to ${writeStepPaths}.
 6. Do NOT copy artifacts into \`.cclaw/runs/\`; archival is handled only by \`cclaw archive\`.
 
 ## Gates

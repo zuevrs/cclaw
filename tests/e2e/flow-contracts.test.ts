@@ -223,4 +223,16 @@ describe("flow command contracts", () => {
 
     expect(reviewSkill).toMatchSnapshot("review-skill");
   });
+
+  it("matches golden snapshot for ship skill", async () => {
+    const root = await fs.mkdtemp(path.join(os.tmpdir(), "cclaw-golden-ship-"));
+    await initCclaw({ projectRoot: root });
+
+    const shipSkill = await fs.readFile(
+      path.join(root, ".cclaw/skills/shipping-and-handoff/SKILL.md"),
+      "utf8"
+    );
+
+    expect(shipSkill).toMatchSnapshot("ship-skill");
+  });
 });

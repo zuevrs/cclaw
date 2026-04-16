@@ -1461,7 +1461,8 @@ const SHIP: StageSchemaInput = {
     { id: "ship_release_notes_written", description: "Release notes are complete and accurate." },
     { id: "ship_rollback_plan_ready", description: "Rollback trigger, steps, and verification are documented." },
     { id: "ship_finalization_mode_selected", description: "Exactly one finalization action is selected." },
-    { id: "ship_finalization_executed", description: "Selected finalization action was executed and verified." }
+    { id: "ship_finalization_executed", description: "Selected finalization action was executed and verified." },
+    { id: "ship_post_merge_tests", description: "Full test suite re-run on the merged result (not just the branch). Post-merge failures caught before release." }
   ],
   requiredEvidence: [
     "Artifact written to `.cclaw/artifacts/08-ship.md`.",
@@ -1494,7 +1495,10 @@ const SHIP: StageSchemaInput = {
   rationalizations: [
     { claim: "Rollback details can be written after release.", reality: "Rollback is part of release readiness, not post-release cleanup." },
     { claim: "Finalization choice is obvious from context.", reality: "Explicit branch action prevents accidental release state." },
-    { claim: "Urgent fixes can skip preflight.", reality: "Urgency increases risk; preflight discipline matters more, not less." }
+    { claim: "Urgent fixes can skip preflight.", reality: "Urgency increases risk; preflight discipline matters more, not less." },
+    { claim: "Monitoring can be set up after deploy.", reality: "If you cannot observe the release, you cannot detect failure. Monitoring is a ship prerequisite, not a follow-up task." },
+    { claim: "A small merge does not need post-merge testing.", reality: "Small merges on diverged bases cause silent conflicts. Post-merge suite runs catch what branch-only CI misses." },
+    { claim: "Release notes are internal documentation, not a ship gate.", reality: "Release notes are the rollback decision input. Without them, the team cannot assess what changed or why a rollback is needed." }
   ],
   redFlags: [
     "No rollback trigger/steps",
@@ -1519,7 +1523,8 @@ const SHIP: StageSchemaInput = {
     { name: "Rollback-First Thinking", description: "Before shipping, answer: what tells me this is broken? How do I undo it? How do I verify the undo worked? If you cannot answer all three, you are not ready." },
     { name: "Explicit Over Implicit Finalization", description: "Merge, PR, keep, discard — each has different consequences. Pick one. Say it out loud. Write it down. Never let finalization be 'whatever the default is.'" },
     { name: "Post-Merge Paranoia", description: "The merge itself can introduce failures even when both branches pass independently. Always run the full suite AFTER merge, not just before." },
-    { name: "Observability Before Ship", description: "If you cannot monitor the change in production, you cannot know if it is broken. Monitoring/logging is a ship prerequisite, not a follow-up." }
+    { name: "Observability Before Ship", description: "If you cannot monitor the change in production, you cannot know if it is broken. Monitoring/logging is a ship prerequisite, not a follow-up." },
+    { name: "Release Blast Radius", description: "Before shipping, map the blast radius: how many users are affected if this breaks? Is it one endpoint or the entire app? Scale rollback urgency and monitoring to the blast radius, not the diff size. A 3-line auth change can have infinite blast radius." }
   ],
   reviewSections: [
     {
@@ -1546,17 +1551,22 @@ const SHIP: StageSchemaInput = {
   ],
   completionStatus: ["SHIPPED", "SHIPPED_WITH_EXCEPTIONS", "BLOCKED"],
   crossStageTrace: {
-    readsFrom: [".cclaw/artifacts/07-review.md", ".cclaw/artifacts/06-tdd.md"],
+    readsFrom: [".cclaw/artifacts/07-review.md", ".cclaw/artifacts/06-tdd.md", ".cclaw/artifacts/05-plan.md", ".cclaw/artifacts/04-spec.md"],
     writesTo: [".cclaw/artifacts/08-ship.md"],
-    traceabilityRule: "Ship artifact must reference review verdict and resolution status. Rollback plan must reference specific changes that could fail."
+    traceabilityRule: "Ship artifact must reference review verdict and resolution status. Release notes must reference spec criteria. Rollback plan must reference specific changes that could fail."
   },
   artifactValidation: [
     { section: "Preflight Results", required: true, validationRule: "Build, test, lint, type-check results captured with fresh output. Exceptions documented if any." },
     { section: "Release Notes", required: true, validationRule: "What changed, why, impact. References spec criteria. Breaking changes flagged." },
     { section: "Rollback Plan", required: true, validationRule: "Trigger conditions, rollback steps (exact commands), verification steps." },
     { section: "Monitoring", required: false, validationRule: "If applicable: what metrics/logs to watch post-deploy. Risk note if no monitoring." },
-    { section: "Finalization", required: true, validationRule: "Exactly one finalization enum token selected. Execution result documented. Worktree cleaned if applicable." }
-  ]
+    { section: "Finalization", required: true, validationRule: "Exactly one finalization enum token selected. Execution result documented. Worktree cleaned if applicable." },
+    { section: "Completion Status", required: false, validationRule: "If present: exactly one of SHIPPED, SHIPPED_WITH_EXCEPTIONS, BLOCKED. Exceptions documented when applicable." }
+  ],
+  namedAntiPattern: {
+    title: "Green CI Means Safe to Merge",
+    description: "CI passing on a feature branch does not prove the merged result is safe. Post-merge test failures are common when the base branch has diverged. Re-run the full suite on the merge result, not just the branch. A green branch badge is a necessary condition, not a sufficient one."
+  }
 };
 
 // ---------------------------------------------------------------------------
