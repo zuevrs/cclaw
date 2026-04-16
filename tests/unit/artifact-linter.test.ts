@@ -454,6 +454,108 @@ API -> Service -> DB
     expect(result.passed).toBe(true);
   });
 
+  it("passes complete plan artifact", async () => {
+    const root = await fs.mkdtemp(path.join(os.tmpdir(), "cclaw-plan-full-pass-"));
+    await writeRuntimeArtifact(root, "05-plan.md", `# Plan Artifact
+
+## Dependency Graph
+- T-1 -> T-2 -> T-3
+
+## Dependency Waves
+
+### Wave 1
+- Task IDs: T-1
+- Verification gate: schema tests pass
+
+### Wave 2
+- Task IDs: T-2
+- Depends on: Wave 1
+- Verification gate: integration tests pass
+
+## Task List
+| Task ID | Description | Acceptance criterion | Verification command | Effort |
+|---|---|---|---|---|
+| T-1 | Define schema | AC-1 | npm test | S |
+| T-2 | Implement publisher | AC-1, AC-2 | npm test | M |
+
+## Acceptance Mapping
+| Criterion ID | Task IDs |
+|---|---|
+| AC-1 | T-1, T-2 |
+| AC-2 | T-2 |
+
+## WAIT_FOR_CONFIRM
+- Status: pending
+- Confirmed by:
+`);
+
+    const result = await lintArtifact(root, "plan");
+    expect(result.passed).toBe(true);
+  });
+
+  it("fails plan when Dependency Graph is missing", async () => {
+    const root = await fs.mkdtemp(path.join(os.tmpdir(), "cclaw-plan-no-dg-"));
+    await writeRuntimeArtifact(root, "05-plan.md", `# Plan Artifact
+
+## Dependency Waves
+
+### Wave 1
+- Task IDs: T-1
+- Verification gate: tests pass
+
+## Task List
+| Task ID | Description | Acceptance criterion | Verification command | Effort |
+|---|---|---|---|---|
+| T-1 | Do stuff | AC-1 | npm test | S |
+
+## Acceptance Mapping
+| Criterion ID | Task IDs |
+|---|---|
+| AC-1 | T-1 |
+
+## WAIT_FOR_CONFIRM
+- Status: pending
+- Confirmed by:
+`);
+
+    const result = await lintArtifact(root, "plan");
+    expect(result.passed).toBe(false);
+    const dg = result.findings.find((f) => f.section === "Dependency Graph");
+    expect(dg?.found).toBe(false);
+    expect(dg?.required).toBe(true);
+  });
+
+  it("fails plan when Task List is empty", async () => {
+    const root = await fs.mkdtemp(path.join(os.tmpdir(), "cclaw-plan-empty-tasks-"));
+    await writeRuntimeArtifact(root, "05-plan.md", `# Plan Artifact
+
+## Dependency Graph
+- T-1
+
+## Dependency Waves
+
+### Wave 1
+- Task IDs: T-1
+- Verification gate: tests pass
+
+## Task List
+
+## Acceptance Mapping
+| Criterion ID | Task IDs |
+|---|---|
+| AC-1 | T-1 |
+
+## WAIT_FOR_CONFIRM
+- Status: pending
+- Confirmed by:
+`);
+
+    const result = await lintArtifact(root, "plan");
+    expect(result.passed).toBe(false);
+    const tl = result.findings.find((f) => f.section === "Task List");
+    expect(tl?.found).toBe(false);
+  });
+
   it("fails plan WAIT_FOR_CONFIRM when Status is missing", async () => {
     const root = await fs.mkdtemp(path.join(os.tmpdir(), "cclaw-plan-wfc-missing-"));
     await writeRuntimeArtifact(root, "05-plan.md", `# Plan Artifact
