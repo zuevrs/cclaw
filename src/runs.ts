@@ -1,9 +1,15 @@
 import fs from "node:fs/promises";
 import path from "node:path";
 import { COMMAND_FILE_ORDER, RUNTIME_ROOT } from "./constants.js";
-import { canTransition, createInitialFlowState, type FlowState } from "./flow-state.js";
+import {
+  canTransition,
+  createInitialFlowState,
+  isFlowTrack,
+  skippedStagesForTrack,
+  type FlowState
+} from "./flow-state.js";
 import { ensureDir, exists, withDirectoryLock, writeFileSafe } from "./fs-utils.js";
-import type { FlowStage } from "./types.js";
+import type { FlowStage, FlowTrack } from "./types.js";
 
 export class InvalidStageTransitionError extends Error {
   constructor(
@@ -230,8 +236,29 @@ function sanitizeStageGateCatalog(
   return next;
 }
 
+function coerceTrack(value: unknown): FlowTrack {
+  return isFlowTrack(value) ? value : "standard";
+}
+
+function sanitizeSkippedStages(value: unknown, track: FlowTrack): FlowStage[] {
+  const trackDefault = skippedStagesForTrack(track);
+  if (!Array.isArray(value)) {
+    return trackDefault;
+  }
+  const seen = new Set<FlowStage>();
+  const out: FlowStage[] = [];
+  for (const raw of value) {
+    if (isFlowStage(raw) && !seen.has(raw)) {
+      seen.add(raw);
+      out.push(raw);
+    }
+  }
+  return out.length > 0 ? out : trackDefault;
+}
+
 function coerceFlowState(parsed: Record<string, unknown>): FlowState {
-  const next = createInitialFlowState();
+  const track = coerceTrack(parsed.track);
+  const next = createInitialFlowState("active", track);
   const activeRunIdRaw = parsed.activeRunId;
   const activeRunId = typeof activeRunIdRaw === "string" && activeRunIdRaw.trim().length > 0
     ? activeRunIdRaw.trim()
@@ -242,7 +269,9 @@ function coerceFlowState(parsed: Record<string, unknown>): FlowState {
     currentStage: isFlowStage(parsed.currentStage) ? parsed.currentStage : next.currentStage,
     completedStages: sanitizeCompletedStages(parsed.completedStages),
     guardEvidence: sanitizeGuardEvidence(parsed.guardEvidence),
-    stageGateCatalog: sanitizeStageGateCatalog(parsed.stageGateCatalog, next.stageGateCatalog)
+    stageGateCatalog: sanitizeStageGateCatalog(parsed.stageGateCatalog, next.stageGateCatalog),
+    track,
+    skippedStages: sanitizeSkippedStages(parsed.skippedStages, track)
   };
 }
 

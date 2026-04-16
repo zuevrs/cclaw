@@ -48,6 +48,38 @@ describe("config", () => {
     await expect(readConfig(root)).rejects.toThrow(/unknown top-level key\(s\): surpriseMode/);
   });
 
+  it("defaults defaultTrack to standard when not specified", async () => {
+    const root = await createTempProject("config-default-track");
+    await fs.mkdir(path.join(root, ".cclaw"), { recursive: true });
+    await fs.writeFile(configPath(root), "harnesses:\n  - claude\n", "utf8");
+    const config = await readConfig(root);
+    expect(config.defaultTrack).toBe("standard");
+  });
+
+  it("accepts defaultTrack=quick", async () => {
+    const root = await createTempProject("config-quick-track");
+    await fs.mkdir(path.join(root, ".cclaw"), { recursive: true });
+    await fs.writeFile(
+      configPath(root),
+      "harnesses:\n  - claude\ndefaultTrack: quick\n",
+      "utf8"
+    );
+    const config = await readConfig(root);
+    expect(config.defaultTrack).toBe("quick");
+  });
+
+  it("rejects unknown defaultTrack values with remediation guidance", async () => {
+    const root = await createTempProject("config-bad-track");
+    await fs.mkdir(path.join(root, ".cclaw"), { recursive: true });
+    await fs.writeFile(
+      configPath(root),
+      "harnesses:\n  - claude\ndefaultTrack: turbo\n",
+      "utf8"
+    );
+    await expect(readConfig(root)).rejects.toThrow(/"defaultTrack" must be one of: quick, standard/);
+    await expect(readConfig(root)).rejects.toThrow(/Supported tracks: quick, standard/);
+  });
+
   it("parses prompt guard and git hook settings", async () => {
     const root = await createTempProject("config-global-learnings");
     await fs.mkdir(path.join(root, ".cclaw"), { recursive: true });

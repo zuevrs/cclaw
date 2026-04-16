@@ -60,6 +60,14 @@ This is the only progression command the user needs to drive the entire flow. St
 → If current stage's \`next\` is **\`done\`**: report **"Flow complete. All stages finished."** and stop.
 → Otherwise: load **\`${RUNTIME_ROOT}/skills/<skillFolder>/SKILL.md\`** and **\`${RUNTIME_ROOT}/commands/<nextStage>.md\`** for the successor stage. Execute that stage's protocol.
 
+### Track-aware successor resolution
+
+\`flow-state.json\` carries a \`track\` field (\`"quick"\` or \`"standard"\`) and a \`skippedStages\` array.
+
+- If \`track === "quick"\`, the critical path is **spec → tdd → review → ship**. When advancing, skip any stage listed in \`skippedStages\` — i.e. after the current stage completes, pick the next stage that is NOT in \`skippedStages\`.
+- If \`track === "standard"\`, advance through all 8 stages in their natural order.
+- Never reintroduce a skipped stage mid-run. If the user wants upstream scoping work, they must archive the run and start a new one with \`track: "standard"\`.
+
 ## Resume Semantics
 
 \`/cc-next\` in a **new session** = resume from where you left off:

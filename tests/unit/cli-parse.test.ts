@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { parseArgs, parseHarnesses, usage } from "../../src/cli.js";
+import { parseArgs, parseHarnesses, parseTrack, usage } from "../../src/cli.js";
 
 describe("cli parser", () => {
   it("parses init with harness list", () => {
@@ -54,5 +54,26 @@ describe("cli parser", () => {
     expect(text).toContain("-h");
     expect(text).toContain("--version");
     expect(text).toContain("-v");
+    expect(text).toContain("--track");
+  });
+
+  it("parses init with --track=quick", () => {
+    const parsed = parseArgs(["init", "--track=quick"]);
+    expect(parsed.command).toBe("init");
+    expect(parsed.track).toBe("quick");
+  });
+
+  it("parses init with --track=standard", () => {
+    const parsed = parseArgs(["init", "--track=standard"]);
+    expect(parsed.track).toBe("standard");
+  });
+
+  it("throws for unknown track id", () => {
+    expect(() => parseTrack("turbo")).toThrowError(/Unknown track: turbo/);
+    expect(() => parseTrack("turbo")).toThrowError(/Supported: quick, standard/);
+  });
+
+  it("leaves track undefined when flag not provided", () => {
+    expect(parseArgs(["init"]).track).toBeUndefined();
   });
 });

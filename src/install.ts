@@ -44,11 +44,12 @@ import { ensureGitignore, removeGitignorePatterns } from "./gitignore.js";
 import { HARNESS_ADAPTERS, syncHarnessShims, removeCclawFromAgentsMd } from "./harness-adapters.js";
 import { validateHookDocument } from "./hook-schema.js";
 import { ensureRunSystem, readFlowState } from "./runs.js";
-import type { HarnessId, VibyConfig } from "./types.js";
+import type { FlowTrack, HarnessId, VibyConfig } from "./types.js";
 
 export interface InitOptions {
   projectRoot: string;
   harnesses?: HarnessId[];
+  track?: FlowTrack;
 }
 
 const OPENCODE_PLUGIN_REL_PATH = ".opencode/plugins/cclaw-plugin.mjs";
@@ -725,13 +726,13 @@ async function syncDisabledHarnessArtifacts(projectRoot: string, harnesses: Harn
   }
 }
 
-async function writeState(projectRoot: string, forceReset = false): Promise<void> {
+async function writeState(projectRoot: string, config: VibyConfig, forceReset = false): Promise<void> {
   const statePath = runtimePath(projectRoot, "state", "flow-state.json");
   if (!forceReset && (await exists(statePath))) {
     return;
   }
 
-  const state = createInitialFlowState();
+  const state = createInitialFlowState("active", config.defaultTrack ?? "standard");
   await writeFileSafe(statePath, `${JSON.stringify(state, null, 2)}\n`);
 }
 
@@ -849,7 +850,7 @@ async function materializeRuntime(projectRoot: string, config: VibyConfig, force
   await writeContextModes(projectRoot);
   await writeArtifactTemplates(projectRoot);
   await writeRulebook(projectRoot);
-  await writeState(projectRoot, forceStateReset);
+  await writeState(projectRoot, config, forceStateReset);
   await ensureRunSystem(projectRoot, { createIfMissing: false });
   await ensureSessionStateFiles(projectRoot);
   await writeAdapterManifest(projectRoot, harnesses);
@@ -863,7 +864,7 @@ async function materializeRuntime(projectRoot: string, config: VibyConfig, force
 }
 
 export async function initCclaw(options: InitOptions): Promise<void> {
-  const config = createDefaultConfig(options.harnesses);
+  const config = createDefaultConfig(options.harnesses, options.track);
   await writeConfig(options.projectRoot, config);
   await materializeRuntime(options.projectRoot, config, true);
 }

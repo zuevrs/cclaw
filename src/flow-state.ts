@@ -1,6 +1,7 @@
 import { COMMAND_FILE_ORDER } from "./constants.js";
 import { buildTransitionRules, orderedStageSchemas, stageGateIds } from "./content/stage-schema.js";
-import type { FlowStage, TransitionRule } from "./types.js";
+import { FLOW_STAGES, FLOW_TRACKS, TRACK_STAGES } from "./types.js";
+import type { FlowStage, FlowTrack, TransitionRule } from "./types.js";
 
 export const TRANSITION_RULES: TransitionRule[] = buildTransitionRules();
 
@@ -16,9 +17,48 @@ export interface FlowState {
   completedStages: FlowStage[];
   guardEvidence: Record<string, string>;
   stageGateCatalog: Record<FlowStage, StageGateState>;
+  /** Active flow track (determines which stages are in the critical path for this run). */
+  track: FlowTrack;
+  /** Stages explicitly skipped for this track (empty for standard; populated for quick). */
+  skippedStages: FlowStage[];
 }
 
-export function createInitialFlowState(activeRunId = "active"): FlowState {
+export interface InitialFlowStateOptions {
+  activeRunId?: string;
+  track?: FlowTrack;
+}
+
+export function isFlowTrack(value: unknown): value is FlowTrack {
+  return typeof value === "string" && (FLOW_TRACKS as readonly string[]).includes(value);
+}
+
+export function trackStages(track: FlowTrack): FlowStage[] {
+  return [...TRACK_STAGES[track]];
+}
+
+export function skippedStagesForTrack(track: FlowTrack): FlowStage[] {
+  const inTrack = new Set(TRACK_STAGES[track]);
+  return FLOW_STAGES.filter((stage) => !inTrack.has(stage));
+}
+
+export function firstStageForTrack(track: FlowTrack): FlowStage {
+  const stages = TRACK_STAGES[track];
+  return stages[0] ?? "brainstorm";
+}
+
+export function createInitialFlowState(
+  activeRunIdOrOptions: string | InitialFlowStateOptions = "active",
+  maybeTrack?: FlowTrack
+): FlowState {
+  const options: InitialFlowStateOptions =
+    typeof activeRunIdOrOptions === "string"
+      ? { activeRunId: activeRunIdOrOptions, track: maybeTrack }
+      : activeRunIdOrOptions;
+
+  const activeRunId = options.activeRunId ?? "active";
+  const track: FlowTrack = options.track ?? "standard";
+  const skippedStages = skippedStagesForTrack(track);
+
   const stageGateCatalog = {} as Record<FlowStage, StageGateState>;
   for (const schema of orderedStageSchemas()) {
     stageGateCatalog[schema.stage] = {
@@ -30,10 +70,12 @@ export function createInitialFlowState(activeRunId = "active"): FlowState {
 
   return {
     activeRunId,
-    currentStage: "brainstorm",
+    currentStage: firstStageForTrack(track),
     completedStages: [],
     guardEvidence: {},
-    stageGateCatalog
+    stageGateCatalog,
+    track,
+    skippedStages
   };
 }
 
@@ -46,20 +88,34 @@ export function getTransitionGuards(from: FlowStage, to: FlowStage): string[] {
   return match ? [...match.guards] : [];
 }
 
-export function nextStage(stage: FlowStage): FlowStage | null {
-  const index = COMMAND_FILE_ORDER.indexOf(stage);
-  if (index < 0 || index === COMMAND_FILE_ORDER.length - 1) {
+export function nextStage(stage: FlowStage, track: FlowTrack = "standard"): FlowStage | null {
+  const ordered = TRACK_STAGES[track];
+  const index = ordered.indexOf(stage);
+  if (index < 0) {
+    const fallback = COMMAND_FILE_ORDER.indexOf(stage);
+    if (fallback < 0 || fallback === COMMAND_FILE_ORDER.length - 1) {
+      return null;
+    }
+    return COMMAND_FILE_ORDER[fallback + 1];
+  }
+  if (index === ordered.length - 1) {
     return null;
   }
-
-  return COMMAND_FILE_ORDER[index + 1];
+  return ordered[index + 1];
 }
 
-export function previousStage(stage: FlowStage): FlowStage | null {
-  const index = COMMAND_FILE_ORDER.indexOf(stage);
-  if (index <= 0) {
+export function previousStage(stage: FlowStage, track: FlowTrack = "standard"): FlowStage | null {
+  const ordered = TRACK_STAGES[track];
+  const index = ordered.indexOf(stage);
+  if (index === 0) {
     return null;
   }
-
-  return COMMAND_FILE_ORDER[index - 1];
+  if (index < 0) {
+    const fallback = COMMAND_FILE_ORDER.indexOf(stage);
+    if (fallback <= 0) {
+      return null;
+    }
+    return COMMAND_FILE_ORDER[fallback - 1];
+  }
+  return ordered[index - 1];
 }
