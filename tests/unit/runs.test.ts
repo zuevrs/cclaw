@@ -5,6 +5,7 @@ import { describe, expect, it } from "vitest";
 import { createInitialFlowState } from "../../src/flow-state.js";
 import {
   archiveRun,
+  CorruptFlowStateError,
   ensureRunSystem,
   listRuns,
   readFlowState,
@@ -105,5 +106,34 @@ describe("runs system", () => {
     expect(state.stageGateCatalog.brainstorm.required).not.toContain("tampered");
     expect(state.stageGateCatalog.brainstorm.passed).toEqual(["brainstorm_context_explored"]);
     expect(state.stageGateCatalog.brainstorm.blocked).toEqual(["brainstorm_direction_approved"]);
+  });
+
+  it("quarantines corrupt flow-state.json and throws CorruptFlowStateError", async () => {
+    const root = await fs.mkdtemp(path.join(os.tmpdir(), "cclaw-runs-corrupt-"));
+    await ensureRunSystem(root);
+    const flowPath = path.join(root, ".cclaw/state/flow-state.json");
+    await fs.writeFile(flowPath, "this is not { json", "utf8");
+
+    await expect(readFlowState(root)).rejects.toBeInstanceOf(CorruptFlowStateError);
+
+    await expect(fs.stat(flowPath)).rejects.toThrow();
+    const stateDirEntries = await fs.readdir(path.join(root, ".cclaw/state"));
+    const quarantined = stateDirEntries.filter((name) => name.startsWith("flow-state.json.corrupt-"));
+    expect(quarantined).toHaveLength(1);
+    const quarantinedContents = await fs.readFile(
+      path.join(root, ".cclaw/state", quarantined[0]),
+      "utf8"
+    );
+    expect(quarantinedContents).toBe("this is not { json");
+  });
+
+  it("quarantines flow-state.json when top-level value is not an object", async () => {
+    const root = await fs.mkdtemp(path.join(os.tmpdir(), "cclaw-runs-corrupt-array-"));
+    await ensureRunSystem(root);
+    const flowPath = path.join(root, ".cclaw/state/flow-state.json");
+    await fs.writeFile(flowPath, "[1,2,3]", "utf8");
+
+    await expect(readFlowState(root)).rejects.toBeInstanceOf(CorruptFlowStateError);
+    await expect(fs.stat(flowPath)).rejects.toThrow();
   });
 });
