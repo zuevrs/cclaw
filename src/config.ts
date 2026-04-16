@@ -4,7 +4,7 @@ import { parse, stringify } from "yaml";
 import { CCLAW_VERSION, DEFAULT_HARNESSES, FLOW_VERSION, RUNTIME_ROOT } from "./constants.js";
 import { exists, writeFileSafe } from "./fs-utils.js";
 import { FLOW_TRACKS, HARNESS_IDS } from "./types.js";
-import type { FlowTrack, HarnessId, VibyConfig } from "./types.js";
+import type { FlowTrack, HarnessId, InitProfile, VibyConfig } from "./types.js";
 
 const CONFIG_PATH = `${RUNTIME_ROOT}/config.yaml`;
 const HARNESS_ID_SET = new Set<string>(HARNESS_IDS);
@@ -54,6 +54,47 @@ export function createDefaultConfig(
     gitHookGuards: false,
     defaultTrack
   };
+}
+
+/**
+ * Build a VibyConfig for a named init profile. Profile defaults are applied
+ * first, then any explicit overrides (CLI flags) win. This keeps the profile
+ * contract deterministic and testable.
+ */
+export function createProfileConfig(
+  profile: InitProfile,
+  overrides: { harnesses?: HarnessId[]; defaultTrack?: FlowTrack } = {}
+): VibyConfig {
+  const base = createDefaultConfig();
+  switch (profile) {
+    case "minimal":
+      return {
+        ...base,
+        harnesses: overrides.harnesses ?? ["claude"],
+        autoAdvance: false,
+        promptGuardMode: "advisory",
+        gitHookGuards: false,
+        defaultTrack: overrides.defaultTrack ?? "quick"
+      };
+    case "standard":
+      return {
+        ...base,
+        harnesses: overrides.harnesses ?? DEFAULT_HARNESSES,
+        autoAdvance: false,
+        promptGuardMode: "advisory",
+        gitHookGuards: false,
+        defaultTrack: overrides.defaultTrack ?? "standard"
+      };
+    case "full":
+      return {
+        ...base,
+        harnesses: overrides.harnesses ?? DEFAULT_HARNESSES,
+        autoAdvance: false,
+        promptGuardMode: "strict",
+        gitHookGuards: true,
+        defaultTrack: overrides.defaultTrack ?? "standard"
+      };
+  }
 }
 
 export async function readConfig(projectRoot: string): Promise<VibyConfig> {

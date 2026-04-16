@@ -30,6 +30,19 @@ export const TRACK_STAGES: Record<FlowTrack, readonly FlowStage[]> = {
 export const HARNESS_IDS = ["claude", "cursor", "opencode", "codex"] as const;
 export type HarnessId = (typeof HARNESS_IDS)[number];
 
+/**
+ * Init profiles pre-fill `cclaw init` flags for common install shapes.
+ *
+ * - `minimal` — single-harness (claude), quick track default, no git hook guards. For solo
+ *   contributors or bugfix-heavy repos where most work is \`quick\` scope.
+ * - `standard` — default harness set, standard track, no git hook guards, advisory guards.
+ *   Matches the pre-profile default behavior.
+ * - `full` — default harness set, standard track, git hook guards on, strict prompt guards.
+ *   For teams that want every safety rail on.
+ */
+export const INIT_PROFILES = ["minimal", "standard", "full"] as const;
+export type InitProfile = (typeof INIT_PROFILES)[number];
+
 export interface VibyConfig {
   version: string;
   flowVersion: string;

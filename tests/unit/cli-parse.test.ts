@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { parseArgs, parseHarnesses, parseTrack, usage } from "../../src/cli.js";
+import { parseArgs, parseHarnesses, parseProfile, parseTrack, usage } from "../../src/cli.js";
 
 describe("cli parser", () => {
   it("parses init with harness list", () => {
@@ -75,5 +75,32 @@ describe("cli parser", () => {
 
   it("leaves track undefined when flag not provided", () => {
     expect(parseArgs(["init"]).track).toBeUndefined();
+  });
+
+  it("parses init with --profile=minimal", () => {
+    const parsed = parseArgs(["init", "--profile=minimal"]);
+    expect(parsed.command).toBe("init");
+    expect(parsed.profile).toBe("minimal");
+  });
+
+  it("parses init with --profile=standard", () => {
+    expect(parseArgs(["init", "--profile=standard"]).profile).toBe("standard");
+  });
+
+  it("parses init with --profile=full", () => {
+    expect(parseArgs(["init", "--profile=full"]).profile).toBe("full");
+  });
+
+  it("throws for unknown profile id", () => {
+    expect(() => parseProfile("enterprise")).toThrowError(/Unknown profile: enterprise/);
+    expect(() => parseProfile("enterprise")).toThrowError(/Supported: minimal, standard, full/);
+  });
+
+  it("leaves profile undefined when flag not provided", () => {
+    expect(parseArgs(["init"]).profile).toBeUndefined();
+  });
+
+  it("documents --profile in usage", () => {
+    expect(usage()).toContain("--profile");
   });
 });

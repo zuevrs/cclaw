@@ -8,7 +8,7 @@ import {
   RUNTIME_ROOT,
   UTILITY_COMMANDS
 } from "./constants.js";
-import { writeConfig, createDefaultConfig, readConfig, configPath } from "./config.js";
+import { writeConfig, createDefaultConfig, createProfileConfig, readConfig, configPath } from "./config.js";
 import { commandContract } from "./content/contracts.js";
 import { contextModeFiles, createInitialContextModeState } from "./content/contexts.js";
 import { learnSkillMarkdown, learnCommandContract } from "./content/learnings.js";
@@ -46,12 +46,14 @@ import { ensureGitignore, removeGitignorePatterns } from "./gitignore.js";
 import { HARNESS_ADAPTERS, syncHarnessShims, removeCclawFromAgentsMd } from "./harness-adapters.js";
 import { validateHookDocument } from "./hook-schema.js";
 import { ensureRunSystem, readFlowState } from "./runs.js";
-import type { FlowTrack, HarnessId, VibyConfig } from "./types.js";
+import type { FlowTrack, HarnessId, InitProfile, VibyConfig } from "./types.js";
 
 export interface InitOptions {
   projectRoot: string;
   harnesses?: HarnessId[];
   track?: FlowTrack;
+  /** When set, pre-fills config defaults from the named profile before applying flag overrides. */
+  profile?: InitProfile;
 }
 
 const OPENCODE_PLUGIN_REL_PATH = ".opencode/plugins/cclaw-plugin.mjs";
@@ -1022,7 +1024,12 @@ async function materializeRuntime(projectRoot: string, config: VibyConfig, force
 }
 
 export async function initCclaw(options: InitOptions): Promise<void> {
-  const config = createDefaultConfig(options.harnesses, options.track);
+  const config = options.profile
+    ? createProfileConfig(options.profile, {
+        harnesses: options.harnesses,
+        defaultTrack: options.track
+      })
+    : createDefaultConfig(options.harnesses, options.track);
   await writeConfig(options.projectRoot, config);
   await materializeRuntime(options.projectRoot, config, true);
 }
