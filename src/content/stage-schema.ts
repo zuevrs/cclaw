@@ -513,7 +513,8 @@ const DESIGN: StageSchemaInput = {
     "For design baseline approval: present the full baseline. **STOP.** Do NOT proceed until user explicitly approves the design.",
     "Take a firm position on every recommendation. Do NOT hedge with 'it depends' or 'you could do either'. State your opinion, then justify it.",
     "Use pushback patterns for weak framing: if the user says 'it's just a small change', respond with 'small changes to shared interfaces have outsized blast radius — let's map it'. If 'we'll refactor later', respond with 'later never comes — show me the refactor ticket or do it now'.",
-    "When the user's proposed architecture is suboptimal, say so directly. Offer the alternative with concrete trade-offs, do not bury criticism in praise."
+    "When the user's proposed architecture is suboptimal, say so directly. Offer the alternative with concrete trade-offs, do not bury criticism in praise.",
+    "When encountering ambiguity, classify it before acting: (A) ask user for missing info, (B) enumerate interpretations and pick one with justification, (C) propose hypothesis with validation path. Do NOT silently resolve ambiguity."
   ],
   process: [
     "Read upstream artifacts (brainstorm, scope).",
@@ -615,7 +616,8 @@ const DESIGN: StageSchemaInput = {
     { name: "Owner Preference Alignment", description: "Every recommendation must align with project conventions (DRY, test style, minimal diff, edge-case rigor). Read existing patterns before recommending new ones." },
     { name: "Failure Is Information", description: "A design that fails fast and visibly is better than one that silently degrades. Map every failure mode and make it observable. Undetected failures compound." },
     { name: "Search Breadth Before Depth", description: "Before committing to a design path, survey the full solution space: stdlib, existing code, open-source, prior art. A 30-minute search can save a 30-hour custom build." },
-    { name: "Outside Voice", description: "When confidence is high and options seem obvious, that is exactly when to seek contradiction. Ask: what would a skeptical reviewer challenge here? What assumption am I not questioning?" }
+    { name: "Outside Voice", description: "When confidence is high and options seem obvious, that is exactly when to seek contradiction. Ask: what would a skeptical reviewer challenge here? What assumption am I not questioning?" },
+    { name: "Ambiguity Classification", description: "Before resolving any unclear requirement, classify it: (A) Insufficient information — ask the user. (B) Multiple valid interpretations — enumerate and pick with justification. (C) Genuinely unknown — propose hypothesis and validation path. Never treat all ambiguity the same way." }
   ],
   reviewSections: [
     {
@@ -744,7 +746,8 @@ const SPEC: StageSchemaInput = {
     "Resolve ambiguity before moving to plan. Challenge vague language.",
     "Capture assumptions explicitly, not implicitly.",
     "Require user confirmation on the written spec. **STOP.** Do NOT proceed to plan until user approves.",
-    "For each criterion, ask: how would you test this? If the answer is unclear, rewrite."
+    "For each criterion, ask: how would you test this? If the answer is unclear, rewrite.",
+    "When encountering ambiguity, classify it before acting: (A) ask user for missing info, (B) enumerate interpretations and pick one with justification, (C) propose hypothesis with validation path. Do NOT silently resolve ambiguity."
   ],
   process: [
     "Define measurable acceptance criteria.",
@@ -813,7 +816,8 @@ const SPEC: StageSchemaInput = {
   cognitivePatterns: [
     { name: "Observable Over Descriptive", description: "Requirements describe what can be observed, not what should feel like. Replace every adjective with a measurement." },
     { name: "Boundary Precision", description: "Every acceptance criterion has boundary conditions. What is the minimum valid input? Maximum? What happens at the edges?" },
-    { name: "Assumption Surfacing", description: "Implicit assumptions are invisible requirements. Force every assumption into an explicit statement. If you cannot name the assumption, you have not found it yet." }
+    { name: "Assumption Surfacing", description: "Implicit assumptions are invisible requirements. Force every assumption into an explicit statement. If you cannot name the assumption, you have not found it yet." },
+    { name: "Ambiguity Classification", description: "Before resolving any unclear requirement, classify it: (A) Insufficient information — ask the user. (B) Multiple valid interpretations — enumerate and pick with justification. (C) Genuinely unknown — propose hypothesis and validation path. Never treat all ambiguity the same way." }
   ],
   reviewSections: [],
   completionStatus: ["DONE", "DONE_WITH_CONCERNS", "BLOCKED"],
