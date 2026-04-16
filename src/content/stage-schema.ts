@@ -1670,9 +1670,9 @@ const STAGE_AUTO_SUBAGENT_DISPATCH: Record<FlowStage, StageAutoSubagentDispatch[
     },
     {
       agent: "security-reviewer",
-      mode: "proactive",
-      when: "When auth, input validation, secrets, parser, or privileged actions changed.",
-      purpose: "Raise exploitable findings before release.",
+      mode: "mandatory",
+      when: "Always in review stage. Even when no trust boundaries changed, produce an explicit 'no-change' security attestation.",
+      purpose: "Guarantee a dedicated security pass on every diff: auth, input validation, secrets, injection, privilege, and blast-radius review are never opt-in.",
       requiresUserGate: false
     }
   ],

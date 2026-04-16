@@ -249,7 +249,7 @@ export function agentRoutingTable(): string {
 | Brainstorm (start with \`/cc <idea>\`) | planner | — |
 | Scope / Design / Spec / Plan (advance via \`/cc-next\`) | planner | security-reviewer on design, spec-reviewer on spec |
 | TDD (via \`/cc-next\`) | test-author | doc-updater |
-| Review (via \`/cc-next\`) | spec-reviewer, code-reviewer | security-reviewer |
+| Review (via \`/cc-next\`) | spec-reviewer, code-reviewer, security-reviewer | — |
 | Ship (via \`/cc-next\`) | — | doc-updater |
 `;
 }
@@ -265,8 +265,8 @@ Cclaw provides specialist agents under \`.cclaw/agents/\` for targeted delegatio
 ${agentRoutingTable()}
 
 **Activation modes:**
-- **Mandatory:** MUST be used when the related stage runs (spec-reviewer, code-reviewer during review)
-- **Proactive:** Should be used automatically when context matches (planner for complex features, security-reviewer for auth code)
+- **Mandatory:** MUST be used when the related stage runs (spec-reviewer, code-reviewer, and security-reviewer during review; planner during scope and design; test-author during tdd; doc-updater during ship). Even if a change has no trust-boundary impact, security-reviewer produces an explicit no-change attestation.
+- **Proactive:** Should be used automatically when context matches (planner for complex features, security-reviewer escalations outside review, doc-updater on behavior changes)
 - **On-demand:** Invoked only when explicitly requested
 
 **Agent files:** \`.cclaw/agents/{name}.md\` — each contains YAML frontmatter with tools and model tier.

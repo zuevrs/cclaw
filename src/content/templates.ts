@@ -138,9 +138,9 @@ export const ARTIFACT_TEMPLATES: Record<string, string> = {
 
 ## Architecture Diagram
 
-\\\`\\\`\\\`
+\`\`\`
 (ASCII, Mermaid, or tool-generated diagram showing component boundaries and data flow direction)
-\\\`\\\`\\\`
+\`\`\`
 
 ## What Already Exists
 | Sub-problem | Existing code/library | Layer | Reuse decision |

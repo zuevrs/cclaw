@@ -60,7 +60,7 @@ Machine-only work should be delegated to specialist agents automatically accordi
 |---|---|---|---|---|
 | spec-reviewer | mandatory | Always in review stage. | Verify implementation against acceptance criteria with file evidence. | not required |
 | code-reviewer | mandatory | Always in review stage. | Assess correctness, maintainability, architecture, and ship risk. | not required |
-| security-reviewer | proactive | When auth, input validation, secrets, parser, or privileged actions changed. | Raise exploitable findings before release. | not required |
+| security-reviewer | mandatory | Always in review stage. Even when no trust boundaries changed, produce an explicit 'no-change' security attestation. | Guarantee a dedicated security pass on every diff: auth, input validation, secrets, injection, privilege, and blast-radius review are never opt-in. | not required |
 
 **Gate rule:** user interaction is required only for approval/override decisions. Do not ask the user to manually trigger machine-only specialist checks.
 
@@ -68,7 +68,7 @@ Machine-only work should be delegated to specialist agents automatically accordi
 
 Before completing this stage, verify that ALL mandatory delegations are recorded. If using a harness that supports Task/delegate tools, each mandatory agent must have been invoked. If the harness does not support delegation, record a waiver with reason \`harness_limitation\` in the delegation log.
 
-Mandatory agents for this stage: \`spec-reviewer\`, \`code-reviewer\`. Stage transition is BLOCKED until all are **completed** or **explicitly waived** by the user (waived entries must name the agent and carry an explicit waiver reason).
+Mandatory agents for this stage: \`spec-reviewer\`, \`code-reviewer\`, \`security-reviewer\`. Stage transition is BLOCKED until all are **completed** or **explicitly waived** by the user (waived entries must name the agent and carry an explicit waiver reason).
 
 On session stop or stage completion, the agent should write delegation entries to \`.cclaw/state/delegation-log.json\` for audit.
 
@@ -388,7 +388,7 @@ When this stage ends, report one of:
 When all required gates are satisfied and the artifact is written:
 
 0. **Delegation pre-flight** (BLOCKING):
-   - Mandatory agents for this stage: \`spec-reviewer\`, \`code-reviewer\`.
+   - Mandatory agents for this stage: \`spec-reviewer\`, \`code-reviewer\`, \`security-reviewer\`.
    - For each mandatory agent: confirm it was dispatched (via Task/delegate) and completed, OR record an explicit waiver with reason in \`.cclaw/state/delegation-log.json\`.
    - Write a JSON entry per agent: \`{ "stage": "review", "agent": "<name>", "mode": "mandatory", "status": "completed"|"waived", "waiverReason": "<if waived>", "ts": "<ISO timestamp>" }\`.
    - If the harness does not support delegation, record status \`"waived"\` with reason \`"harness_limitation"\`.

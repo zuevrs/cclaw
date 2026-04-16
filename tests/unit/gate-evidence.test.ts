@@ -1,9 +1,9 @@
 import fs from "node:fs/promises";
-import os from "node:os";
 import path from "node:path";
 import { describe, expect, it } from "vitest";
 import { stageSchema } from "../../src/content/stage-schema.js";
 import { createInitialFlowState } from "../../src/flow-state.js";
+import { createTempProject } from "../helpers/index.js";
 import {
   reconcileAndWriteCurrentStageGateCatalog,
   reconcileCurrentStageGateCatalog,
@@ -17,7 +17,7 @@ async function prepareRoot(root: string): Promise<void> {
 
 describe("gate evidence verification", () => {
   it("fails when passed gates have no recorded guard evidence", async () => {
-    const root = await fs.mkdtemp(path.join(os.tmpdir(), "cclaw-gate-evidence-fail-"));
+    const root = await createTempProject("gate-evidence-fail");
     await prepareRoot(root);
 
     const state = createInitialFlowState("run-gate");
@@ -30,7 +30,7 @@ describe("gate evidence verification", () => {
   });
 
   it("passes when guard evidence exists and artifact checks satisfy required sections", async () => {
-    const root = await fs.mkdtemp(path.join(os.tmpdir(), "cclaw-gate-evidence-pass-"));
+    const root = await createTempProject("gate-evidence-pass");
     await prepareRoot(root);
     await fs.writeFile(path.join(root, ".cclaw/artifacts/01-brainstorm.md"), `# Brainstorm Artifact
 
@@ -81,7 +81,7 @@ describe("gate evidence verification", () => {
   });
 
   it("fails review stage when review-army payload is invalid", async () => {
-    const root = await fs.mkdtemp(path.join(os.tmpdir(), "cclaw-gate-evidence-review-army-"));
+    const root = await createTempProject("gate-evidence-review-army");
     await prepareRoot(root);
     await fs.writeFile(path.join(root, ".cclaw/artifacts/07-review.md"), `# Review Artifact
 
@@ -167,7 +167,7 @@ describe("gate evidence reconciliation", () => {
   });
 
   it("writes reconciled catalog back to flow-state", async () => {
-    const root = await fs.mkdtemp(path.join(os.tmpdir(), "cclaw-gate-reconcile-writeback-"));
+    const root = await createTempProject("gate-reconcile-writeback");
     await prepareRoot(root);
 
     const state = createInitialFlowState("run-reconcile");

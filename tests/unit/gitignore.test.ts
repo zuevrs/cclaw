@@ -1,12 +1,12 @@
 import fs from "node:fs/promises";
-import os from "node:os";
 import path from "node:path";
 import { describe, expect, it } from "vitest";
 import { ensureGitignore } from "../../src/gitignore.js";
+import { createTempProject } from "../helpers/index.js";
 
 describe("gitignore patcher", () => {
   it("is idempotent", async () => {
-    const root = await fs.mkdtemp(path.join(os.tmpdir(), "cclaw-gitignore-"));
+    const root = await createTempProject("gitignore");
     const gitignore = path.join(root, ".gitignore");
     await fs.writeFile(gitignore, "node_modules/\n", "utf8");
 

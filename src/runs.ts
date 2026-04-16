@@ -8,7 +8,14 @@ import type { FlowStage } from "./types.js";
 const FLOW_STATE_REL_PATH = `${RUNTIME_ROOT}/state/flow-state.json`;
 const RUNS_DIR_REL_PATH = `${RUNTIME_ROOT}/runs`;
 const ACTIVE_ARTIFACTS_REL_PATH = `${RUNTIME_ROOT}/artifacts`;
+const STATE_DIR_REL_PATH = `${RUNTIME_ROOT}/state`;
 const FLOW_STAGE_SET = new Set<string>(COMMAND_FILE_ORDER);
+
+/** State filenames explicitly excluded from the archive snapshot. */
+const STATE_SNAPSHOT_EXCLUDE = new Set<string>([
+  ".flow-state.lock",
+  ".delegation.lock"
+]);
 
 export interface CclawRunMeta {
   id: string;
@@ -22,6 +29,18 @@ export interface ArchiveRunResult {
   archivedAt: string;
   featureName: string;
   resetState: FlowState;
+  snapshottedStateFiles: string[];
+}
+
+export interface ArchiveManifest {
+  version: 1;
+  archiveId: string;
+  archivedAt: string;
+  featureName: string;
+  sourceRunId: string;
+  sourceCurrentStage: FlowStage;
+  sourceCompletedStages: FlowStage[];
+  snapshottedStateFiles: string[];
 }
 
 interface EnsureRunSystemOptions {
@@ -42,6 +61,46 @@ function runsRoot(projectRoot: string): string {
 
 function activeArtifactsPath(projectRoot: string): string {
   return path.join(projectRoot, ACTIVE_ARTIFACTS_REL_PATH);
+}
+
+function stateDirPath(projectRoot: string): string {
+  return path.join(projectRoot, STATE_DIR_REL_PATH);
+}
+
+async function snapshotStateDirectory(
+  projectRoot: string,
+  destinationRoot: string
+): Promise<string[]> {
+  const sourceDir = stateDirPath(projectRoot);
+  if (!(await exists(sourceDir))) {
+    return [];
+  }
+  await ensureDir(destinationRoot);
+  const copied: string[] = [];
+  let entries: Array<{ name: string; isDirectory: () => boolean; isFile: () => boolean }>;
+  try {
+    entries = await fs.readdir(sourceDir, { withFileTypes: true });
+  } catch {
+    return [];
+  }
+  for (const entry of entries) {
+    if (STATE_SNAPSHOT_EXCLUDE.has(entry.name)) continue;
+    if (entry.name.startsWith(".") && !entry.name.endsWith(".json")) continue;
+    const from = path.join(sourceDir, entry.name);
+    const to = path.join(destinationRoot, entry.name);
+    try {
+      if (entry.isDirectory()) {
+        await fs.cp(from, to, { recursive: true });
+        copied.push(`${entry.name}/`);
+      } else if (entry.isFile()) {
+        await fs.copyFile(from, to);
+        copied.push(entry.name);
+      }
+    } catch {
+      // best-effort snapshot; continue on individual failures
+    }
+  }
+  return copied.sort((a, b) => a.localeCompare(b));
 }
 
 function isFlowStage(value: unknown): value is FlowStage {
@@ -185,17 +244,70 @@ async function uniqueArchiveId(projectRoot: string, baseId: string): Promise<str
   return candidate;
 }
 
+export class CorruptFlowStateError extends Error {
+  readonly statePath: string;
+  readonly quarantinedPath: string;
+  constructor(statePath: string, quarantinedPath: string, cause: unknown) {
+    super(
+      `Corrupt flow-state.json detected at ${statePath}. ` +
+        `Quarantined to ${quarantinedPath}. ` +
+        `Inspect the quarantined file, reconcile by hand, then re-run your command ` +
+        `or delete ${statePath} to start over. ` +
+        `Underlying error: ${cause instanceof Error ? cause.message : String(cause)}`
+    );
+    this.name = "CorruptFlowStateError";
+    this.statePath = statePath;
+    this.quarantinedPath = quarantinedPath;
+    if (cause instanceof Error) {
+      (this as { cause?: unknown }).cause = cause;
+    }
+  }
+}
+
+function quarantineTimestamp(date = new Date()): string {
+  return date.toISOString().replace(/[:.]/gu, "-");
+}
+
+async function quarantineCorruptState(statePath: string, cause: unknown): Promise<never> {
+  const quarantinedPath = `${statePath}.corrupt-${quarantineTimestamp()}.json`;
+  try {
+    await fs.rename(statePath, quarantinedPath);
+  } catch (renameErr) {
+    try {
+      const raw = await fs.readFile(statePath, "utf8");
+      await fs.writeFile(quarantinedPath, raw, "utf8");
+      await fs.unlink(statePath).catch(() => undefined);
+    } catch {
+      throw new CorruptFlowStateError(statePath, quarantinedPath, renameErr);
+    }
+  }
+  throw new CorruptFlowStateError(statePath, quarantinedPath, cause);
+}
+
 export async function readFlowState(projectRoot: string): Promise<FlowState> {
   const statePath = flowStatePath(projectRoot);
   if (!(await exists(statePath))) {
     return createInitialFlowState();
   }
+  let raw: string;
   try {
-    const parsed = JSON.parse(await fs.readFile(statePath, "utf8")) as Record<string, unknown>;
-    return coerceFlowState(parsed);
-  } catch {
-    return createInitialFlowState();
+    raw = await fs.readFile(statePath, "utf8");
+  } catch (readErr) {
+    throw new CorruptFlowStateError(statePath, statePath, readErr);
   }
+  let parsed: unknown;
+  try {
+    parsed = JSON.parse(raw);
+  } catch (parseErr) {
+    await quarantineCorruptState(statePath, parseErr);
+  }
+  if (!parsed || typeof parsed !== "object" || Array.isArray(parsed)) {
+    await quarantineCorruptState(
+      statePath,
+      new Error("flow-state.json did not deserialize to a JSON object")
+    );
+  }
+  return coerceFlowState(parsed as Record<string, unknown>);
 }
 
 export async function writeFlowState(projectRoot: string, state: FlowState): Promise<void> {
@@ -262,19 +374,40 @@ export async function archiveRun(projectRoot: string, featureName?: string): Pro
   const archivePath = path.join(runsDir, archiveId);
   const archiveArtifactsPath = path.join(archivePath, "artifacts");
 
+  const sourceState = await readFlowState(projectRoot);
+
   await ensureDir(archivePath);
   await fs.rename(artifactsDir, archiveArtifactsPath);
   await ensureDir(artifactsDir);
 
+  const archiveStatePath = path.join(archivePath, "state");
+  const snapshottedStateFiles = await snapshotStateDirectory(projectRoot, archiveStatePath);
+
   const resetState = createInitialFlowState();
   await writeFlowState(projectRoot, resetState);
   const archivedAt = new Date().toISOString();
+
+  const manifest: ArchiveManifest = {
+    version: 1,
+    archiveId,
+    archivedAt,
+    featureName: feature,
+    sourceRunId: sourceState.activeRunId,
+    sourceCurrentStage: sourceState.currentStage,
+    sourceCompletedStages: sourceState.completedStages,
+    snapshottedStateFiles
+  };
+  await writeFileSafe(
+    path.join(archivePath, "archive-manifest.json"),
+    `${JSON.stringify(manifest, null, 2)}\n`
+  );
 
   return {
     archiveId,
     archivePath,
     archivedAt,
     featureName: feature,
-    resetState
+    resetState,
+    snapshottedStateFiles
   };
 }

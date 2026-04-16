@@ -1,10 +1,10 @@
 import fs from "node:fs/promises";
-import os from "node:os";
 import path from "node:path";
 import { pathToFileURL } from "node:url";
 import { spawn } from "node:child_process";
 import { describe, expect, it } from "vitest";
 import { opencodePluginJs, sessionStartScript, stopCheckpointScript } from "../../src/content/hooks.js";
+import { createTempProject } from "../helpers/index.js";
 import {
   claudeHooksJsonWithObservation,
   contextMonitorScript,
@@ -110,7 +110,7 @@ describe("hooks lifecycle rehydration", () => {
   });
 
   it("session-start script executes and emits bootstrap payload with knowledge", async () => {
-    const root = await fs.mkdtemp(path.join(os.tmpdir(), "cclaw-session-start-runtime-"));
+    const root = await createTempProject("session-start-runtime");
     await fs.mkdir(path.join(root, ".cclaw/state"), { recursive: true });
     await fs.mkdir(path.join(root, ".cclaw/contexts"), { recursive: true });
     await fs.mkdir(path.join(root, ".cclaw/skills/using-cclaw"), { recursive: true });
@@ -161,7 +161,7 @@ describe("hooks lifecycle rehydration", () => {
   });
 
   it("stop script writes checkpoint with run id and preserves progress fields", async () => {
-    const root = await fs.mkdtemp(path.join(os.tmpdir(), "cclaw-stop-runtime-"));
+    const root = await createTempProject("stop-runtime");
     await fs.mkdir(path.join(root, ".cclaw/state"), { recursive: true });
     await fs.writeFile(path.join(root, ".cclaw/state/flow-state.json"), JSON.stringify({
       currentStage: "plan",
@@ -200,7 +200,7 @@ describe("hooks lifecycle rehydration", () => {
   });
 
   it("prompt guard logs advisory events for risky cclaw writes", async () => {
-    const root = await fs.mkdtemp(path.join(os.tmpdir(), "cclaw-prompt-guard-runtime-"));
+    const root = await createTempProject("prompt-guard-runtime");
     await fs.mkdir(path.join(root, ".cclaw/state"), { recursive: true });
     const result = await runScript(
       root,
@@ -223,7 +223,7 @@ describe("hooks lifecycle rehydration", () => {
   });
 
   it("prompt guard blocks risky writes in strict mode", async () => {
-    const root = await fs.mkdtemp(path.join(os.tmpdir(), "cclaw-prompt-guard-strict-runtime-"));
+    const root = await createTempProject("prompt-guard-strict-runtime");
     await fs.mkdir(path.join(root, ".cclaw/state"), { recursive: true });
     const result = await runScript(
       root,
@@ -242,7 +242,7 @@ describe("hooks lifecycle rehydration", () => {
   });
 
   it("workflow guard warns on stage jumps without recent flow read", async () => {
-    const root = await fs.mkdtemp(path.join(os.tmpdir(), "cclaw-workflow-guard-runtime-"));
+    const root = await createTempProject("workflow-guard-runtime");
     await fs.mkdir(path.join(root, ".cclaw/state"), { recursive: true });
     await fs.writeFile(path.join(root, ".cclaw/state/flow-state.json"), JSON.stringify({
       currentStage: "scope",
@@ -271,7 +271,7 @@ describe("hooks lifecycle rehydration", () => {
   });
 
   it("workflow guard exempts cclaw doctor from non-safe-tool in plan stage", async () => {
-    const root = await fs.mkdtemp(path.join(os.tmpdir(), "cclaw-guard-cclaw-cli-"));
+    const root = await createTempProject("guard-cclaw-cli");
     await fs.mkdir(path.join(root, ".cclaw/state"), { recursive: true });
     await fs.writeFile(path.join(root, ".cclaw/state/flow-state.json"), JSON.stringify({
       currentStage: "design",
@@ -307,7 +307,7 @@ describe("hooks lifecycle rehydration", () => {
   });
 
   it("context monitor debounces warnings per band and respects TTL override", async () => {
-    const root = await fs.mkdtemp(path.join(os.tmpdir(), "cclaw-context-monitor-runtime-"));
+    const root = await createTempProject("context-monitor-runtime");
     await fs.mkdir(path.join(root, ".cclaw/state"), { recursive: true });
 
     const payload = JSON.stringify({
@@ -337,7 +337,7 @@ describe("hooks lifecycle rehydration", () => {
   });
 
   it("opencode plugin rehydrates and runs guard hooks", async () => {
-    const root = await fs.mkdtemp(path.join(os.tmpdir(), "cclaw-opencode-runtime-"));
+    const root = await createTempProject("opencode-runtime");
     await fs.mkdir(path.join(root, ".cclaw/hooks"), { recursive: true });
     await fs.mkdir(path.join(root, ".cclaw/state"), { recursive: true });
     await fs.mkdir(path.join(root, ".cclaw/skills/using-cclaw"), { recursive: true });

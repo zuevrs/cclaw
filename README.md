@@ -120,6 +120,12 @@ Required repository secret:
 └── runs/                     # archived feature snapshots (YYYY-MM-DD-feature-name)
 ```
 
+## Harness Integration
+
+Supported harnesses: `claude`, `cursor`, `opencode`, `codex`. The full
+per-harness install surface, feature matrix, and lifecycle details live in
+[docs/harnesses.md](./docs/harnesses.md).
+
 ## License
 
 [MIT](./LICENSE)

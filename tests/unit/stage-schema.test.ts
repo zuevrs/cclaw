@@ -2,6 +2,7 @@ import { describe, expect, it } from "vitest";
 import { stageSchema } from "../../src/content/stage-schema.js";
 import { stageSkillMarkdown } from "../../src/content/skills.js";
 import { enhancedAgentBody } from "../../src/content/subagents.js";
+import { ARTIFACT_TEMPLATES } from "../../src/content/templates.js";
 
 describe("stage schema and subagent alignment", () => {
   it("plan stage reads spec, design, and scope artifacts", () => {
@@ -24,6 +25,21 @@ describe("stage schema and subagent alignment", () => {
     const review = stageSchema("review");
     expect(review.requiredEvidence).toContain("Artifact written to `.cclaw/artifacts/07-review-army.json`.");
     expect(review.policyNeedles).toContain("Review Army");
+  });
+
+  it("review stage mandates security-reviewer alongside spec- and code-reviewer", () => {
+    const review = stageSchema("review");
+    expect(review.mandatoryDelegations).toContain("spec-reviewer");
+    expect(review.mandatoryDelegations).toContain("code-reviewer");
+    expect(review.mandatoryDelegations).toContain("security-reviewer");
+  });
+
+  it("design template renders architecture diagram with clean triple-backtick fences", () => {
+    const design = ARTIFACT_TEMPLATES["03-design.md"];
+    expect(design).toContain("## Architecture Diagram");
+    expect(design).not.toMatch(/\\`\\`\\`/);
+    const diagramBlock = design.split("## Architecture Diagram")[1];
+    expect(diagramBlock).toMatch(/\n```\n[\s\S]*?\n```\n/);
   });
 
   it("stage skills render explicit when-not-to-use guidance", () => {

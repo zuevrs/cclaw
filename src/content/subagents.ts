@@ -39,7 +39,7 @@ For cclaw flow stages, machine-only specialist work should auto-dispatch without
 
 - **design/plan:** planner
 - **tdd:** test-author
-- **review:** spec-reviewer + code-reviewer (security-reviewer when trust boundaries moved)
+- **review:** spec-reviewer + code-reviewer + security-reviewer (security-reviewer is always mandatory; produce an explicit no-change attestation when no trust boundaries moved)
 - **ship:** doc-updater
 
 Human input remains mandatory only at explicit approval gates (plan approval, user challenge resolution, release finalization mode).
