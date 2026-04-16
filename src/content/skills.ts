@@ -433,6 +433,25 @@ ${stageTransitionAutoAdvanceBlock(schema)}
 ${progressiveDisclosureBlock(stage)}
 ${selfImprovementBlock(stage)}
 ## Handoff
+
+Before closing the stage, announce the handoff explicitly so the user can steer. Use the **Handoff Menu** below; never auto-advance silently, even when \`/cc-next\` is available.
+
+### Handoff Menu
+
+Offer the user a lettered choice at the end of the stage (use \`AskUserQuestion\` / \`AskQuestion\` when the harness supports it, otherwise plain lettered text):
+
+- **A) Advance** — run \`/cc-next\` and continue to the next stage. Default when all gates are satisfied and there are no open concerns.
+- **B) Revise this stage** — stay on the current stage; apply the user's feedback, then re-ask for handoff.
+- **C) Pause / park** — save state; stop here. Useful when the user wants to share the artifact with a human reviewer before continuing.
+- **D) Rewind** — move to a prior stage (user names which). Use when downstream work revealed that an earlier stage was wrong.
+- **E) Abandon** — mark the flow as cancelled; no further stages will run. Artifacts remain on disk.
+
+Recommendation rules:
+- If all required gates are satisfied AND the stage's completion status is \`DONE\`, recommend **A (Advance)**.
+- If completion status is \`DONE_WITH_CONCERNS\`, recommend **B (Revise)** and name the concern.
+- If completion status is \`BLOCKED\`, recommend **B (Revise)** or **C (Pause)** depending on whether the blocker is internal or external.
+
+Reference data for the user:
 - Next command: \`/cc-next\` (loads whatever stage is current in flow-state)
 - Required artifact: \`.cclaw/artifacts/${schema.artifactFile}\`
 - Stage stays blocked if any required gate is unsatisfied
