@@ -1163,7 +1163,9 @@ const TDD: StageSchemaInput = {
     { name: "Characterization First", description: "Before changing existing behavior, write characterization tests that capture current behavior as-is. These tests document what the system does today — even if that behavior is wrong. Only after the characterization suite is green do you add the new RED test for the desired change. This prevents accidental behavior destruction during refactoring." },
     { name: "Test Pyramid Shape", description: "Healthy test suites look like a pyramid: many small fast tests at the base, fewer medium integration tests in the middle, few large end-to-end tests at the top. Each layer catches a different class of bug; none of them substitutes for another. If your suite is top-heavy (mostly E2E) it is slow and flaky; if it is base-only it misses integration contracts. During TDD, default to the smallest layer that can prove the behavior." },
     { name: "Prove-It Pattern (bug fixes)", description: "For any reported regression or hotfix, the FIRST test is a reproduction — it must fail without your fix, pass with your fix, and fail again if the fix is reverted. This is the only way to prove you fixed the reported bug and not a superficially similar one. Skipping this step is how bugs come back two releases later wearing a different name." },
-    { name: "Test Size Model", description: "Size tests by scope, not by name: Small = pure logic, no I/O, <50ms; Medium = one process boundary, possibly filesystem or an in-memory DB; Large = multi-process / network / real external service. Small tests are the default; escalate to Medium only when a real boundary must be exercised, and to Large only for end-to-end user journeys. Record the size class in the TDD artifact so reviewers can sanity-check the pyramid shape." }
+    { name: "Test Size Model", description: "Size tests by scope, not by name: Small = pure logic, no I/O, <50ms; Medium = one process boundary, possibly filesystem or an in-memory DB; Large = multi-process / network / real external service. Small tests are the default; escalate to Medium only when a real boundary must be exercised, and to Large only for end-to-end user journeys. Record the size class in the TDD artifact so reviewers can sanity-check the pyramid shape." },
+    { name: "State Over Interaction", description: "Assert on observable outcomes (return values, state changes, persisted data, HTTP responses) — NOT on which helper methods were called, how many times, or in what order. Interaction-style assertions (`expect(mock.foo).toHaveBeenCalledWith(...)` without a state assertion) couple tests to implementation and shatter under harmless refactors. Use mocks only at trust boundaries (network, filesystem, time); for everything inside the module, let state do the asserting. If you cannot observe the outcome without a mock-spy, rework the seam before writing the test." },
+    { name: "Beyoncé Rule", description: "If you liked it, you should have put a test on it. Every surface that a caller can observe — public API, CLI flag, config key, exit code, persisted schema — is a contract, and every contract without a test is a silent regression waiting to happen. When a bug or production incident reveals an uncovered surface, the fix is never 'patch the code'; it is 'patch the code AND add the test that would have caught it'. Untested behavior does not exist for future refactors — it only exists until somebody accidentally removes it." }
   ],
   reviewSections: [
     {
@@ -1205,6 +1207,17 @@ const TDD: StageSchemaInput = {
         "Is there captured RED evidence from running the reproduction WITHOUT the fix applied?",
         "Is there captured GREEN evidence from the same reproduction AFTER the fix was applied?",
         "Is there a note confirming the reproduction test fails again if the fix is reverted (or equivalent evidence that the test is actually pinned to this fix)?"
+      ],
+      stopGate: false
+    },
+    {
+      title: "State-over-Interaction + Beyoncé Coverage",
+      evaluationPoints: [
+        "Do assertions target observable state (return values, persisted data, HTTP responses, logs) rather than which internal helpers were called?",
+        "Are mocks/spies used only at true trust boundaries (network, filesystem, time, external services), not for module-internal collaborators?",
+        "For every public surface touched in this slice (exported API, CLI flag, config key, env var, exit code, schema field) — does at least one test observe it?",
+        "If a bug or review finding revealed an uncovered surface, was a test added alongside the fix, not just the code change?",
+        "Are interaction-style assertions (e.g. `toHaveBeenCalledWith` without a state assertion) justified by an explicit boundary comment, or flagged for follow-up?"
       ],
       stopGate: false
     }
