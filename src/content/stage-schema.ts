@@ -820,7 +820,30 @@ const SPEC: StageSchemaInput = {
     { name: "Assumption Surfacing", description: "Implicit assumptions are invisible requirements. Force every assumption into an explicit statement. If you cannot name the assumption, you have not found it yet." },
     { name: "Ambiguity Classification", description: "Before resolving any unclear requirement, classify it: (A) Insufficient information — ask the user. (B) Multiple valid interpretations — enumerate and pick with justification. (C) Genuinely unknown — propose hypothesis and validation path. Never treat all ambiguity the same way." }
   ],
-  reviewSections: [],
+  reviewSections: [
+    {
+      title: "Acceptance Criteria Audit",
+      evaluationPoints: [
+        "Is every criterion observable (can you point to evidence of pass/fail)?",
+        "Is every criterion measurable (numeric threshold or boolean outcome)?",
+        "Is every criterion falsifiable (can you describe what failure looks like)?",
+        "Does every criterion trace to a design decision (Design Decision Ref)?",
+        "Are there any vague adjectives (fast, intuitive, robust) without thresholds?"
+      ],
+      stopGate: true
+    },
+    {
+      title: "Testability Audit",
+      evaluationPoints: [
+        "Does every criterion have a concrete test description in the Testability Map?",
+        "Does every test specify a verification approach (unit, integration, e2e, manual)?",
+        "Does every test include a runnable command or manual steps?",
+        "Are edge cases (boundary + error) defined for every criterion?",
+        "Can you run every verification command right now and get a meaningful result?"
+      ],
+      stopGate: true
+    }
+  ],
   completionStatus: ["DONE", "DONE_WITH_CONCERNS", "BLOCKED"],
   crossStageTrace: {
     readsFrom: [".cclaw/artifacts/03-design.md", ".cclaw/artifacts/02-scope.md"],
