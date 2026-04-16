@@ -97,8 +97,14 @@ These skills live in \`.cclaw/skills/\` but have no slash commands. They activat
 
 Use it to add **project-specific** skills that complement the managed library:
 
-- Each skill: \`.cclaw/custom-skills/<folder>/SKILL.md\` with the same frontmatter format as managed skills (\`name\` + \`description\` triggering routing).
-- Activate by mentioning the skill name explicitly, or rely on semantic routing from the description.
+- Each skill: \`.cclaw/custom-skills/<folder>/SKILL.md\` following the public-API frontmatter schema documented in \`.cclaw/custom-skills/README.md\`.
+- The frontmatter public API is stable across cclaw releases: \`name\`, \`description\` (required), plus optional \`stages\`, \`triggers\`, \`hardGate\`, \`owners\`, \`version\`.
+- Routing precedence when loading a stage:
+  1. Active stage skill under \`.cclaw/skills/<stage>/\`.
+  2. Managed utility skills whose trigger matches (\`landscape-check\`, \`security-audit\`, \`adversarial-review\`, etc.).
+  3. **Custom skills** whose \`stages\` array includes the active stage (or is missing) AND whose \`description\` / \`triggers\` match the prompt.
+- Custom skills are **never mandatory delegations** — they are opt-in lenses. If you need a mandatory dispatch, promote the skill upstream or add a managed specialist instead.
+- Activate by mentioning the skill name explicitly, or rely on semantic routing from the description + triggers.
 - See \`.cclaw/custom-skills/README.md\` for the full convention and a starter template under \`.cclaw/custom-skills/example/\`.
 
 If a custom skill turns out to generalize (e.g. another project would want the same lens), promote it to a managed skill via a contribution to the cclaw repo — managed skills get versioning and maintenance.

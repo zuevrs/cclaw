@@ -667,42 +667,92 @@ to add project-specific skills that complement the managed skills under
 If the skill is general (security, performance, accessibility, etc.) prefer
 contributing it upstream instead — the managed skills receive maintenance.
 
-## File format
+## File format — public API (stable contract)
 
-Each skill lives at \`.cclaw/custom-skills/<folder>/SKILL.md\` with frontmatter:
+Each skill lives at \`.cclaw/custom-skills/<folder>/SKILL.md\`. The format is a
+**stable public API**: \`cclaw sync\` and \`cclaw upgrade\` will not rewrite
+custom skills, and the fields below are guaranteed to be respected by the
+meta-skill router and the stage hooks.
+
+### Frontmatter (YAML, required)
+
+\`\`\`yaml
+---
+# Required fields
+name: <kebab-case-skill-name>
+description: >
+  One sentence (≤180 chars) that triggers semantic routing. Include the
+  concrete situation and the expected action
+  (e.g. "Audit Kafka topic contracts when a producer or consumer signature changes").
+
+# Optional fields (omit when not applicable)
+stages: [design, spec, tdd, review]    # flow stages this skill applies to
+triggers:
+  - "kafka topic"
+  - "producer.schema"
+  - "consumer.schema"
+hardGate: false                        # true => skill body MUST include a ## HARD-GATE section
+owners: ["@team-messaging"]            # informational routing hint, not enforced
+version: 0.1.0                         # semver; bump when hardGate or algorithm changes
+---
+\`\`\`
+
+### Field contract
+
+| Field | Type | Required | Meaning |
+|---|---|---|---|
+| \`name\` | string (kebab-case) | yes | Unique id used by the router and by \`/cc-status\` diagnostics. |
+| \`description\` | string ≤180 chars (single line OR YAML \`>\` folded) | yes | Drives semantic routing. Include trigger + action. |
+| \`stages\` | array of flow stages | no | When present, the meta-skill only surfaces this skill during those stages. Omit for "any stage". |
+| \`triggers\` | array of strings | no | Extra literal substrings that route to this skill when found in the user prompt or the active artifact. |
+| \`hardGate\` | boolean | no | When \`true\`, the body MUST include a \`## HARD-GATE\` section; the agent treats the rule as non-skippable. |
+| \`owners\` | array of strings | no | Informational only — surfaced to the user, never enforced. |
+| \`version\` | semver string | no | Bump when you change the HARD-GATE or algorithm so reviewers can spot changes. |
+
+### Body sections (markdown, recommended order)
 
 \`\`\`markdown
----
-name: <kebab-case-skill-name>
-description: "One sentence describing when this skill applies. Triggers semantic routing."
----
-
 # <Skill title>
 
-## When to use
-- ...
+## Overview
+One-paragraph summary; context for when this skill is loaded.
 
-## HARD-GATE (optional)
-A non-skippable rule, if any. Phrase it as a refusal, not a recommendation.
+## When to use
+- Bullet list of situations where this skill adds value.
+
+## When NOT to use
+- Situations where loading this skill is context bloat or wrong.
+
+## HARD-GATE   (REQUIRED when frontmatter hardGate: true)
+Phrase it as a refusal:
+> Do not <X> while <Y>.
 
 ## Algorithm / checklist
-1. ...
-2. ...
+1. Concrete, observable steps with evidence (file:line, artifact, or knowledge entry).
+
+## Output protocol
+Where the artifact / chat output lives and what shape it takes.
 
 ## Anti-patterns
-- ...
+- Common failure modes to reject.
 \`\`\`
+
+### Stage association semantics
+
+- \`stages: []\` or missing → skill is available at any stage. The meta-skill still only surfaces it when \`description\` or \`triggers\` match the prompt.
+- \`stages: [review]\` → skill is offered only during the review stage.
+- Custom skills **never** become mandatory delegations. They are opt-in lenses. If you need a mandatory dispatch, add a proper managed specialist under \`.cclaw/skills/\` instead.
 
 ## Routing
 
 Custom skills are surfaced via the \`using-cclaw\` meta-skill at session start.
 Mention the skill name in your prompt or let the agent semantic-route to it
-based on the description.
+based on the description + triggers + stages frontmatter.
 
-## Removing or replacing
+## Versioning & removal
 
-Custom skills are user-owned. Delete or edit them at any time — \`cclaw sync\`
-will not touch them.
+Custom skills are user-owned. Bump \`version\` when you change the HARD-GATE or
+algorithm; delete or edit them at any time — \`cclaw sync\` will not touch them.
 `;
 
 const CUSTOM_SKILLS_EXAMPLE = `---
