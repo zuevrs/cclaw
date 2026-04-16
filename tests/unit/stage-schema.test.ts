@@ -27,6 +27,13 @@ describe("stage schema and subagent alignment", () => {
     expect(review.policyNeedles).toContain("Review Army");
   });
 
+  it("review stage mandates security-reviewer alongside spec- and code-reviewer", () => {
+    const review = stageSchema("review");
+    expect(review.mandatoryDelegations).toContain("spec-reviewer");
+    expect(review.mandatoryDelegations).toContain("code-reviewer");
+    expect(review.mandatoryDelegations).toContain("security-reviewer");
+  });
+
   it("design template renders architecture diagram with clean triple-backtick fences", () => {
     const design = ARTIFACT_TEMPLATES["03-design.md"];
     expect(design).toContain("## Architecture Diagram");
