@@ -1517,4 +1517,75 @@ describe("review army schema validation", () => {
     expect(result.valid).toBe(false);
     expect(result.errors.join("\n")).toContain("shipBlockers must include open Critical finding");
   });
+
+  it("requires findings[*].location with file + line", async () => {
+    const root = await createTempProject("review-army-location-required");
+    await fs.mkdir(path.join(root, ".cclaw/state"), { recursive: true });
+    await fs.mkdir(path.join(root, ".cclaw/artifacts"), { recursive: true });
+    await fs.writeFile(path.join(root, ".cclaw/state/flow-state.json"), JSON.stringify({
+      currentStage: "review",
+      activeRunId: "active",
+      completedStages: []
+    }, null, 2), "utf8");
+    await fs.writeFile(path.join(root, ".cclaw/artifacts/07-review-army.json"), JSON.stringify({
+      version: 1,
+      generatedAt: "2026-01-01T00:00:00Z",
+      scope: { base: "main", head: "feature", files: ["src/a.ts"] },
+      findings: [{
+        id: "F-1",
+        severity: "Important",
+        confidence: 6,
+        fingerprint: "fp-1",
+        reportedBy: ["code-reviewer"],
+        status: "open",
+        recommendation: "Refactor"
+      }],
+      reconciliation: {
+        duplicatesCollapsed: 0,
+        conflicts: [],
+        multiSpecialistConfirmed: [],
+        shipBlockers: []
+      }
+    }, null, 2), "utf8");
+
+    const result = await validateReviewArmy(root);
+    expect(result.valid).toBe(false);
+    expect(result.errors.join("\n")).toMatch(/location is required/);
+  });
+
+  it("requires multiSpecialistConfirmed findings to have >=2 distinct reviewers", async () => {
+    const root = await createTempProject("review-army-multi-spec");
+    await fs.mkdir(path.join(root, ".cclaw/state"), { recursive: true });
+    await fs.mkdir(path.join(root, ".cclaw/artifacts"), { recursive: true });
+    await fs.writeFile(path.join(root, ".cclaw/state/flow-state.json"), JSON.stringify({
+      currentStage: "review",
+      activeRunId: "active",
+      completedStages: []
+    }, null, 2), "utf8");
+    await fs.writeFile(path.join(root, ".cclaw/artifacts/07-review-army.json"), JSON.stringify({
+      version: 1,
+      generatedAt: "2026-01-01T00:00:00Z",
+      scope: { base: "main", head: "feature", files: ["src/a.ts"] },
+      findings: [{
+        id: "F-1",
+        severity: "Important",
+        confidence: 7,
+        fingerprint: "fp-1",
+        reportedBy: ["code-reviewer"],
+        status: "open",
+        location: { file: "src/a.ts", line: 3 },
+        recommendation: "Simplify branch"
+      }],
+      reconciliation: {
+        duplicatesCollapsed: 0,
+        conflicts: [],
+        multiSpecialistConfirmed: ["F-1"],
+        shipBlockers: []
+      }
+    }, null, 2), "utf8");
+
+    const result = await validateReviewArmy(root);
+    expect(result.valid).toBe(false);
+    expect(result.errors.join("\n")).toMatch(/confirmed by at least 2 distinct reviewers/);
+  });
 });

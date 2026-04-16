@@ -517,17 +517,17 @@ export async function validateReviewArmy(
       if (!isStringArray(o.reportedBy) || o.reportedBy.length === 0) {
         errors.push(`findings[${i}].reportedBy must be a non-empty string array.`);
       }
-      if (o.location !== undefined) {
-        if (o.location === null || typeof o.location !== "object" || Array.isArray(o.location)) {
-          errors.push(`findings[${i}].location must be an object when present.`);
-        } else {
-          const loc = o.location as Record<string, unknown>;
-          if (!isNonEmptyString(loc.file)) {
-            errors.push(`findings[${i}].location.file must be a non-empty string.`);
-          }
-          if (!isFiniteNumber(loc.line) || loc.line < 1) {
-            errors.push(`findings[${i}].location.line must be a positive number.`);
-          }
+      if (o.location === undefined || o.location === null) {
+        errors.push(`findings[${i}].location is required and must be an object with file + line.`);
+      } else if (typeof o.location !== "object" || Array.isArray(o.location)) {
+        errors.push(`findings[${i}].location must be an object with file + line.`);
+      } else {
+        const loc = o.location as Record<string, unknown>;
+        if (!isNonEmptyString(loc.file)) {
+          errors.push(`findings[${i}].location.file must be a non-empty string.`);
+        }
+        if (!isFiniteNumber(loc.line) || loc.line < 1) {
+          errors.push(`findings[${i}].location.line must be a positive number.`);
         }
       }
       if (o.recommendation !== undefined && !isNonEmptyString(o.recommendation)) {
@@ -574,6 +574,23 @@ export async function validateReviewArmy(
       for (const msId of rec.multiSpecialistConfirmed) {
         if (!findingIds.has(msId)) {
           errors.push(`reconciliation.multiSpecialistConfirmed references unknown finding id "${msId}".`);
+          continue;
+        }
+        if (Array.isArray(root.findings)) {
+          const finding = root.findings.find((f) => {
+            return f && typeof f === "object" && !Array.isArray(f) && (f as Record<string, unknown>).id === msId;
+          });
+          if (finding && typeof finding === "object" && !Array.isArray(finding)) {
+            const reportedBy = (finding as Record<string, unknown>).reportedBy;
+            const count = Array.isArray(reportedBy)
+              ? new Set((reportedBy as unknown[]).filter((v) => typeof v === "string")).size
+              : 0;
+            if (count < 2) {
+              errors.push(
+                `reconciliation.multiSpecialistConfirmed entry "${msId}" must be confirmed by at least 2 distinct reviewers (found ${count}).`
+              );
+            }
+          }
         }
       }
     }
