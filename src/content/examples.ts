@@ -815,6 +815,72 @@ const DOMAIN_LABELS: Record<ExampleDomain, string> = {
 };
 
 const STAGE_DOMAIN_SAMPLES: Partial<Record<FlowStage, DomainSample[]>> = {
+  brainstorm: [
+    {
+      domain: "web",
+      label: "Direction",
+      body: "Problem: admin dashboard orders table requires manual refresh to see new orders. Success: admins see new rows within 2s of server-side status change, no full navigation. Anti-success: WebSocket rewrite of the whole table stack when only one view needs live updates."
+    },
+    {
+      domain: "cli",
+      label: "Direction",
+      body: "Problem: `cclaw archive` silently deletes 30+ day runs with no preview. Success: a `--dry-run` flag prints would-be-archived run IDs to stdout and exits 0; current behavior is unchanged without the flag. Anti-success: adding an interactive confirmation prompt that breaks CI scripts."
+    },
+    {
+      domain: "library",
+      label: "Direction",
+      body: "Problem: consumers cannot validate hook JSON without importing internal modules. Success: `validateHookDocument(obj)` exported from the package root with typed result `{ ok, errors? }`. Anti-success: exposing the full Zod schema and forcing consumers to depend on Zod."
+    },
+    {
+      domain: "data-pipeline",
+      label: "Direction",
+      body: "Problem: reruns of the orders job create duplicate `fact_orders` rows. Success: running the job twice on the same input leaves row count unchanged and `dbt test --select fact_orders` green. Anti-success: introducing a nightly dedup job that hides the underlying non-idempotency."
+    }
+  ],
+  scope: [
+    {
+      domain: "web",
+      label: "Scope line",
+      body: "In: live-update `/dashboard/orders` table via SSE; out: notification drawer, mobile PWA, dashboards other than `orders`. Discretion: choice of SSE vs long-polling for legacy Safari. NOT in scope: rewriting the auth layer or the existing REST endpoints."
+    },
+    {
+      domain: "cli",
+      label: "Scope line",
+      body: "In: add `--dry-run` to `cclaw archive`; out: redesigning archive formats, adding retention flags, or changing the default. Discretion: exact wording of stdout lines. NOT in scope: touching `init` / `sync` / `doctor` subcommands."
+    },
+    {
+      domain: "library",
+      label: "Scope line",
+      body: "In: expose `validateHookDocument` + types from package root; out: rewriting hook schema, adding new hook kinds, dropping old ones. Discretion: whether to re-export `HookDocument` as type-only. NOT in scope: migrating consumers."
+    },
+    {
+      domain: "data-pipeline",
+      label: "Scope line",
+      body: "In: dedup step between `raw.orders` and `fact_orders` keyed on `(order_id, event_ts)`; out: redesigning ingestion, adding new partitions, or touching downstream marts. Discretion: `row_number()` vs `qualify`-style dedup. NOT in scope: backfilling historical partitions."
+    }
+  ],
+  design: [
+    {
+      domain: "web",
+      label: "Architecture note",
+      body: "Data flow: server-side order update → publish to `orders-updates` channel → SSE endpoint `/api/orders/stream` → `useOrderFeed` hook merges into React state → row rerenders. Failure mode: SSE connection drop → exponential-backoff reconnect + on-reconnect REST snapshot fallback. Trade-off accepted: no client→server channel (SSE one-way); existing REST mutations cover it."
+    },
+    {
+      domain: "cli",
+      label: "Architecture note",
+      body: "Flag is parsed by the existing Zod CLI parser; `--dry-run` short-circuits before any filesystem mutation, shares formatter `src/cli/format.ts` with `status`. Failure mode: formatter output differs between `status` and `archive --dry-run` → centralize format. Trade-off: we print run IDs unsorted to keep the code path identical to the real archive path."
+    },
+    {
+      domain: "library",
+      label: "Architecture note",
+      body: "Re-export `validateHookDocument` from package root; rename internal `__validate` to match the exported name so callsites and the export converge. Failure mode: consumers importing from `/dist/internal` break on the rename → add a deprecation re-export shim for one minor. Trade-off: slightly wider public surface today buys us a smaller public surface tomorrow."
+    },
+    {
+      domain: "data-pipeline",
+      label: "Architecture note",
+      body: "Insert `int_orders_deduped` CTE between staging and fact, keyed on `(order_id, event_ts)` with `row_number() = 1` per key; `fact_orders` reads from the deduped model only. Failure mode: late-arriving events with an earlier `event_ts` would flap the chosen row → tiebreak on `ingest_ts DESC`. Trade-off: the job now does one extra pass; measured +8% runtime, within budget."
+    }
+  ],
   spec: [
     {
       domain: "web",
@@ -879,6 +945,28 @@ const STAGE_DOMAIN_SAMPLES: Partial<Record<FlowStage, DomainSample[]>> = {
       domain: "data-pipeline",
       label: "RED→GREEN→REFACTOR",
       body: "RED: `dbt test --select fact_orders` → `unique test on (order_id, event_ts)` fails on re-run. GREEN: added `row_number()` dedup in the staging model. REFACTOR: extracted the dedup CTE into `int_orders_deduped` for reuse by `fact_returns`."
+    }
+  ],
+  review: [
+    {
+      domain: "web",
+      label: "Finding",
+      body: "R-W-1 (Critical, correctness): `useOrderFeed` does not unsubscribe from the SSE channel on unmount — two mounts on the same page double-count rows. Evidence: `tests/unit/order-feed-hook.test.ts > unmount` fails. Fix owner: frontend; blocks ship."
+    },
+    {
+      domain: "cli",
+      label: "Finding",
+      body: "R-C-2 (Suggestion, UX): `cclaw archive --dry-run` prints run IDs without a trailing newline, breaking downstream `xargs` pipelines. Evidence: `echo '' | xargs -I{} printf '%s\\n' {}` contrast. Fix owner: CLI; non-blocking."
+    },
+    {
+      domain: "library",
+      label: "Finding",
+      body: "R-L-1 (Important, surface-area): the new `validateHookDocument` export is documented in README but missing from `src/index.ts` — `import { validateHookDocument } from 'cclaw'` fails despite the docs. Evidence: `pnpm build && node -e \"require('./dist').validateHookDocument\"` prints `undefined`. Fix owner: library; blocks ship."
+    },
+    {
+      domain: "data-pipeline",
+      label: "Finding",
+      body: "R-D-1 (Critical, correctness): dedup CTE orders by `event_ts ASC` instead of `event_ts DESC` — on duplicate events we keep the older row. Evidence: `dbt test --select fact_orders` green but fixture `tests/fixtures/orders-dupes.csv` shows wrong survivor. Fix owner: analytics-eng; blocks ship."
     }
   ],
   ship: [
