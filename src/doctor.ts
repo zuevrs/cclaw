@@ -11,6 +11,8 @@ import { gitignoreHasRequiredPatterns } from "./gitignore.js";
 import { HARNESS_ADAPTERS, CCLAW_MARKER_START, CCLAW_MARKER_END } from "./harness-adapters.js";
 import { policyChecks } from "./policy.js";
 import { readFlowState } from "./runs.js";
+import { skippedStagesForTrack } from "./flow-state.js";
+import { TRACK_STAGES } from "./types.js";
 import { checkMandatoryDelegations } from "./delegation.js";
 import { buildTraceMatrix } from "./trace-matrix.js";
 import {
@@ -790,6 +792,33 @@ export async function doctorChecks(projectRoot: string, options: DoctorOptions =
     name: "flow_state:active_run_id",
     ok: activeRunId.length > 0,
     details: `${RUNTIME_ROOT}/state/flow-state.json must include activeRunId`
+  });
+
+  const activeTrack = flowState.track ?? "standard";
+  const trackStageList = TRACK_STAGES[activeTrack];
+  const skippedFromState = Array.isArray(flowState.skippedStages) ? flowState.skippedStages : [];
+  const expectedSkipped = skippedStagesForTrack(activeTrack);
+  const skippedConsistent =
+    expectedSkipped.length === skippedFromState.length &&
+    expectedSkipped.every((stage) => skippedFromState.includes(stage));
+  checks.push({
+    name: "flow_state:track",
+    ok: skippedConsistent,
+    details: skippedConsistent
+      ? `active track "${activeTrack}" (${trackStageList.length}/${COMMAND_FILE_ORDER.length} stages: ${trackStageList.join(" → ")})${
+          expectedSkipped.length > 0 ? `; skippedStages=${expectedSkipped.join(", ")}` : ""
+        }`
+      : `track "${activeTrack}" expects skippedStages=[${expectedSkipped.join(", ")}] but flow-state has [${skippedFromState.join(", ")}] — run \`cclaw sync\` to repair`
+  });
+  checks.push({
+    name: "flow_state:track_completed_in_track",
+    ok: flowState.completedStages.every((stage) => trackStageList.includes(stage) || expectedSkipped.includes(stage)),
+    details: (() => {
+      const offTrack = flowState.completedStages.filter((stage) => !trackStageList.includes(stage) && !expectedSkipped.includes(stage));
+      return offTrack.length === 0
+        ? `every completed stage belongs to track "${activeTrack}" or its skipped set`
+        : `completed stages contain entries outside track "${activeTrack}" and not in skipped set: ${offTrack.join(", ")}`;
+    })()
   });
   checks.push({
     name: "artifacts:active_root",
