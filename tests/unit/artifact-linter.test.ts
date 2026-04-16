@@ -203,6 +203,136 @@ describe("artifact linter heuristics", () => {
     expect(result.passed).toBe(false);
     expect(readiness?.found).toBe(false);
   });
+
+  it("fails scope artifact missing Mode-Specific Analysis section", async () => {
+    const root = await fs.mkdtemp(path.join(os.tmpdir(), "cclaw-scope-missing-mode-"));
+    await writeRuntimeArtifact(root, "02-scope.md", `# Scope Artifact
+
+## Prime Directives
+- Zero silent failures: every delivery failure maps to a visible state.
+- Named error surfaces: stream disconnect, auth drift, and publisher timeout.
+- Four-path data flow: happy, nil payload, empty payload, upstream error.
+- Interaction edge cases: double-open panel, reconnect after sleep.
+- Observability expectations: stream error counter, publish-to-visible lag.
+- Deferred-item handling: WebSocket channel deferred with rationale.
+
+## Premise Challenge
+- Right problem? Yes, users miss follow-ups.
+- Direct path? Durable feed is the right path.
+- What if nothing? Users continue missing events.
+
+## Implementation Alternatives
+| Option | Summary | Effort (S/M/L/XL) | Risk | Pros | Cons | Reuses |
+|---|---|---|---|---|---|---|
+| A (minimum viable) | Polling-only | S | Low | Fast | Weaker UX | REST endpoint |
+| B (recommended) | SSE + REST fallback | M | Med | Better UX | Reconnect handling | Event publisher |
+
+## Scope Mode
+- [x] selective
+
+## In Scope / Out of Scope
+
+### In Scope
+- In-app notification feed
+
+### Out of Scope
+- Email/SMS providers
+
+## Discretion Areas
+- Badge rendering strategy
+
+## Deferred Items
+| Item | Rationale |
+|---|---|
+| WebSocket channel | Not justified for current load |
+
+## Error & Rescue Registry
+| Capability | Failure mode | Detection | Fallback |
+|---|---|---|---|
+| Event delivery | SSE drops | Heartbeat timeout | REST polling |
+
+## Completion Dashboard
+- Checklist findings: 9/9 complete
+- Resolved decisions count: 5
+- Unresolved decisions: None
+
+## Scope Summary
+- Selected mode: selective
+- Accepted scope: durable feed + SSE
+- Deferred: WebSocket channel
+- Explicitly excluded: outbound channels
+`);
+
+    const result = await lintArtifact(root, "scope");
+    const modeAnalysis = result.findings.find((f) => f.section === "Mode-Specific Analysis");
+    expect(result.passed).toBe(false);
+    expect(modeAnalysis?.found).toBe(false);
+    expect(modeAnalysis?.required).toBe(true);
+  });
+
+  it("fails Prime Directives when required keywords are missing", async () => {
+    const root = await fs.mkdtemp(path.join(os.tmpdir(), "cclaw-scope-keywords-"));
+    await writeRuntimeArtifact(root, "02-scope.md", `# Scope Artifact
+
+## Prime Directives
+- Basic error handling is in scope.
+
+## Premise Challenge
+- Right problem? Yes.
+- Direct path? Yes.
+- What if nothing? Bad outcomes.
+
+## Implementation Alternatives
+| Option | Summary | Effort (S/M/L/XL) | Risk | Pros | Cons | Reuses |
+|---|---|---|---|---|---|---|
+| A | Simple approach | S | Low | Fast | Limited | None |
+| B | Better approach | M | Med | Robust | Slower | Some |
+
+## Scope Mode
+- [x] hold
+
+## Mode-Specific Analysis
+- Selected mode: HOLD
+- Analysis: minimum-change-set hardening applied to existing notification system.
+
+## In Scope / Out of Scope
+
+### In Scope
+- Notification feed
+
+### Out of Scope
+- Email providers
+
+## Discretion Areas
+- None
+
+## Deferred Items
+| Item | Rationale |
+|---|---|
+| None | N/A |
+
+## Error & Rescue Registry
+| Capability | Failure mode | Detection | Fallback |
+|---|---|---|---|
+| Feed | Timeout | Health check | Retry |
+
+## Completion Dashboard
+- Checklist findings: complete
+- Resolved decisions count: 3
+- Unresolved decisions: None
+
+## Scope Summary
+- Selected mode: hold
+- Accepted scope: notification feed hardening
+- Deferred: none
+- Explicitly excluded: email/SMS
+`);
+
+    const result = await lintArtifact(root, "scope");
+    const primeDirectives = result.findings.find((f) => f.section === "Prime Directives");
+    expect(primeDirectives?.found).toBe(false);
+    expect(primeDirectives?.details).toContain("missing");
+  });
 });
 
 describe("review army schema validation", () => {
