@@ -241,6 +241,23 @@ function validateSectionBody(
     }
   }
 
+  if (/WAIT_FOR_CONFIRM/u.test(rule) && /status.*pending/iu.test(rule)) {
+    const statusLine = bodyLines.find((l) => /^\s*-?\s*Status\s*:/iu.test(l));
+    if (!statusLine) {
+      return { ok: false, details: "WAIT_FOR_CONFIRM section must contain a 'Status:' line." };
+    }
+    const validStatuses = ["pending", "approved"];
+    const statusMatch = /Status\s*:\s*(\S+)/iu.exec(statusLine);
+    const statusValue = statusMatch?.[1]?.toLowerCase();
+    if (!statusValue || !validStatuses.includes(statusValue)) {
+      const foundLabel = statusValue || "(empty)";
+      return {
+        ok: false,
+        details: "WAIT_FOR_CONFIRM Status must be exactly one of: " + validStatuses.join(", ") + ". Found: " + foundLabel + "."
+      };
+    }
+  }
+
   const keywords = extractRequiredKeywords(rule);
   if (keywords.length > 0) {
     const bodyLower = sectionBody.toLowerCase();
