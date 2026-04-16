@@ -44,6 +44,40 @@ jobs:
       - name: Test
         run: npm test
 
+  coverage:
+    name: Test Coverage (Node 20.x)
+    runs-on: ubuntu-latest
+    needs:
+      - build-and-test
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Setup Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: "20.x"
+          cache: npm
+
+      - name: Install dependencies
+        run: npm ci
+
+      - name: Build
+        run: npm run build
+
+      - name: Test with coverage (enforced thresholds)
+        run: npm run test:coverage
+
+      - name: Upload coverage report
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: coverage-report
+          path: coverage/
+          if-no-files-found: ignore
+          retention-days: 14
+
   runtime-smoke:
     name: Runtime Smoke
     runs-on: ubuntu-latest
