@@ -120,10 +120,19 @@ async function syncRoutingFile(filePath: string, title: string): Promise<void> {
   }
 }
 
-async function syncAgentsMd(projectRoot: string): Promise<void> {
+async function syncAgentsMd(projectRoot: string, harnesses: HarnessId[] = []): Promise<void> {
+  // AGENTS.md is universal — always injected or created. Claude Code, Cursor,
+  // Codex, and OpenCode all read it when present.
   await syncRoutingFile(path.join(projectRoot, "AGENTS.md"), "AGENTS");
+
+  // CLAUDE.md is Claude Code's preferred routing file. If the claude harness
+  // is active, we materialise the routing block there too (create if missing,
+  // otherwise keep append-and-refresh semantics). For non-claude installs, we
+  // still refresh CLAUDE.md when it already exists — never silently drop it.
   const claudePath = path.join(projectRoot, "CLAUDE.md");
-  if (await exists(claudePath)) {
+  const claudeExists = await exists(claudePath);
+  const claudeHarnessActive = harnesses.includes("claude");
+  if (claudeExists || claudeHarnessActive) {
     await syncRoutingFile(claudePath, "CLAUDE");
   }
 }
@@ -204,5 +213,5 @@ export async function syncHarnessShims(projectRoot: string, harnesses: HarnessId
   }
 
   await syncAgentFiles(projectRoot);
-  await syncAgentsMd(projectRoot);
+  await syncAgentsMd(projectRoot, harnesses);
 }
