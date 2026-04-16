@@ -328,13 +328,13 @@ describe("install lifecycle", () => {
     await initCclaw({ projectRoot: root });
 
     await expect(
-      fs.stat(path.join(root, ".cclaw/skills/language-typescript/SKILL.md"))
+      fs.stat(path.join(root, ".cclaw/rules/lang/typescript.md"))
     ).rejects.toBeDefined();
     await expect(
-      fs.stat(path.join(root, ".cclaw/skills/language-python/SKILL.md"))
+      fs.stat(path.join(root, ".cclaw/rules/lang/python.md"))
     ).rejects.toBeDefined();
     await expect(
-      fs.stat(path.join(root, ".cclaw/skills/language-go/SKILL.md"))
+      fs.stat(path.join(root, ".cclaw/rules/lang/go.md"))
     ).rejects.toBeDefined();
 
     const current = await readConfig(root);
@@ -342,19 +342,47 @@ describe("install lifecycle", () => {
     await syncCclaw(root);
 
     await expect(
-      fs.stat(path.join(root, ".cclaw/skills/language-typescript/SKILL.md"))
+      fs.stat(path.join(root, ".cclaw/rules/lang/typescript.md"))
     ).resolves.toBeDefined();
     await expect(
-      fs.stat(path.join(root, ".cclaw/skills/language-go/SKILL.md"))
+      fs.stat(path.join(root, ".cclaw/rules/lang/go.md"))
     ).resolves.toBeDefined();
     await expect(
-      fs.stat(path.join(root, ".cclaw/skills/language-python/SKILL.md"))
+      fs.stat(path.join(root, ".cclaw/rules/lang/python.md"))
     ).rejects.toBeDefined();
 
     const checks = await doctorChecks(root);
     expect(checks.some((c) => c.name === "language_rule_pack:typescript" && c.ok)).toBe(true);
     expect(checks.some((c) => c.name === "language_rule_pack:go" && c.ok)).toBe(true);
     expect(checks.some((c) => c.name === "language_rule_pack:python")).toBe(false);
+  });
+
+  it("sync migrates legacy .cclaw/skills/language-* folders to .cclaw/rules/lang/", async () => {
+    const root = await createTempProject("lang-rule-packs-legacy");
+    await initCclaw({ projectRoot: root });
+
+    const legacyPath = path.join(root, ".cclaw/skills/language-typescript/SKILL.md");
+    await fs.mkdir(path.dirname(legacyPath), { recursive: true });
+    await fs.writeFile(legacyPath, "# legacy\n", "utf8");
+
+    const current = await readConfig(root);
+    await writeConfig(root, { ...current, languageRulePacks: ["typescript"] });
+    await syncCclaw(root);
+
+    await expect(fs.stat(legacyPath)).rejects.toBeDefined();
+    await expect(
+      fs.stat(path.join(root, ".cclaw/skills/language-typescript"))
+    ).rejects.toBeDefined();
+    await expect(
+      fs.stat(path.join(root, ".cclaw/rules/lang/typescript.md"))
+    ).resolves.toBeDefined();
+
+    const checks = await doctorChecks(root);
+    expect(
+      checks.some(
+        (c) => c.name === "language_rule_pack:no_legacy:language-typescript" && c.ok
+      )
+    ).toBe(true);
   });
 
   it("uninstall preserves harness directories that contain user files", async () => {

@@ -88,7 +88,7 @@ Before starting stage execution:
 2. Resolve active artifact root: \`.cclaw/artifacts/\`.
 3. Load upstream artifacts required by this stage:
 ${readLines}
-4. Read \`.cclaw/knowledge.md\` and apply relevant entries before making decisions.
+4. Stream \`.cclaw/knowledge.jsonl\` (strict-JSONL knowledge store) and apply relevant entries before making decisions.
 `;
 }
 
@@ -257,7 +257,7 @@ function progressiveDisclosureBlock(stage: FlowStage): string {
 - Primary stage procedure (this file): \`.cclaw/skills/${schema.skillFolder}/SKILL.md\`
 - Orchestrator contract (gate language and handoff): \`.cclaw/commands/${stage}.md\`
 - Artifact structure baseline: \`.cclaw/templates/${schema.artifactFile}\`
-- Runtime state truth source: \`.cclaw/state/flow-state.json\` + \`.cclaw/artifacts/\` + \`.cclaw/knowledge.md\`
+- Runtime state truth source: \`.cclaw/state/flow-state.json\` + \`.cclaw/artifacts/\` + \`.cclaw/knowledge.jsonl\`
 
 ### See also
 - Meta routing and activation rules: \`.cclaw/skills/using-cclaw/SKILL.md\`

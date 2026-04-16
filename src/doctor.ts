@@ -21,7 +21,12 @@ import {
   verifyCurrentStageGateEvidence
 } from "./gate-evidence.js";
 import { stageSkillFolder } from "./content/skills.js";
-import { LANGUAGE_RULE_PACK_FOLDERS, UTILITY_SKILL_FOLDERS } from "./content/utility-skills.js";
+import {
+  LANGUAGE_RULE_PACK_DIR,
+  LANGUAGE_RULE_PACK_FILES,
+  LEGACY_LANGUAGE_RULE_PACK_FOLDERS,
+  UTILITY_SKILL_FOLDERS
+} from "./content/utility-skills.js";
 import { CONTEXT_MODES, DEFAULT_CONTEXT_MODE } from "./content/contexts.js";
 import { validateHookDocument } from "./hook-schema.js";
 import type { HarnessId } from "./types.js";
@@ -440,14 +445,29 @@ export async function doctorChecks(projectRoot: string, options: DoctorOptions =
   }
 
   // Opt-in language rule packs: only check presence for packs the user enabled.
+  // Canonical location is .cclaw/rules/lang/<pack>.md.
   for (const pack of parsedConfig?.languageRulePacks ?? []) {
-    const folder = LANGUAGE_RULE_PACK_FOLDERS[pack];
-    if (!folder) continue;
-    const skillPath = path.join(projectRoot, RUNTIME_ROOT, "skills", folder, "SKILL.md");
+    const fileName = LANGUAGE_RULE_PACK_FILES[pack];
+    if (!fileName) continue;
+    const packPath = path.join(projectRoot, RUNTIME_ROOT, ...LANGUAGE_RULE_PACK_DIR, fileName);
     checks.push({
       name: `language_rule_pack:${pack}`,
-      ok: await exists(skillPath),
-      details: skillPath
+      ok: await exists(packPath),
+      details: packPath
+    });
+  }
+
+  // Drift: legacy per-language skill folders from v0.7.0 must not coexist with
+  // the new rules/lang/ layout. `cclaw sync` removes them on the next run.
+  for (const legacyFolder of LEGACY_LANGUAGE_RULE_PACK_FOLDERS) {
+    const legacyPath = path.join(projectRoot, RUNTIME_ROOT, "skills", legacyFolder);
+    const legacyPresent = await exists(legacyPath);
+    checks.push({
+      name: `language_rule_pack:no_legacy:${legacyFolder}`,
+      ok: !legacyPresent,
+      details: legacyPresent
+        ? `legacy ${legacyPath} must be removed — language packs moved to ${RUNTIME_ROOT}/${LANGUAGE_RULE_PACK_DIR.join("/")}/. Run \`cclaw sync\`.`
+        : `no legacy ${legacyFolder} skill folder`
     });
   }
 
@@ -727,11 +747,22 @@ export async function doctorChecks(projectRoot: string, options: DoctorOptions =
     details: hasPython ? "python3 available" : "warning: python3 not found, jq/node paths must stay healthy"
   });
 
-  // Knowledge store exists
+  // Knowledge store exists (canonical JSONL, no markdown mirror)
   checks.push({
     name: "knowledge:store_exists",
-    ok: await exists(path.join(projectRoot, RUNTIME_ROOT, "knowledge.md")),
-    details: `${RUNTIME_ROOT}/knowledge.md must exist`
+    ok: await exists(path.join(projectRoot, RUNTIME_ROOT, "knowledge.jsonl")),
+    details: `${RUNTIME_ROOT}/knowledge.jsonl must exist`
+  });
+
+  // There must be NO legacy markdown knowledge store — JSONL is the only store.
+  const legacyKnowledgeMdPath = path.join(projectRoot, RUNTIME_ROOT, "knowledge.md");
+  const legacyExists = await exists(legacyKnowledgeMdPath);
+  checks.push({
+    name: "knowledge:no_legacy_markdown",
+    ok: !legacyExists,
+    details: legacyExists
+      ? `legacy ${RUNTIME_ROOT}/knowledge.md must be removed — cclaw is JSONL-native`
+      : `no legacy markdown store present`
   });
 
   checks.push({

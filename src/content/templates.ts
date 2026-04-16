@@ -447,7 +447,7 @@ Execution rule: complete and verify each wave before starting the next wave.
 _Optional retrospective. The goal is to make the **next** feature faster, not to evaluate this one._
 _If you have nothing to add, write the explicit line: \`No compound insight this run.\`_
 - Insight: <one short line about what should accelerate the next run>
-- Action: append \`[compound]\` entry to \`.cclaw/knowledge.md\` capturing the insight
+- Action: append one strict-schema JSON line with \`"type":"compound"\` to \`.cclaw/knowledge.jsonl\` capturing the insight (fields: type, trigger, action, confidence, domain, stage, created, project)
 `
 };
 

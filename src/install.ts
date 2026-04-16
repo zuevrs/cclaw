@@ -40,8 +40,10 @@ import {
 } from "./content/templates.js";
 import { stageSkillFolder, stageSkillMarkdown } from "./content/skills.js";
 import {
-  LANGUAGE_RULE_PACK_FOLDERS,
+  LANGUAGE_RULE_PACK_DIR,
+  LANGUAGE_RULE_PACK_FILES,
   LANGUAGE_RULE_PACK_GENERATORS,
+  LEGACY_LANGUAGE_RULE_PACK_FOLDERS,
   UTILITY_SKILL_FOLDERS,
   UTILITY_SKILL_MAP
 } from "./content/utility-skills.js";
@@ -260,12 +262,26 @@ async function writeSkills(projectRoot: string, config?: VibyConfig): Promise<vo
     await writeFileSafe(runtimePath(projectRoot, "skills", folder, "SKILL.md"), generator());
   }
 
+  // Language rule packs live under .cclaw/rules/lang/<pack>.md. They are opt-in:
+  // only the packs listed in config.languageRulePacks are materialised. Any
+  // legacy per-language skill folders from v0.7.0 (.cclaw/skills/language-*)
+  // are cleaned up below so the new rules/lang layout is the only truth.
   const enabledPacks = config?.languageRulePacks ?? [];
   for (const pack of enabledPacks) {
-    const folder = LANGUAGE_RULE_PACK_FOLDERS[pack];
-    const generator = LANGUAGE_RULE_PACK_GENERATORS[folder];
-    if (!folder || !generator) continue;
-    await writeFileSafe(runtimePath(projectRoot, "skills", folder, "SKILL.md"), generator());
+    const fileName = LANGUAGE_RULE_PACK_FILES[pack];
+    const generator = LANGUAGE_RULE_PACK_GENERATORS[pack];
+    if (!fileName || !generator) continue;
+    await writeFileSafe(
+      runtimePath(projectRoot, ...LANGUAGE_RULE_PACK_DIR, fileName),
+      generator()
+    );
+  }
+
+  for (const legacyFolder of LEGACY_LANGUAGE_RULE_PACK_FOLDERS) {
+    const legacyPath = runtimePath(projectRoot, "skills", legacyFolder);
+    if (await exists(legacyPath)) {
+      await fs.rm(legacyPath, { recursive: true, force: true });
+    }
   }
 }
 
@@ -648,9 +664,13 @@ async function writeHooks(projectRoot: string, config: VibyConfig): Promise<void
 }
 
 async function ensureKnowledgeStore(projectRoot: string): Promise<void> {
-  const storePath = runtimePath(projectRoot, "knowledge.md");
+  const storePath = runtimePath(projectRoot, "knowledge.jsonl");
   if (!(await exists(storePath))) {
-    await writeFileSafe(storePath, "# Project Knowledge\n\n");
+    await writeFileSafe(storePath, "");
+  }
+  const legacyMdPath = runtimePath(projectRoot, "knowledge.md");
+  if (await exists(legacyMdPath)) {
+    await fs.rm(legacyMdPath, { force: true });
   }
 }
 

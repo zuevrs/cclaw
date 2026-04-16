@@ -50,7 +50,7 @@ Before starting stage execution:
 - \`.cclaw/artifacts/06-tdd.md\`
 - \`.cclaw/artifacts/04-spec.md\`
 - \`.cclaw/artifacts/05-plan.md\`
-4. Read \`.cclaw/knowledge.md\` and apply relevant entries before making decisions.
+4. Stream \`.cclaw/knowledge.jsonl\` (strict-JSONL knowledge store) and apply relevant entries before making decisions.
 
 ## Automatic Subagent Dispatch
 
@@ -429,7 +429,7 @@ When resuming a stage in a NEW session (artifact exists but gates are not all pa
 - Primary stage procedure (this file): \`.cclaw/skills/two-layer-review/SKILL.md\`
 - Orchestrator contract (gate language and handoff): \`.cclaw/commands/review.md\`
 - Artifact structure baseline: \`.cclaw/templates/07-review.md\`
-- Runtime state truth source: \`.cclaw/state/flow-state.json\` + \`.cclaw/artifacts/\` + \`.cclaw/knowledge.md\`
+- Runtime state truth source: \`.cclaw/state/flow-state.json\` + \`.cclaw/artifacts/\` + \`.cclaw/knowledge.jsonl\`
 
 ### See also
 - Meta routing and activation rules: \`.cclaw/skills/using-cclaw/SKILL.md\`
@@ -444,21 +444,17 @@ After this stage, ask:
 - Did I discover a non-obvious reusable **rule** or **pattern**?
 - Did a failure reveal a reusable **lesson**?
 
-If yes, append one concise entry to **both** the markdown mirror (\`.cclaw/knowledge.md\`) and the canonical JSONL store (\`.cclaw/knowledge.jsonl\`) with the same timestamp:
+If yes, append one concise JSON line to the canonical knowledge store
+(\`.cclaw/knowledge.jsonl\`) using the strict 8-field schema:
 
 \`\`\`bash
 TS="$(date -u +%Y-%m-%dT%H:%M:%SZ)"
-cat >> .cclaw/knowledge.md <<EOF
-### $TS [pattern] short-title
-- Stage: review
-- Context: what situation triggered this
-- Insight: what should be remembered
-- Reuse: how to apply this next time
-EOF
-printf '%s\\n' '{"type":"pattern","title":"short-title","stage":"review","context":"what situation triggered this","insight":"what should be remembered","reuse":"how to apply this next time","created":"'"$TS"'","confidence":"medium","domain":null,"project":null,"supersedes":null,"superseded":false,"archived":false}' >> .cclaw/knowledge.jsonl
+printf '%s\\n' '{"type":"pattern","trigger":"when <situation>","action":"<concrete move>","confidence":"medium","domain":null,"stage":"review","created":"'"$TS"'","project":null}' >> .cclaw/knowledge.jsonl
 \`\`\`
 
 Type must be exactly one of: \`rule\`, \`pattern\`, \`lesson\`, \`compound\`.
+Fields must appear in the order: \`type, trigger, action, confidence, domain, stage, created, project\`.
+Missing optional values must be emitted as \`null\`, never omitted.
 
 ## Handoff
 - Next command: \`/cc-next\` (loads whatever stage is current in flow-state)
@@ -518,7 +514,7 @@ Before starting stage execution:
 - \`.cclaw/artifacts/06-tdd.md\`
 - \`.cclaw/artifacts/05-plan.md\`
 - \`.cclaw/artifacts/04-spec.md\`
-4. Read \`.cclaw/knowledge.md\` and apply relevant entries before making decisions.
+4. Stream \`.cclaw/knowledge.jsonl\` (strict-JSONL knowledge store) and apply relevant entries before making decisions.
 
 ## Automatic Subagent Dispatch
 
@@ -744,7 +740,7 @@ When fixing a bug:
 | Monitoring | optional | If applicable: what metrics/logs to watch post-deploy. Risk note if no monitoring. |
 | Finalization | REQUIRED | Exactly one finalization enum token selected. Execution result documented. Worktree cleaned if applicable. |
 | Completion Status | optional | If present: exactly one of SHIPPED, SHIPPED_WITH_EXCEPTIONS, BLOCKED. Exceptions documented when applicable. |
-| Compound Step | optional | Optional retrospective: at least one bullet of the form 'Insight: ... | Action: append [compound] entry to .cclaw/knowledge.md', or an explicit 'No compound insight this run.' line. |
+| Compound Step | optional | Optional retrospective: at least one bullet of the form 'Insight: ... | Action: append [compound] entry to .cclaw/knowledge.jsonl', or an explicit 'No compound insight this run.' line. |
 
 
 ## Common Rationalizations
@@ -825,7 +821,7 @@ When resuming a stage in a NEW session (artifact exists but gates are not all pa
 - Primary stage procedure (this file): \`.cclaw/skills/shipping-and-handoff/SKILL.md\`
 - Orchestrator contract (gate language and handoff): \`.cclaw/commands/ship.md\`
 - Artifact structure baseline: \`.cclaw/templates/08-ship.md\`
-- Runtime state truth source: \`.cclaw/state/flow-state.json\` + \`.cclaw/artifacts/\` + \`.cclaw/knowledge.md\`
+- Runtime state truth source: \`.cclaw/state/flow-state.json\` + \`.cclaw/artifacts/\` + \`.cclaw/knowledge.jsonl\`
 
 ### See also
 - Meta routing and activation rules: \`.cclaw/skills/using-cclaw/SKILL.md\`
@@ -840,21 +836,17 @@ After this stage, ask:
 - Did I discover a non-obvious reusable **rule** or **pattern**?
 - Did a failure reveal a reusable **lesson**?
 
-If yes, append one concise entry to **both** the markdown mirror (\`.cclaw/knowledge.md\`) and the canonical JSONL store (\`.cclaw/knowledge.jsonl\`) with the same timestamp:
+If yes, append one concise JSON line to the canonical knowledge store
+(\`.cclaw/knowledge.jsonl\`) using the strict 8-field schema:
 
 \`\`\`bash
 TS="$(date -u +%Y-%m-%dT%H:%M:%SZ)"
-cat >> .cclaw/knowledge.md <<EOF
-### $TS [pattern] short-title
-- Stage: ship
-- Context: what situation triggered this
-- Insight: what should be remembered
-- Reuse: how to apply this next time
-EOF
-printf '%s\\n' '{"type":"pattern","title":"short-title","stage":"ship","context":"what situation triggered this","insight":"what should be remembered","reuse":"how to apply this next time","created":"'"$TS"'","confidence":"medium","domain":null,"project":null,"supersedes":null,"superseded":false,"archived":false}' >> .cclaw/knowledge.jsonl
+printf '%s\\n' '{"type":"pattern","trigger":"when <situation>","action":"<concrete move>","confidence":"medium","domain":null,"stage":"ship","created":"'"$TS"'","project":null}' >> .cclaw/knowledge.jsonl
 \`\`\`
 
 Type must be exactly one of: \`rule\`, \`pattern\`, \`lesson\`, \`compound\`.
+Fields must appear in the order: \`type, trigger, action, confidence, domain, stage, created, project\`.
+Missing optional values must be emitted as \`null\`, never omitted.
 
 ## Handoff
 - Next command: \`/cc-next\` (loads whatever stage is current in flow-state)
@@ -913,7 +905,7 @@ Before starting stage execution:
 - \`.cclaw/artifacts/04-spec.md\`
 - \`.cclaw/artifacts/03-design.md\`
 - \`.cclaw/artifacts/02-scope.md\`
-4. Read \`.cclaw/knowledge.md\` and apply relevant entries before making decisions.
+4. Stream \`.cclaw/knowledge.jsonl\` (strict-JSONL knowledge store) and apply relevant entries before making decisions.
 
 ## Automatic Subagent Dispatch
 
@@ -1205,7 +1197,7 @@ When resuming a stage in a NEW session (artifact exists but gates are not all pa
 - Primary stage procedure (this file): \`.cclaw/skills/planning-and-task-breakdown/SKILL.md\`
 - Orchestrator contract (gate language and handoff): \`.cclaw/commands/plan.md\`
 - Artifact structure baseline: \`.cclaw/templates/05-plan.md\`
-- Runtime state truth source: \`.cclaw/state/flow-state.json\` + \`.cclaw/artifacts/\` + \`.cclaw/knowledge.md\`
+- Runtime state truth source: \`.cclaw/state/flow-state.json\` + \`.cclaw/artifacts/\` + \`.cclaw/knowledge.jsonl\`
 
 ### See also
 - Meta routing and activation rules: \`.cclaw/skills/using-cclaw/SKILL.md\`
@@ -1220,21 +1212,17 @@ After this stage, ask:
 - Did I discover a non-obvious reusable **rule** or **pattern**?
 - Did a failure reveal a reusable **lesson**?
 
-If yes, append one concise entry to **both** the markdown mirror (\`.cclaw/knowledge.md\`) and the canonical JSONL store (\`.cclaw/knowledge.jsonl\`) with the same timestamp:
+If yes, append one concise JSON line to the canonical knowledge store
+(\`.cclaw/knowledge.jsonl\`) using the strict 8-field schema:
 
 \`\`\`bash
 TS="$(date -u +%Y-%m-%dT%H:%M:%SZ)"
-cat >> .cclaw/knowledge.md <<EOF
-### $TS [pattern] short-title
-- Stage: plan
-- Context: what situation triggered this
-- Insight: what should be remembered
-- Reuse: how to apply this next time
-EOF
-printf '%s\\n' '{"type":"pattern","title":"short-title","stage":"plan","context":"what situation triggered this","insight":"what should be remembered","reuse":"how to apply this next time","created":"'"$TS"'","confidence":"medium","domain":null,"project":null,"supersedes":null,"superseded":false,"archived":false}' >> .cclaw/knowledge.jsonl
+printf '%s\\n' '{"type":"pattern","trigger":"when <situation>","action":"<concrete move>","confidence":"medium","domain":null,"stage":"plan","created":"'"$TS"'","project":null}' >> .cclaw/knowledge.jsonl
 \`\`\`
 
 Type must be exactly one of: \`rule\`, \`pattern\`, \`lesson\`, \`compound\`.
+Fields must appear in the order: \`type, trigger, action, confidence, domain, stage, created, project\`.
+Missing optional values must be emitted as \`null\`, never omitted.
 
 ## Handoff
 - Next command: \`/cc-next\` (loads whatever stage is current in flow-state)
@@ -1294,7 +1282,7 @@ Before starting stage execution:
 - \`.cclaw/artifacts/05-plan.md\`
 - \`.cclaw/artifacts/04-spec.md\`
 - \`.cclaw/artifacts/03-design.md\`
-4. Read \`.cclaw/knowledge.md\` and apply relevant entries before making decisions.
+4. Stream \`.cclaw/knowledge.jsonl\` (strict-JSONL knowledge store) and apply relevant entries before making decisions.
 
 ## Automatic Subagent Dispatch
 
@@ -1632,7 +1620,7 @@ When resuming a stage in a NEW session (artifact exists but gates are not all pa
 - Primary stage procedure (this file): \`.cclaw/skills/test-driven-development/SKILL.md\`
 - Orchestrator contract (gate language and handoff): \`.cclaw/commands/tdd.md\`
 - Artifact structure baseline: \`.cclaw/templates/06-tdd.md\`
-- Runtime state truth source: \`.cclaw/state/flow-state.json\` + \`.cclaw/artifacts/\` + \`.cclaw/knowledge.md\`
+- Runtime state truth source: \`.cclaw/state/flow-state.json\` + \`.cclaw/artifacts/\` + \`.cclaw/knowledge.jsonl\`
 
 ### See also
 - Meta routing and activation rules: \`.cclaw/skills/using-cclaw/SKILL.md\`
@@ -1648,21 +1636,17 @@ After this stage, ask:
 - Did I discover a non-obvious reusable **rule** or **pattern**?
 - Did a failure reveal a reusable **lesson**?
 
-If yes, append one concise entry to **both** the markdown mirror (\`.cclaw/knowledge.md\`) and the canonical JSONL store (\`.cclaw/knowledge.jsonl\`) with the same timestamp:
+If yes, append one concise JSON line to the canonical knowledge store
+(\`.cclaw/knowledge.jsonl\`) using the strict 8-field schema:
 
 \`\`\`bash
 TS="$(date -u +%Y-%m-%dT%H:%M:%SZ)"
-cat >> .cclaw/knowledge.md <<EOF
-### $TS [pattern] short-title
-- Stage: tdd
-- Context: what situation triggered this
-- Insight: what should be remembered
-- Reuse: how to apply this next time
-EOF
-printf '%s\\n' '{"type":"pattern","title":"short-title","stage":"tdd","context":"what situation triggered this","insight":"what should be remembered","reuse":"how to apply this next time","created":"'"$TS"'","confidence":"medium","domain":null,"project":null,"supersedes":null,"superseded":false,"archived":false}' >> .cclaw/knowledge.jsonl
+printf '%s\\n' '{"type":"pattern","trigger":"when <situation>","action":"<concrete move>","confidence":"medium","domain":null,"stage":"tdd","created":"'"$TS"'","project":null}' >> .cclaw/knowledge.jsonl
 \`\`\`
 
 Type must be exactly one of: \`rule\`, \`pattern\`, \`lesson\`, \`compound\`.
+Fields must appear in the order: \`type, trigger, action, confidence, domain, stage, created, project\`.
+Missing optional values must be emitted as \`null\`, never omitted.
 
 ## Handoff
 - Next command: \`/cc-next\` (loads whatever stage is current in flow-state)
@@ -1719,7 +1703,7 @@ Before starting stage execution:
 2. Resolve active artifact root: \`.cclaw/artifacts/\`.
 3. Load upstream artifacts required by this stage:
 - (first stage — no upstream artifacts)
-4. Read \`.cclaw/knowledge.md\` and apply relevant entries before making decisions.
+4. Stream \`.cclaw/knowledge.jsonl\` (strict-JSONL knowledge store) and apply relevant entries before making decisions.
 
 ## Automatic Subagent Dispatch
 
@@ -1978,7 +1962,7 @@ When resuming a stage in a NEW session (artifact exists but gates are not all pa
 - Primary stage procedure (this file): \`.cclaw/skills/brainstorming/SKILL.md\`
 - Orchestrator contract (gate language and handoff): \`.cclaw/commands/brainstorm.md\`
 - Artifact structure baseline: \`.cclaw/templates/01-brainstorm.md\`
-- Runtime state truth source: \`.cclaw/state/flow-state.json\` + \`.cclaw/artifacts/\` + \`.cclaw/knowledge.md\`
+- Runtime state truth source: \`.cclaw/state/flow-state.json\` + \`.cclaw/artifacts/\` + \`.cclaw/knowledge.jsonl\`
 
 ### See also
 - Meta routing and activation rules: \`.cclaw/skills/using-cclaw/SKILL.md\`
@@ -1992,21 +1976,17 @@ After this stage, ask:
 - Did I discover a non-obvious reusable **rule** or **pattern**?
 - Did a failure reveal a reusable **lesson**?
 
-If yes, append one concise entry to **both** the markdown mirror (\`.cclaw/knowledge.md\`) and the canonical JSONL store (\`.cclaw/knowledge.jsonl\`) with the same timestamp:
+If yes, append one concise JSON line to the canonical knowledge store
+(\`.cclaw/knowledge.jsonl\`) using the strict 8-field schema:
 
 \`\`\`bash
 TS="$(date -u +%Y-%m-%dT%H:%M:%SZ)"
-cat >> .cclaw/knowledge.md <<EOF
-### $TS [pattern] short-title
-- Stage: brainstorm
-- Context: what situation triggered this
-- Insight: what should be remembered
-- Reuse: how to apply this next time
-EOF
-printf '%s\\n' '{"type":"pattern","title":"short-title","stage":"brainstorm","context":"what situation triggered this","insight":"what should be remembered","reuse":"how to apply this next time","created":"'"$TS"'","confidence":"medium","domain":null,"project":null,"supersedes":null,"superseded":false,"archived":false}' >> .cclaw/knowledge.jsonl
+printf '%s\\n' '{"type":"pattern","trigger":"when <situation>","action":"<concrete move>","confidence":"medium","domain":null,"stage":"brainstorm","created":"'"$TS"'","project":null}' >> .cclaw/knowledge.jsonl
 \`\`\`
 
 Type must be exactly one of: \`rule\`, \`pattern\`, \`lesson\`, \`compound\`.
+Fields must appear in the order: \`type, trigger, action, confidence, domain, stage, created, project\`.
+Missing optional values must be emitted as \`null\`, never omitted.
 
 ## Handoff
 - Next command: \`/cc-next\` (loads whatever stage is current in flow-state)
@@ -2035,7 +2015,7 @@ Do NOT ship, merge, or release until both review layers complete with an explici
 - \`.cclaw/artifacts/06-tdd.md\`
 - \`.cclaw/artifacts/04-spec.md\`
 - \`.cclaw/artifacts/05-plan.md\`
-4. Load \`.cclaw/knowledge.md\` and apply relevant entries.
+4. Stream \`.cclaw/knowledge.jsonl\` and apply relevant JSON-line entries (strict schema: type, trigger, action, confidence, domain, stage, created, project).
 5. Write stage output to \`.cclaw/artifacts/07-review.md\` and \`.cclaw/artifacts/07-review-army.json\`.
 6. Do NOT copy artifacts into \`.cclaw/runs/\`; archival is handled only by \`cclaw archive\`.
 
@@ -2079,7 +2059,7 @@ Do NOT merge, push, or finalize without a passed preflight check, written rollba
 - \`.cclaw/artifacts/06-tdd.md\`
 - \`.cclaw/artifacts/05-plan.md\`
 - \`.cclaw/artifacts/04-spec.md\`
-4. Load \`.cclaw/knowledge.md\` and apply relevant entries.
+4. Stream \`.cclaw/knowledge.jsonl\` and apply relevant JSON-line entries (strict schema: type, trigger, action, confidence, domain, stage, created, project).
 5. Write stage output to \`.cclaw/artifacts/08-ship.md\`.
 6. Do NOT copy artifacts into \`.cclaw/runs/\`; archival is handled only by \`cclaw archive\`.
 

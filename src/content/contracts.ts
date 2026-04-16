@@ -39,7 +39,7 @@ ${schema.hardGate}
 2. Resolve active artifact root: \`.cclaw/artifacts/\`.
 3. Load required upstream artifacts for this stage:
 ${hydrationLines}
-4. Load \`.cclaw/knowledge.md\` and apply relevant entries.
+4. Stream \`.cclaw/knowledge.jsonl\` and apply relevant JSON-line entries (strict schema: type, trigger, action, confidence, domain, stage, created, project).
 5. Write stage output to ${writeStepPaths}.
 6. Do NOT copy artifacts into \`.cclaw/runs/\`; archival is handled only by \`cclaw archive\`.
 

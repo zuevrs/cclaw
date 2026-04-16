@@ -1581,7 +1581,7 @@ const SHIP: StageSchemaInput = {
     { section: "Monitoring", required: false, validationRule: "If applicable: what metrics/logs to watch post-deploy. Risk note if no monitoring." },
     { section: "Finalization", required: true, validationRule: "Exactly one finalization enum token selected. Execution result documented. Worktree cleaned if applicable." },
     { section: "Completion Status", required: false, validationRule: "If present: exactly one of SHIPPED, SHIPPED_WITH_EXCEPTIONS, BLOCKED. Exceptions documented when applicable." },
-    { section: "Compound Step", required: false, validationRule: "Optional retrospective: at least one bullet of the form 'Insight: ... | Action: append [compound] entry to .cclaw/knowledge.md', or an explicit 'No compound insight this run.' line." }
+    { section: "Compound Step", required: false, validationRule: "Optional retrospective: at least one bullet of the form 'Insight: ... | Action: append [compound] entry to .cclaw/knowledge.jsonl', or an explicit 'No compound insight this run.' line." }
   ],
   namedAntiPattern: {
     title: "Green CI Means Safe to Merge",
