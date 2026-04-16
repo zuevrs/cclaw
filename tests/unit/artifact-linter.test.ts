@@ -171,6 +171,113 @@ describe("artifact linter heuristics", () => {
     expect(finalization?.details).toContain("exactly one selected token");
   });
 
+  it("passes complete ship artifact", async () => {
+    const root = await fs.mkdtemp(path.join(os.tmpdir(), "cclaw-ship-full-pass-"));
+    await writeRuntimeArtifact(root, "08-ship.md", `# Ship Artifact
+
+## Preflight Results
+- Review verdict: APPROVED
+- Build: pass
+- Tests: pass (47 passed, 0 failed)
+- Lint: pass
+- Type-check: pass
+- Working tree clean: yes
+
+## Release Notes
+- Added: notification feed with SSE
+- Breaking changes: None
+
+## Rollback Plan
+- Trigger conditions: error rate >5%
+- Rollback steps: git revert <sha> && git push
+- Verification steps: confirm error rate baseline
+
+## Monitoring
+- Metrics/logs to watch: error rate for 24h
+
+## Finalization
+- Selected enum: FINALIZE_OPEN_PR
+- Execution result: PR #42 merged
+`);
+
+    const result = await lintArtifact(root, "ship");
+    expect(result.passed).toBe(true);
+  });
+
+  it("fails ship when Preflight Results is missing", async () => {
+    const root = await fs.mkdtemp(path.join(os.tmpdir(), "cclaw-ship-no-preflight-"));
+    await writeRuntimeArtifact(root, "08-ship.md", `# Ship Artifact
+
+## Release Notes
+- Added: notification feed
+
+## Rollback Plan
+- Trigger conditions: error rate >5%
+- Rollback steps: revert
+- Verification steps: smoke test
+
+## Finalization
+- Selected enum: FINALIZE_OPEN_PR
+- Execution result: PR merged
+`);
+
+    const result = await lintArtifact(root, "ship");
+    expect(result.passed).toBe(false);
+    const pf = result.findings.find((f) => f.section === "Preflight Results");
+    expect(pf?.found).toBe(false);
+    expect(pf?.required).toBe(true);
+  });
+
+  it("fails ship when Rollback Plan is missing", async () => {
+    const root = await fs.mkdtemp(path.join(os.tmpdir(), "cclaw-ship-no-rollback-"));
+    await writeRuntimeArtifact(root, "08-ship.md", `# Ship Artifact
+
+## Preflight Results
+- Build: pass
+- Tests: pass
+
+## Release Notes
+- Added: notification feed
+
+## Finalization
+- Selected enum: FINALIZE_MERGE_LOCAL
+- Execution result: merged locally
+`);
+
+    const result = await lintArtifact(root, "ship");
+    expect(result.passed).toBe(false);
+    const rb = result.findings.find((f) => f.section === "Rollback Plan");
+    expect(rb?.found).toBe(false);
+    expect(rb?.required).toBe(true);
+  });
+
+  it("fails ship when Finalization has invalid single token", async () => {
+    const root = await fs.mkdtemp(path.join(os.tmpdir(), "cclaw-ship-bad-finalize-"));
+    await writeRuntimeArtifact(root, "08-ship.md", `# Ship Artifact
+
+## Preflight Results
+- Build: pass
+- Tests: pass
+
+## Release Notes
+- Added: notification feed
+
+## Rollback Plan
+- Trigger conditions: error rate >5%
+- Rollback steps: revert
+- Verification steps: smoke test
+
+## Finalization
+- Selected enum: DEPLOY_NOW
+- Execution result: deployed
+`);
+
+    const result = await lintArtifact(root, "ship");
+    const fin = result.findings.find((f) => f.section === "Finalization");
+    expect(fin?.found).toBe(false);
+    expect(fin?.details).toContain("exactly one selected token");
+  });
+
   it("requires review readiness dashboard section for review artifacts", async () => {
     const root = await fs.mkdtemp(path.join(os.tmpdir(), "cclaw-artifact-lint-review-readiness-"));
     await writeRuntimeArtifact(root, "07-review.md", `# Review Artifact
