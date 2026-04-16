@@ -478,9 +478,31 @@ export async function validateReviewArmy(
     }
     if (!Array.isArray(rec.conflicts)) {
       errors.push("reconciliation.conflicts must be an array.");
+    } else {
+      (rec.conflicts as unknown[]).forEach((c, ci) => {
+        if (c === null || typeof c !== "object" || Array.isArray(c)) {
+          errors.push(`reconciliation.conflicts[${ci}] must be an object.`);
+          return;
+        }
+        const co = c as Record<string, unknown>;
+        if (!isNonEmptyString(co.findingId)) {
+          errors.push(`reconciliation.conflicts[${ci}].findingId must be a non-empty string.`);
+        } else if (!findingIds.has(co.findingId)) {
+          errors.push(`reconciliation.conflicts[${ci}].findingId references unknown finding "${co.findingId}".`);
+        }
+        if (!isNonEmptyString(co.description)) {
+          errors.push(`reconciliation.conflicts[${ci}].description must be a non-empty string.`);
+        }
+      });
     }
     if (!isStringArray(rec.multiSpecialistConfirmed)) {
       errors.push("reconciliation.multiSpecialistConfirmed must be an array of finding ids.");
+    } else {
+      for (const msId of rec.multiSpecialistConfirmed) {
+        if (!findingIds.has(msId)) {
+          errors.push(`reconciliation.multiSpecialistConfirmed references unknown finding id "${msId}".`);
+        }
+      }
     }
     if (!isStringArray(rec.shipBlockers)) {
       errors.push("reconciliation.shipBlockers must be an array of finding ids.");
