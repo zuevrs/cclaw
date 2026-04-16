@@ -127,6 +127,74 @@ describe("runs system", () => {
     expect(quarantinedContents).toBe("this is not { json");
   });
 
+  it("archive snapshots state/ (flow-state, delegation-log) and writes a manifest", async () => {
+    const root = await fs.mkdtemp(path.join(os.tmpdir(), "cclaw-runs-archive-state-"));
+    await ensureRunSystem(root);
+    await fs.writeFile(path.join(root, ".cclaw/artifacts/00-idea.md"), "# Search Revamp\n", "utf8");
+    await writeFlowState(root, {
+      ...createInitialFlowState("active"),
+      currentStage: "plan",
+      completedStages: ["brainstorm", "scope", "design", "spec"]
+    });
+    await fs.writeFile(
+      path.join(root, ".cclaw/state/delegation-log.json"),
+      JSON.stringify({
+        runId: "active",
+        entries: [
+          {
+            stage: "scope",
+            agent: "planner",
+            mode: "mandatory",
+            status: "completed",
+            ts: "2026-04-16T00:00:00.000Z"
+          }
+        ]
+      }, null, 2),
+      "utf8"
+    );
+    await fs.writeFile(
+      path.join(root, ".cclaw/state/stage-activity.jsonl"),
+      `${JSON.stringify({ stage: "scope", ts: "2026-04-16T00:00:01.000Z", event: "enter" })}\n`,
+      "utf8"
+    );
+    const archived = await archiveRun(root, "Search Revamp");
+
+    expect(archived.snapshottedStateFiles).toContain("flow-state.json");
+    expect(archived.snapshottedStateFiles).toContain("delegation-log.json");
+    expect(archived.snapshottedStateFiles).toContain("stage-activity.jsonl");
+    for (const name of archived.snapshottedStateFiles) {
+      expect(name.startsWith(".flow-state.lock")).toBe(false);
+      expect(name.startsWith(".delegation.lock")).toBe(false);
+    }
+
+    const snapshotDir = path.join(archived.archivePath, "state");
+    const flowSnap = JSON.parse(await fs.readFile(path.join(snapshotDir, "flow-state.json"), "utf8"));
+    expect(flowSnap.currentStage).toBe("plan");
+    expect(flowSnap.completedStages).toEqual(["brainstorm", "scope", "design", "spec"]);
+
+    const delegationSnap = JSON.parse(
+      await fs.readFile(path.join(snapshotDir, "delegation-log.json"), "utf8")
+    );
+    expect(delegationSnap.entries[0].agent).toBe("planner");
+
+    const manifestPath = path.join(archived.archivePath, "archive-manifest.json");
+    const manifest = JSON.parse(await fs.readFile(manifestPath, "utf8"));
+    expect(manifest.version).toBe(1);
+    expect(manifest.archiveId).toBe(archived.archiveId);
+    expect(manifest.featureName).toBe("Search Revamp");
+    expect(manifest.sourceCurrentStage).toBe("plan");
+    expect(manifest.sourceCompletedStages).toEqual([
+      "brainstorm",
+      "scope",
+      "design",
+      "spec"
+    ]);
+
+    const resetState = await readFlowState(root);
+    expect(resetState.currentStage).toBe("brainstorm");
+    expect(resetState.completedStages).toEqual([]);
+  });
+
   it("quarantines flow-state.json when top-level value is not an object", async () => {
     const root = await fs.mkdtemp(path.join(os.tmpdir(), "cclaw-runs-corrupt-array-"));
     await ensureRunSystem(root);

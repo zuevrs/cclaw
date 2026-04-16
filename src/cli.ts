@@ -178,9 +178,12 @@ async function runCommand(parsed: ParsedArgs, ctx: CliContext): Promise<number> 
 
   if (command === "archive") {
     const archived = await archiveRun(ctx.cwd, parsed.archiveName);
+    const snapshotSummary = archived.snapshottedStateFiles.length > 0
+      ? ` Snapshotted ${archived.snapshottedStateFiles.length} state file(s) under ${archived.archivePath}/state and wrote archive-manifest.json.`
+      : "";
     info(
       ctx,
-      `Archived active artifacts to ${archived.archivePath}. Flow state reset to brainstorm.`
+      `Archived active artifacts to ${archived.archivePath}. Flow state reset to brainstorm.${snapshotSummary}`
     );
     return 0;
   }

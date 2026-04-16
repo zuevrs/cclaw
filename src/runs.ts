@@ -8,7 +8,14 @@ import type { FlowStage } from "./types.js";
 const FLOW_STATE_REL_PATH = `${RUNTIME_ROOT}/state/flow-state.json`;
 const RUNS_DIR_REL_PATH = `${RUNTIME_ROOT}/runs`;
 const ACTIVE_ARTIFACTS_REL_PATH = `${RUNTIME_ROOT}/artifacts`;
+const STATE_DIR_REL_PATH = `${RUNTIME_ROOT}/state`;
 const FLOW_STAGE_SET = new Set<string>(COMMAND_FILE_ORDER);
+
+/** State filenames explicitly excluded from the archive snapshot. */
+const STATE_SNAPSHOT_EXCLUDE = new Set<string>([
+  ".flow-state.lock",
+  ".delegation.lock"
+]);
 
 export interface CclawRunMeta {
   id: string;
@@ -22,6 +29,18 @@ export interface ArchiveRunResult {
   archivedAt: string;
   featureName: string;
   resetState: FlowState;
+  snapshottedStateFiles: string[];
+}
+
+export interface ArchiveManifest {
+  version: 1;
+  archiveId: string;
+  archivedAt: string;
+  featureName: string;
+  sourceRunId: string;
+  sourceCurrentStage: FlowStage;
+  sourceCompletedStages: FlowStage[];
+  snapshottedStateFiles: string[];
 }
 
 interface EnsureRunSystemOptions {
@@ -42,6 +61,46 @@ function runsRoot(projectRoot: string): string {
 
 function activeArtifactsPath(projectRoot: string): string {
   return path.join(projectRoot, ACTIVE_ARTIFACTS_REL_PATH);
+}
+
+function stateDirPath(projectRoot: string): string {
+  return path.join(projectRoot, STATE_DIR_REL_PATH);
+}
+
+async function snapshotStateDirectory(
+  projectRoot: string,
+  destinationRoot: string
+): Promise<string[]> {
+  const sourceDir = stateDirPath(projectRoot);
+  if (!(await exists(sourceDir))) {
+    return [];
+  }
+  await ensureDir(destinationRoot);
+  const copied: string[] = [];
+  let entries: Array<{ name: string; isDirectory: () => boolean; isFile: () => boolean }>;
+  try {
+    entries = await fs.readdir(sourceDir, { withFileTypes: true });
+  } catch {
+    return [];
+  }
+  for (const entry of entries) {
+    if (STATE_SNAPSHOT_EXCLUDE.has(entry.name)) continue;
+    if (entry.name.startsWith(".") && !entry.name.endsWith(".json")) continue;
+    const from = path.join(sourceDir, entry.name);
+    const to = path.join(destinationRoot, entry.name);
+    try {
+      if (entry.isDirectory()) {
+        await fs.cp(from, to, { recursive: true });
+        copied.push(`${entry.name}/`);
+      } else if (entry.isFile()) {
+        await fs.copyFile(from, to);
+        copied.push(entry.name);
+      }
+    } catch {
+      // best-effort snapshot; continue on individual failures
+    }
+  }
+  return copied.sort((a, b) => a.localeCompare(b));
 }
 
 function isFlowStage(value: unknown): value is FlowStage {
@@ -315,19 +374,40 @@ export async function archiveRun(projectRoot: string, featureName?: string): Pro
   const archivePath = path.join(runsDir, archiveId);
   const archiveArtifactsPath = path.join(archivePath, "artifacts");
 
+  const sourceState = await readFlowState(projectRoot);
+
   await ensureDir(archivePath);
   await fs.rename(artifactsDir, archiveArtifactsPath);
   await ensureDir(artifactsDir);
 
+  const archiveStatePath = path.join(archivePath, "state");
+  const snapshottedStateFiles = await snapshotStateDirectory(projectRoot, archiveStatePath);
+
   const resetState = createInitialFlowState();
   await writeFlowState(projectRoot, resetState);
   const archivedAt = new Date().toISOString();
+
+  const manifest: ArchiveManifest = {
+    version: 1,
+    archiveId,
+    archivedAt,
+    featureName: feature,
+    sourceRunId: sourceState.activeRunId,
+    sourceCurrentStage: sourceState.currentStage,
+    sourceCompletedStages: sourceState.completedStages,
+    snapshottedStateFiles
+  };
+  await writeFileSafe(
+    path.join(archivePath, "archive-manifest.json"),
+    `${JSON.stringify(manifest, null, 2)}\n`
+  );
 
   return {
     archiveId,
     archivePath,
     archivedAt,
     featureName: feature,
-    resetState
+    resetState,
+    snapshottedStateFiles
   };
 }
