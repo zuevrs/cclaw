@@ -971,7 +971,30 @@ const PLAN: StageSchemaInput = {
     { name: "Two-Minute Smell Test", description: "If a competent engineer cannot understand and start a task in two minutes, the task is too large or too vague. Break it down further." },
     { name: "Make the Change Easy, Then Make the Easy Change", description: "Refactor first, implement second. Never structural + behavioral changes simultaneously. Sequence tasks accordingly." }
   ],
-  reviewSections: [],
+  reviewSections: [
+    {
+      title: "Task Decomposition Audit",
+      evaluationPoints: [
+        "Does every task target a single coherent area (vertical slice)?",
+        "Can each task be completed in 2-5 minutes?",
+        "Does every task have an acceptance criterion link and verification command?",
+        "Are there tasks that touch multiple unrelated areas?",
+        "Would a new engineer understand and start each task within two minutes?"
+      ],
+      stopGate: true
+    },
+    {
+      title: "Wave Completeness Audit",
+      evaluationPoints: [
+        "Does every task belong to exactly one wave?",
+        "Does each wave have a verification gate?",
+        "Are wave dependencies explicit and acyclic?",
+        "Is the acceptance mapping complete — every spec criterion covered?",
+        "Are there hidden dependencies between tasks in different waves?"
+      ],
+      stopGate: true
+    }
+  ],
   completionStatus: ["DONE", "DONE_WITH_CONCERNS", "BLOCKED"],
   crossStageTrace: {
     readsFrom: [".cclaw/artifacts/04-spec.md", ".cclaw/artifacts/03-design.md", ".cclaw/artifacts/02-scope.md"],
