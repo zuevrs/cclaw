@@ -726,6 +726,154 @@ candidates exist).
 `;
 }
 
+export function securityAuditSkill(): string {
+  return `---
+name: security-audit
+description: "Proactive security audit — hunts for vulnerabilities across the codebase using pattern-based detection. Distinct from security review (checklist for a specific diff)."
+---
+
+# Security Audit
+
+## Quick Start
+
+> 1. Scan the codebase for high-signal vulnerability patterns (not just the diff).
+> 2. Produce a finding register grouped by category with severity and file:line.
+> 3. For each Critical: provide a concrete exploit path (not just a category label).
+
+## HARD-GATE
+
+Do not close a security audit pass while any Critical pattern match is
+unresolved. Each Critical finding must be either fixed, suppressed with
+a documented reason, or tracked as a named accepted risk with an owner.
+
+## When to Use
+
+- Initial project onboarding (baseline audit)
+- Before a major release that expands attack surface
+- When new dependencies are introduced
+- After a security incident (to check for same-class issues)
+- On a scheduled cadence (quarterly for stable projects, monthly for high-risk)
+
+This is complementary to the \`security\` skill, which is a point-in-time
+review checklist scoped to a single diff.
+
+## Audit Pattern Catalog
+
+Run each category as a focused pass. For every pattern, capture
+file:line evidence — never assume the project is clean just because
+there was "no obvious problem".
+
+### 1. Secret Exposure
+
+Patterns to grep for (language-agnostic):
+
+- \`AKIA[0-9A-Z]{16}\` — AWS access key id
+- \`-----BEGIN (RSA |EC |DSA )?PRIVATE KEY-----\`
+- \`xox[bp]-[0-9a-zA-Z-]+\` — Slack tokens
+- \`ghp_[A-Za-z0-9]{36}\` — GitHub PAT
+- \`console\\.log.*(token|secret|password|api_key)\`
+- Hard-coded JWTs (3 base64 segments separated by \`.\`)
+
+Also inspect: .env.example for real values, logs for PII, git history for
+leaked secrets via \`git log -p | grep -i secret\`.
+
+### 2. Injection
+
+- Raw SQL string concatenation with request data
+- \`eval(\`, \`new Function(\`, \`exec(\`, \`execSync(\` with untrusted input
+- \`dangerouslySetInnerHTML\`, \`innerHTML =\` with user-provided content
+- Shell command construction from user input
+- Template literal SQL (\`\\\`SELECT ... \${userInput}\\\`\`)
+
+### 3. Auth and Session
+
+- Missing auth middleware on routes that mutate state
+- JWT verification that trusts the \`alg\` header (algorithm confusion)
+- \`setCookie\` without \`HttpOnly\`, \`Secure\`, or \`SameSite\`
+- Session fixation (no regenerate-on-login)
+- Rate limit absent on login, signup, password reset
+
+### 4. Trust Boundary and LLM Output
+
+- LLM output passed directly to \`exec\` / SQL / filesystem calls
+- Tool-call arguments from the model used without schema validation
+- Untrusted markdown rendered without sanitization
+- Confused deputy: service acts on behalf of user without passing auth context
+
+### 5. Crypto Misuse
+
+- MD5 / SHA1 for password hashing
+- \`Math.random()\` used for security tokens
+- Reused IV in AES-GCM (catastrophic)
+- ECB mode cipher usage
+- Missing constant-time comparison for secrets
+
+### 6. Dependency and Supply Chain
+
+- \`npm audit\` / \`pip audit\` Critical or High advisories unresolved
+- Dependencies pulled from non-locked tags instead of pinned versions
+- Post-install scripts from new/unknown packages
+- Un-reviewed direct-to-main dependency bumps
+
+### 7. File System and Path Traversal
+
+- \`path.join\` with user input without \`path.normalize\` + prefix check
+- Unzip/untar without entry path validation (zip-slip)
+- Writing to user-supplied paths without allowlist
+- Following symlinks inside trusted directories
+
+### 8. Logging and Observability
+
+- Stack traces returned in API responses (production)
+- Logs containing tokens, passwords, full request bodies
+- Error messages that reveal DB schema or internal paths
+
+## Output Format
+
+Produce a single audit report with this structure:
+
+\`\`\`markdown
+# Security Audit — <scope>, <date>
+
+## Summary
+- Files scanned: <N>
+- Categories checked: <list>
+- Critical: <N>, Important: <N>, Suggestion: <N>
+
+## Findings
+
+### <Category> — <Pattern name>
+- **Severity:** Critical | Important | Suggestion
+- **File:line:** path/to/file.ts:42
+- **Evidence:** short excerpt (≤ 3 lines)
+- **Exploit path:** specific, concrete (not a category label)
+- **Fix:** specific remediation with command/patch-level detail
+- **Owner:** <name or role>
+- **Target date:** <YYYY-MM-DD for Critical/Important>
+
+## Accepted Risks
+- <finding id>: <reason documented>, owner <name>, revisit <date>
+
+## Suppressed (False Positives)
+- <finding id>: <why this pattern is not exploitable here>
+\`\`\`
+
+## Anti-Patterns
+
+- "No Critical findings" without stating what patterns were actually run.
+- Accepting a Critical risk without named owner + revisit date.
+- Treating a lint rule as equivalent to a runtime security check.
+- Running audits only on the diff — the diff does not contain legacy risks.
+- Deleting audit reports after fixing findings (keep them as regression evidence).
+
+## Red Flags
+
+- Audit claims coverage but cites zero file:line evidence.
+- Every Critical pattern has zero matches (this is implausible for any non-trivial codebase — verify the grep commands were actually executed).
+- Findings are Important-only (no Critical or Suggestion buckets) — usually means severity was compressed to avoid escalation.
+`;
+}
+
 export function adversarialReviewSkill(): string {
   return `---
 name: adversarial-review
@@ -818,7 +966,8 @@ export const UTILITY_SKILL_FOLDERS = [
   "source-driven-development",
   "frontend-accessibility",
   "landscape-check",
-  "adversarial-review"
+  "adversarial-review",
+  "security-audit"
 ] as const;
 
 export const UTILITY_SKILL_MAP: Record<string, () => string> = {
@@ -832,5 +981,6 @@ export const UTILITY_SKILL_MAP: Record<string, () => string> = {
   "source-driven-development": sourceDrivenDevelopmentSkill,
   "frontend-accessibility": frontendAccessibilitySkill,
   "landscape-check": landscapeCheckSkill,
-  "adversarial-review": adversarialReviewSkill
+  "adversarial-review": adversarialReviewSkill,
+  "security-audit": securityAuditSkill
 };

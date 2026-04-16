@@ -156,6 +156,10 @@ export async function syncHarnessShims(projectRoot: string, harnesses: HarnessId
       path.join(commandDir, "cc-learn.md"),
       utilityShimContent(harness, "learn", "learnings", "learn.md")
     );
+    await writeFileSafe(
+      path.join(commandDir, "cc-status.md"),
+      utilityShimContent(harness, "status", "flow-status", "status.md")
+    );
   }
 
   await syncAgentFiles(projectRoot);

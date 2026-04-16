@@ -14,11 +14,13 @@ import { contextModeFiles, createInitialContextModeState } from "./content/conte
 import { learnSkillMarkdown, learnCommandContract } from "./content/learnings.js";
 import { nextCommandContract, nextCommandSkillMarkdown } from "./content/next-command.js";
 import { startCommandContract, startCommandSkillMarkdown } from "./content/start-command.js";
+import { statusCommandContract, statusCommandSkillMarkdown } from "./content/status-command.js";
 import { subagentDrivenDevSkill, parallelAgentsSkill } from "./content/subagents.js";
 import { sessionHooksSkillMarkdown } from "./content/session-hooks.js";
 import {
   sessionStartScript,
   stopCheckpointScript,
+  preCompactScript,
   opencodePluginJs,
   claudeHooksJson,
   cursorHooksJson,
@@ -224,6 +226,10 @@ async function writeSkills(projectRoot: string): Promise<void> {
     runtimePath(projectRoot, "skills", "flow-start", "SKILL.md"),
     startCommandSkillMarkdown()
   );
+  await writeFileSafe(
+    runtimePath(projectRoot, "skills", "flow-status", "SKILL.md"),
+    statusCommandSkillMarkdown()
+  );
 
   await writeFileSafe(
     runtimePath(projectRoot, "skills", "subagent-dev", "SKILL.md"),
@@ -252,7 +258,7 @@ async function writeUtilityCommands(projectRoot: string): Promise<void> {
   await writeFileSafe(runtimePath(projectRoot, "commands", "learn.md"), learnCommandContract());
   await writeFileSafe(runtimePath(projectRoot, "commands", "next.md"), nextCommandContract());
   await writeFileSafe(runtimePath(projectRoot, "commands", "start.md"), startCommandContract());
-
+  await writeFileSafe(runtimePath(projectRoot, "commands", "status.md"), statusCommandContract());
 }
 
 function toObject(value: unknown): Record<string, unknown> | null {
@@ -570,6 +576,7 @@ async function writeHooks(projectRoot: string, config: VibyConfig): Promise<void
 
   await writeFileSafe(path.join(hooksDir, "session-start.sh"), sessionStartScript());
   await writeFileSafe(path.join(hooksDir, "stop-checkpoint.sh"), stopCheckpointScript());
+  await writeFileSafe(path.join(hooksDir, "pre-compact.sh"), preCompactScript());
   await writeFileSafe(path.join(hooksDir, "prompt-guard.sh"), promptGuardScript({
     strictMode: config.promptGuardMode === "strict"
   }));
@@ -582,6 +589,7 @@ async function writeHooks(projectRoot: string, config: VibyConfig): Promise<void
     for (const script of [
       "session-start.sh",
       "stop-checkpoint.sh",
+      "pre-compact.sh",
       "prompt-guard.sh",
       "workflow-guard.sh",
       "context-monitor.sh",
@@ -951,7 +959,7 @@ function stripManagedHookCommands(value: unknown): { updated: unknown; changed: 
 
 function isManagedRuntimeHookCommand(command: string): boolean {
   const normalized = command.trim().replace(/\s+/gu, " ");
-  return /(^|\s)(?:bash\s+)?(?:\.\/)?\.cclaw\/hooks\/(?:session-start|stop-checkpoint|prompt-guard|workflow-guard|context-monitor)\.sh(?:\s|$)/u.test(
+  return /(^|\s)(?:bash\s+)?(?:\.\/)?\.cclaw\/hooks\/(?:session-start|stop-checkpoint|pre-compact|prompt-guard|workflow-guard|context-monitor)\.sh(?:\s|$)/u.test(
     normalized
   );
 }
