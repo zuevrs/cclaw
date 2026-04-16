@@ -131,13 +131,13 @@ jobs:
         run: npm pack
 
       - name: Upload package artifact
-        uses: actions/upload-artifact@v4
+        uses: actions/upload-artifact@v7
         with:
           name: cclaw-package
           path: "*.tgz"
 
       - name: Upload plugin manifests artifact
-        uses: actions/upload-artifact@v4
+        uses: actions/upload-artifact@v7
         with:
           name: plugin-manifests
           path: release-artifacts/plugin-manifests
