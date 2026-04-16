@@ -35,7 +35,20 @@ export interface ArtifactValidation {
 }
 
 export interface StageAutoSubagentDispatch {
-  agent: "planner" | "spec-reviewer" | "code-reviewer" | "security-reviewer" | "test-author" | "doc-updater";
+  agent:
+    | "planner"
+    | "spec-reviewer"
+    | "code-reviewer"
+    | "security-reviewer"
+    | "test-author"
+    | "doc-updater"
+    // Research pool — parallel, read-only, fast-tier. Fan out during
+    // brainstorm/scope/design to gather signal before classical planning.
+    | "repo-research-analyst"
+    | "learnings-researcher"
+    | "framework-docs-researcher"
+    | "best-practices-researcher"
+    | "git-history-analyzer";
   /**
    * - `mandatory` — must be dispatched (or explicitly waived) before stage transition.
    * - `proactive` — should be dispatched automatically when context matches `when`.
@@ -1665,6 +1678,20 @@ const STAGE_AUTO_SUBAGENT_DISPATCH: Record<FlowStage, StageAutoSubagentDispatch[
       when: "When request is ambiguous, multi-surface, or spans multiple modules.",
       purpose: "Map scope and alternatives before direction lock.",
       requiresUserGate: false
+    },
+    {
+      agent: "repo-research-analyst",
+      mode: "proactive",
+      when: "When the user's idea touches an unfamiliar module, stack, or integration surface.",
+      purpose: "Parallel fan-out: summarise existing code paths, tech stack, and similar features already present — feeds the alternatives list.",
+      requiresUserGate: false
+    },
+    {
+      agent: "learnings-researcher",
+      mode: "proactive",
+      when: "On every non-trivial brainstorm where `.cclaw/knowledge.jsonl` has entries.",
+      purpose: "Surface prior learnings and anti-patterns that apply to the current task before direction lock.",
+      requiresUserGate: false
     }
   ],
   scope: [
@@ -1673,6 +1700,13 @@ const STAGE_AUTO_SUBAGENT_DISPATCH: Record<FlowStage, StageAutoSubagentDispatch[
       mode: "mandatory",
       when: "Always during scope shaping.",
       purpose: "Challenge premise, map alternatives, and produce explicit in/out contract.",
+      requiresUserGate: false
+    },
+    {
+      agent: "git-history-analyzer",
+      mode: "proactive",
+      when: "When scope touches modules with churn, recent regressions, or unclear ownership.",
+      purpose: "Read recent commits, PRs, and issue references for the affected paths before scope lock.",
       requiresUserGate: false
     }
   ],
@@ -1689,6 +1723,20 @@ const STAGE_AUTO_SUBAGENT_DISPATCH: Record<FlowStage, StageAutoSubagentDispatch[
       mode: "proactive",
       when: "When trust boundaries, auth, secrets, or external inputs are involved.",
       purpose: "Catch design-level security risks before implementation.",
+      requiresUserGate: false
+    },
+    {
+      agent: "framework-docs-researcher",
+      mode: "proactive",
+      when: "When a specific framework/library version is detected and a non-trivial API is in play.",
+      purpose: "Retrieve version-specific docs + migration notes so the design does not rely on stale training priors.",
+      requiresUserGate: false
+    },
+    {
+      agent: "best-practices-researcher",
+      mode: "conditional",
+      when: "When the user flags a quality axis (performance, accessibility, reliability) as primary.",
+      purpose: "Pull domain best-practices and contrast them with the current design choice.",
       requiresUserGate: false
     }
   ],

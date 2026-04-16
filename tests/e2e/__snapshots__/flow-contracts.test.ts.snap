@@ -1762,6 +1762,8 @@ Machine-only work should be delegated to specialist agents automatically accordi
 | Agent | Mode | When | Purpose | User Gate |
 |---|---|---|---|---|
 | planner | proactive | When request is ambiguous, multi-surface, or spans multiple modules. | Map scope and alternatives before direction lock. | not required |
+| repo-research-analyst | proactive | When the user's idea touches an unfamiliar module, stack, or integration surface. | Parallel fan-out: summarise existing code paths, tech stack, and similar features already present — feeds the alternatives list. | not required |
+| learnings-researcher | proactive | On every non-trivial brainstorm where \`.cclaw/knowledge.jsonl\` has entries. | Surface prior learnings and anti-patterns that apply to the current task before direction lock. | not required |
 
 **Gate rule:** user interaction is required only for approval/override decisions. Do not ask the user to manually trigger machine-only specialist checks.
 
