@@ -393,36 +393,20 @@ When this stage ends, report one of:
 
 ## Stage Completion Protocol
 
-When all required gates are satisfied and the artifact is written:
+Apply the **Shared Stage Completion Protocol** from \`.cclaw/skills/using-cclaw/SKILL.md\` with these parameters — do NOT re-derive the generic steps here.
 
-0. **Delegation pre-flight** (BLOCKING):
-   - Mandatory agents for this stage: \`spec-reviewer\`, \`code-reviewer\`, \`security-reviewer\`.
-   - For each mandatory agent: confirm it was dispatched (via Task/delegate) and completed, OR record an explicit waiver with reason in \`.cclaw/state/delegation-log.json\`.
-   - Write a JSON entry per agent: \`{ "stage": "review", "agent": "<name>", "mode": "mandatory", "status": "completed"|"waived", "waiverReason": "<if waived>", "ts": "<ISO timestamp>" }\`.
-   - If the harness does not support delegation, record status \`"waived"\` with reason \`"harness_limitation"\`.
-   - **Do NOT proceed to step 1 until every mandatory agent has an entry in the delegation log.**
-1. **Update \`.cclaw/state/flow-state.json\`:**
-   - Set \`currentStage\` to \`"ship"\`
-   - Add \`"review"\` to \`completedStages\` array
-   - Move all gate IDs for this stage (\`review_layer1_spec_compliance\`, \`review_layer2_correctness\`, \`review_layer2_security\`, \`review_layer2_performance\`, \`review_layer2_architecture\`, \`review_severity_classified\`, \`review_criticals_resolved\`, \`review_army_json_valid\`, \`review_completeness_scored\`, \`review_security_audit_swept\`) into \`stageGateCatalog.review.passed\`
-   - Clear \`stageGateCatalog.review.blocked\`
-   - For each passed gate, add an entry to \`guardEvidence\`: \`"<gate_id>": "<artifact path or excerpt proving the gate>"\`. Do NOT leave \`guardEvidence\` empty.
-2. **Persist artifact** at \`.cclaw/artifacts/07-review.md\`. Do NOT manually copy into \`.cclaw/runs/\`; archival is handled by \`cclaw archive\`.
-3. **Doctor pre-flight** — Run \`npx cclaw doctor\` (or the installed cclaw binary). If any check fails, resolve the issue (missing delegation entry, artifact section, gate evidence) and re-run until all checks pass. Do NOT proceed to the next step while doctor reports failures.
-4. Tell the user:
+**Completion Parameters**
+- \`stage\` — \`review\`
+- \`next\` — \`ship\` (release handoff stage with preflight checks, rollback readiness, and explicit finalization mode.)
+- \`gates\` — \`review_layer1_spec_compliance\`, \`review_layer2_correctness\`, \`review_layer2_security\`, \`review_layer2_performance\`, \`review_layer2_architecture\`, \`review_severity_classified\`, \`review_criticals_resolved\`, \`review_army_json_valid\`, \`review_completeness_scored\`, \`review_security_audit_swept\`
+- \`artifact\` — \`.cclaw/artifacts/07-review.md\`
+- \`mandatory\` — \`spec-reviewer\`, \`code-reviewer\`, \`security-reviewer\`
 
-   > **Stage \`review\` complete.** Next: **ship** — release handoff stage with preflight checks, rollback readiness, and explicit finalization mode.
-   >
-   > Run \`/cc-next\` to continue.
-
-**STOP.** Do not load the next stage skill yourself. The user will run \`/cc-next\` when ready (same session or new session).
+When all required gates are satisfied and the artifact is written, execute the shared procedure (delegation pre-flight → flow-state update → artifact persistence → \`npx cclaw doctor\` → user handoff → STOP) using the parameters above. If any check fails, resolve the issue and re-run before proceeding.
 
 ## Resume Protocol
 
-When resuming a stage in a NEW session (artifact exists but gates are not all passed in flow-state):
-1. Read the existing artifact and check which gates can be verified from artifact evidence.
-2. For each unverified gate, ask the user to confirm ONE gate at a time. Do NOT batch multiple gate confirmations in a single message.
-3. Update \`guardEvidence\` for each confirmed gate before proceeding.
+When resuming this stage in a NEW session (artifact exists but not all of \`review_layer1_spec_compliance\`, \`review_layer2_correctness\`, \`review_layer2_security\`, \`review_layer2_performance\`, \`review_layer2_architecture\`, \`review_severity_classified\`, \`review_criticals_resolved\`, \`review_army_json_valid\`, \`review_completeness_scored\`, \`review_security_audit_swept\` are passed), follow the **Shared Resume Protocol** in \`.cclaw/skills/using-cclaw/SKILL.md\` — confirm one gate at a time, update \`guardEvidence\` for each, never batch confirmations.
 
 ## Progressive Disclosure
 
@@ -808,33 +792,20 @@ When this stage ends, report one of:
 
 ## Stage Completion Protocol
 
-When all required gates are satisfied and the artifact is written:
+Apply the **Shared Stage Completion Protocol** from \`.cclaw/skills/using-cclaw/SKILL.md\` with these parameters — do NOT re-derive the generic steps here.
 
-0. **Delegation pre-flight** (BLOCKING):
-   - Mandatory agents for this stage: \`doc-updater\`.
-   - For each mandatory agent: confirm it was dispatched (via Task/delegate) and completed, OR record an explicit waiver with reason in \`.cclaw/state/delegation-log.json\`.
-   - Write a JSON entry per agent: \`{ "stage": "ship", "agent": "<name>", "mode": "mandatory", "status": "completed"|"waived", "waiverReason": "<if waived>", "ts": "<ISO timestamp>" }\`.
-   - If the harness does not support delegation, record status \`"waived"\` with reason \`"harness_limitation"\`.
-   - **Do NOT proceed to step 1 until every mandatory agent has an entry in the delegation log.**
-1. **Update \`.cclaw/state/flow-state.json\`:**
-   - Add \`"ship"\` to \`completedStages\` array
-   - Move all gate IDs for this stage (\`ship_review_verdict_valid\`, \`ship_preflight_passed\`, \`ship_release_notes_written\`, \`ship_rollback_plan_ready\`, \`ship_finalization_mode_selected\`, \`ship_finalization_executed\`, \`ship_post_merge_tests\`) into \`stageGateCatalog.ship.passed\`
-   - Clear \`stageGateCatalog.ship.blocked\`
-   - For each passed gate, add an entry to \`guardEvidence\`: \`"<gate_id>": "<artifact path or excerpt proving the gate>"\`. Do NOT leave \`guardEvidence\` empty.
-2. **Persist artifact** at \`.cclaw/artifacts/08-ship.md\`. Do NOT manually copy into \`.cclaw/runs/\`; archival is handled by \`cclaw archive\`.
-3. **Doctor pre-flight** — Run \`npx cclaw doctor\` (or the installed cclaw binary). If any check fails, resolve the issue (missing delegation entry, artifact section, gate evidence) and re-run until all checks pass. Do NOT proceed to the next step while doctor reports failures.
-4. Tell the user:
+**Completion Parameters**
+- \`stage\` — \`ship\`
+- \`next\` — \`done\` (flow complete — release cut and handoff signed off)
+- \`gates\` — \`ship_review_verdict_valid\`, \`ship_preflight_passed\`, \`ship_release_notes_written\`, \`ship_rollback_plan_ready\`, \`ship_finalization_mode_selected\`, \`ship_finalization_executed\`, \`ship_post_merge_tests\`
+- \`artifact\` — \`.cclaw/artifacts/08-ship.md\`
+- \`mandatory\` — \`doc-updater\`
 
-   > **Flow complete.** All stages finished. The project is ready for release.
-
-**STOP.** Do not load the next stage skill yourself. The user will run \`/cc-next\` when ready (same session or new session).
+When all required gates are satisfied and the artifact is written, execute the shared procedure (delegation pre-flight → flow-state update → artifact persistence → \`npx cclaw doctor\` → user handoff → STOP) using the parameters above. If any check fails, resolve the issue and re-run before proceeding.
 
 ## Resume Protocol
 
-When resuming a stage in a NEW session (artifact exists but gates are not all passed in flow-state):
-1. Read the existing artifact and check which gates can be verified from artifact evidence.
-2. For each unverified gate, ask the user to confirm ONE gate at a time. Do NOT batch multiple gate confirmations in a single message.
-3. Update \`guardEvidence\` for each confirmed gate before proceeding.
+When resuming this stage in a NEW session (artifact exists but not all of \`ship_review_verdict_valid\`, \`ship_preflight_passed\`, \`ship_release_notes_written\`, \`ship_rollback_plan_ready\`, \`ship_finalization_mode_selected\`, \`ship_finalization_executed\`, \`ship_post_merge_tests\` are passed), follow the **Shared Resume Protocol** in \`.cclaw/skills/using-cclaw/SKILL.md\` — confirm one gate at a time, update \`guardEvidence\` for each, never batch confirmations.
 
 ## Progressive Disclosure
 
@@ -1201,36 +1172,20 @@ When this stage ends, report one of:
 
 ## Stage Completion Protocol
 
-When all required gates are satisfied and the artifact is written:
+Apply the **Shared Stage Completion Protocol** from \`.cclaw/skills/using-cclaw/SKILL.md\` with these parameters — do NOT re-derive the generic steps here.
 
-0. **Delegation pre-flight** (BLOCKING):
-   - Mandatory agents for this stage: \`planner\`.
-   - For each mandatory agent: confirm it was dispatched (via Task/delegate) and completed, OR record an explicit waiver with reason in \`.cclaw/state/delegation-log.json\`.
-   - Write a JSON entry per agent: \`{ "stage": "plan", "agent": "<name>", "mode": "mandatory", "status": "completed"|"waived", "waiverReason": "<if waived>", "ts": "<ISO timestamp>" }\`.
-   - If the harness does not support delegation, record status \`"waived"\` with reason \`"harness_limitation"\`.
-   - **Do NOT proceed to step 1 until every mandatory agent has an entry in the delegation log.**
-1. **Update \`.cclaw/state/flow-state.json\`:**
-   - Set \`currentStage\` to \`"tdd"\`
-   - Add \`"plan"\` to \`completedStages\` array
-   - Move all gate IDs for this stage (\`plan_tasks_sliced_2_5_min\`, \`plan_dependency_graph_written\`, \`plan_dependency_waves_defined\`, \`plan_verification_steps_defined\`, \`plan_acceptance_mapped\`, \`plan_wait_for_confirm\`) into \`stageGateCatalog.plan.passed\`
-   - Clear \`stageGateCatalog.plan.blocked\`
-   - For each passed gate, add an entry to \`guardEvidence\`: \`"<gate_id>": "<artifact path or excerpt proving the gate>"\`. Do NOT leave \`guardEvidence\` empty.
-2. **Persist artifact** at \`.cclaw/artifacts/05-plan.md\`. Do NOT manually copy into \`.cclaw/runs/\`; archival is handled by \`cclaw archive\`.
-3. **Doctor pre-flight** — Run \`npx cclaw doctor\` (or the installed cclaw binary). If any check fails, resolve the issue (missing delegation entry, artifact section, gate evidence) and re-run until all checks pass. Do NOT proceed to the next step while doctor reports failures.
-4. Tell the user:
+**Completion Parameters**
+- \`stage\` — \`plan\`
+- \`next\` — \`tdd\` (full TDD cycle: RED (failing tests), GREEN (minimal implementation), REFACTOR (cleanup). One plan slice at a time with strict traceability.)
+- \`gates\` — \`plan_tasks_sliced_2_5_min\`, \`plan_dependency_graph_written\`, \`plan_dependency_waves_defined\`, \`plan_verification_steps_defined\`, \`plan_acceptance_mapped\`, \`plan_wait_for_confirm\`
+- \`artifact\` — \`.cclaw/artifacts/05-plan.md\`
+- \`mandatory\` — \`planner\`
 
-   > **Stage \`plan\` complete.** Next: **tdd** — full TDD cycle: RED (failing tests), GREEN (minimal implementation), REFACTOR (cleanup). One plan slice at a time with strict traceability.
-   >
-   > Run \`/cc-next\` to continue.
-
-**STOP.** Do not load the next stage skill yourself. The user will run \`/cc-next\` when ready (same session or new session).
+When all required gates are satisfied and the artifact is written, execute the shared procedure (delegation pre-flight → flow-state update → artifact persistence → \`npx cclaw doctor\` → user handoff → STOP) using the parameters above. If any check fails, resolve the issue and re-run before proceeding.
 
 ## Resume Protocol
 
-When resuming a stage in a NEW session (artifact exists but gates are not all passed in flow-state):
-1. Read the existing artifact and check which gates can be verified from artifact evidence.
-2. For each unverified gate, ask the user to confirm ONE gate at a time. Do NOT batch multiple gate confirmations in a single message.
-3. Update \`guardEvidence\` for each confirmed gate before proceeding.
+When resuming this stage in a NEW session (artifact exists but not all of \`plan_tasks_sliced_2_5_min\`, \`plan_dependency_graph_written\`, \`plan_dependency_waves_defined\`, \`plan_verification_steps_defined\`, \`plan_acceptance_mapped\`, \`plan_wait_for_confirm\` are passed), follow the **Shared Resume Protocol** in \`.cclaw/skills/using-cclaw/SKILL.md\` — confirm one gate at a time, update \`guardEvidence\` for each, never batch confirmations.
 
 ## Progressive Disclosure
 
@@ -1665,36 +1620,20 @@ When this stage ends, report one of:
 
 ## Stage Completion Protocol
 
-When all required gates are satisfied and the artifact is written:
+Apply the **Shared Stage Completion Protocol** from \`.cclaw/skills/using-cclaw/SKILL.md\` with these parameters — do NOT re-derive the generic steps here.
 
-0. **Delegation pre-flight** (BLOCKING):
-   - Mandatory agents for this stage: \`test-author\`.
-   - For each mandatory agent: confirm it was dispatched (via Task/delegate) and completed, OR record an explicit waiver with reason in \`.cclaw/state/delegation-log.json\`.
-   - Write a JSON entry per agent: \`{ "stage": "tdd", "agent": "<name>", "mode": "mandatory", "status": "completed"|"waived", "waiverReason": "<if waived>", "ts": "<ISO timestamp>" }\`.
-   - If the harness does not support delegation, record status \`"waived"\` with reason \`"harness_limitation"\`.
-   - **Do NOT proceed to step 1 until every mandatory agent has an entry in the delegation log.**
-1. **Update \`.cclaw/state/flow-state.json\`:**
-   - Set \`currentStage\` to \`"review"\`
-   - Add \`"tdd"\` to \`completedStages\` array
-   - Move all gate IDs for this stage (\`tdd_red_test_written\`, \`tdd_red_failure_captured\`, \`tdd_trace_to_acceptance\`, \`tdd_red_failure_reason_verified\`, \`tdd_green_full_suite\`, \`tdd_refactor_completed\`, \`tdd_refactor_notes_written\`, \`tdd_traceable_to_plan\`) into \`stageGateCatalog.tdd.passed\`
-   - Clear \`stageGateCatalog.tdd.blocked\`
-   - For each passed gate, add an entry to \`guardEvidence\`: \`"<gate_id>": "<artifact path or excerpt proving the gate>"\`. Do NOT leave \`guardEvidence\` empty.
-2. **Persist artifact** at \`.cclaw/artifacts/06-tdd.md\`. Do NOT manually copy into \`.cclaw/runs/\`; archival is handled by \`cclaw archive\`.
-3. **Doctor pre-flight** — Run \`npx cclaw doctor\` (or the installed cclaw binary). If any check fails, resolve the issue (missing delegation entry, artifact section, gate evidence) and re-run until all checks pass. Do NOT proceed to the next step while doctor reports failures.
-4. Tell the user:
+**Completion Parameters**
+- \`stage\` — \`tdd\`
+- \`next\` — \`review\` (two-layer review stage: spec compliance first, then code quality and production readiness. Section-by-section with severity discipline.)
+- \`gates\` — \`tdd_red_test_written\`, \`tdd_red_failure_captured\`, \`tdd_trace_to_acceptance\`, \`tdd_red_failure_reason_verified\`, \`tdd_green_full_suite\`, \`tdd_refactor_completed\`, \`tdd_refactor_notes_written\`, \`tdd_traceable_to_plan\`
+- \`artifact\` — \`.cclaw/artifacts/06-tdd.md\`
+- \`mandatory\` — \`test-author\`
 
-   > **Stage \`tdd\` complete.** Next: **review** — two-layer review stage: spec compliance first, then code quality and production readiness. Section-by-section with severity discipline.
-   >
-   > Run \`/cc-next\` to continue.
-
-**STOP.** Do not load the next stage skill yourself. The user will run \`/cc-next\` when ready (same session or new session).
+When all required gates are satisfied and the artifact is written, execute the shared procedure (delegation pre-flight → flow-state update → artifact persistence → \`npx cclaw doctor\` → user handoff → STOP) using the parameters above. If any check fails, resolve the issue and re-run before proceeding.
 
 ## Resume Protocol
 
-When resuming a stage in a NEW session (artifact exists but gates are not all passed in flow-state):
-1. Read the existing artifact and check which gates can be verified from artifact evidence.
-2. For each unverified gate, ask the user to confirm ONE gate at a time. Do NOT batch multiple gate confirmations in a single message.
-3. Update \`guardEvidence\` for each confirmed gate before proceeding.
+When resuming this stage in a NEW session (artifact exists but not all of \`tdd_red_test_written\`, \`tdd_red_failure_captured\`, \`tdd_trace_to_acceptance\`, \`tdd_red_failure_reason_verified\`, \`tdd_green_full_suite\`, \`tdd_refactor_completed\`, \`tdd_refactor_notes_written\`, \`tdd_traceable_to_plan\` are passed), follow the **Shared Resume Protocol** in \`.cclaw/skills/using-cclaw/SKILL.md\` — confirm one gate at a time, update \`guardEvidence\` for each, never batch confirmations.
 
 ## Progressive Disclosure
 
@@ -2033,30 +1972,20 @@ When this stage ends, report one of:
 
 ## Stage Completion Protocol
 
-When all required gates are satisfied and the artifact is written:
+Apply the **Shared Stage Completion Protocol** from \`.cclaw/skills/using-cclaw/SKILL.md\` with these parameters — do NOT re-derive the generic steps here.
 
-1. **Update \`.cclaw/state/flow-state.json\`:**
-   - Set \`currentStage\` to \`"scope"\`
-   - Add \`"brainstorm"\` to \`completedStages\` array
-   - Move all gate IDs for this stage (\`brainstorm_context_explored\`, \`brainstorm_idea_understood\`, \`brainstorm_approaches_compared\`, \`brainstorm_direction_approved\`, \`brainstorm_artifact_reviewed\`) into \`stageGateCatalog.brainstorm.passed\`
-   - Clear \`stageGateCatalog.brainstorm.blocked\`
-   - For each passed gate, add an entry to \`guardEvidence\`: \`"<gate_id>": "<artifact path or excerpt proving the gate>"\`. Do NOT leave \`guardEvidence\` empty.
-2. **Persist artifact** at \`.cclaw/artifacts/01-brainstorm.md\`. Do NOT manually copy into \`.cclaw/runs/\`; archival is handled by \`cclaw archive\`.
-3. **Doctor pre-flight** — Run \`npx cclaw doctor\` (or the installed cclaw binary). If any check fails, resolve the issue (missing delegation entry, artifact section, gate evidence) and re-run until all checks pass. Do NOT proceed to the next step while doctor reports failures.
-4. Tell the user:
+**Completion Parameters**
+- \`stage\` — \`brainstorm\`
+- \`next\` — \`scope\` (strategic scope stage. Challenge premise and lock explicit in-scope/out-of-scope boundaries using CEO-level thinking.)
+- \`gates\` — \`brainstorm_context_explored\`, \`brainstorm_idea_understood\`, \`brainstorm_approaches_compared\`, \`brainstorm_direction_approved\`, \`brainstorm_artifact_reviewed\`
+- \`artifact\` — \`.cclaw/artifacts/01-brainstorm.md\`
+- \`mandatory\` — none
 
-   > **Stage \`brainstorm\` complete.** Next: **scope** — strategic scope stage. Challenge premise and lock explicit in-scope/out-of-scope boundaries using CEO-level thinking.
-   >
-   > Run \`/cc-next\` to continue.
-
-**STOP.** Do not load the next stage skill yourself. The user will run \`/cc-next\` when ready (same session or new session).
+When all required gates are satisfied and the artifact is written, execute the shared procedure (delegation pre-flight → flow-state update → artifact persistence → \`npx cclaw doctor\` → user handoff → STOP) using the parameters above. If any check fails, resolve the issue and re-run before proceeding.
 
 ## Resume Protocol
 
-When resuming a stage in a NEW session (artifact exists but gates are not all passed in flow-state):
-1. Read the existing artifact and check which gates can be verified from artifact evidence.
-2. For each unverified gate, ask the user to confirm ONE gate at a time. Do NOT batch multiple gate confirmations in a single message.
-3. Update \`guardEvidence\` for each confirmed gate before proceeding.
+When resuming this stage in a NEW session (artifact exists but not all of \`brainstorm_context_explored\`, \`brainstorm_idea_understood\`, \`brainstorm_approaches_compared\`, \`brainstorm_direction_approved\`, \`brainstorm_artifact_reviewed\` are passed), follow the **Shared Resume Protocol** in \`.cclaw/skills/using-cclaw/SKILL.md\` — confirm one gate at a time, update \`guardEvidence\` for each, never batch confirmations.
 
 ## Progressive Disclosure
 

@@ -238,6 +238,43 @@ When a stage requires user input (approval, choice, direction):
 
 If the same approach fails three times in a row (same verification command, same review finding, same tool invocation), STOP and escalate: summarize what you tried, what evidence you have, what hypothesis you are now testing, and ask the user how to proceed. Do not invent a new angle silently on the fourth attempt.
 
+### Shared Stage Completion Protocol
+
+Every stage skill ends with a completion block parameterized by four values: \`next\` (next stage or \`done\`), \`gates\` (gate IDs to mark passed), \`artifact\` (file under \`.cclaw/artifacts/\`), and \`mandatory\` (agents required by delegation enforcement). Stage skills print their **Completion Parameters** and then defer to this procedure — do NOT re-print the full procedure per stage.
+
+When all required gates are satisfied and the artifact is written, execute **in this exact order**:
+
+0. **Delegation pre-flight** (BLOCKING, only when \`mandatory\` is non-empty).
+   - For each agent in \`mandatory\`: confirm it was dispatched (via Task/delegate) and completed, OR record an explicit waiver with reason in \`.cclaw/state/delegation-log.json\`.
+   - Write a JSON entry per agent: \`{ "stage": "<stage>", "agent": "<name>", "mode": "mandatory", "status": "completed"|"waived", "waiverReason": "<if waived>", "ts": "<ISO timestamp>" }\`.
+   - If the harness does not support delegation, record status \`"waived"\` with reason \`"harness_limitation"\`.
+   - **Do NOT proceed to step 1 until every mandatory agent has an entry in the delegation log.**
+1. **Update \`.cclaw/state/flow-state.json\`:**
+   - Set \`currentStage\` to \`next\` (or leave unchanged when \`next === "done"\`).
+   - Add the current stage to \`completedStages\`.
+   - Move every gate ID in \`gates\` into \`stageGateCatalog.<stage>.passed\`.
+   - Clear \`stageGateCatalog.<stage>.blocked\`.
+   - For each passed gate, add an entry to \`guardEvidence\`: \`"<gate_id>": "<artifact path or excerpt proving the gate>"\`. Do NOT leave \`guardEvidence\` empty.
+2. **Persist artifact** at \`.cclaw/artifacts/<artifact>\`. Do NOT manually copy into \`.cclaw/runs/\`; archival is handled by \`cclaw archive\`.
+3. **Doctor pre-flight** — run \`npx cclaw doctor\` (or the installed cclaw binary). If any check fails, resolve the issue (missing delegation entry, artifact section, gate evidence) and re-run until all checks pass. Do NOT proceed while doctor reports failures.
+4. **Tell the user** (verbatim when \`next\` is a stage; use the flow-complete variant when \`next === "done"\`):
+   > **Stage \`<stage>\` complete.** Next: **<next>** — <one-line next-stage description>.
+   >
+   > Run \`/cc-next\` to continue.
+
+   Flow-complete variant:
+   > **Flow complete.** All stages finished. The project is ready for release.
+
+5. **STOP.** Do not load the next stage skill yourself. The user will run \`/cc-next\` when ready (same session or new session).
+
+### Shared Resume Protocol
+
+When resuming a stage in a NEW session (artifact exists but gates are not all passed in \`flow-state.json\`):
+
+1. Read the existing artifact and mark every gate whose evidence is already present in the artifact.
+2. For each unverified gate, ask the user to confirm ONE gate at a time. Do NOT batch multiple gate confirmations in a single message.
+3. Update \`guardEvidence\` for each confirmed gate before proceeding to the next unverified gate.
+
 ## </EXTREMELY-IMPORTANT>
 
 ## Invocation Preamble (per turn, non-trivial tasks)

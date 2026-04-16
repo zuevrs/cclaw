@@ -175,58 +175,35 @@ function stageCompletionProtocol(schema: StageSchema): string {
   const stage = schema.stage;
   const gateIds = schema.requiredGates.map((g) => g.id);
   const gateList = gateIds.map((id) => `\`${id}\``).join(", ");
-  const nextStage = schema.next === "done" ? null : schema.next;
+  const nextStage = schema.next === "done" ? "done" : schema.next;
   const mandatory = schema.mandatoryDelegations;
-  const delegationLogRel = `${RUNTIME_ROOT}/state/delegation-log.json`;
+  const mandatoryList =
+    mandatory.length > 0 ? mandatory.map((a) => `\`${a}\``).join(", ") : "none";
 
-  const stateUpdate = nextStage
-    ? `   - Set \`currentStage\` to \`"${nextStage}"\`
-   - Add \`"${stage}"\` to \`completedStages\` array
-   - Move all gate IDs for this stage (${gateList}) into \`stageGateCatalog.${stage}.passed\`
-   - Clear \`stageGateCatalog.${stage}.blocked\``
-    : `   - Add \`"${stage}"\` to \`completedStages\` array
-   - Move all gate IDs for this stage (${gateList}) into \`stageGateCatalog.${stage}.passed\`
-   - Clear \`stageGateCatalog.${stage}.blocked\``;
-
-  const delegationBlock =
-    mandatory.length > 0
-      ? `0. **Delegation pre-flight** (BLOCKING):
-   - Mandatory agents for this stage: ${mandatory.map((a) => `\`${a}\``).join(", ")}.
-   - For each mandatory agent: confirm it was dispatched (via Task/delegate) and completed, OR record an explicit waiver with reason in \`${delegationLogRel}\`.
-   - Write a JSON entry per agent: \`{ "stage": "${stage}", "agent": "<name>", "mode": "mandatory", "status": "completed"|"waived", "waiverReason": "<if waived>", "ts": "<ISO timestamp>" }\`.
-   - If the harness does not support delegation, record status \`"waived"\` with reason \`"harness_limitation"\`.
-   - **Do NOT proceed to step 1 until every mandatory agent has an entry in the delegation log.**
-`
-      : "";
-
-  let nextAction: string;
-  if (nextStage) {
-    const nextSchema = stageSchema(nextStage);
-    const nextDescription = nextSchema.skillDescription.charAt(0).toLowerCase() + nextSchema.skillDescription.slice(1);
-    nextAction = `4. Tell the user:\n\n   > **Stage \`${stage}\` complete.** Next: **${nextStage}** — ${nextDescription}\n   >\n   > Run \`/cc-next\` to continue.`;
-  } else {
-    nextAction = `4. Tell the user:\n\n   > **Flow complete.** All stages finished. The project is ready for release.`;
-  }
+  const nextDescription =
+    schema.next === "done"
+      ? "flow complete — release cut and handoff signed off"
+      : (() => {
+          const nextSchema = stageSchema(schema.next as FlowStage);
+          return nextSchema.skillDescription.charAt(0).toLowerCase() + nextSchema.skillDescription.slice(1);
+        })();
 
   return `## Stage Completion Protocol
 
-When all required gates are satisfied and the artifact is written:
+Apply the **Shared Stage Completion Protocol** from \`.cclaw/skills/using-cclaw/SKILL.md\` with these parameters — do NOT re-derive the generic steps here.
 
-${delegationBlock}1. **Update \`${RUNTIME_ROOT}/state/flow-state.json\`:**
-${stateUpdate}
-   - For each passed gate, add an entry to \`guardEvidence\`: \`"<gate_id>": "<artifact path or excerpt proving the gate>"\`. Do NOT leave \`guardEvidence\` empty.
-2. **Persist artifact** at \`${RUNTIME_ROOT}/artifacts/${schema.artifactFile}\`. Do NOT manually copy into \`${RUNTIME_ROOT}/runs/\`; archival is handled by \`cclaw archive\`.
-3. **Doctor pre-flight** — Run \`npx cclaw doctor\` (or the installed cclaw binary). If any check fails, resolve the issue (missing delegation entry, artifact section, gate evidence) and re-run until all checks pass. Do NOT proceed to the next step while doctor reports failures.
-${nextAction}
+**Completion Parameters**
+- \`stage\` — \`${stage}\`
+- \`next\` — \`${nextStage}\` (${nextDescription})
+- \`gates\` — ${gateList}
+- \`artifact\` — \`${RUNTIME_ROOT}/artifacts/${schema.artifactFile}\`
+- \`mandatory\` — ${mandatoryList}
 
-**STOP.** Do not load the next stage skill yourself. The user will run \`/cc-next\` when ready (same session or new session).
+When all required gates are satisfied and the artifact is written, execute the shared procedure (delegation pre-flight → flow-state update → artifact persistence → \`npx cclaw doctor\` → user handoff → STOP) using the parameters above. If any check fails, resolve the issue and re-run before proceeding.
 
 ## Resume Protocol
 
-When resuming a stage in a NEW session (artifact exists but gates are not all passed in flow-state):
-1. Read the existing artifact and check which gates can be verified from artifact evidence.
-2. For each unverified gate, ask the user to confirm ONE gate at a time. Do NOT batch multiple gate confirmations in a single message.
-3. Update \`guardEvidence\` for each confirmed gate before proceeding.
+When resuming this stage in a NEW session (artifact exists but not all of ${gateList} are passed), follow the **Shared Resume Protocol** in \`.cclaw/skills/using-cclaw/SKILL.md\` — confirm one gate at a time, update \`guardEvidence\` for each, never batch confirmations.
 `;
 }
 
