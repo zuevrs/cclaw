@@ -103,6 +103,33 @@ describe("flow command contracts", () => {
     expect(scopeSkill).toContain("cclaw doctor");
   });
 
+  it("includes namedAntiPattern in spec skill", async () => {
+    const root = await fs.mkdtemp(path.join(os.tmpdir(), "cclaw-spec-anti-"));
+    await initCclaw({ projectRoot: root });
+
+    const specSkill = await fs.readFile(
+      path.join(root, ".cclaw/skills/specification-authoring/SKILL.md"),
+      "utf8"
+    );
+    expect(specSkill).toContain("Implementation Will Clarify Requirements");
+  });
+
+  it("includes Ambiguity Classification in design and spec skills", async () => {
+    const root = await fs.mkdtemp(path.join(os.tmpdir(), "cclaw-ambiguity-"));
+    await initCclaw({ projectRoot: root });
+
+    const designSkill = await fs.readFile(
+      path.join(root, ".cclaw/skills/engineering-design-lock/SKILL.md"),
+      "utf8"
+    );
+    const specSkill = await fs.readFile(
+      path.join(root, ".cclaw/skills/specification-authoring/SKILL.md"),
+      "utf8"
+    );
+    expect(designSkill).toContain("Ambiguity Classification");
+    expect(specSkill).toContain("Ambiguity Classification");
+  });
+
   it("matches golden snapshots for strict-stage content", async () => {
     const root = await fs.mkdtemp(path.join(os.tmpdir(), "cclaw-golden-"));
     await initCclaw({ projectRoot: root });

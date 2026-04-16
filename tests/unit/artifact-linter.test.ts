@@ -270,6 +270,158 @@ describe("artifact linter heuristics", () => {
     expect(modeAnalysis?.required).toBe(true);
   });
 
+  it("fails design artifact when Codebase Investigation is missing", async () => {
+    const root = await fs.mkdtemp(path.join(os.tmpdir(), "cclaw-design-missing-cbi-"));
+    await writeRuntimeArtifact(root, "03-design.md", `# Design Artifact
+
+## Search Before Building
+| Layer | Label | What to reuse first |
+|---|---|---|
+| Layer 1 | stdlib | Built-in timers |
+
+## Architecture Boundaries
+| Component | Responsibility | Owner |
+|---|---|---|
+| API | routes | team-a |
+
+## Architecture Diagram
+\`\`\`
+API -> Service -> DB
+\`\`\`
+
+## What Already Exists
+| Sub-problem | Existing code | Layer | Reuse decision |
+|---|---|---|---|
+| Auth | middleware/auth.ts | Layer 1 | Reuse |
+
+## Data Flow
+- Happy path: request -> response
+- Nil/empty input path: 400 error
+- Upstream error path: 502 retry
+- Timeout/downstream path: 504
+
+## Failure Mode Table
+| Failure mode | Trigger | Detection | Mitigation | User impact |
+|---|---|---|---|---|
+| DB down | outage | health check | failover | degraded |
+
+## Test Strategy
+- Unit: validators
+- Integration: API routes
+- E2E: full flow
+
+## Performance Budget
+| Critical path | Metric | Target | Measurement method |
+|---|---|---|---|
+| API response | p99 latency | 200ms | load test |
+
+## NOT in scope
+- Admin UI
+
+## Completion Dashboard
+| Review Section | Status | Issues |
+|---|---|---|
+| Architecture Review | clear | — |
+
+**Decisions made:** 2 | **Unresolved:** 0
+`);
+
+    const result = await lintArtifact(root, "design");
+    const cbi = result.findings.find((f) => f.section === "Codebase Investigation");
+    expect(result.passed).toBe(false);
+    expect(cbi?.found).toBe(false);
+    expect(cbi?.required).toBe(true);
+  });
+
+  it("fails design artifact when Performance Budget is missing", async () => {
+    const root = await fs.mkdtemp(path.join(os.tmpdir(), "cclaw-design-missing-perf-"));
+    await writeRuntimeArtifact(root, "03-design.md", `# Design Artifact
+
+## Codebase Investigation
+| File | Current responsibility | Patterns discovered |
+|---|---|---|
+| src/api.ts | API routes | Express router |
+
+## Search Before Building
+| Layer | Label | What to reuse first |
+|---|---|---|
+| Layer 1 | stdlib | Built-in timers |
+
+## Architecture Boundaries
+| Component | Responsibility | Owner |
+|---|---|---|
+| API | routes | team-a |
+
+## Architecture Diagram
+\`\`\`
+API -> Service -> DB
+\`\`\`
+
+## What Already Exists
+| Sub-problem | Existing code | Layer | Reuse decision |
+|---|---|---|---|
+| Auth | middleware/auth.ts | Layer 1 | Reuse |
+
+## Data Flow
+- Happy path: request -> response
+- Nil/empty input path: 400 error
+- Upstream error path: 502 retry
+- Timeout/downstream path: 504
+
+## Failure Mode Table
+| Failure mode | Trigger | Detection | Mitigation | User impact |
+|---|---|---|---|---|
+| DB down | outage | health check | failover | degraded |
+
+## Test Strategy
+- Unit: validators
+- Integration: API routes
+- E2E: full flow
+
+## NOT in scope
+- Admin UI
+
+## Completion Dashboard
+| Review Section | Status | Issues |
+|---|---|---|
+| Architecture Review | clear | — |
+
+**Decisions made:** 2 | **Unresolved:** 0
+`);
+
+    const result = await lintArtifact(root, "design");
+    const perf = result.findings.find((f) => f.section === "Performance Budget");
+    expect(result.passed).toBe(false);
+    expect(perf?.found).toBe(false);
+    expect(perf?.required).toBe(true);
+  });
+
+  it("design trivial-change escape hatch downgrades most sections to optional", async () => {
+    const root = await fs.mkdtemp(path.join(os.tmpdir(), "cclaw-design-trivial-"));
+    await writeRuntimeArtifact(root, "03-design.md", `# Design Artifact — Trivial Change / Escape Hatch
+
+## Architecture Boundaries
+| Component | Responsibility | Owner |
+|---|---|---|
+| config parser | reads YAML config | core team |
+
+## NOT in scope
+- Full config migration tool
+
+## Completion Dashboard
+| Review Section | Status | Issues |
+|---|---|---|
+| Architecture Review | clear | — |
+
+**Decisions made:** 1 | **Unresolved:** 0
+`);
+
+    const result = await lintArtifact(root, "design");
+    expect(result.passed).toBe(true);
+    const required = result.findings.filter((f) => f.required);
+    expect(required.every((f) => f.found)).toBe(true);
+  });
+
   it("fails Prime Directives when required keywords are missing", async () => {
     const root = await fs.mkdtemp(path.join(os.tmpdir(), "cclaw-scope-keywords-"));
     await writeRuntimeArtifact(root, "02-scope.md", `# Scope Artifact
