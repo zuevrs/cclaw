@@ -27,6 +27,23 @@ describe("stage schema and subagent alignment", () => {
     expect(review.policyNeedles).toContain("Review Army");
   });
 
+  it("07-review-army.json template matches validator schema shape", () => {
+    const template = ARTIFACT_TEMPLATES["07-review-army.json"];
+    const parsed = JSON.parse(template) as Record<string, unknown>;
+    expect(parsed.version).toBe(1);
+    expect(typeof parsed.generatedAt).toBe("string");
+    expect((parsed.generatedAt as string).length).toBeGreaterThan(0);
+    expect(parsed.scope).toMatchObject({ base: expect.any(String), head: expect.any(String), files: [] });
+    expect(parsed.findings).toEqual([]);
+    expect(parsed.reconciliation).toEqual({
+      duplicatesCollapsed: 0,
+      conflicts: [],
+      multiSpecialistConfirmed: [],
+      shipBlockers: []
+    });
+    expect(JSON.stringify(parsed)).not.toMatch(/"title"|"category"/);
+  });
+
   it("review stage mandates security-reviewer alongside spec- and code-reviewer", () => {
     const review = stageSchema("review");
     expect(review.mandatoryDelegations).toContain("spec-reviewer");

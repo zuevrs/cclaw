@@ -362,28 +362,13 @@ Execution rule: complete and verify each wave before starting the next wave.
 `,
   "07-review-army.json": `{
   "version": 1,
-  "generatedAt": "",
+  "generatedAt": "<ISO 8601 timestamp, e.g. 2026-04-14T12:00:00Z>",
   "scope": {
-    "base": "",
-    "head": "",
+    "base": "<base branch or ref>",
+    "head": "<head branch or ref>",
     "files": []
   },
-  "findings": [
-    {
-      "id": "",
-      "title": "",
-      "severity": "Critical",
-      "confidence": 7,
-      "category": "correctness",
-      "location": {
-        "file": ""
-      },
-      "fingerprint": "",
-      "reportedBy": [],
-      "status": "open",
-      "recommendation": ""
-    }
-  ],
+  "findings": [],
   "reconciliation": {
     "duplicatesCollapsed": 0,
     "conflicts": [],
