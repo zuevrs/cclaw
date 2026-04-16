@@ -157,6 +157,8 @@ function stageCompletionProtocol(schema: StageSchema): string {
   const gateIds = schema.requiredGates.map((g) => g.id);
   const gateList = gateIds.map((id) => `\`${id}\``).join(", ");
   const nextStage = schema.next === "done" ? null : schema.next;
+  const mandatory = schema.mandatoryDelegations;
+  const delegationLogRel = `${RUNTIME_ROOT}/state/delegation-log.json`;
 
   const stateUpdate = nextStage
     ? `   - Set \`currentStage\` to \`"${nextStage}"\`
@@ -166,6 +168,17 @@ function stageCompletionProtocol(schema: StageSchema): string {
     : `   - Add \`"${stage}"\` to \`completedStages\` array
    - Move all gate IDs for this stage (${gateList}) into \`stageGateCatalog.${stage}.passed\`
    - Clear \`stageGateCatalog.${stage}.blocked\``;
+
+  const delegationBlock =
+    mandatory.length > 0
+      ? `0. **Delegation pre-flight** (BLOCKING):
+   - Mandatory agents for this stage: ${mandatory.map((a) => `\`${a}\``).join(", ")}.
+   - For each mandatory agent: confirm it was dispatched (via Task/delegate) and completed, OR record an explicit waiver with reason in \`${delegationLogRel}\`.
+   - Write a JSON entry per agent: \`{ "stage": "${stage}", "agent": "<name>", "mode": "mandatory", "status": "completed"|"waived", "waiverReason": "<if waived>", "ts": "<ISO timestamp>" }\`.
+   - If the harness does not support delegation, record status \`"waived"\` with reason \`"harness_limitation"\`.
+   - **Do NOT proceed to step 1 until every mandatory agent has an entry in the delegation log.**
+`
+      : "";
 
   let nextAction: string;
   if (nextStage) {
@@ -180,7 +193,7 @@ function stageCompletionProtocol(schema: StageSchema): string {
 
 When all required gates are satisfied and the artifact is written:
 
-1. **Update \`${RUNTIME_ROOT}/state/flow-state.json\`:**
+${delegationBlock}1. **Update \`${RUNTIME_ROOT}/state/flow-state.json\`:**
 ${stateUpdate}
    - For each passed gate, add an entry to \`guardEvidence\`: \`"<gate_id>": "<artifact path or excerpt proving the gate>"\`. Do NOT leave \`guardEvidence\` empty.
 2. **Persist artifact** at \`${RUNTIME_ROOT}/artifacts/${schema.artifactFile}\`. Do NOT manually copy into \`${RUNTIME_ROOT}/runs/\`; archival is handled by \`cclaw archive\`.
