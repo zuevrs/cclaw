@@ -175,6 +175,11 @@ export const ARTIFACT_TEMPLATES: Record<string, string> = {
 - Parallel lanes:
 - Conflict risks:
 
+## Interface Contracts
+| Module | Produces | Consumes |
+|---|---|---|
+|  |  |  |
+
 ## Unresolved Decisions
 | Decision | Missing info | Owner | Default |
 |---|---|---|---|
@@ -211,6 +216,11 @@ export const ARTIFACT_TEMPLATES: Record<string, string> = {
 | Criterion ID | Verification approach | Command/manual steps |
 |---|---|---|
 | AC-1 |  |  |
+
+## Interface Contracts
+| Module | Produces | Consumes |
+|---|---|---|
+|  |  |  |
 
 ## Approval
 - Approved by:

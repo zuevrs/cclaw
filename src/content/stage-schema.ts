@@ -691,6 +691,7 @@ const DESIGN: StageSchemaInput = {
     { section: "NOT in scope", required: true, validationRule: "Work considered and explicitly deferred with one-line rationale." },
     { section: "Parallelization Strategy", required: false, validationRule: "If multi-module: dependency table, parallel lanes, conflict flags." },
     { section: "Unresolved Decisions", required: false, validationRule: "If any: what info is missing, who provides it, default if unanswered." },
+    { section: "Interface Contracts", required: false, validationRule: "If present: for each module boundary list produces (outputs) and consumes (inputs) with data types." },
     { section: "Completion Dashboard", required: true, validationRule: "Lists every review section with status (clear / issues-found-resolved / issues-open), decision count, and unresolved items (or 'None')." }
   ],
   trivialOverrideSections: ["Architecture Boundaries", "NOT in scope", "Completion Dashboard"],
@@ -826,6 +827,7 @@ const SPEC: StageSchemaInput = {
     { section: "Edge Cases", required: true, validationRule: "At least one boundary and one error condition per criterion." },
     { section: "Constraints and Assumptions", required: true, validationRule: "All implicit assumptions surfaced. Constraints have sources." },
     { section: "Testability Map", required: true, validationRule: "Each criterion maps to a concrete test description with verification approach (unit, integration, e2e, manual) and command or manual steps." },
+    { section: "Interface Contracts", required: false, validationRule: "If present: for each module boundary list produces (outputs) and consumes (inputs) with data types." },
     { section: "Approval", required: true, validationRule: "Explicit user approval marker present." }
   ],
   namedAntiPattern: {
