@@ -1404,6 +1404,50 @@ describe("review army schema validation", () => {
     expect(result.errors.join("\n")).toContain("multiSpecialistConfirmed references unknown finding id");
   });
 
+  it("rejects duplicate finding IDs", async () => {
+    const root = await fs.mkdtemp(path.join(os.tmpdir(), "cclaw-review-army-dup-id-"));
+    await fs.mkdir(path.join(root, ".cclaw/state"), { recursive: true });
+    await fs.mkdir(path.join(root, ".cclaw/artifacts"), { recursive: true });
+    await fs.writeFile(path.join(root, ".cclaw/state/flow-state.json"), JSON.stringify({
+      currentStage: "review",
+      activeRunId: "active",
+      completedStages: []
+    }, null, 2), "utf8");
+    await fs.writeFile(path.join(root, ".cclaw/artifacts/07-review-army.json"), JSON.stringify({
+      version: 1,
+      generatedAt: "2026-01-01T00:00:00Z",
+      scope: { base: "main", head: "feature", files: ["src/a.ts"] },
+      findings: [
+        {
+          id: "F-1",
+          severity: "Suggestion",
+          confidence: 5,
+          fingerprint: "fp-1",
+          reportedBy: ["code-reviewer"],
+          status: "open"
+        },
+        {
+          id: "F-1",
+          severity: "Important",
+          confidence: 6,
+          fingerprint: "fp-2",
+          reportedBy: ["security-reviewer"],
+          status: "open"
+        }
+      ],
+      reconciliation: {
+        duplicatesCollapsed: 0,
+        conflicts: [],
+        multiSpecialistConfirmed: [],
+        shipBlockers: []
+      }
+    }, null, 2), "utf8");
+
+    const result = await validateReviewArmy(root);
+    expect(result.valid).toBe(false);
+    expect(result.errors.join("\n")).toContain("must be unique");
+  });
+
   it("rejects open critical findings that are not listed as ship blockers", async () => {
     const root = await fs.mkdtemp(path.join(os.tmpdir(), "cclaw-review-army-invalid-"));
     await fs.mkdir(path.join(root, ".cclaw/state"), { recursive: true });
