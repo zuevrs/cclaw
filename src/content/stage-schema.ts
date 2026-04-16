@@ -832,6 +832,7 @@ const SPEC: StageSchemaInput = {
     { section: "Edge Cases", required: true, validationRule: "At least one boundary and one error condition per criterion." },
     { section: "Constraints and Assumptions", required: true, validationRule: "All implicit assumptions surfaced. Constraints have sources." },
     { section: "Testability Map", required: true, validationRule: "Each criterion maps to a concrete test description with verification approach (unit, integration, e2e, manual) and command or manual steps." },
+    { section: "Vague to Fixed", required: false, validationRule: "If present: table with original vague wording and rewritten observable/testable version for each ambiguous requirement." },
     { section: "Non-Functional Requirements", required: false, validationRule: "If present: performance thresholds, security constraints, scalability limits, reliability targets with measurable values." },
     { section: "Interface Contracts", required: false, validationRule: "If present: for each module boundary list produces (outputs) and consumes (inputs) with data types." },
     { section: "Approval", required: true, validationRule: "Explicit user approval marker present." }

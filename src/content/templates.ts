@@ -222,6 +222,11 @@ export const ARTIFACT_TEMPLATES: Record<string, string> = {
 |---|---|---|
 | AC-1 |  |  |
 
+## Vague to Fixed
+| Original (vague) | Rewritten (observable/testable) |
+|---|---|
+|  |  |
+
 ## Non-Functional Requirements
 | Category | Requirement | Threshold | Measurement |
 |---|---|---|---|
