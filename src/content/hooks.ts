@@ -798,8 +798,15 @@ export default function cclawPlugin(ctx) {
     return parts.join("\\n");
   }
 
-  function emitBootstrap() {
-    console.log(buildBootstrap());
+  let bootstrapCache = "";
+
+  function refreshBootstrapCache() {
+    bootstrapCache = buildBootstrap();
+  }
+
+  function getBootstrap() {
+    if (!bootstrapCache) refreshBootstrapCache();
+    return bootstrapCache;
   }
 
   async function runHookScript(scriptFileName, payload = {}) {
@@ -855,7 +862,10 @@ export default function cclawPlugin(ctx) {
         eventType === "session.compacted" ||
         eventType === "session.cleared"
       ) {
-        emitBootstrap();
+        // Avoid writing directly to stdout in lifecycle hooks because it can
+        // interfere with OpenCode TUI rendering. Bootstrap is injected via
+        // the system transform hook instead.
+        refreshBootstrapCache();
       }
       if (eventType === "session.idle") {
         await runHookScript("stop-checkpoint.sh", { loop_count: 0 });
@@ -880,7 +890,7 @@ export default function cclawPlugin(ctx) {
       await runHookScript("context-monitor.sh", payload);
     },
     "experimental.chat.system.transform": (payload) => {
-      const bootstrap = buildBootstrap();
+      const bootstrap = getBootstrap();
       if (typeof payload === "string") {
         return payload.includes("cclaw loaded.") ? payload : \`\${payload}\\n\\n\${bootstrap}\`;
       }
