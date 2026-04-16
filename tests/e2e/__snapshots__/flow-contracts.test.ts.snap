@@ -334,7 +334,13 @@ When fixing a bug:
 | A quick skim is sufficient for small diffs. | Small diffs hide high-impact changes. A 3-line auth bypass is still critical. Every diff gets layered review regardless of size. |
 | The author already reviewed their own code. | Self-review misses blind spots by definition. Independent review exists precisely because authors cannot objectively evaluate their own assumptions. |
 
-## Anti-Patterns
+## Anti-Patterns & Red Flags
+
+> One consolidated list of observable failure modes for this stage. Mix of
+> behavioural anti-patterns (things you might do wrong) and red-flag
+> signals (things you might notice going wrong). Dedup-merged so no item
+> appears twice.
+
 - Single generic review without layered structure
 - No severity classification
 - Shipping with open criticals
@@ -343,8 +349,6 @@ When fixing a bug:
 - layer 1 failed
 - critical findings unresolved
 - missing regression evidence
-
-## Red Flags
 - No separate Layer 1/Layer 2 outcomes
 - No structured review-army reconciliation artifact
 - No critical bucket
@@ -724,7 +728,13 @@ When fixing a bug:
 | A small merge does not need post-merge testing. | Small merges on diverged bases cause silent conflicts. Post-merge suite runs catch what branch-only CI misses. |
 | Release notes are internal documentation, not a ship gate. | Release notes are the rollback decision input. Without them, the team cannot assess what changed or why a rollback is needed. |
 
-## Anti-Patterns
+## Anti-Patterns & Red Flags
+
+> One consolidated list of observable failure modes for this stage. Mix of
+> behavioural anti-patterns (things you might do wrong) and red-flag
+> signals (things you might notice going wrong). Dedup-merged so no item
+> appears twice.
+
 - Shipping without rollback strategy
 - Implicit finalization decision
 - Bypassing preflight due to urgency
@@ -734,8 +744,6 @@ When fixing a bug:
 - critical review blockers remain
 - rollback plan missing
 - finalization mode not selected
-
-## Red Flags
 - No rollback trigger/steps
 - More than one finalization mode implied
 - No explicit preflight result
@@ -1086,7 +1094,13 @@ Evaluate:
 | Dependency map is overkill for this change. | Missing dependencies are a major source of blocked execution. |
 | We can assume approval and continue. | Explicit confirmation is the contract boundary between planning and execution. |
 
-## Anti-Patterns
+## Anti-Patterns & Red Flags
+
+> One consolidated list of observable failure modes for this stage. Mix of
+> behavioural anti-patterns (things you might do wrong) and red-flag
+> signals (things you might notice going wrong). Dedup-merged so no item
+> appears twice.
+
 - Horizontal decomposition without end-to-end slices
 - Tasks without verification steps
 - Starting execution before approval
@@ -1095,8 +1109,6 @@ Evaluate:
 - dependency uncertainty unresolved
 - wave boundaries are unclear
 - no explicit confirmation
-
-## Red Flags
 - No dependency graph
 - No WAIT_FOR_CONFIRM marker
 - No explicit dependency waves
@@ -1569,7 +1581,13 @@ When fixing a bug:
 | Traceability is implied by commit diff. | Explicit mapping avoids ambiguity in review and rollback. |
 | Tests written after implementation achieve the same goals. | Post-hoc tests confirm assumptions, not behavior. They test what you built, not what you should have built. TDD forces you to think about behavior before you have an implementation to be anchored by. |
 
-## Anti-Patterns
+## Anti-Patterns & Red Flags
+
+> One consolidated list of observable failure modes for this stage. Mix of
+> behavioural anti-patterns (things you might do wrong) and red-flag
+> signals (things you might notice going wrong). Dedup-merged so no item
+> appears twice.
+
 - Writing code before failing test
 - Asserting implementation details instead of behavior
 - Big-bang implementation across multiple slices
@@ -1581,8 +1599,6 @@ When fixing a bug:
 - full suite not green
 - behavior changed during refactor
 - no evidence recorded
-
-## Red Flags
 - No failing test output (RED missing)
 - Implementation edits appear before RED evidence
 - No full-suite GREEN evidence
@@ -1892,7 +1908,13 @@ These are thinking instincts, not a checklist. Let them shape your perspective t
 | Any question is useful context. | Only questions whose answers change what we build improve the design. |
 | Two options that differ only in tooling count as distinct approaches. | Distinct means different architecture, not different libraries for the same approach. |
 
-## Anti-Patterns
+## Anti-Patterns & Red Flags
+
+> One consolidated list of observable failure modes for this stage. Mix of
+> behavioural anti-patterns (things you might do wrong) and red-flag
+> signals (things you might notice going wrong). Dedup-merged so no item
+> appears twice.
+
 - Asking questions without exploring existing project context first
 - Asking bundled or purely informational questions that don't change decisions
 - Proposing cosmetic option variants instead of architecturally distinct approaches
@@ -1901,8 +1923,6 @@ These are thinking instincts, not a checklist. Let them shape your perspective t
 - no explicit approval
 - critical ambiguity unresolved
 - project context not explored
-
-## Red Flags
 - No project context exploration before questions
 - Questions that only gather preferences without design impact
 - Options that are variants of one approach, not distinct alternatives

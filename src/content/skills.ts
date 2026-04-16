@@ -449,11 +449,24 @@ ${decisionRecordBlock(stage)}
 ## Common Rationalizations
 ${rationalizationTable(stage)}
 
-## Anti-Patterns
-${[...schema.antiPatterns, ...schema.blockers].map((item) => `- ${item}`).join("\n")}
+## Anti-Patterns & Red Flags
 
-## Red Flags
-${schema.redFlags.map((item) => `- ${item}`).join("\n")}
+> One consolidated list of observable failure modes for this stage. Mix of
+> behavioural anti-patterns (things you might do wrong) and red-flag
+> signals (things you might notice going wrong). Dedup-merged so no item
+> appears twice.
+
+${(() => {
+  const merged: string[] = [];
+  const seen = new Set<string>();
+  for (const item of [...schema.antiPatterns, ...schema.blockers, ...schema.redFlags]) {
+    const key = item.trim().toLowerCase();
+    if (seen.has(key)) continue;
+    seen.add(key);
+    merged.push(item);
+  }
+  return merged.map((item) => `- ${item}`).join("\n");
+})()}
 
 ${completionStatusBlock(stage)}
 ## Verification

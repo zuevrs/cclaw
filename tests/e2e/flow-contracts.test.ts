@@ -49,7 +49,7 @@ describe("flow command contracts", () => {
       expect(content).toContain("## Process");
       expect(content).toContain("## Verification");
       expect(content).toContain("## Common Rationalizations");
-      expect(content).toContain("## Red Flags");
+      expect(content).toContain("## Anti-Patterns & Red Flags");
     }
 
     for (const harnessDir of [

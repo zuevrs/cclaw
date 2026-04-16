@@ -305,7 +305,7 @@ export async function doctorChecks(projectRoot: string, options: DoctorOptions =
         { id: "completion_protocol", pattern: /^## Stage Completion Protocol$/m, label: "## Stage Completion Protocol" },
         { id: "handoff_menu", pattern: /^### Handoff Menu$/m, label: "### Handoff Menu" },
         { id: "good_vs_bad", pattern: /Good vs Bad/i, label: "Good vs Bad examples" },
-        { id: "anti_patterns", pattern: /^## Anti-Patterns$/m, label: "## Anti-Patterns" }
+        { id: "anti_patterns", pattern: /^## Anti-Patterns & Red Flags$/m, label: "## Anti-Patterns & Red Flags" }
       ];
       const missingSections = canonicalSections
         .filter((section) => !section.pattern.test(skillContent))
