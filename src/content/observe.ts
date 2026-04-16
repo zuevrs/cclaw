@@ -316,8 +316,13 @@ is_plan_mode_safe_tool() {
     todowrite|todoread|todo_write|todo_read) return 0 ;;
     webfetch|websearch|web_fetch|web_search|fetchmcpresource) return 0 ;;
     switchmode|switch_mode) return 0 ;;
+    task|delegate) return 0 ;;
     *) return 1 ;;
   esac
+}
+
+is_cclaw_cli_payload() {
+  printf '%s' "$1" | grep -Eq '(cclaw |npx cclaw |/cc-|/cc[^[:alnum:]_-])'
 }
 
 is_preimplementation_stage() {
@@ -377,7 +382,7 @@ fi
 
 if is_preimplementation_stage "$CURRENT_STAGE" && ! is_plan_mode_safe_tool "$TOOL_LOWER"; then
   if ! is_mutating_tool "$TOOL_LOWER"; then
-    if ! printf '%s' "$PAYLOAD_LOWER" | grep -Eq '\.cclaw/'; then
+    if ! printf '%s' "$PAYLOAD_LOWER" | grep -Eq '\.cclaw/' && ! is_cclaw_cli_payload "$PAYLOAD_LOWER"; then
       if [ -n "$REASONS" ]; then
         REASONS="$REASONS,non_safe_tool_in_plan_stage_\${CURRENT_STAGE}"
       else
@@ -400,9 +405,10 @@ fi
 SHOULD_RECORD_FLOW_READ=0
 case "$TOOL_LOWER" in
   read|readfile|open|view|cat) SHOULD_RECORD_FLOW_READ=1 ;;
+  shell|runcommand|run_command|execcommand|exec_command|terminal) SHOULD_RECORD_FLOW_READ=1 ;;
 esac
 
-if [ "$SHOULD_RECORD_FLOW_READ" -eq 1 ] && printf '%s' "$PAYLOAD_LOWER" | grep -Eq '\.cclaw/state/flow-state\.json'; then
+if [ "$SHOULD_RECORD_FLOW_READ" -eq 1 ] && printf '%s' "$PAYLOAD_LOWER" | grep -Eq '(\.cclaw/state/flow-state\.json|cclaw doctor|cclaw sync)'; then
   TMP_STATE_FILE="$GUARD_STATE_FILE.tmp.$$"
   if command -v jq >/dev/null 2>&1 && [ -f "$GUARD_STATE_FILE" ]; then
     jq --arg ts "$TS" --argjson epoch "$NOW_EPOCH" '
