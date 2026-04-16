@@ -317,6 +317,13 @@ Execution rule: complete and verify each wave before starting the next wave.
 | AC-2 (idempotency) | T-1, T-2 |
 | AC-3 (failure visibility) | T-3 |
 
+### Risk Assessment
+
+| Task/Wave | Risk | Likelihood | Impact | Mitigation |
+| --- | --- | --- | --- | --- |
+| T-3 (Wave 3) | SSE reconnect logic complex | Medium | High | Spike reconnect in isolation before integrating with feed UI |
+| Wave 2 → 3 | Publisher API contract may shift | Low | Medium | Pin contract in T-1 schema; T-2 integration test validates |
+
 ### WAIT_FOR_CONFIRM
 - Status: pending
 - Confirmed by:`,
