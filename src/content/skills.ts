@@ -1,6 +1,6 @@
 import { RUNTIME_ROOT } from "../constants.js";
 import type { FlowStage } from "../types.js";
-import { stageExamples, stageGoodBadExamples } from "./examples.js";
+import { stageDomainExamples, stageExamples, stageGoodBadExamples } from "./examples.js";
 import { selfImprovementBlock } from "./learnings.js";
 import type { StageSchema } from "./stage-schema.js";
 import { stageAutoSubagentDispatch, stageSchema } from "./stage-schema.js";
@@ -168,6 +168,50 @@ function waveExecutionModeBlock(stage: FlowStage): string {
 
 After plan approval (**WAIT_FOR_CONFIRM** / \`plan_wait_for_confirm\` satisfied), process **all tasks in the current dependency wave** sequentially: **RED → GREEN → REFACTOR** per task, recording evidence per slice. **Stop** only on **BLOCKED**, a test failure that **requires user input**, or **wave completion** (every task in the wave has the required RED / GREEN / REFACTOR evidence per the plan artifact).
 
+### Walkthrough — Wave 1 with 3 tasks
+
+The example below is **illustrative only** — do not copy the command names blindly, match them to your stack.
+
+Assume Wave 1 from the plan artifact contains three tasks:
+
+| Task ID | Description | AC | Verification |
+|---|---|---|---|
+| T-1 \`[~3m]\` | Add \`User.emailNormalized\` column | AC-1 | \`npm test -- users/schema\` |
+| T-2 \`[~4m]\` | Normalize on write in \`UserRepo.save\` | AC-1 | \`npm test -- users/repo\` |
+| T-3 \`[~3m]\` | Reject duplicates in \`UserService.signup\` | AC-2 | \`npm test -- users/service\` |
+
+**Execution transcript** (one slice at a time, evidence captured per step):
+
+**T-1 — RED**
+
+> Run: \`npm test -- users/schema\` → **FAIL** (missing column: \`emailNormalized\`). Captured the failure stack as RED evidence. No production code touched yet.
+
+**T-1 — GREEN**
+
+> Added the column in the schema module. Re-ran \`npm test -- users/schema\` → **PASS**. Ran the full suite \`npm test\` → **PASS**. Captured both outputs as GREEN evidence.
+
+**T-1 — REFACTOR**
+
+> Extracted the column definition into a shared \`NormalizedEmail\` type used by T-2/T-3. Re-ran \`npm test\` → **PASS**. Captured REFACTOR note: "Extracted NormalizedEmail type to keep T-2/T-3 DRY; zero behavior change, all tests still green."
+
+**T-2 — RED / GREEN / REFACTOR**: same shape — write the repo test that expects normalised writes, watch it fail (RED), implement normalisation inside \`UserRepo.save\` only (GREEN), then refactor the normaliser out of the repo into a helper shared with T-3 (REFACTOR).
+
+**T-3 — RED / GREEN / REFACTOR**: write the service-level duplicate test that expects a rejection, watch it fail (RED), add the duplicate check in \`UserService.signup\` (GREEN), refactor the error message into a named constant (REFACTOR).
+
+**Wave gate check**
+
+After T-3 REFACTOR, before declaring Wave 1 done:
+
+1. Run the **full suite** (\`npm test\`) one final time → **PASS** captured as wave-exit evidence.
+2. Verify the TDD artifact contains RED, GREEN, and REFACTOR evidence for T-1, T-2, **and** T-3. No partial waves.
+3. Only now mark Wave 1 complete. Wave 2 cannot start until this step.
+
+**When to stop mid-wave (do NOT push through)**
+
+- A RED test fails for a reason you did not predict (e.g. an unrelated flaky test) → **pause**, diagnose, log an operational-self-improvement entry, and decide with the user before proceeding.
+- A GREEN step would require touching code outside the task's acceptance criterion → **pause**, the task is scoped wrong; adjust the plan or open a follow-up task.
+- The same RED failure reappears after a GREEN change → **escalate** per the 3-attempts rule; do not keep patching.
+
 `;
 }
 
@@ -175,58 +219,35 @@ function stageCompletionProtocol(schema: StageSchema): string {
   const stage = schema.stage;
   const gateIds = schema.requiredGates.map((g) => g.id);
   const gateList = gateIds.map((id) => `\`${id}\``).join(", ");
-  const nextStage = schema.next === "done" ? null : schema.next;
+  const nextStage = schema.next === "done" ? "done" : schema.next;
   const mandatory = schema.mandatoryDelegations;
-  const delegationLogRel = `${RUNTIME_ROOT}/state/delegation-log.json`;
+  const mandatoryList =
+    mandatory.length > 0 ? mandatory.map((a) => `\`${a}\``).join(", ") : "none";
 
-  const stateUpdate = nextStage
-    ? `   - Set \`currentStage\` to \`"${nextStage}"\`
-   - Add \`"${stage}"\` to \`completedStages\` array
-   - Move all gate IDs for this stage (${gateList}) into \`stageGateCatalog.${stage}.passed\`
-   - Clear \`stageGateCatalog.${stage}.blocked\``
-    : `   - Add \`"${stage}"\` to \`completedStages\` array
-   - Move all gate IDs for this stage (${gateList}) into \`stageGateCatalog.${stage}.passed\`
-   - Clear \`stageGateCatalog.${stage}.blocked\``;
-
-  const delegationBlock =
-    mandatory.length > 0
-      ? `0. **Delegation pre-flight** (BLOCKING):
-   - Mandatory agents for this stage: ${mandatory.map((a) => `\`${a}\``).join(", ")}.
-   - For each mandatory agent: confirm it was dispatched (via Task/delegate) and completed, OR record an explicit waiver with reason in \`${delegationLogRel}\`.
-   - Write a JSON entry per agent: \`{ "stage": "${stage}", "agent": "<name>", "mode": "mandatory", "status": "completed"|"waived", "waiverReason": "<if waived>", "ts": "<ISO timestamp>" }\`.
-   - If the harness does not support delegation, record status \`"waived"\` with reason \`"harness_limitation"\`.
-   - **Do NOT proceed to step 1 until every mandatory agent has an entry in the delegation log.**
-`
-      : "";
-
-  let nextAction: string;
-  if (nextStage) {
-    const nextSchema = stageSchema(nextStage);
-    const nextDescription = nextSchema.skillDescription.charAt(0).toLowerCase() + nextSchema.skillDescription.slice(1);
-    nextAction = `4. Tell the user:\n\n   > **Stage \`${stage}\` complete.** Next: **${nextStage}** — ${nextDescription}\n   >\n   > Run \`/cc-next\` to continue.`;
-  } else {
-    nextAction = `4. Tell the user:\n\n   > **Flow complete.** All stages finished. The project is ready for release.`;
-  }
+  const nextDescription =
+    schema.next === "done"
+      ? "flow complete — release cut and handoff signed off"
+      : (() => {
+          const nextSchema = stageSchema(schema.next as FlowStage);
+          return nextSchema.skillDescription.charAt(0).toLowerCase() + nextSchema.skillDescription.slice(1);
+        })();
 
   return `## Stage Completion Protocol
 
-When all required gates are satisfied and the artifact is written:
+Apply the **Shared Stage Completion Protocol** from \`.cclaw/skills/using-cclaw/SKILL.md\` with these parameters — do NOT re-derive the generic steps here.
 
-${delegationBlock}1. **Update \`${RUNTIME_ROOT}/state/flow-state.json\`:**
-${stateUpdate}
-   - For each passed gate, add an entry to \`guardEvidence\`: \`"<gate_id>": "<artifact path or excerpt proving the gate>"\`. Do NOT leave \`guardEvidence\` empty.
-2. **Persist artifact** at \`${RUNTIME_ROOT}/artifacts/${schema.artifactFile}\`. Do NOT manually copy into \`${RUNTIME_ROOT}/runs/\`; archival is handled by \`cclaw archive\`.
-3. **Doctor pre-flight** — Run \`npx cclaw doctor\` (or the installed cclaw binary). If any check fails, resolve the issue (missing delegation entry, artifact section, gate evidence) and re-run until all checks pass. Do NOT proceed to the next step while doctor reports failures.
-${nextAction}
+**Completion Parameters**
+- \`stage\` — \`${stage}\`
+- \`next\` — \`${nextStage}\` (${nextDescription})
+- \`gates\` — ${gateList}
+- \`artifact\` — \`${RUNTIME_ROOT}/artifacts/${schema.artifactFile}\`
+- \`mandatory\` — ${mandatoryList}
 
-**STOP.** Do not load the next stage skill yourself. The user will run \`/cc-next\` when ready (same session or new session).
+When all required gates are satisfied and the artifact is written, execute the shared procedure (delegation pre-flight → flow-state update → artifact persistence → \`npx cclaw doctor\` → user handoff → STOP) using the parameters above. If any check fails, resolve the issue and re-run before proceeding.
 
 ## Resume Protocol
 
-When resuming a stage in a NEW session (artifact exists but gates are not all passed in flow-state):
-1. Read the existing artifact and check which gates can be verified from artifact evidence.
-2. For each unverified gate, ask the user to confirm ONE gate at a time. Do NOT batch multiple gate confirmations in a single message.
-3. Update \`guardEvidence\` for each confirmed gate before proceeding.
+When resuming this stage in a NEW session (artifact exists but not all of ${gateList} are passed), follow the **Shared Resume Protocol** in \`.cclaw/skills/using-cclaw/SKILL.md\` — confirm one gate at a time, update \`guardEvidence\` for each, never batch confirmations.
 `;
 }
 
@@ -392,6 +413,7 @@ You MUST complete these steps in order:
 ${checklistItems}
 
 ${stageGoodBadExamples(stage)}
+${stageDomainExamples(stage)}
 ${stageExamples(stage)}
 ${namedAntiPatternBlock(stage)}
 ${cognitivePatternsList(stage)}

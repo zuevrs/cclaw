@@ -66,10 +66,14 @@ describe("flow command contracts", () => {
     }
   });
 
-  it("includes delegation pre-flight in completion protocol for stages with mandatory agents", async () => {
+  it("includes delegation pre-flight in shared completion protocol and cites mandatory agents per stage", async () => {
     const root = await createTempProject("delegation-protocol");
     await initCclaw({ projectRoot: root });
 
+    const metaSkill = await fs.readFile(
+      path.join(root, ".cclaw/skills/using-cclaw/SKILL.md"),
+      "utf8"
+    );
     const scopeSkill = await fs.readFile(
       path.join(root, ".cclaw/skills/scope-shaping/SKILL.md"),
       "utf8"
@@ -83,24 +87,32 @@ describe("flow command contracts", () => {
       "utf8"
     );
 
-    expect(scopeSkill).toContain("Delegation pre-flight");
-    expect(scopeSkill).toContain("delegation-log.json");
+    expect(metaSkill).toContain("Delegation pre-flight");
+    expect(metaSkill).toContain("delegation-log.json");
+    expect(metaSkill).toContain("Shared Stage Completion Protocol");
+
+    expect(scopeSkill).toContain("Shared Stage Completion Protocol");
     expect(scopeSkill).toContain("`planner`");
-    expect(designSkill).toContain("Delegation pre-flight");
-    expect(designSkill).toContain("delegation-log.json");
-    expect(brainstormSkill).not.toContain("Delegation pre-flight");
+    expect(designSkill).toContain("Shared Stage Completion Protocol");
+    expect(designSkill).toMatch(/- `mandatory` —.*`planner`/);
+    expect(brainstormSkill).toContain("`mandatory` — none");
   });
 
-  it("includes doctor pre-flight in completion protocol", async () => {
+  it("includes doctor pre-flight in shared completion protocol", async () => {
     const root = await createTempProject("doctor-protocol");
     await initCclaw({ projectRoot: root });
 
+    const metaSkill = await fs.readFile(
+      path.join(root, ".cclaw/skills/using-cclaw/SKILL.md"),
+      "utf8"
+    );
     const scopeSkill = await fs.readFile(
       path.join(root, ".cclaw/skills/scope-shaping/SKILL.md"),
       "utf8"
     );
-    expect(scopeSkill).toContain("Doctor pre-flight");
-    expect(scopeSkill).toContain("cclaw doctor");
+    expect(metaSkill).toContain("Doctor pre-flight");
+    expect(metaSkill).toContain("cclaw doctor");
+    expect(scopeSkill).toContain("Apply the **Shared Stage Completion Protocol**");
   });
 
   it("includes namedAntiPattern in spec skill", async () => {

@@ -530,17 +530,249 @@ export function stageGoodBadExamples(stage: FlowStage): string {
   ].join("\n");
 }
 
-export function stageExamples(stage: FlowStage): string {
+export const STAGE_EXAMPLES_REFERENCE_DIR = "references/stages";
+
+export function stageExamplesReferencePath(stage: FlowStage): string {
+  return `.cclaw/${STAGE_EXAMPLES_REFERENCE_DIR}/${stage}-examples.md`;
+}
+
+/**
+ * Returns the full example artifact body as a standalone reference markdown
+ * file. Materialized under .cclaw/references/stages/<stage>-examples.md so
+ * the always-rendered skill body can link instead of inlining.
+ */
+export function stageExamplesReferenceMarkdown(stage: FlowStage): string | null {
   const examples = STAGE_EXAMPLES[stage];
-  if (!examples) return "";
+  if (!examples) return null;
   return [
-    "## Examples",
+    `---`,
+    `stage: ${stage}`,
+    `name: ${stage}-stage-examples`,
+    `description: "Full sample artifact for the ${stage} stage. Loaded only when an agent explicitly needs a complete example; the stage skill links here rather than inlining."`,
+    `---`,
     "",
-    "Concrete artifact samples. These mirror the exact heading levels agents must use when authoring the stage artifact (all H2 `##` sections), so they are presented inside a markdown fence to avoid collapsing into the SKILL outline.",
+    `# ${stage} stage — full artifact sample`,
+    "",
+    `This file is linked from \`.cclaw/skills/<${stage}-stage>/SKILL.md\` under **Examples → See also**. The sample uses H2 headings that mirror the artifact a cclaw session must produce, so the markdown is wrapped in a fence to avoid collapsing into the outline.`,
     "",
     "```markdown",
     examples,
     "```",
     ""
   ].join("\n");
+}
+
+/**
+ * Returns the short inline pointer rendered directly inside the stage skill.
+ * Replaces the previous always-inline ~50-100 line fenced block and
+ * delivers true progressive disclosure: the full example lives in a
+ * reference file loaded on demand.
+ */
+export function stageExamples(stage: FlowStage): string {
+  const examples = STAGE_EXAMPLES[stage];
+  if (!examples) return "";
+  return [
+    "## Examples",
+    "",
+    `Full artifact sample for this stage lives at \`${stageExamplesReferencePath(stage)}\`. Open it when you need a complete reference; do NOT paste the example into the artifact verbatim — it is a shape guide, not a template.`,
+    "",
+    "Summary of what the reference covers:",
+    ...exampleSummaryBullets(stage),
+    ""
+  ].join("\n");
+}
+
+function exampleSummaryBullets(stage: FlowStage): string[] {
+  const headings = STAGE_EXAMPLE_SECTION_HEADINGS[stage] ?? [];
+  if (headings.length === 0) return ["- Full artifact structure."];
+  return headings.map((heading) => `- ${heading}`);
+}
+
+// Kept in sync with STAGE_EXAMPLES above so the inline summary matches the
+// reference file without duplicating the heavy text. Update whenever the
+// sample in STAGE_EXAMPLES gains or loses a top-level section.
+const STAGE_EXAMPLE_SECTION_HEADINGS: Record<FlowStage, string[]> = {
+  brainstorm: [
+    "Problem framing (problem, success, constraints)",
+    "Candidate approaches with trade-offs",
+    "Recommended direction + open questions",
+    "Clarification log and decision record"
+  ],
+  scope: [
+    "In-scope / out-of-scope / deferred lists with concrete capabilities",
+    "Requirements table with stable R# IDs",
+    "Boundary stress-tests and non-negotiables",
+    "Decision record for premise challenges"
+  ],
+  design: [
+    "Blast-radius file list",
+    "Mandatory architecture diagram (Mermaid)",
+    "Failure-mode table with detection + mitigation",
+    "Test strategy + performance budget",
+    "Completion dashboard + unresolved decisions"
+  ],
+  spec: [
+    "Acceptance-criteria table (observable, measurable, falsifiable)",
+    "Requirement-ref column tying each AC back to an R# from scope",
+    "Verification-approach column",
+    "Approval block"
+  ],
+  plan: [
+    "Dependency graph + dependency waves",
+    "Task list with effort + minutes estimate per task",
+    "Acceptance mapping (every AC → task IDs)",
+    "No-Placeholder scan row + WAIT_FOR_CONFIRM marker"
+  ],
+  tdd: [
+    "RED evidence per slice (failing test output)",
+    "Acceptance mapping per slice",
+    "GREEN evidence (full-suite pass)",
+    "REFACTOR notes with behavior-preservation confirmation",
+    "Test-pyramid shape + prove-it reproduction when applicable"
+  ],
+  review: [
+    "Spec-compliance findings (Layer 1)",
+    "Code-quality findings (Layer 2)",
+    "Severity, evidence, and status per finding",
+    "Go / no-go verdict"
+  ],
+  ship: [
+    "Release checklist (version, changelog, tag, artifacts)",
+    "Rollback plan with trigger, steps, verification",
+    "Runbook (how to verify the release post-deploy)",
+    "Sign-off block"
+  ]
+};
+
+// ---------------------------------------------------------------------------
+// Domain-specific living examples (A.2#30).
+//
+// The generic examples above use a "notification feed" narrative, which is
+// fine for calibration but leaves agents guessing when the project is a CLI,
+// a library, or a data pipeline. The map below attaches 3-4 domain-specific
+// living examples to the stages where domain shape matters most
+// (spec, plan, tdd, ship). Keep each example to 1-2 sentences — they are
+// calibration samples, not full artifacts.
+// ---------------------------------------------------------------------------
+
+export type ExampleDomain = "web" | "cli" | "library" | "data-pipeline";
+
+interface DomainSample {
+  domain: ExampleDomain;
+  label: string;
+  body: string;
+}
+
+const DOMAIN_LABELS: Record<ExampleDomain, string> = {
+  web: "Web app (full-stack)",
+  cli: "CLI tool",
+  library: "Library / SDK",
+  "data-pipeline": "Data pipeline / ETL"
+};
+
+const STAGE_DOMAIN_SAMPLES: Partial<Record<FlowStage, DomainSample[]>> = {
+  spec: [
+    {
+      domain: "web",
+      label: "AC",
+      body: "AC-W1: Given a signed-in admin viewing `/dashboard/orders`, when an order's status changes server-side, the row updates within 2s without a full navigation (assert via `pnpm playwright test orders-live.spec.ts`)."
+    },
+    {
+      domain: "cli",
+      label: "AC",
+      body: "AC-C1: Given `cclaw init --claude` run in an empty directory, exit code is `0`, `.cclaw/config.yaml` is created with `harnesses: [claude]`, and stderr contains no warnings (asserted by `tests/integration/init-sync-doctor.test.ts`)."
+    },
+    {
+      domain: "library",
+      label: "AC",
+      body: "AC-L1: `validateHookDocument(obj)` returns `{ ok: true }` for every fixture under `tests/fixtures/valid-hooks/` and `{ ok: false, errors: [...] }` with at least one message for every fixture under `tests/fixtures/invalid-hooks/`."
+    },
+    {
+      domain: "data-pipeline",
+      label: "AC",
+      body: "AC-D1: For any `orders.csv` input, the pipeline emits exactly one row per `(order_id, event_ts)` pair to `warehouse.fact_orders`; running the job twice on the same input is idempotent (row count unchanged, verified by `dbt test --select fact_orders`)."
+    }
+  ],
+  plan: [
+    {
+      domain: "web",
+      label: "Task",
+      body: "T-W-3 `[~4m]`: Wire SSE endpoint `/api/orders/stream` into `useOrderFeed` hook. AC-W1. Verify: `pnpm playwright test orders-live.spec.ts`. Depends on: T-W-2."
+    },
+    {
+      domain: "cli",
+      label: "Task",
+      body: "T-C-2 `[~3m]`: Add `--dry-run` flag to `cclaw archive` that prints the would-be-archived run IDs to stdout and exits 0. AC-C3. Verify: `node dist/cli.js archive --dry-run` + `tests/unit/cli-parse.test.ts`."
+    },
+    {
+      domain: "library",
+      label: "Task",
+      body: "T-L-1 `[~5m]`: Expose `validateHookDocument` from the package root and re-export its types. AC-L1. Verify: `pnpm build && node -e \"console.log(require('./dist').validateHookDocument)\"`."
+    },
+    {
+      domain: "data-pipeline",
+      label: "Task",
+      body: "T-D-2 `[~5m]`: Add dedup step keyed on `(order_id, event_ts)` between `raw.orders` and `fact_orders`. AC-D1. Verify: `dbt run --select fact_orders+ && dbt test --select fact_orders`."
+    }
+  ],
+  tdd: [
+    {
+      domain: "web",
+      label: "RED→GREEN→REFACTOR",
+      body: "RED: `pnpm playwright test orders-live.spec.ts` → timeout waiting for row update. GREEN: wired SSE event → row rerenders via `useOrderFeed`. REFACTOR: extracted `applyOrderEvent(row, event)` pure helper; 87/87 tests still pass."
+    },
+    {
+      domain: "cli",
+      label: "RED→GREEN→REFACTOR",
+      body: "RED: `tests/unit/cli-parse.test.ts` expects `--dry-run` flag → `unknown option` error. GREEN: added to the Zod parser; 19/19 pass. REFACTOR: hoisted the dry-run formatter into `src/cli/format.ts` shared with `status`."
+    },
+    {
+      domain: "library",
+      label: "RED→GREEN→REFACTOR",
+      body: "RED: `tests/unit/hook-schema.test.ts` imports `validateHookDocument` from package root → `export not found`. GREEN: added re-export + types. REFACTOR: renamed internal `__validate` to `validateHookDocument` so the export name matches the source."
+    },
+    {
+      domain: "data-pipeline",
+      label: "RED→GREEN→REFACTOR",
+      body: "RED: `dbt test --select fact_orders` → `unique test on (order_id, event_ts)` fails on re-run. GREEN: added `row_number()` dedup in the staging model. REFACTOR: extracted the dedup CTE into `int_orders_deduped` for reuse by `fact_returns`."
+    }
+  ],
+  ship: [
+    {
+      domain: "web",
+      label: "Rollback",
+      body: "Trigger: error rate on `/api/orders/stream` > 2% for 5 minutes, or p95 latency > 1.5s for 10 minutes. Steps: `vercel rollback <deployment>`; run `2026_04_14_revert_orders_stream.sql` before traffic returns. Verify: error rate returns to baseline within 10 minutes on the `orders-live` dashboard."
+    },
+    {
+      domain: "cli",
+      label: "Rollback",
+      body: "Trigger: `cclaw init --claude` exits non-zero on a fresh tmp dir, OR `cclaw doctor` regresses (FAIL count increases) on the smoke matrix. Steps: `npm unpublish cclaw-cli@<version>` (within the 72h window) or `npm deprecate cclaw-cli@<version> '<reason>'`; publish the previous patch. Verify: `npx cclaw-cli@latest --version` prints the previous version."
+    },
+    {
+      domain: "library",
+      label: "Rollback",
+      body: "Trigger: any consumer reports `validateHookDocument` no longer exported, OR the CI `dual-package-check` job fails. Steps: `npm deprecate cclaw-cli@<version> 'broken package export — use <prev>'`; publish the previous minor with a patch bump; emit changelog `## Rollback` entry. Verify: a smoke consumer project `pnpm add cclaw-cli@latest` imports cleanly."
+    },
+    {
+      domain: "data-pipeline",
+      label: "Rollback",
+      body: "Trigger: `dbt test --select fact_orders` fails on production run, OR downstream dashboard MAU count drops >10% week-over-week. Steps: disable the new model via `dbt_project.yml` + `dbt run --select state:modified` with the previous git SHA; rerun backfill `dagster asset materialize fact_orders --partition <yesterday>`. Verify: `fact_orders` row count within ±1% of the previous week's baseline."
+    }
+  ]
+};
+
+export function stageDomainExamples(stage: FlowStage): string {
+  const samples = STAGE_DOMAIN_SAMPLES[stage];
+  if (!samples || samples.length === 0) return "";
+  const lines: string[] = [
+    "## Living Examples by Domain",
+    "",
+    "Use the row matching your project shape to calibrate voice, specificity, and command choice. The rows are deliberately terse — copy the **shape**, not the text.",
+    ""
+  ];
+  for (const sample of samples) {
+    lines.push(`**${DOMAIN_LABELS[sample.domain]} — ${sample.label}:** ${sample.body}`);
+    lines.push("");
+  }
+  return lines.join("\n");
 }

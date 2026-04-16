@@ -211,10 +211,7 @@ When a stage requires user input (approval, choice, direction):
 1. **State the decision** in one sentence.
 2. **Present options** as labeled choices (A, B, C...), one-line each, with trade-off / consequence.
 3. **Mark one option \`(recommended)\`** with a one-line reason. Do NOT use numeric "Completeness" rubrics — pick the option that best closes the decision with the smallest blast radius, lowest irreversible risk, and clearest evidence.
-4. **Use the harness ask-user tool when available:**
-   - Claude Code: \`AskUserQuestion\`
-   - Cursor: \`AskQuestion\` (options array)
-   - Codex/OpenCode: numbered list in plain text (no native ask tool).
+4. **Use the harness ask-user tool when available.** For the exact tool name and fallback, consult \`.cclaw/references/harness-tools/<harness>.md\` (one file per supported harness — claude, cursor, opencode, codex). Summary: Claude Code → \`AskUserQuestion\`; Cursor → \`AskQuestion\`; OpenCode / Codex → plain-text lettered list.
 5. **Wait for response.** Do not proceed until the user picks.
 6. **Commit to the choice.** Once decided, do not re-argue.
 
@@ -238,6 +235,43 @@ When a stage requires user input (approval, choice, direction):
 
 If the same approach fails three times in a row (same verification command, same review finding, same tool invocation), STOP and escalate: summarize what you tried, what evidence you have, what hypothesis you are now testing, and ask the user how to proceed. Do not invent a new angle silently on the fourth attempt.
 
+### Shared Stage Completion Protocol
+
+Every stage skill ends with a completion block parameterized by four values: \`next\` (next stage or \`done\`), \`gates\` (gate IDs to mark passed), \`artifact\` (file under \`.cclaw/artifacts/\`), and \`mandatory\` (agents required by delegation enforcement). Stage skills print their **Completion Parameters** and then defer to this procedure — do NOT re-print the full procedure per stage.
+
+When all required gates are satisfied and the artifact is written, execute **in this exact order**:
+
+0. **Delegation pre-flight** (BLOCKING, only when \`mandatory\` is non-empty).
+   - For each agent in \`mandatory\`: confirm it was dispatched (via Task/delegate) and completed, OR record an explicit waiver with reason in \`.cclaw/state/delegation-log.json\`.
+   - Write a JSON entry per agent: \`{ "stage": "<stage>", "agent": "<name>", "mode": "mandatory", "status": "completed"|"waived", "waiverReason": "<if waived>", "ts": "<ISO timestamp>" }\`.
+   - If the harness does not support delegation, record status \`"waived"\` with reason \`"harness_limitation"\`.
+   - **Do NOT proceed to step 1 until every mandatory agent has an entry in the delegation log.**
+1. **Update \`.cclaw/state/flow-state.json\`:**
+   - Set \`currentStage\` to \`next\` (or leave unchanged when \`next === "done"\`).
+   - Add the current stage to \`completedStages\`.
+   - Move every gate ID in \`gates\` into \`stageGateCatalog.<stage>.passed\`.
+   - Clear \`stageGateCatalog.<stage>.blocked\`.
+   - For each passed gate, add an entry to \`guardEvidence\`: \`"<gate_id>": "<artifact path or excerpt proving the gate>"\`. Do NOT leave \`guardEvidence\` empty.
+2. **Persist artifact** at \`.cclaw/artifacts/<artifact>\`. Do NOT manually copy into \`.cclaw/runs/\`; archival is handled by \`cclaw archive\`.
+3. **Doctor pre-flight** — run \`npx cclaw doctor\` (or the installed cclaw binary). If any check fails, resolve the issue (missing delegation entry, artifact section, gate evidence) and re-run until all checks pass. Do NOT proceed while doctor reports failures.
+4. **Tell the user** (verbatim when \`next\` is a stage; use the flow-complete variant when \`next === "done"\`):
+   > **Stage \`<stage>\` complete.** Next: **<next>** — <one-line next-stage description>.
+   >
+   > Run \`/cc-next\` to continue.
+
+   Flow-complete variant:
+   > **Flow complete.** All stages finished. The project is ready for release.
+
+5. **STOP.** Do not load the next stage skill yourself. The user will run \`/cc-next\` when ready (same session or new session).
+
+### Shared Resume Protocol
+
+When resuming a stage in a NEW session (artifact exists but gates are not all passed in \`flow-state.json\`):
+
+1. Read the existing artifact and mark every gate whose evidence is already present in the artifact.
+2. For each unverified gate, ask the user to confirm ONE gate at a time. Do NOT batch multiple gate confirmations in a single message.
+3. Update \`guardEvidence\` for each confirmed gate before proceeding to the next unverified gate.
+
 ## </EXTREMELY-IMPORTANT>
 
 ## Invocation Preamble (per turn, non-trivial tasks)
@@ -256,6 +290,40 @@ The preamble exists to prevent silent drift from the user's ask. If the preamble
 </EXTREMELY-IMPORTANT>
 
 Do not re-emit the preamble on every subsequent tool call — once per user turn is sufficient. If the user message changes the goal mid-execution, emit a fresh preamble before acting on the new direction.
+
+## Engineering Ethos
+
+Three guardrails apply to every stage, every turn. Internalise them — they trump speed, cleverness, and novelty:
+
+### Search Before Building
+
+Before writing new code, a new skill, a new abstraction, or a new artifact section, spend 60–120 seconds checking whether the thing already exists. Order of search:
+
+1. **Project artifacts** — \`.cclaw/artifacts/**\`, \`docs/**\`, root-level \`README.md\` / \`SPEC.md\` / \`DESIGN.md\`.
+2. **Project knowledge** — \`.cclaw/knowledge.jsonl\` (lessons with matching \`domain\` / \`trigger\`).
+3. **Codebase** — \`rg\` / \`Grep\` for the symbol, function, test, or comment that describes what you're about to add.
+4. **Framework/library primitives** — prefer a stdlib or framework-native affordance over a handwritten helper.
+5. **Existing skill or stage rule** — \`.cclaw/skills/**/SKILL.md\` and \`.cclaw/commands/**/*.md\`.
+
+Only after the first four turn up nothing do you build. Every duplicate helper, redefined type, parallel-but-incompatible artifact section, or re-discovered lesson is a tax on the next five sessions. Record the negative search result (what you looked for, where, and why nothing fit) in the turn's preamble or the stage artifact so future agents don't repeat the hunt.
+
+### Boil the Lake (scoped minimum-sweep rule)
+
+"Boil the lake" normally means wasteful, exhaustive work. **cclaw inverts the phrase**: within the current stage, you are expected to sweep *the defined surface exhaustively* — not to stop at the first plausible answer.
+
+- In \`brainstorm\` / \`scope\` — enumerate every viable approach in the defined option space; name the ones you rejected and why.
+- In \`design\` — trace every data-flow and failure edge across the chosen component boundary, not just the happy path.
+- In \`spec\` — list every acceptance criterion for the in-scope surface; "and similar" / "etc." is banned.
+- In \`tdd\` — exercise every branch / error path / boundary of the slice under test, not only the canonical case.
+- In \`review\` — audit every file touched in the diff, not just the files named in the spec.
+
+The sweep is bounded by the stage's declared surface. Expanding the surface is a Decision Protocol question, not a silent enlargement.
+
+### Do Less, Prove More
+
+When in doubt between adding code / scope / artifact sections and cutting them, cut. The flow already forces you to justify each stage's output — volume is never a proxy for quality. One acceptance criterion with captured evidence beats five without; one labeled architecture diagram beats three generic boxes-and-arrows; one REFACTOR note explaining a concrete trade-off beats a paragraph of filler.
+
+If a rule, template section, or agent feels ornamental, flag it in \`Operational Self-Improvement\` and propose removal — cclaw's invariant is that every section must pay its tokens back by preventing a specific failure mode.
 
 ## Operational Self-Improvement (auto-learn)
 

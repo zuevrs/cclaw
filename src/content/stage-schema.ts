@@ -985,6 +985,8 @@ const PLAN: StageSchemaInput = {
   cognitivePatterns: [
     { name: "Vertical Slice Thinking", description: "Each task delivers one thin end-to-end slice of value. Horizontal layers (all models, then all controllers) create integration risk. Vertical slices (one feature through all layers) reduce it." },
     { name: "Two-Minute Smell Test", description: "If a competent engineer cannot understand and start a task in two minutes, the task is too large or too vague. Break it down further." },
+    { name: "Five-Minute Budget (hard)", description: "Every plan step MUST fit a 2-to-5-minute execution budget on a competent implementer. If a step plausibly takes longer, it is two steps pretending to be one — split it. Measure by 'keyboard minutes on this slice', not by wall clock. Write the estimated minutes next to each task (e.g. `[~3m]`); when a TDD slice later consumes >2× the estimate, log an operational-self-improvement entry so future plans calibrate better." },
+    { name: "No Placeholders", description: "Plan text must be copy-pasteable. Forbidden tokens anywhere in the artifact: `TODO`, `TBD`, `FIXME`, `<fill-in>`, `<your-*-here>`, `xxx`, `...` (as ellipsis for omitted content — real commands use real args). Every acceptance-criterion link, file path, test command, and verification command must be concrete and runnable as written. A placeholder is a deferred decision masquerading as a plan; decide it now or remove the task." },
     { name: "Make the Change Easy, Then Make the Easy Change", description: "Refactor first, implement second. Never structural + behavioral changes simultaneously. Sequence tasks accordingly." },
     { name: "Diagnose Before Fix", description: "Before decomposing work, understand the current state of the codebase. Read existing code, tests, and conventions. Tasks should reference what exists, not assume a blank slate." },
     { name: "Scrap Signals", description: "If a task description is vague, the acceptance criterion is missing, or the verification command is a placeholder — it is scrap. Either rewrite it or remove it. Half-specified tasks waste more time than no tasks." },
@@ -1012,6 +1014,16 @@ const PLAN: StageSchemaInput = {
         "Are there hidden dependencies between tasks in different waves?"
       ],
       stopGate: true
+    },
+    {
+      title: "Five-Minute Budget + No-Placeholders Audit",
+      evaluationPoints: [
+        "Does every task carry an explicit minutes estimate (e.g. `[~3m]`) and does every estimate fit the 2-to-5-minute budget? Estimates >5 minutes must be split.",
+        "Are all file paths, test commands, and verification commands copy-pasteable as written — no `TODO`, `TBD`, `FIXME`, `<fill-in>`, `<your-*-here>`, `xxx`, or ellipsis standing in for omitted args?",
+        "Does every acceptance-criterion reference resolve to a real R# / AC-### in the spec (not a blank link)?",
+        "If an estimate is genuinely uncertain (first-time integration, unfamiliar library), is the uncertainty named explicitly and scheduled as a spike task in wave 0, rather than hidden behind a large estimate?"
+      ],
+      stopGate: true
     }
   ],
   completionStatus: ["DONE", "DONE_WITH_CONCERNS", "BLOCKED"],
@@ -1023,11 +1035,12 @@ const PLAN: StageSchemaInput = {
   artifactValidation: [
     { section: "Dependency Graph", required: true, validationRule: "Ordering and parallel opportunities explicit. No circular dependencies." },
     { section: "Dependency Waves", required: true, validationRule: "Every task belongs to a wave. Each wave has an exit gate and dependency statement." },
-    { section: "Task List", required: true, validationRule: "Each task: ID, description, acceptance criterion link, verification command, and effort estimate (S/M/L)." },
+    { section: "Task List", required: true, validationRule: "Each task row includes ID, description, acceptance criterion, verification command, and effort estimate (S/M/L). Every task must also carry a minutes estimate within the 2-5 minute budget." },
     { section: "Acceptance Mapping", required: true, validationRule: "Every spec criterion is covered by at least one task." },
     { section: "Risk Assessment", required: false, validationRule: "If present: per-task or per-wave risk identification with likelihood, impact, and mitigation strategy." },
     { section: "Boundary Map", required: false, validationRule: "If present: per-wave or per-task interface contracts listing what each task produces (exports) and consumes (imports) from other tasks." },
-    { section: "WAIT_FOR_CONFIRM", required: true, validationRule: "Explicit marker present. Status: pending until user approves." }
+    { section: "WAIT_FOR_CONFIRM", required: true, validationRule: "Explicit marker present. Status: pending until user approves." },
+    { section: "No-Placeholder Scan", required: false, validationRule: "If present: confirmation that a text scan for `TODO`, `TBD`, `FIXME`, `<fill-in>`, `<your-*-here>`, `xxx`, or bare ellipses has zero hits in the task list. A placeholder is a deferred decision masquerading as a plan." }
   ],
   namedAntiPattern: {
     title: "Task Details Can Be Finalized During Coding",
@@ -1163,7 +1176,9 @@ const TDD: StageSchemaInput = {
     { name: "Characterization First", description: "Before changing existing behavior, write characterization tests that capture current behavior as-is. These tests document what the system does today — even if that behavior is wrong. Only after the characterization suite is green do you add the new RED test for the desired change. This prevents accidental behavior destruction during refactoring." },
     { name: "Test Pyramid Shape", description: "Healthy test suites look like a pyramid: many small fast tests at the base, fewer medium integration tests in the middle, few large end-to-end tests at the top. Each layer catches a different class of bug; none of them substitutes for another. If your suite is top-heavy (mostly E2E) it is slow and flaky; if it is base-only it misses integration contracts. During TDD, default to the smallest layer that can prove the behavior." },
     { name: "Prove-It Pattern (bug fixes)", description: "For any reported regression or hotfix, the FIRST test is a reproduction — it must fail without your fix, pass with your fix, and fail again if the fix is reverted. This is the only way to prove you fixed the reported bug and not a superficially similar one. Skipping this step is how bugs come back two releases later wearing a different name." },
-    { name: "Test Size Model", description: "Size tests by scope, not by name: Small = pure logic, no I/O, <50ms; Medium = one process boundary, possibly filesystem or an in-memory DB; Large = multi-process / network / real external service. Small tests are the default; escalate to Medium only when a real boundary must be exercised, and to Large only for end-to-end user journeys. Record the size class in the TDD artifact so reviewers can sanity-check the pyramid shape." }
+    { name: "Test Size Model", description: "Size tests by scope, not by name: Small = pure logic, no I/O, <50ms; Medium = one process boundary, possibly filesystem or an in-memory DB; Large = multi-process / network / real external service. Small tests are the default; escalate to Medium only when a real boundary must be exercised, and to Large only for end-to-end user journeys. Record the size class in the TDD artifact so reviewers can sanity-check the pyramid shape." },
+    { name: "State Over Interaction", description: "Assert on observable outcomes (return values, state changes, persisted data, HTTP responses) — NOT on which helper methods were called, how many times, or in what order. Interaction-style assertions (`expect(mock.foo).toHaveBeenCalledWith(...)` without a state assertion) couple tests to implementation and shatter under harmless refactors. Use mocks only at trust boundaries (network, filesystem, time); for everything inside the module, let state do the asserting. If you cannot observe the outcome without a mock-spy, rework the seam before writing the test." },
+    { name: "Beyoncé Rule", description: "If you liked it, you should have put a test on it. Every surface that a caller can observe — public API, CLI flag, config key, exit code, persisted schema — is a contract, and every contract without a test is a silent regression waiting to happen. When a bug or production incident reveals an uncovered surface, the fix is never 'patch the code'; it is 'patch the code AND add the test that would have caught it'. Untested behavior does not exist for future refactors — it only exists until somebody accidentally removes it." }
   ],
   reviewSections: [
     {
@@ -1205,6 +1220,17 @@ const TDD: StageSchemaInput = {
         "Is there captured RED evidence from running the reproduction WITHOUT the fix applied?",
         "Is there captured GREEN evidence from the same reproduction AFTER the fix was applied?",
         "Is there a note confirming the reproduction test fails again if the fix is reverted (or equivalent evidence that the test is actually pinned to this fix)?"
+      ],
+      stopGate: false
+    },
+    {
+      title: "State-over-Interaction + Beyoncé Coverage",
+      evaluationPoints: [
+        "Do assertions target observable state (return values, persisted data, HTTP responses, logs) rather than which internal helpers were called?",
+        "Are mocks/spies used only at true trust boundaries (network, filesystem, time, external services), not for module-internal collaborators?",
+        "For every public surface touched in this slice (exported API, CLI flag, config key, env var, exit code, schema field) — does at least one test observe it?",
+        "If a bug or review finding revealed an uncovered surface, was a test added alongside the fix, not just the code change?",
+        "Are interaction-style assertions (e.g. `toHaveBeenCalledWith` without a state assertion) justified by an explicit boundary comment, or flagged for follow-up?"
       ],
       stopGate: false
     }

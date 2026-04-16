@@ -3,7 +3,7 @@ import fs from "node:fs/promises";
 import path from "node:path";
 import { lintArtifact } from "../../src/artifact-linter.js";
 import { CCLAW_AGENTS } from "../../src/content/agents.js";
-import { stageExamples } from "../../src/content/examples.js";
+import { stageExamples, stageExamplesReferenceMarkdown } from "../../src/content/examples.js";
 import { stageSchema } from "../../src/content/stage-schema.js";
 import { stageSkillMarkdown } from "../../src/content/skills.js";
 import { enhancedAgentBody } from "../../src/content/subagents.js";
@@ -80,8 +80,12 @@ describe("stage schema and subagent alignment", () => {
   });
 
   it("brainstorm example is a valid artifact when copy-pasted verbatim", async () => {
-    const wrapped = stageExamples("brainstorm");
-    const fenceMatch = /```markdown\n([\s\S]+?)\n```/u.exec(wrapped);
+    const inlinePointer = stageExamples("brainstorm");
+    expect(inlinePointer).toContain(".cclaw/references/stages/brainstorm-examples.md");
+
+    const reference = stageExamplesReferenceMarkdown("brainstorm");
+    expect(reference, "stage examples reference should exist").toBeTruthy();
+    const fenceMatch = /```markdown\n([\s\S]+?)\n```/u.exec(reference!);
     expect(fenceMatch, "example should be wrapped in a markdown fence").toBeTruthy();
     const body = fenceMatch![1]!;
     expect(body).toMatch(/^## Context/);

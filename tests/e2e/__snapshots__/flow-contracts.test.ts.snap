@@ -115,50 +115,16 @@ Contrasting samples to calibrate the quality bar for this stage. Read before wri
 
 **Why it matters:** "LGTM" is not a review — it is a signature on whatever the author shipped. Every finding needs a severity, a falsifiable description, evidence, and a status.
 
+
 ## Examples
 
-Concrete artifact samples. These mirror the exact heading levels agents must use when authoring the stage artifact (all H2 \`##\` sections), so they are presented inside a markdown fence to avoid collapsing into the SKILL outline.
+Full artifact sample for this stage lives at \`.cclaw/references/stages/review-examples.md\`. Open it when you need a complete reference; do NOT paste the example into the artifact verbatim — it is a shape guide, not a template.
 
-\`\`\`markdown
-## Layer 1 Verdict
-
-| Criterion | Verdict | Evidence |
-| --- | --- | --- |
-| AC-1: Delivery within 5s without reload | PASS | \`notification-feed.e2e.ts:44-88\` asserts SSE-to-UI timing under mock clock |
-| AC-2: Dedupe — one visible item per key | PARTIAL | Unit tests cover publisher dedupe; UI merge path lacks test for race reordering (\`feedStore.test.ts\` missing case) |
-| AC-3: Degraded mode + REST snapshot | PASS | \`NotificationsPanel.tsx:112-140\` renders banner + calls snapshot endpoint |
-
-## Layer 2 Findings
-
-| ID | Severity | Category | Description | Status |
-| --- | --- | --- | --- | --- |
-| R-1 | Critical | correctness | Snapshot endpoint returns newest N rows but does not guarantee consistency with stream cursor — users can miss items between snapshot and subscribe. | open |
-| R-2 | Important | performance | \`feedStore.merge()\` does full-array scan on every SSE event; O(n) per event where n is feed length. | open |
-| R-3 | Suggestion | architecture | SSE reconnect logic duplicated across \`useNotifications\` and \`usePresence\`; extract shared hook. | open |
-
-## Review Army Contract
-
-- See \`07-review-army.json\`
-- Reconciliation summary: 1 duplicate collapsed (R-1 reported by spec-reviewer and code-reviewer), 0 conflicts
-
-## Review Readiness Dashboard
-
-- Layer 1 complete: yes (3/3 criteria)
-- Layer 2 complete: yes (5 sections reviewed)
-- Review army schema valid: yes
-- Open critical blockers: 1 (R-1)
-- Ship recommendation: BLOCKED until R-1 resolved
-
-## Severity Summary
-
-- Critical: 1
-- Important: 1
-- Suggestion: 1
-
-## Final Verdict
-
-- BLOCKED
-\`\`\`
+Summary of what the reference covers:
+- Spec-compliance findings (Layer 1)
+- Code-quality findings (Layer 2)
+- Severity, evidence, and status per finding
+- Go / no-go verdict
 
 ## Anti-Pattern: "Tests Pass So It Must Be Correct"
 
@@ -393,36 +359,20 @@ When this stage ends, report one of:
 
 ## Stage Completion Protocol
 
-When all required gates are satisfied and the artifact is written:
+Apply the **Shared Stage Completion Protocol** from \`.cclaw/skills/using-cclaw/SKILL.md\` with these parameters — do NOT re-derive the generic steps here.
 
-0. **Delegation pre-flight** (BLOCKING):
-   - Mandatory agents for this stage: \`spec-reviewer\`, \`code-reviewer\`, \`security-reviewer\`.
-   - For each mandatory agent: confirm it was dispatched (via Task/delegate) and completed, OR record an explicit waiver with reason in \`.cclaw/state/delegation-log.json\`.
-   - Write a JSON entry per agent: \`{ "stage": "review", "agent": "<name>", "mode": "mandatory", "status": "completed"|"waived", "waiverReason": "<if waived>", "ts": "<ISO timestamp>" }\`.
-   - If the harness does not support delegation, record status \`"waived"\` with reason \`"harness_limitation"\`.
-   - **Do NOT proceed to step 1 until every mandatory agent has an entry in the delegation log.**
-1. **Update \`.cclaw/state/flow-state.json\`:**
-   - Set \`currentStage\` to \`"ship"\`
-   - Add \`"review"\` to \`completedStages\` array
-   - Move all gate IDs for this stage (\`review_layer1_spec_compliance\`, \`review_layer2_correctness\`, \`review_layer2_security\`, \`review_layer2_performance\`, \`review_layer2_architecture\`, \`review_severity_classified\`, \`review_criticals_resolved\`, \`review_army_json_valid\`, \`review_completeness_scored\`, \`review_security_audit_swept\`) into \`stageGateCatalog.review.passed\`
-   - Clear \`stageGateCatalog.review.blocked\`
-   - For each passed gate, add an entry to \`guardEvidence\`: \`"<gate_id>": "<artifact path or excerpt proving the gate>"\`. Do NOT leave \`guardEvidence\` empty.
-2. **Persist artifact** at \`.cclaw/artifacts/07-review.md\`. Do NOT manually copy into \`.cclaw/runs/\`; archival is handled by \`cclaw archive\`.
-3. **Doctor pre-flight** — Run \`npx cclaw doctor\` (or the installed cclaw binary). If any check fails, resolve the issue (missing delegation entry, artifact section, gate evidence) and re-run until all checks pass. Do NOT proceed to the next step while doctor reports failures.
-4. Tell the user:
+**Completion Parameters**
+- \`stage\` — \`review\`
+- \`next\` — \`ship\` (release handoff stage with preflight checks, rollback readiness, and explicit finalization mode.)
+- \`gates\` — \`review_layer1_spec_compliance\`, \`review_layer2_correctness\`, \`review_layer2_security\`, \`review_layer2_performance\`, \`review_layer2_architecture\`, \`review_severity_classified\`, \`review_criticals_resolved\`, \`review_army_json_valid\`, \`review_completeness_scored\`, \`review_security_audit_swept\`
+- \`artifact\` — \`.cclaw/artifacts/07-review.md\`
+- \`mandatory\` — \`spec-reviewer\`, \`code-reviewer\`, \`security-reviewer\`
 
-   > **Stage \`review\` complete.** Next: **ship** — release handoff stage with preflight checks, rollback readiness, and explicit finalization mode.
-   >
-   > Run \`/cc-next\` to continue.
-
-**STOP.** Do not load the next stage skill yourself. The user will run \`/cc-next\` when ready (same session or new session).
+When all required gates are satisfied and the artifact is written, execute the shared procedure (delegation pre-flight → flow-state update → artifact persistence → \`npx cclaw doctor\` → user handoff → STOP) using the parameters above. If any check fails, resolve the issue and re-run before proceeding.
 
 ## Resume Protocol
 
-When resuming a stage in a NEW session (artifact exists but gates are not all passed in flow-state):
-1. Read the existing artifact and check which gates can be verified from artifact evidence.
-2. For each unverified gate, ask the user to confirm ONE gate at a time. Do NOT batch multiple gate confirmations in a single message.
-3. Update \`guardEvidence\` for each confirmed gate before proceeding.
+When resuming this stage in a NEW session (artifact exists but not all of \`review_layer1_spec_compliance\`, \`review_layer2_correctness\`, \`review_layer2_security\`, \`review_layer2_performance\`, \`review_layer2_architecture\`, \`review_severity_classified\`, \`review_criticals_resolved\`, \`review_army_json_valid\`, \`review_completeness_scored\`, \`review_security_audit_swept\` are passed), follow the **Shared Resume Protocol** in \`.cclaw/skills/using-cclaw/SKILL.md\` — confirm one gate at a time, update \`guardEvidence\` for each, never batch confirmations.
 
 ## Progressive Disclosure
 
@@ -592,45 +542,27 @@ Contrasting samples to calibrate the quality bar for this stage. Read before wri
 
 **Why it matters:** "Revert if anything goes wrong" leaves the on-call engineer to invent the plan at 2 a.m. The rollback trigger is an operational contract: state the signal, the command, and the verification.
 
+## Living Examples by Domain
+
+Use the row matching your project shape to calibrate voice, specificity, and command choice. The rows are deliberately terse — copy the **shape**, not the text.
+
+**Web app (full-stack) — Rollback:** Trigger: error rate on \`/api/orders/stream\` > 2% for 5 minutes, or p95 latency > 1.5s for 10 minutes. Steps: \`vercel rollback <deployment>\`; run \`2026_04_14_revert_orders_stream.sql\` before traffic returns. Verify: error rate returns to baseline within 10 minutes on the \`orders-live\` dashboard.
+
+**CLI tool — Rollback:** Trigger: \`cclaw init --claude\` exits non-zero on a fresh tmp dir, OR \`cclaw doctor\` regresses (FAIL count increases) on the smoke matrix. Steps: \`npm unpublish cclaw-cli@<version>\` (within the 72h window) or \`npm deprecate cclaw-cli@<version> '<reason>'\`; publish the previous patch. Verify: \`npx cclaw-cli@latest --version\` prints the previous version.
+
+**Library / SDK — Rollback:** Trigger: any consumer reports \`validateHookDocument\` no longer exported, OR the CI \`dual-package-check\` job fails. Steps: \`npm deprecate cclaw-cli@<version> 'broken package export — use <prev>'\`; publish the previous minor with a patch bump; emit changelog \`## Rollback\` entry. Verify: a smoke consumer project \`pnpm add cclaw-cli@latest\` imports cleanly.
+
+**Data pipeline / ETL — Rollback:** Trigger: \`dbt test --select fact_orders\` fails on production run, OR downstream dashboard MAU count drops >10% week-over-week. Steps: disable the new model via \`dbt_project.yml\` + \`dbt run --select state:modified\` with the previous git SHA; rerun backfill \`dagster asset materialize fact_orders --partition <yesterday>\`. Verify: \`fact_orders\` row count within ±1% of the previous week's baseline.
+
 ## Examples
 
-Concrete artifact samples. These mirror the exact heading levels agents must use when authoring the stage artifact (all H2 \`##\` sections), so they are presented inside a markdown fence to avoid collapsing into the SKILL outline.
+Full artifact sample for this stage lives at \`.cclaw/references/stages/ship-examples.md\`. Open it when you need a complete reference; do NOT paste the example into the artifact verbatim — it is a shape guide, not a template.
 
-\`\`\`markdown
-## Preflight Results
-
-- Review verdict: APPROVED_WITH_CONCERNS (R-1 resolved, R-2 accepted as known debt)
-- Build: pass (\`pnpm build\` succeeds)
-- Tests: pass (\`pnpm vitest run && pnpm playwright test\` — 47 passed, 0 failed)
-- Lint: pass (\`pnpm lint\` clean)
-- Type-check: pass (\`pnpm typecheck\` clean)
-- Working tree clean: yes (\`git status\` shows no uncommitted changes)
-
-## Release Notes
-
-- **Added:** In-app notification feed with SSE updates and REST fallback snapshotting (AC-1, AC-3).
-- **Changed:** Notification payloads now include a stable dedupe key for idempotent rendering (AC-2).
-- **Fixed:** Panel no longer drops the newest item when reconnecting after sleep/resume.
-- **Breaking changes:** None.
-
-## Rollback Plan
-
-- Trigger conditions: error rate on \`/notifications/stream\` exceeds 5% for >5 minutes, or p95 publish-to-visible lag exceeds 10s.
-- Rollback steps: \`git revert <merge-sha> && git push origin main\` then redeploy; if DB migrations shipped, run \`2026_04_12_notifications_cursor_down.sql\` before traffic.
-- Verification steps: confirm error rate returns to pre-release baseline within 10 minutes; smoke-test feed panel manually.
-
-## Monitoring
-
-- Metrics/logs to watch: error rate on \`/notifications/stream\` and snapshot endpoint for 24h; p95 publish-to-visible lag via metrics dashboard.
-- Risk note (if no monitoring): N/A — monitoring is in place.
-
-## Finalization
-
-- Selected enum: FINALIZE_OPEN_PR
-- Selected label: B
-- Execution result: PR #42 created via \`gh pr create\`; CI passed; squash-merged to main.
-- PR URL: https://github.com/example/repo/pull/42
-\`\`\`
+Summary of what the reference covers:
+- Release checklist (version, changelog, tag, artifacts)
+- Rollback plan with trigger, steps, verification
+- Runbook (how to verify the release post-deploy)
+- Sign-off block
 
 ## Anti-Pattern: "Green CI Means Safe to Merge"
 
@@ -808,33 +740,20 @@ When this stage ends, report one of:
 
 ## Stage Completion Protocol
 
-When all required gates are satisfied and the artifact is written:
+Apply the **Shared Stage Completion Protocol** from \`.cclaw/skills/using-cclaw/SKILL.md\` with these parameters — do NOT re-derive the generic steps here.
 
-0. **Delegation pre-flight** (BLOCKING):
-   - Mandatory agents for this stage: \`doc-updater\`.
-   - For each mandatory agent: confirm it was dispatched (via Task/delegate) and completed, OR record an explicit waiver with reason in \`.cclaw/state/delegation-log.json\`.
-   - Write a JSON entry per agent: \`{ "stage": "ship", "agent": "<name>", "mode": "mandatory", "status": "completed"|"waived", "waiverReason": "<if waived>", "ts": "<ISO timestamp>" }\`.
-   - If the harness does not support delegation, record status \`"waived"\` with reason \`"harness_limitation"\`.
-   - **Do NOT proceed to step 1 until every mandatory agent has an entry in the delegation log.**
-1. **Update \`.cclaw/state/flow-state.json\`:**
-   - Add \`"ship"\` to \`completedStages\` array
-   - Move all gate IDs for this stage (\`ship_review_verdict_valid\`, \`ship_preflight_passed\`, \`ship_release_notes_written\`, \`ship_rollback_plan_ready\`, \`ship_finalization_mode_selected\`, \`ship_finalization_executed\`, \`ship_post_merge_tests\`) into \`stageGateCatalog.ship.passed\`
-   - Clear \`stageGateCatalog.ship.blocked\`
-   - For each passed gate, add an entry to \`guardEvidence\`: \`"<gate_id>": "<artifact path or excerpt proving the gate>"\`. Do NOT leave \`guardEvidence\` empty.
-2. **Persist artifact** at \`.cclaw/artifacts/08-ship.md\`. Do NOT manually copy into \`.cclaw/runs/\`; archival is handled by \`cclaw archive\`.
-3. **Doctor pre-flight** — Run \`npx cclaw doctor\` (or the installed cclaw binary). If any check fails, resolve the issue (missing delegation entry, artifact section, gate evidence) and re-run until all checks pass. Do NOT proceed to the next step while doctor reports failures.
-4. Tell the user:
+**Completion Parameters**
+- \`stage\` — \`ship\`
+- \`next\` — \`done\` (flow complete — release cut and handoff signed off)
+- \`gates\` — \`ship_review_verdict_valid\`, \`ship_preflight_passed\`, \`ship_release_notes_written\`, \`ship_rollback_plan_ready\`, \`ship_finalization_mode_selected\`, \`ship_finalization_executed\`, \`ship_post_merge_tests\`
+- \`artifact\` — \`.cclaw/artifacts/08-ship.md\`
+- \`mandatory\` — \`doc-updater\`
 
-   > **Flow complete.** All stages finished. The project is ready for release.
-
-**STOP.** Do not load the next stage skill yourself. The user will run \`/cc-next\` when ready (same session or new session).
+When all required gates are satisfied and the artifact is written, execute the shared procedure (delegation pre-flight → flow-state update → artifact persistence → \`npx cclaw doctor\` → user handoff → STOP) using the parameters above. If any check fails, resolve the issue and re-run before proceeding.
 
 ## Resume Protocol
 
-When resuming a stage in a NEW session (artifact exists but gates are not all passed in flow-state):
-1. Read the existing artifact and check which gates can be verified from artifact evidence.
-2. For each unverified gate, ask the user to confirm ONE gate at a time. Do NOT batch multiple gate confirmations in a single message.
-3. Update \`guardEvidence\` for each confirmed gate before proceeding.
+When resuming this stage in a NEW session (artifact exists but not all of \`ship_review_verdict_valid\`, \`ship_preflight_passed\`, \`ship_release_notes_written\`, \`ship_rollback_plan_ready\`, \`ship_finalization_mode_selected\`, \`ship_finalization_executed\`, \`ship_post_merge_tests\` are passed), follow the **Shared Resume Protocol** in \`.cclaw/skills/using-cclaw/SKILL.md\` — confirm one gate at a time, update \`guardEvidence\` for each, never batch confirmations.
 
 ## Progressive Disclosure
 
@@ -1000,66 +919,27 @@ Contrasting samples to calibrate the quality bar for this stage. Read before wri
 
 **Why it matters:** A task without a single acceptance criterion and a reproducible verification command is a wish. If you cannot say how you will know it is done, you cannot ship it.
 
+## Living Examples by Domain
+
+Use the row matching your project shape to calibrate voice, specificity, and command choice. The rows are deliberately terse — copy the **shape**, not the text.
+
+**Web app (full-stack) — Task:** T-W-3 \`[~4m]\`: Wire SSE endpoint \`/api/orders/stream\` into \`useOrderFeed\` hook. AC-W1. Verify: \`pnpm playwright test orders-live.spec.ts\`. Depends on: T-W-2.
+
+**CLI tool — Task:** T-C-2 \`[~3m]\`: Add \`--dry-run\` flag to \`cclaw archive\` that prints the would-be-archived run IDs to stdout and exits 0. AC-C3. Verify: \`node dist/cli.js archive --dry-run\` + \`tests/unit/cli-parse.test.ts\`.
+
+**Library / SDK — Task:** T-L-1 \`[~5m]\`: Expose \`validateHookDocument\` from the package root and re-export its types. AC-L1. Verify: \`pnpm build && node -e "console.log(require('./dist').validateHookDocument)"\`.
+
+**Data pipeline / ETL — Task:** T-D-2 \`[~5m]\`: Add dedup step keyed on \`(order_id, event_ts)\` between \`raw.orders\` and \`fact_orders\`. AC-D1. Verify: \`dbt run --select fact_orders+ && dbt test --select fact_orders\`.
+
 ## Examples
 
-Concrete artifact samples. These mirror the exact heading levels agents must use when authoring the stage artifact (all H2 \`##\` sections), so they are presented inside a markdown fence to avoid collapsing into the SKILL outline.
+Full artifact sample for this stage lives at \`.cclaw/references/stages/plan-examples.md\`. Open it when you need a complete reference; do NOT paste the example into the artifact verbatim — it is a shape guide, not a template.
 
-\`\`\`markdown
-## Dependency Graph
-
-\`\`\`
-T-1 ──▶ T-2 ──▶ T-3
- │               ▲
- └───────────────┘
-\`\`\`
-
-Parallel opportunity: T-1 is a prerequisite for both T-2 and T-3 (T-3 also needs T-2).
-
-## Dependency Waves
-
-#### Wave 1 (foundation)
-- Task IDs: T-1
-- Verification gate: schema tests pass, dedupe key fixtures validated
-
-#### Wave 2 (core logic)
-- Task IDs: T-2
-- Depends on: Wave 1 (T-1 complete)
-- Verification gate: integration test proves publish-to-outbox path
-
-#### Wave 3 (integration)
-- Task IDs: T-3
-- Depends on: Wave 2 (T-2 complete)
-- Verification gate: e2e tests pass for delivery, dedupe, and degraded mode
-
-Execution rule: complete and verify each wave before starting the next wave.
-
-## Task List
-
-| Task ID | Description | Acceptance criterion | Verification command | Effort |
-| --- | --- | --- | --- | --- |
-| T-1 | Define notification event schema + dedupe key rules | AC-1, AC-2: schema contract + fixtures | \`\`\`pnpm vitest run tests/unit/notification-schema.test.ts\`\`\` |
-| T-2 | Implement publisher + outbox write path | AC-1: integration test (happy path publish) | \`\`\`pnpm vitest run tests/integration/publisher.test.ts\`\`\` |
-| T-3 | Implement client feed + SSE subscribe + REST fallback | AC-1, AC-2, AC-3: e2e tests including degraded mode | \`\`\`pnpm playwright test tests/e2e/notification-feed.spec.ts\`\`\` |
-
-## Acceptance Mapping
-
-| Criterion ID | Task IDs |
-| --- | --- |
-| AC-1 (delivery within 5s) | T-2, T-3 |
-| AC-2 (idempotency) | T-1, T-2 |
-| AC-3 (failure visibility) | T-3 |
-
-## Risk Assessment
-
-| Task/Wave | Risk | Likelihood | Impact | Mitigation |
-| --- | --- | --- | --- | --- |
-| T-3 (Wave 3) | SSE reconnect logic complex | Medium | High | Spike reconnect in isolation before integrating with feed UI |
-| Wave 2 → 3 | Publisher API contract may shift | Low | Medium | Pin contract in T-1 schema; T-2 integration test validates |
-
-## WAIT_FOR_CONFIRM
-- Status: pending
-- Confirmed by:
-\`\`\`
+Summary of what the reference covers:
+- Dependency graph + dependency waves
+- Task list with effort + minutes estimate per task
+- Acceptance mapping (every AC → task IDs)
+- No-Placeholder scan row + WAIT_FOR_CONFIRM marker
 
 ## Anti-Pattern: "Task Details Can Be Finalized During Coding"
 
@@ -1071,10 +951,12 @@ These are thinking instincts, not a checklist. Let them shape your perspective t
 
 1. **Vertical Slice Thinking** — Each task delivers one thin end-to-end slice of value. Horizontal layers (all models, then all controllers) create integration risk. Vertical slices (one feature through all layers) reduce it.
 2. **Two-Minute Smell Test** — If a competent engineer cannot understand and start a task in two minutes, the task is too large or too vague. Break it down further.
-3. **Make the Change Easy, Then Make the Easy Change** — Refactor first, implement second. Never structural + behavioral changes simultaneously. Sequence tasks accordingly.
-4. **Diagnose Before Fix** — Before decomposing work, understand the current state of the codebase. Read existing code, tests, and conventions. Tasks should reference what exists, not assume a blank slate.
-5. **Scrap Signals** — If a task description is vague, the acceptance criterion is missing, or the verification command is a placeholder — it is scrap. Either rewrite it or remove it. Half-specified tasks waste more time than no tasks.
-6. **Risk-First Exploration** — Sequence the highest-risk or most uncertain tasks first. If wave 1 proves the risky assumption wrong, the rest of the plan can adapt. If the risk is buried in wave 3, you discover failure late.
+3. **Five-Minute Budget (hard)** — Every plan step MUST fit a 2-to-5-minute execution budget on a competent implementer. If a step plausibly takes longer, it is two steps pretending to be one — split it. Measure by 'keyboard minutes on this slice', not by wall clock. Write the estimated minutes next to each task (e.g. \`[~3m]\`); when a TDD slice later consumes >2× the estimate, log an operational-self-improvement entry so future plans calibrate better.
+4. **No Placeholders** — Plan text must be copy-pasteable. Forbidden tokens anywhere in the artifact: \`TODO\`, \`TBD\`, \`FIXME\`, \`<fill-in>\`, \`<your-*-here>\`, \`xxx\`, \`...\` (as ellipsis for omitted content — real commands use real args). Every acceptance-criterion link, file path, test command, and verification command must be concrete and runnable as written. A placeholder is a deferred decision masquerading as a plan; decide it now or remove the task.
+5. **Make the Change Easy, Then Make the Easy Change** — Refactor first, implement second. Never structural + behavioral changes simultaneously. Sequence tasks accordingly.
+6. **Diagnose Before Fix** — Before decomposing work, understand the current state of the codebase. Read existing code, tests, and conventions. Tasks should reference what exists, not assume a blank slate.
+7. **Scrap Signals** — If a task description is vague, the acceptance criterion is missing, or the verification command is a placeholder — it is scrap. Either rewrite it or remove it. Half-specified tasks waste more time than no tasks.
+8. **Risk-First Exploration** — Sequence the highest-risk or most uncertain tasks first. If wave 1 proves the risky assumption wrong, the rest of the plan can adapt. If the risk is buried in wave 3, you discover failure late.
 
 ## Interaction Protocol
 1. Plan in read-only mode relative to implementation.
@@ -1135,6 +1017,16 @@ Evaluate:
 
 **STOP.** Present the most important question from this section to the user, even if your recommendation is clear. If no issues are found, state your assessment in one sentence and ask the user to confirm before moving on. If issues exist, present them ONE AT A TIME: describe the problem concretely, present 2-3 options, state your recommendation, and explain WHY.
 
+### Five-Minute Budget + No-Placeholders Audit
+
+Evaluate:
+- Does every task carry an explicit minutes estimate (e.g. \`[~3m]\`) and does every estimate fit the 2-to-5-minute budget? Estimates >5 minutes must be split.
+- Are all file paths, test commands, and verification commands copy-pasteable as written — no \`TODO\`, \`TBD\`, \`FIXME\`, \`<fill-in>\`, \`<your-*-here>\`, \`xxx\`, or ellipsis standing in for omitted args?
+- Does every acceptance-criterion reference resolve to a real R# / AC-### in the spec (not a blank link)?
+- If an estimate is genuinely uncertain (first-time integration, unfamiliar library), is the uncertainty named explicitly and scheduled as a spike task in wave 0, rather than hidden behind a large estimate?
+
+**STOP.** Present the most important question from this section to the user, even if your recommendation is clear. If no issues are found, state your assessment in one sentence and ask the user to confirm before moving on. If issues exist, present them ONE AT A TIME: describe the problem concretely, present 2-3 options, state your recommendation, and explain WHY.
+
 
 ## Cross-Stage Traceability
 
@@ -1154,11 +1046,12 @@ Evaluate:
 |---|---|---|
 | Dependency Graph | REQUIRED | Ordering and parallel opportunities explicit. No circular dependencies. |
 | Dependency Waves | REQUIRED | Every task belongs to a wave. Each wave has an exit gate and dependency statement. |
-| Task List | REQUIRED | Each task: ID, description, acceptance criterion link, verification command, and effort estimate (S/M/L). |
+| Task List | REQUIRED | Each task row includes ID, description, acceptance criterion, verification command, and effort estimate (S/M/L). Every task must also carry a minutes estimate within the 2-5 minute budget. |
 | Acceptance Mapping | REQUIRED | Every spec criterion is covered by at least one task. |
 | Risk Assessment | optional | If present: per-task or per-wave risk identification with likelihood, impact, and mitigation strategy. |
 | Boundary Map | optional | If present: per-wave or per-task interface contracts listing what each task produces (exports) and consumes (imports) from other tasks. |
 | WAIT_FOR_CONFIRM | REQUIRED | Explicit marker present. Status: pending until user approves. |
+| No-Placeholder Scan | optional | If present: confirmation that a text scan for \`TODO\`, \`TBD\`, \`FIXME\`, \`<fill-in>\`, \`<your-*-here>\`, \`xxx\`, or bare ellipses has zero hits in the task list. A placeholder is a deferred decision masquerading as a plan. |
 
 
 
@@ -1201,36 +1094,20 @@ When this stage ends, report one of:
 
 ## Stage Completion Protocol
 
-When all required gates are satisfied and the artifact is written:
+Apply the **Shared Stage Completion Protocol** from \`.cclaw/skills/using-cclaw/SKILL.md\` with these parameters — do NOT re-derive the generic steps here.
 
-0. **Delegation pre-flight** (BLOCKING):
-   - Mandatory agents for this stage: \`planner\`.
-   - For each mandatory agent: confirm it was dispatched (via Task/delegate) and completed, OR record an explicit waiver with reason in \`.cclaw/state/delegation-log.json\`.
-   - Write a JSON entry per agent: \`{ "stage": "plan", "agent": "<name>", "mode": "mandatory", "status": "completed"|"waived", "waiverReason": "<if waived>", "ts": "<ISO timestamp>" }\`.
-   - If the harness does not support delegation, record status \`"waived"\` with reason \`"harness_limitation"\`.
-   - **Do NOT proceed to step 1 until every mandatory agent has an entry in the delegation log.**
-1. **Update \`.cclaw/state/flow-state.json\`:**
-   - Set \`currentStage\` to \`"tdd"\`
-   - Add \`"plan"\` to \`completedStages\` array
-   - Move all gate IDs for this stage (\`plan_tasks_sliced_2_5_min\`, \`plan_dependency_graph_written\`, \`plan_dependency_waves_defined\`, \`plan_verification_steps_defined\`, \`plan_acceptance_mapped\`, \`plan_wait_for_confirm\`) into \`stageGateCatalog.plan.passed\`
-   - Clear \`stageGateCatalog.plan.blocked\`
-   - For each passed gate, add an entry to \`guardEvidence\`: \`"<gate_id>": "<artifact path or excerpt proving the gate>"\`. Do NOT leave \`guardEvidence\` empty.
-2. **Persist artifact** at \`.cclaw/artifacts/05-plan.md\`. Do NOT manually copy into \`.cclaw/runs/\`; archival is handled by \`cclaw archive\`.
-3. **Doctor pre-flight** — Run \`npx cclaw doctor\` (or the installed cclaw binary). If any check fails, resolve the issue (missing delegation entry, artifact section, gate evidence) and re-run until all checks pass. Do NOT proceed to the next step while doctor reports failures.
-4. Tell the user:
+**Completion Parameters**
+- \`stage\` — \`plan\`
+- \`next\` — \`tdd\` (full TDD cycle: RED (failing tests), GREEN (minimal implementation), REFACTOR (cleanup). One plan slice at a time with strict traceability.)
+- \`gates\` — \`plan_tasks_sliced_2_5_min\`, \`plan_dependency_graph_written\`, \`plan_dependency_waves_defined\`, \`plan_verification_steps_defined\`, \`plan_acceptance_mapped\`, \`plan_wait_for_confirm\`
+- \`artifact\` — \`.cclaw/artifacts/05-plan.md\`
+- \`mandatory\` — \`planner\`
 
-   > **Stage \`plan\` complete.** Next: **tdd** — full TDD cycle: RED (failing tests), GREEN (minimal implementation), REFACTOR (cleanup). One plan slice at a time with strict traceability.
-   >
-   > Run \`/cc-next\` to continue.
-
-**STOP.** Do not load the next stage skill yourself. The user will run \`/cc-next\` when ready (same session or new session).
+When all required gates are satisfied and the artifact is written, execute the shared procedure (delegation pre-flight → flow-state update → artifact persistence → \`npx cclaw doctor\` → user handoff → STOP) using the parameters above. If any check fails, resolve the issue and re-run before proceeding.
 
 ## Resume Protocol
 
-When resuming a stage in a NEW session (artifact exists but gates are not all passed in flow-state):
-1. Read the existing artifact and check which gates can be verified from artifact evidence.
-2. For each unverified gate, ask the user to confirm ONE gate at a time. Do NOT batch multiple gate confirmations in a single message.
-3. Update \`guardEvidence\` for each confirmed gate before proceeding.
+When resuming this stage in a NEW session (artifact exists but not all of \`plan_tasks_sliced_2_5_min\`, \`plan_dependency_graph_written\`, \`plan_dependency_waves_defined\`, \`plan_verification_steps_defined\`, \`plan_acceptance_mapped\`, \`plan_wait_for_confirm\` are passed), follow the **Shared Resume Protocol** in \`.cclaw/skills/using-cclaw/SKILL.md\` — confirm one gate at a time, update \`guardEvidence\` for each, never batch confirmations.
 
 ## Progressive Disclosure
 
@@ -1402,51 +1279,28 @@ Contrasting samples to calibrate the quality bar for this stage. Read before wri
 
 **Why it matters:** Code written before a failing test is guessing validated after the fact. The RED failure IS the specification — without it, the GREEN pass proves nothing about the intended behavior.
 
+## Living Examples by Domain
+
+Use the row matching your project shape to calibrate voice, specificity, and command choice. The rows are deliberately terse — copy the **shape**, not the text.
+
+**Web app (full-stack) — RED→GREEN→REFACTOR:** RED: \`pnpm playwright test orders-live.spec.ts\` → timeout waiting for row update. GREEN: wired SSE event → row rerenders via \`useOrderFeed\`. REFACTOR: extracted \`applyOrderEvent(row, event)\` pure helper; 87/87 tests still pass.
+
+**CLI tool — RED→GREEN→REFACTOR:** RED: \`tests/unit/cli-parse.test.ts\` expects \`--dry-run\` flag → \`unknown option\` error. GREEN: added to the Zod parser; 19/19 pass. REFACTOR: hoisted the dry-run formatter into \`src/cli/format.ts\` shared with \`status\`.
+
+**Library / SDK — RED→GREEN→REFACTOR:** RED: \`tests/unit/hook-schema.test.ts\` imports \`validateHookDocument\` from package root → \`export not found\`. GREEN: added re-export + types. REFACTOR: renamed internal \`__validate\` to \`validateHookDocument\` so the export name matches the source.
+
+**Data pipeline / ETL — RED→GREEN→REFACTOR:** RED: \`dbt test --select fact_orders\` → \`unique test on (order_id, event_ts)\` fails on re-run. GREEN: added \`row_number()\` dedup in the staging model. REFACTOR: extracted the dedup CTE into \`int_orders_deduped\` for reuse by \`fact_returns\`.
+
 ## Examples
 
-Concrete artifact samples. These mirror the exact heading levels agents must use when authoring the stage artifact (all H2 \`##\` sections), so they are presented inside a markdown fence to avoid collapsing into the SKILL outline.
+Full artifact sample for this stage lives at \`.cclaw/references/stages/tdd-examples.md\`. Open it when you need a complete reference; do NOT paste the example into the artifact verbatim — it is a shape guide, not a template.
 
-\`\`\`markdown
-## RED Evidence
-
-| Slice | Test name | Command | Failure output summary |
-| --- | --- | --- | --- |
-| S-1 (event schema + dedupe) | counts unique keys and unread items | \`\`\`pnpm vitest run tests/unit/dedupe-feed.test.ts\`\`\` | Cannot find module '../notificationFeed' |
-| S-2 (publisher outbox) | publishes event to outbox with dedupe key | \`\`\`pnpm vitest run tests/integration/publisher.test.ts\`\`\` | publishToOutbox is not a function |
-| S-3 (client feed + fallback) | shows notification within 5s via SSE | \`\`\`pnpm playwright test tests/e2e/notification-feed.spec.ts\`\`\` | Element [data-testid="feed-item"] not found |
-
-## Acceptance Mapping
-
-| Slice | Plan task ID | Spec criterion ID |
-| --- | --- | --- |
-| S-1 | T-1 | AC-1, AC-2 |
-| S-2 | T-2 | AC-1 |
-| S-3 | T-3 | AC-1, AC-2, AC-3 |
-
-## Failure Analysis
-
-| Slice | Expected missing behavior | Actual failure reason |
-| --- | --- | --- |
-| S-1 | notificationFeed module does not exist yet | Module import fails — correct: implementation missing |
-| S-2 | publishToOutbox function not implemented | Function not found — correct: write path missing |
-| S-3 | Feed UI not rendered, SSE not connected | DOM element missing — correct: client component not built |
-
-## GREEN Evidence
-
-- Full suite command: \`\`\`pnpm vitest run && pnpm playwright test\`\`\`
-- Full suite result: 47 tests passed (3 new + 44 existing), 0 failed, 0 skipped
-
-## REFACTOR Notes
-
-- What changed: Extracted \`\`\`mergeLatestByDedupeKey\`\`\` helper from inline loop in \`\`\`summarizeDedupedFeed\`\`\`; moved SSE reconnect logic into \`\`\`useSSEConnection\`\`\` hook.
-- Why: Dedupe merge logic is reused by both publisher and client; reconnect logic was duplicated across components.
-- Behavior preserved: Full suite re-run confirms 47/47 pass after refactor.
-
-## Traceability
-
-- Plan task IDs: T-1, T-2, T-3
-- Spec criterion IDs: AC-1, AC-2, AC-3
-\`\`\`
+Summary of what the reference covers:
+- RED evidence per slice (failing test output)
+- Acceptance mapping per slice
+- GREEN evidence (full-suite pass)
+- REFACTOR notes with behavior-preservation confirmation
+- Test-pyramid shape + prove-it reproduction when applicable
 
 ## Anti-Pattern: "Code Before Failing Test"
 
@@ -1466,6 +1320,8 @@ These are thinking instincts, not a checklist. Let them shape your perspective t
 8. **Test Pyramid Shape** — Healthy test suites look like a pyramid: many small fast tests at the base, fewer medium integration tests in the middle, few large end-to-end tests at the top. Each layer catches a different class of bug; none of them substitutes for another. If your suite is top-heavy (mostly E2E) it is slow and flaky; if it is base-only it misses integration contracts. During TDD, default to the smallest layer that can prove the behavior.
 9. **Prove-It Pattern (bug fixes)** — For any reported regression or hotfix, the FIRST test is a reproduction — it must fail without your fix, pass with your fix, and fail again if the fix is reverted. This is the only way to prove you fixed the reported bug and not a superficially similar one. Skipping this step is how bugs come back two releases later wearing a different name.
 10. **Test Size Model** — Size tests by scope, not by name: Small = pure logic, no I/O, <50ms; Medium = one process boundary, possibly filesystem or an in-memory DB; Large = multi-process / network / real external service. Small tests are the default; escalate to Medium only when a real boundary must be exercised, and to Large only for end-to-end user journeys. Record the size class in the TDD artifact so reviewers can sanity-check the pyramid shape.
+11. **State Over Interaction** — Assert on observable outcomes (return values, state changes, persisted data, HTTP responses) — NOT on which helper methods were called, how many times, or in what order. Interaction-style assertions (\`expect(mock.foo).toHaveBeenCalledWith(...)\` without a state assertion) couple tests to implementation and shatter under harmless refactors. Use mocks only at trust boundaries (network, filesystem, time); for everything inside the module, let state do the asserting. If you cannot observe the outcome without a mock-spy, rework the seam before writing the test.
+12. **Beyoncé Rule** — If you liked it, you should have put a test on it. Every surface that a caller can observe — public API, CLI flag, config key, exit code, persisted schema — is a contract, and every contract without a test is a silent regression waiting to happen. When a bug or production incident reveals an uncovered surface, the fix is never 'patch the code'; it is 'patch the code AND add the test that would have caught it'. Untested behavior does not exist for future refactors — it only exists until somebody accidentally removes it.
 
 ## Interaction Protocol
 1. Pick one planned slice at a time.
@@ -1482,6 +1338,50 @@ These are thinking instincts, not a checklist. Let them shape your perspective t
 ## Wave Execution Mode
 
 After plan approval (**WAIT_FOR_CONFIRM** / \`plan_wait_for_confirm\` satisfied), process **all tasks in the current dependency wave** sequentially: **RED → GREEN → REFACTOR** per task, recording evidence per slice. **Stop** only on **BLOCKED**, a test failure that **requires user input**, or **wave completion** (every task in the wave has the required RED / GREEN / REFACTOR evidence per the plan artifact).
+
+### Walkthrough — Wave 1 with 3 tasks
+
+The example below is **illustrative only** — do not copy the command names blindly, match them to your stack.
+
+Assume Wave 1 from the plan artifact contains three tasks:
+
+| Task ID | Description | AC | Verification |
+|---|---|---|---|
+| T-1 \`[~3m]\` | Add \`User.emailNormalized\` column | AC-1 | \`npm test -- users/schema\` |
+| T-2 \`[~4m]\` | Normalize on write in \`UserRepo.save\` | AC-1 | \`npm test -- users/repo\` |
+| T-3 \`[~3m]\` | Reject duplicates in \`UserService.signup\` | AC-2 | \`npm test -- users/service\` |
+
+**Execution transcript** (one slice at a time, evidence captured per step):
+
+**T-1 — RED**
+
+> Run: \`npm test -- users/schema\` → **FAIL** (missing column: \`emailNormalized\`). Captured the failure stack as RED evidence. No production code touched yet.
+
+**T-1 — GREEN**
+
+> Added the column in the schema module. Re-ran \`npm test -- users/schema\` → **PASS**. Ran the full suite \`npm test\` → **PASS**. Captured both outputs as GREEN evidence.
+
+**T-1 — REFACTOR**
+
+> Extracted the column definition into a shared \`NormalizedEmail\` type used by T-2/T-3. Re-ran \`npm test\` → **PASS**. Captured REFACTOR note: "Extracted NormalizedEmail type to keep T-2/T-3 DRY; zero behavior change, all tests still green."
+
+**T-2 — RED / GREEN / REFACTOR**: same shape — write the repo test that expects normalised writes, watch it fail (RED), implement normalisation inside \`UserRepo.save\` only (GREEN), then refactor the normaliser out of the repo into a helper shared with T-3 (REFACTOR).
+
+**T-3 — RED / GREEN / REFACTOR**: write the service-level duplicate test that expects a rejection, watch it fail (RED), add the duplicate check in \`UserService.signup\` (GREEN), refactor the error message into a named constant (REFACTOR).
+
+**Wave gate check**
+
+After T-3 REFACTOR, before declaring Wave 1 done:
+
+1. Run the **full suite** (\`npm test\`) one final time → **PASS** captured as wave-exit evidence.
+2. Verify the TDD artifact contains RED, GREEN, and REFACTOR evidence for T-1, T-2, **and** T-3. No partial waves.
+3. Only now mark Wave 1 complete. Wave 2 cannot start until this step.
+
+**When to stop mid-wave (do NOT push through)**
+
+- A RED test fails for a reason you did not predict (e.g. an unrelated flaky test) → **pause**, diagnose, log an operational-self-improvement entry, and decide with the user before proceeding.
+- A GREEN step would require touching code outside the task's acceptance criterion → **pause**, the task is scoped wrong; adjust the plan or open a follow-up task.
+- The same RED failure reappears after a GREEN change → **escalate** per the 3-attempts rule; do not keep patching.
 
 
 ## Required Gates
@@ -1554,6 +1454,15 @@ Evaluate:
 - Is there captured RED evidence from running the reproduction WITHOUT the fix applied?
 - Is there captured GREEN evidence from the same reproduction AFTER the fix was applied?
 - Is there a note confirming the reproduction test fails again if the fix is reverted (or equivalent evidence that the test is actually pinned to this fix)?
+
+### State-over-Interaction + Beyoncé Coverage
+
+Evaluate:
+- Do assertions target observable state (return values, persisted data, HTTP responses, logs) rather than which internal helpers were called?
+- Are mocks/spies used only at true trust boundaries (network, filesystem, time, external services), not for module-internal collaborators?
+- For every public surface touched in this slice (exported API, CLI flag, config key, env var, exit code, schema field) — does at least one test observe it?
+- If a bug or review finding revealed an uncovered surface, was a test added alongside the fix, not just the code change?
+- Are interaction-style assertions (e.g. \`toHaveBeenCalledWith\` without a state assertion) justified by an explicit boundary comment, or flagged for follow-up?
 
 ## Verification Before Completion
 
@@ -1665,36 +1574,20 @@ When this stage ends, report one of:
 
 ## Stage Completion Protocol
 
-When all required gates are satisfied and the artifact is written:
+Apply the **Shared Stage Completion Protocol** from \`.cclaw/skills/using-cclaw/SKILL.md\` with these parameters — do NOT re-derive the generic steps here.
 
-0. **Delegation pre-flight** (BLOCKING):
-   - Mandatory agents for this stage: \`test-author\`.
-   - For each mandatory agent: confirm it was dispatched (via Task/delegate) and completed, OR record an explicit waiver with reason in \`.cclaw/state/delegation-log.json\`.
-   - Write a JSON entry per agent: \`{ "stage": "tdd", "agent": "<name>", "mode": "mandatory", "status": "completed"|"waived", "waiverReason": "<if waived>", "ts": "<ISO timestamp>" }\`.
-   - If the harness does not support delegation, record status \`"waived"\` with reason \`"harness_limitation"\`.
-   - **Do NOT proceed to step 1 until every mandatory agent has an entry in the delegation log.**
-1. **Update \`.cclaw/state/flow-state.json\`:**
-   - Set \`currentStage\` to \`"review"\`
-   - Add \`"tdd"\` to \`completedStages\` array
-   - Move all gate IDs for this stage (\`tdd_red_test_written\`, \`tdd_red_failure_captured\`, \`tdd_trace_to_acceptance\`, \`tdd_red_failure_reason_verified\`, \`tdd_green_full_suite\`, \`tdd_refactor_completed\`, \`tdd_refactor_notes_written\`, \`tdd_traceable_to_plan\`) into \`stageGateCatalog.tdd.passed\`
-   - Clear \`stageGateCatalog.tdd.blocked\`
-   - For each passed gate, add an entry to \`guardEvidence\`: \`"<gate_id>": "<artifact path or excerpt proving the gate>"\`. Do NOT leave \`guardEvidence\` empty.
-2. **Persist artifact** at \`.cclaw/artifacts/06-tdd.md\`. Do NOT manually copy into \`.cclaw/runs/\`; archival is handled by \`cclaw archive\`.
-3. **Doctor pre-flight** — Run \`npx cclaw doctor\` (or the installed cclaw binary). If any check fails, resolve the issue (missing delegation entry, artifact section, gate evidence) and re-run until all checks pass. Do NOT proceed to the next step while doctor reports failures.
-4. Tell the user:
+**Completion Parameters**
+- \`stage\` — \`tdd\`
+- \`next\` — \`review\` (two-layer review stage: spec compliance first, then code quality and production readiness. Section-by-section with severity discipline.)
+- \`gates\` — \`tdd_red_test_written\`, \`tdd_red_failure_captured\`, \`tdd_trace_to_acceptance\`, \`tdd_red_failure_reason_verified\`, \`tdd_green_full_suite\`, \`tdd_refactor_completed\`, \`tdd_refactor_notes_written\`, \`tdd_traceable_to_plan\`
+- \`artifact\` — \`.cclaw/artifacts/06-tdd.md\`
+- \`mandatory\` — \`test-author\`
 
-   > **Stage \`tdd\` complete.** Next: **review** — two-layer review stage: spec compliance first, then code quality and production readiness. Section-by-section with severity discipline.
-   >
-   > Run \`/cc-next\` to continue.
-
-**STOP.** Do not load the next stage skill yourself. The user will run \`/cc-next\` when ready (same session or new session).
+When all required gates are satisfied and the artifact is written, execute the shared procedure (delegation pre-flight → flow-state update → artifact persistence → \`npx cclaw doctor\` → user handoff → STOP) using the parameters above. If any check fails, resolve the issue and re-run before proceeding.
 
 ## Resume Protocol
 
-When resuming a stage in a NEW session (artifact exists but gates are not all passed in flow-state):
-1. Read the existing artifact and check which gates can be verified from artifact evidence.
-2. For each unverified gate, ask the user to confirm ONE gate at a time. Do NOT batch multiple gate confirmations in a single message.
-3. Update \`guardEvidence\` for each confirmed gate before proceeding.
+When resuming this stage in a NEW session (artifact exists but not all of \`tdd_red_test_written\`, \`tdd_red_failure_captured\`, \`tdd_trace_to_acceptance\`, \`tdd_red_failure_reason_verified\`, \`tdd_green_full_suite\`, \`tdd_refactor_completed\`, \`tdd_refactor_notes_written\`, \`tdd_traceable_to_plan\` are passed), follow the **Shared Resume Protocol** in \`.cclaw/skills/using-cclaw/SKILL.md\` — confirm one gate at a time, update \`guardEvidence\` for each, never batch confirmations.
 
 ## Progressive Disclosure
 
@@ -1860,59 +1753,16 @@ Contrasting samples to calibrate the quality bar for this stage. Read before wri
 
 **Why it matters:** "Make it better" is not a success criterion — an agent cannot know when it is done. State the observable condition that proves success.
 
+
 ## Examples
 
-Concrete artifact samples. These mirror the exact heading levels agents must use when authoring the stage artifact (all H2 \`##\` sections), so they are presented inside a markdown fence to avoid collapsing into the SKILL outline.
+Full artifact sample for this stage lives at \`.cclaw/references/stages/brainstorm-examples.md\`. Open it when you need a complete reference; do NOT paste the example into the artifact verbatim — it is a shape guide, not a template.
 
-\`\`\`markdown
-## Context
-
-- **Project state:** Monorepo with CI pipeline using custom release scripts. Release checks are scattered across shell scripts with no shared validation logic.
-- **Relevant existing code/patterns:** \`scripts/pre-publish.sh\` does metadata checks. \`src/release/\` has partial validation helpers.
-
-## Problem
-
-- **What we're solving:** release checks are fragile and inconsistent between CI and local runs. Invalid metadata sometimes reaches npm publish.
-- **Success criteria:** invalid release preconditions are caught before publish with explicit operator feedback, in both CI and local workflows.
-- **Constraints:** no new runtime dependencies; must work within existing CI pipeline structure.
-
-## Clarifying Questions
-
-| # | Question | Answer | Decision impact |
-| --- | --- | --- | --- |
-| 1 | If release metadata is invalid, should we block publishing hard or only warn? | Block hard. | Validation becomes a mandatory gate — no warning-only fallback. |
-| 2 | Should the validation logic live in a reusable module or stay as shell scripts? | Reusable module. | Architecture: shared TypeScript module imported by CI and local tooling, not duplicated shell scripts. |
-| 3 | For v1, prioritize rapid delivery or maximum configurability? | Rapid delivery. | Minimal deterministic validation surface; defer plugin/config system to v2. |
-
-## Approaches
-
-| Approach | Architecture | Trade-offs | Recommendation |
-| --- | --- | --- | --- |
-| A: Reusable validation module | Shared TS module with typed validators, imported by CI scripts and local CLI. Existing \`pre-publish.sh\` calls the module. | Medium upfront effort, high reuse. Requires test coverage for the module. | **Recommended** — best balance of reuse and delivery speed. |
-| B: Hardened shell scripts | Keep existing script approach, add stricter checks and error messages. | Lowest effort. Weak reuse, CI/local divergence risk grows over time. | Viable fallback if TS module is blocked. |
-| C: Full release framework | New release orchestrator with plugin system, config files, rollback commands. | Maximum flexibility. High risk, delivery delay, over-engineered for current needs. | Not recommended for v1. |
-
-## Selected Direction
-
-- **Approach:** A — Reusable validation module
-- **Rationale:** shared TS module gives consistent behavior in CI and local, avoids script duplication, and stays within the no-new-dependency constraint.
-- **Approval:** approved
-
-## Design
-
-- **Architecture:** single \`release-validator\` module in \`src/release/\` exporting typed check functions. CI script and local CLI both import and run the same checks.
-- **Key components:** \`validateMetadata()\`, \`validateChangelog()\`, \`validateVersion()\` — each returns a typed result with error details. A \`runAll()\` orchestrator runs checks and exits non-zero on any failure.
-- **Data flow:** package.json + CHANGELOG.md → validator module → structured result → CI/CLI renders human-readable report.
-
-## Assumptions and Open Questions
-
-- **Assumptions:** CI remains the primary execution path; existing release metadata files remain the source of truth; v1 prioritizes determinism over customization.
-- **Open questions:** What exact rollback sequence for failed publish? Should status output include machine-readable JSON alongside markdown?
-
-## Notes for the next stage
-
-Carry the no-new-dependency constraint and hard-block behavior directly into scope in/out boundaries.
-\`\`\`
+Summary of what the reference covers:
+- Problem framing (problem, success, constraints)
+- Candidate approaches with trade-offs
+- Recommended direction + open questions
+- Clarification log and decision record
 
 ## Anti-Pattern: "This Is Too Simple To Need A Design"
 
@@ -2033,30 +1883,20 @@ When this stage ends, report one of:
 
 ## Stage Completion Protocol
 
-When all required gates are satisfied and the artifact is written:
+Apply the **Shared Stage Completion Protocol** from \`.cclaw/skills/using-cclaw/SKILL.md\` with these parameters — do NOT re-derive the generic steps here.
 
-1. **Update \`.cclaw/state/flow-state.json\`:**
-   - Set \`currentStage\` to \`"scope"\`
-   - Add \`"brainstorm"\` to \`completedStages\` array
-   - Move all gate IDs for this stage (\`brainstorm_context_explored\`, \`brainstorm_idea_understood\`, \`brainstorm_approaches_compared\`, \`brainstorm_direction_approved\`, \`brainstorm_artifact_reviewed\`) into \`stageGateCatalog.brainstorm.passed\`
-   - Clear \`stageGateCatalog.brainstorm.blocked\`
-   - For each passed gate, add an entry to \`guardEvidence\`: \`"<gate_id>": "<artifact path or excerpt proving the gate>"\`. Do NOT leave \`guardEvidence\` empty.
-2. **Persist artifact** at \`.cclaw/artifacts/01-brainstorm.md\`. Do NOT manually copy into \`.cclaw/runs/\`; archival is handled by \`cclaw archive\`.
-3. **Doctor pre-flight** — Run \`npx cclaw doctor\` (or the installed cclaw binary). If any check fails, resolve the issue (missing delegation entry, artifact section, gate evidence) and re-run until all checks pass. Do NOT proceed to the next step while doctor reports failures.
-4. Tell the user:
+**Completion Parameters**
+- \`stage\` — \`brainstorm\`
+- \`next\` — \`scope\` (strategic scope stage. Challenge premise and lock explicit in-scope/out-of-scope boundaries using CEO-level thinking.)
+- \`gates\` — \`brainstorm_context_explored\`, \`brainstorm_idea_understood\`, \`brainstorm_approaches_compared\`, \`brainstorm_direction_approved\`, \`brainstorm_artifact_reviewed\`
+- \`artifact\` — \`.cclaw/artifacts/01-brainstorm.md\`
+- \`mandatory\` — none
 
-   > **Stage \`brainstorm\` complete.** Next: **scope** — strategic scope stage. Challenge premise and lock explicit in-scope/out-of-scope boundaries using CEO-level thinking.
-   >
-   > Run \`/cc-next\` to continue.
-
-**STOP.** Do not load the next stage skill yourself. The user will run \`/cc-next\` when ready (same session or new session).
+When all required gates are satisfied and the artifact is written, execute the shared procedure (delegation pre-flight → flow-state update → artifact persistence → \`npx cclaw doctor\` → user handoff → STOP) using the parameters above. If any check fails, resolve the issue and re-run before proceeding.
 
 ## Resume Protocol
 
-When resuming a stage in a NEW session (artifact exists but gates are not all passed in flow-state):
-1. Read the existing artifact and check which gates can be verified from artifact evidence.
-2. For each unverified gate, ask the user to confirm ONE gate at a time. Do NOT batch multiple gate confirmations in a single message.
-3. Update \`guardEvidence\` for each confirmed gate before proceeding.
+When resuming this stage in a NEW session (artifact exists but not all of \`brainstorm_context_explored\`, \`brainstorm_idea_understood\`, \`brainstorm_approaches_compared\`, \`brainstorm_direction_approved\`, \`brainstorm_artifact_reviewed\` are passed), follow the **Shared Resume Protocol** in \`.cclaw/skills/using-cclaw/SKILL.md\` — confirm one gate at a time, update \`guardEvidence\` for each, never batch confirmations.
 
 ## Progressive Disclosure
 
