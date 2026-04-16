@@ -287,7 +287,18 @@ export async function lintArtifact(projectRoot: string, stage: FlowStage): Promi
   const raw = await fs.readFile(absFile, "utf8");
   const sections = extractH2Sections(raw);
 
+  const isTrivialOverride =
+    schema.trivialOverrideSections &&
+    schema.trivialOverrideSections.length > 0 &&
+    /trivial.change|mini.design|escape.hatch/iu.test(raw);
+  const overrideSet = isTrivialOverride
+    ? new Set(schema.trivialOverrideSections!.map((s) => normalizeHeadingTitle(s).toLowerCase()))
+    : null;
+
   for (const v of schema.artifactValidation) {
+    const effectiveRequired = overrideSet
+      ? overrideSet.has(normalizeHeadingTitle(v.section).toLowerCase()) ? true : false
+      : v.required;
     const hasHeading = headingPresent(sections, v.section);
     const body = hasHeading ? sectionBodyByName(sections, v.section) : null;
     const validation = body === null
@@ -296,7 +307,7 @@ export async function lintArtifact(projectRoot: string, stage: FlowStage): Promi
     const found = hasHeading && validation.ok;
     findings.push({
       section: v.section,
-      required: v.required,
+      required: effectiveRequired,
       rule: v.validationRule,
       found,
       details: found

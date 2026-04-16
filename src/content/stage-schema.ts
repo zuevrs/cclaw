@@ -81,6 +81,8 @@ export interface StageSchema {
   decisionRecordFormat?: string;
   /** When true, stage skill includes wave auto-execute guidance (tdd). */
   waveExecutionAllowed?: boolean;
+  /** Sections that remain required even when the trivial-change escape hatch is active (design only). */
+  trivialOverrideSections?: string[];
   /** Agent names that MUST be dispatched (or waived) before stage transition — derived from mandatory auto-subagent rows. */
   mandatoryDelegations: string[];
 }
@@ -511,7 +513,8 @@ const DESIGN: StageSchemaInput = {
     "For design baseline approval: present the full baseline. **STOP.** Do NOT proceed until user explicitly approves the design.",
     "Take a firm position on every recommendation. Do NOT hedge with 'it depends' or 'you could do either'. State your opinion, then justify it.",
     "Use pushback patterns for weak framing: if the user says 'it's just a small change', respond with 'small changes to shared interfaces have outsized blast radius — let's map it'. If 'we'll refactor later', respond with 'later never comes — show me the refactor ticket or do it now'.",
-    "When the user's proposed architecture is suboptimal, say so directly. Offer the alternative with concrete trade-offs, do not bury criticism in praise."
+    "When the user's proposed architecture is suboptimal, say so directly. Offer the alternative with concrete trade-offs, do not bury criticism in praise.",
+    "When encountering ambiguity, classify it before acting: (A) ask user for missing info, (B) enumerate interpretations and pick one with justification, (C) propose hypothesis with validation path. Do NOT silently resolve ambiguity."
   ],
   process: [
     "Read upstream artifacts (brainstorm, scope).",
@@ -613,7 +616,8 @@ const DESIGN: StageSchemaInput = {
     { name: "Owner Preference Alignment", description: "Every recommendation must align with project conventions (DRY, test style, minimal diff, edge-case rigor). Read existing patterns before recommending new ones." },
     { name: "Failure Is Information", description: "A design that fails fast and visibly is better than one that silently degrades. Map every failure mode and make it observable. Undetected failures compound." },
     { name: "Search Breadth Before Depth", description: "Before committing to a design path, survey the full solution space: stdlib, existing code, open-source, prior art. A 30-minute search can save a 30-hour custom build." },
-    { name: "Outside Voice", description: "When confidence is high and options seem obvious, that is exactly when to seek contradiction. Ask: what would a skeptical reviewer challenge here? What assumption am I not questioning?" }
+    { name: "Outside Voice", description: "When confidence is high and options seem obvious, that is exactly when to seek contradiction. Ask: what would a skeptical reviewer challenge here? What assumption am I not questioning?" },
+    { name: "Ambiguity Classification", description: "Before resolving any unclear requirement, classify it: (A) Insufficient information — ask the user. (B) Multiple valid interpretations — enumerate and pick with justification. (C) Genuinely unknown — propose hypothesis and validation path. Never treat all ambiguity the same way." }
   ],
   reviewSections: [
     {
@@ -677,17 +681,23 @@ const DESIGN: StageSchemaInput = {
     traceabilityRule: "Every architecture decision must trace to a scope boundary. Every downstream spec requirement must trace to a design decision."
   },
   artifactValidation: [
+    { section: "Codebase Investigation", required: true, validationRule: "Must list blast-radius files with current responsibilities and discovered patterns." },
+    { section: "Search Before Building", required: true, validationRule: "For each technical choice: Layer 1 (exact match), Layer 2 (partial match), Layer 3 (inspiration), EUREKA labels with reuse-first default." },
     { section: "Architecture Boundaries", required: true, validationRule: "Must list component boundaries with ownership." },
     { section: "Architecture Diagram", required: true, validationRule: "At least one diagram (ASCII, Mermaid, or image) showing component boundaries and data flow direction." },
     { section: "Data Flow", required: true, validationRule: "Must include happy path, nil input, empty input, upstream error paths." },
     { section: "Failure Mode Table", required: true, validationRule: "Each failure mode has: trigger, detection, mitigation, user impact." },
     { section: "Test Strategy", required: true, validationRule: "Must define unit/integration/e2e expectations with coverage targets." },
+    { section: "Performance Budget", required: true, validationRule: "For each critical path: metric name, target threshold, and measurement method." },
     { section: "What Already Exists", required: true, validationRule: "For each sub-problem: existing code/library found (Layer 1-3/EUREKA label), reuse decision, and adaptation needed." },
     { section: "NOT in scope", required: true, validationRule: "Work considered and explicitly deferred with one-line rationale." },
     { section: "Parallelization Strategy", required: false, validationRule: "If multi-module: dependency table, parallel lanes, conflict flags." },
     { section: "Unresolved Decisions", required: false, validationRule: "If any: what info is missing, who provides it, default if unanswered." },
+    { section: "Interface Contracts", required: false, validationRule: "If present: for each module boundary list produces (outputs) and consumes (inputs) with data types." },
+    { section: "Patterns to Mirror", required: false, validationRule: "If present: list discovered codebase patterns to follow, with file references and rationale for each." },
     { section: "Completion Dashboard", required: true, validationRule: "Lists every review section with status (clear / issues-found-resolved / issues-open), decision count, and unresolved items (or 'None')." }
   ],
+  trivialOverrideSections: ["Architecture Boundaries", "NOT in scope", "Completion Dashboard"],
   namedAntiPattern: {
     title: "Architecture Will Emerge While Coding",
     description: "Emergent architecture is a myth for non-trivial systems. What actually emerges is accidental complexity, incompatible module boundaries, and tech debt that costs 10x to fix later. Lock architecture explicitly before writing code."
@@ -737,7 +747,8 @@ const SPEC: StageSchemaInput = {
     "Resolve ambiguity before moving to plan. Challenge vague language.",
     "Capture assumptions explicitly, not implicitly.",
     "Require user confirmation on the written spec. **STOP.** Do NOT proceed to plan until user approves.",
-    "For each criterion, ask: how would you test this? If the answer is unclear, rewrite."
+    "For each criterion, ask: how would you test this? If the answer is unclear, rewrite.",
+    "When encountering ambiguity, classify it before acting: (A) ask user for missing info, (B) enumerate interpretations and pick one with justification, (C) propose hypothesis with validation path. Do NOT silently resolve ambiguity."
   ],
   process: [
     "Define measurable acceptance criteria.",
@@ -806,7 +817,8 @@ const SPEC: StageSchemaInput = {
   cognitivePatterns: [
     { name: "Observable Over Descriptive", description: "Requirements describe what can be observed, not what should feel like. Replace every adjective with a measurement." },
     { name: "Boundary Precision", description: "Every acceptance criterion has boundary conditions. What is the minimum valid input? Maximum? What happens at the edges?" },
-    { name: "Assumption Surfacing", description: "Implicit assumptions are invisible requirements. Force every assumption into an explicit statement. If you cannot name the assumption, you have not found it yet." }
+    { name: "Assumption Surfacing", description: "Implicit assumptions are invisible requirements. Force every assumption into an explicit statement. If you cannot name the assumption, you have not found it yet." },
+    { name: "Ambiguity Classification", description: "Before resolving any unclear requirement, classify it: (A) Insufficient information — ask the user. (B) Multiple valid interpretations — enumerate and pick with justification. (C) Genuinely unknown — propose hypothesis and validation path. Never treat all ambiguity the same way." }
   ],
   reviewSections: [],
   completionStatus: ["DONE", "DONE_WITH_CONCERNS", "BLOCKED"],
@@ -816,12 +828,17 @@ const SPEC: StageSchemaInput = {
     traceabilityRule: "Every acceptance criterion must trace to a design decision. Every downstream plan task must trace to a spec criterion."
   },
   artifactValidation: [
-    { section: "Acceptance Criteria", required: true, validationRule: "Each criterion is observable, measurable, and falsifiable." },
+    { section: "Acceptance Criteria", required: true, validationRule: "Each criterion is observable, measurable, and falsifiable. Table should include a Design Decision Ref column tracing back to design artifact." },
     { section: "Edge Cases", required: true, validationRule: "At least one boundary and one error condition per criterion." },
     { section: "Constraints and Assumptions", required: true, validationRule: "All implicit assumptions surfaced. Constraints have sources." },
-    { section: "Testability Map", required: true, validationRule: "Each criterion maps to a concrete test description." },
+    { section: "Testability Map", required: true, validationRule: "Each criterion maps to a concrete test description with verification approach (unit, integration, e2e, manual) and command or manual steps." },
+    { section: "Interface Contracts", required: false, validationRule: "If present: for each module boundary list produces (outputs) and consumes (inputs) with data types." },
     { section: "Approval", required: true, validationRule: "Explicit user approval marker present." }
-  ]
+  ],
+  namedAntiPattern: {
+    title: "Implementation Will Clarify Requirements",
+    description: "Unclear specs do not become clear during coding — they become contradictory implementations, rework, and scope creep. If a requirement cannot be stated in observable, testable terms right now, it is not ready for implementation. Rewrite it until it is falsifiable."
+  }
 };
 
 // ---------------------------------------------------------------------------

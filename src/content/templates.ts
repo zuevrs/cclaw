@@ -163,12 +163,27 @@ export const ARTIFACT_TEMPLATES: Record<string, string> = {
 - Integration:
 - E2E:
 
+## Performance Budget
+| Critical path | Metric | Target | Measurement method |
+|---|---|---|---|
+|  |  |  |  |
+
 ## NOT in scope
 - 
 
 ## Parallelization Strategy
 - Parallel lanes:
 - Conflict risks:
+
+## Patterns to Mirror
+| Pattern | Source file | Rationale |
+|---|---|---|
+|  |  |  |
+
+## Interface Contracts
+| Module | Produces | Consumes |
+|---|---|---|
+|  |  |  |
 
 ## Unresolved Decisions
 | Decision | Missing info | Owner | Default |
@@ -189,9 +204,9 @@ export const ARTIFACT_TEMPLATES: Record<string, string> = {
   "04-spec.md": `# Specification Artifact
 
 ## Acceptance Criteria
-| ID | Criterion (observable/measurable/falsifiable) |
-|---|---|
-| AC-1 |  |
+| ID | Criterion (observable/measurable/falsifiable) | Design Decision Ref |
+|---|---|---|
+| AC-1 |  |  |
 
 ## Edge Cases
 | Criterion ID | Boundary case | Error case |
@@ -206,6 +221,11 @@ export const ARTIFACT_TEMPLATES: Record<string, string> = {
 | Criterion ID | Verification approach | Command/manual steps |
 |---|---|---|
 | AC-1 |  |  |
+
+## Interface Contracts
+| Module | Produces | Consumes |
+|---|---|---|
+|  |  |  |
 
 ## Approval
 - Approved by:
