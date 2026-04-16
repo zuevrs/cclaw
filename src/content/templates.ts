@@ -77,6 +77,14 @@ export const ARTIFACT_TEMPLATES: Record<string, string> = {
 - [ ] hold
 - [ ] reduce
 
+## Mode-Specific Analysis
+- **Selected mode:**
+- **Analysis:**
+  - (EXPAND: 10x opportunities, delight features)
+  - (SELECTIVE: hold-scope baseline, cherry-picked expansions)
+  - (HOLD: minimum-change-set hardening)
+  - (REDUCE: ruthless cuts, follow-up split)
+
 ## In Scope / Out of Scope
 
 ### In Scope

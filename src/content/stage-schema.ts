@@ -449,6 +449,7 @@ const SCOPE: StageSchemaInput = {
     { section: "Premise Challenge", required: true, validationRule: "Must contain explicit answers to: right problem? direct path? what if nothing?" },
     { section: "Implementation Alternatives", required: true, validationRule: "2-3 options with Name, Summary, Effort, Risk, Pros, Cons, and Reuses. Must include minimal viable and ideal architecture options." },
     { section: "Scope Mode", required: true, validationRule: "Must state selected mode and rationale with default heuristic justification." },
+    { section: "Mode-Specific Analysis", required: true, validationRule: "Must document the analysis matching the selected scope mode: EXPAND (10x and delight opportunities), SELECTIVE (hold-scope baseline then cherry-picked expansions), HOLD (minimum-change-set hardening), REDUCE (ruthless cuts and follow-up split)." },
     { section: "In Scope / Out of Scope", required: true, validationRule: "Two separate explicit lists. Out-of-scope must not be empty." },
     { section: "Discretion Areas", required: true, validationRule: "Explicit list of implementer decision zones, or 'None' if scope is fully locked." },
     { section: "Deferred Items", required: true, validationRule: "Each item has one-line rationale. If empty, state 'None' explicitly." },
