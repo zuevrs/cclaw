@@ -66,6 +66,43 @@ describe("flow command contracts", () => {
     }
   });
 
+  it("includes delegation pre-flight in completion protocol for stages with mandatory agents", async () => {
+    const root = await fs.mkdtemp(path.join(os.tmpdir(), "cclaw-delegation-protocol-"));
+    await initCclaw({ projectRoot: root });
+
+    const scopeSkill = await fs.readFile(
+      path.join(root, ".cclaw/skills/scope-shaping/SKILL.md"),
+      "utf8"
+    );
+    const designSkill = await fs.readFile(
+      path.join(root, ".cclaw/skills/engineering-design-lock/SKILL.md"),
+      "utf8"
+    );
+    const brainstormSkill = await fs.readFile(
+      path.join(root, ".cclaw/skills/brainstorming/SKILL.md"),
+      "utf8"
+    );
+
+    expect(scopeSkill).toContain("Delegation pre-flight");
+    expect(scopeSkill).toContain("delegation-log.json");
+    expect(scopeSkill).toContain("`planner`");
+    expect(designSkill).toContain("Delegation pre-flight");
+    expect(designSkill).toContain("delegation-log.json");
+    expect(brainstormSkill).not.toContain("Delegation pre-flight");
+  });
+
+  it("includes doctor pre-flight in completion protocol", async () => {
+    const root = await fs.mkdtemp(path.join(os.tmpdir(), "cclaw-doctor-protocol-"));
+    await initCclaw({ projectRoot: root });
+
+    const scopeSkill = await fs.readFile(
+      path.join(root, ".cclaw/skills/scope-shaping/SKILL.md"),
+      "utf8"
+    );
+    expect(scopeSkill).toContain("Doctor pre-flight");
+    expect(scopeSkill).toContain("cclaw doctor");
+  });
+
   it("matches golden snapshots for strict-stage content", async () => {
     const root = await fs.mkdtemp(path.join(os.tmpdir(), "cclaw-golden-"));
     await initCclaw({ projectRoot: root });
