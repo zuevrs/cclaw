@@ -639,6 +639,105 @@ async function ensureKnowledgeStore(projectRoot: string): Promise<void> {
   }
 }
 
+async function ensureCustomSkillsScaffold(projectRoot: string): Promise<void> {
+  const customDir = runtimePath(projectRoot, "custom-skills");
+  await ensureDir(customDir);
+  const readmePath = path.join(customDir, "README.md");
+  if (!(await exists(readmePath))) {
+    await writeFileSafe(readmePath, CUSTOM_SKILLS_README);
+  }
+  const examplePath = path.join(customDir, "example", "SKILL.md");
+  if (!(await exists(examplePath))) {
+    await writeFileSafe(examplePath, CUSTOM_SKILLS_EXAMPLE);
+  }
+}
+
+const CUSTOM_SKILLS_README = `# Custom Skills (sync-safe)
+
+This directory is **never overwritten** by \`cclaw sync\` or \`cclaw upgrade\`. Use it
+to add project-specific skills that complement the managed skills under
+\`.cclaw/skills/\`.
+
+## When to add a custom skill
+
+- A repeatable lens specific to **this project** (e.g. "billing-domain", "kafka-message-contracts").
+- A team convention you want every agent session to load.
+- A domain checklist that does not generalize to other projects.
+
+If the skill is general (security, performance, accessibility, etc.) prefer
+contributing it upstream instead — the managed skills receive maintenance.
+
+## File format
+
+Each skill lives at \`.cclaw/custom-skills/<folder>/SKILL.md\` with frontmatter:
+
+\`\`\`markdown
+---
+name: <kebab-case-skill-name>
+description: "One sentence describing when this skill applies. Triggers semantic routing."
+---
+
+# <Skill title>
+
+## When to use
+- ...
+
+## HARD-GATE (optional)
+A non-skippable rule, if any. Phrase it as a refusal, not a recommendation.
+
+## Algorithm / checklist
+1. ...
+2. ...
+
+## Anti-patterns
+- ...
+\`\`\`
+
+## Routing
+
+Custom skills are surfaced via the \`using-cclaw\` meta-skill at session start.
+Mention the skill name in your prompt or let the agent semantic-route to it
+based on the description.
+
+## Removing or replacing
+
+Custom skills are user-owned. Delete or edit them at any time — \`cclaw sync\`
+will not touch them.
+`;
+
+const CUSTOM_SKILLS_EXAMPLE = `---
+name: example-custom-skill
+description: "Replace this with a one-sentence description that triggers when the skill should be used. Delete or rename this folder when you add a real skill."
+---
+
+# Example Custom Skill
+
+This is a placeholder. Use it as a starting template, then delete or rename
+the \`example/\` folder.
+
+## When to use
+
+- A real, repeatable situation in **this** project that needs a consistent lens.
+
+## HARD-GATE (optional)
+
+Drop this section if no hard rule applies. Keep it crisp:
+
+> Do not <X> while <Y>.
+
+## Algorithm
+
+1. Step one — observable, file:line evidence required.
+2. Step two — produce a named artifact, not a vibe.
+3. Step three — escalate / hand off / record knowledge entry.
+
+## Anti-patterns
+
+- Treating this skill as advisory when the situation matches the trigger.
+- Loading this skill when the situation clearly does not match (context bloat).
+`;
+
+
 async function ensureSessionStateFiles(projectRoot: string): Promise<void> {
   const stateDir = runtimePath(projectRoot, "state");
   await ensureDir(stateDir);
@@ -863,6 +962,7 @@ async function materializeRuntime(projectRoot: string, config: VibyConfig, force
   await ensureSessionStateFiles(projectRoot);
   await writeAdapterManifest(projectRoot, harnesses);
   await ensureKnowledgeStore(projectRoot);
+  await ensureCustomSkillsScaffold(projectRoot);
   await writeHooks(projectRoot, config);
   await syncDisabledHarnessArtifacts(projectRoot, harnesses);
   await syncManagedGitHooks(projectRoot, config);

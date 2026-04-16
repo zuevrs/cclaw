@@ -25,7 +25,8 @@ export const REQUIRED_DIRS = [
   `${RUNTIME_ROOT}/rules`,
   `${RUNTIME_ROOT}/adapters`,
   `${RUNTIME_ROOT}/agents`,
-  `${RUNTIME_ROOT}/hooks`
+  `${RUNTIME_ROOT}/hooks`,
+  `${RUNTIME_ROOT}/custom-skills`
 ] as const;
 
 export const REQUIRED_GITIGNORE_PATTERNS = [
