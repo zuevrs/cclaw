@@ -47,6 +47,11 @@ import {
   UTILITY_SKILL_FOLDERS,
   UTILITY_SKILL_MAP
 } from "./content/utility-skills.js";
+import {
+  HARNESS_TOOL_REFS_DIR,
+  HARNESS_TOOL_REFS_INDEX_MD,
+  harnessToolRefMarkdown
+} from "./content/harness-tool-refs.js";
 import { createInitialFlowState } from "./flow-state.js";
 import { ensureDir, exists, writeFileSafe } from "./fs-utils.js";
 import { ensureGitignore, removeGitignorePatterns } from "./gitignore.js";
@@ -282,6 +287,22 @@ async function writeSkills(projectRoot: string, config?: VibyConfig): Promise<vo
     if (await exists(legacyPath)) {
       await fs.rm(legacyPath, { recursive: true, force: true });
     }
+  }
+
+  // Per-harness tool maps (A.1#4). One reference file per supported harness
+  // plus an index; stage/utility skills cite these instead of hardcoding
+  // tool names inline.
+  const harnessIds: HarnessId[] = ["claude", "cursor", "opencode", "codex"];
+  const harnessRefsDir = HARNESS_TOOL_REFS_DIR.split("/");
+  await writeFileSafe(
+    runtimePath(projectRoot, ...harnessRefsDir, "README.md"),
+    HARNESS_TOOL_REFS_INDEX_MD
+  );
+  for (const harness of harnessIds) {
+    await writeFileSafe(
+      runtimePath(projectRoot, ...harnessRefsDir, `${harness}.md`),
+      harnessToolRefMarkdown(harness)
+    );
   }
 }
 

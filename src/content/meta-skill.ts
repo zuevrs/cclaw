@@ -211,10 +211,7 @@ When a stage requires user input (approval, choice, direction):
 1. **State the decision** in one sentence.
 2. **Present options** as labeled choices (A, B, C...), one-line each, with trade-off / consequence.
 3. **Mark one option \`(recommended)\`** with a one-line reason. Do NOT use numeric "Completeness" rubrics — pick the option that best closes the decision with the smallest blast radius, lowest irreversible risk, and clearest evidence.
-4. **Use the harness ask-user tool when available:**
-   - Claude Code: \`AskUserQuestion\`
-   - Cursor: \`AskQuestion\` (options array)
-   - Codex/OpenCode: numbered list in plain text (no native ask tool).
+4. **Use the harness ask-user tool when available.** For the exact tool name and fallback, consult \`.cclaw/references/harness-tools/<harness>.md\` (one file per supported harness — claude, cursor, opencode, codex). Summary: Claude Code → \`AskUserQuestion\`; Cursor → \`AskQuestion\`; OpenCode / Codex → plain-text lettered list.
 5. **Wait for response.** Do not proceed until the user picks.
 6. **Commit to the choice.** Once decided, do not re-argue.
 
