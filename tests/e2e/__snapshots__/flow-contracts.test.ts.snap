@@ -13,7 +13,7 @@ description: "Two-layer review stage: spec compliance first, then code quality a
 > **Even if you read nothing else, do these 3 things:**
 > 1. Obey the HARD-GATE below — violating it invalidates the entire stage.
 > 2. Complete every checklist step in order and write the artifact to \`.cclaw/artifacts/07-review.md\`.
-> 3. Do not claim completion without satisfying gates: \`review_layer1_spec_compliance\`, \`review_layer2_correctness\`, \`review_layer2_security\` (+6 more).
+> 3. Do not claim completion without satisfying gates: \`review_layer1_spec_compliance\`, \`review_layer2_correctness\`, \`review_layer2_security\` (+7 more).
 >
 > **After this stage:** update \`flow-state.json\` and tell the user to run \`/cc-next\`.
 
@@ -60,7 +60,7 @@ Machine-only work should be delegated to specialist agents automatically accordi
 |---|---|---|---|---|
 | spec-reviewer | mandatory | Always in review stage. | Verify implementation against acceptance criteria with file evidence. | not required |
 | code-reviewer | mandatory | Always in review stage. | Assess correctness, maintainability, architecture, and ship risk. | not required |
-| security-reviewer | mandatory | Always in review stage. Even when no trust boundaries changed, produce an explicit 'no-change' security attestation. | Guarantee a dedicated security pass on every diff: auth, input validation, secrets, injection, privilege, and blast-radius review are never opt-in. | not required |
+| security-reviewer | mandatory | Always in review stage. Even when no trust boundaries changed, produce an explicit 'no-change' security attestation. | Guarantee a dedicated security pass on every diff: auth, input validation, secrets, injection, privilege, and blast-radius review are never opt-in. MUST load the \`security-audit\` skill and run a pattern-based sweep across the diff scope and touched modules in addition to the per-diff Layer 2 security checklist. | not required |
 | code-reviewer | conditional | When the diff exceeds 100 changed lines, touches more than 10 files, or modifies trust boundaries — dispatch a SECOND, independent code-reviewer with the adversarial-review skill loaded so the review army has at least two voices on a high-blast-radius change. | Adversarial second-opinion review on large or trust-sensitive diffs. The second reviewer treats the implementation as hostile and tries to break it (hostile-user, future-maintainer, competitor lenses) instead of sympathetically explaining it. | not required |
 
 **Gate rule:** user interaction is required only for approval/override decisions. Do not ask the user to manually trigger machine-only specialist checks.
@@ -92,7 +92,7 @@ You MUST complete these steps in order:
 4. Load upstream evidence — read TDD artifact (RED + GREEN + REFACTOR), spec, and plan. Verify evidence chain is unbroken.
 5. Layer 1: Spec Compliance — check every acceptance criterion against implementation. Verdict: pass/fail per criterion.
 6. Layer 2a: Correctness — logic errors, race conditions, boundary violations, null handling.
-7. Layer 2b: Security — input validation, auth boundaries, secrets exposure, injection vectors.
+7. Layer 2b: Security — input validation, auth boundaries, secrets exposure, injection vectors. **Mandatory:** also load and execute the \`.cclaw/skills/security-audit/SKILL.md\` utility skill (proactive pattern sweep across diff + touched modules, not just the diff itself) and merge findings into the review army. The Layer 2 security pass is not complete until the audit sweep records a finding count (0 acceptable) with file:line evidence for every Critical.
 8. Layer 2c: Performance — N+1 queries, memory leaks, missing caching, hot paths.
 9. Layer 2d: Architecture Fit — does the implementation match the locked design? Coupling, cohesion, interface contracts.
 10. Layer 2e: External Safety — SQL safety, concurrency, secrets in logs, enum completeness (grep outside diff), LLM trust boundaries.
@@ -195,6 +195,7 @@ These are thinking instincts, not a checklist. Let them shape your perspective t
 - \`review_criticals_resolved\` — No unresolved critical blockers remain.
 - \`review_army_json_valid\` — 07-review-army.json passes schema validation (validateReviewArmy).
 - \`review_completeness_scored\` — Completeness score is computed and recorded (AC coverage, task coverage, slice coverage, adversarial pass).
+- \`review_security_audit_swept\` — The security-audit utility skill was run against the diff scope and the modules it touches. Finding count (0 if clean) recorded in the review army with file:line evidence for every Critical.
 
 ## Required Evidence
 - [ ] Artifact written to \`.cclaw/artifacts/07-review.md\`.
@@ -402,7 +403,7 @@ When all required gates are satisfied and the artifact is written:
 1. **Update \`.cclaw/state/flow-state.json\`:**
    - Set \`currentStage\` to \`"ship"\`
    - Add \`"review"\` to \`completedStages\` array
-   - Move all gate IDs for this stage (\`review_layer1_spec_compliance\`, \`review_layer2_correctness\`, \`review_layer2_security\`, \`review_layer2_performance\`, \`review_layer2_architecture\`, \`review_severity_classified\`, \`review_criticals_resolved\`, \`review_army_json_valid\`, \`review_completeness_scored\`) into \`stageGateCatalog.review.passed\`
+   - Move all gate IDs for this stage (\`review_layer1_spec_compliance\`, \`review_layer2_correctness\`, \`review_layer2_security\`, \`review_layer2_performance\`, \`review_layer2_architecture\`, \`review_severity_classified\`, \`review_criticals_resolved\`, \`review_army_json_valid\`, \`review_completeness_scored\`, \`review_security_audit_swept\`) into \`stageGateCatalog.review.passed\`
    - Clear \`stageGateCatalog.review.blocked\`
    - For each passed gate, add an entry to \`guardEvidence\`: \`"<gate_id>": "<artifact path or excerpt proving the gate>"\`. Do NOT leave \`guardEvidence\` empty.
 2. **Persist artifact** at \`.cclaw/artifacts/07-review.md\`. Do NOT manually copy into \`.cclaw/runs/\`; archival is handled by \`cclaw archive\`.
@@ -2034,7 +2035,7 @@ Do NOT ship, merge, or release until both review layers complete with an explici
 6. Do NOT copy artifacts into \`.cclaw/runs/\`; archival is handled only by \`cclaw archive\`.
 
 ## Gates
-\`review_layer1_spec_compliance\`, \`review_layer2_correctness\`, \`review_layer2_security\`, \`review_layer2_performance\`, \`review_layer2_architecture\`, \`review_severity_classified\`, \`review_criticals_resolved\`, \`review_army_json_valid\`, \`review_completeness_scored\`
+\`review_layer1_spec_compliance\`, \`review_layer2_correctness\`, \`review_layer2_security\`, \`review_layer2_performance\`, \`review_layer2_architecture\`, \`review_severity_classified\`, \`review_criticals_resolved\`, \`review_army_json_valid\`, \`review_completeness_scored\`, \`review_security_audit_swept\`
 
 ## Exit
 - both layers completed

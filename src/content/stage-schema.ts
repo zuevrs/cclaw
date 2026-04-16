@@ -1236,7 +1236,7 @@ const REVIEW: StageSchemaInput = {
     "Load upstream evidence — read TDD artifact (RED + GREEN + REFACTOR), spec, and plan. Verify evidence chain is unbroken.",
     "Layer 1: Spec Compliance — check every acceptance criterion against implementation. Verdict: pass/fail per criterion.",
     "Layer 2a: Correctness — logic errors, race conditions, boundary violations, null handling.",
-    "Layer 2b: Security — input validation, auth boundaries, secrets exposure, injection vectors.",
+    "Layer 2b: Security — input validation, auth boundaries, secrets exposure, injection vectors. **Mandatory:** also load and execute the `.cclaw/skills/security-audit/SKILL.md` utility skill (proactive pattern sweep across diff + touched modules, not just the diff itself) and merge findings into the review army. The Layer 2 security pass is not complete until the audit sweep records a finding count (0 acceptable) with file:line evidence for every Critical.",
     "Layer 2c: Performance — N+1 queries, memory leaks, missing caching, hot paths.",
     "Layer 2d: Architecture Fit — does the implementation match the locked design? Coupling, cohesion, interface contracts.",
     "Layer 2e: External Safety — SQL safety, concurrency, secrets in logs, enum completeness (grep outside diff), LLM trust boundaries.",
@@ -1273,7 +1273,8 @@ const REVIEW: StageSchemaInput = {
     { id: "review_severity_classified", description: "All findings are severity-tagged." },
     { id: "review_criticals_resolved", description: "No unresolved critical blockers remain." },
     { id: "review_army_json_valid", description: "07-review-army.json passes schema validation (validateReviewArmy)." },
-    { id: "review_completeness_scored", description: "Completeness score is computed and recorded (AC coverage, task coverage, slice coverage, adversarial pass)." }
+    { id: "review_completeness_scored", description: "Completeness score is computed and recorded (AC coverage, task coverage, slice coverage, adversarial pass)." },
+    { id: "review_security_audit_swept", description: "The security-audit utility skill was run against the diff scope and the modules it touches. Finding count (0 if clean) recorded in the review army with file:line evidence for every Critical." }
   ],
   requiredEvidence: [
     "Artifact written to `.cclaw/artifacts/07-review.md`.",
@@ -1698,8 +1699,9 @@ const STAGE_AUTO_SUBAGENT_DISPATCH: Record<FlowStage, StageAutoSubagentDispatch[
       agent: "security-reviewer",
       mode: "mandatory",
       when: "Always in review stage. Even when no trust boundaries changed, produce an explicit 'no-change' security attestation.",
-      purpose: "Guarantee a dedicated security pass on every diff: auth, input validation, secrets, injection, privilege, and blast-radius review are never opt-in.",
-      requiresUserGate: false
+      purpose: "Guarantee a dedicated security pass on every diff: auth, input validation, secrets, injection, privilege, and blast-radius review are never opt-in. MUST load the `security-audit` skill and run a pattern-based sweep across the diff scope and touched modules in addition to the per-diff Layer 2 security checklist.",
+      requiresUserGate: false,
+      skill: "security-audit"
     },
     {
       agent: "code-reviewer",
