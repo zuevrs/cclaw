@@ -376,8 +376,7 @@ Execution rule: complete and verify each wave before starting the next wave.
       "confidence": 7,
       "category": "correctness",
       "location": {
-        "file": "",
-        "line": 0
+        "file": ""
       },
       "fingerprint": "",
       "reportedBy": [],
