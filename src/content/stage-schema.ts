@@ -81,6 +81,8 @@ export interface StageSchema {
   decisionRecordFormat?: string;
   /** When true, stage skill includes wave auto-execute guidance (tdd). */
   waveExecutionAllowed?: boolean;
+  /** Sections that remain required even when the trivial-change escape hatch is active (design only). */
+  trivialOverrideSections?: string[];
   /** Agent names that MUST be dispatched (or waived) before stage transition — derived from mandatory auto-subagent rows. */
   mandatoryDelegations: string[];
 }
@@ -691,6 +693,7 @@ const DESIGN: StageSchemaInput = {
     { section: "Unresolved Decisions", required: false, validationRule: "If any: what info is missing, who provides it, default if unanswered." },
     { section: "Completion Dashboard", required: true, validationRule: "Lists every review section with status (clear / issues-found-resolved / issues-open), decision count, and unresolved items (or 'None')." }
   ],
+  trivialOverrideSections: ["Architecture Boundaries", "NOT in scope", "Completion Dashboard"],
   namedAntiPattern: {
     title: "Architecture Will Emerge While Coding",
     description: "Emergent architecture is a myth for non-trivial systems. What actually emerges is accidental complexity, incompatible module boundaries, and tech debt that costs 10x to fix later. Lock architecture explicitly before writing code."
