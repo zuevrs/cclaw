@@ -137,6 +137,17 @@ Contrasting samples to calibrate the quality bar for this stage. Read before wri
 
 **Why it matters:** Security findings without a reproduction step and a tied fix-task are suggestions, not reviews. Attach the curl (or equivalent), the fix task ID, and the verification test.
 
+## Living Examples by Domain
+
+Use the row matching your project shape to calibrate voice, specificity, and command choice. The rows are deliberately terse — copy the **shape**, not the text.
+
+**Web app (full-stack) — Finding:** R-W-1 (Critical, correctness): \`useOrderFeed\` does not unsubscribe from the SSE channel on unmount — two mounts on the same page double-count rows. Evidence: \`tests/unit/order-feed-hook.test.ts > unmount\` fails. Fix owner: frontend; blocks ship.
+
+**CLI tool — Finding:** R-C-2 (Suggestion, UX): \`cclaw archive --dry-run\` prints run IDs without a trailing newline, breaking downstream \`xargs\` pipelines. Evidence: \`echo '' | xargs -I{} printf '%s\\n' {}\` contrast. Fix owner: CLI; non-blocking.
+
+**Library / SDK — Finding:** R-L-1 (Important, surface-area): the new \`validateHookDocument\` export is documented in README but missing from \`src/index.ts\` — \`import { validateHookDocument } from 'cclaw'\` fails despite the docs. Evidence: \`pnpm build && node -e "require('./dist').validateHookDocument"\` prints \`undefined\`. Fix owner: library; blocks ship.
+
+**Data pipeline / ETL — Finding:** R-D-1 (Critical, correctness): dedup CTE orders by \`event_ts ASC\` instead of \`event_ts DESC\` — on duplicate events we keep the older row. Evidence: \`dbt test --select fact_orders\` green but fixture \`tests/fixtures/orders-dupes.csv\` shows wrong survivor. Fix owner: analytics-eng; blocks ship.
 
 ## Examples
 
@@ -1874,6 +1885,17 @@ Contrasting samples to calibrate the quality bar for this stage. Read before wri
 
 **Why it matters:** A good question gives the user context, a recommendation, and lettered options they can answer with one keystroke. "Let me know" shifts the framing cost back to the user.
 
+## Living Examples by Domain
+
+Use the row matching your project shape to calibrate voice, specificity, and command choice. The rows are deliberately terse — copy the **shape**, not the text.
+
+**Web app (full-stack) — Direction:** Problem: admin dashboard orders table requires manual refresh to see new orders. Success: admins see new rows within 2s of server-side status change, no full navigation. Anti-success: WebSocket rewrite of the whole table stack when only one view needs live updates.
+
+**CLI tool — Direction:** Problem: \`cclaw archive\` silently deletes 30+ day runs with no preview. Success: a \`--dry-run\` flag prints would-be-archived run IDs to stdout and exits 0; current behavior is unchanged without the flag. Anti-success: adding an interactive confirmation prompt that breaks CI scripts.
+
+**Library / SDK — Direction:** Problem: consumers cannot validate hook JSON without importing internal modules. Success: \`validateHookDocument(obj)\` exported from the package root with typed result \`{ ok, errors? }\`. Anti-success: exposing the full Zod schema and forcing consumers to depend on Zod.
+
+**Data pipeline / ETL — Direction:** Problem: reruns of the orders job create duplicate \`fact_orders\` rows. Success: running the job twice on the same input leaves row count unchanged and \`dbt test --select fact_orders\` green. Anti-success: introducing a nightly dedup job that hides the underlying non-idempotency.
 
 ## Examples
 
