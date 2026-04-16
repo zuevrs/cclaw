@@ -241,11 +241,11 @@ Design output should be **reviewable by someone who did not attend brainstorming
 
     spec: `### Acceptance Criteria
 
-| ID | Criterion (observable/measurable/falsifiable) |
-| --- | --- |
-| AC-1 | Given a signed-in user with an active session, when the server publishes a new notification event for that user, the client feed shows the new item within 5 seconds without a full page reload. |
-| AC-2 | Given the same logical notification is published twice with the same dedupe key, when the client processes the stream, the feed contains exactly one visible item for that key. |
-| AC-3 | Given the live connection is unavailable, when the user opens the notifications panel, the UI shows a non-blocking "live updates paused" banner and loads the latest snapshot via REST within 2 seconds. |
+| ID | Criterion (observable/measurable/falsifiable) | Design Decision Ref |
+| --- | --- | --- |
+| AC-1 | Given a signed-in user with an active session, when the server publishes a new notification event for that user, the client feed shows the new item within 5 seconds without a full page reload. | Architecture: SSE delivery path |
+| AC-2 | Given the same logical notification is published twice with the same dedupe key, when the client processes the stream, the feed contains exactly one visible item for that key. | Architecture: dedupe-key in event schema |
+| AC-3 | Given the live connection is unavailable, when the user opens the notifications panel, the UI shows a non-blocking "live updates paused" banner and loads the latest snapshot via REST within 2 seconds. | Architecture: REST fallback + degraded UX |
 
 ### Edge Cases
 
