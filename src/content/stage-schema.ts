@@ -820,7 +820,30 @@ const SPEC: StageSchemaInput = {
     { name: "Assumption Surfacing", description: "Implicit assumptions are invisible requirements. Force every assumption into an explicit statement. If you cannot name the assumption, you have not found it yet." },
     { name: "Ambiguity Classification", description: "Before resolving any unclear requirement, classify it: (A) Insufficient information — ask the user. (B) Multiple valid interpretations — enumerate and pick with justification. (C) Genuinely unknown — propose hypothesis and validation path. Never treat all ambiguity the same way." }
   ],
-  reviewSections: [],
+  reviewSections: [
+    {
+      title: "Acceptance Criteria Audit",
+      evaluationPoints: [
+        "Is every criterion observable (can you point to evidence of pass/fail)?",
+        "Is every criterion measurable (numeric threshold or boolean outcome)?",
+        "Is every criterion falsifiable (can you describe what failure looks like)?",
+        "Does every criterion trace to a design decision (Design Decision Ref)?",
+        "Are there any vague adjectives (fast, intuitive, robust) without thresholds?"
+      ],
+      stopGate: true
+    },
+    {
+      title: "Testability Audit",
+      evaluationPoints: [
+        "Does every criterion have a concrete test description in the Testability Map?",
+        "Does every test specify a verification approach (unit, integration, e2e, manual)?",
+        "Does every test include a runnable command or manual steps?",
+        "Are edge cases (boundary + error) defined for every criterion?",
+        "Can you run every verification command right now and get a meaningful result?"
+      ],
+      stopGate: true
+    }
+  ],
   completionStatus: ["DONE", "DONE_WITH_CONCERNS", "BLOCKED"],
   crossStageTrace: {
     readsFrom: [".cclaw/artifacts/03-design.md", ".cclaw/artifacts/02-scope.md"],
@@ -832,6 +855,8 @@ const SPEC: StageSchemaInput = {
     { section: "Edge Cases", required: true, validationRule: "At least one boundary and one error condition per criterion." },
     { section: "Constraints and Assumptions", required: true, validationRule: "All implicit assumptions surfaced. Constraints have sources." },
     { section: "Testability Map", required: true, validationRule: "Each criterion maps to a concrete test description with verification approach (unit, integration, e2e, manual) and command or manual steps." },
+    { section: "Vague to Fixed", required: false, validationRule: "If present: table with original vague wording and rewritten observable/testable version for each ambiguous requirement." },
+    { section: "Non-Functional Requirements", required: false, validationRule: "If present: performance thresholds, security constraints, scalability limits, reliability targets with measurable values." },
     { section: "Interface Contracts", required: false, validationRule: "If present: for each module boundary list produces (outputs) and consumes (inputs) with data types." },
     { section: "Approval", required: true, validationRule: "Explicit user approval marker present." }
   ],
@@ -944,9 +969,35 @@ const PLAN: StageSchemaInput = {
   cognitivePatterns: [
     { name: "Vertical Slice Thinking", description: "Each task delivers one thin end-to-end slice of value. Horizontal layers (all models, then all controllers) create integration risk. Vertical slices (one feature through all layers) reduce it." },
     { name: "Two-Minute Smell Test", description: "If a competent engineer cannot understand and start a task in two minutes, the task is too large or too vague. Break it down further." },
-    { name: "Make the Change Easy, Then Make the Easy Change", description: "Refactor first, implement second. Never structural + behavioral changes simultaneously. Sequence tasks accordingly." }
+    { name: "Make the Change Easy, Then Make the Easy Change", description: "Refactor first, implement second. Never structural + behavioral changes simultaneously. Sequence tasks accordingly." },
+    { name: "Diagnose Before Fix", description: "Before decomposing work, understand the current state of the codebase. Read existing code, tests, and conventions. Tasks should reference what exists, not assume a blank slate." },
+    { name: "Scrap Signals", description: "If a task description is vague, the acceptance criterion is missing, or the verification command is a placeholder — it is scrap. Either rewrite it or remove it. Half-specified tasks waste more time than no tasks." },
+    { name: "Risk-First Exploration", description: "Sequence the highest-risk or most uncertain tasks first. If wave 1 proves the risky assumption wrong, the rest of the plan can adapt. If the risk is buried in wave 3, you discover failure late." }
   ],
-  reviewSections: [],
+  reviewSections: [
+    {
+      title: "Task Decomposition Audit",
+      evaluationPoints: [
+        "Does every task target a single coherent area (vertical slice)?",
+        "Can each task be completed in 2-5 minutes?",
+        "Does every task have an acceptance criterion link and verification command?",
+        "Are there tasks that touch multiple unrelated areas?",
+        "Would a new engineer understand and start each task within two minutes?"
+      ],
+      stopGate: true
+    },
+    {
+      title: "Wave Completeness Audit",
+      evaluationPoints: [
+        "Does every task belong to exactly one wave?",
+        "Does each wave have a verification gate?",
+        "Are wave dependencies explicit and acyclic?",
+        "Is the acceptance mapping complete — every spec criterion covered?",
+        "Are there hidden dependencies between tasks in different waves?"
+      ],
+      stopGate: true
+    }
+  ],
   completionStatus: ["DONE", "DONE_WITH_CONCERNS", "BLOCKED"],
   crossStageTrace: {
     readsFrom: [".cclaw/artifacts/04-spec.md", ".cclaw/artifacts/03-design.md", ".cclaw/artifacts/02-scope.md"],
@@ -956,10 +1007,15 @@ const PLAN: StageSchemaInput = {
   artifactValidation: [
     { section: "Dependency Graph", required: true, validationRule: "Ordering and parallel opportunities explicit. No circular dependencies." },
     { section: "Dependency Waves", required: true, validationRule: "Every task belongs to a wave. Each wave has an exit gate and dependency statement." },
-    { section: "Task List", required: true, validationRule: "Each task: ID, description, acceptance criterion link, verification command." },
+    { section: "Task List", required: true, validationRule: "Each task: ID, description, acceptance criterion link, verification command, and effort estimate (S/M/L)." },
     { section: "Acceptance Mapping", required: true, validationRule: "Every spec criterion is covered by at least one task." },
+    { section: "Risk Assessment", required: false, validationRule: "If present: per-task or per-wave risk identification with likelihood, impact, and mitigation strategy." },
     { section: "WAIT_FOR_CONFIRM", required: true, validationRule: "Explicit marker present. Status: pending until user approves." }
-  ]
+  ],
+  namedAntiPattern: {
+    title: "Task Details Can Be Finalized During Coding",
+    description: "Underspecified tasks do not become clear during implementation — they become context thrash, broken sequencing, and rework. Every task needs an acceptance criterion, a verification command, and a wave assignment before execution starts. If you cannot describe what 'done' looks like for a task, the task is not ready."
+  }
 };
 
 // ---------------------------------------------------------------------------

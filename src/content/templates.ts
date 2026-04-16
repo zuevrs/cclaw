@@ -222,6 +222,16 @@ export const ARTIFACT_TEMPLATES: Record<string, string> = {
 |---|---|---|
 | AC-1 |  |  |
 
+## Vague to Fixed
+| Original (vague) | Rewritten (observable/testable) |
+|---|---|
+|  |  |
+
+## Non-Functional Requirements
+| Category | Requirement | Threshold | Measurement |
+|---|---|---|---|
+|  |  |  |  |
+
 ## Interface Contracts
 | Module | Produces | Consumes |
 |---|---|---|
@@ -255,14 +265,19 @@ export const ARTIFACT_TEMPLATES: Record<string, string> = {
 Execution rule: complete and verify each wave before starting the next wave.
 
 ## Task List
-| Task ID | Description | Acceptance criterion | Verification command |
-|---|---|---|---|
-| T-1 |  |  |  |
+| Task ID | Description | Acceptance criterion | Verification command | Effort |
+|---|---|---|---|---|
+| T-1 |  |  |  |  |
 
 ## Acceptance Mapping
 | Criterion ID | Task IDs |
 |---|---|
 | AC-1 | T-1 |
+
+## Risk Assessment
+| Task/Wave | Risk | Likelihood | Impact | Mitigation |
+|---|---|---|---|---|
+|  |  |  |  |  |
 
 ## WAIT_FOR_CONFIRM
 - Status: pending

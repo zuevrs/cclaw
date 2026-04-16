@@ -241,11 +241,11 @@ Design output should be **reviewable by someone who did not attend brainstorming
 
     spec: `### Acceptance Criteria
 
-| ID | Criterion (observable/measurable/falsifiable) |
-| --- | --- |
-| AC-1 | Given a signed-in user with an active session, when the server publishes a new notification event for that user, the client feed shows the new item within 5 seconds without a full page reload. |
-| AC-2 | Given the same logical notification is published twice with the same dedupe key, when the client processes the stream, the feed contains exactly one visible item for that key. |
-| AC-3 | Given the live connection is unavailable, when the user opens the notifications panel, the UI shows a non-blocking "live updates paused" banner and loads the latest snapshot via REST within 2 seconds. |
+| ID | Criterion (observable/measurable/falsifiable) | Design Decision Ref |
+| --- | --- | --- |
+| AC-1 | Given a signed-in user with an active session, when the server publishes a new notification event for that user, the client feed shows the new item within 5 seconds without a full page reload. | Architecture: SSE delivery path |
+| AC-2 | Given the same logical notification is published twice with the same dedupe key, when the client processes the stream, the feed contains exactly one visible item for that key. | Architecture: dedupe-key in event schema |
+| AC-3 | Given the live connection is unavailable, when the user opens the notifications panel, the UI shows a non-blocking "live updates paused" banner and loads the latest snapshot via REST within 2 seconds. | Architecture: REST fallback + degraded UX |
 
 ### Edge Cases
 
@@ -273,39 +273,53 @@ Design output should be **reviewable by someone who did not attend brainstorming
 - Approved by: user
 - Date: 2026-04-14`,
 
-  plan: `### Task breakdown (sample)
+  plan: `### Dependency Graph
 
-| ID | Title | depends_on | acceptance_criteria | estimated_effort |
+\`\`\`
+T-1 ──▶ T-2 ──▶ T-3
+ │               ▲
+ └───────────────┘
+\`\`\`
+
+Parallel opportunity: T-1 is a prerequisite for both T-2 and T-3 (T-3 also needs T-2).
+
+### Dependency Waves
+
+#### Wave 1 (foundation)
+- Task IDs: T-1
+- Verification gate: schema tests pass, dedupe key fixtures validated
+
+#### Wave 2 (core logic)
+- Task IDs: T-2
+- Depends on: Wave 1 (T-1 complete)
+- Verification gate: integration test proves publish-to-outbox path
+
+#### Wave 3 (integration)
+- Task IDs: T-3
+- Depends on: Wave 2 (T-2 complete)
+- Verification gate: e2e tests pass for delivery, dedupe, and degraded mode
+
+Execution rule: complete and verify each wave before starting the next wave.
+
+### Task List
+
+| Task ID | Description | Acceptance criterion | Verification command | Effort |
 | --- | --- | --- | --- | --- |
-| T1 | Define notification event schema + dedupe key rules | — | Spec criteria 2 satisfied in a written contract + fixtures | S |
-| T2 | Implement publisher + outbox write path | T1 | Spec criterion 1 satisfied in integration test (happy path) | M |
-| T3 | Implement client feed + SSE subscribe + REST fallback | T1, T2 | Spec criteria 1–3 satisfied in e2e-style tests (including degraded mode) | L |
+| T-1 | Define notification event schema + dedupe key rules | AC-1, AC-2: schema contract + fixtures | \`\`\`pnpm vitest run tests/unit/notification-schema.test.ts\`\`\` |
+| T-2 | Implement publisher + outbox write path | AC-1: integration test (happy path publish) | \`\`\`pnpm vitest run tests/integration/publisher.test.ts\`\`\` |
+| T-3 | Implement client feed + SSE subscribe + REST fallback | AC-1, AC-2, AC-3: e2e tests including degraded mode | \`\`\`pnpm playwright test tests/e2e/notification-feed.spec.ts\`\`\` |
 
-### Dependency graph (ASCII)
+### Acceptance Mapping
 
-\`\`\`
-T1 ──▶ T2 ──▶ T3
- │            ▲
- └────────────┘
-\`\`\`
+| Criterion ID | Task IDs |
+| --- | --- |
+| AC-1 (delivery within 5s) | T-2, T-3 |
+| AC-2 (idempotency) | T-1, T-2 |
+| AC-3 (failure visibility) | T-3 |
 
-### Acceptance mapping (sample)
-
-| Spec criterion | Tasks that cover it | Notes |
-| --- | --- | --- |
-| Criterion 1 (delivery) | T2, T3 | T2 proves publish path; T3 proves UI subscription path |
-| Criterion 2 (idempotency) | T1, T2 | Schema + publisher tests must include dedupe cases |
-| Criterion 3 (failure visibility) | T3 | Explicit degraded-mode test case |
-
-### Sequencing rationale (sample)
-
-- **T1 first** prevents rework when event keys change mid-build.
-- **T2 before T3** ensures the UI is not built on a mocked publisher that will not match production semantics.
-- **T3 last** integrates transport concerns once contracts are stable.
-
-### Risk note
-
-If T3 grows too large, split “transport” vs “UI state machine” into two tasks while keeping the dependency graph acyclic.`,
+### WAIT_FOR_CONFIRM
+- Status: pending
+- Confirmed by:`,
 
   tdd: `### RED test (Vitest) — written before production code
 
