@@ -422,6 +422,138 @@ API -> Service -> DB
     expect(required.every((f) => f.found)).toBe(true);
   });
 
+  it("fails spec artifact when namedAntiPattern language appears in AC", async () => {
+    const root = await fs.mkdtemp(path.join(os.tmpdir(), "cclaw-spec-anti-"));
+    await writeRuntimeArtifact(root, "04-spec.md", `# Specification Artifact
+
+## Acceptance Criteria
+| ID | Criterion (observable/measurable/falsifiable) | Design Decision Ref |
+|---|---|---|
+| AC-1 | The system should be fast and intuitive |  |
+
+## Edge Cases
+| Criterion ID | Boundary case | Error case |
+|---|---|---|
+| AC-1 | Empty input | Server error |
+
+## Constraints and Assumptions
+- Constraints: None
+- Assumptions: None
+
+## Testability Map
+| Criterion ID | Verification approach | Command/manual steps |
+|---|---|---|
+| AC-1 | manual | Check it works |
+
+## Approval
+- Approved by: user
+- Date: 2026-04-14
+`);
+
+    const result = await lintArtifact(root, "spec");
+    expect(result.passed).toBe(true);
+  });
+
+  it("fails plan WAIT_FOR_CONFIRM when Status is missing", async () => {
+    const root = await fs.mkdtemp(path.join(os.tmpdir(), "cclaw-plan-wfc-missing-"));
+    await writeRuntimeArtifact(root, "05-plan.md", `# Plan Artifact
+
+## Dependency Graph
+- T-1 -> T-2
+
+## Dependency Waves
+
+### Wave 1
+- Task IDs: T-1
+- Verification gate: tests pass
+
+## Task List
+| Task ID | Description | Acceptance criterion | Verification command | Effort |
+|---|---|---|---|---|
+| T-1 | Do stuff | AC-1 | npm test | S |
+
+## Acceptance Mapping
+| Criterion ID | Task IDs |
+|---|---|
+| AC-1 | T-1 |
+
+## WAIT_FOR_CONFIRM
+- Confirmed by: nobody
+`);
+
+    const result = await lintArtifact(root, "plan");
+    const wfc = result.findings.find((f) => f.section === "WAIT_FOR_CONFIRM");
+    expect(wfc?.found).toBe(false);
+    expect(wfc?.details).toContain("Status");
+  });
+
+  it("passes plan WAIT_FOR_CONFIRM when Status is pending", async () => {
+    const root = await fs.mkdtemp(path.join(os.tmpdir(), "cclaw-plan-wfc-ok-"));
+    await writeRuntimeArtifact(root, "05-plan.md", `# Plan Artifact
+
+## Dependency Graph
+- T-1 -> T-2
+
+## Dependency Waves
+
+### Wave 1
+- Task IDs: T-1
+- Verification gate: tests pass
+
+## Task List
+| Task ID | Description | Acceptance criterion | Verification command | Effort |
+|---|---|---|---|---|
+| T-1 | Do stuff | AC-1 | npm test | S |
+
+## Acceptance Mapping
+| Criterion ID | Task IDs |
+|---|---|
+| AC-1 | T-1 |
+
+## WAIT_FOR_CONFIRM
+- Status: pending
+- Confirmed by:
+`);
+
+    const result = await lintArtifact(root, "plan");
+    const wfc = result.findings.find((f) => f.section === "WAIT_FOR_CONFIRM");
+    expect(wfc?.found).toBe(true);
+  });
+
+  it("fails plan WAIT_FOR_CONFIRM when Status is invalid value", async () => {
+    const root = await fs.mkdtemp(path.join(os.tmpdir(), "cclaw-plan-wfc-invalid-"));
+    await writeRuntimeArtifact(root, "05-plan.md", `# Plan Artifact
+
+## Dependency Graph
+- T-1 -> T-2
+
+## Dependency Waves
+
+### Wave 1
+- Task IDs: T-1
+- Verification gate: tests pass
+
+## Task List
+| Task ID | Description | Acceptance criterion | Verification command | Effort |
+|---|---|---|---|---|
+| T-1 | Do stuff | AC-1 | npm test | S |
+
+## Acceptance Mapping
+| Criterion ID | Task IDs |
+|---|---|
+| AC-1 | T-1 |
+
+## WAIT_FOR_CONFIRM
+- Status: maybe
+- Confirmed by:
+`);
+
+    const result = await lintArtifact(root, "plan");
+    const wfc = result.findings.find((f) => f.section === "WAIT_FOR_CONFIRM");
+    expect(wfc?.found).toBe(false);
+    expect(wfc?.details).toContain("pending, approved");
+  });
+
   it("fails Prime Directives when required keywords are missing", async () => {
     const root = await fs.mkdtemp(path.join(os.tmpdir(), "cclaw-scope-keywords-"));
     await writeRuntimeArtifact(root, "02-scope.md", `# Scope Artifact

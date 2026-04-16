@@ -114,6 +114,49 @@ describe("flow command contracts", () => {
     expect(specSkill).toContain("Implementation Will Clarify Requirements");
   });
 
+  it("includes namedAntiPattern in plan skill", async () => {
+    const root = await fs.mkdtemp(path.join(os.tmpdir(), "cclaw-plan-anti-"));
+    await initCclaw({ projectRoot: root });
+
+    const planSkill = await fs.readFile(
+      path.join(root, ".cclaw/skills/planning-and-task-breakdown/SKILL.md"),
+      "utf8"
+    );
+    expect(planSkill).toContain("Task Details Can Be Finalized During Coding");
+  });
+
+  it("includes review sections in spec and plan skills", async () => {
+    const root = await fs.mkdtemp(path.join(os.tmpdir(), "cclaw-review-sections-"));
+    await initCclaw({ projectRoot: root });
+
+    const specSkill = await fs.readFile(
+      path.join(root, ".cclaw/skills/specification-authoring/SKILL.md"),
+      "utf8"
+    );
+    const planSkill = await fs.readFile(
+      path.join(root, ".cclaw/skills/planning-and-task-breakdown/SKILL.md"),
+      "utf8"
+    );
+
+    expect(specSkill).toContain("Acceptance Criteria Audit");
+    expect(specSkill).toContain("Testability Audit");
+    expect(planSkill).toContain("Task Decomposition Audit");
+    expect(planSkill).toContain("Wave Completeness Audit");
+  });
+
+  it("includes Risk-First and Diagnose Before Fix cognitive patterns in plan", async () => {
+    const root = await fs.mkdtemp(path.join(os.tmpdir(), "cclaw-plan-cognitive-"));
+    await initCclaw({ projectRoot: root });
+
+    const planSkill = await fs.readFile(
+      path.join(root, ".cclaw/skills/planning-and-task-breakdown/SKILL.md"),
+      "utf8"
+    );
+    expect(planSkill).toContain("Diagnose Before Fix");
+    expect(planSkill).toContain("Scrap Signals");
+    expect(planSkill).toContain("Risk-First Exploration");
+  });
+
   it("includes Ambiguity Classification in design and spec skills", async () => {
     const root = await fs.mkdtemp(path.join(os.tmpdir(), "cclaw-ambiguity-"));
     await initCclaw({ projectRoot: root });

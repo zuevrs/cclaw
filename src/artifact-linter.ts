@@ -241,7 +241,7 @@ function validateSectionBody(
     }
   }
 
-  if (/WAIT_FOR_CONFIRM/u.test(rule) && /status.*pending/iu.test(rule)) {
+  if (/Status:\s*pending\s+until/iu.test(rule)) {
     const statusLine = bodyLines.find((l) => /^\s*-?\s*Status\s*:/iu.test(l));
     if (!statusLine) {
       return { ok: false, details: "WAIT_FOR_CONFIRM section must contain a 'Status:' line." };
