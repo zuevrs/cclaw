@@ -444,7 +444,7 @@ After this stage, ask:
 - Did I discover a non-obvious reusable **rule** or **pattern**?
 - Did a failure reveal a reusable **lesson**?
 
-If yes, append one concise entry to \`.cclaw/knowledge.md\`:
+If yes, append one concise entry to **both** the markdown mirror (\`.cclaw/knowledge.md\`) and the canonical JSONL store (\`.cclaw/knowledge.jsonl\`) with the same timestamp:
 
 \`\`\`bash
 TS="$(date -u +%Y-%m-%dT%H:%M:%SZ)"
@@ -455,6 +455,7 @@ cat >> .cclaw/knowledge.md <<EOF
 - Insight: what should be remembered
 - Reuse: how to apply this next time
 EOF
+printf '%s\\n' '{"type":"pattern","title":"short-title","stage":"review","context":"what situation triggered this","insight":"what should be remembered","reuse":"how to apply this next time","created":"'"$TS"'","confidence":"medium","domain":null,"project":null,"supersedes":null,"superseded":false,"archived":false}' >> .cclaw/knowledge.jsonl
 \`\`\`
 
 Type must be exactly one of: \`rule\`, \`pattern\`, \`lesson\`, \`compound\`.
@@ -839,7 +840,7 @@ After this stage, ask:
 - Did I discover a non-obvious reusable **rule** or **pattern**?
 - Did a failure reveal a reusable **lesson**?
 
-If yes, append one concise entry to \`.cclaw/knowledge.md\`:
+If yes, append one concise entry to **both** the markdown mirror (\`.cclaw/knowledge.md\`) and the canonical JSONL store (\`.cclaw/knowledge.jsonl\`) with the same timestamp:
 
 \`\`\`bash
 TS="$(date -u +%Y-%m-%dT%H:%M:%SZ)"
@@ -850,6 +851,7 @@ cat >> .cclaw/knowledge.md <<EOF
 - Insight: what should be remembered
 - Reuse: how to apply this next time
 EOF
+printf '%s\\n' '{"type":"pattern","title":"short-title","stage":"ship","context":"what situation triggered this","insight":"what should be remembered","reuse":"how to apply this next time","created":"'"$TS"'","confidence":"medium","domain":null,"project":null,"supersedes":null,"superseded":false,"archived":false}' >> .cclaw/knowledge.jsonl
 \`\`\`
 
 Type must be exactly one of: \`rule\`, \`pattern\`, \`lesson\`, \`compound\`.
@@ -1218,7 +1220,7 @@ After this stage, ask:
 - Did I discover a non-obvious reusable **rule** or **pattern**?
 - Did a failure reveal a reusable **lesson**?
 
-If yes, append one concise entry to \`.cclaw/knowledge.md\`:
+If yes, append one concise entry to **both** the markdown mirror (\`.cclaw/knowledge.md\`) and the canonical JSONL store (\`.cclaw/knowledge.jsonl\`) with the same timestamp:
 
 \`\`\`bash
 TS="$(date -u +%Y-%m-%dT%H:%M:%SZ)"
@@ -1229,6 +1231,7 @@ cat >> .cclaw/knowledge.md <<EOF
 - Insight: what should be remembered
 - Reuse: how to apply this next time
 EOF
+printf '%s\\n' '{"type":"pattern","title":"short-title","stage":"plan","context":"what situation triggered this","insight":"what should be remembered","reuse":"how to apply this next time","created":"'"$TS"'","confidence":"medium","domain":null,"project":null,"supersedes":null,"superseded":false,"archived":false}' >> .cclaw/knowledge.jsonl
 \`\`\`
 
 Type must be exactly one of: \`rule\`, \`pattern\`, \`lesson\`, \`compound\`.
@@ -1645,7 +1648,7 @@ After this stage, ask:
 - Did I discover a non-obvious reusable **rule** or **pattern**?
 - Did a failure reveal a reusable **lesson**?
 
-If yes, append one concise entry to \`.cclaw/knowledge.md\`:
+If yes, append one concise entry to **both** the markdown mirror (\`.cclaw/knowledge.md\`) and the canonical JSONL store (\`.cclaw/knowledge.jsonl\`) with the same timestamp:
 
 \`\`\`bash
 TS="$(date -u +%Y-%m-%dT%H:%M:%SZ)"
@@ -1656,6 +1659,7 @@ cat >> .cclaw/knowledge.md <<EOF
 - Insight: what should be remembered
 - Reuse: how to apply this next time
 EOF
+printf '%s\\n' '{"type":"pattern","title":"short-title","stage":"tdd","context":"what situation triggered this","insight":"what should be remembered","reuse":"how to apply this next time","created":"'"$TS"'","confidence":"medium","domain":null,"project":null,"supersedes":null,"superseded":false,"archived":false}' >> .cclaw/knowledge.jsonl
 \`\`\`
 
 Type must be exactly one of: \`rule\`, \`pattern\`, \`lesson\`, \`compound\`.
@@ -1988,7 +1992,7 @@ After this stage, ask:
 - Did I discover a non-obvious reusable **rule** or **pattern**?
 - Did a failure reveal a reusable **lesson**?
 
-If yes, append one concise entry to \`.cclaw/knowledge.md\`:
+If yes, append one concise entry to **both** the markdown mirror (\`.cclaw/knowledge.md\`) and the canonical JSONL store (\`.cclaw/knowledge.jsonl\`) with the same timestamp:
 
 \`\`\`bash
 TS="$(date -u +%Y-%m-%dT%H:%M:%SZ)"
@@ -1999,6 +2003,7 @@ cat >> .cclaw/knowledge.md <<EOF
 - Insight: what should be remembered
 - Reuse: how to apply this next time
 EOF
+printf '%s\\n' '{"type":"pattern","title":"short-title","stage":"brainstorm","context":"what situation triggered this","insight":"what should be remembered","reuse":"how to apply this next time","created":"'"$TS"'","confidence":"medium","domain":null,"project":null,"supersedes":null,"superseded":false,"archived":false}' >> .cclaw/knowledge.jsonl
 \`\`\`
 
 Type must be exactly one of: \`rule\`, \`pattern\`, \`lesson\`, \`compound\`.

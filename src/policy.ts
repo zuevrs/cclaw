@@ -115,7 +115,8 @@ export async function policyChecks(projectRoot: string, options: PolicyOptions =
   // --- utility skill checks ---
   const runtimeFile = (relativePath: string): string => `${RUNTIME_ROOT}/${relativePath}`;
   const utilitySkillChecks: Array<{ file: string; needle: string; name: string }> = [
-    { file: runtimeFile("skills/learnings/SKILL.md"), needle: "## Entry format (append-only)", name: "utility_skill:learnings:entry_format" },
+    { file: runtimeFile("skills/learnings/SKILL.md"), needle: "## Entry format", name: "utility_skill:learnings:entry_format" },
+    { file: runtimeFile("skills/learnings/SKILL.md"), needle: "knowledge.jsonl", name: "utility_skill:learnings:jsonl_mirror" },
     { file: runtimeFile("skills/learnings/SKILL.md"), needle: "## Subcommands", name: "utility_skill:learnings:subcommands" },
     { file: runtimeFile("skills/learnings/SKILL.md"), needle: "## HARD-GATE", name: "utility_skill:learnings:hard_gate" },
     { file: runtimeFile("commands/learn.md"), needle: "## Subcommands", name: "utility_command:learn:subcommands" },

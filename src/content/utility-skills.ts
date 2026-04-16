@@ -762,23 +762,22 @@ candidates exist).
 export function knowledgeCurationSkill(): string {
   return `---
 name: knowledge-curation
-description: "Read-only curation pass over .cclaw/knowledge.md. Surfaces stale, duplicate, or low-confidence entries and proposes a soft-archive plan; never deletes without explicit user approval."
+description: "Read-only curation pass over .cclaw/knowledge.md and .cclaw/knowledge.jsonl. Surfaces stale, duplicate, or low-confidence entries and proposes a soft-archive plan; never deletes without explicit user approval."
 ---
 
 # Knowledge Curation
 
 ## Quick Start
 
-> 1. This is a **read-only audit** of \`.cclaw/knowledge.md\`. Never delete or rewrite entries here.
+> 1. This is a **read-only audit** of \`.cclaw/knowledge.md\` and, when present, \`.cclaw/knowledge.jsonl\`. Never delete or rewrite entries here.
 > 2. Surface candidates for soft-archive when the active file > 50 entries OR contains stale/duplicate/superseded entries.
 > 3. Propose a single archive plan and require explicit user approval before any move.
 
 ## HARD-GATE
 
-- Do not modify \`.cclaw/knowledge.md\` from this skill except via an explicit
-  user-approved archive plan that **moves** entries to
-  \`.cclaw/knowledge.archive.md\` (never deletes them).
+- Do not modify \`.cclaw/knowledge.md\` or \`.cclaw/knowledge.jsonl\` from this skill except via an explicit user-approved archive plan that **moves** markdown entries to \`.cclaw/knowledge.archive.md\` and appends soft-archive lines (same title, \`archived: true\`) to the JSONL. Never physically removes entries.
 - Do not silently rewrite or summarize entries — preserve original wording.
+- Prefer the JSONL store for queries when present (faster, structured); use the markdown mirror as the human-readable source of truth for final user approval.
 
 ## When to run
 
