@@ -67,10 +67,10 @@ export interface VibyConfig {
   /** Default flow track for new runs (quick = shortened path, standard = full pipeline). */
   defaultTrack?: FlowTrack;
   /**
-   * Opt-in language rule packs. Each enabled pack materializes a matching utility
-   * skill under `.cclaw/skills/language-<id>/SKILL.md` on next `cclaw sync`. The
-   * meta-skill router loads the pack during review/tdd when the diff touches the
-   * language in question.
+   * Opt-in language rule packs. Each enabled pack materializes a matching rule
+   * file under `.cclaw/rules/lang/<id>.md` on the next `cclaw sync`. The
+   * meta-skill router loads the pack during review/tdd when the diff touches
+   * the language in question. Disabled packs have no on-disk footprint.
    */
   languageRulePacks?: LanguageRulePack[];
 }

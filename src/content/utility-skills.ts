@@ -1367,17 +1367,40 @@ irrelevant. Discarded errors are Go's #1 source of silent data loss.
 `;
 }
 
-export const LANGUAGE_RULE_PACK_FOLDERS = {
-  typescript: "language-typescript",
-  python: "language-python",
-  go: "language-go"
+/**
+ * Language rule packs live under `.cclaw/rules/lang/<pack>.md`. They are NOT
+ * skills (no folder, no `SKILL.md`) — they are opt-in **rule files** that the
+ * meta-skill router and stage hooks consult when the corresponding language
+ * appears in a diff. The pack id doubles as the on-disk filename stem.
+ */
+export const LANGUAGE_RULE_PACK_FILES = {
+  typescript: "typescript.md",
+  python: "python.md",
+  go: "go.md"
 } as const;
 
+/**
+ * Folder (relative to runtime root) that holds every enabled language rule
+ * pack. A single folder keeps discovery trivial for hooks and for `doctor`.
+ */
+export const LANGUAGE_RULE_PACK_DIR = ["rules", "lang"] as const;
+
 export const LANGUAGE_RULE_PACK_GENERATORS: Record<string, () => string> = {
-  "language-typescript": languageTypescriptSkill,
-  "language-python": languagePythonSkill,
-  "language-go": languageGoSkill
+  typescript: languageTypescriptSkill,
+  python: languagePythonSkill,
+  go: languageGoSkill
 };
+
+/**
+ * Legacy per-language folders under `.cclaw/skills/` used in v0.7.0. Listed
+ * here so `cclaw sync` and `doctor` can surface drift and the installer can
+ * clean them up after the move to `.cclaw/rules/lang/`.
+ */
+export const LEGACY_LANGUAGE_RULE_PACK_FOLDERS = [
+  "language-typescript",
+  "language-python",
+  "language-go"
+] as const;
 
 export const UTILITY_SKILL_FOLDERS = [
   "security",

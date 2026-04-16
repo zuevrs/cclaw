@@ -98,15 +98,22 @@ review lenses can enable opt-in rule packs in \`.cclaw/config.yaml\`:
 
 \`\`\`yaml
 languageRulePacks:
-  - typescript   # → skills/language-typescript/SKILL.md
-  - python       # → skills/language-python/SKILL.md
-  - go           # → skills/language-go/SKILL.md
+  - typescript   # → .cclaw/rules/lang/typescript.md
+  - python       # → .cclaw/rules/lang/python.md
+  - go           # → .cclaw/rules/lang/go.md
 \`\`\`
 
-After editing the list, run \`cclaw sync\` to materialize the enabled pack SKILL.md
-files. Packs activate during \`tdd\` and \`review\` when the diff touches files in
-their language. They are additive lenses — Tier-1 rules block merge, Tier-2 rules
-require a named follow-up. Never silently override them.
+After editing the list, run \`cclaw sync\` to materialize the enabled packs
+under \`.cclaw/rules/lang/\` (one \`<language>.md\` file per pack, each with
+YAML frontmatter declaring \`stages\` and \`triggers\`). Packs activate during
+\`tdd\` and \`review\` when the diff touches files in their language. They are
+additive lenses — Tier-1 rules block merge, Tier-2 rules require a named
+follow-up. Never silently override them.
+
+\`cclaw sync\` and \`cclaw doctor\` also refuse the legacy v0.7.0 location
+\`.cclaw/skills/language-*/\` — if a project still has those folders,
+\`sync\` removes them on the next run and \`doctor\` surfaces the drift until
+they are gone.
 
 ## Custom Skills (project-owned, sync-safe)
 
