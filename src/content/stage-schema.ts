@@ -684,6 +684,7 @@ const DESIGN: StageSchemaInput = {
     { section: "Data Flow", required: true, validationRule: "Must include happy path, nil input, empty input, upstream error paths." },
     { section: "Failure Mode Table", required: true, validationRule: "Each failure mode has: trigger, detection, mitigation, user impact." },
     { section: "Test Strategy", required: true, validationRule: "Must define unit/integration/e2e expectations with coverage targets." },
+    { section: "Performance Budget", required: true, validationRule: "For each critical path: metric name, target threshold, and measurement method." },
     { section: "What Already Exists", required: true, validationRule: "For each sub-problem: existing code/library found (Layer 1-3/EUREKA label), reuse decision, and adaptation needed." },
     { section: "NOT in scope", required: true, validationRule: "Work considered and explicitly deferred with one-line rationale." },
     { section: "Parallelization Strategy", required: false, validationRule: "If multi-module: dependency table, parallel lanes, conflict flags." },

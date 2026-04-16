@@ -163,6 +163,11 @@ export const ARTIFACT_TEMPLATES: Record<string, string> = {
 - Integration:
 - E2E:
 
+## Performance Budget
+| Critical path | Metric | Target | Measurement method |
+|---|---|---|---|
+|  |  |  |  |
+
 ## NOT in scope
 - 
 
