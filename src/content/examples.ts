@@ -368,34 +368,44 @@ Execution rule: complete and verify each wave before starting the next wave.
 - Plan task IDs: T-1, T-2, T-3
 - Spec criterion IDs: AC-1, AC-2, AC-3`,
 
-  review: `### Layer 1 — Spec compliance (per-criterion)
+  review: `### Layer 1 Verdict
 
-| Criterion | Status | Evidence |
+| Criterion | Verdict | Evidence |
 | --- | --- | --- |
-| Delivery within 5s without reload | PASS | \`notification-feed.e2e.ts:44-88\` asserts SSE-to-UI timing under mock clock |
-| Dedupe: one visible item per key | PARTIAL | Unit tests cover publisher dedupe; UI merge path lacks test for race reordering (\`feedStore.test.ts\` missing case) |
-| Degraded mode + REST snapshot | PASS | \`NotificationsPanel.tsx:112-140\` renders banner + calls snapshot endpoint |
+| AC-1: Delivery within 5s without reload | PASS | \`notification-feed.e2e.ts:44-88\` asserts SSE-to-UI timing under mock clock |
+| AC-2: Dedupe — one visible item per key | PARTIAL | Unit tests cover publisher dedupe; UI merge path lacks test for race reordering (\`feedStore.test.ts\` missing case) |
+| AC-3: Degraded mode + REST snapshot | PASS | \`NotificationsPanel.tsx:112-140\` renders banner + calls snapshot endpoint |
 
-### Layer 2 — Engineering finding (sample)
+### Layer 2 Findings
 
-- **Severity:** Major
-- **Description:** Snapshot endpoint returns newest N rows but does not guarantee consistency with stream cursor, so users can miss items that arrived between snapshot and subscribe.
-- **File:line:** \`server/routes/notifications.ts:208\`
-- **Recommendation:** Return a monotonic cursor with snapshot and initialize SSE from that cursor; add contract tests for gapless delivery.
-- **Resolution options:**
-  1. Add cursor field + server-side reconciliation on subscribe (preferred).
-  2. Client-side “fetch since last seen id” merge pass (more complex, easier to get wrong).
-  3. Temporary mitigation: widen polling window when SSE is unhealthy (acceptable only as a short-term bridge).
+| ID | Severity | Category | Description | Status |
+| --- | --- | --- | --- | --- |
+| R-1 | Critical | correctness | Snapshot endpoint returns newest N rows but does not guarantee consistency with stream cursor — users can miss items between snapshot and subscribe. | open |
+| R-2 | Important | performance | \`feedStore.merge()\` does full-array scan on every SSE event; O(n) per event where n is feed length. | open |
+| R-3 | Suggestion | architecture | SSE reconnect logic duplicated across \`useNotifications\` and \`usePresence\`; extract shared hook. | open |
 
-### Layer 0 — hygiene checks (sample)
+### Review Army Contract
 
-- **Dependency freshness:** no critical CVEs in direct server dependencies (scanner report linked in PR).
-- **Secrets:** no new env vars committed; rotation playbook unchanged.
+- See \`07-review-army.json\`
+- Reconciliation summary: 1 duplicate collapsed (R-1 reported by spec-reviewer and code-reviewer), 0 conflicts
 
-### Exit criteria (sample)
+### Review Readiness Dashboard
 
-- All **Major** findings resolved or explicitly accepted with a time-bounded follow-up ticket.
-- **PARTIAL** spec compliance items have a named owner and a test plan before ship.`,
+- Layer 1 complete: yes (3/3 criteria)
+- Layer 2 complete: yes (5 sections reviewed)
+- Review army schema valid: yes
+- Open critical blockers: 1 (R-1)
+- Ship recommendation: BLOCKED until R-1 resolved
+
+### Severity Summary
+
+- Critical: 1
+- Important: 1
+- Suggestion: 1
+
+### Final Verdict
+
+- BLOCKED`,
 
   ship: `### Preflight checklist (sample)
 

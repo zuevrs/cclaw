@@ -1123,7 +1123,8 @@ const TDD: StageSchemaInput = {
     { claim: "One broad integration test is enough.", reality: "Slice-level RED tests are required for precise failure signal." },
     { claim: "Refactor can be skipped for speed.", reality: "Skipping refactor accumulates debt and weakens maintainability." },
     { claim: "Only changed tests need to pass.", reality: "Full-suite checks are needed to detect regressions." },
-    { claim: "Traceability is implied by commit diff.", reality: "Explicit mapping avoids ambiguity in review and rollback." }
+    { claim: "Traceability is implied by commit diff.", reality: "Explicit mapping avoids ambiguity in review and rollback." },
+    { claim: "Tests written after implementation achieve the same goals.", reality: "Post-hoc tests confirm assumptions, not behavior. They test what you built, not what you should have built. TDD forces you to think about behavior before you have an implementation to be anchored by." }
   ],
   redFlags: [
     "No failing test output (RED missing)",
@@ -1142,7 +1143,8 @@ const TDD: StageSchemaInput = {
     { name: "Minimal Viable Change", description: "The best implementation is the smallest one that passes all RED tests. Every extra line is risk. Resist the urge to 'improve while you are here.'" },
     { name: "Regression Paranoia", description: "Assume every change breaks something until the full suite proves otherwise. Partial test runs are lies of omission." },
     { name: "Refactor-as-Hygiene", description: "Refactoring is not optional cleanup — it is the third leg of TDD. GREEN without REFACTOR accumulates mess. REFACTOR without GREEN breaks things." },
-    { name: "Evidence Over Anecdote", description: "Every claim about test state must be backed by captured output. 'It passed' without terminal evidence is not evidence. 'I saw it fail' without the failure output is not RED. Capture commands, outputs, and results — not summaries from memory." }
+    { name: "Evidence Over Anecdote", description: "Every claim about test state must be backed by captured output. 'It passed' without terminal evidence is not evidence. 'I saw it fail' without the failure output is not RED. Capture commands, outputs, and results — not summaries from memory." },
+    { name: "Characterization First", description: "Before changing existing behavior, write characterization tests that capture current behavior as-is. These tests document what the system does today — even if that behavior is wrong. Only after the characterization suite is green do you add the new RED test for the desired change. This prevents accidental behavior destruction during refactoring." }
   ],
   reviewSections: [
     {
@@ -1253,7 +1255,8 @@ const REVIEW: StageSchemaInput = {
     { id: "review_layer2_performance", description: "Performance review completed." },
     { id: "review_layer2_architecture", description: "Architecture fit review completed." },
     { id: "review_severity_classified", description: "All findings are severity-tagged." },
-    { id: "review_criticals_resolved", description: "No unresolved critical blockers remain." }
+    { id: "review_criticals_resolved", description: "No unresolved critical blockers remain." },
+    { id: "review_army_json_valid", description: "07-review-army.json passes schema validation (validateReviewArmy)." }
   ],
   requiredEvidence: [
     "Artifact written to `.cclaw/artifacts/07-review.md`.",
@@ -1288,7 +1291,9 @@ const REVIEW: StageSchemaInput = {
     { claim: "Passing tests mean spec compliance by default.", reality: "Tests can miss requirement mismatches; explicit spec review is mandatory." },
     { claim: "Severity labels are unnecessary.", reality: "Without severity, release decisions become inconsistent." },
     { claim: "Critical issues can be fixed after ship.", reality: "Critical blockers must be resolved before release handoff." },
-    { claim: "Security review is not needed for internal tools.", reality: "Internal tools become external surface area. Security is always in scope." }
+    { claim: "Security review is not needed for internal tools.", reality: "Internal tools become external surface area. Security is always in scope." },
+    { claim: "A quick skim is sufficient for small diffs.", reality: "Small diffs hide high-impact changes. A 3-line auth bypass is still critical. Every diff gets layered review regardless of size." },
+    { claim: "The author already reviewed their own code.", reality: "Self-review misses blind spots by definition. Independent review exists precisely because authors cannot objectively evaluate their own assumptions." }
   ],
   redFlags: [
     "No separate Layer 1/Layer 2 outcomes",
@@ -1385,7 +1390,7 @@ const REVIEW: StageSchemaInput = {
   completionStatus: ["APPROVED", "APPROVED_WITH_CONCERNS", "BLOCKED"],
   crossStageTrace: {
     readsFrom: [".cclaw/artifacts/06-tdd.md", ".cclaw/artifacts/04-spec.md", ".cclaw/artifacts/05-plan.md"],
-    writesTo: [".cclaw/artifacts/07-review.md"],
+    writesTo: [".cclaw/artifacts/07-review.md", ".cclaw/artifacts/07-review-army.json"],
     traceabilityRule: "Review verdict must reference specific spec criteria and TDD evidence. Downstream ship stage must reference review verdict."
   },
   artifactValidation: [
@@ -1393,7 +1398,7 @@ const REVIEW: StageSchemaInput = {
     { section: "Layer 2 Findings", required: true, validationRule: "Each finding has severity, description, and resolution status." },
     { section: "Review Army Contract", required: true, validationRule: "Structured findings include id/severity/confidence/fingerprint/reportedBy/status with dedup reconciliation summary." },
     { section: "Review Readiness Dashboard", required: true, validationRule: "At least 4 readiness checklist lines including blocker and recommendation status." },
-    { section: "Severity Summary", required: true, validationRule: "Counts: N critical, N important, N suggestion." },
+    { section: "Severity Summary", required: true, validationRule: "Per-severity count lines for critical, important, and suggestion buckets." },
     { section: "Final Verdict", required: true, validationRule: "Exactly one of: APPROVED, APPROVED_WITH_CONCERNS, BLOCKED." }
   ],
   namedAntiPattern: {
