@@ -1,5 +1,5 @@
 /**
- * Utility skills that complement the 9 flow stages.
+ * Utility skills that complement the 8 flow stages.
  * These are contextual lenses, not flow stages.
  * Each skill: ~120-180 lines, under the 500-line progressive disclosure guideline.
  */

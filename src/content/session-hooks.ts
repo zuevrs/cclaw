@@ -35,7 +35,7 @@ When a new session begins in any harness:
 ### What to show the user at session start
 
 \`\`\`
-Cclaw flow state: [current stage] ([N] of 9 stages completed)
+Cclaw flow state: [current stage] ([N] of 8 stages completed)
 Knowledge highlights: [rule/pattern 1], [rule/pattern 2], [rule/pattern 3]
 Next action: /cc-[stage] to continue, or describe what you'd like to do.
 \`\`\`

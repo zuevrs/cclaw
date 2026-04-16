@@ -1626,6 +1626,13 @@ const STAGE_AUTO_SUBAGENT_DISPATCH: Record<FlowStage, StageAutoSubagentDispatch[
       when: "When acceptance criteria are unclear or constraints conflict.",
       purpose: "Normalize measurable criteria and testability mapping.",
       requiresUserGate: false
+    },
+    {
+      agent: "spec-reviewer",
+      mode: "proactive",
+      when: "When acceptance criteria and edge cases are drafted and need independent validation before plan stage.",
+      purpose: "Independent review of spec against measurability, testability, and completeness before locking the contract for plan.",
+      requiresUserGate: false
     }
   ],
   plan: [
