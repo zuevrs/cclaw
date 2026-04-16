@@ -85,6 +85,16 @@ export const ARTIFACT_TEMPLATES: Record<string, string> = {
   - (HOLD: minimum-change-set hardening)
   - (REDUCE: ruthless cuts, follow-up split)
 
+## Requirements (stable IDs)
+| ID | Requirement (observable outcome) | Priority | Source (origin doc / prompt line) |
+|---|---|---|---|
+| R1 |  | P0 |  |
+
+> Assign \`R1\`, \`R2\`, \`R3\`… once and never renumber. Downstream artifacts
+> (design, spec, plan, review) reference these IDs verbatim. If a requirement
+> is later dropped, keep the row and mark Priority \`DROPPED\`; if a new one is
+> added mid-flow, append with the next free R-number — do NOT reuse numbers.
+
 ## In Scope / Out of Scope
 
 ### In Scope
@@ -204,9 +214,13 @@ export const ARTIFACT_TEMPLATES: Record<string, string> = {
   "04-spec.md": `# Specification Artifact
 
 ## Acceptance Criteria
-| ID | Criterion (observable/measurable/falsifiable) | Design Decision Ref |
-|---|---|---|
-| AC-1 |  |  |
+| ID | Requirement Ref (R#) | Criterion (observable/measurable/falsifiable) | Design Decision Ref |
+|---|---|---|---|
+| AC-1 | R1 |  |  |
+
+> Every AC must reference at least one \`R#\` from \`02-scope.md\`. ACs are
+> stable (never renumber): dropped ACs stay with Priority \`DROPPED\`; new
+> ones append with the next free \`AC-#\`.
 
 ## Edge Cases
 | Criterion ID | Boundary case | Error case |
@@ -328,6 +342,20 @@ Execution rule: complete and verify each wave before starting the next wave.
 | Code type | Target | Current | Command |
 |---|---|---|---|
 |  |  |  |  |
+
+## Test Pyramid Shape
+> Fill in per slice. Size classes: **Small** = pure logic, no I/O, <50ms; **Medium** = single process boundary (fs, in-memory DB, in-process service); **Large** = multi-process / network / real external service. Default to Small; escalate only when a real boundary must be exercised.
+
+| Slice | # Small | # Medium | # Large | Justification for any Medium/Large |
+|---|---|---|---|---|
+| S-1 |  |  |  |  |
+
+## Prove-It Reproduction (bug-fix slices only)
+> Required whenever the slice is classified as a **bug fix** (task class = \`software-bugfix\`). Must demonstrate the test fails without the fix, passes with the fix, and would fail again if the fix were reverted. Skip this table entirely for non-bugfix slices.
+
+| Slice | Reproduction test | RED-without-fix evidence | GREEN-with-fix evidence | Revert-guard note |
+|---|---|---|---|---|
+| S-1 |  |  |  |  |
 `,
   "07-review.md": `# Review Artifact
 

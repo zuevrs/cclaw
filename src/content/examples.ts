@@ -442,6 +442,94 @@ Execution rule: complete and verify each wave before starting the next wave.
 - PR URL: https://github.com/example/repo/pull/42`,
 };
 
+const GOOD_BAD_EXAMPLES: Record<FlowStage, { good: string; bad: string; lesson: string }> = {
+  brainstorm: {
+    good:
+      "Problem: release checks are fragile and inconsistent between CI and local runs; invalid metadata sometimes reaches npm publish. Success: invalid release preconditions are caught before publish with explicit operator feedback, in both CI and local workflows. Constraints: no new runtime dependencies.",
+    bad:
+      "Problem: releases are broken. Success: make them better. Constraints: be careful.",
+    lesson:
+      "\"Make it better\" is not a success criterion — an agent cannot know when it is done. State the observable condition that proves success."
+  },
+  scope: {
+    good:
+      "In scope: in-app notification feed, SSE delivery path, read/unread state, retry on transient failures. Out of scope: email/SMS/push providers, per-user preferences. Deferred: WebSocket channel, rich media, full-text search.",
+    bad:
+      "In scope: notifications. Out of scope: stuff we are not doing. Deferred: v2.",
+    lesson:
+      "Vague boundaries get relitigated in every subsequent stage. Enumerate concrete capabilities on each side — \"stuff we are not doing\" is not a decision."
+  },
+  design: {
+    good:
+      "Failure: SSE connection drop. Trigger: network interruption. Detection: client heartbeat timeout (30s). Mitigation: auto-reconnect with exponential backoff + REST snapshot fallback. User impact: ≤10s delay, no data loss.",
+    bad:
+      "Failure: network errors. Mitigation: retry and log. User impact: users may see issues sometimes.",
+    lesson:
+      "A failure row without a detection signal and a bounded user impact is aspirational, not a design. Name the trigger, the detector, and the recovery behavior."
+  },
+  spec: {
+    good:
+      "AC-1: Given a signed-in user with an active session, when the server publishes a new notification event for that user, the client feed shows the new item within 5 seconds without a full page reload.",
+    bad:
+      "AC-1: Users should see their notifications quickly and reliably, with a good user experience.",
+    lesson:
+      "Spec criteria must be observable, measurable, and falsifiable. \"Quickly\" is a feeling; \"within 5 seconds without a full page reload\" is a test."
+  },
+  plan: {
+    good:
+      "T-2: Implement publisher + outbox write path. Acceptance: AC-1. Verification: `pnpm vitest run tests/integration/publisher.test.ts`. Depends on: T-1. Effort: M.",
+    bad:
+      "T-2: Build the backend. Verify: manual testing. Effort: a few days.",
+    lesson:
+      "A task without a single acceptance criterion and a reproducible verification command is a wish. If you cannot say how you will know it is done, you cannot ship it."
+  },
+  tdd: {
+    good:
+      "RED: `pnpm vitest run tests/unit/dedupe-feed.test.ts` → `publishToOutbox is not a function`. GREEN (after minimal impl): same command, 47/47 pass, full suite. REFACTOR: extracted `mergeLatestByDedupeKey`; suite still 47/47.",
+    bad:
+      "Wrote the publisher code. Tests pass now. Will add unit tests later when I have time.",
+    lesson:
+      "Code written before a failing test is guessing validated after the fact. The RED failure IS the specification — without it, the GREEN pass proves nothing about the intended behavior."
+  },
+  review: {
+    good:
+      "R-1 Critical: snapshot endpoint returns newest N rows but does not guarantee consistency with stream cursor — users can miss items between snapshot and subscribe. Evidence: integration test `notification-consistency.test.ts:22-58`. Status: open.",
+    bad:
+      "Looks good overall. A few small things could be polished, maybe refactor the merge logic. LGTM.",
+    lesson:
+      "\"LGTM\" is not a review — it is a signature on whatever the author shipped. Every finding needs a severity, a falsifiable description, evidence, and a status."
+  },
+  ship: {
+    good:
+      "Rollback trigger: error rate on `/notifications/stream` >5% for 5 minutes, or p95 publish-to-visible lag >10s. Steps: `git revert <merge-sha> && git push origin main` then redeploy; run `2026_04_12_notifications_cursor_down.sql` before traffic. Verification: error rate returns to baseline within 10 minutes.",
+    bad:
+      "Rollback plan: revert the commit if anything goes wrong.",
+    lesson:
+      "\"Revert if anything goes wrong\" leaves the on-call engineer to invent the plan at 2 a.m. The rollback trigger is an operational contract: state the signal, the command, and the verification."
+  }
+};
+
+export function stageGoodBadExamples(stage: FlowStage): string {
+  const sample = GOOD_BAD_EXAMPLES[stage];
+  if (!sample) return "";
+  return [
+    "## Good vs Bad (at-a-glance)",
+    "",
+    "Contrasting samples to calibrate the quality bar for this stage. Read before writing the artifact — mirror the **Good** shape, avoid the **Bad** shape.",
+    "",
+    "**Good**",
+    "",
+    "> " + sample.good,
+    "",
+    "**Bad**",
+    "",
+    "> " + sample.bad,
+    "",
+    "**Why it matters:** " + sample.lesson,
+    ""
+  ].join("\n");
+}
+
 export function stageExamples(stage: FlowStage): string {
   const examples = STAGE_EXAMPLES[stage];
   if (!examples) return "";

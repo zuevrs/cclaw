@@ -11,6 +11,11 @@ const SUBAGENT_AGENT_NAMES = [
   "security-reviewer",
   "test-author",
   "doc-updater",
+  "repo-research-analyst",
+  "learnings-researcher",
+  "framework-docs-researcher",
+  "best-practices-researcher",
+  "git-history-analyzer",
 ] as const;
 
 type SubagentCclawAgentName = (typeof SUBAGENT_AGENT_NAMES)[number];
@@ -62,6 +67,20 @@ If delegation tooling is unavailable in the active harness, run the same control
 - **Use a faster model** for bounded, deterministic tasks (single slice implementation, mechanical refactors, straightforward lint/test fixes).
 - **Use a more capable model** for high-ambiguity or high-risk analysis (security review, architecture conflicts, spec contradiction resolution).
 - During review-heavy stages, prefer **mixed routing**: faster first-pass triage + escalate only high-severity/low-confidence findings.
+
+### Cost-aware routing (tier table)
+
+| Tier | Use for | Example agents |
+|---|---|---|
+| \`deep\` | one heavy reasoning pass per stage (planner, final reconciliation) | planner |
+| \`balanced\` | spec compliance + code/security review with enough context | spec-reviewer, code-reviewer, security-reviewer, test-author |
+| \`fast\` | read-only research / narrow machine checks / docs updates — safe to fan out | repo-research-analyst, learnings-researcher, framework-docs-researcher, best-practices-researcher, git-history-analyzer, doc-updater |
+
+**Routing rules:**
+- At most ONE \`deep\` agent per stage (planner OR final reconciliation, not both).
+- \`balanced\` agents are default for review-stage specialists.
+- \`fast\` agents are the only tier you should fan out in parallel (3-5 at a time is fine).
+- Never escalate a \`fast\` agent's output directly to ship decisions — always have a \`balanced\` reviewer consume the evidence first.
 
 ## HARD-GATE
 
@@ -569,6 +588,151 @@ Process (mandatory):
 `;
 }
 
+function repoResearchAnalystEnhancedBody(): string {
+  return `
+
+## Task Tool Delegation
+
+Launch **read-only repo exploration** at the start of brainstorm/scope/design so the primary agent plans on a grounded map, not guesses. Run as a \`fast\` tier agent — cheap to fan out alongside learnings-researcher and best-practices-researcher.
+
+\`\`\`
+You are a repo research analyst subagent.
+
+TASK DOMAIN: {1-sentence description of the feature/fix/refactor being planned}
+REPO HINTS: {known directories, module names, patterns the primary agent already knows}
+OUT OF SCOPE: {paths not to read (large vendor dirs, generated code)}
+
+Deliverables:
+- Relevant modules: list of \`path — purpose\` (cite file:line on ambiguous claims).
+- Reuse candidates: list of \`file:line — why this absorbs the change\`.
+- Ownership hints: CODEOWNERS / README / comment signals.
+- Gaps: capabilities NOT yet present that the task would need.
+
+Rules:
+- Read-only. Do NOT edit files.
+- Cite file:line for every claim; never invent paths.
+- If the scope is too large to fully explore, say so and bound your search.
+\`\`\`
+
+`;
+}
+
+function learningsResearcherEnhancedBody(): string {
+  return `
+
+## Task Tool Delegation
+
+Dispatch before any non-trivial stage to stream \`.cclaw/knowledge.jsonl\` and surface prior learnings. Cheap \`fast\` tier — fan out with other research agents.
+
+\`\`\`
+You are a learnings researcher subagent.
+
+TASK DESCRIPTION: {verbatim prompt + current stage}
+DOMAIN HINTS: {keywords from Task Classification / Origin Docs}
+
+Deliverables:
+- Matched rules: list of \`trigger → action (confidence)\`.
+- Matched patterns: list of \`trigger → action (confidence)\`.
+- Matched lessons: list of \`trigger → action (confidence)\`.
+- Matched compounds: list of \`trigger → action (confidence)\`.
+- No-match note (if nothing relevant exists).
+
+Rules:
+- Read-only; NEVER rewrite or delete entries.
+- Return at most 10 entries, ranked by confidence then recency.
+- Quote the entries verbatim — do NOT paraphrase.
+\`\`\`
+
+`;
+}
+
+function frameworkDocsResearcherEnhancedBody(): string {
+  return `
+
+## Task Tool Delegation
+
+Use for any task that depends on a specific framework/library/SDK/CLI. Prefer context7 MCP when available for version-accurate docs; otherwise WebSearch/WebFetch official sources.
+
+\`\`\`
+You are a framework documentation researcher subagent.
+
+LIBRARY + VERSION: {name + resolved version from lockfile / pyproject / go.mod / Cargo.toml / pom.xml / build.gradle}
+TASK USAGE: {which APIs the task will actually call}
+CONTEXT7: {"available" | "not available"}
+
+Deliverables:
+- Key APIs: list of signatures the task will touch.
+- Breaking changes since the last major release relevant to the task.
+- Gotchas: deprecated paths, version-gated flags, platform caveats.
+- Source: URL(s) or MCP reference used.
+
+Rules:
+- Never invent APIs. Prefer silence + UNKNOWN over speculation.
+- Tie every statement to an authoritative source; avoid blog posts when official docs exist.
+\`\`\`
+
+`;
+}
+
+function bestPracticesResearcherEnhancedBody(): string {
+  return `
+
+## Task Tool Delegation
+
+Use when the task touches a well-known domain (auth, caching, rate limiting, observability, accessibility, etc.) and the primary agent needs a short, citable best-practice summary.
+
+\`\`\`
+You are a best-practices researcher subagent.
+
+DOMAIN: {one word, e.g. auth, caching, rate-limiting, a11y, observability, retries}
+SUB-PROBLEM: {narrow one-sentence statement of what the task is actually deciding}
+
+Deliverables:
+- Recommended practices: 5-8 entries of \`practice — rationale — source\`.
+- Common traps / anti-patterns: list of \`trap — why it fails — source\`.
+- Decision hooks: 1-3 explicit questions the primary agent must answer.
+
+Rules:
+- Cite 3-5 authoritative sources (official docs, IETF/W3C/OWASP, well-known standards).
+- If the domain has no authoritative answer, say so; do NOT substitute opinion.
+\`\`\`
+
+`;
+}
+
+function gitHistoryAnalyzerEnhancedBody(): string {
+  return `
+
+## Task Tool Delegation
+
+Use when the task touches existing code, so the primary agent can see prior attempts, reverts, and owners before proposing changes.
+
+\`\`\`
+You are a git history analyzer subagent.
+
+IMPACTED PATHS: {list of files/directories the task plans to touch}
+WINDOW: {default 90 days; adjust only if explicitly needed}
+
+Commands to run (read-only):
+- git log --follow -n 20 -- <path>
+- git blame <path>
+- git log --since="<window>" --grep="revert|regression" -- <path>
+- git log --since="<window>" --format="%an" -- <path> | sort | uniq -c | sort -nr
+
+Deliverables:
+- Recent themes: 3-5 bullets on what changed lately per path.
+- Revert/regression signals: list with commit SHAs.
+- Owners: best-guess from blame + committer frequency.
+- Collision risks: in-flight refactors/migrations visible in log.
+
+Rules:
+- Read-only. Never amend history, never git push.
+- If a path is new (no history), say so explicitly rather than fabricating context.
+\`\`\`
+
+`;
+}
+
 function docUpdaterEnhancedBody(): string {
   return `
 
@@ -609,6 +773,16 @@ export function enhancedAgentBody(agentName: string): string {
       return testAuthorEnhancedBody();
     case "doc-updater":
       return docUpdaterEnhancedBody();
+    case "repo-research-analyst":
+      return repoResearchAnalystEnhancedBody();
+    case "learnings-researcher":
+      return learningsResearcherEnhancedBody();
+    case "framework-docs-researcher":
+      return frameworkDocsResearcherEnhancedBody();
+    case "best-practices-researcher":
+      return bestPracticesResearcherEnhancedBody();
+    case "git-history-analyzer":
+      return gitHistoryAnalyzerEnhancedBody();
     default:
       return `
 

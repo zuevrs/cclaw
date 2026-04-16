@@ -309,7 +309,7 @@ const SCOPE: StageSchemaInput = {
     "**Error and Rescue Registry** — For each capability: what breaks, how detected, what fallback."
   ],
   interactionProtocol: [
-    "For scope mode selection: use the Decision Protocol — present expand/selective/hold/reduce as labeled options with trade-offs and mark one as (recommended). **Score each option `Completeness: X/10`** (10 = covers every prime-directive failure mode, four data-flow paths, observability, and deferred handling for the in-scope set; subtract for each gap). Recommend the highest-scoring option; if scores tie, pick the lowest blast radius. Base your recommendation on default heuristics: greenfield -> expand, enhancement -> selective, bugfix/hotfix/refactor -> hold, broad blast radius -> reduce. If AskQuestion/AskUserQuestion is available, send exactly ONE question per call, validate fields against runtime schema, and on schema error immediately fall back to plain-text question instead of retrying guessed payloads.",
+    "For scope mode selection: use the Decision Protocol — present expand/selective/hold/reduce as labeled options with trade-offs and mark one as (recommended). Do NOT use a numeric Completeness rubric; recommend the option that best covers the prime-directive failure modes, four data-flow paths, observability, and deferred handling for the in-scope set with the smallest blast radius. Base your recommendation on default heuristics: greenfield -> expand, enhancement -> selective, bugfix/hotfix/refactor -> hold, broad blast radius -> reduce. If AskQuestion/AskUserQuestion is available, send exactly ONE question per call, validate fields against runtime schema, and on schema error immediately fall back to plain-text question instead of retrying guessed payloads.",
     "Walk through the scope checklist interactively. Each checklist item that surfaces a decision should be presented to the user as a question, not as a monologue. Do not dump all items at once.",
     "Challenge premise and verify the problem framing before anything else.",
     "Take a position on every scope decision. Avoid hedging phrases like 'this could work' or 'there are many ways'; state your recommendation and one concrete condition that would change it.",
@@ -464,6 +464,7 @@ const SCOPE: StageSchemaInput = {
   artifactValidation: [
     { section: "Prime Directives", required: true, validationRule: "For each scoped capability: named failure modes, explicit error surface, four data-flow paths, interaction edge cases, observability expectations, and deferred-item handling." },
     { section: "Premise Challenge", required: true, validationRule: "Must contain explicit answers to: right problem? direct path? what if nothing?" },
+    { section: "Requirements", required: true, validationRule: "Table of stable requirement IDs (R1, R2, R3…) one per row with observable outcome, priority, and source. IDs are assigned once and never renumbered across scope/design/spec/plan/review; dropped requirements stay with Priority `DROPPED`." },
     { section: "Implementation Alternatives", required: true, validationRule: "2-3 options with Name, Summary, Effort, Risk, Pros, Cons, and Reuses. Must include minimal viable and ideal architecture options." },
     { section: "Scope Mode", required: true, validationRule: "Must state selected mode and rationale with default heuristic justification." },
     { section: "Mode-Specific Analysis", required: true, validationRule: "Must document the analysis matching the selected scope mode: EXPAND (10x and delight opportunities), SELECTIVE (hold-scope baseline then cherry-picked expansions), HOLD (minimum-change-set hardening), REDUCE (ruthless cuts and follow-up split)." },
@@ -509,7 +510,7 @@ const DESIGN: StageSchemaInput = {
     "Codebase Investigation — Before any design decision, read the actual code in the blast radius. List every file that will be touched, its current responsibilities, and existing patterns (error handling, naming, test style). Design must conform to discovered patterns, not impose new ones without justification.",
     "Step 0: Scope Challenge — what existing code solves sub-problems? Minimum change set? Complexity check: 8+ files or 2+ new services = complexity smell → flag for possible scope reduction.",
     "Search Before Building — For each technical choice (library, pattern, architecture), search for existing solutions. Label findings: Layer 1 (exact match), Layer 2 (partial match, needs adaptation), Layer 3 (inspiration only), EUREKA (unexpected perfect solution). Default to existing before custom.",
-    "Architecture Review — system design, component boundaries, data flow, scaling, security architecture. For each new codepath: one realistic production failure scenario. **Mandatory:** produce at least one architecture diagram (ASCII, Mermaid, or tool-generated) showing component boundaries and data flow direction.",
+    "Architecture Review — system design, component boundaries, data flow, scaling, security architecture. For each new codepath: one realistic production failure scenario. **Mandatory:** produce at least one architecture diagram (ASCII, Mermaid, or tool-generated) showing component boundaries and data flow direction. Apply the **Visual Communication rules** (see below) — an unlabeled or generic diagram is worse than no diagram, because it pretends to encode decisions it does not.",
     "Code Quality Review — code organization, DRY violations, error handling patterns, over/under-engineering assessment.",
     "Test Review — diagram every new flow, data path, error path. For each: what test type covers it? Does one exist? What is the gap? Produce test plan artifact.",
     "Performance Review — N+1 queries, memory concerns, caching opportunities, slow code paths. What breaks at 10x load? At 100x?",
@@ -521,7 +522,7 @@ const DESIGN: StageSchemaInput = {
   interactionProtocol: [
     "Review architecture decisions section-by-section.",
     "For EACH issue found in a review section, present it ONE AT A TIME. Do NOT batch multiple issues.",
-    "For each issue: use the Decision Protocol — describe concretely with file/line references, present labeled options (A/B/C) with trade-offs, effort estimate (S/M/L/XL), risk level (Low/Med/High), **`Completeness: X/10` per option** (10 = fully addresses architecture/data-flow/failure-modes/test+perf review concerns for the issue, subtract for each unaddressed dimension), and mark one as (recommended). Prefer the highest-scoring option; if scores tie, prefer the lower-risk one. If AskQuestion/AskUserQuestion is available, send exactly ONE question per call, validate fields against runtime schema, and on schema error immediately fall back to plain-text question instead of retrying guessed payloads.",
+    "For each issue: use the Decision Protocol — describe concretely with file/line references, present labeled options (A/B/C) with trade-offs, effort estimate (S/M/L/XL), risk level (Low/Med/High), and mark one as (recommended). Do NOT use a numeric Completeness rubric; recommend the option that best covers architecture, data-flow, failure-modes, test, and perf review concerns for the issue with the lowest risk. If AskQuestion/AskUserQuestion is available, send exactly ONE question per call, validate fields against runtime schema, and on schema error immediately fall back to plain-text question instead of retrying guessed payloads.",
     "Only proceed to the next review section after ALL issues in the current section are resolved.",
     "If a section has no issues, say 'No issues found' and move on.",
     "Do not skip failure-mode mapping.",
@@ -699,7 +700,7 @@ const DESIGN: StageSchemaInput = {
     { section: "Codebase Investigation", required: true, validationRule: "Must list blast-radius files with current responsibilities and discovered patterns." },
     { section: "Search Before Building", required: true, validationRule: "For each technical choice: Layer 1 (exact match), Layer 2 (partial match), Layer 3 (inspiration), EUREKA labels with reuse-first default." },
     { section: "Architecture Boundaries", required: true, validationRule: "Must list component boundaries with ownership." },
-    { section: "Architecture Diagram", required: true, validationRule: "At least one diagram (ASCII, Mermaid, or image) showing component boundaries and data flow direction." },
+    { section: "Architecture Diagram", required: true, validationRule: "At least one diagram (ASCII, Mermaid, or image) showing component boundaries and data flow direction. Diagram must: (1) label every node with a concrete component name (no generic 'Service A/B'), (2) label every arrow with the action or message (no unlabeled arrows), (3) mark direction of data flow explicitly, (4) distinguish synchronous from asynchronous edges (e.g. solid vs dashed, or `sync:` / `async:` prefix), (5) show at least one failure edge or degraded-mode branch when the system has one." },
     { section: "Data Flow", required: true, validationRule: "Must include happy path, nil input, empty input, upstream error paths." },
     { section: "Failure Mode Table", required: true, validationRule: "Each failure mode has: trigger, detection, mitigation, user impact." },
     { section: "Test Strategy", required: true, validationRule: "Must define unit/integration/e2e expectations with coverage targets." },
@@ -866,7 +867,7 @@ const SPEC: StageSchemaInput = {
     traceabilityRule: "Every acceptance criterion must trace to a design decision. Every downstream plan task must trace to a spec criterion."
   },
   artifactValidation: [
-    { section: "Acceptance Criteria", required: true, validationRule: "Each criterion is observable, measurable, and falsifiable. Table should include a Design Decision Ref column tracing back to design artifact." },
+    { section: "Acceptance Criteria", required: true, validationRule: "Each criterion is observable, measurable, and falsifiable. Table must include a Requirement Ref column linking to R# IDs in 02-scope.md and a Design Decision Ref column tracing back to design artifact. AC IDs (AC-1, AC-2…) are stable across revisions — dropped ACs stay with Priority `DROPPED`." },
     { section: "Edge Cases", required: true, validationRule: "At least one boundary and one error condition per criterion." },
     { section: "Constraints and Assumptions", required: true, validationRule: "All implicit assumptions surfaced. Constraints have sources." },
     { section: "Testability Map", required: true, validationRule: "Each criterion maps to a concrete test description with verification approach (unit, integration, e2e, manual) and command or manual steps." },
@@ -1159,7 +1160,10 @@ const TDD: StageSchemaInput = {
     { name: "Regression Paranoia", description: "Assume every change breaks something until the full suite proves otherwise. Partial test runs are lies of omission." },
     { name: "Refactor-as-Hygiene", description: "Refactoring is not optional cleanup — it is the third leg of TDD. GREEN without REFACTOR accumulates mess. REFACTOR without GREEN breaks things." },
     { name: "Evidence Over Anecdote", description: "Every claim about test state must be backed by captured output. 'It passed' without terminal evidence is not evidence. 'I saw it fail' without the failure output is not RED. Capture commands, outputs, and results — not summaries from memory." },
-    { name: "Characterization First", description: "Before changing existing behavior, write characterization tests that capture current behavior as-is. These tests document what the system does today — even if that behavior is wrong. Only after the characterization suite is green do you add the new RED test for the desired change. This prevents accidental behavior destruction during refactoring." }
+    { name: "Characterization First", description: "Before changing existing behavior, write characterization tests that capture current behavior as-is. These tests document what the system does today — even if that behavior is wrong. Only after the characterization suite is green do you add the new RED test for the desired change. This prevents accidental behavior destruction during refactoring." },
+    { name: "Test Pyramid Shape", description: "Healthy test suites look like a pyramid: many small fast tests at the base, fewer medium integration tests in the middle, few large end-to-end tests at the top. Each layer catches a different class of bug; none of them substitutes for another. If your suite is top-heavy (mostly E2E) it is slow and flaky; if it is base-only it misses integration contracts. During TDD, default to the smallest layer that can prove the behavior." },
+    { name: "Prove-It Pattern (bug fixes)", description: "For any reported regression or hotfix, the FIRST test is a reproduction — it must fail without your fix, pass with your fix, and fail again if the fix is reverted. This is the only way to prove you fixed the reported bug and not a superficially similar one. Skipping this step is how bugs come back two releases later wearing a different name." },
+    { name: "Test Size Model", description: "Size tests by scope, not by name: Small = pure logic, no I/O, <50ms; Medium = one process boundary, possibly filesystem or an in-memory DB; Large = multi-process / network / real external service. Small tests are the default; escalate to Medium only when a real boundary must be exercised, and to Large only for end-to-end user journeys. Record the size class in the TDD artifact so reviewers can sanity-check the pyramid shape." }
   ],
   reviewSections: [
     {
@@ -1183,6 +1187,26 @@ const TDD: StageSchemaInput = {
         "Is traceability complete: every change links to plan task ID and spec criterion?"
       ],
       stopGate: true
+    },
+    {
+      title: "Test Pyramid + Size Audit",
+      evaluationPoints: [
+        "Is the tests-added count skewed toward Small (unit) tests, with Medium and Large used only when a real boundary justifies the cost?",
+        "Does every newly added test declare a size class (Small / Medium / Large) — either inline in the test file or in the TDD artifact table?",
+        "Are Large tests reserved for genuine end-to-end user journeys (not substitutes for unit coverage)?",
+        "Has the slice avoided using Medium/Large tests to paper over testability problems that should be fixed at the design layer?"
+      ],
+      stopGate: false
+    },
+    {
+      title: "Prove-It Reproduction (bug-fix slices)",
+      evaluationPoints: [
+        "Does the artifact identify this slice as a bug fix, and if so, include a reproduction test checked in alongside the fix?",
+        "Is there captured RED evidence from running the reproduction WITHOUT the fix applied?",
+        "Is there captured GREEN evidence from the same reproduction AFTER the fix was applied?",
+        "Is there a note confirming the reproduction test fails again if the fix is reverted (or equivalent evidence that the test is actually pinned to this fix)?"
+      ],
+      stopGate: false
     }
   ],
   completionStatus: ["DONE", "DONE_WITH_CONCERNS", "BLOCKED"],
@@ -1199,7 +1223,9 @@ const TDD: StageSchemaInput = {
     { section: "REFACTOR Notes", required: true, validationRule: "What changed, why, behavior preservation confirmed." },
     { section: "Traceability", required: true, validationRule: "Plan task ID and spec criterion linked." },
     { section: "Verification Ladder", required: false, validationRule: "If present: per-slice verification tier (static, command, behavioral, human) with evidence for highest tier reached." },
-    { section: "Coverage Targets", required: false, validationRule: "If present: per-module or per-code-type coverage thresholds with current values and measurement commands." }
+    { section: "Coverage Targets", required: false, validationRule: "If present: per-module or per-code-type coverage thresholds with current values and measurement commands." },
+    { section: "Test Pyramid Shape", required: false, validationRule: "If present: per-slice count of Small/Medium/Large tests added, to let reviewers verify the suite is not drifting top-heavy." },
+    { section: "Prove-It Reproduction", required: false, validationRule: "Required for bug-fix slices: original failing reproduction test (RED without fix), passing output with fix (GREEN), and a note confirming the test fails again if the fix is reverted." }
   ],
   namedAntiPattern: {
     title: "Code Before Failing Test",
@@ -1249,7 +1275,7 @@ const REVIEW: StageSchemaInput = {
     "Run Layer 1 (spec compliance) completely before starting Layer 2.",
     "In each review section, present findings ONE AT A TIME. Do NOT batch.",
     "Classify every finding as Critical, Important, or Suggestion.",
-    "For each Critical finding: use the Decision Protocol — present resolution options (A/B/C) with trade-offs, **score each option `Completeness: X/10`** (10 = fully closes the finding with no carry-over risk; subtract for partial fixes, deferred follow-ups, or new risk introduced), and mark one as (recommended). Prefer the highest-scoring option; if scores tie, prefer the option with the smallest blast radius. If AskQuestion/AskUserQuestion is available, send exactly ONE question per call, validate fields against runtime schema, and on schema error immediately fall back to plain-text question instead of retrying guessed payloads.",
+    "For each Critical finding: use the Decision Protocol — present resolution options (A/B/C) with trade-offs, and mark one as (recommended). Do NOT use a numeric Completeness rubric; recommend the option that fully closes the finding with no carry-over risk and the smallest blast radius. If AskQuestion/AskUserQuestion is available, send exactly ONE question per call, validate fields against runtime schema, and on schema error immediately fall back to plain-text question instead of retrying guessed payloads.",
     "Resolve all critical blockers before ship.",
     "For final verdict: use AskQuestion/AskUserQuestion only if runtime schema is confirmed; otherwise collect verdict with a plain-text single-choice prompt (APPROVED / APPROVED_WITH_CONCERNS / BLOCKED).",
     "**STOP.** Do NOT proceed to ship until the user provides an explicit verdict."
@@ -1462,7 +1488,7 @@ const SHIP: StageSchemaInput = {
   interactionProtocol: [
     "Run preflight checks before any release action.",
     "Document release notes and rollback plan explicitly.",
-    "For finalization mode: use the Decision Protocol — present modes as labeled options (A/B/C/D) with consequences, **score each option `Completeness: X/10`** (10 = fully addresses release blast-radius, rollback readiness, observability, and stakeholder communication), and mark one as (recommended). Prefer the highest-scoring option; if scores tie, prefer the most reversible one. If AskQuestion/AskUserQuestion is available, send exactly ONE question per call, validate fields against runtime schema, and on schema error immediately fall back to plain-text question instead of retrying guessed payloads.",
+    "For finalization mode: use the Decision Protocol — present modes as labeled options (A/B/C/D) with consequences, and mark one as (recommended). Do NOT use a numeric Completeness rubric; recommend the mode that best addresses release blast-radius, rollback readiness, observability, and stakeholder communication — ties go to the most reversible option. If AskQuestion/AskUserQuestion is available, send exactly ONE question per call, validate fields against runtime schema, and on schema error immediately fall back to plain-text question instead of retrying guessed payloads.",
     "Do not proceed if critical blockers remain from review.",
     "**STOP.** Present finalization options and wait for user selection before executing any finalization action."
   ],

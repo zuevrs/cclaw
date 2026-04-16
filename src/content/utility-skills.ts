@@ -1083,6 +1083,144 @@ Escalate to the main review-army under the matching severity (Critical / Importa
 `;
 }
 
+export function documentReviewSkill(): string {
+  return `---
+name: document-review
+description: "Post-artifact scrub pass. Use after writing any cclaw artifact (brainstorm, scope, design, spec, plan, review, ship) and before asking the user for approval — catches placeholders, internal inconsistencies, dangling references, and vague language."
+---
+
+# Document Review
+
+## Quick Start
+
+> 1. Run against the **just-written artifact** before you ask the user to approve it.
+> 2. Walk the five lenses below. For each, produce either a concrete fix or the explicit string "no issues".
+> 3. Apply all fixes yourself in the same artifact — this skill is a scrub, not a checklist for the user.
+
+## HARD-GATE
+
+Do NOT surface an artifact to the user for approval while **any** of the
+following are still present:
+
+- Unresolved placeholders (\`TBD\`, \`TODO\`, \`<fill me>\`, empty table rows
+  that the schema requires).
+- Broken cross-references (e.g. \`AC-12\` in spec when spec table only goes
+  up to \`AC-8\`; \`R3\` referenced in a design decision when scope stops at \`R2\`).
+- Contradictions between sections of the same artifact (e.g. \`In Scope\`
+  says X but \`Acceptance Criteria\` never mentions X).
+- Vague language where the stage requires observable / measurable
+  statements (e.g. "fast", "simple", "seamless", "robust" without a metric).
+- Missing required sections declared by the stage's \`artifactValidation\`.
+
+If any of these remain, fix them first, then re-run this skill; only then
+ask for approval.
+
+## When to Use
+
+- Immediately after writing \`.cclaw/artifacts/01-brainstorm.md\`
+- Immediately after writing \`.cclaw/artifacts/02-scope.md\`
+- Immediately after writing \`.cclaw/artifacts/03-design.md\`
+- Immediately after writing \`.cclaw/artifacts/04-spec.md\`
+- Immediately after writing \`.cclaw/artifacts/05-plan.md\`
+- Immediately after writing \`.cclaw/artifacts/07-review.md\`
+- Immediately after writing \`.cclaw/artifacts/08-ship.md\`
+- Whenever you regenerate an artifact after a Reclassification pass
+
+Do NOT run during \`06-tdd.md\` — the TDD artifact is append-only evidence;
+scrubbing risks destroying RED/GREEN history. Use \`Verification Before
+Completion\` in the TDD skill instead.
+
+## Five Lenses
+
+### 1. Placeholder Scrub
+
+Grep the artifact for: \`TBD\`, \`TODO\`, \`FIXME\`, \`<fill me>\`,
+\`<describe>\`, \`<owner>\`, \`N/A\` inside cells the schema marks as required,
+and empty first-row table cells that the template left blank.
+
+**Output:** each placeholder replaced with real content, or a line added
+explicitly stating "None — <reason>". Never leave a placeholder in a
+required section.
+
+### 2. Cross-Reference Integrity
+
+- Every \`R#\` referenced in this artifact must exist in \`02-scope.md\`.
+- Every \`AC-#\` referenced must exist in \`04-spec.md\`.
+- Every task ID referenced must exist in \`05-plan.md\`.
+- Every file path cited must be the canonical casing used elsewhere.
+- Every ADR / decision reference must resolve to an existing record.
+
+**Output:** broken refs fixed, or flagged with the exact upstream artifact
+that needs updating first.
+
+### 3. Internal Consistency
+
+- \`In Scope\` / \`Out of Scope\` lists do not overlap.
+- Acceptance Criteria match the requirements they claim to verify.
+- Plan tasks cover every AC (no AC left without at least one task).
+- Failure modes listed in design appear in the spec's edge cases.
+- Review verdict matches the evidence (no "Ship" with open Criticals).
+
+**Output:** contradictions resolved by amending whichever side is wrong,
+with a one-line rationale.
+
+### 4. Ambiguity Scan
+
+Flag words that masquerade as decisions:
+
+- "fast", "simple", "robust", "intuitive", "seamless", "scalable",
+  "production-ready", "high quality" — each must be replaced with an
+  observable metric or dropped.
+- "etc.", "and so on", "similar to X" in requirements — enumerate or drop.
+- Passive voice that hides the actor ("will be validated") — name the
+  actor ("the API gateway validates the payload").
+
+**Output:** every flagged term rewritten as observable, or escalated as a
+Decision Protocol question before approval.
+
+### 5. Schema Conformance
+
+Re-verify the artifact against the stage's \`artifactValidation\`:
+
+- Every required section is present with a non-empty body.
+- Tables have the columns the template specifies (no dropped columns).
+- Any "N/A" in a required section carries an inline reason.
+- Required evidence links (test output, diff excerpts) resolve.
+
+**Output:** missing sections added, or escalated as a BLOCKED signal if
+the artifact cannot honestly be completed without more work.
+
+## Output Protocol
+
+After running all five lenses, emit a single one-line summary **before
+asking the user for approval**:
+
+> Document review: 5/5 lenses clean; <N> fixes applied.
+
+If fixes were blocked (e.g. upstream artifact drift), do NOT claim
+"clean" — surface the blocker explicitly and stop.
+
+## Anti-Patterns
+
+- Running this skill as a "polish pass" after the user already approved
+  the artifact — by then it is too late.
+- Treating placeholders as "documentation" ("TBD on rollback — we'll
+  figure it out"). Either decide now or mark it as an explicit BLOCKED.
+- Silently rewriting user-approved content under the guise of "scrubbing".
+- Using this skill as a substitute for the stage's own review sections —
+  it is a **last-mile check**, not a replacement for the stage review.
+
+## Red Flags
+
+- "No issues" on an artifact that still has empty table rows.
+- Cross-reference lens passes but the artifact cites IDs from a stage
+  that has not yet been written.
+- Ambiguity scan finds nothing in a brainstorm / scope artifact (this is
+  implausible — those stages produce narrative by design, and narrative
+  always contains at least one vague phrase worth tightening).
+`;
+}
+
 export function retrospectiveSkill(): string {
   return `---
 name: retrospective
@@ -1416,7 +1554,8 @@ export const UTILITY_SKILL_FOLDERS = [
   "adversarial-review",
   "security-audit",
   "knowledge-curation",
-  "retrospective"
+  "retrospective",
+  "document-review"
 ] as const;
 
 export const UTILITY_SKILL_MAP: Record<string, () => string> = {
@@ -1433,5 +1572,6 @@ export const UTILITY_SKILL_MAP: Record<string, () => string> = {
   "adversarial-review": adversarialReviewSkill,
   "security-audit": securityAuditSkill,
   "knowledge-curation": knowledgeCurationSkill,
-  retrospective: retrospectiveSkill
+  retrospective: retrospectiveSkill,
+  "document-review": documentReviewSkill
 };

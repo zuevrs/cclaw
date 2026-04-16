@@ -28,30 +28,69 @@ This is the **recommended way to start** working with cclaw. Use \`/cc-next\` fo
 ## HARD-GATE
 
 - **Do not** skip reading \`${flowPath}\` — always check current state before acting.
-- **Do not** start implementation stages directly from \`/cc <prompt>\` — always begin at brainstorm.
+- **Do not** start implementation stages directly from \`/cc <prompt>\` — always begin at the first stage of the resolved track (brainstorm for standard, spec for quick).
+- **Do not** start a stage pipeline for a task that is not a software change (pure question, non-software task, conversation).
 
 ## Algorithm
 
 ### With prompt (\`/cc <text>\`)
 
-1. Read \`${flowPath}\`.
-2. If flow already has completed stages beyond brainstorm, warn the user that starting a new brainstorm will reset progress. Ask for confirmation before proceeding.
-3. **Track heuristic** — classify the idea text and **recommend** a track (the user can override before any state mutation):
+1. **Phase 0 — Task classification.** Before any stage routing, classify the prompt:
+
+   | Class | Signals | Action |
+   |---|---|---|
+   | **non-software** | legal text / docs / marketing copy / meeting notes / therapy-style conversation | Respond directly, do NOT open a stage, do NOT mutate flow state. |
+   | **pure-question** | "how does X work?", "explain Y", "what are the trade-offs of Z?" | Answer directly, do NOT open a stage. |
+   | **trivial** | typo, one-liner, rename, config tweak, copy change, version bump with zero behavior change | Fast-path: skip \`brainstorm\` and \`scope\`, seed \`00-idea.md\`, move straight to \`design\` or \`spec\` depending on whether an interface change is involved. |
+   | **software — bug fix with repro** | regression / hotfix / named symptom + repro steps | Fast-path: set track to \`quick\`, seed \`04-spec.md\` with the reproduction, enter \`tdd\` with a RED reproduction test first. |
+   | **software — standard** | feature, refactor, migration, integration, architecture change | Full 8-stage flow starting at \`brainstorm\`. |
+
+   Record the chosen class in \`.cclaw/artifacts/00-idea.md\` on the \`Class:\` line. Do NOT silently treat a non-software task as software.
+
+2. **Phase 1 — Origin-document discovery.** Before asking the user for context, scan for existing requirements/plan artifacts and merge them into initial context:
+   - \`.cclaw/artifacts/00-idea.md\` if it already exists (resumed flow).
+   - Common origin locations: \`docs/prd/**\`, \`docs/rfcs/**\`, \`docs/adr/**\`, \`docs/design/**\`, \`specs/**\`, \`prd/**\`, \`rfc/**\`, \`design/**\`, root-level \`PRD.md\` / \`SPEC.md\` / \`DESIGN.md\` / \`REQUIREMENTS.md\` / \`ROADMAP.md\`.
+   - Summarize each discovered doc in \`00-idea.md\` under a \`Discovered context\` section with path + 1-line summary.
+   - If an origin doc contradicts the prompt, surface the conflict to the user before routing.
+
+3. **Phase 2 — Tech-stack + version detection.** Sniff the repo for stack + language versions and record under \`Stack:\`:
+   - Node: \`package.json\` \`engines\` / \`volta\` / \`packageManager\` / \`devDependencies\`.
+   - Python: \`pyproject.toml\` / \`requirements*.txt\` / \`.python-version\`.
+   - Go: \`go.mod\` (module + Go version).
+   - Rust: \`Cargo.toml\` (\`[package]\` + \`rust-version\`).
+   - Java/Kotlin: \`pom.xml\` / \`build.gradle*\` + toolchain version.
+   - Containers: \`Dockerfile\`, \`docker-compose*.yml\`.
+   - CI: \`.github/workflows\`, \`.gitlab-ci.yml\`.
+   Skip detection quietly if no markers are found — do NOT invent a stack.
+
+4. Read \`${flowPath}\`.
+5. If flow already has completed stages beyond brainstorm, warn the user that starting a new brainstorm will reset progress. Ask for confirmation before proceeding.
+6. **Track heuristic** — classify the idea text and **recommend** a track (the user can override before any state mutation):
    - **quick** (\`spec → tdd → review → ship\`) — single-purpose work where the spec is essentially already known.
      Triggers (case-insensitive substring or close variant): \`bug\`, \`bugfix\`, \`fix\`, \`hotfix\`, \`patch\`, \`typo\`, \`regression\`, \`copy change\`, \`rename\`, \`bump\`, \`upgrade dep\`, \`config tweak\`, \`docs only\`, \`comment\`, \`lint\`, \`format\`, \`small\`, \`tiny\`, \`one-liner\`, \`revert\`.
    - **standard** (full 8 stages — default) — anything that introduces a new capability, touches multiple modules, or has unclear scope.
      Triggers: \`new feature\`, \`add\`, \`build\`, \`design\`, \`refactor\`, \`migration\`, \`platform\`, \`architecture\`, \`endpoint\`, \`schema\`, \`api\`, \`integrate\`, \`workflow\`, \`onboarding\`, or any prompt that does not match quick triggers.
    - When triggers conflict (e.g. "small refactor that touches 5 modules") prefer **standard** — quick is opt-in and only safe when scope is genuinely tiny.
-4. Present the recommendation as a single decision with explicit options:
+7. Present the recommendation as a single decision with explicit options:
    > \`Recommended track: <quick|standard>\` because \`<one-line reason citing matched triggers>\`.
    > Override? (A) keep \`<recommended>\`  (B) switch to \`<other>\`  (C) cancel.
    If \`AskQuestion\`/\`AskUserQuestion\` is available, send exactly ONE question; on schema error, fall back to plain text.
-5. Persist the chosen track to \`${flowPath}\` (\`track\` field). Compute \`skippedStages\` from the track and write that too. Use the **first stage of the chosen track** as \`currentStage\` (quick → \`spec\`, standard → \`brainstorm\`).
-6. Write the prompt to \`.cclaw/artifacts/00-idea.md\` as the raw idea capture, and append a \`Track:\` line referencing the chosen track and the matched heuristic.
-7. Load the **first-stage skill for the chosen track** and its command file:
-   - quick → \`.cclaw/skills/specification-authoring/SKILL.md\` + \`.cclaw/commands/spec.md\`
-   - standard → \`.cclaw/skills/brainstorming/SKILL.md\` + \`.cclaw/commands/brainstorm.md\`
-8. Execute that stage with the prompt as initial context.
+8. Persist the chosen track to \`${flowPath}\` (\`track\` field). Compute \`skippedStages\` from the track and write that too. Use the **first stage of the chosen track** as \`currentStage\` (quick → \`spec\`, standard → \`brainstorm\`, trivial fast-path → \`design\` or \`spec\` per Phase 0).
+9. Write the prompt to \`.cclaw/artifacts/00-idea.md\` with the following header lines: \`Class:\` (from Phase 0), \`Track:\` (chosen track + matched heuristic), \`Stack:\` (from Phase 2 detection, or \`unknown\`), and a \`Discovered context\` section if Phase 1 found origin docs.
+10. Load the **first-stage skill for the chosen track** and its command file:
+    - quick → \`.cclaw/skills/specification-authoring/SKILL.md\` + \`.cclaw/commands/spec.md\`
+    - standard → \`.cclaw/skills/brainstorming/SKILL.md\` + \`.cclaw/commands/brainstorm.md\`
+    - trivial fast-path → design or spec skill per Phase 0 decision.
+11. Execute that stage with the prompt + Phase 1/Phase 2 context as initial input.
+
+### Reclassification on discovery
+
+If during any stage the agent discovers evidence that contradicts the initial Phase 0 / track decision (e.g. a supposedly \`trivial\` change turns out to require schema migration, a \`quick\` bug fix turns out to need design discussion, an origin doc reveals scope 3× larger than the prompt), STOP and re-classify:
+
+1. Surface the new evidence in plain text.
+2. Propose the updated \`Class\` + \`Track\` with a one-line reason.
+3. Use the Decision Protocol to let the user accept, override, or cancel.
+4. On acceptance: update \`00-idea.md\` with a \`Reclassification:\` entry (old → new, reason, ISO timestamp) and update \`flow-state.json\` accordingly — do NOT rewrite prior artifacts, they stay as history.
 
 ### Without prompt (\`/cc\`)
 
@@ -92,12 +131,15 @@ Do **not** silently discard an existing flow when the user provides a prompt. If
 
 ### Path A: \`/cc <prompt>\`
 
-1. Read \`${flowPath}\`.
-2. If \`completedStages\` is non-empty:
+1. **Task classification (Phase 0).** Decide whether the prompt is \`software-standard\`, \`software-trivial\`, \`software-bugfix\`, \`pure-question\`, or \`non-software\`. Non-software and pure-question exit immediately — answer directly, do not open a stage.
+2. **Origin-document discovery (Phase 1).** Scan for \`docs/prd/**\`, \`docs/rfcs/**\`, \`docs/adr/**\`, \`docs/design/**\`, \`specs/**\`, root-level \`PRD.md\` / \`SPEC.md\` / \`DESIGN.md\` / \`REQUIREMENTS.md\`. Summarize any hits in \`00-idea.md\` under \`Discovered context\`. Surface conflicts with the prompt before routing.
+3. **Stack detection (Phase 2).** Inspect \`package.json\` engines, \`pyproject.toml\`, \`go.mod\`, \`Cargo.toml\`, \`pom.xml\`, \`build.gradle*\`, \`Dockerfile\`, \`docker-compose*.yml\`, and CI configs. Record stack + versions on the \`Stack:\` line. Do not invent stack details.
+4. Read \`${flowPath}\`.
+5. If \`completedStages\` is non-empty:
    - Inform: "You have an active flow at stage **{currentStage}** with {N} completed stages. Starting a new brainstorm will reset progress."
    - Ask: "Continue with reset? (A) Yes, start fresh (B) No, resume current flow"
    - If (B) → switch to Path B behavior.
-3. **Classify the idea** using the heuristic below and present a single track recommendation. Wait for explicit confirmation or override before mutating any state.
+6. **Classify the idea** using the heuristic below and present a single track recommendation. Wait for explicit confirmation or override before mutating any state.
 
    **Track heuristic** (lowercase substring match against the user prompt):
 
@@ -108,9 +150,13 @@ Do **not** silently discard an existing flow when the user provides a prompt. If
 
    - On conflict, prefer \`standard\` (quick is opt-in for genuinely tiny work).
    - Always state the recommendation as a one-line reason citing the matched trigger.
-4. Persist the chosen track in \`${flowPath}\` (\`track\` + \`skippedStages\`). Set \`currentStage\` to the first stage of the chosen track (\`quick\` → \`spec\`, \`standard\` → \`brainstorm\`). Reset gate catalog.
-5. Write \`${RUNTIME_ROOT}/artifacts/00-idea.md\` with the user's prompt and an explicit \`Track:\` line capturing the heuristic decision.
-6. Load and execute the **first stage skill of the chosen track** (\`brainstorming\` for standard, \`specification-authoring\` for quick) plus its matching command file.
+7. Persist the chosen track in \`${flowPath}\` (\`track\` + \`skippedStages\`). Set \`currentStage\` to the first stage of the chosen track (\`quick\` → \`spec\`, \`standard\` → \`brainstorm\`, trivial fast-path → \`design\` or \`spec\`). Reset gate catalog.
+8. Write \`${RUNTIME_ROOT}/artifacts/00-idea.md\` with the user's prompt plus header lines: \`Class:\`, \`Track:\`, \`Stack:\`, and a \`Discovered context\` section from Phase 1.
+9. Load and execute the **first stage skill of the chosen track** (\`brainstorming\` for standard, \`specification-authoring\` for quick) plus its matching command file.
+
+### Reclassification on discovery
+
+If mid-stage evidence contradicts the initial Class/Track decision (the "trivial" change needs a migration, the "quick" bug fix needs architecture work, an origin doc multiplies scope), STOP and re-classify using the Decision Protocol. Record \`Reclassification:\` in \`00-idea.md\` with old/new class and a one-line reason. Do NOT rewrite prior artifacts — they stay as history.
 
 ### Path B: \`/cc\` (no arguments)
 

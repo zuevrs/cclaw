@@ -1,9 +1,9 @@
 import { RUNTIME_ROOT } from "../constants.js";
 import type { FlowStage } from "../types.js";
-import { stageExamples } from "./examples.js";
+import { stageExamples, stageGoodBadExamples } from "./examples.js";
 import { selfImprovementBlock } from "./learnings.js";
 import type { StageSchema } from "./stage-schema.js";
-import { QUESTION_FORMAT_SPEC, ERROR_BUDGET_SPEC, stageAutoSubagentDispatch, stageSchema } from "./stage-schema.js";
+import { stageAutoSubagentDispatch, stageSchema } from "./stage-schema.js";
 
 function rationalizationTable(stage: FlowStage): string {
   const schema = stageSchema(stage);
@@ -71,6 +71,25 @@ function decisionRecordBlock(stage: FlowStage): string {
   const fmt = stageSchema(stage).decisionRecordFormat;
   if (!fmt) return "";
   return `## Decision Record Template\n\nUse this format for every non-trivial architecture or scope decision made during this stage:\n\n\`\`\`\n${fmt}\n\`\`\`\n`;
+}
+
+function visualCommunicationBlock(stage: FlowStage): string {
+  if (stage !== "design") return "";
+  return `## Visual Communication Rules
+
+Diagrams are load-bearing artifacts in the design stage, not decoration. A diagram that encodes structure wrongly (or hides structure behind generic labels) misleads every downstream reader. Apply these rules to **every** diagram in the design artifact:
+
+1. **Concrete names, never generic.** "Service A → Service B" is not a diagram; it is a shape. Every node must name a real component the team will build or touch (\`NotificationPublisher\`, \`FeedReadModel\`, \`Stripe webhook handler\`). If you cannot name it concretely, the design is not ready.
+2. **Every arrow is labeled.** Label with the message, action, or protocol it carries (\`publishEvent(user_id, payload)\`, \`GET /snapshot\`, \`dedupe-key upsert\`). Unlabeled arrows silently lose the contract between components.
+3. **Direction is explicit.** Use arrowheads, not bare lines; draw the flow of *data* (not "dependency") unless the diagram type is explicitly a dependency graph, in which case say so in a one-line caption.
+4. **Distinguish sync vs async.** Use a convention and state it once in a legend: e.g. solid arrow = synchronous request/response, dashed arrow = async message via queue/bus, double arrow = two-way. Async edges always name the queue or topic.
+5. **Show at least one failure edge.** Every non-trivial diagram needs one branch that represents the degraded or error path (timeout, reconnect, fallback to cache, poison-message routing). A diagram with only the happy path hides the interesting half of the design.
+6. **One level of detail per diagram.** Do not mix "service-level" and "class-level" on the same canvas. If you need both, produce two diagrams — one at the system boundary, one at the internal module — and cross-reference them.
+7. **Caption, not decoration.** Each diagram gets a one-sentence caption below it stating what the reader should take away ("*Publish path with idempotent outbox; SSE stream reads the projection, not the bus directly*"). If you cannot write the caption in one sentence, the diagram is doing two things at once.
+8. **Prefer text-based formats** (Mermaid, ASCII) over binary images in \`.cclaw/artifacts/\` so diffs stay reviewable. Binary/SVG is allowed when the diagram is already the source of truth elsewhere (e.g. \`docs/architecture/\`) and the artifact embeds a link plus a text-based summary.
+
+If a diagram cannot satisfy rules 1–5, do NOT include it — a missing diagram is honest; a misleading diagram is worse. Surface the gap in **Unresolved Decisions** and proceed without the diagram until the decisions that would populate it are locked.
+`;
 }
 
 function contextLoadingBlock(stage: FlowStage): string {
@@ -372,15 +391,14 @@ You MUST complete these steps in order:
 
 ${checklistItems}
 
+${stageGoodBadExamples(stage)}
 ${stageExamples(stage)}
 ${namedAntiPatternBlock(stage)}
 ${cognitivePatternsList(stage)}
 ## Interaction Protocol
 ${schema.interactionProtocol.map((item, i) => `${i + 1}. ${item}`).join("\n")}
 
-${QUESTION_FORMAT_SPEC}
-
-${ERROR_BUDGET_SPEC}
+**See \`.cclaw/skills/using-cclaw/SKILL.md\` "Shared Decision + Tool-Use Protocol"** for the full AskUserQuestion format, error/retry budget, and the 3-attempt escalation rule. Do not duplicate those rules here — apply them verbatim.
 
 ${waveExecutionModeBlock(stage)}
 ## Required Gates
@@ -396,15 +414,13 @@ ${reviewSectionsBlock(stage)}
 ${verificationBlock(stage)}
 ${crossStageTraceBlock(stage)}
 ${artifactValidationBlock(stage)}
+${visualCommunicationBlock(stage)}
 ${decisionRecordBlock(stage)}
 ## Common Rationalizations
 ${rationalizationTable(stage)}
 
-## Blockers
-${schema.blockers.length > 0 ? schema.blockers.map((item) => `- ${item}`).join("\n") : "- None — stage can always proceed"}
-
 ## Anti-Patterns
-${schema.antiPatterns.map((item) => `- ${item}`).join("\n")}
+${[...schema.antiPatterns, ...schema.blockers].map((item) => `- ${item}`).join("\n")}
 
 ## Red Flags
 ${schema.redFlags.map((item) => `- ${item}`).join("\n")}
@@ -417,6 +433,25 @@ ${stageTransitionAutoAdvanceBlock(schema)}
 ${progressiveDisclosureBlock(stage)}
 ${selfImprovementBlock(stage)}
 ## Handoff
+
+Before closing the stage, announce the handoff explicitly so the user can steer. Use the **Handoff Menu** below; never auto-advance silently, even when \`/cc-next\` is available.
+
+### Handoff Menu
+
+Offer the user a lettered choice at the end of the stage (use \`AskUserQuestion\` / \`AskQuestion\` when the harness supports it, otherwise plain lettered text):
+
+- **A) Advance** — run \`/cc-next\` and continue to the next stage. Default when all gates are satisfied and there are no open concerns.
+- **B) Revise this stage** — stay on the current stage; apply the user's feedback, then re-ask for handoff.
+- **C) Pause / park** — save state; stop here. Useful when the user wants to share the artifact with a human reviewer before continuing.
+- **D) Rewind** — move to a prior stage (user names which). Use when downstream work revealed that an earlier stage was wrong.
+- **E) Abandon** — mark the flow as cancelled; no further stages will run. Artifacts remain on disk.
+
+Recommendation rules:
+- If all required gates are satisfied AND the stage's completion status is \`DONE\`, recommend **A (Advance)**.
+- If completion status is \`DONE_WITH_CONCERNS\`, recommend **B (Revise)** and name the concern.
+- If completion status is \`BLOCKED\`, recommend **B (Revise)** or **C (Pause)** depending on whether the blocker is internal or external.
+
+Reference data for the user:
 - Next command: \`/cc-next\` (loads whatever stage is current in flow-state)
 - Required artifact: \`.cclaw/artifacts/${schema.artifactFile}\`
 - Stage stays blocked if any required gate is unsatisfied
