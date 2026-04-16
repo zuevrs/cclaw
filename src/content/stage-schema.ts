@@ -827,7 +827,11 @@ const SPEC: StageSchemaInput = {
     { section: "Constraints and Assumptions", required: true, validationRule: "All implicit assumptions surfaced. Constraints have sources." },
     { section: "Testability Map", required: true, validationRule: "Each criterion maps to a concrete test description." },
     { section: "Approval", required: true, validationRule: "Explicit user approval marker present." }
-  ]
+  ],
+  namedAntiPattern: {
+    title: "Implementation Will Clarify Requirements",
+    description: "Unclear specs do not become clear during coding — they become contradictory implementations, rework, and scope creep. If a requirement cannot be stated in observable, testable terms right now, it is not ready for implementation. Rewrite it until it is falsifiable."
+  }
 };
 
 // ---------------------------------------------------------------------------
