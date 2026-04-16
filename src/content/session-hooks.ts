@@ -27,7 +27,7 @@ These are prompt-discipline guidelines that complement the real hooks cclaw gene
 When a new session begins in any harness:
 
 1. **Read flow state:** Load \`.cclaw/state/flow-state.json\` to find the current stage and completed stages.
-2. **Load knowledge:** Review recent entries from \`.cclaw/knowledge.md\` and surface the most relevant rules/patterns.
+2. **Load knowledge:** Stream the tail of \`.cclaw/knowledge.jsonl\` (strict JSONL store) and surface the most relevant rules/patterns.
 3. **Check for in-progress work:** If the last stage is incomplete, remind the user and offer to resume.
 4. **Load suggestion memory:** Read \`.cclaw/state/suggestion-memory.json\` and honor \`enabled=false\` opt-out.
 5. **Read AGENTS.md:** The cclaw block contains routing and rules — follow them.
@@ -46,7 +46,7 @@ Before ending a session or when context is full:
 
 1. **Verify no pending changes:** All modified files must be either committed or explicitly reverted.
 2. **Update flow state:** Mark the current stage as its actual status (DONE / DONE_WITH_CONCERNS / BLOCKED).
-3. **Write knowledge:** If any non-obvious reusable insight appears, append to \`.cclaw/knowledge.md\` with type \`rule\`, \`pattern\`, or \`lesson\`.
+3. **Write knowledge:** If any non-obvious reusable insight appears, append one strict-schema JSON line to \`.cclaw/knowledge.jsonl\` with type \`rule\`, \`pattern\`, \`lesson\`, or \`compound\`.
 4. **Create checkpoint:** Write a brief status note to the current artifact or as a comment in flow-state.json.
 
 ### Stop conditions (agent must halt and report)

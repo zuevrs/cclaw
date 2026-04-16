@@ -58,7 +58,7 @@ SUGGESTION_MEMORY_FILE="$ROOT/${RUNTIME_ROOT}/state/suggestion-memory.json"
 CONTEXT_WARNINGS_FILE="$ROOT/${RUNTIME_ROOT}/state/context-warnings.jsonl"
 CONTEXT_MODE_FILE="$ROOT/${RUNTIME_ROOT}/state/context-mode.json"
 CONTEXTS_DIR="$ROOT/${RUNTIME_ROOT}/contexts"
-KNOWLEDGE_FILE="$ROOT/${RUNTIME_ROOT}/knowledge.md"
+KNOWLEDGE_FILE="$ROOT/${RUNTIME_ROOT}/knowledge.jsonl"
 META_SKILL="$ROOT/${RUNTIME_ROOT}/skills/${META_SKILL_NAME}/SKILL.md"
 
 # --- Read flow state ---
@@ -316,7 +316,7 @@ if [ -f "$META_SKILL" ]; then
   META_CONTENT=$(cat "$META_SKILL" 2>/dev/null || echo "")
 fi
 
-# --- Load knowledge snapshot (append-only markdown) ---
+# --- Load knowledge snapshot (canonical JSONL tail) ---
 KNOWLEDGE_SUMMARY=""
 if [ -f "$KNOWLEDGE_FILE" ] && [ -s "$KNOWLEDGE_FILE" ]; then
   KNOWLEDGE_SUMMARY=$(tail -n 30 "$KNOWLEDGE_FILE" 2>/dev/null || echo "")
@@ -601,7 +601,7 @@ RUN_SYNC_NOTE="Run metadata sync removed; active artifacts stay in ${RUNTIME_ROO
 
 # --- Escape for JSON ---
 ${ESCAPE_FN}
-MSG=$(escape_json "Cclaw: session ending (stage=$STAGE, run=$ACTIVE_RUN). $CHECKPOINT_NOTE $RUN_SYNC_NOTE Before stopping: (1) confirm flow-state reflects reality, (2) ensure artifact changes match current feature intent, (3) if you discovered a non-obvious rule/pattern, append it to ${RUNTIME_ROOT}/knowledge.md, (4) commit or revert pending changes.")
+MSG=$(escape_json "Cclaw: session ending (stage=$STAGE, run=$ACTIVE_RUN). $CHECKPOINT_NOTE $RUN_SYNC_NOTE Before stopping: (1) confirm flow-state reflects reality, (2) ensure artifact changes match current feature intent, (3) if you discovered a non-obvious rule/pattern, append one strict-schema JSON line to ${RUNTIME_ROOT}/knowledge.jsonl, (4) commit or revert pending changes.")
 
 # --- Output harness-specific JSON ---
 case "$HARNESS" in
@@ -640,7 +640,7 @@ INPUT=$(cat 2>/dev/null || echo '{}')
 STATE_DIR="$ROOT/${RUNTIME_ROOT}/state"
 STATE_FILE="$STATE_DIR/flow-state.json"
 DELEGATION_FILE="$STATE_DIR/delegation-log.json"
-KNOWLEDGE_FILE="$ROOT/${RUNTIME_ROOT}/knowledge.md"
+KNOWLEDGE_FILE="$ROOT/${RUNTIME_ROOT}/knowledge.jsonl"
 DIGEST_FILE="$STATE_DIR/session-digest.md"
 DIGEST_TMP="$STATE_DIR/session-digest.md.tmp.$$"
 
@@ -799,7 +799,7 @@ export default function cclawPlugin(ctx) {
   const contextModePath = join(stateDir, "context-mode.json");
   const contextsDir = join(runtimeDir, "contexts");
   const sessionDigestPath = join(stateDir, "session-digest.md");
-  const knowledgePath = join(runtimeDir, "knowledge.md");
+  const knowledgePath = join(runtimeDir, "knowledge.jsonl");
   const metaSkillPath = join(runtimeDir, "skills/${META_SKILL_NAME}/SKILL.md");
 
   function ensureRuntimeDirs() {
@@ -936,7 +936,7 @@ export default function cclawPlugin(ctx) {
     if (knowledge.length > 0) parts.push("Knowledge snapshot (latest entries):", ...knowledge);
 
     parts.push(
-      "If you discover a non-obvious rule or pattern, append it to .cclaw/knowledge.md using type: rule, pattern, or lesson."
+      "If you discover a non-obvious rule or pattern, append one strict-schema JSON line to .cclaw/knowledge.jsonl using type: rule, pattern, lesson, or compound."
     );
 
     const meta = readFileText(metaSkillPath).trim();

@@ -762,22 +762,22 @@ candidates exist).
 export function knowledgeCurationSkill(): string {
   return `---
 name: knowledge-curation
-description: "Read-only curation pass over .cclaw/knowledge.md and .cclaw/knowledge.jsonl. Surfaces stale, duplicate, or low-confidence entries and proposes a soft-archive plan; never deletes without explicit user approval."
+description: "Read-only curation pass over the canonical strict-JSONL knowledge store at .cclaw/knowledge.jsonl. Surfaces stale, duplicate, or low-confidence entries and proposes a soft-archive plan that moves approved lines to .cclaw/knowledge.archive.jsonl. Never deletes without explicit user approval."
 ---
 
 # Knowledge Curation
 
 ## Quick Start
 
-> 1. This is a **read-only audit** of \`.cclaw/knowledge.md\` and, when present, \`.cclaw/knowledge.jsonl\`. Never delete or rewrite entries here.
+> 1. This is a **read-only audit** of \`.cclaw/knowledge.jsonl\`. Never delete or rewrite entries here.
 > 2. Surface candidates for soft-archive when the active file > 50 entries OR contains stale/duplicate/superseded entries.
 > 3. Propose a single archive plan and require explicit user approval before any move.
 
 ## HARD-GATE
 
-- Do not modify \`.cclaw/knowledge.md\` or \`.cclaw/knowledge.jsonl\` from this skill except via an explicit user-approved archive plan that **moves** markdown entries to \`.cclaw/knowledge.archive.md\` and appends soft-archive lines (same title, \`archived: true\`) to the JSONL. Never physically removes entries.
-- Do not silently rewrite or summarize entries — preserve original wording.
-- Prefer the JSONL store for queries when present (faster, structured); use the markdown mirror as the human-readable source of truth for final user approval.
+- Do not modify \`.cclaw/knowledge.jsonl\` from this skill except via an explicit user-approved archive plan that **moves** full JSON lines verbatim to \`.cclaw/knowledge.archive.jsonl\`. Never physically delete history that is already archived — the archive file is append-only too.
+- Do not silently rewrite or summarize entries — preserve the original JSON line byte-for-byte.
+- Operate only on the canonical JSONL store. If you see a stray \`.cclaw/knowledge.md\`, report it as a drift signal; do **not** read or rewrite it.
 
 ## When to run
 
@@ -787,28 +787,28 @@ description: "Read-only curation pass over .cclaw/knowledge.md and .cclaw/knowle
 
 ## Audit dimensions
 
-For each entry in \`.cclaw/knowledge.md\` produce a row with:
+For each JSON line in \`.cclaw/knowledge.jsonl\` produce a row with:
 
 | Field | Source |
 |---|---|
-| Title | \`### <ts> [type] <title>\` heading |
-| Type | \`rule\` / \`pattern\` / \`lesson\` / \`compound\` |
-| Stage | \`Stage:\` field (or \`unknown\`) |
-| Age | days since timestamp |
-| Confidence | \`Confidence:\` field if present, else \`unstated\` |
-| Domain | \`Domain:\` field if present |
-| Supersedes | \`Supersedes:\` field if present |
+| # | 1-based line number in the JSONL file |
+| Type | \`type\` field (\`rule\` / \`pattern\` / \`lesson\` / \`compound\`) |
+| Stage | \`stage\` field (or \`null\`) |
+| Age | days since \`created\` |
+| Confidence | \`confidence\` field |
+| Domain | \`domain\` field (or \`null\`) |
+| Trigger | \`trigger\` field, truncated to 60 chars |
 | Status hint | one of: keep / supersede-candidate / archive-candidate / duplicate |
 
 ### Status rules
 
-- **supersede-candidate**: another entry has \`Supersedes: <this-title>\`.
-- **duplicate**: title or insight ≈ another entry's (caller's judgment, not regex).
+- **supersede-candidate**: a newer line shares the same \`trigger\` (case-insensitive) and a different \`action\`.
+- **duplicate**: \`trigger\` ≈ another line's AND \`action\` ≈ the same (caller's judgment).
 - **archive-candidate**:
-  - Type \`lesson\` AND age > 180 days AND no \`Supersedes\` chain points to it; OR
-  - Stage = \`brainstorm\` AND age > 90 days; OR
-  - Confidence = \`low\` AND age > 60 days; OR
-  - Total active entries > 50 and entry has lowest reuse signal.
+  - \`type=lesson\` AND age > 180 days AND no newer line references the same \`trigger\`; OR
+  - \`stage=brainstorm\` AND age > 90 days; OR
+  - \`confidence=low\` AND age > 60 days; OR
+  - Total active entries > 50 and entry has the lowest estimated reuse signal.
 - **keep**: everything else.
 
 ## Output format
@@ -818,7 +818,7 @@ Produce two artifacts as **chat output only** (do not write files):
 ### 1. Audit table
 
 \`\`\`markdown
-| # | Title | Type | Stage | Age | Confidence | Status hint |
+| # | Type | Stage | Age | Confidence | Trigger | Status hint |
 |---|---|---|---|---|---|---|
 | 1 | … | … | … | … | … | … |
 \`\`\`
@@ -831,14 +831,15 @@ Produce two artifacts as **chat output only** (do not write files):
 Threshold reasoning: <why entries below were selected>
 
 Entries to archive:
-1. <title> — reason
-2. <title> — reason
+1. line #<N> — <trigger> — reason
+2. line #<N> — <trigger> — reason
 
 Action plan if approved:
-1. Append a header to \`.cclaw/knowledge.archive.md\` with today's UTC date.
-2. Move (cut/paste) selected entries verbatim from \`.cclaw/knowledge.md\` into the archive file.
-3. Append a single supersession line to \`.cclaw/knowledge.md\`:
-   \\\`### <ts> [pattern] knowledge-curation-<date> — archived <N> entries, see knowledge.archive.md\\\`
+1. Ensure \`.cclaw/knowledge.archive.jsonl\` exists (create empty if missing).
+2. Move (cut/paste) the selected JSON lines verbatim from
+   \`.cclaw/knowledge.jsonl\` into \`.cclaw/knowledge.archive.jsonl\`,
+   preserving byte order within each file.
+3. Do not rewrite, re-order, or pretty-print any remaining line in the active file.
 
 After approval: ask the user to run the move themselves, or — if they explicitly grant write access — perform the move atomically and report the new active count.
 \`\`\`
@@ -1093,7 +1094,7 @@ description: "Post-ship retrospective lens. Use after a ship to extract durable 
 ## Quick Start
 
 > 1. Run **after** the ship stage closes (PR merged or release tagged), while the run is still loaded in memory.
-> 2. Walk the four lenses below; harvest concrete entries for \`.cclaw/knowledge.md\`.
+> 2. Walk the four lenses below; harvest concrete entries for \`.cclaw/knowledge.jsonl\`.
 > 3. Stop when you have at least one durable entry **or** an explicit "no new lesson this run".
 
 ## HARD-GATE
@@ -1146,13 +1147,14 @@ For each lens, write either a knowledge entry **or** the explicit string
 
 ## Output protocol
 
-For every harvested insight, append one entry to \`.cclaw/knowledge.md\` using
-the standard format (see \`learnings\` skill). Prefer:
+For every harvested insight, append one strict-schema JSON line to
+\`.cclaw/knowledge.jsonl\` (fields: \`type, trigger, action, confidence, domain, stage, created, project\`).
+See the \`learnings\` skill for the canonical shape. Choose \`type\`:
 
-- \`[compound]\` for process/speed accelerators.
-- \`[lesson]\` for "we learned this the hard way".
-- \`[pattern]\` for repeatable shapes that worked.
-- \`[rule]\` only for hard constraints that must always hold.
+- \`compound\` for process/speed accelerators.
+- \`lesson\` for "we learned this the hard way".
+- \`pattern\` for repeatable shapes that worked.
+- \`rule\` only for hard constraints that must always hold.
 
 Then write a one-paragraph **Run Summary** at the top of the next
 \`/cc <idea>\` brainstorm context citing the lessons in scope.

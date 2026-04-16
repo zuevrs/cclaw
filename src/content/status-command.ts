@@ -12,7 +12,7 @@ function delegationLogPath(): string {
 }
 
 function knowledgePath(): string {
-  return `${RUNTIME_ROOT}/knowledge.md`;
+  return `${RUNTIME_ROOT}/knowledge.jsonl`;
 }
 
 function contextModePath(): string {
@@ -140,7 +140,7 @@ a read-only command.
    - Prefer \`${checkpointPath()}\` when \`stage === currentStage\` and \`timestamp\` parses as ISO 8601.
    - Else scan \`${stageActivityPath()}\` from tail for the most recent entry whose \`stage === currentStage\`; use its \`ts\`.
    - Render \`<X>d<Y>h\`, \`<X>h<Y>m\`, \`<X>m\`, or \`(unknown)\`.
-5. Read \`${RUNTIME_ROOT}/knowledge.md\`. If missing or empty → knowledge highlights are \`(none recorded)\`.
+5. Read \`${RUNTIME_ROOT}/knowledge.jsonl\`. If missing or empty → knowledge highlights are \`(none recorded)\`. Parse each line as JSON and surface its \`trigger\`/\`action\`.
 6. For each gate in \`stageGateCatalog[currentStage].required\`:
    - Satisfied if present in \`passed\` and absent from \`blocked\`.
 7. Build and print the status block (see command contract for layout).

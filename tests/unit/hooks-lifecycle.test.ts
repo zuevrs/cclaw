@@ -106,7 +106,7 @@ describe("hooks lifecycle rehydration", () => {
     expect(script).toContain("context-mode.json");
     expect(script).toContain("Context mode:");
     expect(script).toContain("Active artifacts: .cclaw/artifacts/");
-    expect(script).toContain("knowledge.md");
+    expect(script).toContain("knowledge.jsonl");
   });
 
   it("session-start script executes and emits bootstrap payload with knowledge", async () => {
@@ -128,14 +128,17 @@ describe("hooks lifecycle rehydration", () => {
     await fs.writeFile(path.join(root, ".cclaw/state/stage-activity.jsonl"), [
       JSON.stringify({ ts: "2026-01-01T00:00:01Z", phase: "post", tool: "RunCommand", stage: "review", runId: "active" })
     ].join("\n"), "utf8");
-    await fs.writeFile(path.join(root, ".cclaw/knowledge.md"), [
-      "# Project Knowledge",
-      "",
-      "### 2026-01-01T00:00:00Z [pattern] keep-diffs-small",
-      "- Stage: review",
-      "- Context: wide release changes",
-      "- Insight: split broad changes",
-      "- Reuse: keep change sets focused"
+    await fs.writeFile(path.join(root, ".cclaw/knowledge.jsonl"), [
+      JSON.stringify({
+        type: "pattern",
+        trigger: "when a single PR spans multiple unrelated changes",
+        action: "split broad changes into small focused diffs before review",
+        confidence: "high",
+        domain: "review",
+        stage: "review",
+        created: "2026-01-01T00:00:00Z",
+        project: "cclaw"
+      })
     ].join("\n"), "utf8");
     await fs.writeFile(path.join(root, ".cclaw/state/context-mode.json"), JSON.stringify({
       activeMode: "review",
@@ -157,7 +160,7 @@ describe("hooks lifecycle rehydration", () => {
     expect(context).toContain("Context mode: review");
     expect(context).toContain("Checkpoint: stage=review");
     expect(context).toContain("Knowledge snapshot");
-    expect(context).toContain("keep-diffs-small");
+    expect(context).toContain("split broad changes into small focused diffs");
   });
 
   it("stop script writes checkpoint with run id and preserves progress fields", async () => {
@@ -346,14 +349,17 @@ describe("hooks lifecycle rehydration", () => {
       activeRunId: "active",
       completedStages: ["brainstorm", "scope"]
     }, null, 2), "utf8");
-    await fs.writeFile(path.join(root, ".cclaw/knowledge.md"), [
-      "# Project Knowledge",
-      "",
-      "### 2026-01-01T00:00:00Z [rule] keep-risk-visible",
-      "- Stage: design",
-      "- Context: architecture decisions",
-      "- Insight: make trade-offs explicit",
-      "- Reuse: include risk notes in artifacts"
+    await fs.writeFile(path.join(root, ".cclaw/knowledge.jsonl"), [
+      JSON.stringify({
+        type: "rule",
+        trigger: "when making architecture decisions",
+        action: "make trade-offs explicit and include risk notes in the design artifact",
+        confidence: "high",
+        domain: "architecture",
+        stage: "design",
+        created: "2026-01-01T00:00:00Z",
+        project: "cclaw"
+      })
     ].join("\n"), "utf8");
     await fs.writeFile(path.join(root, ".cclaw/skills/using-cclaw/SKILL.md"), "# Using Cclaw\n", "utf8");
 
@@ -401,7 +407,7 @@ describe("hooks lifecycle rehydration", () => {
     };
     expect(transformed.system).toContain("Active artifacts: .cclaw/artifacts/");
     expect(transformed.system).toContain("Knowledge snapshot");
-    expect(transformed.system).toContain("keep-risk-visible");
+    expect(transformed.system).toContain("make trade-offs explicit");
 
     const guardLog = await fs.readFile(path.join(root, ".cclaw/state/prompt-guard.jsonl"), "utf8");
     expect(guardLog).toContain("write_to_cclaw_runtime");

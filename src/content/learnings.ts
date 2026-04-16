@@ -1,12 +1,31 @@
 // ---------------------------------------------------------------------------
 // Knowledge store content for /cc-learn and stage self-improvement prompts.
+//
+// The knowledge store is a single canonical JSONL file. Each line is one
+// self-contained JSON object matching the strict schema in this module.
+// There is no markdown mirror — cclaw is JSONL-native.
 // ---------------------------------------------------------------------------
 
-const KNOWLEDGE_PATH = ".cclaw/knowledge.md";
-const KNOWLEDGE_JSONL_PATH = ".cclaw/knowledge.jsonl";
+const KNOWLEDGE_PATH = ".cclaw/knowledge.jsonl";
+const KNOWLEDGE_ARCHIVE_PATH = ".cclaw/knowledge.archive.jsonl";
 const LEARN_SKILL_NAME = "learnings";
 const LEARN_SKILL_DESCRIPTION =
-  "Project-scoped knowledge store: review and append rule/pattern/lesson/compound entries. Maintains a human-readable markdown mirror at .cclaw/knowledge.md and a canonical JSONL store at .cclaw/knowledge.jsonl.";
+  "Project-scoped knowledge store: append and query rule/pattern/lesson/compound entries in the canonical JSONL file at .cclaw/knowledge.jsonl. Strict schema, append-only, machine-queryable.";
+
+/**
+ * Canonical JSONL field order (matches the reference spec).
+ * Exported for tests and any programmatic writer that wants the exact shape.
+ */
+export const KNOWLEDGE_JSONL_FIELDS = [
+  "type",
+  "trigger",
+  "action",
+  "confidence",
+  "domain",
+  "stage",
+  "created",
+  "project"
+] as const;
 
 export function learnSkillMarkdown(): string {
   return `---
@@ -18,113 +37,81 @@ description: "${LEARN_SKILL_DESCRIPTION}"
 
 ## Overview
 
-This skill manages the project knowledge store. The store has **two mirrored formats**:
-
-- \`${KNOWLEDGE_PATH}\` — human-readable, append-only markdown (the reading view).
-- \`${KNOWLEDGE_JSONL_PATH}\` — canonical, machine-queryable JSONL (one JSON object per line). Used by the curator, /cc-status, and future analytics.
-
-Every \`/cc-learn add\` appends to **both** files. \`/cc-learn search\` prefers the JSONL store if it exists; otherwise it falls back to the markdown file.
+The project knowledge store is **one canonical JSONL file**: \`${KNOWLEDGE_PATH}\`.
+Each line is one self-contained JSON object. Append-only. Machine-queryable.
 
 Use the store to keep durable knowledge that should survive sessions:
-- **rule**: hard constraint to follow every time
-- **pattern**: repeatable way that works well in this project
-- **lesson**: non-obvious outcome from a failure or trade-off
-- **compound**: post-ship insight about how to make the *next* feature faster (process accelerator, not domain rule)
+- **rule**: hard constraint to follow every time.
+- **pattern**: repeatable way that works well in this project.
+- **lesson**: non-obvious outcome from a failure or trade-off.
+- **compound**: post-ship insight about how to make the *next* feature faster (process accelerator, not domain rule).
 
 ## HARD-GATE
 
-Under \`/cc-learn\`, only modify the knowledge store files (\`${KNOWLEDGE_PATH}\` and \`${KNOWLEDGE_JSONL_PATH}\`) or an explicitly user-approved summary file. Do not modify application code here.
+Under \`/cc-learn\`, only modify \`${KNOWLEDGE_PATH}\`, \`${KNOWLEDGE_ARCHIVE_PATH}\`,
+or an explicitly user-approved summary file. Do not modify application code here.
+Do not invent alternate stores (no markdown mirror, no SQLite, no per-stage files).
 
-## Entry format — markdown mirror (append-only)
+## Entry format — strict JSONL schema
 
-\`\`\`markdown
-### 2026-04-14T12:00:00Z [pattern] short-title
-- Stage: design
-- Context: one short line
-- Insight: one short line
-- Reuse: one short line
-- Confidence: high | medium | low      (optional)
-- Domain: api | infra | ui | testing | …  (optional)
-- Project: <repo or scope name>        (optional)
-\`\`\`
-
-## Entry format — canonical JSONL (one entry per line)
+Exactly one JSON object per line. Fields must appear in the order:
+\`type, trigger, action, confidence, domain, stage, created, project\`.
 
 \`\`\`json
-{"type":"pattern","title":"short-title","stage":"design","context":"one short line","insight":"one short line","reuse":"one short line","created":"2026-04-14T12:00:00Z","confidence":"high","domain":"api","project":"cclaw","supersedes":null,"superseded":false,"archived":false}
+{"type":"pattern","trigger":"when reviewing external payloads","action":"parse through zod before touching service layer","confidence":"high","domain":"api","stage":"review","created":"2026-04-14T12:00:00Z","project":"cclaw"}
 \`\`\`
-
-Schema:
 
 | field | type | required | notes |
 |---|---|---|---|
 | \`type\` | \`"rule" \\| "pattern" \\| "lesson" \\| "compound"\` | yes | Lowercase. |
-| \`title\` | string | yes | Short title, used as a human-readable identifier. |
-| \`stage\` | \`FlowStage\` | yes | One of brainstorm / scope / design / spec / plan / tdd / review / ship. |
-| \`context\` | string | yes | What situation triggered this. |
-| \`insight\` | string | yes | What must be remembered. |
-| \`reuse\` | string | yes | How to apply this next time — concrete trigger/action. |
-| \`created\` | ISO 8601 UTC string | yes | When the entry was written. |
-| \`confidence\` | \`"high" \\| "medium" \\| "low"\` | optional | Default \`medium\` if omitted. |
-| \`domain\` | string | optional | Free-form taxonomy (\`api\`, \`infra\`, \`ui\`, …). |
-| \`project\` | string | optional | Repo or scope name when the entry crosses features. |
-| \`supersedes\` | string \\| null | optional | Title of the entry this one replaces. |
-| \`superseded\` | boolean | optional | \`true\` when a newer entry replaces this one. |
-| \`archived\` | boolean | optional | \`true\` once the curator soft-archives the entry. |
+| \`trigger\` | string | yes | The concrete situation that must be recognized. Start with a verb or \`when …\`. |
+| \`action\` | string | yes | The concrete move to take when the trigger fires. One sentence. |
+| \`confidence\` | \`"high" \\| "medium" \\| "low"\` | yes | Write \`medium\` when unsure; do not omit. |
+| \`domain\` | string \\| null | yes | Free-form taxonomy (\`api\`, \`infra\`, \`ui\`, \`security\`, \`testing\`, …). Use \`null\` when cross-cutting. |
+| \`stage\` | \`FlowStage\` \\| null | yes | One of brainstorm / scope / design / spec / plan / tdd / review / ship, or \`null\` when cross-stage. |
+| \`created\` | ISO 8601 UTC string | yes | \`date -u +%Y-%m-%dT%H:%M:%SZ\`. |
+| \`project\` | string \\| null | yes | Repo or scope name. Use \`null\` when the entry crosses projects. |
 
 Rules:
-- Type must be exactly one of \`rule\`, \`pattern\`, \`lesson\`, \`compound\` (lowercase).
-- Never rewrite history silently; append a newer correction entry instead. To replace, set \`supersedes\` to the old title in the new JSONL entry and in the new markdown entry prefix with \`Supersedes: <old-title>\`. Flip \`superseded: true\` on the old JSONL entry via a new JSONL line (the file is append-only; use a \`replace\` line by convention — see Curation policy).
-- Keep entries concise and actionable.
-- Optional fields (\`Confidence\`, \`Domain\`, \`Project\`) are forward-compatible and used by the **knowledge-curation** skill — fill them when known.
-
-## Backward-compat migration (markdown → JSONL)
-
-Run \`/cc-learn migrate\` once per repo when \`${KNOWLEDGE_JSONL_PATH}\` is missing:
-
-1. Parse \`${KNOWLEDGE_PATH}\`. Each entry starts with \`### <ISO8601> [<type>] <title>\` and is followed by \`- <Field>: <value>\` lines until the next \`###\` or EOF.
-2. Map fields to JSONL schema:
-   - Heading timestamp → \`created\`; heading \`[type]\` → \`type\`; heading title → \`title\`.
-   - Bullet \`Stage:\`, \`Context:\`, \`Insight:\`, \`Reuse:\`, \`Confidence:\`, \`Domain:\`, \`Project:\` → matching fields.
-   - A \`Supersedes:\` prefix line becomes \`"supersedes": "<old-title>"\`.
-3. Emit one JSON object per line to \`${KNOWLEDGE_JSONL_PATH}\` preserving the original order. Set defaults: \`confidence = "medium"\`, \`superseded = false\`, \`archived = false\`, missing optional fields = \`null\`.
-4. Do **not** rewrite \`${KNOWLEDGE_PATH}\`. The markdown stays as the human-readable mirror; new additions continue to write both files.
-5. After migration, \`/cc-learn search\` reads the JSONL store first; if absent, it continues to parse the markdown file (so users who never migrate still work).
+- No other fields. Extra keys are forbidden and MUST be rejected by any writer.
+- Every required-null field must be emitted explicitly as \`null\` (not omitted). This keeps the file grep-friendly.
+- Append-only: never rewrite or delete a historical line. Corrections are new
+  entries whose \`trigger\` clearly supersedes the earlier one.
+- Keep each entry one line. No pretty-printing. No trailing commas.
 
 ## Curation policy (target: ≤ 50 active entries)
 
-The knowledge file is append-only, but entries can be **superseded** rather than deleted:
-
-- When you discover a more correct rule, append a new entry with \`Supersedes: <old-title>\`.
-- During \`/cc-learn curate\`, the assistant surfaces candidates for soft-archive (move to \`.cclaw/knowledge.archive.md\`) when the active file exceeds 50 entries or contains stale/duplicate entries.
-
-See the **knowledge-curation** utility skill for the full curation protocol.
+- The file is append-only — entries are never physically deleted.
+- When the canonical file exceeds 50 lines, \`/cc-learn curate\` proposes
+  soft-archiving: the approved lines are **moved** to \`${KNOWLEDGE_ARCHIVE_PATH}\`
+  verbatim (same JSONL shape). The working file stays lean.
+- See the **knowledge-curation** utility skill for the full curation protocol.
 
 ## Subcommands
 
 ### \`/cc-learn\` (default)
-- Show the last 30 lines from \`${KNOWLEDGE_PATH}\`.
-- If file is missing or empty, report that clearly.
+- Read \`${KNOWLEDGE_PATH}\`. Stream the last 30 lines; pretty-print each
+  line's \`type\` / \`trigger\` / \`action\` for human review.
+- If file is missing or empty, report that clearly and suggest \`/cc-learn add\`.
 
 ### \`/cc-learn search <query>\`
-- If \`${KNOWLEDGE_JSONL_PATH}\` exists: stream it, JSON.parse each line, filter where any of \`title\`, \`context\`, \`insight\`, \`reuse\`, \`domain\` contains \`<query>\` (case-insensitive). Skip \`archived: true\` unless \`--include-archived\` is passed.
-- Otherwise: case-insensitive text search in \`${KNOWLEDGE_PATH}\`.
-- Return matched headings and nearby lines.
+- Stream \`${KNOWLEDGE_PATH}\`, JSON.parse each line, filter where any of
+  \`trigger\`, \`action\`, \`domain\`, \`project\` contains \`<query>\` (case-insensitive).
+- Return the matched lines pretty-printed (do not mutate the file).
 
 ### \`/cc-learn add\`
-- Ask for: \`type\`, \`short title\`, \`context\`, \`insight\`, \`reuse\`.
-- Optionally ask for: \`confidence\`, \`domain\`, \`project\`, \`supersedes\`.
-- Append one markdown entry to \`${KNOWLEDGE_PATH}\` (human mirror).
-- Append one JSON line to \`${KNOWLEDGE_JSONL_PATH}\` (canonical store) using the same UTC timestamp as the markdown entry's heading.
-- Re-read both tails to confirm both writes.
-
-### \`/cc-learn migrate\`
-- Parse \`${KNOWLEDGE_PATH}\` and emit \`${KNOWLEDGE_JSONL_PATH}\` per the Backward-compat migration protocol above.
-- Safe to re-run: if JSONL already exists, report the current entry count and exit (no destructive rewrite).
+- Ask for required fields in order: \`type\`, \`trigger\`, \`action\`, \`confidence\`, \`domain\`, \`stage\`, \`project\`.
+- \`confidence\` must be one of \`high\`, \`medium\`, \`low\`. Default to \`medium\` if the user declines to set it.
+- \`domain\`, \`stage\`, and \`project\` may be explicitly \`null\`.
+- \`created\` is set automatically to the current UTC ISO timestamp.
+- Append exactly one JSON line to \`${KNOWLEDGE_PATH}\` with the field order from the schema table above.
+- Re-read the file tail to confirm the new line is valid JSON and parses back to the same object.
 
 ### \`/cc-learn curate\`
 - Hand off to the **knowledge-curation** skill (read-only audit + soft-archive plan).
-- Never deletes from \`${KNOWLEDGE_PATH}\` or \`${KNOWLEDGE_JSONL_PATH}\` without an explicit user-approved archive plan. Soft-archive in JSONL means appending a new line with the same \`title\` and \`archived: true\` (entries are never physically removed).
+- Never deletes. Soft-archive means **moving** full JSON lines from
+  \`${KNOWLEDGE_PATH}\` to \`${KNOWLEDGE_ARCHIVE_PATH}\` as part of a
+  user-approved curation pass.
 `;
 }
 
@@ -133,23 +120,23 @@ export function learnCommandContract(): string {
 
 ## Purpose
 
-Manage the project knowledge store. Two mirrored formats:
-- \`${KNOWLEDGE_PATH}\` — human-readable markdown (append-only, tail view).
-- \`${KNOWLEDGE_JSONL_PATH}\` — canonical JSONL (one entry per line) used by the curator and machine consumers.
+Manage the project knowledge store. One canonical file, strict JSONL:
+- \`${KNOWLEDGE_PATH}\` — append-only JSONL, one entry per line.
+- \`${KNOWLEDGE_ARCHIVE_PATH}\` — soft-archive target written only by curate.
 
 ## HARD-GATE
 
-Do not edit source code from this command. Only operate on \`${KNOWLEDGE_PATH}\`, \`${KNOWLEDGE_JSONL_PATH}\`, or user-approved summary output.
+Do not edit source code from this command. Only operate on \`${KNOWLEDGE_PATH}\`,
+\`${KNOWLEDGE_ARCHIVE_PATH}\`, or user-approved summary output.
 
 ## Subcommands
 
 | subcommand | args | description |
 |---|---|---|
-| (default) | — | Show recent knowledge entries (tail view from markdown mirror). |
-| \`search\` | \`<query>\` | Search knowledge for relevant prior rules/patterns/lessons. Prefers JSONL when present. |
-| \`add\` | — | Append a new entry (\`rule\` / \`pattern\` / \`lesson\` / \`compound\`) to **both** markdown and JSONL. |
-| \`migrate\` | — | Emit the canonical JSONL mirror from the markdown file (idempotent). |
-| \`curate\` | — | Hand off to the **knowledge-curation** skill: read-only audit + soft-archive plan when the active file exceeds the curation threshold. |
+| (default) | — | Show recent knowledge entries (tail of JSONL, pretty-printed). |
+| \`search\` | \`<query>\` | Stream-filter the JSONL for matching \`trigger\`, \`action\`, \`domain\`, \`project\`. |
+| \`add\` | — | Append one JSON line (\`rule\` / \`pattern\` / \`lesson\` / \`compound\`) with the strict 8-field schema. |
+| \`curate\` | — | Hand off to the **knowledge-curation** skill: read-only audit + soft-archive plan when the file exceeds the curation threshold. |
 `;
 }
 
@@ -160,38 +147,36 @@ After this stage, ask:
 - Did I discover a non-obvious reusable **rule** or **pattern**?
 - Did a failure reveal a reusable **lesson**?
 
-If yes, append one concise entry to **both** the markdown mirror (\`${KNOWLEDGE_PATH}\`) and the canonical JSONL store (\`${KNOWLEDGE_JSONL_PATH}\`) with the same timestamp:
+If yes, append one concise JSON line to the canonical knowledge store
+(\`${KNOWLEDGE_PATH}\`) using the strict 8-field schema:
 
 \`\`\`bash
 TS="$(date -u +%Y-%m-%dT%H:%M:%SZ)"
-cat >> ${KNOWLEDGE_PATH} <<EOF
-### $TS [pattern] short-title
-- Stage: ${stageName}
-- Context: what situation triggered this
-- Insight: what should be remembered
-- Reuse: how to apply this next time
-EOF
-printf '%s\\n' '{"type":"pattern","title":"short-title","stage":"${stageName}","context":"what situation triggered this","insight":"what should be remembered","reuse":"how to apply this next time","created":"'"$TS"'","confidence":"medium","domain":null,"project":null,"supersedes":null,"superseded":false,"archived":false}' >> ${KNOWLEDGE_JSONL_PATH}
+printf '%s\\n' '{"type":"pattern","trigger":"when <situation>","action":"<concrete move>","confidence":"medium","domain":null,"stage":"${stageName}","created":"'"$TS"'","project":null}' >> ${KNOWLEDGE_PATH}
 \`\`\`
 
 Type must be exactly one of: \`rule\`, \`pattern\`, \`lesson\`, \`compound\`.
+Fields must appear in the order: \`type, trigger, action, confidence, domain, stage, created, project\`.
+Missing optional values must be emitted as \`null\`, never omitted.
 `;
 }
 
 export function learningsSearchPreamble(stage: string): string {
   return `## Prior Knowledge (load at stage start)
 
-Before stage work, search \`${KNOWLEDGE_PATH}\` for relevant entries (for example: \`${stage}\`, affected systems, key constraints) and apply them explicitly.
-
-If the file is empty, continue normally.
+Before stage work, stream \`${KNOWLEDGE_PATH}\` and filter for entries relevant to
+this stage (\`${stage}\`), affected domains, and key constraints. Apply matching
+entries explicitly. If the file is empty, continue normally.
 `;
 }
 
 export function learningsAgentsMdBlock(): string {
   return `### Knowledge Store
 
-\`${KNOWLEDGE_PATH}\` — append-only markdown memory with entry types \`rule\`, \`pattern\`, \`lesson\`, \`compound\`.
-At session start and stage transitions, load recent entries and apply relevant ones.
-If a non-obvious reusable rule/pattern/lesson is discovered, append a new entry.
+\`${KNOWLEDGE_PATH}\` — append-only JSONL memory with entry types \`rule\`, \`pattern\`, \`lesson\`, \`compound\`.
+Strict 8-field schema: \`type, trigger, action, confidence, domain, stage, created, project\`.
+At session start and stage transitions, tail the file and apply relevant entries.
+If a non-obvious reusable rule/pattern/lesson is discovered, append a new line
+through \`/cc-learn add\` (never hand-edit).
 `;
 }

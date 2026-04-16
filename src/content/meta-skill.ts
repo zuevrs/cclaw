@@ -191,10 +191,12 @@ Watch for these anti-patterns:
 
 ## Knowledge Integration
 
-At session start and stage transitions, check \`.cclaw/knowledge.md\` for project-specific knowledge:
-- Review recent entries and apply relevant rules/patterns to the current task
-- If you discover a non-obvious reusable rule or pattern, append a new entry with type \`rule\`, \`pattern\`, or \`lesson\`
+At session start and stage transitions, stream \`.cclaw/knowledge.jsonl\` (the canonical strict-JSONL knowledge store) and apply relevant entries:
+- Each line is one JSON object with fields \`type, trigger, action, confidence, domain, stage, created, project\`.
+- Review recent entries and apply relevant rules/patterns to the current task.
+- If you discover a non-obvious reusable rule or pattern, append one new JSON line via \`/cc-learn add\` with type \`rule\`, \`pattern\`, \`lesson\`, or \`compound\`.
 
-Knowledge capture is append-only and should preserve historical context rather than rewriting prior entries.
+Knowledge capture is append-only and strict-schema. Never rewrite or delete
+historical entries; corrections are new lines whose \`trigger\` supersedes the earlier one.
 `;
 }

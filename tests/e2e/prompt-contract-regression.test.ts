@@ -59,7 +59,7 @@ describe("prompt-contract regression harness", () => {
     expect(cursorHooks).toContain("context-monitor.sh");
     expect(sessionStart).toContain("suggestion-memory.json");
     expect(sessionStart).toContain("context-warnings.jsonl");
-    expect(sessionStart).toContain("knowledge.md");
+    expect(sessionStart).toContain("knowledge.jsonl");
     expect(promptGuard).toContain("write_to_cclaw_runtime");
     expect(workflowGuard).toContain("stage_invocation_without_recent_flow_read");
     expect(contextMonitor).toContain("remaining is");

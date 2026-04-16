@@ -727,11 +727,22 @@ export async function doctorChecks(projectRoot: string, options: DoctorOptions =
     details: hasPython ? "python3 available" : "warning: python3 not found, jq/node paths must stay healthy"
   });
 
-  // Knowledge store exists
+  // Knowledge store exists (canonical JSONL, no markdown mirror)
   checks.push({
     name: "knowledge:store_exists",
-    ok: await exists(path.join(projectRoot, RUNTIME_ROOT, "knowledge.md")),
-    details: `${RUNTIME_ROOT}/knowledge.md must exist`
+    ok: await exists(path.join(projectRoot, RUNTIME_ROOT, "knowledge.jsonl")),
+    details: `${RUNTIME_ROOT}/knowledge.jsonl must exist`
+  });
+
+  // There must be NO legacy markdown knowledge store — JSONL is the only store.
+  const legacyKnowledgeMdPath = path.join(projectRoot, RUNTIME_ROOT, "knowledge.md");
+  const legacyExists = await exists(legacyKnowledgeMdPath);
+  checks.push({
+    name: "knowledge:no_legacy_markdown",
+    ok: !legacyExists,
+    details: legacyExists
+      ? `legacy ${RUNTIME_ROOT}/knowledge.md must be removed — cclaw is JSONL-native`
+      : `no legacy markdown store present`
   });
 
   checks.push({

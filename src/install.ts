@@ -648,9 +648,13 @@ async function writeHooks(projectRoot: string, config: VibyConfig): Promise<void
 }
 
 async function ensureKnowledgeStore(projectRoot: string): Promise<void> {
-  const storePath = runtimePath(projectRoot, "knowledge.md");
+  const storePath = runtimePath(projectRoot, "knowledge.jsonl");
   if (!(await exists(storePath))) {
-    await writeFileSafe(storePath, "# Project Knowledge\n\n");
+    await writeFileSafe(storePath, "");
+  }
+  const legacyMdPath = runtimePath(projectRoot, "knowledge.md");
+  if (await exists(legacyMdPath)) {
+    await fs.rm(legacyMdPath, { force: true });
   }
 }
 
