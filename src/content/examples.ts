@@ -239,42 +239,39 @@ Data flow: Gateway → Service (validate + enrich) → Publisher (fan-out) → Q
 
 Design output should be **reviewable by someone who did not attend brainstorming**: they can trace from constraints → components → open decisions without reading code.`,
 
-    spec: `### Acceptance criteria (Given / When / Then)
+    spec: `### Acceptance Criteria
 
-**Criterion 1 — delivery**
-
-- **Given** a signed-in user with an active session
-- **When** the server publishes a new notification event for that user
-- **Then** the client feed shows the new item within 5 seconds without a full page reload
-
-**Criterion 2 — idempotency**
-
-- **Given** the same logical notification is published twice with the same dedupe key
-- **When** the client processes the stream
-- **Then** the feed contains exactly one visible item for that key
-
-**Criterion 3 — failure visibility**
-
-- **Given** the live connection is unavailable
-- **When** the user opens the notifications panel
-- **Then** the UI shows a non-blocking degraded state and still loads the latest snapshot via REST
-
-### Non-testable → fixed (comparison)
-
-| Vague (non-testable) | Fixed (observable + testable) |
+| ID | Criterion (observable/measurable/falsifiable) |
 | --- | --- |
-| “Notifications should be fast.” | “p95 time from publish to visible feed update ≤ 5s under steady load.” |
-| “The system should handle errors gracefully.” | “If SSE is down, panel renders REST snapshot within 2s and shows ‘live updates paused’.” |
-| “Users should not see duplicates.” | “For dedupe key K, repeated publishes produce exactly one row with key K.” |
+| AC-1 | Given a signed-in user with an active session, when the server publishes a new notification event for that user, the client feed shows the new item within 5 seconds without a full page reload. |
+| AC-2 | Given the same logical notification is published twice with the same dedupe key, when the client processes the stream, the feed contains exactly one visible item for that key. |
+| AC-3 | Given the live connection is unavailable, when the user opens the notifications panel, the UI shows a non-blocking "live updates paused" banner and loads the latest snapshot via REST within 2 seconds. |
 
-### Test doubles / fixtures (planning notes)
+### Edge Cases
 
-- Use a deterministic clock for the “within 5 seconds” criterion in automated tests.
-- Use a fake transport for SSE in unit tests; reserve browser-level tests for one happy path + one degraded path.
+| Criterion ID | Boundary case | Error case |
+| --- | --- | --- |
+| AC-1 | Notification published during client reconnect window (boundary: \u2264 5 s delivery still holds after reconnect). | Server publish fails mid-write — client never receives event; REST snapshot fills gap. |
+| AC-2 | Two events with identical dedupe key arrive within same SSE frame (boundary: only one row rendered). | Dedupe-key field missing — reject event at publisher and log error. |
+| AC-3 | SSE disconnects after exactly 30 s heartbeat timeout (boundary: banner appears within 1 s of timeout). | REST snapshot endpoint returns 500 — panel shows "unable to load" with retry button. |
 
-### Traceability reminder
+### Constraints and Assumptions
 
-Every criterion should map to **at least one automated check** (unit/integration/e2e) before the work is considered “specified enough” to start TDD in earnest.`,
+- **Constraints:** Max feed size 1 000 items per user. SSE heartbeat interval 30 s (server-side). REST snapshot p99 \u2264 200 ms. No new runtime dependencies.
+- **Assumptions:** Users have a single active session at a time for v1. Existing auth middleware provides user context. Event publisher is single-writer per user.
+
+### Testability Map
+
+| Criterion ID | Verification approach | Command/manual steps |
+| --- | --- | --- |
+| AC-1 | Integration test: publish event \u2192 assert feed contains item within 5 s (deterministic clock). | \`pnpm vitest run tests/integration/notification-delivery.test.ts\` |
+| AC-2 | Unit test: publish same dedupe key twice \u2192 assert single row in feed store. | \`pnpm vitest run tests/unit/dedupe-feed.test.ts\` |
+| AC-3 | E2E test: kill SSE transport \u2192 assert banner visible + REST snapshot loads. | \`pnpm playwright test tests/e2e/degraded-mode.spec.ts\` |
+
+### Approval
+
+- Approved by: user
+- Date: 2026-04-14`,
 
   plan: `### Task breakdown (sample)
 
