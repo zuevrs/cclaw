@@ -82,6 +82,27 @@ If delegation tooling is unavailable in the active harness, run the same control
 - \`fast\` agents are the only tier you should fan out in parallel (3-5 at a time is fine).
 - Never escalate a \`fast\` agent's output directly to ship decisions — always have a \`balanced\` reviewer consume the evidence first.
 
+### Per-stage routing triggers
+
+Concrete per-stage rules so the controller does not have to guess which tier fits each dispatch. These are defaults; explicit user overrides always win.
+
+| Stage | Deep slot | Balanced slot(s) | Fast fan-out | Trigger to escalate |
+|---|---|---|---|---|
+| brainstorm | planner (only if ambiguity spans >1 module) | — | repo-research-analyst · learnings-researcher (2 in parallel) | promote to \`balanced\` spec-reviewer once direction locks |
+| scope | planner (always) | — | git-history-analyzer (if churn / recent regression on the surface) | promote to \`balanced\` planner if scope touches external contracts |
+| design | planner (always) | security-reviewer (if trust boundary touched) | framework-docs-researcher · best-practices-researcher (up to 2 in parallel) | escalate one specialist to \`deep\` only if a failure mode is Critical-severity |
+| spec | — | spec-reviewer (if spec > 200 lines or multiple ACs) | — | escalate to \`deep\` only for spec ↔ design contradictions |
+| plan | planner (solo, always) | — | — | never fan out at plan stage; one owner for dependency graph |
+| tdd | — | test-author (each slice) · code-reviewer (slice-local) | doc-updater (API surface changes) | escalate to \`deep\` only when a RED test cannot be expressed (design leak) |
+| review | — | spec-reviewer · code-reviewer · security-reviewer (all mandatory) | doc-updater + framework-docs-researcher for narrow lookups | escalate a \`balanced\` reviewer to \`deep\` only when two reviewers disagree on severity |
+| ship | — | — | doc-updater (changelog/migration notes) | escalate to \`balanced\` code-reviewer only if preflight finds a regression |
+
+**De-escalation rules (avoid over-spending):**
+- If a \`deep\` planner run returns low-uncertainty output (single unambiguous plan), do **not** add a second \`deep\` pass in the same stage.
+- If a \`fast\` researcher's evidence is the only input to a decision, the consuming agent must be \`balanced\` or higher.
+- Review-stage reviewers should default to \`balanced\`; bump to \`deep\` only when findings cite architectural contradictions.
+- Refactor-only TDD slices (state-based, no behavioral change) can drop test-author to \`fast\` if the test pyramid stays green.
+
 ## HARD-GATE
 
 **Never dispatch a subagent without a concrete, self-contained task description pasted into the prompt. Do not pass file references the subagent must read to understand its task.**
