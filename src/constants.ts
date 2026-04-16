@@ -25,7 +25,8 @@ export const REQUIRED_DIRS = [
   `${RUNTIME_ROOT}/rules`,
   `${RUNTIME_ROOT}/adapters`,
   `${RUNTIME_ROOT}/agents`,
-  `${RUNTIME_ROOT}/hooks`
+  `${RUNTIME_ROOT}/hooks`,
+  `${RUNTIME_ROOT}/custom-skills`
 ] as const;
 
 export const REQUIRED_GITIGNORE_PATTERNS = [
@@ -57,7 +58,7 @@ export const COMMAND_FILE_ORDER: FlowStage[] = [
   "ship"
 ];
 
-export const UTILITY_COMMANDS = ["learn", "next"] as const;
+export const UTILITY_COMMANDS = ["learn", "next", "status"] as const;
 
 export const SUBAGENT_SKILL_FOLDERS = [
   "subagent-dev",

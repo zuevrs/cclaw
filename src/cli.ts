@@ -3,11 +3,11 @@ import { readFileSync, realpathSync } from "node:fs";
 import process from "node:process";
 import path from "node:path";
 import { fileURLToPath } from "node:url";
-import { HARNESS_IDS } from "./types.js";
+import { FLOW_TRACKS, HARNESS_IDS } from "./types.js";
 import { doctorChecks, doctorSucceeded } from "./doctor.js";
 import { initCclaw, syncCclaw, uninstallCclaw, upgradeCclaw } from "./install.js";
 import { error, info } from "./logger.js";
-import type { CliContext, HarnessId } from "./types.js";
+import type { CliContext, FlowTrack, HarnessId } from "./types.js";
 import { archiveRun } from "./runs.js";
 
 type CommandName = "init" | "sync" | "doctor" | "upgrade" | "uninstall" | "archive";
@@ -16,6 +16,7 @@ const INSTALLER_COMMANDS: CommandName[] = ["init", "sync", "doctor", "upgrade", 
 interface ParsedArgs {
   command?: CommandName;
   harnesses?: HarnessId[];
+  track?: FlowTrack;
   reconcileGates?: boolean;
   archiveName?: string;
   showHelp?: boolean;
@@ -33,6 +34,7 @@ Usage:
 Commands:
   init       Bootstrap .cclaw runtime, state, and harness shims in this project.
              Flags: --harnesses=<list>  Comma list of harnesses (claude,cursor,opencode,codex).
+                    --track=<id>        Flow track for new runs (standard | quick). Default: standard.
   sync       Regenerate harness shim files from the current .cclaw config (non-destructive).
   doctor     Run health checks against the local .cclaw runtime. Exit code 2 on failure.
              Flags: --reconcile-gates   Recompute current-stage gate evidence before checks.
@@ -93,6 +95,14 @@ function parseHarnesses(raw: string): HarnessId[] {
   return requested as HarnessId[];
 }
 
+function parseTrack(raw: string): FlowTrack {
+  const trimmed = raw.trim();
+  if (!(FLOW_TRACKS as readonly string[]).includes(trimmed)) {
+    throw new Error(`Unknown track: ${trimmed}. Supported: ${FLOW_TRACKS.join(", ")}`);
+  }
+  return trimmed as FlowTrack;
+}
+
 function parseArgs(argv: string[]): ParsedArgs {
   const parsed: ParsedArgs = {};
 
@@ -115,6 +125,10 @@ function parseArgs(argv: string[]): ParsedArgs {
   for (const flag of flags) {
     if (flag.startsWith("--harnesses=")) {
       parsed.harnesses = parseHarnesses(flag.replace("--harnesses=", ""));
+      continue;
+    }
+    if (flag.startsWith("--track=")) {
+      parsed.track = parseTrack(flag.replace("--track=", ""));
       continue;
     }
     if (flag === "--reconcile-gates") {
@@ -148,9 +162,11 @@ async function runCommand(parsed: ParsedArgs, ctx: CliContext): Promise<number> 
   if (command === "init") {
     await initCclaw({
       projectRoot: ctx.cwd,
-      harnesses: parsed.harnesses
+      harnesses: parsed.harnesses,
+      track: parsed.track
     });
-    info(ctx, "Initialized .cclaw runtime and generated harness shims");
+    const trackNote = parsed.track ? ` (track: ${parsed.track})` : "";
+    info(ctx, `Initialized .cclaw runtime and generated harness shims${trackNote}`);
     return 0;
   }
 
@@ -225,4 +241,4 @@ if (isDirectExecution()) {
   void main();
 }
 
-export { parseArgs, parseHarnesses };
+export { parseArgs, parseHarnesses, parseTrack };

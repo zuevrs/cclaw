@@ -350,7 +350,15 @@ Execution rule: complete and verify each wave before starting the next wave.
 - Layer 2 complete:
 - Review army schema valid:
 - Open critical blockers:
+- Adversarial review pass:
 - Ship recommendation:
+
+## Completeness Score
+- AC coverage: <N>/<M> (<percent>%)
+- Task coverage (tasks backed by ≥1 test slice): <N>/<M>
+- Slice coverage (slices linked to ≥1 AC): <N>/<M>
+- Adversarial review pass: true | false
+- Overall score: <0-100>
 
 ## Severity Summary
 - Critical:
@@ -412,6 +420,12 @@ Execution rule: complete and verify each wave before starting the next wave.
 ## Completion Status
 - SHIPPED | SHIPPED_WITH_EXCEPTIONS | BLOCKED
 - Exceptions (if any):
+
+## Compound Step
+_Optional retrospective. The goal is to make the **next** feature faster, not to evaluate this one._
+_If you have nothing to add, write the explicit line: \`No compound insight this run.\`_
+- Insight: <one short line about what should accelerate the next run>
+- Action: append \`[compound]\` entry to \`.cclaw/knowledge.md\` capturing the insight
 `
 };
 

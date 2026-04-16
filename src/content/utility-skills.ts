@@ -1,5 +1,5 @@
 /**
- * Utility skills that complement the 9 flow stages.
+ * Utility skills that complement the 8 flow stages.
  * These are contextual lenses, not flow stages.
  * Each skill: ~120-180 lines, under the 500-line progressive disclosure guideline.
  */
@@ -510,12 +510,45 @@ Do not start implementation execution without an approved plan artifact and expl
 - Machine-only checks are delegated to subagents when supported.
 - User approvals are requested only at required gate boundaries.
 
+## Fresh Context Protocol (between waves)
+
+After a wave completes — especially after long agent turns — context drift is
+the #1 cause of degraded execution quality. Before starting the **next wave**,
+prefer a **fresh agent context** over continuing in a saturated session:
+
+1. **Snapshot wave outcome** — append a short summary to the plan artifact
+   (\`### Wave <N> outcome\` with: tasks done, evidence files, blockers, next-wave inputs).
+2. **Capture handoff facts** — the minimum information the next agent needs:
+   - Stage and run id (from \`.cclaw/state/flow-state.json\`)
+   - List of completed task IDs from the plan
+   - Open blockers / failing gates by name
+   - File paths the next wave will touch (no full diffs)
+3. **Decide: continue or rotate**
+   - **Rotate** (start a new agent session) when: prior wave consumed > ~50% of the context budget, the prior wave required deep investigation that the next wave does not need, or you are about to cross a stage boundary.
+   - **Continue** when: next wave is a tiny follow-up (≤ 1 task) and the prior context is directly relevant.
+4. **Resume** in the new session via \`/cc-next\` — the session-start hook will restore flow state, checkpoint, and digest automatically.
+
+This is the same intuition as Compound Engineering's "fresh context per iteration": every wave starts with a clean, intentionally-loaded context, not a degraded carry-over.
+
+### Handoff template (paste into next session)
+
+\`\`\`markdown
+## Wave <N> handoff
+- Stage: <stage>
+- Run: <runId>
+- Completed task IDs: <list>
+- Blockers: <list or none>
+- Files next wave will touch: <list>
+- Verification command(s) used: <list>
+\`\`\`
+
 ## Anti-Patterns
 
 - Executing all tasks in one pass without intermediate verification.
 - Marking tasks done without command evidence.
 - Reordering critical dependencies for speed.
 - Continuing after a gate failure hoping later tasks fix it.
+- Carrying a saturated context across wave boundaries because "it has all the history" — saturated context is a liability, not an asset.
 `;
 }
 
@@ -659,6 +692,397 @@ Do not approve user-facing UI changes that break basic keyboard navigation or re
 `;
 }
 
+export function landscapeCheckSkill(): string {
+  return `---
+name: landscape-check
+description: "Landscape survey before a design/scope decision. Use when deciding whether to build, reuse, or adopt — inside and outside the repo."
+---
+
+# Landscape Check
+
+## Quick Start
+
+> 1. Before committing to a build decision, survey the landscape: in-repo, in-ecosystem, and in-class.
+> 2. Produce a one-page table of candidates (build / reuse in-repo / adopt external) with evidence.
+> 3. Explicitly kill alternatives with a one-line reason. Do not leave implicit assumptions.
+
+## HARD-GATE
+
+Do not approve a scope or design that introduces a new system, library,
+or abstraction without comparing at least **one in-repo candidate** and
+**one external/ecosystem candidate** (or explicitly stating why no such
+candidates exist).
+
+## When to Use
+
+- Scope stage, before picking a mode (expand/selective/hold/reduce)
+- Design stage, before committing to a new architecture boundary
+- Brainstorm stage, when the user frames the problem as "let's build X"
+- Review stage, when a proposed change duplicates an existing capability
+
+## Protocol
+
+1. **Define the capability in one sentence.** "We need a way to <verb> <object> under <constraint>."
+2. **In-repo search.** Grep for similar verbs/modules/components. Read the closest 1-3 candidates. Record their fit and why they are or are not a good adapter target.
+3. **Ecosystem search.** Check ecosystem defaults (stdlib, framework primitives, common OSS packages in use). Do not invent new dependencies when an existing one covers 80%+ of the need.
+4. **In-class search.** Look at how other well-known projects in the same class solve this. Cite at least one concrete example (even if you end up rejecting it).
+5. **Produce the decision table.** Columns: Candidate, Kind (build / reuse / adopt), Fit (1-5), Effort (S/M/L/XL), Risk, Reason accepted or rejected.
+6. **Commit.** Pick exactly one winner. All losers must have a one-line kill reason.
+
+## Output Template
+
+\`\`\`markdown
+### Landscape Check — <capability>
+
+| Candidate | Kind | Fit | Effort | Risk | Verdict |
+|---|---|---|---|---|---|
+| src/foo/Bar | reuse | 4/5 | S | Low | SELECTED — already covers 80% of the need |
+| external/lib-x | adopt | 3/5 | M | Med | REJECTED — heavy dep, 20% unused surface |
+| build new | build | 2/5 | L | High | REJECTED — premature abstraction |
+
+**Decision:** Reuse \`src/foo/Bar\` with a thin adapter. Kill reasons recorded above.
+\`\`\`
+
+## Anti-Patterns
+
+- "We looked and nothing fits" without citing what was looked at.
+- Treating "nobody on the team knows library X" as a kill reason without evaluating the learning cost.
+- Choosing "build" because reuse would require a small refactor of the existing component.
+- Skipping the in-class search because "our case is special" — it usually is not.
+
+## Red Flags
+
+- Decision table has only the winner listed.
+- Ecosystem search is empty when a well-known primitive obviously applies.
+- "Fit" scores without evidence (no file:line, no cited OSS repo, no framework docs reference).
+- The in-repo candidate was never read before being dismissed.
+`;
+}
+
+export function knowledgeCurationSkill(): string {
+  return `---
+name: knowledge-curation
+description: "Read-only curation pass over .cclaw/knowledge.md. Surfaces stale, duplicate, or low-confidence entries and proposes a soft-archive plan; never deletes without explicit user approval."
+---
+
+# Knowledge Curation
+
+## Quick Start
+
+> 1. This is a **read-only audit** of \`.cclaw/knowledge.md\`. Never delete or rewrite entries here.
+> 2. Surface candidates for soft-archive when the active file > 50 entries OR contains stale/duplicate/superseded entries.
+> 3. Propose a single archive plan and require explicit user approval before any move.
+
+## HARD-GATE
+
+- Do not modify \`.cclaw/knowledge.md\` from this skill except via an explicit
+  user-approved archive plan that **moves** entries to
+  \`.cclaw/knowledge.archive.md\` (never deletes them).
+- Do not silently rewrite or summarize entries — preserve original wording.
+
+## When to run
+
+- Triggered automatically by **\`/cc-learn curate\`**.
+- Recommended after \`cclaw archive\` of a feature run, when knowledge has grown.
+- Recommended when active entry count exceeds **50**.
+
+## Audit dimensions
+
+For each entry in \`.cclaw/knowledge.md\` produce a row with:
+
+| Field | Source |
+|---|---|
+| Title | \`### <ts> [type] <title>\` heading |
+| Type | \`rule\` / \`pattern\` / \`lesson\` / \`compound\` |
+| Stage | \`Stage:\` field (or \`unknown\`) |
+| Age | days since timestamp |
+| Confidence | \`Confidence:\` field if present, else \`unstated\` |
+| Domain | \`Domain:\` field if present |
+| Supersedes | \`Supersedes:\` field if present |
+| Status hint | one of: keep / supersede-candidate / archive-candidate / duplicate |
+
+### Status rules
+
+- **supersede-candidate**: another entry has \`Supersedes: <this-title>\`.
+- **duplicate**: title or insight ≈ another entry's (caller's judgment, not regex).
+- **archive-candidate**:
+  - Type \`lesson\` AND age > 180 days AND no \`Supersedes\` chain points to it; OR
+  - Stage = \`brainstorm\` AND age > 90 days; OR
+  - Confidence = \`low\` AND age > 60 days; OR
+  - Total active entries > 50 and entry has lowest reuse signal.
+- **keep**: everything else.
+
+## Output format
+
+Produce two artifacts as **chat output only** (do not write files):
+
+### 1. Audit table
+
+\`\`\`markdown
+| # | Title | Type | Stage | Age | Confidence | Status hint |
+|---|---|---|---|---|---|---|
+| 1 | … | … | … | … | … | … |
+\`\`\`
+
+### 2. Soft-archive proposal
+
+\`\`\`markdown
+## Proposed archive (requires user approval)
+
+Threshold reasoning: <why entries below were selected>
+
+Entries to archive:
+1. <title> — reason
+2. <title> — reason
+
+Action plan if approved:
+1. Append a header to \`.cclaw/knowledge.archive.md\` with today's UTC date.
+2. Move (cut/paste) selected entries verbatim from \`.cclaw/knowledge.md\` into the archive file.
+3. Append a single supersession line to \`.cclaw/knowledge.md\`:
+   \\\`### <ts> [pattern] knowledge-curation-<date> — archived <N> entries, see knowledge.archive.md\\\`
+
+After approval: ask the user to run the move themselves, or — if they explicitly grant write access — perform the move atomically and report the new active count.
+\`\`\`
+
+## Anti-patterns
+
+- Deleting entries instead of archiving — knowledge must be append-only.
+- Rewriting an entry to "clean it up" — preserve original wording verbatim.
+- Auto-archiving without user approval, even when above threshold.
+- Removing \`compound\` entries — these are the highest-leverage records.
+- Treating high age as a proxy for low value — a 2-year-old security rule may be the most important entry in the file.
+`;
+}
+
+export function securityAuditSkill(): string {
+  return `---
+name: security-audit
+description: "Proactive security audit — hunts for vulnerabilities across the codebase using pattern-based detection. Distinct from security review (checklist for a specific diff)."
+---
+
+# Security Audit
+
+## Quick Start
+
+> 1. Scan the codebase for high-signal vulnerability patterns (not just the diff).
+> 2. Produce a finding register grouped by category with severity and file:line.
+> 3. For each Critical: provide a concrete exploit path (not just a category label).
+
+## HARD-GATE
+
+Do not close a security audit pass while any Critical pattern match is
+unresolved. Each Critical finding must be either fixed, suppressed with
+a documented reason, or tracked as a named accepted risk with an owner.
+
+## When to Use
+
+- Initial project onboarding (baseline audit)
+- Before a major release that expands attack surface
+- When new dependencies are introduced
+- After a security incident (to check for same-class issues)
+- On a scheduled cadence (quarterly for stable projects, monthly for high-risk)
+
+This is complementary to the \`security\` skill, which is a point-in-time
+review checklist scoped to a single diff.
+
+## Audit Pattern Catalog
+
+Run each category as a focused pass. For every pattern, capture
+file:line evidence — never assume the project is clean just because
+there was "no obvious problem".
+
+### 1. Secret Exposure
+
+Patterns to grep for (language-agnostic):
+
+- \`AKIA[0-9A-Z]{16}\` — AWS access key id
+- \`-----BEGIN (RSA |EC |DSA )?PRIVATE KEY-----\`
+- \`xox[bp]-[0-9a-zA-Z-]+\` — Slack tokens
+- \`ghp_[A-Za-z0-9]{36}\` — GitHub PAT
+- \`console\\.log.*(token|secret|password|api_key)\`
+- Hard-coded JWTs (3 base64 segments separated by \`.\`)
+
+Also inspect: .env.example for real values, logs for PII, git history for
+leaked secrets via \`git log -p | grep -i secret\`.
+
+### 2. Injection
+
+- Raw SQL string concatenation with request data
+- \`eval(\`, \`new Function(\`, \`exec(\`, \`execSync(\` with untrusted input
+- \`dangerouslySetInnerHTML\`, \`innerHTML =\` with user-provided content
+- Shell command construction from user input
+- Template literal SQL (\`\\\`SELECT ... \${userInput}\\\`\`)
+
+### 3. Auth and Session
+
+- Missing auth middleware on routes that mutate state
+- JWT verification that trusts the \`alg\` header (algorithm confusion)
+- \`setCookie\` without \`HttpOnly\`, \`Secure\`, or \`SameSite\`
+- Session fixation (no regenerate-on-login)
+- Rate limit absent on login, signup, password reset
+
+### 4. Trust Boundary and LLM Output
+
+- LLM output passed directly to \`exec\` / SQL / filesystem calls
+- Tool-call arguments from the model used without schema validation
+- Untrusted markdown rendered without sanitization
+- Confused deputy: service acts on behalf of user without passing auth context
+
+### 5. Crypto Misuse
+
+- MD5 / SHA1 for password hashing
+- \`Math.random()\` used for security tokens
+- Reused IV in AES-GCM (catastrophic)
+- ECB mode cipher usage
+- Missing constant-time comparison for secrets
+
+### 6. Dependency and Supply Chain
+
+- \`npm audit\` / \`pip audit\` Critical or High advisories unresolved
+- Dependencies pulled from non-locked tags instead of pinned versions
+- Post-install scripts from new/unknown packages
+- Un-reviewed direct-to-main dependency bumps
+
+### 7. File System and Path Traversal
+
+- \`path.join\` with user input without \`path.normalize\` + prefix check
+- Unzip/untar without entry path validation (zip-slip)
+- Writing to user-supplied paths without allowlist
+- Following symlinks inside trusted directories
+
+### 8. Logging and Observability
+
+- Stack traces returned in API responses (production)
+- Logs containing tokens, passwords, full request bodies
+- Error messages that reveal DB schema or internal paths
+
+## Output Format
+
+Produce a single audit report with this structure:
+
+\`\`\`markdown
+# Security Audit — <scope>, <date>
+
+## Summary
+- Files scanned: <N>
+- Categories checked: <list>
+- Critical: <N>, Important: <N>, Suggestion: <N>
+
+## Findings
+
+### <Category> — <Pattern name>
+- **Severity:** Critical | Important | Suggestion
+- **File:line:** path/to/file.ts:42
+- **Evidence:** short excerpt (≤ 3 lines)
+- **Exploit path:** specific, concrete (not a category label)
+- **Fix:** specific remediation with command/patch-level detail
+- **Owner:** <name or role>
+- **Target date:** <YYYY-MM-DD for Critical/Important>
+
+## Accepted Risks
+- <finding id>: <reason documented>, owner <name>, revisit <date>
+
+## Suppressed (False Positives)
+- <finding id>: <why this pattern is not exploitable here>
+\`\`\`
+
+## Anti-Patterns
+
+- "No Critical findings" without stating what patterns were actually run.
+- Accepting a Critical risk without named owner + revisit date.
+- Treating a lint rule as equivalent to a runtime security check.
+- Running audits only on the diff — the diff does not contain legacy risks.
+- Deleting audit reports after fixing findings (keep them as regression evidence).
+
+## Red Flags
+
+- Audit claims coverage but cites zero file:line evidence.
+- Every Critical pattern has zero matches (this is implausible for any non-trivial codebase — verify the grep commands were actually executed).
+- Findings are Important-only (no Critical or Suggestion buckets) — usually means severity was compressed to avoid escalation.
+`;
+}
+
+export function adversarialReviewSkill(): string {
+  return `---
+name: adversarial-review
+description: "Adversarial review lens. Use during review to deliberately attack the implementation — as a hostile user, a future maintainer, or a competitor."
+---
+
+# Adversarial Review
+
+## Quick Start
+
+> 1. Stop assuming good-faith usage. Play three roles in sequence: hostile user, stressed operator, future maintainer.
+> 2. For each role, produce at least 2 concrete attack/friction scenarios with file:line evidence.
+> 3. Escalate any finding that a Critical severity review would miss.
+
+## HARD-GATE
+
+Do not complete review stage without an adversarial-review pass when
+**any** of the following apply: user-facing input surface changed,
+trust boundary moved, concurrency was introduced, or a new failure
+mode path was added.
+
+## When to Use
+
+- Review stage, after Layer 2 quality checks complete
+- Before shipping anything user-facing or revenue-sensitive
+- When fuzz/property-testing exists but was not exercised against this change
+- When the implementer has a strong "this is fine" prior
+
+## Roles and Questions
+
+### Role 1 — Hostile User
+
+You are trying to break, trick, or exploit the system. Ask:
+
+- What happens on empty / null / maximum / negative / unicode / newline inputs?
+- What if I call the endpoint 1000 times per second? What about 1 every 10 minutes for a week?
+- What if I send a payload that is almost valid (off-by-one schema, wrong content-type, duplicate keys)?
+- What if two honest actions collide (double-click, race, retry after timeout)?
+- Can I observe a secret through error messages, timing, or response size?
+
+### Role 2 — Stressed Operator
+
+You are on call at 3 AM. Ask:
+
+- What does this look like in logs when it fails? Is the failure actionable?
+- If I restart the service mid-request, does state recover cleanly?
+- Is the rollback procedure real, tested, and under 15 minutes?
+- Can I tell from metrics alone whether this is healthy?
+
+### Role 3 — Future Maintainer
+
+You are reading this code in 6 months with no memory of the context. Ask:
+
+- Can I safely change this without breaking callers I cannot see?
+- Are there hidden invariants not captured in tests?
+- Will renaming this field silently break serialized consumers?
+- Is the "obviously correct" path actually correct, or is it just plausible?
+
+## Output Format
+
+For each finding:
+
+\`\`\`
+- **Role:** Hostile User | Stressed Operator | Future Maintainer
+- **Scenario:** concrete scenario (not a category)
+- **File:line:** path/to/file.ts:42
+- **Impact:** what breaks, for whom, under what frequency
+- **Recommendation:** specific fix or mitigation
+\`\`\`
+
+Escalate to the main review-army under the matching severity (Critical / Important / Suggestion).
+
+## Anti-Patterns
+
+- Treating adversarial review as a category list without producing concrete scenarios.
+- Assuming "our users would never do that" — they will, or the next integration will.
+- Running adversarial review after the ship decision is already made.
+- Only playing the hostile-user role and skipping operator + maintainer.
+`;
+}
+
 export const UTILITY_SKILL_FOLDERS = [
   "security",
   "debugging",
@@ -668,7 +1092,11 @@ export const UTILITY_SKILL_FOLDERS = [
   "executing-plans",
   "context-engineering",
   "source-driven-development",
-  "frontend-accessibility"
+  "frontend-accessibility",
+  "landscape-check",
+  "adversarial-review",
+  "security-audit",
+  "knowledge-curation"
 ] as const;
 
 export const UTILITY_SKILL_MAP: Record<string, () => string> = {
@@ -680,5 +1108,9 @@ export const UTILITY_SKILL_MAP: Record<string, () => string> = {
   "executing-plans": executingPlansSkill,
   "context-engineering": contextEngineeringSkill,
   "source-driven-development": sourceDrivenDevelopmentSkill,
-  "frontend-accessibility": frontendAccessibilitySkill
+  "frontend-accessibility": frontendAccessibilitySkill,
+  "landscape-check": landscapeCheckSkill,
+  "adversarial-review": adversarialReviewSkill,
+  "security-audit": securityAuditSkill,
+  "knowledge-curation": knowledgeCurationSkill
 };

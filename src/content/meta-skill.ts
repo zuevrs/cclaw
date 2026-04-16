@@ -91,6 +91,18 @@ These skills live in \`.cclaw/skills/\` but have no slash commands. They activat
 
 **Activation rule:** When a contextual skill applies, read its SKILL.md and follow it as a supplementary lens alongside the current stage. Do not skip the stage workflow — the contextual skill adds depth, not a detour.
 
+## Custom Skills (project-owned, sync-safe)
+
+\`.cclaw/custom-skills/\` is a sync-safe directory. \`cclaw sync\` and \`cclaw upgrade\` **never overwrite** files there.
+
+Use it to add **project-specific** skills that complement the managed library:
+
+- Each skill: \`.cclaw/custom-skills/<folder>/SKILL.md\` with the same frontmatter format as managed skills (\`name\` + \`description\` triggering routing).
+- Activate by mentioning the skill name explicitly, or rely on semantic routing from the description.
+- See \`.cclaw/custom-skills/README.md\` for the full convention and a starter template under \`.cclaw/custom-skills/example/\`.
+
+If a custom skill turns out to generalize (e.g. another project would want the same lens), promote it to a managed skill via a contribution to the cclaw repo — managed skills get versioning and maintenance.
+
 ## Progressive Disclosure (Depth / See Also)
 
 Use this loading order to keep context lean while preserving depth:

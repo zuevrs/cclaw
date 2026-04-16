@@ -13,7 +13,7 @@ description: "Two-layer review stage: spec compliance first, then code quality a
 > **Even if you read nothing else, do these 3 things:**
 > 1. Obey the HARD-GATE below — violating it invalidates the entire stage.
 > 2. Complete every checklist step in order and write the artifact to \`.cclaw/artifacts/07-review.md\`.
-> 3. Do not claim completion without satisfying gates: \`review_layer1_spec_compliance\`, \`review_layer2_correctness\`, \`review_layer2_security\` (+5 more).
+> 3. Do not claim completion without satisfying gates: \`review_layer1_spec_compliance\`, \`review_layer2_correctness\`, \`review_layer2_security\` (+6 more).
 >
 > **After this stage:** update \`flow-state.json\` and tell the user to run \`/cc-next\`.
 
@@ -192,6 +192,7 @@ These are thinking instincts, not a checklist. Let them shape your perspective t
 - \`review_severity_classified\` — All findings are severity-tagged.
 - \`review_criticals_resolved\` — No unresolved critical blockers remain.
 - \`review_army_json_valid\` — 07-review-army.json passes schema validation (validateReviewArmy).
+- \`review_completeness_scored\` — Completeness score is computed and recorded (AC coverage, task coverage, slice coverage, adversarial pass).
 
 ## Required Evidence
 - [ ] Artifact written to \`.cclaw/artifacts/07-review.md\`.
@@ -338,6 +339,7 @@ When fixing a bug:
 | Layer 2 Findings | REQUIRED | Each finding has severity, description, and resolution status. |
 | Review Army Contract | REQUIRED | Structured findings include id/severity/confidence/fingerprint/reportedBy/status with dedup reconciliation summary. |
 | Review Readiness Dashboard | REQUIRED | At least 4 readiness checklist lines including blocker and recommendation status. |
+| Completeness Score | REQUIRED | Records AC coverage, task coverage, test-slice coverage, and adversarial-review pass status as numeric or boolean values. At minimum, a line like 'AC coverage: N/M' or 'AC coverage: 100%'. |
 | Severity Summary | REQUIRED | Per-severity count lines for critical, important, and suggestion buckets. |
 | Final Verdict | REQUIRED | Exactly one of: APPROVED, APPROVED_WITH_CONCERNS, BLOCKED. |
 
@@ -398,7 +400,7 @@ When all required gates are satisfied and the artifact is written:
 1. **Update \`.cclaw/state/flow-state.json\`:**
    - Set \`currentStage\` to \`"ship"\`
    - Add \`"review"\` to \`completedStages\` array
-   - Move all gate IDs for this stage (\`review_layer1_spec_compliance\`, \`review_layer2_correctness\`, \`review_layer2_security\`, \`review_layer2_performance\`, \`review_layer2_architecture\`, \`review_severity_classified\`, \`review_criticals_resolved\`, \`review_army_json_valid\`) into \`stageGateCatalog.review.passed\`
+   - Move all gate IDs for this stage (\`review_layer1_spec_compliance\`, \`review_layer2_correctness\`, \`review_layer2_security\`, \`review_layer2_performance\`, \`review_layer2_architecture\`, \`review_severity_classified\`, \`review_criticals_resolved\`, \`review_army_json_valid\`, \`review_completeness_scored\`) into \`stageGateCatalog.review.passed\`
    - Clear \`stageGateCatalog.review.blocked\`
    - For each passed gate, add an entry to \`guardEvidence\`: \`"<gate_id>": "<artifact path or excerpt proving the gate>"\`. Do NOT leave \`guardEvidence\` empty.
 2. **Persist artifact** at \`.cclaw/artifacts/07-review.md\`. Do NOT manually copy into \`.cclaw/runs/\`; archival is handled by \`cclaw archive\`.
@@ -452,7 +454,7 @@ cat >> .cclaw/knowledge.md <<EOF
 EOF
 \`\`\`
 
-Type must be exactly one of: \`rule\`, \`pattern\`, \`lesson\`.
+Type must be exactly one of: \`rule\`, \`pattern\`, \`lesson\`, \`compound\`.
 
 ## Handoff
 - Next command: \`/cc-next\` (loads whatever stage is current in flow-state)
@@ -738,6 +740,7 @@ When fixing a bug:
 | Monitoring | optional | If applicable: what metrics/logs to watch post-deploy. Risk note if no monitoring. |
 | Finalization | REQUIRED | Exactly one finalization enum token selected. Execution result documented. Worktree cleaned if applicable. |
 | Completion Status | optional | If present: exactly one of SHIPPED, SHIPPED_WITH_EXCEPTIONS, BLOCKED. Exceptions documented when applicable. |
+| Compound Step | optional | Optional retrospective: at least one bullet of the form 'Insight: ... | Action: append [compound] entry to .cclaw/knowledge.md', or an explicit 'No compound insight this run.' line. |
 
 
 ## Common Rationalizations
@@ -846,7 +849,7 @@ cat >> .cclaw/knowledge.md <<EOF
 EOF
 \`\`\`
 
-Type must be exactly one of: \`rule\`, \`pattern\`, \`lesson\`.
+Type must be exactly one of: \`rule\`, \`pattern\`, \`lesson\`, \`compound\`.
 
 ## Handoff
 - Next command: \`/cc-next\` (loads whatever stage is current in flow-state)
@@ -1225,7 +1228,7 @@ cat >> .cclaw/knowledge.md <<EOF
 EOF
 \`\`\`
 
-Type must be exactly one of: \`rule\`, \`pattern\`, \`lesson\`.
+Type must be exactly one of: \`rule\`, \`pattern\`, \`lesson\`, \`compound\`.
 
 ## Handoff
 - Next command: \`/cc-next\` (loads whatever stage is current in flow-state)
@@ -1652,7 +1655,7 @@ cat >> .cclaw/knowledge.md <<EOF
 EOF
 \`\`\`
 
-Type must be exactly one of: \`rule\`, \`pattern\`, \`lesson\`.
+Type must be exactly one of: \`rule\`, \`pattern\`, \`lesson\`, \`compound\`.
 
 ## Handoff
 - Next command: \`/cc-next\` (loads whatever stage is current in flow-state)
@@ -1995,7 +1998,7 @@ cat >> .cclaw/knowledge.md <<EOF
 EOF
 \`\`\`
 
-Type must be exactly one of: \`rule\`, \`pattern\`, \`lesson\`.
+Type must be exactly one of: \`rule\`, \`pattern\`, \`lesson\`, \`compound\`.
 
 ## Handoff
 - Next command: \`/cc-next\` (loads whatever stage is current in flow-state)
@@ -2029,7 +2032,7 @@ Do NOT ship, merge, or release until both review layers complete with an explici
 6. Do NOT copy artifacts into \`.cclaw/runs/\`; archival is handled only by \`cclaw archive\`.
 
 ## Gates
-\`review_layer1_spec_compliance\`, \`review_layer2_correctness\`, \`review_layer2_security\`, \`review_layer2_performance\`, \`review_layer2_architecture\`, \`review_severity_classified\`, \`review_criticals_resolved\`, \`review_army_json_valid\`
+\`review_layer1_spec_compliance\`, \`review_layer2_correctness\`, \`review_layer2_security\`, \`review_layer2_performance\`, \`review_layer2_architecture\`, \`review_severity_classified\`, \`review_criticals_resolved\`, \`review_army_json_valid\`, \`review_completeness_scored\`
 
 ## Exit
 - both layers completed

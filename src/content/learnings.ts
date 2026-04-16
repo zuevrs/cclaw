@@ -23,6 +23,7 @@ Use it to keep durable knowledge that should survive sessions:
 - **rule**: hard constraint to follow every time
 - **pattern**: repeatable way that works well in this project
 - **lesson**: non-obvious outcome from a failure or trade-off
+- **compound**: post-ship insight about how to make the *next* feature faster (process accelerator, not domain rule)
 
 ## HARD-GATE
 
@@ -36,12 +37,25 @@ Under \`/cc-learn\`, only modify the knowledge store (\`${KNOWLEDGE_PATH}\`) or 
 - Context: one short line
 - Insight: one short line
 - Reuse: one short line
+- Confidence: high | medium | low      (optional)
+- Domain: api | infra | ui | testing | …  (optional)
+- Project: <repo or scope name>        (optional)
 \`\`\`
 
 Rules:
-- Type must be exactly one of \`rule\`, \`pattern\`, \`lesson\` (lowercase).
-- Never rewrite history silently; append a newer correction entry instead.
+- Type must be exactly one of \`rule\`, \`pattern\`, \`lesson\`, \`compound\` (lowercase).
+- Never rewrite history silently; append a newer correction entry instead. To replace, prefix the new entry with \`Supersedes: <old-title>\`.
 - Keep entries concise and actionable.
+- Optional fields (\`Confidence\`, \`Domain\`, \`Project\`) are forward-compatible and used by the **knowledge-curation** skill — fill them when known.
+
+## Curation policy (target: ≤ 50 active entries)
+
+The knowledge file is append-only, but entries can be **superseded** rather than deleted:
+
+- When you discover a more correct rule, append a new entry with \`Supersedes: <old-title>\`.
+- During \`/cc-learn curate\`, the assistant surfaces candidates for soft-archive (move to \`.cclaw/knowledge.archive.md\`) when the active file exceeds 50 entries or contains stale/duplicate entries.
+
+See the **knowledge-curation** utility skill for the full curation protocol.
 
 ## Subcommands
 
@@ -55,8 +69,13 @@ Rules:
 
 ### \`/cc-learn add\`
 - Ask for: \`type\`, \`short title\`, \`context\`, \`insight\`, \`reuse\`.
+- Optionally ask for: \`confidence\`, \`domain\`, \`project\`.
 - Append one entry using current UTC timestamp.
 - Re-read the file tail and confirm the entry was written.
+
+### \`/cc-learn curate\`
+- Hand off to the **knowledge-curation** skill (read-only audit + soft-archive plan).
+- Never deletes from \`${KNOWLEDGE_PATH}\` without an explicit user-approved archive plan.
 `;
 }
 
@@ -77,7 +96,8 @@ Do not edit source code from this command. Only operate on \`${KNOWLEDGE_PATH}\`
 |---|---|---|
 | (default) | — | Show recent knowledge entries (tail view). |
 | \`search\` | \`<query>\` | Search knowledge text for relevant prior rules/patterns/lessons. |
-| \`add\` | — | Append a new entry with type \`rule\` / \`pattern\` / \`lesson\`. |
+| \`add\` | — | Append a new entry with type \`rule\` / \`pattern\` / \`lesson\` / \`compound\`. |
+| \`curate\` | — | Hand off to the **knowledge-curation** skill: read-only audit + soft-archive plan when the active file exceeds the curation threshold. |
 `;
 }
 
@@ -101,7 +121,7 @@ cat >> ${KNOWLEDGE_PATH} <<EOF
 EOF
 \`\`\`
 
-Type must be exactly one of: \`rule\`, \`pattern\`, \`lesson\`.
+Type must be exactly one of: \`rule\`, \`pattern\`, \`lesson\`, \`compound\`.
 `;
 }
 
@@ -117,7 +137,7 @@ If the file is empty, continue normally.
 export function learningsAgentsMdBlock(): string {
   return `### Knowledge Store
 
-\`${KNOWLEDGE_PATH}\` — append-only markdown memory with entry types \`rule\`, \`pattern\`, \`lesson\`.
+\`${KNOWLEDGE_PATH}\` — append-only markdown memory with entry types \`rule\`, \`pattern\`, \`lesson\`, \`compound\`.
 At session start and stage transitions, load recent entries and apply relevant ones.
 If a non-obvious reusable rule/pattern/lesson is discovered, append a new entry.
 `;

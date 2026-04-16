@@ -14,11 +14,13 @@ import { contextModeFiles, createInitialContextModeState } from "./content/conte
 import { learnSkillMarkdown, learnCommandContract } from "./content/learnings.js";
 import { nextCommandContract, nextCommandSkillMarkdown } from "./content/next-command.js";
 import { startCommandContract, startCommandSkillMarkdown } from "./content/start-command.js";
+import { statusCommandContract, statusCommandSkillMarkdown } from "./content/status-command.js";
 import { subagentDrivenDevSkill, parallelAgentsSkill } from "./content/subagents.js";
 import { sessionHooksSkillMarkdown } from "./content/session-hooks.js";
 import {
   sessionStartScript,
   stopCheckpointScript,
+  preCompactScript,
   opencodePluginJs,
   claudeHooksJson,
   cursorHooksJson,
@@ -44,11 +46,12 @@ import { ensureGitignore, removeGitignorePatterns } from "./gitignore.js";
 import { HARNESS_ADAPTERS, syncHarnessShims, removeCclawFromAgentsMd } from "./harness-adapters.js";
 import { validateHookDocument } from "./hook-schema.js";
 import { ensureRunSystem, readFlowState } from "./runs.js";
-import type { HarnessId, VibyConfig } from "./types.js";
+import type { FlowTrack, HarnessId, VibyConfig } from "./types.js";
 
 export interface InitOptions {
   projectRoot: string;
   harnesses?: HarnessId[];
+  track?: FlowTrack;
 }
 
 const OPENCODE_PLUGIN_REL_PATH = ".opencode/plugins/cclaw-plugin.mjs";
@@ -223,6 +226,10 @@ async function writeSkills(projectRoot: string): Promise<void> {
     runtimePath(projectRoot, "skills", "flow-start", "SKILL.md"),
     startCommandSkillMarkdown()
   );
+  await writeFileSafe(
+    runtimePath(projectRoot, "skills", "flow-status", "SKILL.md"),
+    statusCommandSkillMarkdown()
+  );
 
   await writeFileSafe(
     runtimePath(projectRoot, "skills", "subagent-dev", "SKILL.md"),
@@ -251,7 +258,7 @@ async function writeUtilityCommands(projectRoot: string): Promise<void> {
   await writeFileSafe(runtimePath(projectRoot, "commands", "learn.md"), learnCommandContract());
   await writeFileSafe(runtimePath(projectRoot, "commands", "next.md"), nextCommandContract());
   await writeFileSafe(runtimePath(projectRoot, "commands", "start.md"), startCommandContract());
-
+  await writeFileSafe(runtimePath(projectRoot, "commands", "status.md"), statusCommandContract());
 }
 
 function toObject(value: unknown): Record<string, unknown> | null {
@@ -569,6 +576,7 @@ async function writeHooks(projectRoot: string, config: VibyConfig): Promise<void
 
   await writeFileSafe(path.join(hooksDir, "session-start.sh"), sessionStartScript());
   await writeFileSafe(path.join(hooksDir, "stop-checkpoint.sh"), stopCheckpointScript());
+  await writeFileSafe(path.join(hooksDir, "pre-compact.sh"), preCompactScript());
   await writeFileSafe(path.join(hooksDir, "prompt-guard.sh"), promptGuardScript({
     strictMode: config.promptGuardMode === "strict"
   }));
@@ -581,6 +589,7 @@ async function writeHooks(projectRoot: string, config: VibyConfig): Promise<void
     for (const script of [
       "session-start.sh",
       "stop-checkpoint.sh",
+      "pre-compact.sh",
       "prompt-guard.sh",
       "workflow-guard.sh",
       "context-monitor.sh",
@@ -629,6 +638,105 @@ async function ensureKnowledgeStore(projectRoot: string): Promise<void> {
     await writeFileSafe(storePath, "# Project Knowledge\n\n");
   }
 }
+
+async function ensureCustomSkillsScaffold(projectRoot: string): Promise<void> {
+  const customDir = runtimePath(projectRoot, "custom-skills");
+  await ensureDir(customDir);
+  const readmePath = path.join(customDir, "README.md");
+  if (!(await exists(readmePath))) {
+    await writeFileSafe(readmePath, CUSTOM_SKILLS_README);
+  }
+  const examplePath = path.join(customDir, "example", "SKILL.md");
+  if (!(await exists(examplePath))) {
+    await writeFileSafe(examplePath, CUSTOM_SKILLS_EXAMPLE);
+  }
+}
+
+const CUSTOM_SKILLS_README = `# Custom Skills (sync-safe)
+
+This directory is **never overwritten** by \`cclaw sync\` or \`cclaw upgrade\`. Use it
+to add project-specific skills that complement the managed skills under
+\`.cclaw/skills/\`.
+
+## When to add a custom skill
+
+- A repeatable lens specific to **this project** (e.g. "billing-domain", "kafka-message-contracts").
+- A team convention you want every agent session to load.
+- A domain checklist that does not generalize to other projects.
+
+If the skill is general (security, performance, accessibility, etc.) prefer
+contributing it upstream instead — the managed skills receive maintenance.
+
+## File format
+
+Each skill lives at \`.cclaw/custom-skills/<folder>/SKILL.md\` with frontmatter:
+
+\`\`\`markdown
+---
+name: <kebab-case-skill-name>
+description: "One sentence describing when this skill applies. Triggers semantic routing."
+---
+
+# <Skill title>
+
+## When to use
+- ...
+
+## HARD-GATE (optional)
+A non-skippable rule, if any. Phrase it as a refusal, not a recommendation.
+
+## Algorithm / checklist
+1. ...
+2. ...
+
+## Anti-patterns
+- ...
+\`\`\`
+
+## Routing
+
+Custom skills are surfaced via the \`using-cclaw\` meta-skill at session start.
+Mention the skill name in your prompt or let the agent semantic-route to it
+based on the description.
+
+## Removing or replacing
+
+Custom skills are user-owned. Delete or edit them at any time — \`cclaw sync\`
+will not touch them.
+`;
+
+const CUSTOM_SKILLS_EXAMPLE = `---
+name: example-custom-skill
+description: "Replace this with a one-sentence description that triggers when the skill should be used. Delete or rename this folder when you add a real skill."
+---
+
+# Example Custom Skill
+
+This is a placeholder. Use it as a starting template, then delete or rename
+the \`example/\` folder.
+
+## When to use
+
+- A real, repeatable situation in **this** project that needs a consistent lens.
+
+## HARD-GATE (optional)
+
+Drop this section if no hard rule applies. Keep it crisp:
+
+> Do not <X> while <Y>.
+
+## Algorithm
+
+1. Step one — observable, file:line evidence required.
+2. Step two — produce a named artifact, not a vibe.
+3. Step three — escalate / hand off / record knowledge entry.
+
+## Anti-patterns
+
+- Treating this skill as advisory when the situation matches the trigger.
+- Loading this skill when the situation clearly does not match (context bloat).
+`;
+
 
 async function ensureSessionStateFiles(projectRoot: string): Promise<void> {
   const stateDir = runtimePath(projectRoot, "state");
@@ -725,13 +833,13 @@ async function syncDisabledHarnessArtifacts(projectRoot: string, harnesses: Harn
   }
 }
 
-async function writeState(projectRoot: string, forceReset = false): Promise<void> {
+async function writeState(projectRoot: string, config: VibyConfig, forceReset = false): Promise<void> {
   const statePath = runtimePath(projectRoot, "state", "flow-state.json");
   if (!forceReset && (await exists(statePath))) {
     return;
   }
 
-  const state = createInitialFlowState();
+  const state = createInitialFlowState("active", config.defaultTrack ?? "standard");
   await writeFileSafe(statePath, `${JSON.stringify(state, null, 2)}\n`);
 }
 
@@ -849,11 +957,12 @@ async function materializeRuntime(projectRoot: string, config: VibyConfig, force
   await writeContextModes(projectRoot);
   await writeArtifactTemplates(projectRoot);
   await writeRulebook(projectRoot);
-  await writeState(projectRoot, forceStateReset);
+  await writeState(projectRoot, config, forceStateReset);
   await ensureRunSystem(projectRoot, { createIfMissing: false });
   await ensureSessionStateFiles(projectRoot);
   await writeAdapterManifest(projectRoot, harnesses);
   await ensureKnowledgeStore(projectRoot);
+  await ensureCustomSkillsScaffold(projectRoot);
   await writeHooks(projectRoot, config);
   await syncDisabledHarnessArtifacts(projectRoot, harnesses);
   await syncManagedGitHooks(projectRoot, config);
@@ -863,7 +972,7 @@ async function materializeRuntime(projectRoot: string, config: VibyConfig, force
 }
 
 export async function initCclaw(options: InitOptions): Promise<void> {
-  const config = createDefaultConfig(options.harnesses);
+  const config = createDefaultConfig(options.harnesses, options.track);
   await writeConfig(options.projectRoot, config);
   await materializeRuntime(options.projectRoot, config, true);
 }
@@ -950,7 +1059,7 @@ function stripManagedHookCommands(value: unknown): { updated: unknown; changed: 
 
 function isManagedRuntimeHookCommand(command: string): boolean {
   const normalized = command.trim().replace(/\s+/gu, " ");
-  return /(^|\s)(?:bash\s+)?(?:\.\/)?\.cclaw\/hooks\/(?:session-start|stop-checkpoint|prompt-guard|workflow-guard|context-monitor)\.sh(?:\s|$)/u.test(
+  return /(^|\s)(?:bash\s+)?(?:\.\/)?\.cclaw\/hooks\/(?:session-start|stop-checkpoint|pre-compact|prompt-guard|workflow-guard|context-monitor)\.sh(?:\s|$)/u.test(
     normalized
   );
 }

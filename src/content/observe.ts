@@ -1626,6 +1626,14 @@ export function claudeHooksJsonWithObservation(): string {
           command: `bash ${RUNTIME_ROOT}/hooks/stop-checkpoint.sh`,
           timeout: 10
         }]
+      }],
+      PreCompact: [{
+        matcher: "manual|auto",
+        hooks: [{
+          type: "command",
+          command: `bash ${RUNTIME_ROOT}/hooks/pre-compact.sh`,
+          timeout: 10
+        }]
       }]
     }
   }, null, 2);
@@ -1646,6 +1654,8 @@ export function cursorHooksJsonWithObservation(): string {
         command: `bash ${RUNTIME_ROOT}/hooks/session-start.sh`
       }],
       sessionCompact: [{
+        command: `bash ${RUNTIME_ROOT}/hooks/pre-compact.sh`
+      }, {
         command: `bash ${RUNTIME_ROOT}/hooks/session-start.sh`
       }],
       preToolUse: [{
@@ -1697,6 +1707,14 @@ export function codexHooksJsonWithObservation(): string {
         hooks: [{
           type: "command",
           command: `bash ${RUNTIME_ROOT}/hooks/stop-checkpoint.sh`,
+          timeout: 10
+        }]
+      }],
+      PreCompact: [{
+        matcher: "manual|auto",
+        hooks: [{
+          type: "command",
+          command: `bash ${RUNTIME_ROOT}/hooks/pre-compact.sh`,
           timeout: 10
         }]
       }]
