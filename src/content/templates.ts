@@ -274,6 +274,11 @@ Execution rule: complete and verify each wave before starting the next wave.
 |---|---|
 | AC-1 | T-1 |
 
+## Risk Assessment
+| Task/Wave | Risk | Likelihood | Impact | Mitigation |
+|---|---|---|---|---|
+|  |  |  |  |  |
+
 ## WAIT_FOR_CONFIRM
 - Status: pending
 - Confirmed by:

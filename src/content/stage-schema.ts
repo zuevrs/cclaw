@@ -1006,6 +1006,7 @@ const PLAN: StageSchemaInput = {
     { section: "Dependency Waves", required: true, validationRule: "Every task belongs to a wave. Each wave has an exit gate and dependency statement." },
     { section: "Task List", required: true, validationRule: "Each task: ID, description, acceptance criterion link, verification command." },
     { section: "Acceptance Mapping", required: true, validationRule: "Every spec criterion is covered by at least one task." },
+    { section: "Risk Assessment", required: false, validationRule: "If present: per-task or per-wave risk identification with likelihood, impact, and mitigation strategy." },
     { section: "WAIT_FOR_CONFIRM", required: true, validationRule: "Explicit marker present. Status: pending until user approves." }
   ],
   namedAntiPattern: {
