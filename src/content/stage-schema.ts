@@ -1142,7 +1142,30 @@ const TDD: StageSchemaInput = {
     { name: "Regression Paranoia", description: "Assume every change breaks something until the full suite proves otherwise. Partial test runs are lies of omission." },
     { name: "Refactor-as-Hygiene", description: "Refactoring is not optional cleanup — it is the third leg of TDD. GREEN without REFACTOR accumulates mess. REFACTOR without GREEN breaks things." }
   ],
-  reviewSections: [],
+  reviewSections: [
+    {
+      title: "RED Evidence Audit",
+      evaluationPoints: [
+        "Does every slice have a captured failing test output?",
+        "Does each failure reason match the expected missing behavior (not a typo or config error)?",
+        "Were tests written BEFORE any production code for that slice?",
+        "Does each RED test assert observable behavior, not implementation details?",
+        "Is there a test for each acceptance criterion mapped in the plan?"
+      ],
+      stopGate: true
+    },
+    {
+      title: "GREEN/REFACTOR Audit",
+      evaluationPoints: [
+        "Does GREEN evidence show a FULL suite pass (not partial)?",
+        "Is the GREEN implementation minimal — no features beyond what RED tests require?",
+        "Does the REFACTOR step preserve all existing behavior (no new failures)?",
+        "Are REFACTOR notes documented with rationale?",
+        "Is traceability complete: every change links to plan task ID and spec criterion?"
+      ],
+      stopGate: true
+    }
+  ],
   completionStatus: ["DONE", "DONE_WITH_CONCERNS", "BLOCKED"],
   crossStageTrace: {
     readsFrom: [".cclaw/artifacts/05-plan.md", ".cclaw/artifacts/04-spec.md"],
