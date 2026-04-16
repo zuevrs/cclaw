@@ -1453,6 +1453,50 @@ These are thinking instincts, not a checklist. Let them shape your perspective t
 
 After plan approval (**WAIT_FOR_CONFIRM** / \`plan_wait_for_confirm\` satisfied), process **all tasks in the current dependency wave** sequentially: **RED → GREEN → REFACTOR** per task, recording evidence per slice. **Stop** only on **BLOCKED**, a test failure that **requires user input**, or **wave completion** (every task in the wave has the required RED / GREEN / REFACTOR evidence per the plan artifact).
 
+### Walkthrough — Wave 1 with 3 tasks
+
+The example below is **illustrative only** — do not copy the command names blindly, match them to your stack.
+
+Assume Wave 1 from the plan artifact contains three tasks:
+
+| Task ID | Description | AC | Verification |
+|---|---|---|---|
+| T-1 \`[~3m]\` | Add \`User.emailNormalized\` column | AC-1 | \`npm test -- users/schema\` |
+| T-2 \`[~4m]\` | Normalize on write in \`UserRepo.save\` | AC-1 | \`npm test -- users/repo\` |
+| T-3 \`[~3m]\` | Reject duplicates in \`UserService.signup\` | AC-2 | \`npm test -- users/service\` |
+
+**Execution transcript** (one slice at a time, evidence captured per step):
+
+**T-1 — RED**
+
+> Run: \`npm test -- users/schema\` → **FAIL** (missing column: \`emailNormalized\`). Captured the failure stack as RED evidence. No production code touched yet.
+
+**T-1 — GREEN**
+
+> Added the column in the schema module. Re-ran \`npm test -- users/schema\` → **PASS**. Ran the full suite \`npm test\` → **PASS**. Captured both outputs as GREEN evidence.
+
+**T-1 — REFACTOR**
+
+> Extracted the column definition into a shared \`NormalizedEmail\` type used by T-2/T-3. Re-ran \`npm test\` → **PASS**. Captured REFACTOR note: "Extracted NormalizedEmail type to keep T-2/T-3 DRY; zero behavior change, all tests still green."
+
+**T-2 — RED / GREEN / REFACTOR**: same shape — write the repo test that expects normalised writes, watch it fail (RED), implement normalisation inside \`UserRepo.save\` only (GREEN), then refactor the normaliser out of the repo into a helper shared with T-3 (REFACTOR).
+
+**T-3 — RED / GREEN / REFACTOR**: write the service-level duplicate test that expects a rejection, watch it fail (RED), add the duplicate check in \`UserService.signup\` (GREEN), refactor the error message into a named constant (REFACTOR).
+
+**Wave gate check**
+
+After T-3 REFACTOR, before declaring Wave 1 done:
+
+1. Run the **full suite** (\`npm test\`) one final time → **PASS** captured as wave-exit evidence.
+2. Verify the TDD artifact contains RED, GREEN, and REFACTOR evidence for T-1, T-2, **and** T-3. No partial waves.
+3. Only now mark Wave 1 complete. Wave 2 cannot start until this step.
+
+**When to stop mid-wave (do NOT push through)**
+
+- A RED test fails for a reason you did not predict (e.g. an unrelated flaky test) → **pause**, diagnose, log an operational-self-improvement entry, and decide with the user before proceeding.
+- A GREEN step would require touching code outside the task's acceptance criterion → **pause**, the task is scoped wrong; adjust the plan or open a follow-up task.
+- The same RED failure reappears after a GREEN change → **escalate** per the 3-attempts rule; do not keep patching.
+
 
 ## Required Gates
 - \`tdd_red_test_written\` — Failing tests exist before implementation changes.
