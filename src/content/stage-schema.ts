@@ -1160,7 +1160,10 @@ const TDD: StageSchemaInput = {
     { name: "Regression Paranoia", description: "Assume every change breaks something until the full suite proves otherwise. Partial test runs are lies of omission." },
     { name: "Refactor-as-Hygiene", description: "Refactoring is not optional cleanup — it is the third leg of TDD. GREEN without REFACTOR accumulates mess. REFACTOR without GREEN breaks things." },
     { name: "Evidence Over Anecdote", description: "Every claim about test state must be backed by captured output. 'It passed' without terminal evidence is not evidence. 'I saw it fail' without the failure output is not RED. Capture commands, outputs, and results — not summaries from memory." },
-    { name: "Characterization First", description: "Before changing existing behavior, write characterization tests that capture current behavior as-is. These tests document what the system does today — even if that behavior is wrong. Only after the characterization suite is green do you add the new RED test for the desired change. This prevents accidental behavior destruction during refactoring." }
+    { name: "Characterization First", description: "Before changing existing behavior, write characterization tests that capture current behavior as-is. These tests document what the system does today — even if that behavior is wrong. Only after the characterization suite is green do you add the new RED test for the desired change. This prevents accidental behavior destruction during refactoring." },
+    { name: "Test Pyramid Shape", description: "Healthy test suites look like a pyramid: many small fast tests at the base, fewer medium integration tests in the middle, few large end-to-end tests at the top. Each layer catches a different class of bug; none of them substitutes for another. If your suite is top-heavy (mostly E2E) it is slow and flaky; if it is base-only it misses integration contracts. During TDD, default to the smallest layer that can prove the behavior." },
+    { name: "Prove-It Pattern (bug fixes)", description: "For any reported regression or hotfix, the FIRST test is a reproduction — it must fail without your fix, pass with your fix, and fail again if the fix is reverted. This is the only way to prove you fixed the reported bug and not a superficially similar one. Skipping this step is how bugs come back two releases later wearing a different name." },
+    { name: "Test Size Model", description: "Size tests by scope, not by name: Small = pure logic, no I/O, <50ms; Medium = one process boundary, possibly filesystem or an in-memory DB; Large = multi-process / network / real external service. Small tests are the default; escalate to Medium only when a real boundary must be exercised, and to Large only for end-to-end user journeys. Record the size class in the TDD artifact so reviewers can sanity-check the pyramid shape." }
   ],
   reviewSections: [
     {
@@ -1184,6 +1187,26 @@ const TDD: StageSchemaInput = {
         "Is traceability complete: every change links to plan task ID and spec criterion?"
       ],
       stopGate: true
+    },
+    {
+      title: "Test Pyramid + Size Audit",
+      evaluationPoints: [
+        "Is the tests-added count skewed toward Small (unit) tests, with Medium and Large used only when a real boundary justifies the cost?",
+        "Does every newly added test declare a size class (Small / Medium / Large) — either inline in the test file or in the TDD artifact table?",
+        "Are Large tests reserved for genuine end-to-end user journeys (not substitutes for unit coverage)?",
+        "Has the slice avoided using Medium/Large tests to paper over testability problems that should be fixed at the design layer?"
+      ],
+      stopGate: false
+    },
+    {
+      title: "Prove-It Reproduction (bug-fix slices)",
+      evaluationPoints: [
+        "Does the artifact identify this slice as a bug fix, and if so, include a reproduction test checked in alongside the fix?",
+        "Is there captured RED evidence from running the reproduction WITHOUT the fix applied?",
+        "Is there captured GREEN evidence from the same reproduction AFTER the fix was applied?",
+        "Is there a note confirming the reproduction test fails again if the fix is reverted (or equivalent evidence that the test is actually pinned to this fix)?"
+      ],
+      stopGate: false
     }
   ],
   completionStatus: ["DONE", "DONE_WITH_CONCERNS", "BLOCKED"],
@@ -1200,7 +1223,9 @@ const TDD: StageSchemaInput = {
     { section: "REFACTOR Notes", required: true, validationRule: "What changed, why, behavior preservation confirmed." },
     { section: "Traceability", required: true, validationRule: "Plan task ID and spec criterion linked." },
     { section: "Verification Ladder", required: false, validationRule: "If present: per-slice verification tier (static, command, behavioral, human) with evidence for highest tier reached." },
-    { section: "Coverage Targets", required: false, validationRule: "If present: per-module or per-code-type coverage thresholds with current values and measurement commands." }
+    { section: "Coverage Targets", required: false, validationRule: "If present: per-module or per-code-type coverage thresholds with current values and measurement commands." },
+    { section: "Test Pyramid Shape", required: false, validationRule: "If present: per-slice count of Small/Medium/Large tests added, to let reviewers verify the suite is not drifting top-heavy." },
+    { section: "Prove-It Reproduction", required: false, validationRule: "Required for bug-fix slices: original failing reproduction test (RED without fix), passing output with fix (GREEN), and a note confirming the test fails again if the fix is reverted." }
   ],
   namedAntiPattern: {
     title: "Code Before Failing Test",

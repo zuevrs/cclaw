@@ -1347,6 +1347,9 @@ These are thinking instincts, not a checklist. Let them shape your perspective t
 5. **Refactor-as-Hygiene** — Refactoring is not optional cleanup — it is the third leg of TDD. GREEN without REFACTOR accumulates mess. REFACTOR without GREEN breaks things.
 6. **Evidence Over Anecdote** — Every claim about test state must be backed by captured output. 'It passed' without terminal evidence is not evidence. 'I saw it fail' without the failure output is not RED. Capture commands, outputs, and results — not summaries from memory.
 7. **Characterization First** — Before changing existing behavior, write characterization tests that capture current behavior as-is. These tests document what the system does today — even if that behavior is wrong. Only after the characterization suite is green do you add the new RED test for the desired change. This prevents accidental behavior destruction during refactoring.
+8. **Test Pyramid Shape** — Healthy test suites look like a pyramid: many small fast tests at the base, fewer medium integration tests in the middle, few large end-to-end tests at the top. Each layer catches a different class of bug; none of them substitutes for another. If your suite is top-heavy (mostly E2E) it is slow and flaky; if it is base-only it misses integration contracts. During TDD, default to the smallest layer that can prove the behavior.
+9. **Prove-It Pattern (bug fixes)** — For any reported regression or hotfix, the FIRST test is a reproduction — it must fail without your fix, pass with your fix, and fail again if the fix is reverted. This is the only way to prove you fixed the reported bug and not a superficially similar one. Skipping this step is how bugs come back two releases later wearing a different name.
+10. **Test Size Model** — Size tests by scope, not by name: Small = pure logic, no I/O, <50ms; Medium = one process boundary, possibly filesystem or an in-memory DB; Large = multi-process / network / real external service. Small tests are the default; escalate to Medium only when a real boundary must be exercised, and to Large only for end-to-end user journeys. Record the size class in the TDD artifact so reviewers can sanity-check the pyramid shape.
 
 ## Interaction Protocol
 1. Pick one planned slice at a time.
@@ -1420,6 +1423,22 @@ Evaluate:
 
 **STOP.** Present the most important question from this section to the user, even if your recommendation is clear. If no issues are found, state your assessment in one sentence and ask the user to confirm before moving on. If issues exist, present them ONE AT A TIME: describe the problem concretely, present 2-3 options, state your recommendation, and explain WHY.
 
+### Test Pyramid + Size Audit
+
+Evaluate:
+- Is the tests-added count skewed toward Small (unit) tests, with Medium and Large used only when a real boundary justifies the cost?
+- Does every newly added test declare a size class (Small / Medium / Large) — either inline in the test file or in the TDD artifact table?
+- Are Large tests reserved for genuine end-to-end user journeys (not substitutes for unit coverage)?
+- Has the slice avoided using Medium/Large tests to paper over testability problems that should be fixed at the design layer?
+
+### Prove-It Reproduction (bug-fix slices)
+
+Evaluate:
+- Does the artifact identify this slice as a bug fix, and if so, include a reproduction test checked in alongside the fix?
+- Is there captured RED evidence from running the reproduction WITHOUT the fix applied?
+- Is there captured GREEN evidence from the same reproduction AFTER the fix was applied?
+- Is there a note confirming the reproduction test fails again if the fix is reverted (or equivalent evidence that the test is actually pinned to this fix)?
+
 ## Verification Before Completion
 
 **Iron law:** Do not claim this stage is complete without fresh verification evidence from THIS message.
@@ -1477,6 +1496,8 @@ When fixing a bug:
 | Traceability | REQUIRED | Plan task ID and spec criterion linked. |
 | Verification Ladder | optional | If present: per-slice verification tier (static, command, behavioral, human) with evidence for highest tier reached. |
 | Coverage Targets | optional | If present: per-module or per-code-type coverage thresholds with current values and measurement commands. |
+| Test Pyramid Shape | optional | If present: per-slice count of Small/Medium/Large tests added, to let reviewers verify the suite is not drifting top-heavy. |
+| Prove-It Reproduction | optional | Required for bug-fix slices: original failing reproduction test (RED without fix), passing output with fix (GREEN), and a note confirming the test fails again if the fix is reverted. |
 
 
 ## Common Rationalizations
