@@ -455,7 +455,9 @@ const SCOPE: StageSchemaInput = {
     { section: "Deferred Items", required: true, validationRule: "Each item has one-line rationale. If empty, state 'None' explicitly." },
     { section: "Error & Rescue Registry", required: true, validationRule: "Each scoped capability has: failure mode, detection method, fallback decision." },
     { section: "Completion Dashboard", required: true, validationRule: "Lists checklist findings, count of resolved decisions, and unresolved decisions (or 'None')." },
-    { section: "Scope Summary", required: true, validationRule: "Clean summary: mode, strongest challenges, recommended path, accepted scope, deferred, excluded." }
+    { section: "Scope Summary", required: true, validationRule: "Clean summary: mode, strongest challenges, recommended path, accepted scope, deferred, excluded." },
+    { section: "Dream State Mapping", required: false, validationRule: "If present (complex projects): CURRENT STATE, THIS PLAN, 12-MONTH IDEAL, and alignment verdict." },
+    { section: "Temporal Interrogation", required: false, validationRule: "If present (complex projects): timeline simulation table with decision pressures and lock-now vs defer verdicts." }
   ],
   namedAntiPattern: {
     title: "Scope Is Obvious From Context",
