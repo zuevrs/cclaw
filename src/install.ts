@@ -38,7 +38,7 @@ import {
   RULEBOOK_MARKDOWN,
   buildRulesJson
 } from "./content/templates.js";
-import { stageSkillFolder, stageSkillMarkdown } from "./content/skills.js";
+import { TDD_WAVE_WALKTHROUGH_MARKDOWN, stageSkillFolder, stageSkillMarkdown } from "./content/skills.js";
 import {
   STAGE_EXAMPLES_REFERENCE_DIR,
   stageExamplesReferenceMarkdown
@@ -242,6 +242,15 @@ async function writeSkills(projectRoot: string, config?: VibyConfig): Promise<vo
       );
     }
   }
+
+  // Progressive disclosure for the TDD Wave Execution walkthrough (A.1#1).
+  // The detailed 3-task transcript lives next to stage examples so the
+  // always-rendered TDD skill stays under the line-budget and the reference
+  // is loaded on demand.
+  await writeFileSafe(
+    runtimePath(projectRoot, ...STAGE_EXAMPLES_REFERENCE_DIR.split("/"), "tdd-wave-walkthrough.md"),
+    TDD_WAVE_WALKTHROUGH_MARKDOWN
+  );
 
   // Utility skills (not flow stages)
   await writeFileSafe(

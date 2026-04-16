@@ -1,6 +1,6 @@
 import { RUNTIME_ROOT } from "../constants.js";
 import type { FlowStage } from "../types.js";
-import { stageDomainExamples, stageExamples, stageGoodBadExamples } from "./examples.js";
+import { STAGE_EXAMPLES_REFERENCE_DIR, stageDomainExamples, stageExamples, stageGoodBadExamples } from "./examples.js";
 import { selfImprovementBlock } from "./learnings.js";
 import type { StageSchema } from "./stage-schema.js";
 import { stageAutoSubagentDispatch, stageSchema } from "./stage-schema.js";
@@ -159,6 +159,12 @@ On session stop or stage completion, the agent should write delegation entries t
 
 const VERIFICATION_STAGES: FlowStage[] = ["tdd", "review", "ship"];
 
+/**
+ * Short inline summary of Wave Execution Mode. The detailed 3-task
+ * walkthrough (RED/GREEN/REFACTOR transcript per slice) lives in the
+ * companion reference file so the always-rendered skill body stays under
+ * the 400-line soft budget.
+ */
 function waveExecutionModeBlock(stage: FlowStage): string {
   const schema = stageSchema(stage);
   if (!schema.waveExecutionAllowed) {
@@ -168,11 +174,32 @@ function waveExecutionModeBlock(stage: FlowStage): string {
 
 After plan approval (**WAIT_FOR_CONFIRM** / \`plan_wait_for_confirm\` satisfied), process **all tasks in the current dependency wave** sequentially: **RED → GREEN → REFACTOR** per task, recording evidence per slice. **Stop** only on **BLOCKED**, a test failure that **requires user input**, or **wave completion** (every task in the wave has the required RED / GREEN / REFACTOR evidence per the plan artifact).
 
-### Walkthrough — Wave 1 with 3 tasks
+**Wave gate check (before marking a wave complete):**
 
-The example below is **illustrative only** — do not copy the command names blindly, match them to your stack.
+1. Run the **full suite** one final time → PASS, captured as wave-exit evidence.
+2. Verify the TDD artifact contains RED, GREEN, and REFACTOR evidence for every task in the wave. No partial waves.
+3. Only then declare the wave complete. The next wave cannot start until this step.
 
-Assume Wave 1 from the plan artifact contains three tasks:
+**When to stop mid-wave (do NOT push through):**
+
+- A RED test fails for an unpredicted reason (e.g. an unrelated flaky test) → **pause**, diagnose, log an operational-self-improvement entry.
+- A GREEN step would require touching code outside the task's acceptance criterion → **pause**, the task is scoped wrong.
+- The same RED failure reappears after a GREEN change → **escalate** per the 3-attempts rule.
+
+> **Full 3-task walkthrough transcript** (RED/GREEN/REFACTOR per slice, with wave gate check): see \`.cclaw/${STAGE_EXAMPLES_REFERENCE_DIR}/tdd-wave-walkthrough.md\`.
+`;
+}
+
+/**
+ * Long-form Wave Execution walkthrough. Rendered once into
+ * \`.cclaw/references/stages/tdd-wave-walkthrough.md\` by the installer.
+ */
+export const TDD_WAVE_WALKTHROUGH_MARKDOWN = `# TDD — Wave Execution Walkthrough
+
+Detailed RED / GREEN / REFACTOR transcript for a 3-task wave. Illustrative
+only — do not copy the command names blindly, match them to your stack.
+
+## Wave 1 example tasks
 
 | Task ID | Description | AC | Verification |
 |---|---|---|---|
@@ -180,40 +207,43 @@ Assume Wave 1 from the plan artifact contains three tasks:
 | T-2 \`[~4m]\` | Normalize on write in \`UserRepo.save\` | AC-1 | \`npm test -- users/repo\` |
 | T-3 \`[~3m]\` | Reject duplicates in \`UserService.signup\` | AC-2 | \`npm test -- users/service\` |
 
-**Execution transcript** (one slice at a time, evidence captured per step):
+## Execution transcript
 
-**T-1 — RED**
+### T-1 — RED
 
 > Run: \`npm test -- users/schema\` → **FAIL** (missing column: \`emailNormalized\`). Captured the failure stack as RED evidence. No production code touched yet.
 
-**T-1 — GREEN**
+### T-1 — GREEN
 
 > Added the column in the schema module. Re-ran \`npm test -- users/schema\` → **PASS**. Ran the full suite \`npm test\` → **PASS**. Captured both outputs as GREEN evidence.
 
-**T-1 — REFACTOR**
+### T-1 — REFACTOR
 
 > Extracted the column definition into a shared \`NormalizedEmail\` type used by T-2/T-3. Re-ran \`npm test\` → **PASS**. Captured REFACTOR note: "Extracted NormalizedEmail type to keep T-2/T-3 DRY; zero behavior change, all tests still green."
 
-**T-2 — RED / GREEN / REFACTOR**: same shape — write the repo test that expects normalised writes, watch it fail (RED), implement normalisation inside \`UserRepo.save\` only (GREEN), then refactor the normaliser out of the repo into a helper shared with T-3 (REFACTOR).
+### T-2 — RED / GREEN / REFACTOR
 
-**T-3 — RED / GREEN / REFACTOR**: write the service-level duplicate test that expects a rejection, watch it fail (RED), add the duplicate check in \`UserService.signup\` (GREEN), refactor the error message into a named constant (REFACTOR).
+Write the repo test that expects normalised writes, watch it fail (RED), implement normalisation inside \`UserRepo.save\` only (GREEN), then refactor the normaliser out of the repo into a helper shared with T-3 (REFACTOR).
 
-**Wave gate check**
+### T-3 — RED / GREEN / REFACTOR
+
+Write the service-level duplicate test that expects a rejection, watch it fail (RED), add the duplicate check in \`UserService.signup\` (GREEN), refactor the error message into a named constant (REFACTOR).
+
+## Wave gate check
 
 After T-3 REFACTOR, before declaring Wave 1 done:
 
-1. Run the **full suite** (\`npm test\`) one final time → **PASS** captured as wave-exit evidence.
+1. Run the full suite (\`npm test\`) one final time → **PASS** captured as wave-exit evidence.
 2. Verify the TDD artifact contains RED, GREEN, and REFACTOR evidence for T-1, T-2, **and** T-3. No partial waves.
 3. Only now mark Wave 1 complete. Wave 2 cannot start until this step.
 
-**When to stop mid-wave (do NOT push through)**
+## When to stop mid-wave (do NOT push through)
 
 - A RED test fails for a reason you did not predict (e.g. an unrelated flaky test) → **pause**, diagnose, log an operational-self-improvement entry, and decide with the user before proceeding.
 - A GREEN step would require touching code outside the task's acceptance criterion → **pause**, the task is scoped wrong; adjust the plan or open a follow-up task.
 - The same RED failure reappears after a GREEN change → **escalate** per the 3-attempts rule; do not keep patching.
-
 `;
-}
+
 
 function stageCompletionProtocol(schema: StageSchema): string {
   const stage = schema.stage;
