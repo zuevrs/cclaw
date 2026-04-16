@@ -1,5 +1,5 @@
 #!/usr/bin/env node
-import { realpathSync } from "node:fs";
+import { readFileSync, realpathSync } from "node:fs";
 import process from "node:process";
 import path from "node:path";
 import { fileURLToPath } from "node:url";
@@ -18,19 +18,65 @@ interface ParsedArgs {
   harnesses?: HarnessId[];
   reconcileGates?: boolean;
   archiveName?: string;
+  showHelp?: boolean;
+  showVersion?: boolean;
 }
 
-function usage(): string {
+export function usage(): string {
   return `cclaw - installer-first flow toolkit
 
 Usage:
-  cclaw init [--harnesses=claude,cursor,opencode,codex]
-  cclaw sync
-  cclaw doctor [--reconcile-gates]
-  cclaw archive [--name=feature-name]
-  cclaw upgrade
-  cclaw uninstall
+  cclaw <command> [flags]
+  cclaw --help | -h
+  cclaw --version | -v
+
+Commands:
+  init       Bootstrap .cclaw runtime, state, and harness shims in this project.
+             Flags: --harnesses=<list>  Comma list of harnesses (claude,cursor,opencode,codex).
+  sync       Regenerate harness shim files from the current .cclaw config (non-destructive).
+  doctor     Run health checks against the local .cclaw runtime. Exit code 2 on failure.
+             Flags: --reconcile-gates   Recompute current-stage gate evidence before checks.
+  archive    Move .cclaw/artifacts into .cclaw/runs/<date>-<slug> and reset flow state.
+             Flags: --name=<feature>    Feature slug (default: inferred from 00-idea.md).
+  upgrade    Refresh generated files in .cclaw without modifying user artifacts.
+  uninstall  Remove .cclaw runtime and the generated harness shim files.
+
+Global flags:
+  -h, --help     Show this help message and exit 0.
+  -v, --version  Print the cclaw CLI version and exit 0.
+
+Examples:
+  cclaw init --harnesses=claude,cursor
+  cclaw doctor --reconcile-gates
+  cclaw archive --name=payments-revamp
+
+Docs:   https://github.com/zuevrs/cclaw
+Issues: https://github.com/zuevrs/cclaw/issues
 `;
+}
+
+function cliPackageVersion(): string {
+  try {
+    const here = path.dirname(fileURLToPath(import.meta.url));
+    const candidates = [
+      path.resolve(here, "../package.json"),
+      path.resolve(here, "../../package.json")
+    ];
+    for (const candidate of candidates) {
+      try {
+        const raw = readFileSync(candidate, "utf8");
+        const parsed = JSON.parse(raw) as { name?: string; version?: string };
+        if (parsed.name === "cclaw-cli" && typeof parsed.version === "string") {
+          return parsed.version;
+        }
+      } catch {
+        continue;
+      }
+    }
+  } catch {
+    // fall through
+  }
+  return "unknown";
 }
 
 function parseHarnesses(raw: string): HarnessId[] {
@@ -48,12 +94,24 @@ function parseHarnesses(raw: string): HarnessId[] {
 }
 
 function parseArgs(argv: string[]): ParsedArgs {
-  const [commandRaw, ...flags] = argv;
-  const command = INSTALLER_COMMANDS.includes(commandRaw as CommandName)
+  const parsed: ParsedArgs = {};
+
+  const helpFlag = argv.find((arg) => arg === "--help" || arg === "-h");
+  if (helpFlag) {
+    parsed.showHelp = true;
+  }
+  const versionFlag = argv.find((arg) => arg === "--version" || arg === "-v");
+  if (versionFlag) {
+    parsed.showVersion = true;
+  }
+
+  const [commandRaw, ...flags] = argv.filter(
+    (arg) => arg !== "--help" && arg !== "-h" && arg !== "--version" && arg !== "-v"
+  );
+  parsed.command = INSTALLER_COMMANDS.includes(commandRaw as CommandName)
     ? (commandRaw as CommandName)
     : undefined;
 
-  const parsed: ParsedArgs = { command };
   for (const flag of flags) {
     if (flag.startsWith("--harnesses=")) {
       parsed.harnesses = parseHarnesses(flag.replace("--harnesses=", ""));
@@ -72,6 +130,15 @@ function parseArgs(argv: string[]): ParsedArgs {
 }
 
 async function runCommand(parsed: ParsedArgs, ctx: CliContext): Promise<number> {
+  if (parsed.showHelp) {
+    ctx.stdout.write(usage());
+    return 0;
+  }
+  if (parsed.showVersion) {
+    ctx.stdout.write(`cclaw ${cliPackageVersion()}\n`);
+    return 0;
+  }
+
   const command = parsed.command;
   if (!command) {
     ctx.stderr.write(usage());
