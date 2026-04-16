@@ -3,7 +3,7 @@ import type { FlowStage } from "../types.js";
 import { stageExamples } from "./examples.js";
 import { selfImprovementBlock } from "./learnings.js";
 import type { StageSchema } from "./stage-schema.js";
-import { QUESTION_FORMAT_SPEC, ERROR_BUDGET_SPEC, stageAutoSubagentDispatch, stageSchema } from "./stage-schema.js";
+import { stageAutoSubagentDispatch, stageSchema } from "./stage-schema.js";
 
 function rationalizationTable(stage: FlowStage): string {
   const schema = stageSchema(stage);
@@ -378,9 +378,7 @@ ${cognitivePatternsList(stage)}
 ## Interaction Protocol
 ${schema.interactionProtocol.map((item, i) => `${i + 1}. ${item}`).join("\n")}
 
-${QUESTION_FORMAT_SPEC}
-
-${ERROR_BUDGET_SPEC}
+**See \`.cclaw/skills/using-cclaw/SKILL.md\` "Shared Decision + Tool-Use Protocol"** for the full AskUserQuestion format, error/retry budget, and the 3-attempt escalation rule. Do not duplicate those rules here — apply them verbatim.
 
 ${waveExecutionModeBlock(stage)}
 ## Required Gates
@@ -400,11 +398,8 @@ ${decisionRecordBlock(stage)}
 ## Common Rationalizations
 ${rationalizationTable(stage)}
 
-## Blockers
-${schema.blockers.length > 0 ? schema.blockers.map((item) => `- ${item}`).join("\n") : "- None — stage can always proceed"}
-
 ## Anti-Patterns
-${schema.antiPatterns.map((item) => `- ${item}`).join("\n")}
+${[...schema.antiPatterns, ...schema.blockers].map((item) => `- ${item}`).join("\n")}
 
 ## Red Flags
 ${schema.redFlags.map((item) => `- ${item}`).join("\n")}
