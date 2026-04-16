@@ -1549,9 +1549,9 @@ const SHIP: StageSchemaInput = {
   ],
   completionStatus: ["SHIPPED", "SHIPPED_WITH_EXCEPTIONS", "BLOCKED"],
   crossStageTrace: {
-    readsFrom: [".cclaw/artifacts/07-review.md", ".cclaw/artifacts/06-tdd.md"],
+    readsFrom: [".cclaw/artifacts/07-review.md", ".cclaw/artifacts/06-tdd.md", ".cclaw/artifacts/05-plan.md", ".cclaw/artifacts/04-spec.md"],
     writesTo: [".cclaw/artifacts/08-ship.md"],
-    traceabilityRule: "Ship artifact must reference review verdict and resolution status. Rollback plan must reference specific changes that could fail."
+    traceabilityRule: "Ship artifact must reference review verdict and resolution status. Release notes must reference spec criteria. Rollback plan must reference specific changes that could fail."
   },
   artifactValidation: [
     { section: "Preflight Results", required: true, validationRule: "Build, test, lint, type-check results captured with fresh output. Exceptions documented if any." },

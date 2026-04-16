@@ -508,6 +508,8 @@ Before starting stage execution:
 3. Load upstream artifacts required by this stage:
 - \`.cclaw/artifacts/07-review.md\`
 - \`.cclaw/artifacts/06-tdd.md\`
+- \`.cclaw/artifacts/05-plan.md\`
+- \`.cclaw/artifacts/04-spec.md\`
 4. Read \`.cclaw/knowledge.md\` and apply relevant entries before making decisions.
 
 ## Automatic Subagent Dispatch
@@ -712,11 +714,13 @@ When fixing a bug:
 **Reads from:**
 - .cclaw/artifacts/07-review.md
 - .cclaw/artifacts/06-tdd.md
+- .cclaw/artifacts/05-plan.md
+- .cclaw/artifacts/04-spec.md
 
 **Writes to:**
 - .cclaw/artifacts/08-ship.md
 
-**Rule:** Ship artifact must reference review verdict and resolution status. Rollback plan must reference specific changes that could fail.
+**Rule:** Ship artifact must reference review verdict and resolution status. Release notes must reference spec criteria. Rollback plan must reference specific changes that could fail.
 
 ## Artifact Validation
 
@@ -2039,7 +2043,7 @@ Load and follow **.cclaw/skills/shipping-and-handoff/SKILL.md** — it contains 
 Do NOT merge, push, or finalize without a passed preflight check, written rollback plan, and exactly one explicit finalization mode selected. No exceptions for urgency.
 
 ## In / Out
-- **Reads:** .cclaw/artifacts/07-review.md, .cclaw/artifacts/06-tdd.md
+- **Reads:** .cclaw/artifacts/07-review.md, .cclaw/artifacts/06-tdd.md, .cclaw/artifacts/05-plan.md, .cclaw/artifacts/04-spec.md
 - **Writes:** \`.cclaw/artifacts/08-ship.md\`
 - **Next:** \`/cc-next\` (updates flow-state and loads the next stage)
 
@@ -2049,6 +2053,8 @@ Do NOT merge, push, or finalize without a passed preflight check, written rollba
 3. Load required upstream artifacts for this stage:
 - \`.cclaw/artifacts/07-review.md\`
 - \`.cclaw/artifacts/06-tdd.md\`
+- \`.cclaw/artifacts/05-plan.md\`
+- \`.cclaw/artifacts/04-spec.md\`
 4. Load \`.cclaw/knowledge.md\` and apply relevant entries.
 5. Write stage output to \`.cclaw/artifacts/08-ship.md\`.
 6. Do NOT copy artifacts into \`.cclaw/runs/\`; archival is handled only by \`cclaw archive\`.
