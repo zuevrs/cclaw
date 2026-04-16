@@ -184,9 +184,9 @@ function stageCompletionProtocol(schema: StageSchema): string {
   if (nextStage) {
     const nextSchema = stageSchema(nextStage);
     const nextDescription = nextSchema.skillDescription.charAt(0).toLowerCase() + nextSchema.skillDescription.slice(1);
-    nextAction = `3. Tell the user:\n\n   > **Stage \`${stage}\` complete.** Next: **${nextStage}** — ${nextDescription}\n   >\n   > Run \`/cc-next\` to continue.`;
+    nextAction = `4. Tell the user:\n\n   > **Stage \`${stage}\` complete.** Next: **${nextStage}** — ${nextDescription}\n   >\n   > Run \`/cc-next\` to continue.`;
   } else {
-    nextAction = `3. Tell the user:\n\n   > **Flow complete.** All stages finished. The project is ready for release.`;
+    nextAction = `4. Tell the user:\n\n   > **Flow complete.** All stages finished. The project is ready for release.`;
   }
 
   return `## Stage Completion Protocol
@@ -197,6 +197,7 @@ ${delegationBlock}1. **Update \`${RUNTIME_ROOT}/state/flow-state.json\`:**
 ${stateUpdate}
    - For each passed gate, add an entry to \`guardEvidence\`: \`"<gate_id>": "<artifact path or excerpt proving the gate>"\`. Do NOT leave \`guardEvidence\` empty.
 2. **Persist artifact** at \`${RUNTIME_ROOT}/artifacts/${schema.artifactFile}\`. Do NOT manually copy into \`${RUNTIME_ROOT}/runs/\`; archival is handled by \`cclaw archive\`.
+3. **Doctor pre-flight** — Run \`npx cclaw doctor\` (or the installed cclaw binary). If any check fails, resolve the issue (missing delegation entry, artifact section, gate evidence) and re-run until all checks pass. Do NOT proceed to the next step while doctor reports failures.
 ${nextAction}
 
 **STOP.** Do not load the next stage skill yourself. The user will run \`/cc-next\` when ready (same session or new session).
