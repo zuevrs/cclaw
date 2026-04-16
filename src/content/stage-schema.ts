@@ -969,7 +969,10 @@ const PLAN: StageSchemaInput = {
   cognitivePatterns: [
     { name: "Vertical Slice Thinking", description: "Each task delivers one thin end-to-end slice of value. Horizontal layers (all models, then all controllers) create integration risk. Vertical slices (one feature through all layers) reduce it." },
     { name: "Two-Minute Smell Test", description: "If a competent engineer cannot understand and start a task in two minutes, the task is too large or too vague. Break it down further." },
-    { name: "Make the Change Easy, Then Make the Easy Change", description: "Refactor first, implement second. Never structural + behavioral changes simultaneously. Sequence tasks accordingly." }
+    { name: "Make the Change Easy, Then Make the Easy Change", description: "Refactor first, implement second. Never structural + behavioral changes simultaneously. Sequence tasks accordingly." },
+    { name: "Diagnose Before Fix", description: "Before decomposing work, understand the current state of the codebase. Read existing code, tests, and conventions. Tasks should reference what exists, not assume a blank slate." },
+    { name: "Scrap Signals", description: "If a task description is vague, the acceptance criterion is missing, or the verification command is a placeholder — it is scrap. Either rewrite it or remove it. Half-specified tasks waste more time than no tasks." },
+    { name: "Risk-First Exploration", description: "Sequence the highest-risk or most uncertain tasks first. If wave 1 proves the risky assumption wrong, the rest of the plan can adapt. If the risk is buried in wave 3, you discover failure late." }
   ],
   reviewSections: [
     {
