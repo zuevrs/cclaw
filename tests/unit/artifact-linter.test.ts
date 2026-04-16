@@ -656,6 +656,151 @@ API -> Service -> DB
     expect(wfc?.details).toContain("pending, approved");
   });
 
+  it("passes complete tdd artifact", async () => {
+    const root = await fs.mkdtemp(path.join(os.tmpdir(), "cclaw-tdd-full-pass-"));
+    await writeRuntimeArtifact(root, "06-tdd.md", `# TDD Artifact
+
+## RED Evidence
+| Slice | Test name | Command | Failure output summary |
+|---|---|---|---|
+| S-1 | counts unique keys | pnpm vitest run dedupe.test.ts | Cannot find module |
+
+## Acceptance Mapping
+| Slice | Plan task ID | Spec criterion ID |
+|---|---|---|
+| S-1 | T-1 | AC-1 |
+
+## Failure Analysis
+| Slice | Expected missing behavior | Actual failure reason |
+|---|---|---|
+| S-1 | Module not implemented | Module import fails — correct |
+
+## GREEN Evidence
+- Full suite command: pnpm vitest run
+- Full suite result: 12 passed, 0 failed
+
+## REFACTOR Notes
+- What changed: Extracted helper function
+- Why: Reuse across tests
+- Behavior preserved: Full suite green after refactor
+
+## Traceability
+- Plan task IDs: T-1
+- Spec criterion IDs: AC-1
+`);
+
+    const result = await lintArtifact(root, "tdd");
+    expect(result.passed).toBe(true);
+  });
+
+  it("fails tdd when RED Evidence is missing", async () => {
+    const root = await fs.mkdtemp(path.join(os.tmpdir(), "cclaw-tdd-no-red-"));
+    await writeRuntimeArtifact(root, "06-tdd.md", `# TDD Artifact
+
+## Acceptance Mapping
+| Slice | Plan task ID | Spec criterion ID |
+|---|---|---|
+| S-1 | T-1 | AC-1 |
+
+## Failure Analysis
+| Slice | Expected missing behavior | Actual failure reason |
+|---|---|---|
+| S-1 | Module missing | Import fails |
+
+## GREEN Evidence
+- Full suite command: pnpm vitest run
+- Full suite result: 12 passed
+
+## REFACTOR Notes
+- What changed: Extracted helper
+- Why: Reuse
+- Behavior preserved: Yes
+
+## Traceability
+- Plan task IDs: T-1
+- Spec criterion IDs: AC-1
+`);
+
+    const result = await lintArtifact(root, "tdd");
+    expect(result.passed).toBe(false);
+    const red = result.findings.find((f) => f.section === "RED Evidence");
+    expect(red?.found).toBe(false);
+    expect(red?.required).toBe(true);
+  });
+
+  it("fails tdd when GREEN Evidence is empty", async () => {
+    const root = await fs.mkdtemp(path.join(os.tmpdir(), "cclaw-tdd-empty-green-"));
+    await writeRuntimeArtifact(root, "06-tdd.md", `# TDD Artifact
+
+## RED Evidence
+| Slice | Test name | Command | Failure output summary |
+|---|---|---|---|
+| S-1 | test name | vitest | Cannot find module |
+
+## Acceptance Mapping
+| Slice | Plan task ID | Spec criterion ID |
+|---|---|---|
+| S-1 | T-1 | AC-1 |
+
+## Failure Analysis
+| Slice | Expected missing behavior | Actual failure reason |
+|---|---|---|
+| S-1 | Not implemented | Import fails |
+
+## GREEN Evidence
+
+## REFACTOR Notes
+- What changed: Nothing
+- Why: Minimal
+- Behavior preserved: Yes
+
+## Traceability
+- Plan task IDs: T-1
+- Spec criterion IDs: AC-1
+`);
+
+    const result = await lintArtifact(root, "tdd");
+    expect(result.passed).toBe(false);
+    const green = result.findings.find((f) => f.section === "GREEN Evidence");
+    expect(green?.found).toBe(false);
+  });
+
+  it("fails tdd when Traceability is missing", async () => {
+    const root = await fs.mkdtemp(path.join(os.tmpdir(), "cclaw-tdd-no-trace-"));
+    await writeRuntimeArtifact(root, "06-tdd.md", `# TDD Artifact
+
+## RED Evidence
+| Slice | Test name | Command | Failure output summary |
+|---|---|---|---|
+| S-1 | test name | vitest | Cannot find module |
+
+## Acceptance Mapping
+| Slice | Plan task ID | Spec criterion ID |
+|---|---|---|
+| S-1 | T-1 | AC-1 |
+
+## Failure Analysis
+| Slice | Expected missing behavior | Actual failure reason |
+|---|---|---|
+| S-1 | Not implemented | Import fails |
+
+## GREEN Evidence
+- Full suite command: vitest run
+- Full suite result: 12 passed
+
+## REFACTOR Notes
+- What changed: Extracted helper
+- Why: Reuse
+- Behavior preserved: Yes
+`);
+
+    const result = await lintArtifact(root, "tdd");
+    expect(result.passed).toBe(false);
+    const trace = result.findings.find((f) => f.section === "Traceability");
+    expect(trace?.found).toBe(false);
+    expect(trace?.required).toBe(true);
+  });
+
   it("fails Prime Directives when required keywords are missing", async () => {
     const root = await fs.mkdtemp(path.join(os.tmpdir(), "cclaw-scope-keywords-"));
     await writeRuntimeArtifact(root, "02-scope.md", `# Scope Artifact
