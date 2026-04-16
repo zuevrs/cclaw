@@ -88,6 +88,13 @@ export interface ArchiveRunResult {
   featureName: string;
   resetState: FlowState;
   snapshottedStateFiles: string[];
+  /** Knowledge curation hint: total active entries + soft threshold (50). */
+  knowledge: {
+    activeEntryCount: number;
+    softThreshold: number;
+    overThreshold: boolean;
+    knowledgePath: string;
+  };
 }
 
 export interface ArchiveManifest {
@@ -504,12 +511,50 @@ export async function archiveRun(projectRoot: string, featureName?: string): Pro
     `${JSON.stringify(manifest, null, 2)}\n`
   );
 
+  const knowledgeStats = await readKnowledgeStats(projectRoot);
+
   return {
     archiveId,
     archivePath,
     archivedAt,
     featureName: feature,
     resetState,
-    snapshottedStateFiles
+    snapshottedStateFiles,
+    knowledge: knowledgeStats
   };
+}
+
+const KNOWLEDGE_SOFT_THRESHOLD = 50;
+
+async function readKnowledgeStats(projectRoot: string): Promise<ArchiveRunResult["knowledge"]> {
+  const knowledgePath = path.join(projectRoot, RUNTIME_ROOT, "knowledge.md");
+  let activeEntryCount = 0;
+  if (await exists(knowledgePath)) {
+    const text = await fs.readFile(knowledgePath, "utf8");
+    activeEntryCount = countActiveKnowledgeEntries(text);
+  }
+  return {
+    activeEntryCount,
+    softThreshold: KNOWLEDGE_SOFT_THRESHOLD,
+    overThreshold: activeEntryCount > KNOWLEDGE_SOFT_THRESHOLD,
+    knowledgePath: `${RUNTIME_ROOT}/knowledge.md`
+  };
+}
+
+/**
+ * Counts active (non-superseded) knowledge entries.
+ * An entry is a markdown H3 heading with the canonical timestamped format produced by
+ * `learn add` / `learn curate`. Entries marked `Supersedes:` themselves are still active;
+ * this helper does not currently follow supersession chains beyond raw count, which is
+ * deliberate — the curator reads the file directly to make the soft-archive plan.
+ */
+export function countActiveKnowledgeEntries(text: string): number {
+  const lines = text.split(/\r?\n/);
+  let count = 0;
+  for (const line of lines) {
+    if (/^###\s+\d{4}-\d{2}-\d{2}T\d{2}:\d{2}:\d{2}Z\s+\[(rule|pattern|lesson|compound)\]/u.test(line)) {
+      count += 1;
+    }
+  }
+  return count;
 }

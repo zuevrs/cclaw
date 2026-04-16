@@ -91,14 +91,37 @@ These skills live in \`.cclaw/skills/\` but have no slash commands. They activat
 
 **Activation rule:** When a contextual skill applies, read its SKILL.md and follow it as a supplementary lens alongside the current stage. Do not skip the stage workflow — the contextual skill adds depth, not a detour.
 
+### Opt-in language rule packs
+
+cclaw stays language-agnostic by default. Projects that want language-specific
+review lenses can enable opt-in rule packs in \`.cclaw/config.yaml\`:
+
+\`\`\`yaml
+languageRulePacks:
+  - typescript   # → skills/language-typescript/SKILL.md
+  - python       # → skills/language-python/SKILL.md
+  - go           # → skills/language-go/SKILL.md
+\`\`\`
+
+After editing the list, run \`cclaw sync\` to materialize the enabled pack SKILL.md
+files. Packs activate during \`tdd\` and \`review\` when the diff touches files in
+their language. They are additive lenses — Tier-1 rules block merge, Tier-2 rules
+require a named follow-up. Never silently override them.
+
 ## Custom Skills (project-owned, sync-safe)
 
 \`.cclaw/custom-skills/\` is a sync-safe directory. \`cclaw sync\` and \`cclaw upgrade\` **never overwrite** files there.
 
 Use it to add **project-specific** skills that complement the managed library:
 
-- Each skill: \`.cclaw/custom-skills/<folder>/SKILL.md\` with the same frontmatter format as managed skills (\`name\` + \`description\` triggering routing).
-- Activate by mentioning the skill name explicitly, or rely on semantic routing from the description.
+- Each skill: \`.cclaw/custom-skills/<folder>/SKILL.md\` following the public-API frontmatter schema documented in \`.cclaw/custom-skills/README.md\`.
+- The frontmatter public API is stable across cclaw releases: \`name\`, \`description\` (required), plus optional \`stages\`, \`triggers\`, \`hardGate\`, \`owners\`, \`version\`.
+- Routing precedence when loading a stage:
+  1. Active stage skill under \`.cclaw/skills/<stage>/\`.
+  2. Managed utility skills whose trigger matches (\`landscape-check\`, \`security-audit\`, \`adversarial-review\`, etc.).
+  3. **Custom skills** whose \`stages\` array includes the active stage (or is missing) AND whose \`description\` / \`triggers\` match the prompt.
+- Custom skills are **never mandatory delegations** — they are opt-in lenses. If you need a mandatory dispatch, promote the skill upstream or add a managed specialist instead.
+- Activate by mentioning the skill name explicitly, or rely on semantic routing from the description + triggers.
 - See \`.cclaw/custom-skills/README.md\` for the full convention and a starter template under \`.cclaw/custom-skills/example/\`.
 
 If a custom skill turns out to generalize (e.g. another project would want the same lens), promote it to a managed skill via a contribution to the cclaw repo — managed skills get versioning and maintenance.
@@ -131,13 +154,27 @@ When a stage requires user input (approval, choice, direction), use this structu
 2. **Present options** as labeled choices (A, B, C...) with:
    - One-line description of each option
    - Trade-off or consequence
+   - **\`Completeness: X/10\`** — how thoroughly does this option cover the dimensions the stage cares about (failure modes, data flow, blast radius, observability, rollback, etc. — pick the dimensions that matter for *this* decision and subtract for each gap). Force a numeric score; vague text scores ≤ 5.
    - Mark one as **(recommended)** with brief why
-3. **Use the harness ask-user tool** when available:
+3. **Pick the highest-scoring option as the recommendation.** If scores tie, prefer the option with the smallest blast radius (review/ship), the lowest risk (design/spec), or the most reversible outcome (ship finalization).
+4. **Use the harness ask-user tool** when available:
    - Claude Code: \`AskUserQuestion\` tool
    - Cursor: \`AskQuestion\` tool with options array
    - Codex/OpenCode: numbered list in message (no native ask tool)
-4. **Wait for response.** Do not proceed until the user picks.
-5. **Commit to the choice.** Once decided, do not re-argue.
+5. **Wait for response.** Do not proceed until the user picks.
+6. **Commit to the choice.** Once decided, do not re-argue.
+
+### Completeness scoring rubric (apply per option)
+
+| Score | Meaning |
+|---|---|
+| 9-10 | Closes the decision with no carry-over risk; covers every dimension stage cares about. |
+| 7-8 | Closes the decision with a small named follow-up; one dimension partially covered. |
+| 5-6 | Plausible but leaves at least one dimension visibly open; needs follow-up before next stage. |
+| 3-4 | Workaround, not a solution; defers the real problem. |
+| 0-2 | Wishful thinking; do not recommend. |
+
+Always show the score next to the option label, e.g. \`(B) [Completeness: 8/10]\`.
 
 ### When to use structured asks vs conversational
 - **Structured (tool):** Architecture choices, scope decisions, approval gates, mode selection, scope boundary issues

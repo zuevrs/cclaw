@@ -15,6 +15,18 @@ function knowledgePath(): string {
   return `${RUNTIME_ROOT}/knowledge.md`;
 }
 
+function contextModePath(): string {
+  return `${RUNTIME_ROOT}/state/context-mode.json`;
+}
+
+function checkpointPath(): string {
+  return `${RUNTIME_ROOT}/state/checkpoint.json`;
+}
+
+function stageActivityPath(): string {
+  return `${RUNTIME_ROOT}/state/stage-activity.jsonl`;
+}
+
 /**
  * Command contract for /cc-status — a read-only snapshot command.
  * Does not mutate state. Always safe to run.
@@ -44,9 +56,15 @@ time to answer "where are we?" without advancing the flow.
    \`skippedStages\`, and per-stage gate catalog.
 2. Read **\`${delegationPath}\`** — count delegated / completed / waived / pending entries
    for the current stage's \`mandatoryDelegations\`.
-3. Read the top of **\`${knowledgePath}\`** — surface up to 3 most recent entries
+3. Read **\`${contextModePath()}\`** — surface \`activeMode\` (default if missing).
+4. Compute **time in current stage** from the most recent stage-entry signal:
+   - Prefer \`${checkpointPath()}\`'s \`timestamp\` when its \`stage\` matches \`currentStage\`.
+   - Otherwise scan \`${stageActivityPath()}\` from the end for the first entry whose \`stage\` matches \`currentStage\` and use its \`ts\`.
+   - Compute the duration as \`now - signalTimestamp\` and render compactly: \`<X>m\`, \`<X>h<Y>m\`, or \`<X>d<Y>h\`.
+   - If no signal exists, render \`(unknown)\`.
+5. Read the top of **\`${knowledgePath}\`** — surface up to 3 most recent entries
    (by trailing timestamp or source marker).
-4. Emit the status block described below. Do **not** load any stage skill.
+6. Emit the status block described below. Do **not** load any stage skill.
 
 ## Status Block Format
 
@@ -54,6 +72,8 @@ time to answer "where are we?" without advancing the flow.
 cclaw status
   track:            <quick|standard>
   current stage:    <stage>     (<N>/<total> in track)
+  time in stage:    <Xd Yh | Yh Zm | Zm | unknown>
+  context mode:     <activeMode>     (default | execution | review | incident | …)
   completed stages: <list or "none">
   skipped stages:   <list or "none">
 
@@ -115,11 +135,16 @@ a read-only command.
 
 1. Read \`${flowPath}\`. If missing → report **BLOCKED: flow state absent** and suggest \`cclaw init\`.
 2. Read \`${delegationPath}\`. Missing → treat all mandatory delegations as pending.
-3. Read \`${RUNTIME_ROOT}/knowledge.md\`. If missing or empty → knowledge highlights are \`(none recorded)\`.
-4. For each gate in \`stageGateCatalog[currentStage].required\`:
+3. Read \`${contextModePath()}\` for \`activeMode\`. Missing → render \`activeMode = default\`.
+4. Compute **time in stage**:
+   - Prefer \`${checkpointPath()}\` when \`stage === currentStage\` and \`timestamp\` parses as ISO 8601.
+   - Else scan \`${stageActivityPath()}\` from tail for the most recent entry whose \`stage === currentStage\`; use its \`ts\`.
+   - Render \`<X>d<Y>h\`, \`<X>h<Y>m\`, \`<X>m\`, or \`(unknown)\`.
+5. Read \`${RUNTIME_ROOT}/knowledge.md\`. If missing or empty → knowledge highlights are \`(none recorded)\`.
+6. For each gate in \`stageGateCatalog[currentStage].required\`:
    - Satisfied if present in \`passed\` and absent from \`blocked\`.
-5. Build and print the status block (see command contract for layout).
-6. Suggest the next action:
+7. Build and print the status block (see command contract for layout).
+8. Suggest the next action:
    - If current stage has unmet gates → \`/cc-next\` to resume.
    - If current stage is complete → \`/cc-next\` to advance (or report "Flow complete" if terminal).
 

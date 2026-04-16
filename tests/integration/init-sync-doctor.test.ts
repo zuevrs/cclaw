@@ -323,6 +323,40 @@ describe("install lifecycle", () => {
     await expect(fs.stat(path.join(root, ".opencode"))).rejects.toBeDefined();
   });
 
+  it("language rule packs: disabled by default, sync only materializes enabled packs", async () => {
+    const root = await createTempProject("lang-rule-packs");
+    await initCclaw({ projectRoot: root });
+
+    await expect(
+      fs.stat(path.join(root, ".cclaw/skills/language-typescript/SKILL.md"))
+    ).rejects.toBeDefined();
+    await expect(
+      fs.stat(path.join(root, ".cclaw/skills/language-python/SKILL.md"))
+    ).rejects.toBeDefined();
+    await expect(
+      fs.stat(path.join(root, ".cclaw/skills/language-go/SKILL.md"))
+    ).rejects.toBeDefined();
+
+    const current = await readConfig(root);
+    await writeConfig(root, { ...current, languageRulePacks: ["typescript", "go"] });
+    await syncCclaw(root);
+
+    await expect(
+      fs.stat(path.join(root, ".cclaw/skills/language-typescript/SKILL.md"))
+    ).resolves.toBeDefined();
+    await expect(
+      fs.stat(path.join(root, ".cclaw/skills/language-go/SKILL.md"))
+    ).resolves.toBeDefined();
+    await expect(
+      fs.stat(path.join(root, ".cclaw/skills/language-python/SKILL.md"))
+    ).rejects.toBeDefined();
+
+    const checks = await doctorChecks(root);
+    expect(checks.some((c) => c.name === "language_rule_pack:typescript" && c.ok)).toBe(true);
+    expect(checks.some((c) => c.name === "language_rule_pack:go" && c.ok)).toBe(true);
+    expect(checks.some((c) => c.name === "language_rule_pack:python")).toBe(false);
+  });
+
   it("uninstall preserves harness directories that contain user files", async () => {
     const root = await createTempProject("uninstall-preserve");
     await initCclaw({ projectRoot: root });

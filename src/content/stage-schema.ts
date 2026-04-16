@@ -36,10 +36,25 @@ export interface ArtifactValidation {
 
 export interface StageAutoSubagentDispatch {
   agent: "planner" | "spec-reviewer" | "code-reviewer" | "security-reviewer" | "test-author" | "doc-updater";
-  mode: "mandatory" | "proactive";
+  /**
+   * - `mandatory` — must be dispatched (or explicitly waived) before stage transition.
+   * - `proactive` — should be dispatched automatically when context matches `when`.
+   * - `conditional` — dispatched only when `condition` evaluates true at runtime; counted as
+   *   mandatory **only when the condition holds**.
+   */
+  mode: "mandatory" | "proactive" | "conditional";
   when: string;
   purpose: string;
   requiresUserGate: boolean;
+  /**
+   * Optional machine-friendly trigger expression for `conditional` rows.
+   * Supported predicates: `diff_lines_gt:<N>`, `files_touched_gt:<N>`,
+   * `trust_boundary_changed`, `release_blast_radius_high`.
+   * Multiple predicates joined by `||` mean ANY trigger satisfies the condition.
+   */
+  condition?: string;
+  /** Optional skill folder the dispatched agent should load as additional context. */
+  skill?: string;
 }
 
 export interface NamedAntiPattern {
@@ -294,7 +309,7 @@ const SCOPE: StageSchemaInput = {
     "**Error and Rescue Registry** — For each capability: what breaks, how detected, what fallback."
   ],
   interactionProtocol: [
-    "For scope mode selection: use the Decision Protocol — present expand/selective/hold/reduce as labeled options with trade-offs and mark one as (recommended). Base your recommendation on default heuristics: greenfield -> expand, enhancement -> selective, bugfix/hotfix/refactor -> hold, broad blast radius -> reduce. If AskQuestion/AskUserQuestion is available, send exactly ONE question per call, validate fields against runtime schema, and on schema error immediately fall back to plain-text question instead of retrying guessed payloads.",
+    "For scope mode selection: use the Decision Protocol — present expand/selective/hold/reduce as labeled options with trade-offs and mark one as (recommended). **Score each option `Completeness: X/10`** (10 = covers every prime-directive failure mode, four data-flow paths, observability, and deferred handling for the in-scope set; subtract for each gap). Recommend the highest-scoring option; if scores tie, pick the lowest blast radius. Base your recommendation on default heuristics: greenfield -> expand, enhancement -> selective, bugfix/hotfix/refactor -> hold, broad blast radius -> reduce. If AskQuestion/AskUserQuestion is available, send exactly ONE question per call, validate fields against runtime schema, and on schema error immediately fall back to plain-text question instead of retrying guessed payloads.",
     "Walk through the scope checklist interactively. Each checklist item that surfaces a decision should be presented to the user as a question, not as a monologue. Do not dump all items at once.",
     "Challenge premise and verify the problem framing before anything else.",
     "Take a position on every scope decision. Avoid hedging phrases like 'this could work' or 'there are many ways'; state your recommendation and one concrete condition that would change it.",
@@ -506,7 +521,7 @@ const DESIGN: StageSchemaInput = {
   interactionProtocol: [
     "Review architecture decisions section-by-section.",
     "For EACH issue found in a review section, present it ONE AT A TIME. Do NOT batch multiple issues.",
-    "For each issue: use the Decision Protocol — describe concretely with file/line references, present labeled options (A/B/C) with trade-offs, effort estimate (S/M/L/XL), risk level (Low/Med/High), and mark one as (recommended). If AskQuestion/AskUserQuestion is available, send exactly ONE question per call, validate fields against runtime schema, and on schema error immediately fall back to plain-text question instead of retrying guessed payloads.",
+    "For each issue: use the Decision Protocol — describe concretely with file/line references, present labeled options (A/B/C) with trade-offs, effort estimate (S/M/L/XL), risk level (Low/Med/High), **`Completeness: X/10` per option** (10 = fully addresses architecture/data-flow/failure-modes/test+perf review concerns for the issue, subtract for each unaddressed dimension), and mark one as (recommended). Prefer the highest-scoring option; if scores tie, prefer the lower-risk one. If AskQuestion/AskUserQuestion is available, send exactly ONE question per call, validate fields against runtime schema, and on schema error immediately fall back to plain-text question instead of retrying guessed payloads.",
     "Only proceed to the next review section after ALL issues in the current section are resolved.",
     "If a section has no issues, say 'No issues found' and move on.",
     "Do not skip failure-mode mapping.",
@@ -1217,10 +1232,11 @@ const REVIEW: StageSchemaInput = {
   checklist: [
     "Diff Scope — Run `git diff` against base branch. If no diff, exit early with APPROVED (no changes to review). Scope the review to changed files unless blast-radius analysis requires wider inspection.",
     "Change-Size Check — ~100 lines = normal. ~300 lines = consider splitting. ~1000+ lines = strongly recommend stacked PRs. Flag large diffs to the user.",
+    "Adversarial Trigger Check — compute changed-line count (`git diff --shortstat <base>..HEAD`), files-touched count, and whether trust boundaries changed (auth/secrets/external inputs/permissions). If `lines > 100` OR `files > 10` OR `trust boundary changed`, **dispatch a SECOND code-reviewer agent with the `adversarial-review` skill loaded** and reconcile its findings into the review army (treat the conditional dispatch as mandatory whenever the trigger holds; record the trigger that fired in the dashboard).",
     "Load upstream evidence — read TDD artifact (RED + GREEN + REFACTOR), spec, and plan. Verify evidence chain is unbroken.",
     "Layer 1: Spec Compliance — check every acceptance criterion against implementation. Verdict: pass/fail per criterion.",
     "Layer 2a: Correctness — logic errors, race conditions, boundary violations, null handling.",
-    "Layer 2b: Security — input validation, auth boundaries, secrets exposure, injection vectors.",
+    "Layer 2b: Security — input validation, auth boundaries, secrets exposure, injection vectors. **Mandatory:** also load and execute the `.cclaw/skills/security-audit/SKILL.md` utility skill (proactive pattern sweep across diff + touched modules, not just the diff itself) and merge findings into the review army. The Layer 2 security pass is not complete until the audit sweep records a finding count (0 acceptable) with file:line evidence for every Critical.",
     "Layer 2c: Performance — N+1 queries, memory leaks, missing caching, hot paths.",
     "Layer 2d: Architecture Fit — does the implementation match the locked design? Coupling, cohesion, interface contracts.",
     "Layer 2e: External Safety — SQL safety, concurrency, secrets in logs, enum completeness (grep outside diff), LLM trust boundaries.",
@@ -1233,7 +1249,7 @@ const REVIEW: StageSchemaInput = {
     "Run Layer 1 (spec compliance) completely before starting Layer 2.",
     "In each review section, present findings ONE AT A TIME. Do NOT batch.",
     "Classify every finding as Critical, Important, or Suggestion.",
-    "For each Critical finding: use the Decision Protocol — present resolution options (A/B/C) with trade-offs and mark one as (recommended). If AskQuestion/AskUserQuestion is available, send exactly ONE question per call, validate fields against runtime schema, and on schema error immediately fall back to plain-text question instead of retrying guessed payloads.",
+    "For each Critical finding: use the Decision Protocol — present resolution options (A/B/C) with trade-offs, **score each option `Completeness: X/10`** (10 = fully closes the finding with no carry-over risk; subtract for partial fixes, deferred follow-ups, or new risk introduced), and mark one as (recommended). Prefer the highest-scoring option; if scores tie, prefer the option with the smallest blast radius. If AskQuestion/AskUserQuestion is available, send exactly ONE question per call, validate fields against runtime schema, and on schema error immediately fall back to plain-text question instead of retrying guessed payloads.",
     "Resolve all critical blockers before ship.",
     "For final verdict: use AskQuestion/AskUserQuestion only if runtime schema is confirmed; otherwise collect verdict with a plain-text single-choice prompt (APPROVED / APPROVED_WITH_CONCERNS / BLOCKED).",
     "**STOP.** Do NOT proceed to ship until the user provides an explicit verdict."
@@ -1257,7 +1273,8 @@ const REVIEW: StageSchemaInput = {
     { id: "review_severity_classified", description: "All findings are severity-tagged." },
     { id: "review_criticals_resolved", description: "No unresolved critical blockers remain." },
     { id: "review_army_json_valid", description: "07-review-army.json passes schema validation (validateReviewArmy)." },
-    { id: "review_completeness_scored", description: "Completeness score is computed and recorded (AC coverage, task coverage, slice coverage, adversarial pass)." }
+    { id: "review_completeness_scored", description: "Completeness score is computed and recorded (AC coverage, task coverage, slice coverage, adversarial pass)." },
+    { id: "review_security_audit_swept", description: "The security-audit utility skill was run against the diff scope and the modules it touches. Finding count (0 if clean) recorded in the review army with file:line evidence for every Critical." }
   ],
   requiredEvidence: [
     "Artifact written to `.cclaw/artifacts/07-review.md`.",
@@ -1398,7 +1415,7 @@ const REVIEW: StageSchemaInput = {
     { section: "Layer 1 Verdict", required: true, validationRule: "Per-criterion pass/fail with references." },
     { section: "Layer 2 Findings", required: true, validationRule: "Each finding has severity, description, and resolution status." },
     { section: "Review Army Contract", required: true, validationRule: "Structured findings include id/severity/confidence/fingerprint/reportedBy/status with dedup reconciliation summary." },
-    { section: "Review Readiness Dashboard", required: true, validationRule: "At least 4 readiness checklist lines including blocker and recommendation status." },
+    { section: "Review Readiness Dashboard", required: true, validationRule: "Includes a per-pass table (Layer 1 / Layer 2 / Adversarial / Schema) with a 'Completed at' column, a Delegation log snapshot block (path .cclaw/state/delegation-log.json with required/completed/waived/pending), a Staleness signal block (commit at last review pass and current commit), and a Headline with open critical blockers + ship recommendation. At minimum, the section text must contain the substrings 'Completed at', 'delegation-log.json', 'commit at last review pass', and 'Ship recommendation'." },
     { section: "Completeness Score", required: true, validationRule: "Records AC coverage, task coverage, test-slice coverage, and adversarial-review pass status as numeric or boolean values. At minimum, a line like 'AC coverage: N/M' or 'AC coverage: 100%'." },
     { section: "Severity Summary", required: true, validationRule: "Per-severity count lines for critical, important, and suggestion buckets." },
     { section: "Final Verdict", required: true, validationRule: "Exactly one of: APPROVED, APPROVED_WITH_CONCERNS, BLOCKED." }
@@ -1445,7 +1462,7 @@ const SHIP: StageSchemaInput = {
   interactionProtocol: [
     "Run preflight checks before any release action.",
     "Document release notes and rollback plan explicitly.",
-    "For finalization mode: use the Decision Protocol — present modes as labeled options (A/B/C/D) with consequences and mark one as (recommended). If AskQuestion/AskUserQuestion is available, send exactly ONE question per call, validate fields against runtime schema, and on schema error immediately fall back to plain-text question instead of retrying guessed payloads.",
+    "For finalization mode: use the Decision Protocol — present modes as labeled options (A/B/C/D) with consequences, **score each option `Completeness: X/10`** (10 = fully addresses release blast-radius, rollback readiness, observability, and stakeholder communication), and mark one as (recommended). Prefer the highest-scoring option; if scores tie, prefer the most reversible one. If AskQuestion/AskUserQuestion is available, send exactly ONE question per call, validate fields against runtime schema, and on schema error immediately fall back to plain-text question instead of retrying guessed payloads.",
     "Do not proceed if critical blockers remain from review.",
     "**STOP.** Present finalization options and wait for user selection before executing any finalization action."
   ],
@@ -1682,8 +1699,18 @@ const STAGE_AUTO_SUBAGENT_DISPATCH: Record<FlowStage, StageAutoSubagentDispatch[
       agent: "security-reviewer",
       mode: "mandatory",
       when: "Always in review stage. Even when no trust boundaries changed, produce an explicit 'no-change' security attestation.",
-      purpose: "Guarantee a dedicated security pass on every diff: auth, input validation, secrets, injection, privilege, and blast-radius review are never opt-in.",
-      requiresUserGate: false
+      purpose: "Guarantee a dedicated security pass on every diff: auth, input validation, secrets, injection, privilege, and blast-radius review are never opt-in. MUST load the `security-audit` skill and run a pattern-based sweep across the diff scope and touched modules in addition to the per-diff Layer 2 security checklist.",
+      requiresUserGate: false,
+      skill: "security-audit"
+    },
+    {
+      agent: "code-reviewer",
+      mode: "conditional",
+      condition: "diff_lines_gt:100||files_touched_gt:10||trust_boundary_changed",
+      when: "When the diff exceeds 100 changed lines, touches more than 10 files, or modifies trust boundaries — dispatch a SECOND, independent code-reviewer with the adversarial-review skill loaded so the review army has at least two voices on a high-blast-radius change.",
+      purpose: "Adversarial second-opinion review on large or trust-sensitive diffs. The second reviewer treats the implementation as hostile and tries to break it (hostile-user, future-maintainer, competitor lenses) instead of sympathetically explaining it.",
+      requiresUserGate: false,
+      skill: "adversarial-review"
     }
   ],
   ship: [
@@ -1709,6 +1736,11 @@ export function mandatoryDelegationsForStage(stage: FlowStage): string[] {
   return STAGE_AUTO_SUBAGENT_DISPATCH[stage]
     .filter((d) => d.mode === "mandatory")
     .map((d) => d.agent);
+}
+
+/** Conditional dispatches that become mandatory only when their `condition` predicate evaluates true. */
+export function conditionalDispatchesForStage(stage: FlowStage): StageAutoSubagentDispatch[] {
+  return STAGE_AUTO_SUBAGENT_DISPATCH[stage].filter((d) => d.mode === "conditional");
 }
 
 export function stageSchema(stage: FlowStage): StageSchema {

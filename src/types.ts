@@ -30,6 +30,30 @@ export const TRACK_STAGES: Record<FlowTrack, readonly FlowStage[]> = {
 export const HARNESS_IDS = ["claude", "cursor", "opencode", "codex"] as const;
 export type HarnessId = (typeof HARNESS_IDS)[number];
 
+/**
+ * Init profiles pre-fill `cclaw init` flags for common install shapes.
+ *
+ * - `minimal` — single-harness (claude), quick track default, no git hook guards. For solo
+ *   contributors or bugfix-heavy repos where most work is \`quick\` scope.
+ * - `standard` — default harness set, standard track, no git hook guards, advisory guards.
+ *   Matches the pre-profile default behavior.
+ * - `full` — default harness set, standard track, git hook guards on, strict prompt guards.
+ *   For teams that want every safety rail on.
+ */
+export const INIT_PROFILES = ["minimal", "standard", "full"] as const;
+export type InitProfile = (typeof INIT_PROFILES)[number];
+
+/**
+ * Opt-in language rule packs. When enabled in config, `cclaw sync` installs the
+ * corresponding utility skill so the meta-skill router can load language-specific
+ * anti-patterns, idioms, and review heuristics during review/tdd stages.
+ *
+ * Opt-in intentional: cclaw stays language-agnostic by default; rule packs are
+ * additive context that the user must explicitly enable.
+ */
+export const LANGUAGE_RULE_PACKS = ["typescript", "python", "go"] as const;
+export type LanguageRulePack = (typeof LANGUAGE_RULE_PACKS)[number];
+
 export interface VibyConfig {
   version: string;
   flowVersion: string;
@@ -42,6 +66,13 @@ export interface VibyConfig {
   gitHookGuards?: boolean;
   /** Default flow track for new runs (quick = shortened path, standard = full pipeline). */
   defaultTrack?: FlowTrack;
+  /**
+   * Opt-in language rule packs. Each enabled pack materializes a matching utility
+   * skill under `.cclaw/skills/language-<id>/SKILL.md` on next `cclaw sync`. The
+   * meta-skill router loads the pack during review/tdd when the diff touches the
+   * language in question.
+   */
+  languageRulePacks?: LanguageRulePack[];
 }
 
 export interface TransitionRule {

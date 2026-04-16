@@ -13,7 +13,7 @@ description: "Two-layer review stage: spec compliance first, then code quality a
 > **Even if you read nothing else, do these 3 things:**
 > 1. Obey the HARD-GATE below — violating it invalidates the entire stage.
 > 2. Complete every checklist step in order and write the artifact to \`.cclaw/artifacts/07-review.md\`.
-> 3. Do not claim completion without satisfying gates: \`review_layer1_spec_compliance\`, \`review_layer2_correctness\`, \`review_layer2_security\` (+6 more).
+> 3. Do not claim completion without satisfying gates: \`review_layer1_spec_compliance\`, \`review_layer2_correctness\`, \`review_layer2_security\` (+7 more).
 >
 > **After this stage:** update \`flow-state.json\` and tell the user to run \`/cc-next\`.
 
@@ -60,7 +60,8 @@ Machine-only work should be delegated to specialist agents automatically accordi
 |---|---|---|---|---|
 | spec-reviewer | mandatory | Always in review stage. | Verify implementation against acceptance criteria with file evidence. | not required |
 | code-reviewer | mandatory | Always in review stage. | Assess correctness, maintainability, architecture, and ship risk. | not required |
-| security-reviewer | mandatory | Always in review stage. Even when no trust boundaries changed, produce an explicit 'no-change' security attestation. | Guarantee a dedicated security pass on every diff: auth, input validation, secrets, injection, privilege, and blast-radius review are never opt-in. | not required |
+| security-reviewer | mandatory | Always in review stage. Even when no trust boundaries changed, produce an explicit 'no-change' security attestation. | Guarantee a dedicated security pass on every diff: auth, input validation, secrets, injection, privilege, and blast-radius review are never opt-in. MUST load the \`security-audit\` skill and run a pattern-based sweep across the diff scope and touched modules in addition to the per-diff Layer 2 security checklist. | not required |
+| code-reviewer | conditional | When the diff exceeds 100 changed lines, touches more than 10 files, or modifies trust boundaries — dispatch a SECOND, independent code-reviewer with the adversarial-review skill loaded so the review army has at least two voices on a high-blast-radius change. | Adversarial second-opinion review on large or trust-sensitive diffs. The second reviewer treats the implementation as hostile and tries to break it (hostile-user, future-maintainer, competitor lenses) instead of sympathetically explaining it. | not required |
 
 **Gate rule:** user interaction is required only for approval/override decisions. Do not ask the user to manually trigger machine-only specialist checks.
 
@@ -87,17 +88,18 @@ You MUST complete these steps in order:
 
 1. Diff Scope — Run \`git diff\` against base branch. If no diff, exit early with APPROVED (no changes to review). Scope the review to changed files unless blast-radius analysis requires wider inspection.
 2. Change-Size Check — ~100 lines = normal. ~300 lines = consider splitting. ~1000+ lines = strongly recommend stacked PRs. Flag large diffs to the user.
-3. Load upstream evidence — read TDD artifact (RED + GREEN + REFACTOR), spec, and plan. Verify evidence chain is unbroken.
-4. Layer 1: Spec Compliance — check every acceptance criterion against implementation. Verdict: pass/fail per criterion.
-5. Layer 2a: Correctness — logic errors, race conditions, boundary violations, null handling.
-6. Layer 2b: Security — input validation, auth boundaries, secrets exposure, injection vectors.
-7. Layer 2c: Performance — N+1 queries, memory leaks, missing caching, hot paths.
-8. Layer 2d: Architecture Fit — does the implementation match the locked design? Coupling, cohesion, interface contracts.
-9. Layer 2e: External Safety — SQL safety, concurrency, secrets in logs, enum completeness (grep outside diff), LLM trust boundaries.
-10. Review Army reconciliation — normalize findings into structured records, dedup by fingerprint, and mark multi-specialist confirmations.
-11. Meta-Review — Were tests actually run? Do test names match what they test? Are there real assertions?
-12. Classify findings — Critical (blocks ship), Important (should fix), Suggestion (optional improvement).
-13. Produce verdict — APPROVED, APPROVED_WITH_CONCERNS, or BLOCKED.
+3. Adversarial Trigger Check — compute changed-line count (\`git diff --shortstat <base>..HEAD\`), files-touched count, and whether trust boundaries changed (auth/secrets/external inputs/permissions). If \`lines > 100\` OR \`files > 10\` OR \`trust boundary changed\`, **dispatch a SECOND code-reviewer agent with the \`adversarial-review\` skill loaded** and reconcile its findings into the review army (treat the conditional dispatch as mandatory whenever the trigger holds; record the trigger that fired in the dashboard).
+4. Load upstream evidence — read TDD artifact (RED + GREEN + REFACTOR), spec, and plan. Verify evidence chain is unbroken.
+5. Layer 1: Spec Compliance — check every acceptance criterion against implementation. Verdict: pass/fail per criterion.
+6. Layer 2a: Correctness — logic errors, race conditions, boundary violations, null handling.
+7. Layer 2b: Security — input validation, auth boundaries, secrets exposure, injection vectors. **Mandatory:** also load and execute the \`.cclaw/skills/security-audit/SKILL.md\` utility skill (proactive pattern sweep across diff + touched modules, not just the diff itself) and merge findings into the review army. The Layer 2 security pass is not complete until the audit sweep records a finding count (0 acceptable) with file:line evidence for every Critical.
+8. Layer 2c: Performance — N+1 queries, memory leaks, missing caching, hot paths.
+9. Layer 2d: Architecture Fit — does the implementation match the locked design? Coupling, cohesion, interface contracts.
+10. Layer 2e: External Safety — SQL safety, concurrency, secrets in logs, enum completeness (grep outside diff), LLM trust boundaries.
+11. Review Army reconciliation — normalize findings into structured records, dedup by fingerprint, and mark multi-specialist confirmations.
+12. Meta-Review — Were tests actually run? Do test names match what they test? Are there real assertions?
+13. Classify findings — Critical (blocks ship), Important (should fix), Suggestion (optional improvement).
+14. Produce verdict — APPROVED, APPROVED_WITH_CONCERNS, or BLOCKED.
 
 ## Examples
 
@@ -163,7 +165,7 @@ These are thinking instincts, not a checklist. Let them shape your perspective t
 1. Run Layer 1 (spec compliance) completely before starting Layer 2.
 2. In each review section, present findings ONE AT A TIME. Do NOT batch.
 3. Classify every finding as Critical, Important, or Suggestion.
-4. For each Critical finding: use the Decision Protocol — present resolution options (A/B/C) with trade-offs and mark one as (recommended). If AskQuestion/AskUserQuestion is available, send exactly ONE question per call, validate fields against runtime schema, and on schema error immediately fall back to plain-text question instead of retrying guessed payloads.
+4. For each Critical finding: use the Decision Protocol — present resolution options (A/B/C) with trade-offs, **score each option \`Completeness: X/10\`** (10 = fully closes the finding with no carry-over risk; subtract for partial fixes, deferred follow-ups, or new risk introduced), and mark one as (recommended). Prefer the highest-scoring option; if scores tie, prefer the option with the smallest blast radius. If AskQuestion/AskUserQuestion is available, send exactly ONE question per call, validate fields against runtime schema, and on schema error immediately fall back to plain-text question instead of retrying guessed payloads.
 5. Resolve all critical blockers before ship.
 6. For final verdict: use AskQuestion/AskUserQuestion only if runtime schema is confirmed; otherwise collect verdict with a plain-text single-choice prompt (APPROVED / APPROVED_WITH_CONCERNS / BLOCKED).
 7. **STOP.** Do NOT proceed to ship until the user provides an explicit verdict.
@@ -193,6 +195,7 @@ These are thinking instincts, not a checklist. Let them shape your perspective t
 - \`review_criticals_resolved\` — No unresolved critical blockers remain.
 - \`review_army_json_valid\` — 07-review-army.json passes schema validation (validateReviewArmy).
 - \`review_completeness_scored\` — Completeness score is computed and recorded (AC coverage, task coverage, slice coverage, adversarial pass).
+- \`review_security_audit_swept\` — The security-audit utility skill was run against the diff scope and the modules it touches. Finding count (0 if clean) recorded in the review army with file:line evidence for every Critical.
 
 ## Required Evidence
 - [ ] Artifact written to \`.cclaw/artifacts/07-review.md\`.
@@ -338,7 +341,7 @@ When fixing a bug:
 | Layer 1 Verdict | REQUIRED | Per-criterion pass/fail with references. |
 | Layer 2 Findings | REQUIRED | Each finding has severity, description, and resolution status. |
 | Review Army Contract | REQUIRED | Structured findings include id/severity/confidence/fingerprint/reportedBy/status with dedup reconciliation summary. |
-| Review Readiness Dashboard | REQUIRED | At least 4 readiness checklist lines including blocker and recommendation status. |
+| Review Readiness Dashboard | REQUIRED | Includes a per-pass table (Layer 1 / Layer 2 / Adversarial / Schema) with a 'Completed at' column, a Delegation log snapshot block (path .cclaw/state/delegation-log.json with required/completed/waived/pending), a Staleness signal block (commit at last review pass and current commit), and a Headline with open critical blockers + ship recommendation. At minimum, the section text must contain the substrings 'Completed at', 'delegation-log.json', 'commit at last review pass', and 'Ship recommendation'. |
 | Completeness Score | REQUIRED | Records AC coverage, task coverage, test-slice coverage, and adversarial-review pass status as numeric or boolean values. At minimum, a line like 'AC coverage: N/M' or 'AC coverage: 100%'. |
 | Severity Summary | REQUIRED | Per-severity count lines for critical, important, and suggestion buckets. |
 | Final Verdict | REQUIRED | Exactly one of: APPROVED, APPROVED_WITH_CONCERNS, BLOCKED. |
@@ -400,7 +403,7 @@ When all required gates are satisfied and the artifact is written:
 1. **Update \`.cclaw/state/flow-state.json\`:**
    - Set \`currentStage\` to \`"ship"\`
    - Add \`"review"\` to \`completedStages\` array
-   - Move all gate IDs for this stage (\`review_layer1_spec_compliance\`, \`review_layer2_correctness\`, \`review_layer2_security\`, \`review_layer2_performance\`, \`review_layer2_architecture\`, \`review_severity_classified\`, \`review_criticals_resolved\`, \`review_army_json_valid\`, \`review_completeness_scored\`) into \`stageGateCatalog.review.passed\`
+   - Move all gate IDs for this stage (\`review_layer1_spec_compliance\`, \`review_layer2_correctness\`, \`review_layer2_security\`, \`review_layer2_performance\`, \`review_layer2_architecture\`, \`review_severity_classified\`, \`review_criticals_resolved\`, \`review_army_json_valid\`, \`review_completeness_scored\`, \`review_security_audit_swept\`) into \`stageGateCatalog.review.passed\`
    - Clear \`stageGateCatalog.review.blocked\`
    - For each passed gate, add an entry to \`guardEvidence\`: \`"<gate_id>": "<artifact path or excerpt proving the gate>"\`. Do NOT leave \`guardEvidence\` empty.
 2. **Persist artifact** at \`.cclaw/artifacts/07-review.md\`. Do NOT manually copy into \`.cclaw/runs/\`; archival is handled by \`cclaw archive\`.
@@ -441,7 +444,7 @@ After this stage, ask:
 - Did I discover a non-obvious reusable **rule** or **pattern**?
 - Did a failure reveal a reusable **lesson**?
 
-If yes, append one concise entry to \`.cclaw/knowledge.md\`:
+If yes, append one concise entry to **both** the markdown mirror (\`.cclaw/knowledge.md\`) and the canonical JSONL store (\`.cclaw/knowledge.jsonl\`) with the same timestamp:
 
 \`\`\`bash
 TS="$(date -u +%Y-%m-%dT%H:%M:%SZ)"
@@ -452,6 +455,7 @@ cat >> .cclaw/knowledge.md <<EOF
 - Insight: what should be remembered
 - Reuse: how to apply this next time
 EOF
+printf '%s\\n' '{"type":"pattern","title":"short-title","stage":"review","context":"what situation triggered this","insight":"what should be remembered","reuse":"how to apply this next time","created":"'"$TS"'","confidence":"medium","domain":null,"project":null,"supersedes":null,"superseded":false,"archived":false}' >> .cclaw/knowledge.jsonl
 \`\`\`
 
 Type must be exactly one of: \`rule\`, \`pattern\`, \`lesson\`, \`compound\`.
@@ -616,7 +620,7 @@ These are thinking instincts, not a checklist. Let them shape your perspective t
 ## Interaction Protocol
 1. Run preflight checks before any release action.
 2. Document release notes and rollback plan explicitly.
-3. For finalization mode: use the Decision Protocol — present modes as labeled options (A/B/C/D) with consequences and mark one as (recommended). If AskQuestion/AskUserQuestion is available, send exactly ONE question per call, validate fields against runtime schema, and on schema error immediately fall back to plain-text question instead of retrying guessed payloads.
+3. For finalization mode: use the Decision Protocol — present modes as labeled options (A/B/C/D) with consequences, **score each option \`Completeness: X/10\`** (10 = fully addresses release blast-radius, rollback readiness, observability, and stakeholder communication), and mark one as (recommended). Prefer the highest-scoring option; if scores tie, prefer the most reversible one. If AskQuestion/AskUserQuestion is available, send exactly ONE question per call, validate fields against runtime schema, and on schema error immediately fall back to plain-text question instead of retrying guessed payloads.
 4. Do not proceed if critical blockers remain from review.
 5. **STOP.** Present finalization options and wait for user selection before executing any finalization action.
 
@@ -836,7 +840,7 @@ After this stage, ask:
 - Did I discover a non-obvious reusable **rule** or **pattern**?
 - Did a failure reveal a reusable **lesson**?
 
-If yes, append one concise entry to \`.cclaw/knowledge.md\`:
+If yes, append one concise entry to **both** the markdown mirror (\`.cclaw/knowledge.md\`) and the canonical JSONL store (\`.cclaw/knowledge.jsonl\`) with the same timestamp:
 
 \`\`\`bash
 TS="$(date -u +%Y-%m-%dT%H:%M:%SZ)"
@@ -847,6 +851,7 @@ cat >> .cclaw/knowledge.md <<EOF
 - Insight: what should be remembered
 - Reuse: how to apply this next time
 EOF
+printf '%s\\n' '{"type":"pattern","title":"short-title","stage":"ship","context":"what situation triggered this","insight":"what should be remembered","reuse":"how to apply this next time","created":"'"$TS"'","confidence":"medium","domain":null,"project":null,"supersedes":null,"superseded":false,"archived":false}' >> .cclaw/knowledge.jsonl
 \`\`\`
 
 Type must be exactly one of: \`rule\`, \`pattern\`, \`lesson\`, \`compound\`.
@@ -1215,7 +1220,7 @@ After this stage, ask:
 - Did I discover a non-obvious reusable **rule** or **pattern**?
 - Did a failure reveal a reusable **lesson**?
 
-If yes, append one concise entry to \`.cclaw/knowledge.md\`:
+If yes, append one concise entry to **both** the markdown mirror (\`.cclaw/knowledge.md\`) and the canonical JSONL store (\`.cclaw/knowledge.jsonl\`) with the same timestamp:
 
 \`\`\`bash
 TS="$(date -u +%Y-%m-%dT%H:%M:%SZ)"
@@ -1226,6 +1231,7 @@ cat >> .cclaw/knowledge.md <<EOF
 - Insight: what should be remembered
 - Reuse: how to apply this next time
 EOF
+printf '%s\\n' '{"type":"pattern","title":"short-title","stage":"plan","context":"what situation triggered this","insight":"what should be remembered","reuse":"how to apply this next time","created":"'"$TS"'","confidence":"medium","domain":null,"project":null,"supersedes":null,"superseded":false,"archived":false}' >> .cclaw/knowledge.jsonl
 \`\`\`
 
 Type must be exactly one of: \`rule\`, \`pattern\`, \`lesson\`, \`compound\`.
@@ -1642,7 +1648,7 @@ After this stage, ask:
 - Did I discover a non-obvious reusable **rule** or **pattern**?
 - Did a failure reveal a reusable **lesson**?
 
-If yes, append one concise entry to \`.cclaw/knowledge.md\`:
+If yes, append one concise entry to **both** the markdown mirror (\`.cclaw/knowledge.md\`) and the canonical JSONL store (\`.cclaw/knowledge.jsonl\`) with the same timestamp:
 
 \`\`\`bash
 TS="$(date -u +%Y-%m-%dT%H:%M:%SZ)"
@@ -1653,6 +1659,7 @@ cat >> .cclaw/knowledge.md <<EOF
 - Insight: what should be remembered
 - Reuse: how to apply this next time
 EOF
+printf '%s\\n' '{"type":"pattern","title":"short-title","stage":"tdd","context":"what situation triggered this","insight":"what should be remembered","reuse":"how to apply this next time","created":"'"$TS"'","confidence":"medium","domain":null,"project":null,"supersedes":null,"superseded":false,"archived":false}' >> .cclaw/knowledge.jsonl
 \`\`\`
 
 Type must be exactly one of: \`rule\`, \`pattern\`, \`lesson\`, \`compound\`.
@@ -1985,7 +1992,7 @@ After this stage, ask:
 - Did I discover a non-obvious reusable **rule** or **pattern**?
 - Did a failure reveal a reusable **lesson**?
 
-If yes, append one concise entry to \`.cclaw/knowledge.md\`:
+If yes, append one concise entry to **both** the markdown mirror (\`.cclaw/knowledge.md\`) and the canonical JSONL store (\`.cclaw/knowledge.jsonl\`) with the same timestamp:
 
 \`\`\`bash
 TS="$(date -u +%Y-%m-%dT%H:%M:%SZ)"
@@ -1996,6 +2003,7 @@ cat >> .cclaw/knowledge.md <<EOF
 - Insight: what should be remembered
 - Reuse: how to apply this next time
 EOF
+printf '%s\\n' '{"type":"pattern","title":"short-title","stage":"brainstorm","context":"what situation triggered this","insight":"what should be remembered","reuse":"how to apply this next time","created":"'"$TS"'","confidence":"medium","domain":null,"project":null,"supersedes":null,"superseded":false,"archived":false}' >> .cclaw/knowledge.jsonl
 \`\`\`
 
 Type must be exactly one of: \`rule\`, \`pattern\`, \`lesson\`, \`compound\`.
@@ -2032,7 +2040,7 @@ Do NOT ship, merge, or release until both review layers complete with an explici
 6. Do NOT copy artifacts into \`.cclaw/runs/\`; archival is handled only by \`cclaw archive\`.
 
 ## Gates
-\`review_layer1_spec_compliance\`, \`review_layer2_correctness\`, \`review_layer2_security\`, \`review_layer2_performance\`, \`review_layer2_architecture\`, \`review_severity_classified\`, \`review_criticals_resolved\`, \`review_army_json_valid\`, \`review_completeness_scored\`
+\`review_layer1_spec_compliance\`, \`review_layer2_correctness\`, \`review_layer2_security\`, \`review_layer2_performance\`, \`review_layer2_architecture\`, \`review_severity_classified\`, \`review_criticals_resolved\`, \`review_army_json_valid\`, \`review_completeness_scored\`, \`review_security_audit_swept\`
 
 ## Exit
 - both layers completed
