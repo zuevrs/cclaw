@@ -350,7 +350,15 @@ Execution rule: complete and verify each wave before starting the next wave.
 - Layer 2 complete:
 - Review army schema valid:
 - Open critical blockers:
+- Adversarial review pass:
 - Ship recommendation:
+
+## Completeness Score
+- AC coverage: <N>/<M> (<percent>%)
+- Task coverage (tasks backed by ≥1 test slice): <N>/<M>
+- Slice coverage (slices linked to ≥1 AC): <N>/<M>
+- Adversarial review pass: true | false
+- Overall score: <0-100>
 
 ## Severity Summary
 - Critical:

@@ -659,6 +659,154 @@ Do not approve user-facing UI changes that break basic keyboard navigation or re
 `;
 }
 
+export function landscapeCheckSkill(): string {
+  return `---
+name: landscape-check
+description: "Landscape survey before a design/scope decision. Use when deciding whether to build, reuse, or adopt — inside and outside the repo."
+---
+
+# Landscape Check
+
+## Quick Start
+
+> 1. Before committing to a build decision, survey the landscape: in-repo, in-ecosystem, and in-class.
+> 2. Produce a one-page table of candidates (build / reuse in-repo / adopt external) with evidence.
+> 3. Explicitly kill alternatives with a one-line reason. Do not leave implicit assumptions.
+
+## HARD-GATE
+
+Do not approve a scope or design that introduces a new system, library,
+or abstraction without comparing at least **one in-repo candidate** and
+**one external/ecosystem candidate** (or explicitly stating why no such
+candidates exist).
+
+## When to Use
+
+- Scope stage, before picking a mode (expand/selective/hold/reduce)
+- Design stage, before committing to a new architecture boundary
+- Brainstorm stage, when the user frames the problem as "let's build X"
+- Review stage, when a proposed change duplicates an existing capability
+
+## Protocol
+
+1. **Define the capability in one sentence.** "We need a way to <verb> <object> under <constraint>."
+2. **In-repo search.** Grep for similar verbs/modules/components. Read the closest 1-3 candidates. Record their fit and why they are or are not a good adapter target.
+3. **Ecosystem search.** Check ecosystem defaults (stdlib, framework primitives, common OSS packages in use). Do not invent new dependencies when an existing one covers 80%+ of the need.
+4. **In-class search.** Look at how other well-known projects in the same class solve this. Cite at least one concrete example (even if you end up rejecting it).
+5. **Produce the decision table.** Columns: Candidate, Kind (build / reuse / adopt), Fit (1-5), Effort (S/M/L/XL), Risk, Reason accepted or rejected.
+6. **Commit.** Pick exactly one winner. All losers must have a one-line kill reason.
+
+## Output Template
+
+\`\`\`markdown
+### Landscape Check — <capability>
+
+| Candidate | Kind | Fit | Effort | Risk | Verdict |
+|---|---|---|---|---|---|
+| src/foo/Bar | reuse | 4/5 | S | Low | SELECTED — already covers 80% of the need |
+| external/lib-x | adopt | 3/5 | M | Med | REJECTED — heavy dep, 20% unused surface |
+| build new | build | 2/5 | L | High | REJECTED — premature abstraction |
+
+**Decision:** Reuse \`src/foo/Bar\` with a thin adapter. Kill reasons recorded above.
+\`\`\`
+
+## Anti-Patterns
+
+- "We looked and nothing fits" without citing what was looked at.
+- Treating "nobody on the team knows library X" as a kill reason without evaluating the learning cost.
+- Choosing "build" because reuse would require a small refactor of the existing component.
+- Skipping the in-class search because "our case is special" — it usually is not.
+
+## Red Flags
+
+- Decision table has only the winner listed.
+- Ecosystem search is empty when a well-known primitive obviously applies.
+- "Fit" scores without evidence (no file:line, no cited OSS repo, no framework docs reference).
+- The in-repo candidate was never read before being dismissed.
+`;
+}
+
+export function adversarialReviewSkill(): string {
+  return `---
+name: adversarial-review
+description: "Adversarial review lens. Use during review to deliberately attack the implementation — as a hostile user, a future maintainer, or a competitor."
+---
+
+# Adversarial Review
+
+## Quick Start
+
+> 1. Stop assuming good-faith usage. Play three roles in sequence: hostile user, stressed operator, future maintainer.
+> 2. For each role, produce at least 2 concrete attack/friction scenarios with file:line evidence.
+> 3. Escalate any finding that a Critical severity review would miss.
+
+## HARD-GATE
+
+Do not complete review stage without an adversarial-review pass when
+**any** of the following apply: user-facing input surface changed,
+trust boundary moved, concurrency was introduced, or a new failure
+mode path was added.
+
+## When to Use
+
+- Review stage, after Layer 2 quality checks complete
+- Before shipping anything user-facing or revenue-sensitive
+- When fuzz/property-testing exists but was not exercised against this change
+- When the implementer has a strong "this is fine" prior
+
+## Roles and Questions
+
+### Role 1 — Hostile User
+
+You are trying to break, trick, or exploit the system. Ask:
+
+- What happens on empty / null / maximum / negative / unicode / newline inputs?
+- What if I call the endpoint 1000 times per second? What about 1 every 10 minutes for a week?
+- What if I send a payload that is almost valid (off-by-one schema, wrong content-type, duplicate keys)?
+- What if two honest actions collide (double-click, race, retry after timeout)?
+- Can I observe a secret through error messages, timing, or response size?
+
+### Role 2 — Stressed Operator
+
+You are on call at 3 AM. Ask:
+
+- What does this look like in logs when it fails? Is the failure actionable?
+- If I restart the service mid-request, does state recover cleanly?
+- Is the rollback procedure real, tested, and under 15 minutes?
+- Can I tell from metrics alone whether this is healthy?
+
+### Role 3 — Future Maintainer
+
+You are reading this code in 6 months with no memory of the context. Ask:
+
+- Can I safely change this without breaking callers I cannot see?
+- Are there hidden invariants not captured in tests?
+- Will renaming this field silently break serialized consumers?
+- Is the "obviously correct" path actually correct, or is it just plausible?
+
+## Output Format
+
+For each finding:
+
+\`\`\`
+- **Role:** Hostile User | Stressed Operator | Future Maintainer
+- **Scenario:** concrete scenario (not a category)
+- **File:line:** path/to/file.ts:42
+- **Impact:** what breaks, for whom, under what frequency
+- **Recommendation:** specific fix or mitigation
+\`\`\`
+
+Escalate to the main review-army under the matching severity (Critical / Important / Suggestion).
+
+## Anti-Patterns
+
+- Treating adversarial review as a category list without producing concrete scenarios.
+- Assuming "our users would never do that" — they will, or the next integration will.
+- Running adversarial review after the ship decision is already made.
+- Only playing the hostile-user role and skipping operator + maintainer.
+`;
+}
+
 export const UTILITY_SKILL_FOLDERS = [
   "security",
   "debugging",
@@ -668,7 +816,9 @@ export const UTILITY_SKILL_FOLDERS = [
   "executing-plans",
   "context-engineering",
   "source-driven-development",
-  "frontend-accessibility"
+  "frontend-accessibility",
+  "landscape-check",
+  "adversarial-review"
 ] as const;
 
 export const UTILITY_SKILL_MAP: Record<string, () => string> = {
@@ -680,5 +830,7 @@ export const UTILITY_SKILL_MAP: Record<string, () => string> = {
   "executing-plans": executingPlansSkill,
   "context-engineering": contextEngineeringSkill,
   "source-driven-development": sourceDrivenDevelopmentSkill,
-  "frontend-accessibility": frontendAccessibilitySkill
+  "frontend-accessibility": frontendAccessibilitySkill,
+  "landscape-check": landscapeCheckSkill,
+  "adversarial-review": adversarialReviewSkill
 };

@@ -1256,7 +1256,8 @@ const REVIEW: StageSchemaInput = {
     { id: "review_layer2_architecture", description: "Architecture fit review completed." },
     { id: "review_severity_classified", description: "All findings are severity-tagged." },
     { id: "review_criticals_resolved", description: "No unresolved critical blockers remain." },
-    { id: "review_army_json_valid", description: "07-review-army.json passes schema validation (validateReviewArmy)." }
+    { id: "review_army_json_valid", description: "07-review-army.json passes schema validation (validateReviewArmy)." },
+    { id: "review_completeness_scored", description: "Completeness score is computed and recorded (AC coverage, task coverage, slice coverage, adversarial pass)." }
   ],
   requiredEvidence: [
     "Artifact written to `.cclaw/artifacts/07-review.md`.",
@@ -1398,6 +1399,7 @@ const REVIEW: StageSchemaInput = {
     { section: "Layer 2 Findings", required: true, validationRule: "Each finding has severity, description, and resolution status." },
     { section: "Review Army Contract", required: true, validationRule: "Structured findings include id/severity/confidence/fingerprint/reportedBy/status with dedup reconciliation summary." },
     { section: "Review Readiness Dashboard", required: true, validationRule: "At least 4 readiness checklist lines including blocker and recommendation status." },
+    { section: "Completeness Score", required: true, validationRule: "Records AC coverage, task coverage, test-slice coverage, and adversarial-review pass status as numeric or boolean values. At minimum, a line like 'AC coverage: N/M' or 'AC coverage: 100%'." },
     { section: "Severity Summary", required: true, validationRule: "Per-severity count lines for critical, important, and suggestion buckets." },
     { section: "Final Verdict", required: true, validationRule: "Exactly one of: APPROVED, APPROVED_WITH_CONCERNS, BLOCKED." }
   ],
