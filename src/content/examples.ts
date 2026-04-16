@@ -407,33 +407,39 @@ Execution rule: complete and verify each wave before starting the next wave.
 
 - BLOCKED`,
 
-  ship: `### Preflight checklist (sample)
+  ship: `### Preflight Results
 
-- tests ✅ (\`pnpm test\` green on main)
-- build ✅ (\`pnpm build\` succeeds)
-- lint ✅ (\`pnpm lint\` clean)
-- type-check ✅ (\`pnpm typecheck\` clean)
+- Review verdict: APPROVED_WITH_CONCERNS (R-1 resolved, R-2 accepted as known debt)
+- Build: pass (\`pnpm build\` succeeds)
+- Tests: pass (\`pnpm vitest run && pnpm playwright test\` — 47 passed, 0 failed)
+- Lint: pass (\`pnpm lint\` clean)
+- Type-check: pass (\`pnpm typecheck\` clean)
+- Working tree clean: yes (\`git status\` shows no uncommitted changes)
 
-### Release notes (sample)
+### Release Notes
 
-- **Added:** In-app notification feed with SSE updates and REST fallback snapshotting.
-- **Changed:** Notification payloads now include a stable dedupe key for idempotent rendering.
+- **Added:** In-app notification feed with SSE updates and REST fallback snapshotting (AC-1, AC-3).
+- **Changed:** Notification payloads now include a stable dedupe key for idempotent rendering (AC-2).
 - **Fixed:** Panel no longer drops the newest item when reconnecting after sleep/resume.
+- **Breaking changes:** None.
 
-### Rollback plan (sample)
+### Rollback Plan
 
-1. Revert release tag \`v1.14.0\` to \`v1.13.2\` and redeploy the previous container image from the registry.
-2. If database migrations shipped, run the documented down migration \`2026_04_12_notifications_cursor_down.sql\` before serving traffic again.
+- Trigger conditions: error rate on \`/notifications/stream\` exceeds 5% for >5 minutes, or p95 publish-to-visible lag exceeds 10s.
+- Rollback steps: \`git revert <merge-sha> && git push origin main\` then redeploy; if DB migrations shipped, run \`2026_04_12_notifications_cursor_down.sql\` before traffic.
+- Verification steps: confirm error rate returns to pre-release baseline within 10 minutes; smoke-test feed panel manually.
 
-### Post-release monitoring (sample)
+### Monitoring
 
-- Watch error rate on \`/notifications/stream\` and snapshot endpoint separately for 24 hours.
-- Track p95 “publish → visible” lag via existing metrics dashboard; alert if SLO regresses.
+- Metrics/logs to watch: error rate on \`/notifications/stream\` and snapshot endpoint for 24h; p95 publish-to-visible lag via metrics dashboard.
+- Risk note (if no monitoring): N/A — monitoring is in place.
 
-### Communications (sample)
+### Finalization
 
-- Post a short internal changelog entry linking to release notes and rollback doc location.
-- If user-visible behavior changes, prepare a one-paragraph support macro explaining the new feed + fallback behavior.`,
+- Selected enum: FINALIZE_OPEN_PR
+- Selected label: B
+- Execution result: PR #42 created via \`gh pr create\`; CI passed; squash-merged to main.
+- PR URL: https://github.com/example/repo/pull/42`,
 };
 
 export function stageExamples(stage: FlowStage): string {
