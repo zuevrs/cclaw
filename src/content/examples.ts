@@ -76,6 +76,14 @@ The original premise (“add notifications”) was reframed to **“ensure users
 | **12-MONTH IDEAL** | Unified notification center with reliable multi-channel fan-out and user-level routing preferences. |
 | **Alignment verdict** | Aligned: this scope builds the durability foundation without prematurely committing to channel expansion. |
 
+### Mode-Specific Analysis
+
+**Selected mode:** SELECTIVE EXPANSION
+
+- **Hold-scope baseline:** SSE live updates + REST fallback is the minimum that meets the "know when action is needed" reframe. Accepted as baseline.
+- **Expansion evaluated — degraded-state UX (accepted):** Adding an explicit "live updates paused" banner and polling fallback turns a reliability gap into a visible, recoverable state. Low incremental effort (S), high user trust payoff.
+- **Expansion evaluated — real-time channel upgrade (deferred):** WebSocket channel provides lower latency but requires new infra (connection pool, auth handshake). Not justified for current load; deferred to post-v1 validation.
+
 ### Implementation Alternatives
 
 | Option | Summary | Effort (S/M/L/XL) | Risk | Pros | Cons | Reuses |
