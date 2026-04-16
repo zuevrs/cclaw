@@ -61,6 +61,7 @@ Machine-only work should be delegated to specialist agents automatically accordi
 | spec-reviewer | mandatory | Always in review stage. | Verify implementation against acceptance criteria with file evidence. | not required |
 | code-reviewer | mandatory | Always in review stage. | Assess correctness, maintainability, architecture, and ship risk. | not required |
 | security-reviewer | mandatory | Always in review stage. Even when no trust boundaries changed, produce an explicit 'no-change' security attestation. | Guarantee a dedicated security pass on every diff: auth, input validation, secrets, injection, privilege, and blast-radius review are never opt-in. | not required |
+| code-reviewer | conditional | When the diff exceeds 100 changed lines, touches more than 10 files, or modifies trust boundaries — dispatch a SECOND, independent code-reviewer with the adversarial-review skill loaded so the review army has at least two voices on a high-blast-radius change. | Adversarial second-opinion review on large or trust-sensitive diffs. The second reviewer treats the implementation as hostile and tries to break it (hostile-user, future-maintainer, competitor lenses) instead of sympathetically explaining it. | not required |
 
 **Gate rule:** user interaction is required only for approval/override decisions. Do not ask the user to manually trigger machine-only specialist checks.
 
@@ -87,17 +88,18 @@ You MUST complete these steps in order:
 
 1. Diff Scope — Run \`git diff\` against base branch. If no diff, exit early with APPROVED (no changes to review). Scope the review to changed files unless blast-radius analysis requires wider inspection.
 2. Change-Size Check — ~100 lines = normal. ~300 lines = consider splitting. ~1000+ lines = strongly recommend stacked PRs. Flag large diffs to the user.
-3. Load upstream evidence — read TDD artifact (RED + GREEN + REFACTOR), spec, and plan. Verify evidence chain is unbroken.
-4. Layer 1: Spec Compliance — check every acceptance criterion against implementation. Verdict: pass/fail per criterion.
-5. Layer 2a: Correctness — logic errors, race conditions, boundary violations, null handling.
-6. Layer 2b: Security — input validation, auth boundaries, secrets exposure, injection vectors.
-7. Layer 2c: Performance — N+1 queries, memory leaks, missing caching, hot paths.
-8. Layer 2d: Architecture Fit — does the implementation match the locked design? Coupling, cohesion, interface contracts.
-9. Layer 2e: External Safety — SQL safety, concurrency, secrets in logs, enum completeness (grep outside diff), LLM trust boundaries.
-10. Review Army reconciliation — normalize findings into structured records, dedup by fingerprint, and mark multi-specialist confirmations.
-11. Meta-Review — Were tests actually run? Do test names match what they test? Are there real assertions?
-12. Classify findings — Critical (blocks ship), Important (should fix), Suggestion (optional improvement).
-13. Produce verdict — APPROVED, APPROVED_WITH_CONCERNS, or BLOCKED.
+3. Adversarial Trigger Check — compute changed-line count (\`git diff --shortstat <base>..HEAD\`), files-touched count, and whether trust boundaries changed (auth/secrets/external inputs/permissions). If \`lines > 100\` OR \`files > 10\` OR \`trust boundary changed\`, **dispatch a SECOND code-reviewer agent with the \`adversarial-review\` skill loaded** and reconcile its findings into the review army (treat the conditional dispatch as mandatory whenever the trigger holds; record the trigger that fired in the dashboard).
+4. Load upstream evidence — read TDD artifact (RED + GREEN + REFACTOR), spec, and plan. Verify evidence chain is unbroken.
+5. Layer 1: Spec Compliance — check every acceptance criterion against implementation. Verdict: pass/fail per criterion.
+6. Layer 2a: Correctness — logic errors, race conditions, boundary violations, null handling.
+7. Layer 2b: Security — input validation, auth boundaries, secrets exposure, injection vectors.
+8. Layer 2c: Performance — N+1 queries, memory leaks, missing caching, hot paths.
+9. Layer 2d: Architecture Fit — does the implementation match the locked design? Coupling, cohesion, interface contracts.
+10. Layer 2e: External Safety — SQL safety, concurrency, secrets in logs, enum completeness (grep outside diff), LLM trust boundaries.
+11. Review Army reconciliation — normalize findings into structured records, dedup by fingerprint, and mark multi-specialist confirmations.
+12. Meta-Review — Were tests actually run? Do test names match what they test? Are there real assertions?
+13. Classify findings — Critical (blocks ship), Important (should fix), Suggestion (optional improvement).
+14. Produce verdict — APPROVED, APPROVED_WITH_CONCERNS, or BLOCKED.
 
 ## Examples
 

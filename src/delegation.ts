@@ -9,7 +9,7 @@ import type { FlowStage } from "./types.js";
 export type DelegationEntry = {
   stage: string;
   agent: string;
-  mode: "mandatory" | "proactive";
+  mode: "mandatory" | "proactive" | "conditional";
   status: "scheduled" | "completed" | "failed" | "waived";
   taskId?: string;
   waiverReason?: string;
@@ -19,6 +19,11 @@ export type DelegationEntry = {
    * consumers treat missing runId as unscoped (conservatively excluded from current-run checks).
    */
   runId?: string;
+  /**
+   * For `conditional` rows: the trigger predicate that fired (e.g. `diff_lines_gt:100`).
+   * Recorded for audit so reviewers can see why the second pass was required.
+   */
+  conditionTrigger?: string;
 };
 
 export type DelegationLedger = {
@@ -37,7 +42,7 @@ function delegationLockPath(projectRoot: string): string {
 function isDelegationEntry(value: unknown): value is DelegationEntry {
   if (!value || typeof value !== "object" || Array.isArray(value)) return false;
   const o = value as Record<string, unknown>;
-  const modeOk = o.mode === "mandatory" || o.mode === "proactive";
+  const modeOk = o.mode === "mandatory" || o.mode === "proactive" || o.mode === "conditional";
   const statusOk =
     o.status === "scheduled" ||
     o.status === "completed" ||
@@ -51,7 +56,8 @@ function isDelegationEntry(value: unknown): value is DelegationEntry {
     typeof o.ts === "string" &&
     (o.taskId === undefined || typeof o.taskId === "string") &&
     (o.waiverReason === undefined || typeof o.waiverReason === "string") &&
-    (o.runId === undefined || typeof o.runId === "string")
+    (o.runId === undefined || typeof o.runId === "string") &&
+    (o.conditionTrigger === undefined || typeof o.conditionTrigger === "string")
   );
 }
 

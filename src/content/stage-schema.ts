@@ -36,10 +36,25 @@ export interface ArtifactValidation {
 
 export interface StageAutoSubagentDispatch {
   agent: "planner" | "spec-reviewer" | "code-reviewer" | "security-reviewer" | "test-author" | "doc-updater";
-  mode: "mandatory" | "proactive";
+  /**
+   * - `mandatory` — must be dispatched (or explicitly waived) before stage transition.
+   * - `proactive` — should be dispatched automatically when context matches `when`.
+   * - `conditional` — dispatched only when `condition` evaluates true at runtime; counted as
+   *   mandatory **only when the condition holds**.
+   */
+  mode: "mandatory" | "proactive" | "conditional";
   when: string;
   purpose: string;
   requiresUserGate: boolean;
+  /**
+   * Optional machine-friendly trigger expression for `conditional` rows.
+   * Supported predicates: `diff_lines_gt:<N>`, `files_touched_gt:<N>`,
+   * `trust_boundary_changed`, `release_blast_radius_high`.
+   * Multiple predicates joined by `||` mean ANY trigger satisfies the condition.
+   */
+  condition?: string;
+  /** Optional skill folder the dispatched agent should load as additional context. */
+  skill?: string;
 }
 
 export interface NamedAntiPattern {
@@ -1217,6 +1232,7 @@ const REVIEW: StageSchemaInput = {
   checklist: [
     "Diff Scope — Run `git diff` against base branch. If no diff, exit early with APPROVED (no changes to review). Scope the review to changed files unless blast-radius analysis requires wider inspection.",
     "Change-Size Check — ~100 lines = normal. ~300 lines = consider splitting. ~1000+ lines = strongly recommend stacked PRs. Flag large diffs to the user.",
+    "Adversarial Trigger Check — compute changed-line count (`git diff --shortstat <base>..HEAD`), files-touched count, and whether trust boundaries changed (auth/secrets/external inputs/permissions). If `lines > 100` OR `files > 10` OR `trust boundary changed`, **dispatch a SECOND code-reviewer agent with the `adversarial-review` skill loaded** and reconcile its findings into the review army (treat the conditional dispatch as mandatory whenever the trigger holds; record the trigger that fired in the dashboard).",
     "Load upstream evidence — read TDD artifact (RED + GREEN + REFACTOR), spec, and plan. Verify evidence chain is unbroken.",
     "Layer 1: Spec Compliance — check every acceptance criterion against implementation. Verdict: pass/fail per criterion.",
     "Layer 2a: Correctness — logic errors, race conditions, boundary violations, null handling.",
@@ -1684,6 +1700,15 @@ const STAGE_AUTO_SUBAGENT_DISPATCH: Record<FlowStage, StageAutoSubagentDispatch[
       when: "Always in review stage. Even when no trust boundaries changed, produce an explicit 'no-change' security attestation.",
       purpose: "Guarantee a dedicated security pass on every diff: auth, input validation, secrets, injection, privilege, and blast-radius review are never opt-in.",
       requiresUserGate: false
+    },
+    {
+      agent: "code-reviewer",
+      mode: "conditional",
+      condition: "diff_lines_gt:100||files_touched_gt:10||trust_boundary_changed",
+      when: "When the diff exceeds 100 changed lines, touches more than 10 files, or modifies trust boundaries — dispatch a SECOND, independent code-reviewer with the adversarial-review skill loaded so the review army has at least two voices on a high-blast-radius change.",
+      purpose: "Adversarial second-opinion review on large or trust-sensitive diffs. The second reviewer treats the implementation as hostile and tries to break it (hostile-user, future-maintainer, competitor lenses) instead of sympathetically explaining it.",
+      requiresUserGate: false,
+      skill: "adversarial-review"
     }
   ],
   ship: [
@@ -1709,6 +1734,11 @@ export function mandatoryDelegationsForStage(stage: FlowStage): string[] {
   return STAGE_AUTO_SUBAGENT_DISPATCH[stage]
     .filter((d) => d.mode === "mandatory")
     .map((d) => d.agent);
+}
+
+/** Conditional dispatches that become mandatory only when their `condition` predicate evaluates true. */
+export function conditionalDispatchesForStage(stage: FlowStage): StageAutoSubagentDispatch[] {
+  return STAGE_AUTO_SUBAGENT_DISPATCH[stage].filter((d) => d.mode === "conditional");
 }
 
 export function stageSchema(stage: FlowStage): StageSchema {
