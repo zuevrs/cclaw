@@ -464,6 +464,7 @@ const SCOPE: StageSchemaInput = {
   artifactValidation: [
     { section: "Prime Directives", required: true, validationRule: "For each scoped capability: named failure modes, explicit error surface, four data-flow paths, interaction edge cases, observability expectations, and deferred-item handling." },
     { section: "Premise Challenge", required: true, validationRule: "Must contain explicit answers to: right problem? direct path? what if nothing?" },
+    { section: "Requirements", required: true, validationRule: "Table of stable requirement IDs (R1, R2, R3…) one per row with observable outcome, priority, and source. IDs are assigned once and never renumbered across scope/design/spec/plan/review; dropped requirements stay with Priority `DROPPED`." },
     { section: "Implementation Alternatives", required: true, validationRule: "2-3 options with Name, Summary, Effort, Risk, Pros, Cons, and Reuses. Must include minimal viable and ideal architecture options." },
     { section: "Scope Mode", required: true, validationRule: "Must state selected mode and rationale with default heuristic justification." },
     { section: "Mode-Specific Analysis", required: true, validationRule: "Must document the analysis matching the selected scope mode: EXPAND (10x and delight opportunities), SELECTIVE (hold-scope baseline then cherry-picked expansions), HOLD (minimum-change-set hardening), REDUCE (ruthless cuts and follow-up split)." },
@@ -866,7 +867,7 @@ const SPEC: StageSchemaInput = {
     traceabilityRule: "Every acceptance criterion must trace to a design decision. Every downstream plan task must trace to a spec criterion."
   },
   artifactValidation: [
-    { section: "Acceptance Criteria", required: true, validationRule: "Each criterion is observable, measurable, and falsifiable. Table should include a Design Decision Ref column tracing back to design artifact." },
+    { section: "Acceptance Criteria", required: true, validationRule: "Each criterion is observable, measurable, and falsifiable. Table must include a Requirement Ref column linking to R# IDs in 02-scope.md and a Design Decision Ref column tracing back to design artifact. AC IDs (AC-1, AC-2…) are stable across revisions — dropped ACs stay with Priority `DROPPED`." },
     { section: "Edge Cases", required: true, validationRule: "At least one boundary and one error condition per criterion." },
     { section: "Constraints and Assumptions", required: true, validationRule: "All implicit assumptions surfaced. Constraints have sources." },
     { section: "Testability Map", required: true, validationRule: "Each criterion maps to a concrete test description with verification approach (unit, integration, e2e, manual) and command or manual steps." },

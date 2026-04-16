@@ -85,6 +85,16 @@ export const ARTIFACT_TEMPLATES: Record<string, string> = {
   - (HOLD: minimum-change-set hardening)
   - (REDUCE: ruthless cuts, follow-up split)
 
+## Requirements (stable IDs)
+| ID | Requirement (observable outcome) | Priority | Source (origin doc / prompt line) |
+|---|---|---|---|
+| R1 |  | P0 |  |
+
+> Assign \`R1\`, \`R2\`, \`R3\`… once and never renumber. Downstream artifacts
+> (design, spec, plan, review) reference these IDs verbatim. If a requirement
+> is later dropped, keep the row and mark Priority \`DROPPED\`; if a new one is
+> added mid-flow, append with the next free R-number — do NOT reuse numbers.
+
 ## In Scope / Out of Scope
 
 ### In Scope
@@ -204,9 +214,13 @@ export const ARTIFACT_TEMPLATES: Record<string, string> = {
   "04-spec.md": `# Specification Artifact
 
 ## Acceptance Criteria
-| ID | Criterion (observable/measurable/falsifiable) | Design Decision Ref |
-|---|---|---|
-| AC-1 |  |  |
+| ID | Requirement Ref (R#) | Criterion (observable/measurable/falsifiable) | Design Decision Ref |
+|---|---|---|---|
+| AC-1 | R1 |  |  |
+
+> Every AC must reference at least one \`R#\` from \`02-scope.md\`. ACs are
+> stable (never renumber): dropped ACs stay with Priority \`DROPPED\`; new
+> ones append with the next free \`AC-#\`.
 
 ## Edge Cases
 | Criterion ID | Boundary case | Error case |
