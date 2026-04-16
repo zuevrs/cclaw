@@ -1,4 +1,5 @@
 import { describe, expect, it } from "vitest";
+import { CCLAW_AGENTS } from "../../src/content/agents.js";
 import { stageSchema } from "../../src/content/stage-schema.js";
 import { stageSkillMarkdown } from "../../src/content/skills.js";
 import { enhancedAgentBody } from "../../src/content/subagents.js";
@@ -49,6 +50,13 @@ describe("stage schema and subagent alignment", () => {
     expect(review.mandatoryDelegations).toContain("spec-reviewer");
     expect(review.mandatoryDelegations).toContain("code-reviewer");
     expect(review.mandatoryDelegations).toContain("security-reviewer");
+  });
+
+  it("security-reviewer agent registry entry is mandatory", () => {
+    const agent = CCLAW_AGENTS.find((a) => a.name === "security-reviewer");
+    expect(agent).toBeDefined();
+    expect(agent?.activation).toBe("mandatory");
+    expect(agent?.description.toLowerCase()).toMatch(/mandatory|no-change/);
   });
 
   it("design template renders architecture diagram with clean triple-backtick fences", () => {
