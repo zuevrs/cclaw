@@ -985,6 +985,8 @@ const PLAN: StageSchemaInput = {
   cognitivePatterns: [
     { name: "Vertical Slice Thinking", description: "Each task delivers one thin end-to-end slice of value. Horizontal layers (all models, then all controllers) create integration risk. Vertical slices (one feature through all layers) reduce it." },
     { name: "Two-Minute Smell Test", description: "If a competent engineer cannot understand and start a task in two minutes, the task is too large or too vague. Break it down further." },
+    { name: "Five-Minute Budget (hard)", description: "Every plan step MUST fit a 2-to-5-minute execution budget on a competent implementer. If a step plausibly takes longer, it is two steps pretending to be one — split it. Measure by 'keyboard minutes on this slice', not by wall clock. Write the estimated minutes next to each task (e.g. `[~3m]`); when a TDD slice later consumes >2× the estimate, log an operational-self-improvement entry so future plans calibrate better." },
+    { name: "No Placeholders", description: "Plan text must be copy-pasteable. Forbidden tokens anywhere in the artifact: `TODO`, `TBD`, `FIXME`, `<fill-in>`, `<your-*-here>`, `xxx`, `...` (as ellipsis for omitted content — real commands use real args). Every acceptance-criterion link, file path, test command, and verification command must be concrete and runnable as written. A placeholder is a deferred decision masquerading as a plan; decide it now or remove the task." },
     { name: "Make the Change Easy, Then Make the Easy Change", description: "Refactor first, implement second. Never structural + behavioral changes simultaneously. Sequence tasks accordingly." },
     { name: "Diagnose Before Fix", description: "Before decomposing work, understand the current state of the codebase. Read existing code, tests, and conventions. Tasks should reference what exists, not assume a blank slate." },
     { name: "Scrap Signals", description: "If a task description is vague, the acceptance criterion is missing, or the verification command is a placeholder — it is scrap. Either rewrite it or remove it. Half-specified tasks waste more time than no tasks." },
@@ -1012,6 +1014,16 @@ const PLAN: StageSchemaInput = {
         "Are there hidden dependencies between tasks in different waves?"
       ],
       stopGate: true
+    },
+    {
+      title: "Five-Minute Budget + No-Placeholders Audit",
+      evaluationPoints: [
+        "Does every task carry an explicit minutes estimate (e.g. `[~3m]`) and does every estimate fit the 2-to-5-minute budget? Estimates >5 minutes must be split.",
+        "Are all file paths, test commands, and verification commands copy-pasteable as written — no `TODO`, `TBD`, `FIXME`, `<fill-in>`, `<your-*-here>`, `xxx`, or ellipsis standing in for omitted args?",
+        "Does every acceptance-criterion reference resolve to a real R# / AC-### in the spec (not a blank link)?",
+        "If an estimate is genuinely uncertain (first-time integration, unfamiliar library), is the uncertainty named explicitly and scheduled as a spike task in wave 0, rather than hidden behind a large estimate?"
+      ],
+      stopGate: true
     }
   ],
   completionStatus: ["DONE", "DONE_WITH_CONCERNS", "BLOCKED"],
@@ -1023,11 +1035,12 @@ const PLAN: StageSchemaInput = {
   artifactValidation: [
     { section: "Dependency Graph", required: true, validationRule: "Ordering and parallel opportunities explicit. No circular dependencies." },
     { section: "Dependency Waves", required: true, validationRule: "Every task belongs to a wave. Each wave has an exit gate and dependency statement." },
-    { section: "Task List", required: true, validationRule: "Each task: ID, description, acceptance criterion link, verification command, and effort estimate (S/M/L)." },
+    { section: "Task List", required: true, validationRule: "Each task row includes ID, description, acceptance criterion, verification command, and effort estimate (S/M/L). Every task must also carry a minutes estimate within the 2-5 minute budget." },
     { section: "Acceptance Mapping", required: true, validationRule: "Every spec criterion is covered by at least one task." },
     { section: "Risk Assessment", required: false, validationRule: "If present: per-task or per-wave risk identification with likelihood, impact, and mitigation strategy." },
     { section: "Boundary Map", required: false, validationRule: "If present: per-wave or per-task interface contracts listing what each task produces (exports) and consumes (imports) from other tasks." },
-    { section: "WAIT_FOR_CONFIRM", required: true, validationRule: "Explicit marker present. Status: pending until user approves." }
+    { section: "WAIT_FOR_CONFIRM", required: true, validationRule: "Explicit marker present. Status: pending until user approves." },
+    { section: "No-Placeholder Scan", required: false, validationRule: "If present: confirmation that a text scan for `TODO`, `TBD`, `FIXME`, `<fill-in>`, `<your-*-here>`, `xxx`, or bare ellipses has zero hits in the task list. A placeholder is a deferred decision masquerading as a plan." }
   ],
   namedAntiPattern: {
     title: "Task Details Can Be Finalized During Coding",

@@ -279,9 +279,15 @@ export const ARTIFACT_TEMPLATES: Record<string, string> = {
 Execution rule: complete and verify each wave before starting the next wave.
 
 ## Task List
-| Task ID | Description | Acceptance criterion | Verification command | Effort |
-|---|---|---|---|---|
-| T-1 |  |  |  |  |
+
+**Rules (apply before writing rows):**
+- Every task fits the **2-5 minute budget**. If \`[~Nm]\` is >5, split the task.
+- **No placeholders.** Forbidden tokens anywhere in this table: \`TODO\`, \`TBD\`, \`FIXME\`, \`<fill-in>\`, \`<your-*-here>\`, \`xxx\`, bare ellipsis. Every file path, test, and verification command must be copy-pasteable as written.
+- If an estimate is genuinely uncertain (new library, unfamiliar subsystem), add a **spike task in wave 0** to de-risk — do NOT hide the uncertainty inside a large estimate.
+
+| Task ID | Description | Acceptance criterion | Verification command | Effort (S/M/L) | Minutes |
+|---|---|---|---|---|---|
+| T-1 |  |  |  |  | [~3m] |
 
 ## Acceptance Mapping
 | Criterion ID | Task IDs |
@@ -297,6 +303,10 @@ Execution rule: complete and verify each wave before starting the next wave.
 | Task/Wave | Produces (exports) | Consumes (imports from) |
 |---|---|---|
 |  |  |  |
+
+## No-Placeholder Scan
+- Scanned tokens: \`TODO\`, \`TBD\`, \`FIXME\`, \`<fill-in>\`, \`<your-*-here>\`, \`xxx\`, bare ellipsis in task rows.
+- Hits: 0 (required for WAIT_FOR_CONFIRM to resolve).
 
 ## WAIT_FOR_CONFIRM
 - Status: pending

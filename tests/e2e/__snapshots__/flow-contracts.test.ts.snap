@@ -1042,10 +1042,12 @@ These are thinking instincts, not a checklist. Let them shape your perspective t
 
 1. **Vertical Slice Thinking** — Each task delivers one thin end-to-end slice of value. Horizontal layers (all models, then all controllers) create integration risk. Vertical slices (one feature through all layers) reduce it.
 2. **Two-Minute Smell Test** — If a competent engineer cannot understand and start a task in two minutes, the task is too large or too vague. Break it down further.
-3. **Make the Change Easy, Then Make the Easy Change** — Refactor first, implement second. Never structural + behavioral changes simultaneously. Sequence tasks accordingly.
-4. **Diagnose Before Fix** — Before decomposing work, understand the current state of the codebase. Read existing code, tests, and conventions. Tasks should reference what exists, not assume a blank slate.
-5. **Scrap Signals** — If a task description is vague, the acceptance criterion is missing, or the verification command is a placeholder — it is scrap. Either rewrite it or remove it. Half-specified tasks waste more time than no tasks.
-6. **Risk-First Exploration** — Sequence the highest-risk or most uncertain tasks first. If wave 1 proves the risky assumption wrong, the rest of the plan can adapt. If the risk is buried in wave 3, you discover failure late.
+3. **Five-Minute Budget (hard)** — Every plan step MUST fit a 2-to-5-minute execution budget on a competent implementer. If a step plausibly takes longer, it is two steps pretending to be one — split it. Measure by 'keyboard minutes on this slice', not by wall clock. Write the estimated minutes next to each task (e.g. \`[~3m]\`); when a TDD slice later consumes >2× the estimate, log an operational-self-improvement entry so future plans calibrate better.
+4. **No Placeholders** — Plan text must be copy-pasteable. Forbidden tokens anywhere in the artifact: \`TODO\`, \`TBD\`, \`FIXME\`, \`<fill-in>\`, \`<your-*-here>\`, \`xxx\`, \`...\` (as ellipsis for omitted content — real commands use real args). Every acceptance-criterion link, file path, test command, and verification command must be concrete and runnable as written. A placeholder is a deferred decision masquerading as a plan; decide it now or remove the task.
+5. **Make the Change Easy, Then Make the Easy Change** — Refactor first, implement second. Never structural + behavioral changes simultaneously. Sequence tasks accordingly.
+6. **Diagnose Before Fix** — Before decomposing work, understand the current state of the codebase. Read existing code, tests, and conventions. Tasks should reference what exists, not assume a blank slate.
+7. **Scrap Signals** — If a task description is vague, the acceptance criterion is missing, or the verification command is a placeholder — it is scrap. Either rewrite it or remove it. Half-specified tasks waste more time than no tasks.
+8. **Risk-First Exploration** — Sequence the highest-risk or most uncertain tasks first. If wave 1 proves the risky assumption wrong, the rest of the plan can adapt. If the risk is buried in wave 3, you discover failure late.
 
 ## Interaction Protocol
 1. Plan in read-only mode relative to implementation.
@@ -1106,6 +1108,16 @@ Evaluate:
 
 **STOP.** Present the most important question from this section to the user, even if your recommendation is clear. If no issues are found, state your assessment in one sentence and ask the user to confirm before moving on. If issues exist, present them ONE AT A TIME: describe the problem concretely, present 2-3 options, state your recommendation, and explain WHY.
 
+### Five-Minute Budget + No-Placeholders Audit
+
+Evaluate:
+- Does every task carry an explicit minutes estimate (e.g. \`[~3m]\`) and does every estimate fit the 2-to-5-minute budget? Estimates >5 minutes must be split.
+- Are all file paths, test commands, and verification commands copy-pasteable as written — no \`TODO\`, \`TBD\`, \`FIXME\`, \`<fill-in>\`, \`<your-*-here>\`, \`xxx\`, or ellipsis standing in for omitted args?
+- Does every acceptance-criterion reference resolve to a real R# / AC-### in the spec (not a blank link)?
+- If an estimate is genuinely uncertain (first-time integration, unfamiliar library), is the uncertainty named explicitly and scheduled as a spike task in wave 0, rather than hidden behind a large estimate?
+
+**STOP.** Present the most important question from this section to the user, even if your recommendation is clear. If no issues are found, state your assessment in one sentence and ask the user to confirm before moving on. If issues exist, present them ONE AT A TIME: describe the problem concretely, present 2-3 options, state your recommendation, and explain WHY.
+
 
 ## Cross-Stage Traceability
 
@@ -1125,11 +1137,12 @@ Evaluate:
 |---|---|---|
 | Dependency Graph | REQUIRED | Ordering and parallel opportunities explicit. No circular dependencies. |
 | Dependency Waves | REQUIRED | Every task belongs to a wave. Each wave has an exit gate and dependency statement. |
-| Task List | REQUIRED | Each task: ID, description, acceptance criterion link, verification command, and effort estimate (S/M/L). |
+| Task List | REQUIRED | Each task row includes ID, description, acceptance criterion, verification command, and effort estimate (S/M/L). Every task must also carry a minutes estimate within the 2-5 minute budget. |
 | Acceptance Mapping | REQUIRED | Every spec criterion is covered by at least one task. |
 | Risk Assessment | optional | If present: per-task or per-wave risk identification with likelihood, impact, and mitigation strategy. |
 | Boundary Map | optional | If present: per-wave or per-task interface contracts listing what each task produces (exports) and consumes (imports) from other tasks. |
 | WAIT_FOR_CONFIRM | REQUIRED | Explicit marker present. Status: pending until user approves. |
+| No-Placeholder Scan | optional | If present: confirmation that a text scan for \`TODO\`, \`TBD\`, \`FIXME\`, \`<fill-in>\`, \`<your-*-here>\`, \`xxx\`, or bare ellipses has zero hits in the task list. A placeholder is a deferred decision masquerading as a plan. |
 
 
 
