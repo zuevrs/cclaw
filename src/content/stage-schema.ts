@@ -1494,7 +1494,10 @@ const SHIP: StageSchemaInput = {
   rationalizations: [
     { claim: "Rollback details can be written after release.", reality: "Rollback is part of release readiness, not post-release cleanup." },
     { claim: "Finalization choice is obvious from context.", reality: "Explicit branch action prevents accidental release state." },
-    { claim: "Urgent fixes can skip preflight.", reality: "Urgency increases risk; preflight discipline matters more, not less." }
+    { claim: "Urgent fixes can skip preflight.", reality: "Urgency increases risk; preflight discipline matters more, not less." },
+    { claim: "Monitoring can be set up after deploy.", reality: "If you cannot observe the release, you cannot detect failure. Monitoring is a ship prerequisite, not a follow-up task." },
+    { claim: "A small merge does not need post-merge testing.", reality: "Small merges on diverged bases cause silent conflicts. Post-merge suite runs catch what branch-only CI misses." },
+    { claim: "Release notes are internal documentation, not a ship gate.", reality: "Release notes are the rollback decision input. Without them, the team cannot assess what changed or why a rollback is needed." }
   ],
   redFlags: [
     "No rollback trigger/steps",
