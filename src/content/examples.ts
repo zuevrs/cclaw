@@ -442,92 +442,236 @@ Execution rule: complete and verify each wave before starting the next wave.
 - PR URL: https://github.com/example/repo/pull/42`,
 };
 
-const GOOD_BAD_EXAMPLES: Record<FlowStage, { good: string; bad: string; lesson: string }> = {
-  brainstorm: {
-    good:
-      "Problem: release checks are fragile and inconsistent between CI and local runs; invalid metadata sometimes reaches npm publish. Success: invalid release preconditions are caught before publish with explicit operator feedback, in both CI and local workflows. Constraints: no new runtime dependencies.",
-    bad:
-      "Problem: releases are broken. Success: make them better. Constraints: be careful.",
-    lesson:
-      "\"Make it better\" is not a success criterion — an agent cannot know when it is done. State the observable condition that proves success."
-  },
-  scope: {
-    good:
-      "In scope: in-app notification feed, SSE delivery path, read/unread state, retry on transient failures. Out of scope: email/SMS/push providers, per-user preferences. Deferred: WebSocket channel, rich media, full-text search.",
-    bad:
-      "In scope: notifications. Out of scope: stuff we are not doing. Deferred: v2.",
-    lesson:
-      "Vague boundaries get relitigated in every subsequent stage. Enumerate concrete capabilities on each side — \"stuff we are not doing\" is not a decision."
-  },
-  design: {
-    good:
-      "Failure: SSE connection drop. Trigger: network interruption. Detection: client heartbeat timeout (30s). Mitigation: auto-reconnect with exponential backoff + REST snapshot fallback. User impact: ≤10s delay, no data loss.",
-    bad:
-      "Failure: network errors. Mitigation: retry and log. User impact: users may see issues sometimes.",
-    lesson:
-      "A failure row without a detection signal and a bounded user impact is aspirational, not a design. Name the trigger, the detector, and the recovery behavior."
-  },
-  spec: {
-    good:
-      "AC-1: Given a signed-in user with an active session, when the server publishes a new notification event for that user, the client feed shows the new item within 5 seconds without a full page reload.",
-    bad:
-      "AC-1: Users should see their notifications quickly and reliably, with a good user experience.",
-    lesson:
-      "Spec criteria must be observable, measurable, and falsifiable. \"Quickly\" is a feeling; \"within 5 seconds without a full page reload\" is a test."
-  },
-  plan: {
-    good:
-      "T-2: Implement publisher + outbox write path. Acceptance: AC-1. Verification: `pnpm vitest run tests/integration/publisher.test.ts`. Depends on: T-1. Effort: M.",
-    bad:
-      "T-2: Build the backend. Verify: manual testing. Effort: a few days.",
-    lesson:
-      "A task without a single acceptance criterion and a reproducible verification command is a wish. If you cannot say how you will know it is done, you cannot ship it."
-  },
-  tdd: {
-    good:
-      "RED: `pnpm vitest run tests/unit/dedupe-feed.test.ts` → `publishToOutbox is not a function`. GREEN (after minimal impl): same command, 47/47 pass, full suite. REFACTOR: extracted `mergeLatestByDedupeKey`; suite still 47/47.",
-    bad:
-      "Wrote the publisher code. Tests pass now. Will add unit tests later when I have time.",
-    lesson:
-      "Code written before a failing test is guessing validated after the fact. The RED failure IS the specification — without it, the GREEN pass proves nothing about the intended behavior."
-  },
-  review: {
-    good:
-      "R-1 Critical: snapshot endpoint returns newest N rows but does not guarantee consistency with stream cursor — users can miss items between snapshot and subscribe. Evidence: integration test `notification-consistency.test.ts:22-58`. Status: open.",
-    bad:
-      "Looks good overall. A few small things could be polished, maybe refactor the merge logic. LGTM.",
-    lesson:
-      "\"LGTM\" is not a review — it is a signature on whatever the author shipped. Every finding needs a severity, a falsifiable description, evidence, and a status."
-  },
-  ship: {
-    good:
-      "Rollback trigger: error rate on `/notifications/stream` >5% for 5 minutes, or p95 publish-to-visible lag >10s. Steps: `git revert <merge-sha> && git push origin main` then redeploy; run `2026_04_12_notifications_cursor_down.sql` before traffic. Verification: error rate returns to baseline within 10 minutes.",
-    bad:
-      "Rollback plan: revert the commit if anything goes wrong.",
-    lesson:
-      "\"Revert if anything goes wrong\" leaves the on-call engineer to invent the plan at 2 a.m. The rollback trigger is an operational contract: state the signal, the command, and the verification."
-  }
+interface GoodBadSample {
+  label: string;
+  good: string;
+  bad: string;
+  lesson: string;
+}
+
+const GOOD_BAD_EXAMPLES: Record<FlowStage, GoodBadSample[]> = {
+  brainstorm: [
+    {
+      label: "Problem / success statement",
+      good:
+        "Problem: release checks are fragile and inconsistent between CI and local runs; invalid metadata sometimes reaches npm publish. Success: invalid release preconditions are caught before publish with explicit operator feedback, in both CI and local workflows. Constraints: no new runtime dependencies.",
+      bad:
+        "Problem: releases are broken. Success: make them better. Constraints: be careful.",
+      lesson:
+        "\"Make it better\" is not a success criterion — an agent cannot know when it is done. State the observable condition that proves success."
+    },
+    {
+      label: "Alternative direction (one of 2–3)",
+      good:
+        "Option B: Pre-publish verifier script invoked from \`release.yml\` and a \`pnpm release:check\` target. Pros: one enforcement surface; fails fast locally. Cons: adds a script to maintain; must stay in sync with \`package.json\`. Rejected alternative: relying on npm lifecycle hooks only — they run too late to block publish.",
+      bad:
+        "We could also use a script, or hooks, or something in CI. We'll pick whichever is easier later.",
+      lesson:
+        "Alternatives are only useful if they are concrete and comparable. Name each one, call out pros/cons, and say what was rejected — otherwise \"later\" becomes \"never\" and the choice is made by accident."
+    },
+    {
+      label: "Clarifying question",
+      good:
+        "Before I lock direction: should a failed release:check block the CI job (hard failure) or only warn and continue? The former is safer but costs a revert cycle when the check itself is wrong; the latter preserves velocity but can let bad metadata through. Recommend A (block). Pick: A) Block  B) Warn-only  C) Block in CI, warn locally.",
+      bad:
+        "Do you want it to fail or warn? Let me know.",
+      lesson:
+        "A good question gives the user context, a recommendation, and lettered options they can answer with one keystroke. \"Let me know\" shifts the framing cost back to the user."
+    }
+  ],
+  scope: [
+    {
+      label: "In / out / deferred boundaries",
+      good:
+        "In scope: in-app notification feed, SSE delivery path, read/unread state, retry on transient failures. Out of scope: email/SMS/push providers, per-user preferences. Deferred: WebSocket channel, rich media, full-text search.",
+      bad:
+        "In scope: notifications. Out of scope: stuff we are not doing. Deferred: v2.",
+      lesson:
+        "Vague boundaries get relitigated in every subsequent stage. Enumerate concrete capabilities on each side — \"stuff we are not doing\" is not a decision."
+    },
+    {
+      label: "Scope change trace",
+      good:
+        "Scope delta at 2026-04-15: user asked to add per-user mute preferences. Decision: moved from Out-of-scope → In-scope; acknowledged cost (≈1 day, +1 schema migration); risk: touches settings surface. Recorded in \`03-design.md#scope-trace\`. Requires re-running scope review before design lock.",
+      bad:
+        "Added mute preferences to scope.",
+      lesson:
+        "Scope changes silently are how projects drift. Every in↔out move needs a timestamp, a cost estimate, and a link to the next review it invalidates."
+    }
+  ],
+  design: [
+    {
+      label: "Failure mode row",
+      good:
+        "Failure: SSE connection drop. Trigger: network interruption. Detection: client heartbeat timeout (30s). Mitigation: auto-reconnect with exponential backoff + REST snapshot fallback. User impact: ≤10s delay, no data loss.",
+      bad:
+        "Failure: network errors. Mitigation: retry and log. User impact: users may see issues sometimes.",
+      lesson:
+        "A failure row without a detection signal and a bounded user impact is aspirational, not a design. Name the trigger, the detector, and the recovery behavior."
+    },
+    {
+      label: "Rejected design alternative",
+      good:
+        "Considered WebSocket instead of SSE. Rejected because: (1) our proxy layer strips upgrade headers; (2) one-way push fits the \"notification feed\" semantics; (3) SSE plays nicer with HTTP/2 fan-out. Trade-off accepted: no client→server channel; we will fall back to REST for the tiny set of acks.",
+      bad:
+        "We chose SSE. WebSocket could also work.",
+      lesson:
+        "A design without a rejected alternative reads like a requirement, not a decision. The rejection is the part that survives review — it tells future readers what trade-off was taken."
+    },
+    {
+      label: "Diagram caption",
+      good:
+        "Figure 1 — Notification pipeline (sequence diagram): producer → outbox(durable) → relay → SSE stream → client. Label on relay shows \"at-least-once; dedupe by event_id\"; label on client shows \"merge by dedupe_key before render\".",
+      bad:
+        "Figure 1: notification flow.",
+      lesson:
+        "An unlabeled diagram is decoration. Every arrow needs a delivery guarantee, every box needs an action verb — otherwise the diagram contradicts the prose without anyone noticing."
+    }
+  ],
+  spec: [
+    {
+      label: "Observable acceptance criterion",
+      good:
+        "AC-1: Given a signed-in user with an active session, when the server publishes a new notification event for that user, the client feed shows the new item within 5 seconds without a full page reload.",
+      bad:
+        "AC-1: Users should see their notifications quickly and reliably, with a good user experience.",
+      lesson:
+        "Spec criteria must be observable, measurable, and falsifiable. \"Quickly\" is a feeling; \"within 5 seconds without a full page reload\" is a test."
+    },
+    {
+      label: "Negative / error-path criterion",
+      good:
+        "AC-4: Given the SSE connection drops mid-session, when the client detects no heartbeat for 30 seconds, the UI shows a \"Reconnecting…\" badge and automatically re-subscribes; missed events delivered since the last ACKed id are replayed exactly once.",
+      bad:
+        "AC-4: Handle errors gracefully.",
+      lesson:
+        "Error-path criteria are where most bugs hide. Write them with the same \"given/when/then\" rigor as happy-path — otherwise QA ends up inventing them at release time."
+    },
+    {
+      label: "Non-functional budget",
+      good:
+        "NFR-2: p95 end-to-end publish-to-visible latency ≤5s under 1k concurrent subscribers on a 2-vCPU pod; CPU headroom ≥30% at steady state. Measurement: \`k6 run tests/load/notifications.js\`, report median + p95 + p99.",
+      bad:
+        "NFR-2: Performance should be good.",
+      lesson:
+        "Non-functional goals without numbers + a measurement command are aspirational. Pin the percentile, the load shape, and the script that produces the evidence."
+    }
+  ],
+  plan: [
+    {
+      label: "Single task row",
+      good:
+        "T-2: Implement publisher + outbox write path. Acceptance: AC-1. Verification: \`pnpm vitest run tests/integration/publisher.test.ts\`. Depends on: T-1. Effort: M (≈4 min).",
+      bad:
+        "T-2: Build the backend. Verify: manual testing. Effort: a few days.",
+      lesson:
+        "A task without a single acceptance criterion and a reproducible verification command is a wish. If you cannot say how you will know it is done, you cannot ship it."
+    },
+    {
+      label: "Dependency graph entry",
+      good:
+        "T-5 (consume SSE client) depends on T-3 (stream endpoint) and T-4 (auth cookie forwarding). Parallelizable with T-6 (read-state persistence). Blocks T-8 (end-to-end happy-path e2e).",
+      bad:
+        "T-5 depends on other tasks.",
+      lesson:
+        "The value of a dependency graph is mechanical scheduling. \"Depends on other tasks\" is a shrug — list the IDs so the execution order is unambiguous."
+    }
+  ],
+  tdd: [
+    {
+      label: "RED → GREEN → REFACTOR slice",
+      good:
+        "RED: \`pnpm vitest run tests/unit/dedupe-feed.test.ts\` → \`publishToOutbox is not a function\`. GREEN (after minimal impl): same command, 47/47 pass, full suite. REFACTOR: extracted \`mergeLatestByDedupeKey\`; suite still 47/47.",
+      bad:
+        "Wrote the publisher code. Tests pass now. Will add unit tests later when I have time.",
+      lesson:
+        "Code written before a failing test is guessing validated after the fact. The RED failure IS the specification — without it, the GREEN pass proves nothing about the intended behavior."
+    },
+    {
+      label: "Bug-fix reproduction test",
+      good:
+        "Bug B-17: dedup fails when two events arrive in the same ms. Prove-It RED: added \`tests/unit/dedupe-feed.test.ts > dedupes when timestamps collide\`; run → \`expected 1 item, received 2\`. Fix applied; same test passes; full suite still 47/47.",
+      bad:
+        "Fixed the duplicate rendering issue.",
+      lesson:
+        "A bug without a reproducing test is a bug that comes back. Ship the RED test as part of the fix — it is the contract that prevents regression."
+    },
+    {
+      label: "Refactor-only slice (state-based)",
+      good:
+        "Refactor: moved heartbeat logic into \`useHeartbeat()\` hook. No behavior change intended. Evidence: no new tests; existing state-based tests \`feed-state.test.ts\` (42 assertions) still pass; coverage unchanged at 94%.",
+      bad:
+        "Refactored the component. Added some interaction mocks to check the new hook is called.",
+      lesson:
+        "A refactor should assert on state, not on call shape. If you had to rewrite your mocks, it was not a refactor — it was a redesign dressed as one."
+    }
+  ],
+  review: [
+    {
+      label: "Critical finding",
+      good:
+        "R-1 Critical: snapshot endpoint returns newest N rows but does not guarantee consistency with stream cursor — users can miss items between snapshot and subscribe. Evidence: integration test \`notification-consistency.test.ts:22-58\`. Status: open.",
+      bad:
+        "Looks good overall. A few small things could be polished, maybe refactor the merge logic. LGTM.",
+      lesson:
+        "\"LGTM\" is not a review — it is a signature on whatever the author shipped. Every finding needs a severity, a falsifiable description, evidence, and a status."
+    },
+    {
+      label: "Security review row",
+      good:
+        "R-4 High (sec): SSE endpoint accepts any user_id in the query string; a logged-in attacker can subscribe to another user's stream. Evidence: \`curl\` repro in \`docs/notes/sec-r4.md\`. Fix: require auth cookie, filter events by session.user.id server-side. Status: fix in T-11; verified in \`notifications-auth.test.ts\`.",
+      bad:
+        "Might want to double-check auth on the SSE endpoint.",
+      lesson:
+        "Security findings without a reproduction step and a tied fix-task are suggestions, not reviews. Attach the curl (or equivalent), the fix task ID, and the verification test."
+    }
+  ],
+  ship: [
+    {
+      label: "Rollback contract",
+      good:
+        "Rollback trigger: error rate on \`/notifications/stream\` >5% for 5 minutes, or p95 publish-to-visible lag >10s. Steps: \`git revert <merge-sha> && git push origin main\` then redeploy; run \`2026_04_12_notifications_cursor_down.sql\` before traffic. Verification: error rate returns to baseline within 10 minutes.",
+      bad:
+        "Rollback plan: revert the commit if anything goes wrong.",
+      lesson:
+        "\"Revert if anything goes wrong\" leaves the on-call engineer to invent the plan at 2 a.m. The rollback trigger is an operational contract: state the signal, the command, and the verification."
+    },
+    {
+      label: "Preflight check",
+      good:
+        "Preflight: \`pnpm release:check\` ✅ (package metadata ok, changeset captured), \`pnpm test\` ✅ 195/195, \`pnpm build\` ✅, CI green on feat/notifications @ \`abc1234\`, rollback plan captured, migration reviewed. Finalization mode: Merge via squash.",
+      bad:
+        "All good, shipping it.",
+      lesson:
+        "A preflight is a checklist that names each gate and the command that proved it. \"All good\" is a vibe — it cannot be audited after the fact when the deploy misbehaves."
+    }
+  ]
 };
 
 export function stageGoodBadExamples(stage: FlowStage): string {
-  const sample = GOOD_BAD_EXAMPLES[stage];
-  if (!sample) return "";
-  return [
+  const samples = GOOD_BAD_EXAMPLES[stage];
+  if (!samples || samples.length === 0) return "";
+  const blocks: string[] = [
     "## Good vs Bad (at-a-glance)",
     "",
-    "Contrasting samples to calibrate the quality bar for this stage. Read before writing the artifact — mirror the **Good** shape, avoid the **Bad** shape.",
-    "",
-    "**Good**",
-    "",
-    "> " + sample.good,
-    "",
-    "**Bad**",
-    "",
-    "> " + sample.bad,
-    "",
-    "**Why it matters:** " + sample.lesson,
+    "Contrasting samples to calibrate the quality bar for this stage. Read before writing the artifact — mirror the **Good** shape, avoid the **Bad** shape. Each block targets a different axis of the stage so you can spot-check more than one dimension of your draft.",
     ""
-  ].join("\n");
+  ];
+  samples.forEach((sample, index) => {
+    blocks.push(`### ${index + 1}. ${sample.label}`);
+    blocks.push("");
+    blocks.push("**Good**");
+    blocks.push("");
+    blocks.push("> " + sample.good);
+    blocks.push("");
+    blocks.push("**Bad**");
+    blocks.push("");
+    blocks.push("> " + sample.bad);
+    blocks.push("");
+    blocks.push("**Why it matters:** " + sample.lesson);
+    blocks.push("");
+  });
+  return blocks.join("\n");
 }
 
 export const STAGE_EXAMPLES_REFERENCE_DIR = "references/stages";

@@ -111,7 +111,9 @@ You MUST complete these steps in order:
 
 ## Good vs Bad (at-a-glance)
 
-Contrasting samples to calibrate the quality bar for this stage. Read before writing the artifact — mirror the **Good** shape, avoid the **Bad** shape.
+Contrasting samples to calibrate the quality bar for this stage. Read before writing the artifact — mirror the **Good** shape, avoid the **Bad** shape. Each block targets a different axis of the stage so you can spot-check more than one dimension of your draft.
+
+### 1. Critical finding
 
 **Good**
 
@@ -122,6 +124,18 @@ Contrasting samples to calibrate the quality bar for this stage. Read before wri
 > Looks good overall. A few small things could be polished, maybe refactor the merge logic. LGTM.
 
 **Why it matters:** "LGTM" is not a review — it is a signature on whatever the author shipped. Every finding needs a severity, a falsifiable description, evidence, and a status.
+
+### 2. Security review row
+
+**Good**
+
+> R-4 High (sec): SSE endpoint accepts any user_id in the query string; a logged-in attacker can subscribe to another user's stream. Evidence: \`curl\` repro in \`docs/notes/sec-r4.md\`. Fix: require auth cookie, filter events by session.user.id server-side. Status: fix in T-11; verified in \`notifications-auth.test.ts\`.
+
+**Bad**
+
+> Might want to double-check auth on the SSE endpoint.
+
+**Why it matters:** Security findings without a reproduction step and a tied fix-task are suggestions, not reviews. Attach the curl (or equivalent), the fix task ID, and the verification test.
 
 
 ## Examples
@@ -550,7 +564,9 @@ You MUST complete these steps in order:
 
 ## Good vs Bad (at-a-glance)
 
-Contrasting samples to calibrate the quality bar for this stage. Read before writing the artifact — mirror the **Good** shape, avoid the **Bad** shape.
+Contrasting samples to calibrate the quality bar for this stage. Read before writing the artifact — mirror the **Good** shape, avoid the **Bad** shape. Each block targets a different axis of the stage so you can spot-check more than one dimension of your draft.
+
+### 1. Rollback contract
 
 **Good**
 
@@ -561,6 +577,18 @@ Contrasting samples to calibrate the quality bar for this stage. Read before wri
 > Rollback plan: revert the commit if anything goes wrong.
 
 **Why it matters:** "Revert if anything goes wrong" leaves the on-call engineer to invent the plan at 2 a.m. The rollback trigger is an operational contract: state the signal, the command, and the verification.
+
+### 2. Preflight check
+
+**Good**
+
+> Preflight: \`pnpm release:check\` ✅ (package metadata ok, changeset captured), \`pnpm test\` ✅ 195/195, \`pnpm build\` ✅, CI green on feat/notifications @ \`abc1234\`, rollback plan captured, migration reviewed. Finalization mode: Merge via squash.
+
+**Bad**
+
+> All good, shipping it.
+
+**Why it matters:** A preflight is a checklist that names each gate and the command that proved it. "All good" is a vibe — it cannot be audited after the fact when the deploy misbehaves.
 
 ## Living Examples by Domain
 
@@ -939,17 +967,31 @@ You MUST complete these steps in order:
 
 ## Good vs Bad (at-a-glance)
 
-Contrasting samples to calibrate the quality bar for this stage. Read before writing the artifact — mirror the **Good** shape, avoid the **Bad** shape.
+Contrasting samples to calibrate the quality bar for this stage. Read before writing the artifact — mirror the **Good** shape, avoid the **Bad** shape. Each block targets a different axis of the stage so you can spot-check more than one dimension of your draft.
+
+### 1. Single task row
 
 **Good**
 
-> T-2: Implement publisher + outbox write path. Acceptance: AC-1. Verification: \`pnpm vitest run tests/integration/publisher.test.ts\`. Depends on: T-1. Effort: M.
+> T-2: Implement publisher + outbox write path. Acceptance: AC-1. Verification: \`pnpm vitest run tests/integration/publisher.test.ts\`. Depends on: T-1. Effort: M (≈4 min).
 
 **Bad**
 
 > T-2: Build the backend. Verify: manual testing. Effort: a few days.
 
 **Why it matters:** A task without a single acceptance criterion and a reproducible verification command is a wish. If you cannot say how you will know it is done, you cannot ship it.
+
+### 2. Dependency graph entry
+
+**Good**
+
+> T-5 (consume SSE client) depends on T-3 (stream endpoint) and T-4 (auth cookie forwarding). Parallelizable with T-6 (read-state persistence). Blocks T-8 (end-to-end happy-path e2e).
+
+**Bad**
+
+> T-5 depends on other tasks.
+
+**Why it matters:** The value of a dependency graph is mechanical scheduling. "Depends on other tasks" is a shrug — list the IDs so the execution order is unambiguous.
 
 ## Living Examples by Domain
 
@@ -1311,7 +1353,9 @@ You MUST complete these steps in order:
 
 ## Good vs Bad (at-a-glance)
 
-Contrasting samples to calibrate the quality bar for this stage. Read before writing the artifact — mirror the **Good** shape, avoid the **Bad** shape.
+Contrasting samples to calibrate the quality bar for this stage. Read before writing the artifact — mirror the **Good** shape, avoid the **Bad** shape. Each block targets a different axis of the stage so you can spot-check more than one dimension of your draft.
+
+### 1. RED → GREEN → REFACTOR slice
 
 **Good**
 
@@ -1322,6 +1366,30 @@ Contrasting samples to calibrate the quality bar for this stage. Read before wri
 > Wrote the publisher code. Tests pass now. Will add unit tests later when I have time.
 
 **Why it matters:** Code written before a failing test is guessing validated after the fact. The RED failure IS the specification — without it, the GREEN pass proves nothing about the intended behavior.
+
+### 2. Bug-fix reproduction test
+
+**Good**
+
+> Bug B-17: dedup fails when two events arrive in the same ms. Prove-It RED: added \`tests/unit/dedupe-feed.test.ts > dedupes when timestamps collide\`; run → \`expected 1 item, received 2\`. Fix applied; same test passes; full suite still 47/47.
+
+**Bad**
+
+> Fixed the duplicate rendering issue.
+
+**Why it matters:** A bug without a reproducing test is a bug that comes back. Ship the RED test as part of the fix — it is the contract that prevents regression.
+
+### 3. Refactor-only slice (state-based)
+
+**Good**
+
+> Refactor: moved heartbeat logic into \`useHeartbeat()\` hook. No behavior change intended. Evidence: no new tests; existing state-based tests \`feed-state.test.ts\` (42 assertions) still pass; coverage unchanged at 94%.
+
+**Bad**
+
+> Refactored the component. Added some interaction mocks to check the new hook is called.
+
+**Why it matters:** A refactor should assert on state, not on call shape. If you had to rewrite your mocks, it was not a refactor — it was a redesign dressed as one.
 
 ## Living Examples by Domain
 
@@ -1799,7 +1867,9 @@ You MUST complete these steps in order:
 
 ## Good vs Bad (at-a-glance)
 
-Contrasting samples to calibrate the quality bar for this stage. Read before writing the artifact — mirror the **Good** shape, avoid the **Bad** shape.
+Contrasting samples to calibrate the quality bar for this stage. Read before writing the artifact — mirror the **Good** shape, avoid the **Bad** shape. Each block targets a different axis of the stage so you can spot-check more than one dimension of your draft.
+
+### 1. Problem / success statement
 
 **Good**
 
@@ -1810,6 +1880,30 @@ Contrasting samples to calibrate the quality bar for this stage. Read before wri
 > Problem: releases are broken. Success: make them better. Constraints: be careful.
 
 **Why it matters:** "Make it better" is not a success criterion — an agent cannot know when it is done. State the observable condition that proves success.
+
+### 2. Alternative direction (one of 2–3)
+
+**Good**
+
+> Option B: Pre-publish verifier script invoked from \`release.yml\` and a \`pnpm release:check\` target. Pros: one enforcement surface; fails fast locally. Cons: adds a script to maintain; must stay in sync with \`package.json\`. Rejected alternative: relying on npm lifecycle hooks only — they run too late to block publish.
+
+**Bad**
+
+> We could also use a script, or hooks, or something in CI. We'll pick whichever is easier later.
+
+**Why it matters:** Alternatives are only useful if they are concrete and comparable. Name each one, call out pros/cons, and say what was rejected — otherwise "later" becomes "never" and the choice is made by accident.
+
+### 3. Clarifying question
+
+**Good**
+
+> Before I lock direction: should a failed release:check block the CI job (hard failure) or only warn and continue? The former is safer but costs a revert cycle when the check itself is wrong; the latter preserves velocity but can let bad metadata through. Recommend A (block). Pick: A) Block  B) Warn-only  C) Block in CI, warn locally.
+
+**Bad**
+
+> Do you want it to fail or warn? Let me know.
+
+**Why it matters:** A good question gives the user context, a recommendation, and lettered options they can answer with one keystroke. "Let me know" shifts the framing cost back to the user.
 
 
 ## Examples
