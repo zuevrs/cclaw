@@ -194,9 +194,9 @@ export const ARTIFACT_TEMPLATES: Record<string, string> = {
   "04-spec.md": `# Specification Artifact
 
 ## Acceptance Criteria
-| ID | Criterion (observable/measurable/falsifiable) |
-|---|---|
-| AC-1 |  |
+| ID | Criterion (observable/measurable/falsifiable) | Design Decision Ref |
+|---|---|---|
+| AC-1 |  |  |
 
 ## Edge Cases
 | Criterion ID | Boundary case | Error case |
