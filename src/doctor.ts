@@ -285,12 +285,82 @@ export async function doctorChecks(projectRoot: string, options: DoctorOptions =
       const skillContent = await fs.readFile(skillPath, "utf8");
       const lineCount = skillContent.split("\n").length;
       const MIN_SKILL_LINES = 110;
+      const MAX_SKILL_LINES = 650;
       checks.push({
         name: `skill:${stage}:min_lines`,
         ok: lineCount >= MIN_SKILL_LINES,
         details: `${skillPath} has ${lineCount} lines (minimum ${MIN_SKILL_LINES})`
       });
+      checks.push({
+        name: `skill:${stage}:max_lines`,
+        ok: lineCount <= MAX_SKILL_LINES,
+        details: `${skillPath} has ${lineCount} lines (soft max ${MAX_SKILL_LINES}; stage skills beyond this drift into unread bloat)`
+      });
+
+      const canonicalSections: Array<{ id: string; pattern: RegExp; label: string }> = [
+        { id: "frontmatter", pattern: /^---\nname: [\w-]+\ndescription: /m, label: "YAML frontmatter (name + description)" },
+        { id: "hard_gate", pattern: /^## HARD-GATE$/m, label: "## HARD-GATE" },
+        { id: "checklist", pattern: /^## Checklist$/m, label: "## Checklist" },
+        { id: "completion_protocol", pattern: /^## Stage Completion Protocol$/m, label: "## Stage Completion Protocol" },
+        { id: "handoff_menu", pattern: /^### Handoff Menu$/m, label: "### Handoff Menu" },
+        { id: "good_vs_bad", pattern: /Good vs Bad/i, label: "Good vs Bad examples" },
+        { id: "anti_patterns", pattern: /^## Anti-Patterns$/m, label: "## Anti-Patterns" }
+      ];
+      const missingSections = canonicalSections
+        .filter((section) => !section.pattern.test(skillContent))
+        .map((section) => section.label);
+      checks.push({
+        name: `skill:${stage}:canonical_sections`,
+        ok: missingSections.length === 0,
+        details:
+          missingSections.length === 0
+            ? `${skillPath} contains all canonical sections`
+            : `${skillPath} missing sections: ${missingSections.join(", ")}`
+      });
     }
+  }
+
+  // Meta-skill health — the using-cclaw routing brain must always contain the
+  // signals that stage skills reference. When one of these drifts, every stage
+  // citation breaks silently.
+  const metaSkillPath = path.join(projectRoot, RUNTIME_ROOT, "skills", "using-cclaw", "SKILL.md");
+  if (await exists(metaSkillPath)) {
+    const metaContent = await fs.readFile(metaSkillPath, "utf8");
+    const requiredSignals: Array<{ id: string; pattern: RegExp; label: string }> = [
+      { id: "instruction_priority", pattern: /Instruction Priority/i, label: "Instruction Priority" },
+      { id: "spawned_detection", pattern: /Spawned Subagent Detection/i, label: "Spawned Subagent Detection" },
+      { id: "shared_decision", pattern: /Shared Decision \+ Tool-Use Protocol/i, label: "Shared Decision + Tool-Use Protocol" },
+      { id: "shared_completion", pattern: /Shared Stage Completion Protocol/i, label: "Shared Stage Completion Protocol" },
+      { id: "escalation_rule", pattern: /Escalation Rule \(3 attempts\)/i, label: "Escalation Rule (3 attempts)" },
+      { id: "invocation_preamble", pattern: /Invocation Preamble/i, label: "Invocation Preamble" },
+      { id: "operational_self_improvement", pattern: /Operational Self-Improvement/i, label: "Operational Self-Improvement" },
+      { id: "engineering_ethos", pattern: /Engineering Ethos/i, label: "Engineering Ethos" },
+      { id: "task_classification", pattern: /Task Classification/i, label: "Task Classification" }
+    ];
+    const missingMeta = requiredSignals
+      .filter((signal) => !signal.pattern.test(metaContent))
+      .map((signal) => signal.label);
+    checks.push({
+      name: "skill:meta:signals",
+      ok: missingMeta.length === 0,
+      details:
+        missingMeta.length === 0
+          ? `${metaSkillPath} contains all required routing signals`
+          : `${metaSkillPath} missing signals: ${missingMeta.join(", ")}`
+    });
+  }
+
+  // Harness tool-map references (A.1#4) must always be present — stage skills
+  // cite the paths by name.
+  const harnessRefDir = path.join(projectRoot, RUNTIME_ROOT, "references", "harness-tools");
+  const harnessRefFiles = ["README.md", "claude.md", "cursor.md", "opencode.md", "codex.md"];
+  for (const fileName of harnessRefFiles) {
+    const refPath = path.join(harnessRefDir, fileName);
+    checks.push({
+      name: `harness_tool_ref:${fileName.replace(/\.md$/, "")}`,
+      ok: await exists(refPath),
+      details: refPath
+    });
   }
 
   checks.push({
