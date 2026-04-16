@@ -13,7 +13,11 @@ import { policyChecks } from "./policy.js";
 import { readFlowState } from "./runs.js";
 import { checkMandatoryDelegations } from "./delegation.js";
 import { buildTraceMatrix } from "./trace-matrix.js";
-import { reconcileAndWriteCurrentStageGateCatalog, verifyCurrentStageGateEvidence } from "./gate-evidence.js";
+import {
+  reconcileAndWriteCurrentStageGateCatalog,
+  verifyCompletedStagesGateClosure,
+  verifyCurrentStageGateEvidence
+} from "./gate-evidence.js";
 import { stageSkillFolder } from "./content/skills.js";
 import { UTILITY_SKILL_FOLDERS } from "./content/utility-skills.js";
 import { CONTEXT_MODES, DEFAULT_CONTEXT_MODE } from "./content/contexts.js";
@@ -849,6 +853,17 @@ export async function doctorChecks(projectRoot: string, options: DoctorOptions =
     details: gateEvidence.ok
       ? `stage "${gateEvidence.stage}" gate evidence is consistent (required=${gateEvidence.requiredCount}, passed=${gateEvidence.passedCount}, blocked=${gateEvidence.blockedCount})`
       : gateEvidence.issues.join(" ")
+  });
+
+  const completedClosure = verifyCompletedStagesGateClosure(flowState);
+  checks.push({
+    name: "gates:closure:completed_stages",
+    ok: completedClosure.ok,
+    details: completedClosure.ok
+      ? flowState.completedStages.length === 0
+        ? "no completed stages yet"
+        : `all ${flowState.completedStages.length} completed stages have every required gate passed`
+      : completedClosure.issues.join(" ")
   });
 
   // Self-improvement block in stage skills

@@ -11,6 +11,20 @@ export interface GateEvidenceCheckResult {
   requiredCount: number;
   passedCount: number;
   blockedCount: number;
+  /** True only when every required gate for the stage is in `passed` and none are `blocked`. */
+  complete: boolean;
+  /** Required gate ids that are neither passed nor blocked. */
+  missingRequired: string[];
+}
+
+export interface CompletedStagesClosureResult {
+  ok: boolean;
+  issues: string[];
+  openStages: Array<{
+    stage: FlowStage;
+    missingRequired: string[];
+    blocked: string[];
+  }>;
 }
 
 function unique(values: string[]): string[] {
@@ -82,14 +96,59 @@ export async function verifyCurrentStageGateEvidence(
     }
   }
 
+  const passedSet = new Set(catalog.passed);
+  const missingRequired = required.filter((gateId) => !passedSet.has(gateId));
+  const complete = missingRequired.length === 0 && catalog.blocked.length === 0;
+
+  if (flowState.completedStages.includes(stage) && !complete) {
+    if (missingRequired.length > 0) {
+      issues.push(
+        `stage "${stage}" is marked completed but required gates are not passed: ${missingRequired.join(", ")}.`
+      );
+    }
+    if (catalog.blocked.length > 0) {
+      issues.push(
+        `stage "${stage}" is marked completed but has blocked gates: ${catalog.blocked.join(", ")}.`
+      );
+    }
+  }
+
   return {
     ok: issues.length === 0,
     stage,
     issues,
     requiredCount: required.length,
     passedCount: catalog.passed.length,
-    blockedCount: catalog.blocked.length
+    blockedCount: catalog.blocked.length,
+    complete,
+    missingRequired
   };
+}
+
+export function verifyCompletedStagesGateClosure(flowState: FlowState): CompletedStagesClosureResult {
+  const issues: string[] = [];
+  const openStages: CompletedStagesClosureResult["openStages"] = [];
+  for (const stage of flowState.completedStages) {
+    const schema = stageSchema(stage);
+    const catalog = flowState.stageGateCatalog[stage];
+    const required = schema.requiredGates.map((gate) => gate.id);
+    const passedSet = new Set(catalog.passed);
+    const missingRequired = required.filter((gateId) => !passedSet.has(gateId));
+    if (missingRequired.length > 0 || catalog.blocked.length > 0) {
+      openStages.push({ stage, missingRequired, blocked: [...catalog.blocked] });
+      if (missingRequired.length > 0) {
+        issues.push(
+          `completed stage "${stage}" has unpassed required gates: ${missingRequired.join(", ")}.`
+        );
+      }
+      if (catalog.blocked.length > 0) {
+        issues.push(
+          `completed stage "${stage}" still has blocked gates: ${catalog.blocked.join(", ")}.`
+        );
+      }
+    }
+  }
+  return { ok: openStages.length === 0, issues, openStages };
 }
 
 export interface GateReconciliationResult {

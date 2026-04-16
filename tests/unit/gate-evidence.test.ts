@@ -7,6 +7,7 @@ import { createTempProject } from "../helpers/index.js";
 import {
   reconcileAndWriteCurrentStageGateCatalog,
   reconcileCurrentStageGateCatalog,
+  verifyCompletedStagesGateClosure,
   verifyCurrentStageGateEvidence
 } from "../../src/gate-evidence.js";
 
@@ -145,6 +146,67 @@ describe("gate evidence verification", () => {
     const result = await verifyCurrentStageGateEvidence(root, state);
     expect(result.ok).toBe(false);
     expect(result.issues.join("\n")).toContain("review-army validation failed");
+  });
+
+  it("reports missing required gates via missingRequired while stage is active", async () => {
+    const root = await createTempProject("gate-evidence-missing");
+    await prepareRoot(root);
+    const state = createInitialFlowState("run-active");
+    const required = stageSchema(state.currentStage).requiredGates.map((g) => g.id);
+
+    const result = await verifyCurrentStageGateEvidence(root, state);
+    expect(result.complete).toBe(false);
+    expect(result.missingRequired).toEqual(required);
+    expect(result.ok).toBe(true);
+  });
+
+  it("fails when stage is marked completed but required gates are not all passed", async () => {
+    const root = await createTempProject("gate-evidence-completed-gap");
+    await prepareRoot(root);
+    const state = createInitialFlowState("run-completed-gap");
+    const required = stageSchema(state.currentStage).requiredGates.map((g) => g.id);
+    state.stageGateCatalog[state.currentStage].passed = [required[0]!];
+    state.guardEvidence[required[0]!] = "evidence-1";
+    state.completedStages.push(state.currentStage);
+
+    const result = await verifyCurrentStageGateEvidence(root, state);
+    expect(result.ok).toBe(false);
+    expect(result.issues.join("\n")).toContain("marked completed but required gates are not passed");
+  });
+});
+
+describe("completed-stage gate closure verification", () => {
+  it("passes when no stages are completed", () => {
+    const state = createInitialFlowState("run-empty");
+    const result = verifyCompletedStagesGateClosure(state);
+    expect(result.ok).toBe(true);
+    expect(result.openStages).toEqual([]);
+  });
+
+  it("fails when a completed stage still has unpassed required gates", () => {
+    const state = createInitialFlowState("run-open");
+    state.completedStages.push("brainstorm");
+    state.stageGateCatalog.brainstorm.passed = [];
+
+    const result = verifyCompletedStagesGateClosure(state);
+    expect(result.ok).toBe(false);
+    expect(result.openStages[0]?.stage).toBe("brainstorm");
+    expect(result.openStages[0]?.missingRequired.length).toBeGreaterThan(0);
+  });
+
+  it("fails when a completed stage carries blocked gates", () => {
+    const state = createInitialFlowState("run-blocked");
+    const required = stageSchema("brainstorm").requiredGates.map((g) => g.id);
+    state.completedStages.push("brainstorm");
+    state.stageGateCatalog.brainstorm.passed = [...required];
+    state.stageGateCatalog.brainstorm.blocked = [required[0]!];
+    for (const gate of required) {
+      state.guardEvidence[gate] = "ev";
+    }
+
+    const result = verifyCompletedStagesGateClosure(state);
+    expect(result.ok).toBe(false);
+    expect(result.issues.join("\n")).toContain("still has blocked gates");
   });
 });
 
