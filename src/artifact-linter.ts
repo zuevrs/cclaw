@@ -238,6 +238,7 @@ function validateSectionBody(
           details: `Rule expects exactly one selected token (${tokens.join(", ")}); found ${selected.size}.`
         };
       }
+      return { ok: true, details: "Exactly one token selected as expected." };
     }
   }
 

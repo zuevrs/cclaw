@@ -801,6 +801,154 @@ API -> Service -> DB
     expect(trace?.required).toBe(true);
   });
 
+  it("passes complete review artifact", async () => {
+    const root = await fs.mkdtemp(path.join(os.tmpdir(), "cclaw-review-full-pass-"));
+    await writeRuntimeArtifact(root, "07-review.md", `# Review Artifact
+
+## Layer 1 Verdict
+| Criterion | Verdict | Evidence |
+|---|---|---|
+| AC-1 | PASS | notification-feed.e2e.ts:44-88 |
+| AC-2 | PARTIAL | feedStore.test.ts missing race case |
+
+## Layer 2 Findings
+| ID | Severity | Category | Description | Status |
+|---|---|---|---|---|
+| R-1 | Critical | correctness | Snapshot cursor gap | open |
+| R-2 | Suggestion | architecture | Extract shared hook | open |
+
+## Review Army Contract
+- See \`07-review-army.json\`
+- Reconciliation summary: 0 conflicts
+
+## Review Readiness Dashboard
+- Layer 1 complete: yes
+- Layer 2 complete: yes
+- Review army schema valid: yes
+- Open critical blockers: 1
+
+## Severity Summary
+- Critical: 1
+- Important: 0
+- Suggestion: 1
+
+## Final Verdict
+- BLOCKED
+`);
+
+    const result = await lintArtifact(root, "review");
+    expect(result.passed).toBe(true);
+  });
+
+  it("fails review when Layer 2 Findings is missing", async () => {
+    const root = await fs.mkdtemp(path.join(os.tmpdir(), "cclaw-review-no-l2-"));
+    await writeRuntimeArtifact(root, "07-review.md", `# Review Artifact
+
+## Layer 1 Verdict
+| Criterion | Verdict | Evidence |
+|---|---|---|
+| AC-1 | PASS | e2e test evidence |
+
+## Review Army Contract
+- See \`07-review-army.json\`
+- Reconciliation summary: none
+
+## Review Readiness Dashboard
+- Layer 1 complete: yes
+- Layer 2 complete: no
+- Review army schema valid: yes
+- Open critical blockers: 0
+
+## Severity Summary
+- Critical: 0
+- Important: 0
+- Suggestion: 0
+
+## Final Verdict
+- APPROVED
+`);
+
+    const result = await lintArtifact(root, "review");
+    expect(result.passed).toBe(false);
+    const l2 = result.findings.find((f) => f.section === "Layer 2 Findings");
+    expect(l2?.found).toBe(false);
+    expect(l2?.required).toBe(true);
+  });
+
+  it("fails review when Final Verdict is invalid enum value", async () => {
+    const root = await fs.mkdtemp(path.join(os.tmpdir(), "cclaw-review-bad-verdict-"));
+    await writeRuntimeArtifact(root, "07-review.md", `# Review Artifact
+
+## Layer 1 Verdict
+| Criterion | Verdict | Evidence |
+|---|---|---|
+| AC-1 | PASS | test evidence |
+
+## Layer 2 Findings
+| ID | Severity | Category | Description | Status |
+|---|---|---|---|---|
+| R-1 | Suggestion | correctness | Minor naming | open |
+
+## Review Army Contract
+- See \`07-review-army.json\`
+- Reconciliation summary: none
+
+## Review Readiness Dashboard
+- Layer 1 complete: yes
+- Layer 2 complete: yes
+- Review army schema valid: yes
+- Open critical blockers: 0
+
+## Severity Summary
+- Critical: 0
+- Important: 0
+- Suggestion: 1
+
+## Final Verdict
+- LOOKS_GOOD
+`);
+
+    const result = await lintArtifact(root, "review");
+    const verdict = result.findings.find((f) => f.section === "Final Verdict");
+    expect(verdict?.found).toBe(false);
+    expect(verdict?.details).toContain("exactly one");
+  });
+
+  it("fails review when Severity Summary is missing", async () => {
+    const root = await fs.mkdtemp(path.join(os.tmpdir(), "cclaw-review-no-severity-"));
+    await writeRuntimeArtifact(root, "07-review.md", `# Review Artifact
+
+## Layer 1 Verdict
+| Criterion | Verdict | Evidence |
+|---|---|---|
+| AC-1 | PASS | test evidence |
+
+## Layer 2 Findings
+| ID | Severity | Category | Description | Status |
+|---|---|---|---|---|
+| R-1 | Suggestion | correctness | Minor naming | open |
+
+## Review Army Contract
+- See \`07-review-army.json\`
+- Reconciliation summary: none
+
+## Review Readiness Dashboard
+- Layer 1 complete: yes
+- Layer 2 complete: yes
+- Review army schema valid: yes
+- Open critical blockers: 0
+
+## Final Verdict
+- APPROVED
+`);
+
+    const result = await lintArtifact(root, "review");
+    expect(result.passed).toBe(false);
+    const sev = result.findings.find((f) => f.section === "Severity Summary");
+    expect(sev?.found).toBe(false);
+    expect(sev?.required).toBe(true);
+  });
+
   it("fails Prime Directives when required keywords are missing", async () => {
     const root = await fs.mkdtemp(path.join(os.tmpdir(), "cclaw-scope-keywords-"));
     await writeRuntimeArtifact(root, "02-scope.md", `# Scope Artifact
