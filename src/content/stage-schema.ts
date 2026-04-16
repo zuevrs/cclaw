@@ -1556,7 +1556,11 @@ const SHIP: StageSchemaInput = {
     { section: "Rollback Plan", required: true, validationRule: "Trigger conditions, rollback steps (exact commands), verification steps." },
     { section: "Monitoring", required: false, validationRule: "If applicable: what metrics/logs to watch post-deploy. Risk note if no monitoring." },
     { section: "Finalization", required: true, validationRule: "Exactly one finalization enum token selected. Execution result documented. Worktree cleaned if applicable." }
-  ]
+  ],
+  namedAntiPattern: {
+    title: "Green CI Means Safe to Merge",
+    description: "CI passing on a feature branch does not prove the merged result is safe. Post-merge test failures are common when the base branch has diverged. Re-run the full suite on the merge result, not just the branch. A green branch badge is a necessary condition, not a sufficient one."
+  }
 };
 
 // ---------------------------------------------------------------------------
