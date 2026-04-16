@@ -604,3 +604,92 @@ export async function validateReviewArmy(
 
   return { valid: errors.length === 0, errors };
 }
+
+export interface ReviewVerdictConsistencyResult {
+  ok: boolean;
+  errors: string[];
+  finalVerdict: "APPROVED" | "APPROVED_WITH_CONCERNS" | "BLOCKED" | "UNKNOWN";
+  openCriticalCount: number;
+  shipBlockerCount: number;
+}
+
+/**
+ * Ensure the narrative verdict in 07-review.md is consistent with the
+ * structured review-army reconciliation. A review cannot declare
+ * APPROVED while open Critical findings or shipBlockers remain.
+ */
+export async function checkReviewVerdictConsistency(
+  projectRoot: string
+): Promise<ReviewVerdictConsistencyResult> {
+  const errors: string[] = [];
+  const reviewMdPath = path.join(projectRoot, RUNTIME_ROOT, "artifacts", "07-review.md");
+  const armyJsonPath = path.join(projectRoot, RUNTIME_ROOT, "artifacts", "07-review-army.json");
+
+  let finalVerdict: ReviewVerdictConsistencyResult["finalVerdict"] = "UNKNOWN";
+  if (await exists(reviewMdPath)) {
+    const raw = await fs.readFile(reviewMdPath, "utf8");
+    const sections = extractH2Sections(raw);
+    const verdictBody = sectionBodyByName(sections, "Final Verdict");
+    if (verdictBody) {
+      const chosen: Array<ReviewVerdictConsistencyResult["finalVerdict"]> = [];
+      for (const token of ["APPROVED_WITH_CONCERNS", "APPROVED", "BLOCKED"] as const) {
+        const regex = new RegExp(`\\b${token}\\b`, "u");
+        if (regex.test(verdictBody)) {
+          // APPROVED would match inside APPROVED_WITH_CONCERNS; prefer the longer match first.
+          if (token === "APPROVED" && /\bAPPROVED_WITH_CONCERNS\b/u.test(verdictBody)) continue;
+          chosen.push(token);
+        }
+      }
+      if (chosen.length === 1) {
+        finalVerdict = chosen[0]!;
+      } else if (chosen.length > 1) {
+        errors.push(
+          `Final Verdict section lists multiple verdict tokens (${chosen.join(", ")}). Select exactly one.`
+        );
+      } else {
+        errors.push('Final Verdict section does not select APPROVED, APPROVED_WITH_CONCERNS, or BLOCKED.');
+      }
+    } else {
+      errors.push('07-review.md is missing the "## Final Verdict" section.');
+    }
+  }
+
+  let openCriticalCount = 0;
+  let shipBlockerCount = 0;
+  if (await exists(armyJsonPath)) {
+    try {
+      const raw = await fs.readFile(armyJsonPath, "utf8");
+      const parsed = JSON.parse(raw) as Record<string, unknown>;
+      const findings = Array.isArray(parsed.findings) ? parsed.findings : [];
+      for (const f of findings) {
+        if (!f || typeof f !== "object" || Array.isArray(f)) continue;
+        const o = f as Record<string, unknown>;
+        if (o.severity === "Critical" && o.status === "open") {
+          openCriticalCount++;
+        }
+      }
+      const rec = parsed.reconciliation && typeof parsed.reconciliation === "object" && !Array.isArray(parsed.reconciliation)
+        ? (parsed.reconciliation as Record<string, unknown>)
+        : null;
+      if (rec && Array.isArray(rec.shipBlockers)) {
+        shipBlockerCount = (rec.shipBlockers as unknown[]).filter((v) => typeof v === "string").length;
+      }
+    } catch {
+      // JSON validity is the concern of validateReviewArmy; skip silently here.
+    }
+  }
+
+  if (finalVerdict === "APPROVED" && (openCriticalCount > 0 || shipBlockerCount > 0)) {
+    errors.push(
+      `Final Verdict is APPROVED but review-army has ${openCriticalCount} open Critical finding(s) and ${shipBlockerCount} shipBlocker(s). Use BLOCKED or APPROVED_WITH_CONCERNS.`
+    );
+  }
+
+  return {
+    ok: errors.length === 0,
+    errors,
+    finalVerdict,
+    openCriticalCount,
+    shipBlockerCount
+  };
+}

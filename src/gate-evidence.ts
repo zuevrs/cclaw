@@ -1,6 +1,6 @@
 import fs from "node:fs/promises";
 import path from "node:path";
-import { lintArtifact, validateReviewArmy } from "./artifact-linter.js";
+import { checkReviewVerdictConsistency, lintArtifact, validateReviewArmy } from "./artifact-linter.js";
 import { RUNTIME_ROOT } from "./constants.js";
 import { stageSchema } from "./content/stage-schema.js";
 import type { FlowState, StageGateState } from "./flow-state.js";
@@ -116,6 +116,10 @@ export async function verifyCurrentStageGateEvidence(
       const reviewArmy = await validateReviewArmy(projectRoot);
       if (!reviewArmy.valid) {
         issues.push(`review-army validation failed: ${reviewArmy.errors.join("; ")}`);
+      }
+      const verdictConsistency = await checkReviewVerdictConsistency(projectRoot);
+      if (!verdictConsistency.ok) {
+        issues.push(`review verdict inconsistency: ${verdictConsistency.errors.join("; ")}`);
       }
     }
   }
