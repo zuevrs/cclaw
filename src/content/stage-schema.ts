@@ -1398,7 +1398,7 @@ const REVIEW: StageSchemaInput = {
     { section: "Layer 1 Verdict", required: true, validationRule: "Per-criterion pass/fail with references." },
     { section: "Layer 2 Findings", required: true, validationRule: "Each finding has severity, description, and resolution status." },
     { section: "Review Army Contract", required: true, validationRule: "Structured findings include id/severity/confidence/fingerprint/reportedBy/status with dedup reconciliation summary." },
-    { section: "Review Readiness Dashboard", required: true, validationRule: "At least 4 readiness checklist lines including blocker and recommendation status." },
+    { section: "Review Readiness Dashboard", required: true, validationRule: "Includes a per-pass table (Layer 1 / Layer 2 / Adversarial / Schema) with a 'Completed at' column, a Delegation log snapshot block (path .cclaw/state/delegation-log.json with required/completed/waived/pending), a Staleness signal block (commit at last review pass and current commit), and a Headline with open critical blockers + ship recommendation. At minimum, the section text must contain the substrings 'Completed at', 'delegation-log.json', 'commit at last review pass', and 'Ship recommendation'." },
     { section: "Completeness Score", required: true, validationRule: "Records AC coverage, task coverage, test-slice coverage, and adversarial-review pass status as numeric or boolean values. At minimum, a line like 'AC coverage: N/M' or 'AC coverage: 100%'." },
     { section: "Severity Summary", required: true, validationRule: "Per-severity count lines for critical, important, and suggestion buckets." },
     { section: "Final Verdict", required: true, validationRule: "Exactly one of: APPROVED, APPROVED_WITH_CONCERNS, BLOCKED." }

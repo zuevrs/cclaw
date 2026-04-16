@@ -338,7 +338,7 @@ When fixing a bug:
 | Layer 1 Verdict | REQUIRED | Per-criterion pass/fail with references. |
 | Layer 2 Findings | REQUIRED | Each finding has severity, description, and resolution status. |
 | Review Army Contract | REQUIRED | Structured findings include id/severity/confidence/fingerprint/reportedBy/status with dedup reconciliation summary. |
-| Review Readiness Dashboard | REQUIRED | At least 4 readiness checklist lines including blocker and recommendation status. |
+| Review Readiness Dashboard | REQUIRED | Includes a per-pass table (Layer 1 / Layer 2 / Adversarial / Schema) with a 'Completed at' column, a Delegation log snapshot block (path .cclaw/state/delegation-log.json with required/completed/waived/pending), a Staleness signal block (commit at last review pass and current commit), and a Headline with open critical blockers + ship recommendation. At minimum, the section text must contain the substrings 'Completed at', 'delegation-log.json', 'commit at last review pass', and 'Ship recommendation'. |
 | Completeness Score | REQUIRED | Records AC coverage, task coverage, test-slice coverage, and adversarial-review pass status as numeric or boolean values. At minimum, a line like 'AC coverage: N/M' or 'AC coverage: 100%'. |
 | Severity Summary | REQUIRED | Per-severity count lines for critical, important, and suggestion buckets. |
 | Final Verdict | REQUIRED | Exactly one of: APPROVED, APPROVED_WITH_CONCERNS, BLOCKED. |
