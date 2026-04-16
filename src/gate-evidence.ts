@@ -1,8 +1,30 @@
-import { lintArtifact, validateReviewArmy } from "./artifact-linter.js";
+import fs from "node:fs/promises";
+import path from "node:path";
+import { checkReviewVerdictConsistency, lintArtifact, validateReviewArmy } from "./artifact-linter.js";
+import { RUNTIME_ROOT } from "./constants.js";
 import { stageSchema } from "./content/stage-schema.js";
 import type { FlowState, StageGateState } from "./flow-state.js";
+import { exists } from "./fs-utils.js";
 import { readFlowState, writeFlowState } from "./runs.js";
 import type { FlowStage } from "./types.js";
+
+async function currentStageArtifactExists(projectRoot: string, stage: FlowStage): Promise<boolean> {
+  const artifactFile = stageSchema(stage).artifactFile;
+  const candidates = [
+    path.join(projectRoot, RUNTIME_ROOT, "artifacts", artifactFile),
+    path.join(projectRoot, artifactFile)
+  ];
+  for (const candidate of candidates) {
+    if (await exists(candidate)) return true;
+  }
+  // Artifact-linter also accepts the file under current working directory fallback; stat once more.
+  try {
+    await fs.access(path.join(projectRoot, artifactFile));
+    return true;
+  } catch {
+    return false;
+  }
+}
 
 export interface GateEvidenceCheckResult {
   ok: boolean;
@@ -11,6 +33,20 @@ export interface GateEvidenceCheckResult {
   requiredCount: number;
   passedCount: number;
   blockedCount: number;
+  /** True only when every required gate for the stage is in `passed` and none are `blocked`. */
+  complete: boolean;
+  /** Required gate ids that are neither passed nor blocked. */
+  missingRequired: string[];
+}
+
+export interface CompletedStagesClosureResult {
+  ok: boolean;
+  issues: string[];
+  openStages: Array<{
+    stage: FlowStage;
+    missingRequired: string[];
+    blocked: string[];
+  }>;
 }
 
 function unique(values: string[]): string[] {
@@ -63,7 +99,9 @@ export async function verifyCurrentStageGateEvidence(
     }
   }
 
-  const shouldValidateArtifact = catalog.passed.length > 0 || flowState.completedStages.includes(stage);
+  const artifactPresent = await currentStageArtifactExists(projectRoot, stage);
+  const shouldValidateArtifact =
+    artifactPresent || catalog.passed.length > 0 || flowState.completedStages.includes(stage);
   if (shouldValidateArtifact) {
     const lint = await lintArtifact(projectRoot, stage);
     if (!lint.passed) {
@@ -79,6 +117,27 @@ export async function verifyCurrentStageGateEvidence(
       if (!reviewArmy.valid) {
         issues.push(`review-army validation failed: ${reviewArmy.errors.join("; ")}`);
       }
+      const verdictConsistency = await checkReviewVerdictConsistency(projectRoot);
+      if (!verdictConsistency.ok) {
+        issues.push(`review verdict inconsistency: ${verdictConsistency.errors.join("; ")}`);
+      }
+    }
+  }
+
+  const passedSet = new Set(catalog.passed);
+  const missingRequired = required.filter((gateId) => !passedSet.has(gateId));
+  const complete = missingRequired.length === 0 && catalog.blocked.length === 0;
+
+  if (flowState.completedStages.includes(stage) && !complete) {
+    if (missingRequired.length > 0) {
+      issues.push(
+        `stage "${stage}" is marked completed but required gates are not passed: ${missingRequired.join(", ")}.`
+      );
+    }
+    if (catalog.blocked.length > 0) {
+      issues.push(
+        `stage "${stage}" is marked completed but has blocked gates: ${catalog.blocked.join(", ")}.`
+      );
     }
   }
 
@@ -88,8 +147,36 @@ export async function verifyCurrentStageGateEvidence(
     issues,
     requiredCount: required.length,
     passedCount: catalog.passed.length,
-    blockedCount: catalog.blocked.length
+    blockedCount: catalog.blocked.length,
+    complete,
+    missingRequired
   };
+}
+
+export function verifyCompletedStagesGateClosure(flowState: FlowState): CompletedStagesClosureResult {
+  const issues: string[] = [];
+  const openStages: CompletedStagesClosureResult["openStages"] = [];
+  for (const stage of flowState.completedStages) {
+    const schema = stageSchema(stage);
+    const catalog = flowState.stageGateCatalog[stage];
+    const required = schema.requiredGates.map((gate) => gate.id);
+    const passedSet = new Set(catalog.passed);
+    const missingRequired = required.filter((gateId) => !passedSet.has(gateId));
+    if (missingRequired.length > 0 || catalog.blocked.length > 0) {
+      openStages.push({ stage, missingRequired, blocked: [...catalog.blocked] });
+      if (missingRequired.length > 0) {
+        issues.push(
+          `completed stage "${stage}" has unpassed required gates: ${missingRequired.join(", ")}.`
+        );
+      }
+      if (catalog.blocked.length > 0) {
+        issues.push(
+          `completed stage "${stage}" still has blocked gates: ${catalog.blocked.join(", ")}.`
+        );
+      }
+    }
+  }
+  return { ok: openStages.length === 0, issues, openStages };
 }
 
 export interface GateReconciliationResult {

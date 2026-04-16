@@ -1,9 +1,61 @@
 import fs from "node:fs/promises";
 import path from "node:path";
 import { COMMAND_FILE_ORDER, RUNTIME_ROOT } from "./constants.js";
-import { createInitialFlowState, type FlowState } from "./flow-state.js";
+import { canTransition, createInitialFlowState, type FlowState } from "./flow-state.js";
 import { ensureDir, exists, withDirectoryLock, writeFileSafe } from "./fs-utils.js";
 import type { FlowStage } from "./types.js";
+
+export class InvalidStageTransitionError extends Error {
+  constructor(
+    public readonly from: FlowStage,
+    public readonly to: FlowStage,
+    message: string
+  ) {
+    super(message);
+    this.name = "InvalidStageTransitionError";
+  }
+}
+
+export interface WriteFlowStateOptions {
+  /**
+   * When true, skip prior-state validation. Used for run archival, initial
+   * bootstrap, or explicit recovery; never set from normal stage handlers.
+   */
+  allowReset?: boolean;
+}
+
+function validateFlowTransition(prev: FlowState, next: FlowState): void {
+  if (prev.activeRunId !== next.activeRunId) {
+    // New run — only reset paths may change the runId, but those set allowReset.
+    throw new InvalidStageTransitionError(
+      prev.currentStage,
+      next.currentStage,
+      `cannot change activeRunId from "${prev.activeRunId}" to "${next.activeRunId}" without allowReset.`
+    );
+  }
+
+  for (const completed of prev.completedStages) {
+    if (!next.completedStages.includes(completed)) {
+      throw new InvalidStageTransitionError(
+        prev.currentStage,
+        next.currentStage,
+        `completedStages must be monotonic: stage "${completed}" was previously completed but is missing from the new state.`
+      );
+    }
+  }
+
+  if (prev.currentStage === next.currentStage) {
+    return;
+  }
+
+  if (!canTransition(prev.currentStage, next.currentStage)) {
+    throw new InvalidStageTransitionError(
+      prev.currentStage,
+      next.currentStage,
+      `no transition rule allows "${prev.currentStage}" -> "${next.currentStage}". Use /cc-next to advance stages or archive the run to reset.`
+    );
+  }
+}
 
 const FLOW_STATE_REL_PATH = `${RUNTIME_ROOT}/state/flow-state.json`;
 const RUNS_DIR_REL_PATH = `${RUNTIME_ROOT}/runs`;
@@ -310,10 +362,31 @@ export async function readFlowState(projectRoot: string): Promise<FlowState> {
   return coerceFlowState(parsed as Record<string, unknown>);
 }
 
-export async function writeFlowState(projectRoot: string, state: FlowState): Promise<void> {
+export async function writeFlowState(
+  projectRoot: string,
+  state: FlowState,
+  options: WriteFlowStateOptions = {}
+): Promise<void> {
   await withDirectoryLock(flowStateLockPath(projectRoot), async () => {
+    const statePath = flowStatePath(projectRoot);
+    if (!options.allowReset && (await exists(statePath))) {
+      try {
+        const raw = await fs.readFile(statePath, "utf8");
+        const parsed = JSON.parse(raw) as Record<string, unknown>;
+        if (parsed && typeof parsed === "object" && !Array.isArray(parsed)) {
+          const prev = coerceFlowState(parsed);
+          validateFlowTransition(prev, state);
+        }
+      } catch (err) {
+        if (err instanceof InvalidStageTransitionError) {
+          throw err;
+        }
+        // A corrupt prior file is surfaced by readFlowState elsewhere; don't
+        // block a legitimate write attempt on parse errors here.
+      }
+    }
     const safe = coerceFlowState({ ...(state as unknown as Record<string, unknown>) });
-    await writeFileSafe(flowStatePath(projectRoot), `${JSON.stringify(safe, null, 2)}\n`);
+    await writeFileSafe(statePath, `${JSON.stringify(safe, null, 2)}\n`);
   });
 }
 
@@ -326,7 +399,7 @@ export async function ensureRunSystem(
   const statePath = flowStatePath(projectRoot);
   const state = await readFlowState(projectRoot);
   if (!(await exists(statePath))) {
-    await writeFlowState(projectRoot, state);
+    await writeFlowState(projectRoot, state, { allowReset: true });
   }
   return state;
 }
@@ -384,7 +457,7 @@ export async function archiveRun(projectRoot: string, featureName?: string): Pro
   const snapshottedStateFiles = await snapshotStateDirectory(projectRoot, archiveStatePath);
 
   const resetState = createInitialFlowState();
-  await writeFlowState(projectRoot, resetState);
+  await writeFlowState(projectRoot, resetState, { allowReset: true });
   const archivedAt = new Date().toISOString();
 
   const manifest: ArchiveManifest = {

@@ -118,10 +118,10 @@ export const CCLAW_AGENTS: AgentDefinition[] = [
   {
     name: "security-reviewer",
     description:
-      "PROACTIVE after auth, crypto, secrets, parsers, or sensitive data paths change. MUST BE USED when trust boundaries move, new external inputs arrive, or LLM/tool output influences privileged actions.",
+      "MANDATORY during every review stage. Even when no auth, crypto, secrets, parsers, or sensitive data paths changed, produce an explicit 'no-change' security attestation. MUST BE USED when trust boundaries move, new external inputs arrive, or LLM/tool output influences privileged actions.",
     tools: ["Read", "Grep", "Glob"],
     model: "balanced",
-    activation: "proactive",
+    activation: "mandatory",
     relatedStages: ["review", "design"],
     body: [
       "You are a **security vulnerability detection** specialist focused on practical exploitability.",

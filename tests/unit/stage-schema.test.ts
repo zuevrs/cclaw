@@ -1,8 +1,14 @@
 import { describe, expect, it } from "vitest";
+import fs from "node:fs/promises";
+import path from "node:path";
+import { lintArtifact } from "../../src/artifact-linter.js";
+import { CCLAW_AGENTS } from "../../src/content/agents.js";
+import { stageExamples } from "../../src/content/examples.js";
 import { stageSchema } from "../../src/content/stage-schema.js";
 import { stageSkillMarkdown } from "../../src/content/skills.js";
 import { enhancedAgentBody } from "../../src/content/subagents.js";
 import { ARTIFACT_TEMPLATES } from "../../src/content/templates.js";
+import { createTempProject } from "../helpers/index.js";
 
 describe("stage schema and subagent alignment", () => {
   it("plan stage reads spec, design, and scope artifacts", () => {
@@ -27,11 +33,35 @@ describe("stage schema and subagent alignment", () => {
     expect(review.policyNeedles).toContain("Review Army");
   });
 
+  it("07-review-army.json template matches validator schema shape", () => {
+    const template = ARTIFACT_TEMPLATES["07-review-army.json"];
+    const parsed = JSON.parse(template) as Record<string, unknown>;
+    expect(parsed.version).toBe(1);
+    expect(typeof parsed.generatedAt).toBe("string");
+    expect((parsed.generatedAt as string).length).toBeGreaterThan(0);
+    expect(parsed.scope).toMatchObject({ base: expect.any(String), head: expect.any(String), files: [] });
+    expect(parsed.findings).toEqual([]);
+    expect(parsed.reconciliation).toEqual({
+      duplicatesCollapsed: 0,
+      conflicts: [],
+      multiSpecialistConfirmed: [],
+      shipBlockers: []
+    });
+    expect(JSON.stringify(parsed)).not.toMatch(/"title"|"category"/);
+  });
+
   it("review stage mandates security-reviewer alongside spec- and code-reviewer", () => {
     const review = stageSchema("review");
     expect(review.mandatoryDelegations).toContain("spec-reviewer");
     expect(review.mandatoryDelegations).toContain("code-reviewer");
     expect(review.mandatoryDelegations).toContain("security-reviewer");
+  });
+
+  it("security-reviewer agent registry entry is mandatory", () => {
+    const agent = CCLAW_AGENTS.find((a) => a.name === "security-reviewer");
+    expect(agent).toBeDefined();
+    expect(agent?.activation).toBe("mandatory");
+    expect(agent?.description.toLowerCase()).toMatch(/mandatory|no-change/);
   });
 
   it("design template renders architecture diagram with clean triple-backtick fences", () => {
@@ -47,5 +77,24 @@ describe("stage schema and subagent alignment", () => {
     expect(review.whenNotToUse.length).toBeGreaterThan(0);
     const markdown = stageSkillMarkdown("review");
     expect(markdown).toContain("## When Not to Use");
+  });
+
+  it("brainstorm example is a valid artifact when copy-pasted verbatim", async () => {
+    const wrapped = stageExamples("brainstorm");
+    const fenceMatch = /```markdown\n([\s\S]+?)\n```/u.exec(wrapped);
+    expect(fenceMatch, "example should be wrapped in a markdown fence").toBeTruthy();
+    const body = fenceMatch![1]!;
+    expect(body).toMatch(/^## Context/);
+
+    const root = await createTempProject("examples-brainstorm");
+    await fs.mkdir(path.join(root, ".cclaw/artifacts"), { recursive: true });
+    await fs.writeFile(
+      path.join(root, ".cclaw/artifacts/01-brainstorm.md"),
+      `# Brainstorm Artifact\n\n${body}\n`,
+      "utf8"
+    );
+    const result = await lintArtifact(root, "brainstorm");
+    const failed = result.findings.filter((f) => f.required && !f.found);
+    expect(failed.map((f) => f.section)).toEqual([]);
   });
 });

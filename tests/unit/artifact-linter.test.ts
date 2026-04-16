@@ -529,14 +529,14 @@ API -> Service -> DB
     expect(required.every((f) => f.found)).toBe(true);
   });
 
-  it("fails spec artifact when namedAntiPattern language appears in AC", async () => {
-    const root = await createTempProject("spec-anti");
+  it("rejects spec artifact when an acceptance criterion uses vague adjectives", async () => {
+    const root = await createTempProject("spec-vague-ac");
     await writeRuntimeArtifact(root, "04-spec.md", `# Specification Artifact
 
 ## Acceptance Criteria
 | ID | Criterion (observable/measurable/falsifiable) | Design Decision Ref |
 |---|---|---|
-| AC-1 | The system should be fast and intuitive |  |
+| AC-1 | The system should be fast and intuitive | D-1 |
 
 ## Edge Cases
 | Criterion ID | Boundary case | Error case |
@@ -551,6 +551,75 @@ API -> Service -> DB
 | Criterion ID | Verification approach | Command/manual steps |
 |---|---|---|
 | AC-1 | manual | Check it works |
+
+## Approval
+- Approved by: user
+- Date: 2026-04-14
+`);
+
+    const result = await lintArtifact(root, "spec");
+    expect(result.passed).toBe(false);
+    const acFinding = result.findings.find((f) => f.section === "Acceptance Criteria");
+    expect(acFinding?.found).toBe(false);
+    expect(acFinding?.details.toLowerCase()).toMatch(/vague adjective/);
+  });
+
+  it("rejects acceptance criterion that has no observable verb and no number", async () => {
+    const root = await createTempProject("spec-no-predicate");
+    await writeRuntimeArtifact(root, "04-spec.md", `# Specification Artifact
+
+## Acceptance Criteria
+| ID | Criterion (observable/measurable/falsifiable) | Design Decision Ref |
+|---|---|---|
+| AC-1 | The system has a release validator module for metadata | D-1 |
+
+## Edge Cases
+| Criterion ID | Boundary case | Error case |
+|---|---|---|
+| AC-1 | Missing fields | Corrupt data |
+
+## Constraints and Assumptions
+- Constraints: None
+- Assumptions: None
+
+## Testability Map
+| Criterion ID | Verification approach | Command/manual steps |
+|---|---|---|
+| AC-1 | unit | npm test |
+
+## Approval
+- Approved by: user
+- Date: 2026-04-14
+`);
+
+    const result = await lintArtifact(root, "spec");
+    expect(result.passed).toBe(false);
+    const ac = result.findings.find((f) => f.section === "Acceptance Criteria");
+    expect(ac?.details.toLowerCase()).toMatch(/measurable predicate/);
+  });
+
+  it("accepts spec artifact with a measurable acceptance criterion", async () => {
+    const root = await createTempProject("spec-measurable-ac");
+    await writeRuntimeArtifact(root, "04-spec.md", `# Specification Artifact
+
+## Acceptance Criteria
+| ID | Criterion (observable/measurable/falsifiable) | Design Decision Ref |
+|---|---|---|
+| AC-1 | Publish blocks when package.json version differs from CHANGELOG heading | D-1 |
+
+## Edge Cases
+| Criterion ID | Boundary case | Error case |
+|---|---|---|
+| AC-1 | Empty changelog | Mismatched version |
+
+## Constraints and Assumptions
+- Constraints: Node 20+ only
+- Assumptions: Release automation runs on CI
+
+## Testability Map
+| Criterion ID | Verification approach | Command/manual steps |
+|---|---|---|
+| AC-1 | unit | npm run test -- publish-guard |
 
 ## Approval
 - Approved by: user
@@ -1481,5 +1550,76 @@ describe("review army schema validation", () => {
     const result = await validateReviewArmy(root);
     expect(result.valid).toBe(false);
     expect(result.errors.join("\n")).toContain("shipBlockers must include open Critical finding");
+  });
+
+  it("requires findings[*].location with file + line", async () => {
+    const root = await createTempProject("review-army-location-required");
+    await fs.mkdir(path.join(root, ".cclaw/state"), { recursive: true });
+    await fs.mkdir(path.join(root, ".cclaw/artifacts"), { recursive: true });
+    await fs.writeFile(path.join(root, ".cclaw/state/flow-state.json"), JSON.stringify({
+      currentStage: "review",
+      activeRunId: "active",
+      completedStages: []
+    }, null, 2), "utf8");
+    await fs.writeFile(path.join(root, ".cclaw/artifacts/07-review-army.json"), JSON.stringify({
+      version: 1,
+      generatedAt: "2026-01-01T00:00:00Z",
+      scope: { base: "main", head: "feature", files: ["src/a.ts"] },
+      findings: [{
+        id: "F-1",
+        severity: "Important",
+        confidence: 6,
+        fingerprint: "fp-1",
+        reportedBy: ["code-reviewer"],
+        status: "open",
+        recommendation: "Refactor"
+      }],
+      reconciliation: {
+        duplicatesCollapsed: 0,
+        conflicts: [],
+        multiSpecialistConfirmed: [],
+        shipBlockers: []
+      }
+    }, null, 2), "utf8");
+
+    const result = await validateReviewArmy(root);
+    expect(result.valid).toBe(false);
+    expect(result.errors.join("\n")).toMatch(/location is required/);
+  });
+
+  it("requires multiSpecialistConfirmed findings to have >=2 distinct reviewers", async () => {
+    const root = await createTempProject("review-army-multi-spec");
+    await fs.mkdir(path.join(root, ".cclaw/state"), { recursive: true });
+    await fs.mkdir(path.join(root, ".cclaw/artifacts"), { recursive: true });
+    await fs.writeFile(path.join(root, ".cclaw/state/flow-state.json"), JSON.stringify({
+      currentStage: "review",
+      activeRunId: "active",
+      completedStages: []
+    }, null, 2), "utf8");
+    await fs.writeFile(path.join(root, ".cclaw/artifacts/07-review-army.json"), JSON.stringify({
+      version: 1,
+      generatedAt: "2026-01-01T00:00:00Z",
+      scope: { base: "main", head: "feature", files: ["src/a.ts"] },
+      findings: [{
+        id: "F-1",
+        severity: "Important",
+        confidence: 7,
+        fingerprint: "fp-1",
+        reportedBy: ["code-reviewer"],
+        status: "open",
+        location: { file: "src/a.ts", line: 3 },
+        recommendation: "Simplify branch"
+      }],
+      reconciliation: {
+        duplicatesCollapsed: 0,
+        conflicts: [],
+        multiSpecialistConfirmed: ["F-1"],
+        shipBlockers: []
+      }
+    }, null, 2), "utf8");
+
+    const result = await validateReviewArmy(root);
+    expect(result.valid).toBe(false);
+    expect(result.errors.join("\n")).toMatch(/confirmed by at least 2 distinct reviewers/);
   });
 });

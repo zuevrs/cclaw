@@ -101,9 +101,10 @@ You MUST complete these steps in order:
 
 ## Examples
 
-Concrete samples of what good output looks like for this stage.
+Concrete artifact samples. These mirror the exact heading levels agents must use when authoring the stage artifact (all H2 \`##\` sections), so they are presented inside a markdown fence to avoid collapsing into the SKILL outline.
 
-### Layer 1 Verdict
+\`\`\`markdown
+## Layer 1 Verdict
 
 | Criterion | Verdict | Evidence |
 | --- | --- | --- |
@@ -111,7 +112,7 @@ Concrete samples of what good output looks like for this stage.
 | AC-2: Dedupe — one visible item per key | PARTIAL | Unit tests cover publisher dedupe; UI merge path lacks test for race reordering (\`feedStore.test.ts\` missing case) |
 | AC-3: Degraded mode + REST snapshot | PASS | \`NotificationsPanel.tsx:112-140\` renders banner + calls snapshot endpoint |
 
-### Layer 2 Findings
+## Layer 2 Findings
 
 | ID | Severity | Category | Description | Status |
 | --- | --- | --- | --- | --- |
@@ -119,12 +120,12 @@ Concrete samples of what good output looks like for this stage.
 | R-2 | Important | performance | \`feedStore.merge()\` does full-array scan on every SSE event; O(n) per event where n is feed length. | open |
 | R-3 | Suggestion | architecture | SSE reconnect logic duplicated across \`useNotifications\` and \`usePresence\`; extract shared hook. | open |
 
-### Review Army Contract
+## Review Army Contract
 
 - See \`07-review-army.json\`
 - Reconciliation summary: 1 duplicate collapsed (R-1 reported by spec-reviewer and code-reviewer), 0 conflicts
 
-### Review Readiness Dashboard
+## Review Readiness Dashboard
 
 - Layer 1 complete: yes (3/3 criteria)
 - Layer 2 complete: yes (5 sections reviewed)
@@ -132,15 +133,16 @@ Concrete samples of what good output looks like for this stage.
 - Open critical blockers: 1 (R-1)
 - Ship recommendation: BLOCKED until R-1 resolved
 
-### Severity Summary
+## Severity Summary
 
 - Critical: 1
 - Important: 1
 - Suggestion: 1
 
-### Final Verdict
+## Final Verdict
 
 - BLOCKED
+\`\`\`
 
 ## Anti-Pattern: "Tests Pass So It Must Be Correct"
 
@@ -556,9 +558,10 @@ You MUST complete these steps in order:
 
 ## Examples
 
-Concrete samples of what good output looks like for this stage.
+Concrete artifact samples. These mirror the exact heading levels agents must use when authoring the stage artifact (all H2 \`##\` sections), so they are presented inside a markdown fence to avoid collapsing into the SKILL outline.
 
-### Preflight Results
+\`\`\`markdown
+## Preflight Results
 
 - Review verdict: APPROVED_WITH_CONCERNS (R-1 resolved, R-2 accepted as known debt)
 - Build: pass (\`pnpm build\` succeeds)
@@ -567,30 +570,31 @@ Concrete samples of what good output looks like for this stage.
 - Type-check: pass (\`pnpm typecheck\` clean)
 - Working tree clean: yes (\`git status\` shows no uncommitted changes)
 
-### Release Notes
+## Release Notes
 
 - **Added:** In-app notification feed with SSE updates and REST fallback snapshotting (AC-1, AC-3).
 - **Changed:** Notification payloads now include a stable dedupe key for idempotent rendering (AC-2).
 - **Fixed:** Panel no longer drops the newest item when reconnecting after sleep/resume.
 - **Breaking changes:** None.
 
-### Rollback Plan
+## Rollback Plan
 
 - Trigger conditions: error rate on \`/notifications/stream\` exceeds 5% for >5 minutes, or p95 publish-to-visible lag exceeds 10s.
 - Rollback steps: \`git revert <merge-sha> && git push origin main\` then redeploy; if DB migrations shipped, run \`2026_04_12_notifications_cursor_down.sql\` before traffic.
 - Verification steps: confirm error rate returns to pre-release baseline within 10 minutes; smoke-test feed panel manually.
 
-### Monitoring
+## Monitoring
 
 - Metrics/logs to watch: error rate on \`/notifications/stream\` and snapshot endpoint for 24h; p95 publish-to-visible lag via metrics dashboard.
 - Risk note (if no monitoring): N/A — monitoring is in place.
 
-### Finalization
+## Finalization
 
 - Selected enum: FINALIZE_OPEN_PR
 - Selected label: B
 - Execution result: PR #42 created via \`gh pr create\`; CI passed; squash-merged to main.
 - PR URL: https://github.com/example/repo/pull/42
+\`\`\`
 
 ## Anti-Pattern: "Green CI Means Safe to Merge"
 
@@ -944,9 +948,10 @@ You MUST complete these steps in order:
 
 ## Examples
 
-Concrete samples of what good output looks like for this stage.
+Concrete artifact samples. These mirror the exact heading levels agents must use when authoring the stage artifact (all H2 \`##\` sections), so they are presented inside a markdown fence to avoid collapsing into the SKILL outline.
 
-### Dependency Graph
+\`\`\`markdown
+## Dependency Graph
 
 \`\`\`
 T-1 ──▶ T-2 ──▶ T-3
@@ -956,7 +961,7 @@ T-1 ──▶ T-2 ──▶ T-3
 
 Parallel opportunity: T-1 is a prerequisite for both T-2 and T-3 (T-3 also needs T-2).
 
-### Dependency Waves
+## Dependency Waves
 
 #### Wave 1 (foundation)
 - Task IDs: T-1
@@ -974,7 +979,7 @@ Parallel opportunity: T-1 is a prerequisite for both T-2 and T-3 (T-3 also needs
 
 Execution rule: complete and verify each wave before starting the next wave.
 
-### Task List
+## Task List
 
 | Task ID | Description | Acceptance criterion | Verification command | Effort |
 | --- | --- | --- | --- | --- |
@@ -982,7 +987,7 @@ Execution rule: complete and verify each wave before starting the next wave.
 | T-2 | Implement publisher + outbox write path | AC-1: integration test (happy path publish) | \`\`\`pnpm vitest run tests/integration/publisher.test.ts\`\`\` |
 | T-3 | Implement client feed + SSE subscribe + REST fallback | AC-1, AC-2, AC-3: e2e tests including degraded mode | \`\`\`pnpm playwright test tests/e2e/notification-feed.spec.ts\`\`\` |
 
-### Acceptance Mapping
+## Acceptance Mapping
 
 | Criterion ID | Task IDs |
 | --- | --- |
@@ -990,16 +995,17 @@ Execution rule: complete and verify each wave before starting the next wave.
 | AC-2 (idempotency) | T-1, T-2 |
 | AC-3 (failure visibility) | T-3 |
 
-### Risk Assessment
+## Risk Assessment
 
 | Task/Wave | Risk | Likelihood | Impact | Mitigation |
 | --- | --- | --- | --- | --- |
 | T-3 (Wave 3) | SSE reconnect logic complex | Medium | High | Spike reconnect in isolation before integrating with feed UI |
 | Wave 2 → 3 | Publisher API contract may shift | Low | Medium | Pin contract in T-1 schema; T-2 integration test validates |
 
-### WAIT_FOR_CONFIRM
+## WAIT_FOR_CONFIRM
 - Status: pending
 - Confirmed by:
+\`\`\`
 
 ## Anti-Pattern: "Task Details Can Be Finalized During Coding"
 
@@ -1327,9 +1333,10 @@ You MUST complete these steps in order:
 
 ## Examples
 
-Concrete samples of what good output looks like for this stage.
+Concrete artifact samples. These mirror the exact heading levels agents must use when authoring the stage artifact (all H2 \`##\` sections), so they are presented inside a markdown fence to avoid collapsing into the SKILL outline.
 
-### RED Evidence
+\`\`\`markdown
+## RED Evidence
 
 | Slice | Test name | Command | Failure output summary |
 | --- | --- | --- | --- |
@@ -1337,7 +1344,7 @@ Concrete samples of what good output looks like for this stage.
 | S-2 (publisher outbox) | publishes event to outbox with dedupe key | \`\`\`pnpm vitest run tests/integration/publisher.test.ts\`\`\` | publishToOutbox is not a function |
 | S-3 (client feed + fallback) | shows notification within 5s via SSE | \`\`\`pnpm playwright test tests/e2e/notification-feed.spec.ts\`\`\` | Element [data-testid="feed-item"] not found |
 
-### Acceptance Mapping
+## Acceptance Mapping
 
 | Slice | Plan task ID | Spec criterion ID |
 | --- | --- | --- |
@@ -1345,7 +1352,7 @@ Concrete samples of what good output looks like for this stage.
 | S-2 | T-2 | AC-1 |
 | S-3 | T-3 | AC-1, AC-2, AC-3 |
 
-### Failure Analysis
+## Failure Analysis
 
 | Slice | Expected missing behavior | Actual failure reason |
 | --- | --- | --- |
@@ -1353,21 +1360,22 @@ Concrete samples of what good output looks like for this stage.
 | S-2 | publishToOutbox function not implemented | Function not found — correct: write path missing |
 | S-3 | Feed UI not rendered, SSE not connected | DOM element missing — correct: client component not built |
 
-### GREEN Evidence
+## GREEN Evidence
 
 - Full suite command: \`\`\`pnpm vitest run && pnpm playwright test\`\`\`
 - Full suite result: 47 tests passed (3 new + 44 existing), 0 failed, 0 skipped
 
-### REFACTOR Notes
+## REFACTOR Notes
 
 - What changed: Extracted \`\`\`mergeLatestByDedupeKey\`\`\` helper from inline loop in \`\`\`summarizeDedupedFeed\`\`\`; moved SSE reconnect logic into \`\`\`useSSEConnection\`\`\` hook.
 - Why: Dedupe merge logic is reused by both publisher and client; reconnect logic was duplicated across components.
 - Behavior preserved: Full suite re-run confirms 47/47 pass after refactor.
 
-### Traceability
+## Traceability
 
 - Plan task IDs: T-1, T-2, T-3
 - Spec criterion IDs: AC-1, AC-2, AC-3
+\`\`\`
 
 ## Anti-Pattern: "Code Before Failing Test"
 
@@ -1745,20 +1753,21 @@ You MUST complete these steps in order:
 
 ## Examples
 
-Concrete samples of what good output looks like for this stage.
+Concrete artifact samples. These mirror the exact heading levels agents must use when authoring the stage artifact (all H2 \`##\` sections), so they are presented inside a markdown fence to avoid collapsing into the SKILL outline.
 
-### Context
+\`\`\`markdown
+## Context
 
 - **Project state:** Monorepo with CI pipeline using custom release scripts. Release checks are scattered across shell scripts with no shared validation logic.
 - **Relevant existing code/patterns:** \`scripts/pre-publish.sh\` does metadata checks. \`src/release/\` has partial validation helpers.
 
-### Problem
+## Problem
 
 - **What we're solving:** release checks are fragile and inconsistent between CI and local runs. Invalid metadata sometimes reaches npm publish.
 - **Success criteria:** invalid release preconditions are caught before publish with explicit operator feedback, in both CI and local workflows.
 - **Constraints:** no new runtime dependencies; must work within existing CI pipeline structure.
 
-### Clarifying Questions
+## Clarifying Questions
 
 | # | Question | Answer | Decision impact |
 | --- | --- | --- | --- |
@@ -1766,7 +1775,7 @@ Concrete samples of what good output looks like for this stage.
 | 2 | Should the validation logic live in a reusable module or stay as shell scripts? | Reusable module. | Architecture: shared TypeScript module imported by CI and local tooling, not duplicated shell scripts. |
 | 3 | For v1, prioritize rapid delivery or maximum configurability? | Rapid delivery. | Minimal deterministic validation surface; defer plugin/config system to v2. |
 
-### Approaches
+## Approaches
 
 | Approach | Architecture | Trade-offs | Recommendation |
 | --- | --- | --- | --- |
@@ -1774,26 +1783,27 @@ Concrete samples of what good output looks like for this stage.
 | B: Hardened shell scripts | Keep existing script approach, add stricter checks and error messages. | Lowest effort. Weak reuse, CI/local divergence risk grows over time. | Viable fallback if TS module is blocked. |
 | C: Full release framework | New release orchestrator with plugin system, config files, rollback commands. | Maximum flexibility. High risk, delivery delay, over-engineered for current needs. | Not recommended for v1. |
 
-### Selected Direction
+## Selected Direction
 
 - **Approach:** A — Reusable validation module
 - **Rationale:** shared TS module gives consistent behavior in CI and local, avoids script duplication, and stays within the no-new-dependency constraint.
 - **Approval:** approved
 
-### Design
+## Design
 
 - **Architecture:** single \`release-validator\` module in \`src/release/\` exporting typed check functions. CI script and local CLI both import and run the same checks.
 - **Key components:** \`validateMetadata()\`, \`validateChangelog()\`, \`validateVersion()\` — each returns a typed result with error details. A \`runAll()\` orchestrator runs checks and exits non-zero on any failure.
 - **Data flow:** package.json + CHANGELOG.md → validator module → structured result → CI/CLI renders human-readable report.
 
-### Assumptions and Open Questions
+## Assumptions and Open Questions
 
 - **Assumptions:** CI remains the primary execution path; existing release metadata files remain the source of truth; v1 prioritizes determinism over customization.
 - **Open questions:** What exact rollback sequence for failed publish? Should status output include machine-readable JSON alongside markdown?
 
-### Notes for the next stage
+## Notes for the next stage
 
 Carry the no-new-dependency constraint and hard-block behavior directly into scope in/out boundaries.
+\`\`\`
 
 ## Anti-Pattern: "This Is Too Simple To Need A Design"
 

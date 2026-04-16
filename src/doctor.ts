@@ -13,7 +13,11 @@ import { policyChecks } from "./policy.js";
 import { readFlowState } from "./runs.js";
 import { checkMandatoryDelegations } from "./delegation.js";
 import { buildTraceMatrix } from "./trace-matrix.js";
-import { reconcileAndWriteCurrentStageGateCatalog, verifyCurrentStageGateEvidence } from "./gate-evidence.js";
+import {
+  reconcileAndWriteCurrentStageGateCatalog,
+  verifyCompletedStagesGateClosure,
+  verifyCurrentStageGateEvidence
+} from "./gate-evidence.js";
 import { stageSkillFolder } from "./content/skills.js";
 import { UTILITY_SKILL_FOLDERS } from "./content/utility-skills.js";
 import { CONTEXT_MODES, DEFAULT_CONTEXT_MODE } from "./content/contexts.js";
@@ -813,13 +817,39 @@ export async function doctorChecks(projectRoot: string, options: DoctorOptions =
       ? `warning: waived mandatory delegations for stage "${flowState.currentStage}": ${delegation.waived.join(", ")}`
       : "no waived mandatory delegations for current stage"
   });
+  checks.push({
+    name: "warning:delegation:stale_runs",
+    ok: true,
+    details: delegation.staleIgnored.length > 0
+      ? `warning: ${delegation.staleIgnored.length} delegation entries from other runs were ignored: ${delegation.staleIgnored.join(", ")}`
+      : "no stale delegation entries from prior runs"
+  });
 
   const trace = await buildTraceMatrix(projectRoot);
+  const artifactsDir = path.join(projectRoot, RUNTIME_ROOT, "artifacts");
+  const specExists = await exists(path.join(artifactsDir, "04-spec.md"));
+  const planExists = await exists(path.join(artifactsDir, "05-plan.md"));
+  const tddExists = await exists(path.join(artifactsDir, "06-tdd.md"));
   const traceHasSignal =
     trace.entries.length > 0 ||
     trace.orphanedCriteria.length > 0 ||
     trace.orphanedTasks.length > 0 ||
     trace.orphanedTests.length > 0;
+  const artifactsPresent = specExists || planExists || tddExists;
+  const emptyMatrixWithArtifacts = !traceHasSignal && artifactsPresent;
+  checks.push({
+    name: "trace:matrix_populated",
+    ok: !emptyMatrixWithArtifacts,
+    details: emptyMatrixWithArtifacts
+      ? `trace matrix is empty but artifacts exist (${[
+          specExists ? "04-spec.md" : null,
+          planExists ? "05-plan.md" : null,
+          tddExists ? "06-tdd.md" : null
+        ].filter(Boolean).join(", ")}). The extractors found no criterion/task/slice IDs — check heading conventions and ID formats.`
+      : artifactsPresent
+        ? `trace matrix parsed ${trace.entries.length} criterion(s) from present artifacts`
+        : "no downstream artifacts to trace yet"
+  });
   checks.push({
     name: "trace:criteria_coverage",
     ok: !traceHasSignal || trace.orphanedCriteria.length === 0,
@@ -849,6 +879,17 @@ export async function doctorChecks(projectRoot: string, options: DoctorOptions =
     details: gateEvidence.ok
       ? `stage "${gateEvidence.stage}" gate evidence is consistent (required=${gateEvidence.requiredCount}, passed=${gateEvidence.passedCount}, blocked=${gateEvidence.blockedCount})`
       : gateEvidence.issues.join(" ")
+  });
+
+  const completedClosure = verifyCompletedStagesGateClosure(flowState);
+  checks.push({
+    name: "gates:closure:completed_stages",
+    ok: completedClosure.ok,
+    details: completedClosure.ok
+      ? flowState.completedStages.length === 0
+        ? "no completed stages yet"
+        : `all ${flowState.completedStages.length} completed stages have every required gate passed`
+      : completedClosure.issues.join(" ")
   });
 
   // Self-improvement block in stage skills

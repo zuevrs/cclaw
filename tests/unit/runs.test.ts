@@ -6,6 +6,7 @@ import {
   archiveRun,
   CorruptFlowStateError,
   ensureRunSystem,
+  InvalidStageTransitionError,
   listRuns,
   readFlowState,
   writeFlowState
@@ -27,11 +28,15 @@ describe("runs system", () => {
     const root = await createTempProject("runs-archive");
     await ensureRunSystem(root);
     await fs.writeFile(path.join(root, ".cclaw/artifacts/01-brainstorm.md"), "# draft\n", "utf8");
-    await writeFlowState(root, {
-      ...createInitialFlowState("active"),
-      currentStage: "design",
-      completedStages: ["brainstorm", "scope"]
-    });
+    await writeFlowState(
+      root,
+      {
+        ...createInitialFlowState("active"),
+        currentStage: "design",
+        completedStages: ["brainstorm", "scope"]
+      },
+      { allowReset: true }
+    );
 
     const archived = await archiveRun(root, "Payments Revamp");
     const state = await readFlowState(root);
@@ -131,11 +136,15 @@ describe("runs system", () => {
     const root = await createTempProject("runs-archive-state");
     await ensureRunSystem(root);
     await fs.writeFile(path.join(root, ".cclaw/artifacts/00-idea.md"), "# Search Revamp\n", "utf8");
-    await writeFlowState(root, {
-      ...createInitialFlowState("active"),
-      currentStage: "plan",
-      completedStages: ["brainstorm", "scope", "design", "spec"]
-    });
+    await writeFlowState(
+      root,
+      {
+        ...createInitialFlowState("active"),
+        currentStage: "plan",
+        completedStages: ["brainstorm", "scope", "design", "spec"]
+      },
+      { allowReset: true }
+    );
     await fs.writeFile(
       path.join(root, ".cclaw/state/delegation-log.json"),
       JSON.stringify({
@@ -203,5 +212,54 @@ describe("runs system", () => {
 
     await expect(readFlowState(root)).rejects.toBeInstanceOf(CorruptFlowStateError);
     await expect(fs.stat(flowPath)).rejects.toThrow();
+  });
+
+  it("rejects illegal stage transitions in writeFlowState", async () => {
+    const root = await createTempProject("runs-transition-illegal");
+    await ensureRunSystem(root);
+
+    await expect(
+      writeFlowState(root, {
+        ...createInitialFlowState("active"),
+        currentStage: "design"
+      })
+    ).rejects.toBeInstanceOf(InvalidStageTransitionError);
+  });
+
+  it("rejects non-monotonic completedStages in writeFlowState", async () => {
+    const root = await createTempProject("runs-transition-monotonic");
+    await ensureRunSystem(root);
+    await writeFlowState(
+      root,
+      {
+        ...createInitialFlowState("active"),
+        currentStage: "scope",
+        completedStages: ["brainstorm"]
+      },
+      { allowReset: true }
+    );
+
+    await expect(
+      writeFlowState(root, {
+        ...createInitialFlowState("active"),
+        currentStage: "scope",
+        completedStages: []
+      })
+    ).rejects.toBeInstanceOf(InvalidStageTransitionError);
+  });
+
+  it("accepts a legal forward transition via writeFlowState", async () => {
+    const root = await createTempProject("runs-transition-ok");
+    await ensureRunSystem(root);
+
+    await writeFlowState(root, {
+      ...createInitialFlowState("active"),
+      currentStage: "scope",
+      completedStages: ["brainstorm"]
+    });
+
+    const stored = await readFlowState(root);
+    expect(stored.currentStage).toBe("scope");
+    expect(stored.completedStages).toEqual(["brainstorm"]);
   });
 });

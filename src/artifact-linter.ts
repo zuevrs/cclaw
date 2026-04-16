@@ -168,9 +168,65 @@ function extractRequiredKeywords(rule: string): string[] {
   return phrases;
 }
 
+const VAGUE_AC_ADJECTIVES = [
+  "fast",
+  "quick",
+  "slow",
+  "fast enough",
+  "quickly",
+  "intuitive",
+  "robust",
+  "reliable",
+  "scalable",
+  "simple",
+  "easy",
+  "user-friendly",
+  "user friendly",
+  "nice",
+  "good",
+  "clean",
+  "secure enough",
+  "responsive",
+  "efficient",
+  "performant",
+  "smooth",
+  "seamless",
+  "modern"
+];
+
+function isSeparatorRow(line: string): boolean {
+  return /^\|[-:| ]+\|$/u.test(line);
+}
+
+function getMarkdownTableRows(sectionBody: string): string[][] {
+  const lines = sectionBody.split(/\r?\n/).map((line) => line.trim());
+  const rows: string[][] = [];
+  let sawSeparator = false;
+  for (const line of lines) {
+    if (!/^\|.*\|$/u.test(line)) continue;
+    if (isSeparatorRow(line)) {
+      sawSeparator = true;
+      continue;
+    }
+    if (!sawSeparator) continue;
+    rows.push(parseMarkdownTableRow(line));
+  }
+  return rows;
+}
+
+function lineContainsVagueAdjective(text: string): string | null {
+  const lower = text.toLowerCase();
+  for (const adjective of VAGUE_AC_ADJECTIVES) {
+    const pattern = new RegExp(`(?:^|[^A-Za-z])${adjective.replace(/ /g, "\\s+")}(?:[^A-Za-z]|$)`, "iu");
+    if (pattern.test(lower)) return adjective;
+  }
+  return null;
+}
+
 function validateSectionBody(
   sectionBody: string,
-  rule: string
+  rule: string,
+  sectionName: string
 ): { ok: boolean; details: string } {
   const bodyLines = sectionBody.split(/\r?\n/).map((line) => line.trim());
   const meaningful = meaningfulLineCount(sectionBody);
@@ -273,6 +329,34 @@ function validateSectionBody(
     }
   }
 
+  if (
+    normalizeHeadingTitle(sectionName).toLowerCase() === "acceptance criteria" &&
+    /observable[\s,]*measurable[\s,]+(and )?falsifiable/iu.test(rule)
+  ) {
+    const rows = getMarkdownTableRows(sectionBody);
+    for (const row of rows) {
+      const criterionText = row[1] ?? row[0] ?? "";
+      const adjective = lineContainsVagueAdjective(criterionText);
+      if (adjective) {
+        return {
+          ok: false,
+          details: `Acceptance criterion uses vague adjective "${adjective}" without a measurable predicate: "${criterionText.slice(0, 140)}". Rewrite with a numeric threshold or boolean outcome.`
+        };
+      }
+      const hasDigit = /\d/u.test(criterionText);
+      const hasMeasurableVerb = /\b(blocks?|rejects?|returns?|matches?|equals?|emits?|succeeds?|fails?|publishes?|logs?|persists?|reads?|writes?|creates?|deletes?|throws?|contains?|restores?|exceeds?|responds?|warns?|quarantines?|includes?|raises?|passes?|denies|refuses|exits|succeeds|completes|prevents|allows|maps|points|signals|surfaces|records|produces|accepts|requires)\b/iu.test(
+        criterionText
+      );
+      const hasMeaningfulText = /[A-Za-z]/u.test(criterionText) && criterionText.trim().length >= 12;
+      if (hasMeaningfulText && !hasDigit && !hasMeasurableVerb) {
+        return {
+          ok: false,
+          details: `Acceptance criterion lacks a measurable predicate (no numeric threshold, no observable verb like blocks/returns/publishes/matches): "${criterionText.slice(0, 140)}". Rewrite so the criterion is falsifiable by a single test.`
+        };
+      }
+    }
+  }
+
   return {
     ok: true,
     details: "Section heading and content satisfy lint heuristics."
@@ -321,7 +405,7 @@ export async function lintArtifact(projectRoot: string, stage: FlowStage): Promi
     const body = hasHeading ? sectionBodyByName(sections, v.section) : null;
     const validation = body === null
       ? { ok: false, details: `No ## heading matching required section "${v.section}".` }
-      : validateSectionBody(body, v.validationRule);
+      : validateSectionBody(body, v.validationRule, v.section);
     const found = hasHeading && validation.ok;
     findings.push({
       section: v.section,
@@ -444,17 +528,17 @@ export async function validateReviewArmy(
       if (!isStringArray(o.reportedBy) || o.reportedBy.length === 0) {
         errors.push(`findings[${i}].reportedBy must be a non-empty string array.`);
       }
-      if (o.location !== undefined) {
-        if (o.location === null || typeof o.location !== "object" || Array.isArray(o.location)) {
-          errors.push(`findings[${i}].location must be an object when present.`);
-        } else {
-          const loc = o.location as Record<string, unknown>;
-          if (!isNonEmptyString(loc.file)) {
-            errors.push(`findings[${i}].location.file must be a non-empty string.`);
-          }
-          if (!isFiniteNumber(loc.line) || loc.line < 1) {
-            errors.push(`findings[${i}].location.line must be a positive number.`);
-          }
+      if (o.location === undefined || o.location === null) {
+        errors.push(`findings[${i}].location is required and must be an object with file + line.`);
+      } else if (typeof o.location !== "object" || Array.isArray(o.location)) {
+        errors.push(`findings[${i}].location must be an object with file + line.`);
+      } else {
+        const loc = o.location as Record<string, unknown>;
+        if (!isNonEmptyString(loc.file)) {
+          errors.push(`findings[${i}].location.file must be a non-empty string.`);
+        }
+        if (!isFiniteNumber(loc.line) || loc.line < 1) {
+          errors.push(`findings[${i}].location.line must be a positive number.`);
         }
       }
       if (o.recommendation !== undefined && !isNonEmptyString(o.recommendation)) {
@@ -501,6 +585,23 @@ export async function validateReviewArmy(
       for (const msId of rec.multiSpecialistConfirmed) {
         if (!findingIds.has(msId)) {
           errors.push(`reconciliation.multiSpecialistConfirmed references unknown finding id "${msId}".`);
+          continue;
+        }
+        if (Array.isArray(root.findings)) {
+          const finding = root.findings.find((f) => {
+            return f && typeof f === "object" && !Array.isArray(f) && (f as Record<string, unknown>).id === msId;
+          });
+          if (finding && typeof finding === "object" && !Array.isArray(finding)) {
+            const reportedBy = (finding as Record<string, unknown>).reportedBy;
+            const count = Array.isArray(reportedBy)
+              ? new Set((reportedBy as unknown[]).filter((v) => typeof v === "string")).size
+              : 0;
+            if (count < 2) {
+              errors.push(
+                `reconciliation.multiSpecialistConfirmed entry "${msId}" must be confirmed by at least 2 distinct reviewers (found ${count}).`
+              );
+            }
+          }
         }
       }
     }
@@ -530,4 +631,93 @@ export async function validateReviewArmy(
   }
 
   return { valid: errors.length === 0, errors };
+}
+
+export interface ReviewVerdictConsistencyResult {
+  ok: boolean;
+  errors: string[];
+  finalVerdict: "APPROVED" | "APPROVED_WITH_CONCERNS" | "BLOCKED" | "UNKNOWN";
+  openCriticalCount: number;
+  shipBlockerCount: number;
+}
+
+/**
+ * Ensure the narrative verdict in 07-review.md is consistent with the
+ * structured review-army reconciliation. A review cannot declare
+ * APPROVED while open Critical findings or shipBlockers remain.
+ */
+export async function checkReviewVerdictConsistency(
+  projectRoot: string
+): Promise<ReviewVerdictConsistencyResult> {
+  const errors: string[] = [];
+  const reviewMdPath = path.join(projectRoot, RUNTIME_ROOT, "artifacts", "07-review.md");
+  const armyJsonPath = path.join(projectRoot, RUNTIME_ROOT, "artifacts", "07-review-army.json");
+
+  let finalVerdict: ReviewVerdictConsistencyResult["finalVerdict"] = "UNKNOWN";
+  if (await exists(reviewMdPath)) {
+    const raw = await fs.readFile(reviewMdPath, "utf8");
+    const sections = extractH2Sections(raw);
+    const verdictBody = sectionBodyByName(sections, "Final Verdict");
+    if (verdictBody) {
+      const chosen: Array<ReviewVerdictConsistencyResult["finalVerdict"]> = [];
+      for (const token of ["APPROVED_WITH_CONCERNS", "APPROVED", "BLOCKED"] as const) {
+        const regex = new RegExp(`\\b${token}\\b`, "u");
+        if (regex.test(verdictBody)) {
+          // APPROVED would match inside APPROVED_WITH_CONCERNS; prefer the longer match first.
+          if (token === "APPROVED" && /\bAPPROVED_WITH_CONCERNS\b/u.test(verdictBody)) continue;
+          chosen.push(token);
+        }
+      }
+      if (chosen.length === 1) {
+        finalVerdict = chosen[0]!;
+      } else if (chosen.length > 1) {
+        errors.push(
+          `Final Verdict section lists multiple verdict tokens (${chosen.join(", ")}). Select exactly one.`
+        );
+      } else {
+        errors.push('Final Verdict section does not select APPROVED, APPROVED_WITH_CONCERNS, or BLOCKED.');
+      }
+    } else {
+      errors.push('07-review.md is missing the "## Final Verdict" section.');
+    }
+  }
+
+  let openCriticalCount = 0;
+  let shipBlockerCount = 0;
+  if (await exists(armyJsonPath)) {
+    try {
+      const raw = await fs.readFile(armyJsonPath, "utf8");
+      const parsed = JSON.parse(raw) as Record<string, unknown>;
+      const findings = Array.isArray(parsed.findings) ? parsed.findings : [];
+      for (const f of findings) {
+        if (!f || typeof f !== "object" || Array.isArray(f)) continue;
+        const o = f as Record<string, unknown>;
+        if (o.severity === "Critical" && o.status === "open") {
+          openCriticalCount++;
+        }
+      }
+      const rec = parsed.reconciliation && typeof parsed.reconciliation === "object" && !Array.isArray(parsed.reconciliation)
+        ? (parsed.reconciliation as Record<string, unknown>)
+        : null;
+      if (rec && Array.isArray(rec.shipBlockers)) {
+        shipBlockerCount = (rec.shipBlockers as unknown[]).filter((v) => typeof v === "string").length;
+      }
+    } catch {
+      // JSON validity is the concern of validateReviewArmy; skip silently here.
+    }
+  }
+
+  if (finalVerdict === "APPROVED" && (openCriticalCount > 0 || shipBlockerCount > 0)) {
+    errors.push(
+      `Final Verdict is APPROVED but review-army has ${openCriticalCount} open Critical finding(s) and ${shipBlockerCount} shipBlocker(s). Use BLOCKED or APPROVED_WITH_CONCERNS.`
+    );
+  }
+
+  return {
+    ok: errors.length === 0,
+    errors,
+    finalVerdict,
+    openCriticalCount,
+    shipBlockerCount
+  };
 }
