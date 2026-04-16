@@ -14,6 +14,11 @@ export type DelegationEntry = {
   taskId?: string;
   waiverReason?: string;
   ts: string;
+  /**
+   * Run id the entry belongs to. Older ledgers written before 0.5.17 may omit this;
+   * consumers treat missing runId as unscoped (conservatively excluded from current-run checks).
+   */
+  runId?: string;
 };
 
 export type DelegationLedger = {
@@ -45,7 +50,8 @@ function isDelegationEntry(value: unknown): value is DelegationEntry {
     statusOk &&
     typeof o.ts === "string" &&
     (o.taskId === undefined || typeof o.taskId === "string") &&
-    (o.waiverReason === undefined || typeof o.waiverReason === "string")
+    (o.waiverReason === undefined || typeof o.waiverReason === "string") &&
+    (o.runId === undefined || typeof o.runId === "string")
   );
 }
 
@@ -86,9 +92,10 @@ export async function appendDelegation(projectRoot: string, entry: DelegationEnt
   await withDirectoryLock(delegationLockPath(projectRoot), async () => {
     const filePath = delegationLogPath(projectRoot);
     const prior = await readDelegationLedger(projectRoot);
+    const stamped: DelegationEntry = { ...entry, runId: entry.runId ?? activeRunId };
     const ledger: DelegationLedger = {
       runId: activeRunId,
-      entries: [...prior.entries, entry]
+      entries: [...prior.entries, stamped]
     };
     await writeFileSafe(filePath, `${JSON.stringify(ledger, null, 2)}\n`);
   });
@@ -97,16 +104,21 @@ export async function appendDelegation(projectRoot: string, entry: DelegationEnt
 export async function checkMandatoryDelegations(
   projectRoot: string,
   stage: FlowStage
-): Promise<{ satisfied: boolean; missing: string[]; waived: string[] }> {
+): Promise<{ satisfied: boolean; missing: string[]; waived: string[]; staleIgnored: string[] }> {
   const mandatory = stageSchema(stage).mandatoryDelegations;
+  const { activeRunId } = await readFlowState(projectRoot);
   const ledger = await readDelegationLedger(projectRoot);
   const forStage = ledger.entries.filter((e) => e.stage === stage);
+  const forRun = forStage.filter((e) => e.runId === activeRunId);
+  const staleIgnored = forStage
+    .filter((e) => e.runId !== activeRunId)
+    .map((e) => `${e.agent}(runId=${e.runId ?? "unknown"})`);
 
   const missing: string[] = [];
   const waived: string[] = [];
 
   for (const agent of mandatory) {
-    const rows = forStage.filter((e) => e.agent === agent);
+    const rows = forRun.filter((e) => e.agent === agent);
     const ok = rows.some((e) => e.status === "completed" || e.status === "waived");
     if (!ok) {
       missing.push(agent);
@@ -118,6 +130,7 @@ export async function checkMandatoryDelegations(
   return {
     satisfied: missing.length === 0,
     missing,
-    waived
+    waived,
+    staleIgnored
   };
 }

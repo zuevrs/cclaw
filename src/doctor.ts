@@ -817,6 +817,13 @@ export async function doctorChecks(projectRoot: string, options: DoctorOptions =
       ? `warning: waived mandatory delegations for stage "${flowState.currentStage}": ${delegation.waived.join(", ")}`
       : "no waived mandatory delegations for current stage"
   });
+  checks.push({
+    name: "warning:delegation:stale_runs",
+    ok: true,
+    details: delegation.staleIgnored.length > 0
+      ? `warning: ${delegation.staleIgnored.length} delegation entries from other runs were ignored: ${delegation.staleIgnored.join(", ")}`
+      : "no stale delegation entries from prior runs"
+  });
 
   const trace = await buildTraceMatrix(projectRoot);
   const traceHasSignal =
