@@ -1144,6 +1144,7 @@ When fixing a bug:
 | Refactor can be skipped for speed. | Skipping refactor accumulates debt and weakens maintainability. |
 | Only changed tests need to pass. | Full-suite checks are needed to detect regressions. |
 | Traceability is implied by commit diff. | Explicit mapping avoids ambiguity in review and rollback. |
+| Tests written after implementation achieve the same goals. | Post-hoc tests confirm assumptions, not behavior. They test what you built, not what you should have built. TDD forces you to think about behavior before you have an implementation to be anchored by. |
 
 ## Blockers
 - tests pass before behavior change (RED failure missing)

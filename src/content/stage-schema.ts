@@ -1123,7 +1123,8 @@ const TDD: StageSchemaInput = {
     { claim: "One broad integration test is enough.", reality: "Slice-level RED tests are required for precise failure signal." },
     { claim: "Refactor can be skipped for speed.", reality: "Skipping refactor accumulates debt and weakens maintainability." },
     { claim: "Only changed tests need to pass.", reality: "Full-suite checks are needed to detect regressions." },
-    { claim: "Traceability is implied by commit diff.", reality: "Explicit mapping avoids ambiguity in review and rollback." }
+    { claim: "Traceability is implied by commit diff.", reality: "Explicit mapping avoids ambiguity in review and rollback." },
+    { claim: "Tests written after implementation achieve the same goals.", reality: "Post-hoc tests confirm assumptions, not behavior. They test what you built, not what you should have built. TDD forces you to think about behavior before you have an implementation to be anchored by." }
   ],
   redFlags: [
     "No failing test output (RED missing)",
