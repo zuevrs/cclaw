@@ -28,6 +28,23 @@ describe("install lifecycle", () => {
     await expect(fs.stat(path.join(root, ".opencode/plugins/cclaw-plugin.mjs"))).rejects.toBeDefined();
   });
 
+  it("doctor fails-closed when spec artifact exists but produces an empty trace matrix", async () => {
+    const root = await createTempProject("doctor-empty-trace");
+    await initCclaw({ projectRoot: root });
+
+    await fs.writeFile(
+      path.join(root, ".cclaw/artifacts/04-spec.md"),
+      `# Specification Artifact\n\n## Acceptance Criteria\nNothing measurable here.\n`,
+      "utf8"
+    );
+
+    const checks = await doctorChecks(root);
+    const traceMatrix = checks.find((c) => c.name === "trace:matrix_populated");
+    expect(traceMatrix).toBeDefined();
+    expect(traceMatrix?.ok).toBe(false);
+    expect(traceMatrix?.details).toMatch(/empty but artifacts exist/);
+  });
+
   it("initializes runtime and passes doctor checks", async () => {
     const root = await createTempProject("init");
     await initCclaw({ projectRoot: root });

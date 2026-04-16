@@ -826,11 +826,30 @@ export async function doctorChecks(projectRoot: string, options: DoctorOptions =
   });
 
   const trace = await buildTraceMatrix(projectRoot);
+  const artifactsDir = path.join(projectRoot, RUNTIME_ROOT, "artifacts");
+  const specExists = await exists(path.join(artifactsDir, "04-spec.md"));
+  const planExists = await exists(path.join(artifactsDir, "05-plan.md"));
+  const tddExists = await exists(path.join(artifactsDir, "06-tdd.md"));
   const traceHasSignal =
     trace.entries.length > 0 ||
     trace.orphanedCriteria.length > 0 ||
     trace.orphanedTasks.length > 0 ||
     trace.orphanedTests.length > 0;
+  const artifactsPresent = specExists || planExists || tddExists;
+  const emptyMatrixWithArtifacts = !traceHasSignal && artifactsPresent;
+  checks.push({
+    name: "trace:matrix_populated",
+    ok: !emptyMatrixWithArtifacts,
+    details: emptyMatrixWithArtifacts
+      ? `trace matrix is empty but artifacts exist (${[
+          specExists ? "04-spec.md" : null,
+          planExists ? "05-plan.md" : null,
+          tddExists ? "06-tdd.md" : null
+        ].filter(Boolean).join(", ")}). The extractors found no criterion/task/slice IDs — check heading conventions and ID formats.`
+      : artifactsPresent
+        ? `trace matrix parsed ${trace.entries.length} criterion(s) from present artifacts`
+        : "no downstream artifacts to trace yet"
+  });
   checks.push({
     name: "trace:criteria_coverage",
     ok: !traceHasSignal || trace.orphanedCriteria.length === 0,
