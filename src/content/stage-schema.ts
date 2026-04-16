@@ -1142,7 +1142,8 @@ const TDD: StageSchemaInput = {
     { name: "Minimal Viable Change", description: "The best implementation is the smallest one that passes all RED tests. Every extra line is risk. Resist the urge to 'improve while you are here.'" },
     { name: "Regression Paranoia", description: "Assume every change breaks something until the full suite proves otherwise. Partial test runs are lies of omission." },
     { name: "Refactor-as-Hygiene", description: "Refactoring is not optional cleanup — it is the third leg of TDD. GREEN without REFACTOR accumulates mess. REFACTOR without GREEN breaks things." },
-    { name: "Evidence Over Anecdote", description: "Every claim about test state must be backed by captured output. 'It passed' without terminal evidence is not evidence. 'I saw it fail' without the failure output is not RED. Capture commands, outputs, and results — not summaries from memory." }
+    { name: "Evidence Over Anecdote", description: "Every claim about test state must be backed by captured output. 'It passed' without terminal evidence is not evidence. 'I saw it fail' without the failure output is not RED. Capture commands, outputs, and results — not summaries from memory." },
+    { name: "Characterization First", description: "Before changing existing behavior, write characterization tests that capture current behavior as-is. These tests document what the system does today — even if that behavior is wrong. Only after the characterization suite is green do you add the new RED test for the desired change. This prevents accidental behavior destruction during refactoring." }
   ],
   reviewSections: [
     {
