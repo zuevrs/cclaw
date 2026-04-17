@@ -134,6 +134,15 @@ describe("install lifecycle", () => {
     expect(warningCheck?.severity).toBe("warning");
   });
 
+  it("doctor classifies all checks in a fresh install", async () => {
+    const root = await createTempProject("doctor-classification");
+    await initCclaw({ projectRoot: root });
+
+    const checks = await doctorChecks(root);
+    const unclassified = checks.filter((check) => check.summary === "Unclassified doctor check.");
+    expect(unclassified).toEqual([]);
+  });
+
   it("sync regenerates shim files", async () => {
     const root = await createTempProject("sync");
     await initCclaw({ projectRoot: root });
