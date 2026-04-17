@@ -933,6 +933,14 @@ async function ensureSessionStateFiles(projectRoot: string): Promise<void> {
       `${JSON.stringify(createInitialContextModeState(), null, 2)}\n`
     );
   }
+
+  const knowledgeDigestPath = path.join(stateDir, "knowledge-digest.md");
+  if (!(await exists(knowledgeDigestPath))) {
+    await writeFileSafe(
+      knowledgeDigestPath,
+      "# Knowledge digest (auto-generated)\n\n(no entries yet)\n"
+    );
+  }
 }
 
 async function writeRulebook(projectRoot: string): Promise<void> {

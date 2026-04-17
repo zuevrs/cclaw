@@ -66,16 +66,15 @@ export async function policyChecks(projectRoot: string, options: PolicyOptions =
       "## Process",
       "## Verification",
       "## Interaction Protocol",
-      "## Common Rationalizations",
       "## Anti-Patterns & Red Flags",
       "## HARD-GATE",
       "## Checklist",
       "## Context Loading",
       "## Automatic Subagent Dispatch",
-      "## Cognitive Patterns",
       "## Cross-Stage Traceability",
-      "## Completion Status",
-      "## Artifact Validation"
+      "## Artifact Validation",
+      "## Completion Parameters",
+      "## Shared Stage Guidance"
     ]) {
       rules.push({
         filePath: skillFile,
@@ -133,15 +132,17 @@ export async function policyChecks(projectRoot: string, options: PolicyOptions =
     { file: runtimeFile("skills/session/SKILL.md"), needle: "## Session Start Protocol", name: "utility_skill:session:start" },
     { file: runtimeFile("skills/session/SKILL.md"), needle: "## Session Stop Protocol", name: "utility_skill:session:stop" },
 
-    { file: runtimeFile("skills/using-cclaw/SKILL.md"), needle: "## Skill Discovery Flowchart", name: "meta_skill:discovery" },
-    { file: runtimeFile("skills/using-cclaw/SKILL.md"), needle: "## Activation Rules", name: "meta_skill:activation" },
-    { file: runtimeFile("skills/using-cclaw/SKILL.md"), needle: "## Stage Quick Reference", name: "meta_skill:reference" },
-    { file: runtimeFile("skills/using-cclaw/SKILL.md"), needle: "## Failure Modes", name: "meta_skill:failure_modes" },
-    { file: runtimeFile("skills/using-cclaw/SKILL.md"), needle: "## Contextual Skills", name: "meta_skill:contextual_skills" },
-    { file: runtimeFile("skills/using-cclaw/SKILL.md"), needle: "## Decision Protocol", name: "meta_skill:decision_protocol" },
-    { file: runtimeFile("skills/using-cclaw/SKILL.md"), needle: "## Progressive Disclosure (Depth / See Also)", name: "meta_skill:progressive_disclosure" },
+    { file: runtimeFile("skills/using-cclaw/SKILL.md"), needle: "## Routing flow", name: "meta_skill:routing_flow" },
+    { file: runtimeFile("skills/using-cclaw/SKILL.md"), needle: "## Task classification", name: "meta_skill:task_classification" },
+    { file: runtimeFile("skills/using-cclaw/SKILL.md"), needle: "## Stage quick map", name: "meta_skill:stage_quick_map" },
+    { file: runtimeFile("skills/using-cclaw/SKILL.md"), needle: "## Contextual skill activation", name: "meta_skill:contextual_skills" },
+    { file: runtimeFile("skills/using-cclaw/SKILL.md"), needle: "## Protocol references", name: "meta_skill:protocol_refs" },
+    { file: runtimeFile("skills/using-cclaw/SKILL.md"), needle: "## Failure guardrails", name: "meta_skill:failure_guardrails" },
+    { file: runtimeFile("references/protocols/decision.md"), needle: "# Decision Protocol", name: "protocol:decision" },
+    { file: runtimeFile("references/protocols/completion.md"), needle: "# Stage Completion Protocol", name: "protocol:completion" },
+    { file: runtimeFile("references/protocols/ethos.md"), needle: "# Engineering Ethos", name: "protocol:ethos" },
     { file: runtimeFile("skills/session/SKILL.md"), needle: "## Session Resume Protocol", name: "utility_skill:session:resume" },
-    { file: runtimeFile("skills/brainstorming/SKILL.md"), needle: "## Progressive Disclosure", name: "stage_skill:progressive_disclosure" },
+    { file: runtimeFile("skills/brainstorming/SKILL.md"), needle: "common-guidance.md", name: "stage_skill:shared_guidance_reference" },
 
     { file: runtimeFile("skills/security/SKILL.md"), needle: "## HARD-GATE", name: "utility_skill:security:hard_gate" },
     { file: runtimeFile("skills/security/SKILL.md"), needle: "## Checklist", name: "utility_skill:security:checklist" },
@@ -190,7 +191,9 @@ export async function policyChecks(projectRoot: string, options: PolicyOptions =
     { file: runtimeFile("hooks/workflow-guard.sh"), needle: "stage_invocation_without_recent_flow_read", name: "hooks:workflow_guard:flow_read_reason" },
     { file: runtimeFile("hooks/workflow-guard.sh"), needle: "stage_jump_", name: "hooks:workflow_guard:stage_jump_reason" },
     { file: runtimeFile("hooks/context-monitor.sh"), needle: "remaining is", name: "hooks:context:threshold_warning" },
-    { file: runtimeFile("hooks/opencode-plugin.mjs"), needle: "activeRunId", name: "hooks:opencode:active_run" }
+    { file: runtimeFile("hooks/opencode-plugin.mjs"), needle: "activeRunId", name: "hooks:opencode:active_run" },
+    { file: runtimeFile("hooks/session-start.sh"), needle: "Knowledge digest", name: "hooks:session_start:knowledge_digest" },
+    { file: runtimeFile("hooks/opencode-plugin.mjs"), needle: "Knowledge digest", name: "hooks:opencode:knowledge_digest" }
   ];
   if (activeHarnesses.has("opencode")) {
     utilitySkillChecks.push({
