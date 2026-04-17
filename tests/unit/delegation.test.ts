@@ -1,6 +1,7 @@
 import fs from "node:fs/promises";
 import path from "node:path";
 import { describe, expect, it } from "vitest";
+import { createDefaultConfig, writeConfig } from "../../src/config.js";
 import { appendDelegation, checkMandatoryDelegations, readDelegationLedger } from "../../src/delegation.js";
 import { createInitialFlowState } from "../../src/flow-state.js";
 import { createTempProject } from "../helpers/index.js";
@@ -70,5 +71,27 @@ describe("delegation ledger run scoping", () => {
     expect(result.satisfied).toBe(true);
     expect(result.missing).toEqual([]);
     expect(result.staleIgnored).toEqual([]);
+  });
+
+  it("auto-waives mandatory delegations when native dispatch is unavailable", async () => {
+    const root = await createTempProject("delegation-auto-waiver");
+    await seedFlowState(root, "run-codex");
+    await writeConfig(root, createDefaultConfig(["codex"]));
+
+    const result = await checkMandatoryDelegations(root, "scope");
+    expect(result.satisfied).toBe(true);
+    expect(result.missing).toEqual([]);
+    expect(result.autoWaived).toContain("planner");
+
+    const ledger = await readDelegationLedger(root);
+    expect(
+      ledger.entries.some(
+        (entry) =>
+          entry.stage === "scope" &&
+          entry.agent === "planner" &&
+          entry.status === "waived" &&
+          entry.waiverReason === "harness_limitation"
+      )
+    ).toBe(true);
   });
 });

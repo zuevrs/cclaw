@@ -1,7 +1,9 @@
 import fs from "node:fs/promises";
 import path from "node:path";
 import { RUNTIME_ROOT } from "./constants.js";
+import { readConfig } from "./config.js";
 import { exists, withDirectoryLock, writeFileSafe } from "./fs-utils.js";
+import { HARNESS_ADAPTERS } from "./harness-adapters.js";
 import { readFlowState } from "./runs.js";
 import { stageSchema } from "./content/stage-schema.js";
 import type { FlowStage } from "./types.js";
@@ -110,7 +112,7 @@ export async function appendDelegation(projectRoot: string, entry: DelegationEnt
 export async function checkMandatoryDelegations(
   projectRoot: string,
   stage: FlowStage
-): Promise<{ satisfied: boolean; missing: string[]; waived: string[]; staleIgnored: string[] }> {
+): Promise<{ satisfied: boolean; missing: string[]; waived: string[]; autoWaived: string[]; staleIgnored: string[] }> {
   const mandatory = stageSchema(stage).mandatoryDelegations;
   const { activeRunId } = await readFlowState(projectRoot);
   const ledger = await readDelegationLedger(projectRoot);
@@ -122,12 +124,37 @@ export async function checkMandatoryDelegations(
 
   const missing: string[] = [];
   const waived: string[] = [];
+  const autoWaived: string[] = [];
+  const config = await readConfig(projectRoot).catch(() => null);
+  const harnesses = config?.harnesses ?? [];
+  const nativeDelegationUnavailable =
+    harnesses.length > 0 &&
+    harnesses.every((harness) => HARNESS_ADAPTERS[harness].capabilities.nativeSubagentDispatch === "none");
 
   for (const agent of mandatory) {
     const rows = forRun.filter((e) => e.agent === agent);
     const ok = rows.some((e) => e.status === "completed" || e.status === "waived");
     if (!ok) {
-      missing.push(agent);
+      if (nativeDelegationUnavailable) {
+        const existingHarnessWaiver = rows.some(
+          (e) => e.status === "waived" && e.waiverReason === "harness_limitation"
+        );
+        if (!existingHarnessWaiver) {
+          await appendDelegation(projectRoot, {
+            stage,
+            agent,
+            mode: "mandatory",
+            status: "waived",
+            waiverReason: "harness_limitation",
+            ts: new Date().toISOString(),
+            runId: activeRunId
+          });
+        }
+        waived.push(agent);
+        autoWaived.push(agent);
+      } else {
+        missing.push(agent);
+      }
     } else if (rows.some((e) => e.status === "waived")) {
       waived.push(agent);
     }
@@ -137,6 +164,7 @@ export async function checkMandatoryDelegations(
     satisfied: missing.length === 0,
     missing,
     waived,
+    autoWaived,
     staleIgnored
   };
 }

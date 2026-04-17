@@ -60,6 +60,16 @@ describe("install lifecycle", () => {
     await expect(fs.stat(path.join(root, ".cclaw/state/checkpoint.json"))).resolves.toBeDefined();
     await expect(fs.stat(path.join(root, ".cclaw/state/stage-activity.jsonl"))).resolves.toBeDefined();
     await expect(fs.stat(path.join(root, ".cclaw/state/preamble-log.jsonl"))).resolves.toBeDefined();
+    await expect(fs.stat(path.join(root, ".cclaw/state/harness-gaps.json"))).resolves.toBeDefined();
+    const harnessGaps = JSON.parse(
+      await fs.readFile(path.join(root, ".cclaw/state/harness-gaps.json"), "utf8")
+    ) as {
+      harnesses: Array<{ harness: string; tier: string; missingCapabilities: string[] }>;
+    };
+    const codexGap = harnessGaps.harnesses.find((entry) => entry.harness === "codex");
+    expect(codexGap?.tier).toBe("tier2");
+    expect(codexGap?.missingCapabilities).toContain("nativeSubagentDispatch:none");
+    expect(codexGap?.missingCapabilities).toContain("structuredAsk:none");
 
     const claudeHooks = JSON.parse(
       await fs.readFile(path.join(root, ".claude/hooks/hooks.json"), "utf8")
@@ -82,6 +92,24 @@ describe("install lifecycle", () => {
     expect(agentsMd).not.toContain("### Agent Specialists");
     expect(agentsMd).not.toContain("### Hooks (real lifecycle integration)");
     expect(agentsMd).not.toContain("### Runtime Details (full mode)");
+
+    const generatedAgents = (await fs.readdir(path.join(root, ".cclaw/agents")))
+      .filter((fileName) => fileName.endsWith(".md"))
+      .sort();
+    expect(generatedAgents).toEqual([
+      "doc-updater.md",
+      "planner.md",
+      "reviewer.md",
+      "security-reviewer.md",
+      "test-author.md"
+    ]);
+
+    const researchPlaybook = await fs.readFile(
+      path.join(root, ".cclaw/skills/research/repo-scan.md"),
+      "utf8"
+    );
+    expect(researchPlaybook).toContain("# Repo Scan Playbook");
+    expect(researchPlaybook.startsWith("---")).toBe(false);
   });
 
   it("doctor emits severity, fix, and doc references", async () => {
@@ -128,6 +156,7 @@ describe("install lifecycle", () => {
     const staleShim = path.join(root, ".claude/commands/cc-obsolete.md");
     const staleStartShim = path.join(root, ".claude/commands/cc-start.md");
     const customAgent = path.join(root, ".cclaw/agents/custom-team-reviewer.md");
+    const legacyGeneratedAgent = path.join(root, ".cclaw/agents/repo-research-analyst.md");
     const customSkillDir = path.join(root, ".cclaw/skills/team-custom-skill");
     const legacySkillDir = path.join(root, ".cclaw/skills/project-learnings");
     const legacyBrowserQaDir = path.join(root, ".cclaw/skills/browser-qa-testing");
@@ -135,6 +164,7 @@ describe("install lifecycle", () => {
     await fs.writeFile(staleShim, "# stale shim\n", "utf8");
     await fs.writeFile(staleStartShim, "# stale start shim\n", "utf8");
     await fs.writeFile(customAgent, "# user agent\n", "utf8");
+    await fs.writeFile(legacyGeneratedAgent, "# legacy generated agent\n", "utf8");
     await fs.mkdir(customSkillDir, { recursive: true });
     await fs.writeFile(path.join(customSkillDir, "SKILL.md"), "# user skill\n", "utf8");
     await fs.mkdir(legacySkillDir, { recursive: true });
@@ -148,6 +178,7 @@ describe("install lifecycle", () => {
     await expect(fs.stat(staleShim)).rejects.toBeDefined();
     await expect(fs.stat(staleStartShim)).rejects.toBeDefined();
     await expect(fs.stat(customAgent)).resolves.toBeDefined();
+    await expect(fs.stat(legacyGeneratedAgent)).rejects.toBeDefined();
     await expect(fs.stat(customSkillDir)).resolves.toBeDefined();
     await expect(fs.stat(legacySkillDir)).rejects.toBeDefined();
     await expect(fs.stat(legacyBrowserQaDir)).rejects.toBeDefined();

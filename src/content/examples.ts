@@ -387,7 +387,7 @@ Execution rule: complete and verify each wave before starting the next wave.
 ## Review Army Contract
 
 - See \`07-review-army.json\`
-- Reconciliation summary: 1 duplicate collapsed (R-1 reported by spec-reviewer and code-reviewer), 0 conflicts
+- Reconciliation summary: 1 duplicate collapsed (R-1 reported by reviewer and security-reviewer), 0 conflicts
 
 ## Review Readiness Dashboard
 

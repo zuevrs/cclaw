@@ -63,6 +63,22 @@ Record completion/waiver in \`${delegationLogRel}\` before stage completion.
 `;
 }
 
+function researchPlaybooksBlock(stage: FlowStage): string {
+  const playbooks = stageSchema(stage).researchPlaybooks ?? [];
+  if (playbooks.length === 0) return "";
+  const rows = playbooks
+    .map((playbook) => `- \`${RUNTIME_ROOT}/skills/${playbook}\``)
+    .join("\n");
+  return `## Research Playbooks
+
+Use these in-thread research procedures before locking this stage. They are
+playbooks (not delegated personas), so execute them in the primary agent context
+and record outcomes in the stage artifact when relevant.
+
+${rows}
+`;
+}
+
 function reviewSectionsBlock(stage: FlowStage): string {
   const schema = stageSchema(stage);
   if (schema.reviewSections.length === 0) return "";
@@ -336,6 +352,7 @@ ${schema.requiredContext.length > 0 ? schema.requiredContext.map((item) => `- ${
 
 ${contextLoadingBlock(stage)}
 ${autoSubagentDispatchBlock(stage)}
+${researchPlaybooksBlock(stage)}
 
 ## Outputs
 ${schema.outputs.map((item) => `- ${item}`).join("\n")}

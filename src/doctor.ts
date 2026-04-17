@@ -4,7 +4,7 @@ import { execFile } from "node:child_process";
 import { pathToFileURL } from "node:url";
 import { promisify } from "node:util";
 import { COMMAND_FILE_ORDER, REQUIRED_DIRS, RUNTIME_ROOT } from "./constants.js";
-import { CCLAW_AGENTS } from "./content/agents.js";
+import { CCLAW_AGENTS } from "./content/core-agents.js";
 import { readConfig } from "./config.js";
 import { exists } from "./fs-utils.js";
 import { gitignoreHasRequiredPatterns } from "./gitignore.js";
@@ -389,6 +389,11 @@ export async function doctorChecks(projectRoot: string, options: DoctorOptions =
       details: refPath
     });
   }
+  checks.push({
+    name: "harness_ref:matrix",
+    ok: await exists(path.join(projectRoot, RUNTIME_ROOT, "references", "harnesses.md")),
+    details: `${RUNTIME_ROOT}/references/harnesses.md`
+  });
 
   const doctorRefDir = path.join(projectRoot, RUNTIME_ROOT, "references", "doctor");
   for (const fileName of Object.keys(DOCTOR_REFERENCE_MARKDOWN)) {
@@ -892,6 +897,11 @@ export async function doctorChecks(projectRoot: string, options: DoctorOptions =
     ok: await exists(path.join(projectRoot, RUNTIME_ROOT, "state", "suggestion-memory.json")),
     details: `${RUNTIME_ROOT}/state/suggestion-memory.json must exist for proactive suggestion memory`
   });
+  checks.push({
+    name: "state:harness_gaps_exists",
+    ok: await exists(path.join(projectRoot, RUNTIME_ROOT, "state", "harness-gaps.json")),
+    details: `${RUNTIME_ROOT}/state/harness-gaps.json must exist for tiered harness capability tracking`
+  });
   const contextModeStatePath = path.join(projectRoot, RUNTIME_ROOT, "state", "context-mode.json");
   checks.push({
     name: "state:context_mode_exists",
@@ -1075,7 +1085,11 @@ export async function doctorChecks(projectRoot: string, options: DoctorOptions =
     name: "warning:delegation:waived",
     ok: true,
     details: delegation.waived.length > 0
-      ? `warning: waived mandatory delegations for stage "${flowState.currentStage}": ${delegation.waived.join(", ")}`
+      ? `warning: waived mandatory delegations for stage "${flowState.currentStage}": ${delegation.waived.join(", ")}${
+          delegation.autoWaived.length > 0
+            ? ` (auto-waived due to harness limitation: ${delegation.autoWaived.join(", ")})`
+            : ""
+        }`
       : "no waived mandatory delegations for current stage"
   });
   checks.push({
