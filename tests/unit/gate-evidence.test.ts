@@ -16,6 +16,12 @@ async function prepareRoot(root: string): Promise<void> {
   await fs.mkdir(path.join(root, ".cclaw/artifacts"), { recursive: true });
 }
 
+function requiredGateIds(stage: ReturnType<typeof stageSchema>["stage"]): string[] {
+  return stageSchema(stage).requiredGates
+    .filter((gate) => gate.tier === "required")
+    .map((gate) => gate.id);
+}
+
 describe("gate evidence verification", () => {
   it("fails when passed gates have no recorded guard evidence", async () => {
     const root = await createTempProject("gate-evidence-fail");
@@ -243,7 +249,7 @@ describe("gate evidence verification", () => {
     const root = await createTempProject("gate-evidence-missing");
     await prepareRoot(root);
     const state = createInitialFlowState("run-active");
-    const required = stageSchema(state.currentStage).requiredGates.map((g) => g.id);
+    const required = requiredGateIds(state.currentStage);
 
     const result = await verifyCurrentStageGateEvidence(root, state);
     expect(result.complete).toBe(false);
@@ -255,7 +261,7 @@ describe("gate evidence verification", () => {
     const root = await createTempProject("gate-evidence-completed-gap");
     await prepareRoot(root);
     const state = createInitialFlowState("run-completed-gap");
-    const required = stageSchema(state.currentStage).requiredGates.map((g) => g.id);
+    const required = requiredGateIds(state.currentStage);
     state.stageGateCatalog[state.currentStage].passed = [required[0]!];
     state.guardEvidence[required[0]!] = "evidence-1";
     state.completedStages.push(state.currentStage);
@@ -287,7 +293,7 @@ describe("completed-stage gate closure verification", () => {
 
   it("fails when a completed stage carries blocked gates", () => {
     const state = createInitialFlowState("run-blocked");
-    const required = stageSchema("brainstorm").requiredGates.map((g) => g.id);
+    const required = requiredGateIds("brainstorm");
     state.completedStages.push("brainstorm");
     state.stageGateCatalog.brainstorm.passed = [...required];
     state.stageGateCatalog.brainstorm.blocked = [required[0]!];
@@ -297,14 +303,14 @@ describe("completed-stage gate closure verification", () => {
 
     const result = verifyCompletedStagesGateClosure(state);
     expect(result.ok).toBe(false);
-    expect(result.issues.join("\n")).toContain("still has blocked gates");
+    expect(result.issues.join("\n")).toContain("still has blocking blocked gates");
   });
 });
 
 describe("gate evidence reconciliation", () => {
   it("normalizes current-stage gate catalog and demotes passed gates without evidence", () => {
     const state = createInitialFlowState("run-reconcile");
-    const required = stageSchema("brainstorm").requiredGates.map((gate) => gate.id);
+    const required = requiredGateIds("brainstorm");
     const firstGate = required[0]!;
 
     state.stageGateCatalog.brainstorm.required = [...required, "unexpected_gate"];
@@ -317,6 +323,36 @@ describe("gate evidence reconciliation", () => {
     expect(reconciliation.after.passed).toEqual([]);
     expect(reconciliation.after.blocked).toContain(firstGate);
     expect(reconciliation.notes.join("\n")).toContain("missing evidence");
+  });
+
+  it("resolves passed/blocked overlap in favor of passed when evidence exists", () => {
+    const state = createInitialFlowState("run-reconcile-overlap-evidence");
+    const required = requiredGateIds("brainstorm");
+    const firstGate = required[0]!;
+
+    state.stageGateCatalog.brainstorm.passed = [firstGate];
+    state.stageGateCatalog.brainstorm.blocked = [firstGate];
+    state.guardEvidence[firstGate] = "approved direction in artifact";
+
+    const { reconciliation } = reconcileCurrentStageGateCatalog(state);
+    expect(reconciliation.changed).toBe(true);
+    expect(reconciliation.after.passed).toContain(firstGate);
+    expect(reconciliation.after.blocked).not.toContain(firstGate);
+    expect(reconciliation.notes.join("\n")).toContain("in favor of passed");
+  });
+
+  it("returns unchanged state when current-stage catalog is already normalized", () => {
+    const state = createInitialFlowState("run-reconcile-clean");
+    const required = requiredGateIds("brainstorm");
+    state.stageGateCatalog.brainstorm.passed = [...required];
+    for (const gate of required) {
+      state.guardEvidence[gate] = "gate evidence";
+    }
+
+    const { nextState, reconciliation } = reconcileCurrentStageGateCatalog(state);
+    expect(reconciliation.changed).toBe(false);
+    expect(reconciliation.notes).toEqual([]);
+    expect(nextState).toBe(state);
   });
 
   it("writes reconciled catalog back to flow-state", async () => {

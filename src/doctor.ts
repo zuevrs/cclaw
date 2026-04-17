@@ -306,8 +306,8 @@ export async function doctorChecks(projectRoot: string, options: DoctorOptions =
         { id: "iron_law", pattern: /^\*\*IRON LAW — [A-Z]+:\*\* .+$/m, label: "Iron Law punchcard (<EXTREMELY-IMPORTANT> wrapper)" },
         { id: "hard_gate", pattern: /^## HARD-GATE$/m, label: "## HARD-GATE" },
         { id: "checklist", pattern: /^## Checklist$/m, label: "## Checklist" },
-        { id: "completion_protocol", pattern: /^## Stage Completion Protocol$/m, label: "## Stage Completion Protocol" },
-        { id: "handoff_menu", pattern: /^### Handoff Menu$/m, label: "### Handoff Menu" },
+        { id: "completion_parameters", pattern: /^## Completion Parameters$/m, label: "## Completion Parameters" },
+        { id: "shared_guidance", pattern: /^## Shared Stage Guidance$/m, label: "## Shared Stage Guidance" },
         { id: "good_vs_bad", pattern: /Good vs Bad/i, label: "Good vs Bad examples" },
         { id: "anti_patterns", pattern: /^## Anti-Patterns & Red Flags$/m, label: "## Anti-Patterns & Red Flags" }
       ];
@@ -333,14 +333,12 @@ export async function doctorChecks(projectRoot: string, options: DoctorOptions =
     const metaContent = await fs.readFile(metaSkillPath, "utf8");
     const requiredSignals: Array<{ id: string; pattern: RegExp; label: string }> = [
       { id: "instruction_priority", pattern: /Instruction Priority/i, label: "Instruction Priority" },
-      { id: "spawned_detection", pattern: /Spawned Subagent Detection/i, label: "Spawned Subagent Detection" },
-      { id: "shared_decision", pattern: /Shared Decision \+ Tool-Use Protocol/i, label: "Shared Decision + Tool-Use Protocol" },
-      { id: "shared_completion", pattern: /Shared Stage Completion Protocol/i, label: "Shared Stage Completion Protocol" },
-      { id: "escalation_rule", pattern: /Escalation Rule \(3 attempts\)/i, label: "Escalation Rule (3 attempts)" },
-      { id: "invocation_preamble", pattern: /Invocation Preamble/i, label: "Invocation Preamble" },
-      { id: "operational_self_improvement", pattern: /Operational Self-Improvement/i, label: "Operational Self-Improvement" },
-      { id: "engineering_ethos", pattern: /Engineering Ethos/i, label: "Engineering Ethos" },
-      { id: "task_classification", pattern: /Task Classification/i, label: "Task Classification" }
+      { id: "routing_flow", pattern: /Routing flow/i, label: "Routing flow" },
+      { id: "task_classification", pattern: /Task classification/i, label: "Task classification" },
+      { id: "stage_map", pattern: /Stage quick map/i, label: "Stage quick map" },
+      { id: "protocol_refs", pattern: /Protocol references/i, label: "Protocol references" },
+      { id: "knowledge_guidance", pattern: /Knowledge guidance/i, label: "Knowledge guidance" },
+      { id: "failure_guardrails", pattern: /Failure guardrails/i, label: "Failure guardrails" }
     ];
     const missingMeta = requiredSignals
       .filter((signal) => !signal.pattern.test(metaContent))
@@ -841,6 +839,11 @@ export async function doctorChecks(projectRoot: string, options: DoctorOptions =
     ok: await exists(path.join(projectRoot, RUNTIME_ROOT, "knowledge.jsonl")),
     details: `${RUNTIME_ROOT}/knowledge.jsonl must exist`
   });
+  checks.push({
+    name: "knowledge:digest_exists",
+    ok: await exists(path.join(projectRoot, RUNTIME_ROOT, "state", "knowledge-digest.md")),
+    details: `${RUNTIME_ROOT}/state/knowledge-digest.md must exist`
+  });
 
   // There must be NO legacy markdown knowledge store — JSONL is the only store.
   const legacyKnowledgeMdPath = path.join(projectRoot, RUNTIME_ROOT, "knowledge.md");
@@ -1037,8 +1040,15 @@ export async function doctorChecks(projectRoot: string, options: DoctorOptions =
     name: "gates:evidence:current_stage",
     ok: gateEvidence.ok,
     details: gateEvidence.ok
-      ? `stage "${gateEvidence.stage}" gate evidence is consistent (required=${gateEvidence.requiredCount}, passed=${gateEvidence.passedCount}, blocked=${gateEvidence.blockedCount})`
+      ? `stage "${gateEvidence.stage}" gate evidence is consistent (required=${gateEvidence.requiredCount}, recommended=${gateEvidence.recommendedCount}, conditional=${gateEvidence.conditionalCount}, triggered=${gateEvidence.triggeredConditionalCount}, passed=${gateEvidence.passedCount}, blocked=${gateEvidence.blockedCount})`
       : gateEvidence.issues.join(" ")
+  });
+  checks.push({
+    name: "warning:gates:recommended:current_stage",
+    ok: true,
+    details: gateEvidence.missingRecommended.length > 0
+      ? `warning: stage "${gateEvidence.stage}" has unmet recommended gates: ${gateEvidence.missingRecommended.join(", ")}`
+      : `no unmet recommended gates for stage "${gateEvidence.stage}"`
   });
 
   const completedClosure = verifyCompletedStagesGateClosure(flowState);
@@ -1051,19 +1061,6 @@ export async function doctorChecks(projectRoot: string, options: DoctorOptions =
         : `all ${flowState.completedStages.length} completed stages have every required gate passed`
       : completedClosure.issues.join(" ")
   });
-
-  // Self-improvement block in stage skills
-  for (const stage of COMMAND_FILE_ORDER) {
-    const skillPath = path.join(projectRoot, RUNTIME_ROOT, "skills", stageSkillFolder(stage), "SKILL.md");
-    if (await exists(skillPath)) {
-      const content = await fs.readFile(skillPath, "utf8");
-      checks.push({
-        name: `skill:${stage}:self_improvement`,
-        ok: content.includes("## Operational Self-Improvement"),
-        details: `${skillPath} must contain self-improvement block`
-      });
-    }
-  }
 
   const isRepo = await isGitRepo(projectRoot);
   checks.push({

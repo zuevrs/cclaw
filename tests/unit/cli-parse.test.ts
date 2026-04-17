@@ -70,7 +70,7 @@ describe("cli parser", () => {
 
   it("throws for unknown track id", () => {
     expect(() => parseTrack("turbo")).toThrowError(/Unknown track: turbo/);
-    expect(() => parseTrack("turbo")).toThrowError(/Supported: quick, standard/);
+    expect(() => parseTrack("turbo")).toThrowError(/Supported: quick, medium, standard/);
   });
 
   it("leaves track undefined when flag not provided", () => {

@@ -159,8 +159,11 @@ describe("hooks lifecycle rehydration", () => {
     expect(context).toContain("run=active");
     expect(context).toContain("Context mode: review");
     expect(context).toContain("Checkpoint: stage=review");
-    expect(context).toContain("Knowledge snapshot");
+    expect(context).toContain("Knowledge digest");
     expect(context).toContain("split broad changes into small focused diffs");
+    const digest = await fs.readFile(path.join(root, ".cclaw/state/knowledge-digest.md"), "utf8");
+    expect(digest).toContain("Knowledge digest (auto-generated)");
+    expect(digest).toContain("split broad changes into small focused diffs");
   });
 
   it("stop script writes checkpoint with run id and preserves progress fields", async () => {
@@ -406,7 +409,7 @@ describe("hooks lifecycle rehydration", () => {
       system: string;
     };
     expect(transformed.system).toContain("Active artifacts: .cclaw/artifacts/");
-    expect(transformed.system).toContain("Knowledge snapshot");
+    expect(transformed.system).toContain("Knowledge digest");
     expect(transformed.system).toContain("make trade-offs explicit");
 
     const guardLog = await fs.readFile(path.join(root, ".cclaw/state/prompt-guard.jsonl"), "utf8");
@@ -439,7 +442,7 @@ describe("hooks lifecycle rehydration", () => {
     expect(plugin).toContain('"experimental.chat.system.transform"');
     expect(plugin).toContain("activeRunId");
     expect(plugin).not.toContain(".cclaw/runs/");
-    expect(plugin).toContain("Knowledge snapshot");
+    expect(plugin).toContain("Knowledge digest");
     expect(plugin).toContain("Last session:");
     expect(plugin).toContain("Latest context warning:");
   });

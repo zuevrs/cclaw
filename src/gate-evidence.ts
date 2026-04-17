@@ -31,12 +31,19 @@ export interface GateEvidenceCheckResult {
   stage: FlowStage;
   issues: string[];
   requiredCount: number;
+  recommendedCount: number;
+  conditionalCount: number;
+  triggeredConditionalCount: number;
   passedCount: number;
   blockedCount: number;
-  /** True only when every required gate for the stage is in `passed` and none are `blocked`. */
+  /** True only when required + triggered conditional gates are passed and unblocked. */
   complete: boolean;
   /** Required gate ids that are neither passed nor blocked. */
   missingRequired: string[];
+  /** Recommended gates not yet passed (does not block). */
+  missingRecommended: string[];
+  /** Triggered conditional gates that are not yet passed. */
+  missingTriggeredConditional: string[];
 }
 
 export interface CompletedStagesClosureResult {
@@ -45,6 +52,7 @@ export interface CompletedStagesClosureResult {
   openStages: Array<{
     stage: FlowStage;
     missingRequired: string[];
+    missingTriggeredConditional: string[];
     blocked: string[];
   }>;
 }
@@ -65,23 +73,58 @@ export async function verifyCurrentStageGateEvidence(
   const stage = flowState.currentStage;
   const schema = stageSchema(stage);
   const catalog = flowState.stageGateCatalog[stage];
-  const required = schema.requiredGates.map((gate) => gate.id);
+  const required = schema.requiredGates
+    .filter((gate) => gate.tier === "required")
+    .map((gate) => gate.id);
+  const recommended = schema.requiredGates
+    .filter((gate) => gate.tier === "recommended")
+    .map((gate) => gate.id);
+  const conditional = schema.requiredGates
+    .filter((gate) => gate.tier === "conditional")
+    .map((gate) => gate.id);
   const requiredSet = new Set(required);
+  const recommendedSet = new Set(recommended);
+  const conditionalSet = new Set(conditional);
+  const allowedSet = new Set([...required, ...recommended, ...conditional]);
   const issues: string[] = [];
 
   const catalogRequired = unique(catalog.required);
+  const catalogRecommended = unique(catalog.recommended ?? []);
+  const catalogConditional = unique(catalog.conditional ?? []);
+  const catalogTriggered = unique(catalog.triggered ?? []);
   const missingInCatalog = required.filter((gateId) => !catalogRequired.includes(gateId));
   const unexpectedInCatalog = catalogRequired.filter((gateId) => !requiredSet.has(gateId));
+  const missingRecommendedInCatalog = recommended.filter((gateId) => !catalogRecommended.includes(gateId));
+  const unexpectedRecommendedInCatalog = catalogRecommended.filter((gateId) => !recommendedSet.has(gateId));
+  const missingConditionalInCatalog = conditional.filter((gateId) => !catalogConditional.includes(gateId));
+  const unexpectedConditionalInCatalog = catalogConditional.filter((gateId) => !conditionalSet.has(gateId));
   for (const gateId of missingInCatalog) {
     issues.push(`gate "${gateId}" missing from stageGateCatalog.required for stage "${stage}".`);
   }
   for (const gateId of unexpectedInCatalog) {
     issues.push(`unexpected gate "${gateId}" found in stageGateCatalog.required for stage "${stage}".`);
   }
+  for (const gateId of missingRecommendedInCatalog) {
+    issues.push(`gate "${gateId}" missing from stageGateCatalog.recommended for stage "${stage}".`);
+  }
+  for (const gateId of unexpectedRecommendedInCatalog) {
+    issues.push(`unexpected gate "${gateId}" found in stageGateCatalog.recommended for stage "${stage}".`);
+  }
+  for (const gateId of missingConditionalInCatalog) {
+    issues.push(`gate "${gateId}" missing from stageGateCatalog.conditional for stage "${stage}".`);
+  }
+  for (const gateId of unexpectedConditionalInCatalog) {
+    issues.push(`unexpected gate "${gateId}" found in stageGateCatalog.conditional for stage "${stage}".`);
+  }
+  for (const gateId of catalogTriggered) {
+    if (!conditionalSet.has(gateId)) {
+      issues.push(`triggered gate "${gateId}" is not defined as conditional for stage "${stage}".`);
+    }
+  }
 
   const blockedSet = new Set(catalog.blocked);
   for (const gateId of catalog.passed) {
-    if (!requiredSet.has(gateId)) {
+    if (!allowedSet.has(gateId)) {
       issues.push(`passed gate "${gateId}" is not defined for stage "${stage}".`);
       continue;
     }
@@ -94,7 +137,7 @@ export async function verifyCurrentStageGateEvidence(
     }
   }
   for (const gateId of catalog.blocked) {
-    if (!requiredSet.has(gateId)) {
+    if (!allowedSet.has(gateId)) {
       issues.push(`blocked gate "${gateId}" is not defined for stage "${stage}".`);
     }
   }
@@ -125,8 +168,18 @@ export async function verifyCurrentStageGateEvidence(
   }
 
   const passedSet = new Set(catalog.passed);
+  const triggeredConditionalSet = new Set([
+    ...catalogTriggered.filter((gateId) => conditionalSet.has(gateId)),
+    ...catalog.passed.filter((gateId) => conditionalSet.has(gateId)),
+    ...catalog.blocked.filter((gateId) => conditionalSet.has(gateId))
+  ]);
   const missingRequired = required.filter((gateId) => !passedSet.has(gateId));
-  const complete = missingRequired.length === 0 && catalog.blocked.length === 0;
+  const missingRecommended = recommended.filter((gateId) => !passedSet.has(gateId));
+  const missingTriggeredConditional = [...triggeredConditionalSet].filter((gateId) => !passedSet.has(gateId));
+  const blockingBlocked = catalog.blocked.filter(
+    (gateId) => requiredSet.has(gateId) || triggeredConditionalSet.has(gateId)
+  );
+  const complete = missingRequired.length === 0 && missingTriggeredConditional.length === 0 && blockingBlocked.length === 0;
 
   if (flowState.completedStages.includes(stage) && !complete) {
     if (missingRequired.length > 0) {
@@ -134,9 +187,14 @@ export async function verifyCurrentStageGateEvidence(
         `stage "${stage}" is marked completed but required gates are not passed: ${missingRequired.join(", ")}.`
       );
     }
-    if (catalog.blocked.length > 0) {
+    if (missingTriggeredConditional.length > 0) {
       issues.push(
-        `stage "${stage}" is marked completed but has blocked gates: ${catalog.blocked.join(", ")}.`
+        `stage "${stage}" is marked completed but triggered conditional gates are not passed: ${missingTriggeredConditional.join(", ")}.`
+      );
+    }
+    if (blockingBlocked.length > 0) {
+      issues.push(
+        `stage "${stage}" is marked completed but has blocking blocked gates: ${blockingBlocked.join(", ")}.`
       );
     }
   }
@@ -146,10 +204,15 @@ export async function verifyCurrentStageGateEvidence(
     stage,
     issues,
     requiredCount: required.length,
+    recommendedCount: recommended.length,
+    conditionalCount: conditional.length,
+    triggeredConditionalCount: triggeredConditionalSet.size,
     passedCount: catalog.passed.length,
     blockedCount: catalog.blocked.length,
     complete,
-    missingRequired
+    missingRequired,
+    missingRecommended,
+    missingTriggeredConditional
   };
 }
 
@@ -159,19 +222,44 @@ export function verifyCompletedStagesGateClosure(flowState: FlowState): Complete
   for (const stage of flowState.completedStages) {
     const schema = stageSchema(stage);
     const catalog = flowState.stageGateCatalog[stage];
-    const required = schema.requiredGates.map((gate) => gate.id);
+    const required = schema.requiredGates
+      .filter((gate) => gate.tier === "required")
+      .map((gate) => gate.id);
+    const conditional = schema.requiredGates
+      .filter((gate) => gate.tier === "conditional")
+      .map((gate) => gate.id);
+    const conditionalSet = new Set(conditional);
     const passedSet = new Set(catalog.passed);
+    const triggeredSet = new Set([
+      ...(catalog.triggered ?? []).filter((gateId) => conditionalSet.has(gateId)),
+      ...catalog.passed.filter((gateId) => conditionalSet.has(gateId)),
+      ...catalog.blocked.filter((gateId) => conditionalSet.has(gateId))
+    ]);
     const missingRequired = required.filter((gateId) => !passedSet.has(gateId));
-    if (missingRequired.length > 0 || catalog.blocked.length > 0) {
-      openStages.push({ stage, missingRequired, blocked: [...catalog.blocked] });
+    const missingTriggeredConditional = [...triggeredSet].filter((gateId) => !passedSet.has(gateId));
+    const blockingBlocked = catalog.blocked.filter(
+      (gateId) => required.includes(gateId) || triggeredSet.has(gateId)
+    );
+    if (missingRequired.length > 0 || missingTriggeredConditional.length > 0 || blockingBlocked.length > 0) {
+      openStages.push({
+        stage,
+        missingRequired,
+        missingTriggeredConditional,
+        blocked: [...blockingBlocked]
+      });
       if (missingRequired.length > 0) {
         issues.push(
           `completed stage "${stage}" has unpassed required gates: ${missingRequired.join(", ")}.`
         );
       }
-      if (catalog.blocked.length > 0) {
+      if (missingTriggeredConditional.length > 0) {
         issues.push(
-          `completed stage "${stage}" still has blocked gates: ${catalog.blocked.join(", ")}.`
+          `completed stage "${stage}" has unpassed triggered conditional gates: ${missingTriggeredConditional.join(", ")}.`
+        );
+      }
+      if (blockingBlocked.length > 0) {
+        issues.push(
+          `completed stage "${stage}" still has blocking blocked gates: ${blockingBlocked.join(", ")}.`
         );
       }
     }
@@ -196,20 +284,34 @@ export function reconcileCurrentStageGateCatalog(flowState: FlowState): {
   reconciliation: GateReconciliationResult;
 } {
   const stage = flowState.currentStage;
-  const required = stageSchema(stage).requiredGates.map((gate) => gate.id);
+  const required = stageSchema(stage).requiredGates
+    .filter((gate) => gate.tier === "required")
+    .map((gate) => gate.id);
+  const recommended = stageSchema(stage).requiredGates
+    .filter((gate) => gate.tier === "recommended")
+    .map((gate) => gate.id);
+  const conditional = stageSchema(stage).requiredGates
+    .filter((gate) => gate.tier === "conditional")
+    .map((gate) => gate.id);
   const requiredSet = new Set(required);
+  const recommendedSet = new Set(recommended);
+  const conditionalSet = new Set(conditional);
+  const allowedSet = new Set([...required, ...recommended, ...conditional]);
   const catalog = flowState.stageGateCatalog[stage];
   const notes: string[] = [];
 
   const before: StageGateState = {
     required: [...catalog.required],
+    recommended: [...catalog.recommended],
+    conditional: [...catalog.conditional],
+    triggered: [...catalog.triggered],
     passed: [...catalog.passed],
     blocked: [...catalog.blocked]
   };
 
   const passedSet = new Set(
     unique(catalog.passed).filter((gateId) => {
-      const keep = requiredSet.has(gateId);
+      const keep = allowedSet.has(gateId);
       if (!keep) {
         notes.push(`removed unknown passed gate "${gateId}"`);
       }
@@ -218,13 +320,27 @@ export function reconcileCurrentStageGateCatalog(flowState: FlowState): {
   );
   const blockedSet = new Set(
     unique(catalog.blocked).filter((gateId) => {
-      const keep = requiredSet.has(gateId);
+      const keep = allowedSet.has(gateId);
       if (!keep) {
         notes.push(`removed unknown blocked gate "${gateId}"`);
       }
       return keep;
     })
   );
+  const triggeredSet = new Set(
+    unique(catalog.triggered).filter((gateId) => {
+      const keep = conditionalSet.has(gateId);
+      if (!keep) {
+        notes.push(`removed unknown triggered gate "${gateId}"`);
+      }
+      return keep;
+    })
+  );
+  for (const gateId of [...passedSet, ...blockedSet]) {
+    if (conditionalSet.has(gateId)) {
+      triggeredSet.add(gateId);
+    }
+  }
 
   for (const gateId of [...passedSet]) {
     if (!blockedSet.has(gateId)) continue;
@@ -248,12 +364,20 @@ export function reconcileCurrentStageGateCatalog(flowState: FlowState): {
 
   const after: StageGateState = {
     required: [...required],
-    passed: required.filter((gateId) => passedSet.has(gateId)),
-    blocked: required.filter((gateId) => blockedSet.has(gateId) && !passedSet.has(gateId))
+    recommended: [...recommended],
+    conditional: [...conditional],
+    triggered: conditional.filter((gateId) => triggeredSet.has(gateId)),
+    passed: [...required, ...recommended, ...conditional].filter((gateId) => passedSet.has(gateId)),
+    blocked: [...required, ...recommended, ...conditional].filter(
+      (gateId) => blockedSet.has(gateId) && !passedSet.has(gateId)
+    )
   };
 
   const changed =
     !sameStringArray(before.required, after.required) ||
+    !sameStringArray(before.recommended, after.recommended) ||
+    !sameStringArray(before.conditional, after.conditional) ||
+    !sameStringArray(before.triggered, after.triggered) ||
     !sameStringArray(before.passed, after.passed) ||
     !sameStringArray(before.blocked, after.blocked);
 

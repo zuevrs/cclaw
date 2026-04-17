@@ -137,9 +137,9 @@ describe("artifact linter heuristics", () => {
 
     const result = await lintArtifact(root, "brainstorm");
     const questions = result.findings.find((finding) => finding.section === "Clarifying Questions");
-    expect(result.passed).toBe(false);
+    expect(result.passed).toBe(true);
     expect(questions?.found).toBe(false);
-    expect(questions?.details).toContain("no meaningful content");
+    expect(questions?.required).toBe(false);
   });
 
   it("enforces exactly one selected enum token in finalization", async () => {
@@ -307,8 +307,9 @@ describe("artifact linter heuristics", () => {
 
     const result = await lintArtifact(root, "review");
     const readiness = result.findings.find((finding) => finding.section === "Review Readiness Dashboard");
-    expect(result.passed).toBe(false);
+    expect(result.passed).toBe(true);
     expect(readiness?.found).toBe(false);
+    expect(readiness?.required).toBe(false);
   });
 
   it("fails scope artifact missing Mode-Specific Analysis section", async () => {
@@ -372,9 +373,9 @@ describe("artifact linter heuristics", () => {
 
     const result = await lintArtifact(root, "scope");
     const modeAnalysis = result.findings.find((f) => f.section === "Mode-Specific Analysis");
-    expect(result.passed).toBe(false);
+    expect(result.passed).toBe(true);
     expect(modeAnalysis?.found).toBe(false);
-    expect(modeAnalysis?.required).toBe(true);
+    expect(modeAnalysis?.required).toBe(false);
   });
 
   it("fails design artifact when Codebase Investigation is missing", async () => {
@@ -437,7 +438,7 @@ API -> Service -> DB
     const cbi = result.findings.find((f) => f.section === "Codebase Investigation");
     expect(result.passed).toBe(false);
     expect(cbi?.found).toBe(false);
-    expect(cbi?.required).toBe(true);
+    expect(cbi?.required).toBe(false);
   });
 
   it("fails design artifact when Performance Budget is missing", async () => {
@@ -500,7 +501,7 @@ API -> Service -> DB
     const perf = result.findings.find((f) => f.section === "Performance Budget");
     expect(result.passed).toBe(false);
     expect(perf?.found).toBe(false);
-    expect(perf?.required).toBe(true);
+    expect(perf?.required).toBe(false);
   });
 
   it("design trivial-change escape hatch downgrades most sections to optional", async () => {
@@ -695,10 +696,10 @@ API -> Service -> DB
 `);
 
     const result = await lintArtifact(root, "plan");
-    expect(result.passed).toBe(false);
+    expect(result.passed).toBe(true);
     const dg = result.findings.find((f) => f.section === "Dependency Graph");
     expect(dg?.found).toBe(false);
-    expect(dg?.required).toBe(true);
+    expect(dg?.required).toBe(false);
   });
 
   it("fails plan when Task List is empty", async () => {
@@ -970,10 +971,10 @@ API -> Service -> DB
 `);
 
     const result = await lintArtifact(root, "tdd");
-    expect(result.passed).toBe(false);
+    expect(result.passed).toBe(true);
     const am = result.findings.find((f) => f.section === "Acceptance Mapping");
     expect(am?.found).toBe(false);
-    expect(am?.required).toBe(true);
+    expect(am?.required).toBe(false);
   });
 
   it("fails tdd when Failure Analysis is missing", async () => {
@@ -1005,10 +1006,10 @@ API -> Service -> DB
 `);
 
     const result = await lintArtifact(root, "tdd");
-    expect(result.passed).toBe(false);
+    expect(result.passed).toBe(true);
     const fa = result.findings.find((f) => f.section === "Failure Analysis");
     expect(fa?.found).toBe(false);
-    expect(fa?.required).toBe(true);
+    expect(fa?.required).toBe(false);
   });
 
   it("fails tdd when REFACTOR Notes is missing", async () => {
@@ -1229,10 +1230,10 @@ API -> Service -> DB
 `);
 
     const result = await lintArtifact(root, "review");
-    expect(result.passed).toBe(false);
+    expect(result.passed).toBe(true);
     const l2 = result.findings.find((f) => f.section === "Layer 2 Findings");
     expect(l2?.found).toBe(false);
-    expect(l2?.required).toBe(true);
+    expect(l2?.required).toBe(false);
   });
 
   it("fails review when Final Verdict is invalid enum value", async () => {

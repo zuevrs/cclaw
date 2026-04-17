@@ -62,9 +62,10 @@ This is the only progression command the user needs to drive the entire flow. St
 
 ### Track-aware successor resolution
 
-\`flow-state.json\` carries a \`track\` field (\`"quick"\` or \`"standard"\`) and a \`skippedStages\` array.
+\`flow-state.json\` carries a \`track\` field (\`"quick"\`, \`"medium"\`, or \`"standard"\`) and a \`skippedStages\` array.
 
 - If \`track === "quick"\`, the critical path is **spec → tdd → review → ship**. When advancing, skip any stage listed in \`skippedStages\` — i.e. after the current stage completes, pick the next stage that is NOT in \`skippedStages\`.
+- If \`track === "medium"\`, the critical path is **brainstorm → spec → plan → tdd → review → ship**. Scope and design are intentionally skipped unless the run is reclassified to standard.
 - If \`track === "standard"\`, advance through all 8 stages in their natural order.
 - Never reintroduce a skipped stage mid-run. If the user wants upstream scoping work, they must archive the run and start a new one with \`track: "standard"\`.
 

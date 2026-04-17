@@ -4,6 +4,9 @@ import type { FlowStage, TransitionRule } from "../types.js";
 export interface StageGate {
   id: string;
   description: string;
+  tier?: "required" | "recommended" | "conditional";
+  /** Used when tier=conditional. Predicate syntax mirrors conditional delegation rules. */
+  condition?: string;
 }
 
 export interface StageRationalization {
@@ -31,6 +34,9 @@ export interface CrossStageTrace {
 export interface ArtifactValidation {
   section: string;
   required: boolean;
+  tier?: "required" | "recommended" | "conditional";
+  /** Optional predicate for conditional validations. */
+  condition?: string;
   validationRule: string;
 }
 
@@ -135,6 +141,130 @@ export interface StageSchema {
 // ---------------------------------------------------------------------------
 
 type StageSchemaInput = Omit<StageSchema, "mandatoryDelegations">;
+
+/**
+ * Gate tiers:
+ * - required: blocking for stage completion.
+ * - recommended: quality signal; unmet -> DONE_WITH_CONCERNS, not BLOCKED.
+ * - conditional: becomes blocking only when triggered.
+ */
+const REQUIRED_GATE_IDS: Record<FlowStage, string[]> = {
+  brainstorm: [
+    "brainstorm_approaches_compared",
+    "brainstorm_direction_approved",
+    "brainstorm_artifact_reviewed"
+  ],
+  scope: [
+    "scope_mode_selected",
+    "scope_contract_written",
+    "scope_user_approved"
+  ],
+  design: [
+    "design_architecture_locked",
+    "design_data_flow_mapped",
+    "design_failure_modes_mapped",
+    "design_test_and_perf_defined"
+  ],
+  spec: [
+    "spec_acceptance_measurable",
+    "spec_testability_confirmed",
+    "spec_user_approved"
+  ],
+  plan: [
+    "plan_tasks_sliced_2_5_min",
+    "plan_dependency_waves_defined",
+    "plan_acceptance_mapped",
+    "plan_wait_for_confirm"
+  ],
+  tdd: [
+    "tdd_red_test_written",
+    "tdd_green_full_suite",
+    "tdd_refactor_completed",
+    "tdd_traceable_to_plan"
+  ],
+  review: [
+    "review_layer1_spec_compliance",
+    "review_layer2_security",
+    "review_criticals_resolved",
+    "review_army_json_valid"
+  ],
+  ship: [
+    "ship_review_verdict_valid",
+    "ship_preflight_passed",
+    "ship_rollback_plan_ready",
+    "ship_finalization_executed"
+  ]
+};
+
+const CONDITIONAL_GATE_RULES: Partial<Record<FlowStage, Record<string, string>>> = {
+  review: {
+    review_security_audit_swept: "diff_lines_gt:100||files_touched_gt:10||trust_boundary_changed"
+  },
+  ship: {
+    ship_post_merge_tests: "files_touched_gt:10||release_blast_radius_high"
+  }
+};
+
+const REQUIRED_ARTIFACT_SECTIONS: Record<FlowStage, string[]> = {
+  brainstorm: ["Context", "Problem", "Approaches", "Selected Direction"],
+  scope: ["Scope Mode", "In Scope / Out of Scope", "Completion Dashboard", "Scope Summary"],
+  design: ["Architecture Boundaries", "Architecture Diagram", "Failure Mode Table", "Completion Dashboard"],
+  spec: ["Acceptance Criteria", "Edge Cases", "Testability Map", "Approval"],
+  plan: ["Task List", "Dependency Waves", "Acceptance Mapping", "WAIT_FOR_CONFIRM"],
+  tdd: ["RED Evidence", "GREEN Evidence", "REFACTOR Notes", "Traceability"],
+  review: ["Layer 1 Verdict", "Review Army Contract", "Severity Summary", "Final Verdict"],
+  ship: ["Preflight Results", "Release Notes", "Rollback Plan", "Finalization"]
+};
+
+const CONDITIONAL_ARTIFACT_RULES: Partial<Record<FlowStage, Record<string, string>>> = {
+  review: {
+    "Review Readiness Dashboard": "diff_lines_gt:100||files_touched_gt:10||trust_boundary_changed"
+  },
+  ship: {
+    Monitoring: "release_blast_radius_high"
+  }
+};
+
+function tieredStageGates(stage: FlowStage, gates: StageGate[]): StageGate[] {
+  const requiredSet = new Set(REQUIRED_GATE_IDS[stage]);
+  const conditional = CONDITIONAL_GATE_RULES[stage] ?? {};
+  return gates.map((gate) => {
+    const condition = conditional[gate.id];
+    if (condition) {
+      return {
+        ...gate,
+        tier: "conditional",
+        condition
+      };
+    }
+    return {
+      ...gate,
+      tier: requiredSet.has(gate.id) ? "required" : "recommended"
+    };
+  });
+}
+
+function tieredArtifactValidation(stage: FlowStage, rows: ArtifactValidation[]): ArtifactValidation[] {
+  const requiredSections = new Set(REQUIRED_ARTIFACT_SECTIONS[stage]);
+  const conditional = CONDITIONAL_ARTIFACT_RULES[stage] ?? {};
+  return rows.map((row) => {
+    const condition = conditional[row.section];
+    if (condition) {
+      return {
+        ...row,
+        tier: "conditional",
+        condition,
+        required: false
+      };
+    }
+    const required = requiredSections.has(row.section);
+    return {
+      ...row,
+      tier: required ? "required" : "recommended",
+      required
+    };
+  });
+}
 
 const BRAINSTORM: StageSchemaInput = {
   stage: "brainstorm",
@@ -1846,8 +1976,12 @@ export function conditionalDispatchesForStage(stage: FlowStage): StageAutoSubage
 
 export function stageSchema(stage: FlowStage): StageSchema {
   const base = STAGE_SCHEMA_MAP[stage];
+  const tieredGates = tieredStageGates(stage, base.requiredGates);
+  const tieredValidation = tieredArtifactValidation(stage, base.artifactValidation);
   return {
     ...base,
+    requiredGates: tieredGates,
+    artifactValidation: tieredValidation,
     mandatoryDelegations: mandatoryDelegationsForStage(stage)
   };
 }
@@ -1857,7 +1991,21 @@ export function orderedStageSchemas(): StageSchema[] {
 }
 
 export function stageGateIds(stage: FlowStage): string[] {
-  return stageSchema(stage).requiredGates.map((gate) => gate.id);
+  return stageSchema(stage).requiredGates
+    .filter((gate) => gate.tier === "required")
+    .map((gate) => gate.id);
+}
+
+export function stageRecommendedGateIds(stage: FlowStage): string[] {
+  return stageSchema(stage).requiredGates
+    .filter((gate) => gate.tier === "recommended")
+    .map((gate) => gate.id);
+}
+
+export function stageConditionalGateIds(stage: FlowStage): string[] {
+  return stageSchema(stage).requiredGates
+    .filter((gate) => gate.tier === "conditional")
+    .map((gate) => gate.id);
 }
 
 export function nextCclawCommand(stage: FlowStage): string {

@@ -33,12 +33,18 @@ import {
 } from "./content/observe.js";
 import { META_SKILL_NAME, usingCclawSkillMarkdown } from "./content/meta-skill.js";
 import {
+  decisionProtocolMarkdown,
+  completionProtocolMarkdown,
+  ethosProtocolMarkdown
+} from "./content/protocols.js";
+import {
   ARTIFACT_TEMPLATES,
   CURSOR_WORKFLOW_RULE_MDC,
   RULEBOOK_MARKDOWN,
   buildRulesJson
 } from "./content/templates.js";
 import { TDD_WAVE_WALKTHROUGH_MARKDOWN, stageSkillFolder, stageSkillMarkdown } from "./content/skills.js";
+import { stageCommonGuidanceMarkdown } from "./content/stage-common-guidance.js";
 import {
   STAGE_EXAMPLES_REFERENCE_DIR,
   stageExamplesReferenceMarkdown
@@ -251,6 +257,10 @@ async function writeSkills(projectRoot: string, config?: VibyConfig): Promise<vo
     runtimePath(projectRoot, ...STAGE_EXAMPLES_REFERENCE_DIR.split("/"), "tdd-wave-walkthrough.md"),
     TDD_WAVE_WALKTHROUGH_MARKDOWN
   );
+  await writeFileSafe(
+    runtimePath(projectRoot, ...STAGE_EXAMPLES_REFERENCE_DIR.split("/"), "common-guidance.md"),
+    stageCommonGuidanceMarkdown()
+  );
 
   // Utility skills (not flow stages)
   await writeFileSafe(
@@ -285,6 +295,18 @@ async function writeSkills(projectRoot: string, config?: VibyConfig): Promise<vo
   await writeFileSafe(
     runtimePath(projectRoot, "skills", META_SKILL_NAME, "SKILL.md"),
     usingCclawSkillMarkdown()
+  );
+  await writeFileSafe(
+    runtimePath(projectRoot, "references", "protocols", "decision.md"),
+    decisionProtocolMarkdown()
+  );
+  await writeFileSafe(
+    runtimePath(projectRoot, "references", "protocols", "completion.md"),
+    completionProtocolMarkdown()
+  );
+  await writeFileSafe(
+    runtimePath(projectRoot, "references", "protocols", "ethos.md"),
+    ethosProtocolMarkdown()
   );
 
   for (const folder of UTILITY_SKILL_FOLDERS) {
@@ -909,6 +931,14 @@ async function ensureSessionStateFiles(projectRoot: string): Promise<void> {
     await writeFileSafe(
       contextModePath,
       `${JSON.stringify(createInitialContextModeState(), null, 2)}\n`
+    );
+  }
+
+  const knowledgeDigestPath = path.join(stateDir, "knowledge-digest.md");
+  if (!(await exists(knowledgeDigestPath))) {
+    await writeFileSafe(
+      knowledgeDigestPath,
+      "# Knowledge digest (auto-generated)\n\n(no entries yet)\n"
     );
   }
 }

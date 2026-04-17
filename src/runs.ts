@@ -211,11 +211,15 @@ function sanitizeStageGateCatalog(
   value: unknown,
   fallback: FlowState["stageGateCatalog"]
 ): FlowState["stageGateCatalog"] {
+  const uniqueStrings = (items: string[]): string[] => [...new Set(items)];
   const next = {} as FlowState["stageGateCatalog"];
   for (const stage of COMMAND_FILE_ORDER) {
     const base = fallback[stage];
     next[stage] = {
       required: [...base.required],
+      recommended: [...base.recommended],
+      conditional: [...base.conditional],
+      triggered: [...base.triggered],
       passed: [...base.passed],
       blocked: [...base.blocked]
     };
@@ -232,11 +236,26 @@ function sanitizeStageGateCatalog(
       continue;
     }
     const typed = rawStage as Record<string, unknown>;
-    const allowedGateIds = new Set(next[stage].required);
+    const stageState = next[stage];
+    const allowedGateIds = new Set([
+      ...stageState.required,
+      ...stageState.recommended,
+      ...stageState.conditional
+    ]);
+    const conditionalGateIds = new Set(stageState.conditional);
+    const passed = sanitizeStringArray(typed.passed).filter((gate) => allowedGateIds.has(gate));
+    const blocked = sanitizeStringArray(typed.blocked).filter((gate) => allowedGateIds.has(gate));
+    const triggeredFromState = sanitizeStringArray(typed.triggered).filter((gate) =>
+      conditionalGateIds.has(gate)
+    );
+    const touchedConditionals = [...passed, ...blocked].filter((gate) => conditionalGateIds.has(gate));
     next[stage] = {
-      required: [...next[stage].required],
-      passed: sanitizeStringArray(typed.passed).filter((gate) => allowedGateIds.has(gate)),
-      blocked: sanitizeStringArray(typed.blocked).filter((gate) => allowedGateIds.has(gate))
+      required: [...stageState.required],
+      recommended: [...stageState.recommended],
+      conditional: [...stageState.conditional],
+      triggered: uniqueStrings([...triggeredFromState, ...touchedConditionals]),
+      passed,
+      blocked
     };
   }
 
