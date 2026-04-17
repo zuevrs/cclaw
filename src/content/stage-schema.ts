@@ -9,16 +9,6 @@ export interface StageGate {
   condition?: string;
 }
 
-export interface StageRationalization {
-  claim: string;
-  reality: string;
-}
-
-export interface CognitivePattern {
-  name: string;
-  description: string;
-}
-
 export interface ReviewSection {
   title: string;
   evaluationPoints: string[];
@@ -68,11 +58,6 @@ export interface StageAutoSubagentDispatch {
   skill?: string;
 }
 
-export interface NamedAntiPattern {
-  title: string;
-  description: string;
-}
-
 export interface StageSchema {
   stage: FlowStage;
   skillFolder: string;
@@ -102,19 +87,15 @@ export interface StageSchema {
   blockers: string[];
   exitCriteria: string[];
   antiPatterns: string[];
-  rationalizations: StageRationalization[];
   redFlags: string[];
   policyNeedles: string[];
   artifactFile: string;
   next: FlowStage | "done";
   checklist: string[];
-  cognitivePatterns: CognitivePattern[];
   reviewSections: ReviewSection[];
   completionStatus: string[];
   crossStageTrace: CrossStageTrace;
   artifactValidation: ArtifactValidation[];
-  namedAntiPattern?: NamedAntiPattern;
-  decisionRecordFormat?: string;
   /** When true, stage skill includes wave auto-execute guidance (tdd). */
   waveExecutionAllowed?: boolean;
   /** Sections that remain required even when the trivial-change escape hatch is active (design only). */
@@ -360,11 +341,6 @@ const BRAINSTORM: StageSchemaInput = {
     "Jumping directly into implementation",
     "Requesting approval without stating what decision is being approved"
   ],
-  rationalizations: [
-    { claim: "I already know what to build, so exploration is unnecessary.", reality: "Checking files and context catches wrong assumptions that waste hours later." },
-    { claim: "Any question is useful context.", reality: "Only questions whose answers change what we build improve the design." },
-    { claim: "Two options that differ only in tooling count as distinct approaches.", reality: "Distinct means different architecture, not different libraries for the same approach." }
-  ],
   redFlags: [
     "No project context exploration before questions",
     "Questions that only gather preferences without design impact",
@@ -381,13 +357,6 @@ const BRAINSTORM: StageSchemaInput = {
   ],
   artifactFile: "01-brainstorm.md",
   next: "scope",
-  cognitivePatterns: [
-    { name: "Context Before Questions", description: "Understand what exists before asking what to build." },
-    { name: "Depth Matches Complexity", description: "Brief design for simple tasks, thorough exploration for complex ones." },
-    { name: "Diverge Then Commit", description: "Explore multiple architecturally distinct options first, commit only after explicit approval." },
-    { name: "Question Quality Over Quantity", description: "Each question should change what we build, not just gather trivia." },
-    { name: "Know When To Move On", description: "Stop asking when problem, constraints, and success criteria are clear enough to compare approaches." }
-  ],
   reviewSections: [],
   completionStatus: ["DONE", "DONE_WITH_CONCERNS", "BLOCKED"],
   crossStageTrace: {
@@ -403,11 +372,7 @@ const BRAINSTORM: StageSchemaInput = {
     { section: "Selected Direction", required: true, validationRule: "Must include the selected approach, rationale, and explicit approval marker." },
     { section: "Design", required: true, validationRule: "Must cover architecture, key components, and data flow scaled to complexity." },
     { section: "Assumptions and Open Questions", required: true, validationRule: "Must capture unresolved assumptions/open questions, or explicitly state none." }
-  ],
-  namedAntiPattern: {
-    title: "This Is Too Simple To Need A Design",
-    description: "Every project goes through this process. Simple projects are where unexamined assumptions cause the most wasted work. The design can be short, but you MUST present it and get approval."
-  }
+  ]
 };
 
 // ---------------------------------------------------------------------------
@@ -515,13 +480,6 @@ const SCOPE: StageSchemaInput = {
     "Batching multiple scope issues into one question",
     "Re-arguing for smaller scope after user rejects reduction"
   ],
-  rationalizations: [
-    { claim: "Scope can be finalized during implementation.", reality: "Late scope decisions create architecture churn and missed deadlines." },
-    { claim: "Mode selection is unnecessary overhead.", reality: "Mode selection makes trade-offs explicit and prevents silent drift." },
-    { claim: "Out-of-scope is obvious.", reality: "Unwritten exclusions return later as hidden requirements." },
-    { claim: "We do not need alternatives for a clear request.", reality: "Even clear requests benefit from a minimal-viable vs ideal comparison." },
-    { claim: "Pushback risks sounding confrontational, so I should stay neutral.", reality: "Respectful pushback catches framing errors before they become expensive implementation mistakes." }
-  ],
   redFlags: [
     "No selected mode in artifact",
     "Mode selected without heuristic justification",
@@ -534,17 +492,6 @@ const SCOPE: StageSchemaInput = {
   policyNeedles: ["Scope mode", "In Scope", "Out of Scope", "Discretion Areas", "NOT in scope", "Premise Challenge"],
   artifactFile: "02-scope.md",
   next: "design",
-  cognitivePatterns: [
-    { name: "Depth Matches Complexity", description: "Scale each section to project complexity: concise for simple prototypes, deep for production systems." },
-    { name: "Classification Instinct", description: "Categorize every decision by reversibility x magnitude. Most things are two-way doors — move fast. Only slow down for irreversible + high-magnitude decisions." },
-    { name: "Inversion Reflex", description: "For every 'how do we win?' also ask 'what would make us fail?' Map failure modes before committing to scope." },
-    { name: "Focus as Subtraction", description: "Primary value-add is what to NOT do. Default: do fewer things, better. Every feature must earn its place." },
-    { name: "Speed Calibration", description: "Fast is default. Only slow down for irreversible + high-magnitude decisions. 70% information is enough to decide." },
-    { name: "Leverage Obsession", description: "Find inputs where small effort creates massive output. Reuse existing code aggressively. Build new only when nothing exists." },
-    { name: "Proxy Skepticism", description: "Is this metric/feature solving the actual problem or a proxy for it? Ask: if this succeeds perfectly, does the user's real problem go away?" },
-    { name: "Narrative Coherence", description: "The scope should tell a story: problem → insight → solution → impact. If you cannot tell that story in two sentences, scope is too broad or misframed." },
-    { name: "Blast Radius Awareness", description: "For every scope item, count how many systems/files/teams it touches. High blast radius = high risk = needs explicit justification." }
-  ],
   reviewSections: [
     {
       title: "Scope Boundary Audit",
@@ -615,11 +562,7 @@ const SCOPE: StageSchemaInput = {
     { section: "Scope Summary", required: true, validationRule: "Clean summary: mode, strongest challenges, recommended path, accepted scope, deferred, excluded." },
     { section: "Dream State Mapping", required: false, validationRule: "If present (complex projects): CURRENT STATE, THIS PLAN, 12-MONTH IDEAL, and alignment verdict." },
     { section: "Temporal Interrogation", required: false, validationRule: "If present (complex projects): timeline simulation table with decision pressures and lock-now vs defer verdicts." }
-  ],
-  namedAntiPattern: {
-    title: "Scope Is Obvious From Context",
-    description: "Scope is never obvious. Unstated boundaries return as hidden requirements during implementation. Even when a request seems perfectly clear, the act of writing explicit in-scope and out-of-scope lists reveals assumptions that would otherwise surface as late surprises."
-  }
+  ]
 };
 
 // ---------------------------------------------------------------------------
@@ -740,14 +683,6 @@ const DESIGN: StageSchemaInput = {
     "Agreeing with user's architecture choice without evaluating alternatives",
     "Hedging every recommendation with 'it depends' instead of taking a position"
   ],
-  rationalizations: [
-    { claim: "Architecture can emerge incrementally while coding.", reality: "Unplanned architecture decisions cause incompatible module boundaries." },
-    { claim: "Failure modes are edge cases we can ignore for now.", reality: "Production incidents usually come from unplanned edge paths." },
-    { claim: "Performance can be optimized after launch.", reality: "Missing performance budgets make regressions invisible until late." },
-    { claim: "This is a strategy doc so implementation sections do not apply.", reality: "Implementation details are where strategy breaks down. Every section must be evaluated." },
-    { claim: "The user preferred approach A, so we should go with it.", reality: "User preference is an input, not a conclusion. Evaluate on engineering merit. If approach B is objectively better, recommend B with evidence." },
-    { claim: "Both options are roughly equivalent.", reality: "Options are never equivalent once you quantify effort (S/M/L/XL) and risk (Low/Med/High). If you cannot distinguish them, you have not investigated deeply enough." }
-  ],
   redFlags: [
     "No explicit architecture boundary section",
     "No failure recovery strategy",
@@ -766,19 +701,6 @@ const DESIGN: StageSchemaInput = {
   ],
   artifactFile: "03-design.md",
   next: "spec",
-  cognitivePatterns: [
-    { name: "Boring By Default", description: "Every company gets about three innovation tokens. Everything else should be proven technology. If the plan rolls a custom solution where a built-in exists, flag it." },
-    { name: "Incremental Over Revolutionary", description: "Strangler fig, not big bang. Canary, not global rollout. Refactor, not rewrite." },
-    { name: "Systems Over Heroes", description: "Design for tired humans at 3am, not your best engineer on their best day. If it requires heroics to operate, the design is wrong." },
-    { name: "Essential vs Accidental Complexity", description: "Before adding anything: is this solving a real problem or one we created? Distinguish essential complexity from accidental." },
-    { name: "Blast Radius Instinct", description: "Every decision evaluated through: what is the worst case and how many systems/people does it affect?" },
-    { name: "Completeness Push", description: "AI effort is cheap. Push for completeness in plans: cover all files in blast radius, all edge cases in touched code, all affected tests. Favor doing it now over creating a TODO." },
-    { name: "Owner Preference Alignment", description: "Every recommendation must align with project conventions (DRY, test style, minimal diff, edge-case rigor). Read existing patterns before recommending new ones." },
-    { name: "Failure Is Information", description: "A design that fails fast and visibly is better than one that silently degrades. Map every failure mode and make it observable. Undetected failures compound." },
-    { name: "Search Breadth Before Depth", description: "Before committing to a design path, survey the full solution space: stdlib, existing code, open-source, prior art. A 30-minute search can save a 30-hour custom build." },
-    { name: "Outside Voice", description: "When confidence is high and options seem obvious, that is exactly when to seek contradiction. Ask: what would a skeptical reviewer challenge here? What assumption am I not questioning?" },
-    { name: "Ambiguity Classification", description: "Before resolving any unclear requirement, classify it: (A) Insufficient information — ask the user. (B) Multiple valid interpretations — enumerate and pick with justification. (C) Genuinely unknown — propose hypothesis and validation path. Never treat all ambiguity the same way." }
-  ],
   reviewSections: [
     {
       title: "Architecture Review",
@@ -857,20 +779,7 @@ const DESIGN: StageSchemaInput = {
     { section: "Patterns to Mirror", required: false, validationRule: "If present: list discovered codebase patterns to follow, with file references and rationale for each." },
     { section: "Completion Dashboard", required: true, validationRule: "Lists every review section with status (clear / issues-found-resolved / issues-open), decision count, and unresolved items (or 'None')." }
   ],
-  trivialOverrideSections: ["Architecture Boundaries", "NOT in scope", "Completion Dashboard"],
-  namedAntiPattern: {
-    title: "Architecture Will Emerge While Coding",
-    description: "Emergent architecture is a myth for non-trivial systems. What actually emerges is accidental complexity, incompatible module boundaries, and tech debt that costs 10x to fix later. Lock architecture explicitly before writing code."
-  },
-  decisionRecordFormat: `### Decision: [TITLE]
-**Status:** Proposed | Accepted | Rejected
-**Context:** [What is the situation?]
-**Options:**
-- A: [option] — effort: [S/M/L], risk: [low/med/high]
-- B: [option] — effort: [S/M/L], risk: [low/med/high]
-**Decision:** [chosen option]
-**Rationale:** [why this option over others]
-**Consequences:** [what changes as a result]`
+  trivialOverrideSections: ["Architecture Boundaries", "NOT in scope", "Completion Dashboard"]
 };
 
 // ---------------------------------------------------------------------------
@@ -959,12 +868,6 @@ const SPEC: StageSchemaInput = {
     "Proceeding to plan before approval",
     "Using vague adjectives (fast, intuitive, robust) without thresholds"
   ],
-  rationalizations: [
-    { claim: "The implementation will clarify this requirement.", reality: "Unclear specs create rework and contradictory implementations." },
-    { claim: "Acceptance criteria do not need to be measurable.", reality: "Without measurability, verification becomes subjective." },
-    { claim: "We can skip explicit approval to save time.", reality: "Skipping approval shifts uncertainty into later, costlier stages." },
-    { claim: "Edge cases are implementation details.", reality: "Edge cases determine acceptance boundaries; specifying them prevents scope creep." }
-  ],
   redFlags: [
     "Criteria use vague language (fast, intuitive, robust) without thresholds",
     "No explicit assumptions section",
@@ -975,12 +878,6 @@ const SPEC: StageSchemaInput = {
   policyNeedles: ["Acceptance Criteria", "Constraints", "Testability", "approved spec", "Edge Cases"],
   artifactFile: "04-spec.md",
   next: "plan",
-  cognitivePatterns: [
-    { name: "Observable Over Descriptive", description: "Requirements describe what can be observed, not what should feel like. Replace every adjective with a measurement." },
-    { name: "Boundary Precision", description: "Every acceptance criterion has boundary conditions. What is the minimum valid input? Maximum? What happens at the edges?" },
-    { name: "Assumption Surfacing", description: "Implicit assumptions are invisible requirements. Force every assumption into an explicit statement. If you cannot name the assumption, you have not found it yet." },
-    { name: "Ambiguity Classification", description: "Before resolving any unclear requirement, classify it: (A) Insufficient information — ask the user. (B) Multiple valid interpretations — enumerate and pick with justification. (C) Genuinely unknown — propose hypothesis and validation path. Never treat all ambiguity the same way." }
-  ],
   reviewSections: [
     {
       title: "Acceptance Criteria Audit",
@@ -1020,11 +917,7 @@ const SPEC: StageSchemaInput = {
     { section: "Non-Functional Requirements", required: false, validationRule: "If present: performance thresholds, security constraints, scalability limits, reliability targets with measurable values." },
     { section: "Interface Contracts", required: false, validationRule: "If present: for each module boundary list produces (outputs) and consumes (inputs) with data types." },
     { section: "Approval", required: true, validationRule: "Explicit user approval marker present." }
-  ],
-  namedAntiPattern: {
-    title: "Implementation Will Clarify Requirements",
-    description: "Unclear specs do not become clear during coding — they become contradictory implementations, rework, and scope creep. If a requirement cannot be stated in observable, testable terms right now, it is not ready for implementation. Rewrite it until it is falsifiable."
-  }
+  ]
 };
 
 // ---------------------------------------------------------------------------
@@ -1113,11 +1006,6 @@ const PLAN: StageSchemaInput = {
     "Starting execution before approval",
     "Tasks that touch multiple unrelated areas"
   ],
-  rationalizations: [
-    { claim: "Task details can be finalized during coding.", reality: "Underspecified tasks cause context thrash and broken sequencing." },
-    { claim: "Dependency map is overkill for this change.", reality: "Missing dependencies are a major source of blocked execution." },
-    { claim: "We can assume approval and continue.", reality: "Explicit confirmation is the contract boundary between planning and execution." }
-  ],
   redFlags: [
     "No dependency graph",
     "No WAIT_FOR_CONFIRM marker",
@@ -1128,16 +1016,6 @@ const PLAN: StageSchemaInput = {
   policyNeedles: ["WAIT_FOR_CONFIRM", "Task Graph", "Dependency Waves", "Acceptance Mapping", "verification steps"],
   artifactFile: "05-plan.md",
   next: "tdd",
-  cognitivePatterns: [
-    { name: "Vertical Slice Thinking", description: "Each task delivers one thin end-to-end slice of value. Horizontal layers (all models, then all controllers) create integration risk. Vertical slices (one feature through all layers) reduce it." },
-    { name: "Two-Minute Smell Test", description: "If a competent engineer cannot understand and start a task in two minutes, the task is too large or too vague. Break it down further." },
-    { name: "Five-Minute Budget (hard)", description: "Every plan step MUST fit a 2-to-5-minute execution budget on a competent implementer. If a step plausibly takes longer, it is two steps pretending to be one — split it. Measure by 'keyboard minutes on this slice', not by wall clock. Write the estimated minutes next to each task (e.g. `[~3m]`); when a TDD slice later consumes >2× the estimate, log an operational-self-improvement entry so future plans calibrate better." },
-    { name: "No Placeholders", description: "Plan text must be copy-pasteable. Forbidden tokens anywhere in the artifact: `TODO`, `TBD`, `FIXME`, `<fill-in>`, `<your-*-here>`, `xxx`, `...` (as ellipsis for omitted content — real commands use real args). Every acceptance-criterion link, file path, test command, and verification command must be concrete and runnable as written. A placeholder is a deferred decision masquerading as a plan; decide it now or remove the task." },
-    { name: "Make the Change Easy, Then Make the Easy Change", description: "Refactor first, implement second. Never structural + behavioral changes simultaneously. Sequence tasks accordingly." },
-    { name: "Diagnose Before Fix", description: "Before decomposing work, understand the current state of the codebase. Read existing code, tests, and conventions. Tasks should reference what exists, not assume a blank slate." },
-    { name: "Scrap Signals", description: "If a task description is vague, the acceptance criterion is missing, or the verification command is a placeholder — it is scrap. Either rewrite it or remove it. Half-specified tasks waste more time than no tasks." },
-    { name: "Risk-First Exploration", description: "Sequence the highest-risk or most uncertain tasks first. If wave 1 proves the risky assumption wrong, the rest of the plan can adapt. If the risk is buried in wave 3, you discover failure late." }
-  ],
   reviewSections: [
     {
       title: "Task Decomposition Audit",
@@ -1187,11 +1065,7 @@ const PLAN: StageSchemaInput = {
     { section: "Boundary Map", required: false, validationRule: "If present: per-wave or per-task interface contracts listing what each task produces (exports) and consumes (imports) from other tasks." },
     { section: "WAIT_FOR_CONFIRM", required: true, validationRule: "Explicit marker present. Status: pending until user approves." },
     { section: "No-Placeholder Scan", required: false, validationRule: "If present: confirmation that a text scan for `TODO`, `TBD`, `FIXME`, `<fill-in>`, `<your-*-here>`, `xxx`, or bare ellipses has zero hits in the task list. A placeholder is a deferred decision masquerading as a plan." }
-  ],
-  namedAntiPattern: {
-    title: "Task Details Can Be Finalized During Coding",
-    description: "Underspecified tasks do not become clear during implementation — they become context thrash, broken sequencing, and rework. Every task needs an acceptance criterion, a verification command, and a wave assignment before execution starts. If you cannot describe what 'done' looks like for a task, the task is not ready."
-  }
+  ]
 };
 
 // ---------------------------------------------------------------------------
@@ -1293,15 +1167,6 @@ const TDD: StageSchemaInput = {
     "Undocumented refactor changes",
     "Adding features beyond what RED tests require"
   ],
-  rationalizations: [
-    { claim: "This change is obvious, tests can be added later.", reality: "Without RED proof, regressions hide behind optimistic assumptions." },
-    { claim: "A passing baseline is enough to continue.", reality: "Baseline pass does not prove new behavior requirements." },
-    { claim: "One broad integration test is enough.", reality: "Slice-level RED tests are required for precise failure signal." },
-    { claim: "Refactor can be skipped for speed.", reality: "Skipping refactor accumulates debt and weakens maintainability." },
-    { claim: "Only changed tests need to pass.", reality: "Full-suite checks are needed to detect regressions." },
-    { claim: "Traceability is implied by commit diff.", reality: "Explicit mapping avoids ambiguity in review and rollback." },
-    { claim: "Tests written after implementation achieve the same goals.", reality: "Post-hoc tests confirm assumptions, not behavior. They test what you built, not what you should have built. TDD forces you to think about behavior before you have an implementation to be anchored by." }
-  ],
   redFlags: [
     "No failing test output (RED missing)",
     "Implementation edits appear before RED evidence",
@@ -1313,20 +1178,6 @@ const TDD: StageSchemaInput = {
   policyNeedles: ["RED", "GREEN", "REFACTOR", "failing test", "full test suite", "acceptance criteria", "traceable to plan slice"],
   artifactFile: "06-tdd.md",
   next: "review",
-  cognitivePatterns: [
-    { name: "Behavior Over Implementation", description: "Tests describe WHAT the system does, not HOW. Test the observable behavior from outside the unit. If you need to test internals, the design needs work." },
-    { name: "Failure-First Thinking", description: "The failing test IS the specification. Until you see the right failure, you do not understand what you are building. Wrong failures are information." },
-    { name: "Minimal Viable Change", description: "The best implementation is the smallest one that passes all RED tests. Every extra line is risk. Resist the urge to 'improve while you are here.'" },
-    { name: "Regression Paranoia", description: "Assume every change breaks something until the full suite proves otherwise. Partial test runs are lies of omission." },
-    { name: "Refactor-as-Hygiene", description: "Refactoring is not optional cleanup — it is the third leg of TDD. GREEN without REFACTOR accumulates mess. REFACTOR without GREEN breaks things." },
-    { name: "Evidence Over Anecdote", description: "Every claim about test state must be backed by captured output. 'It passed' without terminal evidence is not evidence. 'I saw it fail' without the failure output is not RED. Capture commands, outputs, and results — not summaries from memory." },
-    { name: "Characterization First", description: "Before changing existing behavior, write characterization tests that capture current behavior as-is. These tests document what the system does today — even if that behavior is wrong. Only after the characterization suite is green do you add the new RED test for the desired change. This prevents accidental behavior destruction during refactoring." },
-    { name: "Test Pyramid Shape", description: "Healthy test suites look like a pyramid: many small fast tests at the base, fewer medium integration tests in the middle, few large end-to-end tests at the top. Each layer catches a different class of bug; none of them substitutes for another. If your suite is top-heavy (mostly E2E) it is slow and flaky; if it is base-only it misses integration contracts. During TDD, default to the smallest layer that can prove the behavior." },
-    { name: "Prove-It Pattern (bug fixes)", description: "For any reported regression or hotfix, the FIRST test is a reproduction — it must fail without your fix, pass with your fix, and fail again if the fix is reverted. This is the only way to prove you fixed the reported bug and not a superficially similar one. Skipping this step is how bugs come back two releases later wearing a different name." },
-    { name: "Test Size Model", description: "Size tests by scope, not by name: Small = pure logic, no I/O, <50ms; Medium = one process boundary, possibly filesystem or an in-memory DB; Large = multi-process / network / real external service. Small tests are the default; escalate to Medium only when a real boundary must be exercised, and to Large only for end-to-end user journeys. Record the size class in the TDD artifact so reviewers can sanity-check the pyramid shape." },
-    { name: "State Over Interaction", description: "Assert on observable outcomes (return values, state changes, persisted data, HTTP responses) — NOT on which helper methods were called, how many times, or in what order. Interaction-style assertions (`expect(mock.foo).toHaveBeenCalledWith(...)` without a state assertion) couple tests to implementation and shatter under harmless refactors. Use mocks only at trust boundaries (network, filesystem, time); for everything inside the module, let state do the asserting. If you cannot observe the outcome without a mock-spy, rework the seam before writing the test." },
-    { name: "Beyoncé Rule", description: "If you liked it, you should have put a test on it. Every surface that a caller can observe — public API, CLI flag, config key, exit code, persisted schema — is a contract, and every contract without a test is a silent regression waiting to happen. When a bug or production incident reveals an uncovered surface, the fix is never 'patch the code'; it is 'patch the code AND add the test that would have caught it'. Untested behavior does not exist for future refactors — it only exists until somebody accidentally removes it." }
-  ],
   reviewSections: [
     {
       title: "RED Evidence Audit",
@@ -1400,10 +1251,6 @@ const TDD: StageSchemaInput = {
     { section: "Test Pyramid Shape", required: false, validationRule: "If present: per-slice count of Small/Medium/Large tests added, to let reviewers verify the suite is not drifting top-heavy." },
     { section: "Prove-It Reproduction", required: false, validationRule: "Required for bug-fix slices: original failing reproduction test (RED without fix), passing output with fix (GREEN), and a note confirming the test fails again if the fix is reverted." }
   ],
-  namedAntiPattern: {
-    title: "Code Before Failing Test",
-    description: "Production code written before a failing test is not TDD — it is guessing validated after the fact. Tests written after implementation confirm assumptions, not behavior. If you wrote code first, delete it and start with RED. Delete means delete — not 'keep as reference.' The failing test IS the specification."
-  },
   waveExecutionAllowed: true
 };
 
@@ -1505,14 +1352,6 @@ const REVIEW: StageSchemaInput = {
     "Batching multiple findings into one report without individual resolution",
     "Skipping Layer 2 sections because Layer 1 passed"
   ],
-  rationalizations: [
-    { claim: "Passing tests mean spec compliance by default.", reality: "Tests can miss requirement mismatches; explicit spec review is mandatory." },
-    { claim: "Severity labels are unnecessary.", reality: "Without severity, release decisions become inconsistent." },
-    { claim: "Critical issues can be fixed after ship.", reality: "Critical blockers must be resolved before release handoff." },
-    { claim: "Security review is not needed for internal tools.", reality: "Internal tools become external surface area. Security is always in scope." },
-    { claim: "A quick skim is sufficient for small diffs.", reality: "Small diffs hide high-impact changes. A 3-line auth bypass is still critical. Every diff gets layered review regardless of size." },
-    { claim: "The author already reviewed their own code.", reality: "Self-review misses blind spots by definition. Independent review exists precisely because authors cannot objectively evaluate their own assumptions." }
-  ],
   redFlags: [
     "No separate Layer 1/Layer 2 outcomes",
     "No structured review-army reconciliation artifact",
@@ -1524,14 +1363,6 @@ const REVIEW: StageSchemaInput = {
   policyNeedles: ["Layer 1", "Layer 2", "Critical", "Review Army", "Ready to Ship", "One issue at a time"],
   artifactFile: "07-review.md",
   next: "ship",
-  cognitivePatterns: [
-    { name: "Severity Discipline", description: "Every finding gets a severity label. Critical blocks ship. Important should be fixed. Suggestion is optional. No ambiguous middle ground." },
-    { name: "Spec-First Not Code-First", description: "Review starts with the spec, not the code. Does the code do what was specified? Only after spec compliance is confirmed do you review code quality." },
-    { name: "Blocker Resolution Before Progress", description: "When a critical finding is identified, stop and resolve it before continuing the review. Do not accumulate criticals for batch resolution." },
-    { name: "Evidence or Unknown", description: "For every safety/correctness claim, cite file:line or test name. If you cannot point to evidence, the claim is 'UNKNOWN' not 'safe'. Never say 'probably tested' — check." },
-    { name: "Diff-Scoped Thinking", description: "Start with the diff (git diff vs main). Review only what changed unless a change has blast-radius implications. Skip unchanged files unless directly affected." },
-    { name: "Change-Size Awareness", description: "~100 lines = normal review. ~300 lines = consider splitting. ~1000+ lines = strongly recommend splitting into stacked PRs. Large diffs hide bugs." }
-  ],
   reviewSections: [
     {
       title: "Layer 1: Spec Compliance",
@@ -1619,11 +1450,7 @@ const REVIEW: StageSchemaInput = {
     { section: "Completeness Score", required: true, validationRule: "Records AC coverage, task coverage, test-slice coverage, and adversarial-review pass status as numeric or boolean values. At minimum, a line like 'AC coverage: N/M' or 'AC coverage: 100%'." },
     { section: "Severity Summary", required: true, validationRule: "Per-severity count lines for critical, important, and suggestion buckets." },
     { section: "Final Verdict", required: true, validationRule: "Exactly one of: APPROVED, APPROVED_WITH_CONCERNS, BLOCKED." }
-  ],
-  namedAntiPattern: {
-    title: "Tests Pass So It Must Be Correct",
-    description: "Tests verify what the developer thought to test. They do not verify what the spec requires. A passing test suite with failing spec compliance is a false green. Layer 1 exists precisely because tests and specs can diverge without anyone noticing."
-  }
+  ]
 };
 
 // ---------------------------------------------------------------------------
@@ -1712,14 +1539,6 @@ const SHIP: StageSchemaInput = {
     "Selecting multiple finalization modes",
     "Shipping with BLOCKED review verdict"
   ],
-  rationalizations: [
-    { claim: "Rollback details can be written after release.", reality: "Rollback is part of release readiness, not post-release cleanup." },
-    { claim: "Finalization choice is obvious from context.", reality: "Explicit branch action prevents accidental release state." },
-    { claim: "Urgent fixes can skip preflight.", reality: "Urgency increases risk; preflight discipline matters more, not less." },
-    { claim: "Monitoring can be set up after deploy.", reality: "If you cannot observe the release, you cannot detect failure. Monitoring is a ship prerequisite, not a follow-up task." },
-    { claim: "A small merge does not need post-merge testing.", reality: "Small merges on diverged bases cause silent conflicts. Post-merge suite runs catch what branch-only CI misses." },
-    { claim: "Release notes are internal documentation, not a ship gate.", reality: "Release notes are the rollback decision input. Without them, the team cannot assess what changed or why a rollback is needed." }
-  ],
   redFlags: [
     "No rollback trigger/steps",
     "More than one finalization mode implied",
@@ -1738,14 +1557,6 @@ const SHIP: StageSchemaInput = {
   ],
   artifactFile: "08-ship.md",
   next: "done",
-  cognitivePatterns: [
-    { name: "Preflight Discipline", description: "Preflight is not bureaucracy — it is the last safety net. Every skip 'just this once' normalizes skipping. Run the checks every time." },
-    { name: "Rollback-First Thinking", description: "Before shipping, answer: what tells me this is broken? How do I undo it? How do I verify the undo worked? If you cannot answer all three, you are not ready." },
-    { name: "Explicit Over Implicit Finalization", description: "Merge, PR, keep, discard — each has different consequences. Pick one. Say it out loud. Write it down. Never let finalization be 'whatever the default is.'" },
-    { name: "Post-Merge Paranoia", description: "The merge itself can introduce failures even when both branches pass independently. Always run the full suite AFTER merge, not just before." },
-    { name: "Observability Before Ship", description: "If you cannot monitor the change in production, you cannot know if it is broken. Monitoring/logging is a ship prerequisite, not a follow-up." },
-    { name: "Release Blast Radius", description: "Before shipping, map the blast radius: how many users are affected if this breaks? Is it one endpoint or the entire app? Scale rollback urgency and monitoring to the blast radius, not the diff size. A 3-line auth change can have infinite blast radius." }
-  ],
   reviewSections: [
     {
       title: "Preflight Verification",
@@ -1783,11 +1594,7 @@ const SHIP: StageSchemaInput = {
     { section: "Finalization", required: true, validationRule: "Exactly one finalization enum token selected. Execution result documented. Worktree cleaned if applicable." },
     { section: "Completion Status", required: false, validationRule: "If present: exactly one of SHIPPED, SHIPPED_WITH_EXCEPTIONS, BLOCKED. Exceptions documented when applicable." },
     { section: "Compound Step", required: false, validationRule: "Optional retrospective: at least one bullet of the form 'Insight: ... | Action: append [compound] entry to .cclaw/knowledge.jsonl', or an explicit 'No compound insight this run.' line." }
-  ],
-  namedAntiPattern: {
-    title: "Green CI Means Safe to Merge",
-    description: "CI passing on a feature branch does not prove the merged result is safe. Post-merge test failures are common when the base branch has diverged. Re-run the full suite on the merge result, not just the branch. A green branch badge is a necessary condition, not a sufficient one."
-  }
+  ]
 };
 
 // ---------------------------------------------------------------------------
