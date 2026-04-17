@@ -16,6 +16,7 @@ import { nextCommandContract, nextCommandSkillMarkdown } from "./content/next-co
 import { startCommandContract, startCommandSkillMarkdown } from "./content/start-command.js";
 import { statusCommandContract, statusCommandSkillMarkdown } from "./content/status-command.js";
 import { featureCommandContract, featureCommandSkillMarkdown } from "./content/feature-command.js";
+import { tddLogCommandContract, tddLogCommandSkillMarkdown } from "./content/tdd-log-command.js";
 import { retroCommandContract, retroCommandSkillMarkdown } from "./content/retro-command.js";
 import {
   rewindAcknowledgeCommandContract,
@@ -300,6 +301,10 @@ async function writeSkills(projectRoot: string, config?: VibyConfig): Promise<vo
     featureCommandSkillMarkdown()
   );
   await writeFileSafe(
+    runtimePath(projectRoot, "skills", "tdd-cycle-log", "SKILL.md"),
+    tddLogCommandSkillMarkdown()
+  );
+  await writeFileSafe(
     runtimePath(projectRoot, "skills", "flow-retro", "SKILL.md"),
     retroCommandSkillMarkdown()
   );
@@ -402,6 +407,7 @@ async function writeUtilityCommands(projectRoot: string): Promise<void> {
   await writeFileSafe(runtimePath(projectRoot, "commands", "start.md"), startCommandContract());
   await writeFileSafe(runtimePath(projectRoot, "commands", "status.md"), statusCommandContract());
   await writeFileSafe(runtimePath(projectRoot, "commands", "feature.md"), featureCommandContract());
+  await writeFileSafe(runtimePath(projectRoot, "commands", "tdd-log.md"), tddLogCommandContract());
   await writeFileSafe(runtimePath(projectRoot, "commands", "retro.md"), retroCommandContract());
   await writeFileSafe(runtimePath(projectRoot, "commands", "rewind.md"), rewindCommandContract());
   await writeFileSafe(
@@ -729,7 +735,13 @@ async function writeHooks(projectRoot: string, config: VibyConfig): Promise<void
   await writeFileSafe(path.join(hooksDir, "prompt-guard.sh"), promptGuardScript({
     strictMode: config.promptGuardMode === "strict"
   }));
-  await writeFileSafe(path.join(hooksDir, "workflow-guard.sh"), workflowGuardScript());
+  await writeFileSafe(
+    path.join(hooksDir, "workflow-guard.sh"),
+    workflowGuardScript({
+      tddEnforcementMode: config.tddEnforcement ?? "advisory",
+      tddTestGlobs: config.tddTestGlobs
+    })
+  );
   await writeFileSafe(path.join(hooksDir, "context-monitor.sh"), contextMonitorScript());
   const opencodePluginSource = opencodePluginJs();
   await writeFileSafe(path.join(hooksDir, "opencode-plugin.mjs"), opencodePluginSource);
@@ -995,6 +1007,11 @@ async function ensureSessionStateFiles(projectRoot: string): Promise<void> {
   const preambleLogPath = path.join(stateDir, "preamble-log.jsonl");
   if (!(await exists(preambleLogPath))) {
     await writeFileSafe(preambleLogPath, "");
+  }
+
+  const tddCycleLogPath = path.join(stateDir, "tdd-cycle-log.jsonl");
+  if (!(await exists(tddCycleLogPath))) {
+    await writeFileSafe(tddCycleLogPath, "");
   }
 }
 

@@ -26,6 +26,7 @@ import {
   verifyCompletedStagesGateClosure,
   verifyCurrentStageGateEvidence
 } from "./gate-evidence.js";
+import { parseTddCycleLog, validateTddCycleOrder } from "./tdd-cycle.js";
 import { stageSkillFolder } from "./content/skills.js";
 import { doctorCheckMetadata } from "./doctor-registry.js";
 import {
@@ -503,6 +504,7 @@ export async function doctorChecks(projectRoot: string, options: DoctorOptions =
       "cc-learn.md",
       "cc-status.md",
       "cc-feature.md",
+      "cc-tdd-log.md",
       "cc-retro.md",
       "cc-rewind.md",
       "cc-rewind-ack.md"
@@ -526,6 +528,7 @@ export async function doctorChecks(projectRoot: string, options: DoctorOptions =
     const hasCcLearn = content.includes("/cc-learn");
     const hasCcStatus = content.includes("/cc-status");
     const hasCcFeature = content.includes("/cc-feature");
+    const hasCcTddLog = content.includes("/cc-tdd-log");
     const hasCcRetro = content.includes("/cc-retro");
     const hasCcRewind = content.includes("/cc-rewind");
     const hasCcRewindAck = content.includes("/cc-rewind-ack");
@@ -538,6 +541,7 @@ export async function doctorChecks(projectRoot: string, options: DoctorOptions =
       && hasCcLearn
       && hasCcStatus
       && hasCcFeature
+      && hasCcTddLog
       && hasCcRetro
       && hasCcRewind
       && hasCcRewindAck
@@ -552,7 +556,7 @@ export async function doctorChecks(projectRoot: string, options: DoctorOptions =
   });
 
   // Utility commands
-  for (const cmd of ["learn", "next", "status", "feature", "retro", "rewind", "rewind-ack"]) {
+  for (const cmd of ["learn", "next", "status", "feature", "tdd-log", "retro", "rewind", "rewind-ack"]) {
     const cmdPath = path.join(projectRoot, RUNTIME_ROOT, "commands", `${cmd}.md`);
     checks.push({
       name: `utility_command:${cmd}`,
@@ -565,6 +569,7 @@ export async function doctorChecks(projectRoot: string, options: DoctorOptions =
   for (const [folder, label] of [
     ["learnings", "learnings"],
     ["feature-workspaces", "feature-workspaces"],
+    ["tdd-cycle-log", "tdd-cycle-log"],
     ["flow-retro", "flow-retro"],
     ["flow-rewind", "flow-rewind"],
     ["subagent-dev", "sdd"],
@@ -1153,6 +1158,42 @@ export async function doctorChecks(projectRoot: string, options: DoctorOptions =
         : "retro gate not required yet (ship not completed)"
       : "retro gate incomplete: run /cc-retro and record at least one compound knowledge entry"
   });
+  const tddLogPath = path.join(projectRoot, RUNTIME_ROOT, "state", "tdd-cycle-log.jsonl");
+  const tddLogExists = await exists(tddLogPath);
+  checks.push({
+    name: "state:tdd_cycle_log_exists",
+    ok: tddLogExists,
+    details: `${RUNTIME_ROOT}/state/tdd-cycle-log.jsonl must exist`
+  });
+  const tddCompleted = flowState.completedStages.includes("tdd")
+    || (flowState.currentStage === "review" || flowState.currentStage === "ship");
+  if (tddLogExists) {
+    const tddLogRaw = await fs.readFile(tddLogPath, "utf8");
+    const parsedCycles = parseTddCycleLog(tddLogRaw);
+    const validation = validateTddCycleOrder(parsedCycles, { runId: activeRunId || undefined });
+    const hasCoverage = validation.sliceCount > 0;
+    checks.push({
+      name: "state:tdd_cycle_order",
+      ok: validation.ok && (!tddCompleted || hasCoverage),
+      details: validation.ok
+        ? tddCompleted && !hasCoverage
+          ? "tdd stage complete but no RED/GREEN cycle evidence logged"
+          : `tdd cycle log valid (${validation.sliceCount} slice(s), open_red=${validation.openRedSlices.length})`
+        : `tdd cycle order issues: ${validation.issues.join("; ")}${
+            validation.openRedSlices.length > 0
+              ? ` | open red slices: ${validation.openRedSlices.join(", ")}`
+              : ""
+          }`
+    });
+  } else {
+    checks.push({
+      name: "state:tdd_cycle_order",
+      ok: !tddCompleted,
+      details: tddCompleted
+        ? "tdd stage complete but tdd-cycle-log.jsonl is missing"
+        : "tdd cycle order deferred until tdd stage evidence is generated"
+    });
+  }
   checks.push({
     name: "runs:archive_root",
     ok: await exists(path.join(projectRoot, RUNTIME_ROOT, "runs")),

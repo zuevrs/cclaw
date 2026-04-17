@@ -64,6 +64,7 @@ export const UTILITY_COMMANDS = [
   "next",
   "status",
   "feature",
+  "tdd-log",
   "retro",
   "rewind",
   "rewind-ack"

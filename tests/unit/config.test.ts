@@ -105,6 +105,19 @@ describe("config", () => {
     expect(config.gitHookGuards).toBe(true);
   });
 
+  it("parses tdd enforcement settings", async () => {
+    const root = await createTempProject("config-tdd-enforcement");
+    await fs.mkdir(path.join(root, ".cclaw"), { recursive: true });
+    await fs.writeFile(
+      configPath(root),
+      "harnesses:\n  - claude\ntddEnforcement: strict\ntddTestGlobs:\n  - \"**/*.test.ts\"\n",
+      "utf8"
+    );
+    const config = await readConfig(root);
+    expect(config.tddEnforcement).toBe("strict");
+    expect(config.tddTestGlobs).toEqual(["**/*.test.ts"]);
+  });
+
   it("parses trackHeuristics overrides", async () => {
     const root = await createTempProject("config-track-heuristics");
     await fs.mkdir(path.join(root, ".cclaw"), { recursive: true });
@@ -178,6 +191,7 @@ trackHeuristics:
   it("full profile turns every safety rail on", () => {
     const cfg = createProfileConfig("full");
     expect(cfg.promptGuardMode).toBe("strict");
+    expect(cfg.tddEnforcement).toBe("strict");
     expect(cfg.gitHookGuards).toBe(true);
     expect(cfg.defaultTrack).toBe("standard");
   });
