@@ -8,6 +8,18 @@ describe("cli parser", () => {
     expect(parsed.harnesses).toEqual(["claude", "cursor"]);
   });
 
+  it("parses init dry-run and interactive toggles", () => {
+    const parsed = parseArgs(["init", "--dry-run", "--interactive"]);
+    expect(parsed.command).toBe("init");
+    expect(parsed.dryRun).toBe(true);
+    expect(parsed.interactive).toBe(true);
+  });
+
+  it("parses init no-interactive toggle", () => {
+    const parsed = parseArgs(["init", "--no-interactive"]);
+    expect(parsed.interactive).toBe(false);
+  });
+
   it("throws for unknown harness", () => {
     expect(() => parseHarnesses("claude,unknown")).toThrowError(/Unknown harnesses/);
   });
@@ -111,5 +123,8 @@ describe("cli parser", () => {
 
   it("documents --profile in usage", () => {
     expect(usage()).toContain("--profile");
+    expect(usage()).toContain("--dry-run");
+    expect(usage()).toContain("--interactive");
+    expect(usage()).toContain("--no-interactive");
   });
 });
