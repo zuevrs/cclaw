@@ -60,6 +60,12 @@ const UTILITY_SHIMS: UtilityShimSpec[] = [
     commandFile: "feature.md"
   },
   {
+    fileName: "cc-retro.md",
+    command: "retro",
+    skillFolder: "flow-retro",
+    commandFile: "retro.md"
+  },
+  {
     fileName: "cc-rewind.md",
     command: "rewind",
     skillFolder: "flow-rewind",
@@ -177,6 +183,7 @@ When in doubt, prefer **non-trivial** — the quick track is opt-in and only saf
 | \`/cc-learn\` | **Cross-cutting.** Capture or review project knowledge (append-only JSONL). |
 | \`/cc-status\` | **Read-only.** Compact snapshot of current stage, gates, and delegations. |
 | \`/cc-feature\` | **Workspace.** Manage active feature snapshots for parallel tracks. |
+| \`/cc-retro\` | **Learning gate.** Mandatory retrospective before archive after ship. |
 | \`/cc-rewind\` | **Recovery.** Rewind flow to an earlier stage and invalidate downstream work. |
 | \`/cc-rewind-ack\` | **Recovery.** Clear stale-stage markers after redo. |
 

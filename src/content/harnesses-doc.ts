@@ -72,6 +72,7 @@ All harnesses receive the same utility commands:
 - \`/cc-learn\` - knowledge capture/lookup
 - \`/cc-status\` - read-only flow snapshot
 - \`/cc-feature\` - multi-feature workspace management
+- \`/cc-retro\` - mandatory retrospective gate before archive
 - \`/cc-rewind\` - rewind flow and invalidate downstream stages
 - \`/cc-rewind-ack\` - clear stale stage markers after redo
 

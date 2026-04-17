@@ -37,6 +37,12 @@ export interface StaleStageMarker {
   acknowledgedAt?: string;
 }
 
+export interface RetroState {
+  required: boolean;
+  completedAt?: string;
+  compoundEntries: number;
+}
+
 export interface FlowState {
   activeRunId: string;
   currentStage: FlowStage;
@@ -51,6 +57,8 @@ export interface FlowState {
   staleStages: Partial<Record<FlowStage, StaleStageMarker>>;
   /** Chronological rewind operations for the active run. */
   rewinds: RewindRecord[];
+  /** Mandatory retrospective gate status before archive. */
+  retro: RetroState;
 }
 
 export interface InitialFlowStateOptions {
@@ -110,7 +118,12 @@ export function createInitialFlowState(
     track,
     skippedStages,
     staleStages: {},
-    rewinds: []
+    rewinds: [],
+    retro: {
+      required: false,
+      completedAt: undefined,
+      compoundEntries: 0
+    }
   };
 }
 

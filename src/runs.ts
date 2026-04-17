@@ -105,6 +105,13 @@ export interface ArchiveRunResult {
     overThreshold: boolean;
     knowledgePath: string;
   };
+  retro: {
+    required: boolean;
+    completed: boolean;
+    skipped: boolean;
+    skipReason?: string;
+    compoundEntries: number;
+  };
 }
 
 export interface ArchiveManifest {
@@ -117,6 +124,7 @@ export interface ArchiveManifest {
   sourceCurrentStage: FlowStage;
   sourceCompletedStages: FlowStage[];
   snapshottedStateFiles: string[];
+  retro: ArchiveRunResult["retro"];
 }
 
 export interface RewindRunOptions {
@@ -136,6 +144,11 @@ export interface RewindRunResult {
 
 interface EnsureRunSystemOptions {
   createIfMissing?: boolean;
+}
+
+export interface ArchiveRunOptions {
+  skipRetro?: boolean;
+  skipRetroReason?: string;
 }
 
 function flowStatePath(projectRoot: string): string {
@@ -378,6 +391,30 @@ function sanitizeRewinds(value: unknown): FlowState["rewinds"] {
   return out;
 }
 
+function sanitizeRetroState(value: unknown): FlowState["retro"] {
+  const fallback: FlowState["retro"] = {
+    required: false,
+    completedAt: undefined,
+    compoundEntries: 0
+  };
+  if (!value || typeof value !== "object" || Array.isArray(value)) {
+    return fallback;
+  }
+  const typed = value as Record<string, unknown>;
+  const required = typeof typed.required === "boolean" ? typed.required : false;
+  const completedAt = typeof typed.completedAt === "string" ? typed.completedAt : undefined;
+  const compoundEntriesRaw = typed.compoundEntries;
+  const compoundEntries =
+    typeof compoundEntriesRaw === "number" && Number.isFinite(compoundEntriesRaw) && compoundEntriesRaw >= 0
+      ? Math.floor(compoundEntriesRaw)
+      : 0;
+  return {
+    required,
+    completedAt,
+    compoundEntries
+  };
+}
+
 function coerceFlowState(parsed: Record<string, unknown>): FlowState {
   const track = coerceTrack(parsed.track);
   const next = createInitialFlowState("active", track);
@@ -395,7 +432,8 @@ function coerceFlowState(parsed: Record<string, unknown>): FlowState {
     track,
     skippedStages: sanitizeSkippedStages(parsed.skippedStages, track),
     staleStages: sanitizeStaleStages(parsed.staleStages),
-    rewinds: sanitizeRewinds(parsed.rewinds)
+    rewinds: sanitizeRewinds(parsed.rewinds),
+    retro: sanitizeRetroState(parsed.retro)
   };
 }
 
@@ -467,6 +505,60 @@ function staleArtifactFileName(fileName: string): string {
 
 function stageIndexMapForTrack(track: FlowTrack): Map<FlowStage, number> {
   return new Map(trackStages(track).map((stage, index) => [stage, index]));
+}
+
+function retroArtifactPath(projectRoot: string): string {
+  return path.join(activeArtifactsPath(projectRoot), "09-retro.md");
+}
+
+interface RetroGateStatus {
+  required: boolean;
+  completed: boolean;
+  compoundEntries: number;
+  hasRetroArtifact: boolean;
+}
+
+async function evaluateRetroGate(projectRoot: string, state: FlowState): Promise<RetroGateStatus> {
+  const required = state.completedStages.includes("ship");
+  const artifactFile = retroArtifactPath(projectRoot);
+  let hasRetroArtifact = false;
+  if (await exists(artifactFile)) {
+    try {
+      const raw = await fs.readFile(artifactFile, "utf8");
+      hasRetroArtifact = raw.trim().length > 0;
+    } catch {
+      hasRetroArtifact = false;
+    }
+  }
+  const knowledgeFile = path.join(projectRoot, RUNTIME_ROOT, "knowledge.jsonl");
+  let compoundEntries = 0;
+  if (await exists(knowledgeFile)) {
+    try {
+      const raw = await fs.readFile(knowledgeFile, "utf8");
+      for (const line of raw.split(/\r?\n/)) {
+        const trimmed = line.trim();
+        if (!trimmed) continue;
+        try {
+          const parsed = JSON.parse(trimmed) as { type?: unknown };
+          if (parsed.type === "compound") {
+            compoundEntries += 1;
+          }
+        } catch {
+          // ignore malformed lines for retro gate calculation
+        }
+      }
+    } catch {
+      compoundEntries = 0;
+    }
+  }
+
+  const completed = required ? (hasRetroArtifact && compoundEntries > 0) : true;
+  return {
+    required,
+    completed,
+    compoundEntries,
+    hasRetroArtifact
+  };
 }
 
 export class CorruptFlowStateError extends Error {
@@ -610,7 +702,11 @@ export async function listRuns(projectRoot: string): Promise<CclawRunMeta[]> {
   return runs.sort((a, b) => a.createdAt.localeCompare(b.createdAt));
 }
 
-export async function archiveRun(projectRoot: string, featureName?: string): Promise<ArchiveRunResult> {
+export async function archiveRun(
+  projectRoot: string,
+  featureName?: string,
+  options: ArchiveRunOptions = {}
+): Promise<ArchiveRunResult> {
   await ensureRunSystem(projectRoot);
   const activeFeature = await readActiveFeature(projectRoot);
   const artifactsDir = activeArtifactsPath(projectRoot);
@@ -626,7 +722,38 @@ export async function archiveRun(projectRoot: string, featureName?: string): Pro
   const archivePath = path.join(runsDir, archiveId);
   const archiveArtifactsPath = path.join(archivePath, "artifacts");
 
-  const sourceState = await readFlowState(projectRoot);
+  let sourceState = await readFlowState(projectRoot);
+  const retroGate = await evaluateRetroGate(projectRoot, sourceState);
+  const skipRetro = options.skipRetro === true;
+  const skipRetroReason = options.skipRetroReason?.trim();
+  if (skipRetro && (!skipRetroReason || skipRetroReason.length === 0)) {
+    throw new Error("archive --skip-retro requires --retro-reason=<text>.");
+  }
+  if (retroGate.required && !retroGate.completed && !skipRetro) {
+    throw new Error(
+      "Archive blocked: retro gate is required after ship completion. " +
+      "Run /cc-retro and append at least one compound knowledge entry, or re-run archive with --skip-retro and --retro-reason."
+    );
+  }
+  if (retroGate.completed) {
+    const completedAt = sourceState.retro.completedAt ?? new Date().toISOString();
+    sourceState = {
+      ...sourceState,
+      retro: {
+        required: retroGate.required,
+        completedAt,
+        compoundEntries: retroGate.compoundEntries
+      }
+    };
+    await writeFlowState(projectRoot, sourceState, { allowReset: true });
+  }
+  const retroSummary: ArchiveRunResult["retro"] = {
+    required: retroGate.required,
+    completed: retroGate.completed,
+    skipped: skipRetro,
+    skipReason: skipRetro ? skipRetroReason : undefined,
+    compoundEntries: retroGate.compoundEntries
+  };
 
   await ensureDir(archivePath);
   await fs.rename(artifactsDir, archiveArtifactsPath);
@@ -648,7 +775,8 @@ export async function archiveRun(projectRoot: string, featureName?: string): Pro
     sourceRunId: sourceState.activeRunId,
     sourceCurrentStage: sourceState.currentStage,
     sourceCompletedStages: sourceState.completedStages,
-    snapshottedStateFiles
+    snapshottedStateFiles,
+    retro: retroSummary
   };
   await writeFileSafe(
     path.join(archivePath, "archive-manifest.json"),
@@ -666,7 +794,8 @@ export async function archiveRun(projectRoot: string, featureName?: string): Pro
     activeFeature,
     resetState,
     snapshottedStateFiles,
-    knowledge: knowledgeStats
+    knowledge: knowledgeStats,
+    retro: retroSummary
   };
 }
 

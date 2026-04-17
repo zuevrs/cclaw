@@ -71,6 +71,56 @@ describe("runs system", () => {
     expect(second.archiveId).toMatch(/-2$/);
   });
 
+  it("blocks archive when ship is complete but retro gate is not satisfied", async () => {
+    const root = await createTempProject("runs-retro-block");
+    await ensureRunSystem(root);
+    await writeFlowState(
+      root,
+      {
+        ...createInitialFlowState("active"),
+        currentStage: "ship",
+        completedStages: ["brainstorm", "scope", "design", "spec", "plan", "tdd", "review", "ship"]
+      },
+      { allowReset: true }
+    );
+
+    await expect(archiveRun(root, "Retro Blocked")).rejects.toThrow(/retro gate/i);
+  });
+
+  it("allows archive after retro artifact + compound knowledge are present", async () => {
+    const root = await createTempProject("runs-retro-ok");
+    await ensureRunSystem(root);
+    await writeFlowState(
+      root,
+      {
+        ...createInitialFlowState("active"),
+        currentStage: "ship",
+        completedStages: ["brainstorm", "scope", "design", "spec", "plan", "tdd", "review", "ship"]
+      },
+      { allowReset: true }
+    );
+    await fs.writeFile(path.join(root, ".cclaw/artifacts/09-retro.md"), "# retro\n", "utf8");
+    await fs.writeFile(
+      path.join(root, ".cclaw/knowledge.jsonl"),
+      `${JSON.stringify({
+        type: "compound",
+        trigger: "when shipping a high-risk change",
+        action: "run focused rollback drill before merge",
+        confidence: "high",
+        domain: "ship",
+        stage: "retro",
+        created: "2026-01-01T00:00:00Z",
+        project: "cclaw"
+      })}\n`,
+      "utf8"
+    );
+
+    const archived = await archiveRun(root, "Retro Ready");
+    expect(archived.retro.required).toBe(true);
+    expect(archived.retro.completed).toBe(true);
+    expect(archived.retro.compoundEntries).toBeGreaterThanOrEqual(1);
+  });
+
   it("lists archived run folders", async () => {
     const root = await createTempProject("runs-list");
     await ensureRunSystem(root);

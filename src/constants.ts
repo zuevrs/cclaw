@@ -64,6 +64,7 @@ export const UTILITY_COMMANDS = [
   "next",
   "status",
   "feature",
+  "retro",
   "rewind",
   "rewind-ack"
 ] as const;

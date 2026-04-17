@@ -31,6 +31,8 @@ interface ParsedArgs {
   doctorQuiet?: boolean;
   doctorOnly?: string[];
   archiveName?: string;
+  archiveSkipRetro?: boolean;
+  archiveSkipRetroReason?: string;
   showHelp?: boolean;
   showVersion?: boolean;
 }
@@ -60,6 +62,8 @@ Commands:
                     --quiet             Print only failing checks (and totals).
   archive    Move .cclaw/artifacts into .cclaw/runs/<date>-<slug> and reset flow state.
              Flags: --name=<feature>    Feature slug (default: inferred from 00-idea.md).
+                    --skip-retro       Bypass mandatory retro gate (requires --retro-reason).
+                    --retro-reason=<t> Reason for bypassing retro gate.
   upgrade    Refresh generated files in .cclaw without modifying user artifacts.
   uninstall  Remove .cclaw runtime and the generated harness shim files.
 
@@ -439,6 +443,14 @@ function parseArgs(argv: string[]): ParsedArgs {
     }
     if (flag.startsWith("--name=")) {
       parsed.archiveName = flag.replace("--name=", "").trim();
+      continue;
+    }
+    if (flag === "--skip-retro") {
+      parsed.archiveSkipRetro = true;
+      continue;
+    }
+    if (flag.startsWith("--retro-reason=")) {
+      parsed.archiveSkipRetroReason = flag.replace("--retro-reason=", "").trim();
     }
   }
 
@@ -548,7 +560,10 @@ async function runCommand(parsed: ParsedArgs, ctx: CliContext): Promise<number> 
   }
 
   if (command === "archive") {
-    const archived = await archiveRun(ctx.cwd, parsed.archiveName);
+    const archived = await archiveRun(ctx.cwd, parsed.archiveName, {
+      skipRetro: parsed.archiveSkipRetro === true,
+      skipRetroReason: parsed.archiveSkipRetroReason
+    });
     const snapshotSummary = archived.snapshottedStateFiles.length > 0
       ? ` Snapshotted ${archived.snapshottedStateFiles.length} state file(s) under ${archived.archivePath}/state and wrote archive-manifest.json.`
       : "";

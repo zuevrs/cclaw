@@ -481,11 +481,41 @@ Execution rule: complete and verify each wave before starting the next wave.
 - SHIPPED | SHIPPED_WITH_EXCEPTIONS | BLOCKED
 - Exceptions (if any):
 
-## Compound Step
-_Optional retrospective. The goal is to make the **next** feature faster, not to evaluate this one._
-_If you have nothing to add, write the explicit line: \`No compound insight this run.\`_
-- Insight: <one short line about what should accelerate the next run>
-- Action: append one strict-schema JSON line with \`"type":"compound"\` to \`.cclaw/knowledge.jsonl\` capturing the insight (fields: type, trigger, action, confidence, domain, stage, created, project)
+## Retro Gate Handoff
+- Run \`/cc-retro\` before archive.
+- Retro artifact path: \`.cclaw/artifacts/09-retro.md\`
+- Archive remains blocked until retro gate is complete.
+`,
+  "09-retro.md": `# Retro Artifact
+
+## Run Summary
+- Flow track:
+- Scope delivered:
+- Main outcome:
+
+## Friction Log
+| Category | What slowed us down | Evidence | Prevention rule |
+|---|---|---|---|
+|  |  |  |  |
+
+## Acceleration Log
+| Category | What helped | Evidence | Reuse trigger |
+|---|---|---|---|
+|  |  |  |  |
+
+## Compound Decisions
+| Insight | Trigger pattern | Action rule for next run |
+|---|---|---|
+|  |  |  |
+
+## Knowledge Writes
+- Compound entries appended to \`.cclaw/knowledge.jsonl\`: <N>
+- Entry ids / timestamps:
+
+## Retro Completion
+- RETRO_COMPLETE: yes
+- Completed at (UTC):
+- Notes:
 `
 };
 
