@@ -8,6 +8,11 @@ import {
   skippedStagesForTrack,
   type FlowState
 } from "./flow-state.js";
+import {
+  ensureFeatureSystem,
+  readActiveFeature,
+  syncActiveFeatureSnapshot
+} from "./feature-system.js";
 import { ensureDir, exists, withDirectoryLock, writeFileSafe } from "./fs-utils.js";
 import type { FlowStage, FlowTrack } from "./types.js";
 
@@ -86,6 +91,7 @@ export interface ArchiveRunResult {
   archivePath: string;
   archivedAt: string;
   featureName: string;
+  activeFeature: string;
   resetState: FlowState;
   snapshottedStateFiles: string[];
   /** Knowledge curation hint: total active entries + soft threshold (50). */
@@ -102,6 +108,7 @@ export interface ArchiveManifest {
   archiveId: string;
   archivedAt: string;
   featureName: string;
+  activeFeature: string;
   sourceRunId: string;
   sourceCurrentStage: FlowStage;
   sourceCompletedStages: FlowStage[];
@@ -392,6 +399,7 @@ async function quarantineCorruptState(statePath: string, cause: unknown): Promis
 }
 
 export async function readFlowState(projectRoot: string): Promise<FlowState> {
+  await ensureFeatureSystem(projectRoot);
   const statePath = flowStatePath(projectRoot);
   if (!(await exists(statePath))) {
     return createInitialFlowState();
@@ -422,6 +430,7 @@ export async function writeFlowState(
   state: FlowState,
   options: WriteFlowStateOptions = {}
 ): Promise<void> {
+  await ensureFeatureSystem(projectRoot);
   await withDirectoryLock(flowStateLockPath(projectRoot), async () => {
     const statePath = flowStatePath(projectRoot);
     if (!options.allowReset && (await exists(statePath))) {
@@ -443,12 +452,14 @@ export async function writeFlowState(
     const safe = coerceFlowState({ ...(state as unknown as Record<string, unknown>) });
     await writeFileSafe(statePath, `${JSON.stringify(safe, null, 2)}\n`);
   });
+  await syncActiveFeatureSnapshot(projectRoot);
 }
 
 export async function ensureRunSystem(
   projectRoot: string,
   _options: EnsureRunSystemOptions = {}
 ): Promise<FlowState> {
+  await ensureFeatureSystem(projectRoot);
   await ensureDir(runsRoot(projectRoot));
   await ensureDir(activeArtifactsPath(projectRoot));
   const statePath = flowStatePath(projectRoot);
@@ -456,6 +467,7 @@ export async function ensureRunSystem(
   if (!(await exists(statePath))) {
     await writeFlowState(projectRoot, state, { allowReset: true });
   }
+  await syncActiveFeatureSnapshot(projectRoot);
   return state;
 }
 
@@ -489,6 +501,7 @@ export async function listRuns(projectRoot: string): Promise<CclawRunMeta[]> {
 
 export async function archiveRun(projectRoot: string, featureName?: string): Promise<ArchiveRunResult> {
   await ensureRunSystem(projectRoot);
+  const activeFeature = await readActiveFeature(projectRoot);
   const artifactsDir = activeArtifactsPath(projectRoot);
   const runsDir = runsRoot(projectRoot);
   await ensureDir(runsDir);
@@ -520,6 +533,7 @@ export async function archiveRun(projectRoot: string, featureName?: string): Pro
     archiveId,
     archivedAt,
     featureName: feature,
+    activeFeature,
     sourceRunId: sourceState.activeRunId,
     sourceCurrentStage: sourceState.currentStage,
     sourceCompletedStages: sourceState.completedStages,
@@ -531,12 +545,14 @@ export async function archiveRun(projectRoot: string, featureName?: string): Pro
   );
 
   const knowledgeStats = await readKnowledgeStats(projectRoot);
+  await syncActiveFeatureSnapshot(projectRoot);
 
   return {
     archiveId,
     archivePath,
     archivedAt,
     featureName: feature,
+    activeFeature,
     resetState,
     snapshottedStateFiles,
     knowledge: knowledgeStats

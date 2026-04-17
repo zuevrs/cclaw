@@ -27,6 +27,40 @@ export interface HarnessAdapter {
   };
 }
 
+interface UtilityShimSpec {
+  fileName: string;
+  command: string;
+  skillFolder: string;
+  commandFile: string;
+}
+
+const UTILITY_SHIMS: UtilityShimSpec[] = [
+  {
+    fileName: "cc-next.md",
+    command: "next",
+    skillFolder: "flow-next-step",
+    commandFile: "next.md"
+  },
+  {
+    fileName: "cc-learn.md",
+    command: "learn",
+    skillFolder: "learnings",
+    commandFile: "learn.md"
+  },
+  {
+    fileName: "cc-status.md",
+    command: "status",
+    skillFolder: "flow-status",
+    commandFile: "status.md"
+  },
+  {
+    fileName: "cc-feature.md",
+    command: "feature",
+    skillFolder: "feature-workspaces",
+    commandFile: "feature.md"
+  }
+];
+
 export const HARNESS_ADAPTERS: Record<HarnessId, HarnessAdapter> = {
   claude: {
     id: "claude",
@@ -122,13 +156,15 @@ When in doubt, prefer **non-trivial** — the quick track is opt-in and only saf
 5. Contextual utility skills.
 6. Training priors.
 
-### Commands (3 total)
+### Commands
 
 | Command | Purpose |
 |---|---|
 | \`/cc\` | **Entry point.** No args = resume current stage. With prompt = classify task and start the right flow. |
 | \`/cc-next\` | **Progression.** Advances to the next stage when current is complete. |
 | \`/cc-learn\` | **Cross-cutting.** Capture or review project knowledge (append-only JSONL). |
+| \`/cc-status\` | **Read-only.** Compact snapshot of current stage, gates, and delegations. |
+| \`/cc-feature\` | **Workspace.** Manage active feature snapshots for parallel tracks. |
 
 **Stage order:** brainstorm > scope > design > spec > plan > tdd > review > ship.
 \`/cc-next\` loads the right stage skill automatically. Gates must pass before handoff.
@@ -254,18 +290,12 @@ export async function syncHarnessShims(projectRoot: string, harnesses: HarnessId
       path.join(commandDir, "cc.md"),
       utilityShimContent(harness, "cc", "flow-start", "start.md")
     );
-    await writeFileSafe(
-      path.join(commandDir, "cc-next.md"),
-      utilityShimContent(harness, "next", "flow-next-step", "next.md")
-    );
-    await writeFileSafe(
-      path.join(commandDir, "cc-learn.md"),
-      utilityShimContent(harness, "learn", "learnings", "learn.md")
-    );
-    await writeFileSafe(
-      path.join(commandDir, "cc-status.md"),
-      utilityShimContent(harness, "status", "flow-status", "status.md")
-    );
+    for (const shim of UTILITY_SHIMS) {
+      await writeFileSafe(
+        path.join(commandDir, shim.fileName),
+        utilityShimContent(harness, shim.command, shim.skillFolder, shim.commandFile)
+      );
+    }
   }
 
   await syncAgentFiles(projectRoot);

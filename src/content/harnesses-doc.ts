@@ -70,6 +70,8 @@ All harnesses receive the same utility commands:
 - \`/cc\` - flow entry and resume
 - \`/cc-next\` - stage progression
 - \`/cc-learn\` - knowledge capture/lookup
+- \`/cc-status\` - read-only flow snapshot
+- \`/cc-feature\` - multi-feature workspace management
 
 Stage order remains canonical:
 \`brainstorm -> scope -> design -> spec -> plan -> tdd -> review -> ship\`

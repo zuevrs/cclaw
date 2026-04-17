@@ -14,6 +14,12 @@ import { readFlowState } from "./runs.js";
 import { skippedStagesForTrack } from "./flow-state.js";
 import { TRACK_STAGES } from "./types.js";
 import { checkMandatoryDelegations } from "./delegation.js";
+import {
+  ensureFeatureSystem,
+  featureRootPath,
+  listFeatures,
+  readActiveFeature
+} from "./feature-system.js";
 import { buildTraceMatrix } from "./trace-matrix.js";
 import {
   reconcileAndWriteCurrentStageGateCatalog,
@@ -491,7 +497,7 @@ export async function doctorChecks(projectRoot: string, options: DoctorOptions =
       });
       continue;
     }
-    for (const shim of ["cc.md", "cc-next.md", "cc-learn.md"]) {
+    for (const shim of ["cc.md", "cc-next.md", "cc-learn.md", "cc-status.md", "cc-feature.md"]) {
       const shimPath = path.join(projectRoot, adapter.commandDir, shim);
       checks.push({
         name: `shim:${harness}:${shim.replace(".md", "")}`,
@@ -509,10 +515,20 @@ export async function doctorChecks(projectRoot: string, options: DoctorOptions =
     const hasCcCommand = content.includes("/cc");
     const hasCcNext = content.includes("/cc-next");
     const hasCcLearn = content.includes("/cc-learn");
+    const hasCcStatus = content.includes("/cc-status");
+    const hasCcFeature = content.includes("/cc-feature");
     const hasVerification = content.includes("Verification Discipline");
     const hasMinimalMarker = content.includes("intentionally minimal for cross-project use");
     const hasMetaSkillPointer = content.includes(".cclaw/skills/using-cclaw/SKILL.md");
-    agentsBlockOk = hasMarkers && hasCcCommand && hasCcNext && hasCcLearn && hasVerification && hasMinimalMarker && hasMetaSkillPointer;
+    agentsBlockOk = hasMarkers
+      && hasCcCommand
+      && hasCcNext
+      && hasCcLearn
+      && hasCcStatus
+      && hasCcFeature
+      && hasVerification
+      && hasMinimalMarker
+      && hasMetaSkillPointer;
   }
   checks.push({
     name: "agents:cclaw_block",
@@ -521,7 +537,7 @@ export async function doctorChecks(projectRoot: string, options: DoctorOptions =
   });
 
   // Utility commands
-  for (const cmd of ["learn"]) {
+  for (const cmd of ["learn", "next", "status", "feature"]) {
     const cmdPath = path.join(projectRoot, RUNTIME_ROOT, "commands", `${cmd}.md`);
     checks.push({
       name: `utility_command:${cmd}`,
@@ -533,6 +549,7 @@ export async function doctorChecks(projectRoot: string, options: DoctorOptions =
   // Utility skills
   for (const [folder, label] of [
     ["learnings", "learnings"],
+    ["feature-workspaces", "feature-workspaces"],
     ["subagent-dev", "sdd"],
     ["parallel-dispatch", "parallel-agents"],
     ["session", "session"],
@@ -1009,6 +1026,8 @@ export async function doctorChecks(projectRoot: string, options: DoctorOptions =
     });
   }
 
+  await ensureFeatureSystem(projectRoot);
+  const activeFeature = await readActiveFeature(projectRoot);
   let flowState = await readFlowState(projectRoot);
   if (options.reconcileCurrentStageGates === true) {
     const reconciliation = await reconcileAndWriteCurrentStageGateCatalog(projectRoot);
@@ -1066,6 +1085,33 @@ export async function doctorChecks(projectRoot: string, options: DoctorOptions =
     name: "artifacts:active_root",
     ok: await exists(path.join(projectRoot, RUNTIME_ROOT, "artifacts")),
     details: `${RUNTIME_ROOT}/artifacts must exist as the active artifact root`
+  });
+  const features = await listFeatures(projectRoot);
+  checks.push({
+    name: "state:active_feature_meta",
+    ok: await exists(path.join(projectRoot, RUNTIME_ROOT, "state", "active-feature.json")),
+    details: `${RUNTIME_ROOT}/state/active-feature.json must exist`
+  });
+  checks.push({
+    name: "state:active_feature_exists",
+    ok: features.includes(activeFeature),
+    details: features.includes(activeFeature)
+      ? `active feature "${activeFeature}" is present in ${RUNTIME_ROOT}/features`
+      : `active feature "${activeFeature}" is missing from ${RUNTIME_ROOT}/features`
+  });
+  checks.push({
+    name: "state:features_nonempty",
+    ok: features.length > 0,
+    details: features.length > 0
+      ? `${features.length} feature snapshot(s): ${features.join(", ")}`
+      : `no feature snapshots found under ${RUNTIME_ROOT}/features`
+  });
+  checks.push({
+    name: "state:active_feature_snapshot_dirs",
+    ok:
+      await exists(path.join(featureRootPath(projectRoot, activeFeature), "artifacts")) &&
+      await exists(path.join(featureRootPath(projectRoot, activeFeature), "state")),
+    details: `${RUNTIME_ROOT}/features/${activeFeature}/artifacts and /state must exist`
   });
   checks.push({
     name: "runs:archive_root",

@@ -21,6 +21,8 @@ describe("runs system", () => {
     expect(state.activeRunId).toBe("active");
     expect(state.currentStage).toBe("brainstorm");
     await expect(fs.stat(path.join(root, ".cclaw/artifacts"))).resolves.toBeTruthy();
+    await expect(fs.stat(path.join(root, ".cclaw/features/default"))).resolves.toBeTruthy();
+    await expect(fs.stat(path.join(root, ".cclaw/state/active-feature.json"))).resolves.toBeTruthy();
     await expect(fs.stat(path.join(root, ".cclaw/runs"))).resolves.toBeTruthy();
   });
 
@@ -42,6 +44,7 @@ describe("runs system", () => {
     const state = await readFlowState(root);
 
     expect(archived.archiveId).toMatch(/^\d{4}-\d{2}-\d{2}-payments-revamp/);
+    expect(archived.activeFeature).toBe("default");
     await expect(
       fs.readFile(path.join(archived.archivePath, "artifacts", "01-brainstorm.md"), "utf8")
     ).resolves.toContain("# draft");
@@ -191,6 +194,7 @@ describe("runs system", () => {
     expect(manifest.version).toBe(1);
     expect(manifest.archiveId).toBe(archived.archiveId);
     expect(manifest.featureName).toBe("Search Revamp");
+    expect(manifest.activeFeature).toBe("default");
     expect(manifest.sourceCurrentStage).toBe("plan");
     expect(manifest.sourceCompletedStages).toEqual([
       "brainstorm",
