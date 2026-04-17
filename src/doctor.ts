@@ -21,9 +21,11 @@ import { TRACK_STAGES } from "./types.js";
 import { checkMandatoryDelegations } from "./delegation.js";
 import {
   ensureFeatureSystem,
-  featureRootPath,
   listFeatures,
-  readActiveFeature
+  readActiveFeature,
+  readFeatureWorktreeRegistry,
+  resolveFeatureWorkspacePath,
+  worktreeRegistryPath
 } from "./feature-system.js";
 import { buildTraceMatrix } from "./trace-matrix.js";
 import {
@@ -47,7 +49,6 @@ import type { HarnessId } from "./types.js";
 import type { DoctorSeverity } from "./doctor-registry.js";
 
 const execFileAsync = promisify(execFile);
-const PREAMBLE_COOLDOWN_MS = 15 * 60 * 1000;
 
 export interface DoctorCheck {
   name: string;
@@ -543,7 +544,7 @@ export async function doctorChecks(projectRoot: string, options: DoctorOptions =
   });
 
   // Utility commands
-  for (const cmd of ["learn", "next", "status", "tree", "diff", "feature", "tdd-log", "retro", "rewind", "rewind-ack"]) {
+  for (const cmd of ["learn", "next", "status", "tree", "diff", "feature", "tdd-log", "retro", "rewind"]) {
     const cmdPath = path.join(projectRoot, RUNTIME_ROOT, "commands", `${cmd}.md`);
     checks.push({
       name: `utility_command:${cmd}`,
@@ -557,7 +558,7 @@ export async function doctorChecks(projectRoot: string, options: DoctorOptions =
     ["learnings", "learnings"],
     ["flow-tree", "flow-tree"],
     ["flow-diff", "flow-diff"],
-    ["feature-workspaces", "feature-workspaces"],
+    ["using-git-worktrees", "using-git-worktrees"],
     ["tdd-cycle-log", "tdd-cycle-log"],
     ["flow-retro", "flow-retro"],
     ["flow-rewind", "flow-rewind"],
@@ -909,6 +910,72 @@ export async function doctorChecks(projectRoot: string, options: DoctorOptions =
       ? `legacy ${RUNTIME_ROOT}/knowledge.md must be removed — cclaw is JSONL-native`
       : `no legacy markdown store present`
   });
+  const knowledgePath = path.join(projectRoot, RUNTIME_ROOT, "knowledge.jsonl");
+  if (await exists(knowledgePath)) {
+    let malformedKnowledgeLines = 0;
+    let missingSchemaV2Fields = 0;
+    let parsedKnowledgeLines = 0;
+    const requiredV2Fields = [
+      "type",
+      "trigger",
+      "action",
+      "confidence",
+      "domain",
+      "stage",
+      "origin_stage",
+      "origin_feature",
+      "frequency",
+      "universality",
+      "maturity",
+      "created",
+      "first_seen_ts",
+      "last_seen_ts",
+      "project"
+    ];
+    try {
+      const raw = await fs.readFile(knowledgePath, "utf8");
+      const lines = raw
+        .split("\n")
+        .map((line) => line.trim())
+        .filter((line) => line.length > 0);
+      for (const line of lines) {
+        try {
+          const parsed = JSON.parse(line) as Record<string, unknown>;
+          if (!parsed || typeof parsed !== "object" || Array.isArray(parsed)) {
+            malformedKnowledgeLines += 1;
+            continue;
+          }
+          parsedKnowledgeLines += 1;
+          const missing = requiredV2Fields.some((field) => !Object.prototype.hasOwnProperty.call(parsed, field));
+          if (missing) {
+            missingSchemaV2Fields += 1;
+          }
+        } catch {
+          malformedKnowledgeLines += 1;
+        }
+      }
+    } catch {
+      malformedKnowledgeLines += 1;
+    }
+    checks.push({
+      name: "knowledge:jsonl_parseable",
+      ok: malformedKnowledgeLines === 0,
+      details:
+        malformedKnowledgeLines === 0
+          ? "knowledge.jsonl lines parse as JSON objects"
+          : `knowledge.jsonl contains ${malformedKnowledgeLines} malformed line(s)`
+    });
+    checks.push({
+      name: "warning:knowledge:schema_v2_fields",
+      ok: true,
+      details:
+        parsedKnowledgeLines === 0
+          ? "knowledge.jsonl is empty"
+          : missingSchemaV2Fields === 0
+            ? `all ${parsedKnowledgeLines} knowledge line(s) include schema v2 fields`
+            : `warning: ${missingSchemaV2Fields}/${parsedKnowledgeLines} knowledge line(s) miss schema v2 fields (origin/maturity/frequency metadata)`
+    });
+  }
 
   checks.push({
     name: "state:checkpoint_exists",
@@ -920,6 +987,54 @@ export async function doctorChecks(projectRoot: string, options: DoctorOptions =
     ok: await exists(path.join(projectRoot, RUNTIME_ROOT, "state", "stage-activity.jsonl")),
     details: `${RUNTIME_ROOT}/state/stage-activity.jsonl must exist`
   });
+  const stageActivityPath = path.join(projectRoot, RUNTIME_ROOT, "state", "stage-activity.jsonl");
+  if (await exists(stageActivityPath)) {
+    let malformedActivityLines = 0;
+    let missingSchemaVersion = 0;
+    let parsedActivityLines = 0;
+    try {
+      const raw = await fs.readFile(stageActivityPath, "utf8");
+      const lines = raw
+        .split("\n")
+        .map((line) => line.trim())
+        .filter((line) => line.length > 0);
+      for (const line of lines) {
+        try {
+          const parsed = JSON.parse(line) as Record<string, unknown>;
+          if (!parsed || typeof parsed !== "object" || Array.isArray(parsed)) {
+            malformedActivityLines += 1;
+            continue;
+          }
+          parsedActivityLines += 1;
+          if (parsed.schemaVersion !== 1) {
+            missingSchemaVersion += 1;
+          }
+        } catch {
+          malformedActivityLines += 1;
+        }
+      }
+    } catch {
+      malformedActivityLines += 1;
+    }
+    checks.push({
+      name: "state:stage_activity_jsonl_parseable",
+      ok: malformedActivityLines === 0,
+      details:
+        malformedActivityLines === 0
+          ? "stage-activity.jsonl lines parse as JSON objects"
+          : `stage-activity.jsonl contains ${malformedActivityLines} malformed line(s)`
+    });
+    checks.push({
+      name: "warning:state:stage_activity_schema_version",
+      ok: true,
+      details:
+        parsedActivityLines === 0
+          ? "stage-activity.jsonl is empty"
+          : missingSchemaVersion === 0
+            ? `all ${parsedActivityLines} stage-activity line(s) include schemaVersion=1`
+            : `warning: ${missingSchemaVersion}/${parsedActivityLines} stage-activity line(s) missing schemaVersion=1`
+    });
+  }
   checks.push({
     name: "state:suggestion_memory_exists",
     ok: await exists(path.join(projectRoot, RUNTIME_ROOT, "state", "suggestion-memory.json")),
@@ -957,83 +1072,6 @@ export async function doctorChecks(projectRoot: string, options: DoctorOptions =
       name: `contexts:mode:${mode}`,
       ok: await exists(modePath),
       details: modePath
-    });
-  }
-
-  const preambleLogPath = path.join(projectRoot, RUNTIME_ROOT, "state", "preamble-log.jsonl");
-  const preambleLogExists = await exists(preambleLogPath);
-  checks.push({
-    name: "state:preamble_log_exists",
-    ok: preambleLogExists,
-    details: `${RUNTIME_ROOT}/state/preamble-log.jsonl must exist for preamble budget tracking`
-  });
-  if (preambleLogExists) {
-    let duplicateHits = 0;
-    let parsedEntries = 0;
-    let malformedEntries = 0;
-    try {
-      const now = Date.now();
-      const byKey = new Map<string, number[]>();
-      const raw = await fs.readFile(preambleLogPath, "utf8");
-      const lines = raw
-        .split("\n")
-        .map((line) => line.trim())
-        .filter((line) => line.length > 0);
-      for (const line of lines) {
-        try {
-          const parsed = JSON.parse(line) as Record<string, unknown>;
-          const tsRaw = parsed.ts;
-          const stageRaw = parsed.stage;
-          const triggerRaw = parsed.trigger;
-          const hashRaw = parsed.hash;
-          if (
-            typeof tsRaw !== "string" ||
-            typeof stageRaw !== "string" ||
-            typeof triggerRaw !== "string" ||
-            typeof hashRaw !== "string"
-          ) {
-            malformedEntries += 1;
-            continue;
-          }
-          const stamp = Date.parse(tsRaw);
-          if (!Number.isFinite(stamp)) {
-            malformedEntries += 1;
-            continue;
-          }
-          if (now - stamp > 24 * 60 * 60 * 1000) {
-            continue;
-          }
-          parsedEntries += 1;
-          const key = `${stageRaw}|${triggerRaw}|${hashRaw}`;
-          const bucket = byKey.get(key) ?? [];
-          bucket.push(stamp);
-          byKey.set(key, bucket);
-        } catch {
-          malformedEntries += 1;
-        }
-      }
-      for (const stamps of byKey.values()) {
-        stamps.sort((a, b) => a - b);
-        for (let i = 1; i < stamps.length; i += 1) {
-          if (stamps[i]! - stamps[i - 1]! < PREAMBLE_COOLDOWN_MS) {
-            duplicateHits += 1;
-          }
-        }
-      }
-    } catch {
-      malformedEntries += 1;
-    }
-
-    checks.push({
-      name: "warning:preamble:dedup",
-      ok: true,
-      details: duplicateHits > 0
-        ? `warning: detected ${duplicateHits} repeated preamble emission(s) inside ${Math.floor(PREAMBLE_COOLDOWN_MS / 60000)}m cooldown window`
-        : parsedEntries > 0
-          ? `preamble budget healthy (${parsedEntries} recent preamble entry/entries checked)`
-          : malformedEntries > 0
-            ? `warning: preamble log exists but entries are malformed (${malformedEntries} line(s) ignored)`
-            : "preamble log is empty; no recent preamble emissions recorded"
     });
   }
 
@@ -1098,31 +1136,51 @@ export async function doctorChecks(projectRoot: string, options: DoctorOptions =
     details: `${RUNTIME_ROOT}/artifacts must exist as the active artifact root`
   });
   const features = await listFeatures(projectRoot);
+  const worktreeRegistry = await readFeatureWorktreeRegistry(projectRoot);
+  const activeFeatureEntry = worktreeRegistry.entries.find((entry) => entry.featureId === activeFeature);
+  const activeFeatureWorkspacePath = activeFeatureEntry
+    ? resolveFeatureWorkspacePath(projectRoot, activeFeatureEntry)
+    : "";
   checks.push({
     name: "state:active_feature_meta",
     ok: await exists(path.join(projectRoot, RUNTIME_ROOT, "state", "active-feature.json")),
     details: `${RUNTIME_ROOT}/state/active-feature.json must exist`
   });
   checks.push({
+    name: "state:worktree_registry_exists",
+    ok: await exists(worktreeRegistryPath(projectRoot)),
+    details: `${RUNTIME_ROOT}/state/worktrees.json must exist and track feature->worktree mapping`
+  });
+  checks.push({
     name: "state:active_feature_exists",
     ok: features.includes(activeFeature),
     details: features.includes(activeFeature)
-      ? `active feature "${activeFeature}" is present in ${RUNTIME_ROOT}/features`
-      : `active feature "${activeFeature}" is missing from ${RUNTIME_ROOT}/features`
+      ? `active feature "${activeFeature}" is present in ${RUNTIME_ROOT}/state/worktrees.json`
+      : `active feature "${activeFeature}" is missing from ${RUNTIME_ROOT}/state/worktrees.json`
   });
   checks.push({
     name: "state:features_nonempty",
     ok: features.length > 0,
     details: features.length > 0
-      ? `${features.length} feature snapshot(s): ${features.join(", ")}`
-      : `no feature snapshots found under ${RUNTIME_ROOT}/features`
+      ? `${features.length} registered feature workspace(s): ${features.join(", ")}`
+      : `no feature workspaces found in ${RUNTIME_ROOT}/state/worktrees.json`
   });
   checks.push({
-    name: "state:active_feature_snapshot_dirs",
-    ok:
-      await exists(path.join(featureRootPath(projectRoot, activeFeature), "artifacts")) &&
-      await exists(path.join(featureRootPath(projectRoot, activeFeature), "state")),
-    details: `${RUNTIME_ROOT}/features/${activeFeature}/artifacts and /state must exist`
+    name: "state:active_feature_workspace_path",
+    ok: activeFeatureEntry ? await exists(activeFeatureWorkspacePath) : false,
+    details: activeFeatureEntry
+      ? `active feature "${activeFeature}" maps to workspace path ${activeFeatureEntry.path} (${activeFeatureEntry.source})`
+      : `active feature "${activeFeature}" has no worktree registry entry`
+  });
+  const legacyWorkspaceEntries = worktreeRegistry.entries
+    .filter((entry) => entry.source === "legacy-snapshot")
+    .map((entry) => entry.featureId);
+  checks.push({
+    name: "warning:state:legacy_feature_snapshots",
+    ok: legacyWorkspaceEntries.length === 0,
+    details: legacyWorkspaceEntries.length === 0
+      ? "no legacy .cclaw/features snapshot entries remain"
+      : `legacy snapshot entries still present (read-only): ${legacyWorkspaceEntries.join(", ")}`
   });
   const staleStages = Object.keys(flowState.staleStages).filter((value) =>
     COMMAND_FILE_ORDER.includes(value as (typeof COMMAND_FILE_ORDER)[number])
@@ -1132,7 +1190,7 @@ export async function doctorChecks(projectRoot: string, options: DoctorOptions =
     ok: staleStages.length === 0,
     details: staleStages.length === 0
       ? "no stale stages pending acknowledgement"
-      : `stale stages must be acknowledged via /cc-ops rewind-ack: ${staleStages.join(", ")}`
+      : `stale stages must be acknowledged via /cc-ops rewind --ack <stage>: ${staleStages.join(", ")}`
   });
   const retroRequired = flowState.completedStages.includes("ship");
   const retroComplete =

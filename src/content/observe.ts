@@ -832,7 +832,8 @@ if command -v jq >/dev/null 2>&1; then
     --arg phase "$PHASE" \\
     --arg stage "$STAGE" \\
     --arg runId "$ACTIVE_RUN" \\
-    '{ts:$ts,event:$event,tool:$tool,phase:$phase,stage:$stage,runId:$runId}' 2>/dev/null || echo "")
+    --arg schemaVersion "1" \\
+    '{ts:$ts,event:$event,tool:$tool,phase:$phase,stage:$stage,runId:$runId,schemaVersion:($schemaVersion|tonumber)}' 2>/dev/null || echo "")
 else
   EVENT_JSON=$(printf '{"ts":"%s","event":"%s","tool":"%s","phase":"%s","stage":"%s","runId":"%s","data":"%s"}' \\
     "$(escape_json "$TS")" \\
@@ -842,7 +843,7 @@ else
     "$(escape_json "$STAGE")" \\
     "$(escape_json "$ACTIVE_RUN")" \\
     "$(escape_json "$PAYLOAD")")
-  ACTIVITY_JSON=$(printf '{"ts":"%s","event":"%s","tool":"%s","phase":"%s","stage":"%s","runId":"%s"}' \\
+  ACTIVITY_JSON=$(printf '{"ts":"%s","event":"%s","tool":"%s","phase":"%s","stage":"%s","runId":"%s","schemaVersion":1}' \\
     "$(escape_json "$TS")" \\
     "$(escape_json "$EVENT")" \\
     "$(escape_json "$TOOL")" \\

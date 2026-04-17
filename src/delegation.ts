@@ -8,14 +8,38 @@ import { readFlowState } from "./runs.js";
 import { stageSchema } from "./content/stage-schema.js";
 import type { FlowStage } from "./types.js";
 
+export type DelegationMode = "mandatory" | "proactive" | "conditional";
+export type DelegationStatus = "scheduled" | "completed" | "failed" | "waived";
+
+export interface DelegationTokenUsage {
+  input: number;
+  output: number;
+  model: string;
+}
+
 export type DelegationEntry = {
   stage: string;
   agent: string;
-  mode: "mandatory" | "proactive" | "conditional";
-  status: "scheduled" | "completed" | "failed" | "waived";
+  mode: DelegationMode;
+  status: DelegationStatus;
+  /**
+   * Span identifier for this delegation unit. Multiple status transitions for
+   * the same delegated unit should reuse the same spanId.
+   */
+  spanId?: string;
+  /** Parent span id when this delegation was spawned from another span. */
+  parentSpanId?: string;
+  /** ISO timestamp when the delegation span started. */
+  startTs?: string;
+  /** ISO timestamp when the delegation span ended (for terminal statuses). */
+  endTs?: string;
+  /**
+   * Legacy timestamp used by historical ledgers. New writers set both `ts` and
+   * `startTs` for backward compatibility.
+   */
   taskId?: string;
   waiverReason?: string;
-  ts: string;
+  ts?: string;
   /**
    * Run id the entry belongs to. Older ledgers written before 0.5.17 may omit this;
    * consumers treat missing runId as unscoped (conservatively excluded from current-run checks).
@@ -26,6 +50,14 @@ export type DelegationEntry = {
    * Recorded for audit so reviewers can see why the second pass was required.
    */
   conditionTrigger?: string;
+  /** Optional token usage captured from the delegated run. */
+  tokens?: DelegationTokenUsage;
+  /** Number of retries attempted for this span. */
+  retryCount?: number;
+  /** Optional references to evidence anchors in artifacts. */
+  evidenceRefs?: string[];
+  /** Schema version marker for span-compatible delegation logs. */
+  schemaVersion?: 1;
 };
 
 export type DelegationLedger = {
@@ -41,6 +73,23 @@ function delegationLockPath(projectRoot: string): string {
   return path.join(projectRoot, RUNTIME_ROOT, "state", ".delegation.lock");
 }
 
+function createSpanId(): string {
+  return `dspan-${Date.now().toString(36)}-${Math.random().toString(36).slice(2, 10)}`;
+}
+
+function isDelegationTokenUsage(value: unknown): value is DelegationTokenUsage {
+  if (!value || typeof value !== "object" || Array.isArray(value)) return false;
+  const o = value as Record<string, unknown>;
+  return (
+    typeof o.input === "number" &&
+    Number.isFinite(o.input) &&
+    typeof o.output === "number" &&
+    Number.isFinite(o.output) &&
+    typeof o.model === "string" &&
+    o.model.trim().length > 0
+  );
+}
+
 function isDelegationEntry(value: unknown): value is DelegationEntry {
   if (!value || typeof value !== "object" || Array.isArray(value)) return false;
   const o = value as Record<string, unknown>;
@@ -50,16 +99,33 @@ function isDelegationEntry(value: unknown): value is DelegationEntry {
     o.status === "completed" ||
     o.status === "failed" ||
     o.status === "waived";
+  const timestampOk =
+    typeof o.ts === "string" ||
+    typeof o.startTs === "string";
+  const retryOk =
+    o.retryCount === undefined ||
+    (typeof o.retryCount === "number" &&
+      Number.isFinite(o.retryCount) &&
+      Number.isInteger(o.retryCount) &&
+      o.retryCount >= 0);
   return (
     typeof o.stage === "string" &&
     typeof o.agent === "string" &&
     modeOk &&
     statusOk &&
-    typeof o.ts === "string" &&
+    timestampOk &&
+    (o.spanId === undefined || typeof o.spanId === "string") &&
+    (o.parentSpanId === undefined || typeof o.parentSpanId === "string") &&
+    (o.startTs === undefined || typeof o.startTs === "string") &&
+    (o.endTs === undefined || typeof o.endTs === "string") &&
     (o.taskId === undefined || typeof o.taskId === "string") &&
     (o.waiverReason === undefined || typeof o.waiverReason === "string") &&
     (o.runId === undefined || typeof o.runId === "string") &&
-    (o.conditionTrigger === undefined || typeof o.conditionTrigger === "string")
+    (o.conditionTrigger === undefined || typeof o.conditionTrigger === "string") &&
+    (o.tokens === undefined || isDelegationTokenUsage(o.tokens)) &&
+    retryOk &&
+    (o.evidenceRefs === undefined || (Array.isArray(o.evidenceRefs) && o.evidenceRefs.every((item) => typeof item === "string"))) &&
+    (o.schemaVersion === undefined || o.schemaVersion === 1)
   );
 }
 
@@ -73,7 +139,19 @@ function parseLedger(raw: unknown, runId: string): DelegationLedger {
   if (Array.isArray(entriesRaw)) {
     for (const item of entriesRaw) {
       if (isDelegationEntry(item)) {
-        entries.push(item);
+        const ts = item.startTs ?? item.ts ?? new Date().toISOString();
+        entries.push({
+          ...item,
+          spanId: item.spanId ?? createSpanId(),
+          startTs: ts,
+          ts,
+          retryCount:
+            typeof item.retryCount === "number" && Number.isInteger(item.retryCount) && item.retryCount >= 0
+              ? item.retryCount
+              : 0,
+          evidenceRefs: Array.isArray(item.evidenceRefs) ? item.evidenceRefs : [],
+          schemaVersion: 1
+        });
       }
     }
   }
@@ -100,7 +178,22 @@ export async function appendDelegation(projectRoot: string, entry: DelegationEnt
   await withDirectoryLock(delegationLockPath(projectRoot), async () => {
     const filePath = delegationLogPath(projectRoot);
     const prior = await readDelegationLedger(projectRoot);
+    const startTs = entry.startTs ?? entry.ts ?? new Date().toISOString();
     const stamped: DelegationEntry = { ...entry, runId: entry.runId ?? activeRunId };
+    stamped.spanId = entry.spanId ?? createSpanId();
+    stamped.startTs = startTs;
+    stamped.ts = startTs;
+    stamped.schemaVersion = 1;
+    if (
+      stamped.retryCount === undefined ||
+      !Number.isInteger(stamped.retryCount) ||
+      stamped.retryCount < 0
+    ) {
+      stamped.retryCount = 0;
+    }
+    if (!Array.isArray(stamped.evidenceRefs)) {
+      stamped.evidenceRefs = [];
+    }
     const ledger: DelegationLedger = {
       runId: activeRunId,
       entries: [...prior.entries, stamped]

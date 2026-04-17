@@ -35,7 +35,7 @@ Task arrives
   ├─ Resume existing flow? -> /cc or /cc-next
   ├─ Knowledge operation? -> /cc-learn
   ├─ Read-only workspace view? -> /cc-view [status|tree|diff]
-  └─ Workspace operation? -> /cc-ops [feature|tdd-log|retro|archive|rewind|rewind-ack]
+  └─ Workspace operation? -> /cc-ops [feature|tdd-log|retro|archive|rewind]
 \`\`\`
 
 ## Task classification
@@ -79,7 +79,7 @@ Do not inline these protocols in stage skills; cite by path:
 
 - Decision protocol: \`${DECISION_PROTOCOL_REL_PATH}\`
 - Completion/resume protocol: \`${COMPLETION_PROTOCOL_REL_PATH}\`
-- Engineering ethos + preamble rules: \`${ETHOS_PROTOCOL_REL_PATH}\`
+- Engineering ethos + announce discipline: \`${ETHOS_PROTOCOL_REL_PATH}\`
 
 ## Knowledge guidance
 

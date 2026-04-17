@@ -43,7 +43,7 @@ This is the only progression command the user needs to drive the entire flow. St
 
 1. Read **\`${flowPath}\`**. If missing → **BLOCKED** (state missing).
 2. Parse JSON. Capture \`currentStage\` and \`stageGateCatalog[currentStage]\`.
-3. If \`staleStages[currentStage]\` exists, do not advance automatically. Re-run the stage artifact work, then clear the marker with \`/cc-ops rewind-ack <currentStage>\`.
+3. If \`staleStages[currentStage]\` exists, do not advance automatically. Re-run the stage artifact work, then clear the marker with \`/cc-ops rewind --ack <currentStage>\`.
 4. Let \`G\` = \`requiredGates\` for **\`currentStage\`** from the stage schema.
 5. Let \`catalog\` = \`stageGateCatalog[currentStage]\` from flow state.
 6. **Satisfied** for gate id \`g\`: \`g\` in \`catalog.passed\` and \`g\` not in \`catalog.blocked\`.
@@ -131,7 +131,7 @@ Do **not** mark gates satisfied from memory alone. Cite **artifact evidence** (p
 
 1. Open **\`${flowPath}\`**.
 2. Record \`currentStage\` and \`stageGateCatalog[currentStage]\`.
-3. If \`staleStages[currentStage]\` exists, re-run the stage and clear marker via \`/cc-ops rewind-ack <currentStage>\` before advancing.
+3. If \`staleStages[currentStage]\` exists, re-run the stage and clear marker via \`/cc-ops rewind --ack <currentStage>\` before advancing.
 4. If the file is missing or invalid JSON → **BLOCKED** (report and stop).
 
 ### Step 2: Evaluate gates

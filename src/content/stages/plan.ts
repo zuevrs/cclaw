@@ -28,6 +28,8 @@ export const PLAN: StageSchemaInput = {
     "Group tasks into dependency waves — wave N+1 cannot start until wave N has verification evidence.",
     "Slice into vertical tasks — each task targets 2-5 minutes, produces one testable outcome, and touches one coherent area.",
     "Attach verification — every task has an acceptance criterion mapping and a concrete verification command.",
+    "Map scope Locked Decisions — every D-XX from scope is referenced by at least one plan task (or explicitly marked deferred with reason).",
+    "Run anti-placeholder + anti-scope-reduction scans — block `TODO/TBD/...` and phrasing like `v1`, `for now`, `later` for locked boundaries.",
     "Define checkpoints — mark points where progress should be validated before continuing.",
     "WAIT_FOR_CONFIRM — write plan artifact and explicitly pause. **STOP.** Do NOT proceed until user confirms. Then update `flow-state.json` and tell user to run `/cc-next`."
   ],
@@ -36,6 +38,7 @@ export const PLAN: StageSchemaInput = {
     "Split work into small vertical slices (target 2-5 minute tasks).",
     "Publish explicit dependency waves with entry and exit checks for each wave.",
     "Attach verification step to every task.",
+    "Preserve locked scope boundaries: no silent scope reduction language in task rows.",
     "Enforce WAIT_FOR_CONFIRM: present the plan summary with options (A) Approve / (B) Revise / (C) Reject.",
     "**STOP.** Do NOT proceed until user explicitly approves. Then update `flow-state.json` and tell user to run `/cc-next`."
   ],
@@ -43,6 +46,7 @@ export const PLAN: StageSchemaInput = {
     "Build dependency graph and ordered slices.",
     "Group slices into execution waves and define gate criteria per wave.",
     "Define each task with acceptance mapping and verification commands.",
+    "Trace every locked decision (D-XX) to plan tasks or explicit defer rationale.",
     "Record checkpoints and blockers.",
     "Write plan artifact and pause at WAIT_FOR_CONFIRM."
   ],
@@ -57,6 +61,7 @@ export const PLAN: StageSchemaInput = {
   requiredEvidence: [
     "Artifact written to `.cclaw/artifacts/05-plan.md`.",
     "Task list includes acceptance mapping.",
+    "Locked decision coverage table present with D-XX trace links.",
     "Dependency graph documented.",
     "Dependency waves documented with wave-by-wave verification gates.",
     "WAIT_FOR_CONFIRM status recorded."
@@ -72,6 +77,7 @@ export const PLAN: StageSchemaInput = {
     "tasks too broad",
     "dependency uncertainty unresolved",
     "wave boundaries are unclear",
+    "locked decisions from scope are not mapped to tasks",
     "no explicit confirmation"
   ],
   exitCriteria: [
@@ -84,16 +90,19 @@ export const PLAN: StageSchemaInput = {
     "Horizontal decomposition without end-to-end slices",
     "Tasks without verification steps",
     "Starting execution before approval",
-    "Tasks that touch multiple unrelated areas"
+    "Tasks that touch multiple unrelated areas",
+    "Using placeholder tokens or scope-reduction phrases (`v1`, `for now`, `later`) in task definitions"
   ],
   redFlags: [
     "No dependency graph",
     "No WAIT_FOR_CONFIRM marker",
     "No explicit dependency waves",
     "Tasks exceed one coherent outcome",
-    "No acceptance mapping"
+    "No acceptance mapping",
+    "Locked decisions are missing or not mapped",
+    "Scope-reduction language appears without explicit approved defer decision"
   ],
-  policyNeedles: ["WAIT_FOR_CONFIRM", "Task Graph", "Dependency Waves", "Acceptance Mapping", "verification steps"],
+  policyNeedles: ["WAIT_FOR_CONFIRM", "Task Graph", "Dependency Waves", "Acceptance Mapping", "verification steps", "Locked Decision Coverage"],
   artifactFile: "05-plan.md",
   next: "tdd",
   reviewSections: [
@@ -134,16 +143,18 @@ export const PLAN: StageSchemaInput = {
   crossStageTrace: {
     readsFrom: [".cclaw/artifacts/04-spec.md", ".cclaw/artifacts/03-design.md", ".cclaw/artifacts/02-scope.md"],
     writesTo: [".cclaw/artifacts/05-plan.md"],
-    traceabilityRule: "Every task must trace to a spec acceptance criterion. Every downstream RED test must trace to a plan task."
+    traceabilityRule: "Every task must trace to a spec acceptance criterion. Every locked scope decision (D-XX) must trace to at least one plan task or explicit defer rationale. Every downstream RED test must trace to a plan task."
   },
   artifactValidation: [
     { section: "Dependency Graph", required: true, validationRule: "Ordering and parallel opportunities explicit. No circular dependencies." },
     { section: "Dependency Waves", required: true, validationRule: "Every task belongs to a wave. Each wave has an exit gate and dependency statement." },
     { section: "Task List", required: true, validationRule: "Each task row includes ID, description, acceptance criterion, verification command, and effort estimate (S/M/L). Every task must also carry a minutes estimate within the 2-5 minute budget." },
     { section: "Acceptance Mapping", required: true, validationRule: "Every spec criterion is covered by at least one task." },
+    { section: "Locked Decision Coverage", required: false, validationRule: "Every locked decision ID (D-XX) from scope is listed with linked task IDs or explicit defer rationale." },
     { section: "Risk Assessment", required: false, validationRule: "If present: per-task or per-wave risk identification with likelihood, impact, and mitigation strategy." },
     { section: "Boundary Map", required: false, validationRule: "If present: per-wave or per-task interface contracts listing what each task produces (exports) and consumes (imports) from other tasks." },
     { section: "WAIT_FOR_CONFIRM", required: true, validationRule: "Explicit marker present. Status: pending until user approves." },
-    { section: "No-Placeholder Scan", required: false, validationRule: "If present: confirmation that a text scan for `TODO`, `TBD`, `FIXME`, `<fill-in>`, `<your-*-here>`, `xxx`, or bare ellipses has zero hits in the task list. A placeholder is a deferred decision masquerading as a plan." }
+    { section: "No-Placeholder Scan", required: false, validationRule: "Confirmation that a text scan for `TODO`, `TBD`, `FIXME`, `<fill-in>`, `<your-*-here>`, `xxx`, or bare ellipses has zero hits in the task list. A placeholder is a deferred decision masquerading as a plan." },
+    { section: "No Scope Reduction Language Scan", required: false, validationRule: "Confirmation that scope-reduction phrases (`v1`, `for now`, `later`, `temporary`, `placeholder`) are absent from task rows when locked decisions exist." }
   ]
 };

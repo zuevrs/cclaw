@@ -2,7 +2,16 @@ import { COMMAND_FILE_ORDER } from "../constants.js";
 import { orderedStageSchemas } from "./stage-schema.js";
 
 export const ARTIFACT_TEMPLATES: Record<string, string> = {
-  "01-brainstorm.md": `# Brainstorm Artifact
+  "01-brainstorm.md": `---
+stage: brainstorm
+schema_version: 1
+version: 0.18.0
+feature: <feature-id>
+locked_decisions: []
+inputs_hash: sha256:pending
+---
+
+# Brainstorm Artifact
 
 ## Context
 - **Project state:**
@@ -38,7 +47,16 @@ export const ARTIFACT_TEMPLATES: Record<string, string> = {
 - **Assumptions:**
 - **Open questions (or "None"):**
 `,
-  "02-scope.md": `# Scope Artifact
+  "02-scope.md": `---
+stage: scope
+schema_version: 1
+version: 0.18.0
+feature: <feature-id>
+locked_decisions: []
+inputs_hash: sha256:pending
+---
+
+# Scope Artifact
 
 ## Prime Directives
 - Zero silent failures:
@@ -95,6 +113,11 @@ export const ARTIFACT_TEMPLATES: Record<string, string> = {
 > is later dropped, keep the row and mark Priority \`DROPPED\`; if a new one is
 > added mid-flow, append with the next free R-number — do NOT reuse numbers.
 
+## Locked Decisions (D-XX)
+| Decision ID | Decision | Why locked now | Downstream impact |
+|---|---|---|---|
+| D-01 |  |  |  |
+
 ## In Scope / Out of Scope
 
 ### In Scope
@@ -127,7 +150,16 @@ export const ARTIFACT_TEMPLATES: Record<string, string> = {
 - Deferred:
 - Explicitly excluded:
 `,
-  "03-design.md": `# Design Artifact
+  "03-design.md": `---
+stage: design
+schema_version: 1
+version: 0.18.0
+feature: <feature-id>
+locked_decisions: []
+inputs_hash: sha256:pending
+---
+
+# Design Artifact
 
 ## Codebase Investigation
 | File | Current responsibility | Patterns discovered |
@@ -211,7 +243,16 @@ export const ARTIFACT_TEMPLATES: Record<string, string> = {
 
 **Decisions made:** 0 | **Unresolved:** 0
 `,
-  "04-spec.md": `# Specification Artifact
+  "04-spec.md": `---
+stage: spec
+schema_version: 1
+version: 0.18.0
+feature: <feature-id>
+locked_decisions: []
+inputs_hash: sha256:pending
+---
+
+# Specification Artifact
 
 ## Acceptance Criteria
 | ID | Requirement Ref (R#) | Criterion (observable/measurable/falsifiable) | Design Decision Ref |
@@ -255,7 +296,16 @@ export const ARTIFACT_TEMPLATES: Record<string, string> = {
 - Approved by:
 - Date:
 `,
-  "05-plan.md": `# Plan Artifact
+  "05-plan.md": `---
+stage: plan
+schema_version: 1
+version: 0.18.0
+feature: <feature-id>
+locked_decisions: []
+inputs_hash: sha256:pending
+---
+
+# Plan Artifact
 
 ## Dependency Graph
 - 
@@ -283,6 +333,7 @@ Execution rule: complete and verify each wave before starting the next wave.
 **Rules (apply before writing rows):**
 - Every task fits the **2-5 minute budget**. If \`[~Nm]\` is >5, split the task.
 - **No placeholders.** Forbidden tokens anywhere in this table: \`TODO\`, \`TBD\`, \`FIXME\`, \`<fill-in>\`, \`<your-*-here>\`, \`xxx\`, bare ellipsis. Every file path, test, and verification command must be copy-pasteable as written.
+- **No silent scope reduction.** Forbidden phrasing when locked decisions exist: \`v1\`, \`for now\`, \`later\`, \`temporary\`, \`placeholder\`, \`mock for now\`, \`hardcoded for now\`, \`will improve later\`.
 - If an estimate is genuinely uncertain (new library, unfamiliar subsystem), add a **spike task in wave 0** to de-risk — do NOT hide the uncertainty inside a large estimate.
 
 | Task ID | Description | Acceptance criterion | Verification command | Effort (S/M/L) | Minutes |
@@ -293,6 +344,11 @@ Execution rule: complete and verify each wave before starting the next wave.
 | Criterion ID | Task IDs |
 |---|---|
 | AC-1 | T-1 |
+
+## Locked Decision Coverage
+| Decision ID | Source section | Plan tasks implementing decision | Status |
+|---|---|---|---|
+| D-01 | 02-scope.md > Locked Decisions | T-1 | covered |
 
 ## Risk Assessment
 | Task/Wave | Risk | Likelihood | Impact | Mitigation |
@@ -308,11 +364,24 @@ Execution rule: complete and verify each wave before starting the next wave.
 - Scanned tokens: \`TODO\`, \`TBD\`, \`FIXME\`, \`<fill-in>\`, \`<your-*-here>\`, \`xxx\`, bare ellipsis in task rows.
 - Hits: 0 (required for WAIT_FOR_CONFIRM to resolve).
 
+## No Scope Reduction Language Scan
+- Scanned phrases: \`v1\`, \`for now\`, \`later\`, \`temporary\`, \`placeholder\`, \`mock for now\`, \`hardcoded for now\`, \`will improve later\`.
+- Hits: 0 (required when Locked Decisions section is non-empty).
+
 ## WAIT_FOR_CONFIRM
 - Status: pending
 - Confirmed by:
 `,
-  "06-tdd.md": `# TDD Artifact
+  "06-tdd.md": `---
+stage: tdd
+schema_version: 1
+version: 0.18.0
+feature: <feature-id>
+locked_decisions: []
+inputs_hash: sha256:pending
+---
+
+# TDD Artifact
 
 ## RED Evidence
 | Slice | Test name | Command | Failure output summary |
@@ -367,7 +436,16 @@ Execution rule: complete and verify each wave before starting the next wave.
 |---|---|---|---|---|
 | S-1 |  |  |  |  |
 `,
-  "07-review.md": `# Review Artifact
+  "07-review.md": `---
+stage: review
+schema_version: 1
+version: 0.18.0
+feature: <feature-id>
+locked_decisions: []
+inputs_hash: sha256:pending
+---
+
+# Review Artifact
 
 ## Layer 1 Verdict
 | Criterion | Verdict | Evidence |
@@ -445,7 +523,16 @@ Execution rule: complete and verify each wave before starting the next wave.
   }
 }
 `,
-  "08-ship.md": `# Ship Artifact
+  "08-ship.md": `---
+stage: ship
+schema_version: 1
+version: 0.18.0
+feature: <feature-id>
+locked_decisions: []
+inputs_hash: sha256:pending
+---
+
+# Ship Artifact
 
 ## Preflight Results
 - Review verdict:
@@ -486,7 +573,16 @@ Execution rule: complete and verify each wave before starting the next wave.
 - Retro artifact path: \`.cclaw/artifacts/09-retro.md\`
 - Archive remains blocked until retro gate is complete.
 `,
-  "09-retro.md": `# Retro Artifact
+  "09-retro.md": `---
+stage: retro
+schema_version: 1
+version: 0.18.0
+feature: <feature-id>
+locked_decisions: []
+inputs_hash: sha256:pending
+---
+
+# Retro Artifact
 
 ## Run Summary
 - Flow track:

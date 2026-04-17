@@ -79,12 +79,12 @@ Read-only subcommands:
 - \`/cc-view diff\` - before/after flow-state diff map
 
 Operations subcommands:
-- \`/cc-ops feature ...\` - multi-feature workspace management
+- \`/cc-ops feature ...\` - git-worktree feature isolation and routing
 - \`/cc-ops tdd-log ...\` - explicit RED/GREEN/REFACTOR evidence log
 - \`/cc-ops retro\` - mandatory retrospective gate before archive
 - \`/cc-ops archive\` - archive active run from harness flow
 - \`/cc-ops rewind ...\` - rewind flow and invalidate downstream stages
-- \`/cc-ops rewind-ack ...\` - clear stale stage markers after redo
+- \`/cc-ops rewind --ack ...\` - clear stale stage markers after redo
 
 Stage order remains canonical:
 \`brainstorm -> scope -> design -> spec -> plan -> tdd -> review -> ship\`

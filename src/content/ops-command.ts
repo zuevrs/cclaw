@@ -16,7 +16,6 @@ Subcommands:
 - \`retro\` -> \`/cc-ops retro\`
 - \`archive\` -> \`/cc-ops archive\`
 - \`rewind\` -> \`/cc-ops rewind\`
-- \`rewind-ack\` -> \`/cc-ops rewind-ack\`
 
 ## HARD-GATE
 
@@ -32,7 +31,6 @@ Subcommands:
    - \`retro\` -> \`${RUNTIME_ROOT}/commands/retro.md\`
    - \`archive\` -> \`${RUNTIME_ROOT}/commands/archive.md\`
    - \`rewind\` -> \`${RUNTIME_ROOT}/commands/rewind.md\`
-   - \`rewind-ack\` -> \`${RUNTIME_ROOT}/commands/rewind-ack.md\`
 3. Unknown subcommand -> print supported values and stop.
 
 ## Primary skill
@@ -55,7 +53,7 @@ This wrapper only dispatches. It must not apply state mutations itself.
 
 ## Protocol
 
-1. Require a subcommand (\`feature|tdd-log|retro|archive|rewind|rewind-ack\`).
+1. Require a subcommand (\`feature|tdd-log|retro|archive|rewind\`).
 2. Route to the matching command contract + skill pair.
 3. Preserve pass-through args after the subcommand (e.g. \`/cc-ops rewind design\`).
 4. Echo which subcommand was dispatched for auditability.

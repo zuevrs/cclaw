@@ -91,15 +91,6 @@ const REQUIRED_GATE_IDS: Record<FlowStage, string[]> = {
   ]
 };
 
-const CONDITIONAL_GATE_RULES: Partial<Record<FlowStage, Record<string, string>>> = {
-  review: {
-    review_security_audit_swept: "diff_lines_gt:100||files_touched_gt:10||trust_boundary_changed"
-  },
-  ship: {
-    ship_post_merge_tests: "files_touched_gt:10||release_blast_radius_high"
-  }
-};
-
 const REQUIRED_ARTIFACT_SECTIONS: Record<FlowStage, string[]> = {
   brainstorm: ["Context", "Problem", "Approaches", "Selected Direction"],
   scope: ["Scope Mode", "In Scope / Out of Scope", "Completion Dashboard", "Scope Summary"],
@@ -111,27 +102,9 @@ const REQUIRED_ARTIFACT_SECTIONS: Record<FlowStage, string[]> = {
   ship: ["Preflight Results", "Release Notes", "Rollback Plan", "Finalization"]
 };
 
-const CONDITIONAL_ARTIFACT_RULES: Partial<Record<FlowStage, Record<string, string>>> = {
-  review: {
-    "Review Readiness Dashboard": "diff_lines_gt:100||files_touched_gt:10||trust_boundary_changed"
-  },
-  ship: {
-    Monitoring: "release_blast_radius_high"
-  }
-};
-
 function tieredStageGates(stage: FlowStage, gates: StageGate[]): StageGate[] {
   const requiredSet = new Set(REQUIRED_GATE_IDS[stage]);
-  const conditional = CONDITIONAL_GATE_RULES[stage] ?? {};
   return gates.map((gate) => {
-    const condition = conditional[gate.id];
-    if (condition) {
-      return {
-        ...gate,
-        tier: "conditional",
-        condition
-      };
-    }
     return {
       ...gate,
       tier: requiredSet.has(gate.id) ? "required" : "recommended"
@@ -141,17 +114,7 @@ function tieredStageGates(stage: FlowStage, gates: StageGate[]): StageGate[] {
 
 function tieredArtifactValidation(stage: FlowStage, rows: ArtifactValidation[]): ArtifactValidation[] {
   const requiredSections = new Set(REQUIRED_ARTIFACT_SECTIONS[stage]);
-  const conditional = CONDITIONAL_ARTIFACT_RULES[stage] ?? {};
   return rows.map((row) => {
-    const condition = conditional[row.section];
-    if (condition) {
-      return {
-        ...row,
-        tier: "conditional",
-        condition,
-        required: false
-      };
-    }
     const required = requiredSections.has(row.section);
     return {
       ...row,
@@ -337,9 +300,9 @@ export function stageRecommendedGateIds(stage: FlowStage): string[] {
 }
 
 export function stageConditionalGateIds(stage: FlowStage): string[] {
-  return stageSchema(stage).requiredGates
-    .filter((gate) => gate.tier === "conditional")
-    .map((gate) => gate.id);
+  // Conditional gate DSL removed in favor of explicit required/recommended tiers.
+  void stage;
+  return [];
 }
 
 export function nextCclawCommand(stage: FlowStage): string {

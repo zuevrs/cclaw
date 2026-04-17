@@ -1286,7 +1286,7 @@ For each lens, write either a knowledge entry **or** the explicit string
 ## Output protocol
 
 For every harvested insight, append one strict-schema JSON line to
-\`.cclaw/knowledge.jsonl\` (fields: \`type, trigger, action, confidence, domain, stage, created, project\`).
+\`.cclaw/knowledge.jsonl\` (fields: \`type, trigger, action, confidence, domain, stage, origin_stage, origin_feature, frequency, universality, maturity, created, first_seen_ts, last_seen_ts, project\`).
 See the \`learnings\` skill for the canonical shape. Choose \`type\`:
 
 - \`compound\` for process/speed accelerators.
