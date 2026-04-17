@@ -39,6 +39,7 @@ import {
   buildRulesJson
 } from "./content/templates.js";
 import { TDD_WAVE_WALKTHROUGH_MARKDOWN, stageSkillFolder, stageSkillMarkdown } from "./content/skills.js";
+import { stageCommonGuidanceMarkdown } from "./content/stage-common-guidance.js";
 import {
   STAGE_EXAMPLES_REFERENCE_DIR,
   stageExamplesReferenceMarkdown
@@ -250,6 +251,10 @@ async function writeSkills(projectRoot: string, config?: VibyConfig): Promise<vo
   await writeFileSafe(
     runtimePath(projectRoot, ...STAGE_EXAMPLES_REFERENCE_DIR.split("/"), "tdd-wave-walkthrough.md"),
     TDD_WAVE_WALKTHROUGH_MARKDOWN
+  );
+  await writeFileSafe(
+    runtimePath(projectRoot, ...STAGE_EXAMPLES_REFERENCE_DIR.split("/"), "common-guidance.md"),
+    stageCommonGuidanceMarkdown()
   );
 
   // Utility skills (not flow stages)
