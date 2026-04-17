@@ -41,7 +41,7 @@ Mandatory retrospective gate before archive once ship is complete.
    - \`required: true\`
    - \`completedAt: <ISO>\`
    - \`compoundEntries: <count>\`
-5. Report completion summary and remind user that \`cclaw archive\` is now unblocked.
+5. Report completion summary and remind user that \`/cc-archive\` is now unblocked.
 
 ## Primary skill
 

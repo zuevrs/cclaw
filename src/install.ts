@@ -20,6 +20,7 @@ import { diffCommandContract, diffCommandSkillMarkdown } from "./content/diff-co
 import { featureCommandContract, featureCommandSkillMarkdown } from "./content/feature-command.js";
 import { tddLogCommandContract, tddLogCommandSkillMarkdown } from "./content/tdd-log-command.js";
 import { retroCommandContract, retroCommandSkillMarkdown } from "./content/retro-command.js";
+import { archiveCommandContract, archiveCommandSkillMarkdown } from "./content/archive-command.js";
 import {
   rewindAcknowledgeCommandContract,
   rewindCommandContract,
@@ -322,6 +323,10 @@ async function writeSkills(projectRoot: string, config?: VibyConfig): Promise<vo
     runtimePath(projectRoot, "skills", "flow-rewind", "SKILL.md"),
     rewindCommandSkillMarkdown()
   );
+  await writeFileSafe(
+    runtimePath(projectRoot, "skills", "flow-archive", "SKILL.md"),
+    archiveCommandSkillMarkdown()
+  );
 
   await writeFileSafe(
     runtimePath(projectRoot, "skills", "subagent-dev", "SKILL.md"),
@@ -421,6 +426,7 @@ async function writeUtilityCommands(projectRoot: string): Promise<void> {
   await writeFileSafe(runtimePath(projectRoot, "commands", "feature.md"), featureCommandContract());
   await writeFileSafe(runtimePath(projectRoot, "commands", "tdd-log.md"), tddLogCommandContract());
   await writeFileSafe(runtimePath(projectRoot, "commands", "retro.md"), retroCommandContract());
+  await writeFileSafe(runtimePath(projectRoot, "commands", "archive.md"), archiveCommandContract());
   await writeFileSafe(runtimePath(projectRoot, "commands", "rewind.md"), rewindCommandContract());
   await writeFileSafe(
     runtimePath(projectRoot, "commands", "rewind-ack.md"),

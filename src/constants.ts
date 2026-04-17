@@ -68,6 +68,7 @@ export const UTILITY_COMMANDS = [
   "feature",
   "tdd-log",
   "retro",
+  "archive",
   "rewind",
   "rewind-ack"
 ] as const;

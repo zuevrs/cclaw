@@ -10,7 +10,7 @@ export const META_SKILL_NAME = "using-cclaw";
 export function usingCclawSkillMarkdown(): string {
   return `---
 name: using-cclaw
-description: "Routing brain for cclaw. Decide whether to start/resume a stage, answer directly, or use utility commands like /cc-learn, /cc-status, /cc-tree, and /cc-diff."
+description: "Routing brain for cclaw. Decide whether to start/resume a stage, answer directly, or use utility commands like /cc-learn, /cc-status, /cc-tree, /cc-diff, and /cc-archive."
 ---
 
 # Using Cclaw
@@ -34,7 +34,7 @@ Task arrives
   ├─ New software work? -> /cc <idea>
   ├─ Resume existing flow? -> /cc or /cc-next
   ├─ Knowledge operation? -> /cc-learn
-  └─ Workspace operation? -> /cc-status, /cc-tree, /cc-diff, /cc-feature, /cc-tdd-log, /cc-retro, /cc-rewind
+  └─ Workspace operation? -> /cc-status, /cc-tree, /cc-diff, /cc-feature, /cc-tdd-log, /cc-retro, /cc-archive, /cc-rewind
 \`\`\`
 
 ## Task classification

@@ -37,7 +37,7 @@ This is the only progression command the user needs to drive the entire flow. St
 
 - **Do not** invent gate completion: use only \`${flowPath}\` plus observable evidence in repo artifacts.
 - **Do not** skip stages: advance only from \`currentStage\` to its configured successor.
-- If the flow is at the terminal stage with all ship gates satisfied, **report completion**.
+- If the flow reaches terminal ship completion, route closeout in order: **/cc-retro -> /cc-archive**.
 
 ## Algorithm (mandatory)
 
@@ -58,7 +58,10 @@ This is the only progression command the user needs to drive the entire flow. St
 
 ### Path B: Current stage IS complete (all gates passed, all delegations satisfied)
 
-→ If current stage's \`next\` is **\`done\`**: report **"Flow complete. All stages finished."** and stop.
+→ If current stage's \`next\` is **\`done\`**:
+  - if \`currentStage === "ship"\` and \`retro.completedAt\` is missing -> route to \`/cc-retro\`,
+  - if \`currentStage === "ship"\` and \`retro.completedAt\` is present -> route to \`/cc-archive\`,
+  - otherwise report **"Flow complete. All stages finished."** and stop.
 → Otherwise: load **\`${RUNTIME_ROOT}/skills/<skillFolder>/SKILL.md\`** and **\`${RUNTIME_ROOT}/commands/<nextStage>.md\`** for the successor stage. Execute that stage's protocol.
 
 ### Track-aware successor resolution
@@ -151,7 +154,11 @@ Execute the stage protocol. The stage skill handles interaction, STOP points, ga
 
 **Path B — stage IS complete (all gates met, all delegations done):**
 
-If \`next\` is \`done\` → report **"Flow complete. All stages finished."** and stop.
+If \`next\` is \`done\`:
+
+- If \`currentStage\` is \`ship\` and \`retro.completedAt\` is missing -> route to \`/cc-retro\`.
+- If \`currentStage\` is \`ship\` and \`retro.completedAt\` exists -> route to \`/cc-archive\`.
+- Otherwise report **"Flow complete. All stages finished."** and stop.
 
 Otherwise load the next stage's skill and command contract, begin execution.
 

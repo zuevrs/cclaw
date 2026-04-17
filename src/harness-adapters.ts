@@ -84,6 +84,12 @@ const UTILITY_SHIMS: UtilityShimSpec[] = [
     commandFile: "retro.md"
   },
   {
+    fileName: "cc-archive.md",
+    command: "archive",
+    skillFolder: "flow-archive",
+    commandFile: "archive.md"
+  },
+  {
     fileName: "cc-rewind.md",
     command: "rewind",
     skillFolder: "flow-rewind",
@@ -205,6 +211,7 @@ When in doubt, prefer **non-trivial** — the quick track is opt-in and only saf
 | \`/cc-feature\` | **Workspace.** Manage active feature snapshots for parallel tracks. |
 | \`/cc-tdd-log\` | **Evidence.** Record RED/GREEN/REFACTOR cycle events for enforcement. |
 | \`/cc-retro\` | **Learning gate.** Mandatory retrospective before archive after ship. |
+| \`/cc-archive\` | **Run finalization.** Archive active flow into \`.cclaw/runs/\` and reset runtime. |
 | \`/cc-rewind\` | **Recovery.** Rewind flow to an earlier stage and invalidate downstream work. |
 | \`/cc-rewind-ack\` | **Recovery.** Clear stale-stage markers after redo. |
 

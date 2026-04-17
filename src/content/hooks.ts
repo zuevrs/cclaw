@@ -750,7 +750,7 @@ if [ "$CHECKPOINT_WRITTEN" -eq 0 ]; then
   CHECKPOINT_NOTE="Checkpoint update failed. Review ${RUNTIME_ROOT}/state/checkpoint.json manually."
 fi
 
-RUN_SYNC_NOTE="Run metadata sync removed; active artifacts stay in ${RUNTIME_ROOT}/artifacts until cclaw archive."
+RUN_SYNC_NOTE="Run metadata sync removed; active artifacts stay in ${RUNTIME_ROOT}/artifacts until /cc-archive (or cclaw archive runtime)."
 
 # --- Escape for JSON ---
 ${ESCAPE_FN}

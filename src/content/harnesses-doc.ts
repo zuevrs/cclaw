@@ -76,6 +76,7 @@ All harnesses receive the same utility commands:
 - \`/cc-feature\` - multi-feature workspace management
 - \`/cc-tdd-log\` - explicit RED/GREEN/REFACTOR evidence log
 - \`/cc-retro\` - mandatory retrospective gate before archive
+- \`/cc-archive\` - archive active run from harness flow
 - \`/cc-rewind\` - rewind flow and invalidate downstream stages
 - \`/cc-rewind-ack\` - clear stale stage markers after redo
 
