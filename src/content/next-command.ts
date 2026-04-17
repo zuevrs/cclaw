@@ -43,11 +43,12 @@ This is the only progression command the user needs to drive the entire flow. St
 
 1. Read **\`${flowPath}\`**. If missing → **BLOCKED** (state missing).
 2. Parse JSON. Capture \`currentStage\` and \`stageGateCatalog[currentStage]\`.
-3. Let \`G\` = \`requiredGates\` for **\`currentStage\`** from the stage schema.
-4. Let \`catalog\` = \`stageGateCatalog[currentStage]\` from flow state.
-5. **Satisfied** for gate id \`g\`: \`g\` in \`catalog.passed\` and \`g\` not in \`catalog.blocked\`.
-6. Let \`M\` = \`mandatoryDelegations\` for \`currentStage\`.
-7. If \`M\` is non-empty, inspect **\`${delegationPath}\`**. Treat as satisfied only if the agent is **completed** or **waived**.
+3. If \`staleStages[currentStage]\` exists, do not advance automatically. Re-run the stage artifact work, then clear the marker with \`/cc-rewind-ack <currentStage>\`.
+4. Let \`G\` = \`requiredGates\` for **\`currentStage\`** from the stage schema.
+5. Let \`catalog\` = \`stageGateCatalog[currentStage]\` from flow state.
+6. **Satisfied** for gate id \`g\`: \`g\` in \`catalog.passed\` and \`g\` not in \`catalog.blocked\`.
+7. Let \`M\` = \`mandatoryDelegations\` for \`currentStage\`.
+8. If \`M\` is non-empty, inspect **\`${delegationPath}\`**. Treat as satisfied only if the agent is **completed** or **waived**.
 
 ### Path A: Current stage is NOT complete (any gate unmet or delegation missing)
 
@@ -127,7 +128,8 @@ Do **not** mark gates satisfied from memory alone. Cite **artifact evidence** (p
 
 1. Open **\`${flowPath}\`**.
 2. Record \`currentStage\` and \`stageGateCatalog[currentStage]\`.
-3. If the file is missing or invalid JSON → **BLOCKED** (report and stop).
+3. If \`staleStages[currentStage]\` exists, re-run the stage and clear marker via \`/cc-rewind-ack <currentStage>\` before advancing.
+4. If the file is missing or invalid JSON → **BLOCKED** (report and stop).
 
 ### Step 2: Evaluate gates
 

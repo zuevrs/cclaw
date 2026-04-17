@@ -69,12 +69,14 @@ COMPLETED="0"
 ACTIVE_RUN="none"
 ACTIVE_FEATURE="default"
 ACTIVE_CONTEXT_MODE="default"
+STALE_STAGES=""
 CONTEXT_MODE_NOTE=""
 if [ -f "$STATE_FILE" ]; then
   if command -v jq >/dev/null 2>&1; then
     STAGE=$(jq -r '.currentStage // "none"' "$STATE_FILE" 2>/dev/null || echo "none")
     COMPLETED=$(jq -r '(.completedStages | length) // 0' "$STATE_FILE" 2>/dev/null || echo "0")
     ACTIVE_RUN=$(jq -r '.activeRunId // "none"' "$STATE_FILE" 2>/dev/null || echo "none")
+    STALE_STAGES=$(jq -r '(.staleStages // {} | keys | join(", "))' "$STATE_FILE" 2>/dev/null || echo "")
   else
     if command -v python3 >/dev/null 2>&1; then
       STAGE=$(python3 - "$STATE_FILE" <<'PY'
@@ -123,6 +125,22 @@ try:
 except Exception:
     pass
 print(run)
+PY
+)
+      STALE_STAGES=$(python3 - "$STATE_FILE" <<'PY'
+import json
+import sys
+value = ""
+try:
+    with open(sys.argv[1], "r", encoding="utf-8") as fh:
+        data = json.load(fh)
+    stale = data.get("staleStages", {})
+    if isinstance(stale, dict):
+        keys = [k for k, v in stale.items() if isinstance(v, dict)]
+        value = ", ".join(keys)
+except Exception:
+    pass
+print(value)
 PY
 )
     else
@@ -482,6 +500,10 @@ if [ -n "$STAGE_SUGGESTION" ]; then
   CTX="$CTX
 $STAGE_SUGGESTION
 To disable suggestions persistently set ${RUNTIME_ROOT}/state/suggestion-memory.json -> enabled=false."
+fi
+if [ -n "$STALE_STAGES" ]; then
+  CTX="$CTX
+Stale stages pending acknowledgement: $STALE_STAGES (use /cc-rewind-ack <stage> after redo)."
 fi
 if [ -n "$KNOWLEDGE_DIGEST" ]; then
   CTX="$CTX

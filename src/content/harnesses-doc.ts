@@ -72,6 +72,8 @@ All harnesses receive the same utility commands:
 - \`/cc-learn\` - knowledge capture/lookup
 - \`/cc-status\` - read-only flow snapshot
 - \`/cc-feature\` - multi-feature workspace management
+- \`/cc-rewind\` - rewind flow and invalidate downstream stages
+- \`/cc-rewind-ack\` - clear stale stage markers after redo
 
 Stage order remains canonical:
 \`brainstorm -> scope -> design -> spec -> plan -> tdd -> review -> ship\`

@@ -497,7 +497,15 @@ export async function doctorChecks(projectRoot: string, options: DoctorOptions =
       });
       continue;
     }
-    for (const shim of ["cc.md", "cc-next.md", "cc-learn.md", "cc-status.md", "cc-feature.md"]) {
+    for (const shim of [
+      "cc.md",
+      "cc-next.md",
+      "cc-learn.md",
+      "cc-status.md",
+      "cc-feature.md",
+      "cc-rewind.md",
+      "cc-rewind-ack.md"
+    ]) {
       const shimPath = path.join(projectRoot, adapter.commandDir, shim);
       checks.push({
         name: `shim:${harness}:${shim.replace(".md", "")}`,
@@ -517,6 +525,8 @@ export async function doctorChecks(projectRoot: string, options: DoctorOptions =
     const hasCcLearn = content.includes("/cc-learn");
     const hasCcStatus = content.includes("/cc-status");
     const hasCcFeature = content.includes("/cc-feature");
+    const hasCcRewind = content.includes("/cc-rewind");
+    const hasCcRewindAck = content.includes("/cc-rewind-ack");
     const hasVerification = content.includes("Verification Discipline");
     const hasMinimalMarker = content.includes("intentionally minimal for cross-project use");
     const hasMetaSkillPointer = content.includes(".cclaw/skills/using-cclaw/SKILL.md");
@@ -526,6 +536,8 @@ export async function doctorChecks(projectRoot: string, options: DoctorOptions =
       && hasCcLearn
       && hasCcStatus
       && hasCcFeature
+      && hasCcRewind
+      && hasCcRewindAck
       && hasVerification
       && hasMinimalMarker
       && hasMetaSkillPointer;
@@ -537,7 +549,7 @@ export async function doctorChecks(projectRoot: string, options: DoctorOptions =
   });
 
   // Utility commands
-  for (const cmd of ["learn", "next", "status", "feature"]) {
+  for (const cmd of ["learn", "next", "status", "feature", "rewind", "rewind-ack"]) {
     const cmdPath = path.join(projectRoot, RUNTIME_ROOT, "commands", `${cmd}.md`);
     checks.push({
       name: `utility_command:${cmd}`,
@@ -550,6 +562,7 @@ export async function doctorChecks(projectRoot: string, options: DoctorOptions =
   for (const [folder, label] of [
     ["learnings", "learnings"],
     ["feature-workspaces", "feature-workspaces"],
+    ["flow-rewind", "flow-rewind"],
     ["subagent-dev", "sdd"],
     ["parallel-dispatch", "parallel-agents"],
     ["session", "session"],
@@ -1112,6 +1125,16 @@ export async function doctorChecks(projectRoot: string, options: DoctorOptions =
       await exists(path.join(featureRootPath(projectRoot, activeFeature), "artifacts")) &&
       await exists(path.join(featureRootPath(projectRoot, activeFeature), "state")),
     details: `${RUNTIME_ROOT}/features/${activeFeature}/artifacts and /state must exist`
+  });
+  const staleStages = Object.keys(flowState.staleStages).filter((value) =>
+    COMMAND_FILE_ORDER.includes(value as (typeof COMMAND_FILE_ORDER)[number])
+  );
+  checks.push({
+    name: "state:stale_stages_resolved",
+    ok: staleStages.length === 0,
+    details: staleStages.length === 0
+      ? "no stale stages pending acknowledgement"
+      : `stale stages must be acknowledged via /cc-rewind-ack: ${staleStages.join(", ")}`
   });
   checks.push({
     name: "runs:archive_root",

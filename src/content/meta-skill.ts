@@ -34,7 +34,7 @@ Task arrives
   ├─ New software work? -> /cc <idea>
   ├─ Resume existing flow? -> /cc or /cc-next
   ├─ Knowledge operation? -> /cc-learn
-  └─ Workspace operation? -> /cc-feature or /cc-status
+  └─ Workspace operation? -> /cc-feature, /cc-status, /cc-rewind
 \`\`\`
 
 ## Task classification

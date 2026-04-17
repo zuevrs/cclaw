@@ -58,6 +58,18 @@ const UTILITY_SHIMS: UtilityShimSpec[] = [
     command: "feature",
     skillFolder: "feature-workspaces",
     commandFile: "feature.md"
+  },
+  {
+    fileName: "cc-rewind.md",
+    command: "rewind",
+    skillFolder: "flow-rewind",
+    commandFile: "rewind.md"
+  },
+  {
+    fileName: "cc-rewind-ack.md",
+    command: "rewind-ack",
+    skillFolder: "flow-rewind",
+    commandFile: "rewind-ack.md"
   }
 ];
 
@@ -165,6 +177,8 @@ When in doubt, prefer **non-trivial** — the quick track is opt-in and only saf
 | \`/cc-learn\` | **Cross-cutting.** Capture or review project knowledge (append-only JSONL). |
 | \`/cc-status\` | **Read-only.** Compact snapshot of current stage, gates, and delegations. |
 | \`/cc-feature\` | **Workspace.** Manage active feature snapshots for parallel tracks. |
+| \`/cc-rewind\` | **Recovery.** Rewind flow to an earlier stage and invalidate downstream work. |
+| \`/cc-rewind-ack\` | **Recovery.** Clear stale-stage markers after redo. |
 
 **Stage order:** brainstorm > scope > design > spec > plan > tdd > review > ship.
 \`/cc-next\` loads the right stage skill automatically. Gates must pass before handoff.

@@ -16,6 +16,11 @@ import { nextCommandContract, nextCommandSkillMarkdown } from "./content/next-co
 import { startCommandContract, startCommandSkillMarkdown } from "./content/start-command.js";
 import { statusCommandContract, statusCommandSkillMarkdown } from "./content/status-command.js";
 import { featureCommandContract, featureCommandSkillMarkdown } from "./content/feature-command.js";
+import {
+  rewindAcknowledgeCommandContract,
+  rewindCommandContract,
+  rewindCommandSkillMarkdown
+} from "./content/rewind-command.js";
 import { subagentDrivenDevSkill, parallelAgentsSkill } from "./content/subagents.js";
 import { sessionHooksSkillMarkdown } from "./content/session-hooks.js";
 import {
@@ -293,6 +298,10 @@ async function writeSkills(projectRoot: string, config?: VibyConfig): Promise<vo
     runtimePath(projectRoot, "skills", "feature-workspaces", "SKILL.md"),
     featureCommandSkillMarkdown()
   );
+  await writeFileSafe(
+    runtimePath(projectRoot, "skills", "flow-rewind", "SKILL.md"),
+    rewindCommandSkillMarkdown()
+  );
 
   await writeFileSafe(
     runtimePath(projectRoot, "skills", "subagent-dev", "SKILL.md"),
@@ -388,6 +397,11 @@ async function writeUtilityCommands(projectRoot: string): Promise<void> {
   await writeFileSafe(runtimePath(projectRoot, "commands", "start.md"), startCommandContract());
   await writeFileSafe(runtimePath(projectRoot, "commands", "status.md"), statusCommandContract());
   await writeFileSafe(runtimePath(projectRoot, "commands", "feature.md"), featureCommandContract());
+  await writeFileSafe(runtimePath(projectRoot, "commands", "rewind.md"), rewindCommandContract());
+  await writeFileSafe(
+    runtimePath(projectRoot, "commands", "rewind-ack.md"),
+    rewindAcknowledgeCommandContract()
+  );
 }
 
 function toObject(value: unknown): Record<string, unknown> | null {

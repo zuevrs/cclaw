@@ -21,6 +21,22 @@ export interface StageGateState {
   blocked: string[];
 }
 
+export interface RewindRecord {
+  id: string;
+  fromStage: FlowStage;
+  toStage: FlowStage;
+  reason: string;
+  timestamp: string;
+  invalidatedStages: FlowStage[];
+}
+
+export interface StaleStageMarker {
+  rewindId: string;
+  reason: string;
+  markedAt: string;
+  acknowledgedAt?: string;
+}
+
 export interface FlowState {
   activeRunId: string;
   currentStage: FlowStage;
@@ -31,6 +47,10 @@ export interface FlowState {
   track: FlowTrack;
   /** Stages explicitly skipped for this track (empty for standard; populated for quick). */
   skippedStages: FlowStage[];
+  /** Stages invalidated by rewind operations and awaiting explicit acknowledgement. */
+  staleStages: Partial<Record<FlowStage, StaleStageMarker>>;
+  /** Chronological rewind operations for the active run. */
+  rewinds: RewindRecord[];
 }
 
 export interface InitialFlowStateOptions {
@@ -88,7 +108,9 @@ export function createInitialFlowState(
     guardEvidence: {},
     stageGateCatalog,
     track,
-    skippedStages
+    skippedStages,
+    staleStages: {},
+    rewinds: []
   };
 }
 

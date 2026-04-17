@@ -59,7 +59,14 @@ export const COMMAND_FILE_ORDER: FlowStage[] = [
   "ship"
 ];
 
-export const UTILITY_COMMANDS = ["learn", "next", "status", "feature"] as const;
+export const UTILITY_COMMANDS = [
+  "learn",
+  "next",
+  "status",
+  "feature",
+  "rewind",
+  "rewind-ack"
+] as const;
 
 export const SUBAGENT_SKILL_FOLDERS = [
   "subagent-dev",
