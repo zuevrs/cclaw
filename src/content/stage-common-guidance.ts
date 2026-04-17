@@ -60,9 +60,17 @@ Rollback / fallback: <if decision proves wrong>
 
 ## Self-improvement reminder
 
-If a reusable lesson appears during the stage, append one strict-schema JSONL
-entry (manually via \`/cc-learn add\` or directly in stage closeout protocol).
-Do not keep operational lessons only in chat.
+Before closeout, capture 1-3 reusable insights in \`.cclaw/knowledge.jsonl\`
+whenever the stage produced non-obvious decisions, patterns, or lessons.
+Prefer \`type=rule|pattern|lesson\` (\`compound\` stays retro-focused).
+
+Track policy:
+- \`standard\` / \`medium\`: required for \`design\`, \`tdd\`, and \`review\`;
+  recommended for other stages.
+- \`quick\`: recommended only.
+
+"No learning captured" is acceptable only with an explicit reason
+(for example, purely mechanical edits with no new decisions).
 
 ## Progressive disclosure baseline
 

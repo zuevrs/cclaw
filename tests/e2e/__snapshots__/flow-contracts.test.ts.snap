@@ -307,13 +307,6 @@ Rule: Review verdict must reference specific spec criteria and TDD evidence. Dow
 - [ ] critical blockers resolved
 - [ ] ship readiness explicitly stated
 
-## Operational Self-Improvement
-
-Before closeout, capture 1-3 reusable insights in \`.cclaw/knowledge.jsonl\` whenever
-the stage produced non-obvious decisions, patterns, or lessons.
-Prefer \`type=rule|pattern|lesson\` (\`compound\` stays retro-only) and set
-\`stage: "review"\` unless the insight is explicitly cross-stage.
-
 ## Completion Parameters
 
 - \`stage\`: \`review\`
@@ -595,13 +588,6 @@ Rule: Ship artifact must reference review verdict and resolution status. Release
 - [ ] rollback and release notes complete
 - [ ] finalization action explicitly chosen and executed
 
-## Operational Self-Improvement
-
-Before closeout, capture 1-3 reusable insights in \`.cclaw/knowledge.jsonl\` whenever
-the stage produced non-obvious decisions, patterns, or lessons.
-Prefer \`type=rule|pattern|lesson\` (\`compound\` stays retro-only) and set
-\`stage: "ship"\` unless the insight is explicitly cross-stage.
-
 ## Completion Parameters
 
 - \`stage\`: \`ship\`
@@ -879,13 +865,6 @@ Rule: Every task must trace to a spec acceptance criterion. Every downstream RED
 - [ ] WAIT_FOR_CONFIRM present and unresolved until user approves
 - [ ] artifact ready for TDD execution
 - [ ] acceptance mapping complete
-
-## Operational Self-Improvement
-
-Before closeout, capture 1-3 reusable insights in \`.cclaw/knowledge.jsonl\` whenever
-the stage produced non-obvious decisions, patterns, or lessons.
-Prefer \`type=rule|pattern|lesson\` (\`compound\` stays retro-only) and set
-\`stage: "plan"\` unless the insight is explicitly cross-stage.
 
 ## Completion Parameters
 
@@ -1228,13 +1207,6 @@ Rule: Every RED test traces to a plan task. Every GREEN change traces to a RED t
 - [ ] required gates marked satisfied
 - [ ] traceability annotated
 
-## Operational Self-Improvement
-
-Before closeout, capture 1-3 reusable insights in \`.cclaw/knowledge.jsonl\` whenever
-the stage produced non-obvious decisions, patterns, or lessons.
-Prefer \`type=rule|pattern|lesson\` (\`compound\` stays retro-only) and set
-\`stage: "tdd"\` unless the insight is explicitly cross-stage.
-
 ## Completion Parameters
 
 - \`stage\`: \`tdd\`
@@ -1508,13 +1480,6 @@ Rule: Scope and design decisions must trace back to explored context and approve
 - [ ] required gates marked satisfied
 - [ ] no implementation action taken
 - [ ] artifact reviewed by user
-
-## Operational Self-Improvement
-
-Before closeout, capture 1-3 reusable insights in \`.cclaw/knowledge.jsonl\` whenever
-the stage produced non-obvious decisions, patterns, or lessons.
-Prefer \`type=rule|pattern|lesson\` (\`compound\` stays retro-only) and set
-\`stage: "brainstorm"\` unless the insight is explicitly cross-stage.
 
 ## Completion Parameters
 
