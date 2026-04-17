@@ -325,6 +325,36 @@ describe("gate evidence reconciliation", () => {
     expect(reconciliation.notes.join("\n")).toContain("missing evidence");
   });
 
+  it("resolves passed/blocked overlap in favor of passed when evidence exists", () => {
+    const state = createInitialFlowState("run-reconcile-overlap-evidence");
+    const required = requiredGateIds("brainstorm");
+    const firstGate = required[0]!;
+
+    state.stageGateCatalog.brainstorm.passed = [firstGate];
+    state.stageGateCatalog.brainstorm.blocked = [firstGate];
+    state.guardEvidence[firstGate] = "approved direction in artifact";
+
+    const { reconciliation } = reconcileCurrentStageGateCatalog(state);
+    expect(reconciliation.changed).toBe(true);
+    expect(reconciliation.after.passed).toContain(firstGate);
+    expect(reconciliation.after.blocked).not.toContain(firstGate);
+    expect(reconciliation.notes.join("\n")).toContain("in favor of passed");
+  });
+
+  it("returns unchanged state when current-stage catalog is already normalized", () => {
+    const state = createInitialFlowState("run-reconcile-clean");
+    const required = requiredGateIds("brainstorm");
+    state.stageGateCatalog.brainstorm.passed = [...required];
+    for (const gate of required) {
+      state.guardEvidence[gate] = "gate evidence";
+    }
+
+    const { nextState, reconciliation } = reconcileCurrentStageGateCatalog(state);
+    expect(reconciliation.changed).toBe(false);
+    expect(reconciliation.notes).toEqual([]);
+    expect(nextState).toBe(state);
+  });
+
   it("writes reconciled catalog back to flow-state", async () => {
     const root = await createTempProject("gate-reconcile-writeback");
     await prepareRoot(root);
