@@ -17,6 +17,8 @@ import { startCommandContract, startCommandSkillMarkdown } from "./content/start
 import { statusCommandContract, statusCommandSkillMarkdown } from "./content/status-command.js";
 import { treeCommandContract, treeCommandSkillMarkdown } from "./content/tree-command.js";
 import { diffCommandContract, diffCommandSkillMarkdown } from "./content/diff-command.js";
+import { viewCommandContract, viewCommandSkillMarkdown } from "./content/view-command.js";
+import { opsCommandContract, opsCommandSkillMarkdown } from "./content/ops-command.js";
 import { featureCommandContract, featureCommandSkillMarkdown } from "./content/feature-command.js";
 import { tddLogCommandContract, tddLogCommandSkillMarkdown } from "./content/tdd-log-command.js";
 import { retroCommandContract, retroCommandSkillMarkdown } from "./content/retro-command.js";
@@ -296,6 +298,10 @@ async function writeSkills(projectRoot: string, config?: VibyConfig): Promise<vo
     startCommandSkillMarkdown()
   );
   await writeFileSafe(
+    runtimePath(projectRoot, "skills", "flow-view", "SKILL.md"),
+    viewCommandSkillMarkdown()
+  );
+  await writeFileSafe(
     runtimePath(projectRoot, "skills", "flow-status", "SKILL.md"),
     statusCommandSkillMarkdown()
   );
@@ -306,6 +312,10 @@ async function writeSkills(projectRoot: string, config?: VibyConfig): Promise<vo
   await writeFileSafe(
     runtimePath(projectRoot, "skills", "flow-diff", "SKILL.md"),
     diffCommandSkillMarkdown()
+  );
+  await writeFileSafe(
+    runtimePath(projectRoot, "skills", "flow-ops", "SKILL.md"),
+    opsCommandSkillMarkdown()
   );
   await writeFileSafe(
     runtimePath(projectRoot, "skills", "feature-workspaces", "SKILL.md"),
@@ -419,10 +429,12 @@ async function writeSkills(projectRoot: string, config?: VibyConfig): Promise<vo
 async function writeUtilityCommands(projectRoot: string): Promise<void> {
   await writeFileSafe(runtimePath(projectRoot, "commands", "learn.md"), learnCommandContract());
   await writeFileSafe(runtimePath(projectRoot, "commands", "next.md"), nextCommandContract());
+  await writeFileSafe(runtimePath(projectRoot, "commands", "view.md"), viewCommandContract());
   await writeFileSafe(runtimePath(projectRoot, "commands", "start.md"), startCommandContract());
   await writeFileSafe(runtimePath(projectRoot, "commands", "status.md"), statusCommandContract());
   await writeFileSafe(runtimePath(projectRoot, "commands", "tree.md"), treeCommandContract());
   await writeFileSafe(runtimePath(projectRoot, "commands", "diff.md"), diffCommandContract());
+  await writeFileSafe(runtimePath(projectRoot, "commands", "ops.md"), opsCommandContract());
   await writeFileSafe(runtimePath(projectRoot, "commands", "feature.md"), featureCommandContract());
   await writeFileSafe(runtimePath(projectRoot, "commands", "tdd-log.md"), tddLogCommandContract());
   await writeFileSafe(runtimePath(projectRoot, "commands", "retro.md"), retroCommandContract());

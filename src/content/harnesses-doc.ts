@@ -69,10 +69,12 @@ All harnesses receive the same utility commands:
 
 - \`/cc\` - flow entry and resume
 - \`/cc-next\` - stage progression
+- \`/cc-view\` - read-only router for status/tree/diff
 - \`/cc-learn\` - knowledge capture/lookup
 - \`/cc-status\` - read-only visual flow snapshot
 - \`/cc-tree\` - deep flow tree (stages, artifacts, stale markers)
 - \`/cc-diff\` - before/after flow-state diff map
+- \`/cc-ops\` - operations router for feature/tdd-log/retro/archive/rewind
 - \`/cc-feature\` - multi-feature workspace management
 - \`/cc-tdd-log\` - explicit RED/GREEN/REFACTOR evidence log
 - \`/cc-retro\` - mandatory retrospective gate before archive
