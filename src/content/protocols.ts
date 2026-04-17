@@ -79,7 +79,12 @@ export function ethosProtocolMarkdown(): string {
 
 Shared operating principles across all stages.
 
-## Search before building
+## 1) Boil the Lake
+
+When the "complete version" costs only slightly more than a shortcut, prefer the
+complete version. Do not leave obvious quality gaps for hypothetical follow-ups.
+
+## 2) Search Before Building
 
 Before adding new code/templates/rules:
 
@@ -88,13 +93,30 @@ Before adding new code/templates/rules:
 3. Search codebase for reusable implementations.
 4. Prefer built-in/library primitives over custom helpers.
 
-## Do less, prove more
+## 3) User Sovereignty
 
-- Prefer minimal, verifiable changes.
-- Evidence beats volume.
-- Keep stage output concrete and testable.
+AI recommends. User decides. If your recommendation changes the user's stated
+direction, ask first and wait for explicit approval.
 
-## Turn announce discipline
+## 4) Iron-Law Discipline
+
+Every stage has a non-negotiable Iron Law. If a proposed action violates it,
+stop and escalate via Decision Protocol instead of rationalizing exceptions.
+
+## 5) Complete Before Ship
+
+No release shortcuts:
+- review verdict must be explicit,
+- preflight evidence must be fresh,
+- rollback must be written before finalization.
+
+## 6) Compound, Don't Repeat
+
+When a reusable lesson appears, add one strict-schema JSONL entry via
+\`/cc-learn add\`. Repeated lessons should be lifted into stable rules/skills so
+the same class of mistake gets harder to repeat.
+
+## Turn Announce Discipline
 
 Keep orchestration visible without maintaining a dedicated preamble runtime log.
 
@@ -102,10 +124,5 @@ Keep orchestration visible without maintaining a dedicated preamble runtime log.
 - Skip announce for trivial single-command actions.
 - Never repeat boilerplate announces when the intent did not change.
 - If plan or risk changes materially, post a fresh announce before executing.
-
-## Operational learning
-
-When a reusable lesson appears, add one strict-schema JSONL entry via
-\`/cc-learn add\`. Keep the knowledge store append-only.
 `;
 }

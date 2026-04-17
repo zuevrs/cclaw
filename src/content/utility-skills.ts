@@ -602,6 +602,94 @@ Modes are stored in \`.cclaw/contexts/\`:
 `;
 }
 
+export function verificationBeforeCompletionSkill(): string {
+  return `---
+name: verification-before-completion
+description: "Final verification discipline before stage closeout or ship. Use when preparing a completion claim."
+---
+
+# Verification Before Completion
+
+## Announce at start
+
+"Using verification-before-completion to validate fresh evidence before completion."
+
+## HARD-GATE
+
+Do not claim completion from memory. Every pass claim requires fresh, in-turn evidence.
+
+## Protocol
+
+1. Identify changed scope (files, modules, user-facing behaviors).
+2. Run the smallest command set that still proves the scope:
+   - tests for changed area
+   - typecheck/build/lint if the stack requires it
+3. Capture exact command + pass/fail output in the artifact.
+4. If this is a bug fix, include RED -> GREEN regression evidence.
+5. If any check fails, stop completion and return to fix loop.
+
+## Completion claim checklist
+
+- [ ] Commands were run in this turn (not reused from earlier output).
+- [ ] Output corresponds to the actual changed scope.
+- [ ] Failures (if any) are resolved or explicitly escalated.
+- [ ] Artifact includes evidence references.
+- [ ] Completion status reflects evidence (DONE / DONE_WITH_CONCERNS / BLOCKED).
+
+## Anti-patterns
+
+- "Tests passed earlier today" without rerunning.
+- Reporting only "PASS" without command context.
+- Running unrelated checks while skipping changed scope checks.
+- Marking DONE while blockers still fail.
+`;
+}
+
+export function finishingDevelopmentBranchSkill(): string {
+  return `---
+name: finishing-a-development-branch
+description: "Finalize implementation branch after review: verify, choose integration mode, execute safely, and clean up."
+---
+
+# Finishing a Development Branch
+
+## Announce at start
+
+"Using finishing-a-development-branch to complete this branch safely."
+
+## HARD-GATE
+
+Do not merge, open PR, or discard branch until verification and rollback notes are explicit.
+
+## Protocol
+
+1. Verify readiness:
+   - review verdict is APPROVED or APPROVED_WITH_CONCERNS
+   - verification-before-completion checklist is satisfied
+2. Choose one finalization mode:
+   - FINALIZE_MERGE_LOCAL
+   - FINALIZE_OPEN_PR
+   - FINALIZE_KEEP_BRANCH
+   - FINALIZE_DISCARD_BRANCH
+3. Execute only the chosen mode and record exact result.
+4. If merge or discard happened in a feature worktree, clean the worktree.
+5. Update ship artifact with release notes, rollback, and finalization evidence.
+
+## Rollback minimum
+
+- Trigger: what tells us release is wrong.
+- Steps: exact revert/reset/rollback commands.
+- Verification: how we confirm rollback worked.
+
+## Anti-patterns
+
+- Multiple finalization modes in one run.
+- Merge without rollback section.
+- PR without test/verification summary.
+- Discarding branch without explicit user confirmation.
+`;
+}
+
 export function sourceDrivenDevelopmentSkill(): string {
   return `---
 name: source-driven-development
@@ -1547,6 +1635,8 @@ export const UTILITY_SKILL_FOLDERS = [
   "ci-cd",
   "docs",
   "executing-plans",
+  "verification-before-completion",
+  "finishing-a-development-branch",
   "context-engineering",
   "source-driven-development",
   "frontend-accessibility",
@@ -1565,6 +1655,8 @@ export const UTILITY_SKILL_MAP: Record<string, () => string> = {
   "ci-cd": ciCdSkill,
   docs: docsSkill,
   "executing-plans": executingPlansSkill,
+  "verification-before-completion": verificationBeforeCompletionSkill,
+  "finishing-a-development-branch": finishingDevelopmentBranchSkill,
   "context-engineering": contextEngineeringSkill,
   "source-driven-development": sourceDrivenDevelopmentSkill,
   "frontend-accessibility": frontendAccessibilitySkill,

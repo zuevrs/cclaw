@@ -77,6 +77,25 @@ async function isGitRepo(projectRoot: string): Promise<boolean> {
   }
 }
 
+async function gitWorktreePaths(projectRoot: string): Promise<Set<string>> {
+  try {
+    const { stdout } = await execFileAsync("git", ["worktree", "list", "--porcelain"], {
+      cwd: projectRoot
+    });
+    const out = new Set<string>();
+    for (const line of stdout.split(/\r?\n/)) {
+      const trimmed = line.trim();
+      if (!trimmed.startsWith("worktree ")) continue;
+      const rawPath = trimmed.slice("worktree ".length).trim();
+      if (!rawPath) continue;
+      out.add(path.resolve(rawPath));
+    }
+    return out;
+  } catch {
+    return new Set<string>();
+  }
+}
+
 async function resolveGitHooksDir(projectRoot: string): Promise<string | null> {
   try {
     const { stdout } = await execFileAsync("git", ["rev-parse", "--git-path", "hooks"], { cwd: projectRoot });
@@ -521,6 +540,7 @@ export async function doctorChecks(projectRoot: string, options: DoctorOptions =
     const hasMarkers = content.includes(CCLAW_MARKER_START) && content.includes(CCLAW_MARKER_END);
     const hasCcCommand = content.includes("/cc");
     const hasCcNext = content.includes("/cc-next");
+    const hasCcIdeate = content.includes("/cc-ideate");
     const hasCcLearn = content.includes("/cc-learn");
     const hasCcView = content.includes("/cc-view");
     const hasCcOps = content.includes("/cc-ops");
@@ -530,6 +550,7 @@ export async function doctorChecks(projectRoot: string, options: DoctorOptions =
     agentsBlockOk = hasMarkers
       && hasCcCommand
       && hasCcNext
+      && hasCcIdeate
       && hasCcLearn
       && hasCcView
       && hasCcOps
@@ -544,7 +565,7 @@ export async function doctorChecks(projectRoot: string, options: DoctorOptions =
   });
 
   // Utility commands
-  for (const cmd of ["learn", "next", "status", "tree", "diff", "feature", "tdd-log", "retro", "rewind"]) {
+  for (const cmd of ["learn", "next", "ideate", "status", "tree", "diff", "feature", "tdd-log", "retro", "compound", "rewind"]) {
     const cmdPath = path.join(projectRoot, RUNTIME_ROOT, "commands", `${cmd}.md`);
     checks.push({
       name: `utility_command:${cmd}`,
@@ -556,12 +577,16 @@ export async function doctorChecks(projectRoot: string, options: DoctorOptions =
   // Utility skills
   for (const [folder, label] of [
     ["learnings", "learnings"],
+    ["flow-ideate", "flow-ideate"],
     ["flow-tree", "flow-tree"],
     ["flow-diff", "flow-diff"],
     ["using-git-worktrees", "using-git-worktrees"],
     ["tdd-cycle-log", "tdd-cycle-log"],
     ["flow-retro", "flow-retro"],
+    ["flow-compound", "flow-compound"],
     ["flow-rewind", "flow-rewind"],
+    ["verification-before-completion", "verification-before-completion"],
+    ["finishing-a-development-branch", "finishing-a-development-branch"],
     ["subagent-dev", "sdd"],
     ["parallel-dispatch", "parallel-agents"],
     ["session", "session"],
@@ -915,6 +940,8 @@ export async function doctorChecks(projectRoot: string, options: DoctorOptions =
     let malformedKnowledgeLines = 0;
     let missingSchemaV2Fields = 0;
     let parsedKnowledgeLines = 0;
+    let lowConfidenceLines = 0;
+    const triggerActionCounts = new Map<string, number>();
     const requiredV2Fields = [
       "type",
       "trigger",
@@ -946,6 +973,16 @@ export async function doctorChecks(projectRoot: string, options: DoctorOptions =
             continue;
           }
           parsedKnowledgeLines += 1;
+          const confidence = typeof parsed.confidence === "string" ? parsed.confidence.toLowerCase() : "";
+          if (confidence === "low") {
+            lowConfidenceLines += 1;
+          }
+          const trigger = typeof parsed.trigger === "string" ? parsed.trigger.trim().toLowerCase() : "";
+          const action = typeof parsed.action === "string" ? parsed.action.trim().toLowerCase() : "";
+          if (trigger.length > 0 && action.length > 0) {
+            const key = `${trigger} => ${action}`;
+            triggerActionCounts.set(key, (triggerActionCounts.get(key) ?? 0) + 1);
+          }
           const missing = requiredV2Fields.some((field) => !Object.prototype.hasOwnProperty.call(parsed, field));
           if (missing) {
             missingSchemaV2Fields += 1;
@@ -974,6 +1011,26 @@ export async function doctorChecks(projectRoot: string, options: DoctorOptions =
           : missingSchemaV2Fields === 0
             ? `all ${parsedKnowledgeLines} knowledge line(s) include schema v2 fields`
             : `warning: ${missingSchemaV2Fields}/${parsedKnowledgeLines} knowledge line(s) miss schema v2 fields (origin/maturity/frequency metadata)`
+    });
+    const lowConfidenceRatio = parsedKnowledgeLines === 0 ? 0 : lowConfidenceLines / parsedKnowledgeLines;
+    checks.push({
+      name: "warning:knowledge:low_confidence_density",
+      ok: true,
+      details:
+        parsedKnowledgeLines === 0
+          ? "knowledge.jsonl is empty"
+          : lowConfidenceRatio <= 0.35
+            ? `low-confidence entries: ${lowConfidenceLines}/${parsedKnowledgeLines}`
+            : `warning: low-confidence entries are high (${lowConfidenceLines}/${parsedKnowledgeLines}, ${(lowConfidenceRatio * 100).toFixed(1)}%). Consider /cc-learn curate before adding more.`
+    });
+    const repeatedClusters = [...triggerActionCounts.entries()].filter(([, count]) => count >= 3);
+    checks.push({
+      name: "warning:knowledge:repeat_clusters",
+      ok: true,
+      details:
+        repeatedClusters.length === 0
+          ? "no high-frequency repeated trigger/action clusters detected"
+          : `warning: ${repeatedClusters.length} repeated learning cluster(s) detected (>=3 repeats). Consider /cc-ops compound to lift them into rules/skills.`
     });
   }
 
@@ -1135,6 +1192,32 @@ export async function doctorChecks(projectRoot: string, options: DoctorOptions =
     ok: await exists(path.join(projectRoot, RUNTIME_ROOT, "artifacts")),
     details: `${RUNTIME_ROOT}/artifacts must exist as the active artifact root`
   });
+  const artifactsRoot = path.join(projectRoot, RUNTIME_ROOT, "artifacts");
+  let artifactPlaceholderHits: string[] = [];
+  if (await exists(artifactsRoot)) {
+    try {
+      const entries = await fs.readdir(artifactsRoot, { withFileTypes: true });
+      const placeholderPattern = /\b(?:TODO|TBD|FIXME)\b|<fill-in>|<your-.*-here>/giu;
+      for (const entry of entries) {
+        if (!entry.isFile() || !entry.name.endsWith(".md")) continue;
+        const filePath = path.join(artifactsRoot, entry.name);
+        const content = await fs.readFile(filePath, "utf8");
+        const matchCount = (content.match(placeholderPattern) ?? []).length;
+        if (matchCount > 0) {
+          artifactPlaceholderHits.push(`${entry.name}:${matchCount}`);
+        }
+      }
+    } catch {
+      artifactPlaceholderHits = [];
+    }
+  }
+  checks.push({
+    name: "warning:artifacts:stale_placeholders",
+    ok: true,
+    details: artifactPlaceholderHits.length === 0
+      ? "no TODO/TBD/FIXME placeholder markers found in active artifacts"
+      : `warning: placeholder markers detected in active artifacts (${artifactPlaceholderHits.join(", ")}). Clear before marking completion.`
+  });
   const features = await listFeatures(projectRoot);
   const worktreeRegistry = await readFeatureWorktreeRegistry(projectRoot);
   const activeFeatureEntry = worktreeRegistry.entries.find((entry) => entry.featureId === activeFeature);
@@ -1171,6 +1254,43 @@ export async function doctorChecks(projectRoot: string, options: DoctorOptions =
     details: activeFeatureEntry
       ? `active feature "${activeFeature}" maps to workspace path ${activeFeatureEntry.path} (${activeFeatureEntry.source})`
       : `active feature "${activeFeature}" has no worktree registry entry`
+  });
+  const missingRegistryPaths: string[] = [];
+  for (const entry of worktreeRegistry.entries) {
+    const workspacePath = resolveFeatureWorkspacePath(projectRoot, entry);
+    if (!(await exists(workspacePath))) {
+      missingRegistryPaths.push(`${entry.featureId}:${entry.path}`);
+    }
+  }
+  checks.push({
+    name: "state:worktree_registry_paths_exist",
+    ok: missingRegistryPaths.length === 0,
+    details: missingRegistryPaths.length === 0
+      ? "all worktree registry entries resolve to existing paths"
+      : `missing worktree paths for registry entries: ${missingRegistryPaths.join(", ")}`
+  });
+  const gitTrackedPaths = await gitWorktreePaths(projectRoot);
+  const registryGitPaths = worktreeRegistry.entries
+    .filter((entry) => entry.source === "git-worktree")
+    .map((entry) => resolveFeatureWorkspacePath(projectRoot, entry));
+  const missingFromGitList = registryGitPaths.filter((workspacePath) => !gitTrackedPaths.has(path.resolve(workspacePath)));
+  checks.push({
+    name: "warning:state:worktree_registry_git_drift",
+    ok: true,
+    details: missingFromGitList.length === 0
+      ? "git-worktree registry entries align with `git worktree list`"
+      : `warning: ${missingFromGitList.length} registry worktree path(s) are missing from \`git worktree list\`: ${missingFromGitList.join(", ")}`
+  });
+  const managedWorktreeRoot = path.join(projectRoot, RUNTIME_ROOT, "worktrees");
+  const unregisteredManagedWorktrees = [...gitTrackedPaths]
+    .filter((workspacePath) => workspacePath.startsWith(path.resolve(managedWorktreeRoot)))
+    .filter((workspacePath) => !registryGitPaths.some((registeredPath) => path.resolve(registeredPath) === workspacePath));
+  checks.push({
+    name: "warning:state:worktree_unregistered_paths",
+    ok: true,
+    details: unregisteredManagedWorktrees.length === 0
+      ? "no unmanaged git worktrees under .cclaw/worktrees"
+      : `warning: unregistered git worktree paths detected: ${unregisteredManagedWorktrees.map((value) => path.relative(projectRoot, value)).join(", ")}`
   });
   const legacyWorkspaceEntries = worktreeRegistry.entries
     .filter((entry) => entry.source === "legacy-snapshot")

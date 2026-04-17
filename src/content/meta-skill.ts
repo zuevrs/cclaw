@@ -10,7 +10,7 @@ export const META_SKILL_NAME = "using-cclaw";
 export function usingCclawSkillMarkdown(): string {
   return `---
 name: using-cclaw
-description: "Routing brain for cclaw. Decide whether to start/resume a stage, answer directly, or use utility commands like /cc-learn, /cc-view, and /cc-ops."
+description: "Routing brain for cclaw. Decide whether to start/resume a stage, answer directly, or use utility commands like /cc-learn, /cc-ideate, /cc-view, and /cc-ops."
 ---
 
 # Using Cclaw
@@ -32,10 +32,11 @@ Task arrives
   ├─ Running as spawned subagent? -> obey parent prompt only; do not run cclaw routing
   ├─ Pure question / non-software ask? -> answer directly (no stage)
   ├─ New software work? -> /cc <idea>
+  ├─ Repo-improvement discovery? -> /cc-ideate
   ├─ Resume existing flow? -> /cc or /cc-next
   ├─ Knowledge operation? -> /cc-learn
   ├─ Read-only workspace view? -> /cc-view [status|tree|diff]
-  └─ Workspace operation? -> /cc-ops [feature|tdd-log|retro|archive|rewind]
+  └─ Workspace operation? -> /cc-ops [feature|tdd-log|retro|compound|archive|rewind]
 \`\`\`
 
 ## Task classification
@@ -67,6 +68,8 @@ Tracks may skip stages via \`flow-state.track\` + \`skippedStages\`.
 Load utility skills only when triggered by the current task:
 
 - security, performance, debugging, docs, ci-cd
+- verification-before-completion before completion claims
+- finishing-a-development-branch during ship/finalization
 - document-review and execution context skills
 - language rule packs from \`.cclaw/config.yaml\` when enabled
 

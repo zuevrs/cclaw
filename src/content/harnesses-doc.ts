@@ -69,9 +69,10 @@ All harnesses receive the same utility commands:
 
 - \`/cc\` - flow entry and resume
 - \`/cc-next\` - stage progression
+- \`/cc-ideate\` - discovery mode for ranked repo-improvement backlog
 - \`/cc-view\` - read-only router for status/tree/diff
 - \`/cc-learn\` - knowledge capture/lookup
-- \`/cc-ops\` - operations router for feature/tdd-log/retro/archive/rewind
+- \`/cc-ops\` - operations router for feature/tdd-log/retro/compound/archive/rewind
 
 Read-only subcommands:
 - \`/cc-view status\` - visual flow snapshot
@@ -82,6 +83,7 @@ Operations subcommands:
 - \`/cc-ops feature ...\` - git-worktree feature isolation and routing
 - \`/cc-ops tdd-log ...\` - explicit RED/GREEN/REFACTOR evidence log
 - \`/cc-ops retro\` - mandatory retrospective gate before archive
+- \`/cc-ops compound\` - lift repeated learnings into durable rules/skills
 - \`/cc-ops archive\` - archive active run from harness flow
 - \`/cc-ops rewind ...\` - rewind flow and invalidate downstream stages
 - \`/cc-ops rewind --ack ...\` - clear stale stage markers after redo

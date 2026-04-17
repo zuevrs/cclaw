@@ -37,7 +37,7 @@ This is the only progression command the user needs to drive the entire flow. St
 
 - **Do not** invent gate completion: use only \`${flowPath}\` plus observable evidence in repo artifacts.
 - **Do not** skip stages: advance only from \`currentStage\` to its configured successor.
-- If the flow reaches terminal ship completion, route closeout in order: **/cc-ops retro -> /cc-ops archive**.
+- If the flow reaches terminal ship completion, route closeout in order: **/cc-ops retro -> /cc-ops compound (optional) -> /cc-ops archive**.
 
 ## Algorithm (mandatory)
 
@@ -60,7 +60,7 @@ This is the only progression command the user needs to drive the entire flow. St
 
 → If current stage's \`next\` is **\`done\`**:
   - if \`currentStage === "ship"\` and \`retro.completedAt\` is missing -> route to \`/cc-ops retro\`,
-  - if \`currentStage === "ship"\` and \`retro.completedAt\` is present -> route to \`/cc-ops archive\`,
+  - if \`currentStage === "ship"\` and \`retro.completedAt\` is present -> suggest \`/cc-ops compound\` then route to \`/cc-ops archive\`,
   - otherwise report **"Flow complete. All stages finished."** and stop.
 → Otherwise: load **\`${RUNTIME_ROOT}/skills/<skillFolder>/SKILL.md\`** and **\`${RUNTIME_ROOT}/commands/<nextStage>.md\`** for the successor stage. Execute that stage's protocol.
 
@@ -157,7 +157,7 @@ Execute the stage protocol. The stage skill handles interaction, STOP points, ga
 If \`next\` is \`done\`:
 
 - If \`currentStage\` is \`ship\` and \`retro.completedAt\` is missing -> route to \`/cc-ops retro\`.
-- If \`currentStage\` is \`ship\` and \`retro.completedAt\` exists -> route to \`/cc-ops archive\`.
+- If \`currentStage\` is \`ship\` and \`retro.completedAt\` exists -> suggest \`/cc-ops compound\`, then route to \`/cc-ops archive\`.
 - Otherwise report **"Flow complete. All stages finished."** and stop.
 
 Otherwise load the next stage's skill and command contract, begin execution.

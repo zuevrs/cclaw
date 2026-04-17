@@ -107,6 +107,9 @@ Provide fresh, stage-local verification evidence from this turn:
 1. Run verification commands (tests/build/lint/type-check) for the changed scope.
 2. Confirm output, do not infer success from prior runs.
 3. If this is a bug fix, capture RED -> GREEN evidence for the regression path.
+
+Reference utility skill:
+\`.cclaw/skills/verification-before-completion/SKILL.md\`
 `;
 }
 
@@ -204,11 +207,14 @@ function stageSpecificSeeAlso(stage: FlowStage): string[] {
     ],
     review: [
       `- \`${RUNTIME_ROOT}/skills/security/SKILL.md\``,
-      `- \`${RUNTIME_ROOT}/skills/parallel-dispatch/SKILL.md\``
+      `- \`${RUNTIME_ROOT}/skills/parallel-dispatch/SKILL.md\``,
+      `- \`${RUNTIME_ROOT}/skills/verification-before-completion/SKILL.md\``
     ],
     ship: [
       `- \`${RUNTIME_ROOT}/skills/ci-cd/SKILL.md\``,
-      `- \`${RUNTIME_ROOT}/skills/docs/SKILL.md\``
+      `- \`${RUNTIME_ROOT}/skills/docs/SKILL.md\``,
+      `- \`${RUNTIME_ROOT}/skills/verification-before-completion/SKILL.md\``,
+      `- \`${RUNTIME_ROOT}/skills/finishing-a-development-branch/SKILL.md\``
     ]
   };
   return refs[stage];
@@ -242,9 +248,10 @@ function quickStartBlock(stage: FlowStage): string {
   const gatePreview = schema.requiredGates.slice(0, 3).map((g) => `\`${g.id}\``).join(", ");
   return `## Quick Start
 
-1. Obey HARD-GATE and Iron Law.
-2. Execute checklist in order and persist \`${RUNTIME_ROOT}/artifacts/${schema.artifactFile}\`.
-3. Satisfy gates (${gatePreview}${schema.requiredGates.length > 3 ? ` +${schema.requiredGates.length - 3}` : ""}).
+1. Announce at start: "Using \`${schema.skillName}\` to ${schema.purpose}".
+2. Obey HARD-GATE and Iron Law.
+3. Execute checklist in order and persist \`${RUNTIME_ROOT}/artifacts/${schema.artifactFile}\`.
+4. Satisfy gates (${gatePreview}${schema.requiredGates.length > 3 ? ` +${schema.requiredGates.length - 3}` : ""}).
 `;
 }
 

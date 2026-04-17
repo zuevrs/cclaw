@@ -172,6 +172,26 @@ export const REVIEW: StageSchemaInput = {
       stopGate: true
     },
     {
+      title: "Specialist Lens: Data & Migration Safety",
+      evaluationPoints: [
+        "Schema/data migrations are reversible and include backfill/rollback strategy",
+        "Idempotency expectations are explicit for retryable flows",
+        "Data-loss scenarios (truncate/overwrite/drop) are guarded by checks or dry-runs",
+        "Boundary contracts (API/schema/event payload) maintain backward compatibility or are versioned"
+      ],
+      stopGate: false
+    },
+    {
+      title: "Specialist Lens: Developer Experience",
+      evaluationPoints: [
+        "New behavior includes discoverable docs/usage notes where needed",
+        "Error messages are actionable for on-call and local debugging",
+        "Default configuration remains safe and unsurprising",
+        "Change footprint stays minimal and avoids hidden coupling"
+      ],
+      stopGate: false
+    },
+    {
       title: "Meta-Review: Verify the Verification",
       evaluationPoints: [
         "Were tests actually run (not just assumed to pass)?",

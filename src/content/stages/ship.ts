@@ -29,6 +29,7 @@ export const SHIP: StageSchemaInput = {
     "Re-run tests on merged result — if merging locally, run the full test suite AFTER the merge, not just before. Post-merge failures are common.",
     "Generate release notes — summarize what changed, why, and what it affects. Reference spec criteria. Include: breaking changes, new dependencies, migration steps if any.",
     "Write rollback plan — trigger conditions (what tells you it is broken), rollback steps (exact commands/git operations), and verification (how to confirm rollback worked).",
+    "Load utility skills — `verification-before-completion` for fresh evidence and `finishing-a-development-branch` for finalization workflow.",
     "Monitoring checklist — what should be watched after deploy? Error rates, latency, key business metrics. If no monitoring exists, flag it as a risk.",
     "Select finalization mode — exactly ONE enum: (A) FINALIZE_MERGE_LOCAL, (B) FINALIZE_OPEN_PR, (C) FINALIZE_KEEP_BRANCH, (D) FINALIZE_DISCARD_BRANCH. For discard: list what will be deleted, require typed confirmation.",
     "Execute finalization — perform the selected action. For merge: verify clean merge. For PR: include structured body (summary, test plan, rollback). For discard: verify deletion.",
