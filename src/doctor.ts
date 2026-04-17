@@ -1037,8 +1037,15 @@ export async function doctorChecks(projectRoot: string, options: DoctorOptions =
     name: "gates:evidence:current_stage",
     ok: gateEvidence.ok,
     details: gateEvidence.ok
-      ? `stage "${gateEvidence.stage}" gate evidence is consistent (required=${gateEvidence.requiredCount}, passed=${gateEvidence.passedCount}, blocked=${gateEvidence.blockedCount})`
+      ? `stage "${gateEvidence.stage}" gate evidence is consistent (required=${gateEvidence.requiredCount}, recommended=${gateEvidence.recommendedCount}, conditional=${gateEvidence.conditionalCount}, triggered=${gateEvidence.triggeredConditionalCount}, passed=${gateEvidence.passedCount}, blocked=${gateEvidence.blockedCount})`
       : gateEvidence.issues.join(" ")
+  });
+  checks.push({
+    name: "warning:gates:recommended:current_stage",
+    ok: true,
+    details: gateEvidence.missingRecommended.length > 0
+      ? `warning: stage "${gateEvidence.stage}" has unmet recommended gates: ${gateEvidence.missingRecommended.join(", ")}`
+      : `no unmet recommended gates for stage "${gateEvidence.stage}"`
   });
 
   const completedClosure = verifyCompletedStagesGateClosure(flowState);

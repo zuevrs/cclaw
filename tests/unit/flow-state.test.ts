@@ -29,6 +29,9 @@ describe("flow state", () => {
   it("builds per-stage gate catalog in initial state", () => {
     const state = createInitialFlowState();
     expect(state.stageGateCatalog.plan.required).toContain("plan_wait_for_confirm");
+    expect(state.stageGateCatalog.plan.recommended.length).toBeGreaterThan(0);
+    expect(Array.isArray(state.stageGateCatalog.plan.conditional)).toBe(true);
+    expect(Array.isArray(state.stageGateCatalog.plan.triggered)).toBe(true);
     expect(state.stageGateCatalog.review.required).toContain("review_layer1_spec_compliance");
   });
 

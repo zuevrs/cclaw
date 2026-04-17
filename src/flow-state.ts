@@ -1,5 +1,11 @@
 import { COMMAND_FILE_ORDER } from "./constants.js";
-import { buildTransitionRules, orderedStageSchemas, stageGateIds } from "./content/stage-schema.js";
+import {
+  buildTransitionRules,
+  orderedStageSchemas,
+  stageConditionalGateIds,
+  stageGateIds,
+  stageRecommendedGateIds
+} from "./content/stage-schema.js";
 import { FLOW_STAGES, FLOW_TRACKS, TRACK_STAGES } from "./types.js";
 import type { FlowStage, FlowTrack, TransitionRule } from "./types.js";
 
@@ -7,6 +13,10 @@ export const TRANSITION_RULES: TransitionRule[] = buildTransitionRules();
 
 export interface StageGateState {
   required: string[];
+  recommended: string[];
+  conditional: string[];
+  /** Conditional gates currently considered active for blocking checks. */
+  triggered: string[];
   passed: string[];
   blocked: string[];
 }
@@ -63,6 +73,9 @@ export function createInitialFlowState(
   for (const schema of orderedStageSchemas()) {
     stageGateCatalog[schema.stage] = {
       required: stageGateIds(schema.stage),
+      recommended: stageRecommendedGateIds(schema.stage),
+      conditional: stageConditionalGateIds(schema.stage),
+      triggered: [],
       passed: [],
       blocked: []
     };
