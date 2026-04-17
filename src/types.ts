@@ -79,8 +79,6 @@ export interface VibyConfig {
   version: string;
   flowVersion: string;
   harnesses: HarnessId[];
-  /** When true, stage skills instruct the agent to continue to the following stage after gates pass. */
-  autoAdvance?: boolean;
   /** Prompt guard behavior for runtime write-risk detection hooks. */
   promptGuardMode?: "advisory" | "strict";
   /** TDD red->green->refactor enforcement mode used by workflow guard hooks. */

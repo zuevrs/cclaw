@@ -15,10 +15,10 @@ describe("doctor registry", () => {
     expect(meta.docRef).toContain("hooks-and-lifecycle.md");
   });
 
-  it("falls back to generic error metadata for unknown checks", () => {
+  it("falls back to warning metadata for unknown checks", () => {
     const meta = doctorCheckMetadata("custom:unknown");
-    expect(meta.severity).toBe("error");
-    expect(meta.summary).toContain("Doctor runtime integrity check");
+    expect(meta.severity).toBe("warning");
+    expect(meta.summary).toContain("Unclassified doctor check");
   });
 
   it("doctorSucceeded fails only on error-severity failures", () => {

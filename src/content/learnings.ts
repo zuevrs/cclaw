@@ -143,40 +143,9 @@ Do not edit source code from this command. Only operate on \`${KNOWLEDGE_PATH}\`
 export function selfImprovementBlock(stageName: string): string {
   return `## Operational Self-Improvement
 
-After this stage, ask:
-- Did I discover a non-obvious reusable **rule** or **pattern**?
-- Did a failure reveal a reusable **lesson**?
-
-If yes, append one concise JSON line to the canonical knowledge store
-(\`${KNOWLEDGE_PATH}\`) using the strict 8-field schema:
-
-\`\`\`bash
-TS="$(date -u +%Y-%m-%dT%H:%M:%SZ)"
-printf '%s\\n' '{"type":"pattern","trigger":"when <situation>","action":"<concrete move>","confidence":"medium","domain":null,"stage":"${stageName}","created":"'"$TS"'","project":null}' >> ${KNOWLEDGE_PATH}
-\`\`\`
-
-Type must be exactly one of: \`rule\`, \`pattern\`, \`lesson\`, \`compound\`.
-Fields must appear in the order: \`type, trigger, action, confidence, domain, stage, created, project\`.
-Missing optional values must be emitted as \`null\`, never omitted.
-`;
-}
-
-export function learningsSearchPreamble(stage: string): string {
-  return `## Prior Knowledge (load at stage start)
-
-Before stage work, stream \`${KNOWLEDGE_PATH}\` and filter for entries relevant to
-this stage (\`${stage}\`), affected domains, and key constraints. Apply matching
-entries explicitly. If the file is empty, continue normally.
-`;
-}
-
-export function learningsAgentsMdBlock(): string {
-  return `### Knowledge Store
-
-\`${KNOWLEDGE_PATH}\` — append-only JSONL memory with entry types \`rule\`, \`pattern\`, \`lesson\`, \`compound\`.
-Strict 8-field schema: \`type, trigger, action, confidence, domain, stage, created, project\`.
-At session start and stage transitions, tail the file and apply relevant entries.
-If a non-obvious reusable rule/pattern/lesson is discovered, append a new line
-through \`/cc-learn add\` (never hand-edit).
+Before closeout, capture 1-3 reusable insights in \`${KNOWLEDGE_PATH}\` whenever
+the stage produced non-obvious decisions, patterns, or lessons.
+Prefer \`type=rule|pattern|lesson\` (\`compound\` stays retro-only) and set
+\`stage: "${stageName}"\` unless the insight is explicitly cross-stage.
 `;
 }

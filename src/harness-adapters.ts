@@ -42,6 +42,12 @@ const UTILITY_SHIMS: UtilityShimSpec[] = [
     commandFile: "next.md"
   },
   {
+    fileName: "cc-view.md",
+    command: "view",
+    skillFolder: "flow-view",
+    commandFile: "view.md"
+  },
+  {
     fileName: "cc-learn.md",
     command: "learn",
     skillFolder: "learnings",
@@ -66,6 +72,12 @@ const UTILITY_SHIMS: UtilityShimSpec[] = [
     commandFile: "diff.md"
   },
   {
+    fileName: "cc-ops.md",
+    command: "ops",
+    skillFolder: "flow-ops",
+    commandFile: "ops.md"
+  },
+  {
     fileName: "cc-feature.md",
     command: "feature",
     skillFolder: "feature-workspaces",
@@ -82,6 +94,12 @@ const UTILITY_SHIMS: UtilityShimSpec[] = [
     command: "retro",
     skillFolder: "flow-retro",
     commandFile: "retro.md"
+  },
+  {
+    fileName: "cc-archive.md",
+    command: "archive",
+    skillFolder: "flow-archive",
+    commandFile: "archive.md"
   },
   {
     fileName: "cc-rewind.md",
@@ -198,13 +216,16 @@ When in doubt, prefer **non-trivial** — the quick track is opt-in and only saf
 |---|---|
 | \`/cc\` | **Entry point.** No args = resume current stage. With prompt = classify task and start the right flow. |
 | \`/cc-next\` | **Progression.** Advances to the next stage when current is complete. |
+| \`/cc-view\` | **Read-only router.** Unified entry for status/tree/diff views. |
 | \`/cc-learn\` | **Cross-cutting.** Capture or review project knowledge (append-only JSONL). |
 | \`/cc-status\` | **Read-only.** Visual snapshot with progress bar, gate delta, and delegations. |
 | \`/cc-tree\` | **Read-only.** Deep flow tree for stages, artifacts, and stale markers. |
 | \`/cc-diff\` | **Delta map.** Compare current flow-state with saved baseline snapshot. |
+| \`/cc-ops\` | **Operations router.** Unified entry for feature/tdd-log/retro/archive/rewind actions. |
 | \`/cc-feature\` | **Workspace.** Manage active feature snapshots for parallel tracks. |
 | \`/cc-tdd-log\` | **Evidence.** Record RED/GREEN/REFACTOR cycle events for enforcement. |
 | \`/cc-retro\` | **Learning gate.** Mandatory retrospective before archive after ship. |
+| \`/cc-archive\` | **Run finalization.** Archive active flow into \`.cclaw/runs/\` and reset runtime. |
 | \`/cc-rewind\` | **Recovery.** Rewind flow to an earlier stage and invalidate downstream work. |
 | \`/cc-rewind-ack\` | **Recovery.** Clear stale-stage markers after redo. |
 

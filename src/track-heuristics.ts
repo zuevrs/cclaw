@@ -55,7 +55,7 @@ const DEFAULT_RULES: Record<FlowTrack, TrackHeuristicRule> = {
       "onboarding"
     ]
   }
-};
+} satisfies Record<FlowTrack, TrackHeuristicRule>;
 
 const DEFAULT_PRIORITY: FlowTrack[] = ["standard", "medium", "quick"];
 const DEFAULT_FALLBACK: FlowTrack = "standard";

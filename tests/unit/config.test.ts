@@ -177,7 +177,6 @@ trackHeuristics:
     expect(cfg.defaultTrack).toBe("medium");
     expect(cfg.promptGuardMode).toBe("advisory");
     expect(cfg.gitHookGuards).toBe(false);
-    expect(cfg.autoAdvance).toBe(false);
   });
 
   it("standard profile matches historical default behavior", () => {

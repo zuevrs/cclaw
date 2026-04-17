@@ -17,7 +17,6 @@ const ALLOWED_CONFIG_KEYS = new Set<string>([
   "version",
   "flowVersion",
   "harnesses",
-  "autoAdvance",
   "promptGuardMode",
   "tddEnforcement",
   "tddTestGlobs",
@@ -76,7 +75,6 @@ export function createDefaultConfig(
     version: CCLAW_VERSION,
     flowVersion: FLOW_VERSION,
     harnesses,
-    autoAdvance: false,
     promptGuardMode: "advisory",
     tddEnforcement: "advisory",
     tddTestGlobs: ["**/*.test.*", "**/*.spec.*", "**/test/**"],
@@ -105,7 +103,6 @@ export function createProfileConfig(
       return {
         ...base,
         harnesses: overrides.harnesses ?? ["claude"],
-        autoAdvance: false,
         promptGuardMode: "advisory",
         tddEnforcement: "advisory",
         gitHookGuards: false,
@@ -116,7 +113,6 @@ export function createProfileConfig(
       return {
         ...base,
         harnesses: overrides.harnesses ?? DEFAULT_HARNESSES,
-        autoAdvance: false,
         promptGuardMode: "advisory",
         tddEnforcement: "advisory",
         gitHookGuards: false,
@@ -127,7 +123,6 @@ export function createProfileConfig(
       return {
         ...base,
         harnesses: overrides.harnesses ?? DEFAULT_HARNESSES,
-        autoAdvance: false,
         promptGuardMode: "strict",
         tddEnforcement: "strict",
         gitHookGuards: true,
@@ -178,9 +173,6 @@ export async function readConfig(projectRoot: string): Promise<VibyConfig> {
   const harnesses = hasHarnessesField
     ? [...new Set(validatedHarnesses)]
     : DEFAULT_HARNESSES;
-
-  const autoAdvanceRaw = parsed.autoAdvance;
-  const autoAdvance = typeof autoAdvanceRaw === "boolean" ? autoAdvanceRaw : false;
 
   const promptGuardModeRaw = parsed.promptGuardMode;
   if (
@@ -344,7 +336,6 @@ export async function readConfig(projectRoot: string): Promise<VibyConfig> {
     version: parsed.version ?? CCLAW_VERSION,
     flowVersion: parsed.flowVersion ?? FLOW_VERSION,
     harnesses,
-    autoAdvance,
     promptGuardMode,
     tddEnforcement,
     tddTestGlobs,
