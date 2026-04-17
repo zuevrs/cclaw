@@ -28,7 +28,7 @@ This is the **recommended way to start** working with cclaw. Use \`/cc-next\` fo
 ## HARD-GATE
 
 - **Do not** skip reading \`${flowPath}\` — always check current state before acting.
-- **Do not** start implementation stages directly from \`/cc <prompt>\` — always begin at the first stage of the resolved track (brainstorm for standard, spec for quick).
+- **Do not** start implementation stages directly from \`/cc <prompt>\` — always begin at the first stage of the resolved track (brainstorm for medium/standard, spec for quick).
 - **Do not** start a stage pipeline for a task that is not a software change (pure question, non-software task, conversation).
 
 ## Algorithm
@@ -43,6 +43,7 @@ This is the **recommended way to start** working with cclaw. Use \`/cc-next\` fo
    | **pure-question** | "how does X work?", "explain Y", "what are the trade-offs of Z?" | Answer directly, do NOT open a stage. |
    | **trivial** | typo, one-liner, rename, config tweak, copy change, version bump with zero behavior change | Fast-path: skip \`brainstorm\` and \`scope\`, seed \`00-idea.md\`, move straight to \`design\` or \`spec\` depending on whether an interface change is involved. |
    | **software — bug fix with repro** | regression / hotfix / named symptom + repro steps | Fast-path: set track to \`quick\`, seed \`04-spec.md\` with the reproduction, enter \`tdd\` with a RED reproduction test first. |
+   | **software — medium** | additive feature following existing architecture | medium track (\`brainstorm → spec → plan → tdd → review → ship\`). |
    | **software — standard** | feature, refactor, migration, integration, architecture change | Full 8-stage flow starting at \`brainstorm\`. |
 
    Record the chosen class in \`.cclaw/artifacts/00-idea.md\` on the \`Class:\` line. Do NOT silently treat a non-software task as software.
@@ -68,18 +69,20 @@ This is the **recommended way to start** working with cclaw. Use \`/cc-next\` fo
 6. **Track heuristic** — classify the idea text and **recommend** a track (the user can override before any state mutation):
    - **quick** (\`spec → tdd → review → ship\`) — single-purpose work where the spec is essentially already known.
      Triggers (case-insensitive substring or close variant): \`bug\`, \`bugfix\`, \`fix\`, \`hotfix\`, \`patch\`, \`typo\`, \`regression\`, \`copy change\`, \`rename\`, \`bump\`, \`upgrade dep\`, \`config tweak\`, \`docs only\`, \`comment\`, \`lint\`, \`format\`, \`small\`, \`tiny\`, \`one-liner\`, \`revert\`.
-   - **standard** (full 8 stages — default) — anything that introduces a new capability, touches multiple modules, or has unclear scope.
-     Triggers: \`new feature\`, \`add\`, \`build\`, \`design\`, \`refactor\`, \`migration\`, \`platform\`, \`architecture\`, \`endpoint\`, \`schema\`, \`api\`, \`integrate\`, \`workflow\`, \`onboarding\`, or any prompt that does not match quick triggers.
-   - When triggers conflict (e.g. "small refactor that touches 5 modules") prefer **standard** — quick is opt-in and only safe when scope is genuinely tiny.
+   - **medium** (\`brainstorm → spec → plan → tdd → review → ship\`) — additive work that fits existing architecture and still needs product framing.
+     Triggers: \`add endpoint\`, \`add field\`, \`extend existing\`, \`wire integration\`, \`small migration\`, \`new screen following existing patterns\`.
+   - **standard** (full 8 stages — default fallback) — anything that introduces a new capability with architecture uncertainty, touches many modules, or has unclear scope.
+     Triggers: \`new feature\`, \`refactor\`, \`migration\`, \`platform\`, \`architecture\`, \`schema\`, \`integrate\`, \`workflow\`, \`onboarding\`, or any prompt that does not match quick/medium confidently.
+   - When triggers conflict, prefer **standard** over **medium**, and **medium** over **quick**.
 7. Present the recommendation as a single decision with explicit options:
-   > \`Recommended track: <quick|standard>\` because \`<one-line reason citing matched triggers>\`.
-   > Override? (A) keep \`<recommended>\`  (B) switch to \`<other>\`  (C) cancel.
+   > \`Recommended track: <quick|medium|standard>\` because \`<one-line reason citing matched triggers>\`.
+   > Override? (A) keep \`<recommended>\`  (B) switch track  (C) cancel.
    If \`AskQuestion\`/\`AskUserQuestion\` is available, send exactly ONE question; on schema error, fall back to plain text.
-8. Persist the chosen track to \`${flowPath}\` (\`track\` field). Compute \`skippedStages\` from the track and write that too. Use the **first stage of the chosen track** as \`currentStage\` (quick → \`spec\`, standard → \`brainstorm\`, trivial fast-path → \`design\` or \`spec\` per Phase 0).
+8. Persist the chosen track to \`${flowPath}\` (\`track\` field). Compute \`skippedStages\` from the track and write that too. Use the **first stage of the chosen track** as \`currentStage\` (quick → \`spec\`, medium/standard → \`brainstorm\`, trivial fast-path → \`design\` or \`spec\` per Phase 0).
 9. Write the prompt to \`.cclaw/artifacts/00-idea.md\` with the following header lines: \`Class:\` (from Phase 0), \`Track:\` (chosen track + matched heuristic), \`Stack:\` (from Phase 2 detection, or \`unknown\`), and a \`Discovered context\` section if Phase 1 found origin docs.
 10. Load the **first-stage skill for the chosen track** and its command file:
     - quick → \`.cclaw/skills/specification-authoring/SKILL.md\` + \`.cclaw/commands/spec.md\`
-    - standard → \`.cclaw/skills/brainstorming/SKILL.md\` + \`.cclaw/commands/brainstorm.md\`
+    - medium/standard → \`.cclaw/skills/brainstorming/SKILL.md\` + \`.cclaw/commands/brainstorm.md\`
     - trivial fast-path → design or spec skill per Phase 0 decision.
 11. Execute that stage with the prompt + Phase 1/Phase 2 context as initial input.
 
@@ -146,13 +149,14 @@ Do **not** silently discard an existing flow when the user provides a prompt. If
    | Track | Triggers | Use when |
    |---|---|---|
    | \`quick\` | \`bug\`, \`bugfix\`, \`fix\`, \`hotfix\`, \`patch\`, \`typo\`, \`regression\`, \`rename\`, \`bump\`, \`upgrade dep\`, \`docs only\`, \`comment\`, \`lint\`, \`format\`, \`small\`, \`tiny\`, \`one-liner\`, \`revert\`, \`copy change\` | Single-purpose, spec is essentially known, low blast radius |
-   | \`standard\` | \`new feature\`, \`add\`, \`build\`, \`design\`, \`refactor\`, \`migration\`, \`platform\`, \`architecture\`, \`endpoint\`, \`schema\`, \`api\`, \`integrate\`, \`workflow\`, \`onboarding\` (or no quick trigger matched) | Anything new, multi-module, or unclear scope |
+   | \`medium\` | \`add endpoint\`, \`add field\`, \`extend existing\`, \`wire integration\`, \`small migration\`, \`new screen following existing pattern\` | Additive work with existing architecture |
+   | \`standard\` | \`new feature\`, \`build\`, \`design\`, \`refactor\`, \`migration\`, \`platform\`, \`architecture\`, \`schema\`, \`api\`, \`integrate\`, \`workflow\`, \`onboarding\` (or no confident quick/medium match) | New or uncertain multi-module work |
 
-   - On conflict, prefer \`standard\` (quick is opt-in for genuinely tiny work).
-   - Always state the recommendation as a one-line reason citing the matched trigger.
-7. Persist the chosen track in \`${flowPath}\` (\`track\` + \`skippedStages\`). Set \`currentStage\` to the first stage of the chosen track (\`quick\` → \`spec\`, \`standard\` → \`brainstorm\`, trivial fast-path → \`design\` or \`spec\`). Reset gate catalog.
+   - On conflict, prefer \`standard\` over \`medium\`, and \`medium\` over \`quick\`.
+   - Always state the recommendation as a one-line reason citing matched triggers.
+7. Persist the chosen track in \`${flowPath}\` (\`track\` + \`skippedStages\`). Set \`currentStage\` to the first stage of the chosen track (\`quick\` → \`spec\`, \`medium\`/ \`standard\` → \`brainstorm\`, trivial fast-path → \`design\` or \`spec\`). Reset gate catalog.
 8. Write \`${RUNTIME_ROOT}/artifacts/00-idea.md\` with the user's prompt plus header lines: \`Class:\`, \`Track:\`, \`Stack:\`, and a \`Discovered context\` section from Phase 1.
-9. Load and execute the **first stage skill of the chosen track** (\`brainstorming\` for standard, \`specification-authoring\` for quick) plus its matching command file.
+9. Load and execute the **first stage skill of the chosen track** (\`brainstorming\` for medium/standard, \`specification-authoring\` for quick) plus its matching command file.
 
 ### Reclassification on discovery
 

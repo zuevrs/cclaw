@@ -11,19 +11,22 @@ export const FLOW_STAGES = [
 
 export type FlowStage = (typeof FLOW_STAGES)[number];
 
-export const FLOW_TRACKS = ["quick", "standard"] as const;
+export const FLOW_TRACKS = ["quick", "medium", "standard"] as const;
 export type FlowTrack = (typeof FLOW_TRACKS)[number];
 
 /**
  * Ordered stages that make up each flow track.
  *
  * - `standard` runs the full 8-stage pipeline (default — same as before tracks existed).
+ * - `medium` keeps product framing but skips heavy scope/design lock-in:
+ *   brainstorm -> spec -> plan -> tdd -> review -> ship.
  * - `quick` skips the upstream product stages (brainstorm/scope/design/plan) for
  *   small bug fixes or single-purpose changes where the spec is already known.
  *   It still keeps the non-negotiable safety gates: spec → tdd → review → ship.
  */
 export const TRACK_STAGES: Record<FlowTrack, readonly FlowStage[]> = {
   standard: FLOW_STAGES,
+  medium: ["brainstorm", "spec", "plan", "tdd", "review", "ship"],
   quick: ["spec", "tdd", "review", "ship"]
 } as const;
 
@@ -33,8 +36,8 @@ export type HarnessId = (typeof HARNESS_IDS)[number];
 /**
  * Init profiles pre-fill `cclaw init` flags for common install shapes.
  *
- * - `minimal` — single-harness (claude), quick track default, no git hook guards. For solo
- *   contributors or bugfix-heavy repos where most work is \`quick\` scope.
+ * - `minimal` — single-harness (claude), medium track default, no git hook guards. For solo
+ *   contributors who still want brainstorm/spec/plan rigor without full scope+design overhead.
  * - `standard` — default harness set, standard track, no git hook guards, advisory guards.
  *   Matches the pre-profile default behavior.
  * - `full` — default harness set, standard track, git hook guards on, strict prompt guards.

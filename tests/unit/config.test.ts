@@ -68,6 +68,18 @@ describe("config", () => {
     expect(config.defaultTrack).toBe("quick");
   });
 
+  it("accepts defaultTrack=medium", async () => {
+    const root = await createTempProject("config-medium-track");
+    await fs.mkdir(path.join(root, ".cclaw"), { recursive: true });
+    await fs.writeFile(
+      configPath(root),
+      "harnesses:\n  - claude\ndefaultTrack: medium\n",
+      "utf8"
+    );
+    const config = await readConfig(root);
+    expect(config.defaultTrack).toBe("medium");
+  });
+
   it("rejects unknown defaultTrack values with remediation guidance", async () => {
     const root = await createTempProject("config-bad-track");
     await fs.mkdir(path.join(root, ".cclaw"), { recursive: true });
@@ -76,8 +88,8 @@ describe("config", () => {
       "harnesses:\n  - claude\ndefaultTrack: turbo\n",
       "utf8"
     );
-    await expect(readConfig(root)).rejects.toThrow(/"defaultTrack" must be one of: quick, standard/);
-    await expect(readConfig(root)).rejects.toThrow(/Supported tracks: quick, standard/);
+    await expect(readConfig(root)).rejects.toThrow(/"defaultTrack" must be one of: quick, medium, standard/);
+    await expect(readConfig(root)).rejects.toThrow(/Supported tracks: quick, medium, standard/);
   });
 
   it("parses prompt guard and git hook settings", async () => {
@@ -100,10 +112,10 @@ describe("config", () => {
     await expect(readConfig(root)).rejects.toThrow(/"promptGuardMode" must be "advisory" or "strict"/);
   });
 
-  it("minimal profile pre-fills claude-only + quick track + advisory guards", () => {
+  it("minimal profile pre-fills claude-only + medium track + advisory guards", () => {
     const cfg = createProfileConfig("minimal");
     expect(cfg.harnesses).toEqual(["claude"]);
-    expect(cfg.defaultTrack).toBe("quick");
+    expect(cfg.defaultTrack).toBe("medium");
     expect(cfg.promptGuardMode).toBe("advisory");
     expect(cfg.gitHookGuards).toBe(false);
     expect(cfg.autoAdvance).toBe(false);

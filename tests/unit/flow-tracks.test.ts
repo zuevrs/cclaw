@@ -11,8 +11,9 @@ import {
 
 describe("flow tracks", () => {
   describe("isFlowTrack", () => {
-    it("recognizes standard and quick tracks", () => {
+    it("recognizes standard, medium, and quick tracks", () => {
       expect(isFlowTrack("standard")).toBe(true);
+      expect(isFlowTrack("medium")).toBe(true);
       expect(isFlowTrack("quick")).toBe(true);
     });
 
@@ -38,6 +39,17 @@ describe("flow tracks", () => {
       ]);
     });
 
+    it("medium track keeps brainstorm/spec/plan then execution stages", () => {
+      expect(trackStages("medium")).toEqual([
+        "brainstorm",
+        "spec",
+        "plan",
+        "tdd",
+        "review",
+        "ship"
+      ]);
+    });
+
     it("quick track runs only the safety core", () => {
       expect(trackStages("quick")).toEqual(["spec", "tdd", "review", "ship"]);
     });
@@ -51,11 +63,19 @@ describe("flow tracks", () => {
     it("marks upstream stages as skipped on quick", () => {
       expect(skippedStagesForTrack("quick")).toEqual(["brainstorm", "scope", "design", "plan"]);
     });
+
+    it("marks scope and design as skipped on medium", () => {
+      expect(skippedStagesForTrack("medium")).toEqual(["scope", "design"]);
+    });
   });
 
   describe("firstStageForTrack", () => {
     it("starts at brainstorm on standard", () => {
       expect(firstStageForTrack("standard")).toBe("brainstorm");
+    });
+
+    it("starts at brainstorm on medium", () => {
+      expect(firstStageForTrack("medium")).toBe("brainstorm");
     });
 
     it("starts at spec on quick", () => {
@@ -83,6 +103,14 @@ describe("flow tracks", () => {
       expect(state.track).toBe("quick");
       expect(state.currentStage).toBe("spec");
       expect(state.skippedStages).toEqual(["brainstorm", "scope", "design", "plan"]);
+    });
+
+    it("accepts medium track and sets skipped scope/design", () => {
+      const state = createInitialFlowState({ activeRunId: "run-m", track: "medium" });
+      expect(state.activeRunId).toBe("run-m");
+      expect(state.track).toBe("medium");
+      expect(state.currentStage).toBe("brainstorm");
+      expect(state.skippedStages).toEqual(["scope", "design"]);
     });
 
     it("accepts legacy (runId, track) tuple call signature", () => {
@@ -114,6 +142,13 @@ describe("flow tracks", () => {
       expect(nextStage("tdd", "quick")).toBe("review");
       expect(nextStage("review", "quick")).toBe("ship");
       expect(nextStage("ship", "quick")).toBeNull();
+    });
+
+    it("medium advance follows brainstorm → spec → plan chain", () => {
+      expect(nextStage("brainstorm", "medium")).toBe("spec");
+      expect(nextStage("spec", "medium")).toBe("plan");
+      expect(nextStage("plan", "medium")).toBe("tdd");
+      expect(nextStage("ship", "medium")).toBeNull();
     });
 
     it("quick ignores upstream stages (they are not on the critical path)", () => {

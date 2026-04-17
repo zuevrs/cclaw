@@ -83,7 +83,7 @@ export function createProfileConfig(
         autoAdvance: false,
         promptGuardMode: "advisory",
         gitHookGuards: false,
-        defaultTrack: overrides.defaultTrack ?? "quick",
+        defaultTrack: overrides.defaultTrack ?? "medium",
         languageRulePacks: overrides.languageRulePacks ?? []
       };
     case "standard":
