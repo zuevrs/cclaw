@@ -84,6 +84,7 @@ import { ensureDir, exists, writeFileSafe } from "./fs-utils.js";
 import { ensureGitignore, removeGitignorePatterns } from "./gitignore.js";
 import {
   HARNESS_ADAPTERS,
+  harnessShimFileNames,
   harnessTier,
   syncHarnessShims,
   removeCclawFromAgentsMd
@@ -896,7 +897,7 @@ version: 0.1.0                         # semver; bump when hardGate or algorithm
 
 | Field | Type | Required | Meaning |
 |---|---|---|---|
-| \`name\` | string (kebab-case) | yes | Unique id used by the router and by \`/cc-status\` diagnostics. |
+| \`name\` | string (kebab-case) | yes | Unique id used by the router and by \`/cc-view status\` diagnostics. |
 | \`description\` | string ≤180 chars (single line OR YAML \`>\` folded) | yes | Drives semantic routing. Include trigger + action. |
 | \`stages\` | array of flow stages | no | When present, the meta-skill only surfaces this skill during those stages. Omit for "any stage". |
 | \`triggers\` | array of strings | no | Extra literal substrings that route to this skill when found in the user prompt or the active artifact. |
@@ -1236,13 +1237,7 @@ async function cleanLegacyArtifacts(projectRoot: string): Promise<void> {
 }
 
 async function cleanStaleFiles(projectRoot: string): Promise<void> {
-  const expectedShimFiles = new Set<string>([
-    ...COMMAND_FILE_ORDER.map((stage) => `viby-${stage}.md`),
-    ...UTILITY_COMMANDS.map((cmd) => `viby-${cmd}.md`),
-    ...COMMAND_FILE_ORDER.map((stage) => `cc-${stage}.md`),
-    ...UTILITY_COMMANDS.map((cmd) => `cc-${cmd}.md`),
-    "cc.md"
-  ]);
+  const expectedShimFiles = new Set<string>(harnessShimFileNames());
 
   for (const adapter of Object.values(HARNESS_ADAPTERS)) {
     const commandDir = path.join(projectRoot, adapter.commandDir);

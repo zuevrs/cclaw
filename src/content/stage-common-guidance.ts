@@ -26,9 +26,9 @@ Use this same closeout menu for every stage:
 
 - **A) Advance** — run \`/cc-next\` and continue.
 - **B) Revise this stage** — stay on current stage and apply feedback.
-- **C) Pause / park** — stop now and resume later.
-- **D) Rewind** — move to a prior stage explicitly chosen by the user.
-- **E) Abandon** — cancel this flow; artifacts remain on disk.
+- **C) Pause / park** — run \`/cc-view status\`, then stop and resume later.
+- **D) Rewind** — run \`/cc-ops rewind <target-stage>\`.
+- **E) Abandon** — archive with \`/cc-ops archive --skip-retro --retro-reason="<reason>"\` when user explicitly wants to end the run.
 
 Recommendation defaults:
 
@@ -60,9 +60,17 @@ Rollback / fallback: <if decision proves wrong>
 
 ## Self-improvement reminder
 
-If a reusable lesson appears during the stage, append one strict-schema JSONL
-entry (manually via \`/cc-learn add\` or directly in stage closeout protocol).
-Do not keep operational lessons only in chat.
+Before closeout, capture 1-3 reusable insights in \`.cclaw/knowledge.jsonl\`
+whenever the stage produced non-obvious decisions, patterns, or lessons.
+Prefer \`type=rule|pattern|lesson\` (\`compound\` stays retro-focused).
+
+Track policy:
+- \`standard\` / \`medium\`: required for \`design\`, \`tdd\`, and \`review\`;
+  recommended for other stages.
+- \`quick\`: recommended only.
+
+"No learning captured" is acceptable only with an explicit reason
+(for example, purely mechanical edits with no new decisions).
 
 ## Progressive disclosure baseline
 

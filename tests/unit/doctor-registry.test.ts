@@ -15,9 +15,21 @@ describe("doctor registry", () => {
     expect(meta.docRef).toContain("hooks-and-lifecycle.md");
   });
 
-  it("falls back to warning metadata for unknown checks", () => {
+  it("classifies plural hooks-prefixed checks as error severity", () => {
+    const meta = doctorCheckMetadata("hooks:workflow_guard:tdd_red_first");
+    expect(meta.severity).toBe("error");
+    expect(meta.docRef).toContain("hooks-and-lifecycle.md");
+  });
+
+  it("classifies protocol checks as error severity", () => {
+    const meta = doctorCheckMetadata("protocol:completion");
+    expect(meta.severity).toBe("error");
+    expect(meta.docRef).toContain("harness-and-routing.md");
+  });
+
+  it("falls back to error metadata for unknown checks", () => {
     const meta = doctorCheckMetadata("custom:unknown");
-    expect(meta.severity).toBe("warning");
+    expect(meta.severity).toBe("error");
     expect(meta.summary).toContain("Unclassified doctor check");
   });
 

@@ -8,7 +8,12 @@ import { CCLAW_AGENTS } from "./content/core-agents.js";
 import { readConfig } from "./config.js";
 import { exists } from "./fs-utils.js";
 import { gitignoreHasRequiredPatterns } from "./gitignore.js";
-import { HARNESS_ADAPTERS, CCLAW_MARKER_START, CCLAW_MARKER_END } from "./harness-adapters.js";
+import {
+  HARNESS_ADAPTERS,
+  CCLAW_MARKER_START,
+  CCLAW_MARKER_END,
+  harnessShimFileNames
+} from "./harness-adapters.js";
 import { policyChecks } from "./policy.js";
 import { readFlowState } from "./runs.js";
 import { skippedStagesForTrack } from "./flow-state.js";
@@ -498,19 +503,7 @@ export async function doctorChecks(projectRoot: string, options: DoctorOptions =
       });
       continue;
     }
-    for (const shim of [
-      "cc.md",
-      "cc-next.md",
-      "cc-learn.md",
-      "cc-status.md",
-      "cc-tree.md",
-      "cc-diff.md",
-      "cc-feature.md",
-      "cc-tdd-log.md",
-      "cc-retro.md",
-      "cc-rewind.md",
-      "cc-rewind-ack.md"
-    ]) {
+    for (const shim of harnessShimFileNames()) {
       const shimPath = path.join(projectRoot, adapter.commandDir, shim);
       checks.push({
         name: `shim:${harness}:${shim.replace(".md", "")}`,
@@ -528,14 +521,8 @@ export async function doctorChecks(projectRoot: string, options: DoctorOptions =
     const hasCcCommand = content.includes("/cc");
     const hasCcNext = content.includes("/cc-next");
     const hasCcLearn = content.includes("/cc-learn");
-    const hasCcStatus = content.includes("/cc-status");
-    const hasCcTree = content.includes("/cc-tree");
-    const hasCcDiff = content.includes("/cc-diff");
-    const hasCcFeature = content.includes("/cc-feature");
-    const hasCcTddLog = content.includes("/cc-tdd-log");
-    const hasCcRetro = content.includes("/cc-retro");
-    const hasCcRewind = content.includes("/cc-rewind");
-    const hasCcRewindAck = content.includes("/cc-rewind-ack");
+    const hasCcView = content.includes("/cc-view");
+    const hasCcOps = content.includes("/cc-ops");
     const hasVerification = content.includes("Verification Discipline");
     const hasMinimalMarker = content.includes("intentionally minimal for cross-project use");
     const hasMetaSkillPointer = content.includes(".cclaw/skills/using-cclaw/SKILL.md");
@@ -543,14 +530,8 @@ export async function doctorChecks(projectRoot: string, options: DoctorOptions =
       && hasCcCommand
       && hasCcNext
       && hasCcLearn
-      && hasCcStatus
-      && hasCcTree
-      && hasCcDiff
-      && hasCcFeature
-      && hasCcTddLog
-      && hasCcRetro
-      && hasCcRewind
-      && hasCcRewindAck
+      && hasCcView
+      && hasCcOps
       && hasVerification
       && hasMinimalMarker
       && hasMetaSkillPointer;
@@ -1151,7 +1132,7 @@ export async function doctorChecks(projectRoot: string, options: DoctorOptions =
     ok: staleStages.length === 0,
     details: staleStages.length === 0
       ? "no stale stages pending acknowledgement"
-      : `stale stages must be acknowledged via /cc-rewind-ack: ${staleStages.join(", ")}`
+      : `stale stages must be acknowledged via /cc-ops rewind-ack: ${staleStages.join(", ")}`
   });
   const retroRequired = flowState.completedStages.includes("ship");
   const retroComplete =
@@ -1164,7 +1145,7 @@ export async function doctorChecks(projectRoot: string, options: DoctorOptions =
       ? retroRequired
         ? `retro gate complete (${flowState.retro.compoundEntries} compound entries)`
         : "retro gate not required yet (ship not completed)"
-      : "retro gate incomplete: run /cc-retro and record at least one compound knowledge entry"
+      : "retro gate incomplete: run /cc-ops retro and record at least one compound knowledge entry"
   });
   const flowSnapshotPath = path.join(projectRoot, RUNTIME_ROOT, "state", "flow-state.snapshot.json");
   const flowSnapshotExists = await exists(flowSnapshotPath);

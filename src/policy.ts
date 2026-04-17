@@ -121,7 +121,7 @@ export async function policyChecks(projectRoot: string, options: PolicyOptions =
     { file: runtimeFile("skills/learnings/SKILL.md"), needle: "## HARD-GATE", name: "utility_skill:learnings:hard_gate" },
     { file: runtimeFile("commands/learn.md"), needle: "## Subcommands", name: "utility_command:learn:subcommands" },
     { file: runtimeFile("commands/status.md"), needle: "bar:", name: "utility_command:status:visual_bar" },
-    { file: runtimeFile("commands/status.md"), needle: "/cc-tree · /cc-diff", name: "utility_command:status:tree_diff_link" },
+    { file: runtimeFile("commands/status.md"), needle: "/cc-view tree · /cc-view diff", name: "utility_command:status:tree_diff_link" },
     { file: runtimeFile("commands/tree.md"), needle: "## Algorithm", name: "utility_command:tree:algorithm" },
     { file: runtimeFile("skills/flow-tree/SKILL.md"), needle: "## Protocol", name: "utility_skill:tree:protocol" },
     { file: runtimeFile("skills/flow-tree/SKILL.md"), needle: "## HARD-GATE", name: "utility_skill:tree:hard_gate" },

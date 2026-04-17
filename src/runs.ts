@@ -732,7 +732,7 @@ export async function archiveRun(
   if (retroGate.required && !retroGate.completed && !skipRetro) {
     throw new Error(
       "Archive blocked: retro gate is required after ship completion. " +
-      "Run /cc-retro and append at least one compound knowledge entry, or re-run archive with --skip-retro and --retro-reason."
+      "Run /cc-ops retro and append at least one compound knowledge entry, or re-run /cc-ops archive with --skip-retro and --retro-reason."
     );
   }
   if (retroGate.completed) {

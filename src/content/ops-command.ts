@@ -11,12 +11,12 @@ export function opsCommandContract(): string {
 Unified operational command surface for non-stage flow actions.
 
 Subcommands:
-- \`feature\` -> \`/cc-feature\`
-- \`tdd-log\` -> \`/cc-tdd-log\`
-- \`retro\` -> \`/cc-retro\`
-- \`archive\` -> \`/cc-archive\`
-- \`rewind\` -> \`/cc-rewind\`
-- \`rewind-ack\` -> \`/cc-rewind-ack\`
+- \`feature\` -> \`/cc-ops feature\`
+- \`tdd-log\` -> \`/cc-ops tdd-log\`
+- \`retro\` -> \`/cc-ops retro\`
+- \`archive\` -> \`/cc-ops archive\`
+- \`rewind\` -> \`/cc-ops rewind\`
+- \`rewind-ack\` -> \`/cc-ops rewind-ack\`
 
 ## HARD-GATE
 

@@ -12,7 +12,7 @@ function flowStatePath(): string {
 }
 
 export function tddLogCommandContract(): string {
-  return `# /cc-tdd-log
+  return `# /cc-ops tdd-log
 
 ## Purpose
 
@@ -25,10 +25,10 @@ Record explicit RED/GREEN/REFACTOR evidence used by workflow guard and doctor ch
 
 ## Subcommands
 
-- \`/cc-tdd-log red <slice> <command> [note]\`
-- \`/cc-tdd-log green <slice> <command> [note]\`
-- \`/cc-tdd-log refactor <slice> <command> [note]\`
-- \`/cc-tdd-log show\`
+- \`/cc-ops tdd-log red <slice> <command> [note]\`
+- \`/cc-ops tdd-log green <slice> <command> [note]\`
+- \`/cc-ops tdd-log refactor <slice> <command> [note]\`
+- \`/cc-ops tdd-log show\`
 
 ## Log Schema
 
@@ -53,7 +53,7 @@ name: ${TDD_LOG_SKILL_NAME}
 description: "Append RED/GREEN/REFACTOR entries into tdd-cycle-log.jsonl for guard/doctor enforcement."
 ---
 
-# /cc-tdd-log
+# /cc-ops tdd-log
 
 ## HARD-GATE
 

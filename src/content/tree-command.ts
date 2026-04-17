@@ -20,7 +20,7 @@ function rewindLogPath(): string {
 }
 
 export function treeCommandContract(): string {
-  return `# /cc-tree
+  return `# /cc-view tree
 
 ## Purpose
 
@@ -29,7 +29,7 @@ stale markers, and artifact presence.
 
 ## HARD-GATE
 
-- \`/cc-tree\` is read-only. Do not mutate flow-state or artifacts.
+- \`/cc-view tree\` is read-only. Do not mutate flow-state or artifacts.
 - Use values from \`${flowStatePath()}\` and \`${delegationLogPath()}\`; never infer missing evidence.
 
 ## Algorithm
@@ -71,7 +71,7 @@ name: ${TREE_SKILL_NAME}
 description: "Render a visual flow tree for stages, gates, delegations, and artifacts."
 ---
 
-# /cc-tree
+# /cc-view tree
 
 ## HARD-GATE
 

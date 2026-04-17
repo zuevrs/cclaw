@@ -41,7 +41,7 @@ ${schema.hardGate}
 ${hydrationLines}
 4. Stream \`.cclaw/knowledge.jsonl\` and apply relevant JSON-line entries (strict schema: type, trigger, action, confidence, domain, stage, created, project).
 5. Write stage output to ${writeStepPaths}.
-6. Do NOT copy artifacts into \`.cclaw/runs/\`; archival is handled by \`/cc-archive\` (agent-facing wrapper over archive runtime).
+6. Do NOT copy artifacts into \`.cclaw/runs/\`; archival is handled by \`/cc-ops archive\` (agent-facing wrapper over archive runtime).
 
 ## Gates
 ${gateIds}

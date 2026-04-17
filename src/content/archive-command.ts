@@ -16,14 +16,14 @@ function activeArtifactsPath(): string {
 }
 
 export function archiveCommandContract(): string {
-  return `# /cc-archive
+  return `# /cc-ops archive
 
 ## Purpose
 
 Archive the active cclaw run from inside the harness flow (agent-first finish).
 
 This command removes the user-facing CLI gap: users can stay in \`/cc-*\` flow and
-finish with \`/cc-archive\` after ship + retro are complete.
+finish with \`/cc-ops archive\` after ship + retro are complete.
 
 ## HARD-GATE
 
@@ -33,13 +33,13 @@ finish with \`/cc-archive\` after ship + retro are complete.
 
 ## Inputs
 
-\`/cc-archive [--name=<slug>] [--skip-retro --retro-reason=<text>]\`
+\`/cc-ops archive [--name=<slug>] [--skip-retro --retro-reason=<text>]\`
 
 ## Algorithm
 
 1. Read \`${flowStatePath()}\`.
 2. If ship is complete and \`retro.completedAt\` is absent:
-   - block with explicit instruction: run \`/cc-retro\` first.
+   - block with explicit instruction: run \`/cc-ops retro\` first.
 3. Build archive command:
    - base: \`npx cclaw archive\`
    - optional: \`--name=<slug>\`
@@ -72,7 +72,7 @@ name: ${ARCHIVE_SKILL_NAME}
 description: "Archive the active cclaw run from harness flow and reset runtime safely."
 ---
 
-# /cc-archive
+# /cc-ops archive
 
 ## HARD-GATE
 
@@ -84,7 +84,7 @@ runtime command so state snapshots and manifest generation stay atomic.
 1. Read \`${flowStatePath()}\`:
    - confirm whether ship is completed,
    - check \`retro.completedAt\` for post-ship runs.
-2. If ship complete and retro incomplete -> stop and direct user to \`/cc-retro\`.
+2. If ship complete and retro incomplete -> stop and direct user to \`/cc-ops retro\`.
 3. Build shell command:
    - \`npx cclaw archive\`
    - append \`--name=<slug>\` when provided

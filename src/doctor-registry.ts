@@ -74,7 +74,7 @@ const RULES: DoctorRegistryRule[] = [
     }
   },
   {
-    test: /^(hook:|lifecycle:|git_hooks:)/,
+    test: /^(hook:|hooks:|lifecycle:|git_hooks:)/,
     metadata: {
       severity: "error",
       summary: "Hook wiring and lifecycle integration check.",
@@ -83,7 +83,7 @@ const RULES: DoctorRegistryRule[] = [
     }
   },
   {
-    test: /^(shim:|agents:cclaw_block|rules:cursor:workflow)/,
+    test: /^(shim:|agents:cclaw_block|rules:cursor:)/,
     metadata: {
       severity: "error",
       summary: "Harness shim and routing file consistency check.",
@@ -98,6 +98,24 @@ const RULES: DoctorRegistryRule[] = [
       summary: "Flow state and gate evidence consistency check.",
       fix: "Repair flow-state artifacts and gate evidence, then run `cclaw doctor --reconcile-gates`.",
       docRef: ref("state-and-gates.md")
+    }
+  },
+  {
+    test: /^(knowledge:|artifacts:|runs:)/,
+    metadata: {
+      severity: "error",
+      summary: "Knowledge and artifact runtime integrity check.",
+      fix: "Restore missing runtime files under `.cclaw/` or re-run `cclaw sync`.",
+      docRef: ref("runtime-layout.md")
+    }
+  },
+  {
+    test: /^(meta_skill:|protocol:|stage_skill:|context_mode:)/,
+    metadata: {
+      severity: "error",
+      summary: "Routing skill and protocol integrity check.",
+      fix: "Regenerate runtime references and skills via `cclaw sync`, then re-run doctor.",
+      docRef: ref("harness-and-routing.md")
     }
   },
   {
@@ -136,9 +154,9 @@ export function doctorCheckMetadata(checkName: string): DoctorCheckMetadata {
     }
   }
   return {
-    severity: "warning",
+    severity: "error",
     summary: "Unclassified doctor check.",
-    fix: "Review the check details and add a matching rule in doctor-registry when this check should be severity-scoped.",
+    fix: "Report this check name to cclaw maintainers so doctor-registry can classify it explicitly.",
     docRef: ref("README.md")
   };
 }

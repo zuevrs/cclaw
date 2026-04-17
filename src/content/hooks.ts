@@ -503,7 +503,7 @@ To disable suggestions persistently set ${RUNTIME_ROOT}/state/suggestion-memory.
 fi
 if [ -n "$STALE_STAGES" ]; then
   CTX="$CTX
-Stale stages pending acknowledgement: $STALE_STAGES (use /cc-rewind-ack <stage> after redo)."
+Stale stages pending acknowledgement: $STALE_STAGES (use /cc-ops rewind-ack <stage> after redo)."
 fi
 if [ -n "$KNOWLEDGE_DIGEST" ]; then
   CTX="$CTX
@@ -750,7 +750,7 @@ if [ "$CHECKPOINT_WRITTEN" -eq 0 ]; then
   CHECKPOINT_NOTE="Checkpoint update failed. Review ${RUNTIME_ROOT}/state/checkpoint.json manually."
 fi
 
-RUN_SYNC_NOTE="Run metadata sync removed; active artifacts stay in ${RUNTIME_ROOT}/artifacts until /cc-archive (or cclaw archive runtime)."
+RUN_SYNC_NOTE="Run metadata sync removed; active artifacts stay in ${RUNTIME_ROOT}/artifacts until /cc-ops archive (or cclaw archive runtime)."
 
 # --- Escape for JSON ---
 ${ESCAPE_FN}

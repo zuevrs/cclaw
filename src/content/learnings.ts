@@ -139,13 +139,3 @@ Do not edit source code from this command. Only operate on \`${KNOWLEDGE_PATH}\`
 | \`curate\` | — | Hand off to the **knowledge-curation** skill: read-only audit + soft-archive plan when the file exceeds the curation threshold. |
 `;
 }
-
-export function selfImprovementBlock(stageName: string): string {
-  return `## Operational Self-Improvement
-
-Before closeout, capture 1-3 reusable insights in \`${KNOWLEDGE_PATH}\` whenever
-the stage produced non-obvious decisions, patterns, or lessons.
-Prefer \`type=rule|pattern|lesson\` (\`compound\` stays retro-only) and set
-\`stage: "${stageName}"\` unless the insight is explicitly cross-stage.
-`;
-}
