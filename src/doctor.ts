@@ -32,6 +32,7 @@ import { validateHookDocument } from "./hook-schema.js";
 import type { HarnessId } from "./types.js";
 
 const execFileAsync = promisify(execFile);
+const PREAMBLE_COOLDOWN_MS = 15 * 60 * 1000;
 
 export interface DoctorCheck {
   name: string;
@@ -898,6 +899,83 @@ export async function doctorChecks(projectRoot: string, options: DoctorOptions =
       name: `contexts:mode:${mode}`,
       ok: await exists(modePath),
       details: modePath
+    });
+  }
+
+  const preambleLogPath = path.join(projectRoot, RUNTIME_ROOT, "state", "preamble-log.jsonl");
+  const preambleLogExists = await exists(preambleLogPath);
+  checks.push({
+    name: "state:preamble_log_exists",
+    ok: preambleLogExists,
+    details: `${RUNTIME_ROOT}/state/preamble-log.jsonl must exist for preamble budget tracking`
+  });
+  if (preambleLogExists) {
+    let duplicateHits = 0;
+    let parsedEntries = 0;
+    let malformedEntries = 0;
+    try {
+      const now = Date.now();
+      const byKey = new Map<string, number[]>();
+      const raw = await fs.readFile(preambleLogPath, "utf8");
+      const lines = raw
+        .split("\n")
+        .map((line) => line.trim())
+        .filter((line) => line.length > 0);
+      for (const line of lines) {
+        try {
+          const parsed = JSON.parse(line) as Record<string, unknown>;
+          const tsRaw = parsed.ts;
+          const stageRaw = parsed.stage;
+          const triggerRaw = parsed.trigger;
+          const hashRaw = parsed.hash;
+          if (
+            typeof tsRaw !== "string" ||
+            typeof stageRaw !== "string" ||
+            typeof triggerRaw !== "string" ||
+            typeof hashRaw !== "string"
+          ) {
+            malformedEntries += 1;
+            continue;
+          }
+          const stamp = Date.parse(tsRaw);
+          if (!Number.isFinite(stamp)) {
+            malformedEntries += 1;
+            continue;
+          }
+          if (now - stamp > 24 * 60 * 60 * 1000) {
+            continue;
+          }
+          parsedEntries += 1;
+          const key = `${stageRaw}|${triggerRaw}|${hashRaw}`;
+          const bucket = byKey.get(key) ?? [];
+          bucket.push(stamp);
+          byKey.set(key, bucket);
+        } catch {
+          malformedEntries += 1;
+        }
+      }
+      for (const stamps of byKey.values()) {
+        stamps.sort((a, b) => a - b);
+        for (let i = 1; i < stamps.length; i += 1) {
+          if (stamps[i]! - stamps[i - 1]! < PREAMBLE_COOLDOWN_MS) {
+            duplicateHits += 1;
+          }
+        }
+      }
+    } catch {
+      malformedEntries += 1;
+    }
+
+    checks.push({
+      name: "warning:preamble:dedup",
+      ok: true,
+      details: duplicateHits > 0
+        ? `warning: detected ${duplicateHits} repeated preamble emission(s) inside ${Math.floor(PREAMBLE_COOLDOWN_MS / 60000)}m cooldown window`
+        : parsedEntries > 0
+          ? `preamble budget healthy (${parsedEntries} recent preamble entry/entries checked)`
+          : malformedEntries > 0
+            ? `warning: preamble log exists but entries are malformed (${malformedEntries} line(s) ignored)`
+            : "preamble log is empty; no recent preamble emissions recorded"
     });
   }
 

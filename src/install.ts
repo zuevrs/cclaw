@@ -941,6 +941,11 @@ async function ensureSessionStateFiles(projectRoot: string): Promise<void> {
       "# Knowledge digest (auto-generated)\n\n(no entries yet)\n"
     );
   }
+
+  const preambleLogPath = path.join(stateDir, "preamble-log.jsonl");
+  if (!(await exists(preambleLogPath))) {
+    await writeFileSafe(preambleLogPath, "");
+  }
 }
 
 async function writeRulebook(projectRoot: string): Promise<void> {

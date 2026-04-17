@@ -82,14 +82,42 @@ Before adding new code/templates/rules:
 - Evidence beats volume.
 - Keep stage output concrete and testable.
 
-## Preamble rule
+## Preamble budget
 
-Use a turn preamble only for non-trivial execution turns:
-- a file-editing implementation step,
-- stage transition,
-- or multi-step operation where drift risk is real.
+This section is the single source of truth for preamble behavior.
+Do not duplicate preamble rules in AGENTS.md, harness adapters, or stage-local docs.
 
-Skip preamble for pure Q&A or tiny edits.
+### Emit when
+
+| Trigger | Machine-verifiable condition |
+|---|---|
+| Stage transition | \`flow-state.currentStage\` changes in this turn |
+| Non-trivial implementation turn | agent is about to run source-editing tools outside \`.cclaw/\` |
+| Multi-step risky operation | planned sequence contains 2+ commands with rollback/risk potential |
+
+### Skip when
+
+| Skip reason | Condition |
+|---|---|
+| Pure Q&A | no filesystem or runtime mutation planned |
+| Trivial change | single low-risk edit with no stage or plan drift |
+| Subagent dispatch payload | prompt is for spawned agent/tool call only |
+| Cooldown hit | same stage + same trigger emitted within cooldown window |
+
+### Form contract (max 4 lines)
+
+1. \`Stage:\` current stage id  
+2. \`Goal:\` concrete objective for this turn  
+3. \`Plan:\` next 1-3 actions  
+4. \`Guardrails:\` key constraints / non-goals
+
+### Cooldown
+
+- Record each emitted preamble in \`.cclaw/state/preamble-log.jsonl\` as JSON line:
+  \`{"ts","stage","runId","trigger","hash"}\`.
+- Default cooldown: 15 minutes for identical \`stage + trigger + hash\`.
+- TDD wave mode uses stricter dedupe: one preamble per wave unless scope changes.
+- If the plan changes materially, a new preamble is allowed inside cooldown.
 
 ## Operational learning
 
