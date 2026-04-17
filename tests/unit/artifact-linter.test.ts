@@ -15,6 +15,42 @@ async function writeRuntimeArtifact(root: string, fileName: string, content: str
   await fs.writeFile(path.join(root, ".cclaw/artifacts", fileName), content, "utf8");
 }
 
+function completePlanArtifact(frontmatter = ""): string {
+  const header = frontmatter.trim().length > 0 ? `${frontmatter.trim()}\n\n` : "";
+  return `${header}# Plan Artifact
+
+## Dependency Graph
+- T-1 -> T-2 -> T-3
+
+## Dependency Waves
+
+### Wave 1
+- Task IDs: T-1
+- Verification gate: schema tests pass
+
+### Wave 2
+- Task IDs: T-2
+- Depends on: Wave 1
+- Verification gate: integration tests pass
+
+## Task List
+| Task ID | Description | Acceptance criterion | Verification command | Effort |
+|---|---|---|---|---|
+| T-1 | Define schema | AC-1 | npm test | S |
+| T-2 | Implement publisher | AC-1, AC-2 | npm test | M |
+
+## Acceptance Mapping
+| Criterion ID | Task IDs |
+|---|---|
+| AC-1 | T-1, T-2 |
+| AC-2 | T-2 |
+
+## WAIT_FOR_CONFIRM
+- Status: pending
+- Confirmed by:
+`;
+}
+
 describe("artifact linter heuristics", () => {
   it("fails when required brainstorm sections are missing", async () => {
     const root = await createTempProject("artifact-lint-missing");
@@ -378,6 +414,80 @@ describe("artifact linter heuristics", () => {
     expect(modeAnalysis?.required).toBe(false);
   });
 
+  it("enforces scope-reduction scan when locked decisions section is present", async () => {
+    const root = await createTempProject("scope-strict-reduction");
+    await writeRuntimeArtifact(root, "02-scope.md", `# Scope Artifact
+
+## Prime Directives
+- Zero silent failures: every delivery failure maps to a visible state.
+- Named error surfaces: stream disconnect, auth drift, and publisher timeout.
+- Four-path data flow: happy, nil payload, empty payload, upstream error.
+- Interaction edge cases: double-open panel, reconnect after sleep.
+- Observability expectations: stream error counter, publish-to-visible lag.
+- Deferred-item handling: WebSocket channel deferred with rationale.
+
+## Premise Challenge
+- Right problem? Yes, users miss follow-ups.
+- Direct path? Durable feed is the right path.
+- What if nothing? Users continue missing events.
+
+## Implementation Alternatives
+| Option | Summary | Effort (S/M/L/XL) | Risk | Pros | Cons | Reuses |
+|---|---|---|---|---|---|---|
+| A (minimum viable) | Polling-only | S | Low | Fast | Weaker UX | REST endpoint |
+| B (recommended) | SSE + REST fallback | M | Med | Better UX | Reconnect handling | Event publisher |
+
+## Scope Mode
+- [x] selective
+
+## Mode-Specific Analysis
+- Selected mode: selective
+- Analysis: selective mode chosen to avoid unbounded scope.
+
+## In Scope / Out of Scope
+
+### In Scope
+- In-app notification feed for now
+
+### Out of Scope
+- Email/SMS providers
+
+## Discretion Areas
+- Badge rendering strategy
+
+## Deferred Items
+| Item | Rationale |
+|---|---|
+| WebSocket channel | Not justified for current load |
+
+## Error & Rescue Registry
+| Capability | Failure mode | Detection | Fallback |
+|---|---|---|---|
+| Event delivery | SSE drops | Heartbeat timeout | REST polling |
+
+## Locked Decisions (D-XX)
+| ID | Decision | Rationale |
+|---|---|---|
+| D-01 | Keep feed query in current API contract | Avoid breaking consumers for now |
+
+## Completion Dashboard
+- Checklist findings: 9/9 complete
+- Resolved decisions count: 5
+- Unresolved decisions: None
+
+## Scope Summary
+- Selected mode: selective
+- Accepted scope: durable feed + SSE
+- Deferred: WebSocket channel
+- Explicitly excluded: outbound channels
+`);
+
+    const result = await lintArtifact(root, "scope");
+    const reduction = result.findings.find((f) => f.section === "No Scope Reduction Language");
+    expect(reduction?.required).toBe(true);
+    expect(reduction?.found).toBe(false);
+  });
+
   it("fails design artifact when Codebase Investigation is missing", async () => {
     const root = await createTempProject("design-missing-cbi");
     await writeRuntimeArtifact(root, "03-design.md", `# Design Artifact
@@ -668,6 +778,151 @@ API -> Service -> DB
 
     const result = await lintArtifact(root, "plan");
     expect(result.passed).toBe(true);
+  });
+
+  it("enables strict plan guard checks when frontmatter is present", async () => {
+    const root = await createTempProject("plan-strict-guards");
+    const frontmatter = `---
+stage: plan
+schema_version: 1
+version: 0.18.0
+feature: test-feature
+locked_decisions: []
+inputs_hash: sha256:pending
+---`;
+    const planWithViolations = completePlanArtifact(frontmatter).replace(
+      "| T-2 | Implement publisher | AC-1, AC-2 | npm test | M |",
+      "| T-2 | TODO implement publisher for now | AC-1, AC-2 | npm test | M |"
+    );
+    await writeRuntimeArtifact(root, "05-plan.md", planWithViolations);
+    await fs.writeFile(
+      path.join(root, ".cclaw/artifacts/02-scope.md"),
+      `# Scope Artifact
+
+## Locked Decisions (D-XX)
+| ID | Decision | Rationale |
+|---|---|---|
+| D-01 | Keep audit trail in JSONL | compliance |
+`,
+      "utf8"
+    );
+
+    const result = await lintArtifact(root, "plan");
+    const placeholder = result.findings.find((f) => f.section === "No Placeholder Enforcement");
+    const trace = result.findings.find((f) => f.section === "Locked Decision Traceability");
+    const reduction = result.findings.find((f) => f.section === "No Scope Reduction Language");
+
+    expect(placeholder?.required).toBe(true);
+    expect(placeholder?.found).toBe(false);
+    expect(trace?.required).toBe(true);
+    expect(trace?.found).toBe(false);
+    expect(reduction?.required).toBe(true);
+    expect(reduction?.found).toBe(false);
+  });
+
+  it("keeps plan guard checks advisory in legacy artifacts without strict markers", async () => {
+    const root = await createTempProject("plan-legacy-guards");
+    const legacyPlan = completePlanArtifact().replace(
+      "| T-2 | Implement publisher | AC-1, AC-2 | npm test | M |",
+      "| T-2 | TODO implement publisher for now | AC-1, AC-2 | npm test | M |"
+    );
+    await writeRuntimeArtifact(root, "05-plan.md", legacyPlan);
+    await fs.writeFile(
+      path.join(root, ".cclaw/artifacts/02-scope.md"),
+      `# Scope Artifact
+
+## Locked Decisions (D-XX)
+| ID | Decision | Rationale |
+|---|---|---|
+| D-01 | Keep audit trail in JSONL | compliance |
+`,
+      "utf8"
+    );
+
+    const result = await lintArtifact(root, "plan");
+    const placeholder = result.findings.find((f) => f.section === "No Placeholder Enforcement");
+    const trace = result.findings.find((f) => f.section === "Locked Decision Traceability");
+    const reduction = result.findings.find((f) => f.section === "No Scope Reduction Language");
+
+    expect(result.passed).toBe(true);
+    expect(placeholder?.required).toBe(false);
+    expect(trace?.required).toBe(false);
+    expect(reduction?.required).toBe(false);
+  });
+
+  it("reports frontmatter validation errors for stage/schema/hash mismatches", async () => {
+    const root = await createTempProject("plan-frontmatter-invalid");
+    const invalidFrontmatter = `---
+stage: scope
+schema_version: 2
+version: 0.18.0
+feature: test-feature
+locked_decisions: []
+inputs_hash: sha256:not-valid
+---`;
+    await writeRuntimeArtifact(root, "05-plan.md", completePlanArtifact(invalidFrontmatter));
+
+    const result = await lintArtifact(root, "plan");
+    const frontmatter = result.findings.find((f) => f.section === "Frontmatter");
+
+    expect(frontmatter?.required).toBe(true);
+    expect(frontmatter?.found).toBe(false);
+    expect(frontmatter?.details).toContain('stage must be "plan"');
+  });
+
+  it("reports missing frontmatter key details when strict block is incomplete", async () => {
+    const root = await createTempProject("plan-frontmatter-missing-key");
+    const incompleteFrontmatter = `---
+stage: plan
+schema_version: 1
+version: 0.18.0
+feature: test-feature
+locked_decisions: []
+---`;
+    await writeRuntimeArtifact(root, "05-plan.md", completePlanArtifact(incompleteFrontmatter));
+
+    const result = await lintArtifact(root, "plan");
+    const frontmatter = result.findings.find((f) => f.section === "Frontmatter");
+
+    expect(frontmatter?.required).toBe(true);
+    expect(frontmatter?.found).toBe(false);
+    expect(frontmatter?.details).toContain("missing required key");
+  });
+
+  it("reports schema version mismatch when frontmatter uses non-v1 schema", async () => {
+    const root = await createTempProject("plan-frontmatter-schema-mismatch");
+    const badSchemaFrontmatter = `---
+stage: plan
+schema_version: 2
+version: 0.18.0
+feature: test-feature
+locked_decisions: []
+inputs_hash: sha256:pending
+---`;
+    await writeRuntimeArtifact(root, "05-plan.md", completePlanArtifact(badSchemaFrontmatter));
+
+    const result = await lintArtifact(root, "plan");
+    const frontmatter = result.findings.find((f) => f.section === "Frontmatter");
+    expect(frontmatter?.found).toBe(false);
+    expect(frontmatter?.details).toContain('schema_version must be "1"');
+  });
+
+  it("reports invalid inputs_hash format in frontmatter", async () => {
+    const root = await createTempProject("plan-frontmatter-hash-mismatch");
+    const badHashFrontmatter = `---
+stage: plan
+schema_version: 1
+version: 0.18.0
+feature: test-feature
+locked_decisions: []
+inputs_hash: sha256:not-a-real-hash
+---`;
+    await writeRuntimeArtifact(root, "05-plan.md", completePlanArtifact(badHashFrontmatter));
+
+    const result = await lintArtifact(root, "plan");
+    const frontmatter = result.findings.find((f) => f.section === "Frontmatter");
+    expect(frontmatter?.found).toBe(false);
+    expect(frontmatter?.details).toContain("inputs_hash must be");
   });
 
   it("fails plan when Dependency Graph is missing", async () => {
