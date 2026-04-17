@@ -1,5 +1,7 @@
 import fs from "node:fs/promises";
 import path from "node:path";
+import { execFile } from "node:child_process";
+import { promisify } from "node:util";
 import { describe, expect, it } from "vitest";
 import {
   createFeature,
@@ -10,50 +12,59 @@ import {
 } from "../../src/feature-system.js";
 import { createTempProject } from "../helpers/index.js";
 
+const execFileAsync = promisify(execFile);
+
+async function git(cwd: string, args: string[]): Promise<void> {
+  await execFileAsync("git", args, { cwd });
+}
+
+async function initGitRepo(projectRoot: string): Promise<void> {
+  await git(projectRoot, ["init"]);
+  await git(projectRoot, ["config", "user.email", "tests@example.com"]);
+  await git(projectRoot, ["config", "user.name", "Test Runner"]);
+  await fs.writeFile(path.join(projectRoot, "README.md"), "# temp\n", "utf8");
+  await git(projectRoot, ["add", "README.md"]);
+  await git(projectRoot, ["commit", "-m", "init"]);
+}
+
 describe("feature system", () => {
-  it("bootstraps default feature metadata and snapshot dirs", async () => {
+  it("bootstraps default feature metadata and worktree registry", async () => {
     const root = await createTempProject("feature-bootstrap");
     await fs.mkdir(path.join(root, ".cclaw/artifacts"), { recursive: true });
     await fs.mkdir(path.join(root, ".cclaw/state"), { recursive: true });
+    await initGitRepo(root);
 
     await ensureFeatureSystem(root);
     const active = await readActiveFeature(root);
     const features = await listFeatures(root);
+    const registry = JSON.parse(
+      await fs.readFile(path.join(root, ".cclaw/state/worktrees.json"), "utf8")
+    ) as { entries?: Array<{ featureId?: string }> };
 
     expect(active).toBe("default");
     expect(features).toContain("default");
-    await expect(
-      fs.stat(path.join(root, ".cclaw/features/default/artifacts"))
-    ).resolves.toBeTruthy();
-    await expect(
-      fs.stat(path.join(root, ".cclaw/features/default/state"))
-    ).resolves.toBeTruthy();
+    expect(
+      (registry.entries ?? []).some((entry) => entry.featureId === "default")
+    ).toBe(true);
+    await expect(fs.stat(path.join(root, ".cclaw/worktrees"))).resolves.toBeTruthy();
   });
 
-  it("creates and switches feature snapshots", async () => {
+  it("creates git worktrees and switches active feature pointer", async () => {
     const root = await createTempProject("feature-switch");
     await fs.mkdir(path.join(root, ".cclaw/artifacts"), { recursive: true });
     await fs.mkdir(path.join(root, ".cclaw/state"), { recursive: true });
-    await fs.writeFile(path.join(root, ".cclaw/artifacts/00-idea.md"), "# Alpha\n", "utf8");
-    await fs.writeFile(
-      path.join(root, ".cclaw/state/flow-state.json"),
-      JSON.stringify({ currentStage: "scope", completedStages: ["brainstorm"], activeRunId: "active" }, null, 2),
-      "utf8"
-    );
+    await initGitRepo(root);
 
     await ensureFeatureSystem(root);
     await createFeature(root, "beta", { cloneActive: false });
+    await expect(fs.stat(path.join(root, ".cclaw/worktrees/beta"))).resolves.toBeTruthy();
+
     await switchActiveFeature(root, "beta");
-
     expect(await readActiveFeature(root)).toBe("beta");
-    const activeArtifacts = await fs.readdir(path.join(root, ".cclaw/artifacts"));
-    expect(activeArtifacts).toEqual([]);
 
-    await fs.writeFile(path.join(root, ".cclaw/artifacts/00-idea.md"), "# Beta\n", "utf8");
     await switchActiveFeature(root, "default");
-
     expect(await readActiveFeature(root)).toBe("default");
-    const restored = await fs.readFile(path.join(root, ".cclaw/artifacts/00-idea.md"), "utf8");
-    expect(restored).toContain("Alpha");
+    const features = await listFeatures(root);
+    expect(features).toContain("beta");
   });
 });

@@ -25,9 +25,9 @@ export const TDD: StageSchemaInput = {
   checklist: [
     "Select plan slice — pick one task from the plan. Do not batch multiple tasks.",
     "Map to acceptance criterion — identify the specific spec criterion this test proves.",
-    "RED: Write behavior-focused test — test the expected behavior, not implementation details. Tests MUST fail.",
+    "Dispatch mandatory `test-author` subagent in `TEST_RED_ONLY` mode — produce failing behavior tests and RED evidence only (no production edits).",
     "RED: Capture failure output — copy the exact failure output as RED evidence. Record in artifact.",
-    "GREEN: Minimal implementation — write the smallest code change that makes the RED tests pass. No extra features.",
+    "Dispatch `test-author` subagent in `BUILD_GREEN_REFACTOR` mode — minimal implementation + full-suite GREEN + refactor notes.",
     "GREEN: Run full suite — execute ALL tests, not just the ones you wrote. The full suite must be GREEN.",
     "GREEN: Verify no regressions — if any existing test breaks, fix the regression before proceeding.",
     "REFACTOR: Improve code quality — without changing behavior. Document what you changed and why.",
@@ -37,6 +37,7 @@ export const TDD: StageSchemaInput = {
   ],
   interactionProtocol: [
     "Pick one planned slice at a time.",
+    "Controller owns orchestration; execution runs through the mandatory `test-author` delegation for RED then GREEN/REFACTOR modes.",
     "Write behavior-focused tests before changing implementation (RED).",
     "Capture and store failing output as RED evidence.",
     "Apply minimal change to satisfy RED tests (GREEN).",
@@ -47,9 +48,9 @@ export const TDD: StageSchemaInput = {
   ],
   process: [
     "Select slice and map to acceptance criterion.",
-    "Write test(s) that fail for expected reason (RED).",
+    "Dispatch `test-author` in TEST_RED_ONLY mode and produce failing test(s) for expected reason (RED).",
     "Run tests and capture failure output.",
-    "Implement smallest change needed for GREEN.",
+    "Dispatch `test-author` in BUILD_GREEN_REFACTOR mode and implement smallest change needed for GREEN.",
     "Run full tests and build checks.",
     "Perform refactor pass preserving behavior.",
     "Record RED, GREEN, and REFACTOR evidence in artifact.",

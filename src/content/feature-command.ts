@@ -1,22 +1,22 @@
 import { RUNTIME_ROOT } from "../constants.js";
 
-const FEATURE_SKILL_FOLDER = "feature-workspaces";
-const FEATURE_SKILL_NAME = "feature-workspaces";
+const FEATURE_SKILL_FOLDER = "using-git-worktrees";
+const FEATURE_SKILL_NAME = "using-git-worktrees";
 
 function activeFeaturePath(): string {
   return `${RUNTIME_ROOT}/state/active-feature.json`;
 }
 
-function featuresRoot(): string {
+function worktreeRegistryPath(): string {
+  return `${RUNTIME_ROOT}/state/worktrees.json`;
+}
+
+function managedWorktreesRoot(): string {
+  return `${RUNTIME_ROOT}/worktrees`;
+}
+
+function legacyFeaturesRoot(): string {
   return `${RUNTIME_ROOT}/features`;
-}
-
-function runtimeArtifactsPath(): string {
-  return `${RUNTIME_ROOT}/artifacts`;
-}
-
-function runtimeStatePath(): string {
-  return `${RUNTIME_ROOT}/state`;
 }
 
 export function featureCommandContract(): string {
@@ -24,49 +24,54 @@ export function featureCommandContract(): string {
 
 ## Purpose
 
-Manage multi-feature workspaces without flow-state/artifact collisions.
+Manage parallel feature execution using git worktrees (git-native isolation).
 
-The active runtime remains:
-- \`${runtimeArtifactsPath()}\` (active artifacts)
-- \`${runtimeStatePath()}\` (active state)
-
-Feature snapshots live under \`${featuresRoot()}/<feature-id>/\`.
+Runtime state/artifacts are **never** copied between features anymore. Isolation is branch/worktree-level.
 
 ## HARD-GATE
 
-- Never overwrite another feature snapshot silently.
-- Before switching feature, snapshot the current active runtime first.
-- Keep \`${activeFeaturePath()}\` as the single source of "current feature".
+- Do not mutate feature context by copying \`${RUNTIME_ROOT}/artifacts\` or \`${RUNTIME_ROOT}/state\` between feature IDs.
+- Use \`git worktree add\` for new feature execution paths.
+- Keep \`${activeFeaturePath()}\` + \`${worktreeRegistryPath()}\` as the feature routing source of truth.
+- Treat \`${legacyFeaturesRoot()}/\` as read-only migration data.
 
 ## Subcommands
 
 ### \`/cc-ops feature status\`
-Show active feature id and snapshot location.
+Show:
+- active feature id from \`${activeFeaturePath()}\`
+- resolved worktree entry from \`${worktreeRegistryPath()}\`
+- active workspace path
 
 ### \`/cc-ops feature list\`
-List all feature ids in \`${featuresRoot()}/\` (directory names).
+List registered feature worktrees from \`${worktreeRegistryPath()}\` and mark active entry.
 
 ### \`/cc-ops feature new <feature-id>\`
-Create \`${featuresRoot()}/<feature-id>/artifacts\` and \`${featuresRoot()}/<feature-id>/state\`.
+1. Validate \`feature-id\` (lowercase slug, letters/numbers/dashes).
+2. Create worktree under \`${managedWorktreesRoot()}/<feature-id>\`.
+3. Create/switch branch using \`git worktree add\` (prefer \`feature/<feature-id>\` naming).
+4. Register entry in \`${worktreeRegistryPath()}\`.
 
-Optional flag:
-- \`--clone-active\`: clone current active runtime into the new feature snapshot.
+Optional flags:
+- \`--clone-active\`: seed from active branch HEAD (default behavior).
+- \`--switch\`: mark new feature as active after registration.
 
 ### \`/cc-ops feature switch <feature-id>\`
-1. Snapshot current active runtime into \`${featuresRoot()}/<active>/\`.
-2. Restore target snapshot from \`${featuresRoot()}/<feature-id>/\` into active runtime:
-   - \`${runtimeArtifactsPath()}\`
-   - \`${runtimeStatePath()}\` (preserve \`active-feature.json\`)
-3. Update \`${activeFeaturePath()}\` with \`activeFeature=<feature-id>\`.
+1. Validate that \`<feature-id>\` exists in \`${worktreeRegistryPath()}\`.
+2. Update \`${activeFeaturePath()}\`.
+3. Print target worktree path and instruct the operator/agent to continue from that workspace root.
 
-If the target snapshot is empty, initialize runtime as a fresh flow.
+## Migration note
+
+Legacy snapshot folders under \`${legacyFeaturesRoot()}/\` are supported as read-only references during migration and should not be used for new execution.
 
 ## Output
 
 Always print:
 - active feature before
 - active feature after
-- whether snapshot/restore changed files
+- target workspace path
+- workspace source (\`git-worktree\` | \`workspace\` | \`legacy-snapshot\`)
 
 ## Primary skill
 
@@ -77,51 +82,49 @@ Always print:
 export function featureCommandSkillMarkdown(): string {
   return `---
 name: ${FEATURE_SKILL_NAME}
-description: "Manage cclaw multi-feature workspaces (status/list/new/switch) while preserving active flow runtime."
+description: "Manage cclaw feature isolation using git worktrees (status/list/new/switch)."
 ---
 
-# /cc-ops feature — Feature Workspace Manager
+# /cc-ops feature — Git Worktree Manager
 
 ## HARD-GATE
 
-Do not switch feature by editing only \`active-feature.json\`. A valid switch must snapshot current runtime and restore target runtime.
+Do not implement feature switching by copying runtime files between feature IDs. Use git worktrees and registry updates only.
 
 ## Paths
 
 - Active pointer: \`${activeFeaturePath()}\`
-- Feature snapshots: \`${featuresRoot()}/<feature-id>/\`
-- Active runtime artifacts: \`${runtimeArtifactsPath()}\`
-- Active runtime state: \`${runtimeStatePath()}\`
+- Worktree registry: \`${worktreeRegistryPath()}\`
+- Managed worktree root: \`${managedWorktreesRoot()}\`
+- Legacy snapshots (read-only): \`${legacyFeaturesRoot()}\`
 
 ## Protocol
 
 ### status
 1. Read \`${activeFeaturePath()}\`.
-2. Print active feature id and its snapshot folder.
+2. Resolve active entry in \`${worktreeRegistryPath()}\`.
+3. Print active id + workspace path + source.
 
 ### list
-1. Enumerate directories in \`${featuresRoot()}/\`.
+1. Enumerate entries in \`${worktreeRegistryPath()}\`.
 2. Mark the active one.
+3. Highlight any \`legacy-snapshot\` entries as migration-only.
 
-### new <feature-id> [--clone-active]
-1. Validate \`feature-id\` (lowercase slug, letters/numbers/dashes).
-2. Create snapshot dirs:
-   - \`${featuresRoot()}/<feature-id>/artifacts\`
-   - \`${featuresRoot()}/<feature-id>/state\`
-3. If \`--clone-active\`: copy active runtime artifacts/state into the new snapshot.
-4. Do not change active feature unless the user explicitly requests switch.
+### new <feature-id> [--clone-active] [--switch]
+1. Validate \`feature-id\` and ensure not already registered.
+2. Run \`git worktree add\` to create \`${managedWorktreesRoot()}/<feature-id>\`.
+3. Register entry in \`${worktreeRegistryPath()}\` with branch + path + source.
+4. If \`--switch\`, update \`${activeFeaturePath()}\`.
 
 ### switch <feature-id>
-1. Read current active feature id.
-2. Snapshot current runtime into current feature snapshot.
-3. Restore target snapshot into active runtime.
-4. Update \`${activeFeaturePath()}\`.
-5. Report stage/run after restore (\`flow-state.json\`).
+1. Validate target exists in \`${worktreeRegistryPath()}\`.
+2. Update \`${activeFeaturePath()}\`.
+3. Report target path and require continuation from that workspace root.
 
 ## Safety checks
 
 - If target feature does not exist: block and suggest \`/cc-ops feature new <id>\`.
-- If snapshot copy fails: abort switch, keep current active feature unchanged.
-- Preserve global pointer file \`active-feature.json\` when restoring state.
+- If \`git worktree add\` fails: do not write partial registry updates.
+- If active feature maps to \`legacy-snapshot\`, report read-only migration warning.
 `;
 }

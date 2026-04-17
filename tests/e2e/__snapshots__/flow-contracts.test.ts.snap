@@ -702,8 +702,10 @@ You MUST complete these steps in order:
 3. Group tasks into dependency waves — wave N+1 cannot start until wave N has verification evidence.
 4. Slice into vertical tasks — each task targets 2-5 minutes, produces one testable outcome, and touches one coherent area.
 5. Attach verification — every task has an acceptance criterion mapping and a concrete verification command.
-6. Define checkpoints — mark points where progress should be validated before continuing.
-7. WAIT_FOR_CONFIRM — write plan artifact and explicitly pause. **STOP.** Do NOT proceed until user confirms. Then update \`flow-state.json\` and tell user to run \`/cc-next\`.
+6. Map scope Locked Decisions — every D-XX from scope is referenced by at least one plan task (or explicitly marked deferred with reason).
+7. Run anti-placeholder + anti-scope-reduction scans — block \`TODO/TBD/...\` and phrasing like \`v1\`, \`for now\`, \`later\` for locked boundaries.
+8. Define checkpoints — mark points where progress should be validated before continuing.
+9. WAIT_FOR_CONFIRM — write plan artifact and explicitly pause. **STOP.** Do NOT proceed until user confirms. Then update \`flow-state.json\` and tell user to run \`/cc-next\`.
 
 ## Good vs Bad (at-a-glance)
 
@@ -761,8 +763,9 @@ Summary of what the reference covers:
 2. Split work into small vertical slices (target 2-5 minute tasks).
 3. Publish explicit dependency waves with entry and exit checks for each wave.
 4. Attach verification step to every task.
-5. Enforce WAIT_FOR_CONFIRM: present the plan summary with options (A) Approve / (B) Revise / (C) Reject.
-6. **STOP.** Do NOT proceed until user explicitly approves. Then update \`flow-state.json\` and tell user to run \`/cc-next\`.
+5. Preserve locked scope boundaries: no silent scope reduction language in task rows.
+6. Enforce WAIT_FOR_CONFIRM: present the plan summary with options (A) Approve / (B) Revise / (C) Reject.
+7. **STOP.** Do NOT proceed until user explicitly approves. Then update \`flow-state.json\` and tell user to run \`/cc-next\`.
 
 Shared decision/ask-user protocol:
 \`.cclaw/references/protocols/decision.md\`
@@ -779,6 +782,7 @@ Shared decision/ask-user protocol:
 ## Required Evidence
 - [ ] Artifact written to \`.cclaw/artifacts/05-plan.md\`.
 - [ ] Task list includes acceptance mapping.
+- [ ] Locked decision coverage table present with D-XX trace links.
 - [ ] Dependency graph documented.
 - [ ] Dependency waves documented with wave-by-wave verification gates.
 - [ ] WAIT_FOR_CONFIRM status recorded.
@@ -787,8 +791,9 @@ Shared decision/ask-user protocol:
 1. Build dependency graph and ordered slices.
 2. Group slices into execution waves and define gate criteria per wave.
 3. Define each task with acceptance mapping and verification commands.
-4. Record checkpoints and blockers.
-5. Write plan artifact and pause at WAIT_FOR_CONFIRM.
+4. Trace every locked decision (D-XX) to plan tasks or explicit defer rationale.
+5. Record checkpoints and blockers.
+6. Write plan artifact and pause at WAIT_FOR_CONFIRM.
 
 ## Review Sections
 
@@ -829,7 +834,7 @@ Reads from:
 Writes to:
 - .cclaw/artifacts/05-plan.md
 
-Rule: Every task must trace to a spec acceptance criterion. Every downstream RED test must trace to a plan task.
+Rule: Every task must trace to a spec acceptance criterion. Every locked scope decision (D-XX) must trace to at least one plan task or explicit defer rationale. Every downstream RED test must trace to a plan task.
 
 ## Artifact Validation
 
@@ -839,10 +844,12 @@ Rule: Every task must trace to a spec acceptance criterion. Every downstream RED
 | Dependency Waves | REQUIRED | Every task belongs to a wave. Each wave has an exit gate and dependency statement. |
 | Task List | REQUIRED | Each task row includes ID, description, acceptance criterion, verification command, and effort estimate (S/M/L). Every task must also carry a minutes estimate within the 2-5 minute budget. |
 | Acceptance Mapping | REQUIRED | Every spec criterion is covered by at least one task. |
+| Locked Decision Coverage | recommended | Every locked decision ID (D-XX) from scope is listed with linked task IDs or explicit defer rationale. |
 | Risk Assessment | recommended | If present: per-task or per-wave risk identification with likelihood, impact, and mitigation strategy. |
 | Boundary Map | recommended | If present: per-wave or per-task interface contracts listing what each task produces (exports) and consumes (imports) from other tasks. |
 | WAIT_FOR_CONFIRM | REQUIRED | Explicit marker present. Status: pending until user approves. |
-| No-Placeholder Scan | recommended | If present: confirmation that a text scan for \`TODO\`, \`TBD\`, \`FIXME\`, \`<fill-in>\`, \`<your-*-here>\`, \`xxx\`, or bare ellipses has zero hits in the task list. A placeholder is a deferred decision masquerading as a plan. |
+| No-Placeholder Scan | recommended | Confirmation that a text scan for \`TODO\`, \`TBD\`, \`FIXME\`, \`<fill-in>\`, \`<your-*-here>\`, \`xxx\`, or bare ellipses has zero hits in the task list. A placeholder is a deferred decision masquerading as a plan. |
+| No Scope Reduction Language Scan | recommended | Confirmation that scope-reduction phrases (\`v1\`, \`for now\`, \`later\`, \`temporary\`, \`placeholder\`) are absent from task rows when locked decisions exist. |
 
 
 ## Anti-Patterns & Red Flags
@@ -850,15 +857,19 @@ Rule: Every task must trace to a spec acceptance criterion. Every downstream RED
 - Tasks without verification steps
 - Starting execution before approval
 - Tasks that touch multiple unrelated areas
+- Using placeholder tokens or scope-reduction phrases (\`v1\`, \`for now\`, \`later\`) in task definitions
 - tasks too broad
 - dependency uncertainty unresolved
 - wave boundaries are unclear
+- locked decisions from scope are not mapped to tasks
 - no explicit confirmation
 - No dependency graph
 - No WAIT_FOR_CONFIRM marker
 - No explicit dependency waves
 - Tasks exceed one coherent outcome
 - No acceptance mapping
+- Locked decisions are missing or not mapped
+- Scope-reduction language appears without explicit approved defer decision
 
 ## Verification
 - [ ] plan quality gates complete
@@ -979,9 +990,9 @@ You MUST complete these steps in order:
 
 1. Select plan slice — pick one task from the plan. Do not batch multiple tasks.
 2. Map to acceptance criterion — identify the specific spec criterion this test proves.
-3. RED: Write behavior-focused test — test the expected behavior, not implementation details. Tests MUST fail.
+3. Dispatch mandatory \`test-author\` subagent in \`TEST_RED_ONLY\` mode — produce failing behavior tests and RED evidence only (no production edits).
 4. RED: Capture failure output — copy the exact failure output as RED evidence. Record in artifact.
-5. GREEN: Minimal implementation — write the smallest code change that makes the RED tests pass. No extra features.
+5. Dispatch \`test-author\` subagent in \`BUILD_GREEN_REFACTOR\` mode — minimal implementation + full-suite GREEN + refactor notes.
 6. GREEN: Run full suite — execute ALL tests, not just the ones you wrote. The full suite must be GREEN.
 7. GREEN: Verify no regressions — if any existing test breaks, fix the regression before proceeding.
 8. REFACTOR: Improve code quality — without changing behavior. Document what you changed and why.
@@ -1055,13 +1066,14 @@ Summary of what the reference covers:
 
 ## Interaction Protocol
 1. Pick one planned slice at a time.
-2. Write behavior-focused tests before changing implementation (RED).
-3. Capture and store failing output as RED evidence.
-4. Apply minimal change to satisfy RED tests (GREEN).
-5. Run full suite, not partial checks, for GREEN validation.
-6. Refactor without changing behavior and document rationale (REFACTOR).
-7. Stop if regressions appear and fix before proceeding.
-8. If a test passes unexpectedly, investigate: does the behavior already exist, or is the test wrong?
+2. Controller owns orchestration; execution runs through the mandatory \`test-author\` delegation for RED then GREEN/REFACTOR modes.
+3. Write behavior-focused tests before changing implementation (RED).
+4. Capture and store failing output as RED evidence.
+5. Apply minimal change to satisfy RED tests (GREEN).
+6. Run full suite, not partial checks, for GREEN validation.
+7. Refactor without changing behavior and document rationale (REFACTOR).
+8. Stop if regressions appear and fix before proceeding.
+9. If a test passes unexpectedly, investigate: does the behavior already exist, or is the test wrong?
 
 Shared decision/ask-user protocol:
 \`.cclaw/references/protocols/decision.md\`
@@ -1070,9 +1082,8 @@ Shared decision/ask-user protocol:
 
 Execute the current dependency wave task-by-task (RED -> GREEN -> REFACTOR).
 Stop on BLOCKED status or when user input is required.
-Apply preamble budget discipline: one preamble per wave, then continue without
-repeating it for each task. Re-emit only when the wave boundary changes or the
-plan changes materially.
+Apply concise turn announces: one announce per wave boundary (or when risk/plan
+changes materially), then execute tasks without repetitive boilerplate.
 
 Detailed walkthrough:
 \`.cclaw/references/stages/tdd-wave-walkthrough.md\`
@@ -1098,9 +1109,9 @@ Detailed walkthrough:
 
 ## Process
 1. Select slice and map to acceptance criterion.
-2. Write test(s) that fail for expected reason (RED).
+2. Dispatch \`test-author\` in TEST_RED_ONLY mode and produce failing test(s) for expected reason (RED).
 3. Run tests and capture failure output.
-4. Implement smallest change needed for GREEN.
+4. Dispatch \`test-author\` in BUILD_GREEN_REFACTOR mode and implement smallest change needed for GREEN.
 5. Run full tests and build checks.
 6. Perform refactor pass preserving behavior.
 7. Record RED, GREEN, and REFACTOR evidence in artifact.
@@ -1527,7 +1538,7 @@ Do NOT ship, merge, or release until both review layers complete with an explici
 - \`.cclaw/artifacts/06-tdd.md\`
 - \`.cclaw/artifacts/04-spec.md\`
 - \`.cclaw/artifacts/05-plan.md\`
-4. Stream \`.cclaw/knowledge.jsonl\` and apply relevant JSON-line entries (strict schema: type, trigger, action, confidence, domain, stage, created, project).
+4. Stream \`.cclaw/knowledge.jsonl\` and apply relevant JSON-line entries (strict schema: type, trigger, action, confidence, domain, stage, origin_stage, origin_feature, frequency, universality, maturity, created, first_seen_ts, last_seen_ts, project).
 5. Write stage output to \`.cclaw/artifacts/07-review.md\` and \`.cclaw/artifacts/07-review-army.json\`.
 6. Do NOT copy artifacts into \`.cclaw/runs/\`; archival is handled by \`/cc-ops archive\` (agent-facing wrapper over archive runtime).
 
@@ -1571,7 +1582,7 @@ Do NOT merge, push, or finalize without a passed preflight check, written rollba
 - \`.cclaw/artifacts/06-tdd.md\`
 - \`.cclaw/artifacts/05-plan.md\`
 - \`.cclaw/artifacts/04-spec.md\`
-4. Stream \`.cclaw/knowledge.jsonl\` and apply relevant JSON-line entries (strict schema: type, trigger, action, confidence, domain, stage, created, project).
+4. Stream \`.cclaw/knowledge.jsonl\` and apply relevant JSON-line entries (strict schema: type, trigger, action, confidence, domain, stage, origin_stage, origin_feature, frequency, universality, maturity, created, first_seen_ts, last_seen_ts, project).
 5. Write stage output to \`.cclaw/artifacts/08-ship.md\`.
 6. Do NOT copy artifacts into \`.cclaw/runs/\`; archival is handled by \`/cc-ops archive\` (agent-facing wrapper over archive runtime).
 

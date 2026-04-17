@@ -53,6 +53,7 @@ export const SCOPE: StageSchemaInput = {
     "Run mode-specific analysis that matches the selected scope mode.",
     "Walk through scope review sections one at a time.",
     "Write explicit scope contract, discretion areas, and deferred items.",
+    "Freeze non-negotiable boundaries as stable Locked Decisions (D-XX IDs).",
     "Produce scope summary plus completion dashboard (checklist findings, number of resolved decisions, unresolved items or `None`)."
   ],
   requiredGates: [
@@ -68,6 +69,7 @@ export const SCOPE: StageSchemaInput = {
     "In-scope and out-of-scope lists are explicit.",
     "Discretion areas are explicit (or marked as `None`).",
     "Selected mode and rationale are documented.",
+    "Locked Decisions section lists stable D-XX IDs for non-negotiable boundaries.",
     "Premise challenge findings documented.",
     "Deferred items list with one-line rationale for each.",
     "Completion dashboard lists checklist findings, decision count, and unresolved items (or `None`)."
@@ -93,6 +95,7 @@ export const SCOPE: StageSchemaInput = {
     "discretion areas recorded explicitly",
     "required gates marked satisfied",
     "deferred list recorded explicitly",
+    "locked decisions captured with stable D-XX IDs",
     "completion dashboard produced",
     "scope summary produced"
   ],
@@ -103,7 +106,8 @@ export const SCOPE: StageSchemaInput = {
     "Sycophantic agreement without evidence-based pushback",
     "Hedged recommendations that avoid taking a position",
     "Batching multiple scope issues into one question",
-    "Re-arguing for smaller scope after user rejects reduction"
+    "Re-arguing for smaller scope after user rejects reduction",
+    "Using scope-reduction placeholders (`v1`, `for now`, `we can do later`) instead of explicit user-approved boundaries"
   ],
   redFlags: [
     "No selected mode in artifact",
@@ -112,9 +116,10 @@ export const SCOPE: StageSchemaInput = {
     "No deferred/not-in-scope section",
     "No user approval marker",
     "Premise challenge missing or superficial",
-    "No implementation alternatives evaluated"
+    "No implementation alternatives evaluated",
+    "Missing Locked Decisions section or decisions without D-XX IDs"
   ],
-  policyNeedles: ["Scope mode", "In Scope", "Out of Scope", "Discretion Areas", "NOT in scope", "Premise Challenge"],
+  policyNeedles: ["Scope mode", "In Scope", "Out of Scope", "Discretion Areas", "NOT in scope", "Premise Challenge", "Locked Decisions"],
   artifactFile: "02-scope.md",
   next: "design",
   reviewSections: [
@@ -176,6 +181,7 @@ export const SCOPE: StageSchemaInput = {
     { section: "Prime Directives", required: true, validationRule: "For each scoped capability: named failure modes, explicit error surface, four data-flow paths, interaction edge cases, observability expectations, and deferred-item handling." },
     { section: "Premise Challenge", required: true, validationRule: "Must contain explicit answers to: right problem? direct path? what if nothing?" },
     { section: "Requirements", required: true, validationRule: "Table of stable requirement IDs (R1, R2, R3…) one per row with observable outcome, priority, and source. IDs are assigned once and never renumbered across scope/design/spec/plan/review; dropped requirements stay with Priority `DROPPED`." },
+    { section: "Locked Decisions (D-XX)", required: false, validationRule: "List of stable locked decisions with IDs D-01, D-02... Each ID appears once, includes rationale, and is intended for downstream cross-stage traceability." },
     { section: "Implementation Alternatives", required: true, validationRule: "2-3 options with Name, Summary, Effort, Risk, Pros, Cons, and Reuses. Must include minimal viable and ideal architecture options." },
     { section: "Scope Mode", required: true, validationRule: "Must state selected mode and rationale with default heuristic justification." },
     { section: "Mode-Specific Analysis", required: true, validationRule: "Must document the analysis matching the selected scope mode: EXPAND (10x and delight opportunities), SELECTIVE (hold-scope baseline then cherry-picked expansions), HOLD (minimum-change-set hardening), REDUCE (ruthless cuts and follow-up split)." },

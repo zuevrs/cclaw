@@ -24,7 +24,6 @@ import { tddLogCommandContract, tddLogCommandSkillMarkdown } from "./content/tdd
 import { retroCommandContract, retroCommandSkillMarkdown } from "./content/retro-command.js";
 import { archiveCommandContract, archiveCommandSkillMarkdown } from "./content/archive-command.js";
 import {
-  rewindAcknowledgeCommandContract,
   rewindCommandContract,
   rewindCommandSkillMarkdown
 } from "./content/rewind-command.js";
@@ -319,7 +318,7 @@ async function writeSkills(projectRoot: string, config?: VibyConfig): Promise<vo
     opsCommandSkillMarkdown()
   );
   await writeFileSafe(
-    runtimePath(projectRoot, "skills", "feature-workspaces", "SKILL.md"),
+    runtimePath(projectRoot, "skills", "using-git-worktrees", "SKILL.md"),
     featureCommandSkillMarkdown()
   );
   await writeFileSafe(
@@ -441,10 +440,6 @@ async function writeUtilityCommands(projectRoot: string): Promise<void> {
   await writeFileSafe(runtimePath(projectRoot, "commands", "retro.md"), retroCommandContract());
   await writeFileSafe(runtimePath(projectRoot, "commands", "archive.md"), archiveCommandContract());
   await writeFileSafe(runtimePath(projectRoot, "commands", "rewind.md"), rewindCommandContract());
-  await writeFileSafe(
-    runtimePath(projectRoot, "commands", "rewind-ack.md"),
-    rewindAcknowledgeCommandContract()
-  );
 }
 
 function toObject(value: unknown): Record<string, unknown> | null {
@@ -1035,11 +1030,6 @@ async function ensureSessionStateFiles(projectRoot: string): Promise<void> {
     );
   }
 
-  const preambleLogPath = path.join(stateDir, "preamble-log.jsonl");
-  if (!(await exists(preambleLogPath))) {
-    await writeFileSafe(preambleLogPath, "");
-  }
-
   const tddCycleLogPath = path.join(stateDir, "tdd-cycle-log.jsonl");
   if (!(await exists(tddCycleLogPath))) {
     await writeFileSafe(tddCycleLogPath, "");
@@ -1174,7 +1164,8 @@ async function cleanLegacyArtifacts(projectRoot: string): Promise<void> {
     "session-guidelines",
     "security-review",
     "documentation",
-    "browser-qa-testing"
+    "browser-qa-testing",
+    "feature-workspaces"
   ]) {
     try {
       await fs.rm(runtimePath(projectRoot, "skills", legacyFolder), {

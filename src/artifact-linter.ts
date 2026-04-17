@@ -223,6 +223,79 @@ function lineContainsVagueAdjective(text: string): string | null {
   return null;
 }
 
+interface ParsedFrontmatter {
+  hasFrontmatter: boolean;
+  values: Record<string, string>;
+}
+
+const FRONTMATTER_REQUIRED_KEYS = [
+  "stage",
+  "schema_version",
+  "version",
+  "feature",
+  "locked_decisions",
+  "inputs_hash"
+] as const;
+
+const PLACEHOLDER_PATTERNS: Array<{ label: string; regex: RegExp }> = [
+  { label: "TODO", regex: /\bTODO\b/iu },
+  { label: "TBD", regex: /\bTBD\b/iu },
+  { label: "FIXME", regex: /\bFIXME\b/iu },
+  { label: "<fill-in>", regex: /<fill-in>/iu },
+  { label: "<your-*-here>", regex: /<your-[^>]*-here>/iu },
+  { label: "xxx", regex: /\bxxx\b/iu },
+  { label: "ellipsis", regex: /\.{3}/u }
+];
+
+const SCOPE_REDUCTION_PATTERNS: Array<{ label: string; regex: RegExp }> = [
+  { label: "v1", regex: /\bv1\b/iu },
+  { label: "for now", regex: /\bfor now\b/iu },
+  { label: "later", regex: /\blater\b/iu },
+  { label: "temporary", regex: /\btemporary\b/iu },
+  { label: "placeholder", regex: /\bplaceholder\b/iu },
+  { label: "mock for now", regex: /\bmock for now\b/iu },
+  { label: "hardcoded for now", regex: /\bhardcoded for now\b/iu },
+  { label: "will improve later", regex: /\bwill improve later\b/iu }
+];
+
+function parseFrontmatter(markdown: string): ParsedFrontmatter {
+  const lines = markdown.split(/\r?\n/);
+  if (lines[0]?.trim() !== "---") {
+    return { hasFrontmatter: false, values: {} };
+  }
+  const endIndex = lines.findIndex((line, index) => index > 0 && line.trim() === "---");
+  if (endIndex < 0) {
+    return { hasFrontmatter: false, values: {} };
+  }
+  const values: Record<string, string> = {};
+  for (const line of lines.slice(1, endIndex)) {
+    const match = /^([A-Za-z0-9_-]+)\s*:\s*(.*)$/u.exec(line.trim());
+    if (!match) continue;
+    const key = match[1]!;
+    const value = match[2]!.trim();
+    values[key] = value;
+  }
+  return { hasFrontmatter: true, values };
+}
+
+function extractDecisionIds(text: string): string[] {
+  const ids = text.match(/\bD-\d+\b/gu) ?? [];
+  return [...new Set(ids)];
+}
+
+function collectPatternHits(
+  text: string,
+  patterns: Array<{ label: string; regex: RegExp }>
+): string[] {
+  const hits: string[] = [];
+  for (const pattern of patterns) {
+    if (pattern.regex.test(text)) {
+      hits.push(pattern.label);
+    }
+  }
+  return hits;
+}
+
 function validateSectionBody(
   sectionBody: string,
   rule: string,
@@ -388,6 +461,38 @@ export async function lintArtifact(projectRoot: string, stage: FlowStage): Promi
 
   const raw = await fs.readFile(absFile, "utf8");
   const sections = extractH2Sections(raw);
+  const parsedFrontmatter = parseFrontmatter(raw);
+  const frontmatterMissingKeys = FRONTMATTER_REQUIRED_KEYS.filter((key) => {
+    const value = parsedFrontmatter.values[key];
+    return typeof value !== "string" || value.trim().length === 0;
+  });
+  const frontmatterStage = parsedFrontmatter.values.stage?.replace(/^['"]|['"]$/gu, "");
+  const frontmatterSchemaVersion = parsedFrontmatter.values.schema_version?.replace(/^['"]|['"]$/gu, "");
+  const frontmatterInputsHash = parsedFrontmatter.values.inputs_hash?.replace(/^['"]|['"]$/gu, "");
+  const frontmatterValid =
+    parsedFrontmatter.hasFrontmatter &&
+    frontmatterMissingKeys.length === 0 &&
+    frontmatterStage === stage &&
+    frontmatterSchemaVersion === "1" &&
+    /^sha256:(?:pending|[a-f0-9]{64})$/iu.test(frontmatterInputsHash ?? "");
+  const requireFrontmatter = parsedFrontmatter.hasFrontmatter;
+  findings.push({
+    section: "Frontmatter",
+    required: requireFrontmatter,
+    rule: "Artifact must include frontmatter keys (stage, schema_version=1, version, feature, locked_decisions, inputs_hash=sha256:pending|sha256:<64hex>).",
+    found: parsedFrontmatter.hasFrontmatter ? frontmatterValid : true,
+    details: !parsedFrontmatter.hasFrontmatter
+      ? "Legacy artifact without YAML frontmatter (allowed for backward compatibility)."
+      : frontmatterMissingKeys.length > 0
+        ? `Frontmatter missing required key(s): ${frontmatterMissingKeys.join(", ")}.`
+        : frontmatterStage !== stage
+          ? `Frontmatter stage must be "${stage}" (found "${frontmatterStage ?? "(missing)"}").`
+          : frontmatterSchemaVersion !== "1"
+            ? `Frontmatter schema_version must be "1" (found "${frontmatterSchemaVersion ?? "(missing)"}").`
+            : !/^sha256:(?:pending|[a-f0-9]{64})$/iu.test(frontmatterInputsHash ?? "")
+              ? "Frontmatter inputs_hash must be sha256:pending or sha256:<64 hex chars>."
+              : "Frontmatter integrity checks passed."
+  });
 
   const isTrivialOverride =
     schema.trivialOverrideSections &&
@@ -415,6 +520,79 @@ export async function lintArtifact(projectRoot: string, stage: FlowStage): Promi
       details: found
         ? validation.details
         : validation.details
+    });
+  }
+
+  if (stage === "plan") {
+    const strictPlanGuards =
+      parsedFrontmatter.hasFrontmatter ||
+      headingPresent(sections, "No-Placeholder Scan") ||
+      headingPresent(sections, "No Scope Reduction Language Scan") ||
+      headingPresent(sections, "Locked Decision Coverage");
+    const taskListBody = sectionBodyByName(sections, "Task List") ?? raw;
+    const placeholderHits = collectPatternHits(taskListBody, PLACEHOLDER_PATTERNS);
+    findings.push({
+      section: "No Placeholder Enforcement",
+      required: strictPlanGuards,
+      rule: "Task List must not contain placeholders (TODO/TBD/FIXME/<fill-in>/<your-*-here>/xxx/ellipsis).",
+      found: placeholderHits.length === 0,
+      details:
+        placeholderHits.length === 0
+          ? "No placeholder tokens detected in Task List."
+          : `Detected placeholder token(s) in Task List: ${placeholderHits.join(", ")}.`
+    });
+
+    const scopePath = path.join(projectRoot, RUNTIME_ROOT, "artifacts", "02-scope.md");
+    const scopeRaw = (await exists(scopePath)) ? await fs.readFile(scopePath, "utf8") : "";
+    const scopeDecisionIds = extractDecisionIds(scopeRaw);
+    const missingDecisionRefs = scopeDecisionIds.filter((id) => !raw.includes(id));
+    findings.push({
+      section: "Locked Decision Traceability",
+      required: strictPlanGuards && scopeDecisionIds.length > 0,
+      rule: "Every locked decision ID (D-XX) in scope must be referenced in plan.",
+      found: missingDecisionRefs.length === 0,
+      details:
+        scopeDecisionIds.length === 0
+          ? "No D-XX IDs found in scope artifact; traceability check skipped."
+          : missingDecisionRefs.length === 0
+            ? `All ${scopeDecisionIds.length} scope decision IDs are referenced in plan.`
+            : `Missing scope decision reference(s) in plan: ${missingDecisionRefs.join(", ")}.`
+    });
+
+    const reductionHits = collectPatternHits(taskListBody, SCOPE_REDUCTION_PATTERNS);
+    findings.push({
+      section: "No Scope Reduction Language",
+      required: strictPlanGuards && scopeDecisionIds.length > 0,
+      rule: "Task List must not include scope-reduction language when locked decisions exist.",
+      found: reductionHits.length === 0,
+      details:
+        scopeDecisionIds.length === 0
+          ? "No locked decisions found in scope artifact; scope-reduction scan is advisory."
+          : reductionHits.length === 0
+            ? "No scope-reduction phrases detected in Task List."
+            : `Detected scope-reduction phrase(s) in Task List: ${reductionHits.join(", ")}.`
+    });
+  }
+
+  if (stage === "scope") {
+    const strictScopeGuards =
+      parsedFrontmatter.hasFrontmatter ||
+      headingPresent(sections, "Locked Decisions (D-XX)");
+    const scopeSections = [
+      sectionBodyByName(sections, "In Scope / Out of Scope") ?? "",
+      sectionBodyByName(sections, "Scope Summary") ?? "",
+      sectionBodyByName(sections, "Locked Decisions (D-XX)") ?? ""
+    ].join("\n");
+    const reductionHits = collectPatternHits(scopeSections, SCOPE_REDUCTION_PATTERNS);
+    findings.push({
+      section: "No Scope Reduction Language",
+      required: strictScopeGuards,
+      rule: "Scope boundary sections must not use reduction placeholders (`v1`, `for now`, `later`, `temporary`, `placeholder`).",
+      found: reductionHits.length === 0,
+      details:
+        reductionHits.length === 0
+          ? "No scope-reduction phrases detected in scope boundary sections."
+          : `Detected scope-reduction phrase(s): ${reductionHits.join(", ")}.`
     });
   }
 

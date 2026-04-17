@@ -118,9 +118,8 @@ function waveExecutionModeBlock(stage: FlowStage): string {
 
 Execute the current dependency wave task-by-task (RED -> GREEN -> REFACTOR).
 Stop on BLOCKED status or when user input is required.
-Apply preamble budget discipline: one preamble per wave, then continue without
-repeating it for each task. Re-emit only when the wave boundary changes or the
-plan changes materially.
+Apply concise turn announces: one announce per wave boundary (or when risk/plan
+changes materially), then execute tasks without repetitive boilerplate.
 
 Detailed walkthrough:
 \`.cclaw/${STAGE_EXAMPLES_REFERENCE_DIR}/tdd-wave-walkthrough.md\`

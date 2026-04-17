@@ -20,7 +20,7 @@ export const REQUIRED_DIRS = [
   `${RUNTIME_ROOT}/contexts`,
   `${RUNTIME_ROOT}/templates`,
   `${RUNTIME_ROOT}/artifacts`,
-  `${RUNTIME_ROOT}/features`,
+  `${RUNTIME_ROOT}/worktrees`,
   `${RUNTIME_ROOT}/state`,
   `${RUNTIME_ROOT}/runs`,
   `${RUNTIME_ROOT}/rules`,
@@ -71,8 +71,7 @@ export const UTILITY_COMMANDS = [
   "tdd-log",
   "retro",
   "archive",
-  "rewind",
-  "rewind-ack"
+  "rewind"
 ] as const;
 
 export const SUBAGENT_SKILL_FOLDERS = [

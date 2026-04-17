@@ -13,7 +13,7 @@ Reference docs for \`cclaw doctor\` checks.
 - \`hooks-and-lifecycle.md\` - hook wiring and harness lifecycle integration
 - \`harness-and-routing.md\` - harness shims, AGENTS/CLAUDE routing blocks, cursor rule
 - \`state-and-gates.md\` - flow-state integrity and gate evidence contracts
-- \`delegation-and-preamble.md\` - mandatory delegations and preamble budget controls
+- \`delegation-and-preamble.md\` - mandatory delegations and lightweight announce discipline
 - \`traceability.md\` - spec/plan/tdd trace matrix expectations
 - \`tooling-capabilities.md\` - local runtime prerequisites (bash/node/python/jq)
 - \`config-and-policy.md\` - config schema, rules policy, and validation references
@@ -86,18 +86,19 @@ Reference docs for \`cclaw doctor\` checks.
 - mandatory delegations for the current stage must be completed or waived
 - waivers should include an explicit reason
 - stale entries from previous runs are ignored by current-run checks
+- delegation entries use span-compatible fields (\`spanId\`, \`startTs\`, \`endTs\`, \`retryCount\`, \`evidenceRefs\`)
 
-## Preamble budget contract
+## Announce discipline contract
 
-- preamble events are logged to \`.cclaw/state/preamble-log.jsonl\`
-- repeated entries inside cooldown windows indicate noisy preamble behavior
-- in TDD wave mode, emit once per wave unless plan materially changes
+- no dedicated preamble runtime log is required
+- substantial turns should still start with a concise announce (stage + goal + next action)
+- do not spam repeated announces when intent did not change
 
 ## Typical fixes
 
 1. Append missing delegation records with \`completed\` or \`waived\` status.
 2. Record harness-limitation waivers when native delegation is unavailable.
-3. Reduce repeated preamble emissions and keep logs structured (\`ts/stage/trigger/hash\`).
+3. Keep announces concise and only refresh when plan/risk materially changes.
 `,
   "traceability.md": `# Traceability
 

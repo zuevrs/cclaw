@@ -59,7 +59,6 @@ describe("install lifecycle", () => {
     expect(flow.activeRunId).toBe("active");
     await expect(fs.stat(path.join(root, ".cclaw/state/checkpoint.json"))).resolves.toBeDefined();
     await expect(fs.stat(path.join(root, ".cclaw/state/stage-activity.jsonl"))).resolves.toBeDefined();
-    await expect(fs.stat(path.join(root, ".cclaw/state/preamble-log.jsonl"))).resolves.toBeDefined();
     await expect(fs.stat(path.join(root, ".cclaw/state/flow-state.snapshot.json"))).resolves.toBeDefined();
     await expect(fs.stat(path.join(root, ".cclaw/state/harness-gaps.json"))).resolves.toBeDefined();
     await expect(fs.stat(path.join(root, ".cclaw/commands/tree.md"))).resolves.toBeDefined();

@@ -464,7 +464,7 @@ if [ -n "$ROUTING_MISSING" ]; then
 fi
 
 # --- Build context message ---
-CTX="cclaw loaded. Flow: stage=$STAGE ($COMPLETED/8 completed, run=$ACTIVE_RUN, feature=$ACTIVE_FEATURE). Active artifacts: ${RUNTIME_ROOT}/artifacts/. Feature snapshots: ${RUNTIME_ROOT}/features/$ACTIVE_FEATURE/. Learnings: $LEARNINGS_COUNT entries."
+CTX="cclaw loaded. Flow: stage=$STAGE ($COMPLETED/8 completed, run=$ACTIVE_RUN, feature=$ACTIVE_FEATURE). Active artifacts: ${RUNTIME_ROOT}/artifacts/. Feature registry: ${RUNTIME_ROOT}/state/worktrees.json (managed roots: ${RUNTIME_ROOT}/worktrees/). Learnings: $LEARNINGS_COUNT entries."
 if [ -n "$VERSION_NOTE" ]; then
   CTX="$CTX
 $VERSION_NOTE"
@@ -503,7 +503,7 @@ To disable suggestions persistently set ${RUNTIME_ROOT}/state/suggestion-memory.
 fi
 if [ -n "$STALE_STAGES" ]; then
   CTX="$CTX
-Stale stages pending acknowledgement: $STALE_STAGES (use /cc-ops rewind-ack <stage> after redo)."
+Stale stages pending acknowledgement: $STALE_STAGES (use /cc-ops rewind --ack <stage> after redo)."
 fi
 if [ -n "$KNOWLEDGE_DIGEST" ]; then
   CTX="$CTX

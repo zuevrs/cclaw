@@ -20,7 +20,8 @@ export function rewindCommandContract(): string {
 
 ## Purpose
 
-Rewind active flow to an earlier stage and atomically invalidate downstream work.
+Rewind active flow to an earlier stage, or acknowledge stale markers after
+intentional rework.
 
 ## HARD-GATE
 
@@ -31,9 +32,12 @@ Rewind active flow to an earlier stage and atomically invalidate downstream work
 ## Inputs
 
 \`/cc-ops rewind <target-stage> [reason]\`
+or
+\`/cc-ops rewind --ack <stage>\`
 
 ## Algorithm
 
+### rewind mode
 1. Read \`${flowStatePath()}\` and current track.
 2. Validate \`target-stage\` belongs to the active track and is not ahead of current stage.
 3. Compute downstream stages to invalidate (all stages after target that were completed or current).
@@ -47,42 +51,23 @@ Rewind active flow to an earlier stage and atomically invalidate downstream work
    - append \`rewinds[]\` record
 7. Append JSON line to \`${rewindLogPath()}\`.
 
-## Output
-
-- Rewind id
-- from -> to stage
-- Invalidated stages list
-- Number of stale artifacts
-
-## Primary skill
-
-**${RUNTIME_ROOT}/skills/${REWIND_SKILL_FOLDER}/SKILL.md**
-`;
-}
-
-export function rewindAcknowledgeCommandContract(): string {
-  return `# /cc-ops rewind-ack
-
-## Purpose
-
-Acknowledge and clear stale-stage markers after downstream work is intentionally redone.
-
-## Input
-
-\`/cc-ops rewind-ack <stage>\`
-
-## HARD-GATE
-
-- Only clear stale marker for the requested stage.
-- Never modify completedStages from this command.
-
-## Algorithm
-
+### acknowledge mode (\`--ack\`)
 1. Read \`${flowStatePath()}\`.
 2. If \`staleStages.<stage>\` is missing, report no-op.
 3. Remove \`staleStages.<stage>\`.
 4. Write updated flow-state.
 5. Print remaining stale stages (if any).
+
+## Output
+
+- In rewind mode:
+  - rewind id
+  - from -> to stage
+  - invalidated stages list
+  - number of stale artifacts
+- In acknowledge mode:
+  - acknowledged stage
+  - remaining stale stages
 
 ## Primary skill
 
@@ -96,7 +81,7 @@ name: ${REWIND_SKILL_NAME}
 description: "Rewind active flow stage safely and acknowledge stale invalidations."
 ---
 
-# /cc-ops rewind + /cc-ops rewind-ack
+# /cc-ops rewind
 
 ## HARD-GATE
 
@@ -112,7 +97,7 @@ Rewind is an atomic state transition. Never leave flow-state half-updated (for e
 5. Record \`rewinds[]\` and \`staleStages\` in flow-state.
 6. Append rewind entry into \`${rewindLogPath()}\`.
 
-### rewind-ack
+### rewind --ack <stage>
 1. Load flow-state stale map.
 2. Remove exactly one stale stage marker.
 3. Report remaining stale stages.

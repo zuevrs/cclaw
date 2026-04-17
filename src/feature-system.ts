@@ -1,54 +1,85 @@
 import fs from "node:fs/promises";
 import path from "node:path";
+import { execFile } from "node:child_process";
+import { promisify } from "node:util";
 import { RUNTIME_ROOT } from "./constants.js";
 import { ensureDir, exists, writeFileSafe } from "./fs-utils.js";
 
-const FEATURES_DIR_REL_PATH = `${RUNTIME_ROOT}/features`;
+const execFileAsync = promisify(execFile);
+
+const WORKTREES_DIR_REL_PATH = `${RUNTIME_ROOT}/worktrees`;
+const LEGACY_FEATURES_DIR_REL_PATH = `${RUNTIME_ROOT}/features`;
 const ACTIVE_FEATURE_META_REL_PATH = `${RUNTIME_ROOT}/state/active-feature.json`;
+const WORKTREE_REGISTRY_REL_PATH = `${RUNTIME_ROOT}/state/worktrees.json`;
 const DEFAULT_FEATURE_ID = "default";
+const WORKTREE_REGISTRY_SCHEMA_VERSION = 1;
 const FEATURE_ID_PATTERN = /^[a-z0-9][a-z0-9-]{0,63}$/u;
-const FEATURE_STATE_EXCLUDE_FROM_SNAPSHOT = new Set([
-  "active-feature.json",
-  ".flow-state.lock",
-  ".delegation.lock"
-]);
 
 export interface ActiveFeatureMeta {
   activeFeature: string;
   updatedAt: string;
 }
 
-interface CopyDirOptions {
-  exclude?: Set<string>;
-  preserveTargetEntries?: Set<string>;
+export type FeatureWorkspaceSource = "git-worktree" | "workspace" | "legacy-snapshot";
+
+export interface FeatureWorkspaceEntry {
+  featureId: string;
+  branch: string;
+  path: string;
+  source: FeatureWorkspaceSource;
+  createdAt: string;
 }
 
-function featuresRoot(projectRoot: string): string {
-  return path.join(projectRoot, FEATURES_DIR_REL_PATH);
+export interface FeatureWorktreeRegistry {
+  schemaVersion: 1;
+  updatedAt: string;
+  entries: FeatureWorkspaceEntry[];
 }
 
-function runtimeArtifactsRoot(projectRoot: string): string {
-  return path.join(projectRoot, RUNTIME_ROOT, "artifacts");
+export interface CreateFeatureOptions {
+  cloneActive?: boolean;
+  switchTo?: boolean;
 }
 
-function runtimeStateRoot(projectRoot: string): string {
-  return path.join(projectRoot, RUNTIME_ROOT, "state");
+interface GitResult {
+  ok: boolean;
+  stdout: string;
+  stderr: string;
+}
+
+function worktreesRoot(projectRoot: string): string {
+  return path.join(projectRoot, WORKTREES_DIR_REL_PATH);
+}
+
+function legacyFeaturesRoot(projectRoot: string): string {
+  return path.join(projectRoot, LEGACY_FEATURES_DIR_REL_PATH);
 }
 
 export function activeFeatureMetaPath(projectRoot: string): string {
   return path.join(projectRoot, ACTIVE_FEATURE_META_REL_PATH);
 }
 
+export function worktreeRegistryPath(projectRoot: string): string {
+  return path.join(projectRoot, WORKTREE_REGISTRY_REL_PATH);
+}
+
 export function featureRootPath(projectRoot: string, featureId: string): string {
-  return path.join(featuresRoot(projectRoot), featureId);
+  return path.join(worktreesRoot(projectRoot), normalizedFeatureId(featureId));
 }
 
 export function featureArtifactsPath(projectRoot: string, featureId: string): string {
-  return path.join(featureRootPath(projectRoot, featureId), "artifacts");
+  return path.join(featureRootPath(projectRoot, featureId), RUNTIME_ROOT, "artifacts");
 }
 
 export function featureStatePath(projectRoot: string, featureId: string): string {
-  return path.join(featureRootPath(projectRoot, featureId), "state");
+  return path.join(featureRootPath(projectRoot, featureId), RUNTIME_ROOT, "state");
+}
+
+export function resolveFeatureWorkspacePath(projectRoot: string, entry: FeatureWorkspaceEntry): string {
+  if (entry.path === ".") {
+    return projectRoot;
+  }
+  return path.resolve(projectRoot, entry.path);
 }
 
 function normalizedFeatureId(value: string): string {
@@ -65,71 +96,143 @@ function normalizedFeatureId(value: string): string {
   return FEATURE_ID_PATTERN.test(clipped) ? clipped : DEFAULT_FEATURE_ID;
 }
 
-async function clearDirectory(
-  dirPath: string,
-  preserveTargetEntries: Set<string> = new Set()
-): Promise<void> {
-  await ensureDir(dirPath);
-  let entries: Array<{ name: string; isDirectory: () => boolean }>;
-  try {
-    entries = await fs.readdir(dirPath, { withFileTypes: true });
-  } catch {
-    return;
+function toRelativePath(projectRoot: string, absolutePath: string): string {
+  const rel = path.relative(projectRoot, absolutePath);
+  if (!rel || rel.trim().length === 0) {
+    return ".";
   }
+  return rel.split(path.sep).join("/");
+}
+
+function sanitizeWorkspaceSource(value: unknown): FeatureWorkspaceSource {
+  if (value === "git-worktree" || value === "workspace" || value === "legacy-snapshot") {
+    return value;
+  }
+  return "workspace";
+}
+
+function sanitizeRegistryEntry(raw: unknown): FeatureWorkspaceEntry | null {
+  if (!raw || typeof raw !== "object" || Array.isArray(raw)) {
+    return null;
+  }
+  const typed = raw as Record<string, unknown>;
+  const featureIdRaw = typeof typed.featureId === "string" ? typed.featureId : "";
+  const featureId = normalizedFeatureId(featureIdRaw);
+  if (!FEATURE_ID_PATTERN.test(featureId)) {
+    return null;
+  }
+  const branch = typeof typed.branch === "string" && typed.branch.trim().length > 0
+    ? typed.branch.trim()
+    : (featureId === DEFAULT_FEATURE_ID ? "workspace/default" : `workspace/${featureId}`);
+  const pathRaw = typeof typed.path === "string" ? typed.path.trim() : "";
+  const workspacePath = pathRaw.length > 0 ? pathRaw : ".";
+  const createdAt = typeof typed.createdAt === "string" && typed.createdAt.trim().length > 0
+    ? typed.createdAt.trim()
+    : new Date().toISOString();
+  return {
+    featureId,
+    branch,
+    path: workspacePath,
+    source: sanitizeWorkspaceSource(typed.source),
+    createdAt
+  };
+}
+
+function dedupeEntries(entries: FeatureWorkspaceEntry[]): FeatureWorkspaceEntry[] {
+  const byId = new Map<string, FeatureWorkspaceEntry>();
   for (const entry of entries) {
-    if (preserveTargetEntries.has(entry.name)) {
-      continue;
+    if (!byId.has(entry.featureId)) {
+      byId.set(entry.featureId, entry);
     }
-    await fs.rm(path.join(dirPath, entry.name), { recursive: true, force: true });
+  }
+  return [...byId.values()].sort((a, b) => a.featureId.localeCompare(b.featureId));
+}
+
+async function runGit(projectRoot: string, args: string[]): Promise<GitResult> {
+  try {
+    const { stdout, stderr } = await execFileAsync("git", args, { cwd: projectRoot });
+    return { ok: true, stdout: stdout.trim(), stderr: stderr.trim() };
+  } catch (error) {
+    const err = error as { stdout?: string; stderr?: string; message?: string };
+    return {
+      ok: false,
+      stdout: typeof err.stdout === "string" ? err.stdout.trim() : "",
+      stderr: typeof err.stderr === "string" && err.stderr.trim().length > 0
+        ? err.stderr.trim()
+        : (err.message ?? "git command failed")
+    };
   }
 }
 
-async function copyDirectoryContents(
-  sourceDir: string,
-  targetDir: string,
-  options: CopyDirOptions = {}
-): Promise<void> {
-  const exclude = options.exclude ?? new Set<string>();
-  const preserveTargetEntries = options.preserveTargetEntries ?? new Set<string>();
-  await ensureDir(targetDir);
-  await clearDirectory(targetDir, preserveTargetEntries);
-  if (!(await exists(sourceDir))) {
-    return;
-  }
+async function isGitRepository(projectRoot: string): Promise<boolean> {
+  const result = await runGit(projectRoot, ["rev-parse", "--is-inside-work-tree"]);
+  return result.ok && result.stdout === "true";
+}
 
-  let entries: Array<{ name: string; isDirectory: () => boolean; isFile: () => boolean }>;
+async function currentBranch(projectRoot: string): Promise<string> {
+  const result = await runGit(projectRoot, ["rev-parse", "--abbrev-ref", "HEAD"]);
+  return result.ok && result.stdout.length > 0 ? result.stdout : "HEAD";
+}
+
+async function defaultStartPoint(projectRoot: string): Promise<string> {
+  const remoteHead = await runGit(projectRoot, ["symbolic-ref", "--short", "refs/remotes/origin/HEAD"]);
+  if (remoteHead.ok && remoteHead.stdout.length > 0) {
+    return remoteHead.stdout.replace(/^origin\//u, "");
+  }
+  return currentBranch(projectRoot);
+}
+
+function buildDefaultEntry(source: FeatureWorkspaceSource, branch: string): FeatureWorkspaceEntry {
+  return {
+    featureId: DEFAULT_FEATURE_ID,
+    branch,
+    path: ".",
+    source,
+    createdAt: new Date().toISOString()
+  };
+}
+
+async function readRegistry(projectRoot: string): Promise<FeatureWorktreeRegistry> {
+  const filePath = worktreeRegistryPath(projectRoot);
+  if (!(await exists(filePath))) {
+    return {
+      schemaVersion: WORKTREE_REGISTRY_SCHEMA_VERSION,
+      updatedAt: new Date().toISOString(),
+      entries: []
+    };
+  }
   try {
-    entries = await fs.readdir(sourceDir, { withFileTypes: true });
+    const parsed = JSON.parse(await fs.readFile(filePath, "utf8")) as Record<string, unknown>;
+    const entriesRaw = Array.isArray(parsed.entries) ? parsed.entries : [];
+    const entries = dedupeEntries(
+      entriesRaw
+        .map((entry) => sanitizeRegistryEntry(entry))
+        .filter((entry): entry is FeatureWorkspaceEntry => entry !== null)
+    );
+    const updatedAt = typeof parsed.updatedAt === "string" && parsed.updatedAt.trim().length > 0
+      ? parsed.updatedAt.trim()
+      : new Date().toISOString();
+    return {
+      schemaVersion: WORKTREE_REGISTRY_SCHEMA_VERSION,
+      updatedAt,
+      entries
+    };
   } catch {
-    return;
-  }
-
-  for (const entry of entries) {
-    if (exclude.has(entry.name)) {
-      continue;
-    }
-    const from = path.join(sourceDir, entry.name);
-    const to = path.join(targetDir, entry.name);
-    if (entry.isDirectory()) {
-      await fs.cp(from, to, { recursive: true, force: true });
-      continue;
-    }
-    if (entry.isFile()) {
-      await fs.copyFile(from, to);
-    }
+    return {
+      schemaVersion: WORKTREE_REGISTRY_SCHEMA_VERSION,
+      updatedAt: new Date().toISOString(),
+      entries: []
+    };
   }
 }
 
-async function dirHasEntries(dirPath: string, exclude: Set<string> = new Set()): Promise<boolean> {
-  if (!(await exists(dirPath))) {
-    return false;
-  }
-  try {
-    const entries = await fs.readdir(dirPath, { withFileTypes: true });
-    return entries.some((entry) => !exclude.has(entry.name));
-  } catch {
-    return false;
-  }
+async function writeRegistry(projectRoot: string, registry: FeatureWorktreeRegistry): Promise<void> {
+  const normalized: FeatureWorktreeRegistry = {
+    schemaVersion: WORKTREE_REGISTRY_SCHEMA_VERSION,
+    updatedAt: registry.updatedAt,
+    entries: dedupeEntries(registry.entries)
+  };
+  await writeFileSafe(worktreeRegistryPath(projectRoot), `${JSON.stringify(normalized, null, 2)}\n`);
 }
 
 async function readActiveFeatureMetaInternal(projectRoot: string): Promise<ActiveFeatureMeta> {
@@ -168,110 +271,110 @@ async function writeActiveFeatureMeta(projectRoot: string, meta: ActiveFeatureMe
   await writeFileSafe(activeFeatureMetaPath(projectRoot), `${JSON.stringify(normalized, null, 2)}\n`);
 }
 
-async function ensureFeatureSnapshot(projectRoot: string, featureId: string): Promise<void> {
-  const id = normalizedFeatureId(featureId);
-  await ensureDir(featureArtifactsPath(projectRoot, id));
-  await ensureDir(featureStatePath(projectRoot, id));
+function registryHasFeature(registry: FeatureWorktreeRegistry, featureId: string): boolean {
+  return registry.entries.some((entry) => entry.featureId === featureId);
+}
+
+function findEntry(registry: FeatureWorktreeRegistry, featureId: string): FeatureWorkspaceEntry | undefined {
+  return registry.entries.find((entry) => entry.featureId === featureId);
+}
+
+async function listLegacySnapshotIds(projectRoot: string): Promise<string[]> {
+  const root = legacyFeaturesRoot(projectRoot);
+  if (!(await exists(root))) {
+    return [];
+  }
+  try {
+    const entries = await fs.readdir(root, { withFileTypes: true });
+    return entries
+      .filter((entry) => entry.isDirectory() && FEATURE_ID_PATTERN.test(entry.name))
+      .map((entry) => entry.name)
+      .sort((a, b) => a.localeCompare(b));
+  } catch {
+    return [];
+  }
+}
+
+async function ensureRegistryState(projectRoot: string): Promise<{
+  registry: FeatureWorktreeRegistry;
+  activeMeta: ActiveFeatureMeta;
+}> {
+  await ensureDir(path.join(projectRoot, RUNTIME_ROOT, "state"));
+  await ensureDir(worktreesRoot(projectRoot));
+
+  const gitRepo = await isGitRepository(projectRoot);
+  const source: FeatureWorkspaceSource = gitRepo ? "git-worktree" : "workspace";
+  const branch = gitRepo ? await currentBranch(projectRoot) : "workspace/default";
+
+  const currentRegistry = await readRegistry(projectRoot);
+  const entries = [...currentRegistry.entries];
+  if (!entries.some((entry) => entry.featureId === DEFAULT_FEATURE_ID)) {
+    entries.push(buildDefaultEntry(source, branch));
+  }
+
+  const legacyFeatureIds = await listLegacySnapshotIds(projectRoot);
+  for (const legacyId of legacyFeatureIds) {
+    if (entries.some((entry) => entry.featureId === legacyId)) {
+      continue;
+    }
+    entries.push({
+      featureId: legacyId,
+      branch: `legacy/${legacyId}`,
+      path: `${LEGACY_FEATURES_DIR_REL_PATH}/${legacyId}`,
+      source: "legacy-snapshot",
+      createdAt: new Date().toISOString()
+    });
+  }
+
+  const registry: FeatureWorktreeRegistry = {
+    schemaVersion: WORKTREE_REGISTRY_SCHEMA_VERSION,
+    updatedAt: new Date().toISOString(),
+    entries: dedupeEntries(entries)
+  };
+  await writeRegistry(projectRoot, registry);
+
+  const active = await readActiveFeatureMetaInternal(projectRoot);
+  const normalizedActive = registryHasFeature(registry, active.activeFeature)
+    ? active.activeFeature
+    : DEFAULT_FEATURE_ID;
+  const activeMeta: ActiveFeatureMeta = {
+    activeFeature: normalizedActive,
+    updatedAt: new Date().toISOString()
+  };
+  await writeActiveFeatureMeta(projectRoot, activeMeta);
+  return { registry, activeMeta };
+}
+
+export async function ensureFeatureSystem(projectRoot: string): Promise<ActiveFeatureMeta> {
+  const { activeMeta } = await ensureRegistryState(projectRoot);
+  return activeMeta;
+}
+
+export async function readFeatureWorktreeRegistry(projectRoot: string): Promise<FeatureWorktreeRegistry> {
+  const { registry } = await ensureRegistryState(projectRoot);
+  return registry;
 }
 
 export async function readActiveFeature(projectRoot: string): Promise<string> {
-  const meta = await readActiveFeatureMetaInternal(projectRoot);
+  const meta = await ensureFeatureSystem(projectRoot);
   return normalizedFeatureId(meta.activeFeature);
 }
 
 export async function listFeatures(projectRoot: string): Promise<string[]> {
-  const root = featuresRoot(projectRoot);
-  if (!(await exists(root))) {
-    return [];
-  }
-  let entries: Array<{ name: string; isDirectory: () => boolean }>;
-  try {
-    entries = await fs.readdir(root, { withFileTypes: true });
-  } catch {
-    return [];
-  }
-  return entries
-    .filter((entry) => entry.isDirectory() && FEATURE_ID_PATTERN.test(entry.name))
-    .map((entry) => entry.name)
-    .sort((a, b) => a.localeCompare(b));
-}
-
-export async function ensureFeatureSystem(projectRoot: string): Promise<ActiveFeatureMeta> {
-  await ensureDir(featuresRoot(projectRoot));
-  await ensureDir(runtimeArtifactsRoot(projectRoot));
-  await ensureDir(runtimeStateRoot(projectRoot));
-
-  const existing = await readActiveFeatureMetaInternal(projectRoot);
-  const activeFeature = normalizedFeatureId(existing.activeFeature);
-  await ensureFeatureSnapshot(projectRoot, activeFeature);
-
-  const runtimeArtifactsHasData = await dirHasEntries(runtimeArtifactsRoot(projectRoot));
-  const runtimeStateHasData = await dirHasEntries(
-    runtimeStateRoot(projectRoot),
-    new Set(["active-feature.json"])
-  );
-  const featureArtifactsHasData = await dirHasEntries(featureArtifactsPath(projectRoot, activeFeature));
-  const featureStateHasData = await dirHasEntries(featureStatePath(projectRoot, activeFeature));
-
-  if ((runtimeArtifactsHasData || runtimeStateHasData) && !featureArtifactsHasData && !featureStateHasData) {
-    await copyDirectoryContents(
-      runtimeArtifactsRoot(projectRoot),
-      featureArtifactsPath(projectRoot, activeFeature)
-    );
-    await copyDirectoryContents(
-      runtimeStateRoot(projectRoot),
-      featureStatePath(projectRoot, activeFeature),
-      { exclude: FEATURE_STATE_EXCLUDE_FROM_SNAPSHOT }
-    );
-  } else if ((!runtimeArtifactsHasData && !runtimeStateHasData) && (featureArtifactsHasData || featureStateHasData)) {
-    await copyDirectoryContents(
-      featureArtifactsPath(projectRoot, activeFeature),
-      runtimeArtifactsRoot(projectRoot)
-    );
-    await copyDirectoryContents(
-      featureStatePath(projectRoot, activeFeature),
-      runtimeStateRoot(projectRoot),
-      { preserveTargetEntries: new Set(["active-feature.json"]) }
-    );
-  }
-
-  const normalized: ActiveFeatureMeta = {
-    activeFeature,
-    updatedAt: new Date().toISOString()
-  };
-  await writeActiveFeatureMeta(projectRoot, normalized);
-  return normalized;
+  const registry = await readFeatureWorktreeRegistry(projectRoot);
+  return registry.entries.map((entry) => entry.featureId).sort((a, b) => a.localeCompare(b));
 }
 
 export async function syncActiveFeatureSnapshot(projectRoot: string): Promise<void> {
-  const activeFeature = await readActiveFeature(projectRoot);
-  await ensureFeatureSnapshot(projectRoot, activeFeature);
-  await copyDirectoryContents(runtimeArtifactsRoot(projectRoot), featureArtifactsPath(projectRoot, activeFeature));
-  await copyDirectoryContents(runtimeStateRoot(projectRoot), featureStatePath(projectRoot, activeFeature), {
-    exclude: FEATURE_STATE_EXCLUDE_FROM_SNAPSHOT
-  });
+  await ensureFeatureSystem(projectRoot);
 }
 
 export async function switchActiveFeature(projectRoot: string, featureId: string): Promise<ActiveFeatureMeta> {
-  await ensureFeatureSystem(projectRoot);
-  const current = await readActiveFeature(projectRoot);
+  const registry = await readFeatureWorktreeRegistry(projectRoot);
   const target = normalizedFeatureId(featureId);
-  if (current === target) {
-    const unchanged: ActiveFeatureMeta = {
-      activeFeature: current,
-      updatedAt: new Date().toISOString()
-    };
-    await writeActiveFeatureMeta(projectRoot, unchanged);
-    return unchanged;
+  if (!registryHasFeature(registry, target)) {
+    throw new Error(`Feature "${target}" is not registered. Create it first with /cc-ops feature new ${target}.`);
   }
-
-  await syncActiveFeatureSnapshot(projectRoot);
-  await ensureFeatureSnapshot(projectRoot, target);
-  await copyDirectoryContents(featureArtifactsPath(projectRoot, target), runtimeArtifactsRoot(projectRoot));
-  await copyDirectoryContents(featureStatePath(projectRoot, target), runtimeStateRoot(projectRoot), {
-    preserveTargetEntries: new Set(["active-feature.json"])
-  });
-
   const nextMeta: ActiveFeatureMeta = {
     activeFeature: target,
     updatedAt: new Date().toISOString()
@@ -280,42 +383,90 @@ export async function switchActiveFeature(projectRoot: string, featureId: string
   return nextMeta;
 }
 
-export interface CreateFeatureOptions {
-  cloneActive?: boolean;
-  switchTo?: boolean;
-}
-
 export async function createFeature(
   projectRoot: string,
   rawFeatureId: string,
   options: CreateFeatureOptions = {}
 ): Promise<string> {
-  await ensureFeatureSystem(projectRoot);
+  const registry = await readFeatureWorktreeRegistry(projectRoot);
   const featureId = normalizedFeatureId(rawFeatureId);
-  if (featureId === DEFAULT_FEATURE_ID && rawFeatureId.trim().length > 0 && rawFeatureId.trim().toLowerCase() !== "default") {
+  if (
+    featureId === DEFAULT_FEATURE_ID &&
+    rawFeatureId.trim().length > 0 &&
+    rawFeatureId.trim().toLowerCase() !== "default"
+  ) {
     throw new Error(`Unable to create feature from "${rawFeatureId}" — use letters, numbers, and dashes.`);
   }
-  const featureDir = featureRootPath(projectRoot, featureId);
-  if (await exists(featureDir)) {
+  if (registryHasFeature(registry, featureId)) {
     throw new Error(`Feature "${featureId}" already exists.`);
   }
 
-  await ensureFeatureSnapshot(projectRoot, featureId);
-  if (options.cloneActive === true) {
-    const activeFeature = await readActiveFeature(projectRoot);
-    await syncActiveFeatureSnapshot(projectRoot);
-    await copyDirectoryContents(
-      featureArtifactsPath(projectRoot, activeFeature),
-      featureArtifactsPath(projectRoot, featureId)
-    );
-    await copyDirectoryContents(
-      featureStatePath(projectRoot, activeFeature),
-      featureStatePath(projectRoot, featureId)
-    );
+  const isGit = await isGitRepository(projectRoot);
+  let entry: FeatureWorkspaceEntry;
+  if (isGit) {
+    const workspacePath = featureRootPath(projectRoot, featureId);
+    if (await exists(workspacePath)) {
+      throw new Error(`Worktree path already exists: ${workspacePath}`);
+    }
+    await ensureDir(path.dirname(workspacePath));
+
+    const branch = `feature/${featureId}`;
+    const localBranchRef = `refs/heads/${branch}`;
+    const branchCheck = await runGit(projectRoot, ["show-ref", "--verify", "--quiet", localBranchRef]);
+    if (branchCheck.ok) {
+      const addExisting = await runGit(projectRoot, ["worktree", "add", workspacePath, branch]);
+      if (!addExisting.ok) {
+        throw new Error(`Unable to attach worktree for branch "${branch}": ${addExisting.stderr}`);
+      }
+    } else {
+      const startPoint = options.cloneActive === false
+        ? await defaultStartPoint(projectRoot)
+        : "HEAD";
+      const addNew = await runGit(projectRoot, ["worktree", "add", "-b", branch, workspacePath, startPoint]);
+      if (!addNew.ok) {
+        throw new Error(`Unable to create worktree "${featureId}" on branch "${branch}": ${addNew.stderr}`);
+      }
+    }
+
+    entry = {
+      featureId,
+      branch,
+      path: toRelativePath(projectRoot, workspacePath),
+      source: "git-worktree",
+      createdAt: new Date().toISOString()
+    };
+  } else {
+    const workspacePath = featureRootPath(projectRoot, featureId);
+    await ensureDir(workspacePath);
+    entry = {
+      featureId,
+      branch: `workspace/${featureId}`,
+      path: toRelativePath(projectRoot, workspacePath),
+      source: "workspace",
+      createdAt: new Date().toISOString()
+    };
   }
+
+  const nextRegistry: FeatureWorktreeRegistry = {
+    schemaVersion: WORKTREE_REGISTRY_SCHEMA_VERSION,
+    updatedAt: new Date().toISOString(),
+    entries: dedupeEntries([...registry.entries, entry])
+  };
+  await writeRegistry(projectRoot, nextRegistry);
 
   if (options.switchTo === true) {
     await switchActiveFeature(projectRoot, featureId);
   }
+
   return featureId;
+}
+
+export async function activeFeatureWorkspacePath(projectRoot: string): Promise<string> {
+  const registry = await readFeatureWorktreeRegistry(projectRoot);
+  const active = await readActiveFeature(projectRoot);
+  const entry = findEntry(registry, active);
+  if (!entry) {
+    return projectRoot;
+  }
+  return resolveFeatureWorkspacePath(projectRoot, entry);
 }
