@@ -61,7 +61,8 @@ Rollback / fallback: <if decision proves wrong>
 ## Self-improvement reminder
 
 If a reusable lesson appears during the stage, append one strict-schema JSONL
-entry via \`/cc-learn add\`. Do not keep operational lessons only in chat.
+entry (manually via \`/cc-learn add\` or directly in stage closeout protocol).
+Do not keep operational lessons only in chat.
 
 ## Progressive disclosure baseline
 

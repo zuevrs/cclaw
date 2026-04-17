@@ -49,8 +49,20 @@ Shared closeout sequence applied by every stage skill.
    - update \`guardEvidence\`.
 3. Persist stage artifact under \`.cclaw/artifacts/\`.
 4. Run \`npx cclaw doctor\` and resolve failures.
-5. Notify user with stage completion and next action (\`/cc-next\`).
-6. Stop; do not auto-run the next stage unless user asks.
+5. Capture reusable learnings from this stage artifact:
+   - append 1-3 strict-schema JSONL entries when the stage produced non-obvious
+     decisions, patterns, or lessons,
+   - use \`type=rule|pattern|lesson\` (\`compound\` stays retro-focused).
+6. Notify user with stage completion and next action (\`/cc-next\`).
+7. Stop; do not auto-run the next stage unless user asks.
+
+## Automatic learning capture policy
+
+- \`standard\` / \`medium\` tracks: required for \`design\`, \`tdd\`, and \`review\`;
+  recommended for other stages.
+- \`quick\` track: recommended only (avoid overhead for tiny fixes).
+- "No learning captured" is acceptable only when explicitly justified (e.g. pure
+  mechanical change, no new trade-offs).
 
 ## Resume protocol
 

@@ -1,6 +1,7 @@
 import { RUNTIME_ROOT } from "../constants.js";
 import type { FlowStage } from "../types.js";
 import { STAGE_EXAMPLES_REFERENCE_DIR, stageDomainExamples, stageExamples, stageGoodBadExamples } from "./examples.js";
+import { selfImprovementBlock } from "./learnings.js";
 import { STAGE_COMMON_GUIDANCE_REL_PATH } from "./stage-common-guidance.js";
 import type { StageSchema } from "./stage-schema.js";
 import { stageAutoSubagentDispatch, stageSchema } from "./stage-schema.js";
@@ -397,6 +398,7 @@ ${mergedAntiPatterns(schema)}
 ## Verification
 ${schema.exitCriteria.map((item) => `- [ ] ${item}`).join("\n")}
 
+${selfImprovementBlock(schema.stage)}
 ${completionParametersBlock(schema)}
 ## Shared Stage Guidance
 See:
