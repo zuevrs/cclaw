@@ -136,9 +136,9 @@ export function doctorCheckMetadata(checkName: string): DoctorCheckMetadata {
     }
   }
   return {
-    severity: "error",
-    summary: "Doctor runtime integrity check.",
-    fix: "Inspect check details, apply the suggested remediation, and re-run `cclaw doctor`.",
+    severity: "warning",
+    summary: "Unclassified doctor check.",
+    fix: "Review the check details and add a matching rule in doctor-registry when this check should be severity-scoped.",
     docRef: ref("README.md")
   };
 }
