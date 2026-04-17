@@ -1,0 +1,106 @@
+import type { FlowStage } from "../../types.js";
+
+export interface StageGate {
+  id: string;
+  description: string;
+  tier?: "required" | "recommended" | "conditional";
+  /** Used when tier=conditional. Predicate syntax mirrors conditional delegation rules. */
+  condition?: string;
+}
+
+export interface ReviewSection {
+  title: string;
+  evaluationPoints: string[];
+  stopGate: boolean;
+}
+
+export interface CrossStageTrace {
+  readsFrom: string[];
+  writesTo: string[];
+  traceabilityRule: string;
+}
+
+export interface ArtifactValidation {
+  section: string;
+  required: boolean;
+  tier?: "required" | "recommended" | "conditional";
+  /** Optional predicate for conditional validations. */
+  condition?: string;
+  validationRule: string;
+}
+
+export interface StageAutoSubagentDispatch {
+  agent:
+    | "planner"
+    | "reviewer"
+    | "security-reviewer"
+    | "test-author"
+    | "doc-updater";
+  /**
+   * - `mandatory` — must be dispatched (or explicitly waived) before stage transition.
+   * - `proactive` — should be dispatched automatically when context matches `when`.
+   * - `conditional` — dispatched only when `condition` evaluates true at runtime; counted as
+   *   mandatory **only when the condition holds**.
+   */
+  mode: "mandatory" | "proactive" | "conditional";
+  when: string;
+  purpose: string;
+  requiresUserGate: boolean;
+  /**
+   * Optional machine-friendly trigger expression for `conditional` rows.
+   * Supported predicates: `diff_lines_gt:<N>`, `files_touched_gt:<N>`,
+   * `trust_boundary_changed`, `release_blast_radius_high`.
+   * Multiple predicates joined by `||` mean ANY trigger satisfies the condition.
+   */
+  condition?: string;
+  /** Optional skill folder the dispatched agent should load as additional context. */
+  skill?: string;
+}
+
+export interface StageSchema {
+  stage: FlowStage;
+  skillFolder: string;
+  skillName: string;
+  skillDescription: string;
+  hardGate: string;
+  /**
+   * One-line "Iron Law" punchcard — the single rule that, if broken,
+   * invalidates the stage outright. Rendered in ALL-CAPS wrapped in
+   * <EXTREMELY-IMPORTANT> XML markers at the very top of the skill body.
+   * Reference: Superpowers (obra) "NO PRODUCTION CODE WITHOUT A FAILING
+   * TEST FIRST".
+   */
+  ironLaw: string;
+  purpose: string;
+  whenToUse: string[];
+  whenNotToUse: string[];
+  interactionProtocol: string[];
+  process: string[];
+  requiredGates: StageGate[];
+  requiredEvidence: string[];
+  inputs: string[];
+  requiredContext: string[];
+  /** In-thread research procedures for this stage (`.cclaw/skills/research/*.md`). */
+  researchPlaybooks?: string[];
+  outputs: string[];
+  blockers: string[];
+  exitCriteria: string[];
+  antiPatterns: string[];
+  redFlags: string[];
+  policyNeedles: string[];
+  artifactFile: string;
+  next: FlowStage | "done";
+  checklist: string[];
+  reviewSections: ReviewSection[];
+  completionStatus: string[];
+  crossStageTrace: CrossStageTrace;
+  artifactValidation: ArtifactValidation[];
+  /** When true, stage skill includes wave auto-execute guidance (tdd). */
+  waveExecutionAllowed?: boolean;
+  /** Sections that remain required even when the trivial-change escape hatch is active (design only). */
+  trivialOverrideSections?: string[];
+  /** Agent names that MUST be dispatched (or waived) before stage transition — derived from mandatory auto-subagent rows. */
+  mandatoryDelegations: string[];
+}
+
+export type StageSchemaInput = Omit<StageSchema, "mandatoryDelegations">;
