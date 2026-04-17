@@ -105,6 +105,52 @@ describe("config", () => {
     expect(config.gitHookGuards).toBe(true);
   });
 
+  it("parses trackHeuristics overrides", async () => {
+    const root = await createTempProject("config-track-heuristics");
+    await fs.mkdir(path.join(root, ".cclaw"), { recursive: true });
+    await fs.writeFile(
+      configPath(root),
+      `harnesses:
+  - claude
+trackHeuristics:
+  fallback: medium
+  priority:
+    - quick
+    - medium
+  tracks:
+    quick:
+      triggers:
+        - hotfix
+      veto:
+        - migration
+`,
+      "utf8"
+    );
+    const config = await readConfig(root);
+    expect(config.trackHeuristics?.fallback).toBe("medium");
+    expect(config.trackHeuristics?.priority).toEqual(["quick", "medium"]);
+    expect(config.trackHeuristics?.tracks?.quick?.triggers).toEqual(["hotfix"]);
+    expect(config.trackHeuristics?.tracks?.quick?.veto).toEqual(["migration"]);
+  });
+
+  it("rejects invalid regex in trackHeuristics patterns", async () => {
+    const root = await createTempProject("config-track-pattern-invalid");
+    await fs.mkdir(path.join(root, ".cclaw"), { recursive: true });
+    await fs.writeFile(
+      configPath(root),
+      `harnesses:
+  - claude
+trackHeuristics:
+  tracks:
+    medium:
+      patterns:
+        - "(unclosed"
+`,
+      "utf8"
+    );
+    await expect(readConfig(root)).rejects.toThrow(/invalid regex/);
+  });
+
   it("rejects invalid prompt guard modes", async () => {
     const root = await createTempProject("config-invalid-guard-mode");
     await fs.mkdir(path.join(root, ".cclaw"), { recursive: true });

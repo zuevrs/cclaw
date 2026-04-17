@@ -21,7 +21,8 @@ const ALLOWED_CONFIG_KEYS = new Set<string>([
   "promptGuardMode",
   "gitHookGuards",
   "defaultTrack",
-  "languageRulePacks"
+  "languageRulePacks",
+  "trackHeuristics"
 ]);
 
 function configFixExample(): string {
@@ -39,6 +40,26 @@ function configValidationError(configFilePath: string, reason: string): Error {
       `Example config:\n${configFixExample()}\n` +
       `After fixing, run: cclaw sync`
   );
+}
+
+function isRecord(value: unknown): value is Record<string, unknown> {
+  return typeof value === "object" && value !== null && !Array.isArray(value);
+}
+
+function validateStringArray(
+  value: unknown,
+  fieldName: string,
+  configFilePath: string
+): string[] | undefined {
+  if (value === undefined) return undefined;
+  if (!Array.isArray(value)) {
+    throw configValidationError(configFilePath, `"${fieldName}" must be an array of strings`);
+  }
+  const invalid = value.filter((item) => typeof item !== "string");
+  if (invalid.length > 0) {
+    throw configValidationError(configFilePath, `"${fieldName}" must contain only strings`);
+  }
+  return value as string[];
 }
 
 export function configPath(projectRoot: string): string {
@@ -202,6 +223,102 @@ export async function readConfig(projectRoot: string): Promise<VibyConfig> {
   }
   const languageRulePacks = [...new Set(rawPacks as LanguageRulePack[])];
 
+  const trackHeuristicsRaw = (parsed as { trackHeuristics?: unknown }).trackHeuristics;
+  let trackHeuristics: VibyConfig["trackHeuristics"] = undefined;
+  if (Object.prototype.hasOwnProperty.call(parsed, "trackHeuristics")) {
+    if (!isRecord(trackHeuristicsRaw)) {
+      throw configValidationError(fullPath, `"trackHeuristics" must be an object`);
+    }
+    const fallbackRaw = trackHeuristicsRaw.fallback;
+    if (fallbackRaw !== undefined && (typeof fallbackRaw !== "string" || !FLOW_TRACK_SET.has(fallbackRaw))) {
+      throw configValidationError(
+        fullPath,
+        `"trackHeuristics.fallback" must be one of: ${SUPPORTED_TRACKS_TEXT}`
+      );
+    }
+
+    const priorityRaw = trackHeuristicsRaw.priority;
+    let priority: FlowTrack[] | undefined;
+    if (priorityRaw !== undefined) {
+      if (!Array.isArray(priorityRaw)) {
+        throw configValidationError(fullPath, `"trackHeuristics.priority" must be an array`);
+      }
+      const invalidPriority = priorityRaw.filter(
+        (value) => typeof value !== "string" || !FLOW_TRACK_SET.has(value)
+      );
+      if (invalidPriority.length > 0) {
+        throw configValidationError(
+          fullPath,
+          `"trackHeuristics.priority" must contain only: ${SUPPORTED_TRACKS_TEXT}`
+        );
+      }
+      priority = [...new Set(priorityRaw as FlowTrack[])];
+    }
+
+    const tracksRaw = trackHeuristicsRaw.tracks;
+    let tracks: NonNullable<VibyConfig["trackHeuristics"]>["tracks"] = undefined;
+    if (tracksRaw !== undefined) {
+      if (!isRecord(tracksRaw)) {
+        throw configValidationError(fullPath, `"trackHeuristics.tracks" must be an object`);
+      }
+      tracks = {};
+      for (const [trackName, ruleRaw] of Object.entries(tracksRaw)) {
+        if (!FLOW_TRACK_SET.has(trackName)) {
+          throw configValidationError(
+            fullPath,
+            `"trackHeuristics.tracks" contains unknown track "${trackName}". Supported: ${SUPPORTED_TRACKS_TEXT}`
+          );
+        }
+        if (!isRecord(ruleRaw)) {
+          throw configValidationError(
+            fullPath,
+            `"trackHeuristics.tracks.${trackName}" must be an object`
+          );
+        }
+
+        const triggers = validateStringArray(
+          ruleRaw.triggers,
+          `trackHeuristics.tracks.${trackName}.triggers`,
+          fullPath
+        );
+        const patterns = validateStringArray(
+          ruleRaw.patterns,
+          `trackHeuristics.tracks.${trackName}.patterns`,
+          fullPath
+        );
+        const veto = validateStringArray(
+          ruleRaw.veto,
+          `trackHeuristics.tracks.${trackName}.veto`,
+          fullPath
+        );
+        if (patterns) {
+          for (const pattern of patterns) {
+            try {
+              // eslint-disable-next-line no-new
+              new RegExp(pattern, "iu");
+            } catch {
+              throw configValidationError(
+                fullPath,
+                `"trackHeuristics.tracks.${trackName}.patterns" contains invalid regex "${pattern}"`
+              );
+            }
+          }
+        }
+        tracks[trackName as FlowTrack] = {
+          triggers,
+          patterns,
+          veto
+        };
+      }
+    }
+
+    trackHeuristics = {
+      fallback: fallbackRaw as FlowTrack | undefined,
+      priority,
+      tracks
+    };
+  }
+
   return {
     version: parsed.version ?? CCLAW_VERSION,
     flowVersion: parsed.flowVersion ?? FLOW_VERSION,
@@ -210,7 +327,8 @@ export async function readConfig(projectRoot: string): Promise<VibyConfig> {
     promptGuardMode,
     gitHookGuards,
     defaultTrack,
-    languageRulePacks
+    languageRulePacks,
+    trackHeuristics
   };
 }
 

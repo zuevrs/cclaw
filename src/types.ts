@@ -57,6 +57,24 @@ export type InitProfile = (typeof INIT_PROFILES)[number];
 export const LANGUAGE_RULE_PACKS = ["typescript", "python", "go"] as const;
 export type LanguageRulePack = (typeof LANGUAGE_RULE_PACKS)[number];
 
+export interface TrackHeuristicRule {
+  triggers?: string[];
+  patterns?: string[];
+  veto?: string[];
+}
+
+export interface TrackHeuristicsConfig {
+  /** Track used when no trigger/pattern matches. */
+  fallback?: FlowTrack;
+  /**
+   * Track evaluation order. First matching track wins.
+   * Example: ["standard", "medium", "quick"].
+   */
+  priority?: FlowTrack[];
+  /** Per-track matching rules. */
+  tracks?: Partial<Record<FlowTrack, TrackHeuristicRule>>;
+}
+
 export interface VibyConfig {
   version: string;
   flowVersion: string;
@@ -76,6 +94,11 @@ export interface VibyConfig {
    * the language in question. Disabled packs have no on-disk footprint.
    */
   languageRulePacks?: LanguageRulePack[];
+  /**
+   * Optional prompt-to-track mapping overrides for /cc classification.
+   * If omitted, cclaw uses built-in defaults.
+   */
+  trackHeuristics?: TrackHeuristicsConfig;
 }
 
 export interface TransitionRule {
