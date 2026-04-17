@@ -20,6 +20,10 @@ interface ParsedArgs {
   track?: FlowTrack;
   profile?: InitProfile;
   reconcileGates?: boolean;
+  doctorJson?: boolean;
+  doctorExplain?: boolean;
+  doctorQuiet?: boolean;
+  doctorOnly?: string[];
   archiveName?: string;
   showHelp?: boolean;
   showVersion?: boolean;
@@ -37,10 +41,14 @@ Commands:
   init       Bootstrap .cclaw runtime, state, and harness shims in this project.
              Flags: --profile=<id>      Pre-fill defaults. One of: minimal | standard | full. Default: standard.
                     --harnesses=<list>  Comma list of harnesses (claude,cursor,opencode,codex). Overrides the profile default.
-                    --track=<id>        Flow track for new runs (standard | quick). Overrides the profile default.
+                    --track=<id>        Flow track for new runs (standard | medium | quick). Overrides the profile default.
   sync       Regenerate harness shim files from the current .cclaw config (non-destructive).
-  doctor     Run health checks against the local .cclaw runtime. Exit code 2 on failure.
+  doctor     Run health checks against the local .cclaw runtime. Exit code 2 when any error-severity check fails.
              Flags: --reconcile-gates   Recompute current-stage gate evidence before checks.
+                    --json              Emit machine-readable JSON output.
+                    --only=<filter>     Comma list of severities/check-name filters (error,warning,info,trace:,hook:...).
+                    --explain           Include fix + doc reference per check in text mode.
+                    --quiet             Print only failing checks (and totals).
   archive    Move .cclaw/artifacts into .cclaw/runs/<date>-<slug> and reset flow state.
              Flags: --name=<feature>    Feature slug (default: inferred from 00-idea.md).
   upgrade    Refresh generated files in .cclaw without modifying user artifacts.
@@ -114,6 +122,92 @@ function parseProfile(raw: string): InitProfile {
   return trimmed as InitProfile;
 }
 
+function parseDoctorOnly(raw: string): string[] {
+  return raw
+    .split(",")
+    .map((item) => item.trim().toLowerCase())
+    .filter((item) => item.length > 0);
+}
+
+function filterDoctorChecks(
+  checks: Awaited<ReturnType<typeof doctorChecks>>,
+  filters: string[] | undefined
+): Awaited<ReturnType<typeof doctorChecks>> {
+  if (!filters || filters.length === 0) {
+    return checks;
+  }
+  return checks.filter((check) => {
+    const name = check.name.toLowerCase();
+    return filters.some((filter) => {
+      if (filter === "error" || filter === "warning" || filter === "info") {
+        return check.severity === filter;
+      }
+      return name.includes(filter);
+    });
+  });
+}
+
+function doctorCountsBySeverity(checks: Awaited<ReturnType<typeof doctorChecks>>): {
+  error: { total: number; failing: number };
+  warning: { total: number; failing: number };
+  info: { total: number; failing: number };
+} {
+  const result = {
+    error: { total: 0, failing: 0 },
+    warning: { total: 0, failing: 0 },
+    info: { total: 0, failing: 0 }
+  };
+  for (const check of checks) {
+    const bucket = result[check.severity];
+    bucket.total += 1;
+    if (!check.ok) {
+      bucket.failing += 1;
+    }
+  }
+  return result;
+}
+
+function printDoctorText(
+  ctx: CliContext,
+  checks: Awaited<ReturnType<typeof doctorChecks>>,
+  options: { explain: boolean; quiet: boolean }
+): void {
+  const orderedSeverities: Array<"error" | "warning" | "info"> = ["error", "warning", "info"];
+  const view = options.quiet ? checks.filter((check) => !check.ok) : checks;
+
+  for (const severity of orderedSeverities) {
+    const inBucket = view.filter((check) => check.severity === severity);
+    if (inBucket.length === 0) continue;
+    ctx.stdout.write(`\n[${severity.toUpperCase()}]\n`);
+    for (const check of inBucket) {
+      const status = check.ok ? "PASS" : "FAIL";
+      ctx.stdout.write(`${status} ${check.name} :: ${check.summary}\n`);
+      if (!options.quiet) {
+        ctx.stdout.write(`  details: ${check.details}\n`);
+      }
+      if (options.explain) {
+        ctx.stdout.write(`  fix: ${check.fix}\n`);
+        if (check.docRef) {
+          ctx.stdout.write(`  docs: ${check.docRef}\n`);
+        }
+      }
+    }
+  }
+
+  const counts = doctorCountsBySeverity(checks);
+  const failingErrors = checks.filter((check) => check.severity === "error" && !check.ok).length;
+  ctx.stdout.write(
+    `\nTotals: error ${counts.error.failing}/${counts.error.total} failing, ` +
+      `warning ${counts.warning.failing}/${counts.warning.total} failing, ` +
+      `info ${counts.info.failing}/${counts.info.total} failing\n`
+  );
+  if (failingErrors > 0) {
+    ctx.stdout.write(`Doctor status: BLOCKED (${failingErrors} failing error checks)\n`);
+  } else {
+    ctx.stdout.write("Doctor status: HEALTHY (no failing error checks)\n");
+  }
+}
+
 function parseArgs(argv: string[]): ParsedArgs {
   const parsed: ParsedArgs = {};
 
@@ -148,6 +242,22 @@ function parseArgs(argv: string[]): ParsedArgs {
     }
     if (flag === "--reconcile-gates") {
       parsed.reconcileGates = true;
+      continue;
+    }
+    if (flag === "--json") {
+      parsed.doctorJson = true;
+      continue;
+    }
+    if (flag === "--explain") {
+      parsed.doctorExplain = true;
+      continue;
+    }
+    if (flag === "--quiet") {
+      parsed.doctorQuiet = true;
+      continue;
+    }
+    if (flag.startsWith("--only=")) {
+      parsed.doctorOnly = parseDoctorOnly(flag.replace("--only=", ""));
       continue;
     }
     if (flag.startsWith("--name=")) {
@@ -198,8 +308,26 @@ async function runCommand(parsed: ParsedArgs, ctx: CliContext): Promise<number> 
     const checks = await doctorChecks(ctx.cwd, {
       reconcileCurrentStageGates: parsed.reconcileGates === true
     });
-    for (const check of checks) {
-      ctx.stdout.write(`${check.ok ? "PASS" : "FAIL"} ${check.name} :: ${check.details}\n`);
+    const filteredChecks = filterDoctorChecks(checks, parsed.doctorOnly);
+    const explain = parsed.doctorExplain === true;
+    const quiet = parsed.doctorQuiet === true;
+
+    if (parsed.doctorJson === true) {
+      const counts = doctorCountsBySeverity(filteredChecks);
+      ctx.stdout.write(
+        `${JSON.stringify({
+          ok: doctorSucceeded(checks),
+          filters: parsed.doctorOnly ?? [],
+          counts,
+          checks: filteredChecks
+        }, null, 2)}\n`
+      );
+    } else {
+      if (filteredChecks.length === 0) {
+        ctx.stdout.write("No checks matched the --only filter.\n");
+      } else {
+        printDoctorText(ctx, filteredChecks, { explain, quiet });
+      }
     }
     return doctorSucceeded(checks) ? 0 : 2;
   }

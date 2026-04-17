@@ -59,6 +59,7 @@ describe("install lifecycle", () => {
     expect(flow.activeRunId).toBe("active");
     await expect(fs.stat(path.join(root, ".cclaw/state/checkpoint.json"))).resolves.toBeDefined();
     await expect(fs.stat(path.join(root, ".cclaw/state/stage-activity.jsonl"))).resolves.toBeDefined();
+    await expect(fs.stat(path.join(root, ".cclaw/state/preamble-log.jsonl"))).resolves.toBeDefined();
 
     const claudeHooks = JSON.parse(
       await fs.readFile(path.join(root, ".claude/hooks/hooks.json"), "utf8")
@@ -81,6 +82,23 @@ describe("install lifecycle", () => {
     expect(agentsMd).not.toContain("### Agent Specialists");
     expect(agentsMd).not.toContain("### Hooks (real lifecycle integration)");
     expect(agentsMd).not.toContain("### Runtime Details (full mode)");
+  });
+
+  it("doctor emits severity, fix, and doc references", async () => {
+    const root = await createTempProject("doctor-metadata");
+    await initCclaw({ projectRoot: root });
+
+    const checks = await doctorChecks(root);
+    const configCheck = checks.find((check) => check.name === "config:valid");
+    const warningCheck = checks.find((check) => check.name === "warning:capability:jq");
+
+    expect(configCheck).toBeDefined();
+    expect(configCheck?.severity).toBe("error");
+    expect(configCheck?.fix.length).toBeGreaterThan(0);
+    expect(configCheck?.docRef).toContain(".cclaw/references/doctor/");
+
+    expect(warningCheck).toBeDefined();
+    expect(warningCheck?.severity).toBe("warning");
   });
 
   it("sync regenerates shim files", async () => {

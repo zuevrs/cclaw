@@ -62,6 +62,7 @@ import {
   HARNESS_TOOL_REFS_INDEX_MD,
   harnessToolRefMarkdown
 } from "./content/harness-tool-refs.js";
+import { DOCTOR_REFERENCE_MARKDOWN } from "./content/doctor-references.js";
 import { createInitialFlowState } from "./flow-state.js";
 import { ensureDir, exists, writeFileSafe } from "./fs-utils.js";
 import { ensureGitignore, removeGitignorePatterns } from "./gitignore.js";
@@ -350,6 +351,11 @@ async function writeSkills(projectRoot: string, config?: VibyConfig): Promise<vo
       runtimePath(projectRoot, ...harnessRefsDir, `${harness}.md`),
       harnessToolRefMarkdown(harness)
     );
+  }
+
+  const doctorRefsDir = ["references", "doctor"] as const;
+  for (const [fileName, markdown] of Object.entries(DOCTOR_REFERENCE_MARKDOWN)) {
+    await writeFileSafe(runtimePath(projectRoot, ...doctorRefsDir, fileName), markdown);
   }
 }
 

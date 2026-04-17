@@ -31,6 +31,15 @@ describe("cli parser", () => {
     expect(parsed.reconcileGates).toBe(true);
   });
 
+  it("parses doctor output flags", () => {
+    const parsed = parseArgs(["doctor", "--json", "--explain", "--quiet", "--only=error,hook:"]);
+    expect(parsed.command).toBe("doctor");
+    expect(parsed.doctorJson).toBe(true);
+    expect(parsed.doctorExplain).toBe(true);
+    expect(parsed.doctorQuiet).toBe(true);
+    expect(parsed.doctorOnly).toEqual(["error", "hook:"]);
+  });
+
   it("recognizes --help and -h at any position", () => {
     expect(parseArgs(["--help"]).showHelp).toBe(true);
     expect(parseArgs(["-h"]).showHelp).toBe(true);

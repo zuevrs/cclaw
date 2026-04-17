@@ -21,6 +21,7 @@ import {
   verifyCurrentStageGateEvidence
 } from "./gate-evidence.js";
 import { stageSkillFolder } from "./content/skills.js";
+import { doctorCheckMetadata } from "./doctor-registry.js";
 import {
   LANGUAGE_RULE_PACK_DIR,
   LANGUAGE_RULE_PACK_FILES,
@@ -28,8 +29,10 @@ import {
   UTILITY_SKILL_FOLDERS
 } from "./content/utility-skills.js";
 import { CONTEXT_MODES, DEFAULT_CONTEXT_MODE } from "./content/contexts.js";
+import { DOCTOR_REFERENCE_MARKDOWN } from "./content/doctor-references.js";
 import { validateHookDocument } from "./hook-schema.js";
 import type { HarnessId } from "./types.js";
+import type { DoctorSeverity } from "./doctor-registry.js";
 
 const execFileAsync = promisify(execFile);
 const PREAMBLE_COOLDOWN_MS = 15 * 60 * 1000;
@@ -38,12 +41,19 @@ export interface DoctorCheck {
   name: string;
   ok: boolean;
   details: string;
+  severity: DoctorSeverity;
+  summary: string;
+  fix: string;
+  docRef?: string;
 }
 
 export interface DoctorOptions {
   /** When true, normalize current-stage gate catalog and persist reconciliation before checks. */
   reconcileCurrentStageGates?: boolean;
 }
+
+type PendingDoctorCheck = Omit<DoctorCheck, "severity" | "summary" | "fix" | "docRef"> &
+  Partial<Pick<DoctorCheck, "severity" | "summary" | "fix" | "docRef">>;
 
 async function isGitRepo(projectRoot: string): Promise<boolean> {
   try {
@@ -255,7 +265,7 @@ async function opencodePluginRuntimeShapeCheck(projectRoot: string): Promise<{ o
 }
 
 export async function doctorChecks(projectRoot: string, options: DoctorOptions = {}): Promise<DoctorCheck[]> {
-  const checks: DoctorCheck[] = [];
+  const checks: PendingDoctorCheck[] = [];
 
   for (const dir of REQUIRED_DIRS) {
     const fullPath = path.join(projectRoot, dir);
@@ -375,6 +385,16 @@ export async function doctorChecks(projectRoot: string, options: DoctorOptions =
     const refPath = path.join(stageRefDir, `${stage}-examples.md`);
     checks.push({
       name: `stage_examples_ref:${stage}`,
+      ok: await exists(refPath),
+      details: refPath
+    });
+  }
+
+  const doctorRefDir = path.join(projectRoot, RUNTIME_ROOT, "references", "doctor");
+  for (const fileName of Object.keys(DOCTOR_REFERENCE_MARKDOWN)) {
+    const refPath = path.join(doctorRefDir, fileName);
+    checks.push({
+      name: `doctor_ref:${fileName.replace(/\.md$/, "")}`,
       ok: await exists(refPath),
       details: refPath
     });
@@ -1181,9 +1201,18 @@ export async function doctorChecks(projectRoot: string, options: DoctorOptions =
   const policy = await policyChecks(projectRoot, { harnesses: configuredHarnesses });
   checks.push(...policy);
 
-  return checks;
+  return checks.map((check): DoctorCheck => {
+    const metadata = doctorCheckMetadata(check.name);
+    return {
+      ...check,
+      severity: check.severity ?? metadata.severity,
+      summary: check.summary ?? metadata.summary,
+      fix: check.fix ?? metadata.fix,
+      docRef: check.docRef ?? metadata.docRef
+    };
+  });
 }
 
 export function doctorSucceeded(checks: DoctorCheck[]): boolean {
-  return checks.every((check) => check.ok);
+  return checks.every((check) => check.ok || check.severity !== "error");
 }
