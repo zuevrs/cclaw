@@ -153,6 +153,79 @@ describe("install lifecycle", () => {
     expect(unclassified).toEqual([]);
   });
 
+  it("doctor keeps runtime-integrity check families at error severity", async () => {
+    const root = await createTempProject("doctor-integrity-severity");
+    await initCclaw({ projectRoot: root });
+
+    const checks = await doctorChecks(root);
+
+    const integrityPrefixes = [
+      "hook:",
+      "hooks:",
+      "lifecycle:",
+      "git_hooks:",
+      "meta_skill:",
+      "protocol:",
+      "stage_skill:",
+      "context_mode:",
+      "knowledge:",
+      "artifacts:",
+      "runs:",
+      "flow_state:",
+      "state:",
+      "contexts:",
+      "gates:",
+      "trace:",
+      "delegation:",
+      "shim:",
+      "dir:",
+      "command:",
+      "utility_command:",
+      "utility_skill:",
+      "agent:",
+      "harness_tool_ref:",
+      "harness_ref:",
+      "stage_examples_ref:",
+      "doctor_ref:"
+    ];
+
+    const infoAllowlist = new Set(["gates:reconcile:writeback"]);
+
+    const offenders = checks.filter((check) => {
+      if (infoAllowlist.has(check.name)) return false;
+      if (!integrityPrefixes.some((prefix) => check.name.startsWith(prefix))) return false;
+      if (check.name.startsWith("warning:")) return false;
+      if (/^skill:.*:(max_lines|min_lines|canonical_sections)$/u.test(check.name)) return false;
+      return check.severity !== "error";
+    });
+
+    if (offenders.length > 0) {
+      const detail = offenders
+        .map((check) => `${check.name} -> severity=${check.severity}`)
+        .join("\n");
+      throw new Error(
+        `Runtime-integrity checks must be error severity so doctor fails closed.\n${detail}`
+      );
+    }
+  });
+
+  it("doctor classifies every emitted check via an explicit registry rule", async () => {
+    const root = await createTempProject("doctor-fallback-free");
+    await initCclaw({ projectRoot: root });
+
+    const checks = await doctorChecks(root);
+
+    const fallbackFix = "Report this check name to cclaw maintainers";
+    const fellThrough = checks.filter((check) => check.fix.startsWith(fallbackFix));
+
+    if (fellThrough.length > 0) {
+      const detail = fellThrough.map((check) => check.name).sort().join("\n");
+      throw new Error(
+        `Doctor emitted checks that fell through to the fallback classifier:\n${detail}`
+      );
+    }
+  });
+
   it("sync regenerates shim files", async () => {
     const root = await createTempProject("sync");
     await initCclaw({ projectRoot: root });
