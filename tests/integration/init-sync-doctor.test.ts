@@ -69,6 +69,7 @@ describe("install lifecycle", () => {
       .filter((name) => /^cc(?:-.*)?\.md$/u.test(name))
       .sort();
     expect(claudeShims).toEqual([
+      "cc-ideate.md",
       "cc-learn.md",
       "cc-next.md",
       "cc-ops.md",

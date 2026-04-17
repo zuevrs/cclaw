@@ -18,9 +18,10 @@ If you are about to violate the Iron Law, STOP. No amount of urgency, partial pr
 
 ## Quick Start
 
-1. Obey HARD-GATE and Iron Law.
-2. Execute checklist in order and persist \`.cclaw/artifacts/07-review.md\`.
-3. Satisfy gates (\`review_layer1_spec_compliance\`, \`review_layer2_correctness\`, \`review_layer2_security\` +7).
+1. Announce at start: "Using \`two-layer-review\` to Validate that implementation matches spec and meets quality/security/performance bar through structured two-layer review.".
+2. Obey HARD-GATE and Iron Law.
+3. Execute checklist in order and persist \`.cclaw/artifacts/07-review.md\`.
+4. Satisfy gates (\`review_layer1_spec_compliance\`, \`review_layer2_correctness\`, \`review_layer2_security\` +7).
 
 
 ## Overview
@@ -245,6 +246,18 @@ Shared decision/ask-user protocol:
 
 **STOP:** resolve findings in this section before moving forward.
 
+### Specialist Lens: Data & Migration Safety
+- Schema/data migrations are reversible and include backfill/rollback strategy
+- Idempotency expectations are explicit for retryable flows
+- Data-loss scenarios (truncate/overwrite/drop) are guarded by checks or dry-runs
+- Boundary contracts (API/schema/event payload) maintain backward compatibility or are versioned
+
+### Specialist Lens: Developer Experience
+- New behavior includes discoverable docs/usage notes where needed
+- Error messages are actionable for on-call and local debugging
+- Default configuration remains safe and unsurprising
+- Change footprint stays minimal and avoids hidden coupling
+
 ### Meta-Review: Verify the Verification
 - Were tests actually run (not just assumed to pass)?
 - Do the test names match what they actually test?
@@ -258,6 +271,9 @@ Provide fresh, stage-local verification evidence from this turn:
 1. Run verification commands (tests/build/lint/type-check) for the changed scope.
 2. Confirm output, do not infer success from prior runs.
 3. If this is a bug fix, capture RED -> GREEN evidence for the regression path.
+
+Reference utility skill:
+\`.cclaw/skills/verification-before-completion/SKILL.md\`
 
 ## Cross-Stage Traceability
 
@@ -329,6 +345,7 @@ See:
 - \`.cclaw/skills/session/SKILL.md\`
 - \`.cclaw/skills/security/SKILL.md\`
 - \`.cclaw/skills/parallel-dispatch/SKILL.md\`
+- \`.cclaw/skills/verification-before-completion/SKILL.md\`
 - \`.cclaw/commands/review.md\`
 "
 `;
@@ -351,9 +368,10 @@ If you are about to violate the Iron Law, STOP. No amount of urgency, partial pr
 
 ## Quick Start
 
-1. Obey HARD-GATE and Iron Law.
-2. Execute checklist in order and persist \`.cclaw/artifacts/08-ship.md\`.
-3. Satisfy gates (\`ship_review_verdict_valid\`, \`ship_preflight_passed\`, \`ship_release_notes_written\` +4).
+1. Announce at start: "Using \`shipping-and-handoff\` to Prepare a safe release handoff with clear rollback and branch finalization decision.".
+2. Obey HARD-GATE and Iron Law.
+3. Execute checklist in order and persist \`.cclaw/artifacts/08-ship.md\`.
+4. Satisfy gates (\`ship_review_verdict_valid\`, \`ship_preflight_passed\`, \`ship_release_notes_written\` +4).
 
 
 ## Overview
@@ -423,10 +441,11 @@ You MUST complete these steps in order:
 4. Re-run tests on merged result — if merging locally, run the full test suite AFTER the merge, not just before. Post-merge failures are common.
 5. Generate release notes — summarize what changed, why, and what it affects. Reference spec criteria. Include: breaking changes, new dependencies, migration steps if any.
 6. Write rollback plan — trigger conditions (what tells you it is broken), rollback steps (exact commands/git operations), and verification (how to confirm rollback worked).
-7. Monitoring checklist — what should be watched after deploy? Error rates, latency, key business metrics. If no monitoring exists, flag it as a risk.
-8. Select finalization mode — exactly ONE enum: (A) FINALIZE_MERGE_LOCAL, (B) FINALIZE_OPEN_PR, (C) FINALIZE_KEEP_BRANCH, (D) FINALIZE_DISCARD_BRANCH. For discard: list what will be deleted, require typed confirmation.
-9. Execute finalization — perform the selected action. For merge: verify clean merge. For PR: include structured body (summary, test plan, rollback). For discard: verify deletion.
-10. Worktree cleanup — if using git worktrees, clean up the worktree after merge/discard. Keep it only for 'keep branch' mode.
+7. Load utility skills — \`verification-before-completion\` for fresh evidence and \`finishing-a-development-branch\` for finalization workflow.
+8. Monitoring checklist — what should be watched after deploy? Error rates, latency, key business metrics. If no monitoring exists, flag it as a risk.
+9. Select finalization mode — exactly ONE enum: (A) FINALIZE_MERGE_LOCAL, (B) FINALIZE_OPEN_PR, (C) FINALIZE_KEEP_BRANCH, (D) FINALIZE_DISCARD_BRANCH. For discard: list what will be deleted, require typed confirmation.
+10. Execute finalization — perform the selected action. For merge: verify clean merge. For PR: include structured body (summary, test plan, rollback). For discard: verify deletion.
+11. Worktree cleanup — if using git worktrees, clean up the worktree after merge/discard. Keep it only for 'keep branch' mode.
 
 ## Good vs Bad (at-a-glance)
 
@@ -541,6 +560,9 @@ Provide fresh, stage-local verification evidence from this turn:
 2. Confirm output, do not infer success from prior runs.
 3. If this is a bug fix, capture RED -> GREEN evidence for the regression path.
 
+Reference utility skill:
+\`.cclaw/skills/verification-before-completion/SKILL.md\`
+
 ## Cross-Stage Traceability
 
 Reads from:
@@ -610,6 +632,8 @@ See:
 - \`.cclaw/skills/session/SKILL.md\`
 - \`.cclaw/skills/ci-cd/SKILL.md\`
 - \`.cclaw/skills/docs/SKILL.md\`
+- \`.cclaw/skills/verification-before-completion/SKILL.md\`
+- \`.cclaw/skills/finishing-a-development-branch/SKILL.md\`
 - \`.cclaw/commands/ship.md\`
 "
 `;
@@ -632,9 +656,10 @@ If you are about to violate the Iron Law, STOP. No amount of urgency, partial pr
 
 ## Quick Start
 
-1. Obey HARD-GATE and Iron Law.
-2. Execute checklist in order and persist \`.cclaw/artifacts/05-plan.md\`.
-3. Satisfy gates (\`plan_tasks_sliced_2_5_min\`, \`plan_dependency_graph_written\`, \`plan_dependency_waves_defined\` +3).
+1. Announce at start: "Using \`planning-and-task-breakdown\` to Create small executable tasks with dependencies and pause for explicit user confirmation.".
+2. Obey HARD-GATE and Iron Law.
+3. Execute checklist in order and persist \`.cclaw/artifacts/05-plan.md\`.
+4. Satisfy gates (\`plan_tasks_sliced_2_5_min\`, \`plan_dependency_graph_written\`, \`plan_dependency_waves_defined\` +3).
 
 
 ## Overview
@@ -921,9 +946,10 @@ If you are about to violate the Iron Law, STOP. No amount of urgency, partial pr
 
 ## Quick Start
 
-1. Obey HARD-GATE and Iron Law.
-2. Execute checklist in order and persist \`.cclaw/artifacts/06-tdd.md\`.
-3. Satisfy gates (\`tdd_red_test_written\`, \`tdd_red_failure_captured\`, \`tdd_trace_to_acceptance\` +5).
+1. Announce at start: "Using \`test-driven-development\` to Implement features through the TDD cycle: write failing tests, make them pass with minimal code, then refactor.".
+2. Obey HARD-GATE and Iron Law.
+3. Execute checklist in order and persist \`.cclaw/artifacts/06-tdd.md\`.
+4. Satisfy gates (\`tdd_red_test_written\`, \`tdd_red_failure_captured\`, \`tdd_trace_to_acceptance\` +5).
 
 
 ## Overview
@@ -1164,6 +1190,9 @@ Provide fresh, stage-local verification evidence from this turn:
 2. Confirm output, do not infer success from prior runs.
 3. If this is a bug fix, capture RED -> GREEN evidence for the regression path.
 
+Reference utility skill:
+\`.cclaw/skills/verification-before-completion/SKILL.md\`
+
 ## Cross-Stage Traceability
 
 Reads from:
@@ -1262,9 +1291,10 @@ If you are about to violate the Iron Law, STOP. No amount of urgency, partial pr
 
 ## Quick Start
 
-1. Obey HARD-GATE and Iron Law.
-2. Execute checklist in order and persist \`.cclaw/artifacts/01-brainstorm.md\`.
-3. Satisfy gates (\`brainstorm_context_explored\`, \`brainstorm_idea_understood\`, \`brainstorm_approaches_compared\` +2).
+1. Announce at start: "Using \`brainstorming\` to Turn an initial idea into an approved design direction through natural collaborative dialogue — understanding the problem before proposing solutions.".
+2. Obey HARD-GATE and Iron Law.
+3. Execute checklist in order and persist \`.cclaw/artifacts/01-brainstorm.md\`.
+4. Satisfy gates (\`brainstorm_context_explored\`, \`brainstorm_idea_understood\`, \`brainstorm_approaches_compared\` +2).
 
 
 ## Overview
