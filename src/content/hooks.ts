@@ -52,6 +52,7 @@ set -euo pipefail
 ${DETECT_ROOT}
 
 STATE_FILE="$ROOT/${RUNTIME_ROOT}/state/flow-state.json"
+ACTIVE_FEATURE_FILE="$ROOT/${RUNTIME_ROOT}/state/active-feature.json"
 CHECKPOINT_FILE="$ROOT/${RUNTIME_ROOT}/state/checkpoint.json"
 ACTIVITY_FILE="$ROOT/${RUNTIME_ROOT}/state/stage-activity.jsonl"
 SUGGESTION_MEMORY_FILE="$ROOT/${RUNTIME_ROOT}/state/suggestion-memory.json"
@@ -66,13 +67,16 @@ META_SKILL="$ROOT/${RUNTIME_ROOT}/skills/${META_SKILL_NAME}/SKILL.md"
 STAGE="none"
 COMPLETED="0"
 ACTIVE_RUN="none"
+ACTIVE_FEATURE="default"
 ACTIVE_CONTEXT_MODE="default"
+STALE_STAGES=""
 CONTEXT_MODE_NOTE=""
 if [ -f "$STATE_FILE" ]; then
   if command -v jq >/dev/null 2>&1; then
     STAGE=$(jq -r '.currentStage // "none"' "$STATE_FILE" 2>/dev/null || echo "none")
     COMPLETED=$(jq -r '(.completedStages | length) // 0' "$STATE_FILE" 2>/dev/null || echo "0")
     ACTIVE_RUN=$(jq -r '.activeRunId // "none"' "$STATE_FILE" 2>/dev/null || echo "none")
+    STALE_STAGES=$(jq -r '(.staleStages // {} | keys | join(", "))' "$STATE_FILE" 2>/dev/null || echo "")
   else
     if command -v python3 >/dev/null 2>&1; then
       STAGE=$(python3 - "$STATE_FILE" <<'PY'
@@ -123,6 +127,22 @@ except Exception:
 print(run)
 PY
 )
+      STALE_STAGES=$(python3 - "$STATE_FILE" <<'PY'
+import json
+import sys
+value = ""
+try:
+    with open(sys.argv[1], "r", encoding="utf-8") as fh:
+        data = json.load(fh)
+    stale = data.get("staleStages", {})
+    if isinstance(stale, dict):
+        keys = [k for k, v in stale.items() if isinstance(v, dict)]
+        value = ", ".join(keys)
+except Exception:
+    pass
+print(value)
+PY
+)
     else
       STAGE=$(grep -o '"currentStage"[[:space:]]*:[[:space:]]*"[^"]*"' "$STATE_FILE" 2>/dev/null | head -1 | sed 's/.*"\\([^"]*\\)"$/\\1/' || echo "none")
       COMPLETED_RAW=$(grep -o '"completedStages"[[:space:]]*:[[:space:]]*\\[[^]]*\\]' "$STATE_FILE" 2>/dev/null | head -1 || echo "")
@@ -133,6 +153,28 @@ PY
       fi
       ACTIVE_RUN=$(grep -o '"activeRunId"[[:space:]]*:[[:space:]]*"[^"]*"' "$STATE_FILE" 2>/dev/null | head -1 | sed 's/.*"\\([^"]*\\)"$/\\1/' || echo "none")
     fi
+  fi
+fi
+
+if [ -f "$ACTIVE_FEATURE_FILE" ]; then
+  if command -v jq >/dev/null 2>&1; then
+    ACTIVE_FEATURE=$(jq -r '.activeFeature // "default"' "$ACTIVE_FEATURE_FILE" 2>/dev/null || echo "default")
+  elif command -v python3 >/dev/null 2>&1; then
+    ACTIVE_FEATURE=$(python3 - "$ACTIVE_FEATURE_FILE" <<'PY'
+import json
+import sys
+feature = "default"
+try:
+    with open(sys.argv[1], "r", encoding="utf-8") as fh:
+        data = json.load(fh)
+    value = data.get("activeFeature")
+    if isinstance(value, str) and value:
+        feature = value
+except Exception:
+    pass
+print(feature)
+PY
+)
   fi
 fi
 
@@ -422,7 +464,7 @@ if [ -n "$ROUTING_MISSING" ]; then
 fi
 
 # --- Build context message ---
-CTX="cclaw loaded. Flow: stage=$STAGE ($COMPLETED/8 completed, run=$ACTIVE_RUN). Active artifacts: ${RUNTIME_ROOT}/artifacts/. Learnings: $LEARNINGS_COUNT entries."
+CTX="cclaw loaded. Flow: stage=$STAGE ($COMPLETED/8 completed, run=$ACTIVE_RUN, feature=$ACTIVE_FEATURE). Active artifacts: ${RUNTIME_ROOT}/artifacts/. Feature snapshots: ${RUNTIME_ROOT}/features/$ACTIVE_FEATURE/. Learnings: $LEARNINGS_COUNT entries."
 if [ -n "$VERSION_NOTE" ]; then
   CTX="$CTX
 $VERSION_NOTE"
@@ -458,6 +500,10 @@ if [ -n "$STAGE_SUGGESTION" ]; then
   CTX="$CTX
 $STAGE_SUGGESTION
 To disable suggestions persistently set ${RUNTIME_ROOT}/state/suggestion-memory.json -> enabled=false."
+fi
+if [ -n "$STALE_STAGES" ]; then
+  CTX="$CTX
+Stale stages pending acknowledgement: $STALE_STAGES (use /cc-rewind-ack <stage> after redo)."
 fi
 if [ -n "$KNOWLEDGE_DIGEST" ]; then
   CTX="$CTX

@@ -70,6 +70,14 @@ All harnesses receive the same utility commands:
 - \`/cc\` - flow entry and resume
 - \`/cc-next\` - stage progression
 - \`/cc-learn\` - knowledge capture/lookup
+- \`/cc-status\` - read-only visual flow snapshot
+- \`/cc-tree\` - deep flow tree (stages, artifacts, stale markers)
+- \`/cc-diff\` - before/after flow-state diff map
+- \`/cc-feature\` - multi-feature workspace management
+- \`/cc-tdd-log\` - explicit RED/GREEN/REFACTOR evidence log
+- \`/cc-retro\` - mandatory retrospective gate before archive
+- \`/cc-rewind\` - rewind flow and invalidate downstream stages
+- \`/cc-rewind-ack\` - clear stale stage markers after redo
 
 Stage order remains canonical:
 \`brainstorm -> scope -> design -> spec -> plan -> tdd -> review -> ship\`

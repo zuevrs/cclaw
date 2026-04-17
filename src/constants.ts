@@ -20,6 +20,7 @@ export const REQUIRED_DIRS = [
   `${RUNTIME_ROOT}/contexts`,
   `${RUNTIME_ROOT}/templates`,
   `${RUNTIME_ROOT}/artifacts`,
+  `${RUNTIME_ROOT}/features`,
   `${RUNTIME_ROOT}/state`,
   `${RUNTIME_ROOT}/runs`,
   `${RUNTIME_ROOT}/rules`,
@@ -58,7 +59,18 @@ export const COMMAND_FILE_ORDER: FlowStage[] = [
   "ship"
 ];
 
-export const UTILITY_COMMANDS = ["learn", "next", "status"] as const;
+export const UTILITY_COMMANDS = [
+  "learn",
+  "next",
+  "status",
+  "tree",
+  "diff",
+  "feature",
+  "tdd-log",
+  "retro",
+  "rewind",
+  "rewind-ack"
+] as const;
 
 export const SUBAGENT_SKILL_FOLDERS = [
   "subagent-dev",

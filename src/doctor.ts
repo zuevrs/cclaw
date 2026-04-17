@@ -14,12 +14,19 @@ import { readFlowState } from "./runs.js";
 import { skippedStagesForTrack } from "./flow-state.js";
 import { TRACK_STAGES } from "./types.js";
 import { checkMandatoryDelegations } from "./delegation.js";
+import {
+  ensureFeatureSystem,
+  featureRootPath,
+  listFeatures,
+  readActiveFeature
+} from "./feature-system.js";
 import { buildTraceMatrix } from "./trace-matrix.js";
 import {
   reconcileAndWriteCurrentStageGateCatalog,
   verifyCompletedStagesGateClosure,
   verifyCurrentStageGateEvidence
 } from "./gate-evidence.js";
+import { parseTddCycleLog, validateTddCycleOrder } from "./tdd-cycle.js";
 import { stageSkillFolder } from "./content/skills.js";
 import { doctorCheckMetadata } from "./doctor-registry.js";
 import {
@@ -491,7 +498,19 @@ export async function doctorChecks(projectRoot: string, options: DoctorOptions =
       });
       continue;
     }
-    for (const shim of ["cc.md", "cc-next.md", "cc-learn.md"]) {
+    for (const shim of [
+      "cc.md",
+      "cc-next.md",
+      "cc-learn.md",
+      "cc-status.md",
+      "cc-tree.md",
+      "cc-diff.md",
+      "cc-feature.md",
+      "cc-tdd-log.md",
+      "cc-retro.md",
+      "cc-rewind.md",
+      "cc-rewind-ack.md"
+    ]) {
       const shimPath = path.join(projectRoot, adapter.commandDir, shim);
       checks.push({
         name: `shim:${harness}:${shim.replace(".md", "")}`,
@@ -509,10 +528,32 @@ export async function doctorChecks(projectRoot: string, options: DoctorOptions =
     const hasCcCommand = content.includes("/cc");
     const hasCcNext = content.includes("/cc-next");
     const hasCcLearn = content.includes("/cc-learn");
+    const hasCcStatus = content.includes("/cc-status");
+    const hasCcTree = content.includes("/cc-tree");
+    const hasCcDiff = content.includes("/cc-diff");
+    const hasCcFeature = content.includes("/cc-feature");
+    const hasCcTddLog = content.includes("/cc-tdd-log");
+    const hasCcRetro = content.includes("/cc-retro");
+    const hasCcRewind = content.includes("/cc-rewind");
+    const hasCcRewindAck = content.includes("/cc-rewind-ack");
     const hasVerification = content.includes("Verification Discipline");
     const hasMinimalMarker = content.includes("intentionally minimal for cross-project use");
     const hasMetaSkillPointer = content.includes(".cclaw/skills/using-cclaw/SKILL.md");
-    agentsBlockOk = hasMarkers && hasCcCommand && hasCcNext && hasCcLearn && hasVerification && hasMinimalMarker && hasMetaSkillPointer;
+    agentsBlockOk = hasMarkers
+      && hasCcCommand
+      && hasCcNext
+      && hasCcLearn
+      && hasCcStatus
+      && hasCcTree
+      && hasCcDiff
+      && hasCcFeature
+      && hasCcTddLog
+      && hasCcRetro
+      && hasCcRewind
+      && hasCcRewindAck
+      && hasVerification
+      && hasMinimalMarker
+      && hasMetaSkillPointer;
   }
   checks.push({
     name: "agents:cclaw_block",
@@ -521,7 +562,7 @@ export async function doctorChecks(projectRoot: string, options: DoctorOptions =
   });
 
   // Utility commands
-  for (const cmd of ["learn"]) {
+  for (const cmd of ["learn", "next", "status", "tree", "diff", "feature", "tdd-log", "retro", "rewind", "rewind-ack"]) {
     const cmdPath = path.join(projectRoot, RUNTIME_ROOT, "commands", `${cmd}.md`);
     checks.push({
       name: `utility_command:${cmd}`,
@@ -533,6 +574,12 @@ export async function doctorChecks(projectRoot: string, options: DoctorOptions =
   // Utility skills
   for (const [folder, label] of [
     ["learnings", "learnings"],
+    ["flow-tree", "flow-tree"],
+    ["flow-diff", "flow-diff"],
+    ["feature-workspaces", "feature-workspaces"],
+    ["tdd-cycle-log", "tdd-cycle-log"],
+    ["flow-retro", "flow-retro"],
+    ["flow-rewind", "flow-rewind"],
     ["subagent-dev", "sdd"],
     ["parallel-dispatch", "parallel-agents"],
     ["session", "session"],
@@ -1009,6 +1056,8 @@ export async function doctorChecks(projectRoot: string, options: DoctorOptions =
     });
   }
 
+  await ensureFeatureSystem(projectRoot);
+  const activeFeature = await readActiveFeature(projectRoot);
   let flowState = await readFlowState(projectRoot);
   if (options.reconcileCurrentStageGates === true) {
     const reconciliation = await reconcileAndWriteCurrentStageGateCatalog(projectRoot);
@@ -1067,6 +1116,112 @@ export async function doctorChecks(projectRoot: string, options: DoctorOptions =
     ok: await exists(path.join(projectRoot, RUNTIME_ROOT, "artifacts")),
     details: `${RUNTIME_ROOT}/artifacts must exist as the active artifact root`
   });
+  const features = await listFeatures(projectRoot);
+  checks.push({
+    name: "state:active_feature_meta",
+    ok: await exists(path.join(projectRoot, RUNTIME_ROOT, "state", "active-feature.json")),
+    details: `${RUNTIME_ROOT}/state/active-feature.json must exist`
+  });
+  checks.push({
+    name: "state:active_feature_exists",
+    ok: features.includes(activeFeature),
+    details: features.includes(activeFeature)
+      ? `active feature "${activeFeature}" is present in ${RUNTIME_ROOT}/features`
+      : `active feature "${activeFeature}" is missing from ${RUNTIME_ROOT}/features`
+  });
+  checks.push({
+    name: "state:features_nonempty",
+    ok: features.length > 0,
+    details: features.length > 0
+      ? `${features.length} feature snapshot(s): ${features.join(", ")}`
+      : `no feature snapshots found under ${RUNTIME_ROOT}/features`
+  });
+  checks.push({
+    name: "state:active_feature_snapshot_dirs",
+    ok:
+      await exists(path.join(featureRootPath(projectRoot, activeFeature), "artifacts")) &&
+      await exists(path.join(featureRootPath(projectRoot, activeFeature), "state")),
+    details: `${RUNTIME_ROOT}/features/${activeFeature}/artifacts and /state must exist`
+  });
+  const staleStages = Object.keys(flowState.staleStages).filter((value) =>
+    COMMAND_FILE_ORDER.includes(value as (typeof COMMAND_FILE_ORDER)[number])
+  );
+  checks.push({
+    name: "state:stale_stages_resolved",
+    ok: staleStages.length === 0,
+    details: staleStages.length === 0
+      ? "no stale stages pending acknowledgement"
+      : `stale stages must be acknowledged via /cc-rewind-ack: ${staleStages.join(", ")}`
+  });
+  const retroRequired = flowState.completedStages.includes("ship");
+  const retroComplete =
+    !retroRequired ||
+    (typeof flowState.retro.completedAt === "string" && flowState.retro.compoundEntries > 0);
+  checks.push({
+    name: "state:retro_gate",
+    ok: retroComplete,
+    details: retroComplete
+      ? retroRequired
+        ? `retro gate complete (${flowState.retro.compoundEntries} compound entries)`
+        : "retro gate not required yet (ship not completed)"
+      : "retro gate incomplete: run /cc-retro and record at least one compound knowledge entry"
+  });
+  const flowSnapshotPath = path.join(projectRoot, RUNTIME_ROOT, "state", "flow-state.snapshot.json");
+  const flowSnapshotExists = await exists(flowSnapshotPath);
+  let flowSnapshotValid = flowSnapshotExists;
+  if (flowSnapshotExists) {
+    try {
+      JSON.parse(await fs.readFile(flowSnapshotPath, "utf8"));
+      flowSnapshotValid = true;
+    } catch {
+      flowSnapshotValid = false;
+    }
+  }
+  checks.push({
+    name: "state:flow_snapshot",
+    ok: flowSnapshotExists && flowSnapshotValid,
+    details: flowSnapshotExists
+      ? flowSnapshotValid
+        ? `${RUNTIME_ROOT}/state/flow-state.snapshot.json exists and is valid JSON`
+        : `${RUNTIME_ROOT}/state/flow-state.snapshot.json exists but is invalid JSON`
+      : `${RUNTIME_ROOT}/state/flow-state.snapshot.json is missing`
+  });
+  const tddLogPath = path.join(projectRoot, RUNTIME_ROOT, "state", "tdd-cycle-log.jsonl");
+  const tddLogExists = await exists(tddLogPath);
+  checks.push({
+    name: "state:tdd_cycle_log_exists",
+    ok: tddLogExists,
+    details: `${RUNTIME_ROOT}/state/tdd-cycle-log.jsonl must exist`
+  });
+  const tddCompleted = flowState.completedStages.includes("tdd")
+    || (flowState.currentStage === "review" || flowState.currentStage === "ship");
+  if (tddLogExists) {
+    const tddLogRaw = await fs.readFile(tddLogPath, "utf8");
+    const parsedCycles = parseTddCycleLog(tddLogRaw);
+    const validation = validateTddCycleOrder(parsedCycles, { runId: activeRunId || undefined });
+    const hasCoverage = validation.sliceCount > 0;
+    checks.push({
+      name: "state:tdd_cycle_order",
+      ok: validation.ok && (!tddCompleted || hasCoverage),
+      details: validation.ok
+        ? tddCompleted && !hasCoverage
+          ? "tdd stage complete but no RED/GREEN cycle evidence logged"
+          : `tdd cycle log valid (${validation.sliceCount} slice(s), open_red=${validation.openRedSlices.length})`
+        : `tdd cycle order issues: ${validation.issues.join("; ")}${
+            validation.openRedSlices.length > 0
+              ? ` | open red slices: ${validation.openRedSlices.join(", ")}`
+              : ""
+          }`
+    });
+  } else {
+    checks.push({
+      name: "state:tdd_cycle_order",
+      ok: !tddCompleted,
+      details: tddCompleted
+        ? "tdd stage complete but tdd-cycle-log.jsonl is missing"
+        : "tdd cycle order deferred until tdd stage evidence is generated"
+    });
+  }
   checks.push({
     name: "runs:archive_root",
     ok: await exists(path.join(projectRoot, RUNTIME_ROOT, "runs")),

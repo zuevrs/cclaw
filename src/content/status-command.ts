@@ -27,6 +27,10 @@ function stageActivityPath(): string {
   return `${RUNTIME_ROOT}/state/stage-activity.jsonl`;
 }
 
+function snapshotPath(): string {
+  return `${RUNTIME_ROOT}/state/flow-state.snapshot.json`;
+}
+
 /**
  * Command contract for /cc-status — a read-only snapshot command.
  * Does not mutate state. Always safe to run.
@@ -38,8 +42,8 @@ export function statusCommandContract(): string {
 
 ## Purpose
 
-**Read-only snapshot of the cclaw run.** Shows track, current stage, completed stages,
-gate coverage, mandatory delegations, and the top 3 knowledge highlights.
+**Read-only visual snapshot of the cclaw run.** Shows progress bar, current stage,
+gate coverage, delegation status, stale markers, and top knowledge highlights.
 
 This command **never mutates state**. Use it at session start to orient, or at any
 time to answer "where are we?" without advancing the flow.
@@ -49,6 +53,7 @@ time to answer "where are we?" without advancing the flow.
 - **Do not** use \`/cc-status\` output to infer gate completion for decisions — cite
   artifact evidence via \`/cc-next\` when advancing.
 - **Do not** mutate \`${flowPath}\` or delegation log from this command.
+- **Do not** rewrite \`${snapshotPath()}\` from this command (use \`/cc-diff\`).
 
 ## Algorithm
 
@@ -62,38 +67,32 @@ time to answer "where are we?" without advancing the flow.
    - Otherwise scan \`${stageActivityPath()}\` from the end for the first entry whose \`stage\` matches \`currentStage\` and use its \`ts\`.
    - Compute the duration as \`now - signalTimestamp\` and render compactly: \`<X>m\`, \`<X>h<Y>m\`, or \`<X>d<Y>h\`.
    - If no signal exists, render \`(unknown)\`.
-5. Read the top of **\`${knowledgePath}\`** — surface up to 3 most recent entries
+5. Optionally read **\`${snapshotPath()}\`** to compute gate delta versus prior baseline:
+   - If missing or invalid, render \`delta: (baseline unavailable; run /cc-diff)\`.
+6. Read the top of **\`${knowledgePath}\`** — surface up to 3 most recent entries
    (by trailing timestamp or source marker).
-6. Emit the status block described below. Do **not** load any stage skill.
+7. Emit the visual status block described below. Do **not** load any stage skill.
+
+## Visual markers
+
+Default UTF markers: \`✓\` passed, \`▶\` current, \`○\` pending, \`⊘\` skipped, \`⏸\` stale, \`✗\` blocked.  
+ASCII fallback (no UTF locale): \`[x]\`, \`[>]\`, \`[ ]\`, \`[-]\`, \`[=]\`, \`[!]\`.
 
 ## Status Block Format
 
 \`\`\`
 cclaw status
-  track:            <quick|standard>
-  current stage:    <stage>     (<N>/<total> in track)
-  time in stage:    <Xd Yh | Yh Zm | Zm | unknown>
-  context mode:     <activeMode>     (default | execution | review | incident | …)
-  completed stages: <list or "none">
-  skipped stages:   <list or "none">
-
-  gates:
-    passed:   <count> of <required>
-    blocked:  <count>
-    unmet:    <list of gate ids>
-
-  delegations (current stage):
-    required:  <list>
-    completed: <list>
-    pending:   <list>
-
-  knowledge highlights:
-    - <latest entry summary line>
-    - <second entry summary line>
-    - <third entry summary line>
-
-  next action:
-    /cc-next  (advance or resume current stage)
+  flow:   <track> · run=<runId> · feature=<feature-id>
+  stage:  <stage> (<N>/<total>) · time <Xd|XhYm|Xm|unknown> · mode <activeMode>
+  bar:    [✓ brainstorm] [✓ scope] [▶ design] [○ spec] [○ plan] [○ tdd] [○ review] [○ ship]
+  gates:  now <passed>/<required> · blocked <count> · delta <summary or baseline-unavailable>
+  delegations: [✓ <role>] [○ <role>] ...
+  stale:  <list or none>
+  knowledge:
+    - <latest entry summary>
+    - <second entry summary>
+    - <third entry summary>
+  next: /cc-next · /cc-tree · /cc-diff
 \`\`\`
 
 ## Anti-patterns
@@ -101,6 +100,7 @@ cclaw status
 - Inventing gate status without reading \`${flowPath}\`.
 - Reporting delegations as satisfied when the log says \`pending\`.
 - Advancing the stage from \`/cc-status\` — progression belongs to \`/cc-next\`.
+- Hiding stale stages; stale markers must be surfaced directly in the status line.
 
 ## Primary skill
 
@@ -116,7 +116,7 @@ export function statusCommandSkillMarkdown(): string {
   const delegationPath = delegationLogPath();
   return `---
 name: ${STATUS_SKILL_NAME}
-description: "Read-only snapshot of the cclaw flow: track, stage, gate coverage, delegations, knowledge highlights. Never mutates state."
+description: "Read-only visual snapshot of the cclaw flow with progress bar, gate delta, delegations, and stale markers."
 ---
 
 # /cc-status — Flow Status Snapshot
@@ -129,7 +129,7 @@ advancing or mutating anything. Safe to run at any point.
 ## HARD-GATE
 
 Do **not** mutate \`${flowPath}\` or \`${delegationPath}\` from this skill. This is
-a read-only command.
+a read-only command. Do **not** update \`${snapshotPath()}\` here.
 
 ## Algorithm
 
@@ -140,19 +140,28 @@ a read-only command.
    - Prefer \`${checkpointPath()}\` when \`stage === currentStage\` and \`timestamp\` parses as ISO 8601.
    - Else scan \`${stageActivityPath()}\` from tail for the most recent entry whose \`stage === currentStage\`; use its \`ts\`.
    - Render \`<X>d<Y>h\`, \`<X>h<Y>m\`, \`<X>m\`, or \`(unknown)\`.
-5. Read \`${RUNTIME_ROOT}/knowledge.jsonl\`. If missing or empty → knowledge highlights are \`(none recorded)\`. Parse each line as JSON and surface its \`trigger\`/\`action\`.
-6. For each gate in \`stageGateCatalog[currentStage].required\`:
+5. Try reading \`${snapshotPath()}\` for gate delta:
+   - If available, compare current stage \`passed\` / \`blocked\` sets against baseline.
+   - If unavailable, render \`delta: (baseline unavailable; run /cc-diff)\`.
+6. Read \`${RUNTIME_ROOT}/knowledge.jsonl\`. If missing or empty → knowledge highlights are \`(none recorded)\`. Parse each line as JSON and surface its \`trigger\`/\`action\`.
+7. For each gate in \`stageGateCatalog[currentStage].required\`:
    - Satisfied if present in \`passed\` and absent from \`blocked\`.
-7. Build and print the status block (see command contract for layout).
-8. Suggest the next action:
+8. Build and print the visual status block:
+   - stage header
+   - one-line progress bar with per-stage markers
+   - gate summary + delta
+   - delegation row
+   - stale stage row
+9. Suggest the next action:
    - If current stage has unmet gates → \`/cc-next\` to resume.
    - If current stage is complete → \`/cc-next\` to advance (or report "Flow complete" if terminal).
 
 ## Output Guidelines
 
-- Keep output compact (≤ 25 lines) — status, not narrative.
+- Keep output compact (≤ 30 lines) — status, not narrative.
 - Report counts, not full artifact contents.
 - If any data source is missing or corrupt, say so explicitly rather than guessing.
+- Include \`/cc-tree\` for deep structure and \`/cc-diff\` for before/after map in the final line.
 
 ## Anti-patterns
 

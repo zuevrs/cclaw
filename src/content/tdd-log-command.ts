@@ -1,0 +1,80 @@
+import { RUNTIME_ROOT } from "../constants.js";
+
+const TDD_LOG_SKILL_FOLDER = "tdd-cycle-log";
+const TDD_LOG_SKILL_NAME = "tdd-cycle-log";
+
+function logPath(): string {
+  return `${RUNTIME_ROOT}/state/tdd-cycle-log.jsonl`;
+}
+
+function flowStatePath(): string {
+  return `${RUNTIME_ROOT}/state/flow-state.json`;
+}
+
+export function tddLogCommandContract(): string {
+  return `# /cc-tdd-log
+
+## Purpose
+
+Record explicit RED/GREEN/REFACTOR evidence used by workflow guard and doctor checks.
+
+## HARD-GATE
+
+- Every implementation write in tdd must be preceded by a logged RED event.
+- Use append-only JSONL at \`${logPath()}\`; never rewrite prior lines.
+
+## Subcommands
+
+- \`/cc-tdd-log red <slice> <command> [note]\`
+- \`/cc-tdd-log green <slice> <command> [note]\`
+- \`/cc-tdd-log refactor <slice> <command> [note]\`
+- \`/cc-tdd-log show\`
+
+## Log Schema
+
+Each JSON line must include:
+- \`ts\` (ISO timestamp)
+- \`runId\` (from flow-state)
+- \`stage\` (usually \`tdd\`)
+- \`slice\` (e.g. \`S-1\`)
+- \`phase\` (\`red\` | \`green\` | \`refactor\`)
+- \`command\`
+- optional: \`files\`, \`exitCode\`, \`note\`
+
+## Primary skill
+
+**${RUNTIME_ROOT}/skills/${TDD_LOG_SKILL_FOLDER}/SKILL.md**
+`;
+}
+
+export function tddLogCommandSkillMarkdown(): string {
+  return `---
+name: ${TDD_LOG_SKILL_NAME}
+description: "Append RED/GREEN/REFACTOR entries into tdd-cycle-log.jsonl for guard/doctor enforcement."
+---
+
+# /cc-tdd-log
+
+## HARD-GATE
+
+Do not fake RED evidence. A \`red\` entry must correspond to a failing test command.
+
+## Protocol
+
+1. Read \`${flowStatePath()}\` and capture \`activeRunId\` + \`currentStage\`.
+2. Build JSON entry:
+   - \`ts\`: now ISO
+   - \`runId\`: activeRunId
+   - \`stage\`: currentStage
+   - \`slice\`: user-provided slice id
+   - \`phase\`: red|green|refactor
+   - \`command\`: test command or refactor verification command
+3. Append one line to \`${logPath()}\`.
+4. \`show\`: print the last 20 lines grouped by slice.
+
+## Validation
+
+- File remains valid JSONL (one JSON object per line).
+- For each slice, first phase must be \`red\`.
+`;
+}

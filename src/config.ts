@@ -19,6 +19,8 @@ const ALLOWED_CONFIG_KEYS = new Set<string>([
   "harnesses",
   "autoAdvance",
   "promptGuardMode",
+  "tddEnforcement",
+  "tddTestGlobs",
   "gitHookGuards",
   "defaultTrack",
   "languageRulePacks",
@@ -76,6 +78,8 @@ export function createDefaultConfig(
     harnesses,
     autoAdvance: false,
     promptGuardMode: "advisory",
+    tddEnforcement: "advisory",
+    tddTestGlobs: ["**/*.test.*", "**/*.spec.*", "**/test/**"],
     gitHookGuards: false,
     defaultTrack,
     languageRulePacks: []
@@ -103,6 +107,7 @@ export function createProfileConfig(
         harnesses: overrides.harnesses ?? ["claude"],
         autoAdvance: false,
         promptGuardMode: "advisory",
+        tddEnforcement: "advisory",
         gitHookGuards: false,
         defaultTrack: overrides.defaultTrack ?? "medium",
         languageRulePacks: overrides.languageRulePacks ?? []
@@ -113,6 +118,7 @@ export function createProfileConfig(
         harnesses: overrides.harnesses ?? DEFAULT_HARNESSES,
         autoAdvance: false,
         promptGuardMode: "advisory",
+        tddEnforcement: "advisory",
         gitHookGuards: false,
         defaultTrack: overrides.defaultTrack ?? "standard",
         languageRulePacks: overrides.languageRulePacks ?? []
@@ -123,6 +129,7 @@ export function createProfileConfig(
         harnesses: overrides.harnesses ?? DEFAULT_HARNESSES,
         autoAdvance: false,
         promptGuardMode: "strict",
+        tddEnforcement: "strict",
         gitHookGuards: true,
         defaultTrack: overrides.defaultTrack ?? "standard",
         languageRulePacks: overrides.languageRulePacks ?? [...LANGUAGE_RULE_PACKS]
@@ -184,6 +191,20 @@ export async function readConfig(projectRoot: string): Promise<VibyConfig> {
     throw configValidationError(fullPath, `"promptGuardMode" must be "advisory" or "strict"`);
   }
   const promptGuardMode = promptGuardModeRaw === "strict" ? "strict" : "advisory";
+
+  const tddEnforcementRaw = (parsed as { tddEnforcement?: unknown }).tddEnforcement;
+  if (
+    Object.prototype.hasOwnProperty.call(parsed, "tddEnforcement") &&
+    tddEnforcementRaw !== "advisory" &&
+    tddEnforcementRaw !== "strict"
+  ) {
+    throw configValidationError(fullPath, `"tddEnforcement" must be "advisory" or "strict"`);
+  }
+  const tddEnforcement = tddEnforcementRaw === "strict" ? "strict" : "advisory";
+
+  const tddTestGlobsRaw = (parsed as { tddTestGlobs?: unknown }).tddTestGlobs;
+  const tddTestGlobs = validateStringArray(tddTestGlobsRaw, "tddTestGlobs", fullPath)
+    ?? ["**/*.test.*", "**/*.spec.*", "**/test/**"];
 
   const gitHookGuardsRaw = parsed.gitHookGuards;
   if (
@@ -325,6 +346,8 @@ export async function readConfig(projectRoot: string): Promise<VibyConfig> {
     harnesses,
     autoAdvance,
     promptGuardMode,
+    tddEnforcement,
+    tddTestGlobs,
     gitHookGuards,
     defaultTrack,
     languageRulePacks,

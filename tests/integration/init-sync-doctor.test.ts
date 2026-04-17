@@ -60,7 +60,12 @@ describe("install lifecycle", () => {
     await expect(fs.stat(path.join(root, ".cclaw/state/checkpoint.json"))).resolves.toBeDefined();
     await expect(fs.stat(path.join(root, ".cclaw/state/stage-activity.jsonl"))).resolves.toBeDefined();
     await expect(fs.stat(path.join(root, ".cclaw/state/preamble-log.jsonl"))).resolves.toBeDefined();
+    await expect(fs.stat(path.join(root, ".cclaw/state/flow-state.snapshot.json"))).resolves.toBeDefined();
     await expect(fs.stat(path.join(root, ".cclaw/state/harness-gaps.json"))).resolves.toBeDefined();
+    await expect(fs.stat(path.join(root, ".cclaw/commands/tree.md"))).resolves.toBeDefined();
+    await expect(fs.stat(path.join(root, ".cclaw/commands/diff.md"))).resolves.toBeDefined();
+    await expect(fs.stat(path.join(root, ".claude/commands/cc-tree.md"))).resolves.toBeDefined();
+    await expect(fs.stat(path.join(root, ".claude/commands/cc-diff.md"))).resolves.toBeDefined();
     const harnessGaps = JSON.parse(
       await fs.readFile(path.join(root, ".cclaw/state/harness-gaps.json"), "utf8")
     ) as {

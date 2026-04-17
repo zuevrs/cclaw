@@ -3,12 +3,14 @@ import path from "node:path";
 import { describe, expect, it } from "vitest";
 import { createInitialFlowState } from "../../src/flow-state.js";
 import {
+  acknowledgeStaleStage,
   archiveRun,
   CorruptFlowStateError,
   ensureRunSystem,
   InvalidStageTransitionError,
   listRuns,
   readFlowState,
+  rewindRun,
   writeFlowState
 } from "../../src/runs.js";
 import { createTempProject } from "../helpers/index.js";
@@ -21,6 +23,8 @@ describe("runs system", () => {
     expect(state.activeRunId).toBe("active");
     expect(state.currentStage).toBe("brainstorm");
     await expect(fs.stat(path.join(root, ".cclaw/artifacts"))).resolves.toBeTruthy();
+    await expect(fs.stat(path.join(root, ".cclaw/features/default"))).resolves.toBeTruthy();
+    await expect(fs.stat(path.join(root, ".cclaw/state/active-feature.json"))).resolves.toBeTruthy();
     await expect(fs.stat(path.join(root, ".cclaw/runs"))).resolves.toBeTruthy();
   });
 
@@ -42,6 +46,7 @@ describe("runs system", () => {
     const state = await readFlowState(root);
 
     expect(archived.archiveId).toMatch(/^\d{4}-\d{2}-\d{2}-payments-revamp/);
+    expect(archived.activeFeature).toBe("default");
     await expect(
       fs.readFile(path.join(archived.archivePath, "artifacts", "01-brainstorm.md"), "utf8")
     ).resolves.toContain("# draft");
@@ -64,6 +69,56 @@ describe("runs system", () => {
 
     expect(second.archiveId).not.toBe(first.archiveId);
     expect(second.archiveId).toMatch(/-2$/);
+  });
+
+  it("blocks archive when ship is complete but retro gate is not satisfied", async () => {
+    const root = await createTempProject("runs-retro-block");
+    await ensureRunSystem(root);
+    await writeFlowState(
+      root,
+      {
+        ...createInitialFlowState("active"),
+        currentStage: "ship",
+        completedStages: ["brainstorm", "scope", "design", "spec", "plan", "tdd", "review", "ship"]
+      },
+      { allowReset: true }
+    );
+
+    await expect(archiveRun(root, "Retro Blocked")).rejects.toThrow(/retro gate/i);
+  });
+
+  it("allows archive after retro artifact + compound knowledge are present", async () => {
+    const root = await createTempProject("runs-retro-ok");
+    await ensureRunSystem(root);
+    await writeFlowState(
+      root,
+      {
+        ...createInitialFlowState("active"),
+        currentStage: "ship",
+        completedStages: ["brainstorm", "scope", "design", "spec", "plan", "tdd", "review", "ship"]
+      },
+      { allowReset: true }
+    );
+    await fs.writeFile(path.join(root, ".cclaw/artifacts/09-retro.md"), "# retro\n", "utf8");
+    await fs.writeFile(
+      path.join(root, ".cclaw/knowledge.jsonl"),
+      `${JSON.stringify({
+        type: "compound",
+        trigger: "when shipping a high-risk change",
+        action: "run focused rollback drill before merge",
+        confidence: "high",
+        domain: "ship",
+        stage: "retro",
+        created: "2026-01-01T00:00:00Z",
+        project: "cclaw"
+      })}\n`,
+      "utf8"
+    );
+
+    const archived = await archiveRun(root, "Retro Ready");
+    expect(archived.retro.required).toBe(true);
+    expect(archived.retro.completed).toBe(true);
+    expect(archived.retro.compoundEntries).toBeGreaterThanOrEqual(1);
   });
 
   it("lists archived run folders", async () => {
@@ -191,6 +246,7 @@ describe("runs system", () => {
     expect(manifest.version).toBe(1);
     expect(manifest.archiveId).toBe(archived.archiveId);
     expect(manifest.featureName).toBe("Search Revamp");
+    expect(manifest.activeFeature).toBe("default");
     expect(manifest.sourceCurrentStage).toBe("plan");
     expect(manifest.sourceCompletedStages).toEqual([
       "brainstorm",
@@ -261,5 +317,73 @@ describe("runs system", () => {
     const stored = await readFlowState(root);
     expect(stored.currentStage).toBe("scope");
     expect(stored.completedStages).toEqual(["brainstorm"]);
+  });
+
+  it("rewind invalidates downstream stages and archives stale artifacts", async () => {
+    const root = await createTempProject("runs-rewind");
+    await ensureRunSystem(root);
+    await writeFlowState(
+      root,
+      {
+        ...createInitialFlowState("active"),
+        currentStage: "review",
+        completedStages: ["brainstorm", "scope", "design", "spec", "plan", "tdd"]
+      },
+      { allowReset: true }
+    );
+    await fs.writeFile(path.join(root, ".cclaw/artifacts/05-plan.md"), "# plan\n", "utf8");
+    await fs.writeFile(path.join(root, ".cclaw/artifacts/06-tdd.md"), "# tdd\n", "utf8");
+    await fs.writeFile(path.join(root, ".cclaw/artifacts/07-review.md"), "# review\n", "utf8");
+
+    const rewound = await rewindRun(root, { to: "spec", reason: "requirements shift" });
+    const state = await readFlowState(root);
+
+    expect(rewound.from).toBe("review");
+    expect(rewound.to).toBe("spec");
+    expect(rewound.invalidatedStages).toEqual(["plan", "tdd", "review"]);
+    expect(state.currentStage).toBe("spec");
+    expect(state.completedStages).toEqual(["brainstorm", "scope", "design"]);
+    expect(Object.keys(state.staleStages).sort()).toEqual(["plan", "review", "tdd"]);
+    await expect(fs.stat(path.join(root, ".cclaw/artifacts/05-plan.stale.md"))).resolves.toBeTruthy();
+    await expect(fs.stat(path.join(root, ".cclaw/artifacts/06-tdd.stale.md"))).resolves.toBeTruthy();
+    await expect(fs.stat(path.join(root, ".cclaw/artifacts/07-review.stale.md"))).resolves.toBeTruthy();
+    await expect(
+      fs.readFile(path.join(rewound.archivePath, "05-plan.md"), "utf8")
+    ).resolves.toContain("# plan");
+    const rewindLog = await fs.readFile(path.join(root, ".cclaw/state/rewind-log.jsonl"), "utf8");
+    expect(rewindLog).toContain("\"toStage\":\"spec\"");
+  });
+
+  it("acknowledgeStaleStage clears exactly one stale marker", async () => {
+    const root = await createTempProject("runs-rewind-ack");
+    await ensureRunSystem(root);
+    await writeFlowState(
+      root,
+      {
+        ...createInitialFlowState("active"),
+        currentStage: "tdd",
+        completedStages: ["brainstorm", "scope", "design", "spec", "plan"],
+        staleStages: {
+          tdd: {
+            rewindId: "rewind-1",
+            reason: "test",
+            markedAt: "2026-01-01T00:00:00.000Z"
+          },
+          review: {
+            rewindId: "rewind-1",
+            reason: "test",
+            markedAt: "2026-01-01T00:00:00.000Z"
+          }
+        }
+      },
+      { allowReset: true }
+    );
+
+    const result = await acknowledgeStaleStage(root, "tdd");
+    const state = await readFlowState(root);
+    expect(result.acknowledged).toBe(true);
+    expect(result.remaining).toEqual(["review"]);
+    expect(state.staleStages.tdd).toBeUndefined();
+    expect(state.staleStages.review).toBeDefined();
   });
 });

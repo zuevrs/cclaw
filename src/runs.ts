@@ -6,9 +6,16 @@ import {
   createInitialFlowState,
   isFlowTrack,
   skippedStagesForTrack,
+  trackStages,
   type FlowState
 } from "./flow-state.js";
+import {
+  ensureFeatureSystem,
+  readActiveFeature,
+  syncActiveFeatureSnapshot
+} from "./feature-system.js";
 import { ensureDir, exists, withDirectoryLock, writeFileSafe } from "./fs-utils.js";
+import { stageSchema } from "./content/stage-schema.js";
 import type { FlowStage, FlowTrack } from "./types.js";
 
 export class InvalidStageTransitionError extends Error {
@@ -67,6 +74,8 @@ const FLOW_STATE_REL_PATH = `${RUNTIME_ROOT}/state/flow-state.json`;
 const RUNS_DIR_REL_PATH = `${RUNTIME_ROOT}/runs`;
 const ACTIVE_ARTIFACTS_REL_PATH = `${RUNTIME_ROOT}/artifacts`;
 const STATE_DIR_REL_PATH = `${RUNTIME_ROOT}/state`;
+const REWIND_LOG_REL_PATH = `${RUNTIME_ROOT}/state/rewind-log.jsonl`;
+const REWIND_ARCHIVE_DIR_NAME = "_rewind-archive";
 const FLOW_STAGE_SET = new Set<string>(COMMAND_FILE_ORDER);
 
 /** State filenames explicitly excluded from the archive snapshot. */
@@ -86,6 +95,7 @@ export interface ArchiveRunResult {
   archivePath: string;
   archivedAt: string;
   featureName: string;
+  activeFeature: string;
   resetState: FlowState;
   snapshottedStateFiles: string[];
   /** Knowledge curation hint: total active entries + soft threshold (50). */
@@ -95,6 +105,13 @@ export interface ArchiveRunResult {
     overThreshold: boolean;
     knowledgePath: string;
   };
+  retro: {
+    required: boolean;
+    completed: boolean;
+    skipped: boolean;
+    skipReason?: string;
+    compoundEntries: number;
+  };
 }
 
 export interface ArchiveManifest {
@@ -102,14 +119,36 @@ export interface ArchiveManifest {
   archiveId: string;
   archivedAt: string;
   featureName: string;
+  activeFeature: string;
   sourceRunId: string;
   sourceCurrentStage: FlowStage;
   sourceCompletedStages: FlowStage[];
   snapshottedStateFiles: string[];
+  retro: ArchiveRunResult["retro"];
+}
+
+export interface RewindRunOptions {
+  to: FlowStage;
+  reason?: string;
+}
+
+export interface RewindRunResult {
+  rewindId: string;
+  from: FlowStage;
+  to: FlowStage;
+  invalidatedStages: FlowStage[];
+  staleArtifacts: string[];
+  archivePath: string;
+  nextState: FlowState;
 }
 
 interface EnsureRunSystemOptions {
   createIfMissing?: boolean;
+}
+
+export interface ArchiveRunOptions {
+  skipRetro?: boolean;
+  skipRetroReason?: string;
 }
 
 function flowStatePath(projectRoot: string): string {
@@ -130,6 +169,14 @@ function activeArtifactsPath(projectRoot: string): string {
 
 function stateDirPath(projectRoot: string): string {
   return path.join(projectRoot, STATE_DIR_REL_PATH);
+}
+
+function rewindLogPath(projectRoot: string): string {
+  return path.join(projectRoot, REWIND_LOG_REL_PATH);
+}
+
+function rewindArchivePath(projectRoot: string, rewindId: string): string {
+  return path.join(activeArtifactsPath(projectRoot), REWIND_ARCHIVE_DIR_NAME, rewindId);
 }
 
 async function snapshotStateDirectory(
@@ -282,6 +329,92 @@ function sanitizeSkippedStages(value: unknown, track: FlowTrack): FlowStage[] {
   return out.length > 0 ? out : trackDefault;
 }
 
+function sanitizeStaleStages(
+  value: unknown
+): FlowState["staleStages"] {
+  if (!value || typeof value !== "object" || Array.isArray(value)) {
+    return {};
+  }
+  const out: FlowState["staleStages"] = {};
+  for (const [stage, raw] of Object.entries(value as Record<string, unknown>)) {
+    if (!isFlowStage(stage)) continue;
+    if (!raw || typeof raw !== "object" || Array.isArray(raw)) continue;
+    const typed = raw as Record<string, unknown>;
+    const rewindId = typeof typed.rewindId === "string" ? typed.rewindId : "";
+    const reason = typeof typed.reason === "string" ? typed.reason : "";
+    const markedAt = typeof typed.markedAt === "string" ? typed.markedAt : "";
+    const acknowledgedAt = typeof typed.acknowledgedAt === "string" ? typed.acknowledgedAt : undefined;
+    if (!rewindId || !reason || !markedAt) {
+      continue;
+    }
+    out[stage] = {
+      rewindId,
+      reason,
+      markedAt,
+      acknowledgedAt
+    };
+  }
+  return out;
+}
+
+function sanitizeRewinds(value: unknown): FlowState["rewinds"] {
+  if (!Array.isArray(value)) {
+    return [];
+  }
+  const out: FlowState["rewinds"] = [];
+  for (const raw of value) {
+    if (!raw || typeof raw !== "object" || Array.isArray(raw)) {
+      continue;
+    }
+    const typed = raw as Record<string, unknown>;
+    if (
+      typeof typed.id !== "string" ||
+      !isFlowStage(typed.fromStage) ||
+      !isFlowStage(typed.toStage) ||
+      typeof typed.reason !== "string" ||
+      typeof typed.timestamp !== "string"
+    ) {
+      continue;
+    }
+    const invalidatedStages = Array.isArray(typed.invalidatedStages)
+      ? typed.invalidatedStages.filter((stage): stage is FlowStage => isFlowStage(stage))
+      : [];
+    out.push({
+      id: typed.id,
+      fromStage: typed.fromStage,
+      toStage: typed.toStage,
+      reason: typed.reason,
+      timestamp: typed.timestamp,
+      invalidatedStages
+    });
+  }
+  return out;
+}
+
+function sanitizeRetroState(value: unknown): FlowState["retro"] {
+  const fallback: FlowState["retro"] = {
+    required: false,
+    completedAt: undefined,
+    compoundEntries: 0
+  };
+  if (!value || typeof value !== "object" || Array.isArray(value)) {
+    return fallback;
+  }
+  const typed = value as Record<string, unknown>;
+  const required = typeof typed.required === "boolean" ? typed.required : false;
+  const completedAt = typeof typed.completedAt === "string" ? typed.completedAt : undefined;
+  const compoundEntriesRaw = typed.compoundEntries;
+  const compoundEntries =
+    typeof compoundEntriesRaw === "number" && Number.isFinite(compoundEntriesRaw) && compoundEntriesRaw >= 0
+      ? Math.floor(compoundEntriesRaw)
+      : 0;
+  return {
+    required,
+    completedAt,
+    compoundEntries
+  };
+}
+
 function coerceFlowState(parsed: Record<string, unknown>): FlowState {
   const track = coerceTrack(parsed.track);
   const next = createInitialFlowState("active", track);
@@ -297,7 +430,10 @@ function coerceFlowState(parsed: Record<string, unknown>): FlowState {
     guardEvidence: sanitizeGuardEvidence(parsed.guardEvidence),
     stageGateCatalog: sanitizeStageGateCatalog(parsed.stageGateCatalog, next.stageGateCatalog),
     track,
-    skippedStages: sanitizeSkippedStages(parsed.skippedStages, track)
+    skippedStages: sanitizeSkippedStages(parsed.skippedStages, track),
+    staleStages: sanitizeStaleStages(parsed.staleStages),
+    rewinds: sanitizeRewinds(parsed.rewinds),
+    retro: sanitizeRetroState(parsed.retro)
   };
 }
 
@@ -351,6 +487,80 @@ async function uniqueArchiveId(projectRoot: string, baseId: string): Promise<str
   return candidate;
 }
 
+function rewindTimestampId(date = new Date()): string {
+  return date
+    .toISOString()
+    .replace(/[-:]/gu, "")
+    .replace(/\.\d{3}Z$/u, "Z");
+}
+
+function staleArtifactFileName(fileName: string): string {
+  const ext = path.extname(fileName);
+  if (!ext) {
+    return `${fileName}.stale`;
+  }
+  const base = fileName.slice(0, -ext.length);
+  return `${base}.stale${ext}`;
+}
+
+function stageIndexMapForTrack(track: FlowTrack): Map<FlowStage, number> {
+  return new Map(trackStages(track).map((stage, index) => [stage, index]));
+}
+
+function retroArtifactPath(projectRoot: string): string {
+  return path.join(activeArtifactsPath(projectRoot), "09-retro.md");
+}
+
+interface RetroGateStatus {
+  required: boolean;
+  completed: boolean;
+  compoundEntries: number;
+  hasRetroArtifact: boolean;
+}
+
+async function evaluateRetroGate(projectRoot: string, state: FlowState): Promise<RetroGateStatus> {
+  const required = state.completedStages.includes("ship");
+  const artifactFile = retroArtifactPath(projectRoot);
+  let hasRetroArtifact = false;
+  if (await exists(artifactFile)) {
+    try {
+      const raw = await fs.readFile(artifactFile, "utf8");
+      hasRetroArtifact = raw.trim().length > 0;
+    } catch {
+      hasRetroArtifact = false;
+    }
+  }
+  const knowledgeFile = path.join(projectRoot, RUNTIME_ROOT, "knowledge.jsonl");
+  let compoundEntries = 0;
+  if (await exists(knowledgeFile)) {
+    try {
+      const raw = await fs.readFile(knowledgeFile, "utf8");
+      for (const line of raw.split(/\r?\n/)) {
+        const trimmed = line.trim();
+        if (!trimmed) continue;
+        try {
+          const parsed = JSON.parse(trimmed) as { type?: unknown };
+          if (parsed.type === "compound") {
+            compoundEntries += 1;
+          }
+        } catch {
+          // ignore malformed lines for retro gate calculation
+        }
+      }
+    } catch {
+      compoundEntries = 0;
+    }
+  }
+
+  const completed = required ? (hasRetroArtifact && compoundEntries > 0) : true;
+  return {
+    required,
+    completed,
+    compoundEntries,
+    hasRetroArtifact
+  };
+}
+
 export class CorruptFlowStateError extends Error {
   readonly statePath: string;
   readonly quarantinedPath: string;
@@ -392,6 +602,7 @@ async function quarantineCorruptState(statePath: string, cause: unknown): Promis
 }
 
 export async function readFlowState(projectRoot: string): Promise<FlowState> {
+  await ensureFeatureSystem(projectRoot);
   const statePath = flowStatePath(projectRoot);
   if (!(await exists(statePath))) {
     return createInitialFlowState();
@@ -422,6 +633,7 @@ export async function writeFlowState(
   state: FlowState,
   options: WriteFlowStateOptions = {}
 ): Promise<void> {
+  await ensureFeatureSystem(projectRoot);
   await withDirectoryLock(flowStateLockPath(projectRoot), async () => {
     const statePath = flowStatePath(projectRoot);
     if (!options.allowReset && (await exists(statePath))) {
@@ -443,12 +655,14 @@ export async function writeFlowState(
     const safe = coerceFlowState({ ...(state as unknown as Record<string, unknown>) });
     await writeFileSafe(statePath, `${JSON.stringify(safe, null, 2)}\n`);
   });
+  await syncActiveFeatureSnapshot(projectRoot);
 }
 
 export async function ensureRunSystem(
   projectRoot: string,
   _options: EnsureRunSystemOptions = {}
 ): Promise<FlowState> {
+  await ensureFeatureSystem(projectRoot);
   await ensureDir(runsRoot(projectRoot));
   await ensureDir(activeArtifactsPath(projectRoot));
   const statePath = flowStatePath(projectRoot);
@@ -456,6 +670,7 @@ export async function ensureRunSystem(
   if (!(await exists(statePath))) {
     await writeFlowState(projectRoot, state, { allowReset: true });
   }
+  await syncActiveFeatureSnapshot(projectRoot);
   return state;
 }
 
@@ -487,8 +702,13 @@ export async function listRuns(projectRoot: string): Promise<CclawRunMeta[]> {
   return runs.sort((a, b) => a.createdAt.localeCompare(b.createdAt));
 }
 
-export async function archiveRun(projectRoot: string, featureName?: string): Promise<ArchiveRunResult> {
+export async function archiveRun(
+  projectRoot: string,
+  featureName?: string,
+  options: ArchiveRunOptions = {}
+): Promise<ArchiveRunResult> {
   await ensureRunSystem(projectRoot);
+  const activeFeature = await readActiveFeature(projectRoot);
   const artifactsDir = activeArtifactsPath(projectRoot);
   const runsDir = runsRoot(projectRoot);
   await ensureDir(runsDir);
@@ -502,7 +722,38 @@ export async function archiveRun(projectRoot: string, featureName?: string): Pro
   const archivePath = path.join(runsDir, archiveId);
   const archiveArtifactsPath = path.join(archivePath, "artifacts");
 
-  const sourceState = await readFlowState(projectRoot);
+  let sourceState = await readFlowState(projectRoot);
+  const retroGate = await evaluateRetroGate(projectRoot, sourceState);
+  const skipRetro = options.skipRetro === true;
+  const skipRetroReason = options.skipRetroReason?.trim();
+  if (skipRetro && (!skipRetroReason || skipRetroReason.length === 0)) {
+    throw new Error("archive --skip-retro requires --retro-reason=<text>.");
+  }
+  if (retroGate.required && !retroGate.completed && !skipRetro) {
+    throw new Error(
+      "Archive blocked: retro gate is required after ship completion. " +
+      "Run /cc-retro and append at least one compound knowledge entry, or re-run archive with --skip-retro and --retro-reason."
+    );
+  }
+  if (retroGate.completed) {
+    const completedAt = sourceState.retro.completedAt ?? new Date().toISOString();
+    sourceState = {
+      ...sourceState,
+      retro: {
+        required: retroGate.required,
+        completedAt,
+        compoundEntries: retroGate.compoundEntries
+      }
+    };
+    await writeFlowState(projectRoot, sourceState, { allowReset: true });
+  }
+  const retroSummary: ArchiveRunResult["retro"] = {
+    required: retroGate.required,
+    completed: retroGate.completed,
+    skipped: skipRetro,
+    skipReason: skipRetro ? skipRetroReason : undefined,
+    compoundEntries: retroGate.compoundEntries
+  };
 
   await ensureDir(archivePath);
   await fs.rename(artifactsDir, archiveArtifactsPath);
@@ -520,10 +771,12 @@ export async function archiveRun(projectRoot: string, featureName?: string): Pro
     archiveId,
     archivedAt,
     featureName: feature,
+    activeFeature,
     sourceRunId: sourceState.activeRunId,
     sourceCurrentStage: sourceState.currentStage,
     sourceCompletedStages: sourceState.completedStages,
-    snapshottedStateFiles
+    snapshottedStateFiles,
+    retro: retroSummary
   };
   await writeFileSafe(
     path.join(archivePath, "archive-manifest.json"),
@@ -531,15 +784,196 @@ export async function archiveRun(projectRoot: string, featureName?: string): Pro
   );
 
   const knowledgeStats = await readKnowledgeStats(projectRoot);
+  await syncActiveFeatureSnapshot(projectRoot);
 
   return {
     archiveId,
     archivePath,
     archivedAt,
     featureName: feature,
+    activeFeature,
     resetState,
     snapshottedStateFiles,
-    knowledge: knowledgeStats
+    knowledge: knowledgeStats,
+    retro: retroSummary
+  };
+}
+
+export async function rewindRun(
+  projectRoot: string,
+  options: RewindRunOptions
+): Promise<RewindRunResult> {
+  await ensureRunSystem(projectRoot);
+  const state = await readFlowState(projectRoot);
+  const track = state.track ?? "standard";
+  const ordered = trackStages(track);
+  const stageToIndex = stageIndexMapForTrack(track);
+  const toIndex = stageToIndex.get(options.to);
+  const currentIndex = stageToIndex.get(state.currentStage);
+  if (toIndex === undefined) {
+    throw new Error(`Cannot rewind to "${options.to}" because it is outside track "${track}".`);
+  }
+  if (currentIndex === undefined) {
+    throw new Error(`Current stage "${state.currentStage}" is not part of track "${track}".`);
+  }
+  if (toIndex > currentIndex) {
+    throw new Error(`Cannot rewind forward from "${state.currentStage}" to "${options.to}".`);
+  }
+
+  const reason = options.reason?.trim() && options.reason.trim().length > 0
+    ? options.reason.trim()
+    : "manual_rewind";
+  const nowIso = new Date().toISOString();
+  const rewindId = `rewind-${rewindTimestampId()}`;
+
+  const invalidatedStages = ordered.filter((stage) => {
+    const idx = stageToIndex.get(stage);
+    if (idx === undefined || idx <= toIndex) {
+      return false;
+    }
+    return state.completedStages.includes(stage) || stage === state.currentStage;
+  });
+
+  const nextCompletedStages = state.completedStages.filter((stage) => {
+    const idx = stageToIndex.get(stage);
+    return typeof idx === "number" && idx < toIndex;
+  });
+
+  const freshCatalog = createInitialFlowState({ activeRunId: state.activeRunId, track }).stageGateCatalog;
+  const nextCatalog: FlowState["stageGateCatalog"] = { ...state.stageGateCatalog };
+  for (const stage of ordered) {
+    const idx = stageToIndex.get(stage);
+    if (idx === undefined) continue;
+    if (idx >= toIndex) {
+      nextCatalog[stage] = {
+        ...freshCatalog[stage],
+        required: [...freshCatalog[stage].required],
+        recommended: [...freshCatalog[stage].recommended],
+        conditional: [...freshCatalog[stage].conditional],
+        triggered: [],
+        passed: [],
+        blocked: []
+      };
+    }
+  }
+
+  const nextGuardEvidence: Record<string, string> = { ...state.guardEvidence };
+  for (const stage of ordered) {
+    const idx = stageToIndex.get(stage);
+    if (idx === undefined || idx < toIndex) continue;
+    const catalog = state.stageGateCatalog[stage];
+    const gateIds = new Set([
+      ...catalog.required,
+      ...catalog.recommended,
+      ...catalog.conditional,
+      ...catalog.triggered,
+      ...catalog.passed,
+      ...catalog.blocked
+    ]);
+    for (const gateId of gateIds) {
+      delete nextGuardEvidence[gateId];
+    }
+  }
+
+  const nextStale: FlowState["staleStages"] = {};
+  for (const [stage, marker] of Object.entries(state.staleStages) as Array<
+    [FlowStage, FlowState["staleStages"][FlowStage]]
+  >) {
+    if (!marker) continue;
+    const idx = stageToIndex.get(stage);
+    if (idx === undefined || idx <= toIndex) {
+      continue;
+    }
+    nextStale[stage] = marker;
+  }
+  for (const stage of invalidatedStages) {
+    nextStale[stage] = {
+      rewindId,
+      reason,
+      markedAt: nowIso
+    };
+  }
+
+  const archivePath = rewindArchivePath(projectRoot, rewindId);
+  const staleArtifacts: string[] = [];
+  for (const stage of invalidatedStages) {
+    const artifactFile = stageSchema(stage).artifactFile;
+    const artifactPath = path.join(activeArtifactsPath(projectRoot), artifactFile);
+    if (!(await exists(artifactPath))) {
+      continue;
+    }
+    await ensureDir(archivePath);
+    await ensureDir(path.join(archivePath, path.dirname(artifactFile)));
+    await fs.copyFile(artifactPath, path.join(archivePath, artifactFile));
+    const staleName = staleArtifactFileName(artifactFile);
+    const stalePath = path.join(activeArtifactsPath(projectRoot), staleName);
+    await fs.rm(stalePath, { force: true });
+    await fs.rename(artifactPath, stalePath);
+    staleArtifacts.push(staleName);
+  }
+
+  const rewindRecord: FlowState["rewinds"][number] = {
+    id: rewindId,
+    fromStage: state.currentStage,
+    toStage: options.to,
+    reason,
+    timestamp: nowIso,
+    invalidatedStages
+  };
+  const nextState: FlowState = {
+    ...state,
+    currentStage: options.to,
+    completedStages: nextCompletedStages,
+    guardEvidence: nextGuardEvidence,
+    stageGateCatalog: nextCatalog,
+    staleStages: nextStale,
+    rewinds: [...state.rewinds, rewindRecord]
+  };
+  await writeFlowState(projectRoot, nextState, { allowReset: true });
+
+  const rewindLogEntry = {
+    ...rewindRecord,
+    track,
+    runId: state.activeRunId,
+    staleArtifacts
+  };
+  await ensureDir(path.dirname(rewindLogPath(projectRoot)));
+  await fs.appendFile(rewindLogPath(projectRoot), `${JSON.stringify(rewindLogEntry)}\n`, "utf8");
+
+  return {
+    rewindId,
+    from: state.currentStage,
+    to: options.to,
+    invalidatedStages,
+    staleArtifacts,
+    archivePath,
+    nextState
+  };
+}
+
+export async function acknowledgeStaleStage(
+  projectRoot: string,
+  stage: FlowStage
+): Promise<{ acknowledged: boolean; remaining: FlowStage[] }> {
+  await ensureRunSystem(projectRoot);
+  const state = await readFlowState(projectRoot);
+  const marker = state.staleStages[stage];
+  if (!marker) {
+    return {
+      acknowledged: false,
+      remaining: Object.keys(state.staleStages).filter((value): value is FlowStage => isFlowStage(value))
+    };
+  }
+  const nextStale: FlowState["staleStages"] = { ...state.staleStages };
+  delete nextStale[stage];
+  const nextState: FlowState = {
+    ...state,
+    staleStages: nextStale
+  };
+  await writeFlowState(projectRoot, nextState, { allowReset: true });
+  return {
+    acknowledged: true,
+    remaining: Object.keys(nextStale).filter((value): value is FlowStage => isFlowStage(value))
   };
 }
 

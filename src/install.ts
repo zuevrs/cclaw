@@ -15,6 +15,16 @@ import { learnSkillMarkdown, learnCommandContract } from "./content/learnings.js
 import { nextCommandContract, nextCommandSkillMarkdown } from "./content/next-command.js";
 import { startCommandContract, startCommandSkillMarkdown } from "./content/start-command.js";
 import { statusCommandContract, statusCommandSkillMarkdown } from "./content/status-command.js";
+import { treeCommandContract, treeCommandSkillMarkdown } from "./content/tree-command.js";
+import { diffCommandContract, diffCommandSkillMarkdown } from "./content/diff-command.js";
+import { featureCommandContract, featureCommandSkillMarkdown } from "./content/feature-command.js";
+import { tddLogCommandContract, tddLogCommandSkillMarkdown } from "./content/tdd-log-command.js";
+import { retroCommandContract, retroCommandSkillMarkdown } from "./content/retro-command.js";
+import {
+  rewindAcknowledgeCommandContract,
+  rewindCommandContract,
+  rewindCommandSkillMarkdown
+} from "./content/rewind-command.js";
 import { subagentDrivenDevSkill, parallelAgentsSkill } from "./content/subagents.js";
 import { sessionHooksSkillMarkdown } from "./content/session-hooks.js";
 import {
@@ -288,6 +298,30 @@ async function writeSkills(projectRoot: string, config?: VibyConfig): Promise<vo
     runtimePath(projectRoot, "skills", "flow-status", "SKILL.md"),
     statusCommandSkillMarkdown()
   );
+  await writeFileSafe(
+    runtimePath(projectRoot, "skills", "flow-tree", "SKILL.md"),
+    treeCommandSkillMarkdown()
+  );
+  await writeFileSafe(
+    runtimePath(projectRoot, "skills", "flow-diff", "SKILL.md"),
+    diffCommandSkillMarkdown()
+  );
+  await writeFileSafe(
+    runtimePath(projectRoot, "skills", "feature-workspaces", "SKILL.md"),
+    featureCommandSkillMarkdown()
+  );
+  await writeFileSafe(
+    runtimePath(projectRoot, "skills", "tdd-cycle-log", "SKILL.md"),
+    tddLogCommandSkillMarkdown()
+  );
+  await writeFileSafe(
+    runtimePath(projectRoot, "skills", "flow-retro", "SKILL.md"),
+    retroCommandSkillMarkdown()
+  );
+  await writeFileSafe(
+    runtimePath(projectRoot, "skills", "flow-rewind", "SKILL.md"),
+    rewindCommandSkillMarkdown()
+  );
 
   await writeFileSafe(
     runtimePath(projectRoot, "skills", "subagent-dev", "SKILL.md"),
@@ -382,6 +416,16 @@ async function writeUtilityCommands(projectRoot: string): Promise<void> {
   await writeFileSafe(runtimePath(projectRoot, "commands", "next.md"), nextCommandContract());
   await writeFileSafe(runtimePath(projectRoot, "commands", "start.md"), startCommandContract());
   await writeFileSafe(runtimePath(projectRoot, "commands", "status.md"), statusCommandContract());
+  await writeFileSafe(runtimePath(projectRoot, "commands", "tree.md"), treeCommandContract());
+  await writeFileSafe(runtimePath(projectRoot, "commands", "diff.md"), diffCommandContract());
+  await writeFileSafe(runtimePath(projectRoot, "commands", "feature.md"), featureCommandContract());
+  await writeFileSafe(runtimePath(projectRoot, "commands", "tdd-log.md"), tddLogCommandContract());
+  await writeFileSafe(runtimePath(projectRoot, "commands", "retro.md"), retroCommandContract());
+  await writeFileSafe(runtimePath(projectRoot, "commands", "rewind.md"), rewindCommandContract());
+  await writeFileSafe(
+    runtimePath(projectRoot, "commands", "rewind-ack.md"),
+    rewindAcknowledgeCommandContract()
+  );
 }
 
 function toObject(value: unknown): Record<string, unknown> | null {
@@ -703,7 +747,13 @@ async function writeHooks(projectRoot: string, config: VibyConfig): Promise<void
   await writeFileSafe(path.join(hooksDir, "prompt-guard.sh"), promptGuardScript({
     strictMode: config.promptGuardMode === "strict"
   }));
-  await writeFileSafe(path.join(hooksDir, "workflow-guard.sh"), workflowGuardScript());
+  await writeFileSafe(
+    path.join(hooksDir, "workflow-guard.sh"),
+    workflowGuardScript({
+      tddEnforcementMode: config.tddEnforcement ?? "advisory",
+      tddTestGlobs: config.tddTestGlobs
+    })
+  );
   await writeFileSafe(path.join(hooksDir, "context-monitor.sh"), contextMonitorScript());
   const opencodePluginSource = opencodePluginJs();
   await writeFileSafe(path.join(hooksDir, "opencode-plugin.mjs"), opencodePluginSource);
@@ -918,6 +968,7 @@ Drop this section if no hard rule applies. Keep it crisp:
 async function ensureSessionStateFiles(projectRoot: string): Promise<void> {
   const stateDir = runtimePath(projectRoot, "state");
   await ensureDir(stateDir);
+  const flow = await readFlowState(projectRoot);
 
   const activityPath = path.join(stateDir, "stage-activity.jsonl");
   if (!(await exists(activityPath))) {
@@ -926,7 +977,6 @@ async function ensureSessionStateFiles(projectRoot: string): Promise<void> {
 
   const checkpointPath = path.join(stateDir, "checkpoint.json");
   if (!(await exists(checkpointPath))) {
-    const flow = await readFlowState(projectRoot);
     const initialCheckpoint = {
       stage: flow.currentStage,
       runId: flow.activeRunId,
@@ -969,6 +1019,19 @@ async function ensureSessionStateFiles(projectRoot: string): Promise<void> {
   const preambleLogPath = path.join(stateDir, "preamble-log.jsonl");
   if (!(await exists(preambleLogPath))) {
     await writeFileSafe(preambleLogPath, "");
+  }
+
+  const tddCycleLogPath = path.join(stateDir, "tdd-cycle-log.jsonl");
+  if (!(await exists(tddCycleLogPath))) {
+    await writeFileSafe(tddCycleLogPath, "");
+  }
+
+  const flowSnapshotPath = path.join(stateDir, "flow-state.snapshot.json");
+  if (!(await exists(flowSnapshotPath))) {
+    await writeFileSafe(flowSnapshotPath, `${JSON.stringify({
+      capturedAt: new Date().toISOString(),
+      state: flow
+    }, null, 2)}\n`);
   }
 }
 

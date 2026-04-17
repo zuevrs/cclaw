@@ -37,6 +37,13 @@ describe("cli parser", () => {
     expect(parsed.archiveName).toBe("release-safety");
   });
 
+  it("parses archive retro override flags", () => {
+    const parsed = parseArgs(["archive", "--skip-retro", "--retro-reason=manual override"]);
+    expect(parsed.command).toBe("archive");
+    expect(parsed.archiveSkipRetro).toBe(true);
+    expect(parsed.archiveSkipRetroReason).toBe("manual override");
+  });
+
   it("parses doctor reconcile gates flag", () => {
     const parsed = parseArgs(["doctor", "--reconcile-gates"]);
     expect(parsed.command).toBe("doctor");
@@ -76,6 +83,8 @@ describe("cli parser", () => {
     expect(text).toContain("--version");
     expect(text).toContain("-v");
     expect(text).toContain("--track");
+    expect(text).toContain("--skip-retro");
+    expect(text).toContain("--retro-reason");
   });
 
   it("parses init with --track=quick", () => {
