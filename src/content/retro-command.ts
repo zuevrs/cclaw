@@ -41,7 +41,7 @@ Mandatory retrospective gate before archive once ship is complete.
    - \`required: true\`
    - \`completedAt: <ISO>\`
    - \`compoundEntries: <count>\`
-5. Report completion summary and remind user that \`/cc-ops archive\` is now unblocked.
+5. Report completion summary and remind user that \`/cc-ops compound\` (optional) can lift repeated learnings before \`/cc-ops archive\`.
 
 ## Primary skill
 
@@ -73,6 +73,7 @@ Archive must remain blocked until retro artifact exists and compound knowledge w
 5. Print explicit completion line:
    - \`retro gate: complete\`
    - \`compound entries added: <N>\`
+   - \`next: /cc-ops compound (optional) -> /cc-ops archive\`
 
 ## Validation
 

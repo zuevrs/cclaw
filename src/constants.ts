@@ -62,6 +62,7 @@ export const COMMAND_FILE_ORDER: FlowStage[] = [
 export const UTILITY_COMMANDS = [
   "learn",
   "next",
+  "ideate",
   "view",
   "status",
   "tree",
@@ -70,6 +71,7 @@ export const UTILITY_COMMANDS = [
   "feature",
   "tdd-log",
   "retro",
+  "compound",
   "archive",
   "rewind"
 ] as const;
