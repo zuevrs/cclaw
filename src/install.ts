@@ -33,6 +33,11 @@ import {
 } from "./content/observe.js";
 import { META_SKILL_NAME, usingCclawSkillMarkdown } from "./content/meta-skill.js";
 import {
+  decisionProtocolMarkdown,
+  completionProtocolMarkdown,
+  ethosProtocolMarkdown
+} from "./content/protocols.js";
+import {
   ARTIFACT_TEMPLATES,
   CURSOR_WORKFLOW_RULE_MDC,
   RULEBOOK_MARKDOWN,
@@ -290,6 +295,18 @@ async function writeSkills(projectRoot: string, config?: VibyConfig): Promise<vo
   await writeFileSafe(
     runtimePath(projectRoot, "skills", META_SKILL_NAME, "SKILL.md"),
     usingCclawSkillMarkdown()
+  );
+  await writeFileSafe(
+    runtimePath(projectRoot, "references", "protocols", "decision.md"),
+    decisionProtocolMarkdown()
+  );
+  await writeFileSafe(
+    runtimePath(projectRoot, "references", "protocols", "completion.md"),
+    completionProtocolMarkdown()
+  );
+  await writeFileSafe(
+    runtimePath(projectRoot, "references", "protocols", "ethos.md"),
+    ethosProtocolMarkdown()
   );
 
   for (const folder of UTILITY_SKILL_FOLDERS) {
