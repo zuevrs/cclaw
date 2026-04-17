@@ -54,66 +54,16 @@ const UTILITY_SHIMS: UtilityShimSpec[] = [
     commandFile: "learn.md"
   },
   {
-    fileName: "cc-status.md",
-    command: "status",
-    skillFolder: "flow-status",
-    commandFile: "status.md"
-  },
-  {
-    fileName: "cc-tree.md",
-    command: "tree",
-    skillFolder: "flow-tree",
-    commandFile: "tree.md"
-  },
-  {
-    fileName: "cc-diff.md",
-    command: "diff",
-    skillFolder: "flow-diff",
-    commandFile: "diff.md"
-  },
-  {
     fileName: "cc-ops.md",
     command: "ops",
     skillFolder: "flow-ops",
     commandFile: "ops.md"
-  },
-  {
-    fileName: "cc-feature.md",
-    command: "feature",
-    skillFolder: "feature-workspaces",
-    commandFile: "feature.md"
-  },
-  {
-    fileName: "cc-tdd-log.md",
-    command: "tdd-log",
-    skillFolder: "tdd-cycle-log",
-    commandFile: "tdd-log.md"
-  },
-  {
-    fileName: "cc-retro.md",
-    command: "retro",
-    skillFolder: "flow-retro",
-    commandFile: "retro.md"
-  },
-  {
-    fileName: "cc-archive.md",
-    command: "archive",
-    skillFolder: "flow-archive",
-    commandFile: "archive.md"
-  },
-  {
-    fileName: "cc-rewind.md",
-    command: "rewind",
-    skillFolder: "flow-rewind",
-    commandFile: "rewind.md"
-  },
-  {
-    fileName: "cc-rewind-ack.md",
-    command: "rewind-ack",
-    skillFolder: "flow-rewind",
-    commandFile: "rewind-ack.md"
   }
 ];
+
+export function harnessShimFileNames(): string[] {
+  return ["cc.md", ...UTILITY_SHIMS.map((shim) => shim.fileName)];
+}
 
 export const HARNESS_ADAPTERS: Record<HarnessId, HarnessAdapter> = {
   claude: {
@@ -218,16 +168,7 @@ When in doubt, prefer **non-trivial** — the quick track is opt-in and only saf
 | \`/cc-next\` | **Progression.** Advances to the next stage when current is complete. |
 | \`/cc-view\` | **Read-only router.** Unified entry for status/tree/diff views. |
 | \`/cc-learn\` | **Cross-cutting.** Capture or review project knowledge (append-only JSONL). |
-| \`/cc-status\` | **Read-only.** Visual snapshot with progress bar, gate delta, and delegations. |
-| \`/cc-tree\` | **Read-only.** Deep flow tree for stages, artifacts, and stale markers. |
-| \`/cc-diff\` | **Delta map.** Compare current flow-state with saved baseline snapshot. |
 | \`/cc-ops\` | **Operations router.** Unified entry for feature/tdd-log/retro/archive/rewind actions. |
-| \`/cc-feature\` | **Workspace.** Manage active feature snapshots for parallel tracks. |
-| \`/cc-tdd-log\` | **Evidence.** Record RED/GREEN/REFACTOR cycle events for enforcement. |
-| \`/cc-retro\` | **Learning gate.** Mandatory retrospective before archive after ship. |
-| \`/cc-archive\` | **Run finalization.** Archive active flow into \`.cclaw/runs/\` and reset runtime. |
-| \`/cc-rewind\` | **Recovery.** Rewind flow to an earlier stage and invalidate downstream work. |
-| \`/cc-rewind-ack\` | **Recovery.** Clear stale-stage markers after redo. |
 
 **Stage order:** brainstorm > scope > design > spec > plan > tdd > review > ship.
 \`/cc-next\` loads the right stage skill automatically. Gates must pass before handoff.

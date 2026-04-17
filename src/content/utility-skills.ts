@@ -782,7 +782,7 @@ description: "Read-only curation pass over the canonical strict-JSONL knowledge 
 ## When to run
 
 - Triggered automatically by **\`/cc-learn curate\`**.
-- Recommended after \`/cc-archive\` (or archive runtime) of a feature run, when knowledge has grown.
+- Recommended after \`/cc-ops archive\` (or archive runtime) of a feature run, when knowledge has grown.
 - Recommended when active entry count exceeds **50**.
 
 ## Audit dimensions

@@ -20,7 +20,7 @@ function runtimeStatePath(): string {
 }
 
 export function featureCommandContract(): string {
-  return `# /cc-feature
+  return `# /cc-ops feature
 
 ## Purpose
 
@@ -40,19 +40,19 @@ Feature snapshots live under \`${featuresRoot()}/<feature-id>/\`.
 
 ## Subcommands
 
-### \`/cc-feature status\`
+### \`/cc-ops feature status\`
 Show active feature id and snapshot location.
 
-### \`/cc-feature list\`
+### \`/cc-ops feature list\`
 List all feature ids in \`${featuresRoot()}/\` (directory names).
 
-### \`/cc-feature new <feature-id>\`
+### \`/cc-ops feature new <feature-id>\`
 Create \`${featuresRoot()}/<feature-id>/artifacts\` and \`${featuresRoot()}/<feature-id>/state\`.
 
 Optional flag:
 - \`--clone-active\`: clone current active runtime into the new feature snapshot.
 
-### \`/cc-feature switch <feature-id>\`
+### \`/cc-ops feature switch <feature-id>\`
 1. Snapshot current active runtime into \`${featuresRoot()}/<active>/\`.
 2. Restore target snapshot from \`${featuresRoot()}/<feature-id>/\` into active runtime:
    - \`${runtimeArtifactsPath()}\`
@@ -80,7 +80,7 @@ name: ${FEATURE_SKILL_NAME}
 description: "Manage cclaw multi-feature workspaces (status/list/new/switch) while preserving active flow runtime."
 ---
 
-# /cc-feature — Feature Workspace Manager
+# /cc-ops feature — Feature Workspace Manager
 
 ## HARD-GATE
 
@@ -120,7 +120,7 @@ Do not switch feature by editing only \`active-feature.json\`. A valid switch mu
 
 ## Safety checks
 
-- If target feature does not exist: block and suggest \`/cc-feature new <id>\`.
+- If target feature does not exist: block and suggest \`/cc-ops feature new <id>\`.
 - If snapshot copy fails: abort switch, keep current active feature unchanged.
 - Preserve global pointer file \`active-feature.json\` when restoring state.
 `;

@@ -83,7 +83,7 @@ export interface VibyConfig {
   promptGuardMode?: "advisory" | "strict";
   /** TDD red->green->refactor enforcement mode used by workflow guard hooks. */
   tddEnforcement?: "advisory" | "strict";
-  /** Optional test file globs used by guard guidance and /cc-tdd-log docs. */
+  /** Optional test file globs used by guard guidance and /cc-ops tdd-log docs. */
   tddTestGlobs?: string[];
   /** When true, cclaw installs managed git pre-commit/pre-push wrappers. */
   gitHookGuards?: boolean;

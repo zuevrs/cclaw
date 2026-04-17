@@ -16,7 +16,7 @@ function knowledgePath(): string {
 }
 
 export function retroCommandContract(): string {
-  return `# /cc-retro
+  return `# /cc-ops retro
 
 ## Purpose
 
@@ -41,7 +41,7 @@ Mandatory retrospective gate before archive once ship is complete.
    - \`required: true\`
    - \`completedAt: <ISO>\`
    - \`compoundEntries: <count>\`
-5. Report completion summary and remind user that \`/cc-archive\` is now unblocked.
+5. Report completion summary and remind user that \`/cc-ops archive\` is now unblocked.
 
 ## Primary skill
 
@@ -55,7 +55,7 @@ name: ${RETRO_SKILL_NAME}
 description: "Run mandatory retrospective and record compound knowledge before archive."
 ---
 
-# /cc-retro
+# /cc-ops retro
 
 ## HARD-GATE
 

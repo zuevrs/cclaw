@@ -64,8 +64,18 @@ describe("install lifecycle", () => {
     await expect(fs.stat(path.join(root, ".cclaw/state/harness-gaps.json"))).resolves.toBeDefined();
     await expect(fs.stat(path.join(root, ".cclaw/commands/tree.md"))).resolves.toBeDefined();
     await expect(fs.stat(path.join(root, ".cclaw/commands/diff.md"))).resolves.toBeDefined();
-    await expect(fs.stat(path.join(root, ".claude/commands/cc-tree.md"))).resolves.toBeDefined();
-    await expect(fs.stat(path.join(root, ".claude/commands/cc-diff.md"))).resolves.toBeDefined();
+    await expect(fs.stat(path.join(root, ".claude/commands/cc-view.md"))).resolves.toBeDefined();
+    await expect(fs.stat(path.join(root, ".claude/commands/cc-ops.md"))).resolves.toBeDefined();
+    const claudeShims = (await fs.readdir(path.join(root, ".claude/commands")))
+      .filter((name) => /^cc(?:-.*)?\.md$/u.test(name))
+      .sort();
+    expect(claudeShims).toEqual([
+      "cc-learn.md",
+      "cc-next.md",
+      "cc-ops.md",
+      "cc-view.md",
+      "cc.md"
+    ]);
     const harnessGaps = JSON.parse(
       await fs.readFile(path.join(root, ".cclaw/state/harness-gaps.json"), "utf8")
     ) as {

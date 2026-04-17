@@ -16,7 +16,7 @@ function rewindLogPath(): string {
 }
 
 export function rewindCommandContract(): string {
-  return `# /cc-rewind
+  return `# /cc-ops rewind
 
 ## Purpose
 
@@ -30,7 +30,7 @@ Rewind active flow to an earlier stage and atomically invalidate downstream work
 
 ## Inputs
 
-\`/cc-rewind <target-stage> [reason]\`
+\`/cc-ops rewind <target-stage> [reason]\`
 
 ## Algorithm
 
@@ -61,7 +61,7 @@ Rewind active flow to an earlier stage and atomically invalidate downstream work
 }
 
 export function rewindAcknowledgeCommandContract(): string {
-  return `# /cc-rewind-ack
+  return `# /cc-ops rewind-ack
 
 ## Purpose
 
@@ -69,7 +69,7 @@ Acknowledge and clear stale-stage markers after downstream work is intentionally
 
 ## Input
 
-\`/cc-rewind-ack <stage>\`
+\`/cc-ops rewind-ack <stage>\`
 
 ## HARD-GATE
 
@@ -96,7 +96,7 @@ name: ${REWIND_SKILL_NAME}
 description: "Rewind active flow stage safely and acknowledge stale invalidations."
 ---
 
-# /cc-rewind + /cc-rewind-ack
+# /cc-ops rewind + /cc-ops rewind-ack
 
 ## HARD-GATE
 

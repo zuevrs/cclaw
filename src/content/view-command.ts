@@ -51,9 +51,9 @@ Wrapper is read-only and dispatch-only. It must not mutate flow state directly.
 
 1. Parse optional subcommand token:
    - missing -> \`status\`
-   - \`status\` -> dispatch to \`/cc-status\`
-   - \`tree\` -> dispatch to \`/cc-tree\`
-   - \`diff\` -> dispatch to \`/cc-diff\`
+   - \`status\` -> dispatch to \`${RUNTIME_ROOT}/commands/status.md\`
+   - \`tree\` -> dispatch to \`${RUNTIME_ROOT}/commands/tree.md\`
+   - \`diff\` -> dispatch to \`${RUNTIME_ROOT}/commands/diff.md\`
 2. Execute the target command contract and skill.
 3. Return concise output and suggest \`/cc-view <subcommand>\` variants for navigation.
 `;

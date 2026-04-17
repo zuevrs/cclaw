@@ -12,7 +12,7 @@ function snapshotPath(): string {
 }
 
 export function diffCommandContract(): string {
-  return `# /cc-diff
+  return `# /cc-view diff
 
 ## Purpose
 
@@ -59,7 +59,7 @@ name: ${DIFF_SKILL_NAME}
 description: "Compare current flow-state against saved snapshot and render gate/stage deltas."
 ---
 
-# /cc-diff
+# /cc-view diff
 
 ## HARD-GATE
 

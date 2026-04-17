@@ -37,13 +37,13 @@ This is the only progression command the user needs to drive the entire flow. St
 
 - **Do not** invent gate completion: use only \`${flowPath}\` plus observable evidence in repo artifacts.
 - **Do not** skip stages: advance only from \`currentStage\` to its configured successor.
-- If the flow reaches terminal ship completion, route closeout in order: **/cc-retro -> /cc-archive**.
+- If the flow reaches terminal ship completion, route closeout in order: **/cc-ops retro -> /cc-ops archive**.
 
 ## Algorithm (mandatory)
 
 1. Read **\`${flowPath}\`**. If missing → **BLOCKED** (state missing).
 2. Parse JSON. Capture \`currentStage\` and \`stageGateCatalog[currentStage]\`.
-3. If \`staleStages[currentStage]\` exists, do not advance automatically. Re-run the stage artifact work, then clear the marker with \`/cc-rewind-ack <currentStage>\`.
+3. If \`staleStages[currentStage]\` exists, do not advance automatically. Re-run the stage artifact work, then clear the marker with \`/cc-ops rewind-ack <currentStage>\`.
 4. Let \`G\` = \`requiredGates\` for **\`currentStage\`** from the stage schema.
 5. Let \`catalog\` = \`stageGateCatalog[currentStage]\` from flow state.
 6. **Satisfied** for gate id \`g\`: \`g\` in \`catalog.passed\` and \`g\` not in \`catalog.blocked\`.
@@ -59,8 +59,8 @@ This is the only progression command the user needs to drive the entire flow. St
 ### Path B: Current stage IS complete (all gates passed, all delegations satisfied)
 
 → If current stage's \`next\` is **\`done\`**:
-  - if \`currentStage === "ship"\` and \`retro.completedAt\` is missing -> route to \`/cc-retro\`,
-  - if \`currentStage === "ship"\` and \`retro.completedAt\` is present -> route to \`/cc-archive\`,
+  - if \`currentStage === "ship"\` and \`retro.completedAt\` is missing -> route to \`/cc-ops retro\`,
+  - if \`currentStage === "ship"\` and \`retro.completedAt\` is present -> route to \`/cc-ops archive\`,
   - otherwise report **"Flow complete. All stages finished."** and stop.
 → Otherwise: load **\`${RUNTIME_ROOT}/skills/<skillFolder>/SKILL.md\`** and **\`${RUNTIME_ROOT}/commands/<nextStage>.md\`** for the successor stage. Execute that stage's protocol.
 
@@ -131,7 +131,7 @@ Do **not** mark gates satisfied from memory alone. Cite **artifact evidence** (p
 
 1. Open **\`${flowPath}\`**.
 2. Record \`currentStage\` and \`stageGateCatalog[currentStage]\`.
-3. If \`staleStages[currentStage]\` exists, re-run the stage and clear marker via \`/cc-rewind-ack <currentStage>\` before advancing.
+3. If \`staleStages[currentStage]\` exists, re-run the stage and clear marker via \`/cc-ops rewind-ack <currentStage>\` before advancing.
 4. If the file is missing or invalid JSON → **BLOCKED** (report and stop).
 
 ### Step 2: Evaluate gates
@@ -156,8 +156,8 @@ Execute the stage protocol. The stage skill handles interaction, STOP points, ga
 
 If \`next\` is \`done\`:
 
-- If \`currentStage\` is \`ship\` and \`retro.completedAt\` is missing -> route to \`/cc-retro\`.
-- If \`currentStage\` is \`ship\` and \`retro.completedAt\` exists -> route to \`/cc-archive\`.
+- If \`currentStage\` is \`ship\` and \`retro.completedAt\` is missing -> route to \`/cc-ops retro\`.
+- If \`currentStage\` is \`ship\` and \`retro.completedAt\` exists -> route to \`/cc-ops archive\`.
 - Otherwise report **"Flow complete. All stages finished."** and stop.
 
 Otherwise load the next stage's skill and command contract, begin execution.

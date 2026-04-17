@@ -32,13 +32,13 @@ function snapshotPath(): string {
 }
 
 /**
- * Command contract for /cc-status — a read-only snapshot command.
+ * Command contract for /cc-view status — a read-only snapshot command.
  * Does not mutate state. Always safe to run.
  */
 export function statusCommandContract(): string {
   const flowPath = flowStatePath();
   const delegationPath = delegationLogPath();
-  return `# /cc-status
+  return `# /cc-view status
 
 ## Purpose
 
@@ -50,10 +50,10 @@ time to answer "where are we?" without advancing the flow.
 
 ## HARD-GATE
 
-- **Do not** use \`/cc-status\` output to infer gate completion for decisions — cite
+- **Do not** use \`/cc-view status\` output to infer gate completion for decisions — cite
   artifact evidence via \`/cc-next\` when advancing.
 - **Do not** mutate \`${flowPath}\` or delegation log from this command.
-- **Do not** rewrite \`${snapshotPath()}\` from this command (use \`/cc-diff\`).
+- **Do not** rewrite \`${snapshotPath()}\` from this command (use \`/cc-view diff\`).
 
 ## Algorithm
 
@@ -68,7 +68,7 @@ time to answer "where are we?" without advancing the flow.
    - Compute the duration as \`now - signalTimestamp\` and render compactly: \`<X>m\`, \`<X>h<Y>m\`, or \`<X>d<Y>h\`.
    - If no signal exists, render \`(unknown)\`.
 5. Optionally read **\`${snapshotPath()}\`** to compute gate delta versus prior baseline:
-   - If missing or invalid, render \`delta: (baseline unavailable; run /cc-diff)\`.
+   - If missing or invalid, render \`delta: (baseline unavailable; run /cc-view diff)\`.
 6. Read the top of **\`${knowledgePath}\`** — surface up to 3 most recent entries
    (by trailing timestamp or source marker).
 7. Emit the visual status block described below. Do **not** load any stage skill.
@@ -92,14 +92,14 @@ cclaw status
     - <latest entry summary>
     - <second entry summary>
     - <third entry summary>
-  next: /cc-next · /cc-tree · /cc-diff
+  next: /cc-next · /cc-view tree · /cc-view diff
 \`\`\`
 
 ## Anti-patterns
 
 - Inventing gate status without reading \`${flowPath}\`.
 - Reporting delegations as satisfied when the log says \`pending\`.
-- Advancing the stage from \`/cc-status\` — progression belongs to \`/cc-next\`.
+- Advancing the stage from \`/cc-view status\` — progression belongs to \`/cc-next\`.
 - Hiding stale stages; stale markers must be surfaced directly in the status line.
 
 ## Primary skill
@@ -109,7 +109,7 @@ cclaw status
 }
 
 /**
- * Skill body for /cc-status — read-only status snapshot.
+ * Skill body for /cc-view status — read-only status snapshot.
  */
 export function statusCommandSkillMarkdown(): string {
   const flowPath = flowStatePath();
@@ -119,11 +119,11 @@ name: ${STATUS_SKILL_NAME}
 description: "Read-only visual snapshot of the cclaw flow with progress bar, gate delta, delegations, and stale markers."
 ---
 
-# /cc-status — Flow Status Snapshot
+# /cc-view status — Flow Status Snapshot
 
 ## Overview
 
-\`/cc-status\` is the quickest way to answer "where are we in the flow?" without
+\`/cc-view status\` is the quickest way to answer "where are we in the flow?" without
 advancing or mutating anything. Safe to run at any point.
 
 ## HARD-GATE
@@ -142,7 +142,7 @@ a read-only command. Do **not** update \`${snapshotPath()}\` here.
    - Render \`<X>d<Y>h\`, \`<X>h<Y>m\`, \`<X>m\`, or \`(unknown)\`.
 5. Try reading \`${snapshotPath()}\` for gate delta:
    - If available, compare current stage \`passed\` / \`blocked\` sets against baseline.
-   - If unavailable, render \`delta: (baseline unavailable; run /cc-diff)\`.
+   - If unavailable, render \`delta: (baseline unavailable; run /cc-view diff)\`.
 6. Read \`${RUNTIME_ROOT}/knowledge.jsonl\`. If missing or empty → knowledge highlights are \`(none recorded)\`. Parse each line as JSON and surface its \`trigger\`/\`action\`.
 7. For each gate in \`stageGateCatalog[currentStage].required\`:
    - Satisfied if present in \`passed\` and absent from \`blocked\`.
@@ -161,11 +161,11 @@ a read-only command. Do **not** update \`${snapshotPath()}\` here.
 - Keep output compact (≤ 30 lines) — status, not narrative.
 - Report counts, not full artifact contents.
 - If any data source is missing or corrupt, say so explicitly rather than guessing.
-- Include \`/cc-tree\` for deep structure and \`/cc-diff\` for before/after map in the final line.
+- Include \`/cc-view tree\` for deep structure and \`/cc-view diff\` for before/after map in the final line.
 
 ## Anti-patterns
 
-- Rebuilding trace-matrix or running doctor from \`/cc-status\` — those belong to dedicated tools.
+- Rebuilding trace-matrix or running doctor from \`/cc-view status\` — those belong to dedicated tools.
 - Treating absence of delegation log as "all delegations complete".
 - Mutating state to "clean up" during a status check.
 `;
