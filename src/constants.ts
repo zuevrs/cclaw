@@ -63,6 +63,8 @@ export const UTILITY_COMMANDS = [
   "learn",
   "next",
   "status",
+  "tree",
+  "diff",
   "feature",
   "tdd-log",
   "retro",

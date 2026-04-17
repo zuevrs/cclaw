@@ -503,6 +503,8 @@ export async function doctorChecks(projectRoot: string, options: DoctorOptions =
       "cc-next.md",
       "cc-learn.md",
       "cc-status.md",
+      "cc-tree.md",
+      "cc-diff.md",
       "cc-feature.md",
       "cc-tdd-log.md",
       "cc-retro.md",
@@ -527,6 +529,8 @@ export async function doctorChecks(projectRoot: string, options: DoctorOptions =
     const hasCcNext = content.includes("/cc-next");
     const hasCcLearn = content.includes("/cc-learn");
     const hasCcStatus = content.includes("/cc-status");
+    const hasCcTree = content.includes("/cc-tree");
+    const hasCcDiff = content.includes("/cc-diff");
     const hasCcFeature = content.includes("/cc-feature");
     const hasCcTddLog = content.includes("/cc-tdd-log");
     const hasCcRetro = content.includes("/cc-retro");
@@ -540,6 +544,8 @@ export async function doctorChecks(projectRoot: string, options: DoctorOptions =
       && hasCcNext
       && hasCcLearn
       && hasCcStatus
+      && hasCcTree
+      && hasCcDiff
       && hasCcFeature
       && hasCcTddLog
       && hasCcRetro
@@ -556,7 +562,7 @@ export async function doctorChecks(projectRoot: string, options: DoctorOptions =
   });
 
   // Utility commands
-  for (const cmd of ["learn", "next", "status", "feature", "tdd-log", "retro", "rewind", "rewind-ack"]) {
+  for (const cmd of ["learn", "next", "status", "tree", "diff", "feature", "tdd-log", "retro", "rewind", "rewind-ack"]) {
     const cmdPath = path.join(projectRoot, RUNTIME_ROOT, "commands", `${cmd}.md`);
     checks.push({
       name: `utility_command:${cmd}`,
@@ -568,6 +574,8 @@ export async function doctorChecks(projectRoot: string, options: DoctorOptions =
   // Utility skills
   for (const [folder, label] of [
     ["learnings", "learnings"],
+    ["flow-tree", "flow-tree"],
+    ["flow-diff", "flow-diff"],
     ["feature-workspaces", "feature-workspaces"],
     ["tdd-cycle-log", "tdd-cycle-log"],
     ["flow-retro", "flow-retro"],
@@ -1157,6 +1165,26 @@ export async function doctorChecks(projectRoot: string, options: DoctorOptions =
         ? `retro gate complete (${flowState.retro.compoundEntries} compound entries)`
         : "retro gate not required yet (ship not completed)"
       : "retro gate incomplete: run /cc-retro and record at least one compound knowledge entry"
+  });
+  const flowSnapshotPath = path.join(projectRoot, RUNTIME_ROOT, "state", "flow-state.snapshot.json");
+  const flowSnapshotExists = await exists(flowSnapshotPath);
+  let flowSnapshotValid = flowSnapshotExists;
+  if (flowSnapshotExists) {
+    try {
+      JSON.parse(await fs.readFile(flowSnapshotPath, "utf8"));
+      flowSnapshotValid = true;
+    } catch {
+      flowSnapshotValid = false;
+    }
+  }
+  checks.push({
+    name: "state:flow_snapshot",
+    ok: flowSnapshotExists && flowSnapshotValid,
+    details: flowSnapshotExists
+      ? flowSnapshotValid
+        ? `${RUNTIME_ROOT}/state/flow-state.snapshot.json exists and is valid JSON`
+        : `${RUNTIME_ROOT}/state/flow-state.snapshot.json exists but is invalid JSON`
+      : `${RUNTIME_ROOT}/state/flow-state.snapshot.json is missing`
   });
   const tddLogPath = path.join(projectRoot, RUNTIME_ROOT, "state", "tdd-cycle-log.jsonl");
   const tddLogExists = await exists(tddLogPath);

@@ -15,6 +15,8 @@ import { learnSkillMarkdown, learnCommandContract } from "./content/learnings.js
 import { nextCommandContract, nextCommandSkillMarkdown } from "./content/next-command.js";
 import { startCommandContract, startCommandSkillMarkdown } from "./content/start-command.js";
 import { statusCommandContract, statusCommandSkillMarkdown } from "./content/status-command.js";
+import { treeCommandContract, treeCommandSkillMarkdown } from "./content/tree-command.js";
+import { diffCommandContract, diffCommandSkillMarkdown } from "./content/diff-command.js";
 import { featureCommandContract, featureCommandSkillMarkdown } from "./content/feature-command.js";
 import { tddLogCommandContract, tddLogCommandSkillMarkdown } from "./content/tdd-log-command.js";
 import { retroCommandContract, retroCommandSkillMarkdown } from "./content/retro-command.js";
@@ -297,6 +299,14 @@ async function writeSkills(projectRoot: string, config?: VibyConfig): Promise<vo
     statusCommandSkillMarkdown()
   );
   await writeFileSafe(
+    runtimePath(projectRoot, "skills", "flow-tree", "SKILL.md"),
+    treeCommandSkillMarkdown()
+  );
+  await writeFileSafe(
+    runtimePath(projectRoot, "skills", "flow-diff", "SKILL.md"),
+    diffCommandSkillMarkdown()
+  );
+  await writeFileSafe(
     runtimePath(projectRoot, "skills", "feature-workspaces", "SKILL.md"),
     featureCommandSkillMarkdown()
   );
@@ -406,6 +416,8 @@ async function writeUtilityCommands(projectRoot: string): Promise<void> {
   await writeFileSafe(runtimePath(projectRoot, "commands", "next.md"), nextCommandContract());
   await writeFileSafe(runtimePath(projectRoot, "commands", "start.md"), startCommandContract());
   await writeFileSafe(runtimePath(projectRoot, "commands", "status.md"), statusCommandContract());
+  await writeFileSafe(runtimePath(projectRoot, "commands", "tree.md"), treeCommandContract());
+  await writeFileSafe(runtimePath(projectRoot, "commands", "diff.md"), diffCommandContract());
   await writeFileSafe(runtimePath(projectRoot, "commands", "feature.md"), featureCommandContract());
   await writeFileSafe(runtimePath(projectRoot, "commands", "tdd-log.md"), tddLogCommandContract());
   await writeFileSafe(runtimePath(projectRoot, "commands", "retro.md"), retroCommandContract());
@@ -956,6 +968,7 @@ Drop this section if no hard rule applies. Keep it crisp:
 async function ensureSessionStateFiles(projectRoot: string): Promise<void> {
   const stateDir = runtimePath(projectRoot, "state");
   await ensureDir(stateDir);
+  const flow = await readFlowState(projectRoot);
 
   const activityPath = path.join(stateDir, "stage-activity.jsonl");
   if (!(await exists(activityPath))) {
@@ -964,7 +977,6 @@ async function ensureSessionStateFiles(projectRoot: string): Promise<void> {
 
   const checkpointPath = path.join(stateDir, "checkpoint.json");
   if (!(await exists(checkpointPath))) {
-    const flow = await readFlowState(projectRoot);
     const initialCheckpoint = {
       stage: flow.currentStage,
       runId: flow.activeRunId,
@@ -1012,6 +1024,14 @@ async function ensureSessionStateFiles(projectRoot: string): Promise<void> {
   const tddCycleLogPath = path.join(stateDir, "tdd-cycle-log.jsonl");
   if (!(await exists(tddCycleLogPath))) {
     await writeFileSafe(tddCycleLogPath, "");
+  }
+
+  const flowSnapshotPath = path.join(stateDir, "flow-state.snapshot.json");
+  if (!(await exists(flowSnapshotPath))) {
+    await writeFileSafe(flowSnapshotPath, `${JSON.stringify({
+      capturedAt: new Date().toISOString(),
+      state: flow
+    }, null, 2)}\n`);
   }
 }
 

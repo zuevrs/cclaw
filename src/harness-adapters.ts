@@ -54,6 +54,18 @@ const UTILITY_SHIMS: UtilityShimSpec[] = [
     commandFile: "status.md"
   },
   {
+    fileName: "cc-tree.md",
+    command: "tree",
+    skillFolder: "flow-tree",
+    commandFile: "tree.md"
+  },
+  {
+    fileName: "cc-diff.md",
+    command: "diff",
+    skillFolder: "flow-diff",
+    commandFile: "diff.md"
+  },
+  {
     fileName: "cc-feature.md",
     command: "feature",
     skillFolder: "feature-workspaces",
@@ -187,7 +199,9 @@ When in doubt, prefer **non-trivial** — the quick track is opt-in and only saf
 | \`/cc\` | **Entry point.** No args = resume current stage. With prompt = classify task and start the right flow. |
 | \`/cc-next\` | **Progression.** Advances to the next stage when current is complete. |
 | \`/cc-learn\` | **Cross-cutting.** Capture or review project knowledge (append-only JSONL). |
-| \`/cc-status\` | **Read-only.** Compact snapshot of current stage, gates, and delegations. |
+| \`/cc-status\` | **Read-only.** Visual snapshot with progress bar, gate delta, and delegations. |
+| \`/cc-tree\` | **Read-only.** Deep flow tree for stages, artifacts, and stale markers. |
+| \`/cc-diff\` | **Delta map.** Compare current flow-state with saved baseline snapshot. |
 | \`/cc-feature\` | **Workspace.** Manage active feature snapshots for parallel tracks. |
 | \`/cc-tdd-log\` | **Evidence.** Record RED/GREEN/REFACTOR cycle events for enforcement. |
 | \`/cc-retro\` | **Learning gate.** Mandatory retrospective before archive after ship. |
