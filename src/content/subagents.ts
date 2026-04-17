@@ -6,16 +6,10 @@
 
 const SUBAGENT_AGENT_NAMES = [
   "planner",
-  "spec-reviewer",
-  "code-reviewer",
+  "reviewer",
   "security-reviewer",
   "test-author",
-  "doc-updater",
-  "repo-research-analyst",
-  "learnings-researcher",
-  "framework-docs-researcher",
-  "best-practices-researcher",
-  "git-history-analyzer",
+  "doc-updater"
 ] as const;
 
 type SubagentCclawAgentName = (typeof SUBAGENT_AGENT_NAMES)[number];
@@ -44,7 +38,7 @@ For cclaw flow stages, machine-only specialist work should auto-dispatch without
 
 - **design/plan:** planner
 - **tdd:** test-author
-- **review:** spec-reviewer + code-reviewer + security-reviewer (security-reviewer is always mandatory; produce an explicit no-change attestation when no trust boundaries moved)
+- **review:** reviewer + security-reviewer (security-reviewer is always mandatory; produce an explicit no-change attestation when no trust boundaries moved)
 - **ship:** doc-updater
 
 Human input remains mandatory only at explicit approval gates (plan approval, user challenge resolution, release finalization mode).
@@ -73,8 +67,8 @@ If delegation tooling is unavailable in the active harness, run the same control
 | Tier | Use for | Example agents |
 |---|---|---|
 | \`deep\` | one heavy reasoning pass per stage (planner, final reconciliation) | planner |
-| \`balanced\` | spec compliance + code/security review with enough context | spec-reviewer, code-reviewer, security-reviewer, test-author |
-| \`fast\` | read-only research / narrow machine checks / docs updates — safe to fan out | repo-research-analyst, learnings-researcher, framework-docs-researcher, best-practices-researcher, git-history-analyzer, doc-updater |
+| \`balanced\` | spec compliance + code/security review with enough context | reviewer, security-reviewer, test-author |
+| \`fast\` | bounded maintenance updates and doc hygiene | doc-updater |
 
 **Routing rules:**
 - At most ONE \`deep\` agent per stage (planner OR final reconciliation, not both).
@@ -88,14 +82,14 @@ Concrete per-stage rules so the controller does not have to guess which tier fit
 
 | Stage | Deep slot | Balanced slot(s) | Fast fan-out | Trigger to escalate |
 |---|---|---|---|---|
-| brainstorm | planner (only if ambiguity spans >1 module) | — | repo-research-analyst · learnings-researcher (2 in parallel) | promote to \`balanced\` spec-reviewer once direction locks |
-| scope | planner (always) | — | git-history-analyzer (if churn / recent regression on the surface) | promote to \`balanced\` planner if scope touches external contracts |
-| design | planner (always) | security-reviewer (if trust boundary touched) | framework-docs-researcher · best-practices-researcher (up to 2 in parallel) | escalate one specialist to \`deep\` only if a failure mode is Critical-severity |
-| spec | — | spec-reviewer (if spec > 200 lines or multiple ACs) | — | escalate to \`deep\` only for spec ↔ design contradictions |
+| brainstorm | planner (only if ambiguity spans >1 module) | — | run in-thread research playbooks | promote to \`balanced\` reviewer once direction locks |
+| scope | planner (always) | — | run \`research/git-history.md\` in-thread when churn is high | promote to \`balanced\` planner if scope touches external contracts |
+| design | planner (always) | security-reviewer (if trust boundary touched) | run \`research/framework-docs-lookup.md\` + \`research/best-practices-lookup.md\` in-thread | escalate one specialist to \`deep\` only if a failure mode is Critical-severity |
+| spec | — | reviewer (if spec > 200 lines or multiple ACs) | — | escalate to \`deep\` only for spec ↔ design contradictions |
 | plan | planner (solo, always) | — | — | never fan out at plan stage; one owner for dependency graph |
-| tdd | — | test-author (each slice) · code-reviewer (slice-local) | doc-updater (API surface changes) | escalate to \`deep\` only when a RED test cannot be expressed (design leak) |
-| review | — | spec-reviewer · code-reviewer · security-reviewer (all mandatory) | doc-updater + framework-docs-researcher for narrow lookups | escalate a \`balanced\` reviewer to \`deep\` only when two reviewers disagree on severity |
-| ship | — | — | doc-updater (changelog/migration notes) | escalate to \`balanced\` code-reviewer only if preflight finds a regression |
+| tdd | — | test-author (each slice) · reviewer (slice-local) | doc-updater (API surface changes) | escalate to \`deep\` only when a RED test cannot be expressed (design leak) |
+| review | — | reviewer · security-reviewer (both mandatory) | doc-updater for release-note drift checks | escalate a \`balanced\` reviewer to \`deep\` only when two reviewers disagree on severity |
+| ship | — | security-reviewer (if blast radius is high) | doc-updater (changelog/migration notes) | escalate to \`balanced\` reviewer only if preflight finds a regression |
 
 **De-escalation rules (avoid over-spending):**
 - If a \`deep\` planner run returns low-uncertainty output (single unambiguous plan), do **not** add a second \`deep\` pass in the same stage.
@@ -125,7 +119,7 @@ If you catch yourself writing “read PLAN.md Task 3” or “implement the next
 2. **For each task sequentially (NEVER parallel implementation subagents — file conflicts):**
    1. **Dispatch implementer subagent** with the **full task text pasted in** (not a file reference).
    2. **Check return status:** \`DONE\` / \`DONE_WITH_CONCERNS\` / \`NEEDS_CONTEXT\` / \`BLOCKED\`
-   3. If \`DONE\`: dispatch **spec-reviewer** subagent to verify actual code matches spec.
+   3. If \`DONE\`: dispatch **reviewer** subagent to verify actual code matches spec and quality expectations.
    4. If spec review **FAIL**: dispatch **fixer subagent** (a **new** agent — not an inline patch from the parent — to avoid context pollution).
    5. Dispatch **code-quality reviewer** (maintainability/PR hygiene).
    6. **Mark task complete** only after concerns are triaged or explicitly accepted with rationale.
@@ -355,7 +349,7 @@ Write a structured reconciliation artifact at \`.cclaw/artifacts/07-review-army.
       "severity": "Critical|Important|Suggestion",
       "confidence": 1,
       "fingerprint": "hash-or-stable-key",
-      "reportedBy": ["spec-reviewer", "code-reviewer"],
+      "reportedBy": ["reviewer", "security-reviewer"],
       "status": "open|accepted|resolved",
       "location": { "file": "path", "line": 123 },
       "recommendation": "..."
@@ -508,7 +502,7 @@ function specReviewerEnhancedBody(): string {
 
 ## Task Tool Delegation
 
-For spec-compliance audits, use the Task tool with the following **spec-reviewer** payload (fill placeholders in the parent session).
+For review audits, use the Task tool with the following **reviewer** payload (fill placeholders in the parent session).
 
 \`\`\`
 You are a specification compliance reviewer (subagent).
@@ -551,6 +545,10 @@ Output format (mandatory):
 \`\`\`
 
 `;
+}
+
+function reviewerEnhancedBody(): string {
+  return `${specReviewerEnhancedBody()}${codeReviewerEnhancedBody()}`;
 }
 
 function securityReviewerEnhancedBody(): string {
@@ -614,7 +612,7 @@ function repoResearchAnalystEnhancedBody(): string {
 
 ## Task Tool Delegation
 
-Launch **read-only repo exploration** at the start of brainstorm/scope/design so the primary agent plans on a grounded map, not guesses. Run as a \`fast\` tier agent — cheap to fan out alongside learnings-researcher and best-practices-researcher.
+Launch **read-only repo exploration** at the start of brainstorm/scope/design so the primary agent plans on a grounded map, not guesses. Use this as an in-thread research procedure.
 
 \`\`\`
 You are a repo research analyst subagent.
@@ -778,32 +776,20 @@ Tasks:
 
 /**
  * Returns markdown fragments augmenting each specialist persona with Task tool
- * delegation guidance. Combine with the existing `body` field from `agents.ts`.
+ * delegation guidance. Combine with the existing `body` field from `core-agents.ts`.
  */
 export function enhancedAgentBody(agentName: string): string {
   switch (agentName as SubagentCclawAgentName) {
     case "planner":
       return plannerEnhancedBody();
-    case "spec-reviewer":
-      return specReviewerEnhancedBody();
-    case "code-reviewer":
-      return codeReviewerEnhancedBody();
+    case "reviewer":
+      return reviewerEnhancedBody();
     case "security-reviewer":
       return securityReviewerEnhancedBody();
     case "test-author":
       return testAuthorEnhancedBody();
     case "doc-updater":
       return docUpdaterEnhancedBody();
-    case "repo-research-analyst":
-      return repoResearchAnalystEnhancedBody();
-    case "learnings-researcher":
-      return learningsResearcherEnhancedBody();
-    case "framework-docs-researcher":
-      return frameworkDocsResearcherEnhancedBody();
-    case "best-practices-researcher":
-      return bestPracticesResearcherEnhancedBody();
-    case "git-history-analyzer":
-      return gitHistoryAnalyzerEnhancedBody();
     default:
       return `
 
@@ -827,7 +813,7 @@ Status contract: DONE | DONE_WITH_CONCERNS | NEEDS_CONTEXT | BLOCKED.
 
 - Controller sequentially dispatches **implementer → reviewer** loops per task.
 - HARD-GATE: paste **self-contained task text**; never point subagents at plan files to “discover” scope.
-- **Spec fixers** are **fresh agents** after failed spec reviews — avoids parent-context pollution.
+- **Review fixers** are **fresh agents** after failed review passes — avoids parent-context pollution.
 - **Machine-only flow checks auto-dispatch** by stage (design/plan/tdd/review/ship) without asking the user to trigger each specialist manually.
 
 ### Parallel Agents (\`dispatching-parallel-agents\` skill)

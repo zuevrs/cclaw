@@ -1,0 +1,147 @@
+import { RUNTIME_ROOT } from "../constants.js";
+
+export const DOCTOR_REFERENCE_DIR = `${RUNTIME_ROOT}/references/doctor`;
+
+export const DOCTOR_REFERENCE_MARKDOWN: Record<string, string> = {
+  "README.md": `# Doctor Reference Index
+
+Reference docs for \`cclaw doctor\` checks.
+
+## Categories
+
+- \`runtime-layout.md\` - runtime directories, generated commands, and skill files
+- \`hooks-and-lifecycle.md\` - hook wiring and harness lifecycle integration
+- \`harness-and-routing.md\` - harness shims, AGENTS/CLAUDE routing blocks, cursor rule
+- \`state-and-gates.md\` - flow-state integrity and gate evidence contracts
+- \`delegation-and-preamble.md\` - mandatory delegations and preamble budget controls
+- \`traceability.md\` - spec/plan/tdd trace matrix expectations
+- \`tooling-capabilities.md\` - local runtime prerequisites (bash/node/python/jq)
+- \`config-and-policy.md\` - config schema, rules policy, and validation references
+`,
+  "runtime-layout.md": `# Runtime Layout
+
+## Expected surfaces
+
+- \`.cclaw/\` root and generated subdirectories
+- stage command contracts under \`.cclaw/commands/\`
+- stage skills under \`.cclaw/skills/\`
+- utility command contracts (\`start\`, \`next\`, \`learn\`, \`status\`)
+- state files under \`.cclaw/state/\`
+
+## Typical fixes
+
+1. Run \`cclaw sync\` to re-materialize generated assets.
+2. If runtime is severely drifted, run \`cclaw upgrade\`.
+3. Avoid manual edits under generated runtime paths unless explicitly supported.
+`,
+  "hooks-and-lifecycle.md": `# Hooks And Lifecycle
+
+## Expected behavior
+
+- session start rehydrates flow + knowledge digest
+- pre-tool hooks run prompt/workflow guards
+- post-tool hooks run context monitor
+- stop hooks checkpoint progress
+- OpenCode uses plugin-based lifecycle integration
+
+## Typical fixes
+
+1. Re-run \`cclaw sync\` after harness config changes.
+2. Ensure harness is enabled in \`.cclaw/config.yaml\`.
+3. Validate hook JSON shape and remove malformed manual edits.
+`,
+  "harness-and-routing.md": `# Harness And Routing
+
+## Expected behavior
+
+- command shims exist for every enabled harness
+- managed routing block is present in \`AGENTS.md\` (and \`CLAUDE.md\` when applicable)
+- cursor rule mirrors workflow activation guidance
+- opencode plugin path is registered in opencode config
+
+## Typical fixes
+
+1. Confirm \`harnesses\` list in \`.cclaw/config.yaml\`.
+2. Run \`cclaw sync\` to re-generate shims/routing files.
+3. Remove stale harness artifacts for disabled harnesses via \`cclaw sync\`.
+`,
+  "state-and-gates.md": `# State And Gates
+
+## Expected behavior
+
+- \`flow-state.json\` has activeRunId, current stage, and consistent track/skippedStages
+- current-stage gate evidence is internally consistent
+- completed stages only include passed required gates
+
+## Typical fixes
+
+1. Run \`cclaw doctor --reconcile-gates\` to refresh current-stage gate catalog.
+2. Repair inconsistent stage artifacts, then re-run doctor.
+3. Do not manually mutate gate arrays without matching artifact evidence.
+`,
+  "delegation-and-preamble.md": `# Delegation And Preamble
+
+## Delegation contract
+
+- mandatory delegations for the current stage must be completed or waived
+- waivers should include an explicit reason
+- stale entries from previous runs are ignored by current-run checks
+
+## Preamble budget contract
+
+- preamble events are logged to \`.cclaw/state/preamble-log.jsonl\`
+- repeated entries inside cooldown windows indicate noisy preamble behavior
+- in TDD wave mode, emit once per wave unless plan materially changes
+
+## Typical fixes
+
+1. Append missing delegation records with \`completed\` or \`waived\` status.
+2. Record harness-limitation waivers when native delegation is unavailable.
+3. Reduce repeated preamble emissions and keep logs structured (\`ts/stage/trigger/hash\`).
+`,
+  "traceability.md": `# Traceability
+
+## Expected behavior
+
+- spec criteria map to plan tasks
+- plan tasks map to tdd slices/tests
+- no orphaned criteria/tasks/tests when downstream artifacts exist
+
+## Typical fixes
+
+1. Add stable IDs to spec/plan/tdd sections.
+2. Ensure mapping tables include every active criterion/task/slice.
+3. Re-run \`cclaw doctor\` after artifact updates.
+`,
+  "tooling-capabilities.md": `# Tooling Capabilities
+
+## Required
+
+- \`bash\` for runtime hook scripts
+- \`node\` for generated runtime scripts/plugins
+
+## Optional fallback
+
+- at least one of \`python3\` or \`jq\` for JSON parsing fallback paths
+
+## Typical fixes
+
+1. Install missing runtime tools.
+2. Keep at least one JSON fallback parser available (\`python3\` or \`jq\`).
+`,
+  "config-and-policy.md": `# Config And Policy
+
+## Expected behavior
+
+- \`.cclaw/config.yaml\` parses and uses supported keys/values
+- \`.cclaw/rules/rules.json\` matches generated policy schema
+- policy needles and required sections remain present in generated contracts
+
+## Typical fixes
+
+1. Repair invalid config values and run \`cclaw sync\`.
+2. Re-generate policy files via \`cclaw sync\` if drift is detected.
+3. Keep generated contracts aligned with stage schemas and policy needles.
+`
+};
+

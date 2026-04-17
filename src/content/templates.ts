@@ -387,11 +387,11 @@ Execution rule: complete and verify each wave before starting the next wave.
 
 | Pass | Status | Completed at (UTC) | Reviewer / source | Commit at review | Drift vs HEAD |
 |---|---|---|---|---|---|
-| Layer 1 — spec compliance | pass / fail / pending | <ISO 8601> | spec-reviewer | <short sha> | <files changed since> |
-| Layer 2 — correctness | pass / fail / pending | <ISO 8601> | code-reviewer | <short sha> | <files changed since> |
+| Layer 1 — spec compliance | pass / fail / pending | <ISO 8601> | reviewer | <short sha> | <files changed since> |
+| Layer 2 — correctness | pass / fail / pending | <ISO 8601> | reviewer | <short sha> | <files changed since> |
 | Layer 2 — security | pass / fail / pending | <ISO 8601> | security-reviewer | <short sha> | <files changed since> |
-| Layer 2 — performance | pass / fail / pending | <ISO 8601> | code-reviewer | <short sha> | <files changed since> |
-| Layer 2 — architecture | pass / fail / pending | <ISO 8601> | code-reviewer | <short sha> | <files changed since> |
+| Layer 2 — performance | pass / fail / pending | <ISO 8601> | reviewer | <short sha> | <files changed since> |
+| Layer 2 — architecture | pass / fail / pending | <ISO 8601> | reviewer | <short sha> | <files changed since> |
 | Adversarial review | pass / fail / n/a | <ISO 8601 or —> | adversarial-review skill | <short sha or —> | <drift or —> |
 | Review army schema valid | pass / fail | <ISO 8601> | jsonschema | <short sha> | n/a |
 
@@ -534,13 +534,51 @@ alwaysApply: true
 
 # Cclaw Workflow Guardrails
 
-- Follow stage order: brainstorm -> scope -> design -> spec -> plan -> tdd -> review -> ship.
-- Read \`.cclaw/state/flow-state.json\` before acting; continue from current stage when active.
-- Use \`/cc-next\` only after required gates pass; never bypass explicit pause/approval rules.
-- Keep evidence in \`.cclaw/artifacts/\`; archive completed feature artifacts only via \`cclaw archive\`.
-- For machine-only checks in design/plan/tdd/review/ship, dispatch required specialists automatically when tooling supports it.
-- Ask for user input only at explicit approval gates (scope mode, plan approval, user challenge resolution, ship finalization).
-- Treat \`.cclaw/skills/using-cclaw/SKILL.md\` as routing source of truth; load contextual utility skills only when their triggers apply.
+## Activation Rule
+
+Before responding to coding work:
+1. Read \`.cclaw/state/flow-state.json\`.
+2. Start with \`/cc\` or continue with \`/cc-next\`.
+3. If no software-stage flow applies, respond normally.
+
+## Stage Order
+
+\`brainstorm -> scope -> design -> spec -> plan -> tdd -> review -> ship\`
+
+Track-specific skips are allowed only when \`flow-state.track\` + \`skippedStages\` explicitly say so.
+
+## Task Classification
+
+| Class | Route |
+|---|---|
+| non-trivial software work | \`/cc <idea>\` |
+| trivial software fix | \`/cc <idea>\` (quick or medium track) |
+| bugfix with repro | \`/cc <idea>\` and enforce RED-first in tdd |
+| pure question / non-software | direct answer (no stage flow) |
+
+## Command Surface
+
+- \`/cc\` = entry and resume.
+- \`/cc-next\` = only progression path.
+- \`/cc-learn\` = knowledge capture and recall.
+
+## Verification Discipline
+
+- No completion claim without fresh command evidence in this turn.
+- Do not mark gates passed from memory.
+- Keep evidence in \`.cclaw/artifacts/\`; archive only via \`cclaw archive\`.
+
+## Delegation And Approvals
+
+- Machine-only checks in design/plan/tdd/review/ship should auto-dispatch when tooling supports it.
+- Ask for user input only at explicit approval gates (scope mode, plan approval, challenge resolution, ship finalization).
+- If harness capabilities are partial, record waiver reasons in delegation logs.
+
+## Routing Source Of Truth
+
+- Primary router: \`.cclaw/skills/using-cclaw/SKILL.md\`.
+- Protocols: \`.cclaw/references/protocols/*.md\`.
+- Preamble budget: \`.cclaw/references/protocols/ethos.md\`.
 `;
 
 export function buildRulesJson(): Record<string, unknown> {

@@ -4,7 +4,7 @@ import { execFile } from "node:child_process";
 import { pathToFileURL } from "node:url";
 import { promisify } from "node:util";
 import { COMMAND_FILE_ORDER, REQUIRED_DIRS, RUNTIME_ROOT } from "./constants.js";
-import { CCLAW_AGENTS } from "./content/agents.js";
+import { CCLAW_AGENTS } from "./content/core-agents.js";
 import { readConfig } from "./config.js";
 import { exists } from "./fs-utils.js";
 import { gitignoreHasRequiredPatterns } from "./gitignore.js";
@@ -21,6 +21,7 @@ import {
   verifyCurrentStageGateEvidence
 } from "./gate-evidence.js";
 import { stageSkillFolder } from "./content/skills.js";
+import { doctorCheckMetadata } from "./doctor-registry.js";
 import {
   LANGUAGE_RULE_PACK_DIR,
   LANGUAGE_RULE_PACK_FILES,
@@ -28,21 +29,31 @@ import {
   UTILITY_SKILL_FOLDERS
 } from "./content/utility-skills.js";
 import { CONTEXT_MODES, DEFAULT_CONTEXT_MODE } from "./content/contexts.js";
+import { DOCTOR_REFERENCE_MARKDOWN } from "./content/doctor-references.js";
 import { validateHookDocument } from "./hook-schema.js";
 import type { HarnessId } from "./types.js";
+import type { DoctorSeverity } from "./doctor-registry.js";
 
 const execFileAsync = promisify(execFile);
+const PREAMBLE_COOLDOWN_MS = 15 * 60 * 1000;
 
 export interface DoctorCheck {
   name: string;
   ok: boolean;
   details: string;
+  severity: DoctorSeverity;
+  summary: string;
+  fix: string;
+  docRef?: string;
 }
 
 export interface DoctorOptions {
   /** When true, normalize current-stage gate catalog and persist reconciliation before checks. */
   reconcileCurrentStageGates?: boolean;
 }
+
+type PendingDoctorCheck = Omit<DoctorCheck, "severity" | "summary" | "fix" | "docRef"> &
+  Partial<Pick<DoctorCheck, "severity" | "summary" | "fix" | "docRef">>;
 
 async function isGitRepo(projectRoot: string): Promise<boolean> {
   try {
@@ -254,7 +265,7 @@ async function opencodePluginRuntimeShapeCheck(projectRoot: string): Promise<{ o
 }
 
 export async function doctorChecks(projectRoot: string, options: DoctorOptions = {}): Promise<DoctorCheck[]> {
-  const checks: DoctorCheck[] = [];
+  const checks: PendingDoctorCheck[] = [];
 
   for (const dir of REQUIRED_DIRS) {
     const fullPath = path.join(projectRoot, dir);
@@ -374,6 +385,21 @@ export async function doctorChecks(projectRoot: string, options: DoctorOptions =
     const refPath = path.join(stageRefDir, `${stage}-examples.md`);
     checks.push({
       name: `stage_examples_ref:${stage}`,
+      ok: await exists(refPath),
+      details: refPath
+    });
+  }
+  checks.push({
+    name: "harness_ref:matrix",
+    ok: await exists(path.join(projectRoot, RUNTIME_ROOT, "references", "harnesses.md")),
+    details: `${RUNTIME_ROOT}/references/harnesses.md`
+  });
+
+  const doctorRefDir = path.join(projectRoot, RUNTIME_ROOT, "references", "doctor");
+  for (const fileName of Object.keys(DOCTOR_REFERENCE_MARKDOWN)) {
+    const refPath = path.join(doctorRefDir, fileName);
+    checks.push({
+      name: `doctor_ref:${fileName.replace(/\.md$/, "")}`,
       ok: await exists(refPath),
       details: refPath
     });
@@ -871,6 +897,11 @@ export async function doctorChecks(projectRoot: string, options: DoctorOptions =
     ok: await exists(path.join(projectRoot, RUNTIME_ROOT, "state", "suggestion-memory.json")),
     details: `${RUNTIME_ROOT}/state/suggestion-memory.json must exist for proactive suggestion memory`
   });
+  checks.push({
+    name: "state:harness_gaps_exists",
+    ok: await exists(path.join(projectRoot, RUNTIME_ROOT, "state", "harness-gaps.json")),
+    details: `${RUNTIME_ROOT}/state/harness-gaps.json must exist for tiered harness capability tracking`
+  });
   const contextModeStatePath = path.join(projectRoot, RUNTIME_ROOT, "state", "context-mode.json");
   checks.push({
     name: "state:context_mode_exists",
@@ -898,6 +929,83 @@ export async function doctorChecks(projectRoot: string, options: DoctorOptions =
       name: `contexts:mode:${mode}`,
       ok: await exists(modePath),
       details: modePath
+    });
+  }
+
+  const preambleLogPath = path.join(projectRoot, RUNTIME_ROOT, "state", "preamble-log.jsonl");
+  const preambleLogExists = await exists(preambleLogPath);
+  checks.push({
+    name: "state:preamble_log_exists",
+    ok: preambleLogExists,
+    details: `${RUNTIME_ROOT}/state/preamble-log.jsonl must exist for preamble budget tracking`
+  });
+  if (preambleLogExists) {
+    let duplicateHits = 0;
+    let parsedEntries = 0;
+    let malformedEntries = 0;
+    try {
+      const now = Date.now();
+      const byKey = new Map<string, number[]>();
+      const raw = await fs.readFile(preambleLogPath, "utf8");
+      const lines = raw
+        .split("\n")
+        .map((line) => line.trim())
+        .filter((line) => line.length > 0);
+      for (const line of lines) {
+        try {
+          const parsed = JSON.parse(line) as Record<string, unknown>;
+          const tsRaw = parsed.ts;
+          const stageRaw = parsed.stage;
+          const triggerRaw = parsed.trigger;
+          const hashRaw = parsed.hash;
+          if (
+            typeof tsRaw !== "string" ||
+            typeof stageRaw !== "string" ||
+            typeof triggerRaw !== "string" ||
+            typeof hashRaw !== "string"
+          ) {
+            malformedEntries += 1;
+            continue;
+          }
+          const stamp = Date.parse(tsRaw);
+          if (!Number.isFinite(stamp)) {
+            malformedEntries += 1;
+            continue;
+          }
+          if (now - stamp > 24 * 60 * 60 * 1000) {
+            continue;
+          }
+          parsedEntries += 1;
+          const key = `${stageRaw}|${triggerRaw}|${hashRaw}`;
+          const bucket = byKey.get(key) ?? [];
+          bucket.push(stamp);
+          byKey.set(key, bucket);
+        } catch {
+          malformedEntries += 1;
+        }
+      }
+      for (const stamps of byKey.values()) {
+        stamps.sort((a, b) => a - b);
+        for (let i = 1; i < stamps.length; i += 1) {
+          if (stamps[i]! - stamps[i - 1]! < PREAMBLE_COOLDOWN_MS) {
+            duplicateHits += 1;
+          }
+        }
+      }
+    } catch {
+      malformedEntries += 1;
+    }
+
+    checks.push({
+      name: "warning:preamble:dedup",
+      ok: true,
+      details: duplicateHits > 0
+        ? `warning: detected ${duplicateHits} repeated preamble emission(s) inside ${Math.floor(PREAMBLE_COOLDOWN_MS / 60000)}m cooldown window`
+        : parsedEntries > 0
+          ? `preamble budget healthy (${parsedEntries} recent preamble entry/entries checked)`
+          : malformedEntries > 0
+            ? `warning: preamble log exists but entries are malformed (${malformedEntries} line(s) ignored)`
+            : "preamble log is empty; no recent preamble emissions recorded"
     });
   }
 
@@ -977,7 +1085,11 @@ export async function doctorChecks(projectRoot: string, options: DoctorOptions =
     name: "warning:delegation:waived",
     ok: true,
     details: delegation.waived.length > 0
-      ? `warning: waived mandatory delegations for stage "${flowState.currentStage}": ${delegation.waived.join(", ")}`
+      ? `warning: waived mandatory delegations for stage "${flowState.currentStage}": ${delegation.waived.join(", ")}${
+          delegation.autoWaived.length > 0
+            ? ` (auto-waived due to harness limitation: ${delegation.autoWaived.join(", ")})`
+            : ""
+        }`
       : "no waived mandatory delegations for current stage"
   });
   checks.push({
@@ -1103,9 +1215,18 @@ export async function doctorChecks(projectRoot: string, options: DoctorOptions =
   const policy = await policyChecks(projectRoot, { harnesses: configuredHarnesses });
   checks.push(...policy);
 
-  return checks;
+  return checks.map((check): DoctorCheck => {
+    const metadata = doctorCheckMetadata(check.name);
+    return {
+      ...check,
+      severity: check.severity ?? metadata.severity,
+      summary: check.summary ?? metadata.summary,
+      fix: check.fix ?? metadata.fix,
+      docRef: check.docRef ?? metadata.docRef
+    };
+  });
 }
 
 export function doctorSucceeded(checks: DoctorCheck[]): boolean {
-  return checks.every((check) => check.ok);
+  return checks.every((check) => check.ok || check.severity !== "error");
 }

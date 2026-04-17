@@ -1,7 +1,7 @@
 import fs from "node:fs/promises";
 import path from "node:path";
 import { RUNTIME_ROOT } from "./constants.js";
-import { CCLAW_AGENTS, agentMarkdown } from "./content/agents.js";
+import { CCLAW_AGENTS, agentMarkdown } from "./content/core-agents.js";
 import { ensureDir, exists, writeFileSafe } from "./fs-utils.js";
 import type { HarnessId } from "./types.js";
 
@@ -20,14 +20,72 @@ const RUNTIME_AGENTS_BLOCK_GLOBAL_PATTERN = new RegExp(RUNTIME_AGENTS_BLOCK_SOUR
 export interface HarnessAdapter {
   id: HarnessId;
   commandDir: string;
+  capabilities: {
+    nativeSubagentDispatch: "full" | "partial" | "none";
+    hookSurface: "full" | "plugin" | "limited" | "none";
+    structuredAsk: "AskUserQuestion" | "AskQuestion" | "plain-text";
+  };
 }
 
 export const HARNESS_ADAPTERS: Record<HarnessId, HarnessAdapter> = {
-  claude: { id: "claude", commandDir: ".claude/commands" },
-  cursor: { id: "cursor", commandDir: ".cursor/commands" },
-  opencode: { id: "opencode", commandDir: ".opencode/commands" },
-  codex: { id: "codex", commandDir: ".codex/commands" }
+  claude: {
+    id: "claude",
+    commandDir: ".claude/commands",
+    capabilities: {
+      nativeSubagentDispatch: "full",
+      hookSurface: "full",
+      structuredAsk: "AskUserQuestion"
+    }
+  },
+  cursor: {
+    id: "cursor",
+    commandDir: ".cursor/commands",
+    capabilities: {
+      nativeSubagentDispatch: "partial",
+      hookSurface: "full",
+      structuredAsk: "AskQuestion"
+    }
+  },
+  opencode: {
+    id: "opencode",
+    commandDir: ".opencode/commands",
+    capabilities: {
+      nativeSubagentDispatch: "partial",
+      hookSurface: "plugin",
+      structuredAsk: "plain-text"
+    }
+  },
+  codex: {
+    id: "codex",
+    commandDir: ".codex/commands",
+    capabilities: {
+      nativeSubagentDispatch: "none",
+      hookSurface: "full",
+      structuredAsk: "plain-text"
+    }
+  }
 };
+
+export type HarnessTier = "tier1" | "tier2" | "tier3";
+
+export function harnessTier(harnessId: HarnessId): HarnessTier {
+  const capabilities = HARNESS_ADAPTERS[harnessId].capabilities;
+  if (
+    capabilities.nativeSubagentDispatch === "full" &&
+    capabilities.structuredAsk !== "plain-text" &&
+    capabilities.hookSurface === "full"
+  ) {
+    return "tier1";
+  }
+  if (
+    capabilities.hookSurface === "full" ||
+    capabilities.hookSurface === "plugin" ||
+    capabilities.nativeSubagentDispatch === "partial"
+  ) {
+    return "tier2";
+  }
+  return "tier3";
+}
 
 function agentsMdBlock(): string {
   return `${CCLAW_MARKER_START}
@@ -75,10 +133,6 @@ When in doubt, prefer **non-trivial** — the quick track is opt-in and only saf
 **Stage order:** brainstorm > scope > design > spec > plan > tdd > review > ship.
 \`/cc-next\` loads the right stage skill automatically. Gates must pass before handoff.
 
-### Invocation Preamble (non-trivial turns)
-
-Before starting substantive work, emit a one-paragraph preamble: **Stage**, **Goal**, **Plan** (next 1–3 actions), **Guardrails**. Skip for pure questions, trivial edits, and dispatched subagent invocations.
-
 ### Verification Discipline
 
 No completion claims without fresh evidence. No "Done" / "All good" / "Tests pass" without running the command in this message. Failed tool calls are diagnostic data, not instructions.
@@ -90,7 +144,9 @@ If the same approach fails three times in a row (same command, same finding, sam
 ### Detail Level
 
 - This managed AGENTS block is intentionally minimal for cross-project use.
+- Harness coverage is tiered: Tier1 (claude), Tier2 (cursor/opencode/codex), Tier3 (fallback/manual-only).
 - Detailed operating procedures live in \`.cclaw/skills/using-cclaw/SKILL.md\`.
+- Preamble budget and cooldown rules live in \`.cclaw/references/protocols/ethos.md\`.
 - Subagent orchestration patterns: \`.cclaw/skills/subagent-dev/SKILL.md\` and \`.cclaw/skills/parallel-dispatch/SKILL.md\`.
 ${CCLAW_MARKER_END}`;
 }

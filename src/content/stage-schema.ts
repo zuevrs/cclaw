@@ -43,18 +43,10 @@ export interface ArtifactValidation {
 export interface StageAutoSubagentDispatch {
   agent:
     | "planner"
-    | "spec-reviewer"
-    | "code-reviewer"
+    | "reviewer"
     | "security-reviewer"
     | "test-author"
-    | "doc-updater"
-    // Research pool — parallel, read-only, fast-tier. Fan out during
-    // brainstorm/scope/design to gather signal before classical planning.
-    | "repo-research-analyst"
-    | "learnings-researcher"
-    | "framework-docs-researcher"
-    | "best-practices-researcher"
-    | "git-history-analyzer";
+    | "doc-updater";
   /**
    * - `mandatory` — must be dispatched (or explicitly waived) before stage transition.
    * - `proactive` — should be dispatched automatically when context matches `when`.
@@ -104,6 +96,8 @@ export interface StageSchema {
   requiredEvidence: string[];
   inputs: string[];
   requiredContext: string[];
+  /** In-thread research procedures for this stage (`.cclaw/skills/research/*.md`). */
+  researchPlaybooks?: string[];
   outputs: string[];
   blockers: string[];
   exitCriteria: string[];
@@ -339,6 +333,10 @@ const BRAINSTORM: StageSchemaInput = {
     "current behavior of affected area",
     "business and delivery constraints"
   ],
+  researchPlaybooks: [
+    "research/repo-scan.md",
+    "research/learnings-lookup.md"
+  ],
   outputs: [
     "approved design direction",
     "alternatives with trade-offs",
@@ -489,6 +487,9 @@ const SCOPE: StageSchemaInput = {
     "approved brainstorm direction",
     "existing capabilities and reusable components",
     "delivery deadlines and risk tolerance"
+  ],
+  researchPlaybooks: [
+    "research/git-history.md"
   ],
   outputs: ["scope mode decision", "scope contract", "discretion areas list", "deferred scope list", "scope summary", "scope completion dashboard"],
   blockers: [
@@ -705,6 +706,10 @@ const DESIGN: StageSchemaInput = {
     "existing architecture and boundaries",
     "operational constraints",
     "security and reliability expectations"
+  ],
+  researchPlaybooks: [
+    "research/framework-docs-lookup.md",
+    "research/best-practices-lookup.md"
   ],
   outputs: [
     "architecture lock",
@@ -1427,7 +1432,7 @@ const REVIEW: StageSchemaInput = {
   checklist: [
     "Diff Scope — Run `git diff` against base branch. If no diff, exit early with APPROVED (no changes to review). Scope the review to changed files unless blast-radius analysis requires wider inspection.",
     "Change-Size Check — ~100 lines = normal. ~300 lines = consider splitting. ~1000+ lines = strongly recommend stacked PRs. Flag large diffs to the user.",
-    "Adversarial Trigger Check — compute changed-line count (`git diff --shortstat <base>..HEAD`), files-touched count, and whether trust boundaries changed (auth/secrets/external inputs/permissions). If `lines > 100` OR `files > 10` OR `trust boundary changed`, **dispatch a SECOND code-reviewer agent with the `adversarial-review` skill loaded** and reconcile its findings into the review army (treat the conditional dispatch as mandatory whenever the trigger holds; record the trigger that fired in the dashboard).",
+    "Adversarial Trigger Check — compute changed-line count (`git diff --shortstat <base>..HEAD`), files-touched count, and whether trust boundaries changed (auth/secrets/external inputs/permissions). If `lines > 100` OR `files > 10` OR `trust boundary changed`, **dispatch a SECOND reviewer agent with the `adversarial-review` skill loaded** and reconcile its findings into the review army (treat the conditional dispatch as mandatory whenever the trigger holds; record the trigger that fired in the dashboard).",
     "Load upstream evidence — read TDD artifact (RED + GREEN + REFACTOR), spec, and plan. Verify evidence chain is unbroken.",
     "Layer 1: Spec Compliance — check every acceptance criterion against implementation. Verdict: pass/fail per criterion.",
     "Layer 2a: Correctness — logic errors, race conditions, boundary violations, null handling.",
@@ -1808,20 +1813,6 @@ const STAGE_AUTO_SUBAGENT_DISPATCH: Record<FlowStage, StageAutoSubagentDispatch[
       when: "When request is ambiguous, multi-surface, or spans multiple modules.",
       purpose: "Map scope and alternatives before direction lock.",
       requiresUserGate: false
-    },
-    {
-      agent: "repo-research-analyst",
-      mode: "proactive",
-      when: "When the user's idea touches an unfamiliar module, stack, or integration surface.",
-      purpose: "Parallel fan-out: summarise existing code paths, tech stack, and similar features already present — feeds the alternatives list.",
-      requiresUserGate: false
-    },
-    {
-      agent: "learnings-researcher",
-      mode: "proactive",
-      when: "On every non-trivial brainstorm where `.cclaw/knowledge.jsonl` has entries.",
-      purpose: "Surface prior learnings and anti-patterns that apply to the current task before direction lock.",
-      requiresUserGate: false
     }
   ],
   scope: [
@@ -1830,13 +1821,6 @@ const STAGE_AUTO_SUBAGENT_DISPATCH: Record<FlowStage, StageAutoSubagentDispatch[
       mode: "mandatory",
       when: "Always during scope shaping.",
       purpose: "Challenge premise, map alternatives, and produce explicit in/out contract.",
-      requiresUserGate: false
-    },
-    {
-      agent: "git-history-analyzer",
-      mode: "proactive",
-      when: "When scope touches modules with churn, recent regressions, or unclear ownership.",
-      purpose: "Read recent commits, PRs, and issue references for the affected paths before scope lock.",
       requiresUserGate: false
     }
   ],
@@ -1854,20 +1838,6 @@ const STAGE_AUTO_SUBAGENT_DISPATCH: Record<FlowStage, StageAutoSubagentDispatch[
       when: "When trust boundaries, auth, secrets, or external inputs are involved.",
       purpose: "Catch design-level security risks before implementation.",
       requiresUserGate: false
-    },
-    {
-      agent: "framework-docs-researcher",
-      mode: "proactive",
-      when: "When a specific framework/library version is detected and a non-trivial API is in play.",
-      purpose: "Retrieve version-specific docs + migration notes so the design does not rely on stale training priors.",
-      requiresUserGate: false
-    },
-    {
-      agent: "best-practices-researcher",
-      mode: "conditional",
-      when: "When the user flags a quality axis (performance, accessibility, reliability) as primary.",
-      purpose: "Pull domain best-practices and contrast them with the current design choice.",
-      requiresUserGate: false
     }
   ],
   spec: [
@@ -1879,7 +1849,7 @@ const STAGE_AUTO_SUBAGENT_DISPATCH: Record<FlowStage, StageAutoSubagentDispatch[
       requiresUserGate: false
     },
     {
-      agent: "spec-reviewer",
+      agent: "reviewer",
       mode: "proactive",
       when: "When acceptance criteria and edge cases are drafted and need independent validation before plan stage.",
       purpose: "Independent review of spec against measurability, testability, and completeness before locking the contract for plan.",
@@ -1913,17 +1883,10 @@ const STAGE_AUTO_SUBAGENT_DISPATCH: Record<FlowStage, StageAutoSubagentDispatch[
   ],
   review: [
     {
-      agent: "spec-reviewer",
+      agent: "reviewer",
       mode: "mandatory",
       when: "Always in review stage.",
-      purpose: "Verify implementation against acceptance criteria with file evidence.",
-      requiresUserGate: false
-    },
-    {
-      agent: "code-reviewer",
-      mode: "mandatory",
-      when: "Always in review stage.",
-      purpose: "Assess correctness, maintainability, architecture, and ship risk.",
+      purpose: "Run spec compliance and code-quality passes with file evidence.",
       requiresUserGate: false
     },
     {
@@ -1935,10 +1898,10 @@ const STAGE_AUTO_SUBAGENT_DISPATCH: Record<FlowStage, StageAutoSubagentDispatch[
       skill: "security-audit"
     },
     {
-      agent: "code-reviewer",
+      agent: "reviewer",
       mode: "conditional",
       condition: "diff_lines_gt:100||files_touched_gt:10||trust_boundary_changed",
-      when: "When the diff exceeds 100 changed lines, touches more than 10 files, or modifies trust boundaries — dispatch a SECOND, independent code-reviewer with the adversarial-review skill loaded so the review army has at least two voices on a high-blast-radius change.",
+      when: "When the diff exceeds 100 changed lines, touches more than 10 files, or modifies trust boundaries — dispatch a SECOND, independent reviewer with the adversarial-review skill loaded so the review army has at least two voices on a high-blast-radius change.",
       purpose: "Adversarial second-opinion review on large or trust-sensitive diffs. The second reviewer treats the implementation as hostile and tries to break it (hostile-user, future-maintainer, competitor lenses) instead of sympathetically explaining it.",
       requiresUserGate: false,
       skill: "adversarial-review"
@@ -1953,10 +1916,10 @@ const STAGE_AUTO_SUBAGENT_DISPATCH: Record<FlowStage, StageAutoSubagentDispatch[
       requiresUserGate: false
     },
     {
-      agent: "code-reviewer",
+      agent: "security-reviewer",
       mode: "proactive",
-      when: "When release involves broad blast radius or unresolved concerns.",
-      purpose: "Provide final integration-scale quality pass.",
+      when: "When release involves broad blast radius, trust-boundary movement, or unresolved security concerns.",
+      purpose: "Provide final exploitability check before release finalization.",
       requiresUserGate: false
     }
   ]

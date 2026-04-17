@@ -2,7 +2,7 @@ import { describe, expect, it } from "vitest";
 import fs from "node:fs/promises";
 import path from "node:path";
 import { lintArtifact } from "../../src/artifact-linter.js";
-import { CCLAW_AGENTS } from "../../src/content/agents.js";
+import { CCLAW_AGENTS } from "../../src/content/core-agents.js";
 import { stageExamples, stageExamplesReferenceMarkdown } from "../../src/content/examples.js";
 import { stageSchema } from "../../src/content/stage-schema.js";
 import { stageSkillMarkdown } from "../../src/content/skills.js";
@@ -50,10 +50,9 @@ describe("stage schema and subagent alignment", () => {
     expect(JSON.stringify(parsed)).not.toMatch(/"title"|"category"/);
   });
 
-  it("review stage mandates security-reviewer alongside spec- and code-reviewer", () => {
+  it("review stage mandates reviewer and security-reviewer", () => {
     const review = stageSchema("review");
-    expect(review.mandatoryDelegations).toContain("spec-reviewer");
-    expect(review.mandatoryDelegations).toContain("code-reviewer");
+    expect(review.mandatoryDelegations).toContain("reviewer");
     expect(review.mandatoryDelegations).toContain("security-reviewer");
   });
 
@@ -62,6 +61,29 @@ describe("stage schema and subagent alignment", () => {
     expect(agent).toBeDefined();
     expect(agent?.activation).toBe("mandatory");
     expect(agent?.description.toLowerCase()).toMatch(/mandatory|no-change/);
+  });
+
+  it("agent registry uses the core-5 roster", () => {
+    expect(CCLAW_AGENTS.map((agent) => agent.name).sort()).toEqual([
+      "doc-updater",
+      "planner",
+      "reviewer",
+      "security-reviewer",
+      "test-author"
+    ]);
+  });
+
+  it("design skill renders research playbooks instead of research personas", () => {
+    const design = stageSchema("design");
+    expect(design.researchPlaybooks).toEqual([
+      "research/framework-docs-lookup.md",
+      "research/best-practices-lookup.md"
+    ]);
+    const markdown = stageSkillMarkdown("design");
+    expect(markdown).toContain("## Research Playbooks");
+    expect(markdown).toContain(".cclaw/skills/research/framework-docs-lookup.md");
+    expect(markdown).toContain(".cclaw/skills/research/best-practices-lookup.md");
+    expect(markdown).not.toContain("framework-docs-researcher");
   });
 
   it("design template renders architecture diagram with clean triple-backtick fences", () => {

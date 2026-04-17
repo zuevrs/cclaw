@@ -57,15 +57,24 @@ import {
   UTILITY_SKILL_FOLDERS,
   UTILITY_SKILL_MAP
 } from "./content/utility-skills.js";
+import { RESEARCH_PLAYBOOKS } from "./content/research-playbooks.js";
 import {
   HARNESS_TOOL_REFS_DIR,
   HARNESS_TOOL_REFS_INDEX_MD,
   harnessToolRefMarkdown
 } from "./content/harness-tool-refs.js";
+import { DOCTOR_REFERENCE_MARKDOWN } from "./content/doctor-references.js";
+import { harnessIntegrationDocMarkdown } from "./content/harnesses-doc.js";
+import { HOOK_EVENTS_BY_HARNESS, HOOK_SEMANTIC_EVENTS } from "./content/hook-events.js";
 import { createInitialFlowState } from "./flow-state.js";
 import { ensureDir, exists, writeFileSafe } from "./fs-utils.js";
 import { ensureGitignore, removeGitignorePatterns } from "./gitignore.js";
-import { HARNESS_ADAPTERS, syncHarnessShims, removeCclawFromAgentsMd } from "./harness-adapters.js";
+import {
+  HARNESS_ADAPTERS,
+  harnessTier,
+  syncHarnessShims,
+  removeCclawFromAgentsMd
+} from "./harness-adapters.js";
 import { validateHookDocument } from "./hook-schema.js";
 import { ensureRunSystem, readFlowState } from "./runs.js";
 import type { FlowTrack, HarnessId, InitProfile, VibyConfig } from "./types.js";
@@ -314,6 +323,11 @@ async function writeSkills(projectRoot: string, config?: VibyConfig): Promise<vo
     await writeFileSafe(runtimePath(projectRoot, "skills", folder, "SKILL.md"), generator());
   }
 
+  // In-thread research procedures (no YAML frontmatter, not delegated personas).
+  for (const [fileName, markdown] of Object.entries(RESEARCH_PLAYBOOKS)) {
+    await writeFileSafe(runtimePath(projectRoot, "skills", "research", fileName), markdown);
+  }
+
   // Language rule packs live under .cclaw/rules/lang/<pack>.md. They are opt-in:
   // only the packs listed in config.languageRulePacks are materialised. Any
   // legacy per-language skill folders from v0.7.0 (.cclaw/skills/language-*)
@@ -351,6 +365,16 @@ async function writeSkills(projectRoot: string, config?: VibyConfig): Promise<vo
       harnessToolRefMarkdown(harness)
     );
   }
+
+  const doctorRefsDir = ["references", "doctor"] as const;
+  for (const [fileName, markdown] of Object.entries(DOCTOR_REFERENCE_MARKDOWN)) {
+    await writeFileSafe(runtimePath(projectRoot, ...doctorRefsDir, fileName), markdown);
+  }
+
+  await writeFileSafe(
+    runtimePath(projectRoot, "references", "harnesses.md"),
+    harnessIntegrationDocMarkdown()
+  );
 }
 
 async function writeUtilityCommands(projectRoot: string): Promise<void> {
@@ -941,6 +965,11 @@ async function ensureSessionStateFiles(projectRoot: string): Promise<void> {
       "# Knowledge digest (auto-generated)\n\n(no entries yet)\n"
     );
   }
+
+  const preambleLogPath = path.join(stateDir, "preamble-log.jsonl");
+  if (!(await exists(preambleLogPath))) {
+    await writeFileSafe(preambleLogPath, "");
+  }
 }
 
 async function writeRulebook(projectRoot: string): Promise<void> {
@@ -1018,6 +1047,38 @@ async function writeAdapterManifest(projectRoot: string, harnesses: HarnessId[])
   );
 }
 
+async function writeHarnessGapsState(projectRoot: string, harnesses: HarnessId[]): Promise<void> {
+  const report = harnesses.map((harness) => {
+    const capabilities = HARNESS_ADAPTERS[harness].capabilities;
+    const hookMap = HOOK_EVENTS_BY_HARNESS[harness];
+    const missingHookEvents = HOOK_SEMANTIC_EVENTS.filter((eventName) => !hookMap[eventName]);
+    const missingCapabilities: string[] = [];
+    if (capabilities.nativeSubagentDispatch !== "full") {
+      missingCapabilities.push(`nativeSubagentDispatch:${capabilities.nativeSubagentDispatch}`);
+    }
+    if (capabilities.hookSurface !== "full") {
+      missingCapabilities.push(`hookSurface:${capabilities.hookSurface}`);
+    }
+    if (capabilities.structuredAsk === "plain-text") {
+      missingCapabilities.push("structuredAsk:none");
+    }
+    return {
+      harness,
+      tier: harnessTier(harness),
+      missingCapabilities,
+      missingHookEvents
+    };
+  });
+
+  await writeFileSafe(
+    runtimePath(projectRoot, "state", "harness-gaps.json"),
+    `${JSON.stringify({
+      generatedAt: new Date().toISOString(),
+      harnesses: report
+    }, null, 2)}\n`
+  );
+}
+
 async function cleanLegacyArtifacts(projectRoot: string): Promise<void> {
   // Remove deprecated utility skill folders from older releases.
   for (const legacyFolder of [
@@ -1048,6 +1109,22 @@ async function cleanLegacyArtifacts(projectRoot: string): Promise<void> {
     await fs.rm(runtimePath(projectRoot, "agents", "securityer.md"), { force: true });
   } catch {
     // best-effort cleanup
+  }
+  // Core-5 migration: remove deprecated generated agent personas.
+  for (const legacyAgentFile of [
+    "spec-reviewer.md",
+    "code-reviewer.md",
+    "repo-research-analyst.md",
+    "learnings-researcher.md",
+    "framework-docs-researcher.md",
+    "best-practices-researcher.md",
+    "git-history-analyzer.md"
+  ]) {
+    try {
+      await fs.rm(runtimePath(projectRoot, "agents", legacyAgentFile), { force: true });
+    } catch {
+      // best-effort cleanup
+    }
   }
 
   for (const legacyPlugin of [
@@ -1122,6 +1199,7 @@ async function materializeRuntime(projectRoot: string, config: VibyConfig, force
   await ensureRunSystem(projectRoot, { createIfMissing: false });
   await ensureSessionStateFiles(projectRoot);
   await writeAdapterManifest(projectRoot, harnesses);
+  await writeHarnessGapsState(projectRoot, harnesses);
   await ensureKnowledgeStore(projectRoot);
   await ensureCustomSkillsScaffold(projectRoot);
   await writeHooks(projectRoot, config);

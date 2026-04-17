@@ -41,7 +41,7 @@ sequenceDiagram
 - **Low cognitive load:** one canonical stage flow instead of dozens of competing paths.
 - **Installer-first architecture:** generates files and hooks; does not run a hidden control plane.
 - **Hard-gated quality:** each stage has non-skippable constraints that reduce AI drift.
-- **Cross-harness parity:** same behavior model across Claude Code, Cursor, Codex, OpenCode.
+- **Tiered harness coverage:** transparent capability tiers across Claude Code, Cursor, Codex, OpenCode.
 - **Compounding context:** flow state + project knowledge get rehydrated on new sessions automatically.
 - **Incremental delivery:** active artifacts stay in one place; `cclaw archive` snapshots completed features into dated run folders.
 
@@ -114,16 +114,17 @@ Required repository secret:
 ├── commands/
 ├── hooks/
 ├── templates/
+├── references/
 ├── artifacts/                # active feature artifacts
 ├── state/
-├── knowledge.md              # append-only rule/pattern/lesson log
+├── knowledge.jsonl           # append-only strict-schema rule/pattern/lesson log
 └── runs/                     # archived feature snapshots (YYYY-MM-DD-feature-name)
 ```
 
 ## Harness Integration
 
 Supported harnesses: `claude`, `cursor`, `opencode`, `codex`. The full
-per-harness install surface, feature matrix, and lifecycle details live in
+per-harness tier/capability matrix, install surface, and lifecycle details live in
 [docs/harnesses.md](./docs/harnesses.md).
 
 ## License

@@ -8,6 +8,18 @@ describe("cli parser", () => {
     expect(parsed.harnesses).toEqual(["claude", "cursor"]);
   });
 
+  it("parses init dry-run and interactive toggles", () => {
+    const parsed = parseArgs(["init", "--dry-run", "--interactive"]);
+    expect(parsed.command).toBe("init");
+    expect(parsed.dryRun).toBe(true);
+    expect(parsed.interactive).toBe(true);
+  });
+
+  it("parses init no-interactive toggle", () => {
+    const parsed = parseArgs(["init", "--no-interactive"]);
+    expect(parsed.interactive).toBe(false);
+  });
+
   it("throws for unknown harness", () => {
     expect(() => parseHarnesses("claude,unknown")).toThrowError(/Unknown harnesses/);
   });
@@ -29,6 +41,15 @@ describe("cli parser", () => {
     const parsed = parseArgs(["doctor", "--reconcile-gates"]);
     expect(parsed.command).toBe("doctor");
     expect(parsed.reconcileGates).toBe(true);
+  });
+
+  it("parses doctor output flags", () => {
+    const parsed = parseArgs(["doctor", "--json", "--explain", "--quiet", "--only=error,hook:"]);
+    expect(parsed.command).toBe("doctor");
+    expect(parsed.doctorJson).toBe(true);
+    expect(parsed.doctorExplain).toBe(true);
+    expect(parsed.doctorQuiet).toBe(true);
+    expect(parsed.doctorOnly).toEqual(["error", "hook:"]);
   });
 
   it("recognizes --help and -h at any position", () => {
@@ -102,5 +123,8 @@ describe("cli parser", () => {
 
   it("documents --profile in usage", () => {
     expect(usage()).toContain("--profile");
+    expect(usage()).toContain("--dry-run");
+    expect(usage()).toContain("--interactive");
+    expect(usage()).toContain("--no-interactive");
   });
 });

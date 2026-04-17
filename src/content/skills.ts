@@ -63,6 +63,22 @@ Record completion/waiver in \`${delegationLogRel}\` before stage completion.
 `;
 }
 
+function researchPlaybooksBlock(stage: FlowStage): string {
+  const playbooks = stageSchema(stage).researchPlaybooks ?? [];
+  if (playbooks.length === 0) return "";
+  const rows = playbooks
+    .map((playbook) => `- \`${RUNTIME_ROOT}/skills/${playbook}\``)
+    .join("\n");
+  return `## Research Playbooks
+
+Use these in-thread research procedures before locking this stage. They are
+playbooks (not delegated personas), so execute them in the primary agent context
+and record outcomes in the stage artifact when relevant.
+
+${rows}
+`;
+}
+
 function reviewSectionsBlock(stage: FlowStage): string {
   const schema = stageSchema(stage);
   if (schema.reviewSections.length === 0) return "";
@@ -102,6 +118,9 @@ function waveExecutionModeBlock(stage: FlowStage): string {
 
 Execute the current dependency wave task-by-task (RED -> GREEN -> REFACTOR).
 Stop on BLOCKED status or when user input is required.
+Apply preamble budget discipline: one preamble per wave, then continue without
+repeating it for each task. Re-emit only when the wave boundary changes or the
+plan changes materially.
 
 Detailed walkthrough:
 \`.cclaw/${STAGE_EXAMPLES_REFERENCE_DIR}/tdd-wave-walkthrough.md\`
@@ -333,6 +352,7 @@ ${schema.requiredContext.length > 0 ? schema.requiredContext.map((item) => `- ${
 
 ${contextLoadingBlock(stage)}
 ${autoSubagentDispatchBlock(stage)}
+${researchPlaybooksBlock(stage)}
 
 ## Outputs
 ${schema.outputs.map((item) => `- ${item}`).join("\n")}

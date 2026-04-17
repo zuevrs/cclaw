@@ -63,13 +63,13 @@ Before execution:
 
 | Agent | Mode | User Gate | Trigger |
 |---|---|---|---|
-| spec-reviewer | mandatory | not required | Always in review stage. |
-| code-reviewer | mandatory | not required | Always in review stage. |
+| reviewer | mandatory | not required | Always in review stage. |
 | security-reviewer | mandatory | not required | Always in review stage. Even when no trust boundaries changed, produce an explicit 'no-change' security attestation. |
-| code-reviewer | conditional | not required | When the diff exceeds 100 changed lines, touches more than 10 files, or modifies trust boundaries — dispatch a SECOND, independent code-reviewer with the adversarial-review skill loaded so the review army has at least two voices on a high-blast-radius change. |
+| reviewer | conditional | not required | When the diff exceeds 100 changed lines, touches more than 10 files, or modifies trust boundaries — dispatch a SECOND, independent reviewer with the adversarial-review skill loaded so the review army has at least two voices on a high-blast-radius change. |
 
-Mandatory delegations for this stage: \`spec-reviewer\`, \`code-reviewer\`, \`security-reviewer\`.
+Mandatory delegations for this stage: \`reviewer\`, \`security-reviewer\`.
 Record completion/waiver in \`.cclaw/state/delegation-log.json\` before stage completion.
+
 
 
 ## Outputs
@@ -87,7 +87,7 @@ You MUST complete these steps in order:
 
 1. Diff Scope — Run \`git diff\` against base branch. If no diff, exit early with APPROVED (no changes to review). Scope the review to changed files unless blast-radius analysis requires wider inspection.
 2. Change-Size Check — ~100 lines = normal. ~300 lines = consider splitting. ~1000+ lines = strongly recommend stacked PRs. Flag large diffs to the user.
-3. Adversarial Trigger Check — compute changed-line count (\`git diff --shortstat <base>..HEAD\`), files-touched count, and whether trust boundaries changed (auth/secrets/external inputs/permissions). If \`lines > 100\` OR \`files > 10\` OR \`trust boundary changed\`, **dispatch a SECOND code-reviewer agent with the \`adversarial-review\` skill loaded** and reconcile its findings into the review army (treat the conditional dispatch as mandatory whenever the trigger holds; record the trigger that fired in the dashboard).
+3. Adversarial Trigger Check — compute changed-line count (\`git diff --shortstat <base>..HEAD\`), files-touched count, and whether trust boundaries changed (auth/secrets/external inputs/permissions). If \`lines > 100\` OR \`files > 10\` OR \`trust boundary changed\`, **dispatch a SECOND reviewer agent with the \`adversarial-review\` skill loaded** and reconcile its findings into the review army (treat the conditional dispatch as mandatory whenever the trigger holds; record the trigger that fired in the dashboard).
 4. Load upstream evidence — read TDD artifact (RED + GREEN + REFACTOR), spec, and plan. Verify evidence chain is unbroken.
 5. Layer 1: Spec Compliance — check every acceptance criterion against implementation. Verdict: pass/fail per criterion.
 6. Layer 2a: Correctness — logic errors, race conditions, boundary violations, null handling.
@@ -313,7 +313,7 @@ Rule: Review verdict must reference specific spec criteria and TDD evidence. Dow
 - \`next\`: \`ship\` (Release handoff stage with preflight checks, rollback readiness, and explicit finalization mode.)
 - \`gates\`: \`review_layer1_spec_compliance\`, \`review_layer2_correctness\`, \`review_layer2_security\`, \`review_layer2_performance\`, \`review_layer2_architecture\`, \`review_severity_classified\`, \`review_criticals_resolved\`, \`review_army_json_valid\`, \`review_completeness_scored\`, \`review_security_audit_swept\`
 - \`artifact\`: \`.cclaw/artifacts/07-review.md\`
-- \`mandatory delegations\`: \`spec-reviewer\`, \`code-reviewer\`, \`security-reviewer\`
+- \`mandatory delegations\`: \`reviewer\`, \`security-reviewer\`
 
 Apply shared completion logic from:
 \`.cclaw/references/protocols/completion.md\`
@@ -398,10 +398,11 @@ Before execution:
 | Agent | Mode | User Gate | Trigger |
 |---|---|---|---|
 | doc-updater | mandatory | not required | Always in ship stage. |
-| code-reviewer | proactive | not required | When release involves broad blast radius or unresolved concerns. |
+| security-reviewer | proactive | not required | When release involves broad blast radius, trust-boundary movement, or unresolved security concerns. |
 
 Mandatory delegations for this stage: \`doc-updater\`.
 Record completion/waiver in \`.cclaw/state/delegation-log.json\` before stage completion.
+
 
 
 ## Outputs
@@ -680,6 +681,7 @@ Before execution:
 
 Mandatory delegations for this stage: \`planner\`.
 Record completion/waiver in \`.cclaw/state/delegation-log.json\` before stage completion.
+
 
 
 ## Outputs
@@ -961,6 +963,7 @@ Mandatory delegations for this stage: \`test-author\`.
 Record completion/waiver in \`.cclaw/state/delegation-log.json\` before stage completion.
 
 
+
 ## Outputs
 - failing test set
 - passing implementation
@@ -1067,6 +1070,9 @@ Shared decision/ask-user protocol:
 
 Execute the current dependency wave task-by-task (RED -> GREEN -> REFACTOR).
 Stop on BLOCKED status or when user input is required.
+Apply preamble budget discipline: one preamble per wave, then continue without
+repeating it for each task. Re-emit only when the wave boundary changes or the
+plan changes materially.
 
 Detailed walkthrough:
 \`.cclaw/references/stages/tdd-wave-walkthrough.md\`
@@ -1289,11 +1295,18 @@ Before execution:
 | Agent | Mode | User Gate | Trigger |
 |---|---|---|---|
 | planner | proactive | not required | When request is ambiguous, multi-surface, or spans multiple modules. |
-| repo-research-analyst | proactive | not required | When the user's idea touches an unfamiliar module, stack, or integration surface. |
-| learnings-researcher | proactive | not required | On every non-trivial brainstorm where \`.cclaw/knowledge.jsonl\` has entries. |
 
 Mandatory delegations for this stage: none.
 Record completion/waiver in \`.cclaw/state/delegation-log.json\` before stage completion.
+
+## Research Playbooks
+
+Use these in-thread research procedures before locking this stage. They are
+playbooks (not delegated personas), so execute them in the primary agent context
+and record outcomes in the stage artifact when relevant.
+
+- \`.cclaw/skills/research/repo-scan.md\`
+- \`.cclaw/skills/research/learnings-lookup.md\`
 
 
 ## Outputs
