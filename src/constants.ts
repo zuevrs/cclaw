@@ -1,9 +1,41 @@
+import { readFileSync } from "node:fs";
+import path from "node:path";
+import { fileURLToPath } from "node:url";
 import type { FlowStage, HarnessId } from "./types.js";
 
 /** Hidden runtime directory at project root (dot-prefixed). */
 export const RUNTIME_ROOT = ".cclaw";
 
-export const CCLAW_VERSION = "0.1.1";
+/**
+ * Resolved once at module load from the cclaw-cli package.json. Walking a
+ * short list of candidates keeps the helper working in both the compiled
+ * `dist/` layout and the in-repo `src/` layout (tests, ts-node).
+ */
+function readPackageVersion(): string {
+  try {
+    const here = path.dirname(fileURLToPath(import.meta.url));
+    const candidates = [
+      path.resolve(here, "../package.json"),
+      path.resolve(here, "../../package.json")
+    ];
+    for (const candidate of candidates) {
+      try {
+        const raw = readFileSync(candidate, "utf8");
+        const parsed = JSON.parse(raw) as { name?: string; version?: string };
+        if (parsed.name === "cclaw-cli" && typeof parsed.version === "string") {
+          return parsed.version;
+        }
+      } catch {
+        continue;
+      }
+    }
+  } catch {
+    // Fall through to dev fallback.
+  }
+  return "0.0.0-dev";
+}
+
+export const CCLAW_VERSION = readPackageVersion();
 export const FLOW_VERSION = "1.0.0";
 
 export const DEFAULT_HARNESSES: HarnessId[] = [

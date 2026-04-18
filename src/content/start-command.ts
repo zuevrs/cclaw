@@ -9,8 +9,9 @@ function flowStatePath(): string {
 
 /**
  * Command contract for /cc — the unified entry point.
- * No args → behaves like /cc-next (resume or start brainstorm).
- * With prompt → starts brainstorm with the given idea.
+ * No args → behaves like /cc-next (resume or start the flow at its first stage).
+ * With prompt → classifies the idea, selects a track, and starts the first
+ * stage of that track (brainstorm for medium/standard, spec for quick).
  */
 export function startCommandContract(): string {
   const flowPath = flowStatePath();
@@ -115,7 +116,7 @@ export function startCommandSkillMarkdown(): string {
   const flowPath = flowStatePath();
   return `---
 name: ${START_SKILL_NAME}
-description: "Unified entry point for the cclaw flow. No args = resume/next. With prompt = start brainstorm with idea."
+description: "Unified entry point for the cclaw flow. No args = resume/next. With prompt = classify, pick track, start its first stage."
 ---
 
 # /cc — Flow Entry Point
@@ -125,7 +126,7 @@ description: "Unified entry point for the cclaw flow. No args = resume/next. Wit
 \`/cc\` is the **starting command** for cclaw. It intelligently routes:
 
 - **No arguments** → acts as \`/cc-next\` (resume current stage or advance to next)
-- **With a prompt** → captures the idea and starts brainstorm
+- **With a prompt** → classifies the task, picks a track (quick/medium/standard), and starts the **first stage of that track** (not always brainstorm — e.g. the \`quick\` track starts at \`spec\`)
 
 ## HARD-GATE
 

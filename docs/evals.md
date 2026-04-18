@@ -1,8 +1,7 @@
 # cclaw evals
 
 Eval-driven prompt engineering for cclaw. Skill and prompt changes land with a
-measured score delta rather than subjective review. See
-[`docs/roadmap.md`](./roadmap.md) Phase 7 for the rollout plan.
+measured score delta rather than subjective review.
 
 ## Status
 
@@ -563,8 +562,8 @@ artifacts with a 30–90 day retention.
 - `dailyUsdCap` is opt-in. When set, the runner aborts once estimated spend crosses the threshold.
 - `reports/` is gitignored; everything else under `.cclaw/evals/` is tracked so teams share corpus, rubrics, baselines, and config.
 
-## Deferred to Phase 8
+## Deferred
 
 Running the actual IDE harnesses (claude-code / cursor-agent) against
-GLM-class models through a proxy is a separate design problem; see
-`docs/roadmap.md` Phase 8.
+GLM-class models through a proxy is a separate design problem and is not part
+of the eval CLI today.

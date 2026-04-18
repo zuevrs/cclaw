@@ -8,7 +8,6 @@ release-artifacts/
 scripts/reference-sync.sh
 docs/*
 !docs/harnesses.md
-!docs/roadmap.md
 !docs/evals.md
 
 # cclaw generated artifacts
