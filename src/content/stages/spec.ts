@@ -80,14 +80,11 @@ export const SPEC: StageSchemaInput = {
     "plan-ready acceptance mapping exists",
     "testability confirmed for all criteria"
   ],
-  antiPatterns: [
+  commonRationalizations: [
     "High-level goals without measurable outcomes",
     "Implicit assumptions",
     "Proceeding to plan before approval",
-    "Using vague adjectives (fast, intuitive, robust) without thresholds"
-  ],
-  redFlags: [
-    "Criteria use vague language (fast, intuitive, robust) without thresholds",
+    "Using vague adjectives (fast, intuitive, robust) without thresholds",
     "No explicit assumptions section",
     "No approval record",
     "No testability mapping",

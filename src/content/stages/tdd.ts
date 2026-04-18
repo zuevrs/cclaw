@@ -91,16 +91,14 @@ export const TDD: StageSchemaInput = {
     "required gates marked satisfied",
     "traceability annotated"
   ],
-  antiPatterns: [
+  commonRationalizations: [
     "Writing code before failing test",
     "Asserting implementation details instead of behavior",
     "Big-bang implementation across multiple slices",
     "Partial test runs presented as GREEN",
     "Skipping evidence capture",
     "Undocumented refactor changes",
-    "Adding features beyond what RED tests require"
-  ],
-  redFlags: [
+    "Adding features beyond what RED tests require",
     "No failing test output (RED missing)",
     "Implementation edits appear before RED evidence",
     "No full-suite GREEN evidence",

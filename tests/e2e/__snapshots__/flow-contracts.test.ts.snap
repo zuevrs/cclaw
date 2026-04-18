@@ -307,15 +307,15 @@ Rule: Review verdict must reference specific spec criteria and TDD evidence. Dow
 - Shipping with open criticals
 - Batching multiple findings into one report without individual resolution
 - Skipping Layer 2 sections because Layer 1 passed
-- layer 1 failed
-- critical findings unresolved
-- missing regression evidence
 - No separate Layer 1/Layer 2 outcomes
 - No structured review-army reconciliation artifact
 - No critical bucket
 - No explicit ready/not-ready verdict
 - Review sections skipped or abbreviated
 - Findings not classified by severity
+- layer 1 failed
+- critical findings unresolved
+- missing regression evidence
 
 ## Verification
 - [ ] both layers completed
@@ -595,15 +595,15 @@ Rule: Ship artifact must reference review verdict and resolution status. Release
 - Bypassing preflight due to urgency
 - Selecting multiple finalization modes
 - Shipping with BLOCKED review verdict
-- review verdict is BLOCKED
-- critical review blockers remain
-- rollback plan missing
-- finalization mode not selected
 - No rollback trigger/steps
 - More than one finalization mode implied
 - No explicit preflight result
 - Review verdict not referenced
 - Finalization not executed, only planned
+- review verdict is BLOCKED
+- critical review blockers remain
+- rollback plan missing
+- finalization mode not selected
 
 ## Verification
 - [ ] preflight completed
@@ -883,11 +883,6 @@ Rule: Every task must trace to a spec acceptance criterion. Every locked scope d
 - Starting execution before approval
 - Tasks that touch multiple unrelated areas
 - Using placeholder tokens or scope-reduction phrases (\`v1\`, \`for now\`, \`later\`) in task definitions
-- tasks too broad
-- dependency uncertainty unresolved
-- wave boundaries are unclear
-- locked decisions from scope are not mapped to tasks
-- no explicit confirmation
 - No dependency graph
 - No WAIT_FOR_CONFIRM marker
 - No explicit dependency waves
@@ -895,6 +890,11 @@ Rule: Every task must trace to a spec acceptance criterion. Every locked scope d
 - No acceptance mapping
 - Locked decisions are missing or not mapped
 - Scope-reduction language appears without explicit approved defer decision
+- tasks too broad
+- dependency uncertainty unresolved
+- wave boundaries are unclear
+- locked decisions from scope are not mapped to tasks
+- no explicit confirmation
 
 ## Verification
 - [ ] plan quality gates complete
@@ -1229,16 +1229,16 @@ Rule: Every RED test traces to a plan task. Every GREEN change traces to a RED t
 - Skipping evidence capture
 - Undocumented refactor changes
 - Adding features beyond what RED tests require
-- tests pass before behavior change (RED failure missing)
-- full suite not green
-- behavior changed during refactor
-- no evidence recorded
 - No failing test output (RED missing)
 - Implementation edits appear before RED evidence
 - No full-suite GREEN evidence
 - No refactor notes
 - Multiple tasks implemented in one pass without justification
 - Files changed outside current slice scope
+- tests pass before behavior change (RED failure missing)
+- full suite not green
+- behavior changed during refactor
+- no evidence recorded
 
 ## Verification
 - [ ] RED evidence exists and is traceable
@@ -1508,13 +1508,11 @@ Rule: Scope and design decisions must trace back to explored context and approve
 - Proposing cosmetic option variants instead of architecturally distinct approaches
 - Jumping directly into implementation
 - Requesting approval without stating what decision is being approved
+- Questions that only gather preferences without design impact
+- Options that are variants of one approach, not distinct alternatives
 - no explicit approval
 - critical ambiguity unresolved
 - project context not explored
-- No project context exploration before questions
-- Questions that only gather preferences without design impact
-- Options that are variants of one approach, not distinct alternatives
-- Approval requested without explicit decision context
 
 ## Verification
 - [ ] approved design direction documented

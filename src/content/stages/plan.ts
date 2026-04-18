@@ -86,14 +86,12 @@ export const PLAN: StageSchemaInput = {
     "artifact ready for TDD execution",
     "acceptance mapping complete"
   ],
-  antiPatterns: [
+  commonRationalizations: [
     "Horizontal decomposition without end-to-end slices",
     "Tasks without verification steps",
     "Starting execution before approval",
     "Tasks that touch multiple unrelated areas",
-    "Using placeholder tokens or scope-reduction phrases (`v1`, `for now`, `later`) in task definitions"
-  ],
-  redFlags: [
+    "Using placeholder tokens or scope-reduction phrases (`v1`, `for now`, `later`) in task definitions",
     "No dependency graph",
     "No WAIT_FOR_CONFIRM marker",
     "No explicit dependency waves",

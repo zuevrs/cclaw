@@ -85,8 +85,14 @@ export interface StageSchema {
   outputs: string[];
   blockers: string[];
   exitCriteria: string[];
-  antiPatterns: string[];
-  redFlags: string[];
+  /**
+   * Consolidated "Common Rationalizations" list — things an agent is likely to
+   * talk itself into that should stop the stage. Rendered under the
+   * "Anti-Patterns & Red Flags" heading in the generated SKILL.md. Replaces
+   * the former split between `antiPatterns` and `redFlags`, which produced
+   * near-duplicate entries and forced downstream code to merge them anyway.
+   */
+  commonRationalizations: string[];
   policyNeedles: string[];
   artifactFile: string;
   next: FlowStage | "done";
