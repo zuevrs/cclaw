@@ -21,4 +21,21 @@ describe("ideate and compound utility surfaces", () => {
     expect(ideateSkill).toContain("## HARD-GATE");
     expect(compoundSkill).toContain("## HARD-GATE");
   });
+
+  it("embeds a drift checklist in the compound skill and contract", async () => {
+    const root = await createTempProject("compound-drift");
+    await initCclaw({ projectRoot: root });
+
+    const compoundContract = await fs.readFile(path.join(root, ".cclaw/commands/compound.md"), "utf8");
+    const compoundSkill = await fs.readFile(path.join(root, ".cclaw/skills/flow-compound/SKILL.md"), "utf8");
+
+    expect(compoundContract).toContain("Drift check");
+    expect(compoundSkill).toContain("Drift check");
+    expect(compoundSkill).toContain("Read the lift target");
+    expect(compoundSkill).toContain("Grep for contradictions");
+    expect(compoundSkill).toContain("last_seen_ts");
+    expect(compoundSkill).toContain("superseding");
+    expect(compoundSkill).toContain("Cite line IDs");
+    expect(compoundSkill).toContain("Freshness:");
+  });
 });
