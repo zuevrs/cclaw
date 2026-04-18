@@ -78,12 +78,39 @@ describe("install lifecycle", () => {
     const harnessGaps = JSON.parse(
       await fs.readFile(path.join(root, ".cclaw/state/harness-gaps.json"), "utf8")
     ) as {
-      harnesses: Array<{ harness: string; tier: string; missingCapabilities: string[] }>;
+      schemaVersion?: number;
+      harnesses: Array<{
+        harness: string;
+        tier: string;
+        subagentFallback?: string;
+        playbookPath?: string;
+        missingCapabilities: string[];
+        missingHookEvents?: string[];
+        remediation?: string[];
+      }>;
     };
+    expect(harnessGaps.schemaVersion).toBe(2);
     const codexGap = harnessGaps.harnesses.find((entry) => entry.harness === "codex");
     expect(codexGap?.tier).toBe("tier2");
     expect(codexGap?.missingCapabilities).toContain("nativeSubagentDispatch:none");
     expect(codexGap?.missingCapabilities).toContain("structuredAsk:none");
+    expect(codexGap?.subagentFallback).toBe("role-switch");
+    expect(codexGap?.playbookPath).toBe(".cclaw/references/harnesses/codex-playbook.md");
+    expect(codexGap?.remediation?.some((line) => line.includes("role-switch"))).toBe(true);
+
+    // Parity playbooks must be materialised for every supported harness.
+    for (const harness of ["claude", "cursor", "opencode", "codex"] as const) {
+      const playbookPath = path.join(
+        root,
+        `.cclaw/references/harnesses/${harness}-playbook.md`
+      );
+      const body = await fs.readFile(playbookPath, "utf8");
+      expect(body).toContain(`harness: ${harness}`);
+      expect(body).toContain("# ");
+    }
+    await expect(
+      fs.stat(path.join(root, ".cclaw/references/harnesses/README.md"))
+    ).resolves.toBeDefined();
 
     const claudeHooks = JSON.parse(
       await fs.readFile(path.join(root, ".claude/hooks/hooks.json"), "utf8")

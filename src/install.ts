@@ -89,6 +89,12 @@ import {
 } from "./content/harness-tool-refs.js";
 import { DOCTOR_REFERENCE_MARKDOWN } from "./content/doctor-references.js";
 import { harnessIntegrationDocMarkdown } from "./content/harnesses-doc.js";
+import {
+  HARNESS_PLAYBOOKS_DIR,
+  harnessPlaybookFileName,
+  harnessPlaybookMarkdown,
+  harnessPlaybooksIndexMarkdown
+} from "./content/harness-playbooks.js";
 import { HOOK_EVENTS_BY_HARNESS, HOOK_SEMANTIC_EVENTS } from "./content/hook-events.js";
 import { createInitialFlowState } from "./flow-state.js";
 import { ensureDir, exists, writeFileSafe } from "./fs-utils.js";
@@ -468,6 +474,22 @@ async function writeSkills(projectRoot: string, config?: VibyConfig): Promise<vo
     runtimePath(projectRoot, "references", "harnesses.md"),
     harnessIntegrationDocMarkdown()
   );
+
+  // Per-harness parity playbooks. Generated for every supported harness
+  // regardless of which harnesses the project installed — the index always
+  // resolves, and doctor only asserts presence of the installed harnesses'
+  // playbooks (see runtime-integrity checks).
+  const playbookDirSegments = HARNESS_PLAYBOOKS_DIR.split("/");
+  await writeFileSafe(
+    runtimePath(projectRoot, ...playbookDirSegments, "README.md"),
+    harnessPlaybooksIndexMarkdown()
+  );
+  for (const harness of harnessIds) {
+    await writeFileSafe(
+      runtimePath(projectRoot, ...playbookDirSegments, harnessPlaybookFileName(harness)),
+      harnessPlaybookMarkdown(harness)
+    );
+  }
 }
 
 async function writeUtilityCommands(projectRoot: string): Promise<void> {
@@ -1180,11 +1202,45 @@ async function writeHarnessGapsState(projectRoot: string, harnesses: HarnessId[]
     if (capabilities.structuredAsk === "plain-text") {
       missingCapabilities.push("structuredAsk:none");
     }
+
+    const remediation: string[] = [];
+    switch (capabilities.subagentFallback) {
+      case "native":
+        // nothing to remediate — harness has first-class dispatch
+        break;
+      case "generic-dispatch":
+        remediation.push(
+          `subagent dispatch → map named cclaw agents onto generic Task subagent_type per ${HARNESS_PLAYBOOKS_DIR}/${harness}-playbook.md`
+        );
+        break;
+      case "role-switch":
+        remediation.push(
+          `subagent dispatch → role-switch in-session with evidenceRefs per ${HARNESS_PLAYBOOKS_DIR}/${harness}-playbook.md`
+        );
+        break;
+      case "waiver":
+        remediation.push(
+          `subagent dispatch → record explicit harness_limitation waiver; no parity path available`
+        );
+        break;
+    }
+    if (capabilities.structuredAsk === "plain-text") {
+      remediation.push(
+        "structured ask → fall back to a numbered plain-text list; first option is default"
+      );
+    }
+    for (const event of missingHookEvents) {
+      remediation.push(`hook event ${event} → schedule the corresponding script manually or accept reduced observability`);
+    }
+
     return {
       harness,
       tier: harnessTier(harness),
+      subagentFallback: capabilities.subagentFallback,
+      playbookPath: `${RUNTIME_ROOT}/${HARNESS_PLAYBOOKS_DIR}/${harness}-playbook.md`,
       missingCapabilities,
-      missingHookEvents
+      missingHookEvents,
+      remediation
     };
   });
 
@@ -1192,6 +1248,7 @@ async function writeHarnessGapsState(projectRoot: string, harnesses: HarnessId[]
     runtimePath(projectRoot, "state", "harness-gaps.json"),
     `${JSON.stringify({
       generatedAt: new Date().toISOString(),
+      schemaVersion: 2,
       harnesses: report
     }, null, 2)}\n`
   );

@@ -17,13 +17,48 @@ const RUNTIME_AGENTS_BLOCK_SOURCE =
 const RUNTIME_AGENTS_BLOCK_PATTERN = new RegExp(RUNTIME_AGENTS_BLOCK_SOURCE, "u");
 const RUNTIME_AGENTS_BLOCK_GLOBAL_PATTERN = new RegExp(RUNTIME_AGENTS_BLOCK_SOURCE, "gu");
 
+export type SubagentFallback =
+  /** Harness has real, isolated subagent dispatch; no fallback needed. */
+  | "native"
+  /**
+   * Harness has generic dispatch (e.g. Cursor's Task tool with
+   * `subagent_type`) but not user-defined named subagents; cclaw maps each
+   * named agent to the generic dispatcher with a structured role prompt.
+   */
+  | "generic-dispatch"
+  /**
+   * No isolated dispatch — the agent performs the named subagent's role
+   * in-session with an explicit role announce + delegation-log entry
+   * carrying evidenceRefs. Accepted as `completed` in delegation checks.
+   */
+  | "role-switch"
+  /**
+   * No meaningful fallback — mandatory delegations can only be waived
+   * under `waiverReason: "harness_limitation"`.
+   */
+  | "waiver";
+
 export interface HarnessAdapter {
   id: HarnessId;
   commandDir: string;
   capabilities: {
-    nativeSubagentDispatch: "full" | "partial" | "none";
+    /**
+     * Level of native subagent dispatch:
+     * - `full`    — isolated workers + user-defined named subagents (Claude).
+     * - `generic` — generic dispatcher (Task) without named agents (Cursor).
+     * - `partial` — plugin-based dispatch, not a first-class primitive
+     *   (OpenCode).
+     * - `none`    — no dispatch primitive at all (Codex).
+     */
+    nativeSubagentDispatch: "full" | "generic" | "partial" | "none";
     hookSurface: "full" | "plugin" | "limited" | "none";
     structuredAsk: "AskUserQuestion" | "AskQuestion" | "plain-text";
+    /**
+     * Declared fallback pattern used when the harness cannot satisfy a
+     * mandatory delegation natively. Drives `checkMandatoryDelegations`
+     * and the generated playbook per harness.
+     */
+    subagentFallback: SubagentFallback;
   };
 }
 
@@ -80,16 +115,22 @@ export const HARNESS_ADAPTERS: Record<HarnessId, HarnessAdapter> = {
     capabilities: {
       nativeSubagentDispatch: "full",
       hookSurface: "full",
-      structuredAsk: "AskUserQuestion"
+      structuredAsk: "AskUserQuestion",
+      subagentFallback: "native"
     }
   },
   cursor: {
     id: "cursor",
     commandDir: ".cursor/commands",
     capabilities: {
-      nativeSubagentDispatch: "partial",
+      // Cursor has a real Task tool with subagent_type (generalPurpose,
+      // explore, shell, browser-use, …) but no user-defined named
+      // subagents. cclaw maps each named agent (planner/reviewer/…) onto
+      // generic dispatch with a role prompt — see the cursor playbook.
+      nativeSubagentDispatch: "generic",
       hookSurface: "full",
-      structuredAsk: "AskQuestion"
+      structuredAsk: "AskQuestion",
+      subagentFallback: "generic-dispatch"
     }
   },
   opencode: {
@@ -98,7 +139,8 @@ export const HARNESS_ADAPTERS: Record<HarnessId, HarnessAdapter> = {
     capabilities: {
       nativeSubagentDispatch: "partial",
       hookSurface: "plugin",
-      structuredAsk: "plain-text"
+      structuredAsk: "plain-text",
+      subagentFallback: "role-switch"
     }
   },
   codex: {
@@ -107,7 +149,8 @@ export const HARNESS_ADAPTERS: Record<HarnessId, HarnessAdapter> = {
     capabilities: {
       nativeSubagentDispatch: "none",
       hookSurface: "full",
-      structuredAsk: "plain-text"
+      structuredAsk: "plain-text",
+      subagentFallback: "role-switch"
     }
   }
 };
@@ -126,11 +169,23 @@ export function harnessTier(harnessId: HarnessId): HarnessTier {
   if (
     capabilities.hookSurface === "full" ||
     capabilities.hookSurface === "plugin" ||
+    capabilities.nativeSubagentDispatch === "generic" ||
     capabilities.nativeSubagentDispatch === "partial"
   ) {
     return "tier2";
   }
   return "tier3";
+}
+
+/**
+ * Harness IDs ordered from best (tier1) to least-capable. Stable sort — same
+ * tier preserves declaration order.
+ */
+export function harnessesByTier(): HarnessId[] {
+  return (Object.keys(HARNESS_ADAPTERS) as HarnessId[]).sort((a, b) => {
+    const tierOrder = { tier1: 0, tier2: 1, tier3: 2 };
+    return tierOrder[harnessTier(a)] - tierOrder[harnessTier(b)];
+  });
 }
 
 function agentsMdBlock(): string {

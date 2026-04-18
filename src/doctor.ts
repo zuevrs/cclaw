@@ -44,6 +44,10 @@ import {
 } from "./content/utility-skills.js";
 import { CONTEXT_MODES, DEFAULT_CONTEXT_MODE } from "./content/contexts.js";
 import { DOCTOR_REFERENCE_MARKDOWN } from "./content/doctor-references.js";
+import {
+  HARNESS_PLAYBOOKS_DIR,
+  harnessPlaybookFileName
+} from "./content/harness-playbooks.js";
 import { validateHookDocument } from "./hook-schema.js";
 import type { HarnessId } from "./types.js";
 import type { DoctorSeverity } from "./doctor-registry.js";
@@ -427,6 +431,13 @@ export async function doctorChecks(projectRoot: string, options: DoctorOptions =
     details: `${RUNTIME_ROOT}/references/harnesses.md`
   });
 
+  const playbookDir = path.join(projectRoot, RUNTIME_ROOT, ...HARNESS_PLAYBOOKS_DIR.split("/"));
+  checks.push({
+    name: "harness_ref:playbooks_index",
+    ok: await exists(path.join(playbookDir, "README.md")),
+    details: `${RUNTIME_ROOT}/${HARNESS_PLAYBOOKS_DIR}/README.md`
+  });
+
   const doctorRefDir = path.join(projectRoot, RUNTIME_ROOT, "references", "doctor");
   for (const fileName of Object.keys(DOCTOR_REFERENCE_MARKDOWN)) {
     const refPath = path.join(doctorRefDir, fileName);
@@ -531,6 +542,17 @@ export async function doctorChecks(projectRoot: string, options: DoctorOptions =
         details: shimPath
       });
     }
+    const playbookFile = path.join(
+      projectRoot,
+      RUNTIME_ROOT,
+      ...HARNESS_PLAYBOOKS_DIR.split("/"),
+      harnessPlaybookFileName(harness)
+    );
+    checks.push({
+      name: `harness_ref:playbook:${harness}`,
+      ok: await exists(playbookFile),
+      details: `${RUNTIME_ROOT}/${HARNESS_PLAYBOOKS_DIR}/${harnessPlaybookFileName(harness)}`
+    });
   }
 
   const agentsFile = path.join(projectRoot, "AGENTS.md");
@@ -1386,12 +1408,16 @@ export async function doctorChecks(projectRoot: string, options: DoctorOptions =
   });
 
   const delegation = await checkMandatoryDelegations(projectRoot, flowState.currentStage);
+  const missingEvidenceNote =
+    delegation.missingEvidence && delegation.missingEvidence.length > 0
+      ? ` (role-switch rows without evidenceRefs: ${delegation.missingEvidence.join(", ")})`
+      : "";
   checks.push({
     name: "delegation:mandatory:current_stage",
     ok: delegation.satisfied,
     details: delegation.satisfied
-      ? `All mandatory delegations satisfied for stage "${flowState.currentStage}"`
-      : `Missing mandatory delegations for stage "${flowState.currentStage}": ${delegation.missing.join(", ")}`
+      ? `All mandatory delegations satisfied for stage "${flowState.currentStage}" (mode: ${delegation.expectedMode})`
+      : `Missing mandatory delegations for stage "${flowState.currentStage}": ${delegation.missing.join(", ")}${missingEvidenceNote}`
   });
   checks.push({
     name: "warning:delegation:waived",

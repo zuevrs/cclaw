@@ -12,10 +12,20 @@ describe("harness parity model", () => {
 
   it("keeps capability metadata attached to every harness adapter", () => {
     for (const adapter of Object.values(HARNESS_ADAPTERS)) {
-      expect(["full", "partial", "none"]).toContain(adapter.capabilities.nativeSubagentDispatch);
+      expect(["full", "generic", "partial", "none"]).toContain(adapter.capabilities.nativeSubagentDispatch);
       expect(["AskUserQuestion", "AskQuestion", "plain-text"]).toContain(adapter.capabilities.structuredAsk);
       expect(["full", "plugin", "limited", "none"]).toContain(adapter.capabilities.hookSurface);
+      expect(["native", "generic-dispatch", "role-switch", "waiver"]).toContain(
+        adapter.capabilities.subagentFallback
+      );
     }
+  });
+
+  it("declares a sensible subagentFallback per harness", () => {
+    expect(HARNESS_ADAPTERS.claude.capabilities.subagentFallback).toBe("native");
+    expect(HARNESS_ADAPTERS.cursor.capabilities.subagentFallback).toBe("generic-dispatch");
+    expect(HARNESS_ADAPTERS.opencode.capabilities.subagentFallback).toBe("role-switch");
+    expect(HARNESS_ADAPTERS.codex.capabilities.subagentFallback).toBe("role-switch");
   });
 
   it("renders harness docs from capability metadata", () => {

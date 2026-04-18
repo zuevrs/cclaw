@@ -73,25 +73,78 @@ describe("delegation ledger run scoping", () => {
     expect(result.staleIgnored).toEqual([]);
   });
 
-  it("auto-waives mandatory delegations when native dispatch is unavailable", async () => {
-    const root = await createTempProject("delegation-auto-waiver");
+  it("requires explicit role-switch evidence on Codex instead of silent auto-waiver", async () => {
+    const root = await createTempProject("delegation-role-switch-missing");
     await seedFlowState(root, "run-codex");
     await writeConfig(root, createDefaultConfig(["codex"]));
 
     const result = await checkMandatoryDelegations(root, "scope");
-    expect(result.satisfied).toBe(true);
-    expect(result.missing).toEqual([]);
-    expect(result.autoWaived).toContain("planner");
+    expect(result.satisfied).toBe(false);
+    expect(result.missing).toContain("planner");
+    expect(result.autoWaived).toEqual([]);
+    expect(result.expectedMode).toBe("role-switch");
 
     const ledger = await readDelegationLedger(root);
-    expect(
-      ledger.entries.some(
-        (entry) =>
-          entry.stage === "scope" &&
-          entry.agent === "planner" &&
-          entry.status === "waived" &&
-          entry.waiverReason === "harness_limitation"
-      )
-    ).toBe(true);
+    expect(ledger.entries).toEqual([]);
+  });
+
+  it("accepts a role-switch delegation carrying evidence under a role-switch harness", async () => {
+    const root = await createTempProject("delegation-role-switch-ok");
+    await seedFlowState(root, "run-codex-ok");
+    await writeConfig(root, createDefaultConfig(["codex"]));
+
+    await appendDelegation(root, {
+      stage: "scope",
+      agent: "planner",
+      mode: "mandatory",
+      status: "completed",
+      fulfillmentMode: "role-switch",
+      evidenceRefs: [".cclaw/artifacts/02-scope.md#decisions"],
+      ts: new Date().toISOString()
+    });
+
+    const result = await checkMandatoryDelegations(root, "scope");
+    expect(result.satisfied).toBe(true);
+    expect(result.missing).toEqual([]);
+    expect(result.missingEvidence).toEqual([]);
+    expect(result.expectedMode).toBe("role-switch");
+  });
+
+  it("flags role-switch completion without evidenceRefs as missingEvidence", async () => {
+    const root = await createTempProject("delegation-role-switch-no-evidence");
+    await seedFlowState(root, "run-codex-thin");
+    await writeConfig(root, createDefaultConfig(["codex"]));
+
+    await appendDelegation(root, {
+      stage: "scope",
+      agent: "planner",
+      mode: "mandatory",
+      status: "completed",
+      fulfillmentMode: "role-switch",
+      ts: new Date().toISOString()
+    });
+
+    const result = await checkMandatoryDelegations(root, "scope");
+    expect(result.satisfied).toBe(false);
+    expect(result.missing).toEqual([]);
+    expect(result.missingEvidence).toContain("planner");
+  });
+
+  it("prefers the stronger fallback in mixed harness installs (claude + codex)", async () => {
+    const root = await createTempProject("delegation-mixed-install");
+    await seedFlowState(root, "run-mixed");
+    await writeConfig(root, createDefaultConfig(["claude", "codex"]));
+
+    await appendDelegation(root, {
+      stage: "scope",
+      agent: "planner",
+      mode: "mandatory",
+      status: "completed",
+      ts: new Date().toISOString()
+    });
+
+    const result = await checkMandatoryDelegations(root, "scope");
+    expect(result.satisfied).toBe(true);
+    expect(result.expectedMode).toBe("isolated");
   });
 });
