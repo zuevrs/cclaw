@@ -5,7 +5,14 @@ import { EVALS_ROOT } from "../constants.js";
 import { exists } from "../fs-utils.js";
 import { FLOW_STAGES } from "../types.js";
 import type { FlowStage } from "../types.js";
-import type { EvalCase, ExpectedShape, StructuralExpected } from "./types.js";
+import type {
+  EvalCase,
+  ExpectedShape,
+  RulesExpected,
+  RuleRegex,
+  StructuralExpected,
+  TraceabilityExpected
+} from "./types.js";
 
 const FLOW_STAGE_SET = new Set<string>(FLOW_STAGES);
 
@@ -99,6 +106,194 @@ function parseStructural(
   return structural;
 }
 
+function parseRegexRule(
+  filePath: string,
+  context: string,
+  value: unknown
+): RuleRegex {
+  if (typeof value === "string") {
+    return { pattern: value };
+  }
+  if (!isRecord(value)) {
+    throw corpusError(
+      filePath,
+      `"${context}" entries must be either a string or a mapping with "pattern"`
+    );
+  }
+  const pattern = value.pattern;
+  if (typeof pattern !== "string" || pattern.length === 0) {
+    throw corpusError(
+      filePath,
+      `"${context}" mapping entry must include a non-empty "pattern" string`
+    );
+  }
+  const flags = value.flags;
+  if (flags !== undefined && typeof flags !== "string") {
+    throw corpusError(filePath, `"${context}" flags must be a string`);
+  }
+  const description = value.description;
+  if (description !== undefined && typeof description !== "string") {
+    throw corpusError(filePath, `"${context}" description must be a string`);
+  }
+  const rule: RuleRegex = { pattern };
+  if (flags !== undefined) rule.flags = flags;
+  if (description !== undefined) rule.description = description;
+  return rule;
+}
+
+function parseRegexRules(
+  filePath: string,
+  context: string,
+  value: unknown
+): RuleRegex[] | undefined {
+  if (value === undefined) return undefined;
+  if (!Array.isArray(value)) {
+    throw corpusError(filePath, `"${context}" must be an array`);
+  }
+  return value.map((entry, index) =>
+    parseRegexRule(filePath, `${context}[${index}]`, entry)
+  );
+}
+
+function parseOccurrenceBounds(
+  filePath: string,
+  context: string,
+  value: unknown
+): Record<string, number> | undefined {
+  if (value === undefined) return undefined;
+  if (!isRecord(value)) {
+    throw corpusError(filePath, `"${context}" must be a mapping of phrase → integer`);
+  }
+  const out: Record<string, number> = {};
+  for (const [phrase, count] of Object.entries(value)) {
+    if (typeof count !== "number" || !Number.isFinite(count) || !Number.isInteger(count) || count < 0) {
+      throw corpusError(
+        filePath,
+        `"${context}.${phrase}" must be a non-negative integer`
+      );
+    }
+    out[phrase] = count;
+  }
+  return out;
+}
+
+function parseRules(filePath: string, raw: unknown): RulesExpected | undefined {
+  if (raw === undefined) return undefined;
+  if (!isRecord(raw)) {
+    throw corpusError(filePath, `"expected.rules" must be a mapping`);
+  }
+  const mustContain = readStringArray(
+    filePath,
+    "expected.rules.must_contain",
+    raw.must_contain ?? raw.mustContain
+  );
+  const mustNotContain = readStringArray(
+    filePath,
+    "expected.rules.must_not_contain",
+    raw.must_not_contain ?? raw.mustNotContain
+  );
+  const regexRequired = parseRegexRules(
+    filePath,
+    "expected.rules.regex_required",
+    raw.regex_required ?? raw.regexRequired
+  );
+  const regexForbidden = parseRegexRules(
+    filePath,
+    "expected.rules.regex_forbidden",
+    raw.regex_forbidden ?? raw.regexForbidden
+  );
+  const minOccurrences = parseOccurrenceBounds(
+    filePath,
+    "expected.rules.min_occurrences",
+    raw.min_occurrences ?? raw.minOccurrences
+  );
+  const maxOccurrences = parseOccurrenceBounds(
+    filePath,
+    "expected.rules.max_occurrences",
+    raw.max_occurrences ?? raw.maxOccurrences
+  );
+  const uniqueBulletsInSection = readStringArray(
+    filePath,
+    "expected.rules.unique_bullets_in_section",
+    raw.unique_bullets_in_section ?? raw.uniqueBulletsInSection
+  );
+
+  const rules: RulesExpected = {};
+  if (mustContain) rules.mustContain = mustContain;
+  if (mustNotContain) rules.mustNotContain = mustNotContain;
+  if (regexRequired) rules.regexRequired = regexRequired;
+  if (regexForbidden) rules.regexForbidden = regexForbidden;
+  if (minOccurrences) rules.minOccurrences = minOccurrences;
+  if (maxOccurrences) rules.maxOccurrences = maxOccurrences;
+  if (uniqueBulletsInSection) rules.uniqueBulletsInSection = uniqueBulletsInSection;
+
+  return Object.keys(rules).length === 0 ? undefined : rules;
+}
+
+function parseTraceability(
+  filePath: string,
+  raw: unknown
+): TraceabilityExpected | undefined {
+  if (raw === undefined) return undefined;
+  if (!isRecord(raw)) {
+    throw corpusError(filePath, `"expected.traceability" must be a mapping`);
+  }
+  const idPattern = raw.id_pattern ?? raw.idPattern;
+  if (typeof idPattern !== "string" || idPattern.length === 0) {
+    throw corpusError(
+      filePath,
+      `"expected.traceability.id_pattern" must be a non-empty regex source`
+    );
+  }
+  const idFlags = raw.id_flags ?? raw.idFlags;
+  if (idFlags !== undefined && typeof idFlags !== "string") {
+    throw corpusError(filePath, `"expected.traceability.id_flags" must be a string`);
+  }
+  const source = raw.source;
+  if (typeof source !== "string" || source.length === 0) {
+    throw corpusError(
+      filePath,
+      `"expected.traceability.source" must be "self" or an extra_fixtures label`
+    );
+  }
+  const requireInRaw = raw.require_in ?? raw.requireIn;
+  const requireIn = readStringArray(
+    filePath,
+    "expected.traceability.require_in",
+    requireInRaw
+  );
+  if (!requireIn || requireIn.length === 0) {
+    throw corpusError(
+      filePath,
+      `"expected.traceability.require_in" must be a non-empty array`
+    );
+  }
+  const out: TraceabilityExpected = { idPattern, source, requireIn };
+  if (idFlags !== undefined) out.idFlags = idFlags;
+  return out;
+}
+
+function parseExtraFixtures(
+  filePath: string,
+  raw: unknown
+): Record<string, string> | undefined {
+  if (raw === undefined) return undefined;
+  if (!isRecord(raw)) {
+    throw corpusError(filePath, `"extra_fixtures" must be a mapping of label → path`);
+  }
+  const out: Record<string, string> = {};
+  for (const [label, value] of Object.entries(raw)) {
+    if (typeof value !== "string" || value.length === 0) {
+      throw corpusError(
+        filePath,
+        `"extra_fixtures.${label}" must be a non-empty path string`
+      );
+    }
+    out[label] = value;
+  }
+  return Object.keys(out).length === 0 ? undefined : out;
+}
+
 function parseExpected(filePath: string, raw: unknown): ExpectedShape | undefined {
   if (raw === undefined) return undefined;
   if (!isRecord(raw)) {
@@ -107,12 +302,10 @@ function parseExpected(filePath: string, raw: unknown): ExpectedShape | undefine
   const shape: ExpectedShape = {};
   const structural = parseStructural(filePath, raw.structural);
   if (structural) shape.structural = structural;
-  if (raw.rules !== undefined) {
-    if (!isRecord(raw.rules)) {
-      throw corpusError(filePath, `"expected.rules" must be a mapping`);
-    }
-    shape.rules = raw.rules as Record<string, unknown>;
-  }
+  const rules = parseRules(filePath, raw.rules);
+  if (rules) shape.rules = rules;
+  const traceability = parseTraceability(filePath, raw.traceability);
+  if (traceability) shape.traceability = traceability;
   if (raw.judge !== undefined) {
     if (!isRecord(raw.judge)) {
       throw corpusError(filePath, `"expected.judge" must be a mapping`);
@@ -149,6 +342,10 @@ function validateCase(filePath: string, raw: unknown): EvalCase {
   );
   const expected = parseExpected(filePath, raw.expected);
   const fixture = typeof raw.fixture === "string" ? raw.fixture : undefined;
+  const extraFixtures = parseExtraFixtures(
+    filePath,
+    raw.extra_fixtures ?? raw.extraFixtures
+  );
 
   return {
     id: id.trim(),
@@ -156,7 +353,8 @@ function validateCase(filePath: string, raw: unknown): EvalCase {
     inputPrompt: inputPrompt.trim(),
     contextFiles,
     expected,
-    fixture
+    fixture,
+    extraFixtures
   };
 }
 
@@ -238,4 +436,49 @@ export async function readFixtureArtifact(
     );
   }
   return fs.readFile(fixturePath, "utf8");
+}
+
+/**
+ * Resolve an entry from `extraFixtures` to an absolute filesystem path,
+ * relative to the case's stage directory (same convention as `fixture`).
+ */
+export function extraFixturePath(
+  projectRoot: string,
+  caseEntry: EvalCase,
+  label: string
+): string | undefined {
+  const value = caseEntry.extraFixtures?.[label];
+  if (!value) return undefined;
+  return path.resolve(
+    projectRoot,
+    EVALS_ROOT,
+    "corpus",
+    caseEntry.stage,
+    value
+  );
+}
+
+/**
+ * Read every declared extra fixture for a case into a `{ label → text }`
+ * map. Missing files throw so authoring mistakes surface immediately rather
+ * than being silently skipped by cross-artifact verifiers.
+ */
+export async function readExtraFixtures(
+  projectRoot: string,
+  caseEntry: EvalCase
+): Promise<Record<string, string>> {
+  const out: Record<string, string> = {};
+  if (!caseEntry.extraFixtures) return out;
+  for (const label of Object.keys(caseEntry.extraFixtures)) {
+    const filePath = extraFixturePath(projectRoot, caseEntry, label);
+    if (!filePath) continue;
+    if (!(await exists(filePath))) {
+      throw new Error(
+        `Extra fixture missing for ${caseEntry.stage}/${caseEntry.id} ` +
+          `(label="${label}"): ${filePath}`
+      );
+    }
+    out[label] = await fs.readFile(filePath, "utf8");
+  }
+  return out;
 }
