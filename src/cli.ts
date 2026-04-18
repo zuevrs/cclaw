@@ -1,5 +1,5 @@
 #!/usr/bin/env node
-import { createReadStream, readFileSync, realpathSync } from "node:fs";
+import { createReadStream, realpathSync } from "node:fs";
 import { spawn } from "node:child_process";
 import fs from "node:fs/promises";
 import process from "node:process";
@@ -12,7 +12,7 @@ import { initCclaw, syncCclaw, uninstallCclaw, upgradeCclaw } from "./install.js
 import { error, info } from "./logger.js";
 import type { CliContext, FlowTrack, HarnessId, InitProfile } from "./types.js";
 import { archiveRun } from "./runs.js";
-import { RUNTIME_ROOT } from "./constants.js";
+import { CCLAW_VERSION, RUNTIME_ROOT } from "./constants.js";
 import { createDefaultConfig, createProfileConfig } from "./config.js";
 import { detectHarnesses } from "./init-detect.js";
 import { HARNESS_ADAPTERS } from "./harness-adapters.js";
@@ -168,30 +168,6 @@ Examples:
 Docs:   https://github.com/zuevrs/cclaw
 Issues: https://github.com/zuevrs/cclaw/issues
 `;
-}
-
-function cliPackageVersion(): string {
-  try {
-    const here = path.dirname(fileURLToPath(import.meta.url));
-    const candidates = [
-      path.resolve(here, "../package.json"),
-      path.resolve(here, "../../package.json")
-    ];
-    for (const candidate of candidates) {
-      try {
-        const raw = readFileSync(candidate, "utf8");
-        const parsed = JSON.parse(raw) as { name?: string; version?: string };
-        if (parsed.name === "cclaw-cli" && typeof parsed.version === "string") {
-          return parsed.version;
-        }
-      } catch {
-        continue;
-      }
-    }
-  } catch {
-    // fall through
-  }
-  return "unknown";
 }
 
 function parseHarnesses(raw: string): HarnessId[] {
@@ -940,7 +916,7 @@ async function runCommand(parsed: ParsedArgs, ctx: CliContext): Promise<number> 
     return 0;
   }
   if (parsed.showVersion) {
-    ctx.stdout.write(`cclaw ${cliPackageVersion()}\n`);
+    ctx.stdout.write(`cclaw ${CCLAW_VERSION}\n`);
     return 0;
   }
 
