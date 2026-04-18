@@ -1219,16 +1219,18 @@ export default function cclawPlugin(ctx) {
 export function hooksAgentsMdBlock(): string {
   return `### Hooks (real lifecycle integration)
 
-Cclaw generates real hook integrations across harnesses:
-- **Claude/Cursor/Codex:** lifecycle rehydration + PreToolUse/PostToolUse + Stop
+Cclaw generates real hook integrations for every harness that exposes a
+hook primitive:
+- **Claude/Cursor:** lifecycle rehydration + PreToolUse/PostToolUse + Stop
 - **OpenCode:** session lifecycle + system transform rehydration + bootstrap parity (digest/warnings/knowledge snapshot)
+- **Codex:** *no hooks API exists in Codex CLI* — substitution happens via skills (\`.agents/skills/cclaw-cc*/SKILL.md\`) and explicit in-turn agent steps. See \`.cclaw/references/harnesses/codex-playbook.md\`.
 
 | Harness | Hook file | Events |
 |---------|-----------|--------|
 | Claude Code | \`.claude/hooks/hooks.json\` | SessionStart(startup/resume/clear/compact), PreToolUse, PostToolUse, Stop |
 | Cursor | \`.cursor/hooks.json\` | sessionStart/sessionResume/sessionClear/sessionCompact, preToolUse, postToolUse, stop |
-| Codex | \`.codex/hooks.json\` | SessionStart(startup/resume/clear/compact), PreToolUse, PostToolUse, Stop |
 | OpenCode | \`${RUNTIME_ROOT}/hooks/opencode-plugin.mjs\` | session.created/updated/resumed/cleared/compacted/idle, tool.execute.before/after, system transform |
+| Codex | *none* | skill-description matching + in-turn agent steps (no hooks API) |
 
 Hook state files:
 - \`${RUNTIME_ROOT}/state/stage-activity.jsonl\`

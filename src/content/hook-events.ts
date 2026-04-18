@@ -40,12 +40,11 @@ export const HOOK_EVENTS_BY_HARNESS: Record<
     precompact_digest: "plugin session.cleared/session.resumed hooks"
   },
   codex: {
-    session_rehydrate: "SessionStart matcher startup|resume|clear|compact",
-    pre_tool_prompt_guard: "PreToolUse -> prompt-guard.sh",
-    pre_tool_workflow_guard: "PreToolUse -> workflow-guard.sh",
-    post_tool_context_monitor: "PostToolUse -> context-monitor.sh",
-    stop_checkpoint: "Stop -> stop-checkpoint.sh",
-    precompact_digest: "PreCompact -> pre-compact.sh"
+    // Codex CLI has no hooks primitive. cclaw substitutes via skills
+    // under `.agents/skills/cclaw-cc*/SKILL.md` plus explicit in-turn
+    // agent steps (see codex playbook). All semantic events are
+    // intentionally unmapped here so `harness-gaps.json` exposes them
+    // honestly.
   }
 };
 

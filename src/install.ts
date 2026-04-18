@@ -39,8 +39,7 @@ import {
   preCompactScript,
   opencodePluginJs,
   claudeHooksJson,
-  cursorHooksJson,
-  codexHooksJson
+  cursorHooksJson
 } from "./content/hooks.js";
 import {
   contextMonitorScript,
@@ -878,11 +877,11 @@ async function writeHooks(projectRoot: string, config: VibyConfig): Promise<void
       const cursorDir = path.join(projectRoot, ".cursor");
       await ensureDir(cursorDir);
       await writeMergedHookJson(projectRoot, path.join(cursorDir, "hooks.json"), cursorHooksJson());
-    } else if (harness === "codex") {
-      const dir = path.join(projectRoot, ".codex");
-      await ensureDir(dir);
-      await writeMergedHookJson(projectRoot, path.join(dir, "hooks.json"), codexHooksJson());
     }
+    // Codex has no hooks primitive — v0.39.0 stopped generating
+    // `.codex/hooks.json` because Codex CLI never actually read it. Codex
+    // substitutes for hooks via explicit agent steps documented in the
+    // codex playbook.
     // OpenCode registration is auto-managed via opencode.json/opencode.jsonc.
   }
 }
@@ -1142,10 +1141,13 @@ async function writeCursorWorkflowRule(projectRoot: string, harnesses: HarnessId
 
 async function syncDisabledHarnessArtifacts(projectRoot: string, harnesses: HarnessId[]): Promise<void> {
   const enabled = new Set<HarnessId>(harnesses);
+  // Codex is intentionally absent — cclaw stopped generating `.codex/hooks.json`
+  // in v0.39.0 (the file was never consumed by Codex CLI). Legacy `.codex/*`
+  // files are removed unconditionally by `cleanupLegacyCodexSurfaces` during
+  // every `syncHarnessShims` pass.
   const managedHookFiles: Array<{ harness: HarnessId; hookPath: string }> = [
     { harness: "claude", hookPath: path.join(projectRoot, ".claude/hooks/hooks.json") },
-    { harness: "cursor", hookPath: path.join(projectRoot, ".cursor/hooks.json") },
-    { harness: "codex", hookPath: path.join(projectRoot, ".codex/hooks.json") }
+    { harness: "cursor", hookPath: path.join(projectRoot, ".cursor/hooks.json") }
   ];
 
   for (const entry of managedHookFiles) {
@@ -1334,6 +1336,12 @@ async function cleanStaleFiles(projectRoot: string): Promise<void> {
   const expectedShimFiles = new Set<string>(harnessShimFileNames());
 
   for (const adapter of Object.values(HARNESS_ADAPTERS)) {
+    // Skill-kind shims (Codex) live in per-skill directories, not flat
+    // markdown files, so the regex-based stale sweep below would never
+    // match them anyway. The legacy `.codex/commands/` cleanup happens in
+    // `cleanupLegacyCodexSurfaces` inside syncHarnessShims().
+    if (adapter.shimKind === "skill") continue;
+
     const commandDir = path.join(projectRoot, adapter.commandDir);
     if (!(await exists(commandDir))) continue;
 
@@ -1579,6 +1587,24 @@ export async function uninstallCclaw(projectRoot: string): Promise<void> {
       // directory not present
     }
   }
+
+  // v0.39.0 migrated Codex shims to `.agents/skills/cclaw-cc*/SKILL.md`
+  // (Codex CLI reads `.agents/skills/`, not `.codex/commands/`). On uninstall
+  // we remove just the cclaw-owned skill folders, not the whole
+  // `.agents/skills/` directory — other tools may share it.
+  const codexSkillsRoot = path.join(projectRoot, ".agents/skills");
+  try {
+    const entries = await fs.readdir(codexSkillsRoot);
+    for (const entry of entries) {
+      if (/^cclaw-(?:cc)(?:-.*)?$/u.test(entry)) {
+        await fs.rm(path.join(codexSkillsRoot, entry), { recursive: true, force: true });
+      }
+    }
+  } catch {
+    // directory not present
+  }
+  await removeIfEmpty(codexSkillsRoot);
+  await removeIfEmpty(path.join(projectRoot, ".agents"));
 
   for (const pluginPath of [
     path.join(projectRoot, ".opencode/plugins/viby-plugin.mjs"),

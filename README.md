@@ -127,8 +127,10 @@ Plus harness-specific shims:
 - `.claude/commands/cc*.md` + `.claude/hooks/hooks.json`
 - `.cursor/commands/cc*.md` + `.cursor/hooks.json` + `.cursor/rules/cclaw-workflow.mdc`
 - `.opencode/commands/cc*.md` + `.opencode/plugins/cclaw-plugin.mjs`
-- `.codex/commands/cc*.md` + `.codex/hooks.json`
-- `AGENTS.md` with a managed routing block
+- `.agents/skills/cclaw-cc*/SKILL.md` (Codex; activated via `/use cclaw-cc`
+  or description-based auto-matching — Codex no longer reads `.codex/commands/`
+  or `.codex/hooks.json`, and `cclaw sync` cleans those up if present)
+- `AGENTS.md` with a managed routing block (includes a Codex-specific note)
 
 `.cclaw/config.yaml` holds every tunable key (prompt guard strictness,
 TDD enforcement, git-hook guards, language rule packs, track heuristics).
@@ -355,7 +357,7 @@ closes every real gap with a documented fallback — not a silent waiver.
 | Claude Code | full (named subagents) | `native` | full | `AskUserQuestion` | [`claude-playbook.md`](./src/content/harness-playbooks.ts) |
 | Cursor | generic Task dispatcher | `generic-dispatch` | full | `AskQuestion` | `cursor-playbook.md` |
 | OpenCode | plugin / in-session | `role-switch` | plugin | plain-text | `opencode-playbook.md` |
-| OpenAI Codex | in-session only | `role-switch` (evidenceRefs required) | full | plain-text | `codex-playbook.md` |
+| OpenAI Codex | in-session only | `role-switch` (evidenceRefs required) | none (no hooks API) | plain-text | `codex-playbook.md` |
 
 What the fallbacks mean:
 
@@ -377,6 +379,17 @@ What the fallbacks mean:
 - `waiver` — reserved. Only fires auto-waivers if every installed
   harness declares it. Currently unused — v0.33 removed the old
   Codex-only auto-waiver path.
+
+> **Codex note (v0.39+).** Codex CLI deprecated custom prompts and the
+> `.codex/hooks.json` API, so cclaw installs Codex entry points as
+> native **skills** under `.agents/skills/cclaw-cc*/SKILL.md`. Invoke
+> them with `/use cclaw-cc`, `/use cclaw-cc-next`, `/use cclaw-cc-view`,
+> `/use cclaw-cc-ops`, `/use cclaw-cc-ideate`, or just say something
+> like *"run cc for payments refund fix"* — Codex auto-matches skills
+> from their description. Hook-driven checks (prompt-guard, stop-save,
+> post-tool context monitor) are substituted in the `cclaw-cc*` skill
+> bodies as explicit agent steps; run `cclaw doctor` to see what's
+> missing and how the playbook compensates.
 
 The full capability matrix lives in
 [`docs/harnesses.md`](./docs/harnesses.md). Per-harness playbooks are

@@ -201,28 +201,43 @@ has either a \`completed\` row with evidenceRefs (role-switch) or a
 const CODEX_PLAYBOOK = `---
 harness: codex
 fallback: role-switch
-description: "OpenAI Codex has no subagent dispatch primitive. cclaw uses role-switch with evidenceRefs; silent auto-waiver is explicitly disabled."
+description: "OpenAI Codex has no subagent dispatch and no hooks. cclaw ships entry points as skills under .agents/skills/; mandatory delegations fall back to role-switch with evidenceRefs."
 ---
 
 # OpenAI Codex — Parity Playbook
 
-**Fallback: role-switch.** Codex has no subagent dispatch — neither named
-nor generic. cclaw used to silently auto-waive mandatory delegations on
-Codex; v0.33 disables that shortcut. The agent must role-switch in-session
-and record evidence, or the delegation gate blocks stage completion.
+Codex CLI exposes **neither a custom slash-command system nor a hooks
+API**. cclaw v0.39.0 acknowledged this and rewired the codex harness:
 
-## Role-switch protocol
+- **Entry points are skills.** \`/cc\`, \`/cc-next\`, \`/cc-ideate\`,
+  \`/cc-view\`, \`/cc-ops\` are generated as skills at
+  \`.agents/skills/cclaw-cc/SKILL.md\` (and \`cclaw-cc-next/\`, etc.). They
+  activate via Codex's native \`/use <skillName>\` command or
+  automatically when the user's prompt mentions any of the
+  \`/cc\`-style tokens (skill descriptions include them verbatim).
+- **No hooks.** Everything that Claude/Cursor get from
+  \`SessionStart\` / \`PreToolUse\` / \`PostToolUse\` / \`Stop\` /
+  \`PreCompact\` must run as explicit agent steps. The session rehydration,
+  prompt-guard, workflow-guard, context-monitor, and stop-checkpoint
+  behaviors are documented in \`.cclaw/skills/using-cclaw/SKILL.md\`.
+- **Legacy paths are dead.** \`.codex/commands/*\` and \`.codex/hooks.json\`
+  are removed on every \`cclaw sync\`. Do not restore them by hand —
+  Codex CLI never read either path.
 
-Identical to OpenCode. Key requirements:
+## Fallback: role-switch
+
+Codex has no subagent dispatch — neither named nor generic. Mandatory
+delegations must be role-switched in-session. Silent auto-waiver was
+disabled in v0.33 and remains off.
 
 1. **Explicit announce.** Before performing the role, emit a single
    message naming the role and citing \`.cclaw/agents/<agent>.md\`.
-2. **No role interleaving.** Do not mix, for example, reviewer and
-   test-author work into the same turn — close one delegation before
-   opening another.
-3. **EvidenceRefs are mandatory.** Under Codex's role-switch fallback a
-   \`completed\` row without \`evidenceRefs\` is treated as
-   \`missingEvidence\` by \`cclaw doctor\` and blocks the gate.
+2. **No role interleaving.** Close one delegation before opening
+   another; never mix, for example, reviewer and test-author work in
+   the same turn.
+3. **EvidenceRefs are mandatory.** A \`completed\` row without
+   \`evidenceRefs\` is treated as \`missingEvidence\` by \`cclaw doctor\`
+   and blocks the stage gate.
 
 ## Stage-specific role maps
 
@@ -235,23 +250,37 @@ Identical to OpenCode. Key requirements:
 | review     | \`reviewer\`, \`security-reviewer\` | \`.cclaw/artifacts/07-review.md\`  |
 | ship       | \`doc-updater\`                  | \`.cclaw/artifacts/08-ship.md\`      |
 
-## Why no auto-waiver anymore?
+## Invocation cheatsheet
 
-Silent auto-waiver on Codex let entire stages complete without any
-reviewer or test-author work. That defeats cclaw's hard gates. v0.33
-replaces it with an explicit role-switch obligation: the agent still gets
-a path forward, but the path is visible in the delegation log.
+- \`/use cclaw-cc\` — open the \`/cc\` skill and pick a track.
+- \`/use cclaw-cc-next\` — advance the flow one stage.
+- \`/use cclaw-cc-ops\` — compound / archive / rewind.
+- Typing \`/cc …\` or \`/cc-next …\` in plain text also works: Codex
+  matches the skill descriptions (which spell out these tokens) and
+  auto-loads the right skill body.
+- Use Codex's built-in \`/skill\` UI to enable or disable
+  cclaw skills per session.
 
-If a team genuinely wants to skip a delegation on Codex, they must
-manually append a \`status: "waived"\` row with a one-line
-\`waiverReason\` — the same audit trail any Claude/Cursor install would
-need.
+## Hook substitution matrix
+
+| Hook intent | Codex substitute |
+|-------------|------------------|
+| SessionStart rehydration | On first turn, the agent reads \`.cclaw/state/flow-state.json\` and \`.cclaw/knowledge.jsonl\` explicitly before acting. |
+| PreToolUse prompt-guard | The \`/cc\` skill body enforces task classification before writes. |
+| PreToolUse workflow-guard | The active stage skill enforces TDD / artifact gates before writes. |
+| PostToolUse context-monitor | End-of-turn budget check lives in \`.cclaw/references/protocols/ethos.md\`. |
+| Stop checkpoint | Stage-completion protocol updates \`.cclaw/state/flow-state.json\` in the same turn. |
+| PreCompact digest | Manual \`/cc-view status\` before \`/compact\`; the user triggers this. |
 
 ## Verification
 
-\`cclaw doctor\` passes when every mandatory agent for the active stage
-has a \`completed\` row with \`fulfillmentMode: "role-switch"\` and at
-least one \`evidenceRef\`.
+\`cclaw doctor\` on a codex-enabled install checks:
+
+- \`shim:codex:cclaw-cc:present\` and \`frontmatter\` (plus the four
+  utility skills).
+- No legacy \`.codex/commands/\` or \`.codex/hooks.json\` lingering.
+- Every mandatory agent for the active stage has a \`completed\` row
+  with \`fulfillmentMode: "role-switch"\` and at least one \`evidenceRef\`.
 `;
 
 const PLAYBOOK_BY_HARNESS: Record<HarnessId, string> = {

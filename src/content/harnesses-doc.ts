@@ -119,7 +119,7 @@ Harness-specific additions:
 - \`claude\`: \`.claude/commands/cc*.md\`, \`.claude/hooks/hooks.json\`
 - \`cursor\`: \`.cursor/commands/cc*.md\`, \`.cursor/hooks.json\`, \`.cursor/rules/cclaw-workflow.mdc\`
 - \`opencode\`: \`.opencode/commands/cc*.md\`, \`.opencode/plugins/cclaw-plugin.mjs\`, opencode plugin registration
-- \`codex\`: \`.codex/commands/cc*.md\`, \`.codex/hooks.json\`
+- \`codex\`: \`.agents/skills/cclaw-cc/SKILL.md\`, \`.agents/skills/cclaw-cc-next/SKILL.md\`, \`.agents/skills/cclaw-cc-ideate/SKILL.md\`, \`.agents/skills/cclaw-cc-view/SKILL.md\`, \`.agents/skills/cclaw-cc-ops/SKILL.md\` (Codex CLI reads \`.agents/skills/\` on startup; \`.codex/*\` was never consumed by the CLI and is auto-cleaned on sync)
 
 ## Runtime observability
 

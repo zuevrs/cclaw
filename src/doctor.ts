@@ -12,7 +12,8 @@ import {
   HARNESS_ADAPTERS,
   CCLAW_MARKER_START,
   CCLAW_MARKER_END,
-  harnessShimFileNames
+  harnessShimFileNames,
+  harnessShimSkillNames
 } from "./harness-adapters.js";
 import { policyChecks } from "./policy.js";
 import { readFlowState } from "./runs.js";
@@ -525,7 +526,7 @@ export async function doctorChecks(projectRoot: string, options: DoctorOptions =
   }
 
   for (const harness of configuredHarnesses) {
-    const adapter = (HARNESS_ADAPTERS as Record<string, { commandDir: string }>)[harness];
+    const adapter = HARNESS_ADAPTERS[harness];
     if (!adapter) {
       checks.push({
         name: `harness:${harness}:supported`,
@@ -534,13 +535,17 @@ export async function doctorChecks(projectRoot: string, options: DoctorOptions =
       });
       continue;
     }
-    for (const shim of harnessShimFileNames()) {
-      const shimPath = path.join(projectRoot, adapter.commandDir, shim);
-      checks.push({
-        name: `shim:${harness}:${shim.replace(".md", "")}`,
-        ok: await exists(shimPath),
-        details: shimPath
-      });
+    // For command-kind harnesses we check flat files; skill-kind (codex) is
+    // validated in the codex-specific block below (`shim:codex:<name>:*`).
+    if (adapter.shimKind === "command") {
+      for (const shim of harnessShimFileNames()) {
+        const shimPath = path.join(projectRoot, adapter.commandDir, shim);
+        checks.push({
+          name: `shim:${harness}:${shim.replace(".md", "")}`,
+          ok: await exists(shimPath),
+          details: shimPath
+        });
+      }
     }
     const playbookFile = path.join(
       projectRoot,
@@ -703,15 +708,16 @@ export async function doctorChecks(projectRoot: string, options: DoctorOptions =
     }
   }
 
-  // Hook JSON files per harness
+  // Hook JSON files per harness. Codex is absent because Codex CLI has no
+  // hooks primitive — cclaw stopped writing `.codex/hooks.json` in v0.39.0.
+  // OpenCode ships hooks through its plugin system (covered below).
   const hookPaths: Record<string, string> = {
     claude: ".claude/hooks/hooks.json",
-    cursor: ".cursor/hooks.json",
-    codex: ".codex/hooks.json"
+    cursor: ".cursor/hooks.json"
   };
   for (const harness of configuredHarnesses) {
     const hp = hookPaths[harness];
-    if (!hp && harness !== "opencode") {
+    if (!hp && harness !== "opencode" && harness !== "codex") {
       checks.push({
         name: `hook:json:${harness}`,
         ok: false,
@@ -728,7 +734,7 @@ export async function doctorChecks(projectRoot: string, options: DoctorOptions =
         ok: hookOk,
         details: fullPath
       });
-      if (harness === "claude" || harness === "cursor" || harness === "codex") {
+      if (harness === "claude" || harness === "cursor") {
         const schema = validateHookDocument(harness, parsed);
         checks.push({
           name: `hook:schema:${harness}`,
@@ -839,31 +845,56 @@ export async function doctorChecks(projectRoot: string, options: DoctorOptions =
   }
 
   if (configuredHarnesses.includes("codex")) {
-    const file = path.join(projectRoot, ".codex/hooks.json");
-    const parsed = await readHookDocument(file);
-    const hooks = toObject(parsed?.hooks) ?? {};
-    const sessionStart = hooks.SessionStart;
-    const ok = JSON.stringify(sessionStart ?? "").includes("startup|resume|clear|compact");
-    checks.push({
-      name: "lifecycle:codex:rehydration_matcher",
-      ok,
-      details: `${file} must include SessionStart matcher startup|resume|clear|compact`
-    });
+    // Codex CLI has no hooks primitive and no slash-command discovery
+    // (`.codex/commands/*` was never read). cclaw ships codex shims as
+    // skills under `.agents/skills/cclaw-cc*/SKILL.md`. Every required
+    // skill must exist with the expected frontmatter `name`.
+    const skillsRoot = path.join(projectRoot, ".agents/skills");
+    for (const skillName of harnessShimSkillNames()) {
+      const skillPath = path.join(skillsRoot, skillName, "SKILL.md");
+      let ok = false;
+      let frontmatterOk = false;
+      if (await exists(skillPath)) {
+        ok = true;
+        const content = await fs.readFile(skillPath, "utf8");
+        frontmatterOk = new RegExp(`^---[\\s\\S]*?\\nname: ${skillName}\\b`, "u").test(content);
+      }
+      checks.push({
+        name: `shim:codex:${skillName}:present`,
+        ok,
+        details: skillPath
+      });
+      checks.push({
+        name: `shim:codex:${skillName}:frontmatter`,
+        ok,
+        details: frontmatterOk
+          ? `${skillPath} has \`name: ${skillName}\` frontmatter`
+          : ok
+            ? `${skillPath} present but \`name: ${skillName}\` frontmatter is missing`
+            : `${skillPath} absent; cannot validate frontmatter`
+      });
+    }
 
-    const sessionCommands = collectHookCommands(hooks.SessionStart);
-    const preCommands = collectHookCommands(hooks.PreToolUse);
-    const postCommands = collectHookCommands(hooks.PostToolUse);
-    const stopCommands = collectHookCommands(hooks.Stop);
-    const wiringOk =
-      sessionCommands.some((cmd) => cmd.includes("session-start.sh")) &&
-      preCommands.some((cmd) => cmd.includes("prompt-guard.sh")) &&
-      preCommands.some((cmd) => cmd.includes("workflow-guard.sh")) &&
-      postCommands.some((cmd) => cmd.includes("context-monitor.sh")) &&
-      stopCommands.some((cmd) => cmd.includes("stop-checkpoint.sh"));
+    // Warn if legacy `.codex/commands/*` or `.codex/hooks.json` is still
+    // around — cclaw syncs should have removed these, but a botched
+    // upgrade or a manual restore could leave them dangling.
+    const legacyCommandsDir = path.join(projectRoot, ".codex/commands");
+    const legacyCommandsPresent = await exists(legacyCommandsDir);
     checks.push({
-      name: "hook:wiring:codex",
-      ok: wiringOk,
-      details: `${file} must wire session-start/prompt-guard/workflow-guard/context-monitor/stop-checkpoint`
+      name: "warning:codex:legacy_commands_dir",
+      ok: true,
+      details: legacyCommandsPresent
+        ? `warning: ${legacyCommandsDir} still present; Codex never read this directory — run \`cclaw sync\` to remove it.`
+        : `no legacy ${legacyCommandsDir} detected`
+    });
+    const legacyHooks = path.join(projectRoot, ".codex/hooks.json");
+    const legacyHooksPresent = await exists(legacyHooks);
+    checks.push({
+      name: "warning:codex:legacy_hooks_json",
+      ok: true,
+      details: legacyHooksPresent
+        ? `warning: ${legacyHooks} still present; Codex CLI has no hooks API — run \`cclaw sync\` to remove it.`
+        : `no legacy ${legacyHooks} detected`
     });
   }
 
