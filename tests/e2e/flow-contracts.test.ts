@@ -116,6 +116,23 @@ describe("flow command contracts", () => {
     expect(decisionProtocol).toContain("# Decision Protocol");
   });
 
+  it("requires spec skill to chunk acceptance criteria for sign-off", async () => {
+    const root = await createTempProject("spec-chunking");
+    await initCclaw({ projectRoot: root });
+
+    const specSkill = await fs.readFile(
+      path.join(root, ".cclaw/skills/specification-authoring/SKILL.md"),
+      "utf8"
+    );
+
+    expect(specSkill).toContain("Chunk acceptance criteria for review");
+    expect(specSkill).toContain("batches of 3-5");
+    expect(specSkill).toContain("pause for explicit ACK");
+    expect(specSkill).toContain(
+      "Present acceptance criteria to the user in 3-5-item batches"
+    );
+  });
+
   it("encodes the Decision Protocol skeleton and completeness calibration", async () => {
     const root = await createTempProject("decision-skeleton");
     await initCclaw({ projectRoot: root });
