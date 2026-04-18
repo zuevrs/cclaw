@@ -6,14 +6,14 @@ import process from "node:process";
 import path from "node:path";
 import { createInterface } from "node:readline/promises";
 import { fileURLToPath } from "node:url";
-import { FLOW_TRACKS, HARNESS_IDS, INIT_PROFILES } from "./types.js";
+import { FLOW_TRACKS, HARNESS_IDS } from "./types.js";
 import { doctorChecks, doctorSucceeded } from "./doctor.js";
 import { initCclaw, syncCclaw, uninstallCclaw, upgradeCclaw } from "./install.js";
 import { error, info } from "./logger.js";
-import type { CliContext, FlowTrack, HarnessId, InitProfile } from "./types.js";
+import type { CliContext, FlowTrack, HarnessId } from "./types.js";
 import { archiveRun } from "./runs.js";
 import { CCLAW_VERSION, RUNTIME_ROOT } from "./constants.js";
-import { createDefaultConfig, createProfileConfig } from "./config.js";
+import { createDefaultConfig } from "./config.js";
 import { detectHarnesses } from "./init-detect.js";
 import { HARNESS_ADAPTERS } from "./harness-adapters.js";
 import { runEval } from "./eval/runner.js";
@@ -52,7 +52,6 @@ interface ParsedArgs {
   command?: CommandName;
   harnesses?: HarnessId[];
   track?: FlowTrack;
-  profile?: InitProfile;
   dryRun?: boolean;
   interactive?: boolean;
   reconcileGates?: boolean;
@@ -141,14 +140,6 @@ function parseTrack(raw: string): FlowTrack {
     throw new Error(`Unknown track: ${trimmed}. Supported: ${FLOW_TRACKS.join(", ")}`);
   }
   return trimmed as FlowTrack;
-}
-
-function parseProfile(raw: string): InitProfile {
-  const trimmed = raw.trim();
-  if (!(INIT_PROFILES as readonly string[]).includes(trimmed)) {
-    throw new Error(`Unknown profile: ${trimmed}. Supported: ${INIT_PROFILES.join(", ")}`);
-  }
-  return trimmed as InitProfile;
 }
 
 function parseLegacyTier(raw: string): EvalMode {
@@ -243,46 +234,14 @@ function buildInitSurfacePreview(harnesses: HarnessId[]): string[] {
   return lines;
 }
 
-function inferTrackDefault(profile: InitProfile | undefined, track: FlowTrack | undefined): FlowTrack {
-  if (track) return track;
-  if (!profile) return "standard";
-  return createProfileConfig(profile).defaultTrack ?? "standard";
-}
-
 async function promptInitConfig(
-  defaults: { profile: InitProfile; track: FlowTrack; harnesses: HarnessId[] },
+  defaults: { harnesses: HarnessId[] },
   ctx: CliContext
-): Promise<{ profile: InitProfile; track: FlowTrack; harnesses: HarnessId[] }> {
+): Promise<{ harnesses: HarnessId[] }> {
   const rl = createInterface({
     input: process.stdin,
     output: ctx.stdout
   });
-
-  const pickSingle = async <T extends string>(
-    label: string,
-    options: readonly T[],
-    fallback: T
-  ): Promise<T> => {
-    while (true) {
-      ctx.stdout.write(`\n${label}\n`);
-      options.forEach((option, index) => {
-        const marker = option === fallback ? " (default)" : "";
-        ctx.stdout.write(`  ${index + 1}) ${option}${marker}\n`);
-      });
-      const answer = (await rl.question("> ")).trim();
-      if (answer.length === 0) {
-        return fallback;
-      }
-      const numeric = Number(answer);
-      if (Number.isInteger(numeric) && numeric >= 1 && numeric <= options.length) {
-        return options[numeric - 1]!;
-      }
-      if ((options as readonly string[]).includes(answer)) {
-        return answer as T;
-      }
-      ctx.stdout.write("Invalid selection. Use option number or value.\n");
-    }
-  };
 
   const pickHarnesses = async (fallback: HarnessId[]): Promise<HarnessId[]> => {
     const fallbackText = fallback.join(",");
@@ -307,18 +266,14 @@ async function promptInitConfig(
   };
 
   try {
-    const profile = await pickSingle("Select init profile:", INIT_PROFILES, defaults.profile);
-    const trackDefault = inferTrackDefault(profile, defaults.track);
-    const track = await pickSingle("Select default flow track:", FLOW_TRACKS, trackDefault);
     const harnesses = await pickHarnesses(defaults.harnesses);
-    return { profile, track, harnesses };
+    return { harnesses };
   } finally {
     rl.close();
   }
 }
 
 async function resolveInitInputs(parsed: ParsedArgs, ctx: CliContext): Promise<{
-  profile?: InitProfile;
   track?: FlowTrack;
   harnesses?: HarnessId[];
   detectedHarnesses: HarnessId[];
@@ -333,14 +288,12 @@ async function resolveInitInputs(parsed: ParsedArgs, ctx: CliContext): Promise<{
   const implicitPrompt =
     !promptForbidden &&
     isInitPromptAllowed(ctx) &&
-    parsed.profile === undefined &&
     parsed.track === undefined &&
     parsed.harnesses === undefined;
   const shouldPrompt = promptRequested || implicitPrompt;
 
   if (!shouldPrompt) {
     return {
-      profile: parsed.profile,
       track: parsed.track,
       harnesses: autoHarnesses,
       detectedHarnesses
@@ -352,14 +305,11 @@ async function resolveInitInputs(parsed: ParsedArgs, ctx: CliContext): Promise<{
   }
 
   const defaults = {
-    profile: parsed.profile ?? "standard",
-    track: inferTrackDefault(parsed.profile, parsed.track),
     harnesses: autoHarnesses ?? HARNESS_IDS.slice()
   };
   const prompted = await promptInitConfig(defaults, ctx);
   return {
-    profile: prompted.profile,
-    track: prompted.track,
+    track: parsed.track,
     harnesses: prompted.harnesses,
     detectedHarnesses
   };
@@ -529,7 +479,6 @@ function parseArgs(argv: string[]): ParsedArgs {
       continue;
     }
     if (flag.startsWith("--profile=")) {
-      parsed.profile = parseProfile(flag.replace("--profile=", ""));
       continue;
     }
     if (flag === "--interactive") {
@@ -902,24 +851,17 @@ async function runCommand(parsed: ParsedArgs, ctx: CliContext): Promise<number> 
 
   if (command === "init") {
     const resolved = await resolveInitInputs(parsed, ctx);
-    const effectiveProfile = resolved.profile;
     const effectiveTrack = resolved.track;
     const effectiveHarnesses = resolved.harnesses;
 
     if (parsed.dryRun === true) {
-      const previewConfig = effectiveProfile
-        ? createProfileConfig(effectiveProfile, {
-            harnesses: effectiveHarnesses,
-            defaultTrack: effectiveTrack
-          })
-        : createDefaultConfig(effectiveHarnesses, effectiveTrack);
+      const previewConfig = createDefaultConfig(effectiveHarnesses, effectiveTrack);
       const previewSurfaces = buildInitSurfacePreview(previewConfig.harnesses);
       info(ctx, "Dry run: no files were written.");
       if (resolved.detectedHarnesses.length > 0 && parsed.harnesses === undefined) {
         info(ctx, `Detected harnesses from repo: ${resolved.detectedHarnesses.join(", ")}`);
       }
       ctx.stdout.write(`${JSON.stringify({
-        profile: effectiveProfile ?? "standard(default)",
         track: previewConfig.defaultTrack ?? "standard",
         harnesses: previewConfig.harnesses,
         promptGuardMode: previewConfig.promptGuardMode,
@@ -933,16 +875,13 @@ async function runCommand(parsed: ParsedArgs, ctx: CliContext): Promise<number> 
     await initCclaw({
       projectRoot: ctx.cwd,
       harnesses: effectiveHarnesses,
-      track: effectiveTrack,
-      profile: effectiveProfile
+      track: effectiveTrack
     });
     if (resolved.detectedHarnesses.length > 0 && parsed.harnesses === undefined) {
       info(ctx, `Detected harnesses from repo: ${resolved.detectedHarnesses.join(", ")}`);
     }
-    const profileNote = effectiveProfile ? ` profile=${effectiveProfile}` : "";
-    const trackNote = effectiveTrack ? ` track=${effectiveTrack}` : "";
-    const suffix = profileNote || trackNote ? ` (${(profileNote + trackNote).trim()})` : "";
-    info(ctx, `Initialized .cclaw runtime and generated harness shims${suffix}`);
+    const trackNote = effectiveTrack ? ` (track=${effectiveTrack})` : "";
+    info(ctx, `Initialized .cclaw runtime and generated harness shims${trackNote}`);
     return 0;
   }
 
@@ -1200,4 +1139,4 @@ if (isDirectExecution()) {
   void main();
 }
 
-export { parseArgs, parseHarnesses, parseTrack, parseProfile };
+export { parseArgs, parseHarnesses, parseTrack };

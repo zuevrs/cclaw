@@ -69,14 +69,10 @@ describe("cli parser: eval command", () => {
     expect(parsed.evalNoWrite).toBe(true);
   });
 
-  it("documents eval command in usage()", () => {
+  it("documents eval command at top level (flag reference lives in docs/evals.md)", () => {
     const text = usage();
-    expect(text).toContain("cclaw eval");
-    expect(text).toContain("--schema-only");
-    expect(text).toContain("--mode=<fixture|agent|workflow>");
-    expect(text).toContain("--stage=<id>");
-    expect(text).toContain("--judge");
-    expect(text).toContain("--no-write");
-    expect(text).toContain("Legacy --tier=A|B|C still works");
+    expect(text).toContain("eval");
+    expect(text).toContain("docs/evals.md");
+    expect(text).toContain("npx cclaw-cli eval --dry-run");
   });
 });

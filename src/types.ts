@@ -34,19 +34,6 @@ export const HARNESS_IDS = ["claude", "cursor", "opencode", "codex"] as const;
 export type HarnessId = (typeof HARNESS_IDS)[number];
 
 /**
- * Init profiles pre-fill `cclaw init` flags for common install shapes.
- *
- * - `minimal` — single-harness (claude), medium track default, no git hook guards. For solo
- *   contributors who still want brainstorm/spec/plan rigor without full scope+design overhead.
- * - `standard` — default harness set, standard track, no git hook guards, advisory guards.
- *   Matches the pre-profile default behavior.
- * - `full` — default harness set, standard track, git hook guards on, strict prompt guards.
- *   For teams that want every safety rail on.
- */
-export const INIT_PROFILES = ["minimal", "standard", "full"] as const;
-export type InitProfile = (typeof INIT_PROFILES)[number];
-
-/**
  * Opt-in language rule packs. When enabled in config, `cclaw sync` installs the
  * corresponding utility skill so the meta-skill router can load language-specific
  * anti-patterns, idioms, and review heuristics during review/tdd stages.
