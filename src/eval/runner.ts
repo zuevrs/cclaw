@@ -3,7 +3,7 @@ import { CCLAW_VERSION } from "../constants.js";
 import type { FlowStage } from "../types.js";
 import { FLOW_STAGES } from "../types.js";
 import { compareAgainstBaselines, loadBaselinesByStage } from "./baseline.js";
-import { loadCorpus, readFixtureArtifact } from "./corpus.js";
+import { loadCorpus, readExtraFixtures, readFixtureArtifact } from "./corpus.js";
 import { loadEvalConfig } from "./config-loader.js";
 import type {
   BaselineDelta,
@@ -15,7 +15,9 @@ import type {
   ResolvedEvalConfig,
   VerifierResult
 } from "./types.js";
+import { verifyRules } from "./verifiers/rules.js";
 import { verifyStructural } from "./verifiers/structural.js";
+import { verifyTraceability } from "./verifiers/traceability.js";
 
 export interface RunEvalOptions {
   projectRoot: string;
@@ -69,42 +71,92 @@ function skeletonVerifierResult(message: string, details?: Record<string, unknow
   };
 }
 
-async function runCaseStructural(
+interface RunFlags {
+  runStructural: boolean;
+  runRules: boolean;
+  runTraceability: boolean;
+}
+
+/**
+ * --schema-only narrows to structural. --rules opens up rules + traceability
+ * on top of structural (traceability is a rule-family verifier even though
+ * it lives in its own module). Default (no flag) matches --schema-only for
+ * backwards compatibility with the Step 1 gate.
+ */
+function resolveRunFlags(options: RunEvalOptions): RunFlags {
+  const rulesRequested = options.rules === true;
+  const schemaOnly = options.schemaOnly === true;
+  return {
+    runStructural: true,
+    runRules: rulesRequested && !schemaOnly,
+    runTraceability: rulesRequested && !schemaOnly
+  };
+}
+
+async function loadArtifactOrRecord(
   projectRoot: string,
   caseEntry: EvalCase,
-  plannedTier: EvalTier
+  verifierResults: VerifierResult[]
+): Promise<string | undefined> {
+  try {
+    return await readFixtureArtifact(projectRoot, caseEntry);
+  } catch (err) {
+    verifierResults.push({
+      kind: "structural",
+      id: "structural:fixture:missing",
+      ok: false,
+      score: 0,
+      message: err instanceof Error ? err.message : String(err),
+      details: { fixture: caseEntry.fixture }
+    });
+    return undefined;
+  }
+}
+
+async function runCase(
+  projectRoot: string,
+  caseEntry: EvalCase,
+  plannedTier: EvalTier,
+  flags: RunFlags
 ): Promise<EvalCaseResult> {
   const started = Date.now();
-  const structuralExpected = caseEntry.expected?.structural;
   const verifierResults: VerifierResult[] = [];
+  const expected = caseEntry.expected;
 
-  if (!structuralExpected || Object.keys(structuralExpected).length === 0) {
-    // No structural expectations declared — case is treated as "N/A" for this
-    // verifier kind; a placeholder pass keeps downstream math simple while
-    // making the situation visible in the report.
-    verifierResults.push(
-      skeletonVerifierResult(
-        "No structural expectations declared for this case; structural verifier skipped.",
-        { skipped: true }
-      )
-    );
-  } else {
-    let artifact: string | undefined;
-    try {
-      artifact = await readFixtureArtifact(projectRoot, caseEntry);
-    } catch (err) {
+  const hasStructural =
+    !!expected?.structural && Object.keys(expected.structural).length > 0;
+  const hasRules =
+    flags.runRules && !!expected?.rules && Object.keys(expected.rules).length > 0;
+  const hasTraceability =
+    flags.runTraceability && !!expected?.traceability;
+
+  const needsArtifact = hasStructural || hasRules || hasTraceability;
+  let artifact: string | undefined;
+  if (needsArtifact) {
+    artifact = await loadArtifactOrRecord(projectRoot, caseEntry, verifierResults);
+    if (artifact === undefined && verifierResults.length === 0) {
       verifierResults.push({
         kind: "structural",
-        id: "structural:fixture:missing",
+        id: "structural:fixture:absent",
         ok: false,
         score: 0,
-        message: err instanceof Error ? err.message : String(err),
-        details: { fixture: caseEntry.fixture }
+        message:
+          "Expectations declared but no fixture path provided. Add `fixture: ./<id>/fixture.md`.",
+        details: { fixtureProvided: false }
       });
     }
+  }
 
-    if (artifact !== undefined) {
-      const results = verifyStructural(artifact, structuralExpected);
+  if (flags.runStructural) {
+    if (!hasStructural) {
+      verifierResults.push(
+        skeletonVerifierResult(
+          "No structural expectations declared for this case; structural verifier skipped.",
+          { skipped: true }
+        )
+      );
+    } else if (artifact !== undefined) {
+      const results = verifyStructural(artifact, expected!.structural);
       if (results.length === 0) {
         verifierResults.push(
           skeletonVerifierResult(
@@ -115,20 +167,36 @@ async function runCaseStructural(
       } else {
         verifierResults.push(...results);
       }
-    } else if (verifierResults.length === 0) {
+    }
+  }
+
+  if (hasRules && artifact !== undefined) {
+    const results = verifyRules(artifact, expected!.rules);
+    verifierResults.push(...results);
+  }
+
+  if (hasTraceability && artifact !== undefined) {
+    try {
+      const extras = await readExtraFixtures(projectRoot, caseEntry);
+      const results = verifyTraceability(artifact, extras, expected!.traceability);
+      verifierResults.push(...results);
+    } catch (err) {
       verifierResults.push({
-        kind: "structural",
-        id: "structural:fixture:absent",
+        kind: "rules",
+        id: "traceability:fixture:missing",
         ok: false,
         score: 0,
-        message:
-          "Structural expectations declared but no fixture path provided. Add `fixture: ./<id>/fixture.md`.",
-        details: { fixtureProvided: false }
+        message: err instanceof Error ? err.message : String(err),
+        details: { extraFixtures: Object.keys(caseEntry.extraFixtures ?? {}) }
       });
     }
   }
 
-  const allOk = verifierResults.every((r) => r.ok);
+  const nonSkippedResults = verifierResults.filter((r) => r.details?.skipped !== true);
+  const allOk =
+    nonSkippedResults.length === 0
+      ? verifierResults.every((r) => r.ok)
+      : nonSkippedResults.every((r) => r.ok);
   return {
     caseId: caseEntry.id,
     stage: caseEntry.stage,
@@ -189,12 +257,11 @@ export async function runEval(options: RunEvalOptions): Promise<DryRunSummary | 
       "Corpus is empty. Seed cases live under `.cclaw/evals/corpus/<stage>/*.yaml`."
     );
   }
-  if (options.rules) {
-    notes.push("--rules is accepted; rule verifiers are not wired yet.");
-  }
   if (options.judge) {
     notes.push("--judge is accepted; LLM judging is not wired yet.");
   }
+
+  const flags: RunFlags = resolveRunFlags(options);
 
   if (options.dryRun === true) {
     const summary: DryRunSummary = {
@@ -207,8 +274,8 @@ export async function runEval(options: RunEvalOptions): Promise<DryRunSummary | 
       },
       plannedTier,
       verifiersAvailable: {
-        structural: true,
-        rules: false,
+        structural: flags.runStructural,
+        rules: flags.runRules,
         judge: false,
         workflow: false
       },
@@ -220,7 +287,7 @@ export async function runEval(options: RunEvalOptions): Promise<DryRunSummary | 
   const now = new Date().toISOString();
   const caseResults: EvalCaseResult[] = [];
   for (const item of corpus) {
-    caseResults.push(await runCaseStructural(options.projectRoot, item, plannedTier));
+    caseResults.push(await runCase(options.projectRoot, item, plannedTier, flags));
   }
 
   const stages = stagesInResults(caseResults);
