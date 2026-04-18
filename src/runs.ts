@@ -724,10 +724,14 @@ export async function archiveRun(
   if (skipRetro && (!skipRetroReason || skipRetroReason.length === 0)) {
     throw new Error("archive --skip-retro requires --retro-reason=<text>.");
   }
-  if (retroGate.required && !retroGate.completed && !skipRetro) {
+  const retroSkippedInCloseout =
+    sourceState.closeout.retroSkipped === true &&
+    typeof sourceState.closeout.retroSkipReason === "string" &&
+    sourceState.closeout.retroSkipReason.trim().length > 0;
+  if (retroGate.required && !retroGate.completed && !skipRetro && !retroSkippedInCloseout) {
     throw new Error(
       "Archive blocked: retro gate is required after ship completion. " +
-      "Run /cc-ops retro and append at least one compound knowledge entry, or re-run /cc-ops archive with --skip-retro and --retro-reason."
+      "Run /cc-next (auto-runs retro) or, for CLI-only flows, re-run `cclaw archive --skip-retro --retro-reason=<text>`."
     );
   }
   if (retroGate.completed) {

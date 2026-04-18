@@ -20,28 +20,62 @@ export function retroCommandContract(): string {
 
 ## Purpose
 
-Mandatory retrospective gate before archive once ship is complete.
+Auto-triggered retrospective after ship. \`/cc-next\` drafts \`${retroArtifactPath()}\`
+from run artifacts and knowledge, then asks the user exactly ONE structured
+question: **edit / accept / skip**. Default = accept.
+
+This command is normally invoked indirectly by \`/cc-next\` when
+\`closeout.shipSubstate === "retro_review"\`. Invoking it directly is still
+supported for manual re-runs.
 
 ## HARD-GATE
 
-- Do not mark retro complete without writing \`${retroArtifactPath()}\`.
-- Do not finish retro without appending at least one \`type=compound\` entry into \`${knowledgePath()}\`.
+- Do not finalize retro without \`${retroArtifactPath()}\` on disk (or an explicit
+  \`retroSkipped: true\` in closeout with a one-line reason).
+- Do not finalize without appending **at least one** \`type=compound\` entry to
+  \`${knowledgePath()}\` (skipped runs set \`compoundEntries: 0\` instead).
+- Never advance to compound/archive with \`shipSubstate\` still at
+  \`"retro_review"\`.
+
+## Inputs
+
+\`/cc-ops retro\` (no flags). If the user wants to skip, they answer **skip**
+in the structured ask; there is no \`--skip\` flag.
 
 ## Algorithm
 
-1. Read \`${flowStatePath()}\`; confirm ship stage is complete for current run.
-2. Synthesize retrospective artifact \`${retroArtifactPath()}\` with:
-   - what slowed this run
-   - what accelerated this run
-   - concrete repeatable rule for next run
-3. Append >=1 strict-schema JSONL entry to \`${knowledgePath()}\` with:
-   - \`type: "compound"\`
-   - \`stage: "ship"\` or \`"retro"\`
-4. Update flow-state \`retro\` block:
-   - \`required: true\`
-   - \`completedAt: <ISO>\`
-   - \`compoundEntries: <count>\`
-5. Report completion summary and remind user that \`/cc-ops compound\` (optional) can lift repeated learnings before \`/cc-ops archive\`.
+1. Read \`${flowStatePath()}\`; confirm \`completedStages\` contains \`"ship"\`.
+2. If \`closeout.shipSubstate !== "retro_review"\`, and \`retro.completedAt\`
+   is already set, report "retro already complete" and stop.
+3. Draft \`${retroArtifactPath()}\` from available evidence:
+   - scan \`.cclaw/artifacts/01..08-*.md\` for decisions, blockers, rewinds,
+   - scan \`.cclaw/state/delegation-log.json\` for subagent outcomes,
+   - scan \`${knowledgePath()}\` for entries recorded during this run,
+   - structure the draft as: Outcomes / Slowed / Accelerated / Repeatable rule.
+4. Update \`closeout.retroDraftedAt = <ISO>\` in flow-state.
+5. Present **one** structured ask (AskUserQuestion on Claude, AskQuestion on
+   Cursor, plain-text options elsewhere):
+   - \`accept\` (default) — keep the draft as-is,
+   - \`edit\` — user edits \`${retroArtifactPath()}\` in-place, then re-runs \`/cc-next\`,
+   - \`skip\` — record \`retroSkipped: true\` + one-line reason, no compound entry required.
+6. On **accept**:
+   - append >=1 strict-schema JSONL line to \`${knowledgePath()}\` with
+     \`type: "compound"\` and \`stage: "retro"\`,
+   - set \`retro.required = true\`, \`retro.completedAt = <ISO>\`,
+     \`retro.compoundEntries = <count>\`,
+   - set \`closeout.retroAcceptedAt = <ISO>\`,
+   - set \`closeout.shipSubstate = "compound_review"\`.
+7. On **edit**:
+   - leave \`shipSubstate = "retro_review"\`,
+   - tell user to edit \`${retroArtifactPath()}\` and run \`/cc-next\` again.
+8. On **skip**:
+   - require a one-line reason; if empty, re-ask once then escalate,
+   - set \`closeout.retroSkipped = true\`, \`closeout.retroSkipReason = <text>\`,
+     \`closeout.retroAcceptedAt = <ISO>\`,
+   - set \`retro.completedAt = <ISO>\` (marks gate satisfied for archive), and
+     \`retro.compoundEntries = 0\`,
+   - set \`closeout.shipSubstate = "compound_review"\`.
+9. Emit a one-line summary: \`retro: accepted|edited|skipped | next: /cc-next\`.
 
 ## Primary skill
 
@@ -52,33 +86,71 @@ Mandatory retrospective gate before archive once ship is complete.
 export function retroCommandSkillMarkdown(): string {
   return `---
 name: ${RETRO_SKILL_NAME}
-description: "Run mandatory retrospective and record compound knowledge before archive."
+description: "Auto-drafted retrospective with a single structured accept/edit/skip ask. Triggered from /cc-next when shipSubstate=retro_review."
 ---
 
 # /cc-ops retro
 
 ## HARD-GATE
 
-Archive must remain blocked until retro artifact exists and compound knowledge was appended.
+Archive stays blocked until one of:
+- retro artifact exists **and** one compound knowledge entry was appended, OR
+- retro was explicitly skipped with a one-line reason recorded in closeout.
+
+Do not silently skip. Do not finalize without updating \`flow-state.json\`.
 
 ## Protocol
 
-1. Confirm ship completion from \`${flowStatePath()}\`.
-2. Create/update \`${retroArtifactPath()}\` with concise retrospective sections:
-   - outcomes
-   - bottlenecks
-   - reusable acceleration patterns
-3. Append at least one \`compound\` knowledge entry into \`${knowledgePath()}\`.
-4. Update \`flow-state.json.retro\` with completion timestamp + compound count.
-5. Print explicit completion line:
-   - \`retro gate: complete\`
-   - \`compound entries added: <N>\`
-   - \`next: /cc-ops compound (optional) -> /cc-ops archive\`
+1. Confirm ship completion by reading \`${flowStatePath()}\`.
+2. If retro draft does not yet exist, synthesise \`${retroArtifactPath()}\` using:
+   - all \`.cclaw/artifacts/*-*.md\` from the active run (stages 01–08),
+   - \`.cclaw/state/delegation-log.json\` entries,
+   - \`${knowledgePath()}\` entries written during this run.
+   Draft sections:
+   - **Outcomes** — what was actually shipped.
+   - **Slowed** — concrete friction points (cite artifact line or delegation id).
+   - **Accelerated** — patterns/decisions that worked and are worth keeping.
+   - **Repeatable rule** — one candidate rule/pattern for next run.
+   Record \`closeout.retroDraftedAt\`.
+3. Ask the user **one** structured question via the harness question tool
+   (AskUserQuestion / AskQuestion / plain text fallback):
+
+   > Retro draft ready at \`${retroArtifactPath()}\`. How do you want to
+   > proceed? (default: accept)
+   >
+   > - **accept** — keep the draft and continue.
+   > - **edit** — I'll edit it, then re-run \`/cc-next\`.
+   > - **skip** — no retro this run (requires one-line reason).
+
+4. Apply the state transition for the chosen option:
+   - \`accept\` → append \`{ "type": "compound", "stage": "retro", ... }\` line
+     to \`${knowledgePath()}\`; set \`retro.completedAt\`, \`retro.compoundEntries\`,
+     \`closeout.retroAcceptedAt\`; set \`closeout.shipSubstate = "compound_review"\`.
+   - \`edit\` → leave \`shipSubstate = "retro_review"\`; announce resume path.
+   - \`skip\` → set \`closeout.retroSkipped\`, \`closeout.retroSkipReason\`,
+     \`closeout.retroAcceptedAt\`, \`retro.completedAt\`,
+     \`retro.compoundEntries = 0\`; set \`closeout.shipSubstate = "compound_review"\`.
+
+5. Print one-line completion summary:
+   - \`retro gate: accepted (<N> compound entries)\`
+   - \`retro gate: skipped (reason: <text>)\`
+   - \`retro gate: editing (re-run /cc-next when ready)\`
+
+## Resume semantics
+
+A new session with \`closeout.shipSubstate === "retro_review"\` resumes
+exactly here. If \`closeout.retroDraftedAt\` is present but
+\`retroAcceptedAt\` is missing, re-ask the same structured question without
+regenerating the draft.
 
 ## Validation
 
-- \`${retroArtifactPath()}\` exists and is non-empty.
-- \`${knowledgePath()}\` contains >=1 valid \`compound\` line.
-- \`retro.completedAt\` is set in flow-state.
+- \`${retroArtifactPath()}\` exists and is non-empty, **or**
+  \`closeout.retroSkipped === true\` with a non-empty reason.
+- When accepted: \`${knowledgePath()}\` gained a valid \`compound\` line
+  and \`retro.compoundEntries > 0\`.
+- \`retro.completedAt\` is set.
+- \`closeout.shipSubstate\` is \`"compound_review"\` (or still
+  \`"retro_review"\` when user picked \`edit\`).
 `;
 }

@@ -8,29 +8,49 @@ export function compoundCommandContract(): string {
 
 ## Purpose
 
-Lift repeated lessons into durable project assets (rules, protocols, skills)
-so the next run is easier and safer.
+Lift repeated lessons from \`${RUNTIME_ROOT}/knowledge.jsonl\` into durable
+project assets (rules, protocols, skills) so the next run is easier and safer.
+
+Auto-triggered by \`/cc-next\` when \`closeout.shipSubstate === "compound_review"\`.
+Direct invocation is supported but rarely needed.
 
 ## HARD-GATE
 
-- Do not mutate rules/skills without explicit user approval.
-- Every proposal must cite concrete knowledge evidence (line references or IDs).
+- Do not mutate rules/skills/protocols without explicit user approval.
+- Every proposal must cite concrete knowledge evidence (line refs or IDs).
 - Keep scope focused: one compound change set per run.
+- Do not block the archive step if no clusters qualify — record an empty
+  compound pass and advance.
+
+## Inputs
+
+\`/cc-ops compound\` (no flags). The structured ask presents candidates;
+the user can approve individual lifts, accept-all, or skip.
 
 ## Algorithm
 
-1. Read \`${RUNTIME_ROOT}/knowledge.jsonl\`.
-2. Cluster repeated trigger/action pairs.
-3. For clusters with frequency >= 3, propose one lift action:
-   - rule update
-   - protocol update
-   - utility skill update
-4. For each proposal include:
-   - why now
-   - target file(s)
-   - expected risk reduction
-5. Ask user approval for each proposal before writing.
-6. Apply approved lifts and record completion in retro artifact.
+1. Read \`${RUNTIME_ROOT}/knowledge.jsonl\` (strict JSONL, one entry per line).
+2. Cluster entries by \`trigger\` + \`action\` similarity.
+3. Filter candidates whose recurrence count >= 3.
+4. If **no candidates** exist:
+   - set \`closeout.compoundCompletedAt = <ISO>\`,
+   - set \`closeout.compoundPromoted = 0\`,
+   - set \`closeout.shipSubstate = "ready_to_archive"\`,
+   - emit \`compound: no candidates | next: /cc-next\` and stop.
+5. Otherwise, present **one** structured ask (AskUserQuestion / AskQuestion /
+   plain text) summarising all candidates at once:
+   - \`apply-all\` (default) — apply every listed lift,
+   - \`apply-selected\` — prompt per-candidate,
+   - \`skip\` — record a skip reason and advance without changes.
+6. Apply approved lifts to the target file(s). Each lift also appends a
+   \`type: "compound"\` entry back to \`${RUNTIME_ROOT}/knowledge.jsonl\`
+   summarising what was lifted.
+7. Update flow-state:
+   - \`closeout.compoundCompletedAt = <ISO>\`,
+   - \`closeout.compoundPromoted = <count>\`,
+   - \`closeout.compoundSkipped = true\` if user picked skip,
+   - \`closeout.shipSubstate = "ready_to_archive"\`.
+8. Emit one-line summary: \`compound: promoted=<N> skipped=<bool> | next: /cc-next\`.
 
 ## Primary skill
 
@@ -41,7 +61,7 @@ so the next run is easier and safer.
 export function compoundCommandSkillMarkdown(): string {
   return `---
 name: ${COMPOUND_SKILL_NAME}
-description: "Compound mode: convert repeated learnings into durable rules/protocols/skills."
+description: "Lift repeated learnings into durable rules/protocols/skills. Auto-triggered after retro accept."
 ---
 
 # /cc-ops compound
@@ -52,13 +72,21 @@ description: "Compound mode: convert repeated learnings into durable rules/proto
 
 ## HARD-GATE
 
-No silent codification. Every lift requires explicit user approval.
+No silent codification. Every lift requires explicit user approval. An
+empty pass is allowed and must advance \`closeout.shipSubstate\` to
+\`"ready_to_archive"\`.
 
 ## Protocol
 
-1. Parse \`.cclaw/knowledge.jsonl\` and group repeated lessons.
-2. Keep only candidates with clear recurrence and actionable lift path.
-3. Propose each candidate using this template:
+1. Parse \`.cclaw/knowledge.jsonl\` and group repeated lessons by
+   trigger+action similarity.
+2. Keep only candidates with recurrence >= 3 and an actionable lift path.
+3. If none qualify, record an empty pass:
+   - \`closeout.compoundCompletedAt = <ISO>\`,
+   - \`closeout.compoundPromoted = 0\`,
+   - \`closeout.shipSubstate = "ready_to_archive"\`,
+   - announce \`compound: no candidates\` and stop.
+4. Otherwise, render each candidate as:
 
 \`\`\`
 Candidate: <short title>
@@ -68,8 +96,35 @@ Change type: <add/update/remove>
 Expected benefit: <what regressions this prevents>
 \`\`\`
 
-4. Ask user to approve/reject per candidate.
-5. Apply only approved candidates.
-6. Append a \`compound\` learning entry summarizing what was lifted.
+5. Present **one** structured question with three options:
+   - \`apply-all\` (default) — apply every candidate,
+   - \`apply-selected\` — prompt per-candidate approval next,
+   - \`skip\` — record a skip reason and advance.
+
+6. For approved candidates:
+   - edit the target file(s) with the lift,
+   - append a \`type: "compound"\` entry to \`.cclaw/knowledge.jsonl\`
+     describing what was promoted.
+
+7. Update flow-state \`closeout\`:
+   - \`compoundCompletedAt\`,
+   - \`compoundPromoted\` (count),
+   - \`compoundSkipped\` (boolean) + \`compoundSkipReason\` when applicable,
+   - \`shipSubstate = "ready_to_archive"\`.
+
+## Resume semantics
+
+A new session with \`shipSubstate === "compound_review"\` re-runs the scan
+and re-asks the structured question. If the user already applied lifts in
+a previous session but the state file was not updated, they should pick
+\`skip\` with reason \`already-applied\` — compound is idempotent from the
+closeout chain's perspective.
+
+## Validation
+
+- \`closeout.compoundCompletedAt\` is set.
+- \`closeout.shipSubstate === "ready_to_archive"\`.
+- If lifts were applied, the target files show the edit and at least one
+  new \`compound\` line exists in \`.cclaw/knowledge.jsonl\`.
 `;
 }
