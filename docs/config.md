@@ -26,11 +26,9 @@ defaultTrack: standard
 languageRulePacks: []
 trackHeuristics:
   fallback: standard
-  priority: [quick, medium, standard]
   tracks:
     quick:
       triggers: [hotfix, typo, rename]
-      patterns: ["^fix:\\s"]
       veto: [migration, refactor]
 ```
 
@@ -104,15 +102,20 @@ Leave empty for language-agnostic installs.
 
 ### `trackHeuristics` (object, optional)
 
-Override the classifier that picks a track from the user's prompt.
+Per-track vocabulary hints the LLM applies when classifying a `/cc`
+prompt. **Advisory** — cclaw surfaces the lists in the `/cc` skill prose
+so the agent can use them; there is no Node-level router.
 
-- `fallback` — track used when no rule matches.
-- `priority` — order in which tracks are evaluated.
-- `tracks.<track>.triggers` — bag-of-words trigger list (case-insensitive).
-- `tracks.<track>.patterns` — list of regex patterns (evaluated with
-  `iu` flags). Invalid regex throws at `readConfig()` time.
+- `fallback` — track used when no trigger matches (default: `standard`).
+- `tracks.<track>.triggers` — bag-of-words trigger list (case-insensitive
+  substring match).
 - `tracks.<track>.veto` — if any veto word appears in the prompt, this
-  track is skipped even if triggers/patterns match.
+  track is skipped even when triggers match.
+
+Evaluation order is fixed: `standard -> medium -> quick` (narrow-to-broad).
+The regex `patterns` field and the `priority` override were removed in
+v0.38.0 because nothing in runtime consumed them; move that intent into
+`triggers` (substrings) or `veto`.
 
 ## Common recipes
 
@@ -137,17 +140,16 @@ languageRulePacks: [typescript]
 ```yaml
 trackHeuristics:
   fallback: standard
-  priority: [quick, medium, standard]
   tracks:
     quick:
-      triggers: [hotfix, patch, typo, rename]
-      patterns: ["^fix:\\s"]
+      triggers: [hotfix, patch, typo, rename, "^fix:"]
 ```
 
 ## Validation
 
 `readConfig()` validates every key on every stage transition. Unknown
-top-level keys, unknown harness/track/pack values, and invalid regex
-patterns all throw with an actionable error pointing at the exact key.
-A config parse error is fatal — the agent cannot advance until it is
-fixed.
+top-level keys and unknown harness/track/pack values throw with an
+actionable error pointing at the exact key. Legacy fields removed in
+v0.38.0 — `trackHeuristics.priority` and `trackHeuristics.tracks.*.patterns`
+— also throw, with a migration hint. A config parse error is fatal: the
+agent cannot advance until it is fixed.

@@ -19,10 +19,9 @@ describe("track heuristics resolver", () => {
     expect(result.matchedTokens).toEqual([]);
   });
 
-  it("honors config fallback and custom priority", () => {
+  it("honors config fallback when no rule matches", () => {
     const result = resolveTrackFromPrompt("something ambiguous", {
-      fallback: "medium",
-      priority: ["quick", "medium", "standard"]
+      fallback: "medium"
     });
     expect(result.track).toBe("medium");
   });

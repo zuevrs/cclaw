@@ -7,6 +7,8 @@ export interface TrackResolution {
   matchedTokens: string[];
 }
 
+// Built-in vocabulary per track. Kept in one place so tests, docs, and the
+// /cc skill prose can snapshot the exact same strings.
 const DEFAULT_RULES: Record<FlowTrack, TrackHeuristicRule> = {
   quick: {
     triggers: [
@@ -57,7 +59,9 @@ const DEFAULT_RULES: Record<FlowTrack, TrackHeuristicRule> = {
   }
 } satisfies Record<FlowTrack, TrackHeuristicRule>;
 
-const DEFAULT_PRIORITY: FlowTrack[] = ["standard", "medium", "quick"];
+// Fixed evaluation order: narrow-to-broad. Overriding this was never wired
+// into runtime, so cclaw stopped offering the knob in v0.38.0.
+const EVALUATION_ORDER: readonly FlowTrack[] = ["standard", "medium", "quick"];
 const DEFAULT_FALLBACK: FlowTrack = "standard";
 
 function hasToken(promptLower: string, token: string): boolean {
@@ -70,16 +74,6 @@ function matchRule(promptLower: string, rule: TrackHeuristicRule | undefined): s
   for (const trigger of rule.triggers ?? []) {
     if (hasToken(promptLower, trigger)) {
       matches.push(trigger);
-    }
-  }
-  for (const pattern of rule.patterns ?? []) {
-    try {
-      const regex = new RegExp(pattern, "iu");
-      if (regex.test(promptLower)) {
-        matches.push(`/${pattern}/`);
-      }
-    } catch {
-      // Ignore invalid custom regex entries; config validation should catch these.
     }
   }
   return [...new Set(matches)];
@@ -102,40 +96,32 @@ function mergeRules(
     if (!rule) continue;
     merged[track] = {
       triggers: rule.triggers ?? merged[track].triggers,
-      patterns: rule.patterns ?? merged[track].patterns,
       veto: rule.veto ?? merged[track].veto
     };
   }
   return merged;
 }
 
-function resolvePriority(config: TrackHeuristicsConfig | undefined): FlowTrack[] {
-  const configured = config?.priority ?? [];
-  const filtered = configured.filter((track): track is FlowTrack => isValidTrack(track));
-  const unique = [...new Set(filtered)];
-  if (unique.length === 0) return [...DEFAULT_PRIORITY];
-
-  // Ensure all tracks are still represented in deterministic order.
-  for (const track of FLOW_TRACKS) {
-    if (!unique.includes(track)) unique.push(track);
-  }
-  return unique;
-}
-
 function resolveFallback(config: TrackHeuristicsConfig | undefined): FlowTrack {
   return config?.fallback && isValidTrack(config.fallback) ? config.fallback : DEFAULT_FALLBACK;
 }
 
+/**
+ * Reference implementation of the track classifier the /cc skill prose
+ * describes. Tests pin its behavior so the built-in defaults stay honest.
+ * This function is not called from cclaw runtime — `/cc` routing happens in
+ * the LLM. If you wire this in later, update README to drop the
+ * "advisory" language.
+ */
 export function resolveTrackFromPrompt(
   prompt: string,
   config: TrackHeuristicsConfig | undefined
 ): TrackResolution {
   const promptLower = prompt.toLowerCase();
   const rules = mergeRules(DEFAULT_RULES, config);
-  const priority = resolvePriority(config);
   const fallback = resolveFallback(config);
 
-  for (const track of priority) {
+  for (const track of EVALUATION_ORDER) {
     const rule = rules[track];
     const vetoes = rule.veto ?? [];
     if (vetoes.some((token) => hasToken(promptLower, token))) {
@@ -160,6 +146,6 @@ export function resolveTrackFromPrompt(
 
 export const TRACK_HEURISTICS_DEFAULTS = {
   fallback: DEFAULT_FALLBACK,
-  priority: DEFAULT_PRIORITY,
+  evaluationOrder: EVALUATION_ORDER,
   tracks: DEFAULT_RULES
 } as const;

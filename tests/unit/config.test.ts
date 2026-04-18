@@ -118,7 +118,7 @@ describe("config", () => {
     expect(config.tddTestGlobs).toEqual(["**/*.test.ts"]);
   });
 
-  it("parses trackHeuristics overrides", async () => {
+  it("parses trackHeuristics overrides (triggers + veto + fallback)", async () => {
     const root = await createTempProject("config-track-heuristics");
     await fs.mkdir(path.join(root, ".cclaw"), { recursive: true });
     await fs.writeFile(
@@ -127,9 +127,6 @@ describe("config", () => {
   - claude
 trackHeuristics:
   fallback: medium
-  priority:
-    - quick
-    - medium
   tracks:
     quick:
       triggers:
@@ -141,13 +138,29 @@ trackHeuristics:
     );
     const config = await readConfig(root);
     expect(config.trackHeuristics?.fallback).toBe("medium");
-    expect(config.trackHeuristics?.priority).toEqual(["quick", "medium"]);
     expect(config.trackHeuristics?.tracks?.quick?.triggers).toEqual(["hotfix"]);
     expect(config.trackHeuristics?.tracks?.quick?.veto).toEqual(["migration"]);
   });
 
-  it("rejects invalid regex in trackHeuristics patterns", async () => {
-    const root = await createTempProject("config-track-pattern-invalid");
+  it("rejects the removed trackHeuristics.priority field", async () => {
+    const root = await createTempProject("config-track-priority-removed");
+    await fs.mkdir(path.join(root, ".cclaw"), { recursive: true });
+    await fs.writeFile(
+      configPath(root),
+      `harnesses:
+  - claude
+trackHeuristics:
+  priority:
+    - quick
+    - standard
+`,
+      "utf8"
+    );
+    await expect(readConfig(root)).rejects.toThrow(/no longer supported/);
+  });
+
+  it("rejects the removed trackHeuristics.tracks.*.patterns field", async () => {
+    const root = await createTempProject("config-track-patterns-removed");
     await fs.mkdir(path.join(root, ".cclaw"), { recursive: true });
     await fs.writeFile(
       configPath(root),
@@ -157,11 +170,11 @@ trackHeuristics:
   tracks:
     medium:
       patterns:
-        - "(unclosed"
+        - "^epic:"
 `,
       "utf8"
     );
-    await expect(readConfig(root)).rejects.toThrow(/invalid regex/);
+    await expect(readConfig(root)).rejects.toThrow(/no longer supported/);
   });
 
   it("rejects invalid prompt guard modes", async () => {

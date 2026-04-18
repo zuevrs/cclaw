@@ -44,21 +44,39 @@ export type HarnessId = (typeof HARNESS_IDS)[number];
 export const LANGUAGE_RULE_PACKS = ["typescript", "python", "go"] as const;
 export type LanguageRulePack = (typeof LANGUAGE_RULE_PACKS)[number];
 
+/**
+ * Per-track vocabulary hints the LLM applies when classifying a /cc prompt.
+ *
+ * Intentionally minimal:
+ * - `triggers`: additional substrings that push a prompt toward this track.
+ * - `veto`:     substrings that forbid this track even if a trigger matches.
+ *
+ * Removed in v0.38.0:
+ * - `patterns` (regex): no runtime ever consumed them; kept authors honest
+ *   about what cclaw actually enforces.
+ */
 export interface TrackHeuristicRule {
   triggers?: string[];
-  patterns?: string[];
   veto?: string[];
 }
 
+/**
+ * Optional prompt-to-track overrides for /cc classification.
+ *
+ * Honesty note: this config is **advisory**. cclaw surfaces these lists in
+ * the /cc skill and contract prose so the LLM can apply them when picking a
+ * track. There is no Node-level routing layer that mechanically enforces the
+ * result — which is why we only ship `triggers`, `veto`, and `fallback`, not
+ * regex patterns or priority overrides.
+ *
+ * Removed in v0.38.0:
+ * - `priority`: track evaluation order is always `standard -> medium -> quick`
+ *   (narrow-to-broad matching). Overriding it was never wired.
+ */
 export interface TrackHeuristicsConfig {
-  /** Track used when no trigger/pattern matches. */
+  /** Track used when no trigger matches. Defaults to `standard`. */
   fallback?: FlowTrack;
-  /**
-   * Track evaluation order. First matching track wins.
-   * Example: ["standard", "medium", "quick"].
-   */
-  priority?: FlowTrack[];
-  /** Per-track matching rules. */
+  /** Per-track vocabulary hints. */
   tracks?: Partial<Record<FlowTrack, TrackHeuristicRule>>;
 }
 
@@ -114,7 +132,8 @@ export interface VibyConfig {
    */
   languageRulePacks?: LanguageRulePack[];
   /**
-   * Optional prompt-to-track mapping overrides for /cc classification.
+   * Optional prompt-to-track vocabulary overrides for /cc classification.
+   * Advisory (surfaced in the /cc skill prose), not machine-enforced.
    * If omitted, cclaw uses built-in defaults.
    */
   trackHeuristics?: TrackHeuristicsConfig;

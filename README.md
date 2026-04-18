@@ -229,27 +229,30 @@ Each critical-path stage produces a dated artifact under
 bundle into `.cclaw/runs/<YYYY-MM-DD-slug>/` and resets the active flow
 for the next feature.
 
-### Track heuristics are configurable
+### Track heuristics are configurable (advisory)
 
 Every team has its own vocabulary. Override the built-in trigger lists in
 `.cclaw/config.yaml`:
 
 ```yaml
 trackHeuristics:
-  priority: [standard, medium, quick]
   fallback: standard
   tracks:
     quick:
       triggers: [hotfix, rollback, prod-incident]
-      veto: [schema, migration]   # never route quick even if one trigger hits
+      veto: [schema, migration]   # never route quick even if a trigger hits
     standard:
-      patterns:
-        - "^epic:"
-        - "platform-team|core-infra"
+      triggers: [epic, platform-team, core-infra]
 ```
 
-`priority` + `veto` + regex `patterns` give you deterministic routing
-without touching any code.
+Honest caveat: this config is **advisory**. cclaw surfaces these lists in
+the `/cc` skill and contract prose so the LLM applies them during
+classification — there is no Node-level router that mechanically enforces
+the outcome. That is why the knobs are deliberately minimal: per-track
+`triggers` + `veto` on top of defaults, plus `fallback`. Evaluation order is
+fixed (`standard -> medium -> quick`, narrow-to-broad); regex `patterns`
+and a `priority` override were removed in v0.38.0 because nothing in
+runtime consumed them.
 
 ### Mid-flow reclassification
 
