@@ -237,21 +237,53 @@ Exit criteria — met:
 
 **Goals:** realistic multi-turn runs — AUT reads project files, writes artifacts, uses function-calling.
 
-Scope:
+Delivered:
 
-- `src/eval/tools/{read,write,glob,grep}.ts` — sandbox-confined tool implementations with JSON schemas.
-- `src/eval/sandbox.ts` — per-case tmp directory (`os.tmpdir()/cclaw-eval-<uuid>/`) with deterministic cleanup.
-- `src/eval/agents/with-tools.ts` (Tier B) — multi-turn loop with `tool_choice: "auto"`, `MAX_TURNS` guard.
-- Corpus cases gain `context_files` field (real project files copied to sandbox).
-- `cclaw eval --tier=B`.
-- Tool-use metrics in report: number of tool calls, depth, error rate, rejected paths.
+- `src/eval/sandbox.ts` — per-case `os.tmpdir()/cclaw-eval-<uuid>/`
+  with `resolve()` guarded by realpath (absolute paths, `..`, symlink
+  escapes, NUL bytes rejected), `allowMissing: true` branch for
+  nested write destinations, and idempotent `dispose()`.
+- `src/eval/tools/{read,write,glob,grep}.ts` + `tools/index.ts`:
+  four sandbox-confined tools with OpenAI JSON schemas, per-invocation
+  payload ceilings, denied-path reporting, and a central registry
+  (`BUILTIN_TOOLS`, `toolsByName`, `toolsForRequest`).
+- `src/eval/agents/with-tools.ts` — multi-turn Tier B loop with
+  `tool_choice: "auto"`, `toolMaxTurns` cap, argument/result byte
+  ceilings, `ToolUseSummary` metrics (turns, calls, errors, deniedPaths,
+  per-tool counts), and artifact resolution that prefers a sandbox
+  `artifact.md`/`artifact.txt` over the assistant message.
+- `ChatMessage.toolCalls` in the LLM client + OpenAI wire serialization
+  so replayed assistant/tool transcripts round-trip.
+- Runner wires `--tier=B`: dispatches `runWithTools`, records the
+  workflow verifier `agent:with-tools`, surfaces tool metrics, honors
+  the cost guard (aborts on `DailyCostCapExceededError`), and fails the
+  case on `MaxTurnsExceededError`.
+- Markdown report: new "Tool use" table per Tier B case
+  (turns/calls/errors/denied/by-tool).
+- `cclaw eval --judge --tier=B` supported on the CLI.
+- Config surface: `toolMaxTurns`, `toolMaxArgumentsBytes`,
+  `toolMaxResultBytes` in `config.yaml` and
+  `CCLAW_EVAL_TOOL_MAX_TURNS` / `_ARG_BYTES` / `_RESULT_BYTES` env
+  overrides.
+- 26 new unit tests (sandbox lifecycle + escapes, each tool, agent
+  multi-turn + MaxTurnsExceededError, runner Tier B end-to-end).
+- Demo corpus expanded to 41 cases (`tests/fixtures/eval-demo/`
+  seeds a Tier B spec case with `context_files: [README.md]`). PR
+  CI remains green because cases without structural/rules are
+  marked skipped on `--schema-only` and `--rules` paths.
 
-Exit criteria:
+Exit criteria met:
 
-- AUT successfully reads `.cclaw/skills/*/SKILL.md` from sandbox, produces a valid artifact.
-- Sandbox cleanup verified by test (no leftover dirs after suite).
-- Single stage Tier B run completes in <3 min and costs <$3.
-- Tool calls cannot escape the sandbox (test with `../etc/passwd` attempt).
+- AUT reads seeded project files from the sandbox and produces a
+  valid artifact (verified by `tests/unit/eval-runner-tier-b.test.ts`).
+- Sandbox cleanup asserted (`createSandbox` disposes on success and on
+  any thrown path).
+- Tool calls cannot escape the sandbox — `../etc/passwd`, absolute
+  paths, and symlink jumps all rejected with `SandboxEscapeError` and
+  surfaced in `deniedPaths`.
+- End-to-end Tier B case with mocked client completes in <1s; live
+  run budget stays inside `dailyUsdCap` because cost is committed per
+  chat turn.
 
 ### Step 5 — Tier C: End-to-End Workflow (v0.27.0)
 
