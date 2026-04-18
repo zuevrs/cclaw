@@ -1,0 +1,62 @@
+name: Evals Structural (PR Gate)
+
+# PR-blocking Wave 7.1 gate. Runs the LLM-free structural verifier against
+# the 24-case seed corpus under `tests/fixtures/eval-demo/` and fails the
+# build if any case regresses against the committed per-stage baselines
+# (`tests/fixtures/eval-demo/.cclaw/evals/baselines/<stage>.json`).
+#
+# This workflow intentionally uses **no** secrets and makes zero network
+# calls — LLM-backed evals (Tier A/B/C) arrive in Waves 7.3–7.5 as separate
+# workflows (`evals-nightly.yml`, `evals-release.yml`).
+
+on:
+  pull_request:
+    paths:
+      - "src/eval/**"
+      - "src/content/eval-scaffold.ts"
+      - "src/cli.ts"
+      - "src/constants.ts"
+      - "tests/fixtures/eval-demo/**"
+      - ".github/workflows/evals-structural.yml"
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: evals-structural-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  structural:
+    name: Structural Verifier (24 cases)
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Setup Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: "20.x"
+          cache: npm
+
+      - name: Install dependencies
+        run: npm ci
+
+      - name: Build
+        run: npm run build
+
+      - name: Run structural evals against the seed corpus
+        working-directory: tests/fixtures/eval-demo
+        run: node ../../../dist/cli.js eval --schema-only
+
+      - name: Upload eval report
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: eval-structural-report
+          path: tests/fixtures/eval-demo/.cclaw/evals/reports/
+          if-no-files-found: ignore
+          retention-days: 14
