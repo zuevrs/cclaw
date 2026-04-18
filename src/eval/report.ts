@@ -148,6 +148,51 @@ export function formatMarkdownReport(report: EvalReport): string {
     lines.push(``);
   }
 
+  const workflowCases = report.cases.filter((item) => !!item.workflow);
+  if (workflowCases.length > 0) {
+    lines.push(`## Workflow stages`);
+    lines.push(``);
+    lines.push(
+      `| case id | stage | duration (ms) | cost (USD) | turns | tool calls | judge ok |`
+    );
+    lines.push(`| --- | --- | --- | --- | --- | --- | --- |`);
+    for (const item of workflowCases) {
+      const wf = item.workflow!;
+      for (const stage of wf.stages) {
+        const cost = stage.usageUsd > 0 ? stage.usageUsd.toFixed(4) : "-";
+        const judgeOk =
+          stage.judgeOk === true ? "yes" : stage.judgeOk === false ? "no" : "-";
+        lines.push(
+          `| ${item.caseId} | ${stage.stage} | ${stage.durationMs} | ${cost} | ` +
+            `${stage.toolUse.turns} | ${stage.toolUse.calls} | ${judgeOk} |`
+        );
+      }
+    }
+    lines.push(``);
+  }
+
+  const consistencyCases = report.cases.filter((item) =>
+    item.verifierResults.some((r) => r.kind === "consistency")
+  );
+  if (consistencyCases.length > 0) {
+    lines.push(`## Consistency checks`);
+    lines.push(``);
+    lines.push(`| case id | check id | ok | message |`);
+    lines.push(`| --- | --- | --- | --- |`);
+    for (const item of consistencyCases) {
+      for (const verifier of item.verifierResults) {
+        if (verifier.kind !== "consistency") continue;
+        const message = verifier.message
+          ? verifier.message.replace(/\|/g, "\\|").slice(0, 160)
+          : "-";
+        lines.push(
+          `| ${item.caseId} | ${verifier.id} | ${verifier.ok ? "yes" : "no"} | ${message} |`
+        );
+      }
+    }
+    lines.push(``);
+  }
+
   lines.push(`## Verifier details`);
   lines.push(``);
   for (const item of report.cases) {

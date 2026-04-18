@@ -13,7 +13,7 @@ measured score delta rather than subjective review. See
 | 2 | 0.24.0 | shipped | Rule-based verifiers (keywords, regex, counts, uniqueness) + cross-stage traceability, 40-case corpus |
 | 3 | 0.25.0 | shipped | LLM judge + Tier A single-shot, cost guard, nightly CI |
 | 4 | 0.26.0 | shipped | Tier B agent with tools + sandbox (read/write/glob/grep) |
-| 5 | 0.27.0 | planned | Tier C multi-stage workflow + release CI |
+| 5 | 0.27.0 | shipped | Tier C multi-stage workflow, cross-artifact consistency, `cclaw eval diff`, release CI |
 | 6 | 0.28.0 | planned | HTML reports, cross-model diff, polish |
 
 ## Quickstart
@@ -81,6 +81,7 @@ repo — only `CCLAW_EVAL_API_KEY` is supplied this way.
 | `CCLAW_EVAL_TOOL_MAX_TURNS` | Tier B turn cap for the with-tools loop. Default `8`. |
 | `CCLAW_EVAL_TOOL_MAX_ARG_BYTES` | Max bytes accepted for a single tool-call arguments payload. Default `65536`. |
 | `CCLAW_EVAL_TOOL_MAX_RESULT_BYTES` | Max bytes returned to the model per tool call (truncated with marker). Default `32768`. |
+| `CCLAW_EVAL_WORKFLOW_MAX_TOTAL_TURNS` | Tier C ceiling on total turns across every stage in one workflow case. Default `40`. |
 
 Example local setup (z.ai GLM):
 
@@ -361,6 +362,107 @@ Exit criteria (met for v0.26.0):
   refused and recorded in `deniedPaths`.
 - `MaxTurnsExceededError` aborts the case cleanly.
 
+## Tier C: multi-stage workflow
+
+Tier C chains the Tier B with-tools agent across a sequence of stages
+(`brainstorm → scope → design → spec → plan`, any non-empty subset is
+allowed) so a single eval case simulates the full early-lifecycle arc.
+Runs live under `.cclaw/evals/corpus/workflows/*.yaml`, not per-stage
+directories.
+
+The orchestrator (`src/eval/agents/workflow.ts`):
+
+1. Creates one sandbox for the whole case and seeds `context_files`.
+2. For each stage, clears leftover `artifact.md` candidates, calls
+   `runWithTools({ externalSandbox, promptPreamble })`, and persists the
+   produced artifact to `stages/<stage>.md` inside the sandbox. Later
+   stages read those files with the existing `read_file` tool, so the
+   contract matches what an IDE agent would see.
+3. Surfaces a `WorkflowRunSummary` on `EvalCaseResult` with per-stage
+   durations, turns, tool calls, token usage, cost, and (when `--judge`
+   is set) the rubric medians.
+4. Disposes the sandbox in a `finally` so temp dirs never leak.
+
+Cross-artifact consistency checks run after all stages complete
+(`src/eval/verifiers/workflow-consistency.ts`):
+
+- `ids_flow` — every match of `id_pattern` in the `from` stage must
+  appear in each `to` stage. Typical entry: `{ id_pattern: "D-\\d+",
+  from: scope, to: [design, plan] }`.
+- `placeholder_free` — none of the listed phrases (default `TBD`,
+  `TODO`, `placeholder`, case-insensitive) may appear in the named
+  stages.
+- `no_contradictions` — if `must` appears in the anchor stage, `forbid`
+  must NOT appear in any listed `stages`. Vacuously satisfied when the
+  anchor itself is absent.
+
+A Tier C case YAML mirrors the single-stage shape but declares a
+`stages` array and an optional `consistency` block:
+
+```yaml
+id: workflow-01-feature-addition
+description: Dark mode toggle end-to-end.
+stages:
+  - name: brainstorm
+    input_prompt: |
+      Explore dark mode directions and recommend one.
+  - name: scope
+    input_prompt: |
+      Read stages/brainstorm.md and produce decisions D-01..D-0N.
+  - name: plan
+    input_prompt: |
+      Read every prior stages/*.md and plan with every D-XX referenced.
+consistency:
+  ids_flow:
+    - id_pattern: "D-\\d+"
+      from: scope
+      to: [plan]
+  placeholder_free:
+    stages: [brainstorm, scope, plan]
+  no_contradictions:
+    - stage: scope
+      must: "theme storage: localStorage"
+      forbid: "theme storage: server"
+      stages: [plan]
+```
+
+Run the full Tier C corpus with judge rubrics attached:
+
+```bash
+cclaw eval --tier=C --judge
+```
+
+Use `CCLAW_EVAL_WORKFLOW_MAX_TOTAL_TURNS` (or `workflowMaxTotalTurns` in
+`config.yaml`) to cap the total turns a workflow may consume across
+all stages — useful when a long chain risks draining the daily spend
+cap.
+
+### Comparing runs (`cclaw eval diff`)
+
+`cclaw eval diff <old> <new>` renders a side-by-side summary of two
+report JSON files under `.cclaw/evals/reports/`. Each selector may be:
+
+- a `cclawVersion` string (e.g. `0.26.0`) — matched against the
+  `cclawVersion` field in any report,
+- a filename relative to `.cclaw/evals/reports/`, or
+- the literal `latest` — the most recent report by mtime.
+
+The diff prints summary deltas, per-case pass/fail transitions,
+verifier score drops, and (for Tier C) stage-level duration and cost
+deltas. Exit code is `1` whenever any case regressed or any verifier
+dropped; `0` when the diff is clean. Add `--json` to get the structured
+payload for downstream automation.
+
+Exit criteria (met for v0.27.0):
+
+- `runWorkflow` threads artifacts via the shared sandbox and unit tests
+  assert both stage chaining and error propagation.
+- Consistency verifier emits deterministic per-rule verifier results
+  with stable ids.
+- `cclaw eval --tier=C` produces a `WorkflowRunSummary` on each case
+  with per-stage metrics; `cclaw eval diff` exits non-zero on
+  regressions.
+
 ## Cost guard
 
 The optional `dailyUsdCap` (config) / `CCLAW_EVAL_DAILY_USD_CAP` (env)
@@ -386,23 +488,27 @@ tokenPricing:
 
 ## CI
 
-Two workflows share the corpus under `tests/fixtures/eval-demo/`:
+Three workflows share the corpus under `tests/fixtures/eval-demo/`:
 
 | Workflow | Triggers | Verifiers | Needs secrets | Gates PRs |
 | --- | --- | --- | --- | --- |
 | `evals-structural.yml` | `pull_request`, `workflow_dispatch` | Structural + rules + traceability | No | Yes |
 | `evals-nightly.yml` | `schedule` (03:17 UTC), `workflow_dispatch` | Structural + rules + judge (Tier A) | `CCLAW_EVAL_API_KEY`, `CCLAW_EVAL_BASE_URL` | No (advisory) |
+| `evals-release.yml` | `push` to `v*` tag, `workflow_dispatch` | Tier C workflow + judge + consistency | `CCLAW_EVAL_API_KEY`, `CCLAW_EVAL_BASE_URL` | No (advisory) |
 
-The nightly workflow skips automatically when the API-key secret is not
-configured — safe default for forks and during rollout. Reports and the
-daily spend ledger are uploaded as workflow artifacts with a 30-day
-retention.
+The nightly and release workflows skip automatically when the API-key
+secret is not configured — safe default for forks and during rollout.
+The release workflow additionally appends the generated Markdown report
+to the matching GitHub Release body so reviewers can skim per-stage
+cost, duration, and consistency results alongside the auto-drafted
+notes. Reports and the daily spend ledger are uploaded as workflow
+artifacts with a 30–90 day retention.
 
 ## Architecture
 
 - **Agent-under-test (AUT)** — consumes the stage skill and produces an artifact. Three fidelity tiers.
 - **Judge** — LLM judge step; evaluates an artifact against a rubric. Structured JSON output, median-of-3.
-- **Verifiers** — four kinds: `structural`, `rules`, `judge`, `workflow`. Cheaper tiers run first and can short-circuit expensive ones.
+- **Verifiers** — five kinds: `structural`, `rules`, `judge`, `workflow`, `consistency`. Cheaper tiers run first and can short-circuit expensive ones; `consistency` is Tier C-only and deterministic.
 - **Sandbox** — Tier B step onward. Every case runs in `os.tmpdir()/cclaw-eval-<uuid>/` with tool access limited to that path.
 - **LLM client** — official `openai` npm package pointed at any OpenAI-compatible `baseURL`. Wired alongside the LLM judge step.
 

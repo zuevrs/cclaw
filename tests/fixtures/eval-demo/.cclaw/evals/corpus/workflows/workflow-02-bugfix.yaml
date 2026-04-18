@@ -1,0 +1,42 @@
+id: workflow-02-bugfix
+description: |
+  Triage, scope, and plan a concrete bug fix (login flow returns 500
+  intermittently). Only three stages — brainstorm, scope, plan — so
+  Tier C exercises the short-path as well as the five-stage case.
+
+stages:
+  - name: brainstorm
+    input_prompt: |
+      Our `/api/login` endpoint returns HTTP 500 on ~2% of calls with
+      stack traces pointing at a nil-pointer deref in the session
+      middleware under load. Produce a brainstorm artifact covering
+      likely root causes, mitigation strategies, and a recommendation
+      that names the fix direction. Use the cclaw brainstorm contract.
+
+  - name: scope
+    input_prompt: |
+      Read `stages/brainstorm.md`. Produce a scope artifact with
+      decisions `D-01`..`D-0N` covering: root cause hypothesis, repro
+      strategy, rollout/rollback criteria, and success metrics (target
+      error rate and latency p95). Mark the bug severity and declared
+      out-of-scope items explicitly.
+
+  - name: plan
+    input_prompt: |
+      Read `stages/brainstorm.md` and `stages/scope.md`. Produce a
+      sequenced plan that starts with a failing regression test,
+      references every `D-XX` from scope, and ends with release
+      verification + rollback instructions. Use the cclaw plan contract.
+
+consistency:
+  ids_flow:
+    - id_pattern: "D-\\d+"
+      from: scope
+      to: [plan]
+  placeholder_free:
+    stages: [brainstorm, scope, plan]
+  no_contradictions:
+    - stage: scope
+      must: "severity: high"
+      forbid: "severity: low"
+      stages: [plan]

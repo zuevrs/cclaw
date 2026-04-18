@@ -1,0 +1,58 @@
+id: workflow-01-feature-addition
+description: |
+  Add a feature end-to-end: dark mode toggle. Exercises brainstorm →
+  scope → design → spec → plan with decisions (D-XX) that must thread
+  through every later stage.
+
+stages:
+  - name: brainstorm
+    input_prompt: |
+      We want to add a dark mode toggle to our React web app. Explore
+      the problem space, list meaningful directions (at least three),
+      and end with a single "Recommendation" section that picks one
+      direction with a one-sentence rationale. Use the cclaw brainstorm
+      contract and emit `artifact.md`.
+
+  - name: scope
+    input_prompt: |
+      Read `stages/brainstorm.md`, pick up the recommended direction,
+      and produce a scope artifact with explicit decisions numbered
+      `D-01`, `D-02`, ... covering at least: theme storage, default
+      theme, and system-preference sync. List explicit out-of-scope
+      items. Use the cclaw scope contract and emit `artifact.md`.
+
+  - name: design
+    input_prompt: |
+      Read `stages/scope.md`, quote every `D-XX` decision you are
+      designing for, and produce a design artifact that covers the
+      component API, state management, and migration path. Use the
+      cclaw design contract and emit `artifact.md`.
+
+  - name: spec
+    input_prompt: |
+      Read `stages/scope.md` and `stages/design.md`, then produce a
+      Gherkin-style spec with at least three scenarios covering the
+      decisions. Reference `D-XX` ids directly in scenario titles so
+      downstream traceability holds. Use the cclaw spec contract and
+      emit `artifact.md`.
+
+  - name: plan
+    input_prompt: |
+      Read every prior stage artifact under `stages/*.md`, then produce
+      a sequenced plan with numbered steps. Every `D-XX` decision from
+      scope must appear in at least one plan step (inline reference is
+      enough). Use the cclaw plan contract and emit `artifact.md`.
+
+consistency:
+  ids_flow:
+    - id_pattern: "D-\\d+"
+      from: scope
+      to: [design, spec, plan]
+  placeholder_free:
+    stages: [brainstorm, scope, design, spec, plan]
+    phrases: [TBD, TODO, placeholder]
+  no_contradictions:
+    - stage: scope
+      must: "theme storage: localStorage"
+      forbid: "theme storage: server"
+      stages: [design, spec, plan]

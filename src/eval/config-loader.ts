@@ -38,7 +38,8 @@ const NUMERIC_ENVS = new Set([
   "CCLAW_EVAL_AGENT_TEMPERATURE",
   "CCLAW_EVAL_TOOL_MAX_TURNS",
   "CCLAW_EVAL_TOOL_MAX_ARG_BYTES",
-  "CCLAW_EVAL_TOOL_MAX_RESULT_BYTES"
+  "CCLAW_EVAL_TOOL_MAX_RESULT_BYTES",
+  "CCLAW_EVAL_WORKFLOW_MAX_TOTAL_TURNS"
 ]);
 
 function evalConfigError(configFilePath: string, reason: string): Error {
@@ -216,6 +217,11 @@ function validateFileConfig(
     raw.toolMaxResultBytes,
     "toolMaxResultBytes"
   );
+  assignPositiveInt(
+    "workflowMaxTotalTurns",
+    raw.workflowMaxTotalTurns,
+    "workflowMaxTotalTurns"
+  );
 
   if (raw.regression !== undefined) {
     if (!isRecord(raw.regression)) {
@@ -263,7 +269,8 @@ function validateFileConfig(
     "tokenPricing",
     "toolMaxTurns",
     "toolMaxArgumentsBytes",
-    "toolMaxResultBytes"
+    "toolMaxResultBytes",
+    "workflowMaxTotalTurns"
   ]);
   const unknown = Object.keys(raw).filter((key) => !knownKeys.has(key));
   if (unknown.length > 0) {
@@ -403,6 +410,11 @@ function applyEnvOverrides(
     void label;
   };
   readPositiveInt("CCLAW_EVAL_TOOL_MAX_TURNS", "toolMaxTurns", "toolMaxTurns");
+  readPositiveInt(
+    "CCLAW_EVAL_WORKFLOW_MAX_TOTAL_TURNS",
+    "workflowMaxTotalTurns",
+    "workflowMaxTotalTurns"
+  );
   readPositiveInt(
     "CCLAW_EVAL_TOOL_MAX_ARG_BYTES",
     "toolMaxArgumentsBytes",

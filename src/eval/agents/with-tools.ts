@@ -82,6 +82,19 @@ export interface WithToolsInput {
   loadSkill?: (stage: EvalCase["stage"]) => Promise<string>;
   /** Override for the sandbox factory (test hook). */
   createSandboxFn?: typeof createSandbox;
+  /**
+   * Reuse an externally-managed sandbox instead of creating + disposing a
+   * per-call one. Tier C workflow orchestration uses this so every stage
+   * shares the same sandbox and earlier artifacts remain visible. When
+   * set, the caller is responsible for `dispose()`.
+   */
+  externalSandbox?: Sandbox;
+  /**
+   * Optional override of the default user prompt prefix. Tier C uses this
+   * to tell the model which stage it is on and where the prior artifacts
+   * are located.
+   */
+  promptPreamble?: string;
 }
 
 export interface WithToolsOutput {
@@ -118,11 +131,14 @@ export async function runWithTools(input: WithToolsInput): Promise<WithToolsOutp
   const toolMap = toolsByName(tools);
   const toolsBody = toolsForRequest(tools);
   const sandboxFactory = input.createSandboxFn ?? createSandbox;
+  const externalSandbox = input.externalSandbox;
 
-  const sandbox = await sandboxFactory({
-    projectRoot,
-    ...(caseEntry.contextFiles ? { contextFiles: caseEntry.contextFiles } : {})
-  });
+  const sandbox =
+    externalSandbox ??
+    (await sandboxFactory({
+      projectRoot,
+      ...(caseEntry.contextFiles ? { contextFiles: caseEntry.contextFiles } : {})
+    }));
 
   const toolUse: ToolUseSummary = {
     turns: 0,
@@ -135,7 +151,12 @@ export async function runWithTools(input: WithToolsInput): Promise<WithToolsOutp
   let lastModel = config.model;
   let totalAttempts = 0;
 
-  const userPrompt = buildUserPrompt(caseEntry, sandbox, tools);
+  const userPrompt = buildUserPrompt(
+    caseEntry,
+    sandbox,
+    tools,
+    input.promptPreamble
+  );
   const messages: ChatMessage[] = [
     { role: "system", content: systemPrompt },
     { role: "user", content: userPrompt }
@@ -226,7 +247,7 @@ export async function runWithTools(input: WithToolsInput): Promise<WithToolsOutp
     }
     throw new MaxTurnsExceededError(maxTurns);
   } finally {
-    await sandbox.dispose();
+    if (!externalSandbox) await sandbox.dispose();
   }
 }
 
@@ -291,7 +312,8 @@ function clampPositive(value: number | undefined, fallback: number): number {
 function buildUserPrompt(
   caseEntry: EvalCase,
   sandbox: Sandbox,
-  tools: SandboxTool[]
+  tools: SandboxTool[],
+  preamble?: string
 ): string {
   const toolList = tools.map((t) => `- ${t.descriptor.name}: ${t.descriptor.description}`);
   const files = caseEntry.contextFiles ?? [];
@@ -299,10 +321,16 @@ function buildUserPrompt(
     files.length > 0
       ? files.map((f) => `- ${f}`).join("\n")
       : "(no files seeded)";
-  const lines: string[] = [
+  const lines: string[] = [];
+  if (preamble && preamble.trim().length > 0) {
+    lines.push(preamble.trim(), ``);
+  }
+  lines.push(
     `Stage: ${caseEntry.stage}`,
     `Case id: ${caseEntry.id}`,
-    ``,
+    ``
+  );
+  const rest: string[] = [
     `Sandbox root: ${sandbox.root}`,
     `You may call the following tools to read or modify files inside the sandbox.`,
     `All paths are relative to the sandbox root.`,
@@ -322,6 +350,7 @@ function buildUserPrompt(
     `You may optionally write the artifact to \`artifact.md\` in the sandbox; ` +
       `if you do, the last written \`artifact.md\` is preferred over the chat reply.`
   ];
+  lines.push(...rest);
   return lines.join("\n");
 }
 
