@@ -26,8 +26,16 @@ export type EvalTier = (typeof EVAL_TIERS)[number];
 /**
  * Verifier kinds, in increasing cost and decreasing determinism:
  * structural and rules run without LLM; judge and workflow use the configured model.
+ * `consistency` is the Tier C cross-artifact family (deterministic but
+ * operates over multiple artifacts at once).
  */
-export const VERIFIER_KINDS = ["structural", "rules", "judge", "workflow"] as const;
+export const VERIFIER_KINDS = [
+  "structural",
+  "rules",
+  "judge",
+  "workflow",
+  "consistency"
+] as const;
 export type VerifierKind = (typeof VERIFIER_KINDS)[number];
 
 /**
@@ -210,6 +218,11 @@ export interface EvalCaseResult {
   durationMs: number;
   costUsd?: number;
   verifierResults: VerifierResult[];
+  /**
+   * Tier C only: the per-stage breakdown collected by the workflow
+   * agent. Unset for Tier A/B cases so the on-disk JSON stays small.
+   */
+  workflow?: WorkflowRunSummary;
 }
 
 /** Top-level eval report, serialized to JSON and rendered to Markdown. */
@@ -299,6 +312,14 @@ export interface EvalConfig {
    * marker so the model sees the cutoff.
    */
   toolMaxResultBytes?: number;
+  /**
+   * Maximum total turns a single Tier C workflow case may consume
+   * across all stages combined. Defaults to 40 (stages × toolMaxTurns).
+   * Runs that exceed the cap fail the current stage with a
+   * `MaxTurnsExceededError` propagated from the underlying with-tools
+   * loop rather than a dedicated workflow-level error.
+   */
+  workflowMaxTotalTurns?: number;
 }
 
 /** Per-model pricing schedule, expressed as USD per 1K tokens. */
@@ -441,4 +462,117 @@ export interface ToolUseSummary {
   deniedPaths: string[];
   /** Per-tool call counts, keyed by tool name. */
   byTool: Record<string, number>;
+}
+
+/**
+ * Cross-stage consistency expectations for a Tier C workflow case. Every
+ * sub-check is optional so authors can opt in incrementally; an empty
+ * block produces zero verifier results.
+ */
+export interface WorkflowConsistencyExpected {
+  /**
+   * For each rule, every id extracted from the `from` stage must appear in
+   * every listed `to` stage. Typical entry: `{ idPattern: "D-\\d+", from:
+   * "scope", to: ["plan"] }`. Guards the "decisions flow downstream" rule.
+   */
+  idsFlow?: Array<{
+    idPattern: string;
+    idFlags?: string;
+    from: WorkflowStageName;
+    to: WorkflowStageName[];
+  }>;
+  /**
+   * Stages that must not contain any of the listed case-insensitive
+   * phrases. Defaults to `["TBD", "TODO", "placeholder"]` when set to an
+   * empty array; omit entirely to skip the check.
+   */
+  placeholderFree?: {
+    stages: WorkflowStageName[];
+    phrases?: string[];
+  };
+  /**
+   * Free-form substring pairs: for every entry, if `must` appears in the
+   * named stage, `forbid` must NOT appear anywhere in the listed
+   * `stages`. Useful for "v1 decided in scope, plan must not say v2".
+   */
+  noContradictions?: Array<{
+    stage: WorkflowStageName;
+    must: string;
+    forbid: string;
+    stages: WorkflowStageName[];
+  }>;
+}
+
+/**
+ * A single stage step inside a Tier C workflow case. The stage's
+ * `inputPrompt` is handed to the Tier B with-tools agent with prior-stage
+ * artifacts seeded into the sandbox under `stages/<name>.md`.
+ */
+export interface WorkflowStageStep {
+  name: WorkflowStageName;
+  inputPrompt: string;
+  /** Per-stage rubric id override (defaults to the stage name). */
+  rubric?: string;
+  /** Per-stage required rubric check ids (mirror of JudgeExpected.requiredChecks). */
+  requiredChecks?: string[];
+  /** Per-stage minimum rubric scores (mirror of JudgeExpected.minimumScores). */
+  minimumScores?: Record<string, number>;
+}
+
+/**
+ * Supported workflow stages. Deliberately a subset of `FlowStage` —
+ * Tier C covers the early "design" arc of a project. TDD/review/ship
+ * are out of scope (they require real code execution).
+ */
+export const WORKFLOW_STAGES = [
+  "brainstorm",
+  "scope",
+  "design",
+  "spec",
+  "plan"
+] as const;
+export type WorkflowStageName = (typeof WORKFLOW_STAGES)[number];
+
+/**
+ * A Tier C workflow case. Lives under
+ * `.cclaw/evals/corpus/workflows/<id>.yaml` and wires a multi-stage run
+ * through the with-tools agent.
+ */
+export interface WorkflowCase {
+  id: string;
+  /** Short human-readable description (rendered in reports). */
+  description?: string;
+  /** Project files seeded into the sandbox before stage 1 runs. */
+  contextFiles?: string[];
+  /** Ordered list of stages to run. Must be non-empty. */
+  stages: WorkflowStageStep[];
+  /** Cross-stage consistency checks (Tier C-specific verifier family). */
+  consistency?: WorkflowConsistencyExpected;
+}
+
+/** Per-stage record inside a Tier C workflow run. */
+export interface WorkflowStageResult {
+  stage: WorkflowStageName;
+  artifact: string;
+  durationMs: number;
+  usageUsd: number;
+  toolUse: ToolUseSummary;
+  attempts: number;
+  model: string;
+  promptTokens: number;
+  completionTokens: number;
+  /** True when the judge (when requested) produced `ok:true` for every required check. */
+  judgeOk?: boolean;
+  /** Per-rubric-check medians keyed by check id (for the report). */
+  judgeMedians?: Record<string, number>;
+}
+
+/** Tier C orchestration output collected by the runner. */
+export interface WorkflowRunSummary {
+  caseId: string;
+  stages: WorkflowStageResult[];
+  totalUsageUsd: number;
+  totalDurationMs: number;
+  /** True when every stage judge was ok (or judge was skipped everywhere). */
+  allJudgeOk: boolean;
 }
