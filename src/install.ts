@@ -3,7 +3,9 @@ import fs from "node:fs/promises";
 import path from "node:path";
 import { promisify } from "node:util";
 import {
+  CCLAW_VERSION,
   COMMAND_FILE_ORDER,
+  FLOW_VERSION,
   REQUIRED_DIRS,
   RUNTIME_ROOT,
   UTILITY_COMMANDS
@@ -1343,11 +1345,25 @@ export async function syncCclaw(projectRoot: string): Promise<void> {
   await materializeRuntime(projectRoot, config, false);
 }
 
+/**
+ * Refresh generated files in `.cclaw/` without touching user-authored
+ * artifacts, state, or custom config keys. Only the `version` + `flowVersion`
+ * stamps are rewritten so the on-disk config reflects the installed CLI;
+ * `promptGuardMode`, `tddEnforcement`, `gitHookGuards`, `languageRulePacks`,
+ * and `trackHeuristics` are preserved verbatim from the existing config.
+ *
+ * For an explicit reset to the default profile the user should reinstall via
+ * `cclaw init --profile=<id>` (after optionally archiving the current run).
+ */
 export async function upgradeCclaw(projectRoot: string): Promise<void> {
-  const config = await readConfig(projectRoot);
-  const upgradedConfig = createDefaultConfig(config.harnesses);
-  await writeConfig(projectRoot, upgradedConfig);
-  await materializeRuntime(projectRoot, upgradedConfig, false);
+  const existing = await readConfig(projectRoot);
+  const upgraded: VibyConfig = {
+    ...existing,
+    version: CCLAW_VERSION,
+    flowVersion: FLOW_VERSION
+  };
+  await writeConfig(projectRoot, upgraded);
+  await materializeRuntime(projectRoot, upgraded, false);
 }
 
 function stripManagedHookCommands(value: unknown): { updated: unknown; changed: boolean } {

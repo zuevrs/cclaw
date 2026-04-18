@@ -5,7 +5,7 @@ import { promisify } from "node:util";
 import { describe, expect, it } from "vitest";
 import { readConfig, writeConfig } from "../../src/config.js";
 import { doctorChecks, doctorSucceeded } from "../../src/doctor.js";
-import { initCclaw, syncCclaw, uninstallCclaw } from "../../src/install.js";
+import { initCclaw, syncCclaw, uninstallCclaw, upgradeCclaw } from "../../src/install.js";
 import { createTempProject } from "../helpers/index.js";
 
 const execFileAsync = promisify(execFile);
@@ -224,6 +224,44 @@ describe("install lifecycle", () => {
         `Doctor emitted checks that fell through to the fallback classifier:\n${detail}`
       );
     }
+  });
+
+  it("upgrade preserves the full profile config and only refreshes generated files", async () => {
+    const root = await createTempProject("upgrade-preserve");
+    await initCclaw({ projectRoot: root, profile: "full" });
+
+    const before = await readConfig(root);
+    expect(before.promptGuardMode).toBe("strict");
+    expect(before.tddEnforcement).toBe("strict");
+    expect(before.gitHookGuards).toBe(true);
+    expect(before.languageRulePacks.length).toBeGreaterThan(0);
+
+    await writeConfig(root, {
+      ...before,
+      trackHeuristics: {
+        fallback: "standard",
+        priority: ["quick", "medium", "standard"],
+        tracks: {
+          quick: { triggers: ["hotfix"], patterns: undefined, veto: undefined },
+          medium: undefined,
+          standard: undefined
+        }
+      }
+    });
+
+    const shim = path.join(root, ".claude/commands/cc.md");
+    await fs.rm(shim);
+
+    await upgradeCclaw(root);
+
+    const after = await readConfig(root);
+    expect(after.promptGuardMode).toBe("strict");
+    expect(after.tddEnforcement).toBe("strict");
+    expect(after.gitHookGuards).toBe(true);
+    expect(after.languageRulePacks).toEqual(before.languageRulePacks);
+    expect(after.trackHeuristics?.tracks?.quick?.triggers).toEqual(["hotfix"]);
+
+    await expect(fs.stat(shim)).resolves.toBeDefined();
   });
 
   it("sync regenerates shim files", async () => {
