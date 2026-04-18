@@ -310,23 +310,23 @@ inputs_hash: sha256:pending
 ## Dependency Graph
 - 
 
-## Dependency Waves
+## Dependency Batches
 
-### Wave 1 (foundation)
+### Batch 1 (foundation)
 - Task IDs:
 - Verification gate:
 
-### Wave 2 (dependent)
-- Task IDs:
-- Depends on:
-- Verification gate:
-
-### Wave 3 (integration)
+### Batch 2 (dependent)
 - Task IDs:
 - Depends on:
 - Verification gate:
 
-Execution rule: complete and verify each wave before starting the next wave.
+### Batch 3 (integration)
+- Task IDs:
+- Depends on:
+- Verification gate:
+
+Execution rule: complete and verify each batch before starting the next batch.
 
 ## Task List
 
@@ -334,7 +334,7 @@ Execution rule: complete and verify each wave before starting the next wave.
 - Every task fits the **2-5 minute budget**. If \`[~Nm]\` is >5, split the task.
 - **No placeholders.** Forbidden tokens anywhere in this table: \`TODO\`, \`TBD\`, \`FIXME\`, \`<fill-in>\`, \`<your-*-here>\`, \`xxx\`, bare ellipsis. Every file path, test, and verification command must be copy-pasteable as written.
 - **No silent scope reduction.** Forbidden phrasing when locked decisions exist: \`v1\`, \`for now\`, \`later\`, \`temporary\`, \`placeholder\`, \`mock for now\`, \`hardcoded for now\`, \`will improve later\`.
-- If an estimate is genuinely uncertain (new library, unfamiliar subsystem), add a **spike task in wave 0** to de-risk — do NOT hide the uncertainty inside a large estimate.
+- If an estimate is genuinely uncertain (new library, unfamiliar subsystem), add a **spike task in batch 0** to de-risk — do NOT hide the uncertainty inside a large estimate.
 
 | Task ID | Description | Acceptance criterion | Verification command | Effort (S/M/L) | Minutes |
 |---|---|---|---|---|---|
@@ -351,12 +351,12 @@ Execution rule: complete and verify each wave before starting the next wave.
 | D-01 | 02-scope.md > Locked Decisions | T-1 | covered |
 
 ## Risk Assessment
-| Task/Wave | Risk | Likelihood | Impact | Mitigation |
+| Task/Batch | Risk | Likelihood | Impact | Mitigation |
 |---|---|---|---|---|
 |  |  |  |  |  |
 
 ## Boundary Map
-| Task/Wave | Produces (exports) | Consumes (imports from) |
+| Task/Batch | Produces (exports) | Consumes (imports from) |
 |---|---|---|
 |  |  |  |
 

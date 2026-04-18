@@ -113,19 +113,19 @@ Reference utility skill:
 `;
 }
 
-function waveExecutionModeBlock(stage: FlowStage): string {
+function batchExecutionModeBlock(stage: FlowStage): string {
   const schema = stageSchema(stage);
-  if (!schema.waveExecutionAllowed) return "";
+  if (!schema.batchExecutionAllowed) return "";
 
-  return `## Wave Execution Mode
+  return `## Batch Execution Mode
 
-Execute the current dependency wave task-by-task (RED -> GREEN -> REFACTOR).
+Execute the current dependency batch task-by-task (RED -> GREEN -> REFACTOR).
 Stop on BLOCKED status or when user input is required.
-Apply concise turn announces: one announce per wave boundary (or when risk/plan
+Apply concise turn announces: one announce per batch boundary (or when risk/plan
 changes materially), then execute tasks without repetitive boilerplate.
 
 Detailed walkthrough:
-\`.cclaw/${STAGE_EXAMPLES_REFERENCE_DIR}/tdd-wave-walkthrough.md\`
+\`.cclaw/${STAGE_EXAMPLES_REFERENCE_DIR}/tdd-batch-walkthrough.md\`
 `;
 }
 
@@ -203,7 +203,7 @@ function stageSpecificSeeAlso(stage: FlowStage): string[] {
     ],
     tdd: [
       `- \`${RUNTIME_ROOT}/skills/debugging/SKILL.md\``,
-      `- \`${RUNTIME_ROOT}/references/stages/tdd-wave-walkthrough.md\``
+      `- \`${RUNTIME_ROOT}/references/stages/tdd-batch-walkthrough.md\``
     ],
     review: [
       `- \`${RUNTIME_ROOT}/skills/security/SKILL.md\``,
@@ -256,15 +256,15 @@ function quickStartBlock(stage: FlowStage): string {
 }
 
 /**
- * Long-form Wave Execution walkthrough. Rendered once into
- * \`.cclaw/references/stages/tdd-wave-walkthrough.md\` by the installer.
+ * Long-form Batch Execution walkthrough. Rendered once into
+ * \`.cclaw/references/stages/tdd-batch-walkthrough.md\` by the installer.
  */
-export const TDD_WAVE_WALKTHROUGH_MARKDOWN = `# TDD — Wave Execution Walkthrough
+export const TDD_BATCH_WALKTHROUGH_MARKDOWN = `# TDD — Batch Execution Walkthrough
 
-Detailed RED / GREEN / REFACTOR transcript for a 3-task wave. Illustrative
+Detailed RED / GREEN / REFACTOR transcript for a 3-task batch. Illustrative
 only — do not copy the command names blindly, match them to your stack.
 
-## Wave 1 example tasks
+## Batch 1 example tasks
 
 | Task ID | Description | AC | Verification |
 |---|---|---|---|
@@ -294,15 +294,15 @@ Write the repo test that expects normalised writes, watch it fail (RED), impleme
 
 Write the service-level duplicate test that expects a rejection, watch it fail (RED), add the duplicate check in \`UserService.signup\` (GREEN), refactor the error message into a named constant (REFACTOR).
 
-## Wave gate check
+## Batch gate check
 
-After T-3 REFACTOR, before declaring Wave 1 done:
+After T-3 REFACTOR, before declaring Batch 1 done:
 
-1. Run the full suite (\`npm test\`) one final time → **PASS** captured as wave-exit evidence.
-2. Verify the TDD artifact contains RED, GREEN, and REFACTOR evidence for T-1, T-2, **and** T-3. No partial waves.
-3. Only now mark Wave 1 complete. Wave 2 cannot start until this step.
+1. Run the full suite (\`npm test\`) one final time → **PASS** captured as batch-exit evidence.
+2. Verify the TDD artifact contains RED, GREEN, and REFACTOR evidence for T-1, T-2, **and** T-3. No partial batches.
+3. Only now mark Batch 1 complete. Batch 2 cannot start until this step.
 
-## When to stop mid-wave (do NOT push through)
+## When to stop mid-batch (do NOT push through)
 
 - A RED test fails for a reason you did not predict (e.g. an unrelated flaky test) → **pause**, diagnose, log an operational-self-improvement entry, and decide with the user before proceeding.
 - A GREEN step would require touching code outside the task's acceptance criterion → **pause**, the task is scoped wrong; adjust the plan or open a follow-up task.
@@ -382,7 +382,7 @@ ${schema.interactionProtocol.map((item, i) => `${i + 1}. ${item}`).join("\n")}
 Shared decision/ask-user protocol:
 \`${DECISION_PROTOCOL_PATH}\`
 
-${waveExecutionModeBlock(stage)}
+${batchExecutionModeBlock(stage)}
 ## Required Gates
 ${gateList}
 

@@ -182,5 +182,5 @@ export const TDD: StageSchemaInput = {
     { section: "Test Pyramid Shape", required: false, validationRule: "If present: per-slice count of Small/Medium/Large tests added, to let reviewers verify the suite is not drifting top-heavy." },
     { section: "Prove-It Reproduction", required: false, validationRule: "Required for bug-fix slices: original failing reproduction test (RED without fix), passing output with fix (GREEN), and a note confirming the test fails again if the fix is reverted." }
   ],
-  waveExecutionAllowed: true
+  batchExecutionAllowed: true
 };

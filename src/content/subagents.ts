@@ -133,7 +133,7 @@ If you catch yourself writing “read PLAN.md Task 3” or “implement the next
 | Status | Meaning | Controller action |
 |---|---|---|
 | DONE | Implementation complete; tests orchestrated per prompt; no known material risks | Proceed to reviewers |
-| DONE_WITH_CONCERNS | Shippable but with documented tradeoffs/risks | Proceed with reviewer + explicit notes; do not “hand-wave” concerns |
+| DONE_WITH_CONCERNS | Shippable but with documented tradeoffs/risks | Proceed with reviewer + explicit notes; do not dismiss concerns |
 | NEEDS_CONTEXT | Missing authoritative information only the parent/user can supply | Parent gathers context, then re-dispatch implementer with augmented prompt |
 | BLOCKED | Hard stop (permissions, tool failure, conflicting requirements, unsafe state) | Parent escalates to user; do not stack speculative guesses |
 

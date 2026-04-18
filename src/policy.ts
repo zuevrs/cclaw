@@ -197,7 +197,7 @@ export async function policyChecks(projectRoot: string, options: PolicyOptions =
     { file: runtimeFile("skills/docs/SKILL.md"), needle: "## README Guidance", name: "utility_skill:docs:readme" },
     { file: runtimeFile("skills/executing-plans/SKILL.md"), needle: "## HARD-GATE", name: "utility_skill:executing_plans:hard_gate" },
     { file: runtimeFile("skills/executing-plans/SKILL.md"), needle: "## Execution Protocol", name: "utility_skill:executing_plans:protocol" },
-    { file: runtimeFile("skills/executing-plans/SKILL.md"), needle: "## Wave Checklist", name: "utility_skill:executing_plans:waves" },
+    { file: runtimeFile("skills/executing-plans/SKILL.md"), needle: "## Batch Checklist", name: "utility_skill:executing_plans:batches" },
     { file: runtimeFile("skills/verification-before-completion/SKILL.md"), needle: "## HARD-GATE", name: "utility_skill:verification_before_completion:hard_gate" },
     { file: runtimeFile("skills/verification-before-completion/SKILL.md"), needle: "## Protocol", name: "utility_skill:verification_before_completion:protocol" },
     { file: runtimeFile("skills/finishing-a-development-branch/SKILL.md"), needle: "## HARD-GATE", name: "utility_skill:finishing_branch:hard_gate" },

@@ -25,7 +25,7 @@ export const PLAN: StageSchemaInput = {
   checklist: [
     "Read upstream — load spec, design, and scope artifacts. Cross-reference acceptance criteria.",
     "Build dependency graph — identify task ordering, parallel opportunities, and blocking dependencies.",
-    "Group tasks into dependency waves — wave N+1 cannot start until wave N has verification evidence.",
+    "Group tasks into dependency batches — batch N+1 cannot start until batch N has verification evidence.",
     "Slice into vertical tasks — each task targets 2-5 minutes, produces one testable outcome, and touches one coherent area.",
     "Attach verification — every task has an acceptance criterion mapping and a concrete verification command.",
     "Map scope Locked Decisions — every D-XX from scope is referenced by at least one plan task (or explicitly marked deferred with reason).",
@@ -36,7 +36,7 @@ export const PLAN: StageSchemaInput = {
   interactionProtocol: [
     "Plan in read-only mode relative to implementation.",
     "Split work into small vertical slices (target 2-5 minute tasks).",
-    "Publish explicit dependency waves with entry and exit checks for each wave.",
+    "Publish explicit dependency batches with entry and exit checks for each batch.",
     "Attach verification step to every task.",
     "Preserve locked scope boundaries: no silent scope reduction language in task rows.",
     "Enforce WAIT_FOR_CONFIRM: present the plan summary with options (A) Approve / (B) Revise / (C) Reject.",
@@ -44,7 +44,7 @@ export const PLAN: StageSchemaInput = {
   ],
   process: [
     "Build dependency graph and ordered slices.",
-    "Group slices into execution waves and define gate criteria per wave.",
+    "Group slices into execution batches and define gate criteria per batch.",
     "Define each task with acceptance mapping and verification commands.",
     "Trace every locked decision (D-XX) to plan tasks or explicit defer rationale.",
     "Record checkpoints and blockers.",
@@ -53,7 +53,7 @@ export const PLAN: StageSchemaInput = {
   requiredGates: [
     { id: "plan_tasks_sliced_2_5_min", description: "Tasks are small, executable slices." },
     { id: "plan_dependency_graph_written", description: "Dependency graph and order are explicit." },
-    { id: "plan_dependency_waves_defined", description: "Tasks are grouped into executable waves with gate checks." },
+    { id: "plan_dependency_batches_defined", description: "Tasks are grouped into executable batches with gate checks." },
     { id: "plan_verification_steps_defined", description: "Each task has verification guidance." },
     { id: "plan_acceptance_mapped", description: "Each task maps to a spec acceptance criterion." },
     { id: "plan_wait_for_confirm", description: "Execution blocked until explicit user confirmation." }
@@ -63,7 +63,7 @@ export const PLAN: StageSchemaInput = {
     "Task list includes acceptance mapping.",
     "Locked decision coverage table present with D-XX trace links.",
     "Dependency graph documented.",
-    "Dependency waves documented with wave-by-wave verification gates.",
+    "Dependency batches documented with batch-by-batch verification gates.",
     "WAIT_FOR_CONFIRM status recorded."
   ],
   inputs: ["approved spec", "codebase context", "delivery constraints"],
@@ -72,11 +72,11 @@ export const PLAN: StageSchemaInput = {
     "current architecture",
     "known technical debt and dependencies"
   ],
-  outputs: ["task graph", "dependency wave plan", "ordered plan", "explicit confirmation checkpoint"],
+  outputs: ["task graph", "dependency batch plan", "ordered plan", "explicit confirmation checkpoint"],
   blockers: [
     "tasks too broad",
     "dependency uncertainty unresolved",
-    "wave boundaries are unclear",
+    "batch boundaries are unclear",
     "locked decisions from scope are not mapped to tasks",
     "no explicit confirmation"
   ],
@@ -94,13 +94,13 @@ export const PLAN: StageSchemaInput = {
     "Using placeholder tokens or scope-reduction phrases (`v1`, `for now`, `later`) in task definitions",
     "No dependency graph",
     "No WAIT_FOR_CONFIRM marker",
-    "No explicit dependency waves",
+    "No explicit dependency batches",
     "Tasks exceed one coherent outcome",
     "No acceptance mapping",
     "Locked decisions are missing or not mapped",
     "Scope-reduction language appears without explicit approved defer decision"
   ],
-  policyNeedles: ["WAIT_FOR_CONFIRM", "Task Graph", "Dependency Waves", "Acceptance Mapping", "verification steps", "Locked Decision Coverage"],
+  policyNeedles: ["WAIT_FOR_CONFIRM", "Task Graph", "Dependency Batches", "Acceptance Mapping", "verification steps", "Locked Decision Coverage"],
   artifactFile: "05-plan.md",
   next: "tdd",
   reviewSections: [
@@ -116,13 +116,13 @@ export const PLAN: StageSchemaInput = {
       stopGate: true
     },
     {
-      title: "Wave Completeness Audit",
+      title: "Batch Completeness Audit",
       evaluationPoints: [
-        "Does every task belong to exactly one wave?",
-        "Does each wave have a verification gate?",
-        "Are wave dependencies explicit and acyclic?",
+        "Does every task belong to exactly one batch?",
+        "Does each batch have a verification gate?",
+        "Are batch dependencies explicit and acyclic?",
         "Is the acceptance mapping complete — every spec criterion covered?",
-        "Are there hidden dependencies between tasks in different waves?"
+        "Are there hidden dependencies between tasks in different batches?"
       ],
       stopGate: true
     },
@@ -132,7 +132,7 @@ export const PLAN: StageSchemaInput = {
         "Does every task carry an explicit minutes estimate (e.g. `[~3m]`) and does every estimate fit the 2-to-5-minute budget? Estimates >5 minutes must be split.",
         "Are all file paths, test commands, and verification commands copy-pasteable as written — no `TODO`, `TBD`, `FIXME`, `<fill-in>`, `<your-*-here>`, `xxx`, or ellipsis standing in for omitted args?",
         "Does every acceptance-criterion reference resolve to a real R# / AC-### in the spec (not a blank link)?",
-        "If an estimate is genuinely uncertain (first-time integration, unfamiliar library), is the uncertainty named explicitly and scheduled as a spike task in wave 0, rather than hidden behind a large estimate?"
+        "If an estimate is genuinely uncertain (first-time integration, unfamiliar library), is the uncertainty named explicitly and scheduled as a spike task in batch 0, rather than hidden behind a large estimate?"
       ],
       stopGate: true
     }
@@ -145,12 +145,12 @@ export const PLAN: StageSchemaInput = {
   },
   artifactValidation: [
     { section: "Dependency Graph", required: true, validationRule: "Ordering and parallel opportunities explicit. No circular dependencies." },
-    { section: "Dependency Waves", required: true, validationRule: "Every task belongs to a wave. Each wave has an exit gate and dependency statement." },
+    { section: "Dependency Batches", required: true, validationRule: "Every task belongs to a batch. Each batch has an exit gate and dependency statement." },
     { section: "Task List", required: true, validationRule: "Each task row includes ID, description, acceptance criterion, verification command, and effort estimate (S/M/L). Every task must also carry a minutes estimate within the 2-5 minute budget." },
     { section: "Acceptance Mapping", required: true, validationRule: "Every spec criterion is covered by at least one task." },
     { section: "Locked Decision Coverage", required: false, validationRule: "Every locked decision ID (D-XX) from scope is listed with linked task IDs or explicit defer rationale." },
-    { section: "Risk Assessment", required: false, validationRule: "If present: per-task or per-wave risk identification with likelihood, impact, and mitigation strategy." },
-    { section: "Boundary Map", required: false, validationRule: "If present: per-wave or per-task interface contracts listing what each task produces (exports) and consumes (imports) from other tasks." },
+    { section: "Risk Assessment", required: false, validationRule: "If present: per-task or per-batch risk identification with likelihood, impact, and mitigation strategy." },
+    { section: "Boundary Map", required: false, validationRule: "If present: per-batch or per-task interface contracts listing what each task produces (exports) and consumes (imports) from other tasks." },
     { section: "WAIT_FOR_CONFIRM", required: true, validationRule: "Explicit marker present. Status: pending until user approves." },
     { section: "No-Placeholder Scan", required: false, validationRule: "Confirmation that a text scan for `TODO`, `TBD`, `FIXME`, `<fill-in>`, `<your-*-here>`, `xxx`, or bare ellipses has zero hits in the task list. A placeholder is a deferred decision masquerading as a plan." },
     { section: "No Scope Reduction Language Scan", required: false, validationRule: "Confirmation that scope-reduction phrases (`v1`, `for now`, `later`, `temporary`, `placeholder`) are absent from task rows when locked decisions exist." }

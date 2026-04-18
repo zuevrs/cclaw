@@ -488,7 +488,7 @@ description: "Execute approved plans with disciplined batching, explicit checkpo
 ## Quick Start
 
 > 1. Confirm the plan and stage gates are approved before execution.
-> 2. Execute in batches (waves), not as one giant untracked stream.
+> 2. Execute in batches, not as one giant untracked stream.
 > 3. Stop at checkpoint boundaries for verification and user visibility.
 
 ## HARD-GATE
@@ -498,47 +498,47 @@ Do not start implementation execution without an approved plan artifact and expl
 ## Execution Protocol
 
 1. **Load plan source of truth** from \`.cclaw/artifacts/05-plan.md\` (canonical run copy when available).
-2. **Group tasks into waves** by dependency order and risk.
-3. **Run one wave at a time** with evidence after each task (tests, build, lint, or review evidence as applicable).
-4. **Checkpoint each wave** by updating stage artifact evidence and unresolved blockers.
+2. **Group tasks into batches** by dependency order and risk.
+3. **Run one batch at a time** with evidence after each task (tests, build, lint, or review evidence as applicable).
+4. **Checkpoint each batch** by updating stage artifact evidence and unresolved blockers.
 5. **Stop immediately** on any hard blocker, failing gate, or unresolved critical finding.
 
-## Wave Checklist
+## Batch Checklist
 
-- Wave scope is explicit (task IDs + expected outputs).
+- Batch scope is explicit (task IDs + expected outputs).
 - Verification command for each task is predetermined.
 - Machine-only checks are delegated to subagents when supported.
 - User approvals are requested only at required gate boundaries.
 
-## Fresh Context Protocol (between waves)
+## Fresh Context Protocol (between batches)
 
-After a wave completes — especially after long agent turns — context drift is
-the #1 cause of degraded execution quality. Before starting the **next wave**,
+After a batch completes — especially after long agent turns — context drift is
+the #1 cause of degraded execution quality. Before starting the **next batch**,
 prefer a **fresh agent context** over continuing in a saturated session:
 
-1. **Snapshot wave outcome** — append a short summary to the plan artifact
-   (\`### Wave <N> outcome\` with: tasks done, evidence files, blockers, next-wave inputs).
+1. **Snapshot batch outcome** — append a short summary to the plan artifact
+   (\`### Batch <N> outcome\` with: tasks done, evidence files, blockers, next-batch inputs).
 2. **Capture handoff facts** — the minimum information the next agent needs:
    - Stage and run id (from \`.cclaw/state/flow-state.json\`)
    - List of completed task IDs from the plan
    - Open blockers / failing gates by name
-   - File paths the next wave will touch (no full diffs)
+   - File paths the next batch will touch (no full diffs)
 3. **Decide: continue or rotate**
-   - **Rotate** (start a new agent session) when: prior wave consumed > ~50% of the context budget, the prior wave required deep investigation that the next wave does not need, or you are about to cross a stage boundary.
-   - **Continue** when: next wave is a tiny follow-up (≤ 1 task) and the prior context is directly relevant.
+   - **Rotate** (start a new agent session) when: prior batch consumed > ~50% of the context budget, the prior batch required deep investigation that the next batch does not need, or you are about to cross a stage boundary.
+   - **Continue** when: next batch is a tiny follow-up (≤ 1 task) and the prior context is directly relevant.
 4. **Resume** in the new session via \`/cc-next\` — the session-start hook will restore flow state, checkpoint, and digest automatically.
 
-This is the same intuition as Compound Engineering's "fresh context per iteration": every wave starts with a clean, intentionally-loaded context, not a degraded carry-over.
+This is the same intuition as Compound Engineering's "fresh context per iteration": every batch starts with a clean, intentionally-loaded context, not a degraded carry-over.
 
 ### Handoff template (paste into next session)
 
 \`\`\`markdown
-## Wave <N> handoff
+## Batch <N> handoff
 - Stage: <stage>
 - Run: <runId>
 - Completed task IDs: <list>
 - Blockers: <list or none>
-- Files next wave will touch: <list>
+- Files next batch will touch: <list>
 - Verification command(s) used: <list>
 \`\`\`
 
@@ -548,7 +548,7 @@ This is the same intuition as Compound Engineering's "fresh context per iteratio
 - Marking tasks done without command evidence.
 - Reordering critical dependencies for speed.
 - Continuing after a gate failure hoping later tasks fix it.
-- Carrying a saturated context across wave boundaries because "it has all the history" — saturated context is a liability, not an asset.
+- Carrying a saturated context across batch boundaries because "it has all the history" — saturated context is a liability, not an asset.
 `;
 }
 
@@ -1355,7 +1355,7 @@ For each lens, write either a knowledge entry **or** the explicit string
 
 ### 2. What slowed us down?
 
-- Repeated context loss between waves → \`[compound]\` accelerator.
+- Repeated context loss between batches → \`[compound]\` accelerator.
 - Re-derivation of a fact already in upstream artifacts → \`[pattern]\` "re-read X first".
 - Tooling friction (slow test loop, flaky CI) → \`[compound]\` follow-up.
 

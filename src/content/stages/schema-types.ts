@@ -101,8 +101,8 @@ export interface StageSchema {
   completionStatus: string[];
   crossStageTrace: CrossStageTrace;
   artifactValidation: ArtifactValidation[];
-  /** When true, stage skill includes wave auto-execute guidance (tdd). */
-  waveExecutionAllowed?: boolean;
+  /** When true, stage skill includes batch auto-execute guidance (tdd). */
+  batchExecutionAllowed?: boolean;
   /** Sections that remain required even when the trivial-change escape hatch is active (design only). */
   trivialOverrideSections?: string[];
   /** Agent names that MUST be dispatched (or waived) before stage transition — derived from mandatory auto-subagent rows. */
