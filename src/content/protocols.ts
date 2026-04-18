@@ -21,11 +21,62 @@ Shared format for decisions that require user confirmation.
    - OpenCode/Codex: plain text options
 5. Wait for user choice before proceeding.
 
+## Decision skeleton
+
+Every Decision Protocol call — regardless of harness — follows this
+four-part skeleton. Do not skip a part; if a part is trivially empty,
+say so explicitly (e.g. "Re-ground: same branch, same task as prior
+turn").
+
+1. **Re-ground (1-2 sentences).** State the project, the active
+   feature slug, the active stage (from \`flow-state.json\`), and the
+   decision's plain-English context. Pull these values from the source
+   of truth, not from conversation memory.
+2. **Simplify (2-4 sentences).** Explain the choice in plain English a
+   smart 16-year-old could follow. No internal jargon, no raw function
+   names, no implementation trivia. Say what each option DOES and
+   what changes for the user.
+3. **Recommend.** One line of the form
+   \`RECOMMENDATION: Choose [Letter] because [one-line reason]\`.
+   Always prefer the more complete option unless an explicit constraint
+   says otherwise (see Completeness calibration below). Never present
+   options as equivalent when they are not.
+4. **Options.** Lettered options \`A) ... B) ... C) ...\`. Each option
+   includes one-line \`Completeness: X/10\` plus, when effort differs
+   noticeably, a \`(human: ~Xh / agent: ~Ym)\` estimate.
+
+## Completeness calibration
+
+Use the same 1-10 scale for every option so comparisons stay honest:
+
+- **10** = complete implementation: all stated edges handled,
+  traceable to spec, no known deferred work.
+- **7** = covers the happy path; one or two non-critical edges
+  deferred with an explicit follow-up.
+- **5** = partial; either drops edge cases silently or hands off
+  required work to a future run.
+- **3** = shortcut; skips spec criteria, violates an Iron Law, or
+  defers significant work without tracking.
+- **1** = acknowledged placeholder (\`TBD\`, \`TODO\`, "static for now").
+
+Calibration rules:
+
+- Mark any option at \`Completeness: ≤5\` and require the user to
+  acknowledge the gap before picking it.
+- If two options are both \`≥8\`, recommend the higher one.
+- "Static for now" / "we will add later" phrasing always scores \`≤3\`
+  and must be surfaced in Simplify, not buried in an option label.
+
 ## Ask format
 
 - One question per call.
-- Option labels are short and unambiguous.
-- If tool schema fails once, fall back to plain text immediately.
+- Option labels are short and unambiguous; the full reasoning lives in
+  Simplify + per-option Completeness.
+- If tool schema fails once, fall back to plain text immediately but
+  keep the skeleton (Re-ground / Simplify / RECOMMENDATION / lettered
+  Options with Completeness scores).
+- Log the chosen letter into the stage artifact's decision log with
+  the Completeness score; do not rely on chat history.
 
 ## Retry and escalation
 

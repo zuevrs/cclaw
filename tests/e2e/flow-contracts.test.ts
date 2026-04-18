@@ -116,6 +116,63 @@ describe("flow command contracts", () => {
     expect(decisionProtocol).toContain("# Decision Protocol");
   });
 
+  it("requires spec skill to chunk acceptance criteria for sign-off", async () => {
+    const root = await createTempProject("spec-chunking");
+    await initCclaw({ projectRoot: root });
+
+    const specSkill = await fs.readFile(
+      path.join(root, ".cclaw/skills/specification-authoring/SKILL.md"),
+      "utf8"
+    );
+
+    expect(specSkill).toContain("Chunk acceptance criteria for review");
+    expect(specSkill).toContain("batches of 3-5");
+    expect(specSkill).toContain("pause for explicit ACK");
+    expect(specSkill).toContain(
+      "Present acceptance criteria to the user in 3-5-item batches"
+    );
+  });
+
+  it("encodes the Decision Protocol skeleton and completeness calibration", async () => {
+    const root = await createTempProject("decision-skeleton");
+    await initCclaw({ projectRoot: root });
+
+    const decisionProtocol = await fs.readFile(
+      path.join(root, ".cclaw/references/protocols/decision.md"),
+      "utf8"
+    );
+
+    expect(decisionProtocol).toContain("## Decision skeleton");
+    expect(decisionProtocol).toContain("Re-ground");
+    expect(decisionProtocol).toContain("Simplify");
+    expect(decisionProtocol).toContain("RECOMMENDATION: Choose [Letter]");
+    expect(decisionProtocol).toContain("Completeness: X/10");
+
+    expect(decisionProtocol).toContain("## Completeness calibration");
+    expect(decisionProtocol).toContain("**10** = complete implementation");
+    expect(decisionProtocol).toContain("**3** = shortcut");
+
+    expect(decisionProtocol).toContain(
+      "Log the chosen letter into the stage artifact's decision log"
+    );
+  });
+
+  it("requires the meta-skill to declare a skill-before-response gate", async () => {
+    const root = await createTempProject("skill-gate");
+    await initCclaw({ projectRoot: root });
+
+    const metaSkill = await fs.readFile(
+      path.join(root, ".cclaw/skills/using-cclaw/SKILL.md"),
+      "utf8"
+    );
+
+    expect(metaSkill).toContain("## Skill-before-response gate");
+    expect(metaSkill).toContain("load the matching stage SKILL before producing");
+    expect(metaSkill).toContain("Substantive");
+    expect(metaSkill).toContain("Non-substantive");
+    expect(metaSkill).toContain("/cc");
+  });
+
   it("includes shared guidance references in spec and plan skills", async () => {
     const root = await createTempProject("spec-anti");
     await initCclaw({ projectRoot: root });

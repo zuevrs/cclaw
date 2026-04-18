@@ -34,6 +34,7 @@ export const SPEC: StageSchemaInput = {
     "Express each requirement in observable terms.",
     "Resolve ambiguity before moving to plan. Challenge vague language.",
     "Capture assumptions explicitly, not implicitly.",
+    "**Chunk acceptance criteria for review.** When presenting the spec to the user for sign-off, deliver acceptance criteria in batches of 3-5 and **pause for explicit ACK** (via Decision Protocol) before sending the next batch. Do not dump the full criteria wall in one message — small batches surface objections earlier and keep the sign-off meaningful. Full spec writeup still lands in `04-spec.md`, but the conversation itself must be digestible.",
     "Require user confirmation on the written spec. **STOP.** Do NOT proceed to plan until user approves.",
     "For each criterion, ask: how would you test this? If the answer is unclear, rewrite.",
     "When encountering ambiguity, classify it before acting: (A) ask user for missing info, (B) enumerate interpretations and pick one with justification, (C) propose hypothesis with validation path. Do NOT silently resolve ambiguity."
@@ -43,6 +44,7 @@ export const SPEC: StageSchemaInput = {
     "Capture constraints, assumptions, and edge cases.",
     "Build testability map: criterion -> test description.",
     "Confirm testability for each criterion.",
+    "Present acceptance criteria to the user in 3-5-item batches, pausing for explicit ACK between batches (see Interaction Protocol).",
     "Write spec artifact and request approval."
   ],
   requiredGates: [
