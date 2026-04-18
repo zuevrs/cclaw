@@ -110,23 +110,34 @@ Exit criteria:
 - Existing 250+ test suite stays green.
 - Typecheck clean.
 
-### Wave 7.1 — Schema Verifiers L1 (v0.23.0)
+### Wave 7.1 — Schema Verifiers L1 (v0.23.0) ✅
 
 **Goals:** first regression layer, still zero LLM. Runs on every PR.
 
 Scope:
 
-- `src/eval/verifiers/structural.ts` — checks required sections, frontmatter, length bounds, placeholder-free body.
-- Fixture-based corpus in `.cclaw/evals/corpus/<stage>/<id>.yaml` with `corpus/<stage>/<id>/fixture.md` as the artifact-under-test.
-- 3 cases per stage × 8 stages = 24 fixtures.
-- `src/eval/baseline.ts` — write and compare baselines (`baselines/<stage>.json`).
-- `cclaw eval --schema-only`.
-- `.github/workflows/evals-structural.yml` — PR-blocking on regression.
+- `src/eval/verifiers/structural.ts` — checks required sections, forbidden
+  patterns, length bounds (lines/chars, frontmatter excluded), and required
+  YAML frontmatter keys.
+- Fixture-based corpus in `tests/fixtures/eval-demo/.cclaw/evals/corpus/<stage>/<id>.yaml`
+  with a sibling `<id>/fixture.md` as the artifact-under-test.
+- 3 cases per stage × 8 stages = 24 fixtures (across dark-mode, auth-refactor,
+  and billing-rewrite scenarios) with committed per-stage baselines.
+- `src/eval/baseline.ts` — load/write/compare baselines (`baselines/<stage>.json`).
+  Writes are gated behind `--update-baseline --confirm` and refuse to run if any
+  case is currently failing.
+- `cclaw eval --schema-only` runs the real structural verifier.
+- Exit code is `1` whenever any case fails *or* any baseline-tracked verifier
+  regresses from `ok:true` to `ok:false`.
+- `.github/workflows/evals-structural.yml` — PR-blocking, zero-secret CI that
+  executes the demo corpus against its committed baselines.
 
 Exit criteria:
 
-- 24 corpus cases pass on main.
-- Synthetic regression (e.g., removed section in fixture) is caught with exit code 1.
+- ✅ 24 corpus cases pass on main (verified by `tests/integration/eval-structural.test.ts`).
+- ✅ Synthetic regression (removed required section, injected `TBD` pattern)
+  is caught with exit code 1 and surfaces a `newly-failing` entry in the
+  baseline delta.
 
 ### Wave 7.2 — Rule-based Verifiers L2 (v0.24.0)
 
