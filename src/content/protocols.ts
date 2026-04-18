@@ -49,12 +49,38 @@ Shared closeout sequence applied by every stage skill.
    - update \`guardEvidence\`.
 3. Persist stage artifact under \`.cclaw/artifacts/\`.
 4. Run \`npx cclaw doctor\` and resolve failures.
-5. Capture reusable learnings from this stage artifact:
-   - append 1-3 strict-schema JSONL entries when the stage produced non-obvious
-     decisions, patterns, or lessons,
-   - use \`type=rule|pattern|lesson\` (\`compound\` stays retro-focused).
+5. **Capture through-flow learnings** — see the policy below. Knowledge
+   accrues continuously across stages, not just at retro.
 6. Notify user with stage completion and next action (\`/cc-next\`).
 7. Stop; do not auto-run the next stage unless user asks.
+
+## Through-flow knowledge capture
+
+Knowledge is recorded **throughout the run**, not saved up for retro.
+Each stage contributes a different kind of insight:
+
+| Stage       | Typical \`type\`  | What to capture                                       |
+|-------------|-----------------|-------------------------------------------------------|
+| brainstorm  | \`lesson\`        | rejected framings and why (only when non-obvious)     |
+| scope       | \`rule\`          | explicit out-of-scope boundaries worth remembering    |
+| design      | \`pattern\`       | architectural trade-offs and their rationale          |
+| spec        | \`rule\`          | non-negotiable acceptance criteria shape              |
+| plan        | \`pattern\`       | effective decomposition / risk-ordering heuristics    |
+| tdd         | \`pattern\`       | red→green→refactor cycle lessons, test-design notes   |
+| review      | \`lesson\`        | recurring defects / blockers caught in this codebase  |
+| ship        | \`lesson\`        | rollback triggers, preflight gotchas                  |
+| retro       | \`compound\`      | process accelerators for the **next** run             |
+
+Rules:
+
+- Append 1–3 strict-schema JSONL lines to \`.cclaw/knowledge.jsonl\` per
+  stage when that stage produced non-obvious decisions, patterns, or
+  lessons. Obvious restatements of the checklist do not count.
+- Use \`type=rule|pattern|lesson\` during stages; reserve \`type=compound\`
+  for the retro step so the retro vs. through-flow signal stays
+  distinguishable.
+- Set \`origin_stage\` to the stage that emitted the entry and
+  \`origin_feature\` to the active feature slug.
 
 ## Automatic learning capture policy
 
@@ -62,7 +88,8 @@ Shared closeout sequence applied by every stage skill.
   recommended for other stages.
 - \`quick\` track: recommended only (avoid overhead for tiny fixes).
 - "No learning captured" is acceptable only when explicitly justified (e.g. pure
-  mechanical change, no new trade-offs).
+  mechanical change, no new trade-offs). Record the justification in the
+  stage artifact, not in knowledge.jsonl.
 
 ## Resume protocol
 
@@ -112,9 +139,13 @@ No release shortcuts:
 
 ## 6) Compound, Don't Repeat
 
-When a reusable lesson appears, add one strict-schema JSONL entry via
-\`/cc-learn add\`. Repeated lessons should be lifted into stable rules/skills so
-the same class of mistake gets harder to repeat.
+Knowledge is recorded **throughout** the run, not saved for the retro.
+When a reusable lesson appears in design, plan, tdd, or review, append one
+strict-schema JSONL entry to \`.cclaw/knowledge.jsonl\` using
+\`type=rule|pattern|lesson\`. Reserve \`type=compound\` for post-ship retro.
+Repeated lessons (frequency ≥ 3) are lifted into stable
+rules/protocols/skills during the automatic compound pass so the same
+class of mistake gets harder to repeat.
 
 ## Turn Announce Discipline
 
