@@ -86,6 +86,33 @@ describe("runs system", () => {
     await expect(archiveRun(root, "Retro Blocked")).rejects.toThrow(/retro gate/i);
   });
 
+  it("allows archive when retro was skipped via closeout substate with a reason", async () => {
+    const root = await createTempProject("runs-retro-skipped-closeout");
+    await ensureRunSystem(root);
+    const base = createInitialFlowState("active");
+    await writeFlowState(
+      root,
+      {
+        ...base,
+        currentStage: "ship",
+        completedStages: ["brainstorm", "scope", "design", "spec", "plan", "tdd", "review", "ship"],
+        closeout: {
+          ...base.closeout,
+          shipSubstate: "ready_to_archive",
+          retroSkipped: true,
+          retroSkipReason: "trivial doc change",
+          retroAcceptedAt: "2026-01-01T00:00:00Z"
+        }
+      },
+      { allowReset: true }
+    );
+
+    const archived = await archiveRun(root, "Skip Via Closeout");
+    expect(archived.retro.required).toBe(true);
+    expect(archived.retro.completed).toBe(false);
+    expect(archived.retro.skipped).toBe(false);
+  });
+
   it("allows archive after retro artifact + compound knowledge are present", async () => {
     const root = await createTempProject("runs-retro-ok");
     await ensureRunSystem(root);

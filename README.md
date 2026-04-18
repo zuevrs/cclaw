@@ -200,8 +200,9 @@ cclaw has eight stages, but a single prompt rarely needs all of them.
 | **standard** _(default)_ | all 8 stages | `new feature`, `refactor`, `migration`, `platform`, `schema`, `architecture` |
 
 Each stage produces a dated artifact under `.cclaw/artifacts/`:
-`00-idea.md` (seed) and `01-brainstorm.md` through `08-ship.md`
-(plus `09-retro.md` at automatic closeout — see below).
+`00-idea.md` (seed), `01-brainstorm.md` through `08-ship.md`, and
+`09-retro.md` at automatic closeout (see
+[Ship and closeout](#ship-and-closeout--automatic-resumable)).
 
 ### Track heuristics are configurable
 
@@ -254,8 +255,12 @@ it into ceremony:
   in a single place (`.cclaw/contexts/`), so every skill speaks the same
   dialect.
 - **Knowledge capture throughout the flow.** Every stage completion
-  protocol can emit entries to `knowledge.jsonl` — not only retro. Strict
-  JSONL schema keeps it machine-queryable.
+  protocol emits typed entries (`rule` / `pattern` / `lesson`) to
+  `.cclaw/knowledge.jsonl` as the flow progresses — not only at retro.
+  Retro itself adds a `compound` entry, and the automatic compound pass
+  after ship promotes recurring entries (≥ 3) into first-class
+  rules/protocols/skills so the **next** run is easier. Strict JSONL
+  schema keeps the whole thing machine-queryable.
 - **Automatic integrity checks.** Runtime health is verified on every
   stage transition — no command you need to remember to run.
 
@@ -278,24 +283,38 @@ native subagent dispatch, such as Codex — see
 
 ---
 
-## Ship and closeout
+## Ship and closeout — automatic, resumable
 
-Shipping writes `08-ship.md` and then closes out the feature through a
-guided three-step sequence:
+Shipping writes `08-ship.md`. `/cc-next` then automatically walks the
+feature through a deterministic three-step closeout without extra
+commands from you:
 
-1. **Retro** drafts `09-retro.md` from flow artifacts and the delegation
-   log; you review and accept.
-2. **Compound pass** promotes repeated knowledge entries (frequency ≥ 2,
-   maturity = stable) into first-class rules or skills.
-3. **Archive** moves artifacts to `.cclaw/runs/YYYY-MM-DD-<slug>/` and
-   resets `flow-state.json`.
+1. **Retro (`09-retro.md`).** cclaw drafts a retrospective from your
+   stage artifacts, the delegation log, and the knowledge entries
+   recorded during the run. It then asks exactly **one** structured
+   question:
+   - **accept** *(default)* — keep the draft, record one `compound`
+     knowledge entry, advance.
+   - **edit** — you edit `09-retro.md` in place, then `/cc-next` again.
+   - **skip** — record a one-line reason, continue (archive will
+     surface the skip in the run manifest).
+2. **Compound pass.** If the knowledge store has clusters recurring 3+
+   times, cclaw proposes concrete lifts into rules/protocols/skills and
+   asks once: apply-all / apply-selected / skip. An empty pass advances
+   silently.
+3. **Archive.** Moves artifacts into `.cclaw/runs/YYYY-MM-DD-<slug>/`,
+   snapshots `state/`, writes a manifest, and resets `flow-state.json`
+   to the track's initial stage.
 
-Retro is not optional — archive is gated on retro completion so you can't
-silently lose the learning pass.
+The chain is driven by `closeout.shipSubstate` inside `flow-state.json`
+(`retro_review` → `compound_review` → `ready_to_archive` → `archived`).
+If your session dies mid-closeout, a new `/cc-next` resumes at the
+exact step — retro drafts are not regenerated and no structured ask is
+repeated silently.
 
-> **Coming next:** cclaw will chain these three steps automatically from
-> `ship` (one structured `edit`/`accept`/`skip` ask, resumable if the
-> session ends). Tracked as the v0.32 closeout-automation wave.
+You can still invoke each step manually (`/cc-ops retro`, `/cc-ops
+compound`, `/cc-ops archive`), but for the default path you do not need
+to: `/cc-next` is the only command.
 
 ---
 
