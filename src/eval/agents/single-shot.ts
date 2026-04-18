@@ -1,5 +1,5 @@
 /**
- * Tier A single-shot agent.
+ * Single-shot agent used by fixture mode when `--judge` is set.
  *
  * Simplest realistic AUT: one LLM call with the stage's SKILL.md as the
  * system prompt and the case's `inputPrompt` as the user message. Output
@@ -9,7 +9,7 @@
  * Design notes:
  *
  * - No tools. No multi-turn. No reads of the project beyond the one
- *   SKILL.md. Tier B/C layer complexity on top in later steps.
+ *   SKILL.md. agent/workflow modes layer complexity on top.
  * - Errors are propagated as-is (`EvalLlmError` subclasses) so the
  *   runner can surface them as verifier failures without swallowing the
  *   cause.
@@ -61,7 +61,7 @@ export async function loadStageSkill(
   if (!(await exists(file))) {
     throw new Error(
       `Stage skill not found: ${path.relative(projectRoot, file)}. ` +
-        `Run \`cclaw init\` (or \`cclaw sync\`) before \`cclaw eval --tier=A --judge\`.`
+        `Run \`cclaw init\` (or \`cclaw sync\`) before \`cclaw eval --mode=fixture --judge\`.`
     );
   }
   return fs.readFile(file, "utf8");
@@ -90,7 +90,7 @@ function buildUserPrompt(caseEntry: EvalCase): string {
   return lines.join("\n");
 }
 
-/** Run the Tier A single-shot AUT and return the produced artifact. */
+/** Run the single-shot AUT (fixture mode + --judge) and return the produced artifact. */
 export async function runSingleShot(input: SingleShotInput): Promise<SingleShotOutput> {
   const { caseEntry, config, projectRoot, client } = input;
   const started = Date.now();

@@ -1,11 +1,11 @@
 /**
- * Tier B with-tools agent.
+ * Multi-turn with-tools agent (agent mode, reused by workflow mode).
  *
  * Multi-turn loop with OpenAI-style function-calling over a set of
  * sandbox-confined tools. The AUT is given:
  *
- *  - System prompt = stage SKILL.md (same contract as Tier A so the
- *    single-shot baseline is comparable).
+ *  - System prompt = stage SKILL.md (same contract as the single-shot path
+ *    so the baseline is comparable).
  *  - User prompt = task description + a short "tools available" hint
  *    that names the sandbox root and the four built-in tools.
  *  - Tools = `read_file`, `write_file`, `glob`, `grep` (see
@@ -29,7 +29,7 @@
  * Artifact resolution: the final assistant content is the artifact. If
  * the model used `write_file` to stage the artifact at
  * `artifact.md` (or `artifact/<stage>.md`), we prefer that file — it
- * mirrors the Tier C workflow where writes are the deliverable. The
+ * mirrors workflow mode where writes are the deliverable. The
  * fallback is the terminal assistant message so prompts that don't
  * call write_file still produce something judgable.
  */
@@ -57,7 +57,7 @@ export class MaxTurnsExceededError extends Error {
   readonly turns: number;
 
   constructor(turns: number) {
-    super(`Tier B agent exceeded the ${turns}-turn budget without a terminal stop.`);
+    super(`Agent loop exceeded the ${turns}-turn budget without a terminal stop.`);
     this.name = "MaxTurnsExceededError";
     this.turns = turns;
   }
@@ -84,15 +84,15 @@ export interface WithToolsInput {
   createSandboxFn?: typeof createSandbox;
   /**
    * Reuse an externally-managed sandbox instead of creating + disposing a
-   * per-call one. Tier C workflow orchestration uses this so every stage
-   * shares the same sandbox and earlier artifacts remain visible. When
-   * set, the caller is responsible for `dispose()`.
+   * per-call one. Workflow mode uses this so every stage shares the same
+   * sandbox and earlier artifacts remain visible. When set, the caller is
+   * responsible for `dispose()`.
    */
   externalSandbox?: Sandbox;
   /**
-   * Optional override of the default user prompt prefix. Tier C uses this
-   * to tell the model which stage it is on and where the prior artifacts
-   * are located.
+   * Optional override of the default user prompt prefix. Workflow mode uses
+   * this to tell the model which stage it is on and where the prior
+   * artifacts are located.
    */
   promptPreamble?: string;
 }

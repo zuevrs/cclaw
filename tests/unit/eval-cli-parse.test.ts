@@ -20,23 +20,36 @@ describe("cli parser: eval command", () => {
     expect(parsed.evalJudge).toBe(true);
   });
 
-  it("parses --stage and --tier", () => {
-    const parsed = parseArgs(["eval", "--stage=brainstorm", "--tier=B"]);
+  it("parses --stage and --mode", () => {
+    const parsed = parseArgs(["eval", "--stage=brainstorm", "--mode=agent"]);
     expect(parsed.evalStage).toBe("brainstorm");
-    expect(parsed.evalTier).toBe("B");
+    expect(parsed.evalMode).toBe("agent");
   });
 
-  it("accepts lowercase tier values", () => {
-    const parsed = parseArgs(["eval", "--tier=c"]);
-    expect(parsed.evalTier).toBe("C");
+  it("accepts legacy --tier values (A/B/C → fixture/agent/workflow)", () => {
+    expect(parseArgs(["eval", "--tier=A"]).evalMode).toBe("fixture");
+    expect(parseArgs(["eval", "--tier=B"]).evalMode).toBe("agent");
+    expect(parseArgs(["eval", "--tier=C"]).evalMode).toBe("workflow");
+  });
+
+  it("accepts lowercase legacy tier values", () => {
+    expect(parseArgs(["eval", "--tier=c"]).evalMode).toBe("workflow");
   });
 
   it("throws for unknown stage", () => {
     expect(() => parseArgs(["eval", "--stage=unknown"])).toThrow(/Unknown eval stage/);
   });
 
-  it("throws for unknown tier", () => {
-    expect(() => parseArgs(["eval", "--tier=Z"])).toThrow(/Unknown eval tier/);
+  it("throws for unknown --mode", () => {
+    expect(() => parseArgs(["eval", "--mode=nonsense"])).toThrow(
+      /Evaluation mode must be one of/
+    );
+  });
+
+  it("throws for unknown --tier", () => {
+    expect(() => parseArgs(["eval", "--tier=Z"])).toThrow(
+      /Evaluation mode must be one of/
+    );
   });
 
   it("--json routes to evalJson for eval command", () => {
@@ -60,9 +73,10 @@ describe("cli parser: eval command", () => {
     const text = usage();
     expect(text).toContain("cclaw eval");
     expect(text).toContain("--schema-only");
-    expect(text).toContain("--tier=<A|B|C>");
+    expect(text).toContain("--mode=<fixture|agent|workflow>");
     expect(text).toContain("--stage=<id>");
     expect(text).toContain("--judge");
     expect(text).toContain("--no-write");
+    expect(text).toContain("Legacy --tier=A|B|C still works");
   });
 });

@@ -64,7 +64,7 @@ describe("eval structural+rules - integration against the committed corpus", () 
     }
   });
 
-  it("passes all 40 structural/rules cases and skips the Tier B demo with --rules", async () => {
+  it("passes all 40 structural/rules cases and skips the agent-mode demo with --rules", async () => {
     const root = await cloneDemo("eval-int-pass");
     const res = await runEval({ projectRoot: root, rules: true, env: {} });
     expect("kind" in res).toBe(false);
@@ -79,7 +79,7 @@ describe("eval structural+rules - integration against the committed corpus", () 
     }
   });
 
-  it("--schema-only skips the rules-only + Tier B cases and passes the 24 structural cases", async () => {
+  it("--schema-only skips the rules-only + agent-mode cases and passes the 24 structural cases", async () => {
     const root = await cloneDemo("eval-int-schema-only");
     const res = await runEval({
       projectRoot: root,

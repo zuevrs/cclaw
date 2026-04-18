@@ -29,7 +29,7 @@ export function formatMarkdownReport(report: EvalReport): string {
   lines.push(`- cclaw version: ${report.cclawVersion}`);
   lines.push(`- provider: ${report.provider}`);
   lines.push(`- model: ${report.model}`);
-  lines.push(`- tier: ${report.tier}`);
+  lines.push(`- mode: ${report.mode}`);
   lines.push(`- stages: ${stages}`);
   lines.push(``);
   lines.push(`## Summary`);

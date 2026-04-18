@@ -1,7 +1,7 @@
 /**
- * Workflow corpus loader for Tier C.
+ * Workflow corpus loader (workflow mode).
  *
- * Tier C cases live under `.cclaw/evals/corpus/workflows/<id>.yaml` and
+ * Workflow-mode cases live under `.cclaw/evals/corpus/workflows/<id>.yaml` and
  * describe a multi-stage run that chains the with-tools agent across
  * `brainstorm → scope → design → spec → plan`. Unlike single-stage
  * cases (which are keyed by stage folder), workflow cases ship as a
@@ -291,9 +291,9 @@ function validateWorkflowCase(filePath: string, raw: unknown): WorkflowCase {
 }
 
 /**
- * Load every Tier C workflow case under
+ * Load every workflow-mode case under
  * `.cclaw/evals/corpus/workflows/*.yaml`. Returns an empty array when the
- * directory is missing — a fresh `cclaw init` has no Tier C corpus yet.
+ * directory is missing — a fresh `cclaw init` has no workflow corpus yet.
  */
 export async function loadWorkflowCorpus(projectRoot: string): Promise<WorkflowCase[]> {
   const dir = path.join(projectRoot, EVALS_ROOT, "corpus", "workflows");

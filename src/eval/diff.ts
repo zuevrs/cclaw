@@ -8,8 +8,8 @@
  *   - per-case pass/fail transitions
  *   - per-verifier score drops (only the drops — new passes are noted in
  *     the summary line, not repeated per verifier)
- *   - Tier C stage-level cost & duration deltas when both reports carry a
- *     `workflow` summary for the same case id
+ *   - Workflow-mode stage-level cost & duration deltas when both reports
+ *     carry a `workflow` summary for the same case id
  *
  * The resolver accepts three shapes for the `<old>` / `<new>` arguments:
  *
@@ -93,7 +93,7 @@ export interface EvalDiffReportMeta {
   runId: string;
   cclawVersion: string;
   generatedAt: string;
-  tier: string;
+  mode: string;
   model: string;
   sourcePath: string;
 }
@@ -184,7 +184,7 @@ function meta(report: EvalReport, sourcePath: string): EvalDiffReportMeta {
     runId: report.runId,
     cclawVersion: report.cclawVersion,
     generatedAt: report.generatedAt,
-    tier: report.tier,
+    mode: report.mode,
     model: report.model,
     sourcePath
   };

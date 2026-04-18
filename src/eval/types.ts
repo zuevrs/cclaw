@@ -12,21 +12,36 @@
 import type { FlowStage } from "../types.js";
 
 /**
- * Fidelity tier for the agent-under-test.
+ * Evaluation mode — what the agent-under-test actually does.
  *
- * - `A` — single-shot API call, no tools. Cheap, validates core prompt behavior.
- * - `B` — SDK loop with function-calling for Read/Write/Glob/Grep inside a sandbox.
- * - `C` — multi-stage workflow run (brainstorm -> scope -> ... -> plan) with threaded
- *   artifacts. Most realistic tier we ship in Phase 7; literal IDE-harness runs
- *   (claude-code / cursor-agent proxied to OpenAI-compat) are deferred to Phase 8.
+ * - `fixture` — verify an existing artifact against structural/rule/judge
+ *   expectations. No LLM drafting, only verifiers (judge may still invoke
+ *   the API). Cheapest mode.
+ * - `agent` — LLM drafts a single-stage artifact inside a sandbox using the
+ *   function-calling loop (read_file/write_file/glob/grep). Replaces the
+ *   previous single-shot path entirely.
+ * - `workflow` — LLM orchestrates the full multi-stage flow
+ *   (brainstorm → scope → design → spec → plan) with threaded artifacts.
+ *
+ * Legacy `A|B|C` tier names are still accepted by the CLI/config loader with
+ * a deprecation warning — see `src/eval/mode.ts` for the mapping.
+ */
+export const EVAL_MODES = ["fixture", "agent", "workflow"] as const;
+export type EvalMode = (typeof EVAL_MODES)[number];
+
+/**
+ * Legacy tier identifier, kept so on-disk reports generated before v0.28.0
+ * keep parsing. New code should always use `EvalMode`.
+ * @deprecated use `EvalMode` + `toMode()` from `src/eval/mode.ts`.
  */
 export const EVAL_TIERS = ["A", "B", "C"] as const;
+/** @deprecated use `EvalMode`. */
 export type EvalTier = (typeof EVAL_TIERS)[number];
 
 /**
  * Verifier kinds, in increasing cost and decreasing determinism:
  * structural and rules run without LLM; judge and workflow use the configured model.
- * `consistency` is the Tier C cross-artifact family (deterministic but
+ * `consistency` is the workflow-mode cross-artifact family (deterministic but
  * operates over multiple artifacts at once).
  */
 export const VERIFIER_KINDS = [
@@ -133,7 +148,7 @@ export interface TraceabilityExpected {
  * LLM-judge expectations — Step 3.
  *
  * When present, the judge runs against the resolved artifact (live-agent
- * output in Tier A/B/C, or the pre-generated fixture when `--judge` is
+ * output in agent/workflow mode, or the pre-generated fixture when `--judge` is
  * combined with `--schema-only` for smoke tests). Every field below is
  * optional; the case-level hint overlays the stage-level rubric loaded
  * from `.cclaw/evals/rubrics/<stage>.yaml`.
@@ -176,7 +191,7 @@ export interface EvalCase {
   id: string;
   stage: FlowStage;
   inputPrompt: string;
-  /** Project files copied into the Tier B/C sandbox before the agent runs. */
+  /** Project files copied into the agent/workflow sandbox before the agent runs. */
   contextFiles?: string[];
   /**
    * Typed expectation hints consumed by the structural/rules/judge verifiers.
@@ -213,14 +228,15 @@ export interface VerifierResult {
 export interface EvalCaseResult {
   caseId: string;
   stage: FlowStage;
-  tier: EvalTier;
+  mode: EvalMode;
   passed: boolean;
   durationMs: number;
   costUsd?: number;
   verifierResults: VerifierResult[];
   /**
-   * Tier C only: the per-stage breakdown collected by the workflow
-   * agent. Unset for Tier A/B cases so the on-disk JSON stays small.
+   * Only populated in `workflow` mode: per-stage breakdown collected by
+   * the workflow orchestrator. Unset for `fixture` / `agent` modes so the
+   * on-disk JSON stays small.
    */
   workflow?: WorkflowRunSummary;
 }
@@ -233,7 +249,7 @@ export interface EvalReport {
   cclawVersion: string;
   provider: string;
   model: string;
-  tier: EvalTier;
+  mode: EvalMode;
   stages: FlowStage[];
   cases: EvalCaseResult[];
   summary: {
@@ -264,8 +280,8 @@ export interface EvalConfig {
   model: string;
   /** Optional separate model for the judge role. Defaults to `model`. */
   judgeModel?: string;
-  /** Default tier when `--tier` is not supplied. */
-  defaultTier: EvalTier;
+  /** Default mode when `--mode` is not supplied. */
+  defaultMode: EvalMode;
   /** Optional hard stop on estimated USD spend per day. Unset = no cap. */
   dailyUsdCap?: number;
   /** Regression thresholds for CI gates. */
@@ -296,7 +312,7 @@ export interface EvalConfig {
   tokenPricing?: Record<string, TokenPricing>;
   /**
    * Maximum assistant turns (tool_calls → tool result cycles) allowed by
-   * the Tier B with-tools agent. Defaults to 8 when unset. Runs that
+   * the with-tools agent loop (agent/workflow mode). Defaults to 8. Runs that
    * exceed the cap fail with a `MaxTurnsExceededError` and surface as a
    * workflow verifier result.
    */
@@ -313,7 +329,7 @@ export interface EvalConfig {
    */
   toolMaxResultBytes?: number;
   /**
-   * Maximum total turns a single Tier C workflow case may consume
+   * Maximum total turns a single workflow-mode case may consume
    * across all stages combined. Defaults to 40 (stages × toolMaxTurns).
    * Runs that exceed the cap fail the current stage with a
    * `MaxTurnsExceededError` propagated from the underlying with-tools
@@ -447,7 +463,7 @@ export interface JudgeInvocation {
 }
 
 /**
- * Tool-use summary produced by the Tier B with-tools agent. Captured so
+ * Tool-use summary produced by the with-tools agent loop. Captured so
  * the runner can surface per-case tool metrics in the markdown report
  * (number of calls, depth, error rate, denied paths).
  */
@@ -465,7 +481,7 @@ export interface ToolUseSummary {
 }
 
 /**
- * Cross-stage consistency expectations for a Tier C workflow case. Every
+ * Cross-stage consistency expectations for a workflow-mode case. Every
  * sub-check is optional so authors can opt in incrementally; an empty
  * block produces zero verifier results.
  */
@@ -504,8 +520,8 @@ export interface WorkflowConsistencyExpected {
 }
 
 /**
- * A single stage step inside a Tier C workflow case. The stage's
- * `inputPrompt` is handed to the Tier B with-tools agent with prior-stage
+ * A single stage step inside a workflow-mode case. The stage's
+ * `inputPrompt` is handed to the with-tools agent loop with prior-stage
  * artifacts seeded into the sandbox under `stages/<name>.md`.
  */
 export interface WorkflowStageStep {
@@ -520,8 +536,8 @@ export interface WorkflowStageStep {
 }
 
 /**
- * Supported workflow stages. Deliberately a subset of `FlowStage` —
- * Tier C covers the early "design" arc of a project. TDD/review/ship
+ * Supported workflow-mode stages. Deliberately a subset of `FlowStage` —
+ * the workflow mode covers the early "design" arc of a project. TDD/review/ship
  * are out of scope (they require real code execution).
  */
 export const WORKFLOW_STAGES = [
@@ -534,7 +550,7 @@ export const WORKFLOW_STAGES = [
 export type WorkflowStageName = (typeof WORKFLOW_STAGES)[number];
 
 /**
- * A Tier C workflow case. Lives under
+ * A workflow-mode case. Lives under
  * `.cclaw/evals/corpus/workflows/<id>.yaml` and wires a multi-stage run
  * through the with-tools agent.
  */
@@ -546,11 +562,11 @@ export interface WorkflowCase {
   contextFiles?: string[];
   /** Ordered list of stages to run. Must be non-empty. */
   stages: WorkflowStageStep[];
-  /** Cross-stage consistency checks (Tier C-specific verifier family). */
+  /** Cross-stage consistency checks (workflow-mode verifier family). */
   consistency?: WorkflowConsistencyExpected;
 }
 
-/** Per-stage record inside a Tier C workflow run. */
+/** Per-stage record inside a workflow-mode run. */
 export interface WorkflowStageResult {
   stage: WorkflowStageName;
   artifact: string;
@@ -567,7 +583,7 @@ export interface WorkflowStageResult {
   judgeMedians?: Record<string, number>;
 }
 
-/** Tier C orchestration output collected by the runner. */
+/** Workflow-mode orchestration output collected by the runner. */
 export interface WorkflowRunSummary {
   caseId: string;
   stages: WorkflowStageResult[];

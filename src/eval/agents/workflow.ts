@@ -1,7 +1,7 @@
 /**
- * Tier C workflow agent.
+ * Workflow-mode agent.
  *
- * Runs the Tier B with-tools loop once per stage in a workflow case,
+ * Runs the with-tools loop once per stage in a workflow case,
  * sharing a single sandbox across stages so every new stage can read
  * the earlier artifacts the model produced. The shape of the run is:
  *
@@ -185,7 +185,7 @@ function buildStagePreamble(
 ): string {
   const lines: string[] = [];
   lines.push(
-    `You are running stage "${current}" of the Tier C workflow "${workflow.id}".`
+    `You are running stage "${current}" of the workflow "${workflow.id}".`
   );
   if (workflow.description) {
     lines.push(`Case description: ${workflow.description}`);

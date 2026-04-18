@@ -26,7 +26,7 @@ describe("eval runner", () => {
     const result = await runEval({ projectRoot: root, dryRun: true, env: {} });
     assertDryRun(result);
     expect(result.corpus.total).toBe(0);
-    expect(result.plannedTier).toBe("A");
+    expect(result.plannedMode).toBe("fixture");
     expect(result.config.apiKey).toBeUndefined();
     expect(result.verifiersAvailable).toEqual({
       structural: true,
@@ -52,16 +52,16 @@ describe("eval runner", () => {
     expect(result.notes.some((n) => n.includes("CCLAW_EVAL_API_KEY"))).toBe(true);
   });
 
-  it("dry-run respects tier override", async () => {
-    const root = await createTempProject("runner-dry-tier");
+  it("dry-run respects --mode override", async () => {
+    const root = await createTempProject("runner-dry-mode");
     const result = await runEval({
       projectRoot: root,
       dryRun: true,
-      tier: "C",
+      mode: "workflow",
       env: {}
     });
     assertDryRun(result);
-    expect(result.plannedTier).toBe("C");
+    expect(result.plannedMode).toBe("workflow");
   });
 
   it("groups corpus by stage in dry-run summary", async () => {
@@ -121,7 +121,7 @@ describe("eval llm client (real adapter)", () => {
       provider: "zai",
       baseUrl: "https://api.z.ai/api/coding/paas/v4",
       model: "glm-5.1",
-      defaultTier: "A",
+      defaultMode: "fixture",
       timeoutMs: 120_000,
       maxRetries: 2,
       regression: { failIfDeltaBelow: -0.15, failIfCriticalBelow: 3.0 },

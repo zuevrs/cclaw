@@ -3,8 +3,9 @@ import path from "node:path";
 import { parse } from "yaml";
 import { EVALS_CONFIG_PATH } from "../constants.js";
 import { exists } from "../fs-utils.js";
-import type { EvalConfig, EvalTier, ResolvedEvalConfig, TokenPricing } from "./types.js";
-import { EVAL_TIERS } from "./types.js";
+import type { EvalConfig, EvalMode, ResolvedEvalConfig, TokenPricing } from "./types.js";
+import { EVAL_MODES } from "./types.js";
+import { parseModeInput } from "./mode.js";
 
 /**
  * Default eval config. Optimized for the z.ai OpenAI-compatible coding endpoint
@@ -16,7 +17,7 @@ export const DEFAULT_EVAL_CONFIG: EvalConfig = {
   provider: "zai",
   baseUrl: "https://api.z.ai/api/coding/paas/v4",
   model: "glm-5.1",
-  defaultTier: "A",
+  defaultMode: "fixture",
   regression: {
     failIfDeltaBelow: -0.15,
     failIfCriticalBelow: 3.0
@@ -28,7 +29,6 @@ export const DEFAULT_EVAL_CONFIG: EvalConfig = {
   agentTemperature: 0.2
 };
 
-const EVAL_TIER_SET = new Set<string>(EVAL_TIERS);
 const NUMERIC_ENVS = new Set([
   "CCLAW_EVAL_DAILY_USD_CAP",
   "CCLAW_EVAL_TIMEOUT_MS",
@@ -45,7 +45,7 @@ const NUMERIC_ENVS = new Set([
 function evalConfigError(configFilePath: string, reason: string): Error {
   return new Error(
     `Invalid cclaw eval config at ${configFilePath}: ${reason}\n` +
-      `Supported tiers: ${EVAL_TIERS.join(", ")}\n` +
+      `Supported modes: ${EVAL_MODES.join(", ")} (legacy tier values A|B|C also accepted).\n` +
       `See docs/evals.md for the full schema. After fixing, run: cclaw eval --dry-run`
   );
 }
@@ -62,14 +62,11 @@ function parseNumericEnv(name: string, raw: string): number {
   return value;
 }
 
-function parseTierEnv(raw: string): EvalTier {
-  const trimmed = raw.trim().toUpperCase();
-  if (!EVAL_TIER_SET.has(trimmed)) {
-    throw new Error(
-      `Environment variable CCLAW_EVAL_TIER must be one of ${EVAL_TIERS.join("/")}, got: ${raw}`
-    );
-  }
-  return trimmed as EvalTier;
+function parseModeEnv(raw: string, envName: string): EvalMode {
+  return parseModeInput(envName === "CCLAW_EVAL_TIER" ? raw.toUpperCase() : raw, {
+    source: "env",
+    raw: `${envName}=${raw}`
+  });
 }
 
 function validateFileConfig(
@@ -96,14 +93,42 @@ function validateFileConfig(
   assignString("model", raw.model);
   assignString("judgeModel", raw.judgeModel);
 
-  if (raw.defaultTier !== undefined) {
-    if (typeof raw.defaultTier !== "string" || !EVAL_TIER_SET.has(raw.defaultTier)) {
+  if (raw.defaultMode !== undefined) {
+    if (typeof raw.defaultMode !== "string") {
       throw evalConfigError(
         configFilePath,
-        `"defaultTier" must be one of: ${EVAL_TIERS.join(", ")}`
+        `"defaultMode" must be one of: ${EVAL_MODES.join(", ")}`
       );
     }
-    out.defaultTier = raw.defaultTier as EvalTier;
+    try {
+      out.defaultMode = parseModeInput(raw.defaultMode, {
+        source: "config",
+        raw: `defaultMode: ${raw.defaultMode}`
+      });
+    } catch (err) {
+      throw evalConfigError(
+        configFilePath,
+        err instanceof Error ? err.message : String(err)
+      );
+    }
+  } else if (raw.defaultTier !== undefined) {
+    if (typeof raw.defaultTier !== "string") {
+      throw evalConfigError(
+        configFilePath,
+        `"defaultTier" must be a string (legacy; prefer "defaultMode")`
+      );
+    }
+    try {
+      out.defaultMode = parseModeInput(raw.defaultTier, {
+        source: "config",
+        raw: `defaultTier: ${raw.defaultTier}`
+      });
+    } catch (err) {
+      throw evalConfigError(
+        configFilePath,
+        err instanceof Error ? err.message : String(err)
+      );
+    }
   }
 
   if (raw.dailyUsdCap !== undefined) {
@@ -258,6 +283,7 @@ function validateFileConfig(
     "baseUrl",
     "model",
     "judgeModel",
+    "defaultMode",
     "defaultTier",
     "dailyUsdCap",
     "timeoutMs",
@@ -339,10 +365,16 @@ function applyEnvOverrides(
     patched.provider = provider;
     overridden = true;
   }
-  const tier = read("CCLAW_EVAL_TIER");
-  if (tier) {
-    patched.defaultTier = parseTierEnv(tier);
+  const modeEnv = read("CCLAW_EVAL_MODE");
+  if (modeEnv) {
+    patched.defaultMode = parseModeEnv(modeEnv, "CCLAW_EVAL_MODE");
     overridden = true;
+  } else {
+    const legacyTier = read("CCLAW_EVAL_TIER");
+    if (legacyTier) {
+      patched.defaultMode = parseModeEnv(legacyTier, "CCLAW_EVAL_TIER");
+      overridden = true;
+    }
   }
   const cap = read("CCLAW_EVAL_DAILY_USD_CAP");
   if (cap) {

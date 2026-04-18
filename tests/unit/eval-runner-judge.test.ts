@@ -61,7 +61,7 @@ async function makeTempRoot(prefix: string): Promise<string> {
   return root;
 }
 
-describe("eval runner --judge --tier=A", () => {
+describe("eval runner --judge --mode=fixture", () => {
   it("runs the single-shot agent, scores the artifact, and records per-case cost", async () => {
     const root = await makeTempRoot("judge-happy");
     await setupProjectWithCase(root);
@@ -81,7 +81,7 @@ describe("eval runner --judge --tier=A", () => {
     const result = await runEval({
       projectRoot: root,
       judge: true,
-      tier: "A",
+      mode: "fixture",
       rules: false,
       stage: "brainstorm",
       env: { CCLAW_EVAL_API_KEY: "test" },
@@ -114,7 +114,7 @@ describe("eval runner --judge --tier=A", () => {
     const result = await runEval({
       projectRoot: root,
       judge: true,
-      tier: "A",
+      mode: "fixture",
       stage: "brainstorm",
       env: { CCLAW_EVAL_API_KEY: "test" },
       llmClient: client
@@ -149,7 +149,7 @@ describe("eval runner --judge --tier=A", () => {
       runEval({
         projectRoot: root,
         judge: true,
-        tier: "A",
+        mode: "fixture",
         stage: "brainstorm",
         env: {
           CCLAW_EVAL_API_KEY: "test",

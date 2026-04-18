@@ -1,5 +1,5 @@
 /**
- * Cross-artifact consistency verifier for Tier C.
+ * Cross-artifact consistency verifier for workflow mode.
  *
  * Operates over a `{ stage → artifact }` map produced by the workflow
  * agent and emits deterministic verifier results for:

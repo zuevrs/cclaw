@@ -25,7 +25,7 @@ export interface ChatMessage {
   toolCallId?: string;
   /**
    * OpenAI-style tool calls carried on a preceding assistant message.
-   * Populated by the Tier B loop so the wire transcript stays
+   * Populated by the with-tools loop so the wire transcript stays
    * consistent (assistant message → tool responses).
    */
   toolCalls?: Array<{ id: string; name: string; arguments: string }>;
@@ -50,7 +50,7 @@ export interface ChatRequest {
   seed?: number;
   /**
    * Tool/function-calling definitions in OpenAI wire format. Populated only
-   * by Tier B. Ignored by the Tier A single-shot path.
+   * by agent/workflow modes. Ignored by the single-shot path.
    */
   tools?: unknown[];
   toolChoice?: "auto" | "none";

@@ -10,7 +10,7 @@ describe("eval config loader", () => {
     expect(config.provider).toBe(DEFAULT_EVAL_CONFIG.provider);
     expect(config.baseUrl).toBe(DEFAULT_EVAL_CONFIG.baseUrl);
     expect(config.model).toBe(DEFAULT_EVAL_CONFIG.model);
-    expect(config.defaultTier).toBe("A");
+    expect(config.defaultMode).toBe("fixture");
     expect(config.apiKey).toBeUndefined();
     expect(config.dailyUsdCap).toBeUndefined();
   });
@@ -27,15 +27,26 @@ describe("eval config loader", () => {
     await writeProjectFile(
       root,
       ".cclaw/evals/config.yaml",
-      `provider: openai\nmodel: gpt-5\ndefaultTier: B\nregression:\n  failIfDeltaBelow: -0.1\n`
+      `provider: openai\nmodel: gpt-5\ndefaultMode: agent\nregression:\n  failIfDeltaBelow: -0.1\n`
     );
     const config = await loadEvalConfig(root, {});
     expect(config.source).toBe("file");
     expect(config.provider).toBe("openai");
     expect(config.model).toBe("gpt-5");
-    expect(config.defaultTier).toBe("B");
+    expect(config.defaultMode).toBe("agent");
     expect(config.regression.failIfDeltaBelow).toBeCloseTo(-0.1);
     expect(config.regression.failIfCriticalBelow).toBe(DEFAULT_EVAL_CONFIG.regression.failIfCriticalBelow);
+  });
+
+  it("config file accepts legacy defaultTier (A|B|C)", async () => {
+    const root = await createTempProject("eval-config-legacy-tier");
+    await writeProjectFile(
+      root,
+      ".cclaw/evals/config.yaml",
+      `defaultTier: B\n`
+    );
+    const config = await loadEvalConfig(root, {});
+    expect(config.defaultMode).toBe("agent");
   });
 
   it("env overrides beat file overrides", async () => {
@@ -50,14 +61,20 @@ describe("eval config loader", () => {
       CCLAW_EVAL_BASE_URL: "https://example.test/v1",
       CCLAW_EVAL_API_KEY: "sk-test",
       CCLAW_EVAL_DAILY_USD_CAP: "12.5",
-      CCLAW_EVAL_TIER: "c"
+      CCLAW_EVAL_MODE: "workflow"
     });
     expect(config.source).toBe("file+env");
     expect(config.model).toBe("claude-sonnet-4-5");
     expect(config.baseUrl).toBe("https://example.test/v1");
     expect(config.apiKey).toBe("sk-test");
     expect(config.dailyUsdCap).toBe(12.5);
-    expect(config.defaultTier).toBe("C");
+    expect(config.defaultMode).toBe("workflow");
+  });
+
+  it("legacy CCLAW_EVAL_TIER still maps to the corresponding mode", async () => {
+    const root = await createTempProject("eval-config-legacy-env");
+    const config = await loadEvalConfig(root, { CCLAW_EVAL_TIER: "c" });
+    expect(config.defaultMode).toBe("workflow");
   });
 
   it("env-only applies when there is no config.yaml", async () => {
@@ -77,21 +94,23 @@ describe("eval config loader", () => {
     await expect(loadEvalConfig(root, {})).rejects.toThrow(/unknown top-level key/);
   });
 
-  it("rejects invalid tier in file", async () => {
-    const root = await createTempProject("eval-config-bad-tier");
+  it("rejects invalid mode in file", async () => {
+    const root = await createTempProject("eval-config-bad-mode");
     await writeProjectFile(
       root,
       ".cclaw/evals/config.yaml",
-      `defaultTier: Z\n`
+      `defaultMode: nonsense\n`
     );
-    await expect(loadEvalConfig(root, {})).rejects.toThrow(/defaultTier/);
+    await expect(loadEvalConfig(root, {})).rejects.toThrow(
+      /Evaluation mode must be one of/
+    );
   });
 
-  it("rejects invalid tier in env", async () => {
+  it("rejects invalid mode in env", async () => {
     const root = await createTempProject("eval-config-bad-env");
     await expect(
-      loadEvalConfig(root, { CCLAW_EVAL_TIER: "Z" })
-    ).rejects.toThrow(/CCLAW_EVAL_TIER/);
+      loadEvalConfig(root, { CCLAW_EVAL_MODE: "Z" })
+    ).rejects.toThrow(/Evaluation mode must be one of/);
   });
 
   it("rejects non-numeric daily cap", async () => {

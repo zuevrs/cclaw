@@ -18,7 +18,7 @@ function buildReport(overrides: Partial<EvalReport> = {}): EvalReport {
     cclawVersion: "0.22.0",
     provider: "zai",
     model: "glm-5.1",
-    tier: "A",
+    mode: "fixture",
     stages: [],
     cases: [],
     summary: {
@@ -49,7 +49,7 @@ describe("eval report", () => {
         {
           caseId: "brainstorm-01",
           stage: "brainstorm",
-          tier: "A",
+          mode: "fixture",
           passed: true,
           durationMs: 42,
           costUsd: 0.0125,

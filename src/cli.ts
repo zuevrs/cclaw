@@ -18,8 +18,9 @@ import { runEval } from "./eval/runner.js";
 import { writeBaselinesFromReport } from "./eval/baseline.js";
 import { writeJsonReport, writeMarkdownReport } from "./eval/report.js";
 import { formatDiffMarkdown, runEvalDiff } from "./eval/diff.js";
-import { EVAL_TIERS } from "./eval/types.js";
-import type { EvalTier } from "./eval/types.js";
+import { EVAL_MODES } from "./eval/types.js";
+import type { EvalMode } from "./eval/types.js";
+import { parseModeInput } from "./eval/mode.js";
 import { FLOW_STAGES } from "./types.js";
 
 type CommandName = "init" | "sync" | "doctor" | "upgrade" | "uninstall" | "archive" | "eval";
@@ -49,7 +50,7 @@ interface ParsedArgs {
   archiveSkipRetro?: boolean;
   archiveSkipRetroReason?: string;
   evalStage?: string;
-  evalTier?: EvalTier;
+  evalMode?: EvalMode;
   evalSchemaOnly?: boolean;
   evalRules?: boolean;
   evalJudge?: boolean;
@@ -93,11 +94,16 @@ Commands:
                     --skip-retro       Bypass mandatory retro gate (requires --retro-reason).
                     --retro-reason=<t> Reason for bypassing retro gate.
   eval       Run cclaw evals against .cclaw/evals/corpus (Phase 7: structural verifier + baselines).
-             Flags: --stage=<id>         Limit to one flow stage (${FLOW_STAGES.join("|")}) for Tier A/B.
-                    --tier=<A|B|C>       Fidelity tier (A=single-shot, B=tools, C=multi-stage workflow).
+             Flags: --stage=<id>         Limit to one flow stage (${FLOW_STAGES.join("|")}) for fixture/agent modes.
+                    --mode=<${EVAL_MODES.join("|")}>
+                                         Evaluation mode:
+                                           fixture  = verify existing artifacts with structural/rule/judge verifiers.
+                                           agent    = LLM drafts one stage's artifact in a sandbox with tools.
+                                           workflow = LLM runs the full multi-stage flow (brainstorm→plan).
+                                         Legacy --tier=A|B|C still works (deprecated).
                     --schema-only        Run only structural verifiers (default).
                     --rules              Also run rule-based verifiers (keywords, regex, counts, uniqueness, traceability).
-                    --judge              Run the LLM judge (median-of-N) against each case's rubric. Requires CCLAW_EVAL_API_KEY; Tier A runs the single-shot agent, Tier B/C the sandbox tool-using agent (read_file/write_file/glob/grep).
+                    --judge              Run the LLM judge (median-of-N) against each case's rubric. Requires CCLAW_EVAL_API_KEY; fixture mode judges an existing artifact, agent/workflow modes draft first and then judge.
                     --dry-run            Validate config + corpus, print summary, do not execute.
                     --json               Emit machine-readable JSON on stdout.
                     --no-write           Skip writing the report to .cclaw/evals/reports/.
@@ -122,9 +128,9 @@ Examples:
   cclaw archive --name=payments-revamp
   cclaw eval --dry-run
   cclaw eval --stage=brainstorm --schema-only
-  cclaw eval --judge --tier=A --stage=brainstorm
-  cclaw eval --judge --tier=B --stage=spec
-  cclaw eval --tier=C --judge
+  cclaw eval --judge --mode=fixture --stage=brainstorm
+  cclaw eval --judge --mode=agent --stage=spec
+  cclaw eval --mode=workflow --judge
   cclaw eval diff 0.26.0 latest
 
 Docs:   https://github.com/zuevrs/cclaw
@@ -186,12 +192,18 @@ function parseProfile(raw: string): InitProfile {
   return trimmed as InitProfile;
 }
 
-function parseEvalTier(raw: string): EvalTier {
-  const trimmed = raw.trim().toUpperCase();
-  if (!(EVAL_TIERS as readonly string[]).includes(trimmed)) {
-    throw new Error(`Unknown eval tier: ${raw}. Supported: ${EVAL_TIERS.join(", ")}`);
-  }
-  return trimmed as EvalTier;
+function parseLegacyTier(raw: string): EvalMode {
+  return parseModeInput(raw.toUpperCase(), {
+    source: "cli",
+    raw: `--tier=${raw}`
+  });
+}
+
+function parseEvalMode(raw: string): EvalMode {
+  return parseModeInput(raw, {
+    source: "cli",
+    raw: `--mode=${raw}`
+  });
 }
 
 function parseEvalStage(raw: string): string {
@@ -567,8 +579,12 @@ function parseArgs(argv: string[]): ParsedArgs {
       parsed.evalStage = parseEvalStage(flag.replace("--stage=", ""));
       continue;
     }
+    if (flag.startsWith("--mode=")) {
+      parsed.evalMode = parseEvalMode(flag.replace("--mode=", ""));
+      continue;
+    }
     if (flag.startsWith("--tier=")) {
-      parsed.evalTier = parseEvalTier(flag.replace("--tier=", ""));
+      parsed.evalMode = parseLegacyTier(flag.replace("--tier=", ""));
       continue;
     }
     if (flag === "--schema-only") {
@@ -741,7 +757,7 @@ async function runCommand(parsed: ParsedArgs, ctx: CliContext): Promise<number> 
     const result = await runEval({
       projectRoot: ctx.cwd,
       stage: parsed.evalStage as Parameters<typeof runEval>[0]["stage"],
-      tier: parsed.evalTier,
+      mode: parsed.evalMode,
       schemaOnly: parsed.evalSchemaOnly === true,
       rules: parsed.evalRules === true,
       judge: parsed.evalJudge === true,
@@ -759,12 +775,12 @@ async function runCommand(parsed: ParsedArgs, ctx: CliContext): Promise<number> 
       ctx.stdout.write(`  model: ${result.config.model}\n`);
       ctx.stdout.write(`  source: ${result.config.source}\n`);
       ctx.stdout.write(`  apiKey: ${result.config.apiKey ? "set" : "unset"}\n`);
-      ctx.stdout.write(`  tier: ${result.plannedTier}\n`);
+      ctx.stdout.write(`  mode: ${result.plannedMode}\n`);
       ctx.stdout.write(`  corpus: ${result.corpus.total} case(s)\n`);
       for (const [stage, count] of Object.entries(result.corpus.byStage)) {
         ctx.stdout.write(`    - ${stage}: ${count}\n`);
       }
-      if (result.workflowCorpus.total > 0 || result.plannedTier === "C") {
+      if (result.workflowCorpus.total > 0 || result.plannedMode === "workflow") {
         ctx.stdout.write(
           `  workflow corpus: ${result.workflowCorpus.total} case(s)\n`
         );
