@@ -1,5 +1,5 @@
 #!/usr/bin/env node
-import { createReadStream, realpathSync } from "node:fs";
+import { createReadStream, existsSync, realpathSync } from "node:fs";
 import { spawn } from "node:child_process";
 import fs from "node:fs/promises";
 import process from "node:process";
@@ -224,6 +224,30 @@ function parseEvalStage(raw: string): string {
 
 function isInitPromptAllowed(ctx: CliContext): boolean {
   return Boolean(process.stdin.isTTY && ctx.stdout.isTTY);
+}
+
+/**
+ * Print a short, friendly hint when the user runs `cclaw-cli` with no
+ * arguments. Does not read or mutate flow state — only checks whether
+ * `.cclaw/config.yaml` exists to branch between "installed" and
+ * "not-installed" messaging. Keeps exit 0 in both cases: users discover
+ * the tool through this path, not through an error.
+ */
+function printNoArgsHint(ctx: CliContext): number {
+  const installed = existsSync(path.join(ctx.cwd, RUNTIME_ROOT, "config.yaml"));
+  if (installed) {
+    ctx.stdout.write(
+      "cclaw is installed in this project. Open your harness (Claude Code, " +
+        "Cursor, OpenCode, or Codex) and type `/cc` to start.\n"
+    );
+  } else {
+    ctx.stdout.write(
+      "cclaw is not installed in this project yet.\n" +
+        "Run `npx cclaw-cli init` to bootstrap .cclaw and the harness shims.\n" +
+        "For help: `npx cclaw-cli --help`.\n"
+    );
+  }
+  return 0;
 }
 
 function buildInitSurfacePreview(harnesses: HarnessId[]): string[] {
@@ -922,8 +946,7 @@ async function runCommand(parsed: ParsedArgs, ctx: CliContext): Promise<number> 
 
   const command = parsed.command;
   if (!command) {
-    ctx.stderr.write(usage());
-    return 1;
+    return printNoArgsHint(ctx);
   }
 
   if (command === "init") {
