@@ -3,11 +3,15 @@ import path from "node:path";
 import { COMMAND_FILE_ORDER, RUNTIME_ROOT } from "./constants.js";
 import {
   canTransition,
+  createInitialCloseoutState,
   createInitialFlowState,
   isFlowTrack,
   skippedStagesForTrack,
   trackStages,
-  type FlowState
+  SHIP_SUBSTATES,
+  type CloseoutState,
+  type FlowState,
+  type ShipSubstate
 } from "./flow-state.js";
 import {
   ensureFeatureSystem,
@@ -390,6 +394,40 @@ function sanitizeRetroState(value: unknown): FlowState["retro"] {
   };
 }
 
+function isShipSubstate(value: unknown): value is ShipSubstate {
+  return typeof value === "string" && (SHIP_SUBSTATES as readonly string[]).includes(value);
+}
+
+function sanitizeCloseoutState(value: unknown): CloseoutState {
+  const fallback = createInitialCloseoutState();
+  if (!value || typeof value !== "object" || Array.isArray(value)) {
+    return fallback;
+  }
+  const typed = value as Record<string, unknown>;
+  const shipSubstate = isShipSubstate(typed.shipSubstate) ? typed.shipSubstate : fallback.shipSubstate;
+  const retroDraftedAt = typeof typed.retroDraftedAt === "string" ? typed.retroDraftedAt : undefined;
+  const retroAcceptedAt = typeof typed.retroAcceptedAt === "string" ? typed.retroAcceptedAt : undefined;
+  const retroSkipped = typeof typed.retroSkipped === "boolean" ? typed.retroSkipped : undefined;
+  const retroSkipReason = typeof typed.retroSkipReason === "string" ? typed.retroSkipReason : undefined;
+  const compoundCompletedAt = typeof typed.compoundCompletedAt === "string" ? typed.compoundCompletedAt : undefined;
+  const compoundSkipped = typeof typed.compoundSkipped === "boolean" ? typed.compoundSkipped : undefined;
+  const promotedRaw = typed.compoundPromoted;
+  const compoundPromoted =
+    typeof promotedRaw === "number" && Number.isFinite(promotedRaw) && promotedRaw >= 0
+      ? Math.floor(promotedRaw)
+      : 0;
+  return {
+    shipSubstate,
+    retroDraftedAt,
+    retroAcceptedAt,
+    retroSkipped,
+    retroSkipReason,
+    compoundCompletedAt,
+    compoundSkipped,
+    compoundPromoted
+  };
+}
+
 function coerceFlowState(parsed: Record<string, unknown>): FlowState {
   const track = coerceTrack(parsed.track);
   const next = createInitialFlowState("active", track);
@@ -408,7 +446,8 @@ function coerceFlowState(parsed: Record<string, unknown>): FlowState {
     skippedStages: sanitizeSkippedStages(parsed.skippedStages, track),
     staleStages: sanitizeStaleStages(parsed.staleStages),
     rewinds: sanitizeRewinds(parsed.rewinds),
-    retro: sanitizeRetroState(parsed.retro)
+    retro: sanitizeRetroState(parsed.retro),
+    closeout: sanitizeCloseoutState(parsed.closeout)
   };
 }
 
