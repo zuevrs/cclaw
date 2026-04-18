@@ -14,11 +14,12 @@ provider: zai
 baseUrl: https://api.z.ai/api/coding/paas/v4
 model: glm-5.1
 
-# Default fidelity tier when --tier is not supplied.
-#   A = single-shot API call (cheap)
-#   B = SDK with tool use     (realistic)
-#   C = multi-stage workflow  (end-to-end)
-defaultTier: A
+# Default evaluation mode when --mode is not supplied.
+#   fixture  = verify existing artifacts (cheap, LLM-free unless --judge is set)
+#   agent    = LLM drafts one stage's artifact in a sandbox with tools
+#   workflow = LLM runs the full multi-stage flow (brainstorm → plan)
+# (Legacy alias --tier=A|B|C still works; A→fixture, B→agent, C→workflow.)
+defaultMode: fixture
 
 # Per-call timeout and retry budget.
 timeoutMs: 120000
@@ -53,7 +54,7 @@ expected:
 \`\`\`
 
 Start with 3 structural cases per stage (24 total), then expand to 5 per
-stage (40 total) once rule verifiers land. Tier B/C runs may add
+stage (40 total) once rule verifiers land. Agent/workflow runs may add
 \`context_files\` pulled from real projects to exercise the sandbox.
 `;
 

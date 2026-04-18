@@ -15,21 +15,23 @@ import { loadEvalConfig } from "./config-loader.js";
 import {
   type CostGuard,
   createCostGuard,
-  DailyCostCapExceededError
+  DailyCostCapExceededError,
+  RunCostCapExceededError
 } from "./cost-guard.js";
 import {
   createEvalClient,
   EvalLlmError,
   type EvalLlmClient
 } from "./llm-client.js";
+import { noopProgressLogger, type ProgressLogger } from "./progress.js";
 import { loadAllRubrics } from "./rubric-loader.js";
 import type {
   BaselineDelta,
   BaselineSnapshot,
   EvalCase,
   EvalCaseResult,
+  EvalMode,
   EvalReport,
-  EvalTier,
   JudgeInvocation,
   ResolvedEvalConfig,
   RubricDoc,
@@ -49,7 +51,7 @@ import { verifyWorkflowConsistency } from "./verifiers/workflow-consistency.js";
 export interface RunEvalOptions {
   projectRoot: string;
   stage?: FlowStage;
-  tier?: EvalTier;
+  mode?: EvalMode;
   /** When true, run only structural verifiers (Step 1). */
   schemaOnly?: boolean;
   /** When true, run structural + rule-based verifiers. Step 2 wires rules. */
@@ -66,6 +68,25 @@ export interface RunEvalOptions {
    * without hitting the network.
    */
   llmClient?: EvalLlmClient;
+  /**
+   * Optional progress logger. The CLI wires a stderr-backed logger by
+   * default so users see one-line updates during long runs; tests and
+   * programmatic callers can inject a silent (noop) logger or capture
+   * events for assertions. When omitted, progress is silenced.
+   */
+  progress?: ProgressLogger;
+  /**
+   * Per-run USD cap. Enforced in-memory; independent from the daily cap
+   * (`dailyUsdCap` / `CCLAW_EVAL_DAILY_USD_CAP`) that persists across
+   * invocations. Undefined means no cap.
+   */
+  maxCostUsd?: number;
+  /**
+   * Override the configured `model` (and `judgeModel`) for this run.
+   * Used by `cclaw eval --compare-model` to replay the same corpus
+   * against an alternative model without editing `config.yaml`.
+   */
+  modelOverride?: string;
 }
 
 export interface DryRunSummary {
@@ -76,12 +97,12 @@ export interface DryRunSummary {
     byStage: Record<string, number>;
     cases: Array<{ id: string; stage: FlowStage }>;
   };
-  /** Tier C-only workflow corpus summary. Empty for Tier A/B planned runs. */
+  /** Only populated in `workflow` mode; empty for fixture / agent modes. */
   workflowCorpus: {
     total: number;
     cases: Array<{ id: string; stages: WorkflowStageName[] }>;
   };
-  plannedTier: EvalTier;
+  plannedMode: EvalMode;
   verifiersAvailable: {
     structural: boolean;
     rules: boolean;
@@ -121,24 +142,25 @@ interface RunFlags {
 /**
  * --schema-only narrows to structural. --rules opens up rules + traceability
  * on top of structural (traceability is a rule-family verifier even though
- * it lives in its own module). --judge opens up the LLM judge and, for
- * Tier A, the single-shot agent-under-test. --schema-only always wins so
- * the LLM-free PR gate never pays for tokens even if stale flags collide.
+ * it lives in its own module). --judge opens up the LLM judge and, in
+ * `agent` / `workflow` modes, the agent-under-test loop. --schema-only always
+ * wins so the LLM-free PR gate never pays for tokens even if stale flags
+ * collide.
  */
 function resolveRunFlags(options: RunEvalOptions): RunFlags {
   const rulesRequested = options.rules === true;
   const schemaOnly = options.schemaOnly === true;
   const judgeRequested = options.judge === true;
-  const tier = options.tier ?? "A";
+  const mode: EvalMode = options.mode ?? "fixture";
   const runJudge = judgeRequested && !schemaOnly;
-  // Tier C always needs the agent loop (no fixture fallback for workflows),
-  // so we still require an LLM client but we do NOT require --judge on the
-  // CLI to produce a workflow run. The judge piece itself stays gated by
-  // `runJudge` so consistency-only runs are cheap and deterministic.
+  // `workflow` always needs the agent loop (no fixture fallback), so we still
+  // require an LLM client but do NOT require --judge on the CLI to produce a
+  // workflow run. The judge piece stays gated by `runJudge` so consistency-
+  // only runs remain cheap and deterministic.
   const runAgent =
-    tier === "C"
+    mode === "workflow"
       ? !schemaOnly
-      : runJudge && (tier === "A" || tier === "B");
+      : runJudge && (mode === "fixture" || mode === "agent");
   return {
     runStructural: true,
     runRules: rulesRequested && !schemaOnly,
@@ -192,7 +214,7 @@ async function loadArtifactOrRecord(
 interface RunCaseContext {
   projectRoot: string;
   caseEntry: EvalCase;
-  plannedTier: EvalTier;
+  plannedMode: EvalMode;
   flags: RunFlags;
   config: ResolvedEvalConfig;
   client?: EvalLlmClient;
@@ -203,12 +225,15 @@ interface RunCaseContext {
 interface RunWorkflowContext {
   projectRoot: string;
   workflow: WorkflowCase;
-  plannedTier: EvalTier;
+  plannedMode: EvalMode;
   flags: RunFlags;
   config: ResolvedEvalConfig;
   client?: EvalLlmClient;
   costGuard: CostGuard;
   rubrics: Map<FlowStage, RubricDoc>;
+  progress: ProgressLogger;
+  caseIndex: number;
+  totalCases: number;
 }
 
 function stageJudgeHint(step: WorkflowStageStep): {
@@ -228,7 +253,7 @@ function stageJudgeHint(step: WorkflowStageStep): {
 }
 
 async function runWorkflowCase(ctx: RunWorkflowContext): Promise<EvalCaseResult> {
-  const { projectRoot, workflow, plannedTier, flags, config, client, rubrics } = ctx;
+  const { projectRoot, workflow, plannedMode, flags, config, client, rubrics, progress, caseIndex, totalCases } = ctx;
   const started = Date.now();
   const verifierResults: VerifierResult[] = [];
   let caseCostUsd = 0;
@@ -244,14 +269,14 @@ async function runWorkflowCase(ctx: RunWorkflowContext): Promise<EvalCaseResult>
       ok: false,
       score: 0,
       message:
-        "Tier C requires the with-tools agent (CCLAW_EVAL_API_KEY or injected client). " +
+        "workflow mode requires the with-tools agent (CCLAW_EVAL_API_KEY or injected client). " +
         "Re-run with credentials to execute the workflow.",
       details: { stages: workflow.stages.map((s) => s.name) }
     });
     return {
       caseId: workflow.id,
       stage: lastStage as FlowStage,
-      tier: plannedTier,
+      mode: plannedMode,
       passed: false,
       durationMs: Date.now() - started,
       verifierResults
@@ -264,10 +289,29 @@ async function runWorkflowCase(ctx: RunWorkflowContext): Promise<EvalCaseResult>
       workflow,
       config,
       projectRoot,
-      client
+      client,
+      onStageStart: (stage) =>
+        progress.emit({
+          kind: "stage-start",
+          caseId: workflow.id,
+          stage,
+          index: caseIndex,
+          total: totalCases
+        }),
+      onStageEnd: (stage, stageResult) =>
+        progress.emit({
+          kind: "stage-end",
+          caseId: workflow.id,
+          stage,
+          index: caseIndex,
+          total: totalCases,
+          passed: true,
+          durationMs: stageResult.durationMs,
+          ...(stageResult.usageUsd > 0 ? { costUsd: stageResult.usageUsd } : {})
+        })
     });
   } catch (err) {
-    if (err instanceof DailyCostCapExceededError) throw err;
+    if (err instanceof DailyCostCapExceededError || err instanceof RunCostCapExceededError) throw err;
     const retryable = err instanceof EvalLlmError ? err.retryable : false;
     const maxTurns = err instanceof MaxTurnsExceededError ? err.turns : undefined;
     verifierResults.push({
@@ -284,7 +328,7 @@ async function runWorkflowCase(ctx: RunWorkflowContext): Promise<EvalCaseResult>
     return {
       caseId: workflow.id,
       stage: lastStage as FlowStage,
-      tier: plannedTier,
+      mode: plannedMode,
       passed: false,
       durationMs: Date.now() - started,
       verifierResults
@@ -364,7 +408,7 @@ async function runWorkflowCase(ctx: RunWorkflowContext): Promise<EvalCaseResult>
           });
         }
       } catch (err) {
-        if (err instanceof DailyCostCapExceededError) throw err;
+        if (err instanceof DailyCostCapExceededError || err instanceof RunCostCapExceededError) throw err;
         const retryable = err instanceof EvalLlmError ? err.retryable : false;
         verifierResults.push({
           kind: "judge",
@@ -403,7 +447,7 @@ async function runWorkflowCase(ctx: RunWorkflowContext): Promise<EvalCaseResult>
   return {
     caseId: workflow.id,
     stage: lastStage as FlowStage,
-    tier: plannedTier,
+    mode: plannedMode,
     passed: allOk,
     durationMs: Date.now() - started,
     costUsd: caseCostUsd > 0 ? Number(caseCostUsd.toFixed(6)) : undefined,
@@ -413,7 +457,7 @@ async function runWorkflowCase(ctx: RunWorkflowContext): Promise<EvalCaseResult>
 }
 
 async function runCase(ctx: RunCaseContext): Promise<EvalCaseResult> {
-  const { projectRoot, caseEntry, plannedTier, flags, config, client, costGuard, rubrics } = ctx;
+  const { projectRoot, caseEntry, plannedMode, flags, config, client, costGuard, rubrics } = ctx;
   const started = Date.now();
   const verifierResults: VerifierResult[] = [];
   const expected = caseEntry.expected;
@@ -431,7 +475,7 @@ async function runCase(ctx: RunCaseContext): Promise<EvalCaseResult> {
   const needsArtifact = hasStructural || hasRules || hasTraceability || judgeRequested;
   let artifact: string | undefined;
   if (needsArtifact) {
-    if (flags.runAgent && judgeRequested && client && plannedTier === "A") {
+    if (flags.runAgent && judgeRequested && client && plannedMode === "fixture") {
       try {
         const produced = await runSingleShot({
           caseEntry,
@@ -456,7 +500,7 @@ async function runCase(ctx: RunCaseContext): Promise<EvalCaseResult> {
           }
         });
       } catch (err) {
-        if (err instanceof DailyCostCapExceededError) throw err;
+        if (err instanceof DailyCostCapExceededError || err instanceof RunCostCapExceededError) throw err;
         const retryable = err instanceof EvalLlmError ? err.retryable : false;
         verifierResults.push({
           kind: "workflow",
@@ -467,7 +511,7 @@ async function runCase(ctx: RunCaseContext): Promise<EvalCaseResult> {
           details: { retryable }
         });
       }
-    } else if (flags.runAgent && judgeRequested && client && plannedTier === "B") {
+    } else if (flags.runAgent && judgeRequested && client && plannedMode === "agent") {
       try {
         const produced = await runWithTools({
           caseEntry,
@@ -496,7 +540,7 @@ async function runCase(ctx: RunCaseContext): Promise<EvalCaseResult> {
           }
         });
       } catch (err) {
-        if (err instanceof DailyCostCapExceededError) throw err;
+        if (err instanceof DailyCostCapExceededError || err instanceof RunCostCapExceededError) throw err;
         const retryable = err instanceof EvalLlmError ? err.retryable : false;
         const maxTurns = err instanceof MaxTurnsExceededError ? err.turns : undefined;
         verifierResults.push({
@@ -601,7 +645,7 @@ async function runCase(ctx: RunCaseContext): Promise<EvalCaseResult> {
         );
         verifierResults.push(...judgeVerifiers);
       } catch (err) {
-        if (err instanceof DailyCostCapExceededError) throw err;
+        if (err instanceof DailyCostCapExceededError || err instanceof RunCostCapExceededError) throw err;
         const retryable = err instanceof EvalLlmError ? err.retryable : false;
         verifierResults.push({
           kind: "judge",
@@ -623,7 +667,7 @@ async function runCase(ctx: RunCaseContext): Promise<EvalCaseResult> {
   return {
     caseId: caseEntry.id,
     stage: caseEntry.stage,
-    tier: plannedTier,
+    mode: plannedMode,
     passed: allOk,
     durationMs: Date.now() - started,
     costUsd: caseCostUsd > 0 ? Number(caseCostUsd.toFixed(6)) : undefined,
@@ -664,29 +708,39 @@ function stagesInResults(caseResults: EvalCaseResult[]): FlowStage[] {
 }
 
 /**
- * Structural runner. When `schemaOnly` is set (or no other verifier flags are
- * active), runs structural verifiers against fixture-backed cases and loads
- * per-stage baselines for regression comparison. Tier A/B/C agent loops
- * arrive in later steps; until then cases without `fixture` are marked as
- * skipped rather than failing.
+ * Main eval runner. Dispatches between fixture-backed verification, the
+ * single-stage agent-with-tools loop, and the multi-stage workflow
+ * orchestrator based on `options.mode`. Per-stage baselines are loaded for
+ * regression comparison. Cases without a `fixture` path in the yaml are
+ * marked skipped (not failed) when no LLM drafting runs.
  */
 export async function runEval(options: RunEvalOptions): Promise<DryRunSummary | EvalReport> {
-  const config = await loadEvalConfig(options.projectRoot, options.env ?? process.env);
-  const plannedTier = options.tier ?? config.defaultTier;
+  const baseConfig = await loadEvalConfig(
+    options.projectRoot,
+    options.env ?? process.env
+  );
+  const config: ResolvedEvalConfig = options.modelOverride
+    ? {
+        ...baseConfig,
+        model: options.modelOverride,
+        judgeModel: options.modelOverride
+      }
+    : baseConfig;
+  const plannedMode: EvalMode = options.mode ?? config.defaultMode;
   const corpus =
-    plannedTier === "C" ? [] : await loadCorpus(options.projectRoot, options.stage);
+    plannedMode === "workflow" ? [] : await loadCorpus(options.projectRoot, options.stage);
   const workflowCorpus =
-    plannedTier === "C" ? await loadWorkflowCorpus(options.projectRoot) : [];
+    plannedMode === "workflow" ? await loadWorkflowCorpus(options.projectRoot) : [];
 
   const notes: string[] = [];
-  if (plannedTier !== "C" && corpus.length === 0) {
+  if (plannedMode !== "workflow" && corpus.length === 0) {
     notes.push(
       "Corpus is empty. Seed cases live under `.cclaw/evals/corpus/<stage>/*.yaml`."
     );
   }
-  if (plannedTier === "C" && workflowCorpus.length === 0) {
+  if (plannedMode === "workflow" && workflowCorpus.length === 0) {
     notes.push(
-      "Workflow corpus is empty. Tier C cases live under `.cclaw/evals/corpus/workflows/*.yaml`."
+      "Workflow corpus is empty. Workflow-mode cases live under `.cclaw/evals/corpus/workflows/*.yaml`."
     );
   }
   const flags: RunFlags = resolveRunFlags(options);
@@ -696,9 +750,9 @@ export async function runEval(options: RunEvalOptions): Promise<DryRunSummary | 
       "--judge requires CCLAW_EVAL_API_KEY (or an injected client for tests); judge pipeline will report errors per case."
     );
   }
-  if (plannedTier === "C" && !config.apiKey && !options.llmClient) {
+  if (plannedMode === "workflow" && !config.apiKey && !options.llmClient) {
     notes.push(
-      "Tier C requires CCLAW_EVAL_API_KEY (or an injected client for tests); workflow runs will fail per case without one."
+      "workflow mode requires CCLAW_EVAL_API_KEY (or an injected client for tests); workflow runs will fail per case without one."
     );
   }
 
@@ -718,24 +772,41 @@ export async function runEval(options: RunEvalOptions): Promise<DryRunSummary | 
           stages: item.stages.map((s) => s.name)
         }))
       },
-      plannedTier,
+      plannedMode,
       verifiersAvailable: {
         structural: flags.runStructural,
         rules: flags.runRules,
         judge: flags.runJudge,
         workflow: flags.runAgent,
-        consistency: plannedTier === "C"
+        consistency: plannedMode === "workflow"
       },
       notes
     };
     return summary;
   }
 
-  const costGuard = createCostGuard(options.projectRoot, config);
+  const costGuard = createCostGuard(
+    options.projectRoot,
+    config,
+    options.maxCostUsd !== undefined ? { runCapUsd: options.maxCostUsd } : {}
+  );
+  const progress = options.progress ?? noopProgressLogger();
   let wrappedClient: EvalLlmClient | undefined;
-  const clientNeeded = flags.runJudge || plannedTier === "C";
+  const clientNeeded = flags.runJudge || plannedMode === "workflow";
   if (clientNeeded) {
-    const base = options.llmClient ?? createEvalClient(config);
+    const base =
+      options.llmClient ??
+      createEvalClient(config, {
+        onRetry: (event) =>
+          progress.emit({
+            kind: "retry",
+            caseId: "llm",
+            attempt: event.attempt,
+            maxAttempts: event.maxAttempts,
+            waitMs: event.waitMs,
+            reason: event.error.message
+          })
+      });
     wrappedClient = wrapClientWithCostGuard(
       base,
       costGuard,
@@ -749,35 +820,80 @@ export async function runEval(options: RunEvalOptions): Promise<DryRunSummary | 
 
   const now = new Date().toISOString();
   const caseResults: EvalCaseResult[] = [];
-  if (plannedTier === "C") {
-    for (const wf of workflowCorpus) {
-      caseResults.push(
-        await runWorkflowCase({
-          projectRoot: options.projectRoot,
-          workflow: wf,
-          plannedTier,
-          flags,
-          config,
-          client: wrappedClient,
-          costGuard,
-          rubrics
-        })
-      );
+  const totalPlannedCases =
+    plannedMode === "workflow" ? workflowCorpus.length : corpus.length;
+  const runStarted = Date.now();
+  progress.emit({
+    kind: "run-start",
+    mode: plannedMode,
+    totalCases: totalPlannedCases
+  });
+  if (plannedMode === "workflow") {
+    for (let i = 0; i < workflowCorpus.length; i += 1) {
+      const wf = workflowCorpus[i]!;
+      progress.emit({
+        kind: "case-start",
+        caseId: wf.id,
+        stage: wf.stages[wf.stages.length - 1]?.name ?? "workflow",
+        index: i + 1,
+        total: workflowCorpus.length
+      });
+      const result = await runWorkflowCase({
+        projectRoot: options.projectRoot,
+        workflow: wf,
+        plannedMode,
+        flags,
+        config,
+        client: wrappedClient,
+        costGuard,
+        rubrics,
+        progress,
+        caseIndex: i + 1,
+        totalCases: workflowCorpus.length
+      });
+      progress.emit({
+        kind: "case-end",
+        caseId: wf.id,
+        stage: result.stage,
+        index: i + 1,
+        total: workflowCorpus.length,
+        passed: result.passed,
+        durationMs: result.durationMs,
+        ...(result.costUsd !== undefined ? { costUsd: result.costUsd } : {})
+      });
+      caseResults.push(result);
     }
   } else {
-    for (const item of corpus) {
-      caseResults.push(
-        await runCase({
-          projectRoot: options.projectRoot,
-          caseEntry: item,
-          plannedTier,
-          flags,
-          config,
-          client: wrappedClient,
-          costGuard,
-          rubrics
-        })
-      );
+    for (let i = 0; i < corpus.length; i += 1) {
+      const item = corpus[i]!;
+      progress.emit({
+        kind: "case-start",
+        caseId: item.id,
+        stage: item.stage,
+        index: i + 1,
+        total: corpus.length
+      });
+      const result = await runCase({
+        projectRoot: options.projectRoot,
+        caseEntry: item,
+        plannedMode,
+        flags,
+        config,
+        client: wrappedClient,
+        costGuard,
+        rubrics
+      });
+      progress.emit({
+        kind: "case-end",
+        caseId: item.id,
+        stage: item.stage,
+        index: i + 1,
+        total: corpus.length,
+        passed: result.passed,
+        durationMs: result.durationMs,
+        ...(result.costUsd !== undefined ? { costUsd: result.costUsd } : {})
+      });
+      caseResults.push(result);
     }
   }
 
@@ -796,7 +912,7 @@ export async function runEval(options: RunEvalOptions): Promise<DryRunSummary | 
     cclawVersion: CCLAW_VERSION,
     provider: config.provider,
     model: config.model,
-    tier: plannedTier,
+    mode: plannedMode,
     stages,
     cases: caseResults,
     summary
@@ -807,6 +923,14 @@ export async function runEval(options: RunEvalOptions): Promise<DryRunSummary | 
     baselines
   );
   if (baselineDelta) report.baselineDelta = baselineDelta;
+
+  progress.emit({
+    kind: "run-end",
+    totalCases: summary.totalCases,
+    passed: summary.passed,
+    failed: summary.failed,
+    durationMs: Date.now() - runStarted
+  });
 
   return report;
 }

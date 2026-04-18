@@ -1,5 +1,7 @@
 #!/usr/bin/env node
-import { readFileSync, realpathSync } from "node:fs";
+import { createReadStream, readFileSync, realpathSync } from "node:fs";
+import { spawn } from "node:child_process";
+import fs from "node:fs/promises";
 import process from "node:process";
 import path from "node:path";
 import { createInterface } from "node:readline/promises";
@@ -15,11 +17,24 @@ import { createDefaultConfig, createProfileConfig } from "./config.js";
 import { detectHarnesses } from "./init-detect.js";
 import { HARNESS_ADAPTERS } from "./harness-adapters.js";
 import { runEval } from "./eval/runner.js";
+import { createStderrProgressLogger } from "./eval/progress.js";
 import { writeBaselinesFromReport } from "./eval/baseline.js";
 import { writeJsonReport, writeMarkdownReport } from "./eval/report.js";
 import { formatDiffMarkdown, runEvalDiff } from "./eval/diff.js";
-import { EVAL_TIERS } from "./eval/types.js";
-import type { EvalTier } from "./eval/types.js";
+import {
+  ensureRunDir,
+  generateRunId,
+  isRunAlive,
+  listRuns,
+  readRunStatus,
+  resolveRunId,
+  runLogPath,
+  writeRunStatus,
+  type EvalRunStatus
+} from "./eval/runs.js";
+import { EVAL_MODES } from "./eval/types.js";
+import type { EvalMode } from "./eval/types.js";
+import { parseModeInput } from "./eval/mode.js";
 import { FLOW_STAGES } from "./types.js";
 
 type CommandName = "init" | "sync" | "doctor" | "upgrade" | "uninstall" | "archive" | "eval";
@@ -49,7 +64,7 @@ interface ParsedArgs {
   archiveSkipRetro?: boolean;
   archiveSkipRetroReason?: string;
   evalStage?: string;
-  evalTier?: EvalTier;
+  evalMode?: EvalMode;
   evalSchemaOnly?: boolean;
   evalRules?: boolean;
   evalJudge?: boolean;
@@ -57,10 +72,14 @@ interface ParsedArgs {
   evalNoWrite?: boolean;
   evalUpdateBaseline?: boolean;
   evalConfirm?: boolean;
-  /** Optional subcommand after `eval`. Currently only `diff` is supported. */
-  evalSubcommand?: "diff";
+  evalQuiet?: boolean;
+  evalMaxCostUsd?: number;
+  /** Optional subcommand after `eval`. */
+  evalSubcommand?: "diff" | "runs";
   /** Positional arguments for eval subcommands (e.g. `diff <old> <new>`). */
   evalArgs?: string[];
+  evalBackground?: boolean;
+  evalCompareModel?: string;
   showHelp?: boolean;
   showVersion?: boolean;
 }
@@ -93,22 +112,41 @@ Commands:
                     --skip-retro       Bypass mandatory retro gate (requires --retro-reason).
                     --retro-reason=<t> Reason for bypassing retro gate.
   eval       Run cclaw evals against .cclaw/evals/corpus (Phase 7: structural verifier + baselines).
-             Flags: --stage=<id>         Limit to one flow stage (${FLOW_STAGES.join("|")}) for Tier A/B.
-                    --tier=<A|B|C>       Fidelity tier (A=single-shot, B=tools, C=multi-stage workflow).
+             Flags: --stage=<id>         Limit to one flow stage (${FLOW_STAGES.join("|")}) for fixture/agent modes.
+                    --mode=<${EVAL_MODES.join("|")}>
+                                         Evaluation mode:
+                                           fixture  = verify existing artifacts with structural/rule/judge verifiers.
+                                           agent    = LLM drafts one stage's artifact in a sandbox with tools.
+                                           workflow = LLM runs the full multi-stage flow (brainstorm→plan).
+                                         Legacy --tier=A|B|C still works (deprecated).
                     --schema-only        Run only structural verifiers (default).
                     --rules              Also run rule-based verifiers (keywords, regex, counts, uniqueness, traceability).
-                    --judge              Run the LLM judge (median-of-N) against each case's rubric. Requires CCLAW_EVAL_API_KEY; Tier A runs the single-shot agent, Tier B/C the sandbox tool-using agent (read_file/write_file/glob/grep).
+                    --judge              Run the LLM judge (median-of-N) against each case's rubric. Requires CCLAW_EVAL_API_KEY; fixture mode judges an existing artifact, agent/workflow modes draft first and then judge.
                     --dry-run            Validate config + corpus, print summary, do not execute.
                     --json               Emit machine-readable JSON on stdout.
                     --no-write           Skip writing the report to .cclaw/evals/reports/.
                     --update-baseline    Overwrite baselines from the current run (requires --confirm).
                     --confirm            Acknowledge --update-baseline (prevents accidental resets).
+                    --quiet              Silence the stderr progress logger (default: emit one
+                                         line per case / stage to stderr so long runs are visible).
+                    --max-cost-usd=<n>   Abort the run if committed USD spend crosses <n>
+                                         (independent from the daily cap). Also readable from
+                                         CCLAW_EVAL_MAX_COST_USD.
+                    --compare-model=<id> Run the same corpus twice — once with the configured model
+                                         and once with <id> — then diff the summaries. Exit code 1
+                                         when the override model regressed.
+                    --background         Spawn the run as a detached child process, write the
+                                         combined output to .cclaw/evals/runs/<id>/run.log, and
+                                         return immediately. Attach later with
+                                         \`cclaw eval runs tail <id|latest>\`.
 
              Subcommands:
                     diff <old> <new>     Compare two reports under .cclaw/evals/reports/.
                                          Each argument is a cclawVersion (e.g. 0.26.0), a filename,
                                          or the literal "latest". Exit code 1 when the diff shows a
                                          regression. Accepts --json to emit machine-readable output.
+                    runs [action] [id]   Inspect background runs under .cclaw/evals/runs/.
+                                         Actions: list (default) | status <id|latest> | tail <id|latest>.
   upgrade    Refresh generated files in .cclaw without modifying user artifacts.
   uninstall  Remove .cclaw runtime and the generated harness shim files.
 
@@ -122,9 +160,9 @@ Examples:
   cclaw archive --name=payments-revamp
   cclaw eval --dry-run
   cclaw eval --stage=brainstorm --schema-only
-  cclaw eval --judge --tier=A --stage=brainstorm
-  cclaw eval --judge --tier=B --stage=spec
-  cclaw eval --tier=C --judge
+  cclaw eval --judge --mode=fixture --stage=brainstorm
+  cclaw eval --judge --mode=agent --stage=spec
+  cclaw eval --mode=workflow --judge
   cclaw eval diff 0.26.0 latest
 
 Docs:   https://github.com/zuevrs/cclaw
@@ -186,12 +224,18 @@ function parseProfile(raw: string): InitProfile {
   return trimmed as InitProfile;
 }
 
-function parseEvalTier(raw: string): EvalTier {
-  const trimmed = raw.trim().toUpperCase();
-  if (!(EVAL_TIERS as readonly string[]).includes(trimmed)) {
-    throw new Error(`Unknown eval tier: ${raw}. Supported: ${EVAL_TIERS.join(", ")}`);
-  }
-  return trimmed as EvalTier;
+function parseLegacyTier(raw: string): EvalMode {
+  return parseModeInput(raw.toUpperCase(), {
+    source: "cli",
+    raw: `--tier=${raw}`
+  });
+}
+
+function parseEvalMode(raw: string): EvalMode {
+  return parseModeInput(raw, {
+    source: "cli",
+    raw: `--mode=${raw}`
+  });
 }
 
 function parseEvalStage(raw: string): string {
@@ -456,6 +500,22 @@ function printDoctorText(
   }
 }
 
+function resolveMaxCostOption(
+  fromCli: number | undefined,
+  env: NodeJS.ProcessEnv
+): { maxCostUsd?: number } {
+  if (fromCli !== undefined) return { maxCostUsd: fromCli };
+  const raw = env.CCLAW_EVAL_MAX_COST_USD;
+  if (raw === undefined || raw.trim() === "") return {};
+  const value = Number(raw);
+  if (!Number.isFinite(value) || value <= 0) {
+    throw new Error(
+      `CCLAW_EVAL_MAX_COST_USD must be a positive number, got: ${raw}`
+    );
+  }
+  return { maxCostUsd: value };
+}
+
 function parseArgs(argv: string[]): ParsedArgs {
   const parsed: ParsedArgs = {};
 
@@ -494,8 +554,10 @@ function parseArgs(argv: string[]): ParsedArgs {
         if (token === "diff") {
           parsed.evalSubcommand = "diff";
           sawSubcommand = true;
+        } else if (token === "runs") {
+          parsed.evalSubcommand = "runs";
+          sawSubcommand = true;
         } else {
-          // Treat unknown positional as an eval arg for forward compat.
           evalArgs.push(token);
         }
         continue;
@@ -567,8 +629,12 @@ function parseArgs(argv: string[]): ParsedArgs {
       parsed.evalStage = parseEvalStage(flag.replace("--stage=", ""));
       continue;
     }
+    if (flag.startsWith("--mode=")) {
+      parsed.evalMode = parseEvalMode(flag.replace("--mode=", ""));
+      continue;
+    }
     if (flag.startsWith("--tier=")) {
-      parsed.evalTier = parseEvalTier(flag.replace("--tier=", ""));
+      parsed.evalMode = parseLegacyTier(flag.replace("--tier=", ""));
       continue;
     }
     if (flag === "--schema-only") {
@@ -595,6 +661,31 @@ function parseArgs(argv: string[]): ParsedArgs {
       parsed.evalConfirm = true;
       continue;
     }
+    if (flag === "--background") {
+      parsed.evalBackground = true;
+      continue;
+    }
+    if (flag.startsWith("--compare-model=")) {
+      const value = flag.replace("--compare-model=", "").trim();
+      if (value.length === 0) {
+        throw new Error(
+          `--compare-model requires a non-empty model id (e.g. --compare-model=gpt-4o-mini).`
+        );
+      }
+      parsed.evalCompareModel = value;
+      continue;
+    }
+    if (flag.startsWith("--max-cost-usd=")) {
+      const raw = flag.replace("--max-cost-usd=", "").trim();
+      const value = Number(raw);
+      if (!Number.isFinite(value) || value <= 0) {
+        throw new Error(
+          `--max-cost-usd requires a positive number, got: ${raw}`
+        );
+      }
+      parsed.evalMaxCostUsd = value;
+      continue;
+    }
   }
 
   // `--json` is shared between doctor and eval. Disambiguate by command.
@@ -602,8 +693,245 @@ function parseArgs(argv: string[]): ParsedArgs {
     parsed.evalJson = true;
     parsed.doctorJson = undefined;
   }
+  // `--quiet` on `eval` silences the stderr progress logger. On doctor it
+  // continues to mean "print only failing checks" — the flag slot is the
+  // same, the semantics depend on which command owns the invocation.
+  if (parsed.command === "eval" && parsed.doctorQuiet === true) {
+    parsed.evalQuiet = true;
+    parsed.doctorQuiet = undefined;
+  }
 
   return parsed;
+}
+
+/**
+ * Spawn `cclaw eval` (without `--background`) in a detached child process
+ * and return immediately. The child's stdout+stderr are piped to
+ * `.cclaw/evals/runs/<id>/run.log` so the user can attach later with
+ * `cclaw eval runs tail`. We do NOT wait for the child — the whole point
+ * is to free the terminal while a multi-minute workflow-mode run
+ * proceeds in the background.
+ */
+async function spawnBackgroundEval(
+  parsed: ParsedArgs,
+  ctx: CliContext
+): Promise<number> {
+  const id = generateRunId();
+  await ensureRunDir(ctx.cwd, id);
+  const logPath = runLogPath(ctx.cwd, id);
+  const childArgv = process.argv.slice(2).filter((a) => a !== "--background");
+  const cliEntry = process.argv[1];
+  if (!cliEntry) {
+    error(ctx, "Could not resolve cclaw entrypoint for --background.");
+    return 1;
+  }
+  const logHandle = await fs.open(logPath, "a");
+  try {
+    const child = spawn(process.execPath, [cliEntry, ...childArgv], {
+      cwd: ctx.cwd,
+      detached: true,
+      stdio: ["ignore", logHandle.fd, logHandle.fd],
+      env: process.env
+    });
+    const pid = child.pid ?? -1;
+    await writeRunStatus(ctx.cwd, {
+      id,
+      startedAt: new Date().toISOString(),
+      pid,
+      argv: childArgv,
+      cwd: ctx.cwd,
+      state: "running"
+    });
+    child.unref();
+    const finalize = async (code: number | null): Promise<void> => {
+      const current = await readRunStatus(ctx.cwd, id);
+      if (!current) return;
+      const exitCode = typeof code === "number" ? code : -1;
+      await writeRunStatus(ctx.cwd, {
+        ...current,
+        endedAt: new Date().toISOString(),
+        exitCode,
+        state: exitCode === 0 ? "succeeded" : "failed"
+      });
+    };
+    child.on("exit", (code) => {
+      void finalize(code);
+    });
+    child.on("error", (err) => {
+      void writeRunStatus(ctx.cwd, {
+        id,
+        startedAt: new Date().toISOString(),
+        pid,
+        argv: childArgv,
+        cwd: ctx.cwd,
+        endedAt: new Date().toISOString(),
+        exitCode: -1,
+        state: "failed"
+      });
+      error(ctx, `Background eval failed to start: ${err.message}`);
+    });
+    ctx.stdout.write(
+      `cclaw eval: background run id=${id} pid=${pid}\n` +
+        `  log:    ${logPath}\n` +
+        `  tail:   cclaw eval runs tail ${id}\n` +
+        `  status: cclaw eval runs status ${id}\n`
+    );
+    return 0;
+  } finally {
+    await logHandle.close();
+  }
+}
+
+function formatRunRow(status: EvalRunStatus): string {
+  const ended = status.endedAt ? ` ended=${status.endedAt}` : "";
+  const exitCode =
+    status.exitCode !== undefined ? ` exit=${status.exitCode}` : "";
+  const alive =
+    status.state === "running" ? (isRunAlive(status) ? "" : " (stale)") : "";
+  return `${status.id}  state=${status.state}${alive}  pid=${status.pid}  started=${status.startedAt}${ended}${exitCode}`;
+}
+
+async function runEvalRunsSubcommand(
+  parsed: ParsedArgs,
+  ctx: CliContext
+): Promise<number> {
+  const args = parsed.evalArgs ?? [];
+  const action = args[0] ?? "list";
+  if (action === "list") {
+    const runs = await listRuns(ctx.cwd);
+    if (runs.length === 0) {
+      ctx.stdout.write("No eval runs recorded under .cclaw/evals/runs/.\n");
+      return 0;
+    }
+    if (parsed.evalJson === true) {
+      ctx.stdout.write(`${JSON.stringify(runs, null, 2)}\n`);
+      return 0;
+    }
+    for (const run of runs) ctx.stdout.write(`${formatRunRow(run)}\n`);
+    return 0;
+  }
+  if (action === "status") {
+    const id = await resolveRunId(ctx.cwd, args[1]);
+    if (!id) {
+      error(ctx, `No such run: ${args[1] ?? "(none recorded)"}`);
+      return 1;
+    }
+    const status = await readRunStatus(ctx.cwd, id);
+    if (!status) {
+      error(ctx, `Run ${id} has no status file.`);
+      return 1;
+    }
+    if (parsed.evalJson === true) {
+      ctx.stdout.write(`${JSON.stringify(status, null, 2)}\n`);
+    } else {
+      ctx.stdout.write(`${formatRunRow(status)}\n`);
+      ctx.stdout.write(`log: ${runLogPath(ctx.cwd, id)}\n`);
+    }
+    return status.state === "failed" ? 1 : 0;
+  }
+  if (action === "tail") {
+    const id = await resolveRunId(ctx.cwd, args[1]);
+    if (!id) {
+      error(ctx, `No such run: ${args[1] ?? "(none recorded)"}`);
+      return 1;
+    }
+    const logFile = runLogPath(ctx.cwd, id);
+    const stream = createReadStream(logFile, { encoding: "utf8" });
+    await new Promise<void>((resolve, reject) => {
+      stream.on("data", (chunk) => ctx.stdout.write(chunk));
+      stream.on("end", () => resolve());
+      stream.on("error", reject);
+    });
+    return 0;
+  }
+  error(
+    ctx,
+    `Unknown \`cclaw eval runs\` action: ${action}. Use list | status | tail.`
+  );
+  return 1;
+}
+
+/**
+ * Run the same corpus twice — once against the configured model, once
+ * against `--compare-model=<id>` — and print a summary comparing the
+ * two. Both reports are written to `.cclaw/evals/reports/` (unless
+ * `--no-write` is set) and a unified diff is emitted to stdout. Exit
+ * code is 1 when the override model regressed against the baseline
+ * model, 0 otherwise.
+ */
+async function runCompareModel(
+  parsed: ParsedArgs,
+  ctx: CliContext,
+  progress: ReturnType<typeof createStderrProgressLogger> | undefined
+): Promise<number> {
+  const baselineOpts = {
+    projectRoot: ctx.cwd,
+    stage: parsed.evalStage as Parameters<typeof runEval>[0]["stage"],
+    mode: parsed.evalMode,
+    schemaOnly: parsed.evalSchemaOnly === true,
+    rules: parsed.evalRules === true,
+    judge: parsed.evalJudge === true,
+    ...(progress ? { progress } : {}),
+    ...resolveMaxCostOption(parsed.evalMaxCostUsd, process.env)
+  };
+  ctx.stderr.write(`[cclaw eval] compare: running baseline model...\n`);
+  const baseline = await runEval(baselineOpts);
+  if ("kind" in baseline) {
+    error(ctx, "--compare-model is incompatible with --dry-run.");
+    return 1;
+  }
+  ctx.stderr.write(
+    `[cclaw eval] compare: running ${parsed.evalCompareModel} ...\n`
+  );
+  const candidate = await runEval({
+    ...baselineOpts,
+    modelOverride: parsed.evalCompareModel
+  });
+  if ("kind" in candidate) {
+    error(ctx, "--compare-model received an unexpected dry-run response.");
+    return 1;
+  }
+  if (parsed.evalNoWrite !== true) {
+    await writeJsonReport(ctx.cwd, baseline);
+    await writeMarkdownReport(ctx.cwd, baseline);
+    await writeJsonReport(ctx.cwd, candidate);
+    await writeMarkdownReport(ctx.cwd, candidate);
+  }
+  const passDelta = candidate.summary.passed - baseline.summary.passed;
+  const failDelta = candidate.summary.failed - baseline.summary.failed;
+  const costDelta =
+    candidate.summary.totalCostUsd - baseline.summary.totalCostUsd;
+  if (parsed.evalJson === true) {
+    ctx.stdout.write(
+      `${JSON.stringify(
+        {
+          baseline: {
+            model: baseline.model,
+            summary: baseline.summary
+          },
+          candidate: {
+            model: candidate.model,
+            summary: candidate.summary
+          },
+          delta: { passed: passDelta, failed: failDelta, costUsd: costDelta }
+        },
+        null,
+        2
+      )}\n`
+    );
+  } else {
+    ctx.stdout.write(
+      `cclaw eval compare-model:\n` +
+        `  baseline   ${baseline.model}: pass=${baseline.summary.passed}/${baseline.summary.totalCases} ` +
+        `fail=${baseline.summary.failed} cost=$${baseline.summary.totalCostUsd.toFixed(4)}\n` +
+        `  candidate  ${candidate.model}: pass=${candidate.summary.passed}/${candidate.summary.totalCases} ` +
+        `fail=${candidate.summary.failed} cost=$${candidate.summary.totalCostUsd.toFixed(4)}\n` +
+        `  delta: passed=${passDelta >= 0 ? "+" : ""}${passDelta} ` +
+        `failed=${failDelta >= 0 ? "+" : ""}${failDelta} ` +
+        `cost=${costDelta >= 0 ? "+" : ""}$${costDelta.toFixed(4)}\n`
+    );
+  }
+  return failDelta > 0 ? 1 : 0;
 }
 
 async function runCommand(parsed: ParsedArgs, ctx: CliContext): Promise<number> {
@@ -708,6 +1036,14 @@ async function runCommand(parsed: ParsedArgs, ctx: CliContext): Promise<number> 
     return 0;
   }
 
+  if (command === "eval" && parsed.evalSubcommand === "runs") {
+    return runEvalRunsSubcommand(parsed, ctx);
+  }
+
+  if (command === "eval" && parsed.evalBackground === true) {
+    return spawnBackgroundEval(parsed, ctx);
+  }
+
   if (command === "eval" && parsed.evalSubcommand === "diff") {
     const args = parsed.evalArgs ?? [];
     if (args.length !== 2) {
@@ -738,14 +1074,26 @@ async function runCommand(parsed: ParsedArgs, ctx: CliContext): Promise<number> 
   }
 
   if (command === "eval") {
+    const wantProgress =
+      parsed.evalQuiet !== true &&
+      parsed.dryRun !== true &&
+      parsed.evalJson !== true;
+    const progress = wantProgress
+      ? createStderrProgressLogger({ writer: (s) => ctx.stderr.write(s) })
+      : undefined;
+    if (parsed.evalCompareModel !== undefined) {
+      return runCompareModel(parsed, ctx, progress);
+    }
     const result = await runEval({
       projectRoot: ctx.cwd,
       stage: parsed.evalStage as Parameters<typeof runEval>[0]["stage"],
-      tier: parsed.evalTier,
+      mode: parsed.evalMode,
       schemaOnly: parsed.evalSchemaOnly === true,
       rules: parsed.evalRules === true,
       judge: parsed.evalJudge === true,
-      dryRun: parsed.dryRun === true
+      dryRun: parsed.dryRun === true,
+      ...(progress ? { progress } : {}),
+      ...resolveMaxCostOption(parsed.evalMaxCostUsd, process.env)
     });
 
     if ("kind" in result) {
@@ -759,12 +1107,12 @@ async function runCommand(parsed: ParsedArgs, ctx: CliContext): Promise<number> 
       ctx.stdout.write(`  model: ${result.config.model}\n`);
       ctx.stdout.write(`  source: ${result.config.source}\n`);
       ctx.stdout.write(`  apiKey: ${result.config.apiKey ? "set" : "unset"}\n`);
-      ctx.stdout.write(`  tier: ${result.plannedTier}\n`);
+      ctx.stdout.write(`  mode: ${result.plannedMode}\n`);
       ctx.stdout.write(`  corpus: ${result.corpus.total} case(s)\n`);
       for (const [stage, count] of Object.entries(result.corpus.byStage)) {
         ctx.stdout.write(`    - ${stage}: ${count}\n`);
       }
-      if (result.workflowCorpus.total > 0 || result.plannedTier === "C") {
+      if (result.workflowCorpus.total > 0 || result.plannedMode === "workflow") {
         ctx.stdout.write(
           `  workflow corpus: ${result.workflowCorpus.total} case(s)\n`
         );

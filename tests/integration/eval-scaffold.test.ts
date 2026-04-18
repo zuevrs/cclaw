@@ -22,7 +22,7 @@ describe("cclaw init: eval scaffold", () => {
     const config = await readProjectFile(root, ".cclaw/evals/config.yaml");
     expect(config).toContain("baseUrl: https://api.z.ai/api/coding/paas/v4");
     expect(config).toContain("model: glm-5.1");
-    expect(config).toContain("defaultTier: A");
+    expect(config).toContain("defaultMode: fixture");
   });
 
   it("seeds a starter rubric for every FLOW_STAGE on init", async () => {

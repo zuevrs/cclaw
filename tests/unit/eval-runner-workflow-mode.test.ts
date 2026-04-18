@@ -46,9 +46,9 @@ function stop(content: string): ChatResponse {
   };
 }
 
-describe("eval runner --tier=C", () => {
+describe("eval runner --mode=workflow", () => {
   it("runs each stage of the workflow, records per-stage results, and runs consistency checks", async () => {
-    const root = await fs.mkdtemp(path.join(os.tmpdir(), "cclaw-tier-c-"));
+    const root = await fs.mkdtemp(path.join(os.tmpdir(), "cclaw-workflow-"));
     await setupProjectWithWorkflowCase(root);
 
     const scripted: ChatResponse[] = [
@@ -67,14 +67,14 @@ describe("eval runner --tier=C", () => {
 
     const result = await runEval({
       projectRoot: root,
-      tier: "C",
+      mode: "workflow",
       env: { CCLAW_EVAL_API_KEY: "test" },
       llmClient: client
     });
 
     expect("kind" in result).toBe(false);
     const report = result as EvalReport;
-    expect(report.tier).toBe("C");
+    expect(report.mode).toBe("workflow");
     expect(report.summary.totalCases).toBe(1);
     const caseResult = report.cases[0]!;
     expect(caseResult.workflow).toBeDefined();
@@ -94,7 +94,7 @@ describe("eval runner --tier=C", () => {
   });
 
   it("records a workflow failure without throwing when the agent hits an error", async () => {
-    const root = await fs.mkdtemp(path.join(os.tmpdir(), "cclaw-tier-c-err-"));
+    const root = await fs.mkdtemp(path.join(os.tmpdir(), "cclaw-workflow-err-"));
     await setupProjectWithWorkflowCase(root);
 
     // The stage loop keeps asking for a tool that doesn't produce progress,
@@ -124,7 +124,7 @@ describe("eval runner --tier=C", () => {
 
     const result = await runEval({
       projectRoot: root,
-      tier: "C",
+      mode: "workflow",
       env: {
         CCLAW_EVAL_API_KEY: "test",
         CCLAW_EVAL_TOOL_MAX_TURNS: "2"

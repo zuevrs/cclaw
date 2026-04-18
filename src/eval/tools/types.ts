@@ -1,5 +1,5 @@
 /**
- * Shared types for Tier B sandbox-confined tools.
+ * Shared types for sandbox-confined tools (agent/workflow mode).
  *
  * Tools are plain async functions: they take validated arguments and a
  * sandbox handle and return a structured result. The runner serializes

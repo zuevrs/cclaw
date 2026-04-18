@@ -1,5 +1,5 @@
 /**
- * Per-case sandbox for the Tier B with-tools agent.
+ * Per-case sandbox for the with-tools agent (agent/workflow mode).
  *
  * Every case gets its own `os.tmpdir()/cclaw-eval-<uuid>/` directory. Any
  * `contextFiles` the case declares are copied in relative to the project

@@ -16,7 +16,7 @@ function baseConfig(overrides: Partial<ResolvedEvalConfig> = {}): ResolvedEvalCo
     provider: "zai",
     baseUrl: "https://api.z.ai/api/coding/paas/v4",
     model: "glm-5.1",
-    defaultTier: "A",
+    defaultMode: "fixture",
     timeoutMs: 60_000,
     maxRetries: 2,
     regression: { failIfDeltaBelow: -0.15, failIfCriticalBelow: 3.0 },

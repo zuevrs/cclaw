@@ -1,7 +1,7 @@
 /**
- * Tier C workflow agent.
+ * Workflow-mode agent.
  *
- * Runs the Tier B with-tools loop once per stage in a workflow case,
+ * Runs the with-tools loop once per stage in a workflow case,
  * sharing a single sandbox across stages so every new stage can read
  * the earlier artifacts the model produced. The shape of the run is:
  *
@@ -63,6 +63,13 @@ export interface WorkflowInput {
   loadSkill?: (stage: WorkflowStageName) => Promise<string>;
   /** Override for the sandbox factory (test hook). */
   createSandboxFn?: typeof createSandbox;
+  /**
+   * Optional per-stage lifecycle hooks. The runner uses these to emit
+   * progress events to stderr so workflow-mode runs surface real-time
+   * status rather than going silent for minutes.
+   */
+  onStageStart?: (stage: WorkflowStageName) => void;
+  onStageEnd?: (stage: WorkflowStageName, result: WorkflowStageResult) => void;
 }
 
 export interface WorkflowOutput {
@@ -94,6 +101,7 @@ export async function runWorkflow(input: WorkflowInput): Promise<WorkflowOutput>
     );
 
     for (const step of workflow.stages) {
+      input.onStageStart?.(step.name);
       await clearArtifactFile(sandbox);
       const priorStages: WorkflowStageName[] = stageResults.map((r) => r.stage);
       const preamble = buildStagePreamble(
@@ -139,6 +147,7 @@ export async function runWorkflow(input: WorkflowInput): Promise<WorkflowOutput>
         completionTokens: result.usage.completionTokens
       };
       stageResults.push(stageResult);
+      input.onStageEnd?.(step.name, stageResult);
       totalUsageUsd += result.usageUsd;
       totalDurationMs += result.durationMs;
     }
@@ -185,7 +194,7 @@ function buildStagePreamble(
 ): string {
   const lines: string[] = [];
   lines.push(
-    `You are running stage "${current}" of the Tier C workflow "${workflow.id}".`
+    `You are running stage "${current}" of the workflow "${workflow.id}".`
   );
   if (workflow.description) {
     lines.push(`Case description: ${workflow.description}`);

@@ -39,7 +39,7 @@ function makeCaseResult(
   overrides: Partial<EvalCaseResult> & { caseId: string; stage: EvalCaseResult["stage"] }
 ): EvalCaseResult {
   return {
-    tier: "A",
+    mode: "fixture",
     passed: true,
     durationMs: 0,
     verifierResults: [makeVerifier("structural:x", true)],
@@ -58,7 +58,7 @@ function makeReport(overrides: Partial<EvalReport> = {}): EvalReport {
     cclawVersion: "test",
     provider: "zai",
     model: "glm-5.1",
-    tier: "A",
+    mode: "fixture",
     stages: FLOW_STAGES.filter((s) => cases.some((c) => c.stage === s)),
     cases,
     summary: {
@@ -186,7 +186,7 @@ describe("baseline - compareAgainstBaselines", () => {
         {
           caseId: "alpha",
           stage: "brainstorm",
-          tier: "A",
+          mode: "fixture",
           passed: false,
           durationMs: 1,
           verifierResults: [
@@ -216,7 +216,7 @@ describe("baseline - compareAgainstBaselines", () => {
         {
           caseId: "alpha",
           stage: "brainstorm",
-          tier: "A",
+          mode: "fixture",
           passed: true,
           durationMs: 1,
           verifierResults: [
@@ -227,7 +227,7 @@ describe("baseline - compareAgainstBaselines", () => {
         {
           caseId: "beta",
           stage: "brainstorm",
-          tier: "A",
+          mode: "fixture",
           passed: true,
           durationMs: 1,
           verifierResults: [makeVerifier("structural:section:a", true)]
@@ -248,7 +248,7 @@ describe("baseline - compareAgainstBaselines", () => {
         {
           caseId: "alpha",
           stage: "brainstorm",
-          tier: "A",
+          mode: "fixture",
           passed: true,
           durationMs: 1,
           verifierResults: [

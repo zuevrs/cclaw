@@ -1,5 +1,5 @@
 /**
- * Registry of sandbox-confined tools used by the Tier B with-tools agent.
+ * Registry of sandbox-confined tools used by the with-tools agent (agent/workflow mode).
  *
  * The registry order defines the advertised schema order in the
  * function-calling payload. Keeping it stable means judges reading

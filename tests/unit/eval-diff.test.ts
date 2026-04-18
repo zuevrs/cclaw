@@ -18,13 +18,13 @@ function report(overrides: Partial<EvalReport> = {}): EvalReport {
     cclawVersion: "0.27.0",
     provider: "zai",
     model: "glm-5.1",
-    tier: "B",
+    mode: "agent",
     stages: ["spec"],
     cases: [
       {
         caseId: "case-a",
         stage: "spec",
-        tier: "B",
+        mode: "agent",
         passed: true,
         durationMs: 100,
         costUsd: 0.001,

@@ -25,7 +25,7 @@ export interface ChatMessage {
   toolCallId?: string;
   /**
    * OpenAI-style tool calls carried on a preceding assistant message.
-   * Populated by the Tier B loop so the wire transcript stays
+   * Populated by the with-tools loop so the wire transcript stays
    * consistent (assistant message → tool responses).
    */
   toolCalls?: Array<{ id: string; name: string; arguments: string }>;
@@ -50,7 +50,7 @@ export interface ChatRequest {
   seed?: number;
   /**
    * Tool/function-calling definitions in OpenAI wire format. Populated only
-   * by Tier B. Ignored by the Tier A single-shot path.
+   * by agent/workflow modes. Ignored by the single-shot path.
    */
   tools?: unknown[];
   toolChoice?: "auto" | "none";
@@ -171,6 +171,17 @@ export interface CreateEvalClientOptions {
   retryPolicy?: RetryPolicy;
   /** Deterministic sleep used by the retry loop. Defaults to `setTimeout`. */
   sleep?: (ms: number) => Promise<void>;
+  /**
+   * Observer invoked when a chat() call is about to sleep before the next
+   * retry attempt. Use this to surface "we are retrying" status via the
+   * progress logger so long, silent backoff windows become visible.
+   */
+  onRetry?: (event: {
+    attempt: number;
+    maxAttempts: number;
+    waitMs: number;
+    error: EvalLlmError;
+  }) => void;
 }
 
 export interface RetryPolicy {
@@ -384,7 +395,14 @@ export function createEvalClient(
           lastError = normalized;
           const isLastAttempt = attempt === maxAttempts - 1;
           if (!normalized.retryable || isLastAttempt) throw normalized;
-          await sleep(backoffDelay(attempt, retryPolicy));
+          const waitMs = backoffDelay(attempt, retryPolicy);
+          options.onRetry?.({
+            attempt: attempt + 1,
+            maxAttempts,
+            waitMs,
+            error: normalized
+          });
+          await sleep(waitMs);
         }
       }
       throw lastError ?? new EvalLlmTransportError(new Error("unknown"));

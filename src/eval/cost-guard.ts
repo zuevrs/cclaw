@@ -72,6 +72,32 @@ export class DailyCostCapExceededError extends Error {
   }
 }
 
+/**
+ * Per-run cost cap — enforced in-memory, no ledger file. Complements the
+ * daily cap so a single long workflow run can't blow the whole day's
+ * budget even if the daily cap is generous. Opt-in via
+ * `--max-cost-usd=<n>` on the CLI or `CCLAW_EVAL_MAX_COST_USD`.
+ */
+export class RunCostCapExceededError extends Error {
+  readonly capUsd: number;
+  readonly projectedUsd: number;
+  readonly currentUsd: number;
+
+  constructor(opts: { capUsd: number; projectedUsd: number; currentUsd: number }) {
+    super(
+      `Run cost cap would be exceeded: ` +
+        `current=$${opts.currentUsd.toFixed(4)}, ` +
+        `projected=$${opts.projectedUsd.toFixed(4)}, ` +
+        `cap=$${opts.capUsd.toFixed(4)}. ` +
+        `Raise --max-cost-usd or drop it to run uncapped.`
+    );
+    this.name = "RunCostCapExceededError";
+    this.capUsd = opts.capUsd;
+    this.projectedUsd = opts.projectedUsd;
+    this.currentUsd = opts.currentUsd;
+  }
+}
+
 function utcDate(now: Date = new Date()): string {
   return now.toISOString().slice(0, 10);
 }
@@ -156,6 +182,12 @@ export interface CreateCostGuardOptions {
   now?: () => Date;
   /** Override the default filesystem root for the ledger. */
   ledgerPath?: string;
+  /**
+   * Per-run (in-memory) USD cap. Independent from the persisted daily
+   * cap so a single `cclaw eval` invocation can be budgeted without
+   * touching the shared nightly ledger. Undefined = unlimited.
+   */
+  runCapUsd?: number;
 }
 
 export function createCostGuard(
@@ -167,11 +199,26 @@ export function createCostGuard(
   const currentDate = (): string => utcDate(now());
   const file = (): string =>
     options.ledgerPath ?? ledgerPath(projectRoot, currentDate());
+  const runCap = options.runCapUsd;
+  let runTotalUsd = 0;
 
   return {
     async commit(model, usage) {
       const usd = computeUsageUsd(model, usage, config);
-      if (config.dailyUsdCap === undefined) return usd;
+      if (runCap !== undefined) {
+        const projected = Number((runTotalUsd + usd).toFixed(6));
+        if (projected > runCap) {
+          throw new RunCostCapExceededError({
+            capUsd: runCap,
+            projectedUsd: projected,
+            currentUsd: runTotalUsd
+          });
+        }
+      }
+      if (config.dailyUsdCap === undefined) {
+        runTotalUsd = Number((runTotalUsd + usd).toFixed(6));
+        return usd;
+      }
       const date = currentDate();
       const target = file();
       const ledger = await readLedger(target, date);
@@ -192,6 +239,7 @@ export function createCostGuard(
       byModel.usd = Number((byModel.usd + usd).toFixed(6));
       ledger.byModel[model] = byModel;
       await writeLedger(target, ledger);
+      runTotalUsd = Number((runTotalUsd + usd).toFixed(6));
       return usd;
     },
     async snapshot() {

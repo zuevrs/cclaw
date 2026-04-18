@@ -18,7 +18,7 @@ function baseConfig(overrides: Partial<ResolvedEvalConfig> = {}): ResolvedEvalCo
     provider: "zai",
     baseUrl: "u",
     model: "glm-5.1",
-    defaultTier: "C",
+    defaultMode: "workflow",
     timeoutMs: 30_000,
     maxRetries: 1,
     regression: { failIfDeltaBelow: -0.15, failIfCriticalBelow: 3.0 },
@@ -65,7 +65,7 @@ function scripted(
   };
 }
 
-describe("runWorkflow (Tier C orchestrator)", () => {
+describe("runWorkflow (workflow-mode orchestrator)", () => {
   let projectRoot: string;
 
   beforeEach(async () => {

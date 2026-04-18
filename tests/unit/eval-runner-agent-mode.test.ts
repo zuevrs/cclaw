@@ -81,9 +81,9 @@ async function makeTempRoot(prefix: string): Promise<string> {
   return fs.mkdtemp(path.join(os.tmpdir(), `cclaw-${prefix}-`));
 }
 
-describe("eval runner --judge --tier=B", () => {
+describe("eval runner --judge --mode=agent", () => {
   it("runs the with-tools agent, records tool metrics, and scores the artifact", async () => {
-    const root = await makeTempRoot("tier-b");
+    const root = await makeTempRoot("agent-mode");
     await setupProjectWithSpecCase(root);
     const scripted: ChatResponse[] = [
       ...agentWithReadThenStop(),
@@ -119,7 +119,7 @@ describe("eval runner --judge --tier=B", () => {
     const result = await runEval({
       projectRoot: root,
       judge: true,
-      tier: "B",
+      mode: "agent",
       rules: false,
       stage: "spec",
       env: { CCLAW_EVAL_API_KEY: "test" },
@@ -128,7 +128,7 @@ describe("eval runner --judge --tier=B", () => {
 
     expect("kind" in result).toBe(false);
     const report = result as EvalReport;
-    expect(report.tier).toBe("B");
+    expect(report.mode).toBe("agent");
     expect(report.summary.totalCases).toBe(1);
     const caseResult = report.cases[0]!;
     const ids = caseResult.verifierResults.map((r) => r.id);

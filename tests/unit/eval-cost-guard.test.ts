@@ -16,7 +16,7 @@ function config(overrides: Partial<ResolvedEvalConfig> = {}): ResolvedEvalConfig
     provider: "zai",
     baseUrl: "u",
     model: "glm-5.1",
-    defaultTier: "A",
+    defaultMode: "fixture",
     timeoutMs: 60_000,
     maxRetries: 1,
     regression: { failIfDeltaBelow: -0.15, failIfCriticalBelow: 3.0 },
