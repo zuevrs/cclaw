@@ -1386,12 +1386,16 @@ export async function doctorChecks(projectRoot: string, options: DoctorOptions =
   });
 
   const delegation = await checkMandatoryDelegations(projectRoot, flowState.currentStage);
+  const missingEvidenceNote =
+    delegation.missingEvidence && delegation.missingEvidence.length > 0
+      ? ` (role-switch rows without evidenceRefs: ${delegation.missingEvidence.join(", ")})`
+      : "";
   checks.push({
     name: "delegation:mandatory:current_stage",
     ok: delegation.satisfied,
     details: delegation.satisfied
-      ? `All mandatory delegations satisfied for stage "${flowState.currentStage}"`
-      : `Missing mandatory delegations for stage "${flowState.currentStage}": ${delegation.missing.join(", ")}`
+      ? `All mandatory delegations satisfied for stage "${flowState.currentStage}" (mode: ${delegation.expectedMode})`
+      : `Missing mandatory delegations for stage "${flowState.currentStage}": ${delegation.missing.join(", ")}${missingEvidenceNote}`
   });
   checks.push({
     name: "warning:delegation:waived",

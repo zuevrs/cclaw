@@ -3,13 +3,28 @@ import path from "node:path";
 import { RUNTIME_ROOT } from "./constants.js";
 import { readConfig } from "./config.js";
 import { exists, withDirectoryLock, writeFileSafe } from "./fs-utils.js";
-import { HARNESS_ADAPTERS } from "./harness-adapters.js";
+import { HARNESS_ADAPTERS, type SubagentFallback } from "./harness-adapters.js";
 import { readFlowState } from "./runs.js";
 import { stageSchema } from "./content/stage-schema.js";
 import type { FlowStage } from "./types.js";
 
 export type DelegationMode = "mandatory" | "proactive" | "conditional";
 export type DelegationStatus = "scheduled" | "completed" | "failed" | "waived";
+
+/**
+ * How a delegation was actually fulfilled. Advisory — mirrors the harness
+ * `subagentFallback` that was in effect when the entry was recorded.
+ *
+ * - `isolated`         — Claude-style isolated subagent worker.
+ * - `generic-dispatch` — Cursor-style Task dispatch mapped to a named role.
+ * - `role-switch`      — performed in-session with explicit role announce.
+ * - `harness-waiver`   — auto-waived due to missing dispatch capability.
+ */
+export type DelegationFulfillmentMode =
+  | "isolated"
+  | "generic-dispatch"
+  | "role-switch"
+  | "harness-waiver";
 
 export interface DelegationTokenUsage {
   input: number;
@@ -56,6 +71,12 @@ export type DelegationEntry = {
   retryCount?: number;
   /** Optional references to evidence anchors in artifacts. */
   evidenceRefs?: string[];
+  /**
+   * Fulfillment mode this entry was executed under. Omitted on legacy rows
+   * (treated as `"isolated"` for Claude, otherwise inferred from the active
+   * harness).
+   */
+  fulfillmentMode?: DelegationFulfillmentMode;
   /** Schema version marker for span-compatible delegation logs. */
   schemaVersion?: 1;
 };
@@ -121,6 +142,11 @@ function isDelegationEntry(value: unknown): value is DelegationEntry {
     (o.taskId === undefined || typeof o.taskId === "string") &&
     (o.waiverReason === undefined || typeof o.waiverReason === "string") &&
     (o.runId === undefined || typeof o.runId === "string") &&
+    (o.fulfillmentMode === undefined ||
+      o.fulfillmentMode === "isolated" ||
+      o.fulfillmentMode === "generic-dispatch" ||
+      o.fulfillmentMode === "role-switch" ||
+      o.fulfillmentMode === "harness-waiver") &&
     (o.conditionTrigger === undefined || typeof o.conditionTrigger === "string") &&
     (o.tokens === undefined || isDelegationTokenUsage(o.tokens)) &&
     retryOk &&
@@ -202,10 +228,36 @@ export async function appendDelegation(projectRoot: string, entry: DelegationEnt
   });
 }
 
+/**
+ * Aggregate the fulfillment mode cclaw expects for the active harness set.
+ * Priority native > generic-dispatch > role-switch > waiver — the best
+ * available mode wins so mixed installs (e.g. claude + codex) inherit the
+ * strongest guarantee.
+ */
+export function expectedFulfillmentMode(
+  fallbacks: SubagentFallback[]
+): DelegationFulfillmentMode {
+  if (fallbacks.length === 0) return "isolated";
+  if (fallbacks.some((f) => f === "native")) return "isolated";
+  if (fallbacks.some((f) => f === "generic-dispatch")) return "generic-dispatch";
+  if (fallbacks.some((f) => f === "role-switch")) return "role-switch";
+  return "harness-waiver";
+}
+
 export async function checkMandatoryDelegations(
   projectRoot: string,
   stage: FlowStage
-): Promise<{ satisfied: boolean; missing: string[]; waived: string[]; autoWaived: string[]; staleIgnored: string[] }> {
+): Promise<{
+  satisfied: boolean;
+  missing: string[];
+  waived: string[];
+  autoWaived: string[];
+  staleIgnored: string[];
+  /** Delegation rows missing required evidence under a role-switch fallback. */
+  missingEvidence: string[];
+  /** Expected fulfillment mode for the active harness set. */
+  expectedMode: DelegationFulfillmentMode;
+}> {
   const mandatory = stageSchema(stage).mandatoryDelegations;
   const { activeRunId } = await readFlowState(projectRoot);
   const ledger = await readDelegationLedger(projectRoot);
@@ -218,17 +270,24 @@ export async function checkMandatoryDelegations(
   const missing: string[] = [];
   const waived: string[] = [];
   const autoWaived: string[] = [];
+  const missingEvidence: string[] = [];
   const config = await readConfig(projectRoot).catch(() => null);
   const harnesses = config?.harnesses ?? [];
-  const nativeDelegationUnavailable =
-    harnesses.length > 0 &&
-    harnesses.every((harness) => HARNESS_ADAPTERS[harness].capabilities.nativeSubagentDispatch === "none");
+  const fallbacks = harnesses.map((h) => HARNESS_ADAPTERS[h].capabilities.subagentFallback);
+  const expectedMode = expectedFulfillmentMode(fallbacks);
+  const onlyWaiverFallback =
+    harnesses.length > 0 && fallbacks.every((f) => f === "waiver");
 
   for (const agent of mandatory) {
     const rows = forRun.filter((e) => e.agent === agent);
-    const ok = rows.some((e) => e.status === "completed" || e.status === "waived");
+    const completedRows = rows.filter((e) => e.status === "completed");
+    const waivedRows = rows.filter((e) => e.status === "waived");
+    const hasCompleted = completedRows.length > 0;
+    const hasWaived = waivedRows.length > 0;
+    const ok = hasCompleted || hasWaived;
+
     if (!ok) {
-      if (nativeDelegationUnavailable) {
+      if (onlyWaiverFallback) {
         const existingHarnessWaiver = rows.some(
           (e) => e.status === "waived" && e.waiverReason === "harness_limitation"
         );
@@ -239,6 +298,7 @@ export async function checkMandatoryDelegations(
             mode: "mandatory",
             status: "waived",
             waiverReason: "harness_limitation",
+            fulfillmentMode: "harness-waiver",
             ts: new Date().toISOString(),
             runId: activeRunId
           });
@@ -248,16 +308,32 @@ export async function checkMandatoryDelegations(
       } else {
         missing.push(agent);
       }
-    } else if (rows.some((e) => e.status === "waived")) {
+      continue;
+    }
+
+    if (hasWaived) {
       waived.push(agent);
+    }
+
+    // Under role-switch fallback, a `completed` row is only credible if it
+    // carries at least one evidenceRef — otherwise the agent might have
+    // claimed role-switch satisfaction without showing its work.
+    if (
+      hasCompleted &&
+      expectedMode === "role-switch" &&
+      !completedRows.some((e) => Array.isArray(e.evidenceRefs) && e.evidenceRefs.length > 0)
+    ) {
+      missingEvidence.push(agent);
     }
   }
 
   return {
-    satisfied: missing.length === 0,
+    satisfied: missing.length === 0 && missingEvidence.length === 0,
     missing,
     waived,
     autoWaived,
-    staleIgnored
+    staleIgnored,
+    missingEvidence,
+    expectedMode
   };
 }
