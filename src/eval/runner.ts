@@ -7,8 +7,10 @@ import {
   MaxTurnsExceededError,
   runWithTools
 } from "./agents/with-tools.js";
+import { runWorkflow } from "./agents/workflow.js";
 import { compareAgainstBaselines, loadBaselinesByStage } from "./baseline.js";
 import { loadCorpus, readExtraFixtures, readFixtureArtifact } from "./corpus.js";
+import { loadWorkflowCorpus } from "./workflow-corpus.js";
 import { loadEvalConfig } from "./config-loader.js";
 import {
   type CostGuard,
@@ -31,12 +33,18 @@ import type {
   JudgeInvocation,
   ResolvedEvalConfig,
   RubricDoc,
-  VerifierResult
+  VerifierResult,
+  WorkflowCase,
+  WorkflowRunSummary,
+  WorkflowStageName,
+  WorkflowStageResult,
+  WorkflowStageStep
 } from "./types.js";
 import { judgeResultsToVerifiers, runJudge } from "./verifiers/judge.js";
 import { verifyRules } from "./verifiers/rules.js";
 import { verifyStructural } from "./verifiers/structural.js";
 import { verifyTraceability } from "./verifiers/traceability.js";
+import { verifyWorkflowConsistency } from "./verifiers/workflow-consistency.js";
 
 export interface RunEvalOptions {
   projectRoot: string;
@@ -68,12 +76,18 @@ export interface DryRunSummary {
     byStage: Record<string, number>;
     cases: Array<{ id: string; stage: FlowStage }>;
   };
+  /** Tier C-only workflow corpus summary. Empty for Tier A/B planned runs. */
+  workflowCorpus: {
+    total: number;
+    cases: Array<{ id: string; stages: WorkflowStageName[] }>;
+  };
   plannedTier: EvalTier;
   verifiersAvailable: {
     structural: boolean;
     rules: boolean;
     judge: boolean;
     workflow: boolean;
+    consistency: boolean;
   };
   notes: string[];
 }
@@ -117,7 +131,14 @@ function resolveRunFlags(options: RunEvalOptions): RunFlags {
   const judgeRequested = options.judge === true;
   const tier = options.tier ?? "A";
   const runJudge = judgeRequested && !schemaOnly;
-  const runAgent = runJudge && (tier === "A" || tier === "B");
+  // Tier C always needs the agent loop (no fixture fallback for workflows),
+  // so we still require an LLM client but we do NOT require --judge on the
+  // CLI to produce a workflow run. The judge piece itself stays gated by
+  // `runJudge` so consistency-only runs are cheap and deterministic.
+  const runAgent =
+    tier === "C"
+      ? !schemaOnly
+      : runJudge && (tier === "A" || tier === "B");
   return {
     runStructural: true,
     runRules: rulesRequested && !schemaOnly,
@@ -177,6 +198,218 @@ interface RunCaseContext {
   client?: EvalLlmClient;
   costGuard: CostGuard;
   rubrics: Map<FlowStage, RubricDoc>;
+}
+
+interface RunWorkflowContext {
+  projectRoot: string;
+  workflow: WorkflowCase;
+  plannedTier: EvalTier;
+  flags: RunFlags;
+  config: ResolvedEvalConfig;
+  client?: EvalLlmClient;
+  costGuard: CostGuard;
+  rubrics: Map<FlowStage, RubricDoc>;
+}
+
+function stageJudgeHint(step: WorkflowStageStep): {
+  rubric?: string;
+  requiredChecks?: string[];
+  minimumScores?: Record<string, number>;
+} {
+  const hint: {
+    rubric?: string;
+    requiredChecks?: string[];
+    minimumScores?: Record<string, number>;
+  } = {};
+  if (step.rubric) hint.rubric = step.rubric;
+  if (step.requiredChecks) hint.requiredChecks = step.requiredChecks;
+  if (step.minimumScores) hint.minimumScores = step.minimumScores;
+  return hint;
+}
+
+async function runWorkflowCase(ctx: RunWorkflowContext): Promise<EvalCaseResult> {
+  const { projectRoot, workflow, plannedTier, flags, config, client, rubrics } = ctx;
+  const started = Date.now();
+  const verifierResults: VerifierResult[] = [];
+  let caseCostUsd = 0;
+
+  const lastStage: WorkflowStageName =
+    (workflow.stages[workflow.stages.length - 1]?.name as WorkflowStageName) ??
+    "plan";
+
+  if (!flags.runAgent || !client) {
+    verifierResults.push({
+      kind: "workflow",
+      id: "workflow:agent:disabled",
+      ok: false,
+      score: 0,
+      message:
+        "Tier C requires the with-tools agent (CCLAW_EVAL_API_KEY or injected client). " +
+        "Re-run with credentials to execute the workflow.",
+      details: { stages: workflow.stages.map((s) => s.name) }
+    });
+    return {
+      caseId: workflow.id,
+      stage: lastStage as FlowStage,
+      tier: plannedTier,
+      passed: false,
+      durationMs: Date.now() - started,
+      verifierResults
+    };
+  }
+
+  let workflowResult: Awaited<ReturnType<typeof runWorkflow>>;
+  try {
+    workflowResult = await runWorkflow({
+      workflow,
+      config,
+      projectRoot,
+      client
+    });
+  } catch (err) {
+    if (err instanceof DailyCostCapExceededError) throw err;
+    const retryable = err instanceof EvalLlmError ? err.retryable : false;
+    const maxTurns = err instanceof MaxTurnsExceededError ? err.turns : undefined;
+    verifierResults.push({
+      kind: "workflow",
+      id: "workflow:agent:error",
+      ok: false,
+      score: 0,
+      message: err instanceof Error ? err.message : String(err),
+      details: {
+        retryable,
+        ...(maxTurns !== undefined ? { maxTurnsExceeded: maxTurns } : {})
+      }
+    });
+    return {
+      caseId: workflow.id,
+      stage: lastStage as FlowStage,
+      tier: plannedTier,
+      passed: false,
+      durationMs: Date.now() - started,
+      verifierResults
+    };
+  }
+
+  caseCostUsd += workflowResult.totalUsageUsd;
+  const stageResults: WorkflowStageResult[] = [...workflowResult.stages];
+  verifierResults.push({
+    kind: "workflow",
+    id: "workflow:agent",
+    ok: true,
+    score: 1,
+    message:
+      `workflow ran ${stageResults.length} stage(s) in ` +
+      `${workflowResult.totalDurationMs}ms ` +
+      `(spent $${workflowResult.totalUsageUsd.toFixed(6)})`,
+    details: {
+      stages: stageResults.map((s) => ({
+        name: s.stage,
+        durationMs: s.durationMs,
+        usageUsd: s.usageUsd,
+        turns: s.toolUse.turns,
+        calls: s.toolUse.calls
+      }))
+    }
+  });
+
+  let allJudgeOk = true;
+  if (flags.runJudge) {
+    for (let i = 0; i < workflow.stages.length; i += 1) {
+      const step = workflow.stages[i] as WorkflowStageStep;
+      const stageResult = stageResults[i] as WorkflowStageResult;
+      const rubric = rubrics.get(step.name);
+      if (!rubric) {
+        verifierResults.push({
+          kind: "judge",
+          id: `judge:rubric:missing:${step.name}`,
+          ok: false,
+          score: 0,
+          message: `No rubric at .cclaw/evals/rubrics/${step.name}.yaml.`,
+          details: { stage: step.name }
+        });
+        allJudgeOk = false;
+        stageResult.judgeOk = false;
+        continue;
+      }
+      const hint = stageJudgeHint(step);
+      try {
+        const invocation = await runJudge({
+          artifact: stageResult.artifact,
+          rubric,
+          config,
+          client,
+          caseHint: hint
+        });
+        caseCostUsd += invocation.usageUsd;
+        const judgeVerifiers = judgeResultsToVerifiers(
+          rubric,
+          invocation,
+          config,
+          hint
+        );
+        const medians: Record<string, number> = {};
+        for (const agg of invocation.aggregates) {
+          medians[agg.checkId] = agg.median;
+        }
+        stageResult.judgeMedians = medians;
+        const stageOk = judgeVerifiers.every((v) => v.ok);
+        stageResult.judgeOk = stageOk;
+        if (!stageOk) allJudgeOk = false;
+        for (const v of judgeVerifiers) {
+          verifierResults.push({
+            ...v,
+            id: `${v.id}:${step.name}`,
+            details: { ...(v.details ?? {}), stage: step.name }
+          });
+        }
+      } catch (err) {
+        if (err instanceof DailyCostCapExceededError) throw err;
+        const retryable = err instanceof EvalLlmError ? err.retryable : false;
+        verifierResults.push({
+          kind: "judge",
+          id: `judge:invocation:error:${step.name}`,
+          ok: false,
+          score: 0,
+          message: err instanceof Error ? err.message : String(err),
+          details: { retryable, rubricId: rubric.id, stage: step.name }
+        });
+        stageResult.judgeOk = false;
+        allJudgeOk = false;
+      }
+    }
+  }
+
+  const consistencyResults = verifyWorkflowConsistency(
+    workflowResult.artifacts,
+    workflow.consistency
+  );
+  verifierResults.push(...consistencyResults);
+
+  const nonSkipped = verifierResults.filter((r) => r.details?.skipped !== true);
+  const allOk =
+    nonSkipped.length === 0
+      ? verifierResults.every((r) => r.ok)
+      : nonSkipped.every((r) => r.ok);
+
+  const workflowSummary: WorkflowRunSummary = {
+    caseId: workflow.id,
+    stages: stageResults,
+    totalUsageUsd: workflowResult.totalUsageUsd,
+    totalDurationMs: workflowResult.totalDurationMs,
+    allJudgeOk: flags.runJudge ? allJudgeOk : true
+  };
+
+  return {
+    caseId: workflow.id,
+    stage: lastStage as FlowStage,
+    tier: plannedTier,
+    passed: allOk,
+    durationMs: Date.now() - started,
+    costUsd: caseCostUsd > 0 ? Number(caseCostUsd.toFixed(6)) : undefined,
+    verifierResults,
+    workflow: workflowSummary
+  };
 }
 
 async function runCase(ctx: RunCaseContext): Promise<EvalCaseResult> {
@@ -439,13 +672,21 @@ function stagesInResults(caseResults: EvalCaseResult[]): FlowStage[] {
  */
 export async function runEval(options: RunEvalOptions): Promise<DryRunSummary | EvalReport> {
   const config = await loadEvalConfig(options.projectRoot, options.env ?? process.env);
-  const corpus = await loadCorpus(options.projectRoot, options.stage);
   const plannedTier = options.tier ?? config.defaultTier;
+  const corpus =
+    plannedTier === "C" ? [] : await loadCorpus(options.projectRoot, options.stage);
+  const workflowCorpus =
+    plannedTier === "C" ? await loadWorkflowCorpus(options.projectRoot) : [];
 
   const notes: string[] = [];
-  if (corpus.length === 0) {
+  if (plannedTier !== "C" && corpus.length === 0) {
     notes.push(
       "Corpus is empty. Seed cases live under `.cclaw/evals/corpus/<stage>/*.yaml`."
+    );
+  }
+  if (plannedTier === "C" && workflowCorpus.length === 0) {
+    notes.push(
+      "Workflow corpus is empty. Tier C cases live under `.cclaw/evals/corpus/workflows/*.yaml`."
     );
   }
   const flags: RunFlags = resolveRunFlags(options);
@@ -455,9 +696,9 @@ export async function runEval(options: RunEvalOptions): Promise<DryRunSummary | 
       "--judge requires CCLAW_EVAL_API_KEY (or an injected client for tests); judge pipeline will report errors per case."
     );
   }
-  if ((options.tier ?? "A") !== "A" && flags.runJudge) {
+  if (plannedTier === "C" && !config.apiKey && !options.llmClient) {
     notes.push(
-      "Tier B/C agent-under-test is not wired yet; --judge will score the committed fixture as a stand-in."
+      "Tier C requires CCLAW_EVAL_API_KEY (or an injected client for tests); workflow runs will fail per case without one."
     );
   }
 
@@ -470,12 +711,20 @@ export async function runEval(options: RunEvalOptions): Promise<DryRunSummary | 
         byStage: groupByStage(corpus),
         cases: corpus.map((item) => ({ id: item.id, stage: item.stage }))
       },
+      workflowCorpus: {
+        total: workflowCorpus.length,
+        cases: workflowCorpus.map((item) => ({
+          id: item.id,
+          stages: item.stages.map((s) => s.name)
+        }))
+      },
       plannedTier,
       verifiersAvailable: {
         structural: flags.runStructural,
         rules: flags.runRules,
         judge: flags.runJudge,
-        workflow: flags.runAgent
+        workflow: flags.runAgent,
+        consistency: plannedTier === "C"
       },
       notes
     };
@@ -484,7 +733,8 @@ export async function runEval(options: RunEvalOptions): Promise<DryRunSummary | 
 
   const costGuard = createCostGuard(options.projectRoot, config);
   let wrappedClient: EvalLlmClient | undefined;
-  if (flags.runJudge) {
+  const clientNeeded = flags.runJudge || plannedTier === "C";
+  if (clientNeeded) {
     const base = options.llmClient ?? createEvalClient(config);
     wrappedClient = wrapClientWithCostGuard(
       base,
@@ -492,25 +742,43 @@ export async function runEval(options: RunEvalOptions): Promise<DryRunSummary | 
       config.judgeModel ?? config.model
     );
   }
-  const rubrics = flags.runJudge
+  const rubricsNeeded = flags.runJudge;
+  const rubrics = rubricsNeeded
     ? await loadAllRubrics(options.projectRoot)
     : new Map<FlowStage, RubricDoc>();
 
   const now = new Date().toISOString();
   const caseResults: EvalCaseResult[] = [];
-  for (const item of corpus) {
-    caseResults.push(
-      await runCase({
-        projectRoot: options.projectRoot,
-        caseEntry: item,
-        plannedTier,
-        flags,
-        config,
-        client: wrappedClient,
-        costGuard,
-        rubrics
-      })
-    );
+  if (plannedTier === "C") {
+    for (const wf of workflowCorpus) {
+      caseResults.push(
+        await runWorkflowCase({
+          projectRoot: options.projectRoot,
+          workflow: wf,
+          plannedTier,
+          flags,
+          config,
+          client: wrappedClient,
+          costGuard,
+          rubrics
+        })
+      );
+    }
+  } else {
+    for (const item of corpus) {
+      caseResults.push(
+        await runCase({
+          projectRoot: options.projectRoot,
+          caseEntry: item,
+          plannedTier,
+          flags,
+          config,
+          client: wrappedClient,
+          costGuard,
+          rubrics
+        })
+      );
+    }
   }
 
   const stages = stagesInResults(caseResults);

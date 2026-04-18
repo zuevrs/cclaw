@@ -17,6 +17,7 @@ import { HARNESS_ADAPTERS } from "./harness-adapters.js";
 import { runEval } from "./eval/runner.js";
 import { writeBaselinesFromReport } from "./eval/baseline.js";
 import { writeJsonReport, writeMarkdownReport } from "./eval/report.js";
+import { formatDiffMarkdown, runEvalDiff } from "./eval/diff.js";
 import { EVAL_TIERS } from "./eval/types.js";
 import type { EvalTier } from "./eval/types.js";
 import { FLOW_STAGES } from "./types.js";
@@ -56,6 +57,10 @@ interface ParsedArgs {
   evalNoWrite?: boolean;
   evalUpdateBaseline?: boolean;
   evalConfirm?: boolean;
+  /** Optional subcommand after `eval`. Currently only `diff` is supported. */
+  evalSubcommand?: "diff";
+  /** Positional arguments for eval subcommands (e.g. `diff <old> <new>`). */
+  evalArgs?: string[];
   showHelp?: boolean;
   showVersion?: boolean;
 }
@@ -88,16 +93,22 @@ Commands:
                     --skip-retro       Bypass mandatory retro gate (requires --retro-reason).
                     --retro-reason=<t> Reason for bypassing retro gate.
   eval       Run cclaw evals against .cclaw/evals/corpus (Phase 7: structural verifier + baselines).
-             Flags: --stage=<id>         Limit to one flow stage (${FLOW_STAGES.join("|")}).
-                    --tier=<A|B|C>       Fidelity tier (A=single-shot, B=tools, C=workflow).
+             Flags: --stage=<id>         Limit to one flow stage (${FLOW_STAGES.join("|")}) for Tier A/B.
+                    --tier=<A|B|C>       Fidelity tier (A=single-shot, B=tools, C=multi-stage workflow).
                     --schema-only        Run only structural verifiers (default).
                     --rules              Also run rule-based verifiers (keywords, regex, counts, uniqueness, traceability).
-                    --judge              Run the LLM judge (median-of-N) against each case's rubric. Requires CCLAW_EVAL_API_KEY; Tier A runs the single-shot agent, Tier B runs the sandbox tool-using agent (read_file/write_file/glob/grep).
+                    --judge              Run the LLM judge (median-of-N) against each case's rubric. Requires CCLAW_EVAL_API_KEY; Tier A runs the single-shot agent, Tier B/C the sandbox tool-using agent (read_file/write_file/glob/grep).
                     --dry-run            Validate config + corpus, print summary, do not execute.
                     --json               Emit machine-readable JSON on stdout.
                     --no-write           Skip writing the report to .cclaw/evals/reports/.
                     --update-baseline    Overwrite baselines from the current run (requires --confirm).
                     --confirm            Acknowledge --update-baseline (prevents accidental resets).
+
+             Subcommands:
+                    diff <old> <new>     Compare two reports under .cclaw/evals/reports/.
+                                         Each argument is a cclawVersion (e.g. 0.26.0), a filename,
+                                         or the literal "latest". Exit code 1 when the diff shows a
+                                         regression. Accepts --json to emit machine-readable output.
   upgrade    Refresh generated files in .cclaw without modifying user artifacts.
   uninstall  Remove .cclaw runtime and the generated harness shim files.
 
@@ -113,6 +124,8 @@ Examples:
   cclaw eval --stage=brainstorm --schema-only
   cclaw eval --judge --tier=A --stage=brainstorm
   cclaw eval --judge --tier=B --stage=spec
+  cclaw eval --tier=C --judge
+  cclaw eval diff 0.26.0 latest
 
 Docs:   https://github.com/zuevrs/cclaw
 Issues: https://github.com/zuevrs/cclaw/issues
@@ -455,12 +468,43 @@ function parseArgs(argv: string[]): ParsedArgs {
     parsed.showVersion = true;
   }
 
-  const [commandRaw, ...flags] = argv.filter(
+  const filteredArgv = argv.filter(
     (arg) => arg !== "--help" && arg !== "-h" && arg !== "--version" && arg !== "-v"
   );
+  const [commandRaw, ...rest] = filteredArgv;
   parsed.command = INSTALLER_COMMANDS.includes(commandRaw as CommandName)
     ? (commandRaw as CommandName)
     : undefined;
+
+  // For `eval`, the next non-flag argument is an optional subcommand. Any
+  // subsequent non-flag tokens are captured as evalArgs (consumed by the
+  // subcommand handler). This preserves backwards compat: callers that run
+  // `cclaw eval --dry-run` see no subcommand and no positional args.
+  let flags: string[] = rest;
+  if (parsed.command === "eval") {
+    const evalArgs: string[] = [];
+    const remainder: string[] = [];
+    let sawSubcommand = false;
+    for (const token of rest) {
+      if (token.startsWith("--")) {
+        remainder.push(token);
+        continue;
+      }
+      if (!sawSubcommand) {
+        if (token === "diff") {
+          parsed.evalSubcommand = "diff";
+          sawSubcommand = true;
+        } else {
+          // Treat unknown positional as an eval arg for forward compat.
+          evalArgs.push(token);
+        }
+        continue;
+      }
+      evalArgs.push(token);
+    }
+    if (evalArgs.length > 0) parsed.evalArgs = evalArgs;
+    flags = remainder;
+  }
 
   for (const flag of flags) {
     if (flag.startsWith("--harnesses=")) {
@@ -664,6 +708,35 @@ async function runCommand(parsed: ParsedArgs, ctx: CliContext): Promise<number> 
     return 0;
   }
 
+  if (command === "eval" && parsed.evalSubcommand === "diff") {
+    const args = parsed.evalArgs ?? [];
+    if (args.length !== 2) {
+      error(
+        ctx,
+        `\`cclaw eval diff\` requires two arguments: <old> <new>. ` +
+          `Example: cclaw eval diff 0.26.0 latest`
+      );
+      return 1;
+    }
+    const [oldSel, newSel] = args as [string, string];
+    try {
+      const diff = await runEvalDiff({
+        projectRoot: ctx.cwd,
+        old: oldSel,
+        new: newSel
+      });
+      if (parsed.evalJson === true) {
+        ctx.stdout.write(`${JSON.stringify(diff, null, 2)}\n`);
+      } else {
+        ctx.stdout.write(formatDiffMarkdown(diff));
+      }
+      return diff.regressed ? 1 : 0;
+    } catch (err) {
+      error(ctx, err instanceof Error ? err.message : String(err));
+      return 1;
+    }
+  }
+
   if (command === "eval") {
     const result = await runEval({
       projectRoot: ctx.cwd,
@@ -690,6 +763,14 @@ async function runCommand(parsed: ParsedArgs, ctx: CliContext): Promise<number> 
       ctx.stdout.write(`  corpus: ${result.corpus.total} case(s)\n`);
       for (const [stage, count] of Object.entries(result.corpus.byStage)) {
         ctx.stdout.write(`    - ${stage}: ${count}\n`);
+      }
+      if (result.workflowCorpus.total > 0 || result.plannedTier === "C") {
+        ctx.stdout.write(
+          `  workflow corpus: ${result.workflowCorpus.total} case(s)\n`
+        );
+        for (const wf of result.workflowCorpus.cases) {
+          ctx.stdout.write(`    - ${wf.id}: ${wf.stages.join(" → ")}\n`);
+        }
       }
       ctx.stdout.write(`  verifiers available:\n`);
       for (const [key, value] of Object.entries(result.verifiersAvailable)) {
