@@ -88,6 +88,33 @@ export function formatMarkdownReport(report: EvalReport): string {
   }
   lines.push(``);
 
+  const judgeCases = report.cases.filter((item) =>
+    item.verifierResults.some((r) => r.kind === "judge")
+  );
+  if (judgeCases.length > 0) {
+    lines.push(`## Judge scores`);
+    lines.push(``);
+    lines.push(`| stage | case id | check | median | mean | coverage | ok |`);
+    lines.push(`| --- | --- | --- | --- | --- | --- | --- |`);
+    for (const item of judgeCases) {
+      for (const verifier of item.verifierResults) {
+        if (verifier.kind !== "judge") continue;
+        if (verifier.id === "judge:required-checks") continue;
+        if (verifier.id === "judge:rubric:missing") continue;
+        if (verifier.id === "judge:invocation:error") continue;
+        const details = verifier.details ?? {};
+        const median = typeof details.median === "number" ? details.median.toFixed(2) : "-";
+        const mean = typeof details.mean === "number" ? details.mean.toFixed(2) : "-";
+        const coverage = details.coverage === true ? "yes" : "no";
+        const checkId = verifier.id.replace(/^judge:/, "");
+        lines.push(
+          `| ${item.stage} | ${item.caseId} | ${checkId} | ${median} | ${mean} | ${coverage} | ${verifier.ok ? "yes" : "no"} |`
+        );
+      }
+    }
+    lines.push(``);
+  }
+
   lines.push(`## Verifier details`);
   lines.push(``);
   for (const item of report.cases) {
