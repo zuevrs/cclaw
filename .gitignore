@@ -7,6 +7,8 @@ coverage/
 release-artifacts/
 docs/*
 !docs/harnesses.md
+!docs/roadmap.md
+!docs/evals.md
 
 # cclaw generated artifacts
 .cclaw/

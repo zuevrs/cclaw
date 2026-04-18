@@ -57,6 +57,13 @@ import {
   RULEBOOK_MARKDOWN,
   buildRulesJson
 } from "./content/templates.js";
+import {
+  EVAL_BASELINES_README,
+  EVAL_CONFIG_YAML,
+  EVAL_CORPUS_README,
+  EVAL_REPORTS_README,
+  EVAL_RUBRICS_README
+} from "./content/eval-scaffold.js";
 import { TDD_WAVE_WALKTHROUGH_MARKDOWN, stageSkillFolder, stageSkillMarkdown } from "./content/skills.js";
 import { stageCommonGuidanceMarkdown } from "./content/stage-common-guidance.js";
 import {
@@ -249,6 +256,26 @@ async function writeCommandContracts(projectRoot: string): Promise<void> {
 async function writeArtifactTemplates(projectRoot: string): Promise<void> {
   for (const [fileName, content] of Object.entries(ARTIFACT_TEMPLATES)) {
     await writeFileSafe(runtimePath(projectRoot, "templates", fileName), content);
+  }
+}
+
+/**
+ * Seed the `.cclaw/evals/` scaffold. Only writes files that do not already
+ * exist so that user-authored config.yaml / corpus / rubrics / baselines are
+ * never clobbered by `cclaw sync`.
+ */
+async function writeEvalScaffold(projectRoot: string): Promise<void> {
+  const targets: Array<{ rel: string; content: string }> = [
+    { rel: "evals/config.yaml", content: EVAL_CONFIG_YAML },
+    { rel: "evals/corpus/README.md", content: EVAL_CORPUS_README },
+    { rel: "evals/rubrics/README.md", content: EVAL_RUBRICS_README },
+    { rel: "evals/baselines/README.md", content: EVAL_BASELINES_README },
+    { rel: "evals/reports/README.md", content: EVAL_REPORTS_README }
+  ];
+  for (const target of targets) {
+    const absolute = runtimePath(projectRoot, ...target.rel.split("/"));
+    if (await exists(absolute)) continue;
+    await writeFileSafe(absolute, target.content);
   }
 }
 
@@ -1273,6 +1300,7 @@ async function materializeRuntime(projectRoot: string, config: VibyConfig, force
   await writeSkills(projectRoot, config);
   await writeContextModes(projectRoot);
   await writeArtifactTemplates(projectRoot);
+  await writeEvalScaffold(projectRoot);
   await writeRulebook(projectRoot);
   await writeState(projectRoot, config, forceStateReset);
   await ensureRunSystem(projectRoot, { createIfMissing: false });
