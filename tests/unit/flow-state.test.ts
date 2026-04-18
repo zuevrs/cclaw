@@ -1,10 +1,12 @@
 import { describe, expect, it } from "vitest";
 import {
   canTransition,
+  createInitialCloseoutState,
   createInitialFlowState,
   getTransitionGuards,
   nextStage,
-  previousStage
+  previousStage,
+  SHIP_SUBSTATES
 } from "../../src/flow-state.js";
 
 describe("flow state", () => {
@@ -39,5 +41,27 @@ describe("flow state", () => {
     expect(nextStage("review")).toBe("ship");
     expect(previousStage("scope")).toBe("brainstorm");
     expect(previousStage("brainstorm")).toBeNull();
+  });
+
+  it("initializes closeout substate to idle with no timestamps", () => {
+    const state = createInitialFlowState();
+    expect(state.closeout.shipSubstate).toBe("idle");
+    expect(state.closeout.retroDraftedAt).toBeUndefined();
+    expect(state.closeout.retroAcceptedAt).toBeUndefined();
+    expect(state.closeout.retroSkipped).toBeUndefined();
+    expect(state.closeout.compoundCompletedAt).toBeUndefined();
+    expect(state.closeout.compoundPromoted).toBe(0);
+  });
+
+  it("exposes the full shipSubstate machine", () => {
+    expect(SHIP_SUBSTATES).toEqual([
+      "idle",
+      "retro_review",
+      "compound_review",
+      "ready_to_archive",
+      "archived"
+    ]);
+    const closeout = createInitialCloseoutState();
+    expect(SHIP_SUBSTATES).toContain(closeout.shipSubstate);
   });
 });

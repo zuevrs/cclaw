@@ -37,7 +37,7 @@ This is the only progression command the user needs to drive the entire flow. St
 
 - **Do not** invent gate completion: use only \`${flowPath}\` plus observable evidence in repo artifacts.
 - **Do not** skip stages: advance only from \`currentStage\` to its configured successor.
-- If the flow reaches terminal ship completion, route closeout in order: **/cc-ops retro -> /cc-ops compound (optional) -> /cc-ops archive**.
+- After ship completes, the closeout chain **retro -> compound -> archive** runs automatically, driven by \`closeout.shipSubstate\`. Do not ask the user to type those commands manually — follow the substate switch in Path B below.
 
 ## Algorithm (mandatory)
 
@@ -59,9 +59,24 @@ This is the only progression command the user needs to drive the entire flow. St
 ### Path B: Current stage IS complete (all gates passed, all delegations satisfied)
 
 → If current stage's \`next\` is **\`done\`**:
-  - if \`currentStage === "ship"\` and \`retro.completedAt\` is missing -> route to \`/cc-ops retro\`,
-  - if \`currentStage === "ship"\` and \`retro.completedAt\` is present -> suggest \`/cc-ops compound\` then route to \`/cc-ops archive\`,
-  - otherwise report **"Flow complete. All stages finished."** and stop.
+
+  When \`currentStage === "ship"\`, route by **\`closeout.shipSubstate\`**:
+  - \`"idle"\` or missing -> set \`closeout.shipSubstate = "retro_review"\`, then
+    load \`${RUNTIME_ROOT}/commands/retro.md\` + \`${RUNTIME_ROOT}/skills/flow-retro/SKILL.md\`
+    and execute the retro protocol (draft + one structured accept/edit/skip ask).
+  - \`"retro_review"\` -> continue the retro protocol (re-ask the structured
+    question; the draft already exists — do not regenerate it).
+  - \`"compound_review"\` -> load \`${RUNTIME_ROOT}/commands/compound.md\` +
+    \`${RUNTIME_ROOT}/skills/flow-compound/SKILL.md\`, execute the compound
+    scan, ask user **one** structured question (apply / skip) per candidate
+    cluster or a single accept-all / skip choice, and advance substate on
+    completion or skip.
+  - \`"ready_to_archive"\` -> load \`${RUNTIME_ROOT}/commands/archive.md\` +
+    \`${RUNTIME_ROOT}/skills/flow-archive/SKILL.md\`, run archive, reset state.
+  - \`"archived"\` (transient) -> report "run archived" and stop.
+
+  Otherwise report **"Flow complete. All stages finished."** and stop.
+
 → Otherwise: load **\`${RUNTIME_ROOT}/skills/<skillFolder>/SKILL.md\`** and **\`${RUNTIME_ROOT}/commands/<nextStage>.md\`** for the successor stage. Execute that stage's protocol.
 
 ### Track-aware successor resolution
@@ -78,6 +93,9 @@ This is the only progression command the user needs to drive the entire flow. St
 \`/cc-next\` in a **new session** = resume from where you left off:
 - Flow-state records \`currentStage\` and which gates have passed.
 - The stage skill reads upstream artifacts and picks up context.
+- \`closeout.shipSubstate\` carries the post-ship substate, so a crashed
+  session during retro/compound/archive resumes at the exact step without
+  regenerating the retro draft.
 - No special resume command needed — \`/cc-next\` IS the resume command.
 
 ## Primary skill
@@ -156,11 +174,25 @@ Execute the stage protocol. The stage skill handles interaction, STOP points, ga
 
 If \`next\` is \`done\`:
 
-- If \`currentStage\` is \`ship\` and \`retro.completedAt\` is missing -> route to \`/cc-ops retro\`.
-- If \`currentStage\` is \`ship\` and \`retro.completedAt\` exists -> suggest \`/cc-ops compound\`, then route to \`/cc-ops archive\`.
-- Otherwise report **"Flow complete. All stages finished."** and stop.
+When \`currentStage\` is \`ship\`, automatically drive the **closeout chain**
+by inspecting \`closeout.shipSubstate\`:
 
-Otherwise load the next stage's skill and command contract, begin execution.
+| shipSubstate          | Action                                              |
+|-----------------------|-----------------------------------------------------|
+| \`idle\` / missing      | Flip to \`retro_review\` and start retro protocol     |
+| \`retro_review\`        | Continue retro protocol (re-ask accept/edit/skip)   |
+| \`compound_review\`     | Run compound scan with a single approve/skip ask    |
+| \`ready_to_archive\`    | Run archive skill; reset flow-state on success      |
+| \`archived\`            | Report "run archived"; stop                         |
+
+Each step owns its own state transition. \`/cc-next\` never shells out to
+\`cclaw doctor\` or \`cclaw archive\` automatically — it loads the matching
+skill and command contract and executes the protocol in-session.
+
+Otherwise report **"Flow complete. All stages finished."** and stop.
+
+Otherwise (non-terminal \`next\`): load the next stage's skill and command
+contract, begin execution.
 
 ## Stage order
 

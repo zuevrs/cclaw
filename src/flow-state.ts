@@ -43,6 +43,55 @@ export interface RetroState {
   compoundEntries: number;
 }
 
+/**
+ * Ship closeout substate machine.
+ *
+ * After ship completes, cclaw auto-chains retro → compound → archive.
+ * Each step is interruptible: `/cc-next` reads `shipSubstate` and resumes
+ * from the correct step even across sessions.
+ *
+ * - `idle` — ship not complete, or closeout not yet started.
+ * - `retro_review` — 09-retro.md draft exists; awaiting user edit/accept/skip.
+ * - `compound_review` — retro accepted; compound pass awaiting execution
+ *   (or user skip).
+ * - `ready_to_archive` — retro + compound done; archive is the next
+ *   automatic step.
+ * - `archived` — archive completed in this session (transient — archive
+ *   resets flow-state so this value does not persist between runs).
+ */
+export const SHIP_SUBSTATES = [
+  "idle",
+  "retro_review",
+  "compound_review",
+  "ready_to_archive",
+  "archived"
+] as const;
+export type ShipSubstate = (typeof SHIP_SUBSTATES)[number];
+
+export interface CloseoutState {
+  shipSubstate: ShipSubstate;
+  retroDraftedAt?: string;
+  retroAcceptedAt?: string;
+  retroSkipped?: boolean;
+  retroSkipReason?: string;
+  compoundCompletedAt?: string;
+  compoundSkipped?: boolean;
+  compoundPromoted: number;
+}
+
+export function createInitialCloseoutState(): CloseoutState {
+  return {
+    shipSubstate: "idle",
+    retroDraftedAt: undefined,
+    retroAcceptedAt: undefined,
+    retroSkipped: undefined,
+    retroSkipReason: undefined,
+    compoundCompletedAt: undefined,
+    compoundSkipped: undefined,
+    compoundPromoted: 0
+  };
+}
+
 export interface FlowState {
   activeRunId: string;
   currentStage: FlowStage;
@@ -59,6 +108,8 @@ export interface FlowState {
   rewinds: RewindRecord[];
   /** Mandatory retrospective gate status before archive. */
   retro: RetroState;
+  /** Ship → retro → compound → archive substate for resumable closeout. */
+  closeout: CloseoutState;
 }
 
 export interface InitialFlowStateOptions {
@@ -123,7 +174,8 @@ export function createInitialFlowState(
       required: false,
       completedAt: undefined,
       compoundEntries: 0
-    }
+    },
+    closeout: createInitialCloseoutState()
   };
 }
 
