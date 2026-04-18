@@ -265,9 +265,8 @@ describe("install lifecycle", () => {
       languageRulePacks: ["typescript", "python", "go"],
       trackHeuristics: {
         fallback: "standard",
-        priority: ["quick", "medium", "standard"],
         tracks: {
-          quick: { triggers: ["hotfix"], patterns: undefined, veto: undefined },
+          quick: { triggers: ["hotfix"], veto: undefined },
           medium: undefined,
           standard: undefined
         }

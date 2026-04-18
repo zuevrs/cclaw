@@ -68,7 +68,7 @@ This is the **recommended way to start** working with cclaw. Use \`/cc-next\` fo
 4. Read \`${flowPath}\`.
 5. If flow already has completed stages beyond brainstorm, warn the user that starting a new brainstorm will reset progress. Ask for confirmation before proceeding.
 6. **Track heuristic** — classify the idea text and **recommend** a track (the user can override before any state mutation):
-   - First, load \`${RUNTIME_ROOT}/config.yaml\`. If \`trackHeuristics\` is defined, apply those per-track rules (\`priority\`, \`fallback\`, \`tracks.<id>.{triggers,patterns,veto}\`) before built-in defaults.
+   - First, load \`${RUNTIME_ROOT}/config.yaml\`. If \`trackHeuristics\` is defined, apply those per-track vocabulary hints (\`fallback\`, \`tracks.<id>.{triggers,veto}\`) on top of the built-in defaults. Evaluation order is always \`standard -> medium -> quick\` (narrow-to-broad).
    - **quick** (\`spec → tdd → review → ship\`) — single-purpose work where the spec is essentially already known.
      Triggers (case-insensitive substring or close variant): \`bug\`, \`bugfix\`, \`fix\`, \`hotfix\`, \`patch\`, \`typo\`, \`regression\`, \`copy change\`, \`rename\`, \`bump\`, \`upgrade dep\`, \`config tweak\`, \`docs only\`, \`comment\`, \`lint\`, \`format\`, \`small\`, \`tiny\`, \`one-liner\`, \`revert\`.
    - **medium** (\`brainstorm → spec → plan → tdd → review → ship\`) — additive work that fits existing architecture and still needs product framing.
@@ -145,7 +145,7 @@ Do **not** silently discard an existing flow when the user provides a prompt. If
    - Ask: "Continue with reset? (A) Yes, start fresh (B) No, resume current flow"
    - If (B) → switch to Path B behavior.
 6. **Classify the idea** using the heuristic below and present a single track recommendation. Wait for explicit confirmation or override before mutating any state.
-   - If \`${RUNTIME_ROOT}/config.yaml\` defines \`trackHeuristics\`, apply that override first (priority/fallback/rules), then use built-in defaults only as fallback.
+   - If \`${RUNTIME_ROOT}/config.yaml\` defines \`trackHeuristics\`, apply those vocabulary hints (\`fallback\`, \`tracks.<id>.{triggers,veto}\`) on top of built-in defaults. Evaluation order is fixed: \`standard -> medium -> quick\`. (Honest note: this is advisory prose; the LLM applies it, not a Node-level router.)
 
    **Track heuristic** (lowercase substring match against the user prompt):
 

@@ -206,22 +206,11 @@ export async function readConfig(projectRoot: string): Promise<VibyConfig> {
       );
     }
 
-    const priorityRaw = trackHeuristicsRaw.priority;
-    let priority: FlowTrack[] | undefined;
-    if (priorityRaw !== undefined) {
-      if (!Array.isArray(priorityRaw)) {
-        throw configValidationError(fullPath, `"trackHeuristics.priority" must be an array`);
-      }
-      const invalidPriority = priorityRaw.filter(
-        (value) => typeof value !== "string" || !FLOW_TRACK_SET.has(value)
+    if (Object.prototype.hasOwnProperty.call(trackHeuristicsRaw, "priority")) {
+      throw configValidationError(
+        fullPath,
+        `"trackHeuristics.priority" is no longer supported (removed in v0.38.0). Track evaluation order is always standard -> medium -> quick. Remove the field to upgrade.`
       );
-      if (invalidPriority.length > 0) {
-        throw configValidationError(
-          fullPath,
-          `"trackHeuristics.priority" must contain only: ${SUPPORTED_TRACKS_TEXT}`
-        );
-      }
-      priority = [...new Set(priorityRaw as FlowTrack[])];
     }
 
     const tracksRaw = trackHeuristicsRaw.tracks;
@@ -245,14 +234,16 @@ export async function readConfig(projectRoot: string): Promise<VibyConfig> {
           );
         }
 
+        if (Object.prototype.hasOwnProperty.call(ruleRaw, "patterns")) {
+          throw configValidationError(
+            fullPath,
+            `"trackHeuristics.tracks.${trackName}.patterns" is no longer supported (removed in v0.38.0). Regex patterns were never wired into runtime routing. Move the intent into "triggers" (substrings) or "veto".`
+          );
+        }
+
         const triggers = validateStringArray(
           ruleRaw.triggers,
           `trackHeuristics.tracks.${trackName}.triggers`,
-          fullPath
-        );
-        const patterns = validateStringArray(
-          ruleRaw.patterns,
-          `trackHeuristics.tracks.${trackName}.patterns`,
           fullPath
         );
         const veto = validateStringArray(
@@ -260,22 +251,8 @@ export async function readConfig(projectRoot: string): Promise<VibyConfig> {
           `trackHeuristics.tracks.${trackName}.veto`,
           fullPath
         );
-        if (patterns) {
-          for (const pattern of patterns) {
-            try {
-              // eslint-disable-next-line no-new
-              new RegExp(pattern, "iu");
-            } catch {
-              throw configValidationError(
-                fullPath,
-                `"trackHeuristics.tracks.${trackName}.patterns" contains invalid regex "${pattern}"`
-              );
-            }
-          }
-        }
         tracks[trackName as FlowTrack] = {
           triggers,
-          patterns,
           veto
         };
       }
@@ -283,7 +260,6 @@ export async function readConfig(projectRoot: string): Promise<VibyConfig> {
 
     trackHeuristics = {
       fallback: fallbackRaw as FlowTrack | undefined,
-      priority,
       tracks
     };
   }
