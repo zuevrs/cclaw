@@ -31,6 +31,14 @@ function snapshotPath(): string {
   return `${RUNTIME_ROOT}/state/flow-state.snapshot.json`;
 }
 
+function harnessGapsPath(): string {
+  return `${RUNTIME_ROOT}/state/harness-gaps.json`;
+}
+
+function retroArtifactPath(): string {
+  return `${RUNTIME_ROOT}/artifacts/09-retro.md`;
+}
+
 /**
  * Command contract for /cc-view status — a read-only snapshot command.
  * Does not mutate state. Always safe to run.
@@ -43,7 +51,8 @@ export function statusCommandContract(): string {
 ## Purpose
 
 **Read-only visual snapshot of the cclaw run.** Shows progress bar, current stage,
-gate coverage, delegation status, stale markers, and top knowledge highlights.
+gate coverage, delegation status with fulfillmentMode, closeout substate after
+ship, harness parity fallback, stale markers, and top knowledge highlights.
 
 This command **never mutates state**. Use it at session start to orient, or at any
 time to answer "where are we?" without advancing the flow.
@@ -58,9 +67,10 @@ time to answer "where are we?" without advancing the flow.
 ## Algorithm
 
 1. Read **\`${flowPath}\`** — capture \`track\`, \`currentStage\`, \`completedStages\`,
-   \`skippedStages\`, and per-stage gate catalog.
-2. Read **\`${delegationPath}\`** — count delegated / completed / waived / pending entries
-   for the current stage's \`mandatoryDelegations\`.
+   \`skippedStages\`, \`staleStages\`, per-stage gate catalog, and **\`closeout\`**
+   (shipSubstate + retro/compound flags).
+2. Read **\`${delegationPath}\`** — for each mandatory agent of the current stage,
+   capture \`status\`, \`fulfillmentMode\`, and whether \`evidenceRefs\` are present.
 3. Read **\`${contextModePath()}\`** — surface \`activeMode\` (default if missing).
 4. Compute **time in current stage** from the most recent stage-entry signal:
    - Prefer \`${checkpointPath()}\`'s \`timestamp\` when its \`stage\` matches \`currentStage\`.
@@ -69,25 +79,37 @@ time to answer "where are we?" without advancing the flow.
    - If no signal exists, render \`(unknown)\`.
 5. Optionally read **\`${snapshotPath()}\`** to compute gate delta versus prior baseline:
    - If missing or invalid, render \`delta: (baseline unavailable; run /cc-view diff)\`.
-6. Read the top of **\`${knowledgePath}\`** — surface up to 3 most recent entries
+6. Read **\`${harnessGapsPath()}\`** (schemaVersion 2). For every installed harness
+   capture \`tier\`, \`subagentFallback\`, and \`playbookPath\` for the harness row.
+7. Read the top of **\`${knowledgePath()}\`** — surface up to 3 most recent entries
    (by trailing timestamp or source marker).
-7. Emit the visual status block described below. Do **not** load any stage skill.
+8. Detect **closeout artifacts**: check whether \`${retroArtifactPath()}\` exists on
+   disk and annotate the closeout row accordingly.
+9. Emit the visual status block described below. Do **not** load any stage skill.
 
 ## Visual markers
 
 Default UTF markers: \`✓\` passed, \`▶\` current, \`○\` pending, \`⊘\` skipped, \`⏸\` stale, \`✗\` blocked.  
 ASCII fallback (no UTF locale): \`[x]\`, \`[>]\`, \`[ ]\`, \`[-]\`, \`[=]\`, \`[!]\`.
 
+Delegation markers: \`✓\` completed, \`◎\` completed-no-evidence (role-switch
+harness; **blocks stage**), \`○\` scheduled/pending, \`⊘\` waived, \`✗\` failed.
+
 ## Status Block Format
 
 \`\`\`
 cclaw status
-  flow:   <track> · run=<runId> · feature=<feature-id>
-  stage:  <stage> (<N>/<total>) · time <Xd|XhYm|Xm|unknown> · mode <activeMode>
-  bar:    [✓ brainstorm] [✓ scope] [▶ design] [○ spec] [○ plan] [○ tdd] [○ review] [○ ship]
-  gates:  now <passed>/<required> · blocked <count> · delta <summary or baseline-unavailable>
-  delegations: [✓ <role>] [○ <role>] ...
-  stale:  <list or none>
+  flow:    <track> · run=<runId> · feature=<feature-id>
+  stage:   <stage> (<N>/<total>) · time <Xd|XhYm|Xm|unknown> · mode <activeMode>
+  bar:     [✓ brainstorm] [✓ scope] [▶ design] [○ spec] [○ plan] [○ tdd] [○ review] [○ ship]
+  gates:   now <passed>/<required> · blocked <count> · delta <summary or baseline-unavailable>
+  delegations (<expectedMode>):
+    - planner      ✓ completed  mode=<isolated|generic-dispatch|role-switch>
+    - reviewer     ○ pending
+    - test-author  ◎ missing-evidence (role-switch; add evidenceRefs)
+  closeout: <shipSubstate> · retro=<drafted|accepted|skipped|—> · compound=<N promoted|skipped|—>
+  harness: <id>=<tier>/<fallback>, ... · playbooks: <M>/<N>
+  stale:   <list or none>
   knowledge:
     - <latest entry summary>
     - <second entry summary>
@@ -95,12 +117,20 @@ cclaw status
   next: /cc-next · /cc-view tree · /cc-view diff
 \`\`\`
 
+- Omit the \`closeout:\` row when \`currentStage !== "ship"\` and \`shipSubstate === "idle"\`.
+- Omit \`delegations\` line when the current stage has zero mandatory delegations.
+- Omit \`harness\` line only when \`${harnessGapsPath()}\` is missing or invalid
+  (render \`harness: (report unavailable; run cclaw upgrade)\`).
+
 ## Anti-patterns
 
 - Inventing gate status without reading \`${flowPath}\`.
 - Reporting delegations as satisfied when the log says \`pending\`.
+- Treating a \`completed\` role-switch delegation without \`evidenceRefs\` as green
+  — it must surface as \`◎ missing-evidence\`.
 - Advancing the stage from \`/cc-view status\` — progression belongs to \`/cc-next\`.
-- Hiding stale stages; stale markers must be surfaced directly in the status line.
+- Hiding the closeout substate after ship; retro/compound/archive progress must
+  be visible so \`/cc-next\` resumes at the right step.
 
 ## Primary skill
 
@@ -116,7 +146,7 @@ export function statusCommandSkillMarkdown(): string {
   const delegationPath = delegationLogPath();
   return `---
 name: ${STATUS_SKILL_NAME}
-description: "Read-only visual snapshot of the cclaw flow with progress bar, gate delta, delegations, and stale markers."
+description: "Read-only visual snapshot of the cclaw flow with progress bar, gate delta, delegations (fulfillmentMode + evidence), closeout substate, and harness parity row."
 ---
 
 # /cc-view status — Flow Status Snapshot
@@ -124,7 +154,14 @@ description: "Read-only visual snapshot of the cclaw flow with progress bar, gat
 ## Overview
 
 \`/cc-view status\` is the quickest way to answer "where are we in the flow?" without
-advancing or mutating anything. Safe to run at any point.
+advancing or mutating anything. Safe to run at any point. The snapshot reflects:
+
+- progress across stages with per-stage markers,
+- gate coverage and delta vs. baseline,
+- mandatory delegations with **fulfillmentMode** (isolated / generic-dispatch /
+  role-switch / harness-waiver) and evidence gate,
+- **closeout substate** after ship (retro → compound → archive),
+- **harness parity row** (tier + fallback) for the active harness set.
 
 ## HARD-GATE
 
@@ -143,22 +180,45 @@ a read-only command. Do **not** update \`${snapshotPath()}\` here.
 5. Try reading \`${snapshotPath()}\` for gate delta:
    - If available, compare current stage \`passed\` / \`blocked\` sets against baseline.
    - If unavailable, render \`delta: (baseline unavailable; run /cc-view diff)\`.
-6. Read \`${RUNTIME_ROOT}/knowledge.jsonl\`. If missing or empty → knowledge highlights are \`(none recorded)\`. Parse each line as JSON and surface its \`trigger\`/\`action\`.
-7. For each gate in \`stageGateCatalog[currentStage].required\`:
+6. Read \`${harnessGapsPath()}\`:
+   - If \`schemaVersion === 2\`, for each entry render \`<harness>=<tier>/<subagentFallback>\`.
+   - Count existing \`playbookPath\` files on disk to print \`playbooks: <M>/<N>\`.
+   - If the file is missing or has an older schema, render
+     \`harness: (report unavailable; run cclaw upgrade)\`.
+7. Read \`${RUNTIME_ROOT}/knowledge.jsonl\`. If missing or empty → knowledge highlights are \`(none recorded)\`. Parse each line as JSON and surface its \`trigger\`/\`action\`.
+8. For each gate in \`stageGateCatalog[currentStage].required\`:
    - Satisfied if present in \`passed\` and absent from \`blocked\`.
-8. Build and print the visual status block:
-   - stage header
-   - one-line progress bar with per-stage markers
-   - gate summary + delta
-   - delegation row
-   - stale stage row
-9. Suggest the next action:
-   - If current stage has unmet gates → \`/cc-next\` to resume.
-   - If current stage is complete → \`/cc-next\` to advance (or report "Flow complete" if terminal).
+9. For each mandatory delegation of the current stage, evaluate:
+   - \`✓ completed\` when \`status === "completed"\` and (harness is not role-switch
+     **or** \`evidenceRefs.length >= 1\`).
+   - \`◎ missing-evidence\` when \`status === "completed"\`, harness declares
+     \`role-switch\`, and \`evidenceRefs\` is empty or absent.
+   - \`○ <status>\` for \`scheduled\` / pending.
+   - \`⊘ waived\` when \`status === "waived"\`.
+   - \`✗ failed\` when \`status === "failed"\`.
+10. Compute **closeout row** when \`currentStage === "ship"\` or
+    \`closeout.shipSubstate !== "idle"\`:
+    - \`shipSubstate\` verbatim,
+    - \`retro=drafted|accepted|skipped|—\` derived from \`closeout.retroDraftedAt\`,
+      \`closeout.retroAcceptedAt\`, \`closeout.retroSkipped\`,
+    - \`compound=<N promoted>|skipped|—\` from
+      \`closeout.compoundPromoted\` / \`closeout.compoundSkipped\`.
+11. Build and print the visual status block:
+    - stage header
+    - one-line progress bar with per-stage markers
+    - gate summary + delta
+    - delegation rows (per mandatory agent)
+    - closeout row (when active)
+    - harness row
+    - stale stage row
+12. Suggest the next action:
+    - If current stage has unmet gates → \`/cc-next\` to resume.
+    - If closeout substate is non-idle → \`/cc-next\` to continue the chain.
+    - If current stage is complete → \`/cc-next\` to advance (or report "Flow complete" if terminal).
 
 ## Output Guidelines
 
-- Keep output compact (≤ 30 lines) — status, not narrative.
+- Keep output compact (≤ 40 lines) — status, not narrative.
 - Report counts, not full artifact contents.
 - If any data source is missing or corrupt, say so explicitly rather than guessing.
 - Include \`/cc-view tree\` for deep structure and \`/cc-view diff\` for before/after map in the final line.
@@ -167,6 +227,10 @@ a read-only command. Do **not** update \`${snapshotPath()}\` here.
 
 - Rebuilding trace-matrix or running doctor from \`/cc-view status\` — those belong to dedicated tools.
 - Treating absence of delegation log as "all delegations complete".
+- Collapsing \`◎ missing-evidence\` into \`✓ completed\` — role-switch gaps must stay
+  visible so the stage cannot advance silently.
+- Omitting the closeout row when \`shipSubstate !== "idle"\`; it is the only signal
+  that tells the user why \`/cc-next\` is about to run retro/compound/archive.
 - Mutating state to "clean up" during a status check.
 `;
 }
