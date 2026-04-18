@@ -23,8 +23,12 @@ const ALLOWED_CONFIG_KEYS = new Set<string>([
   "gitHookGuards",
   "defaultTrack",
   "languageRulePacks",
-  "trackHeuristics"
+  "trackHeuristics",
+  "sliceReview"
 ]);
+
+const DEFAULT_SLICE_REVIEW_THRESHOLD = 5;
+const DEFAULT_SLICE_REVIEW_TRACKS: FlowTrack[] = ["standard"];
 
 function configFixExample(): string {
   return `harnesses:
@@ -284,6 +288,65 @@ export async function readConfig(projectRoot: string): Promise<VibyConfig> {
     };
   }
 
+  const sliceReviewRaw = (parsed as { sliceReview?: unknown }).sliceReview;
+  let sliceReview: VibyConfig["sliceReview"] = undefined;
+  if (Object.prototype.hasOwnProperty.call(parsed, "sliceReview")) {
+    if (!isRecord(sliceReviewRaw)) {
+      throw configValidationError(fullPath, `"sliceReview" must be an object`);
+    }
+
+    const enabledRaw = sliceReviewRaw.enabled;
+    if (enabledRaw !== undefined && typeof enabledRaw !== "boolean") {
+      throw configValidationError(fullPath, `"sliceReview.enabled" must be a boolean`);
+    }
+
+    const thresholdRaw = sliceReviewRaw.filesChangedThreshold;
+    if (
+      thresholdRaw !== undefined &&
+      (typeof thresholdRaw !== "number" || !Number.isInteger(thresholdRaw) || thresholdRaw < 1)
+    ) {
+      throw configValidationError(
+        fullPath,
+        `"sliceReview.filesChangedThreshold" must be a positive integer`
+      );
+    }
+
+    const touchTriggers = validateStringArray(
+      sliceReviewRaw.touchTriggers,
+      "sliceReview.touchTriggers",
+      fullPath
+    );
+
+    const enforceRaw = sliceReviewRaw.enforceOnTracks;
+    let enforceOnTracks: FlowTrack[] | undefined;
+    if (enforceRaw !== undefined) {
+      if (!Array.isArray(enforceRaw)) {
+        throw configValidationError(
+          fullPath,
+          `"sliceReview.enforceOnTracks" must be an array`
+        );
+      }
+      const invalidTracks = enforceRaw.filter(
+        (value) => typeof value !== "string" || !FLOW_TRACK_SET.has(value)
+      );
+      if (invalidTracks.length > 0) {
+        throw configValidationError(
+          fullPath,
+          `"sliceReview.enforceOnTracks" must contain only: ${SUPPORTED_TRACKS_TEXT}`
+        );
+      }
+      enforceOnTracks = [...new Set(enforceRaw as FlowTrack[])];
+    }
+
+    sliceReview = {
+      enabled: typeof enabledRaw === "boolean" ? enabledRaw : false,
+      filesChangedThreshold:
+        typeof thresholdRaw === "number" ? thresholdRaw : DEFAULT_SLICE_REVIEW_THRESHOLD,
+      touchTriggers: touchTriggers ?? [],
+      enforceOnTracks: enforceOnTracks ?? DEFAULT_SLICE_REVIEW_TRACKS
+    };
+  }
+
   return {
     version: parsed.version ?? CCLAW_VERSION,
     flowVersion: parsed.flowVersion ?? FLOW_VERSION,
@@ -294,7 +357,8 @@ export async function readConfig(projectRoot: string): Promise<VibyConfig> {
     gitHookGuards,
     defaultTrack,
     languageRulePacks,
-    trackHeuristics
+    trackHeuristics,
+    sliceReview
   };
 }
 
