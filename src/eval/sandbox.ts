@@ -112,24 +112,21 @@ export async function createSandbox(options: SandboxOptions): Promise<Sandbox> {
           `realpath failed: ${(err as Error).message}`
         );
       }
-      const parent = path.dirname(joined);
-      let parentReal: string;
-      try {
-        parentReal = await fs.realpath(parent);
-      } catch (parentErr) {
+      const existingAncestor = await findExistingAncestor(joined, realRoot);
+      if (!existingAncestor) {
         throw new SandboxEscapeError(
           requested,
-          `parent directory missing: ${(parentErr as Error).message}`
+          "no existing ancestor inside the sandbox"
         );
       }
-      const parentRel = path.relative(realRoot, parentReal);
-      if (parentRel.startsWith("..") || path.isAbsolute(parentRel)) {
+      const ancestorRel = path.relative(realRoot, existingAncestor.real);
+      if (ancestorRel.startsWith("..") || path.isAbsolute(ancestorRel)) {
         throw new SandboxEscapeError(
           requested,
           "parent resolves outside the sandbox"
         );
       }
-      finalPath = path.join(parentReal, path.basename(joined));
+      finalPath = path.join(existingAncestor.real, existingAncestor.trailing);
     }
     const finalRel = path.relative(realRoot, finalPath);
     if (finalRel.startsWith("..") || path.isAbsolute(finalRel)) {
@@ -145,6 +142,26 @@ export async function createSandbox(options: SandboxOptions): Promise<Sandbox> {
       await fs.rm(realRoot, { recursive: true, force: true });
     }
   };
+}
+
+async function findExistingAncestor(
+  target: string,
+  stopAt: string
+): Promise<{ real: string; trailing: string } | undefined> {
+  const segments: string[] = [];
+  let current = target;
+  while (true) {
+    try {
+      const real = await fs.realpath(current);
+      return { real, trailing: path.join(...segments.reverse()) };
+    } catch {
+      const parent = path.dirname(current);
+      if (parent === current) return undefined;
+      segments.push(path.basename(current));
+      if (path.relative(stopAt, parent).startsWith("..")) return undefined;
+      current = parent;
+    }
+  }
 }
 
 async function copyContextFile(
