@@ -13,6 +13,22 @@ export const DEFAULT_HARNESSES: HarnessId[] = [
   "codex"
 ];
 
+/**
+ * Evals subtree. Wave 7.0 scaffolds the directory layout and a default config.yaml;
+ * verifiers and LLM wiring arrive in Waves 7.1–7.5. Keeping this separate from the
+ * main REQUIRED_DIRS list makes it explicit that the evals runtime is additive and
+ * does not affect non-eval cclaw behavior.
+ */
+export const EVALS_ROOT = `${RUNTIME_ROOT}/evals`;
+export const EVALS_CONFIG_PATH = `${EVALS_ROOT}/config.yaml`;
+export const EVALS_DIRS = [
+  EVALS_ROOT,
+  `${EVALS_ROOT}/corpus`,
+  `${EVALS_ROOT}/rubrics`,
+  `${EVALS_ROOT}/baselines`,
+  `${EVALS_ROOT}/reports`
+] as const;
+
 export const REQUIRED_DIRS = [
   RUNTIME_ROOT,
   `${RUNTIME_ROOT}/commands`,
@@ -27,12 +43,22 @@ export const REQUIRED_DIRS = [
   `${RUNTIME_ROOT}/adapters`,
   `${RUNTIME_ROOT}/agents`,
   `${RUNTIME_ROOT}/hooks`,
-  `${RUNTIME_ROOT}/custom-skills`
+  `${RUNTIME_ROOT}/custom-skills`,
+  ...EVALS_DIRS
 ] as const;
 
 export const REQUIRED_GITIGNORE_PATTERNS = [
   "# cclaw generated artifacts",
   `${RUNTIME_ROOT}/`,
+  "# cclaw evals: user-owned, track in git",
+  `!${EVALS_ROOT}/`,
+  `!${EVALS_ROOT}/config.yaml`,
+  `!${EVALS_ROOT}/corpus/`,
+  `!${EVALS_ROOT}/corpus/**`,
+  `!${EVALS_ROOT}/rubrics/`,
+  `!${EVALS_ROOT}/rubrics/**`,
+  `!${EVALS_ROOT}/baselines/`,
+  `!${EVALS_ROOT}/baselines/**`,
   ".claude/commands/cc-*.md",
   ".claude/commands/cc.md",
   ".cursor/commands/cc-*.md",
