@@ -277,9 +277,8 @@ The `tdd` stage is not prose guidance. It requires:
 - optional **REFACTOR** pass with coverage preservation
 
 `/cc-next` will not advance past `tdd` until the delegation log shows the
-subagent as `completed` or explicitly `waived` (for harnesses without
-native subagent dispatch, such as Codex — see
-[Harness support](#harness-support)).
+subagent as `completed` (or, on Codex / OpenCode, role-switched with
+`evidenceRefs` — see [Harness support](#harness-support)).
 
 ---
 
@@ -320,21 +319,50 @@ to: `/cc-next` is the only command.
 
 ## Harness support
 
-cclaw is honest about which harnesses give you full automation and which
-need small manual bridges. See
-[`docs/harnesses.md`](./docs/harnesses.md) for the full matrix.
+cclaw is honest about what each harness can and cannot do, and it
+closes every real gap with a documented fallback — not a silent waiver.
 
-| Harness | Subagent dispatch | Hook surface | Structured ask | Status |
-|---|---|---|---|---|
-| Claude Code | native | full | `AskUserQuestion` | full parity |
-| Cursor | partial | full | `AskQuestion` | parity gap: subagent dispatch |
-| OpenCode | partial | plugin | plain-text | parity gap: plugin hooks |
-| OpenAI Codex | none (waiver) | full | plain-text | parity gap: no subagent |
+| Harness | Dispatch | Fallback | Hook surface | Structured ask | Playbook |
+|---|---|---|---|---|---|
+| Claude Code | full (named subagents) | `native` | full | `AskUserQuestion` | [`claude-playbook.md`](./src/content/harness-playbooks.ts) |
+| Cursor | generic Task dispatcher | `generic-dispatch` | full | `AskQuestion` | `cursor-playbook.md` |
+| OpenCode | plugin / in-session | `role-switch` | plugin | plain-text | `opencode-playbook.md` |
+| OpenAI Codex | in-session only | `role-switch` (evidenceRefs required) | full | plain-text | `codex-playbook.md` |
 
-Capability gaps are captured in `.cclaw/state/harness-gaps.json`. Where
-native dispatch is missing, cclaw emits a **structured waiver** rather
-than pretending the delegation happened. Closing these gaps is an
-ongoing kinetic effort — see the harness tracking doc above.
+What the fallbacks mean:
+
+- `native` — Claude runs mandatory delegations in isolated subagent
+  workers; cclaw records them with `fulfillmentMode: "isolated"`.
+- `generic-dispatch` — Cursor has a real Task tool with a fixed
+  vocabulary of `subagent_type`s (`explore`, `generalPurpose`, …).
+  cclaw maps each named agent (planner / reviewer / test-author /
+  security-reviewer / doc-updater) onto the generic dispatcher with a
+  structured role prompt. Per-agent mapping lives in the Cursor
+  playbook.
+- `role-switch` — OpenCode and Codex lack an isolated worker primitive.
+  The agent announces the role in-session, performs the work, and
+  records a delegation row with `fulfillmentMode: "role-switch"` and at
+  least one `evidenceRef` pointing at the artifact section that
+  captures the output. Under role-switch, a `completed` row **without**
+  evidenceRefs is classified as `missingEvidence` by `cclaw doctor` and
+  blocks stage completion.
+- `waiver` — reserved. Only fires auto-waivers if every installed
+  harness declares it. Currently unused — v0.33 removed the old
+  Codex-only auto-waiver path.
+
+The full capability matrix lives in
+[`docs/harnesses.md`](./docs/harnesses.md). Per-harness playbooks are
+generated into `.cclaw/references/harnesses/` on every install and
+upgrade; stage skills cite them by path.
+
+Runtime state:
+
+- `.cclaw/state/harness-gaps.json` (schema v2) — per-harness list of
+  missing capabilities, missing hook events, the declared fallback, the
+  playbook path, and a `remediation[]` list you can act on.
+- `cclaw doctor` — asserts every installed harness has its playbook on
+  disk and surfaces the expected fulfillment mode inside the
+  `delegation:mandatory:current_stage` check.
 
 ---
 
