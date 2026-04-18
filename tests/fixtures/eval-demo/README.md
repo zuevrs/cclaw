@@ -1,10 +1,11 @@
 # eval-demo fixture
 
 Project-shaped directory used as the canonical corpus for `cclaw eval`
-in CI. Twenty-four cases (3 per stage × 8 stages) exercise the structural
-verifier. The structure is intentionally identical to what a
-real user sees inside `.cclaw/evals/` after `cclaw init` so bugs in
-layout resolution surface here first.
+in CI. Forty-one cases across all 8 stages: 24 structural fixtures
+(3 per stage × 8), 16 rules-only cases, and 1 Tier B demo that seeds
+`README.md` into the sandbox. The structure is intentionally identical
+to what a real user sees inside `.cclaw/evals/` after `cclaw init` so
+bugs in layout resolution surface here first.
 
 Run locally:
 

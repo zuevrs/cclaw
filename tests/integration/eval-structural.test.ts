@@ -42,12 +42,12 @@ async function cloneDemo(tag: string): Promise<string> {
 }
 
 describe("eval structural+rules - integration against the committed corpus", () => {
-  it("loads 40 cases spanning all 8 stages", async () => {
+  it("loads 41 cases spanning all 8 stages", async () => {
     const root = await cloneDemo("eval-int-count");
     const res = await runEval({ projectRoot: root, dryRun: true, env: {} });
     expect("kind" in res).toBe(true);
     if ("kind" in res) {
-      expect(res.corpus.total).toBe(40);
+      expect(res.corpus.total).toBe(41);
       expect(Object.keys(res.corpus.byStage).sort()).toEqual([
         "brainstorm",
         "design",
@@ -58,28 +58,28 @@ describe("eval structural+rules - integration against the committed corpus", () 
         "spec",
         "tdd"
       ]);
-      for (const count of Object.values(res.corpus.byStage)) {
-        expect(count).toBe(5);
+      for (const [stage, count] of Object.entries(res.corpus.byStage)) {
+        expect(count).toBe(stage === "spec" ? 6 : 5);
       }
     }
   });
 
-  it("passes all 40 cases with --rules and reports zero regressions", async () => {
+  it("passes all 40 structural/rules cases and skips the Tier B demo with --rules", async () => {
     const root = await cloneDemo("eval-int-pass");
     const res = await runEval({ projectRoot: root, rules: true, env: {} });
     expect("kind" in res).toBe(false);
     if (!("kind" in res)) {
-      expect(res.summary.totalCases).toBe(40);
+      expect(res.summary.totalCases).toBe(41);
       expect(res.summary.passed).toBe(40);
       expect(res.summary.failed).toBe(0);
-      expect(res.summary.skipped).toBe(0);
+      expect(res.summary.skipped).toBe(1);
       expect(res.baselineDelta).toBeDefined();
       expect(res.baselineDelta?.criticalFailures).toBe(0);
       expect(res.baselineDelta?.regressions).toEqual([]);
     }
   });
 
-  it("--schema-only skips the 16 rules-only cases and passes the 24 structural cases", async () => {
+  it("--schema-only skips the rules-only + Tier B cases and passes the 24 structural cases", async () => {
     const root = await cloneDemo("eval-int-schema-only");
     const res = await runEval({
       projectRoot: root,
@@ -87,9 +87,9 @@ describe("eval structural+rules - integration against the committed corpus", () 
       env: {}
     });
     if (!("kind" in res)) {
-      expect(res.summary.totalCases).toBe(40);
+      expect(res.summary.totalCases).toBe(41);
       expect(res.summary.passed).toBe(24);
-      expect(res.summary.skipped).toBe(16);
+      expect(res.summary.skipped).toBe(17);
       expect(res.summary.failed).toBe(0);
     }
   });
