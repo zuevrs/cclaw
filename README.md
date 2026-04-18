@@ -133,7 +133,7 @@ inside `/cc-ops` subcommands.
 | **`/cc <idea>`** | Classify the task, discover origin docs (`docs/prd/**`, ADRs, root `PRD.md`, …), sniff the stack, recommend a track, then start the first stage of that track. `/cc` without arguments resumes the current flow. |
 | **`/cc-next`** | The one progression primitive. Reads `flow-state.json`, checks gates + mandatory subagent delegations, and either resumes the current stage or advances to the next. `/cc-next` in a new session is how you **resume**. |
 | **`/cc-ideate`** | Repository improvement discovery. Scans for TODOs, flaky tests, oversized modules, docs drift, and recurring knowledge-store lessons; returns a ranked backlog before you commit to a specific feature. |
-| **`/cc-view`** | Read-only flow visibility. `/cc-view status` (default), `/cc-view tree`, `/cc-view diff` (baseline delta map). Never mutates state. |
+| **`/cc-view`** | Read-only flow visibility. `/cc-view status` (default) shows stage progress, mandatory delegations with their fulfillment mode (isolated / generic-dispatch / role-switch), the ship closeout substate (retro → compound → archive), and the active harness parity row. `/cc-view tree` renders the same picture as a tree with a closeout sub-branch under ship and a per-harness playbook summary. `/cc-view diff` shows stage/gate/closeout/delegation deltas since the last run. Never mutates state (except diff's snapshot baseline). |
 
 > Power-user surface: `/cc-ops` is an operational router for manual
 > overrides (rewind a stale stage, manage parallel features, re-run a
