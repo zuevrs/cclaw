@@ -171,4 +171,80 @@ trackHeuristics:
     await expect(readConfig(root)).rejects.toThrow(/"promptGuardMode" must be "advisory" or "strict"/);
   });
 
+  it("parses sliceReview with sane defaults when enabled", async () => {
+    const root = await createTempProject("config-slice-review");
+    await fs.mkdir(path.join(root, ".cclaw"), { recursive: true });
+    await fs.writeFile(
+      configPath(root),
+      `harnesses:
+  - claude
+sliceReview:
+  enabled: true
+  filesChangedThreshold: 8
+  touchTriggers:
+    - "migrations/**"
+    - "auth/**"
+  enforceOnTracks:
+    - standard
+    - medium
+`,
+      "utf8"
+    );
+    const config = await readConfig(root);
+    expect(config.sliceReview?.enabled).toBe(true);
+    expect(config.sliceReview?.filesChangedThreshold).toBe(8);
+    expect(config.sliceReview?.touchTriggers).toEqual(["migrations/**", "auth/**"]);
+    expect(config.sliceReview?.enforceOnTracks).toEqual(["standard", "medium"]);
+  });
+
+  it("fills sliceReview defaults when only enabled: true is provided", async () => {
+    const root = await createTempProject("config-slice-review-defaults");
+    await fs.mkdir(path.join(root, ".cclaw"), { recursive: true });
+    await fs.writeFile(
+      configPath(root),
+      `harnesses:
+  - claude
+sliceReview:
+  enabled: true
+`,
+      "utf8"
+    );
+    const config = await readConfig(root);
+    expect(config.sliceReview?.enabled).toBe(true);
+    expect(config.sliceReview?.filesChangedThreshold).toBe(5);
+    expect(config.sliceReview?.touchTriggers).toEqual([]);
+    expect(config.sliceReview?.enforceOnTracks).toEqual(["standard"]);
+  });
+
+  it("rejects non-integer or non-positive sliceReview.filesChangedThreshold", async () => {
+    const root = await createTempProject("config-slice-review-bad-threshold");
+    await fs.mkdir(path.join(root, ".cclaw"), { recursive: true });
+    await fs.writeFile(
+      configPath(root),
+      `harnesses:
+  - claude
+sliceReview:
+  filesChangedThreshold: 0
+`,
+      "utf8"
+    );
+    await expect(readConfig(root)).rejects.toThrow(/must be a positive integer/);
+  });
+
+  it("rejects unknown track in sliceReview.enforceOnTracks", async () => {
+    const root = await createTempProject("config-slice-review-bad-track");
+    await fs.mkdir(path.join(root, ".cclaw"), { recursive: true });
+    await fs.writeFile(
+      configPath(root),
+      `harnesses:
+  - claude
+sliceReview:
+  enforceOnTracks:
+    - legendary
+`,
+      "utf8"
+    );
+    await expect(readConfig(root)).rejects.toThrow(/must contain only/);
+  });
+
 });

@@ -615,6 +615,66 @@ describe("install lifecycle", () => {
     await expect(fs.stat(path.join(root, ".opencode"))).rejects.toBeDefined();
   });
 
+  it("warns when sliceReview is enabled and tdd artifact lacks Per-Slice Review", async () => {
+    const root = await createTempProject("slice-review-warn-missing");
+    await initCclaw({ projectRoot: root });
+
+    const current = await readConfig(root);
+    await writeConfig(root, {
+      ...current,
+      sliceReview: { enabled: true, filesChangedThreshold: 5, touchTriggers: [], enforceOnTracks: ["standard"] }
+    });
+
+    await fs.writeFile(
+      path.join(root, ".cclaw/artifacts/06-tdd.md"),
+      `# TDD\n\n## Acceptance Mapping\n- T-001 → R-001\n\n### Slice T-001\n\n## RED\nfailing output\n\n## GREEN\npassing output\n`,
+      "utf8"
+    );
+
+    const checks = await doctorChecks(root);
+    const warning = checks.find((c) => c.name === "warning:slice_review:missing_section");
+    expect(warning).toBeDefined();
+    expect(warning?.ok).toBe(false);
+    expect(warning?.severity).toBe("warning");
+    expect(warning?.details).toMatch(/Per-Slice Review/);
+  });
+
+  it("stays silent when Per-Slice Review section is present", async () => {
+    const root = await createTempProject("slice-review-warn-present");
+    await initCclaw({ projectRoot: root });
+
+    const current = await readConfig(root);
+    await writeConfig(root, {
+      ...current,
+      sliceReview: { enabled: true, filesChangedThreshold: 5, touchTriggers: [], enforceOnTracks: ["standard"] }
+    });
+
+    await fs.writeFile(
+      path.join(root, ".cclaw/artifacts/06-tdd.md"),
+      `# TDD\n\n## Acceptance Mapping\n- T-001 → R-001\n\n### Slice T-001\n\n## RED\nfailing output\n\n## GREEN\npassing output\n\n## Per-Slice Review\n- Slice T-001: not triggered (touchCount=2).\n`,
+      "utf8"
+    );
+
+    const checks = await doctorChecks(root);
+    const warning = checks.find((c) => c.name === "warning:slice_review:missing_section");
+    expect(warning).toBeDefined();
+    expect(warning?.ok).toBe(true);
+  });
+
+  it("does not evaluate slice review when feature is disabled", async () => {
+    const root = await createTempProject("slice-review-warn-disabled");
+    await initCclaw({ projectRoot: root });
+
+    await fs.writeFile(
+      path.join(root, ".cclaw/artifacts/06-tdd.md"),
+      `# TDD\n\n## Acceptance Mapping\n- T-001 → R-001\n\n## RED\nfailing output\n`,
+      "utf8"
+    );
+
+    const checks = await doctorChecks(root);
+    expect(checks.find((c) => c.name === "warning:slice_review:missing_section")).toBeUndefined();
+  });
+
   it("uninstall strips only cclaw hooks and preserves user hooks", async () => {
     const root = await createTempProject("uninstall-hooks");
     await initCclaw({ projectRoot: root });

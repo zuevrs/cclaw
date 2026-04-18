@@ -1485,6 +1485,39 @@ export async function doctorChecks(projectRoot: string, options: DoctorOptions =
       : `orphaned test slices: ${trace.orphanedTests.join(", ")}`
   });
 
+  // Slice-review warning (opt-in via config.sliceReview.enabled).
+  // Fires when:
+  //   - sliceReview.enabled is true
+  //   - current track is listed in sliceReview.enforceOnTracks
+  //   - 06-tdd.md exists (so the slice loop actually started)
+  //   - artifact contains at least one slice marker (look for the tdd
+  //     "Acceptance Mapping" or any `### Slice` heading) AND the Per-Slice
+  //     Review heading is absent
+  // Non-blocking — warnings guide the user toward adding the review
+  // section without failing doctor.
+  const sliceReviewConfig = parsedConfig?.sliceReview;
+  const sliceReviewEnabled = sliceReviewConfig?.enabled === true;
+  const sliceReviewEnforcedTracks = sliceReviewConfig?.enforceOnTracks ?? ["standard"];
+  const sliceReviewEnforcedHere =
+    sliceReviewEnabled && sliceReviewEnforcedTracks.includes(activeTrack);
+  if (sliceReviewEnforcedHere && tddExists) {
+    const tddMarkdown = await fs.readFile(path.join(artifactsDir, "06-tdd.md"), "utf8");
+    const hasSliceSignal = /^###\s+Slice\b/im.test(tddMarkdown)
+      || /^##\s+Acceptance Mapping\b/im.test(tddMarkdown)
+      || /^##\s+RED\b/im.test(tddMarkdown);
+    const hasReviewHeading = /^##\s+Per-Slice Review\b/im.test(tddMarkdown);
+    const missing = hasSliceSignal && !hasReviewHeading;
+    checks.push({
+      name: "warning:slice_review:missing_section",
+      ok: !missing,
+      details: missing
+        ? `warning: sliceReview is enabled for track "${activeTrack}" and 06-tdd.md contains slice evidence but no "## Per-Slice Review" section. Add a Per-Slice Review entry for every triggered slice (touchCount >= ${sliceReviewConfig?.filesChangedThreshold ?? 5}, touchPaths match, or highRisk=true), or record "not triggered" explicitly.`
+        : hasReviewHeading
+          ? `sliceReview section present in 06-tdd.md (track "${activeTrack}")`
+          : `sliceReview enabled but no slice evidence yet in 06-tdd.md (track "${activeTrack}")`
+    });
+  }
+
   const gateEvidence = await verifyCurrentStageGateEvidence(projectRoot, flowState);
   checks.push({
     name: "gates:evidence:current_stage",

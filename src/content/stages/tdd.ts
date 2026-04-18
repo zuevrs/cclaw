@@ -33,6 +33,7 @@ export const TDD: StageSchemaInput = {
     "REFACTOR: Improve code quality — without changing behavior. Document what you changed and why.",
     "Record evidence — capture RED failure, GREEN output, and REFACTOR notes in the TDD artifact.",
     "Annotate traceability — link to plan task ID and spec criterion.",
+    "Per-Slice Review (conditional) — if `.cclaw/config.yaml::sliceReview.enabled` is true and the slice meets any trigger (touchCount >= filesChangedThreshold, touchPaths match touchTriggers, or highRisk=true), append a `## Per-Slice Review` entry for this slice before moving on (see the dedicated section below).",
     "Repeat for each slice — return to step 1 for the next plan slice."
   ],
   interactionProtocol: [
@@ -44,7 +45,8 @@ export const TDD: StageSchemaInput = {
     "Run full suite, not partial checks, for GREEN validation.",
     "Refactor without changing behavior and document rationale (REFACTOR).",
     "Stop if regressions appear and fix before proceeding.",
-    "If a test passes unexpectedly, investigate: does the behavior already exist, or is the test wrong?"
+    "If a test passes unexpectedly, investigate: does the behavior already exist, or is the test wrong?",
+    "**Per-Slice Review checkpoint (conditional, opt-in).** When `.cclaw/config.yaml::sliceReview.enabled` is true, check every slice against the triggers before declaring it DONE. Triggers: `touchCount >= filesChangedThreshold`, any `touchPaths` match a `touchTriggers` glob, or the plan row declares `highRisk: true`. On a trigger, run two passes on the slice alone — (1) Spec-Compliance: trace RED/GREEN/REFACTOR evidence back to its plan task + spec criterion, noting edge cases the tests skip; (2) Quality: diff-scan for naming, error handling, dead code, simpler alternatives. Record both under `## Per-Slice Review` in `06-tdd.md`, naming the trigger that fired. Dispatch the `reviewer` subagent natively when available (log `fulfillmentMode: \"isolated\"`); otherwise fulfil via in-session role switch (`fulfillmentMode: \"role-switch\"`). Never fabricate an isolated pass from memory. Tracks outside `sliceReview.enforceOnTracks` still emit the section; doctor only escalates missed reviews on enforced tracks."
   ],
   process: [
     "Select slice and map to acceptance criterion.",
@@ -54,7 +56,7 @@ export const TDD: StageSchemaInput = {
     "Run full tests and build checks.",
     "Perform refactor pass preserving behavior.",
     "Record RED, GREEN, and REFACTOR evidence in artifact.",
-    "Annotate traceability to plan task and spec criterion."
+    "Annotate traceability to plan task and spec criterion; on `sliceReview` triggers, append a Per-Slice Review entry before closing the slice."
   ],
   requiredGates: [
     { id: "tdd_red_test_written", description: "Failing tests exist before implementation changes." },
@@ -153,6 +155,15 @@ export const TDD: StageSchemaInput = {
       stopGate: false
     },
     {
+      title: "Per-Slice Review Audit (conditional)",
+      evaluationPoints: [
+        "When `.cclaw/config.yaml::sliceReview.enabled` is true: does every triggered slice (touchCount >= threshold, touchPaths match, or highRisk=true) carry a Per-Slice Review entry with BOTH a Spec-Compliance pass (plan task <-> spec criterion + edge-case notes) AND a Quality pass (diff-level naming/errors/dead code/simpler alternatives)?",
+        "Is the delegation `fulfillmentMode` recorded (`isolated` for a dispatched reviewer subagent, `role-switch` for an in-session pass) and does it match an entry in `.cclaw/state/delegation-log.json`?",
+        "On tracks listed in `sliceReview.enforceOnTracks`, are there zero missed triggered slices (doctor also surfaces this as a warning)?"
+      ],
+      stopGate: false
+    },
+    {
       title: "State-over-Interaction + Beyoncé Coverage",
       evaluationPoints: [
         "Do assertions target observable state (return values, persisted data, HTTP responses, logs) rather than which internal helpers were called?",
@@ -180,7 +191,8 @@ export const TDD: StageSchemaInput = {
     { section: "Verification Ladder", required: false, validationRule: "If present: per-slice verification tier (static, command, behavioral, human) with evidence for highest tier reached." },
     { section: "Coverage Targets", required: false, validationRule: "If present: per-module or per-code-type coverage thresholds with current values and measurement commands." },
     { section: "Test Pyramid Shape", required: false, validationRule: "If present: per-slice count of Small/Medium/Large tests added, to let reviewers verify the suite is not drifting top-heavy." },
-    { section: "Prove-It Reproduction", required: false, validationRule: "Required for bug-fix slices: original failing reproduction test (RED without fix), passing output with fix (GREEN), and a note confirming the test fails again if the fix is reverted." }
+    { section: "Prove-It Reproduction", required: false, validationRule: "Required for bug-fix slices: original failing reproduction test (RED without fix), passing output with fix (GREEN), and a note confirming the test fails again if the fix is reverted." },
+    { section: "Per-Slice Review", required: false, validationRule: "When `.cclaw/config.yaml::sliceReview.enabled` is true: per triggered slice, a two-part record — Spec-Compliance (slice <-> plan task <-> spec criterion trace plus edge-case notes) and Quality (diff-focused review of naming, error handling, dead code, simpler alternatives). Each entry names the trigger (touchCount, touchPaths glob, or highRisk) and the delegation fulfillmentMode (`isolated` when a reviewer subagent was dispatched natively; `role-switch` when fulfilled in-session). Slices that did not meet any trigger may list `not triggered` instead of a full pass." }
   ],
   batchExecutionAllowed: true
 };

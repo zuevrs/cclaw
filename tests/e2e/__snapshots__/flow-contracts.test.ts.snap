@@ -727,10 +727,11 @@ You MUST complete these steps in order:
 3. Group tasks into dependency batches — batch N+1 cannot start until batch N has verification evidence.
 4. Slice into vertical tasks — each task targets 2-5 minutes, produces one testable outcome, and touches one coherent area.
 5. Attach verification — every task has an acceptance criterion mapping and a concrete verification command.
-6. Map scope Locked Decisions — every D-XX from scope is referenced by at least one plan task (or explicitly marked deferred with reason).
-7. Run anti-placeholder + anti-scope-reduction scans — block \`TODO/TBD/...\` and phrasing like \`v1\`, \`for now\`, \`later\` for locked boundaries.
-8. Define checkpoints — mark points where progress should be validated before continuing.
-9. WAIT_FOR_CONFIRM — write plan artifact and explicitly pause. **STOP.** Do NOT proceed until user confirms. Then update \`flow-state.json\` and tell user to run \`/cc-next\`.
+6. Annotate slice-review metadata — if \`.cclaw/config.yaml::sliceReview.enabled\` is true, every task row additionally carries \`touchCount\` (rough number of files expected to change) and \`touchPaths\` (glob hints, e.g. \`migrations/**\`, \`src/auth/**\`). A task may set \`highRisk: true\` to force a review pass regardless of thresholds. These fields feed the TDD stage's Per-Slice Review checkpoint; when \`sliceReview\` is disabled they are optional.
+7. Map scope Locked Decisions — every D-XX from scope is referenced by at least one plan task (or explicitly marked deferred with reason).
+8. Run anti-placeholder + anti-scope-reduction scans — block \`TODO/TBD/...\` and phrasing like \`v1\`, \`for now\`, \`later\` for locked boundaries.
+9. Define checkpoints — mark points where progress should be validated before continuing.
+10. WAIT_FOR_CONFIRM — write plan artifact and explicitly pause. **STOP.** Do NOT proceed until user confirms. Then update \`flow-state.json\` and tell user to run \`/cc-next\`.
 
 ## Good vs Bad (at-a-glance)
 
@@ -867,7 +868,7 @@ Rule: Every task must trace to a spec acceptance criterion. Every locked scope d
 |---|---|---|
 | Dependency Graph | recommended | Ordering and parallel opportunities explicit. No circular dependencies. |
 | Dependency Batches | REQUIRED | Every task belongs to a batch. Each batch has an exit gate and dependency statement. |
-| Task List | REQUIRED | Each task row includes ID, description, acceptance criterion, verification command, and effort estimate (S/M/L). Every task must also carry a minutes estimate within the 2-5 minute budget. |
+| Task List | REQUIRED | Each task row includes ID, description, acceptance criterion, verification command, and effort estimate (S/M/L). Every task must also carry a minutes estimate within the 2-5 minute budget. When the sliceReview feature is enabled in the cclaw config, each task row additionally declares touchCount, touchPaths, and an optional highRisk flag so the TDD stage can decide whether a Per-Slice Review pass is required. |
 | Acceptance Mapping | REQUIRED | Every spec criterion is covered by at least one task. |
 | Locked Decision Coverage | recommended | Every locked decision ID (D-XX) from scope is listed with linked task IDs or explicit defer rationale. |
 | Risk Assessment | recommended | If present: per-task or per-batch risk identification with likelihood, impact, and mitigation strategy. |
@@ -1024,7 +1025,8 @@ You MUST complete these steps in order:
 8. REFACTOR: Improve code quality — without changing behavior. Document what you changed and why.
 9. Record evidence — capture RED failure, GREEN output, and REFACTOR notes in the TDD artifact.
 10. Annotate traceability — link to plan task ID and spec criterion.
-11. Repeat for each slice — return to step 1 for the next plan slice.
+11. Per-Slice Review (conditional) — if \`.cclaw/config.yaml::sliceReview.enabled\` is true and the slice meets any trigger (touchCount >= filesChangedThreshold, touchPaths match touchTriggers, or highRisk=true), append a \`## Per-Slice Review\` entry for this slice before moving on (see the dedicated section below).
+12. Repeat for each slice — return to step 1 for the next plan slice.
 
 ## Good vs Bad (at-a-glance)
 
@@ -1100,6 +1102,7 @@ Summary of what the reference covers:
 7. Refactor without changing behavior and document rationale (REFACTOR).
 8. Stop if regressions appear and fix before proceeding.
 9. If a test passes unexpectedly, investigate: does the behavior already exist, or is the test wrong?
+10. **Per-Slice Review checkpoint (conditional, opt-in).** When \`.cclaw/config.yaml::sliceReview.enabled\` is true, check every slice against the triggers before declaring it DONE. Triggers: \`touchCount >= filesChangedThreshold\`, any \`touchPaths\` match a \`touchTriggers\` glob, or the plan row declares \`highRisk: true\`. On a trigger, run two passes on the slice alone — (1) Spec-Compliance: trace RED/GREEN/REFACTOR evidence back to its plan task + spec criterion, noting edge cases the tests skip; (2) Quality: diff-scan for naming, error handling, dead code, simpler alternatives. Record both under \`## Per-Slice Review\` in \`06-tdd.md\`, naming the trigger that fired. Dispatch the \`reviewer\` subagent natively when available (log \`fulfillmentMode: "isolated"\`); otherwise fulfil via in-session role switch (\`fulfillmentMode: "role-switch"\`). Never fabricate an isolated pass from memory. Tracks outside \`sliceReview.enforceOnTracks\` still emit the section; doctor only escalates missed reviews on enforced tracks.
 
 Shared decision/ask-user protocol:
 \`.cclaw/references/protocols/decision.md\`
@@ -1141,7 +1144,7 @@ Detailed walkthrough:
 5. Run full tests and build checks.
 6. Perform refactor pass preserving behavior.
 7. Record RED, GREEN, and REFACTOR evidence in artifact.
-8. Annotate traceability to plan task and spec criterion.
+8. Annotate traceability to plan task and spec criterion; on \`sliceReview\` triggers, append a Per-Slice Review entry before closing the slice.
 
 ## Review Sections
 
@@ -1174,6 +1177,11 @@ Detailed walkthrough:
 - Is there captured RED evidence from running the reproduction WITHOUT the fix applied?
 - Is there captured GREEN evidence from the same reproduction AFTER the fix was applied?
 - Is there a note confirming the reproduction test fails again if the fix is reverted (or equivalent evidence that the test is actually pinned to this fix)?
+
+### Per-Slice Review Audit (conditional)
+- When \`.cclaw/config.yaml::sliceReview.enabled\` is true: does every triggered slice (touchCount >= threshold, touchPaths match, or highRisk=true) carry a Per-Slice Review entry with BOTH a Spec-Compliance pass (plan task <-> spec criterion + edge-case notes) AND a Quality pass (diff-level naming/errors/dead code/simpler alternatives)?
+- Is the delegation \`fulfillmentMode\` recorded (\`isolated\` for a dispatched reviewer subagent, \`role-switch\` for an in-session pass) and does it match an entry in \`.cclaw/state/delegation-log.json\`?
+- On tracks listed in \`sliceReview.enforceOnTracks\`, are there zero missed triggered slices (doctor also surfaces this as a warning)?
 
 ### State-over-Interaction + Beyoncé Coverage
 - Do assertions target observable state (return values, persisted data, HTTP responses, logs) rather than which internal helpers were called?
@@ -1219,6 +1227,7 @@ Rule: Every RED test traces to a plan task. Every GREEN change traces to a RED t
 | Coverage Targets | recommended | If present: per-module or per-code-type coverage thresholds with current values and measurement commands. |
 | Test Pyramid Shape | recommended | If present: per-slice count of Small/Medium/Large tests added, to let reviewers verify the suite is not drifting top-heavy. |
 | Prove-It Reproduction | recommended | Required for bug-fix slices: original failing reproduction test (RED without fix), passing output with fix (GREEN), and a note confirming the test fails again if the fix is reverted. |
+| Per-Slice Review | recommended | When \`.cclaw/config.yaml::sliceReview.enabled\` is true: per triggered slice, a two-part record — Spec-Compliance (slice <-> plan task <-> spec criterion trace plus edge-case notes) and Quality (diff-focused review of naming, error handling, dead code, simpler alternatives). Each entry names the trigger (touchCount, touchPaths glob, or highRisk) and the delegation fulfillmentMode (\`isolated\` when a reviewer subagent was dispatched natively; \`role-switch\` when fulfilled in-session). Slices that did not meet any trigger may list \`not triggered\` instead of a full pass. |
 
 
 ## Anti-Patterns & Red Flags

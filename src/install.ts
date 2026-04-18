@@ -1400,7 +1400,8 @@ export async function syncCclaw(projectRoot: string): Promise<void> {
  * artifacts, state, or custom config keys. Only the `version` + `flowVersion`
  * stamps are rewritten so the on-disk config reflects the installed CLI;
  * `promptGuardMode`, `tddEnforcement`, `gitHookGuards`, `languageRulePacks`,
- * and `trackHeuristics` are preserved verbatim from the existing config.
+ * `trackHeuristics`, and `sliceReview` are preserved verbatim from the
+ * existing config.
  *
  * For an explicit reset, run `cclaw-cli uninstall && cclaw-cli init`
  * (after optionally archiving the current run via `/cc-ops archive`).
