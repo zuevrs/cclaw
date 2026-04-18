@@ -62,6 +62,7 @@ import {
   EVAL_CONFIG_YAML,
   EVAL_CORPUS_README,
   EVAL_REPORTS_README,
+  EVAL_RUBRIC_FILES,
   EVAL_RUBRICS_README
 } from "./content/eval-scaffold.js";
 import { TDD_BATCH_WALKTHROUGH_MARKDOWN, stageSkillFolder, stageSkillMarkdown } from "./content/skills.js";
@@ -272,6 +273,12 @@ async function writeEvalScaffold(projectRoot: string): Promise<void> {
     { rel: "evals/baselines/README.md", content: EVAL_BASELINES_README },
     { rel: "evals/reports/README.md", content: EVAL_REPORTS_README }
   ];
+  for (const rubric of EVAL_RUBRIC_FILES) {
+    targets.push({
+      rel: `evals/rubrics/${rubric.stage}.yaml`,
+      content: rubric.contents
+    });
+  }
   for (const target of targets) {
     const absolute = runtimePath(projectRoot, ...target.rel.split("/"));
     if (await exists(absolute)) continue;

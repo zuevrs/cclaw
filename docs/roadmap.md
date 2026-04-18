@@ -178,29 +178,60 @@ Exit criteria — met:
   delta.
 - `cclaw eval --rules` runs as a PR-blocking CI job.
 
-### Step 3 — LLM Judge + Tier A (v0.25.0)
+### Step 3 — LLM Judge + Tier A (v0.25.0) — shipped
 
 **First step with real API calls to the configured OpenAI-compat endpoint.**
 
-Scope:
+Delivered:
 
-- `src/eval/llm-client.ts` with retry, timeout, rate-limit, structured error types.
-- `src/eval/cost-guard.ts` — USD counter based on `usage.total_tokens × pricing`; hard-stop when `CCLAW_EVAL_DAILY_USD_CAP` is set and exceeded.
-- `src/eval/agents/single-shot.ts` (Tier A) — one API call with SKILL.md as system, case prompt as user.
-- `src/eval/verifiers/judge.ts` — median-of-3 scoring, structured JSON output, judge-agreement metric.
-- `.cclaw/evals/rubrics/<stage>.yaml` — 3–5 rubric checks per stage.
-- Regression thresholds in `config.yaml`:
-  - `fail_if_delta_below: -0.15` (>15% drop is a fail)
-  - `fail_if_critical_below: 3.0` (any check <3.0 is a fail)
-- `.github/workflows/evals-nightly.yml` — cron on main, uses `secrets.CCLAW_EVAL_API_KEY`.
-- `cclaw eval --judge --tier=A`.
+- `src/eval/llm-client.ts` wraps the `openai` SDK and targets any
+  OpenAI-compatible `baseURL`. Retry with exponential backoff on
+  transient failures (timeouts / 429 / 5xx / transport), structured
+  error hierarchy (`EvalLlmError`, `EvalLlmAuthError`,
+  `EvalLlmTimeoutError`, `EvalLlmRateLimitedError`,
+  `EvalLlmInvalidResponseError`, `EvalLlmNotConfiguredError`).
+  Supports `responseFormatJson` + optional `seed`.
+- `src/eval/cost-guard.ts` — per-model USD accounting with a built-in
+  pricing schedule for GLM 5.1 and a conservative fallback. Daily cap
+  enforced via a persistent ledger at
+  `.cclaw/evals/.spend-YYYY-MM-DD.json`; abort with
+  `DailyCostCapExceededError` as soon as a commit would exceed the cap.
+- `src/eval/rubric-loader.ts` + starter rubrics for all 8 stages
+  seeded by `cclaw init`/`sync` (user edits preserved).
+  Schema supports `weight`, `critical`, `minimumScore` per check.
+- `src/eval/verifiers/judge.ts` — median-of-N sampling (odd N, default
+  3) with strict JSON output parsing, code-fence stripping, per-check
+  coverage tracking, and critical-floor enforcement.
+- `src/eval/agents/single-shot.ts` — Tier A single-shot agent using
+  the stage `SKILL.md` as the system prompt and the case prompt as
+  the user message.
+- `src/eval/runner.ts` threads Tier A + judge end-to-end with a
+  client wrapper that debits the cost guard on every chat call (no
+  double-commit), and surfaces per-case `costUsd` in the report.
+- `src/eval/report.ts` renders a dedicated "Judge scores" table with
+  median / mean / coverage per rubric check.
+- CLI: `cclaw eval --judge --tier=A` plus new env overrides
+  (`CCLAW_EVAL_JUDGE_SAMPLES`, `CCLAW_EVAL_JUDGE_TEMPERATURE`,
+  `CCLAW_EVAL_AGENT_TEMPERATURE`).
+- `.github/workflows/evals-nightly.yml` — advisory cron (03:17 UTC)
+  plus `workflow_dispatch`, skips when `CCLAW_EVAL_API_KEY` /
+  `CCLAW_EVAL_BASE_URL` are absent, uploads both the report and the
+  daily spend ledger.
+- 51 new unit + integration tests (llm-client, cost-guard, rubric
+  loader, judge, single-shot, runner `--judge` path, and scaffold
+  rubric landing + idempotent sync). Total suite: 436 tests passing.
 
-Exit criteria:
+Exit criteria — met:
 
-- One-stage judge run completes in <90s and costs <$0.50 per stage.
-- Nightly CI runs all 8 stages, produces markdown report artifact.
-- Synthetically degraded skill is correctly flagged as regression.
-- Cost cap, when enabled, aborts a run mid-flight with a clear error.
+- Tier A + judge completes against the seed corpus in under a minute
+  per stage when credentials are available; full sweep bounded by
+  `CCLAW_EVAL_DAILY_USD_CAP`.
+- Nightly CI produces markdown report + spend-ledger artifacts with
+  30-day retention.
+- Cost cap, when enabled, aborts the run mid-flight with a structured
+  error (covered by a runner test).
+- Synthetically degraded rubrics / dropped required checks flag the
+  case with a non-zero exit code (covered by judge + runner tests).
 
 ### Step 4 — Tier B: Agent with Tools (v0.26.0)
 

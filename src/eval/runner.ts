@@ -2,9 +2,21 @@ import { randomUUID } from "node:crypto";
 import { CCLAW_VERSION } from "../constants.js";
 import type { FlowStage } from "../types.js";
 import { FLOW_STAGES } from "../types.js";
+import { runSingleShot } from "./agents/single-shot.js";
 import { compareAgainstBaselines, loadBaselinesByStage } from "./baseline.js";
 import { loadCorpus, readExtraFixtures, readFixtureArtifact } from "./corpus.js";
 import { loadEvalConfig } from "./config-loader.js";
+import {
+  type CostGuard,
+  createCostGuard,
+  DailyCostCapExceededError
+} from "./cost-guard.js";
+import {
+  createEvalClient,
+  EvalLlmError,
+  type EvalLlmClient
+} from "./llm-client.js";
+import { loadAllRubrics } from "./rubric-loader.js";
 import type {
   BaselineDelta,
   BaselineSnapshot,
@@ -12,9 +24,12 @@ import type {
   EvalCaseResult,
   EvalReport,
   EvalTier,
+  JudgeInvocation,
   ResolvedEvalConfig,
+  RubricDoc,
   VerifierResult
 } from "./types.js";
+import { judgeResultsToVerifiers, runJudge } from "./verifiers/judge.js";
 import { verifyRules } from "./verifiers/rules.js";
 import { verifyStructural } from "./verifiers/structural.js";
 import { verifyTraceability } from "./verifiers/traceability.js";
@@ -33,6 +48,12 @@ export interface RunEvalOptions {
   dryRun?: boolean;
   /** Override process.env during tests. */
   env?: NodeJS.ProcessEnv;
+  /**
+   * Optional LLM client injection. Primary use case: unit and
+   * integration tests that want deterministic judge + agent behavior
+   * without hitting the network.
+   */
+  llmClient?: EvalLlmClient;
 }
 
 export interface DryRunSummary {
@@ -75,21 +96,50 @@ interface RunFlags {
   runStructural: boolean;
   runRules: boolean;
   runTraceability: boolean;
+  runJudge: boolean;
+  runAgent: boolean;
 }
 
 /**
  * --schema-only narrows to structural. --rules opens up rules + traceability
  * on top of structural (traceability is a rule-family verifier even though
- * it lives in its own module). Default (no flag) matches --schema-only for
- * backwards compatibility with the Step 1 gate.
+ * it lives in its own module). --judge opens up the LLM judge and, for
+ * Tier A, the single-shot agent-under-test. --schema-only always wins so
+ * the LLM-free PR gate never pays for tokens even if stale flags collide.
  */
 function resolveRunFlags(options: RunEvalOptions): RunFlags {
   const rulesRequested = options.rules === true;
   const schemaOnly = options.schemaOnly === true;
+  const judgeRequested = options.judge === true;
+  const runJudge = judgeRequested && !schemaOnly;
+  const runAgent = runJudge && (options.tier ?? "A") === "A";
   return {
     runStructural: true,
     runRules: rulesRequested && !schemaOnly,
-    runTraceability: rulesRequested && !schemaOnly
+    runTraceability: rulesRequested && !schemaOnly,
+    runJudge,
+    runAgent
+  };
+}
+
+/**
+ * Wrap a client so every chat() result is accounted against the cost
+ * guard before being returned. The guard throws
+ * DailyCostCapExceededError if committing the call would cross the
+ * configured cap — the runner surfaces that as a hard failure so
+ * nightly CI fails loud instead of silently overspending.
+ */
+function wrapClientWithCostGuard(
+  client: EvalLlmClient,
+  costGuard: CostGuard,
+  fallbackModel: string
+): EvalLlmClient {
+  return {
+    async chat(request) {
+      const response = await client.chat(request);
+      await costGuard.commit(response.model || fallbackModel, response.usage);
+      return response;
+    }
   };
 }
 
@@ -113,15 +163,23 @@ async function loadArtifactOrRecord(
   }
 }
 
-async function runCase(
-  projectRoot: string,
-  caseEntry: EvalCase,
-  plannedTier: EvalTier,
-  flags: RunFlags
-): Promise<EvalCaseResult> {
+interface RunCaseContext {
+  projectRoot: string;
+  caseEntry: EvalCase;
+  plannedTier: EvalTier;
+  flags: RunFlags;
+  config: ResolvedEvalConfig;
+  client?: EvalLlmClient;
+  costGuard: CostGuard;
+  rubrics: Map<FlowStage, RubricDoc>;
+}
+
+async function runCase(ctx: RunCaseContext): Promise<EvalCaseResult> {
+  const { projectRoot, caseEntry, plannedTier, flags, config, client, costGuard, rubrics } = ctx;
   const started = Date.now();
   const verifierResults: VerifierResult[] = [];
   const expected = caseEntry.expected;
+  let caseCostUsd = 0;
 
   const hasStructural =
     !!expected?.structural && Object.keys(expected.structural).length > 0;
@@ -129,11 +187,51 @@ async function runCase(
     flags.runRules && !!expected?.rules && Object.keys(expected.rules).length > 0;
   const hasTraceability =
     flags.runTraceability && !!expected?.traceability;
+  const judgeRequested =
+    flags.runJudge && !!expected?.judge;
 
-  const needsArtifact = hasStructural || hasRules || hasTraceability;
+  const needsArtifact = hasStructural || hasRules || hasTraceability || judgeRequested;
   let artifact: string | undefined;
   if (needsArtifact) {
-    artifact = await loadArtifactOrRecord(projectRoot, caseEntry, verifierResults);
+    if (flags.runAgent && judgeRequested && client) {
+      try {
+        const produced = await runSingleShot({
+          caseEntry,
+          config,
+          projectRoot,
+          client
+        });
+        artifact = produced.artifact;
+        caseCostUsd += produced.usageUsd;
+        verifierResults.push({
+          kind: "workflow",
+          id: "agent:single-shot",
+          ok: true,
+          score: 1,
+          message: `single-shot agent produced ${produced.artifact.length} char(s) in ${produced.durationMs}ms`,
+          details: {
+            model: produced.model,
+            tokensIn: produced.usage.promptTokens,
+            tokensOut: produced.usage.completionTokens,
+            usageUsd: produced.usageUsd,
+            attempts: produced.attempts
+          }
+        });
+      } catch (err) {
+        if (err instanceof DailyCostCapExceededError) throw err;
+        const retryable = err instanceof EvalLlmError ? err.retryable : false;
+        verifierResults.push({
+          kind: "workflow",
+          id: "agent:single-shot",
+          ok: false,
+          score: 0,
+          message: err instanceof Error ? err.message : String(err),
+          details: { retryable }
+        });
+      }
+    } else {
+      artifact = await loadArtifactOrRecord(projectRoot, caseEntry, verifierResults);
+    }
     if (artifact === undefined && verifierResults.length === 0) {
       verifierResults.push({
         kind: "structural",
@@ -192,6 +290,49 @@ async function runCase(
     }
   }
 
+  if (judgeRequested && artifact !== undefined && client) {
+    const rubric = rubrics.get(caseEntry.stage);
+    if (!rubric) {
+      verifierResults.push({
+        kind: "judge",
+        id: "judge:rubric:missing",
+        ok: false,
+        score: 0,
+        message: `No rubric at .cclaw/evals/rubrics/${caseEntry.stage}.yaml. Add one before running --judge.`,
+        details: { stage: caseEntry.stage }
+      });
+    } else {
+      try {
+        const invocation: JudgeInvocation = await runJudge({
+          artifact,
+          rubric,
+          config,
+          client,
+          caseHint: expected!.judge
+        });
+        caseCostUsd += invocation.usageUsd;
+        const judgeVerifiers = judgeResultsToVerifiers(
+          rubric,
+          invocation,
+          config,
+          expected!.judge
+        );
+        verifierResults.push(...judgeVerifiers);
+      } catch (err) {
+        if (err instanceof DailyCostCapExceededError) throw err;
+        const retryable = err instanceof EvalLlmError ? err.retryable : false;
+        verifierResults.push({
+          kind: "judge",
+          id: "judge:invocation:error",
+          ok: false,
+          score: 0,
+          message: err instanceof Error ? err.message : String(err),
+          details: { retryable, rubricId: rubric.id }
+        });
+      }
+    }
+  }
+
   const nonSkippedResults = verifierResults.filter((r) => r.details?.skipped !== true);
   const allOk =
     nonSkippedResults.length === 0
@@ -203,6 +344,7 @@ async function runCase(
     tier: plannedTier,
     passed: allOk,
     durationMs: Date.now() - started,
+    costUsd: caseCostUsd > 0 ? Number(caseCostUsd.toFixed(6)) : undefined,
     verifierResults
   };
 }
@@ -257,11 +399,18 @@ export async function runEval(options: RunEvalOptions): Promise<DryRunSummary | 
       "Corpus is empty. Seed cases live under `.cclaw/evals/corpus/<stage>/*.yaml`."
     );
   }
-  if (options.judge) {
-    notes.push("--judge is accepted; LLM judging is not wired yet.");
-  }
-
   const flags: RunFlags = resolveRunFlags(options);
+
+  if (flags.runJudge && !config.apiKey && !options.llmClient) {
+    notes.push(
+      "--judge requires CCLAW_EVAL_API_KEY (or an injected client for tests); judge pipeline will report errors per case."
+    );
+  }
+  if ((options.tier ?? "A") !== "A" && flags.runJudge) {
+    notes.push(
+      "Tier B/C agent-under-test is not wired yet; --judge will score the committed fixture as a stand-in."
+    );
+  }
 
   if (options.dryRun === true) {
     const summary: DryRunSummary = {
@@ -276,18 +425,43 @@ export async function runEval(options: RunEvalOptions): Promise<DryRunSummary | 
       verifiersAvailable: {
         structural: flags.runStructural,
         rules: flags.runRules,
-        judge: false,
-        workflow: false
+        judge: flags.runJudge,
+        workflow: flags.runAgent
       },
       notes
     };
     return summary;
   }
 
+  const costGuard = createCostGuard(options.projectRoot, config);
+  let wrappedClient: EvalLlmClient | undefined;
+  if (flags.runJudge) {
+    const base = options.llmClient ?? createEvalClient(config);
+    wrappedClient = wrapClientWithCostGuard(
+      base,
+      costGuard,
+      config.judgeModel ?? config.model
+    );
+  }
+  const rubrics = flags.runJudge
+    ? await loadAllRubrics(options.projectRoot)
+    : new Map<FlowStage, RubricDoc>();
+
   const now = new Date().toISOString();
   const caseResults: EvalCaseResult[] = [];
   for (const item of corpus) {
-    caseResults.push(await runCase(options.projectRoot, item, plannedTier, flags));
+    caseResults.push(
+      await runCase({
+        projectRoot: options.projectRoot,
+        caseEntry: item,
+        plannedTier,
+        flags,
+        config,
+        client: wrappedClient,
+        costGuard,
+        rubrics
+      })
+    );
   }
 
   const stages = stagesInResults(caseResults);
