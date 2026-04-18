@@ -11,7 +11,7 @@ measured score delta rather than subjective review. See
 | 0 | 0.22.0 | shipped | `cclaw eval` CLI, directory scaffold, config loader, corpus loader, report writer |
 | 1 | 0.23.0 | shipped | Structural verifier, baselines, 24-case seed corpus, PR-blocking CI gate |
 | 2 | 0.24.0 | shipped | Rule-based verifiers (keywords, regex, counts, uniqueness) + cross-stage traceability, 40-case corpus |
-| 3 | 0.25.0 | planned | LLM judge + Tier A single-shot, nightly CI |
+| 3 | 0.25.0 | shipped | LLM judge + Tier A single-shot, cost guard, nightly CI |
 | 4 | 0.26.0 | planned | Tier B agent with tools + sandbox |
 | 5 | 0.27.0 | planned | Tier C multi-stage workflow + release CI |
 | 6 | 0.28.0 | planned | HTML reports, cross-model diff, polish |
@@ -75,6 +75,9 @@ repo — only `CCLAW_EVAL_API_KEY` is supplied this way.
 | `CCLAW_EVAL_DAILY_USD_CAP` | Enable hard-stop on estimated daily spend. Unset = no cap. |
 | `CCLAW_EVAL_TIMEOUT_MS` | Per-call timeout in milliseconds. |
 | `CCLAW_EVAL_MAX_RETRIES` | Retry budget on transient API errors. |
+| `CCLAW_EVAL_JUDGE_SAMPLES` | Number of samples the LLM judge aggregates per artifact. Must be odd (default: `3`). |
+| `CCLAW_EVAL_JUDGE_TEMPERATURE` | Sampling temperature for the judge call. Default `0.3`. |
+| `CCLAW_EVAL_AGENT_TEMPERATURE` | Sampling temperature for Tier A single-shot agent runs. Default `0.2`. |
 
 Example local setup (z.ai GLM):
 
@@ -91,7 +94,7 @@ cclaw eval [flags]
   --tier=<A|B|C>       Fidelity tier. A=single-shot, B=tools, C=workflow.
   --schema-only        Structural verifiers only (sections / forbidden / lengths / frontmatter).
   --rules              Structural + rule verifiers (keywords, regex, counts, uniqueness) + cross-stage traceability.
-  --judge              Include LLM judging (not wired yet; requires CCLAW_EVAL_API_KEY).
+  --judge              Include the LLM judge (median-of-N rubric scoring; requires CCLAW_EVAL_API_KEY).
   --dry-run            Validate config + corpus, print summary, do not execute.
   --json               Emit machine-readable JSON on stdout.
   --no-write           Skip writing the report to .cclaw/evals/reports/.
@@ -222,7 +225,29 @@ expected:
 - Missing or unreadable `extra_fixtures` fail the case with a structured
   error rather than a silent pass.
 
-Rubric schema (LLM judge step onward): `.cclaw/evals/rubrics/<stage>.yaml`.
+### Per-case judge expectations (`expected.judge`)
+
+Optional hints the judge consults when scoring a specific case. All
+fields are optional.
+
+```yaml
+expected:
+  judge:
+    rubric: brainstorm            # override the default stage rubric
+    samples: 5                    # override global judgeSamples for this case
+    required_checks:              # fail the case if the rubric drops these ids
+      - distinctness
+      - recommendation-clarity
+    minimum_scores:               # per-check floor below which the case fails
+      distinctness: 4
+      recommendation-clarity: 4
+```
+
+## Rubrics
+
+Each stage owns a rubric at `.cclaw/evals/rubrics/<stage>.yaml`.
+`cclaw init` seeds a starter rubric for every flow stage; `cclaw sync`
+preserves user edits and only writes files that are missing.
 
 ```yaml
 stage: brainstorm
@@ -231,7 +256,86 @@ checks:
     prompt: "Are the proposed directions genuinely distinct (not rephrasings)?"
     scale: "1-5 where 5=fully distinct approaches"
     weight: 1.0
+    critical: true       # any sample scoring <= 2 fails the case
+    minimumScore: 3      # per-check floor; median must be >= this
 ```
+
+Schema:
+
+- `stage` — required, must match the directory name.
+- `checks[]` — non-empty list. Each `id` is a kebab-case string that
+  becomes the verifier id (`judge:<id>`).
+- `prompt` — the question the judge answers; also shown in reports.
+- `scale` — optional free-form hint (e.g., `"1-5 where 5=best"`).
+  Regardless of the hint, the judge always returns integer scores
+  `1..5` so rubric aggregation math stays stable.
+- `weight` — optional, default `1.0`. Currently used for display only;
+  pass/fail is decided per-check.
+- `critical` — optional, default `false`. When `true`, any sample
+  scoring `<= 2` fails the case even if the median passes.
+- `minimumScore` — optional per-check floor. When set, the median score
+  must be `>= minimumScore` for the case to pass.
+
+### Judge output contract
+
+The judge is asked for strict JSON of the form:
+
+```json
+{
+  "scores": { "distinctness": 4, "coverage": 5 },
+  "rationales": { "distinctness": "…", "coverage": "…" }
+}
+```
+
+Each rubric check runs through N samples (default `judgeSamples: 3`,
+must be odd). The runner:
+
+1. Clamps each score to `[1, 5]`.
+2. Drops samples that omit a check id and records `coverage`.
+3. Aggregates per-check median + mean.
+4. Fails the verifier if the median is below `minimumScore` or a
+   `critical` check has any sample `<= 2`.
+
+Judge scores appear as a dedicated "Judge scores" table in the
+generated markdown report alongside per-check rationales from the first
+sample.
+
+## Cost guard
+
+The optional `dailyUsdCap` (config) / `CCLAW_EVAL_DAILY_USD_CAP` (env)
+hard-stops the run once the cumulative estimated USD cost for the
+current UTC day would exceed the cap. The runner maintains a per-day
+ledger at `.cclaw/evals/.spend-YYYY-MM-DD.json` (gitignored) so
+consecutive invocations on the same day share a budget.
+
+Pricing is resolved in order:
+
+1. `tokenPricing[<model>]` from `config.yaml` if supplied.
+2. Built-in schedule for known models (GLM 5.1 and friends).
+3. Fallback schedule for unknown models (conservative upper bound).
+
+Set `tokenPricing` to override defaults without editing source:
+
+```yaml
+tokenPricing:
+  glm-5.1:
+    input: 0.0005      # USD per 1K prompt tokens
+    output: 0.0015     # USD per 1K completion tokens
+```
+
+## CI
+
+Two workflows share the corpus under `tests/fixtures/eval-demo/`:
+
+| Workflow | Triggers | Verifiers | Needs secrets | Gates PRs |
+| --- | --- | --- | --- | --- |
+| `evals-structural.yml` | `pull_request`, `workflow_dispatch` | Structural + rules + traceability | No | Yes |
+| `evals-nightly.yml` | `schedule` (03:17 UTC), `workflow_dispatch` | Structural + rules + judge (Tier A) | `CCLAW_EVAL_API_KEY`, `CCLAW_EVAL_BASE_URL` | No (advisory) |
+
+The nightly workflow skips automatically when the API-key secret is not
+configured — safe default for forks and during rollout. Reports and the
+daily spend ledger are uploaded as workflow artifacts with a 30-day
+retention.
 
 ## Architecture
 
