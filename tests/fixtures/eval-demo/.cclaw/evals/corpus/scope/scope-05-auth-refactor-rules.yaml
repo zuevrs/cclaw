@@ -1,0 +1,20 @@
+id: scope-05-auth-refactor-rules
+stage: scope
+input_prompt: |
+  Audit the passkey scope for rule-level structure (decisions, uniqueness).
+fixture: ./scope-02-auth-refactor/fixture.md
+expected:
+  rules:
+    must_contain:
+      - "Decisions"
+      - "Non-Goals"
+    must_not_contain:
+      - "revisit later"
+    regex_required:
+      - pattern: "D-\\d+"
+        description: Decision ids
+    min_occurrences:
+      "D-0": 2
+    unique_bullets_in_section:
+      - Decisions
+      - Goals

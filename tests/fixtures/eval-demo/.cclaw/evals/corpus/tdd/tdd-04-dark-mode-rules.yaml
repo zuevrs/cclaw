@@ -1,0 +1,21 @@
+id: tdd-04-dark-mode-rules
+stage: tdd
+input_prompt: |
+  Audit the dark-mode TDD artifact for red/green/refactor coverage.
+fixture: ./tdd-01-dark-mode/fixture.md
+expected:
+  rules:
+    must_contain:
+      - "Red"
+      - "Green"
+      - "Refactor"
+    must_not_contain:
+      - "skipped test"
+      - "TBD"
+    regex_required:
+      - pattern: "(red|green)\\s+test"
+        description: Red or green test mention
+    min_occurrences:
+      "Run output:": 2
+    unique_bullets_in_section:
+      - Red

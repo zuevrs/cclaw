@@ -1,0 +1,21 @@
+id: design-05-auth-refactor-rules
+stage: design
+input_prompt: |
+  Audit the passkey design for context/decision/consequences coverage.
+fixture: ./design-02-auth-refactor/fixture.md
+expected:
+  rules:
+    must_contain:
+      - "Context"
+      - "Decision"
+      - "Consequences"
+    must_not_contain:
+      - "maybe"
+    regex_required:
+      - pattern: "^## "
+        flags: m
+        description: At least one H2 section
+    min_occurrences:
+      "## ": 3
+    unique_bullets_in_section:
+      - Consequences

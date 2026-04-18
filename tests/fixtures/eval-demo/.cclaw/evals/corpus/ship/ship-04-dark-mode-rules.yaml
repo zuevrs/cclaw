@@ -1,0 +1,23 @@
+id: ship-04-dark-mode-rules
+stage: ship
+input_prompt: |
+  Audit the dark-mode ship notes for release-notes/rollout/validation.
+fixture: ./ship-01-dark-mode/fixture.md
+expected:
+  rules:
+    must_contain:
+      - "Release Notes"
+      - "Rollout"
+      - "Validation"
+      - "Rollback"
+    must_not_contain:
+      - "TBD"
+      - "coming soon"
+    regex_required:
+      - pattern: "Day \\d+"
+        description: Dated rollout step
+    min_occurrences:
+      "Day ": 3
+    unique_bullets_in_section:
+      - Rollout
+      - Validation

@@ -1,7 +1,7 @@
 {
   "schemaVersion": 1,
   "stage": "review",
-  "generatedAt": "2026-04-18T10:49:12.134Z",
+  "generatedAt": "2026-04-18T12:58:44.689Z",
   "cclawVersion": "0.1.1",
   "cases": {
     "review-01-dark-mode": {
@@ -194,6 +194,130 @@
         {
           "id": "structural:frontmatter:created-at",
           "kind": "structural",
+          "ok": true,
+          "score": 1
+        }
+      ]
+    },
+    "review-04-dark-mode-rules": {
+      "passed": true,
+      "verifierResults": [
+        {
+          "id": "structural:no-expectations",
+          "kind": "structural",
+          "ok": true,
+          "score": 1
+        },
+        {
+          "id": "rules:contains:findings",
+          "kind": "rules",
+          "ok": true,
+          "score": 1
+        },
+        {
+          "id": "rules:contains:signoff",
+          "kind": "rules",
+          "ok": true,
+          "score": 1
+        },
+        {
+          "id": "rules:contains:approved",
+          "kind": "rules",
+          "ok": true,
+          "score": 1
+        },
+        {
+          "id": "rules:not-contains:tbd",
+          "kind": "rules",
+          "ok": true,
+          "score": 1
+        },
+        {
+          "id": "rules:not-contains:follow-up-later",
+          "kind": "rules",
+          "ok": true,
+          "score": 1
+        },
+        {
+          "id": "rules:regex-required:at-least-one-owner-handle",
+          "kind": "rules",
+          "ok": true,
+          "score": 1
+        },
+        {
+          "id": "rules:min-occurrences:owner",
+          "kind": "rules",
+          "ok": true,
+          "score": 1
+        },
+        {
+          "id": "rules:unique-in-section:findings",
+          "kind": "rules",
+          "ok": true,
+          "score": 1
+        },
+        {
+          "id": "rules:unique-in-section:signoff",
+          "kind": "rules",
+          "ok": true,
+          "score": 1
+        }
+      ]
+    },
+    "review-05-auth-refactor-rules": {
+      "passed": true,
+      "verifierResults": [
+        {
+          "id": "structural:no-expectations",
+          "kind": "structural",
+          "ok": true,
+          "score": 1
+        },
+        {
+          "id": "rules:contains:findings",
+          "kind": "rules",
+          "ok": true,
+          "score": 1
+        },
+        {
+          "id": "rules:contains:signoff",
+          "kind": "rules",
+          "ok": true,
+          "score": 1
+        },
+        {
+          "id": "rules:contains:approved",
+          "kind": "rules",
+          "ok": true,
+          "score": 1
+        },
+        {
+          "id": "rules:not-contains:tbd",
+          "kind": "rules",
+          "ok": true,
+          "score": 1
+        },
+        {
+          "id": "rules:regex-required:at-least-one-owner-handle",
+          "kind": "rules",
+          "ok": true,
+          "score": 1
+        },
+        {
+          "id": "rules:min-occurrences:owner",
+          "kind": "rules",
+          "ok": true,
+          "score": 1
+        },
+        {
+          "id": "rules:unique-in-section:findings",
+          "kind": "rules",
+          "ok": true,
+          "score": 1
+        },
+        {
+          "id": "rules:unique-in-section:signoff",
+          "kind": "rules",
           "ok": true,
           "score": 1
         }

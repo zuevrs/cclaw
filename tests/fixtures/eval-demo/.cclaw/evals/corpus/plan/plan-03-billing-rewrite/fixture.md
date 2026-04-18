@@ -26,3 +26,9 @@ created_at: 2026-04-17
 - Partial rollbacks if step S4 reveals event ordering bugs.
 - Ledger service becomes a new hot-path SPOF (mitigation: multi-AZ
   deployment + circuit breaker on webhook ingress).
+
+## Decision Traceability
+
+- D-01 (idempotency keys) is implemented by S2 and shadow-tested in S4.
+- D-02 (ledger-only writer) is the defining constraint for M2 cut-over.
+- D-03 (server-side prorations) guards the S2 aggregate boundary.

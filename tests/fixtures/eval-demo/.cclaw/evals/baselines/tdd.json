@@ -1,7 +1,7 @@
 {
   "schemaVersion": 1,
   "stage": "tdd",
-  "generatedAt": "2026-04-18T10:49:12.135Z",
+  "generatedAt": "2026-04-18T12:58:44.690Z",
   "cclawVersion": "0.1.1",
   "cases": {
     "tdd-01-dark-mode": {
@@ -194,6 +194,118 @@
         {
           "id": "structural:frontmatter:created-at",
           "kind": "structural",
+          "ok": true,
+          "score": 1
+        }
+      ]
+    },
+    "tdd-04-dark-mode-rules": {
+      "passed": true,
+      "verifierResults": [
+        {
+          "id": "structural:no-expectations",
+          "kind": "structural",
+          "ok": true,
+          "score": 1
+        },
+        {
+          "id": "rules:contains:red",
+          "kind": "rules",
+          "ok": true,
+          "score": 1
+        },
+        {
+          "id": "rules:contains:green",
+          "kind": "rules",
+          "ok": true,
+          "score": 1
+        },
+        {
+          "id": "rules:contains:refactor",
+          "kind": "rules",
+          "ok": true,
+          "score": 1
+        },
+        {
+          "id": "rules:not-contains:skipped-test",
+          "kind": "rules",
+          "ok": true,
+          "score": 1
+        },
+        {
+          "id": "rules:not-contains:tbd",
+          "kind": "rules",
+          "ok": true,
+          "score": 1
+        },
+        {
+          "id": "rules:regex-required:red-or-green-test-mention",
+          "kind": "rules",
+          "ok": true,
+          "score": 1
+        },
+        {
+          "id": "rules:min-occurrences:run-output",
+          "kind": "rules",
+          "ok": true,
+          "score": 1
+        },
+        {
+          "id": "rules:unique-in-section:red",
+          "kind": "rules",
+          "ok": true,
+          "score": 1
+        }
+      ]
+    },
+    "tdd-05-auth-refactor-rules": {
+      "passed": true,
+      "verifierResults": [
+        {
+          "id": "structural:no-expectations",
+          "kind": "structural",
+          "ok": true,
+          "score": 1
+        },
+        {
+          "id": "rules:contains:red",
+          "kind": "rules",
+          "ok": true,
+          "score": 1
+        },
+        {
+          "id": "rules:contains:green",
+          "kind": "rules",
+          "ok": true,
+          "score": 1
+        },
+        {
+          "id": "rules:contains:refactor",
+          "kind": "rules",
+          "ok": true,
+          "score": 1
+        },
+        {
+          "id": "rules:not-contains:skipped-test",
+          "kind": "rules",
+          "ok": true,
+          "score": 1
+        },
+        {
+          "id": "rules:regex-required:red-or-green-test-mention",
+          "kind": "rules",
+          "ok": true,
+          "score": 1
+        },
+        {
+          "id": "rules:min-occurrences:run-output",
+          "kind": "rules",
+          "ok": true,
+          "score": 1
+        },
+        {
+          "id": "rules:unique-in-section:red",
+          "kind": "rules",
           "ok": true,
           "score": 1
         }

@@ -31,3 +31,9 @@ Run output: 4 tests green in 45 ms. No production code changes beyond
 
 Run output: 4 tests still green, plus 2 new unit tests for
 `ChallengeStore` making the store a tested unit.
+
+## Decision Traceability
+
+- D-01: conditional UI autofill tested via the origin/clientDataJSON check.
+- D-02: Postgres credential index exercised through `ChallengeStore` tests.
+- D-03: password-fallback invariant encoded in the "no credential" unit.

@@ -26,3 +26,9 @@ created_at: 2026-04-17
   testing with YubiKey, iCloud Keychain, Android, Windows Hello).
 - Cross-device ceremonies on legacy browsers.
 - Support load spike during M3; staff training completed before M3.
+
+## Decision Traceability
+
+- D-01 (WebAuthn level 3 + conditional UI) drives S1 and S4.
+- D-02 (Postgres credential index) is honored by S1 + S2 storage work.
+- D-03 (password fallback) shapes the M4 cut-over runbook in S5.

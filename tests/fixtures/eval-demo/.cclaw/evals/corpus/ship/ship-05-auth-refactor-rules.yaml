@@ -1,0 +1,23 @@
+id: ship-05-auth-refactor-rules
+stage: ship
+input_prompt: |
+  Audit the passkey ship notes for release-notes/rollout/validation.
+fixture: ./ship-02-auth-refactor/fixture.md
+expected:
+  rules:
+    must_contain:
+      - "Release Notes"
+      - "Rollout"
+      - "Validation"
+      - "Rollback"
+    must_not_contain:
+      - "TBD"
+      - "coming soon"
+    regex_required:
+      - pattern: "Day \\d+"
+        description: Dated rollout step
+    min_occurrences:
+      "Day ": 3
+    unique_bullets_in_section:
+      - Rollout
+      - Validation

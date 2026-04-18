@@ -1,0 +1,21 @@
+id: spec-05-auth-refactor-rules
+stage: spec
+input_prompt: |
+  Audit the passkey spec for acceptance/interfaces/non-goals.
+fixture: ./spec-02-auth-refactor/fixture.md
+expected:
+  rules:
+    must_contain:
+      - "Acceptance Criteria"
+      - "Interfaces"
+      - "Non-Goals"
+    must_not_contain:
+      - "TBD"
+      - "probably"
+    regex_required:
+      - pattern: "`(GET|POST|PATCH|PUT|DELETE) /"
+        description: HTTP method + path reference
+    min_occurrences:
+      "POST /api/auth/passkey": 4
+    unique_bullets_in_section:
+      - Acceptance Criteria

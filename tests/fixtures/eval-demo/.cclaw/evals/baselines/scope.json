@@ -1,7 +1,7 @@
 {
   "schemaVersion": 1,
   "stage": "scope",
-  "generatedAt": "2026-04-18T10:49:12.135Z",
+  "generatedAt": "2026-04-18T12:58:44.690Z",
   "cclawVersion": "0.1.1",
   "cases": {
     "scope-01-dark-mode": {
@@ -194,6 +194,124 @@
         {
           "id": "structural:frontmatter:created-at",
           "kind": "structural",
+          "ok": true,
+          "score": 1
+        }
+      ]
+    },
+    "scope-04-dark-mode-rules": {
+      "passed": true,
+      "verifierResults": [
+        {
+          "id": "structural:no-expectations",
+          "kind": "structural",
+          "ok": true,
+          "score": 1
+        },
+        {
+          "id": "rules:contains:decisions",
+          "kind": "rules",
+          "ok": true,
+          "score": 1
+        },
+        {
+          "id": "rules:contains:non-goals",
+          "kind": "rules",
+          "ok": true,
+          "score": 1
+        },
+        {
+          "id": "rules:not-contains:revisit-later",
+          "kind": "rules",
+          "ok": true,
+          "score": 1
+        },
+        {
+          "id": "rules:not-contains:open-question",
+          "kind": "rules",
+          "ok": true,
+          "score": 1
+        },
+        {
+          "id": "rules:regex-required:decision-ids",
+          "kind": "rules",
+          "ok": true,
+          "score": 1
+        },
+        {
+          "id": "rules:min-occurrences:d-0",
+          "kind": "rules",
+          "ok": true,
+          "score": 1
+        },
+        {
+          "id": "rules:unique-in-section:decisions",
+          "kind": "rules",
+          "ok": true,
+          "score": 1
+        },
+        {
+          "id": "rules:unique-in-section:goals",
+          "kind": "rules",
+          "ok": true,
+          "score": 1
+        },
+        {
+          "id": "rules:unique-in-section:non-goals",
+          "kind": "rules",
+          "ok": true,
+          "score": 1
+        }
+      ]
+    },
+    "scope-05-auth-refactor-rules": {
+      "passed": true,
+      "verifierResults": [
+        {
+          "id": "structural:no-expectations",
+          "kind": "structural",
+          "ok": true,
+          "score": 1
+        },
+        {
+          "id": "rules:contains:decisions",
+          "kind": "rules",
+          "ok": true,
+          "score": 1
+        },
+        {
+          "id": "rules:contains:non-goals",
+          "kind": "rules",
+          "ok": true,
+          "score": 1
+        },
+        {
+          "id": "rules:not-contains:revisit-later",
+          "kind": "rules",
+          "ok": true,
+          "score": 1
+        },
+        {
+          "id": "rules:regex-required:decision-ids",
+          "kind": "rules",
+          "ok": true,
+          "score": 1
+        },
+        {
+          "id": "rules:min-occurrences:d-0",
+          "kind": "rules",
+          "ok": true,
+          "score": 1
+        },
+        {
+          "id": "rules:unique-in-section:decisions",
+          "kind": "rules",
+          "ok": true,
+          "score": 1
+        },
+        {
+          "id": "rules:unique-in-section:goals",
+          "kind": "rules",
           "ok": true,
           "score": 1
         }

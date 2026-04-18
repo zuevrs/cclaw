@@ -29,3 +29,11 @@ Run output: all 3 tests green in 12 ms. No production code outside
 - Drop duplicated fallback branch by short-circuiting on the cookie.
 
 Run output: all 3 tests still green, module LOC went from 24 → 18.
+
+## Decision Traceability
+
+- D-01: cookie-driven preference exercised by the null-cookie test.
+- D-02: Tailwind `class` strategy asserted indirectly by the literal
+  theme values in `THEME_MODES`.
+- D-03: SSR hint test will live alongside the server component and is
+  stubbed by this resolver contract.

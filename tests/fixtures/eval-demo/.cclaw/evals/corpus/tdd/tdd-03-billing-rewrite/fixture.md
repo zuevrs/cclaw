@@ -31,3 +31,9 @@ calculator module touched.
 
 Run output: 4 tests remain green, plus 3 regression tests for the
 ledger. Module count unchanged; cohesion improved.
+
+## Decision Traceability
+
+- D-01: idempotency honored by the replay-safe ledger tests.
+- D-02: ledger-only writes asserted via the `RefundLedger` integration case.
+- D-03: server-side prorations covered by the BigInt-safe arithmetic tests.

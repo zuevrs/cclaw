@@ -1,7 +1,7 @@
 {
   "schemaVersion": 1,
   "stage": "plan",
-  "generatedAt": "2026-04-18T10:49:12.134Z",
+  "generatedAt": "2026-04-18T12:58:44.689Z",
   "cclawVersion": "0.1.1",
   "cases": {
     "plan-01-dark-mode": {
@@ -64,6 +64,18 @@
         {
           "id": "structural:frontmatter:created-at",
           "kind": "structural",
+          "ok": true,
+          "score": 1
+        },
+        {
+          "id": "traceability:scope->self",
+          "kind": "rules",
+          "ok": true,
+          "score": 1
+        },
+        {
+          "id": "traceability:scope->tdd",
+          "kind": "rules",
           "ok": true,
           "score": 1
         }
@@ -131,6 +143,18 @@
           "kind": "structural",
           "ok": true,
           "score": 1
+        },
+        {
+          "id": "traceability:scope->self",
+          "kind": "rules",
+          "ok": true,
+          "score": 1
+        },
+        {
+          "id": "traceability:scope->tdd",
+          "kind": "rules",
+          "ok": true,
+          "score": 1
         }
       ]
     },
@@ -194,6 +218,178 @@
         {
           "id": "structural:frontmatter:created-at",
           "kind": "structural",
+          "ok": true,
+          "score": 1
+        },
+        {
+          "id": "traceability:scope->self",
+          "kind": "rules",
+          "ok": true,
+          "score": 1
+        },
+        {
+          "id": "traceability:scope->tdd",
+          "kind": "rules",
+          "ok": true,
+          "score": 1
+        }
+      ]
+    },
+    "plan-04-dark-mode-rules": {
+      "passed": true,
+      "verifierResults": [
+        {
+          "id": "structural:no-expectations",
+          "kind": "structural",
+          "ok": true,
+          "score": 1
+        },
+        {
+          "id": "rules:contains:milestones",
+          "kind": "rules",
+          "ok": true,
+          "score": 1
+        },
+        {
+          "id": "rules:contains:steps",
+          "kind": "rules",
+          "ok": true,
+          "score": 1
+        },
+        {
+          "id": "rules:contains:risks",
+          "kind": "rules",
+          "ok": true,
+          "score": 1
+        },
+        {
+          "id": "rules:not-contains:open-question",
+          "kind": "rules",
+          "ok": true,
+          "score": 1
+        },
+        {
+          "id": "rules:not-contains:tbd",
+          "kind": "rules",
+          "ok": true,
+          "score": 1
+        },
+        {
+          "id": "rules:regex-required:milestone-ids",
+          "kind": "rules",
+          "ok": true,
+          "score": 1
+        },
+        {
+          "id": "rules:regex-required:step-ids",
+          "kind": "rules",
+          "ok": true,
+          "score": 1
+        },
+        {
+          "id": "rules:min-occurrences:m1",
+          "kind": "rules",
+          "ok": true,
+          "score": 1
+        },
+        {
+          "id": "rules:min-occurrences:s1",
+          "kind": "rules",
+          "ok": true,
+          "score": 1
+        },
+        {
+          "id": "rules:unique-in-section:milestones",
+          "kind": "rules",
+          "ok": true,
+          "score": 1
+        },
+        {
+          "id": "rules:unique-in-section:steps",
+          "kind": "rules",
+          "ok": true,
+          "score": 1
+        },
+        {
+          "id": "rules:unique-in-section:risks",
+          "kind": "rules",
+          "ok": true,
+          "score": 1
+        }
+      ]
+    },
+    "plan-05-auth-refactor-rules": {
+      "passed": true,
+      "verifierResults": [
+        {
+          "id": "structural:no-expectations",
+          "kind": "structural",
+          "ok": true,
+          "score": 1
+        },
+        {
+          "id": "rules:contains:milestones",
+          "kind": "rules",
+          "ok": true,
+          "score": 1
+        },
+        {
+          "id": "rules:contains:steps",
+          "kind": "rules",
+          "ok": true,
+          "score": 1
+        },
+        {
+          "id": "rules:contains:risks",
+          "kind": "rules",
+          "ok": true,
+          "score": 1
+        },
+        {
+          "id": "rules:not-contains:open-question",
+          "kind": "rules",
+          "ok": true,
+          "score": 1
+        },
+        {
+          "id": "rules:regex-required:milestone-ids",
+          "kind": "rules",
+          "ok": true,
+          "score": 1
+        },
+        {
+          "id": "rules:regex-required:step-ids",
+          "kind": "rules",
+          "ok": true,
+          "score": 1
+        },
+        {
+          "id": "rules:min-occurrences:m1",
+          "kind": "rules",
+          "ok": true,
+          "score": 1
+        },
+        {
+          "id": "rules:min-occurrences:s1",
+          "kind": "rules",
+          "ok": true,
+          "score": 1
+        },
+        {
+          "id": "rules:unique-in-section:milestones",
+          "kind": "rules",
+          "ok": true,
+          "score": 1
+        },
+        {
+          "id": "rules:unique-in-section:steps",
+          "kind": "rules",
+          "ok": true,
+          "score": 1
+        },
+        {
+          "id": "rules:unique-in-section:risks",
+          "kind": "rules",
           "ok": true,
           "score": 1
         }

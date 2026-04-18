@@ -3,6 +3,9 @@ stage: plan
 input_prompt: |
   Plan refund rewrite milestones.
 fixture: ./plan-03-billing-rewrite/fixture.md
+extra_fixtures:
+  scope: ../scope/scope-03-billing-rewrite/fixture.md
+  tdd: ../tdd/tdd-03-billing-rewrite/fixture.md
 expected:
   structural:
     required_sections:
@@ -19,3 +22,9 @@ expected:
       - created_at
     min_lines: 8
     max_lines: 120
+  traceability:
+    id_pattern: 'D-\d+'
+    source: scope
+    require_in:
+      - self
+      - tdd

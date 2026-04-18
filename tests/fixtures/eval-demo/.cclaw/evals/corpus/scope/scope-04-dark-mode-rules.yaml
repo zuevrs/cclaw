@@ -1,0 +1,22 @@
+id: scope-04-dark-mode-rules
+stage: scope
+input_prompt: |
+  Audit the dark-mode scope for rule-level structure (decisions, uniqueness).
+fixture: ./scope-01-dark-mode/fixture.md
+expected:
+  rules:
+    must_contain:
+      - "Decisions"
+      - "Non-Goals"
+    must_not_contain:
+      - "revisit later"
+      - "open question"
+    regex_required:
+      - pattern: "D-\\d+"
+        description: Decision ids
+    min_occurrences:
+      "D-0": 2
+    unique_bullets_in_section:
+      - Decisions
+      - Goals
+      - Non-Goals

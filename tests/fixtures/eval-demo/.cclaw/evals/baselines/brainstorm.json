@@ -1,7 +1,7 @@
 {
   "schemaVersion": 1,
   "stage": "brainstorm",
-  "generatedAt": "2026-04-18T10:49:12.134Z",
+  "generatedAt": "2026-04-18T12:58:44.688Z",
   "cclawVersion": "0.1.1",
   "cases": {
     "brainstorm-01-dark-mode": {
@@ -176,6 +176,112 @@
         {
           "id": "structural:frontmatter:created-at",
           "kind": "structural",
+          "ok": true,
+          "score": 1
+        }
+      ]
+    },
+    "brainstorm-04-dark-mode-rules": {
+      "passed": true,
+      "verifierResults": [
+        {
+          "id": "structural:no-expectations",
+          "kind": "structural",
+          "ok": true,
+          "score": 1
+        },
+        {
+          "id": "rules:contains:recommendation",
+          "kind": "rules",
+          "ok": true,
+          "score": 1
+        },
+        {
+          "id": "rules:contains:rationalizations",
+          "kind": "rules",
+          "ok": true,
+          "score": 1
+        },
+        {
+          "id": "rules:not-contains:hand-wave",
+          "kind": "rules",
+          "ok": true,
+          "score": 1
+        },
+        {
+          "id": "rules:not-contains:revisit-later",
+          "kind": "rules",
+          "ok": true,
+          "score": 1
+        },
+        {
+          "id": "rules:regex-required:at-least-one-bulleted-direction",
+          "kind": "rules",
+          "ok": true,
+          "score": 1
+        },
+        {
+          "id": "rules:min-occurrences:rule",
+          "kind": "rules",
+          "ok": true,
+          "score": 1
+        },
+        {
+          "id": "rules:unique-in-section:directions",
+          "kind": "rules",
+          "ok": true,
+          "score": 1
+        }
+      ]
+    },
+    "brainstorm-05-auth-refactor-rules": {
+      "passed": true,
+      "verifierResults": [
+        {
+          "id": "structural:no-expectations",
+          "kind": "structural",
+          "ok": true,
+          "score": 1
+        },
+        {
+          "id": "rules:contains:recommendation",
+          "kind": "rules",
+          "ok": true,
+          "score": 1
+        },
+        {
+          "id": "rules:contains:rationalizations",
+          "kind": "rules",
+          "ok": true,
+          "score": 1
+        },
+        {
+          "id": "rules:not-contains:hand-wave",
+          "kind": "rules",
+          "ok": true,
+          "score": 1
+        },
+        {
+          "id": "rules:not-contains:tbd",
+          "kind": "rules",
+          "ok": true,
+          "score": 1
+        },
+        {
+          "id": "rules:regex-required:at-least-one-bulleted-direction",
+          "kind": "rules",
+          "ok": true,
+          "score": 1
+        },
+        {
+          "id": "rules:min-occurrences:rule",
+          "kind": "rules",
+          "ok": true,
+          "score": 1
+        },
+        {
+          "id": "rules:unique-in-section:directions",
+          "kind": "rules",
           "ok": true,
           "score": 1
         }
