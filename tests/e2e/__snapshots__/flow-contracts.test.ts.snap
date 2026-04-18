@@ -868,7 +868,7 @@ Rule: Every task must trace to a spec acceptance criterion. Every locked scope d
 |---|---|---|
 | Dependency Graph | recommended | Ordering and parallel opportunities explicit. No circular dependencies. |
 | Dependency Batches | REQUIRED | Every task belongs to a batch. Each batch has an exit gate and dependency statement. |
-| Task List | REQUIRED | Each task row includes ID, description, acceptance criterion, verification command, and effort estimate (S/M/L). Every task must also carry a minutes estimate within the 2-5 minute budget. When \`.cclaw/config.yaml::sliceReview.enabled\` is true, each task row additionally declares \`touchCount\`, \`touchPaths\`, and an optional \`highRisk\` flag; the TDD stage uses these to decide whether a Per-Slice Review pass is mandatory. |
+| Task List | REQUIRED | Each task row includes ID, description, acceptance criterion, verification command, and effort estimate (S/M/L). Every task must also carry a minutes estimate within the 2-5 minute budget. When the sliceReview feature is enabled in the cclaw config, each task row additionally declares touchCount, touchPaths, and an optional highRisk flag so the TDD stage can decide whether a Per-Slice Review pass is required. |
 | Acceptance Mapping | REQUIRED | Every spec criterion is covered by at least one task. |
 | Locked Decision Coverage | recommended | Every locked decision ID (D-XX) from scope is listed with linked task IDs or explicit defer rationale. |
 | Risk Assessment | recommended | If present: per-task or per-batch risk identification with likelihood, impact, and mitigation strategy. |
