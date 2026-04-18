@@ -24,10 +24,10 @@ describe("prompt-contract regression harness", () => {
     const planContract = await fs.readFile(path.join(root, ".cclaw/commands/plan.md"), "utf8");
     const reviewContract = await fs.readFile(path.join(root, ".cclaw/commands/review.md"), "utf8");
 
-    expect(planSkill).toContain("Dependency Waves");
+    expect(planSkill).toContain("Dependency Batches");
     expect(planSkill).toContain("WAIT_FOR_CONFIRM");
     expect(planSkill).toContain("/cc-next");
-    expect(planContract).toContain("Dependency Waves");
+    expect(planContract).toContain("Dependency Batches");
     expect(planContract).toContain("Context Hydration");
 
     expect(tddSkill).toContain("RED");

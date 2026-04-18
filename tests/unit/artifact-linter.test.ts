@@ -22,15 +22,15 @@ function completePlanArtifact(frontmatter = ""): string {
 ## Dependency Graph
 - T-1 -> T-2 -> T-3
 
-## Dependency Waves
+## Dependency Batches
 
-### Wave 1
+### Batch 1
 - Task IDs: T-1
 - Verification gate: schema tests pass
 
-### Wave 2
+### Batch 2
 - Task IDs: T-2
-- Depends on: Wave 1
+- Depends on: Batch 1
 - Verification gate: integration tests pass
 
 ## Task List
@@ -748,15 +748,15 @@ API -> Service -> DB
 ## Dependency Graph
 - T-1 -> T-2 -> T-3
 
-## Dependency Waves
+## Dependency Batches
 
-### Wave 1
+### Batch 1
 - Task IDs: T-1
 - Verification gate: schema tests pass
 
-### Wave 2
+### Batch 2
 - Task IDs: T-2
-- Depends on: Wave 1
+- Depends on: Batch 1
 - Verification gate: integration tests pass
 
 ## Task List
@@ -929,9 +929,9 @@ inputs_hash: sha256:not-a-real-hash
     const root = await createTempProject("plan-no-dg");
     await writeRuntimeArtifact(root, "05-plan.md", `# Plan Artifact
 
-## Dependency Waves
+## Dependency Batches
 
-### Wave 1
+### Batch 1
 - Task IDs: T-1
 - Verification gate: tests pass
 
@@ -964,9 +964,9 @@ inputs_hash: sha256:not-a-real-hash
 ## Dependency Graph
 - T-1
 
-## Dependency Waves
+## Dependency Batches
 
-### Wave 1
+### Batch 1
 - Task IDs: T-1
 - Verification gate: tests pass
 
@@ -995,9 +995,9 @@ inputs_hash: sha256:not-a-real-hash
 ## Dependency Graph
 - T-1 -> T-2
 
-## Dependency Waves
+## Dependency Batches
 
-### Wave 1
+### Batch 1
 - Task IDs: T-1
 - Verification gate: tests pass
 
@@ -1028,9 +1028,9 @@ inputs_hash: sha256:not-a-real-hash
 ## Dependency Graph
 - T-1 -> T-2
 
-## Dependency Waves
+## Dependency Batches
 
-### Wave 1
+### Batch 1
 - Task IDs: T-1
 - Verification gate: tests pass
 
@@ -1061,9 +1061,9 @@ inputs_hash: sha256:not-a-real-hash
 ## Dependency Graph
 - T-1 -> T-2
 
-## Dependency Waves
+## Dependency Batches
 
-### Wave 1
+### Batch 1
 - Task IDs: T-1
 - Verification gate: tests pass
 

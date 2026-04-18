@@ -34,7 +34,7 @@ describe("eval runner", () => {
     expect(result.notes.some((n) => n.includes("Corpus is empty"))).toBe(true);
   });
 
-  it("dry-run with --judge adds a Wave 7.3 note", async () => {
+  it("dry-run with --judge surfaces a 'not wired yet' note", async () => {
     const root = await createTempProject("runner-dry-judge");
     const result = await runEval({
       projectRoot: root,
@@ -43,7 +43,7 @@ describe("eval runner", () => {
       env: {}
     });
     assertDryRun(result);
-    expect(result.notes.some((n) => n.includes("Wave 7.3"))).toBe(true);
+    expect(result.notes.some((n) => n.includes("LLM judging is not wired yet"))).toBe(true);
   });
 
   it("dry-run respects tier override", async () => {
@@ -109,7 +109,7 @@ describe("eval runner", () => {
   });
 });
 
-describe("eval llm client (Wave 7.0 stub)", () => {
+describe("eval llm client (pre-wire stub)", () => {
   it("createEvalClient returns a shape that throws on chat()", async () => {
     const client = createEvalClient({
       provider: "zai",
@@ -126,9 +126,9 @@ describe("eval llm client (Wave 7.0 stub)", () => {
     ).rejects.toBeInstanceOf(EvalLlmNotWiredError);
   });
 
-  it("EvalLlmNotWiredError mentions the wave and offline fallback", async () => {
-    const err = new EvalLlmNotWiredError("7.3");
-    expect(err.message).toContain("Wave 7.3");
+  it("EvalLlmNotWiredError mentions the offline fallback", async () => {
+    const err = new EvalLlmNotWiredError();
+    expect(err.message).toContain("not wired yet");
     expect(err.message).toContain("--dry-run");
   });
 });
