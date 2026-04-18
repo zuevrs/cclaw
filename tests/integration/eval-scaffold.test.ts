@@ -25,6 +25,37 @@ describe("cclaw init: eval scaffold", () => {
     expect(config).toContain("defaultTier: A");
   });
 
+  it("seeds a starter rubric for every FLOW_STAGE on init", async () => {
+    const root = await createTempProject("eval-scaffold-rubrics");
+    await initCclaw({ projectRoot: root });
+    for (const stage of [
+      "brainstorm",
+      "scope",
+      "design",
+      "spec",
+      "plan",
+      "tdd",
+      "review",
+      "ship"
+    ]) {
+      expect(await projectPathExists(root, `.cclaw/evals/rubrics/${stage}.yaml`)).toBe(true);
+      const body = await readProjectFile(root, `.cclaw/evals/rubrics/${stage}.yaml`);
+      expect(body).toContain(`stage: ${stage}`);
+      expect(body).toMatch(/- id: [a-z][a-z0-9-]*/);
+    }
+  });
+
+  it("sync preserves a user-edited rubric", async () => {
+    const root = await createTempProject("eval-scaffold-rubrics-preserve");
+    await initCclaw({ projectRoot: root });
+    const file = path.join(root, ".cclaw/evals/rubrics/plan.yaml");
+    const customized = `stage: plan\nchecks:\n  - id: my-only-check\n    prompt: custom\n`;
+    await fs.writeFile(file, customized, "utf8");
+    await syncCclaw(root);
+    const after = await fs.readFile(file, "utf8");
+    expect(after).toBe(customized);
+  });
+
   it("sync does not overwrite user-edited config.yaml", async () => {
     const root = await createTempProject("eval-scaffold-preserve");
     await initCclaw({ projectRoot: root });
