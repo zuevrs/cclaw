@@ -70,7 +70,6 @@ describe("install lifecycle", () => {
       .sort();
     expect(claudeShims).toEqual([
       "cc-ideate.md",
-      "cc-learn.md",
       "cc-next.md",
       "cc-ops.md",
       "cc-view.md",
@@ -226,18 +225,17 @@ describe("install lifecycle", () => {
     }
   });
 
-  it("upgrade preserves the full profile config and only refreshes generated files", async () => {
+  it("upgrade preserves user-authored strict config and only refreshes generated files", async () => {
     const root = await createTempProject("upgrade-preserve");
-    await initCclaw({ projectRoot: root, profile: "full" });
+    await initCclaw({ projectRoot: root });
 
-    const before = await readConfig(root);
-    expect(before.promptGuardMode).toBe("strict");
-    expect(before.tddEnforcement).toBe("strict");
-    expect(before.gitHookGuards).toBe(true);
-    expect(before.languageRulePacks.length).toBeGreaterThan(0);
-
+    const initial = await readConfig(root);
     await writeConfig(root, {
-      ...before,
+      ...initial,
+      promptGuardMode: "strict",
+      tddEnforcement: "strict",
+      gitHookGuards: true,
+      languageRulePacks: ["typescript", "python", "go"],
       trackHeuristics: {
         fallback: "standard",
         priority: ["quick", "medium", "standard"],
@@ -248,6 +246,12 @@ describe("install lifecycle", () => {
         }
       }
     });
+
+    const before = await readConfig(root);
+    expect(before.promptGuardMode).toBe("strict");
+    expect(before.tddEnforcement).toBe("strict");
+    expect(before.gitHookGuards).toBe(true);
+    expect(before.languageRulePacks.length).toBeGreaterThan(0);
 
     const shim = path.join(root, ".claude/commands/cc.md");
     await fs.rm(shim);

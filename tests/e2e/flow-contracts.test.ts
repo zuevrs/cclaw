@@ -59,7 +59,7 @@ describe("flow command contracts", () => {
       ".opencode/commands",
       ".codex/commands"
     ]) {
-      for (const shim of ["cc.md", "cc-next.md", "cc-learn.md", "cc-ideate.md", "cc-ops.md"]) {
+      for (const shim of ["cc.md", "cc-next.md", "cc-ideate.md", "cc-view.md", "cc-ops.md"]) {
         const shimPath = path.join(root, harnessDir, shim);
         const content = await fs.readFile(shimPath, "utf8");
         expect(content).toContain(".cclaw/skills/");

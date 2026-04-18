@@ -1,7 +1,7 @@
 import fs from "node:fs/promises";
 import path from "node:path";
 import { describe, expect, it } from "vitest";
-import { configPath, createProfileConfig, readConfig, writeConfig } from "../../src/config.js";
+import { configPath, readConfig, writeConfig } from "../../src/config.js";
 import { createTempProject } from "../helpers/index.js";
 describe("config", () => {
   it("keeps explicit empty harness list", async () => {
@@ -171,37 +171,4 @@ trackHeuristics:
     await expect(readConfig(root)).rejects.toThrow(/"promptGuardMode" must be "advisory" or "strict"/);
   });
 
-  it("minimal profile pre-fills claude-only + medium track + advisory guards", () => {
-    const cfg = createProfileConfig("minimal");
-    expect(cfg.harnesses).toEqual(["claude"]);
-    expect(cfg.defaultTrack).toBe("medium");
-    expect(cfg.promptGuardMode).toBe("advisory");
-    expect(cfg.gitHookGuards).toBe(false);
-  });
-
-  it("standard profile matches historical default behavior", () => {
-    const cfg = createProfileConfig("standard");
-    expect(cfg.harnesses.length).toBeGreaterThan(1);
-    expect(cfg.defaultTrack).toBe("standard");
-    expect(cfg.promptGuardMode).toBe("advisory");
-    expect(cfg.gitHookGuards).toBe(false);
-  });
-
-  it("full profile turns every safety rail on", () => {
-    const cfg = createProfileConfig("full");
-    expect(cfg.promptGuardMode).toBe("strict");
-    expect(cfg.tddEnforcement).toBe("strict");
-    expect(cfg.gitHookGuards).toBe(true);
-    expect(cfg.defaultTrack).toBe("standard");
-  });
-
-  it("profile overrides honor explicit harness/track flags", () => {
-    const cfg = createProfileConfig("minimal", {
-      harnesses: ["claude", "cursor"],
-      defaultTrack: "standard"
-    });
-    expect(cfg.harnesses).toEqual(["claude", "cursor"]);
-    expect(cfg.defaultTrack).toBe("standard");
-    expect(cfg.promptGuardMode).toBe("advisory");
-  });
 });

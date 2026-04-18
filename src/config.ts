@@ -4,7 +4,7 @@ import { parse, stringify } from "yaml";
 import { CCLAW_VERSION, DEFAULT_HARNESSES, FLOW_VERSION, RUNTIME_ROOT } from "./constants.js";
 import { exists, writeFileSafe } from "./fs-utils.js";
 import { FLOW_TRACKS, HARNESS_IDS, LANGUAGE_RULE_PACKS } from "./types.js";
-import type { FlowTrack, HarnessId, InitProfile, LanguageRulePack, VibyConfig } from "./types.js";
+import type { FlowTrack, HarnessId, LanguageRulePack, VibyConfig } from "./types.js";
 
 const CONFIG_PATH = `${RUNTIME_ROOT}/config.yaml`;
 const HARNESS_ID_SET = new Set<string>(HARNESS_IDS);
@@ -82,54 +82,6 @@ export function createDefaultConfig(
     defaultTrack,
     languageRulePacks: []
   };
-}
-
-/**
- * Build a VibyConfig for a named init profile. Profile defaults are applied
- * first, then any explicit overrides (CLI flags) win. This keeps the profile
- * contract deterministic and testable.
- */
-export function createProfileConfig(
-  profile: InitProfile,
-  overrides: {
-    harnesses?: HarnessId[];
-    defaultTrack?: FlowTrack;
-    languageRulePacks?: LanguageRulePack[];
-  } = {}
-): VibyConfig {
-  const base = createDefaultConfig();
-  switch (profile) {
-    case "minimal":
-      return {
-        ...base,
-        harnesses: overrides.harnesses ?? ["claude"],
-        promptGuardMode: "advisory",
-        tddEnforcement: "advisory",
-        gitHookGuards: false,
-        defaultTrack: overrides.defaultTrack ?? "medium",
-        languageRulePacks: overrides.languageRulePacks ?? []
-      };
-    case "standard":
-      return {
-        ...base,
-        harnesses: overrides.harnesses ?? DEFAULT_HARNESSES,
-        promptGuardMode: "advisory",
-        tddEnforcement: "advisory",
-        gitHookGuards: false,
-        defaultTrack: overrides.defaultTrack ?? "standard",
-        languageRulePacks: overrides.languageRulePacks ?? []
-      };
-    case "full":
-      return {
-        ...base,
-        harnesses: overrides.harnesses ?? DEFAULT_HARNESSES,
-        promptGuardMode: "strict",
-        tddEnforcement: "strict",
-        gitHookGuards: true,
-        defaultTrack: overrides.defaultTrack ?? "standard",
-        languageRulePacks: overrides.languageRulePacks ?? [...LANGUAGE_RULE_PACKS]
-      };
-  }
 }
 
 export async function readConfig(projectRoot: string): Promise<VibyConfig> {

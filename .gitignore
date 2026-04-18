@@ -9,6 +9,7 @@ scripts/reference-sync.sh
 docs/*
 !docs/harnesses.md
 !docs/evals.md
+!docs/config.md
 
 # cclaw generated artifacts
 .cclaw/

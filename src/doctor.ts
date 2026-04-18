@@ -541,7 +541,6 @@ export async function doctorChecks(projectRoot: string, options: DoctorOptions =
     const hasCcCommand = content.includes("/cc");
     const hasCcNext = content.includes("/cc-next");
     const hasCcIdeate = content.includes("/cc-ideate");
-    const hasCcLearn = content.includes("/cc-learn");
     const hasCcView = content.includes("/cc-view");
     const hasCcOps = content.includes("/cc-ops");
     const hasVerification = content.includes("Verification Discipline");
@@ -551,7 +550,6 @@ export async function doctorChecks(projectRoot: string, options: DoctorOptions =
       && hasCcCommand
       && hasCcNext
       && hasCcIdeate
-      && hasCcLearn
       && hasCcView
       && hasCcOps
       && hasVerification

@@ -1,19 +1,19 @@
 #!/usr/bin/env node
-import { createReadStream, realpathSync } from "node:fs";
+import { createReadStream, existsSync, realpathSync } from "node:fs";
 import { spawn } from "node:child_process";
 import fs from "node:fs/promises";
 import process from "node:process";
 import path from "node:path";
 import { createInterface } from "node:readline/promises";
 import { fileURLToPath } from "node:url";
-import { FLOW_TRACKS, HARNESS_IDS, INIT_PROFILES } from "./types.js";
+import { FLOW_TRACKS, HARNESS_IDS } from "./types.js";
 import { doctorChecks, doctorSucceeded } from "./doctor.js";
 import { initCclaw, syncCclaw, uninstallCclaw, upgradeCclaw } from "./install.js";
 import { error, info } from "./logger.js";
-import type { CliContext, FlowTrack, HarnessId, InitProfile } from "./types.js";
+import type { CliContext, FlowTrack, HarnessId } from "./types.js";
 import { archiveRun } from "./runs.js";
 import { CCLAW_VERSION, RUNTIME_ROOT } from "./constants.js";
-import { createDefaultConfig, createProfileConfig } from "./config.js";
+import { createDefaultConfig } from "./config.js";
 import { detectHarnesses } from "./init-detect.js";
 import { HARNESS_ADAPTERS } from "./harness-adapters.js";
 import { runEval } from "./eval/runner.js";
@@ -52,7 +52,6 @@ interface ParsedArgs {
   command?: CommandName;
   harnesses?: HarnessId[];
   track?: FlowTrack;
-  profile?: InitProfile;
   dryRun?: boolean;
   interactive?: boolean;
   reconcileGates?: boolean;
@@ -88,82 +87,33 @@ export function usage(): string {
   return `cclaw - installer-first flow toolkit
 
 Usage:
-  cclaw <command> [flags]
-  cclaw --help | -h
-  cclaw --version | -v
+  npx cclaw-cli                   # launch setup or print "already installed" hint
+  npx cclaw-cli <command> [flags]
+  npx cclaw-cli --help | -h
+  npx cclaw-cli --version | -v
 
 Commands:
   init       Bootstrap .cclaw runtime, state, and harness shims in this project.
-             Flags: --profile=<id>      Pre-fill defaults. One of: minimal | standard | full. Default: standard.
-                    --harnesses=<list>  Comma list of harnesses (claude,cursor,opencode,codex). Overrides the profile default.
-                    --track=<id>        Flow track for new runs (standard | medium | quick). Overrides the profile default.
-                    --interactive       Force interactive prompts (TTY only).
-                    --no-interactive    Skip interactive prompts even on TTY.
-                    --dry-run           Print resolved config + generated surfaces without writing files.
-  sync       Regenerate harness shim files from the current .cclaw config (non-destructive).
-  doctor     Run health checks against the local .cclaw runtime. Exit code 2 when any error-severity check fails.
-             Flags: --reconcile-gates   Recompute current-stage gate evidence before checks.
-                    --json              Emit machine-readable JSON output.
-                    --only=<filter>     Comma list of severities/check-name filters (error,warning,info,trace:,hook:...).
-                    --explain           Include fix + doc reference per check in text mode.
-                    --quiet             Print only failing checks (and totals).
-  archive    Move .cclaw/artifacts into .cclaw/runs/<date>-<slug> and reset flow state.
-             Flags: --name=<feature>    Feature slug (default: inferred from 00-idea.md).
-                    --skip-retro       Bypass mandatory retro gate (requires --retro-reason).
-                    --retro-reason=<t> Reason for bypassing retro gate.
-  eval       Run cclaw evals against .cclaw/evals/corpus (Phase 7: structural verifier + baselines).
-             Flags: --stage=<id>         Limit to one flow stage (${FLOW_STAGES.join("|")}) for fixture/agent modes.
-                    --mode=<${EVAL_MODES.join("|")}>
-                                         Evaluation mode:
-                                           fixture  = verify existing artifacts with structural/rule/judge verifiers.
-                                           agent    = LLM drafts one stage's artifact in a sandbox with tools.
-                                           workflow = LLM runs the full multi-stage flow (brainstorm→plan).
-                                         Legacy --tier=A|B|C still works (deprecated).
-                    --schema-only        Run only structural verifiers (default).
-                    --rules              Also run rule-based verifiers (keywords, regex, counts, uniqueness, traceability).
-                    --judge              Run the LLM judge (median-of-N) against each case's rubric. Requires CCLAW_EVAL_API_KEY; fixture mode judges an existing artifact, agent/workflow modes draft first and then judge.
-                    --dry-run            Validate config + corpus, print summary, do not execute.
-                    --json               Emit machine-readable JSON on stdout.
-                    --no-write           Skip writing the report to .cclaw/evals/reports/.
-                    --update-baseline    Overwrite baselines from the current run (requires --confirm).
-                    --confirm            Acknowledge --update-baseline (prevents accidental resets).
-                    --quiet              Silence the stderr progress logger (default: emit one
-                                         line per case / stage to stderr so long runs are visible).
-                    --max-cost-usd=<n>   Abort the run if committed USD spend crosses <n>
-                                         (independent from the daily cap). Also readable from
-                                         CCLAW_EVAL_MAX_COST_USD.
-                    --compare-model=<id> Run the same corpus twice — once with the configured model
-                                         and once with <id> — then diff the summaries. Exit code 1
-                                         when the override model regressed.
-                    --background         Spawn the run as a detached child process, write the
-                                         combined output to .cclaw/evals/runs/<id>/run.log, and
-                                         return immediately. Attach later with
-                                         \`cclaw eval runs tail <id|latest>\`.
-
-             Subcommands:
-                    diff <old> <new>     Compare two reports under .cclaw/evals/reports/.
-                                         Each argument is a cclawVersion (e.g. 0.26.0), a filename,
-                                         or the literal "latest". Exit code 1 when the diff shows a
-                                         regression. Accepts --json to emit machine-readable output.
-                    runs [action] [id]   Inspect background runs under .cclaw/evals/runs/.
-                                         Actions: list (default) | status <id|latest> | tail <id|latest>.
-  upgrade    Refresh generated files in .cclaw without modifying user artifacts.
+             Flags: --harnesses=<list>  Comma list of harnesses (claude,cursor,opencode,codex).
+                    --no-interactive    Skip interactive prompts even on TTY (for CI/scripts).
+  upgrade    Refresh generated files in .cclaw. Preserves your config.yaml.
   uninstall  Remove .cclaw runtime and the generated harness shim files.
+  eval       Run cclaw evals. Maintainer surface — see docs/evals.md.
+             Full flag reference: \`npx cclaw-cli eval --help\` or docs/evals.md.
 
 Global flags:
   -h, --help     Show this help message and exit 0.
   -v, --version  Print the cclaw CLI version and exit 0.
 
 Examples:
-  cclaw init --harnesses=claude,cursor
-  cclaw doctor --reconcile-gates
-  cclaw archive --name=payments-revamp
-  cclaw eval --dry-run
-  cclaw eval --stage=brainstorm --schema-only
-  cclaw eval --judge --mode=fixture --stage=brainstorm
-  cclaw eval --judge --mode=agent --stage=spec
-  cclaw eval --mode=workflow --judge
-  cclaw eval diff 0.26.0 latest
+  npx cclaw-cli
+  npx cclaw-cli init --harnesses=claude,cursor --no-interactive
+  npx cclaw-cli upgrade
+  npx cclaw-cli eval --dry-run
+
+Everything operational (retro, archive, worktrees, doctor, learnings)
+happens inside your harness via slash commands. The CLI is just a
+launcher. See README.md for the four user-facing slash commands.
 
 Docs:   https://github.com/zuevrs/cclaw
 Issues: https://github.com/zuevrs/cclaw/issues
@@ -192,14 +142,6 @@ function parseTrack(raw: string): FlowTrack {
   return trimmed as FlowTrack;
 }
 
-function parseProfile(raw: string): InitProfile {
-  const trimmed = raw.trim();
-  if (!(INIT_PROFILES as readonly string[]).includes(trimmed)) {
-    throw new Error(`Unknown profile: ${trimmed}. Supported: ${INIT_PROFILES.join(", ")}`);
-  }
-  return trimmed as InitProfile;
-}
-
 function parseLegacyTier(raw: string): EvalMode {
   return parseModeInput(raw.toUpperCase(), {
     source: "cli",
@@ -224,6 +166,30 @@ function parseEvalStage(raw: string): string {
 
 function isInitPromptAllowed(ctx: CliContext): boolean {
   return Boolean(process.stdin.isTTY && ctx.stdout.isTTY);
+}
+
+/**
+ * Print a short, friendly hint when the user runs `cclaw-cli` with no
+ * arguments. Does not read or mutate flow state — only checks whether
+ * `.cclaw/config.yaml` exists to branch between "installed" and
+ * "not-installed" messaging. Keeps exit 0 in both cases: users discover
+ * the tool through this path, not through an error.
+ */
+function printNoArgsHint(ctx: CliContext): number {
+  const installed = existsSync(path.join(ctx.cwd, RUNTIME_ROOT, "config.yaml"));
+  if (installed) {
+    ctx.stdout.write(
+      "cclaw is installed in this project. Open your harness (Claude Code, " +
+        "Cursor, OpenCode, or Codex) and type `/cc` to start.\n"
+    );
+  } else {
+    ctx.stdout.write(
+      "cclaw is not installed in this project yet.\n" +
+        "Run `npx cclaw-cli init` to bootstrap .cclaw and the harness shims.\n" +
+        "For help: `npx cclaw-cli --help`.\n"
+    );
+  }
+  return 0;
 }
 
 function buildInitSurfacePreview(harnesses: HarnessId[]): string[] {
@@ -268,46 +234,14 @@ function buildInitSurfacePreview(harnesses: HarnessId[]): string[] {
   return lines;
 }
 
-function inferTrackDefault(profile: InitProfile | undefined, track: FlowTrack | undefined): FlowTrack {
-  if (track) return track;
-  if (!profile) return "standard";
-  return createProfileConfig(profile).defaultTrack ?? "standard";
-}
-
 async function promptInitConfig(
-  defaults: { profile: InitProfile; track: FlowTrack; harnesses: HarnessId[] },
+  defaults: { harnesses: HarnessId[] },
   ctx: CliContext
-): Promise<{ profile: InitProfile; track: FlowTrack; harnesses: HarnessId[] }> {
+): Promise<{ harnesses: HarnessId[] }> {
   const rl = createInterface({
     input: process.stdin,
     output: ctx.stdout
   });
-
-  const pickSingle = async <T extends string>(
-    label: string,
-    options: readonly T[],
-    fallback: T
-  ): Promise<T> => {
-    while (true) {
-      ctx.stdout.write(`\n${label}\n`);
-      options.forEach((option, index) => {
-        const marker = option === fallback ? " (default)" : "";
-        ctx.stdout.write(`  ${index + 1}) ${option}${marker}\n`);
-      });
-      const answer = (await rl.question("> ")).trim();
-      if (answer.length === 0) {
-        return fallback;
-      }
-      const numeric = Number(answer);
-      if (Number.isInteger(numeric) && numeric >= 1 && numeric <= options.length) {
-        return options[numeric - 1]!;
-      }
-      if ((options as readonly string[]).includes(answer)) {
-        return answer as T;
-      }
-      ctx.stdout.write("Invalid selection. Use option number or value.\n");
-    }
-  };
 
   const pickHarnesses = async (fallback: HarnessId[]): Promise<HarnessId[]> => {
     const fallbackText = fallback.join(",");
@@ -332,18 +266,14 @@ async function promptInitConfig(
   };
 
   try {
-    const profile = await pickSingle("Select init profile:", INIT_PROFILES, defaults.profile);
-    const trackDefault = inferTrackDefault(profile, defaults.track);
-    const track = await pickSingle("Select default flow track:", FLOW_TRACKS, trackDefault);
     const harnesses = await pickHarnesses(defaults.harnesses);
-    return { profile, track, harnesses };
+    return { harnesses };
   } finally {
     rl.close();
   }
 }
 
 async function resolveInitInputs(parsed: ParsedArgs, ctx: CliContext): Promise<{
-  profile?: InitProfile;
   track?: FlowTrack;
   harnesses?: HarnessId[];
   detectedHarnesses: HarnessId[];
@@ -358,14 +288,12 @@ async function resolveInitInputs(parsed: ParsedArgs, ctx: CliContext): Promise<{
   const implicitPrompt =
     !promptForbidden &&
     isInitPromptAllowed(ctx) &&
-    parsed.profile === undefined &&
     parsed.track === undefined &&
     parsed.harnesses === undefined;
   const shouldPrompt = promptRequested || implicitPrompt;
 
   if (!shouldPrompt) {
     return {
-      profile: parsed.profile,
       track: parsed.track,
       harnesses: autoHarnesses,
       detectedHarnesses
@@ -377,14 +305,11 @@ async function resolveInitInputs(parsed: ParsedArgs, ctx: CliContext): Promise<{
   }
 
   const defaults = {
-    profile: parsed.profile ?? "standard",
-    track: inferTrackDefault(parsed.profile, parsed.track),
     harnesses: autoHarnesses ?? HARNESS_IDS.slice()
   };
   const prompted = await promptInitConfig(defaults, ctx);
   return {
-    profile: prompted.profile,
-    track: prompted.track,
+    track: parsed.track,
     harnesses: prompted.harnesses,
     detectedHarnesses
   };
@@ -554,7 +479,6 @@ function parseArgs(argv: string[]): ParsedArgs {
       continue;
     }
     if (flag.startsWith("--profile=")) {
-      parsed.profile = parseProfile(flag.replace("--profile=", ""));
       continue;
     }
     if (flag === "--interactive") {
@@ -922,30 +846,22 @@ async function runCommand(parsed: ParsedArgs, ctx: CliContext): Promise<number> 
 
   const command = parsed.command;
   if (!command) {
-    ctx.stderr.write(usage());
-    return 1;
+    return printNoArgsHint(ctx);
   }
 
   if (command === "init") {
     const resolved = await resolveInitInputs(parsed, ctx);
-    const effectiveProfile = resolved.profile;
     const effectiveTrack = resolved.track;
     const effectiveHarnesses = resolved.harnesses;
 
     if (parsed.dryRun === true) {
-      const previewConfig = effectiveProfile
-        ? createProfileConfig(effectiveProfile, {
-            harnesses: effectiveHarnesses,
-            defaultTrack: effectiveTrack
-          })
-        : createDefaultConfig(effectiveHarnesses, effectiveTrack);
+      const previewConfig = createDefaultConfig(effectiveHarnesses, effectiveTrack);
       const previewSurfaces = buildInitSurfacePreview(previewConfig.harnesses);
       info(ctx, "Dry run: no files were written.");
       if (resolved.detectedHarnesses.length > 0 && parsed.harnesses === undefined) {
         info(ctx, `Detected harnesses from repo: ${resolved.detectedHarnesses.join(", ")}`);
       }
       ctx.stdout.write(`${JSON.stringify({
-        profile: effectiveProfile ?? "standard(default)",
         track: previewConfig.defaultTrack ?? "standard",
         harnesses: previewConfig.harnesses,
         promptGuardMode: previewConfig.promptGuardMode,
@@ -959,16 +875,13 @@ async function runCommand(parsed: ParsedArgs, ctx: CliContext): Promise<number> 
     await initCclaw({
       projectRoot: ctx.cwd,
       harnesses: effectiveHarnesses,
-      track: effectiveTrack,
-      profile: effectiveProfile
+      track: effectiveTrack
     });
     if (resolved.detectedHarnesses.length > 0 && parsed.harnesses === undefined) {
       info(ctx, `Detected harnesses from repo: ${resolved.detectedHarnesses.join(", ")}`);
     }
-    const profileNote = effectiveProfile ? ` profile=${effectiveProfile}` : "";
-    const trackNote = effectiveTrack ? ` track=${effectiveTrack}` : "";
-    const suffix = profileNote || trackNote ? ` (${(profileNote + trackNote).trim()})` : "";
-    info(ctx, `Initialized .cclaw runtime and generated harness shims${suffix}`);
+    const trackNote = effectiveTrack ? ` (track=${effectiveTrack})` : "";
+    info(ctx, `Initialized .cclaw runtime and generated harness shims${trackNote}`);
     return 0;
   }
 
@@ -1226,4 +1139,4 @@ if (isDirectExecution()) {
   void main();
 }
 
-export { parseArgs, parseHarnesses, parseTrack, parseProfile };
+export { parseArgs, parseHarnesses, parseTrack };
