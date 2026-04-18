@@ -88,82 +88,33 @@ export function usage(): string {
   return `cclaw - installer-first flow toolkit
 
 Usage:
-  cclaw <command> [flags]
-  cclaw --help | -h
-  cclaw --version | -v
+  npx cclaw-cli                   # launch setup or print "already installed" hint
+  npx cclaw-cli <command> [flags]
+  npx cclaw-cli --help | -h
+  npx cclaw-cli --version | -v
 
 Commands:
   init       Bootstrap .cclaw runtime, state, and harness shims in this project.
-             Flags: --profile=<id>      Pre-fill defaults. One of: minimal | standard | full. Default: standard.
-                    --harnesses=<list>  Comma list of harnesses (claude,cursor,opencode,codex). Overrides the profile default.
-                    --track=<id>        Flow track for new runs (standard | medium | quick). Overrides the profile default.
-                    --interactive       Force interactive prompts (TTY only).
-                    --no-interactive    Skip interactive prompts even on TTY.
-                    --dry-run           Print resolved config + generated surfaces without writing files.
-  sync       Regenerate harness shim files from the current .cclaw config (non-destructive).
-  doctor     Run health checks against the local .cclaw runtime. Exit code 2 when any error-severity check fails.
-             Flags: --reconcile-gates   Recompute current-stage gate evidence before checks.
-                    --json              Emit machine-readable JSON output.
-                    --only=<filter>     Comma list of severities/check-name filters (error,warning,info,trace:,hook:...).
-                    --explain           Include fix + doc reference per check in text mode.
-                    --quiet             Print only failing checks (and totals).
-  archive    Move .cclaw/artifacts into .cclaw/runs/<date>-<slug> and reset flow state.
-             Flags: --name=<feature>    Feature slug (default: inferred from 00-idea.md).
-                    --skip-retro       Bypass mandatory retro gate (requires --retro-reason).
-                    --retro-reason=<t> Reason for bypassing retro gate.
-  eval       Run cclaw evals against .cclaw/evals/corpus (Phase 7: structural verifier + baselines).
-             Flags: --stage=<id>         Limit to one flow stage (${FLOW_STAGES.join("|")}) for fixture/agent modes.
-                    --mode=<${EVAL_MODES.join("|")}>
-                                         Evaluation mode:
-                                           fixture  = verify existing artifacts with structural/rule/judge verifiers.
-                                           agent    = LLM drafts one stage's artifact in a sandbox with tools.
-                                           workflow = LLM runs the full multi-stage flow (brainstorm→plan).
-                                         Legacy --tier=A|B|C still works (deprecated).
-                    --schema-only        Run only structural verifiers (default).
-                    --rules              Also run rule-based verifiers (keywords, regex, counts, uniqueness, traceability).
-                    --judge              Run the LLM judge (median-of-N) against each case's rubric. Requires CCLAW_EVAL_API_KEY; fixture mode judges an existing artifact, agent/workflow modes draft first and then judge.
-                    --dry-run            Validate config + corpus, print summary, do not execute.
-                    --json               Emit machine-readable JSON on stdout.
-                    --no-write           Skip writing the report to .cclaw/evals/reports/.
-                    --update-baseline    Overwrite baselines from the current run (requires --confirm).
-                    --confirm            Acknowledge --update-baseline (prevents accidental resets).
-                    --quiet              Silence the stderr progress logger (default: emit one
-                                         line per case / stage to stderr so long runs are visible).
-                    --max-cost-usd=<n>   Abort the run if committed USD spend crosses <n>
-                                         (independent from the daily cap). Also readable from
-                                         CCLAW_EVAL_MAX_COST_USD.
-                    --compare-model=<id> Run the same corpus twice — once with the configured model
-                                         and once with <id> — then diff the summaries. Exit code 1
-                                         when the override model regressed.
-                    --background         Spawn the run as a detached child process, write the
-                                         combined output to .cclaw/evals/runs/<id>/run.log, and
-                                         return immediately. Attach later with
-                                         \`cclaw eval runs tail <id|latest>\`.
-
-             Subcommands:
-                    diff <old> <new>     Compare two reports under .cclaw/evals/reports/.
-                                         Each argument is a cclawVersion (e.g. 0.26.0), a filename,
-                                         or the literal "latest". Exit code 1 when the diff shows a
-                                         regression. Accepts --json to emit machine-readable output.
-                    runs [action] [id]   Inspect background runs under .cclaw/evals/runs/.
-                                         Actions: list (default) | status <id|latest> | tail <id|latest>.
-  upgrade    Refresh generated files in .cclaw without modifying user artifacts.
+             Flags: --harnesses=<list>  Comma list of harnesses (claude,cursor,opencode,codex).
+                    --no-interactive    Skip interactive prompts even on TTY (for CI/scripts).
+  upgrade    Refresh generated files in .cclaw. Preserves your config.yaml.
   uninstall  Remove .cclaw runtime and the generated harness shim files.
+  eval       Run cclaw evals. Maintainer surface — see docs/evals.md.
+             Full flag reference: \`npx cclaw-cli eval --help\` or docs/evals.md.
 
 Global flags:
   -h, --help     Show this help message and exit 0.
   -v, --version  Print the cclaw CLI version and exit 0.
 
 Examples:
-  cclaw init --harnesses=claude,cursor
-  cclaw doctor --reconcile-gates
-  cclaw archive --name=payments-revamp
-  cclaw eval --dry-run
-  cclaw eval --stage=brainstorm --schema-only
-  cclaw eval --judge --mode=fixture --stage=brainstorm
-  cclaw eval --judge --mode=agent --stage=spec
-  cclaw eval --mode=workflow --judge
-  cclaw eval diff 0.26.0 latest
+  npx cclaw-cli
+  npx cclaw-cli init --harnesses=claude,cursor --no-interactive
+  npx cclaw-cli upgrade
+  npx cclaw-cli eval --dry-run
+
+Everything operational (retro, archive, worktrees, doctor, learnings)
+happens inside your harness via slash commands. The CLI is just a
+launcher. See README.md for the four user-facing slash commands.
 
 Docs:   https://github.com/zuevrs/cclaw
 Issues: https://github.com/zuevrs/cclaw/issues

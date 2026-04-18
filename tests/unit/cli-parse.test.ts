@@ -73,18 +73,34 @@ describe("cli parser", () => {
     expect(parseArgs(["doctor"]).showVersion).toBeUndefined();
   });
 
-  it("usage message documents every installer command and global flag", () => {
+  it("usage message documents the public user surface", () => {
     const text = usage();
-    for (const cmd of ["init", "sync", "doctor", "archive", "upgrade", "uninstall"]) {
+    for (const cmd of ["init", "upgrade", "uninstall", "eval"]) {
       expect(text).toContain(cmd);
     }
     expect(text).toContain("--help");
     expect(text).toContain("-h");
     expect(text).toContain("--version");
     expect(text).toContain("-v");
-    expect(text).toContain("--track");
-    expect(text).toContain("--skip-retro");
-    expect(text).toContain("--retro-reason");
+    expect(text).toContain("--harnesses");
+    expect(text).toContain("--no-interactive");
+  });
+
+  it("usage message keeps operational surface out of the public help", () => {
+    const text = usage();
+    for (const hiddenCmd of ["sync", "doctor", "archive"]) {
+      expect(text).not.toContain(`\n  ${hiddenCmd} `);
+    }
+    for (const hiddenFlag of [
+      "--profile",
+      "--track",
+      "--interactive",
+      "--reconcile-gates",
+      "--skip-retro",
+      "--retro-reason"
+    ]) {
+      expect(text).not.toContain(hiddenFlag);
+    }
   });
 
   it("parses init with --track=quick", () => {
@@ -130,10 +146,4 @@ describe("cli parser", () => {
     expect(parseArgs(["init"]).profile).toBeUndefined();
   });
 
-  it("documents --profile in usage", () => {
-    expect(usage()).toContain("--profile");
-    expect(usage()).toContain("--dry-run");
-    expect(usage()).toContain("--interactive");
-    expect(usage()).toContain("--no-interactive");
-  });
 });
