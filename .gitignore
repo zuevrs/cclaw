@@ -12,6 +12,9 @@ docs/*
 
 # cclaw generated artifacts
 .cclaw/
+# Allow the canonical eval corpus used by cclaw's own CI.
+!tests/fixtures/**/.cclaw/
+!tests/fixtures/**/.cclaw/**
 .claude/commands/cc-*.md
 .cursor/commands/cc-*.md
 .opencode/commands/cc-*.md

@@ -1,0 +1,21 @@
+id: design-02-auth-refactor
+stage: design
+input_prompt: |
+  Design the passkey provider adapter.
+fixture: ./design-02-auth-refactor/fixture.md
+expected:
+  structural:
+    required_sections:
+      - "Context"
+      - "Decision"
+      - "Consequences"
+    forbidden_patterns:
+      - TBD
+      - TODO
+      - placeholder
+    required_frontmatter_keys:
+      - stage
+      - author
+      - created_at
+    min_lines: 8
+    max_lines: 120

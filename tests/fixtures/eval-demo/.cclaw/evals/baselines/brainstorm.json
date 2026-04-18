@@ -1,0 +1,185 @@
+{
+  "schemaVersion": 1,
+  "stage": "brainstorm",
+  "generatedAt": "2026-04-18T10:49:12.134Z",
+  "cclawVersion": "0.1.1",
+  "cases": {
+    "brainstorm-01-dark-mode": {
+      "passed": true,
+      "verifierResults": [
+        {
+          "id": "structural:section:directions",
+          "kind": "structural",
+          "ok": true,
+          "score": 1
+        },
+        {
+          "id": "structural:section:recommendation",
+          "kind": "structural",
+          "ok": true,
+          "score": 1
+        },
+        {
+          "id": "structural:forbidden:tbd",
+          "kind": "structural",
+          "ok": true,
+          "score": 1
+        },
+        {
+          "id": "structural:forbidden:todo",
+          "kind": "structural",
+          "ok": true,
+          "score": 1
+        },
+        {
+          "id": "structural:forbidden:placeholder",
+          "kind": "structural",
+          "ok": true,
+          "score": 1
+        },
+        {
+          "id": "structural:length:lines",
+          "kind": "structural",
+          "ok": true,
+          "score": 1
+        },
+        {
+          "id": "structural:frontmatter:stage",
+          "kind": "structural",
+          "ok": true,
+          "score": 1
+        },
+        {
+          "id": "structural:frontmatter:author",
+          "kind": "structural",
+          "ok": true,
+          "score": 1
+        },
+        {
+          "id": "structural:frontmatter:created-at",
+          "kind": "structural",
+          "ok": true,
+          "score": 1
+        }
+      ]
+    },
+    "brainstorm-02-auth-refactor": {
+      "passed": true,
+      "verifierResults": [
+        {
+          "id": "structural:section:directions",
+          "kind": "structural",
+          "ok": true,
+          "score": 1
+        },
+        {
+          "id": "structural:section:recommendation",
+          "kind": "structural",
+          "ok": true,
+          "score": 1
+        },
+        {
+          "id": "structural:forbidden:tbd",
+          "kind": "structural",
+          "ok": true,
+          "score": 1
+        },
+        {
+          "id": "structural:forbidden:todo",
+          "kind": "structural",
+          "ok": true,
+          "score": 1
+        },
+        {
+          "id": "structural:forbidden:placeholder",
+          "kind": "structural",
+          "ok": true,
+          "score": 1
+        },
+        {
+          "id": "structural:length:lines",
+          "kind": "structural",
+          "ok": true,
+          "score": 1
+        },
+        {
+          "id": "structural:frontmatter:stage",
+          "kind": "structural",
+          "ok": true,
+          "score": 1
+        },
+        {
+          "id": "structural:frontmatter:author",
+          "kind": "structural",
+          "ok": true,
+          "score": 1
+        },
+        {
+          "id": "structural:frontmatter:created-at",
+          "kind": "structural",
+          "ok": true,
+          "score": 1
+        }
+      ]
+    },
+    "brainstorm-03-billing-rewrite": {
+      "passed": true,
+      "verifierResults": [
+        {
+          "id": "structural:section:directions",
+          "kind": "structural",
+          "ok": true,
+          "score": 1
+        },
+        {
+          "id": "structural:section:recommendation",
+          "kind": "structural",
+          "ok": true,
+          "score": 1
+        },
+        {
+          "id": "structural:forbidden:tbd",
+          "kind": "structural",
+          "ok": true,
+          "score": 1
+        },
+        {
+          "id": "structural:forbidden:todo",
+          "kind": "structural",
+          "ok": true,
+          "score": 1
+        },
+        {
+          "id": "structural:forbidden:placeholder",
+          "kind": "structural",
+          "ok": true,
+          "score": 1
+        },
+        {
+          "id": "structural:length:lines",
+          "kind": "structural",
+          "ok": true,
+          "score": 1
+        },
+        {
+          "id": "structural:frontmatter:stage",
+          "kind": "structural",
+          "ok": true,
+          "score": 1
+        },
+        {
+          "id": "structural:frontmatter:author",
+          "kind": "structural",
+          "ok": true,
+          "score": 1
+        },
+        {
+          "id": "structural:frontmatter:created-at",
+          "kind": "structural",
+          "ok": true,
+          "score": 1
+        }
+      ]
+    }
+  }
+}

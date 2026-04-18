@@ -138,11 +138,7 @@ export interface EvalReport {
     totalDurationMs: number;
   };
   /** Present when comparing against a saved baseline (Wave 7.1+). */
-  baselineDelta?: {
-    baselineId: string;
-    scoreDelta: number;
-    criticalFailures: number;
-  };
+  baselineDelta?: BaselineDelta;
 }
 
 /**
