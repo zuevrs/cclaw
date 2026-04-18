@@ -117,7 +117,8 @@ Plus harness-specific shims:
 
 `.cclaw/config.yaml` holds every tunable key (prompt guard strictness,
 TDD enforcement, git-hook guards, language rule packs, track heuristics).
-Edit it directly — `cclaw-cli upgrade` preserves your changes.
+Edit it directly — `cclaw-cli upgrade` preserves your changes. Full key
+reference: [`docs/config.md`](./docs/config.md).
 
 ---
 
@@ -355,7 +356,8 @@ npx cclaw-cli --version
 For CI or scripted installs, `cclaw-cli init --harnesses=<list>
 --no-interactive` is the non-interactive form. All other tunables
 (prompt-guard strictness, TDD enforcement, language rule packs, track
-heuristics) are set by editing `.cclaw/config.yaml` directly.
+heuristics) are set by editing `.cclaw/config.yaml` directly — see
+[`docs/config.md`](./docs/config.md) for the full key reference.
 
 ---
 
