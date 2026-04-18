@@ -2,13 +2,15 @@
 
 **Install once, ship every time.** cclaw is an installer-first workflow
 runtime that gives your AI coding agent one inspectable path from idea to
-shipped PR:
+shipped PR — **plus an automatic closeout chain** that turns every ship
+into reusable knowledge:
 
-> **brainstorm → scope → design → spec → plan → tdd → review → ship**
+> **brainstorm → scope → design → spec → plan → tdd → review → ship**  
+> **↳ auto-closeout: retro → compound → archive** *(resumable, never manual)*
 
 Every stage has real gates the agent cannot skip, every decision leaves a
-file-backed audit trail, and the same six slash commands work across
-Claude Code, Cursor, OpenCode, and OpenAI Codex.
+file-backed audit trail, and the same slash commands work across Claude
+Code, Cursor, OpenCode, and OpenAI Codex.
 
 You install cclaw **once** from the terminal, then everything happens
 inside your harness — no hidden control plane, no background daemon, no
@@ -41,15 +43,28 @@ operational knobs to memorise.
       │          │        │       │      │      │      │       │
       ▼          ▼        ▼       ▼      ▼      ▼      ▼       ▼
    01.md      02.md    03.md   04.md  05.md  06.md  07.md   08.md
-      │
-      └──── gates + subagents + knowledge capture happen at every step
+      │                                                      │
+      └──── gates + subagents + knowledge capture             │
+            happen at every step                              │
+                                                              ▼
+                                              ┌─────────────────────────┐
+                                              │  automatic closeout     │
+                                              │  (resumable state       │
+                                              │   machine, never manual)│
+                                              └────────────┬────────────┘
+                                                           ▼
+                                        retro ──► compound ──► archive
+                                        09.md     (knowledge  (runs/
+                                                   promoted)   <slug>/)
 ```
 
 Every stage reads and writes real files under `.cclaw/`. `flow-state.json`
-holds the single source of truth for "where are we"; `knowledge.jsonl`
-accumulates reusable lessons **throughout** the flow, not only at the end;
-stage artifacts live under `.cclaw/artifacts/` until the feature is
-archived.
+holds the single source of truth for "where are we" — including
+`closeout.shipSubstate` so a ship → retro → compound → archive chain
+resumes at the exact step after any interruption. `knowledge.jsonl`
+accumulates reusable lessons **throughout** the flow, not only at the
+end; stage artifacts live under `.cclaw/artifacts/` until archive rolls
+them into `.cclaw/runs/<date-slug>/`.
 
 ```
 You ──► /cc <idea>
@@ -188,21 +203,31 @@ No magic. No ambiguity about where you are.
 
 ---
 
-## The eight stages, and the three tracks
+## The eight stages, the three tracks, and auto-closeout
 
-cclaw has eight stages, but a single prompt rarely needs all of them.
-`/cc` picks a **track** up front so the flow matches the task.
+cclaw has eight **critical-path** stages plus an automatic three-step
+closeout chain (retro → compound → archive). A single prompt rarely needs
+all eight critical-path stages, so `/cc` picks a **track** up front so
+the flow matches the task.
 
-| Track | Path | Typical trigger |
+| Track | Critical path | Typical trigger |
 |---|---|---|
 | **quick** | `spec → tdd → review → ship` | `bug`, `hotfix`, `typo`, `rename`, `bump`, `docs only`, one-liners |
 | **medium** | `brainstorm → spec → plan → tdd → review → ship` | `add endpoint`, `add field`, `extend existing`, `wire integration` |
 | **standard** _(default)_ | all 8 stages | `new feature`, `refactor`, `migration`, `platform`, `schema`, `architecture` |
 
-Each stage produces a dated artifact under `.cclaw/artifacts/`:
-`00-idea.md` (seed), `01-brainstorm.md` through `08-ship.md`, and
-`09-retro.md` at automatic closeout (see
-[Ship and closeout](#ship-and-closeout--automatic-resumable)).
+**Every track ends with the same auto-closeout chain.** Once ship
+completes, `/cc-next` automatically drives
+`retro → compound → archive` — with `closeout.shipSubstate` carrying the
+exact step across sessions, so a crashed or backgrounded run resumes
+without re-drafting retros or re-asking structured questions. See
+[Ship and closeout](#ship-and-closeout--automatic-resumable).
+
+Each critical-path stage produces a dated artifact under
+`.cclaw/artifacts/`: `00-idea.md` (seed), `01-brainstorm.md` through
+`08-ship.md`. Closeout adds `09-retro.md`; archive then rolls the whole
+bundle into `.cclaw/runs/<YYYY-MM-DD-slug>/` and resets the active flow
+for the next feature.
 
 ### Track heuristics are configurable
 
