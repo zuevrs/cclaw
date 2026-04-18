@@ -218,6 +218,7 @@ async function runCase(ctx: RunCaseContext): Promise<EvalCaseResult> {
           }
         });
       } catch (err) {
+        if (err instanceof DailyCostCapExceededError) throw err;
         const retryable = err instanceof EvalLlmError ? err.retryable : false;
         verifierResults.push({
           kind: "workflow",
