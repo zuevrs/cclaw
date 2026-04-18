@@ -38,9 +38,33 @@ export type SubagentFallback =
    */
   | "waiver";
 
+/**
+ * How a harness discovers cclaw's `/cc*` entry points.
+ *
+ * - `command` — harness has a native custom slash-command system and reads
+ *   flat markdown files from `<commandDir>/<fileName>.md` (Claude Code,
+ *   Cursor, OpenCode).
+ * - `skill` — harness ignores flat commands and reads SKILL.md from
+ *   directories under a skills root (Codex CLI ≥0.89, Jan 2026). cclaw
+ *   writes `<commandDir>/<skillName>/SKILL.md` and the agent invokes it
+ *   either via `/use <skillName>` or via automatic description matching
+ *   when the user's text mentions `/cc`, `/cc-next`, etc.
+ */
+export type ShimKind = "command" | "skill";
+
 export interface HarnessAdapter {
   id: HarnessId;
+  /**
+   * Root directory where cclaw writes `/cc*` entry points.
+   *
+   * - For `shimKind: "command"` this is the directory containing flat
+   *   markdown files (`<commandDir>/cc.md`, `<commandDir>/cc-next.md`, …).
+   * - For `shimKind: "skill"` this is the skills root that contains
+   *   per-skill subdirectories (`<commandDir>/<skillName>/SKILL.md`).
+   */
   commandDir: string;
+  /** See {@link ShimKind}. Defaults to `"command"` if unspecified at a callsite. */
+  shimKind: ShimKind;
   capabilities: {
     /**
      * Level of native subagent dispatch:
@@ -63,7 +87,16 @@ export interface HarnessAdapter {
 }
 
 interface UtilityShimSpec {
+  /** Filename used for command-kind harnesses (e.g. `cc-next.md`). */
   fileName: string;
+  /**
+   * Skill directory name used for skill-kind harnesses. Each name is
+   * namespaced under `cclaw-` so a user who syncs multiple tools into
+   * `.agents/skills/` (the universal path) won't collide with stock
+   * OpenAI skills like `pdf-editor` or `skill-creator`.
+   */
+  skillName: string;
+  /** User-visible command token without the leading slash (`next`). */
   command: string;
   skillFolder: string;
   commandFile: string;
@@ -72,29 +105,36 @@ interface UtilityShimSpec {
 const UTILITY_SHIMS: UtilityShimSpec[] = [
   {
     fileName: "cc-next.md",
+    skillName: "cclaw-cc-next",
     command: "next",
     skillFolder: "flow-next-step",
     commandFile: "next.md"
   },
   {
     fileName: "cc-ideate.md",
+    skillName: "cclaw-cc-ideate",
     command: "ideate",
     skillFolder: "flow-ideate",
     commandFile: "ideate.md"
   },
   {
     fileName: "cc-view.md",
+    skillName: "cclaw-cc-view",
     command: "view",
     skillFolder: "flow-view",
     commandFile: "view.md"
   },
   {
     fileName: "cc-ops.md",
+    skillName: "cclaw-cc-ops",
     command: "ops",
     skillFolder: "flow-ops",
     commandFile: "ops.md"
   }
 ];
+
+/** Skill-kind shim name for the root `/cc` entry point. */
+const ENTRY_SHIM_SKILL_NAME = "cclaw-cc";
 
 /**
  * Shims that older cclaw versions installed as top-level slash commands but
@@ -108,10 +148,16 @@ export function harnessShimFileNames(): string[] {
   return ["cc.md", ...UTILITY_SHIMS.map((shim) => shim.fileName)];
 }
 
+/** Skill folder names cclaw writes under `<commandDir>` for skill-kind harnesses. */
+export function harnessShimSkillNames(): string[] {
+  return [ENTRY_SHIM_SKILL_NAME, ...UTILITY_SHIMS.map((shim) => shim.skillName)];
+}
+
 export const HARNESS_ADAPTERS: Record<HarnessId, HarnessAdapter> = {
   claude: {
     id: "claude",
     commandDir: ".claude/commands",
+    shimKind: "command",
     capabilities: {
       nativeSubagentDispatch: "full",
       hookSurface: "full",
@@ -122,6 +168,7 @@ export const HARNESS_ADAPTERS: Record<HarnessId, HarnessAdapter> = {
   cursor: {
     id: "cursor",
     commandDir: ".cursor/commands",
+    shimKind: "command",
     capabilities: {
       // Cursor has a real Task tool with subagent_type (generalPurpose,
       // explore, shell, browser-use, …) but no user-defined named
@@ -136,6 +183,7 @@ export const HARNESS_ADAPTERS: Record<HarnessId, HarnessAdapter> = {
   opencode: {
     id: "opencode",
     commandDir: ".opencode/commands",
+    shimKind: "command",
     capabilities: {
       nativeSubagentDispatch: "partial",
       hookSurface: "plugin",
@@ -145,10 +193,17 @@ export const HARNESS_ADAPTERS: Record<HarnessId, HarnessAdapter> = {
   },
   codex: {
     id: "codex",
-    commandDir: ".codex/commands",
+    // Codex CLI reads skills from the universal `.agents/skills/` path
+    // (OpenAI Codex 0.89, Jan 2026; legacy `~/.codex/skills/` also
+    // supported). It has no native `.codex/commands/` slash-command
+    // discovery and no `.codex/hooks.json` primitive — v0.39.0 migrated
+    // cclaw to write skill-kind shims here and stops generating the
+    // dead `.codex/*` surfaces.
+    commandDir: ".agents/skills",
+    shimKind: "skill",
     capabilities: {
       nativeSubagentDispatch: "none",
-      hookSurface: "full",
+      hookSurface: "none",
       structuredAsk: "plain-text",
       subagentFallback: "role-switch"
     }
@@ -263,6 +318,22 @@ If the same approach fails three times in a row (same command, same finding, sam
 - Detailed operating procedures live in \`.cclaw/skills/using-cclaw/SKILL.md\`.
 - Preamble budget and cooldown rules live in \`.cclaw/references/protocols/ethos.md\`.
 - Subagent orchestration patterns: \`.cclaw/skills/subagent-dev/SKILL.md\` and \`.cclaw/skills/parallel-dispatch/SKILL.md\`.
+
+### Codex users
+
+OpenAI Codex CLI has **no native \`/cc\` slash command** and **no hooks API**. The
+\`/cc\`, \`/cc-next\`, \`/cc-ideate\`, \`/cc-view\`, \`/cc-ops\` tokens above describe
+intent — in Codex they map onto skills cclaw installs at
+\`.agents/skills/cclaw-cc*/SKILL.md\`. Activate one of two ways:
+
+- Type \`/use cclaw-cc\` (or \`cclaw-cc-next\`, etc.) at Codex's prompt.
+- Type \`/cc …\` as plain text — Codex matches the skill \`description\`
+  frontmatter (which spells out the token verbatim) and loads the right
+  skill body automatically.
+
+Legacy \`.codex/commands/*\` and \`.codex/hooks.json\` are removed on
+\`cclaw sync\` — Codex CLI never consumed either path. See
+\`.cclaw/references/harnesses/codex-playbook.md\` for the hook-substitution matrix.
 ${CCLAW_MARKER_END}`;
 }
 
@@ -345,6 +416,158 @@ This is a utility command (not a flow stage). It does not advance flow state.
 `;
 }
 
+/**
+ * Frontmatter `description` that triggers the skill when the user types any
+ * of the classic cclaw slash-tokens. Codex's skill matcher runs on the skill
+ * description verbatim, so we spell out every vocabulary Codex users type
+ * instead of relying on semantics.
+ */
+function codexSkillDescription(command: string): string {
+  switch (command) {
+    case "cc":
+      return `Entry point for the cclaw 8-stage workflow (brainstorm → scope → design → spec → plan → tdd → review → ship). Use whenever the user types \`/cc\`, \`/cclaw\`, or asks to "start the flow", "begin cclaw", "kick off the workflow", "classify this task", or wants to start/resume a non-trivial software change. No args = resume the active stage from \`.cclaw/state/flow-state.json\`. With a prompt = classify and pick a track (quick/medium/standard).`;
+    case "next":
+      return `Advance the cclaw flow to the next stage. Use when the user types \`/cc-next\` or asks to "move to the next stage", "continue the flow", "advance cclaw", "progress the workflow", or when the current stage skill reports completion and gates have passed.`;
+    case "ideate":
+      return `Read-only repo-improvement discovery for cclaw. Use when the user types \`/cc-ideate\` or asks to "ideate", "brainstorm improvements", "scan the repo for TODOs/tech debt", "generate a backlog", or wants a ranked list of candidate ideas before committing to a single flow. Does not mutate \`.cclaw/state/flow-state.json\`.`;
+    case "view":
+      return `Read-only router for cclaw flow views. Use when the user types \`/cc-view\`, \`/cc-view status\`, \`/cc-view tree\`, \`/cc-view diff\`, or asks to "show cclaw status", "show the flow tree", "diff flow state", or wants a snapshot without mutation.`;
+    case "ops":
+      return `Operations router for cclaw post-flow actions. Use when the user types \`/cc-ops\`, \`/cc-ops feature\`, \`/cc-ops tdd-log\`, \`/cc-ops retro\`, \`/cc-ops compound\`, \`/cc-ops archive\`, \`/cc-ops rewind\`, or asks to "archive the run", "run the retro", "compound knowledge", "rewind to an earlier stage", or manage feature worktrees.`;
+    default:
+      return `Generated cclaw skill for ${command}.`;
+  }
+}
+
+/**
+ * Skill body for codex-kind shims. Deliberately terse — the meat lives in
+ * `.cclaw/skills/` and `.cclaw/commands/`, and Codex's progressive-disclosure
+ * model loads skill bodies lazily, so we want a pointer plus the honest
+ * harness caveat, not a duplicated contract.
+ */
+function codexSkillBody(command: string, skillFolder: string, commandFile: string): string {
+  const slashToken = command === "cc" ? "/cc" : `/cc-${command}`;
+  const title = command === "cc" ? "cclaw /cc (Codex adapter)" : `cclaw ${slashToken} (Codex adapter)`;
+  const extraContractHeading = command === "cc"
+    ? "If you have not already loaded the cclaw meta-skill this session, also load `.cclaw/skills/using-cclaw/SKILL.md` — it is the routing brain for stage/utility selection."
+    : "This skill is a utility entry point, not a flow stage. Do not mutate `.cclaw/state/flow-state.json` directly.";
+
+  return `# ${title}
+
+You are running inside the OpenAI Codex harness. Codex has **no native
+\`${slashToken}\` slash command and no \`.codex/hooks.json\` primitive** — cclaw
+ships its entry points as skills under \`.agents/skills/\` and relies on
+\`AGENTS.md\` + skill descriptions for activation. If the user typed
+\`${slashToken} …\` as plain text (or asked to perform its action in English),
+follow the steps below.
+
+## Protocol
+
+1. Read \`.cclaw/state/flow-state.json\` first to know the active stage,
+   track, and run metadata.
+2. Load and follow \`.cclaw/skills/${skillFolder}/SKILL.md\` as the
+   authoritative skill — its gates, artifacts, and delegations are
+   canonical.
+3. Load \`.cclaw/commands/${commandFile}\` for the full command contract
+   (protocol, validation, post-state expectations).
+4. ${extraContractHeading}
+
+## Honest caveats
+
+- Codex has no subagent dispatch primitive. Mandatory delegations
+  fall back to **role-switch** — announce the role, act in-session,
+  append a completed row with \`evidenceRefs\` to
+  \`.cclaw/state/delegation-log.json\`. Silent auto-waiver is disabled
+  (v0.33+).
+- Codex has no hooks. Session rehydration, prompt-guard, workflow-guard,
+  context-monitor, stop-checkpoint, and pre-compact behavior all have to
+  run as explicit agent steps. Read \`.cclaw/references/harnesses/codex-playbook.md\`
+  for the substitution matrix.
+`;
+}
+
+function codexSkillMarkdown(command: string, skillName: string, skillFolder: string, commandFile: string): string {
+  const description = codexSkillDescription(command);
+  const frontmatter = [
+    "---",
+    `name: ${skillName}`,
+    `description: ${description}`,
+    "source: generated-by-cclaw",
+    "---",
+    ""
+  ].join("\n");
+  return `${frontmatter}${codexSkillBody(command, skillFolder, commandFile)}`;
+}
+
+async function writeCommandKindShims(commandDir: string, harness: HarnessId): Promise<void> {
+  await ensureDir(commandDir);
+  await writeFileSafe(
+    path.join(commandDir, "cc.md"),
+    utilityShimContent(harness, "cc", "flow-start", "start.md")
+  );
+  for (const shim of UTILITY_SHIMS) {
+    await writeFileSafe(
+      path.join(commandDir, shim.fileName),
+      utilityShimContent(harness, shim.command, shim.skillFolder, shim.commandFile)
+    );
+  }
+  for (const legacy of LEGACY_HARNESS_SHIMS) {
+    const legacyPath = path.join(commandDir, legacy);
+    try {
+      await fs.unlink(legacyPath);
+    } catch {
+      // fine — file may not exist (fresh install) or may be on read-only FS
+    }
+  }
+}
+
+async function writeSkillKindShims(commandDir: string): Promise<void> {
+  await ensureDir(commandDir);
+  await writeFileSafe(
+    path.join(commandDir, ENTRY_SHIM_SKILL_NAME, "SKILL.md"),
+    codexSkillMarkdown("cc", ENTRY_SHIM_SKILL_NAME, "flow-start", "start.md")
+  );
+  for (const shim of UTILITY_SHIMS) {
+    await writeFileSafe(
+      path.join(commandDir, shim.skillName, "SKILL.md"),
+      codexSkillMarkdown(shim.command, shim.skillName, shim.skillFolder, shim.commandFile)
+    );
+  }
+}
+
+/**
+ * Legacy codex surfaces cclaw wrote before v0.39.0 that Codex CLI never
+ * actually consumed (`.codex/commands/*.md` had no discovery, `.codex/hooks.json`
+ * had no hooks API). On every sync we proactively delete these so users
+ * upgrading from older installs see a clean `.codex/` (or no `.codex/` at all).
+ */
+async function cleanupLegacyCodexSurfaces(projectRoot: string): Promise<void> {
+  const legacyCommandsDir = path.join(projectRoot, ".codex/commands");
+  try {
+    await fs.rm(legacyCommandsDir, { recursive: true, force: true });
+  } catch {
+    // best-effort cleanup
+  }
+  const legacyHooksFile = path.join(projectRoot, ".codex/hooks.json");
+  try {
+    await fs.rm(legacyHooksFile, { force: true });
+  } catch {
+    // best-effort cleanup
+  }
+  // If `.codex/` is now empty we drop it entirely — codex CLI doesn't need
+  // that directory anymore. Leave it alone if the user stored their own
+  // data there.
+  try {
+    const codexDir = path.join(projectRoot, ".codex");
+    const entries = await fs.readdir(codexDir);
+    if (entries.length === 0) {
+      await fs.rmdir(codexDir);
+    }
+  } catch {
+    // directory absent or non-empty
+  }
+}
+
 async function syncAgentFiles(projectRoot: string): Promise<void> {
   const agentsDir = path.join(projectRoot, RUNTIME_ROOT, "agents");
   await ensureDir(agentsDir);
@@ -357,31 +580,19 @@ async function syncAgentFiles(projectRoot: string): Promise<void> {
 }
 
 export async function syncHarnessShims(projectRoot: string, harnesses: HarnessId[]): Promise<void> {
-  for (const harness of harnesses) {
-    const adapter = (HARNESS_ADAPTERS as Record<string, { commandDir: string }>)[harness];
-    if (!adapter) {
-      continue;
-    }
-    const commandDir = path.join(projectRoot, adapter.commandDir);
-    await ensureDir(commandDir);
+  // Legacy codex cleanup is unconditional — even installs that never enabled
+  // codex but previously did will see stale `.codex/commands/*.md` and
+  // `.codex/hooks.json` get removed on upgrade.
+  await cleanupLegacyCodexSurfaces(projectRoot);
 
-    await writeFileSafe(
-      path.join(commandDir, "cc.md"),
-      utilityShimContent(harness, "cc", "flow-start", "start.md")
-    );
-    for (const shim of UTILITY_SHIMS) {
-      await writeFileSafe(
-        path.join(commandDir, shim.fileName),
-        utilityShimContent(harness, shim.command, shim.skillFolder, shim.commandFile)
-      );
-    }
-    for (const legacy of LEGACY_HARNESS_SHIMS) {
-      const legacyPath = path.join(commandDir, legacy);
-      try {
-        await fs.unlink(legacyPath);
-      } catch {
-        // fine — file may not exist (fresh install) or may be on read-only FS
-      }
+  for (const harness of harnesses) {
+    const adapter = HARNESS_ADAPTERS[harness];
+    if (!adapter) continue;
+    const commandDir = path.join(projectRoot, adapter.commandDir);
+    if (adapter.shimKind === "skill") {
+      await writeSkillKindShims(commandDir);
+    } else {
+      await writeCommandKindShims(commandDir, harness);
     }
   }
 

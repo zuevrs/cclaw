@@ -56,8 +56,7 @@ describe("flow command contracts", () => {
     for (const harnessDir of [
       ".claude/commands",
       ".cursor/commands",
-      ".opencode/commands",
-      ".codex/commands"
+      ".opencode/commands"
     ]) {
       for (const shim of ["cc.md", "cc-next.md", "cc-ideate.md", "cc-view.md", "cc-ops.md"]) {
         const shimPath = path.join(root, harnessDir, shim);
@@ -65,6 +64,19 @@ describe("flow command contracts", () => {
         expect(content).toContain(".cclaw/skills/");
       }
     }
+
+    // Codex uses skill-kind shims under `.agents/skills/cclaw-cc*/SKILL.md`
+    // since v0.39.0 — Codex CLI reads that path, not `.codex/commands/`.
+    for (const skillName of ["cclaw-cc", "cclaw-cc-next", "cclaw-cc-ideate", "cclaw-cc-view", "cclaw-cc-ops"]) {
+      const skillPath = path.join(root, ".agents/skills", skillName, "SKILL.md");
+      const content = await fs.readFile(skillPath, "utf8");
+      expect(content).toContain(`name: ${skillName}`);
+      expect(content).toContain(".cclaw/skills/");
+    }
+
+    // The legacy `.codex/commands/` directory must not be created any more.
+    await expect(fs.stat(path.join(root, ".codex/commands"))).rejects.toThrow(/ENOENT/);
+    await expect(fs.stat(path.join(root, ".codex/hooks.json"))).rejects.toThrow(/ENOENT/);
   });
 
   it("keeps completion protocol externalized and stage parameters explicit", async () => {

@@ -7,7 +7,12 @@ describe("harness parity model", () => {
     expect(harnessTier("claude")).toBe("tier1");
     expect(harnessTier("cursor")).toBe("tier2");
     expect(harnessTier("opencode")).toBe("tier2");
-    expect(harnessTier("codex")).toBe("tier2");
+    // Codex is honestly tier3 since v0.39.0: no hooks primitive, no
+    // native subagent dispatch, no custom slash commands. cclaw still
+    // ships skill-kind shims under `.agents/skills/cclaw-cc*/` so Codex
+    // users get entry points, but the capability model no longer claims
+    // parity it cannot deliver.
+    expect(harnessTier("codex")).toBe("tier3");
   });
 
   it("keeps capability metadata attached to every harness adapter", () => {

@@ -32,9 +32,14 @@ export async function detectHarnesses(projectRoot: string): Promise<HarnessId[]>
     detected.push("opencode");
   }
 
+  // Codex CLI doesn't require a persistent per-project directory. We
+  // detect via `.agents/skills/` (the universal path Codex 0.89+ reads;
+  // Jan 2026) or the legacy `.codex/` marker left by pre-v0.39 cclaw.
+  // AGENTS.md is intentionally *not* a codex hint because every other
+  // harness in cclaw's list also reads AGENTS.md.
   const codexHints = [
-    path.join(projectRoot, ".codex"),
-    path.join(projectRoot, ".codex/hooks.json")
+    path.join(projectRoot, ".agents/skills"),
+    path.join(projectRoot, ".codex")
   ];
   if (await anyExists(codexHints)) {
     detected.push("codex");

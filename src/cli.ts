@@ -215,7 +215,11 @@ function buildInitSurfacePreview(harnesses: HarnessId[]): string[] {
   ];
   for (const harness of harnesses) {
     const adapter = HARNESS_ADAPTERS[harness];
-    lines.push(`${adapter.commandDir}/cc*.md`);
+    if (adapter.shimKind === "skill") {
+      lines.push(`${adapter.commandDir}/cclaw-cc*/SKILL.md`);
+    } else {
+      lines.push(`${adapter.commandDir}/cc*.md`);
+    }
     if (harness === "claude") {
       lines.push(".claude/hooks/hooks.json");
     }
@@ -223,9 +227,9 @@ function buildInitSurfacePreview(harnesses: HarnessId[]): string[] {
       lines.push(".cursor/hooks.json");
       lines.push(".cursor/rules/cclaw-workflow.mdc");
     }
-    if (harness === "codex") {
-      lines.push(".codex/hooks.json");
-    }
+    // Codex has no hooks file — it reads skills from `.agents/skills/` only
+    // (v0.39.0+). Legacy `.codex/commands/*` and `.codex/hooks.json` are
+    // auto-cleaned on sync.
     if (harness === "opencode") {
       lines.push(".opencode/plugins/cclaw-plugin.mjs");
       lines.push("opencode.json(.c) plugin registration");
