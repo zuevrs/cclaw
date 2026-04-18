@@ -116,6 +116,30 @@ describe("flow command contracts", () => {
     expect(decisionProtocol).toContain("# Decision Protocol");
   });
 
+  it("encodes the Decision Protocol skeleton and completeness calibration", async () => {
+    const root = await createTempProject("decision-skeleton");
+    await initCclaw({ projectRoot: root });
+
+    const decisionProtocol = await fs.readFile(
+      path.join(root, ".cclaw/references/protocols/decision.md"),
+      "utf8"
+    );
+
+    expect(decisionProtocol).toContain("## Decision skeleton");
+    expect(decisionProtocol).toContain("Re-ground");
+    expect(decisionProtocol).toContain("Simplify");
+    expect(decisionProtocol).toContain("RECOMMENDATION: Choose [Letter]");
+    expect(decisionProtocol).toContain("Completeness: X/10");
+
+    expect(decisionProtocol).toContain("## Completeness calibration");
+    expect(decisionProtocol).toContain("**10** = complete implementation");
+    expect(decisionProtocol).toContain("**3** = shortcut");
+
+    expect(decisionProtocol).toContain(
+      "Log the chosen letter into the stage artifact's decision log"
+    );
+  });
+
   it("requires the meta-skill to declare a skill-before-response gate", async () => {
     const root = await createTempProject("skill-gate");
     await initCclaw({ projectRoot: root });
