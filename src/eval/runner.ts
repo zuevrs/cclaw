@@ -81,6 +81,12 @@ export interface RunEvalOptions {
    * invocations. Undefined means no cap.
    */
   maxCostUsd?: number;
+  /**
+   * Override the configured `model` (and `judgeModel`) for this run.
+   * Used by `cclaw eval --compare-model` to replay the same corpus
+   * against an alternative model without editing `config.yaml`.
+   */
+  modelOverride?: string;
 }
 
 export interface DryRunSummary {
@@ -709,7 +715,17 @@ function stagesInResults(caseResults: EvalCaseResult[]): FlowStage[] {
  * marked skipped (not failed) when no LLM drafting runs.
  */
 export async function runEval(options: RunEvalOptions): Promise<DryRunSummary | EvalReport> {
-  const config = await loadEvalConfig(options.projectRoot, options.env ?? process.env);
+  const baseConfig = await loadEvalConfig(
+    options.projectRoot,
+    options.env ?? process.env
+  );
+  const config: ResolvedEvalConfig = options.modelOverride
+    ? {
+        ...baseConfig,
+        model: options.modelOverride,
+        judgeModel: options.modelOverride
+      }
+    : baseConfig;
   const plannedMode: EvalMode = options.mode ?? config.defaultMode;
   const corpus =
     plannedMode === "workflow" ? [] : await loadCorpus(options.projectRoot, options.stage);
