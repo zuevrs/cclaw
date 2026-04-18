@@ -1,14 +1,15 @@
 /**
- * Integration test for structural evals.
+ * Integration test for structural + rules + traceability evals.
  *
  * We copy the canonical `tests/fixtures/eval-demo/.cclaw/evals/` tree into a
  * temp directory so the test is hermetic (no cross-test contamination, no
  * reliance on the repo's working tree) and runs the real `runEval` pipeline
- * exactly the same way CI does. The test proves two things:
+ * exactly the same way CI does. The test proves:
  *
- * 1. All 24 seed cases pass against their committed baselines.
- * 2. A synthetic regression — deleting a required section from one fixture —
- *    is caught as a baseline-driven critical failure.
+ * 1. All 40 seed cases pass schema + rules + traceability gates against
+ *    their committed baselines.
+ * 2. Structural, rule, and traceability regressions each surface as
+ *    baseline-driven critical failures.
  */
 import fs from "node:fs/promises";
 import path from "node:path";
@@ -40,13 +41,13 @@ async function cloneDemo(tag: string): Promise<string> {
   return tmp;
 }
 
-describe("eval structural - integration against the committed corpus", () => {
-  it("loads 24 cases spanning all 8 stages", async () => {
+describe("eval structural+rules - integration against the committed corpus", () => {
+  it("loads 40 cases spanning all 8 stages", async () => {
     const root = await cloneDemo("eval-int-count");
     const res = await runEval({ projectRoot: root, dryRun: true, env: {} });
     expect("kind" in res).toBe(true);
     if ("kind" in res) {
-      expect(res.corpus.total).toBe(24);
+      expect(res.corpus.total).toBe(40);
       expect(Object.keys(res.corpus.byStage).sort()).toEqual([
         "brainstorm",
         "design",
@@ -58,23 +59,38 @@ describe("eval structural - integration against the committed corpus", () => {
         "tdd"
       ]);
       for (const count of Object.values(res.corpus.byStage)) {
-        expect(count).toBe(3);
+        expect(count).toBe(5);
       }
     }
   });
 
-  it("passes all 24 cases and reports zero regressions against baselines", async () => {
+  it("passes all 40 cases with --rules and reports zero regressions", async () => {
     const root = await cloneDemo("eval-int-pass");
-    const res = await runEval({ projectRoot: root, env: {} });
+    const res = await runEval({ projectRoot: root, rules: true, env: {} });
     expect("kind" in res).toBe(false);
     if (!("kind" in res)) {
-      expect(res.summary.totalCases).toBe(24);
-      expect(res.summary.passed).toBe(24);
+      expect(res.summary.totalCases).toBe(40);
+      expect(res.summary.passed).toBe(40);
       expect(res.summary.failed).toBe(0);
       expect(res.summary.skipped).toBe(0);
       expect(res.baselineDelta).toBeDefined();
       expect(res.baselineDelta?.criticalFailures).toBe(0);
       expect(res.baselineDelta?.regressions).toEqual([]);
+    }
+  });
+
+  it("--schema-only skips the 16 rules-only cases and passes the 24 structural cases", async () => {
+    const root = await cloneDemo("eval-int-schema-only");
+    const res = await runEval({
+      projectRoot: root,
+      schemaOnly: true,
+      env: {}
+    });
+    if (!("kind" in res)) {
+      expect(res.summary.totalCases).toBe(40);
+      expect(res.summary.passed).toBe(24);
+      expect(res.summary.skipped).toBe(16);
+      expect(res.summary.failed).toBe(0);
     }
   });
 
@@ -89,7 +105,7 @@ describe("eval structural - integration against the committed corpus", () => {
     expect(mutated).not.toBe(original);
     await fs.writeFile(targetFixture, mutated, "utf8");
 
-    const res = await runEval({ projectRoot: root, env: {} });
+    const res = await runEval({ projectRoot: root, rules: true, env: {} });
     expect("kind" in res).toBe(false);
     if (!("kind" in res)) {
       expect(res.summary.failed).toBeGreaterThanOrEqual(1);
@@ -115,10 +131,59 @@ describe("eval structural - integration against the committed corpus", () => {
     const mutated = original + "\nTBD: follow up with provider docs.\n";
     await fs.writeFile(targetFixture, mutated, "utf8");
 
-    const res = await runEval({ projectRoot: root, env: {} });
+    const res = await runEval({ projectRoot: root, rules: true, env: {} });
     if (!("kind" in res)) {
       const regression = res.baselineDelta?.regressions.find(
         (r) => r.verifierId === "structural:forbidden:tbd" && r.reason === "newly-failing"
+      );
+      expect(regression).toBeDefined();
+    }
+  });
+
+  it("synthetic rule regression (duplicate bullet) flips unique-in-section", async () => {
+    const root = await cloneDemo("eval-int-rule-dup");
+    const targetFixture = path.join(
+      root,
+      ".cclaw/evals/corpus/scope/scope-01-dark-mode/fixture.md"
+    );
+    const original = await fs.readFile(targetFixture, "utf8");
+    const mutated = original.replace(
+      "- D-03: SSR hint resolved in the root layout via a server component.",
+      "- D-01: Preference stored in an HttpOnly cookie named `cclaw_theme`."
+    );
+    expect(mutated).not.toBe(original);
+    await fs.writeFile(targetFixture, mutated, "utf8");
+
+    const res = await runEval({ projectRoot: root, rules: true, env: {} });
+    if (!("kind" in res)) {
+      const regression = res.baselineDelta?.regressions.find(
+        (r) =>
+          r.caseId === "scope-04-dark-mode-rules" &&
+          r.verifierId === "rules:unique-in-section:decisions" &&
+          r.reason === "newly-failing"
+      );
+      expect(regression).toBeDefined();
+    }
+  });
+
+  it("synthetic traceability regression (scope decision dropped from plan) is caught", async () => {
+    const root = await cloneDemo("eval-int-trace");
+    const targetFixture = path.join(
+      root,
+      ".cclaw/evals/corpus/plan/plan-01-dark-mode/fixture.md"
+    );
+    const original = await fs.readFile(targetFixture, "utf8");
+    const mutated = original.replace(/- D-02[^\n]*\n/, "");
+    expect(mutated).not.toBe(original);
+    await fs.writeFile(targetFixture, mutated, "utf8");
+
+    const res = await runEval({ projectRoot: root, rules: true, env: {} });
+    if (!("kind" in res)) {
+      const regression = res.baselineDelta?.regressions.find(
+        (r) =>
+          r.caseId === "plan-01-dark-mode" &&
+          r.verifierId === "traceability:scope->self" &&
+          r.reason === "newly-failing"
       );
       expect(regression).toBeDefined();
     }

@@ -62,11 +62,72 @@ export interface StructuralExpected {
   requiredFrontmatterKeys?: string[];
 }
 
-/** Superset of per-verifier expectation shapes. Only `structural` is wired in Step 1. */
+/**
+ * Rule-based expectations — zero-LLM content checks that are richer than
+ * structural (regex, numeric bounds, uniqueness). Introduced in Step 2.
+ *
+ * Every array field is optional; an empty `RulesExpected` produces zero
+ * verifier results so authors can enable rules incrementally.
+ */
+export interface RulesExpected {
+  /** Case-insensitive substrings the body must include at least once. */
+  mustContain?: string[];
+  /** Case-insensitive substrings the body must NOT include. */
+  mustNotContain?: string[];
+  /** Regex patterns that must match the body at least once. */
+  regexRequired?: RuleRegex[];
+  /** Regex patterns that must NOT match the body. */
+  regexForbidden?: RuleRegex[];
+  /** For each substring key, the body must contain at least N occurrences. */
+  minOccurrences?: Record<string, number>;
+  /** For each substring key, the body must contain at most N occurrences. */
+  maxOccurrences?: Record<string, number>;
+  /**
+   * For each named section (case-insensitive heading substring), every bullet
+   * (`- ...`) directly under the section must be unique. Catches duplicated
+   * decisions or repeated risks.
+   */
+  uniqueBulletsInSection?: string[];
+}
+
+export interface RuleRegex {
+  /** Source of the regex. Parsed with `new RegExp(pattern, flags)`. */
+  pattern: string;
+  /** Optional regex flags; defaults to `"i"` for case-insensitive matching. */
+  flags?: string;
+  /** Human-readable label rendered in verifier messages and slugged into the id. */
+  description?: string;
+}
+
+/**
+ * Cross-stage traceability expectations — assert every ID extracted from
+ * `source` also appears in `self` and/or named `extra_fixtures`. Introduced
+ * in Step 2.
+ */
+export interface TraceabilityExpected {
+  /** Regex applied to the `source` fixture to collect the authoritative ID set. */
+  idPattern: string;
+  /** Optional regex flags (defaults to `"g"`). */
+  idFlags?: string;
+  /**
+   * Where to read the authoritative ID set from. Either `"self"` (the case's
+   * primary `fixture`) or a label present in the case's `extraFixtures` map.
+   */
+  source: string;
+  /**
+   * Where every source ID must also appear. Each entry is `"self"` or an
+   * `extraFixtures` label. Order is preserved for deterministic result ids.
+   */
+  requireIn: string[];
+}
+
+/** Superset of per-verifier expectation shapes. */
 export interface ExpectedShape {
   structural?: StructuralExpected;
-  /** Rule-based (keyword/regex/traceability) checks — Step 2. */
-  rules?: Record<string, unknown>;
+  /** Rule-based (keyword/regex/count/uniqueness) checks — Step 2. */
+  rules?: RulesExpected;
+  /** Cross-stage ID propagation checks — Step 2. */
+  traceability?: TraceabilityExpected;
   /** LLM-judge rubrics — Step 3. */
   judge?: Record<string, unknown>;
 }
@@ -94,6 +155,13 @@ export interface EvalCase {
    * Step 1 development aid.
    */
   fixture?: string;
+  /**
+   * Additional fixture paths loaded alongside the primary `fixture`, keyed
+   * by a free-form label. Consumed by cross-artifact verifiers (e.g.,
+   * traceability) introduced in Step 2. Paths are resolved relative to the
+   * case's stage directory, just like `fixture`.
+   */
+  extraFixtures?: Record<string, string>;
 }
 
 /** Result of one verifier applied to one case. */

@@ -10,7 +10,7 @@ measured score delta rather than subjective review. See
 | --- | --- | --- | --- |
 | 0 | 0.22.0 | shipped | `cclaw eval` CLI, directory scaffold, config loader, corpus loader, report writer |
 | 1 | 0.23.0 | shipped | Structural verifier, baselines, 24-case seed corpus, PR-blocking CI gate |
-| 2 | 0.24.0 | planned | Rule-based verifiers + traceability checks |
+| 2 | 0.24.0 | shipped | Rule-based verifiers (keywords, regex, counts, uniqueness) + cross-stage traceability, 40-case corpus |
 | 3 | 0.25.0 | planned | LLM judge + Tier A single-shot, nightly CI |
 | 4 | 0.26.0 | planned | Tier B agent with tools + sandbox |
 | 5 | 0.27.0 | planned | Tier C multi-stage workflow + release CI |
@@ -89,8 +89,8 @@ cclaw eval --dry-run      # prints `apiKey: set`
 cclaw eval [flags]
   --stage=<id>         Limit to one flow stage (brainstorm|scope|design|spec|plan|tdd|review|ship).
   --tier=<A|B|C>       Fidelity tier. A=single-shot, B=tools, C=workflow.
-  --schema-only        Structural verifiers only (default).
-  --rules              Structural + rule verifiers (not wired yet).
+  --schema-only        Structural verifiers only (sections / forbidden / lengths / frontmatter).
+  --rules              Structural + rule verifiers (keywords, regex, counts, uniqueness) + cross-stage traceability.
   --judge              Include LLM judging (not wired yet; requires CCLAW_EVAL_API_KEY).
   --dry-run            Validate config + corpus, print summary, do not execute.
   --json               Emit machine-readable JSON on stdout.
@@ -147,9 +147,80 @@ expected:
     # max_chars: 6000
 ```
 
-The canonical 24-case corpus used by cclaw's own CI lives under
+The canonical 40-case corpus used by cclaw's own CI lives under
 `tests/fixtures/eval-demo/.cclaw/evals/corpus/` and is the reference for
 authoring new cases.
+
+### Rule-based expectations (`expected.rules`)
+
+Zero-LLM content checks that run with `cclaw eval --rules`. Every field
+is optional; omit the section entirely if the case has none. Matching is
+run against the artifact body (frontmatter is stripped before
+evaluation).
+
+```yaml
+expected:
+  rules:
+    must_contain:                        # plain-substring, case-sensitive
+      - "tailwind"
+      - "RSC"
+    must_not_contain:                    # fail if any appears
+      - "lorem ipsum"
+    regex_required:
+      - pattern: "\\bD-\\d+\\b"          # at least one match required
+        flags: g
+        description: "Decision IDs are present"
+    regex_forbidden:
+      - pattern: "\\bTODO\\b"
+        flags: i
+        description: "No TODO markers"
+    min_occurrences:                     # phrase: >=N occurrences
+      "acceptance criteria": 1
+    max_occurrences:                     # phrase: <=N occurrences
+      "we think": 0
+    unique_bullets_in_section:           # list items must be unique under
+      - Decisions                        # the given H2/H3 headings (case-insensitive)
+      - Non-Goals
+```
+
+Each rule emits a verifier result with a granular id, e.g.:
+
+- `rules:contains:tailwind` / `rules:not-contains:lorem-ipsum`
+- `rules:regex-required:d-xx` / `rules:regex-forbidden:todo`
+- `rules:min-occurrences:acceptance-criteria`
+- `rules:max-occurrences:we-think`
+- `rules:unique-in-section:decisions`
+
+### Traceability expectations (`expected.traceability`)
+
+Asserts that identifiers extracted from a `source` artifact propagate
+into downstream artifacts (`require_in`). Typical use: `scope` decisions
+(`D-01`, `D-02`, ...) must appear in both `plan` and `tdd`.
+
+```yaml
+id: plan-01-dark-mode
+stage: plan
+fixture: ./plan-01-dark-mode/fixture.md
+extra_fixtures:
+  scope: ../../scope/scope-01-dark-mode/fixture.md
+  tdd: ../../tdd/tdd-01-dark-mode/fixture.md
+expected:
+  traceability:
+    id_pattern: "\\bD-\\d+\\b"   # regex defining a traceable id
+    id_flags: g
+    source: scope                # "self" or any key under extra_fixtures
+    require_in:                  # every id from source must appear in each target
+      - self                     # the primary fixture (the case under test)
+      - tdd
+```
+
+- `source: self` is valid — extract ids from the primary artifact and
+  check they appear in the targets (e.g. a `review` fixture must cite
+  every `T-XX` it introduces).
+- Each target emits its own verifier result:
+  `traceability:scope->self`, `traceability:scope->tdd`, etc.
+- Missing or unreadable `extra_fixtures` fail the case with a structured
+  error rather than a silent pass.
 
 Rubric schema (LLM judge step onward): `.cclaw/evals/rubrics/<stage>.yaml`.
 

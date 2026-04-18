@@ -1,0 +1,25 @@
+id: plan-05-auth-refactor-rules
+stage: plan
+input_prompt: |
+  Audit the passkey plan for milestones/steps/risks coverage.
+fixture: ./plan-02-auth-refactor/fixture.md
+expected:
+  rules:
+    must_contain:
+      - "Milestones"
+      - "Steps"
+      - "Risks"
+    must_not_contain:
+      - "open question"
+    regex_required:
+      - pattern: "M\\d+"
+        description: Milestone ids
+      - pattern: "S\\d+"
+        description: Step ids
+    min_occurrences:
+      "M1": 1
+      "S1": 1
+    unique_bullets_in_section:
+      - Milestones
+      - Steps
+      - Risks

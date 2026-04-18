@@ -25,3 +25,9 @@ created_at: 2026-04-17
 - Theme flash on reload if cookie is stripped by a CDN (mitigation:
   allowlist `cclaw_theme` in CDN edge config before M2).
 - Old Safari versions without `color-scheme` support.
+
+## Decision Traceability
+
+- D-01 (cookie preference) landed in S1 and is validated by S4 timing.
+- D-02 (Tailwind `class` strategy) is enforced by S2's provider tests.
+- D-03 (SSR hint via server component) is wired in M2 and audited in S3.

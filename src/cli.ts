@@ -91,7 +91,7 @@ Commands:
              Flags: --stage=<id>         Limit to one flow stage (${FLOW_STAGES.join("|")}).
                     --tier=<A|B|C>       Fidelity tier (A=single-shot, B=tools, C=workflow).
                     --schema-only        Run only structural verifiers (default).
-                    --rules              Run structural + rule verifiers (not wired yet).
+                    --rules              Also run rule-based verifiers (keywords, regex, counts, uniqueness, traceability).
                     --judge              Include LLM judging (not wired yet; requires API key).
                     --dry-run            Validate config + corpus, print summary, do not execute.
                     --json               Emit machine-readable JSON on stdout.
