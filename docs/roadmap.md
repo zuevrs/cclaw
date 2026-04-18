@@ -139,22 +139,44 @@ Exit criteria:
   is caught with exit code 1 and surfaces a `newly-failing` entry in the
   baseline delta.
 
-### Step 2 — Rule-based Verifiers L2 (v0.24.0)
+### Step 2 — Rule-based Verifiers L2 (v0.24.0) — shipped
 
-**Goals:** content rules without LLM — catches ~60% of regressions cheaply.
+**Goal:** content rules without LLM — catches ~60% of regressions cheaply.
 
-Scope:
+Landed:
 
-- `src/eval/verifiers/rules.ts` — keyword/regex must-contain, must-not-contain, numeric bounds (min decisions, min rationalizations), uniqueness.
-- `src/eval/verifiers/traceability.ts` — cross-stage pass: D-XX decisions from scope appear in plan and tdd.
-- Corpus expanded to 5 cases per stage (40 total).
-- `cclaw eval --rules` runs schema + rules.
+- `src/eval/verifiers/rules.ts` — `must_contain`, `must_not_contain`,
+  `regex_required`, `regex_forbidden`, `min_occurrences`,
+  `max_occurrences`, `unique_bullets_in_section`. Each check emits a
+  granular verifier id (e.g. `rules:unique-in-section:decisions`).
+- `src/eval/verifiers/traceability.ts` — extracts ids (configurable
+  regex) from a `source` artifact (`self` or an `extra_fixtures` key)
+  and asserts they appear in every `require_in` target. Missing
+  fixtures surface as structured failures rather than silent passes.
+- `src/eval/corpus.ts` — parses `expected.rules`,
+  `expected.traceability`, and `extra_fixtures`; loads extra fixtures
+  through `readExtraFixtures`.
+- `src/eval/runner.ts` — `--rules` flag enables structural + rules +
+  traceability; `--schema-only` keeps the fast path; dry-run reports
+  which verifier families are available.
+- Seed corpus expanded from 24 → 40 cases (5 per stage): 2
+  structural + 2 rule-focused + 1 trace-focused where applicable.
+  Three multi-file trace cases (`plan-01/02/03-*`) link
+  scope → self/tdd via `D-XX`.
+- All 8 stage baselines regenerated to freeze the new verifier set.
+- `.github/workflows/evals-structural.yml` now runs two jobs:
+  `--schema-only` and `--rules` (still zero secrets, zero network).
+- Integration tests cover loading (40 cases), `--schema-only` skip
+  behavior (16 skipped), a duplicate-bullet rule regression, and a
+  dropped-`D-02` traceability regression.
 
-Exit criteria:
+Exit criteria — met:
 
-- Each stage covered by ≥3 rule checks.
-- Traceability check catches artificial regression in test.
-- `cclaw eval --rules` wired into PR CI.
+- Each stage is covered by ≥3 rule checks across its cases.
+- Synthetic rule + traceability regressions are both caught with
+  exit code 1 and surface as `newly-failing` entries in the baseline
+  delta.
+- `cclaw eval --rules` runs as a PR-blocking CI job.
 
 ### Step 3 — LLM Judge + Tier A (v0.25.0)
 
