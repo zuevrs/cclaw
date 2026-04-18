@@ -30,11 +30,14 @@ Generated from `src/harness-adapters.ts` capabilities and hook event mappings.
 
 ## Shared command contract
 
-All harnesses receive the same utility commands:
+All harnesses receive the same six top-level utility commands:
 
-- `/cc` - flow entry and resume
-- `/cc-next` - stage progression
-- `/cc-learn` - knowledge capture/lookup
+- `/cc` — flow entry and resume
+- `/cc-next` — stage progression
+- `/cc-ideate` — repository improvement discovery
+- `/cc-view` — read-only flow visibility (status/tree/diff)
+- `/cc-learn` — strict-schema knowledge capture/lookup
+- `/cc-ops` — operational router (feature/tdd-log/retro/compound/archive/rewind)
 
 Stage order remains canonical:
 `brainstorm -> scope -> design -> spec -> plan -> tdd -> review -> ship`
