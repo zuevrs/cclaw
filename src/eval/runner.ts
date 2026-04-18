@@ -3,6 +3,10 @@ import { CCLAW_VERSION } from "../constants.js";
 import type { FlowStage } from "../types.js";
 import { FLOW_STAGES } from "../types.js";
 import { runSingleShot } from "./agents/single-shot.js";
+import {
+  MaxTurnsExceededError,
+  runWithTools
+} from "./agents/with-tools.js";
 import { compareAgainstBaselines, loadBaselinesByStage } from "./baseline.js";
 import { loadCorpus, readExtraFixtures, readFixtureArtifact } from "./corpus.js";
 import { loadEvalConfig } from "./config-loader.js";
@@ -111,8 +115,9 @@ function resolveRunFlags(options: RunEvalOptions): RunFlags {
   const rulesRequested = options.rules === true;
   const schemaOnly = options.schemaOnly === true;
   const judgeRequested = options.judge === true;
+  const tier = options.tier ?? "A";
   const runJudge = judgeRequested && !schemaOnly;
-  const runAgent = runJudge && (options.tier ?? "A") === "A";
+  const runAgent = runJudge && (tier === "A" || tier === "B");
   return {
     runStructural: true,
     runRules: rulesRequested && !schemaOnly,
@@ -193,7 +198,7 @@ async function runCase(ctx: RunCaseContext): Promise<EvalCaseResult> {
   const needsArtifact = hasStructural || hasRules || hasTraceability || judgeRequested;
   let artifact: string | undefined;
   if (needsArtifact) {
-    if (flags.runAgent && judgeRequested && client) {
+    if (flags.runAgent && judgeRequested && client && plannedTier === "A") {
       try {
         const produced = await runSingleShot({
           caseEntry,
@@ -227,6 +232,50 @@ async function runCase(ctx: RunCaseContext): Promise<EvalCaseResult> {
           score: 0,
           message: err instanceof Error ? err.message : String(err),
           details: { retryable }
+        });
+      }
+    } else if (flags.runAgent && judgeRequested && client && plannedTier === "B") {
+      try {
+        const produced = await runWithTools({
+          caseEntry,
+          config,
+          projectRoot,
+          client
+        });
+        artifact = produced.artifact;
+        caseCostUsd += produced.usageUsd;
+        verifierResults.push({
+          kind: "workflow",
+          id: "agent:with-tools",
+          ok: true,
+          score: 1,
+          message:
+            `with-tools agent produced ${produced.artifact.length} char(s) in ` +
+            `${produced.durationMs}ms across ${produced.toolUse.turns} turn(s) ` +
+            `(${produced.toolUse.calls} tool call(s))`,
+          details: {
+            model: produced.model,
+            tokensIn: produced.usage.promptTokens,
+            tokensOut: produced.usage.completionTokens,
+            usageUsd: produced.usageUsd,
+            attempts: produced.attempts,
+            toolUse: produced.toolUse
+          }
+        });
+      } catch (err) {
+        if (err instanceof DailyCostCapExceededError) throw err;
+        const retryable = err instanceof EvalLlmError ? err.retryable : false;
+        const maxTurns = err instanceof MaxTurnsExceededError ? err.turns : undefined;
+        verifierResults.push({
+          kind: "workflow",
+          id: "agent:with-tools",
+          ok: false,
+          score: 0,
+          message: err instanceof Error ? err.message : String(err),
+          details: {
+            retryable,
+            ...(maxTurns !== undefined ? { maxTurnsExceeded: maxTurns } : {})
+          }
         });
       }
     } else {
