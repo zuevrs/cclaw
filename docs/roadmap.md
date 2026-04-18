@@ -233,7 +233,7 @@ Exit criteria — met:
 - Synthetically degraded rubrics / dropped required checks flag the
   case with a non-zero exit code (covered by judge + runner tests).
 
-### Step 4 — Tier B: Agent with Tools (v0.26.0)
+### Step 4 — Tier B: Agent with Tools (v0.26.0) — shipped
 
 **Goals:** realistic multi-turn runs — AUT reads project files, writes artifacts, uses function-calling.
 
@@ -285,7 +285,7 @@ Exit criteria met:
   run budget stays inside `dailyUsdCap` because cost is committed per
   chat turn.
 
-### Step 5 — Tier C: End-to-End Workflow (v0.27.0)
+### Step 5 — Tier C: End-to-End Workflow (v0.27.0) — shipped
 
 **Goals:** multi-stage workflow run — AUT simulates a real user session from brainstorm through plan.
 
