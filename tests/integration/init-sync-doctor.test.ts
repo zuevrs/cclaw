@@ -675,6 +675,69 @@ describe("install lifecycle", () => {
     expect(checks.find((c) => c.name === "warning:slice_review:missing_section")).toBeUndefined();
   });
 
+  it("warns about stale raw knowledge entries older than 90 days", async () => {
+    const root = await createTempProject("knowledge-stale-raw");
+    await initCclaw({ projectRoot: root });
+
+    const tenYearsAgo = new Date(Date.now() - 3650 * 24 * 60 * 60 * 1000).toISOString();
+    const staleLine = JSON.stringify({
+      type: "pattern",
+      trigger: "when payload is unchecked",
+      action: "parse through zod",
+      confidence: "medium",
+      domain: "api",
+      stage: "review",
+      origin_stage: "review",
+      origin_feature: "payload-hardening",
+      frequency: 1,
+      universality: "project",
+      maturity: "raw",
+      created: tenYearsAgo,
+      first_seen_ts: tenYearsAgo,
+      last_seen_ts: tenYearsAgo,
+      project: "demo"
+    });
+    await fs.writeFile(path.join(root, ".cclaw/knowledge.jsonl"), staleLine + "\n", "utf8");
+
+    const checks = await doctorChecks(root);
+    const warning = checks.find((c) => c.name === "warning:knowledge:stale_raw_entries");
+    expect(warning).toBeDefined();
+    expect(warning?.ok).toBe(true);
+    expect(warning?.details).toMatch(/1 raw knowledge entry/);
+    expect(warning?.details).toMatch(/older than 90 days/);
+  });
+
+  it("stays silent about stale entries when raw entries are fresh", async () => {
+    const root = await createTempProject("knowledge-fresh-raw");
+    await initCclaw({ projectRoot: root });
+
+    const nowIso = new Date().toISOString();
+    const freshLine = JSON.stringify({
+      type: "pattern",
+      trigger: "when payload is unchecked",
+      action: "parse through zod",
+      confidence: "high",
+      domain: "api",
+      stage: "review",
+      origin_stage: "review",
+      origin_feature: "payload-hardening",
+      frequency: 1,
+      universality: "project",
+      maturity: "raw",
+      created: nowIso,
+      first_seen_ts: nowIso,
+      last_seen_ts: nowIso,
+      project: "demo"
+    });
+    await fs.writeFile(path.join(root, ".cclaw/knowledge.jsonl"), freshLine + "\n", "utf8");
+
+    const checks = await doctorChecks(root);
+    const warning = checks.find((c) => c.name === "warning:knowledge:stale_raw_entries");
+    expect(warning).toBeDefined();
+    expect(warning?.ok).toBe(true);
+    expect(warning?.details).toMatch(/no raw knowledge entries older than 90 days/);
+  });
+
   it("uninstall strips only cclaw hooks and preserves user hooks", async () => {
     const root = await createTempProject("uninstall-hooks");
     await initCclaw({ projectRoot: root });

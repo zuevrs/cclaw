@@ -961,7 +961,13 @@ export async function doctorChecks(projectRoot: string, options: DoctorOptions =
     let missingSchemaV2Fields = 0;
     let parsedKnowledgeLines = 0;
     let lowConfidenceLines = 0;
+    let staleRawEntries = 0;
     const triggerActionCounts = new Map<string, number>();
+    // Stale threshold for raw entries: ~90 days with no re-observation.
+    // Chosen to match the compound drift checklist language; anything newer is
+    // recent enough to trust, anything older deserves a curate/supersede pass.
+    const STALE_RAW_THRESHOLD_MS = 90 * 24 * 60 * 60 * 1000;
+    const now = Date.now();
     const requiredV2Fields = [
       "type",
       "trigger",
@@ -1007,6 +1013,14 @@ export async function doctorChecks(projectRoot: string, options: DoctorOptions =
           if (missing) {
             missingSchemaV2Fields += 1;
           }
+          const maturity = typeof parsed.maturity === "string" ? parsed.maturity.toLowerCase() : "";
+          const lastSeenRaw = typeof parsed.last_seen_ts === "string" ? parsed.last_seen_ts : "";
+          if (maturity === "raw" && lastSeenRaw.length > 0) {
+            const lastSeenMs = Date.parse(lastSeenRaw);
+            if (Number.isFinite(lastSeenMs) && now - lastSeenMs > STALE_RAW_THRESHOLD_MS) {
+              staleRawEntries += 1;
+            }
+          }
         } catch {
           malformedKnowledgeLines += 1;
         }
@@ -1051,6 +1065,16 @@ export async function doctorChecks(projectRoot: string, options: DoctorOptions =
         repeatedClusters.length === 0
           ? "no high-frequency repeated trigger/action clusters detected"
           : `warning: ${repeatedClusters.length} repeated learning cluster(s) detected (>=3 repeats). Consider /cc-ops compound to lift them into rules/skills.`
+    });
+    checks.push({
+      name: "warning:knowledge:stale_raw_entries",
+      ok: true,
+      details:
+        parsedKnowledgeLines === 0
+          ? "knowledge.jsonl is empty"
+          : staleRawEntries === 0
+            ? `no raw knowledge entries older than 90 days`
+            : `warning: ${staleRawEntries} raw knowledge entry(ies) have last_seen_ts older than 90 days. Run /cc-learn curate or append a superseding entry before the next /cc-ops compound pass.`
     });
   }
 

@@ -37,20 +37,24 @@ the user can approve individual lifts, accept-all, or skip.
    - set \`closeout.compoundPromoted = 0\`,
    - set \`closeout.shipSubstate = "ready_to_archive"\`,
    - emit \`compound: no candidates | next: /cc-next\` and stop.
-5. Otherwise, present **one** structured ask (AskUserQuestion / AskQuestion /
+5. **Drift check** each surviving candidate before presenting it (see
+   "Drift check" section in the skill): confirm the lift target file is
+   current, spot-check the repo for contradictions, demote stale clusters
+   into a new superseding entry instead of a lift.
+6. Otherwise, present **one** structured ask (AskUserQuestion / AskQuestion /
    plain text) summarising all candidates at once:
    - \`apply-all\` (default) — apply every listed lift,
    - \`apply-selected\` — prompt per-candidate,
    - \`skip\` — record a skip reason and advance without changes.
-6. Apply approved lifts to the target file(s). Each lift also appends a
+7. Apply approved lifts to the target file(s). Each lift also appends a
    \`type: "compound"\` entry back to \`${RUNTIME_ROOT}/knowledge.jsonl\`
    summarising what was lifted.
-7. Update flow-state:
+8. Update flow-state:
    - \`closeout.compoundCompletedAt = <ISO>\`,
    - \`closeout.compoundPromoted = <count>\`,
    - \`closeout.compoundSkipped = true\` if user picked skip,
    - \`closeout.shipSubstate = "ready_to_archive"\`.
-8. Emit one-line summary: \`compound: promoted=<N> skipped=<bool> | next: /cc-next\`.
+9. Emit one-line summary: \`compound: promoted=<N> skipped=<bool> | next: /cc-next\`.
 
 ## Primary skill
 
@@ -86,27 +90,53 @@ empty pass is allowed and must advance \`closeout.shipSubstate\` to
    - \`closeout.compoundPromoted = 0\`,
    - \`closeout.shipSubstate = "ready_to_archive"\`,
    - announce \`compound: no candidates\` and stop.
-4. Otherwise, render each candidate as:
+4. **Drift check — run before presenting any candidate.** Knowledge lines
+   are append-only, so textual repetition alone does not prove the rule is
+   still true. For every cluster that survives the recurrence filter:
+
+   - **Read the lift target.** Open the rule/protocol/skill file you would
+     edit. If the current contents already encode a stronger version of
+     the cluster's \`action\`, drop the candidate (nothing to lift).
+   - **Grep for contradictions.** Run a quick repo search on the cluster's
+     \`trigger\` keywords. If recent code or docs contradict the cluster,
+     treat the cluster as stale.
+   - **Check age.** Inspect \`last_seen_ts\` across the cluster's lines. If
+     every contributing line is older than ~90 days with no fresh
+     observation, treat the cluster as stale.
+   - **Handle stale clusters correctly.** Do **not** silently skip them.
+     Append a new superseding \`type: "lesson"\` line to
+     \`.cclaw/knowledge.jsonl\` whose \`trigger\` explicitly references the
+     old pattern (e.g. \`"when previous rule about X no longer holds: ..."\`)
+     and whose \`action\` documents the replacement or archive reason.
+     Then drop the candidate from the lift list.
+   - **Cite line IDs.** Every surviving candidate must list the concrete
+     knowledge line indices (1-based) that back it, not just a
+     summary string. This is what makes the lift auditable.
+   - Optionally invoke the \`knowledge-curation\` utility skill's
+     stale/duplicate/supersede heuristics if you want a second pass.
+
+5. Otherwise, render each candidate as:
 
 \`\`\`
 Candidate: <short title>
-Evidence: <knowledge refs>
+Evidence: <knowledge line-ids>
+Freshness: <newest last_seen_ts among evidence lines>
 Lift target: <rule/protocol/skill file>
 Change type: <add/update/remove>
 Expected benefit: <what regressions this prevents>
 \`\`\`
 
-5. Present **one** structured question with three options:
+6. Present **one** structured question with three options:
    - \`apply-all\` (default) — apply every candidate,
    - \`apply-selected\` — prompt per-candidate approval next,
    - \`skip\` — record a skip reason and advance.
 
-6. For approved candidates:
+7. For approved candidates:
    - edit the target file(s) with the lift,
    - append a \`type: "compound"\` entry to \`.cclaw/knowledge.jsonl\`
-     describing what was promoted.
+     describing what was promoted, including the source line IDs.
 
-7. Update flow-state \`closeout\`:
+8. Update flow-state \`closeout\`:
    - \`compoundCompletedAt\`,
    - \`compoundPromoted\` (count),
    - \`compoundSkipped\` (boolean) + \`compoundSkipReason\` when applicable,
@@ -125,6 +155,9 @@ closeout chain's perspective.
 - \`closeout.compoundCompletedAt\` is set.
 - \`closeout.shipSubstate === "ready_to_archive"\`.
 - If lifts were applied, the target files show the edit and at least one
-  new \`compound\` line exists in \`.cclaw/knowledge.jsonl\`.
+  new \`compound\` line exists in \`.cclaw/knowledge.jsonl\`, and the new
+  line references the source knowledge line IDs.
+- If drift check demoted any cluster, a new superseding \`lesson\` line
+  exists on the same run documenting the replacement.
 `;
 }
