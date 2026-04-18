@@ -80,14 +80,12 @@ export const SHIP: StageSchemaInput = {
     "rollback and release notes complete",
     "finalization action explicitly chosen and executed"
   ],
-  antiPatterns: [
+  commonRationalizations: [
     "Shipping without rollback strategy",
     "Implicit finalization decision",
     "Bypassing preflight due to urgency",
     "Selecting multiple finalization modes",
-    "Shipping with BLOCKED review verdict"
-  ],
-  redFlags: [
+    "Shipping with BLOCKED review verdict",
     "No rollback trigger/steps",
     "More than one finalization mode implied",
     "No explicit preflight result",

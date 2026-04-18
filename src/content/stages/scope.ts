@@ -99,7 +99,7 @@ export const SCOPE: StageSchemaInput = {
     "completion dashboard produced",
     "scope summary produced"
   ],
-  antiPatterns: [
+  commonRationalizations: [
     "Scope silently expanded during discussion",
     "No explicit out-of-scope section",
     "Premise accepted without challenge",
@@ -107,16 +107,12 @@ export const SCOPE: StageSchemaInput = {
     "Hedged recommendations that avoid taking a position",
     "Batching multiple scope issues into one question",
     "Re-arguing for smaller scope after user rejects reduction",
-    "Using scope-reduction placeholders (`v1`, `for now`, `we can do later`) instead of explicit user-approved boundaries"
-  ],
-  redFlags: [
+    "Using scope-reduction placeholders (`v1`, `for now`, `we can do later`) instead of explicit user-approved boundaries",
     "No selected mode in artifact",
     "Mode selected without heuristic justification",
     "No discretion section (or explicit `None`) in artifact",
     "No deferred/not-in-scope section",
     "No user approval marker",
-    "Premise challenge missing or superficial",
-    "No implementation alternatives evaluated",
     "Missing Locked Decisions section or decisions without D-XX IDs"
   ],
   policyNeedles: ["Scope mode", "In Scope", "Out of Scope", "Discretion Areas", "NOT in scope", "Premise Challenge", "Locked Decisions"],

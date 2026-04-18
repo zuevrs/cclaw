@@ -97,18 +97,14 @@ export const BRAINSTORM: StageSchemaInput = {
     "no implementation action taken",
     "artifact reviewed by user"
   ],
-  antiPatterns: [
+  commonRationalizations: [
     "Asking questions without exploring existing project context first",
     "Asking bundled or purely informational questions that don't change decisions",
     "Proposing cosmetic option variants instead of architecturally distinct approaches",
     "Jumping directly into implementation",
-    "Requesting approval without stating what decision is being approved"
-  ],
-  redFlags: [
-    "No project context exploration before questions",
+    "Requesting approval without stating what decision is being approved",
     "Questions that only gather preferences without design impact",
-    "Options that are variants of one approach, not distinct alternatives",
-    "Approval requested without explicit decision context"
+    "Options that are variants of one approach, not distinct alternatives"
   ],
   policyNeedles: [
     "Explore project context",

@@ -170,7 +170,7 @@ ${rows}
 function mergedAntiPatterns(schema: StageSchema): string {
   const merged: string[] = [];
   const seen = new Set<string>();
-  for (const item of [...schema.antiPatterns, ...schema.blockers, ...schema.redFlags]) {
+  for (const item of [...schema.commonRationalizations, ...schema.blockers]) {
     const key = item.trim().toLowerCase();
     if (seen.has(key)) continue;
     seen.add(key);

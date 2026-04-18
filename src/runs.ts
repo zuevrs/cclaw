@@ -74,8 +74,6 @@ const FLOW_STATE_REL_PATH = `${RUNTIME_ROOT}/state/flow-state.json`;
 const RUNS_DIR_REL_PATH = `${RUNTIME_ROOT}/runs`;
 const ACTIVE_ARTIFACTS_REL_PATH = `${RUNTIME_ROOT}/artifacts`;
 const STATE_DIR_REL_PATH = `${RUNTIME_ROOT}/state`;
-const REWIND_LOG_REL_PATH = `${RUNTIME_ROOT}/state/rewind-log.jsonl`;
-const REWIND_ARCHIVE_DIR_NAME = "_rewind-archive";
 const FLOW_STAGE_SET = new Set<string>(COMMAND_FILE_ORDER);
 
 /** State filenames explicitly excluded from the archive snapshot. */
@@ -127,21 +125,6 @@ export interface ArchiveManifest {
   retro: ArchiveRunResult["retro"];
 }
 
-export interface RewindRunOptions {
-  to: FlowStage;
-  reason?: string;
-}
-
-export interface RewindRunResult {
-  rewindId: string;
-  from: FlowStage;
-  to: FlowStage;
-  invalidatedStages: FlowStage[];
-  staleArtifacts: string[];
-  archivePath: string;
-  nextState: FlowState;
-}
-
 interface EnsureRunSystemOptions {
   createIfMissing?: boolean;
 }
@@ -169,14 +152,6 @@ function activeArtifactsPath(projectRoot: string): string {
 
 function stateDirPath(projectRoot: string): string {
   return path.join(projectRoot, STATE_DIR_REL_PATH);
-}
-
-function rewindLogPath(projectRoot: string): string {
-  return path.join(projectRoot, REWIND_LOG_REL_PATH);
-}
-
-function rewindArchivePath(projectRoot: string, rewindId: string): string {
-  return path.join(activeArtifactsPath(projectRoot), REWIND_ARCHIVE_DIR_NAME, rewindId);
 }
 
 async function snapshotStateDirectory(
@@ -487,25 +462,6 @@ async function uniqueArchiveId(projectRoot: string, baseId: string): Promise<str
   return candidate;
 }
 
-function rewindTimestampId(date = new Date()): string {
-  return date
-    .toISOString()
-    .replace(/[-:]/gu, "")
-    .replace(/\.\d{3}Z$/u, "Z");
-}
-
-function staleArtifactFileName(fileName: string): string {
-  const ext = path.extname(fileName);
-  if (!ext) {
-    return `${fileName}.stale`;
-  }
-  const base = fileName.slice(0, -ext.length);
-  return `${base}.stale${ext}`;
-}
-
-function stageIndexMapForTrack(track: FlowTrack): Map<FlowStage, number> {
-  return new Map(trackStages(track).map((stage, index) => [stage, index]));
-}
 
 function retroArtifactPath(projectRoot: string): string {
   return path.join(activeArtifactsPath(projectRoot), "09-retro.md");
@@ -796,184 +752,6 @@ export async function archiveRun(
     snapshottedStateFiles,
     knowledge: knowledgeStats,
     retro: retroSummary
-  };
-}
-
-export async function rewindRun(
-  projectRoot: string,
-  options: RewindRunOptions
-): Promise<RewindRunResult> {
-  await ensureRunSystem(projectRoot);
-  const state = await readFlowState(projectRoot);
-  const track = state.track ?? "standard";
-  const ordered = trackStages(track);
-  const stageToIndex = stageIndexMapForTrack(track);
-  const toIndex = stageToIndex.get(options.to);
-  const currentIndex = stageToIndex.get(state.currentStage);
-  if (toIndex === undefined) {
-    throw new Error(`Cannot rewind to "${options.to}" because it is outside track "${track}".`);
-  }
-  if (currentIndex === undefined) {
-    throw new Error(`Current stage "${state.currentStage}" is not part of track "${track}".`);
-  }
-  if (toIndex > currentIndex) {
-    throw new Error(`Cannot rewind forward from "${state.currentStage}" to "${options.to}".`);
-  }
-
-  const reason = options.reason?.trim() && options.reason.trim().length > 0
-    ? options.reason.trim()
-    : "manual_rewind";
-  const nowIso = new Date().toISOString();
-  const rewindId = `rewind-${rewindTimestampId()}`;
-
-  const invalidatedStages = ordered.filter((stage) => {
-    const idx = stageToIndex.get(stage);
-    if (idx === undefined || idx <= toIndex) {
-      return false;
-    }
-    return state.completedStages.includes(stage) || stage === state.currentStage;
-  });
-
-  const nextCompletedStages = state.completedStages.filter((stage) => {
-    const idx = stageToIndex.get(stage);
-    return typeof idx === "number" && idx < toIndex;
-  });
-
-  const freshCatalog = createInitialFlowState({ activeRunId: state.activeRunId, track }).stageGateCatalog;
-  const nextCatalog: FlowState["stageGateCatalog"] = { ...state.stageGateCatalog };
-  for (const stage of ordered) {
-    const idx = stageToIndex.get(stage);
-    if (idx === undefined) continue;
-    if (idx >= toIndex) {
-      nextCatalog[stage] = {
-        ...freshCatalog[stage],
-        required: [...freshCatalog[stage].required],
-        recommended: [...freshCatalog[stage].recommended],
-        conditional: [...freshCatalog[stage].conditional],
-        triggered: [],
-        passed: [],
-        blocked: []
-      };
-    }
-  }
-
-  const nextGuardEvidence: Record<string, string> = { ...state.guardEvidence };
-  for (const stage of ordered) {
-    const idx = stageToIndex.get(stage);
-    if (idx === undefined || idx < toIndex) continue;
-    const catalog = state.stageGateCatalog[stage];
-    const gateIds = new Set([
-      ...catalog.required,
-      ...catalog.recommended,
-      ...catalog.conditional,
-      ...catalog.triggered,
-      ...catalog.passed,
-      ...catalog.blocked
-    ]);
-    for (const gateId of gateIds) {
-      delete nextGuardEvidence[gateId];
-    }
-  }
-
-  const nextStale: FlowState["staleStages"] = {};
-  for (const [stage, marker] of Object.entries(state.staleStages) as Array<
-    [FlowStage, FlowState["staleStages"][FlowStage]]
-  >) {
-    if (!marker) continue;
-    const idx = stageToIndex.get(stage);
-    if (idx === undefined || idx <= toIndex) {
-      continue;
-    }
-    nextStale[stage] = marker;
-  }
-  for (const stage of invalidatedStages) {
-    nextStale[stage] = {
-      rewindId,
-      reason,
-      markedAt: nowIso
-    };
-  }
-
-  const archivePath = rewindArchivePath(projectRoot, rewindId);
-  const staleArtifacts: string[] = [];
-  for (const stage of invalidatedStages) {
-    const artifactFile = stageSchema(stage).artifactFile;
-    const artifactPath = path.join(activeArtifactsPath(projectRoot), artifactFile);
-    if (!(await exists(artifactPath))) {
-      continue;
-    }
-    await ensureDir(archivePath);
-    await ensureDir(path.join(archivePath, path.dirname(artifactFile)));
-    await fs.copyFile(artifactPath, path.join(archivePath, artifactFile));
-    const staleName = staleArtifactFileName(artifactFile);
-    const stalePath = path.join(activeArtifactsPath(projectRoot), staleName);
-    await fs.rm(stalePath, { force: true });
-    await fs.rename(artifactPath, stalePath);
-    staleArtifacts.push(staleName);
-  }
-
-  const rewindRecord: FlowState["rewinds"][number] = {
-    id: rewindId,
-    fromStage: state.currentStage,
-    toStage: options.to,
-    reason,
-    timestamp: nowIso,
-    invalidatedStages
-  };
-  const nextState: FlowState = {
-    ...state,
-    currentStage: options.to,
-    completedStages: nextCompletedStages,
-    guardEvidence: nextGuardEvidence,
-    stageGateCatalog: nextCatalog,
-    staleStages: nextStale,
-    rewinds: [...state.rewinds, rewindRecord]
-  };
-  await writeFlowState(projectRoot, nextState, { allowReset: true });
-
-  const rewindLogEntry = {
-    ...rewindRecord,
-    track,
-    runId: state.activeRunId,
-    staleArtifacts
-  };
-  await ensureDir(path.dirname(rewindLogPath(projectRoot)));
-  await fs.appendFile(rewindLogPath(projectRoot), `${JSON.stringify(rewindLogEntry)}\n`, "utf8");
-
-  return {
-    rewindId,
-    from: state.currentStage,
-    to: options.to,
-    invalidatedStages,
-    staleArtifacts,
-    archivePath,
-    nextState
-  };
-}
-
-export async function acknowledgeStaleStage(
-  projectRoot: string,
-  stage: FlowStage
-): Promise<{ acknowledged: boolean; remaining: FlowStage[] }> {
-  await ensureRunSystem(projectRoot);
-  const state = await readFlowState(projectRoot);
-  const marker = state.staleStages[stage];
-  if (!marker) {
-    return {
-      acknowledged: false,
-      remaining: Object.keys(state.staleStages).filter((value): value is FlowStage => isFlowStage(value))
-    };
-  }
-  const nextStale: FlowState["staleStages"] = { ...state.staleStages };
-  delete nextStale[stage];
-  const nextState: FlowState = {
-    ...state,
-    staleStages: nextStale
-  };
-  await writeFlowState(projectRoot, nextState, { allowReset: true });
-  return {
-    acknowledged: true,
-    remaining: Object.keys(nextStale).filter((value): value is FlowStage => isFlowStage(value))
   };
 }
 

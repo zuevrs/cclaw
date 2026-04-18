@@ -91,14 +91,12 @@ export const REVIEW: StageSchemaInput = {
     "critical blockers resolved",
     "ship readiness explicitly stated"
   ],
-  antiPatterns: [
+  commonRationalizations: [
     "Single generic review without layered structure",
     "No severity classification",
     "Shipping with open criticals",
     "Batching multiple findings into one report without individual resolution",
-    "Skipping Layer 2 sections because Layer 1 passed"
-  ],
-  redFlags: [
+    "Skipping Layer 2 sections because Layer 1 passed",
     "No separate Layer 1/Layer 2 outcomes",
     "No structured review-army reconciliation artifact",
     "No critical bucket",

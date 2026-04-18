@@ -109,20 +109,17 @@ export const DESIGN: StageSchemaInput = {
     "completion dashboard present with all review-section statuses",
     "artifact complete for spec handoff"
   ],
-  antiPatterns: [
+  commonRationalizations: [
     "Architecture deferred to implementation phase",
     "Missing data-flow edge cases",
     "No performance budget for critical path",
     "Batching multiple design issues into one question",
     "Skipping review sections because plan seems simple",
     "Agreeing with user's architecture choice without evaluating alternatives",
-    "Hedging every recommendation with 'it depends' instead of taking a position"
-  ],
-  redFlags: [
+    "Hedging every recommendation with 'it depends' instead of taking a position",
     "No explicit architecture boundary section",
     "No failure recovery strategy",
     "No defined test/perf baseline",
-    "Review sections skipped or condensed",
     "No NOT-in-scope output section",
     "No What-already-exists output section",
     "Design decisions made without reading the actual code first"
