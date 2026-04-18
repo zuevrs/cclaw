@@ -86,13 +86,25 @@ describe("eval report", () => {
         baselineDelta: {
           baselineId: "2026-04-10-main",
           scoreDelta: -0.03,
-          criticalFailures: 1
+          criticalFailures: 1,
+          regressions: [
+            {
+              caseId: "brainstorm-01",
+              stage: "brainstorm",
+              verifierId: "structural:section:directions",
+              reason: "newly-failing",
+              previousScore: 1,
+              currentScore: 0
+            }
+          ]
         }
       })
     );
     expect(md).toContain("## Baseline delta");
     expect(md).toContain("score delta: -0.0300");
     expect(md).toContain("critical failures: 1");
+    expect(md).toContain("### Regressions");
+    expect(md).toContain("structural:section:directions");
   });
 
   it("writes both JSON and Markdown to .cclaw/evals/reports/", async () => {

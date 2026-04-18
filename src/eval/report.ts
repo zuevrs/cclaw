@@ -45,12 +45,27 @@ export function formatMarkdownReport(report: EvalReport): string {
   lines.push(``);
 
   if (report.baselineDelta) {
+    const delta = report.baselineDelta;
     lines.push(`## Baseline delta`);
     lines.push(``);
-    lines.push(`- baseline: ${report.baselineDelta.baselineId}`);
-    lines.push(`- score delta: ${report.baselineDelta.scoreDelta.toFixed(4)}`);
-    lines.push(`- critical failures: ${report.baselineDelta.criticalFailures}`);
+    lines.push(`- baseline: ${delta.baselineId}`);
+    lines.push(`- score delta: ${delta.scoreDelta.toFixed(4)}`);
+    lines.push(`- critical failures: ${delta.criticalFailures}`);
     lines.push(``);
+    if (delta.regressions.length > 0) {
+      lines.push(`### Regressions`);
+      lines.push(``);
+      lines.push(`| stage | case id | verifier | reason | prev | curr |`);
+      lines.push(`| --- | --- | --- | --- | --- | --- |`);
+      for (const reg of delta.regressions) {
+        const prev = reg.previousScore !== undefined ? reg.previousScore.toFixed(2) : "-";
+        const curr = reg.currentScore !== undefined ? reg.currentScore.toFixed(2) : "-";
+        lines.push(
+          `| ${reg.stage} | ${reg.caseId} | ${reg.verifierId} | ${reg.reason} | ${prev} | ${curr} |`
+        );
+      }
+      lines.push(``);
+    }
   }
 
   if (report.cases.length === 0) {

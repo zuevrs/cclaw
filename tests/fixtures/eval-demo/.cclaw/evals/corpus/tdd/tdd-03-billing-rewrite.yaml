@@ -1,0 +1,21 @@
+id: tdd-03-billing-rewrite
+stage: tdd
+input_prompt: |
+  TDD log for refund calculator.
+fixture: ./tdd-03-billing-rewrite/fixture.md
+expected:
+  structural:
+    required_sections:
+      - "Red"
+      - "Green"
+      - "Refactor"
+    forbidden_patterns:
+      - TBD
+      - TODO
+      - placeholder
+    required_frontmatter_keys:
+      - stage
+      - author
+      - created_at
+    min_lines: 8
+    max_lines: 120

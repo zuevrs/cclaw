@@ -26,7 +26,7 @@ describe("eval runner", () => {
     expect(result.plannedTier).toBe("A");
     expect(result.config.apiKey).toBeUndefined();
     expect(result.verifiersAvailable).toEqual({
-      structural: false,
+      structural: true,
       rules: false,
       judge: false,
       workflow: false
@@ -93,7 +93,7 @@ describe("eval runner", () => {
     expect(result.model).toBe("glm-5.1");
   });
 
-  it("non-dry-run on a populated corpus marks each case skipped (Wave 7.0 skeleton)", async () => {
+  it("non-dry-run on a corpus without structural expectations skips verification", async () => {
     const root = await createTempProject("runner-skip");
     await writeProjectFile(
       root,
@@ -104,7 +104,7 @@ describe("eval runner", () => {
     assertReport(result);
     expect(result.summary.totalCases).toBe(1);
     expect(result.summary.skipped).toBe(1);
-    expect(result.cases[0]?.passed).toBe(false);
+    expect(result.cases[0]?.passed).toBe(true);
     expect(result.cases[0]?.verifierResults[0]?.details).toEqual({ skipped: true });
   });
 });

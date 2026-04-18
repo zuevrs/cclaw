@@ -1,0 +1,21 @@
+id: plan-02-auth-refactor
+stage: plan
+input_prompt: |
+  Plan passkey migration milestones.
+fixture: ./plan-02-auth-refactor/fixture.md
+expected:
+  structural:
+    required_sections:
+      - "Milestones"
+      - "Steps"
+      - "Risks"
+    forbidden_patterns:
+      - TBD
+      - TODO
+      - placeholder
+    required_frontmatter_keys:
+      - stage
+      - author
+      - created_at
+    min_lines: 8
+    max_lines: 120

@@ -1,0 +1,203 @@
+{
+  "schemaVersion": 1,
+  "stage": "ship",
+  "generatedAt": "2026-04-18T10:49:12.135Z",
+  "cclawVersion": "0.1.1",
+  "cases": {
+    "ship-01-dark-mode": {
+      "passed": true,
+      "verifierResults": [
+        {
+          "id": "structural:section:release-notes",
+          "kind": "structural",
+          "ok": true,
+          "score": 1
+        },
+        {
+          "id": "structural:section:rollout",
+          "kind": "structural",
+          "ok": true,
+          "score": 1
+        },
+        {
+          "id": "structural:section:validation",
+          "kind": "structural",
+          "ok": true,
+          "score": 1
+        },
+        {
+          "id": "structural:forbidden:tbd",
+          "kind": "structural",
+          "ok": true,
+          "score": 1
+        },
+        {
+          "id": "structural:forbidden:todo",
+          "kind": "structural",
+          "ok": true,
+          "score": 1
+        },
+        {
+          "id": "structural:forbidden:placeholder",
+          "kind": "structural",
+          "ok": true,
+          "score": 1
+        },
+        {
+          "id": "structural:length:lines",
+          "kind": "structural",
+          "ok": true,
+          "score": 1
+        },
+        {
+          "id": "structural:frontmatter:stage",
+          "kind": "structural",
+          "ok": true,
+          "score": 1
+        },
+        {
+          "id": "structural:frontmatter:author",
+          "kind": "structural",
+          "ok": true,
+          "score": 1
+        },
+        {
+          "id": "structural:frontmatter:created-at",
+          "kind": "structural",
+          "ok": true,
+          "score": 1
+        }
+      ]
+    },
+    "ship-02-auth-refactor": {
+      "passed": true,
+      "verifierResults": [
+        {
+          "id": "structural:section:release-notes",
+          "kind": "structural",
+          "ok": true,
+          "score": 1
+        },
+        {
+          "id": "structural:section:rollout",
+          "kind": "structural",
+          "ok": true,
+          "score": 1
+        },
+        {
+          "id": "structural:section:validation",
+          "kind": "structural",
+          "ok": true,
+          "score": 1
+        },
+        {
+          "id": "structural:forbidden:tbd",
+          "kind": "structural",
+          "ok": true,
+          "score": 1
+        },
+        {
+          "id": "structural:forbidden:todo",
+          "kind": "structural",
+          "ok": true,
+          "score": 1
+        },
+        {
+          "id": "structural:forbidden:placeholder",
+          "kind": "structural",
+          "ok": true,
+          "score": 1
+        },
+        {
+          "id": "structural:length:lines",
+          "kind": "structural",
+          "ok": true,
+          "score": 1
+        },
+        {
+          "id": "structural:frontmatter:stage",
+          "kind": "structural",
+          "ok": true,
+          "score": 1
+        },
+        {
+          "id": "structural:frontmatter:author",
+          "kind": "structural",
+          "ok": true,
+          "score": 1
+        },
+        {
+          "id": "structural:frontmatter:created-at",
+          "kind": "structural",
+          "ok": true,
+          "score": 1
+        }
+      ]
+    },
+    "ship-03-billing-rewrite": {
+      "passed": true,
+      "verifierResults": [
+        {
+          "id": "structural:section:release-notes",
+          "kind": "structural",
+          "ok": true,
+          "score": 1
+        },
+        {
+          "id": "structural:section:rollout",
+          "kind": "structural",
+          "ok": true,
+          "score": 1
+        },
+        {
+          "id": "structural:section:validation",
+          "kind": "structural",
+          "ok": true,
+          "score": 1
+        },
+        {
+          "id": "structural:forbidden:tbd",
+          "kind": "structural",
+          "ok": true,
+          "score": 1
+        },
+        {
+          "id": "structural:forbidden:todo",
+          "kind": "structural",
+          "ok": true,
+          "score": 1
+        },
+        {
+          "id": "structural:forbidden:placeholder",
+          "kind": "structural",
+          "ok": true,
+          "score": 1
+        },
+        {
+          "id": "structural:length:lines",
+          "kind": "structural",
+          "ok": true,
+          "score": 1
+        },
+        {
+          "id": "structural:frontmatter:stage",
+          "kind": "structural",
+          "ok": true,
+          "score": 1
+        },
+        {
+          "id": "structural:frontmatter:author",
+          "kind": "structural",
+          "ok": true,
+          "score": 1
+        },
+        {
+          "id": "structural:frontmatter:created-at",
+          "kind": "structural",
+          "ok": true,
+          "score": 1
+        }
+      ]
+    }
+  }
+}

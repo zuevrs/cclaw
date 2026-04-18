@@ -1,0 +1,185 @@
+{
+  "schemaVersion": 1,
+  "stage": "spec",
+  "generatedAt": "2026-04-18T10:49:12.135Z",
+  "cclawVersion": "0.1.1",
+  "cases": {
+    "spec-01-dark-mode": {
+      "passed": true,
+      "verifierResults": [
+        {
+          "id": "structural:section:acceptance-criteria",
+          "kind": "structural",
+          "ok": true,
+          "score": 1
+        },
+        {
+          "id": "structural:section:interfaces",
+          "kind": "structural",
+          "ok": true,
+          "score": 1
+        },
+        {
+          "id": "structural:forbidden:tbd",
+          "kind": "structural",
+          "ok": true,
+          "score": 1
+        },
+        {
+          "id": "structural:forbidden:todo",
+          "kind": "structural",
+          "ok": true,
+          "score": 1
+        },
+        {
+          "id": "structural:forbidden:placeholder",
+          "kind": "structural",
+          "ok": true,
+          "score": 1
+        },
+        {
+          "id": "structural:length:lines",
+          "kind": "structural",
+          "ok": true,
+          "score": 1
+        },
+        {
+          "id": "structural:frontmatter:stage",
+          "kind": "structural",
+          "ok": true,
+          "score": 1
+        },
+        {
+          "id": "structural:frontmatter:author",
+          "kind": "structural",
+          "ok": true,
+          "score": 1
+        },
+        {
+          "id": "structural:frontmatter:created-at",
+          "kind": "structural",
+          "ok": true,
+          "score": 1
+        }
+      ]
+    },
+    "spec-02-auth-refactor": {
+      "passed": true,
+      "verifierResults": [
+        {
+          "id": "structural:section:acceptance-criteria",
+          "kind": "structural",
+          "ok": true,
+          "score": 1
+        },
+        {
+          "id": "structural:section:interfaces",
+          "kind": "structural",
+          "ok": true,
+          "score": 1
+        },
+        {
+          "id": "structural:forbidden:tbd",
+          "kind": "structural",
+          "ok": true,
+          "score": 1
+        },
+        {
+          "id": "structural:forbidden:todo",
+          "kind": "structural",
+          "ok": true,
+          "score": 1
+        },
+        {
+          "id": "structural:forbidden:placeholder",
+          "kind": "structural",
+          "ok": true,
+          "score": 1
+        },
+        {
+          "id": "structural:length:lines",
+          "kind": "structural",
+          "ok": true,
+          "score": 1
+        },
+        {
+          "id": "structural:frontmatter:stage",
+          "kind": "structural",
+          "ok": true,
+          "score": 1
+        },
+        {
+          "id": "structural:frontmatter:author",
+          "kind": "structural",
+          "ok": true,
+          "score": 1
+        },
+        {
+          "id": "structural:frontmatter:created-at",
+          "kind": "structural",
+          "ok": true,
+          "score": 1
+        }
+      ]
+    },
+    "spec-03-billing-rewrite": {
+      "passed": true,
+      "verifierResults": [
+        {
+          "id": "structural:section:acceptance-criteria",
+          "kind": "structural",
+          "ok": true,
+          "score": 1
+        },
+        {
+          "id": "structural:section:interfaces",
+          "kind": "structural",
+          "ok": true,
+          "score": 1
+        },
+        {
+          "id": "structural:forbidden:tbd",
+          "kind": "structural",
+          "ok": true,
+          "score": 1
+        },
+        {
+          "id": "structural:forbidden:todo",
+          "kind": "structural",
+          "ok": true,
+          "score": 1
+        },
+        {
+          "id": "structural:forbidden:placeholder",
+          "kind": "structural",
+          "ok": true,
+          "score": 1
+        },
+        {
+          "id": "structural:length:lines",
+          "kind": "structural",
+          "ok": true,
+          "score": 1
+        },
+        {
+          "id": "structural:frontmatter:stage",
+          "kind": "structural",
+          "ok": true,
+          "score": 1
+        },
+        {
+          "id": "structural:frontmatter:author",
+          "kind": "structural",
+          "ok": true,
+          "score": 1
+        },
+        {
+          "id": "structural:frontmatter:created-at",
+          "kind": "structural",
+          "ok": true,
+          "score": 1
+        }
+      ]
+    }
+  }
+}

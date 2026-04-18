@@ -1,0 +1,20 @@
+id: spec-03-billing-rewrite
+stage: spec
+input_prompt: |
+  Spec partial-refund API surface.
+fixture: ./spec-03-billing-rewrite/fixture.md
+expected:
+  structural:
+    required_sections:
+      - "Acceptance Criteria"
+      - "Interfaces"
+    forbidden_patterns:
+      - TBD
+      - TODO
+      - placeholder
+    required_frontmatter_keys:
+      - stage
+      - author
+      - created_at
+    min_lines: 8
+    max_lines: 120

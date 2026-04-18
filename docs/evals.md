@@ -9,7 +9,7 @@ measured score delta rather than subjective review. See
 | Wave | Version | Status | What it adds |
 | --- | --- | --- | --- |
 | 7.0 | 0.22.0 | ✅ shipped | `cclaw eval` CLI, directory scaffold, config loader, corpus loader, report writer |
-| 7.1 | 0.23.0 | planned | Structural verifiers + first corpus (24 cases) |
+| 7.1 | 0.23.0 | ✅ shipped | Structural verifier, baselines, 24-case seed corpus, PR-blocking CI gate |
 | 7.2 | 0.24.0 | planned | Rule-based verifiers + traceability checks |
 | 7.3 | 0.25.0 | planned | LLM judge + Tier A single-shot, nightly CI |
 | 7.4 | 0.26.0 | planned | Tier B agent with tools + sandbox |
@@ -87,37 +87,70 @@ cclaw eval --dry-run      # prints `apiKey: set`
 
 ```text
 cclaw eval [flags]
-  --stage=<id>       Limit to one flow stage (brainstorm|scope|design|spec|plan|tdd|review|ship).
-  --tier=<A|B|C>     Fidelity tier. A=single-shot, B=tools, C=workflow.
-  --schema-only      Structural verifiers only (Wave 7.1).
-  --rules            Structural + rule verifiers (Wave 7.2).
-  --judge            Include LLM judging (Wave 7.3; requires CCLAW_EVAL_API_KEY).
-  --dry-run          Validate config + corpus, print summary, do not execute.
-  --json             Emit machine-readable JSON on stdout.
-  --no-write         Skip writing the report to .cclaw/evals/reports/.
+  --stage=<id>         Limit to one flow stage (brainstorm|scope|design|spec|plan|tdd|review|ship).
+  --tier=<A|B|C>       Fidelity tier. A=single-shot, B=tools, C=workflow.
+  --schema-only        Structural verifiers only (Wave 7.1, default).
+  --rules              Structural + rule verifiers (Wave 7.2).
+  --judge              Include LLM judging (Wave 7.3; requires CCLAW_EVAL_API_KEY).
+  --dry-run            Validate config + corpus, print summary, do not execute.
+  --json               Emit machine-readable JSON on stdout.
+  --no-write           Skip writing the report to .cclaw/evals/reports/.
+  --update-baseline    Overwrite baselines from the current (passing) run.
+  --confirm            Acknowledge --update-baseline (prevents accidental resets).
 ```
 
 Exit codes:
 
-- `0` — success (dry-run, or every case passed)
-- `1` — one or more cases failed
+- `0` — success (dry-run, or every case passed and no baseline regression)
+- `1` — one or more cases failed, or any baseline-tracked verifier regressed
 - other — propagated from the usual cclaw error paths
+
+Baseline workflow:
+
+1. After intentional structural changes, run
+   `cclaw eval --schema-only --update-baseline --confirm`.
+2. Review the diff of `.cclaw/evals/baselines/<stage>.json` in git.
+3. Commit the baseline update in the same PR as the prompt/skill change.
+4. Subsequent PRs compare against the committed baselines; any verifier
+   that flipped from `ok:true` to `ok:false` triggers a critical failure
+   and exit code 1.
 
 ## Corpus schema (Wave 7.1 onward)
 
-One file per case: `.cclaw/evals/corpus/<stage>/<id>.yaml`.
+One file per case: `.cclaw/evals/corpus/<stage>/<id>.yaml`. An optional
+`fixture.md` alongside the case provides a pre-generated artifact the
+structural verifier runs against before the live agent loop arrives in
+Wave 7.3.
 
 ```yaml
 id: brainstorm-01
 stage: brainstorm
 input_prompt: |
   One short paragraph describing the user's task.
-context_files: []        # optional; copied into sandbox for Tier B/C
-expected:                 # optional verifier-specific hints
-  structure:
-    sections_required: ["Context", "Possible directions", "Open questions"]
-    min_directions: 3
+context_files: []                         # optional; Tier B/C sandbox copy list
+fixture: ./brainstorm-01/fixture.md       # Wave 7.1: artifact under test
+expected:
+  structural:
+    required_sections:                    # case-insensitive, match any heading level
+      - Directions
+      - Recommendation
+    forbidden_patterns:                   # case-insensitive substring check
+      - TBD
+      - TODO
+      - placeholder
+    required_frontmatter_keys:            # keys expected in leading YAML frontmatter
+      - stage
+      - author
+      - created_at
+    min_lines: 8
+    max_lines: 120
+    # min_chars: 200
+    # max_chars: 6000
 ```
+
+The canonical 24-case corpus used by cclaw's own CI lives under
+`tests/fixtures/eval-demo/.cclaw/evals/corpus/` and is the reference for
+authoring new cases.
 
 Rubric schema (Wave 7.3 onward): `.cclaw/evals/rubrics/<stage>.yaml`.
 
