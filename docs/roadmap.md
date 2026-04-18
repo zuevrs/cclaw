@@ -89,7 +89,7 @@ North star: skill and prompt changes are merged based on measured score deltas, 
   - `CCLAW_EVAL_MODEL` (default `glm-5.1`)
   - `CCLAW_EVAL_JUDGE_MODEL` (default = `CCLAW_EVAL_MODEL`)
   - `CCLAW_EVAL_DAILY_USD_CAP` (default unset = no cap; explicit opt-in)
-- **D-EVAL-03**: Tier C in this phase = multi-stage workflow run via SDK with function-calling. Real IDE harness integration (claude-code / cursor-agent through a GLM proxy) is **deferred to Phase 8**.
+- **D-EVAL-03**: Workflow mode (previously called Tier C) in this phase = multi-stage workflow run via SDK with function-calling. Real IDE harness integration (claude-code / cursor-agent through a GLM proxy) is **deferred to Phase 8**. Naming note: `fixture/agent/workflow` replaced `Tier A/B/C` in v0.28.0.
 - **D-EVAL-04**: Two model roles — Agent-under-test (AUT) and Judge. Both default to the same model; `CCLAW_EVAL_JUDGE_MODEL` allows cross-model judging for research.
 - **D-EVAL-05**: Each step ships as its own PR + version bump. Steps are additive and independently valuable.
 
@@ -304,21 +304,52 @@ Exit criteria:
 - Report shows per-stage scores + cross-stage consistency.
 - 3 workflow cases pass consistently on main.
 
-### Step 6 — Polish & Observability (v0.28.0)
+### Step 6 — Polish & Observability (v0.28.0) — shipped
 
-Scope:
+User feedback after Step 5 reframed this phase: drop the HTML report,
+rename "Tier A/B/C" to professional mode names, and fix the "silent,
+long, unclear" feel of `cclaw eval` runs.
 
-- HTML report with dark theme, baseline diff, per-stage drill-down, publishable as GitHub Pages artifact.
-- Cross-model comparison: run same corpus against an alternate `CCLAW_EVAL_MODEL` (e.g., `gpt-5`, `claude-sonnet-4-5`) and diff results.
-- Baseline signing: SHA-256 + timestamps committed to git; `cclaw eval --update-baseline` requires `--confirm` flag.
-- `cclaw eval --init` interactive setup (writes `.env`, generates first corpus case).
-- Final `docs/evals.md` guide + README quickstart.
+Scope (all shipped):
 
-Exit criteria:
+- **Naming:** `tier A/B/C` renamed to `mode fixture/agent/workflow`
+  across CLI, config, env, reports, diffs, and tests. `--tier=A|B|C` /
+  `defaultTier` / `CCLAW_EVAL_TIER` stay wired as deprecated aliases
+  with a one-shot stderr warning.
+- **Progress logger:** stderr-backed one-line-per-case output, enabled
+  by default. `--quiet` silences it; `--dry-run` / `--json` keep stderr
+  clean automatically. Workflow mode emits per-stage start/end events;
+  the LLM client surfaces its internal retry backoff sleeps via an
+  onRetry observer.
+- **Background execution:** `cclaw eval --background` spawns a
+  detached child, writes combined output to
+  `.cclaw/evals/runs/<id>/run.log`, and returns immediately. Attach
+  later with `cclaw eval runs list|status <id|latest>|tail <id|latest>`.
+- **Per-run cost cap:** `--max-cost-usd=<n>` / `CCLAW_EVAL_MAX_COST_USD`
+  enforce an in-memory USD limit independent from the daily ledger cap,
+  with dedicated `RunCostCapExceededError`.
+- **Cross-model comparison:** `cclaw eval --compare-model=<id>` replays
+  the corpus against an alternative model via `runEval({ modelOverride })`
+  and prints a pass/fail/cost diff. Exit code 1 on regression.
+- **Baseline signing:** every baseline written by cclaw now carries a
+  sha256 digest over its canonical `{schemaVersion, stage, cases}` block
+  plus a `signedAt` timestamp. `loadBaseline` verifies the digest when
+  present and throws `BaselineSignatureError` on mismatch so hand-edited
+  baselines fail loudly.
 
-- HTML report renders locally and in CI.
-- Cross-model diff works with one command swap.
-- Docs cover setup, authoring cases, authoring rubrics, troubleshooting.
+Deferred from Step 6:
+
+- Interactive `cclaw eval --init` helper — still useful, but the work
+  grew beyond Step 6's scope; tracked for a later minor release.
+- Hardening `cclaw init` to support an `--eval-only` path — same
+  rationale; requires a broader refactor of `src/install.ts`.
+
+Exit criteria (met):
+
+- `cclaw eval` emits visible progress by default; long runs can be
+  backgrounded and tailed without losing state.
+- Baseline files are tamper-evident.
+- Cross-model comparison works with a single flag swap.
 
 ### Deferred to Phase 8+
 

@@ -11,10 +11,10 @@ measured score delta rather than subjective review. See
 | 0 | 0.22.0 | shipped | `cclaw eval` CLI, directory scaffold, config loader, corpus loader, report writer |
 | 1 | 0.23.0 | shipped | Structural verifier, baselines, 24-case seed corpus, PR-blocking CI gate |
 | 2 | 0.24.0 | shipped | Rule-based verifiers (keywords, regex, counts, uniqueness) + cross-stage traceability, 40-case corpus |
-| 3 | 0.25.0 | shipped | LLM judge + Tier A single-shot, cost guard, nightly CI |
-| 4 | 0.26.0 | shipped | Tier B agent with tools + sandbox (read/write/glob/grep) |
-| 5 | 0.27.0 | shipped | Tier C multi-stage workflow, cross-artifact consistency, `cclaw eval diff`, release CI |
-| 6 | 0.28.0 | planned | HTML reports, cross-model diff, polish |
+| 3 | 0.25.0 | shipped | LLM judge + single-shot agent (now `fixture` mode with `--judge`), cost guard, nightly CI |
+| 4 | 0.26.0 | shipped | Agent mode: multi-turn AUT with sandbox-confined tools (read/write/glob/grep) |
+| 5 | 0.27.0 | shipped | Workflow mode: multi-stage run, cross-artifact consistency, `cclaw eval diff`, release CI |
+| 6 | 0.28.0 | shipped | Mode rename (`fixture/agent/workflow`), progress logger, `--background` + `runs`, `--compare-model`, `--max-cost-usd`, signed baselines |
 
 ## Quickstart
 
@@ -50,7 +50,7 @@ omitted; defaults apply. Unknown keys are rejected.
 provider: zai
 baseUrl: https://api.z.ai/api/coding/paas/v4
 model: glm-5.1
-defaultTier: A        # A | B | C
+defaultMode: fixture  # fixture | agent | workflow (legacy defaultTier: A|B|C still works)
 timeoutMs: 120000
 maxRetries: 2
 # dailyUsdCap: 5      # optional hard cap; unset = no cap
@@ -71,17 +71,19 @@ repo — only `CCLAW_EVAL_API_KEY` is supplied this way.
 | `CCLAW_EVAL_MODEL` | Override `model` (used by both agent-under-test and judge unless `judgeModel` is set). |
 | `CCLAW_EVAL_JUDGE_MODEL` | Override `judgeModel` for cross-model judging. |
 | `CCLAW_EVAL_PROVIDER` | Override the free-form `provider` label shown in reports. |
-| `CCLAW_EVAL_TIER` | Default tier (A/B/C) when `--tier` is not supplied. |
-| `CCLAW_EVAL_DAILY_USD_CAP` | Enable hard-stop on estimated daily spend. Unset = no cap. |
+| `CCLAW_EVAL_MODE` | Default mode (`fixture` / `agent` / `workflow`) when `--mode` is not supplied. |
+| `CCLAW_EVAL_TIER` | Deprecated alias for `CCLAW_EVAL_MODE` (A=fixture, B=agent, C=workflow). |
+| `CCLAW_EVAL_DAILY_USD_CAP` | Enable hard-stop on estimated daily spend (persisted per UTC day). Unset = no cap. |
+| `CCLAW_EVAL_MAX_COST_USD` | Per-run in-memory USD cap; independent from the daily cap. |
 | `CCLAW_EVAL_TIMEOUT_MS` | Per-call timeout in milliseconds. |
 | `CCLAW_EVAL_MAX_RETRIES` | Retry budget on transient API errors. |
 | `CCLAW_EVAL_JUDGE_SAMPLES` | Number of samples the LLM judge aggregates per artifact. Must be odd (default: `3`). |
 | `CCLAW_EVAL_JUDGE_TEMPERATURE` | Sampling temperature for the judge call. Default `0.3`. |
-| `CCLAW_EVAL_AGENT_TEMPERATURE` | Sampling temperature for Tier A single-shot agent runs. Default `0.2`. |
-| `CCLAW_EVAL_TOOL_MAX_TURNS` | Tier B turn cap for the with-tools loop. Default `8`. |
+| `CCLAW_EVAL_AGENT_TEMPERATURE` | Sampling temperature for single-shot / agent-mode runs. Default `0.2`. |
+| `CCLAW_EVAL_TOOL_MAX_TURNS` | Agent-mode turn cap for the with-tools loop. Default `8`. |
 | `CCLAW_EVAL_TOOL_MAX_ARG_BYTES` | Max bytes accepted for a single tool-call arguments payload. Default `65536`. |
 | `CCLAW_EVAL_TOOL_MAX_RESULT_BYTES` | Max bytes returned to the model per tool call (truncated with marker). Default `32768`. |
-| `CCLAW_EVAL_WORKFLOW_MAX_TOTAL_TURNS` | Tier C ceiling on total turns across every stage in one workflow case. Default `40`. |
+| `CCLAW_EVAL_WORKFLOW_MAX_TOTAL_TURNS` | Workflow-mode ceiling on total turns across every stage in one workflow case. Default `40`. |
 
 Example local setup (z.ai GLM):
 
@@ -94,17 +96,59 @@ cclaw eval --dry-run      # prints `apiKey: set`
 
 ```text
 cclaw eval [flags]
-  --stage=<id>         Limit to one flow stage (brainstorm|scope|design|spec|plan|tdd|review|ship).
-  --tier=<A|B|C>       Fidelity tier. A=single-shot, B=tools, C=workflow.
-  --schema-only        Structural verifiers only (sections / forbidden / lengths / frontmatter).
-  --rules              Structural + rule verifiers (keywords, regex, counts, uniqueness) + cross-stage traceability.
-  --judge              Include the LLM judge (median-of-N rubric scoring; requires CCLAW_EVAL_API_KEY).
-  --dry-run            Validate config + corpus, print summary, do not execute.
-  --json               Emit machine-readable JSON on stdout.
-  --no-write           Skip writing the report to .cclaw/evals/reports/.
-  --update-baseline    Overwrite baselines from the current (passing) run.
-  --confirm            Acknowledge --update-baseline (prevents accidental resets).
+  --stage=<id>           Limit to one flow stage (brainstorm|scope|design|spec|plan|tdd|review|ship).
+  --mode=<fixture|agent|workflow>
+                         fixture  = verify existing artifacts (structural / rules / judge).
+                         agent    = LLM drafts one stage's artifact in a sandbox with tools.
+                         workflow = LLM runs the full multi-stage flow.
+  --tier=<A|B|C>         Deprecated alias for --mode (A=fixture, B=agent, C=workflow).
+  --schema-only          Structural verifiers only (sections / forbidden / lengths / frontmatter).
+  --rules                Structural + rule verifiers (keywords, regex, counts, uniqueness) + traceability.
+  --judge                Include the LLM judge (median-of-N rubric scoring; requires CCLAW_EVAL_API_KEY).
+  --dry-run              Validate config + corpus, print summary, do not execute.
+  --json                 Emit machine-readable JSON on stdout.
+  --no-write             Skip writing the report to .cclaw/evals/reports/.
+  --update-baseline      Overwrite baselines from the current (passing) run.
+  --confirm              Acknowledge --update-baseline (prevents accidental resets).
+  --quiet                Silence the stderr progress logger.
+  --max-cost-usd=<n>     Abort when committed USD spend crosses <n> (per-run cap).
+  --compare-model=<id>   Run the corpus twice (configured model + <id>) and diff results.
+  --background           Detach the run, write output to .cclaw/evals/runs/<id>/run.log, return now.
+
+Subcommands:
+  cclaw eval diff <old> <new>                 Compare two reports; exit 1 on regression.
+  cclaw eval runs                             List backgrounded runs.
+  cclaw eval runs status <id|latest>          Show status for a specific run.
+  cclaw eval runs tail <id|latest>            Print the run log.
 ```
+
+### Observability
+
+`cclaw eval` prints a one-line-per-case progress log to stderr by
+default, e.g.:
+
+```
+[cclaw eval] start mode=workflow cases=3
+[cclaw eval] [1/3] workflow-01 (plan) ...
+[cclaw eval]   stage brainstorm ok in 8.2s $0.0041
+[cclaw eval]   stage scope ok in 6.1s $0.0029
+[cclaw eval] retry llm attempt 2/3 in 1.0s (LLM transport error.)
+[cclaw eval] [1/3] workflow-01 (plan) PASS in 47.3s $0.0187
+[cclaw eval] done pass=3 fail=0 total=3 in 2m18s
+```
+
+Pair with `--background` to free the terminal on long workflow-mode
+runs and attach later with `cclaw eval runs tail latest`.
+
+### Signed baselines
+
+Baselines written from v0.28.0 onward carry a sha256 digest over their
+canonical `{schemaVersion, stage, cases}` block plus a `signedAt`
+timestamp. `loadBaseline` verifies the digest when present and throws
+`BaselineSignatureError` on mismatch, so hand-edited baselines fail
+loudly instead of silently shifting the regression bar. Older baselines
+(no signature) continue to load unchanged and acquire a signature the
+next time they are regenerated.
 
 Exit codes:
 
@@ -133,7 +177,7 @@ id: brainstorm-01
 stage: brainstorm
 input_prompt: |
   One short paragraph describing the user's task.
-context_files: []                         # optional; Tier B/C sandbox copy list
+context_files: []                         # optional; agent/workflow sandbox copy list
 fixture: ./brainstorm-01/fixture.md       # artifact under test
 expected:
   structural:
@@ -156,7 +200,7 @@ expected:
 
 The canonical 41-case corpus used by cclaw's own CI lives under
 `tests/fixtures/eval-demo/.cclaw/evals/corpus/` (24 structural + 16
-rules + 1 Tier B demo) and is the reference for authoring new cases.
+rules + 1 agent-mode demo) and is the reference for authoring new cases.
 
 ### Rule-based expectations (`expected.rules`)
 
@@ -304,16 +348,16 @@ Judge scores appear as a dedicated "Judge scores" table in the
 generated markdown report alongside per-check rationales from the first
 sample.
 
-## Tier B: agent with tools
+## Agent mode (formerly "Tier B")
 
-Tier B is a multi-turn AUT. The runner:
+`--mode=agent` runs a multi-turn AUT for a single stage. The runner:
 
 1. Provisions a per-case sandbox at `os.tmpdir()/cclaw-eval-<uuid>/`.
 2. Copies every path listed in `context_files` into the sandbox
    (subdirectories preserved). Entries must resolve inside the
    project root.
 3. Loads the stage `SKILL.md` as the system prompt (same contract as
-   Tier A).
+   fixture mode with `--judge`).
 4. Runs up to `toolMaxTurns` chat turns with OpenAI-style
    function-calling. Each tool call:
    - resolves its path inside the sandbox (absolute paths, `..`,
@@ -337,7 +381,8 @@ Artifact resolution prefers a sandbox file (`artifact.md`,
 `artifact.txt`, `ARTIFACT.md`) if the model writes one; otherwise the
 terminal assistant message is the artifact.
 
-Tier B cases look identical to Tier A plus a `context_files` list:
+Agent-mode cases look identical to fixture-mode cases plus a
+`context_files` list:
 
 ```yaml
 id: spec-06-tier-b-demo
@@ -362,9 +407,9 @@ Exit criteria (met for v0.26.0):
   refused and recorded in `deniedPaths`.
 - `MaxTurnsExceededError` aborts the case cleanly.
 
-## Tier C: multi-stage workflow
+## Workflow mode (formerly "Tier C")
 
-Tier C chains the Tier B with-tools agent across a sequence of stages
+`--mode=workflow` chains the agent-mode with-tools loop across a sequence of stages
 (`brainstorm → scope → design → spec → plan`, any non-empty subset is
 allowed) so a single eval case simulates the full early-lifecycle arc.
 Runs live under `.cclaw/evals/corpus/workflows/*.yaml`, not per-stage
@@ -396,7 +441,7 @@ Cross-artifact consistency checks run after all stages complete
   must NOT appear in any listed `stages`. Vacuously satisfied when the
   anchor itself is absent.
 
-A Tier C case YAML mirrors the single-stage shape but declares a
+A workflow-mode case YAML mirrors the single-stage shape but declares a
 `stages` array and an optional `consistency` block:
 
 ```yaml
@@ -426,10 +471,10 @@ consistency:
       stages: [plan]
 ```
 
-Run the full Tier C corpus with judge rubrics attached:
+Run the full workflow corpus with judge rubrics attached:
 
 ```bash
-cclaw eval --tier=C --judge
+cclaw eval --mode=workflow --judge
 ```
 
 Use `CCLAW_EVAL_WORKFLOW_MAX_TOTAL_TURNS` (or `workflowMaxTotalTurns` in
@@ -448,10 +493,10 @@ report JSON files under `.cclaw/evals/reports/`. Each selector may be:
 - the literal `latest` — the most recent report by mtime.
 
 The diff prints summary deltas, per-case pass/fail transitions,
-verifier score drops, and (for Tier C) stage-level duration and cost
-deltas. Exit code is `1` whenever any case regressed or any verifier
-dropped; `0` when the diff is clean. Add `--json` to get the structured
-payload for downstream automation.
+verifier score drops, and (for workflow mode) stage-level duration and
+cost deltas. Exit code is `1` whenever any case regressed or any
+verifier dropped; `0` when the diff is clean. Add `--json` to get the
+structured payload for downstream automation.
 
 Exit criteria (met for v0.27.0):
 
@@ -459,8 +504,8 @@ Exit criteria (met for v0.27.0):
   assert both stage chaining and error propagation.
 - Consistency verifier emits deterministic per-rule verifier results
   with stable ids.
-- `cclaw eval --tier=C` produces a `WorkflowRunSummary` on each case
-  with per-stage metrics; `cclaw eval diff` exits non-zero on
+- `cclaw eval --mode=workflow` produces a `WorkflowRunSummary` on each
+  case with per-stage metrics; `cclaw eval diff` exits non-zero on
   regressions.
 
 ## Cost guard
@@ -493,8 +538,8 @@ Three workflows share the corpus under `tests/fixtures/eval-demo/`:
 | Workflow | Triggers | Verifiers | Needs secrets | Gates PRs |
 | --- | --- | --- | --- | --- |
 | `evals-structural.yml` | `pull_request`, `workflow_dispatch` | Structural + rules + traceability | No | Yes |
-| `evals-nightly.yml` | `schedule` (03:17 UTC), `workflow_dispatch` | Structural + rules + judge (Tier A) | `CCLAW_EVAL_API_KEY`, `CCLAW_EVAL_BASE_URL` | No (advisory) |
-| `evals-release.yml` | `push` to `v*` tag, `workflow_dispatch` | Tier C workflow + judge + consistency | `CCLAW_EVAL_API_KEY`, `CCLAW_EVAL_BASE_URL` | No (advisory) |
+| `evals-nightly.yml` | `schedule` (03:17 UTC), `workflow_dispatch` | Structural + rules + judge (fixture mode) | `CCLAW_EVAL_API_KEY`, `CCLAW_EVAL_BASE_URL` | No (advisory) |
+| `evals-release.yml` | `push` to `v*` tag, `workflow_dispatch` | Workflow mode + judge + consistency | `CCLAW_EVAL_API_KEY`, `CCLAW_EVAL_BASE_URL` | No (advisory) |
 
 The nightly and release workflows skip automatically when the API-key
 secret is not configured — safe default for forks and during rollout.
@@ -506,11 +551,11 @@ artifacts with a 30–90 day retention.
 
 ## Architecture
 
-- **Agent-under-test (AUT)** — consumes the stage skill and produces an artifact. Three fidelity tiers.
+- **Agent-under-test (AUT)** — consumes the stage skill and produces an artifact. Three modes: `fixture` (verify existing), `agent` (draft one stage), `workflow` (run the full chain).
 - **Judge** — LLM judge step; evaluates an artifact against a rubric. Structured JSON output, median-of-3.
-- **Verifiers** — five kinds: `structural`, `rules`, `judge`, `workflow`, `consistency`. Cheaper tiers run first and can short-circuit expensive ones; `consistency` is Tier C-only and deterministic.
-- **Sandbox** — Tier B step onward. Every case runs in `os.tmpdir()/cclaw-eval-<uuid>/` with tool access limited to that path.
-- **LLM client** — official `openai` npm package pointed at any OpenAI-compatible `baseURL`. Wired alongside the LLM judge step.
+- **Verifiers** — five kinds: `structural`, `rules`, `judge`, `workflow`, `consistency`. Cheaper verifiers run first and can short-circuit expensive ones; `consistency` runs only in workflow mode and is deterministic.
+- **Sandbox** — used from agent mode onward. Every case runs in `os.tmpdir()/cclaw-eval-<uuid>/` with tool access limited to that path.
+- **LLM client** — official `openai` npm package pointed at any OpenAI-compatible `baseURL`. Exposes an `onRetry` observer so the progress logger can surface backoff sleeps in real time.
 
 ## Security & cost
 
