@@ -15,13 +15,15 @@ import { loadEvalConfig } from "./config-loader.js";
 import {
   type CostGuard,
   createCostGuard,
-  DailyCostCapExceededError
+  DailyCostCapExceededError,
+  RunCostCapExceededError
 } from "./cost-guard.js";
 import {
   createEvalClient,
   EvalLlmError,
   type EvalLlmClient
 } from "./llm-client.js";
+import { noopProgressLogger, type ProgressLogger } from "./progress.js";
 import { loadAllRubrics } from "./rubric-loader.js";
 import type {
   BaselineDelta,
@@ -66,6 +68,19 @@ export interface RunEvalOptions {
    * without hitting the network.
    */
   llmClient?: EvalLlmClient;
+  /**
+   * Optional progress logger. The CLI wires a stderr-backed logger by
+   * default so users see one-line updates during long runs; tests and
+   * programmatic callers can inject a silent (noop) logger or capture
+   * events for assertions. When omitted, progress is silenced.
+   */
+  progress?: ProgressLogger;
+  /**
+   * Per-run USD cap. Enforced in-memory; independent from the daily cap
+   * (`dailyUsdCap` / `CCLAW_EVAL_DAILY_USD_CAP`) that persists across
+   * invocations. Undefined means no cap.
+   */
+  maxCostUsd?: number;
 }
 
 export interface DryRunSummary {
@@ -210,6 +225,9 @@ interface RunWorkflowContext {
   client?: EvalLlmClient;
   costGuard: CostGuard;
   rubrics: Map<FlowStage, RubricDoc>;
+  progress: ProgressLogger;
+  caseIndex: number;
+  totalCases: number;
 }
 
 function stageJudgeHint(step: WorkflowStageStep): {
@@ -229,7 +247,7 @@ function stageJudgeHint(step: WorkflowStageStep): {
 }
 
 async function runWorkflowCase(ctx: RunWorkflowContext): Promise<EvalCaseResult> {
-  const { projectRoot, workflow, plannedMode, flags, config, client, rubrics } = ctx;
+  const { projectRoot, workflow, plannedMode, flags, config, client, rubrics, progress, caseIndex, totalCases } = ctx;
   const started = Date.now();
   const verifierResults: VerifierResult[] = [];
   let caseCostUsd = 0;
@@ -265,10 +283,29 @@ async function runWorkflowCase(ctx: RunWorkflowContext): Promise<EvalCaseResult>
       workflow,
       config,
       projectRoot,
-      client
+      client,
+      onStageStart: (stage) =>
+        progress.emit({
+          kind: "stage-start",
+          caseId: workflow.id,
+          stage,
+          index: caseIndex,
+          total: totalCases
+        }),
+      onStageEnd: (stage, stageResult) =>
+        progress.emit({
+          kind: "stage-end",
+          caseId: workflow.id,
+          stage,
+          index: caseIndex,
+          total: totalCases,
+          passed: true,
+          durationMs: stageResult.durationMs,
+          ...(stageResult.usageUsd > 0 ? { costUsd: stageResult.usageUsd } : {})
+        })
     });
   } catch (err) {
-    if (err instanceof DailyCostCapExceededError) throw err;
+    if (err instanceof DailyCostCapExceededError || err instanceof RunCostCapExceededError) throw err;
     const retryable = err instanceof EvalLlmError ? err.retryable : false;
     const maxTurns = err instanceof MaxTurnsExceededError ? err.turns : undefined;
     verifierResults.push({
@@ -365,7 +402,7 @@ async function runWorkflowCase(ctx: RunWorkflowContext): Promise<EvalCaseResult>
           });
         }
       } catch (err) {
-        if (err instanceof DailyCostCapExceededError) throw err;
+        if (err instanceof DailyCostCapExceededError || err instanceof RunCostCapExceededError) throw err;
         const retryable = err instanceof EvalLlmError ? err.retryable : false;
         verifierResults.push({
           kind: "judge",
@@ -457,7 +494,7 @@ async function runCase(ctx: RunCaseContext): Promise<EvalCaseResult> {
           }
         });
       } catch (err) {
-        if (err instanceof DailyCostCapExceededError) throw err;
+        if (err instanceof DailyCostCapExceededError || err instanceof RunCostCapExceededError) throw err;
         const retryable = err instanceof EvalLlmError ? err.retryable : false;
         verifierResults.push({
           kind: "workflow",
@@ -497,7 +534,7 @@ async function runCase(ctx: RunCaseContext): Promise<EvalCaseResult> {
           }
         });
       } catch (err) {
-        if (err instanceof DailyCostCapExceededError) throw err;
+        if (err instanceof DailyCostCapExceededError || err instanceof RunCostCapExceededError) throw err;
         const retryable = err instanceof EvalLlmError ? err.retryable : false;
         const maxTurns = err instanceof MaxTurnsExceededError ? err.turns : undefined;
         verifierResults.push({
@@ -602,7 +639,7 @@ async function runCase(ctx: RunCaseContext): Promise<EvalCaseResult> {
         );
         verifierResults.push(...judgeVerifiers);
       } catch (err) {
-        if (err instanceof DailyCostCapExceededError) throw err;
+        if (err instanceof DailyCostCapExceededError || err instanceof RunCostCapExceededError) throw err;
         const retryable = err instanceof EvalLlmError ? err.retryable : false;
         verifierResults.push({
           kind: "judge",
@@ -732,11 +769,28 @@ export async function runEval(options: RunEvalOptions): Promise<DryRunSummary | 
     return summary;
   }
 
-  const costGuard = createCostGuard(options.projectRoot, config);
+  const costGuard = createCostGuard(
+    options.projectRoot,
+    config,
+    options.maxCostUsd !== undefined ? { runCapUsd: options.maxCostUsd } : {}
+  );
+  const progress = options.progress ?? noopProgressLogger();
   let wrappedClient: EvalLlmClient | undefined;
   const clientNeeded = flags.runJudge || plannedMode === "workflow";
   if (clientNeeded) {
-    const base = options.llmClient ?? createEvalClient(config);
+    const base =
+      options.llmClient ??
+      createEvalClient(config, {
+        onRetry: (event) =>
+          progress.emit({
+            kind: "retry",
+            caseId: "llm",
+            attempt: event.attempt,
+            maxAttempts: event.maxAttempts,
+            waitMs: event.waitMs,
+            reason: event.error.message
+          })
+      });
     wrappedClient = wrapClientWithCostGuard(
       base,
       costGuard,
@@ -750,35 +804,80 @@ export async function runEval(options: RunEvalOptions): Promise<DryRunSummary | 
 
   const now = new Date().toISOString();
   const caseResults: EvalCaseResult[] = [];
+  const totalPlannedCases =
+    plannedMode === "workflow" ? workflowCorpus.length : corpus.length;
+  const runStarted = Date.now();
+  progress.emit({
+    kind: "run-start",
+    mode: plannedMode,
+    totalCases: totalPlannedCases
+  });
   if (plannedMode === "workflow") {
-    for (const wf of workflowCorpus) {
-      caseResults.push(
-        await runWorkflowCase({
-          projectRoot: options.projectRoot,
-          workflow: wf,
-          plannedMode,
-          flags,
-          config,
-          client: wrappedClient,
-          costGuard,
-          rubrics
-        })
-      );
+    for (let i = 0; i < workflowCorpus.length; i += 1) {
+      const wf = workflowCorpus[i]!;
+      progress.emit({
+        kind: "case-start",
+        caseId: wf.id,
+        stage: wf.stages[wf.stages.length - 1]?.name ?? "workflow",
+        index: i + 1,
+        total: workflowCorpus.length
+      });
+      const result = await runWorkflowCase({
+        projectRoot: options.projectRoot,
+        workflow: wf,
+        plannedMode,
+        flags,
+        config,
+        client: wrappedClient,
+        costGuard,
+        rubrics,
+        progress,
+        caseIndex: i + 1,
+        totalCases: workflowCorpus.length
+      });
+      progress.emit({
+        kind: "case-end",
+        caseId: wf.id,
+        stage: result.stage,
+        index: i + 1,
+        total: workflowCorpus.length,
+        passed: result.passed,
+        durationMs: result.durationMs,
+        ...(result.costUsd !== undefined ? { costUsd: result.costUsd } : {})
+      });
+      caseResults.push(result);
     }
   } else {
-    for (const item of corpus) {
-      caseResults.push(
-        await runCase({
-          projectRoot: options.projectRoot,
-          caseEntry: item,
-          plannedMode,
-          flags,
-          config,
-          client: wrappedClient,
-          costGuard,
-          rubrics
-        })
-      );
+    for (let i = 0; i < corpus.length; i += 1) {
+      const item = corpus[i]!;
+      progress.emit({
+        kind: "case-start",
+        caseId: item.id,
+        stage: item.stage,
+        index: i + 1,
+        total: corpus.length
+      });
+      const result = await runCase({
+        projectRoot: options.projectRoot,
+        caseEntry: item,
+        plannedMode,
+        flags,
+        config,
+        client: wrappedClient,
+        costGuard,
+        rubrics
+      });
+      progress.emit({
+        kind: "case-end",
+        caseId: item.id,
+        stage: item.stage,
+        index: i + 1,
+        total: corpus.length,
+        passed: result.passed,
+        durationMs: result.durationMs,
+        ...(result.costUsd !== undefined ? { costUsd: result.costUsd } : {})
+      });
+      caseResults.push(result);
     }
   }
 
@@ -808,6 +907,14 @@ export async function runEval(options: RunEvalOptions): Promise<DryRunSummary | 
     baselines
   );
   if (baselineDelta) report.baselineDelta = baselineDelta;
+
+  progress.emit({
+    kind: "run-end",
+    totalCases: summary.totalCases,
+    passed: summary.passed,
+    failed: summary.failed,
+    durationMs: Date.now() - runStarted
+  });
 
   return report;
 }

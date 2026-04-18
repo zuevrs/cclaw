@@ -15,6 +15,7 @@ import { createDefaultConfig, createProfileConfig } from "./config.js";
 import { detectHarnesses } from "./init-detect.js";
 import { HARNESS_ADAPTERS } from "./harness-adapters.js";
 import { runEval } from "./eval/runner.js";
+import { createStderrProgressLogger } from "./eval/progress.js";
 import { writeBaselinesFromReport } from "./eval/baseline.js";
 import { writeJsonReport, writeMarkdownReport } from "./eval/report.js";
 import { formatDiffMarkdown, runEvalDiff } from "./eval/diff.js";
@@ -58,6 +59,8 @@ interface ParsedArgs {
   evalNoWrite?: boolean;
   evalUpdateBaseline?: boolean;
   evalConfirm?: boolean;
+  evalQuiet?: boolean;
+  evalMaxCostUsd?: number;
   /** Optional subcommand after `eval`. Currently only `diff` is supported. */
   evalSubcommand?: "diff";
   /** Positional arguments for eval subcommands (e.g. `diff <old> <new>`). */
@@ -109,6 +112,11 @@ Commands:
                     --no-write           Skip writing the report to .cclaw/evals/reports/.
                     --update-baseline    Overwrite baselines from the current run (requires --confirm).
                     --confirm            Acknowledge --update-baseline (prevents accidental resets).
+                    --quiet              Silence the stderr progress logger (default: emit one
+                                         line per case / stage to stderr so long runs are visible).
+                    --max-cost-usd=<n>   Abort the run if committed USD spend crosses <n>
+                                         (independent from the daily cap). Also readable from
+                                         CCLAW_EVAL_MAX_COST_USD.
 
              Subcommands:
                     diff <old> <new>     Compare two reports under .cclaw/evals/reports/.
@@ -468,6 +476,22 @@ function printDoctorText(
   }
 }
 
+function resolveMaxCostOption(
+  fromCli: number | undefined,
+  env: NodeJS.ProcessEnv
+): { maxCostUsd?: number } {
+  if (fromCli !== undefined) return { maxCostUsd: fromCli };
+  const raw = env.CCLAW_EVAL_MAX_COST_USD;
+  if (raw === undefined || raw.trim() === "") return {};
+  const value = Number(raw);
+  if (!Number.isFinite(value) || value <= 0) {
+    throw new Error(
+      `CCLAW_EVAL_MAX_COST_USD must be a positive number, got: ${raw}`
+    );
+  }
+  return { maxCostUsd: value };
+}
+
 function parseArgs(argv: string[]): ParsedArgs {
   const parsed: ParsedArgs = {};
 
@@ -611,12 +635,30 @@ function parseArgs(argv: string[]): ParsedArgs {
       parsed.evalConfirm = true;
       continue;
     }
+    if (flag.startsWith("--max-cost-usd=")) {
+      const raw = flag.replace("--max-cost-usd=", "").trim();
+      const value = Number(raw);
+      if (!Number.isFinite(value) || value <= 0) {
+        throw new Error(
+          `--max-cost-usd requires a positive number, got: ${raw}`
+        );
+      }
+      parsed.evalMaxCostUsd = value;
+      continue;
+    }
   }
 
   // `--json` is shared between doctor and eval. Disambiguate by command.
   if (parsed.command === "eval" && parsed.doctorJson === true) {
     parsed.evalJson = true;
     parsed.doctorJson = undefined;
+  }
+  // `--quiet` on `eval` silences the stderr progress logger. On doctor it
+  // continues to mean "print only failing checks" — the flag slot is the
+  // same, the semantics depend on which command owns the invocation.
+  if (parsed.command === "eval" && parsed.doctorQuiet === true) {
+    parsed.evalQuiet = true;
+    parsed.doctorQuiet = undefined;
   }
 
   return parsed;
@@ -754,6 +796,13 @@ async function runCommand(parsed: ParsedArgs, ctx: CliContext): Promise<number> 
   }
 
   if (command === "eval") {
+    const wantProgress =
+      parsed.evalQuiet !== true &&
+      parsed.dryRun !== true &&
+      parsed.evalJson !== true;
+    const progress = wantProgress
+      ? createStderrProgressLogger({ writer: (s) => ctx.stderr.write(s) })
+      : undefined;
     const result = await runEval({
       projectRoot: ctx.cwd,
       stage: parsed.evalStage as Parameters<typeof runEval>[0]["stage"],
@@ -761,7 +810,9 @@ async function runCommand(parsed: ParsedArgs, ctx: CliContext): Promise<number> 
       schemaOnly: parsed.evalSchemaOnly === true,
       rules: parsed.evalRules === true,
       judge: parsed.evalJudge === true,
-      dryRun: parsed.dryRun === true
+      dryRun: parsed.dryRun === true,
+      ...(progress ? { progress } : {}),
+      ...resolveMaxCostOption(parsed.evalMaxCostUsd, process.env)
     });
 
     if ("kind" in result) {

@@ -363,6 +363,18 @@ export interface BaselineSnapshot {
   cclawVersion: string;
   /** Keyed by `EvalCase.id` so unchanged cases produce zero diff. */
   cases: Record<string, BaselineCaseEntry>;
+  /**
+   * Tamper-evident signature computed as sha256 over the canonical JSON
+   * encoding of `{ schemaVersion, stage, cases }`. Present on files
+   * written by cclaw >= 0.28.0; older baselines load with `signature`
+   * absent and the loader skips verification.
+   */
+  signature?: {
+    algorithm: "sha256";
+    digest: string;
+    /** ISO timestamp of when the digest was computed. */
+    signedAt: string;
+  };
 }
 
 export interface BaselineCaseEntry {

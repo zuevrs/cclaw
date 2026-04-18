@@ -14,6 +14,7 @@
  * Writes are gated behind an explicit `--update-baseline --confirm` pair at
  * the CLI layer so accidental resets do not slip into PRs.
  */
+import { createHash } from "node:crypto";
 import fs from "node:fs/promises";
 import path from "node:path";
 import { EVALS_ROOT, CCLAW_VERSION } from "../constants.js";
@@ -32,8 +33,67 @@ import type {
 
 export const BASELINE_SCHEMA_VERSION = 1;
 
+/**
+ * Thrown when a signed baseline's on-disk digest does not match the
+ * canonical encoding of its `{ schemaVersion, stage, cases }` block.
+ * Callers should treat this as a hard failure: the baseline was either
+ * hand-edited or corrupted and cannot be trusted for regression gating.
+ */
+export class BaselineSignatureError extends Error {
+  readonly file: string;
+  readonly expected: string;
+  readonly actual: string;
+
+  constructor(opts: { file: string; expected: string; actual: string }) {
+    super(
+      `Baseline signature mismatch at ${opts.file}: expected ${opts.expected}, got ${opts.actual}. ` +
+        `The file was modified outside of \`cclaw eval --update-baseline\`. ` +
+        `Re-run with --update-baseline --confirm to re-sign a known-good snapshot.`
+    );
+    this.name = "BaselineSignatureError";
+    this.file = opts.file;
+    this.expected = opts.expected;
+    this.actual = opts.actual;
+  }
+}
+
 function baselinePath(projectRoot: string, stage: FlowStage): string {
   return path.join(projectRoot, EVALS_ROOT, "baselines", `${stage}.json`);
+}
+
+/**
+ * Produce a deterministic sha256 digest over the signable portion of a
+ * baseline. We intentionally exclude `generatedAt` and `cclawVersion`
+ * from the digest so that rebuilding the same baseline from identical
+ * case results on a new CLI version doesn't invalidate the signature —
+ * only changes to the observed pass/ok/score payloads do.
+ */
+export function computeBaselineDigest(
+  snapshot: Pick<BaselineSnapshot, "schemaVersion" | "stage" | "cases">
+): string {
+  const canonical = canonicalJson({
+    schemaVersion: snapshot.schemaVersion,
+    stage: snapshot.stage,
+    cases: snapshot.cases
+  });
+  return createHash("sha256").update(canonical).digest("hex");
+}
+
+/**
+ * JSON.stringify with object keys sorted recursively so the digest is
+ * stable across filesystem / serializer variations.
+ */
+function canonicalJson(value: unknown): string {
+  if (value === null || typeof value !== "object") {
+    return JSON.stringify(value);
+  }
+  if (Array.isArray(value)) {
+    return `[${value.map((v) => canonicalJson(v)).join(",")}]`;
+  }
+  const record = value as Record<string, unknown>;
+  const keys = Object.keys(record).sort();
+  const parts = keys.map((k) => `${JSON.stringify(k)}:${canonicalJson(record[k])}`);
+  return `{${parts.join(",")}}`;
 }
 
 export async function loadBaseline(
@@ -55,6 +115,22 @@ export async function loadBaseline(
     throw new Error(
       `Invalid baseline at ${filePath}: shape mismatch (expected schemaVersion=${BASELINE_SCHEMA_VERSION}, stage=${stage})`
     );
+  }
+  const signature = parsed.signature;
+  if (signature) {
+    if (signature.algorithm !== "sha256") {
+      throw new Error(
+        `Invalid baseline at ${filePath}: unsupported signature algorithm "${signature.algorithm}".`
+      );
+    }
+    const actual = computeBaselineDigest(parsed);
+    if (actual !== signature.digest) {
+      throw new BaselineSignatureError({
+        file: filePath,
+        expected: signature.digest,
+        actual
+      });
+    }
   }
   return parsed;
 }
@@ -101,13 +177,20 @@ export function buildBaselineForStage(
   for (const c of stageCases) {
     cases[c.caseId] = entryFromResult(c);
   }
-  return {
+  const now = new Date().toISOString();
+  const unsigned: BaselineSnapshot = {
     schemaVersion: BASELINE_SCHEMA_VERSION,
     stage,
-    generatedAt: new Date().toISOString(),
+    generatedAt: now,
     cclawVersion: CCLAW_VERSION,
     cases
   };
+  unsigned.signature = {
+    algorithm: "sha256",
+    digest: computeBaselineDigest(unsigned),
+    signedAt: now
+  };
+  return unsigned;
 }
 
 export async function writeBaselinesFromReport(

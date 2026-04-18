@@ -171,6 +171,17 @@ export interface CreateEvalClientOptions {
   retryPolicy?: RetryPolicy;
   /** Deterministic sleep used by the retry loop. Defaults to `setTimeout`. */
   sleep?: (ms: number) => Promise<void>;
+  /**
+   * Observer invoked when a chat() call is about to sleep before the next
+   * retry attempt. Use this to surface "we are retrying" status via the
+   * progress logger so long, silent backoff windows become visible.
+   */
+  onRetry?: (event: {
+    attempt: number;
+    maxAttempts: number;
+    waitMs: number;
+    error: EvalLlmError;
+  }) => void;
 }
 
 export interface RetryPolicy {
@@ -384,7 +395,14 @@ export function createEvalClient(
           lastError = normalized;
           const isLastAttempt = attempt === maxAttempts - 1;
           if (!normalized.retryable || isLastAttempt) throw normalized;
-          await sleep(backoffDelay(attempt, retryPolicy));
+          const waitMs = backoffDelay(attempt, retryPolicy);
+          options.onRetry?.({
+            attempt: attempt + 1,
+            maxAttempts,
+            waitMs,
+            error: normalized
+          });
+          await sleep(waitMs);
         }
       }
       throw lastError ?? new EvalLlmTransportError(new Error("unknown"));
