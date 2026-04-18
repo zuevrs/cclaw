@@ -47,14 +47,20 @@ Human input remains mandatory only at explicit approval gates (plan approval, us
 
 ### Harness routing
 
-| Harness | Delegation tool | Structured ask tool | Routing note |
-|---|---|---|---|
-| Claude | Task/delegate | AskUserQuestion | Preferred for rich multi-step delegation + explicit approvals. |
-| Cursor | Task | AskQuestion | Use option-based asks for mode/waiver decisions; keep subagent payloads concise. |
-| Codex | Task (if available) | None native | Use numbered choices in chat for approvals; keep prompts fully self-contained. |
-| OpenCode | Task (if available) | None native | Log delegation outcomes in artifacts/state explicitly; do not assume built-in ask workflows. |
+| Harness | Fallback | Delegation tool | Structured ask | Parity playbook |
+|---|---|---|---|---|
+| Claude | \`native\` | Task (named subagent_type) | AskUserQuestion | \`.cclaw/references/harnesses/claude-playbook.md\` |
+| Cursor | \`generic-dispatch\` | Task (generic subagent_type: explore/generalPurpose/…) | AskQuestion | \`.cclaw/references/harnesses/cursor-playbook.md\` |
+| OpenCode | \`role-switch\` | plugin dispatch _or_ in-session role-switch | plain-text options | \`.cclaw/references/harnesses/opencode-playbook.md\` |
+| Codex | \`role-switch\` | in-session role-switch (mandatory evidenceRefs) | plain-text options | \`.cclaw/references/harnesses/codex-playbook.md\` |
 
-If delegation tooling is unavailable in the active harness, run the same controller protocol in-thread and record a delegation waiver with reason \`harness_limitation\`.
+**Dispatch rules driven by \`subagentFallback\`:**
+
+- \`native\` — use the harness's own named subagent primitive; delegation entry uses \`fulfillmentMode: "isolated"\`.
+- \`generic-dispatch\` — map each cclaw agent onto the generic dispatcher via the harness playbook; delegation entry uses \`fulfillmentMode: "generic-dispatch"\`.
+- \`role-switch\` — announce the role in-session, perform the work, append a delegation row with \`fulfillmentMode: "role-switch"\` and ≥1 \`evidenceRef\`. Without evidenceRefs the \`delegation:mandatory:current_stage\` check reports \`missingEvidence\` and blocks stage completion.
+
+The only time a \`harness_limitation\` waiver fires automatically is when every installed harness declares \`subagentFallback: "waiver"\`. cclaw 0.33 no longer maps Codex onto auto-waiver — the agent must role-switch with evidence.
 
 ### Model routing
 

@@ -1,6 +1,10 @@
 import { HARNESS_ADAPTERS, harnessTier } from "../harness-adapters.js";
 import type { HarnessId } from "../types.js";
 import { HOOK_EVENTS_BY_HARNESS, HOOK_SEMANTIC_EVENTS } from "./hook-events.js";
+import {
+  HARNESS_PLAYBOOKS_DIR,
+  harnessPlaybookFileName
+} from "./harness-playbooks.js";
 
 function harnessTitle(harness: HarnessId): string {
   switch (harness) {
@@ -27,7 +31,9 @@ export function harnessIntegrationDocMarkdown(): string {
     .map((harness) => {
       const adapter = HARNESS_ADAPTERS[harness];
       const tier = harnessTier(harness);
-      return `| ${harnessTitle(harness)} | \`${harness}\` | \`${tier}\` (${tierDescription(tier)}) | ${adapter.capabilities.nativeSubagentDispatch} | ${adapter.capabilities.hookSurface} | ${adapter.capabilities.structuredAsk} |`;
+      const caps = adapter.capabilities;
+      const playbook = `\`${HARNESS_PLAYBOOKS_DIR}/${harnessPlaybookFileName(harness)}\``;
+      return `| ${harnessTitle(harness)} | \`${harness}\` | \`${tier}\` (${tierDescription(tier)}) | ${caps.nativeSubagentDispatch} | ${caps.subagentFallback} | ${caps.hookSurface} | ${caps.structuredAsk} | ${playbook} |`;
     })
     .join("\n");
 
@@ -47,9 +53,16 @@ Generated from \`src/harness-adapters.ts\` capabilities and hook event mappings.
 
 ## Capability tiers
 
-| Harness | ID | Tier | Native subagent dispatch | Hook surface | Structured ask |
-|---|---|---|---|---|---|
+| Harness | ID | Tier | Native dispatch | Fallback | Hook surface | Structured ask | Playbook |
+|---|---|---|---|---|---|---|---|
 ${capabilityRows}
+
+Fallback legend:
+
+- \`native\` — first-class named subagent dispatch (Claude).
+- \`generic-dispatch\` — generic Task dispatcher mapped to cclaw roles (Cursor).
+- \`role-switch\` — in-session role announce + delegation-log entry with evidenceRefs (OpenCode, Codex).
+- \`waiver\` — no parity path; reserved for harnesses that cannot role-switch (none shipped).
 
 ## Semantic hook event coverage
 
