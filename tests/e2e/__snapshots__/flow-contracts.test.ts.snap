@@ -659,7 +659,7 @@ If you are about to violate the Iron Law, STOP. No amount of urgency, partial pr
 1. Announce at start: "Using \`planning-and-task-breakdown\` to Create small executable tasks with dependencies and pause for explicit user confirmation.".
 2. Obey HARD-GATE and Iron Law.
 3. Execute checklist in order and persist \`.cclaw/artifacts/05-plan.md\`.
-4. Satisfy gates (\`plan_tasks_sliced_2_5_min\`, \`plan_dependency_graph_written\`, \`plan_dependency_waves_defined\` +3).
+4. Satisfy gates (\`plan_tasks_sliced_2_5_min\`, \`plan_dependency_graph_written\`, \`plan_dependency_batches_defined\` +3).
 
 
 ## Overview
@@ -711,7 +711,7 @@ Record completion/waiver in \`.cclaw/state/delegation-log.json\` before stage co
 
 ## Outputs
 - task graph
-- dependency wave plan
+- dependency batch plan
 - ordered plan
 - explicit confirmation checkpoint
 
@@ -724,7 +724,7 @@ You MUST complete these steps in order:
 
 1. Read upstream — load spec, design, and scope artifacts. Cross-reference acceptance criteria.
 2. Build dependency graph — identify task ordering, parallel opportunities, and blocking dependencies.
-3. Group tasks into dependency waves — wave N+1 cannot start until wave N has verification evidence.
+3. Group tasks into dependency batches — batch N+1 cannot start until batch N has verification evidence.
 4. Slice into vertical tasks — each task targets 2-5 minutes, produces one testable outcome, and touches one coherent area.
 5. Attach verification — every task has an acceptance criterion mapping and a concrete verification command.
 6. Map scope Locked Decisions — every D-XX from scope is referenced by at least one plan task (or explicitly marked deferred with reason).
@@ -777,7 +777,7 @@ Use the row matching your project shape to calibrate voice, specificity, and com
 Full artifact sample for this stage lives at \`.cclaw/references/stages/plan-examples.md\`. Open it when you need a complete reference; do NOT paste the example into the artifact verbatim — it is a shape guide, not a template.
 
 Summary of what the reference covers:
-- Dependency graph + dependency waves
+- Dependency graph + dependency batches
 - Task list with effort + minutes estimate per task
 - Acceptance mapping (every AC → task IDs)
 - No-Placeholder scan row + WAIT_FOR_CONFIRM marker
@@ -786,7 +786,7 @@ Summary of what the reference covers:
 ## Interaction Protocol
 1. Plan in read-only mode relative to implementation.
 2. Split work into small vertical slices (target 2-5 minute tasks).
-3. Publish explicit dependency waves with entry and exit checks for each wave.
+3. Publish explicit dependency batches with entry and exit checks for each batch.
 4. Attach verification step to every task.
 5. Preserve locked scope boundaries: no silent scope reduction language in task rows.
 6. Enforce WAIT_FOR_CONFIRM: present the plan summary with options (A) Approve / (B) Revise / (C) Reject.
@@ -799,7 +799,7 @@ Shared decision/ask-user protocol:
 ## Required Gates
 - \`plan_tasks_sliced_2_5_min\` — Tasks are small, executable slices.
 - \`plan_dependency_graph_written\` — Dependency graph and order are explicit.
-- \`plan_dependency_waves_defined\` — Tasks are grouped into executable waves with gate checks.
+- \`plan_dependency_batches_defined\` — Tasks are grouped into executable batches with gate checks.
 - \`plan_verification_steps_defined\` — Each task has verification guidance.
 - \`plan_acceptance_mapped\` — Each task maps to a spec acceptance criterion.
 - \`plan_wait_for_confirm\` — Execution blocked until explicit user confirmation.
@@ -809,12 +809,12 @@ Shared decision/ask-user protocol:
 - [ ] Task list includes acceptance mapping.
 - [ ] Locked decision coverage table present with D-XX trace links.
 - [ ] Dependency graph documented.
-- [ ] Dependency waves documented with wave-by-wave verification gates.
+- [ ] Dependency batches documented with batch-by-batch verification gates.
 - [ ] WAIT_FOR_CONFIRM status recorded.
 
 ## Process
 1. Build dependency graph and ordered slices.
-2. Group slices into execution waves and define gate criteria per wave.
+2. Group slices into execution batches and define gate criteria per batch.
 3. Define each task with acceptance mapping and verification commands.
 4. Trace every locked decision (D-XX) to plan tasks or explicit defer rationale.
 5. Record checkpoints and blockers.
@@ -831,12 +831,12 @@ Shared decision/ask-user protocol:
 
 **STOP:** resolve findings in this section before moving forward.
 
-### Wave Completeness Audit
-- Does every task belong to exactly one wave?
-- Does each wave have a verification gate?
-- Are wave dependencies explicit and acyclic?
+### Batch Completeness Audit
+- Does every task belong to exactly one batch?
+- Does each batch have a verification gate?
+- Are batch dependencies explicit and acyclic?
 - Is the acceptance mapping complete — every spec criterion covered?
-- Are there hidden dependencies between tasks in different waves?
+- Are there hidden dependencies between tasks in different batches?
 
 **STOP:** resolve findings in this section before moving forward.
 
@@ -844,7 +844,7 @@ Shared decision/ask-user protocol:
 - Does every task carry an explicit minutes estimate (e.g. \`[~3m]\`) and does every estimate fit the 2-to-5-minute budget? Estimates >5 minutes must be split.
 - Are all file paths, test commands, and verification commands copy-pasteable as written — no \`TODO\`, \`TBD\`, \`FIXME\`, \`<fill-in>\`, \`<your-*-here>\`, \`xxx\`, or ellipsis standing in for omitted args?
 - Does every acceptance-criterion reference resolve to a real R# / AC-### in the spec (not a blank link)?
-- If an estimate is genuinely uncertain (first-time integration, unfamiliar library), is the uncertainty named explicitly and scheduled as a spike task in wave 0, rather than hidden behind a large estimate?
+- If an estimate is genuinely uncertain (first-time integration, unfamiliar library), is the uncertainty named explicitly and scheduled as a spike task in batch 0, rather than hidden behind a large estimate?
 
 **STOP:** resolve findings in this section before moving forward.
 
@@ -866,12 +866,12 @@ Rule: Every task must trace to a spec acceptance criterion. Every locked scope d
 | Section | Tier | Validation rule |
 |---|---|---|
 | Dependency Graph | recommended | Ordering and parallel opportunities explicit. No circular dependencies. |
-| Dependency Waves | REQUIRED | Every task belongs to a wave. Each wave has an exit gate and dependency statement. |
+| Dependency Batches | REQUIRED | Every task belongs to a batch. Each batch has an exit gate and dependency statement. |
 | Task List | REQUIRED | Each task row includes ID, description, acceptance criterion, verification command, and effort estimate (S/M/L). Every task must also carry a minutes estimate within the 2-5 minute budget. |
 | Acceptance Mapping | REQUIRED | Every spec criterion is covered by at least one task. |
 | Locked Decision Coverage | recommended | Every locked decision ID (D-XX) from scope is listed with linked task IDs or explicit defer rationale. |
-| Risk Assessment | recommended | If present: per-task or per-wave risk identification with likelihood, impact, and mitigation strategy. |
-| Boundary Map | recommended | If present: per-wave or per-task interface contracts listing what each task produces (exports) and consumes (imports) from other tasks. |
+| Risk Assessment | recommended | If present: per-task or per-batch risk identification with likelihood, impact, and mitigation strategy. |
+| Boundary Map | recommended | If present: per-batch or per-task interface contracts listing what each task produces (exports) and consumes (imports) from other tasks. |
 | WAIT_FOR_CONFIRM | REQUIRED | Explicit marker present. Status: pending until user approves. |
 | No-Placeholder Scan | recommended | Confirmation that a text scan for \`TODO\`, \`TBD\`, \`FIXME\`, \`<fill-in>\`, \`<your-*-here>\`, \`xxx\`, or bare ellipses has zero hits in the task list. A placeholder is a deferred decision masquerading as a plan. |
 | No Scope Reduction Language Scan | recommended | Confirmation that scope-reduction phrases (\`v1\`, \`for now\`, \`later\`, \`temporary\`, \`placeholder\`) are absent from task rows when locked decisions exist. |
@@ -885,14 +885,14 @@ Rule: Every task must trace to a spec acceptance criterion. Every locked scope d
 - Using placeholder tokens or scope-reduction phrases (\`v1\`, \`for now\`, \`later\`) in task definitions
 - No dependency graph
 - No WAIT_FOR_CONFIRM marker
-- No explicit dependency waves
+- No explicit dependency batches
 - Tasks exceed one coherent outcome
 - No acceptance mapping
 - Locked decisions are missing or not mapped
 - Scope-reduction language appears without explicit approved defer decision
 - tasks too broad
 - dependency uncertainty unresolved
-- wave boundaries are unclear
+- batch boundaries are unclear
 - locked decisions from scope are not mapped to tasks
 - no explicit confirmation
 
@@ -906,7 +906,7 @@ Rule: Every task must trace to a spec acceptance criterion. Every locked scope d
 
 - \`stage\`: \`plan\`
 - \`next\`: \`tdd\` (Full TDD cycle: RED (failing tests), GREEN (minimal implementation), REFACTOR (cleanup). One plan slice at a time with strict traceability.)
-- \`gates\`: \`plan_tasks_sliced_2_5_min\`, \`plan_dependency_graph_written\`, \`plan_dependency_waves_defined\`, \`plan_verification_steps_defined\`, \`plan_acceptance_mapped\`, \`plan_wait_for_confirm\`
+- \`gates\`: \`plan_tasks_sliced_2_5_min\`, \`plan_dependency_graph_written\`, \`plan_dependency_batches_defined\`, \`plan_verification_steps_defined\`, \`plan_acceptance_mapped\`, \`plan_wait_for_confirm\`
 - \`artifact\`: \`.cclaw/artifacts/05-plan.md\`
 - \`mandatory delegations\`: \`planner\`
 
@@ -1104,15 +1104,15 @@ Summary of what the reference covers:
 Shared decision/ask-user protocol:
 \`.cclaw/references/protocols/decision.md\`
 
-## Wave Execution Mode
+## Batch Execution Mode
 
-Execute the current dependency wave task-by-task (RED -> GREEN -> REFACTOR).
+Execute the current dependency batch task-by-task (RED -> GREEN -> REFACTOR).
 Stop on BLOCKED status or when user input is required.
-Apply concise turn announces: one announce per wave boundary (or when risk/plan
+Apply concise turn announces: one announce per batch boundary (or when risk/plan
 changes materially), then execute tasks without repetitive boilerplate.
 
 Detailed walkthrough:
-\`.cclaw/references/stages/tdd-wave-walkthrough.md\`
+\`.cclaw/references/stages/tdd-batch-walkthrough.md\`
 
 ## Required Gates
 - \`tdd_red_test_written\` — Failing tests exist before implementation changes.
@@ -1268,7 +1268,7 @@ See:
 - \`.cclaw/skills/using-cclaw/SKILL.md\`
 - \`.cclaw/skills/session/SKILL.md\`
 - \`.cclaw/skills/debugging/SKILL.md\`
-- \`.cclaw/references/stages/tdd-wave-walkthrough.md\`
+- \`.cclaw/references/stages/tdd-batch-walkthrough.md\`
 - \`.cclaw/commands/tdd.md\`
 "
 `;

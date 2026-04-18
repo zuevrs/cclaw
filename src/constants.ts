@@ -14,10 +14,10 @@ export const DEFAULT_HARNESSES: HarnessId[] = [
 ];
 
 /**
- * Evals subtree. Wave 7.0 scaffolds the directory layout and a default config.yaml;
- * verifiers and LLM wiring arrive in Waves 7.1–7.5. Keeping this separate from the
- * main REQUIRED_DIRS list makes it explicit that the evals runtime is additive and
- * does not affect non-eval cclaw behavior.
+ * Evals subtree. Scaffolds the directory layout and a default config.yaml; the
+ * structural verifier, rule verifiers, and LLM wiring layer on incrementally.
+ * Keeping this separate from the main REQUIRED_DIRS list makes it explicit that
+ * the evals runtime is additive and does not affect non-eval cclaw behavior.
  */
 export const EVALS_ROOT = `${RUNTIME_ROOT}/evals`;
 export const EVALS_CONFIG_PATH = `${EVALS_ROOT}/config.yaml`;

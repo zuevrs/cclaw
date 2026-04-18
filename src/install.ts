@@ -64,7 +64,7 @@ import {
   EVAL_REPORTS_README,
   EVAL_RUBRICS_README
 } from "./content/eval-scaffold.js";
-import { TDD_WAVE_WALKTHROUGH_MARKDOWN, stageSkillFolder, stageSkillMarkdown } from "./content/skills.js";
+import { TDD_BATCH_WALKTHROUGH_MARKDOWN, stageSkillFolder, stageSkillMarkdown } from "./content/skills.js";
 import { stageCommonGuidanceMarkdown } from "./content/stage-common-guidance.js";
 import {
   STAGE_EXAMPLES_REFERENCE_DIR,
@@ -300,13 +300,13 @@ async function writeSkills(projectRoot: string, config?: VibyConfig): Promise<vo
     }
   }
 
-  // Progressive disclosure for the TDD Wave Execution walkthrough (A.1#1).
+  // Progressive disclosure for the TDD Batch Execution walkthrough (A.1#1).
   // The detailed 3-task transcript lives next to stage examples so the
   // always-rendered TDD skill stays under the line-budget and the reference
   // is loaded on demand.
   await writeFileSafe(
-    runtimePath(projectRoot, ...STAGE_EXAMPLES_REFERENCE_DIR.split("/"), "tdd-wave-walkthrough.md"),
-    TDD_WAVE_WALKTHROUGH_MARKDOWN
+    runtimePath(projectRoot, ...STAGE_EXAMPLES_REFERENCE_DIR.split("/"), "tdd-batch-walkthrough.md"),
+    TDD_BATCH_WALKTHROUGH_MARKDOWN
   );
   await writeFileSafe(
     runtimePath(projectRoot, ...STAGE_EXAMPLES_REFERENCE_DIR.split("/"), "common-guidance.md"),

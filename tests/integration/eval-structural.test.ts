@@ -1,5 +1,5 @@
 /**
- * Integration test for Wave 7.1 structural evals.
+ * Integration test for structural evals.
  *
  * We copy the canonical `tests/fixtures/eval-demo/.cclaw/evals/` tree into a
  * temp directory so the test is hermetic (no cross-test contamination, no

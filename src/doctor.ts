@@ -328,8 +328,8 @@ export async function doctorChecks(projectRoot: string, options: DoctorOptions =
       const skillContent = await fs.readFile(skillPath, "utf8");
       const lineCount = skillContent.split("\n").length;
       const MIN_SKILL_LINES = 110;
-      // Soft max tightened in wave 3 from 650 → 500 after externalising the
-      // TDD wave-execution walkthrough and collapsing the duplicate "what
+      // Soft max tightened from 650 → 500 after externalising the TDD
+      // batch-execution walkthrough and collapsing the duplicate "what
       // goes wrong" lists. Stage skills beyond 500 lines drift into unread
       // bloat; long-form content belongs under `.cclaw/references/` instead.
       const MAX_SKILL_LINES = 500;

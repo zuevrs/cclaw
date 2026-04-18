@@ -6,7 +6,7 @@
  */
 
 export const EVAL_CONFIG_YAML = `# cclaw eval config
-# See docs/evals.md for the full schema and Wave 7.1–7.6 rollout plan.
+# See docs/evals.md for the full schema and rollout plan.
 #
 # All values can be overridden at runtime with CCLAW_EVAL_* environment
 # variables (env wins). Secrets like CCLAW_EVAL_API_KEY never live here.
@@ -15,9 +15,9 @@ baseUrl: https://api.z.ai/api/coding/paas/v4
 model: glm-5.1
 
 # Default fidelity tier when --tier is not supplied.
-#   A = single-shot API call (cheap, Wave 7.3)
-#   B = SDK with tool use     (realistic, Wave 7.4)
-#   C = multi-stage workflow  (end-to-end, Wave 7.5)
+#   A = single-shot API call (cheap)
+#   B = SDK with tool use     (realistic)
+#   C = multi-stage workflow  (end-to-end)
 defaultTier: A
 
 # Per-call timeout and retry budget.
@@ -27,7 +27,7 @@ maxRetries: 2
 # Optional hard-stop on estimated USD spend per day. Leave unset for no cap.
 # dailyUsdCap: 5
 
-# Regression thresholds used by CI (Wave 7.3+).
+# Regression thresholds used by CI.
 regression:
   # Fail when overall score drops by more than this fraction (e.g. -0.15 = 15%).
   failIfDeltaBelow: -0.15
@@ -38,7 +38,7 @@ regression:
 export const EVAL_CORPUS_README = `# Eval Corpus
 
 Seed cases live in \`./<stage>/<id>.yaml\`, one file per case.
-See \`docs/evals.md\` for the schema; authoring begins in Wave 7.1.
+See \`docs/evals.md\` for the schema.
 
 Minimal shape:
 
@@ -49,18 +49,18 @@ input_prompt: |
   One short paragraph describing the user's task.
 context_files: []
 expected:
-  # verifier-specific hints; optional in Wave 7.0
+  # verifier-specific hints; optional
 \`\`\`
 
-Wave 7.1 will add 3 cases per stage (24 total). Wave 7.2 will expand to 5 per
-stage (40 total). Wave 7.4/7.5 may add \`context_files\` pulled from real
-projects to exercise Tier B/C sandboxes.
+Start with 3 structural cases per stage (24 total), then expand to 5 per
+stage (40 total) once rule verifiers land. Tier B/C runs may add
+\`context_files\` pulled from real projects to exercise the sandbox.
 `;
 
 export const EVAL_RUBRICS_README = `# Eval Rubrics
 
-LLM-judge rubrics land in Wave 7.3. Each rubric is a short list of checks
-scored on a \`1–5\` scale with a rationale:
+LLM-judge rubrics. Each rubric is a short list of checks scored on a
+\`1–5\` scale with a rationale:
 
 \`\`\`yaml
 stage: brainstorm
@@ -79,8 +79,7 @@ See \`docs/evals.md\` for the full schema.
 export const EVAL_BASELINES_README = `# Eval Baselines
 
 Frozen score snapshots used by regression gates. Baselines are committed to
-git and updated explicitly via \`cclaw eval --update-baseline --confirm\`
-(wired in Wave 7.1).
+git and updated explicitly via \`cclaw eval --update-baseline --confirm\`.
 
 Each baseline file is a JSON document keyed by stage and case id. Do not edit
 by hand; CI will flag baseline churn.

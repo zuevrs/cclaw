@@ -1,5 +1,5 @@
 /**
- * Baseline I/O + regression comparison (Wave 7.1).
+ * Baseline I/O + regression comparison for the eval subsystem.
  *
  * Layout on disk (committed):
  *

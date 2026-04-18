@@ -84,16 +84,16 @@ North star: skill and prompt changes are merged based on measured score deltas, 
 
 - **D-EVAL-01**: LLM client = official `openai` npm SDK with custom `baseURL`. Zero vendor lock-in; any OpenAI-compatible endpoint works (z.ai, OpenAI, together.ai, self-hosted vLLM, etc.).
 - **D-EVAL-02**: Configuration via environment variables only. No secrets in repo.
-  - `CCLAW_EVAL_API_KEY` (required for LLM waves)
+  - `CCLAW_EVAL_API_KEY` (required once the LLM judge step ships)
   - `CCLAW_EVAL_BASE_URL` (default `https://api.z.ai/api/coding/paas/v4`)
   - `CCLAW_EVAL_MODEL` (default `glm-5.1`)
   - `CCLAW_EVAL_JUDGE_MODEL` (default = `CCLAW_EVAL_MODEL`)
   - `CCLAW_EVAL_DAILY_USD_CAP` (default unset = no cap; explicit opt-in)
 - **D-EVAL-03**: Tier C in this phase = multi-stage workflow run via SDK with function-calling. Real IDE harness integration (claude-code / cursor-agent through a GLM proxy) is **deferred to Phase 8**.
 - **D-EVAL-04**: Two model roles — Agent-under-test (AUT) and Judge. Both default to the same model; `CCLAW_EVAL_JUDGE_MODEL` allows cross-model judging for research.
-- **D-EVAL-05**: Each wave ships as its own PR + version bump. Waves are additive and independently valuable.
+- **D-EVAL-05**: Each step ships as its own PR + version bump. Steps are additive and independently valuable.
 
-### Wave 7.0 — Foundations (v0.22.0)
+### Step 0 — Foundations (v0.22.0)
 
 **Goals:** skeleton for `cclaw eval` CLI and directory layout. Zero LLM calls.
 
@@ -110,7 +110,7 @@ Exit criteria:
 - Existing 250+ test suite stays green.
 - Typecheck clean.
 
-### Wave 7.1 — Schema Verifiers L1 (v0.23.0) ✅
+### Step 1 — Schema Verifiers L1 (v0.23.0) — shipped
 
 **Goals:** first regression layer, still zero LLM. Runs on every PR.
 
@@ -134,12 +134,12 @@ Scope:
 
 Exit criteria:
 
-- ✅ 24 corpus cases pass on main (verified by `tests/integration/eval-structural.test.ts`).
-- ✅ Synthetic regression (removed required section, injected `TBD` pattern)
+- 24 corpus cases pass on main (verified by `tests/integration/eval-structural.test.ts`).
+- Synthetic regression (removed required section, injected `TBD` pattern)
   is caught with exit code 1 and surfaces a `newly-failing` entry in the
   baseline delta.
 
-### Wave 7.2 — Rule-based Verifiers L2 (v0.24.0)
+### Step 2 — Rule-based Verifiers L2 (v0.24.0)
 
 **Goals:** content rules without LLM — catches ~60% of regressions cheaply.
 
@@ -156,9 +156,9 @@ Exit criteria:
 - Traceability check catches artificial regression in test.
 - `cclaw eval --rules` wired into PR CI.
 
-### Wave 7.3 — LLM Judge + Tier A (v0.25.0)
+### Step 3 — LLM Judge + Tier A (v0.25.0)
 
-**First wave with real API calls to the configured OpenAI-compat endpoint.**
+**First step with real API calls to the configured OpenAI-compat endpoint.**
 
 Scope:
 
@@ -180,7 +180,7 @@ Exit criteria:
 - Synthetically degraded skill is correctly flagged as regression.
 - Cost cap, when enabled, aborts a run mid-flight with a clear error.
 
-### Wave 7.4 — Tier B: Agent with Tools (v0.26.0)
+### Step 4 — Tier B: Agent with Tools (v0.26.0)
 
 **Goals:** realistic multi-turn runs — AUT reads project files, writes artifacts, uses function-calling.
 
@@ -200,7 +200,7 @@ Exit criteria:
 - Single stage Tier B run completes in <3 min and costs <$3.
 - Tool calls cannot escape the sandbox (test with `../etc/passwd` attempt).
 
-### Wave 7.5 — Tier C: End-to-End Workflow (v0.27.0)
+### Step 5 — Tier C: End-to-End Workflow (v0.27.0)
 
 **Goals:** multi-stage workflow run — AUT simulates a real user session from brainstorm through plan.
 
@@ -219,7 +219,7 @@ Exit criteria:
 - Report shows per-stage scores + cross-stage consistency.
 - 3 workflow cases pass consistently on main.
 
-### Wave 7.6 — Polish & Observability (v0.28.0)
+### Step 6 — Polish & Observability (v0.28.0)
 
 Scope:
 

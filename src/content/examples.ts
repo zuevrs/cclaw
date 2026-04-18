@@ -283,23 +283,23 @@ T-1 ──▶ T-2 ──▶ T-3
 
 Parallel opportunity: T-1 is a prerequisite for both T-2 and T-3 (T-3 also needs T-2).
 
-## Dependency Waves
+## Dependency Batches
 
-#### Wave 1 (foundation)
+#### Batch 1 (foundation)
 - Task IDs: T-1
 - Verification gate: schema tests pass, dedupe key fixtures validated
 
-#### Wave 2 (core logic)
+#### Batch 2 (core logic)
 - Task IDs: T-2
-- Depends on: Wave 1 (T-1 complete)
+- Depends on: Batch 1 (T-1 complete)
 - Verification gate: integration test proves publish-to-outbox path
 
-#### Wave 3 (integration)
+#### Batch 3 (integration)
 - Task IDs: T-3
-- Depends on: Wave 2 (T-2 complete)
+- Depends on: Batch 2 (T-2 complete)
 - Verification gate: e2e tests pass for delivery, dedupe, and degraded mode
 
-Execution rule: complete and verify each wave before starting the next wave.
+Execution rule: complete and verify each batch before starting the next batch.
 
 ## Task List
 
@@ -319,10 +319,10 @@ Execution rule: complete and verify each wave before starting the next wave.
 
 ## Risk Assessment
 
-| Task/Wave | Risk | Likelihood | Impact | Mitigation |
+| Task/Batch | Risk | Likelihood | Impact | Mitigation |
 | --- | --- | --- | --- | --- |
-| T-3 (Wave 3) | SSE reconnect logic complex | Medium | High | Spike reconnect in isolation before integrating with feed UI |
-| Wave 2 → 3 | Publisher API contract may shift | Low | Medium | Pin contract in T-1 schema; T-2 integration test validates |
+| T-3 (Batch 3) | SSE reconnect logic complex | Medium | High | Spike reconnect in isolation before integrating with feed UI |
+| Batch 2 → 3 | Publisher API contract may shift | Low | Medium | Pin contract in T-1 schema; T-2 integration test validates |
 
 ## WAIT_FOR_CONFIRM
 - Status: pending
@@ -762,7 +762,7 @@ const STAGE_EXAMPLE_SECTION_HEADINGS: Record<FlowStage, string[]> = {
     "Approval block"
   ],
   plan: [
-    "Dependency graph + dependency waves",
+    "Dependency graph + dependency batches",
     "Task list with effort + minutes estimate per task",
     "Acceptance mapping (every AC → task IDs)",
     "No-Placeholder scan row + WAIT_FOR_CONFIRM marker"

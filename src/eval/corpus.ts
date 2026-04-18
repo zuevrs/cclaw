@@ -224,7 +224,7 @@ export function fixturePathFor(
 /**
  * Read the fixture artifact text for a case. Returns `undefined` if the case
  * has no fixture reference. Throws a descriptive error if the path exists in
- * the case but not on disk — Wave 7.1 fixtures ship alongside cases.
+ * the case but not on disk — structural fixtures ship alongside cases.
  */
 export async function readFixtureArtifact(
   projectRoot: string,

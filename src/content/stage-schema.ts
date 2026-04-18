@@ -67,7 +67,7 @@ const REQUIRED_GATE_IDS: Record<FlowStage, string[]> = {
   ],
   plan: [
     "plan_tasks_sliced_2_5_min",
-    "plan_dependency_waves_defined",
+    "plan_dependency_batches_defined",
     "plan_acceptance_mapped",
     "plan_wait_for_confirm"
   ],
@@ -96,7 +96,7 @@ const REQUIRED_ARTIFACT_SECTIONS: Record<FlowStage, string[]> = {
   scope: ["Scope Mode", "In Scope / Out of Scope", "Completion Dashboard", "Scope Summary"],
   design: ["Architecture Boundaries", "Architecture Diagram", "Failure Mode Table", "Completion Dashboard"],
   spec: ["Acceptance Criteria", "Edge Cases", "Testability Map", "Approval"],
-  plan: ["Task List", "Dependency Waves", "Acceptance Mapping", "WAIT_FOR_CONFIRM"],
+  plan: ["Task List", "Dependency Batches", "Acceptance Mapping", "WAIT_FOR_CONFIRM"],
   tdd: ["RED Evidence", "GREEN Evidence", "REFACTOR Notes", "Traceability"],
   review: ["Layer 1 Verdict", "Review Army Contract", "Severity Summary", "Final Verdict"],
   ship: ["Preflight Results", "Release Notes", "Rollback Plan", "Finalization"]

@@ -1,5 +1,5 @@
 # Canonical cclaw eval corpus used by the project's own CI.
-# Wave 7.1 exercises structural verifiers; LLM calls arrive in Wave 7.3.
+# Exercises the structural verifiers today; LLM calls wire in later.
 provider: zai
 baseUrl: https://api.z.ai/api/coding/paas/v4
 model: glm-5.1

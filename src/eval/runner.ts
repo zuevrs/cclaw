@@ -21,11 +21,11 @@ export interface RunEvalOptions {
   projectRoot: string;
   stage?: FlowStage;
   tier?: EvalTier;
-  /** When true, run only structural verifiers (Wave 7.1). */
+  /** When true, run only structural verifiers (Step 1). */
   schemaOnly?: boolean;
-  /** When true, run structural + rule-based verifiers. Wave 7.2 wires rules. */
+  /** When true, run structural + rule-based verifiers. Step 2 wires rules. */
   rules?: boolean;
-  /** When true, also run LLM judge verifiers. Wave 7.3 wires judging. */
+  /** When true, also run LLM judge verifiers. Step 3 wires judging. */
   judge?: boolean;
   /** When true, load config + corpus and return a summary without running any verifier. */
   dryRun?: boolean;
@@ -61,7 +61,7 @@ function groupByStage(cases: EvalCase[]): Record<string, number> {
 function skeletonVerifierResult(message: string, details?: Record<string, unknown>): VerifierResult {
   return {
     kind: "structural",
-    id: "wave-7-1-no-structural-expected",
+    id: "structural:no-expectations",
     ok: true,
     score: 1,
     message,
@@ -172,11 +172,11 @@ function stagesInResults(caseResults: EvalCaseResult[]): FlowStage[] {
 }
 
 /**
- * Wave 7.1 runner. When `schemaOnly` is set (or no other verifier flags are
+ * Structural runner. When `schemaOnly` is set (or no other verifier flags are
  * active), runs structural verifiers against fixture-backed cases and loads
  * per-stage baselines for regression comparison. Tier A/B/C agent loops
- * still arrive in Waves 7.3+; until then cases without `fixture` are marked
- * as skipped rather than failing.
+ * arrive in later steps; until then cases without `fixture` are marked as
+ * skipped rather than failing.
  */
 export async function runEval(options: RunEvalOptions): Promise<DryRunSummary | EvalReport> {
   const config = await loadEvalConfig(options.projectRoot, options.env ?? process.env);
@@ -190,10 +190,10 @@ export async function runEval(options: RunEvalOptions): Promise<DryRunSummary | 
     );
   }
   if (options.rules) {
-    notes.push("--rules is accepted; rule verifiers wire up in Wave 7.2.");
+    notes.push("--rules is accepted; rule verifiers are not wired yet.");
   }
   if (options.judge) {
-    notes.push("--judge is accepted; LLM judging wires up in Wave 7.3.");
+    notes.push("--judge is accepted; LLM judging is not wired yet.");
   }
 
   if (options.dryRun === true) {

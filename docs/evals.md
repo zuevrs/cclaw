@@ -6,15 +6,15 @@ measured score delta rather than subjective review. See
 
 ## Status
 
-| Wave | Version | Status | What it adds |
+| Step | Version | Status | What it adds |
 | --- | --- | --- | --- |
-| 7.0 | 0.22.0 | ✅ shipped | `cclaw eval` CLI, directory scaffold, config loader, corpus loader, report writer |
-| 7.1 | 0.23.0 | ✅ shipped | Structural verifier, baselines, 24-case seed corpus, PR-blocking CI gate |
-| 7.2 | 0.24.0 | planned | Rule-based verifiers + traceability checks |
-| 7.3 | 0.25.0 | planned | LLM judge + Tier A single-shot, nightly CI |
-| 7.4 | 0.26.0 | planned | Tier B agent with tools + sandbox |
-| 7.5 | 0.27.0 | planned | Tier C multi-stage workflow + release CI |
-| 7.6 | 0.28.0 | planned | HTML reports, cross-model diff, polish |
+| 0 | 0.22.0 | shipped | `cclaw eval` CLI, directory scaffold, config loader, corpus loader, report writer |
+| 1 | 0.23.0 | shipped | Structural verifier, baselines, 24-case seed corpus, PR-blocking CI gate |
+| 2 | 0.24.0 | planned | Rule-based verifiers + traceability checks |
+| 3 | 0.25.0 | planned | LLM judge + Tier A single-shot, nightly CI |
+| 4 | 0.26.0 | planned | Tier B agent with tools + sandbox |
+| 5 | 0.27.0 | planned | Tier C multi-stage workflow + release CI |
+| 6 | 0.28.0 | planned | HTML reports, cross-model diff, polish |
 
 ## Quickstart
 
@@ -24,7 +24,7 @@ After `cclaw init`, the following tree is materialized:
 .cclaw/evals/
 ├── config.yaml         # provider, model, thresholds (user-owned)
 ├── corpus/             # eval cases per stage (user-owned)
-├── rubrics/            # LLM judge rubrics (user-owned, Wave 7.3+)
+├── rubrics/            # LLM judge rubrics (user-owned, LLM step onward)
 ├── baselines/          # frozen scores for regression gates (user-owned)
 └── reports/            # generated reports (gitignored)
 ```
@@ -66,7 +66,7 @@ repo — only `CCLAW_EVAL_API_KEY` is supplied this way.
 
 | Variable | Effect |
 | --- | --- |
-| `CCLAW_EVAL_API_KEY` | Authentication for the OpenAI-compatible endpoint. Required from Wave 7.3 onward. |
+| `CCLAW_EVAL_API_KEY` | Authentication for the OpenAI-compatible endpoint. Required once the LLM judge step ships. |
 | `CCLAW_EVAL_BASE_URL` | Override `baseUrl`. |
 | `CCLAW_EVAL_MODEL` | Override `model` (used by both agent-under-test and judge unless `judgeModel` is set). |
 | `CCLAW_EVAL_JUDGE_MODEL` | Override `judgeModel` for cross-model judging. |
@@ -89,9 +89,9 @@ cclaw eval --dry-run      # prints `apiKey: set`
 cclaw eval [flags]
   --stage=<id>         Limit to one flow stage (brainstorm|scope|design|spec|plan|tdd|review|ship).
   --tier=<A|B|C>       Fidelity tier. A=single-shot, B=tools, C=workflow.
-  --schema-only        Structural verifiers only (Wave 7.1, default).
-  --rules              Structural + rule verifiers (Wave 7.2).
-  --judge              Include LLM judging (Wave 7.3; requires CCLAW_EVAL_API_KEY).
+  --schema-only        Structural verifiers only (default).
+  --rules              Structural + rule verifiers (not wired yet).
+  --judge              Include LLM judging (not wired yet; requires CCLAW_EVAL_API_KEY).
   --dry-run            Validate config + corpus, print summary, do not execute.
   --json               Emit machine-readable JSON on stdout.
   --no-write           Skip writing the report to .cclaw/evals/reports/.
@@ -115,12 +115,11 @@ Baseline workflow:
    that flipped from `ok:true` to `ok:false` triggers a critical failure
    and exit code 1.
 
-## Corpus schema (Wave 7.1 onward)
+## Corpus schema
 
 One file per case: `.cclaw/evals/corpus/<stage>/<id>.yaml`. An optional
 `fixture.md` alongside the case provides a pre-generated artifact the
-structural verifier runs against before the live agent loop arrives in
-Wave 7.3.
+structural verifier runs against before the live agent loop ships.
 
 ```yaml
 id: brainstorm-01
@@ -128,7 +127,7 @@ stage: brainstorm
 input_prompt: |
   One short paragraph describing the user's task.
 context_files: []                         # optional; Tier B/C sandbox copy list
-fixture: ./brainstorm-01/fixture.md       # Wave 7.1: artifact under test
+fixture: ./brainstorm-01/fixture.md       # artifact under test
 expected:
   structural:
     required_sections:                    # case-insensitive, match any heading level
@@ -152,7 +151,7 @@ The canonical 24-case corpus used by cclaw's own CI lives under
 `tests/fixtures/eval-demo/.cclaw/evals/corpus/` and is the reference for
 authoring new cases.
 
-Rubric schema (Wave 7.3 onward): `.cclaw/evals/rubrics/<stage>.yaml`.
+Rubric schema (LLM judge step onward): `.cclaw/evals/rubrics/<stage>.yaml`.
 
 ```yaml
 stage: brainstorm
@@ -166,10 +165,10 @@ checks:
 ## Architecture
 
 - **Agent-under-test (AUT)** — consumes the stage skill and produces an artifact. Three fidelity tiers.
-- **Judge** — Wave 7.3; evaluates an artifact against a rubric. Structured JSON output, median-of-3.
+- **Judge** — LLM judge step; evaluates an artifact against a rubric. Structured JSON output, median-of-3.
 - **Verifiers** — four kinds: `structural`, `rules`, `judge`, `workflow`. Cheaper tiers run first and can short-circuit expensive ones.
-- **Sandbox** — Wave 7.4+. Every case runs in `os.tmpdir()/cclaw-eval-<uuid>/` with tool access limited to that path.
-- **LLM client** — official `openai` npm package pointed at any OpenAI-compatible `baseURL`. Wired in Wave 7.3.
+- **Sandbox** — Tier B step onward. Every case runs in `os.tmpdir()/cclaw-eval-<uuid>/` with tool access limited to that path.
+- **LLM client** — official `openai` npm package pointed at any OpenAI-compatible `baseURL`. Wired alongside the LLM judge step.
 
 ## Security & cost
 

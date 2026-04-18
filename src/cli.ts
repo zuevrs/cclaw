@@ -87,12 +87,12 @@ Commands:
              Flags: --name=<feature>    Feature slug (default: inferred from 00-idea.md).
                     --skip-retro       Bypass mandatory retro gate (requires --retro-reason).
                     --retro-reason=<t> Reason for bypassing retro gate.
-  eval       Run cclaw evals against .cclaw/evals/corpus (Phase 7, Wave 7.1: structural verifier).
+  eval       Run cclaw evals against .cclaw/evals/corpus (Phase 7: structural verifier + baselines).
              Flags: --stage=<id>         Limit to one flow stage (${FLOW_STAGES.join("|")}).
                     --tier=<A|B|C>       Fidelity tier (A=single-shot, B=tools, C=workflow).
-                    --schema-only        Run only structural verifiers (Wave 7.1, default).
-                    --rules              Run structural + rule verifiers (Wave 7.2).
-                    --judge              Include LLM judging (Wave 7.3; requires API key).
+                    --schema-only        Run only structural verifiers (default).
+                    --rules              Run structural + rule verifiers (not wired yet).
+                    --judge              Include LLM judging (not wired yet; requires API key).
                     --dry-run            Validate config + corpus, print summary, do not execute.
                     --json               Emit machine-readable JSON on stdout.
                     --no-write           Skip writing the report to .cclaw/evals/reports/.

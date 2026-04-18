@@ -303,7 +303,7 @@ if [ "$SUGGESTIONS_ENABLED" = "true" ] && [ "$STAGE_MUTED" != "true" ]; then
     scope) STAGE_SUGGESTION="Suggestion: lock explicit in-scope/out-of-scope boundaries and choose one scope mode." ;;
     design) STAGE_SUGGESTION="Suggestion: map failure modes per new codepath and confirm architecture boundaries before moving forward." ;;
     spec) STAGE_SUGGESTION="Suggestion: ensure every acceptance criterion is measurable and mapped to a concrete test." ;;
-    plan) STAGE_SUGGESTION="Suggestion: group tasks into dependency waves and keep WAIT_FOR_CONFIRM pending until approval." ;;
+    plan) STAGE_SUGGESTION="Suggestion: group tasks into dependency batches and keep WAIT_FOR_CONFIRM pending until approval." ;;
     tdd) STAGE_SUGGESTION="Suggestion: execute RED → GREEN → REFACTOR for each selected slice and capture evidence per cycle." ;;
     review) STAGE_SUGGESTION="Suggestion: run Layer 1 before Layer 2 and reconcile findings into 07-review-army.json." ;;
     ship) STAGE_SUGGESTION="Suggestion: verify preflight + rollback plan before selecting exactly one finalization mode." ;;

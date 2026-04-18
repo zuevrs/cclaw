@@ -16,8 +16,8 @@ describe("stage schema and subagent alignment", () => {
     expect(plan.crossStageTrace.readsFrom).toContain(".cclaw/artifacts/04-spec.md");
     expect(plan.crossStageTrace.readsFrom).toContain(".cclaw/artifacts/03-design.md");
     expect(plan.crossStageTrace.readsFrom).toContain(".cclaw/artifacts/02-scope.md");
-    expect(plan.requiredGates.map((gate) => gate.id)).toContain("plan_dependency_waves_defined");
-    expect(plan.policyNeedles).toContain("Dependency Waves");
+    expect(plan.requiredGates.map((gate) => gate.id)).toContain("plan_dependency_batches_defined");
+    expect(plan.policyNeedles).toContain("Dependency Batches");
   });
 
   it("test-author template distinguishes TEST and BUILD stage modes", () => {

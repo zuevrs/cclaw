@@ -148,7 +148,7 @@ describe("flow command contracts", () => {
     expect(specSkill).toContain("Acceptance Criteria Audit");
     expect(specSkill).toContain("Testability Audit");
     expect(planSkill).toContain("Task Decomposition Audit");
-    expect(planSkill).toContain("Wave Completeness Audit");
+    expect(planSkill).toContain("Batch Completeness Audit");
   });
 
   it("includes completion parameters in plan skill", async () => {

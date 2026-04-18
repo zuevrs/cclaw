@@ -71,7 +71,7 @@ export function formatMarkdownReport(report: EvalReport): string {
   if (report.cases.length === 0) {
     lines.push(`## Cases`);
     lines.push(``);
-    lines.push(`No cases were executed. See \`docs/evals.md\` for the Wave rollout plan.`);
+    lines.push(`No cases were executed. See \`docs/evals.md\` for the rollout plan.`);
     lines.push(``);
     return `${lines.join("\n")}\n`;
   }

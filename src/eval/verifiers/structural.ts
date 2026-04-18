@@ -1,5 +1,5 @@
 /**
- * Structural verifier (Wave 7.1): deterministic, zero-LLM checks against a
+ * Structural verifier: deterministic, zero-LLM checks against a
  * single markdown artifact. Each structural expectation produces one
  * `VerifierResult` so baselines diff cleanly at the check level rather than
  * lumping everything into a single boolean.
@@ -15,8 +15,8 @@
  * - `minLines`/`maxLines` intentionally exclude frontmatter so a rewrite that
  *   adds metadata does not accidentally drop the body below the floor.
  * - Scoring: each check scores 0 or 1. The case `passed` becomes the AND of
- *   all individual `ok` flags. This keeps Wave 7.1 deterministic; the 0..1
- *   rubric scale shows up in Wave 7.3 (judge).
+ *   all individual `ok` flags. This keeps the structural verifier
+ *   deterministic; the 0..1 rubric scale shows up later in the LLM judge.
  */
 import { parse as parseYaml } from "yaml";
 import type { StructuralExpected, VerifierResult } from "../types.js";

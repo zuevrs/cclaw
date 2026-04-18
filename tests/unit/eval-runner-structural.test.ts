@@ -55,7 +55,7 @@ async function seedCorpus(root: string, fixtureBody = PASSING_FIXTURE): Promise<
   );
 }
 
-describe("runEval - structural (Wave 7.1)", () => {
+describe("runEval - structural", () => {
   it("verifiersAvailable.structural is true in dry-run", async () => {
     const root = await createTempProject("eval-structural-dry-run");
     await seedCorpus(root);
@@ -122,7 +122,7 @@ describe("runEval - structural (Wave 7.1)", () => {
       expect(res.summary.totalCases).toBe(1);
       expect(res.summary.skipped).toBe(1);
       expect(res.cases[0]!.verifierResults[0]?.id).toBe(
-        "wave-7-1-no-structural-expected"
+        "structural:no-expectations"
       );
     }
   });

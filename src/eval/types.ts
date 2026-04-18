@@ -6,7 +6,7 @@
  * deliberately decoupled from the main cclaw runtime so that:
  *
  * - Users who never run `cclaw eval` pay zero runtime cost.
- * - The verifier / rubric / LLM stack evolves on its own release cadence (Waves 7.0-7.6).
+ * - The verifier / rubric / LLM stack evolves on its own release cadence (Steps 0-6).
  * - Any OpenAI-compatible endpoint can be swapped in via config (z.ai, OpenAI, vLLM, etc.).
  */
 import type { FlowStage } from "../types.js";
@@ -32,8 +32,8 @@ export type VerifierKind = (typeof VERIFIER_KINDS)[number];
 
 /**
  * Structural expectations — deterministic, LLM-free checks against a single
- * text artifact. Wave 7.1 implements all fields below; Wave 7.2 adds the
- * sibling `rules` shape, Wave 7.3 adds `judge`.
+ * text artifact. Step 1 implements all fields below; Step 2 adds the
+ * sibling `rules` shape, Step 3 adds `judge`.
  */
 export interface StructuralExpected {
   /**
@@ -62,20 +62,20 @@ export interface StructuralExpected {
   requiredFrontmatterKeys?: string[];
 }
 
-/** Superset of per-verifier expectation shapes. Only `structural` is wired in Wave 7.1. */
+/** Superset of per-verifier expectation shapes. Only `structural` is wired in Step 1. */
 export interface ExpectedShape {
   structural?: StructuralExpected;
-  /** Rule-based (keyword/regex/traceability) checks — Wave 7.2. */
+  /** Rule-based (keyword/regex/traceability) checks — Step 2. */
   rules?: Record<string, unknown>;
-  /** LLM-judge rubrics — Wave 7.3. */
+  /** LLM-judge rubrics — Step 3. */
   judge?: Record<string, unknown>;
 }
 
 /**
  * A single eval case describes one input scenario for one stage. Cases live in
  * `.cclaw/evals/corpus/<stage>/<id>.yaml` and may reference a pre-generated
- * fixture artifact for verifier development (Wave 7.1) before the agent loop
- * exists (Wave 7.3+).
+ * fixture artifact for verifier development (Step 1) before the agent loop
+ * exists (Step 3+).
  */
 export interface EvalCase {
   id: string;
@@ -90,8 +90,8 @@ export interface EvalCase {
   expected?: ExpectedShape;
   /**
    * Path (relative to the corpus case file) of a pre-generated artifact used
-   * when verifiers are exercised without a live agent loop. Primarily a Wave
-   * 7.1 development aid.
+   * when verifiers are exercised without a live agent loop. Primarily a
+   * Step 1 development aid.
    */
   fixture?: string;
 }
@@ -137,7 +137,7 @@ export interface EvalReport {
     totalCostUsd: number;
     totalDurationMs: number;
   };
-  /** Present when comparing against a saved baseline (Wave 7.1+). */
+  /** Present when comparing against a saved baseline (Step 1+). */
   baselineDelta?: BaselineDelta;
 }
 
@@ -181,7 +181,7 @@ export interface ResolvedEvalConfig extends EvalConfig {
 }
 
 /**
- * Frozen per-stage baseline used by regression gating (Wave 7.1). Baselines
+ * Frozen per-stage baseline used by regression gating (Step 1). Baselines
  * are committed to git; `cclaw eval --update-baseline --confirm` rewrites
  * them. The shape is intentionally flat so a quick `git diff` reveals what
  * changed between runs.
