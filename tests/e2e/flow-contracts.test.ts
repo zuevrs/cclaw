@@ -258,6 +258,36 @@ describe("flow command contracts", () => {
     expect(shipContract).toMatchSnapshot("ship-contract");
   });
 
+  it("emits conditional slice-review guidance in plan and tdd skills", async () => {
+    const root = await createTempProject("slice-review-guidance");
+    await initCclaw({ projectRoot: root });
+
+    const planSkill = await fs.readFile(
+      path.join(root, ".cclaw/skills/planning-and-task-breakdown/SKILL.md"),
+      "utf8"
+    );
+    const tddSkill = await fs.readFile(
+      path.join(root, ".cclaw/skills/test-driven-development/SKILL.md"),
+      "utf8"
+    );
+
+    expect(planSkill).toContain("sliceReview.enabled");
+    expect(planSkill).toContain("touchCount");
+    expect(planSkill).toContain("touchPaths");
+    expect(planSkill).toContain("highRisk");
+
+    expect(tddSkill).toContain("Per-Slice Review");
+    expect(tddSkill).toContain("sliceReview.enabled");
+    expect(tddSkill).toContain("filesChangedThreshold");
+    expect(tddSkill).toContain("touchTriggers");
+    expect(tddSkill).toContain("enforceOnTracks");
+    expect(tddSkill).toContain("Spec-Compliance");
+    expect(tddSkill).toContain("Quality");
+    expect(tddSkill).toContain("fulfillmentMode");
+    expect(tddSkill).toContain("reviewer");
+    expect(tddSkill).toContain("Per-Slice Review Audit (conditional)");
+  });
+
   it("matches golden snapshots for plan and tdd skills", async () => {
     const root = await createTempProject("golden-plan-tdd");
     await initCclaw({ projectRoot: root });

@@ -28,6 +28,7 @@ export const PLAN: StageSchemaInput = {
     "Group tasks into dependency batches — batch N+1 cannot start until batch N has verification evidence.",
     "Slice into vertical tasks — each task targets 2-5 minutes, produces one testable outcome, and touches one coherent area.",
     "Attach verification — every task has an acceptance criterion mapping and a concrete verification command.",
+    "Annotate slice-review metadata — if `.cclaw/config.yaml::sliceReview.enabled` is true, every task row additionally carries `touchCount` (rough number of files expected to change) and `touchPaths` (glob hints, e.g. `migrations/**`, `src/auth/**`). A task may set `highRisk: true` to force a review pass regardless of thresholds. These fields feed the TDD stage's Per-Slice Review checkpoint; when `sliceReview` is disabled they are optional.",
     "Map scope Locked Decisions — every D-XX from scope is referenced by at least one plan task (or explicitly marked deferred with reason).",
     "Run anti-placeholder + anti-scope-reduction scans — block `TODO/TBD/...` and phrasing like `v1`, `for now`, `later` for locked boundaries.",
     "Define checkpoints — mark points where progress should be validated before continuing.",
@@ -146,7 +147,7 @@ export const PLAN: StageSchemaInput = {
   artifactValidation: [
     { section: "Dependency Graph", required: true, validationRule: "Ordering and parallel opportunities explicit. No circular dependencies." },
     { section: "Dependency Batches", required: true, validationRule: "Every task belongs to a batch. Each batch has an exit gate and dependency statement." },
-    { section: "Task List", required: true, validationRule: "Each task row includes ID, description, acceptance criterion, verification command, and effort estimate (S/M/L). Every task must also carry a minutes estimate within the 2-5 minute budget." },
+    { section: "Task List", required: true, validationRule: "Each task row includes ID, description, acceptance criterion, verification command, and effort estimate (S/M/L). Every task must also carry a minutes estimate within the 2-5 minute budget. When `.cclaw/config.yaml::sliceReview.enabled` is true, each task row additionally declares `touchCount`, `touchPaths`, and an optional `highRisk` flag; the TDD stage uses these to decide whether a Per-Slice Review pass is mandatory." },
     { section: "Acceptance Mapping", required: true, validationRule: "Every spec criterion is covered by at least one task." },
     { section: "Locked Decision Coverage", required: false, validationRule: "Every locked decision ID (D-XX) from scope is listed with linked task IDs or explicit defer rationale." },
     { section: "Risk Assessment", required: false, validationRule: "If present: per-task or per-batch risk identification with likelihood, impact, and mitigation strategy." },
