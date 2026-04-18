@@ -35,7 +35,10 @@ const NUMERIC_ENVS = new Set([
   "CCLAW_EVAL_MAX_RETRIES",
   "CCLAW_EVAL_JUDGE_SAMPLES",
   "CCLAW_EVAL_JUDGE_TEMPERATURE",
-  "CCLAW_EVAL_AGENT_TEMPERATURE"
+  "CCLAW_EVAL_AGENT_TEMPERATURE",
+  "CCLAW_EVAL_TOOL_MAX_TURNS",
+  "CCLAW_EVAL_TOOL_MAX_ARG_BYTES",
+  "CCLAW_EVAL_TOOL_MAX_RESULT_BYTES"
 ]);
 
 function evalConfigError(configFilePath: string, reason: string): Error {
@@ -195,6 +198,25 @@ function validateFileConfig(
     out.tokenPricing = pricing;
   }
 
+  const assignPositiveInt = (key: keyof EvalConfig, value: unknown, label: string): void => {
+    if (value === undefined) return;
+    if (!Number.isInteger(value) || (value as number) < 1) {
+      throw evalConfigError(configFilePath, `"${label}" must be a positive integer`);
+    }
+    (out as Record<string, unknown>)[key as string] = value as number;
+  };
+  assignPositiveInt("toolMaxTurns", raw.toolMaxTurns, "toolMaxTurns");
+  assignPositiveInt(
+    "toolMaxArgumentsBytes",
+    raw.toolMaxArgumentsBytes,
+    "toolMaxArgumentsBytes"
+  );
+  assignPositiveInt(
+    "toolMaxResultBytes",
+    raw.toolMaxResultBytes,
+    "toolMaxResultBytes"
+  );
+
   if (raw.regression !== undefined) {
     if (!isRecord(raw.regression)) {
       throw evalConfigError(configFilePath, `"regression" must be a mapping`);
@@ -238,7 +260,10 @@ function validateFileConfig(
     "judgeSamples",
     "judgeTemperature",
     "agentTemperature",
-    "tokenPricing"
+    "tokenPricing",
+    "toolMaxTurns",
+    "toolMaxArgumentsBytes",
+    "toolMaxResultBytes"
   ]);
   const unknown = Object.keys(raw).filter((key) => !knownKeys.has(key));
   if (unknown.length > 0) {
@@ -365,6 +390,29 @@ function applyEnvOverrides(
     patched.agentTemperature = value;
     overridden = true;
   }
+
+  const readPositiveInt = (name: string, key: keyof EvalConfig, label: string): void => {
+    const raw = read(name);
+    if (!raw) return;
+    const value = parseNumericEnv(name, raw);
+    if (!Number.isInteger(value) || value < 1) {
+      throw new Error(`Environment variable ${name} must be a positive integer, got: ${raw}`);
+    }
+    (patched as unknown as Record<string, unknown>)[key as string] = value;
+    overridden = true;
+    void label;
+  };
+  readPositiveInt("CCLAW_EVAL_TOOL_MAX_TURNS", "toolMaxTurns", "toolMaxTurns");
+  readPositiveInt(
+    "CCLAW_EVAL_TOOL_MAX_ARG_BYTES",
+    "toolMaxArgumentsBytes",
+    "toolMaxArgumentsBytes"
+  );
+  readPositiveInt(
+    "CCLAW_EVAL_TOOL_MAX_RESULT_BYTES",
+    "toolMaxResultBytes",
+    "toolMaxResultBytes"
+  );
 
   const apiKey = read("CCLAW_EVAL_API_KEY");
   return { patched, overridden, apiKey };

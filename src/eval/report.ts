@@ -88,6 +88,39 @@ export function formatMarkdownReport(report: EvalReport): string {
   }
   lines.push(``);
 
+  const toolCases = report.cases.filter((item) =>
+    item.verifierResults.some(
+      (r) => r.id === "agent:with-tools" && typeof r.details?.toolUse === "object"
+    )
+  );
+  if (toolCases.length > 0) {
+    lines.push(`## Tool use`);
+    lines.push(``);
+    lines.push(`| stage | case id | turns | calls | errors | denied | by tool |`);
+    lines.push(`| --- | --- | --- | --- | --- | --- | --- |`);
+    for (const item of toolCases) {
+      const verifier = item.verifierResults.find((r) => r.id === "agent:with-tools");
+      const toolUse = verifier?.details?.toolUse as
+        | {
+            turns: number;
+            calls: number;
+            errors: number;
+            deniedPaths: string[];
+            byTool: Record<string, number>;
+          }
+        | undefined;
+      if (!toolUse) continue;
+      const byTool = Object.entries(toolUse.byTool)
+        .map(([name, count]) => `${name}=${count}`)
+        .join(", ");
+      const denied = toolUse.deniedPaths.length > 0 ? toolUse.deniedPaths.length : "0";
+      lines.push(
+        `| ${item.stage} | ${item.caseId} | ${toolUse.turns} | ${toolUse.calls} | ${toolUse.errors} | ${denied} | ${byTool || "-"} |`
+      );
+    }
+    lines.push(``);
+  }
+
   const judgeCases = report.cases.filter((item) =>
     item.verifierResults.some((r) => r.kind === "judge")
   );

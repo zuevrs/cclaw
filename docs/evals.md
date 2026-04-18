@@ -12,7 +12,7 @@ measured score delta rather than subjective review. See
 | 1 | 0.23.0 | shipped | Structural verifier, baselines, 24-case seed corpus, PR-blocking CI gate |
 | 2 | 0.24.0 | shipped | Rule-based verifiers (keywords, regex, counts, uniqueness) + cross-stage traceability, 40-case corpus |
 | 3 | 0.25.0 | shipped | LLM judge + Tier A single-shot, cost guard, nightly CI |
-| 4 | 0.26.0 | planned | Tier B agent with tools + sandbox |
+| 4 | 0.26.0 | shipped | Tier B agent with tools + sandbox (read/write/glob/grep) |
 | 5 | 0.27.0 | planned | Tier C multi-stage workflow + release CI |
 | 6 | 0.28.0 | planned | HTML reports, cross-model diff, polish |
 
@@ -78,6 +78,9 @@ repo — only `CCLAW_EVAL_API_KEY` is supplied this way.
 | `CCLAW_EVAL_JUDGE_SAMPLES` | Number of samples the LLM judge aggregates per artifact. Must be odd (default: `3`). |
 | `CCLAW_EVAL_JUDGE_TEMPERATURE` | Sampling temperature for the judge call. Default `0.3`. |
 | `CCLAW_EVAL_AGENT_TEMPERATURE` | Sampling temperature for Tier A single-shot agent runs. Default `0.2`. |
+| `CCLAW_EVAL_TOOL_MAX_TURNS` | Tier B turn cap for the with-tools loop. Default `8`. |
+| `CCLAW_EVAL_TOOL_MAX_ARG_BYTES` | Max bytes accepted for a single tool-call arguments payload. Default `65536`. |
+| `CCLAW_EVAL_TOOL_MAX_RESULT_BYTES` | Max bytes returned to the model per tool call (truncated with marker). Default `32768`. |
 
 Example local setup (z.ai GLM):
 
@@ -150,9 +153,9 @@ expected:
     # max_chars: 6000
 ```
 
-The canonical 40-case corpus used by cclaw's own CI lives under
-`tests/fixtures/eval-demo/.cclaw/evals/corpus/` and is the reference for
-authoring new cases.
+The canonical 41-case corpus used by cclaw's own CI lives under
+`tests/fixtures/eval-demo/.cclaw/evals/corpus/` (24 structural + 16
+rules + 1 Tier B demo) and is the reference for authoring new cases.
 
 ### Rule-based expectations (`expected.rules`)
 
@@ -299,6 +302,64 @@ must be odd). The runner:
 Judge scores appear as a dedicated "Judge scores" table in the
 generated markdown report alongside per-check rationales from the first
 sample.
+
+## Tier B: agent with tools
+
+Tier B is a multi-turn AUT. The runner:
+
+1. Provisions a per-case sandbox at `os.tmpdir()/cclaw-eval-<uuid>/`.
+2. Copies every path listed in `context_files` into the sandbox
+   (subdirectories preserved). Entries must resolve inside the
+   project root.
+3. Loads the stage `SKILL.md` as the system prompt (same contract as
+   Tier A).
+4. Runs up to `toolMaxTurns` chat turns with OpenAI-style
+   function-calling. Each tool call:
+   - resolves its path inside the sandbox (absolute paths, `..`,
+     symlink escapes, and NUL bytes are rejected),
+   - enforces `toolMaxArgumentsBytes` on the arguments payload, and
+   - truncates results at `toolMaxResultBytes` with a visible
+     cutoff marker.
+5. Disposes the sandbox in a `finally` so CI never leaks temp dirs.
+
+Built-in tools (OpenAI function schema):
+
+- `read_file(path, offset?, limit?)` — UTF-8 text read, 1-indexed line
+  slicing.
+- `write_file(path, content)` — writes UTF-8, creates parents.
+- `glob(pattern)` — `**`/`*`/`?` globbing over the sandbox, results
+  capped at 500.
+- `grep(pattern, caseInsensitive?, maxMatches?)` — JS-regex line
+  search with a hard 500-match ceiling.
+
+Artifact resolution prefers a sandbox file (`artifact.md`,
+`artifact.txt`, `ARTIFACT.md`) if the model writes one; otherwise the
+terminal assistant message is the artifact.
+
+Tier B cases look identical to Tier A plus a `context_files` list:
+
+```yaml
+id: spec-06-tier-b-demo
+stage: spec
+input_prompt: |
+  Read the seeded README.md and produce a one-paragraph spec with one
+  acceptance criterion.
+context_files:
+  - README.md
+expected:
+  judge:
+    required_checks:
+      - acceptance-criteria-coverage
+```
+
+Exit criteria (met for v0.26.0):
+
+- `runWithTools` returns a `ToolUseSummary` (turns, calls, errors,
+  deniedPaths, per-tool counts) surfaced in reports.
+- Sandbox cleanup asserted by unit test (no leftover dirs).
+- Escape attempts (`../etc/passwd`, `/etc/passwd`, symlink jumps) are
+  refused and recorded in `deniedPaths`.
+- `MaxTurnsExceededError` aborts the case cleanly.
 
 ## Cost guard
 

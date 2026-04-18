@@ -92,7 +92,7 @@ Commands:
                     --tier=<A|B|C>       Fidelity tier (A=single-shot, B=tools, C=workflow).
                     --schema-only        Run only structural verifiers (default).
                     --rules              Also run rule-based verifiers (keywords, regex, counts, uniqueness, traceability).
-                    --judge              Run the LLM judge (median-of-N) against each case's rubric. Requires CCLAW_EVAL_API_KEY; Tier A also runs the single-shot agent-under-test.
+                    --judge              Run the LLM judge (median-of-N) against each case's rubric. Requires CCLAW_EVAL_API_KEY; Tier A runs the single-shot agent, Tier B runs the sandbox tool-using agent (read_file/write_file/glob/grep).
                     --dry-run            Validate config + corpus, print summary, do not execute.
                     --json               Emit machine-readable JSON on stdout.
                     --no-write           Skip writing the report to .cclaw/evals/reports/.
@@ -112,6 +112,7 @@ Examples:
   cclaw eval --dry-run
   cclaw eval --stage=brainstorm --schema-only
   cclaw eval --judge --tier=A --stage=brainstorm
+  cclaw eval --judge --tier=B --stage=spec
 
 Docs:   https://github.com/zuevrs/cclaw
 Issues: https://github.com/zuevrs/cclaw/issues

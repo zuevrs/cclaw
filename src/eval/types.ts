@@ -281,6 +281,24 @@ export interface EvalConfig {
    * `{ input: 0.0005, output: 0.0015 }` = $0.50 per 1M input tokens.
    */
   tokenPricing?: Record<string, TokenPricing>;
+  /**
+   * Maximum assistant turns (tool_calls → tool result cycles) allowed by
+   * the Tier B with-tools agent. Defaults to 8 when unset. Runs that
+   * exceed the cap fail with a `MaxTurnsExceededError` and surface as a
+   * workflow verifier result.
+   */
+  toolMaxTurns?: number;
+  /**
+   * Per-invocation ceiling on tool call arguments bytes. Defends against
+   * runaway writes. Defaults to 64 KiB.
+   */
+  toolMaxArgumentsBytes?: number;
+  /**
+   * Per-invocation ceiling on tool call result bytes returned to the
+   * model. Defaults to 32 KiB; longer results are truncated with a
+   * marker so the model sees the cutoff.
+   */
+  toolMaxResultBytes?: number;
 }
 
 /** Per-model pricing schedule, expressed as USD per 1K tokens. */
@@ -405,4 +423,22 @@ export interface JudgeInvocation {
   aggregates: JudgeAggregate[];
   usageUsd: number;
   durationMs: number;
+}
+
+/**
+ * Tool-use summary produced by the Tier B with-tools agent. Captured so
+ * the runner can surface per-case tool metrics in the markdown report
+ * (number of calls, depth, error rate, denied paths).
+ */
+export interface ToolUseSummary {
+  /** Turns consumed before the agent produced a terminal assistant message. */
+  turns: number;
+  /** Total successful tool invocations across all turns. */
+  calls: number;
+  /** Tool invocations that returned an error (bad args, denied path, etc.). */
+  errors: number;
+  /** Paths the sandbox refused to resolve (escape attempts, missing files). */
+  deniedPaths: string[];
+  /** Per-tool call counts, keyed by tool name. */
+  byTool: Record<string, number>;
 }
