@@ -15,6 +15,7 @@ import { createDefaultConfig, createProfileConfig } from "./config.js";
 import { detectHarnesses } from "./init-detect.js";
 import { HARNESS_ADAPTERS } from "./harness-adapters.js";
 import { runEval } from "./eval/runner.js";
+import { writeBaselinesFromReport } from "./eval/baseline.js";
 import { writeJsonReport, writeMarkdownReport } from "./eval/report.js";
 import { EVAL_TIERS } from "./eval/types.js";
 import type { EvalTier } from "./eval/types.js";
@@ -53,6 +54,8 @@ interface ParsedArgs {
   evalJudge?: boolean;
   evalJson?: boolean;
   evalNoWrite?: boolean;
+  evalUpdateBaseline?: boolean;
+  evalConfirm?: boolean;
   showHelp?: boolean;
   showVersion?: boolean;
 }
@@ -84,15 +87,17 @@ Commands:
              Flags: --name=<feature>    Feature slug (default: inferred from 00-idea.md).
                     --skip-retro       Bypass mandatory retro gate (requires --retro-reason).
                     --retro-reason=<t> Reason for bypassing retro gate.
-  eval       Run cclaw evals against .cclaw/evals/corpus (Phase 7, Wave 7.0 foundations).
-             Flags: --stage=<id>        Limit to one flow stage (${FLOW_STAGES.join("|")}).
-                    --tier=<A|B|C>      Fidelity tier (A=single-shot, B=tools, C=workflow).
-                    --schema-only       Run only structural verifiers (Wave 7.1).
-                    --rules             Run structural + rule verifiers (Wave 7.2).
-                    --judge             Include LLM judging (Wave 7.3; requires API key).
-                    --dry-run           Validate config + corpus, print summary, do not execute.
-                    --json              Emit machine-readable JSON on stdout.
-                    --no-write          Skip writing the report to .cclaw/evals/reports/.
+  eval       Run cclaw evals against .cclaw/evals/corpus (Phase 7, Wave 7.1: structural verifier).
+             Flags: --stage=<id>         Limit to one flow stage (${FLOW_STAGES.join("|")}).
+                    --tier=<A|B|C>       Fidelity tier (A=single-shot, B=tools, C=workflow).
+                    --schema-only        Run only structural verifiers (Wave 7.1, default).
+                    --rules              Run structural + rule verifiers (Wave 7.2).
+                    --judge              Include LLM judging (Wave 7.3; requires API key).
+                    --dry-run            Validate config + corpus, print summary, do not execute.
+                    --json               Emit machine-readable JSON on stdout.
+                    --no-write           Skip writing the report to .cclaw/evals/reports/.
+                    --update-baseline    Overwrite baselines from the current run (requires --confirm).
+                    --confirm            Acknowledge --update-baseline (prevents accidental resets).
   upgrade    Refresh generated files in .cclaw without modifying user artifacts.
   uninstall  Remove .cclaw runtime and the generated harness shim files.
 
@@ -536,6 +541,14 @@ function parseArgs(argv: string[]): ParsedArgs {
       parsed.evalNoWrite = true;
       continue;
     }
+    if (flag === "--update-baseline") {
+      parsed.evalUpdateBaseline = true;
+      continue;
+    }
+    if (flag === "--confirm") {
+      parsed.evalConfirm = true;
+      continue;
+    }
   }
 
   // `--json` is shared between doctor and eval. Disambiguate by command.
@@ -689,6 +702,28 @@ async function runCommand(parsed: ParsedArgs, ctx: CliContext): Promise<number> 
       return 0;
     }
 
+    if (parsed.evalUpdateBaseline === true && parsed.evalConfirm !== true) {
+      error(
+        ctx,
+        "--update-baseline requires --confirm to prevent accidental baseline resets."
+      );
+      return 1;
+    }
+
+    if (parsed.evalUpdateBaseline === true) {
+      if (result.summary.failed > 0) {
+        error(
+          ctx,
+          `Refusing to update baselines: ${result.summary.failed} case(s) currently failing. Fix structural checks first.`
+        );
+        return 1;
+      }
+      const written = await writeBaselinesFromReport(ctx.cwd, result);
+      for (const file of written) {
+        info(ctx, `Baseline written: ${path.relative(ctx.cwd, file)}`);
+      }
+    }
+
     if (parsed.evalNoWrite !== true) {
       const jsonPath = await writeJsonReport(ctx.cwd, result);
       const mdPath = await writeMarkdownReport(ctx.cwd, result);
@@ -696,17 +731,23 @@ async function runCommand(parsed: ParsedArgs, ctx: CliContext): Promise<number> 
       info(ctx, `Report written: ${path.relative(ctx.cwd, mdPath)}`);
     }
 
+    const regressionCount = result.baselineDelta?.criticalFailures ?? 0;
+
     if (parsed.evalJson === true) {
       ctx.stdout.write(`${JSON.stringify(result, null, 2)}\n`);
     } else {
+      const regressionNote =
+        regressionCount > 0 ? `, ${regressionCount} regression(s)` : "";
       ctx.stdout.write(
         `cclaw eval: ${result.summary.totalCases} case(s), ` +
           `${result.summary.passed} passed, ` +
           `${result.summary.failed} failed, ` +
-          `${result.summary.skipped} skipped (Wave 7.0 skeleton — verifiers land in Wave 7.1+)\n`
+          `${result.summary.skipped} skipped${regressionNote}\n`
       );
     }
-    return result.summary.failed > 0 ? 1 : 0;
+    if (result.summary.failed > 0) return 1;
+    if (regressionCount > 0) return 1;
+    return 0;
   }
 
   if (command === "archive") {
