@@ -23,6 +23,12 @@ export interface ChatMessage {
   content: string;
   name?: string;
   toolCallId?: string;
+  /**
+   * OpenAI-style tool calls carried on a preceding assistant message.
+   * Populated by the Tier B loop so the wire transcript stays
+   * consistent (assistant message → tool responses).
+   */
+  toolCalls?: Array<{ id: string; name: string; arguments: string }>;
 }
 
 export interface ChatRequest {
@@ -272,7 +278,16 @@ function buildBody(request: ChatRequest): Record<string, unknown> {
       role: m.role,
       content: m.content,
       ...(m.name !== undefined ? { name: m.name } : {}),
-      ...(m.toolCallId !== undefined ? { tool_call_id: m.toolCallId } : {})
+      ...(m.toolCallId !== undefined ? { tool_call_id: m.toolCallId } : {}),
+      ...(m.toolCalls && m.toolCalls.length > 0
+        ? {
+            tool_calls: m.toolCalls.map((call) => ({
+              id: call.id,
+              type: "function",
+              function: { name: call.name, arguments: call.arguments }
+            }))
+          }
+        : {})
     }))
   };
   if (request.maxTokens !== undefined) body.max_tokens = request.maxTokens;
