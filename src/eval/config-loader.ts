@@ -3,7 +3,7 @@ import path from "node:path";
 import { parse } from "yaml";
 import { EVALS_CONFIG_PATH } from "../constants.js";
 import { exists } from "../fs-utils.js";
-import type { EvalConfig, EvalTier, ResolvedEvalConfig } from "./types.js";
+import type { EvalConfig, EvalTier, ResolvedEvalConfig, TokenPricing } from "./types.js";
 import { EVAL_TIERS } from "./types.js";
 
 /**
@@ -22,14 +22,20 @@ export const DEFAULT_EVAL_CONFIG: EvalConfig = {
     failIfCriticalBelow: 3.0
   },
   timeoutMs: 120_000,
-  maxRetries: 2
+  maxRetries: 2,
+  judgeSamples: 3,
+  judgeTemperature: 0,
+  agentTemperature: 0.2
 };
 
 const EVAL_TIER_SET = new Set<string>(EVAL_TIERS);
 const NUMERIC_ENVS = new Set([
   "CCLAW_EVAL_DAILY_USD_CAP",
   "CCLAW_EVAL_TIMEOUT_MS",
-  "CCLAW_EVAL_MAX_RETRIES"
+  "CCLAW_EVAL_MAX_RETRIES",
+  "CCLAW_EVAL_JUDGE_SAMPLES",
+  "CCLAW_EVAL_JUDGE_TEMPERATURE",
+  "CCLAW_EVAL_AGENT_TEMPERATURE"
 ]);
 
 function evalConfigError(configFilePath: string, reason: string): Error {
@@ -117,6 +123,78 @@ function validateFileConfig(
     out.maxRetries = raw.maxRetries as number;
   }
 
+  if (raw.judgeSamples !== undefined) {
+    const value = raw.judgeSamples;
+    if (!Number.isInteger(value) || (value as number) < 1) {
+      throw evalConfigError(configFilePath, `"judgeSamples" must be a positive integer`);
+    }
+    if ((value as number) % 2 === 0) {
+      throw evalConfigError(
+        configFilePath,
+        `"judgeSamples" must be odd (so median-of-N is a true integer)`
+      );
+    }
+    out.judgeSamples = value as number;
+  }
+
+  if (raw.judgeTemperature !== undefined) {
+    if (typeof raw.judgeTemperature !== "number" || !Number.isFinite(raw.judgeTemperature)) {
+      throw evalConfigError(configFilePath, `"judgeTemperature" must be a finite number`);
+    }
+    if (raw.judgeTemperature < 0 || raw.judgeTemperature > 2) {
+      throw evalConfigError(configFilePath, `"judgeTemperature" must be within [0, 2]`);
+    }
+    out.judgeTemperature = raw.judgeTemperature;
+  }
+
+  if (raw.agentTemperature !== undefined) {
+    if (typeof raw.agentTemperature !== "number" || !Number.isFinite(raw.agentTemperature)) {
+      throw evalConfigError(configFilePath, `"agentTemperature" must be a finite number`);
+    }
+    if (raw.agentTemperature < 0 || raw.agentTemperature > 2) {
+      throw evalConfigError(configFilePath, `"agentTemperature" must be within [0, 2]`);
+    }
+    out.agentTemperature = raw.agentTemperature;
+  }
+
+  if (raw.tokenPricing !== undefined) {
+    if (!isRecord(raw.tokenPricing)) {
+      throw evalConfigError(configFilePath, `"tokenPricing" must be a mapping`);
+    }
+    const pricing: Record<string, TokenPricing> = {};
+    for (const [model, value] of Object.entries(raw.tokenPricing)) {
+      if (!isRecord(value)) {
+        throw evalConfigError(
+          configFilePath,
+          `"tokenPricing.${model}" must be a mapping with numeric input + output keys`
+        );
+      }
+      const input = (value as Record<string, unknown>).input;
+      const output = (value as Record<string, unknown>).output;
+      if (typeof input !== "number" || input < 0) {
+        throw evalConfigError(
+          configFilePath,
+          `"tokenPricing.${model}.input" must be a non-negative number`
+        );
+      }
+      if (typeof output !== "number" || output < 0) {
+        throw evalConfigError(
+          configFilePath,
+          `"tokenPricing.${model}.output" must be a non-negative number`
+        );
+      }
+      const extraneous = Object.keys(value).filter((key) => key !== "input" && key !== "output");
+      if (extraneous.length > 0) {
+        throw evalConfigError(
+          configFilePath,
+          `"tokenPricing.${model}" has unknown key(s): ${extraneous.join(", ")}`
+        );
+      }
+      pricing[model] = { input, output };
+    }
+    out.tokenPricing = pricing;
+  }
+
   if (raw.regression !== undefined) {
     if (!isRecord(raw.regression)) {
       throw evalConfigError(configFilePath, `"regression" must be a mapping`);
@@ -156,7 +234,11 @@ function validateFileConfig(
     "dailyUsdCap",
     "timeoutMs",
     "maxRetries",
-    "regression"
+    "regression",
+    "judgeSamples",
+    "judgeTemperature",
+    "agentTemperature",
+    "tokenPricing"
   ]);
   const unknown = Object.keys(raw).filter((key) => !knownKeys.has(key));
   if (unknown.length > 0) {
@@ -243,6 +325,44 @@ function applyEnvOverrides(
   const retries = read("CCLAW_EVAL_MAX_RETRIES");
   if (retries) {
     patched.maxRetries = parseNumericEnv("CCLAW_EVAL_MAX_RETRIES", retries);
+    overridden = true;
+  }
+  const judgeSamples = read("CCLAW_EVAL_JUDGE_SAMPLES");
+  if (judgeSamples) {
+    const value = parseNumericEnv("CCLAW_EVAL_JUDGE_SAMPLES", judgeSamples);
+    if (!Number.isInteger(value) || value < 1) {
+      throw new Error(
+        `Environment variable CCLAW_EVAL_JUDGE_SAMPLES must be a positive integer, got: ${judgeSamples}`
+      );
+    }
+    if (value % 2 === 0) {
+      throw new Error(
+        `Environment variable CCLAW_EVAL_JUDGE_SAMPLES must be odd, got: ${judgeSamples}`
+      );
+    }
+    patched.judgeSamples = value;
+    overridden = true;
+  }
+  const judgeTemp = read("CCLAW_EVAL_JUDGE_TEMPERATURE");
+  if (judgeTemp) {
+    const value = parseNumericEnv("CCLAW_EVAL_JUDGE_TEMPERATURE", judgeTemp);
+    if (value < 0 || value > 2) {
+      throw new Error(
+        `Environment variable CCLAW_EVAL_JUDGE_TEMPERATURE must be within [0, 2], got: ${judgeTemp}`
+      );
+    }
+    patched.judgeTemperature = value;
+    overridden = true;
+  }
+  const agentTemp = read("CCLAW_EVAL_AGENT_TEMPERATURE");
+  if (agentTemp) {
+    const value = parseNumericEnv("CCLAW_EVAL_AGENT_TEMPERATURE", agentTemp);
+    if (value < 0 || value > 2) {
+      throw new Error(
+        `Environment variable CCLAW_EVAL_AGENT_TEMPERATURE must be within [0, 2], got: ${agentTemp}`
+      );
+    }
+    patched.agentTemperature = value;
     overridden = true;
   }
 
