@@ -30,14 +30,18 @@ Generated from `src/harness-adapters.ts` capabilities and hook event mappings.
 
 ## Shared command contract
 
-All harnesses receive the same six top-level utility commands:
+All harnesses receive the same five top-level utility commands:
 
 - `/cc` — flow entry and resume
 - `/cc-next` — stage progression
 - `/cc-ideate` — repository improvement discovery
 - `/cc-view` — read-only flow visibility (status/tree/diff)
-- `/cc-learn` — strict-schema knowledge capture/lookup
 - `/cc-ops` — operational router (feature/tdd-log/retro/compound/archive/rewind)
+
+Knowledge capture runs as an internal skill (`.cclaw/skills/learnings/SKILL.md`)
+invoked automatically by stage completion protocols — not as a user-typed
+slash command. The `cc-learn.md` shim was removed in v0.31; upgrade will clean
+up stale copies.
 
 Stage order remains canonical:
 `brainstorm -> scope -> design -> spec -> plan -> tdd -> review -> ship`

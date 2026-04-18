@@ -54,18 +54,20 @@ const UTILITY_SHIMS: UtilityShimSpec[] = [
     commandFile: "view.md"
   },
   {
-    fileName: "cc-learn.md",
-    command: "learn",
-    skillFolder: "learnings",
-    commandFile: "learn.md"
-  },
-  {
     fileName: "cc-ops.md",
     command: "ops",
     skillFolder: "flow-ops",
     commandFile: "ops.md"
   }
 ];
+
+/**
+ * Shims that older cclaw versions installed as top-level slash commands but
+ * which we now treat as internal (skill-only, invoked by the agent, never
+ * typed by users). On sync/upgrade we proactively delete any stale file from
+ * harness command directories so `/cc-learn` etc. do not linger.
+ */
+const LEGACY_HARNESS_SHIMS: readonly string[] = ["cc-learn.md"];
 
 export function harnessShimFileNames(): string[] {
   return ["cc.md", ...UTILITY_SHIMS.map((shim) => shim.fileName)];
@@ -183,8 +185,10 @@ When in doubt, prefer **non-trivial** — the quick track is opt-in and only saf
 | \`/cc-next\` | **Progression.** Advances to the next stage when current is complete. |
 | \`/cc-ideate\` | **Discovery mode.** Generates a ranked repo-improvement backlog before implementation. |
 | \`/cc-view\` | **Read-only router.** Unified entry for status/tree/diff views. |
-| \`/cc-learn\` | **Cross-cutting.** Capture or review project knowledge (append-only JSONL). |
 | \`/cc-ops\` | **Operations router.** Unified entry for feature/tdd-log/retro/compound/archive/rewind actions. |
+
+Knowledge capture and curation run automatically as part of stage completion
+protocols via the internal \`learnings\` skill — no user-facing command.
 
 **Stage order:** brainstorm > scope > design > spec > plan > tdd > review > ship.
 \`/cc-next\` loads the right stage skill automatically. Gates must pass before handoff.
@@ -315,6 +319,14 @@ export async function syncHarnessShims(projectRoot: string, harnesses: HarnessId
         path.join(commandDir, shim.fileName),
         utilityShimContent(harness, shim.command, shim.skillFolder, shim.commandFile)
       );
+    }
+    for (const legacy of LEGACY_HARNESS_SHIMS) {
+      const legacyPath = path.join(commandDir, legacy);
+      try {
+        await fs.unlink(legacyPath);
+      } catch {
+        // fine — file may not exist (fresh install) or may be on read-only FS
+      }
     }
   }
 

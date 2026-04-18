@@ -70,7 +70,6 @@ describe("install lifecycle", () => {
       .sort();
     expect(claudeShims).toEqual([
       "cc-ideate.md",
-      "cc-learn.md",
       "cc-next.md",
       "cc-ops.md",
       "cc-view.md",
