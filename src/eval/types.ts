@@ -121,6 +121,32 @@ export interface TraceabilityExpected {
   requireIn: string[];
 }
 
+/**
+ * LLM-judge expectations — Step 3.
+ *
+ * When present, the judge runs against the resolved artifact (live-agent
+ * output in Tier A/B/C, or the pre-generated fixture when `--judge` is
+ * combined with `--schema-only` for smoke tests). Every field below is
+ * optional; the case-level hint overlays the stage-level rubric loaded
+ * from `.cclaw/evals/rubrics/<stage>.yaml`.
+ */
+export interface JudgeExpected {
+  /**
+   * Per-case check ids that MUST be present in the stage rubric. Used when
+   * a case wants to assert the rubric covers scenario-specific properties.
+   */
+  requiredChecks?: string[];
+  /**
+   * Stage rubric identifier when a stage ships multiple rubrics (e.g.
+   * "strict" vs. "lenient"). Defaults to the stage name.
+   */
+  rubric?: string;
+  /** Optional override of `config.judgeSamples` for the case. */
+  samples?: number;
+  /** Per-check minimum score (1..5 scale). Fail when any score drops below. */
+  minimumScores?: Record<string, number>;
+}
+
 /** Superset of per-verifier expectation shapes. */
 export interface ExpectedShape {
   structural?: StructuralExpected;
@@ -129,7 +155,7 @@ export interface ExpectedShape {
   /** Cross-stage ID propagation checks — Step 2. */
   traceability?: TraceabilityExpected;
   /** LLM-judge rubrics — Step 3. */
-  judge?: Record<string, unknown>;
+  judge?: JudgeExpected;
 }
 
 /**
@@ -240,6 +266,27 @@ export interface EvalConfig {
   timeoutMs: number;
   /** Max retries per API call on transient failures. */
   maxRetries: number;
+  /**
+   * Number of judge samples per case (median-of-N). Defaults to 3 when unset.
+   * Must be odd so a true median exists.
+   */
+  judgeSamples?: number;
+  /** Sampling temperature for judge calls. Defaults to 0.0. */
+  judgeTemperature?: number;
+  /** Sampling temperature for the agent-under-test. Defaults to 0.2. */
+  agentTemperature?: number;
+  /**
+   * Optional per-model USD pricing used by the cost guard. Keys match
+   * `model` / `judgeModel`. Values in USD per 1K tokens, so
+   * `{ input: 0.0005, output: 0.0015 }` = $0.50 per 1M input tokens.
+   */
+  tokenPricing?: Record<string, TokenPricing>;
+}
+
+/** Per-model pricing schedule, expressed as USD per 1K tokens. */
+export interface TokenPricing {
+  input: number;
+  output: number;
 }
 
 /** Resolved config with env overrides applied. */
@@ -296,4 +343,66 @@ export interface BaselineRegression {
   reason: "newly-failing" | "case-now-failing" | "score-drop";
   previousScore?: number;
   currentScore?: number;
+}
+
+/**
+ * One rubric check evaluated by the LLM judge. Scored on a 1..5 scale;
+ * 5 means "the artifact fully meets the bar described by `prompt`".
+ */
+export interface RubricCheck {
+  /** Kebab-case slug, unique per rubric. Stable across runs. */
+  id: string;
+  /** Natural-language question posed to the judge. */
+  prompt: string;
+  /** Human-readable scale description rendered in judge prompts. */
+  scale?: string;
+  /** Relative weight for the stage's aggregate score. Defaults to 1.0. */
+  weight?: number;
+  /**
+   * When true, any sample below `config.regression.failIfCriticalBelow`
+   * flips the verifier to `ok:false` (not just a score drop).
+   */
+  critical?: boolean;
+}
+
+/** Parsed `.cclaw/evals/rubrics/<stage>.yaml`. */
+export interface RubricDoc {
+  stage: FlowStage;
+  /** Optional rubric variant label; defaults to the stage name. */
+  id: string;
+  checks: RubricCheck[];
+}
+
+/**
+ * Judge response for a single sample (one API call). The judge is asked to
+ * return structured JSON; `scores[id]` maps rubric check id → integer 1..5.
+ * `rationales[id]` is a short plain-text explanation, useful in reports but
+ * never used for gating.
+ */
+export interface JudgeSample {
+  scores: Record<string, number>;
+  rationales: Record<string, string>;
+}
+
+/** Aggregated judge output across N samples, per rubric check. */
+export interface JudgeAggregate {
+  checkId: string;
+  samples: number[];
+  median: number;
+  mean: number;
+  /** True iff every sample returned a score for this check. */
+  coverage: boolean;
+}
+
+/**
+ * Judge invocation result. Produced by `runJudge` and consumed by the
+ * runner: the runner converts each aggregate into a `VerifierResult` and
+ * records `usageUsd` toward the per-case cost.
+ */
+export interface JudgeInvocation {
+  rubricId: string;
+  samples: JudgeSample[];
+  aggregates: JudgeAggregate[];
+  usageUsd: number;
+  durationMs: number;
 }
