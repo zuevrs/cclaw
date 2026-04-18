@@ -1,6 +1,9 @@
 import { describe, expect, it } from "vitest";
 import { runEval } from "../../src/eval/runner.js";
-import { createEvalClient, EvalLlmNotWiredError } from "../../src/eval/llm-client.js";
+import {
+  createEvalClient,
+  EvalLlmNotConfiguredError
+} from "../../src/eval/llm-client.js";
 import type { DryRunSummary } from "../../src/eval/runner.js";
 import type { EvalReport } from "../../src/eval/types.js";
 import { createTempProject, writeProjectFile } from "../helpers/index.js";
@@ -34,7 +37,7 @@ describe("eval runner", () => {
     expect(result.notes.some((n) => n.includes("Corpus is empty"))).toBe(true);
   });
 
-  it("dry-run with --judge surfaces a 'not wired yet' note", async () => {
+  it("dry-run with --judge reports the judge verifier as available and warns about the missing api key", async () => {
     const root = await createTempProject("runner-dry-judge");
     const result = await runEval({
       projectRoot: root,
@@ -43,7 +46,9 @@ describe("eval runner", () => {
       env: {}
     });
     assertDryRun(result);
-    expect(result.notes.some((n) => n.includes("LLM judging is not wired yet"))).toBe(true);
+    expect(result.verifiersAvailable.judge).toBe(true);
+    expect(result.verifiersAvailable.workflow).toBe(true);
+    expect(result.notes.some((n) => n.includes("CCLAW_EVAL_API_KEY"))).toBe(true);
   });
 
   it("dry-run respects tier override", async () => {
@@ -109,8 +114,8 @@ describe("eval runner", () => {
   });
 });
 
-describe("eval llm client (pre-wire stub)", () => {
-  it("createEvalClient returns a shape that throws on chat()", async () => {
+describe("eval llm client (real adapter)", () => {
+  it("createEvalClient throws EvalLlmNotConfiguredError when apiKey is missing", async () => {
     const client = createEvalClient({
       provider: "zai",
       baseUrl: "https://api.z.ai/api/coding/paas/v4",
@@ -123,12 +128,13 @@ describe("eval llm client (pre-wire stub)", () => {
     });
     await expect(
       client.chat({ model: "glm-5.1", messages: [] })
-    ).rejects.toBeInstanceOf(EvalLlmNotWiredError);
+    ).rejects.toBeInstanceOf(EvalLlmNotConfiguredError);
   });
 
-  it("EvalLlmNotWiredError mentions the offline fallback", async () => {
-    const err = new EvalLlmNotWiredError();
-    expect(err.message).toContain("not wired yet");
-    expect(err.message).toContain("--dry-run");
+  it("EvalLlmNotConfiguredError surfaces the offline fallback and env guidance", async () => {
+    const err = new EvalLlmNotConfiguredError();
+    expect(err.message).toContain("CCLAW_EVAL_API_KEY");
+    expect(err.message).toContain("--schema-only");
+    expect(err.retryable).toBe(false);
   });
 });
