@@ -31,6 +31,47 @@ export const VERIFIER_KINDS = ["structural", "rules", "judge", "workflow"] as co
 export type VerifierKind = (typeof VERIFIER_KINDS)[number];
 
 /**
+ * Structural expectations — deterministic, LLM-free checks against a single
+ * text artifact. Wave 7.1 implements all fields below; Wave 7.2 adds the
+ * sibling `rules` shape, Wave 7.3 adds `judge`.
+ */
+export interface StructuralExpected {
+  /**
+   * Case-insensitive substrings that must each appear on at least one markdown
+   * heading line (line starting with `#`). Useful for "required sections".
+   */
+  requiredSections?: string[];
+  /**
+   * Case-insensitive substrings that must NOT appear anywhere in the body
+   * (headings or prose). Typical entries: "TBD", "TODO", "placeholder".
+   */
+  forbiddenPatterns?: string[];
+  /** Inclusive minimum line count of the artifact body (frontmatter excluded). */
+  minLines?: number;
+  /** Inclusive maximum line count of the artifact body (frontmatter excluded). */
+  maxLines?: number;
+  /** Inclusive minimum character count of the artifact body. */
+  minChars?: number;
+  /** Inclusive maximum character count of the artifact body. */
+  maxChars?: number;
+  /**
+   * Keys that must appear in the leading YAML frontmatter (between a pair of
+   * `---` delimiters at the very top of the file). An artifact without
+   * frontmatter will fail every entry.
+   */
+  requiredFrontmatterKeys?: string[];
+}
+
+/** Superset of per-verifier expectation shapes. Only `structural` is wired in Wave 7.1. */
+export interface ExpectedShape {
+  structural?: StructuralExpected;
+  /** Rule-based (keyword/regex/traceability) checks — Wave 7.2. */
+  rules?: Record<string, unknown>;
+  /** LLM-judge rubrics — Wave 7.3. */
+  judge?: Record<string, unknown>;
+}
+
+/**
  * A single eval case describes one input scenario for one stage. Cases live in
  * `.cclaw/evals/corpus/<stage>/<id>.yaml` and may reference a pre-generated
  * fixture artifact for verifier development (Wave 7.1) before the agent loop
@@ -43,10 +84,10 @@ export interface EvalCase {
   /** Project files copied into the Tier B/C sandbox before the agent runs. */
   contextFiles?: string[];
   /**
-   * Optional expected-shape hints consumed by structural/rule verifiers.
-   * Left intentionally loose; verifiers in Waves 7.1–7.2 will narrow this.
+   * Typed expectation hints consumed by the structural/rules/judge verifiers.
+   * Each sub-shape is optional; missing sub-shapes skip that verifier tier.
    */
-  expected?: Record<string, unknown>;
+  expected?: ExpectedShape;
   /**
    * Path (relative to the corpus case file) of a pre-generated artifact used
    * when verifiers are exercised without a live agent loop. Primarily a Wave
@@ -141,4 +182,54 @@ export interface EvalConfig {
 export interface ResolvedEvalConfig extends EvalConfig {
   apiKey?: string;
   source: "default" | "file" | "env" | "file+env";
+}
+
+/**
+ * Frozen per-stage baseline used by regression gating (Wave 7.1). Baselines
+ * are committed to git; `cclaw eval --update-baseline --confirm` rewrites
+ * them. The shape is intentionally flat so a quick `git diff` reveals what
+ * changed between runs.
+ */
+export interface BaselineSnapshot {
+  schemaVersion: 1;
+  stage: FlowStage;
+  generatedAt: string;
+  cclawVersion: string;
+  /** Keyed by `EvalCase.id` so unchanged cases produce zero diff. */
+  cases: Record<string, BaselineCaseEntry>;
+}
+
+export interface BaselineCaseEntry {
+  passed: boolean;
+  verifierResults: BaselineVerifierEntry[];
+}
+
+export interface BaselineVerifierEntry {
+  id: string;
+  kind: VerifierKind;
+  ok: boolean;
+  score?: number;
+}
+
+/**
+ * Delta between a fresh report and the saved baseline. Populated when
+ * baselines exist on disk and the run covers matching cases.
+ */
+export interface BaselineDelta {
+  baselineId: string;
+  /** Fresh-score − baseline-score, bounded to [-1, 1]. */
+  scoreDelta: number;
+  /** Count of checks that flipped from `ok:true` to `ok:false`. */
+  criticalFailures: number;
+  /** Per-case regression details for the Markdown report. */
+  regressions: BaselineRegression[];
+}
+
+export interface BaselineRegression {
+  caseId: string;
+  stage: FlowStage;
+  verifierId: string;
+  reason: "newly-failing" | "case-now-failing" | "score-drop";
+  previousScore?: number;
+  currentScore?: number;
 }
