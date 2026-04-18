@@ -14,9 +14,22 @@ import { RUNTIME_ROOT } from "./constants.js";
 import { createDefaultConfig, createProfileConfig } from "./config.js";
 import { detectHarnesses } from "./init-detect.js";
 import { HARNESS_ADAPTERS } from "./harness-adapters.js";
+import { runEval } from "./eval/runner.js";
+import { writeJsonReport, writeMarkdownReport } from "./eval/report.js";
+import { EVAL_TIERS } from "./eval/types.js";
+import type { EvalTier } from "./eval/types.js";
+import { FLOW_STAGES } from "./types.js";
 
-type CommandName = "init" | "sync" | "doctor" | "upgrade" | "uninstall" | "archive";
-const INSTALLER_COMMANDS: CommandName[] = ["init", "sync", "doctor", "upgrade", "uninstall", "archive"];
+type CommandName = "init" | "sync" | "doctor" | "upgrade" | "uninstall" | "archive" | "eval";
+const INSTALLER_COMMANDS: CommandName[] = [
+  "init",
+  "sync",
+  "doctor",
+  "upgrade",
+  "uninstall",
+  "archive",
+  "eval"
+];
 
 interface ParsedArgs {
   command?: CommandName;
@@ -33,6 +46,13 @@ interface ParsedArgs {
   archiveName?: string;
   archiveSkipRetro?: boolean;
   archiveSkipRetroReason?: string;
+  evalStage?: string;
+  evalTier?: EvalTier;
+  evalSchemaOnly?: boolean;
+  evalRules?: boolean;
+  evalJudge?: boolean;
+  evalJson?: boolean;
+  evalNoWrite?: boolean;
   showHelp?: boolean;
   showVersion?: boolean;
 }
@@ -64,6 +84,15 @@ Commands:
              Flags: --name=<feature>    Feature slug (default: inferred from 00-idea.md).
                     --skip-retro       Bypass mandatory retro gate (requires --retro-reason).
                     --retro-reason=<t> Reason for bypassing retro gate.
+  eval       Run cclaw evals against .cclaw/evals/corpus (Phase 7, Wave 7.0 foundations).
+             Flags: --stage=<id>        Limit to one flow stage (${FLOW_STAGES.join("|")}).
+                    --tier=<A|B|C>      Fidelity tier (A=single-shot, B=tools, C=workflow).
+                    --schema-only       Run only structural verifiers (Wave 7.1).
+                    --rules             Run structural + rule verifiers (Wave 7.2).
+                    --judge             Include LLM judging (Wave 7.3; requires API key).
+                    --dry-run           Validate config + corpus, print summary, do not execute.
+                    --json              Emit machine-readable JSON on stdout.
+                    --no-write          Skip writing the report to .cclaw/evals/reports/.
   upgrade    Refresh generated files in .cclaw without modifying user artifacts.
   uninstall  Remove .cclaw runtime and the generated harness shim files.
 
@@ -75,6 +104,8 @@ Examples:
   cclaw init --harnesses=claude,cursor
   cclaw doctor --reconcile-gates
   cclaw archive --name=payments-revamp
+  cclaw eval --dry-run
+  cclaw eval --stage=brainstorm --schema-only
 
 Docs:   https://github.com/zuevrs/cclaw
 Issues: https://github.com/zuevrs/cclaw/issues
@@ -133,6 +164,22 @@ function parseProfile(raw: string): InitProfile {
     throw new Error(`Unknown profile: ${trimmed}. Supported: ${INIT_PROFILES.join(", ")}`);
   }
   return trimmed as InitProfile;
+}
+
+function parseEvalTier(raw: string): EvalTier {
+  const trimmed = raw.trim().toUpperCase();
+  if (!(EVAL_TIERS as readonly string[]).includes(trimmed)) {
+    throw new Error(`Unknown eval tier: ${raw}. Supported: ${EVAL_TIERS.join(", ")}`);
+  }
+  return trimmed as EvalTier;
+}
+
+function parseEvalStage(raw: string): string {
+  const trimmed = raw.trim();
+  if (!(FLOW_STAGES as readonly string[]).includes(trimmed)) {
+    throw new Error(`Unknown eval stage: ${raw}. Supported: ${FLOW_STAGES.join(", ")}`);
+  }
+  return trimmed;
 }
 
 function isInitPromptAllowed(ctx: CliContext): boolean {
@@ -463,7 +510,38 @@ function parseArgs(argv: string[]): ParsedArgs {
     }
     if (flag.startsWith("--retro-reason=")) {
       parsed.archiveSkipRetroReason = flag.replace("--retro-reason=", "").trim();
+      continue;
     }
+    if (flag.startsWith("--stage=")) {
+      parsed.evalStage = parseEvalStage(flag.replace("--stage=", ""));
+      continue;
+    }
+    if (flag.startsWith("--tier=")) {
+      parsed.evalTier = parseEvalTier(flag.replace("--tier=", ""));
+      continue;
+    }
+    if (flag === "--schema-only") {
+      parsed.evalSchemaOnly = true;
+      continue;
+    }
+    if (flag === "--rules") {
+      parsed.evalRules = true;
+      continue;
+    }
+    if (flag === "--judge") {
+      parsed.evalJudge = true;
+      continue;
+    }
+    if (flag === "--no-write") {
+      parsed.evalNoWrite = true;
+      continue;
+    }
+  }
+
+  // `--json` is shared between doctor and eval. Disambiguate by command.
+  if (parsed.command === "eval" && parsed.doctorJson === true) {
+    parsed.evalJson = true;
+    parsed.doctorJson = undefined;
   }
 
   return parsed;
@@ -569,6 +647,66 @@ async function runCommand(parsed: ParsedArgs, ctx: CliContext): Promise<number> 
     await upgradeCclaw(ctx.cwd);
     info(ctx, "Upgraded .cclaw runtime and regenerated generated files");
     return 0;
+  }
+
+  if (command === "eval") {
+    const result = await runEval({
+      projectRoot: ctx.cwd,
+      stage: parsed.evalStage as Parameters<typeof runEval>[0]["stage"],
+      tier: parsed.evalTier,
+      schemaOnly: parsed.evalSchemaOnly === true,
+      rules: parsed.evalRules === true,
+      judge: parsed.evalJudge === true,
+      dryRun: parsed.dryRun === true
+    });
+
+    if ("kind" in result) {
+      if (parsed.evalJson === true) {
+        ctx.stdout.write(`${JSON.stringify(result, null, 2)}\n`);
+        return 0;
+      }
+      ctx.stdout.write(`cclaw eval dry-run\n`);
+      ctx.stdout.write(`  provider: ${result.config.provider}\n`);
+      ctx.stdout.write(`  baseUrl: ${result.config.baseUrl}\n`);
+      ctx.stdout.write(`  model: ${result.config.model}\n`);
+      ctx.stdout.write(`  source: ${result.config.source}\n`);
+      ctx.stdout.write(`  apiKey: ${result.config.apiKey ? "set" : "unset"}\n`);
+      ctx.stdout.write(`  tier: ${result.plannedTier}\n`);
+      ctx.stdout.write(`  corpus: ${result.corpus.total} case(s)\n`);
+      for (const [stage, count] of Object.entries(result.corpus.byStage)) {
+        ctx.stdout.write(`    - ${stage}: ${count}\n`);
+      }
+      ctx.stdout.write(`  verifiers available:\n`);
+      for (const [key, value] of Object.entries(result.verifiersAvailable)) {
+        ctx.stdout.write(`    - ${key}: ${value ? "yes" : "no"}\n`);
+      }
+      if (result.notes.length > 0) {
+        ctx.stdout.write(`  notes:\n`);
+        for (const note of result.notes) {
+          ctx.stdout.write(`    - ${note}\n`);
+        }
+      }
+      return 0;
+    }
+
+    if (parsed.evalNoWrite !== true) {
+      const jsonPath = await writeJsonReport(ctx.cwd, result);
+      const mdPath = await writeMarkdownReport(ctx.cwd, result);
+      info(ctx, `Report written: ${path.relative(ctx.cwd, jsonPath)}`);
+      info(ctx, `Report written: ${path.relative(ctx.cwd, mdPath)}`);
+    }
+
+    if (parsed.evalJson === true) {
+      ctx.stdout.write(`${JSON.stringify(result, null, 2)}\n`);
+    } else {
+      ctx.stdout.write(
+        `cclaw eval: ${result.summary.totalCases} case(s), ` +
+          `${result.summary.passed} passed, ` +
+          `${result.summary.failed} failed, ` +
+          `${result.summary.skipped} skipped (Wave 7.0 skeleton — verifiers land in Wave 7.1+)\n`
+      );
+    }
+    return result.summary.failed > 0 ? 1 : 0;
   }
 
   if (command === "archive") {
