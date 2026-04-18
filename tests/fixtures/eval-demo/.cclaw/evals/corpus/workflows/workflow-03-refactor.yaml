@@ -1,0 +1,56 @@
+id: workflow-03-refactor
+description: |
+  Plan a module-level refactor (extract a shared config loader from
+  three call sites). Exercises the full five-stage arc with a
+  deliberate contradiction anchor so the no-contradictions check has
+  something to assert against.
+
+stages:
+  - name: brainstorm
+    input_prompt: |
+      Three services (api, worker, cron) each re-parse the same
+      `.config.yaml` file with subtly different defaults. Brainstorm
+      directions for extracting a shared loader: options for package
+      location, API shape, and migration order. End with a single
+      recommendation.
+
+  - name: scope
+    input_prompt: |
+      Read `stages/brainstorm.md`. Produce a scope artifact with
+      explicit decisions `D-01`..`D-0N` covering package location,
+      public API surface, migration order (api → worker → cron or
+      reverse), and back-compat window. Mark `language: typescript`
+      as a fixed constraint so downstream stages can assert on it.
+
+  - name: design
+    input_prompt: |
+      Read `stages/scope.md`. Produce a design artifact that details
+      the public API, error model, and default-resolution algorithm.
+      Every `D-XX` decision must be quoted. Call out test boundaries.
+
+  - name: spec
+    input_prompt: |
+      Read `stages/scope.md` and `stages/design.md`. Produce a
+      Gherkin-style spec with at least four scenarios covering happy
+      path, missing key, malformed file, and precedence rules. Mention
+      `D-XX` decisions directly in scenarios.
+
+  - name: plan
+    input_prompt: |
+      Read all prior artifacts under `stages/*.md` and produce a
+      migration plan: steps, ownership, observable checkpoints, and
+      rollback gate. Every `D-XX` decision must appear in at least one
+      step.
+
+consistency:
+  ids_flow:
+    - id_pattern: "D-\\d+"
+      from: scope
+      to: [design, spec, plan]
+  placeholder_free:
+    stages: [brainstorm, scope, design, spec, plan]
+  no_contradictions:
+    - stage: scope
+      must: "language: typescript"
+      forbid: "language: python"
+      stages: [design, spec, plan]

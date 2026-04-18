@@ -32,7 +32,8 @@ describe("eval runner", () => {
       structural: true,
       rules: false,
       judge: false,
-      workflow: false
+      workflow: false,
+      consistency: false
     });
     expect(result.notes.some((n) => n.includes("Corpus is empty"))).toBe(true);
   });
