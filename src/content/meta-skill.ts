@@ -25,6 +25,27 @@ description: "Routing brain for cclaw. Decide whether to start/resume a stage, a
 
 If the user explicitly overrides a stage rule, record it in the artifact.
 
+## Skill-before-response gate
+
+If \`.cclaw/state/flow-state.json\` exists and \`currentStage\` is set,
+load the matching stage SKILL before producing **substantive** work
+(artifact edits, code, structured clarifying questions). Do not improvise
+from memory. Also load a contextual utility skill when the task clearly
+triggers it (security, performance, debugging, docs, finishing-a-branch,
+verification-before-completion).
+
+Substantive vs. non-substantive:
+
+- **Substantive** (must load skill first): proposing design, editing an
+  artifact, running gates, dispatching subagents, asking a
+  \`Decision Protocol\` question, declaring a stage done.
+- **Non-substantive** (skill load optional): one-line acknowledgement,
+  clarifying a typo, confirming a prior answer, pure conversation.
+
+If the current stage is ambiguous because \`flow-state.json\` is missing
+or corrupt, stop and route through \`/cc\` before any substantive
+response.
+
 ## Routing flow
 
 \`\`\`

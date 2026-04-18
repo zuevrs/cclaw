@@ -116,6 +116,22 @@ describe("flow command contracts", () => {
     expect(decisionProtocol).toContain("# Decision Protocol");
   });
 
+  it("requires the meta-skill to declare a skill-before-response gate", async () => {
+    const root = await createTempProject("skill-gate");
+    await initCclaw({ projectRoot: root });
+
+    const metaSkill = await fs.readFile(
+      path.join(root, ".cclaw/skills/using-cclaw/SKILL.md"),
+      "utf8"
+    );
+
+    expect(metaSkill).toContain("## Skill-before-response gate");
+    expect(metaSkill).toContain("load the matching stage SKILL before producing");
+    expect(metaSkill).toContain("Substantive");
+    expect(metaSkill).toContain("Non-substantive");
+    expect(metaSkill).toContain("/cc");
+  });
+
   it("includes shared guidance references in spec and plan skills", async () => {
     const root = await createTempProject("spec-anti");
     await initCclaw({ projectRoot: root });
