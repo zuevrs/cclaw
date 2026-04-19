@@ -1,20 +1,25 @@
 import fs from "node:fs/promises";
+import path from "node:path";
 import type { Writable } from "node:stream";
+import { RUNTIME_ROOT } from "../constants.js";
 import { stageSchema } from "../content/stage-schema.js";
 import {
   appendDelegation,
   checkMandatoryDelegations
 } from "../delegation.js";
+import { readActiveFeature } from "../feature-system.js";
 import {
   verifyCompletedStagesGateClosure,
   verifyCurrentStageGateEvidence
 } from "../gate-evidence.js";
+import { extractMarkdownSectionBody, parseLearningsSection } from "../artifact-linter.js";
 import {
   isFlowTrack,
   nextStage,
   type FlowState,
   type StageGateState
 } from "../flow-state.js";
+import { appendKnowledge } from "../knowledge-store.js";
 import { readFlowState, writeFlowState } from "../runs.js";
 import { FLOW_STAGES, type FlowStage } from "../types.js";
 
@@ -339,6 +344,120 @@ async function buildValidationReport(
   };
 }
 
+interface HarvestLearningsResult {
+  ok: boolean;
+  markerWritten: boolean;
+  parsedEntries: number;
+  appendedEntries: number;
+  skippedDuplicates: number;
+  details: string;
+}
+
+const LEARNINGS_HARVEST_MARKER_PREFIX = "<!-- cclaw:learnings-harvested:";
+
+function withLearningsHarvestMarker(
+  artifactMarkdown: string,
+  appendedEntries: number,
+  skippedDuplicates: number
+): string {
+  const suffix = artifactMarkdown.endsWith("\n") ? "" : "\n";
+  return `${artifactMarkdown}${suffix}${LEARNINGS_HARVEST_MARKER_PREFIX}${new Date().toISOString()} appended=${appendedEntries} skipped=${skippedDuplicates} -->\n`;
+}
+
+async function harvestStageLearnings(
+  projectRoot: string,
+  stage: FlowStage,
+  artifactFile: string
+): Promise<HarvestLearningsResult> {
+  const artifactPath = path.join(projectRoot, RUNTIME_ROOT, "artifacts", artifactFile);
+  let raw = "";
+  try {
+    raw = await fs.readFile(artifactPath, "utf8");
+  } catch (err) {
+    return {
+      ok: false,
+      markerWritten: false,
+      parsedEntries: 0,
+      appendedEntries: 0,
+      skippedDuplicates: 0,
+      details: `Unable to read artifact for learnings harvest (${artifactPath}): ${
+        err instanceof Error ? err.message : String(err)
+      }`
+    };
+  }
+
+  if (raw.includes(LEARNINGS_HARVEST_MARKER_PREFIX)) {
+    return {
+      ok: true,
+      markerWritten: false,
+      parsedEntries: 0,
+      appendedEntries: 0,
+      skippedDuplicates: 0,
+      details: "Learnings already harvested for this artifact."
+    };
+  }
+
+  const learningsBody = extractMarkdownSectionBody(raw, "Learnings");
+  if (learningsBody === null) {
+    return {
+      ok: false,
+      markerWritten: false,
+      parsedEntries: 0,
+      appendedEntries: 0,
+      skippedDuplicates: 0,
+      details: 'Artifact is missing required "## Learnings" section.'
+    };
+  }
+
+  const parsed = parseLearningsSection(learningsBody);
+  if (!parsed.ok) {
+    return {
+      ok: false,
+      markerWritten: false,
+      parsedEntries: 0,
+      appendedEntries: 0,
+      skippedDuplicates: 0,
+      details: parsed.details
+    };
+  }
+
+  const activeFeature = await readActiveFeature(projectRoot).catch(() => null);
+  const appendResult = await appendKnowledge(projectRoot, parsed.entries, {
+    stage,
+    originStage: stage,
+    originFeature: activeFeature,
+    project: path.basename(projectRoot)
+  });
+  if (appendResult.invalid > 0) {
+    return {
+      ok: false,
+      markerWritten: false,
+      parsedEntries: parsed.entries.length,
+      appendedEntries: appendResult.appended,
+      skippedDuplicates: appendResult.skippedDuplicates,
+      details: `Learnings append failed schema checks: ${appendResult.errors.join(" | ")}`
+    };
+  }
+
+  const withMarker = withLearningsHarvestMarker(
+    raw,
+    appendResult.appended,
+    appendResult.skippedDuplicates
+  );
+  await fs.writeFile(artifactPath, withMarker, "utf8");
+
+  return {
+    ok: true,
+    markerWritten: true,
+    parsedEntries: parsed.entries.length,
+    appendedEntries: appendResult.appended,
+    skippedDuplicates: appendResult.skippedDuplicates,
+    details: parsed.none
+      ? "Learnings section marked none; harvest marker recorded."
+      : `Harvested ${appendResult.appended} learning entr${appendResult.appended === 1 ? "y" : "ies"} (${appendResult.skippedDuplicates} duplicate skipped).`
+  };
+}
+
 async function runAdvanceStage(
   projectRoot: string,
   args: AdvanceStageArgs,
@@ -462,6 +581,18 @@ async function runAdvanceStage(
     return 1;
   }
 
+  const learningsHarvest = await harvestStageLearnings(
+    projectRoot,
+    args.stage,
+    schema.artifactFile
+  );
+  if (!learningsHarvest.ok) {
+    io.stderr.write(
+      `cclaw internal advance-stage: learnings harvest failed for "${schema.artifactFile}". ${learningsHarvest.details}\n`
+    );
+    return 1;
+  }
+
   const successor = nextStage(args.stage, flowState.track);
   const completedStages = flowState.completedStages.includes(args.stage)
     ? [...flowState.completedStages]
@@ -481,7 +612,14 @@ async function runAdvanceStage(
       stage: args.stage,
       nextStage: successor,
       currentStage: finalState.currentStage,
-      completedStages: finalState.completedStages
+      completedStages: finalState.completedStages,
+      learnings: {
+        parsed: learningsHarvest.parsedEntries,
+        appended: learningsHarvest.appendedEntries,
+        skippedDuplicates: learningsHarvest.skippedDuplicates,
+        markerWritten: learningsHarvest.markerWritten,
+        details: learningsHarvest.details
+      }
     }, null, 2)}\n`);
   }
   return 0;

@@ -331,9 +331,9 @@ Rule: Review verdict must reference specific spec criteria and TDD evidence. Dow
 - \`artifact\`: \`.cclaw/artifacts/07-review.md\`
 - \`mandatory delegations\`: \`reviewer\`, \`security-reviewer\`
 - \`completion helper\`: \`bash .cclaw/hooks/stage-complete.sh review\`
+- Fill \`## Learnings\` before closeout: either \`- None this stage.\` or JSON bullets with required keys \`type\`, \`trigger\`, \`action\`, \`confidence\` (knowledge-schema compatible).
 - Record mandatory delegation completion/waiver in \`.cclaw/state/delegation-log.json\` with rationale as needed.
 - Use the completion helper instead of raw \`flow-state.json\` edits (legacy direct edits trigger workflow-guard warnings or strict-mode blocks).
-
 Apply shared completion logic from:
 \`.cclaw/references/protocols/completion.md\`
 
@@ -621,9 +621,9 @@ Rule: Ship artifact must reference review verdict and resolution status. Release
 - \`artifact\`: \`.cclaw/artifacts/08-ship.md\`
 - \`mandatory delegations\`: \`doc-updater\`
 - \`completion helper\`: \`bash .cclaw/hooks/stage-complete.sh ship\`
+- Fill \`## Learnings\` before closeout: either \`- None this stage.\` or JSON bullets with required keys \`type\`, \`trigger\`, \`action\`, \`confidence\` (knowledge-schema compatible).
 - Record mandatory delegation completion/waiver in \`.cclaw/state/delegation-log.json\` with rationale as needed.
 - Use the completion helper instead of raw \`flow-state.json\` edits (legacy direct edits trigger workflow-guard warnings or strict-mode blocks).
-
 Apply shared completion logic from:
 \`.cclaw/references/protocols/completion.md\`
 
@@ -918,9 +918,9 @@ Rule: Every task must trace to a spec acceptance criterion. Every locked scope d
 - \`artifact\`: \`.cclaw/artifacts/05-plan.md\`
 - \`mandatory delegations\`: \`planner\`
 - \`completion helper\`: \`bash .cclaw/hooks/stage-complete.sh plan\`
+- Fill \`## Learnings\` before closeout: either \`- None this stage.\` or JSON bullets with required keys \`type\`, \`trigger\`, \`action\`, \`confidence\` (knowledge-schema compatible).
 - Record mandatory delegation completion/waiver in \`.cclaw/state/delegation-log.json\` with rationale as needed.
 - Use the completion helper instead of raw \`flow-state.json\` edits (legacy direct edits trigger workflow-guard warnings or strict-mode blocks).
-
 Apply shared completion logic from:
 \`.cclaw/references/protocols/completion.md\`
 
@@ -1267,9 +1267,9 @@ Rule: Every RED test traces to a plan task. Every GREEN change traces to a RED t
 - \`artifact\`: \`.cclaw/artifacts/06-tdd.md\`
 - \`mandatory delegations\`: \`test-author\`
 - \`completion helper\`: \`bash .cclaw/hooks/stage-complete.sh tdd\`
+- Fill \`## Learnings\` before closeout: either \`- None this stage.\` or JSON bullets with required keys \`type\`, \`trigger\`, \`action\`, \`confidence\` (knowledge-schema compatible).
 - Record mandatory delegation completion/waiver in \`.cclaw/state/delegation-log.json\` with rationale as needed.
 - Use the completion helper instead of raw \`flow-state.json\` edits (legacy direct edits trigger workflow-guard warnings or strict-mode blocks).
-
 Apply shared completion logic from:
 \`.cclaw/references/protocols/completion.md\`
 
@@ -1543,9 +1543,9 @@ Rule: Scope and design decisions must trace back to explored context and approve
 - \`artifact\`: \`.cclaw/artifacts/01-brainstorm.md\`
 - \`mandatory delegations\`: none
 - \`completion helper\`: \`bash .cclaw/hooks/stage-complete.sh brainstorm\`
+- Fill \`## Learnings\` before closeout: either \`- None this stage.\` or JSON bullets with required keys \`type\`, \`trigger\`, \`action\`, \`confidence\` (knowledge-schema compatible).
 - Record mandatory delegation completion/waiver in \`.cclaw/state/delegation-log.json\` with rationale as needed.
 - Use the completion helper instead of raw \`flow-state.json\` edits (legacy direct edits trigger workflow-guard warnings or strict-mode blocks).
-
 Apply shared completion logic from:
 \`.cclaw/references/protocols/completion.md\`
 

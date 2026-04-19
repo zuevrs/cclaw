@@ -46,6 +46,9 @@ inputs_hash: sha256:pending
 ## Assumptions and Open Questions
 - **Assumptions:**
 - **Open questions (or "None"):**
+
+## Learnings
+- None this stage.
 `,
   "02-scope.md": `---
 stage: scope
@@ -149,6 +152,9 @@ inputs_hash: sha256:pending
 - Accepted scope:
 - Deferred:
 - Explicitly excluded:
+
+## Learnings
+- None this stage.
 `,
   "03-design.md": `---
 stage: design
@@ -242,6 +248,9 @@ inputs_hash: sha256:pending
 | Distribution & Delivery Review |  |  |
 
 **Decisions made:** 0 | **Unresolved:** 0
+
+## Learnings
+- None this stage.
 `,
   "04-spec.md": `---
 stage: spec
@@ -295,6 +304,9 @@ inputs_hash: sha256:pending
 ## Approval
 - Approved by:
 - Date:
+
+## Learnings
+- None this stage.
 `,
   "05-plan.md": `---
 stage: plan
@@ -371,6 +383,9 @@ Execution rule: complete and verify each batch before starting the next batch.
 ## WAIT_FOR_CONFIRM
 - Status: pending
 - Confirmed by:
+
+## Learnings
+- None this stage.
 `,
   "06-tdd.md": `---
 stage: tdd
@@ -435,6 +450,9 @@ inputs_hash: sha256:pending
 | Slice | Reproduction test | RED-without-fix evidence | GREEN-with-fix evidence | Revert-guard note |
 |---|---|---|---|---|
 | S-1 |  |  |  |  |
+
+## Learnings
+- None this stage.
 `,
   "07-review.md": `---
 stage: review
@@ -505,6 +523,9 @@ inputs_hash: sha256:pending
 
 ## Final Verdict
 - APPROVED | APPROVED_WITH_CONCERNS | BLOCKED
+
+## Learnings
+- None this stage.
 `,
   "07-review-army.json": `{
   "version": 1,
@@ -572,6 +593,9 @@ inputs_hash: sha256:pending
 - Run \`/cc-ops retro\` before archive.
 - Retro artifact path: \`.cclaw/artifacts/09-retro.md\`
 - Archive remains blocked until retro gate is complete.
+
+## Learnings
+- None this stage.
 `,
   "09-retro.md": `---
 stage: retro
@@ -612,6 +636,9 @@ inputs_hash: sha256:pending
 - RETRO_COMPLETE: yes
 - Completed at (UTC):
 - Notes:
+
+## Learnings
+- None this stage.
 `
 };
 

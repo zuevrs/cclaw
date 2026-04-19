@@ -1,7 +1,11 @@
 import fs from "node:fs/promises";
 import path from "node:path";
 import { describe, expect, it } from "vitest";
-import { lintArtifact, validateReviewArmy } from "../../src/artifact-linter.js";
+import {
+  lintArtifact,
+  parseLearningsSection,
+  validateReviewArmy
+} from "../../src/artifact-linter.js";
 import { createTempProject } from "../helpers/index.js";
 
 async function writeRuntimeArtifact(root: string, fileName: string, content: string): Promise<void> {
@@ -49,6 +53,17 @@ function completePlanArtifact(frontmatter = ""): string {
 - Status: pending
 - Confirmed by:
 `;
+}
+
+function validPlanFrontmatter(): string {
+  return `---
+stage: plan
+schema_version: 1
+version: 0.18.0
+feature: feature-alpha
+locked_decisions: []
+inputs_hash: sha256:pending
+---`;
 }
 
 describe("artifact linter heuristics", () => {
@@ -176,6 +191,100 @@ describe("artifact linter heuristics", () => {
     expect(result.passed).toBe(true);
     expect(questions?.found).toBe(false);
     expect(questions?.required).toBe(false);
+  });
+
+  it("requires Learnings section on schema-v1 artifacts with frontmatter", async () => {
+    const root = await createTempProject("artifact-lint-learnings-required");
+    await writeRuntimeArtifact(root, "05-plan.md", completePlanArtifact(validPlanFrontmatter()));
+
+    const result = await lintArtifact(root, "plan");
+    const learnings = result.findings.find((f) => f.section === "Learnings");
+    expect(result.passed).toBe(false);
+    expect(learnings?.required).toBe(true);
+    expect(learnings?.found).toBe(false);
+  });
+
+  it("accepts Learnings sentinel when no reusable insights exist", async () => {
+    const root = await createTempProject("artifact-lint-learnings-none");
+    await writeRuntimeArtifact(
+      root,
+      "05-plan.md",
+      `${completePlanArtifact(validPlanFrontmatter())}
+
+## Learnings
+- None this stage.
+`
+    );
+
+    const result = await lintArtifact(root, "plan");
+    const learnings = result.findings.find((f) => f.section === "Learnings");
+    expect(result.passed).toBe(true);
+    expect(learnings?.found).toBe(true);
+  });
+
+  it("rejects Learnings bullets that are not knowledge-schema compatible", async () => {
+    const root = await createTempProject("artifact-lint-learnings-invalid");
+    await writeRuntimeArtifact(
+      root,
+      "05-plan.md",
+      `${completePlanArtifact(validPlanFrontmatter())}
+
+## Learnings
+- {"type":"pattern","trigger":"","action":"add fallback","confidence":"high"}
+`
+    );
+
+    const result = await lintArtifact(root, "plan");
+    const learnings = result.findings.find((f) => f.section === "Learnings");
+    expect(result.passed).toBe(false);
+    expect(learnings?.found).toBe(false);
+    expect(learnings?.details).toContain("trigger");
+  });
+
+  it("accepts Learnings JSON bullets with strict field compatibility", async () => {
+    const root = await createTempProject("artifact-lint-learnings-valid-json");
+    await writeRuntimeArtifact(
+      root,
+      "05-plan.md",
+      `${completePlanArtifact(validPlanFrontmatter())}
+
+## Learnings
+- {"type":"pattern","trigger":"when dependency batch stalls","action":"split the batch and add an intermediate verification gate","confidence":"medium","domain":"delivery","universality":"project","maturity":"raw"}
+`
+    );
+
+    const result = await lintArtifact(root, "plan");
+    const learnings = result.findings.find((f) => f.section === "Learnings");
+    expect(result.passed).toBe(true);
+    expect(learnings?.found).toBe(true);
+  });
+
+  it("rejects Learnings sections that contain non-bullet lines", () => {
+    const parsed = parseLearningsSection(`summary line\n- None this stage.`);
+    expect(parsed.ok).toBe(false);
+    expect(parsed.details).toContain("only contain bullet lines");
+  });
+
+  it("rejects Learnings bullets with malformed JSON payload", () => {
+    const parsed = parseLearningsSection(`- {"type":"pattern","trigger":"ok",`);
+    expect(parsed.ok).toBe(false);
+    expect(parsed.details).toContain("valid JSON object");
+  });
+
+  it("rejects Learnings JSON bullets with unsupported keys", () => {
+    const parsed = parseLearningsSection(
+      `- {"type":"pattern","trigger":"when lint fails","action":"run targeted fix","confidence":"medium","extra":"nope"}`
+    );
+    expect(parsed.ok).toBe(false);
+    expect(parsed.details).toContain("unknown key");
+  });
+
+  it("rejects Learnings JSON bullets with invalid stage enum", () => {
+    const parsed = parseLearningsSection(
+      `- {"type":"lesson","trigger":"when state is stale","action":"re-read flow-state before editing","confidence":"high","stage":"retro"}`
+    );
+    expect(parsed.ok).toBe(false);
+    expect(parsed.details).toContain("field \"stage\" must be one of");
   });
 
   it("enforces exactly one selected enum token in finalization", async () => {
