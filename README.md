@@ -140,7 +140,7 @@ Plus harness-specific shims:
 `cclaw init` writes five keys, on purpose:
 
 ```yaml
-version: 0.44.0
+version: 0.45.0
 flowVersion: 1.0.0
 harnesses:
   - codex

@@ -60,8 +60,15 @@ Rollback / fallback: <if decision proves wrong>
 
 ## Self-improvement reminder
 
-Before closeout, capture 1-3 reusable insights in \`.cclaw/knowledge.jsonl\`
-whenever the stage produced non-obvious decisions, patterns, or lessons.
+Before closeout, fill the artifact \`## Learnings\` section (do not write
+\`.cclaw/knowledge.jsonl\` by hand):
+- \`- None this stage.\` when nothing reusable emerged.
+- Or 1-3 JSON bullets with required keys \`type\`, \`trigger\`, \`action\`,
+  \`confidence\` (optional fields may mirror knowledge.jsonl schema keys).
+During \`bash .cclaw/hooks/stage-complete.sh <stage>\`, cclaw validates those
+bullets, appends unique entries to \`.cclaw/knowledge.jsonl\`, and stamps a
+harvest marker in the artifact.
+
 Prefer \`type=rule|pattern|lesson\` (\`compound\` stays retro-focused).
 
 Track policy:
@@ -69,8 +76,8 @@ Track policy:
   recommended for other stages.
 - \`quick\`: recommended only.
 
-"No learning captured" is acceptable only with an explicit reason
-(for example, purely mechanical edits with no new decisions).
+\`- None this stage.\` is acceptable only when the stage produced no reusable
+insight (for example, purely mechanical edits with no new decisions).
 
 ## Progressive disclosure baseline
 

@@ -3,7 +3,7 @@ import path from "node:path";
 import { RUNTIME_ROOT } from "./constants.js";
 import { exists } from "./fs-utils.js";
 import { orderedStageSchemas, stageSchema } from "./content/stage-schema.js";
-import type { FlowStage } from "./types.js";
+import { FLOW_STAGES, type FlowStage } from "./types.js";
 
 export interface LintFinding {
   section: string;
@@ -83,6 +83,10 @@ function sectionBodyByName(sections: H2SectionMap, section: string): string | nu
     }
   }
   return null;
+}
+
+export function extractMarkdownSectionBody(markdown: string, section: string): string | null {
+  return sectionBodyByName(extractH2Sections(markdown), section);
 }
 
 function meaningfulLineCount(sectionBody: string): number {
@@ -212,6 +216,268 @@ function getMarkdownTableRows(sectionBody: string): string[][] {
     rows.push(parseMarkdownTableRow(line));
   }
   return rows;
+}
+
+export type LearningEntryType = "rule" | "pattern" | "lesson" | "compound";
+export type LearningConfidence = "high" | "medium" | "low";
+export type LearningUniversality = "project" | "personal" | "universal";
+export type LearningMaturity = "raw" | "lifted-to-rule" | "lifted-to-enforcement";
+
+export interface LearningSeedEntry {
+  type: LearningEntryType;
+  trigger: string;
+  action: string;
+  confidence: LearningConfidence;
+  domain?: string | null;
+  stage?: FlowStage | null;
+  origin_stage?: FlowStage | null;
+  origin_feature?: string | null;
+  frequency?: number;
+  universality?: LearningUniversality;
+  maturity?: LearningMaturity;
+  created?: string;
+  first_seen_ts?: string;
+  last_seen_ts?: string;
+  project?: string | null;
+}
+
+export interface LearningsParseResult {
+  ok: boolean;
+  none: boolean;
+  entries: LearningSeedEntry[];
+  errors: string[];
+  details: string;
+}
+
+const LEARNING_TYPE_SET = new Set<LearningEntryType>(["rule", "pattern", "lesson", "compound"]);
+const LEARNING_CONFIDENCE_SET = new Set<LearningConfidence>(["high", "medium", "low"]);
+const LEARNING_UNIVERSALITY_SET = new Set<LearningUniversality>(["project", "personal", "universal"]);
+const LEARNING_MATURITY_SET = new Set<LearningMaturity>(["raw", "lifted-to-rule", "lifted-to-enforcement"]);
+const FLOW_STAGE_SET = new Set<FlowStage>(FLOW_STAGES);
+const LEARNING_ALLOWED_KEYS = new Set([
+  "type",
+  "trigger",
+  "action",
+  "confidence",
+  "domain",
+  "stage",
+  "origin_stage",
+  "origin_feature",
+  "frequency",
+  "universality",
+  "maturity",
+  "created",
+  "first_seen_ts",
+  "last_seen_ts",
+  "project"
+]);
+
+function isIsoUtcTimestamp(value: string): boolean {
+  return /^\d{4}-\d{2}-\d{2}T\d{2}:\d{2}:\d{2}Z$/u.test(value);
+}
+
+function isNullableString(value: unknown): value is string | null {
+  return value === null || typeof value === "string";
+}
+
+function isNullableStage(value: unknown): value is FlowStage | null {
+  return value === null || (typeof value === "string" && FLOW_STAGE_SET.has(value as FlowStage));
+}
+
+function parseLearningSeedEntry(raw: unknown, index: number): { ok: boolean; entry?: LearningSeedEntry; error?: string } {
+  if (!raw || typeof raw !== "object" || Array.isArray(raw)) {
+    return { ok: false, error: `Learnings bullet #${index} must be a JSON object.` };
+  }
+  const obj = raw as Record<string, unknown>;
+  for (const key of Object.keys(obj)) {
+    if (!LEARNING_ALLOWED_KEYS.has(key)) {
+      return {
+        ok: false,
+        error: `Learnings bullet #${index} includes unknown key "${key}" (allowed keys mirror knowledge JSONL fields).`
+      };
+    }
+  }
+
+  const type = typeof obj.type === "string" ? obj.type.toLowerCase() : "";
+  if (!LEARNING_TYPE_SET.has(type as LearningEntryType)) {
+    return {
+      ok: false,
+      error: `Learnings bullet #${index} must set type to one of: rule, pattern, lesson, compound.`
+    };
+  }
+
+  const trigger = typeof obj.trigger === "string" ? obj.trigger.trim() : "";
+  if (trigger.length === 0) {
+    return {
+      ok: false,
+      error: `Learnings bullet #${index} must include non-empty "trigger".`
+    };
+  }
+
+  const action = typeof obj.action === "string" ? obj.action.trim() : "";
+  if (action.length === 0) {
+    return {
+      ok: false,
+      error: `Learnings bullet #${index} must include non-empty "action".`
+    };
+  }
+
+  const confidence = typeof obj.confidence === "string" ? obj.confidence.toLowerCase() : "";
+  if (!LEARNING_CONFIDENCE_SET.has(confidence as LearningConfidence)) {
+    return {
+      ok: false,
+      error: `Learnings bullet #${index} must set confidence to high|medium|low.`
+    };
+  }
+
+  if (obj.domain !== undefined && !isNullableString(obj.domain)) {
+    return { ok: false, error: `Learnings bullet #${index} field "domain" must be string or null.` };
+  }
+  if (obj.stage !== undefined && !isNullableStage(obj.stage)) {
+    return {
+      ok: false,
+      error: `Learnings bullet #${index} field "stage" must be one of ${FLOW_STAGES.join(", ")} or null.`
+    };
+  }
+  if (obj.origin_stage !== undefined && !isNullableStage(obj.origin_stage)) {
+    return {
+      ok: false,
+      error: `Learnings bullet #${index} field "origin_stage" must be one of ${FLOW_STAGES.join(", ")} or null.`
+    };
+  }
+  if (obj.origin_feature !== undefined && !isNullableString(obj.origin_feature)) {
+    return { ok: false, error: `Learnings bullet #${index} field "origin_feature" must be string or null.` };
+  }
+  if (obj.project !== undefined && !isNullableString(obj.project)) {
+    return { ok: false, error: `Learnings bullet #${index} field "project" must be string or null.` };
+  }
+  if (
+    obj.frequency !== undefined &&
+    (typeof obj.frequency !== "number" || !Number.isInteger(obj.frequency) || obj.frequency < 1)
+  ) {
+    return { ok: false, error: `Learnings bullet #${index} field "frequency" must be an integer >= 1.` };
+  }
+  if (
+    obj.universality !== undefined &&
+    (typeof obj.universality !== "string" ||
+      !LEARNING_UNIVERSALITY_SET.has(obj.universality as LearningUniversality))
+  ) {
+    return {
+      ok: false,
+      error: `Learnings bullet #${index} field "universality" must be project|personal|universal.`
+    };
+  }
+  if (
+    obj.maturity !== undefined &&
+    (typeof obj.maturity !== "string" || !LEARNING_MATURITY_SET.has(obj.maturity as LearningMaturity))
+  ) {
+    return {
+      ok: false,
+      error: `Learnings bullet #${index} field "maturity" must be raw|lifted-to-rule|lifted-to-enforcement.`
+    };
+  }
+  for (const timestampField of ["created", "first_seen_ts", "last_seen_ts"] as const) {
+    const value = obj[timestampField];
+    if (value === undefined) continue;
+    if (typeof value !== "string" || !isIsoUtcTimestamp(value)) {
+      return {
+        ok: false,
+        error: `Learnings bullet #${index} field "${timestampField}" must be ISO UTC (YYYY-MM-DDTHH:MM:SSZ).`
+      };
+    }
+  }
+
+  return {
+    ok: true,
+    entry: {
+      ...obj,
+      type: type as LearningEntryType,
+      trigger,
+      action,
+      confidence: confidence as LearningConfidence
+    } as LearningSeedEntry
+  };
+}
+
+export function parseLearningsSection(sectionBody: string): LearningsParseResult {
+  const lines = sectionBody.split(/\r?\n/).map((line) => line.trim());
+  const nonEmpty = lines.filter((line) => line.length > 0);
+  const bullets = nonEmpty.filter((line) => /^-\s+\S+/u.test(line));
+
+  if (bullets.length === 0) {
+    return {
+      ok: false,
+      none: false,
+      entries: [],
+      errors: ["Learnings section must contain bullet entries."],
+      details: "Learnings section must contain bullet entries."
+    };
+  }
+
+  const nonBulletContent = nonEmpty.filter((line) => !/^-\s+\S+/u.test(line));
+  if (nonBulletContent.length > 0) {
+    return {
+      ok: false,
+      none: false,
+      entries: [],
+      errors: ["Learnings section must only contain bullet lines (one bullet per learning)."],
+      details: "Learnings section must only contain bullet lines (one bullet per learning)."
+    };
+  }
+
+  if (bullets.length === 1) {
+    const payload = bullets[0]!.replace(/^-\s+/u, "").trim();
+    if (/^none this stage\.?$/iu.test(payload)) {
+      return {
+        ok: true,
+        none: true,
+        entries: [],
+        errors: [],
+        details: "Learnings section explicitly marked as none."
+      };
+    }
+  }
+
+  const entries: LearningSeedEntry[] = [];
+  const errors: string[] = [];
+  for (let i = 0; i < bullets.length; i += 1) {
+    const payload = bullets[i]!.replace(/^-\s+/u, "").trim();
+    let parsed: unknown;
+    try {
+      parsed = JSON.parse(payload);
+    } catch (err) {
+      errors.push(
+        `Learnings bullet #${i + 1} must be valid JSON object or "None this stage.": ${
+          err instanceof Error ? err.message : String(err)
+        }`
+      );
+      continue;
+    }
+    const parsedEntry = parseLearningSeedEntry(parsed, i + 1);
+    if (!parsedEntry.ok || !parsedEntry.entry) {
+      errors.push(parsedEntry.error ?? `Learnings bullet #${i + 1} is invalid.`);
+      continue;
+    }
+    entries.push(parsedEntry.entry);
+  }
+
+  if (errors.length > 0) {
+    return {
+      ok: false,
+      none: false,
+      entries: [],
+      errors,
+      details: errors.join(" | ")
+    };
+  }
+
+  return {
+    ok: true,
+    none: false,
+    entries,
+    errors: [],
+    details: `Parsed ${entries.length} learning bullet(s) as knowledge-compatible JSON entries.`
+  };
 }
 
 function lineContainsVagueAdjective(text: string): string | null {
@@ -520,6 +786,27 @@ export async function lintArtifact(projectRoot: string, stage: FlowStage): Promi
       details: found
         ? validation.details
         : validation.details
+    });
+  }
+
+  const learningsBody = sectionBodyByName(sections, "Learnings");
+  const requireLearnings = parsedFrontmatter.hasFrontmatter;
+  if (learningsBody === null) {
+    findings.push({
+      section: "Learnings",
+      required: requireLearnings,
+      rule: "Required for schema-v1 artifacts: include `## Learnings` with bullets of strict JSON objects compatible with knowledge.jsonl schema, or a single `- None this stage.` sentinel.",
+      found: false,
+      details: "No ## heading matching required section \"Learnings\"."
+    });
+  } else {
+    const learnings = parseLearningsSection(learningsBody);
+    findings.push({
+      section: "Learnings",
+      required: requireLearnings,
+      rule: "`## Learnings` must contain either a single `- None this stage.` bullet or JSON bullets compatible with knowledge.jsonl fields (type/trigger/action/confidence required).",
+      found: learnings.ok,
+      details: learnings.details
     });
   }
 

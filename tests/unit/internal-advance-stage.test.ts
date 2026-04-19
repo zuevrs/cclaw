@@ -35,7 +35,10 @@ function captureIo(): CapturedIo {
   };
 }
 
-async function writeBrainstormArtifact(root: string): Promise<void> {
+async function writeBrainstormArtifact(
+  root: string,
+  learningsSection = "- None this stage."
+): Promise<void> {
   await fs.mkdir(path.join(root, ".cclaw/artifacts"), { recursive: true });
   await fs.writeFile(path.join(root, ".cclaw/artifacts/01-brainstorm.md"), `# Brainstorm Artifact
 
@@ -73,6 +76,9 @@ async function writeBrainstormArtifact(root: string): Promise<void> {
 ## Assumptions and Open Questions
 - Assumptions: CI pipeline is stable
 - Open questions (or "None"): None
+
+## Learnings
+${learningsSection}
 `, "utf8");
 }
 
@@ -93,6 +99,9 @@ async function writeScopeArtifact(root: string): Promise<void> {
 
 ## Scope Summary
 - Summary: define clear boundaries before design.
+
+## Learnings
+- None this stage.
 `, "utf8");
 }
 
@@ -198,5 +207,45 @@ describe("internal advance-stage commands", () => {
     expect(captured.stderr()).toContain(
       "cclaw: current stage has 1 unmet mandatory delegations and 1 gates without evidence."
     );
+  });
+
+  it("harvests Learnings JSON bullets into knowledge store and marks artifact", async () => {
+    const root = await createTempProject("internal-harvest-learnings");
+    await ensureRunSystem(root);
+    await writeBrainstormArtifact(
+      root,
+      `- {"type":"pattern","trigger":"when gate evidence is missing","action":"run verify-current-state before trying to advance","confidence":"high","domain":"workflow","universality":"project","maturity":"raw"}`
+    );
+
+    const captured = captureIo();
+    const code = await runInternalCommand(
+      root,
+      ["advance-stage", "brainstorm", "--quiet"],
+      captured.io
+    );
+
+    expect(code).toBe(0);
+    expect(captured.stderr()).toBe("");
+
+    const knowledgeRaw = await fs.readFile(path.join(root, ".cclaw/knowledge.jsonl"), "utf8");
+    const knowledgeLines = knowledgeRaw.trim().split("\n");
+    expect(knowledgeLines).toHaveLength(1);
+    const entry = JSON.parse(knowledgeLines[0]!) as {
+      type: string;
+      trigger: string;
+      action: string;
+      confidence: string;
+      stage: string | null;
+      origin_stage: string | null;
+    };
+    expect(entry.type).toBe("pattern");
+    expect(entry.trigger).toBe("when gate evidence is missing");
+    expect(entry.action).toContain("verify-current-state");
+    expect(entry.confidence).toBe("high");
+    expect(entry.stage).toBe("brainstorm");
+    expect(entry.origin_stage).toBe("brainstorm");
+
+    const artifact = await fs.readFile(path.join(root, ".cclaw/artifacts/01-brainstorm.md"), "utf8");
+    expect(artifact).toContain("<!-- cclaw:learnings-harvested:");
   });
 });

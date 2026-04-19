@@ -53,6 +53,20 @@ Use the store to keep durable knowledge that should survive sessions:
 - **lesson**: non-obvious outcome from a failure or trade-off.
 - **compound**: post-ship insight about how to make the *next* feature faster (process accelerator, not domain rule).
 
+## Continuous capture (stage closeout path)
+
+Knowledge capture is now stage-native:
+- Each stage artifact has a \`## Learnings\` section.
+- Allowed payloads:
+  - \`- None this stage.\` (explicit no-op)
+  - JSON bullets with required keys \`type\`, \`trigger\`, \`action\`, \`confidence\` (optional keys may mirror the full JSONL schema fields).
+- During \`bash .cclaw/hooks/stage-complete.sh <stage>\`, cclaw:
+  1. validates \`## Learnings\`,
+  2. appends deduped entries to \`${KNOWLEDGE_PATH}\`,
+  3. writes a harvest marker into the artifact.
+
+\`/cc-learn\` remains the manual/query surface (search, backfill, curation).
+
 ## HARD-GATE
 
 Under \`/cc-learn\`, only modify \`${KNOWLEDGE_PATH}\`, \`${KNOWLEDGE_ARCHIVE_PATH}\`,
@@ -117,6 +131,7 @@ Rules:
 - Ask for required user-facing fields in order: \`type\`, \`trigger\`, \`action\`, \`confidence\`, \`domain\`, \`stage\`, \`universality\`, \`project\`.
 - \`confidence\` must be one of \`high\`, \`medium\`, \`low\`. Default to \`medium\` if the user declines to set it.
 - \`domain\`, \`stage\`, and \`project\` may be explicitly \`null\`.
+- Prefer stage-native \`## Learnings\` capture for new flow work; use \`add\` mainly for backfilling historical lessons or ad-hoc entries outside a stage closeout.
 - \`origin_stage\` defaults to \`stage\`; \`origin_feature\` defaults to active feature (or \`null\` if unknown).
 - \`frequency\` starts at \`1\`.
 - \`maturity\` starts at \`raw\`.
@@ -140,6 +155,11 @@ export function learnCommandContract(): string {
 Manage the project knowledge store. One canonical file, strict JSONL:
 - \`${KNOWLEDGE_PATH}\` — append-only JSONL, one entry per line.
 - \`${KNOWLEDGE_ARCHIVE_PATH}\` — soft-archive target written only by curate.
+
+Stage-native pipeline:
+- During \`stage-complete.sh\`, cclaw harvests \`## Learnings\` from the current
+  stage artifact into \`${KNOWLEDGE_PATH}\` automatically.
+- Use \`/cc-learn\` for query, backfill, and curation workflows.
 
 ## HARD-GATE
 

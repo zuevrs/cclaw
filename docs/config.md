@@ -11,7 +11,7 @@ launcher, not a dashboard.
 ## What `cclaw init` writes
 
 ```yaml
-version: 0.44.0
+version: 0.45.0
 flowVersion: 1.0.0
 harnesses:
   - codex
@@ -72,6 +72,17 @@ commits whose stage artifact still has unmet gates.
 
 Opt-in because many teams prefer hook-free workflows or already manage
 their git hooks via `husky` / `lefthook` / etc.
+
+### Knowledge capture (always-on, no config key)
+
+Continuous knowledge capture does **not** require a config knob:
+- Every stage artifact template includes `## Learnings`.
+- Use either `- None this stage.` or JSON bullets (`type`, `trigger`,
+  `action`, `confidence`, optional schema fields).
+- `bash .cclaw/hooks/stage-complete.sh <stage>` validates and harvests those
+  bullets into `.cclaw/knowledge.jsonl` with dedupe + schema checks.
+
+If you need manual operations, use `/cc-learn` (search, add/backfill, curate).
 
 ## Advanced overrides (opt-in)
 

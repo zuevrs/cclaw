@@ -51,6 +51,17 @@ function completePlanArtifact(frontmatter = ""): string {
 `;
 }
 
+function validPlanFrontmatter(): string {
+  return `---
+stage: plan
+schema_version: 1
+version: 0.18.0
+feature: feature-alpha
+locked_decisions: []
+inputs_hash: sha256:pending
+---`;
+}
+
 describe("artifact linter heuristics", () => {
   it("fails when required brainstorm sections are missing", async () => {
     const root = await createTempProject("artifact-lint-missing");
@@ -176,6 +187,72 @@ describe("artifact linter heuristics", () => {
     expect(result.passed).toBe(true);
     expect(questions?.found).toBe(false);
     expect(questions?.required).toBe(false);
+  });
+
+  it("requires Learnings section on schema-v1 artifacts with frontmatter", async () => {
+    const root = await createTempProject("artifact-lint-learnings-required");
+    await writeRuntimeArtifact(root, "05-plan.md", completePlanArtifact(validPlanFrontmatter()));
+
+    const result = await lintArtifact(root, "plan");
+    const learnings = result.findings.find((f) => f.section === "Learnings");
+    expect(result.passed).toBe(false);
+    expect(learnings?.required).toBe(true);
+    expect(learnings?.found).toBe(false);
+  });
+
+  it("accepts Learnings sentinel when no reusable insights exist", async () => {
+    const root = await createTempProject("artifact-lint-learnings-none");
+    await writeRuntimeArtifact(
+      root,
+      "05-plan.md",
+      `${completePlanArtifact(validPlanFrontmatter())}
+
+## Learnings
+- None this stage.
+`
+    );
+
+    const result = await lintArtifact(root, "plan");
+    const learnings = result.findings.find((f) => f.section === "Learnings");
+    expect(result.passed).toBe(true);
+    expect(learnings?.found).toBe(true);
+  });
+
+  it("rejects Learnings bullets that are not knowledge-schema compatible", async () => {
+    const root = await createTempProject("artifact-lint-learnings-invalid");
+    await writeRuntimeArtifact(
+      root,
+      "05-plan.md",
+      `${completePlanArtifact(validPlanFrontmatter())}
+
+## Learnings
+- {"type":"pattern","trigger":"","action":"add fallback","confidence":"high"}
+`
+    );
+
+    const result = await lintArtifact(root, "plan");
+    const learnings = result.findings.find((f) => f.section === "Learnings");
+    expect(result.passed).toBe(false);
+    expect(learnings?.found).toBe(false);
+    expect(learnings?.details).toContain("trigger");
+  });
+
+  it("accepts Learnings JSON bullets with strict field compatibility", async () => {
+    const root = await createTempProject("artifact-lint-learnings-valid-json");
+    await writeRuntimeArtifact(
+      root,
+      "05-plan.md",
+      `${completePlanArtifact(validPlanFrontmatter())}
+
+## Learnings
+- {"type":"pattern","trigger":"when dependency batch stalls","action":"split the batch and add an intermediate verification gate","confidence":"medium","domain":"delivery","universality":"project","maturity":"raw"}
+`
+    );
+
+    const result = await lintArtifact(root, "plan");
+    const learnings = result.findings.find((f) => f.section === "Learnings");
+    expect(result.passed).toBe(true);
+    expect(learnings?.found).toBe(true);
   });
 
   it("enforces exactly one selected enum token in finalization", async () => {
