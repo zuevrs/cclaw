@@ -1,7 +1,11 @@
 import fs from "node:fs/promises";
 import path from "node:path";
 import { describe, expect, it } from "vitest";
-import { lintArtifact, validateReviewArmy } from "../../src/artifact-linter.js";
+import {
+  lintArtifact,
+  parseLearningsSection,
+  validateReviewArmy
+} from "../../src/artifact-linter.js";
 import { createTempProject } from "../helpers/index.js";
 
 async function writeRuntimeArtifact(root: string, fileName: string, content: string): Promise<void> {
@@ -253,6 +257,34 @@ describe("artifact linter heuristics", () => {
     const learnings = result.findings.find((f) => f.section === "Learnings");
     expect(result.passed).toBe(true);
     expect(learnings?.found).toBe(true);
+  });
+
+  it("rejects Learnings sections that contain non-bullet lines", () => {
+    const parsed = parseLearningsSection(`summary line\n- None this stage.`);
+    expect(parsed.ok).toBe(false);
+    expect(parsed.details).toContain("only contain bullet lines");
+  });
+
+  it("rejects Learnings bullets with malformed JSON payload", () => {
+    const parsed = parseLearningsSection(`- {"type":"pattern","trigger":"ok",`);
+    expect(parsed.ok).toBe(false);
+    expect(parsed.details).toContain("valid JSON object");
+  });
+
+  it("rejects Learnings JSON bullets with unsupported keys", () => {
+    const parsed = parseLearningsSection(
+      `- {"type":"pattern","trigger":"when lint fails","action":"run targeted fix","confidence":"medium","extra":"nope"}`
+    );
+    expect(parsed.ok).toBe(false);
+    expect(parsed.details).toContain("unknown key");
+  });
+
+  it("rejects Learnings JSON bullets with invalid stage enum", () => {
+    const parsed = parseLearningsSection(
+      `- {"type":"lesson","trigger":"when state is stale","action":"re-read flow-state before editing","confidence":"high","stage":"retro"}`
+    );
+    expect(parsed.ok).toBe(false);
+    expect(parsed.details).toContain("field \"stage\" must be one of");
   });
 
   it("enforces exactly one selected enum token in finalization", async () => {
