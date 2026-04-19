@@ -41,8 +41,10 @@ the user can approve individual lifts, accept-all, or skip.
    "Drift check" section in the skill): confirm the lift target file is
    current, spot-check the repo for contradictions, demote stale clusters
    into a new superseding entry instead of a lift.
-6. Otherwise, present **one** structured ask (AskUserQuestion / AskQuestion /
-   plain text) summarising all candidates at once:
+6. Otherwise, present **one** structured ask via the harness's native ask
+   tool (\`AskUserQuestion\` / \`AskQuestion\` / \`question\` /
+   \`request_user_input\`; plain-text lettered list as fallback) summarising
+   all candidates at once:
    - \`apply-all\` (default) — apply every listed lift,
    - \`apply-selected\` — prompt per-candidate,
    - \`skip\` — record a skip reason and advance without changes.

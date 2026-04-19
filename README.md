@@ -359,8 +359,8 @@ closes every real gap with a documented fallback — not a silent waiver.
 |---|---|---|---|---|---|
 | Claude Code | full (named subagents) | `native` | full | `AskUserQuestion` | [`claude-playbook.md`](./src/content/harness-playbooks.ts) |
 | Cursor | generic Task dispatcher | `generic-dispatch` | full | `AskQuestion` | `cursor-playbook.md` |
-| OpenCode | plugin / in-session | `role-switch` | plugin | plain-text | `opencode-playbook.md` |
-| OpenAI Codex | in-session only | `role-switch` (evidenceRefs required) | limited (Bash-only `PreToolUse`/`PostToolUse`; requires `codex_hooks` feature flag) | plain-text | `codex-playbook.md` |
+| OpenCode | plugin / in-session | `role-switch` | plugin | `question` (permission-gated; `permission.question: "allow"`) | `opencode-playbook.md` |
+| OpenAI Codex | in-session only | `role-switch` (evidenceRefs required) | limited (Bash-only `PreToolUse`/`PostToolUse`; requires `codex_hooks` feature flag) | `request_user_input` (experimental; Plan / Collaboration mode) | `codex-playbook.md` |
 
 What the fallbacks mean:
 

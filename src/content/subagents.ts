@@ -51,8 +51,8 @@ Human input remains mandatory only at explicit approval gates (plan approval, us
 |---|---|---|---|---|
 | Claude | \`native\` | Task (named subagent_type) | AskUserQuestion | \`.cclaw/references/harnesses/claude-playbook.md\` |
 | Cursor | \`generic-dispatch\` | Task (generic subagent_type: explore/generalPurpose/…) | AskQuestion | \`.cclaw/references/harnesses/cursor-playbook.md\` |
-| OpenCode | \`role-switch\` | plugin dispatch _or_ in-session role-switch | plain-text options | \`.cclaw/references/harnesses/opencode-playbook.md\` |
-| Codex | \`role-switch\` | in-session role-switch (mandatory evidenceRefs) | plain-text options | \`.cclaw/references/harnesses/codex-playbook.md\` |
+| OpenCode | \`role-switch\` | plugin dispatch _or_ in-session role-switch | \`question\` (permission-gated; \`permission.question: "allow"\`) | \`.cclaw/references/harnesses/opencode-playbook.md\` |
+| Codex | \`role-switch\` | in-session role-switch (mandatory evidenceRefs) | \`request_user_input\` (experimental; Plan / Collaboration mode) | \`.cclaw/references/harnesses/codex-playbook.md\` |
 
 **Dispatch rules driven by \`subagentFallback\`:**
 

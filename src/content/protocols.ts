@@ -15,10 +15,18 @@ Shared format for decisions that require user confirmation.
 1. State the decision in one sentence.
 2. Provide 2-4 labeled options (A, B, C...).
 3. Mark one option as **recommended** with a short rationale.
-4. Use harness question tools when available:
-   - Claude: \`AskUserQuestion\`
-   - Cursor: \`AskQuestion\`
-   - OpenCode/Codex: plain text options
+4. Use the harness's structured-ask tool when available:
+   - Claude: \`AskUserQuestion\` (up to ~4 options × multi-question).
+   - Cursor: \`AskQuestion\` (≥2 options, multi-question, optional \`allow_multiple\`).
+   - OpenCode: \`question\` tool (options + "type custom" fallback).
+     Requires \`permission.question: "allow"\` in \`opencode.json\`; ACP
+     clients additionally need \`OPENCODE_ENABLE_QUESTION_TOOL=1\`.
+   - Codex: \`request_user_input\` (1-3 short questions; experimental,
+     surfaced in Plan / Collaboration mode).
+   - Fallback (any harness where the native tool is hidden, denied, or
+     returns a schema error): a numbered / lettered plain-text list
+     keeping the same Re-ground / Simplify / RECOMMENDATION / Options
+     skeleton described below.
 5. Wait for user choice before proceeding.
 
 ## Decision skeleton
