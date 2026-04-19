@@ -3,7 +3,12 @@ import path from "node:path";
 import { pathToFileURL } from "node:url";
 import { spawn } from "node:child_process";
 import { describe, expect, it } from "vitest";
-import { opencodePluginJs, sessionStartScript, stopCheckpointScript } from "../../src/content/hooks.js";
+import {
+  opencodePluginJs,
+  sessionStartScript,
+  stageCompleteScript,
+  stopCheckpointScript
+} from "../../src/content/hooks.js";
 import { createTempProject } from "../helpers/index.js";
 import {
   claudeHooksJsonWithObservation,
@@ -81,6 +86,7 @@ describe("hooks lifecycle rehydration", () => {
     expect(JSON.stringify(codex)).toContain("prompt-guard.sh");
     expect(JSON.stringify(codex)).toContain("workflow-guard.sh");
     expect(JSON.stringify(codex)).toContain("context-monitor.sh");
+    expect(JSON.stringify(codex)).toContain("verify-current-state --quiet");
     expect(JSON.stringify(claude)).not.toContain("observe.sh");
     expect(JSON.stringify(codex)).not.toContain("observe.sh");
   });
@@ -205,6 +211,38 @@ describe("hooks lifecycle rehydration", () => {
     expect(checkpoint.lastCompletedStep).toBe("captured assumptions");
     expect(checkpoint.remainingSteps).toEqual(["ask approval"]);
     expect(checkpoint.blockers).toEqual(["need answer from user"]);
+  });
+
+  it("stage-complete helper delegates to internal advance-stage", async () => {
+    const root = await createTempProject("stage-complete-helper");
+    const hooksDir = path.join(root, ".cclaw/hooks");
+    await fs.mkdir(hooksDir, { recursive: true });
+
+    const binDir = path.join(root, "bin");
+    await fs.mkdir(binDir, { recursive: true });
+    const callsPath = path.join(root, "cclaw-calls.log");
+    const cclawShimPath = path.join(binDir, "cclaw");
+    await fs.writeFile(
+      cclawShimPath,
+      `#!/usr/bin/env bash
+printf '%s\n' "$*" >> "${callsPath}"
+`,
+      "utf8"
+    );
+    await fs.chmod(cclawShimPath, 0o755);
+
+    const result = await runScript(
+      root,
+      ".cclaw/hooks/stage-complete.sh",
+      stageCompleteScript(),
+      ["scope", "--passed=scope_contract_written"],
+      "",
+      { PATH: `${binDir}:${process.env.PATH ?? ""}` }
+    );
+    expect(result.code).toBe(0);
+    expect(result.stderr).toBe("");
+    const calls = await fs.readFile(callsPath, "utf8");
+    expect(calls).toContain("internal advance-stage scope --passed=scope_contract_written");
   });
 
   it("prompt guard logs advisory events for risky cclaw writes", async () => {
@@ -447,5 +485,38 @@ describe("hooks lifecycle rehydration", () => {
     expect(plugin).toContain("Knowledge digest");
     expect(plugin).toContain("Last session:");
     expect(plugin).toContain("Latest context warning:");
+  });
+
+  it("opencode plugin blocks when workflow guard exits non-zero", async () => {
+    const root = await createTempProject("opencode-strict-block");
+    await fs.mkdir(path.join(root, ".cclaw/hooks"), { recursive: true });
+    await fs.mkdir(path.join(root, ".cclaw/state"), { recursive: true });
+    await fs.mkdir(path.join(root, ".cclaw/skills/using-cclaw"), { recursive: true });
+    await fs.writeFile(path.join(root, ".cclaw/state/flow-state.json"), JSON.stringify({
+      currentStage: "scope",
+      activeRunId: "active",
+      completedStages: ["brainstorm"]
+    }, null, 2), "utf8");
+    await fs.writeFile(path.join(root, ".cclaw/skills/using-cclaw/SKILL.md"), "# Using Cclaw\n", "utf8");
+
+    const pluginPath = path.join(root, ".cclaw/hooks/opencode-plugin.mjs");
+    await fs.writeFile(pluginPath, opencodePluginJs(), "utf8");
+    await fs.writeFile(path.join(root, ".cclaw/hooks/prompt-guard.sh"), "#!/usr/bin/env bash\nexit 0\n", "utf8");
+    await fs.writeFile(path.join(root, ".cclaw/hooks/workflow-guard.sh"), "#!/usr/bin/env bash\nexit 1\n", "utf8");
+    await fs.chmod(path.join(root, ".cclaw/hooks/prompt-guard.sh"), 0o755);
+    await fs.chmod(path.join(root, ".cclaw/hooks/workflow-guard.sh"), 0o755);
+
+    const imported = await import(`${pathToFileURL(pluginPath).href}?t=${Date.now()}`);
+    const pluginFactory = imported.default as (ctx: { directory: string }) => {
+      "tool.execute.before": (input: unknown, output?: unknown) => Promise<void>;
+    };
+    const plugin = pluginFactory({ directory: root });
+
+    await expect(
+      plugin["tool.execute.before"]({
+        tool: "RunCommand",
+        tool_input: { cmd: "echo test" }
+      })
+    ).rejects.toThrow(/blocked tool\.execute\.before/);
   });
 });

@@ -32,7 +32,7 @@ export const PLAN: StageSchemaInput = {
     "Map scope Locked Decisions — every D-XX from scope is referenced by at least one plan task (or explicitly marked deferred with reason).",
     "Run anti-placeholder + anti-scope-reduction scans — block `TODO/TBD/...` and phrasing like `v1`, `for now`, `later` for locked boundaries.",
     "Define checkpoints — mark points where progress should be validated before continuing.",
-    "WAIT_FOR_CONFIRM — write plan artifact and explicitly pause. **STOP.** Do NOT proceed until user confirms. Then update `flow-state.json` and tell user to run `/cc-next`."
+    "WAIT_FOR_CONFIRM — write plan artifact and explicitly pause. **STOP.** Do NOT proceed until user confirms. Then close the stage with `bash .cclaw/hooks/stage-complete.sh plan` and tell user to run `/cc-next`."
   ],
   interactionProtocol: [
     "Plan in read-only mode relative to implementation.",
@@ -41,7 +41,8 @@ export const PLAN: StageSchemaInput = {
     "Attach verification step to every task.",
     "Preserve locked scope boundaries: no silent scope reduction language in task rows.",
     "Enforce WAIT_FOR_CONFIRM: present the plan summary with options (A) Approve / (B) Revise / (C) Reject.",
-    "**STOP.** Do NOT proceed until user explicitly approves. Then update `flow-state.json` and tell user to run `/cc-next`."
+    "**STOP.** Do NOT proceed until user explicitly approves.",
+    "**STOP BEFORE ADVANCE.** Mandatory delegation `planner` must be marked completed or explicitly waived in `.cclaw/state/delegation-log.json`. Then close the stage via `bash .cclaw/hooks/stage-complete.sh plan` and tell the user to run `/cc-next`."
   ],
   process: [
     "Build dependency graph and ordered slices.",

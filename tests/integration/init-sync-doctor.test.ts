@@ -788,11 +788,15 @@ describe("install lifecycle", () => {
     // `codex_hooks` feature flag in `~/.codex/config.toml`.
     const codexHooks = JSON.parse(
       await fs.readFile(path.join(root, ".codex/hooks.json"), "utf8")
-    ) as { hooks: Record<string, unknown> };
+    ) as {
+      hooks: Record<string, unknown>;
+    };
     expect(codexHooks.hooks).toHaveProperty("SessionStart");
+    expect(codexHooks.hooks).toHaveProperty("UserPromptSubmit");
     expect(codexHooks.hooks).toHaveProperty("PreToolUse");
     expect(codexHooks.hooks).toHaveProperty("PostToolUse");
     expect(codexHooks.hooks).toHaveProperty("Stop");
+    expect(JSON.stringify(codexHooks)).toContain("verify-current-state --quiet");
 
     // `.codex/commands/*` is still never consumed by Codex.
     await expect(fs.stat(path.join(root, ".codex/commands"))).rejects.toThrow(/ENOENT/);

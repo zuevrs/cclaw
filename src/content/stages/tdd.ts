@@ -95,18 +95,11 @@ export const TDD: StageSchemaInput = {
   ],
   commonRationalizations: [
     "Writing code before failing test",
-    "Asserting implementation details instead of behavior",
-    "Big-bang implementation across multiple slices",
     "Partial test runs presented as GREEN",
     "Skipping evidence capture",
     "Undocumented refactor changes",
-    "Adding features beyond what RED tests require",
-    "No failing test output (RED missing)",
-    "Implementation edits appear before RED evidence",
     "No full-suite GREEN evidence",
-    "No refactor notes",
-    "Multiple tasks implemented in one pass without justification",
-    "Files changed outside current slice scope"
+    "Multiple tasks implemented in one pass without justification"
   ],
   policyNeedles: ["RED", "GREEN", "REFACTOR", "failing test", "full test suite", "acceptance criteria", "traceable to plan slice"],
   artifactFile: "06-tdd.md",

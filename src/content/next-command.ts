@@ -48,13 +48,14 @@ This is the only progression command the user needs to drive the entire flow. St
 5. Let \`catalog\` = \`stageGateCatalog[currentStage]\` from flow state.
 6. **Satisfied** for gate id \`g\`: \`g\` in \`catalog.passed\` and \`g\` not in \`catalog.blocked\`.
 7. Let \`M\` = \`mandatoryDelegations\` for \`currentStage\`.
-8. If \`M\` is non-empty, inspect **\`${delegationPath}\`**. Treat as satisfied only if the agent is **completed** or **waived**.
+8. If \`M\` is non-empty, inspect **\`${delegationPath}\`**. Treat as satisfied only if each mandatory agent is **completed** or **waived**.
+9. If any mandatory delegation is missing and no waiver exists: **STOP** and ask the user whether to dispatch now or waive with rationale. Do not mark gates passed while delegation is unresolved.
 
 ### Path A: Current stage is NOT complete (any gate unmet or delegation missing)
 
 → Load **\`${RUNTIME_ROOT}/skills/<skillFolder>/SKILL.md\`** and **\`${RUNTIME_ROOT}/commands/<currentStage>.md\`** for the current stage.
 → Execute that stage's protocol. The stage skill handles the full interaction including STOP points and gate tracking.
-→ When the stage completes, the Stage Completion Protocol in the skill updates \`flow-state.json\` automatically.
+→ Stage completion must use \`bash .cclaw/hooks/stage-complete.sh <currentStage>\` (canonical), which validates delegations + gate evidence before mutating \`flow-state.json\`.
 
 ### Path B: Current stage IS complete (all gates passed, all delegations satisfied)
 
@@ -159,6 +160,8 @@ For each gate id in \`requiredGates\` for \`currentStage\`:
 - **Unmet** otherwise.
 
 Check \`mandatoryDelegations\` via **\`${delegationPath}\`** — satisfied only if **completed** or **waived**.
+If a mandatory delegation is missing and no waiver exists, **STOP** and ask:
+(A) dispatch now, (B) waive with rationale, (C) cancel stage advance.
 
 ### Step 3: Act
 
@@ -168,7 +171,7 @@ Load the current stage's skill and command contract:
 - \`${RUNTIME_ROOT}/skills/<skillFolder>/SKILL.md\`
 - \`${RUNTIME_ROOT}/commands/<currentStage>.md\`
 
-Execute the stage protocol. The stage skill handles interaction, STOP points, gate tracking, and the Stage Completion Protocol (updates \`flow-state.json\` when done).
+Execute the stage protocol. The stage skill handles interaction, STOP points, gate tracking, and stage completion via \`bash .cclaw/hooks/stage-complete.sh <stage>\` (canonical flow-state mutation path).
 
 **Path B — stage IS complete (all gates met, all delegations done):**
 

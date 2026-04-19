@@ -11,7 +11,7 @@ launcher, not a dashboard.
 ## What `cclaw init` writes
 
 ```yaml
-version: 0.43.0
+version: 0.44.0
 flowVersion: 1.0.0
 harnesses:
   - codex
