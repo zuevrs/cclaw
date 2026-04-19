@@ -114,9 +114,30 @@ export interface VibyConfig {
   version: string;
   flowVersion: string;
   harnesses: HarnessId[];
-  /** Prompt guard behavior for runtime write-risk detection hooks. */
+  /**
+   * Single-knob strictness for both guard families. When set, cclaw derives
+   * `promptGuardMode` and `tddEnforcement` from this value unless the legacy
+   * fields are explicitly provided. Default: "advisory".
+   *
+   * Added in v0.43.0 to collapse two fields that always moved together for
+   * ~99% of users. Power users who want asymmetric strictness (e.g. strict
+   * prompt guard, advisory TDD) can still set the legacy fields directly —
+   * explicit per-axis values override the derived strictness.
+   */
+  strictness?: "advisory" | "strict";
+  /**
+   * Prompt guard behavior for runtime write-risk detection hooks.
+   *
+   * Since v0.43.0 this is an advanced override. Prefer `strictness` in new
+   * configs; set this explicitly only when you need strict prompt guarding
+   * while keeping TDD advisory, or vice versa.
+   */
   promptGuardMode?: "advisory" | "strict";
-  /** TDD red->green->refactor enforcement mode used by workflow guard hooks. */
+  /**
+   * TDD red->green->refactor enforcement mode used by workflow guard hooks.
+   *
+   * Since v0.43.0 this is an advanced override — see `strictness`.
+   */
   tddEnforcement?: "advisory" | "strict";
   /** Optional test file globs used by guard guidance and /cc-ops tdd-log docs. */
   tddTestGlobs?: string[];

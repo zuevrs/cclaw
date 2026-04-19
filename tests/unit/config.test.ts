@@ -1,7 +1,14 @@
 import fs from "node:fs/promises";
 import path from "node:path";
+import { parse } from "yaml";
 import { describe, expect, it } from "vitest";
-import { configPath, readConfig, writeConfig } from "../../src/config.js";
+import {
+  configPath,
+  detectLanguageRulePacks,
+  readConfig,
+  writeConfig
+} from "../../src/config.js";
+import { initCclaw } from "../../src/install.js";
 import { createTempProject } from "../helpers/index.js";
 describe("config", () => {
   it("keeps explicit empty harness list", async () => {
@@ -258,6 +265,125 @@ sliceReview:
       "utf8"
     );
     await expect(readConfig(root)).rejects.toThrow(/must contain only/);
+  });
+
+  // -- v0.43.0: strictness collapses promptGuardMode + tddEnforcement -------
+
+  it("strictness=strict derives both legacy guard modes when they are absent", async () => {
+    const root = await createTempProject("config-strictness-strict");
+    await fs.mkdir(path.join(root, ".cclaw"), { recursive: true });
+    await fs.writeFile(
+      configPath(root),
+      "harnesses:\n  - claude\nstrictness: strict\n",
+      "utf8"
+    );
+    const config = await readConfig(root);
+    expect(config.strictness).toBe("strict");
+    expect(config.promptGuardMode).toBe("strict");
+    expect(config.tddEnforcement).toBe("strict");
+  });
+
+  it("strictness defaults to advisory when no knob is provided", async () => {
+    const root = await createTempProject("config-strictness-default");
+    await fs.mkdir(path.join(root, ".cclaw"), { recursive: true });
+    await fs.writeFile(configPath(root), "harnesses:\n  - claude\n", "utf8");
+    const config = await readConfig(root);
+    expect(config.strictness).toBe("advisory");
+    expect(config.promptGuardMode).toBe("advisory");
+    expect(config.tddEnforcement).toBe("advisory");
+  });
+
+  it("explicit promptGuardMode overrides derived strictness per-axis", async () => {
+    const root = await createTempProject("config-asymmetric");
+    await fs.mkdir(path.join(root, ".cclaw"), { recursive: true });
+    await fs.writeFile(
+      configPath(root),
+      "harnesses:\n  - claude\nstrictness: advisory\npromptGuardMode: strict\n",
+      "utf8"
+    );
+    const config = await readConfig(root);
+    expect(config.strictness).toBe("advisory");
+    expect(config.promptGuardMode).toBe("strict"); // explicit override wins
+    expect(config.tddEnforcement).toBe("advisory"); // falls back to strictness
+  });
+
+  it("rejects invalid strictness values", async () => {
+    const root = await createTempProject("config-strictness-bad");
+    await fs.mkdir(path.join(root, ".cclaw"), { recursive: true });
+    await fs.writeFile(configPath(root), "strictness: paranoid\n", "utf8");
+    await expect(readConfig(root)).rejects.toThrow(/"strictness" must be "advisory" or "strict"/);
+  });
+
+  // -- v0.43.0: minimal default template --------------------------------
+
+  it("cclaw init writes a minimal config.yaml (no advisory noise)", async () => {
+    const root = await createTempProject("config-init-minimal");
+    await initCclaw({ projectRoot: root });
+
+    const onDisk = parse(await fs.readFile(configPath(root), "utf8")) as Record<string, unknown>;
+    const keys = Object.keys(onDisk).sort();
+    // Allowed keys in the minimal default template. `languageRulePacks` is
+    // only present when auto-detection found something (not guaranteed for a
+    // temp project), so assert it's either absent or a non-empty array.
+    const minimalCore = ["flowVersion", "gitHookGuards", "harnesses", "strictness", "version"];
+    for (const required of minimalCore) {
+      expect(keys).toContain(required);
+    }
+    const unexpectedAdvanced = [
+      "promptGuardMode",
+      "tddEnforcement",
+      "tddTestGlobs",
+      "defaultTrack",
+      "trackHeuristics",
+      "sliceReview"
+    ];
+    for (const advanced of unexpectedAdvanced) {
+      expect(keys).not.toContain(advanced);
+    }
+    if ("languageRulePacks" in onDisk) {
+      expect(Array.isArray(onDisk.languageRulePacks)).toBe(true);
+      expect((onDisk.languageRulePacks as unknown[]).length).toBeGreaterThan(0);
+    }
+  });
+
+  // -- v0.43.0: languageRulePacks auto-detect ---------------------------
+
+  it("detectLanguageRulePacks returns [] when no manifest is present", async () => {
+    const root = await createTempProject("detect-lang-empty");
+    const packs = await detectLanguageRulePacks(root);
+    expect(packs).toEqual([]);
+  });
+
+  it("detectLanguageRulePacks picks typescript from package.json devDependency", async () => {
+    const root = await createTempProject("detect-lang-ts");
+    await fs.writeFile(
+      path.join(root, "package.json"),
+      JSON.stringify({ name: "demo", devDependencies: { typescript: "5.0.0" } }),
+      "utf8"
+    );
+    const packs = await detectLanguageRulePacks(root);
+    expect(packs).toContain("typescript");
+  });
+
+  it("detectLanguageRulePacks picks python from pyproject.toml", async () => {
+    const root = await createTempProject("detect-lang-py");
+    await fs.writeFile(path.join(root, "pyproject.toml"), "[project]\nname='demo'\n", "utf8");
+    const packs = await detectLanguageRulePacks(root);
+    expect(packs).toContain("python");
+  });
+
+  it("detectLanguageRulePacks picks go from go.mod", async () => {
+    const root = await createTempProject("detect-lang-go");
+    await fs.writeFile(path.join(root, "go.mod"), "module demo\n", "utf8");
+    const packs = await detectLanguageRulePacks(root);
+    expect(packs).toContain("go");
+  });
+
+  it("detectLanguageRulePacks is robust to a malformed package.json", async () => {
+    const root = await createTempProject("detect-lang-bad-pkg");
+    await fs.writeFile(path.join(root, "package.json"), "{ not json", "utf8");
+    const packs = await detectLanguageRulePacks(root);
+    expect(packs).toEqual([]);
   });
 
 });

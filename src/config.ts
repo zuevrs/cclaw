@@ -17,6 +17,7 @@ const ALLOWED_CONFIG_KEYS = new Set<string>([
   "version",
   "flowVersion",
   "harnesses",
+  "strictness",
   "promptGuardMode",
   "tddEnforcement",
   "tddTestGlobs",
@@ -26,6 +27,22 @@ const ALLOWED_CONFIG_KEYS = new Set<string>([
   "trackHeuristics",
   "sliceReview"
 ]);
+
+/**
+ * Config keys always present in the minimal init template. Everything else
+ * is "advanced" — parsed when present, but not pre-populated by `cclaw init`.
+ *
+ * Deliberately small: a first-time user should only see knobs they might
+ * actually flip. Power users override by adding more keys by hand; the
+ * reference lives in `docs/config.md`.
+ */
+const MINIMAL_CONFIG_KEYS = [
+  "version",
+  "flowVersion",
+  "harnesses",
+  "strictness",
+  "gitHookGuards"
+] as const;
 
 const DEFAULT_SLICE_REVIEW_THRESHOLD = 5;
 const DEFAULT_SLICE_REVIEW_TRACKS: FlowTrack[] = ["standard"];
@@ -71,6 +88,26 @@ export function configPath(projectRoot: string): string {
   return path.join(projectRoot, CONFIG_PATH);
 }
 
+/**
+ * Default test-file globs used by workflow-guard.sh to detect when a write
+ * targets a test file during TDD. Users rarely need to override this — the
+ * defaults cover TypeScript / JavaScript / Python / Go / Rust / Java layouts.
+ * Exposed so `install.ts` can reuse the same list when seeding the shell
+ * guard script, even though the field is no longer written to the default
+ * `config.yaml` template.
+ */
+export const DEFAULT_TDD_TEST_GLOBS: readonly string[] = [
+  "**/*.test.*",
+  "**/*.spec.*",
+  "**/test/**"
+];
+
+/**
+ * Populated runtime view of config values that downstream callers (install,
+ * observe, doctor) consume. Always has the derived guard modes populated,
+ * regardless of whether the user wrote `strictness`, the legacy keys, both,
+ * or neither.
+ */
 export function createDefaultConfig(
   harnesses: HarnessId[] = DEFAULT_HARNESSES,
   defaultTrack: FlowTrack = "standard"
@@ -79,13 +116,57 @@ export function createDefaultConfig(
     version: CCLAW_VERSION,
     flowVersion: FLOW_VERSION,
     harnesses,
+    strictness: "advisory",
     promptGuardMode: "advisory",
     tddEnforcement: "advisory",
-    tddTestGlobs: ["**/*.test.*", "**/*.spec.*", "**/test/**"],
+    tddTestGlobs: [...DEFAULT_TDD_TEST_GLOBS],
     gitHookGuards: false,
     defaultTrack,
     languageRulePacks: []
   };
+}
+
+/**
+ * Probe common project-root manifests to infer which language rule packs the
+ * user would reasonably want. Pure-functional best-effort: any filesystem
+ * error is swallowed, producing an empty list — the user can always override
+ * by hand.
+ *
+ * Called from `cclaw init` only (not `readConfig`), so subsequent upgrades
+ * never surprise a user who intentionally cleared the list.
+ */
+export async function detectLanguageRulePacks(projectRoot: string): Promise<LanguageRulePack[]> {
+  const detected: LanguageRulePack[] = [];
+
+  const pkgPath = path.join(projectRoot, "package.json");
+  if (await exists(pkgPath)) {
+    try {
+      const pkg = JSON.parse(await fs.readFile(pkgPath, "utf8")) as Record<string, unknown>;
+      const deps = {
+        ...(pkg.dependencies as Record<string, unknown> | undefined),
+        ...(pkg.devDependencies as Record<string, unknown> | undefined)
+      };
+      if ("typescript" in deps || typeof pkg.types === "string") {
+        detected.push("typescript");
+      }
+    } catch {
+      // Malformed package.json — skip; user can set the pack manually later.
+    }
+  }
+
+  const pythonMarkers = ["pyproject.toml", "requirements.txt", "setup.py", "Pipfile"];
+  for (const marker of pythonMarkers) {
+    if (await exists(path.join(projectRoot, marker))) {
+      detected.push("python");
+      break;
+    }
+  }
+
+  if (await exists(path.join(projectRoot, "go.mod"))) {
+    detected.push("go");
+  }
+
+  return [...new Set(detected)];
 }
 
 export async function readConfig(projectRoot: string): Promise<VibyConfig> {
@@ -130,29 +211,48 @@ export async function readConfig(projectRoot: string): Promise<VibyConfig> {
     ? [...new Set(validatedHarnesses)]
     : DEFAULT_HARNESSES;
 
+  const strictnessRaw = (parsed as { strictness?: unknown }).strictness;
+  if (
+    Object.prototype.hasOwnProperty.call(parsed, "strictness") &&
+    strictnessRaw !== "advisory" &&
+    strictnessRaw !== "strict"
+  ) {
+    throw configValidationError(fullPath, `"strictness" must be "advisory" or "strict"`);
+  }
+  const strictness: "advisory" | "strict" = strictnessRaw === "strict" ? "strict" : "advisory";
+
+  // Legacy guard fields — keep honouring explicit values for power users who
+  // want asymmetric behaviour (e.g. strict prompt guard + advisory TDD).
+  // When the user only set `strictness`, both axes inherit from it.
+  const hasExplicitPromptGuard = Object.prototype.hasOwnProperty.call(parsed, "promptGuardMode");
   const promptGuardModeRaw = parsed.promptGuardMode;
   if (
-    Object.prototype.hasOwnProperty.call(parsed, "promptGuardMode") &&
+    hasExplicitPromptGuard &&
     promptGuardModeRaw !== "advisory" &&
     promptGuardModeRaw !== "strict"
   ) {
     throw configValidationError(fullPath, `"promptGuardMode" must be "advisory" or "strict"`);
   }
-  const promptGuardMode = promptGuardModeRaw === "strict" ? "strict" : "advisory";
+  const promptGuardMode: "advisory" | "strict" = hasExplicitPromptGuard
+    ? (promptGuardModeRaw === "strict" ? "strict" : "advisory")
+    : strictness;
 
+  const hasExplicitTddEnforcement = Object.prototype.hasOwnProperty.call(parsed, "tddEnforcement");
   const tddEnforcementRaw = (parsed as { tddEnforcement?: unknown }).tddEnforcement;
   if (
-    Object.prototype.hasOwnProperty.call(parsed, "tddEnforcement") &&
+    hasExplicitTddEnforcement &&
     tddEnforcementRaw !== "advisory" &&
     tddEnforcementRaw !== "strict"
   ) {
     throw configValidationError(fullPath, `"tddEnforcement" must be "advisory" or "strict"`);
   }
-  const tddEnforcement = tddEnforcementRaw === "strict" ? "strict" : "advisory";
+  const tddEnforcement: "advisory" | "strict" = hasExplicitTddEnforcement
+    ? (tddEnforcementRaw === "strict" ? "strict" : "advisory")
+    : strictness;
 
   const tddTestGlobsRaw = (parsed as { tddTestGlobs?: unknown }).tddTestGlobs;
   const tddTestGlobs = validateStringArray(tddTestGlobsRaw, "tddTestGlobs", fullPath)
-    ?? ["**/*.test.*", "**/*.spec.*", "**/test/**"];
+    ?? [...DEFAULT_TDD_TEST_GLOBS];
 
   const gitHookGuardsRaw = parsed.gitHookGuards;
   if (
@@ -327,6 +427,7 @@ export async function readConfig(projectRoot: string): Promise<VibyConfig> {
     version: parsed.version ?? CCLAW_VERSION,
     flowVersion: parsed.flowVersion ?? FLOW_VERSION,
     harnesses,
+    strictness,
     promptGuardMode,
     tddEnforcement,
     tddTestGlobs,
@@ -338,6 +439,135 @@ export async function readConfig(projectRoot: string): Promise<VibyConfig> {
   };
 }
 
-export async function writeConfig(projectRoot: string, config: VibyConfig): Promise<void> {
-  await writeFileSafe(configPath(projectRoot), stringify(config));
+/**
+ * Fields that live on the populated runtime `VibyConfig` but are considered
+ * "advanced" — we keep them in the in-memory object so downstream callers
+ * don't have to branch, but we do **not** write them to `config.yaml` unless
+ * the user set them explicitly. Keeps the default template small and honest:
+ * only knobs a new user would meaningfully flip show up.
+ */
+type AdvancedConfigKey =
+  | "promptGuardMode"
+  | "tddEnforcement"
+  | "tddTestGlobs"
+  | "defaultTrack"
+  | "languageRulePacks"
+  | "trackHeuristics"
+  | "sliceReview";
+
+/**
+ * Options controlling the serialisation shape of `config.yaml`.
+ *
+ * - `"full"` (default): write every field on the `VibyConfig` object that
+ *   isn't `undefined`. Preserves existing shapes and keeps legacy callers
+ *   working without migration.
+ * - `"minimal"`: write only the user-facing knobs (`MINIMAL_CONFIG_KEYS`)
+ *   plus any non-empty `languageRulePacks` (so auto-detected values survive
+ *   a fresh `cclaw init`). Use this when generating the default template;
+ *   power users can still add advanced keys by hand.
+ *
+ * `advancedKeysPresent` upgrades an otherwise-minimal serialisation by
+ * including the listed advanced keys. `cclaw upgrade` uses it to preserve
+ * the exact shape a user hand-authored, while still re-minimising configs
+ * where the user stayed at defaults.
+ */
+export interface WriteConfigOptions {
+  mode?: "full" | "minimal";
+  advancedKeysPresent?: ReadonlySet<AdvancedConfigKey>;
+}
+
+function isMinimalKey(key: string): boolean {
+  return (MINIMAL_CONFIG_KEYS as readonly string[]).includes(key);
+}
+
+function buildSerializableConfig(
+  config: VibyConfig,
+  options: WriteConfigOptions = {}
+): Record<string, unknown> {
+  const mode = options.mode ?? "full";
+  const advanced = options.advancedKeysPresent;
+  const output: Record<string, unknown> = {};
+  const ordered: (keyof VibyConfig)[] = [
+    "version",
+    "flowVersion",
+    "harnesses",
+    "strictness",
+    "promptGuardMode",
+    "tddEnforcement",
+    "tddTestGlobs",
+    "gitHookGuards",
+    "defaultTrack",
+    "languageRulePacks",
+    "trackHeuristics",
+    "sliceReview"
+  ];
+  for (const key of ordered) {
+    const value = config[key];
+    if (value === undefined) continue;
+
+    if (mode === "full") {
+      output[key] = value;
+      continue;
+    }
+
+    // Minimal mode: always include the short list; advanced keys only when
+    // the caller explicitly opted in, or for auto-detected non-empty
+    // `languageRulePacks`.
+    if (isMinimalKey(key)) {
+      output[key] = value;
+      continue;
+    }
+    if (advanced?.has(key as AdvancedConfigKey)) {
+      output[key] = value;
+      continue;
+    }
+    if (key === "languageRulePacks" && Array.isArray(value) && value.length > 0) {
+      output[key] = value;
+    }
+  }
+  return output;
+}
+
+export async function writeConfig(
+  projectRoot: string,
+  config: VibyConfig,
+  options: WriteConfigOptions = {}
+): Promise<void> {
+  const serialisable = buildSerializableConfig(config, options);
+  await writeFileSafe(configPath(projectRoot), stringify(serialisable));
+}
+
+/**
+ * Enumerate which advanced keys are currently set in the on-disk config.
+ * Used by `cclaw upgrade` to preserve the user's existing shape — if they
+ * wrote `tddTestGlobs` by hand, the upgrade keeps it; if they didn't, the
+ * upgrade stays minimal.
+ */
+export async function detectAdvancedKeys(
+  projectRoot: string
+): Promise<ReadonlySet<AdvancedConfigKey>> {
+  const fullPath = configPath(projectRoot);
+  if (!(await exists(fullPath))) return new Set();
+  try {
+    const parsedUnknown = parse(await fs.readFile(fullPath, "utf8"));
+    if (!isRecord(parsedUnknown)) return new Set();
+    const advancedCandidates: AdvancedConfigKey[] = [
+      "promptGuardMode",
+      "tddEnforcement",
+      "tddTestGlobs",
+      "defaultTrack",
+      "languageRulePacks",
+      "trackHeuristics",
+      "sliceReview"
+    ];
+    const present = new Set<AdvancedConfigKey>();
+    for (const key of advancedCandidates) {
+      if (Object.prototype.hasOwnProperty.call(parsedUnknown, key)) {
+        present.add(key);
+      }
+    }
+    return present;
+  } catch {
+    return new Set();
+  }
 }

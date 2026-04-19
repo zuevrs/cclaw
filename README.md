@@ -135,10 +135,31 @@ Plus harness-specific shims:
   folders are auto-cleaned on sync.)
 - `AGENTS.md` with a managed routing block (includes a Codex-specific note)
 
-`.cclaw/config.yaml` holds every tunable key (prompt guard strictness,
-TDD enforcement, git-hook guards, language rule packs, track heuristics).
-Edit it directly — `cclaw-cli upgrade` preserves your changes. Full key
-reference: [`docs/config.md`](./docs/config.md).
+### `.cclaw/config.yaml` — the minimal surface
+
+`cclaw init` writes five keys, on purpose:
+
+```yaml
+version: 0.43.0
+flowVersion: 1.0.0
+harnesses:
+  - codex
+strictness: advisory     # advisory | strict — one knob for prompt-guard + TDD
+gitHookGuards: false     # opt in to managed .git/hooks/pre-commit + pre-push
+```
+
+If cclaw detects a Node / Python / Go project at init time, a sixth
+`languageRulePacks` line appears (auto-populated from `package.json`,
+`pyproject.toml` / `requirements.txt`, `go.mod`). That is the full
+default surface — a new user sees nothing they need to understand yet.
+
+Advanced knobs (`promptGuardMode` / `tddEnforcement` per-axis overrides,
+`tddTestGlobs`, `defaultTrack`, `trackHeuristics`, `sliceReview`) are
+**opt-in**: add them by hand when you need them. `cclaw upgrade`
+preserves exactly what you wrote — it never silently reintroduces
+defaults you removed.
+
+Full key-by-key reference: [`docs/config.md`](./docs/config.md).
 
 ---
 
