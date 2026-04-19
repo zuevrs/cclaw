@@ -45,6 +45,7 @@ export const DESIGN: StageSchemaInput = {
     "If a section has no issues, say 'No issues found' and move on.",
     "Do not skip failure-mode mapping.",
     "For design baseline approval: present the full baseline. **STOP.** Do NOT proceed until user explicitly approves the design.",
+    "**STOP BEFORE ADVANCE.** Mandatory delegation `planner` must be marked completed or explicitly waived in `.cclaw/state/delegation-log.json`. Then close the stage via `bash .cclaw/hooks/stage-complete.sh design` (do not hand-edit `.cclaw/state/flow-state.json`).",
     "Take a firm position on every recommendation. Do NOT hedge with 'it depends' or 'you could do either'. State your opinion, then justify it.",
     "Use pushback patterns for weak framing: if the user says 'it's just a small change', respond with 'small changes to shared interfaces have outsized blast radius — let's map it'. If 'we'll refactor later', respond with 'later never comes — show me the refactor ticket or do it now'.",
     "When the user's proposed architecture is suboptimal, say so directly. Offer the alternative with concrete trade-offs, do not bury criticism in praise.",

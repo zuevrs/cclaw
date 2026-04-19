@@ -43,8 +43,17 @@ import { EVAL_MODES } from "./eval/types.js";
 import type { EvalMode } from "./eval/types.js";
 import { parseModeInput } from "./eval/mode.js";
 import { FLOW_STAGES } from "./types.js";
+import { runInternalCommand } from "./internal/advance-stage.js";
 
-type CommandName = "init" | "sync" | "doctor" | "upgrade" | "uninstall" | "archive" | "eval";
+type CommandName =
+  | "init"
+  | "sync"
+  | "doctor"
+  | "upgrade"
+  | "uninstall"
+  | "archive"
+  | "eval"
+  | "internal";
 const INSTALLER_COMMANDS: CommandName[] = [
   "init",
   "sync",
@@ -52,7 +61,8 @@ const INSTALLER_COMMANDS: CommandName[] = [
   "upgrade",
   "uninstall",
   "archive",
-  "eval"
+  "eval",
+  "internal"
 ];
 
 interface ParsedArgs {
@@ -86,6 +96,8 @@ interface ParsedArgs {
   evalArgs?: string[];
   evalBackground?: boolean;
   evalCompareModel?: string;
+  /** Hidden plumbing command (`cclaw internal ...`) arguments. */
+  internalArgs?: string[];
   showHelp?: boolean;
   showVersion?: boolean;
 }
@@ -557,6 +569,13 @@ function parseArgs(argv: string[]): ParsedArgs {
     ? (commandRaw as CommandName)
     : undefined;
 
+  // Hidden maintainer surface for runtime guards/helpers. Keep raw positional
+  // args untouched so subcommand-level parsing can evolve independently.
+  if (parsed.command === "internal") {
+    parsed.internalArgs = [...rest];
+    return parsed;
+  }
+
   // For `eval`, the next non-flag argument is an optional subcommand. Any
   // subsequent non-flag tokens are captured as evalArgs (consumed by the
   // subcommand handler). This preserves backwards compat: callers that run
@@ -967,6 +986,9 @@ async function runCommand(parsed: ParsedArgs, ctx: CliContext): Promise<number> 
   const command = parsed.command;
   if (!command) {
     return printNoArgsHint(ctx);
+  }
+  if (command === "internal") {
+    return runInternalCommand(ctx.cwd, parsed.internalArgs ?? [], ctx);
   }
 
   if (command === "init") {

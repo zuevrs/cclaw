@@ -44,7 +44,8 @@ export const SCOPE: StageSchemaInput = {
     "Record explicit in-scope and out-of-scope contract.",
     "Once the user accepts or rejects a recommendation, commit fully. Do not re-argue.",
     "Produce a clean scope summary after all issues are resolved.",
-    "**STOP.** Wait for explicit user approval of scope contract before advancing to design."
+    "**STOP.** Wait for explicit user approval of scope contract before advancing to design.",
+    "**STOP BEFORE ADVANCE.** Mandatory delegation `planner` must be marked completed or explicitly waived in `.cclaw/state/delegation-log.json`. Then close the stage via `bash .cclaw/hooks/stage-complete.sh scope` (do not hand-edit `.cclaw/state/flow-state.json`)."
   ],
   process: [
     "Run premise challenge and existing-solution leverage check.",

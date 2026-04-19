@@ -102,16 +102,21 @@ Shared closeout sequence applied by every stage skill.
 ## Required order
 
 1. Verify mandatory delegations are completed or explicitly waived.
-2. Update \`.cclaw/state/flow-state.json\`:
-   - mark passed gates,
-   - clear blocked gates that are resolved,
-   - update \`guardEvidence\`.
-3. Persist stage artifact under \`.cclaw/artifacts/\`.
-4. Run \`npx cclaw doctor\` and resolve failures.
-5. **Capture through-flow learnings** — see the policy below. Knowledge
+2. Persist stage artifact under \`.cclaw/artifacts/\`.
+3. Use the canonical helper:
+   - \`bash .cclaw/hooks/stage-complete.sh <stage>\`
+   - helper responsibilities: validate mandatory delegations, validate
+     current-stage gate evidence/artifact lint, update
+     \`stageGateCatalog\` + \`guardEvidence\`, and advance \`currentStage\`.
+4. Legacy fallback (only when helper is unavailable): manually edit
+   \`.cclaw/state/flow-state.json\` to mark passed gates, clear resolved
+   blocked gates, and update \`guardEvidence\`. This path is legacy and
+   intentionally noisy in workflow guards.
+5. Run \`npx cclaw doctor\` and resolve failures.
+6. **Capture through-flow learnings** — see the policy below. Knowledge
    accrues continuously across stages, not just at retro.
-6. Notify user with stage completion and next action (\`/cc-next\`).
-7. Stop; do not auto-run the next stage unless user asks.
+7. Notify user with stage completion and next action (\`/cc-next\`).
+8. Stop; do not auto-run the next stage unless user asks.
 
 ## Through-flow knowledge capture
 

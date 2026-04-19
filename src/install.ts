@@ -43,6 +43,7 @@ import { sessionHooksSkillMarkdown } from "./content/session-hooks.js";
 import {
   sessionStartScript,
   stopCheckpointScript,
+  stageCompleteScript,
   preCompactScript,
   opencodePluginJs,
   claudeHooksJson,
@@ -832,6 +833,7 @@ async function writeHooks(projectRoot: string, config: VibyConfig): Promise<void
 
   await writeFileSafe(path.join(hooksDir, "session-start.sh"), sessionStartScript());
   await writeFileSafe(path.join(hooksDir, "stop-checkpoint.sh"), stopCheckpointScript());
+  await writeFileSafe(path.join(hooksDir, "stage-complete.sh"), stageCompleteScript());
   await writeFileSafe(path.join(hooksDir, "pre-compact.sh"), preCompactScript());
   await writeFileSafe(path.join(hooksDir, "prompt-guard.sh"), promptGuardScript({
     strictMode: config.promptGuardMode === "strict"
@@ -839,6 +841,7 @@ async function writeHooks(projectRoot: string, config: VibyConfig): Promise<void
   await writeFileSafe(
     path.join(hooksDir, "workflow-guard.sh"),
     workflowGuardScript({
+      workflowGuardMode: config.strictness ?? "advisory",
       tddEnforcementMode: config.tddEnforcement ?? "advisory",
       tddTestGlobs: config.tddTestGlobs
     })
@@ -851,6 +854,7 @@ async function writeHooks(projectRoot: string, config: VibyConfig): Promise<void
     for (const script of [
       "session-start.sh",
       "stop-checkpoint.sh",
+      "stage-complete.sh",
       "pre-compact.sh",
       "prompt-guard.sh",
       "workflow-guard.sh",
@@ -1542,9 +1546,16 @@ function stripManagedHookCommands(value: unknown): { updated: unknown; changed: 
 
 function isManagedRuntimeHookCommand(command: string): boolean {
   const normalized = command.trim().replace(/\s+/gu, " ");
-  return /(^|\s)(?:bash\s+)?(?:\.\/)?\.cclaw\/hooks\/(?:session-start|stop-checkpoint|pre-compact|prompt-guard|workflow-guard|context-monitor)\.sh(?:\s|$)/u.test(
-    normalized
-  );
+  if (
+    /(^|\s)(?:bash\s+)?(?:\.\/)?\.cclaw\/hooks\/(?:session-start|stop-checkpoint|pre-compact|prompt-guard|workflow-guard|context-monitor)\.sh(?:\s|$)/u.test(
+      normalized
+    )
+  ) {
+    return true;
+  }
+  // Codex UserPromptSubmit non-blocking state nudge:
+  // bash -lc '... cclaw internal verify-current-state --quiet ...'
+  return /internal verify-current-state --quiet/u.test(normalized);
 }
 
 async function removeManagedHookEntries(hookFilePath: string): Promise<void> {

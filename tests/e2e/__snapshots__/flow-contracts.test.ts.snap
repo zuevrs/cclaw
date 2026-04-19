@@ -330,6 +330,9 @@ Rule: Review verdict must reference specific spec criteria and TDD evidence. Dow
 - \`gates\`: \`review_layer1_spec_compliance\`, \`review_layer2_correctness\`, \`review_layer2_security\`, \`review_layer2_performance\`, \`review_layer2_architecture\`, \`review_severity_classified\`, \`review_criticals_resolved\`, \`review_army_json_valid\`, \`review_completeness_scored\`, \`review_security_audit_swept\`
 - \`artifact\`: \`.cclaw/artifacts/07-review.md\`
 - \`mandatory delegations\`: \`reviewer\`, \`security-reviewer\`
+- \`completion helper\`: \`bash .cclaw/hooks/stage-complete.sh review\`
+- Record mandatory delegation completion/waiver in \`.cclaw/state/delegation-log.json\` with rationale as needed.
+- Use the completion helper instead of raw \`flow-state.json\` edits (legacy direct edits trigger workflow-guard warnings or strict-mode blocks).
 
 Apply shared completion logic from:
 \`.cclaw/references/protocols/completion.md\`
@@ -617,6 +620,9 @@ Rule: Ship artifact must reference review verdict and resolution status. Release
 - \`gates\`: \`ship_review_verdict_valid\`, \`ship_preflight_passed\`, \`ship_release_notes_written\`, \`ship_rollback_plan_ready\`, \`ship_finalization_mode_selected\`, \`ship_finalization_executed\`, \`ship_post_merge_tests\`
 - \`artifact\`: \`.cclaw/artifacts/08-ship.md\`
 - \`mandatory delegations\`: \`doc-updater\`
+- \`completion helper\`: \`bash .cclaw/hooks/stage-complete.sh ship\`
+- Record mandatory delegation completion/waiver in \`.cclaw/state/delegation-log.json\` with rationale as needed.
+- Use the completion helper instead of raw \`flow-state.json\` edits (legacy direct edits trigger workflow-guard warnings or strict-mode blocks).
 
 Apply shared completion logic from:
 \`.cclaw/references/protocols/completion.md\`
@@ -731,7 +737,7 @@ You MUST complete these steps in order:
 7. Map scope Locked Decisions — every D-XX from scope is referenced by at least one plan task (or explicitly marked deferred with reason).
 8. Run anti-placeholder + anti-scope-reduction scans — block \`TODO/TBD/...\` and phrasing like \`v1\`, \`for now\`, \`later\` for locked boundaries.
 9. Define checkpoints — mark points where progress should be validated before continuing.
-10. WAIT_FOR_CONFIRM — write plan artifact and explicitly pause. **STOP.** Do NOT proceed until user confirms. Then update \`flow-state.json\` and tell user to run \`/cc-next\`.
+10. WAIT_FOR_CONFIRM — write plan artifact and explicitly pause. **STOP.** Do NOT proceed until user confirms. Then close the stage with \`bash .cclaw/hooks/stage-complete.sh plan\` and tell user to run \`/cc-next\`.
 
 ## Good vs Bad (at-a-glance)
 
@@ -791,7 +797,8 @@ Summary of what the reference covers:
 4. Attach verification step to every task.
 5. Preserve locked scope boundaries: no silent scope reduction language in task rows.
 6. Enforce WAIT_FOR_CONFIRM: present the plan summary with options (A) Approve / (B) Revise / (C) Reject.
-7. **STOP.** Do NOT proceed until user explicitly approves. Then update \`flow-state.json\` and tell user to run \`/cc-next\`.
+7. **STOP.** Do NOT proceed until user explicitly approves.
+8. **STOP BEFORE ADVANCE.** Mandatory delegation \`planner\` must be marked completed or explicitly waived in \`.cclaw/state/delegation-log.json\`. Then close the stage via \`bash .cclaw/hooks/stage-complete.sh plan\` and tell the user to run \`/cc-next\`.
 
 Shared decision/ask-user protocol:
 \`.cclaw/references/protocols/decision.md\`
@@ -910,6 +917,9 @@ Rule: Every task must trace to a spec acceptance criterion. Every locked scope d
 - \`gates\`: \`plan_tasks_sliced_2_5_min\`, \`plan_dependency_graph_written\`, \`plan_dependency_batches_defined\`, \`plan_verification_steps_defined\`, \`plan_acceptance_mapped\`, \`plan_wait_for_confirm\`
 - \`artifact\`: \`.cclaw/artifacts/05-plan.md\`
 - \`mandatory delegations\`: \`planner\`
+- \`completion helper\`: \`bash .cclaw/hooks/stage-complete.sh plan\`
+- Record mandatory delegation completion/waiver in \`.cclaw/state/delegation-log.json\` with rationale as needed.
+- Use the completion helper instead of raw \`flow-state.json\` edits (legacy direct edits trigger workflow-guard warnings or strict-mode blocks).
 
 Apply shared completion logic from:
 \`.cclaw/references/protocols/completion.md\`
@@ -1232,18 +1242,11 @@ Rule: Every RED test traces to a plan task. Every GREEN change traces to a RED t
 
 ## Anti-Patterns & Red Flags
 - Writing code before failing test
-- Asserting implementation details instead of behavior
-- Big-bang implementation across multiple slices
 - Partial test runs presented as GREEN
 - Skipping evidence capture
 - Undocumented refactor changes
-- Adding features beyond what RED tests require
-- No failing test output (RED missing)
-- Implementation edits appear before RED evidence
 - No full-suite GREEN evidence
-- No refactor notes
 - Multiple tasks implemented in one pass without justification
-- Files changed outside current slice scope
 - tests pass before behavior change (RED failure missing)
 - full suite not green
 - behavior changed during refactor
@@ -1263,6 +1266,9 @@ Rule: Every RED test traces to a plan task. Every GREEN change traces to a RED t
 - \`gates\`: \`tdd_red_test_written\`, \`tdd_red_failure_captured\`, \`tdd_trace_to_acceptance\`, \`tdd_red_failure_reason_verified\`, \`tdd_green_full_suite\`, \`tdd_refactor_completed\`, \`tdd_refactor_notes_written\`, \`tdd_traceable_to_plan\`
 - \`artifact\`: \`.cclaw/artifacts/06-tdd.md\`
 - \`mandatory delegations\`: \`test-author\`
+- \`completion helper\`: \`bash .cclaw/hooks/stage-complete.sh tdd\`
+- Record mandatory delegation completion/waiver in \`.cclaw/state/delegation-log.json\` with rationale as needed.
+- Use the completion helper instead of raw \`flow-state.json\` edits (legacy direct edits trigger workflow-guard warnings or strict-mode blocks).
 
 Apply shared completion logic from:
 \`.cclaw/references/protocols/completion.md\`
@@ -1536,6 +1542,9 @@ Rule: Scope and design decisions must trace back to explored context and approve
 - \`gates\`: \`brainstorm_context_explored\`, \`brainstorm_idea_understood\`, \`brainstorm_approaches_compared\`, \`brainstorm_direction_approved\`, \`brainstorm_artifact_reviewed\`
 - \`artifact\`: \`.cclaw/artifacts/01-brainstorm.md\`
 - \`mandatory delegations\`: none
+- \`completion helper\`: \`bash .cclaw/hooks/stage-complete.sh brainstorm\`
+- Record mandatory delegation completion/waiver in \`.cclaw/state/delegation-log.json\` with rationale as needed.
+- Use the completion helper instead of raw \`flow-state.json\` edits (legacy direct edits trigger workflow-guard warnings or strict-mode blocks).
 
 Apply shared completion logic from:
 \`.cclaw/references/protocols/completion.md\`

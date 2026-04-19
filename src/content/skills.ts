@@ -237,6 +237,9 @@ function completionParametersBlock(schema: StageSchema): string {
 - \`gates\`: ${gateList}
 - \`artifact\`: \`${RUNTIME_ROOT}/artifacts/${schema.artifactFile}\`
 - \`mandatory delegations\`: ${mandatory}
+- \`completion helper\`: \`bash .cclaw/hooks/stage-complete.sh ${schema.stage}\`
+- Record mandatory delegation completion/waiver in \`${RUNTIME_ROOT}/state/delegation-log.json\` with rationale as needed.
+- Use the completion helper instead of raw \`flow-state.json\` edits (legacy direct edits trigger workflow-guard warnings or strict-mode blocks).
 
 Apply shared completion logic from:
 \`${COMPLETION_PROTOCOL_PATH}\`

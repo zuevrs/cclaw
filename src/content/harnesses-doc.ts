@@ -75,6 +75,11 @@ ${hookRows}
 - \`tier1\`: full native delegation + structured asks + full hook surface.
 - \`tier2\`: usable flow with capability gaps; mandatory delegation can require waivers.
 - \`tier3\`: manual-only fallback; no native automation guarantees.
+- Codex-specific ceiling: \`PreToolUse\` can only intercept \`Bash\`. Direct
+  \`Write\`/\`Edit\` to \`.cclaw/state/flow-state.json\` cannot be hard-blocked
+  at hook level, so the canonical path is
+  \`bash .cclaw/hooks/stage-complete.sh <stage>\` plus the non-blocking
+  \`UserPromptSubmit\` state nudge.
 
 ## Shared command contract
 
