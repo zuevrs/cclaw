@@ -156,9 +156,9 @@ Summary of what the reference covers:
 1. Run Layer 1 (spec compliance) completely before starting Layer 2.
 2. In each review section, present findings ONE AT A TIME. Do NOT batch.
 3. Classify every finding as Critical, Important, or Suggestion.
-4. For each Critical finding: use the Decision Protocol — present resolution options (A/B/C) with trade-offs, and mark one as (recommended). Do NOT use a numeric Completeness rubric; recommend the option that fully closes the finding with no carry-over risk and the smallest blast radius. If AskQuestion/AskUserQuestion is available, send exactly ONE question per call, validate fields against runtime schema, and on schema error immediately fall back to plain-text question instead of retrying guessed payloads.
+4. For each Critical finding: use the Decision Protocol — present resolution options (A/B/C) with trade-offs, and mark one as (recommended). Do NOT use a numeric Completeness rubric; recommend the option that fully closes the finding with no carry-over risk and the smallest blast radius. If the harness's native structured-ask tool is available (\`AskUserQuestion\` on Claude, \`AskQuestion\` on Cursor, \`question\` on OpenCode with \`permission.question: "allow"\`, \`request_user_input\` on Codex in Plan/Collaboration mode), send exactly ONE question per call, validate fields against the runtime schema, and on schema error immediately fall back to a plain-text lettered list instead of retrying guessed payloads.
 5. Resolve all critical blockers before ship.
-6. For final verdict: use AskQuestion/AskUserQuestion only if runtime schema is confirmed; otherwise collect verdict with a plain-text single-choice prompt (APPROVED / APPROVED_WITH_CONCERNS / BLOCKED).
+6. For final verdict: use the native structured-ask tool (\`AskUserQuestion\` / \`AskQuestion\` / \`question\` / \`request_user_input\`) only if runtime schema is confirmed; otherwise collect verdict with a plain-text single-choice prompt (APPROVED / APPROVED_WITH_CONCERNS / BLOCKED).
 7. **STOP.** Do NOT proceed to ship until the user provides an explicit verdict.
 
 Shared decision/ask-user protocol:
@@ -501,7 +501,7 @@ Summary of what the reference covers:
 ## Interaction Protocol
 1. Run preflight checks before any release action.
 2. Document release notes and rollback plan explicitly.
-3. For finalization mode: use the Decision Protocol — present modes as labeled options (A/B/C/D) with consequences, and mark one as (recommended). Do NOT use a numeric Completeness rubric; recommend the mode that best addresses release blast-radius, rollback readiness, observability, and stakeholder communication — ties go to the most reversible option. If AskQuestion/AskUserQuestion is available, send exactly ONE question per call, validate fields against runtime schema, and on schema error immediately fall back to plain-text question instead of retrying guessed payloads.
+3. For finalization mode: use the Decision Protocol — present modes as labeled options (A/B/C/D) with consequences, and mark one as (recommended). Do NOT use a numeric Completeness rubric; recommend the mode that best addresses release blast-radius, rollback readiness, observability, and stakeholder communication — ties go to the most reversible option. If the harness's native structured-ask tool is available (\`AskUserQuestion\` / \`AskQuestion\` / \`question\` / \`request_user_input\`), send exactly ONE question per call, validate fields against the runtime schema, and on schema error immediately fall back to a plain-text lettered list instead of retrying guessed payloads.
 4. Do not proceed if critical blockers remain from review.
 5. **STOP.** Present finalization options and wait for user selection before executing any finalization action.
 

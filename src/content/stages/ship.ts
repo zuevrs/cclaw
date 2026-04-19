@@ -38,7 +38,7 @@ export const SHIP: StageSchemaInput = {
   interactionProtocol: [
     "Run preflight checks before any release action.",
     "Document release notes and rollback plan explicitly.",
-    "For finalization mode: use the Decision Protocol — present modes as labeled options (A/B/C/D) with consequences, and mark one as (recommended). Do NOT use a numeric Completeness rubric; recommend the mode that best addresses release blast-radius, rollback readiness, observability, and stakeholder communication — ties go to the most reversible option. If AskQuestion/AskUserQuestion is available, send exactly ONE question per call, validate fields against runtime schema, and on schema error immediately fall back to plain-text question instead of retrying guessed payloads.",
+    "For finalization mode: use the Decision Protocol — present modes as labeled options (A/B/C/D) with consequences, and mark one as (recommended). Do NOT use a numeric Completeness rubric; recommend the mode that best addresses release blast-radius, rollback readiness, observability, and stakeholder communication — ties go to the most reversible option. If the harness's native structured-ask tool is available (`AskUserQuestion` / `AskQuestion` / `question` / `request_user_input`), send exactly ONE question per call, validate fields against the runtime schema, and on schema error immediately fall back to a plain-text lettered list instead of retrying guessed payloads.",
     "Do not proceed if critical blockers remain from review.",
     "**STOP.** Present finalization options and wait for user selection before executing any finalization action."
   ],

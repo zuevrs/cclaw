@@ -76,7 +76,28 @@ export interface HarnessAdapter {
      */
     nativeSubagentDispatch: "full" | "generic" | "partial" | "none";
     hookSurface: "full" | "plugin" | "limited" | "none";
-    structuredAsk: "AskUserQuestion" | "AskQuestion" | "plain-text";
+    /**
+     * Structured-ask primitive exposed by the harness.
+     *
+     * - `AskUserQuestion`   — Claude Code native tool (≤5 options × multi-question).
+     * - `AskQuestion`       — Cursor native tool (≥2 options, multi-question, `allow_multiple`).
+     * - `question`          — OpenCode native tool (header + options + "type custom"
+     *   fallback); **gated**: requires `permission.question: "allow"` in
+     *   `opencode.json`, and for ACP clients additionally needs
+     *   `OPENCODE_ENABLE_QUESTION_TOOL=1`.
+     * - `request_user_input` — Codex CLI tool (1-3 short questions); experimental
+     *   and primarily surfaced inside Plan / Collaboration mode templates
+     *   (`codex-rs/collaboration-mode-templates`). Available to agents running
+     *   inside Codex but may be hidden on very old builds.
+     * - `plain-text`        — fallback only; used when no native primitive is
+     *   available (no shipping harness uses this in v0.41.0).
+     */
+    structuredAsk:
+      | "AskUserQuestion"
+      | "AskQuestion"
+      | "question"
+      | "request_user_input"
+      | "plain-text";
     /**
      * Declared fallback pattern used when the harness cannot satisfy a
      * mandatory delegation natively. Drives `checkMandatoryDelegations`
@@ -202,7 +223,15 @@ export const HARNESS_ADAPTERS: Record<HarnessId, HarnessAdapter> = {
     capabilities: {
       nativeSubagentDispatch: "partial",
       hookSurface: "plugin",
-      structuredAsk: "plain-text",
+      // OpenCode exposes a native `question` tool (header + options +
+      // custom-answer fallback, multi-question navigation). It is
+      // permission-gated — `opencode.json` must set
+      // `permission.question: "allow"` and ACP clients must export
+      // `OPENCODE_ENABLE_QUESTION_TOOL=1`. cclaw surfaces the tool name
+      // in the Decision Protocol and in the OpenCode playbook; skills
+      // fall back to the shared plain-text lettered list when the tool
+      // is denied or unavailable.
+      structuredAsk: "question",
       subagentFallback: "role-switch"
     }
   },
@@ -223,7 +252,15 @@ export const HARNESS_ADAPTERS: Record<HarnessId, HarnessAdapter> = {
     capabilities: {
       nativeSubagentDispatch: "none",
       hookSurface: "limited",
-      structuredAsk: "plain-text",
+      // Codex CLI exposes `request_user_input` — an experimental tool
+      // that asks 1-3 short questions and returns the user's answers.
+      // It is the primitive the built-in Plan / Collaboration mode
+      // templates use (see `codex-rs/collaboration-mode-templates`).
+      // Agents running inside Codex can call it directly; cclaw wires
+      // it into the Decision Protocol and the Codex playbook. The
+      // shared plain-text lettered list is the documented fallback
+      // when the tool is unavailable.
+      structuredAsk: "request_user_input",
       subagentFallback: "role-switch"
     }
   }

@@ -53,8 +53,11 @@ in the structured ask; there is no \`--skip\` flag.
    - scan \`${knowledgePath()}\` for entries recorded during this run,
    - structure the draft as: Outcomes / Slowed / Accelerated / Repeatable rule.
 4. Update \`closeout.retroDraftedAt = <ISO>\` in flow-state.
-5. Present **one** structured ask (AskUserQuestion on Claude, AskQuestion on
-   Cursor, plain-text options elsewhere):
+5. Present **one** structured ask using the harness's native tool
+   (\`AskUserQuestion\` on Claude, \`AskQuestion\` on Cursor, \`question\` on
+   OpenCode when \`permission.question: "allow"\` is set,
+   \`request_user_input\` on Codex in Plan / Collaboration mode; fall back
+   to a plain-text lettered list when the tool is hidden or errors):
    - \`accept\` (default) — keep the draft as-is,
    - \`edit\` — user edits \`${retroArtifactPath()}\` in-place, then re-runs \`/cc-next\`,
    - \`skip\` — record \`retroSkipped: true\` + one-line reason, no compound entry required.
@@ -112,8 +115,9 @@ Do not silently skip. Do not finalize without updating \`flow-state.json\`.
    - **Accelerated** — patterns/decisions that worked and are worth keeping.
    - **Repeatable rule** — one candidate rule/pattern for next run.
    Record \`closeout.retroDraftedAt\`.
-3. Ask the user **one** structured question via the harness question tool
-   (AskUserQuestion / AskQuestion / plain text fallback):
+3. Ask the user **one** structured question via the harness's native
+   ask tool (\`AskUserQuestion\` / \`AskQuestion\` / \`question\` /
+   \`request_user_input\`; plain-text lettered list as fallback):
 
    > Retro draft ready at \`${retroArtifactPath()}\`. How do you want to
    > proceed? (default: accept)

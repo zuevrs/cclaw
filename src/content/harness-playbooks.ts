@@ -142,7 +142,7 @@ Cursor dispatch is real isolation.
 const OPENCODE_PLAYBOOK = `---
 harness: opencode
 fallback: role-switch
-description: "OpenCode has plugin-based dispatch hooks but no isolated subagent worker primitive. cclaw uses an in-session role-switch with a delegation-log entry + evidenceRefs."
+description: "OpenCode has plugin-based dispatch hooks and a native structured-ask tool (question) but no isolated subagent worker primitive. cclaw uses an in-session role-switch with a delegation-log entry + evidenceRefs, and emits Decision Protocol calls through the question tool when it is permitted."
 ---
 
 # OpenCode — Parity Playbook
@@ -152,6 +152,22 @@ plugin but does not provide an isolated subagent worker. cclaw closes the
 delegation gate by role-switching inside the same session: the agent
 announces the role, performs the work against the contract, and records
 evidence.
+
+**Structured ask: native \`question\` tool.** OpenCode ships a first-class
+\`question\` primitive (header + question text + options, plus a
+"type custom" fallback; supports multi-question navigation). It is
+permission-gated:
+
+- \`opencode.json\` must grant \`permission.question: "allow"\` (or be
+  covered by a \`"*": "allow"\` default).
+- ACP clients additionally need \`OPENCODE_ENABLE_QUESTION_TOOL=1\` set
+  on the \`opencode acp\` process.
+
+When the tool is permitted, every Decision Protocol call maps to a single
+\`question\` invocation. When it is denied or the host doesn't expose it,
+fall back to the shared plain-text lettered list — same skeleton, same
+artifact decision log. Full mapping:
+\`.cclaw/references/harness-tools/opencode.md\`.
 
 ## Role-switch protocol
 
@@ -233,6 +249,23 @@ Codex CLI has a different shape from Claude/Cursor:
   is removed on every \`cclaw sync\`. The v0.39.x \`.agents/skills/cclaw-cc*/\`
   layout is replaced by \`.agents/skills/cc*/\` and the old folders are
   auto-removed on sync. Do not restore either by hand.
+
+## Structured ask: native \`request_user_input\` tool
+
+Codex exposes \`request_user_input\` — an experimental tool that accepts
+1-3 short questions and returns the user's answers in the same order.
+It is the primitive the built-in Plan / Collaboration mode templates use
+(see \`codex-rs/collaboration-mode-templates/templates/plan.md\`), and
+agents running inside Codex can call it directly. Answers come back as
+free-form strings, not option IDs — keep lettered options inline in the
+question text so the user's reply maps cleanly to the artifact
+decision log.
+
+cclaw stage skills invoke \`request_user_input\` for every Decision
+Protocol call when the tool is available, and fall back to the shared
+plain-text lettered list when Codex returns a schema error or when the
+current host hides the tool (older builds, non-collaboration mode). Full
+mapping: \`.cclaw/references/harness-tools/codex.md\`.
 
 ## Fallback: role-switch
 

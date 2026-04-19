@@ -8,8 +8,8 @@ Generated from `src/harness-adapters.ts` capabilities and hook event mappings.
 |---|---|---|---|---|---|---|---|
 | Claude Code | `claude` | `tier1` (full native automation) | full | native | full | AskUserQuestion | `references/harnesses/claude-playbook.md` |
 | Cursor | `cursor` | `tier2` (partial automation with waivers) | generic | generic-dispatch | full | AskQuestion | `references/harnesses/cursor-playbook.md` |
-| OpenCode | `opencode` | `tier2` (partial automation with waivers) | partial | role-switch | plugin | plain-text | `references/harnesses/opencode-playbook.md` |
-| OpenAI Codex | `codex` | `tier2` (partial automation with waivers) | none | role-switch | limited | plain-text | `references/harnesses/codex-playbook.md` |
+| OpenCode | `opencode` | `tier2` (partial automation with waivers) | partial | role-switch | plugin | question | `references/harnesses/opencode-playbook.md` |
+| OpenAI Codex | `codex` | `tier2` (partial automation with waivers) | none | role-switch | limited | request_user_input | `references/harnesses/codex-playbook.md` |
 
 Fallback legend:
 

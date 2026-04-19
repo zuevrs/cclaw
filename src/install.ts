@@ -1235,10 +1235,30 @@ async function writeHarnessGapsState(projectRoot: string, harnesses: HarnessId[]
         );
         break;
     }
-    if (capabilities.structuredAsk === "plain-text") {
-      remediation.push(
-        "structured ask → fall back to a numbered plain-text list; first option is default"
-      );
+    // Per-harness structuredAsk remediation: record either the fallback
+    // requirement (plain-text) or the gating / experimental status of the
+    // native primitive so `cclaw doctor` and harness-gaps.json stay
+    // honest about *why* a primitive might silently not fire.
+    switch (capabilities.structuredAsk) {
+      case "plain-text":
+        remediation.push(
+          "structured ask → fall back to a numbered plain-text list; first option is default"
+        );
+        break;
+      case "question":
+        remediation.push(
+          `structured ask → OpenCode \`question\` tool; enable with \`permission.question: "allow"\` in \`opencode.json\` (ACP clients additionally need \`OPENCODE_ENABLE_QUESTION_TOOL=1\`). Fallback: shared plain-text lettered list.`
+        );
+        break;
+      case "request_user_input":
+        remediation.push(
+          "structured ask → Codex `request_user_input` tool (experimental; surfaced in Plan / Collaboration mode). Fallback: shared plain-text lettered list when the tool is hidden."
+        );
+        break;
+      case "AskUserQuestion":
+      case "AskQuestion":
+        // Native first-class ask — no remediation required.
+        break;
     }
     for (const event of missingHookEvents) {
       remediation.push(`hook event ${event} → schedule the corresponding script manually or accept reduced observability`);

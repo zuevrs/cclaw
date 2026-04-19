@@ -99,7 +99,13 @@ describe("install lifecycle", () => {
     expect(codexGap?.tier).toBe("tier2");
     expect(codexGap?.missingCapabilities).toContain("nativeSubagentDispatch:none");
     expect(codexGap?.missingCapabilities).toContain("hookSurface:limited");
-    expect(codexGap?.missingCapabilities).toContain("structuredAsk:none");
+    // Wave Q (v0.41.0): Codex exposes `request_user_input` (experimental
+    // Plan / Collaboration mode tool), so structuredAsk is no longer a
+    // missing capability. Remediation still records the gating note.
+    expect(codexGap?.missingCapabilities).not.toContain("structuredAsk:none");
+    expect(
+      codexGap?.remediation?.some((line) => line.includes("request_user_input"))
+    ).toBe(true);
     expect(codexGap?.subagentFallback).toBe("role-switch");
     expect(codexGap?.playbookPath).toBe(".cclaw/references/harnesses/codex-playbook.md");
     expect(codexGap?.remediation?.some((line) => line.includes("role-switch"))).toBe(true);
@@ -108,6 +114,17 @@ describe("install lifecycle", () => {
     // now mapped.
     expect(codexGap?.missingHookEvents).toContain("precompact_digest");
     expect(codexGap?.missingHookEvents).not.toContain("session_rehydrate");
+
+    // Wave Q (v0.41.0): OpenCode's native `question` tool is honest as
+    // permission-gated, not missing — assert the remediation mentions
+    // the config knob.
+    const opencodeGap = harnessGaps.harnesses.find(
+      (entry) => entry.harness === "opencode"
+    );
+    expect(opencodeGap?.missingCapabilities).not.toContain("structuredAsk:none");
+    expect(
+      opencodeGap?.remediation?.some((line) => line.includes("permission.question"))
+    ).toBe(true);
 
     // Parity playbooks must be materialised for every supported harness.
     for (const harness of ["claude", "cursor", "opencode", "codex"] as const) {

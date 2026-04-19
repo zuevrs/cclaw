@@ -139,13 +139,13 @@ description: "Canonical mapping of cclaw capability names → OpenCode primitive
 
 # OpenCode — Tool Map
 
-OpenCode exposes a leaner tool surface than Claude Code / Cursor. When a cclaw skill describes a capability that OpenCode lacks, fall back to the plain-text equivalent listed below.
+OpenCode exposes a leaner tool surface than Claude Code / Cursor, but it DOES have a native structured-ask primitive (\`question\`) — you just have to opt into it. When a cclaw skill describes a capability that OpenCode lacks entirely, fall back to the plain-text equivalent listed below.
 
 ## Core capabilities
 
 | cclaw capability | OpenCode primitive | Notes |
 |---|---|---|
-| Ask user a structured question | **Not available as a tool.** | Emit a plain-text numbered list: \`A) ... B) ... C) (recommended) ...\`. Wait for the user's letter. |
+| Ask user a structured question | \`question\` tool | Each call has a header, question text, and a list of options; users can pick an option or type a custom answer. Supports multiple questions with navigation. **Gated:** \`opencode.json\` must set \`permission.question: "allow"\`; ACP clients additionally need the \`OPENCODE_ENABLE_QUESTION_TOOL=1\` env var. If the tool is denied or unavailable, fall back to a plain-text lettered list (\`A) ... B) ... C) (recommended) ...\`). |
 | Dispatch a subagent | **Not available as a tool.** | Inline the work in the current turn, or split across multiple turns with the user driving. |
 | Read file | file-read primitive | Same role as \`Read\`. |
 | Edit file | file-edit primitive | Same role as \`StrReplace\`; confirm diff before writing. |
@@ -160,6 +160,22 @@ OpenCode exposes a leaner tool surface than Claude Code / Cursor. When a cclaw s
 
 ## Decision-protocol mapping
 
+When the \`question\` tool is enabled, issue one call per decision:
+
+\`\`\`
+question({
+  header: "<stage> decision",
+  question: "<one-sentence decision>",
+  options: [
+    "A) <label> — <trade-off>",
+    "B) <label> — <trade-off>",
+    "C) <label> — <trade-off>  (recommended, because <reason>)"
+  ]
+})
+\`\`\`
+
+If the tool is denied or the host doesn't expose it, fall back to plain text using the same skeleton:
+
 \`\`\`
 Decision: <one sentence>.
 
@@ -172,7 +188,7 @@ Please reply with the letter.
 
 ## Escalation / fall-back
 
-Because OpenCode lacks native ask-user and dispatch tools, more of cclaw's protocols degrade to plain text. This is expected — the flow gates and artifacts are identical; only the delivery channel changes.
+OpenCode has the structured-ask primitive (\`question\`) but no isolated subagent dispatch, so delegation falls back to the role-switch playbook. Flow gates and artifacts are identical; only the delivery channel changes.
 `;
 
 const CODEX_TOOLS_MD = `---
@@ -183,14 +199,14 @@ description: "Canonical mapping of cclaw capability names → Codex CLI primitiv
 
 # Codex — Tool Map
 
-Codex (OpenAI Codex CLI) exposes roughly the same core surface as OpenCode: file I/O, shell, no native ask-user, no dispatch. Fall back to plain text for anything else.
+Codex (OpenAI Codex CLI) exposes file I/O, shell, skills, and lifecycle hooks (≥ v0.114, gated by the \`codex_hooks\` feature flag). It does NOT have isolated subagent dispatch, but it DOES expose a native structured-ask tool (\`request_user_input\`) on builds with the Plan / Collaboration mode templates. Fall back to plain text only when that tool is denied or hidden.
 
 ## Core capabilities
 
 | cclaw capability | Codex primitive | Notes |
 |---|---|---|
-| Ask user a structured question | **Not available as a tool.** | Emit a plain-text lettered list; wait for the user's reply. |
-| Dispatch a subagent | **Not available as a tool.** | Inline the work; split turns if needed. |
+| Ask user a structured question | \`request_user_input\` tool | Accepts 1-3 short questions and returns the user's answers in the same order. Experimental; used by Codex's built-in Plan / Collaboration mode (see \`codex-rs/collaboration-mode-templates/templates/plan.md\`). Offer only meaningful options — filler choices are explicitly discouraged. Free-form answer strings are returned; keep the lettered options inline in the question text. Fall back to a plain-text lettered list if the tool is hidden or errors. |
+| Dispatch a subagent | **Not available as a tool.** | Codex has no named or generic subagent dispatch. cclaw closes the mandatory-delegation gate with the role-switch playbook (\`.cclaw/references/harnesses/codex-playbook.md\`). |
 | Read file | \`read\` / \`open\` primitive | Same role as \`Read\`. |
 | Edit file | \`edit\` / \`patch\` primitive | Same role as \`StrReplace\`. |
 | Create file | \`write\` primitive | Prefer editing existing files. |
@@ -199,10 +215,22 @@ Codex (OpenAI Codex CLI) exposes roughly the same core surface as OpenCode: file
 | Shell command | shell primitive | Codex CLI may restrict some binaries by default — check the effective permissions. |
 | Fetch URL | \`curl\` via shell | Extract markdown manually. |
 | Web search | **Not available.** | Ask user for docs / URL. |
-| Todo tracking | **Not available as a tool.** | Keep an inline \`### TODO\` section; update it as you progress. |
+| Todo tracking | \`update_plan\` tool (Codex-native checklist) | \`update_plan\` is Codex's built-in progress / checklist surface and is **separate** from Plan / Collaboration mode — do not conflate them. cclaw also keeps an inline \`### TODO\` block in-turn as an audit mirror. |
 | MCP tool call | Depends on runtime config. | If MCP is wired, cite the descriptor; otherwise treat as unavailable. |
 
 ## Decision-protocol mapping
+
+When \`request_user_input\` is available, issue a single call with 1-3 questions:
+
+\`\`\`
+request_user_input({
+  questions: [
+    "<stage> — <one-sentence decision>. Reply A/B/C. A) <label> — <trade-off>. B) <label> — <trade-off>. C) <label> — <trade-off> (recommended, <reason>)."
+  ]
+})
+\`\`\`
+
+Answers come back as free-form strings, not option IDs — keep the lettered options inline so the user's reply maps cleanly to the artifact decision log. When the tool is hidden (older build, non-collaboration mode), fall back to plain text with the same skeleton:
 
 \`\`\`
 Decision: <one sentence>.
@@ -216,7 +244,7 @@ Please reply with the letter.
 
 ## Escalation / fall-back
 
-Treat missing tools as "plain-text required", not "skip the step". The gate still has to pass; only the channel changes.
+\`request_user_input\` is the only structured-ask primitive Codex ships; dispatch still requires the role-switch playbook. Treat missing tools as "plain-text required", not "skip the step". The gate still has to pass; only the channel changes.
 `;
 
 const HARNESS_TOOL_REFS: Record<HarnessId, string> = {
@@ -243,8 +271,8 @@ cclaw supports four harnesses; each exposes different primitive names for the sa
 |---|---|---|
 | Claude Code | \`.cclaw/${HARNESS_TOOL_REFS_DIR}/claude.md\` | Richest tool surface (AskUserQuestion, Task, WebFetch, WebSearch, MCP, …). |
 | Cursor | \`.cclaw/${HARNESS_TOOL_REFS_DIR}/cursor.md\` | Near-parity with Claude; uses \`AskQuestion\` instead of \`AskUserQuestion\`. |
-| OpenCode | \`.cclaw/${HARNESS_TOOL_REFS_DIR}/opencode.md\` | No native ask-user / dispatch; more plain-text fallbacks. |
-| Codex | \`.cclaw/${HARNESS_TOOL_REFS_DIR}/codex.md\` | No native ask-user / dispatch; shell + file I/O only by default. |
+| OpenCode | \`.cclaw/${HARNESS_TOOL_REFS_DIR}/opencode.md\` | Native \`question\` tool (permission-gated) for structured asks; no isolated subagent dispatch. |
+| Codex | \`.cclaw/${HARNESS_TOOL_REFS_DIR}/codex.md\` | Native \`request_user_input\` tool (experimental, Plan / Collaboration mode) for structured asks; no subagent dispatch. |
 
 When a new harness is added or an existing one renames a tool, update the corresponding file (and this index) — do NOT scatter tool names across skill text.
 `;

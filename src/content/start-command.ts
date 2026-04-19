@@ -79,7 +79,7 @@ This is the **recommended way to start** working with cclaw. Use \`/cc-next\` fo
 7. Present the recommendation as a single decision with explicit options:
    > \`Recommended track: <quick|medium|standard>\` because \`<one-line reason citing matched triggers>\`.
    > Override? (A) keep \`<recommended>\`  (B) switch track  (C) cancel.
-   If \`AskQuestion\`/\`AskUserQuestion\` is available, send exactly ONE question; on schema error, fall back to plain text.
+   If the harness's native ask tool is available (\`AskUserQuestion\` / \`AskQuestion\` / \`question\` / \`request_user_input\`), send exactly ONE question; on schema error, fall back to a plain-text lettered list.
 8. Persist the chosen track to \`${flowPath}\` (\`track\` field). Compute \`skippedStages\` from the track and write that too. Use the **first stage of the chosen track** as \`currentStage\` (quick → \`spec\`, medium/standard → \`brainstorm\`, trivial fast-path → \`design\` or \`spec\` per Phase 0).
 9. Write the prompt to \`.cclaw/artifacts/00-idea.md\` with the following header lines: \`Class:\` (from Phase 0), \`Track:\` (chosen track + matched heuristic), \`Stack:\` (from Phase 2 detection, or \`unknown\`), and a \`Discovered context\` section if Phase 1 found origin docs.
 10. Load the **first-stage skill for the chosen track** and its command file:
