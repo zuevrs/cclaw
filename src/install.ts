@@ -10,7 +10,14 @@ import {
   RUNTIME_ROOT,
   UTILITY_COMMANDS
 } from "./constants.js";
-import { writeConfig, createDefaultConfig, readConfig, configPath } from "./config.js";
+import {
+  writeConfig,
+  createDefaultConfig,
+  readConfig,
+  configPath,
+  detectLanguageRulePacks,
+  detectAdvancedKeys
+} from "./config.js";
 import { commandContract } from "./content/contracts.js";
 import { contextModeFiles, createInitialContextModeState } from "./content/contexts.js";
 import { learnSkillMarkdown, learnCommandContract } from "./content/learnings.js";
@@ -1419,14 +1426,25 @@ async function materializeRuntime(projectRoot: string, config: VibyConfig, force
 }
 
 export async function initCclaw(options: InitOptions): Promise<void> {
-  const config = createDefaultConfig(options.harnesses, options.track);
-  await writeConfig(options.projectRoot, config);
+  const baseConfig = createDefaultConfig(options.harnesses, options.track);
+  // Best-effort auto-detect: a Node project gets `typescript`, a Go module
+  // gets `go`, etc. Skipped entirely when the project root has no manifests.
+  const detectedPacks = await detectLanguageRulePacks(options.projectRoot);
+  const config: VibyConfig = {
+    ...baseConfig,
+    languageRulePacks: detectedPacks
+  };
+  // Write a minimal `config.yaml` — advanced knobs live in docs/config.md
+  // and only appear in the on-disk file when the user sets them explicitly
+  // or a non-default value was detected (e.g. languageRulePacks).
+  await writeConfig(options.projectRoot, config, { mode: "minimal" });
   await materializeRuntime(options.projectRoot, config, true);
 }
 
 export async function syncCclaw(projectRoot: string): Promise<void> {
+  const configExists = await exists(configPath(projectRoot));
   const config = await readConfig(projectRoot);
-  if (!(await exists(configPath(projectRoot)))) {
+  if (!configExists) {
     await writeConfig(projectRoot, createDefaultConfig(config.harnesses));
   }
   await materializeRuntime(projectRoot, config, false);
@@ -1435,22 +1453,25 @@ export async function syncCclaw(projectRoot: string): Promise<void> {
 /**
  * Refresh generated files in `.cclaw/` without touching user-authored
  * artifacts, state, or custom config keys. Only the `version` + `flowVersion`
- * stamps are rewritten so the on-disk config reflects the installed CLI;
- * `promptGuardMode`, `tddEnforcement`, `gitHookGuards`, `languageRulePacks`,
- * `trackHeuristics`, and `sliceReview` are preserved verbatim from the
- * existing config.
+ * stamps are rewritten so the on-disk config reflects the installed CLI.
  *
- * For an explicit reset, run `cclaw-cli uninstall && cclaw-cli init`
- * (after optionally archiving the current run via `/cc-ops archive`).
+ * Shape preservation: if the user previously hand-authored advanced keys
+ * (e.g. `tddTestGlobs`, `trackHeuristics`, `sliceReview`), those stay in the
+ * yaml. If their existing config is minimal, the upgrade keeps it minimal —
+ * advanced knobs are never silently added.
  */
 export async function upgradeCclaw(projectRoot: string): Promise<void> {
+  const advancedKeysPresent = await detectAdvancedKeys(projectRoot);
   const existing = await readConfig(projectRoot);
   const upgraded: VibyConfig = {
     ...existing,
     version: CCLAW_VERSION,
     flowVersion: FLOW_VERSION
   };
-  await writeConfig(projectRoot, upgraded);
+  await writeConfig(projectRoot, upgraded, {
+    mode: "minimal",
+    advancedKeysPresent
+  });
   await materializeRuntime(projectRoot, upgraded, false);
 }
 
