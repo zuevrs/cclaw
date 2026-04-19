@@ -218,6 +218,46 @@ function getMarkdownTableRows(sectionBody: string): string[][] {
   return rows;
 }
 
+const DIAGRAM_ARROW_PATTERN = /(?:<--?>|<?==?>|--?>|->>|=>|-\.->|→|⟶|↦)/u;
+const DIAGRAM_FAILURE_EDGE_PATTERN = /\b(fail(?:ed|ure)?|error|timeout|fallback|degrad(?:e|ed|ation)|retry|backoff|circuit|unavailable|recover(?:y)?|rescue|mitigat(?:e|ion)|rollback|exception|abort|dead[\s-]?letter|dlq)\b/iu;
+const DIAGRAM_GENERIC_NODE_PATTERN = /\b(service|component|module|system)\s*(?:[A-Z0-9])?\b/iu;
+
+function diagramEdgeLines(sectionBody: string): string[] {
+  return sectionBody
+    .split(/\r?\n/)
+    .map((line) => line.trim())
+    .filter((line) => line.length > 0)
+    .filter((line) => !line.startsWith("```"))
+    .filter((line) => !line.startsWith("%%"))
+    .filter((line) => DIAGRAM_ARROW_PATTERN.test(line));
+}
+
+function hasFailureEdgeInDiagram(sectionBody: string): boolean {
+  const lines = diagramEdgeLines(sectionBody);
+  for (const line of lines) {
+    if (DIAGRAM_ARROW_PATTERN.test(line) && DIAGRAM_FAILURE_EDGE_PATTERN.test(line)) {
+      return true;
+    }
+  }
+  return false;
+}
+
+function hasLabeledDiagramArrow(lines: string[]): boolean {
+  return lines.some((line) => /\|[^|]+\|/u.test(line) || /:\s*[A-Za-z]/u.test(line));
+}
+
+function hasAsyncDiagramEdge(lines: string[]): boolean {
+  return lines.some((line) => /-\.->|-->>|~~>|\basync\b/iu.test(line));
+}
+
+function hasSyncDiagramEdge(lines: string[]): boolean {
+  return lines.some((line) => {
+    if (/\bsync\b/iu.test(line)) return true;
+    if (!/(-->|->|=>|→|⟶|↦)/u.test(line)) return false;
+    return !/-\.->|-->>|~~>/u.test(line);
+  });
+}
+
 export type LearningEntryType = "rule" | "pattern" | "lesson" | "compound";
 export type LearningConfidence = "high" | "medium" | "low";
 export type LearningUniversality = "project" | "personal" | "universal";
@@ -654,22 +694,60 @@ function validateSectionBody(
     }
   }
 
-  const keywords = extractRequiredKeywords(rule);
-  if (keywords.length > 0) {
-    const bodyLower = sectionBody.toLowerCase();
-    const found = keywords.filter((kw) => bodyLower.includes(kw.toLowerCase()));
-    const threshold = Math.ceil(keywords.length * 0.5);
-    if (found.length < threshold) {
-      const missing = keywords.filter((kw) => !bodyLower.includes(kw.toLowerCase()));
+  const sectionNameNormalized = normalizeHeadingTitle(sectionName).toLowerCase();
+  if (sectionNameNormalized === "architecture diagram") {
+    const edgeLines = diagramEdgeLines(sectionBody);
+    if (edgeLines.length === 0) {
       return {
         ok: false,
-        details: `Rule expects keywords (${threshold}/${keywords.length} minimum): missing ${missing.join(", ")}.`
+        details: "Architecture Diagram must include at least one directional edge line (for example `A -->|action| B`)."
+      };
+    }
+    if (!hasLabeledDiagramArrow(edgeLines)) {
+      return {
+        ok: false,
+        details: "Architecture Diagram must label each edge with an action/message (for example `A -->|sync: persist| B`)."
+      };
+    }
+    const genericLine = edgeLines.find((line) => DIAGRAM_GENERIC_NODE_PATTERN.test(line));
+    if (genericLine) {
+      return {
+        ok: false,
+        details: `Architecture Diagram uses a generic node label in edge "${genericLine}". Use concrete component names instead of placeholders like Service/Component.`
+      };
+    }
+    if (!hasAsyncDiagramEdge(edgeLines) || !hasSyncDiagramEdge(edgeLines)) {
+      return {
+        ok: false,
+        details: "Architecture Diagram must distinguish sync vs async edges (for example solid + dotted arrows, or `sync:` and `async:` labels)."
+      };
+    }
+    if (!hasFailureEdgeInDiagram(sectionBody)) {
+      return {
+        ok: false,
+        details: "Architecture Diagram must include at least one failure-edge arrow with a failure keyword (for example: timeout, error, fallback, degraded, retry)."
       };
     }
   }
 
+  if (sectionNameNormalized !== "architecture diagram") {
+    const keywords = extractRequiredKeywords(rule);
+    if (keywords.length > 0) {
+      const bodyLower = sectionBody.toLowerCase();
+      const found = keywords.filter((kw) => bodyLower.includes(kw.toLowerCase()));
+      const threshold = Math.ceil(keywords.length * 0.5);
+      if (found.length < threshold) {
+        const missing = keywords.filter((kw) => !bodyLower.includes(kw.toLowerCase()));
+        return {
+          ok: false,
+          details: `Rule expects keywords (${threshold}/${keywords.length} minimum): missing ${missing.join(", ")}.`
+        };
+      }
+    }
+  }
+
   if (
-    normalizeHeadingTitle(sectionName).toLowerCase() === "acceptance criteria" &&
+    sectionNameNormalized === "acceptance criteria" &&
     /observable[\s,]*measurable[\s,]+(and )?falsifiable/iu.test(rule)
   ) {
     const rows = getMarkdownTableRows(sectionBody);

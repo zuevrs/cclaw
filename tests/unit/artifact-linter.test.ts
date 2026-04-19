@@ -66,6 +66,81 @@ inputs_hash: sha256:pending
 ---`;
 }
 
+function completeDesignArtifact(diagramBody: string): string {
+  return `# Design Artifact
+
+## Codebase Investigation
+| File | Current responsibility | Patterns discovered |
+|---|---|---|
+| src/api.ts | Handles route validation and orchestration | Typed error envelopes and retry wrappers |
+| src/storage.ts | Writes records and fallback reads | Timeout guards with degraded responses |
+
+## Search Before Building
+| Layer | Label | What to reuse first |
+|---|---|---|
+| Layer 1 | Existing request pipeline | Reuse route validation middleware and auth gate |
+| Layer 2 | Shared retry helper | Adapt retry limits for storage writes |
+| Layer 3 | Queueing blog post | Inspiration for backpressure handling |
+| EUREKA | Internal telemetry helper | Reuse existing latency probe hook |
+
+## Architecture Boundaries
+| Component | Responsibility | Owner |
+|---|---|---|
+| API Gateway | Validate input and route requests | platform-api |
+| App Service | Business orchestration and policy checks | app-core |
+| Storage Adapter | Persistence and fallback reads | data-team |
+
+## Architecture Diagram
+\`\`\`mermaid
+flowchart LR
+${diagramBody}
+\`\`\`
+
+## Data Flow
+- Happy path: API Gateway validates request, App Service persists data, and returns success.
+- Nil input path: API Gateway rejects null payload with 400 and logs validation code.
+- Empty input path: API Gateway rejects empty payload with 422 and returns a field-level hint.
+- Upstream error path: Storage Adapter timeout enters fallback path before final response.
+
+## Failure Mode Table
+| Failure mode | Trigger | Detection | Mitigation | User impact |
+|---|---|---|---|---|
+| Storage timeout | Upstream latency spike | timeout metric alarm | fallback cache read + retry queue | stale but available response |
+
+## Test Strategy
+- Unit: validator and adapter tests with >=90% statement coverage target.
+- Integration: API-to-storage fallback path in CI with injected timeouts.
+- E2E: submit -> persist -> readback flow with degraded-mode assertion.
+
+## Performance Budget
+| Critical path | Metric | Target | Measurement method |
+|---|---|---|---|
+| Create request | p95 latency | <=250ms | k6 synthetic test in CI |
+| Fallback read | error recovery latency | <=400ms | chaos timeout scenario replay |
+
+## What Already Exists
+| Sub-problem | Existing code/library found | Layer | Reuse decision | Adaptation needed |
+|---|---|---|---|---|
+| Input validation | src/api/validate.ts | Layer 1 | Reuse | Add one optional-field rule |
+| Retry orchestration | src/lib/retry.ts | Layer 2 | Adapt | Tune retry window for writes |
+
+## NOT in scope
+- Migrating data store engine.
+- Rebuilding API auth model.
+
+## Completion Dashboard
+| Review Section | Status | Notes |
+|---|---|---|
+| Architecture Review | clear | Boundaries approved |
+| Code Quality Review | issues-found-resolved | Naming updated |
+| Test Review | clear | Missing case added |
+| Performance Review | clear | Budget accepted |
+
+- Decisions made: 4
+- Unresolved items: None
+`;
+}
+
 describe("artifact linter heuristics", () => {
   it("fails when required brainstorm sections are missing", async () => {
     const root = await createTempProject("artifact-lint-missing");
@@ -747,6 +822,45 @@ API -> Service -> DB
     expect(result.passed).toBe(true);
     const required = result.findings.filter((f) => f.required);
     expect(required.every((f) => f.found)).toBe(true);
+  });
+
+  it("fails design artifact when architecture diagram has no failure edge branch", async () => {
+    const root = await createTempProject("design-missing-failure-edge");
+    await writeRuntimeArtifact(
+      root,
+      "03-design.md",
+      completeDesignArtifact(
+        `API_Gateway -->|sync: validated request| App_Service
+App_Service -.->|async: enqueue write| Storage_Adapter
+Storage_Adapter -->|sync: write ack| App_Service
+App_Service -->|sync: 200 response| API_Gateway`
+      )
+    );
+
+    const result = await lintArtifact(root, "design");
+    const diagram = result.findings.find((f) => f.section === "Architecture Diagram");
+    expect(result.passed).toBe(false);
+    expect(diagram?.found).toBe(false);
+    expect(diagram?.details).toContain("failure-edge");
+  });
+
+  it("passes design artifact when architecture diagram includes a failure edge", async () => {
+    const root = await createTempProject("design-has-failure-edge");
+    await writeRuntimeArtifact(
+      root,
+      "03-design.md",
+      completeDesignArtifact(
+        `API_Gateway -->|sync: validated request| App_Service
+App_Service -.->|async: enqueue write| Storage_Adapter
+Storage_Adapter -->|timeout| Fallback_Cache
+Fallback_Cache -->|degraded response| API_Gateway`
+      )
+    );
+
+    const result = await lintArtifact(root, "design");
+    const diagram = result.findings.find((f) => f.section === "Architecture Diagram");
+    expect(result.passed).toBe(true);
+    expect(diagram?.found).toBe(true);
   });
 
   it("rejects spec artifact when an acceptance criterion uses vague adjectives", async () => {
