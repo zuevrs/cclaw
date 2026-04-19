@@ -97,12 +97,15 @@ export const REQUIRED_GITIGNORE_PATTERNS = [
   ".cursor/commands/cc.md",
   ".opencode/commands/cc-*.md",
   ".opencode/commands/cc.md",
-  // Codex uses skill-kind shims under `.agents/skills/cclaw-cc*/` since
-  // v0.39.0; legacy `.codex/commands/*` is auto-cleaned on sync.
-  ".agents/skills/cclaw-cc/SKILL.md",
-  ".agents/skills/cclaw-cc-*/SKILL.md",
+  // Codex uses skill-kind shims under `.agents/skills/cc*/` since
+  // v0.40.0 (renamed from the `cclaw-cc*` layout in v0.39.0/v0.39.1).
+  // `cclaw sync` and `cclaw uninstall` both auto-remove the legacy
+  // `cclaw-cc*` directories.
+  ".agents/skills/cc/SKILL.md",
+  ".agents/skills/cc-*/SKILL.md",
   ".claude/hooks/hooks.json",
   ".cursor/hooks.json",
+  ".codex/hooks.json",
   ".opencode/plugins/cclaw-plugin.mjs",
   ".cursor/rules/cclaw-workflow.mdc"
 ] as const;

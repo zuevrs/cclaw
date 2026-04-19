@@ -38,6 +38,11 @@ import { parseTddCycleLog, validateTddCycleOrder } from "./tdd-cycle.js";
 import { stageSkillFolder } from "./content/skills.js";
 import { doctorCheckMetadata } from "./doctor-registry.js";
 import {
+  classifyCodexHooksFlag,
+  codexConfigPath,
+  readCodexConfig
+} from "./codex-feature-flag.js";
+import {
   LANGUAGE_RULE_PACK_DIR,
   LANGUAGE_RULE_PACK_FILES,
   LEGACY_LANGUAGE_RULE_PACK_FOLDERS,
@@ -708,16 +713,18 @@ export async function doctorChecks(projectRoot: string, options: DoctorOptions =
     }
   }
 
-  // Hook JSON files per harness. Codex is absent because Codex CLI has no
-  // hooks primitive — cclaw stopped writing `.codex/hooks.json` in v0.39.0.
-  // OpenCode ships hooks through its plugin system (covered below).
+  // Hook JSON files per harness. OpenCode ships hooks through its plugin
+  // system (covered below). Codex joined the managed list in v0.40.0 — Codex
+  // CLI ≥ v0.114 consumes `.codex/hooks.json` behind the `codex_hooks`
+  // feature flag.
   const hookPaths: Record<string, string> = {
     claude: ".claude/hooks/hooks.json",
-    cursor: ".cursor/hooks.json"
+    cursor: ".cursor/hooks.json",
+    codex: ".codex/hooks.json"
   };
   for (const harness of configuredHarnesses) {
     const hp = hookPaths[harness];
-    if (!hp && harness !== "opencode" && harness !== "codex") {
+    if (!hp && harness !== "opencode") {
       checks.push({
         name: `hook:json:${harness}`,
         ok: false,
@@ -734,7 +741,7 @@ export async function doctorChecks(projectRoot: string, options: DoctorOptions =
         ok: hookOk,
         details: fullPath
       });
-      if (harness === "claude" || harness === "cursor") {
+      if (harness === "claude" || harness === "cursor" || harness === "codex") {
         const schema = validateHookDocument(harness, parsed);
         checks.push({
           name: `hook:schema:${harness}`,
@@ -845,10 +852,11 @@ export async function doctorChecks(projectRoot: string, options: DoctorOptions =
   }
 
   if (configuredHarnesses.includes("codex")) {
-    // Codex CLI has no hooks primitive and no slash-command discovery
-    // (`.codex/commands/*` was never read). cclaw ships codex shims as
-    // skills under `.agents/skills/cclaw-cc*/SKILL.md`. Every required
-    // skill must exist with the expected frontmatter `name`.
+    // Codex CLI has no custom slash-command discovery (`.codex/commands/*`
+    // was never read, even historically). cclaw ships codex entry points
+    // as skills under `.agents/skills/cc*/SKILL.md`; Codex v0.114+ also
+    // supports lifecycle hooks at `.codex/hooks.json` (gated by the
+    // `codex_hooks` feature flag in `~/.codex/config.toml`).
     const skillsRoot = path.join(projectRoot, ".agents/skills");
     for (const skillName of harnessShimSkillNames()) {
       const skillPath = path.join(skillsRoot, skillName, "SKILL.md");
@@ -875,26 +883,89 @@ export async function doctorChecks(projectRoot: string, options: DoctorOptions =
       });
     }
 
-    // Warn if legacy `.codex/commands/*` or `.codex/hooks.json` is still
-    // around — cclaw syncs should have removed these, but a botched
-    // upgrade or a manual restore could leave them dangling.
+    // Hook wiring: the generated `.codex/hooks.json` must reference every
+    // runtime script cclaw needs. Separate from the schema check above;
+    // schema covers structure, this check covers semantic wiring.
+    const codexHooksFile = path.join(projectRoot, ".codex/hooks.json");
+    const codexDoc = await readHookDocument(codexHooksFile);
+    const codexHooks = toObject(codexDoc?.hooks) ?? {};
+    const codexSessionCmds = collectHookCommands(codexHooks.SessionStart);
+    const codexPreCmds = collectHookCommands(codexHooks.PreToolUse);
+    const codexPostCmds = collectHookCommands(codexHooks.PostToolUse);
+    const codexStopCmds = collectHookCommands(codexHooks.Stop);
+    const codexWiringOk =
+      codexSessionCmds.some((cmd) => cmd.includes("session-start.sh")) &&
+      codexPreCmds.some((cmd) => cmd.includes("prompt-guard.sh")) &&
+      codexPreCmds.some((cmd) => cmd.includes("workflow-guard.sh")) &&
+      codexPostCmds.some((cmd) => cmd.includes("context-monitor.sh")) &&
+      codexStopCmds.some((cmd) => cmd.includes("stop-checkpoint.sh"));
+    checks.push({
+      name: "hook:wiring:codex",
+      ok: codexWiringOk,
+      details: `${codexHooksFile} must wire session-start/prompt-guard/workflow-guard/context-monitor/stop-checkpoint (PreToolUse/PostToolUse run Bash-only in Codex v0.114+)`
+    });
+
+    // Feature flag warning: Codex ignores `.codex/hooks.json` unless the
+    // user has `[features] codex_hooks = true` in `~/.codex/config.toml`.
+    // Advisory warning — not a hard failure, because the skills still
+    // work without the flag.
+    const codexConfig = codexConfigPath();
+    let featureFlagNote = "";
+    try {
+      const content = await readCodexConfig(codexConfig);
+      const state = classifyCodexHooksFlag(content);
+      featureFlagNote =
+        state === "enabled"
+          ? `codex_hooks feature flag is enabled in ${codexConfig}`
+          : state === "missing-file"
+            ? `warning: ${codexConfig} does not exist; .codex/hooks.json will be ignored until you create it with \`[features]\\ncodex_hooks = true\\n\`.`
+            : state === "missing-section"
+              ? `warning: ${codexConfig} has no [features] section; add \`[features]\\ncodex_hooks = true\\n\` to enable cclaw hooks.`
+              : state === "missing-key"
+                ? `warning: ${codexConfig} is missing the codex_hooks key under [features]. Add \`codex_hooks = true\` to enable cclaw hooks.`
+                : `warning: ${codexConfig} sets codex_hooks to a non-true value; set \`codex_hooks = true\` under [features] to enable cclaw hooks.`;
+    } catch (err) {
+      featureFlagNote = `warning: could not read ${codexConfig}: ${err instanceof Error ? err.message : String(err)}`;
+    }
+    checks.push({
+      name: "warning:codex:feature_flag",
+      ok: true,
+      details: featureFlagNote
+    });
+
+    // Legacy `.codex/commands/*` must not linger from older cclaw installs.
+    // (The `.codex/hooks.json` path is now managed and is validated above,
+    // so there is no longer a legacy_hooks_json warning.)
     const legacyCommandsDir = path.join(projectRoot, ".codex/commands");
     const legacyCommandsPresent = await exists(legacyCommandsDir);
     checks.push({
       name: "warning:codex:legacy_commands_dir",
       ok: true,
       details: legacyCommandsPresent
-        ? `warning: ${legacyCommandsDir} still present; Codex never read this directory — run \`cclaw sync\` to remove it.`
+        ? `warning: ${legacyCommandsDir} still present; Codex never consumed this directory — run \`cclaw sync\` to remove it.`
         : `no legacy ${legacyCommandsDir} detected`
     });
-    const legacyHooks = path.join(projectRoot, ".codex/hooks.json");
-    const legacyHooksPresent = await exists(legacyHooks);
+
+    // Legacy v0.39.x skill layout under `.agents/skills/cclaw-cc*/`
+    // must have been removed — cclaw sync deletes these automatically,
+    // but flag leftovers so users notice an upgrade issue.
+    const legacyCodexSkills: string[] = [];
+    try {
+      const entries = await fs.readdir(skillsRoot);
+      for (const entry of entries) {
+        if (/^cclaw-cc(?:-.*)?$/u.test(entry)) {
+          legacyCodexSkills.push(entry);
+        }
+      }
+    } catch {
+      // skills root absent; nothing to warn about
+    }
     checks.push({
-      name: "warning:codex:legacy_hooks_json",
-      ok: true,
-      details: legacyHooksPresent
-        ? `warning: ${legacyHooks} still present; Codex CLI has no hooks API — run \`cclaw sync\` to remove it.`
-        : `no legacy ${legacyHooks} detected`
+      name: "warning:codex:legacy_cclaw_cc_skills",
+      ok: legacyCodexSkills.length === 0,
+      details: legacyCodexSkills.length === 0
+        ? `no legacy cclaw-cc* skill folders detected under .agents/skills/`
+        : `warning: legacy skill folders from cclaw v0.39.x present (${legacyCodexSkills.join(", ")}); run \`cclaw sync\` to remove them.`
     });
   }
 

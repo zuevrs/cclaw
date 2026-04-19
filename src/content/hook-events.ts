@@ -40,11 +40,17 @@ export const HOOK_EVENTS_BY_HARNESS: Record<
     precompact_digest: "plugin session.cleared/session.resumed hooks"
   },
   codex: {
-    // Codex CLI has no hooks primitive. cclaw substitutes via skills
-    // under `.agents/skills/cclaw-cc*/SKILL.md` plus explicit in-turn
-    // agent steps (see codex playbook). All semantic events are
-    // intentionally unmapped here so `harness-gaps.json` exposes them
-    // honestly.
+    // Codex CLI v0.114+ exposes lifecycle hooks via `.codex/hooks.json`,
+    // gated by `[features] codex_hooks = true` in `~/.codex/config.toml`.
+    // SessionStart, Stop, and UserPromptSubmit fire for every turn;
+    // PreToolUse/PostToolUse are **Bash-only** (Write/Edit/WebSearch/MCP
+    // calls do not trigger them). `precompact_digest` is unmapped —
+    // Codex has no PreCompact event; cclaw covers it via `/cc-ops retro`.
+    session_rehydrate: "SessionStart matcher startup|resume",
+    pre_tool_prompt_guard: "PreToolUse matcher Bash -> prompt-guard.sh (plus UserPromptSubmit for non-Bash prompts)",
+    pre_tool_workflow_guard: "PreToolUse matcher Bash -> workflow-guard.sh (Bash-only)",
+    post_tool_context_monitor: "PostToolUse matcher Bash -> context-monitor.sh (Bash-only)",
+    stop_checkpoint: "Stop -> stop-checkpoint.sh"
   }
 };
 

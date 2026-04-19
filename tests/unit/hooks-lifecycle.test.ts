@@ -70,7 +70,9 @@ describe("hooks lifecycle rehydration", () => {
     };
 
     expect(claude.hooks.SessionStart[0]?.matcher).toBe("startup|resume|clear|compact");
-    expect(codex.hooks.SessionStart[0]?.matcher).toBe("startup|resume|clear|compact");
+    // Codex CLI v0.114+ emits only `startup` and `resume` — there is no
+    // `clear` or `compact` lifecycle phase in Codex.
+    expect(codex.hooks.SessionStart[0]?.matcher).toBe("startup|resume");
     expect((claude as { cclawHookSchemaVersion?: number }).cclawHookSchemaVersion).toBe(1);
     expect((codex as { cclawHookSchemaVersion?: number }).cclawHookSchemaVersion).toBe(1);
     expect(JSON.stringify(claude)).toContain("prompt-guard.sh");

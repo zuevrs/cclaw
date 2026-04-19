@@ -7,12 +7,12 @@ describe("harness parity model", () => {
     expect(harnessTier("claude")).toBe("tier1");
     expect(harnessTier("cursor")).toBe("tier2");
     expect(harnessTier("opencode")).toBe("tier2");
-    // Codex is honestly tier3 since v0.39.0: no hooks primitive, no
-    // native subagent dispatch, no custom slash commands. cclaw still
-    // ships skill-kind shims under `.agents/skills/cclaw-cc*/` so Codex
-    // users get entry points, but the capability model no longer claims
-    // parity it cannot deliver.
-    expect(harnessTier("codex")).toBe("tier3");
+    // Codex regained tier2 in v0.40.0: Codex CLI ≥ v0.114 (Mar 2026)
+    // exposes lifecycle hooks via `.codex/hooks.json` (gated behind the
+    // `codex_hooks` feature flag). PreToolUse/PostToolUse are Bash-only,
+    // hence `hookSurface: "limited"` rather than `"full"`. cclaw ships
+    // skill-kind shims under `.agents/skills/cc*/` for non-hook entry.
+    expect(harnessTier("codex")).toBe("tier2");
   });
 
   it("keeps capability metadata attached to every harness adapter", () => {

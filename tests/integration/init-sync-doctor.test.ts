@@ -91,20 +91,23 @@ describe("install lifecycle", () => {
     };
     expect(harnessGaps.schemaVersion).toBe(2);
     const codexGap = harnessGaps.harnesses.find((entry) => entry.harness === "codex");
-    // Codex became honestly tier3 in v0.39.0: no hooks API, no subagent
-    // dispatch primitive, no custom slash commands. harness-gaps reports
-    // every missing capability so the user can see what substitutes they
-    // need to apply (role-switch + in-turn agent steps).
-    expect(codexGap?.tier).toBe("tier3");
+    // Codex regained tier2 in v0.40.0: Codex CLI ≥ v0.114 supports
+    // lifecycle hooks (`.codex/hooks.json`, gated by the `codex_hooks`
+    // feature flag). PreToolUse/PostToolUse are Bash-only — reported via
+    // `hookSurface:limited` instead of `none`. No custom slash commands
+    // and no native subagent dispatch persist as gaps.
+    expect(codexGap?.tier).toBe("tier2");
     expect(codexGap?.missingCapabilities).toContain("nativeSubagentDispatch:none");
-    expect(codexGap?.missingCapabilities).toContain("hookSurface:none");
+    expect(codexGap?.missingCapabilities).toContain("hookSurface:limited");
     expect(codexGap?.missingCapabilities).toContain("structuredAsk:none");
     expect(codexGap?.subagentFallback).toBe("role-switch");
     expect(codexGap?.playbookPath).toBe(".cclaw/references/harnesses/codex-playbook.md");
     expect(codexGap?.remediation?.some((line) => line.includes("role-switch"))).toBe(true);
-    // Every semantic hook event should land in missingHookEvents because
-    // Codex has no hooks primitive.
-    expect(codexGap?.missingHookEvents?.length).toBeGreaterThan(0);
+    // `precompact_digest` must still land in missingHookEvents — Codex
+    // has no PreCompact event — but the other five semantic events are
+    // now mapped.
+    expect(codexGap?.missingHookEvents).toContain("precompact_digest");
+    expect(codexGap?.missingHookEvents).not.toContain("session_rehydrate");
 
     // Parity playbooks must be materialised for every supported harness.
     for (const harness of ["claude", "cursor", "opencode", "codex"] as const) {
@@ -534,9 +537,10 @@ describe("install lifecycle", () => {
 
     await expect(fs.stat(path.join(root, ".claude"))).resolves.toBeDefined();
     await expect(fs.stat(path.join(root, ".cursor"))).resolves.toBeDefined();
-    // Codex switched to `.agents/skills/cclaw-cc*/SKILL.md` in v0.39.0;
-    // `.codex/` is no longer created because Codex CLI does not read it.
-    await expect(fs.stat(path.join(root, ".agents/skills/cclaw-cc/SKILL.md"))).resolves.toBeDefined();
+    // Codex in v0.40.0: skills under `.agents/skills/cc*/SKILL.md` and
+    // hooks at `.codex/hooks.json`. Both must be present after init.
+    await expect(fs.stat(path.join(root, ".agents/skills/cc/SKILL.md"))).resolves.toBeDefined();
+    await expect(fs.stat(path.join(root, ".codex/hooks.json"))).resolves.toBeDefined();
     await expect(fs.stat(path.join(root, ".opencode"))).resolves.toBeDefined();
 
     await uninstallCclaw(root);
@@ -544,6 +548,7 @@ describe("install lifecycle", () => {
     await expect(fs.stat(path.join(root, ".claude"))).rejects.toBeDefined();
     await expect(fs.stat(path.join(root, ".cursor"))).rejects.toBeDefined();
     await expect(fs.stat(path.join(root, ".agents"))).rejects.toBeDefined();
+    await expect(fs.stat(path.join(root, ".codex"))).rejects.toBeDefined();
     await expect(fs.stat(path.join(root, ".opencode"))).rejects.toBeDefined();
   });
 
@@ -747,17 +752,11 @@ describe("install lifecycle", () => {
     expect(warning?.details).toMatch(/no raw knowledge entries older than 90 days/);
   });
 
-  it("codex install materializes .agents/skills/cclaw-cc*/SKILL.md and no .codex hooks/commands", async () => {
+  it("codex install materializes .agents/skills/cc*/SKILL.md and .codex/hooks.json", async () => {
     const root = await createTempProject("codex-skills-fresh");
     await initCclaw({ projectRoot: root, harnesses: ["codex"] });
 
-    const expectedSkills = [
-      "cclaw-cc",
-      "cclaw-cc-next",
-      "cclaw-cc-view",
-      "cclaw-cc-ideate",
-      "cclaw-cc-ops"
-    ];
+    const expectedSkills = ["cc", "cc-next", "cc-view", "cc-ideate", "cc-ops"];
     for (const slug of expectedSkills) {
       const skillPath = path.join(root, ".agents/skills", slug, "SKILL.md");
       const body = await fs.readFile(skillPath, "utf8");
@@ -768,17 +767,26 @@ describe("install lifecycle", () => {
       expect(body).toContain(".cclaw/");
     }
 
-    // .codex/* surfaces must not be used at all by the new integration.
+    // Codex hooks are managed again in v0.40.0 — gated by the
+    // `codex_hooks` feature flag in `~/.codex/config.toml`.
+    const codexHooks = JSON.parse(
+      await fs.readFile(path.join(root, ".codex/hooks.json"), "utf8")
+    ) as { hooks: Record<string, unknown> };
+    expect(codexHooks.hooks).toHaveProperty("SessionStart");
+    expect(codexHooks.hooks).toHaveProperty("PreToolUse");
+    expect(codexHooks.hooks).toHaveProperty("PostToolUse");
+    expect(codexHooks.hooks).toHaveProperty("Stop");
+
+    // `.codex/commands/*` is still never consumed by Codex.
     await expect(fs.stat(path.join(root, ".codex/commands"))).rejects.toThrow(/ENOENT/);
-    await expect(fs.stat(path.join(root, ".codex/hooks.json"))).rejects.toThrow(/ENOENT/);
 
     // AGENTS.md should explicitly explain Codex's /use activation.
     const agentsMd = await fs.readFile(path.join(root, "AGENTS.md"), "utf8");
     expect(agentsMd).toMatch(/Codex users/i);
-    expect(agentsMd).toContain("/use cclaw-cc");
+    expect(agentsMd).toContain("/use cc");
   });
 
-  it("sync cleans up legacy .codex/commands and .codex/hooks.json from older cclaw versions", async () => {
+  it("sync cleans up legacy .codex/commands and legacy cclaw-cc* skills from older cclaw versions", async () => {
     const root = await createTempProject("codex-legacy-cleanup");
     await initCclaw({ projectRoot: root, harnesses: ["codex"] });
 
@@ -789,20 +797,27 @@ describe("install lifecycle", () => {
       "# legacy cc prompt\n",
       "utf8"
     );
+    // v0.39.x layout that v0.40.0 renames: `.agents/skills/cclaw-cc*/`.
+    await fs.mkdir(path.join(root, ".agents/skills/cclaw-cc"), { recursive: true });
     await fs.writeFile(
-      path.join(root, ".codex/hooks.json"),
-      JSON.stringify({ hooks: {} }),
+      path.join(root, ".agents/skills/cclaw-cc/SKILL.md"),
+      "---\nname: cclaw-cc\ndescription: legacy\n---\nlegacy body\n",
       "utf8"
     );
 
     await syncCclaw(root);
 
+    // .codex/commands/ and the legacy cclaw-cc folder must both be gone.
     await expect(fs.stat(path.join(root, ".codex/commands"))).rejects.toThrow(/ENOENT/);
-    await expect(fs.stat(path.join(root, ".codex/hooks.json"))).rejects.toThrow(/ENOENT/);
+    await expect(fs.stat(path.join(root, ".agents/skills/cclaw-cc"))).rejects.toThrow(/ENOENT/);
 
-    // Fresh skill surfaces must still be in place.
+    // The managed .codex/hooks.json must still be in place, and the
+    // fresh v0.40.0 skills must exist under the new `cc*` layout.
     await expect(
-      fs.stat(path.join(root, ".agents/skills/cclaw-cc/SKILL.md"))
+      fs.stat(path.join(root, ".codex/hooks.json"))
+    ).resolves.toBeDefined();
+    await expect(
+      fs.stat(path.join(root, ".agents/skills/cc/SKILL.md"))
     ).resolves.toBeDefined();
   });
 
