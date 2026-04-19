@@ -3,39 +3,65 @@ import { RUNTIME_ROOT } from "../constants.js";
 const IDEATE_SKILL_FOLDER = "flow-ideate";
 const IDEATE_SKILL_NAME = "flow-ideate";
 
+/**
+ * Directory + filename convention for ideation artifacts. These are separate
+ * from stage artifacts (00-..08-*.md) because `/cc-ideate` runs outside the
+ * critical-path flow state machine and must not collide with stage numbering.
+ */
+const IDEATION_ARTIFACT_GLOB = ".cclaw/artifacts/ideation-*.md";
+const IDEATION_ARTIFACT_PATTERN = ".cclaw/artifacts/ideation-<YYYY-MM-DD-slug>.md";
+const IDEATION_RESUME_WINDOW_DAYS = 30;
+
+/**
+ * Structured-ask tool list reused across cclaw skills. Kept inline here (small
+ * enough) to avoid cross-module coupling; larger stage skills cite the shared
+ * protocol file instead.
+ */
+const STRUCTURED_ASK_TOOLS =
+  "`AskUserQuestion` on Claude, `AskQuestion` on Cursor, " +
+  "`question` on OpenCode when `permission.question: \"allow\"` is set, " +
+  "`request_user_input` on Codex in Plan / Collaboration mode; " +
+  "fall back to a plain-text lettered list when the tool is hidden or errors";
+
 export function ideateCommandContract(): string {
   return `# /cc-ideate
 
 ## Purpose
 
-Repository-improvement discovery mode. Generate a ranked backlog of high-value
-improvements before committing to a specific feature request.
+Repository-improvement discovery mode. Generate a ranked backlog of
+high-value improvements, persist it as an artifact on disk, and end with
+an explicit handoff — either launch \`/cc\` on a chosen candidate in the
+same session, or save/discard the backlog.
 
 ## HARD-GATE
 
-- This is discovery mode only. Do not start implementation automatically.
-- Every recommendation must include evidence from the current repository.
-- End with a decision prompt: pick one candidate or cancel.
+- Discovery mode only. Never mutate \`.cclaw/state/flow-state.json\`.
+- Every recommendation cites evidence from the current repository
+  (file path, command output, or knowledge-store entry id).
+- Always write a persisted artifact to
+  \`${IDEATION_ARTIFACT_PATTERN}\`. Chat-only output is not acceptable —
+  the next session must be able to resume.
+- Always end with a structured handoff prompt, not an open question.
 
 ## Algorithm
 
-1. Scan repo signals:
-   - open TODO/backlog notes
-   - flaky or failing tests
-   - oversized modules / complexity hotspots
-   - docs drift vs changed code
-   - repeated learnings from \`.cclaw/knowledge.jsonl\`
-2. Produce 5-10 candidates with:
-   - impact (High/Medium/Low)
-   - effort (S/M/L)
-   - confidence (High/Medium/Low)
-   - evidence path(s)
-3. Rank candidates by impact/effort ratio.
-4. Present one recommendation as default.
-5. Ask user to choose:
-   - (A) start with recommended item
-   - (B) choose another candidate
-   - (C) cancel
+1. **Resume check.** Glob \`${IDEATION_ARTIFACT_GLOB}\`. If any artifact
+   has been modified within the last ${IDEATION_RESUME_WINDOW_DAYS} days,
+   offer the user: continue that backlog, start fresh, or cancel.
+2. **Scan repo signals:**
+   - open TODO/FIXME/XXX/HACK notes,
+   - flaky or failing tests,
+   - oversized modules / complexity hotspots,
+   - docs drift vs changed code,
+   - repeated entries in \`${RUNTIME_ROOT}/knowledge.jsonl\`.
+3. **Produce 5-10 candidates** with impact (High/Medium/Low),
+   effort (S/M/L), confidence (High/Medium/Low), and one evidence path
+   per candidate.
+4. **Rank by impact/effort**, recommend the top item.
+5. **Write the artifact** at
+   \`${IDEATION_ARTIFACT_PATTERN}\` using the schema in the skill.
+6. **Present the handoff prompt** with four concrete options — not A/B/C
+   letters. Default = "Start /cc on the top recommendation".
 
 ## Primary skill
 
@@ -46,31 +72,153 @@ improvements before committing to a specific feature request.
 export function ideateCommandSkillMarkdown(): string {
   return `---
 name: ${IDEATE_SKILL_NAME}
-description: "Repository ideation mode: detect and rank high-leverage improvements before implementation."
+description: "Repository ideation mode: detect and rank high-leverage improvements, persist a backlog artifact, and hand off to /cc or save/discard."
 ---
 
 # /cc-ideate
 
 ## Announce at start
 
-"Using flow-ideate to identify highest-leverage improvements in this repository."
+"Using flow-ideate to identify highest-leverage improvements in this
+repository. Will persist a ranked backlog to
+\`${IDEATION_ARTIFACT_PATTERN}\` and end with an explicit handoff."
 
 ## HARD-GATE
 
-Do not start coding in ideate mode. End with an explicit user choice.
+- Do not start coding in ideate mode.
+- Do not mutate \`.cclaw/state/flow-state.json\` — ideation sits outside
+  the critical-path flow.
+- Always produce the artifact file on disk before presenting the handoff.
+- Always end with a structured handoff that names the concrete follow-up
+  command for each option. No A/B/C letters without command context.
 
 ## Protocol
 
-1. Collect evidence from the current repo state.
-2. Build candidate improvements with impact/effort/confidence.
-3. Rank and recommend one candidate.
-4. Ask for explicit selection.
-5. If user selects a candidate, hand off to \`/cc <selected idea>\`.
+### Phase 0 — Resume check
 
-## Candidate format
+1. Use the harness's file-glob tool (\`Glob\` pattern
+   \`${IDEATION_ARTIFACT_GLOB}\` or equivalent \`ls\`/\`find\`).
+2. Filter to files modified within the last ${IDEATION_RESUME_WINDOW_DAYS} days.
+3. If one or more match, present **one** structured ask using the
+   harness's native tool (${STRUCTURED_ASK_TOOLS}) with options:
+   - **Continue the existing backlog** — read the most-recent
+     ideation-*.md and work from its candidate list; skip re-scanning.
+   - **Start a fresh scan** — proceed to Phase 1; the old artifact stays
+     on disk for history.
+   - **Cancel** — stop; do not scan or write anything.
+4. If no recent artifact exists, proceed to Phase 1 silently.
 
-| ID | Improvement | Impact | Effort | Confidence | Evidence |
-|---|---|---|---|---|---|
-| I-1 |  | High/Medium/Low | S/M/L | High/Medium/Low | path or command evidence |
+### Phase 1 — Collect evidence
+
+Scan the current repo. Examples of signals (not exhaustive):
+
+- \`rg -n 'TODO|FIXME|XXX|HACK|TBD'\` grouped by file.
+- Test-runner output (\`npm test\`, \`pytest\`, \`go test ./...\`) — note
+  failures, timeouts, deprecation warnings.
+- Module size outliers (\`wc -l\` or \`du\`) with weak direct test coverage.
+- Docs drift: check that \`README.md\` / \`docs/\` reference files that
+  still exist and flags/APIs that still match \`src/\`.
+- \`${RUNTIME_ROOT}/knowledge.jsonl\` entries with \`type: "heuristic"\`
+  or repeated \`subject:\` values.
+
+Record each finding with the exact file path or command that produced it.
+
+### Phase 2 — Build candidates
+
+For each high-signal finding, construct a candidate:
+
+- **ID** — \`I-1\`, \`I-2\`, …
+- **Title** — one short imperative phrase
+- **Impact** — High / Medium / Low
+- **Effort** — S / M / L
+- **Confidence** — High / Medium / Low
+- **Evidence** — path(s) or command output, inline if short
+- **Proposed handoff** — the exact \`/cc <phrase>\` the user would run
+  to act on this candidate
+
+Aim for 5–10 candidates. Do not invent candidates without evidence.
+
+### Phase 3 — Rank and write the artifact
+
+1. Sort by impact/effort ratio; break ties with confidence.
+2. Compute the artifact filename:
+   - \`slug\` = first 3–5 words of the top recommendation, lowercase,
+     non-alphanumeric collapsed to \`-\`, trimmed. When ideation is
+     focus-hinted (user passed an argument), use the focus hint instead.
+   - \`date\` = today in \`YYYY-MM-DD\` (local time).
+   - Path = \`.cclaw/artifacts/ideation-<date>-<slug>.md\`.
+3. Use the harness's write-file tool (\`Write\`, \`apply_patch\`, or shell
+   \`cat <<EOF > path\`) to create the artifact with this schema:
+
+   \`\`\`markdown
+   # Ideation — <date>
+
+   **Focus:** <user-supplied focus or "open-ended scan">
+   **Generated:** <ISO-8601 timestamp>
+   **Recommendation:** I-1
+
+   ## Ranked backlog
+
+   | ID | Improvement | Impact | Effort | Confidence | Evidence |
+   |---|---|---|---|---|---|
+   | I-1 | Fix feature-worktree test timeouts | High | S | High | tests/unit/feature-system.test.ts:31 |
+   | …   | …                                  | …    | … | …    | …                                     |
+
+   ## Candidate detail
+
+   ### I-1 — Fix feature-worktree test timeouts
+   - **Evidence:** \`npm test\` hangs 40s on tests/unit/feature-system.test.ts:31.
+   - **Handoff:** \`/cc Fix feature-worktree test timeouts on macOS\`
+
+   ### I-2 — …
+   \`\`\`
+
+4. Confirm in chat: "Wrote <path>."
+
+### Phase 4 — Handoff prompt
+
+Present **one** structured ask using the harness's native tool
+(${STRUCTURED_ASK_TOOLS}). Each option must name the concrete follow-up —
+no bare A/B/C.
+
+Required options, in this order:
+
+1. **Start /cc on the top recommendation** — the agent immediately loads
+   \`${RUNTIME_ROOT}/skills/using-cclaw/SKILL.md\` and invokes
+   \`/cc <I-1 handoff phrase>\` in the same turn. Default choice.
+2. **Pick a different candidate** — the agent asks which ID (I-2, I-3, …)
+   and then invokes \`/cc <that candidate's handoff phrase>\`.
+3. **Save and close** — leave the artifact on disk, do nothing else.
+   Next session: \`/cc-ideate\` will offer to resume it.
+4. **Discard** — delete the just-written artifact. Use only when the
+   scan produced nothing actionable.
+
+When the structured-ask tool is unavailable, fall back to a plain-text
+lettered list with the same four labels. Do not invent extra options.
+
+### Phase 5 — Execute the choice
+
+- **Start /cc on I-1** or **different candidate:** announce
+  "Handing off to /cc <phrase>" and load the \`using-cclaw\` router
+  skill. From there, the normal \`/cc\` classification and stage flow
+  takes over. Do not produce a second artifact; the ideation file is
+  preserved as the origin document for this run.
+- **Save and close:** reply with the artifact path and stop.
+- **Discard:** delete the artifact file, confirm deletion, stop.
+
+## Do not
+
+- Do not write into \`.cclaw/artifacts/0X-*.md\` (stage artifacts).
+- Do not mutate \`.cclaw/state/flow-state.json\` at any phase.
+- Do not end the turn with an ungrounded "pick one" question — every
+  option in the handoff prompt must reference a concrete command.
 `;
 }
+
+/**
+ * Exposed for tests and docs that need to mention the artifact convention
+ * without hard-coding the path string in two places.
+ */
+export const IDEATION_ARTIFACT_PATH_PATTERN = IDEATION_ARTIFACT_PATTERN;
+export const IDEATION_ARTIFACT_GLOB_PATTERN = IDEATION_ARTIFACT_GLOB;
+export const IDEATION_RESUME_WINDOW = IDEATION_RESUME_WINDOW_DAYS;
