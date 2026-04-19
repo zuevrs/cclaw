@@ -39,6 +39,7 @@ import {
   preCompactScript,
   opencodePluginJs,
   claudeHooksJson,
+  codexHooksJson,
   cursorHooksJson
 } from "./content/hooks.js";
 import {
@@ -877,11 +878,18 @@ async function writeHooks(projectRoot: string, config: VibyConfig): Promise<void
       const cursorDir = path.join(projectRoot, ".cursor");
       await ensureDir(cursorDir);
       await writeMergedHookJson(projectRoot, path.join(cursorDir, "hooks.json"), cursorHooksJson());
+    } else if (harness === "codex") {
+      // Codex CLI ≥ v0.114 (Mar 2026) supports lifecycle hooks at
+      // `.codex/hooks.json`, gated behind the `[features] codex_hooks = true`
+      // flag in `~/.codex/config.toml`. cclaw always writes the file so
+      // the moment the flag flips on, the cclaw hooks start firing. See
+      // `codexHooksJsonWithObservation` for the Bash-only caveat on
+      // PreToolUse/PostToolUse. `cclaw doctor` warns if the feature flag
+      // is not set.
+      const codexDir = path.join(projectRoot, ".codex");
+      await ensureDir(codexDir);
+      await writeMergedHookJson(projectRoot, path.join(codexDir, "hooks.json"), codexHooksJson());
     }
-    // Codex has no hooks primitive — v0.39.0 stopped generating
-    // `.codex/hooks.json` because Codex CLI never actually read it. Codex
-    // substitutes for hooks via explicit agent steps documented in the
-    // codex playbook.
     // OpenCode registration is auto-managed via opencode.json/opencode.jsonc.
   }
 }
@@ -1141,13 +1149,14 @@ async function writeCursorWorkflowRule(projectRoot: string, harnesses: HarnessId
 
 async function syncDisabledHarnessArtifacts(projectRoot: string, harnesses: HarnessId[]): Promise<void> {
   const enabled = new Set<HarnessId>(harnesses);
-  // Codex is intentionally absent — cclaw stopped generating `.codex/hooks.json`
-  // in v0.39.0 (the file was never consumed by Codex CLI). Legacy `.codex/*`
-  // files are removed unconditionally by `cleanupLegacyCodexSurfaces` during
-  // every `syncHarnessShims` pass.
+  // v0.40.0: `.codex/hooks.json` is back on the managed list now that
+  // Codex CLI actually consumes it (v0.114+, Mar 2026). Legacy
+  // `.codex/commands/` cleanup still happens unconditionally from
+  // `cleanupLegacyCodexSurfaces` inside `syncHarnessShims`.
   const managedHookFiles: Array<{ harness: HarnessId; hookPath: string }> = [
     { harness: "claude", hookPath: path.join(projectRoot, ".claude/hooks/hooks.json") },
-    { harness: "cursor", hookPath: path.join(projectRoot, ".cursor/hooks.json") }
+    { harness: "cursor", hookPath: path.join(projectRoot, ".cursor/hooks.json") },
+    { harness: "codex", hookPath: path.join(projectRoot, ".codex/hooks.json") }
   ];
 
   for (const entry of managedHookFiles) {
@@ -1588,15 +1597,19 @@ export async function uninstallCclaw(projectRoot: string): Promise<void> {
     }
   }
 
-  // v0.39.0 migrated Codex shims to `.agents/skills/cclaw-cc*/SKILL.md`
-  // (Codex CLI reads `.agents/skills/`, not `.codex/commands/`). On uninstall
-  // we remove just the cclaw-owned skill folders, not the whole
-  // `.agents/skills/` directory — other tools may share it.
+  // Codex shim location history:
+  // - < v0.39.0: `.codex/commands/cc*.md` (never consumed by Codex CLI)
+  // - v0.39.0 / v0.39.1: `.agents/skills/cclaw-cc*/SKILL.md`
+  // - ≥ v0.40.0: `.agents/skills/cc*/SKILL.md` (matches Codex's `/use cc`
+  //   prompt verbatim)
+  // Remove all three legacy layouts on uninstall so orphans can't linger.
+  // We only touch cclaw-owned folder names — other tools share
+  // `.agents/skills/` with us.
   const codexSkillsRoot = path.join(projectRoot, ".agents/skills");
   try {
     const entries = await fs.readdir(codexSkillsRoot);
     for (const entry of entries) {
-      if (/^cclaw-(?:cc)(?:-.*)?$/u.test(entry)) {
+      if (/^(?:cclaw-)?cc(?:-(?:next|view|ops|ideate))?$/u.test(entry)) {
         await fs.rm(path.join(codexSkillsRoot, entry), { recursive: true, force: true });
       }
     }

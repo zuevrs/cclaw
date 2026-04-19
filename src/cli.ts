@@ -16,6 +16,13 @@ import { CCLAW_VERSION, RUNTIME_ROOT } from "./constants.js";
 import { createDefaultConfig } from "./config.js";
 import { detectHarnesses } from "./init-detect.js";
 import { HARNESS_ADAPTERS } from "./harness-adapters.js";
+import {
+  classifyCodexHooksFlag,
+  codexConfigPath,
+  patchCodexHooksFlag,
+  readCodexConfig,
+  writeCodexConfig
+} from "./codex-feature-flag.js";
 import { runEval } from "./eval/runner.js";
 import { createStderrProgressLogger } from "./eval/progress.js";
 import { writeBaselinesFromReport } from "./eval/baseline.js";
@@ -216,7 +223,7 @@ function buildInitSurfacePreview(harnesses: HarnessId[]): string[] {
   for (const harness of harnesses) {
     const adapter = HARNESS_ADAPTERS[harness];
     if (adapter.shimKind === "skill") {
-      lines.push(`${adapter.commandDir}/cclaw-cc*/SKILL.md`);
+      lines.push(`${adapter.commandDir}/cc*/SKILL.md`);
     } else {
       lines.push(`${adapter.commandDir}/cc*.md`);
     }
@@ -227,9 +234,12 @@ function buildInitSurfacePreview(harnesses: HarnessId[]): string[] {
       lines.push(".cursor/hooks.json");
       lines.push(".cursor/rules/cclaw-workflow.mdc");
     }
-    // Codex has no hooks file — it reads skills from `.agents/skills/` only
-    // (v0.39.0+). Legacy `.codex/commands/*` and `.codex/hooks.json` are
-    // auto-cleaned on sync.
+    if (harness === "codex") {
+      // v0.40.0: .codex/hooks.json is managed again now that Codex CLI
+      // grew a real hooks API (v0.114+, behind the `codex_hooks`
+      // feature flag). Legacy `.codex/commands/*` is still auto-cleaned.
+      lines.push(".codex/hooks.json (requires `codex_hooks = true` in ~/.codex/config.toml)");
+    }
     if (harness === "opencode") {
       lines.push(".opencode/plugins/cclaw-plugin.mjs");
       lines.push("opencode.json(.c) plugin registration");
@@ -272,6 +282,112 @@ async function promptInitConfig(
   try {
     const harnesses = await pickHarnesses(defaults.harnesses);
     return { harnesses };
+  } finally {
+    rl.close();
+  }
+}
+
+/**
+ * When Codex is one of the installed harnesses, check the Codex CLI
+ * config file for the `codex_hooks` feature flag. If it is missing or
+ * disabled, offer to patch it in with the user's explicit consent.
+ *
+ * The function is deliberately advisory: it never fails init — the worst
+ * case is that Codex runs without the hooks engine, which is exactly
+ * how v0.39.x already shipped. We always print a resolution hint so
+ * the user knows what to do next regardless of which branch was taken.
+ */
+async function maybeEnableCodexHooksFlag(
+  harnesses: HarnessId[] | undefined,
+  parsed: ParsedArgs,
+  ctx: CliContext
+): Promise<void> {
+  if (!harnesses || !harnesses.includes("codex")) return;
+
+  const configPath = codexConfigPath();
+  let existing: string | null;
+  try {
+    existing = await readCodexConfig(configPath);
+  } catch (err) {
+    ctx.stdout.write(
+      `note: Could not read ${configPath} to check the codex_hooks flag: ` +
+        `${err instanceof Error ? err.message : String(err)}\n`
+    );
+    return;
+  }
+
+  const state = classifyCodexHooksFlag(existing);
+  if (state === "enabled") {
+    return;
+  }
+
+  const humanState =
+    state === "missing-file"
+      ? "Codex config file does not exist yet"
+      : state === "missing-section"
+        ? "no [features] section"
+        : state === "missing-key"
+          ? "no codex_hooks key"
+          : "codex_hooks is not enabled";
+
+  const instructions =
+    `To enable Codex hooks manually later, ensure ${configPath} contains:\n` +
+      `  [features]\n  codex_hooks = true\n`;
+
+  if (parsed.interactive === false) {
+    ctx.stdout.write(
+      `note: codex_hooks feature flag is not enabled (${humanState}).\n` +
+        `      cclaw wrote .codex/hooks.json, but Codex will ignore it until you enable the flag.\n` +
+        `      ${instructions}`
+    );
+    return;
+  }
+
+  if (!isInitPromptAllowed(ctx)) {
+    ctx.stdout.write(
+      `note: codex_hooks feature flag is not enabled (${humanState}).\n` +
+        `      cclaw wrote .codex/hooks.json, but Codex will ignore it until you enable the flag.\n` +
+        `      ${instructions}`
+    );
+    return;
+  }
+
+  const rl = createInterface({
+    input: process.stdin,
+    output: ctx.stdout
+  });
+  try {
+    const answer = (await rl.question(
+      `\nCodex CLI hooks are off (${humanState}).\n` +
+        `Enable [features] codex_hooks = true in ${configPath} now? [y/N]: `
+    )).trim().toLowerCase();
+    const yes = answer === "y" || answer === "yes";
+    if (!yes) {
+      ctx.stdout.write(
+        `Leaving ${configPath} untouched. ${instructions}`
+      );
+      return;
+    }
+
+    const { updated, changed } = patchCodexHooksFlag(existing);
+    if (!changed) {
+      ctx.stdout.write(
+        `codex_hooks is already enabled — no changes written.\n`
+      );
+      return;
+    }
+    try {
+      await writeCodexConfig(configPath, updated);
+      ctx.stdout.write(
+        `Enabled [features] codex_hooks = true in ${configPath}.\n`
+      );
+    } catch (err) {
+      ctx.stdout.write(
+        `Could not write ${configPath}: ` +
+          `${err instanceof Error ? err.message : String(err)}\n` +
+          `${instructions}`
+      );
+    }
   } finally {
     rl.close();
   }
@@ -886,6 +1002,7 @@ async function runCommand(parsed: ParsedArgs, ctx: CliContext): Promise<number> 
     }
     const trackNote = effectiveTrack ? ` (track=${effectiveTrack})` : "";
     info(ctx, `Initialized .cclaw runtime and generated harness shims${trackNote}`);
+    await maybeEnableCodexHooksFlag(effectiveHarnesses, parsed, ctx);
     return 0;
   }
 

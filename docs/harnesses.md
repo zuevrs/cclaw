@@ -9,7 +9,7 @@ Generated from `src/harness-adapters.ts` capabilities and hook event mappings.
 | Claude Code | `claude` | `tier1` (full native automation) | full | native | full | AskUserQuestion | `references/harnesses/claude-playbook.md` |
 | Cursor | `cursor` | `tier2` (partial automation with waivers) | generic | generic-dispatch | full | AskQuestion | `references/harnesses/cursor-playbook.md` |
 | OpenCode | `opencode` | `tier2` (partial automation with waivers) | partial | role-switch | plugin | plain-text | `references/harnesses/opencode-playbook.md` |
-| OpenAI Codex | `codex` | `tier3` (manual fallback only) | none | role-switch | none | plain-text | `references/harnesses/codex-playbook.md` |
+| OpenAI Codex | `codex` | `tier2` (partial automation with waivers) | none | role-switch | limited | plain-text | `references/harnesses/codex-playbook.md` |
 
 Fallback legend:
 
@@ -22,11 +22,11 @@ Fallback legend:
 
 | Event | Claude | Cursor | OpenCode | Codex |
 |---|---|---|---|---|
-| `session_rehydrate` | SessionStart matcher startup|resume|clear|compact | sessionStart/sessionResume/sessionClear/sessionCompact | plugin event handlers + transform rehydration | missing |
-| `pre_tool_prompt_guard` | PreToolUse -> prompt-guard.sh | preToolUse -> prompt-guard.sh | plugin tool.execute.before -> prompt-guard.sh | missing |
-| `pre_tool_workflow_guard` | PreToolUse -> workflow-guard.sh | preToolUse -> workflow-guard.sh | plugin tool.execute.before -> workflow-guard.sh | missing |
-| `post_tool_context_monitor` | PostToolUse -> context-monitor.sh | postToolUse -> context-monitor.sh | plugin tool.execute.after -> context-monitor.sh | missing |
-| `stop_checkpoint` | Stop -> stop-checkpoint.sh | stop -> stop-checkpoint.sh | plugin session.idle -> stop-checkpoint.sh | missing |
+| `session_rehydrate` | SessionStart matcher startup|resume|clear|compact | sessionStart/sessionResume/sessionClear/sessionCompact | plugin event handlers + transform rehydration | SessionStart matcher startup|resume |
+| `pre_tool_prompt_guard` | PreToolUse -> prompt-guard.sh | preToolUse -> prompt-guard.sh | plugin tool.execute.before -> prompt-guard.sh | PreToolUse matcher Bash -> prompt-guard.sh (plus UserPromptSubmit for non-Bash prompts) |
+| `pre_tool_workflow_guard` | PreToolUse -> workflow-guard.sh | preToolUse -> workflow-guard.sh | plugin tool.execute.before -> workflow-guard.sh | PreToolUse matcher Bash -> workflow-guard.sh (Bash-only) |
+| `post_tool_context_monitor` | PostToolUse -> context-monitor.sh | postToolUse -> context-monitor.sh | plugin tool.execute.after -> context-monitor.sh | PostToolUse matcher Bash -> context-monitor.sh (Bash-only) |
+| `stop_checkpoint` | Stop -> stop-checkpoint.sh | stop -> stop-checkpoint.sh | plugin session.idle -> stop-checkpoint.sh | Stop -> stop-checkpoint.sh |
 | `precompact_digest` | PreCompact -> pre-compact.sh | sessionCompact -> pre-compact.sh | plugin session.cleared/session.resumed hooks | missing |
 
 ## Interpretation
@@ -78,7 +78,7 @@ Harness-specific additions:
 - `claude`: `.claude/commands/cc*.md`, `.claude/hooks/hooks.json`
 - `cursor`: `.cursor/commands/cc*.md`, `.cursor/hooks.json`, `.cursor/rules/cclaw-workflow.mdc`
 - `opencode`: `.opencode/commands/cc*.md`, `.opencode/plugins/cclaw-plugin.mjs`, opencode plugin registration
-- `codex`: `.agents/skills/cclaw-cc/SKILL.md`, `.agents/skills/cclaw-cc-next/SKILL.md`, `.agents/skills/cclaw-cc-ideate/SKILL.md`, `.agents/skills/cclaw-cc-view/SKILL.md`, `.agents/skills/cclaw-cc-ops/SKILL.md` (Codex CLI reads `.agents/skills/` on startup; `.codex/*` was never consumed by the CLI and is auto-cleaned on sync)
+- `codex`: `.agents/skills/cc/SKILL.md`, `.agents/skills/cc-next/SKILL.md`, `.agents/skills/cc-ideate/SKILL.md`, `.agents/skills/cc-view/SKILL.md`, `.agents/skills/cc-ops/SKILL.md`, `.codex/hooks.json` (Codex CLI reads `.agents/skills/` for custom skills and consumes `.codex/hooks.json` on v0.114+ when `[features] codex_hooks = true` is set in `~/.codex/config.toml`. `.codex/commands/` and the legacy `.agents/skills/cclaw-cc*/` layout from v0.39.x are auto-cleaned on sync.)
 
 ## Runtime observability
 

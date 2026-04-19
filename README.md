@@ -127,9 +127,12 @@ Plus harness-specific shims:
 - `.claude/commands/cc*.md` + `.claude/hooks/hooks.json`
 - `.cursor/commands/cc*.md` + `.cursor/hooks.json` + `.cursor/rules/cclaw-workflow.mdc`
 - `.opencode/commands/cc*.md` + `.opencode/plugins/cclaw-plugin.mjs`
-- `.agents/skills/cclaw-cc*/SKILL.md` (Codex; activated via `/use cclaw-cc`
-  or description-based auto-matching — Codex no longer reads `.codex/commands/`
-  or `.codex/hooks.json`, and `cclaw sync` cleans those up if present)
+- `.agents/skills/cc*/SKILL.md` + `.codex/hooks.json` (Codex; skills are
+  activated via `/use cc` or description-based auto-matching. Hooks
+  require Codex CLI ≥ v0.114 and `[features] codex_hooks = true` in
+  `~/.codex/config.toml`; `cclaw init --codex` offers to patch that flag
+  for you. `.codex/commands/` and the legacy `.agents/skills/cclaw-cc*/`
+  folders are auto-cleaned on sync.)
 - `AGENTS.md` with a managed routing block (includes a Codex-specific note)
 
 `.cclaw/config.yaml` holds every tunable key (prompt guard strictness,
@@ -357,7 +360,7 @@ closes every real gap with a documented fallback — not a silent waiver.
 | Claude Code | full (named subagents) | `native` | full | `AskUserQuestion` | [`claude-playbook.md`](./src/content/harness-playbooks.ts) |
 | Cursor | generic Task dispatcher | `generic-dispatch` | full | `AskQuestion` | `cursor-playbook.md` |
 | OpenCode | plugin / in-session | `role-switch` | plugin | plain-text | `opencode-playbook.md` |
-| OpenAI Codex | in-session only | `role-switch` (evidenceRefs required) | none (no hooks API) | plain-text | `codex-playbook.md` |
+| OpenAI Codex | in-session only | `role-switch` (evidenceRefs required) | limited (Bash-only `PreToolUse`/`PostToolUse`; requires `codex_hooks` feature flag) | plain-text | `codex-playbook.md` |
 
 What the fallbacks mean:
 
@@ -380,16 +383,21 @@ What the fallbacks mean:
   harness declares it. Currently unused — v0.33 removed the old
   Codex-only auto-waiver path.
 
-> **Codex note (v0.39+).** Codex CLI deprecated custom prompts and the
-> `.codex/hooks.json` API, so cclaw installs Codex entry points as
-> native **skills** under `.agents/skills/cclaw-cc*/SKILL.md`. Invoke
-> them with `/use cclaw-cc`, `/use cclaw-cc-next`, `/use cclaw-cc-view`,
-> `/use cclaw-cc-ops`, `/use cclaw-cc-ideate`, or just say something
-> like *"run cc for payments refund fix"* — Codex auto-matches skills
-> from their description. Hook-driven checks (prompt-guard, stop-save,
-> post-tool context monitor) are substituted in the `cclaw-cc*` skill
-> bodies as explicit agent steps; run `cclaw doctor` to see what's
-> missing and how the playbook compensates.
+> **Codex note (v0.40+).** Codex CLI deprecated custom prompts in v0.89
+> (Jan 2026), but Codex ≥ v0.114 (Mar 2026) grew an experimental
+> lifecycle hooks API. cclaw installs Codex entry points as native
+> **skills** under `.agents/skills/cc*/SKILL.md` (invoke with `/use cc`,
+> `/use cc-next`, `/use cc-view`, `/use cc-ops`, `/use cc-ideate`, or
+> by typing `/cc …` in plain text — Codex auto-matches from the skill
+> description) **and** writes `.codex/hooks.json` so session-start
+> rehydration, stop-checkpoint, prompt-guard, workflow-guard, and
+> context-monitor fire automatically — as long as you enable the
+> `codex_hooks` feature flag in `~/.codex/config.toml`. `cclaw init
+> --codex` asks for consent before patching that file. Codex's
+> `PreToolUse`/`PostToolUse` are Bash-only; the stage skills compensate
+> for `Write`/`Edit`/`MCP` tool calls with explicit in-turn checks. Run
+> `cclaw doctor` to see the current state of hooks, the feature flag,
+> and any legacy layout to clean up.
 
 The full capability matrix lives in
 [`docs/harnesses.md`](./docs/harnesses.md). Per-harness playbooks are

@@ -65,18 +65,35 @@ describe("flow command contracts", () => {
       }
     }
 
-    // Codex uses skill-kind shims under `.agents/skills/cclaw-cc*/SKILL.md`
-    // since v0.39.0 — Codex CLI reads that path, not `.codex/commands/`.
-    for (const skillName of ["cclaw-cc", "cclaw-cc-next", "cclaw-cc-ideate", "cclaw-cc-view", "cclaw-cc-ops"]) {
+    // Codex uses skill-kind shims under `.agents/skills/cc*/SKILL.md`
+    // since v0.40.0 (renamed from `cclaw-cc*` in v0.39.x). Codex CLI
+    // reads that path, not `.codex/commands/`.
+    for (const skillName of ["cc", "cc-next", "cc-ideate", "cc-view", "cc-ops"]) {
       const skillPath = path.join(root, ".agents/skills", skillName, "SKILL.md");
       const content = await fs.readFile(skillPath, "utf8");
       expect(content).toContain(`name: ${skillName}`);
       expect(content).toContain(".cclaw/skills/");
     }
 
-    // The legacy `.codex/commands/` directory must not be created any more.
+    // Codex hooks are managed again since v0.40.0.
+    const codexHooksPath = path.join(root, ".codex/hooks.json");
+    const codexHooksRaw = await fs.readFile(codexHooksPath, "utf8");
+    const codexHooks = JSON.parse(codexHooksRaw) as { hooks: Record<string, unknown> };
+    expect(codexHooks.hooks).toHaveProperty("SessionStart");
+    expect(codexHooks.hooks).toHaveProperty("PreToolUse");
+    expect(codexHooks.hooks).toHaveProperty("PostToolUse");
+    expect(codexHooks.hooks).toHaveProperty("Stop");
+
+    // Legacy v0.39.x skill layout must be absent (fresh install writes
+    // `cc*`, not `cclaw-cc*`).
+    for (const legacySkill of ["cclaw-cc", "cclaw-cc-next", "cclaw-cc-view"]) {
+      await expect(
+        fs.stat(path.join(root, ".agents/skills", legacySkill))
+      ).rejects.toThrow(/ENOENT/);
+    }
+
+    // The legacy `.codex/commands/` directory must not be created.
     await expect(fs.stat(path.join(root, ".codex/commands"))).rejects.toThrow(/ENOENT/);
-    await expect(fs.stat(path.join(root, ".codex/hooks.json"))).rejects.toThrow(/ENOENT/);
   });
 
   it("keeps completion protocol externalized and stage parameters explicit", async () => {

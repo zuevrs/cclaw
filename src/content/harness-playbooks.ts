@@ -201,28 +201,38 @@ has either a \`completed\` row with evidenceRefs (role-switch) or a
 const CODEX_PLAYBOOK = `---
 harness: codex
 fallback: role-switch
-description: "OpenAI Codex has no subagent dispatch and no hooks. cclaw ships entry points as skills under .agents/skills/; mandatory delegations fall back to role-switch with evidenceRefs."
+description: "OpenAI Codex exposes lifecycle hooks (v0.114+, gated by the codex_hooks feature flag) but no subagent dispatch and no custom slash commands. cclaw ships entry points as skills under .agents/skills/cc*/ and wires .codex/hooks.json; mandatory delegations fall back to role-switch with evidenceRefs."
 ---
 
 # OpenAI Codex — Parity Playbook
 
-Codex CLI exposes **neither a custom slash-command system nor a hooks
-API**. cclaw v0.39.0 acknowledged this and rewired the codex harness:
+Codex CLI has a different shape from Claude/Cursor:
 
 - **Entry points are skills.** \`/cc\`, \`/cc-next\`, \`/cc-ideate\`,
   \`/cc-view\`, \`/cc-ops\` are generated as skills at
-  \`.agents/skills/cclaw-cc/SKILL.md\` (and \`cclaw-cc-next/\`, etc.). They
-  activate via Codex's native \`/use <skillName>\` command or
-  automatically when the user's prompt mentions any of the
-  \`/cc\`-style tokens (skill descriptions include them verbatim).
-- **No hooks.** Everything that Claude/Cursor get from
-  \`SessionStart\` / \`PreToolUse\` / \`PostToolUse\` / \`Stop\` /
-  \`PreCompact\` must run as explicit agent steps. The session rehydration,
-  prompt-guard, workflow-guard, context-monitor, and stop-checkpoint
-  behaviors are documented in \`.cclaw/skills/using-cclaw/SKILL.md\`.
-- **Legacy paths are dead.** \`.codex/commands/*\` and \`.codex/hooks.json\`
-  are removed on every \`cclaw sync\`. Do not restore them by hand —
-  Codex CLI never read either path.
+  \`.agents/skills/cc/SKILL.md\` (and \`cc-next/\`, \`cc-view/\`,
+  \`cc-ideate/\`, \`cc-ops/\`). They activate via Codex's native
+  \`/use <skillName>\` command or automatically when the user's prompt
+  mentions any of the \`/cc\`-style tokens (skill descriptions include
+  them verbatim). Codex CLI removed custom prompts in v0.89 (Jan 2026);
+  there is no way to register a true custom slash command.
+- **Lifecycle hooks.** Codex CLI ≥ v0.114 (Mar 2026) exposes lifecycle
+  hooks at \`.codex/hooks.json\`, gated behind the experimental
+  \`[features] codex_hooks = true\` flag in \`~/.codex/config.toml\`.
+  cclaw writes \`.codex/hooks.json\` on sync; if the flag is off, the
+  file is simply inert and \`cclaw doctor\` emits a warning. \`cclaw init\`
+  offers to patch the flag with explicit user consent.
+- **Tool interception is Bash-only.** Codex's \`PreToolUse\` and
+  \`PostToolUse\` events only fire for the \`Bash\` tool. \`Write\`,
+  \`Edit\`, \`WebSearch\`, and MCP tool calls are **not** gated by hooks.
+  cclaw partially compensates by also wiring \`UserPromptSubmit\` to
+  \`prompt-guard.sh\` so the stage routing check fires before the turn
+  executes, but workflow-guard (TDD red-first, artifact presence) only
+  fires on Bash turns. See the hook coverage matrix below.
+- **Legacy paths.** \`.codex/commands/*\` was never consumed by Codex and
+  is removed on every \`cclaw sync\`. The v0.39.x \`.agents/skills/cclaw-cc*/\`
+  layout is replaced by \`.agents/skills/cc*/\` and the old folders are
+  auto-removed on sync. Do not restore either by hand.
 
 ## Fallback: role-switch
 
@@ -252,33 +262,57 @@ disabled in v0.33 and remains off.
 
 ## Invocation cheatsheet
 
-- \`/use cclaw-cc\` — open the \`/cc\` skill and pick a track.
-- \`/use cclaw-cc-next\` — advance the flow one stage.
-- \`/use cclaw-cc-ops\` — compound / archive / rewind.
+- \`/use cc\` — open the \`/cc\` skill and pick a track.
+- \`/use cc-next\` — advance the flow one stage.
+- \`/use cc-ops\` — compound / archive / rewind.
 - Typing \`/cc …\` or \`/cc-next …\` in plain text also works: Codex
   matches the skill descriptions (which spell out these tokens) and
   auto-loads the right skill body.
 - Use Codex's built-in \`/skill\` UI to enable or disable
   cclaw skills per session.
 
-## Hook substitution matrix
+## Feature flag — how to enable hooks
 
-| Hook intent | Codex substitute |
-|-------------|------------------|
-| SessionStart rehydration | On first turn, the agent reads \`.cclaw/state/flow-state.json\` and \`.cclaw/knowledge.jsonl\` explicitly before acting. |
-| PreToolUse prompt-guard | The \`/cc\` skill body enforces task classification before writes. |
-| PreToolUse workflow-guard | The active stage skill enforces TDD / artifact gates before writes. |
-| PostToolUse context-monitor | End-of-turn budget check lives in \`.cclaw/references/protocols/ethos.md\`. |
-| Stop checkpoint | Stage-completion protocol updates \`.cclaw/state/flow-state.json\` in the same turn. |
-| PreCompact digest | Manual \`/cc-view status\` before \`/compact\`; the user triggers this. |
+Codex CLI ignores \`.codex/hooks.json\` unless \`codex_hooks = true\`
+appears under \`[features]\` in \`~/.codex/config.toml\`:
+
+\`\`\`toml
+[features]
+codex_hooks = true
+\`\`\`
+
+\`cclaw init --codex\` prompts to write this automatically (one-line
+diff, preserving the rest of \`config.toml\` untouched). Decline the
+prompt to leave the file alone; the skill-level \`/use cc\` entry points
+continue to work regardless.
+
+## Hook coverage matrix
+
+| Hook intent | Codex mapping | Coverage |
+|-------------|---------------|----------|
+| SessionStart rehydration | \`SessionStart\` matcher \`startup|resume\` → \`session-start.sh\` | Full. |
+| PreToolUse prompt-guard | \`PreToolUse\` matcher \`Bash\` + \`UserPromptSubmit\` → \`prompt-guard.sh\` | Bash tool calls are gated inline; \`UserPromptSubmit\` catches prompts before any tool fires, so non-Bash writes (\`Write\`/\`Edit\`) are still prompt-guarded at the turn boundary. |
+| PreToolUse workflow-guard | \`PreToolUse\` matcher \`Bash\` → \`workflow-guard.sh\` | Bash-only. For \`Write\`/\`Edit\` calls the agent performs the TDD-order / artifact check in-turn (see the stage skill). |
+| PostToolUse context-monitor | \`PostToolUse\` matcher \`Bash\` → \`context-monitor.sh\` | Bash-only. Other tool calls get context-monitored at end-of-turn via \`.cclaw/references/protocols/ethos.md\`. |
+| Stop checkpoint | \`Stop\` → \`stop-checkpoint.sh\` | Full. |
+| PreCompact digest | Not supported — Codex has no \`PreCompact\` event. | Covered by \`/cc-ops retro\` and the user running \`/cc-view status\` before Codex's \`/compact\` command. |
 
 ## Verification
 
 \`cclaw doctor\` on a codex-enabled install checks:
 
-- \`shim:codex:cclaw-cc:present\` and \`frontmatter\` (plus the four
-  utility skills).
-- No legacy \`.codex/commands/\` or \`.codex/hooks.json\` lingering.
+- \`shim:codex:cc:present\` and \`frontmatter\` (plus the four utility
+  skills \`cc-next\`, \`cc-view\`, \`cc-ops\`, \`cc-ideate\`).
+- \`hook:schema:codex\` validates \`.codex/hooks.json\` shape.
+- \`hook:wiring:codex\` verifies the generated hooks reference every
+  runtime script cclaw needs (session-start, prompt-guard, workflow-guard,
+  context-monitor, stop-checkpoint).
+- \`warning:codex:feature_flag\` is emitted as a warning (not an error)
+  when \`~/.codex/config.toml\` is missing the \`codex_hooks\` feature
+  flag — hooks silently do nothing in that state.
+- \`warning:codex:legacy_commands_dir\` and
+  \`warning:codex:legacy_cclaw_cc_skills\` catch leftovers from older
+  cclaw versions.
 - Every mandatory agent for the active stage has a \`completed\` row
   with \`fulfillmentMode: "role-switch"\` and at least one \`evidenceRef\`.
 `;

@@ -90,10 +90,11 @@ interface UtilityShimSpec {
   /** Filename used for command-kind harnesses (e.g. `cc-next.md`). */
   fileName: string;
   /**
-   * Skill directory name used for skill-kind harnesses. Each name is
-   * namespaced under `cclaw-` so a user who syncs multiple tools into
-   * `.agents/skills/` (the universal path) won't collide with stock
-   * OpenAI skills like `pdf-editor` or `skill-creator`.
+   * Skill directory name used for skill-kind harnesses. Codex invokes
+   * skills via `/use <skillName>`, so we keep the token identical to
+   * the `cc-next` / `cc-view` / etc. slash-token users already know
+   * from other harnesses. Collisions with stock OpenAI skills are
+   * unlikely (they ship under unrelated names like `pdf-editor`).
    */
   skillName: string;
   /** User-visible command token without the leading slash (`next`). */
@@ -105,28 +106,28 @@ interface UtilityShimSpec {
 const UTILITY_SHIMS: UtilityShimSpec[] = [
   {
     fileName: "cc-next.md",
-    skillName: "cclaw-cc-next",
+    skillName: "cc-next",
     command: "next",
     skillFolder: "flow-next-step",
     commandFile: "next.md"
   },
   {
     fileName: "cc-ideate.md",
-    skillName: "cclaw-cc-ideate",
+    skillName: "cc-ideate",
     command: "ideate",
     skillFolder: "flow-ideate",
     commandFile: "ideate.md"
   },
   {
     fileName: "cc-view.md",
-    skillName: "cclaw-cc-view",
+    skillName: "cc-view",
     command: "view",
     skillFolder: "flow-view",
     commandFile: "view.md"
   },
   {
     fileName: "cc-ops.md",
-    skillName: "cclaw-cc-ops",
+    skillName: "cc-ops",
     command: "ops",
     skillFolder: "flow-ops",
     commandFile: "ops.md"
@@ -134,7 +135,21 @@ const UTILITY_SHIMS: UtilityShimSpec[] = [
 ];
 
 /** Skill-kind shim name for the root `/cc` entry point. */
-const ENTRY_SHIM_SKILL_NAME = "cclaw-cc";
+const ENTRY_SHIM_SKILL_NAME = "cc";
+
+/**
+ * Skill directory names that v0.39.0 / v0.39.1 installed under
+ * `.agents/skills/` before the rename. We delete these on every sync so
+ * upgrades from those versions do not leave orphaned `cclaw-cc*`
+ * folders that would double-register in Codex's skill listing.
+ */
+const LEGACY_CODEX_SKILL_NAMES: readonly string[] = [
+  "cclaw-cc",
+  "cclaw-cc-next",
+  "cclaw-cc-view",
+  "cclaw-cc-ops",
+  "cclaw-cc-ideate"
+];
 
 /**
  * Shims that older cclaw versions installed as top-level slash commands but
@@ -194,16 +209,20 @@ export const HARNESS_ADAPTERS: Record<HarnessId, HarnessAdapter> = {
   codex: {
     id: "codex",
     // Codex CLI reads skills from the universal `.agents/skills/` path
-    // (OpenAI Codex 0.89, Jan 2026; legacy `~/.codex/skills/` also
-    // supported). It has no native `.codex/commands/` slash-command
-    // discovery and no `.codex/hooks.json` primitive — v0.39.0 migrated
-    // cclaw to write skill-kind shims here and stops generating the
-    // dead `.codex/*` surfaces.
+    // (OpenAI Codex 0.89, Jan 2026). It does NOT have a native
+    // `.codex/commands/*` slash-command discovery — cclaw installs
+    // its entry points as skills here. Since v0.114 (Mar 2026) Codex
+    // also exposes lifecycle hooks via `.codex/hooks.json`, behind
+    // the `[features] codex_hooks = true` feature flag in
+    // `~/.codex/config.toml`. cclaw writes that file on sync and
+    // `hookSurface: "limited"` records the reality: SessionStart /
+    // UserPromptSubmit / Stop fire for every turn, but PreToolUse /
+    // PostToolUse only intercept the `Bash` tool.
     commandDir: ".agents/skills",
     shimKind: "skill",
     capabilities: {
       nativeSubagentDispatch: "none",
-      hookSurface: "none",
+      hookSurface: "limited",
       structuredAsk: "plain-text",
       subagentFallback: "role-switch"
     }
@@ -224,6 +243,7 @@ export function harnessTier(harnessId: HarnessId): HarnessTier {
   if (
     capabilities.hookSurface === "full" ||
     capabilities.hookSurface === "plugin" ||
+    capabilities.hookSurface === "limited" ||
     capabilities.nativeSubagentDispatch === "generic" ||
     capabilities.nativeSubagentDispatch === "partial"
   ) {
@@ -314,26 +334,33 @@ If the same approach fails three times in a row (same command, same finding, sam
 ### Detail Level
 
 - This managed AGENTS block is intentionally minimal for cross-project use.
-- Harness coverage is tiered: Tier1 (claude), Tier2 (cursor/opencode/codex), Tier3 (fallback/manual-only).
+- Harness coverage is tiered: Tier1 (claude), Tier2 (cursor/opencode/codex — codex has Bash-only tool hooks), Tier3 (fallback/manual-only).
 - Detailed operating procedures live in \`.cclaw/skills/using-cclaw/SKILL.md\`.
 - Preamble budget and cooldown rules live in \`.cclaw/references/protocols/ethos.md\`.
 - Subagent orchestration patterns: \`.cclaw/skills/subagent-dev/SKILL.md\` and \`.cclaw/skills/parallel-dispatch/SKILL.md\`.
 
 ### Codex users
 
-OpenAI Codex CLI has **no native \`/cc\` slash command** and **no hooks API**. The
-\`/cc\`, \`/cc-next\`, \`/cc-ideate\`, \`/cc-view\`, \`/cc-ops\` tokens above describe
-intent — in Codex they map onto skills cclaw installs at
-\`.agents/skills/cclaw-cc*/SKILL.md\`. Activate one of two ways:
+OpenAI Codex CLI has **no native \`/cc\` slash command** (custom prompts
+were deprecated in v0.89, Jan 2026). The \`/cc\`, \`/cc-next\`,
+\`/cc-ideate\`, \`/cc-view\`, \`/cc-ops\` tokens above describe intent — in
+Codex they map onto skills cclaw installs at
+\`.agents/skills/cc*/SKILL.md\`. Activate one of two ways:
 
-- Type \`/use cclaw-cc\` (or \`cclaw-cc-next\`, etc.) at Codex's prompt.
+- Type \`/use cc\` (or \`cc-next\`, etc.) at Codex's prompt.
 - Type \`/cc …\` as plain text — Codex matches the skill \`description\`
   frontmatter (which spells out the token verbatim) and loads the right
   skill body automatically.
 
-Legacy \`.codex/commands/*\` and \`.codex/hooks.json\` are removed on
-\`cclaw sync\` — Codex CLI never consumed either path. See
-\`.cclaw/references/harnesses/codex-playbook.md\` for the hook-substitution matrix.
+Codex CLI v0.114+ (Mar 2026) **does** expose lifecycle hooks via
+\`.codex/hooks.json\`, gated by the \`[features] codex_hooks = true\` flag
+in \`~/.codex/config.toml\`. cclaw generates \`.codex/hooks.json\` on
+sync; if the feature flag is off, hooks are inert and cclaw's
+session-start rehydration simply does not fire. Run \`cclaw doctor\` to
+see if the flag is missing. \`.codex/commands/*\` is still unused by
+Codex CLI and is removed on every sync. See
+\`.cclaw/references/harnesses/codex-playbook.md\` for the hook coverage
+matrix (Bash-only \`PreToolUse\`/\`PostToolUse\`; other events are full).
 ${CCLAW_MARKER_END}`;
 }
 
@@ -451,15 +478,23 @@ function codexSkillBody(command: string, skillFolder: string, commandFile: strin
   const extraContractHeading = command === "cc"
     ? "If you have not already loaded the cclaw meta-skill this session, also load `.cclaw/skills/using-cclaw/SKILL.md` — it is the routing brain for stage/utility selection."
     : "This skill is a utility entry point, not a flow stage. Do not mutate `.cclaw/state/flow-state.json` directly.";
+  const skillSlug = command === "cc" ? "cc" : `cc-${command}`;
 
   return `# ${title}
 
 You are running inside the OpenAI Codex harness. Codex has **no native
-\`${slashToken}\` slash command and no \`.codex/hooks.json\` primitive** — cclaw
-ships its entry points as skills under \`.agents/skills/\` and relies on
-\`AGENTS.md\` + skill descriptions for activation. If the user typed
-\`${slashToken} …\` as plain text (or asked to perform its action in English),
-follow the steps below.
+\`${slashToken}\` slash command** — custom prompts were deprecated in
+Codex CLI v0.89 (Jan 2026). cclaw ships its entry points as skills
+under \`.agents/skills/${skillSlug}/\` so the user can either:
+
+- Type \`/use ${skillSlug}\` at the Codex prompt, or
+- Type \`${slashToken} …\` (or describe the intent in English) — Codex's
+  skill matcher picks this skill up via the description frontmatter.
+
+Lifecycle hooks **are** available in Codex CLI v0.114+ (behind the
+\`[features] codex_hooks = true\` flag in \`~/.codex/config.toml\`) and
+cclaw installs a matching \`.codex/hooks.json\` — see the playbook for
+what the hook surface does and does not cover.
 
 ## Protocol
 
@@ -479,10 +514,11 @@ follow the steps below.
   append a completed row with \`evidenceRefs\` to
   \`.cclaw/state/delegation-log.json\`. Silent auto-waiver is disabled
   (v0.33+).
-- Codex has no hooks. Session rehydration, prompt-guard, workflow-guard,
-  context-monitor, stop-checkpoint, and pre-compact behavior all have to
-  run as explicit agent steps. Read \`.cclaw/references/harnesses/codex-playbook.md\`
-  for the substitution matrix.
+- Codex's \`PreToolUse\` / \`PostToolUse\` hooks currently only intercept
+  the \`Bash\` tool. \`Write\`, \`Edit\`, \`WebSearch\`, and MCP tool calls
+  are **not** gated by hooks — read
+  \`.cclaw/references/harnesses/codex-playbook.md\` for what cclaw
+  substitutes with in-turn agent steps for those call classes.
 `;
 }
 
@@ -537,9 +573,16 @@ async function writeSkillKindShims(commandDir: string): Promise<void> {
 
 /**
  * Legacy codex surfaces cclaw wrote before v0.39.0 that Codex CLI never
- * actually consumed (`.codex/commands/*.md` had no discovery, `.codex/hooks.json`
- * had no hooks API). On every sync we proactively delete these so users
- * upgrading from older installs see a clean `.codex/` (or no `.codex/` at all).
+ * consumed (`.codex/commands/*.md` had no discovery primitive). We keep
+ * removing `.codex/commands/` on every sync so upgrades from those
+ * installs leave a clean slate, but as of v0.40.0 we DO write
+ * `.codex/hooks.json` again — Codex CLI grew a real hooks API in
+ * v0.114.0 (Mar 2026), and that file is the current, supported target.
+ *
+ * This function also removes skill folders named after the old
+ * `cclaw-cc*` scheme (v0.39.0 / v0.39.1) now that cclaw installs them
+ * as plain `cc*`. Leaving them around would make Codex list two skills
+ * for the same entry point.
  */
 async function cleanupLegacyCodexSurfaces(projectRoot: string): Promise<void> {
   const legacyCommandsDir = path.join(projectRoot, ".codex/commands");
@@ -548,15 +591,22 @@ async function cleanupLegacyCodexSurfaces(projectRoot: string): Promise<void> {
   } catch {
     // best-effort cleanup
   }
-  const legacyHooksFile = path.join(projectRoot, ".codex/hooks.json");
-  try {
-    await fs.rm(legacyHooksFile, { force: true });
-  } catch {
-    // best-effort cleanup
+
+  // Remove the old `cclaw-cc*` skill folders if they exist from a
+  // previous cclaw install. Idempotent; best-effort.
+  const legacySkillsRoot = path.join(projectRoot, ".agents/skills");
+  for (const name of LEGACY_CODEX_SKILL_NAMES) {
+    const folder = path.join(legacySkillsRoot, name);
+    try {
+      await fs.rm(folder, { recursive: true, force: true });
+    } catch {
+      // best-effort
+    }
   }
-  // If `.codex/` is now empty we drop it entirely — codex CLI doesn't need
-  // that directory anymore. Leave it alone if the user stored their own
-  // data there.
+
+  // If `.codex/` is now empty we drop it — happens when neither hooks
+  // are enabled nor the user has their own state there. Otherwise we
+  // leave the directory alone.
   try {
     const codexDir = path.join(projectRoot, ".codex");
     const entries = await fs.readdir(codexDir);

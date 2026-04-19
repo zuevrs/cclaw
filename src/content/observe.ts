@@ -1812,20 +1812,44 @@ export function cursorHooksJsonWithObservation(): string {
   }, null, 2);
 }
 
+/**
+ * Codex CLI ≥ v0.114 hooks. Differences vs. the Claude shape:
+ *
+ * - `SessionStart` matcher is limited to `startup|resume` — Codex does
+ *   not emit `clear` or `compact` lifecycle phases.
+ * - `PreToolUse` / `PostToolUse` fire **only for the `Bash` tool**
+ *   (documented Codex limitation, v0.114/v0.115). We use the `Bash`
+ *   matcher verbatim so Codex doesn't silently swallow our commands.
+ * - `UserPromptSubmit` is supported and is the closest analogue to
+ *   Cursor's `preToolUse` for non-Bash tooling — we run prompt-guard
+ *   there so workflow/prompt checks still fire when the tool being
+ *   used is `Write` or `Edit` rather than `Bash`.
+ * - There is no `PreCompact` event in Codex CLI — pre-compact
+ *   semantics are carried by the agent itself inside `/cc-ops retro`.
+ *
+ * The entire file is inert unless the user opts into
+ * `[features] codex_hooks = true` in `~/.codex/config.toml`; cclaw
+ * doctor and the init prompt handle that flag.
+ */
 export function codexHooksJsonWithObservation(): string {
   return JSON.stringify({
     cclawHookSchemaVersion: 1,
     hooks: {
       SessionStart: [{
-        matcher: "startup|resume|clear|compact",
+        matcher: "startup|resume",
         hooks: [{
           type: "command",
-          command: `bash ${RUNTIME_ROOT}/hooks/session-start.sh`,
-          statusMessage: "Loading cclaw flow state"
+          command: `bash ${RUNTIME_ROOT}/hooks/session-start.sh`
+        }]
+      }],
+      UserPromptSubmit: [{
+        hooks: [{
+          type: "command",
+          command: `bash ${RUNTIME_ROOT}/hooks/prompt-guard.sh`
         }]
       }],
       PreToolUse: [{
-        matcher: "*",
+        matcher: "Bash",
         hooks: [{
           type: "command",
           command: `bash ${RUNTIME_ROOT}/hooks/prompt-guard.sh`
@@ -1835,7 +1859,7 @@ export function codexHooksJsonWithObservation(): string {
         }]
       }],
       PostToolUse: [{
-        matcher: "*",
+        matcher: "Bash",
         hooks: [{
           type: "command",
           command: `bash ${RUNTIME_ROOT}/hooks/context-monitor.sh`
@@ -1845,14 +1869,6 @@ export function codexHooksJsonWithObservation(): string {
         hooks: [{
           type: "command",
           command: `bash ${RUNTIME_ROOT}/hooks/stop-checkpoint.sh`,
-          timeout: 10
-        }]
-      }],
-      PreCompact: [{
-        matcher: "manual|auto",
-        hooks: [{
-          type: "command",
-          command: `bash ${RUNTIME_ROOT}/hooks/pre-compact.sh`,
           timeout: 10
         }]
       }]

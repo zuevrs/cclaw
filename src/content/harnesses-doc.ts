@@ -119,7 +119,7 @@ Harness-specific additions:
 - \`claude\`: \`.claude/commands/cc*.md\`, \`.claude/hooks/hooks.json\`
 - \`cursor\`: \`.cursor/commands/cc*.md\`, \`.cursor/hooks.json\`, \`.cursor/rules/cclaw-workflow.mdc\`
 - \`opencode\`: \`.opencode/commands/cc*.md\`, \`.opencode/plugins/cclaw-plugin.mjs\`, opencode plugin registration
-- \`codex\`: \`.agents/skills/cclaw-cc/SKILL.md\`, \`.agents/skills/cclaw-cc-next/SKILL.md\`, \`.agents/skills/cclaw-cc-ideate/SKILL.md\`, \`.agents/skills/cclaw-cc-view/SKILL.md\`, \`.agents/skills/cclaw-cc-ops/SKILL.md\` (Codex CLI reads \`.agents/skills/\` on startup; \`.codex/*\` was never consumed by the CLI and is auto-cleaned on sync)
+- \`codex\`: \`.agents/skills/cc/SKILL.md\`, \`.agents/skills/cc-next/SKILL.md\`, \`.agents/skills/cc-ideate/SKILL.md\`, \`.agents/skills/cc-view/SKILL.md\`, \`.agents/skills/cc-ops/SKILL.md\`, \`.codex/hooks.json\` (Codex CLI reads \`.agents/skills/\` for custom skills and consumes \`.codex/hooks.json\` on v0.114+ when \`[features] codex_hooks = true\` is set in \`~/.codex/config.toml\`. \`.codex/commands/\` and the legacy \`.agents/skills/cclaw-cc*/\` layout from v0.39.x are auto-cleaned on sync.)
 
 ## Runtime observability
 
