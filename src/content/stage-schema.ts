@@ -292,12 +292,6 @@ export function stageRecommendedGateIds(stage: FlowStage): string[] {
     .map((gate) => gate.id);
 }
 
-export function stageConditionalGateIds(stage: FlowStage): string[] {
-  // Conditional gate DSL removed in favor of explicit required/recommended tiers.
-  void stage;
-  return [];
-}
-
 export function nextCclawCommand(stage: FlowStage): string {
   const next = stageSchema(stage).next;
   return next === "done" ? "none" : `/cc-${next}`;

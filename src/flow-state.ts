@@ -2,7 +2,6 @@ import { COMMAND_FILE_ORDER } from "./constants.js";
 import {
   buildTransitionRules,
   orderedStageSchemas,
-  stageConditionalGateIds,
   stageGateIds,
   stageRecommendedGateIds
 } from "./content/stage-schema.js";
@@ -153,7 +152,7 @@ export function createInitialFlowState(
     stageGateCatalog[schema.stage] = {
       required: stageGateIds(schema.stage),
       recommended: stageRecommendedGateIds(schema.stage),
-      conditional: stageConditionalGateIds(schema.stage),
+      conditional: [],
       triggered: [],
       passed: [],
       blocked: []
