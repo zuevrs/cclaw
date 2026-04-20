@@ -372,11 +372,17 @@ describe("runs system", () => {
       `${JSON.stringify({ stage: "scope", ts: "2026-04-16T00:00:01.000Z", event: "enter" })}\n`,
       "utf8"
     );
+    await fs.writeFile(
+      path.join(root, ".cclaw/state/tdd-cycle-log.jsonl"),
+      `${JSON.stringify({ sliceId: "S-1", phase: "RED", ts: "2026-04-16T00:00:02.000Z" })}\n`,
+      "utf8"
+    );
     const archived = await archiveRun(root, "Search Revamp");
 
     expect(archived.snapshottedStateFiles).toContain("flow-state.json");
     expect(archived.snapshottedStateFiles).toContain("delegation-log.json");
     expect(archived.snapshottedStateFiles).toContain("stage-activity.jsonl");
+    expect(archived.snapshottedStateFiles).toContain("tdd-cycle-log.jsonl");
     for (const name of archived.snapshottedStateFiles) {
       expect(name.startsWith(".flow-state.lock")).toBe(false);
       expect(name.startsWith(".delegation.lock")).toBe(false);
@@ -409,6 +415,15 @@ describe("runs system", () => {
     const resetState = await readFlowState(root);
     expect(resetState.currentStage).toBe("brainstorm");
     expect(resetState.completedStages).toEqual([]);
+
+    const resetDelegation = JSON.parse(
+      await fs.readFile(path.join(root, ".cclaw/state/delegation-log.json"), "utf8")
+    ) as { runId: string; entries: unknown[] };
+    expect(resetDelegation.runId).toBe("active");
+    expect(resetDelegation.entries).toEqual([]);
+
+    const resetTddLog = await fs.readFile(path.join(root, ".cclaw/state/tdd-cycle-log.jsonl"), "utf8");
+    expect(resetTddLog).toBe("");
   });
 
   it("quarantines flow-state.json when top-level value is not an object", async () => {
@@ -468,6 +483,30 @@ describe("runs system", () => {
     const stored = await readFlowState(root);
     expect(stored.currentStage).toBe("scope");
     expect(stored.completedStages).toEqual(["brainstorm"]);
+  });
+
+  it("accepts review -> tdd rewind transition via writeFlowState", async () => {
+    const root = await createTempProject("runs-transition-review-rewind");
+    await ensureRunSystem(root);
+    await writeFlowState(
+      root,
+      {
+        ...createInitialFlowState("active"),
+        currentStage: "review",
+        completedStages: ["brainstorm", "scope", "design", "spec", "plan", "tdd"]
+      },
+      { allowReset: true }
+    );
+
+    await writeFlowState(root, {
+      ...createInitialFlowState("active"),
+      currentStage: "tdd",
+      completedStages: ["brainstorm", "scope", "design", "spec", "plan", "tdd"]
+    });
+
+    const stored = await readFlowState(root);
+    expect(stored.currentStage).toBe("tdd");
+    expect(stored.completedStages).toEqual(["brainstorm", "scope", "design", "spec", "plan", "tdd"]);
   });
 
 });

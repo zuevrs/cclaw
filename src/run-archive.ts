@@ -17,6 +17,8 @@ const STATE_SNAPSHOT_EXCLUDE = new Set<string>([
   ".flow-state.lock",
   ".delegation.lock"
 ]);
+const DELEGATION_LOG_FILE = "delegation-log.json";
+const TDD_CYCLE_LOG_FILE = "tdd-cycle-log.jsonl";
 
 export interface CclawRunMeta {
   id: string;
@@ -112,6 +114,16 @@ async function snapshotStateDirectory(
     }
   }
   return copied.sort((a, b) => a.localeCompare(b));
+}
+
+async function resetCarryoverStateFiles(projectRoot: string, activeRunId: string): Promise<void> {
+  const stateDir = stateDirPath(projectRoot);
+  await ensureDir(stateDir);
+  await writeFileSafe(
+    path.join(stateDir, DELEGATION_LOG_FILE),
+    `${JSON.stringify({ runId: activeRunId, entries: [] }, null, 2)}\n`
+  );
+  await writeFileSafe(path.join(stateDir, TDD_CYCLE_LOG_FILE), "");
 }
 
 function toArchiveDate(date = new Date()): string {
@@ -271,6 +283,7 @@ export async function archiveRun(
 
   const resetState = createInitialFlowState();
   await writeFlowState(projectRoot, resetState, { allowReset: true });
+  await resetCarryoverStateFiles(projectRoot, resetState.activeRunId);
   const archivedAt = new Date().toISOString();
 
   const manifest: ArchiveManifest = {

@@ -22,7 +22,7 @@ export function retroCommandContract(): string {
 
 Auto-triggered retrospective after ship. \`/cc-next\` drafts \`${retroArtifactPath()}\`
 from run artifacts and knowledge, then asks the user exactly ONE structured
-question: **edit / accept / skip**. Default = accept.
+question: **edit / accept / skip / rewind_for_fix**. Default = accept.
 
 This command is normally invoked indirectly by \`/cc-next\` when
 \`closeout.shipSubstate === "retro_review"\`. Invoking it directly is still
@@ -60,7 +60,8 @@ in the structured ask; there is no \`--skip\` flag.
    to a plain-text lettered list when the tool is hidden or errors):
    - \`accept\` (default) — keep the draft as-is,
    - \`edit\` — user edits \`${retroArtifactPath()}\` in-place, then re-runs \`/cc-next\`,
-   - \`skip\` — record \`retroSkipped: true\` + one-line reason, no compound entry required.
+   - \`skip\` — record \`retroSkipped: true\` + one-line reason, no compound entry required,
+   - \`rewind_for_fix\` — route back to \`plan\` / \`tdd\` / \`review\` with a non-empty reason.
 6. On **accept**:
    - append >=1 strict-schema JSONL line to \`${knowledgePath()}\` with
      \`type: "compound"\`, \`source: "retro"\`, and \`stage: null\`,
@@ -78,7 +79,12 @@ in the structured ask; there is no \`--skip\` flag.
    - set \`retro.completedAt = <ISO>\` (marks gate satisfied for archive), and
      \`retro.compoundEntries = 0\`,
    - set \`closeout.shipSubstate = "compound_review"\`.
-9. Emit a one-line summary: \`retro: accepted|edited|skipped | next: /cc-next\`.
+9. On **rewind_for_fix**:
+   - require \`targetStage\` in \`{ plan, tdd, review }\`,
+   - require a concise rationale (min 20 chars),
+   - instruct \`/cc-ops rewind <targetStage> "<reason>"\`,
+   - reset closeout progression by setting \`closeout.shipSubstate = "idle"\`.
+10. Emit a one-line summary: \`retro: accepted|edited|skipped|rewind_for_fix | next: /cc-next\`.
 
 ## Primary skill
 
@@ -89,7 +95,7 @@ in the structured ask; there is no \`--skip\` flag.
 export function retroCommandSkillMarkdown(): string {
   return `---
 name: ${RETRO_SKILL_NAME}
-description: "Auto-drafted retrospective with a single structured accept/edit/skip ask. Triggered from /cc-next when shipSubstate=retro_review."
+description: "Auto-drafted retrospective with a single structured accept/edit/skip/rewind_for_fix ask. Triggered from /cc-next when shipSubstate=retro_review."
 ---
 
 # /cc-ops retro
@@ -125,6 +131,7 @@ Do not silently skip. Do not finalize without updating \`flow-state.json\`.
    > - **accept** — keep the draft and continue.
    > - **edit** — I'll edit it, then re-run \`/cc-next\`.
    > - **skip** — no retro this run (requires one-line reason).
+   > - **rewind_for_fix** — route back to plan/tdd/review because post-ship issues were found.
 
 4. Apply the state transition for the chosen option:
    - \`accept\` → append \`{ "type": "compound", "source": "retro", "stage": null, ... }\` line
@@ -134,11 +141,15 @@ Do not silently skip. Do not finalize without updating \`flow-state.json\`.
    - \`skip\` → set \`closeout.retroSkipped\`, \`closeout.retroSkipReason\`,
      \`closeout.retroAcceptedAt\`, \`retro.completedAt\`,
      \`retro.compoundEntries = 0\`; set \`closeout.shipSubstate = "compound_review"\`.
+   - \`rewind_for_fix\` → require \`targetStage ∈ {plan,tdd,review}\` and
+     reason (>=20 chars), then instruct \`/cc-ops rewind <targetStage> "<reason>"\`
+     and set \`closeout.shipSubstate = "idle"\` to restart closeout after rework.
 
 5. Print one-line completion summary:
    - \`retro gate: accepted (<N> compound entries)\`
    - \`retro gate: skipped (reason: <text>)\`
    - \`retro gate: editing (re-run /cc-next when ready)\`
+   - \`retro gate: rewind_for_fix (target=<stage>)\`
 
 ## Resume semantics
 
