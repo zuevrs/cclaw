@@ -110,16 +110,13 @@ describe("stage schema and subagent alignment", () => {
     expect(markdown).toContain("## When Not to Use");
   });
 
-  it("tdd quick track relaxes plan-trace gate and drops plan artifact dependency", () => {
+  it("tdd quick track drops the plan-trace gate and plan artifact dependency", () => {
     const tddQuick = stageSchema("tdd", "quick");
     const requiredQuickGates = tddQuick.requiredGates
       .filter((gate) => gate.tier === "required")
       .map((gate) => gate.id);
-    const recommendedQuickGates = tddQuick.requiredGates
-      .filter((gate) => gate.tier === "recommended")
-      .map((gate) => gate.id);
     expect(requiredQuickGates).not.toContain("tdd_traceable_to_plan");
-    expect(recommendedQuickGates).toContain("tdd_traceable_to_plan");
+    expect(tddQuick.requiredGates.find((gate) => gate.id === "tdd_traceable_to_plan")).toBeUndefined();
     expect(tddQuick.crossStageTrace.readsFrom).not.toContain(".cclaw/artifacts/05-plan.md");
     expect(tddQuick.crossStageTrace.readsFrom).toEqual([".cclaw/artifacts/04-spec.md"]);
 

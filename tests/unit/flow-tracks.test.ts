@@ -129,7 +129,7 @@ describe("flow tracks", () => {
       expect(stageKeys).toContain("ship");
       expect(standard.stageGateCatalog.tdd.required).toContain("tdd_traceable_to_plan");
       expect(quick.stageGateCatalog.tdd.required).not.toContain("tdd_traceable_to_plan");
-      expect(quick.stageGateCatalog.tdd.recommended).toContain("tdd_traceable_to_plan");
+      expect(quick.stageGateCatalog.tdd.recommended).not.toContain("tdd_traceable_to_plan");
       expect(standard.stageGateCatalog.review.required).toContain("review_trace_matrix_clean");
       expect(quick.stageGateCatalog.review.required).not.toContain("review_trace_matrix_clean");
       expect(quick.stageGateCatalog.review.recommended).toContain("review_trace_matrix_clean");

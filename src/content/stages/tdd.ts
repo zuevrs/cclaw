@@ -212,11 +212,12 @@ function tddQuickTrackVariant(): StageSchemaInput {
     checklist: TDD.checklist.map(quickTrackText),
     interactionProtocol: TDD.interactionProtocol.map(quickTrackText),
     process: TDD.process.map(quickTrackText),
-    requiredGates: TDD.requiredGates.map((gate) =>
-      gate.id === "tdd_traceable_to_plan"
-        ? { ...gate, description: "Change traceability to acceptance criterion is explicit." }
-        : gate
-    ),
+    requiredGates: TDD.requiredGates
+      .filter((gate) => gate.id !== "tdd_traceable_to_plan")
+      .map((gate) => ({
+        ...gate,
+        description: quickTrackText(gate.description)
+      })),
     requiredEvidence: TDD.requiredEvidence.map(quickTrackText),
     inputs: TDD.inputs.map(quickTrackText),
     requiredContext: ["spec artifact", "existing test patterns"],
