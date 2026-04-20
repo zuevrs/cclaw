@@ -1062,13 +1062,14 @@ export async function lintArtifact(projectRoot: string, stage: FlowStage): Promi
   }
 
   if (stage === "scope") {
+    const lockedDecisionsBody = sectionBodyByName(sections, "Locked Decisions (D-XX)") ?? "";
     const strictScopeGuards =
       parsedFrontmatter.hasFrontmatter ||
       headingPresent(sections, "Locked Decisions (D-XX)");
     const scopeSections = [
       sectionBodyByName(sections, "In Scope / Out of Scope") ?? "",
       sectionBodyByName(sections, "Scope Summary") ?? "",
-      sectionBodyByName(sections, "Locked Decisions (D-XX)") ?? ""
+      lockedDecisionsBody
     ].join("\n");
     const reductionHits = collectPatternHits(scopeSections, SCOPE_REDUCTION_PATTERNS);
     findings.push({
@@ -1081,6 +1082,48 @@ export async function lintArtifact(projectRoot: string, stage: FlowStage): Promi
           ? "No scope-reduction phrases detected in scope boundary sections."
           : `Detected scope-reduction phrase(s): ${reductionHits.join(", ")}.`
     });
+
+    // When the Locked Decisions section is present we must enforce the
+    // D-XX ID contract at runtime (previously this was prose-only in the
+    // artifactValidation rule). Empty body, missing IDs, and duplicate
+    // IDs all fail the lint; absence of the section remains advisory so
+    // scope stays optional for small/quick tracks.
+    if (headingPresent(sections, "Locked Decisions (D-XX)")) {
+      const decisionIds = extractDecisionIds(lockedDecisionsBody);
+      const bulletLines = lockedDecisionsBody
+        .split(/\r?\n/u)
+        .map((line) => line.trim())
+        .filter((line) => /^(?:[-*]|\|)\s+\S/u.test(line));
+      const orphanBullets = bulletLines.filter((line) => !/\bD-\d+\b/u.test(line));
+      const duplicateIds: string[] = (() => {
+        const all = lockedDecisionsBody.match(/\bD-\d+\b/gu) ?? [];
+        const counts = new Map<string, number>();
+        for (const id of all) counts.set(id, (counts.get(id) ?? 0) + 1);
+        return [...counts.entries()].filter(([, n]) => n > 1).map(([id]) => id);
+      })();
+      const issues: string[] = [];
+      if (decisionIds.length === 0 && bulletLines.length === 0) {
+        issues.push("section is empty");
+      }
+      if (orphanBullets.length > 0) {
+        issues.push(
+          `${orphanBullets.length} bullet(s) missing a D-XX ID`
+        );
+      }
+      if (duplicateIds.length > 0) {
+        issues.push(`duplicate IDs: ${duplicateIds.join(", ")}`);
+      }
+      findings.push({
+        section: "Locked Decisions ID Integrity",
+        required: true,
+        rule: "Locked Decisions section must list each decision with a unique stable D-XX ID.",
+        found: issues.length === 0,
+        details:
+          issues.length === 0
+            ? `${decisionIds.length} decision ID(s) recorded with no duplicates.`
+            : issues.join("; ")
+      });
+    }
   }
 
   const passed = findings.every((f) => !f.required || f.found);

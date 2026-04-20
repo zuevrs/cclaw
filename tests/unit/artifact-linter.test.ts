@@ -729,6 +729,63 @@ describe("artifact linter heuristics", () => {
     expect(reduction?.found).toBe(false);
   });
 
+  it("flags Locked Decisions rows that are missing a D-XX ID", async () => {
+    const root = await createTempProject("scope-decision-ids-missing");
+    await writeRuntimeArtifact(root, "02-scope.md", `# Scope Artifact
+
+## Scope Mode
+- Mode: strict
+
+## In Scope / Out of Scope
+- In scope: audit log storage
+- Out of scope: archival
+
+## Locked Decisions (D-XX)
+- D-01 — JSONL format for audit trail (compliance)
+- freeform note without an ID
+
+## Completion Dashboard
+- Checklist findings: 1/1
+
+## Scope Summary
+- Selected mode: strict
+`);
+
+    const result = await lintArtifact(root, "scope");
+    const integrity = result.findings.find((f) => f.section === "Locked Decisions ID Integrity");
+    expect(integrity?.required).toBe(true);
+    expect(integrity?.found).toBe(false);
+    expect(integrity?.details).toContain("missing a D-XX ID");
+  });
+
+  it("flags duplicate Locked Decision IDs", async () => {
+    const root = await createTempProject("scope-decision-ids-duplicate");
+    await writeRuntimeArtifact(root, "02-scope.md", `# Scope Artifact
+
+## Scope Mode
+- Mode: strict
+
+## In Scope / Out of Scope
+- In scope: audit log storage
+- Out of scope: archival
+
+## Locked Decisions (D-XX)
+- D-01 — JSONL format (compliance)
+- D-01 — Duplicate row same ID (wrong)
+
+## Completion Dashboard
+- Checklist findings: 1/1
+
+## Scope Summary
+- Selected mode: strict
+`);
+
+    const result = await lintArtifact(root, "scope");
+    const integrity = result.findings.find((f) => f.section === "Locked Decisions ID Integrity");
+    expect(integrity?.found).toBe(false);
+    expect(integrity?.details).toContain("duplicate IDs: D-01");
+  });
+
   it("fails design artifact when Codebase Investigation is missing", async () => {
     const root = await createTempProject("design-missing-cbi");
     await writeRuntimeArtifact(root, "03-design.md", `# Design Artifact
