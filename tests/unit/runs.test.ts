@@ -114,6 +114,30 @@ describe("runs system", () => {
     expect(archived.retro.skipReason).toBe("trivial doc change");
   });
 
+  it("demotes on-disk shipSubstate=ready_to_archive when retro leg is missing", async () => {
+    const root = await createTempProject("runs-closeout-demote");
+    await ensureRunSystem(root);
+    const base = createInitialFlowState("active");
+    // Hand-crafted tampered flow-state: ready_to_archive without any
+    // retroAcceptedAt / retroSkipped. The sanitizer must demote to
+    // retro_review on read so the archive gate blocks.
+    const statePath = path.join(root, ".cclaw/state/flow-state.json");
+    const tampered = {
+      ...base,
+      currentStage: "ship",
+      completedStages: ["brainstorm", "scope", "design", "spec", "plan", "tdd", "review", "ship"],
+      closeout: {
+        ...base.closeout,
+        shipSubstate: "ready_to_archive"
+      }
+    };
+    await fs.writeFile(statePath, `${JSON.stringify(tampered, null, 2)}\n`, "utf8");
+
+    const read = await readFlowState(root);
+    expect(read.closeout.shipSubstate).toBe("retro_review");
+    await expect(archiveRun(root, "Tampered Closeout")).rejects.toThrow(/ready_to_archive/i);
+  });
+
   it("blocks archive when retro was skipped but closeout is not ready_to_archive", async () => {
     const root = await createTempProject("runs-retro-skipped-not-ready");
     await ensureRunSystem(root);
