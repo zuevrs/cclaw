@@ -3,9 +3,7 @@ import type { FlowStage } from "../../types.js";
 export interface StageGate {
   id: string;
   description: string;
-  tier?: "required" | "recommended" | "conditional";
-  /** Used when tier=conditional. Predicate syntax mirrors conditional delegation rules. */
-  condition?: string;
+  tier?: "required" | "recommended";
 }
 
 export interface ReviewSection {
@@ -23,9 +21,7 @@ export interface CrossStageTrace {
 export interface ArtifactValidation {
   section: string;
   required: boolean;
-  tier?: "required" | "recommended" | "conditional";
-  /** Optional predicate for conditional validations. */
-  condition?: string;
+  tier?: "required" | "recommended";
   validationRule: string;
 }
 
@@ -39,20 +35,11 @@ export interface StageAutoSubagentDispatch {
   /**
    * - `mandatory` — must be dispatched (or explicitly waived) before stage transition.
    * - `proactive` — should be dispatched automatically when context matches `when`.
-   * - `conditional` — dispatched only when `condition` evaluates true at runtime; counted as
-   *   mandatory **only when the condition holds**.
    */
-  mode: "mandatory" | "proactive" | "conditional";
+  mode: "mandatory" | "proactive";
   when: string;
   purpose: string;
   requiresUserGate: boolean;
-  /**
-   * Optional machine-friendly trigger expression for `conditional` rows.
-   * Supported predicates: `diff_lines_gt:<N>`, `files_touched_gt:<N>`,
-   * `trust_boundary_changed`, `release_blast_radius_high`.
-   * Multiple predicates joined by `||` mean ANY trigger satisfies the condition.
-   */
-  condition?: string;
   /** Optional skill folder the dispatched agent should load as additional context. */
   skill?: string;
 }

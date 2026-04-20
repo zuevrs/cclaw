@@ -41,7 +41,6 @@ export type {
  * Gate tiers:
  * - required: blocking for stage completion.
  * - recommended: quality signal; unmet -> DONE_WITH_CONCERNS, not BLOCKED.
- * - conditional: becomes blocking only when triggered.
  */
 const REQUIRED_GATE_IDS: Record<FlowStage, string[]> = {
   brainstorm: [
@@ -233,8 +232,7 @@ const STAGE_AUTO_SUBAGENT_DISPATCH: Record<FlowStage, StageAutoSubagentDispatch[
     },
     {
       agent: "reviewer",
-      mode: "conditional",
-      condition: "diff_lines_gt:100||files_touched_gt:10||trust_boundary_changed",
+      mode: "proactive",
       when: "When the diff exceeds 100 changed lines, touches more than 10 files, or modifies trust boundaries — dispatch a SECOND, independent reviewer with the adversarial-review skill loaded so the review army has at least two voices on a high-blast-radius change.",
       purpose: "Adversarial second-opinion review on large or trust-sensitive diffs. The second reviewer treats the implementation as hostile and tries to break it (hostile-user, future-maintainer, competitor lenses) instead of sympathetically explaining it.",
       requiresUserGate: false,
@@ -266,11 +264,6 @@ export function mandatoryDelegationsForStage(stage: FlowStage): string[] {
     .map((d) => d.agent);
 }
 
-/** Conditional dispatches that become mandatory only when their `condition` predicate evaluates true. */
-export function conditionalDispatchesForStage(stage: FlowStage): StageAutoSubagentDispatch[] {
-  return STAGE_AUTO_SUBAGENT_DISPATCH[stage].filter((d) => d.mode === "conditional");
-}
-
 export function stageSchema(stage: FlowStage): StageSchema {
   const base = STAGE_SCHEMA_MAP[stage];
   const tieredGates = tieredStageGates(stage, base.requiredGates);
@@ -297,12 +290,6 @@ export function stageRecommendedGateIds(stage: FlowStage): string[] {
   return stageSchema(stage).requiredGates
     .filter((gate) => gate.tier === "recommended")
     .map((gate) => gate.id);
-}
-
-export function stageConditionalGateIds(stage: FlowStage): string[] {
-  // Conditional gate DSL removed in favor of explicit required/recommended tiers.
-  void stage;
-  return [];
 }
 
 export function nextCclawCommand(stage: FlowStage): string {
