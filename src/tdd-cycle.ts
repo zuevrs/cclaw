@@ -103,7 +103,15 @@ export function validateTddCycleOrder(
         state = "green_done";
         continue;
       }
-      // refactor
+      // refactor — must preserve the passing state established by green.
+      if (entry.exitCode === undefined) {
+        issues.push(`slice ${slice}: refactor entry must record exitCode 0`);
+        continue;
+      }
+      if (entry.exitCode !== 0) {
+        issues.push(`slice ${slice}: refactor entry exitCode must be 0 (tests must stay green)`);
+        continue;
+      }
       if (state !== "green_done") {
         issues.push(`slice ${slice}: refactor logged before green`);
       }
