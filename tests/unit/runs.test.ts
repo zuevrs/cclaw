@@ -226,6 +226,38 @@ describe("runs system", () => {
     expect(archived.retro.compoundEntries).toBeGreaterThanOrEqual(1);
   });
 
+  it("allows archive when retro artifact exists but compound review yielded zero new patterns", async () => {
+    const root = await createTempProject("runs-retro-no-new-patterns");
+    await ensureRunSystem(root);
+    const base = createInitialFlowState("active");
+    await writeFlowState(
+      root,
+      {
+        ...base,
+        currentStage: "ship",
+        completedStages: ["brainstorm", "scope", "design", "spec", "plan", "tdd", "review", "ship"],
+        closeout: {
+          ...base.closeout,
+          shipSubstate: "ready_to_archive",
+          retroDraftedAt: "2026-03-01T00:00:00Z",
+          retroAcceptedAt: "2026-03-02T00:00:00Z",
+          compoundSkipped: true
+        }
+      },
+      { allowReset: true }
+    );
+    await fs.writeFile(
+      path.join(root, ".cclaw/artifacts/09-retro.md"),
+      "# retro\n\nNo new compound patterns this run.\n",
+      "utf8"
+    );
+
+    const archived = await archiveRun(root, "Retro No New Patterns");
+    expect(archived.retro.required).toBe(true);
+    expect(archived.retro.completed).toBe(true);
+    expect(archived.retro.compoundEntries).toBe(0);
+  });
+
   it("ignores retro knowledge entries outside the current retro closeout window", async () => {
     const root = await createTempProject("runs-retro-window-scope");
     await ensureRunSystem(root);
