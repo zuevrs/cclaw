@@ -706,6 +706,65 @@ describe("install lifecycle", () => {
     expect(checks.find((c) => c.name === "warning:slice_review:missing_section")).toBeUndefined();
   });
 
+  it("warns when configured track heuristics disagree with active track", async () => {
+    const root = await createTempProject("track-heuristics-mismatch");
+    await initCclaw({ projectRoot: root });
+
+    const current = await readConfig(root);
+    await writeConfig(root, {
+      ...current,
+      trackHeuristics: {
+        fallback: "standard",
+        tracks: {
+          quick: { triggers: ["hotfix"], veto: undefined },
+          medium: undefined,
+          standard: undefined
+        }
+      }
+    });
+    await fs.writeFile(
+      path.join(root, ".cclaw/artifacts/00-idea.md"),
+      `Class: software-bugfix\nTrack: standard\nStack: unknown\n\n## User prompt\n\nhotfix login typo in auth flow\n`,
+      "utf8"
+    );
+
+    const checks = await doctorChecks(root);
+    const warning = checks.find((c) => c.name === "warning:track_heuristics:advisory_alignment");
+    expect(warning).toBeDefined();
+    expect(warning?.ok).toBe(false);
+    expect(warning?.details).toMatch(/predicts "quick"/);
+    expect(warning?.details).toMatch(/flow-state track is "standard"/);
+  });
+
+  it("stays green when configured track heuristics align with active track", async () => {
+    const root = await createTempProject("track-heuristics-aligned");
+    await initCclaw({ projectRoot: root });
+
+    const current = await readConfig(root);
+    await writeConfig(root, {
+      ...current,
+      trackHeuristics: {
+        fallback: "standard",
+        tracks: {
+          quick: { triggers: ["hotfix"], veto: undefined },
+          medium: undefined,
+          standard: undefined
+        }
+      }
+    });
+    await fs.writeFile(
+      path.join(root, ".cclaw/artifacts/00-idea.md"),
+      `Class: software-standard\nTrack: standard\nStack: unknown\n\n## User prompt\n\nnew feature: billing workflow redesign\n`,
+      "utf8"
+    );
+
+    const checks = await doctorChecks(root);
+    const warning = checks.find((c) => c.name === "warning:track_heuristics:advisory_alignment");
+    expect(warning).toBeDefined();
+    expect(warning?.ok).toBe(true);
+    expect(warning?.details).toMatch(/matches active track "standard"/);
+  });
+
   it("warns about stale raw knowledge entries older than 90 days", async () => {
     const root = await createTempProject("knowledge-stale-raw");
     await initCclaw({ projectRoot: root });
