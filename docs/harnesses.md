@@ -40,6 +40,20 @@ Design-stage research fleet uses the same parity model:
 | `stop_checkpoint` | Stop -> stop-checkpoint.sh | stop -> stop-checkpoint.sh | plugin session.idle -> stop-checkpoint.sh | Stop -> stop-checkpoint.sh |
 | `precompact_digest` | PreCompact -> pre-compact.sh | sessionCompact -> pre-compact.sh | plugin session.compacted -> pre-compact.sh | missing |
 
+## Hook event casing
+
+Hook keys are intentionally harness-native and must not be normalized:
+
+| Harness | ID | Event key casing |
+|---|---|---|
+| Claude Code | `claude` | PascalCase (`SessionStart`, `PreToolUse`) |
+| Cursor | `cursor` | camelCase (`sessionStart`, `preToolUse`) |
+| OpenCode | `opencode` | camelCase (`sessionStart`, `preToolUse`) |
+| OpenAI Codex | `codex` | PascalCase (`SessionStart`, `PreToolUse`) |
+
+Use the exact event names from each harness schema. Treating all hooks as one
+shared casing silently breaks generated wiring.
+
 ## Interpretation
 
 - `tier1`: full native delegation + structured asks + full hook surface.

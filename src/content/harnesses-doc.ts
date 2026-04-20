@@ -32,6 +32,12 @@ export function harnessIntegrationDocMarkdown(): string {
   const stageSkillRows = Object.entries(STAGE_TO_SKILL_FOLDER)
     .map(([stage, skillFolder]) => `| \`${stage}\` | \`${skillFolder}\` |`)
     .join("\n");
+  const hookCasingRows = [
+    "| Claude Code | `claude` | PascalCase (`SessionStart`, `PreToolUse`) |",
+    "| Cursor | `cursor` | camelCase (`sessionStart`, `preToolUse`) |",
+    "| OpenCode | `opencode` | camelCase (`sessionStart`, `preToolUse`) |",
+    "| OpenAI Codex | `codex` | PascalCase (`SessionStart`, `PreToolUse`) |"
+  ].join("\n");
   const capabilityRows = harnesses
     .map((harness) => {
       const adapter = HARNESS_ADAPTERS[harness];
@@ -85,6 +91,17 @@ Design-stage research fleet uses the same parity model:
 | Event | Claude | Cursor | OpenCode | Codex |
 |---|---|---|---|---|
 ${hookRows}
+
+## Hook event casing
+
+Hook keys are intentionally harness-native and must not be normalized:
+
+| Harness | ID | Event key casing |
+|---|---|---|
+${hookCasingRows}
+
+Use the exact event names from each harness schema. Treating all hooks as one
+shared casing silently breaks generated wiring.
 
 ## Interpretation
 
