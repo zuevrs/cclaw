@@ -503,4 +503,109 @@ describe("gate evidence reconciliation", () => {
     expect(notices.notices[0]?.gateId).toBe(firstGate);
     expect(notices.notices[0]?.reason).toContain("demoted from passed to blocked");
   });
+
+  it("does not duplicate reconciliation notices for the same run/stage/gate", async () => {
+    const root = await createTempProject("gate-reconcile-notice-dedupe");
+    await prepareRoot(root);
+
+    const state = createInitialFlowState("run-reconcile-dedupe");
+    const firstGate = stageSchema("brainstorm").requiredGates[0]!.id;
+    state.stageGateCatalog.brainstorm.passed = [firstGate];
+    await fs.writeFile(
+      path.join(root, ".cclaw/state/flow-state.json"),
+      `${JSON.stringify(state, null, 2)}\n`,
+      "utf8"
+    );
+    await fs.writeFile(
+      path.join(root, ".cclaw/state/reconciliation-notices.json"),
+      JSON.stringify({
+        schemaVersion: 1,
+        notices: [
+          {
+            id: `run-reconcile-dedupe:brainstorm:${firstGate}:2026-04-20T00:00:00.000Z`,
+            runId: "run-reconcile-dedupe",
+            stage: "brainstorm",
+            gateId: firstGate,
+            reason: "demoted from passed to blocked during gate reconciliation (missing evidence)",
+            demotedAt: "2026-04-20T00:00:00.000Z"
+          }
+        ]
+      }, null, 2),
+      "utf8"
+    );
+
+    const result = await reconcileAndWriteCurrentStageGateCatalog(root);
+    expect(result.demotedGateIds).toEqual([firstGate]);
+
+    const notices = JSON.parse(
+      await fs.readFile(path.join(root, ".cclaw/state/reconciliation-notices.json"), "utf8")
+    ) as { notices: Array<{ gateId: string }> };
+    expect(notices.notices).toHaveLength(1);
+    expect(notices.notices[0]?.gateId).toBe(firstGate);
+  });
+
+  it("drops stale-run notices and keeps deterministic notice ordering", async () => {
+    const root = await createTempProject("gate-reconcile-notice-sort");
+    await prepareRoot(root);
+
+    const state = createInitialFlowState("run-reconcile-sort");
+    const required = stageSchema("brainstorm").requiredGates.map((gate) => gate.id);
+    const [gateA, gateB, gateC] = required;
+    state.stageGateCatalog.brainstorm.blocked = [gateA!, gateB!, gateC!];
+    await fs.writeFile(
+      path.join(root, ".cclaw/state/flow-state.json"),
+      `${JSON.stringify(state, null, 2)}\n`,
+      "utf8"
+    );
+    await fs.writeFile(
+      path.join(root, ".cclaw/state/reconciliation-notices.json"),
+      JSON.stringify({
+        schemaVersion: 1,
+        notices: [
+          {
+            id: "b-id",
+            runId: "run-reconcile-sort",
+            stage: "brainstorm",
+            gateId: gateB,
+            reason: "demoted from passed to blocked during gate reconciliation (missing evidence)",
+            demotedAt: "2026-04-20T00:00:00.000Z"
+          },
+          {
+            id: "a-id",
+            runId: "run-reconcile-sort",
+            stage: "brainstorm",
+            gateId: gateA,
+            reason: "demoted from passed to blocked during gate reconciliation (missing evidence)",
+            demotedAt: "2026-04-20T00:00:00.000Z"
+          },
+          {
+            id: "c-id",
+            runId: "run-reconcile-sort",
+            stage: "brainstorm",
+            gateId: gateC,
+            reason: "demoted from passed to blocked during gate reconciliation (missing evidence)",
+            demotedAt: "2026-04-20T00:00:01.000Z"
+          },
+          {
+            id: "stale-id",
+            runId: "run-old",
+            stage: "brainstorm",
+            gateId: gateA,
+            reason: "demoted from passed to blocked during gate reconciliation (missing evidence)",
+            demotedAt: "2026-04-19T23:59:59.000Z"
+          }
+        ]
+      }, null, 2),
+      "utf8"
+    );
+
+    const result = await reconcileAndWriteCurrentStageGateCatalog(root);
+    expect(result.changed).toBe(false);
+
+    const notices = JSON.parse(
+      await fs.readFile(path.join(root, ".cclaw/state/reconciliation-notices.json"), "utf8")
+    ) as { notices: Array<{ id: string; runId: string }> };
+    expect(notices.notices.map((notice) => notice.id)).toEqual(["a-id", "b-id", "c-id"]);
+    expect(notices.notices.every((notice) => notice.runId === "run-reconcile-sort")).toBe(true);
+  });
 });
