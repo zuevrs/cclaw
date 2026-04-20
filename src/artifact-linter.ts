@@ -1010,6 +1010,51 @@ export async function lintArtifact(projectRoot: string, stage: FlowStage): Promi
     });
   }
 
+  if (stage === "brainstorm") {
+    // Brainstorm Iron Law: "NO ARTIFACT IS COMPLETE WITHOUT AN EXPLICITLY
+    // APPROVED DIRECTION — SILENCE IS NOT APPROVAL." Previously this was
+    // prose-only — nothing failed when the Selected Direction section
+    // omitted an approval marker, or when the Approaches table collapsed
+    // to a single row (defeating the "2-3 distinct approaches" gate).
+    const approachesBody = sectionBodyByName(sections, "Approaches");
+    if (approachesBody !== null) {
+      const tableRows = approachesBody
+        .split(/\r?\n/u)
+        .map((line) => line.trim())
+        .filter((line) => line.startsWith("|"))
+        .filter((line) => !/^\|\s*[-: |]+\|\s*$/u.test(line))
+        .filter((line) => !/^\|\s*approach\b/iu.test(line));
+      const bulletRows = approachesBody
+        .split(/\r?\n/u)
+        .map((line) => line.trim())
+        .filter((line) => /^(?:[-*]|\d+\.)\s+\S/u.test(line));
+      const rowCount = Math.max(tableRows.length, bulletRows.length);
+      findings.push({
+        section: "Distinct Approaches Enforcement",
+        required: true,
+        rule: "Approaches section must document at least 2 distinct approaches so the Iron Law comparison is meaningful.",
+        found: rowCount >= 2,
+        details:
+          rowCount >= 2
+            ? `Detected ${rowCount} approach row(s).`
+            : `Detected ${rowCount} approach row(s); at least 2 required.`
+      });
+    }
+    const directionBody = sectionBodyByName(sections, "Selected Direction");
+    if (directionBody !== null) {
+      const approvalMarker = /\bapprov(?:ed|al)\b/iu.test(directionBody);
+      findings.push({
+        section: "Direction Approval Marker",
+        required: true,
+        rule: "Selected Direction section must state an explicit approval marker (for example `Approval: approved` or `Approved by: user`).",
+        found: approvalMarker,
+        details: approvalMarker
+          ? "Approval marker present in Selected Direction."
+          : "No explicit `approved`/`approval` marker found in Selected Direction."
+      });
+    }
+  }
+
   if (stage === "plan") {
     const strictPlanGuards =
       parsedFrontmatter.hasFrontmatter ||

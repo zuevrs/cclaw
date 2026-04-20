@@ -233,6 +233,84 @@ describe("artifact linter heuristics", () => {
     expect(result.passed).toBe(true);
   });
 
+  it("fails brainstorm when Approaches collapses to a single row", async () => {
+    const root = await createTempProject("artifact-lint-single-approach");
+    await writeRuntimeArtifact(root, "01-brainstorm.md", `# Brainstorm Artifact
+
+## Context
+- Project state: monorepo with CI
+
+## Problem
+- What we're solving: release regressions
+
+## Clarifying Questions
+| # | Question | Answer | Decision impact |
+|---|---|---|---|
+| 1 | Block or warn? | Block | hard gate |
+
+## Approaches
+| Approach | Architecture | Trade-offs | Recommendation |
+|---|---|---|---|
+| A | script-only checks | fast and cheap | recommended |
+
+## Selected Direction
+- Approach: A
+- Approval: approved by user
+
+## Design
+- Architecture: simple script
+
+## Assumptions and Open Questions
+- None
+`);
+
+    const result = await lintArtifact(root, "brainstorm");
+    const distinct = result.findings.find(
+      (finding) => finding.section === "Distinct Approaches Enforcement"
+    );
+    expect(distinct?.found).toBe(false);
+    expect(distinct?.details).toContain("at least 2 required");
+  });
+
+  it("fails brainstorm when Selected Direction omits approval marker", async () => {
+    const root = await createTempProject("artifact-lint-no-approval");
+    await writeRuntimeArtifact(root, "01-brainstorm.md", `# Brainstorm Artifact
+
+## Context
+- Project state: monorepo with CI
+
+## Problem
+- What we're solving: release regressions
+
+## Clarifying Questions
+| # | Question | Answer | Decision impact |
+|---|---|---|---|
+| 1 | Block or warn? | Block | hard gate |
+
+## Approaches
+| Approach | Architecture | Trade-offs | Recommendation |
+|---|---|---|---|
+| A | script-only checks | fast | |
+| B | reusable module | balanced | recommended |
+
+## Selected Direction
+- Approach: B
+- Rationale: best balance
+
+## Design
+- Architecture: module
+
+## Assumptions and Open Questions
+- None
+`);
+
+    const result = await lintArtifact(root, "brainstorm");
+    const approval = result.findings.find(
+      (finding) => finding.section === "Direction Approval Marker"
+    );
+    expect(approval?.found).toBe(false);
+  });
+
   it("fails brainstorm clarifying questions section when empty", async () => {
     const root = await createTempProject("artifact-lint-empty-questions");
     await writeRuntimeArtifact(root, "01-brainstorm.md", `# Brainstorm Artifact
