@@ -1,7 +1,7 @@
 import { readFileSync } from "node:fs";
 import path from "node:path";
 import { fileURLToPath } from "node:url";
-import type { HarnessId } from "./types.js";
+import type { FlowStage, HarnessId } from "./types.js";
 
 /** Hidden runtime directory at project root (dot-prefixed). */
 export const RUNTIME_ROOT = ".cclaw";
@@ -109,6 +109,26 @@ export const REQUIRED_GITIGNORE_PATTERNS = [
   ".opencode/plugins/cclaw-plugin.mjs",
   ".cursor/rules/cclaw-workflow.mdc"
 ] as const;
+
+/**
+ * Canonical stage -> skill folder mapping.
+ *
+ * Intentional divergence from stage ids:
+ * - stage ids stay short and flow-oriented (`spec`, `tdd`, `ship`)
+ * - skill folders stay descriptive and user-facing for `.cclaw/skills/*`.
+ *
+ * Keep this map as the single source of truth for generated skill paths.
+ */
+export const STAGE_TO_SKILL_FOLDER: Record<FlowStage, string> = {
+  brainstorm: "brainstorming",
+  scope: "scope-shaping",
+  design: "engineering-design-lock",
+  spec: "specification-authoring",
+  plan: "planning-and-task-breakdown",
+  tdd: "test-driven-development",
+  review: "two-layer-review",
+  ship: "shipping-and-handoff"
+};
 
 export const UTILITY_COMMANDS = [
   "learn",

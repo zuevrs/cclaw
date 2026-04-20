@@ -1,5 +1,6 @@
 import { FLOW_STAGES, FLOW_TRACKS, TRACK_STAGES } from "../types.js";
 import type { FlowStage, FlowTrack, TransitionRule } from "../types.js";
+import { STAGE_TO_SKILL_FOLDER } from "../constants.js";
 import {
   BRAINSTORM,
   SCOPE,
@@ -295,6 +296,7 @@ export function stageSchema(stage: FlowStage, track: FlowTrack = "standard"): St
   const tieredValidation = tieredArtifactValidation(stage, base.artifactValidation);
   return {
     ...base,
+    skillFolder: STAGE_TO_SKILL_FOLDER[stage],
     requiredGates: tieredGates,
     artifactValidation: tieredValidation,
     mandatoryDelegations: mandatoryDelegationsForStage(stage)

@@ -77,6 +77,23 @@ Operations subcommands:
 Stage order remains canonical:
 `brainstorm -> scope -> design -> spec -> plan -> tdd -> review -> ship`
 
+## Stage -> skill folder mapping
+
+| Stage | Skill folder |
+|---|---|
+| `brainstorm` | `brainstorming` |
+| `scope` | `scope-shaping` |
+| `design` | `engineering-design-lock` |
+| `spec` | `specification-authoring` |
+| `plan` | `planning-and-task-breakdown` |
+| `tdd` | `test-driven-development` |
+| `review` | `two-layer-review` |
+| `ship` | `shipping-and-handoff` |
+
+This map is generated from `src/constants.ts::STAGE_TO_SKILL_FOLDER` so
+skill-path naming stays explicit and stable even when stage ids differ from
+folder names.
+
 ## Install surfaces
 
 Always generated:

@@ -1,5 +1,6 @@
 import { HARNESS_ADAPTERS, harnessTier } from "../harness-adapters.js";
 import type { HarnessId } from "../types.js";
+import { STAGE_TO_SKILL_FOLDER } from "../constants.js";
 import { HOOK_EVENTS_BY_HARNESS, HOOK_SEMANTIC_EVENTS } from "./hook-events.js";
 import {
   HARNESS_PLAYBOOKS_DIR,
@@ -28,6 +29,9 @@ function tierDescription(tier: string): string {
 
 export function harnessIntegrationDocMarkdown(): string {
   const harnesses = Object.keys(HARNESS_ADAPTERS) as HarnessId[];
+  const stageSkillRows = Object.entries(STAGE_TO_SKILL_FOLDER)
+    .map(([stage, skillFolder]) => `| \`${stage}\` | \`${skillFolder}\` |`)
+    .join("\n");
   const capabilityRows = harnesses
     .map((harness) => {
       const adapter = HARNESS_ADAPTERS[harness];
@@ -118,6 +122,16 @@ Operations subcommands:
 
 Stage order remains canonical:
 \`brainstorm -> scope -> design -> spec -> plan -> tdd -> review -> ship\`
+
+## Stage -> skill folder mapping
+
+| Stage | Skill folder |
+|---|---|
+${stageSkillRows}
+
+This map is generated from \`src/constants.ts::STAGE_TO_SKILL_FOLDER\` so
+skill-path naming stays explicit and stable even when stage ids differ from
+folder names.
 
 ## Install surfaces
 
