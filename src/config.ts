@@ -4,7 +4,7 @@ import { parse, stringify } from "yaml";
 import { CCLAW_VERSION, DEFAULT_HARNESSES, FLOW_VERSION, RUNTIME_ROOT } from "./constants.js";
 import { exists, writeFileSafe } from "./fs-utils.js";
 import { FLOW_TRACKS, HARNESS_IDS, LANGUAGE_RULE_PACKS } from "./types.js";
-import type { FlowTrack, HarnessId, LanguageRulePack, VibyConfig } from "./types.js";
+import type { CclawConfig, FlowTrack, HarnessId, LanguageRulePack } from "./types.js";
 
 const CONFIG_PATH = `${RUNTIME_ROOT}/config.yaml`;
 const HARNESS_ID_SET = new Set<string>(HARNESS_IDS);
@@ -120,7 +120,7 @@ export const DEFAULT_COMPOUND_RECURRENCE_THRESHOLD = 3;
 export function createDefaultConfig(
   harnesses: HarnessId[] = DEFAULT_HARNESSES,
   defaultTrack: FlowTrack = "standard"
-): VibyConfig {
+): CclawConfig {
   const tddTestPathPatterns = [...DEFAULT_TDD_TEST_PATH_PATTERNS];
   const tddProductionPathPatterns = [...DEFAULT_TDD_PRODUCTION_PATH_PATTERNS];
   return {
@@ -187,7 +187,7 @@ export async function detectLanguageRulePacks(projectRoot: string): Promise<Lang
   return [...new Set(detected)];
 }
 
-export async function readConfig(projectRoot: string): Promise<VibyConfig> {
+export async function readConfig(projectRoot: string): Promise<CclawConfig> {
   const fullPath = configPath(projectRoot);
   if (!(await exists(fullPath))) {
     return createDefaultConfig();
@@ -202,7 +202,7 @@ export async function readConfig(projectRoot: string): Promise<VibyConfig> {
 
   const parsed = (parsedUnknown && typeof parsedUnknown === "object"
     ? parsedUnknown
-    : {}) as Partial<VibyConfig>;
+    : {}) as Partial<CclawConfig>;
   const unknownKeys = Object.keys(parsed).filter((key) => !ALLOWED_CONFIG_KEYS.has(key));
   if (unknownKeys.length > 0) {
     throw configValidationError(fullPath, `unknown top-level key(s): ${unknownKeys.join(", ")}`);
@@ -381,7 +381,7 @@ export async function readConfig(projectRoot: string): Promise<VibyConfig> {
   const languageRulePacks = [...new Set(rawPacks as LanguageRulePack[])];
 
   const trackHeuristicsRaw = (parsed as { trackHeuristics?: unknown }).trackHeuristics;
-  let trackHeuristics: VibyConfig["trackHeuristics"] = undefined;
+  let trackHeuristics: CclawConfig["trackHeuristics"] = undefined;
   if (Object.prototype.hasOwnProperty.call(parsed, "trackHeuristics")) {
     if (!isRecord(trackHeuristicsRaw)) {
       throw configValidationError(fullPath, `"trackHeuristics" must be an object`);
@@ -402,7 +402,7 @@ export async function readConfig(projectRoot: string): Promise<VibyConfig> {
     }
 
     const tracksRaw = trackHeuristicsRaw.tracks;
-    let tracks: NonNullable<VibyConfig["trackHeuristics"]>["tracks"] = undefined;
+    let tracks: NonNullable<CclawConfig["trackHeuristics"]>["tracks"] = undefined;
     if (tracksRaw !== undefined) {
       if (!isRecord(tracksRaw)) {
         throw configValidationError(fullPath, `"trackHeuristics.tracks" must be an object`);
@@ -453,7 +453,7 @@ export async function readConfig(projectRoot: string): Promise<VibyConfig> {
   }
 
   const sliceReviewRaw = (parsed as { sliceReview?: unknown }).sliceReview;
-  let sliceReview: VibyConfig["sliceReview"] = undefined;
+  let sliceReview: CclawConfig["sliceReview"] = undefined;
   if (Object.prototype.hasOwnProperty.call(parsed, "sliceReview")) {
     if (!isRecord(sliceReviewRaw)) {
       throw configValidationError(fullPath, `"sliceReview" must be an object`);
@@ -535,7 +535,7 @@ export async function readConfig(projectRoot: string): Promise<VibyConfig> {
 }
 
 /**
- * Fields that live on the populated runtime `VibyConfig` but are considered
+ * Fields that live on the populated runtime `CclawConfig` but are considered
  * "advanced" — we keep them in the in-memory object so downstream callers
  * don't have to branch, but we do **not** write them to `config.yaml` unless
  * the user set them explicitly. Keeps the default template small and honest:
@@ -555,7 +555,7 @@ type AdvancedConfigKey =
 /**
  * Options controlling the serialisation shape of `config.yaml`.
  *
- * - `"full"` (default): write every field on the `VibyConfig` object that
+ * - `"full"` (default): write every field on the `CclawConfig` object that
  *   isn't `undefined`. Preserves existing shapes and keeps legacy callers
  *   working without migration.
  * - `"minimal"`: write only the user-facing knobs (`MINIMAL_CONFIG_KEYS`)
@@ -578,13 +578,13 @@ function isMinimalKey(key: string): boolean {
 }
 
 function buildSerializableConfig(
-  config: VibyConfig,
+  config: CclawConfig,
   options: WriteConfigOptions = {}
 ): Record<string, unknown> {
   const mode = options.mode ?? "full";
   const advanced = options.advancedKeysPresent;
   const output: Record<string, unknown> = {};
-  const ordered: (keyof VibyConfig)[] = [
+  const ordered: (keyof CclawConfig)[] = [
     "version",
     "flowVersion",
     "harnesses",
@@ -629,7 +629,7 @@ function buildSerializableConfig(
 
 export async function writeConfig(
   projectRoot: string,
-  config: VibyConfig,
+  config: CclawConfig,
   options: WriteConfigOptions = {}
 ): Promise<void> {
   const serialisable = buildSerializableConfig(config, options);

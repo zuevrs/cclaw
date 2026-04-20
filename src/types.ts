@@ -133,7 +133,7 @@ export interface CompoundConfig {
   recurrenceThreshold?: number;
 }
 
-export interface VibyConfig {
+export interface CclawConfig {
   version: string;
   flowVersion: string;
   harnesses: HarnessId[];
@@ -197,6 +197,11 @@ export interface VibyConfig {
    */
   sliceReview?: SliceReviewConfig;
 }
+
+/**
+ * @deprecated Use `CclawConfig` instead.
+ */
+export type VibyConfig = CclawConfig;
 
 export interface TransitionRule {
   from: FlowStage;
