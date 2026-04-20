@@ -13,6 +13,10 @@ function delegationLogPathLine(): string {
   return `${RUNTIME_ROOT}/state/delegation-log.json`;
 }
 
+function reconciliationNoticesPathLine(): string {
+  return `${RUNTIME_ROOT}/state/reconciliation-notices.json`;
+}
+
 /**
  * Command contract for /cc-next — the primary progression command.
  * Reads flow-state, starts the current stage if unfinished, or advances if all gates pass.
@@ -21,6 +25,7 @@ export function nextCommandContract(): string {
   const flowPath = flowStatePath();
   const skillRel = `${RUNTIME_ROOT}/skills/${NEXT_SKILL_FOLDER}/SKILL.md`;
   const delegationPath = delegationLogPathLine();
+  const reconciliationNoticesPath = reconciliationNoticesPathLine();
   return `# /cc-next
 
 ## Purpose
@@ -44,13 +49,14 @@ This is the only progression command the user needs to drive the entire flow. St
 1. Read **\`${flowPath}\`**. If missing → **BLOCKED** (state missing).
 2. Parse JSON. Capture \`currentStage\` and \`stageGateCatalog[currentStage]\`.
 3. If \`staleStages[currentStage]\` exists, do not advance automatically. Re-run the stage artifact work, then clear the marker with \`/cc-ops rewind --ack <currentStage>\`.
-4. Let \`G\` = \`requiredGates\` for **\`currentStage\`** from the stage schema.
-5. Let \`catalog\` = \`stageGateCatalog[currentStage]\` from flow state.
-6. **Satisfied** for gate id \`g\`: \`g\` in \`catalog.passed\` and \`g\` not in \`catalog.blocked\`.
-7. Let \`M\` = \`mandatoryDelegations\` for \`currentStage\`.
-8. If \`M\` is non-empty, inspect **\`${delegationPath}\`**. Treat as satisfied only if each mandatory agent is **completed** or **waived**.
-9. If any mandatory delegation is missing and no waiver exists: **STOP** and ask the user whether to dispatch now or waive with rationale. Do not mark gates passed while delegation is unresolved.
-10. If \`currentStage === "review"\` and \`catalog.blocked\` includes \`review_criticals_resolved\`, treat this as a hard remediation branch: recommend \`/cc-ops rewind tdd "review_blocked_by_critical"\` with the blocking finding IDs, and do not attempt to advance toward ship.
+4. Read **\`${reconciliationNoticesPath}\`** when present. If it contains entries for \`activeRunId + currentStage\` and the listed gate is still blocked in \`stageGateCatalog[currentStage].blocked\`, emit a structured warning before any stage-advance decision.
+5. Let \`G\` = \`requiredGates\` for **\`currentStage\`** from the stage schema.
+6. Let \`catalog\` = \`stageGateCatalog[currentStage]\` from flow state.
+7. **Satisfied** for gate id \`g\`: \`g\` in \`catalog.passed\` and \`g\` not in \`catalog.blocked\`.
+8. Let \`M\` = \`mandatoryDelegations\` for \`currentStage\`.
+9. If \`M\` is non-empty, inspect **\`${delegationPath}\`**. Treat as satisfied only if each mandatory agent is **completed** or **waived**.
+10. If any mandatory delegation is missing and no waiver exists: **STOP** and ask the user whether to dispatch now or waive with rationale. Do not mark gates passed while delegation is unresolved.
+11. If \`currentStage === "review"\` and \`catalog.blocked\` includes \`review_criticals_resolved\`, treat this as a hard remediation branch: recommend \`/cc-ops rewind tdd "review_blocked_by_critical"\` with the blocking finding IDs, and do not attempt to advance toward ship.
 
 ### Path A: Current stage is NOT complete (any gate unmet or delegation missing)
 
@@ -112,6 +118,7 @@ This is the only progression command the user needs to drive the entire flow. St
 export function nextCommandSkillMarkdown(): string {
   const flowPath = flowStatePath();
   const delegationPath = delegationLogPathLine();
+  const reconciliationNoticesPath = reconciliationNoticesPathLine();
 
   const stageRows = (["brainstorm", "scope", "design", "spec", "plan", "tdd", "review", "ship"] as const)
     .map((stage) => {
@@ -153,6 +160,7 @@ Do **not** mark gates satisfied from memory alone. Cite **artifact evidence** (p
 2. Record \`currentStage\` and \`stageGateCatalog[currentStage]\`.
 3. If \`staleStages[currentStage]\` exists, re-run the stage and clear marker via \`/cc-ops rewind --ack <currentStage>\` before advancing.
 4. If the file is missing or invalid JSON → **BLOCKED** (report and stop).
+5. Read \`${reconciliationNoticesPath}\` when present. For entries matching \`activeRunId + currentStage\` whose gate is still in \`stageGateCatalog[currentStage].blocked\`, show a warning with gate id + reason before proceeding.
 
 ### Step 2: Evaluate gates
 
@@ -163,6 +171,8 @@ For each gate id in \`requiredGates\` for \`currentStage\`:
 Check \`mandatoryDelegations\` via **\`${delegationPath}\`** — satisfied only if **completed** or **waived**.
 If a mandatory delegation is missing and no waiver exists, **STOP** and ask:
 (A) dispatch now, (B) waive with rationale, (C) cancel stage advance.
+
+If reconciliation warnings were emitted in Step 1, treat them as a pre-advance stop point: require explicit acknowledgement before continuing Path A or Path B.
 
 ### Step 3: Act
 

@@ -4,10 +4,10 @@ import { checkReviewVerdictConsistency, lintArtifact, validateReviewArmy } from 
 import { RUNTIME_ROOT } from "./constants.js";
 import { stageSchema } from "./content/stage-schema.js";
 import type { FlowState, StageGateState } from "./flow-state.js";
-import { exists } from "./fs-utils.js";
+import { ensureDir, exists, writeFileSafe } from "./fs-utils.js";
 import { readFlowState, writeFlowState } from "./runs.js";
 import { buildTraceMatrix } from "./trace-matrix.js";
-import type { FlowStage } from "./types.js";
+import { FLOW_STAGES, type FlowStage } from "./types.js";
 
 async function currentStageArtifactExists(
   projectRoot: string,
@@ -69,6 +69,141 @@ function unique(values: string[]): string[] {
 function sameStringArray(a: string[], b: string[]): boolean {
   if (a.length !== b.length) return false;
   return a.every((value, index) => value === b[index]);
+}
+
+const RECONCILIATION_NOTICES_FILE = "reconciliation-notices.json";
+const RECONCILIATION_NOTICES_SCHEMA_VERSION = 1;
+
+export const RECONCILIATION_NOTICES_REL_PATH = `${RUNTIME_ROOT}/state/${RECONCILIATION_NOTICES_FILE}`;
+
+export interface ReconciliationNotice {
+  id: string;
+  runId: string;
+  stage: FlowStage;
+  gateId: string;
+  reason: string;
+  demotedAt: string;
+}
+
+export interface ReconciliationNoticesPayload {
+  schemaVersion: number;
+  notices: ReconciliationNotice[];
+}
+
+export interface ReconciliationNoticeBuckets {
+  activeBlocked: ReconciliationNotice[];
+  currentStageBlocked: ReconciliationNotice[];
+  unsynced: ReconciliationNotice[];
+  staleRun: ReconciliationNotice[];
+}
+
+function isFlowStageValue(value: unknown): value is FlowStage {
+  return typeof value === "string" && (FLOW_STAGES as readonly string[]).includes(value);
+}
+
+function reconciliationNoticesPath(projectRoot: string): string {
+  return path.join(projectRoot, RUNTIME_ROOT, "state", RECONCILIATION_NOTICES_FILE);
+}
+
+function defaultReconciliationNoticesPayload(): ReconciliationNoticesPayload {
+  return {
+    schemaVersion: RECONCILIATION_NOTICES_SCHEMA_VERSION,
+    notices: []
+  };
+}
+
+function sanitizeReconciliationNotice(raw: unknown): ReconciliationNotice | null {
+  if (!raw || typeof raw !== "object" || Array.isArray(raw)) {
+    return null;
+  }
+  const typed = raw as Record<string, unknown>;
+  if (
+    typeof typed.id !== "string" ||
+    typeof typed.runId !== "string" ||
+    !isFlowStageValue(typed.stage) ||
+    typeof typed.gateId !== "string" ||
+    typeof typed.reason !== "string" ||
+    typeof typed.demotedAt !== "string"
+  ) {
+    return null;
+  }
+  return {
+    id: typed.id,
+    runId: typed.runId,
+    stage: typed.stage,
+    gateId: typed.gateId,
+    reason: typed.reason,
+    demotedAt: typed.demotedAt
+  };
+}
+
+export async function readReconciliationNotices(
+  projectRoot: string
+): Promise<ReconciliationNoticesPayload> {
+  const filePath = reconciliationNoticesPath(projectRoot);
+  if (!(await exists(filePath))) {
+    return defaultReconciliationNoticesPayload();
+  }
+  try {
+    const raw = JSON.parse(await fs.readFile(filePath, "utf8")) as Record<string, unknown>;
+    const notices = Array.isArray(raw.notices)
+      ? raw.notices
+          .map((value) => sanitizeReconciliationNotice(value))
+          .filter((value): value is ReconciliationNotice => value !== null)
+      : [];
+    return {
+      schemaVersion: RECONCILIATION_NOTICES_SCHEMA_VERSION,
+      notices
+    };
+  } catch {
+    return defaultReconciliationNoticesPayload();
+  }
+}
+
+async function writeReconciliationNotices(
+  projectRoot: string,
+  payload: ReconciliationNoticesPayload
+): Promise<void> {
+  const filePath = reconciliationNoticesPath(projectRoot);
+  await ensureDir(path.dirname(filePath));
+  await writeFileSafe(
+    filePath,
+    `${JSON.stringify(
+      {
+        schemaVersion: RECONCILIATION_NOTICES_SCHEMA_VERSION,
+        notices: payload.notices
+      },
+      null,
+      2
+    )}\n`
+  );
+}
+
+export function classifyReconciliationNotices(
+  flowState: FlowState,
+  notices: ReconciliationNotice[]
+): ReconciliationNoticeBuckets {
+  const activeBlocked: ReconciliationNotice[] = [];
+  const currentStageBlocked: ReconciliationNotice[] = [];
+  const unsynced: ReconciliationNotice[] = [];
+  const staleRun: ReconciliationNotice[] = [];
+  for (const notice of notices) {
+    if (notice.runId !== flowState.activeRunId) {
+      staleRun.push(notice);
+      continue;
+    }
+    const stageCatalog = flowState.stageGateCatalog[notice.stage];
+    const blocked = stageCatalog.blocked.includes(notice.gateId);
+    if (!blocked) {
+      unsynced.push(notice);
+      continue;
+    }
+    activeBlocked.push(notice);
+    if (notice.stage === flowState.currentStage) {
+      currentStageBlocked.push(notice);
+    }
+  }
+  return { activeBlocked, currentStageBlocked, unsynced, staleRun };
 }
 
 export async function verifyCurrentStageGateEvidence(
@@ -264,6 +399,7 @@ export interface GateReconciliationResult {
   changed: boolean;
   before: StageGateState;
   after: StageGateState;
+  demotedGateIds: string[];
   notes: string[];
 }
 
@@ -289,6 +425,7 @@ export function reconcileCurrentStageGateCatalog(flowState: FlowState): {
   const allowedSet = new Set([...required, ...recommended]);
   const catalog = flowState.stageGateCatalog[stage];
   const notes: string[] = [];
+  const demotedGateIds = new Set<string>();
 
   const before: StageGateState = {
     required: [...catalog.required],
@@ -335,6 +472,7 @@ export function reconcileCurrentStageGateCatalog(flowState: FlowState): {
       continue;
     }
     passedSet.delete(gateId);
+    demotedGateIds.add(gateId);
     notes.push(`resolved overlap for "${gateId}" in favor of blocked (missing evidence)`);
   }
 
@@ -343,6 +481,7 @@ export function reconcileCurrentStageGateCatalog(flowState: FlowState): {
     if (typeof evidence === "string" && evidence.trim().length > 0) continue;
     passedSet.delete(gateId);
     blockedSet.add(gateId);
+    demotedGateIds.add(gateId);
     notes.push(`moved "${gateId}" from passed to blocked (missing evidence)`);
   }
 
@@ -382,6 +521,7 @@ export function reconcileCurrentStageGateCatalog(flowState: FlowState): {
       changed,
       before,
       after,
+      demotedGateIds: [...required, ...recommended].filter((gateId) => demotedGateIds.has(gateId)),
       notes
     }
   };
@@ -392,8 +532,53 @@ export async function reconcileAndWriteCurrentStageGateCatalog(
 ): Promise<GateReconciliationWritebackResult> {
   const state = await readFlowState(projectRoot);
   const { nextState, reconciliation } = reconcileCurrentStageGateCatalog(state);
+  const effectiveState = reconciliation.changed ? nextState : state;
   if (reconciliation.changed) {
-    await writeFlowState(projectRoot, nextState);
+    await writeFlowState(projectRoot, effectiveState);
+  }
+  const noticesPayload = await readReconciliationNotices(projectRoot);
+  let noticesChanged = false;
+
+  const noticeBuckets = classifyReconciliationNotices(effectiveState, noticesPayload.notices);
+  if (noticeBuckets.unsynced.length > 0 || noticeBuckets.staleRun.length > 0) {
+    const dropIds = new Set(
+      [...noticeBuckets.unsynced, ...noticeBuckets.staleRun].map((notice) => notice.id)
+    );
+    noticesPayload.notices = noticesPayload.notices.filter((notice) => !dropIds.has(notice.id));
+    noticesChanged = true;
+  }
+
+  if (reconciliation.demotedGateIds.length > 0) {
+    const existing = new Set(
+      noticesPayload.notices.map((notice) => `${notice.runId}:${notice.stage}:${notice.gateId}`)
+    );
+    for (const gateId of reconciliation.demotedGateIds) {
+      const dedupeKey = `${effectiveState.activeRunId}:${reconciliation.stage}:${gateId}`;
+      if (existing.has(dedupeKey)) {
+        continue;
+      }
+      const ts = new Date().toISOString();
+      noticesPayload.notices.push({
+        id: `${dedupeKey}:${ts}`,
+        runId: effectiveState.activeRunId,
+        stage: reconciliation.stage,
+        gateId,
+        reason: "demoted from passed to blocked during gate reconciliation (missing evidence)",
+        demotedAt: ts
+      });
+      existing.add(dedupeKey);
+      noticesChanged = true;
+    }
+  }
+
+  if (noticesChanged) {
+    noticesPayload.notices.sort((a, b) => {
+      if (a.demotedAt === b.demotedAt) {
+        return a.id.localeCompare(b.id);
+      }
+      return a.demotedAt.localeCompare(b.demotedAt);
+    });
+    await writeReconciliationNotices(projectRoot, noticesPayload);
   }
   return {
     ...reconciliation,

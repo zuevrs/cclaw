@@ -1132,6 +1132,14 @@ async function ensureSessionStateFiles(projectRoot: string): Promise<void> {
     await writeFileSafe(tddCycleLogPath, "");
   }
 
+  const reconciliationNoticesPath = path.join(stateDir, "reconciliation-notices.json");
+  if (!(await exists(reconciliationNoticesPath))) {
+    await writeFileSafe(
+      reconciliationNoticesPath,
+      `${JSON.stringify({ schemaVersion: 1, notices: [] }, null, 2)}\n`
+    );
+  }
+
   const flowSnapshotPath = path.join(stateDir, "flow-state.snapshot.json");
   if (!(await exists(flowSnapshotPath))) {
     await writeFileSafe(flowSnapshotPath, `${JSON.stringify({
