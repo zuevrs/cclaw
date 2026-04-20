@@ -1,6 +1,6 @@
 {
   "name": "cclaw-cli",
-  "version": "0.46.7",
+  "version": "0.46.8",
   "description": "Installer-first flow toolkit for coding agents",
   "type": "module",
   "bin": {
