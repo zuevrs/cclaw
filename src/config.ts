@@ -59,6 +59,12 @@ function emitConfigWarningOnce(code: string, message: string): void {
   process.emitWarning(message, { code });
 }
 
+function sameStringArray(a: string[] | undefined, b: string[] | undefined): boolean {
+  if (!a || !b) return false;
+  if (a.length !== b.length) return false;
+  return a.every((value, index) => value === b[index]);
+}
+
 function configFixExample(): string {
   return `harnesses:
   - claude
@@ -311,7 +317,11 @@ export async function readConfig(projectRoot: string): Promise<CclawConfig> {
     );
   }
 
-  if (tddTestGlobsRaw !== undefined && explicitTddTestPathPatterns !== undefined) {
+  if (
+    tddTestGlobsRaw !== undefined &&
+    explicitTddTestPathPatterns !== undefined &&
+    !sameStringArray(tddTestGlobs, explicitTddTestPathPatterns)
+  ) {
     emitConfigWarningOnce(
       "CCLAW_CONFIG_DEPRECATED_TDD_TEST_GLOBS",
       `[cclaw] Both "tddTestGlobs" (deprecated) and "tdd.testPathPatterns" are set in ${fullPath}. ` +
