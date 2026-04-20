@@ -5,7 +5,7 @@ import { pathToFileURL } from "node:url";
 import { promisify } from "node:util";
 import { REQUIRED_DIRS, RUNTIME_ROOT } from "./constants.js";
 import { CCLAW_AGENTS } from "./content/core-agents.js";
-import { readConfig } from "./config.js";
+import { detectAdvancedKeys, readConfig } from "./config.js";
 import { exists } from "./fs-utils.js";
 import { gitignoreHasRequiredPatterns } from "./gitignore.js";
 import {
@@ -497,6 +497,19 @@ export async function doctorChecks(projectRoot: string, options: DoctorOptions =
   }
 
   if (parsedConfig) {
+    const advancedKeys = await detectAdvancedKeys(projectRoot).catch(() => new Set());
+    const hasLegacyTddTestGlobs = advancedKeys.has("tddTestGlobs");
+    const hasModernTddConfig = advancedKeys.has("tdd");
+    checks.push({
+      name: "warning:config:deprecated_tdd_test_globs",
+      ok: !hasLegacyTddTestGlobs,
+      details: hasLegacyTddTestGlobs
+        ? hasModernTddConfig
+          ? `warning: ${RUNTIME_ROOT}/config.yaml sets deprecated "tddTestGlobs" alongside "tdd.*"; "tdd.testPathPatterns" takes precedence. Remove legacy key.`
+          : `warning: ${RUNTIME_ROOT}/config.yaml uses deprecated "tddTestGlobs". Migrate to "tdd.testPathPatterns".`
+        : `no deprecated "tddTestGlobs" key detected in ${RUNTIME_ROOT}/config.yaml`
+    });
+
     const expectedMode = parsedConfig.promptGuardMode === "strict" ? "strict" : "advisory";
     const promptGuardPath = path.join(projectRoot, RUNTIME_ROOT, "hooks", "prompt-guard.sh");
     let promptGuardModeOk = false;

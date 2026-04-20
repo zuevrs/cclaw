@@ -165,6 +165,7 @@ export interface CclawConfig {
   /**
    * Legacy alias for test-side path detection in workflow-guard.
    * Prefer `tdd.testPathPatterns` in new configs.
+   * @deprecated Use `tdd.testPathPatterns` instead.
    */
   tddTestGlobs?: string[];
   /** Path-pattern routing for TDD test/production write classification. */

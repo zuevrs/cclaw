@@ -48,6 +48,16 @@ const MINIMAL_CONFIG_KEYS = [
 
 const DEFAULT_SLICE_REVIEW_THRESHOLD = 5;
 const DEFAULT_SLICE_REVIEW_TRACKS: FlowTrack[] = ["standard"];
+const emittedConfigWarnings = new Set<string>();
+
+function emitConfigWarningOnce(code: string, message: string): void {
+  const key = `${code}:${message}`;
+  if (emittedConfigWarnings.has(key)) {
+    return;
+  }
+  emittedConfigWarnings.add(key);
+  process.emitWarning(message, { code });
+}
 
 function configFixExample(): string {
   return `harnesses:
@@ -298,6 +308,14 @@ export async function readConfig(projectRoot: string): Promise<CclawConfig> {
       tddRaw.productionPathPatterns,
       "tdd.productionPathPatterns",
       fullPath
+    );
+  }
+
+  if (tddTestGlobsRaw !== undefined && explicitTddTestPathPatterns !== undefined) {
+    emitConfigWarningOnce(
+      "CCLAW_CONFIG_DEPRECATED_TDD_TEST_GLOBS",
+      `[cclaw] Both "tddTestGlobs" (deprecated) and "tdd.testPathPatterns" are set in ${fullPath}. ` +
+        `Using "tdd.testPathPatterns".`
     );
   }
 
