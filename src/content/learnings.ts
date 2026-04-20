@@ -14,7 +14,8 @@ const LEARN_SKILL_DESCRIPTION =
 
 /**
  * Canonical required JSONL field order (matches strict validator keys).
- * Optional keys (for now: `source`) may be appended after these required fields.
+ * Optional keys (for now: `source`, `severity`) may be appended after these
+ * required fields.
  * Exported for tests and any programmatic writer that wants a stable base shape.
  */
 export const KNOWLEDGE_JSONL_FIELDS = [
@@ -78,7 +79,7 @@ Do not invent alternate stores (no markdown mirror, no SQLite, no per-stage file
 
 Exactly one JSON object per line. Required fields must appear in the order:
 \`type, trigger, action, confidence, domain, stage, origin_stage, origin_feature, frequency, universality, maturity, created, first_seen_ts, last_seen_ts, project\`.
-Optional field \`source\` may be appended after \`project\`.
+Optional fields \`source\` and \`severity\` may be appended after \`project\`.
 
 \`\`\`json
 {"type":"pattern","trigger":"when reviewing external payloads","action":"parse through zod before touching service layer","confidence":"high","domain":"api","stage":"review","origin_stage":"review","origin_feature":"payload-hardening","frequency":1,"universality":"project","maturity":"raw","created":"2026-04-14T12:00:00Z","first_seen_ts":"2026-04-14T12:00:00Z","last_seen_ts":"2026-04-14T12:00:00Z","project":"cclaw"}
@@ -102,6 +103,7 @@ Optional field \`source\` may be appended after \`project\`.
 | \`last_seen_ts\` | ISO 8601 UTC string | yes | Last re-confirmed timestamp. |
 | \`project\` | string \\| null | yes | Repo or scope name. Use \`null\` when the entry crosses projects. |
 | \`source\` | \`"stage" \\| "retro" \\| "compound" \\| "ideate" \\| "manual" \\| null\` | no | Origin channel for the entry when known. |
+| \`severity\` | \`"critical" \\| "important" \\| "suggestion"\` | no | Priority signal for compound lifts; \`critical\` enables single-hit override in \`/cc-ops compound\`. |
 
 Rules:
 - No other fields beyond the table above. Extra keys are forbidden and MUST be rejected by any writer.
@@ -175,7 +177,7 @@ Do not edit source code from this command. Only operate on \`${KNOWLEDGE_PATH}\`
 |---|---|---|
 | (default) | — | Show recent knowledge entries (tail of JSONL, pretty-printed). |
 | \`search\` | \`<query>\` | Stream-filter the JSONL for matching \`trigger\`, \`action\`, \`domain\`, \`project\`. |
-| \`add\` | — | Append one JSON line (\`rule\` / \`pattern\` / \`lesson\` / \`compound\`) with the strict JSONL schema (15 required fields + optional \`source\`). |
+| \`add\` | — | Append one JSON line (\`rule\` / \`pattern\` / \`lesson\` / \`compound\`) with the strict JSONL schema (15 required fields + optional \`source\` / \`severity\`). |
 | \`curate\` | — | Hand off to the **knowledge-curation** skill: read-only audit + soft-archive plan when the file exceeds the curation threshold. |
 `;
 }

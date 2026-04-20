@@ -341,6 +341,7 @@ function validateVerificationLadder(sectionBody: string): { ok: boolean; details
 
 export type LearningEntryType = "rule" | "pattern" | "lesson" | "compound";
 export type LearningConfidence = "high" | "medium" | "low";
+export type LearningSeverity = "critical" | "important" | "suggestion";
 export type LearningUniversality = "project" | "personal" | "universal";
 export type LearningMaturity = "raw" | "lifted-to-rule" | "lifted-to-enforcement";
 export type LearningSource = "stage" | "retro" | "compound" | "ideate" | "manual";
@@ -350,6 +351,7 @@ export interface LearningSeedEntry {
   trigger: string;
   action: string;
   confidence: LearningConfidence;
+  severity?: LearningSeverity;
   domain?: string | null;
   stage?: FlowStage | null;
   origin_stage?: FlowStage | null;
@@ -374,6 +376,7 @@ export interface LearningsParseResult {
 
 const LEARNING_TYPE_SET = new Set<LearningEntryType>(["rule", "pattern", "lesson", "compound"]);
 const LEARNING_CONFIDENCE_SET = new Set<LearningConfidence>(["high", "medium", "low"]);
+const LEARNING_SEVERITY_SET = new Set<LearningSeverity>(["critical", "important", "suggestion"]);
 const LEARNING_UNIVERSALITY_SET = new Set<LearningUniversality>(["project", "personal", "universal"]);
 const LEARNING_MATURITY_SET = new Set<LearningMaturity>(["raw", "lifted-to-rule", "lifted-to-enforcement"]);
 const LEARNING_SOURCE_SET = new Set<LearningSource>([
@@ -389,6 +392,7 @@ const LEARNING_ALLOWED_KEYS = new Set([
   "trigger",
   "action",
   "confidence",
+  "severity",
   "domain",
   "stage",
   "origin_stage",
@@ -458,6 +462,13 @@ function parseLearningSeedEntry(raw: unknown, index: number): { ok: boolean; ent
     return {
       ok: false,
       error: `Learnings bullet #${index} must set confidence to high|medium|low.`
+    };
+  }
+  const severity = typeof obj.severity === "string" ? obj.severity.toLowerCase() : undefined;
+  if (severity !== undefined && !LEARNING_SEVERITY_SET.has(severity as LearningSeverity)) {
+    return {
+      ok: false,
+      error: `Learnings bullet #${index} field "severity" must be critical|important|suggestion.`
     };
   }
 
@@ -535,7 +546,8 @@ function parseLearningSeedEntry(raw: unknown, index: number): { ok: boolean; ent
       type: type as LearningEntryType,
       trigger,
       action,
-      confidence: confidence as LearningConfidence
+      confidence: confidence as LearningConfidence,
+      ...(severity ? { severity: severity as LearningSeverity } : {})
     } as LearningSeedEntry
   };
 }

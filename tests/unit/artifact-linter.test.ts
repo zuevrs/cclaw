@@ -342,6 +342,22 @@ describe("artifact linter heuristics", () => {
     expect(learnings?.found).toBe(true);
   });
 
+  it("accepts optional Learnings severity when value is valid", () => {
+    const parsed = parseLearningsSection(
+      `- {"type":"lesson","trigger":"when deployment risk spikes","action":"run release rollback drill before merge","confidence":"high","severity":"critical"}`
+    );
+    expect(parsed.ok).toBe(true);
+    expect(parsed.entries[0]?.severity).toBe("critical");
+  });
+
+  it("rejects Learnings severity outside the supported enum", () => {
+    const parsed = parseLearningsSection(
+      `- {"type":"lesson","trigger":"when deployment risk spikes","action":"run release rollback drill before merge","confidence":"high","severity":"blocker"}`
+    );
+    expect(parsed.ok).toBe(false);
+    expect(parsed.details).toContain("field \"severity\"");
+  });
+
   it("rejects Learnings sections that contain non-bullet lines", () => {
     const parsed = parseLearningsSection(`summary line\n- None this stage.`);
     expect(parsed.ok).toBe(false);

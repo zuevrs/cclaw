@@ -65,6 +65,17 @@ Fallback legend:
 - \`role-switch\` — in-session role announce + delegation-log entry with evidenceRefs (OpenCode, Codex).
 - \`waiver\` — no parity path; reserved for harnesses that cannot role-switch (none shipped).
 
+## Parallel research dispatch semantics
+
+Design-stage research fleet uses the same parity model:
+
+- **Claude / Cursor**: dispatch all four research lenses in one turn
+  (stack, features, architecture, pitfalls) and synthesize into
+  \`.cclaw/artifacts/02a-research.md\`.
+- **OpenCode / Codex**: execute the same four lenses via sequential
+  role-switch, each with explicit announce -> execute -> evidence trail.
+  This preserves auditability when native parallel dispatch is unavailable.
+
 ## Semantic hook event coverage
 
 | Event | Claude | Cursor | OpenCode | Codex |

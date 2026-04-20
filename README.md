@@ -154,10 +154,11 @@ If cclaw detects a Node / Python / Go project at init time, a sixth
 default surface — a new user sees nothing they need to understand yet.
 
 Advanced knobs (`promptGuardMode` / `tddEnforcement` per-axis overrides,
-`tddTestGlobs`, `defaultTrack`, `trackHeuristics`, `sliceReview`) are
-**opt-in**: add them by hand when you need them. `cclaw upgrade`
-preserves exactly what you wrote — it never silently reintroduces
-defaults you removed.
+`tdd.testPathPatterns` / `tdd.productionPathPatterns`,
+`compound.recurrenceThreshold`, `defaultTrack`, `trackHeuristics`,
+`sliceReview`) are **opt-in**: add them by hand when you need them.
+`cclaw upgrade` preserves exactly what you wrote — it never silently
+reintroduces defaults you removed.
 
 Full key-by-key reference: [`docs/config.md`](./docs/config.md).
 
@@ -240,7 +241,7 @@ the flow matches the task.
 |---|---|---|
 | **quick** | `spec → tdd → review → ship` | `bug`, `hotfix`, `typo`, `rename`, `bump`, `docs only`, one-liners |
 | **medium** | `brainstorm → spec → plan → tdd → review → ship` | `add endpoint`, `add field`, `extend existing`, `wire integration` |
-| **standard** _(default)_ | all 8 stages | `new feature`, `refactor`, `migration`, `platform`, `schema`, `architecture` |
+| **standard** _(default)_ | all 8 stages (+ mandatory design-time parallel research fleet) | `new feature`, `refactor`, `migration`, `platform`, `schema`, `architecture` |
 
 **Every track ends with the same auto-closeout chain.** Once ship
 completes, `/cc-next` automatically drives
@@ -250,10 +251,11 @@ without re-drafting retros or re-asking structured questions. See
 [Ship and closeout](#ship-and-closeout--automatic-resumable).
 
 Each critical-path stage produces a dated artifact under
-`.cclaw/artifacts/`: `00-idea.md` (seed), `01-brainstorm.md` through
+`.cclaw/artifacts/`: `00-idea.md` (seed), `01-brainstorm.md`, `02-scope.md`,
+`02a-research.md` (design research fleet synthesis), `03-design.md` through
 `08-ship.md`. Closeout adds `09-retro.md`; archive then rolls the whole
-bundle into `.cclaw/runs/<YYYY-MM-DD-slug>/` and resets the active flow
-for the next feature.
+bundle into `.cclaw/runs/<YYYY-MM-DD-slug>/` and resets the active flow for
+the next feature.
 
 ### Track heuristics are configurable (advisory)
 
@@ -312,9 +314,12 @@ it into ceremony:
   protocol emits typed entries (`rule` / `pattern` / `lesson`) to
   `.cclaw/knowledge.jsonl` as the flow progresses — not only at retro.
   Retro itself adds a `compound` entry, and the automatic compound pass
-  after ship promotes recurring entries (≥ 3) into first-class
-  rules/protocols/skills so the **next** run is easier. Strict JSONL
-  schema keeps the whole thing machine-queryable.
+  after ship promotes recurring entries into first-class
+  rules/protocols/skills (base threshold from
+  `compound.recurrenceThreshold`, temporarily lowered to 2 for repositories
+  with <5 archived runs, plus a critical-severity single-hit override) so
+  the **next** run is easier. Strict JSONL schema keeps the whole thing
+  machine-queryable.
 - **Automatic integrity checks.** Runtime health is verified on every
   stage transition — no command you need to remember to run.
 

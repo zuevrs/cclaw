@@ -18,7 +18,8 @@ describe("knowledge store append helper", () => {
           type: "pattern",
           trigger: " when dependency queue spikes ",
           action: "route overflow to dead-letter queue and page on-call",
-          confidence: "medium"
+          confidence: "medium",
+          severity: "critical"
         }
       ],
       {
@@ -44,6 +45,7 @@ describe("knowledge store append helper", () => {
     expect(parsed.origin_feature).toBe("queue-hardening");
     expect(parsed.frequency).toBe(1);
     expect(parsed.source).toBe("stage");
+    expect(parsed.severity).toBe("critical");
     expect(parsed.created).toBe("2026-04-19T11:00:00Z");
     expect(parsed.first_seen_ts).toBe("2026-04-19T11:00:00Z");
     expect(parsed.last_seen_ts).toBe("2026-04-19T11:00:00Z");
@@ -99,6 +101,27 @@ describe("knowledge store append helper", () => {
     expect(result.invalid).toBe(1);
     expect(result.errors.join(" ")).toContain("confidence");
     await expect(fs.stat(path.join(root, ".cclaw/knowledge.jsonl"))).rejects.toThrow();
+  });
+
+  it("rejects unknown severity values", async () => {
+    const root = await createTempProject("knowledge-invalid-severity");
+    const seed = {
+      type: "lesson",
+      trigger: "when deployment pressure rises",
+      action: "run a focused rollback drill",
+      confidence: "high",
+      severity: "blocker"
+    } as unknown as KnowledgeSeedEntry;
+
+    const result = await appendKnowledge(root, [seed], {
+      stage: "ship",
+      project: "cclaw",
+      nowIso: "2026-04-19T11:12:00Z"
+    });
+
+    expect(result.appended).toBe(0);
+    expect(result.invalid).toBe(1);
+    expect(result.errors.join(" ")).toContain("severity");
   });
 
   it("rejects unknown source values", async () => {

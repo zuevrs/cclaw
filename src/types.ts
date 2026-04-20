@@ -110,6 +110,29 @@ export interface SliceReviewConfig {
   enforceOnTracks?: FlowTrack[];
 }
 
+/**
+ * File-path routing hints used by workflow-guard during `tdd` stage.
+ *
+ * - `testPathPatterns`: paths considered test-side changes (RED writes).
+ * - `productionPathPatterns`: optional allowlist for production paths that
+ *   participate in GREEN/REFACTOR checks. When omitted, workflow-guard treats
+ *   non-test code files as production writes.
+ */
+export interface TddPathConfig {
+  testPathPatterns?: string[];
+  productionPathPatterns?: string[];
+}
+
+/**
+ * Compound-stage clustering policy.
+ *
+ * `recurrenceThreshold` is the base minimum repeat count for a trigger/action
+ * cluster before it is eligible for promotion into durable rules/skills.
+ */
+export interface CompoundConfig {
+  recurrenceThreshold?: number;
+}
+
 export interface VibyConfig {
   version: string;
   flowVersion: string;
@@ -134,13 +157,20 @@ export interface VibyConfig {
    */
   promptGuardMode?: "advisory" | "strict";
   /**
-   * TDD red->green->refactor enforcement mode used by workflow guard hooks.
+   * TDD RED -> GREEN -> REFACTOR enforcement mode used by workflow guard hooks.
    *
    * Since v0.43.0 this is an advanced override — see `strictness`.
    */
   tddEnforcement?: "advisory" | "strict";
-  /** Optional test file globs used by guard guidance and /cc-ops tdd-log docs. */
+  /**
+   * Legacy alias for test-side path detection in workflow-guard.
+   * Prefer `tdd.testPathPatterns` in new configs.
+   */
   tddTestGlobs?: string[];
+  /** Path-pattern routing for TDD test/production write classification. */
+  tdd?: TddPathConfig;
+  /** Compound-stage recurrence policy overrides. */
+  compound?: CompoundConfig;
   /** When true, cclaw installs managed git pre-commit/pre-push wrappers. */
   gitHookGuards?: boolean;
   /** Default flow track for new runs (quick = shortened path, standard = full pipeline). */

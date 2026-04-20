@@ -95,18 +95,55 @@ Explicit per-axis overrides for the `strictness` knob. Useful when you
 want, say, strict TDD during a red-green push but advisory prompt
 guarding. When set, these values win over the derived `strictness`.
 
-### `tddTestGlobs` (list of glob strings)
+### `tdd` (object)
 
-Globs the TDD workflow guard uses to detect whether a write targets a
-test file. Defaults cover the common layouts — TS/JS `*.test.*`, `*.spec.*`,
-`test/` directories — which matches Python/Go/Rust/Java too.
+Path-pattern routing for real-time TDD guard classification:
 
-Override only for non-standard layouts:
+- `testPathPatterns` — files counted as test-side writes (RED work).
+- `productionPathPatterns` — optional allowlist for production writes that
+  should be blocked when RED is missing.
+
+Default `testPathPatterns`:
 
 ```yaml
-tddTestGlobs:
-  - "src/**/__tests__/**"
-  - "internal/**/testing_*.py"
+tdd:
+  testPathPatterns:
+    - "**/*.test.*"
+    - "**/tests/**"
+    - "**/__tests__/**"
+```
+
+Example with explicit production allowlist:
+
+```yaml
+tdd:
+  testPathPatterns:
+    - "**/*.unit.ts"
+  productionPathPatterns:
+    - "src/**"
+    - "packages/**/src/**"
+```
+
+Legacy compatibility: top-level `tddTestGlobs` is still read, but new configs
+should prefer `tdd.testPathPatterns`.
+
+### `compound` (object)
+
+Compound-stage clustering policy.
+
+- `recurrenceThreshold` (positive integer, default `3`) — base minimum repeat
+  count for trigger/action clusters before lift candidates are proposed.
+
+Runtime tuning always applied by the compound skill:
+
+- For repositories with `< 5` archived runs, effective threshold is temporarily
+  lowered to `min(recurrenceThreshold, 2)`.
+- Any cluster containing a `severity: critical` knowledge entry is eligible
+  even at recurrence `1` (critical override).
+
+```yaml
+compound:
+  recurrenceThreshold: 4
 ```
 
 ### `defaultTrack` (`quick` | `medium` | `standard`, default `standard`)

@@ -390,7 +390,9 @@ async function writeSkills(projectRoot: string, config?: VibyConfig): Promise<vo
   );
   await writeFileSafe(
     runtimePath(projectRoot, "skills", "flow-compound", "SKILL.md"),
-    compoundCommandSkillMarkdown()
+    compoundCommandSkillMarkdown({
+      recurrenceThreshold: config?.compound?.recurrenceThreshold
+    })
   );
   await writeFileSafe(
     runtimePath(projectRoot, "skills", "flow-rewind", "SKILL.md"),
@@ -509,7 +511,7 @@ async function writeSkills(projectRoot: string, config?: VibyConfig): Promise<vo
   }
 }
 
-async function writeUtilityCommands(projectRoot: string): Promise<void> {
+async function writeUtilityCommands(projectRoot: string, config: VibyConfig): Promise<void> {
   await writeFileSafe(runtimePath(projectRoot, "commands", "learn.md"), learnCommandContract());
   await writeFileSafe(runtimePath(projectRoot, "commands", "next.md"), nextCommandContract());
   await writeFileSafe(runtimePath(projectRoot, "commands", "ideate.md"), ideateCommandContract());
@@ -522,7 +524,12 @@ async function writeUtilityCommands(projectRoot: string): Promise<void> {
   await writeFileSafe(runtimePath(projectRoot, "commands", "feature.md"), featureCommandContract());
   await writeFileSafe(runtimePath(projectRoot, "commands", "tdd-log.md"), tddLogCommandContract());
   await writeFileSafe(runtimePath(projectRoot, "commands", "retro.md"), retroCommandContract());
-  await writeFileSafe(runtimePath(projectRoot, "commands", "compound.md"), compoundCommandContract());
+  await writeFileSafe(
+    runtimePath(projectRoot, "commands", "compound.md"),
+    compoundCommandContract({
+      recurrenceThreshold: config.compound?.recurrenceThreshold
+    })
+  );
   await writeFileSafe(runtimePath(projectRoot, "commands", "archive.md"), archiveCommandContract());
   await writeFileSafe(runtimePath(projectRoot, "commands", "rewind.md"), rewindCommandContract());
 }
@@ -853,7 +860,8 @@ async function writeHooks(projectRoot: string, config: VibyConfig): Promise<void
     workflowGuardScript({
       workflowGuardMode: config.strictness ?? "advisory",
       tddEnforcementMode: config.tddEnforcement ?? "advisory",
-      tddTestGlobs: config.tddTestGlobs
+      tddTestPathPatterns: config.tdd?.testPathPatterns ?? config.tddTestGlobs,
+      tddProductionPathPatterns: config.tdd?.productionPathPatterns
     })
   );
   await writeFileSafe(path.join(hooksDir, "context-monitor.sh"), contextMonitorScript());
@@ -1427,7 +1435,7 @@ async function materializeRuntime(projectRoot: string, config: VibyConfig, force
   await cleanLegacyArtifacts(projectRoot);
   await cleanStaleFiles(projectRoot);
   await writeCommandContracts(projectRoot);
-  await writeUtilityCommands(projectRoot);
+  await writeUtilityCommands(projectRoot, config);
   await writeSkills(projectRoot, config);
   await writeContextModes(projectRoot);
   await writeArtifactTemplates(projectRoot);
@@ -1479,9 +1487,9 @@ export async function syncCclaw(projectRoot: string): Promise<void> {
  * stamps are rewritten so the on-disk config reflects the installed CLI.
  *
  * Shape preservation: if the user previously hand-authored advanced keys
- * (e.g. `tddTestGlobs`, `trackHeuristics`, `sliceReview`), those stay in the
- * yaml. If their existing config is minimal, the upgrade keeps it minimal —
- * advanced knobs are never silently added.
+ * (e.g. `tdd`, `compound`, `trackHeuristics`, `sliceReview`), those stay in
+ * the yaml. If their existing config is minimal, the upgrade keeps it
+ * minimal — advanced knobs are never silently added.
  */
 export async function upgradeCclaw(projectRoot: string): Promise<void> {
   const advancedKeysPresent = await detectAdvancedKeys(projectRoot);

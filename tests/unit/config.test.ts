@@ -125,6 +125,130 @@ describe("config", () => {
     expect(config.tddTestGlobs).toEqual(["**/*.test.ts"]);
   });
 
+  it("parses nested tdd path patterns", async () => {
+    const root = await createTempProject("config-tdd-path-patterns");
+    await fs.mkdir(path.join(root, ".cclaw"), { recursive: true });
+    await fs.writeFile(
+      configPath(root),
+      `harnesses:
+  - claude
+tdd:
+  testPathPatterns:
+    - "**/*.unit.ts"
+  productionPathPatterns:
+    - "src/**"
+`,
+      "utf8"
+    );
+    const config = await readConfig(root);
+    expect(config.tdd?.testPathPatterns).toEqual(["**/*.unit.ts"]);
+    expect(config.tdd?.productionPathPatterns).toEqual(["src/**"]);
+    // Legacy alias stays populated for older callers.
+    expect(config.tddTestGlobs).toEqual([
+      "**/*.test.*",
+      "**/tests/**",
+      "**/__tests__/**"
+    ]);
+  });
+
+  it("lets tdd.testPathPatterns override legacy tddTestGlobs", async () => {
+    const root = await createTempProject("config-tdd-override-legacy");
+    await fs.mkdir(path.join(root, ".cclaw"), { recursive: true });
+    await fs.writeFile(
+      configPath(root),
+      `harnesses:
+  - claude
+tddTestGlobs:
+  - "**/*.legacy.ts"
+tdd:
+  testPathPatterns:
+    - "**/*.modern.ts"
+`,
+      "utf8"
+    );
+    const config = await readConfig(root);
+    expect(config.tddTestGlobs).toEqual(["**/*.legacy.ts"]);
+    expect(config.tdd?.testPathPatterns).toEqual(["**/*.modern.ts"]);
+  });
+
+  it("rejects malformed nested tdd config", async () => {
+    const root = await createTempProject("config-tdd-malformed");
+    await fs.mkdir(path.join(root, ".cclaw"), { recursive: true });
+    await fs.writeFile(
+      configPath(root),
+      `harnesses:
+  - claude
+tdd:
+  testPathPatterns: "**/*.test.ts"
+`,
+      "utf8"
+    );
+    await expect(readConfig(root)).rejects.toThrow(/"tdd.testPathPatterns" must be an array of strings/);
+  });
+
+  it("rejects unknown nested tdd keys", async () => {
+    const root = await createTempProject("config-tdd-unknown-key");
+    await fs.mkdir(path.join(root, ".cclaw"), { recursive: true });
+    await fs.writeFile(
+      configPath(root),
+      `harnesses:
+  - claude
+tdd:
+  unsupported: true
+`,
+      "utf8"
+    );
+    await expect(readConfig(root)).rejects.toThrow(/"tdd" has unknown key\(s\): unsupported/);
+  });
+
+  it("parses compound recurrence tuning config", async () => {
+    const root = await createTempProject("config-compound-recurrence");
+    await fs.mkdir(path.join(root, ".cclaw"), { recursive: true });
+    await fs.writeFile(
+      configPath(root),
+      `harnesses:
+  - claude
+compound:
+  recurrenceThreshold: 4
+`,
+      "utf8"
+    );
+    const config = await readConfig(root);
+    expect(config.compound?.recurrenceThreshold).toBe(4);
+  });
+
+  it("rejects malformed compound recurrence config", async () => {
+    const root = await createTempProject("config-compound-bad-threshold");
+    await fs.mkdir(path.join(root, ".cclaw"), { recursive: true });
+    await fs.writeFile(
+      configPath(root),
+      `harnesses:
+  - claude
+compound:
+  recurrenceThreshold: 0
+`,
+      "utf8"
+    );
+    await expect(readConfig(root)).rejects.toThrow(
+      /"compound.recurrenceThreshold" must be a positive integer/
+    );
+  });
+
+  it("rejects unknown compound keys", async () => {
+    const root = await createTempProject("config-compound-unknown-key");
+    await fs.mkdir(path.join(root, ".cclaw"), { recursive: true });
+    await fs.writeFile(
+      configPath(root),
+      `harnesses:
+  - claude
+compound:
+  mode: aggressive
+`,
+      "utf8"
+    );
+    await expect(readConfig(root)).rejects.toThrow(/"compound" has unknown key\(s\): mode/);
+  });
+
   it("parses trackHeuristics overrides (triggers + veto + fallback)", async () => {
     const root = await createTempProject("config-track-heuristics");
     await fs.mkdir(path.join(root, ".cclaw"), { recursive: true });
@@ -333,6 +457,8 @@ sliceReview:
       "promptGuardMode",
       "tddEnforcement",
       "tddTestGlobs",
+      "tdd",
+      "compound",
       "defaultTrack",
       "trackHeuristics",
       "sliceReview"

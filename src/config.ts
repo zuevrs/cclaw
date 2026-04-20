@@ -21,6 +21,8 @@ const ALLOWED_CONFIG_KEYS = new Set<string>([
   "promptGuardMode",
   "tddEnforcement",
   "tddTestGlobs",
+  "tdd",
+  "compound",
   "gitHookGuards",
   "defaultTrack",
   "languageRulePacks",
@@ -89,18 +91,25 @@ export function configPath(projectRoot: string): string {
 }
 
 /**
- * Default test-file globs used by workflow-guard.sh to detect when a write
- * targets a test file during TDD. Users rarely need to override this — the
- * defaults cover TypeScript / JavaScript / Python / Go / Rust / Java layouts.
- * Exposed so `install.ts` can reuse the same list when seeding the shell
- * guard script, even though the field is no longer written to the default
- * `config.yaml` template.
+ * Default test-path patterns used by workflow-guard.sh to classify TDD writes.
+ *
+ * Scope is intentionally narrow and language-agnostic; users can extend this
+ * list in config when their repository uses different conventions.
  */
-export const DEFAULT_TDD_TEST_GLOBS: readonly string[] = [
+export const DEFAULT_TDD_TEST_PATH_PATTERNS: readonly string[] = [
   "**/*.test.*",
-  "**/*.spec.*",
-  "**/test/**"
+  "**/tests/**",
+  "**/__tests__/**"
 ];
+
+/**
+ * Legacy alias kept for backwards compatibility with `tddTestGlobs`.
+ * Prefer `tdd.testPathPatterns` in new configurations.
+ */
+export const DEFAULT_TDD_TEST_GLOBS: readonly string[] = [...DEFAULT_TDD_TEST_PATH_PATTERNS];
+
+export const DEFAULT_TDD_PRODUCTION_PATH_PATTERNS: readonly string[] = [];
+export const DEFAULT_COMPOUND_RECURRENCE_THRESHOLD = 3;
 
 /**
  * Populated runtime view of config values that downstream callers (install,
@@ -112,6 +121,8 @@ export function createDefaultConfig(
   harnesses: HarnessId[] = DEFAULT_HARNESSES,
   defaultTrack: FlowTrack = "standard"
 ): VibyConfig {
+  const tddTestPathPatterns = [...DEFAULT_TDD_TEST_PATH_PATTERNS];
+  const tddProductionPathPatterns = [...DEFAULT_TDD_PRODUCTION_PATH_PATTERNS];
   return {
     version: CCLAW_VERSION,
     flowVersion: FLOW_VERSION,
@@ -119,7 +130,14 @@ export function createDefaultConfig(
     strictness: "advisory",
     promptGuardMode: "advisory",
     tddEnforcement: "advisory",
-    tddTestGlobs: [...DEFAULT_TDD_TEST_GLOBS],
+    tddTestGlobs: [...tddTestPathPatterns],
+    tdd: {
+      testPathPatterns: tddTestPathPatterns,
+      productionPathPatterns: tddProductionPathPatterns
+    },
+    compound: {
+      recurrenceThreshold: DEFAULT_COMPOUND_RECURRENCE_THRESHOLD
+    },
     gitHookGuards: false,
     defaultTrack,
     languageRulePacks: []
@@ -253,6 +271,76 @@ export async function readConfig(projectRoot: string): Promise<VibyConfig> {
   const tddTestGlobsRaw = (parsed as { tddTestGlobs?: unknown }).tddTestGlobs;
   const tddTestGlobs = validateStringArray(tddTestGlobsRaw, "tddTestGlobs", fullPath)
     ?? [...DEFAULT_TDD_TEST_GLOBS];
+
+  const hasTddField = Object.prototype.hasOwnProperty.call(parsed, "tdd");
+  const tddRaw = (parsed as { tdd?: unknown }).tdd;
+  let explicitTddTestPathPatterns: string[] | undefined;
+  let explicitTddProductionPathPatterns: string[] | undefined;
+  if (hasTddField) {
+    if (!isRecord(tddRaw)) {
+      throw configValidationError(fullPath, `"tdd" must be an object`);
+    }
+    const unknownTddKeys = Object.keys(tddRaw).filter(
+      (key) => key !== "testPathPatterns" && key !== "productionPathPatterns"
+    );
+    if (unknownTddKeys.length > 0) {
+      throw configValidationError(
+        fullPath,
+        `"tdd" has unknown key(s): ${unknownTddKeys.join(", ")}`
+      );
+    }
+    explicitTddTestPathPatterns = validateStringArray(
+      tddRaw.testPathPatterns,
+      "tdd.testPathPatterns",
+      fullPath
+    );
+    explicitTddProductionPathPatterns = validateStringArray(
+      tddRaw.productionPathPatterns,
+      "tdd.productionPathPatterns",
+      fullPath
+    );
+  }
+
+  const resolvedTddTestPathPatterns = [
+    ...(explicitTddTestPathPatterns ?? tddTestGlobs ?? DEFAULT_TDD_TEST_PATH_PATTERNS)
+  ];
+  const resolvedTddProductionPathPatterns = [
+    ...(explicitTddProductionPathPatterns ?? DEFAULT_TDD_PRODUCTION_PATH_PATTERNS)
+  ];
+
+  const hasCompoundField = Object.prototype.hasOwnProperty.call(parsed, "compound");
+  const compoundRaw = (parsed as { compound?: unknown }).compound;
+  let compoundRecurrenceThreshold = DEFAULT_COMPOUND_RECURRENCE_THRESHOLD;
+  if (hasCompoundField) {
+    if (!isRecord(compoundRaw)) {
+      throw configValidationError(fullPath, `"compound" must be an object`);
+    }
+    const unknownCompoundKeys = Object.keys(compoundRaw).filter(
+      (key) => key !== "recurrenceThreshold"
+    );
+    if (unknownCompoundKeys.length > 0) {
+      throw configValidationError(
+        fullPath,
+        `"compound" has unknown key(s): ${unknownCompoundKeys.join(", ")}`
+      );
+    }
+    if (
+      compoundRaw.recurrenceThreshold !== undefined &&
+      (
+        typeof compoundRaw.recurrenceThreshold !== "number" ||
+        !Number.isInteger(compoundRaw.recurrenceThreshold) ||
+        compoundRaw.recurrenceThreshold < 1
+      )
+    ) {
+      throw configValidationError(
+        fullPath,
+        `"compound.recurrenceThreshold" must be a positive integer`
+      );
+    }
+    if (typeof compoundRaw.recurrenceThreshold === "number") {
+      compoundRecurrenceThreshold = compoundRaw.recurrenceThreshold;
+    }
+  }
 
   const gitHookGuardsRaw = parsed.gitHookGuards;
   if (
@@ -431,6 +519,13 @@ export async function readConfig(projectRoot: string): Promise<VibyConfig> {
     promptGuardMode,
     tddEnforcement,
     tddTestGlobs,
+    tdd: {
+      testPathPatterns: resolvedTddTestPathPatterns,
+      productionPathPatterns: resolvedTddProductionPathPatterns
+    },
+    compound: {
+      recurrenceThreshold: compoundRecurrenceThreshold
+    },
     gitHookGuards,
     defaultTrack,
     languageRulePacks,
@@ -450,6 +545,8 @@ type AdvancedConfigKey =
   | "promptGuardMode"
   | "tddEnforcement"
   | "tddTestGlobs"
+  | "tdd"
+  | "compound"
   | "defaultTrack"
   | "languageRulePacks"
   | "trackHeuristics"
@@ -495,6 +592,8 @@ function buildSerializableConfig(
     "promptGuardMode",
     "tddEnforcement",
     "tddTestGlobs",
+    "tdd",
+    "compound",
     "gitHookGuards",
     "defaultTrack",
     "languageRulePacks",
@@ -555,6 +654,8 @@ export async function detectAdvancedKeys(
       "promptGuardMode",
       "tddEnforcement",
       "tddTestGlobs",
+      "tdd",
+      "compound",
       "defaultTrack",
       "languageRulePacks",
       "trackHeuristics",

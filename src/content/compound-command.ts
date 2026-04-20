@@ -2,8 +2,24 @@ import { RUNTIME_ROOT } from "../constants.js";
 
 const COMPOUND_SKILL_FOLDER = "flow-compound";
 const COMPOUND_SKILL_NAME = "flow-compound";
+const DEFAULT_RECURRENCE_THRESHOLD = 3;
+const SMALL_PROJECT_ARCHIVE_RUNS_THRESHOLD = 5;
+const SMALL_PROJECT_RECURRENCE_THRESHOLD = 2;
 
-export function compoundCommandContract(): string {
+export interface CompoundCommandOptions {
+  recurrenceThreshold?: number;
+}
+
+function resolveRecurrenceThreshold(options: CompoundCommandOptions): number {
+  const threshold = options.recurrenceThreshold;
+  if (typeof threshold === "number" && Number.isInteger(threshold) && threshold >= 1) {
+    return threshold;
+  }
+  return DEFAULT_RECURRENCE_THRESHOLD;
+}
+
+export function compoundCommandContract(options: CompoundCommandOptions = {}): string {
+  const recurrenceThreshold = resolveRecurrenceThreshold(options);
   return `# /cc-ops compound
 
 ## Purpose
@@ -31,32 +47,40 @@ the user can approve individual lifts, accept-all, or skip.
 
 1. Read \`${RUNTIME_ROOT}/knowledge.jsonl\` (strict JSONL, one entry per line).
 2. Cluster entries by \`trigger\` + \`action\` similarity.
-3. Filter candidates whose recurrence count >= 3.
-4. If **no candidates** exist:
+3. Resolve recurrence policy:
+   - base threshold = \`${recurrenceThreshold}\` (from \`config.compound.recurrenceThreshold\`),
+   - count archived runs under \`${RUNTIME_ROOT}/runs/\`,
+   - if archived run count is < ${SMALL_PROJECT_ARCHIVE_RUNS_THRESHOLD}, use
+     effective threshold = \`min(base threshold, ${SMALL_PROJECT_RECURRENCE_THRESHOLD})\` for this pass.
+4. Filter candidates that satisfy at least one trigger:
+   - recurrence count >= effective threshold, or
+   - any knowledge entry in the cluster has \`severity: "critical"\`
+     (critical override, recurrence can be 1).
+5. If **no candidates** exist:
    - set \`closeout.compoundCompletedAt = <ISO>\`,
    - set \`closeout.compoundPromoted = 0\`,
    - set \`closeout.shipSubstate = "ready_to_archive"\`,
    - emit \`compound: no candidates | next: /cc-next\` and stop.
-5. **Drift check** each surviving candidate before presenting it (see
+6. **Drift check** each surviving candidate before presenting it (see
    "Drift check" section in the skill): confirm the lift target file is
    current, spot-check the repo for contradictions, demote stale clusters
    into a new superseding entry instead of a lift.
-6. Otherwise, present **one** structured ask via the harness's native ask
+7. Otherwise, present **one** structured ask via the harness's native ask
    tool (\`AskUserQuestion\` / \`AskQuestion\` / \`question\` /
    \`request_user_input\`; plain-text lettered list as fallback) summarising
    all candidates at once:
    - \`apply-all\` (default) — apply every listed lift,
    - \`apply-selected\` — prompt per-candidate,
    - \`skip\` — record a skip reason and advance without changes.
-7. Apply approved lifts to the target file(s). Each lift also appends a
+8. Apply approved lifts to the target file(s). Each lift also appends a
    \`type: "compound"\` entry back to \`${RUNTIME_ROOT}/knowledge.jsonl\`
    summarising what was lifted.
-8. Update flow-state:
+9. Update flow-state:
    - \`closeout.compoundCompletedAt = <ISO>\`,
    - \`closeout.compoundPromoted = <count>\`,
    - \`closeout.compoundSkipped = true\` if user picked skip,
    - \`closeout.shipSubstate = "ready_to_archive"\`.
-9. Emit one-line summary: \`compound: promoted=<N> skipped=<bool> | next: /cc-next\`.
+10. Emit one-line summary: \`compound: promoted=<N> skipped=<bool> | next: /cc-next\`.
 
 ## Primary skill
 
@@ -64,7 +88,8 @@ the user can approve individual lifts, accept-all, or skip.
 `;
 }
 
-export function compoundCommandSkillMarkdown(): string {
+export function compoundCommandSkillMarkdown(options: CompoundCommandOptions = {}): string {
+  const recurrenceThreshold = resolveRecurrenceThreshold(options);
   return `---
 name: ${COMPOUND_SKILL_NAME}
 description: "Lift repeated learnings into durable rules/protocols/skills. Auto-triggered after retro accept."
@@ -86,13 +111,20 @@ empty pass is allowed and must advance \`closeout.shipSubstate\` to
 
 1. Parse \`.cclaw/knowledge.jsonl\` and group repeated lessons by
    trigger+action similarity.
-2. Keep only candidates with recurrence >= 3 and an actionable lift path.
-3. If none qualify, record an empty pass:
+2. Resolve recurrence policy:
+   - base threshold = \`${recurrenceThreshold}\` from \`config.compound.recurrenceThreshold\`,
+   - count archived runs under \`.cclaw/runs/\`,
+   - if archived run count is < ${SMALL_PROJECT_ARCHIVE_RUNS_THRESHOLD}, use
+     effective threshold = \`min(base threshold, ${SMALL_PROJECT_RECURRENCE_THRESHOLD})\` for this pass.
+3. Keep only candidates that meet at least one trigger:
+   - recurrence >= effective threshold and actionable lift path, or
+   - a cluster entry with \`severity: critical\` (critical override, recurrence can be 1).
+4. If none qualify, record an empty pass:
    - \`closeout.compoundCompletedAt = <ISO>\`,
    - \`closeout.compoundPromoted = 0\`,
    - \`closeout.shipSubstate = "ready_to_archive"\`,
    - announce \`compound: no candidates\` and stop.
-4. **Drift check — run before presenting any candidate.** Knowledge lines
+5. **Drift check — run before presenting any candidate.** Knowledge lines
    are append-only, so textual repetition alone does not prove the rule is
    still true. For every cluster that survives the recurrence filter:
 
@@ -114,13 +146,17 @@ empty pass is allowed and must advance \`closeout.shipSubstate\` to
    - **Cite line IDs.** Every surviving candidate must list the concrete
      knowledge line indices (1-based) that back it, not just a
      summary string. This is what makes the lift auditable.
+   - **Include qualification reason.** Mark each candidate as
+     \`recurrence\` or \`critical_override\` so reviewers can see why it passed
+     the filter.
    - Optionally invoke the \`knowledge-curation\` utility skill's
      stale/duplicate/supersede heuristics if you want a second pass.
 
-5. Otherwise, render each candidate as:
+6. Otherwise, render each candidate as:
 
 \`\`\`
 Candidate: <short title>
+Qualification: <recurrence|critical_override>
 Evidence: <knowledge line-ids>
 Freshness: <newest last_seen_ts among evidence lines>
 Lift target: <rule/protocol/skill file>
@@ -128,17 +164,17 @@ Change type: <add/update/remove>
 Expected benefit: <what regressions this prevents>
 \`\`\`
 
-6. Present **one** structured question with three options:
+7. Present **one** structured question with three options:
    - \`apply-all\` (default) — apply every candidate,
    - \`apply-selected\` — prompt per-candidate approval next,
    - \`skip\` — record a skip reason and advance.
 
-7. For approved candidates:
+8. For approved candidates:
    - edit the target file(s) with the lift,
    - append a \`type: "compound"\` entry to \`.cclaw/knowledge.jsonl\`
      describing what was promoted, including the source line IDs.
 
-8. Update flow-state \`closeout\`:
+9. Update flow-state \`closeout\`:
    - \`compoundCompletedAt\`,
    - \`compoundPromoted\` (count),
    - \`compoundSkipped\` (boolean) + \`compoundSkipReason\` when applicable,

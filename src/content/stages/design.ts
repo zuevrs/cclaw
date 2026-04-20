@@ -121,9 +121,7 @@ export const DESIGN: StageSchemaInput = {
     "No performance budget for critical path",
     "Batching multiple design issues into one question",
     "Agreeing with user's architecture choice without evaluating alternatives",
-    "Hedging every recommendation with 'it depends' instead of taking a position",
     "No NOT-in-scope output section",
-    "No What-already-exists output section",
     "Design decisions made without reading the actual code first"
   ],
   policyNeedles: [
