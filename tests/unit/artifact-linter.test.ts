@@ -383,6 +383,7 @@ describe("artifact linter heuristics", () => {
 - FINALIZE_OPEN_PR
 - FINALIZE_KEEP_BRANCH
 - FINALIZE_DISCARD_BRANCH
+- FINALIZE_NO_VCS
 `);
 
     const result = await lintArtifact(root, "ship");
@@ -418,6 +419,38 @@ describe("artifact linter heuristics", () => {
 ## Finalization
 - Selected enum: FINALIZE_OPEN_PR
 - Execution result: PR #42 merged
+`);
+
+    const result = await lintArtifact(root, "ship");
+    expect(result.passed).toBe(true);
+  });
+
+  it("accepts FINALIZE_NO_VCS as a valid ship finalization mode", async () => {
+    const root = await createTempProject("ship-no-vcs-finalization");
+    await writeRuntimeArtifact(root, "08-ship.md", `# Ship Artifact
+
+## Preflight Results
+- Review verdict: APPROVED
+- Build: pass
+- Tests: pass
+- Lint: pass
+- Type-check: pass
+- Working tree clean: n/a (no git)
+
+## Release Notes
+- Published docs bundle to static hosting.
+
+## Rollback Plan
+- Trigger conditions: 404 spike on docs routes
+- Rollback steps: restore previous docs bundle from backup storage
+- Verification steps: run docs smoke checks for top routes
+
+## Monitoring
+- Metrics/logs to watch: docs 404 rate
+
+## Finalization
+- Selected enum: FINALIZE_NO_VCS
+- Execution result: uploaded release archive and notified ops owner
 `);
 
     const result = await lintArtifact(root, "ship");
@@ -1350,6 +1383,94 @@ inputs_hash: sha256:not-a-real-hash
 
     const result = await lintArtifact(root, "tdd");
     expect(result.passed).toBe(true);
+  });
+
+  it("fails tdd when RED Evidence does not include explicit failure markers", async () => {
+    const root = await createTempProject("tdd-red-no-failure-marker");
+    await writeRuntimeArtifact(root, "06-tdd.md", `# TDD Artifact
+
+## RED Evidence
+- Command: pnpm vitest run dedupe.test.ts
+- Output summary: test setup executed, pending implementation details
+- Notes: needs more assertions
+
+## Acceptance Mapping
+| Slice | Plan task ID | Spec criterion ID |
+|---|---|---|
+| S-1 | T-1 | AC-1 |
+
+## Failure Analysis
+| Slice | Expected missing behavior | Actual failure reason |
+|---|---|---|
+| S-1 | Module not implemented | Pending implementation note |
+
+## GREEN Evidence
+- Full suite command: pnpm vitest run
+- Full suite result: 12 passed, 0 failed
+
+## Verification Ladder
+- Highest tier reached: command
+- Evidence: pnpm vitest run dedupe.test.ts (pass)
+
+## REFACTOR Notes
+- What changed: Extracted helper function
+- Why: Reuse across tests
+- Behavior preserved: Full suite green after refactor
+
+## Traceability
+- Plan task IDs: T-1
+- Spec criterion IDs: AC-1
+`);
+
+    const result = await lintArtifact(root, "tdd");
+    expect(result.passed).toBe(false);
+    const red = result.findings.find((f) => f.section === "RED Evidence");
+    expect(red?.found).toBe(false);
+    expect(red?.details).toContain("failing output markers");
+  });
+
+  it("fails tdd when GREEN Evidence lacks explicit pass markers", async () => {
+    const root = await createTempProject("tdd-green-no-pass-marker");
+    await writeRuntimeArtifact(root, "06-tdd.md", `# TDD Artifact
+
+## RED Evidence
+| Slice | Test name | Command | Failure output summary |
+|---|---|---|---|
+| S-1 | dedupe fails on duplicate key | pnpm vitest run dedupe.test.ts | FAIL AssertionError expected unique list |
+
+## Acceptance Mapping
+| Slice | Plan task ID | Spec criterion ID |
+|---|---|---|
+| S-1 | T-1 | AC-1 |
+
+## Failure Analysis
+| Slice | Expected missing behavior | Actual failure reason |
+|---|---|---|
+| S-1 | Dedupe missing | Assertion verifies missing branch |
+
+## GREEN Evidence
+- Full suite command: pnpm vitest run
+- Full suite result: verification output unavailable
+
+## Verification Ladder
+- Highest tier reached: command
+- Evidence: pnpm vitest run dedupe.test.ts
+
+## REFACTOR Notes
+- What changed: Extracted helper function
+- Why: Reuse across tests
+- Behavior preserved: Full suite green after refactor
+
+## Traceability
+- Plan task IDs: T-1
+- Spec criterion IDs: AC-1
+`);
+
+    const result = await lintArtifact(root, "tdd");
+    expect(result.passed).toBe(false);
+    const green = result.findings.find((f) => f.section === "GREEN Evidence");
+    expect(green?.found).toBe(false);
+    expect(green?.details).toContain("passing markers");
   });
 
   it("fails tdd when RED Evidence is missing", async () => {

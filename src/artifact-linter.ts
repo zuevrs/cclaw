@@ -148,7 +148,8 @@ function tokensFromRule(rule: string): string[] {
       "FINALIZE_MERGE_LOCAL",
       "FINALIZE_OPEN_PR",
       "FINALIZE_KEEP_BRANCH",
-      "FINALIZE_DISCARD_BRANCH"
+      "FINALIZE_DISCARD_BRANCH",
+      "FINALIZE_NO_VCS"
     ];
   }
   if (/final verdict/iu.test(rule)) {
@@ -221,6 +222,9 @@ function getMarkdownTableRows(sectionBody: string): string[][] {
 const DIAGRAM_ARROW_PATTERN = /(?:<--?>|<?==?>|--?>|->>|=>|-\.->|→|⟶|↦)/u;
 const DIAGRAM_FAILURE_EDGE_PATTERN = /\b(fail(?:ed|ure)?|error|timeout|fallback|degrad(?:e|ed|ation)|retry|backoff|circuit|unavailable|recover(?:y)?|rescue|mitigat(?:e|ion)|rollback|exception|abort|dead[\s-]?letter|dlq)\b/iu;
 const DIAGRAM_GENERIC_NODE_PATTERN = /\b(service|component|module|system)\s*(?:[A-Z0-9])?\b/iu;
+const TEST_COMMAND_MARKER_PATTERN = /\b(?:npm|pnpm|yarn|bun|vitest|jest|pytest|go test|cargo test|mvn test|gradle test|dotnet test)\b/iu;
+const RED_FAILURE_MARKER_PATTERN = /\b(?:fail|failed|failing|assertionerror|cannot find|exception|error|exit code\s*[:=]?\s*[1-9])\b/iu;
+const GREEN_SUCCESS_MARKER_PATTERN = /\b(?:pass|passed|green|ok|0 failed|exit code\s*[:=]?\s*0)\b/iu;
 
 function diagramEdgeLines(sectionBody: string): string[] {
   return sectionBody
@@ -256,6 +260,83 @@ function hasSyncDiagramEdge(lines: string[]): boolean {
     if (!/(-->|->|=>|→|⟶|↦)/u.test(line)) return false;
     return !/-\.->|-->>|~~>/u.test(line);
   });
+}
+
+function validateTddRedEvidence(sectionBody: string): { ok: boolean; details: string } {
+  const meaningful = meaningfulLineCount(sectionBody);
+  if (meaningful < 2) {
+    return {
+      ok: false,
+      details: "RED Evidence must include at least 2 meaningful lines (command plus failing output context)."
+    };
+  }
+  if (!TEST_COMMAND_MARKER_PATTERN.test(sectionBody)) {
+    return {
+      ok: false,
+      details: "RED Evidence must include the test command that produced the failure."
+    };
+  }
+  if (!RED_FAILURE_MARKER_PATTERN.test(sectionBody)) {
+    return {
+      ok: false,
+      details: "RED Evidence must include explicit failing output markers (FAIL/FAILED/AssertionError/exit code != 0)."
+    };
+  }
+  return {
+    ok: true,
+    details: "RED Evidence includes command + failing output markers."
+  };
+}
+
+function validateTddGreenEvidence(sectionBody: string): { ok: boolean; details: string } {
+  const meaningful = meaningfulLineCount(sectionBody);
+  if (meaningful < 2) {
+    return {
+      ok: false,
+      details: "GREEN Evidence must include at least 2 meaningful lines (command and passing result)."
+    };
+  }
+  if (!TEST_COMMAND_MARKER_PATTERN.test(sectionBody)) {
+    return {
+      ok: false,
+      details: "GREEN Evidence must include the full-suite test command."
+    };
+  }
+  if (!GREEN_SUCCESS_MARKER_PATTERN.test(sectionBody)) {
+    return {
+      ok: false,
+      details: "GREEN Evidence must include explicit passing markers (PASS/PASSED/OK/exit code 0)."
+    };
+  }
+  return {
+    ok: true,
+    details: "GREEN Evidence includes command + passing output markers."
+  };
+}
+
+function validateVerificationLadder(sectionBody: string): { ok: boolean; details: string } {
+  if (!/highest tier reached/iu.test(sectionBody)) {
+    return {
+      ok: false,
+      details: "Verification Ladder must include a 'Highest tier reached' line."
+    };
+  }
+  if (!/\b(static|command|behavioral|human)\b/iu.test(sectionBody)) {
+    return {
+      ok: false,
+      details: "Verification Ladder must name a tier (static | command | behavioral | human)."
+    };
+  }
+  if (!/\b(evidence|command|sha|commit)\b/iu.test(sectionBody)) {
+    return {
+      ok: false,
+      details: "Verification Ladder must include evidence details (command output or commit SHA)."
+    };
+  }
+  return {
+    ok: true,
+    details: "Verification Ladder includes tier + evidence fields."
+  };
 }
 
 export type LearningEntryType = "rule" | "pattern" | "lesson" | "compound";
@@ -715,6 +796,15 @@ function validateSectionBody(
   }
 
   const sectionNameNormalized = normalizeHeadingTitle(sectionName).toLowerCase();
+  if (sectionNameNormalized === "red evidence") {
+    return validateTddRedEvidence(sectionBody);
+  }
+  if (sectionNameNormalized === "green evidence") {
+    return validateTddGreenEvidence(sectionBody);
+  }
+  if (sectionNameNormalized === "verification ladder") {
+    return validateVerificationLadder(sectionBody);
+  }
   if (sectionNameNormalized === "architecture diagram") {
     const edgeLines = diagramEdgeLines(sectionBody);
     if (edgeLines.length === 0) {
