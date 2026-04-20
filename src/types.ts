@@ -123,6 +123,16 @@ export interface TddPathConfig {
   productionPathPatterns?: string[];
 }
 
+/**
+ * Compound-stage clustering policy.
+ *
+ * `recurrenceThreshold` is the base minimum repeat count for a trigger/action
+ * cluster before it is eligible for promotion into durable rules/skills.
+ */
+export interface CompoundConfig {
+  recurrenceThreshold?: number;
+}
+
 export interface VibyConfig {
   version: string;
   flowVersion: string;
@@ -159,6 +169,8 @@ export interface VibyConfig {
   tddTestGlobs?: string[];
   /** Path-pattern routing for TDD test/production write classification. */
   tdd?: TddPathConfig;
+  /** Compound-stage recurrence policy overrides. */
+  compound?: CompoundConfig;
   /** When true, cclaw installs managed git pre-commit/pre-push wrappers. */
   gitHookGuards?: boolean;
   /** Default flow track for new runs (quick = shortened path, standard = full pipeline). */

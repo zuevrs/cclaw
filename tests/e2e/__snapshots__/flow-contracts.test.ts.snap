@@ -1581,7 +1581,7 @@ Do NOT ship, merge, or release until both review layers complete with an explici
 - \`.cclaw/artifacts/06-tdd.md\`
 - \`.cclaw/artifacts/04-spec.md\`
 - \`.cclaw/artifacts/05-plan.md\`
-4. Stream \`.cclaw/knowledge.jsonl\` and apply relevant JSON-line entries (strict schema: type, trigger, action, confidence, domain, stage, origin_stage, origin_feature, frequency, universality, maturity, created, first_seen_ts, last_seen_ts, project).
+4. Stream \`.cclaw/knowledge.jsonl\` and apply relevant JSON-line entries (strict schema: type, trigger, action, confidence, domain, stage, origin_stage, origin_feature, frequency, universality, maturity, created, first_seen_ts, last_seen_ts, project; optional: source, severity).
 5. Write stage output to \`.cclaw/artifacts/07-review.md\` and \`.cclaw/artifacts/07-review-army.json\`.
 6. Do NOT copy artifacts into \`.cclaw/runs/\`; archival is handled by \`/cc-ops archive\` (agent-facing wrapper over archive runtime).
 
@@ -1626,7 +1626,7 @@ Do NOT merge, push, or finalize without a passed preflight check, written rollba
 - \`.cclaw/artifacts/06-tdd.md\`
 - \`.cclaw/artifacts/05-plan.md\`
 - \`.cclaw/artifacts/04-spec.md\`
-4. Stream \`.cclaw/knowledge.jsonl\` and apply relevant JSON-line entries (strict schema: type, trigger, action, confidence, domain, stage, origin_stage, origin_feature, frequency, universality, maturity, created, first_seen_ts, last_seen_ts, project).
+4. Stream \`.cclaw/knowledge.jsonl\` and apply relevant JSON-line entries (strict schema: type, trigger, action, confidence, domain, stage, origin_stage, origin_feature, frequency, universality, maturity, created, first_seen_ts, last_seen_ts, project; optional: source, severity).
 5. Write stage output to \`.cclaw/artifacts/08-ship.md\`.
 6. Do NOT copy artifacts into \`.cclaw/runs/\`; archival is handled by \`/cc-ops archive\` (agent-facing wrapper over archive runtime).
 

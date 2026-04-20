@@ -22,6 +22,7 @@ const ALLOWED_CONFIG_KEYS = new Set<string>([
   "tddEnforcement",
   "tddTestGlobs",
   "tdd",
+  "compound",
   "gitHookGuards",
   "defaultTrack",
   "languageRulePacks",
@@ -108,6 +109,7 @@ export const DEFAULT_TDD_TEST_PATH_PATTERNS: readonly string[] = [
 export const DEFAULT_TDD_TEST_GLOBS: readonly string[] = [...DEFAULT_TDD_TEST_PATH_PATTERNS];
 
 export const DEFAULT_TDD_PRODUCTION_PATH_PATTERNS: readonly string[] = [];
+export const DEFAULT_COMPOUND_RECURRENCE_THRESHOLD = 3;
 
 /**
  * Populated runtime view of config values that downstream callers (install,
@@ -132,6 +134,9 @@ export function createDefaultConfig(
     tdd: {
       testPathPatterns: tddTestPathPatterns,
       productionPathPatterns: tddProductionPathPatterns
+    },
+    compound: {
+      recurrenceThreshold: DEFAULT_COMPOUND_RECURRENCE_THRESHOLD
     },
     gitHookGuards: false,
     defaultTrack,
@@ -302,6 +307,40 @@ export async function readConfig(projectRoot: string): Promise<VibyConfig> {
   const resolvedTddProductionPathPatterns = [
     ...(explicitTddProductionPathPatterns ?? DEFAULT_TDD_PRODUCTION_PATH_PATTERNS)
   ];
+
+  const hasCompoundField = Object.prototype.hasOwnProperty.call(parsed, "compound");
+  const compoundRaw = (parsed as { compound?: unknown }).compound;
+  let compoundRecurrenceThreshold = DEFAULT_COMPOUND_RECURRENCE_THRESHOLD;
+  if (hasCompoundField) {
+    if (!isRecord(compoundRaw)) {
+      throw configValidationError(fullPath, `"compound" must be an object`);
+    }
+    const unknownCompoundKeys = Object.keys(compoundRaw).filter(
+      (key) => key !== "recurrenceThreshold"
+    );
+    if (unknownCompoundKeys.length > 0) {
+      throw configValidationError(
+        fullPath,
+        `"compound" has unknown key(s): ${unknownCompoundKeys.join(", ")}`
+      );
+    }
+    if (
+      compoundRaw.recurrenceThreshold !== undefined &&
+      (
+        typeof compoundRaw.recurrenceThreshold !== "number" ||
+        !Number.isInteger(compoundRaw.recurrenceThreshold) ||
+        compoundRaw.recurrenceThreshold < 1
+      )
+    ) {
+      throw configValidationError(
+        fullPath,
+        `"compound.recurrenceThreshold" must be a positive integer`
+      );
+    }
+    if (typeof compoundRaw.recurrenceThreshold === "number") {
+      compoundRecurrenceThreshold = compoundRaw.recurrenceThreshold;
+    }
+  }
 
   const gitHookGuardsRaw = parsed.gitHookGuards;
   if (
@@ -484,6 +523,9 @@ export async function readConfig(projectRoot: string): Promise<VibyConfig> {
       testPathPatterns: resolvedTddTestPathPatterns,
       productionPathPatterns: resolvedTddProductionPathPatterns
     },
+    compound: {
+      recurrenceThreshold: compoundRecurrenceThreshold
+    },
     gitHookGuards,
     defaultTrack,
     languageRulePacks,
@@ -504,6 +546,7 @@ type AdvancedConfigKey =
   | "tddEnforcement"
   | "tddTestGlobs"
   | "tdd"
+  | "compound"
   | "defaultTrack"
   | "languageRulePacks"
   | "trackHeuristics"
@@ -550,6 +593,7 @@ function buildSerializableConfig(
     "tddEnforcement",
     "tddTestGlobs",
     "tdd",
+    "compound",
     "gitHookGuards",
     "defaultTrack",
     "languageRulePacks",
@@ -611,6 +655,7 @@ export async function detectAdvancedKeys(
       "tddEnforcement",
       "tddTestGlobs",
       "tdd",
+      "compound",
       "defaultTrack",
       "languageRulePacks",
       "trackHeuristics",

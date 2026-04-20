@@ -18,6 +18,17 @@ Fallback legend:
 - `role-switch` — in-session role announce + delegation-log entry with evidenceRefs (OpenCode, Codex).
 - `waiver` — no parity path; reserved for harnesses that cannot role-switch (none shipped).
 
+## Parallel research dispatch semantics
+
+Design-stage research fleet uses the same parity model:
+
+- **Claude / Cursor**: dispatch all four research lenses in one turn
+  (stack, features, architecture, pitfalls) and synthesize into
+  `.cclaw/artifacts/02a-research.md`.
+- **OpenCode / Codex**: execute the same four lenses via sequential
+  role-switch, each with explicit announce -> execute -> evidence trail.
+  This preserves auditability when native parallel dispatch is unavailable.
+
 ## Semantic hook event coverage
 
 | Event | Claude | Cursor | OpenCode | Codex |
@@ -27,13 +38,17 @@ Fallback legend:
 | `pre_tool_workflow_guard` | PreToolUse -> workflow-guard.sh | preToolUse -> workflow-guard.sh | plugin tool.execute.before -> workflow-guard.sh | PreToolUse matcher Bash -> workflow-guard.sh (Bash-only) |
 | `post_tool_context_monitor` | PostToolUse -> context-monitor.sh | postToolUse -> context-monitor.sh | plugin tool.execute.after -> context-monitor.sh | PostToolUse matcher Bash -> context-monitor.sh (Bash-only) |
 | `stop_checkpoint` | Stop -> stop-checkpoint.sh | stop -> stop-checkpoint.sh | plugin session.idle -> stop-checkpoint.sh | Stop -> stop-checkpoint.sh |
-| `precompact_digest` | PreCompact -> pre-compact.sh | sessionCompact -> pre-compact.sh | plugin session.cleared/session.resumed hooks | missing |
+| `precompact_digest` | PreCompact -> pre-compact.sh | sessionCompact -> pre-compact.sh | plugin session.compacted -> pre-compact.sh | missing |
 
 ## Interpretation
 
 - `tier1`: full native delegation + structured asks + full hook surface.
 - `tier2`: usable flow with capability gaps; mandatory delegation can require waivers.
-- `tier3`: manual-only fallback; no native automation guarantees.
+- Codex-specific ceiling: `PreToolUse` can only intercept `Bash`. Direct
+  `Write`/`Edit` to `.cclaw/state/flow-state.json` cannot be hard-blocked
+  at hook level, so the canonical path is
+  `bash .cclaw/hooks/stage-complete.sh <stage>` plus the non-blocking
+  `UserPromptSubmit` state nudge.
 
 ## Shared command contract
 
@@ -43,7 +58,6 @@ All harnesses receive the same utility commands:
 - `/cc-next` - stage progression
 - `/cc-ideate` - discovery mode for ranked repo-improvement backlog
 - `/cc-view` - read-only router for status/tree/diff
-- `/cc-learn` - knowledge capture/lookup
 - `/cc-ops` - operations router for feature/tdd-log/retro/compound/archive/rewind
 
 Read-only subcommands:

@@ -201,6 +201,54 @@ tdd:
     await expect(readConfig(root)).rejects.toThrow(/"tdd" has unknown key\(s\): unsupported/);
   });
 
+  it("parses compound recurrence tuning config", async () => {
+    const root = await createTempProject("config-compound-recurrence");
+    await fs.mkdir(path.join(root, ".cclaw"), { recursive: true });
+    await fs.writeFile(
+      configPath(root),
+      `harnesses:
+  - claude
+compound:
+  recurrenceThreshold: 4
+`,
+      "utf8"
+    );
+    const config = await readConfig(root);
+    expect(config.compound?.recurrenceThreshold).toBe(4);
+  });
+
+  it("rejects malformed compound recurrence config", async () => {
+    const root = await createTempProject("config-compound-bad-threshold");
+    await fs.mkdir(path.join(root, ".cclaw"), { recursive: true });
+    await fs.writeFile(
+      configPath(root),
+      `harnesses:
+  - claude
+compound:
+  recurrenceThreshold: 0
+`,
+      "utf8"
+    );
+    await expect(readConfig(root)).rejects.toThrow(
+      /"compound.recurrenceThreshold" must be a positive integer/
+    );
+  });
+
+  it("rejects unknown compound keys", async () => {
+    const root = await createTempProject("config-compound-unknown-key");
+    await fs.mkdir(path.join(root, ".cclaw"), { recursive: true });
+    await fs.writeFile(
+      configPath(root),
+      `harnesses:
+  - claude
+compound:
+  mode: aggressive
+`,
+      "utf8"
+    );
+    await expect(readConfig(root)).rejects.toThrow(/"compound" has unknown key\(s\): mode/);
+  });
+
   it("parses trackHeuristics overrides (triggers + veto + fallback)", async () => {
     const root = await createTempProject("config-track-heuristics");
     await fs.mkdir(path.join(root, ".cclaw"), { recursive: true });
@@ -410,6 +458,7 @@ sliceReview:
       "tddEnforcement",
       "tddTestGlobs",
       "tdd",
+      "compound",
       "defaultTrack",
       "trackHeuristics",
       "sliceReview"

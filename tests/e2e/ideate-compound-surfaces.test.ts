@@ -1,7 +1,8 @@
 import fs from "node:fs/promises";
 import path from "node:path";
 import { describe, expect, it } from "vitest";
-import { initCclaw } from "../../src/install.js";
+import { readConfig, writeConfig } from "../../src/config.js";
+import { initCclaw, syncCclaw } from "../../src/install.js";
 import { createTempProject } from "../helpers/index.js";
 
 describe("ideate and compound utility surfaces", () => {
@@ -70,5 +71,29 @@ describe("ideate and compound utility surfaces", () => {
     expect(compoundSkill).toContain("superseding");
     expect(compoundSkill).toContain("Cite line IDs");
     expect(compoundSkill).toContain("Freshness:");
+  });
+
+  it("renders compound recurrence tuning policy (small-project + critical override)", async () => {
+    const root = await createTempProject("compound-recurrence-policy");
+    await initCclaw({ projectRoot: root });
+
+    const config = await readConfig(root);
+    await writeConfig(root, {
+      ...config,
+      compound: {
+        recurrenceThreshold: 5
+      }
+    });
+    await syncCclaw(root);
+
+    const compoundContract = await fs.readFile(path.join(root, ".cclaw/commands/compound.md"), "utf8");
+    const compoundSkill = await fs.readFile(path.join(root, ".cclaw/skills/flow-compound/SKILL.md"), "utf8");
+
+    expect(compoundContract).toContain("base threshold = `5`");
+    expect(compoundContract).toContain("archived run count is < 5");
+    expect(compoundContract).toContain("severity: \"critical\"");
+    expect(compoundSkill).toContain("base threshold = `5`");
+    expect(compoundSkill).toContain("critical override");
+    expect(compoundSkill).toContain("Qualification: <recurrence|critical_override>");
   });
 });

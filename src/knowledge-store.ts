@@ -6,6 +6,7 @@ import { FLOW_STAGES, type FlowStage } from "./types.js";
 
 export type KnowledgeEntryType = "rule" | "pattern" | "lesson" | "compound";
 export type KnowledgeEntryConfidence = "high" | "medium" | "low";
+export type KnowledgeEntrySeverity = "critical" | "important" | "suggestion";
 export type KnowledgeEntryUniversality = "project" | "personal" | "universal";
 export type KnowledgeEntryMaturity = "raw" | "lifted-to-rule" | "lifted-to-enforcement";
 export type KnowledgeEntrySource = "stage" | "retro" | "compound" | "ideate" | "manual";
@@ -15,6 +16,7 @@ export interface KnowledgeEntry {
   trigger: string;
   action: string;
   confidence: KnowledgeEntryConfidence;
+  severity?: KnowledgeEntrySeverity;
   domain: string | null;
   stage: FlowStage | null;
   origin_stage: FlowStage | null;
@@ -34,6 +36,7 @@ export interface KnowledgeSeedEntry {
   trigger: string;
   action: string;
   confidence: KnowledgeEntryConfidence;
+  severity?: KnowledgeEntrySeverity;
   domain?: string | null;
   stage?: FlowStage | null;
   origin_stage?: FlowStage | null;
@@ -67,6 +70,7 @@ export interface AppendKnowledgeResult {
 
 const KNOWLEDGE_TYPE_SET = new Set<KnowledgeEntryType>(["rule", "pattern", "lesson", "compound"]);
 const KNOWLEDGE_CONFIDENCE_SET = new Set<KnowledgeEntryConfidence>(["high", "medium", "low"]);
+const KNOWLEDGE_SEVERITY_SET = new Set<KnowledgeEntrySeverity>(["critical", "important", "suggestion"]);
 const KNOWLEDGE_UNIVERSALITY_SET = new Set<KnowledgeEntryUniversality>(["project", "personal", "universal"]);
 const KNOWLEDGE_MATURITY_SET = new Set<KnowledgeEntryMaturity>(["raw", "lifted-to-rule", "lifted-to-enforcement"]);
 const KNOWLEDGE_SOURCE_SET = new Set<KnowledgeEntrySource>([
@@ -96,6 +100,7 @@ const KNOWLEDGE_REQUIRED_KEYS = [
 ] as const;
 const KNOWLEDGE_ALLOWED_KEYS = new Set<string>(KNOWLEDGE_REQUIRED_KEYS);
 KNOWLEDGE_ALLOWED_KEYS.add("source");
+KNOWLEDGE_ALLOWED_KEYS.add("severity");
 
 function knowledgePath(projectRoot: string): string {
   return path.join(projectRoot, RUNTIME_ROOT, "knowledge.jsonl");
@@ -119,7 +124,7 @@ function normalizeText(value: string): string {
 
 function dedupeKey(entry: Pick<
   KnowledgeEntry,
-  "type" | "trigger" | "action" | "domain" | "stage" | "origin_stage" | "origin_feature" | "universality" | "project" | "source"
+  "type" | "trigger" | "action" | "domain" | "stage" | "origin_stage" | "origin_feature" | "universality" | "project" | "source" | "severity"
 >): string {
   return [
     entry.type,
@@ -131,7 +136,8 @@ function dedupeKey(entry: Pick<
     entry.origin_feature === null ? "null" : normalizeText(entry.origin_feature),
     entry.universality,
     entry.project === null ? "null" : normalizeText(entry.project),
-    entry.source === undefined || entry.source === null ? "null" : entry.source
+    entry.source === undefined || entry.source === null ? "null" : entry.source,
+    entry.severity === undefined ? "none" : entry.severity
   ].join("|");
 }
 
@@ -176,6 +182,12 @@ export function validateKnowledgeEntry(entry: unknown): { ok: boolean; errors: s
   }
   if (!KNOWLEDGE_CONFIDENCE_SET.has(obj.confidence as KnowledgeEntryConfidence)) {
     errors.push("confidence must be one of: high, medium, low.");
+  }
+  if (
+    obj.severity !== undefined &&
+    (typeof obj.severity !== "string" || !KNOWLEDGE_SEVERITY_SET.has(obj.severity as KnowledgeEntrySeverity))
+  ) {
+    errors.push("severity must be one of: critical, important, suggestion.");
   }
   if (!isNullableString(obj.domain)) {
     errors.push("domain must be string or null.");
@@ -247,6 +259,9 @@ export function materializeKnowledgeEntry(
     last_seen_ts: normalizeUtcIso(seed.last_seen_ts ?? now),
     project: seed.project ?? defaults.project ?? null
   };
+  if (seed.severity !== undefined) {
+    entry.severity = seed.severity;
+  }
   if (source !== null) {
     entry.source = source;
   }
