@@ -513,6 +513,22 @@ interface RetroGateStatus {
   hasRetroArtifact: boolean;
 }
 
+function parseIsoTimestamp(value: string | undefined): number | null {
+  if (!value || value.trim().length === 0) return null;
+  const parsed = Date.parse(value);
+  return Number.isFinite(parsed) ? parsed : null;
+}
+
+function inInclusiveWindow(
+  timestamp: number,
+  windowStartMs: number | null,
+  windowEndMs: number | null
+): boolean {
+  if (windowStartMs !== null && timestamp < windowStartMs) return false;
+  if (windowEndMs !== null && timestamp > windowEndMs) return false;
+  return true;
+}
+
 async function evaluateRetroGate(projectRoot: string, state: FlowState): Promise<RetroGateStatus> {
   const required = state.completedStages.includes("ship");
   const artifactFile = retroArtifactPath(projectRoot);
@@ -525,11 +541,17 @@ async function evaluateRetroGate(projectRoot: string, state: FlowState): Promise
       hasRetroArtifact = false;
     }
   }
+  let compoundEntries = state.retro.compoundEntries;
+  const windowStartMs = parseIsoTimestamp(state.closeout.retroDraftedAt);
+  const windowEndMs =
+    parseIsoTimestamp(state.closeout.retroAcceptedAt) ?? parseIsoTimestamp(state.retro.completedAt);
+  const shouldFallbackScan =
+    compoundEntries <= 0 && (windowStartMs !== null || windowEndMs !== null);
   const knowledgeFile = path.join(projectRoot, RUNTIME_ROOT, "knowledge.jsonl");
-  let compoundEntries = 0;
-  if (await exists(knowledgeFile)) {
+  if (shouldFallbackScan && (await exists(knowledgeFile))) {
     try {
       const raw = await fs.readFile(knowledgeFile, "utf8");
+      compoundEntries = 0;
       for (const line of raw.split(/\r?\n/)) {
         const trimmed = line.trim();
         if (!trimmed) continue;
@@ -538,8 +560,14 @@ async function evaluateRetroGate(projectRoot: string, state: FlowState): Promise
             type?: unknown;
             source?: unknown;
             stage?: unknown;
+            created?: unknown;
           };
           if (parsed.type !== "compound") {
+            continue;
+          }
+          const created =
+            typeof parsed.created === "string" ? parseIsoTimestamp(parsed.created) : null;
+          if (created === null || !inInclusiveWindow(created, windowStartMs, windowEndMs)) {
             continue;
           }
           const source = typeof parsed.source === "string"
