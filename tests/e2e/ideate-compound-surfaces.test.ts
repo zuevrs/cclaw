@@ -23,7 +23,7 @@ describe("ideate and compound utility surfaces", () => {
     expect(compoundSkill).toContain("## HARD-GATE");
   });
 
-  it("persists ideation artifact, supports resume, and ends with concrete handoff options", async () => {
+  it("persists ideate artifact, supports resume, and ends with concrete handoff options", async () => {
     const root = await createTempProject("ideate-handoff");
     await initCclaw({ projectRoot: root });
 
@@ -31,15 +31,15 @@ describe("ideate and compound utility surfaces", () => {
     const ideateSkill = await fs.readFile(path.join(root, ".cclaw/skills/flow-ideate/SKILL.md"), "utf8");
 
     // Persisted artifact is a hard-gate, not a suggestion.
-    expect(ideateContract).toContain(".cclaw/artifacts/ideation-<YYYY-MM-DD-slug>.md");
-    expect(ideateSkill).toContain(".cclaw/artifacts/ideation-<YYYY-MM-DD-slug>.md");
+    expect(ideateContract).toContain(".cclaw/artifacts/ideate-<YYYY-MM-DD-slug>.md");
+    expect(ideateSkill).toContain(".cclaw/artifacts/ideate-<YYYY-MM-DD-slug>.md");
     expect(ideateSkill).toMatch(/always produce the artifact file on disk/i);
 
     // Must not mutate flow-state (utility skill, not a stage).
     expect(ideateSkill).toMatch(/do not mutate .*flow-state\.json/i);
 
-    // Resume check for ideation-*.md younger than 30 days.
-    expect(ideateSkill).toContain("ideation-*.md");
+    // Resume check for ideate-*.md younger than 30 days.
+    expect(ideateSkill).toContain("ideate-*.md");
     expect(ideateSkill).toContain("30 days");
     expect(ideateSkill).toMatch(/Continue the existing backlog/i);
     expect(ideateSkill).toMatch(/Start a fresh scan/i);

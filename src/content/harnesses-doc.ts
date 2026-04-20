@@ -102,7 +102,7 @@ All harnesses receive the same utility commands:
 
 - \`/cc\` - flow entry and resume
 - \`/cc-next\` - stage progression
-- \`/cc-ideate\` - discovery mode for ranked repo-improvement backlog
+- \`/cc-ideate\` - ideate mode for ranked repo-improvement backlog
 - \`/cc-view\` - read-only router for status/tree/diff
 - \`/cc-ops\` - operations router for feature/tdd-log/retro/compound/archive/rewind
 

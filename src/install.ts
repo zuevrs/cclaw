@@ -1397,6 +1397,26 @@ async function cleanLegacyArtifacts(projectRoot: string): Promise<void> {
       // best-effort cleanup
     }
   }
+
+  // D-4 terminology migration: rename historical ideation artifacts to the
+  // canonical ideate-* naming without deleting user-authored content.
+  const artifactsDir = runtimePath(projectRoot, "artifacts");
+  try {
+    const entries = await fs.readdir(artifactsDir);
+    for (const entry of entries) {
+      const match = /^ideation-(.+\.md)$/u.exec(entry);
+      if (!match) continue;
+      const nextName = `ideate-${match[1]}`;
+      const from = path.join(artifactsDir, entry);
+      const to = path.join(artifactsDir, nextName);
+      if (await exists(to)) {
+        continue;
+      }
+      await fs.rename(from, to);
+    }
+  } catch {
+    // no artifacts directory yet (fresh init) or read-only FS
+  }
 }
 
 async function cleanStaleFiles(projectRoot: string): Promise<void> {

@@ -4,13 +4,13 @@ const IDEATE_SKILL_FOLDER = "flow-ideate";
 const IDEATE_SKILL_NAME = "flow-ideate";
 
 /**
- * Directory + filename convention for ideation artifacts. These are separate
+ * Directory + filename convention for ideate artifacts. These are separate
  * from stage artifacts (00-..08-*.md) because `/cc-ideate` runs outside the
  * critical-path flow state machine and must not collide with stage numbering.
  */
-const IDEATION_ARTIFACT_GLOB = ".cclaw/artifacts/ideation-*.md";
-const IDEATION_ARTIFACT_PATTERN = ".cclaw/artifacts/ideation-<YYYY-MM-DD-slug>.md";
-const IDEATION_RESUME_WINDOW_DAYS = 30;
+const IDEATE_ARTIFACT_GLOB = ".cclaw/artifacts/ideate-*.md";
+const IDEATE_ARTIFACT_PATTERN = ".cclaw/artifacts/ideate-<YYYY-MM-DD-slug>.md";
+const IDEATE_RESUME_WINDOW_DAYS = 30;
 
 /**
  * Structured-ask tool list reused across cclaw skills. Kept inline here (small
@@ -28,25 +28,25 @@ export function ideateCommandContract(): string {
 
 ## Purpose
 
-Repository-improvement discovery mode. Generate a ranked backlog of
+Repository-improvement ideate mode. Generate a ranked backlog of
 high-value improvements, persist it as an artifact on disk, and end with
 an explicit handoff — either launch \`/cc\` on a chosen candidate in the
 same session, or save/discard the backlog.
 
 ## HARD-GATE
 
-- Discovery mode only. Never mutate \`.cclaw/state/flow-state.json\`.
+- Ideate mode only. Never mutate \`.cclaw/state/flow-state.json\`.
 - Every recommendation cites evidence from the current repository
   (file path, command output, or knowledge-store entry id).
 - Always write a persisted artifact to
-  \`${IDEATION_ARTIFACT_PATTERN}\`. Chat-only output is not acceptable —
+  \`${IDEATE_ARTIFACT_PATTERN}\`. Chat-only output is not acceptable —
   the next session must be able to resume.
 - Always end with a structured handoff prompt, not an open question.
 
 ## Algorithm
 
-1. **Resume check.** Glob \`${IDEATION_ARTIFACT_GLOB}\`. If any artifact
-   has been modified within the last ${IDEATION_RESUME_WINDOW_DAYS} days,
+1. **Resume check.** Glob \`${IDEATE_ARTIFACT_GLOB}\`. If any artifact
+   has been modified within the last ${IDEATE_RESUME_WINDOW_DAYS} days,
    offer the user: continue that backlog, start fresh, or cancel.
 2. **Scan repo signals:**
    - open TODO/FIXME/XXX/HACK notes,
@@ -59,7 +59,7 @@ same session, or save/discard the backlog.
    per candidate.
 4. **Rank by impact/effort**, recommend the top item.
 5. **Write the artifact** at
-   \`${IDEATION_ARTIFACT_PATTERN}\` using the schema in the skill.
+   \`${IDEATE_ARTIFACT_PATTERN}\` using the schema in the skill.
 6. **Present the handoff prompt** with four concrete options — not A/B/C
    letters. Default = "Start /cc on the top recommendation".
 
@@ -72,7 +72,7 @@ same session, or save/discard the backlog.
 export function ideateCommandSkillMarkdown(): string {
   return `---
 name: ${IDEATE_SKILL_NAME}
-description: "Repository ideation mode: detect and rank high-leverage improvements, persist a backlog artifact, and hand off to /cc or save/discard."
+description: "Repository ideate mode: detect and rank high-leverage improvements, persist a backlog artifact, and hand off to /cc or save/discard."
 ---
 
 # /cc-ideate
@@ -81,12 +81,12 @@ description: "Repository ideation mode: detect and rank high-leverage improvemen
 
 "Using flow-ideate to identify highest-leverage improvements in this
 repository. Will persist a ranked backlog to
-\`${IDEATION_ARTIFACT_PATTERN}\` and end with an explicit handoff."
+\`${IDEATE_ARTIFACT_PATTERN}\` and end with an explicit handoff."
 
 ## HARD-GATE
 
 - Do not start coding in ideate mode.
-- Do not mutate \`.cclaw/state/flow-state.json\` — ideation sits outside
+- Do not mutate \`.cclaw/state/flow-state.json\` — ideate mode sits outside
   the critical-path flow.
 - Always produce the artifact file on disk before presenting the handoff.
 - Always end with a structured handoff that names the concrete follow-up
@@ -97,12 +97,12 @@ repository. Will persist a ranked backlog to
 ### Phase 0 — Resume check
 
 1. Use the harness's file-glob tool (\`Glob\` pattern
-   \`${IDEATION_ARTIFACT_GLOB}\` or equivalent \`ls\`/\`find\`).
-2. Filter to files modified within the last ${IDEATION_RESUME_WINDOW_DAYS} days.
+   \`${IDEATE_ARTIFACT_GLOB}\` or equivalent \`ls\`/\`find\`).
+2. Filter to files modified within the last ${IDEATE_RESUME_WINDOW_DAYS} days.
 3. If one or more match, present **one** structured ask using the
    harness's native tool (${STRUCTURED_ASK_TOOLS}) with options:
    - **Continue the existing backlog** — read the most-recent
-     ideation-*.md and work from its candidate list; skip re-scanning.
+     ideate-*.md and work from its candidate list; skip re-scanning.
    - **Start a fresh scan** — proceed to Phase 1; the old artifact stays
      on disk for history.
    - **Cancel** — stop; do not scan or write anything.
@@ -143,10 +143,10 @@ Aim for 5–10 candidates. Do not invent candidates without evidence.
 1. Sort by impact/effort ratio; break ties with confidence.
 2. Compute the artifact filename:
    - \`slug\` = first 3–5 words of the top recommendation, lowercase,
-     non-alphanumeric collapsed to \`-\`, trimmed. When ideation is
+     non-alphanumeric collapsed to \`-\`, trimmed. When ideate mode is
      focus-hinted (user passed an argument), use the focus hint instead.
    - \`date\` = today in \`YYYY-MM-DD\` (local time).
-   - Path = \`.cclaw/artifacts/ideation-<date>-<slug>.md\`.
+   - Path = \`.cclaw/artifacts/ideate-<date>-<slug>.md\`.
 3. Use the harness's write-file tool (\`Write\`, \`apply_patch\`, or shell
    \`cat <<EOF > path\`) to create the artifact with this schema:
 
@@ -201,7 +201,7 @@ lettered list with the same four labels. Do not invent extra options.
 - **Start /cc on I-1** or **different candidate:** announce
   "Handing off to /cc <phrase>" and load the \`using-cclaw\` router
   skill. From there, the normal \`/cc\` classification and stage flow
-  takes over. Do not produce a second artifact; the ideation file is
+  takes over. Do not produce a second artifact; the ideate file is
   preserved as the origin document for this run.
 - **Save and close:** reply with the artifact path and stop.
 - **Discard:** delete the artifact file, confirm deletion, stop.
