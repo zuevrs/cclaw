@@ -769,7 +769,7 @@ export async function archiveRun(
     typeof sourceState.closeout.retroSkipReason === "string" &&
     sourceState.closeout.retroSkipReason.trim().length > 0;
   const readyForArchive = sourceState.closeout.shipSubstate === "ready_to_archive";
-  if (shipCompleted && !readyForArchive && !skipRetro && !retroSkippedInCloseout) {
+  if (shipCompleted && !readyForArchive && !skipRetro) {
     throw new Error(
       "Archive blocked: closeout is not ready_to_archive. " +
       "Resume /cc-next until closeout reaches ready_to_archive, " +

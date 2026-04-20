@@ -114,6 +114,30 @@ describe("runs system", () => {
     expect(archived.retro.skipReason).toBe("trivial doc change");
   });
 
+  it("blocks archive when retro was skipped but closeout is not ready_to_archive", async () => {
+    const root = await createTempProject("runs-retro-skipped-not-ready");
+    await ensureRunSystem(root);
+    const base = createInitialFlowState("active");
+    await writeFlowState(
+      root,
+      {
+        ...base,
+        currentStage: "ship",
+        completedStages: ["brainstorm", "scope", "design", "spec", "plan", "tdd", "review", "ship"],
+        closeout: {
+          ...base.closeout,
+          shipSubstate: "compound_review",
+          retroSkipped: true,
+          retroSkipReason: "small release, no retro",
+          retroAcceptedAt: "2026-01-01T00:00:00Z"
+        }
+      },
+      { allowReset: true }
+    );
+
+    await expect(archiveRun(root, "Retro Skipped Not Ready")).rejects.toThrow(/ready_to_archive/i);
+  });
+
   it("blocks archive when retro artifacts exist but closeout substate is not ready_to_archive", async () => {
     const root = await createTempProject("runs-retro-substate-block");
     await ensureRunSystem(root);
