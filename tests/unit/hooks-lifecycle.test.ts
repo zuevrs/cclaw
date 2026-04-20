@@ -320,6 +320,154 @@ printf '%s\n' "$*" >> "${callsPath}"
     expect(log).toContain("stage_invocation_without_recent_flow_read");
   });
 
+  it("workflow guard blocks tdd production writes before RED in strict tdd mode", async () => {
+    const root = await createTempProject("workflow-guard-tdd-need-red");
+    await fs.mkdir(path.join(root, ".cclaw/state"), { recursive: true });
+    await fs.writeFile(path.join(root, ".cclaw/state/flow-state.json"), JSON.stringify({
+      currentStage: "tdd",
+      activeRunId: "active",
+      completedStages: ["brainstorm", "scope", "design", "spec", "plan"]
+    }, null, 2), "utf8");
+
+    const result = await runScript(
+      root,
+      "workflow-guard.sh",
+      workflowGuardScript({ tddEnforcementMode: "strict" }),
+      [],
+      JSON.stringify({
+        tool_name: "Write",
+        tool_input: {
+          path: "src/app.ts",
+          content: "export const value = 1;\n"
+        }
+      })
+    );
+    expect(result.code).toBe(1);
+    expect(result.stderr).toContain("Write a failing test first");
+  });
+
+  it("workflow guard allows production writes in tdd when RED is open", async () => {
+    const root = await createTempProject("workflow-guard-tdd-red-open");
+    await fs.mkdir(path.join(root, ".cclaw/state"), { recursive: true });
+    await fs.writeFile(path.join(root, ".cclaw/state/flow-state.json"), JSON.stringify({
+      currentStage: "tdd",
+      activeRunId: "active",
+      completedStages: ["brainstorm", "scope", "design", "spec", "plan"]
+    }, null, 2), "utf8");
+    await fs.writeFile(path.join(root, ".cclaw/state/tdd-cycle-log.jsonl"), [
+      JSON.stringify({ ts: "2026-04-20T00:00:00Z", runId: "active", phase: "red" })
+    ].join("\n"), "utf8");
+
+    const result = await runScript(
+      root,
+      "workflow-guard.sh",
+      workflowGuardScript({ tddEnforcementMode: "strict" }),
+      [],
+      JSON.stringify({
+        tool_name: "Edit",
+        tool_input: {
+          path: "src/app.ts",
+          old_string: "const old = 1;",
+          new_string: "const next = 2;"
+        }
+      })
+    );
+    expect(result.code).toBe(0);
+    expect(result.stderr).not.toContain("Write a failing test first");
+  });
+
+  it("workflow guard allows production writes in tdd after GREEN is done", async () => {
+    const root = await createTempProject("workflow-guard-tdd-green-done");
+    await fs.mkdir(path.join(root, ".cclaw/state"), { recursive: true });
+    await fs.writeFile(path.join(root, ".cclaw/state/flow-state.json"), JSON.stringify({
+      currentStage: "tdd",
+      activeRunId: "active",
+      completedStages: ["brainstorm", "scope", "design", "spec", "plan"]
+    }, null, 2), "utf8");
+    await fs.writeFile(path.join(root, ".cclaw/state/tdd-cycle-log.jsonl"), [
+      JSON.stringify({ ts: "2026-04-20T00:00:00Z", runId: "active", phase: "red" }),
+      JSON.stringify({ ts: "2026-04-20T00:02:00Z", runId: "active", phase: "green" })
+    ].join("\n"), "utf8");
+
+    const result = await runScript(
+      root,
+      "workflow-guard.sh",
+      workflowGuardScript({ tddEnforcementMode: "strict" }),
+      [],
+      JSON.stringify({
+        tool_name: "Write",
+        tool_input: {
+          path: "src/app.ts",
+          content: "export const value = 3;\n"
+        }
+      })
+    );
+    expect(result.code).toBe(0);
+    expect(result.stderr).not.toContain("Write a failing test first");
+  });
+
+  it("workflow guard classifies paths with tdd.testPathPatterns and tdd.productionPathPatterns", async () => {
+    const root = await createTempProject("workflow-guard-tdd-pattern-routing");
+    await fs.mkdir(path.join(root, ".cclaw/state"), { recursive: true });
+    await fs.writeFile(path.join(root, ".cclaw/state/flow-state.json"), JSON.stringify({
+      currentStage: "tdd",
+      activeRunId: "active",
+      completedStages: ["brainstorm", "scope", "design", "spec", "plan"]
+    }, null, 2), "utf8");
+
+    const script = workflowGuardScript({
+      tddEnforcementMode: "strict",
+      tddTestPathPatterns: ["**/*.unit.ts"],
+      tddProductionPathPatterns: ["src/**"]
+    });
+
+    const testWrite = await runScript(
+      root,
+      "workflow-guard.sh",
+      script,
+      [],
+      JSON.stringify({
+        tool_name: "Write",
+        tool_input: {
+          path: "tests/math.unit.ts",
+          content: "describe('math', () => {});\n"
+        }
+      })
+    );
+    expect(testWrite.code).toBe(0);
+
+    const nonProdWrite = await runScript(
+      root,
+      "workflow-guard.sh",
+      script,
+      [],
+      JSON.stringify({
+        tool_name: "Write",
+        tool_input: {
+          path: "scripts/build.ts",
+          content: "console.log('build');\n"
+        }
+      })
+    );
+    expect(nonProdWrite.code).toBe(0);
+
+    const prodWrite = await runScript(
+      root,
+      "workflow-guard.sh",
+      script,
+      [],
+      JSON.stringify({
+        tool_name: "Write",
+        tool_input: {
+          path: "src/app.ts",
+          content: "export const v = 1;\n"
+        }
+      })
+    );
+    expect(prodWrite.code).toBe(1);
+    expect(prodWrite.stderr).toContain("Write a failing test first");
+  });
+
   it("workflow guard exempts cclaw doctor from non-safe-tool in plan stage", async () => {
     const root = await createTempProject("guard-cclaw-cli");
     await fs.mkdir(path.join(root, ".cclaw/state"), { recursive: true });

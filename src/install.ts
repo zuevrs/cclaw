@@ -853,7 +853,8 @@ async function writeHooks(projectRoot: string, config: VibyConfig): Promise<void
     workflowGuardScript({
       workflowGuardMode: config.strictness ?? "advisory",
       tddEnforcementMode: config.tddEnforcement ?? "advisory",
-      tddTestGlobs: config.tddTestGlobs
+      tddTestPathPatterns: config.tdd?.testPathPatterns ?? config.tddTestGlobs,
+      tddProductionPathPatterns: config.tdd?.productionPathPatterns
     })
   );
   await writeFileSafe(path.join(hooksDir, "context-monitor.sh"), contextMonitorScript());
