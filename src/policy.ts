@@ -1,6 +1,7 @@
 import fs from "node:fs/promises";
 import path from "node:path";
-import { COMMAND_FILE_ORDER, RUNTIME_ROOT } from "./constants.js";
+import { RUNTIME_ROOT } from "./constants.js";
+import { FLOW_STAGES } from "./types.js";
 import { stageSchema, stagePolicyNeedles } from "./content/stage-schema.js";
 import { stageSkillFolder } from "./content/skills.js";
 import { exists } from "./fs-utils.js";
@@ -33,7 +34,7 @@ export async function policyChecks(projectRoot: string, options: PolicyOptions =
     options.harnesses && options.harnesses.length > 0 ? options.harnesses : ALL_HARNESSES
   );
 
-  for (const stage of COMMAND_FILE_ORDER) {
+  for (const stage of FLOW_STAGES) {
     const folder = stageSkillFolder(stage);
     const schema = stageSchema(stage);
     const commandFile = `${RUNTIME_ROOT}/commands/${stage}.md`;

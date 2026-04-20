@@ -1,6 +1,6 @@
 import { describe, expect, it } from "vitest";
-import { COMMAND_FILE_ORDER } from "../../src/constants.js";
 import { stageSchema } from "../../src/content/stage-schema.js";
+import { FLOW_STAGES } from "../../src/types.js";
 
 describe("gate density policy", () => {
   it("keeps required gates within per-stage budget", () => {
@@ -9,7 +9,7 @@ describe("gate density policy", () => {
       tdd: 5,
       review: 5
     };
-    for (const stage of COMMAND_FILE_ORDER) {
+    for (const stage of FLOW_STAGES) {
       const required = stageSchema(stage).requiredGates.filter((gate) => gate.tier === "required");
       const maxRequired = REQUIRED_GATE_BUDGET[stage] ?? 4;
       expect(

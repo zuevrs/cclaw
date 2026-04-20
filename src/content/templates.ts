@@ -1,5 +1,5 @@
-import { COMMAND_FILE_ORDER } from "../constants.js";
 import { orderedStageSchemas } from "./stage-schema.js";
+import { FLOW_STAGES } from "../types.js";
 
 export const ARTIFACT_TEMPLATES: Record<string, string> = {
   "01-brainstorm.md": `---
@@ -806,7 +806,7 @@ Track-specific skips are allowed only when \`flow-state.track\` + \`skippedStage
 export function buildRulesJson(): Record<string, unknown> {
   return {
     version: 1,
-    stage_order: COMMAND_FILE_ORDER,
+    stage_order: FLOW_STAGES,
     stage_gates: Object.fromEntries(
       orderedStageSchemas().map((schema) => [
         schema.stage,

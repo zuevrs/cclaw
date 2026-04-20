@@ -1,4 +1,3 @@
-import { COMMAND_FILE_ORDER } from "./constants.js";
 import {
   buildTransitionRules,
   orderedStageSchemas,
@@ -191,11 +190,11 @@ export function nextStage(stage: FlowStage, track: FlowTrack = "standard"): Flow
   const ordered = TRACK_STAGES[track];
   const index = ordered.indexOf(stage);
   if (index < 0) {
-    const fallback = COMMAND_FILE_ORDER.indexOf(stage);
-    if (fallback < 0 || fallback === COMMAND_FILE_ORDER.length - 1) {
+    const fallback = FLOW_STAGES.indexOf(stage);
+    if (fallback < 0 || fallback === FLOW_STAGES.length - 1) {
       return null;
     }
-    return COMMAND_FILE_ORDER[fallback + 1];
+    return FLOW_STAGES[fallback + 1];
   }
   if (index === ordered.length - 1) {
     return null;
@@ -210,11 +209,11 @@ export function previousStage(stage: FlowStage, track: FlowTrack = "standard"): 
     return null;
   }
   if (index < 0) {
-    const fallback = COMMAND_FILE_ORDER.indexOf(stage);
+    const fallback = FLOW_STAGES.indexOf(stage);
     if (fallback <= 0) {
       return null;
     }
-    return COMMAND_FILE_ORDER[fallback - 1];
+    return FLOW_STAGES[fallback - 1];
   }
   return ordered[index - 1];
 }

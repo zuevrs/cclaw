@@ -1,6 +1,6 @@
 import fs from "node:fs/promises";
 import path from "node:path";
-import { COMMAND_FILE_ORDER, RUNTIME_ROOT } from "./constants.js";
+import { RUNTIME_ROOT } from "./constants.js";
 import {
   canTransition,
   createInitialCloseoutState,
@@ -17,6 +17,7 @@ import {
   syncActiveFeatureSnapshot
 } from "./feature-system.js";
 import { ensureDir, exists, withDirectoryLock, writeFileSafe } from "./fs-utils.js";
+import { FLOW_STAGES } from "./types.js";
 import type { FlowStage, FlowTrack } from "./types.js";
 
 export class InvalidStageTransitionError extends Error {
@@ -41,7 +42,7 @@ export interface WriteFlowStateOptions {
 const FLOW_STATE_REL_PATH = `${RUNTIME_ROOT}/state/flow-state.json`;
 const RUNS_DIR_REL_PATH = `${RUNTIME_ROOT}/runs`;
 const ACTIVE_ARTIFACTS_REL_PATH = `${RUNTIME_ROOT}/artifacts`;
-const FLOW_STAGE_SET = new Set<string>(COMMAND_FILE_ORDER);
+const FLOW_STAGE_SET = new Set<string>(FLOW_STAGES);
 
 function validateFlowTransition(prev: FlowState, next: FlowState): void {
   if (prev.activeRunId !== next.activeRunId) {
@@ -137,7 +138,7 @@ function sanitizeStageGateCatalog(
 ): FlowState["stageGateCatalog"] {
   const uniqueStrings = (items: string[]): string[] => [...new Set(items)];
   const next = {} as FlowState["stageGateCatalog"];
-  for (const stage of COMMAND_FILE_ORDER) {
+  for (const stage of FLOW_STAGES) {
     const base = fallback[stage];
     next[stage] = {
       required: [...base.required],
@@ -154,7 +155,7 @@ function sanitizeStageGateCatalog(
   }
 
   const rawCatalog = value as Record<string, unknown>;
-  for (const stage of COMMAND_FILE_ORDER) {
+  for (const stage of FLOW_STAGES) {
     const rawStage = rawCatalog[stage];
     if (!rawStage || typeof rawStage !== "object" || Array.isArray(rawStage)) {
       continue;

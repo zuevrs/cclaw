@@ -3,7 +3,7 @@ import path from "node:path";
 import { execFile } from "node:child_process";
 import { pathToFileURL } from "node:url";
 import { promisify } from "node:util";
-import { COMMAND_FILE_ORDER, REQUIRED_DIRS, RUNTIME_ROOT } from "./constants.js";
+import { REQUIRED_DIRS, RUNTIME_ROOT } from "./constants.js";
 import { CCLAW_AGENTS } from "./content/core-agents.js";
 import { readConfig } from "./config.js";
 import { exists } from "./fs-utils.js";
@@ -18,7 +18,7 @@ import {
 import { policyChecks } from "./policy.js";
 import { readFlowState } from "./runs.js";
 import { skippedStagesForTrack } from "./flow-state.js";
-import { TRACK_STAGES } from "./types.js";
+import { FLOW_STAGES, TRACK_STAGES } from "./types.js";
 import { checkMandatoryDelegations } from "./delegation.js";
 import {
   ensureFeatureSystem,
@@ -335,7 +335,7 @@ export async function doctorChecks(projectRoot: string, options: DoctorOptions =
     });
   }
 
-  for (const stage of COMMAND_FILE_ORDER) {
+  for (const stage of FLOW_STAGES) {
     const commandPath = path.join(projectRoot, RUNTIME_ROOT, "commands", `${stage}.md`);
     checks.push({
       name: `command:${stage}`,
@@ -440,7 +440,7 @@ export async function doctorChecks(projectRoot: string, options: DoctorOptions =
   // skill's Examples section points here; the file MUST exist or the pointer
   // is a dangling link.
   const stageRefDir = path.join(projectRoot, RUNTIME_ROOT, "references", "stages");
-  for (const stage of COMMAND_FILE_ORDER) {
+  for (const stage of FLOW_STAGES) {
     const refPath = path.join(stageRefDir, `${stage}-examples.md`);
     checks.push({
       name: `stage_examples_ref:${stage}`,
@@ -1381,7 +1381,7 @@ export async function doctorChecks(projectRoot: string, options: DoctorOptions =
     name: "flow_state:track",
     ok: skippedConsistent,
     details: skippedConsistent
-      ? `active track "${activeTrack}" (${trackStageList.length}/${COMMAND_FILE_ORDER.length} stages: ${trackStageList.join(" → ")})${
+      ? `active track "${activeTrack}" (${trackStageList.length}/${FLOW_STAGES.length} stages: ${trackStageList.join(" → ")})${
           expectedSkipped.length > 0 ? `; skippedStages=${expectedSkipped.join(", ")}` : ""
         }`
       : `track "${activeTrack}" expects skippedStages=[${expectedSkipped.join(", ")}] but flow-state has [${skippedFromState.join(", ")}] — run \`cclaw sync\` to repair`
@@ -1546,7 +1546,7 @@ export async function doctorChecks(projectRoot: string, options: DoctorOptions =
       : `legacy snapshot entries still present (read-only): ${legacyWorkspaceEntries.join(", ")}`
   });
   const staleStages = Object.keys(flowState.staleStages).filter((value) =>
-    COMMAND_FILE_ORDER.includes(value as (typeof COMMAND_FILE_ORDER)[number])
+    FLOW_STAGES.includes(value as (typeof FLOW_STAGES)[number])
   );
   checks.push({
     name: "state:stale_stages_resolved",
@@ -1787,11 +1787,11 @@ export async function doctorChecks(projectRoot: string, options: DoctorOptions =
       const stageGates = parsed.stage_gates;
       const hasStageOrder =
         Array.isArray(stageOrder) &&
-        COMMAND_FILE_ORDER.every((stage) => stageOrder.includes(stage));
+        FLOW_STAGES.every((stage) => stageOrder.includes(stage));
       const hasStageGates =
         typeof stageGates === "object" &&
         stageGates !== null &&
-        COMMAND_FILE_ORDER.every((stage) =>
+        FLOW_STAGES.every((stage) =>
           Array.isArray((stageGates as Record<string, unknown[]>)[stage])
         );
 

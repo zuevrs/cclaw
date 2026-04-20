@@ -1,5 +1,4 @@
-import { COMMAND_FILE_ORDER } from "../constants.js";
-import { FLOW_TRACKS, TRACK_STAGES } from "../types.js";
+import { FLOW_STAGES, FLOW_TRACKS, TRACK_STAGES } from "../types.js";
 import type { FlowStage, FlowTrack, TransitionRule } from "../types.js";
 import {
   BRAINSTORM,
@@ -303,7 +302,7 @@ export function stageSchema(stage: FlowStage, track: FlowTrack = "standard"): St
 }
 
 export function orderedStageSchemas(track: FlowTrack = "standard"): StageSchema[] {
-  return COMMAND_FILE_ORDER.map((stage) => stageSchema(stage, track));
+  return FLOW_STAGES.map((stage) => stageSchema(stage, track));
 }
 
 export function stageGateIds(stage: FlowStage, track: FlowTrack = "standard"): string[] {

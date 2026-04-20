@@ -4,7 +4,6 @@ import path from "node:path";
 import { promisify } from "node:util";
 import {
   CCLAW_VERSION,
-  COMMAND_FILE_ORDER,
   FLOW_VERSION,
   REQUIRED_DIRS,
   RUNTIME_ROOT,
@@ -120,6 +119,7 @@ import {
 } from "./harness-adapters.js";
 import { validateHookDocument } from "./hook-schema.js";
 import { ensureRunSystem, readFlowState } from "./runs.js";
+import { FLOW_STAGES } from "./types.js";
 import type { CclawConfig, FlowTrack, HarnessId } from "./types.js";
 
 export interface InitOptions {
@@ -264,7 +264,7 @@ async function ensureStructure(projectRoot: string): Promise<void> {
 }
 
 async function writeCommandContracts(projectRoot: string): Promise<void> {
-  for (const stage of COMMAND_FILE_ORDER) {
+  for (const stage of FLOW_STAGES) {
     await writeFileSafe(
       runtimePath(projectRoot, "commands", `${stage}.md`),
       commandContract(stage)
@@ -306,7 +306,7 @@ async function writeEvalScaffold(projectRoot: string): Promise<void> {
 
 async function writeSkills(projectRoot: string, config?: CclawConfig): Promise<void> {
   const skillTrack = config?.defaultTrack ?? "standard";
-  for (const stage of COMMAND_FILE_ORDER) {
+  for (const stage of FLOW_STAGES) {
     const folder = stageSkillFolder(stage);
     await writeFileSafe(
       runtimePath(projectRoot, "skills", folder, "SKILL.md"),

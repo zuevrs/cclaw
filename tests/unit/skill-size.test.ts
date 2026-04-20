@@ -1,11 +1,11 @@
 import { describe, expect, it } from "vitest";
-import { COMMAND_FILE_ORDER } from "../../src/constants.js";
 import { usingCclawSkillMarkdown } from "../../src/content/meta-skill.js";
 import { stageSkillMarkdown } from "../../src/content/skills.js";
+import { FLOW_STAGES } from "../../src/types.js";
 
 describe("stage skill size budgets", () => {
   it("keeps every stage skill under 350 lines", () => {
-    for (const stage of COMMAND_FILE_ORDER) {
+    for (const stage of FLOW_STAGES) {
       const markdown = stageSkillMarkdown(stage);
       const lines = markdown.split(/\r?\n/u).length;
       expect(
