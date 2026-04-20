@@ -320,6 +320,43 @@ describe("gate evidence verification", () => {
     expect(result.issues.join("\n")).toContain("review trace-matrix gate blocked");
   });
 
+  it("blocks design research gate when sections are <fill-in> placeholders", async () => {
+    const root = await createTempProject("gate-evidence-design-research-fillin");
+    await prepareRoot(root);
+    const state = createInitialFlowState("run-design-research-fillin");
+    state.currentStage = "design";
+    const required = requiredGateIds("design");
+    state.stageGateCatalog.design.passed = [...required];
+    for (const gateId of required) {
+      state.guardEvidence[gateId] = `evidence:${gateId}`;
+    }
+    await fs.writeFile(
+      path.join(root, ".cclaw/artifacts/02a-research.md"),
+      `# Research Artifact
+
+## Stack Analysis
+<fill-in>
+
+## Features & Patterns
+<fill-in>
+
+## Architecture Options
+<fill-in>
+
+## Pitfalls & Risks
+<fill-in>
+
+## Synthesis
+<fill-in>
+`,
+      "utf8"
+    );
+
+    const result = await verifyCurrentStageGateEvidence(root, state);
+    expect(result.ok).toBe(false);
+    expect(result.issues.join("\n")).toMatch(/empty or placeholder/);
+  });
+
   it("blocks design research gate when 02a-research artifact is missing", async () => {
     const root = await createTempProject("gate-evidence-design-research");
     await prepareRoot(root);
