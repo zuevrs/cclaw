@@ -312,13 +312,26 @@ export async function checkMandatoryDelegations(
       waived.push(agent);
     }
 
-    // Under role-switch fallback, a `completed` row is only credible if it
-    // carries at least one evidenceRef — otherwise the agent might have
-    // claimed role-switch satisfaction without showing its work.
+    // Evidence gating for `completed` rows has two triggers:
+    //   1. The aggregate expected mode is role-switch (no isolated harness
+    //      available), so every completion implicitly ran as role-switch.
+    //   2. Any completed row is explicitly stamped `fulfillmentMode:
+    //      "role-switch"` — even in a mixed install. This closes the loop
+    //      where a Codex session logs a role-switch completion inside a
+    //      claude+codex project: the aggregate expectedMode is "isolated"
+    //      (claude wins), so the role-switch row would previously sail
+    //      through without evidenceRefs.
+    const hasExplicitRoleSwitchRow = completedRows.some(
+      (e) => e.fulfillmentMode === "role-switch"
+    );
+    const evidenceRequired =
+      expectedMode === "role-switch" || hasExplicitRoleSwitchRow;
     if (
       hasCompleted &&
-      expectedMode === "role-switch" &&
-      !completedRows.some((e) => Array.isArray(e.evidenceRefs) && e.evidenceRefs.length > 0)
+      evidenceRequired &&
+      !completedRows.some(
+        (e) => Array.isArray(e.evidenceRefs) && e.evidenceRefs.length > 0
+      )
     ) {
       missingEvidence.push(agent);
     }
