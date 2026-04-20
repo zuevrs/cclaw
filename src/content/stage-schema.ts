@@ -272,8 +272,8 @@ const STAGE_AUTO_SUBAGENT_DISPATCH: Record<FlowStage, StageAutoSubagentDispatch[
     },
     {
       agent: "reviewer",
-      mode: "proactive",
-      when: "When the diff exceeds 100 changed lines, touches more than 10 files, or modifies trust boundaries — dispatch a SECOND, independent reviewer with the adversarial-review skill loaded so the review army has at least two voices on a high-blast-radius change.",
+      mode: "mandatory",
+      when: "Mandatory when the diff exceeds 100 changed lines, touches more than 10 files, or modifies trust boundaries — dispatch a SECOND, independent reviewer with the adversarial-review skill loaded so the review army has at least two voices on a high-blast-radius change.",
       purpose: "Adversarial second-opinion review on large or trust-sensitive diffs. The second reviewer treats the implementation as hostile and tries to break it (hostile-user, future-maintainer, competitor lenses) instead of sympathetically explaining it.",
       requiresUserGate: false,
       skill: "adversarial-review"
@@ -307,9 +307,11 @@ const STAGE_AUTO_SUBAGENT_DISPATCH: Record<FlowStage, StageAutoSubagentDispatch[
 
 /** Transition guard: agents with `mode: "mandatory"` in auto-subagent dispatch for this stage. */
 export function mandatoryDelegationsForStage(stage: FlowStage): string[] {
-  return STAGE_AUTO_SUBAGENT_DISPATCH[stage]
-    .filter((d) => d.mode === "mandatory")
-    .map((d) => d.agent);
+  return [...new Set(
+    STAGE_AUTO_SUBAGENT_DISPATCH[stage]
+      .filter((d) => d.mode === "mandatory")
+      .map((d) => d.agent)
+  )];
 }
 
 export function stageSchema(stage: FlowStage, track: FlowTrack = "standard"): StageSchema {
