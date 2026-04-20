@@ -103,6 +103,8 @@ export const SHIP: StageSchemaInput = {
     "FINALIZE_NO_VCS"
   ],
   artifactFile: "08-ship.md",
+  // `done` exits the stage pipeline. Archive semantics are handled by the
+  // closeout substate machine (`idle` -> ... -> `archived`) in flow-state.
   next: "done",
   reviewSections: [
     {

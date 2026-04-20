@@ -3,9 +3,9 @@ import path from "node:path";
 import { execFile } from "node:child_process";
 import { pathToFileURL } from "node:url";
 import { promisify } from "node:util";
-import { COMMAND_FILE_ORDER, REQUIRED_DIRS, RUNTIME_ROOT } from "./constants.js";
+import { REQUIRED_DIRS, RUNTIME_ROOT } from "./constants.js";
 import { CCLAW_AGENTS } from "./content/core-agents.js";
-import { readConfig } from "./config.js";
+import { detectAdvancedKeys, readConfig } from "./config.js";
 import { exists } from "./fs-utils.js";
 import { gitignoreHasRequiredPatterns } from "./gitignore.js";
 import {
@@ -18,7 +18,7 @@ import {
 import { policyChecks } from "./policy.js";
 import { readFlowState } from "./runs.js";
 import { skippedStagesForTrack } from "./flow-state.js";
-import { TRACK_STAGES } from "./types.js";
+import { FLOW_STAGES, TRACK_STAGES } from "./types.js";
 import { checkMandatoryDelegations } from "./delegation.js";
 import {
   ensureFeatureSystem,
@@ -335,7 +335,7 @@ export async function doctorChecks(projectRoot: string, options: DoctorOptions =
     });
   }
 
-  for (const stage of COMMAND_FILE_ORDER) {
+  for (const stage of FLOW_STAGES) {
     const commandPath = path.join(projectRoot, RUNTIME_ROOT, "commands", `${stage}.md`);
     checks.push({
       name: `command:${stage}`,
@@ -440,7 +440,7 @@ export async function doctorChecks(projectRoot: string, options: DoctorOptions =
   // skill's Examples section points here; the file MUST exist or the pointer
   // is a dangling link.
   const stageRefDir = path.join(projectRoot, RUNTIME_ROOT, "references", "stages");
-  for (const stage of COMMAND_FILE_ORDER) {
+  for (const stage of FLOW_STAGES) {
     const refPath = path.join(stageRefDir, `${stage}-examples.md`);
     checks.push({
       name: `stage_examples_ref:${stage}`,
@@ -497,6 +497,19 @@ export async function doctorChecks(projectRoot: string, options: DoctorOptions =
   }
 
   if (parsedConfig) {
+    const advancedKeys = await detectAdvancedKeys(projectRoot).catch(() => new Set());
+    const hasLegacyTddTestGlobs = advancedKeys.has("tddTestGlobs");
+    const hasModernTddConfig = advancedKeys.has("tdd");
+    checks.push({
+      name: "warning:config:deprecated_tdd_test_globs",
+      ok: !hasLegacyTddTestGlobs,
+      details: hasLegacyTddTestGlobs
+        ? hasModernTddConfig
+          ? `warning: ${RUNTIME_ROOT}/config.yaml sets deprecated "tddTestGlobs" alongside "tdd.*"; "tdd.testPathPatterns" takes precedence. Remove legacy key.`
+          : `warning: ${RUNTIME_ROOT}/config.yaml uses deprecated "tddTestGlobs". Migrate to "tdd.testPathPatterns".`
+        : `no deprecated "tddTestGlobs" key detected in ${RUNTIME_ROOT}/config.yaml`
+    });
+
     const expectedMode = parsedConfig.promptGuardMode === "strict" ? "strict" : "advisory";
     const promptGuardPath = path.join(projectRoot, RUNTIME_ROOT, "hooks", "prompt-guard.sh");
     let promptGuardModeOk = false;
@@ -1293,6 +1306,67 @@ export async function doctorChecks(projectRoot: string, options: DoctorOptions =
     ok: await exists(path.join(projectRoot, RUNTIME_ROOT, "state", "harness-gaps.json")),
     details: `${RUNTIME_ROOT}/state/harness-gaps.json must exist for tiered harness capability tracking`
   });
+  const adapterManifestPath = path.join(projectRoot, RUNTIME_ROOT, "adapters", "manifest.json");
+  const adapterManifestExists = await exists(adapterManifestPath);
+  checks.push({
+    name: "state:adapter_manifest_exists",
+    ok: adapterManifestExists,
+    details: `${RUNTIME_ROOT}/adapters/manifest.json must exist for harness adapter provenance`
+  });
+  if (adapterManifestExists) {
+    let harnessesOk = false;
+    let harnessesDetails = "";
+    let sourcesOk = false;
+    let sourcesDetails = "";
+    try {
+      const parsed = JSON.parse(await fs.readFile(adapterManifestPath, "utf8")) as {
+        harnesses?: unknown;
+        commandSource?: unknown;
+        skillSource?: unknown;
+      };
+      const manifestHarnesses =
+        Array.isArray(parsed.harnesses)
+          ? parsed.harnesses.filter((entry): entry is string => typeof entry === "string")
+          : [];
+      const expectedHarnesses =
+        configuredHarnesses.length > 0
+          ? [...new Set(configuredHarnesses)].sort()
+          : null;
+      const actualHarnesses = [...new Set(manifestHarnesses)].sort();
+      harnessesOk = expectedHarnesses
+        ? actualHarnesses.length === expectedHarnesses.length &&
+          actualHarnesses.every((harness, index) => harness === expectedHarnesses[index])
+        : actualHarnesses.length > 0;
+      harnessesDetails = expectedHarnesses
+        ? harnessesOk
+          ? `adapter manifest harnesses match config.yaml: ${actualHarnesses.join(", ")}`
+          : `adapter manifest harnesses [${actualHarnesses.join(", ")}] do not match config.yaml [${expectedHarnesses.join(", ")}]`
+        : harnessesOk
+          ? `adapter manifest declares harnesses: ${actualHarnesses.join(", ")}`
+          : "adapter manifest must declare at least one harness";
+      const commandSource = typeof parsed.commandSource === "string" ? parsed.commandSource.trim() : "";
+      const skillSource = typeof parsed.skillSource === "string" ? parsed.skillSource.trim() : "";
+      sourcesOk = commandSource.length > 0 && skillSource.length > 0;
+      sourcesDetails = sourcesOk
+        ? `adapter manifest source globs are set (commandSource=${commandSource}; skillSource=${skillSource})`
+        : "adapter manifest must include non-empty commandSource and skillSource";
+    } catch {
+      harnessesOk = false;
+      harnessesDetails = "adapter manifest must be valid JSON with a harnesses array";
+      sourcesOk = false;
+      sourcesDetails = "adapter manifest must be valid JSON with source globs";
+    }
+    checks.push({
+      name: "state:adapter_manifest_harnesses",
+      ok: harnessesOk,
+      details: harnessesDetails
+    });
+    checks.push({
+      name: "state:adapter_manifest_sources",
+      ok: sourcesOk,
+      details: sourcesDetails
+    });
+  }
   const contextModeStatePath = path.join(projectRoot, RUNTIME_ROOT, "state", "context-mode.json");
   checks.push({
     name: "state:context_mode_exists",
@@ -1381,7 +1455,7 @@ export async function doctorChecks(projectRoot: string, options: DoctorOptions =
     name: "flow_state:track",
     ok: skippedConsistent,
     details: skippedConsistent
-      ? `active track "${activeTrack}" (${trackStageList.length}/${COMMAND_FILE_ORDER.length} stages: ${trackStageList.join(" → ")})${
+      ? `active track "${activeTrack}" (${trackStageList.length}/${FLOW_STAGES.length} stages: ${trackStageList.join(" → ")})${
           expectedSkipped.length > 0 ? `; skippedStages=${expectedSkipped.join(", ")}` : ""
         }`
       : `track "${activeTrack}" expects skippedStages=[${expectedSkipped.join(", ")}] but flow-state has [${skippedFromState.join(", ")}] — run \`cclaw sync\` to repair`
@@ -1546,7 +1620,7 @@ export async function doctorChecks(projectRoot: string, options: DoctorOptions =
       : `legacy snapshot entries still present (read-only): ${legacyWorkspaceEntries.join(", ")}`
   });
   const staleStages = Object.keys(flowState.staleStages).filter((value) =>
-    COMMAND_FILE_ORDER.includes(value as (typeof COMMAND_FILE_ORDER)[number])
+    FLOW_STAGES.includes(value as (typeof FLOW_STAGES)[number])
   );
   checks.push({
     name: "state:stale_stages_resolved",
@@ -1787,11 +1861,11 @@ export async function doctorChecks(projectRoot: string, options: DoctorOptions =
       const stageGates = parsed.stage_gates;
       const hasStageOrder =
         Array.isArray(stageOrder) &&
-        COMMAND_FILE_ORDER.every((stage) => stageOrder.includes(stage));
+        FLOW_STAGES.every((stage) => stageOrder.includes(stage));
       const hasStageGates =
         typeof stageGates === "object" &&
         stageGates !== null &&
-        COMMAND_FILE_ORDER.every((stage) =>
+        FLOW_STAGES.every((stage) =>
           Array.isArray((stageGates as Record<string, unknown[]>)[stage])
         );
 

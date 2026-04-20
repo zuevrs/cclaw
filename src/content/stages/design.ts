@@ -13,7 +13,7 @@ export const DESIGN: StageSchemaInput = {
   ironLaw: "NO DESIGN DECISION WITHOUT A LABELED DIAGRAM, A REJECTED ALTERNATIVE, AND A NAMED FAILURE MODE.",
   purpose: "Lock architecture, data flow, failure modes, and test/performance expectations through rigorous interactive review.",
   whenToUse: [
-    "After scope contract approval",
+    "After scope agreement approval",
     "Before writing final spec and execution plan",
     "When architecture risks need explicit treatment"
   ],
@@ -82,7 +82,7 @@ export const DESIGN: StageSchemaInput = {
     "What-already-exists section produced.",
     "Completion dashboard lists every review section status, decision count, and unresolved items (or 'None')."
   ],
-  inputs: ["scope contract", "system constraints", "non-functional requirements"],
+  inputs: ["scope agreement artifact", "system constraints", "non-functional requirements"],
   requiredContext: [
     "parallel research synthesis from `.cclaw/artifacts/02a-research.md`",
     "existing architecture and boundaries",

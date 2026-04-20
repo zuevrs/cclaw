@@ -1,7 +1,7 @@
 import fs from "node:fs/promises";
 import path from "node:path";
 import { parse } from "yaml";
-import { describe, expect, it } from "vitest";
+import { describe, expect, it, vi } from "vitest";
 import {
   configPath,
   detectLanguageRulePacks,
@@ -120,9 +120,15 @@ describe("config", () => {
       "harnesses:\n  - claude\ntddEnforcement: strict\ntddTestGlobs:\n  - \"**/*.test.ts\"\n",
       "utf8"
     );
-    const config = await readConfig(root);
-    expect(config.tddEnforcement).toBe("strict");
-    expect(config.tddTestGlobs).toEqual(["**/*.test.ts"]);
+    const warningSpy = vi.spyOn(process, "emitWarning").mockImplementation(() => {});
+    try {
+      const config = await readConfig(root);
+      expect(config.tddEnforcement).toBe("strict");
+      expect(config.tddTestGlobs).toEqual(["**/*.test.ts"]);
+      expect(warningSpy).not.toHaveBeenCalled();
+    } finally {
+      warningSpy.mockRestore();
+    }
   });
 
   it("parses nested tdd path patterns", async () => {
@@ -166,9 +172,18 @@ tdd:
 `,
       "utf8"
     );
-    const config = await readConfig(root);
-    expect(config.tddTestGlobs).toEqual(["**/*.legacy.ts"]);
-    expect(config.tdd?.testPathPatterns).toEqual(["**/*.modern.ts"]);
+    const warningSpy = vi.spyOn(process, "emitWarning").mockImplementation(() => {});
+    try {
+      const config = await readConfig(root);
+      expect(config.tddTestGlobs).toEqual(["**/*.legacy.ts"]);
+      expect(config.tdd?.testPathPatterns).toEqual(["**/*.modern.ts"]);
+      expect(warningSpy).toHaveBeenCalledWith(
+        expect.stringContaining("Both \"tddTestGlobs\" (deprecated) and \"tdd.testPathPatterns\" are set"),
+        expect.objectContaining({ code: "CCLAW_CONFIG_DEPRECATED_TDD_TEST_GLOBS" })
+      );
+    } finally {
+      warningSpy.mockRestore();
+    }
   });
 
   it("rejects malformed nested tdd config", async () => {

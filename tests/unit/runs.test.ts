@@ -11,6 +11,7 @@ import {
   readFlowState,
   writeFlowState
 } from "../../src/runs.js";
+import { evaluateRetroGate } from "../../src/retro-gate.js";
 import { createTempProject } from "../helpers/index.js";
 
 describe("runs system", () => {
@@ -326,6 +327,58 @@ describe("runs system", () => {
     );
 
     await expect(archiveRun(root, "Retro Window Scope")).rejects.toThrow(/retro gate/i);
+  });
+
+  it("falls back to retro artifact mtime window when closeout timestamps are missing", async () => {
+    const root = await createTempProject("runs-retro-mtime-fallback");
+    await ensureRunSystem(root);
+    const base = createInitialFlowState("active");
+    await writeFlowState(
+      root,
+      {
+        ...base,
+        currentStage: "ship",
+        completedStages: ["brainstorm", "scope", "design", "spec", "plan", "tdd", "review", "ship"],
+        closeout: {
+          ...base.closeout,
+          shipSubstate: "ready_to_archive"
+        }
+      },
+      { allowReset: true }
+    );
+
+    const retroPath = path.join(root, ".cclaw/artifacts/09-retro.md");
+    const retroTimestamp = new Date("2026-03-10T12:00:00Z");
+    await fs.writeFile(retroPath, "# retro\n\nRecovered session without closeout timestamps.\n", "utf8");
+    await fs.utimes(retroPath, retroTimestamp, retroTimestamp);
+    await fs.writeFile(
+      path.join(root, ".cclaw/knowledge.jsonl"),
+      `${JSON.stringify({
+        type: "compound",
+        source: "retro",
+        trigger: "recovered-retro-note",
+        action: "recover retro gate after interrupted session",
+        confidence: "medium",
+        domain: "ship",
+        stage: "retro",
+        origin_stage: "ship",
+        origin_feature: "retro-fallback",
+        frequency: 1,
+        universality: "project",
+        maturity: "raw",
+        created: retroTimestamp.toISOString(),
+        first_seen_ts: retroTimestamp.toISOString(),
+        last_seen_ts: retroTimestamp.toISOString(),
+        project: "cclaw"
+      })}\n`,
+      "utf8"
+    );
+
+    const state = await readFlowState(root);
+    const retroGate = await evaluateRetroGate(root, state);
+    expect(retroGate.required).toBe(true);
+    expect(retroGate.completed).toBe(true);
+    expect(retroGate.compoundEntries).toBeGreaterThanOrEqual(1);
   });
 
   it("lists archived run folders", async () => {

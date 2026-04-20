@@ -40,6 +40,20 @@ Design-stage research fleet uses the same parity model:
 | `stop_checkpoint` | Stop -> stop-checkpoint.sh | stop -> stop-checkpoint.sh | plugin session.idle -> stop-checkpoint.sh | Stop -> stop-checkpoint.sh |
 | `precompact_digest` | PreCompact -> pre-compact.sh | sessionCompact -> pre-compact.sh | plugin session.compacted -> pre-compact.sh | missing |
 
+## Hook event casing
+
+Hook keys are intentionally harness-native and must not be normalized:
+
+| Harness | ID | Event key casing |
+|---|---|---|
+| Claude Code | `claude` | PascalCase (`SessionStart`, `PreToolUse`) |
+| Cursor | `cursor` | camelCase (`sessionStart`, `preToolUse`) |
+| OpenCode | `opencode` | camelCase (`sessionStart`, `preToolUse`) |
+| OpenAI Codex | `codex` | PascalCase (`SessionStart`, `PreToolUse`) |
+
+Use the exact event names from each harness schema. Treating all hooks as one
+shared casing silently breaks generated wiring.
+
 ## Interpretation
 
 - `tier1`: full native delegation + structured asks + full hook surface.
@@ -56,7 +70,7 @@ All harnesses receive the same utility commands:
 
 - `/cc` - flow entry and resume
 - `/cc-next` - stage progression
-- `/cc-ideate` - discovery mode for ranked repo-improvement backlog
+- `/cc-ideate` - ideate mode for ranked repo-improvement backlog
 - `/cc-view` - read-only router for status/tree/diff
 - `/cc-ops` - operations router for feature/tdd-log/retro/compound/archive/rewind
 
@@ -76,6 +90,23 @@ Operations subcommands:
 
 Stage order remains canonical:
 `brainstorm -> scope -> design -> spec -> plan -> tdd -> review -> ship`
+
+## Stage -> skill folder mapping
+
+| Stage | Skill folder |
+|---|---|
+| `brainstorm` | `brainstorming` |
+| `scope` | `scope-shaping` |
+| `design` | `engineering-design-lock` |
+| `spec` | `specification-authoring` |
+| `plan` | `planning-and-task-breakdown` |
+| `tdd` | `test-driven-development` |
+| `review` | `two-layer-review` |
+| `ship` | `shipping-and-handoff` |
+
+This map is generated from `src/constants.ts::STAGE_TO_SKILL_FOLDER` so
+skill-path naming stays explicit and stable even when stage ids differ from
+folder names.
 
 ## Install surfaces
 

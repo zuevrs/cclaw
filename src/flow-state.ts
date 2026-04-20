@@ -1,4 +1,3 @@
-import { COMMAND_FILE_ORDER } from "./constants.js";
 import {
   buildTransitionRules,
   orderedStageSchemas,
@@ -57,6 +56,14 @@ export interface RetroState {
  *   automatic step.
  * - `archived` — archive completed in this session (transient — archive
  *   resets flow-state so this value does not persist between runs).
+ *
+ * Layer separation (intentional):
+ * - `next: "done"` in stage schema means "the flow stage chain ended".
+ * - `shipSubstate: "archived"` is closeout-machine progress after ship.
+ * - `shipSubstate: "idle"` is the default closeout value before ship.
+ *
+ * These are not duplicates: `done` lives in stage transitions; `archived` /
+ * `idle` live in closeout lifecycle state.
  */
 export const SHIP_SUBSTATES = [
   "idle",
@@ -191,11 +198,7 @@ export function nextStage(stage: FlowStage, track: FlowTrack = "standard"): Flow
   const ordered = TRACK_STAGES[track];
   const index = ordered.indexOf(stage);
   if (index < 0) {
-    const fallback = COMMAND_FILE_ORDER.indexOf(stage);
-    if (fallback < 0 || fallback === COMMAND_FILE_ORDER.length - 1) {
-      return null;
-    }
-    return COMMAND_FILE_ORDER[fallback + 1];
+    return null;
   }
   if (index === ordered.length - 1) {
     return null;
@@ -210,11 +213,11 @@ export function previousStage(stage: FlowStage, track: FlowTrack = "standard"): 
     return null;
   }
   if (index < 0) {
-    const fallback = COMMAND_FILE_ORDER.indexOf(stage);
+    const fallback = FLOW_STAGES.indexOf(stage);
     if (fallback <= 0) {
       return null;
     }
-    return COMMAND_FILE_ORDER[fallback - 1];
+    return FLOW_STAGES[fallback - 1];
   }
   return ordered[index - 1];
 }

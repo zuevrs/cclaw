@@ -67,7 +67,8 @@ export const TDD: StageSchemaInput = {
     { id: "tdd_green_full_suite", description: "Full relevant suite passes in GREEN state." },
     { id: "tdd_refactor_completed", description: "Refactor pass completed with behavior preservation verified." },
     { id: "tdd_verified_before_complete", description: "Fresh verification evidence includes test command, commit SHA, and explicit pass/fail status." },
-    { id: "tdd_traceable_to_plan", description: "Change traceability to plan slice is explicit." }
+    { id: "tdd_traceable_to_plan", description: "Change traceability to plan slice is explicit." },
+    { id: "tdd_docs_drift_check", description: "When public API/config/CLI surfaces change, docs drift is addressed via a completed doc-updater pass." }
   ],
   requiredEvidence: [
     "Artifact updated at `.cclaw/artifacts/06-tdd.md` with RED, GREEN, and REFACTOR sections.",
@@ -212,11 +213,12 @@ function tddQuickTrackVariant(): StageSchemaInput {
     checklist: TDD.checklist.map(quickTrackText),
     interactionProtocol: TDD.interactionProtocol.map(quickTrackText),
     process: TDD.process.map(quickTrackText),
-    requiredGates: TDD.requiredGates.map((gate) =>
-      gate.id === "tdd_traceable_to_plan"
-        ? { ...gate, description: "Change traceability to acceptance criterion is explicit." }
-        : gate
-    ),
+    requiredGates: TDD.requiredGates
+      .filter((gate) => gate.id !== "tdd_traceable_to_plan")
+      .map((gate) => ({
+        ...gate,
+        description: quickTrackText(gate.description)
+      })),
     requiredEvidence: TDD.requiredEvidence.map(quickTrackText),
     inputs: TDD.inputs.map(quickTrackText),
     requiredContext: ["spec artifact", "existing test patterns"],

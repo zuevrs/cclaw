@@ -110,16 +110,25 @@ export const REQUIRED_GITIGNORE_PATTERNS = [
   ".cursor/rules/cclaw-workflow.mdc"
 ] as const;
 
-export const COMMAND_FILE_ORDER: FlowStage[] = [
-  "brainstorm",
-  "scope",
-  "design",
-  "spec",
-  "plan",
-  "tdd",
-  "review",
-  "ship"
-];
+/**
+ * Canonical stage -> skill folder mapping.
+ *
+ * Intentional divergence from stage ids:
+ * - stage ids stay short and flow-oriented (`spec`, `tdd`, `ship`)
+ * - skill folders stay descriptive and user-facing for `.cclaw/skills/*`.
+ *
+ * Keep this map as the single source of truth for generated skill paths.
+ */
+export const STAGE_TO_SKILL_FOLDER: Record<FlowStage, string> = {
+  brainstorm: "brainstorming",
+  scope: "scope-shaping",
+  design: "engineering-design-lock",
+  spec: "specification-authoring",
+  plan: "planning-and-task-breakdown",
+  tdd: "test-driven-development",
+  review: "two-layer-review",
+  ship: "shipping-and-handoff"
+};
 
 export const UTILITY_COMMANDS = [
   "learn",

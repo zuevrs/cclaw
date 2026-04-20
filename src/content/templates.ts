@@ -1,5 +1,5 @@
-import { COMMAND_FILE_ORDER } from "../constants.js";
 import { orderedStageSchemas } from "./stage-schema.js";
+import { FLOW_STAGES } from "../types.js";
 
 export const ARTIFACT_TEMPLATES: Record<string, string> = {
   "01-brainstorm.md": `---
@@ -523,6 +523,7 @@ inputs_hash: sha256:pending
 | ID | Severity | Category | Description | Status |
 |---|---|---|---|---|
 | R-1 | Critical/Important/Suggestion | correctness/security/performance/architecture |  | open/resolved |
+- NO_CHANGE_ATTESTATION: <required when Category=security has no entries; explain why no security-relevant changes were detected>
 
 ## Incoming Feedback Queue
 | ID | Source | Severity | File:line | Request | Status | Evidence |
@@ -806,7 +807,7 @@ Track-specific skips are allowed only when \`flow-state.track\` + \`skippedStage
 export function buildRulesJson(): Record<string, unknown> {
   return {
     version: 1,
-    stage_order: COMMAND_FILE_ORDER,
+    stage_order: FLOW_STAGES,
     stage_gates: Object.fromEntries(
       orderedStageSchemas().map((schema) => [
         schema.stage,
@@ -826,7 +827,7 @@ export function buildRulesJson(): Record<string, unknown> {
       "conventional_commits"
     ],
     MUST_NEVER: [
-      "skip_test_stage",
+      "skip_tdd_stage",
       "ship_with_critical_findings",
       "implement_in_brainstorm",
       "manual_edit_generated",

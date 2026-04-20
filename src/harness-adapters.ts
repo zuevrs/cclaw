@@ -33,8 +33,8 @@ export type SubagentFallback =
    */
   | "role-switch"
   /**
-   * No meaningful fallback — mandatory delegations can only be waived
-   * under `waiverReason: "harness_limitation"`.
+   * Reserved escape hatch for future harnesses with no parity path.
+   * Current shipped harnesses do not use this fallback.
    */
   | "waiver";
 
@@ -350,7 +350,7 @@ When in doubt, prefer **non-trivial** — the quick track is opt-in and only saf
 |---|---|
 | \`/cc\` | **Entry point.** No args = resume current stage. With prompt = classify task and start the right flow. |
 | \`/cc-next\` | **Progression.** Advances to the next stage when current is complete. |
-| \`/cc-ideate\` | **Discovery mode.** Generates a ranked repo-improvement backlog before implementation. |
+| \`/cc-ideate\` | **Ideate mode.** Generates a ranked repo-improvement backlog before implementation. |
 | \`/cc-view\` | **Read-only router.** Unified entry for status/tree/diff views. |
 | \`/cc-ops\` | **Operations router.** Unified entry for feature/tdd-log/retro/compound/archive/rewind actions. |
 
@@ -493,7 +493,7 @@ function codexSkillDescription(command: string): string {
     case "next":
       return `Advance the cclaw flow to the next stage. Use when the user types \`/cc-next\` or asks to "move to the next stage", "continue the flow", "advance cclaw", "progress the workflow", or when the current stage skill reports completion and gates have passed.`;
     case "ideate":
-      return `Read-only repo-improvement discovery for cclaw. Use when the user types \`/cc-ideate\` or asks to "ideate", "brainstorm improvements", "scan the repo for TODOs/tech debt", "generate a backlog", or wants a ranked list of candidate ideas before committing to a single flow. Does not mutate \`.cclaw/state/flow-state.json\`.`;
+      return `Read-only repo-improvement ideate mode for cclaw. Use when the user types \`/cc-ideate\` or asks to "ideate", "scan the repo for TODOs/tech debt", "generate a backlog", or wants a ranked list of candidate ideas before committing to a single flow. Does not mutate \`.cclaw/state/flow-state.json\`.`;
     case "view":
       return `Read-only router for cclaw flow views. Use when the user types \`/cc-view\`, \`/cc-view status\`, \`/cc-view tree\`, \`/cc-view diff\`, or asks to "show cclaw status", "show the flow tree", "diff flow state", or wants a snapshot without mutation.`;
     case "ops":

@@ -1,5 +1,7 @@
 import fs from "node:fs/promises";
 import path from "node:path";
+import { execFile } from "node:child_process";
+import { promisify } from "node:util";
 import { RUNTIME_ROOT } from "./constants.js";
 import { readConfig } from "./config.js";
 import { exists, withDirectoryLock, writeFileSafe } from "./fs-utils.js";
@@ -7,6 +9,8 @@ import { HARNESS_ADAPTERS, type SubagentFallback } from "./harness-adapters.js";
 import { readFlowState } from "./runs.js";
 import { stageSchema } from "./content/stage-schema.js";
 import type { FlowStage } from "./types.js";
+
+const execFileAsync = promisify(execFile);
 
 export type DelegationMode = "mandatory" | "proactive";
 export type DelegationStatus = "scheduled" | "completed" | "failed" | "waived";
@@ -83,6 +87,13 @@ export type DelegationLedger = {
   entries: DelegationEntry[];
 };
 
+interface ReviewTriggerMetrics {
+  changedFiles: number;
+  changedLines: number;
+  trustBoundaryChanged: boolean;
+  requireAdversarialReviewer: boolean;
+}
+
 function delegationLogPath(projectRoot: string): string {
   return path.join(projectRoot, RUNTIME_ROOT, "state", "delegation-log.json");
 }
@@ -93,6 +104,86 @@ function delegationLockPath(projectRoot: string): string {
 
 function createSpanId(): string {
   return `dspan-${Date.now().toString(36)}-${Math.random().toString(36).slice(2, 10)}`;
+}
+
+async function resolveReviewDiffBase(projectRoot: string): Promise<string | null> {
+  let head = "";
+  try {
+    head = (await execFileAsync("git", ["rev-parse", "HEAD"], { cwd: projectRoot })).stdout.trim();
+  } catch {
+    return null;
+  }
+  const candidates = ["origin/main", "origin/master", "main", "master"];
+  for (const candidate of candidates) {
+    try {
+      await execFileAsync("git", ["rev-parse", "--verify", candidate], { cwd: projectRoot });
+      const { stdout } = await execFileAsync("git", ["merge-base", "HEAD", candidate], {
+        cwd: projectRoot
+      });
+      const base = stdout.trim();
+      if (base.length > 0 && base !== head) {
+        return base;
+      }
+    } catch {
+      continue;
+    }
+  }
+  try {
+    const { stdout } = await execFileAsync("git", ["rev-parse", "HEAD~1"], {
+      cwd: projectRoot
+    });
+    const base = stdout.trim();
+    return base.length > 0 ? base : null;
+  } catch {
+    return null;
+  }
+}
+
+async function detectReviewTriggers(projectRoot: string): Promise<ReviewTriggerMetrics> {
+  const empty: ReviewTriggerMetrics = {
+    changedFiles: 0,
+    changedLines: 0,
+    trustBoundaryChanged: false,
+    requireAdversarialReviewer: false
+  };
+  const base = await resolveReviewDiffBase(projectRoot);
+  if (!base) {
+    return empty;
+  }
+  try {
+    const range = `${base}..HEAD`;
+    const shortstat = await execFileAsync("git", ["diff", "--shortstat", range], {
+      cwd: projectRoot
+    });
+    const short = shortstat.stdout.trim();
+    const changedFiles = Number((/(\d+)\s+files?\s+changed/u.exec(short)?.[1] ?? "0"));
+    const insertions = Number((/(\d+)\s+insertions?\(\+\)/u.exec(short)?.[1] ?? "0"));
+    const deletions = Number((/(\d+)\s+deletions?\(-\)/u.exec(short)?.[1] ?? "0"));
+    const changedLines = insertions + deletions;
+
+    const names = await execFileAsync("git", ["diff", "--name-only", range], {
+      cwd: projectRoot
+    });
+    const changedPaths = names.stdout
+      .split(/\r?\n/gu)
+      .map((line) => line.trim())
+      .filter((line) => line.length > 0);
+    const trustBoundaryChanged = changedPaths.some((filePath) =>
+      /(auth|security|secret|token|credential|permission|acl|policy|oauth|session|encrypt|decrypt|input|validation)/iu.test(
+        filePath
+      )
+    );
+    const requireAdversarialReviewer =
+      changedLines > 100 || changedFiles > 10 || trustBoundaryChanged;
+    return {
+      changedFiles,
+      changedLines,
+      trustBoundaryChanged,
+      requireAdversarialReviewer
+    };
+  } catch {
+    return empty;
+  }
 }
 
 function isDelegationTokenUsage(value: unknown): value is DelegationTokenUsage {
@@ -163,6 +254,9 @@ function parseLedger(raw: unknown, runId: string): DelegationLedger {
     for (const item of entriesRaw) {
       if (isDelegationEntry(item)) {
         const ts = item.startTs ?? item.ts ?? new Date().toISOString();
+        const inferredFulfillmentMode =
+          item.fulfillmentMode
+          ?? (item.status === "completed" ? "isolated" : undefined);
         entries.push({
           ...item,
           spanId: item.spanId ?? createSpanId(),
@@ -173,6 +267,7 @@ function parseLedger(raw: unknown, runId: string): DelegationLedger {
               ? item.retryCount
               : 0,
           evidenceRefs: Array.isArray(item.evidenceRefs) ? item.evidenceRefs : [],
+          fulfillmentMode: inferredFulfillmentMode,
           schemaVersion: 1
         });
       }
@@ -216,6 +311,12 @@ export async function appendDelegation(projectRoot: string, entry: DelegationEnt
     }
     if (!Array.isArray(stamped.evidenceRefs)) {
       stamped.evidenceRefs = [];
+    }
+    if (stamped.status === "completed" && stamped.fulfillmentMode === undefined) {
+      const config = await readConfig(projectRoot).catch(() => null);
+      const harnesses = config?.harnesses ?? [];
+      const fallbacks = harnesses.map((h) => HARNESS_ADAPTERS[h].capabilities.subagentFallback);
+      stamped.fulfillmentMode = expectedFulfillmentMode(fallbacks);
     }
     // Idempotency: if a caller (or a retried hook) tries to append a row
     // with a spanId that already exists in the ledger, treat it as a no-op
@@ -279,39 +380,25 @@ export async function checkMandatoryDelegations(
   const harnesses = config?.harnesses ?? [];
   const fallbacks = harnesses.map((h) => HARNESS_ADAPTERS[h].capabilities.subagentFallback);
   const expectedMode = expectedFulfillmentMode(fallbacks);
-  const onlyWaiverFallback =
-    harnesses.length > 0 && fallbacks.every((f) => f === "waiver");
+  const reviewTriggers =
+    stage === "review" ? await detectReviewTriggers(projectRoot) : null;
 
   for (const agent of mandatory) {
     const rows = forRun.filter((e) => e.agent === agent);
     const completedRows = rows.filter((e) => e.status === "completed");
     const waivedRows = rows.filter((e) => e.status === "waived");
-    const hasCompleted = completedRows.length > 0;
+    const requiredCompletedCount =
+      stage === "review" &&
+      agent === "reviewer" &&
+      reviewTriggers?.requireAdversarialReviewer
+        ? 2
+        : 1;
+    const hasCompleted = completedRows.length >= requiredCompletedCount;
     const hasWaived = waivedRows.length > 0;
     const ok = hasCompleted || hasWaived;
 
     if (!ok) {
-      if (onlyWaiverFallback) {
-        const existingHarnessWaiver = rows.some(
-          (e) => e.status === "waived" && e.waiverReason === "harness_limitation"
-        );
-        if (!existingHarnessWaiver) {
-          await appendDelegation(projectRoot, {
-            stage,
-            agent,
-            mode: "mandatory",
-            status: "waived",
-            waiverReason: "harness_limitation",
-            fulfillmentMode: "harness-waiver",
-            ts: new Date().toISOString(),
-            runId: activeRunId
-          });
-        }
-        waived.push(agent);
-        autoWaived.push(agent);
-      } else {
-        missing.push(agent);
-      }
+      missing.push(agent);
       continue;
     }
 
@@ -319,20 +406,11 @@ export async function checkMandatoryDelegations(
       waived.push(agent);
     }
 
-    // Evidence gating for `completed` rows has two triggers:
-    //   1. The aggregate expected mode is role-switch (no isolated harness
-    //      available), so every completion implicitly ran as role-switch.
-    //   2. Any completed row is explicitly stamped `fulfillmentMode:
-    //      "role-switch"` — even in a mixed install. This closes the loop
-    //      where a Codex session logs a role-switch completion inside a
-    //      claude+codex project: the aggregate expectedMode is "isolated"
-    //      (claude wins), so the role-switch row would previously sail
-    //      through without evidenceRefs.
-    const hasExplicitRoleSwitchRow = completedRows.some(
-      (e) => e.fulfillmentMode === "role-switch"
+    // Evidence is required for any non-isolated completion mode. Legacy rows
+    // without fulfillmentMode are inferred to `isolated` during parse.
+    const evidenceRequired = completedRows.some(
+      (e) => (e.fulfillmentMode ?? "isolated") !== "isolated"
     );
-    const evidenceRequired =
-      expectedMode === "role-switch" || hasExplicitRoleSwitchRow;
     if (
       hasCompleted &&
       evidenceRequired &&

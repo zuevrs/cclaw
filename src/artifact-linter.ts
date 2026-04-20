@@ -1414,6 +1414,13 @@ export interface ReviewVerdictConsistencyResult {
   shipBlockerCount: number;
 }
 
+export interface ReviewSecurityNoChangeAttestationResult {
+  ok: boolean;
+  errors: string[];
+  hasSecurityFinding: boolean;
+  hasNoChangeAttestation: boolean;
+}
+
 /**
  * Ensure the narrative verdict in 07-review.md is consistent with the
  * structured review-army reconciliation. A review cannot declare
@@ -1504,5 +1511,61 @@ export async function checkReviewVerdictConsistency(
     finalVerdict,
     openCriticalCount,
     shipBlockerCount
+  };
+}
+
+export async function checkReviewSecurityNoChangeAttestation(
+  projectRoot: string
+): Promise<ReviewSecurityNoChangeAttestationResult> {
+  const reviewMdPath = path.join(projectRoot, RUNTIME_ROOT, "artifacts", "07-review.md");
+  if (!(await exists(reviewMdPath))) {
+    return {
+      ok: true,
+      errors: [],
+      hasSecurityFinding: false,
+      hasNoChangeAttestation: false
+    };
+  }
+
+  const errors: string[] = [];
+  const raw = await fs.readFile(reviewMdPath, "utf8");
+  const sections = extractH2Sections(raw);
+  const securityBody =
+    sectionBodyByName(sections, "Layer 2 Security")
+    ?? sectionBodyByName(sections, "Layer 2b: Security")
+    ?? sectionBodyByName(sections, "Layer 2 Findings");
+
+  if (!securityBody) {
+    errors.push('07-review.md is missing a Layer 2 security section.');
+    return {
+      ok: false,
+      errors,
+      hasSecurityFinding: false,
+      hasNoChangeAttestation: false
+    };
+  }
+
+  const securityTableRowPattern = /^\|\s*[^|\n]+\|\s*[^|\n]+\|\s*security\s*\|\s*[^|\n]+\|\s*[^|\n]+\|/imu;
+  const securityBulletPattern = /^[*-]\s+.*\b(?:security|auth|injection|secret|credential|permission)\b/imu;
+  const hasSecurityFinding =
+    securityTableRowPattern.test(securityBody) || securityBulletPattern.test(securityBody);
+
+  const attestationMatch = /NO_CHANGE_ATTESTATION\s*:\s*(.*)/iu.exec(securityBody);
+  const hasNoChangeAttestation = Boolean(attestationMatch && attestationMatch[1]?.trim().length > 0);
+  if (attestationMatch && attestationMatch[1]?.trim().length === 0) {
+    errors.push("NO_CHANGE_ATTESTATION must include a non-empty rationale.");
+  }
+
+  if (!hasSecurityFinding && !hasNoChangeAttestation) {
+    errors.push(
+      "Layer 2 security evidence missing: include at least one security finding or `NO_CHANGE_ATTESTATION: <reason>`."
+    );
+  }
+
+  return {
+    ok: errors.length === 0,
+    errors,
+    hasSecurityFinding,
+    hasNoChangeAttestation
   };
 }

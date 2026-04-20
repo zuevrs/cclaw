@@ -1,4 +1,4 @@
-import { RUNTIME_ROOT } from "../constants.js";
+import { RUNTIME_ROOT, STAGE_TO_SKILL_FOLDER } from "../constants.js";
 import type { FlowStage, FlowTrack } from "../types.js";
 import { STAGE_EXAMPLES_REFERENCE_DIR, stageDomainExamples, stageExamples, stageGoodBadExamples } from "./examples.js";
 import { STAGE_COMMON_GUIDANCE_REL_PATH } from "./stage-common-guidance.js";
@@ -313,7 +313,7 @@ After T-3 REFACTOR, before declaring Batch 1 done:
 `;
 
 export function stageSkillFolder(stage: FlowStage): string {
-  return stageSchema(stage).skillFolder;
+  return STAGE_TO_SKILL_FOLDER[stage];
 }
 
 export function stageSkillMarkdown(stage: FlowStage, track: FlowTrack = "standard"): string {

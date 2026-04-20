@@ -2,6 +2,7 @@ import fs from "node:fs/promises";
 import path from "node:path";
 import { describe, expect, it } from "vitest";
 import {
+  checkReviewSecurityNoChangeAttestation,
   checkReviewVerdictConsistency,
   extractMarkdownSectionBody,
   lintArtifact,
@@ -2483,5 +2484,45 @@ describe("review army schema validation", () => {
     expect(result.ok).toBe(false);
     expect(result.finalVerdict).toBe("APPROVED_WITH_CONCERNS");
     expect(result.errors.join("\n")).toMatch(/APPROVED_WITH_CONCERNS/);
+  });
+
+  it("passes review security attestation when NO_CHANGE_ATTESTATION is present", async () => {
+    const root = await createTempProject("review-security-attestation-pass");
+    await writeRuntimeArtifact(
+      root,
+      "07-review.md",
+      `# Review Artifact
+
+## Layer 2 Findings
+| ID | Severity | Category | Description | Status |
+|---|---|---|---|---|
+| R-1 | Suggestion | correctness | naming cleanup | open |
+- NO_CHANGE_ATTESTATION: No auth/input/secrets surface changed in this diff.
+`
+    );
+
+    const result = await checkReviewSecurityNoChangeAttestation(root);
+    expect(result.ok).toBe(true);
+    expect(result.hasNoChangeAttestation).toBe(true);
+    expect(result.errors).toEqual([]);
+  });
+
+  it("fails review security attestation when security section has no findings and no attestation", async () => {
+    const root = await createTempProject("review-security-attestation-fail");
+    await writeRuntimeArtifact(
+      root,
+      "07-review.md",
+      `# Review Artifact
+
+## Layer 2 Findings
+| ID | Severity | Category | Description | Status |
+|---|---|---|---|---|
+| R-1 | Suggestion | correctness | naming cleanup | open |
+`
+    );
+
+    const result = await checkReviewSecurityNoChangeAttestation(root);
+    expect(result.ok).toBe(false);
+    expect(result.errors.join("\n")).toMatch(/Layer 2 security evidence missing/);
   });
 });

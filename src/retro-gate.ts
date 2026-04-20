@@ -19,6 +19,8 @@ export interface RetroGateStatus {
   hasRetroArtifact: boolean;
 }
 
+const RETRO_ARTIFACT_MTIME_FALLBACK_WINDOW_MS = 24 * 60 * 60 * 1000;
+
 function parseIsoTimestamp(value: string | undefined): number | null {
   if (!value || value.trim().length === 0) return null;
   const parsed = Date.parse(value);
@@ -51,9 +53,26 @@ export async function evaluateRetroGate(
     }
   }
   let compoundEntries = state.retro.compoundEntries;
-  const windowStartMs = parseIsoTimestamp(state.closeout.retroDraftedAt);
-  const windowEndMs =
+  let windowStartMs = parseIsoTimestamp(state.closeout.retroDraftedAt);
+  let windowEndMs =
     parseIsoTimestamp(state.closeout.retroAcceptedAt) ?? parseIsoTimestamp(state.retro.completedAt);
+  if (
+    compoundEntries <= 0 &&
+    hasRetroArtifact &&
+    windowStartMs === null &&
+    windowEndMs === null
+  ) {
+    try {
+      const stats = await fs.stat(artifactFile);
+      const anchor = stats.mtimeMs;
+      if (Number.isFinite(anchor) && anchor > 0) {
+        windowStartMs = anchor - RETRO_ARTIFACT_MTIME_FALLBACK_WINDOW_MS;
+        windowEndMs = anchor + RETRO_ARTIFACT_MTIME_FALLBACK_WINDOW_MS;
+      }
+    } catch {
+      // fallback scan remains disabled when mtime cannot be read
+    }
+  }
   const shouldFallbackScan =
     compoundEntries <= 0 && (windowStartMs !== null || windowEndMs !== null);
   const knowledgeFile = path.join(projectRoot, RUNTIME_ROOT, "knowledge.jsonl");

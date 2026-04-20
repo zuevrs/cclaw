@@ -4,6 +4,9 @@ import cursorHooksSchema from "./hook-schemas/cursor-hooks.v1.json" with { type:
 
 export type HookSchemaHarness = "claude" | "cursor" | "codex";
 
+// Event names are intentionally harness-native (PascalCase vs camelCase).
+// Do not normalize casing in schema validation or generated hook payloads.
+// Reference: docs/harnesses.md -> "Hook event casing".
 interface HookSchemaDescriptor {
   harness: HookSchemaHarness;
   schemaVersion: number;

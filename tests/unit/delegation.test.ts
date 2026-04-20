@@ -1,15 +1,39 @@
 import fs from "node:fs/promises";
 import path from "node:path";
+import { execFile } from "node:child_process";
+import { promisify } from "node:util";
 import { describe, expect, it } from "vitest";
 import { createDefaultConfig, writeConfig } from "../../src/config.js";
 import { appendDelegation, checkMandatoryDelegations, readDelegationLedger } from "../../src/delegation.js";
 import { createInitialFlowState } from "../../src/flow-state.js";
+import type { FlowStage } from "../../src/types.js";
 import { createTempProject } from "../helpers/index.js";
 
-async function seedFlowState(root: string, runId: string): Promise<void> {
+const execFileAsync = promisify(execFile);
+
+async function git(cwd: string, args: string[]): Promise<void> {
+  await execFileAsync("git", args, { cwd });
+}
+
+async function initGitRepoWithLargeReviewDiff(projectRoot: string): Promise<void> {
+  await git(projectRoot, ["init"]);
+  await git(projectRoot, ["config", "user.email", "tests@example.com"]);
+  await git(projectRoot, ["config", "user.name", "Test Runner"]);
+  await fs.writeFile(path.join(projectRoot, "README.md"), "# temp\n", "utf8");
+  await git(projectRoot, ["add", "README.md"]);
+  await git(projectRoot, ["commit", "-m", "init"]);
+
+  const largeDiff = Array.from({ length: 140 }, (_, index) => `export const line${index} = ${index};`).join("\n");
+  await fs.mkdir(path.join(projectRoot, "src"), { recursive: true });
+  await fs.writeFile(path.join(projectRoot, "src/review-target.ts"), `${largeDiff}\n`, "utf8");
+  await git(projectRoot, ["add", "src/review-target.ts"]);
+  await git(projectRoot, ["commit", "-m", "large review diff"]);
+}
+
+async function seedFlowState(root: string, runId: string, stage: FlowStage = "scope"): Promise<void> {
   await fs.mkdir(path.join(root, ".cclaw/state"), { recursive: true });
   const state = createInitialFlowState(runId);
-  state.currentStage = "scope";
+  state.currentStage = stage;
   await fs.writeFile(
     path.join(root, ".cclaw/state/flow-state.json"),
     `${JSON.stringify(state, null, 2)}\n`,
@@ -157,6 +181,74 @@ describe("delegation ledger run scoping", () => {
     expect(result.missingEvidence).toContain("planner");
   });
 
+  it("infers completion fulfillmentMode from harness fallback when omitted", async () => {
+    const root = await createTempProject("delegation-infer-fulfillment-mode");
+    await seedFlowState(root, "run-codex-infer");
+    await writeConfig(root, createDefaultConfig(["codex"]));
+
+    await appendDelegation(root, {
+      stage: "scope",
+      agent: "planner",
+      mode: "mandatory",
+      status: "completed",
+      ts: new Date().toISOString()
+    });
+
+    const ledger = await readDelegationLedger(root);
+    expect(ledger.entries[0]?.fulfillmentMode).toBe("role-switch");
+
+    const result = await checkMandatoryDelegations(root, "scope");
+    expect(result.satisfied).toBe(false);
+    expect(result.missingEvidence).toContain("planner");
+  });
+
+  it("requires evidence for generic-dispatch completions", async () => {
+    const root = await createTempProject("delegation-generic-dispatch-evidence");
+    await seedFlowState(root, "run-cursor-evidence");
+    await writeConfig(root, createDefaultConfig(["cursor"]));
+
+    await appendDelegation(root, {
+      stage: "scope",
+      agent: "planner",
+      mode: "mandatory",
+      status: "completed",
+      ts: new Date().toISOString()
+    });
+
+    const result = await checkMandatoryDelegations(root, "scope");
+    expect(result.satisfied).toBe(false);
+    expect(result.missingEvidence).toContain("planner");
+  });
+
+  it("reads legacy completed rows without fulfillmentMode as isolated", async () => {
+    const root = await createTempProject("delegation-legacy-fulfillment-mode");
+    await seedFlowState(root, "run-legacy");
+    await writeConfig(root, createDefaultConfig(["claude"]));
+    await fs.writeFile(
+      path.join(root, ".cclaw/state/delegation-log.json"),
+      JSON.stringify({
+        runId: "run-legacy",
+        entries: [
+          {
+            stage: "scope",
+            agent: "planner",
+            mode: "mandatory",
+            status: "completed",
+            ts: new Date().toISOString(),
+            runId: "run-legacy"
+          }
+        ]
+      }, null, 2),
+      "utf8"
+    );
+
+    const ledger = await readDelegationLedger(root);
+    expect(ledger.entries[0]?.fulfillmentMode).toBe("isolated");
+    const result = await checkMandatoryDelegations(root, "scope");
+    expect(result.satisfied).toBe(true);
+    expect(result.missingEvidence).toEqual([]);
+  });
+
   it("requires evidence for explicit role-switch rows even in mixed installs", async () => {
     const root = await createTempProject("delegation-mixed-install-role-switch-evidence");
     await seedFlowState(root, "run-mixed-role-switch");
@@ -197,5 +289,43 @@ describe("delegation ledger run scoping", () => {
     const result = await checkMandatoryDelegations(root, "scope");
     expect(result.satisfied).toBe(true);
     expect(result.expectedMode).toBe("isolated");
+  });
+
+  it("requires a second reviewer completion when adversarial triggers are active", async () => {
+    const root = await createTempProject("delegation-adversarial-review");
+    await seedFlowState(root, "run-review", "review");
+    await writeConfig(root, createDefaultConfig(["claude"]));
+    await initGitRepoWithLargeReviewDiff(root);
+
+    await appendDelegation(root, {
+      stage: "review",
+      agent: "reviewer",
+      mode: "mandatory",
+      status: "completed",
+      ts: new Date().toISOString()
+    });
+    await appendDelegation(root, {
+      stage: "review",
+      agent: "security-reviewer",
+      mode: "mandatory",
+      status: "completed",
+      ts: new Date().toISOString()
+    });
+
+    const firstPass = await checkMandatoryDelegations(root, "review");
+    expect(firstPass.satisfied).toBe(false);
+    expect(firstPass.missing).toContain("reviewer");
+
+    await appendDelegation(root, {
+      stage: "review",
+      agent: "reviewer",
+      mode: "mandatory",
+      status: "completed",
+      ts: new Date().toISOString()
+    });
+
+    const secondPass = await checkMandatoryDelegations(root, "review");
+    expect(secondPass.satisfied).toBe(true);
+    expect(secondPass.missing).toEqual([]);
   });
 });

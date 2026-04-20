@@ -1,9 +1,9 @@
 import fs from "node:fs/promises";
 import path from "node:path";
 import { describe, expect, it } from "vitest";
-import { COMMAND_FILE_ORDER } from "../../src/constants.js";
 import { stageSkillFolder } from "../../src/content/skills.js";
 import { initCclaw } from "../../src/install.js";
+import { FLOW_STAGES } from "../../src/types.js";
 import { createTempProject } from "../helpers/index.js";
 
 describe("flow command contracts", () => {
@@ -11,7 +11,7 @@ describe("flow command contracts", () => {
     const root = await createTempProject("flow");
     await initCclaw({ projectRoot: root });
 
-    for (const stage of COMMAND_FILE_ORDER) {
+    for (const stage of FLOW_STAGES) {
       const content = await fs.readFile(path.join(root, ".cclaw/commands", `${stage}.md`), "utf8");
       expect(content).toContain("## HARD-GATE");
       expect(content).toContain("## Gates");
@@ -43,7 +43,7 @@ describe("flow command contracts", () => {
     const root = await createTempProject("skills");
     await initCclaw({ projectRoot: root });
 
-    for (const stage of COMMAND_FILE_ORDER) {
+    for (const stage of FLOW_STAGES) {
       const skillPath = path.join(root, ".cclaw/skills", stageSkillFolder(stage), "SKILL.md");
       const content = await fs.readFile(skillPath, "utf8");
       expect(content).toContain("## Process");

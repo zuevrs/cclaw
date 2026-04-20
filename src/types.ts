@@ -133,7 +133,7 @@ export interface CompoundConfig {
   recurrenceThreshold?: number;
 }
 
-export interface VibyConfig {
+export interface CclawConfig {
   version: string;
   flowVersion: string;
   harnesses: HarnessId[];
@@ -165,6 +165,7 @@ export interface VibyConfig {
   /**
    * Legacy alias for test-side path detection in workflow-guard.
    * Prefer `tdd.testPathPatterns` in new configs.
+   * @deprecated Use `tdd.testPathPatterns` instead.
    */
   tddTestGlobs?: string[];
   /** Path-pattern routing for TDD test/production write classification. */
@@ -197,6 +198,11 @@ export interface VibyConfig {
    */
   sliceReview?: SliceReviewConfig;
 }
+
+/**
+ * @deprecated Use `CclawConfig` instead.
+ */
+export type VibyConfig = CclawConfig;
 
 export interface TransitionRule {
   from: FlowStage;

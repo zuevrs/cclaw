@@ -4,7 +4,6 @@ import path from "node:path";
 import { promisify } from "node:util";
 import {
   CCLAW_VERSION,
-  COMMAND_FILE_ORDER,
   FLOW_VERSION,
   REQUIRED_DIRS,
   RUNTIME_ROOT,
@@ -18,7 +17,7 @@ import {
   detectLanguageRulePacks,
   detectAdvancedKeys
 } from "./config.js";
-import { commandContract } from "./content/contracts.js";
+import { stageCommandContract } from "./content/contracts.js";
 import { contextModeFiles, createInitialContextModeState } from "./content/contexts.js";
 import { learnSkillMarkdown, learnCommandContract } from "./content/learnings.js";
 import { nextCommandContract, nextCommandSkillMarkdown } from "./content/next-command.js";
@@ -100,7 +99,7 @@ import { DOCTOR_REFERENCE_MARKDOWN } from "./content/doctor-references.js";
 import {
   harnessDocsOverviewMarkdown,
   harnessIntegrationDocMarkdown
-} from "./content/harnesses-doc.js";
+} from "./content/harness-doc.js";
 import {
   HARNESS_PLAYBOOKS_DIR,
   harnessPlaybookFileName,
@@ -120,7 +119,8 @@ import {
 } from "./harness-adapters.js";
 import { validateHookDocument } from "./hook-schema.js";
 import { ensureRunSystem, readFlowState } from "./runs.js";
-import type { FlowTrack, HarnessId, VibyConfig } from "./types.js";
+import { FLOW_STAGES } from "./types.js";
+import type { CclawConfig, FlowTrack, HarnessId } from "./types.js";
 
 export interface InitOptions {
   projectRoot: string;
@@ -205,7 +205,7 @@ async function removeManagedGitHookRelays(projectRoot: string): Promise<void> {
   }
 }
 
-async function syncManagedGitHooks(projectRoot: string, config: VibyConfig): Promise<void> {
+async function syncManagedGitHooks(projectRoot: string, config: CclawConfig): Promise<void> {
   const hooksDir = await resolveGitHooksDir(projectRoot);
   if (!hooksDir) {
     return;
@@ -264,10 +264,10 @@ async function ensureStructure(projectRoot: string): Promise<void> {
 }
 
 async function writeCommandContracts(projectRoot: string): Promise<void> {
-  for (const stage of COMMAND_FILE_ORDER) {
+  for (const stage of FLOW_STAGES) {
     await writeFileSafe(
       runtimePath(projectRoot, "commands", `${stage}.md`),
-      commandContract(stage)
+      stageCommandContract(stage)
     );
   }
 }
@@ -304,9 +304,9 @@ async function writeEvalScaffold(projectRoot: string): Promise<void> {
   }
 }
 
-async function writeSkills(projectRoot: string, config?: VibyConfig): Promise<void> {
+async function writeSkills(projectRoot: string, config?: CclawConfig): Promise<void> {
   const skillTrack = config?.defaultTrack ?? "standard";
-  for (const stage of COMMAND_FILE_ORDER) {
+  for (const stage of FLOW_STAGES) {
     const folder = stageSkillFolder(stage);
     await writeFileSafe(
       runtimePath(projectRoot, "skills", folder, "SKILL.md"),
@@ -511,7 +511,7 @@ async function writeSkills(projectRoot: string, config?: VibyConfig): Promise<vo
   }
 }
 
-async function writeUtilityCommands(projectRoot: string, config: VibyConfig): Promise<void> {
+async function writeUtilityCommands(projectRoot: string, config: CclawConfig): Promise<void> {
   await writeFileSafe(runtimePath(projectRoot, "commands", "learn.md"), learnCommandContract());
   await writeFileSafe(runtimePath(projectRoot, "commands", "next.md"), nextCommandContract());
   await writeFileSafe(runtimePath(projectRoot, "commands", "ideate.md"), ideateCommandContract());
@@ -842,7 +842,7 @@ async function writeMergedHookJson(
   await writeFileSafe(hookFilePath, `${JSON.stringify(mergedDoc, null, 2)}\n`);
 }
 
-async function writeHooks(projectRoot: string, config: VibyConfig): Promise<void> {
+async function writeHooks(projectRoot: string, config: CclawConfig): Promise<void> {
   const harnesses = config.harnesses;
   const hooksDir = runtimePath(projectRoot, "hooks");
   await ensureDir(hooksDir);
@@ -1212,7 +1212,7 @@ async function syncDisabledHarnessArtifacts(projectRoot: string, harnesses: Harn
   }
 }
 
-async function writeState(projectRoot: string, config: VibyConfig, forceReset = false): Promise<void> {
+async function writeState(projectRoot: string, config: CclawConfig, forceReset = false): Promise<void> {
   const statePath = runtimePath(projectRoot, "state", "flow-state.json");
   if (!forceReset && (await exists(statePath))) {
     return;
@@ -1397,6 +1397,26 @@ async function cleanLegacyArtifacts(projectRoot: string): Promise<void> {
       // best-effort cleanup
     }
   }
+
+  // D-4 terminology migration: rename historical ideation artifacts to the
+  // canonical ideate-* naming without deleting user-authored content.
+  const artifactsDir = runtimePath(projectRoot, "artifacts");
+  try {
+    const entries = await fs.readdir(artifactsDir);
+    for (const entry of entries) {
+      const match = /^ideation-(.+\.md)$/u.exec(entry);
+      if (!match) continue;
+      const nextName = `ideate-${match[1]}`;
+      const from = path.join(artifactsDir, entry);
+      const to = path.join(artifactsDir, nextName);
+      if (await exists(to)) {
+        continue;
+      }
+      await fs.rename(from, to);
+    }
+  } catch {
+    // no artifacts directory yet (fresh init) or read-only FS
+  }
 }
 
 async function cleanStaleFiles(projectRoot: string): Promise<void> {
@@ -1429,7 +1449,7 @@ async function cleanStaleFiles(projectRoot: string): Promise<void> {
   // Legacy managed removals happen in cleanLegacyArtifacts() with explicit paths.
 }
 
-async function materializeRuntime(projectRoot: string, config: VibyConfig, forceStateReset: boolean): Promise<void> {
+async function materializeRuntime(projectRoot: string, config: CclawConfig, forceStateReset: boolean): Promise<void> {
   const harnesses = config.harnesses;
   await ensureStructure(projectRoot);
   await cleanLegacyArtifacts(projectRoot);
@@ -1461,7 +1481,7 @@ export async function initCclaw(options: InitOptions): Promise<void> {
   // Best-effort auto-detect: a Node project gets `typescript`, a Go module
   // gets `go`, etc. Skipped entirely when the project root has no manifests.
   const detectedPacks = await detectLanguageRulePacks(options.projectRoot);
-  const config: VibyConfig = {
+  const config: CclawConfig = {
     ...baseConfig,
     languageRulePacks: detectedPacks
   };
@@ -1494,7 +1514,7 @@ export async function syncCclaw(projectRoot: string): Promise<void> {
 export async function upgradeCclaw(projectRoot: string): Promise<void> {
   const advancedKeysPresent = await detectAdvancedKeys(projectRoot);
   const existing = await readConfig(projectRoot);
-  const upgraded: VibyConfig = {
+  const upgraded: CclawConfig = {
     ...existing,
     version: CCLAW_VERSION,
     flowVersion: FLOW_VERSION
