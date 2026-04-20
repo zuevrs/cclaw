@@ -37,6 +37,7 @@ import {
 import { parseTddCycleLog, validateTddCycleOrder } from "./tdd-cycle.js";
 import { stageSkillFolder } from "./content/skills.js";
 import { doctorCheckMetadata } from "./doctor-registry.js";
+import { resolveTrackFromPrompt } from "./track-heuristics.js";
 import {
   classifyCodexHooksFlag,
   codexConfigPath,
@@ -142,6 +143,19 @@ function collectHookCommands(value: unknown): string[] {
   const direct = typeof obj.command === "string" ? [obj.command] : [];
   const nested = collectHookCommands(obj.hooks);
   return [...direct, ...nested];
+}
+
+function extractUserPromptFromIdeaArtifact(markdown: string): string | null {
+  const normalized = markdown.replace(/\r\n?/gu, "\n");
+  const heading = /^##\s+User prompt\s*$/imu.exec(normalized);
+  if (!heading || heading.index === undefined) {
+    return null;
+  }
+  const sectionStart = heading.index + heading[0].length;
+  const tail = normalized.slice(sectionStart).replace(/^\s*\n/gu, "");
+  const nextHeadingIndex = tail.search(/^##\s+/mu);
+  const body = (nextHeadingIndex >= 0 ? tail.slice(0, nextHeadingIndex) : tail).trim();
+  return body.length > 0 ? body : null;
 }
 
 async function commandAvailable(command: string): Promise<boolean> {
@@ -1323,6 +1337,40 @@ export async function doctorChecks(projectRoot: string, options: DoctorOptions =
         }`
       : `track "${activeTrack}" expects skippedStages=[${expectedSkipped.join(", ")}] but flow-state has [${skippedFromState.join(", ")}] — run \`cclaw sync\` to repair`
   });
+  if (parsedConfig?.trackHeuristics) {
+    const ideaArtifactPath = path.join(projectRoot, RUNTIME_ROOT, "artifacts", "00-idea.md");
+    let heuristicsAligned = true;
+    let heuristicsDetails = "trackHeuristics configured; advisory alignment check skipped.";
+
+    if (!(await exists(ideaArtifactPath))) {
+      heuristicsDetails = `trackHeuristics configured but ${RUNTIME_ROOT}/artifacts/00-idea.md is missing; advisory alignment check skipped.`;
+    } else {
+      const ideaMarkdown = await fs.readFile(ideaArtifactPath, "utf8");
+      if (/^Reclassification:\s*/imu.test(ideaMarkdown)) {
+        heuristicsDetails = "00-idea.md contains Reclassification entry; advisory heuristic mismatch check skipped.";
+      } else {
+        const userPrompt = extractUserPromptFromIdeaArtifact(ideaMarkdown);
+        if (!userPrompt) {
+          heuristicsDetails = "00-idea.md has no `## User prompt` section; advisory heuristic mismatch check skipped.";
+        } else {
+          const resolution = resolveTrackFromPrompt(userPrompt, parsedConfig.trackHeuristics);
+          const tokenNote =
+            resolution.matchedTokens.length > 0
+              ? `matched: ${resolution.matchedTokens.join(", ")}`
+              : "matched: none (fallback)";
+          heuristicsAligned = resolution.track === activeTrack;
+          heuristicsDetails = heuristicsAligned
+            ? `trackHeuristics advisory matches active track "${activeTrack}" (${tokenNote}).`
+            : `warning: trackHeuristics advisory predicts "${resolution.track}" (${tokenNote}; ${resolution.reason}) but flow-state track is "${activeTrack}". Re-run classification or add Reclassification in 00-idea.md if override was intentional.`;
+        }
+      }
+    }
+    checks.push({
+      name: "warning:track_heuristics:advisory_alignment",
+      ok: heuristicsAligned,
+      details: heuristicsDetails
+    });
+  }
   checks.push({
     name: "flow_state:track_completed_in_track",
     ok: flowState.completedStages.every((stage) => trackStageList.includes(stage) || expectedSkipped.includes(stage)),

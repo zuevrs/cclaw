@@ -28,6 +28,79 @@ function toObject(value: unknown): Record<string, unknown> | null {
   return value as Record<string, unknown>;
 }
 
+function isNonEmptyString(value: unknown): value is string {
+  return typeof value === "string" && value.trim().length > 0;
+}
+
+function isPositiveNumber(value: unknown): value is number {
+  return typeof value === "number" && Number.isFinite(value) && value > 0;
+}
+
+function validateCursorEvent(
+  eventName: string,
+  eventEntries: unknown[],
+  errors: string[]
+): void {
+  for (let index = 0; index < eventEntries.length; index += 1) {
+    const rawEntry = eventEntries[index];
+    const entry = toObject(rawEntry);
+    if (!entry) {
+      errors.push(`hooks.${eventName}[${index}] must be an object`);
+      continue;
+    }
+    if (!isNonEmptyString(entry.command)) {
+      errors.push(`hooks.${eventName}[${index}].command must be a non-empty string`);
+    }
+    if (entry.matcher !== undefined && typeof entry.matcher !== "string") {
+      errors.push(`hooks.${eventName}[${index}].matcher must be a string when present`);
+    }
+    if (entry.timeout !== undefined && !isPositiveNumber(entry.timeout)) {
+      errors.push(`hooks.${eventName}[${index}].timeout must be a positive number when present`);
+    }
+  }
+}
+
+function validateClaudeLikeEvent(
+  eventName: string,
+  eventEntries: unknown[],
+  errors: string[]
+): void {
+  for (let index = 0; index < eventEntries.length; index += 1) {
+    const rawEntry = eventEntries[index];
+    const entry = toObject(rawEntry);
+    if (!entry) {
+      errors.push(`hooks.${eventName}[${index}] must be an object`);
+      continue;
+    }
+    if (entry.matcher !== undefined && typeof entry.matcher !== "string") {
+      errors.push(`hooks.${eventName}[${index}].matcher must be a string when present`);
+    }
+    if (!Array.isArray(entry.hooks) || entry.hooks.length === 0) {
+      errors.push(`hooks.${eventName}[${index}].hooks must be a non-empty array`);
+      continue;
+    }
+    for (let hookIndex = 0; hookIndex < entry.hooks.length; hookIndex += 1) {
+      const rawHook = entry.hooks[hookIndex];
+      const hook = toObject(rawHook);
+      if (!hook) {
+        errors.push(`hooks.${eventName}[${index}].hooks[${hookIndex}] must be an object`);
+        continue;
+      }
+      if (hook.type !== "command") {
+        errors.push(`hooks.${eventName}[${index}].hooks[${hookIndex}].type must be "command"`);
+      }
+      if (!isNonEmptyString(hook.command)) {
+        errors.push(`hooks.${eventName}[${index}].hooks[${hookIndex}].command must be a non-empty string`);
+      }
+      if (hook.timeout !== undefined && !isPositiveNumber(hook.timeout)) {
+        errors.push(
+          `hooks.${eventName}[${index}].hooks[${hookIndex}].timeout must be a positive number when present`
+        );
+      }
+    }
+  }
+}
+
 export function validateHookDocument(
   harness: HookSchemaHarness,
   document: unknown
@@ -58,6 +131,12 @@ export function validateHookDocument(
       const eventValue = hooks[eventName];
       if (!Array.isArray(eventValue) || eventValue.length === 0) {
         errors.push(`missing required event array "${eventName}"`);
+        continue;
+      }
+      if (harness === "cursor") {
+        validateCursorEvent(eventName, eventValue, errors);
+      } else {
+        validateClaudeLikeEvent(eventName, eventValue, errors);
       }
     }
   }
