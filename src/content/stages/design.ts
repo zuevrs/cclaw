@@ -65,8 +65,6 @@ export const DESIGN: StageSchemaInput = {
     "Write design lock artifact for downstream spec/plan."
   ],
   requiredGates: [
-    { id: "design_codebase_investigated", description: "Blast-radius files read and current patterns catalogued." },
-    { id: "design_scope_challenge_done", description: "Step 0 scope challenge completed with existing-code mapping." },
     { id: "design_architecture_locked", description: "Architecture boundaries are explicit and approved." },
     { id: "design_data_flow_mapped", description: "Data/state flow includes edge-case paths." },
     { id: "design_failure_modes_mapped", description: "Failure modes and mitigations are documented." },
@@ -196,16 +194,16 @@ export const DESIGN: StageSchemaInput = {
     traceabilityRule: "Every architecture decision must trace to a scope boundary. Every downstream spec requirement must trace to a design decision."
   },
   artifactValidation: [
-    { section: "Codebase Investigation", required: true, validationRule: "Must list blast-radius files with current responsibilities and discovered patterns." },
-    { section: "Search Before Building", required: true, validationRule: "For each technical choice: Layer 1 (exact match), Layer 2 (partial match), Layer 3 (inspiration), EUREKA labels with reuse-first default." },
+    { section: "Codebase Investigation", required: false, validationRule: "Must list blast-radius files with current responsibilities and discovered patterns." },
+    { section: "Search Before Building", required: false, validationRule: "For each technical choice: Layer 1 (exact match), Layer 2 (partial match), Layer 3 (inspiration), EUREKA labels with reuse-first default." },
     { section: "Architecture Boundaries", required: true, validationRule: "Must list component boundaries with ownership." },
     { section: "Architecture Diagram", required: true, validationRule: "At least one diagram (ASCII, Mermaid, or image) showing component boundaries and data flow direction. Diagram must: (1) label every node with a concrete component name (no generic 'Service A/B'), (2) label every arrow with the action or message (no unlabeled arrows), (3) mark direction of data flow explicitly, (4) distinguish synchronous from asynchronous edges (e.g. solid vs dashed, or `sync:` / `async:` prefix), (5) include at least one failure/degraded edge line that contains an arrow plus a failure keyword (`timeout`, `error`, `fallback`, `degraded`, `retry`, etc.)." },
-    { section: "Data Flow", required: true, validationRule: "Must include happy path, nil input, empty input, upstream error paths." },
+    { section: "Data Flow", required: false, validationRule: "Must include happy path, nil input, empty input, upstream error paths." },
     { section: "Failure Mode Table", required: true, validationRule: "Each failure mode has: trigger, detection, mitigation, user impact." },
-    { section: "Test Strategy", required: true, validationRule: "Must define unit/integration/e2e expectations with coverage targets." },
-    { section: "Performance Budget", required: true, validationRule: "For each critical path: metric name, target threshold, and measurement method." },
-    { section: "What Already Exists", required: true, validationRule: "For each sub-problem: existing code/library found (Layer 1-3/EUREKA label), reuse decision, and adaptation needed." },
-    { section: "NOT in scope", required: true, validationRule: "Work considered and explicitly deferred with one-line rationale." },
+    { section: "Test Strategy", required: false, validationRule: "Must define unit/integration/e2e expectations with coverage targets." },
+    { section: "Performance Budget", required: false, validationRule: "For each critical path: metric name, target threshold, and measurement method." },
+    { section: "What Already Exists", required: false, validationRule: "For each sub-problem: existing code/library found (Layer 1-3/EUREKA label), reuse decision, and adaptation needed." },
+    { section: "NOT in scope", required: false, validationRule: "Work considered and explicitly deferred with one-line rationale." },
     { section: "Parallelization Strategy", required: false, validationRule: "If multi-module: dependency table, parallel lanes, conflict flags." },
     { section: "Unresolved Decisions", required: false, validationRule: "If any: what info is missing, who provides it, default if unanswered." },
     { section: "Interface Contracts", required: false, validationRule: "If present: for each module boundary list produces (outputs) and consumes (inputs) with data types." },

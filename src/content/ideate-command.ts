@@ -215,10 +215,3 @@ lettered list with the same four labels. Do not invent extra options.
 `;
 }
 
-/**
- * Exposed for tests and docs that need to mention the artifact convention
- * without hard-coding the path string in two places.
- */
-export const IDEATION_ARTIFACT_PATH_PATTERN = IDEATION_ARTIFACT_PATTERN;
-export const IDEATION_ARTIFACT_GLOB_PATTERN = IDEATION_ARTIFACT_GLOB;
-export const IDEATION_RESUME_WINDOW = IDEATION_RESUME_WINDOW_DAYS;

@@ -22,7 +22,7 @@ function harnessTitle(harness: HarnessId): string {
 function tierDescription(tier: string): string {
   if (tier === "tier1") return "full native automation";
   if (tier === "tier2") return "partial automation with waivers";
-  return "manual fallback only";
+  return "compatibility shim";
 }
 
 export function harnessIntegrationDocMarkdown(): string {
@@ -74,7 +74,6 @@ ${hookRows}
 
 - \`tier1\`: full native delegation + structured asks + full hook surface.
 - \`tier2\`: usable flow with capability gaps; mandatory delegation can require waivers.
-- \`tier3\`: manual-only fallback; no native automation guarantees.
 - Codex-specific ceiling: \`PreToolUse\` can only intercept \`Bash\`. Direct
   \`Write\`/\`Edit\` to \`.cclaw/state/flow-state.json\` cannot be hard-blocked
   at hook level, so the canonical path is
@@ -89,7 +88,6 @@ All harnesses receive the same utility commands:
 - \`/cc-next\` - stage progression
 - \`/cc-ideate\` - discovery mode for ranked repo-improvement backlog
 - \`/cc-view\` - read-only router for status/tree/diff
-- \`/cc-learn\` - knowledge capture/lookup
 - \`/cc-ops\` - operations router for feature/tdd-log/retro/compound/archive/rewind
 
 Read-only subcommands:

@@ -2,7 +2,7 @@ import fs from "node:fs/promises";
 import path from "node:path";
 import { RUNTIME_ROOT } from "./constants.js";
 import { exists } from "./fs-utils.js";
-import { orderedStageSchemas, stageSchema } from "./content/stage-schema.js";
+import { stageSchema } from "./content/stage-schema.js";
 import { FLOW_STAGES, type FlowStage } from "./types.js";
 
 export interface LintFinding {
@@ -963,14 +963,6 @@ export async function lintArtifact(projectRoot: string, stage: FlowStage): Promi
 
   const passed = findings.every((f) => !f.required || f.found);
   return { stage, file: relFile, passed, findings };
-}
-
-export async function lintAllArtifacts(projectRoot: string): Promise<LintResult[]> {
-  const out: LintResult[] = [];
-  for (const schema of orderedStageSchemas()) {
-    out.push(await lintArtifact(projectRoot, schema.stage));
-  }
-  return out;
 }
 
 function isNonEmptyString(v: unknown): v is string {

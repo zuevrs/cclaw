@@ -59,15 +59,9 @@ export const REVIEW: StageSchemaInput = {
   ],
   requiredGates: [
     { id: "review_layer1_spec_compliance", description: "Spec compliance check completed with per-criterion verdict." },
-    { id: "review_layer2_correctness", description: "Correctness review completed." },
     { id: "review_layer2_security", description: "Security review completed." },
-    { id: "review_layer2_performance", description: "Performance review completed." },
-    { id: "review_layer2_architecture", description: "Architecture fit review completed." },
-    { id: "review_severity_classified", description: "All findings are severity-tagged." },
     { id: "review_criticals_resolved", description: "No unresolved critical blockers remain." },
-    { id: "review_army_json_valid", description: "07-review-army.json passes schema validation (validateReviewArmy)." },
-    { id: "review_completeness_scored", description: "Completeness score is computed and recorded (AC coverage, task coverage, slice coverage, adversarial pass)." },
-    { id: "review_security_audit_swept", description: "The security-audit utility skill was run against the diff scope and the modules it touches. Finding count (0 if clean) recorded in the review army with file:line evidence for every Critical." }
+    { id: "review_army_json_valid", description: "07-review-army.json passes schema validation (validateReviewArmy)." }
   ],
   requiredEvidence: [
     "Artifact written to `.cclaw/artifacts/07-review.md`.",
@@ -208,10 +202,10 @@ export const REVIEW: StageSchemaInput = {
   },
   artifactValidation: [
     { section: "Layer 1 Verdict", required: true, validationRule: "Per-criterion pass/fail with references." },
-    { section: "Layer 2 Findings", required: true, validationRule: "Each finding has severity, description, and resolution status." },
+    { section: "Layer 2 Findings", required: false, validationRule: "Each finding has severity, description, and resolution status." },
     { section: "Review Army Contract", required: true, validationRule: "Structured findings include id/severity/confidence/fingerprint/reportedBy/status with dedup reconciliation summary." },
-    { section: "Review Readiness Dashboard", required: true, validationRule: "Includes a per-pass table (Layer 1 / Layer 2 / Adversarial / Schema) with a 'Completed at' column, a Delegation log snapshot block (path .cclaw/state/delegation-log.json with required/completed/waived/pending), a Staleness signal block (commit at last review pass and current commit), and a Headline with open critical blockers + ship recommendation. At minimum, the section text must contain the substrings 'Completed at', 'delegation-log.json', 'commit at last review pass', and 'Ship recommendation'." },
-    { section: "Completeness Score", required: true, validationRule: "Records AC coverage, task coverage, test-slice coverage, and adversarial-review pass status as numeric or boolean values. At minimum, a line like 'AC coverage: N/M' or 'AC coverage: 100%'." },
+    { section: "Review Readiness Dashboard", required: false, validationRule: "Includes a per-pass table (Layer 1 / Layer 2 / Adversarial / Schema) with a 'Completed at' column, a Delegation log snapshot block (path .cclaw/state/delegation-log.json with required/completed/waived/pending), a Staleness signal block (commit at last review pass and current commit), and a Headline with open critical blockers + ship recommendation. At minimum, the section text must contain the substrings 'Completed at', 'delegation-log.json', 'commit at last review pass', and 'Ship recommendation'." },
+    { section: "Completeness Score", required: false, validationRule: "Records AC coverage, task coverage, test-slice coverage, and adversarial-review pass status as numeric or boolean values. At minimum, a line like 'AC coverage: N/M' or 'AC coverage: 100%'." },
     { section: "Severity Summary", required: true, validationRule: "Per-severity count lines for critical, important, and suggestion buckets." },
     { section: "Final Verdict", required: true, validationRule: "Exactly one of: APPROVED, APPROVED_WITH_CONCERNS, BLOCKED." }
   ]
