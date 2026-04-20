@@ -1,5 +1,5 @@
 import { COMMAND_FILE_ORDER } from "../constants.js";
-import type { FlowStage, TransitionRule } from "../types.js";
+import type { FlowStage, FlowTrack, TransitionRule } from "../types.js";
 import {
   BRAINSTORM,
   SCOPE,
@@ -10,6 +10,7 @@ import {
   REVIEW,
   SHIP
 } from "./stages/index.js";
+import { tddStageForTrack } from "./stages/tdd.js";
 import type {
   ArtifactValidation,
   StageAutoSubagentDispatch,
@@ -42,7 +43,9 @@ export type {
  * - required: blocking for stage completion.
  * - recommended: quality signal; unmet -> DONE_WITH_CONCERNS, not BLOCKED.
  */
-const REQUIRED_GATE_IDS: Record<FlowStage, string[]> = {
+type RequiredGateSet = string[] | ((track: FlowTrack) => string[]);
+
+const REQUIRED_GATE_IDS: Record<FlowStage, RequiredGateSet> = {
   brainstorm: [
     "brainstorm_approaches_compared",
     "brainstorm_direction_approved",
@@ -70,11 +73,12 @@ const REQUIRED_GATE_IDS: Record<FlowStage, string[]> = {
     "plan_acceptance_mapped",
     "plan_wait_for_confirm"
   ],
-  tdd: [
+  tdd: (track) => [
     "tdd_red_test_written",
     "tdd_green_full_suite",
     "tdd_refactor_completed",
-    "tdd_verified_before_complete"
+    "tdd_verified_before_complete",
+    ...(track === "quick" ? [] : ["tdd_traceable_to_plan"])
   ],
   review: [
     "review_layer1_spec_compliance",
@@ -96,13 +100,18 @@ const REQUIRED_ARTIFACT_SECTIONS: Record<FlowStage, string[]> = {
   design: ["Architecture Boundaries", "Architecture Diagram", "Failure Mode Table", "Completion Dashboard"],
   spec: ["Acceptance Criteria", "Edge Cases", "Testability Map", "Approval"],
   plan: ["Task List", "Dependency Batches", "Acceptance Mapping", "WAIT_FOR_CONFIRM"],
-  tdd: ["RED Evidence", "GREEN Evidence", "REFACTOR Notes", "Traceability"],
+  tdd: ["RED Evidence", "GREEN Evidence", "REFACTOR Notes", "Traceability", "Verification Ladder"],
   review: ["Layer 1 Verdict", "Review Army Contract", "Severity Summary", "Final Verdict"],
   ship: ["Preflight Results", "Release Notes", "Rollback Plan", "Finalization"]
 };
 
-function tieredStageGates(stage: FlowStage, gates: StageGate[]): StageGate[] {
-  const requiredSet = new Set(REQUIRED_GATE_IDS[stage]);
+function resolveRequiredGateIds(stage: FlowStage, track: FlowTrack): string[] {
+  const raw = REQUIRED_GATE_IDS[stage];
+  return typeof raw === "function" ? raw(track) : raw;
+}
+
+function tieredStageGates(stage: FlowStage, gates: StageGate[], track: FlowTrack): StageGate[] {
+  const requiredSet = new Set(resolveRequiredGateIds(stage, track));
   return gates.map((gate) => {
     return {
       ...gate,
@@ -272,9 +281,9 @@ export function mandatoryDelegationsForStage(stage: FlowStage): string[] {
     .map((d) => d.agent);
 }
 
-export function stageSchema(stage: FlowStage): StageSchema {
-  const base = STAGE_SCHEMA_MAP[stage];
-  const tieredGates = tieredStageGates(stage, base.requiredGates);
+export function stageSchema(stage: FlowStage, track: FlowTrack = "standard"): StageSchema {
+  const base = stage === "tdd" ? tddStageForTrack(track) : STAGE_SCHEMA_MAP[stage];
+  const tieredGates = tieredStageGates(stage, base.requiredGates, track);
   const tieredValidation = tieredArtifactValidation(stage, base.artifactValidation);
   return {
     ...base,
@@ -284,18 +293,18 @@ export function stageSchema(stage: FlowStage): StageSchema {
   };
 }
 
-export function orderedStageSchemas(): StageSchema[] {
-  return COMMAND_FILE_ORDER.map((stage) => stageSchema(stage));
+export function orderedStageSchemas(track: FlowTrack = "standard"): StageSchema[] {
+  return COMMAND_FILE_ORDER.map((stage) => stageSchema(stage, track));
 }
 
-export function stageGateIds(stage: FlowStage): string[] {
-  return stageSchema(stage).requiredGates
+export function stageGateIds(stage: FlowStage, track: FlowTrack = "standard"): string[] {
+  return stageSchema(stage, track).requiredGates
     .filter((gate) => gate.tier === "required")
     .map((gate) => gate.id);
 }
 
-export function stageRecommendedGateIds(stage: FlowStage): string[] {
-  return stageSchema(stage).requiredGates
+export function stageRecommendedGateIds(stage: FlowStage, track: FlowTrack = "standard"): string[] {
+  return stageSchema(stage, track).requiredGates
     .filter((gate) => gate.tier === "recommended")
     .map((gate) => gate.id);
 }
@@ -320,8 +329,8 @@ export function buildTransitionRules(): TransitionRule[] {
   return rules;
 }
 
-export function stagePolicyNeedles(stage: FlowStage): string[] {
-  return stageSchema(stage).policyNeedles;
+export function stagePolicyNeedles(stage: FlowStage, track: FlowTrack = "standard"): string[] {
+  return stageSchema(stage, track).policyNeedles;
 }
 
 export function stageAutoSubagentDispatch(stage: FlowStage): StageAutoSubagentDispatch[] {

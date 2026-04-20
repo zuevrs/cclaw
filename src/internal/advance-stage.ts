@@ -492,7 +492,7 @@ async function runAdvanceStage(
     return 1;
   }
 
-  const schema = stageSchema(args.stage);
+  const schema = stageSchema(args.stage, flowState.track);
   const requiredGateIds = schema.requiredGates
     .filter((gate) => gate.tier === "required")
     .map((gate) => gate.id);

@@ -5,6 +5,7 @@
   "schemaVersion": 1,
   "requiredEvents": [
     "SessionStart",
+    "UserPromptSubmit",
     "PreToolUse",
     "PostToolUse",
     "Stop"

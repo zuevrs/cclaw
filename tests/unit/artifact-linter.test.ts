@@ -1334,6 +1334,10 @@ inputs_hash: sha256:not-a-real-hash
 - Full suite command: pnpm vitest run
 - Full suite result: 12 passed, 0 failed
 
+## Verification Ladder
+- Highest tier reached: command
+- Evidence: pnpm vitest run dedupe.test.ts (pass)
+
 ## REFACTOR Notes
 - What changed: Extracted helper function
 - Why: Reuse across tests
@@ -1438,6 +1442,10 @@ inputs_hash: sha256:not-a-real-hash
 - Full suite command: vitest run
 - Full suite result: 12 passed
 
+## Verification Ladder
+- Highest tier reached: command
+- Evidence: vitest run (pass)
+
 ## REFACTOR Notes
 - What changed: Extracted helper
 - Why: Reuse
@@ -1472,6 +1480,10 @@ inputs_hash: sha256:not-a-real-hash
 ## GREEN Evidence
 - Full suite command: vitest run
 - Full suite result: 12 passed
+
+## Verification Ladder
+- Highest tier reached: command
+- Evidence: vitest run (pass)
 
 ## REFACTOR Notes
 - What changed: Extracted helper

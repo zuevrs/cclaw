@@ -37,7 +37,7 @@ export const HOOK_EVENTS_BY_HARNESS: Record<
     pre_tool_workflow_guard: "plugin tool.execute.before -> workflow-guard.sh",
     post_tool_context_monitor: "plugin tool.execute.after -> context-monitor.sh",
     stop_checkpoint: "plugin session.idle -> stop-checkpoint.sh",
-    precompact_digest: "plugin session.cleared/session.resumed hooks"
+    precompact_digest: "plugin session.compacted -> pre-compact.sh"
   },
   codex: {
     // Codex CLI v0.114+ exposes lifecycle hooks via `.codex/hooks.json`,

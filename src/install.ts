@@ -305,11 +305,12 @@ async function writeEvalScaffold(projectRoot: string): Promise<void> {
 }
 
 async function writeSkills(projectRoot: string, config?: VibyConfig): Promise<void> {
+  const skillTrack = config?.defaultTrack ?? "standard";
   for (const stage of COMMAND_FILE_ORDER) {
     const folder = stageSkillFolder(stage);
     await writeFileSafe(
       runtimePath(projectRoot, "skills", folder, "SKILL.md"),
-      stageSkillMarkdown(stage)
+      stageSkillMarkdown(stage, skillTrack)
     );
 
     // Progressive disclosure (A.2#8): materialize the full example artifact as

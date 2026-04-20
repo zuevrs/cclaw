@@ -8,8 +8,12 @@ import { exists } from "./fs-utils.js";
 import { readFlowState, writeFlowState } from "./runs.js";
 import type { FlowStage } from "./types.js";
 
-async function currentStageArtifactExists(projectRoot: string, stage: FlowStage): Promise<boolean> {
-  const artifactFile = stageSchema(stage).artifactFile;
+async function currentStageArtifactExists(
+  projectRoot: string,
+  stage: FlowStage,
+  track: FlowState["track"]
+): Promise<boolean> {
+  const artifactFile = stageSchema(stage, track).artifactFile;
   const candidates = [
     path.join(projectRoot, RUNTIME_ROOT, "artifacts", artifactFile),
     path.join(projectRoot, artifactFile)
@@ -71,7 +75,7 @@ export async function verifyCurrentStageGateEvidence(
   flowState: FlowState
 ): Promise<GateEvidenceCheckResult> {
   const stage = flowState.currentStage;
-  const schema = stageSchema(stage);
+  const schema = stageSchema(stage, flowState.track);
   const catalog = flowState.stageGateCatalog[stage];
   const required = schema.requiredGates
     .filter((gate) => gate.tier === "required")
@@ -136,7 +140,7 @@ export async function verifyCurrentStageGateEvidence(
     }
   }
 
-  const artifactPresent = await currentStageArtifactExists(projectRoot, stage);
+  const artifactPresent = await currentStageArtifactExists(projectRoot, stage, flowState.track);
   const shouldValidateArtifact =
     artifactPresent || catalog.passed.length > 0 || flowState.completedStages.includes(stage);
   if (shouldValidateArtifact) {
@@ -202,7 +206,7 @@ export function verifyCompletedStagesGateClosure(flowState: FlowState): Complete
   const issues: string[] = [];
   const openStages: CompletedStagesClosureResult["openStages"] = [];
   for (const stage of flowState.completedStages) {
-    const schema = stageSchema(stage);
+    const schema = stageSchema(stage, flowState.track);
     const catalog = flowState.stageGateCatalog[stage];
     const required = schema.requiredGates
       .filter((gate) => gate.tier === "required")
@@ -250,10 +254,11 @@ export function reconcileCurrentStageGateCatalog(flowState: FlowState): {
   reconciliation: GateReconciliationResult;
 } {
   const stage = flowState.currentStage;
-  const required = stageSchema(stage).requiredGates
+  const schema = stageSchema(stage, flowState.track);
+  const required = schema.requiredGates
     .filter((gate) => gate.tier === "required")
     .map((gate) => gate.id);
-  const recommended = stageSchema(stage).requiredGates
+  const recommended = schema.requiredGates
     .filter((gate) => gate.tier === "recommended")
     .map((gate) => gate.id);
   const conditional: string[] = [];

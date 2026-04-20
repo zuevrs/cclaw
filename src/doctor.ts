@@ -701,6 +701,8 @@ export async function doctorChecks(projectRoot: string, options: DoctorOptions =
     "session-start.sh",
     "stop-checkpoint.sh",
     "run-hook.cmd",
+    "stage-complete.sh",
+    "pre-compact.sh",
     "prompt-guard.sh",
     "workflow-guard.sh",
     "context-monitor.sh"
@@ -905,11 +907,14 @@ export async function doctorChecks(projectRoot: string, options: DoctorOptions =
     const codexDoc = await readHookDocument(codexHooksFile);
     const codexHooks = toObject(codexDoc?.hooks) ?? {};
     const codexSessionCmds = collectHookCommands(codexHooks.SessionStart);
+    const codexUserPromptCmds = collectHookCommands(codexHooks.UserPromptSubmit);
     const codexPreCmds = collectHookCommands(codexHooks.PreToolUse);
     const codexPostCmds = collectHookCommands(codexHooks.PostToolUse);
     const codexStopCmds = collectHookCommands(codexHooks.Stop);
     const codexWiringOk =
       codexSessionCmds.some((cmd) => cmd.includes("session-start.sh")) &&
+      codexUserPromptCmds.some((cmd) => cmd.includes("prompt-guard.sh")) &&
+      codexUserPromptCmds.some((cmd) => cmd.includes("verify-current-state --quiet")) &&
       codexPreCmds.some((cmd) => cmd.includes("prompt-guard.sh")) &&
       codexPreCmds.some((cmd) => cmd.includes("workflow-guard.sh")) &&
       codexPostCmds.some((cmd) => cmd.includes("context-monitor.sh")) &&
@@ -917,7 +922,7 @@ export async function doctorChecks(projectRoot: string, options: DoctorOptions =
     checks.push({
       name: "hook:wiring:codex",
       ok: codexWiringOk,
-      details: `${codexHooksFile} must wire session-start/prompt-guard/workflow-guard/context-monitor/stop-checkpoint (PreToolUse/PostToolUse run Bash-only in Codex v0.114+)`
+      details: `${codexHooksFile} must wire SessionStart, UserPromptSubmit(prompt-guard + verify-current-state), PreToolUse(prompt/workflow), PostToolUse(context-monitor), and Stop(stop-checkpoint). PreToolUse/PostToolUse run Bash-only in Codex v0.114+`
     });
 
     // Feature flag warning: Codex ignores `.codex/hooks.json` unless the
@@ -987,6 +992,8 @@ export async function doctorChecks(projectRoot: string, options: DoctorOptions =
   if (configuredHarnesses.includes("opencode")) {
     const file = path.join(projectRoot, ".opencode/plugins/cclaw-plugin.mjs");
     let ok = false;
+    let singleHandlerPathOk = false;
+    let precompactHookOk = false;
     if (await exists(file)) {
       const content = await fs.readFile(file, "utf8");
       ok =
@@ -996,15 +1003,35 @@ export async function doctorChecks(projectRoot: string, options: DoctorOptions =
         content.includes("prompt-guard.sh") &&
         content.includes("workflow-guard.sh") &&
         content.includes("context-monitor.sh") &&
+        content.includes("pre-compact.sh") &&
         content.includes('"session.idle"') &&
         content.includes('"session.resumed"') &&
+        content.includes('"session.compacted"') &&
         content.includes('"session.cleared"') &&
         content.includes('"experimental.chat.system.transform"');
+      singleHandlerPathOk =
+        !content.includes('eventType === "tool.execute.before"') &&
+        !content.includes('eventType === "tool.execute.after"') &&
+        content.includes('"tool.execute.before": async') &&
+        content.includes('"tool.execute.after": async');
+      precompactHookOk =
+        content.includes('eventType === "session.compacted"') &&
+        content.includes('runHookScript("pre-compact.sh"');
     }
     checks.push({
       name: "lifecycle:opencode:rehydration_events",
       ok,
       details: `${file} must include event lifecycle handler, tool.execute.before/after with prompt/workflow/context hooks, session.idle checkpoint, and transform rehydration`
+    });
+    checks.push({
+      name: "hook:opencode:single_tool_handler_path",
+      ok: singleHandlerPathOk,
+      details: `${file} must route tool.execute.before/after through dedicated handlers exactly once (no duplicate event() branches).`
+    });
+    checks.push({
+      name: "hook:opencode:precompact_digest",
+      ok: precompactHookOk,
+      details: `${file} must run pre-compact.sh on session.compacted before bootstrap refresh.`
     });
     const runtimeShape = await opencodePluginRuntimeShapeCheck(projectRoot);
     checks.push({

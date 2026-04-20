@@ -1,5 +1,5 @@
 import { RUNTIME_ROOT } from "../constants.js";
-import type { FlowStage } from "../types.js";
+import type { FlowStage, FlowTrack } from "../types.js";
 import { STAGE_EXAMPLES_REFERENCE_DIR, stageDomainExamples, stageExamples, stageGoodBadExamples } from "./examples.js";
 import { STAGE_COMMON_GUIDANCE_REL_PATH } from "./stage-common-guidance.js";
 import type { StageSchema } from "./stage-schema.js";
@@ -9,8 +9,8 @@ const VERIFICATION_STAGES: FlowStage[] = ["tdd", "review", "ship"];
 const DECISION_PROTOCOL_PATH = `${RUNTIME_ROOT}/references/protocols/decision.md`;
 const COMPLETION_PROTOCOL_PATH = `${RUNTIME_ROOT}/references/protocols/completion.md`;
 
-function whenNotToUseBlock(stage: FlowStage): string {
-  const schema = stageSchema(stage);
+function whenNotToUseBlock(stage: FlowStage, track: FlowTrack): string {
+  const schema = stageSchema(stage, track);
   if (schema.whenNotToUse.length === 0) {
     return "";
   }
@@ -20,8 +20,8 @@ ${schema.whenNotToUse.map((item) => `- ${item}`).join("\n")}
 `;
 }
 
-function contextLoadingBlock(stage: FlowStage): string {
-  const trace = stageSchema(stage).crossStageTrace;
+function contextLoadingBlock(stage: FlowStage, track: FlowTrack): string {
+  const trace = stageSchema(stage, track).crossStageTrace;
   const readLines = trace.readsFrom.length > 0
     ? trace.readsFrom.map((value) => `- \`${value}\``).join("\n")
     : "- (first stage — no upstream artifacts)";
@@ -38,7 +38,7 @@ ${readLines}
 `;
 }
 
-function autoSubagentDispatchBlock(stage: FlowStage): string {
+function autoSubagentDispatchBlock(stage: FlowStage, track: FlowTrack): string {
   const rules = stageAutoSubagentDispatch(stage);
   if (rules.length === 0) return "";
 
@@ -48,7 +48,7 @@ function autoSubagentDispatchBlock(stage: FlowStage): string {
       return `| ${rule.agent} | ${rule.mode} | ${userGate} | ${rule.when} |`;
     })
     .join("\n");
-  const mandatory = stageSchema(stage).mandatoryDelegations;
+  const mandatory = stageSchema(stage, track).mandatoryDelegations;
   const mandatoryList = mandatory.length > 0 ? mandatory.map((a) => `\`${a}\``).join(", ") : "none";
   const delegationLogRel = `${RUNTIME_ROOT}/state/delegation-log.json`;
 
@@ -63,8 +63,8 @@ Record completion/waiver in \`${delegationLogRel}\` before stage completion.
 `;
 }
 
-function researchPlaybooksBlock(stage: FlowStage): string {
-  const playbooks = stageSchema(stage).researchPlaybooks ?? [];
+function researchPlaybooksBlock(stage: FlowStage, track: FlowTrack): string {
+  const playbooks = stageSchema(stage, track).researchPlaybooks ?? [];
   if (playbooks.length === 0) return "";
   const rows = playbooks
     .map((playbook) => `- \`${RUNTIME_ROOT}/skills/${playbook}\``)
@@ -79,8 +79,8 @@ ${rows}
 `;
 }
 
-function reviewSectionsBlock(stage: FlowStage): string {
-  const schema = stageSchema(stage);
+function reviewSectionsBlock(stage: FlowStage, track: FlowTrack): string {
+  const schema = stageSchema(stage, track);
   if (schema.reviewSections.length === 0) return "";
   const sections = schema.reviewSections
     .map((sec) => {
@@ -113,8 +113,8 @@ Reference utility skill:
 `;
 }
 
-function batchExecutionModeBlock(stage: FlowStage): string {
-  const schema = stageSchema(stage);
+function batchExecutionModeBlock(stage: FlowStage, track: FlowTrack): string {
+  const schema = stageSchema(stage, track);
   if (!schema.batchExecutionAllowed) return "";
 
   return `## Batch Execution Mode
@@ -129,8 +129,8 @@ Detailed walkthrough:
 `;
 }
 
-function crossStageTraceBlock(stage: FlowStage): string {
-  const trace = stageSchema(stage).crossStageTrace;
+function crossStageTraceBlock(stage: FlowStage, track: FlowTrack): string {
+  const trace = stageSchema(stage, track).crossStageTrace;
   const reads = trace.readsFrom.length > 0
     ? trace.readsFrom.map((r) => `- ${r}`).join("\n")
     : "- (first stage — no upstream artifacts)";
@@ -150,8 +150,8 @@ Rule: ${trace.traceabilityRule}
 `;
 }
 
-function artifactValidationBlock(stage: FlowStage): string {
-  const validations = stageSchema(stage).artifactValidation;
+function artifactValidationBlock(stage: FlowStage, track: FlowTrack): string {
+  const validations = stageSchema(stage, track).artifactValidation;
   if (validations.length === 0) return "";
   const rows = validations
     .map((v) => {
@@ -220,7 +220,7 @@ function stageSpecificSeeAlso(stage: FlowStage): string[] {
   return refs[stage];
 }
 
-function completionParametersBlock(schema: StageSchema): string {
+function completionParametersBlock(schema: StageSchema, track: FlowTrack): string {
   const gateList = schema.requiredGates.map((g) => `\`${g.id}\``).join(", ");
   const mandatory = schema.mandatoryDelegations.length > 0
     ? schema.mandatoryDelegations.map((a) => `\`${a}\``).join(", ")
@@ -228,7 +228,7 @@ function completionParametersBlock(schema: StageSchema): string {
   const nextStage = schema.next === "done" ? "done" : schema.next;
   const nextDescription = schema.next === "done"
     ? "flow complete"
-    : stageSchema(schema.next as FlowStage).skillDescription;
+    : stageSchema(schema.next as FlowStage, track).skillDescription;
 
   return `## Completion Parameters
 
@@ -246,8 +246,8 @@ Apply shared completion logic from:
 `;
 }
 
-function quickStartBlock(stage: FlowStage): string {
-  const schema = stageSchema(stage);
+function quickStartBlock(stage: FlowStage, track: FlowTrack): string {
+  const schema = stageSchema(stage, track);
   const gatePreview = schema.requiredGates.slice(0, 3).map((g) => `\`${g.id}\``).join(", ");
   return `## Quick Start
 
@@ -316,8 +316,8 @@ export function stageSkillFolder(stage: FlowStage): string {
   return stageSchema(stage).skillFolder;
 }
 
-export function stageSkillMarkdown(stage: FlowStage): string {
-  const schema = stageSchema(stage);
+export function stageSkillMarkdown(stage: FlowStage, track: FlowTrack = "standard"): string {
+  const schema = stageSchema(stage, track);
   const gateList = schema.requiredGates
     .map((g) => `- \`${g.id}\` — ${g.description}`)
     .join("\n");
@@ -344,7 +344,7 @@ If you are about to violate the Iron Law, STOP. No amount of urgency, partial pr
 
 </EXTREMELY-IMPORTANT>
 
-${quickStartBlock(stage)}
+${quickStartBlock(stage, track)}
 
 ## Overview
 ${schema.purpose}
@@ -352,16 +352,16 @@ ${schema.purpose}
 ## When to Use
 ${schema.whenToUse.map((item) => `- ${item}`).join("\n")}
 
-${whenNotToUseBlock(stage)}
+${whenNotToUseBlock(stage, track)}
 ## Inputs
 ${schema.inputs.length > 0 ? schema.inputs.map((item) => `- ${item}`).join("\n") : "- (first stage — no required inputs)"}
 
 ## Required Context
 ${schema.requiredContext.length > 0 ? schema.requiredContext.map((item) => `- ${item}`).join("\n") : "- None beyond this skill"}
 
-${contextLoadingBlock(stage)}
-${autoSubagentDispatchBlock(stage)}
-${researchPlaybooksBlock(stage)}
+${contextLoadingBlock(stage, track)}
+${autoSubagentDispatchBlock(stage, track)}
+${researchPlaybooksBlock(stage, track)}
 
 ## Outputs
 ${schema.outputs.map((item) => `- ${item}`).join("\n")}
@@ -385,7 +385,7 @@ ${schema.interactionProtocol.map((item, i) => `${i + 1}. ${item}`).join("\n")}
 Shared decision/ask-user protocol:
 \`${DECISION_PROTOCOL_PATH}\`
 
-${batchExecutionModeBlock(stage)}
+${batchExecutionModeBlock(stage, track)}
 ## Required Gates
 ${gateList}
 
@@ -395,10 +395,10 @@ ${evidenceList}
 ## Process
 ${schema.process.map((item, i) => `${i + 1}. ${item}`).join("\n")}
 
-${reviewSectionsBlock(stage)}
+${reviewSectionsBlock(stage, track)}
 ${verificationBlock(stage)}
-${crossStageTraceBlock(stage)}
-${artifactValidationBlock(stage)}
+${crossStageTraceBlock(stage, track)}
+${artifactValidationBlock(stage, track)}
 
 ## Anti-Patterns & Red Flags
 ${mergedAntiPatterns(schema)}
@@ -406,7 +406,7 @@ ${mergedAntiPatterns(schema)}
 ## Verification
 ${schema.exitCriteria.map((item) => `- [ ] ${item}`).join("\n")}
 
-${completionParametersBlock(schema)}
+${completionParametersBlock(schema, track)}
 ## Shared Stage Guidance
 See:
 - \`${STAGE_COMMON_GUIDANCE_REL_PATH}\`
