@@ -21,7 +21,7 @@ If you are about to violate the Iron Law, STOP. No amount of urgency, partial pr
 1. Announce at start: "Using \`two-layer-review\` to Validate that implementation matches spec and meets quality/security/performance bar through structured two-layer review.".
 2. Obey HARD-GATE and Iron Law.
 3. Execute checklist in order and persist \`.cclaw/artifacts/07-review.md\`.
-4. Satisfy gates (\`review_layer1_spec_compliance\`, \`review_layer2_correctness\`, \`review_layer2_security\` +7).
+4. Satisfy gates (\`review_layer1_spec_compliance\`, \`review_layer2_security\`, \`review_criticals_resolved\` +1).
 
 
 ## Overview
@@ -167,15 +167,9 @@ Shared decision/ask-user protocol:
 
 ## Required Gates
 - \`review_layer1_spec_compliance\` — Spec compliance check completed with per-criterion verdict.
-- \`review_layer2_correctness\` — Correctness review completed.
 - \`review_layer2_security\` — Security review completed.
-- \`review_layer2_performance\` — Performance review completed.
-- \`review_layer2_architecture\` — Architecture fit review completed.
-- \`review_severity_classified\` — All findings are severity-tagged.
 - \`review_criticals_resolved\` — No unresolved critical blockers remain.
 - \`review_army_json_valid\` — 07-review-army.json passes schema validation (validateReviewArmy).
-- \`review_completeness_scored\` — Completeness score is computed and recorded (AC coverage, task coverage, slice coverage, adversarial pass).
-- \`review_security_audit_swept\` — The security-audit utility skill was run against the diff scope and the modules it touches. Finding count (0 if clean) recorded in the review army with file:line evidence for every Critical.
 
 ## Required Evidence
 - [ ] Artifact written to \`.cclaw/artifacts/07-review.md\`.
@@ -327,7 +321,7 @@ Rule: Review verdict must reference specific spec criteria and TDD evidence. Dow
 
 - \`stage\`: \`review\`
 - \`next\`: \`ship\` (Release handoff stage with preflight checks, rollback readiness, and explicit finalization mode.)
-- \`gates\`: \`review_layer1_spec_compliance\`, \`review_layer2_correctness\`, \`review_layer2_security\`, \`review_layer2_performance\`, \`review_layer2_architecture\`, \`review_severity_classified\`, \`review_criticals_resolved\`, \`review_army_json_valid\`, \`review_completeness_scored\`, \`review_security_audit_swept\`
+- \`gates\`: \`review_layer1_spec_compliance\`, \`review_layer2_security\`, \`review_criticals_resolved\`, \`review_army_json_valid\`
 - \`artifact\`: \`.cclaw/artifacts/07-review.md\`
 - \`mandatory delegations\`: \`reviewer\`, \`security-reviewer\`
 - \`completion helper\`: \`bash .cclaw/hooks/stage-complete.sh review\`
@@ -374,7 +368,7 @@ If you are about to violate the Iron Law, STOP. No amount of urgency, partial pr
 1. Announce at start: "Using \`shipping-and-handoff\` to Prepare a safe release handoff with clear rollback and branch finalization decision.".
 2. Obey HARD-GATE and Iron Law.
 3. Execute checklist in order and persist \`.cclaw/artifacts/08-ship.md\`.
-4. Satisfy gates (\`ship_review_verdict_valid\`, \`ship_preflight_passed\`, \`ship_release_notes_written\` +4).
+4. Satisfy gates (\`ship_review_verdict_valid\`, \`ship_preflight_passed\`, \`ship_rollback_plan_ready\` +1).
 
 
 ## Overview
@@ -515,11 +509,8 @@ Shared decision/ask-user protocol:
 ## Required Gates
 - \`ship_review_verdict_valid\` — Review verdict is APPROVED or APPROVED_WITH_CONCERNS.
 - \`ship_preflight_passed\` — Preflight checks passed or exceptions documented and approved.
-- \`ship_release_notes_written\` — Release notes are complete and accurate.
 - \`ship_rollback_plan_ready\` — Rollback trigger, steps, and verification are documented.
-- \`ship_finalization_mode_selected\` — Exactly one finalization action is selected.
 - \`ship_finalization_executed\` — Selected finalization action was executed and verified.
-- \`ship_post_merge_tests\` — Full test suite re-run on the merged result (not just the branch). Post-merge failures caught before release.
 
 ## Required Evidence
 - [ ] Artifact written to \`.cclaw/artifacts/08-ship.md\`.
@@ -617,7 +608,7 @@ Rule: Ship artifact must reference review verdict and resolution status. Release
 
 - \`stage\`: \`ship\`
 - \`next\`: \`done\` (flow complete)
-- \`gates\`: \`ship_review_verdict_valid\`, \`ship_preflight_passed\`, \`ship_release_notes_written\`, \`ship_rollback_plan_ready\`, \`ship_finalization_mode_selected\`, \`ship_finalization_executed\`, \`ship_post_merge_tests\`
+- \`gates\`: \`ship_review_verdict_valid\`, \`ship_preflight_passed\`, \`ship_rollback_plan_ready\`, \`ship_finalization_executed\`
 - \`artifact\`: \`.cclaw/artifacts/08-ship.md\`
 - \`mandatory delegations\`: \`doc-updater\`
 - \`completion helper\`: \`bash .cclaw/hooks/stage-complete.sh ship\`
@@ -665,7 +656,7 @@ If you are about to violate the Iron Law, STOP. No amount of urgency, partial pr
 1. Announce at start: "Using \`planning-and-task-breakdown\` to Create small executable tasks with dependencies and pause for explicit user confirmation.".
 2. Obey HARD-GATE and Iron Law.
 3. Execute checklist in order and persist \`.cclaw/artifacts/05-plan.md\`.
-4. Satisfy gates (\`plan_tasks_sliced_2_5_min\`, \`plan_dependency_graph_written\`, \`plan_dependency_batches_defined\` +3).
+4. Satisfy gates (\`plan_tasks_sliced_2_5_min\`, \`plan_dependency_batches_defined\`, \`plan_acceptance_mapped\` +1).
 
 
 ## Overview
@@ -806,9 +797,7 @@ Shared decision/ask-user protocol:
 
 ## Required Gates
 - \`plan_tasks_sliced_2_5_min\` — Tasks are small, executable slices.
-- \`plan_dependency_graph_written\` — Dependency graph and order are explicit.
 - \`plan_dependency_batches_defined\` — Tasks are grouped into executable batches with gate checks.
-- \`plan_verification_steps_defined\` — Each task has verification guidance.
 - \`plan_acceptance_mapped\` — Each task maps to a spec acceptance criterion.
 - \`plan_wait_for_confirm\` — Execution blocked until explicit user confirmation.
 
@@ -914,7 +903,7 @@ Rule: Every task must trace to a spec acceptance criterion. Every locked scope d
 
 - \`stage\`: \`plan\`
 - \`next\`: \`tdd\` (Full TDD cycle: RED (failing tests), GREEN (minimal implementation), REFACTOR (cleanup). One plan slice at a time with strict traceability.)
-- \`gates\`: \`plan_tasks_sliced_2_5_min\`, \`plan_dependency_graph_written\`, \`plan_dependency_batches_defined\`, \`plan_verification_steps_defined\`, \`plan_acceptance_mapped\`, \`plan_wait_for_confirm\`
+- \`gates\`: \`plan_tasks_sliced_2_5_min\`, \`plan_dependency_batches_defined\`, \`plan_acceptance_mapped\`, \`plan_wait_for_confirm\`
 - \`artifact\`: \`.cclaw/artifacts/05-plan.md\`
 - \`mandatory delegations\`: \`planner\`
 - \`completion helper\`: \`bash .cclaw/hooks/stage-complete.sh plan\`
@@ -960,7 +949,7 @@ If you are about to violate the Iron Law, STOP. No amount of urgency, partial pr
 1. Announce at start: "Using \`test-driven-development\` to Implement features through the TDD cycle: write failing tests, make them pass with minimal code, then refactor.".
 2. Obey HARD-GATE and Iron Law.
 3. Execute checklist in order and persist \`.cclaw/artifacts/06-tdd.md\`.
-4. Satisfy gates (\`tdd_red_test_written\`, \`tdd_red_failure_captured\`, \`tdd_trace_to_acceptance\` +5).
+4. Satisfy gates (\`tdd_red_test_written\`, \`tdd_green_full_suite\`, \`tdd_refactor_completed\` +1).
 
 
 ## Overview
@@ -1129,12 +1118,8 @@ Detailed walkthrough:
 
 ## Required Gates
 - \`tdd_red_test_written\` — Failing tests exist before implementation changes.
-- \`tdd_red_failure_captured\` — Failure output is captured as evidence.
-- \`tdd_trace_to_acceptance\` — RED tests trace to explicit acceptance criteria.
-- \`tdd_red_failure_reason_verified\` — Failure is for the expected reason, not an unrelated error.
 - \`tdd_green_full_suite\` — Full relevant suite passes in GREEN state.
 - \`tdd_refactor_completed\` — Refactor pass completed with behavior preservation verified.
-- \`tdd_refactor_notes_written\` — Refactor decisions and outcomes are documented.
 - \`tdd_traceable_to_plan\` — Change traceability to plan slice is explicit.
 
 ## Required Evidence
@@ -1263,7 +1248,7 @@ Rule: Every RED test traces to a plan task. Every GREEN change traces to a RED t
 
 - \`stage\`: \`tdd\`
 - \`next\`: \`review\` (Two-layer review stage: spec compliance first, then code quality and production readiness. Section-by-section with severity discipline.)
-- \`gates\`: \`tdd_red_test_written\`, \`tdd_red_failure_captured\`, \`tdd_trace_to_acceptance\`, \`tdd_red_failure_reason_verified\`, \`tdd_green_full_suite\`, \`tdd_refactor_completed\`, \`tdd_refactor_notes_written\`, \`tdd_traceable_to_plan\`
+- \`gates\`: \`tdd_red_test_written\`, \`tdd_green_full_suite\`, \`tdd_refactor_completed\`, \`tdd_traceable_to_plan\`
 - \`artifact\`: \`.cclaw/artifacts/06-tdd.md\`
 - \`mandatory delegations\`: \`test-author\`
 - \`completion helper\`: \`bash .cclaw/hooks/stage-complete.sh tdd\`
@@ -1309,7 +1294,7 @@ If you are about to violate the Iron Law, STOP. No amount of urgency, partial pr
 1. Announce at start: "Using \`brainstorming\` to Turn an initial idea into an approved design direction through natural collaborative dialogue — understanding the problem before proposing solutions.".
 2. Obey HARD-GATE and Iron Law.
 3. Execute checklist in order and persist \`.cclaw/artifacts/01-brainstorm.md\`.
-4. Satisfy gates (\`brainstorm_context_explored\`, \`brainstorm_idea_understood\`, \`brainstorm_approaches_compared\` +2).
+4. Satisfy gates (\`brainstorm_approaches_compared\`, \`brainstorm_direction_approved\`, \`brainstorm_artifact_reviewed\`).
 
 
 ## Overview
@@ -1467,8 +1452,6 @@ Shared decision/ask-user protocol:
 
 
 ## Required Gates
-- \`brainstorm_context_explored\` — Project context (files, docs, existing patterns) was checked before asking questions.
-- \`brainstorm_idea_understood\` — Agent and user share the same understanding of the problem, constraints, and success criteria.
 - \`brainstorm_approaches_compared\` — 2-3 architecturally distinct approaches were compared with real trade-offs and a recommendation.
 - \`brainstorm_direction_approved\` — User approved a concrete direction and what exactly was approved is stated.
 - \`brainstorm_artifact_reviewed\` — User reviewed the written brainstorm artifact and confirmed readiness.
@@ -1539,7 +1522,7 @@ Rule: Scope and design decisions must trace back to explored context and approve
 
 - \`stage\`: \`brainstorm\`
 - \`next\`: \`scope\` (Strategic scope stage. Challenge premise and lock explicit in-scope/out-of-scope boundaries using CEO-level thinking.)
-- \`gates\`: \`brainstorm_context_explored\`, \`brainstorm_idea_understood\`, \`brainstorm_approaches_compared\`, \`brainstorm_direction_approved\`, \`brainstorm_artifact_reviewed\`
+- \`gates\`: \`brainstorm_approaches_compared\`, \`brainstorm_direction_approved\`, \`brainstorm_artifact_reviewed\`
 - \`artifact\`: \`.cclaw/artifacts/01-brainstorm.md\`
 - \`mandatory delegations\`: none
 - \`completion helper\`: \`bash .cclaw/hooks/stage-complete.sh brainstorm\`
@@ -1589,7 +1572,7 @@ Do NOT ship, merge, or release until both review layers complete with an explici
 6. Do NOT copy artifacts into \`.cclaw/runs/\`; archival is handled by \`/cc-ops archive\` (agent-facing wrapper over archive runtime).
 
 ## Gates
-\`review_layer1_spec_compliance\`, \`review_layer2_correctness\`, \`review_layer2_security\`, \`review_layer2_performance\`, \`review_layer2_architecture\`, \`review_severity_classified\`, \`review_criticals_resolved\`, \`review_army_json_valid\`, \`review_completeness_scored\`, \`review_security_audit_swept\`
+\`review_layer1_spec_compliance\`, \`review_layer2_security\`, \`review_criticals_resolved\`, \`review_army_json_valid\`
 
 ## Exit
 - both layers completed
@@ -1633,7 +1616,7 @@ Do NOT merge, push, or finalize without a passed preflight check, written rollba
 6. Do NOT copy artifacts into \`.cclaw/runs/\`; archival is handled by \`/cc-ops archive\` (agent-facing wrapper over archive runtime).
 
 ## Gates
-\`ship_review_verdict_valid\`, \`ship_preflight_passed\`, \`ship_release_notes_written\`, \`ship_rollback_plan_ready\`, \`ship_finalization_mode_selected\`, \`ship_finalization_executed\`, \`ship_post_merge_tests\`
+\`ship_review_verdict_valid\`, \`ship_preflight_passed\`, \`ship_rollback_plan_ready\`, \`ship_finalization_executed\`
 
 ## Exit
 - preflight completed
