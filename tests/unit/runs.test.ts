@@ -114,6 +114,30 @@ describe("runs system", () => {
     expect(archived.retro.skipReason).toBe("trivial doc change");
   });
 
+  it("blocks archive when retro was skipped but closeout is not ready_to_archive", async () => {
+    const root = await createTempProject("runs-retro-skipped-not-ready");
+    await ensureRunSystem(root);
+    const base = createInitialFlowState("active");
+    await writeFlowState(
+      root,
+      {
+        ...base,
+        currentStage: "ship",
+        completedStages: ["brainstorm", "scope", "design", "spec", "plan", "tdd", "review", "ship"],
+        closeout: {
+          ...base.closeout,
+          shipSubstate: "compound_review",
+          retroSkipped: true,
+          retroSkipReason: "small release, no retro",
+          retroAcceptedAt: "2026-01-01T00:00:00Z"
+        }
+      },
+      { allowReset: true }
+    );
+
+    await expect(archiveRun(root, "Retro Skipped Not Ready")).rejects.toThrow(/ready_to_archive/i);
+  });
+
   it("blocks archive when retro artifacts exist but closeout substate is not ready_to_archive", async () => {
     const root = await createTempProject("runs-retro-substate-block");
     await ensureRunSystem(root);
@@ -165,7 +189,9 @@ describe("runs system", () => {
         completedStages: ["brainstorm", "scope", "design", "spec", "plan", "tdd", "review", "ship"],
         closeout: {
           ...base.closeout,
-          shipSubstate: "ready_to_archive"
+          shipSubstate: "ready_to_archive",
+          retroDraftedAt: "2026-01-01T00:00:00Z",
+          retroAcceptedAt: "2026-01-02T00:00:00Z"
         }
       },
       { allowReset: true }
@@ -198,6 +224,52 @@ describe("runs system", () => {
     expect(archived.retro.required).toBe(true);
     expect(archived.retro.completed).toBe(true);
     expect(archived.retro.compoundEntries).toBeGreaterThanOrEqual(1);
+  });
+
+  it("ignores retro knowledge entries outside the current retro closeout window", async () => {
+    const root = await createTempProject("runs-retro-window-scope");
+    await ensureRunSystem(root);
+    const base = createInitialFlowState("active");
+    await writeFlowState(
+      root,
+      {
+        ...base,
+        currentStage: "ship",
+        completedStages: ["brainstorm", "scope", "design", "spec", "plan", "tdd", "review", "ship"],
+        closeout: {
+          ...base.closeout,
+          shipSubstate: "ready_to_archive",
+          retroDraftedAt: "2026-02-01T00:00:00Z",
+          retroAcceptedAt: "2026-02-02T00:00:00Z"
+        }
+      },
+      { allowReset: true }
+    );
+    await fs.writeFile(path.join(root, ".cclaw/artifacts/09-retro.md"), "# retro\n", "utf8");
+    await fs.writeFile(
+      path.join(root, ".cclaw/knowledge.jsonl"),
+      `${JSON.stringify({
+        type: "compound",
+        source: "retro",
+        trigger: "stale previous run retro",
+        action: "should not satisfy current run retro gate",
+        confidence: "high",
+        domain: "ship",
+        stage: null,
+        origin_stage: "ship",
+        origin_feature: "old-run",
+        frequency: 1,
+        universality: "project",
+        maturity: "raw",
+        created: "2026-01-01T00:00:00Z",
+        first_seen_ts: "2026-01-01T00:00:00Z",
+        last_seen_ts: "2026-01-01T00:00:00Z",
+        project: "cclaw"
+      })}\n`,
+      "utf8"
+    );
+
+    await expect(archiveRun(root, "Retro Window Scope")).rejects.toThrow(/retro gate/i);
   });
 
   it("lists archived run folders", async () => {
