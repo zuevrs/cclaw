@@ -833,6 +833,40 @@ describe("install lifecycle", () => {
     expect(warning?.details).toMatch(/no raw knowledge entries older than 90 days/);
   });
 
+  it("flags unsynced reconciliation notices and clears them with reconcile-gates", async () => {
+    const root = await createTempProject("doctor-reconciliation-notices");
+    await initCclaw({ projectRoot: root });
+    await fs.writeFile(
+      path.join(root, ".cclaw/state/reconciliation-notices.json"),
+      JSON.stringify({
+        schemaVersion: 1,
+        notices: [
+          {
+            id: "active:brainstorm:brainstorm_context_explored:2026-04-20T00:00:00.000Z",
+            runId: "active",
+            stage: "brainstorm",
+            gateId: "brainstorm_context_explored",
+            reason: "demoted from passed to blocked during gate reconciliation (missing evidence)",
+            demotedAt: "2026-04-20T00:00:00.000Z"
+          }
+        ]
+      }, null, 2),
+      "utf8"
+    );
+
+    const checks = await doctorChecks(root);
+    const staleNotice = checks.find((c) => c.name === "state:reconciliation_notices");
+    expect(staleNotice).toBeDefined();
+    expect(staleNotice?.ok).toBe(false);
+    expect(staleNotice?.details).toMatch(/brainstorm\.brainstorm_context_explored/);
+
+    const reconciledChecks = await doctorChecks(root, { reconcileCurrentStageGates: true });
+    const cleared = reconciledChecks.find((c) => c.name === "state:reconciliation_notices");
+    expect(cleared).toBeDefined();
+    expect(cleared?.ok).toBe(true);
+    expect(cleared?.details).toMatch(/no active reconciliation notices/i);
+  });
+
   it("codex install materializes .agents/skills/cc*/SKILL.md and .codex/hooks.json", async () => {
     const root = await createTempProject("codex-skills-fresh");
     await initCclaw({ projectRoot: root, harnesses: ["codex"] });

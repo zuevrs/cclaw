@@ -30,7 +30,10 @@ import {
 } from "./feature-system.js";
 import { buildTraceMatrix } from "./trace-matrix.js";
 import {
+  classifyReconciliationNotices,
   reconcileAndWriteCurrentStageGateCatalog,
+  readReconciliationNotices,
+  RECONCILIATION_NOTICES_REL_PATH,
   verifyCompletedStagesGateClosure,
   verifyCurrentStageGateEvidence
 } from "./gate-evidence.js";
@@ -1347,6 +1350,24 @@ export async function doctorChecks(projectRoot: string, options: DoctorOptions =
     name: "flow_state:active_run_id",
     ok: activeRunId.length > 0,
     details: `${RUNTIME_ROOT}/state/flow-state.json must include activeRunId`
+  });
+  const reconciliationNotices = await readReconciliationNotices(projectRoot);
+  const noticeBuckets = classifyReconciliationNotices(flowState, reconciliationNotices.notices);
+  const formatNoticeList = (items: typeof noticeBuckets.activeBlocked): string =>
+    items
+      .slice(0, 8)
+      .map((notice) => `${notice.stage}.${notice.gateId}`)
+      .join(", ");
+  checks.push({
+    name: "state:reconciliation_notices",
+    ok: noticeBuckets.unsynced.length === 0,
+    details: noticeBuckets.unsynced.length > 0
+      ? `reconciliation notices out of sync in ${RECONCILIATION_NOTICES_REL_PATH}: ${formatNoticeList(noticeBuckets.unsynced)}. Run \`cclaw doctor --reconcile-gates\` to resync and clear stale entries.`
+      : noticeBuckets.currentStageBlocked.length > 0
+        ? `active reconciliation notices for current stage "${flowState.currentStage}": ${formatNoticeList(noticeBuckets.currentStageBlocked)}`
+        : noticeBuckets.activeBlocked.length > 0
+          ? `active reconciliation notices for run "${flowState.activeRunId}": ${formatNoticeList(noticeBuckets.activeBlocked)}`
+          : `no active reconciliation notices in ${RECONCILIATION_NOTICES_REL_PATH}`
   });
 
   const activeTrack = flowState.track ?? "standard";

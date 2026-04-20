@@ -412,6 +412,7 @@ describe("gate evidence reconciliation", () => {
     expect(reconciliation.after.required).toEqual(required);
     expect(reconciliation.after.passed).toEqual([]);
     expect(reconciliation.after.blocked).toContain(firstGate);
+    expect(reconciliation.demotedGateIds).toContain(firstGate);
     expect(reconciliation.notes.join("\n")).toContain("missing evidence");
   });
 
@@ -428,6 +429,7 @@ describe("gate evidence reconciliation", () => {
     expect(reconciliation.changed).toBe(true);
     expect(reconciliation.after.passed).toContain(firstGate);
     expect(reconciliation.after.blocked).not.toContain(firstGate);
+    expect(reconciliation.demotedGateIds).toEqual([]);
     expect(reconciliation.notes.join("\n")).toContain("in favor of passed");
   });
 
@@ -441,6 +443,7 @@ describe("gate evidence reconciliation", () => {
 
     const { nextState, reconciliation } = reconcileCurrentStageGateCatalog(state);
     expect(reconciliation.changed).toBe(false);
+    expect(reconciliation.demotedGateIds).toEqual([]);
     expect(reconciliation.notes).toEqual([]);
     expect(nextState).toBe(state);
   });
@@ -461,6 +464,7 @@ describe("gate evidence reconciliation", () => {
     const result = await reconcileAndWriteCurrentStageGateCatalog(root);
     expect(result.changed).toBe(true);
     expect(result.wrote).toBe(true);
+    expect(result.demotedGateIds).toEqual([firstGate]);
     expect(result.after.passed).toEqual([]);
     expect(result.after.blocked).toContain(firstGate);
 
@@ -469,5 +473,18 @@ describe("gate evidence reconciliation", () => {
     ) as typeof state;
     expect(persisted.stageGateCatalog.brainstorm.passed).toEqual([]);
     expect(persisted.stageGateCatalog.brainstorm.blocked).toContain(firstGate);
+
+    const notices = JSON.parse(
+      await fs.readFile(path.join(root, ".cclaw/state/reconciliation-notices.json"), "utf8")
+    ) as {
+      schemaVersion: number;
+      notices: Array<{ runId: string; stage: string; gateId: string; reason: string }>;
+    };
+    expect(notices.schemaVersion).toBe(1);
+    expect(notices.notices).toHaveLength(1);
+    expect(notices.notices[0]?.runId).toBe("run-reconcile");
+    expect(notices.notices[0]?.stage).toBe("brainstorm");
+    expect(notices.notices[0]?.gateId).toBe(firstGate);
+    expect(notices.notices[0]?.reason).toContain("demoted from passed to blocked");
   });
 });

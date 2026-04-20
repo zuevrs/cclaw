@@ -19,6 +19,7 @@ const STATE_SNAPSHOT_EXCLUDE = new Set<string>([
 ]);
 const DELEGATION_LOG_FILE = "delegation-log.json";
 const TDD_CYCLE_LOG_FILE = "tdd-cycle-log.jsonl";
+const RECONCILIATION_NOTICES_FILE = "reconciliation-notices.json";
 
 export interface CclawRunMeta {
   id: string;
@@ -124,6 +125,10 @@ async function resetCarryoverStateFiles(projectRoot: string, activeRunId: string
     `${JSON.stringify({ runId: activeRunId, entries: [] }, null, 2)}\n`
   );
   await writeFileSafe(path.join(stateDir, TDD_CYCLE_LOG_FILE), "");
+  await writeFileSafe(
+    path.join(stateDir, RECONCILIATION_NOTICES_FILE),
+    `${JSON.stringify({ schemaVersion: 1, notices: [] }, null, 2)}\n`
+  );
 }
 
 function toArchiveDate(date = new Date()): string {

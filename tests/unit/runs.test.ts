@@ -377,12 +377,30 @@ describe("runs system", () => {
       `${JSON.stringify({ sliceId: "S-1", phase: "RED", ts: "2026-04-16T00:00:02.000Z" })}\n`,
       "utf8"
     );
+    await fs.writeFile(
+      path.join(root, ".cclaw/state/reconciliation-notices.json"),
+      JSON.stringify({
+        schemaVersion: 1,
+        notices: [
+          {
+            id: "active:brainstorm:brainstorm_context_explored:2026-04-16T00:00:03.000Z",
+            runId: "active",
+            stage: "brainstorm",
+            gateId: "brainstorm_context_explored",
+            reason: "demoted from passed to blocked during gate reconciliation (missing evidence)",
+            demotedAt: "2026-04-16T00:00:03.000Z"
+          }
+        ]
+      }, null, 2),
+      "utf8"
+    );
     const archived = await archiveRun(root, "Search Revamp");
 
     expect(archived.snapshottedStateFiles).toContain("flow-state.json");
     expect(archived.snapshottedStateFiles).toContain("delegation-log.json");
     expect(archived.snapshottedStateFiles).toContain("stage-activity.jsonl");
     expect(archived.snapshottedStateFiles).toContain("tdd-cycle-log.jsonl");
+    expect(archived.snapshottedStateFiles).toContain("reconciliation-notices.json");
     for (const name of archived.snapshottedStateFiles) {
       expect(name.startsWith(".flow-state.lock")).toBe(false);
       expect(name.startsWith(".delegation.lock")).toBe(false);
@@ -397,6 +415,10 @@ describe("runs system", () => {
       await fs.readFile(path.join(snapshotDir, "delegation-log.json"), "utf8")
     );
     expect(delegationSnap.entries[0].agent).toBe("planner");
+    const reconciliationSnap = JSON.parse(
+      await fs.readFile(path.join(snapshotDir, "reconciliation-notices.json"), "utf8")
+    ) as { notices: Array<{ gateId: string }> };
+    expect(reconciliationSnap.notices[0]?.gateId).toBe("brainstorm_context_explored");
 
     const manifestPath = path.join(archived.archivePath, "archive-manifest.json");
     const manifest = JSON.parse(await fs.readFile(manifestPath, "utf8"));
@@ -424,6 +446,11 @@ describe("runs system", () => {
 
     const resetTddLog = await fs.readFile(path.join(root, ".cclaw/state/tdd-cycle-log.jsonl"), "utf8");
     expect(resetTddLog).toBe("");
+    const resetReconciliation = JSON.parse(
+      await fs.readFile(path.join(root, ".cclaw/state/reconciliation-notices.json"), "utf8")
+    ) as { schemaVersion: number; notices: unknown[] };
+    expect(resetReconciliation.schemaVersion).toBe(1);
+    expect(resetReconciliation.notices).toEqual([]);
   });
 
   it("quarantines flow-state.json when top-level value is not an object", async () => {
