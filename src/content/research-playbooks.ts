@@ -104,6 +104,42 @@ Summarize citable domain practices for a narrow design decision.
 - Cite authoritative sources (official docs/standards).
 - State uncertainty explicitly when consensus is weak.
 `,
+  "research-fleet.md": `# Parallel Research Fleet Playbook
+
+## Purpose
+
+Run a four-lens investigation before design lock so architecture choices are grounded
+in current ecosystem data, not intuition.
+
+## Dispatch Lenses (fan-out)
+
+Launch four independent investigation threads in parallel when the harness supports it
+(or sequentially with explicit role-switch logs when it does not):
+
+1. **stack-researcher** — dependency compatibility, alternatives, deprecations.
+2. **features-researcher** — domain conventions and product/UX patterns.
+3. **architecture-researcher** — architecture options and trade-off matrix.
+4. **pitfalls-researcher** — known failure modes, CVEs, and operational traps.
+
+## Output Contract
+
+Write findings to \`.cclaw/artifacts/02a-research.md\` with these sections:
+
+- \`## Stack Analysis\`
+- \`## Features & Patterns\`
+- \`## Architecture Options\`
+- \`## Pitfalls & Risks\`
+- \`## Synthesis\`
+
+Each section must contain concrete notes and at least one evidence reference
+(source URL, file path, or command output anchor).
+
+## Guardrails
+
+- Investigate first; no production code edits in this playbook.
+- Keep lenses independent during fan-out; merge only in synthesis.
+- If any lens is incomplete, record it explicitly in \`## Synthesis\` as a blocker.
+`,
   "git-history.md": `# Git History Playbook
 
 ## Purpose

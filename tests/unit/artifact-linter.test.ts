@@ -83,6 +83,14 @@ function completeDesignArtifact(diagramBody: string): string {
 | Layer 3 | Queueing blog post | Inspiration for backpressure handling |
 | EUREKA | Internal telemetry helper | Reuse existing latency probe hook |
 
+## Research Fleet Synthesis
+| Lens | Key findings | Design impact | Evidence |
+|---|---|---|---|
+| stack-researcher | Queue library alternatives are stable across current Node LTS. | Keep existing queue and avoid migration churn. | docs/internal-stack.md |
+| features-researcher | Error-state UX should keep degraded mode visible. | Add degraded-state message contract in API response. | docs/patterns/degraded-ux.md |
+| architecture-researcher | Adapter boundary keeps fallback strategy testable. | Preserve API -> service -> adapter separation. | Architecture review notes |
+| pitfalls-researcher | Timeout retries can cause thundering herd if unbounded. | Cap retry attempts and jitter retry windows. | SRE incident postmortem 2026-03 |
+
 ## Architecture Boundaries
 | Component | Responsibility | Owner |
 |---|---|---|

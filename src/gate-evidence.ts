@@ -1,6 +1,11 @@
 import fs from "node:fs/promises";
 import path from "node:path";
-import { checkReviewVerdictConsistency, lintArtifact, validateReviewArmy } from "./artifact-linter.js";
+import {
+  checkReviewVerdictConsistency,
+  extractMarkdownSectionBody,
+  lintArtifact,
+  validateReviewArmy
+} from "./artifact-linter.js";
 import { RUNTIME_ROOT } from "./constants.js";
 import { stageSchema } from "./content/stage-schema.js";
 import type { FlowState, StageGateState } from "./flow-state.js";
@@ -29,6 +34,22 @@ async function currentStageArtifactExists(
   } catch {
     return false;
   }
+}
+
+async function readArtifactMarkdown(projectRoot: string, artifactFile: string): Promise<string | null> {
+  const candidates = [
+    path.join(projectRoot, RUNTIME_ROOT, "artifacts", artifactFile),
+    path.join(projectRoot, artifactFile)
+  ];
+  for (const candidate of candidates) {
+    if (!(await exists(candidate))) continue;
+    try {
+      return await fs.readFile(candidate, "utf8");
+    } catch {
+      // Try next location.
+    }
+  }
+  return null;
 }
 
 export interface GateEvidenceCheckResult {
@@ -73,6 +94,13 @@ function sameStringArray(a: string[], b: string[]): boolean {
 
 const RECONCILIATION_NOTICES_FILE = "reconciliation-notices.json";
 const RECONCILIATION_NOTICES_SCHEMA_VERSION = 1;
+const DESIGN_RESEARCH_REQUIRED_SECTIONS = [
+  "Stack Analysis",
+  "Features & Patterns",
+  "Architecture Options",
+  "Pitfalls & Risks",
+  "Synthesis"
+] as const;
 
 export const RECONCILIATION_NOTICES_REL_PATH = `${RUNTIME_ROOT}/state/${RECONCILIATION_NOTICES_FILE}`;
 
@@ -317,6 +345,44 @@ export async function verifyCurrentStageGateEvidence(
           issues.push(
             `review trace-matrix gate blocked (review_trace_matrix_clean): ${traceIssues.join("; ")}.`
           );
+        }
+      }
+    }
+    if (stage === "design") {
+      const researchGateRequired = schema.requiredGates.some(
+        (gate) => gate.id === "design_research_complete" && gate.tier === "required"
+      );
+      if (researchGateRequired) {
+        const researchMarkdown = await readArtifactMarkdown(projectRoot, "02a-research.md");
+        if (!researchMarkdown) {
+          issues.push(
+            "design research gate blocked (design_research_complete): missing `.cclaw/artifacts/02a-research.md`."
+          );
+        } else {
+          const missingSections: string[] = [];
+          for (const section of DESIGN_RESEARCH_REQUIRED_SECTIONS) {
+            const body = extractMarkdownSectionBody(researchMarkdown, section);
+            if (body === null) {
+              missingSections.push(section);
+              continue;
+            }
+            const meaningfulLines = body
+              .split(/\r?\n/gu)
+              .map((line) => line.trim())
+              .filter((line) => line.length > 0)
+              .filter((line) => !/^\|?(?:[-:\s|])+$/u.test(line));
+            const nonPlaceholder = meaningfulLines.filter(
+              (line) => !/\b(?:TODO|TBD|FIXME|pending|<fill-in>)\b/iu.test(line)
+            );
+            if (nonPlaceholder.length === 0) {
+              missingSections.push(`${section} (empty or placeholder)`);
+            }
+          }
+          if (missingSections.length > 0) {
+            issues.push(
+              `design research gate blocked (design_research_complete): ${missingSections.join(", ")}.`
+            );
+          }
         }
       }
     }

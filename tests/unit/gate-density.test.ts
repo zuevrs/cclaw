@@ -3,8 +3,9 @@ import { COMMAND_FILE_ORDER } from "../../src/constants.js";
 import { stageSchema } from "../../src/content/stage-schema.js";
 
 describe("gate density policy", () => {
-  it("keeps required gates at or below four per stage", () => {
+  it("keeps required gates within per-stage budget", () => {
     const REQUIRED_GATE_BUDGET: Partial<Record<string, number>> = {
+      design: 5,
       tdd: 5,
       review: 5
     };

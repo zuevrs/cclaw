@@ -156,6 +156,47 @@ inputs_hash: sha256:pending
 ## Learnings
 - None this stage.
 `,
+  "02a-research.md": `---
+stage: design
+schema_version: 1
+version: 0.18.0
+feature: <feature-id>
+locked_decisions: []
+inputs_hash: sha256:pending
+---
+
+# Research Report
+
+## Stack Analysis
+| Topic | Finding | Evidence |
+|---|---|---|
+| Dependency compatibility |  |  |
+| Alternatives/deprecations |  |  |
+
+## Features & Patterns
+| Topic | Finding | Evidence |
+|---|---|---|
+| Domain conventions |  |  |
+| UX/product patterns |  |  |
+
+## Architecture Options
+| Option | Trade-offs | Recommendation | Evidence |
+|---|---|---|---|
+| A |  |  |  |
+| B |  |  |  |
+
+## Pitfalls & Risks
+| Risk | Impact | Mitigation | Evidence |
+|---|---|---|---|
+|  |  |  |  |
+
+## Synthesis
+- Key decisions informed by research:
+- Open questions:
+
+## Learnings
+- None this stage.
+`,
   "03-design.md": `---
 stage: design
 schema_version: 1
@@ -178,6 +219,14 @@ inputs_hash: sha256:pending
 | Layer 1 |  |  |
 | Layer 2 |  |  |
 | Layer 3 |  |  |
+
+## Research Fleet Synthesis
+| Lens | Key findings | Design impact | Evidence |
+|---|---|---|---|
+| stack-researcher |  |  |  |
+| features-researcher |  |  |  |
+| architecture-researcher |  |  |  |
+| pitfalls-researcher |  |  |  |
 
 ## Architecture Boundaries
 | Component | Responsibility | Owner |
