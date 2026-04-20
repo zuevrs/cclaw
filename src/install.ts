@@ -97,7 +97,10 @@ import {
   harnessToolRefMarkdown
 } from "./content/harness-tool-refs.js";
 import { DOCTOR_REFERENCE_MARKDOWN } from "./content/doctor-references.js";
-import { harnessIntegrationDocMarkdown } from "./content/harnesses-doc.js";
+import {
+  harnessDocsOverviewMarkdown,
+  harnessIntegrationDocMarkdown
+} from "./content/harnesses-doc.js";
 import {
   HARNESS_PLAYBOOKS_DIR,
   harnessPlaybookFileName,
@@ -482,6 +485,10 @@ async function writeSkills(projectRoot: string, config?: VibyConfig): Promise<vo
   await writeFileSafe(
     runtimePath(projectRoot, "references", "harnesses.md"),
     harnessIntegrationDocMarkdown()
+  );
+  await writeFileSafe(
+    runtimePath(projectRoot, "references", "harnesses-overview.md"),
+    harnessDocsOverviewMarkdown()
   );
 
   // Per-harness parity playbooks. Generated for every supported harness
