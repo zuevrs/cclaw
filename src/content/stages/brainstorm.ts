@@ -57,8 +57,6 @@ export const BRAINSTORM: StageSchemaInput = {
     "Handoff to scope only after approval is explicit."
   ],
   requiredGates: [
-    { id: "brainstorm_context_explored", description: "Project context (files, docs, existing patterns) was checked before asking questions." },
-    { id: "brainstorm_idea_understood", description: "Agent and user share the same understanding of the problem, constraints, and success criteria." },
     { id: "brainstorm_approaches_compared", description: "2-3 architecturally distinct approaches were compared with real trade-offs and a recommendation." },
     { id: "brainstorm_direction_approved", description: "User approved a concrete direction and what exactly was approved is stated." },
     { id: "brainstorm_artifact_reviewed", description: "User reviewed the written brainstorm artifact and confirmed readiness." }
@@ -126,10 +124,10 @@ export const BRAINSTORM: StageSchemaInput = {
   artifactValidation: [
     { section: "Context", required: true, validationRule: "Must reference project state and relevant existing code or patterns." },
     { section: "Problem", required: true, validationRule: "Must define what we're solving, success criteria, and constraints." },
-    { section: "Clarifying Questions", required: true, validationRule: "Must capture question, answer, and decision impact for each clarifying question." },
+    { section: "Clarifying Questions", required: false, validationRule: "Must capture question, answer, and decision impact for each clarifying question." },
     { section: "Approaches", required: true, validationRule: "Must compare 2-3 architecturally distinct options with real trade-offs and recommendation." },
     { section: "Selected Direction", required: true, validationRule: "Must include the selected approach, rationale, and explicit approval marker." },
-    { section: "Design", required: true, validationRule: "Must cover architecture, key components, and data flow scaled to complexity." },
-    { section: "Assumptions and Open Questions", required: true, validationRule: "Must capture unresolved assumptions/open questions, or explicitly state none." }
+    { section: "Design", required: false, validationRule: "Must cover architecture, key components, and data flow scaled to complexity." },
+    { section: "Assumptions and Open Questions", required: false, validationRule: "Must capture unresolved assumptions/open questions, or explicitly state none." }
   ]
 };

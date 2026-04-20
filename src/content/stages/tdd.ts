@@ -60,12 +60,8 @@ export const TDD: StageSchemaInput = {
   ],
   requiredGates: [
     { id: "tdd_red_test_written", description: "Failing tests exist before implementation changes." },
-    { id: "tdd_red_failure_captured", description: "Failure output is captured as evidence." },
-    { id: "tdd_trace_to_acceptance", description: "RED tests trace to explicit acceptance criteria." },
-    { id: "tdd_red_failure_reason_verified", description: "Failure is for the expected reason, not an unrelated error." },
     { id: "tdd_green_full_suite", description: "Full relevant suite passes in GREEN state." },
     { id: "tdd_refactor_completed", description: "Refactor pass completed with behavior preservation verified." },
-    { id: "tdd_refactor_notes_written", description: "Refactor decisions and outcomes are documented." },
     { id: "tdd_traceable_to_plan", description: "Change traceability to plan slice is explicit." }
   ],
   requiredEvidence: [
@@ -176,8 +172,8 @@ export const TDD: StageSchemaInput = {
   },
   artifactValidation: [
     { section: "RED Evidence", required: true, validationRule: "Failing test output captured per slice." },
-    { section: "Acceptance Mapping", required: true, validationRule: "Each RED test links to a plan task and spec criterion." },
-    { section: "Failure Analysis", required: true, validationRule: "Failure reason matches expected missing behavior." },
+    { section: "Acceptance Mapping", required: false, validationRule: "Each RED test links to a plan task and spec criterion." },
+    { section: "Failure Analysis", required: false, validationRule: "Failure reason matches expected missing behavior." },
     { section: "GREEN Evidence", required: true, validationRule: "Full suite pass output captured." },
     { section: "REFACTOR Notes", required: true, validationRule: "What changed, why, behavior preservation confirmed." },
     { section: "Traceability", required: true, validationRule: "Plan task ID and spec criterion linked." },

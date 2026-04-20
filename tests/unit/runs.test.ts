@@ -83,7 +83,7 @@ describe("runs system", () => {
       { allowReset: true }
     );
 
-    await expect(archiveRun(root, "Retro Blocked")).rejects.toThrow(/retro gate/i);
+    await expect(archiveRun(root, "Retro Blocked")).rejects.toThrow(/ready_to_archive/i);
   });
 
   it("allows archive when retro was skipped via closeout substate with a reason", async () => {
@@ -110,11 +110,12 @@ describe("runs system", () => {
     const archived = await archiveRun(root, "Skip Via Closeout");
     expect(archived.retro.required).toBe(true);
     expect(archived.retro.completed).toBe(false);
-    expect(archived.retro.skipped).toBe(false);
+    expect(archived.retro.skipped).toBe(true);
+    expect(archived.retro.skipReason).toBe("trivial doc change");
   });
 
-  it("allows archive after retro artifact + compound knowledge are present", async () => {
-    const root = await createTempProject("runs-retro-ok");
+  it("blocks archive when retro artifacts exist but closeout substate is not ready_to_archive", async () => {
+    const root = await createTempProject("runs-retro-substate-block");
     await ensureRunSystem(root);
     await writeFlowState(
       root,
@@ -130,12 +131,64 @@ describe("runs system", () => {
       path.join(root, ".cclaw/knowledge.jsonl"),
       `${JSON.stringify({
         type: "compound",
-        trigger: "when shipping a high-risk change",
+        source: "retro",
+        trigger: "after release retrospective",
+        action: "capture at least one durable run-level rule",
+        confidence: "high",
+        domain: "workflow",
+        stage: null,
+        origin_stage: "ship",
+        origin_feature: "retro-substate-check",
+        frequency: 1,
+        universality: "project",
+        maturity: "raw",
+        created: "2026-01-01T00:00:00Z",
+        first_seen_ts: "2026-01-01T00:00:00Z",
+        last_seen_ts: "2026-01-01T00:00:00Z",
+        project: "cclaw"
+      })}\n`,
+      "utf8"
+    );
+
+    await expect(archiveRun(root, "Retro Not Ready")).rejects.toThrow(/ready_to_archive/i);
+  });
+
+  it("allows archive after retro artifact + retro knowledge are present and closeout is ready", async () => {
+    const root = await createTempProject("runs-retro-ok");
+    await ensureRunSystem(root);
+    const base = createInitialFlowState("active");
+    await writeFlowState(
+      root,
+      {
+        ...base,
+        currentStage: "ship",
+        completedStages: ["brainstorm", "scope", "design", "spec", "plan", "tdd", "review", "ship"],
+        closeout: {
+          ...base.closeout,
+          shipSubstate: "ready_to_archive"
+        }
+      },
+      { allowReset: true }
+    );
+    await fs.writeFile(path.join(root, ".cclaw/artifacts/09-retro.md"), "# retro\n", "utf8");
+    await fs.writeFile(
+      path.join(root, ".cclaw/knowledge.jsonl"),
+      `${JSON.stringify({
+        type: "compound",
+        source: "retro",
+        trigger: "after high-risk release retrospective",
         action: "run focused rollback drill before merge",
         confidence: "high",
         domain: "ship",
-        stage: "retro",
+        stage: null,
+        origin_stage: "ship",
+        origin_feature: "retro-ready",
+        frequency: 1,
+        universality: "project",
+        maturity: "raw",
         created: "2026-01-01T00:00:00Z",
+        first_seen_ts: "2026-01-01T00:00:00Z",
+        last_seen_ts: "2026-01-01T00:00:00Z",
         project: "cclaw"
       })}\n`,
       "utf8"
@@ -190,7 +243,7 @@ describe("runs system", () => {
     expect(state.guardEvidence).toEqual({ ok: "yes" });
     expect(state.stageGateCatalog.brainstorm.required).toContain("brainstorm_approaches_compared");
     expect(state.stageGateCatalog.brainstorm.required).not.toContain("tampered");
-    expect(state.stageGateCatalog.brainstorm.passed).toEqual(["brainstorm_context_explored"]);
+    expect(state.stageGateCatalog.brainstorm.passed).toEqual([]);
     expect(state.stageGateCatalog.brainstorm.blocked).toEqual(["brainstorm_direction_approved"]);
   });
 

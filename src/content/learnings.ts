@@ -13,8 +13,9 @@ const LEARN_SKILL_DESCRIPTION =
   "Project-scoped knowledge store: append and query rule/pattern/lesson/compound entries in the canonical JSONL file at .cclaw/knowledge.jsonl. Strict schema, append-only, machine-queryable.";
 
 /**
- * Canonical JSONL field order (matches the reference spec).
- * Exported for tests and any programmatic writer that wants the exact shape.
+ * Canonical required JSONL field order (matches strict validator keys).
+ * Optional keys (for now: `source`) may be appended after these required fields.
+ * Exported for tests and any programmatic writer that wants a stable base shape.
  */
 export const KNOWLEDGE_JSONL_FIELDS = [
   "type",
@@ -75,8 +76,9 @@ Do not invent alternate stores (no markdown mirror, no SQLite, no per-stage file
 
 ## Entry format — strict JSONL schema
 
-Exactly one JSON object per line. Fields must appear in the order:
+Exactly one JSON object per line. Required fields must appear in the order:
 \`type, trigger, action, confidence, domain, stage, origin_stage, origin_feature, frequency, universality, maturity, created, first_seen_ts, last_seen_ts, project\`.
+Optional field \`source\` may be appended after \`project\`.
 
 \`\`\`json
 {"type":"pattern","trigger":"when reviewing external payloads","action":"parse through zod before touching service layer","confidence":"high","domain":"api","stage":"review","origin_stage":"review","origin_feature":"payload-hardening","frequency":1,"universality":"project","maturity":"raw","created":"2026-04-14T12:00:00Z","first_seen_ts":"2026-04-14T12:00:00Z","last_seen_ts":"2026-04-14T12:00:00Z","project":"cclaw"}
@@ -99,9 +101,10 @@ Exactly one JSON object per line. Fields must appear in the order:
 | \`first_seen_ts\` | ISO 8601 UTC string | yes | First observed timestamp (usually equals \`created\`). |
 | \`last_seen_ts\` | ISO 8601 UTC string | yes | Last re-confirmed timestamp. |
 | \`project\` | string \\| null | yes | Repo or scope name. Use \`null\` when the entry crosses projects. |
+| \`source\` | \`"stage" \\| "retro" \\| "compound" \\| "ideate" \\| "manual" \\| null\` | no | Origin channel for the entry when known. |
 
 Rules:
-- No other fields. Extra keys are forbidden and MUST be rejected by any writer.
+- No other fields beyond the table above. Extra keys are forbidden and MUST be rejected by any writer.
 - Every required-null field must be emitted explicitly as \`null\` (not omitted). This keeps the file grep-friendly.
 - Append-only: never rewrite or delete a historical line. Corrections are new
   entries whose \`trigger\` clearly supersedes the earlier one.
@@ -172,7 +175,7 @@ Do not edit source code from this command. Only operate on \`${KNOWLEDGE_PATH}\`
 |---|---|---|
 | (default) | — | Show recent knowledge entries (tail of JSONL, pretty-printed). |
 | \`search\` | \`<query>\` | Stream-filter the JSONL for matching \`trigger\`, \`action\`, \`domain\`, \`project\`. |
-| \`add\` | — | Append one JSON line (\`rule\` / \`pattern\` / \`lesson\` / \`compound\`) with the strict 15-field schema. |
+| \`add\` | — | Append one JSON line (\`rule\` / \`pattern\` / \`lesson\` / \`compound\`) with the strict JSONL schema (15 required fields + optional \`source\`). |
 | \`curate\` | — | Hand off to the **knowledge-curation** skill: read-only audit + soft-archive plan when the file exceeds the curation threshold. |
 `;
 }

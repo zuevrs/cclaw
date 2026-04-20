@@ -534,8 +534,19 @@ async function evaluateRetroGate(projectRoot: string, state: FlowState): Promise
         const trimmed = line.trim();
         if (!trimmed) continue;
         try {
-          const parsed = JSON.parse(trimmed) as { type?: unknown };
-          if (parsed.type === "compound") {
+          const parsed = JSON.parse(trimmed) as {
+            type?: unknown;
+            source?: unknown;
+            stage?: unknown;
+          };
+          if (parsed.type !== "compound") {
+            continue;
+          }
+          const source = typeof parsed.source === "string"
+            ? parsed.source.trim().toLowerCase()
+            : null;
+          const legacyRetroStage = parsed.stage === "retro";
+          if (source === "retro" || legacyRetroStage) {
             compoundEntries += 1;
           }
         } catch {
@@ -719,6 +730,7 @@ export async function archiveRun(
 
   let sourceState = await readFlowState(projectRoot);
   const retroGate = await evaluateRetroGate(projectRoot, sourceState);
+  const shipCompleted = sourceState.completedStages.includes("ship");
   const skipRetro = options.skipRetro === true;
   const skipRetroReason = options.skipRetroReason?.trim();
   if (skipRetro && (!skipRetroReason || skipRetroReason.length === 0)) {
@@ -728,6 +740,14 @@ export async function archiveRun(
     sourceState.closeout.retroSkipped === true &&
     typeof sourceState.closeout.retroSkipReason === "string" &&
     sourceState.closeout.retroSkipReason.trim().length > 0;
+  const readyForArchive = sourceState.closeout.shipSubstate === "ready_to_archive";
+  if (shipCompleted && !readyForArchive && !skipRetro && !retroSkippedInCloseout) {
+    throw new Error(
+      "Archive blocked: closeout is not ready_to_archive. " +
+      "Resume /cc-next until closeout reaches ready_to_archive, " +
+      "or run `cclaw archive --skip-retro --retro-reason=<text>` for CLI-only flows."
+    );
+  }
   if (retroGate.required && !retroGate.completed && !skipRetro && !retroSkippedInCloseout) {
     throw new Error(
       "Archive blocked: retro gate is required after ship completion. " +
@@ -749,8 +769,12 @@ export async function archiveRun(
   const retroSummary: ArchiveRunResult["retro"] = {
     required: retroGate.required,
     completed: retroGate.completed,
-    skipped: skipRetro,
-    skipReason: skipRetro ? skipRetroReason : undefined,
+    skipped: skipRetro || retroSkippedInCloseout,
+    skipReason: skipRetro
+      ? skipRetroReason
+      : retroSkippedInCloseout
+        ? sourceState.closeout.retroSkipReason
+        : undefined,
     compoundEntries: retroGate.compoundEntries
   };
 

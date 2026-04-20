@@ -2,7 +2,7 @@ import fs from "node:fs/promises";
 import path from "node:path";
 import { RUNTIME_ROOT } from "./constants.js";
 import { exists } from "./fs-utils.js";
-import { orderedStageSchemas, stageSchema } from "./content/stage-schema.js";
+import { stageSchema } from "./content/stage-schema.js";
 import { FLOW_STAGES, type FlowStage } from "./types.js";
 
 export interface LintFinding {
@@ -262,6 +262,7 @@ export type LearningEntryType = "rule" | "pattern" | "lesson" | "compound";
 export type LearningConfidence = "high" | "medium" | "low";
 export type LearningUniversality = "project" | "personal" | "universal";
 export type LearningMaturity = "raw" | "lifted-to-rule" | "lifted-to-enforcement";
+export type LearningSource = "stage" | "retro" | "compound" | "ideate" | "manual";
 
 export interface LearningSeedEntry {
   type: LearningEntryType;
@@ -279,6 +280,7 @@ export interface LearningSeedEntry {
   first_seen_ts?: string;
   last_seen_ts?: string;
   project?: string | null;
+  source?: LearningSource | null;
 }
 
 export interface LearningsParseResult {
@@ -293,6 +295,13 @@ const LEARNING_TYPE_SET = new Set<LearningEntryType>(["rule", "pattern", "lesson
 const LEARNING_CONFIDENCE_SET = new Set<LearningConfidence>(["high", "medium", "low"]);
 const LEARNING_UNIVERSALITY_SET = new Set<LearningUniversality>(["project", "personal", "universal"]);
 const LEARNING_MATURITY_SET = new Set<LearningMaturity>(["raw", "lifted-to-rule", "lifted-to-enforcement"]);
+const LEARNING_SOURCE_SET = new Set<LearningSource>([
+  "stage",
+  "retro",
+  "compound",
+  "ideate",
+  "manual"
+]);
 const FLOW_STAGE_SET = new Set<FlowStage>(FLOW_STAGES);
 const LEARNING_ALLOWED_KEYS = new Set([
   "type",
@@ -309,7 +318,8 @@ const LEARNING_ALLOWED_KEYS = new Set([
   "created",
   "first_seen_ts",
   "last_seen_ts",
-  "project"
+  "project",
+  "source"
 ]);
 
 function isIsoUtcTimestamp(value: string): boolean {
@@ -390,6 +400,16 @@ function parseLearningSeedEntry(raw: unknown, index: number): { ok: boolean; ent
   }
   if (obj.project !== undefined && !isNullableString(obj.project)) {
     return { ok: false, error: `Learnings bullet #${index} field "project" must be string or null.` };
+  }
+  if (
+    obj.source !== undefined &&
+    obj.source !== null &&
+    (typeof obj.source !== "string" || !LEARNING_SOURCE_SET.has(obj.source as LearningSource))
+  ) {
+    return {
+      ok: false,
+      error: `Learnings bullet #${index} field "source" must be stage|retro|compound|ideate|manual or null.`
+    };
   }
   if (
     obj.frequency !== undefined &&
@@ -963,14 +983,6 @@ export async function lintArtifact(projectRoot: string, stage: FlowStage): Promi
 
   const passed = findings.every((f) => !f.required || f.found);
   return { stage, file: relFile, passed, findings };
-}
-
-export async function lintAllArtifacts(projectRoot: string): Promise<LintResult[]> {
-  const out: LintResult[] = [];
-  for (const schema of orderedStageSchemas()) {
-    out.push(await lintArtifact(projectRoot, schema.stage));
-  }
-  return out;
 }
 
 function isNonEmptyString(v: unknown): v is string {

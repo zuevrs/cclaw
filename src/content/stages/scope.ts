@@ -58,11 +58,8 @@ export const SCOPE: StageSchemaInput = {
     "Produce scope summary plus completion dashboard (checklist findings, number of resolved decisions, unresolved items or `None`)."
   ],
   requiredGates: [
-    { id: "scope_premise_challenged", description: "Problem framing and assumptions were challenged." },
-    { id: "scope_alternatives_produced", description: "At least 2 implementation alternatives were evaluated with explicit effort/risk and reuse fields." },
     { id: "scope_mode_selected", description: "One scope mode was explicitly selected." },
     { id: "scope_contract_written", description: "In-scope/out-of-scope contract is documented." },
-    { id: "scope_discretion_documented", description: "Discretion areas are documented (or explicitly marked as none)." },
     { id: "scope_user_approved", description: "User approved the final scope direction." }
   ],
   requiredEvidence: [
@@ -175,17 +172,17 @@ export const SCOPE: StageSchemaInput = {
     traceabilityRule: "Every scope boundary must be traceable to a brainstorm decision. Every downstream design choice must stay within the scope contract."
   },
   artifactValidation: [
-    { section: "Prime Directives", required: true, validationRule: "For each scoped capability: named failure modes, explicit error surface, four data-flow paths, interaction edge cases, observability expectations, and deferred-item handling." },
-    { section: "Premise Challenge", required: true, validationRule: "Must contain explicit answers to: right problem? direct path? what if nothing?" },
-    { section: "Requirements", required: true, validationRule: "Table of stable requirement IDs (R1, R2, R3…) one per row with observable outcome, priority, and source. IDs are assigned once and never renumbered across scope/design/spec/plan/review; dropped requirements stay with Priority `DROPPED`." },
+    { section: "Prime Directives", required: false, validationRule: "For each scoped capability: named failure modes, explicit error surface, four data-flow paths, interaction edge cases, observability expectations, and deferred-item handling." },
+    { section: "Premise Challenge", required: false, validationRule: "Must contain explicit answers to: right problem? direct path? what if nothing?" },
+    { section: "Requirements", required: false, validationRule: "Table of stable requirement IDs (R1, R2, R3…) one per row with observable outcome, priority, and source. IDs are assigned once and never renumbered across scope/design/spec/plan/review; dropped requirements stay with Priority `DROPPED`." },
     { section: "Locked Decisions (D-XX)", required: false, validationRule: "List of stable locked decisions with IDs D-01, D-02... Each ID appears once, includes rationale, and is intended for downstream cross-stage traceability." },
-    { section: "Implementation Alternatives", required: true, validationRule: "2-3 options with Name, Summary, Effort, Risk, Pros, Cons, and Reuses. Must include minimal viable and ideal architecture options." },
+    { section: "Implementation Alternatives", required: false, validationRule: "2-3 options with Name, Summary, Effort, Risk, Pros, Cons, and Reuses. Must include minimal viable and ideal architecture options." },
     { section: "Scope Mode", required: true, validationRule: "Must state selected mode and rationale with default heuristic justification." },
-    { section: "Mode-Specific Analysis", required: true, validationRule: "Must document the analysis matching the selected scope mode: EXPAND (10x and delight opportunities), SELECTIVE (hold-scope baseline then cherry-picked expansions), HOLD (minimum-change-set hardening), REDUCE (ruthless cuts and follow-up split)." },
+    { section: "Mode-Specific Analysis", required: false, validationRule: "Must document the analysis matching the selected scope mode: EXPAND (10x and delight opportunities), SELECTIVE (hold-scope baseline then cherry-picked expansions), HOLD (minimum-change-set hardening), REDUCE (ruthless cuts and follow-up split)." },
     { section: "In Scope / Out of Scope", required: true, validationRule: "Two separate explicit lists. Out-of-scope must not be empty." },
-    { section: "Discretion Areas", required: true, validationRule: "Explicit list of implementer decision zones, or 'None' if scope is fully locked." },
-    { section: "Deferred Items", required: true, validationRule: "Each item has one-line rationale. If empty, state 'None' explicitly." },
-    { section: "Error & Rescue Registry", required: true, validationRule: "Each scoped capability has: failure mode, detection method, fallback decision." },
+    { section: "Discretion Areas", required: false, validationRule: "Explicit list of implementer decision zones, or 'None' if scope is fully locked." },
+    { section: "Deferred Items", required: false, validationRule: "Each item has one-line rationale. If empty, state 'None' explicitly." },
+    { section: "Error & Rescue Registry", required: false, validationRule: "Each scoped capability has: failure mode, detection method, fallback decision." },
     { section: "Completion Dashboard", required: true, validationRule: "Lists checklist findings, count of resolved decisions, and unresolved decisions (or 'None')." },
     { section: "Scope Summary", required: true, validationRule: "Clean summary: mode, strongest challenges, recommended path, accepted scope, deferred, excluded." },
     { section: "Dream State Mapping", required: false, validationRule: "If present (complex projects): CURRENT STATE, THIS PLAN, 12-MONTH IDEAL, and alignment verdict." },

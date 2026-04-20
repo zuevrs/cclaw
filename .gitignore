@@ -10,20 +10,25 @@ docs/*
 !docs/harnesses.md
 !docs/evals.md
 !docs/config.md
-
 # cclaw generated artifacts
 .cclaw/
-# Allow the canonical eval corpus used by cclaw's own CI.
-!tests/fixtures/**/.cclaw/
-!tests/fixtures/**/.cclaw/**
+# cclaw evals: user-owned, track in git
+!.cclaw/evals/
+!.cclaw/evals/config.yaml
+!.cclaw/evals/corpus/
+!.cclaw/evals/corpus/**
+!.cclaw/evals/rubrics/
+!.cclaw/evals/rubrics/**
+!.cclaw/evals/baselines/
+!.cclaw/evals/baselines/**
 .claude/commands/cc-*.md
-.cursor/commands/cc-*.md
-.opencode/commands/cc-*.md
-.codex/commands/cc-*.md
 .claude/commands/cc.md
+.cursor/commands/cc-*.md
 .cursor/commands/cc.md
+.opencode/commands/cc-*.md
 .opencode/commands/cc.md
-.codex/commands/cc.md
+.agents/skills/cc/SKILL.md
+.agents/skills/cc-*/SKILL.md
 .claude/hooks/hooks.json
 .cursor/hooks.json
 .codex/hooks.json

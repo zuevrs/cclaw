@@ -49,8 +49,6 @@ export const SPEC: StageSchemaInput = {
   ],
   requiredGates: [
     { id: "spec_acceptance_measurable", description: "Acceptance criteria are measurable and observable." },
-    { id: "spec_edge_cases_documented", description: "Boundary and error conditions are defined for each criterion." },
-    { id: "spec_constraints_documented", description: "Constraints and assumptions are explicit." },
     { id: "spec_testability_confirmed", description: "Each criterion has a described test method." },
     { id: "spec_user_approved", description: "User approved the final written spec." }
   ],
@@ -128,7 +126,7 @@ export const SPEC: StageSchemaInput = {
   artifactValidation: [
     { section: "Acceptance Criteria", required: true, validationRule: "Each criterion is observable, measurable, and falsifiable. Table must include a Requirement Ref column linking to R# IDs in 02-scope.md and a Design Decision Ref column tracing back to design artifact. AC IDs (AC-1, AC-2…) are stable across revisions — dropped ACs stay with Priority `DROPPED`." },
     { section: "Edge Cases", required: true, validationRule: "At least one boundary and one error condition per criterion." },
-    { section: "Constraints and Assumptions", required: true, validationRule: "All implicit assumptions surfaced. Constraints have sources." },
+    { section: "Constraints and Assumptions", required: false, validationRule: "All implicit assumptions surfaced. Constraints have sources." },
     { section: "Testability Map", required: true, validationRule: "Each criterion maps to a concrete test description with verification approach (unit, integration, e2e, manual) and command or manual steps." },
     { section: "Vague to Fixed", required: false, validationRule: "If present: table with original vague wording and rewritten observable/testable version for each ambiguous requirement." },
     { section: "Non-Functional Requirements", required: false, validationRule: "If present: performance thresholds, security constraints, scalability limits, reliability targets with measurable values." },

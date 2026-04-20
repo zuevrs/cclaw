@@ -22,7 +22,7 @@ export function startCommandContract(): string {
 **The unified entry point for the cclaw flow.**
 
 - \`/cc\` (no arguments) → behaves exactly like \`/cc-next\`: reads flow state and resumes the current stage, or starts brainstorm if the flow is fresh.
-- \`/cc <prompt>\` (with an idea/description) → saves the prompt as brainstorm context and begins the brainstorm stage, regardless of current flow state.
+- \`/cc <prompt>\` (with an idea/description) → saves the prompt as idea context and starts the first stage of the resolved track.
 
 This is the **recommended way to start** working with cclaw. Use \`/cc-next\` for subsequent stage progression.
 
@@ -66,7 +66,7 @@ This is the **recommended way to start** working with cclaw. Use \`/cc-next\` fo
    Skip detection quietly if no markers are found — do NOT invent a stack.
 
 4. Read \`${flowPath}\`.
-5. If flow already has completed stages beyond brainstorm, warn the user that starting a new brainstorm will reset progress. Ask for confirmation before proceeding.
+5. If flow already has completed stages, warn the user that starting a new tracked flow will reset progress. Ask for confirmation before proceeding.
 6. **Track heuristic** — classify the idea text and **recommend** a track (the user can override before any state mutation):
    - First, load \`${RUNTIME_ROOT}/config.yaml\`. If \`trackHeuristics\` is defined, apply those per-track vocabulary hints (\`fallback\`, \`tracks.<id>.{triggers,veto}\`) on top of the built-in defaults. Evaluation order is always \`standard -> medium -> quick\` (narrow-to-broad).
    - **quick** (\`spec → tdd → review → ship\`) — single-purpose work where the spec is essentially already known.
@@ -141,7 +141,7 @@ Do **not** silently discard an existing flow when the user provides a prompt. If
 3. **Stack detection (Phase 2).** Inspect \`package.json\` engines, \`pyproject.toml\`, \`go.mod\`, \`Cargo.toml\`, \`pom.xml\`, \`build.gradle*\`, \`Dockerfile\`, \`docker-compose*.yml\`, and CI configs. Record stack + versions on the \`Stack:\` line. Do not invent stack details.
 4. Read \`${flowPath}\`.
 5. If \`completedStages\` is non-empty:
-   - Inform: "You have an active flow at stage **{currentStage}** with {N} completed stages. Starting a new brainstorm will reset progress."
+   - Inform: "You have an active flow at stage **{currentStage}** with {N} completed stages. Starting a new tracked flow will reset progress."
    - Ask: "Continue with reset? (A) Yes, start fresh (B) No, resume current flow"
    - If (B) → switch to Path B behavior.
 6. **Classify the idea** using the heuristic below and present a single track recommendation. Wait for explicit confirmation or override before mutating any state.
@@ -153,7 +153,7 @@ Do **not** silently discard an existing flow when the user provides a prompt. If
    |---|---|---|
    | \`quick\` | \`bug\`, \`bugfix\`, \`fix\`, \`hotfix\`, \`patch\`, \`typo\`, \`regression\`, \`rename\`, \`bump\`, \`upgrade dep\`, \`docs only\`, \`comment\`, \`lint\`, \`format\`, \`small\`, \`tiny\`, \`one-liner\`, \`revert\`, \`copy change\` | Single-purpose, spec is essentially known, low blast radius |
    | \`medium\` | \`add endpoint\`, \`add field\`, \`extend existing\`, \`wire integration\`, \`small migration\`, \`new screen following existing pattern\` | Additive work with existing architecture |
-   | \`standard\` | \`new feature\`, \`build\`, \`design\`, \`refactor\`, \`migration\`, \`platform\`, \`architecture\`, \`schema\`, \`api\`, \`integrate\`, \`workflow\`, \`onboarding\` (or no confident quick/medium match) | New or uncertain multi-module work |
+   | \`standard\` | \`new feature\`, \`refactor\`, \`migration\`, \`platform\`, \`architecture\`, \`schema\`, \`integrate\`, \`workflow\`, \`onboarding\` (or no confident quick/medium match) | New or uncertain multi-module work |
 
    - On conflict, prefer \`standard\` over \`medium\`, and \`medium\` over \`quick\`.
    - Always state the recommendation as a one-line reason citing matched triggers.
@@ -184,6 +184,6 @@ Delegate entirely to \`/cc-next\` behavior:
 | Progressing after completing a stage | \`/cc-next\` |
 | Starting with a specific idea | \`/cc <idea>\` |
 
-Both commands read the same \`flow-state.json\`. The difference is that \`/cc <prompt>\` always targets brainstorm, while \`/cc\` and \`/cc-next\` follow the state.
+Both commands read the same \`flow-state.json\`. The difference is that \`/cc <prompt>\` resolves class + track and starts that track's first stage, while \`/cc\` and \`/cc-next\` follow the current state.
 `;
 }

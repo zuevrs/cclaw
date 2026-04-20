@@ -63,7 +63,7 @@ in the structured ask; there is no \`--skip\` flag.
    - \`skip\` — record \`retroSkipped: true\` + one-line reason, no compound entry required.
 6. On **accept**:
    - append >=1 strict-schema JSONL line to \`${knowledgePath()}\` with
-     \`type: "compound"\` and \`stage: "retro"\`,
+     \`type: "compound"\`, \`source: "retro"\`, and \`stage: null\`,
    - set \`retro.required = true\`, \`retro.completedAt = <ISO>\`,
      \`retro.compoundEntries = <count>\`,
    - set \`closeout.retroAcceptedAt = <ISO>\`,
@@ -127,7 +127,7 @@ Do not silently skip. Do not finalize without updating \`flow-state.json\`.
    > - **skip** — no retro this run (requires one-line reason).
 
 4. Apply the state transition for the chosen option:
-   - \`accept\` → append \`{ "type": "compound", "stage": "retro", ... }\` line
+   - \`accept\` → append \`{ "type": "compound", "source": "retro", "stage": null, ... }\` line
      to \`${knowledgePath()}\`; set \`retro.completedAt\`, \`retro.compoundEntries\`,
      \`closeout.retroAcceptedAt\`; set \`closeout.shipSubstate = "compound_review"\`.
    - \`edit\` → leave \`shipSubstate = "retro_review"\`; announce resume path.

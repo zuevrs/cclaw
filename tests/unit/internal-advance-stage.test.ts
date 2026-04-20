@@ -35,6 +35,16 @@ function captureIo(): CapturedIo {
   };
 }
 
+function requiredGateEvidenceJson(stage: Parameters<typeof stageSchema>[0]): string {
+  const requiredGateIds = stageSchema(stage).requiredGates
+    .filter((gate) => gate.tier === "required")
+    .map((gate) => gate.id);
+  const evidence = Object.fromEntries(
+    requiredGateIds.map((gateId) => [gateId, `evidence for ${gateId}`])
+  );
+  return JSON.stringify(evidence);
+}
+
 async function writeBrainstormArtifact(
   root: string,
   learningsSection = "- None this stage."
@@ -112,9 +122,10 @@ describe("internal advance-stage commands", () => {
     await writeBrainstormArtifact(root);
 
     const captured = captureIo();
+    const evidenceJson = requiredGateEvidenceJson("brainstorm");
     const code = await runInternalCommand(
       root,
-      ["advance-stage", "brainstorm", "--quiet"],
+      ["advance-stage", "brainstorm", `--evidence-json=${evidenceJson}`, "--quiet"],
       captured.io
     );
 
@@ -132,6 +143,22 @@ describe("internal advance-stage commands", () => {
       expect(state.stageGateCatalog.brainstorm.passed).toContain(gateId);
       expect(state.guardEvidence[gateId]).toBeTruthy();
     }
+  });
+
+  it("advance-stage rejects passed gates without evidence payload", async () => {
+    const root = await createTempProject("internal-advance-stage-missing-evidence");
+    await ensureRunSystem(root);
+    await writeBrainstormArtifact(root);
+
+    const captured = captureIo();
+    const code = await runInternalCommand(
+      root,
+      ["advance-stage", "brainstorm", "--quiet"],
+      captured.io
+    );
+
+    expect(code).toBe(1);
+    expect(captured.stderr()).toContain("missing --evidence-json entries for passed gates");
   });
 
   it("verify-flow-state-diff rejects candidate state with passed gate but no evidence", async () => {
@@ -218,9 +245,10 @@ describe("internal advance-stage commands", () => {
     );
 
     const captured = captureIo();
+    const evidenceJson = requiredGateEvidenceJson("brainstorm");
     const code = await runInternalCommand(
       root,
-      ["advance-stage", "brainstorm", "--quiet"],
+      ["advance-stage", "brainstorm", `--evidence-json=${evidenceJson}`, "--quiet"],
       captured.io
     );
 
