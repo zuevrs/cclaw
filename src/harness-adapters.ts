@@ -33,8 +33,8 @@ export type SubagentFallback =
    */
   | "role-switch"
   /**
-   * No meaningful fallback — mandatory delegations can only be waived
-   * under `waiverReason: "harness_limitation"`.
+   * Reserved escape hatch for future harnesses with no parity path.
+   * Current shipped harnesses do not use this fallback.
    */
   | "waiver";
 

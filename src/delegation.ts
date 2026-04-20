@@ -279,8 +279,6 @@ export async function checkMandatoryDelegations(
   const harnesses = config?.harnesses ?? [];
   const fallbacks = harnesses.map((h) => HARNESS_ADAPTERS[h].capabilities.subagentFallback);
   const expectedMode = expectedFulfillmentMode(fallbacks);
-  const onlyWaiverFallback =
-    harnesses.length > 0 && fallbacks.every((f) => f === "waiver");
 
   for (const agent of mandatory) {
     const rows = forRun.filter((e) => e.agent === agent);
@@ -291,27 +289,7 @@ export async function checkMandatoryDelegations(
     const ok = hasCompleted || hasWaived;
 
     if (!ok) {
-      if (onlyWaiverFallback) {
-        const existingHarnessWaiver = rows.some(
-          (e) => e.status === "waived" && e.waiverReason === "harness_limitation"
-        );
-        if (!existingHarnessWaiver) {
-          await appendDelegation(projectRoot, {
-            stage,
-            agent,
-            mode: "mandatory",
-            status: "waived",
-            waiverReason: "harness_limitation",
-            fulfillmentMode: "harness-waiver",
-            ts: new Date().toISOString(),
-            runId: activeRunId
-          });
-        }
-        waived.push(agent);
-        autoWaived.push(agent);
-      } else {
-        missing.push(agent);
-      }
+      missing.push(agent);
       continue;
     }
 
