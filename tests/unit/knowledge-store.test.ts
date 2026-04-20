@@ -25,6 +25,7 @@ describe("knowledge store append helper", () => {
         stage: "review",
         originFeature: "queue-hardening",
         project: "cclaw",
+        source: "stage",
         nowIso: "2026-04-19T11:00:00Z"
       }
     );
@@ -42,6 +43,7 @@ describe("knowledge store append helper", () => {
     expect(parsed.origin_stage).toBe("review");
     expect(parsed.origin_feature).toBe("queue-hardening");
     expect(parsed.frequency).toBe(1);
+    expect(parsed.source).toBe("stage");
     expect(parsed.created).toBe("2026-04-19T11:00:00Z");
     expect(parsed.first_seen_ts).toBe("2026-04-19T11:00:00Z");
     expect(parsed.last_seen_ts).toBe("2026-04-19T11:00:00Z");
@@ -97,5 +99,26 @@ describe("knowledge store append helper", () => {
     expect(result.invalid).toBe(1);
     expect(result.errors.join(" ")).toContain("confidence");
     await expect(fs.stat(path.join(root, ".cclaw/knowledge.jsonl"))).rejects.toThrow();
+  });
+
+  it("rejects unknown source values", async () => {
+    const root = await createTempProject("knowledge-invalid-source");
+    const seed = {
+      type: "rule",
+      trigger: "when importing external learnings",
+      action: "normalize source tags before append",
+      confidence: "medium",
+      source: "unknown-channel"
+    } as unknown as KnowledgeSeedEntry;
+
+    const result = await appendKnowledge(root, [seed], {
+      stage: "plan",
+      project: "cclaw",
+      nowIso: "2026-04-19T11:12:00Z"
+    });
+
+    expect(result.appended).toBe(0);
+    expect(result.invalid).toBe(1);
+    expect(result.errors.join(" ")).toContain("source");
   });
 });
