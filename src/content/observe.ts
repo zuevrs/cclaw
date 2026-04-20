@@ -1827,6 +1827,10 @@ exit 0
  * Updated hooks.json generators with PreToolUse/PostToolUse observation.
  */
 
+function hookDispatcherCommand(scriptName: string): string {
+  return `bash ${RUNTIME_ROOT}/hooks/run-hook.cmd ${scriptName}`;
+}
+
 export function claudeHooksJsonWithObservation(): string {
   return JSON.stringify({
     cclawHookSchemaVersion: 1,
@@ -1835,30 +1839,30 @@ export function claudeHooksJsonWithObservation(): string {
         matcher: "startup|resume|clear|compact",
         hooks: [{
           type: "command",
-          command: `bash ${RUNTIME_ROOT}/hooks/session-start.sh`
+          command: hookDispatcherCommand("session-start.sh")
         }]
       }],
       PreToolUse: [{
         matcher: "*",
         hooks: [{
           type: "command",
-          command: `bash ${RUNTIME_ROOT}/hooks/prompt-guard.sh`
+          command: hookDispatcherCommand("prompt-guard.sh")
         }, {
           type: "command",
-          command: `bash ${RUNTIME_ROOT}/hooks/workflow-guard.sh`
+          command: hookDispatcherCommand("workflow-guard.sh")
         }]
       }],
       PostToolUse: [{
         matcher: "*",
         hooks: [{
           type: "command",
-          command: `bash ${RUNTIME_ROOT}/hooks/context-monitor.sh`
+          command: hookDispatcherCommand("context-monitor.sh")
         }]
       }],
       Stop: [{
         hooks: [{
           type: "command",
-          command: `bash ${RUNTIME_ROOT}/hooks/stop-checkpoint.sh`,
+          command: hookDispatcherCommand("stop-checkpoint.sh"),
           timeout: 10
         }]
       }],
@@ -1866,7 +1870,7 @@ export function claudeHooksJsonWithObservation(): string {
         matcher: "manual|auto",
         hooks: [{
           type: "command",
-          command: `bash ${RUNTIME_ROOT}/hooks/pre-compact.sh`,
+          command: hookDispatcherCommand("pre-compact.sh"),
           timeout: 10
         }]
       }]
@@ -1880,31 +1884,31 @@ export function cursorHooksJsonWithObservation(): string {
     version: 1,
     hooks: {
       sessionStart: [{
-        command: `bash ${RUNTIME_ROOT}/hooks/session-start.sh`
+        command: hookDispatcherCommand("session-start.sh")
       }],
       sessionResume: [{
-        command: `bash ${RUNTIME_ROOT}/hooks/session-start.sh`
+        command: hookDispatcherCommand("session-start.sh")
       }],
       sessionClear: [{
-        command: `bash ${RUNTIME_ROOT}/hooks/session-start.sh`
+        command: hookDispatcherCommand("session-start.sh")
       }],
       sessionCompact: [{
-        command: `bash ${RUNTIME_ROOT}/hooks/pre-compact.sh`
+        command: hookDispatcherCommand("pre-compact.sh")
       }, {
-        command: `bash ${RUNTIME_ROOT}/hooks/session-start.sh`
+        command: hookDispatcherCommand("session-start.sh")
       }],
       preToolUse: [{
         matcher: "*",
-        command: `bash ${RUNTIME_ROOT}/hooks/prompt-guard.sh`
+        command: hookDispatcherCommand("prompt-guard.sh")
       }, {
         matcher: "*",
-        command: `bash ${RUNTIME_ROOT}/hooks/workflow-guard.sh`
+        command: hookDispatcherCommand("workflow-guard.sh")
       }],
       postToolUse: [{
         matcher: "*",
-        command: `bash ${RUNTIME_ROOT}/hooks/context-monitor.sh`
+        command: hookDispatcherCommand("context-monitor.sh")
       }],
-      stop: [{ command: `bash ${RUNTIME_ROOT}/hooks/stop-checkpoint.sh`, timeout: 10 }]
+      stop: [{ command: hookDispatcherCommand("stop-checkpoint.sh"), timeout: 10 }]
     }
   }, null, 2);
 }
@@ -1936,13 +1940,13 @@ export function codexHooksJsonWithObservation(): string {
         matcher: "startup|resume",
         hooks: [{
           type: "command",
-          command: `bash ${RUNTIME_ROOT}/hooks/session-start.sh`
+          command: hookDispatcherCommand("session-start.sh")
         }]
       }],
       UserPromptSubmit: [{
         hooks: [{
           type: "command",
-          command: `bash ${RUNTIME_ROOT}/hooks/prompt-guard.sh`
+          command: hookDispatcherCommand("prompt-guard.sh")
         }, {
           type: "command",
           command: "bash -lc 'if command -v cclaw >/dev/null 2>&1; then cclaw internal verify-current-state --quiet >/dev/null || true; else npx -y cclaw-cli internal verify-current-state --quiet >/dev/null || true; fi'"
@@ -1952,23 +1956,23 @@ export function codexHooksJsonWithObservation(): string {
         matcher: "Bash",
         hooks: [{
           type: "command",
-          command: `bash ${RUNTIME_ROOT}/hooks/prompt-guard.sh`
+          command: hookDispatcherCommand("prompt-guard.sh")
         }, {
           type: "command",
-          command: `bash ${RUNTIME_ROOT}/hooks/workflow-guard.sh`
+          command: hookDispatcherCommand("workflow-guard.sh")
         }]
       }],
       PostToolUse: [{
         matcher: "Bash",
         hooks: [{
           type: "command",
-          command: `bash ${RUNTIME_ROOT}/hooks/context-monitor.sh`
+          command: hookDispatcherCommand("context-monitor.sh")
         }]
       }],
       Stop: [{
         hooks: [{
           type: "command",
-          command: `bash ${RUNTIME_ROOT}/hooks/stop-checkpoint.sh`,
+          command: hookDispatcherCommand("stop-checkpoint.sh"),
           timeout: 10
         }]
       }]

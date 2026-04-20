@@ -471,17 +471,17 @@ describe("install lifecycle", () => {
 
     expect(mergedClaude).toContain("user-stop-hook");
     expect(mergedClaude).toContain("user-prompt-submit");
-    expect(countOccurrences(mergedClaude, "bash .cclaw/hooks/prompt-guard.sh")).toBe(1);
-    expect(countOccurrences(mergedClaude, "bash .cclaw/hooks/workflow-guard.sh")).toBe(1);
-    expect(countOccurrences(mergedClaude, "bash .cclaw/hooks/context-monitor.sh")).toBe(1);
-    expect(countOccurrences(mergedClaude, "bash .cclaw/hooks/stop-checkpoint.sh")).toBe(1);
+    expect(countOccurrences(mergedClaude, "bash .cclaw/hooks/run-hook.cmd prompt-guard.sh")).toBe(1);
+    expect(countOccurrences(mergedClaude, "bash .cclaw/hooks/run-hook.cmd workflow-guard.sh")).toBe(1);
+    expect(countOccurrences(mergedClaude, "bash .cclaw/hooks/run-hook.cmd context-monitor.sh")).toBe(1);
+    expect(countOccurrences(mergedClaude, "bash .cclaw/hooks/run-hook.cmd stop-checkpoint.sh")).toBe(1);
 
     expect(mergedCursor).toContain("cursor-user-stop");
     expect(mergedCursor).toContain("cursor-user-pre");
-    expect(countOccurrences(mergedCursor, ".cclaw/hooks/prompt-guard.sh")).toBe(1);
-    expect(countOccurrences(mergedCursor, ".cclaw/hooks/workflow-guard.sh")).toBe(1);
-    expect(countOccurrences(mergedCursor, ".cclaw/hooks/context-monitor.sh")).toBe(1);
-    expect(countOccurrences(mergedCursor, ".cclaw/hooks/stop-checkpoint.sh")).toBe(1);
+    expect(countOccurrences(mergedCursor, ".cclaw/hooks/run-hook.cmd prompt-guard.sh")).toBe(1);
+    expect(countOccurrences(mergedCursor, ".cclaw/hooks/run-hook.cmd workflow-guard.sh")).toBe(1);
+    expect(countOccurrences(mergedCursor, ".cclaw/hooks/run-hook.cmd context-monitor.sh")).toBe(1);
+    expect(countOccurrences(mergedCursor, ".cclaw/hooks/run-hook.cmd stop-checkpoint.sh")).toBe(1);
   });
 
   it("sync recovers relaxed JSON hooks and preserves user commands", async () => {
@@ -504,7 +504,7 @@ describe("install lifecycle", () => {
     await syncCclaw(root);
     const merged = await fs.readFile(claudeHooksPath, "utf8");
     expect(merged).toContain("user-relaxed-stop");
-    expect(countOccurrences(merged, "bash .cclaw/hooks/prompt-guard.sh")).toBe(1);
+    expect(countOccurrences(merged, "bash .cclaw/hooks/run-hook.cmd prompt-guard.sh")).toBe(1);
 
     const backupsDir = path.join(root, ".cclaw/backups/hooks");
     const backups = await fs.readdir(backupsDir);

@@ -700,6 +700,7 @@ export async function doctorChecks(projectRoot: string, options: DoctorOptions =
   for (const script of [
     "session-start.sh",
     "stop-checkpoint.sh",
+    "run-hook.cmd",
     "prompt-guard.sh",
     "workflow-guard.sh",
     "context-monitor.sh"

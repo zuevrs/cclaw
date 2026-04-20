@@ -80,9 +80,11 @@ describe("hooks lifecycle rehydration", () => {
     expect(codex.hooks.SessionStart[0]?.matcher).toBe("startup|resume");
     expect((claude as { cclawHookSchemaVersion?: number }).cclawHookSchemaVersion).toBe(1);
     expect((codex as { cclawHookSchemaVersion?: number }).cclawHookSchemaVersion).toBe(1);
+    expect(JSON.stringify(claude)).toContain("run-hook.cmd");
     expect(JSON.stringify(claude)).toContain("prompt-guard.sh");
     expect(JSON.stringify(claude)).toContain("workflow-guard.sh");
     expect(JSON.stringify(claude)).toContain("context-monitor.sh");
+    expect(JSON.stringify(codex)).toContain("run-hook.cmd");
     expect(JSON.stringify(codex)).toContain("prompt-guard.sh");
     expect(JSON.stringify(codex)).toContain("workflow-guard.sh");
     expect(JSON.stringify(codex)).toContain("context-monitor.sh");
@@ -100,6 +102,7 @@ describe("hooks lifecycle rehydration", () => {
     expect(Array.isArray(cursor.hooks.sessionClear)).toBe(true);
     expect(Array.isArray(cursor.hooks.sessionCompact)).toBe(true);
     expect((cursor as { cclawHookSchemaVersion?: number }).cclawHookSchemaVersion).toBe(1);
+    expect(JSON.stringify(cursor)).toContain("run-hook.cmd");
     expect(JSON.stringify(cursor)).toContain("prompt-guard.sh");
     expect(JSON.stringify(cursor)).toContain("workflow-guard.sh");
     expect(JSON.stringify(cursor)).toContain("context-monitor.sh");

@@ -43,6 +43,7 @@ import { sessionHooksSkillMarkdown } from "./content/session-hooks.js";
 import {
   sessionStartScript,
   stopCheckpointScript,
+  runHookDispatcherScript,
   stageCompleteScript,
   preCompactScript,
   opencodePluginJs,
@@ -833,6 +834,7 @@ async function writeHooks(projectRoot: string, config: VibyConfig): Promise<void
 
   await writeFileSafe(path.join(hooksDir, "session-start.sh"), sessionStartScript());
   await writeFileSafe(path.join(hooksDir, "stop-checkpoint.sh"), stopCheckpointScript());
+  await writeFileSafe(path.join(hooksDir, "run-hook.cmd"), runHookDispatcherScript());
   await writeFileSafe(path.join(hooksDir, "stage-complete.sh"), stageCompleteScript());
   await writeFileSafe(path.join(hooksDir, "pre-compact.sh"), preCompactScript());
   await writeFileSafe(path.join(hooksDir, "prompt-guard.sh"), promptGuardScript({
@@ -854,6 +856,7 @@ async function writeHooks(projectRoot: string, config: VibyConfig): Promise<void
     for (const script of [
       "session-start.sh",
       "stop-checkpoint.sh",
+      "run-hook.cmd",
       "stage-complete.sh",
       "pre-compact.sh",
       "prompt-guard.sh",
@@ -1548,6 +1551,9 @@ function isManagedRuntimeHookCommand(command: string): boolean {
   const normalized = command.trim().replace(/\s+/gu, " ");
   if (
     /(^|\s)(?:bash\s+)?(?:\.\/)?\.cclaw\/hooks\/(?:session-start|stop-checkpoint|pre-compact|prompt-guard|workflow-guard|context-monitor)\.sh(?:\s|$)/u.test(
+      normalized
+    ) ||
+    /(^|\s)(?:bash\s+)?(?:\.\/)?\.cclaw\/hooks\/run-hook\.cmd\s+(?:session-start|stop-checkpoint|pre-compact|prompt-guard|workflow-guard|context-monitor)(?:\.sh)?(?:\s|$)/u.test(
       normalized
     )
   ) {
