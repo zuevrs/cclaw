@@ -9,8 +9,10 @@ import {
 } from "./artifact-linter.js";
 import { RUNTIME_ROOT } from "./constants.js";
 import { stageSchema } from "./content/stage-schema.js";
+import { readDelegationLedger } from "./delegation.js";
 import type { FlowState, StageGateState } from "./flow-state.js";
 import { ensureDir, exists, writeFileSafe } from "./fs-utils.js";
+import { detectPublicApiChanges } from "./internal/detect-public-api-changes.js";
 import { readFlowState, writeFlowState } from "./runs.js";
 import { buildTraceMatrix } from "./trace-matrix.js";
 import { FLOW_STAGES, type FlowStage } from "./types.js";
@@ -394,6 +396,23 @@ export async function verifyCurrentStageGateEvidence(
               `design research gate blocked (design_research_complete): ${missingSections.join(", ")}.`
             );
           }
+        }
+      }
+    }
+    if (stage === "tdd") {
+      const docsDriftDetection = await detectPublicApiChanges(projectRoot);
+      if (docsDriftDetection.triggered) {
+        const ledger = await readDelegationLedger(projectRoot);
+        const hasDocUpdaterCompletion = ledger.entries.some((entry) =>
+          entry.runId === flowState.activeRunId &&
+          entry.stage === "tdd" &&
+          entry.agent === "doc-updater" &&
+          entry.status === "completed"
+        );
+        if (!hasDocUpdaterCompletion) {
+          issues.push(
+            `tdd docs drift gate blocked (tdd_docs_drift_check): public surface changes detected (${docsDriftDetection.changedFiles.join(", ")}) but no completed doc-updater delegation exists for the active run.`
+          );
         }
       }
     }

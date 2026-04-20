@@ -1,5 +1,7 @@
 import fs from "node:fs/promises";
 import path from "node:path";
+import { execFile } from "node:child_process";
+import { promisify } from "node:util";
 import { describe, expect, it } from "vitest";
 import { stageSchema } from "../../src/content/stage-schema.js";
 import { createInitialFlowState } from "../../src/flow-state.js";
@@ -11,9 +13,29 @@ import {
   verifyCurrentStageGateEvidence
 } from "../../src/gate-evidence.js";
 
+const execFileAsync = promisify(execFile);
+
 async function prepareRoot(root: string): Promise<void> {
   await fs.mkdir(path.join(root, ".cclaw/state"), { recursive: true });
   await fs.mkdir(path.join(root, ".cclaw/artifacts"), { recursive: true });
+}
+
+async function git(cwd: string, args: string[]): Promise<void> {
+  await execFileAsync("git", args, { cwd });
+}
+
+async function initGitRepoWithPublicApiChange(root: string): Promise<void> {
+  await git(root, ["init"]);
+  await git(root, ["config", "user.email", "tests@example.com"]);
+  await git(root, ["config", "user.name", "Test Runner"]);
+  await fs.writeFile(path.join(root, "README.md"), "# temp\n", "utf8");
+  await git(root, ["add", "README.md"]);
+  await git(root, ["commit", "-m", "init"]);
+
+  await fs.mkdir(path.join(root, "src"), { recursive: true });
+  await fs.writeFile(path.join(root, "src/types.ts"), "export interface PublicApi { id: string }\n", "utf8");
+  await git(root, ["add", "src/types.ts"]);
+  await git(root, ["commit", "-m", "public api change"]);
 }
 
 function requiredGateIds(stage: ReturnType<typeof stageSchema>["stage"]): string[] {
@@ -85,6 +107,87 @@ describe("gate evidence verification", () => {
     const result = await verifyCurrentStageGateEvidence(root, state);
     expect(result.ok).toBe(true);
     expect(result.issues).toEqual([]);
+  });
+
+  it("blocks tdd docs drift when public API changed without doc-updater completion", async () => {
+    const root = await createTempProject("gate-evidence-tdd-docs-drift");
+    await prepareRoot(root);
+    await initGitRepoWithPublicApiChange(root);
+    await fs.writeFile(
+      path.join(root, ".cclaw/artifacts/06-tdd.md"),
+      `# TDD Artifact
+
+## RED Evidence
+| Slice | Test name | Command | Failure output summary |
+|---|---|---|---|
+| S-1 | exposes public api | pnpm vitest run api.test.ts | FAIL: expected exported type |
+
+## Acceptance Mapping
+| Slice | Plan task ID | Spec criterion ID |
+|---|---|---|
+| S-1 | T-1 | AC-1 |
+
+## Failure Analysis
+| Slice | Expected missing behavior | Actual failure reason |
+|---|---|---|
+| S-1 | API surface changed | Existing docs/tests stale |
+
+## GREEN Evidence
+- Full suite command: pnpm vitest run
+- Full suite result: 12 passed, 0 failed
+
+## REFACTOR Notes
+- What changed: normalized exported type names
+- Why: keep API naming consistent
+- Behavior preserved: Full suite green after refactor
+
+## Traceability
+- T-1 -> AC-1
+
+## Verification Ladder
+- Highest tier reached: command
+- Evidence: pnpm vitest run api.test.ts (pass)
+`,
+      "utf8"
+    );
+
+    const state = createInitialFlowState("run-tdd-docs");
+    state.currentStage = "tdd";
+    const required = requiredGateIds("tdd");
+    state.stageGateCatalog.tdd.passed = [...required];
+    for (const gateId of required) {
+      state.guardEvidence[gateId] =
+        gateId === "tdd_verified_before_complete"
+          ? "npm test; sha: abc1234; PASS"
+          : `evidence:${gateId}`;
+    }
+
+    const blocked = await verifyCurrentStageGateEvidence(root, state);
+    expect(blocked.ok).toBe(false);
+    expect(blocked.issues.join("\n")).toContain("tdd_docs_drift_check");
+
+    await fs.writeFile(
+      path.join(root, ".cclaw/state/delegation-log.json"),
+      JSON.stringify({
+        runId: "run-tdd-docs",
+        entries: [
+          {
+            stage: "tdd",
+            agent: "doc-updater",
+            mode: "proactive",
+            status: "completed",
+            fulfillmentMode: "isolated",
+            evidenceRefs: [".cclaw/artifacts/06-tdd.md#verification-ladder"],
+            ts: new Date().toISOString(),
+            runId: "run-tdd-docs"
+          }
+        ]
+      }, null, 2),
+      "utf8"
+    );
+
+    const cleared = await verifyCurrentStageGateEvidence(root, state);
+    expect(cleared.ok).toBe(true);
   });
 
   it("fails review stage when Final Verdict is APPROVED but open Critical findings exist", async () => {
