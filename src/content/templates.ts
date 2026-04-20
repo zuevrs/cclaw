@@ -826,7 +826,7 @@ export function buildRulesJson(): Record<string, unknown> {
       "conventional_commits"
     ],
     MUST_NEVER: [
-      "skip_test_stage",
+      "skip_tdd_stage",
       "ship_with_critical_findings",
       "implement_in_brainstorm",
       "manual_edit_generated",
