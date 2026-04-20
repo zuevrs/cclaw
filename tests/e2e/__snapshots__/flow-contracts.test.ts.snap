@@ -949,7 +949,7 @@ If you are about to violate the Iron Law, STOP. No amount of urgency, partial pr
 1. Announce at start: "Using \`test-driven-development\` to Implement features through the TDD cycle: write failing tests, make them pass with minimal code, then refactor.".
 2. Obey HARD-GATE and Iron Law.
 3. Execute checklist in order and persist \`.cclaw/artifacts/06-tdd.md\`.
-4. Satisfy gates (\`tdd_red_test_written\`, \`tdd_green_full_suite\`, \`tdd_refactor_completed\` +1).
+4. Satisfy gates (\`tdd_red_test_written\`, \`tdd_green_full_suite\`, \`tdd_refactor_completed\` +2).
 
 
 ## Overview
@@ -1021,11 +1021,12 @@ You MUST complete these steps in order:
 5. Dispatch \`test-author\` subagent in \`BUILD_GREEN_REFACTOR\` mode — minimal implementation + full-suite GREEN + refactor notes.
 6. GREEN: Run full suite — execute ALL tests, not just the ones you wrote. The full suite must be GREEN.
 7. GREEN: Verify no regressions — if any existing test breaks, fix the regression before proceeding.
-8. REFACTOR: Improve code quality — without changing behavior. Document what you changed and why.
-9. Record evidence — capture RED failure, GREEN output, and REFACTOR notes in the TDD artifact.
-10. Annotate traceability — link to plan task ID and spec criterion.
-11. Per-Slice Review (conditional) — if \`.cclaw/config.yaml::sliceReview.enabled\` is true and the slice meets any trigger (touchCount >= filesChangedThreshold, touchPaths match touchTriggers, or highRisk=true), append a \`## Per-Slice Review\` entry for this slice before moving on (see the dedicated section below).
-12. Repeat for each slice — return to step 1 for the next plan slice.
+8. Run verification-before-completion discipline for the slice — capture a fresh test command, commit SHA, and explicit PASS/FAIL status before completion claims.
+9. REFACTOR: Improve code quality — without changing behavior. Document what you changed and why.
+10. Record evidence — capture RED failure, GREEN output, and REFACTOR notes in the TDD artifact.
+11. Annotate traceability — link to plan task ID and spec criterion.
+12. Per-Slice Review (conditional) — if \`.cclaw/config.yaml::sliceReview.enabled\` is true and the slice meets any trigger (touchCount >= filesChangedThreshold, touchPaths match touchTriggers, or highRisk=true), append a \`## Per-Slice Review\` entry for this slice before moving on (see the dedicated section below).
+13. Repeat for each slice — return to step 1 for the next plan slice.
 
 ## Good vs Bad (at-a-glance)
 
@@ -1098,10 +1099,11 @@ Summary of what the reference covers:
 4. Capture and store failing output as RED evidence.
 5. Apply minimal change to satisfy RED tests (GREEN).
 6. Run full suite, not partial checks, for GREEN validation.
-7. Refactor without changing behavior and document rationale (REFACTOR).
-8. Stop if regressions appear and fix before proceeding.
-9. If a test passes unexpectedly, investigate: does the behavior already exist, or is the test wrong?
-10. **Per-Slice Review checkpoint (conditional, opt-in).** When \`.cclaw/config.yaml::sliceReview.enabled\` is true, check every slice against the triggers before declaring it DONE. Triggers: \`touchCount >= filesChangedThreshold\`, any \`touchPaths\` match a \`touchTriggers\` glob, or the plan row declares \`highRisk: true\`. On a trigger, run two passes on the slice alone — (1) Spec-Compliance: trace RED/GREEN/REFACTOR evidence back to its plan task + spec criterion, noting edge cases the tests skip; (2) Quality: diff-scan for naming, error handling, dead code, simpler alternatives. Record both under \`## Per-Slice Review\` in \`06-tdd.md\`, naming the trigger that fired. Dispatch the \`reviewer\` subagent natively when available (log \`fulfillmentMode: "isolated"\`); otherwise fulfil via in-session role switch (\`fulfillmentMode: "role-switch"\`). Never fabricate an isolated pass from memory. Tracks outside \`sliceReview.enforceOnTracks\` still emit the section; doctor only escalates missed reviews on enforced tracks.
+7. Before declaring the slice complete, run a fresh verification check and record command + commit SHA + PASS/FAIL.
+8. Refactor without changing behavior and document rationale (REFACTOR).
+9. Stop if regressions appear and fix before proceeding.
+10. If a test passes unexpectedly, investigate: does the behavior already exist, or is the test wrong?
+11. **Per-Slice Review checkpoint (conditional, opt-in).** When \`.cclaw/config.yaml::sliceReview.enabled\` is true, check every slice against the triggers before declaring it DONE. Triggers: \`touchCount >= filesChangedThreshold\`, any \`touchPaths\` match a \`touchTriggers\` glob, or the plan row declares \`highRisk: true\`. On a trigger, run two passes on the slice alone — (1) Spec-Compliance: trace RED/GREEN/REFACTOR evidence back to its plan task + spec criterion, noting edge cases the tests skip; (2) Quality: diff-scan for naming, error handling, dead code, simpler alternatives. Record both under \`## Per-Slice Review\` in \`06-tdd.md\`, naming the trigger that fired. Dispatch the \`reviewer\` subagent natively when available (log \`fulfillmentMode: "isolated"\`); otherwise fulfil via in-session role switch (\`fulfillmentMode: "role-switch"\`). Never fabricate an isolated pass from memory. Tracks outside \`sliceReview.enforceOnTracks\` still emit the section; doctor only escalates missed reviews on enforced tracks.
 
 Shared decision/ask-user protocol:
 \`.cclaw/references/protocols/decision.md\`
@@ -1120,12 +1122,14 @@ Detailed walkthrough:
 - \`tdd_red_test_written\` — Failing tests exist before implementation changes.
 - \`tdd_green_full_suite\` — Full relevant suite passes in GREEN state.
 - \`tdd_refactor_completed\` — Refactor pass completed with behavior preservation verified.
+- \`tdd_verified_before_complete\` — Fresh verification evidence includes test command, commit SHA, and explicit pass/fail status.
 - \`tdd_traceable_to_plan\` — Change traceability to plan slice is explicit.
 
 ## Required Evidence
 - [ ] Artifact updated at \`.cclaw/artifacts/06-tdd.md\` with RED, GREEN, and REFACTOR sections.
 - [ ] Failing command output captured (RED).
 - [ ] Full test/build output recorded (GREEN).
+- [ ] Fresh verification evidence recorded with command, commit SHA, and PASS/FAIL status before completion.
 - [ ] Acceptance mapping documented.
 - [ ] Failure reason analysis recorded.
 - [ ] Refactor rationale captured.
@@ -1137,9 +1141,10 @@ Detailed walkthrough:
 3. Run tests and capture failure output.
 4. Dispatch \`test-author\` in BUILD_GREEN_REFACTOR mode and implement smallest change needed for GREEN.
 5. Run full tests and build checks.
-6. Perform refactor pass preserving behavior.
-7. Record RED, GREEN, and REFACTOR evidence in artifact.
-8. Annotate traceability to plan task and spec criterion; on \`sliceReview\` triggers, append a Per-Slice Review entry before closing the slice.
+6. Run a fresh verification-before-completion check and capture command + commit SHA + PASS/FAIL in guard evidence.
+7. Perform refactor pass preserving behavior.
+8. Record RED, GREEN, and REFACTOR evidence in artifact.
+9. Annotate traceability to plan task and spec criterion; on \`sliceReview\` triggers, append a Per-Slice Review entry before closing the slice.
 
 ## Review Sections
 
@@ -1248,7 +1253,7 @@ Rule: Every RED test traces to a plan task. Every GREEN change traces to a RED t
 
 - \`stage\`: \`tdd\`
 - \`next\`: \`review\` (Two-layer review stage: spec compliance first, then code quality and production readiness. Section-by-section with severity discipline.)
-- \`gates\`: \`tdd_red_test_written\`, \`tdd_green_full_suite\`, \`tdd_refactor_completed\`, \`tdd_traceable_to_plan\`
+- \`gates\`: \`tdd_red_test_written\`, \`tdd_green_full_suite\`, \`tdd_refactor_completed\`, \`tdd_verified_before_complete\`, \`tdd_traceable_to_plan\`
 - \`artifact\`: \`.cclaw/artifacts/06-tdd.md\`
 - \`mandatory delegations\`: \`test-author\`
 - \`completion helper\`: \`bash .cclaw/hooks/stage-complete.sh tdd\`

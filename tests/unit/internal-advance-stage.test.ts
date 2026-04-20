@@ -115,6 +115,30 @@ async function writeScopeArtifact(root: string): Promise<void> {
 `, "utf8");
 }
 
+async function writeTddArtifact(root: string): Promise<void> {
+  await fs.mkdir(path.join(root, ".cclaw/artifacts"), { recursive: true });
+  await fs.writeFile(path.join(root, ".cclaw/artifacts/06-tdd.md"), `# TDD Artifact
+
+## RED Evidence
+- Command: npm test -- tests/unit/internal-advance-stage.test.ts
+- Result: expected failure before implementation.
+
+## GREEN Evidence
+- Command: npm test -- tests/unit/internal-advance-stage.test.ts
+- Result: PASS after implementation.
+
+## REFACTOR Notes
+- Simplified helper composition without behavior change.
+
+## Traceability
+- Plan task: T-1
+- Spec criterion: AC-1
+
+## Learnings
+- None this stage.
+`, "utf8");
+}
+
 describe("internal advance-stage commands", () => {
   it("advance-stage promotes stage and writes required gate evidence", async () => {
     const root = await createTempProject("internal-advance-stage");
@@ -159,6 +183,48 @@ describe("internal advance-stage commands", () => {
 
     expect(code).toBe(1);
     expect(captured.stderr()).toContain("missing --evidence-json entries for passed gates");
+  });
+
+  it("advance-stage enforces structured evidence for tdd_verified_before_complete", async () => {
+    const root = await createTempProject("internal-advance-stage-tdd-verification-evidence");
+    await ensureRunSystem(root);
+    await writeTddArtifact(root);
+    const state = await readFlowState(root);
+    await writeFlowState(
+      root,
+      {
+        ...state,
+        currentStage: "tdd",
+        completedStages: []
+      },
+      { allowReset: true }
+    );
+
+    const required = stageSchema("tdd").requiredGates
+      .filter((gate) => gate.tier === "required")
+      .map((gate) => gate.id);
+    const malformedEvidence = Object.fromEntries(
+      required.map((gateId) => [gateId, `evidence for ${gateId}`])
+    ) as Record<string, string>;
+    malformedEvidence.tdd_verified_before_complete = "ran npm test with current branch commit abc1234";
+
+    const captured = captureIo();
+    const code = await runInternalCommand(
+      root,
+      [
+        "advance-stage",
+        "tdd",
+        `--evidence-json=${JSON.stringify(malformedEvidence)}`,
+        "--waive-delegation=test-author",
+        "--waiver-reason=unit_test",
+        "--quiet"
+      ],
+      captured.io
+    );
+
+    expect(code).toBe(1);
+    expect(captured.stderr()).toContain("gate evidence format check failed");
+    expect(captured.stderr()).toContain("tdd_verified_before_complete");
   });
 
   it("verify-flow-state-diff rejects candidate state with passed gate but no evidence", async () => {

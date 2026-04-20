@@ -74,7 +74,7 @@ const REQUIRED_GATE_IDS: Record<FlowStage, string[]> = {
     "tdd_red_test_written",
     "tdd_green_full_suite",
     "tdd_refactor_completed",
-    "tdd_traceable_to_plan"
+    "tdd_verified_before_complete"
   ],
   review: [
     "review_layer1_spec_compliance",

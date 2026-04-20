@@ -74,6 +74,27 @@ function unique<T extends string>(values: T[]): T[] {
   return [...new Set(values)];
 }
 
+const TEST_COMMAND_HINT_PATTERN = /\b(?:npm test|pnpm test|yarn test|bun test|vitest|jest|pytest|go test|cargo test|mvn test|gradle test|dotnet test)\b/iu;
+const SHA_WITH_LABEL_PATTERN = /\b(?:sha|commit)(?:\s*[:=]|\s+)\s*[0-9a-f]{7,40}\b/iu;
+const PASS_STATUS_PATTERN = /\b(?:pass|passed|green|ok)\b/iu;
+
+function validateGateEvidenceShape(stage: FlowStage, gateId: string, evidence: string): string | null {
+  if (stage !== "tdd" || gateId !== "tdd_verified_before_complete") {
+    return null;
+  }
+  const trimmed = evidence.trim();
+  if (!TEST_COMMAND_HINT_PATTERN.test(trimmed)) {
+    return "must include the fresh verification command that was run (for example `npm test`, `pytest`, `go test`, or equivalent).";
+  }
+  if (!SHA_WITH_LABEL_PATTERN.test(trimmed)) {
+    return "must include a commit SHA token prefixed with `sha` or `commit` (for example `sha: abc1234`).";
+  }
+  if (!PASS_STATUS_PATTERN.test(trimmed)) {
+    return "must include explicit success status (for example `PASS` or `GREEN`).";
+  }
+  return null;
+}
+
 function parseStringList(raw: unknown): string[] {
   if (!Array.isArray(raw)) return [];
   return raw
@@ -541,6 +562,24 @@ async function runAdvanceStage(
   if (missingGuardEvidence.length > 0) {
     io.stderr.write(
       `cclaw internal advance-stage: missing --evidence-json entries for passed gates: ${missingGuardEvidence.join(", ")}.\n`
+    );
+    return 1;
+  }
+  const malformedGateEvidence = nextPassed.flatMap((gateId) => {
+    const provided = args.evidenceByGate[gateId];
+    const existing = flowState.guardEvidence[gateId];
+    const effectiveEvidence =
+      typeof provided === "string" && provided.trim().length > 0
+        ? provided
+        : typeof existing === "string" && existing.trim().length > 0
+          ? existing
+          : "";
+    const issue = validateGateEvidenceShape(args.stage, gateId, effectiveEvidence);
+    return issue ? [`${gateId}: ${issue}`] : [];
+  });
+  if (malformedGateEvidence.length > 0) {
+    io.stderr.write(
+      `cclaw internal advance-stage: gate evidence format check failed: ${malformedGateEvidence.join(" | ")}.\n`
     );
     return 1;
   }

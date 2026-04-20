@@ -30,6 +30,7 @@ export const TDD: StageSchemaInput = {
     "Dispatch `test-author` subagent in `BUILD_GREEN_REFACTOR` mode — minimal implementation + full-suite GREEN + refactor notes.",
     "GREEN: Run full suite — execute ALL tests, not just the ones you wrote. The full suite must be GREEN.",
     "GREEN: Verify no regressions — if any existing test breaks, fix the regression before proceeding.",
+    "Run verification-before-completion discipline for the slice — capture a fresh test command, commit SHA, and explicit PASS/FAIL status before completion claims.",
     "REFACTOR: Improve code quality — without changing behavior. Document what you changed and why.",
     "Record evidence — capture RED failure, GREEN output, and REFACTOR notes in the TDD artifact.",
     "Annotate traceability — link to plan task ID and spec criterion.",
@@ -43,6 +44,7 @@ export const TDD: StageSchemaInput = {
     "Capture and store failing output as RED evidence.",
     "Apply minimal change to satisfy RED tests (GREEN).",
     "Run full suite, not partial checks, for GREEN validation.",
+    "Before declaring the slice complete, run a fresh verification check and record command + commit SHA + PASS/FAIL.",
     "Refactor without changing behavior and document rationale (REFACTOR).",
     "Stop if regressions appear and fix before proceeding.",
     "If a test passes unexpectedly, investigate: does the behavior already exist, or is the test wrong?",
@@ -54,6 +56,7 @@ export const TDD: StageSchemaInput = {
     "Run tests and capture failure output.",
     "Dispatch `test-author` in BUILD_GREEN_REFACTOR mode and implement smallest change needed for GREEN.",
     "Run full tests and build checks.",
+    "Run a fresh verification-before-completion check and capture command + commit SHA + PASS/FAIL in guard evidence.",
     "Perform refactor pass preserving behavior.",
     "Record RED, GREEN, and REFACTOR evidence in artifact.",
     "Annotate traceability to plan task and spec criterion; on `sliceReview` triggers, append a Per-Slice Review entry before closing the slice."
@@ -62,12 +65,14 @@ export const TDD: StageSchemaInput = {
     { id: "tdd_red_test_written", description: "Failing tests exist before implementation changes." },
     { id: "tdd_green_full_suite", description: "Full relevant suite passes in GREEN state." },
     { id: "tdd_refactor_completed", description: "Refactor pass completed with behavior preservation verified." },
+    { id: "tdd_verified_before_complete", description: "Fresh verification evidence includes test command, commit SHA, and explicit pass/fail status." },
     { id: "tdd_traceable_to_plan", description: "Change traceability to plan slice is explicit." }
   ],
   requiredEvidence: [
     "Artifact updated at `.cclaw/artifacts/06-tdd.md` with RED, GREEN, and REFACTOR sections.",
     "Failing command output captured (RED).",
     "Full test/build output recorded (GREEN).",
+    "Fresh verification evidence recorded with command, commit SHA, and PASS/FAIL status before completion.",
     "Acceptance mapping documented.",
     "Failure reason analysis recorded.",
     "Refactor rationale captured.",
