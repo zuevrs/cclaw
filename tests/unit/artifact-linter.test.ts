@@ -2,6 +2,7 @@ import fs from "node:fs/promises";
 import path from "node:path";
 import { describe, expect, it } from "vitest";
 import {
+  checkReviewVerdictConsistency,
   lintArtifact,
   parseLearningsSection,
   validateReviewArmy
@@ -2400,5 +2401,53 @@ describe("review army schema validation", () => {
     const result = await validateReviewArmy(root);
     expect(result.valid).toBe(false);
     expect(result.errors.join("\n")).toMatch(/confirmed by at least 2 distinct reviewers/);
+  });
+
+  it("rejects APPROVED_WITH_CONCERNS when open Critical findings remain", async () => {
+    const root = await createTempProject("review-verdict-concerns-open-critical");
+    await writeRuntimeArtifact(
+      root,
+      "07-review.md",
+      `# Review Artifact
+
+## Final Verdict
+- APPROVED_WITH_CONCERNS
+`
+    );
+    await fs.writeFile(
+      path.join(root, ".cclaw/artifacts/07-review-army.json"),
+      JSON.stringify(
+        {
+          version: 1,
+          generatedAt: "2026-01-01T00:00:00Z",
+          scope: { base: "main", head: "feature", files: ["src/a.ts"] },
+          findings: [
+            {
+              id: "F-1",
+              severity: "Critical",
+              confidence: 9,
+              fingerprint: "fp-1",
+              reportedBy: ["code-reviewer", "security-reviewer"],
+              status: "open",
+              location: { file: "src/a.ts", line: 3 }
+            }
+          ],
+          reconciliation: {
+            duplicatesCollapsed: 0,
+            conflicts: [],
+            multiSpecialistConfirmed: ["F-1"],
+            shipBlockers: ["F-1"]
+          }
+        },
+        null,
+        2
+      ),
+      "utf8"
+    );
+
+    const result = await checkReviewVerdictConsistency(root);
+    expect(result.ok).toBe(false);
+    expect(result.finalVerdict).toBe("APPROVED_WITH_CONCERNS");
+    expect(result.errors.join("\n")).toMatch(/APPROVED_WITH_CONCERNS/);
   });
 });

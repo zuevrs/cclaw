@@ -1457,6 +1457,18 @@ export async function checkReviewVerdictConsistency(
       `Final Verdict is APPROVED but review-army has ${openCriticalCount} open Critical finding(s) and ${shipBlockerCount} shipBlocker(s). Use BLOCKED or APPROVED_WITH_CONCERNS.`
     );
   }
+  // APPROVED_WITH_CONCERNS is intended for Important/Suggestion findings
+  // the author has accepted. An *open* Critical finding or an active
+  // shipBlocker must route through BLOCKED (review_verdict_blocked gate)
+  // rather than pass as a concession — previously this slipped through.
+  if (
+    finalVerdict === "APPROVED_WITH_CONCERNS" &&
+    (openCriticalCount > 0 || shipBlockerCount > 0)
+  ) {
+    errors.push(
+      `Final Verdict is APPROVED_WITH_CONCERNS but review-army has ${openCriticalCount} open Critical finding(s) and ${shipBlockerCount} shipBlocker(s). Resolve them or use BLOCKED.`
+    );
+  }
 
   return {
     ok: errors.length === 0,
