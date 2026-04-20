@@ -80,11 +80,12 @@ const REQUIRED_GATE_IDS: Record<FlowStage, RequiredGateSet> = {
     "tdd_verified_before_complete",
     ...(track === "quick" ? [] : ["tdd_traceable_to_plan"])
   ],
-  review: [
+  review: (track) => [
     "review_layer1_spec_compliance",
     "review_layer2_security",
     "review_criticals_resolved",
-    "review_army_json_valid"
+    "review_army_json_valid",
+    ...(track === "quick" ? [] : ["review_trace_matrix_clean"])
   ],
   ship: [
     "ship_review_verdict_valid",
@@ -326,6 +327,12 @@ export function buildTransitionRules(): TransitionRule[] {
       guards: stageGateIds(schema.stage)
     });
   }
+  // Review can explicitly route back to TDD when the verdict is BLOCKED.
+  rules.push({
+    from: "review",
+    to: "tdd",
+    guards: ["review_verdict_blocked"]
+  });
   return rules;
 }
 

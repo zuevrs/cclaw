@@ -27,6 +27,7 @@ export const REVIEW: StageSchemaInput = {
     "Change-Size Check — ~100 lines = normal. ~300 lines = consider splitting. ~1000+ lines = strongly recommend stacked PRs. Flag large diffs to the user.",
     "Adversarial Trigger Check — compute changed-line count (`git diff --shortstat <base>..HEAD`), files-touched count, and whether trust boundaries changed (auth/secrets/external inputs/permissions). If `lines > 100` OR `files > 10` OR `trust boundary changed`, **dispatch a SECOND reviewer agent with the `adversarial-review` skill loaded** and reconcile its findings into the review army (treat the conditional dispatch as mandatory whenever the trigger holds; record the trigger that fired in the dashboard).",
     "Load upstream evidence — read TDD artifact (RED + GREEN + REFACTOR), spec, and plan. Verify evidence chain is unbroken.",
+    "Run traceability matrix — execute `cclaw internal trace-matrix` (or equivalent helper) and confirm there are no orphaned criteria/tasks/tests before declaring ship readiness.",
     "Layer 1: Spec Compliance — check every acceptance criterion against implementation. Verdict: pass/fail per criterion.",
     "Layer 2a: Correctness — logic errors, race conditions, boundary violations, null handling.",
     "Layer 2b: Security — input validation, auth boundaries, secrets exposure, injection vectors. **Mandatory:** also load and execute the `.cclaw/skills/security-audit/SKILL.md` utility skill (proactive pattern sweep across diff + touched modules, not just the diff itself) and merge findings into the review army. The Layer 2 security pass is not complete until the audit sweep records a finding count (0 acceptable) with file:line evidence for every Critical.",
@@ -37,7 +38,8 @@ export const REVIEW: StageSchemaInput = {
     "Review Army reconciliation — normalize findings into structured records, dedup by fingerprint, and mark multi-specialist confirmations.",
     "Meta-Review — Were tests actually run? Do test names match what they test? Are there real assertions?",
     "Classify findings — Critical (blocks ship), Important (should fix), Suggestion (optional improvement).",
-    "Produce verdict — APPROVED, APPROVED_WITH_CONCERNS, or BLOCKED."
+    "Produce verdict — APPROVED, APPROVED_WITH_CONCERNS, or BLOCKED.",
+    "If verdict is BLOCKED, emit remediation route token `ROUTE_BACK_TO_TDD` and include `/cc-ops rewind tdd \"review_blocked_by_critical\"` with the blocking finding IDs."
   ],
   interactionProtocol: [
     "Run Layer 1 (spec compliance) completely before starting Layer 2.",
@@ -45,6 +47,7 @@ export const REVIEW: StageSchemaInput = {
     "Classify every finding as Critical, Important, or Suggestion.",
     "For each Critical finding: use the Decision Protocol — present resolution options (A/B/C) with trade-offs, and mark one as (recommended). Do NOT use a numeric Completeness rubric; recommend the option that fully closes the finding with no carry-over risk and the smallest blast radius. If the harness's native structured-ask tool is available (`AskUserQuestion` on Claude, `AskQuestion` on Cursor, `question` on OpenCode with `permission.question: \"allow\"`, `request_user_input` on Codex in Plan/Collaboration mode), send exactly ONE question per call, validate fields against the runtime schema, and on schema error immediately fall back to a plain-text lettered list instead of retrying guessed payloads.",
     "Resolve all critical blockers before ship.",
+    "When verdict is BLOCKED, do not end with a passive stop: explicitly route remediation to TDD via `ROUTE_BACK_TO_TDD` and point to `/cc-ops rewind tdd` with the blocking IDs.",
     "For final verdict: use the native structured-ask tool (`AskUserQuestion` / `AskQuestion` / `question` / `request_user_input`) only if runtime schema is confirmed; otherwise collect verdict with a plain-text single-choice prompt (APPROVED / APPROVED_WITH_CONCERNS / BLOCKED).",
     "**STOP.** Do NOT proceed to ship until the user provides an explicit verdict."
   ],
@@ -56,21 +59,25 @@ export const REVIEW: StageSchemaInput = {
     "Layer 2d: check architecture fit — design compliance, coupling, interfaces.",
     "Reconcile multi-agent findings into `.cclaw/artifacts/07-review-army.json` (dedup + confidence + conflict notes).",
     "Classify and prioritize all findings.",
-    "Write review report artifact with explicit verdict."
+    "Write review report artifact with explicit verdict.",
+    "If verdict is BLOCKED, include the remediation route token `ROUTE_BACK_TO_TDD` and the rewind command payload."
   ],
   requiredGates: [
     { id: "review_layer1_spec_compliance", description: "Spec compliance check completed with per-criterion verdict." },
     { id: "review_layer2_security", description: "Security review completed." },
     { id: "review_criticals_resolved", description: "No unresolved critical blockers remain." },
-    { id: "review_army_json_valid", description: "07-review-army.json passes schema validation (validateReviewArmy)." }
+    { id: "review_army_json_valid", description: "07-review-army.json passes schema validation (validateReviewArmy)." },
+    { id: "review_trace_matrix_clean", description: "Trace matrix has no orphaned criteria/tasks/test slices for the active run." }
   ],
   requiredEvidence: [
     "Artifact written to `.cclaw/artifacts/07-review.md`.",
     "Artifact written to `.cclaw/artifacts/07-review-army.json`.",
+    "Traceability matrix run recorded (no orphaned criteria/tasks/tests for enforced tracks).",
     "Layer 1 verdict captured with per-criterion pass/fail.",
     "Layer 2 sections completed with findings.",
     "Severity log includes critical/important/suggestion buckets.",
-    "Explicit final verdict: APPROVED, APPROVED_WITH_CONCERNS, or BLOCKED."
+    "Explicit final verdict: APPROVED, APPROVED_WITH_CONCERNS, or BLOCKED.",
+    "If BLOCKED: include explicit remediation route (`ROUTE_BACK_TO_TDD`) with blocking finding IDs."
   ],
   inputs: ["implementation diff", "spec and plan artifacts", "test/build evidence"],
   requiredContext: ["spec criteria", "tdd artifact", "rulebook constraints"],
@@ -99,7 +106,7 @@ export const REVIEW: StageSchemaInput = {
     "Review sections skipped or abbreviated",
     "Findings not classified by severity"
   ],
-  policyNeedles: ["Layer 1", "Layer 2", "Critical", "Review Army", "Ready to Ship", "One issue at a time"],
+  policyNeedles: ["Layer 1", "Layer 2", "Critical", "Review Army", "Ready to Ship", "ROUTE_BACK_TO_TDD", "One issue at a time"],
   artifactFile: "07-review.md",
   next: "ship",
   reviewSections: [
@@ -208,6 +215,8 @@ export const REVIEW: StageSchemaInput = {
     { section: "Review Readiness Dashboard", required: false, validationRule: "Includes a per-pass table (Layer 1 / Layer 2 / Adversarial / Schema) with a 'Completed at' column, a Delegation log snapshot block (path .cclaw/state/delegation-log.json with required/completed/waived/pending), a Staleness signal block (commit at last review pass and current commit), and a Headline with open critical blockers + ship recommendation. At minimum, the section text must contain the substrings 'Completed at', 'delegation-log.json', 'commit at last review pass', and 'Ship recommendation'." },
     { section: "Completeness Score", required: false, validationRule: "Records AC coverage, task coverage, test-slice coverage, and adversarial-review pass status as numeric or boolean values. At minimum, a line like 'AC coverage: N/M' or 'AC coverage: 100%'." },
     { section: "Incoming Feedback Queue", required: false, validationRule: "When external review feedback exists, include a queue summary with per-item disposition (resolved / accepted-risk / rejected-with-evidence) and evidence refs." },
+    { section: "Trace Matrix Check", required: false, validationRule: "Records criteria/tasks/tests orphan counts (all zero on enforced tracks) with command output reference." },
+    { section: "Blocked Route", required: false, validationRule: "When Final Verdict is BLOCKED: includes `ROUTE_BACK_TO_TDD`, rewind target `tdd`, and blocked finding IDs." },
     { section: "Severity Summary", required: true, validationRule: "Per-severity count lines for critical, important, and suggestion buckets." },
     { section: "Final Verdict", required: true, validationRule: "Exactly one of: APPROVED, APPROVED_WITH_CONCERNS, BLOCKED." }
   ]

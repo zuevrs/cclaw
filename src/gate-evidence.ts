@@ -6,6 +6,7 @@ import { stageSchema } from "./content/stage-schema.js";
 import type { FlowState, StageGateState } from "./flow-state.js";
 import { exists } from "./fs-utils.js";
 import { readFlowState, writeFlowState } from "./runs.js";
+import { buildTraceMatrix } from "./trace-matrix.js";
 import type { FlowStage } from "./types.js";
 
 async function currentStageArtifactExists(
@@ -161,6 +162,27 @@ export async function verifyCurrentStageGateEvidence(
       const verdictConsistency = await checkReviewVerdictConsistency(projectRoot);
       if (!verdictConsistency.ok) {
         issues.push(`review verdict inconsistency: ${verdictConsistency.errors.join("; ")}`);
+      }
+      const traceGateRequired = schema.requiredGates.some(
+        (gate) => gate.id === "review_trace_matrix_clean" && gate.tier === "required"
+      );
+      if (traceGateRequired) {
+        const trace = await buildTraceMatrix(projectRoot);
+        const traceIssues: string[] = [];
+        if (trace.orphanedCriteria.length > 0) {
+          traceIssues.push(`orphaned criteria: ${trace.orphanedCriteria.join(", ")}`);
+        }
+        if (trace.orphanedTasks.length > 0) {
+          traceIssues.push(`orphaned tasks: ${trace.orphanedTasks.join(", ")}`);
+        }
+        if (trace.orphanedTests.length > 0) {
+          traceIssues.push(`orphaned tests: ${trace.orphanedTests.join(", ")}`);
+        }
+        if (traceIssues.length > 0) {
+          issues.push(
+            `review trace-matrix gate blocked (review_trace_matrix_clean): ${traceIssues.join("; ")}.`
+          );
+        }
       }
     }
   }
