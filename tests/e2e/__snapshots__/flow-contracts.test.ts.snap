@@ -21,7 +21,7 @@ If you are about to violate the Iron Law, STOP. No amount of urgency, partial pr
 1. Announce at start: "Using \`two-layer-review\` to Validate that implementation matches spec and meets quality/security/performance bar through structured two-layer review.".
 2. Obey HARD-GATE and Iron Law.
 3. Execute checklist in order and persist \`.cclaw/artifacts/07-review.md\`.
-4. Satisfy gates (\`review_layer1_spec_compliance\`, \`review_layer2_security\`, \`review_criticals_resolved\` +1).
+4. Satisfy gates (\`review_layer1_spec_compliance\`, \`review_layer2_security\`, \`review_criticals_resolved\` +2).
 
 
 ## Overview
@@ -91,17 +91,19 @@ You MUST complete these steps in order:
 2. Change-Size Check — ~100 lines = normal. ~300 lines = consider splitting. ~1000+ lines = strongly recommend stacked PRs. Flag large diffs to the user.
 3. Adversarial Trigger Check — compute changed-line count (\`git diff --shortstat <base>..HEAD\`), files-touched count, and whether trust boundaries changed (auth/secrets/external inputs/permissions). If \`lines > 100\` OR \`files > 10\` OR \`trust boundary changed\`, **dispatch a SECOND reviewer agent with the \`adversarial-review\` skill loaded** and reconcile its findings into the review army (treat the conditional dispatch as mandatory whenever the trigger holds; record the trigger that fired in the dashboard).
 4. Load upstream evidence — read TDD artifact (RED + GREEN + REFACTOR), spec, and plan. Verify evidence chain is unbroken.
-5. Layer 1: Spec Compliance — check every acceptance criterion against implementation. Verdict: pass/fail per criterion.
-6. Layer 2a: Correctness — logic errors, race conditions, boundary violations, null handling.
-7. Layer 2b: Security — input validation, auth boundaries, secrets exposure, injection vectors. **Mandatory:** also load and execute the \`.cclaw/skills/security-audit/SKILL.md\` utility skill (proactive pattern sweep across diff + touched modules, not just the diff itself) and merge findings into the review army. The Layer 2 security pass is not complete until the audit sweep records a finding count (0 acceptable) with file:line evidence for every Critical.
-8. Layer 2c: Performance — N+1 queries, memory leaks, missing caching, hot paths.
-9. Layer 2d: Architecture Fit — does the implementation match the locked design? Coupling, cohesion, interface contracts.
-10. Layer 2e: External Safety — SQL safety, concurrency, secrets in logs, enum completeness (grep outside diff), LLM trust boundaries.
-11. Incoming Feedback Intake — when human reviewer comments, bot findings, or CI annotations exist, run \`.cclaw/skills/receiving-code-review/SKILL.md\`, keep a per-comment disposition queue, and mirror outcomes into \`07-review.md\` + \`07-review-army.json\` before final verdict.
-12. Review Army reconciliation — normalize findings into structured records, dedup by fingerprint, and mark multi-specialist confirmations.
-13. Meta-Review — Were tests actually run? Do test names match what they test? Are there real assertions?
-14. Classify findings — Critical (blocks ship), Important (should fix), Suggestion (optional improvement).
-15. Produce verdict — APPROVED, APPROVED_WITH_CONCERNS, or BLOCKED.
+5. Run traceability matrix — execute \`cclaw internal trace-matrix\` (or equivalent helper) and confirm there are no orphaned criteria/tasks/tests before declaring ship readiness.
+6. Layer 1: Spec Compliance — check every acceptance criterion against implementation. Verdict: pass/fail per criterion.
+7. Layer 2a: Correctness — logic errors, race conditions, boundary violations, null handling.
+8. Layer 2b: Security — input validation, auth boundaries, secrets exposure, injection vectors. **Mandatory:** also load and execute the \`.cclaw/skills/security-audit/SKILL.md\` utility skill (proactive pattern sweep across diff + touched modules, not just the diff itself) and merge findings into the review army. The Layer 2 security pass is not complete until the audit sweep records a finding count (0 acceptable) with file:line evidence for every Critical.
+9. Layer 2c: Performance — N+1 queries, memory leaks, missing caching, hot paths.
+10. Layer 2d: Architecture Fit — does the implementation match the locked design? Coupling, cohesion, interface contracts.
+11. Layer 2e: External Safety — SQL safety, concurrency, secrets in logs, enum completeness (grep outside diff), LLM trust boundaries.
+12. Incoming Feedback Intake — when human reviewer comments, bot findings, or CI annotations exist, run \`.cclaw/skills/receiving-code-review/SKILL.md\`, keep a per-comment disposition queue, and mirror outcomes into \`07-review.md\` + \`07-review-army.json\` before final verdict.
+13. Review Army reconciliation — normalize findings into structured records, dedup by fingerprint, and mark multi-specialist confirmations.
+14. Meta-Review — Were tests actually run? Do test names match what they test? Are there real assertions?
+15. Classify findings — Critical (blocks ship), Important (should fix), Suggestion (optional improvement).
+16. Produce verdict — APPROVED, APPROVED_WITH_CONCERNS, or BLOCKED.
+17. If verdict is BLOCKED, emit remediation route token \`ROUTE_BACK_TO_TDD\` and include \`/cc-ops rewind tdd "review_blocked_by_critical"\` with the blocking finding IDs.
 
 ## Good vs Bad (at-a-glance)
 
@@ -160,8 +162,9 @@ Summary of what the reference covers:
 3. Classify every finding as Critical, Important, or Suggestion.
 4. For each Critical finding: use the Decision Protocol — present resolution options (A/B/C) with trade-offs, and mark one as (recommended). Do NOT use a numeric Completeness rubric; recommend the option that fully closes the finding with no carry-over risk and the smallest blast radius. If the harness's native structured-ask tool is available (\`AskUserQuestion\` on Claude, \`AskQuestion\` on Cursor, \`question\` on OpenCode with \`permission.question: "allow"\`, \`request_user_input\` on Codex in Plan/Collaboration mode), send exactly ONE question per call, validate fields against the runtime schema, and on schema error immediately fall back to a plain-text lettered list instead of retrying guessed payloads.
 5. Resolve all critical blockers before ship.
-6. For final verdict: use the native structured-ask tool (\`AskUserQuestion\` / \`AskQuestion\` / \`question\` / \`request_user_input\`) only if runtime schema is confirmed; otherwise collect verdict with a plain-text single-choice prompt (APPROVED / APPROVED_WITH_CONCERNS / BLOCKED).
-7. **STOP.** Do NOT proceed to ship until the user provides an explicit verdict.
+6. When verdict is BLOCKED, do not end with a passive stop: explicitly route remediation to TDD via \`ROUTE_BACK_TO_TDD\` and point to \`/cc-ops rewind tdd\` with the blocking IDs.
+7. For final verdict: use the native structured-ask tool (\`AskUserQuestion\` / \`AskQuestion\` / \`question\` / \`request_user_input\`) only if runtime schema is confirmed; otherwise collect verdict with a plain-text single-choice prompt (APPROVED / APPROVED_WITH_CONCERNS / BLOCKED).
+8. **STOP.** Do NOT proceed to ship until the user provides an explicit verdict.
 
 Shared decision/ask-user protocol:
 \`.cclaw/references/protocols/decision.md\`
@@ -172,14 +175,17 @@ Shared decision/ask-user protocol:
 - \`review_layer2_security\` — Security review completed.
 - \`review_criticals_resolved\` — No unresolved critical blockers remain.
 - \`review_army_json_valid\` — 07-review-army.json passes schema validation (validateReviewArmy).
+- \`review_trace_matrix_clean\` — Trace matrix has no orphaned criteria/tasks/test slices for the active run.
 
 ## Required Evidence
 - [ ] Artifact written to \`.cclaw/artifacts/07-review.md\`.
 - [ ] Artifact written to \`.cclaw/artifacts/07-review-army.json\`.
+- [ ] Traceability matrix run recorded (no orphaned criteria/tasks/tests for enforced tracks).
 - [ ] Layer 1 verdict captured with per-criterion pass/fail.
 - [ ] Layer 2 sections completed with findings.
 - [ ] Severity log includes critical/important/suggestion buckets.
 - [ ] Explicit final verdict: APPROVED, APPROVED_WITH_CONCERNS, or BLOCKED.
+- [ ] If BLOCKED: include explicit remediation route (\`ROUTE_BACK_TO_TDD\`) with blocking finding IDs.
 
 ## Process
 1. Layer 1: check acceptance criteria and requirement coverage.
@@ -190,6 +196,7 @@ Shared decision/ask-user protocol:
 6. Reconcile multi-agent findings into \`.cclaw/artifacts/07-review-army.json\` (dedup + confidence + conflict notes).
 7. Classify and prioritize all findings.
 8. Write review report artifact with explicit verdict.
+9. If verdict is BLOCKED, include the remediation route token \`ROUTE_BACK_TO_TDD\` and the rewind command payload.
 
 ## Review Sections
 
@@ -294,6 +301,8 @@ Rule: Review verdict must reference specific spec criteria and TDD evidence. Dow
 | Review Readiness Dashboard | recommended | Includes a per-pass table (Layer 1 / Layer 2 / Adversarial / Schema) with a 'Completed at' column, a Delegation log snapshot block (path .cclaw/state/delegation-log.json with required/completed/waived/pending), a Staleness signal block (commit at last review pass and current commit), and a Headline with open critical blockers + ship recommendation. At minimum, the section text must contain the substrings 'Completed at', 'delegation-log.json', 'commit at last review pass', and 'Ship recommendation'. |
 | Completeness Score | recommended | Records AC coverage, task coverage, test-slice coverage, and adversarial-review pass status as numeric or boolean values. At minimum, a line like 'AC coverage: N/M' or 'AC coverage: 100%'. |
 | Incoming Feedback Queue | recommended | When external review feedback exists, include a queue summary with per-item disposition (resolved / accepted-risk / rejected-with-evidence) and evidence refs. |
+| Trace Matrix Check | recommended | Records criteria/tasks/tests orphan counts (all zero on enforced tracks) with command output reference. |
+| Blocked Route | recommended | When Final Verdict is BLOCKED: includes \`ROUTE_BACK_TO_TDD\`, rewind target \`tdd\`, and blocked finding IDs. |
 | Severity Summary | REQUIRED | Per-severity count lines for critical, important, and suggestion buckets. |
 | Final Verdict | REQUIRED | Exactly one of: APPROVED, APPROVED_WITH_CONCERNS, BLOCKED. |
 
@@ -304,12 +313,6 @@ Rule: Review verdict must reference specific spec criteria and TDD evidence. Dow
 - Shipping with open criticals
 - Batching multiple findings into one report without individual resolution
 - Skipping Layer 2 sections because Layer 1 passed
-- No separate Layer 1/Layer 2 outcomes
-- No structured review-army reconciliation artifact
-- No critical bucket
-- No explicit ready/not-ready verdict
-- Review sections skipped or abbreviated
-- Findings not classified by severity
 - layer 1 failed
 - critical findings unresolved
 - missing regression evidence
@@ -323,8 +326,8 @@ Rule: Review verdict must reference specific spec criteria and TDD evidence. Dow
 ## Completion Parameters
 
 - \`stage\`: \`review\`
-- \`next\`: \`ship\` (Release handoff stage with preflight checks, rollback readiness, and explicit finalization mode.)
-- \`gates\`: \`review_layer1_spec_compliance\`, \`review_layer2_security\`, \`review_criticals_resolved\`, \`review_army_json_valid\`
+- \`next\`: \`ship\` (Release handoff stage with preflight checks, rollback readiness, and explicit finalization mode for both git and non-git workflows.)
+- \`gates\`: \`review_layer1_spec_compliance\`, \`review_layer2_security\`, \`review_criticals_resolved\`, \`review_army_json_valid\`, \`review_trace_matrix_clean\`
 - \`artifact\`: \`.cclaw/artifacts/07-review.md\`
 - \`mandatory delegations\`: \`reviewer\`, \`security-reviewer\`
 - \`completion helper\`: \`bash .cclaw/hooks/stage-complete.sh review\`
@@ -353,7 +356,7 @@ See:
 exports[`flow command contracts > matches golden snapshot for ship skill > ship-skill 1`] = `
 "---
 name: shipping-and-handoff
-description: "Release handoff stage with preflight checks, rollback readiness, and explicit finalization mode."
+description: "Release handoff stage with preflight checks, rollback readiness, and explicit finalization mode for both git and non-git workflows."
 ---
 
 # shipping-and-handoff
@@ -381,6 +384,7 @@ Prepare a safe release handoff with clear rollback and branch finalization decis
 - After review passes with APPROVED or APPROVED_WITH_CONCERNS verdict
 - Before creating PR/merge/final branch action
 - When release notes and rollback plan are required
+- When shipping from non-git environments (docs bundles, script drops, detached artifacts)
 
 ## When Not to Use
 - Review verdict is BLOCKED or unresolved critical findings remain
@@ -429,7 +433,7 @@ Record completion/waiver in \`.cclaw/state/delegation-log.json\` before stage co
 - final branch decision
 
 ## HARD-GATE
-Do NOT merge, push, or finalize without a passed preflight check, written rollback plan, and exactly one explicit finalization mode selected. No exceptions for urgency.
+Do NOT merge, push, or finalize without a passed preflight check, written rollback plan, and exactly one explicit finalization mode selected. No exceptions for urgency. If no VCS is available, use FINALIZE_NO_VCS explicitly instead of inventing git steps.
 
 ## Checklist
 
@@ -437,15 +441,16 @@ You MUST complete these steps in order:
 
 1. Validate upstream gates — verify review verdict is APPROVED or APPROVED_WITH_CONCERNS. If BLOCKED, stop immediately.
 2. Run preflight checks — tests pass, build succeeds, linter clean, type-check clean, no uncommitted changes. Every check must produce fresh output in this message.
-3. Merge-base detection — identify the correct base branch. Run \`git merge-base HEAD <base>\`. If the base has diverged significantly, flag for rebase-first.
+3. Merge-base detection (git only) — identify the correct base branch. Run \`git merge-base HEAD <base>\`. If the base has diverged significantly, flag for rebase-first.
 4. Re-run tests on merged result — if merging locally, run the full test suite AFTER the merge, not just before. Post-merge failures are common.
 5. Generate release notes — summarize what changed, why, and what it affects. Reference spec criteria. Include: breaking changes, new dependencies, migration steps if any.
 6. Write rollback plan — trigger conditions (what tells you it is broken), rollback steps (exact commands/git operations), and verification (how to confirm rollback worked).
 7. Load utility skills — \`verification-before-completion\` for fresh evidence and \`finishing-a-development-branch\` for finalization workflow.
 8. Monitoring checklist — what should be watched after deploy? Error rates, latency, key business metrics. If no monitoring exists, flag it as a risk.
-9. Select finalization mode — exactly ONE enum: (A) FINALIZE_MERGE_LOCAL, (B) FINALIZE_OPEN_PR, (C) FINALIZE_KEEP_BRANCH, (D) FINALIZE_DISCARD_BRANCH. For discard: list what will be deleted, require typed confirmation.
-10. Execute finalization — perform the selected action. For merge: verify clean merge. For PR: include structured body (summary, test plan, rollback). For discard: verify deletion.
-11. Worktree cleanup — if using git worktrees, clean up the worktree after merge/discard. Keep it only for 'keep branch' mode.
+9. Detect repository mode — if \`.git/\` is absent or inaccessible, lock finalization choices to FINALIZE_NO_VCS only and document manual handoff + rollback.
+10. Select finalization mode — exactly ONE enum: (A) FINALIZE_MERGE_LOCAL, (B) FINALIZE_OPEN_PR, (C) FINALIZE_KEEP_BRANCH, (D) FINALIZE_DISCARD_BRANCH, (E) FINALIZE_NO_VCS. For discard: list what will be deleted, require typed confirmation.
+11. Execute finalization — perform the selected action. For merge: verify clean merge. For PR: include structured body (summary, test plan, rollback). For discard: verify deletion. For NO_VCS: record handoff target, artifact bundle path, and manual rollback owner.
+12. Worktree cleanup — if using git worktrees, clean up the worktree after merge/discard. Keep it only for 'keep branch' mode. Skip for FINALIZE_NO_VCS.
 
 ## Good vs Bad (at-a-glance)
 
@@ -501,7 +506,7 @@ Summary of what the reference covers:
 ## Interaction Protocol
 1. Run preflight checks before any release action.
 2. Document release notes and rollback plan explicitly.
-3. For finalization mode: use the Decision Protocol — present modes as labeled options (A/B/C/D) with consequences, and mark one as (recommended). Do NOT use a numeric Completeness rubric; recommend the mode that best addresses release blast-radius, rollback readiness, observability, and stakeholder communication — ties go to the most reversible option. If the harness's native structured-ask tool is available (\`AskUserQuestion\` / \`AskQuestion\` / \`question\` / \`request_user_input\`), send exactly ONE question per call, validate fields against the runtime schema, and on schema error immediately fall back to a plain-text lettered list instead of retrying guessed payloads.
+3. For finalization mode: use the Decision Protocol — present modes as labeled options (A/B/C/D/E) with consequences, and mark one as (recommended). Do NOT use a numeric Completeness rubric; recommend the mode that best addresses release blast-radius, rollback readiness, observability, and stakeholder communication — ties go to the most reversible option. If the harness's native structured-ask tool is available (\`AskUserQuestion\` / \`AskQuestion\` / \`question\` / \`request_user_input\`), send exactly ONE question per call, validate fields against the runtime schema, and on schema error immediately fall back to a plain-text lettered list instead of retrying guessed payloads.
 4. Do not proceed if critical blockers remain from review.
 5. **STOP.** Present finalization options and wait for user selection before executing any finalization action.
 
@@ -526,7 +531,7 @@ Shared decision/ask-user protocol:
 1. Validate review and test gates.
 2. Run preflight: build, test, lint, uncommitted-changes check.
 3. Generate release notes and rollback procedure.
-4. Choose one finalization enum: FINALIZE_MERGE_LOCAL, FINALIZE_OPEN_PR, FINALIZE_KEEP_BRANCH, or FINALIZE_DISCARD_BRANCH.
+4. Choose one finalization enum: FINALIZE_MERGE_LOCAL, FINALIZE_OPEN_PR, FINALIZE_KEEP_BRANCH, FINALIZE_DISCARD_BRANCH, or FINALIZE_NO_VCS.
 5. Execute finalization action.
 6. Write ship artifact with decision, rationale, and execution result.
 
@@ -581,7 +586,7 @@ Rule: Ship artifact must reference review verdict and resolution status. Release
 | Release Notes | REQUIRED | What changed, why, impact. References spec criteria. Breaking changes flagged. |
 | Rollback Plan | REQUIRED | Trigger conditions, rollback steps (exact commands), verification steps. |
 | Monitoring | recommended | If applicable: what metrics/logs to watch post-deploy. Risk note if no monitoring. |
-| Finalization | REQUIRED | Exactly one finalization enum token selected. Execution result documented. Worktree cleaned if applicable. |
+| Finalization | REQUIRED | Exactly one finalization enum token selected (FINALIZE_MERGE_LOCAL | FINALIZE_OPEN_PR | FINALIZE_KEEP_BRANCH | FINALIZE_DISCARD_BRANCH | FINALIZE_NO_VCS). Execution result documented. Worktree cleaned if applicable. |
 | Completion Status | recommended | If present: exactly one of SHIPPED, SHIPPED_WITH_EXCEPTIONS, BLOCKED. Exceptions documented when applicable. |
 | Compound Step | recommended | Optional retrospective: at least one bullet of the form 'Insight: ... | Action: append [compound] entry to .cclaw/knowledge.jsonl', or an explicit 'No compound insight this run.' line. |
 
@@ -597,6 +602,7 @@ Rule: Ship artifact must reference review verdict and resolution status. Release
 - No explicit preflight result
 - Review verdict not referenced
 - Finalization not executed, only planned
+- Selecting git-dependent finalization mode when \`.git\` is unavailable
 - review verdict is BLOCKED
 - critical review blockers remain
 - rollback plan missing
@@ -1580,7 +1586,7 @@ Do NOT ship, merge, or release until both review layers complete with an explici
 6. Do NOT copy artifacts into \`.cclaw/runs/\`; archival is handled by \`/cc-ops archive\` (agent-facing wrapper over archive runtime).
 
 ## Gates
-\`review_layer1_spec_compliance\`, \`review_layer2_security\`, \`review_criticals_resolved\`, \`review_army_json_valid\`
+\`review_layer1_spec_compliance\`, \`review_layer2_security\`, \`review_criticals_resolved\`, \`review_army_json_valid\`, \`review_trace_matrix_clean\`
 
 ## Exit
 - both layers completed
@@ -1594,6 +1600,7 @@ Do NOT ship, merge, or release until both review layers complete with an explici
 - Critical
 - Review Army
 - Ready to Ship
+- ROUTE_BACK_TO_TDD
 - One issue at a time
 "
 `;
@@ -1604,7 +1611,7 @@ exports[`flow command contracts > matches golden snapshots for strict-stage cont
 Load and follow **.cclaw/skills/shipping-and-handoff/SKILL.md** — it contains the full checklist, examples, interaction protocol, and verification discipline.
 
 ## HARD-GATE
-Do NOT merge, push, or finalize without a passed preflight check, written rollback plan, and exactly one explicit finalization mode selected. No exceptions for urgency.
+Do NOT merge, push, or finalize without a passed preflight check, written rollback plan, and exactly one explicit finalization mode selected. No exceptions for urgency. If no VCS is available, use FINALIZE_NO_VCS explicitly instead of inventing git steps.
 
 ## In / Out
 - **Reads:** .cclaw/artifacts/07-review.md, .cclaw/artifacts/06-tdd.md, .cclaw/artifacts/05-plan.md, .cclaw/artifacts/04-spec.md
@@ -1639,5 +1646,6 @@ Do NOT merge, push, or finalize without a passed preflight check, written rollba
 - FINALIZE_OPEN_PR
 - FINALIZE_KEEP_BRANCH
 - FINALIZE_DISCARD_BRANCH
+- FINALIZE_NO_VCS
 "
 `;

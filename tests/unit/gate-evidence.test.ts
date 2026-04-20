@@ -230,6 +230,96 @@ describe("gate evidence verification", () => {
     expect(result.issues.join("\n")).toContain("review-army validation failed");
   });
 
+  it("blocks review trace gate when trace matrix has orphaned links", async () => {
+    const root = await createTempProject("gate-evidence-trace-orphans");
+    await prepareRoot(root);
+    await fs.writeFile(
+      path.join(root, ".cclaw/artifacts/04-spec.md"),
+      `# Spec
+
+- AC-1: Login accepts valid credentials.
+- AC-2: Login rejects invalid credentials.
+`,
+      "utf8"
+    );
+    await fs.writeFile(
+      path.join(root, ".cclaw/artifacts/05-plan.md"),
+      `# Plan
+
+| Task ID | Description | Acceptance criterion |
+|---|---|---|
+| T-1 | login happy path | AC-1 |
+`,
+      "utf8"
+    );
+    await fs.writeFile(
+      path.join(root, ".cclaw/artifacts/06-tdd.md"),
+      `# TDD
+
+| Slice | Task |
+|---|---|
+| S-1 | T-1 |
+`,
+      "utf8"
+    );
+    await fs.writeFile(
+      path.join(root, ".cclaw/artifacts/07-review.md"),
+      `# Review Artifact
+
+## Layer 1 Verdict
+| Criterion | Verdict | Evidence |
+|---|---|---|
+| AC-1 | PASS | src/auth.ts |
+
+## Layer 2 Findings
+| ID | Severity | Category | Description | Status |
+|---|---|---|---|---|
+| R-1 | Suggestion | architecture | tighten naming | resolved |
+
+## Review Army Contract
+- See \`07-review-army.json\`
+- Reconciliation summary: clean
+
+## Severity Summary
+- Critical: 0
+- Important: 0
+- Suggestion: 1
+
+## Final Verdict
+- APPROVED_WITH_CONCERNS
+`,
+      "utf8"
+    );
+    await fs.writeFile(
+      path.join(root, ".cclaw/artifacts/07-review-army.json"),
+      JSON.stringify({
+        version: 1,
+        generatedAt: "2026-01-01T00:00:00Z",
+        scope: { base: "main", head: "feature", files: ["src/auth.ts"] },
+        findings: [],
+        reconciliation: {
+          duplicatesCollapsed: 0,
+          conflicts: [],
+          multiSpecialistConfirmed: [],
+          shipBlockers: []
+        }
+      }, null, 2),
+      "utf8"
+    );
+
+    const state = createInitialFlowState("run-trace-gate");
+    state.currentStage = "review";
+    const reviewRequired = requiredGateIds("review");
+    state.stageGateCatalog.review.passed = [...reviewRequired];
+    for (const gateId of reviewRequired) {
+      state.guardEvidence[gateId] = `evidence:${gateId}`;
+    }
+
+    const result = await verifyCurrentStageGateEvidence(root, state);
+    expect(result.ok).toBe(false);
+    expect(result.issues.join("\n")).toContain("review trace-matrix gate blocked");
+  });
+
   it("lints artifact eagerly when file exists even before any gate is passed", async () => {
     const root = await createTempProject("gate-evidence-artifact-eager");
     await prepareRoot(root);

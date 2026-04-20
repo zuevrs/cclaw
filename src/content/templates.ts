@@ -521,6 +521,19 @@ inputs_hash: sha256:pending
 - Adversarial review pass: true | false
 - Overall score: <0-100>
 
+## Trace Matrix Check
+- Command: \`cclaw internal trace-matrix\`
+- Orphaned criteria: 0
+- Orphaned tasks: 0
+- Orphaned tests: 0
+- Evidence ref:
+
+## Blocked Route
+- ROUTE_BACK_TO_TDD: only when Final Verdict = BLOCKED
+- Target stage: tdd
+- Blocking finding IDs:
+- Rewind command payload:
+
 ## Severity Summary
 - Critical:
 - Important:
@@ -586,9 +599,11 @@ inputs_hash: sha256:pending
   - FINALIZE_OPEN_PR
   - FINALIZE_KEEP_BRANCH
   - FINALIZE_DISCARD_BRANCH
-- Selected label (A/B/C/D):
+  - FINALIZE_NO_VCS
+- Selected label (A/B/C/D/E):
 - Execution result:
 - PR URL / merge commit / kept branch / discard confirmation:
+- NO_VCS handoff target + artifact path (if FINALIZE_NO_VCS):
 
 ## Completion Status
 - SHIPPED | SHIPPED_WITH_EXCEPTIONS | BLOCKED

@@ -19,13 +19,18 @@ describe("flow state", () => {
     expect(createInitialFlowState("run-custom").activeRunId).toBe("run-custom");
   });
 
-  it("allows tdd -> review and blocks tdd -> ship", () => {
+  it("allows tdd -> review, allows review -> tdd rewind, and blocks tdd -> ship", () => {
     expect(canTransition("tdd", "review")).toBe(true);
+    expect(canTransition("review", "tdd")).toBe(true);
     expect(canTransition("tdd", "ship")).toBe(false);
   });
 
   it("enforces guard list for plan -> tdd", () => {
     expect(getTransitionGuards("plan", "tdd")).toContain("plan_wait_for_confirm");
+  });
+
+  it("exposes blocked-review guard for review -> tdd transition", () => {
+    expect(getTransitionGuards("review", "tdd")).toContain("review_verdict_blocked");
   });
 
   it("builds per-stage gate catalog in initial state", () => {

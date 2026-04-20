@@ -671,9 +671,11 @@ Do not merge, open PR, or discard branch until verification and rollback notes a
    - FINALIZE_OPEN_PR
    - FINALIZE_KEEP_BRANCH
    - FINALIZE_DISCARD_BRANCH
-3. Execute only the chosen mode and record exact result.
-4. If merge or discard happened in a feature worktree, clean the worktree.
-5. Update ship artifact with release notes, rollback, and finalization evidence.
+   - FINALIZE_NO_VCS
+3. If \`.git\` is unavailable, use FINALIZE_NO_VCS and record manual handoff + rollback owner.
+4. Execute only the chosen mode and record exact result.
+5. If merge or discard happened in a feature worktree, clean the worktree.
+6. Update ship artifact with release notes, rollback, and finalization evidence.
 
 ## Rollback minimum
 

@@ -50,6 +50,7 @@ This is the only progression command the user needs to drive the entire flow. St
 7. Let \`M\` = \`mandatoryDelegations\` for \`currentStage\`.
 8. If \`M\` is non-empty, inspect **\`${delegationPath}\`**. Treat as satisfied only if each mandatory agent is **completed** or **waived**.
 9. If any mandatory delegation is missing and no waiver exists: **STOP** and ask the user whether to dispatch now or waive with rationale. Do not mark gates passed while delegation is unresolved.
+10. If \`currentStage === "review"\` and \`catalog.blocked\` includes \`review_criticals_resolved\`, treat this as a hard remediation branch: recommend \`/cc-ops rewind tdd "review_blocked_by_critical"\` with the blocking finding IDs, and do not attempt to advance toward ship.
 
 ### Path A: Current stage is NOT complete (any gate unmet or delegation missing)
 
@@ -172,6 +173,8 @@ Load the current stage's skill and command contract:
 - \`${RUNTIME_ROOT}/commands/<currentStage>.md\`
 
 Execute the stage protocol. The stage skill handles interaction, STOP points, gate tracking, and stage completion via \`bash .cclaw/hooks/stage-complete.sh <stage>\` (canonical flow-state mutation path).
+
+Special-case for review: if \`review_criticals_resolved\` is in \`blocked\`, route to rework instead of looping review forever — recommend \`/cc-ops rewind tdd "review_blocked_by_critical"\`.
 
 **Path B — stage IS complete (all gates met, all delegations done):**
 
