@@ -3,6 +3,7 @@ import path from "node:path";
 import { describe, expect, it } from "vitest";
 import {
   checkReviewVerdictConsistency,
+  extractMarkdownSectionBody,
   lintArtifact,
   parseLearningsSection,
   validateReviewArmy
@@ -2401,6 +2402,39 @@ describe("review army schema validation", () => {
     const result = await validateReviewArmy(root);
     expect(result.valid).toBe(false);
     expect(result.errors.join("\n")).toMatch(/confirmed by at least 2 distinct reviewers/);
+  });
+
+  it("extractMarkdownSectionBody ignores H2 headings inside fenced code blocks", () => {
+    const markdown = `# doc
+
+## Real Section
+- real bullet
+
+\`\`\`
+## Fake Section
+- not a real heading inside code block
+\`\`\`
+
+## Another Real Section
+- second bullet
+`;
+    expect(extractMarkdownSectionBody(markdown, "Fake Section")).toBeNull();
+    expect(extractMarkdownSectionBody(markdown, "Real Section")).toContain("real bullet");
+    expect(extractMarkdownSectionBody(markdown, "Another Real Section")).toContain("second bullet");
+  });
+
+  it("extractMarkdownSectionBody concatenates duplicate H2 headings instead of overwriting", () => {
+    const markdown = `# doc
+
+## Notes
+- first pass bullet
+
+## Notes
+- second pass bullet
+`;
+    const body = extractMarkdownSectionBody(markdown, "Notes");
+    expect(body).toContain("first pass bullet");
+    expect(body).toContain("second pass bullet");
   });
 
   it("rejects APPROVED_WITH_CONCERNS when open Critical findings remain", async () => {

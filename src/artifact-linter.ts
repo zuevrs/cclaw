@@ -37,25 +37,53 @@ function normalizeHeadingTitle(title: string): string {
 
 type H2SectionMap = Map<string, string>;
 
-/** Collect H2 sections and body content (`## Section Name`). */
+/**
+ * Collect H2 sections and body content (`## Section Name`).
+ *
+ * - Ignores lines that live inside fenced code blocks (``` / ~~~) so a
+ *   commented `## Approaches` inside an example doesn't open a phantom
+ *   section and swallow real content.
+ * - When the same heading appears more than once at the top level we
+ *   concatenate the bodies rather than silently overwriting the earlier
+ *   occurrence. This keeps lint rules honest when authors split a section
+ *   into multiple passes.
+ */
 function extractH2Sections(markdown: string): H2SectionMap {
   const sections = new Map<string, string>();
   const lines = markdown.split(/\r?\n/);
   let currentHeading: string | null = null;
   let buffer: string[] = [];
+  let fenced: string | null = null;
 
   const flush = (): void => {
     if (currentHeading === null) return;
-    sections.set(currentHeading, buffer.join("\n"));
+    const existing = sections.get(currentHeading);
+    const body = buffer.join("\n");
+    sections.set(
+      currentHeading,
+      existing === undefined ? body : `${existing}\n${body}`
+    );
   };
 
   for (const line of lines) {
-    const match = /^##\s+(.+)$/u.exec(line);
-    if (match) {
-      flush();
-      currentHeading = normalizeHeadingTitle(match[1] ?? "");
-      buffer = [];
+    const fenceMatch = /^(```|~~~)/u.exec(line);
+    if (fenceMatch) {
+      if (fenced === null) {
+        fenced = fenceMatch[1] ?? null;
+      } else if (line.startsWith(fenced)) {
+        fenced = null;
+      }
+      if (currentHeading !== null) buffer.push(line);
       continue;
+    }
+    if (fenced === null) {
+      const match = /^##\s+(.+)$/u.exec(line);
+      if (match) {
+        flush();
+        currentHeading = normalizeHeadingTitle(match[1] ?? "");
+        buffer = [];
+        continue;
+      }
     }
     if (currentHeading !== null) {
       buffer.push(line);
