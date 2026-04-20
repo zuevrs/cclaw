@@ -5,6 +5,7 @@ import { spawnSync } from "node:child_process";
 import {
   opencodePluginJs,
   preCompactScript,
+  runHookDispatcherScript,
   sessionStartScript,
   stageCompleteScript,
   stopCheckpointScript
@@ -29,6 +30,7 @@ try {
   const shellScripts = [
     ["session-start.sh", sessionStartScript()],
     ["stop-checkpoint.sh", stopCheckpointScript()],
+    ["run-hook.cmd", runHookDispatcherScript()],
     ["stage-complete.sh", stageCompleteScript()],
     ["pre-compact.sh", preCompactScript()],
     ["prompt-guard.sh", promptGuardScript()],
