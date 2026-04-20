@@ -54,4 +54,14 @@ describe("hook schema validation", () => {
     expect(result.ok).toBe(false);
     expect(result.errors.join("\n")).toContain("hooks.preToolUse[0].command must be a non-empty string");
   });
+
+  it("rejects codex hook docs missing UserPromptSubmit wiring", () => {
+    const codex = JSON.parse(codexHooksJsonWithObservation()) as {
+      hooks: Record<string, unknown>;
+    };
+    delete codex.hooks.UserPromptSubmit;
+    const result = validateHookDocument("codex", codex);
+    expect(result.ok).toBe(false);
+    expect(result.errors.join("\n")).toContain('missing required event array "UserPromptSubmit"');
+  });
 });

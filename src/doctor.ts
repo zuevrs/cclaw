@@ -701,6 +701,8 @@ export async function doctorChecks(projectRoot: string, options: DoctorOptions =
     "session-start.sh",
     "stop-checkpoint.sh",
     "run-hook.cmd",
+    "stage-complete.sh",
+    "pre-compact.sh",
     "prompt-guard.sh",
     "workflow-guard.sh",
     "context-monitor.sh"
@@ -905,11 +907,14 @@ export async function doctorChecks(projectRoot: string, options: DoctorOptions =
     const codexDoc = await readHookDocument(codexHooksFile);
     const codexHooks = toObject(codexDoc?.hooks) ?? {};
     const codexSessionCmds = collectHookCommands(codexHooks.SessionStart);
+    const codexUserPromptCmds = collectHookCommands(codexHooks.UserPromptSubmit);
     const codexPreCmds = collectHookCommands(codexHooks.PreToolUse);
     const codexPostCmds = collectHookCommands(codexHooks.PostToolUse);
     const codexStopCmds = collectHookCommands(codexHooks.Stop);
     const codexWiringOk =
       codexSessionCmds.some((cmd) => cmd.includes("session-start.sh")) &&
+      codexUserPromptCmds.some((cmd) => cmd.includes("prompt-guard.sh")) &&
+      codexUserPromptCmds.some((cmd) => cmd.includes("verify-current-state --quiet")) &&
       codexPreCmds.some((cmd) => cmd.includes("prompt-guard.sh")) &&
       codexPreCmds.some((cmd) => cmd.includes("workflow-guard.sh")) &&
       codexPostCmds.some((cmd) => cmd.includes("context-monitor.sh")) &&
@@ -917,7 +922,7 @@ export async function doctorChecks(projectRoot: string, options: DoctorOptions =
     checks.push({
       name: "hook:wiring:codex",
       ok: codexWiringOk,
-      details: `${codexHooksFile} must wire session-start/prompt-guard/workflow-guard/context-monitor/stop-checkpoint (PreToolUse/PostToolUse run Bash-only in Codex v0.114+)`
+      details: `${codexHooksFile} must wire SessionStart, UserPromptSubmit(prompt-guard + verify-current-state), PreToolUse(prompt/workflow), PostToolUse(context-monitor), and Stop(stop-checkpoint). PreToolUse/PostToolUse run Bash-only in Codex v0.114+`
     });
 
     // Feature flag warning: Codex ignores `.codex/hooks.json` unless the

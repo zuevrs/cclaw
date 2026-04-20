@@ -51,6 +51,11 @@ describe("install lifecycle", () => {
 
     const checks = await doctorChecks(root);
     expect(doctorSucceeded(checks)).toBe(true);
+    expect(checks.some((check) => check.name === "hook:script:pre-compact.sh" && check.ok)).toBe(true);
+    expect(checks.some((check) => check.name === "hook:script:pre-compact.sh:executable" && check.ok)).toBe(true);
+    expect(checks.some((check) => check.name === "hook:script:stage-complete.sh" && check.ok)).toBe(true);
+    expect(checks.some((check) => check.name === "hook:script:stage-complete.sh:executable" && check.ok)).toBe(true);
+    expect(checks.some((check) => check.name === "hook:wiring:codex" && check.ok)).toBe(true);
 
     const flow = JSON.parse(
       await fs.readFile(path.join(root, ".cclaw/state/flow-state.json"), "utf8")
