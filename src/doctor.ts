@@ -987,6 +987,8 @@ export async function doctorChecks(projectRoot: string, options: DoctorOptions =
   if (configuredHarnesses.includes("opencode")) {
     const file = path.join(projectRoot, ".opencode/plugins/cclaw-plugin.mjs");
     let ok = false;
+    let singleHandlerPathOk = false;
+    let precompactHookOk = false;
     if (await exists(file)) {
       const content = await fs.readFile(file, "utf8");
       ok =
@@ -996,15 +998,35 @@ export async function doctorChecks(projectRoot: string, options: DoctorOptions =
         content.includes("prompt-guard.sh") &&
         content.includes("workflow-guard.sh") &&
         content.includes("context-monitor.sh") &&
+        content.includes("pre-compact.sh") &&
         content.includes('"session.idle"') &&
         content.includes('"session.resumed"') &&
+        content.includes('"session.compacted"') &&
         content.includes('"session.cleared"') &&
         content.includes('"experimental.chat.system.transform"');
+      singleHandlerPathOk =
+        !content.includes('eventType === "tool.execute.before"') &&
+        !content.includes('eventType === "tool.execute.after"') &&
+        content.includes('"tool.execute.before": async') &&
+        content.includes('"tool.execute.after": async');
+      precompactHookOk =
+        content.includes('eventType === "session.compacted"') &&
+        content.includes('runHookScript("pre-compact.sh"');
     }
     checks.push({
       name: "lifecycle:opencode:rehydration_events",
       ok,
       details: `${file} must include event lifecycle handler, tool.execute.before/after with prompt/workflow/context hooks, session.idle checkpoint, and transform rehydration`
+    });
+    checks.push({
+      name: "hook:opencode:single_tool_handler_path",
+      ok: singleHandlerPathOk,
+      details: `${file} must route tool.execute.before/after through dedicated handlers exactly once (no duplicate event() branches).`
+    });
+    checks.push({
+      name: "hook:opencode:precompact_digest",
+      ok: precompactHookOk,
+      details: `${file} must run pre-compact.sh on session.compacted before bootstrap refresh.`
     });
     const runtimeShape = await opencodePluginRuntimeShapeCheck(projectRoot);
     checks.push({

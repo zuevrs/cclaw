@@ -241,22 +241,11 @@ export default function cclawPlugin(ctx) {
         // the system transform hook instead.
         refreshBootstrapCache();
       }
+      if (eventType === "session.compacted") {
+        await runHookScript("pre-compact.sh", eventData ?? {});
+      }
       if (eventType === "session.idle") {
         await runHookScript("stop-checkpoint.sh", { loop_count: 0 });
-      }
-      if (eventType === "tool.execute.before") {
-        const toolPayload = normalizeToolPayload(eventData, undefined);
-        const promptOk = await runHookScript("prompt-guard.sh", toolPayload);
-        const workflowOk = await runHookScript("workflow-guard.sh", toolPayload);
-        if (!promptOk || !workflowOk) {
-          throw new Error(
-            "cclaw OpenCode guard blocked tool.execute.before (prompt/workflow guard non-zero exit)."
-          );
-        }
-      }
-      if (eventType === "tool.execute.after") {
-        const toolPayload = normalizeToolPayload(eventData, undefined);
-        await runHookScript("context-monitor.sh", toolPayload);
       }
     },
     "tool.execute.before": async (input, output) => {
