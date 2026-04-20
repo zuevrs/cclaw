@@ -8,7 +8,7 @@ import { readFlowState } from "./runs.js";
 import { stageSchema } from "./content/stage-schema.js";
 import type { FlowStage } from "./types.js";
 
-export type DelegationMode = "mandatory" | "proactive" | "conditional";
+export type DelegationMode = "mandatory" | "proactive";
 export type DelegationStatus = "scheduled" | "completed" | "failed" | "waived";
 
 /**
@@ -60,10 +60,7 @@ export type DelegationEntry = {
    * consumers treat missing runId as unscoped (conservatively excluded from current-run checks).
    */
   runId?: string;
-  /**
-   * For `conditional` rows: the trigger predicate that fired (e.g. `diff_lines_gt:100`).
-   * Recorded for audit so reviewers can see why the second pass was required.
-   */
+  /** Legacy field kept for backward compatibility with historical ledgers. */
   conditionTrigger?: string;
   /** Optional token usage captured from the delegated run. */
   tokens?: DelegationTokenUsage;
@@ -114,7 +111,7 @@ function isDelegationTokenUsage(value: unknown): value is DelegationTokenUsage {
 function isDelegationEntry(value: unknown): value is DelegationEntry {
   if (!value || typeof value !== "object" || Array.isArray(value)) return false;
   const o = value as Record<string, unknown>;
-  const modeOk = o.mode === "mandatory" || o.mode === "proactive" || o.mode === "conditional";
+  const modeOk = o.mode === "mandatory" || o.mode === "proactive";
   const statusOk =
     o.status === "scheduled" ||
     o.status === "completed" ||
