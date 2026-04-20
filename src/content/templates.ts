@@ -523,6 +523,7 @@ inputs_hash: sha256:pending
 | ID | Severity | Category | Description | Status |
 |---|---|---|---|---|
 | R-1 | Critical/Important/Suggestion | correctness/security/performance/architecture |  | open/resolved |
+- NO_CHANGE_ATTESTATION: <required when Category=security has no entries; explain why no security-relevant changes were detected>
 
 ## Incoming Feedback Queue
 | ID | Source | Severity | File:line | Request | Status | Evidence |

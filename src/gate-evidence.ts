@@ -1,6 +1,7 @@
 import fs from "node:fs/promises";
 import path from "node:path";
 import {
+  checkReviewSecurityNoChangeAttestation,
   checkReviewVerdictConsistency,
   extractMarkdownSectionBody,
   lintArtifact,
@@ -325,6 +326,10 @@ export async function verifyCurrentStageGateEvidence(
       const verdictConsistency = await checkReviewVerdictConsistency(projectRoot);
       if (!verdictConsistency.ok) {
         issues.push(`review verdict inconsistency: ${verdictConsistency.errors.join("; ")}`);
+      }
+      const securityAttestation = await checkReviewSecurityNoChangeAttestation(projectRoot);
+      if (!securityAttestation.ok) {
+        issues.push(`review security attestation failed: ${securityAttestation.errors.join("; ")}`);
       }
       const traceGateRequired = schema.requiredGates.some(
         (gate) => gate.id === "review_trace_matrix_clean" && gate.tier === "required"
