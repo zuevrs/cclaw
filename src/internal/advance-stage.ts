@@ -222,13 +222,24 @@ function coerceCandidateFlowState(raw: unknown, fallback: FlowState): FlowState 
   );
   const skippedStages = skippedStagesRaw.length > 0 ? skippedStagesRaw : fallback.skippedStages;
 
+  // When the candidate payload omits `guardEvidence` entirely we must keep
+  // the on-disk fallback — otherwise a partial update (e.g. a tooling call
+  // that only passes stage + passedGateIds) would silently wipe every
+  // previously recorded evidence string and fail the next
+  // `verifyCurrentStageGateEvidence` check.
+  const candidateEvidence = parseGuardEvidence(typed.guardEvidence);
+  const guardEvidence =
+    typed.guardEvidence === undefined
+      ? { ...fallback.guardEvidence }
+      : candidateEvidence;
+
   return {
     ...fallback,
     currentStage,
     completedStages,
     track,
     skippedStages,
-    guardEvidence: parseGuardEvidence(typed.guardEvidence),
+    guardEvidence,
     stageGateCatalog: parseCandidateGateCatalog(
       typed.stageGateCatalog,
       fallback.stageGateCatalog
