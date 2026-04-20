@@ -1,4 +1,5 @@
 import type { StageSchemaInput } from "./schema-types.js";
+import type { FlowTrack } from "../../types.js";
 
 // ---------------------------------------------------------------------------
 // TDD — RED → GREEN → REFACTOR cycle (merged test + build)
@@ -182,7 +183,7 @@ export const TDD: StageSchemaInput = {
     { section: "GREEN Evidence", required: true, validationRule: "Full suite pass output captured." },
     { section: "REFACTOR Notes", required: true, validationRule: "What changed, why, behavior preservation confirmed." },
     { section: "Traceability", required: true, validationRule: "Plan task ID and spec criterion linked." },
-    { section: "Verification Ladder", required: false, validationRule: "If present: per-slice verification tier (static, command, behavioral, human) with evidence for highest tier reached." },
+    { section: "Verification Ladder", required: true, validationRule: "Per-slice verification tier (static, command, behavioral, human) with evidence captured for the highest tier reached this turn." },
     { section: "Coverage Targets", required: false, validationRule: "If present: per-module or per-code-type coverage thresholds with current values and measurement commands." },
     { section: "Test Pyramid Shape", required: false, validationRule: "If present: per-slice count of Small/Medium/Large tests added, to let reviewers verify the suite is not drifting top-heavy." },
     { section: "Prove-It Reproduction", required: false, validationRule: "Required for bug-fix slices: original failing reproduction test (RED without fix), passing output with fix (GREEN), and a note confirming the test fails again if the fix is reverted." },
@@ -190,3 +191,71 @@ export const TDD: StageSchemaInput = {
   ],
   batchExecutionAllowed: true
 };
+
+function quickTrackText(value: string): string {
+  return value
+    .replace(/\btask from the plan\b/giu, "acceptance criterion from the spec")
+    .replace(/\bplan task ID\b/giu, "acceptance criterion ID")
+    .replace(/\bplan task\b/giu, "acceptance criterion")
+    .replace(/\bplan row\b/giu, "acceptance row")
+    .replace(/\bplan slice\b/giu, "acceptance slice")
+    .replace(/\bplan artifact\b/giu, "spec artifact")
+    .replace(/\btraceable to plan slice\b/giu, "traceable to acceptance criterion")
+    .replace(/05-plan\.md/gu, "04-spec.md");
+}
+
+function tddQuickTrackVariant(): StageSchemaInput {
+  return {
+    ...TDD,
+    skillDescription: quickTrackText(TDD.skillDescription),
+    hardGate: quickTrackText(TDD.hardGate),
+    checklist: TDD.checklist.map(quickTrackText),
+    interactionProtocol: TDD.interactionProtocol.map(quickTrackText),
+    process: TDD.process.map(quickTrackText),
+    requiredGates: TDD.requiredGates.map((gate) =>
+      gate.id === "tdd_traceable_to_plan"
+        ? { ...gate, description: "Change traceability to acceptance criterion is explicit." }
+        : gate
+    ),
+    requiredEvidence: TDD.requiredEvidence.map(quickTrackText),
+    inputs: TDD.inputs.map(quickTrackText),
+    requiredContext: ["spec artifact", "existing test patterns"],
+    policyNeedles: TDD.policyNeedles.map(quickTrackText),
+    reviewSections: TDD.reviewSections.map((section) => ({
+      ...section,
+      evaluationPoints: section.evaluationPoints.map(quickTrackText)
+    })),
+    crossStageTrace: {
+      ...TDD.crossStageTrace,
+      readsFrom: [".cclaw/artifacts/04-spec.md"],
+      traceabilityRule:
+        "Every RED test traces to an acceptance criterion. Every GREEN change traces to a RED test. Evidence chain must be unbroken."
+    },
+    artifactValidation: TDD.artifactValidation.map((row) => {
+      if (row.section === "Acceptance Mapping") {
+        return {
+          ...row,
+          required: true,
+          validationRule: "Each RED test links to a spec acceptance criterion ID (for example AC-1)."
+        };
+      }
+      if (row.section === "Traceability") {
+        return {
+          ...row,
+          validationRule: "Acceptance criterion IDs are linked to RED/GREEN evidence."
+        };
+      }
+      return {
+        ...row,
+        validationRule: quickTrackText(row.validationRule)
+      };
+    })
+  };
+}
+
+export function tddStageForTrack(track: FlowTrack): StageSchemaInput {
+  if (track === "quick") {
+    return tddQuickTrackVariant();
+  }
+  return TDD;
+}

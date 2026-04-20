@@ -148,10 +148,10 @@ export function createInitialFlowState(
   const skippedStages = skippedStagesForTrack(track);
 
   const stageGateCatalog = {} as Record<FlowStage, StageGateState>;
-  for (const schema of orderedStageSchemas()) {
+  for (const schema of orderedStageSchemas(track)) {
     stageGateCatalog[schema.stage] = {
-      required: stageGateIds(schema.stage),
-      recommended: stageRecommendedGateIds(schema.stage),
+      required: stageGateIds(schema.stage, track),
+      recommended: stageRecommendedGateIds(schema.stage, track),
       conditional: [],
       triggered: [],
       passed: [],

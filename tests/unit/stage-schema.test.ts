@@ -101,6 +101,34 @@ describe("stage schema and subagent alignment", () => {
     expect(markdown).toContain("## When Not to Use");
   });
 
+  it("tdd quick track relaxes plan-trace gate and drops plan artifact dependency", () => {
+    const tddQuick = stageSchema("tdd", "quick");
+    const requiredQuickGates = tddQuick.requiredGates
+      .filter((gate) => gate.tier === "required")
+      .map((gate) => gate.id);
+    const recommendedQuickGates = tddQuick.requiredGates
+      .filter((gate) => gate.tier === "recommended")
+      .map((gate) => gate.id);
+    expect(requiredQuickGates).not.toContain("tdd_traceable_to_plan");
+    expect(recommendedQuickGates).toContain("tdd_traceable_to_plan");
+    expect(tddQuick.crossStageTrace.readsFrom).not.toContain(".cclaw/artifacts/05-plan.md");
+    expect(tddQuick.crossStageTrace.readsFrom).toEqual([".cclaw/artifacts/04-spec.md"]);
+
+    const markdown = stageSkillMarkdown("tdd", "quick");
+    expect(markdown).not.toContain(".cclaw/artifacts/05-plan.md");
+    expect(markdown).not.toContain("plan slice");
+    expect(markdown).toContain("acceptance slice");
+  });
+
+  it("tdd verification ladder is required and explicit", () => {
+    const tdd = stageSchema("tdd");
+    const ladder = tdd.artifactValidation.find((row) => row.section === "Verification Ladder");
+    expect(ladder).toBeDefined();
+    expect(ladder?.required).toBe(true);
+    expect(ladder?.tier).toBe("required");
+    expect(ladder?.validationRule).toMatch(/highest tier reached/i);
+  });
+
   it("brainstorm example is a valid artifact when copy-pasted verbatim", async () => {
     const inlinePointer = stageExamples("brainstorm");
     expect(inlinePointer).toContain(".cclaw/references/stages/brainstorm-examples.md");

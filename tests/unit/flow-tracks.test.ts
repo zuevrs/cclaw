@@ -127,6 +127,9 @@ describe("flow tracks", () => {
       expect(stageKeys).toEqual(Object.keys(quick.stageGateCatalog).sort());
       expect(stageKeys).toContain("brainstorm");
       expect(stageKeys).toContain("ship");
+      expect(standard.stageGateCatalog.tdd.required).toContain("tdd_traceable_to_plan");
+      expect(quick.stageGateCatalog.tdd.required).not.toContain("tdd_traceable_to_plan");
+      expect(quick.stageGateCatalog.tdd.recommended).toContain("tdd_traceable_to_plan");
     });
   });
 
