@@ -77,22 +77,38 @@ function unique<T extends string>(values: T[]): T[] {
 const TEST_COMMAND_HINT_PATTERN = /\b(?:npm test|pnpm test|yarn test|bun test|vitest|jest|pytest|go test|cargo test|mvn test|gradle test|dotnet test)\b/iu;
 const SHA_WITH_LABEL_PATTERN = /\b(?:sha|commit)(?:\s*[:=]|\s+)\s*[0-9a-f]{7,40}\b/iu;
 const PASS_STATUS_PATTERN = /\b(?:pass|passed|green|ok)\b/iu;
+const SHIP_FINALIZATION_MODE_PATTERN =
+  /\bFINALIZE_(?:MERGE_LOCAL|OPEN_PR|QUEUE|HANDOFF|SKIP)\b/u;
 
-function validateGateEvidenceShape(stage: FlowStage, gateId: string, evidence: string): string | null {
-  if (stage !== "tdd" || gateId !== "tdd_verified_before_complete") {
+// Per-gate validators keyed by `${stage}:${gateId}`. Returning a non-null
+// string surfaces the reason as an `advance-stage` failure so evidence is
+// guaranteed to carry the structural breadcrumbs downstream tooling
+// expects. Previously only `tdd:tdd_verified_before_complete` was checked.
+const GATE_EVIDENCE_VALIDATORS: Record<string, (evidence: string) => string | null> = {
+  "tdd:tdd_verified_before_complete": (evidence) => {
+    if (!TEST_COMMAND_HINT_PATTERN.test(evidence)) {
+      return "must include the fresh verification command that was run (for example `npm test`, `pytest`, `go test`, or equivalent).";
+    }
+    if (!SHA_WITH_LABEL_PATTERN.test(evidence)) {
+      return "must include a commit SHA token prefixed with `sha` or `commit` (for example `sha: abc1234`).";
+    }
+    if (!PASS_STATUS_PATTERN.test(evidence)) {
+      return "must include explicit success status (for example `PASS` or `GREEN`).";
+    }
+    return null;
+  },
+  "ship:ship_finalization_executed": (evidence) => {
+    if (!SHIP_FINALIZATION_MODE_PATTERN.test(evidence)) {
+      return "must name the finalization mode that ran (for example `FINALIZE_MERGE_LOCAL`, `FINALIZE_OPEN_PR`, `FINALIZE_HANDOFF`, `FINALIZE_QUEUE`, or `FINALIZE_SKIP`).";
+    }
     return null;
   }
-  const trimmed = evidence.trim();
-  if (!TEST_COMMAND_HINT_PATTERN.test(trimmed)) {
-    return "must include the fresh verification command that was run (for example `npm test`, `pytest`, `go test`, or equivalent).";
-  }
-  if (!SHA_WITH_LABEL_PATTERN.test(trimmed)) {
-    return "must include a commit SHA token prefixed with `sha` or `commit` (for example `sha: abc1234`).";
-  }
-  if (!PASS_STATUS_PATTERN.test(trimmed)) {
-    return "must include explicit success status (for example `PASS` or `GREEN`).";
-  }
-  return null;
+};
+
+function validateGateEvidenceShape(stage: FlowStage, gateId: string, evidence: string): string | null {
+  const validator = GATE_EVIDENCE_VALIDATORS[`${stage}:${gateId}`];
+  if (!validator) return null;
+  return validator(evidence.trim());
 }
 
 function parseStringList(raw: unknown): string[] {
