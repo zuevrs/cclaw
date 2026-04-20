@@ -99,7 +99,7 @@ import { DOCTOR_REFERENCE_MARKDOWN } from "./content/doctor-references.js";
 import {
   harnessDocsOverviewMarkdown,
   harnessIntegrationDocMarkdown
-} from "./content/harnesses-doc.js";
+} from "./content/harness-doc.js";
 import {
   HARNESS_PLAYBOOKS_DIR,
   harnessPlaybookFileName,

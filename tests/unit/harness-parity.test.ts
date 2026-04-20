@@ -1,6 +1,6 @@
 import { describe, expect, it } from "vitest";
 import { HARNESS_ADAPTERS, harnessTier } from "../../src/harness-adapters.js";
-import { harnessIntegrationDocMarkdown } from "../../src/content/harnesses-doc.js";
+import { harnessIntegrationDocMarkdown } from "../../src/content/harness-doc.js";
 
 describe("harness parity model", () => {
   it("classifies harnesses into explicit tiers", () => {
