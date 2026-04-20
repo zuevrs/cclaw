@@ -157,9 +157,8 @@ describe("flow tracks", () => {
       expect(nextStage("ship", "medium")).toBeNull();
     });
 
-    it("quick ignores upstream stages (they are not on the critical path)", () => {
-      // Falls back to legacy behavior if queried with an off-track stage.
-      expect(nextStage("brainstorm", "quick")).toBe("scope");
+    it("quick returns null for upstream stages outside the active track", () => {
+      expect(nextStage("brainstorm", "quick")).toBeNull();
     });
 
     it("previousStage on quick returns null at spec and skips back to spec from tdd", () => {
@@ -173,11 +172,10 @@ describe("flow tracks", () => {
       expect(previousStage("tdd")).toBe("plan");
     });
 
-    it("nextStage fallback returns the standard successor for stages absent from the active track", () => {
-      // brainstorm is not on the quick track, but fallback walks the full standard order
-      expect(nextStage("brainstorm", "quick")).toBe("scope");
-      expect(nextStage("design", "quick")).toBe("spec");
-      expect(nextStage("plan", "quick")).toBe("tdd");
+    it("nextStage returns null for any stage absent from the active track", () => {
+      expect(nextStage("brainstorm", "quick")).toBeNull();
+      expect(nextStage("design", "quick")).toBeNull();
+      expect(nextStage("plan", "quick")).toBeNull();
     });
 
     it("previousStage fallback walks back through the standard order for off-track stages", () => {

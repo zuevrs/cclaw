@@ -198,11 +198,7 @@ export function nextStage(stage: FlowStage, track: FlowTrack = "standard"): Flow
   const ordered = TRACK_STAGES[track];
   const index = ordered.indexOf(stage);
   if (index < 0) {
-    const fallback = FLOW_STAGES.indexOf(stage);
-    if (fallback < 0 || fallback === FLOW_STAGES.length - 1) {
-      return null;
-    }
-    return FLOW_STAGES[fallback + 1];
+    return null;
   }
   if (index === ordered.length - 1) {
     return null;
