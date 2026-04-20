@@ -254,6 +254,9 @@ function parseLedger(raw: unknown, runId: string): DelegationLedger {
     for (const item of entriesRaw) {
       if (isDelegationEntry(item)) {
         const ts = item.startTs ?? item.ts ?? new Date().toISOString();
+        const inferredFulfillmentMode =
+          item.fulfillmentMode
+          ?? (item.status === "completed" ? "isolated" : undefined);
         entries.push({
           ...item,
           spanId: item.spanId ?? createSpanId(),
@@ -264,6 +267,7 @@ function parseLedger(raw: unknown, runId: string): DelegationLedger {
               ? item.retryCount
               : 0,
           evidenceRefs: Array.isArray(item.evidenceRefs) ? item.evidenceRefs : [],
+          fulfillmentMode: inferredFulfillmentMode,
           schemaVersion: 1
         });
       }
@@ -307,6 +311,12 @@ export async function appendDelegation(projectRoot: string, entry: DelegationEnt
     }
     if (!Array.isArray(stamped.evidenceRefs)) {
       stamped.evidenceRefs = [];
+    }
+    if (stamped.status === "completed" && stamped.fulfillmentMode === undefined) {
+      const config = await readConfig(projectRoot).catch(() => null);
+      const harnesses = config?.harnesses ?? [];
+      const fallbacks = harnesses.map((h) => HARNESS_ADAPTERS[h].capabilities.subagentFallback);
+      stamped.fulfillmentMode = expectedFulfillmentMode(fallbacks);
     }
     // Idempotency: if a caller (or a retried hook) tries to append a row
     // with a spanId that already exists in the ledger, treat it as a no-op
@@ -396,20 +406,11 @@ export async function checkMandatoryDelegations(
       waived.push(agent);
     }
 
-    // Evidence gating for `completed` rows has two triggers:
-    //   1. The aggregate expected mode is role-switch (no isolated harness
-    //      available), so every completion implicitly ran as role-switch.
-    //   2. Any completed row is explicitly stamped `fulfillmentMode:
-    //      "role-switch"` — even in a mixed install. This closes the loop
-    //      where a Codex session logs a role-switch completion inside a
-    //      claude+codex project: the aggregate expectedMode is "isolated"
-    //      (claude wins), so the role-switch row would previously sail
-    //      through without evidenceRefs.
-    const hasExplicitRoleSwitchRow = completedRows.some(
-      (e) => e.fulfillmentMode === "role-switch"
+    // Evidence is required for any non-isolated completion mode. Legacy rows
+    // without fulfillmentMode are inferred to `isolated` during parse.
+    const evidenceRequired = completedRows.some(
+      (e) => (e.fulfillmentMode ?? "isolated") !== "isolated"
     );
-    const evidenceRequired =
-      expectedMode === "role-switch" || hasExplicitRoleSwitchRow;
     if (
       hasCompleted &&
       evidenceRequired &&

@@ -181,6 +181,74 @@ describe("delegation ledger run scoping", () => {
     expect(result.missingEvidence).toContain("planner");
   });
 
+  it("infers completion fulfillmentMode from harness fallback when omitted", async () => {
+    const root = await createTempProject("delegation-infer-fulfillment-mode");
+    await seedFlowState(root, "run-codex-infer");
+    await writeConfig(root, createDefaultConfig(["codex"]));
+
+    await appendDelegation(root, {
+      stage: "scope",
+      agent: "planner",
+      mode: "mandatory",
+      status: "completed",
+      ts: new Date().toISOString()
+    });
+
+    const ledger = await readDelegationLedger(root);
+    expect(ledger.entries[0]?.fulfillmentMode).toBe("role-switch");
+
+    const result = await checkMandatoryDelegations(root, "scope");
+    expect(result.satisfied).toBe(false);
+    expect(result.missingEvidence).toContain("planner");
+  });
+
+  it("requires evidence for generic-dispatch completions", async () => {
+    const root = await createTempProject("delegation-generic-dispatch-evidence");
+    await seedFlowState(root, "run-cursor-evidence");
+    await writeConfig(root, createDefaultConfig(["cursor"]));
+
+    await appendDelegation(root, {
+      stage: "scope",
+      agent: "planner",
+      mode: "mandatory",
+      status: "completed",
+      ts: new Date().toISOString()
+    });
+
+    const result = await checkMandatoryDelegations(root, "scope");
+    expect(result.satisfied).toBe(false);
+    expect(result.missingEvidence).toContain("planner");
+  });
+
+  it("reads legacy completed rows without fulfillmentMode as isolated", async () => {
+    const root = await createTempProject("delegation-legacy-fulfillment-mode");
+    await seedFlowState(root, "run-legacy");
+    await writeConfig(root, createDefaultConfig(["claude"]));
+    await fs.writeFile(
+      path.join(root, ".cclaw/state/delegation-log.json"),
+      JSON.stringify({
+        runId: "run-legacy",
+        entries: [
+          {
+            stage: "scope",
+            agent: "planner",
+            mode: "mandatory",
+            status: "completed",
+            ts: new Date().toISOString(),
+            runId: "run-legacy"
+          }
+        ]
+      }, null, 2),
+      "utf8"
+    );
+
+    const ledger = await readDelegationLedger(root);
+    expect(ledger.entries[0]?.fulfillmentMode).toBe("isolated");
+    const result = await checkMandatoryDelegations(root, "scope");
+    expect(result.satisfied).toBe(true);
+    expect(result.missingEvidence).toEqual([]);
+  });
+
   it("requires evidence for explicit role-switch rows even in mixed installs", async () => {
     const root = await createTempProject("delegation-mixed-install-role-switch-evidence");
     await seedFlowState(root, "run-mixed-role-switch");
