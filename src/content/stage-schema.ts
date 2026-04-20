@@ -237,6 +237,14 @@ const STAGE_AUTO_SUBAGENT_DISPATCH: Record<FlowStage, StageAutoSubagentDispatch[
       purpose: "Adversarial second-opinion review on large or trust-sensitive diffs. The second reviewer treats the implementation as hostile and tries to break it (hostile-user, future-maintainer, competitor lenses) instead of sympathetically explaining it.",
       requiresUserGate: false,
       skill: "adversarial-review"
+    },
+    {
+      agent: "reviewer",
+      mode: "proactive",
+      when: "When external reviewer comments, bot findings, or CI annotations are present after the initial review pass.",
+      purpose: "Run the receiving-code-review workflow so every incoming feedback item gets an explicit disposition with evidence, and the queue is mirrored into review artifacts.",
+      requiresUserGate: false,
+      skill: "receiving-code-review"
     }
   ],
   ship: [

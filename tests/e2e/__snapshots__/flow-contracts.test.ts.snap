@@ -67,6 +67,7 @@ Before execution:
 | reviewer | mandatory | not required | Always in review stage. |
 | security-reviewer | mandatory | not required | Always in review stage. Even when no trust boundaries changed, produce an explicit 'no-change' security attestation. |
 | reviewer | proactive | not required | When the diff exceeds 100 changed lines, touches more than 10 files, or modifies trust boundaries — dispatch a SECOND, independent reviewer with the adversarial-review skill loaded so the review army has at least two voices on a high-blast-radius change. |
+| reviewer | proactive | not required | When external reviewer comments, bot findings, or CI annotations are present after the initial review pass. |
 
 Mandatory delegations for this stage: \`reviewer\`, \`security-reviewer\`.
 Record completion/waiver in \`.cclaw/state/delegation-log.json\` before stage completion.
@@ -96,10 +97,11 @@ You MUST complete these steps in order:
 8. Layer 2c: Performance — N+1 queries, memory leaks, missing caching, hot paths.
 9. Layer 2d: Architecture Fit — does the implementation match the locked design? Coupling, cohesion, interface contracts.
 10. Layer 2e: External Safety — SQL safety, concurrency, secrets in logs, enum completeness (grep outside diff), LLM trust boundaries.
-11. Review Army reconciliation — normalize findings into structured records, dedup by fingerprint, and mark multi-specialist confirmations.
-12. Meta-Review — Were tests actually run? Do test names match what they test? Are there real assertions?
-13. Classify findings — Critical (blocks ship), Important (should fix), Suggestion (optional improvement).
-14. Produce verdict — APPROVED, APPROVED_WITH_CONCERNS, or BLOCKED.
+11. Incoming Feedback Intake — when human reviewer comments, bot findings, or CI annotations exist, run \`.cclaw/skills/receiving-code-review/SKILL.md\`, keep a per-comment disposition queue, and mirror outcomes into \`07-review.md\` + \`07-review-army.json\` before final verdict.
+12. Review Army reconciliation — normalize findings into structured records, dedup by fingerprint, and mark multi-specialist confirmations.
+13. Meta-Review — Were tests actually run? Do test names match what they test? Are there real assertions?
+14. Classify findings — Critical (blocks ship), Important (should fix), Suggestion (optional improvement).
+15. Produce verdict — APPROVED, APPROVED_WITH_CONCERNS, or BLOCKED.
 
 ## Good vs Bad (at-a-glance)
 
@@ -291,6 +293,7 @@ Rule: Review verdict must reference specific spec criteria and TDD evidence. Dow
 | Review Army Contract | REQUIRED | Structured findings include id/severity/confidence/fingerprint/reportedBy/status with dedup reconciliation summary. |
 | Review Readiness Dashboard | recommended | Includes a per-pass table (Layer 1 / Layer 2 / Adversarial / Schema) with a 'Completed at' column, a Delegation log snapshot block (path .cclaw/state/delegation-log.json with required/completed/waived/pending), a Staleness signal block (commit at last review pass and current commit), and a Headline with open critical blockers + ship recommendation. At minimum, the section text must contain the substrings 'Completed at', 'delegation-log.json', 'commit at last review pass', and 'Ship recommendation'. |
 | Completeness Score | recommended | Records AC coverage, task coverage, test-slice coverage, and adversarial-review pass status as numeric or boolean values. At minimum, a line like 'AC coverage: N/M' or 'AC coverage: 100%'. |
+| Incoming Feedback Queue | recommended | When external review feedback exists, include a queue summary with per-item disposition (resolved / accepted-risk / rejected-with-evidence) and evidence refs. |
 | Severity Summary | REQUIRED | Per-severity count lines for critical, important, and suggestion buckets. |
 | Final Verdict | REQUIRED | Exactly one of: APPROVED, APPROVED_WITH_CONCERNS, BLOCKED. |
 

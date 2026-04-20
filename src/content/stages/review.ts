@@ -33,6 +33,7 @@ export const REVIEW: StageSchemaInput = {
     "Layer 2c: Performance — N+1 queries, memory leaks, missing caching, hot paths.",
     "Layer 2d: Architecture Fit — does the implementation match the locked design? Coupling, cohesion, interface contracts.",
     "Layer 2e: External Safety — SQL safety, concurrency, secrets in logs, enum completeness (grep outside diff), LLM trust boundaries.",
+    "Incoming Feedback Intake — when human reviewer comments, bot findings, or CI annotations exist, run `.cclaw/skills/receiving-code-review/SKILL.md`, keep a per-comment disposition queue, and mirror outcomes into `07-review.md` + `07-review-army.json` before final verdict.",
     "Review Army reconciliation — normalize findings into structured records, dedup by fingerprint, and mark multi-specialist confirmations.",
     "Meta-Review — Were tests actually run? Do test names match what they test? Are there real assertions?",
     "Classify findings — Critical (blocks ship), Important (should fix), Suggestion (optional improvement).",
@@ -206,6 +207,7 @@ export const REVIEW: StageSchemaInput = {
     { section: "Review Army Contract", required: true, validationRule: "Structured findings include id/severity/confidence/fingerprint/reportedBy/status with dedup reconciliation summary." },
     { section: "Review Readiness Dashboard", required: false, validationRule: "Includes a per-pass table (Layer 1 / Layer 2 / Adversarial / Schema) with a 'Completed at' column, a Delegation log snapshot block (path .cclaw/state/delegation-log.json with required/completed/waived/pending), a Staleness signal block (commit at last review pass and current commit), and a Headline with open critical blockers + ship recommendation. At minimum, the section text must contain the substrings 'Completed at', 'delegation-log.json', 'commit at last review pass', and 'Ship recommendation'." },
     { section: "Completeness Score", required: false, validationRule: "Records AC coverage, task coverage, test-slice coverage, and adversarial-review pass status as numeric or boolean values. At minimum, a line like 'AC coverage: N/M' or 'AC coverage: 100%'." },
+    { section: "Incoming Feedback Queue", required: false, validationRule: "When external review feedback exists, include a queue summary with per-item disposition (resolved / accepted-risk / rejected-with-evidence) and evidence refs." },
     { section: "Severity Summary", required: true, validationRule: "Per-severity count lines for critical, important, and suggestion buckets." },
     { section: "Final Verdict", required: true, validationRule: "Exactly one of: APPROVED, APPROVED_WITH_CONCERNS, BLOCKED." }
   ]

@@ -475,6 +475,11 @@ inputs_hash: sha256:pending
 |---|---|---|---|---|
 | R-1 | Critical/Important/Suggestion | correctness/security/performance/architecture |  | open/resolved |
 
+## Incoming Feedback Queue
+| ID | Source | Severity | File:line | Request | Status | Evidence |
+|---|---|---|---|---|---|---|
+| CR-1 | reviewer / bot / ci | Critical/Important/Suggestion | path:line or n/a |  | open/in-progress/resolved/accepted-risk/rejected-with-evidence |  |
+
 ## Review Army Contract
 - See \`07-review-army.json\`
 - Reconciliation summary:
