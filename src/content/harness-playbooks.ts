@@ -102,9 +102,9 @@ generic dispatcher with a strict role prompt.
 ## Dispatch pattern
 
 1. Pick the mapped \`subagent_type\` from the table above.
-2. Build the \`prompt\` from the cclaw agent contract in
+2. Build the \`prompt\` from the cclaw agent role brief in
    \`.cclaw/agents/<agent>.md\`, prefaced with a single line naming the
-   cclaw role (\`You are the cclaw <agent>. Follow the contract below.\`).
+   cclaw role (\`You are the cclaw <agent>. Follow the role brief below.\`).
 3. Set \`readonly: true\` when the table says yes — Cursor enforces it.
 4. Before dispatch, append a delegation row:
 
@@ -150,7 +150,7 @@ description: "OpenCode has plugin-based dispatch hooks and a native structured-a
 **Fallback: role-switch.** OpenCode exposes tool/session event hooks via a
 plugin but does not provide an isolated subagent worker. cclaw closes the
 delegation gate by role-switching inside the same session: the agent
-announces the role, performs the work against the contract, and records
+announces the role, performs the work against the role brief, and records
 evidence.
 
 **Structured ask: native \`question\` tool.** OpenCode ships a first-class
@@ -176,7 +176,7 @@ artifact decision log. Full mapping:
    > Acting as cclaw **<agent>** per \`.cclaw/agents/<agent>.md\`. No other
    > role may be assumed until the delegation row is closed.
 
-2. Execute the role's contract. Do NOT interleave other roles' work.
+2. Execute the role's brief. Do NOT interleave other roles' work.
 3. Write the result into the stage artifact (e.g. TDD work lands in
    \`.cclaw/artifacts/06-tdd.md\`).
 4. Append a delegation row:

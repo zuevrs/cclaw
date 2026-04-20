@@ -17,7 +17,7 @@ import {
   detectLanguageRulePacks,
   detectAdvancedKeys
 } from "./config.js";
-import { commandContract } from "./content/contracts.js";
+import { stageCommandContract } from "./content/contracts.js";
 import { contextModeFiles, createInitialContextModeState } from "./content/contexts.js";
 import { learnSkillMarkdown, learnCommandContract } from "./content/learnings.js";
 import { nextCommandContract, nextCommandSkillMarkdown } from "./content/next-command.js";
@@ -267,7 +267,7 @@ async function writeCommandContracts(projectRoot: string): Promise<void> {
   for (const stage of FLOW_STAGES) {
     await writeFileSafe(
       runtimePath(projectRoot, "commands", `${stage}.md`),
-      commandContract(stage)
+      stageCommandContract(stage)
     );
   }
 }
