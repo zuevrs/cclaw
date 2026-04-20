@@ -121,13 +121,27 @@ function parseGuardEvidence(value: unknown): Record<string, string> {
   return next;
 }
 
+function emptyGateState(): StageGateState {
+  return {
+    required: [],
+    recommended: [],
+    conditional: [],
+    triggered: [],
+    passed: [],
+    blocked: []
+  };
+}
+
 function parseCandidateGateCatalog(
   value: unknown,
   fallback: FlowState["stageGateCatalog"]
 ): FlowState["stageGateCatalog"] {
   const next = {} as FlowState["stageGateCatalog"];
   for (const stage of FLOW_STAGES) {
-    const base = fallback[stage];
+    // Guard against stale on-disk flow-state files that persisted a partial
+    // stageGateCatalog (missing a stage key). Previously `fallback[stage]`
+    // could be undefined and the spread below would throw at runtime.
+    const base = fallback[stage] ?? emptyGateState();
     next[stage] = {
       required: [...base.required],
       recommended: [...base.recommended],
@@ -147,7 +161,7 @@ function parseCandidateGateCatalog(
       continue;
     }
     const typed = rawStage as Record<string, unknown>;
-    const base = fallback[stage];
+    const base = fallback[stage] ?? emptyGateState();
     const allowed = new Set([...base.required, ...base.recommended, ...base.conditional]);
     const conditional = new Set(base.conditional);
     const passed = unique(parseStringList(typed.passed)).filter((gateId) =>
