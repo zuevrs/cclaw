@@ -72,6 +72,14 @@ export function validateTddCycleOrder(
     let state: "need_red" | "red_open" | "green_done" = "need_red";
     for (const entry of sliceEntries) {
       if (entry.phase === "red") {
+        if (entry.exitCode === undefined) {
+          issues.push(`slice ${slice}: red entry must record a non-zero exitCode`);
+          continue;
+        }
+        if (entry.exitCode === 0) {
+          issues.push(`slice ${slice}: red entry exitCode must be non-zero`);
+          continue;
+        }
         if (state === "red_open") {
           issues.push(`slice ${slice}: duplicate red before green`);
           continue;
@@ -80,6 +88,14 @@ export function validateTddCycleOrder(
         continue;
       }
       if (entry.phase === "green") {
+        if (entry.exitCode === undefined) {
+          issues.push(`slice ${slice}: green entry must record exitCode 0`);
+          continue;
+        }
+        if (entry.exitCode !== 0) {
+          issues.push(`slice ${slice}: green entry exitCode must be 0`);
+          continue;
+        }
         if (state !== "red_open") {
           issues.push(`slice ${slice}: green logged before red`);
           continue;
