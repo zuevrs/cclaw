@@ -8,6 +8,7 @@ import { stageSchema } from "../../src/content/stage-schema.js";
 import { stageSkillMarkdown } from "../../src/content/skills.js";
 import { enhancedAgentBody } from "../../src/content/subagents.js";
 import { ARTIFACT_TEMPLATES } from "../../src/content/templates.js";
+import { TRACK_STAGES, type FlowStage, type FlowTrack } from "../../src/types.js";
 import { createTempProject } from "../helpers/index.js";
 
 describe("stage schema and subagent alignment", () => {
@@ -18,6 +19,43 @@ describe("stage schema and subagent alignment", () => {
     expect(plan.crossStageTrace.readsFrom).toContain(".cclaw/artifacts/02-scope.md");
     expect(plan.requiredGates.map((gate) => gate.id)).toContain("plan_dependency_batches_defined");
     expect(plan.policyNeedles).toContain("Dependency Batches");
+  });
+
+  it("filters cross-stage reads to artifacts that exist on the active track", () => {
+    const artifactStage: Partial<Record<string, FlowStage>> = {
+      ".cclaw/artifacts/01-brainstorm.md": "brainstorm",
+      ".cclaw/artifacts/02-scope.md": "scope",
+      ".cclaw/artifacts/03-design.md": "design",
+      ".cclaw/artifacts/04-spec.md": "spec",
+      ".cclaw/artifacts/05-plan.md": "plan",
+      ".cclaw/artifacts/06-tdd.md": "tdd",
+      ".cclaw/artifacts/07-review.md": "review",
+      ".cclaw/artifacts/08-ship.md": "ship"
+    };
+    const stages: FlowStage[] = ["spec", "plan", "tdd", "review", "ship"];
+    const tracks: FlowTrack[] = ["medium", "quick"];
+
+    for (const track of tracks) {
+      for (const stage of stages) {
+        const reads = stageSchema(stage, track).crossStageTrace.readsFrom;
+        const activeStages = new Set(TRACK_STAGES[track]);
+        for (const artifact of reads) {
+          const sourceStage = artifactStage[artifact];
+          if (!sourceStage) continue;
+          expect(
+            activeStages.has(sourceStage),
+            `${stage}:${track} must not read off-track artifact ${artifact}`
+          ).toBe(true);
+        }
+      }
+    }
+
+    expect(stageSchema("plan", "medium").crossStageTrace.readsFrom).toEqual([
+      ".cclaw/artifacts/04-spec.md"
+    ]);
+    expect(stageSchema("review", "quick").crossStageTrace.readsFrom).not.toContain(
+      ".cclaw/artifacts/05-plan.md"
+    );
   });
 
   it("test-author template distinguishes TEST and BUILD stage modes", () => {

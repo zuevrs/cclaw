@@ -46,6 +46,17 @@ export type {
  */
 type RequiredGateSet = string[] | ((track: FlowTrack) => string[]);
 
+const ARTIFACT_STAGE_BY_PATH: Partial<Record<string, FlowStage>> = {
+  ".cclaw/artifacts/01-brainstorm.md": "brainstorm",
+  ".cclaw/artifacts/02-scope.md": "scope",
+  ".cclaw/artifacts/03-design.md": "design",
+  ".cclaw/artifacts/04-spec.md": "spec",
+  ".cclaw/artifacts/05-plan.md": "plan",
+  ".cclaw/artifacts/06-tdd.md": "tdd",
+  ".cclaw/artifacts/07-review.md": "review",
+  ".cclaw/artifacts/08-ship.md": "ship"
+};
+
 const REQUIRED_GATE_IDS: Record<FlowStage, RequiredGateSet> = {
   brainstorm: [
     "brainstorm_approaches_compared",
@@ -138,6 +149,17 @@ function tieredArtifactValidation(stage: FlowStage, rows: ArtifactValidation[]):
       tier: required ? "required" : "recommended",
       required
     };
+  });
+}
+
+function readsFromForTrack(readsFrom: string[], track: FlowTrack): string[] {
+  const stageSet = new Set(TRACK_STAGES[track]);
+  return readsFrom.filter((artifactPath) => {
+    const stage = ARTIFACT_STAGE_BY_PATH[artifactPath];
+    if (!stage) {
+      return true;
+    }
+    return stageSet.has(stage);
   });
 }
 
@@ -294,9 +316,14 @@ export function stageSchema(stage: FlowStage, track: FlowTrack = "standard"): St
   const base = stage === "tdd" ? tddStageForTrack(track) : STAGE_SCHEMA_MAP[stage];
   const tieredGates = tieredStageGates(stage, base.requiredGates, track);
   const tieredValidation = tieredArtifactValidation(stage, base.artifactValidation);
+  const crossStageTrace = {
+    ...base.crossStageTrace,
+    readsFrom: readsFromForTrack(base.crossStageTrace.readsFrom, track)
+  };
   return {
     ...base,
     skillFolder: STAGE_TO_SKILL_FOLDER[stage],
+    crossStageTrace,
     requiredGates: tieredGates,
     artifactValidation: tieredValidation,
     mandatoryDelegations: mandatoryDelegationsForStage(stage)
