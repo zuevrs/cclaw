@@ -10,9 +10,6 @@ docs/*
 !docs/harnesses.md
 !docs/evals.md
 !docs/config.md
-!docs/references/
-!docs/references/**
-!docs/*-*.txt
 # cclaw generated artifacts
 .cclaw/
 # cclaw evals: user-owned, track in git
