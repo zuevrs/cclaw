@@ -76,14 +76,23 @@ describe("stage schema and subagent alignment", () => {
   it("design skill renders research playbooks instead of research personas", () => {
     const design = stageSchema("design");
     expect(design.researchPlaybooks).toEqual([
+      "research/research-fleet.md",
       "research/framework-docs-lookup.md",
       "research/best-practices-lookup.md"
     ]);
     const markdown = stageSkillMarkdown("design");
     expect(markdown).toContain("## Research Playbooks");
+    expect(markdown).toContain(".cclaw/skills/research/research-fleet.md");
     expect(markdown).toContain(".cclaw/skills/research/framework-docs-lookup.md");
     expect(markdown).toContain(".cclaw/skills/research/best-practices-lookup.md");
     expect(markdown).not.toContain("framework-docs-researcher");
+  });
+
+  it("design stage requires research-fleet completion gate", () => {
+    const design = stageSchema("design");
+    const researchGate = design.requiredGates.find((gate) => gate.id === "design_research_complete");
+    expect(researchGate).toBeDefined();
+    expect(researchGate?.tier).toBe("required");
   });
 
   it("design template renders architecture diagram with clean triple-backtick fences", () => {

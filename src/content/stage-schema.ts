@@ -57,6 +57,7 @@ const REQUIRED_GATE_IDS: Record<FlowStage, RequiredGateSet> = {
     "scope_user_approved"
   ],
   design: [
+    "design_research_complete",
     "design_architecture_locked",
     "design_data_flow_mapped",
     "design_failure_modes_mapped",
@@ -98,7 +99,13 @@ const REQUIRED_GATE_IDS: Record<FlowStage, RequiredGateSet> = {
 const REQUIRED_ARTIFACT_SECTIONS: Record<FlowStage, string[]> = {
   brainstorm: ["Context", "Problem", "Approaches", "Selected Direction"],
   scope: ["Scope Mode", "In Scope / Out of Scope", "Completion Dashboard", "Scope Summary"],
-  design: ["Architecture Boundaries", "Architecture Diagram", "Failure Mode Table", "Completion Dashboard"],
+  design: [
+    "Research Fleet Synthesis",
+    "Architecture Boundaries",
+    "Architecture Diagram",
+    "Failure Mode Table",
+    "Completion Dashboard"
+  ],
   spec: ["Acceptance Criteria", "Edge Cases", "Testability Map", "Approval"],
   plan: ["Task List", "Dependency Batches", "Acceptance Mapping", "WAIT_FOR_CONFIRM"],
   tdd: ["RED Evidence", "GREEN Evidence", "REFACTOR Notes", "Traceability", "Verification Ladder"],

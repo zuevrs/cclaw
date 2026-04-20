@@ -24,6 +24,7 @@ export const DESIGN: StageSchemaInput = {
   ],
   checklist: [
     "Trivial-Change Escape Hatch — If scope artifact shows ≤3 files, zero new interfaces, and no cross-module data flow, skip full review sections. Produce a mini-design: one paragraph of rationale, list of changed files, one risk to watch. Proceed to spec.",
+    "Parallel Research Fleet — run `research/research-fleet.md` before architecture lock. Record 4-lens findings in `.cclaw/artifacts/02a-research.md` and summarize resulting decisions in `## Research Fleet Synthesis`.",
     "Design Doc Check — read existing design docs, scope artifact, brainstorm artifact. If a design doc exists that covers this area, check for 'Supersedes:' and use the latest. Use upstream artifacts as source of truth.",
     "Codebase Investigation — Before any design decision, read the actual code in the blast radius. List every file that will be touched, its current responsibilities, and existing patterns (error handling, naming, test style). Design must conform to discovered patterns, not impose new ones without justification.",
     "Step 0: Scope Challenge — what existing code solves sub-problems? Minimum change set? Complexity check: 8+ files or 2+ new services = complexity smell → flag for possible scope reduction.",
@@ -53,6 +54,7 @@ export const DESIGN: StageSchemaInput = {
   ],
   process: [
     "Read upstream artifacts (brainstorm, scope).",
+    "Run the research fleet playbook and write `.cclaw/artifacts/02a-research.md` before locking architecture choices.",
     "Investigate codebase: read files in blast radius, catalogue current patterns and responsibilities.",
     "Run Step 0 scope challenge: existing code leverage, minimum change set, complexity check.",
     "Walk through each review section interactively.",
@@ -65,12 +67,14 @@ export const DESIGN: StageSchemaInput = {
     "Write design lock artifact for downstream spec/plan."
   ],
   requiredGates: [
+    { id: "design_research_complete", description: "Parallel research artifact is complete and synthesized into design decisions." },
     { id: "design_architecture_locked", description: "Architecture boundaries are explicit and approved." },
     { id: "design_data_flow_mapped", description: "Data/state flow includes edge-case paths." },
     { id: "design_failure_modes_mapped", description: "Failure modes and mitigations are documented." },
     { id: "design_test_and_perf_defined", description: "Test strategy and performance budget are defined." }
   ],
   requiredEvidence: [
+    "Research artifact written to `.cclaw/artifacts/02a-research.md` with stack/features/architecture/pitfalls sections plus synthesis.",
     "Artifact written to `.cclaw/artifacts/03-design.md`.",
     "Failure-mode table exists with mitigations.",
     "Test strategy includes unit/integration/e2e expectations.",
@@ -80,15 +84,18 @@ export const DESIGN: StageSchemaInput = {
   ],
   inputs: ["scope contract", "system constraints", "non-functional requirements"],
   requiredContext: [
+    "parallel research synthesis from `.cclaw/artifacts/02a-research.md`",
     "existing architecture and boundaries",
     "operational constraints",
     "security and reliability expectations"
   ],
   researchPlaybooks: [
+    "research/research-fleet.md",
     "research/framework-docs-lookup.md",
     "research/best-practices-lookup.md"
   ],
   outputs: [
+    "parallel research synthesis artifact",
     "architecture lock",
     "risk and failure map",
     "test and performance baseline",
@@ -113,17 +120,14 @@ export const DESIGN: StageSchemaInput = {
     "Missing data-flow edge cases",
     "No performance budget for critical path",
     "Batching multiple design issues into one question",
-    "Skipping review sections because plan seems simple",
     "Agreeing with user's architecture choice without evaluating alternatives",
     "Hedging every recommendation with 'it depends' instead of taking a position",
-    "No explicit architecture boundary section",
-    "No failure recovery strategy",
-    "No defined test/perf baseline",
     "No NOT-in-scope output section",
     "No What-already-exists output section",
     "Design decisions made without reading the actual code first"
   ],
   policyNeedles: [
+    "Parallel Research Fleet",
     "Architecture",
     "Data Flow",
     "Failure Modes and Mitigation",
@@ -189,11 +193,16 @@ export const DESIGN: StageSchemaInput = {
   ],
   completionStatus: ["DONE", "DONE_WITH_CONCERNS", "BLOCKED"],
   crossStageTrace: {
-    readsFrom: [".cclaw/artifacts/01-brainstorm.md", ".cclaw/artifacts/02-scope.md"],
+    readsFrom: [
+      ".cclaw/artifacts/01-brainstorm.md",
+      ".cclaw/artifacts/02-scope.md",
+      ".cclaw/artifacts/02a-research.md"
+    ],
     writesTo: [".cclaw/artifacts/03-design.md"],
     traceabilityRule: "Every architecture decision must trace to a scope boundary. Every downstream spec requirement must trace to a design decision."
   },
   artifactValidation: [
+    { section: "Research Fleet Synthesis", required: true, validationRule: "Must summarize all four lenses (stack/features/architecture/pitfalls) and map findings to concrete design decisions." },
     { section: "Codebase Investigation", required: false, validationRule: "Must list blast-radius files with current responsibilities and discovered patterns." },
     { section: "Search Before Building", required: false, validationRule: "For each technical choice: Layer 1 (exact match), Layer 2 (partial match), Layer 3 (inspiration), EUREKA labels with reuse-first default." },
     { section: "Architecture Boundaries", required: true, validationRule: "Must list component boundaries with ownership." },

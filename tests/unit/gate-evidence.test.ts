@@ -320,6 +320,22 @@ describe("gate evidence verification", () => {
     expect(result.issues.join("\n")).toContain("review trace-matrix gate blocked");
   });
 
+  it("blocks design research gate when 02a-research artifact is missing", async () => {
+    const root = await createTempProject("gate-evidence-design-research");
+    await prepareRoot(root);
+    const state = createInitialFlowState("run-design-research");
+    state.currentStage = "design";
+    const required = requiredGateIds("design");
+    state.stageGateCatalog.design.passed = [...required];
+    for (const gateId of required) {
+      state.guardEvidence[gateId] = `evidence:${gateId}`;
+    }
+
+    const result = await verifyCurrentStageGateEvidence(root, state);
+    expect(result.ok).toBe(false);
+    expect(result.issues.join("\n")).toContain("design research gate blocked");
+  });
+
   it("lints artifact eagerly when file exists even before any gate is passed", async () => {
     const root = await createTempProject("gate-evidence-artifact-eager");
     await prepareRoot(root);
