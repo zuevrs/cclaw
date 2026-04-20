@@ -91,7 +91,7 @@ Load utility skills only when triggered by the current task:
 - security, performance, debugging, docs, ci-cd
 - verification-before-completion before completion claims
 - finishing-a-development-branch during ship/finalization
-- document-review and execution context skills
+- document-review, receiving-code-review, and execution context skills
 - language rule packs from \`.cclaw/config.yaml\` when enabled
 
 Custom project skills under \`.cclaw/custom-skills/\` are opt-in supplements,

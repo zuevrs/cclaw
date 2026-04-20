@@ -1309,6 +1309,117 @@ If fixes were blocked (e.g. upstream artifact drift), do NOT claim
 `;
 }
 
+export function receivingCodeReviewSkill(): string {
+  return `---
+name: receiving-code-review
+description: "Incoming review-feedback workflow. Use when a human reviewer, PR bot, CI annotation, or security scan provides comments that must be triaged and resolved without losing traceability."
+---
+
+# Receiving Code Review
+
+## Quick Start
+
+> 1. Collect every incoming review note into one queue before fixing anything.
+> 2. Normalize each note into a structured record (id/source/severity/file:line/request/status).
+> 3. Resolve one record at a time and attach evidence for the chosen disposition.
+
+## HARD-GATE
+
+Do not claim "all comments addressed" until every incoming review record has:
+
+- a final disposition (\`resolved\`, \`accepted-risk\`, or \`rejected-with-evidence\`),
+- linked evidence (commit, test output, spec reference, or rationale),
+- and an updated status in the review queue.
+
+Silent drops are forbidden.
+
+## When to Use
+
+- After a PR receives reviewer comments.
+- After CI/static-analysis/security tooling posts annotations.
+- During review/ship when new blocking feedback appears.
+- When multiple feedback channels disagree and need reconciliation.
+
+## Intake Sources
+
+Treat all of these as first-class review input:
+
+- Human reviewer comments (PR/UI/chat copy-paste)
+- Bot comments (lint, security, code quality, policy)
+- CI log findings linked to changed files
+- Post-review user concerns ("this still feels risky")
+
+## Workflow
+
+### 1) Build an intake queue
+
+Create/update a queue table with one row per unique finding:
+
+| ID | Source | Severity | File:line | Request | Status | Evidence |
+|---|---|---|---|---|---|---|
+| CR-1 | reviewer | Critical/Important/Suggestion | path:line or n/a | concise ask | open/in-progress/resolved/accepted-risk/rejected-with-evidence | link or note |
+
+Rules:
+- IDs stay stable across reruns.
+- Deduplicate near-identical comments by fingerprint (\`file + concern + requested change\`).
+- If comments conflict, keep both rows and mark them \`conflict\`.
+
+### 2) Triage by ship impact
+
+- **Critical:** blocks merge/ship until resolved or explicitly accepted by user.
+- **Important:** should be fixed in this iteration unless explicitly deferred.
+- **Suggestion:** optional, but must still get a disposition.
+
+### 3) Resolve one record at a time
+
+For each row:
+1. restate the comment in your own words,
+2. choose disposition:
+   - \`resolved\` (code/docs/tests changed),
+   - \`accepted-risk\` (intentional, user-approved),
+   - \`rejected-with-evidence\` (comment is incorrect or out of scope),
+3. attach concrete evidence (commit hash, diff path, test command output, or spec/plan citation),
+4. update row status.
+
+### 4) Reconcile with review artifacts
+
+When in review stage, mirror outcomes into:
+- \`.cclaw/artifacts/07-review.md\` (Layer 2 findings + readiness dashboard)
+- \`.cclaw/artifacts/07-review-army.json\` (status + shipBlockers alignment)
+
+If any open Critical remains, final verdict cannot be \`APPROVED\`.
+
+### 5) Verify
+
+Run the smallest relevant verification first, then full regression:
+- targeted tests for changed paths,
+- full suite/build for merge readiness.
+
+### 6) Publish response bundle
+
+Produce a concise resolution report:
+- fixed items,
+- deferred/accepted-risk items (with owner/date),
+- rejected items (with evidence),
+- remaining blockers (if any).
+
+## Anti-Patterns
+
+- "Addressed all comments" without a queue table.
+- Collapsing multiple comments into one vague status line.
+- Marking a comment resolved without evidence.
+- Rewriting reviewer intent to make it easier to dismiss.
+- Ignoring bot/CI findings because they are "automated."
+
+## Red Flags
+
+- IDs change between passes (traceability lost).
+- Critical comment has no explicit disposition.
+- Queue says resolved, but review-army still lists open blocker.
+- Response bundle omits rejected comments entirely.
+`;
+}
+
 export function retrospectiveSkill(): string {
   return `---
 name: retrospective
@@ -1645,7 +1756,8 @@ export const UTILITY_SKILL_FOLDERS = [
   "security-audit",
   "knowledge-curation",
   "retrospective",
-  "document-review"
+  "document-review",
+  "receiving-code-review"
 ] as const;
 
 export const UTILITY_SKILL_MAP: Record<string, () => string> = {
@@ -1665,5 +1777,6 @@ export const UTILITY_SKILL_MAP: Record<string, () => string> = {
   "security-audit": securityAuditSkill,
   "knowledge-curation": knowledgeCurationSkill,
   retrospective: retrospectiveSkill,
-  "document-review": documentReviewSkill
+  "document-review": documentReviewSkill,
+  "receiving-code-review": receivingCodeReviewSkill
 };
