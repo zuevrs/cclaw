@@ -302,7 +302,7 @@ function sanitizeCloseoutState(value: unknown): CloseoutState {
     return fallback;
   }
   const typed = value as Record<string, unknown>;
-  const shipSubstate = isShipSubstate(typed.shipSubstate) ? typed.shipSubstate : fallback.shipSubstate;
+  let shipSubstate = isShipSubstate(typed.shipSubstate) ? typed.shipSubstate : fallback.shipSubstate;
   const retroDraftedAt = typeof typed.retroDraftedAt === "string" ? typed.retroDraftedAt : undefined;
   const retroAcceptedAt = typeof typed.retroAcceptedAt === "string" ? typed.retroAcceptedAt : undefined;
   const retroSkipped = typeof typed.retroSkipped === "boolean" ? typed.retroSkipped : undefined;
@@ -314,6 +314,18 @@ function sanitizeCloseoutState(value: unknown): CloseoutState {
     typeof promotedRaw === "number" && Number.isFinite(promotedRaw) && promotedRaw >= 0
       ? Math.floor(promotedRaw)
       : 0;
+
+  // Demote shipSubstate when its retro invariant is violated on disk. A
+  // hand-edited flow-state could claim `ready_to_archive` or `compound_review`
+  // without ever going through the retro step, which would let `archive`
+  // proceed and skip the gate. Compound completion is not independently
+  // tracked in all flows (some runs rely on knowledge.jsonl + the retro
+  // window), so we only demote when the retro leg is missing outright.
+  const retroDone = retroAcceptedAt !== undefined || retroSkipped === true;
+  if (!retroDone && (shipSubstate === "ready_to_archive" || shipSubstate === "compound_review")) {
+    shipSubstate = "retro_review";
+  }
+
   return {
     shipSubstate,
     retroDraftedAt,

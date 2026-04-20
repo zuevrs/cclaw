@@ -371,8 +371,14 @@ export async function verifyCurrentStageGateEvidence(
               .map((line) => line.trim())
               .filter((line) => line.length > 0)
               .filter((line) => !/^\|?(?:[-:\s|])+$/u.test(line));
+            // `<fill-in>` needs its own check because `\b` does not match
+            // around `<`/`>` (non-word characters), so the previous combined
+            // pattern `\b(?:...|<fill-in>)\b` silently never matched placeholder
+            // templates that used angle-bracket form.
             const nonPlaceholder = meaningfulLines.filter(
-              (line) => !/\b(?:TODO|TBD|FIXME|pending|<fill-in>)\b/iu.test(line)
+              (line) =>
+                !/\b(?:TODO|TBD|FIXME|pending)\b/iu.test(line) &&
+                !/<fill-in>/iu.test(line)
             );
             if (nonPlaceholder.length === 0) {
               missingSections.push(`${section} (empty or placeholder)`);

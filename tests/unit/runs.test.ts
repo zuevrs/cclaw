@@ -114,6 +114,30 @@ describe("runs system", () => {
     expect(archived.retro.skipReason).toBe("trivial doc change");
   });
 
+  it("demotes on-disk shipSubstate=ready_to_archive when retro leg is missing", async () => {
+    const root = await createTempProject("runs-closeout-demote");
+    await ensureRunSystem(root);
+    const base = createInitialFlowState("active");
+    // Hand-crafted tampered flow-state: ready_to_archive without any
+    // retroAcceptedAt / retroSkipped. The sanitizer must demote to
+    // retro_review on read so the archive gate blocks.
+    const statePath = path.join(root, ".cclaw/state/flow-state.json");
+    const tampered = {
+      ...base,
+      currentStage: "ship",
+      completedStages: ["brainstorm", "scope", "design", "spec", "plan", "tdd", "review", "ship"],
+      closeout: {
+        ...base.closeout,
+        shipSubstate: "ready_to_archive"
+      }
+    };
+    await fs.writeFile(statePath, `${JSON.stringify(tampered, null, 2)}\n`, "utf8");
+
+    const read = await readFlowState(root);
+    expect(read.closeout.shipSubstate).toBe("retro_review");
+    await expect(archiveRun(root, "Tampered Closeout")).rejects.toThrow(/ready_to_archive/i);
+  });
+
   it("blocks archive when retro was skipped but closeout is not ready_to_archive", async () => {
     const root = await createTempProject("runs-retro-skipped-not-ready");
     await ensureRunSystem(root);
@@ -224,6 +248,38 @@ describe("runs system", () => {
     expect(archived.retro.required).toBe(true);
     expect(archived.retro.completed).toBe(true);
     expect(archived.retro.compoundEntries).toBeGreaterThanOrEqual(1);
+  });
+
+  it("allows archive when retro artifact exists but compound review yielded zero new patterns", async () => {
+    const root = await createTempProject("runs-retro-no-new-patterns");
+    await ensureRunSystem(root);
+    const base = createInitialFlowState("active");
+    await writeFlowState(
+      root,
+      {
+        ...base,
+        currentStage: "ship",
+        completedStages: ["brainstorm", "scope", "design", "spec", "plan", "tdd", "review", "ship"],
+        closeout: {
+          ...base.closeout,
+          shipSubstate: "ready_to_archive",
+          retroDraftedAt: "2026-03-01T00:00:00Z",
+          retroAcceptedAt: "2026-03-02T00:00:00Z",
+          compoundSkipped: true
+        }
+      },
+      { allowReset: true }
+    );
+    await fs.writeFile(
+      path.join(root, ".cclaw/artifacts/09-retro.md"),
+      "# retro\n\nNo new compound patterns this run.\n",
+      "utf8"
+    );
+
+    const archived = await archiveRun(root, "Retro No New Patterns");
+    expect(archived.retro.required).toBe(true);
+    expect(archived.retro.completed).toBe(true);
+    expect(archived.retro.compoundEntries).toBe(0);
   });
 
   it("ignores retro knowledge entries outside the current retro closeout window", async () => {

@@ -263,6 +263,69 @@ describe("internal advance-stage commands", () => {
     expect(captured.stderr()).toContain("candidate state is invalid");
   });
 
+  it("verify-flow-state-diff preserves on-disk guardEvidence when payload omits it", async () => {
+    const root = await createTempProject("internal-verify-diff-preserve-evidence");
+    await ensureRunSystem(root);
+    await writeBrainstormArtifact(root);
+
+    const current = await readFlowState(root);
+    const firstRequired = stageSchema("brainstorm").requiredGates
+      .filter((gate) => gate.tier === "required")
+      .map((gate) => gate.id)[0];
+    if (!firstRequired) {
+      throw new Error("expected at least one required brainstorm gate");
+    }
+
+    // Pre-populate disk state with a real guardEvidence entry so the
+    // candidate diff (which omits guardEvidence entirely) must inherit it.
+    await writeFlowState(
+      root,
+      {
+        ...current,
+        guardEvidence: { [firstRequired]: "previously recorded evidence" },
+        stageGateCatalog: {
+          ...current.stageGateCatalog,
+          brainstorm: {
+            ...current.stageGateCatalog.brainstorm,
+            passed: [firstRequired],
+            blocked: []
+          }
+        }
+      },
+      { allowReset: true }
+    );
+
+    // Candidate: bumps the catalog but does NOT carry guardEvidence at all.
+    const candidate = {
+      currentStage: "brainstorm" as const,
+      stageGateCatalog: {
+        ...current.stageGateCatalog,
+        brainstorm: {
+          ...current.stageGateCatalog.brainstorm,
+          passed: [firstRequired],
+          blocked: []
+        }
+      }
+    };
+
+    const captured = captureIo();
+    const code = await runInternalCommand(
+      root,
+      ["verify-flow-state-diff", `--after-json=${JSON.stringify(candidate)}`, "--quiet"],
+      captured.io
+    );
+
+    // Without preservation this would have failed with `missing guardEvidence
+    // entry` because the empty `{}` would replace the real evidence.
+    expect(captured.stderr()).not.toContain("missing guardEvidence entry");
+    // The remaining required gates are still unsatisfied so the overall
+    // verification is allowed to be incomplete — but it must NOT error on
+    // the `firstRequired` evidence specifically.
+    if (code !== 0) {
+      expect(captured.stderr()).not.toMatch(new RegExp(firstRequired));
+    }
+  });
+
   it("verify-current-state emits codex-friendly unmet-delegation/gate nudge", async () => {
     const root = await createTempProject("internal-verify-current");
     await ensureRunSystem(root);

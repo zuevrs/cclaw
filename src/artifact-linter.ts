@@ -37,25 +37,53 @@ function normalizeHeadingTitle(title: string): string {
 
 type H2SectionMap = Map<string, string>;
 
-/** Collect H2 sections and body content (`## Section Name`). */
+/**
+ * Collect H2 sections and body content (`## Section Name`).
+ *
+ * - Ignores lines that live inside fenced code blocks (``` / ~~~) so a
+ *   commented `## Approaches` inside an example doesn't open a phantom
+ *   section and swallow real content.
+ * - When the same heading appears more than once at the top level we
+ *   concatenate the bodies rather than silently overwriting the earlier
+ *   occurrence. This keeps lint rules honest when authors split a section
+ *   into multiple passes.
+ */
 function extractH2Sections(markdown: string): H2SectionMap {
   const sections = new Map<string, string>();
   const lines = markdown.split(/\r?\n/);
   let currentHeading: string | null = null;
   let buffer: string[] = [];
+  let fenced: string | null = null;
 
   const flush = (): void => {
     if (currentHeading === null) return;
-    sections.set(currentHeading, buffer.join("\n"));
+    const existing = sections.get(currentHeading);
+    const body = buffer.join("\n");
+    sections.set(
+      currentHeading,
+      existing === undefined ? body : `${existing}\n${body}`
+    );
   };
 
   for (const line of lines) {
-    const match = /^##\s+(.+)$/u.exec(line);
-    if (match) {
-      flush();
-      currentHeading = normalizeHeadingTitle(match[1] ?? "");
-      buffer = [];
+    const fenceMatch = /^(```|~~~)/u.exec(line);
+    if (fenceMatch) {
+      if (fenced === null) {
+        fenced = fenceMatch[1] ?? null;
+      } else if (line.startsWith(fenced)) {
+        fenced = null;
+      }
+      if (currentHeading !== null) buffer.push(line);
       continue;
+    }
+    if (fenced === null) {
+      const match = /^##\s+(.+)$/u.exec(line);
+      if (match) {
+        flush();
+        currentHeading = normalizeHeadingTitle(match[1] ?? "");
+        buffer = [];
+        continue;
+      }
     }
     if (currentHeading !== null) {
       buffer.push(line);
@@ -1010,6 +1038,51 @@ export async function lintArtifact(projectRoot: string, stage: FlowStage): Promi
     });
   }
 
+  if (stage === "brainstorm") {
+    // Brainstorm Iron Law: "NO ARTIFACT IS COMPLETE WITHOUT AN EXPLICITLY
+    // APPROVED DIRECTION — SILENCE IS NOT APPROVAL." Previously this was
+    // prose-only — nothing failed when the Selected Direction section
+    // omitted an approval marker, or when the Approaches table collapsed
+    // to a single row (defeating the "2-3 distinct approaches" gate).
+    const approachesBody = sectionBodyByName(sections, "Approaches");
+    if (approachesBody !== null) {
+      const tableRows = approachesBody
+        .split(/\r?\n/u)
+        .map((line) => line.trim())
+        .filter((line) => line.startsWith("|"))
+        .filter((line) => !/^\|\s*[-: |]+\|\s*$/u.test(line))
+        .filter((line) => !/^\|\s*approach\b/iu.test(line));
+      const bulletRows = approachesBody
+        .split(/\r?\n/u)
+        .map((line) => line.trim())
+        .filter((line) => /^(?:[-*]|\d+\.)\s+\S/u.test(line));
+      const rowCount = Math.max(tableRows.length, bulletRows.length);
+      findings.push({
+        section: "Distinct Approaches Enforcement",
+        required: true,
+        rule: "Approaches section must document at least 2 distinct approaches so the Iron Law comparison is meaningful.",
+        found: rowCount >= 2,
+        details:
+          rowCount >= 2
+            ? `Detected ${rowCount} approach row(s).`
+            : `Detected ${rowCount} approach row(s); at least 2 required.`
+      });
+    }
+    const directionBody = sectionBodyByName(sections, "Selected Direction");
+    if (directionBody !== null) {
+      const approvalMarker = /\bapprov(?:ed|al)\b/iu.test(directionBody);
+      findings.push({
+        section: "Direction Approval Marker",
+        required: true,
+        rule: "Selected Direction section must state an explicit approval marker (for example `Approval: approved` or `Approved by: user`).",
+        found: approvalMarker,
+        details: approvalMarker
+          ? "Approval marker present in Selected Direction."
+          : "No explicit `approved`/`approval` marker found in Selected Direction."
+      });
+    }
+  }
+
   if (stage === "plan") {
     const strictPlanGuards =
       parsedFrontmatter.hasFrontmatter ||
@@ -1062,13 +1135,14 @@ export async function lintArtifact(projectRoot: string, stage: FlowStage): Promi
   }
 
   if (stage === "scope") {
+    const lockedDecisionsBody = sectionBodyByName(sections, "Locked Decisions (D-XX)") ?? "";
     const strictScopeGuards =
       parsedFrontmatter.hasFrontmatter ||
       headingPresent(sections, "Locked Decisions (D-XX)");
     const scopeSections = [
       sectionBodyByName(sections, "In Scope / Out of Scope") ?? "",
       sectionBodyByName(sections, "Scope Summary") ?? "",
-      sectionBodyByName(sections, "Locked Decisions (D-XX)") ?? ""
+      lockedDecisionsBody
     ].join("\n");
     const reductionHits = collectPatternHits(scopeSections, SCOPE_REDUCTION_PATTERNS);
     findings.push({
@@ -1081,6 +1155,48 @@ export async function lintArtifact(projectRoot: string, stage: FlowStage): Promi
           ? "No scope-reduction phrases detected in scope boundary sections."
           : `Detected scope-reduction phrase(s): ${reductionHits.join(", ")}.`
     });
+
+    // When the Locked Decisions section is present we must enforce the
+    // D-XX ID contract at runtime (previously this was prose-only in the
+    // artifactValidation rule). Empty body, missing IDs, and duplicate
+    // IDs all fail the lint; absence of the section remains advisory so
+    // scope stays optional for small/quick tracks.
+    if (headingPresent(sections, "Locked Decisions (D-XX)")) {
+      const decisionIds = extractDecisionIds(lockedDecisionsBody);
+      const bulletLines = lockedDecisionsBody
+        .split(/\r?\n/u)
+        .map((line) => line.trim())
+        .filter((line) => /^(?:[-*]|\|)\s+\S/u.test(line));
+      const orphanBullets = bulletLines.filter((line) => !/\bD-\d+\b/u.test(line));
+      const duplicateIds: string[] = (() => {
+        const all = lockedDecisionsBody.match(/\bD-\d+\b/gu) ?? [];
+        const counts = new Map<string, number>();
+        for (const id of all) counts.set(id, (counts.get(id) ?? 0) + 1);
+        return [...counts.entries()].filter(([, n]) => n > 1).map(([id]) => id);
+      })();
+      const issues: string[] = [];
+      if (decisionIds.length === 0 && bulletLines.length === 0) {
+        issues.push("section is empty");
+      }
+      if (orphanBullets.length > 0) {
+        issues.push(
+          `${orphanBullets.length} bullet(s) missing a D-XX ID`
+        );
+      }
+      if (duplicateIds.length > 0) {
+        issues.push(`duplicate IDs: ${duplicateIds.join(", ")}`);
+      }
+      findings.push({
+        section: "Locked Decisions ID Integrity",
+        required: true,
+        rule: "Locked Decisions section must list each decision with a unique stable D-XX ID.",
+        found: issues.length === 0,
+        details:
+          issues.length === 0
+            ? `${decisionIds.length} decision ID(s) recorded with no duplicates.`
+            : issues.join("; ")
+      });
+    }
   }
 
   const passed = findings.every((f) => !f.required || f.found);
@@ -1367,6 +1483,18 @@ export async function checkReviewVerdictConsistency(
   if (finalVerdict === "APPROVED" && (openCriticalCount > 0 || shipBlockerCount > 0)) {
     errors.push(
       `Final Verdict is APPROVED but review-army has ${openCriticalCount} open Critical finding(s) and ${shipBlockerCount} shipBlocker(s). Use BLOCKED or APPROVED_WITH_CONCERNS.`
+    );
+  }
+  // APPROVED_WITH_CONCERNS is intended for Important/Suggestion findings
+  // the author has accepted. An *open* Critical finding or an active
+  // shipBlocker must route through BLOCKED (review_verdict_blocked gate)
+  // rather than pass as a concession — previously this slipped through.
+  if (
+    finalVerdict === "APPROVED_WITH_CONCERNS" &&
+    (openCriticalCount > 0 || shipBlockerCount > 0)
+  ) {
+    errors.push(
+      `Final Verdict is APPROVED_WITH_CONCERNS but review-army has ${openCriticalCount} open Critical finding(s) and ${shipBlockerCount} shipBlocker(s). Resolve them or use BLOCKED.`
     );
   }
 

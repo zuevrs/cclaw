@@ -2,6 +2,8 @@ import fs from "node:fs/promises";
 import path from "node:path";
 import { describe, expect, it } from "vitest";
 import {
+  checkReviewVerdictConsistency,
+  extractMarkdownSectionBody,
   lintArtifact,
   parseLearningsSection,
   validateReviewArmy
@@ -231,6 +233,84 @@ describe("artifact linter heuristics", () => {
 
     const result = await lintArtifact(root, "brainstorm");
     expect(result.passed).toBe(true);
+  });
+
+  it("fails brainstorm when Approaches collapses to a single row", async () => {
+    const root = await createTempProject("artifact-lint-single-approach");
+    await writeRuntimeArtifact(root, "01-brainstorm.md", `# Brainstorm Artifact
+
+## Context
+- Project state: monorepo with CI
+
+## Problem
+- What we're solving: release regressions
+
+## Clarifying Questions
+| # | Question | Answer | Decision impact |
+|---|---|---|---|
+| 1 | Block or warn? | Block | hard gate |
+
+## Approaches
+| Approach | Architecture | Trade-offs | Recommendation |
+|---|---|---|---|
+| A | script-only checks | fast and cheap | recommended |
+
+## Selected Direction
+- Approach: A
+- Approval: approved by user
+
+## Design
+- Architecture: simple script
+
+## Assumptions and Open Questions
+- None
+`);
+
+    const result = await lintArtifact(root, "brainstorm");
+    const distinct = result.findings.find(
+      (finding) => finding.section === "Distinct Approaches Enforcement"
+    );
+    expect(distinct?.found).toBe(false);
+    expect(distinct?.details).toContain("at least 2 required");
+  });
+
+  it("fails brainstorm when Selected Direction omits approval marker", async () => {
+    const root = await createTempProject("artifact-lint-no-approval");
+    await writeRuntimeArtifact(root, "01-brainstorm.md", `# Brainstorm Artifact
+
+## Context
+- Project state: monorepo with CI
+
+## Problem
+- What we're solving: release regressions
+
+## Clarifying Questions
+| # | Question | Answer | Decision impact |
+|---|---|---|---|
+| 1 | Block or warn? | Block | hard gate |
+
+## Approaches
+| Approach | Architecture | Trade-offs | Recommendation |
+|---|---|---|---|
+| A | script-only checks | fast | |
+| B | reusable module | balanced | recommended |
+
+## Selected Direction
+- Approach: B
+- Rationale: best balance
+
+## Design
+- Architecture: module
+
+## Assumptions and Open Questions
+- None
+`);
+
+    const result = await lintArtifact(root, "brainstorm");
+    const approval = result.findings.find(
+      (finding) => finding.section === "Direction Approval Marker"
+    );
+    expect(approval?.found).toBe(false);
   });
 
   it("fails brainstorm clarifying questions section when empty", async () => {
@@ -727,6 +807,63 @@ describe("artifact linter heuristics", () => {
     const reduction = result.findings.find((f) => f.section === "No Scope Reduction Language");
     expect(reduction?.required).toBe(true);
     expect(reduction?.found).toBe(false);
+  });
+
+  it("flags Locked Decisions rows that are missing a D-XX ID", async () => {
+    const root = await createTempProject("scope-decision-ids-missing");
+    await writeRuntimeArtifact(root, "02-scope.md", `# Scope Artifact
+
+## Scope Mode
+- Mode: strict
+
+## In Scope / Out of Scope
+- In scope: audit log storage
+- Out of scope: archival
+
+## Locked Decisions (D-XX)
+- D-01 — JSONL format for audit trail (compliance)
+- freeform note without an ID
+
+## Completion Dashboard
+- Checklist findings: 1/1
+
+## Scope Summary
+- Selected mode: strict
+`);
+
+    const result = await lintArtifact(root, "scope");
+    const integrity = result.findings.find((f) => f.section === "Locked Decisions ID Integrity");
+    expect(integrity?.required).toBe(true);
+    expect(integrity?.found).toBe(false);
+    expect(integrity?.details).toContain("missing a D-XX ID");
+  });
+
+  it("flags duplicate Locked Decision IDs", async () => {
+    const root = await createTempProject("scope-decision-ids-duplicate");
+    await writeRuntimeArtifact(root, "02-scope.md", `# Scope Artifact
+
+## Scope Mode
+- Mode: strict
+
+## In Scope / Out of Scope
+- In scope: audit log storage
+- Out of scope: archival
+
+## Locked Decisions (D-XX)
+- D-01 — JSONL format (compliance)
+- D-01 — Duplicate row same ID (wrong)
+
+## Completion Dashboard
+- Checklist findings: 1/1
+
+## Scope Summary
+- Selected mode: strict
+`);
+
+    const result = await lintArtifact(root, "scope");
+    const integrity = result.findings.find((f) => f.section === "Locked Decisions ID Integrity");
+    expect(integrity?.found).toBe(false);
+    expect(integrity?.details).toContain("duplicate IDs: D-01");
   });
 
   it("fails design artifact when Codebase Investigation is missing", async () => {
@@ -2265,5 +2402,86 @@ describe("review army schema validation", () => {
     const result = await validateReviewArmy(root);
     expect(result.valid).toBe(false);
     expect(result.errors.join("\n")).toMatch(/confirmed by at least 2 distinct reviewers/);
+  });
+
+  it("extractMarkdownSectionBody ignores H2 headings inside fenced code blocks", () => {
+    const markdown = `# doc
+
+## Real Section
+- real bullet
+
+\`\`\`
+## Fake Section
+- not a real heading inside code block
+\`\`\`
+
+## Another Real Section
+- second bullet
+`;
+    expect(extractMarkdownSectionBody(markdown, "Fake Section")).toBeNull();
+    expect(extractMarkdownSectionBody(markdown, "Real Section")).toContain("real bullet");
+    expect(extractMarkdownSectionBody(markdown, "Another Real Section")).toContain("second bullet");
+  });
+
+  it("extractMarkdownSectionBody concatenates duplicate H2 headings instead of overwriting", () => {
+    const markdown = `# doc
+
+## Notes
+- first pass bullet
+
+## Notes
+- second pass bullet
+`;
+    const body = extractMarkdownSectionBody(markdown, "Notes");
+    expect(body).toContain("first pass bullet");
+    expect(body).toContain("second pass bullet");
+  });
+
+  it("rejects APPROVED_WITH_CONCERNS when open Critical findings remain", async () => {
+    const root = await createTempProject("review-verdict-concerns-open-critical");
+    await writeRuntimeArtifact(
+      root,
+      "07-review.md",
+      `# Review Artifact
+
+## Final Verdict
+- APPROVED_WITH_CONCERNS
+`
+    );
+    await fs.writeFile(
+      path.join(root, ".cclaw/artifacts/07-review-army.json"),
+      JSON.stringify(
+        {
+          version: 1,
+          generatedAt: "2026-01-01T00:00:00Z",
+          scope: { base: "main", head: "feature", files: ["src/a.ts"] },
+          findings: [
+            {
+              id: "F-1",
+              severity: "Critical",
+              confidence: 9,
+              fingerprint: "fp-1",
+              reportedBy: ["code-reviewer", "security-reviewer"],
+              status: "open",
+              location: { file: "src/a.ts", line: 3 }
+            }
+          ],
+          reconciliation: {
+            duplicatesCollapsed: 0,
+            conflicts: [],
+            multiSpecialistConfirmed: ["F-1"],
+            shipBlockers: ["F-1"]
+          }
+        },
+        null,
+        2
+      ),
+      "utf8"
+    );
+
+    const result = await checkReviewVerdictConsistency(root);
+    expect(result.ok).toBe(false);
+    expect(result.finalVerdict).toBe("APPROVED_WITH_CONCERNS");
+    expect(result.errors.join("\n")).toMatch(/APPROVED_WITH_CONCERNS/);
   });
 });

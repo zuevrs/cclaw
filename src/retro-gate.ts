@@ -95,7 +95,19 @@ export async function evaluateRetroGate(
     }
   }
 
-  const completed = required ? (hasRetroArtifact && compoundEntries > 0) : true;
+  // A retro is considered complete when either:
+  //   - at least one compound learning was promoted during the retro window, or
+  //   - the operator explicitly skipped retro or compound (`retroSkipped` /
+  //     `compoundSkipped` recorded in the closeout substate) after reviewing
+  //     the draft. Previously the gate required `compoundEntries > 0`
+  //     unconditionally, which dead-locked ship closeout whenever the retro
+  //     yielded no new patterns worth promoting.
+  const explicitSkip = Boolean(
+    state.closeout.retroSkipped || state.closeout.compoundSkipped
+  );
+  const completed = required
+    ? hasRetroArtifact && (compoundEntries > 0 || explicitSkip)
+    : true;
   return {
     required,
     completed,

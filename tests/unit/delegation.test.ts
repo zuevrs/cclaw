@@ -55,6 +55,33 @@ describe("delegation ledger run scoping", () => {
     expect(result.staleIgnored.length).toBeGreaterThan(0);
   });
 
+  it("appendDelegation is idempotent on duplicate spanIds", async () => {
+    const root = await createTempProject("delegation-dedup-spanid");
+    await seedFlowState(root, "run-dedup");
+
+    const ts = new Date().toISOString();
+    await appendDelegation(root, {
+      stage: "scope",
+      agent: "planner",
+      mode: "mandatory",
+      status: "completed",
+      ts,
+      spanId: "span-fixed-1"
+    });
+    await appendDelegation(root, {
+      stage: "scope",
+      agent: "planner",
+      mode: "mandatory",
+      status: "completed",
+      ts,
+      spanId: "span-fixed-1"
+    });
+
+    const ledger = await readDelegationLedger(root);
+    expect(ledger.entries).toHaveLength(1);
+    expect(ledger.entries[0]?.spanId).toBe("span-fixed-1");
+  });
+
   it("counts delegations recorded for the current run", async () => {
     const root = await createTempProject("delegation-current");
     await seedFlowState(root, "run-current");
@@ -128,6 +155,30 @@ describe("delegation ledger run scoping", () => {
     expect(result.satisfied).toBe(false);
     expect(result.missing).toEqual([]);
     expect(result.missingEvidence).toContain("planner");
+  });
+
+  it("requires evidence for explicit role-switch rows even in mixed installs", async () => {
+    const root = await createTempProject("delegation-mixed-install-role-switch-evidence");
+    await seedFlowState(root, "run-mixed-role-switch");
+    await writeConfig(root, createDefaultConfig(["claude", "codex"]));
+
+    // A Codex session inside a claude+codex install logs a role-switch
+    // completion without evidenceRefs. The aggregate expectedMode is
+    // "isolated" (claude wins), but evidence is still required because
+    // the row is explicitly flagged role-switch.
+    await appendDelegation(root, {
+      stage: "scope",
+      agent: "planner",
+      mode: "mandatory",
+      status: "completed",
+      fulfillmentMode: "role-switch",
+      ts: new Date().toISOString()
+    });
+
+    const result = await checkMandatoryDelegations(root, "scope");
+    expect(result.satisfied).toBe(false);
+    expect(result.missingEvidence).toContain("planner");
+    expect(result.expectedMode).toBe("isolated");
   });
 
   it("prefers the stronger fallback in mixed harness installs (claude + codex)", async () => {
