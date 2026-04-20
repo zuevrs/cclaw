@@ -33,6 +33,13 @@ describe("flow state", () => {
     expect(getTransitionGuards("review", "tdd")).toContain("review_verdict_blocked");
   });
 
+  it("allows medium track brainstorm -> spec and quick track spec -> tdd transitions", () => {
+    // Medium skips scope/design; quick skips brainstorm/scope/design/plan.
+    // buildTransitionRules must emit neighbour edges for every track.
+    expect(canTransition("brainstorm", "spec")).toBe(true);
+    expect(canTransition("spec", "tdd")).toBe(true);
+  });
+
   it("builds per-stage gate catalog in initial state", () => {
     const state = createInitialFlowState();
     expect(state.stageGateCatalog.plan.required).toContain("plan_wait_for_confirm");

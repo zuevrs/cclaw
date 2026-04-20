@@ -1,4 +1,5 @@
 import { COMMAND_FILE_ORDER } from "../constants.js";
+import { FLOW_TRACKS, TRACK_STAGES } from "../types.js";
 import type { FlowStage, FlowTrack, TransitionRule } from "../types.js";
 import {
   BRAINSTORM,
@@ -324,15 +325,26 @@ export function nextCclawCommand(stage: FlowStage): string {
 
 export function buildTransitionRules(): TransitionRule[] {
   const rules: TransitionRule[] = [];
-  for (const schema of orderedStageSchemas()) {
-    if (schema.next === "done") {
-      continue;
+  const seen = new Set<string>();
+  // Derive transitions from every track so medium/quick (which skip stages)
+  // get their neighbour edges registered alongside the standard chain.
+  // Previously only the standard track produced rules, so `canTransition`
+  // returned false for legitimate medium/quick transitions (e.g. brainstorm
+  // -> spec on medium) even though `nextStage` correctly advanced them.
+  for (const track of FLOW_TRACKS) {
+    const ordered = TRACK_STAGES[track];
+    for (let i = 0; i < ordered.length - 1; i += 1) {
+      const from = ordered[i];
+      const to = ordered[i + 1];
+      const key = `${from}->${to}`;
+      if (seen.has(key)) continue;
+      seen.add(key);
+      rules.push({
+        from,
+        to,
+        guards: stageGateIds(from, track)
+      });
     }
-    rules.push({
-      from: schema.stage,
-      to: schema.next,
-      guards: stageGateIds(schema.stage)
-    });
   }
   // Review can explicitly route back to TDD when the verdict is BLOCKED.
   rules.push({
