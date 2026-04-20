@@ -458,6 +458,8 @@ CCLAW_EVAL_MODEL=glm-5.1                                  # default
 
 Full details, corpus format, and the eval contract live in
 [`docs/evals.md`](./docs/evals.md).
+Mutation-testing setup lives in `stryker.config.mjs` and
+`.github/workflows/mutation.yml` (manual + weekly run).
 
 ---
 
