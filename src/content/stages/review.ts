@@ -98,13 +98,7 @@ export const REVIEW: StageSchemaInput = {
     "No severity classification",
     "Shipping with open criticals",
     "Batching multiple findings into one report without individual resolution",
-    "Skipping Layer 2 sections because Layer 1 passed",
-    "No separate Layer 1/Layer 2 outcomes",
-    "No structured review-army reconciliation artifact",
-    "No critical bucket",
-    "No explicit ready/not-ready verdict",
-    "Review sections skipped or abbreviated",
-    "Findings not classified by severity"
+    "Skipping Layer 2 sections because Layer 1 passed"
   ],
   policyNeedles: ["Layer 1", "Layer 2", "Critical", "Review Army", "Ready to Ship", "ROUTE_BACK_TO_TDD", "One issue at a time"],
   artifactFile: "07-review.md",
