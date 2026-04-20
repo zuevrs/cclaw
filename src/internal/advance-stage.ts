@@ -530,14 +530,26 @@ async function runAdvanceStage(
     ...nextPassed.filter((gateId) => conditional.has(gateId)),
     ...nextBlocked.filter((gateId) => conditional.has(gateId))
   ]);
+  const missingGuardEvidence = nextPassed.filter((gateId) => {
+    const existing = flowState.guardEvidence[gateId];
+    if (typeof existing === "string" && existing.trim().length > 0) {
+      return false;
+    }
+    const provided = args.evidenceByGate[gateId];
+    return !(typeof provided === "string" && provided.trim().length > 0);
+  });
+  if (missingGuardEvidence.length > 0) {
+    io.stderr.write(
+      `cclaw internal advance-stage: missing --evidence-json entries for passed gates: ${missingGuardEvidence.join(", ")}.\n`
+    );
+    return 1;
+  }
   const nextGuardEvidence: Record<string, string> = { ...flowState.guardEvidence };
   for (const gateId of nextPassed) {
-    const existing = nextGuardEvidence[gateId];
-    if (typeof existing === "string" && existing.trim().length > 0) continue;
     const provided = args.evidenceByGate[gateId];
-    nextGuardEvidence[gateId] = provided && provided.trim().length > 0
-      ? provided.trim()
-      : `stage-complete helper auto-evidence for ${gateId} @ ${new Date().toISOString()} (${schema.artifactFile})`;
+    if (typeof provided === "string" && provided.trim().length > 0) {
+      nextGuardEvidence[gateId] = provided.trim();
+    }
   }
 
   const nextStageCatalog: StageGateState = {

@@ -8,6 +8,7 @@ export type KnowledgeEntryType = "rule" | "pattern" | "lesson" | "compound";
 export type KnowledgeEntryConfidence = "high" | "medium" | "low";
 export type KnowledgeEntryUniversality = "project" | "personal" | "universal";
 export type KnowledgeEntryMaturity = "raw" | "lifted-to-rule" | "lifted-to-enforcement";
+export type KnowledgeEntrySource = "stage" | "retro" | "compound" | "ideate" | "manual";
 
 export interface KnowledgeEntry {
   type: KnowledgeEntryType;
@@ -25,6 +26,7 @@ export interface KnowledgeEntry {
   first_seen_ts: string;
   last_seen_ts: string;
   project: string | null;
+  source?: KnowledgeEntrySource | null;
 }
 
 export interface KnowledgeSeedEntry {
@@ -43,6 +45,7 @@ export interface KnowledgeSeedEntry {
   first_seen_ts?: string;
   last_seen_ts?: string;
   project?: string | null;
+  source?: KnowledgeEntrySource | null;
 }
 
 export interface AppendKnowledgeDefaults {
@@ -50,6 +53,7 @@ export interface AppendKnowledgeDefaults {
   originStage?: FlowStage | null;
   originFeature?: string | null;
   project?: string | null;
+  source?: KnowledgeEntrySource | null;
   nowIso?: string;
 }
 
@@ -65,6 +69,13 @@ const KNOWLEDGE_TYPE_SET = new Set<KnowledgeEntryType>(["rule", "pattern", "less
 const KNOWLEDGE_CONFIDENCE_SET = new Set<KnowledgeEntryConfidence>(["high", "medium", "low"]);
 const KNOWLEDGE_UNIVERSALITY_SET = new Set<KnowledgeEntryUniversality>(["project", "personal", "universal"]);
 const KNOWLEDGE_MATURITY_SET = new Set<KnowledgeEntryMaturity>(["raw", "lifted-to-rule", "lifted-to-enforcement"]);
+const KNOWLEDGE_SOURCE_SET = new Set<KnowledgeEntrySource>([
+  "stage",
+  "retro",
+  "compound",
+  "ideate",
+  "manual"
+]);
 const FLOW_STAGE_SET = new Set<FlowStage>(FLOW_STAGES);
 const KNOWLEDGE_REQUIRED_KEYS = [
   "type",
@@ -84,6 +95,7 @@ const KNOWLEDGE_REQUIRED_KEYS = [
   "project"
 ] as const;
 const KNOWLEDGE_ALLOWED_KEYS = new Set<string>(KNOWLEDGE_REQUIRED_KEYS);
+KNOWLEDGE_ALLOWED_KEYS.add("source");
 
 function knowledgePath(projectRoot: string): string {
   return path.join(projectRoot, RUNTIME_ROOT, "knowledge.jsonl");
@@ -107,7 +119,7 @@ function normalizeText(value: string): string {
 
 function dedupeKey(entry: Pick<
   KnowledgeEntry,
-  "type" | "trigger" | "action" | "domain" | "stage" | "origin_stage" | "origin_feature" | "universality" | "project"
+  "type" | "trigger" | "action" | "domain" | "stage" | "origin_stage" | "origin_feature" | "universality" | "project" | "source"
 >): string {
   return [
     entry.type,
@@ -118,7 +130,8 @@ function dedupeKey(entry: Pick<
     entry.origin_stage ?? "null",
     entry.origin_feature === null ? "null" : normalizeText(entry.origin_feature),
     entry.universality,
-    entry.project === null ? "null" : normalizeText(entry.project)
+    entry.project === null ? "null" : normalizeText(entry.project),
+    entry.source === undefined || entry.source === null ? "null" : entry.source
   ].join("|");
 }
 
@@ -198,6 +211,13 @@ export function validateKnowledgeEntry(entry: unknown): { ok: boolean; errors: s
   if (!isNullableString(obj.project)) {
     errors.push("project must be string or null.");
   }
+  if (
+    obj.source !== undefined &&
+    obj.source !== null &&
+    (typeof obj.source !== "string" || !KNOWLEDGE_SOURCE_SET.has(obj.source as KnowledgeEntrySource))
+  ) {
+    errors.push("source must be one of: stage, retro, compound, ideate, manual, or null.");
+  }
 
   return { ok: errors.length === 0, errors };
 }
@@ -209,7 +229,8 @@ export function materializeKnowledgeEntry(
   const now = normalizeUtcIso(defaults.nowIso ?? nowUtcIso());
   const stage = seed.stage ?? defaults.stage ?? null;
   const originStage = seed.origin_stage ?? defaults.originStage ?? stage ?? null;
-  return {
+  const source = seed.source ?? defaults.source ?? null;
+  const entry: KnowledgeEntry = {
     type: seed.type,
     trigger: seed.trigger.trim(),
     action: seed.action.trim(),
@@ -226,6 +247,10 @@ export function materializeKnowledgeEntry(
     last_seen_ts: normalizeUtcIso(seed.last_seen_ts ?? now),
     project: seed.project ?? defaults.project ?? null
   };
+  if (source !== null) {
+    entry.source = source;
+  }
+  return entry;
 }
 
 async function readExistingKnowledgeKeys(filePath: string): Promise<Set<string>> {
