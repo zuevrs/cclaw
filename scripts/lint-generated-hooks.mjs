@@ -2,10 +2,17 @@ import { mkdtempSync, rmSync, writeFileSync } from "node:fs";
 import { join } from "node:path";
 import { tmpdir } from "node:os";
 import { spawnSync } from "node:child_process";
-import { opencodePluginJs, sessionStartScript, stopCheckpointScript } from "../dist/content/hooks.js";
+import {
+  opencodePluginJs,
+  preCompactScript,
+  sessionStartScript,
+  stageCompleteScript,
+  stopCheckpointScript
+} from "../dist/content/hooks.js";
 import {
   contextMonitorScript,
   promptGuardScript,
+  workflowGuardScript
 } from "../dist/content/observe.js";
 
 const tempDir = mkdtempSync(join(tmpdir(), "cclaw-hook-lint-"));
@@ -22,7 +29,10 @@ try {
   const shellScripts = [
     ["session-start.sh", sessionStartScript()],
     ["stop-checkpoint.sh", stopCheckpointScript()],
+    ["stage-complete.sh", stageCompleteScript()],
+    ["pre-compact.sh", preCompactScript()],
     ["prompt-guard.sh", promptGuardScript()],
+    ["workflow-guard.sh", workflowGuardScript()],
     ["context-monitor.sh", contextMonitorScript()],
   ];
 

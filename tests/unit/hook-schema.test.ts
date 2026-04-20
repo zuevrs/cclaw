@@ -24,4 +24,34 @@ describe("hook schema validation", () => {
     expect(result.ok).toBe(false);
     expect(result.errors.join("\n")).toContain("expected cclawHookSchemaVersion=1");
   });
+
+  it("rejects claude hook docs missing PreCompact wiring", () => {
+    const claude = JSON.parse(claudeHooksJsonWithObservation()) as {
+      hooks: Record<string, unknown>;
+    };
+    delete claude.hooks.PreCompact;
+    const result = validateHookDocument("claude", claude);
+    expect(result.ok).toBe(false);
+    expect(result.errors.join("\n")).toContain('missing required event array "PreCompact"');
+  });
+
+  it("rejects malformed claude hook payload shapes", () => {
+    const claude = JSON.parse(claudeHooksJsonWithObservation()) as {
+      hooks: Record<string, unknown>;
+    };
+    claude.hooks.PreToolUse = [{ matcher: "*" }];
+    const result = validateHookDocument("claude", claude);
+    expect(result.ok).toBe(false);
+    expect(result.errors.join("\n")).toContain("hooks.PreToolUse[0].hooks must be a non-empty array");
+  });
+
+  it("rejects malformed cursor hook payload shapes", () => {
+    const cursor = JSON.parse(cursorHooksJsonWithObservation()) as {
+      hooks: Record<string, unknown>;
+    };
+    cursor.hooks.preToolUse = [{ matcher: "*" }];
+    const result = validateHookDocument("cursor", cursor);
+    expect(result.ok).toBe(false);
+    expect(result.errors.join("\n")).toContain("hooks.preToolUse[0].command must be a non-empty string");
+  });
 });
