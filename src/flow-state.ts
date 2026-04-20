@@ -56,6 +56,14 @@ export interface RetroState {
  *   automatic step.
  * - `archived` — archive completed in this session (transient — archive
  *   resets flow-state so this value does not persist between runs).
+ *
+ * Layer separation (intentional):
+ * - `next: "done"` in stage schema means "the flow stage chain ended".
+ * - `shipSubstate: "archived"` is closeout-machine progress after ship.
+ * - `shipSubstate: "idle"` is the default closeout value before ship.
+ *
+ * These are not duplicates: `done` lives in stage transitions; `archived` /
+ * `idle` live in closeout lifecycle state.
  */
 export const SHIP_SUBSTATES = [
   "idle",
