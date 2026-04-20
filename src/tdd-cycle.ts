@@ -51,6 +51,8 @@ export function parseTddCycleLog(text: string): TddCycleEntry[] {
   return out;
 }
 
+const SLICE_ID_PATTERN = /^S-\d+$/u;
+
 export function validateTddCycleOrder(
   entries: TddCycleEntry[],
   options: { runId?: string } = {}
@@ -67,6 +69,16 @@ export function validateTddCycleOrder(
   }
   const issues: string[] = [];
   const openRedSlices: string[] = [];
+
+  // Reject slices whose ID does not match the stable `S-<number>` contract.
+  // Entries that drop the slice field entirely were previously coerced to
+  // `S-unknown` and silently bucketed together, which means multiple distinct
+  // cycles could appear to share a RED/GREEN pair.
+  for (const slice of bySlice.keys()) {
+    if (!SLICE_ID_PATTERN.test(slice)) {
+      issues.push(`slice "${slice}": id must match /^S-\\d+$/ (e.g. S-1)`);
+    }
+  }
 
   for (const [slice, sliceEntries] of bySlice.entries()) {
     let state: "need_red" | "red_open" | "green_done" = "need_red";
