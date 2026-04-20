@@ -55,6 +55,33 @@ describe("delegation ledger run scoping", () => {
     expect(result.staleIgnored.length).toBeGreaterThan(0);
   });
 
+  it("appendDelegation is idempotent on duplicate spanIds", async () => {
+    const root = await createTempProject("delegation-dedup-spanid");
+    await seedFlowState(root, "run-dedup");
+
+    const ts = new Date().toISOString();
+    await appendDelegation(root, {
+      stage: "scope",
+      agent: "planner",
+      mode: "mandatory",
+      status: "completed",
+      ts,
+      spanId: "span-fixed-1"
+    });
+    await appendDelegation(root, {
+      stage: "scope",
+      agent: "planner",
+      mode: "mandatory",
+      status: "completed",
+      ts,
+      spanId: "span-fixed-1"
+    });
+
+    const ledger = await readDelegationLedger(root);
+    expect(ledger.entries).toHaveLength(1);
+    expect(ledger.entries[0]?.spanId).toBe("span-fixed-1");
+  });
+
   it("counts delegations recorded for the current run", async () => {
     const root = await createTempProject("delegation-current");
     await seedFlowState(root, "run-current");

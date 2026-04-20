@@ -217,6 +217,13 @@ export async function appendDelegation(projectRoot: string, entry: DelegationEnt
     if (!Array.isArray(stamped.evidenceRefs)) {
       stamped.evidenceRefs = [];
     }
+    // Idempotency: if a caller (or a retried hook) tries to append a row
+    // with a spanId that already exists in the ledger, treat it as a no-op
+    // instead of growing the log with duplicate entries that subsequent
+    // delegation checks would mis-count.
+    if (prior.entries.some((existing) => existing.spanId === stamped.spanId)) {
+      return;
+    }
     const ledger: DelegationLedger = {
       runId: activeRunId,
       entries: [...prior.entries, stamped]
