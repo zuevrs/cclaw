@@ -590,8 +590,9 @@ async function runAdvanceStage(
     args.passedGateIds.length > 0
       ? args.passedGateIds.filter((gateId) => selectableGateIds.has(gateId))
       : requiredGateIds;
+  const selectedGateIdSet = new Set(selectedGateIds);
   const selectedTransitionGuards = selectedGateIds.filter((gateId) => transitionGuardIds.has(gateId));
-  const missingRequired = requiredGateIds.filter((gateId) => !selectedGateIds.includes(gateId));
+  const missingRequired = requiredGateIds.filter((gateId) => !selectedGateIdSet.has(gateId));
   if (missingRequired.length > 0) {
     io.stderr.write(
       `cclaw internal advance-stage: required gates not selected as passed: ${missingRequired.join(", ")}.\n`
@@ -630,7 +631,8 @@ async function runAdvanceStage(
   const nextPassed = unique([...catalog.passed, ...selectedGateIds]).filter((gateId) =>
     allowedGateIds.has(gateId)
   );
-  const nextBlocked = unique(catalog.blocked.filter((gateId) => !nextPassed.includes(gateId))).filter(
+  const nextPassedSet = new Set(nextPassed);
+  const nextBlocked = unique(catalog.blocked.filter((gateId) => !nextPassedSet.has(gateId))).filter(
     (gateId) => allowedGateIds.has(gateId)
   );
   const conditional = new Set(catalog.conditional);

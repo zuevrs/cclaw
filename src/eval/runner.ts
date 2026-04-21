@@ -707,6 +707,41 @@ function stagesInResults(caseResults: EvalCaseResult[]): FlowStage[] {
   return FLOW_STAGES.filter((s) => set.has(s));
 }
 
+const MAX_PARALLEL_CASES = 4;
+
+async function runCasesWithBoundedConcurrency<T>(
+  items: readonly T[],
+  concurrency: number,
+  worker: (item: T, index: number) => Promise<EvalCaseResult>
+): Promise<EvalCaseResult[]> {
+  if (items.length === 0) {
+    return [];
+  }
+  const limit = Math.max(1, Math.min(concurrency, items.length));
+  if (limit === 1) {
+    const results: EvalCaseResult[] = [];
+    for (let i = 0; i < items.length; i += 1) {
+      results.push(await worker(items[i]!, i));
+    }
+    return results;
+  }
+
+  const results = new Array<EvalCaseResult>(items.length);
+  let cursor = 0;
+  const runners = Array.from({ length: limit }, async () => {
+    while (true) {
+      const index = cursor;
+      cursor += 1;
+      if (index >= items.length) {
+        return;
+      }
+      results[index] = await worker(items[index]!, index);
+    }
+  });
+  await Promise.all(runners);
+  return results;
+}
+
 /**
  * Main eval runner. Dispatches between fixture-backed verification, the
  * single-stage agent-with-tools loop, and the multi-stage workflow
@@ -864,8 +899,12 @@ export async function runEval(options: RunEvalOptions): Promise<DryRunSummary | 
       caseResults.push(result);
     }
   } else {
-    for (let i = 0; i < corpus.length; i += 1) {
-      const item = corpus[i]!;
+    // Only parallelize fixture/rules verification passes that do not depend on
+    // LLM judge/agent loops. Those modes touch cost guards and retries where
+    // ordered execution is safer.
+    const caseConcurrency =
+      flags.runJudge || flags.runAgent ? 1 : MAX_PARALLEL_CASES;
+    const results = await runCasesWithBoundedConcurrency(corpus, caseConcurrency, async (item, i) => {
       progress.emit({
         kind: "case-start",
         caseId: item.id,
@@ -893,8 +932,9 @@ export async function runEval(options: RunEvalOptions): Promise<DryRunSummary | 
         durationMs: result.durationMs,
         ...(result.costUsd !== undefined ? { costUsd: result.costUsd } : {})
       });
-      caseResults.push(result);
-    }
+      return result;
+    });
+    caseResults.push(...results);
   }
 
   const stages = stagesInResults(caseResults);
