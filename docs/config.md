@@ -59,6 +59,10 @@ One knob that controls both guard families:
 - `strict` — violations **block** stage transitions until the agent
   corrects them.
 
+Codex note: because Codex hooks can hard-intercept only `Bash`, strict mode for
+non-Bash edits is enforced at stage-closeout and via a `verify-current-state`
+check on `UserPromptSubmit` (strict blocks, advisory logs).
+
 Use `strict` on teams where agents tend to skip the preamble, skip RED
 tests, or bypass stage gates. Most projects can stay on `advisory`.
 
