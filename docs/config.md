@@ -11,9 +11,12 @@ launcher, not a dashboard.
 ## What `cclaw init` writes
 
 ```yaml
-version: 0.46.0
+version: ${CCLAW_VERSION}
 flowVersion: 1.0.0
 harnesses:
+  - claude
+  - cursor
+  - opencode
   - codex
 strictness: advisory
 gitHookGuards: false
