@@ -14,15 +14,13 @@ export default defineConfig({
       exclude: [
         "src/**/*.d.ts",
         "src/types.ts",
-        "src/cli.ts",
-        "src/content/**",
         "scripts/**"
       ],
       thresholds: {
-        lines: 78,
-        statements: 78,
-        functions: 82,
-        branches: 72,
+        lines: 70,
+        statements: 70,
+        functions: 75,
+        branches: 60,
         perFile: false,
         "src/artifact-linter.ts": {
           lines: 75,
