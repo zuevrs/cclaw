@@ -77,7 +77,7 @@ repo — only `CCLAW_EVAL_API_KEY` is supplied this way.
 | `CCLAW_EVAL_TIMEOUT_MS` | Per-call timeout in milliseconds. |
 | `CCLAW_EVAL_MAX_RETRIES` | Retry budget on transient API errors. |
 | `CCLAW_EVAL_JUDGE_SAMPLES` | Number of samples the LLM judge aggregates per artifact. Must be odd (default: `3`). |
-| `CCLAW_EVAL_JUDGE_TEMPERATURE` | Sampling temperature for the judge call. Default `0.3`. |
+| `CCLAW_EVAL_JUDGE_TEMPERATURE` | Sampling temperature for the judge call. Default `0.0`. |
 | `CCLAW_EVAL_AGENT_TEMPERATURE` | Sampling temperature for single-shot / agent-mode runs. Default `0.2`. |
 | `CCLAW_EVAL_TOOL_MAX_TURNS` | Agent-mode turn cap for the with-tools loop. Default `8`. |
 | `CCLAW_EVAL_TOOL_MAX_ARG_BYTES` | Max bytes accepted for a single tool-call arguments payload. Default `65536`. |

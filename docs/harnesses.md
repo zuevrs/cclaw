@@ -63,6 +63,8 @@ shared casing silently breaks generated wiring.
   at hook level, so the canonical path is
   `bash .cclaw/hooks/stage-complete.sh <stage>` plus the non-blocking
   `UserPromptSubmit` state nudge.
+- In `strict` mode, Codex additionally runs `cclaw internal verify-current-state`
+  on `UserPromptSubmit` as a fail-closed check (advisory mode remains non-blocking).
 
 ## Shared command contract
 

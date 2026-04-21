@@ -266,6 +266,77 @@ describe("gate evidence verification", () => {
     expect(result.issues.join("\n")).toMatch(/verdict inconsistency/);
   });
 
+  it("blocks review_criticals_resolved when open critical blockers remain", async () => {
+    const root = await createTempProject("review-criticals-gate");
+    await prepareRoot(root);
+    await fs.writeFile(
+      path.join(root, ".cclaw/artifacts/07-review.md"),
+      `# Review Artifact
+
+## Layer 1 Verdict
+| Criterion | Verdict | Evidence |
+|---|---|---|
+| AC-1 | PASS | src/auth.ts |
+
+## Layer 2 Findings
+| ID | Severity | Category | Description | Status |
+|---|---|---|---|---|
+| F-99 | Critical | security | auth bypass | open |
+
+## Review Army Contract
+- See \`07-review-army.json\`
+
+## Severity Summary
+- Critical: 1
+- Important: 0
+- Suggestion: 0
+
+## Final Verdict
+- BLOCKED
+`,
+      "utf8"
+    );
+    await fs.writeFile(
+      path.join(root, ".cclaw/artifacts/07-review-army.json"),
+      JSON.stringify({
+        version: 1,
+        generatedAt: "2026-01-01T00:00:00Z",
+        scope: { base: "main", head: "feature", files: ["src/auth.ts"] },
+        findings: [
+          {
+            id: "F-99",
+            severity: "Critical",
+            confidence: 9,
+            fingerprint: "fp-auth-bypass",
+            reportedBy: ["security-reviewer"],
+            status: "open",
+            recommendation: "Patch auth guard before merge"
+          }
+        ],
+        reconciliation: {
+          duplicatesCollapsed: 0,
+          conflicts: [],
+          multiSpecialistConfirmed: [],
+          shipBlockers: ["F-99"]
+        }
+      }, null, 2),
+      "utf8"
+    );
+
+    const state = createInitialFlowState("run-review-criticals");
+    state.currentStage = "review";
+    const reviewRequired = requiredGateIds("review");
+    state.stageGateCatalog.review.passed = [...reviewRequired];
+    for (const gateId of reviewRequired) {
+      state.guardEvidence[gateId] = `evidence:${gateId}`;
+    }
+
+    const result = await verifyCurrentStageGateEvidence(root, state);
+    expect(result.ok).toBe(false);
+    expect(result.issues.join("\n")).toContain("review criticals gate blocked");
+    expect(result.issues.join("\n")).toContain("review_criticals_resolved");
+  });
+
   it("fails review stage when review-army payload is invalid", async () => {
     const root = await createTempProject("gate-evidence-review-army");
     await prepareRoot(root);
@@ -474,6 +545,85 @@ describe("gate evidence verification", () => {
     const result = await verifyCurrentStageGateEvidence(root, state);
     expect(result.ok).toBe(false);
     expect(result.issues.join("\n")).toContain("design research gate blocked");
+  });
+
+  it("blocks tdd stage when tdd-cycle order is invalid for the active run", async () => {
+    const root = await createTempProject("gate-evidence-tdd-order");
+    await prepareRoot(root);
+    await fs.writeFile(
+      path.join(root, ".cclaw/artifacts/06-tdd.md"),
+      `# TDD Artifact
+
+## RED Evidence
+| Slice | Test name | Command | Failure output summary |
+|---|---|---|---|
+| S-1 | should enforce guard | npm test -- guard.test.ts | FAIL: expected unauthorized to be blocked |
+
+## Acceptance Mapping
+| Slice | Plan task ID | Spec criterion ID |
+|---|---|---|
+| S-1 | T-1 | AC-1 |
+
+## Failure Analysis
+| Slice | Expected missing behavior | Actual failure reason |
+|---|---|---|
+| S-1 | Missing auth check | Guard path bypassed |
+
+## GREEN Evidence
+- Full suite command: npm test
+- Full suite result: PASS
+
+## REFACTOR Notes
+- What changed: removed duplicate guard setup
+- Why: reduce coupling
+- Behavior preserved: npm test remains green
+
+## Traceability
+- T-1 -> AC-1
+
+## Verification Ladder
+- Highest tier reached: command
+- Evidence: npm test (pass)
+`,
+      "utf8"
+    );
+    await fs.writeFile(
+      path.join(root, ".cclaw/state/tdd-cycle-log.jsonl"),
+      `${JSON.stringify({
+        ts: "2026-04-21T10:00:00.000Z",
+        runId: "run-tdd-order",
+        stage: "tdd",
+        slice: "S-1",
+        phase: "green",
+        command: "npm test -- guard.test.ts",
+        exitCode: 0
+      })}\n${JSON.stringify({
+        ts: "2026-04-21T10:00:05.000Z",
+        runId: "run-tdd-order",
+        stage: "tdd",
+        slice: "S-1",
+        phase: "red",
+        command: "npm test -- guard.test.ts",
+        exitCode: 1
+      })}\n`,
+      "utf8"
+    );
+
+    const state = createInitialFlowState("run-tdd-order");
+    state.currentStage = "tdd";
+    const required = requiredGateIds("tdd");
+    state.stageGateCatalog.tdd.passed = [...required];
+    for (const gateId of required) {
+      state.guardEvidence[gateId] =
+        gateId === "tdd_verified_before_complete"
+          ? "npm test -- guard.test.ts; sha: abc1234; PASS"
+          : `evidence:${gateId}`;
+    }
+
+    const result = await verifyCurrentStageGateEvidence(root, state);
+    expect(result.ok).toBe(false);
+    expect(result.issues.join("\n")).toContain("tdd cycle order gate blocked");
+    expect(result.issues.join("\n")).toContain("green logged before red");
   });
 
   it("lints artifact eagerly when file exists even before any gate is passed", async () => {

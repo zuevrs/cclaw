@@ -14,6 +14,7 @@ import type { FlowState, StageGateState } from "./flow-state.js";
 import { ensureDir, exists, writeFileSafe } from "./fs-utils.js";
 import { detectPublicApiChanges } from "./internal/detect-public-api-changes.js";
 import { readFlowState, writeFlowState } from "./runs.js";
+import { parseTddCycleLog, validateTddCycleOrder } from "./tdd-cycle.js";
 import { buildTraceMatrix } from "./trace-matrix.js";
 import { FLOW_STAGES, type FlowStage } from "./types.js";
 
@@ -300,6 +301,7 @@ export async function verifyCurrentStageGateEvidence(
   }
 
   const blockedSet = new Set(catalog.blocked);
+  const passedSet = new Set(catalog.passed);
   for (const gateId of catalog.passed) {
     if (!allowedSet.has(gateId)) {
       issues.push(`passed gate "${gateId}" is not defined for stage "${stage}".`);
@@ -340,6 +342,17 @@ export async function verifyCurrentStageGateEvidence(
       const verdictConsistency = await checkReviewVerdictConsistency(projectRoot);
       if (!verdictConsistency.ok) {
         issues.push(`review verdict inconsistency: ${verdictConsistency.errors.join("; ")}`);
+      }
+      const reviewCriticalsClaimedResolved =
+        passedSet.has("review_criticals_resolved") || flowState.completedStages.includes("review");
+      const unresolvedCriticals =
+        verdictConsistency.openCriticalCount > 0 || verdictConsistency.shipBlockerCount > 0;
+      if (reviewCriticalsClaimedResolved && unresolvedCriticals) {
+        issues.push(
+          `review criticals gate blocked (review_criticals_resolved): review-army still reports ` +
+            `${verdictConsistency.openCriticalCount} open critical(s) and ` +
+            `${verdictConsistency.shipBlockerCount} ship blocker(s).`
+        );
       }
       const securityAttestation = await checkReviewSecurityNoChangeAttestation(projectRoot);
       if (!securityAttestation.ok) {
@@ -427,10 +440,29 @@ export async function verifyCurrentStageGateEvidence(
           );
         }
       }
+      const tddLogPath = path.join(projectRoot, RUNTIME_ROOT, "state", "tdd-cycle-log.jsonl");
+      if (await exists(tddLogPath)) {
+        try {
+          const tddLogRaw = await fs.readFile(tddLogPath, "utf8");
+          const parsedCycles = parseTddCycleLog(tddLogRaw);
+          const tddOrderValidation = validateTddCycleOrder(parsedCycles, {
+            runId: flowState.activeRunId
+          });
+          if (!tddOrderValidation.ok) {
+            const details: string[] = [...tddOrderValidation.issues];
+            if (tddOrderValidation.openRedSlices.length > 0) {
+              details.push(`open red slices: ${tddOrderValidation.openRedSlices.join(", ")}`);
+            }
+            issues.push(`tdd cycle order gate blocked: ${details.join("; ")}`);
+          }
+        } catch (err) {
+          const reason = err instanceof Error ? err.message : String(err);
+          issues.push(`tdd cycle order gate blocked: unable to read tdd-cycle-log.jsonl (${reason}).`);
+        }
+      }
     }
   }
 
-  const passedSet = new Set(catalog.passed);
   const missingRequired = required.filter((gateId) => !passedSet.has(gateId));
   const missingRecommended = recommended.filter((gateId) => !passedSet.has(gateId));
   const missingTriggeredConditional: string[] = [];

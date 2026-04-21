@@ -90,6 +90,8 @@ describe("hooks lifecycle rehydration", () => {
     expect(JSON.stringify(codex)).toContain("workflow-guard.sh");
     expect(JSON.stringify(codex)).toContain("context-monitor.sh");
     expect(JSON.stringify(codex)).toContain("verify-current-state --quiet");
+    expect(JSON.stringify(codex)).toContain("CCLAW_WORKFLOW_GUARD_MODE");
+    expect(JSON.stringify(codex)).toContain("if [ \\\"$MODE\\\" = \\\"strict\\\" ]");
     expect(JSON.stringify(claude)).not.toContain("observe.sh");
     expect(JSON.stringify(codex)).not.toContain("observe.sh");
   });
