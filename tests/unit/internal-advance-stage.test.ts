@@ -3,6 +3,7 @@ import path from "node:path";
 import { Writable } from "node:stream";
 import { describe, expect, it } from "vitest";
 import { stageSchema } from "../../src/content/stage-schema.js";
+import { ARTIFACT_TEMPLATES } from "../../src/content/templates.js";
 import { runInternalCommand } from "../../src/internal/advance-stage.js";
 import { ensureRunSystem, readFlowState, writeFlowState } from "../../src/runs.js";
 import { createTempProject } from "../helpers/index.js";
@@ -139,6 +140,22 @@ async function writeTddArtifact(root: string): Promise<void> {
 `, "utf8");
 }
 
+async function writeReviewArtifacts(root: string): Promise<void> {
+  await fs.mkdir(path.join(root, ".cclaw/artifacts"), { recursive: true });
+  const reviewArtifact = (ARTIFACT_TEMPLATES["07-review.md"] ?? "")
+    .replace("- APPROVED | APPROVED_WITH_CONCERNS | BLOCKED", "- BLOCKED");
+  await fs.writeFile(
+    path.join(root, ".cclaw/artifacts/07-review.md"),
+    reviewArtifact,
+    "utf8"
+  );
+  await fs.writeFile(
+    path.join(root, ".cclaw/artifacts/07-review-army.json"),
+    ARTIFACT_TEMPLATES["07-review-army.json"] ?? "{}",
+    "utf8"
+  );
+}
+
 describe("internal advance-stage commands", () => {
   it("advance-stage promotes stage and writes required gate evidence", async () => {
     const root = await createTempProject("internal-advance-stage");
@@ -153,7 +170,7 @@ describe("internal advance-stage commands", () => {
       captured.io
     );
 
-    expect(code).toBe(0);
+    expect(code, captured.stderr()).toBe(0);
     expect(captured.stderr()).toBe("");
 
     const state = await readFlowState(root);
@@ -363,6 +380,51 @@ describe("internal advance-stage commands", () => {
     expect(captured.stderr()).toContain(
       "cclaw: current stage has 1 unmet mandatory delegations and 1 gates without evidence."
     );
+  });
+
+  it("advance-stage routes review back to tdd when review_verdict_blocked is passed", async () => {
+    const root = await createTempProject("internal-advance-stage-review-rewind");
+    await ensureRunSystem(root);
+    await writeReviewArtifacts(root);
+    await writeFlowState(
+      root,
+      {
+        ...await readFlowState(root),
+        currentStage: "review",
+        track: "quick",
+        completedStages: []
+      },
+      { allowReset: true }
+    );
+
+    const required = stageSchema("review", "quick").requiredGates
+      .filter((gate) => gate.tier === "required")
+      .map((gate) => gate.id);
+    const blockedGuard = "review_verdict_blocked";
+    const passed = [...required, blockedGuard];
+    const evidence = Object.fromEntries(
+      passed.map((gateId) => [gateId, `evidence for ${gateId}`])
+    );
+
+    const captured = captureIo();
+    const code = await runInternalCommand(
+      root,
+      [
+        "advance-stage",
+        "review",
+        `--passed=${passed.join(",")}`,
+        `--evidence-json=${JSON.stringify(evidence)}`,
+        "--waive-delegation=reviewer,security-reviewer",
+        "--waiver-reason=unit_test",
+        "--quiet"
+      ],
+      captured.io
+    );
+
+    expect(code, captured.stderr()).toBe(0);
+    expect(captured.stderr()).toBe("");
+    const state = await readFlowState(root);
+    expect(state.currentStage).toBe("tdd");
   });
 
   it("harvests Learnings JSON bullets into knowledge store and marks artifact", async () => {

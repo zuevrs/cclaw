@@ -1,6 +1,7 @@
 import { describe, expect, it } from "vitest";
 import fs from "node:fs/promises";
 import path from "node:path";
+import { SHIP_FINALIZATION_MODES } from "../../src/constants.js";
 import { lintArtifact } from "../../src/artifact-linter.js";
 import { CCLAW_AGENTS } from "../../src/content/core-agents.js";
 import { stageExamples, stageExamplesReferenceMarkdown } from "../../src/content/examples.js";
@@ -69,6 +70,18 @@ describe("stage schema and subagent alignment", () => {
     const review = stageSchema("review");
     expect(review.requiredEvidence).toContain("Artifact written to `.cclaw/artifacts/07-review-army.json`.");
     expect(review.policyNeedles).toContain("Review Army");
+  });
+
+  it("ship finalization enums are sourced from canonical constants", () => {
+    const ship = stageSchema("ship");
+    const template = ARTIFACT_TEMPLATES["08-ship.md"] ?? "";
+    for (const mode of SHIP_FINALIZATION_MODES) {
+      expect(ship.policyNeedles).toContain(mode);
+      expect(template).toContain(mode);
+    }
+    expect(ship.policyNeedles).not.toContain("FINALIZE_HANDOFF");
+    expect(ship.policyNeedles).not.toContain("FINALIZE_QUEUE");
+    expect(ship.policyNeedles).not.toContain("FINALIZE_SKIP");
   });
 
   it("07-review-army.json template matches validator schema shape", () => {

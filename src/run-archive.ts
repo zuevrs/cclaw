@@ -242,6 +242,19 @@ export async function archiveRun(
     typeof sourceState.closeout.retroSkipReason === "string" &&
     sourceState.closeout.retroSkipReason.trim().length > 0;
   const readyForArchive = sourceState.closeout.shipSubstate === "ready_to_archive";
+  const inShipCloseout = sourceState.currentStage === "ship";
+  if (inShipCloseout && skipRetro) {
+    throw new Error(
+      "Archive blocked: --skip-retro is not allowed while current stage is ship. " +
+      "Complete closeout to ready_to_archive via /cc-next."
+    );
+  }
+  if (inShipCloseout && !readyForArchive) {
+    throw new Error(
+      "Archive blocked: closeout is not ready_to_archive. " +
+      "Resume /cc-next until closeout reaches ready_to_archive."
+    );
+  }
   if (shipCompleted && !readyForArchive && !skipRetro) {
     throw new Error(
       "Archive blocked: closeout is not ready_to_archive. " +

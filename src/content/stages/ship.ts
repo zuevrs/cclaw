@@ -1,4 +1,5 @@
 import type { StageSchemaInput } from "./schema-types.js";
+import { SHIP_FINALIZATION_MODES } from "../../constants.js";
 
 // ---------------------------------------------------------------------------
 // SHIP — reference: superpowers finishing-a-development-branch + gstack /ship
@@ -96,11 +97,7 @@ export const SHIP: StageSchemaInput = {
     "Pre-Ship Checks",
     "Release Notes",
     "Rollback Plan",
-    "FINALIZE_MERGE_LOCAL",
-    "FINALIZE_OPEN_PR",
-    "FINALIZE_KEEP_BRANCH",
-    "FINALIZE_DISCARD_BRANCH",
-    "FINALIZE_NO_VCS"
+    ...SHIP_FINALIZATION_MODES
   ],
   artifactFile: "08-ship.md",
   // `done` exits the stage pipeline. Archive semantics are handled by the

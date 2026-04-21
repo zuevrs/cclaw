@@ -1,7 +1,7 @@
 import fs from "node:fs/promises";
 import path from "node:path";
 import type { Writable } from "node:stream";
-import { RUNTIME_ROOT } from "../constants.js";
+import { RUNTIME_ROOT, SHIP_FINALIZATION_MODES } from "../constants.js";
 import { stageSchema } from "../content/stage-schema.js";
 import {
   appendDelegation,
@@ -14,8 +14,9 @@ import {
 } from "../gate-evidence.js";
 import { extractMarkdownSectionBody, parseLearningsSection } from "../artifact-linter.js";
 import {
+  getAvailableTransitions,
+  getTransitionGuards,
   isFlowTrack,
-  nextStage,
   type FlowState,
   type StageGateState
 } from "../flow-state.js";
@@ -74,11 +75,49 @@ function unique<T extends string>(values: T[]): T[] {
   return [...new Set(values)];
 }
 
+function resolveSuccessorTransition(
+  stage: FlowStage,
+  track: FlowState["track"],
+  transitionTargets: FlowStage[],
+  satisfiedGuards: Set<string>,
+  selectedTransitionGuards: Set<string>
+): FlowStage | null {
+  const natural = transitionTargets[0] ?? null;
+  const specialTargets = transitionTargets.filter((target) => target !== natural);
+
+  for (const target of specialTargets) {
+    const guards = getTransitionGuards(stage, target, track);
+    if (guards.length === 0) continue;
+    const selectedSpecial = guards.some((guard) => selectedTransitionGuards.has(guard));
+    if (!selectedSpecial) continue;
+    if (guards.every((guard) => satisfiedGuards.has(guard))) {
+      return target;
+    }
+  }
+
+  if (natural) {
+    const guards = getTransitionGuards(stage, natural, track);
+    if (guards.every((guard) => satisfiedGuards.has(guard))) {
+      return natural;
+    }
+  }
+
+  for (const target of specialTargets) {
+    const guards = getTransitionGuards(stage, target, track);
+    if (guards.every((guard) => satisfiedGuards.has(guard))) {
+      return target;
+    }
+  }
+
+  return natural;
+}
+
 const TEST_COMMAND_HINT_PATTERN = /\b(?:npm test|pnpm test|yarn test|bun test|vitest|jest|pytest|go test|cargo test|mvn test|gradle test|dotnet test)\b/iu;
 const SHA_WITH_LABEL_PATTERN = /\b(?:sha|commit)(?:\s*[:=]|\s+)\s*[0-9a-f]{7,40}\b/iu;
 const PASS_STATUS_PATTERN = /\b(?:pass|passed|green|ok)\b/iu;
 const SHIP_FINALIZATION_MODE_PATTERN =
-  /\bFINALIZE_(?:MERGE_LOCAL|OPEN_PR|QUEUE|HANDOFF|SKIP)\b/u;
+  new RegExp(`\\b(?:${SHIP_FINALIZATION_MODES.join("|")})\\b`, "u");
+const SHIP_FINALIZATION_MODE_HINT = SHIP_FINALIZATION_MODES.join(", ");
 
 // Per-gate validators keyed by `${stage}:${gateId}`. Returning a non-null
 // string surfaces the reason as an `advance-stage` failure so evidence is
@@ -99,7 +138,7 @@ const GATE_EVIDENCE_VALIDATORS: Record<string, (evidence: string) => string | nu
   },
   "ship:ship_finalization_executed": (evidence) => {
     if (!SHIP_FINALIZATION_MODE_PATTERN.test(evidence)) {
-      return "must name the finalization mode that ran (for example `FINALIZE_MERGE_LOCAL`, `FINALIZE_OPEN_PR`, `FINALIZE_HANDOFF`, `FINALIZE_QUEUE`, or `FINALIZE_SKIP`).";
+      return `must name the finalization mode that ran (for example ${SHIP_FINALIZATION_MODE_HINT}).`;
     }
     return null;
   }
@@ -537,13 +576,21 @@ async function runAdvanceStage(
   const requiredGateIds = schema.requiredGates
     .filter((gate) => gate.tier === "required")
     .map((gate) => gate.id);
+  const transitionTargets = getAvailableTransitions(args.stage, flowState.track).map((rule) => rule.to);
   const allowedGateIds = new Set(
     schema.requiredGates.map((gate) => gate.id)
   );
+  const transitionGuardIds = new Set(
+    transitionTargets
+      .flatMap((target) => getTransitionGuards(args.stage, target, flowState.track))
+      .filter((guardId) => !allowedGateIds.has(guardId))
+  );
+  const selectableGateIds = new Set([...allowedGateIds, ...transitionGuardIds]);
   const selectedGateIds =
     args.passedGateIds.length > 0
-      ? args.passedGateIds.filter((gateId) => allowedGateIds.has(gateId))
+      ? args.passedGateIds.filter((gateId) => selectableGateIds.has(gateId))
       : requiredGateIds;
+  const selectedTransitionGuards = selectedGateIds.filter((gateId) => transitionGuardIds.has(gateId));
   const missingRequired = requiredGateIds.filter((gateId) => !selectedGateIds.includes(gateId));
   if (missingRequired.length > 0) {
     io.stderr.write(
@@ -592,7 +639,8 @@ async function runAdvanceStage(
     ...nextPassed.filter((gateId) => conditional.has(gateId)),
     ...nextBlocked.filter((gateId) => conditional.has(gateId))
   ]);
-  const missingGuardEvidence = nextPassed.filter((gateId) => {
+  const guardEvidenceGateIds = unique([...nextPassed, ...selectedTransitionGuards]);
+  const missingGuardEvidence = guardEvidenceGateIds.filter((gateId) => {
     const existing = flowState.guardEvidence[gateId];
     if (typeof existing === "string" && existing.trim().length > 0) {
       return false;
@@ -625,7 +673,7 @@ async function runAdvanceStage(
     return 1;
   }
   const nextGuardEvidence: Record<string, string> = { ...flowState.guardEvidence };
-  for (const gateId of nextPassed) {
+  for (const gateId of guardEvidenceGateIds) {
     const provided = args.evidenceByGate[gateId];
     if (typeof provided === "string" && provided.trim().length > 0) {
       nextGuardEvidence[gateId] = provided.trim();
@@ -685,7 +733,14 @@ async function runAdvanceStage(
     return 1;
   }
 
-  const successor = nextStage(args.stage, flowState.track);
+  const satisfiedGuards = new Set<string>([...nextPassed, ...selectedTransitionGuards]);
+  const successor = resolveSuccessorTransition(
+    args.stage,
+    flowState.track,
+    transitionTargets,
+    satisfiedGuards,
+    new Set(selectedTransitionGuards)
+  );
   const completedStages = flowState.completedStages.includes(args.stage)
     ? [...flowState.completedStages]
     : [...flowState.completedStages, args.stage];

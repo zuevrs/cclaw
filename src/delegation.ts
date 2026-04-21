@@ -72,6 +72,8 @@ export type DelegationEntry = {
   retryCount?: number;
   /** Optional references to evidence anchors in artifacts. */
   evidenceRefs?: string[];
+  /** Optional skill marker used for role-specific mandatory checks. */
+  skill?: string;
   /**
    * Fulfillment mode this entry was executed under. Omitted on legacy rows
    * (treated as `"isolated"` for Claude, otherwise inferred from the active
@@ -250,6 +252,7 @@ function isDelegationEntry(value: unknown): value is DelegationEntry {
     (o.tokens === undefined || isDelegationTokenUsage(o.tokens)) &&
     retryOk &&
     (o.evidenceRefs === undefined || (Array.isArray(o.evidenceRefs) && o.evidenceRefs.every((item) => typeof item === "string"))) &&
+    (o.skill === undefined || typeof o.skill === "string") &&
     (o.schemaVersion === undefined || o.schemaVersion === 1)
   );
 }
@@ -398,15 +401,17 @@ export async function checkMandatoryDelegations(
     const rows = forRun.filter((e) => e.agent === agent);
     const completedRows = rows.filter((e) => e.status === "completed");
     const waivedRows = rows.filter((e) => e.status === "waived");
-    const requiredCompletedCount =
+    const adversarialReviewerRequired =
       stage === "review" &&
       agent === "reviewer" &&
-      reviewTriggers?.requireAdversarialReviewer
-        ? 2
-        : 1;
+      reviewTriggers?.requireAdversarialReviewer === true;
+    const requiredCompletedCount = adversarialReviewerRequired ? 2 : 1;
     const hasCompleted = completedRows.length >= requiredCompletedCount;
     const hasWaived = waivedRows.length > 0;
-    const ok = hasCompleted || hasWaived;
+    const hasAdversarialSkill =
+      !adversarialReviewerRequired ||
+      completedRows.some((row) => row.skill === "adversarial-review");
+    const ok = hasWaived || (hasCompleted && hasAdversarialSkill);
 
     if (!ok) {
       missing.push(agent);
