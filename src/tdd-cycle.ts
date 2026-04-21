@@ -21,7 +21,11 @@ export interface TddCycleValidation {
 
 export function parseTddCycleLog(text: string): TddCycleEntry[] {
   const out: TddCycleEntry[] = [];
-  for (const raw of text.split(/\r?\n/)) {
+  // Strip a leading UTF-8 BOM on the whole blob so the first line parses
+  // cleanly; `trim()` handles BOM on subsequent lines through the same
+  // codepath (empty/whitespace-only lines are skipped).
+  const normalized = text.charCodeAt(0) === 0xfeff ? text.slice(1) : text;
+  for (const raw of normalized.split(/\r?\n/)) {
     const line = raw.trim();
     if (!line) continue;
     try {
@@ -126,6 +130,7 @@ export function validateTddCycleOrder(
       }
       if (state !== "green_done") {
         issues.push(`slice ${slice}: refactor logged before green`);
+        continue;
       }
       state = "need_red";
     }

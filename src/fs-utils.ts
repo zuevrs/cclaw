@@ -5,6 +5,18 @@ export async function ensureDir(dirPath: string): Promise<void> {
   await fs.mkdir(dirPath, { recursive: true });
 }
 
+/**
+ * Strip a leading UTF-8 BOM (U+FEFF) if present. Many editors (VS Code on
+ * Windows, Notepad, some CI tools) silently prepend a BOM when saving
+ * UTF-8; when the file is then split on `\n` the first line keeps the
+ * invisible BOM and `JSON.parse` rejects it, which caused the first
+ * knowledge.jsonl entry to be silently dropped on load. Treat BOM as a
+ * no-op at read time so the rest of the pipeline sees clean UTF-8.
+ */
+export function stripBom(text: string): string {
+  return text.charCodeAt(0) === 0xfeff ? text.slice(1) : text;
+}
+
 function sleep(ms: number): Promise<void> {
   return new Promise((resolve) => setTimeout(resolve, ms));
 }
@@ -72,7 +84,28 @@ export async function writeFileSafe(filePath: string, content: string): Promise<
     `.${path.basename(filePath)}.tmp-${process.pid}-${Date.now()}-${Math.random().toString(36).slice(2, 8)}`
   );
   await fs.writeFile(tempPath, content, "utf8");
-  await fs.rename(tempPath, filePath);
+  try {
+    await fs.rename(tempPath, filePath);
+  } catch (error) {
+    const code = (error as NodeJS.ErrnoException | undefined)?.code;
+    // `rename` fails with EXDEV when the temp file and target live on
+    // different filesystems (container bind mounts, tmpfs + rootfs,
+    // cross-volume setups). Fall back to copy + unlink so atomic writes
+    // still work — copyFile is not fully atomic but is the best we can
+    // do across devices, and we remove the temp even if copy fails.
+    if (code === "EXDEV") {
+      try {
+        await fs.copyFile(tempPath, filePath);
+      } finally {
+        await fs.unlink(tempPath).catch(() => undefined);
+      }
+      return;
+    }
+    // Other errors: try to clean up the temp to avoid littering the
+    // directory with orphaned `.tmp-<pid>-*` files, then rethrow.
+    await fs.unlink(tempPath).catch(() => undefined);
+    throw error;
+  }
 }
 
 export async function exists(filePath: string): Promise<boolean> {

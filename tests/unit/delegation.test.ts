@@ -4,7 +4,7 @@ import { execFile } from "node:child_process";
 import { promisify } from "node:util";
 import { describe, expect, it } from "vitest";
 import { createDefaultConfig, writeConfig } from "../../src/config.js";
-import { appendDelegation, checkMandatoryDelegations, readDelegationLedger } from "../../src/delegation.js";
+import { appendDelegation, checkMandatoryDelegations, isTrustBoundaryPath, readDelegationLedger } from "../../src/delegation.js";
 import { createInitialFlowState } from "../../src/flow-state.js";
 import type { FlowStage } from "../../src/types.js";
 import { createTempProject } from "../helpers/index.js";
@@ -327,5 +327,22 @@ describe("delegation ledger run scoping", () => {
     const secondPass = await checkMandatoryDelegations(root, "review");
     expect(secondPass.satisfied).toBe(true);
     expect(secondPass.missing).toEqual([]);
+  });
+
+  describe("isTrustBoundaryPath", () => {
+    it("flags paths that clearly indicate trust-boundary surfaces", () => {
+      expect(isTrustBoundaryPath("src/auth/session.ts")).toBe(true);
+      expect(isTrustBoundaryPath("services/oauth-callback.ts")).toBe(true);
+      expect(isTrustBoundaryPath("lib/security/policy-loader.ts")).toBe(true);
+      expect(isTrustBoundaryPath("utils/sanitize-html.ts")).toBe(true);
+      expect(isTrustBoundaryPath("api/csrf-middleware.ts")).toBe(true);
+    });
+
+    it("does not flag generic input/validation paths (avoids false positives)", () => {
+      expect(isTrustBoundaryPath("src/components/form-input.tsx")).toBe(false);
+      expect(isTrustBoundaryPath("utils/number-validation.ts")).toBe(false);
+      expect(isTrustBoundaryPath("tests/e2e/input.test.ts")).toBe(false);
+      expect(isTrustBoundaryPath("schemas/validate-payload.ts")).toBe(false);
+    });
   });
 });

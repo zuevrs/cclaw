@@ -124,6 +124,52 @@ describe("knowledge store append helper", () => {
     expect(result.errors.join(" ")).toContain("severity");
   });
 
+  it("tolerates a UTF-8 BOM on existing knowledge.jsonl and does not drop the first entry on dedupe", async () => {
+    const root = await createTempProject("knowledge-bom");
+    const jsonlPath = path.join(root, ".cclaw/knowledge.jsonl");
+    await fs.mkdir(path.dirname(jsonlPath), { recursive: true });
+
+    const existingEntry: KnowledgeEntry = {
+      type: "pattern",
+      trigger: "bom sentinel",
+      action: "preserve first entry",
+      confidence: "medium",
+      domain: null,
+      stage: "plan",
+      origin_stage: "plan",
+      origin_feature: null,
+      project: "cclaw",
+      frequency: 1,
+      universality: "project",
+      maturity: "raw",
+      first_seen_ts: "2026-04-19T11:00:00Z",
+      last_seen_ts: "2026-04-19T11:00:00Z",
+      created: "2026-04-19T11:00:00Z"
+    };
+    // Prepend a BOM (U+FEFF) to simulate an editor that saved UTF-8 with BOM.
+    const jsonl = `\uFEFF${JSON.stringify(existingEntry)}\n`;
+    await fs.writeFile(jsonlPath, jsonl, "utf8");
+
+    const result = await appendKnowledge(
+      root,
+      [
+        {
+          type: existingEntry.type,
+          trigger: existingEntry.trigger,
+          action: existingEntry.action,
+          confidence: existingEntry.confidence
+        }
+      ],
+      { stage: "plan", project: "cclaw", nowIso: "2026-04-19T11:01:00Z" }
+    );
+
+    // The BOM entry must be indexed, so the identical seed is detected as
+    // a duplicate rather than silently re-appended. Before the fix the BOM
+    // made the first line unparseable and this dedupe was skipped.
+    expect(result.appended).toBe(0);
+    expect(result.skippedDuplicates).toBe(1);
+  });
+
   it("rejects unknown source values", async () => {
     const root = await createTempProject("knowledge-invalid-source");
     const seed = {

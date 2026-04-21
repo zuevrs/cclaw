@@ -3,7 +3,7 @@ import path from "node:path";
 import { RUNTIME_ROOT } from "./constants.js";
 import { exists } from "./fs-utils.js";
 import { stageSchema } from "./content/stage-schema.js";
-import { FLOW_STAGES, type FlowStage } from "./types.js";
+import { FLOW_STAGES, type FlowStage, type FlowTrack } from "./types.js";
 
 export interface LintFinding {
   section: string;
@@ -930,8 +930,12 @@ function validateSectionBody(
   };
 }
 
-export async function lintArtifact(projectRoot: string, stage: FlowStage): Promise<LintResult> {
-  const schema = stageSchema(stage);
+export async function lintArtifact(
+  projectRoot: string,
+  stage: FlowStage,
+  track: FlowTrack = "standard"
+): Promise<LintResult> {
+  const schema = stageSchema(stage, track);
   const { absPath: absFile, relPath: relFile } = await resolveArtifactPath(projectRoot, schema.artifactFile);
   const findings: LintFinding[] = [];
 

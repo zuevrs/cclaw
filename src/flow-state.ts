@@ -189,7 +189,25 @@ export function canTransition(from: FlowStage, to: FlowStage): boolean {
   return TRANSITION_RULES.some((rule) => rule.from === from && rule.to === to);
 }
 
-export function getTransitionGuards(from: FlowStage, to: FlowStage): string[] {
+export function getTransitionGuards(
+  from: FlowStage,
+  to: FlowStage,
+  track: FlowTrack = "standard"
+): string[] {
+  // Natural forward edge on this track: derive guards fresh from the
+  // track-specific gate schema. `TRANSITION_RULES` collapses shared edges
+  // across tracks (first-registered wins), so reading guards directly
+  // from the track-aware schema avoids silently dropping gates that only
+  // the current track requires (e.g. `tdd_traceable_to_plan` on standard
+  // gets lost if quick was registered first).
+  const ordered = TRACK_STAGES[track];
+  const fromIdx = ordered.indexOf(from);
+  if (fromIdx >= 0 && ordered[fromIdx + 1] === to) {
+    return stageGateIds(from, track);
+  }
+  // Non-neighbour edges (e.g. `review -> tdd` with `review_verdict_blocked`)
+  // carry special guards not derivable from a stage's gate catalog; fall
+  // back to the pre-computed rule table.
   const match = TRANSITION_RULES.find((rule) => rule.from === from && rule.to === to);
   return match ? [...match.guards] : [];
 }
