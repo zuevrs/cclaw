@@ -633,6 +633,7 @@ printf '%s\n' "$*" >> "${callsPath}"
     expect(plugin).toContain('"session.resumed"');
     expect(plugin).toContain('"session.compacted"');
     expect(plugin).toContain('"session.cleared"');
+    expect(plugin).toContain('"session.updated"');
     expect(plugin).toContain('runHookScript("pre-compact.sh"');
     expect(plugin).toContain('"tool.execute.before"');
     expect(plugin).toContain('"tool.execute.after"');

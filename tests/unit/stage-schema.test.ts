@@ -8,7 +8,7 @@ import { stageSchema } from "../../src/content/stage-schema.js";
 import { stageSkillMarkdown } from "../../src/content/skills.js";
 import { enhancedAgentBody } from "../../src/content/subagents.js";
 import { ARTIFACT_TEMPLATES } from "../../src/content/templates.js";
-import { TRACK_STAGES, type FlowStage, type FlowTrack } from "../../src/types.js";
+import { FLOW_STAGES, FLOW_TRACKS, TRACK_STAGES, type FlowStage, type FlowTrack } from "../../src/types.js";
 import { createTempProject } from "../helpers/index.js";
 
 describe("stage schema and subagent alignment", () => {
@@ -171,6 +171,50 @@ describe("stage schema and subagent alignment", () => {
     expect(ladder?.required).toBe(true);
     expect(ladder?.tier).toBe("required");
     expect(ladder?.validationRule).toMatch(/highest tier reached/i);
+  });
+
+  it("every declared gate is marked required on at least one track (single source of truth)", () => {
+    const offenders: Array<{ stage: FlowStage; gateId: string }> = [];
+    for (const stage of FLOW_STAGES) {
+      const idsByTrack = new Map<FlowTrack, Map<string, "required" | "recommended">>();
+      for (const track of FLOW_TRACKS) {
+        const schema = stageSchema(stage, track);
+        const tiers = new Map(schema.requiredGates.map((gate) => [gate.id, gate.tier] as const));
+        idsByTrack.set(track, tiers);
+      }
+      const allGateIds = new Set<string>();
+      for (const tiers of idsByTrack.values()) {
+        for (const id of tiers.keys()) allGateIds.add(id);
+      }
+      for (const gateId of allGateIds) {
+        let requiredAnywhere = false;
+        for (const track of FLOW_TRACKS) {
+          const activeStages = new Set(TRACK_STAGES[track]);
+          if (!activeStages.has(stage)) continue;
+          const tier = idsByTrack.get(track)?.get(gateId);
+          if (tier === "required") {
+            requiredAnywhere = true;
+            break;
+          }
+        }
+        if (!requiredAnywhere) {
+          offenders.push({ stage, gateId });
+        }
+      }
+    }
+    expect(
+      offenders,
+      `gate declared in a stage but never marked required on any track (probably missing from REQUIRED_GATE_IDS in src/content/stage-schema.ts)`
+    ).toEqual([]);
+  });
+
+  it("tdd docs-drift gate is required across all tracks", () => {
+    for (const track of FLOW_TRACKS) {
+      const tdd = stageSchema("tdd", track);
+      const drift = tdd.requiredGates.find((gate) => gate.id === "tdd_docs_drift_check");
+      expect(drift, `tdd_docs_drift_check must exist on track=${track}`).toBeDefined();
+      expect(drift?.tier, `tdd_docs_drift_check must be required on track=${track}`).toBe("required");
+    }
   });
 
   it("review trace matrix gate is required on standard and recommended on quick", () => {

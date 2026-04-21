@@ -3,7 +3,7 @@ import path from "node:path";
 import { execFile } from "node:child_process";
 import { pathToFileURL } from "node:url";
 import { promisify } from "node:util";
-import { REQUIRED_DIRS, RUNTIME_ROOT } from "./constants.js";
+import { REQUIRED_DIRS, RUNTIME_ROOT, UTILITY_COMMANDS } from "./constants.js";
 import { CCLAW_AGENTS } from "./content/core-agents.js";
 import { detectAdvancedKeys, readConfig } from "./config.js";
 import { exists } from "./fs-utils.js";
@@ -624,8 +624,8 @@ export async function doctorChecks(projectRoot: string, options: DoctorOptions =
     details: `${agentsFile} must contain the managed cclaw marker block with routing, verification, and minimal detail pointer`
   });
 
-  // Utility commands
-  for (const cmd of ["learn", "next", "ideate", "status", "tree", "diff", "feature", "tdd-log", "retro", "compound", "rewind"]) {
+  // Utility commands — keep in sync with UTILITY_COMMANDS (src/constants.ts)
+  for (const cmd of UTILITY_COMMANDS) {
     const cmdPath = path.join(projectRoot, RUNTIME_ROOT, "commands", `${cmd}.md`);
     checks.push({
       name: `utility_command:${cmd}`,
@@ -907,7 +907,7 @@ export async function doctorChecks(projectRoot: string, options: DoctorOptions =
       });
       checks.push({
         name: `shim:codex:${skillName}:frontmatter`,
-        ok,
+        ok: frontmatterOk,
         details: frontmatterOk
           ? `${skillPath} has \`name: ${skillName}\` frontmatter`
           : ok
