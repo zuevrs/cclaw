@@ -2,7 +2,7 @@ import fs from "node:fs/promises";
 import path from "node:path";
 import { RUNTIME_ROOT } from "./constants.js";
 import type { FlowState } from "./flow-state.js";
-import { exists } from "./fs-utils.js";
+import { exists, stripBom } from "./fs-utils.js";
 
 function activeArtifactsPath(projectRoot: string): string {
   return path.join(projectRoot, RUNTIME_ROOT, "artifacts");
@@ -19,7 +19,13 @@ export interface RetroGateStatus {
   hasRetroArtifact: boolean;
 }
 
-const RETRO_ARTIFACT_MTIME_FALLBACK_WINDOW_MS = 24 * 60 * 60 * 1000;
+// Fallback window for compound-entry scanning when `retroDraftedAt` /
+// `retroAcceptedAt` are not set (legacy runs or imports): use the retro
+// artifact's mtime ± 7 days. 24h was too narrow for long-running retros
+// that are edited over several days or runs imported from another
+// machine with slightly different clocks; 7 days is still tight enough
+// that entries from an unrelated future run are excluded.
+const RETRO_ARTIFACT_MTIME_FALLBACK_WINDOW_MS = 7 * 24 * 60 * 60 * 1000;
 
 function parseIsoTimestamp(value: string | undefined): number | null {
   if (!value || value.trim().length === 0) return null;
@@ -78,7 +84,7 @@ export async function evaluateRetroGate(
   const knowledgeFile = path.join(projectRoot, RUNTIME_ROOT, "knowledge.jsonl");
   if (shouldFallbackScan && (await exists(knowledgeFile))) {
     try {
-      const raw = await fs.readFile(knowledgeFile, "utf8");
+      const raw = stripBom(await fs.readFile(knowledgeFile, "utf8"));
       compoundEntries = 0;
       for (const line of raw.split(/\r?\n/)) {
         const trimmed = line.trim();
@@ -114,19 +120,20 @@ export async function evaluateRetroGate(
     }
   }
 
-  // A retro is considered complete when either:
-  //   - at least one compound learning was promoted during the retro window, or
-  //   - the operator explicitly skipped retro or compound (`retroSkipped` /
-  //     `compoundSkipped` recorded in the closeout substate) after reviewing
-  //     the draft. Previously the gate required `compoundEntries > 0`
-  //     unconditionally, which dead-locked ship closeout whenever the retro
-  //     yielded no new patterns worth promoting.
-  const explicitSkip = Boolean(
-    state.closeout.retroSkipped || state.closeout.compoundSkipped
-  );
-  const completed = required
-    ? hasRetroArtifact && (compoundEntries > 0 || explicitSkip)
-    : true;
+  // A retro is considered complete when any of:
+  //   - the retro artifact exists AND (at least one compound learning was
+  //     promoted during the retro window OR compound was explicitly skipped
+  //     after reviewing the draft), or
+  //   - the operator explicitly skipped the retro step itself
+  //     (`retroSkipped === true` with a reason). `retroSkipped` is an
+  //     operator-level override of the artifact requirement, so it must
+  //     bypass `hasRetroArtifact` — otherwise a run that legitimately had
+  //     nothing worth retro-ing dead-locks at closeout waiting for a
+  //     file that will never exist.
+  const retroSkipped = state.closeout.retroSkipped === true;
+  const compoundSkipped = state.closeout.compoundSkipped === true;
+  const artifactPathComplete = hasRetroArtifact && (compoundEntries > 0 || compoundSkipped);
+  const completed = required ? retroSkipped || artifactPathComplete : true;
   return {
     required,
     completed,
