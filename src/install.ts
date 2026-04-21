@@ -1234,7 +1234,7 @@ async function writeState(projectRoot: string, config: CclawConfig, forceReset =
     return;
   }
 
-  const state = createInitialFlowState("active", config.defaultTrack ?? "standard");
+  const state = createInitialFlowState({ track: config.defaultTrack ?? "standard" });
   await writeFileSafe(statePath, `${JSON.stringify(state, null, 2)}\n`);
 }
 

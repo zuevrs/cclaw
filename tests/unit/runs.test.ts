@@ -19,7 +19,7 @@ describe("runs system", () => {
     const root = await createTempProject("runs-bootstrap");
     const state = await ensureRunSystem(root);
 
-    expect(state.activeRunId).toBe("active");
+    expect(state.activeRunId).toMatch(/^run-/);
     expect(state.currentStage).toBe("brainstorm");
     await expect(fs.stat(path.join(root, ".cclaw/artifacts"))).resolves.toBeTruthy();
     await expect(fs.stat(path.join(root, ".cclaw/worktrees"))).resolves.toBeTruthy();
@@ -55,7 +55,7 @@ describe("runs system", () => {
     expect(activeArtifacts).toEqual([]);
     expect(state.currentStage).toBe("brainstorm");
     expect(state.completedStages).toEqual([]);
-    expect(state.activeRunId).toBe("active");
+    expect(state.activeRunId).toMatch(/^run-/);
   });
 
   it("removes the .archive-in-progress sentinel on success", async () => {
@@ -99,6 +99,47 @@ describe("runs system", () => {
     );
 
     await expect(archiveRun(root, "Retro Blocked")).rejects.toThrow(/ready_to_archive/i);
+  });
+
+  it("blocks archive when current stage is ship and closeout is not ready, even if ship is not marked complete", async () => {
+    const root = await createTempProject("runs-ship-stage-not-ready");
+    await ensureRunSystem(root);
+    await writeFlowState(
+      root,
+      {
+        ...createInitialFlowState("active"),
+        currentStage: "ship",
+        completedStages: ["brainstorm", "scope", "design", "spec", "plan", "tdd", "review"]
+      },
+      { allowReset: true }
+    );
+
+    await expect(archiveRun(root, "Ship Not Ready")).rejects.toThrow(/ready_to_archive/i);
+  });
+
+  it("rejects --skip-retro while current stage is ship", async () => {
+    const root = await createTempProject("runs-ship-stage-skip-retro-disallowed");
+    await ensureRunSystem(root);
+    await writeFlowState(
+      root,
+      {
+        ...createInitialFlowState("active"),
+        currentStage: "ship",
+        completedStages: ["brainstorm", "scope", "design", "spec", "plan", "tdd", "review", "ship"],
+        closeout: {
+          ...createInitialFlowState("active").closeout,
+          shipSubstate: "ready_to_archive"
+        }
+      },
+      { allowReset: true }
+    );
+
+    await expect(
+      archiveRun(root, "Skip Retro Forbidden", {
+        skipRetro: true,
+        skipRetroReason: "unit test should fail"
+      })
+    ).rejects.toThrow(/skip-retro is not allowed/i);
   });
 
   it("allows archive when retro was skipped via closeout substate with a reason", async () => {
@@ -595,7 +636,7 @@ describe("runs system", () => {
     const resetDelegation = JSON.parse(
       await fs.readFile(path.join(root, ".cclaw/state/delegation-log.json"), "utf8")
     ) as { runId: string; entries: unknown[] };
-    expect(resetDelegation.runId).toBe("active");
+    expect(resetDelegation.runId).toBe(resetState.activeRunId);
     expect(resetDelegation.entries).toEqual([]);
 
     const resetTddLog = await fs.readFile(path.join(root, ".cclaw/state/tdd-cycle-log.jsonl"), "utf8");
@@ -674,9 +715,10 @@ describe("runs system", () => {
   it("accepts a legal forward transition via writeFlowState", async () => {
     const root = await createTempProject("runs-transition-ok");
     await ensureRunSystem(root);
+    const current = await readFlowState(root);
 
     await writeFlowState(root, {
-      ...createInitialFlowState("active"),
+      ...current,
       currentStage: "scope",
       completedStages: ["brainstorm"]
     });

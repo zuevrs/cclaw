@@ -3,7 +3,7 @@ import path from "node:path";
 import { RUNTIME_ROOT } from "./constants.js";
 import { createInitialFlowState, type FlowState } from "./flow-state.js";
 import { readActiveFeature, syncActiveFeatureSnapshot } from "./feature-system.js";
-import { ensureDir, exists, writeFileSafe } from "./fs-utils.js";
+import { ensureDir, exists, withDirectoryLock, writeFileSafe } from "./fs-utils.js";
 import { evaluateRetroGate } from "./retro-gate.js";
 import { ensureRunSystem, readFlowState, writeFlowState } from "./run-persistence.js";
 import type { FlowStage } from "./types.js";
@@ -20,6 +20,12 @@ const STATE_SNAPSHOT_EXCLUDE = new Set<string>([
 const DELEGATION_LOG_FILE = "delegation-log.json";
 const TDD_CYCLE_LOG_FILE = "tdd-cycle-log.jsonl";
 const RECONCILIATION_NOTICES_FILE = "reconciliation-notices.json";
+const CRITICAL_STATE_SNAPSHOT_FILES = new Set<string>([
+  "flow-state.json",
+  DELEGATION_LOG_FILE,
+  TDD_CYCLE_LOG_FILE,
+  RECONCILIATION_NOTICES_FILE
+]);
 
 export interface CclawRunMeta {
   id: string;
@@ -81,6 +87,10 @@ function stateDirPath(projectRoot: string): string {
   return path.join(projectRoot, STATE_DIR_REL_PATH);
 }
 
+function archiveLockPath(projectRoot: string): string {
+  return path.join(projectRoot, RUNTIME_ROOT, "state", ".archive.lock");
+}
+
 async function snapshotStateDirectory(
   projectRoot: string,
   destinationRoot: string
@@ -110,8 +120,14 @@ async function snapshotStateDirectory(
         await fs.copyFile(from, to);
         copied.push(entry.name);
       }
-    } catch {
-      // best-effort snapshot; continue on individual failures
+    } catch (error) {
+      if (CRITICAL_STATE_SNAPSHOT_FILES.has(entry.name)) {
+        const details = error instanceof Error ? error.message : String(error);
+        throw new Error(
+          `Archive snapshot failed for critical state file "${entry.name}" (${details}).`
+        );
+      }
+      // Non-critical snapshot files are best-effort and may be skipped.
     }
   }
   return copied.sort((a, b) => a.localeCompare(b));
@@ -215,6 +231,7 @@ export async function archiveRun(
   options: ArchiveRunOptions = {}
 ): Promise<ArchiveRunResult> {
   await ensureRunSystem(projectRoot);
+  return withDirectoryLock(archiveLockPath(projectRoot), async () => {
   const activeFeature = await readActiveFeature(projectRoot);
   const artifactsDir = activeArtifactsPath(projectRoot);
   const runsDir = runsRoot(projectRoot);
@@ -242,6 +259,19 @@ export async function archiveRun(
     typeof sourceState.closeout.retroSkipReason === "string" &&
     sourceState.closeout.retroSkipReason.trim().length > 0;
   const readyForArchive = sourceState.closeout.shipSubstate === "ready_to_archive";
+  const inShipCloseout = sourceState.currentStage === "ship";
+  if (inShipCloseout && skipRetro) {
+    throw new Error(
+      "Archive blocked: --skip-retro is not allowed while current stage is ship. " +
+      "Complete closeout to ready_to_archive via /cc-next."
+    );
+  }
+  if (inShipCloseout && !readyForArchive) {
+    throw new Error(
+      "Archive blocked: closeout is not ready_to_archive. " +
+      "Resume /cc-next until closeout reaches ready_to_archive."
+    );
+  }
   if (shipCompleted && !readyForArchive && !skipRetro) {
     throw new Error(
       "Archive blocked: closeout is not ready_to_archive. " +
@@ -293,7 +323,9 @@ export async function archiveRun(
     `${JSON.stringify({ archiveId, startedAt: archivedAt, sourceRunId: sourceState.activeRunId }, null, 2)}\n`
   );
 
+  const stateBeforeReset = sourceState;
   let artifactsMoved = false;
+  let stateReset = false;
   try {
     await fs.rename(artifactsDir, archiveArtifactsPath);
     artifactsMoved = true;
@@ -304,6 +336,7 @@ export async function archiveRun(
 
     const resetState = createInitialFlowState();
     await writeFlowState(projectRoot, resetState, { allowReset: true });
+    stateReset = true;
     await resetCarryoverStateFiles(projectRoot, resetState.activeRunId);
 
     const manifest: ArchiveManifest = {
@@ -352,8 +385,22 @@ export async function archiveRun(
         // surfaced by doctor and can be reconciled manually.
       }
     }
+    if (stateReset) {
+      try {
+        await writeFlowState(projectRoot, stateBeforeReset, { allowReset: true });
+        await resetCarryoverStateFiles(projectRoot, stateBeforeReset.activeRunId);
+      } catch {
+        // If rollback of state fails, keep sentinel + archive remnants for
+        // manual reconciliation.
+      }
+    }
     throw err;
   }
+  }, {
+    retries: 400,
+    retryDelayMs: 25,
+    staleAfterMs: 120_000
+  });
 }
 
 const KNOWLEDGE_SOFT_THRESHOLD = 50;

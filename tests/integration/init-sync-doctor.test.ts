@@ -75,7 +75,7 @@ describe("install lifecycle", () => {
       await fs.readFile(path.join(root, ".cclaw/state/flow-state.json"), "utf8")
     ) as { activeRunId?: string };
     expect(typeof flow.activeRunId).toBe("string");
-    expect(flow.activeRunId).toBe("active");
+    expect(flow.activeRunId).toMatch(/^run-/);
     await expect(fs.stat(path.join(root, ".cclaw/state/checkpoint.json"))).resolves.toBeDefined();
     await expect(fs.stat(path.join(root, ".cclaw/state/stage-activity.jsonl"))).resolves.toBeDefined();
     await expect(fs.stat(path.join(root, ".cclaw/state/flow-state.snapshot.json"))).resolves.toBeDefined();
@@ -859,6 +859,12 @@ describe("install lifecycle", () => {
   it("flags unsynced reconciliation notices and clears them with reconcile-gates", async () => {
     const root = await createTempProject("doctor-reconciliation-notices");
     await initCclaw({ projectRoot: root });
+    const flow = JSON.parse(
+      await fs.readFile(path.join(root, ".cclaw/state/flow-state.json"), "utf8")
+    ) as { activeRunId?: string };
+    const runId = typeof flow.activeRunId === "string" && flow.activeRunId.length > 0
+      ? flow.activeRunId
+      : "active";
     await fs.writeFile(
       path.join(root, ".cclaw/state/reconciliation-notices.json"),
       JSON.stringify({
@@ -866,7 +872,7 @@ describe("install lifecycle", () => {
         notices: [
           {
             id: "active:brainstorm:brainstorm_context_explored:2026-04-20T00:00:00.000Z",
-            runId: "active",
+            runId,
             stage: "brainstorm",
             gateId: "brainstorm_context_explored",
             reason: "demoted from passed to blocked during gate reconciliation (missing evidence)",
@@ -888,6 +894,55 @@ describe("install lifecycle", () => {
     expect(cleared).toBeDefined();
     expect(cleared?.ok).toBe(true);
     expect(cleared?.details).toMatch(/no active reconciliation notices/i);
+  });
+
+  it("reports reconciliation notices parse errors explicitly", async () => {
+    const root = await createTempProject("doctor-reconciliation-notices-parse");
+    await initCclaw({ projectRoot: root });
+    await fs.writeFile(
+      path.join(root, ".cclaw/state/reconciliation-notices.json"),
+      "{not-valid-json",
+      "utf8"
+    );
+
+    const checks = await doctorChecks(root);
+    const parseCheck = checks.find((c) => c.name === "state:reconciliation_notices_parse");
+    expect(parseCheck).toBeDefined();
+    expect(parseCheck?.ok).toBe(false);
+    expect(parseCheck?.details).toMatch(/unable to parse/i);
+  });
+
+  it("does not crash doctor on corrupt flow-state.json and reports a readable-state error", async () => {
+    const root = await createTempProject("doctor-corrupt-flow-state");
+    await initCclaw({ projectRoot: root });
+    await fs.writeFile(path.join(root, ".cclaw/state/flow-state.json"), "{broken-json", "utf8");
+
+    const checks = await doctorChecks(root);
+    const flowReadable = checks.find((c) => c.name === "flow_state:readable");
+    expect(flowReadable).toBeDefined();
+    expect(flowReadable?.ok).toBe(false);
+    expect(flowReadable?.details).toMatch(/Corrupt flow-state\.json detected/i);
+  });
+
+  it("accepts OpenCode plugin registration when a later config candidate is valid", async () => {
+    const root = await createTempProject("doctor-opencode-registration-multi-config");
+    await initCclaw({ projectRoot: root });
+    await fs.writeFile(
+      path.join(root, "opencode.json"),
+      JSON.stringify({ plugin: [] }, null, 2),
+      "utf8"
+    );
+    await fs.mkdir(path.join(root, ".opencode"), { recursive: true });
+    await fs.writeFile(
+      path.join(root, ".opencode/opencode.json"),
+      JSON.stringify({ plugin: [".opencode/plugins/cclaw-plugin.mjs"] }, null, 2),
+      "utf8"
+    );
+
+    const checks = await doctorChecks(root);
+    const registration = checks.find((c) => c.name === "hook:opencode:config_registration");
+    expect(registration).toBeDefined();
+    expect(registration?.ok).toBe(true);
   });
 
   it("codex install materializes .agents/skills/cc*/SKILL.md and .codex/hooks.json", async () => {

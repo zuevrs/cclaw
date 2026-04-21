@@ -119,6 +119,8 @@ export interface ReconciliationNotice {
 export interface ReconciliationNoticesPayload {
   schemaVersion: number;
   notices: ReconciliationNotice[];
+  parseOk: boolean;
+  schemaOk: boolean;
 }
 
 export interface ReconciliationNoticeBuckets {
@@ -139,7 +141,9 @@ function reconciliationNoticesPath(projectRoot: string): string {
 function defaultReconciliationNoticesPayload(): ReconciliationNoticesPayload {
   return {
     schemaVersion: RECONCILIATION_NOTICES_SCHEMA_VERSION,
-    notices: []
+    notices: [],
+    parseOk: true,
+    schemaOk: true
   };
 }
 
@@ -177,6 +181,7 @@ export async function readReconciliationNotices(
   }
   try {
     const raw = JSON.parse(await fs.readFile(filePath, "utf8")) as Record<string, unknown>;
+    const schemaOk = raw.schemaVersion === RECONCILIATION_NOTICES_SCHEMA_VERSION;
     const notices = Array.isArray(raw.notices)
       ? raw.notices
           .map((value) => sanitizeReconciliationNotice(value))
@@ -184,10 +189,16 @@ export async function readReconciliationNotices(
       : [];
     return {
       schemaVersion: RECONCILIATION_NOTICES_SCHEMA_VERSION,
-      notices
+      notices,
+      parseOk: true,
+      schemaOk
     };
   } catch {
-    return defaultReconciliationNoticesPayload();
+    return {
+      ...defaultReconciliationNoticesPayload(),
+      parseOk: false,
+      schemaOk: false
+    };
   }
 }
 

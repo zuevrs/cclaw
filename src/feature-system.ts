@@ -41,6 +41,14 @@ export interface CreateFeatureOptions {
   switchTo?: boolean;
 }
 
+export interface FeatureSystemAccessOptions {
+  /**
+   * When false, read metadata without auto-repair writes. Useful for pure
+   * diagnostics (doctor) that should not mutate state as a side effect.
+   */
+  repair?: boolean;
+}
+
 interface GitResult {
   ok: boolean;
   stdout: string;
@@ -345,23 +353,89 @@ async function ensureRegistryState(projectRoot: string): Promise<{
   return { registry, activeMeta };
 }
 
-export async function ensureFeatureSystem(projectRoot: string): Promise<ActiveFeatureMeta> {
-  const { activeMeta } = await ensureRegistryState(projectRoot);
+async function readRegistryStateReadonly(projectRoot: string): Promise<{
+  registry: FeatureWorktreeRegistry;
+  activeMeta: ActiveFeatureMeta;
+}> {
+  const currentRegistry = await readRegistry(projectRoot);
+  const entries = [...currentRegistry.entries];
+
+  const gitRepo = await isGitRepository(projectRoot);
+  const source: FeatureWorkspaceSource = gitRepo ? "git-worktree" : "workspace";
+  const branch = gitRepo ? await currentBranch(projectRoot) : "workspace/default";
+  if (!entries.some((entry) => entry.featureId === DEFAULT_FEATURE_ID)) {
+    entries.push(buildDefaultEntry(source, branch));
+  }
+
+  const legacyFeatureIds = await listLegacySnapshotIds(projectRoot);
+  for (const legacyId of legacyFeatureIds) {
+    if (entries.some((entry) => entry.featureId === legacyId)) {
+      continue;
+    }
+    entries.push({
+      featureId: legacyId,
+      branch: `legacy/${legacyId}`,
+      path: `${LEGACY_FEATURES_DIR_REL_PATH}/${legacyId}`,
+      source: "legacy-snapshot",
+      createdAt: new Date().toISOString()
+    });
+  }
+
+  const registry: FeatureWorktreeRegistry = {
+    schemaVersion: WORKTREE_REGISTRY_SCHEMA_VERSION,
+    updatedAt: currentRegistry.updatedAt,
+    entries: dedupeEntries(entries)
+  };
+  const active = await readActiveFeatureMetaInternal(projectRoot);
+  return {
+    registry,
+    activeMeta: {
+      activeFeature: registryHasFeature(registry, active.activeFeature)
+        ? active.activeFeature
+        : DEFAULT_FEATURE_ID,
+      updatedAt: active.updatedAt
+    }
+  };
+}
+async function resolveFeatureSystemState(
+  projectRoot: string,
+  options: FeatureSystemAccessOptions = {}
+): Promise<{ registry: FeatureWorktreeRegistry; activeMeta: ActiveFeatureMeta }> {
+  if (options.repair === false) {
+    return readRegistryStateReadonly(projectRoot);
+  }
+  return ensureRegistryState(projectRoot);
+}
+
+export async function ensureFeatureSystem(
+  projectRoot: string,
+  options: FeatureSystemAccessOptions = {}
+): Promise<ActiveFeatureMeta> {
+  const { activeMeta } = await resolveFeatureSystemState(projectRoot, options);
   return activeMeta;
 }
 
-export async function readFeatureWorktreeRegistry(projectRoot: string): Promise<FeatureWorktreeRegistry> {
-  const { registry } = await ensureRegistryState(projectRoot);
+export async function readFeatureWorktreeRegistry(
+  projectRoot: string,
+  options: FeatureSystemAccessOptions = {}
+): Promise<FeatureWorktreeRegistry> {
+  const { registry } = await resolveFeatureSystemState(projectRoot, options);
   return registry;
 }
 
-export async function readActiveFeature(projectRoot: string): Promise<string> {
-  const meta = await ensureFeatureSystem(projectRoot);
+export async function readActiveFeature(
+  projectRoot: string,
+  options: FeatureSystemAccessOptions = {}
+): Promise<string> {
+  const meta = await ensureFeatureSystem(projectRoot, options);
   return normalizedFeatureId(meta.activeFeature);
 }
 
-export async function listFeatures(projectRoot: string): Promise<string[]> {
-  const registry = await readFeatureWorktreeRegistry(projectRoot);
+export async function listFeatures(
+  projectRoot: string,
+  options: FeatureSystemAccessOptions = {}
+): Promise<string[]> {
+  const registry = await readFeatureWorktreeRegistry(projectRoot, options);
   return registry.entries.map((entry) => entry.featureId).sort((a, b) => a.localeCompare(b));
 }
 

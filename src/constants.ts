@@ -38,6 +38,19 @@ function readPackageVersion(): string {
 export const CCLAW_VERSION = readPackageVersion();
 export const FLOW_VERSION = "1.0.0";
 
+/**
+ * Canonical ship finalization enums used across stage schema, linting, and
+ * runtime gate evidence checks.
+ */
+export const SHIP_FINALIZATION_MODES = [
+  "FINALIZE_MERGE_LOCAL",
+  "FINALIZE_OPEN_PR",
+  "FINALIZE_KEEP_BRANCH",
+  "FINALIZE_DISCARD_BRANCH",
+  "FINALIZE_NO_VCS"
+] as const;
+export type ShipFinalizationMode = (typeof SHIP_FINALIZATION_MODES)[number];
+
 export const DEFAULT_HARNESSES: HarnessId[] = [
   "claude",
   "cursor",

@@ -1,6 +1,6 @@
 import fs from "node:fs/promises";
 import path from "node:path";
-import { RUNTIME_ROOT } from "./constants.js";
+import { RUNTIME_ROOT, SHIP_FINALIZATION_MODES } from "./constants.js";
 import { exists } from "./fs-utils.js";
 import { stageSchema } from "./content/stage-schema.js";
 import { FLOW_STAGES, type FlowStage, type FlowTrack } from "./types.js";
@@ -172,13 +172,7 @@ function tokensFromRule(rule: string): string[] {
     return [...new Set(allCaps)];
   }
   if (/finalization enum token/iu.test(rule)) {
-    return [
-      "FINALIZE_MERGE_LOCAL",
-      "FINALIZE_OPEN_PR",
-      "FINALIZE_KEEP_BRANCH",
-      "FINALIZE_DISCARD_BRANCH",
-      "FINALIZE_NO_VCS"
-    ];
+    return [...SHIP_FINALIZATION_MODES];
   }
   if (/final verdict/iu.test(rule)) {
     return ["APPROVED", "APPROVED_WITH_CONCERNS", "BLOCKED"];

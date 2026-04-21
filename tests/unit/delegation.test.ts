@@ -325,8 +325,21 @@ describe("delegation ledger run scoping", () => {
     });
 
     const secondPass = await checkMandatoryDelegations(root, "review");
-    expect(secondPass.satisfied).toBe(true);
-    expect(secondPass.missing).toEqual([]);
+    expect(secondPass.satisfied).toBe(false);
+    expect(secondPass.missing).toContain("reviewer");
+
+    await appendDelegation(root, {
+      stage: "review",
+      agent: "reviewer",
+      mode: "mandatory",
+      status: "completed",
+      skill: "adversarial-review",
+      ts: new Date().toISOString()
+    });
+
+    const thirdPass = await checkMandatoryDelegations(root, "review");
+    expect(thirdPass.satisfied).toBe(true);
+    expect(thirdPass.missing).toEqual([]);
   });
 
   describe("isTrustBoundaryPath", () => {

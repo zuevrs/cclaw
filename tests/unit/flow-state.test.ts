@@ -3,6 +3,7 @@ import {
   canTransition,
   createInitialCloseoutState,
   createInitialFlowState,
+  getAvailableTransitions,
   getTransitionGuards,
   nextStage,
   previousStage,
@@ -15,7 +16,7 @@ describe("flow state", () => {
   });
 
   it("initializes with active run id", () => {
-    expect(createInitialFlowState().activeRunId).toBe("active");
+    expect(createInitialFlowState().activeRunId).toMatch(/^run-/);
     expect(createInitialFlowState("run-custom").activeRunId).toBe("run-custom");
   });
 
@@ -31,6 +32,12 @@ describe("flow state", () => {
 
   it("exposes blocked-review guard for review -> tdd transition", () => {
     expect(getTransitionGuards("review", "tdd")).toContain("review_verdict_blocked");
+  });
+
+  it("lists natural transition first, then special review rewind transitions", () => {
+    const transitions = getAvailableTransitions("review");
+    expect(transitions[0]?.to).toBe("ship");
+    expect(transitions.some((rule) => rule.to === "tdd")).toBe(true);
   });
 
   it("returns track-specific guards for shared edges (standard keeps tdd_traceable_to_plan, quick drops it)", () => {

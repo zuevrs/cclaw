@@ -1,6 +1,8 @@
-import { CCLAW_VERSION } from "../constants.js";
+import { CCLAW_VERSION, SHIP_FINALIZATION_MODES } from "../constants.js";
 import { orderedStageSchemas } from "./stage-schema.js";
 import { FLOW_STAGES } from "../types.js";
+
+const SHIP_FINALIZATION_ENUM_LINES = SHIP_FINALIZATION_MODES.map((mode) => `  - ${mode}`).join("\n");
 
 export const ARTIFACT_TEMPLATES: Record<string, string> = {
   "01-brainstorm.md": `---
@@ -646,11 +648,7 @@ inputs_hash: sha256:pending
 
 ## Finalization
 - Selected enum (exactly one):
-  - FINALIZE_MERGE_LOCAL
-  - FINALIZE_OPEN_PR
-  - FINALIZE_KEEP_BRANCH
-  - FINALIZE_DISCARD_BRANCH
-  - FINALIZE_NO_VCS
+${SHIP_FINALIZATION_ENUM_LINES}
 - Selected label (A/B/C/D/E):
 - Execution result:
 - PR URL / merge commit / kept branch / discard confirmation:

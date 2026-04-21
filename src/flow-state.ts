@@ -141,8 +141,12 @@ export function firstStageForTrack(track: FlowTrack): FlowStage {
   return stages[0] ?? "brainstorm";
 }
 
+export function createRunId(date = new Date()): string {
+  return `run-${date.getTime().toString(36)}-${Math.random().toString(36).slice(2, 8)}`;
+}
+
 export function createInitialFlowState(
-  activeRunIdOrOptions: string | InitialFlowStateOptions = "active",
+  activeRunIdOrOptions: string | InitialFlowStateOptions = {},
   maybeTrack?: FlowTrack
 ): FlowState {
   const options: InitialFlowStateOptions =
@@ -150,7 +154,7 @@ export function createInitialFlowState(
       ? { activeRunId: activeRunIdOrOptions, track: maybeTrack }
       : activeRunIdOrOptions;
 
-  const activeRunId = options.activeRunId ?? "active";
+  const activeRunId = options.activeRunId ?? createRunId();
   const track: FlowTrack = options.track ?? "standard";
   const skippedStages = skippedStagesForTrack(track);
 
@@ -187,6 +191,22 @@ export function createInitialFlowState(
 
 export function canTransition(from: FlowStage, to: FlowStage): boolean {
   return TRANSITION_RULES.some((rule) => rule.from === from && rule.to === to);
+}
+
+export function getAvailableTransitions(
+  from: FlowStage,
+  track: FlowTrack = "standard"
+): TransitionRule[] {
+  const natural = nextStage(from, track);
+  const fromRules = TRANSITION_RULES.filter((rule) => rule.from === from);
+  if (!natural) {
+    return fromRules;
+  }
+  return fromRules.sort((a, b) => {
+    if (a.to === natural && b.to !== natural) return -1;
+    if (b.to === natural && a.to !== natural) return 1;
+    return a.to.localeCompare(b.to);
+  });
 }
 
 export function getTransitionGuards(

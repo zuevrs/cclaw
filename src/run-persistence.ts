@@ -39,6 +39,14 @@ export interface WriteFlowStateOptions {
   allowReset?: boolean;
 }
 
+export interface ReadFlowStateOptions {
+  /**
+   * When false, skip feature-system auto-repair writes and read flow-state in
+   * pure diagnostic mode.
+   */
+  repairFeatureSystem?: boolean;
+}
+
 const FLOW_STATE_REL_PATH = `${RUNTIME_ROOT}/state/flow-state.json`;
 const RUNS_DIR_REL_PATH = `${RUNTIME_ROOT}/runs`;
 const ACTIVE_ARTIFACTS_REL_PATH = `${RUNTIME_ROOT}/artifacts`;
@@ -353,7 +361,7 @@ function sanitizeCloseoutState(value: unknown): CloseoutState {
 
 function coerceFlowState(parsed: Record<string, unknown>): FlowState {
   const track = coerceTrack(parsed.track);
-  const next = createInitialFlowState("active", track);
+  const next = createInitialFlowState({ track });
   const activeRunIdRaw = parsed.activeRunId;
   const activeRunId = typeof activeRunIdRaw === "string" && activeRunIdRaw.trim().length > 0
     ? activeRunIdRaw.trim()
@@ -414,8 +422,13 @@ async function quarantineCorruptState(statePath: string, cause: unknown): Promis
   throw new CorruptFlowStateError(statePath, quarantinedPath, cause);
 }
 
-export async function readFlowState(projectRoot: string): Promise<FlowState> {
-  await ensureFeatureSystem(projectRoot);
+export async function readFlowState(
+  projectRoot: string,
+  options: ReadFlowStateOptions = {}
+): Promise<FlowState> {
+  if (options.repairFeatureSystem !== false) {
+    await ensureFeatureSystem(projectRoot);
+  }
   const statePath = flowStatePath(projectRoot);
   if (!(await exists(statePath))) {
     return createInitialFlowState();
@@ -461,8 +474,11 @@ export async function writeFlowState(
         if (err instanceof InvalidStageTransitionError) {
           throw err;
         }
-        // A corrupt prior file is surfaced by readFlowState elsewhere; don't
-        // block a legitimate write attempt on parse errors here.
+        throw new Error(
+          `cannot validate flow-state transition because ${FLOW_STATE_REL_PATH} is unreadable or corrupt (${
+            err instanceof Error ? err.message : String(err)
+          }). Run \`cclaw doctor\` and reconcile the state before retrying.`
+        );
       }
     }
     const safe = coerceFlowState({ ...(state as unknown as Record<string, unknown>) });
