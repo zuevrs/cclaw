@@ -75,7 +75,7 @@ describe("cli parser", () => {
 
   it("usage message documents the public user surface", () => {
     const text = usage();
-    for (const cmd of ["init", "upgrade", "uninstall", "eval"]) {
+    for (const cmd of ["init", "sync", "archive", "upgrade", "uninstall", "eval"]) {
       expect(text).toContain(cmd);
     }
     expect(text).toContain("--help");
@@ -86,18 +86,16 @@ describe("cli parser", () => {
     expect(text).toContain("--no-interactive");
   });
 
-  it("usage message keeps operational surface out of the public help", () => {
+  it("usage message keeps internal maintainer switches out of public help", () => {
     const text = usage();
-    for (const hiddenCmd of ["sync", "doctor", "archive"]) {
+    for (const hiddenCmd of ["doctor"]) {
       expect(text).not.toContain(`\n  ${hiddenCmd} `);
     }
     for (const hiddenFlag of [
       "--profile",
       "--track",
       "--interactive",
-      "--reconcile-gates",
-      "--skip-retro",
-      "--retro-reason"
+      "--reconcile-gates"
     ]) {
       expect(text).not.toContain(hiddenFlag);
     }
