@@ -16,11 +16,12 @@ import {
   harnessShimSkillNames
 } from "./harness-adapters.js";
 import { policyChecks } from "./policy.js";
-import { readFlowState } from "./runs.js";
-import { skippedStagesForTrack } from "./flow-state.js";
+import { CorruptFlowStateError, readFlowState } from "./runs.js";
+import { createInitialFlowState, skippedStagesForTrack } from "./flow-state.js";
 import { FLOW_STAGES, TRACK_STAGES } from "./types.js";
 import { checkMandatoryDelegations } from "./delegation.js";
 import {
+  activeFeatureMetaPath,
   ensureFeatureSystem,
   listFeatures,
   readActiveFeature,
@@ -238,6 +239,29 @@ async function readHookDocument(filePath: string): Promise<Record<string, unknow
   }
 }
 
+async function readJsonObjectStatus(filePath: string): Promise<{
+  exists: boolean;
+  ok: boolean;
+  error?: string;
+}> {
+  if (!(await exists(filePath))) {
+    return { exists: false, ok: false, error: "file is missing" };
+  }
+  try {
+    const parsed = JSON.parse(await fs.readFile(filePath, "utf8"));
+    if (!parsed || typeof parsed !== "object" || Array.isArray(parsed)) {
+      return { exists: true, ok: false, error: "JSON root must be an object" };
+    }
+    return { exists: true, ok: true };
+  } catch (error) {
+    return {
+      exists: true,
+      ok: false,
+      error: error instanceof Error ? error.message : String(error)
+    };
+  }
+}
+
 function normalizeOpenCodePluginEntry(entry: unknown): string | null {
   if (typeof entry === "string" && entry.trim().length > 0) return entry.trim();
   if (!entry || typeof entry !== "object" || Array.isArray(entry)) return null;
@@ -260,12 +284,16 @@ async function opencodeRegistrationCheck(projectRoot: string): Promise<{ ok: boo
     path.join(projectRoot, ".opencode/opencode.jsonc")
   ];
 
+  const mismatches: string[] = [];
+  let foundAnyConfig = false;
   for (const configPath of candidates) {
     if (!(await exists(configPath))) {
       continue;
     }
+    foundAnyConfig = true;
     const parsed = await readHookDocument(configPath);
     if (!parsed) {
+      mismatches.push(`${path.relative(projectRoot, configPath)} is unreadable or invalid JSON`);
       continue;
     }
     const plugins = Array.isArray(parsed.plugin) ? parsed.plugin : [];
@@ -273,9 +301,12 @@ async function opencodeRegistrationCheck(projectRoot: string): Promise<{ ok: boo
     if (registered) {
       return { ok: true, details: `${path.relative(projectRoot, configPath)} registers ${expected}` };
     }
-    return { ok: false, details: `${path.relative(projectRoot, configPath)} missing plugin ${expected}` };
+    mismatches.push(`${path.relative(projectRoot, configPath)} missing plugin ${expected}`);
   }
 
+  if (foundAnyConfig) {
+    return { ok: false, details: mismatches.join(" | ") };
+  }
   return { ok: false, details: `No opencode.json/opencode.jsonc found with plugin ${expected}` };
 }
 
@@ -296,6 +327,12 @@ async function opencodePluginRuntimeShapeCheck(projectRoot: string): Promise<{ o
     }
 
     const plugin = imported.default({ directory: projectRoot }) as Record<string, unknown>;
+    if (!plugin || typeof plugin !== "object" || Array.isArray(plugin)) {
+      return {
+        ok: false,
+        details: `${path.relative(projectRoot, pluginPath)} factory must return a plugin object`
+      };
+    }
     const requiredHandlers = [
       "event",
       "tool.execute.before",
@@ -309,8 +346,6 @@ async function opencodePluginRuntimeShapeCheck(projectRoot: string): Promise<{ o
         details: `${path.relative(projectRoot, pluginPath)} missing runtime handlers: ${missing.join(", ")}`
       };
     }
-
-    await (plugin.event as (payload: unknown) => Promise<void>)({ event: { type: "session.updated", data: {} } });
     return {
       ok: true,
       details: `${path.relative(projectRoot, pluginPath)} exports compatible runtime handler shape`
@@ -1397,10 +1432,26 @@ export async function doctorChecks(projectRoot: string, options: DoctorOptions =
     });
   }
 
-  await ensureFeatureSystem(projectRoot);
-  const activeFeature = await readActiveFeature(projectRoot);
-  let flowState = await readFlowState(projectRoot);
-  if (options.reconcileCurrentStageGates === true) {
+  await ensureFeatureSystem(projectRoot, { repair: false });
+  const activeFeature = await readActiveFeature(projectRoot, { repair: false });
+  let flowState = createInitialFlowState();
+  let flowStateCorruptError: CorruptFlowStateError | null = null;
+  try {
+    flowState = await readFlowState(projectRoot, { repairFeatureSystem: false });
+  } catch (error) {
+    if (error instanceof CorruptFlowStateError) {
+      flowStateCorruptError = error;
+      checks.push({
+        name: "flow_state:readable",
+        ok: false,
+        severity: "error",
+        details: error.message
+      });
+    } else {
+      throw error;
+    }
+  }
+  if (options.reconcileCurrentStageGates === true && !flowStateCorruptError) {
     const reconciliation = await reconcileAndWriteCurrentStageGateCatalog(projectRoot);
     if (reconciliation.wrote) {
       flowState = {
@@ -1418,6 +1469,12 @@ export async function doctorChecks(projectRoot: string, options: DoctorOptions =
         ? `reconciled gate catalog for stage "${reconciliation.stage}": ${reconciliation.notes.join("; ")}`
         : `no gate reconciliation changes needed for stage "${reconciliation.stage}"`
     });
+  } else if (options.reconcileCurrentStageGates === true && flowStateCorruptError) {
+    checks.push({
+      name: "gates:reconcile:writeback",
+      ok: false,
+      details: "skipped gate reconciliation because flow-state.json is corrupt"
+    });
   }
   const activeRunId = typeof flowState.activeRunId === "string" ? flowState.activeRunId.trim() : "";
   checks.push({
@@ -1426,6 +1483,15 @@ export async function doctorChecks(projectRoot: string, options: DoctorOptions =
     details: `${RUNTIME_ROOT}/state/flow-state.json must include activeRunId`
   });
   const reconciliationNotices = await readReconciliationNotices(projectRoot);
+  checks.push({
+    name: "state:reconciliation_notices_parse",
+    ok: reconciliationNotices.parseOk && reconciliationNotices.schemaOk,
+    details: !reconciliationNotices.parseOk
+      ? `unable to parse ${RECONCILIATION_NOTICES_REL_PATH}; reset with \`cclaw sync\` or repair JSON by hand`
+      : !reconciliationNotices.schemaOk
+        ? `${RECONCILIATION_NOTICES_REL_PATH} schemaVersion mismatch; expected ${reconciliationNotices.schemaVersion}`
+        : `${RECONCILIATION_NOTICES_REL_PATH} parsed successfully`
+  });
   const noticeBuckets = classifyReconciliationNotices(flowState, reconciliationNotices.notices);
   const formatNoticeList = (items: typeof noticeBuckets.activeBlocked): string =>
     items
@@ -1535,21 +1601,37 @@ export async function doctorChecks(projectRoot: string, options: DoctorOptions =
       ? "no TODO/TBD/FIXME placeholder markers found in active artifacts"
       : `warning: placeholder markers detected in active artifacts (${artifactPlaceholderHits.join(", ")}). Clear before marking completion.`
   });
-  const features = await listFeatures(projectRoot);
-  const worktreeRegistry = await readFeatureWorktreeRegistry(projectRoot);
+  const activeMetaStatus = await readJsonObjectStatus(activeFeatureMetaPath(projectRoot));
+  const worktreeRegistryStatus = await readJsonObjectStatus(worktreeRegistryPath(projectRoot));
+  const features = await listFeatures(projectRoot, { repair: false });
+  const worktreeRegistry = await readFeatureWorktreeRegistry(projectRoot, { repair: false });
   const activeFeatureEntry = worktreeRegistry.entries.find((entry) => entry.featureId === activeFeature);
   const activeFeatureWorkspacePath = activeFeatureEntry
     ? resolveFeatureWorkspacePath(projectRoot, activeFeatureEntry)
     : "";
   checks.push({
     name: "state:active_feature_meta",
-    ok: await exists(path.join(projectRoot, RUNTIME_ROOT, "state", "active-feature.json")),
+    ok: activeMetaStatus.exists,
     details: `${RUNTIME_ROOT}/state/active-feature.json must exist`
   });
   checks.push({
+    name: "state:active_feature_meta_valid_json",
+    ok: activeMetaStatus.ok,
+    details: activeMetaStatus.ok
+      ? `${RUNTIME_ROOT}/state/active-feature.json parsed successfully`
+      : `${RUNTIME_ROOT}/state/active-feature.json is invalid: ${activeMetaStatus.error ?? "unknown error"}`
+  });
+  checks.push({
     name: "state:worktree_registry_exists",
-    ok: await exists(worktreeRegistryPath(projectRoot)),
+    ok: worktreeRegistryStatus.exists,
     details: `${RUNTIME_ROOT}/state/worktrees.json must exist and track feature->worktree mapping`
+  });
+  checks.push({
+    name: "state:worktree_registry_valid_json",
+    ok: worktreeRegistryStatus.ok,
+    details: worktreeRegistryStatus.ok
+      ? `${RUNTIME_ROOT}/state/worktrees.json parsed successfully`
+      : `${RUNTIME_ROOT}/state/worktrees.json is invalid: ${worktreeRegistryStatus.error ?? "unknown error"}`
   });
   checks.push({
     name: "state:active_feature_exists",
@@ -1704,7 +1786,9 @@ export async function doctorChecks(projectRoot: string, options: DoctorOptions =
     details: `${RUNTIME_ROOT}/runs must exist for archived feature snapshots`
   });
 
-  const delegation = await checkMandatoryDelegations(projectRoot, flowState.currentStage);
+  const delegation = await checkMandatoryDelegations(projectRoot, flowState.currentStage, {
+    repairFeatureSystem: false
+  });
   const missingEvidenceNote =
     delegation.missingEvidence && delegation.missingEvidence.length > 0
       ? ` (role-switch rows without evidenceRefs: ${delegation.missingEvidence.join(", ")})`

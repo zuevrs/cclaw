@@ -365,7 +365,8 @@ export function expectedFulfillmentMode(
 
 export async function checkMandatoryDelegations(
   projectRoot: string,
-  stage: FlowStage
+  stage: FlowStage,
+  options: { repairFeatureSystem?: boolean } = {}
 ): Promise<{
   satisfied: boolean;
   missing: string[];
@@ -378,7 +379,9 @@ export async function checkMandatoryDelegations(
   expectedMode: DelegationFulfillmentMode;
 }> {
   const mandatory = stageSchema(stage).mandatoryDelegations;
-  const { activeRunId } = await readFlowState(projectRoot);
+  const { activeRunId } = await readFlowState(projectRoot, {
+    repairFeatureSystem: options.repairFeatureSystem
+  });
   const ledger = await readDelegationLedger(projectRoot);
   const forStage = ledger.entries.filter((e) => e.stage === stage);
   const forRun = forStage.filter((e) => e.runId === activeRunId);
