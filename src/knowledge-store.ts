@@ -77,6 +77,14 @@ export interface ReadKnowledgeResult {
   malformedLines: number;
 }
 
+export interface SelectRelevantLearningsOptions {
+  stage?: FlowStage | null;
+  branch?: string | null;
+  diffFiles?: string[];
+  openGates?: string[];
+  limit?: number;
+}
+
 const KNOWLEDGE_TYPE_SET = new Set<KnowledgeEntryType>(["rule", "pattern", "lesson", "compound"]);
 const KNOWLEDGE_CONFIDENCE_SET = new Set<KnowledgeEntryConfidence>(["high", "medium", "low"]);
 const KNOWLEDGE_SEVERITY_SET = new Set<KnowledgeEntrySeverity>(["critical", "important", "suggestion"]);
@@ -453,4 +461,102 @@ export async function appendKnowledge(
     errors,
     appendedEntries
   };
+}
+
+function tokenizeText(value: string | null | undefined): string[] {
+  if (!value) return [];
+  return value
+    .toLowerCase()
+    .split(/[^a-z0-9]+/u)
+    .map((token) => token.trim())
+    .filter((token) => token.length >= 3);
+}
+
+function uniqueTokens(values: string[]): string[] {
+  return [...new Set(values)];
+}
+
+function pathTokens(paths: string[] | undefined): string[] {
+  if (!Array.isArray(paths) || paths.length === 0) return [];
+  const tokens: string[] = [];
+  for (const filePath of paths) {
+    tokens.push(...tokenizeText(filePath));
+  }
+  return uniqueTokens(tokens);
+}
+
+export async function selectRelevantLearnings(
+  projectRoot: string,
+  options: SelectRelevantLearningsOptions = {}
+): Promise<KnowledgeEntry[]> {
+  const { entries } = await readKnowledgeSafely(projectRoot);
+  if (entries.length === 0) {
+    return [];
+  }
+
+  const stage = options.stage ?? null;
+  const branchTokens = tokenizeText(options.branch ?? null);
+  const diffTokens = pathTokens(options.diffFiles);
+  const gateTokens = pathTokens(options.openGates);
+  const limit =
+    typeof options.limit === "number" && Number.isFinite(options.limit) && options.limit > 0
+      ? Math.floor(options.limit)
+      : 8;
+
+  const ranked = entries.map((entry, index) => {
+    let score = 0;
+
+    if (stage) {
+      if (entry.stage === stage) {
+        score += 4;
+      } else if (entry.origin_stage === stage) {
+        score += 3;
+      } else if (entry.stage === null) {
+        score += 1;
+      }
+    }
+
+    if (entry.confidence === "high") score += 2;
+    if (entry.confidence === "medium") score += 1;
+    if (entry.frequency >= 3) score += 1;
+    if (entry.maturity === "lifted-to-enforcement") score -= 1;
+
+    const searchable = [
+      ...tokenizeText(entry.domain),
+      ...tokenizeText(entry.trigger),
+      ...tokenizeText(entry.action),
+      ...tokenizeText(entry.origin_feature),
+      ...tokenizeText(entry.project)
+    ];
+    const searchSet = new Set(searchable);
+
+    for (const token of branchTokens) {
+      if (searchSet.has(token)) score += 2;
+    }
+    for (const token of diffTokens) {
+      if (searchSet.has(token)) score += 2;
+    }
+    for (const token of gateTokens) {
+      if (searchSet.has(token)) score += 2;
+    }
+
+    return {
+      index,
+      score,
+      entry
+    };
+  });
+
+  ranked.sort((a, b) => {
+    if (b.score !== a.score) return b.score - a.score;
+    const bySeen = Date.parse(b.entry.last_seen_ts) - Date.parse(a.entry.last_seen_ts);
+    if (!Number.isNaN(bySeen) && bySeen !== 0) return bySeen;
+    if (b.entry.frequency !== a.entry.frequency) return b.entry.frequency - a.entry.frequency;
+    return b.index - a.index;
+  });
+
+  return ranked
+    .filter((row) => row.score > 0)
+    .slice(0, limit)
+    .map((row) => row.entry);
 }

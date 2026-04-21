@@ -39,6 +39,7 @@ import {
 } from "./content/rewind-command.js";
 import { subagentDrivenDevSkill, parallelAgentsSkill } from "./content/subagents.js";
 import { sessionHooksSkillMarkdown } from "./content/session-hooks.js";
+import { ironLawRuntimeDocument, ironLawsSkillMarkdown } from "./content/iron-laws.js";
 import {
   sessionStartScript,
   stopCheckpointScript,
@@ -415,6 +416,10 @@ async function writeSkills(projectRoot: string, config?: CclawConfig): Promise<v
   await writeFileSafe(
     runtimePath(projectRoot, "skills", "session", "SKILL.md"),
     sessionHooksSkillMarkdown()
+  );
+  await writeFileSafe(
+    runtimePath(projectRoot, "skills", "iron-laws", "SKILL.md"),
+    ironLawsSkillMarkdown()
   );
   await writeFileSafe(
     runtimePath(projectRoot, "skills", META_SKILL_NAME, "SKILL.md"),
@@ -846,7 +851,21 @@ async function writeMergedHookJson(
 async function writeHooks(projectRoot: string, config: CclawConfig): Promise<void> {
   const harnesses = config.harnesses;
   const hooksDir = runtimePath(projectRoot, "hooks");
+  const stateDir = runtimePath(projectRoot, "state");
   await ensureDir(hooksDir);
+  await ensureDir(stateDir);
+
+  await writeFileSafe(
+    runtimePath(projectRoot, "state", "iron-laws.json"),
+    `${JSON.stringify(
+      ironLawRuntimeDocument({
+        mode: config.ironLaws?.mode,
+        strictLaws: config.ironLaws?.strictLaws
+      }),
+      null,
+      2
+    )}\n`
+  );
 
   await writeFileSafe(path.join(hooksDir, "session-start.sh"), sessionStartScript());
   await writeFileSafe(path.join(hooksDir, "stop-checkpoint.sh"), stopCheckpointScript());

@@ -30,7 +30,8 @@ When a new session begins in any harness:
 2. **Load knowledge:** Stream the tail of \`.cclaw/knowledge.jsonl\` (strict JSONL store) and surface the most relevant rules/patterns.
 3. **Check for in-progress work:** If the last stage is incomplete, remind the user and offer to resume.
 4. **Load suggestion memory:** Read \`.cclaw/state/suggestion-memory.json\` and honor \`enabled=false\` opt-out.
-5. **Read AGENTS.md:** The cclaw block contains routing and rules — follow them.
+5. **Load iron laws:** Read \`.cclaw/state/iron-laws.json\` to know which laws are strict in this repo.
+6. **Read AGENTS.md:** The cclaw block contains routing and rules — follow them.
 
 ### What to show the user at session start
 
@@ -135,5 +136,6 @@ Session boundary behavior (real hooks inject context automatically; guidelines c
 - **Resume:** Re-read state, verify artifact, re-load knowledge, continue from last step.
 
 Skill: \`.cclaw/skills/session/SKILL.md\`
+Policy: \`.cclaw/skills/iron-laws/SKILL.md\`
 `;
 }

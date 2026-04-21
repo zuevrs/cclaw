@@ -194,6 +194,7 @@ ${RUNTIME_SHELL_DETECT_ROOT}
 STATE_DIR="$ROOT/${RUNTIME_ROOT}/state"
 FLOW_STATE_FILE="$STATE_DIR/flow-state.json"
 TDD_LOG_FILE="$STATE_DIR/tdd-cycle-log.jsonl"
+IRON_LAWS_FILE="$STATE_DIR/iron-laws.json"
 GUARD_STATE_FILE="$STATE_DIR/workflow-guard.json"
 GUARD_LOG="$STATE_DIR/workflow-guard.jsonl"
 mkdir -p "$STATE_DIR" 2>/dev/null || true
@@ -262,6 +263,14 @@ TS=$(date -u +"%Y-%m-%dT%H:%M:%SZ" 2>/dev/null || echo "")
 NOW_EPOCH=$(date +%s 2>/dev/null || echo "0")
 REASONS=""
 
+ACTIVE_AGENT="\${CCLAW_ACTIVE_AGENT:-}"
+if [ -z "$ACTIVE_AGENT" ]; then
+  if command -v jq >/dev/null 2>&1; then
+    ACTIVE_AGENT=$(printf '%s' "$INPUT" | jq -r '.agent_name // .agent // .input.agent_name // .input.agent // .tool_input.agent_name // .tool_input.agent // ""' 2>/dev/null || echo "")
+  fi
+fi
+ACTIVE_AGENT_LOWER=$(printf '%s' "$ACTIVE_AGENT" | tr '[:upper:]' '[:lower:]')
+
 CURRENT_STAGE="none"
 CURRENT_RUN="active"
 if [ -f "$FLOW_STATE_FILE" ]; then
@@ -301,6 +310,87 @@ PY
 )
   fi
 fi
+
+SHIP_PREFLIGHT_PASSED="false"
+if [ -f "$FLOW_STATE_FILE" ]; then
+  if command -v jq >/dev/null 2>&1; then
+    SHIP_PREFLIGHT_PASSED=$(jq -r '
+      if ((.stageGateCatalog.ship.passed // []) | index("ship_preflight_passed")) == null
+      then "false"
+      else "true"
+      end
+    ' "$FLOW_STATE_FILE" 2>/dev/null || echo "false")
+  elif command -v python3 >/dev/null 2>&1; then
+    SHIP_PREFLIGHT_PASSED=$(python3 - "$FLOW_STATE_FILE" <<'PY'
+import json
+import sys
+value = "false"
+try:
+    with open(sys.argv[1], "r", encoding="utf-8") as fh:
+        parsed = json.load(fh)
+    ship = ((parsed.get("stageGateCatalog") or {}).get("ship") or {}).get("passed") or []
+    if isinstance(ship, list) and "ship_preflight_passed" in ship:
+        value = "true"
+except Exception:
+    value = "false"
+print(value)
+PY
+)
+  fi
+fi
+
+IRON_LAW_STRICT_ALL="false"
+IRON_LAW_STRICT_IDS=""
+if [ -f "$IRON_LAWS_FILE" ]; then
+  if command -v jq >/dev/null 2>&1; then
+    IRON_LAW_STRICT_ALL=$(jq -r 'if (.mode // "advisory") == "strict" then "true" else "false" end' "$IRON_LAWS_FILE" 2>/dev/null || echo "false")
+    IRON_LAW_STRICT_IDS=$(jq -r '(.laws // []) | map(select(.strict == true) | (.id // "")) | map(select(length > 0)) | join(",")' "$IRON_LAWS_FILE" 2>/dev/null || echo "")
+  elif command -v python3 >/dev/null 2>&1; then
+    IRON_LAW_STRICT_ALL=$(python3 - "$IRON_LAWS_FILE" <<'PY'
+import json
+import sys
+mode = "false"
+try:
+    with open(sys.argv[1], "r", encoding="utf-8") as fh:
+        parsed = json.load(fh)
+    if str(parsed.get("mode", "advisory")) == "strict":
+        mode = "true"
+except Exception:
+    mode = "false"
+print(mode)
+PY
+)
+    IRON_LAW_STRICT_IDS=$(python3 - "$IRON_LAWS_FILE" <<'PY'
+import json
+import sys
+out = []
+try:
+    with open(sys.argv[1], "r", encoding="utf-8") as fh:
+        parsed = json.load(fh)
+    for row in parsed.get("laws", []):
+        if isinstance(row, dict) and row.get("strict") and isinstance(row.get("id"), str):
+            out.append(row["id"].strip())
+except Exception:
+    out = []
+print(",".join([v for v in out if v]))
+PY
+)
+  fi
+fi
+
+iron_law_is_strict() {
+  local law_id="$1"
+  if [ "$IRON_LAW_STRICT_ALL" = "true" ]; then
+    return 0
+  fi
+  if [ -z "$IRON_LAW_STRICT_IDS" ]; then
+    return 1
+  fi
+  case ",$IRON_LAW_STRICT_IDS," in
+    *",$law_id,"*) return 0 ;;
+    *) return 1 ;;
+  esac
+}
 
 LAST_FLOW_READ_AT=0
 if [ -f "$GUARD_STATE_FILE" ]; then
@@ -343,6 +433,14 @@ stage_index() {
 is_mutating_tool() {
   case "$1" in
     write|edit|multiedit|multi_edit|delete|applypatch|apply_patch) return 0 ;;
+    *) return 1 ;;
+  esac
+}
+
+is_execution_or_mutating_tool() {
+  case "$1" in
+    write|edit|multiedit|multi_edit|delete|applypatch|apply_patch) return 0 ;;
+    shell|bash|runcommand|run_command|execcommand|exec_command|terminal) return 0 ;;
     *) return 1 ;;
   esac
 }
@@ -832,6 +930,65 @@ if [ "$CURRENT_STAGE" = "tdd" ] && is_mutating_tool "$TOOL_LOWER"; then
   fi
 fi
 
+if [ "$CURRENT_STAGE" = "tdd" ] && is_mutating_tool "$TOOL_LOWER"; then
+  if [ "$ACTIVE_AGENT_LOWER" = "tdd-red" ] && is_tdd_production_write_payload "$PAYLOAD_LOWER" "$MUTATION_PATHS"; then
+    if [ -n "$REASONS" ]; then
+      REASONS="$REASONS,tdd_red_agent_cannot_write_production"
+    else
+      REASONS="tdd_red_agent_cannot_write_production"
+    fi
+  fi
+  if [ "$ACTIVE_AGENT_LOWER" = "tdd-green" ] && is_tdd_test_payload "$PAYLOAD_LOWER" "$MUTATION_PATHS"; then
+    if [ -n "$REASONS" ]; then
+      REASONS="$REASONS,tdd_green_agent_cannot_write_tests"
+    else
+      REASONS="tdd_green_agent_cannot_write_tests"
+    fi
+  fi
+  if [ "$ACTIVE_AGENT_LOWER" = "tdd-refactor" ]; then
+    TDD_AGENT_STATE=$(tdd_cycle_state)
+    if [ "$TDD_AGENT_STATE" != "green_done" ]; then
+      if [ -n "$REASONS" ]; then
+        REASONS="$REASONS,tdd_refactor_before_green"
+      else
+        REASONS="tdd_refactor_before_green"
+      fi
+    fi
+  fi
+fi
+
+if is_mutating_tool "$TOOL_LOWER"; then
+  if [ "$LAST_FLOW_READ_AT" -le 0 ] || [ "$NOW_EPOCH" -le 0 ] || [ $((NOW_EPOCH - LAST_FLOW_READ_AT)) -gt "$MAX_FLOW_READ_AGE_SEC" ]; then
+    if [ -n "$REASONS" ]; then
+      REASONS="$REASONS,mutating_without_recent_flow_read"
+    else
+      REASONS="mutating_without_recent_flow_read"
+    fi
+  fi
+fi
+
+if is_mutating_tool "$TOOL_LOWER" && printf '%s' "$PAYLOAD_LOWER" | grep -Eq '\.cclaw/(state|hooks|skills)'; then
+  if ! is_cclaw_cli_payload "$PAYLOAD_LOWER"; then
+    if [ -n "$REASONS" ]; then
+      REASONS="$REASONS,runtime_write_requires_managed_only"
+    else
+      REASONS="runtime_write_requires_managed_only"
+    fi
+  fi
+fi
+
+if [ "$CURRENT_STAGE" = "ship" ] && is_execution_or_mutating_tool "$TOOL_LOWER"; then
+  if printf '%s' "$PAYLOAD_LOWER" | grep -Eq '(npm publish|pnpm publish|yarn publish|gh release create|git push[[:space:]].*--tags|npm version)'; then
+    if [ "$SHIP_PREFLIGHT_PASSED" != "true" ]; then
+      if [ -n "$REASONS" ]; then
+        REASONS="$REASONS,ship_preflight_required"
+      else
+        REASONS="ship_preflight_required"
+      fi
+    fi
+  fi
+fi
+
 if is_preimplementation_stage "$CURRENT_STAGE" && ! is_plan_mode_safe_tool "$TOOL_LOWER"; then
   if ! is_mutating_tool "$TOOL_LOWER"; then
     if ! printf '%s' "$PAYLOAD_LOWER" | grep -Eq '\.cclaw/' && ! is_cclaw_cli_payload "$PAYLOAD_LOWER"; then
@@ -897,12 +1054,22 @@ PY
 fi
 
 if [ -n "$REASONS" ]; then
-  if printf '%s' "$REASONS" | grep -Eq 'tdd_write_without_open_red'; then
+  if printf '%s' "$REASONS" | grep -Eq 'tdd_red_agent_cannot_write_production'; then
+    NOTE="Cclaw workflow guard: tdd-red agent is limited to test-side RED work and cannot edit production files."
+  elif printf '%s' "$REASONS" | grep -Eq 'tdd_green_agent_cannot_write_tests'; then
+    NOTE="Cclaw workflow guard: tdd-green agent can implement production fixes but should not author new RED tests."
+  elif printf '%s' "$REASONS" | grep -Eq 'tdd_refactor_before_green'; then
+    NOTE="Cclaw workflow guard: tdd-refactor requires a green_done cycle state before refactor edits."
+  elif printf '%s' "$REASONS" | grep -Eq 'tdd_write_without_open_red'; then
     NOTE="Cclaw workflow guard: Write a failing test first before editing production files during tdd stage (state=\${TDD_CYCLE_STATE})."
+  elif printf '%s' "$REASONS" | grep -Eq 'ship_preflight_required'; then
+    NOTE="Cclaw workflow guard: ship finalization command detected before ship_preflight_passed gate. Run preflight and record evidence first."
   elif printf '%s' "$REASONS" | grep -Eq 'tdd_cycle_counts_unavailable'; then
     NOTE="Cclaw workflow guard: unable to inspect run-scoped tdd-cycle counts (missing usable jq/python3/awk). Install one of these tools before writing production code in tdd."
-  elif printf '%s' "$REASONS" | grep -Eq 'direct_flow_state_edit'; then
-    NOTE="Cclaw workflow guard: direct flow-state edit bypasses the canonical stage-complete helper (\${REASONS}). Prefer: bash ${RUNTIME_ROOT}/hooks/stage-complete.sh <stage>. In strict mode this is blocked."
+  elif printf '%s' "$REASONS" | grep -Eq 'runtime_write_requires_managed_only|direct_flow_state_edit'; then
+    NOTE="Cclaw workflow guard: runtime write to managed ${RUNTIME_ROOT} internals detected (\${REASONS}). Prefer cclaw-managed helpers (stage-complete, sync, command contracts) instead of ad-hoc edits."
+  elif printf '%s' "$REASONS" | grep -Eq 'mutating_without_recent_flow_read'; then
+    NOTE="Cclaw workflow guard: mutating action requires a fresh read of ${RUNTIME_ROOT}/state/flow-state.json before edits."
   else
     NOTE="Cclaw workflow guard: detected potential flow violation (\${REASONS}). Re-read ${RUNTIME_ROOT}/state/flow-state.json, avoid source edits before tdd stage, and enforce RED -> GREEN -> REFACTOR discipline inside tdd."
   fi
@@ -928,7 +1095,25 @@ if [ -n "$REASONS" ]; then
   if printf '%s' "$REASONS" | grep -Eq 'tdd_write_without_open_red' && [ "$TDD_ENFORCEMENT_MODE" = "strict" ]; then
     SHOULD_BLOCK="true"
   fi
+  if printf '%s' "$REASONS" | grep -Eq 'tdd_write_without_open_red' && iron_law_is_strict "tdd-red-before-write"; then
+    SHOULD_BLOCK="true"
+  fi
+  if printf '%s' "$REASONS" | grep -Eq 'runtime_write_requires_managed_only|direct_flow_state_edit' && iron_law_is_strict "runtime-writes-managed-only"; then
+    SHOULD_BLOCK="true"
+  fi
+  if printf '%s' "$REASONS" | grep -Eq 'mutating_without_recent_flow_read|stage_invocation_without_recent_flow_read' && iron_law_is_strict "flow-state-read-fresh"; then
+    SHOULD_BLOCK="true"
+  fi
+  if printf '%s' "$REASONS" | grep -Eq 'ship_preflight_required' && iron_law_is_strict "ship-preflight-required"; then
+    SHOULD_BLOCK="true"
+  fi
+  if printf '%s' "$REASONS" | grep -Eq 'implementation_write_before_plan_completion' && iron_law_is_strict "plan-requires-approval"; then
+    SHOULD_BLOCK="true"
+  fi
   if printf '%s' "$REASONS" | grep -Eq 'tdd_cycle_counts_unavailable'; then
+    SHOULD_BLOCK="true"
+  fi
+  if printf '%s' "$REASONS" | grep -Eq 'tdd_red_agent_cannot_write_production|tdd_green_agent_cannot_write_tests|tdd_refactor_before_green'; then
     SHOULD_BLOCK="true"
   fi
   if [ "$WORKFLOW_GUARD_MODE" = "strict" ] || [ "$SHOULD_BLOCK" = "true" ]; then

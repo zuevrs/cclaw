@@ -2,6 +2,7 @@ import fs from "node:fs/promises";
 import path from "node:path";
 import { RUNTIME_ROOT } from "./constants.js";
 import { CCLAW_AGENTS, agentMarkdown } from "./content/core-agents.js";
+import { ironLawsAgentsMdBlock } from "./content/iron-laws.js";
 import { ensureDir, exists, writeFileSafe } from "./fs-utils.js";
 import type { HarnessId } from "./types.js";
 
@@ -327,6 +328,8 @@ Before responding to a coding request:
 1. Read \`.cclaw/state/flow-state.json\` for the current stage.
 2. Use \`/cc\` to start or \`/cc-next\` to continue the flow.
 3. If no stage applies, respond normally.
+
+${ironLawsAgentsMdBlock()}
 
 ### Task Classification (before \`/cc\`)
 

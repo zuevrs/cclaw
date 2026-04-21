@@ -133,6 +133,11 @@ export interface CompoundConfig {
   recurrenceThreshold?: number;
 }
 
+export interface IronLawsConfig {
+  mode?: "advisory" | "strict";
+  strictLaws?: string[];
+}
+
 export interface CclawConfig {
   version: string;
   flowVersion: string;
@@ -197,6 +202,8 @@ export interface CclawConfig {
    * discipline tractable without forcing it on tiny quick-track fixes.
    */
   sliceReview?: SliceReviewConfig;
+  /** Optional per-law strictness controls for hook-enforced iron laws. */
+  ironLaws?: IronLawsConfig;
 }
 
 /**
