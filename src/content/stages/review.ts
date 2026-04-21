@@ -57,7 +57,7 @@ export const REVIEW: StageSchemaInput = {
     "Layer 2b: check security — validation, auth, secrets, injection.",
     "Layer 2c: check performance — queries, memory, caching, hot paths.",
     "Layer 2d: check architecture fit — design compliance, coupling, interfaces.",
-    "Reconcile multi-agent findings into `.cclaw/artifacts/07-review-army.json` (dedup + confidence + conflict notes).",
+    "Reconcile multi-agent findings into `.cclaw/artifacts/07-review-army.json` (dedup + confidence + conflict notes + source tags from spec/correctness/security/performance/architecture/external-safety passes).",
     "Classify and prioritize all findings.",
     "Write review report artifact with explicit verdict.",
     "If verdict is BLOCKED, include the remediation route token `ROUTE_BACK_TO_TDD` and the rewind command payload."
@@ -205,7 +205,7 @@ export const REVIEW: StageSchemaInput = {
   artifactValidation: [
     { section: "Layer 1 Verdict", required: true, validationRule: "Per-criterion pass/fail with references." },
     { section: "Layer 2 Findings", required: false, validationRule: "Each finding has severity, description, and resolution status. Security coverage must include either explicit security findings or `NO_CHANGE_ATTESTATION: <reason>` when no security-relevant changes were found." },
-    { section: "Review Army Contract", required: true, validationRule: "Structured findings include id/severity/confidence/fingerprint/reportedBy/status with dedup reconciliation summary." },
+    { section: "Review Army Contract", required: true, validationRule: "Structured findings include id/severity/confidence/fingerprint/reportedBy/status and source tags from {spec, correctness, security, performance, architecture, external-safety} with dedup reconciliation summary." },
     { section: "Review Readiness Dashboard", required: false, validationRule: "Includes a per-pass table (Layer 1 / Layer 2 / Adversarial / Schema) with a 'Completed at' column, a Delegation log snapshot block (path .cclaw/state/delegation-log.json with required/completed/waived/pending), a Staleness signal block (commit at last review pass and current commit), and a Headline with open critical blockers + ship recommendation. At minimum, the section text must contain the substrings 'Completed at', 'delegation-log.json', 'commit at last review pass', and 'Ship recommendation'." },
     { section: "Completeness Score", required: false, validationRule: "Records AC coverage, task coverage, test-slice coverage, and adversarial-review pass status as numeric or boolean values. At minimum, a line like 'AC coverage: N/M' or 'AC coverage: 100%'." },
     { section: "Incoming Feedback Queue", required: false, validationRule: "When external review feedback exists, include a queue summary with per-item disposition (resolved / accepted-risk / rejected-with-evidence) and evidence refs." },

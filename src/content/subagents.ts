@@ -43,6 +43,32 @@ For cclaw flow stages, machine-only specialist work should auto-dispatch without
 
 Human input remains mandatory only at explicit approval gates (plan approval, user challenge resolution, release finalization mode).
 
+### Review parallel fan-out protocol
+
+In review stage, prefer a fixed six-pass fan-out before reconciliation:
+
+1. \`review-spec\` (Layer 1)
+2. \`review-correctness\` (Layer 2a)
+3. \`review-security\` (Layer 2b)
+4. \`review-performance\` (Layer 2c)
+5. \`review-architecture\` (Layer 2d)
+6. \`review-external-safety\` (Layer 2e)
+
+Dispatch these in parallel where the harness supports isolated workers, then run
+one reconciliation pass that merges findings into \`.cclaw/artifacts/07-review-army.json\`
+with explicit source tags per finding.
+
+### TDD phase fan-out protocol
+
+Treat RED, GREEN, and REFACTOR as separate delegated intents:
+
+- \`tdd-red\`: tests only, no production writes
+- \`tdd-green\`: minimal production implementation, no new RED tests
+- \`tdd-refactor\`: cleanup only after GREEN is proven
+
+Set \`CCLAW_ACTIVE_AGENT\` to the active phase name when possible so workflow-guard
+can enforce phase-appropriate write boundaries.
+
 ## Model & Harness Routing Notes
 
 ### Harness routing

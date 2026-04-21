@@ -29,6 +29,17 @@ Subcommands:
    - \`diff\` -> load \`${RUNTIME_ROOT}/commands/diff.md\` + \`${RUNTIME_ROOT}/skills/flow-diff/SKILL.md\`
 3. Unknown subcommand -> print supported values and stop.
 
+## Headless mode
+
+For machine orchestration, emit one JSON envelope:
+
+\`\`\`json
+{"version":"1","kind":"stage-output","stage":"review","payload":{"command":"/cc-view","subcommand":"status","summary":"<short>"},"emittedAt":"<ISO-8601>"}
+\`\`\`
+
+Validate envelopes with:
+\`cclaw internal envelope-validate --stdin\`
+
 ## Primary skill
 
 **${RUNTIME_ROOT}/skills/${VIEW_SKILL_FOLDER}/SKILL.md**

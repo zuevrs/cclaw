@@ -103,6 +103,18 @@ If during any stage the agent discovers evidence that contradicts the initial Ph
 2. If flow state is missing → run \`cclaw init\` guidance and stop.
 3. Behave exactly like \`/cc-next\`: check current stage gates, resume if incomplete, advance if complete.
 
+## Headless mode
+
+When called by another skill or subagent in machine mode, emit exactly one
+JSON envelope (no prose) and stop:
+
+\`\`\`json
+{"version":"1","kind":"stage-output","stage":"brainstorm","payload":{"command":"/cc","track":"standard","action":"start_or_resume"},"emittedAt":"<ISO-8601>"}
+\`\`\`
+
+Validate envelopes with:
+\`cclaw internal envelope-validate --stdin\`
+
 ## Primary skill
 
 **${RUNTIME_ROOT}/skills/${START_SKILL_FOLDER}/SKILL.md**
