@@ -4,6 +4,7 @@ import { RUNTIME_ROOT } from "./constants.js";
 import { createInitialFlowState, type FlowState } from "./flow-state.js";
 import { readActiveFeature, syncActiveFeatureSnapshot } from "./feature-system.js";
 import { ensureDir, exists, withDirectoryLock, writeFileSafe } from "./fs-utils.js";
+import { readKnowledgeSafely } from "./knowledge-store.js";
 import { evaluateRetroGate } from "./retro-gate.js";
 import { ensureRunSystem, readFlowState, writeFlowState } from "./run-persistence.js";
 import type { FlowStage } from "./types.js";
@@ -138,12 +139,14 @@ async function resetCarryoverStateFiles(projectRoot: string, activeRunId: string
   await ensureDir(stateDir);
   await writeFileSafe(
     path.join(stateDir, DELEGATION_LOG_FILE),
-    `${JSON.stringify({ runId: activeRunId, entries: [] }, null, 2)}\n`
+    `${JSON.stringify({ runId: activeRunId, entries: [] }, null, 2)}\n`,
+    { mode: 0o600 }
   );
-  await writeFileSafe(path.join(stateDir, TDD_CYCLE_LOG_FILE), "");
+  await writeFileSafe(path.join(stateDir, TDD_CYCLE_LOG_FILE), "", { mode: 0o600 });
   await writeFileSafe(
     path.join(stateDir, RECONCILIATION_NOTICES_FILE),
-    `${JSON.stringify({ schemaVersion: 1, notices: [] }, null, 2)}\n`
+    `${JSON.stringify({ schemaVersion: 1, notices: [] }, null, 2)}\n`,
+    { mode: 0o600 }
   );
 }
 
@@ -406,12 +409,8 @@ export async function archiveRun(
 const KNOWLEDGE_SOFT_THRESHOLD = 50;
 
 async function readKnowledgeStats(projectRoot: string): Promise<ArchiveRunResult["knowledge"]> {
-  const knowledgePath = path.join(projectRoot, RUNTIME_ROOT, "knowledge.jsonl");
-  let activeEntryCount = 0;
-  if (await exists(knowledgePath)) {
-    const text = await fs.readFile(knowledgePath, "utf8");
-    activeEntryCount = countActiveKnowledgeEntries(text);
-  }
+  const { entries } = await readKnowledgeSafely(projectRoot);
+  const activeEntryCount = entries.length;
   return {
     activeEntryCount,
     softThreshold: KNOWLEDGE_SOFT_THRESHOLD,
