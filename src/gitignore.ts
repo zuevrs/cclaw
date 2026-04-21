@@ -1,7 +1,7 @@
 import fs from "node:fs/promises";
 import path from "node:path";
 import { REQUIRED_GITIGNORE_PATTERNS } from "./constants.js";
-import { exists } from "./fs-utils.js";
+import { exists, writeFileSafe } from "./fs-utils.js";
 
 export async function ensureGitignore(projectRoot: string): Promise<void> {
   const gitignorePath = path.join(projectRoot, ".gitignore");
@@ -19,7 +19,10 @@ export async function ensureGitignore(projectRoot: string): Promise<void> {
 
   const base = lines.join("\n").replace(/\s+$/u, "");
   const suffix = `${base.length > 0 ? "\n" : ""}${missing.join("\n")}\n`;
-  await fs.writeFile(gitignorePath, `${base}${suffix}`, "utf8");
+  // `writeFileSafe` performs a tmp-file + rename so a crash mid-write
+  // cannot leave `.gitignore` in a half-written state; the previous
+  // direct `fs.writeFile` could truncate the file on SIGKILL.
+  await writeFileSafe(gitignorePath, `${base}${suffix}`);
 }
 
 export async function removeGitignorePatterns(projectRoot: string): Promise<void> {
@@ -34,7 +37,7 @@ export async function removeGitignorePatterns(projectRoot: string): Promise<void
   if (result.length === 0) {
     await fs.rm(gitignorePath, { force: true });
   } else {
-    await fs.writeFile(gitignorePath, `${result}\n`, "utf8");
+    await writeFileSafe(gitignorePath, `${result}\n`);
   }
 }
 

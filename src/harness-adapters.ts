@@ -169,7 +169,12 @@ const LEGACY_CODEX_SKILL_NAMES: readonly string[] = [
   "cclaw-cc-next",
   "cclaw-cc-view",
   "cclaw-cc-ops",
-  "cclaw-cc-ideate"
+  "cclaw-cc-ideate",
+  // Pre-v0.40 installed `/cc-learn` as a top-level skill before it was
+  // folded into `/cc-ops`. Without this entry the orphan stays behind
+  // after upgrade and Codex lists both the new in-thread workflow and
+  // the legacy slash command.
+  "cclaw-cc-learn"
 ];
 
 /**
@@ -556,6 +561,11 @@ what the hook surface does and does not cover.
   are **not** gated by hooks — read
   \`.cclaw/references/harnesses/codex-playbook.md\` for what cclaw
   substitutes with in-turn agent steps for those call classes.
+- Codex's \`SessionStart\` matcher only supports \`startup|resume\`. Claude
+  and Cursor also fire on \`clear\` and \`compact\`, so mid-session
+  context resets there re-inject cclaw's bootstrap automatically. In
+  Codex you must re-announce the active stage yourself after any
+  \`/clear\` or compaction — the skill does not reload implicitly.
 `;
 }
 

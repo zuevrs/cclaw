@@ -133,6 +133,15 @@ describe("install lifecycle", () => {
     // now mapped.
     expect(codexGap?.missingHookEvents).toContain("precompact_digest");
     expect(codexGap?.missingHookEvents).not.toContain("session_rehydrate");
+    // H-08: the `precompact_digest` remediation line for Codex points at
+    // the in-thread `/cc-ops retro` substitute instead of the generic
+    // "schedule the script manually" copy, because Codex has no
+    // PreCompact event that could run it.
+    const precompactLine = codexGap?.remediation?.find((line) =>
+      line.includes("precompact_digest")
+    );
+    expect(precompactLine).toMatch(/\/cc-ops retro/);
+    expect(precompactLine).not.toMatch(/schedule the corresponding script manually/);
 
     // Wave Q (v0.41.0): OpenCode's native `question` tool is honest as
     // permission-gated, not missing — assert the remediation mentions

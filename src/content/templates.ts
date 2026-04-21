@@ -1,3 +1,4 @@
+import { CCLAW_VERSION } from "../constants.js";
 import { orderedStageSchemas } from "./stage-schema.js";
 import { FLOW_STAGES } from "../types.js";
 
@@ -5,7 +6,7 @@ export const ARTIFACT_TEMPLATES: Record<string, string> = {
   "01-brainstorm.md": `---
 stage: brainstorm
 schema_version: 1
-version: 0.18.0
+version: ${CCLAW_VERSION}
 feature: <feature-id>
 locked_decisions: []
 inputs_hash: sha256:pending
@@ -53,7 +54,7 @@ inputs_hash: sha256:pending
   "02-scope.md": `---
 stage: scope
 schema_version: 1
-version: 0.18.0
+version: ${CCLAW_VERSION}
 feature: <feature-id>
 locked_decisions: []
 inputs_hash: sha256:pending
@@ -159,7 +160,7 @@ inputs_hash: sha256:pending
   "02a-research.md": `---
 stage: design
 schema_version: 1
-version: 0.18.0
+version: ${CCLAW_VERSION}
 feature: <feature-id>
 locked_decisions: []
 inputs_hash: sha256:pending
@@ -200,7 +201,7 @@ inputs_hash: sha256:pending
   "03-design.md": `---
 stage: design
 schema_version: 1
-version: 0.18.0
+version: ${CCLAW_VERSION}
 feature: <feature-id>
 locked_decisions: []
 inputs_hash: sha256:pending
@@ -304,7 +305,7 @@ inputs_hash: sha256:pending
   "04-spec.md": `---
 stage: spec
 schema_version: 1
-version: 0.18.0
+version: ${CCLAW_VERSION}
 feature: <feature-id>
 locked_decisions: []
 inputs_hash: sha256:pending
@@ -360,7 +361,7 @@ inputs_hash: sha256:pending
   "05-plan.md": `---
 stage: plan
 schema_version: 1
-version: 0.18.0
+version: ${CCLAW_VERSION}
 feature: <feature-id>
 locked_decisions: []
 inputs_hash: sha256:pending
@@ -439,7 +440,7 @@ Execution rule: complete and verify each batch before starting the next batch.
   "06-tdd.md": `---
 stage: tdd
 schema_version: 1
-version: 0.18.0
+version: ${CCLAW_VERSION}
 feature: <feature-id>
 locked_decisions: []
 inputs_hash: sha256:pending
@@ -506,7 +507,7 @@ inputs_hash: sha256:pending
   "07-review.md": `---
 stage: review
 schema_version: 1
-version: 0.18.0
+version: ${CCLAW_VERSION}
 feature: <feature-id>
 locked_decisions: []
 inputs_hash: sha256:pending
@@ -615,7 +616,7 @@ inputs_hash: sha256:pending
   "08-ship.md": `---
 stage: ship
 schema_version: 1
-version: 0.18.0
+version: ${CCLAW_VERSION}
 feature: <feature-id>
 locked_decisions: []
 inputs_hash: sha256:pending
@@ -670,7 +671,7 @@ inputs_hash: sha256:pending
   "09-retro.md": `---
 stage: retro
 schema_version: 1
-version: 0.18.0
+version: ${CCLAW_VERSION}
 feature: <feature-id>
 locked_decisions: []
 inputs_hash: sha256:pending

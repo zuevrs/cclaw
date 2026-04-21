@@ -1762,7 +1762,14 @@ export const UTILITY_SKILL_FOLDERS = [
   "receiving-code-review"
 ] as const;
 
-export const UTILITY_SKILL_MAP: Record<string, () => string> = {
+export type UtilitySkillFolder = (typeof UTILITY_SKILL_FOLDERS)[number];
+
+/**
+ * One entry per `UTILITY_SKILL_FOLDERS` slot. Typed via the tuple so that
+ * adding a folder without a generator (or vice versa) is a TypeScript
+ * error — keeps the two sources of truth in lockstep at compile time.
+ */
+export const UTILITY_SKILL_MAP: Record<UtilitySkillFolder, () => string> = {
   security: securityReviewSkill,
   debugging: debuggingSkill,
   performance: performanceSkill,
