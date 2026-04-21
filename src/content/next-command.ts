@@ -55,8 +55,9 @@ This is the only progression command the user needs to drive the entire flow. St
 7. **Satisfied** for gate id \`g\`: \`g\` in \`catalog.passed\` and \`g\` not in \`catalog.blocked\`.
 8. Let \`M\` = \`mandatoryDelegations\` for \`currentStage\`.
 9. If \`M\` is non-empty, inspect **\`${delegationPath}\`**. Treat as satisfied only if each mandatory agent is **completed** or **waived**.
-10. If any mandatory delegation is missing and no waiver exists: **STOP** and ask the user whether to dispatch now or waive with rationale. Do not mark gates passed while delegation is unresolved.
-11. If \`currentStage === "review"\` and \`catalog.blocked\` includes \`review_criticals_resolved\`, treat this as a hard remediation branch: recommend \`/cc-ops rewind tdd "review_blocked_by_critical"\` with the blocking finding IDs, and do not attempt to advance toward ship.
+10. For each satisfied mandatory delegation row, verify \`evidenceRefs\` is a non-empty array (unless status is \`waived\` with rationale). Missing evidenceRefs means delegation is unresolved.
+11. If any mandatory delegation is missing and no waiver exists: **STOP** and ask the user whether to dispatch now or waive with rationale. Do not mark gates passed while delegation is unresolved.
+12. If \`currentStage === "review"\` and \`catalog.blocked\` includes \`review_criticals_resolved\`, treat this as a hard remediation branch: recommend \`/cc-ops rewind tdd "review_blocked_by_critical"\` with the blocking finding IDs, and do not attempt to advance toward ship.
 
 ### Path A: Current stage is NOT complete (any gate unmet or delegation missing)
 
@@ -169,6 +170,7 @@ For each gate id in \`requiredGates\` for \`currentStage\`:
 - **Unmet** otherwise.
 
 Check \`mandatoryDelegations\` via **\`${delegationPath}\`** — satisfied only if **completed** or **waived**.
+Also verify each completed mandatory delegation row has non-empty \`evidenceRefs\` (waived rows must include rationale).
 If a mandatory delegation is missing and no waiver exists, **STOP** and ask:
 (A) dispatch now, (B) waive with rationale, (C) cancel stage advance.
 

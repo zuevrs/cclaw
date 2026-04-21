@@ -151,21 +151,21 @@ export async function buildTraceMatrix(projectRoot: string): Promise<TraceMatrix
   const allSliceIds = tdd ? parseTddSliceIds(tdd) : [];
   const layer1 = review ? extractLayer1Section(review) : "";
 
-  const acToTasks = new Map<string, string[]>();
+  const acToTasks = new Map<string, Set<string>>();
   for (const [task, acs] of taskToAcs) {
     for (const ac of acs) {
-      const prev = acToTasks.get(ac) ?? [];
-      if (!prev.includes(task)) {
-        acToTasks.set(ac, [...prev, task]);
-      }
+      const prev = acToTasks.get(ac) ?? new Set<string>();
+      prev.add(task);
+      acToTasks.set(ac, prev);
     }
   }
 
   const entries: TraceEntry[] = criterionIds.map((criterionId) => {
-    const taskIds = acToTasks.get(criterionId) ?? [];
+    const taskIds = [...(acToTasks.get(criterionId) ?? new Set<string>())];
+    const taskIdSet = new Set(taskIds);
     const testSlices: string[] = [];
     for (const [slice, tasks] of sliceToTasks) {
-      if (tasks.some((t) => taskIds.includes(t))) {
+      if (tasks.some((t) => taskIdSet.has(t))) {
         testSlices.push(slice);
       }
     }
@@ -177,7 +177,7 @@ export async function buildTraceMatrix(projectRoot: string): Promise<TraceMatrix
     };
   });
 
-  const orphanedCriteria = criterionIds.filter((ac) => (acToTasks.get(ac) ?? []).length === 0);
+  const orphanedCriteria = criterionIds.filter((ac) => (acToTasks.get(ac)?.size ?? 0) === 0);
 
   const tasksWithSlice = new Set<string>();
   for (const tasks of sliceToTasks.values()) {

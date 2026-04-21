@@ -68,6 +68,15 @@ export interface AppendKnowledgeResult {
   appendedEntries: KnowledgeEntry[];
 }
 
+export interface ReadKnowledgeOptions {
+  lockAware?: boolean;
+}
+
+export interface ReadKnowledgeResult {
+  entries: KnowledgeEntry[];
+  malformedLines: number;
+}
+
 const KNOWLEDGE_TYPE_SET = new Set<KnowledgeEntryType>(["rule", "pattern", "lesson", "compound"]);
 const KNOWLEDGE_CONFIDENCE_SET = new Set<KnowledgeEntryConfidence>(["high", "medium", "low"]);
 const KNOWLEDGE_SEVERITY_SET = new Set<KnowledgeEntrySeverity>(["critical", "important", "suggestion"]);
@@ -141,8 +150,89 @@ function dedupeKey(entry: Pick<
   ].join("|");
 }
 
+interface KnowledgeSnapshot {
+  lines: string[];
+  entries: KnowledgeEntry[];
+  malformedLines: number;
+  keyToIndex: Map<string, number>;
+  entryByIndex: Map<number, KnowledgeEntry>;
+}
+
+function emptyKnowledgeSnapshot(): KnowledgeSnapshot {
+  return {
+    lines: [],
+    entries: [],
+    malformedLines: 0,
+    keyToIndex: new Map<string, number>(),
+    entryByIndex: new Map<number, KnowledgeEntry>()
+  };
+}
+
+function parseKnowledgeSnapshot(raw: string): KnowledgeSnapshot {
+  const lines = stripBom(raw).split(/\r?\n/u);
+  const entries: KnowledgeEntry[] = [];
+  const keyToIndex = new Map<string, number>();
+  const entryByIndex = new Map<number, KnowledgeEntry>();
+  let malformedLines = 0;
+
+  for (let i = 0; i < lines.length; i += 1) {
+    const trimmed = lines[i]!.trim();
+    if (trimmed.length === 0) continue;
+    try {
+      const parsed = JSON.parse(trimmed) as unknown;
+      const validated = validateKnowledgeEntry(parsed);
+      if (!validated.ok) {
+        malformedLines += 1;
+        continue;
+      }
+      const entry = parsed as KnowledgeEntry;
+      entries.push(entry);
+      const key = dedupeKey(entry);
+      if (!keyToIndex.has(key)) {
+        keyToIndex.set(key, i);
+      }
+      entryByIndex.set(i, entry);
+    } catch {
+      malformedLines += 1;
+    }
+  }
+
+  return {
+    lines,
+    entries,
+    malformedLines,
+    keyToIndex,
+    entryByIndex
+  };
+}
+
+async function readKnowledgeSnapshot(filePath: string): Promise<KnowledgeSnapshot> {
+  try {
+    const raw = await fs.readFile(filePath, "utf8");
+    return parseKnowledgeSnapshot(raw);
+  } catch (error) {
+    const code = (error as NodeJS.ErrnoException | undefined)?.code;
+    if (code === "ENOENT") {
+      return emptyKnowledgeSnapshot();
+    }
+    throw error;
+  }
+}
+
+function mergeKnowledgeOccurrence(target: KnowledgeEntry, incoming: KnowledgeEntry): KnowledgeEntry {
+  const mergedFrequency = target.frequency + Math.max(1, incoming.frequency);
+  const mergedLastSeen = target.last_seen_ts >= incoming.last_seen_ts
+    ? target.last_seen_ts
+    : incoming.last_seen_ts;
+  return {
+    ...target,
+    frequency: mergedFrequency,
+    last_seen_ts: mergedLastSeen
+  };
+}
+
 function isIsoUtcTimestamp(value: string): boolean {
-  return /^\d{4}-\d{2}-\d{2}T\d{2}:\d{2}:\d{2}Z$/u.test(value);
+  return /^\d{4}-\d{2}-\d{2}T\d{2}:\d{2}:\d{2}(?:\.\d{1,3})?Z$/u.test(value);
 }
 
 function isNullableString(value: unknown): value is string | null {
@@ -268,26 +358,24 @@ export function materializeKnowledgeEntry(
   return entry;
 }
 
-async function readExistingKnowledgeKeys(filePath: string): Promise<Set<string>> {
-  const keys = new Set<string>();
-  try {
-    const raw = stripBom(await fs.readFile(filePath, "utf8"));
-    const lines = raw.split(/\r?\n/u).map((line) => line.trim()).filter((line) => line.length > 0);
-    for (const line of lines) {
-      try {
-        const parsed = JSON.parse(line) as unknown;
-        const validated = validateKnowledgeEntry(parsed);
-        if (!validated.ok) continue;
-        const entry = parsed as KnowledgeEntry;
-        keys.add(dedupeKey(entry));
-      } catch {
-        // Ignore malformed historical lines for dedupe indexing.
-      }
-    }
-  } catch {
-    // Missing file is fine — treat as empty store.
+export async function readKnowledgeSafely(
+  projectRoot: string,
+  options: ReadKnowledgeOptions = {}
+): Promise<ReadKnowledgeResult> {
+  const filePath = knowledgePath(projectRoot);
+  const read = async (): Promise<ReadKnowledgeResult> => {
+    const snapshot = await readKnowledgeSnapshot(filePath);
+    return {
+      entries: snapshot.entries,
+      malformedLines: snapshot.malformedLines
+    };
+  };
+
+  if (options.lockAware === false) {
+    return read();
   }
-  return keys;
+
+  return withDirectoryLock(knowledgeLockPath(projectRoot), read);
 }
 
 export async function appendKnowledge(
@@ -317,22 +405,44 @@ export async function appendKnowledge(
   const appendedEntries: KnowledgeEntry[] = [];
   await withDirectoryLock(knowledgeLockPath(projectRoot), async () => {
     await fs.mkdir(path.dirname(filePath), { recursive: true });
-    const existingKeys = await readExistingKnowledgeKeys(filePath);
-    const batchKeys = new Set<string>();
-    const linesToAppend: string[] = [];
+    const snapshot = await readKnowledgeSnapshot(filePath);
+    const updatedByIndex = new Map<number, KnowledgeEntry>();
+    const batchEntries = new Map<string, KnowledgeEntry>();
     for (const entry of materialized) {
       const key = dedupeKey(entry);
-      if (existingKeys.has(key) || batchKeys.has(key)) {
+      const existingIndex = snapshot.keyToIndex.get(key);
+      if (existingIndex !== undefined) {
         skippedDuplicates += 1;
+        const base = updatedByIndex.get(existingIndex) ?? snapshot.entryByIndex.get(existingIndex);
+        if (base) {
+          updatedByIndex.set(existingIndex, mergeKnowledgeOccurrence(base, entry));
+        }
         continue;
       }
-      batchKeys.add(key);
-      existingKeys.add(key);
-      appendedEntries.push(entry);
-      linesToAppend.push(JSON.stringify(entry));
+      const existingBatchEntry = batchEntries.get(key);
+      if (existingBatchEntry) {
+        skippedDuplicates += 1;
+        batchEntries.set(key, mergeKnowledgeOccurrence(existingBatchEntry, entry));
+        continue;
+      }
+      batchEntries.set(key, { ...entry });
     }
-    if (linesToAppend.length > 0) {
-      await fs.appendFile(filePath, `${linesToAppend.join("\n")}\n`, "utf8");
+    appendedEntries.push(...batchEntries.values());
+
+    if (updatedByIndex.size === 0 && batchEntries.size === 0) {
+      return;
+    }
+
+    const rewrittenLines = snapshot.lines.map((line, index) => {
+      const updated = updatedByIndex.get(index);
+      return updated ? JSON.stringify(updated) : line;
+    }).filter((line) => line.trim().length > 0);
+    const linesToWrite = [
+      ...rewrittenLines,
+      ...Array.from(batchEntries.values(), (entry) => JSON.stringify(entry))
+    ];
+    if (linesToWrite.length > 0) {
+      await fs.writeFile(filePath, `${linesToWrite.join("\n")}\n`, "utf8");
     }
   });
 

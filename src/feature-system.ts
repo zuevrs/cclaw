@@ -240,7 +240,7 @@ async function writeRegistry(projectRoot: string, registry: FeatureWorktreeRegis
     updatedAt: registry.updatedAt,
     entries: dedupeEntries(registry.entries)
   };
-  await writeFileSafe(worktreeRegistryPath(projectRoot), `${JSON.stringify(normalized, null, 2)}\n`);
+  await writeFileSafe(worktreeRegistryPath(projectRoot), `${JSON.stringify(normalized, null, 2)}\n`, { mode: 0o600 });
 }
 
 async function readActiveFeatureMetaInternal(projectRoot: string): Promise<ActiveFeatureMeta> {
@@ -276,7 +276,7 @@ async function writeActiveFeatureMeta(projectRoot: string, meta: ActiveFeatureMe
     activeFeature: normalizedFeatureId(meta.activeFeature),
     updatedAt: meta.updatedAt
   };
-  await writeFileSafe(activeFeatureMetaPath(projectRoot), `${JSON.stringify(normalized, null, 2)}\n`);
+  await writeFileSafe(activeFeatureMetaPath(projectRoot), `${JSON.stringify(normalized, null, 2)}\n`, { mode: 0o600 });
 }
 
 function registryHasFeature(registry: FeatureWorktreeRegistry, featureId: string): boolean {

@@ -2,8 +2,10 @@ import { describe, expect, it } from "vitest";
 import {
   claudeHooksJsonWithObservation,
   codexHooksJsonWithObservation,
-  cursorHooksJsonWithObservation
+  cursorHooksJsonWithObservation,
+  workflowGuardScript
 } from "../../src/content/observe.js";
+import { stageCompleteScript } from "../../src/content/hooks.js";
 import { validateHookDocument } from "../../src/hook-schema.js";
 
 describe("hook schema validation", () => {
@@ -63,5 +65,12 @@ describe("hook schema validation", () => {
     const result = validateHookDocument("codex", codex);
     expect(result.ok).toBe(false);
     expect(result.errors.join("\n")).toContain('missing required event array "UserPromptSubmit"');
+  });
+
+  it("generated runtime hooks do not fallback to npx cclaw-cli", () => {
+    const codex = codexHooksJsonWithObservation();
+    expect(codex).not.toContain("npx -y cclaw-cli");
+    expect(stageCompleteScript()).not.toContain("npx -y cclaw-cli");
+    expect(workflowGuardScript()).not.toContain("npx -y cclaw-cli");
   });
 });

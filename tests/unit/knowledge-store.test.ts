@@ -3,6 +3,7 @@ import path from "node:path";
 import { describe, expect, it } from "vitest";
 import {
   appendKnowledge,
+  readKnowledgeSafely,
   type KnowledgeEntry,
   type KnowledgeSeedEntry
 } from "../../src/knowledge-store.js";
@@ -51,7 +52,7 @@ describe("knowledge store append helper", () => {
     expect(parsed.last_seen_ts).toBe("2026-04-19T11:00:00Z");
   });
 
-  it("dedupes repeated trigger/action entries within batch and store", async () => {
+  it("dedupes repeated trigger/action entries within batch and store while bumping frequency", async () => {
     const root = await createTempProject("knowledge-dedupe");
     const seed: KnowledgeSeedEntry = {
       type: "rule",
@@ -80,6 +81,9 @@ describe("knowledge store append helper", () => {
     const raw = await fs.readFile(path.join(root, ".cclaw/knowledge.jsonl"), "utf8");
     const lines = raw.trim().split("\n");
     expect(lines).toHaveLength(1);
+    const parsed = JSON.parse(lines[0]!) as KnowledgeEntry;
+    expect(parsed.frequency).toBe(3);
+    expect(parsed.last_seen_ts).toBe("2026-04-19T11:06:00Z");
   });
 
   it("rejects invalid entries and does not append malformed rows", async () => {
@@ -189,5 +193,42 @@ describe("knowledge store append helper", () => {
     expect(result.appended).toBe(0);
     expect(result.invalid).toBe(1);
     expect(result.errors.join(" ")).toContain("source");
+  });
+
+  it("reads knowledge with BOM stripping and malformed-line accounting", async () => {
+    const root = await createTempProject("knowledge-read-safe");
+    const knowledgePath = path.join(root, ".cclaw/knowledge.jsonl");
+    await fs.mkdir(path.dirname(knowledgePath), { recursive: true });
+    const validEntry: KnowledgeEntry = {
+      type: "pattern",
+      trigger: "stable trigger",
+      action: "stable action",
+      confidence: "medium",
+      domain: null,
+      stage: "plan",
+      origin_stage: "plan",
+      origin_feature: null,
+      frequency: 1,
+      universality: "project",
+      maturity: "raw",
+      created: "2026-04-20T11:00:00Z",
+      first_seen_ts: "2026-04-20T11:00:00Z",
+      last_seen_ts: "2026-04-20T11:00:00Z",
+      project: "cclaw"
+    };
+    await fs.writeFile(
+      knowledgePath,
+      `\uFEFF${JSON.stringify(validEntry)}\n{not-json}\n${JSON.stringify({
+        ...validEntry,
+        trigger: "second trigger"
+      })}\n`,
+      "utf8"
+    );
+
+    const parsed = await readKnowledgeSafely(root);
+    expect(parsed.entries).toHaveLength(2);
+    expect(parsed.malformedLines).toBe(1);
+    expect(parsed.entries[0]?.trigger).toBe("stable trigger");
+    expect(parsed.entries[1]?.trigger).toBe("second trigger");
   });
 });

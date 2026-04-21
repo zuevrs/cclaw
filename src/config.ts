@@ -71,8 +71,15 @@ function configFixExample(): string {
   - cursor`;
 }
 
-function configValidationError(configFilePath: string, reason: string): Error {
-  return new Error(
+export class InvalidConfigError extends Error {
+  constructor(message: string) {
+    super(message);
+    this.name = "InvalidConfigError";
+  }
+}
+
+function configValidationError(configFilePath: string, reason: string): InvalidConfigError {
+  return new InvalidConfigError(
     `Invalid cclaw config at ${configFilePath}: ${reason}\n` +
       `Supported harnesses: ${SUPPORTED_HARNESSES_TEXT}\n` +
       `Supported tracks: ${SUPPORTED_TRACKS_TEXT}\n` +
@@ -212,8 +219,12 @@ export async function readConfig(projectRoot: string): Promise<CclawConfig> {
   let parsedUnknown: unknown;
   try {
     parsedUnknown = parse(await fs.readFile(fullPath, "utf8"));
-  } catch {
-    return createDefaultConfig();
+  } catch (error) {
+    const reason = error instanceof Error ? error.message : "unknown parse error";
+    throw configValidationError(fullPath, `failed to parse YAML (${reason})`);
+  }
+  if (parsedUnknown !== null && parsedUnknown !== undefined && typeof parsedUnknown !== "object") {
+    throw configValidationError(fullPath, "top-level config must be a YAML mapping/object");
   }
 
   const parsed = (parsedUnknown && typeof parsedUnknown === "object"

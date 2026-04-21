@@ -143,7 +143,7 @@ export const CCLAW_AGENTS = [
   {
     name: "doc-updater",
     description:
-      "MANDATORY at ship and PROACTIVE when behavior/config/public API changes. Keep docs and runbooks in lockstep with shipped behavior.",
+      "MANDATORY only at ship; PROACTIVE during tdd/review whenever behavior, config, or public API changes. Keep docs and runbooks in lockstep with shipped behavior.",
     tools: ["Read", "Write", "Edit", "Grep", "Glob"],
     model: "fast",
     activation: "mandatory",

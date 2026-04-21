@@ -115,7 +115,12 @@ Commands:
   init       Bootstrap .cclaw runtime, state, and harness shims in this project.
              Flags: --harnesses=<list>  Comma list of harnesses (claude,cursor,opencode,codex).
                     --no-interactive    Skip interactive prompts even on TTY (for CI/scripts).
+  sync       Reconcile generated runtime files with the current config.
   upgrade    Refresh generated files in .cclaw. Preserves your config.yaml.
+  archive    Archive the active run and reset flow state for next feature.
+             Flags: --name=<slug>        Override archive folder suffix.
+                    --skip-retro         Skip retro gate only when runtime allows it.
+                    --retro-reason=<txt> Required rationale with --skip-retro.
   uninstall  Remove .cclaw runtime and the generated harness shim files.
   eval       Run cclaw evals. Maintainer surface — see docs/evals.md.
              Full flag reference: \`npx cclaw-cli eval --help\` or docs/evals.md.
@@ -127,6 +132,8 @@ Global flags:
 Examples:
   npx cclaw-cli
   npx cclaw-cli init --harnesses=claude,cursor --no-interactive
+  npx cclaw-cli sync
+  npx cclaw-cli archive --name=my-feature
   npx cclaw-cli upgrade
   npx cclaw-cli eval --dry-run
 
@@ -1240,7 +1247,7 @@ async function runCommand(parsed: ParsedArgs, ctx: CliContext): Promise<number> 
     if (k.overThreshold) {
       info(
         ctx,
-        `Knowledge curation recommended: ${k.knowledgePath} now has ${k.activeEntryCount} active entries (soft threshold ${k.softThreshold}). Run \`/cc-learn curate\` to plan a soft-archive of stale/duplicate entries to ${RUNTIME_ROOT}/knowledge.archive.md.`
+        `Knowledge curation recommended: ${k.knowledgePath} now has ${k.activeEntryCount} active entries (soft threshold ${k.softThreshold}). Run \`/cc-learn curate\` to plan a soft-archive of stale/duplicate entries to ${RUNTIME_ROOT}/knowledge.archive.jsonl.`
       );
     } else if (k.activeEntryCount > 0) {
       info(

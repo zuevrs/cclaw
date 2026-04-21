@@ -3,6 +3,7 @@ import path from "node:path";
 import { RUNTIME_ROOT } from "./constants.js";
 import type { FlowState } from "./flow-state.js";
 import { exists, stripBom } from "./fs-utils.js";
+import { readKnowledgeSafely } from "./knowledge-store.js";
 
 function activeArtifactsPath(projectRoot: string): string {
   return path.join(projectRoot, RUNTIME_ROOT, "artifacts");
@@ -81,38 +82,53 @@ export async function evaluateRetroGate(
   }
   const shouldFallbackScan =
     compoundEntries <= 0 && (windowStartMs !== null || windowEndMs !== null);
-  const knowledgeFile = path.join(projectRoot, RUNTIME_ROOT, "knowledge.jsonl");
-  if (shouldFallbackScan && (await exists(knowledgeFile))) {
+  if (shouldFallbackScan) {
+    const countIfEligible = (parsed: {
+      type?: unknown;
+      source?: unknown;
+      stage?: unknown;
+      created?: unknown;
+    }): number => {
+      if (parsed.type !== "compound") {
+        return 0;
+      }
+      const created =
+        typeof parsed.created === "string" ? parseIsoTimestamp(parsed.created) : null;
+      if (created === null || !inInclusiveWindow(created, windowStartMs, windowEndMs)) {
+        return 0;
+      }
+      const source = typeof parsed.source === "string"
+        ? parsed.source.trim().toLowerCase()
+        : null;
+      const legacyRetroStage = parsed.stage === "retro";
+      return source === "retro" || legacyRetroStage ? 1 : 0;
+    };
     try {
-      const raw = stripBom(await fs.readFile(knowledgeFile, "utf8"));
+      const knowledgeFile = path.join(projectRoot, RUNTIME_ROOT, "knowledge.jsonl");
+      const { entries } = await readKnowledgeSafely(projectRoot);
       compoundEntries = 0;
-      for (const line of raw.split(/\r?\n/)) {
-        const trimmed = line.trim();
-        if (!trimmed) continue;
-        try {
-          const parsed = JSON.parse(trimmed) as {
-            type?: unknown;
-            source?: unknown;
-            stage?: unknown;
-            created?: unknown;
-          };
-          if (parsed.type !== "compound") {
-            continue;
+      for (const parsed of entries) {
+        compoundEntries += countIfEligible(parsed);
+      }
+
+      // Backward compatibility for historical/hand-edited rows that don't pass
+      // strict knowledge schema validation but still carry retro evidence.
+      if (compoundEntries === 0 && (await exists(knowledgeFile))) {
+        const raw = stripBom(await fs.readFile(knowledgeFile, "utf8"));
+        for (const line of raw.split(/\r?\n/)) {
+          const trimmed = line.trim();
+          if (!trimmed) continue;
+          try {
+            const parsed = JSON.parse(trimmed) as {
+              type?: unknown;
+              source?: unknown;
+              stage?: unknown;
+              created?: unknown;
+            };
+            compoundEntries += countIfEligible(parsed);
+          } catch {
+            // ignore malformed lines for retro gate calculation
           }
-          const created =
-            typeof parsed.created === "string" ? parseIsoTimestamp(parsed.created) : null;
-          if (created === null || !inInclusiveWindow(created, windowStartMs, windowEndMs)) {
-            continue;
-          }
-          const source = typeof parsed.source === "string"
-            ? parsed.source.trim().toLowerCase()
-            : null;
-          const legacyRetroStage = parsed.stage === "retro";
-          if (source === "retro" || legacyRetroStage) {
-            compoundEntries += 1;
-          }
-        } catch {
-          // ignore malformed lines for retro gate calculation
         }
       }
     } catch {

@@ -97,8 +97,10 @@ scripted installs:
 npx cclaw-cli init --harnesses=claude,cursor --no-interactive
 ```
 
-That's the entire CLI interaction. Everything after install happens
-inside your harness (Claude Code, Cursor, OpenCode, or Codex).
+That's the entire required CLI interaction for the normal workflow.
+Everything day-to-day happens inside your harness (Claude Code, Cursor,
+OpenCode, or Codex); optional maintenance commands are listed in the
+CLI reference.
 
 ### What gets generated
 
@@ -140,9 +142,12 @@ Plus harness-specific shims:
 `cclaw init` writes five keys, on purpose:
 
 ```yaml
-version: 0.46.0
+version: ${CCLAW_VERSION}
 flowVersion: 1.0.0
 harnesses:
+  - claude
+  - cursor
+  - opencode
   - codex
 strictness: advisory     # advisory | strict — one knob for prompt-guard + TDD
 gitHookGuards: false     # opt in to managed .git/hooks/pre-commit + pre-push
@@ -471,7 +476,9 @@ your harness.
 ```bash
 npx cclaw-cli                   # launches interactive setup (or prints
                                 # a one-line status hint if already installed)
+npx cclaw-cli sync              # re-materialize generated runtime from config.yaml
 npx cclaw-cli upgrade           # refresh generated files; preserves .cclaw/config.yaml
+npx cclaw-cli archive           # archive current run and reset flow-state
 npx cclaw-cli uninstall         # remove .cclaw + generated harness shims
 npx cclaw-cli eval …            # maintainer surface (see docs/evals.md)
 npx cclaw-cli --version

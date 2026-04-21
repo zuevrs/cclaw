@@ -88,15 +88,27 @@ export async function withDirectoryLock<T>(
   }
 }
 
-export async function writeFileSafe(filePath: string, content: string): Promise<void> {
+export interface WriteFileSafeOptions {
+  mode?: number;
+}
+
+export async function writeFileSafe(
+  filePath: string,
+  content: string,
+  options: WriteFileSafeOptions = {}
+): Promise<void> {
   await ensureDir(path.dirname(filePath));
   const tempPath = path.join(
     path.dirname(filePath),
     `.${path.basename(filePath)}.tmp-${process.pid}-${Date.now()}-${Math.random().toString(36).slice(2, 8)}`
   );
-  await fs.writeFile(tempPath, content, "utf8");
+  const targetMode = options.mode;
+  await fs.writeFile(tempPath, content, { encoding: "utf8", ...(targetMode !== undefined ? { mode: targetMode } : {}) });
   try {
     await fs.rename(tempPath, filePath);
+    if (targetMode !== undefined) {
+      await fs.chmod(filePath, targetMode).catch(() => undefined);
+    }
   } catch (error) {
     const code = (error as NodeJS.ErrnoException | undefined)?.code;
     // `rename` fails with EXDEV when the temp file and target live on
@@ -107,6 +119,9 @@ export async function writeFileSafe(filePath: string, content: string): Promise<
     if (code === "EXDEV") {
       try {
         await fs.copyFile(tempPath, filePath);
+        if (targetMode !== undefined) {
+          await fs.chmod(filePath, targetMode).catch(() => undefined);
+        }
       } finally {
         await fs.unlink(tempPath).catch(() => undefined);
       }

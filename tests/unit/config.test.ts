@@ -21,12 +21,12 @@ describe("config", () => {
     const config = await readConfig(root);
     expect(config.harnesses).toEqual([]);
   });
-  it("falls back to defaults on malformed yaml", async () => {
+  it("throws on malformed yaml instead of silently defaulting", async () => {
     const root = await createTempProject("config-malformed");
     await fs.mkdir(path.join(root, ".cclaw"), { recursive: true });
     await fs.writeFile(configPath(root), "::: not valid yaml :::", "utf8");
-    const config = await readConfig(root);
-    expect(config.harnesses.length).toBeGreaterThan(0);
+    await expect(readConfig(root)).rejects.toThrow(/Invalid cclaw config/);
+    await expect(readConfig(root)).rejects.toThrow(/failed to parse YAML|top-level config must be a YAML mapping\/object/);
   });
   it("rejects invalid harness ids instead of silently defaulting", async () => {
     const root = await createTempProject("config-invalid");

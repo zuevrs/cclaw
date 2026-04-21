@@ -370,6 +370,27 @@ describe("install lifecycle", () => {
     expect(restoredSkill).toContain("## Required Gates");
   });
 
+  it("sync regenerates stage command contracts when defaultTrack changes", async () => {
+    const root = await createTempProject("sync-track-contracts");
+    await initCclaw({ projectRoot: root });
+    const initialConfig = await readConfig(root);
+    await writeConfig(root, {
+      ...initialConfig,
+      defaultTrack: "quick"
+    });
+    await syncCclaw(root);
+    const quickTddContract = await fs.readFile(path.join(root, ".cclaw/commands/tdd.md"), "utf8");
+    expect(quickTddContract).not.toContain("tdd_traceable_to_plan");
+
+    await writeConfig(root, {
+      ...(await readConfig(root)),
+      defaultTrack: "standard"
+    });
+    await syncCclaw(root);
+    const standardTddContract = await fs.readFile(path.join(root, ".cclaw/commands/tdd.md"), "utf8");
+    expect(standardTddContract).toContain("tdd_traceable_to_plan");
+  });
+
   it("sync removes stale generated shims, persists config, and keeps user-owned assets", async () => {
     const root = await createTempProject("cleanup");
     await initCclaw({ projectRoot: root });

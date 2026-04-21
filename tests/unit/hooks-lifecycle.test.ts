@@ -249,6 +249,50 @@ printf '%s\n' "$*" >> "${callsPath}"
     expect(calls).toContain("internal advance-stage scope --passed=scope_contract_written");
   });
 
+  it("stage-complete helper fails closed when cclaw binary is unavailable", async () => {
+    const root = await createTempProject("stage-complete-no-cclaw");
+    await fs.mkdir(path.join(root, ".cclaw/hooks"), { recursive: true });
+    const result = await runScript(
+      root,
+      ".cclaw/hooks/stage-complete.sh",
+      stageCompleteScript(),
+      ["scope"],
+      "",
+      { PATH: "/usr/bin:/bin" }
+    );
+    expect(result.code).toBe(1);
+    expect(result.stderr).toContain("cclaw binary not found in PATH");
+  });
+
+  it("pre-compact digest reads gate state from stageGateCatalog", async () => {
+    const root = await createTempProject("pre-compact-stage-catalog");
+    await fs.mkdir(path.join(root, ".cclaw/state"), { recursive: true });
+    await fs.mkdir(path.join(root, ".cclaw/hooks"), { recursive: true });
+    await fs.writeFile(path.join(root, ".cclaw/state/flow-state.json"), JSON.stringify({
+      currentStage: "review",
+      track: "standard",
+      activeRunId: "run-stage-catalog",
+      completedStages: ["brainstorm", "scope", "design", "spec", "plan", "tdd"],
+      skippedStages: [],
+      stageGateCatalog: {
+        review: {
+          passed: ["review_criticals_resolved"],
+          blocked: ["review_security_attested"]
+        }
+      }
+    }, null, 2), "utf8");
+
+    const result = await runScript(
+      root,
+      ".cclaw/hooks/pre-compact.sh",
+      preCompactScript()
+    );
+    expect(result.code).toBe(0);
+    const digest = await fs.readFile(path.join(root, ".cclaw/state/session-digest.md"), "utf8");
+    expect(digest).toContain("passed: review_criticals_resolved");
+    expect(digest).toContain("blocked: review_security_attested");
+  });
+
   it("prompt guard logs advisory events for risky cclaw writes", async () => {
     const root = await createTempProject("prompt-guard-runtime");
     await fs.mkdir(path.join(root, ".cclaw/state"), { recursive: true });
@@ -401,6 +445,44 @@ printf '%s\n' "$*" >> "${callsPath}"
           content: "export const value = 3;\n"
         }
       })
+    );
+    expect(result.code).toBe(0);
+    expect(result.stderr).not.toContain("Write a failing test first");
+  });
+
+  it("workflow guard fallback counting keeps runId isolation when jq/python are unusable", async () => {
+    const root = await createTempProject("workflow-guard-runid-fallback");
+    await fs.mkdir(path.join(root, ".cclaw/state"), { recursive: true });
+    await fs.writeFile(path.join(root, ".cclaw/state/flow-state.json"), JSON.stringify({
+      currentStage: "tdd",
+      activeRunId: "run-current",
+      completedStages: ["brainstorm", "scope", "design", "spec", "plan"]
+    }, null, 2), "utf8");
+    await fs.writeFile(path.join(root, ".cclaw/state/tdd-cycle-log.jsonl"), [
+      JSON.stringify({ ts: "2026-04-20T00:00:00Z", runId: "run-old", phase: "red" }),
+      JSON.stringify({ ts: "2026-04-20T00:00:10Z", runId: "run-current", phase: "red" }),
+      JSON.stringify({ ts: "2026-04-20T00:00:20Z", runId: "run-current", phase: "green" })
+    ].join("\n"), "utf8");
+    const binDir = path.join(root, "bin");
+    await fs.mkdir(binDir, { recursive: true });
+    await fs.writeFile(path.join(binDir, "jq"), "#!/usr/bin/env bash\nexit 1\n", "utf8");
+    await fs.writeFile(path.join(binDir, "python3"), "#!/usr/bin/env bash\nexit 1\n", "utf8");
+    await fs.chmod(path.join(binDir, "jq"), 0o755);
+    await fs.chmod(path.join(binDir, "python3"), 0o755);
+
+    const result = await runScript(
+      root,
+      "workflow-guard.sh",
+      workflowGuardScript({ tddEnforcementMode: "strict" }),
+      [],
+      JSON.stringify({
+        tool_name: "Write",
+        tool_input: {
+          path: "src/app.ts",
+          content: "export const value = 42;\n"
+        }
+      }),
+      { PATH: `${binDir}:/usr/bin:/bin` }
     );
     expect(result.code).toBe(0);
     expect(result.stderr).not.toContain("Write a failing test first");
