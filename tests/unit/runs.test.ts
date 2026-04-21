@@ -58,6 +58,20 @@ describe("runs system", () => {
     expect(state.activeRunId).toBe("active");
   });
 
+  it("removes the .archive-in-progress sentinel on success", async () => {
+    const root = await createTempProject("runs-archive-sentinel-clean");
+    await ensureRunSystem(root);
+    await fs.writeFile(path.join(root, ".cclaw/artifacts/00-idea.md"), "# Payments\n", "utf8");
+    const archived = await archiveRun(root, "Payments");
+    await expect(
+      fs.stat(path.join(archived.archivePath, ".archive-in-progress"))
+    ).rejects.toHaveProperty("code", "ENOENT");
+    // Manifest must be present so the archive is considered committed.
+    await expect(
+      fs.stat(path.join(archived.archivePath, "archive-manifest.json"))
+    ).resolves.toBeTruthy();
+  });
+
   it("creates unique archive ids for same-day feature names", async () => {
     const root = await createTempProject("runs-archive-unique");
     await ensureRunSystem(root);
@@ -110,7 +124,11 @@ describe("runs system", () => {
 
     const archived = await archiveRun(root, "Skip Via Closeout");
     expect(archived.retro.required).toBe(true);
-    expect(archived.retro.completed).toBe(false);
+    // R-03: an explicit retroSkipped + reason now counts as a completed
+    // retro from the gate's perspective, so archive manifests record the
+    // gate as complete while preserving the `skipped` + `skipReason`
+    // fields for audit trail.
+    expect(archived.retro.completed).toBe(true);
     expect(archived.retro.skipped).toBe(true);
     expect(archived.retro.skipReason).toBe("trivial doc change");
   });
@@ -281,6 +299,33 @@ describe("runs system", () => {
     expect(archived.retro.required).toBe(true);
     expect(archived.retro.completed).toBe(true);
     expect(archived.retro.compoundEntries).toBe(0);
+  });
+
+  it("treats retroSkipped=true as a complete retro even when the retro artifact is missing (R-03)", async () => {
+    const root = await createTempProject("runs-retro-skipped-no-artifact");
+    await ensureRunSystem(root);
+    const base = createInitialFlowState("active");
+    await writeFlowState(
+      root,
+      {
+        ...base,
+        currentStage: "ship",
+        completedStages: ["brainstorm", "scope", "design", "spec", "plan", "tdd", "review", "ship"],
+        closeout: {
+          ...base.closeout,
+          shipSubstate: "ready_to_archive",
+          retroSkipped: true,
+          retroSkipReason: "micro-fix, no insights worth retro-ing"
+        }
+      },
+      { allowReset: true }
+    );
+
+    const state = await readFlowState(root);
+    const retroGate = await evaluateRetroGate(root, state);
+    expect(retroGate.required).toBe(true);
+    expect(retroGate.completed).toBe(true);
+    expect(retroGate.hasRetroArtifact).toBe(false);
   });
 
   it("ignores retro knowledge entries outside the current retro closeout window", async () => {
@@ -602,6 +647,26 @@ describe("runs system", () => {
         ...createInitialFlowState("active"),
         currentStage: "scope",
         completedStages: []
+      })
+    ).rejects.toBeInstanceOf(InvalidStageTransitionError);
+  });
+
+  it("rejects track changes in writeFlowState (track is immutable per run)", async () => {
+    const root = await createTempProject("runs-transition-track-immutable");
+    await ensureRunSystem(root);
+    await writeFlowState(
+      root,
+      {
+        ...createInitialFlowState("active", "standard"),
+        currentStage: "brainstorm"
+      },
+      { allowReset: true }
+    );
+
+    await expect(
+      writeFlowState(root, {
+        ...createInitialFlowState("active", "quick"),
+        currentStage: "brainstorm"
       })
     ).rejects.toBeInstanceOf(InvalidStageTransitionError);
   });

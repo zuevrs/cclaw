@@ -139,6 +139,21 @@ async function resolveReviewDiffBase(projectRoot: string): Promise<string | null
   }
 }
 
+/**
+ * Heuristic: does a changed file path strongly imply a trust-boundary
+ * surface? Used to gate adversarial-reviewer requirements on review.
+ *
+ * Matches authN/Z, credentials, crypto, policy, or explicit sanitization
+ * or injection handling. Intentionally excludes broad terms like `input`
+ * and `validation` because they match innocuous paths such as
+ * `form-input.ts` or `number-validation.ts` and produce false positives.
+ */
+export function isTrustBoundaryPath(filePath: string): boolean {
+  return /(auth|security|secret|token|credential|permission|acl|policy|oauth|session|encrypt|decrypt|sanitize|untrusted|csrf|xss|injection|taint)/iu.test(
+    filePath
+  );
+}
+
 async function detectReviewTriggers(projectRoot: string): Promise<ReviewTriggerMetrics> {
   const empty: ReviewTriggerMetrics = {
     changedFiles: 0,
@@ -168,11 +183,7 @@ async function detectReviewTriggers(projectRoot: string): Promise<ReviewTriggerM
       .split(/\r?\n/gu)
       .map((line) => line.trim())
       .filter((line) => line.length > 0);
-    const trustBoundaryChanged = changedPaths.some((filePath) =>
-      /(auth|security|secret|token|credential|permission|acl|policy|oauth|session|encrypt|decrypt|input|validation)/iu.test(
-        filePath
-      )
-    );
+    const trustBoundaryChanged = changedPaths.some((p) => isTrustBoundaryPath(p));
     const requireAdversarialReviewer =
       changedLines > 100 || changedFiles > 10 || trustBoundaryChanged;
     return {

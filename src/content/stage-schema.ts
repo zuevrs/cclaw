@@ -49,6 +49,7 @@ type RequiredGateSet = string[] | ((track: FlowTrack) => string[]);
 const ARTIFACT_STAGE_BY_PATH: Partial<Record<string, FlowStage>> = {
   ".cclaw/artifacts/01-brainstorm.md": "brainstorm",
   ".cclaw/artifacts/02-scope.md": "scope",
+  ".cclaw/artifacts/02a-research.md": "design",
   ".cclaw/artifacts/03-design.md": "design",
   ".cclaw/artifacts/04-spec.md": "spec",
   ".cclaw/artifacts/05-plan.md": "plan",
@@ -91,6 +92,7 @@ const REQUIRED_GATE_IDS: Record<FlowStage, RequiredGateSet> = {
     "tdd_green_full_suite",
     "tdd_refactor_completed",
     "tdd_verified_before_complete",
+    "tdd_docs_drift_check",
     ...(track === "quick" ? [] : ["tdd_traceable_to_plan"])
   ],
   review: (track) => [

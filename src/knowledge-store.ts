@@ -1,7 +1,7 @@
 import fs from "node:fs/promises";
 import path from "node:path";
 import { RUNTIME_ROOT } from "./constants.js";
-import { withDirectoryLock } from "./fs-utils.js";
+import { stripBom, withDirectoryLock } from "./fs-utils.js";
 import { FLOW_STAGES, type FlowStage } from "./types.js";
 
 export type KnowledgeEntryType = "rule" | "pattern" | "lesson" | "compound";
@@ -271,7 +271,7 @@ export function materializeKnowledgeEntry(
 async function readExistingKnowledgeKeys(filePath: string): Promise<Set<string>> {
   const keys = new Set<string>();
   try {
-    const raw = await fs.readFile(filePath, "utf8");
+    const raw = stripBom(await fs.readFile(filePath, "utf8"));
     const lines = raw.split(/\r?\n/u).map((line) => line.trim()).filter((line) => line.length > 0);
     for (const line of lines) {
       try {

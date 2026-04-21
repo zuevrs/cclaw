@@ -35,8 +35,14 @@ function yamlFlowSequence(values: string[]): string {
 
 /**
  * Canonical specialist roster (core-5) materialized under `.cclaw/agents/`.
+ *
+ * Declared with `satisfies` so the array retains literal `name` types for
+ * downstream type-level consumers (e.g. `AgentName`), while still being
+ * checked against the `AgentDefinition` shape at compile time. Do not add
+ * an explicit `AgentDefinition[]` annotation here — it would widen `name`
+ * to `string` and break the compile-time drift guard.
  */
-export const CCLAW_AGENTS: AgentDefinition[] = [
+export const CCLAW_AGENTS = [
   {
     name: "planner",
     description:
@@ -153,7 +159,14 @@ export const CCLAW_AGENTS: AgentDefinition[] = [
       "Preserve existing tone and structure; avoid rewrites for style alone."
     ].join("\n")
   }
-];
+] as const satisfies readonly AgentDefinition[];
+
+/**
+ * Union of known agent names (compile-time). Use this in content that
+ * references agents by name so the TypeScript compiler catches renames
+ * and typos instead of letting them slip into generated artifacts.
+ */
+export type AgentName = (typeof CCLAW_AGENTS)[number]["name"];
 
 import { enhancedAgentBody } from "./subagents.js";
 

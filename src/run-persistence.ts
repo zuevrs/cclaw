@@ -54,6 +54,18 @@ function validateFlowTransition(prev: FlowState, next: FlowState): void {
     );
   }
 
+  // Track is immutable within a single run: stage schemas, gate sets, and
+  // cross-stage reads all branch on track. Silently flipping the track
+  // mid-run would let completed stages satisfy one gate tier and the
+  // current stage re-read the catalog under a different tier.
+  if (prev.track !== next.track) {
+    throw new InvalidStageTransitionError(
+      prev.currentStage,
+      next.currentStage,
+      `cannot change track from "${prev.track}" to "${next.track}" mid-run (activeRunId="${prev.activeRunId}"). Archive the run and start a new one to switch tracks.`
+    );
+  }
+
   for (const completed of prev.completedStages) {
     if (!next.completedStages.includes(completed)) {
       throw new InvalidStageTransitionError(

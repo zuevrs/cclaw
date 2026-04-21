@@ -1113,11 +1113,20 @@ export function claudeHooksJsonWithObservation(): string {
         }]
       }],
       PreToolUse: [{
+        // `prompt-guard.sh` inspects tool inputs across all tool calls;
+        // it has to stay on `*` so it sees MCP/Edit/Write/WebSearch
+        // traffic too. `workflow-guard.sh`, however, only checks TDD
+        // ordering on write-like operations — it is a no-op for reads.
+        // Splitting the two matchers cuts Claude's per-read hook
+        // overhead in half without reducing coverage on write paths.
         matcher: "*",
         hooks: [{
           type: "command",
           command: hookDispatcherCommand("prompt-guard.sh")
-        }, {
+        }]
+      }, {
+        matcher: "Write|Edit|MultiEdit|NotebookEdit|Bash",
+        hooks: [{
           type: "command",
           command: hookDispatcherCommand("workflow-guard.sh")
         }]
@@ -1217,6 +1226,18 @@ export function codexHooksJsonWithObservation(): string {
         hooks: [{
           type: "command",
           command: hookDispatcherCommand("prompt-guard.sh")
+        }, {
+          // `workflow-guard.sh` also runs here because Codex's PreToolUse
+          // only sees Bash; Write/Edit/MCP writes never reach the hook
+          // surface. Running workflow-guard on UserPromptSubmit catches
+          // TDD-order violations that originate from the user's prompt
+          // text (e.g. "edit X.ts to ..."). Payload is a prompt envelope,
+          // not a tool call, so the script's TOOL extraction falls back
+          // to "unknown" and advisory mode is a no-op by design — the
+          // value is that prompt text is scanned for write-shaped intent
+          // via the existing PAYLOAD_LOWER heuristics.
+          type: "command",
+          command: hookDispatcherCommand("workflow-guard.sh")
         }, {
           type: "command",
           command: "bash -lc 'if command -v cclaw >/dev/null 2>&1; then cclaw internal verify-current-state --quiet >/dev/null || true; else npx -y cclaw-cli internal verify-current-state --quiet >/dev/null || true; fi'"

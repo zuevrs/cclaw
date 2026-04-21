@@ -66,6 +66,18 @@ describe("tdd cycle validation", () => {
     expect(validation.issues.join(" ")).toMatch(/refactor entry must record exitCode 0/i);
   });
 
+  it("flags refactor logged before green and does not poison subsequent slice state", () => {
+    const entries = parseTddCycleLog([
+      JSON.stringify({ ts: "2026-01-01T00:00:00Z", runId: "active", stage: "tdd", slice: "S-1", phase: "red", command: "vitest S-1", exitCode: 1 }),
+      JSON.stringify({ ts: "2026-01-01T00:01:00Z", runId: "active", stage: "tdd", slice: "S-1", phase: "refactor", command: "vitest", exitCode: 0 }),
+      JSON.stringify({ ts: "2026-01-01T00:02:00Z", runId: "active", stage: "tdd", slice: "S-1", phase: "red", command: "vitest S-1", exitCode: 1 })
+    ].join("\n"));
+    const validation = validateTddCycleOrder(entries, { runId: "active" });
+    expect(validation.ok).toBe(false);
+    expect(validation.issues.join(" ")).toMatch(/refactor logged before green/i);
+    expect(validation.openRedSlices).toContain("S-1");
+  });
+
   it("flags incorrect red/green exit code polarity", () => {
     const entries = parseTddCycleLog([
       JSON.stringify({ ts: "2026-01-01T00:00:00Z", runId: "active", stage: "tdd", slice: "S-1", phase: "red", command: "vitest S-1", exitCode: 0 }),

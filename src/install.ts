@@ -107,7 +107,7 @@ import {
   harnessPlaybooksIndexMarkdown
 } from "./content/harness-playbooks.js";
 import { HOOK_EVENTS_BY_HARNESS, HOOK_SEMANTIC_EVENTS } from "./content/hook-events.js";
-import { createInitialFlowState } from "./flow-state.js";
+import { createInitialFlowState, type FlowState } from "./flow-state.js";
 import { ensureDir, exists, writeFileSafe } from "./fs-utils.js";
 import { ensureGitignore, removeGitignorePatterns } from "./gitignore.js";
 import {
@@ -118,7 +118,8 @@ import {
   removeCclawFromAgentsMd
 } from "./harness-adapters.js";
 import { validateHookDocument } from "./hook-schema.js";
-import { ensureRunSystem, readFlowState } from "./runs.js";
+import { detectHarnesses } from "./init-detect.js";
+import { CorruptFlowStateError, ensureRunSystem, readFlowState } from "./runs.js";
 import { FLOW_STAGES } from "./types.js";
 import type { CclawConfig, FlowTrack, HarnessId } from "./types.js";
 
@@ -1087,7 +1088,22 @@ Drop this section if no hard rule applies. Keep it crisp:
 async function ensureSessionStateFiles(projectRoot: string): Promise<void> {
   const stateDir = runtimePath(projectRoot, "state");
   await ensureDir(stateDir);
-  const flow = await readFlowState(projectRoot);
+  // If flow-state.json is corrupt, `readFlowState` quarantines the bad
+  // file and throws. During install we'd rather continue than abort:
+  // the user just asked to set up cclaw, and the corrupt file is already
+  // preserved next to the original path. Fall back to a fresh initial
+  // state so the rest of install completes and the user can inspect the
+  // `.corrupt-<timestamp>.json` quarantine afterwards.
+  let flow: FlowState;
+  try {
+    flow = await readFlowState(projectRoot);
+  } catch (err) {
+    if (err instanceof CorruptFlowStateError) {
+      flow = createInitialFlowState();
+    } else {
+      throw err;
+    }
+  }
 
   const activityPath = path.join(stateDir, "stage-activity.jsonl");
   if (!(await exists(activityPath))) {
@@ -1299,6 +1315,16 @@ async function writeHarnessGapsState(projectRoot: string, harnesses: HarnessId[]
         break;
     }
     for (const event of missingHookEvents) {
+      if (harness === "codex" && event === "precompact_digest") {
+        // Codex CLI has no PreCompact event. Generic "schedule the script
+        // manually" copy doesn't help; instead, point the agent at the
+        // in-thread substitute that already exists in cclaw content
+        // (`/cc-ops retro` reads the same digest the hook would emit).
+        remediation.push(
+          "hook event precompact_digest → Codex has no PreCompact event; run `/cc-ops retro` in-thread before compaction instead of relying on a hook"
+        );
+        continue;
+      }
       remediation.push(`hook event ${event} → schedule the corresponding script manually or accept reduced observability`);
     }
 
@@ -1494,9 +1520,19 @@ export async function initCclaw(options: InitOptions): Promise<void> {
 
 export async function syncCclaw(projectRoot: string): Promise<void> {
   const configExists = await exists(configPath(projectRoot));
-  const config = await readConfig(projectRoot);
+  let config = await readConfig(projectRoot);
   if (!configExists) {
-    await writeConfig(projectRoot, createDefaultConfig(config.harnesses));
+    // Prefer detected harness markers over the hardcoded default list.
+    // Without this, a user running `cclaw sync` in a `.claude`-only
+    // project ends up with a config that also enables cursor/opencode/
+    // codex, which then fails doctor checks for missing shim folders.
+    // Fall back to the previous default (config.harnesses) if no markers
+    // are found so brand-new projects still bootstrap cleanly.
+    const detected = await detectHarnesses(projectRoot);
+    const harnesses = detected.length > 0 ? detected : config.harnesses;
+    const defaultConfig = createDefaultConfig(harnesses);
+    await writeConfig(projectRoot, defaultConfig);
+    config = defaultConfig;
   }
   await materializeRuntime(projectRoot, config, false);
 }

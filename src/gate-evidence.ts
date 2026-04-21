@@ -311,7 +311,7 @@ export async function verifyCurrentStageGateEvidence(
   const shouldValidateArtifact =
     artifactPresent || catalog.passed.length > 0 || flowState.completedStages.includes(stage);
   if (shouldValidateArtifact) {
-    const lint = await lintArtifact(projectRoot, stage);
+    const lint = await lintArtifact(projectRoot, stage, flowState.track);
     if (!lint.passed) {
       const failedRequired = lint.findings
         .filter((finding) => finding.required && !finding.found)

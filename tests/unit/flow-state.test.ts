@@ -33,6 +33,16 @@ describe("flow state", () => {
     expect(getTransitionGuards("review", "tdd")).toContain("review_verdict_blocked");
   });
 
+  it("returns track-specific guards for shared edges (standard keeps tdd_traceable_to_plan, quick drops it)", () => {
+    const standardGuards = getTransitionGuards("tdd", "review", "standard");
+    const quickGuards = getTransitionGuards("tdd", "review", "quick");
+    expect(standardGuards).toContain("tdd_traceable_to_plan");
+    expect(quickGuards).not.toContain("tdd_traceable_to_plan");
+    // Both tracks still enforce the universally-required TDD gates.
+    expect(standardGuards).toContain("tdd_red_test_written");
+    expect(quickGuards).toContain("tdd_red_test_written");
+  });
+
   it("allows medium track brainstorm -> spec and quick track spec -> tdd transitions", () => {
     // Medium skips scope/design; quick skips brainstorm/scope/design/plan.
     // buildTransitionRules must emit neighbour edges for every track.

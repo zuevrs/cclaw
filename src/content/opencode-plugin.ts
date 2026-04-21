@@ -234,11 +234,15 @@ export default function cclawPlugin(ctx) {
         eventType === "session.created" ||
         eventType === "session.resumed" ||
         eventType === "session.compacted" ||
-        eventType === "session.cleared"
+        eventType === "session.cleared" ||
+        eventType === "session.updated"
       ) {
         // Avoid writing directly to stdout in lifecycle hooks because it can
         // interfere with OpenCode TUI rendering. Bootstrap is injected via
         // the system transform hook instead.
+        // session.updated covers config reloads and artifact/rules edits
+        // that happen mid-session; without it the cache would stay stale
+        // until the next compaction or restart.
         refreshBootstrapCache();
       }
       if (eventType === "session.compacted") {

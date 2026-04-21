@@ -280,48 +280,80 @@ export async function archiveRun(
   };
 
   await ensureDir(archivePath);
-  await fs.rename(artifactsDir, archiveArtifactsPath);
-  await ensureDir(artifactsDir);
 
-  const archiveStatePath = path.join(archivePath, "state");
-  const snapshottedStateFiles = await snapshotStateDirectory(projectRoot, archiveStatePath);
-
-  const resetState = createInitialFlowState();
-  await writeFlowState(projectRoot, resetState, { allowReset: true });
-  await resetCarryoverStateFiles(projectRoot, resetState.activeRunId);
+  // Drop an `.archive-in-progress` sentinel immediately so that a crash
+  // between the artifact rename and the final manifest write leaves a
+  // recoverable marker (doctor surfaces these; re-running archive on an
+  // orphan attempts to complete or roll back). The sentinel is removed
+  // only after the manifest lands successfully.
+  const sentinelPath = path.join(archivePath, ".archive-in-progress");
   const archivedAt = new Date().toISOString();
-
-  const manifest: ArchiveManifest = {
-    version: 1,
-    archiveId,
-    archivedAt,
-    featureName: feature,
-    activeFeature,
-    sourceRunId: sourceState.activeRunId,
-    sourceCurrentStage: sourceState.currentStage,
-    sourceCompletedStages: sourceState.completedStages,
-    snapshottedStateFiles,
-    retro: retroSummary
-  };
   await writeFileSafe(
-    path.join(archivePath, "archive-manifest.json"),
-    `${JSON.stringify(manifest, null, 2)}\n`
+    sentinelPath,
+    `${JSON.stringify({ archiveId, startedAt: archivedAt, sourceRunId: sourceState.activeRunId }, null, 2)}\n`
   );
 
-  const knowledgeStats = await readKnowledgeStats(projectRoot);
-  await syncActiveFeatureSnapshot(projectRoot);
+  let artifactsMoved = false;
+  try {
+    await fs.rename(artifactsDir, archiveArtifactsPath);
+    artifactsMoved = true;
+    await ensureDir(artifactsDir);
 
-  return {
-    archiveId,
-    archivePath,
-    archivedAt,
-    featureName: feature,
-    activeFeature,
-    resetState,
-    snapshottedStateFiles,
-    knowledge: knowledgeStats,
-    retro: retroSummary
-  };
+    const archiveStatePath = path.join(archivePath, "state");
+    const snapshottedStateFiles = await snapshotStateDirectory(projectRoot, archiveStatePath);
+
+    const resetState = createInitialFlowState();
+    await writeFlowState(projectRoot, resetState, { allowReset: true });
+    await resetCarryoverStateFiles(projectRoot, resetState.activeRunId);
+
+    const manifest: ArchiveManifest = {
+      version: 1,
+      archiveId,
+      archivedAt,
+      featureName: feature,
+      activeFeature,
+      sourceRunId: sourceState.activeRunId,
+      sourceCurrentStage: sourceState.currentStage,
+      sourceCompletedStages: sourceState.completedStages,
+      snapshottedStateFiles,
+      retro: retroSummary
+    };
+    await writeFileSafe(
+      path.join(archivePath, "archive-manifest.json"),
+      `${JSON.stringify(manifest, null, 2)}\n`
+    );
+    // Manifest landed — sentinel is no longer needed.
+    await fs.unlink(sentinelPath).catch(() => undefined);
+
+    const knowledgeStats = await readKnowledgeStats(projectRoot);
+    await syncActiveFeatureSnapshot(projectRoot);
+    return {
+      archiveId,
+      archivePath,
+      archivedAt,
+      featureName: feature,
+      activeFeature,
+      resetState,
+      snapshottedStateFiles,
+      knowledge: knowledgeStats,
+      retro: retroSummary
+    };
+  } catch (err) {
+    // Best-effort rollback: if artifacts were moved but the subsequent
+    // steps failed, put artifacts back so the user is not left without
+    // a working run. The sentinel is intentionally left behind for
+    // inspection; doctor surfaces it.
+    if (artifactsMoved) {
+      try {
+        await fs.rm(artifactsDir, { recursive: true, force: true });
+        await fs.rename(archiveArtifactsPath, artifactsDir);
+      } catch {
+        // Rollback failed — sentinel + orphaned archive dir will be
+        // surfaced by doctor and can be reconciled manually.
+      }
+    }
+    throw err;
+  }
 }
 
 const KNOWLEDGE_SOFT_THRESHOLD = 50;
