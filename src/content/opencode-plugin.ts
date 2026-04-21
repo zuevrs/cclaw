@@ -323,7 +323,31 @@ export default function cclawPlugin(ctx) {
         }
         finish(ok);
       });
-      child.stdin?.end(input);
+      if (child.stdin) {
+        child.stdin.on("error", (error) => {
+          const code =
+            error && typeof error === "object" && "code" in error
+              ? String(error.code)
+              : "";
+          if (code === "EPIPE" || code === "ERR_STREAM_DESTROYED") {
+            return;
+          }
+          clearTimeout(timer);
+          finish(false);
+        });
+        try {
+          child.stdin.end(input);
+        } catch (error) {
+          const code =
+            error && typeof error === "object" && "code" in error
+              ? String(error.code)
+              : "";
+          if (code !== "EPIPE" && code !== "ERR_STREAM_DESTROYED") {
+            clearTimeout(timer);
+            finish(false);
+          }
+        }
+      }
     }));
   }
 
