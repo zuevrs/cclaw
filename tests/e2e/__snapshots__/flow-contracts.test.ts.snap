@@ -1003,7 +1003,7 @@ Before execution:
 | Agent | Mode | User Gate | Trigger |
 |---|---|---|---|
 | test-author | mandatory | not required | Always during TDD cycle (RED → GREEN → REFACTOR). |
-| doc-updater | proactive | not required | When public behavior, APIs, or config surfaces change. |
+| doc-updater | proactive | not required | Proactive in tdd when public behavior, APIs, or config surfaces change. |
 
 Mandatory delegations for this stage: \`test-author\`.
 Record completion/waiver in \`.cclaw/state/delegation-log.json\` before stage completion.

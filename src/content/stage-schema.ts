@@ -251,7 +251,7 @@ const STAGE_AUTO_SUBAGENT_DISPATCH: Record<FlowStage, StageAutoSubagentDispatch[
     {
       agent: "doc-updater",
       mode: "proactive",
-      when: "When public behavior, APIs, or config surfaces change.",
+      when: "Proactive in tdd when public behavior, APIs, or config surfaces change.",
       purpose: "Prevent code/docs drift before review and ship.",
       requiresUserGate: false
     }
