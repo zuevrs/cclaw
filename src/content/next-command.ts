@@ -107,6 +107,18 @@ This is the only progression command the user needs to drive the entire flow. St
   regenerating the retro draft.
 - No special resume command needed — \`/cc-next\` IS the resume command.
 
+## Headless mode
+
+When orchestrated by another skill/subagent, emit exactly one JSON envelope and
+no narrative text:
+
+\`\`\`json
+{"version":"1","kind":"gate-result","stage":"review","payload":{"command":"/cc-next","decision":"resume_or_advance","nextStage":"ship"},"emittedAt":"<ISO-8601>"}
+\`\`\`
+
+Validate envelopes with:
+\`cclaw internal envelope-validate --stdin\`
+
 ## Primary skill
 
 **${skillRel}** — full protocol and stage table.

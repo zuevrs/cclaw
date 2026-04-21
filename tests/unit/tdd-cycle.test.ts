@@ -1,5 +1,9 @@
 import { describe, expect, it } from "vitest";
-import { parseTddCycleLog, validateTddCycleOrder } from "../../src/tdd-cycle.js";
+import {
+  hasFailingTestForPath,
+  parseTddCycleLog,
+  validateTddCycleOrder
+} from "../../src/tdd-cycle.js";
 
 describe("tdd cycle validation", () => {
   it("accepts red->green->refactor order", () => {
@@ -87,5 +91,33 @@ describe("tdd cycle validation", () => {
     expect(validation.ok).toBe(false);
     expect(validation.issues.join(" ")).toMatch(/red entry exitCode must be non-zero/i);
     expect(validation.issues.join(" ")).toMatch(/green entry exitCode must be 0/i);
+  });
+
+  it("finds failing RED evidence for a production path", () => {
+    const entries = parseTddCycleLog([
+      JSON.stringify({
+        ts: "2026-01-01T00:00:00Z",
+        runId: "active",
+        stage: "tdd",
+        slice: "S-1",
+        phase: "red",
+        command: "vitest users",
+        files: ["src/users/service.ts"],
+        exitCode: 1
+      }),
+      JSON.stringify({
+        ts: "2026-01-01T00:01:00Z",
+        runId: "active",
+        stage: "tdd",
+        slice: "S-1",
+        phase: "green",
+        command: "vitest users",
+        files: ["src/users/service.ts"],
+        exitCode: 0
+      })
+    ].join("\n"));
+
+    expect(hasFailingTestForPath(entries, "src/users/service.ts", { runId: "active" })).toBe(true);
+    expect(hasFailingTestForPath(entries, "src/payments/service.ts", { runId: "active" })).toBe(false);
   });
 });

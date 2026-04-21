@@ -146,3 +146,36 @@ export function validateTddCycleOrder(
     sliceCount: bySlice.size
   };
 }
+
+function normalizePath(value: string): string {
+  return value.replace(/\\/gu, "/").toLowerCase();
+}
+
+/**
+ * Checks whether the log contains a failing RED record associated with
+ * `productionPath` for the active run.
+ */
+export function hasFailingTestForPath(
+  entries: TddCycleEntry[],
+  productionPath: string,
+  options: { runId?: string } = {}
+): boolean {
+  const normalizedTarget = normalizePath(productionPath);
+  const filtered = options.runId
+    ? entries.filter((entry) => entry.runId === options.runId)
+    : entries;
+
+  for (const entry of filtered) {
+    if (entry.phase !== "red") continue;
+    if (entry.exitCode === undefined || entry.exitCode === 0) continue;
+    if (!Array.isArray(entry.files) || entry.files.length === 0) continue;
+    const hasMatch = entry.files.some((filePath) => {
+      const normalized = normalizePath(filePath);
+      return normalized === normalizedTarget || normalized.endsWith(`/${normalizedTarget}`);
+    });
+    if (hasMatch) {
+      return true;
+    }
+  }
+  return false;
+}

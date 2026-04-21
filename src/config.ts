@@ -2,6 +2,7 @@ import fs from "node:fs/promises";
 import path from "node:path";
 import { parse, stringify } from "yaml";
 import { CCLAW_VERSION, DEFAULT_HARNESSES, FLOW_VERSION, RUNTIME_ROOT } from "./constants.js";
+import { isIronLawId, normalizeStrictLawIds } from "./content/iron-laws.js";
 import { exists, writeFileSafe } from "./fs-utils.js";
 import { FLOW_TRACKS, HARNESS_IDS, LANGUAGE_RULE_PACKS } from "./types.js";
 import type { CclawConfig, FlowTrack, HarnessId, LanguageRulePack } from "./types.js";
@@ -27,7 +28,8 @@ const ALLOWED_CONFIG_KEYS = new Set<string>([
   "defaultTrack",
   "languageRulePacks",
   "trackHeuristics",
-  "sliceReview"
+  "sliceReview",
+  "ironLaws"
 ]);
 
 /**
@@ -163,7 +165,11 @@ export function createDefaultConfig(
     },
     gitHookGuards: false,
     defaultTrack,
-    languageRulePacks: []
+    languageRulePacks: [],
+    ironLaws: {
+      mode: "advisory",
+      strictLaws: []
+    }
   };
 }
 
@@ -550,6 +556,48 @@ export async function readConfig(projectRoot: string): Promise<CclawConfig> {
     };
   }
 
+  const ironLawsRaw = (parsed as { ironLaws?: unknown }).ironLaws;
+  let ironLaws: CclawConfig["ironLaws"] = undefined;
+  if (Object.prototype.hasOwnProperty.call(parsed, "ironLaws")) {
+    if (!isRecord(ironLawsRaw)) {
+      throw configValidationError(fullPath, `"ironLaws" must be an object`);
+    }
+    const unknownIronLawKeys = Object.keys(ironLawsRaw).filter(
+      (key) => key !== "mode" && key !== "strictLaws"
+    );
+    if (unknownIronLawKeys.length > 0) {
+      throw configValidationError(
+        fullPath,
+        `"ironLaws" has unknown key(s): ${unknownIronLawKeys.join(", ")}`
+      );
+    }
+    const modeRaw = ironLawsRaw.mode;
+    if (modeRaw !== undefined && modeRaw !== "advisory" && modeRaw !== "strict") {
+      throw configValidationError(fullPath, `"ironLaws.mode" must be "advisory" or "strict"`);
+    }
+    const strictLawIdsRaw = validateStringArray(
+      ironLawsRaw.strictLaws,
+      "ironLaws.strictLaws",
+      fullPath
+    ) ?? [];
+    const unknownStrictLawIds = strictLawIdsRaw.filter((id) => !isIronLawId(id));
+    if (unknownStrictLawIds.length > 0) {
+      throw configValidationError(
+        fullPath,
+        `"ironLaws.strictLaws" contains unknown law id(s): ${unknownStrictLawIds.join(", ")}`
+      );
+    }
+    ironLaws = {
+      mode: modeRaw === "strict" ? "strict" : "advisory",
+      strictLaws: normalizeStrictLawIds(strictLawIdsRaw)
+    };
+  } else {
+    ironLaws = {
+      mode: strictness,
+      strictLaws: []
+    };
+  }
+
   return {
     version: parsed.version ?? CCLAW_VERSION,
     flowVersion: parsed.flowVersion ?? FLOW_VERSION,
@@ -569,7 +617,8 @@ export async function readConfig(projectRoot: string): Promise<CclawConfig> {
     defaultTrack,
     languageRulePacks,
     trackHeuristics,
-    sliceReview
+    sliceReview,
+    ironLaws
   };
 }
 
@@ -589,7 +638,8 @@ type AdvancedConfigKey =
   | "defaultTrack"
   | "languageRulePacks"
   | "trackHeuristics"
-  | "sliceReview";
+  | "sliceReview"
+  | "ironLaws";
 
 /**
  * Options controlling the serialisation shape of `config.yaml`.
@@ -637,7 +687,8 @@ function buildSerializableConfig(
     "defaultTrack",
     "languageRulePacks",
     "trackHeuristics",
-    "sliceReview"
+    "sliceReview",
+    "ironLaws"
   ];
   for (const key of ordered) {
     const value = config[key];
@@ -698,7 +749,8 @@ export async function detectAdvancedKeys(
       "defaultTrack",
       "languageRulePacks",
       "trackHeuristics",
-      "sliceReview"
+      "sliceReview",
+      "ironLaws"
     ];
     const present = new Set<AdvancedConfigKey>();
     for (const key of advancedCandidates) {

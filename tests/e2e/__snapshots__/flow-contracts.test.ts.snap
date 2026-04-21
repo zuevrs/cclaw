@@ -193,7 +193,7 @@ Shared decision/ask-user protocol:
 3. Layer 2b: check security — validation, auth, secrets, injection.
 4. Layer 2c: check performance — queries, memory, caching, hot paths.
 5. Layer 2d: check architecture fit — design compliance, coupling, interfaces.
-6. Reconcile multi-agent findings into \`.cclaw/artifacts/07-review-army.json\` (dedup + confidence + conflict notes).
+6. Reconcile multi-agent findings into \`.cclaw/artifacts/07-review-army.json\` (dedup + confidence + conflict notes + source tags from spec/correctness/security/performance/architecture/external-safety passes).
 7. Classify and prioritize all findings.
 8. Write review report artifact with explicit verdict.
 9. If verdict is BLOCKED, include the remediation route token \`ROUTE_BACK_TO_TDD\` and the rewind command payload.
@@ -297,7 +297,7 @@ Rule: Review verdict must reference specific spec criteria and TDD evidence. Dow
 |---|---|---|
 | Layer 1 Verdict | REQUIRED | Per-criterion pass/fail with references. |
 | Layer 2 Findings | recommended | Each finding has severity, description, and resolution status. Security coverage must include either explicit security findings or \`NO_CHANGE_ATTESTATION: <reason>\` when no security-relevant changes were found. |
-| Review Army Contract | REQUIRED | Structured findings include id/severity/confidence/fingerprint/reportedBy/status with dedup reconciliation summary. |
+| Review Army Contract | REQUIRED | Structured findings include id/severity/confidence/fingerprint/reportedBy/status and source tags from {spec, correctness, security, performance, architecture, external-safety} with dedup reconciliation summary. |
 | Review Readiness Dashboard | recommended | Includes a per-pass table (Layer 1 / Layer 2 / Adversarial / Schema) with a 'Completed at' column, a Delegation log snapshot block (path .cclaw/state/delegation-log.json with required/completed/waived/pending), a Staleness signal block (commit at last review pass and current commit), and a Headline with open critical blockers + ship recommendation. At minimum, the section text must contain the substrings 'Completed at', 'delegation-log.json', 'commit at last review pass', and 'Ship recommendation'. |
 | Completeness Score | recommended | Records AC coverage, task coverage, test-slice coverage, and adversarial-review pass status as numeric or boolean values. At minimum, a line like 'AC coverage: N/M' or 'AC coverage: 100%'. |
 | Incoming Feedback Queue | recommended | When external review feedback exists, include a queue summary with per-item disposition (resolved / accepted-risk / rejected-with-evidence) and evidence refs. |
@@ -1002,7 +1002,9 @@ Before execution:
 
 | Agent | Mode | User Gate | Trigger |
 |---|---|---|---|
-| test-author | mandatory | not required | Always during TDD cycle (RED → GREEN → REFACTOR). |
+| test-author | mandatory | not required | Always during TDD cycle (RED phase). |
+| test-author | mandatory | not required | Always during TDD cycle (GREEN phase). |
+| test-author | mandatory | not required | Always during TDD cycle (REFACTOR phase). |
 | doc-updater | proactive | not required | Proactive in tdd when public behavior, APIs, or config surfaces change. |
 
 Mandatory delegations for this stage: \`test-author\`.
@@ -1025,13 +1027,13 @@ You MUST complete these steps in order:
 
 1. Select plan slice — pick one task from the plan. Do not batch multiple tasks.
 2. Map to acceptance criterion — identify the specific spec criterion this test proves.
-3. Dispatch mandatory \`test-author\` subagent in \`TEST_RED_ONLY\` mode — produce failing behavior tests and RED evidence only (no production edits).
+3. Dispatch mandatory \`tdd-red\` execution (or \`test-author\` in TEST_RED_ONLY mode) — produce failing behavior tests and RED evidence only (no production edits). Set \`CCLAW_ACTIVE_AGENT=tdd-red\` when supported.
 4. RED: Capture failure output — copy the exact failure output as RED evidence. Record in artifact.
-5. Dispatch \`test-author\` subagent in \`BUILD_GREEN_REFACTOR\` mode — minimal implementation + full-suite GREEN + refactor notes.
+5. Dispatch \`tdd-green\` execution (or \`test-author\` in BUILD_GREEN_REFACTOR mode) — minimal implementation + full-suite GREEN. Set \`CCLAW_ACTIVE_AGENT=tdd-green\` when supported.
 6. GREEN: Run full suite — execute ALL tests, not just the ones you wrote. The full suite must be GREEN.
 7. GREEN: Verify no regressions — if any existing test breaks, fix the regression before proceeding.
 8. Run verification-before-completion discipline for the slice — capture a fresh test command, commit SHA, and explicit PASS/FAIL status before completion claims.
-9. REFACTOR: Improve code quality — without changing behavior. Document what you changed and why.
+9. REFACTOR: Dispatch \`tdd-refactor\` execution (or dedicated refactor mode) to improve code quality without behavior changes. Set \`CCLAW_ACTIVE_AGENT=tdd-refactor\` when supported.
 10. Record evidence — capture RED failure, GREEN output, and REFACTOR notes in the TDD artifact.
 11. Annotate traceability — link to plan task ID and spec criterion.
 12. Per-Slice Review (conditional) — if \`.cclaw/config.yaml::sliceReview.enabled\` is true and the slice meets any trigger (touchCount >= filesChangedThreshold, touchPaths match touchTriggers, or highRisk=true), append a \`## Per-Slice Review\` entry for this slice before moving on (see the dedicated section below).
@@ -1103,7 +1105,7 @@ Summary of what the reference covers:
 
 ## Interaction Protocol
 1. Pick one planned slice at a time.
-2. Controller owns orchestration; execution runs through the mandatory \`test-author\` delegation for RED then GREEN/REFACTOR modes.
+2. Controller owns orchestration; execution runs through phase-specific delegation (\`tdd-red\` -> \`tdd-green\` -> \`tdd-refactor\`) or equivalent \`test-author\` modes.
 3. Write behavior-focused tests before changing implementation (RED).
 4. Capture and store failing output as RED evidence.
 5. Apply minimal change to satisfy RED tests (GREEN).
@@ -1147,12 +1149,12 @@ Detailed walkthrough:
 
 ## Process
 1. Select slice and map to acceptance criterion.
-2. Dispatch \`test-author\` in TEST_RED_ONLY mode and produce failing test(s) for expected reason (RED).
+2. Dispatch \`tdd-red\` (or \`test-author\` TEST_RED_ONLY mode) and produce failing test(s) for expected reason (RED).
 3. Run tests and capture failure output.
-4. Dispatch \`test-author\` in BUILD_GREEN_REFACTOR mode and implement smallest change needed for GREEN.
+4. Dispatch \`tdd-green\` (or \`test-author\` BUILD_GREEN_REFACTOR mode) and implement smallest change needed for GREEN.
 5. Run full tests and build checks.
 6. Run a fresh verification-before-completion check and capture command + commit SHA + PASS/FAIL in guard evidence.
-7. Perform refactor pass preserving behavior.
+7. Dispatch \`tdd-refactor\` pass preserving behavior.
 8. Record RED, GREEN, and REFACTOR evidence in artifact.
 9. Annotate traceability to plan task and spec criterion; on \`sliceReview\` triggers, append a Per-Slice Review entry before closing the slice.
 

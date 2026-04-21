@@ -1265,6 +1265,14 @@ export async function validateReviewArmy(
 
   const severitySet = new Set(["Critical", "Important", "Suggestion"]);
   const statusSet = new Set(["open", "accepted", "resolved"]);
+  const sourceSet = new Set([
+    "spec",
+    "correctness",
+    "security",
+    "performance",
+    "architecture",
+    "external-safety"
+  ]);
   const findingIds = new Set<string>();
   const openCriticalIds = new Set<string>();
 
@@ -1298,6 +1306,18 @@ export async function validateReviewArmy(
       }
       if (!isStringArray(o.reportedBy) || o.reportedBy.length === 0) {
         errors.push(`findings[${i}].reportedBy must be a non-empty string array.`);
+      }
+      if (o.sources !== undefined) {
+        if (!isStringArray(o.sources) || o.sources.length === 0) {
+          errors.push(`findings[${i}].sources must be a non-empty string array when present.`);
+        } else {
+          const invalidSources = o.sources.filter((source) => !sourceSet.has(source));
+          if (invalidSources.length > 0) {
+            errors.push(
+              `findings[${i}].sources contains unknown values: ${invalidSources.join(", ")}.`
+            );
+          }
+        }
       }
       if (o.location === undefined || o.location === null) {
         errors.push(`findings[${i}].location is required and must be an object with file + line.`);
@@ -1396,6 +1416,18 @@ export async function validateReviewArmy(
       for (const id of rec.multiSpecialistConfirmed) {
         if (!findingIds.has(id)) {
           errors.push(`reconciliation.multiSpecialistConfirmed references unknown finding id "${id}".`);
+        }
+      }
+    }
+    if (rec.layerCoverage !== undefined) {
+      if (rec.layerCoverage === null || typeof rec.layerCoverage !== "object" || Array.isArray(rec.layerCoverage)) {
+        errors.push("reconciliation.layerCoverage must be an object when present.");
+      } else {
+        const coverage = rec.layerCoverage as Record<string, unknown>;
+        for (const source of sourceSet) {
+          if (coverage[source] !== undefined && typeof coverage[source] !== "boolean") {
+            errors.push(`reconciliation.layerCoverage.${source} must be boolean when present.`);
+          }
         }
       }
     }

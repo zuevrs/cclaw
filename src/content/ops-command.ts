@@ -35,6 +35,17 @@ Subcommands:
    - \`rewind\` -> \`${RUNTIME_ROOT}/commands/rewind.md\`
 3. Unknown subcommand -> print supported values and stop.
 
+## Headless mode
+
+For skill-to-skill dispatch, emit exactly one JSON envelope:
+
+\`\`\`json
+{"version":"1","kind":"stage-output","stage":"ship","payload":{"command":"/cc-ops","subcommand":"archive","status":"completed"},"emittedAt":"<ISO-8601>"}
+\`\`\`
+
+Validate envelopes with:
+\`cclaw internal envelope-validate --stdin\`
+
 ## Primary skill
 
 **${RUNTIME_ROOT}/skills/${OPS_SKILL_FOLDER}/SKILL.md**

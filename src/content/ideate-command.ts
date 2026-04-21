@@ -63,6 +63,17 @@ same session, or save/discard the backlog.
 6. **Present the handoff prompt** with four concrete options — not A/B/C
    letters. Default = "Start /cc on the top recommendation".
 
+## Headless mode
+
+For skill-to-skill invocation, emit exactly one JSON envelope:
+
+\`\`\`json
+{"version":"1","kind":"stage-output","stage":"brainstorm","payload":{"command":"/cc-ideate","artifact":".cclaw/artifacts/ideate-<date>-<slug>.md","recommendation":"I-1"},"emittedAt":"<ISO-8601>"}
+\`\`\`
+
+Validate envelopes with:
+\`cclaw internal envelope-validate --stdin\`
+
 ## Primary skill
 
 **${RUNTIME_ROOT}/skills/${IDEATE_SKILL_FOLDER}/SKILL.md**

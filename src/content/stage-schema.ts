@@ -39,6 +39,79 @@ export type {
 // and drift. Stage skills cite the meta-skill by path instead.
 // ---------------------------------------------------------------------------
 
+export const SKILL_ENVELOPE_KINDS = [
+  "stage-output",
+  "gate-result",
+  "delegation-record"
+] as const;
+
+export type SkillEnvelopeKind = (typeof SKILL_ENVELOPE_KINDS)[number];
+
+export interface SkillEnvelope {
+  version: "1";
+  kind: SkillEnvelopeKind;
+  stage: FlowStage;
+  payload: unknown;
+  emittedAt: string;
+  agent?: string;
+}
+
+export interface SkillEnvelopeValidation {
+  ok: boolean;
+  errors: string[];
+}
+
+const FLOW_STAGE_SET = new Set<FlowStage>(FLOW_STAGES);
+const SKILL_ENVELOPE_KIND_SET = new Set<string>(SKILL_ENVELOPE_KINDS);
+
+function asRecord(value: unknown): Record<string, unknown> | null {
+  if (!value || typeof value !== "object" || Array.isArray(value)) {
+    return null;
+  }
+  return value as Record<string, unknown>;
+}
+
+export function validateSkillEnvelope(value: unknown): SkillEnvelopeValidation {
+  const errors: string[] = [];
+  const record = asRecord(value);
+  if (!record) {
+    return { ok: false, errors: ["envelope must be a JSON object"] };
+  }
+  if (record.version !== "1") {
+    errors.push('envelope.version must equal "1".');
+  }
+  if (typeof record.kind !== "string" || !SKILL_ENVELOPE_KIND_SET.has(record.kind)) {
+    errors.push(`envelope.kind must be one of: ${SKILL_ENVELOPE_KINDS.join(", ")}.`);
+  }
+  if (typeof record.stage !== "string" || !FLOW_STAGE_SET.has(record.stage as FlowStage)) {
+    errors.push(`envelope.stage must be one of: ${FLOW_STAGES.join(", ")}.`);
+  }
+  if (!Object.prototype.hasOwnProperty.call(record, "payload")) {
+    errors.push("envelope.payload is required.");
+  }
+  if (typeof record.emittedAt !== "string" || Number.isNaN(Date.parse(record.emittedAt))) {
+    errors.push("envelope.emittedAt must be an ISO-8601 timestamp string.");
+  }
+  if (record.agent !== undefined && typeof record.agent !== "string") {
+    errors.push("envelope.agent must be a string when present.");
+  }
+  return { ok: errors.length === 0, errors };
+}
+
+export function parseSkillEnvelope(raw: string): SkillEnvelope | null {
+  let parsed: unknown;
+  try {
+    parsed = JSON.parse(raw);
+  } catch {
+    return null;
+  }
+  const validation = validateSkillEnvelope(parsed);
+  if (!validation.ok) {
+    return null;
+  }
+  return parsed as SkillEnvelope;
+}
+
 /**
  * Gate tiers:
  * - required: blocking for stage completion.
@@ -244,9 +317,26 @@ const STAGE_AUTO_SUBAGENT_DISPATCH: Record<FlowStage, StageAutoSubagentDispatch[
     {
       agent: "test-author",
       mode: "mandatory",
-      when: "Always during TDD cycle (RED → GREEN → REFACTOR).",
-      purpose: "Guarantee failing tests, traceable implementation, and full-suite verification.",
-      requiresUserGate: false
+      when: "Always during TDD cycle (RED phase).",
+      purpose: "Produce failing RED tests only; no production writes.",
+      requiresUserGate: false,
+      skill: "tdd-red-phase"
+    },
+    {
+      agent: "test-author",
+      mode: "mandatory",
+      when: "Always during TDD cycle (GREEN phase).",
+      purpose: "Implement minimum production changes to satisfy RED and prove full-suite GREEN.",
+      requiresUserGate: false,
+      skill: "tdd-green-phase"
+    },
+    {
+      agent: "test-author",
+      mode: "mandatory",
+      when: "Always during TDD cycle (REFACTOR phase).",
+      purpose: "Refactor only after GREEN proof, preserving behavior and test pass state.",
+      requiresUserGate: false,
+      skill: "tdd-refactor-phase"
     },
     {
       agent: "doc-updater",
@@ -261,8 +351,9 @@ const STAGE_AUTO_SUBAGENT_DISPATCH: Record<FlowStage, StageAutoSubagentDispatch[
       agent: "reviewer",
       mode: "mandatory",
       when: "Always in review stage.",
-      purpose: "Run spec compliance and code-quality passes with file evidence.",
-      requiresUserGate: false
+      purpose: "Layer 1 spec compliance pass plus coordination of parallel Layer 2 fan-out (correctness, performance, architecture, external-safety) with source-tagged findings.",
+      requiresUserGate: false,
+      skill: "review-spec-pass"
     },
     {
       agent: "security-reviewer",

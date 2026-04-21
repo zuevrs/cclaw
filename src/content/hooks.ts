@@ -55,6 +55,7 @@ STATE_FILE="$ROOT/${RUNTIME_ROOT}/state/flow-state.json"
 ACTIVE_FEATURE_FILE="$ROOT/${RUNTIME_ROOT}/state/active-feature.json"
 CHECKPOINT_FILE="$ROOT/${RUNTIME_ROOT}/state/checkpoint.json"
 ACTIVITY_FILE="$ROOT/${RUNTIME_ROOT}/state/stage-activity.jsonl"
+IRON_LAWS_FILE="$ROOT/${RUNTIME_ROOT}/state/iron-laws.json"
 SUGGESTION_MEMORY_FILE="$ROOT/${RUNTIME_ROOT}/state/suggestion-memory.json"
 CONTEXT_WARNINGS_FILE="$ROOT/${RUNTIME_ROOT}/state/context-warnings.jsonl"
 CONTEXT_MODE_FILE="$ROOT/${RUNTIME_ROOT}/state/context-mode.json"
@@ -359,65 +360,58 @@ if [ -f "$META_SKILL" ]; then
   META_CONTENT=$(cat "$META_SKILL" 2>/dev/null || echo "")
 fi
 
-# --- Build compact knowledge digest (stage-biased, top entries only) ---
+# --- Build compact knowledge digest (stage + branch + diff aware) ---
 KNOWLEDGE_DIGEST=""
 LEARNINGS_COUNT=0
 if [ -f "$KNOWLEDGE_FILE" ] && [ -s "$KNOWLEDGE_FILE" ]; then
   LEARNINGS_COUNT=$(grep -c '^{' "$KNOWLEDGE_FILE" 2>/dev/null || echo "0")
+fi
+
+if command -v cclaw >/dev/null 2>&1 && [ -f "$KNOWLEDGE_FILE" ] && [ -s "$KNOWLEDGE_FILE" ]; then
+  BRANCH_NAME=""
+  if command -v git >/dev/null 2>&1 && git -C "$ROOT" rev-parse --is-inside-work-tree >/dev/null 2>&1; then
+    BRANCH_NAME=$(git -C "$ROOT" rev-parse --abbrev-ref HEAD 2>/dev/null || echo "")
+  fi
+  DIFF_FILES_CSV=""
+  if command -v git >/dev/null 2>&1 && git -C "$ROOT" rev-parse --is-inside-work-tree >/dev/null 2>&1; then
+    DIFF_FILES_CSV=$(git -C "$ROOT" diff --name-only HEAD~5..HEAD 2>/dev/null | head -n 20 | tr '\n' ',' | sed 's/,$//' || echo "")
+  fi
+  OPEN_GATES_CSV=""
+  if [ -f "$STATE_FILE" ] && command -v jq >/dev/null 2>&1; then
+    OPEN_GATES_CSV=$(jq -r --arg stage "$STAGE" '
+      (.stageGateCatalog[$stage].required // [])
+      - (.stageGateCatalog[$stage].passed // [])
+      | join(",")
+    ' "$STATE_FILE" 2>/dev/null || echo "")
+  fi
+  DIGEST_CMD=(cclaw internal knowledge-digest --stage="$STAGE" --limit=8)
+  if [ -n "$BRANCH_NAME" ]; then
+    DIGEST_CMD+=("--branch=$BRANCH_NAME")
+  fi
+  if [ -n "$DIFF_FILES_CSV" ]; then
+    DIGEST_CMD+=("--diff-files=$DIFF_FILES_CSV")
+  fi
+  if [ -n "$OPEN_GATES_CSV" ]; then
+    DIGEST_CMD+=("--open-gates=$OPEN_GATES_CSV")
+  fi
+  KNOWLEDGE_DIGEST=$("\${DIGEST_CMD[@]}" 2>/dev/null || echo "")
+fi
+
+if [ -z "$KNOWLEDGE_DIGEST" ] && [ -f "$KNOWLEDGE_FILE" ] && [ -s "$KNOWLEDGE_FILE" ]; then
   if command -v jq >/dev/null 2>&1; then
-    KNOWLEDGE_DIGEST=$(tail -n 200 "$KNOWLEDGE_FILE" 2>/dev/null | jq -Rsc --arg stage "$STAGE" '
+    KNOWLEDGE_DIGEST=$(tail -n 120 "$KNOWLEDGE_FILE" 2>/dev/null | jq -Rsc --arg stage "$STAGE" '
       split("\\n")
       | map(select(length > 0))
       | map(try fromjson catch null)
       | map(select(type == "object"))
       | map(select((.stage // null) == $stage or (.stage // null) == null))
       | reverse
-      | .[0:8]
+      | .[0:6]
       | map("- [" + ((.confidence // "unknown")|tostring) + " • " + ((.stage // "global")|tostring) + " • " + ((.domain // "general")|tostring) + "] " + ((.trigger // "trigger")|tostring) + " -> " + ((.action // "action")|tostring))
       | join("\\n")
     ' 2>/dev/null || echo "")
-  elif command -v python3 >/dev/null 2>&1; then
-    KNOWLEDGE_DIGEST=$(python3 - "$KNOWLEDGE_FILE" "$STAGE" <<'PY'
-import json
-import sys
-
-path = sys.argv[1]
-stage = sys.argv[2]
-entries = []
-try:
-    with open(path, "r", encoding="utf-8") as fh:
-        lines = fh.readlines()[-200:]
-    for raw in lines:
-        raw = raw.strip()
-        if not raw:
-            continue
-        try:
-            obj = json.loads(raw)
-        except Exception:
-            continue
-        if not isinstance(obj, dict):
-            continue
-        row_stage = obj.get("stage")
-        if row_stage not in (stage, None):
-            continue
-        entries.append(obj)
-except Exception:
-    entries = []
-
-entries = list(reversed(entries))[:8]
-out = []
-for obj in entries:
-    conf = str(obj.get("confidence", "unknown"))
-    row_stage = str(obj.get("stage", "global"))
-    domain = str(obj.get("domain", "general"))
-    trigger = str(obj.get("trigger", "trigger"))
-    action = str(obj.get("action", "action"))
-    out.append(f"- [{conf} • {row_stage} • {domain}] {trigger} -> {action}")
-print("\\n".join(out))
-PY
-)
   else
-    KNOWLEDGE_DIGEST=$(tail -n 8 "$KNOWLEDGE_FILE" 2>/dev/null || echo "")
+    KNOWLEDGE_DIGEST=$(tail -n 6 "$KNOWLEDGE_FILE" 2>/dev/null || echo "")
   fi
 fi
 
@@ -425,6 +419,38 @@ if [ -n "$KNOWLEDGE_DIGEST" ]; then
   printf '# Knowledge digest (auto-generated)\\n\\n%s\\n' "$KNOWLEDGE_DIGEST" > "$KNOWLEDGE_DIGEST_FILE" 2>/dev/null || true
 elif [ -f "$KNOWLEDGE_DIGEST_FILE" ]; then
   printf '# Knowledge digest (auto-generated)\\n\\n(no matching entries for current stage)\\n' > "$KNOWLEDGE_DIGEST_FILE" 2>/dev/null || true
+fi
+
+IRON_LAWS_SUMMARY=""
+if [ -f "$IRON_LAWS_FILE" ]; then
+  if command -v jq >/dev/null 2>&1; then
+    IRON_LAWS_SUMMARY=$(jq -r '
+      (.laws // [])
+      | map("- [" + (if (.strict // false) then "strict" else "advisory" end) + "] " + ((.id // "law")|tostring) + " -> " + ((.rule // "")|tostring))
+      | .[0:6]
+      | join("\\n")
+    ' "$IRON_LAWS_FILE" 2>/dev/null || echo "")
+  elif command -v python3 >/dev/null 2>&1; then
+    IRON_LAWS_SUMMARY=$(python3 - "$IRON_LAWS_FILE" <<'PY'
+import json
+import sys
+out = []
+try:
+    with open(sys.argv[1], "r", encoding="utf-8") as fh:
+        parsed = json.load(fh)
+    for row in (parsed.get("laws") or [])[:6]:
+        if not isinstance(row, dict):
+            continue
+        strict = "strict" if row.get("strict") else "advisory"
+        law_id = str(row.get("id") or "law")
+        rule = str(row.get("rule") or "")
+        out.append(f"- [{strict}] {law_id} -> {rule}")
+except Exception:
+    out = []
+print("\\n".join(out))
+PY
+)
+  fi
 fi
 
 # --- Installed cclaw-cli version vs. project's recorded version (one-block
@@ -510,6 +536,11 @@ if [ -n "$KNOWLEDGE_DIGEST" ]; then
 Knowledge digest (top relevant entries):
 $KNOWLEDGE_DIGEST"
 fi
+if [ -n "$IRON_LAWS_SUMMARY" ]; then
+  CTX="$CTX
+Iron laws (enforced policy highlights):
+$IRON_LAWS_SUMMARY"
+fi
 if [ -n "$META_CONTENT" ]; then
   CTX="$CTX
 
@@ -553,6 +584,7 @@ STATE_FILE="$STATE_DIR/flow-state.json"
 CHECKPOINT_FILE="$STATE_DIR/checkpoint.json"
 CHECKPOINT_TMP="$STATE_DIR/checkpoint.json.tmp.$$"
 CHECKPOINT_LOCK_DIR="$STATE_DIR/.checkpoint.lock"
+IRON_LAWS_FILE="$STATE_DIR/iron-laws.json"
 STAGE="none"
 ACTIVE_RUN="none"
 LOOP_COUNT=""
@@ -622,6 +654,38 @@ if command -v git >/dev/null 2>&1; then
     else
       DIRTY_STATE="clean"
     fi
+  fi
+fi
+
+STRICT_STOP_DIRTY="false"
+if [ -f "$IRON_LAWS_FILE" ]; then
+  if command -v jq >/dev/null 2>&1; then
+    STRICT_STOP_DIRTY=$(jq -r '
+      if (.mode // "advisory") == "strict" then "true"
+      elif ((.laws // []) | any(.id == "stop-clean-or-checkpointed" and .strict == true)) then "true"
+      else "false"
+      end
+    ' "$IRON_LAWS_FILE" 2>/dev/null || echo "false")
+  elif command -v python3 >/dev/null 2>&1; then
+    STRICT_STOP_DIRTY=$(python3 - "$IRON_LAWS_FILE" <<'PY'
+import json
+import sys
+value = "false"
+try:
+    with open(sys.argv[1], "r", encoding="utf-8") as fh:
+        parsed = json.load(fh)
+    if str(parsed.get("mode", "advisory")) == "strict":
+        value = "true"
+    else:
+        for row in parsed.get("laws", []):
+            if isinstance(row, dict) and row.get("id") == "stop-clean-or-checkpointed" and row.get("strict") is True:
+                value = "true"
+                break
+except Exception:
+    value = "false"
+print(value)
+PY
+)
   fi
 fi
 
@@ -748,6 +812,11 @@ trap - EXIT INT TERM
 CHECKPOINT_NOTE="Checkpoint updated at ${RUNTIME_ROOT}/state/checkpoint.json."
 if [ "$CHECKPOINT_WRITTEN" -eq 0 ]; then
   CHECKPOINT_NOTE="Checkpoint update failed. Review ${RUNTIME_ROOT}/state/checkpoint.json manually."
+fi
+
+if [ "$DIRTY_STATE" = "dirty" ] && [ "$STRICT_STOP_DIRTY" = "true" ]; then
+  printf '[cclaw] Stop blocked by iron law "stop-clean-or-checkpointed": working tree is dirty. Commit/revert changes or update checkpoint blockers before ending the session.\\n' >&2
+  exit 1
 fi
 
 RUN_SYNC_NOTE="Run metadata sync removed; active artifacts stay in ${RUNTIME_ROOT}/artifacts until /cc-ops archive (or cclaw archive runtime)."
