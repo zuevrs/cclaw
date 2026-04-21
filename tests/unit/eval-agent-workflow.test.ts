@@ -179,6 +179,42 @@ describe("runWorkflow (workflow-mode orchestrator)", () => {
     expect(result.stages[1]?.artifact.startsWith("# Scope")).toBe(true);
   });
 
+  it("enforces workflowMaxTotalTurns as a cumulative budget across stages", async () => {
+    const client = scripted([
+      {
+        content: "# Brainstorm\n\none-turn output",
+        usage: { promptTokens: 70, completionTokens: 20, totalTokens: 90 },
+        finishReason: "stop",
+        model: "glm-5.1",
+        attempts: 1
+      },
+      {
+        content: "",
+        toolCalls: [
+          {
+            id: "c-stage-2",
+            name: "read_file",
+            arguments: JSON.stringify({ path: "missing.md" })
+          }
+        ],
+        usage: { promptTokens: 60, completionTokens: 25, totalTokens: 85 },
+        finishReason: "tool_calls",
+        model: "glm-5.1",
+        attempts: 1
+      }
+    ]);
+
+    await expect(
+      runWorkflow({
+        workflow: workflow(),
+        config: baseConfig({ toolMaxTurns: 3, workflowMaxTotalTurns: 2 }),
+        projectRoot,
+        client,
+        loadSkill: async () => "# S"
+      })
+    ).rejects.toThrow(/exceeded the 1-turn budget/i);
+  });
+
   it("propagates errors from underlying with-tools loop (no partial success)", async () => {
     const client = scripted([
       {

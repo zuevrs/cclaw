@@ -38,10 +38,19 @@ import type {
   WorkflowStageResult
 } from "../types.js";
 import { loadStageSkill } from "./single-shot.js";
-import { runWithTools } from "./with-tools.js";
+import { MaxTurnsExceededError, runWithTools } from "./with-tools.js";
 
 const STAGES_SUBDIR = "stages";
 const ARTIFACT_CANDIDATES = ["artifact.md", "artifact.txt", "ARTIFACT.md"];
+const DEFAULT_WORKFLOW_MAX_TOTAL_TURNS = 40;
+const DEFAULT_STAGE_TURN_CAP = 8;
+
+function clampPositive(value: number | undefined, fallback: number): number {
+  if (!Number.isInteger(value) || (value as number) < 1) {
+    return fallback;
+  }
+  return value as number;
+}
 
 export interface WorkflowInput {
   workflow: WorkflowCase;
@@ -93,6 +102,11 @@ export async function runWorkflow(input: WorkflowInput): Promise<WorkflowOutput>
   const artifacts = new Map<WorkflowStageName, string>();
   let totalUsageUsd = 0;
   let totalDurationMs = 0;
+  let totalTurns = 0;
+  const workflowTurnBudget = clampPositive(
+    config.workflowMaxTotalTurns,
+    DEFAULT_WORKFLOW_MAX_TOTAL_TURNS
+  );
 
   try {
     await fs.mkdir(
@@ -101,6 +115,13 @@ export async function runWorkflow(input: WorkflowInput): Promise<WorkflowOutput>
     );
 
     for (const step of workflow.stages) {
+      const remainingWorkflowTurns = workflowTurnBudget - totalTurns;
+      if (remainingWorkflowTurns < 1) {
+        throw new MaxTurnsExceededError(workflowTurnBudget);
+      }
+      const perStageTurnCap = clampPositive(config.toolMaxTurns, DEFAULT_STAGE_TURN_CAP);
+      const stageTurnBudget = Math.min(perStageTurnCap, remainingWorkflowTurns);
+
       input.onStageStart?.(step.name);
       await clearArtifactFile(sandbox);
       const priorStages: WorkflowStageName[] = stageResults.map((r) => r.stage);
@@ -118,7 +139,10 @@ export async function runWorkflow(input: WorkflowInput): Promise<WorkflowOutput>
 
       const result = await runWithTools({
         caseEntry,
-        config,
+        config: {
+          ...config,
+          toolMaxTurns: stageTurnBudget
+        },
         projectRoot,
         client,
         ...(input.tools ? { tools: input.tools } : {}),
@@ -150,6 +174,7 @@ export async function runWorkflow(input: WorkflowInput): Promise<WorkflowOutput>
       input.onStageEnd?.(step.name, stageResult);
       totalUsageUsd += result.usageUsd;
       totalDurationMs += result.durationMs;
+      totalTurns += result.toolUse.turns;
     }
 
     return {
