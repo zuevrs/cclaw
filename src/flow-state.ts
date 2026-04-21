@@ -141,8 +141,12 @@ export function firstStageForTrack(track: FlowTrack): FlowStage {
   return stages[0] ?? "brainstorm";
 }
 
+export function createRunId(date = new Date()): string {
+  return `run-${date.getTime().toString(36)}-${Math.random().toString(36).slice(2, 8)}`;
+}
+
 export function createInitialFlowState(
-  activeRunIdOrOptions: string | InitialFlowStateOptions = "active",
+  activeRunIdOrOptions: string | InitialFlowStateOptions = {},
   maybeTrack?: FlowTrack
 ): FlowState {
   const options: InitialFlowStateOptions =
@@ -150,7 +154,7 @@ export function createInitialFlowState(
       ? { activeRunId: activeRunIdOrOptions, track: maybeTrack }
       : activeRunIdOrOptions;
 
-  const activeRunId = options.activeRunId ?? "active";
+  const activeRunId = options.activeRunId ?? createRunId();
   const track: FlowTrack = options.track ?? "standard";
   const skippedStages = skippedStagesForTrack(track);
 

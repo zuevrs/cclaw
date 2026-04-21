@@ -42,12 +42,14 @@ export async function withDirectoryLock<T>(
   await ensureDir(path.dirname(lockPath));
 
   let acquired = false;
+  let lastError: unknown = null;
   for (let attempt = 0; attempt < retries; attempt += 1) {
     try {
       await fs.mkdir(lockPath);
       acquired = true;
       break;
     } catch (error) {
+      lastError = error;
       const code = (error as NodeJS.ErrnoException | undefined)?.code;
       if (code !== "EEXIST") {
         throw error;
@@ -67,13 +69,22 @@ export async function withDirectoryLock<T>(
   }
 
   if (!acquired) {
-    throw new Error(`Failed to acquire lock: ${lockPath}`);
+    const details = lastError instanceof Error ? lastError.message : String(lastError);
+    throw new Error(
+      `Failed to acquire lock: ${lockPath} (attempts=${retries}, retryDelayMs=${retryDelayMs}, staleAfterMs=${staleAfterMs}, lastError=${details})`
+    );
   }
 
   try {
     return await fn();
   } finally {
-    await fs.rm(lockPath, { recursive: true, force: true }).catch(() => {});
+    await fs.rm(lockPath, { recursive: true, force: true }).catch((cleanupError) => {
+      // Lock cleanup failure should not shadow the original operation result,
+      // but keep a diagnostic breadcrumb for flaky FS environments.
+      const details = cleanupError instanceof Error ? cleanupError.message : String(cleanupError);
+      // eslint-disable-next-line no-console
+      console.warn(`cclaw lock cleanup failed for ${lockPath}: ${details}`);
+    });
   }
 }
 

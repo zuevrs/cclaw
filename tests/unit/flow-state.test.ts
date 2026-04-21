@@ -16,7 +16,7 @@ describe("flow state", () => {
   });
 
   it("initializes with active run id", () => {
-    expect(createInitialFlowState().activeRunId).toBe("active");
+    expect(createInitialFlowState().activeRunId).toMatch(/^run-/);
     expect(createInitialFlowState("run-custom").activeRunId).toBe("run-custom");
   });
 
