@@ -5,7 +5,7 @@ import { pathToFileURL } from "node:url";
 import { promisify } from "node:util";
 import { REQUIRED_DIRS, RUNTIME_ROOT, UTILITY_COMMANDS } from "./constants.js";
 import { CCLAW_AGENTS } from "./content/core-agents.js";
-import { detectAdvancedKeys, readConfig } from "./config.js";
+import { detectAdvancedKeys, InvalidConfigError, readConfig } from "./config.js";
 import { exists } from "./fs-utils.js";
 import { gitignoreHasRequiredPatterns } from "./gitignore.js";
 import {
@@ -259,6 +259,15 @@ async function readJsonObjectStatus(filePath: string): Promise<{
       ok: false,
       error: error instanceof Error ? error.message : String(error)
     };
+  }
+}
+
+async function readPermissionBits(filePath: string): Promise<number | null> {
+  try {
+    const stat = await fs.stat(filePath);
+    return stat.mode & 0o777;
+  } catch {
+    return null;
   }
 }
 
@@ -527,6 +536,7 @@ export async function doctorChecks(projectRoot: string, options: DoctorOptions =
     checks.push({
       name: "config:valid",
       ok: false,
+      severity: error instanceof InvalidConfigError ? "error" : "warning",
       details: error instanceof Error ? error.message : "Invalid config"
     });
   }
@@ -1481,6 +1491,29 @@ export async function doctorChecks(projectRoot: string, options: DoctorOptions =
     name: "flow_state:active_run_id",
     ok: activeRunId.length > 0,
     details: `${RUNTIME_ROOT}/state/flow-state.json must include activeRunId`
+  });
+  const sensitivePermissionTargets = [
+    path.join(projectRoot, RUNTIME_ROOT, "state", "flow-state.json"),
+    path.join(projectRoot, RUNTIME_ROOT, "state", "delegation-log.json"),
+    path.join(projectRoot, RUNTIME_ROOT, "state", "reconciliation-notices.json"),
+    path.join(projectRoot, RUNTIME_ROOT, "state", "worktrees.json"),
+    path.join(projectRoot, RUNTIME_ROOT, "state", "active-feature.json"),
+    path.join(projectRoot, RUNTIME_ROOT, "knowledge.jsonl")
+  ];
+  const permissiveStateFiles: string[] = [];
+  for (const targetPath of sensitivePermissionTargets) {
+    const bits = await readPermissionBits(targetPath);
+    if (bits === null) continue;
+    if (bits > 0o640) {
+      permissiveStateFiles.push(`${path.relative(projectRoot, targetPath)}:${bits.toString(8)}`);
+    }
+  }
+  checks.push({
+    name: "warning:state:file_permissions",
+    ok: true,
+    details: permissiveStateFiles.length === 0
+      ? "sensitive state files are <=0640 permissions"
+      : `warning: sensitive state files are overly permissive (${permissiveStateFiles.join(", ")}). Run \`chmod 600 .cclaw/state/*.json .cclaw/state/*.jsonl .cclaw/knowledge.jsonl\` if this machine is multi-user.`
   });
   const reconciliationNotices = await readReconciliationNotices(projectRoot);
   checks.push({
