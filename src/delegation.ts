@@ -343,7 +343,7 @@ export async function appendDelegation(projectRoot: string, entry: DelegationEnt
       runId: activeRunId,
       entries: [...prior.entries, stamped]
     };
-    await writeFileSafe(filePath, `${JSON.stringify(ledger, null, 2)}\n`);
+    await writeFileSafe(filePath, `${JSON.stringify(ledger, null, 2)}\n`, { mode: 0o600 });
   });
 }
 

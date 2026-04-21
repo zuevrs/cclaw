@@ -264,19 +264,19 @@ async function ensureStructure(projectRoot: string): Promise<void> {
   }
 }
 
-async function writeCommandContracts(projectRoot: string): Promise<void> {
-  for (const stage of FLOW_STAGES) {
+async function writeCommandContracts(projectRoot: string, track: FlowTrack = "standard"): Promise<void> {
+  await Promise.all(FLOW_STAGES.map(async (stage) => {
     await writeFileSafe(
       runtimePath(projectRoot, "commands", `${stage}.md`),
-      stageCommandContract(stage)
+      stageCommandContract(stage, track)
     );
-  }
+  }));
 }
 
 async function writeArtifactTemplates(projectRoot: string): Promise<void> {
-  for (const [fileName, content] of Object.entries(ARTIFACT_TEMPLATES)) {
+  await Promise.all(Object.entries(ARTIFACT_TEMPLATES).map(async ([fileName, content]) => {
     await writeFileSafe(runtimePath(projectRoot, "templates", fileName), content);
-  }
+  }));
 }
 
 /**
@@ -928,7 +928,7 @@ async function writeHooks(projectRoot: string, config: CclawConfig): Promise<voi
 async function ensureKnowledgeStore(projectRoot: string): Promise<void> {
   const storePath = runtimePath(projectRoot, "knowledge.jsonl");
   if (!(await exists(storePath))) {
-    await writeFileSafe(storePath, "");
+    await writeFileSafe(storePath, "", { mode: 0o600 });
   }
   const legacyMdPath = runtimePath(projectRoot, "knowledge.md");
   if (await exists(legacyMdPath)) {
@@ -1107,7 +1107,7 @@ async function ensureSessionStateFiles(projectRoot: string): Promise<void> {
 
   const activityPath = path.join(stateDir, "stage-activity.jsonl");
   if (!(await exists(activityPath))) {
-    await writeFileSafe(activityPath, "");
+    await writeFileSafe(activityPath, "", { mode: 0o600 });
   }
 
   const checkpointPath = path.join(stateDir, "checkpoint.json");
@@ -1121,7 +1121,7 @@ async function ensureSessionStateFiles(projectRoot: string): Promise<void> {
       blockers: [] as string[],
       timestamp: new Date().toISOString()
     };
-    await writeFileSafe(checkpointPath, `${JSON.stringify(initialCheckpoint, null, 2)}\n`);
+    await writeFileSafe(checkpointPath, `${JSON.stringify(initialCheckpoint, null, 2)}\n`, { mode: 0o600 });
   }
 
   const suggestionMemoryPath = path.join(stateDir, "suggestion-memory.json");
@@ -1132,14 +1132,15 @@ async function ensureSessionStateFiles(projectRoot: string): Promise<void> {
       lastSuggestedStage: "",
       lastSuggestedAt: ""
     };
-    await writeFileSafe(suggestionMemoryPath, `${JSON.stringify(suggestionMemory, null, 2)}\n`);
+    await writeFileSafe(suggestionMemoryPath, `${JSON.stringify(suggestionMemory, null, 2)}\n`, { mode: 0o600 });
   }
 
   const contextModePath = path.join(stateDir, "context-mode.json");
   if (!(await exists(contextModePath))) {
     await writeFileSafe(
       contextModePath,
-      `${JSON.stringify(createInitialContextModeState(), null, 2)}\n`
+      `${JSON.stringify(createInitialContextModeState(), null, 2)}\n`,
+      { mode: 0o600 }
     );
   }
 
@@ -1153,14 +1154,15 @@ async function ensureSessionStateFiles(projectRoot: string): Promise<void> {
 
   const tddCycleLogPath = path.join(stateDir, "tdd-cycle-log.jsonl");
   if (!(await exists(tddCycleLogPath))) {
-    await writeFileSafe(tddCycleLogPath, "");
+    await writeFileSafe(tddCycleLogPath, "", { mode: 0o600 });
   }
 
   const reconciliationNoticesPath = path.join(stateDir, "reconciliation-notices.json");
   if (!(await exists(reconciliationNoticesPath))) {
     await writeFileSafe(
       reconciliationNoticesPath,
-      `${JSON.stringify({ schemaVersion: 1, notices: [] }, null, 2)}\n`
+      `${JSON.stringify({ schemaVersion: 1, notices: [] }, null, 2)}\n`,
+      { mode: 0o600 }
     );
   }
 
@@ -1169,7 +1171,7 @@ async function ensureSessionStateFiles(projectRoot: string): Promise<void> {
     await writeFileSafe(flowSnapshotPath, `${JSON.stringify({
       capturedAt: new Date().toISOString(),
       state: flow
-    }, null, 2)}\n`);
+    }, null, 2)}\n`, { mode: 0o600 });
   }
 }
 
@@ -1235,7 +1237,7 @@ async function writeState(projectRoot: string, config: CclawConfig, forceReset =
   }
 
   const state = createInitialFlowState({ track: config.defaultTrack ?? "standard" });
-  await writeFileSafe(statePath, `${JSON.stringify(state, null, 2)}\n`);
+  await writeFileSafe(statePath, `${JSON.stringify(state, null, 2)}\n`, { mode: 0o600 });
 }
 
 async function writeAdapterManifest(projectRoot: string, harnesses: HarnessId[]): Promise<void> {
@@ -1480,13 +1482,15 @@ async function materializeRuntime(projectRoot: string, config: CclawConfig, forc
   await ensureStructure(projectRoot);
   await cleanLegacyArtifacts(projectRoot);
   await cleanStaleFiles(projectRoot);
-  await writeCommandContracts(projectRoot);
-  await writeUtilityCommands(projectRoot, config);
-  await writeSkills(projectRoot, config);
-  await writeContextModes(projectRoot);
-  await writeArtifactTemplates(projectRoot);
-  await writeEvalScaffold(projectRoot);
-  await writeRulebook(projectRoot);
+  await Promise.all([
+    writeCommandContracts(projectRoot, config.defaultTrack ?? "standard"),
+    writeUtilityCommands(projectRoot, config),
+    writeSkills(projectRoot, config),
+    writeContextModes(projectRoot),
+    writeArtifactTemplates(projectRoot),
+    writeEvalScaffold(projectRoot),
+    writeRulebook(projectRoot)
+  ]);
   await writeState(projectRoot, config, forceStateReset);
   await ensureRunSystem(projectRoot, { createIfMissing: false });
   await ensureSessionStateFiles(projectRoot);

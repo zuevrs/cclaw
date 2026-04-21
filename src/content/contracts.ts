@@ -1,9 +1,9 @@
-import type { FlowStage } from "../types.js";
+import type { FlowStage, FlowTrack } from "../types.js";
 import { stageSchema } from "./stage-schema.js";
 import { stageSkillFolder } from "./skills.js";
 
-export function stageCommandContract(stage: FlowStage): string {
-  const schema = stageSchema(stage);
+export function stageCommandContract(stage: FlowStage, track: FlowTrack = "standard"): string {
+  const schema = stageSchema(stage, track);
   const skillPath = `.cclaw/skills/${stageSkillFolder(stage)}/SKILL.md`;
   const reads = schema.crossStageTrace.readsFrom;
   const readsLine = reads.length > 0 ? reads.join(", ") : "(first stage)";

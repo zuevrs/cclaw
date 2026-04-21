@@ -217,7 +217,8 @@ async function writeReconciliationNotices(
       },
       null,
       2
-    )}\n`
+    )}\n`,
+    { mode: 0o600 }
   );
 }
 

@@ -482,7 +482,7 @@ export async function writeFlowState(
       }
     }
     const safe = coerceFlowState({ ...(state as unknown as Record<string, unknown>) });
-    await writeFileSafe(statePath, `${JSON.stringify(safe, null, 2)}\n`);
+    await writeFileSafe(statePath, `${JSON.stringify(safe, null, 2)}\n`, { mode: 0o600 });
   });
   await syncActiveFeatureSnapshot(projectRoot);
 }
