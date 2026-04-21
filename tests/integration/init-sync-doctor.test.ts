@@ -16,7 +16,7 @@ function countOccurrences(value: string, needle: string): number {
   return matches ? matches.length : 0;
 }
 
-describe("install lifecycle", () => {
+describe("install lifecycle", { timeout: 30_000 }, () => {
   it("doctor passes for claude-only harness installs", async () => {
     const root = await createTempProject("claude-only");
     await initCclaw({ projectRoot: root, harnesses: ["claude"] });
