@@ -1,5 +1,6 @@
 import fs from "node:fs/promises";
 import path from "node:path";
+import { DEFAULT_COMPOUND_RECURRENCE_THRESHOLD } from "./config.js";
 import { RUNTIME_ROOT } from "./constants.js";
 import { stripBom, withDirectoryLock } from "./fs-utils.js";
 import { FLOW_STAGES, type FlowStage } from "./types.js";
@@ -83,6 +84,176 @@ export interface SelectRelevantLearningsOptions {
   diffFiles?: string[];
   openGates?: string[];
   limit?: number;
+}
+
+/**
+ * One clustered (trigger, action) group ready for compound lift.
+ *
+ * A cluster "qualifies" when its recurrence count meets the configured
+ * threshold **or** any contributing entry is marked `severity: "critical"`.
+ * The skill surface exposes this for nudging — it is not a gate.
+ */
+export interface CompoundReadinessCluster {
+  trigger: string;
+  action: string;
+  /**
+   * Sum of `frequency` across entries in the cluster — matches the
+   * recurrence count used by `/cc-ops compound`.
+   */
+  recurrence: number;
+  /** Distinct entry lines contributing to this cluster. */
+  entryCount: number;
+  qualification: "recurrence" | "critical_override";
+  severity?: KnowledgeEntrySeverity;
+  lastSeenTs: string;
+  /** Entry types observed (rule/pattern/lesson/compound). */
+  types: KnowledgeEntryType[];
+  /** Distinct maturity values observed across the cluster. */
+  maturity: KnowledgeEntryMaturity[];
+}
+
+export interface CompoundReadiness {
+  schemaVersion: 1;
+  /** Effective recurrence threshold applied to this computation. */
+  threshold: number;
+  /** Total number of (trigger, action) clusters seen, regardless of threshold. */
+  clusterCount: number;
+  /** Number of clusters that passed the threshold or critical override. */
+  readyCount: number;
+  /**
+   * Top ready clusters (sorted by qualification severity / recurrence /
+   * recency). Capped by `maxReady` to keep the artifact small.
+   */
+  ready: CompoundReadinessCluster[];
+  lastUpdatedAt: string;
+}
+
+export interface ComputeCompoundReadinessOptions {
+  threshold?: number;
+  /** Hard cap on `ready[]` to keep the surface digest concise. Default 10. */
+  maxReady?: number;
+  now?: Date;
+}
+
+const DEFAULT_COMPOUND_READINESS_MAX_READY = 10;
+
+/**
+ * Pure function — no filesystem side effects. Callers pass entries from
+ * `readKnowledgeSafely` and get a derived readiness snapshot suitable
+ * for persisting to `.cclaw/state/compound-readiness.json`.
+ *
+ * Clustering key: `(type, normalizeText(trigger), normalizeText(action))`
+ * which mirrors the clustering used by the `/cc-ops compound` skill.
+ * Entries with `maturity === "lifted-to-enforcement"` are excluded —
+ * they were already promoted and should not re-appear as ready.
+ */
+export function computeCompoundReadiness(
+  entries: KnowledgeEntry[],
+  options: ComputeCompoundReadinessOptions = {}
+): CompoundReadiness {
+  const thresholdRaw = options.threshold ?? DEFAULT_COMPOUND_RECURRENCE_THRESHOLD;
+  const threshold =
+    Number.isInteger(thresholdRaw) && thresholdRaw >= 1
+      ? thresholdRaw
+      : DEFAULT_COMPOUND_RECURRENCE_THRESHOLD;
+  const maxReadyRaw = options.maxReady ?? DEFAULT_COMPOUND_READINESS_MAX_READY;
+  const maxReady =
+    Number.isInteger(maxReadyRaw) && maxReadyRaw >= 1
+      ? maxReadyRaw
+      : DEFAULT_COMPOUND_READINESS_MAX_READY;
+  const now = options.now ?? new Date();
+
+  const buckets = new Map<
+    string,
+    {
+      trigger: string;
+      action: string;
+      recurrence: number;
+      entryCount: number;
+      severity?: KnowledgeEntrySeverity;
+      lastSeenTs: string;
+      types: Set<KnowledgeEntryType>;
+      maturity: Set<KnowledgeEntryMaturity>;
+    }
+  >();
+
+  for (const entry of entries) {
+    if (entry.maturity === "lifted-to-enforcement") continue;
+    const key = [
+      entry.type,
+      normalizeText(entry.trigger),
+      normalizeText(entry.action)
+    ].join("||");
+    const frequency = Math.max(1, Math.floor(entry.frequency));
+    const bucket = buckets.get(key);
+    if (!bucket) {
+      buckets.set(key, {
+        trigger: entry.trigger,
+        action: entry.action,
+        recurrence: frequency,
+        entryCount: 1,
+        severity: entry.severity,
+        lastSeenTs: entry.last_seen_ts,
+        types: new Set([entry.type]),
+        maturity: new Set([entry.maturity])
+      });
+      continue;
+    }
+    bucket.recurrence += frequency;
+    bucket.entryCount += 1;
+    bucket.types.add(entry.type);
+    bucket.maturity.add(entry.maturity);
+    if (entry.severity === "critical") {
+      bucket.severity = "critical";
+    } else if (entry.severity === "important" && bucket.severity !== "critical") {
+      bucket.severity = "important";
+    }
+    if (Date.parse(entry.last_seen_ts) > Date.parse(bucket.lastSeenTs)) {
+      bucket.lastSeenTs = entry.last_seen_ts;
+    }
+  }
+
+  const ready: CompoundReadinessCluster[] = [];
+  for (const bucket of buckets.values()) {
+    const criticalOverride = bucket.severity === "critical";
+    const meetsRecurrence = bucket.recurrence >= threshold;
+    if (!criticalOverride && !meetsRecurrence) continue;
+    ready.push({
+      trigger: bucket.trigger,
+      action: bucket.action,
+      recurrence: bucket.recurrence,
+      entryCount: bucket.entryCount,
+      qualification: criticalOverride && !meetsRecurrence ? "critical_override" : "recurrence",
+      ...(bucket.severity ? { severity: bucket.severity } : {}),
+      lastSeenTs: bucket.lastSeenTs,
+      types: Array.from(bucket.types).sort(),
+      maturity: Array.from(bucket.maturity).sort()
+    });
+  }
+
+  ready.sort((a, b) => {
+    const severityWeight = (sev: KnowledgeEntrySeverity | undefined): number => {
+      if (sev === "critical") return 3;
+      if (sev === "important") return 2;
+      if (sev === "suggestion") return 1;
+      return 0;
+    };
+    const severityDiff = severityWeight(b.severity) - severityWeight(a.severity);
+    if (severityDiff !== 0) return severityDiff;
+    if (b.recurrence !== a.recurrence) return b.recurrence - a.recurrence;
+    const recencyDiff = Date.parse(b.lastSeenTs) - Date.parse(a.lastSeenTs);
+    if (!Number.isNaN(recencyDiff) && recencyDiff !== 0) return recencyDiff;
+    return a.trigger.localeCompare(b.trigger);
+  });
+
+  return {
+    schemaVersion: 1,
+    threshold,
+    clusterCount: buckets.size,
+    readyCount: ready.length,
+    ready: ready.slice(0, maxReady),
+    lastUpdatedAt: normalizeUtcIso(now.toISOString())
+  };
 }
 
 const KNOWLEDGE_TYPE_SET = new Set<KnowledgeEntryType>(["rule", "pattern", "lesson", "compound"]);

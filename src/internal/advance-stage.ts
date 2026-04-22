@@ -25,6 +25,7 @@ import {
 import { appendKnowledge } from "../knowledge-store.js";
 import { readFlowState, writeFlowState } from "../runs.js";
 import { FLOW_STAGES, type FlowStage } from "../types.js";
+import { runCompoundReadinessCommand } from "./compound-readiness.js";
 import { runEnvelopeValidateCommand } from "./envelope-validate.js";
 import { runKnowledgeDigestCommand } from "./knowledge-digest.js";
 import { runTddLoopStatusCommand } from "./tdd-loop-status.js";
@@ -914,7 +915,7 @@ export async function runInternalCommand(
   const [subcommand, ...tokens] = argv;
   if (!subcommand) {
     io.stderr.write(
-      "cclaw internal requires a subcommand: advance-stage | verify-flow-state-diff | verify-current-state | knowledge-digest | envelope-validate | tdd-red-evidence | tdd-loop-status | hook\n"
+      "cclaw internal requires a subcommand: advance-stage | verify-flow-state-diff | verify-current-state | knowledge-digest | envelope-validate | tdd-red-evidence | tdd-loop-status | compound-readiness | hook\n"
     );
     return 1;
   }
@@ -941,11 +942,14 @@ export async function runInternalCommand(
     if (subcommand === "tdd-loop-status") {
       return await runTddLoopStatusCommand(projectRoot, tokens, io);
     }
+    if (subcommand === "compound-readiness") {
+      return await runCompoundReadinessCommand(projectRoot, tokens, io);
+    }
     if (subcommand === "hook") {
       return await runHookCommand(projectRoot, parseHookArgs(tokens), io);
     }
     io.stderr.write(
-      `Unknown internal subcommand: ${subcommand}. Expected advance-stage | verify-flow-state-diff | verify-current-state | knowledge-digest | envelope-validate | tdd-red-evidence | tdd-loop-status | hook\n`
+      `Unknown internal subcommand: ${subcommand}. Expected advance-stage | verify-flow-state-diff | verify-current-state | knowledge-digest | envelope-validate | tdd-red-evidence | tdd-loop-status | compound-readiness | hook\n`
     );
     return 1;
   } catch (err) {
