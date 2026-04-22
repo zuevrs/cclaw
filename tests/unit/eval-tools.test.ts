@@ -148,8 +148,9 @@ describe("sandbox tool invocations", () => {
       ctx
     );
     if (!result.ok) throw new Error("expected success");
-    expect(result.content).toContain("README.md");
-    expect(result.content).toContain("docs/guide.md");
+    const normalized = result.content.replace(/\\/gu, "/");
+    expect(normalized).toContain("README.md");
+    expect(normalized).toContain("docs/guide.md");
   });
 
   it("glob returns (no matches) when nothing matches", async () => {
@@ -169,7 +170,7 @@ describe("sandbox tool invocations", () => {
     if (!result.ok) throw new Error("expected success");
     const hits = result.content.split("\n");
     expect(hits).toHaveLength(2);
-    expect(hits[0]).toMatch(/docs\/guide\.md:\d+:alpha/);
+    expect(hits[0].replace(/\\/gu, "/")).toMatch(/docs\/guide\.md:\d+:alpha/);
   });
 
   it("grep rejects invalid regex", async () => {

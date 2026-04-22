@@ -97,15 +97,26 @@ describe("hooks lifecycle wiring", () => {
     const binDir = path.join(root, "bin");
     await fs.mkdir(binDir, { recursive: true });
     const callsPath = path.join(root, "cclaw-calls.log");
-    const cclawShimPath = path.join(binDir, "cclaw");
-    await fs.writeFile(
-      cclawShimPath,
-      `#!/usr/bin/env bash
+    const cclawShimPath = path.join(binDir, process.platform === "win32" ? "cclaw.cmd" : "cclaw");
+    if (process.platform === "win32") {
+      await fs.writeFile(
+        cclawShimPath,
+        `@echo off
+>>"${callsPath}" echo %*
+exit /b 0
+`,
+        "utf8"
+      );
+    } else {
+      await fs.writeFile(
+        cclawShimPath,
+        `#!/usr/bin/env bash
 printf '%s\\n' "$*" >> "${callsPath}"
 `,
-      "utf8"
-    );
-    await fs.chmod(cclawShimPath, 0o755);
+        "utf8"
+      );
+      await fs.chmod(cclawShimPath, 0o755);
+    }
 
     const result = await runNodeScript(
       root,
@@ -113,7 +124,7 @@ printf '%s\\n' "$*" >> "${callsPath}"
       stageCompleteScript(),
       ["scope", "--passed=scope_contract_written"],
       "",
-      { PATH: `${binDir}:${process.env.PATH ?? ""}` }
+      { PATH: `${binDir}${path.delimiter}${process.env.PATH ?? ""}` }
     );
     expect(result.code).toBe(0);
     expect(result.stderr).toBe("");
@@ -130,7 +141,7 @@ printf '%s\\n' "$*" >> "${callsPath}"
       stageCompleteScript(),
       ["scope"],
       "",
-      { PATH: "/usr/bin:/bin" }
+      { PATH: "" }
     );
     expect(result.code).toBe(1);
     expect(result.stderr).toContain("cclaw binary not found in PATH");

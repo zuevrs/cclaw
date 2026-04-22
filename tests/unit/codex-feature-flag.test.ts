@@ -22,7 +22,7 @@ describe("codexConfigPath", () => {
 
   it("honors CODEX_HOME when set to a non-empty value", () => {
     const env = { ...process.env, CODEX_HOME: "/tmp/custom-codex" };
-    expect(codexConfigPath(env)).toBe("/tmp/custom-codex/config.toml");
+    expect(codexConfigPath(env)).toBe(path.join("/tmp/custom-codex", "config.toml"));
   });
 
   it("treats whitespace-only CODEX_HOME as unset", () => {

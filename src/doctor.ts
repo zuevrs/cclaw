@@ -778,10 +778,14 @@ export async function doctorChecks(projectRoot: string, options: DoctorOptions =
       } catch {
         executable = false;
       }
+      const executableCheckOk = process.platform === "win32" ? true : executable;
       checks.push({
         name: `hook:script:${script}:executable`,
-        ok: executable,
-        details: `${scriptPath} must be executable`
+        ok: executableCheckOk,
+        details:
+          process.platform === "win32"
+            ? `${scriptPath} executable-bit check skipped on Windows`
+            : `${scriptPath} must be executable`
       });
     }
   }

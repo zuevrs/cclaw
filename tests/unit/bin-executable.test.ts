@@ -28,10 +28,12 @@ describe("bin targets", () => {
       const abs = path.resolve(repoRoot, rel);
       const info = await fs.stat(abs);
       const head = (await fs.readFile(abs, "utf8")).slice(0, 2);
-      expect(
-        (info.mode & 0o111) !== 0,
-        `${rel} is missing exec bit (mode=${info.mode.toString(8)}); run \`npm run build\` which invokes scripts/chmod-bin.mjs`
-      ).toBe(true);
+      if (process.platform !== "win32") {
+        expect(
+          (info.mode & 0o111) !== 0,
+          `${rel} is missing exec bit (mode=${info.mode.toString(8)}); run \`npm run build\` which invokes scripts/chmod-bin.mjs`
+        ).toBe(true);
+      }
       expect(head, `${rel} is missing #! shebang`).toBe("#!");
     }
   });
