@@ -5,7 +5,7 @@ export function stageCompleteScript(): string {
 import fs from "node:fs/promises";
 import path from "node:path";
 import process from "node:process";
-import { spawn } from "node:child_process";
+import { spawn, spawnSync } from "node:child_process";
 
 const RUNTIME_ROOT = ${JSON.stringify(RUNTIME_ROOT)};
 
@@ -59,12 +59,33 @@ async function main() {
     return;
   }
 
-  const cclawCommand = process.platform === "win32" ? "cclaw.cmd" : "cclaw";
-  const child = spawn(cclawCommand, ["internal", "advance-stage", stage, ...flags], {
+  if (process.platform === "win32") {
+    const probe = spawnSync("where", ["cclaw"], {
+      cwd: root,
+      env: process.env,
+      stdio: "ignore"
+    });
+    if ((probe.status ?? 1) !== 0) {
+      process.stderr.write(
+        "[cclaw] stage-complete: cclaw binary not found in PATH. Install cclaw CLI and rerun stage completion.\\n"
+      );
+      process.exitCode = 1;
+      return;
+    }
+  }
+
+  const isWindows = process.platform === "win32";
+  const child = spawn(
+    isWindows ? "cmd.exe" : "cclaw",
+    isWindows
+      ? ["/d", "/s", "/c", "cclaw", "internal", "advance-stage", stage, ...flags]
+      : ["internal", "advance-stage", stage, ...flags],
+    {
     cwd: root,
     env: process.env,
     stdio: "inherit"
-  });
+  }
+  );
   let spawnErrored = false;
 
   child.on("error", (error) => {
