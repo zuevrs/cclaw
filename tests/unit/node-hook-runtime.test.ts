@@ -24,13 +24,20 @@ async function runNodeHook(
   const payload = typeof input === "string" ? input : JSON.stringify(input);
 
   return await new Promise<RuntimeResult>((resolve, reject) => {
+    const env = {
+      ...process.env,
+      CCLAW_PROJECT_ROOT: root,
+      ...extraEnv
+    } as Record<string, string | undefined>;
+    if (process.platform === "win32") {
+      const normalizedPath = extraEnv.Path ?? extraEnv.PATH ?? process.env.Path ?? process.env.PATH ?? "";
+      delete env.PATH;
+      delete env.Path;
+      env.Path = normalizedPath;
+    }
     const child = spawn(process.execPath, [scriptPath, hookName], {
       cwd: root,
-      env: {
-        ...process.env,
-        CCLAW_PROJECT_ROOT: root,
-        ...extraEnv
-      }
+      env
     });
     let stdout = "";
     let stderr = "";
