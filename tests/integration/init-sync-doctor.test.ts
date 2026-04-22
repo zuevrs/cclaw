@@ -520,17 +520,17 @@ describe("install lifecycle", { timeout: 30_000 }, () => {
 
     expect(mergedClaude).toContain("user-stop-hook");
     expect(mergedClaude).toContain("user-prompt-submit");
-    expect(countOccurrences(mergedClaude, "bash .cclaw/hooks/run-hook.cmd prompt-guard.sh")).toBe(1);
-    expect(countOccurrences(mergedClaude, "bash .cclaw/hooks/run-hook.cmd workflow-guard.sh")).toBe(1);
-    expect(countOccurrences(mergedClaude, "bash .cclaw/hooks/run-hook.cmd context-monitor.sh")).toBe(1);
-    expect(countOccurrences(mergedClaude, "bash .cclaw/hooks/run-hook.cmd stop-checkpoint.sh")).toBe(1);
+    expect(countOccurrences(mergedClaude, "node .cclaw/hooks/run-hook.mjs prompt-guard.sh")).toBe(1);
+    expect(countOccurrences(mergedClaude, "node .cclaw/hooks/run-hook.mjs workflow-guard.sh")).toBe(1);
+    expect(countOccurrences(mergedClaude, "node .cclaw/hooks/run-hook.mjs context-monitor.sh")).toBe(1);
+    expect(countOccurrences(mergedClaude, "node .cclaw/hooks/run-hook.mjs stop-checkpoint.sh")).toBe(1);
 
     expect(mergedCursor).toContain("cursor-user-stop");
     expect(mergedCursor).toContain("cursor-user-pre");
-    expect(countOccurrences(mergedCursor, ".cclaw/hooks/run-hook.cmd prompt-guard.sh")).toBe(1);
-    expect(countOccurrences(mergedCursor, ".cclaw/hooks/run-hook.cmd workflow-guard.sh")).toBe(1);
-    expect(countOccurrences(mergedCursor, ".cclaw/hooks/run-hook.cmd context-monitor.sh")).toBe(1);
-    expect(countOccurrences(mergedCursor, ".cclaw/hooks/run-hook.cmd stop-checkpoint.sh")).toBe(1);
+    expect(countOccurrences(mergedCursor, "node .cclaw/hooks/run-hook.mjs prompt-guard.sh")).toBe(1);
+    expect(countOccurrences(mergedCursor, "node .cclaw/hooks/run-hook.mjs workflow-guard.sh")).toBe(1);
+    expect(countOccurrences(mergedCursor, "node .cclaw/hooks/run-hook.mjs context-monitor.sh")).toBe(1);
+    expect(countOccurrences(mergedCursor, "node .cclaw/hooks/run-hook.mjs stop-checkpoint.sh")).toBe(1);
   });
 
   it("sync recovers relaxed JSON hooks and preserves user commands", async () => {
@@ -553,7 +553,7 @@ describe("install lifecycle", { timeout: 30_000 }, () => {
     await syncCclaw(root);
     const merged = await fs.readFile(claudeHooksPath, "utf8");
     expect(merged).toContain("user-relaxed-stop");
-    expect(countOccurrences(merged, "bash .cclaw/hooks/run-hook.cmd prompt-guard.sh")).toBe(1);
+    expect(countOccurrences(merged, "node .cclaw/hooks/run-hook.mjs prompt-guard.sh")).toBe(1);
 
     const backupsDir = path.join(root, ".cclaw/backups/hooks");
     const backups = await fs.readdir(backupsDir);
@@ -993,7 +993,7 @@ describe("install lifecycle", { timeout: 30_000 }, () => {
     expect(codexHooks.hooks).toHaveProperty("PreToolUse");
     expect(codexHooks.hooks).toHaveProperty("PostToolUse");
     expect(codexHooks.hooks).toHaveProperty("Stop");
-    expect(JSON.stringify(codexHooks)).toContain("verify-current-state --quiet");
+    expect(JSON.stringify(codexHooks)).toContain("verify-current-state");
 
     // `.codex/commands/*` is still never consumed by Codex.
     await expect(fs.stat(path.join(root, ".codex/commands"))).rejects.toThrow(/ENOENT/);

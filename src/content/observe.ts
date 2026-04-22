@@ -1678,7 +1678,7 @@ exit 0
  */
 
 function hookDispatcherCommand(scriptName: string): string {
-  return `bash ${RUNTIME_ROOT}/hooks/run-hook.cmd ${scriptName}`;
+  return `node ${RUNTIME_ROOT}/hooks/run-hook.mjs ${scriptName}`;
 }
 
 export function claudeHooksJsonWithObservation(): string {
@@ -1820,7 +1820,7 @@ export function codexHooksJsonWithObservation(): string {
           command: hookDispatcherCommand("workflow-guard.sh")
         }, {
           type: "command",
-          command: "bash -lc 'if ! command -v cclaw >/dev/null 2>&1; then echo \"[cclaw] codex hook: cclaw binary is required for verify-current-state\" >&2; exit 1; fi; MODE=\"${CCLAW_WORKFLOW_GUARD_MODE:-advisory}\"; if [ \"$MODE\" = \"strict\" ]; then cclaw internal verify-current-state --quiet >/dev/null; else cclaw internal verify-current-state --quiet >/dev/null || true; fi'"
+          command: hookDispatcherCommand("verify-current-state")
         }]
       }],
       PreToolUse: [{

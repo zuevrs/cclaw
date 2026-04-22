@@ -238,6 +238,59 @@ describe("node hook runtime", () => {
     expect(hasRed.stderr).not.toContain("missing failing RED evidence");
   });
 
+  it("verify-current-state honors strict/advisory mode without bash wrappers", async () => {
+    const root = await createTempProject("node-hook-verify-current-state");
+    const binDir = path.join(root, "bin");
+    await fs.mkdir(binDir, { recursive: true });
+    await fs.writeFile(
+      path.join(binDir, "cclaw"),
+      `#!/usr/bin/env bash
+if [ "$1" = "internal" ] && [ "$2" = "verify-current-state" ]; then
+  exit "\${CCLAW_FAKE_VERIFY_EXIT:-0}"
+fi
+exit 0
+`,
+      "utf8"
+    );
+    await fs.chmod(path.join(binDir, "cclaw"), 0o755);
+
+    const strictFail = await runNodeHook(
+      root,
+      "verify-current-state",
+      nodeHookRuntimeScript(),
+      {},
+      {
+        PATH: `${binDir}:${process.env.PATH ?? ""}`,
+        CCLAW_WORKFLOW_GUARD_MODE: "strict",
+        CCLAW_FAKE_VERIFY_EXIT: "1"
+      }
+    );
+    expect(strictFail.code).toBe(1);
+
+    const advisoryFail = await runNodeHook(
+      root,
+      "verify-current-state",
+      nodeHookRuntimeScript(),
+      {},
+      {
+        PATH: `${binDir}:${process.env.PATH ?? ""}`,
+        CCLAW_WORKFLOW_GUARD_MODE: "advisory",
+        CCLAW_FAKE_VERIFY_EXIT: "1"
+      }
+    );
+    expect(advisoryFail.code).toBe(0);
+
+    const missingBinary = await runNodeHook(
+      root,
+      "verify-current-state",
+      nodeHookRuntimeScript(),
+      {},
+      { PATH: "/usr/bin:/bin" }
+    );
+    expect(missingBinary.code).toBe(1);
+    expect(missingBinary.stderr).toContain("cclaw binary is required for verify-current-state");
+  });
+
   it("context-monitor debounces advisories and auto-captures failing tests", async () => {
     const root = await createTempProject("node-hook-context-monitor");
     await fs.mkdir(path.join(root, ".cclaw/state"), { recursive: true });

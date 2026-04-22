@@ -273,9 +273,9 @@ export default function cclawPlugin(ctx) {
     });
   }
 
-  async function runHookScript(scriptFileName, payload = {}) {
+  async function runHookScript(hookName, payload = {}) {
     const { spawn } = await import("node:child_process");
-    const scriptPath = join(root, "${RUNTIME_ROOT}/hooks/" + scriptFileName);
+    const hookRuntimePath = join(root, "${RUNTIME_ROOT}/hooks/run-hook.mjs");
     const input = typeof payload === "string" ? payload : JSON.stringify(payload ?? {});
     return scheduleHookTask(() => new Promise((resolve) => {
       let stderr = "";
@@ -288,7 +288,7 @@ export default function cclawPlugin(ctx) {
 
       let child;
       try {
-        child = spawn("bash", [scriptPath], {
+        child = spawn(process.execPath, [hookRuntimePath, hookName], {
           cwd: root,
           stdio: ["pipe", "ignore", "pipe"]
         });
@@ -300,7 +300,7 @@ export default function cclawPlugin(ctx) {
       const timer = setTimeout(() => {
         child.kill("SIGKILL");
         if (stderr.length > 0) {
-          console.error("[cclaw] opencode hook timeout: " + scriptFileName + " stderr=" + stderr.slice(-1200));
+          console.error("[cclaw] opencode hook timeout: " + hookName + " stderr=" + stderr.slice(-1200));
         }
         finish(false);
       }, 20_000);
@@ -319,7 +319,7 @@ export default function cclawPlugin(ctx) {
         clearTimeout(timer);
         const ok = code === 0;
         if (!ok && stderr.length > 0) {
-          console.error("[cclaw] opencode hook failed: " + scriptFileName + " stderr=" + stderr.slice(-1200));
+          console.error("[cclaw] opencode hook failed: " + hookName + " stderr=" + stderr.slice(-1200));
         }
         finish(ok);
       });

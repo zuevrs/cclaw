@@ -109,6 +109,63 @@ async function readStdin() {
   });
 }
 
+async function runCclawInternal(root, args) {
+  return await new Promise((resolve) => {
+    let settled = false;
+    let stderr = "";
+    const finalize = (value) => {
+      if (settled) return;
+      settled = true;
+      resolve(value);
+    };
+    let child;
+    try {
+      child = spawn("cclaw", ["internal", ...args], {
+        cwd: root,
+        env: process.env,
+        stdio: ["ignore", "ignore", "pipe"]
+      });
+    } catch (error) {
+      const code = error && typeof error === "object" && "code" in error ? String(error.code) : "";
+      finalize({
+        code: 1,
+        stderr,
+        missingBinary: code === "ENOENT"
+      });
+      return;
+    }
+    child.stderr?.on("data", (chunk) => {
+      stderr += String(chunk ?? "");
+      if (stderr.length > 8000) {
+        stderr = stderr.slice(-8000);
+      }
+    });
+    child.on("error", (error) => {
+      const code = error && typeof error === "object" && "code" in error ? String(error.code) : "";
+      finalize({
+        code: 1,
+        stderr,
+        missingBinary: code === "ENOENT"
+      });
+    });
+    child.on("close", (code, signal) => {
+      if (signal) {
+        finalize({
+          code: 1,
+          stderr,
+          missingBinary: false
+        });
+        return;
+      }
+      finalize({
+        code: typeof code === "number" ? code : 1,
+        stderr,
+        missingBinary: false
+      });
+    });
+  });
+}
+
 function detectHarness(env) {
   if (env.CLAUDE_PROJECT_DIR) return "claude";
   if (env.CURSOR_PROJECT_DIR || env.CURSOR_PROJECT_ROOT) return "cursor";
@@ -1456,6 +1513,24 @@ async function handleContextMonitor(runtime) {
   return 0;
 }
 
+async function handleVerifyCurrentState(runtime) {
+  const mode = process.env.CCLAW_WORKFLOW_GUARD_MODE === "strict"
+    ? "strict"
+    : DEFAULT_WORKFLOW_GUARD_MODE;
+  const result = await runCclawInternal(runtime.root, ["verify-current-state", "--quiet"]);
+  if (result.missingBinary) {
+    process.stderr.write("[cclaw] codex hook: cclaw binary is required for verify-current-state\\n");
+    return 1;
+  }
+  if (mode === "strict") {
+    if (result.code !== 0 && result.stderr.trim().length > 0) {
+      process.stderr.write(result.stderr);
+    }
+    return result.code === 0 ? 0 : 1;
+  }
+  return 0;
+}
+
 function normalizeHookName(rawName) {
   const value = normalizeText(rawName).toLowerCase();
   if (value === "session-start" || value === "session-start.sh") return "session-start";
@@ -1464,6 +1539,7 @@ function normalizeHookName(rawName) {
   if (value === "prompt-guard" || value === "prompt-guard.sh") return "prompt-guard";
   if (value === "workflow-guard" || value === "workflow-guard.sh") return "workflow-guard";
   if (value === "context-monitor" || value === "context-monitor.sh") return "context-monitor";
+  if (value === "verify-current-state") return "verify-current-state";
   return "";
 }
 
@@ -1473,7 +1549,7 @@ async function main() {
     process.stderr.write(
       "[cclaw] run-hook: usage: node " +
         RUNTIME_ROOT +
-        "/hooks/run-hook.mjs <session-start|stop-checkpoint|pre-compact|prompt-guard|workflow-guard|context-monitor>\\n"
+        "/hooks/run-hook.mjs <session-start|stop-checkpoint|pre-compact|prompt-guard|workflow-guard|context-monitor|verify-current-state>\\n"
     );
     process.exitCode = 1;
     return;
@@ -1516,6 +1592,10 @@ async function main() {
     }
     if (hookName === "context-monitor") {
       process.exitCode = await handleContextMonitor(runtime);
+      return;
+    }
+    if (hookName === "verify-current-state") {
+      process.exitCode = await handleVerifyCurrentState(runtime);
       return;
     }
     process.stderr.write("[cclaw] run-hook: unsupported hook " + hookName + "\\n");
