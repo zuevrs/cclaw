@@ -555,17 +555,17 @@ export async function doctorChecks(projectRoot: string, options: DoctorOptions =
         : `no deprecated "tddTestGlobs" key detected in ${RUNTIME_ROOT}/config.yaml`
     });
 
-    const expectedMode = parsedConfig.promptGuardMode === "strict" ? "strict" : "advisory";
-    const promptGuardPath = path.join(projectRoot, RUNTIME_ROOT, "hooks", "run-hook.mjs");
-    let promptGuardModeOk = false;
-    if (await exists(promptGuardPath)) {
-      const promptGuardContent = await fs.readFile(promptGuardPath, "utf8");
-      promptGuardModeOk = promptGuardContent.includes(`const DEFAULT_PROMPT_GUARD_MODE = "${expectedMode}"`);
+    const expectedStrictness = parsedConfig.strictness === "strict" ? "strict" : "advisory";
+    const hookRuntimePath = path.join(projectRoot, RUNTIME_ROOT, "hooks", "run-hook.mjs");
+    let strictnessOk = false;
+    if (await exists(hookRuntimePath)) {
+      const runtimeContent = await fs.readFile(hookRuntimePath, "utf8");
+      strictnessOk = runtimeContent.includes(`const DEFAULT_STRICTNESS = "${expectedStrictness}"`);
     }
     checks.push({
-      name: "hook:prompt_guard:mode",
-      ok: promptGuardModeOk,
-      details: `${promptGuardPath} must match promptGuardMode=${expectedMode}`
+      name: "hook:runtime:strictness",
+      ok: strictnessOk,
+      details: `${hookRuntimePath} must embed DEFAULT_STRICTNESS = "${expectedStrictness}" matching config.strictness`
     });
 
     if (parsedConfig.gitHookGuards === true) {

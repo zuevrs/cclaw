@@ -1,9 +1,13 @@
 import { RUNTIME_ROOT } from "../constants.js";
 
 export interface NodeHookRuntimeOptions {
-  promptGuardMode?: "advisory" | "strict";
-  workflowGuardMode?: "advisory" | "strict";
-  tddEnforcementMode?: "advisory" | "strict";
+  /**
+   * Single enforcement knob derived from `config.strictness`. Generated hooks
+   * embed this value as the default for every guard (prompt, workflow, TDD,
+   * iron-laws-coupled blocks). `CCLAW_STRICTNESS` env var overrides at run
+   * time; per-law strictness still flows through `iron-laws.json`.
+   */
+  strictness?: "advisory" | "strict";
   tddTestPathPatterns?: string[];
   tddProductionPathPatterns?: string[];
 }
@@ -20,9 +24,7 @@ function normalizePatterns(patterns: string[] | undefined, fallback: string[]): 
  * bash/python/jq runtime dependencies.
  */
 export function nodeHookRuntimeScript(options: NodeHookRuntimeOptions = {}): string {
-  const promptGuardMode = options.promptGuardMode === "strict" ? "strict" : "advisory";
-  const workflowGuardMode = options.workflowGuardMode === "strict" ? "strict" : "advisory";
-  const tddEnforcementMode = options.tddEnforcementMode === "strict" ? "strict" : "advisory";
+  const strictness = options.strictness === "strict" ? "strict" : "advisory";
   const tddTestPathPatterns = normalizePatterns(options.tddTestPathPatterns, [
     "**/*.test.*",
     "**/tests/**",
@@ -37,11 +39,16 @@ import process from "node:process";
 import { spawn } from "node:child_process";
 
 const RUNTIME_ROOT = ${JSON.stringify(RUNTIME_ROOT)};
-const DEFAULT_PROMPT_GUARD_MODE = ${JSON.stringify(promptGuardMode)};
-const DEFAULT_WORKFLOW_GUARD_MODE = ${JSON.stringify(workflowGuardMode)};
-const DEFAULT_TDD_ENFORCEMENT_MODE = ${JSON.stringify(tddEnforcementMode)};
+// Single strictness default, derived from config.strictness at install time.
+// \`CCLAW_STRICTNESS\` env var overrides for the current process. All guards
+// (prompt, workflow, TDD, iron-laws) route through \`resolveStrictness()\`.
+const DEFAULT_STRICTNESS = ${JSON.stringify(strictness)};
 const DEFAULT_TDD_TEST_PATH_PATTERNS = ${JSON.stringify(tddTestPathPatterns)};
 const DEFAULT_TDD_PRODUCTION_PATH_PATTERNS = ${JSON.stringify(tddProductionPathPatterns)};
+
+function resolveStrictness() {
+  return process.env.CCLAW_STRICTNESS === "strict" ? "strict" : DEFAULT_STRICTNESS;
+}
 
 function toObject(value) {
   if (!value || typeof value !== "object" || Array.isArray(value)) return null;
@@ -1034,9 +1041,7 @@ async function handlePreCompact(runtime) {
 }
 
 async function handlePromptGuard(runtime) {
-  const mode = process.env.PROMPT_GUARD_MODE === "strict"
-    ? "strict"
-    : DEFAULT_PROMPT_GUARD_MODE;
+  const mode = resolveStrictness();
   const stateDir = path.join(runtime.root, RUNTIME_ROOT, "state");
   const guardLog = path.join(stateDir, "prompt-guard.jsonl");
 
@@ -1212,17 +1217,15 @@ function isProductionPath(rawPath, testPatterns, productionPatterns) {
 }
 
 async function handleWorkflowGuard(runtime) {
-  const mode = process.env.CCLAW_WORKFLOW_GUARD_MODE === "strict"
-    ? "strict"
-    : DEFAULT_WORKFLOW_GUARD_MODE;
+  const mode = resolveStrictness();
   const maxAgeRaw = process.env.CCLAW_WORKFLOW_GUARD_MAX_AGE_SEC;
   const maxAgeSec =
     typeof maxAgeRaw === "string" && /^[0-9]+$/u.test(maxAgeRaw)
       ? Number(maxAgeRaw)
       : 1800;
-  const tddEnforcement = process.env.TDD_ENFORCEMENT_MODE === "strict"
-    ? "strict"
-    : DEFAULT_TDD_ENFORCEMENT_MODE;
+  // TDD enforcement now follows the same single strictness knob — keeping the
+  // distinct local binding so the downstream block rules stay self-documenting.
+  const tddEnforcement = mode;
 
   const stateDir = path.join(runtime.root, RUNTIME_ROOT, "state");
   const guardStateFile = path.join(stateDir, "workflow-guard.json");
@@ -1523,9 +1526,7 @@ async function handleContextMonitor(runtime) {
 }
 
 async function handleVerifyCurrentState(runtime) {
-  const mode = process.env.CCLAW_WORKFLOW_GUARD_MODE === "strict"
-    ? "strict"
-    : DEFAULT_WORKFLOW_GUARD_MODE;
+  const mode = resolveStrictness();
   const result = await runCclawInternal(runtime.root, ["verify-current-state", "--quiet"]);
   if (result.missingBinary) {
     process.stderr.write("[cclaw] hook: cclaw binary is required for verify-current-state\\n");
