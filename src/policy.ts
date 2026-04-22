@@ -177,6 +177,7 @@ export async function policyChecks(projectRoot: string, options: PolicyOptions =
     { file: runtimeFile("references/flow-map.md"), needle: "## Stages (8)", name: "reference:flow_map:stages" },
     { file: runtimeFile("references/flow-map.md"), needle: "## Ralph Loop", name: "reference:flow_map:ralph_loop" },
     { file: runtimeFile("references/flow-map.md"), needle: "## Key state files", name: "reference:flow_map:state_files" },
+    { file: runtimeFile("references/flow-map.md"), needle: "## Compound readiness", name: "reference:flow_map:compound_readiness" },
     { file: runtimeFile("skills/session/SKILL.md"), needle: "## Session Resume Protocol", name: "utility_skill:session:resume" },
     { file: runtimeFile("skills/brainstorming/SKILL.md"), needle: "common-guidance.md", name: "stage_skill:shared_guidance_reference" },
 

@@ -84,6 +84,17 @@ worth acting on:
 Ralph Loop is a signal, not a gate. Stage advancement still runs
 through the normal \`flow-state.json\` gate catalog.
 
+## Compound readiness (auto-promotion signal)
+
+SessionStart also refreshes
+\`${RUNTIME_ROOT}/state/compound-readiness.json\` from \`knowledge.jsonl\`.
+The file lists clusters whose summed \`frequency\` reaches
+\`compound.recurrenceThreshold\` (default 3) or whose severity is
+\`critical\` (override). It surfaces a one-line nudge in the session
+digest only during \`review\` and \`ship\`, where lift-to-rule is in
+scope; earlier stages refresh the file silently. Promotion itself stays
+manual via \`/cc-ops compound\` so the signal never blocks flow.
+
 ## Key state files
 
 | Path | What it holds |
@@ -92,6 +103,7 @@ through the normal \`flow-state.json\` gate catalog.
 | \`${RUNTIME_ROOT}/state/delegation-log.json\` | Per-stage mandatory agent status + fulfillmentMode + evidenceRefs. |
 | \`${RUNTIME_ROOT}/state/tdd-cycle-log.jsonl\` | Append-only RED/GREEN/REFACTOR entries (source of Ralph Loop). |
 | \`${RUNTIME_ROOT}/state/ralph-loop.json\` | Derived Ralph Loop status (TDD-only). |
+| \`${RUNTIME_ROOT}/state/compound-readiness.json\` | Derived compound-promotion readiness (refreshed each SessionStart). |
 | \`${RUNTIME_ROOT}/state/stage-activity.jsonl\` | Append-only stage-enter/exit and gate-pass signals. |
 | \`${RUNTIME_ROOT}/state/checkpoint.json\` | Latest session checkpoint (stage + timestamp). |
 | \`${RUNTIME_ROOT}/state/context-mode.json\` | Active context mode (\`default\`, \`headless\`, ...). |

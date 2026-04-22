@@ -201,8 +201,10 @@ describe("flow command contracts", () => {
     expect(flowMap).toContain("/cc-view");
     expect(flowMap).toContain("/cc-ops");
     expect(flowMap).toContain("## Ralph Loop");
+    expect(flowMap).toContain("## Compound readiness");
     expect(flowMap).toContain("## Key state files");
     expect(flowMap).toContain(".cclaw/state/ralph-loop.json");
+    expect(flowMap).toContain(".cclaw/state/compound-readiness.json");
 
     const metaSkill = await fs.readFile(
       path.join(root, ".cclaw/skills/using-cclaw/SKILL.md"),
