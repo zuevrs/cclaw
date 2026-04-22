@@ -1670,13 +1670,16 @@ function isManagedRuntimeHookCommand(command: string): boolean {
     ) ||
     /(^|\s)(?:bash\s+)?(?:\.\/)?\.cclaw\/hooks\/run-hook\.cmd\s+(?:session-start|stop-checkpoint|pre-compact|prompt-guard|workflow-guard|context-monitor)(?:\.sh)?(?:\s|$)/u.test(
       normalized
+    ) ||
+    /(^|\s)(?:node\s+)?(?:"|')?(?:\.\/)?\.cclaw\/hooks\/run-hook\.mjs(?:"|')?\s+(?:session-start|stop-checkpoint|pre-compact|prompt-guard|workflow-guard|context-monitor|verify-current-state)(?:\.sh)?(?:\s|$)/u.test(
+      normalized
     )
   ) {
     return true;
   }
   // Codex UserPromptSubmit non-blocking state nudge:
-  // bash -lc '... cclaw internal verify-current-state --quiet ...'
-  return /internal verify-current-state --quiet/u.test(normalized);
+  // legacy shell and newer Node wrappers call this internal command.
+  return /internal verify-current-state(?:\s|$)/u.test(normalized);
 }
 
 async function removeManagedHookEntries(hookFilePath: string): Promise<void> {
