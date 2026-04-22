@@ -1025,7 +1025,7 @@ Do NOT merge, ship, or skip review. Follow RED → GREEN → REFACTOR strictly f
 
 You MUST complete these steps in order:
 
-1. Select plan slice — pick one task from the plan. Do not batch multiple tasks.
+1. Select plan slice — pick one task from the plan. Do not batch multiple tasks. Before starting, read \`.cclaw/state/ralph-loop.json\` (\`loopIteration\`, \`acClosed[]\`, \`redOpenSlices[]\`) so you skip cycles already closed.
 2. Map to acceptance criterion — identify the specific spec criterion this test proves.
 3. Dispatch mandatory \`tdd-red\` execution (or \`test-author\` in TEST_RED_ONLY mode) — produce failing behavior tests and RED evidence only (no production edits). Set \`CCLAW_ACTIVE_AGENT=tdd-red\` when supported.
 4. RED: Capture failure output — copy the exact failure output as RED evidence. Record in artifact.
@@ -1034,7 +1034,7 @@ You MUST complete these steps in order:
 7. GREEN: Verify no regressions — if any existing test breaks, fix the regression before proceeding.
 8. Run verification-before-completion discipline for the slice — capture a fresh test command, commit SHA, and explicit PASS/FAIL status before completion claims.
 9. REFACTOR: Dispatch \`tdd-refactor\` execution (or dedicated refactor mode) to improve code quality without behavior changes. Set \`CCLAW_ACTIVE_AGENT=tdd-refactor\` when supported.
-10. Record evidence — capture RED failure, GREEN output, and REFACTOR notes in the TDD artifact.
+10. Record evidence — capture RED failure, GREEN output, and REFACTOR notes in the TDD artifact. When logging the \`green\` row via \`/cc-ops tdd-log green\`, attach the closed acceptance-criterion IDs in \`acIds\` so Ralph Loop status counts them.
 11. Annotate traceability — link to plan task ID and spec criterion.
 12. Per-Slice Review (conditional) — if \`.cclaw/config.yaml::sliceReview.enabled\` is true and the slice meets any trigger (touchCount >= filesChangedThreshold, touchPaths match touchTriggers, or highRisk=true), append a \`## Per-Slice Review\` entry for this slice before moving on (see the dedicated section below).
 13. Repeat for each slice — return to step 1 for the next plan slice.

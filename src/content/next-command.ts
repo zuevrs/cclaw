@@ -64,6 +64,17 @@ This is the only progression command the user needs to drive the entire flow. St
 → Load **\`${RUNTIME_ROOT}/skills/<skillFolder>/SKILL.md\`** and **\`${RUNTIME_ROOT}/commands/<currentStage>.md\`** for the current stage.
 → Execute that stage's protocol. The stage skill handles the full interaction including STOP points and gate tracking.
 → Stage completion must use \`node .cclaw/hooks/stage-complete.mjs <currentStage>\` (canonical), which validates delegations + gate evidence before mutating \`flow-state.json\`.
+→ **Ralph Loop (tdd only).** When \`currentStage === "tdd"\`, also read
+  \`${RUNTIME_ROOT}/state/ralph-loop.json\` (refreshed on every session-start
+  while the flow is in tdd). Use it as a ground-truth progress indicator:
+  - \`loopIteration\` tells you how many RED → GREEN cycles already landed.
+  - \`acClosed\` lists the distinct acceptance-criterion IDs a GREEN row has
+    closed so far — if your plan tasks map to ACs, this is the "tasks
+    remaining" signal without needing a separate counter.
+  - \`redOpenSlices\` is the set of slices with an unsatisfied RED. Do not
+    advance to review while this is non-empty.
+  - Stage advancement to \`review\` still requires the normal gates in
+    \`flow-state.json\`; Ralph Loop status is a soft nudge, not a gate.
 
 ### Path B: Current stage IS complete (all gates passed, all delegations satisfied)
 
@@ -197,6 +208,15 @@ Load the current stage's skill and command contract:
 - \`${RUNTIME_ROOT}/commands/<currentStage>.md\`
 
 Execute the stage protocol. The stage skill handles interaction, STOP points, gate tracking, and stage completion via \`node .cclaw/hooks/stage-complete.mjs <stage>\` (canonical flow-state mutation path).
+
+**Ralph Loop (tdd only).** When the current stage is \`tdd\`, pair the
+normal gate-evidence view with \`${RUNTIME_ROOT}/state/ralph-loop.json\`:
+\`loopIteration\` is the running count of RED → GREEN cycles,
+\`acClosed\` lists distinct acceptance-criterion IDs already closed by
+GREEN rows (populated from \`acIds\` in \`tdd-cycle-log.jsonl\`), and
+\`redOpenSlices\` is the "tasks remaining" indicator. Advance only when
+every planned slice is in \`acClosed\` (or explicitly deferred) and
+\`redOpenSlices\` is empty.
 
 Special-case for review: if \`review_criticals_resolved\` is in \`blocked\`, route to rework instead of looping review forever — recommend \`/cc-ops rewind tdd "review_blocked_by_critical"\`.
 
