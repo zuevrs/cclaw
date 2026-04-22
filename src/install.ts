@@ -195,6 +195,11 @@ function resolveChangedFiles(root) {
 const root = resolveRepoRoot();
 const runtimeHook = path.join(root, RUNTIME_ROOT, "hooks", "run-hook.mjs");
 if (!fs.existsSync(runtimeHook)) {
+  // cclaw git relay is installed but the runtime entrypoint is missing —
+  // warn visibly (without blocking the commit) so the drift is noticed.
+  process.stderr.write(
+    "[cclaw] " + HOOK_NAME + ": " + runtimeHook + " not found; run \`cclaw sync\` to reinstall\\n"
+  );
   process.exit(0);
 }
 
@@ -1725,7 +1730,11 @@ function stripManagedHookCommands(value: unknown): { updated: unknown; changed: 
 }
 
 function isManagedRuntimeHookCommand(command: string): boolean {
-  const normalized = command.trim().replace(/\s+/gu, " ");
+  // Normalize whitespace and collapse any Windows-style backslash path
+  // separators to forward slashes so user-edited hook configs on Windows
+  // (e.g. `node .cclaw\hooks\run-hook.mjs ...`) still round-trip through
+  // sync without being duplicated alongside freshly generated entries.
+  const normalized = command.trim().replace(/\s+/gu, " ").replace(/\\/gu, "/");
   if (
     /(^|\s)(?:node\s+)?(?:"|')?(?:\.\/)?\.cclaw\/hooks\/run-hook\.mjs(?:"|')?\s+(?:session-start|stop-checkpoint|pre-compact|prompt-guard|workflow-guard|context-monitor|verify-current-state)(?:\s|$)/u.test(
       normalized

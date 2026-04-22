@@ -831,12 +831,9 @@ export async function doctorChecks(projectRoot: string, options: DoctorOptions =
     }
   }
 
-  // OpenCode plugin source + deployed path
-  checks.push({
-    name: "hook:opencode_plugin_source",
-    ok: await exists(path.join(projectRoot, RUNTIME_ROOT, "hooks", "opencode-plugin.mjs")),
-    details: `${RUNTIME_ROOT}/hooks/opencode-plugin.mjs`
-  });
+  // OpenCode plugin deployed path. (Presence of the source under
+  // `${RUNTIME_ROOT}/hooks/opencode-plugin.mjs` is already asserted by the
+  // generic `hook:script:opencode-plugin.mjs` check above; avoid a duplicate.)
   const opencodeEnabled = configuredHarnesses.includes("opencode");
   const opencodeDeployed = await exists(path.join(projectRoot, ".opencode/plugins/cclaw-plugin.mjs"));
   checks.push({
@@ -1111,26 +1108,10 @@ export async function doctorChecks(projectRoot: string, options: DoctorOptions =
   }
 
   const hasNode = await commandAvailable("node");
-  const hasPython = await commandAvailable("python3");
-  const hasJq = await commandAvailable("jq");
   checks.push({
     name: "capability:required:node",
     ok: hasNode,
     details: "node is required for cclaw runtime scripts and CLI wiring"
-  });
-  checks.push({
-    name: "warning:capability:jq",
-    ok: true,
-    details: hasJq
-      ? "jq available (optional)"
-      : "warning: jq not found; Node hook runtime no longer depends on jq"
-  });
-  checks.push({
-    name: "warning:capability:python3",
-    ok: true,
-    details: hasPython
-      ? "python3 available (optional)"
-      : "warning: python3 not found; Node hook runtime no longer depends on python3"
   });
   const windowsHookConfigCandidates = [
     path.join(projectRoot, ".claude/hooks/hooks.json"),

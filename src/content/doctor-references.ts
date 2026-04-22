@@ -15,7 +15,7 @@ Reference docs for \`cclaw doctor\` checks.
 - \`state-and-gates.md\` - flow-state integrity and gate evidence contracts
 - \`delegation-and-preamble.md\` - mandatory delegations and lightweight announce discipline
 - \`traceability.md\` - spec/plan/tdd trace matrix expectations
-- \`tooling-capabilities.md\` - local runtime prerequisites (bash/node/python/jq)
+- \`tooling-capabilities.md\` - local runtime prerequisites (node only)
 - \`config-and-policy.md\` - config schema, rules policy, and validation references
 `,
   "runtime-layout.md": `# Runtime Layout
@@ -118,17 +118,21 @@ Reference docs for \`cclaw doctor\` checks.
 
 ## Required
 
-- \`bash\` for runtime hook scripts
-- \`node\` for generated runtime scripts/plugins
+- \`node\` (>=20) — the only runtime dependency. All hooks, git-hook relays, and the
+  \`cclaw\` CLI itself run on Node.js. No \`bash\`, \`python3\`, or \`jq\` required.
+- \`git\` — needed for worktree and pre-commit/pre-push relays.
 
-## Optional fallback
+## Not required (removed)
 
-- at least one of \`python3\` or \`jq\` for JSON parsing fallback paths
+Earlier releases relied on \`bash\` to execute generated shell hooks and on
+\`python3\`/\`jq\` as JSON fallback parsers. Node-only mode removes both: hooks
+dispatch through \`node .cclaw/hooks/run-hook.mjs <hook-name>\`, so these tools
+are no longer part of the supported runtime contract.
 
 ## Typical fixes
 
-1. Install missing runtime tools.
-2. Keep at least one JSON fallback parser available (\`python3\` or \`jq\`).
+1. Install Node.js 20 or newer (matches \`package.json\` \`engines\`) and ensure \`node\` is on \`PATH\`.
+2. Re-run \`cclaw sync\` to regenerate hook configs after upgrading Node.
 `,
   "config-and-policy.md": `# Config And Policy
 

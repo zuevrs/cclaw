@@ -410,6 +410,12 @@ export default function cclawPlugin(ctx) {
             : typeof payload;
         console.error("[cclaw] opencode unknown event payload keys: " + keys);
       }
+      // session.compacted must run pre-compact BEFORE refreshing the bootstrap
+      // cache, otherwise the injected system prompt still shows the pre-compact
+      // digest/state until the next lifecycle event.
+      if (eventType === "session.compacted") {
+        await runHookScript("pre-compact", eventData ?? {});
+      }
       if (
         eventType === "session.created" ||
         eventType === "session.resumed" ||
@@ -424,9 +430,6 @@ export default function cclawPlugin(ctx) {
         // that happen mid-session; without it the cache would stay stale
         // until the next compaction or restart.
         await refreshBootstrapCache(true);
-      }
-      if (eventType === "session.compacted") {
-        await runHookScript("pre-compact", eventData ?? {});
       }
       if (eventType === "session.idle") {
         await runHookScript("stop-checkpoint", { loop_count: 0 });

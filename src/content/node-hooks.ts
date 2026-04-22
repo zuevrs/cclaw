@@ -196,12 +196,12 @@ async function detectRoot(env) {
     try {
       const runtimePath = path.join(candidate, RUNTIME_ROOT);
       const stat = await fs.stat(runtimePath);
-      if (stat.isDirectory()) return candidate;
+      if (stat.isDirectory()) return { root: candidate, foundRuntime: true };
     } catch {
       // continue
     }
   }
-  return candidates[0] || process.cwd();
+  return { root: candidates[0] || process.cwd(), foundRuntime: false };
 }
 
 function toLower(value) {
@@ -1528,7 +1528,7 @@ async function handleVerifyCurrentState(runtime) {
     : DEFAULT_WORKFLOW_GUARD_MODE;
   const result = await runCclawInternal(runtime.root, ["verify-current-state", "--quiet"]);
   if (result.missingBinary) {
-    process.stderr.write("[cclaw] codex hook: cclaw binary is required for verify-current-state\\n");
+    process.stderr.write("[cclaw] hook: cclaw binary is required for verify-current-state\\n");
     return 1;
   }
   if (mode === "strict") {
@@ -1565,7 +1565,14 @@ async function main() {
   }
 
   const harness = detectHarness(process.env);
-  const root = await detectRoot(process.env);
+  const { root, foundRuntime } = await detectRoot(process.env);
+  if (!foundRuntime) {
+    // No .cclaw/ runtime in any candidate root — this directory is not
+    // initialized for cclaw. Exit 0 silently so hooks never block harnesses
+    // that run in unrelated repos; users initialize with \`cclaw init\`.
+    process.exitCode = 0;
+    return;
+  }
   const inputRaw = await readStdin();
   const inputData = safeParseJson(inputRaw, {});
   const runtime = {

@@ -247,6 +247,7 @@ describe("node hook runtime", () => {
 
   it("verify-current-state honors strict/advisory mode without bash wrappers", async () => {
     const root = await createTempProject("node-hook-verify-current-state");
+    await fs.mkdir(path.join(root, ".cclaw/state"), { recursive: true });
     const binDir = path.join(root, "bin");
     await fs.mkdir(binDir, { recursive: true });
     const shimName = process.platform === "win32" ? "cclaw.cmd" : "cclaw";
@@ -378,5 +379,22 @@ exit 0
     );
     expect(evidenceLog).toContain('"source":"posttool-auto"');
     expect(evidenceLog).toContain("src/app.ts");
+  });
+
+  it("exits 0 silently when no .cclaw runtime is present in any candidate root", async () => {
+    const root = await createTempProject("node-hook-no-runtime");
+    // Deliberately do NOT create .cclaw/ — simulates running the hook in a
+    // directory that has never been `cclaw init`-ed.
+    const result = await runNodeHook(
+      root,
+      "prompt-guard",
+      nodeHookRuntimeScript({ promptGuardMode: "strict" }),
+      {
+        tool_name: "Write",
+        tool_input: { path: "src/app.ts", content: "x" }
+      }
+    );
+    expect(result.code).toBe(0);
+    expect(result.stderr).toBe("");
   });
 });
