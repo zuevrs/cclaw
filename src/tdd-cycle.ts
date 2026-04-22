@@ -10,6 +10,12 @@ export interface TddCycleEntry {
   files?: string[];
   exitCode?: number;
   note?: string;
+  /**
+   * Optional acceptance-criterion IDs this log line relates to (e.g. `["AC-1"]`).
+   * Used by the Ralph Loop status summary to surface how many ACs have been
+   * closed by a GREEN cycle without forcing the user to track them manually.
+   */
+  acIds?: string[];
 }
 
 export interface TddCycleValidation {
@@ -45,7 +51,11 @@ export function parseTddCycleLog(text: string): TddCycleEntry[] {
           ? parsed.files.filter((item): item is string => typeof item === "string")
           : undefined,
         exitCode: typeof parsed.exitCode === "number" ? parsed.exitCode : undefined,
-        note: typeof parsed.note === "string" ? parsed.note : undefined
+        note: typeof parsed.note === "string" ? parsed.note : undefined,
+        acIds: Array.isArray(parsed.acIds)
+          ? parsed.acIds
+              .filter((item): item is string => typeof item === "string" && item.length > 0)
+          : undefined
       };
       out.push(entry);
     } catch {
@@ -149,6 +159,108 @@ export function validateTddCycleOrder(
 
 function normalizePath(value: string): string {
   return value.replace(/\\/gu, "/").toLowerCase();
+}
+
+export interface RalphLoopSliceState {
+  slice: string;
+  redCount: number;
+  greenCount: number;
+  refactorCount: number;
+  redOpen: boolean;
+  acIds: string[];
+}
+
+export interface RalphLoopStatus {
+  schemaVersion: 1;
+  runId: string;
+  /**
+   * Number of RED -> GREEN cycles observed for the run — a rough "Ralph Loop"
+   * iteration counter that mirrors how many passing tests the loop has
+   * delivered so far.
+   */
+  loopIteration: number;
+  redOpen: boolean;
+  redOpenSlices: string[];
+  acClosed: string[];
+  sliceCount: number;
+  slices: RalphLoopSliceState[];
+  lastUpdatedAt: string;
+}
+
+/**
+ * Derive a lightweight Ralph Loop summary from parsed tdd-cycle-log entries.
+ * The goal is to give the model a single source of truth for "am I done
+ * iterating?" — it collapses per-slice progress and distinct closed AC IDs
+ * (from GREEN rows) into a single artifact the next-command contract reads.
+ */
+export function computeRalphLoopStatus(
+  entries: TddCycleEntry[],
+  options: { runId?: string; now?: Date } = {}
+): RalphLoopStatus {
+  const runId = options.runId ?? "active";
+  const filtered = entries.filter((entry) =>
+    options.runId ? entry.runId === options.runId : true
+  );
+  const slicesMap = new Map<string, RalphLoopSliceState>();
+  const acClosedSet = new Set<string>();
+  let loopIteration = 0;
+  const redOpenSlices: string[] = [];
+
+  for (const slice of Array.from(new Set(filtered.map((entry) => entry.slice)))) {
+    slicesMap.set(slice, {
+      slice,
+      redCount: 0,
+      greenCount: 0,
+      refactorCount: 0,
+      redOpen: false,
+      acIds: []
+    });
+  }
+
+  for (const entry of filtered) {
+    const state = slicesMap.get(entry.slice);
+    if (!state) continue;
+    if (entry.phase === "red") {
+      state.redCount += 1;
+      if (entry.exitCode !== undefined && entry.exitCode !== 0) {
+        state.redOpen = true;
+      }
+      continue;
+    }
+    if (entry.phase === "green") {
+      state.greenCount += 1;
+      state.redOpen = false;
+      loopIteration += 1;
+      if (Array.isArray(entry.acIds)) {
+        for (const acId of entry.acIds) {
+          acClosedSet.add(acId);
+          if (!state.acIds.includes(acId)) state.acIds.push(acId);
+        }
+      }
+      continue;
+    }
+    state.refactorCount += 1;
+  }
+
+  for (const state of slicesMap.values()) {
+    if (state.redOpen) redOpenSlices.push(state.slice);
+  }
+
+  const slices = Array.from(slicesMap.values()).sort((a, b) =>
+    a.slice.localeCompare(b.slice, "en")
+  );
+
+  return {
+    schemaVersion: 1,
+    runId,
+    loopIteration,
+    redOpen: redOpenSlices.length > 0,
+    redOpenSlices,
+    acClosed: Array.from(acClosedSet).sort(),
+    sliceCount: slices.length,
+    slices,
+    lastUpdatedAt: (options.now ?? new Date()).toISOString()
+  };
 }
 
 /**
