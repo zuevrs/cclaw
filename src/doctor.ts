@@ -1111,26 +1111,10 @@ export async function doctorChecks(projectRoot: string, options: DoctorOptions =
   }
 
   const hasNode = await commandAvailable("node");
-  const hasPython = await commandAvailable("python3");
-  const hasJq = await commandAvailable("jq");
   checks.push({
     name: "capability:required:node",
     ok: hasNode,
     details: "node is required for cclaw runtime scripts and CLI wiring"
-  });
-  checks.push({
-    name: "warning:capability:jq",
-    ok: true,
-    details: hasJq
-      ? "jq available (optional)"
-      : "warning: jq not found; Node hook runtime no longer depends on jq"
-  });
-  checks.push({
-    name: "warning:capability:python3",
-    ok: true,
-    details: hasPython
-      ? "python3 available (optional)"
-      : "warning: python3 not found; Node hook runtime no longer depends on python3"
   });
   const windowsHookConfigCandidates = [
     path.join(projectRoot, ".claude/hooks/hooks.json"),

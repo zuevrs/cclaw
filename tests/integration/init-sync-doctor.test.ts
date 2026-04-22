@@ -215,7 +215,9 @@ describe("install lifecycle", { timeout: 30_000 }, () => {
 
     const checks = await doctorChecks(root);
     const configCheck = checks.find((check) => check.name === "config:valid");
-    const warningCheck = checks.find((check) => check.name === "warning:capability:jq");
+    const warningCheck = checks.find(
+      (check) => check.name === "warning:windows:hook_dispatch_node_only"
+    );
 
     expect(configCheck).toBeDefined();
     expect(configCheck?.severity).toBe("error");

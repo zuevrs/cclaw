@@ -4,7 +4,7 @@ import { doctorSucceeded } from "../../src/doctor.js";
 
 describe("doctor registry", () => {
   it("classifies warning-prefixed checks as warning severity", () => {
-    const meta = doctorCheckMetadata("warning:capability:jq");
+    const meta = doctorCheckMetadata("warning:windows:hook_dispatch_node_only");
     expect(meta.severity).toBe("warning");
     expect(meta.fix.length).toBeGreaterThan(0);
   });

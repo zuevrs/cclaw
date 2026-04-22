@@ -47,15 +47,6 @@ const RULES: DoctorRegistryRule[] = [
     }
   },
   {
-    test: /^capability:runtime:json_parser$/,
-    metadata: {
-      severity: "warning",
-      summary: "Optional JSON fallback parser availability.",
-      fix: "Install at least one of `python3` or `jq` for resilient fallback parsing.",
-      docRef: ref("tooling-capabilities.md")
-    }
-  },
-  {
     test: /^capability:required:/,
     metadata: {
       severity: "error",
