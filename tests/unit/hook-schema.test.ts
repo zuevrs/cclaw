@@ -2,10 +2,9 @@ import { describe, expect, it } from "vitest";
 import {
   claudeHooksJsonWithObservation,
   codexHooksJsonWithObservation,
-  cursorHooksJsonWithObservation,
-  workflowGuardScript
+  cursorHooksJsonWithObservation
 } from "../../src/content/observe.js";
-import { stageCompleteScript } from "../../src/content/hooks.js";
+import { nodeHookRuntimeScript, stageCompleteScript } from "../../src/content/hooks.js";
 import { validateHookDocument } from "../../src/hook-schema.js";
 
 describe("hook schema validation", () => {
@@ -71,6 +70,6 @@ describe("hook schema validation", () => {
     const codex = codexHooksJsonWithObservation();
     expect(codex).not.toContain("npx -y cclaw-cli");
     expect(stageCompleteScript()).not.toContain("npx -y cclaw-cli");
-    expect(workflowGuardScript()).not.toContain("npx -y cclaw-cli");
+    expect(nodeHookRuntimeScript()).not.toContain("npx -y cclaw-cli");
   });
 });

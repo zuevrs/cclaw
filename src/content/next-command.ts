@@ -63,7 +63,7 @@ This is the only progression command the user needs to drive the entire flow. St
 
 → Load **\`${RUNTIME_ROOT}/skills/<skillFolder>/SKILL.md\`** and **\`${RUNTIME_ROOT}/commands/<currentStage>.md\`** for the current stage.
 → Execute that stage's protocol. The stage skill handles the full interaction including STOP points and gate tracking.
-→ Stage completion must use \`bash .cclaw/hooks/stage-complete.sh <currentStage>\` (canonical), which validates delegations + gate evidence before mutating \`flow-state.json\`.
+→ Stage completion must use \`node .cclaw/hooks/stage-complete.mjs <currentStage>\` (canonical), which validates delegations + gate evidence before mutating \`flow-state.json\`.
 
 ### Path B: Current stage IS complete (all gates passed, all delegations satisfied)
 
@@ -196,7 +196,7 @@ Load the current stage's skill and command contract:
 - \`${RUNTIME_ROOT}/skills/<skillFolder>/SKILL.md\`
 - \`${RUNTIME_ROOT}/commands/<currentStage>.md\`
 
-Execute the stage protocol. The stage skill handles interaction, STOP points, gate tracking, and stage completion via \`bash .cclaw/hooks/stage-complete.sh <stage>\` (canonical flow-state mutation path).
+Execute the stage protocol. The stage skill handles interaction, STOP points, gate tracking, and stage completion via \`node .cclaw/hooks/stage-complete.mjs <stage>\` (canonical flow-state mutation path).
 
 Special-case for review: if \`review_criticals_resolved\` is in \`blocked\`, route to rework instead of looping review forever — recommend \`/cc-ops rewind tdd "review_blocked_by_critical"\`.
 

@@ -41,22 +41,12 @@ import { subagentDrivenDevSkill, parallelAgentsSkill } from "./content/subagents
 import { sessionHooksSkillMarkdown } from "./content/session-hooks.js";
 import { ironLawRuntimeDocument, ironLawsSkillMarkdown } from "./content/iron-laws.js";
 import {
-  hookLibScript,
-  sessionStartScript,
-  stopCheckpointScript,
-  runHookDispatcherScript,
   stageCompleteScript,
-  preCompactScript,
   opencodePluginJs,
   claudeHooksJson,
   codexHooksJson,
   cursorHooksJson
 } from "./content/hooks.js";
-import {
-  contextMonitorScript,
-  promptGuardScript,
-  workflowGuardScript
-} from "./content/observe.js";
 import { nodeHookRuntimeScript } from "./content/node-hooks.js";
 import { META_SKILL_NAME, usingCclawSkillMarkdown } from "./content/meta-skill.js";
 import {
@@ -158,33 +148,122 @@ async function resolveGitHooksDir(projectRoot: string): Promise<string | null> {
 }
 
 function managedGitRuntimeScript(hookName: "pre-commit" | "pre-push"): string {
-  const rangeExpression = hookName === "pre-commit"
-    ? 'git diff --cached --name-only'
-    : 'git diff --name-only @{upstream}...HEAD || git diff --name-only HEAD~1...HEAD';
-  return `#!/usr/bin/env bash
-# ${GIT_HOOK_MANAGED_MARKER}: runtime ${hookName}
-set -euo pipefail
+  return `#!/usr/bin/env node
+// ${GIT_HOOK_MANAGED_MARKER}: runtime ${hookName}
+import fs from "node:fs";
+import path from "node:path";
+import process from "node:process";
+import { spawnSync } from "node:child_process";
 
-ROOT=$(git rev-parse --show-toplevel 2>/dev/null || pwd)
-GUARD_SCRIPT="$ROOT/${RUNTIME_ROOT}/hooks/prompt-guard.sh"
-[ -x "$GUARD_SCRIPT" ] || exit 0
+const HOOK_NAME = ${JSON.stringify(hookName)};
+const RUNTIME_ROOT = ${JSON.stringify(RUNTIME_ROOT)};
 
-FILES=$(${rangeExpression} 2>/dev/null || true)
-[ -n "$FILES" ] || exit 0
+function runGit(args, cwd) {
+  const result = spawnSync("git", args, {
+    cwd,
+    encoding: "utf8",
+    stdio: ["ignore", "pipe", "ignore"]
+  });
+  return {
+    status: typeof result.status === "number" ? result.status : 1,
+    stdout: typeof result.stdout === "string" ? result.stdout : ""
+  };
+}
 
-printf '%s\n' "$FILES" | bash "$GUARD_SCRIPT"
+function resolveRepoRoot() {
+  const result = runGit(["rev-parse", "--show-toplevel"], process.cwd());
+  if (result.status === 0) {
+    const root = result.stdout.trim();
+    if (root.length > 0) return root;
+  }
+  return process.cwd();
+}
+
+function resolveChangedFiles(root) {
+  if (HOOK_NAME === "pre-commit") {
+    const result = runGit(["diff", "--cached", "--name-only"], root);
+    return result.status === 0 ? result.stdout : "";
+  }
+  const upstreamResult = runGit(["diff", "--name-only", "@{upstream}...HEAD"], root);
+  if (upstreamResult.status === 0) {
+    return upstreamResult.stdout;
+  }
+  const fallback = runGit(["diff", "--name-only", "HEAD~1...HEAD"], root);
+  return fallback.status === 0 ? fallback.stdout : "";
+}
+
+const root = resolveRepoRoot();
+const runtimeHook = path.join(root, RUNTIME_ROOT, "hooks", "run-hook.mjs");
+if (!fs.existsSync(runtimeHook)) {
+  process.exit(0);
+}
+
+const changedFiles = resolveChangedFiles(root)
+  .split(/\\r?\\n/gu)
+  .map((line) => line.trim())
+  .filter((line) => line.length > 0);
+if (changedFiles.length === 0) {
+  process.exit(0);
+}
+
+const payload = JSON.stringify({
+  tool_name: "Write",
+  tool_input: {
+    path: changedFiles.join("\\n"),
+    paths: changedFiles
+  }
+});
+
+  const result = spawnSync(process.execPath, [runtimeHook, "prompt-guard"], {
+  cwd: root,
+  env: process.env,
+  input: payload,
+  encoding: "utf8",
+  stdio: ["pipe", "ignore", "inherit"]
+});
+process.exit(typeof result.status === "number" ? result.status : 1);
 `;
 }
 
 function managedGitRelayHook(hookName: "pre-commit" | "pre-push"): string {
-  return `#!/usr/bin/env bash
-# ${GIT_HOOK_MANAGED_MARKER}: relay ${hookName}
-set -euo pipefail
+  return `#!/usr/bin/env node
+// ${GIT_HOOK_MANAGED_MARKER}: relay ${hookName}
+import fs from "node:fs";
+import path from "node:path";
+import process from "node:process";
+import { spawn, spawnSync } from "node:child_process";
 
-ROOT=$(git rev-parse --show-toplevel 2>/dev/null || pwd)
-RUNTIME_HOOK="$ROOT/${GIT_HOOK_RUNTIME_REL_DIR}/${hookName}.sh"
-[ -x "$RUNTIME_HOOK" ] || exit 0
-exec bash "$RUNTIME_HOOK" "$@"
+const RUNTIME_REL_DIR = ${JSON.stringify(GIT_HOOK_RUNTIME_REL_DIR)};
+const HOOK_NAME = ${JSON.stringify(hookName)};
+
+function resolveRepoRoot() {
+  const result = spawnSync("git", ["rev-parse", "--show-toplevel"], {
+    cwd: process.cwd(),
+    encoding: "utf8",
+    stdio: ["ignore", "pipe", "ignore"]
+  });
+  if (typeof result.status === "number" && result.status === 0) {
+    const root = (result.stdout || "").trim();
+    if (root.length > 0) return root;
+  }
+  return process.cwd();
+}
+
+const root = resolveRepoRoot();
+const runtimeHook = path.join(root, RUNTIME_REL_DIR, HOOK_NAME + ".mjs");
+if (!fs.existsSync(runtimeHook)) {
+  process.exit(0);
+}
+
+const child = spawn(process.execPath, [runtimeHook, ...process.argv.slice(2)], {
+  cwd: root,
+  env: process.env,
+  stdio: "inherit"
+});
+child.on("error", () => process.exit(1));
+child.on("close", (code, signal) => {
+  process.exit(signal ? 1 : typeof code === "number" ? code : 1);
+});
 `;
 }
 
@@ -228,7 +307,7 @@ async function syncManagedGitHooks(projectRoot: string, config: CclawConfig): Pr
   const runtimeGitHooksDir = path.join(projectRoot, GIT_HOOK_RUNTIME_REL_DIR);
   await ensureDir(runtimeGitHooksDir);
   for (const hookName of ["pre-commit", "pre-push"] as const) {
-    const runtimePathForHook = path.join(runtimeGitHooksDir, `${hookName}.sh`);
+    const runtimePathForHook = path.join(runtimeGitHooksDir, `${hookName}.mjs`);
     await writeFileSafe(runtimePathForHook, managedGitRuntimeScript(hookName));
     try {
       await fs.chmod(runtimePathForHook, 0o755);
@@ -869,25 +948,7 @@ async function writeHooks(projectRoot: string, config: CclawConfig): Promise<voi
     )}\n`
   );
 
-  await writeFileSafe(path.join(hooksDir, "_lib.sh"), hookLibScript());
-  await writeFileSafe(path.join(hooksDir, "session-start.sh"), sessionStartScript());
-  await writeFileSafe(path.join(hooksDir, "stop-checkpoint.sh"), stopCheckpointScript());
-  await writeFileSafe(path.join(hooksDir, "run-hook.cmd"), runHookDispatcherScript());
-  await writeFileSafe(path.join(hooksDir, "stage-complete.sh"), stageCompleteScript());
-  await writeFileSafe(path.join(hooksDir, "pre-compact.sh"), preCompactScript());
-  await writeFileSafe(path.join(hooksDir, "prompt-guard.sh"), promptGuardScript({
-    strictMode: config.promptGuardMode === "strict"
-  }));
-  await writeFileSafe(
-    path.join(hooksDir, "workflow-guard.sh"),
-    workflowGuardScript({
-      workflowGuardMode: config.strictness ?? "advisory",
-      tddEnforcementMode: config.tddEnforcement ?? "advisory",
-      tddTestPathPatterns: config.tdd?.testPathPatterns ?? config.tddTestGlobs,
-      tddProductionPathPatterns: config.tdd?.productionPathPatterns
-    })
-  );
-  await writeFileSafe(path.join(hooksDir, "context-monitor.sh"), contextMonitorScript());
+  await writeFileSafe(path.join(hooksDir, "stage-complete.mjs"), stageCompleteScript());
   await writeFileSafe(path.join(hooksDir, "run-hook.mjs"), nodeHookRuntimeScript({
     promptGuardMode: config.promptGuardMode ?? config.strictness ?? "advisory",
     workflowGuardMode: config.strictness ?? "advisory",
@@ -900,15 +961,7 @@ async function writeHooks(projectRoot: string, config: CclawConfig): Promise<voi
 
   try {
     for (const script of [
-      "_lib.sh",
-      "session-start.sh",
-      "stop-checkpoint.sh",
-      "run-hook.cmd",
-      "stage-complete.sh",
-      "pre-compact.sh",
-      "prompt-guard.sh",
-      "workflow-guard.sh",
-      "context-monitor.sh",
+      "stage-complete.mjs",
       "run-hook.mjs",
       "opencode-plugin.mjs"
     ]) {
@@ -1448,7 +1501,16 @@ async function cleanLegacyArtifacts(projectRoot: string): Promise<void> {
     runtimePath(projectRoot, "observations.jsonl"),
     runtimePath(projectRoot, "hooks", "observe.sh"),
     runtimePath(projectRoot, "hooks", "summarize-observations.sh"),
-    runtimePath(projectRoot, "hooks", "summarize-observations.mjs")
+    runtimePath(projectRoot, "hooks", "summarize-observations.mjs"),
+    runtimePath(projectRoot, "hooks", "_lib.sh"),
+    runtimePath(projectRoot, "hooks", "session-start.sh"),
+    runtimePath(projectRoot, "hooks", "stop-checkpoint.sh"),
+    runtimePath(projectRoot, "hooks", "run-hook.cmd"),
+    runtimePath(projectRoot, "hooks", "stage-complete.sh"),
+    runtimePath(projectRoot, "hooks", "pre-compact.sh"),
+    runtimePath(projectRoot, "hooks", "prompt-guard.sh"),
+    runtimePath(projectRoot, "hooks", "workflow-guard.sh"),
+    runtimePath(projectRoot, "hooks", "context-monitor.sh")
   ]) {
     try {
       await fs.rm(legacyRuntimeFile, { force: true });
@@ -1665,20 +1727,13 @@ function stripManagedHookCommands(value: unknown): { updated: unknown; changed: 
 function isManagedRuntimeHookCommand(command: string): boolean {
   const normalized = command.trim().replace(/\s+/gu, " ");
   if (
-    /(^|\s)(?:bash\s+)?(?:\.\/)?\.cclaw\/hooks\/(?:session-start|stop-checkpoint|pre-compact|prompt-guard|workflow-guard|context-monitor)\.sh(?:\s|$)/u.test(
-      normalized
-    ) ||
-    /(^|\s)(?:bash\s+)?(?:\.\/)?\.cclaw\/hooks\/run-hook\.cmd\s+(?:session-start|stop-checkpoint|pre-compact|prompt-guard|workflow-guard|context-monitor)(?:\.sh)?(?:\s|$)/u.test(
-      normalized
-    ) ||
-    /(^|\s)(?:node\s+)?(?:"|')?(?:\.\/)?\.cclaw\/hooks\/run-hook\.mjs(?:"|')?\s+(?:session-start|stop-checkpoint|pre-compact|prompt-guard|workflow-guard|context-monitor|verify-current-state)(?:\.sh)?(?:\s|$)/u.test(
+    /(^|\s)(?:node\s+)?(?:"|')?(?:\.\/)?\.cclaw\/hooks\/run-hook\.mjs(?:"|')?\s+(?:session-start|stop-checkpoint|pre-compact|prompt-guard|workflow-guard|context-monitor|verify-current-state)(?:\s|$)/u.test(
       normalized
     )
   ) {
     return true;
   }
-  // Codex UserPromptSubmit non-blocking state nudge:
-  // legacy shell and newer Node wrappers call this internal command.
+  // Codex UserPromptSubmit non-blocking state nudge.
   return /internal verify-current-state(?:\s|$)/u.test(normalized);
 }
 

@@ -24,13 +24,20 @@ async function runNodeHook(
   const payload = typeof input === "string" ? input : JSON.stringify(input);
 
   return await new Promise<RuntimeResult>((resolve, reject) => {
+    const env = {
+      ...process.env,
+      CCLAW_PROJECT_ROOT: root,
+      ...extraEnv
+    } as Record<string, string | undefined>;
+    if (process.platform === "win32") {
+      const normalizedPath = extraEnv.Path ?? extraEnv.PATH ?? process.env.Path ?? process.env.PATH ?? "";
+      delete env.PATH;
+      delete env.Path;
+      env.Path = normalizedPath;
+    }
     const child = spawn(process.execPath, [scriptPath, hookName], {
       cwd: root,
-      env: {
-        ...process.env,
-        CCLAW_PROJECT_ROOT: root,
-        ...extraEnv
-      }
+      env
     });
     let stdout = "";
     let stderr = "";
@@ -242,17 +249,35 @@ describe("node hook runtime", () => {
     const root = await createTempProject("node-hook-verify-current-state");
     const binDir = path.join(root, "bin");
     await fs.mkdir(binDir, { recursive: true });
-    await fs.writeFile(
-      path.join(binDir, "cclaw"),
-      `#!/usr/bin/env bash
+    const shimName = process.platform === "win32" ? "cclaw.cmd" : "cclaw";
+    const shimPath = path.join(binDir, shimName);
+    if (process.platform === "win32") {
+      await fs.writeFile(
+        shimPath,
+        `@echo off
+if /I "%1"=="internal" if /I "%2"=="verify-current-state" exit /b %CCLAW_FAKE_VERIFY_EXIT%
+exit /b 0
+`,
+        "utf8"
+      );
+    } else {
+      await fs.writeFile(
+        shimPath,
+        `#!/usr/bin/env bash
 if [ "$1" = "internal" ] && [ "$2" = "verify-current-state" ]; then
   exit "\${CCLAW_FAKE_VERIFY_EXIT:-0}"
 fi
 exit 0
 `,
-      "utf8"
-    );
-    await fs.chmod(path.join(binDir, "cclaw"), 0o755);
+        "utf8"
+      );
+      await fs.chmod(shimPath, 0o755);
+    }
+    const joinedPath = `${binDir}${path.delimiter}${process.env.PATH ?? process.env.Path ?? ""}`;
+    const pathEnv =
+      process.platform === "win32"
+        ? { PATH: joinedPath, Path: joinedPath }
+        : { PATH: joinedPath };
 
     const strictFail = await runNodeHook(
       root,
@@ -260,7 +285,7 @@ exit 0
       nodeHookRuntimeScript(),
       {},
       {
-        PATH: `${binDir}:${process.env.PATH ?? ""}`,
+        ...pathEnv,
         CCLAW_WORKFLOW_GUARD_MODE: "strict",
         CCLAW_FAKE_VERIFY_EXIT: "1"
       }
@@ -273,7 +298,7 @@ exit 0
       nodeHookRuntimeScript(),
       {},
       {
-        PATH: `${binDir}:${process.env.PATH ?? ""}`,
+        ...pathEnv,
         CCLAW_WORKFLOW_GUARD_MODE: "advisory",
         CCLAW_FAKE_VERIFY_EXIT: "1"
       }
@@ -285,7 +310,7 @@ exit 0
       "verify-current-state",
       nodeHookRuntimeScript(),
       {},
-      { PATH: "/usr/bin:/bin" }
+      process.platform === "win32" ? { PATH: "", Path: "" } : { PATH: "" }
     );
     expect(missingBinary.code).toBe(1);
     expect(missingBinary.stderr).toContain("cclaw binary is required for verify-current-state");

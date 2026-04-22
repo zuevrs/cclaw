@@ -9,7 +9,7 @@
 ## Validation
 
 - [ ] `npm test`
-- [ ] `npm run lint:hooks`
+- [ ] `npm run build`
 - [ ] `npm run smoke:runtime`
 
 ## Checklist

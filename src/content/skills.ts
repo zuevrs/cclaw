@@ -237,7 +237,7 @@ function completionParametersBlock(schema: StageSchema, track: FlowTrack): strin
 - \`gates\`: ${gateList}
 - \`artifact\`: \`${RUNTIME_ROOT}/artifacts/${schema.artifactFile}\`
 - \`mandatory delegations\`: ${mandatory}
-- \`completion helper\`: \`bash .cclaw/hooks/stage-complete.sh ${schema.stage}\`
+- \`completion helper\`: \`node .cclaw/hooks/stage-complete.mjs ${schema.stage}\`
 - Fill \`## Learnings\` before closeout: either \`- None this stage.\` or JSON bullets with required keys \`type\`, \`trigger\`, \`action\`, \`confidence\` (knowledge-schema compatible).
 - Record mandatory delegation completion/waiver in \`${RUNTIME_ROOT}/state/delegation-log.json\` with rationale as needed.
 - Use the completion helper instead of raw \`flow-state.json\` edits (legacy direct edits trigger workflow-guard warnings or strict-mode blocks).

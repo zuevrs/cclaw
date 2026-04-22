@@ -86,7 +86,7 @@ Continuous knowledge capture does **not** require a config knob:
 - Every stage artifact template includes `## Learnings`.
 - Use either `- None this stage.` or JSON bullets (`type`, `trigger`,
   `action`, `confidence`, optional schema fields).
-- `bash .cclaw/hooks/stage-complete.sh <stage>` validates and harvests those
+- `node .cclaw/hooks/stage-complete.mjs <stage>` validates and harvests those
   bullets into `.cclaw/knowledge.jsonl` with dedupe + schema checks.
 
 If you need manual operations, use `/cc-learn` (search, add/backfill, curate).

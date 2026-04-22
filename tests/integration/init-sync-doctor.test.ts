@@ -65,10 +65,10 @@ describe("install lifecycle", { timeout: 30_000 }, () => {
 
     const checks = await doctorChecks(root);
     expect(doctorSucceeded(checks)).toBe(true);
-    expect(checks.some((check) => check.name === "hook:script:pre-compact.sh" && check.ok)).toBe(true);
-    expect(checks.some((check) => check.name === "hook:script:pre-compact.sh:executable" && check.ok)).toBe(true);
-    expect(checks.some((check) => check.name === "hook:script:stage-complete.sh" && check.ok)).toBe(true);
-    expect(checks.some((check) => check.name === "hook:script:stage-complete.sh:executable" && check.ok)).toBe(true);
+    expect(checks.some((check) => check.name === "hook:script:run-hook.mjs" && check.ok)).toBe(true);
+    expect(checks.some((check) => check.name === "hook:script:run-hook.mjs:executable" && check.ok)).toBe(true);
+    expect(checks.some((check) => check.name === "hook:script:stage-complete.mjs" && check.ok)).toBe(true);
+    expect(checks.some((check) => check.name === "hook:script:stage-complete.mjs:executable" && check.ok)).toBe(true);
     expect(checks.some((check) => check.name === "hook:wiring:codex" && check.ok)).toBe(true);
 
     const flow = JSON.parse(
@@ -445,13 +445,13 @@ describe("install lifecycle", { timeout: 30_000 }, () => {
     expect(preCommitRelay).toContain("cclaw-managed-git-hook");
     expect(prePushRelay).toContain("cclaw-managed-git-hook");
 
-    const runtimePreCommit = await fs.readFile(path.join(root, ".cclaw/hooks/git/pre-commit.sh"), "utf8");
-    const runtimePrePush = await fs.readFile(path.join(root, ".cclaw/hooks/git/pre-push.sh"), "utf8");
-    expect(runtimePreCommit).toContain("prompt-guard.sh");
-    expect(runtimePrePush).toContain("prompt-guard.sh");
+    const runtimePreCommit = await fs.readFile(path.join(root, ".cclaw/hooks/git/pre-commit.mjs"), "utf8");
+    const runtimePrePush = await fs.readFile(path.join(root, ".cclaw/hooks/git/pre-push.mjs"), "utf8");
+    expect(runtimePreCommit).toContain("run-hook.mjs");
+    expect(runtimePrePush).toContain("run-hook.mjs");
 
-    const promptGuard = await fs.readFile(path.join(root, ".cclaw/hooks/prompt-guard.sh"), "utf8");
-    expect(promptGuard).toContain('PROMPT_GUARD_MODE="strict"');
+    const hookRuntime = await fs.readFile(path.join(root, ".cclaw/hooks/run-hook.mjs"), "utf8");
+    expect(hookRuntime).toContain('const DEFAULT_PROMPT_GUARD_MODE = "strict";');
   });
 
   it("sync removes managed artifacts for harnesses removed from config", async () => {
@@ -520,17 +520,17 @@ describe("install lifecycle", { timeout: 30_000 }, () => {
 
     expect(mergedClaude).toContain("user-stop-hook");
     expect(mergedClaude).toContain("user-prompt-submit");
-    expect(countOccurrences(mergedClaude, "node .cclaw/hooks/run-hook.mjs prompt-guard.sh")).toBe(1);
-    expect(countOccurrences(mergedClaude, "node .cclaw/hooks/run-hook.mjs workflow-guard.sh")).toBe(1);
-    expect(countOccurrences(mergedClaude, "node .cclaw/hooks/run-hook.mjs context-monitor.sh")).toBe(1);
-    expect(countOccurrences(mergedClaude, "node .cclaw/hooks/run-hook.mjs stop-checkpoint.sh")).toBe(1);
+    expect(countOccurrences(mergedClaude, "node .cclaw/hooks/run-hook.mjs prompt-guard")).toBe(1);
+    expect(countOccurrences(mergedClaude, "node .cclaw/hooks/run-hook.mjs workflow-guard")).toBe(1);
+    expect(countOccurrences(mergedClaude, "node .cclaw/hooks/run-hook.mjs context-monitor")).toBe(1);
+    expect(countOccurrences(mergedClaude, "node .cclaw/hooks/run-hook.mjs stop-checkpoint")).toBe(1);
 
     expect(mergedCursor).toContain("cursor-user-stop");
     expect(mergedCursor).toContain("cursor-user-pre");
-    expect(countOccurrences(mergedCursor, "node .cclaw/hooks/run-hook.mjs prompt-guard.sh")).toBe(1);
-    expect(countOccurrences(mergedCursor, "node .cclaw/hooks/run-hook.mjs workflow-guard.sh")).toBe(1);
-    expect(countOccurrences(mergedCursor, "node .cclaw/hooks/run-hook.mjs context-monitor.sh")).toBe(1);
-    expect(countOccurrences(mergedCursor, "node .cclaw/hooks/run-hook.mjs stop-checkpoint.sh")).toBe(1);
+    expect(countOccurrences(mergedCursor, "node .cclaw/hooks/run-hook.mjs prompt-guard")).toBe(1);
+    expect(countOccurrences(mergedCursor, "node .cclaw/hooks/run-hook.mjs workflow-guard")).toBe(1);
+    expect(countOccurrences(mergedCursor, "node .cclaw/hooks/run-hook.mjs context-monitor")).toBe(1);
+    expect(countOccurrences(mergedCursor, "node .cclaw/hooks/run-hook.mjs stop-checkpoint")).toBe(1);
   });
 
   it("sync recovers relaxed JSON hooks and preserves user commands", async () => {
@@ -553,7 +553,7 @@ describe("install lifecycle", { timeout: 30_000 }, () => {
     await syncCclaw(root);
     const merged = await fs.readFile(claudeHooksPath, "utf8");
     expect(merged).toContain("user-relaxed-stop");
-    expect(countOccurrences(merged, "node .cclaw/hooks/run-hook.mjs prompt-guard.sh")).toBe(1);
+    expect(countOccurrences(merged, "node .cclaw/hooks/run-hook.mjs prompt-guard")).toBe(1);
 
     const backupsDir = path.join(root, ".cclaw/backups/hooks");
     const backups = await fs.readdir(backupsDir);
@@ -1049,14 +1049,14 @@ describe("install lifecycle", { timeout: 30_000 }, () => {
       hooks: {
         Stop: [{
           hooks: [
-            { type: "command", command: "bash .cclaw/hooks/stop-checkpoint.sh" },
+            { type: "command", command: "node .cclaw/hooks/run-hook.mjs stop-checkpoint" },
             { type: "command", command: "echo user-stop-hook" }
           ]
         }],
         PostToolUse: [{
           matcher: "*",
           hooks: [
-            { type: "command", command: "bash .cclaw/hooks/context-monitor.sh" },
+            { type: "command", command: "node .cclaw/hooks/run-hook.mjs context-monitor" },
             { type: "command", command: "echo user-post-hook" }
           ]
         }]

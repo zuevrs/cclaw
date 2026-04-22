@@ -116,7 +116,7 @@ export function configPath(projectRoot: string): string {
 }
 
 /**
- * Default test-path patterns used by workflow-guard.sh to classify TDD writes.
+ * Default test-path patterns used by the workflow-guard hook to classify TDD writes.
  *
  * Scope is intentionally narrow and language-agnostic; users can extend this
  * list in config when their repository uses different conventions.

@@ -65,7 +65,7 @@ Before closeout, fill the artifact \`## Learnings\` section (do not write
 - \`- None this stage.\` when nothing reusable emerged.
 - Or 1-3 JSON bullets with required keys \`type\`, \`trigger\`, \`action\`,
   \`confidence\` (optional fields may mirror knowledge.jsonl schema keys).
-During \`bash .cclaw/hooks/stage-complete.sh <stage>\`, cclaw validates those
+During \`node .cclaw/hooks/stage-complete.mjs <stage>\`, cclaw validates those
 bullets, appends unique entries to \`.cclaw/knowledge.jsonl\`, and stamps a
 harvest marker in the artifact.
 

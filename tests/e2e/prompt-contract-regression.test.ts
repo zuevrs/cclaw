@@ -46,22 +46,19 @@ describe("prompt-contract regression harness", () => {
 
     const claudeHooks = await fs.readFile(path.join(root, ".claude/hooks/hooks.json"), "utf8");
     const cursorHooks = await fs.readFile(path.join(root, ".cursor/hooks.json"), "utf8");
-    const sessionStart = await fs.readFile(path.join(root, ".cclaw/hooks/session-start.sh"), "utf8");
-    const promptGuard = await fs.readFile(path.join(root, ".cclaw/hooks/prompt-guard.sh"), "utf8");
-    const workflowGuard = await fs.readFile(path.join(root, ".cclaw/hooks/workflow-guard.sh"), "utf8");
-    const contextMonitor = await fs.readFile(path.join(root, ".cclaw/hooks/context-monitor.sh"), "utf8");
+    const hookRuntime = await fs.readFile(path.join(root, ".cclaw/hooks/run-hook.mjs"), "utf8");
 
-    expect(claudeHooks).toContain("prompt-guard.sh");
-    expect(claudeHooks).toContain("workflow-guard.sh");
-    expect(claudeHooks).toContain("context-monitor.sh");
-    expect(cursorHooks).toContain("prompt-guard.sh");
-    expect(cursorHooks).toContain("workflow-guard.sh");
-    expect(cursorHooks).toContain("context-monitor.sh");
-    expect(sessionStart).toContain("suggestion-memory.json");
-    expect(sessionStart).toContain("context-warnings.jsonl");
-    expect(sessionStart).toContain("knowledge.jsonl");
-    expect(promptGuard).toContain("write_to_cclaw_runtime");
-    expect(workflowGuard).toContain("stage_invocation_without_recent_flow_read");
-    expect(contextMonitor).toContain("remaining is");
+    expect(claudeHooks).toContain("node .cclaw/hooks/run-hook.mjs prompt-guard");
+    expect(claudeHooks).toContain("node .cclaw/hooks/run-hook.mjs workflow-guard");
+    expect(claudeHooks).toContain("node .cclaw/hooks/run-hook.mjs context-monitor");
+    expect(cursorHooks).toContain("node .cclaw/hooks/run-hook.mjs prompt-guard");
+    expect(cursorHooks).toContain("node .cclaw/hooks/run-hook.mjs workflow-guard");
+    expect(cursorHooks).toContain("node .cclaw/hooks/run-hook.mjs context-monitor");
+    expect(hookRuntime).toContain("suggestion-memory.json");
+    expect(hookRuntime).toContain("context-warnings.jsonl");
+    expect(hookRuntime).toContain("knowledge.jsonl");
+    expect(hookRuntime).toContain("write_to_cclaw_runtime");
+    expect(hookRuntime).toContain("stage_invocation_without_recent_flow_read");
+    expect(hookRuntime).toContain("context remaining is");
   });
 });

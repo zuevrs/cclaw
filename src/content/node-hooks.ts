@@ -111,6 +111,7 @@ async function readStdin() {
 
 async function runCclawInternal(root, args) {
   return await new Promise((resolve) => {
+    const isWindows = process.platform === "win32";
     let settled = false;
     let stderr = "";
     const finalize = (value) => {
@@ -120,17 +121,21 @@ async function runCclawInternal(root, args) {
     };
     let child;
     try {
-      child = spawn("cclaw", ["internal", ...args], {
+      child = spawn(
+        isWindows ? "cmd.exe" : "cclaw",
+        isWindows ? ["/d", "/s", "/c", "cclaw", "internal", ...args] : ["internal", ...args],
+        {
         cwd: root,
         env: process.env,
         stdio: ["ignore", "ignore", "pipe"]
-      });
+      }
+      );
     } catch (error) {
       const code = error && typeof error === "object" && "code" in error ? String(error.code) : "";
       finalize({
         code: 1,
         stderr,
-        missingBinary: code === "ENOENT"
+        missingBinary: code === "ENOENT" || (isWindows && code === "EINVAL")
       });
       return;
     }
@@ -145,7 +150,7 @@ async function runCclawInternal(root, args) {
       finalize({
         code: 1,
         stderr,
-        missingBinary: code === "ENOENT"
+        missingBinary: code === "ENOENT" || (isWindows && code === "EINVAL")
       });
     });
     child.on("close", (code, signal) => {
@@ -157,10 +162,14 @@ async function runCclawInternal(root, args) {
         });
         return;
       }
+      const stderrLower = stderr.toLowerCase();
+      const missingBinary = isWindows
+        ? stderrLower.includes("is not recognized as an internal or external command")
+        : false;
       finalize({
         code: typeof code === "number" ? code : 1,
         stderr,
-        missingBinary: false
+        missingBinary
       });
     });
   });
@@ -1533,12 +1542,12 @@ async function handleVerifyCurrentState(runtime) {
 
 function normalizeHookName(rawName) {
   const value = normalizeText(rawName).toLowerCase();
-  if (value === "session-start" || value === "session-start.sh") return "session-start";
-  if (value === "stop-checkpoint" || value === "stop-checkpoint.sh") return "stop-checkpoint";
-  if (value === "pre-compact" || value === "pre-compact.sh") return "pre-compact";
-  if (value === "prompt-guard" || value === "prompt-guard.sh") return "prompt-guard";
-  if (value === "workflow-guard" || value === "workflow-guard.sh") return "workflow-guard";
-  if (value === "context-monitor" || value === "context-monitor.sh") return "context-monitor";
+  if (value === "session-start") return "session-start";
+  if (value === "stop-checkpoint") return "stop-checkpoint";
+  if (value === "pre-compact") return "pre-compact";
+  if (value === "prompt-guard") return "prompt-guard";
+  if (value === "workflow-guard") return "workflow-guard";
+  if (value === "context-monitor") return "context-monitor";
   if (value === "verify-current-state") return "verify-current-state";
   return "";
 }

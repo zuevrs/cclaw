@@ -217,19 +217,19 @@ export async function policyChecks(projectRoot: string, options: PolicyOptions =
     { file: runtimeFile("contexts/review.md"), needle: "Context Mode: review", name: "context_mode:review" },
     { file: runtimeFile("contexts/incident.md"), needle: "Context Mode: incident", name: "context_mode:incident" },
 
-    { file: runtimeFile("hooks/session-start.sh"), needle: "ACTIVE_RUN=", name: "hooks:session_start:active_run" },
-    { file: runtimeFile("hooks/session-start.sh"), needle: "checkpoint.json", name: "hooks:session_start:checkpoint_ref" },
-    { file: runtimeFile("hooks/session-start.sh"), needle: "stage-activity.jsonl", name: "hooks:session_start:activity_ref" },
-    { file: runtimeFile("hooks/session-start.sh"), needle: "suggestion-memory.json", name: "hooks:session_start:suggestion_memory" },
-    { file: runtimeFile("hooks/session-start.sh"), needle: "context-warnings.jsonl", name: "hooks:session_start:context_warning_ref" },
-    { file: runtimeFile("hooks/stop-checkpoint.sh"), needle: "checkpoint.json", name: "hooks:stop:checkpoint_write" },
-    { file: runtimeFile("hooks/prompt-guard.sh"), needle: "write_to_cclaw_runtime", name: "hooks:guard:risky_write_advisory" },
-    { file: runtimeFile("hooks/workflow-guard.sh"), needle: "stage_invocation_without_recent_flow_read", name: "hooks:workflow_guard:flow_read_reason" },
-    { file: runtimeFile("hooks/workflow-guard.sh"), needle: "stage_jump_", name: "hooks:workflow_guard:stage_jump_reason" },
-    { file: runtimeFile("hooks/workflow-guard.sh"), needle: "tdd_write_without_open_red", name: "hooks:workflow_guard:tdd_red_first" },
-    { file: runtimeFile("hooks/context-monitor.sh"), needle: "remaining is", name: "hooks:context:threshold_warning" },
+    { file: runtimeFile("hooks/run-hook.mjs"), needle: "activeRunId", name: "hooks:session_start:active_run" },
+    { file: runtimeFile("hooks/run-hook.mjs"), needle: "checkpoint.json", name: "hooks:session_start:checkpoint_ref" },
+    { file: runtimeFile("hooks/run-hook.mjs"), needle: "stage-activity.jsonl", name: "hooks:session_start:activity_ref" },
+    { file: runtimeFile("hooks/run-hook.mjs"), needle: "suggestion-memory.json", name: "hooks:session_start:suggestion_memory" },
+    { file: runtimeFile("hooks/run-hook.mjs"), needle: "context-warnings.jsonl", name: "hooks:session_start:context_warning_ref" },
+    { file: runtimeFile("hooks/run-hook.mjs"), needle: "checkpoint.json", name: "hooks:stop:checkpoint_write" },
+    { file: runtimeFile("hooks/run-hook.mjs"), needle: "write_to_cclaw_runtime", name: "hooks:guard:risky_write_advisory" },
+    { file: runtimeFile("hooks/run-hook.mjs"), needle: "stage_invocation_without_recent_flow_read", name: "hooks:workflow_guard:flow_read_reason" },
+    { file: runtimeFile("hooks/run-hook.mjs"), needle: "stage_jump_", name: "hooks:workflow_guard:stage_jump_reason" },
+    { file: runtimeFile("hooks/run-hook.mjs"), needle: "tdd_write_without_open_red", name: "hooks:workflow_guard:tdd_red_first" },
+    { file: runtimeFile("hooks/run-hook.mjs"), needle: "context remaining is", name: "hooks:context:threshold_warning" },
     { file: runtimeFile("hooks/opencode-plugin.mjs"), needle: "activeRunId", name: "hooks:opencode:active_run" },
-    { file: runtimeFile("hooks/session-start.sh"), needle: "Knowledge digest", name: "hooks:session_start:knowledge_digest" },
+    { file: runtimeFile("hooks/run-hook.mjs"), needle: "Knowledge digest", name: "hooks:session_start:knowledge_digest" },
     { file: runtimeFile("hooks/opencode-plugin.mjs"), needle: "Knowledge digest", name: "hooks:opencode:knowledge_digest" }
   ];
   if (activeHarnesses.has("opencode")) {
@@ -240,7 +240,7 @@ export async function policyChecks(projectRoot: string, options: PolicyOptions =
     });
     utilitySkillChecks.push({
       file: ".opencode/plugins/cclaw-plugin.mjs",
-      needle: "workflow-guard.sh",
+      needle: "workflow-guard",
       name: "hooks:opencode:deployed_workflow_guard"
     });
   }

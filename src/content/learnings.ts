@@ -62,7 +62,7 @@ Knowledge capture is now stage-native:
 - Allowed payloads:
   - \`- None this stage.\` (explicit no-op)
   - JSON bullets with required keys \`type\`, \`trigger\`, \`action\`, \`confidence\` (optional keys may mirror the full JSONL schema fields).
-- During \`bash .cclaw/hooks/stage-complete.sh <stage>\`, cclaw:
+- During \`node .cclaw/hooks/stage-complete.mjs <stage>\`, cclaw:
   1. validates \`## Learnings\`,
   2. appends deduped entries to \`${KNOWLEDGE_PATH}\`,
   3. writes a harvest marker into the artifact.
@@ -162,7 +162,7 @@ Manage the project knowledge store. One canonical file, strict JSONL:
 - \`${KNOWLEDGE_ARCHIVE_PATH}\` — soft-archive target written only by curate.
 
 Stage-native pipeline:
-- During \`stage-complete.sh\`, cclaw harvests \`## Learnings\` from the current
+- During \`stage-complete.mjs\`, cclaw harvests \`## Learnings\` from the current
   stage artifact into \`${KNOWLEDGE_PATH}\` automatically.
 - Use \`/cc-learn\` for query, backfill, and curation workflows.
 
