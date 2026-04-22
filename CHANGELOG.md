@@ -4,6 +4,16 @@
 
 ### Added
 
+- Hook manifest as single source of truth (`src/content/hook-manifest.ts`).
+  The per-harness JSON documents (`.claude/hooks/hooks.json`,
+  `.cursor/hooks.json`, `.codex/hooks.json`) and the semantic coverage
+  table in `hook-events.ts` are now derived from one declarative manifest.
+  New diagnostic: `cclaw internal hook-manifest [--harness <id>] [--json]`.
+- Parity tests (`tests/unit/ralph-loop-parity.test.ts`) that seed a
+  fixed TDD-cycle log / knowledge file and assert the inline
+  implementations in the generated `run-hook.mjs` produce the same
+  `ralph-loop.json` / `compound-readiness.json` as the canonical
+  `computeRalphLoopStatus` and `computeCompoundReadiness` in core.
 - Path-aware TDD guard routing via `tdd.testPathPatterns` and
   `tdd.productionPathPatterns`, including strict-mode blocking with the
   explicit message "Write a failing test first" when production edits happen

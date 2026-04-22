@@ -1,56 +1,48 @@
 import type { HarnessId } from "../types.js";
+import {
+  HOOK_SEMANTIC_EVENTS,
+  HOOK_MANIFEST_HARNESSES,
+  semanticEventCoverage,
+  type HookSemanticEvent,
+  type HookManifestHarness
+} from "./hook-manifest.js";
 
-export const HOOK_SEMANTIC_EVENTS = [
-  "session_rehydrate",
-  "pre_tool_prompt_guard",
-  "pre_tool_workflow_guard",
-  "post_tool_context_monitor",
-  "stop_checkpoint",
-  "precompact_digest"
-] as const;
+export { HOOK_SEMANTIC_EVENTS, type HookSemanticEvent } from "./hook-manifest.js";
 
-export type HookSemanticEvent = (typeof HOOK_SEMANTIC_EVENTS)[number];
+function isManifestHarness(value: HarnessId): value is HookManifestHarness {
+  return (HOOK_MANIFEST_HARNESSES as readonly HarnessId[]).includes(value);
+}
 
+/**
+ * OpenCode is covered by the inline plugin (`opencode-plugin.ts`), not
+ * by the generated `run-hook.mjs` dispatcher. We keep its semantic
+ * coverage table here as an explicit descriptor, since it does not
+ * flow through the hook manifest.
+ */
+const OPENCODE_SEMANTIC_COVERAGE: Partial<Record<HookSemanticEvent, string>> = {
+  session_rehydrate: "plugin event handlers + transform rehydration",
+  pre_tool_prompt_guard: "plugin tool.execute.before -> prompt-guard",
+  pre_tool_workflow_guard: "plugin tool.execute.before -> workflow-guard",
+  post_tool_context_monitor: "plugin tool.execute.after -> context-monitor",
+  stop_checkpoint: "plugin session.idle -> stop-checkpoint",
+  precompact_digest: "plugin session.compacted -> pre-compact"
+};
+
+/**
+ * Public semantic coverage map derived from `HOOK_MANIFEST` for
+ * claude/cursor/codex, plus the static OpenCode descriptor. Consumers
+ * should treat this as read-only.
+ */
 export const HOOK_EVENTS_BY_HARNESS: Record<
   HarnessId,
   Partial<Record<HookSemanticEvent, string>>
-> = {
-  claude: {
-    session_rehydrate: "SessionStart matcher startup|resume|clear|compact",
-    pre_tool_prompt_guard: "PreToolUse -> prompt-guard",
-    pre_tool_workflow_guard: "PreToolUse -> workflow-guard",
-    post_tool_context_monitor: "PostToolUse -> context-monitor",
-    stop_checkpoint: "Stop -> stop-checkpoint",
-    precompact_digest: "PreCompact -> pre-compact"
-  },
-  cursor: {
-    session_rehydrate: "sessionStart/sessionResume/sessionClear/sessionCompact",
-    pre_tool_prompt_guard: "preToolUse -> prompt-guard",
-    pre_tool_workflow_guard: "preToolUse -> workflow-guard",
-    post_tool_context_monitor: "postToolUse -> context-monitor",
-    stop_checkpoint: "stop -> stop-checkpoint",
-    precompact_digest: "sessionCompact -> pre-compact"
-  },
-  opencode: {
-    session_rehydrate: "plugin event handlers + transform rehydration",
-    pre_tool_prompt_guard: "plugin tool.execute.before -> prompt-guard",
-    pre_tool_workflow_guard: "plugin tool.execute.before -> workflow-guard",
-    post_tool_context_monitor: "plugin tool.execute.after -> context-monitor",
-    stop_checkpoint: "plugin session.idle -> stop-checkpoint",
-    precompact_digest: "plugin session.compacted -> pre-compact"
-  },
-  codex: {
-    // Codex CLI v0.114+ exposes lifecycle hooks via `.codex/hooks.json`,
-    // gated by `[features] codex_hooks = true` in `~/.codex/config.toml`.
-    // SessionStart, Stop, and UserPromptSubmit fire for every turn;
-    // PreToolUse/PostToolUse are **Bash-only** (Write/Edit/WebSearch/MCP
-    // calls do not trigger them). `precompact_digest` is unmapped —
-    // Codex has no PreCompact event; cclaw covers it via `/cc-ops retro`.
-    session_rehydrate: "SessionStart matcher startup|resume",
-    pre_tool_prompt_guard: "PreToolUse matcher Bash -> prompt-guard (plus UserPromptSubmit for non-Bash prompts)",
-    pre_tool_workflow_guard: "PreToolUse matcher Bash -> workflow-guard (Bash-only)",
-    post_tool_context_monitor: "PostToolUse matcher Bash -> context-monitor (Bash-only)",
-    stop_checkpoint: "Stop -> stop-checkpoint"
-  }
-};
+> = Object.freeze(
+  {
+    claude: semanticEventCoverage("claude"),
+    cursor: semanticEventCoverage("cursor"),
+    codex: semanticEventCoverage("codex"),
+    opencode: OPENCODE_SEMANTIC_COVERAGE
+  } satisfies Record<HarnessId, Partial<Record<HookSemanticEvent, string>>>
+);
 
+void isManifestHarness;
