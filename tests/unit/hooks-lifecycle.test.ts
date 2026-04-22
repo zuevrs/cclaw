@@ -401,7 +401,16 @@ printf '%s\n' "$*" >> "${callsPath}"
       completedStages: ["brainstorm", "scope", "design", "spec", "plan"]
     }, null, 2), "utf8");
     await fs.writeFile(path.join(root, ".cclaw/state/tdd-cycle-log.jsonl"), [
-      JSON.stringify({ ts: "2026-04-20T00:00:00Z", runId: "active", phase: "red" })
+      JSON.stringify({
+        ts: "2026-04-20T00:00:00Z",
+        runId: "active",
+        stage: "tdd",
+        slice: "S-1",
+        phase: "red",
+        command: "npm test -- tests/unit/app.test.ts",
+        files: ["src/app.ts"],
+        exitCode: 1
+      })
     ].join("\n"), "utf8");
 
     const result = await runScript(
@@ -431,8 +440,26 @@ printf '%s\n' "$*" >> "${callsPath}"
       completedStages: ["brainstorm", "scope", "design", "spec", "plan"]
     }, null, 2), "utf8");
     await fs.writeFile(path.join(root, ".cclaw/state/tdd-cycle-log.jsonl"), [
-      JSON.stringify({ ts: "2026-04-20T00:00:00Z", runId: "active", phase: "red" }),
-      JSON.stringify({ ts: "2026-04-20T00:02:00Z", runId: "active", phase: "green" })
+      JSON.stringify({
+        ts: "2026-04-20T00:00:00Z",
+        runId: "active",
+        stage: "tdd",
+        slice: "S-1",
+        phase: "red",
+        command: "npm test -- tests/unit/app.test.ts",
+        files: ["src/app.ts"],
+        exitCode: 1
+      }),
+      JSON.stringify({
+        ts: "2026-04-20T00:02:00Z",
+        runId: "active",
+        stage: "tdd",
+        slice: "S-1",
+        phase: "green",
+        command: "npm test -- tests/unit/app.test.ts",
+        files: ["src/app.ts"],
+        exitCode: 0
+      })
     ].join("\n"), "utf8");
 
     const result = await runScript(
@@ -552,6 +579,42 @@ printf '%s\n' "$*" >> "${callsPath}"
     expect(prodWrite.stderr).toContain("Write a failing test first");
   });
 
+  it("workflow guard blocks production write when per-path RED evidence is missing", async () => {
+    const root = await createTempProject("workflow-guard-per-path-red-missing");
+    await fs.mkdir(path.join(root, ".cclaw/state"), { recursive: true });
+    await fs.writeFile(path.join(root, ".cclaw/state/flow-state.json"), JSON.stringify({
+      currentStage: "tdd",
+      activeRunId: "active",
+      completedStages: ["brainstorm", "scope", "design", "spec", "plan"]
+    }, null, 2), "utf8");
+
+    const binDir = path.join(root, "bin");
+    await fs.mkdir(binDir, { recursive: true });
+    await fs.writeFile(
+      path.join(binDir, "cclaw"),
+      "#!/usr/bin/env bash\nif [ \"$1\" = \"internal\" ] && [ \"$2\" = \"tdd-red-evidence\" ]; then exit 2; fi\nexit 0\n",
+      "utf8"
+    );
+    await fs.chmod(path.join(binDir, "cclaw"), 0o755);
+
+    const result = await runScript(
+      root,
+      "workflow-guard.sh",
+      workflowGuardScript({ tddEnforcementMode: "strict" }),
+      [],
+      JSON.stringify({
+        tool_name: "Write",
+        tool_input: {
+          path: "src/app.ts",
+          content: "export const value = 7;\n"
+        }
+      }),
+      { PATH: `${binDir}:/usr/bin:/bin` }
+    );
+    expect(result.code).toBe(1);
+    expect(result.stderr).toContain("missing failing RED evidence");
+  });
+
   it("workflow guard exempts cclaw doctor from non-safe-tool in plan stage", async () => {
     const root = await createTempProject("guard-cclaw-cli");
     await fs.mkdir(path.join(root, ".cclaw/state"), { recursive: true });
@@ -616,6 +679,39 @@ printf '%s\n' "$*" >> "${callsPath}"
     );
     expect(forced.code).toBe(0);
     expect(forced.stderr).toContain("Cclaw advisory");
+  });
+
+  it("context monitor auto-captures failing test evidence during tdd", async () => {
+    const root = await createTempProject("context-monitor-auto-red");
+    await fs.mkdir(path.join(root, ".cclaw/state"), { recursive: true });
+    await fs.writeFile(path.join(root, ".cclaw/state/flow-state.json"), JSON.stringify({
+      currentStage: "tdd",
+      activeRunId: "run-auto-red",
+      completedStages: ["brainstorm", "scope", "design", "spec", "plan"]
+    }, null, 2), "utf8");
+
+    const result = await runScript(
+      root,
+      "context-monitor.sh",
+      contextMonitorScript(),
+      [],
+      JSON.stringify({
+        input: {
+          tool: "RunCommand",
+          tool_input: {
+            cmd: "npm test -- tests/unit/app.test.ts"
+          }
+        },
+        output: {
+          exitCode: 1,
+          stderr: "FAIL src/app.ts"
+        }
+      })
+    );
+    expect(result.code).toBe(0);
+    const evidenceLog = await fs.readFile(path.join(root, ".cclaw/state/tdd-red-evidence.jsonl"), "utf8");
+    expect(evidenceLog).toContain("\"source\":\"posttool-auto\"");
+    expect(evidenceLog).toContain("src/app.ts");
   });
 
   it("opencode plugin rehydrates and runs guard hooks", async () => {

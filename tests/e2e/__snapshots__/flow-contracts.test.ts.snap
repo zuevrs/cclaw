@@ -21,7 +21,7 @@ If you are about to violate the Iron Law, STOP. No amount of urgency, partial pr
 1. Announce at start: "Using \`two-layer-review\` to Validate that implementation matches spec and meets quality/security/performance bar through structured two-layer review.".
 2. Obey HARD-GATE and Iron Law.
 3. Execute checklist in order and persist \`.cclaw/artifacts/07-review.md\`.
-4. Satisfy gates (\`review_layer1_spec_compliance\`, \`review_layer2_security\`, \`review_criticals_resolved\` +2).
+4. Satisfy gates (\`review_layer1_spec_compliance\`, \`review_layer2_security\`, \`review_layer_coverage_complete\` +3).
 
 
 ## Overview
@@ -35,7 +35,6 @@ Validate that implementation matches spec and meets quality/security/performance
 ## When Not to Use
 - There is no implementation diff to review
 - TDD stage evidence is missing or stale
-- The goal is direct release execution without layered quality checks
 
 
 ## Inputs
@@ -173,6 +172,7 @@ Shared decision/ask-user protocol:
 ## Required Gates
 - \`review_layer1_spec_compliance\` — Spec compliance check completed with per-criterion verdict.
 - \`review_layer2_security\` — Security review completed.
+- \`review_layer_coverage_complete\` — Layer coverage map in 07-review-army.json confirms spec/correctness/security/performance/architecture/external-safety passes.
 - \`review_criticals_resolved\` — No unresolved critical blockers remain.
 - \`review_army_json_valid\` — 07-review-army.json passes schema validation (validateReviewArmy).
 - \`review_trace_matrix_clean\` — Trace matrix has no orphaned criteria/tasks/test slices for the active run.
@@ -327,7 +327,7 @@ Rule: Review verdict must reference specific spec criteria and TDD evidence. Dow
 
 - \`stage\`: \`review\`
 - \`next\`: \`ship\` (Release handoff stage with preflight checks, rollback readiness, and explicit finalization mode for both git and non-git workflows.)
-- \`gates\`: \`review_layer1_spec_compliance\`, \`review_layer2_security\`, \`review_criticals_resolved\`, \`review_army_json_valid\`, \`review_trace_matrix_clean\`
+- \`gates\`: \`review_layer1_spec_compliance\`, \`review_layer2_security\`, \`review_layer_coverage_complete\`, \`review_criticals_resolved\`, \`review_army_json_valid\`, \`review_trace_matrix_clean\`
 - \`artifact\`: \`.cclaw/artifacts/07-review.md\`
 - \`mandatory delegations\`: \`reviewer\`, \`security-reviewer\`
 - \`completion helper\`: \`bash .cclaw/hooks/stage-complete.sh review\`
@@ -1589,7 +1589,7 @@ Do NOT ship, merge, or release until both review layers complete with an explici
 6. Do NOT copy artifacts into \`.cclaw/runs/\`; archival is handled by \`/cc-ops archive\` (agent-facing wrapper over archive runtime).
 
 ## Gates
-\`review_layer1_spec_compliance\`, \`review_layer2_security\`, \`review_criticals_resolved\`, \`review_army_json_valid\`, \`review_trace_matrix_clean\`
+\`review_layer1_spec_compliance\`, \`review_layer2_security\`, \`review_layer_coverage_complete\`, \`review_criticals_resolved\`, \`review_army_json_valid\`, \`review_trace_matrix_clean\`
 
 ## Exit
 - both layers completed

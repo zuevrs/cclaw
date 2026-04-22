@@ -119,6 +119,15 @@ export const IRON_LAWS = [
     appliesTo: ["ship"]
   },
   {
+    id: "review-coverage-complete-before-ship",
+    title: "Review layer coverage before ship",
+    rule: "Block ship finalization when review-army does not confirm full Layer 1/2 coverage map.",
+    rationale: "Prevents finalization when multi-pass review evidence is incomplete or partially missing.",
+    enforcement: "PreToolUse",
+    severity: "hard-gate",
+    appliesTo: ["ship"]
+  },
+  {
     id: "subagent-task-self-contained",
     title: "Subagent tasks are self-contained",
     rule: "Delegated tasks must include explicit objective, constraints, and expected output, not just references.",

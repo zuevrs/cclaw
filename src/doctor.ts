@@ -759,6 +759,7 @@ export async function doctorChecks(projectRoot: string, options: DoctorOptions =
 
   // Hook scripts
   for (const script of [
+    "_lib.sh",
     "session-start.sh",
     "stop-checkpoint.sh",
     "run-hook.cmd",
@@ -975,6 +976,7 @@ export async function doctorChecks(projectRoot: string, options: DoctorOptions =
     const codexWiringOk =
       codexSessionCmds.some((cmd) => cmd.includes("session-start.sh")) &&
       codexUserPromptCmds.some((cmd) => cmd.includes("prompt-guard.sh")) &&
+      codexUserPromptCmds.some((cmd) => cmd.includes("workflow-guard.sh")) &&
       codexUserPromptCmds.some((cmd) => cmd.includes("verify-current-state --quiet")) &&
       codexPreCmds.some((cmd) => cmd.includes("prompt-guard.sh")) &&
       codexPreCmds.some((cmd) => cmd.includes("workflow-guard.sh")) &&
@@ -983,7 +985,7 @@ export async function doctorChecks(projectRoot: string, options: DoctorOptions =
     checks.push({
       name: "hook:wiring:codex",
       ok: codexWiringOk,
-      details: `${codexHooksFile} must wire SessionStart, UserPromptSubmit(prompt-guard + verify-current-state), PreToolUse(prompt/workflow), PostToolUse(context-monitor), and Stop(stop-checkpoint). PreToolUse/PostToolUse run Bash-only in Codex v0.114+`
+      details: `${codexHooksFile} must wire SessionStart, UserPromptSubmit(prompt/workflow/verify-current-state), PreToolUse(prompt/workflow), PostToolUse(context-monitor), and Stop(stop-checkpoint). PreToolUse/PostToolUse run Bash-only in Codex v0.114+`
     });
 
     // Feature flag warning: Codex ignores `.codex/hooks.json` unless the
@@ -1065,10 +1067,12 @@ export async function doctorChecks(projectRoot: string, options: DoctorOptions =
         content.includes("workflow-guard.sh") &&
         content.includes("context-monitor.sh") &&
         content.includes("pre-compact.sh") &&
+        content.includes('"session.created"') &&
         content.includes('"session.idle"') &&
         content.includes('"session.resumed"') &&
         content.includes('"session.compacted"') &&
         content.includes('"session.cleared"') &&
+        content.includes('"session.updated"') &&
         content.includes('"experimental.chat.system.transform"');
       singleHandlerPathOk =
         !content.includes('eventType === "tool.execute.before"') &&
@@ -1082,7 +1086,7 @@ export async function doctorChecks(projectRoot: string, options: DoctorOptions =
     checks.push({
       name: "lifecycle:opencode:rehydration_events",
       ok,
-      details: `${file} must include event lifecycle handler, tool.execute.before/after with prompt/workflow/context hooks, session.idle checkpoint, and transform rehydration`
+      details: `${file} must include event lifecycle handler, session.created/updated/resumed/cleared/compacted rehydration, tool.execute.before/after with prompt/workflow/context hooks, session.idle checkpoint, and transform rehydration`
     });
     checks.push({
       name: "hook:opencode:single_tool_handler_path",
