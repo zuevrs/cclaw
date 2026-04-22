@@ -120,6 +120,11 @@ Hook-driven guards respect the \`strictness\` field in
 
 Override per-session with \`CCLAW_STRICTNESS=advisory|strict\`.
 
+Hook wiring itself comes from a **single manifest** (\`src/content/hook-manifest.ts\`):
+the per-harness documents at \`.claude/hooks/hooks.json\`, \`.cursor/hooks.json\`,
+\`.codex/hooks.json\` are all derived from it. Inspect the live bindings with
+\`cclaw internal hook-manifest\` (add \`--json\` for machine-readable output).
+
 ## When in doubt
 
 1. Read \`${RUNTIME_ROOT}/state/flow-state.json\` to know where you are.
