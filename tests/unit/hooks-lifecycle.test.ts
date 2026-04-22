@@ -19,6 +19,7 @@ import {
   promptGuardScript,
   workflowGuardScript
 } from "../../src/content/observe.js";
+import { nodeHookRuntimeScript } from "../../src/content/node-hooks.js";
 
 interface ScriptResult {
   code: number | null;
@@ -81,17 +82,15 @@ describe("hooks lifecycle rehydration", () => {
     expect(codex.hooks.SessionStart[0]?.matcher).toBe("startup|resume");
     expect((claude as { cclawHookSchemaVersion?: number }).cclawHookSchemaVersion).toBe(1);
     expect((codex as { cclawHookSchemaVersion?: number }).cclawHookSchemaVersion).toBe(1);
-    expect(JSON.stringify(claude)).toContain("run-hook.cmd");
+    expect(JSON.stringify(claude)).toContain("run-hook.mjs");
     expect(JSON.stringify(claude)).toContain("prompt-guard.sh");
     expect(JSON.stringify(claude)).toContain("workflow-guard.sh");
     expect(JSON.stringify(claude)).toContain("context-monitor.sh");
-    expect(JSON.stringify(codex)).toContain("run-hook.cmd");
+    expect(JSON.stringify(codex)).toContain("run-hook.mjs");
     expect(JSON.stringify(codex)).toContain("prompt-guard.sh");
     expect(JSON.stringify(codex)).toContain("workflow-guard.sh");
     expect(JSON.stringify(codex)).toContain("context-monitor.sh");
-    expect(JSON.stringify(codex)).toContain("verify-current-state --quiet");
-    expect(JSON.stringify(codex)).toContain("CCLAW_WORKFLOW_GUARD_MODE");
-    expect(JSON.stringify(codex)).toContain("if [ \\\"$MODE\\\" = \\\"strict\\\" ]");
+    expect(JSON.stringify(codex)).toContain("verify-current-state");
     expect(JSON.stringify(claude)).not.toContain("observe.sh");
     expect(JSON.stringify(codex)).not.toContain("observe.sh");
   });
@@ -105,7 +104,7 @@ describe("hooks lifecycle rehydration", () => {
     expect(Array.isArray(cursor.hooks.sessionClear)).toBe(true);
     expect(Array.isArray(cursor.hooks.sessionCompact)).toBe(true);
     expect((cursor as { cclawHookSchemaVersion?: number }).cclawHookSchemaVersion).toBe(1);
-    expect(JSON.stringify(cursor)).toContain("run-hook.cmd");
+    expect(JSON.stringify(cursor)).toContain("run-hook.mjs");
     expect(JSON.stringify(cursor)).toContain("prompt-guard.sh");
     expect(JSON.stringify(cursor)).toContain("workflow-guard.sh");
     expect(JSON.stringify(cursor)).toContain("context-monitor.sh");
@@ -739,22 +738,10 @@ printf '%s\n' "$*" >> "${callsPath}"
     await fs.writeFile(path.join(root, ".cclaw/skills/using-cclaw/SKILL.md"), "# Using Cclaw\n", "utf8");
 
     const pluginPath = path.join(root, ".cclaw/hooks/opencode-plugin.mjs");
-    const stopScriptPath = path.join(root, ".cclaw/hooks/stop-checkpoint.sh");
-    const preCompactPath = path.join(root, ".cclaw/hooks/pre-compact.sh");
-    const promptGuardPath = path.join(root, ".cclaw/hooks/prompt-guard.sh");
-    const workflowGuardPath = path.join(root, ".cclaw/hooks/workflow-guard.sh");
-    const contextMonitorPath = path.join(root, ".cclaw/hooks/context-monitor.sh");
+    const hookRuntimePath = path.join(root, ".cclaw/hooks/run-hook.mjs");
     await fs.writeFile(pluginPath, opencodePluginJs(), "utf8");
-    await fs.writeFile(stopScriptPath, stopCheckpointScript(), "utf8");
-    await fs.writeFile(preCompactPath, preCompactScript(), "utf8");
-    await fs.writeFile(promptGuardPath, promptGuardScript(), "utf8");
-    await fs.writeFile(workflowGuardPath, workflowGuardScript(), "utf8");
-    await fs.writeFile(contextMonitorPath, contextMonitorScript(), "utf8");
-    await fs.chmod(stopScriptPath, 0o755);
-    await fs.chmod(preCompactPath, 0o755);
-    await fs.chmod(promptGuardPath, 0o755);
-    await fs.chmod(workflowGuardPath, 0o755);
-    await fs.chmod(contextMonitorPath, 0o755);
+    await fs.writeFile(hookRuntimePath, nodeHookRuntimeScript(), "utf8");
+    await fs.chmod(hookRuntimePath, 0o755);
 
     const imported = await import(`${pathToFileURL(pluginPath).href}?t=${Date.now()}`);
     const pluginFactory = imported.default as (ctx: { directory: string }) => {
@@ -819,6 +806,8 @@ printf '%s\n' "$*" >> "${callsPath}"
     expect(plugin).toContain('"tool.execute.after"');
     expect(plugin).not.toContain('eventType === "tool.execute.before"');
     expect(plugin).not.toContain('eventType === "tool.execute.after"');
+    expect(plugin).toContain("run-hook.mjs");
+    expect(plugin).toContain("process.execPath");
     expect(plugin).toContain("prompt-guard.sh");
     expect(plugin).toContain("workflow-guard.sh");
     expect(plugin).toContain("context-monitor.sh");
@@ -845,10 +834,17 @@ printf '%s\n' "$*" >> "${callsPath}"
 
     const pluginPath = path.join(root, ".cclaw/hooks/opencode-plugin.mjs");
     await fs.writeFile(pluginPath, opencodePluginJs(), "utf8");
-    await fs.writeFile(path.join(root, ".cclaw/hooks/prompt-guard.sh"), "#!/usr/bin/env bash\nexit 0\n", "utf8");
-    await fs.writeFile(path.join(root, ".cclaw/hooks/workflow-guard.sh"), "#!/usr/bin/env bash\nexit 1\n", "utf8");
-    await fs.chmod(path.join(root, ".cclaw/hooks/prompt-guard.sh"), 0o755);
-    await fs.chmod(path.join(root, ".cclaw/hooks/workflow-guard.sh"), 0o755);
+    await fs.writeFile(
+      path.join(root, ".cclaw/hooks/run-hook.mjs"),
+      `#!/usr/bin/env node
+if ((process.argv[2] || "") === "workflow-guard.sh") {
+  process.exit(1);
+}
+process.exit(0);
+`,
+      "utf8"
+    );
+    await fs.chmod(path.join(root, ".cclaw/hooks/run-hook.mjs"), 0o755);
 
     const imported = await import(`${pathToFileURL(pluginPath).href}?t=${Date.now()}`);
     const pluginFactory = imported.default as (ctx: { directory: string }) => {
