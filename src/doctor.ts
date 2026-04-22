@@ -831,12 +831,9 @@ export async function doctorChecks(projectRoot: string, options: DoctorOptions =
     }
   }
 
-  // OpenCode plugin source + deployed path
-  checks.push({
-    name: "hook:opencode_plugin_source",
-    ok: await exists(path.join(projectRoot, RUNTIME_ROOT, "hooks", "opencode-plugin.mjs")),
-    details: `${RUNTIME_ROOT}/hooks/opencode-plugin.mjs`
-  });
+  // OpenCode plugin deployed path. (Presence of the source under
+  // `${RUNTIME_ROOT}/hooks/opencode-plugin.mjs` is already asserted by the
+  // generic `hook:script:opencode-plugin.mjs` check above; avoid a duplicate.)
   const opencodeEnabled = configuredHarnesses.includes("opencode");
   const opencodeDeployed = await exists(path.join(projectRoot, ".opencode/plugins/cclaw-plugin.mjs"));
   checks.push({
