@@ -426,16 +426,16 @@ export default function cclawPlugin(ctx) {
         await refreshBootstrapCache(true);
       }
       if (eventType === "session.compacted") {
-        await runHookScript("pre-compact.sh", eventData ?? {});
+        await runHookScript("pre-compact", eventData ?? {});
       }
       if (eventType === "session.idle") {
-        await runHookScript("stop-checkpoint.sh", { loop_count: 0 });
+        await runHookScript("stop-checkpoint", { loop_count: 0 });
       }
     },
     "tool.execute.before": async (input, output) => {
       const payload = normalizeToolPayload(input, output);
-      const promptOk = await runHookScript("prompt-guard.sh", payload);
-      const workflowOk = await runHookScript("workflow-guard.sh", payload);
+      const promptOk = await runHookScript("prompt-guard", payload);
+      const workflowOk = await runHookScript("workflow-guard", payload);
       if (!promptOk || !workflowOk) {
         throw new Error(
           "cclaw OpenCode guard blocked tool.execute.before (prompt/workflow guard non-zero exit)."
@@ -444,7 +444,7 @@ export default function cclawPlugin(ctx) {
     },
     "tool.execute.after": async (input, output) => {
       const payload = normalizeToolPayload(input, output);
-      await runHookScript("context-monitor.sh", payload);
+      await runHookScript("context-monitor", payload);
       void refreshBootstrapCache(false);
     },
     "experimental.chat.system.transform": (payload) => {

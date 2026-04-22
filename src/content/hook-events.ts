@@ -17,27 +17,27 @@ export const HOOK_EVENTS_BY_HARNESS: Record<
 > = {
   claude: {
     session_rehydrate: "SessionStart matcher startup|resume|clear|compact",
-    pre_tool_prompt_guard: "PreToolUse -> prompt-guard.sh",
-    pre_tool_workflow_guard: "PreToolUse -> workflow-guard.sh",
-    post_tool_context_monitor: "PostToolUse -> context-monitor.sh",
-    stop_checkpoint: "Stop -> stop-checkpoint.sh",
-    precompact_digest: "PreCompact -> pre-compact.sh"
+    pre_tool_prompt_guard: "PreToolUse -> prompt-guard",
+    pre_tool_workflow_guard: "PreToolUse -> workflow-guard",
+    post_tool_context_monitor: "PostToolUse -> context-monitor",
+    stop_checkpoint: "Stop -> stop-checkpoint",
+    precompact_digest: "PreCompact -> pre-compact"
   },
   cursor: {
     session_rehydrate: "sessionStart/sessionResume/sessionClear/sessionCompact",
-    pre_tool_prompt_guard: "preToolUse -> prompt-guard.sh",
-    pre_tool_workflow_guard: "preToolUse -> workflow-guard.sh",
-    post_tool_context_monitor: "postToolUse -> context-monitor.sh",
-    stop_checkpoint: "stop -> stop-checkpoint.sh",
-    precompact_digest: "sessionCompact -> pre-compact.sh"
+    pre_tool_prompt_guard: "preToolUse -> prompt-guard",
+    pre_tool_workflow_guard: "preToolUse -> workflow-guard",
+    post_tool_context_monitor: "postToolUse -> context-monitor",
+    stop_checkpoint: "stop -> stop-checkpoint",
+    precompact_digest: "sessionCompact -> pre-compact"
   },
   opencode: {
     session_rehydrate: "plugin event handlers + transform rehydration",
-    pre_tool_prompt_guard: "plugin tool.execute.before -> prompt-guard.sh",
-    pre_tool_workflow_guard: "plugin tool.execute.before -> workflow-guard.sh",
-    post_tool_context_monitor: "plugin tool.execute.after -> context-monitor.sh",
-    stop_checkpoint: "plugin session.idle -> stop-checkpoint.sh",
-    precompact_digest: "plugin session.compacted -> pre-compact.sh"
+    pre_tool_prompt_guard: "plugin tool.execute.before -> prompt-guard",
+    pre_tool_workflow_guard: "plugin tool.execute.before -> workflow-guard",
+    post_tool_context_monitor: "plugin tool.execute.after -> context-monitor",
+    stop_checkpoint: "plugin session.idle -> stop-checkpoint",
+    precompact_digest: "plugin session.compacted -> pre-compact"
   },
   codex: {
     // Codex CLI v0.114+ exposes lifecycle hooks via `.codex/hooks.json`,
@@ -47,10 +47,10 @@ export const HOOK_EVENTS_BY_HARNESS: Record<
     // calls do not trigger them). `precompact_digest` is unmapped —
     // Codex has no PreCompact event; cclaw covers it via `/cc-ops retro`.
     session_rehydrate: "SessionStart matcher startup|resume",
-    pre_tool_prompt_guard: "PreToolUse matcher Bash -> prompt-guard.sh (plus UserPromptSubmit for non-Bash prompts)",
-    pre_tool_workflow_guard: "PreToolUse matcher Bash -> workflow-guard.sh (Bash-only)",
-    post_tool_context_monitor: "PostToolUse matcher Bash -> context-monitor.sh (Bash-only)",
-    stop_checkpoint: "Stop -> stop-checkpoint.sh"
+    pre_tool_prompt_guard: "PreToolUse matcher Bash -> prompt-guard (plus UserPromptSubmit for non-Bash prompts)",
+    pre_tool_workflow_guard: "PreToolUse matcher Bash -> workflow-guard (Bash-only)",
+    post_tool_context_monitor: "PostToolUse matcher Bash -> context-monitor (Bash-only)",
+    stop_checkpoint: "Stop -> stop-checkpoint"
   }
 };
 

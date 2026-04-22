@@ -556,11 +556,11 @@ export async function doctorChecks(projectRoot: string, options: DoctorOptions =
     });
 
     const expectedMode = parsedConfig.promptGuardMode === "strict" ? "strict" : "advisory";
-    const promptGuardPath = path.join(projectRoot, RUNTIME_ROOT, "hooks", "prompt-guard.sh");
+    const promptGuardPath = path.join(projectRoot, RUNTIME_ROOT, "hooks", "run-hook.mjs");
     let promptGuardModeOk = false;
     if (await exists(promptGuardPath)) {
       const promptGuardContent = await fs.readFile(promptGuardPath, "utf8");
-      promptGuardModeOk = promptGuardContent.includes(`PROMPT_GUARD_MODE="${expectedMode}"`);
+      promptGuardModeOk = promptGuardContent.includes(`const DEFAULT_PROMPT_GUARD_MODE = "${expectedMode}"`);
     }
     checks.push({
       name: "hook:prompt_guard:mode",
@@ -569,13 +569,13 @@ export async function doctorChecks(projectRoot: string, options: DoctorOptions =
     });
 
     if (parsedConfig.gitHookGuards === true) {
-      const runtimePreCommit = path.join(projectRoot, RUNTIME_ROOT, "hooks", "git", "pre-commit.sh");
-      const runtimePrePush = path.join(projectRoot, RUNTIME_ROOT, "hooks", "git", "pre-push.sh");
+      const runtimePreCommit = path.join(projectRoot, RUNTIME_ROOT, "hooks", "git", "pre-commit.mjs");
+      const runtimePrePush = path.join(projectRoot, RUNTIME_ROOT, "hooks", "git", "pre-push.mjs");
       const runtimeScriptsOk = (await exists(runtimePreCommit)) && (await exists(runtimePrePush));
       checks.push({
         name: "git_hooks:managed:runtime_scripts",
         ok: runtimeScriptsOk,
-        details: `${RUNTIME_ROOT}/hooks/git/pre-commit.sh and pre-push.sh must exist when gitHookGuards=true`
+        details: `${RUNTIME_ROOT}/hooks/git/pre-commit.mjs and pre-push.mjs must exist when gitHookGuards=true`
       });
 
       const gitHooksDir = await resolveGitHooksDir(projectRoot);
@@ -759,15 +759,9 @@ export async function doctorChecks(projectRoot: string, options: DoctorOptions =
 
   // Hook scripts
   for (const script of [
-    "_lib.sh",
-    "session-start.sh",
-    "stop-checkpoint.sh",
-    "run-hook.cmd",
-    "stage-complete.sh",
-    "pre-compact.sh",
-    "prompt-guard.sh",
-    "workflow-guard.sh",
-    "context-monitor.sh"
+    "run-hook.mjs",
+    "stage-complete.mjs",
+    "opencode-plugin.mjs"
   ]) {
     const scriptPath = path.join(projectRoot, RUNTIME_ROOT, "hooks", script);
     const scriptExists = await exists(scriptPath);
@@ -866,11 +860,11 @@ export async function doctorChecks(projectRoot: string, options: DoctorOptions =
     const postCommands = collectHookCommands(hooks.PostToolUse);
     const stopCommands = collectHookCommands(hooks.Stop);
     const wiringOk =
-      sessionCommands.some((cmd) => cmd.includes("session-start.sh")) &&
-      preCommands.some((cmd) => cmd.includes("prompt-guard.sh")) &&
-      preCommands.some((cmd) => cmd.includes("workflow-guard.sh")) &&
-      postCommands.some((cmd) => cmd.includes("context-monitor.sh")) &&
-      stopCommands.some((cmd) => cmd.includes("stop-checkpoint.sh"));
+      sessionCommands.some((cmd) => cmd.includes("session-start")) &&
+      preCommands.some((cmd) => cmd.includes("prompt-guard")) &&
+      preCommands.some((cmd) => cmd.includes("workflow-guard")) &&
+      postCommands.some((cmd) => cmd.includes("context-monitor")) &&
+      stopCommands.some((cmd) => cmd.includes("stop-checkpoint"));
     checks.push({
       name: "hook:wiring:claude",
       ok: wiringOk,
@@ -903,11 +897,11 @@ export async function doctorChecks(projectRoot: string, options: DoctorOptions =
     const postCommands = collectHookCommands(hooks.postToolUse);
     const stopCommands = collectHookCommands(hooks.stop);
     const wiringOk =
-      sessionCommands.some((cmd) => cmd.includes("session-start.sh")) &&
-      preCommands.some((cmd) => cmd.includes("prompt-guard.sh")) &&
-      preCommands.some((cmd) => cmd.includes("workflow-guard.sh")) &&
-      postCommands.some((cmd) => cmd.includes("context-monitor.sh")) &&
-      stopCommands.some((cmd) => cmd.includes("stop-checkpoint.sh"));
+      sessionCommands.some((cmd) => cmd.includes("session-start")) &&
+      preCommands.some((cmd) => cmd.includes("prompt-guard")) &&
+      preCommands.some((cmd) => cmd.includes("workflow-guard")) &&
+      postCommands.some((cmd) => cmd.includes("context-monitor")) &&
+      stopCommands.some((cmd) => cmd.includes("stop-checkpoint"));
     checks.push({
       name: "hook:wiring:cursor",
       ok: wiringOk,
@@ -974,14 +968,14 @@ export async function doctorChecks(projectRoot: string, options: DoctorOptions =
     const codexPostCmds = collectHookCommands(codexHooks.PostToolUse);
     const codexStopCmds = collectHookCommands(codexHooks.Stop);
     const codexWiringOk =
-      codexSessionCmds.some((cmd) => cmd.includes("session-start.sh")) &&
-      codexUserPromptCmds.some((cmd) => cmd.includes("prompt-guard.sh")) &&
-      codexUserPromptCmds.some((cmd) => cmd.includes("workflow-guard.sh")) &&
+      codexSessionCmds.some((cmd) => cmd.includes("session-start")) &&
+      codexUserPromptCmds.some((cmd) => cmd.includes("prompt-guard")) &&
+      codexUserPromptCmds.some((cmd) => cmd.includes("workflow-guard")) &&
       codexUserPromptCmds.some((cmd) => cmd.includes("verify-current-state")) &&
-      codexPreCmds.some((cmd) => cmd.includes("prompt-guard.sh")) &&
-      codexPreCmds.some((cmd) => cmd.includes("workflow-guard.sh")) &&
-      codexPostCmds.some((cmd) => cmd.includes("context-monitor.sh")) &&
-      codexStopCmds.some((cmd) => cmd.includes("stop-checkpoint.sh"));
+      codexPreCmds.some((cmd) => cmd.includes("prompt-guard")) &&
+      codexPreCmds.some((cmd) => cmd.includes("workflow-guard")) &&
+      codexPostCmds.some((cmd) => cmd.includes("context-monitor")) &&
+      codexStopCmds.some((cmd) => cmd.includes("stop-checkpoint"));
     checks.push({
       name: "hook:wiring:codex",
       ok: codexWiringOk,
@@ -1063,10 +1057,10 @@ export async function doctorChecks(projectRoot: string, options: DoctorOptions =
         content.includes("event: async") &&
         content.includes('"tool.execute.before"') &&
         content.includes('"tool.execute.after"') &&
-        content.includes("prompt-guard.sh") &&
-        content.includes("workflow-guard.sh") &&
-        content.includes("context-monitor.sh") &&
-        content.includes("pre-compact.sh") &&
+        content.includes("prompt-guard") &&
+        content.includes("workflow-guard") &&
+        content.includes("context-monitor") &&
+        content.includes("pre-compact") &&
         content.includes('"session.created"') &&
         content.includes('"session.idle"') &&
         content.includes('"session.resumed"') &&
@@ -1081,7 +1075,7 @@ export async function doctorChecks(projectRoot: string, options: DoctorOptions =
         content.includes('"tool.execute.after": async');
       precompactHookOk =
         content.includes('eventType === "session.compacted"') &&
-        content.includes('runHookScript("pre-compact.sh"');
+        content.includes('runHookScript("pre-compact"');
     }
     checks.push({
       name: "lifecycle:opencode:rehydration_events",
@@ -1096,7 +1090,7 @@ export async function doctorChecks(projectRoot: string, options: DoctorOptions =
     checks.push({
       name: "hook:opencode:precompact_digest",
       ok: precompactHookOk,
-      details: `${file} must run pre-compact.sh on session.compacted before bootstrap refresh.`
+      details: `${file} must run pre-compact on session.compacted before bootstrap refresh.`
     });
     const runtimeShape = await opencodePluginRuntimeShapeCheck(projectRoot);
     checks.push({
@@ -1112,34 +1106,47 @@ export async function doctorChecks(projectRoot: string, options: DoctorOptions =
     });
   }
 
-  const hasBash = await commandAvailable("bash");
   const hasNode = await commandAvailable("node");
   const hasPython = await commandAvailable("python3");
   const hasJq = await commandAvailable("jq");
-  checks.push({
-    name: "capability:required:bash",
-    ok: hasBash,
-    details: "bash is required to execute cclaw hook scripts"
-  });
   checks.push({
     name: "capability:required:node",
     ok: hasNode,
     details: "node is required for cclaw runtime scripts and CLI wiring"
   });
   checks.push({
-    name: "capability:runtime:json_parser",
-    ok: hasPython || hasJq,
-    details: "at least one of python3 or jq must be available for hook JSON parsing fallbacks"
-  });
-  checks.push({
     name: "warning:capability:jq",
     ok: true,
-    details: hasJq ? "jq available" : "warning: jq not found, python/node fallbacks will be used"
+    details: hasJq
+      ? "jq available (optional)"
+      : "warning: jq not found; Node hook runtime no longer depends on jq"
   });
   checks.push({
     name: "warning:capability:python3",
     ok: true,
-    details: hasPython ? "python3 available" : "warning: python3 not found, jq/node paths must stay healthy"
+    details: hasPython
+      ? "python3 available (optional)"
+      : "warning: python3 not found; Node hook runtime no longer depends on python3"
+  });
+  const windowsHookConfigCandidates = [
+    path.join(projectRoot, ".claude/hooks/hooks.json"),
+    path.join(projectRoot, ".cursor/hooks.json"),
+    path.join(projectRoot, ".codex/hooks.json")
+  ];
+  const legacyDispatchFiles: string[] = [];
+  for (const candidate of windowsHookConfigCandidates) {
+    if (!(await exists(candidate))) continue;
+    const content = await fs.readFile(candidate, "utf8");
+    if (/run-hook\.cmd|bash\s+\.cclaw\/hooks\//u.test(content)) {
+      legacyDispatchFiles.push(path.relative(projectRoot, candidate));
+    }
+  }
+  checks.push({
+    name: "warning:windows:hook_dispatch_node_only",
+    ok: legacyDispatchFiles.length === 0,
+    details: legacyDispatchFiles.length === 0
+      ? "hook configs use node-dispatched .cclaw/hooks/run-hook.mjs commands"
+      : `warning: legacy shell hook dispatch remains in ${legacyDispatchFiles.join(", ")}`
   });
 
   // Knowledge store exists (canonical JSONL, no markdown mirror)

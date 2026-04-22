@@ -242,7 +242,7 @@ Codex CLI has a different shape from Claude/Cursor:
   \`PostToolUse\` events only fire for the \`Bash\` tool. \`Write\`,
   \`Edit\`, \`WebSearch\`, and MCP tool calls are **not** gated by hooks.
   cclaw partially compensates by wiring \`UserPromptSubmit\` to both
-  \`prompt-guard.sh\` and a non-blocking
+  \`prompt-guard\` and a non-blocking
   \`cclaw internal verify-current-state --quiet\` nudge that emits
   unmet-delegation / missing-evidence warnings before the turn executes.
   This is still a nudge, not a hard block: workflow-guard (TDD red-first,
@@ -300,7 +300,7 @@ disabled in v0.33 and remains off.
 - \`/use cc\` — open the \`/cc\` skill and pick a track.
 - \`/use cc-next\` — advance the flow one stage.
 - \`/use cc-ops\` — compound / archive / rewind.
-- \`bash .cclaw/hooks/stage-complete.sh <stage>\` — canonical stage closeout helper;
+- \`node .cclaw/hooks/stage-complete.mjs <stage>\` — canonical stage closeout helper;
   validates delegations + gate evidence before mutating \`flow-state.json\`.
 - Typing \`/cc …\` or \`/cc-next …\` in plain text also works: Codex
   matches the skill descriptions (which spell out these tokens) and
@@ -327,12 +327,12 @@ continue to work regardless.
 
 | Hook intent | Codex mapping | Coverage |
 |-------------|---------------|----------|
-| SessionStart rehydration | \`SessionStart\` matcher \`startup|resume\` → \`session-start.sh\` | Full. |
-| PreToolUse prompt-guard | \`PreToolUse\` matcher \`Bash\` + \`UserPromptSubmit\` → \`prompt-guard.sh\` | Bash tool calls are gated inline; \`UserPromptSubmit\` catches prompts before any tool fires, so non-Bash writes (\`Write\`/\`Edit\`) are still prompt-guarded at the turn boundary. |
+| SessionStart rehydration | \`SessionStart\` matcher \`startup|resume\` → \`session-start\` | Full. |
+| PreToolUse prompt-guard | \`PreToolUse\` matcher \`Bash\` + \`UserPromptSubmit\` → \`prompt-guard\` | Bash tool calls are gated inline; \`UserPromptSubmit\` catches prompts before any tool fires, so non-Bash writes (\`Write\`/\`Edit\`) are still prompt-guarded at the turn boundary. |
 | UserPromptSubmit state nudge | \`UserPromptSubmit\` → \`cclaw internal verify-current-state --quiet\` | Non-blocking warning only. Prints unmet mandatory delegation / gate-evidence counts before the turn; cannot block non-Bash \`Write\`/\`Edit\`. |
-| PreToolUse workflow-guard | \`PreToolUse\` matcher \`Bash\` → \`workflow-guard.sh\` | Bash-only. For \`Write\`/\`Edit\` calls the agent performs the TDD-order / artifact check in-turn (see the stage skill). |
-| PostToolUse context-monitor | \`PostToolUse\` matcher \`Bash\` → \`context-monitor.sh\` | Bash-only. Other tool calls get context-monitored at end-of-turn via \`.cclaw/references/protocols/ethos.md\`. |
-| Stop checkpoint | \`Stop\` → \`stop-checkpoint.sh\` | Full. |
+| PreToolUse workflow-guard | \`PreToolUse\` matcher \`Bash\` → \`workflow-guard\` | Bash-only. For \`Write\`/\`Edit\` calls the agent performs the TDD-order / artifact check in-turn (see the stage skill). |
+| PostToolUse context-monitor | \`PostToolUse\` matcher \`Bash\` → \`context-monitor\` | Bash-only. Other tool calls get context-monitored at end-of-turn via \`.cclaw/references/protocols/ethos.md\`. |
+| Stop checkpoint | \`Stop\` → \`stop-checkpoint\` | Full. |
 | PreCompact digest | Not supported — Codex has no \`PreCompact\` event. | Covered by \`/cc-ops retro\` and the user running \`/cc-view status\` before Codex's \`/compact\` command. |
 
 ## Verification

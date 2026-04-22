@@ -38,8 +38,28 @@ jobs:
       - name: Build
         run: npm run build
 
-      - name: Lint generated hook scripts
-        run: node scripts/lint-generated-hooks.mjs
+      - name: Test
+        run: npm test
+
+  build-and-test-windows:
+    name: Build and Test (Windows Node 20.x)
+    runs-on: windows-latest
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Setup Node.js
+        uses: actions/setup-node@v6
+        with:
+          node-version: "20.x"
+          cache: npm
+
+      - name: Install dependencies
+        run: npm ci
+
+      - name: Build
+        run: npm run build
 
       - name: Test
         run: npm test
@@ -49,6 +69,7 @@ jobs:
     runs-on: ubuntu-latest
     needs:
       - build-and-test
+      - build-and-test-windows
 
     steps:
       - name: Checkout
@@ -83,6 +104,7 @@ jobs:
     runs-on: ubuntu-latest
     needs:
       - build-and-test
+      - build-and-test-windows
 
     steps:
       - name: Checkout
@@ -109,6 +131,7 @@ jobs:
     runs-on: ubuntu-latest
     needs:
       - build-and-test
+      - build-and-test-windows
 
     steps:
       - name: Checkout

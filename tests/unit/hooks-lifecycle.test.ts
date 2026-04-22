@@ -3,23 +3,14 @@ import path from "node:path";
 import { pathToFileURL } from "node:url";
 import { spawn } from "node:child_process";
 import { describe, expect, it } from "vitest";
-import {
-  opencodePluginJs,
-  preCompactScript,
-  sessionStartScript,
-  stageCompleteScript,
-  stopCheckpointScript
-} from "../../src/content/hooks.js";
-import { createTempProject } from "../helpers/index.js";
+import { opencodePluginJs, stageCompleteScript } from "../../src/content/hooks.js";
 import {
   claudeHooksJsonWithObservation,
-  contextMonitorScript,
   codexHooksJsonWithObservation,
-  cursorHooksJsonWithObservation,
-  promptGuardScript,
-  workflowGuardScript
+  cursorHooksJsonWithObservation
 } from "../../src/content/observe.js";
 import { nodeHookRuntimeScript } from "../../src/content/node-hooks.js";
+import { createTempProject } from "../helpers/index.js";
 
 interface ScriptResult {
   code: number | null;
@@ -27,7 +18,7 @@ interface ScriptResult {
   stderr: string;
 }
 
-async function runScript(
+async function runNodeScript(
   root: string,
   scriptName: string,
   scriptBody: string,
@@ -36,11 +27,12 @@ async function runScript(
   extraEnv: Record<string, string> = {}
 ): Promise<ScriptResult> {
   const scriptPath = path.join(root, scriptName);
+  await fs.mkdir(path.dirname(scriptPath), { recursive: true });
   await fs.writeFile(scriptPath, scriptBody, "utf8");
   await fs.chmod(scriptPath, 0o755);
 
   return await new Promise<ScriptResult>((resolve, reject) => {
-    const child = spawn("bash", [scriptPath, ...args], {
+    const child = spawn(process.execPath, [scriptPath, ...args], {
       cwd: root,
       env: {
         ...process.env,
@@ -67,161 +59,40 @@ async function runScript(
   });
 }
 
-describe("hooks lifecycle rehydration", () => {
-  it("uses full lifecycle matcher in claude and codex hooks", () => {
-    const claude = JSON.parse(claudeHooksJsonWithObservation()) as {
-      hooks: { SessionStart: Array<{ matcher?: string }> };
-    };
-    const codex = JSON.parse(codexHooksJsonWithObservation()) as {
-      hooks: { SessionStart: Array<{ matcher?: string }> };
-    };
+describe("hooks lifecycle wiring", () => {
+  it("uses node runtime commands for all harness hook configs", () => {
+    const claude = claudeHooksJsonWithObservation();
+    const cursor = cursorHooksJsonWithObservation();
+    const codex = codexHooksJsonWithObservation();
 
-    expect(claude.hooks.SessionStart[0]?.matcher).toBe("startup|resume|clear|compact");
-    // Codex CLI v0.114+ emits only `startup` and `resume` — there is no
-    // `clear` or `compact` lifecycle phase in Codex.
-    expect(codex.hooks.SessionStart[0]?.matcher).toBe("startup|resume");
-    expect((claude as { cclawHookSchemaVersion?: number }).cclawHookSchemaVersion).toBe(1);
-    expect((codex as { cclawHookSchemaVersion?: number }).cclawHookSchemaVersion).toBe(1);
-    expect(JSON.stringify(claude)).toContain("run-hook.mjs");
-    expect(JSON.stringify(claude)).toContain("prompt-guard.sh");
-    expect(JSON.stringify(claude)).toContain("workflow-guard.sh");
-    expect(JSON.stringify(claude)).toContain("context-monitor.sh");
-    expect(JSON.stringify(codex)).toContain("run-hook.mjs");
-    expect(JSON.stringify(codex)).toContain("prompt-guard.sh");
-    expect(JSON.stringify(codex)).toContain("workflow-guard.sh");
-    expect(JSON.stringify(codex)).toContain("context-monitor.sh");
-    expect(JSON.stringify(codex)).toContain("verify-current-state");
-    expect(JSON.stringify(claude)).not.toContain("observe.sh");
-    expect(JSON.stringify(codex)).not.toContain("observe.sh");
-  });
+    expect(claude).toContain("node .cclaw/hooks/run-hook.mjs session-start");
+    expect(claude).toContain("node .cclaw/hooks/run-hook.mjs prompt-guard");
+    expect(claude).toContain("node .cclaw/hooks/run-hook.mjs workflow-guard");
+    expect(claude).toContain("node .cclaw/hooks/run-hook.mjs context-monitor");
+    expect(claude).toContain("node .cclaw/hooks/run-hook.mjs stop-checkpoint");
+    expect(claude).toContain("node .cclaw/hooks/run-hook.mjs pre-compact");
+    expect(claude).not.toContain(".sh");
 
-  it("defines cursor rehydration lifecycle events", () => {
-    const cursor = JSON.parse(cursorHooksJsonWithObservation()) as {
-      hooks: Record<string, unknown>;
-    };
-    expect(Array.isArray(cursor.hooks.sessionStart)).toBe(true);
-    expect(Array.isArray(cursor.hooks.sessionResume)).toBe(true);
-    expect(Array.isArray(cursor.hooks.sessionClear)).toBe(true);
-    expect(Array.isArray(cursor.hooks.sessionCompact)).toBe(true);
-    expect((cursor as { cclawHookSchemaVersion?: number }).cclawHookSchemaVersion).toBe(1);
-    expect(JSON.stringify(cursor)).toContain("run-hook.mjs");
-    expect(JSON.stringify(cursor)).toContain("prompt-guard.sh");
-    expect(JSON.stringify(cursor)).toContain("workflow-guard.sh");
-    expect(JSON.stringify(cursor)).toContain("context-monitor.sh");
-    expect(JSON.stringify(cursor)).not.toContain("observe.sh");
-  });
+    expect(cursor).toContain("node .cclaw/hooks/run-hook.mjs session-start");
+    expect(cursor).toContain("node .cclaw/hooks/run-hook.mjs prompt-guard");
+    expect(cursor).toContain("node .cclaw/hooks/run-hook.mjs workflow-guard");
+    expect(cursor).toContain("node .cclaw/hooks/run-hook.mjs context-monitor");
+    expect(cursor).toContain("node .cclaw/hooks/run-hook.mjs stop-checkpoint");
+    expect(cursor).toContain("node .cclaw/hooks/run-hook.mjs pre-compact");
+    expect(cursor).not.toContain(".sh");
 
-  it("session-start script injects active artifacts and knowledge context", () => {
-    const script = sessionStartScript();
-    expect(script).toContain("ACTIVE_RUN=");
-    expect(script).toContain("checkpoint.json");
-    expect(script).toContain("stage-activity.jsonl");
-    expect(script).toContain("context-mode.json");
-    expect(script).toContain("Context mode:");
-    expect(script).toContain("Active artifacts: .cclaw/artifacts/");
-    expect(script).toContain("knowledge.jsonl");
-  });
-
-  it("session-start script executes and emits bootstrap payload with knowledge", async () => {
-    const root = await createTempProject("session-start-runtime");
-    await fs.mkdir(path.join(root, ".cclaw/state"), { recursive: true });
-    await fs.mkdir(path.join(root, ".cclaw/contexts"), { recursive: true });
-    await fs.mkdir(path.join(root, ".cclaw/skills/using-cclaw"), { recursive: true });
-    await fs.writeFile(path.join(root, ".cclaw/state/flow-state.json"), JSON.stringify({
-      currentStage: "review",
-      activeRunId: "active",
-      completedStages: ["brainstorm", "scope", "design", "spec", "plan", "tdd"]
-    }, null, 2), "utf8");
-    await fs.writeFile(path.join(root, ".cclaw/state/checkpoint.json"), JSON.stringify({
-      stage: "review",
-      status: "in_progress",
-      runId: "active",
-      timestamp: "2026-01-01T00:00:00Z"
-    }, null, 2), "utf8");
-    await fs.writeFile(path.join(root, ".cclaw/state/stage-activity.jsonl"), [
-      JSON.stringify({ ts: "2026-01-01T00:00:01Z", phase: "post", tool: "RunCommand", stage: "review", runId: "active" })
-    ].join("\n"), "utf8");
-    await fs.writeFile(path.join(root, ".cclaw/knowledge.jsonl"), [
-      JSON.stringify({
-        type: "pattern",
-        trigger: "when a single PR spans multiple unrelated changes",
-        action: "split broad changes into small focused diffs before review",
-        confidence: "high",
-        domain: "review",
-        stage: "review",
-        created: "2026-01-01T00:00:00Z",
-        project: "cclaw"
-      })
-    ].join("\n"), "utf8");
-    await fs.writeFile(path.join(root, ".cclaw/state/context-mode.json"), JSON.stringify({
-      activeMode: "review",
-      updatedAt: "2026-01-01T00:00:00Z",
-      availableModes: ["default", "execution", "review", "incident"]
-    }, null, 2), "utf8");
-    await fs.writeFile(path.join(root, ".cclaw/contexts/review.md"), "# Context Mode: review\n", "utf8");
-    await fs.writeFile(path.join(root, ".cclaw/skills/using-cclaw/SKILL.md"), "# Using Cclaw\n", "utf8");
-
-    const result = await runScript(root, "session-start.sh", sessionStartScript());
-    expect(result.code).toBe(0);
-    const payload = JSON.parse(result.stdout) as {
-      hookSpecificOutput?: { additionalContext?: string };
-      additional_context?: string;
-    };
-    const context = payload.hookSpecificOutput?.additionalContext ?? payload.additional_context ?? "";
-    expect(context).toContain("cclaw loaded. Flow: stage=review");
-    expect(context).toContain("run=active");
-    expect(context).toContain("Context mode: review");
-    expect(context).toContain("Checkpoint: stage=review");
-    expect(context).toContain("Knowledge digest");
-    expect(context).toContain("split broad changes into small focused diffs");
-    const digest = await fs.readFile(path.join(root, ".cclaw/state/knowledge-digest.md"), "utf8");
-    expect(digest).toContain("Knowledge digest (auto-generated)");
-    expect(digest).toContain("split broad changes into small focused diffs");
-  });
-
-  it("stop script writes checkpoint with run id and preserves progress fields", async () => {
-    const root = await createTempProject("stop-runtime");
-    await fs.mkdir(path.join(root, ".cclaw/state"), { recursive: true });
-    await fs.writeFile(path.join(root, ".cclaw/state/flow-state.json"), JSON.stringify({
-      currentStage: "plan",
-      activeRunId: "active",
-      completedStages: ["brainstorm"]
-    }, null, 2), "utf8");
-    await fs.writeFile(path.join(root, ".cclaw/state/checkpoint.json"), JSON.stringify({
-      stage: "scope",
-      runId: "old-run",
-      status: "blocked",
-      lastCompletedStep: "captured assumptions",
-      remainingSteps: ["ask approval"],
-      blockers: ["need answer from user"]
-    }, null, 2), "utf8");
-
-    const result = await runScript(root, "stop-checkpoint.sh", stopCheckpointScript(), [], '{"loop_count":0}');
-    expect(result.code).toBe(0);
-    expect(result.stderr).toBe("");
-
-    const checkpoint = JSON.parse(
-      await fs.readFile(path.join(root, ".cclaw/state/checkpoint.json"), "utf8")
-    ) as {
-      stage: string;
-      runId: string;
-      status: string;
-      lastCompletedStep: string;
-      remainingSteps: string[];
-      blockers: string[];
-    };
-    expect(checkpoint.stage).toBe("plan");
-    expect(checkpoint.runId).toBe("active");
-    expect(checkpoint.status).toBe("blocked");
-    expect(checkpoint.lastCompletedStep).toBe("captured assumptions");
-    expect(checkpoint.remainingSteps).toEqual(["ask approval"]);
-    expect(checkpoint.blockers).toEqual(["need answer from user"]);
+    expect(codex).toContain("node .cclaw/hooks/run-hook.mjs session-start");
+    expect(codex).toContain("node .cclaw/hooks/run-hook.mjs prompt-guard");
+    expect(codex).toContain("node .cclaw/hooks/run-hook.mjs workflow-guard");
+    expect(codex).toContain("node .cclaw/hooks/run-hook.mjs context-monitor");
+    expect(codex).toContain("node .cclaw/hooks/run-hook.mjs stop-checkpoint");
+    expect(codex).toContain("node .cclaw/hooks/run-hook.mjs verify-current-state");
+    expect(codex).not.toContain(".sh");
   });
 
   it("stage-complete helper delegates to internal advance-stage", async () => {
     const root = await createTempProject("stage-complete-helper");
-    const hooksDir = path.join(root, ".cclaw/hooks");
-    await fs.mkdir(hooksDir, { recursive: true });
+    await fs.mkdir(path.join(root, ".cclaw/hooks"), { recursive: true });
 
     const binDir = path.join(root, "bin");
     await fs.mkdir(binDir, { recursive: true });
@@ -230,15 +101,15 @@ describe("hooks lifecycle rehydration", () => {
     await fs.writeFile(
       cclawShimPath,
       `#!/usr/bin/env bash
-printf '%s\n' "$*" >> "${callsPath}"
+printf '%s\\n' "$*" >> "${callsPath}"
 `,
       "utf8"
     );
     await fs.chmod(cclawShimPath, 0o755);
 
-    const result = await runScript(
+    const result = await runNodeScript(
       root,
-      ".cclaw/hooks/stage-complete.sh",
+      ".cclaw/hooks/stage-complete.mjs",
       stageCompleteScript(),
       ["scope", "--passed=scope_contract_written"],
       "",
@@ -253,9 +124,9 @@ printf '%s\n' "$*" >> "${callsPath}"
   it("stage-complete helper fails closed when cclaw binary is unavailable", async () => {
     const root = await createTempProject("stage-complete-no-cclaw");
     await fs.mkdir(path.join(root, ".cclaw/hooks"), { recursive: true });
-    const result = await runScript(
+    const result = await runNodeScript(
       root,
-      ".cclaw/hooks/stage-complete.sh",
+      ".cclaw/hooks/stage-complete.mjs",
       stageCompleteScript(),
       ["scope"],
       "",
@@ -265,455 +136,22 @@ printf '%s\n' "$*" >> "${callsPath}"
     expect(result.stderr).toContain("cclaw binary not found in PATH");
   });
 
-  it("pre-compact digest reads gate state from stageGateCatalog", async () => {
-    const root = await createTempProject("pre-compact-stage-catalog");
-    await fs.mkdir(path.join(root, ".cclaw/state"), { recursive: true });
-    await fs.mkdir(path.join(root, ".cclaw/hooks"), { recursive: true });
-    await fs.writeFile(path.join(root, ".cclaw/state/flow-state.json"), JSON.stringify({
-      currentStage: "review",
-      track: "standard",
-      activeRunId: "run-stage-catalog",
-      completedStages: ["brainstorm", "scope", "design", "spec", "plan", "tdd"],
-      skippedStages: [],
-      stageGateCatalog: {
-        review: {
-          passed: ["review_criticals_resolved"],
-          blocked: ["review_security_attested"]
-        }
-      }
-    }, null, 2), "utf8");
-
-    const result = await runScript(
-      root,
-      ".cclaw/hooks/pre-compact.sh",
-      preCompactScript()
-    );
-    expect(result.code).toBe(0);
-    const digest = await fs.readFile(path.join(root, ".cclaw/state/session-digest.md"), "utf8");
-    expect(digest).toContain("passed: review_criticals_resolved");
-    expect(digest).toContain("blocked: review_security_attested");
+  it("opencode plugin source references node-only hook names", () => {
+    const plugin = opencodePluginJs();
+    expect(plugin).toContain("run-hook.mjs");
+    expect(plugin).toContain('runHookScript("pre-compact"');
+    expect(plugin).toContain('runHookScript("prompt-guard"');
+    expect(plugin).toContain('runHookScript("workflow-guard"');
+    expect(plugin).toContain('runHookScript("context-monitor"');
+    expect(plugin).toContain('runHookScript("stop-checkpoint"');
+    expect(plugin).not.toContain("prompt-guard.sh");
+    expect(plugin).not.toContain("workflow-guard.sh");
+    expect(plugin).not.toContain("context-monitor.sh");
+    expect(plugin).not.toContain("pre-compact.sh");
+    expect(plugin).not.toContain("stop-checkpoint.sh");
   });
 
-  it("prompt guard logs advisory events for risky cclaw writes", async () => {
-    const root = await createTempProject("prompt-guard-runtime");
-    await fs.mkdir(path.join(root, ".cclaw/state"), { recursive: true });
-    const result = await runScript(
-      root,
-      "prompt-guard.sh",
-      promptGuardScript(),
-      [],
-      JSON.stringify({
-        tool_name: "Write",
-        tool_input: {
-          path: ".cclaw/state/flow-state.json",
-          content: "rm -rf .cclaw"
-        }
-      })
-    );
-    expect(result.code).toBe(0);
-    expect(result.stderr).toContain("Cclaw advisory");
-
-    const log = await fs.readFile(path.join(root, ".cclaw/state/prompt-guard.jsonl"), "utf8");
-    expect(log).toContain("write_to_cclaw_runtime");
-  });
-
-  it("prompt guard blocks risky writes in strict mode", async () => {
-    const root = await createTempProject("prompt-guard-strict-runtime");
-    await fs.mkdir(path.join(root, ".cclaw/state"), { recursive: true });
-    const result = await runScript(
-      root,
-      "prompt-guard-strict.sh",
-      promptGuardScript({ strictMode: true }),
-      [],
-      JSON.stringify({
-        tool_name: "Write",
-        tool_input: {
-          path: ".cclaw/state/flow-state.json"
-        }
-      })
-    );
-    expect(result.code).toBe(1);
-    expect(result.stderr).toContain("blocked by strict mode");
-  });
-
-  it("workflow guard warns on stage jumps without recent flow read", async () => {
-    const root = await createTempProject("workflow-guard-runtime");
-    await fs.mkdir(path.join(root, ".cclaw/state"), { recursive: true });
-    await fs.writeFile(path.join(root, ".cclaw/state/flow-state.json"), JSON.stringify({
-      currentStage: "scope",
-      activeRunId: "active",
-      completedStages: ["brainstorm"]
-    }, null, 2), "utf8");
-
-    const result = await runScript(
-      root,
-      "workflow-guard.sh",
-      workflowGuardScript(),
-      [],
-      JSON.stringify({
-        tool_name: "RunCommand",
-        tool_input: {
-          cmd: "/cc-next"
-        }
-      })
-    );
-    expect(result.code).toBe(0);
-    expect(result.stderr).toContain("workflow guard");
-
-    const log = await fs.readFile(path.join(root, ".cclaw/state/workflow-guard.jsonl"), "utf8");
-    expect(log).not.toContain("non_safe_tool_in_plan_stage_scope");
-    expect(log).toContain("stage_invocation_without_recent_flow_read");
-  });
-
-  it("workflow guard blocks tdd production writes before RED in strict tdd mode", async () => {
-    const root = await createTempProject("workflow-guard-tdd-need-red");
-    await fs.mkdir(path.join(root, ".cclaw/state"), { recursive: true });
-    await fs.writeFile(path.join(root, ".cclaw/state/flow-state.json"), JSON.stringify({
-      currentStage: "tdd",
-      activeRunId: "active",
-      completedStages: ["brainstorm", "scope", "design", "spec", "plan"]
-    }, null, 2), "utf8");
-
-    const result = await runScript(
-      root,
-      "workflow-guard.sh",
-      workflowGuardScript({ tddEnforcementMode: "strict" }),
-      [],
-      JSON.stringify({
-        tool_name: "Write",
-        tool_input: {
-          path: "src/app.ts",
-          content: "export const value = 1;\n"
-        }
-      })
-    );
-    expect(result.code).toBe(1);
-    expect(result.stderr).toContain("Write a failing test first");
-  });
-
-  it("workflow guard allows production writes in tdd when RED is open", async () => {
-    const root = await createTempProject("workflow-guard-tdd-red-open");
-    await fs.mkdir(path.join(root, ".cclaw/state"), { recursive: true });
-    await fs.writeFile(path.join(root, ".cclaw/state/flow-state.json"), JSON.stringify({
-      currentStage: "tdd",
-      activeRunId: "active",
-      completedStages: ["brainstorm", "scope", "design", "spec", "plan"]
-    }, null, 2), "utf8");
-    await fs.writeFile(path.join(root, ".cclaw/state/tdd-cycle-log.jsonl"), [
-      JSON.stringify({
-        ts: "2026-04-20T00:00:00Z",
-        runId: "active",
-        stage: "tdd",
-        slice: "S-1",
-        phase: "red",
-        command: "npm test -- tests/unit/app.test.ts",
-        files: ["src/app.ts"],
-        exitCode: 1
-      })
-    ].join("\n"), "utf8");
-
-    const result = await runScript(
-      root,
-      "workflow-guard.sh",
-      workflowGuardScript({ tddEnforcementMode: "strict" }),
-      [],
-      JSON.stringify({
-        tool_name: "Edit",
-        tool_input: {
-          path: "src/app.ts",
-          old_string: "const old = 1;",
-          new_string: "const next = 2;"
-        }
-      })
-    );
-    expect(result.code).toBe(0);
-    expect(result.stderr).not.toContain("Write a failing test first");
-  });
-
-  it("workflow guard allows production writes in tdd after GREEN is done", async () => {
-    const root = await createTempProject("workflow-guard-tdd-green-done");
-    await fs.mkdir(path.join(root, ".cclaw/state"), { recursive: true });
-    await fs.writeFile(path.join(root, ".cclaw/state/flow-state.json"), JSON.stringify({
-      currentStage: "tdd",
-      activeRunId: "active",
-      completedStages: ["brainstorm", "scope", "design", "spec", "plan"]
-    }, null, 2), "utf8");
-    await fs.writeFile(path.join(root, ".cclaw/state/tdd-cycle-log.jsonl"), [
-      JSON.stringify({
-        ts: "2026-04-20T00:00:00Z",
-        runId: "active",
-        stage: "tdd",
-        slice: "S-1",
-        phase: "red",
-        command: "npm test -- tests/unit/app.test.ts",
-        files: ["src/app.ts"],
-        exitCode: 1
-      }),
-      JSON.stringify({
-        ts: "2026-04-20T00:02:00Z",
-        runId: "active",
-        stage: "tdd",
-        slice: "S-1",
-        phase: "green",
-        command: "npm test -- tests/unit/app.test.ts",
-        files: ["src/app.ts"],
-        exitCode: 0
-      })
-    ].join("\n"), "utf8");
-
-    const result = await runScript(
-      root,
-      "workflow-guard.sh",
-      workflowGuardScript({ tddEnforcementMode: "strict" }),
-      [],
-      JSON.stringify({
-        tool_name: "Write",
-        tool_input: {
-          path: "src/app.ts",
-          content: "export const value = 3;\n"
-        }
-      })
-    );
-    expect(result.code).toBe(0);
-    expect(result.stderr).not.toContain("Write a failing test first");
-  });
-
-  it("workflow guard fallback counting keeps runId isolation when jq/python are unusable", async () => {
-    const root = await createTempProject("workflow-guard-runid-fallback");
-    await fs.mkdir(path.join(root, ".cclaw/state"), { recursive: true });
-    await fs.writeFile(path.join(root, ".cclaw/state/flow-state.json"), JSON.stringify({
-      currentStage: "tdd",
-      activeRunId: "run-current",
-      completedStages: ["brainstorm", "scope", "design", "spec", "plan"]
-    }, null, 2), "utf8");
-    await fs.writeFile(path.join(root, ".cclaw/state/tdd-cycle-log.jsonl"), [
-      JSON.stringify({ ts: "2026-04-20T00:00:00Z", runId: "run-old", phase: "red" }),
-      JSON.stringify({ ts: "2026-04-20T00:00:10Z", runId: "run-current", phase: "red" }),
-      JSON.stringify({ ts: "2026-04-20T00:00:20Z", runId: "run-current", phase: "green" })
-    ].join("\n"), "utf8");
-    const binDir = path.join(root, "bin");
-    await fs.mkdir(binDir, { recursive: true });
-    await fs.writeFile(path.join(binDir, "jq"), "#!/usr/bin/env bash\nexit 1\n", "utf8");
-    await fs.writeFile(path.join(binDir, "python3"), "#!/usr/bin/env bash\nexit 1\n", "utf8");
-    await fs.chmod(path.join(binDir, "jq"), 0o755);
-    await fs.chmod(path.join(binDir, "python3"), 0o755);
-
-    const result = await runScript(
-      root,
-      "workflow-guard.sh",
-      workflowGuardScript({ tddEnforcementMode: "strict" }),
-      [],
-      JSON.stringify({
-        tool_name: "Write",
-        tool_input: {
-          path: "src/app.ts",
-          content: "export const value = 42;\n"
-        }
-      }),
-      { PATH: `${binDir}:/usr/bin:/bin` }
-    );
-    expect(result.code).toBe(0);
-    expect(result.stderr).not.toContain("Write a failing test first");
-  });
-
-  it("workflow guard classifies paths with tdd.testPathPatterns and tdd.productionPathPatterns", async () => {
-    const root = await createTempProject("workflow-guard-tdd-pattern-routing");
-    await fs.mkdir(path.join(root, ".cclaw/state"), { recursive: true });
-    await fs.writeFile(path.join(root, ".cclaw/state/flow-state.json"), JSON.stringify({
-      currentStage: "tdd",
-      activeRunId: "active",
-      completedStages: ["brainstorm", "scope", "design", "spec", "plan"]
-    }, null, 2), "utf8");
-
-    const script = workflowGuardScript({
-      tddEnforcementMode: "strict",
-      tddTestPathPatterns: ["**/*.unit.ts"],
-      tddProductionPathPatterns: ["src/**"]
-    });
-
-    const testWrite = await runScript(
-      root,
-      "workflow-guard.sh",
-      script,
-      [],
-      JSON.stringify({
-        tool_name: "Write",
-        tool_input: {
-          path: "tests/math.unit.ts",
-          content: "describe('math', () => {});\n"
-        }
-      })
-    );
-    expect(testWrite.code).toBe(0);
-
-    const nonProdWrite = await runScript(
-      root,
-      "workflow-guard.sh",
-      script,
-      [],
-      JSON.stringify({
-        tool_name: "Write",
-        tool_input: {
-          path: "scripts/build.ts",
-          content: "console.log('build');\n"
-        }
-      })
-    );
-    expect(nonProdWrite.code).toBe(0);
-
-    const prodWrite = await runScript(
-      root,
-      "workflow-guard.sh",
-      script,
-      [],
-      JSON.stringify({
-        tool_name: "Write",
-        tool_input: {
-          path: "src/app.ts",
-          content: "export const v = 1;\n"
-        }
-      })
-    );
-    expect(prodWrite.code).toBe(1);
-    expect(prodWrite.stderr).toContain("Write a failing test first");
-  });
-
-  it("workflow guard blocks production write when per-path RED evidence is missing", async () => {
-    const root = await createTempProject("workflow-guard-per-path-red-missing");
-    await fs.mkdir(path.join(root, ".cclaw/state"), { recursive: true });
-    await fs.writeFile(path.join(root, ".cclaw/state/flow-state.json"), JSON.stringify({
-      currentStage: "tdd",
-      activeRunId: "active",
-      completedStages: ["brainstorm", "scope", "design", "spec", "plan"]
-    }, null, 2), "utf8");
-
-    const binDir = path.join(root, "bin");
-    await fs.mkdir(binDir, { recursive: true });
-    await fs.writeFile(
-      path.join(binDir, "cclaw"),
-      "#!/usr/bin/env bash\nif [ \"$1\" = \"internal\" ] && [ \"$2\" = \"tdd-red-evidence\" ]; then exit 2; fi\nexit 0\n",
-      "utf8"
-    );
-    await fs.chmod(path.join(binDir, "cclaw"), 0o755);
-
-    const result = await runScript(
-      root,
-      "workflow-guard.sh",
-      workflowGuardScript({ tddEnforcementMode: "strict" }),
-      [],
-      JSON.stringify({
-        tool_name: "Write",
-        tool_input: {
-          path: "src/app.ts",
-          content: "export const value = 7;\n"
-        }
-      }),
-      { PATH: `${binDir}:/usr/bin:/bin` }
-    );
-    expect(result.code).toBe(1);
-    expect(result.stderr).toContain("missing failing RED evidence");
-  });
-
-  it("workflow guard exempts cclaw doctor from non-safe-tool in plan stage", async () => {
-    const root = await createTempProject("guard-cclaw-cli");
-    await fs.mkdir(path.join(root, ".cclaw/state"), { recursive: true });
-    await fs.writeFile(path.join(root, ".cclaw/state/flow-state.json"), JSON.stringify({
-      currentStage: "design",
-      activeRunId: "active",
-      completedStages: ["brainstorm", "scope"]
-    }, null, 2), "utf8");
-
-    const epoch = Math.floor(Date.now() / 1000);
-    await fs.writeFile(path.join(root, ".cclaw/state/workflow-guard.json"), JSON.stringify({
-      lastFlowReadAt: new Date().toISOString(),
-      lastFlowReadAtEpoch: epoch
-    }, null, 2), "utf8");
-
-    const result = await runScript(
-      root,
-      "workflow-guard.sh",
-      workflowGuardScript(),
-      [],
-      JSON.stringify({
-        tool_name: "Shell",
-        tool_input: {
-          command: "npx cclaw doctor"
-        }
-      })
-    );
-    expect(result.code).toBe(0);
-    const logPath = path.join(root, ".cclaw/state/workflow-guard.jsonl");
-    const logExists = await fs.stat(logPath).then(() => true).catch(() => false);
-    if (logExists) {
-      const log = await fs.readFile(logPath, "utf8");
-      expect(log).not.toContain("non_safe_tool_in_plan_stage");
-    }
-  });
-
-  it("context monitor debounces warnings per band and respects TTL override", async () => {
-    const root = await createTempProject("context-monitor-runtime");
-    await fs.mkdir(path.join(root, ".cclaw/state"), { recursive: true });
-
-    const payload = JSON.stringify({
-      context: {
-        remaining_percent: 18
-      }
-    });
-
-    const first = await runScript(root, "context-monitor.sh", contextMonitorScript(), [], payload);
-    expect(first.code).toBe(0);
-    expect(first.stderr).toContain("Cclaw advisory");
-
-    const second = await runScript(root, "context-monitor.sh", contextMonitorScript(), [], payload);
-    expect(second.code).toBe(0);
-    expect(second.stderr).toBe("");
-
-    const forced = await runScript(
-      root,
-      "context-monitor.sh",
-      contextMonitorScript(),
-      [],
-      payload,
-      { CCLAW_CONTEXT_MONITOR_TTL_SEC: "0" }
-    );
-    expect(forced.code).toBe(0);
-    expect(forced.stderr).toContain("Cclaw advisory");
-  });
-
-  it("context monitor auto-captures failing test evidence during tdd", async () => {
-    const root = await createTempProject("context-monitor-auto-red");
-    await fs.mkdir(path.join(root, ".cclaw/state"), { recursive: true });
-    await fs.writeFile(path.join(root, ".cclaw/state/flow-state.json"), JSON.stringify({
-      currentStage: "tdd",
-      activeRunId: "run-auto-red",
-      completedStages: ["brainstorm", "scope", "design", "spec", "plan"]
-    }, null, 2), "utf8");
-
-    const result = await runScript(
-      root,
-      "context-monitor.sh",
-      contextMonitorScript(),
-      [],
-      JSON.stringify({
-        input: {
-          tool: "RunCommand",
-          tool_input: {
-            cmd: "npm test -- tests/unit/app.test.ts"
-          }
-        },
-        output: {
-          exitCode: 1,
-          stderr: "FAIL src/app.ts"
-        }
-      })
-    );
-    expect(result.code).toBe(0);
-    const evidenceLog = await fs.readFile(path.join(root, ".cclaw/state/tdd-red-evidence.jsonl"), "utf8");
-    expect(evidenceLog).toContain("\"source\":\"posttool-auto\"");
-    expect(evidenceLog).toContain("src/app.ts");
-  });
-
-  it("opencode plugin rehydrates and runs guard hooks", async () => {
+  it("opencode plugin rehydrates and runs node hook runtime", async () => {
     const root = await createTempProject("opencode-runtime");
     await fs.mkdir(path.join(root, ".cclaw/hooks"), { recursive: true });
     await fs.mkdir(path.join(root, ".cclaw/state"), { recursive: true });
@@ -784,40 +222,12 @@ printf '%s\n' "$*" >> "${callsPath}"
     const sessionDigest = await fs.readFile(path.join(root, ".cclaw/state/session-digest.md"), "utf8");
     expect(sessionDigest).toContain("# Session Digest");
     expect(sessionDigest).toContain("Generated by pre-compact hook");
-    expect(sessionDigest).toContain("## Flow snapshot");
     const checkpoint = JSON.parse(await fs.readFile(path.join(root, ".cclaw/state/checkpoint.json"), "utf8")) as {
       runId?: string;
       stage?: string;
     };
     expect(checkpoint.runId).toBe("active");
     expect(checkpoint.stage).toBe("design");
-  });
-
-  it("opencode plugin includes lifecycle events in source", () => {
-    const plugin = opencodePluginJs();
-    expect(plugin).toContain("event: async");
-    expect(plugin).toContain('"session.created"');
-    expect(plugin).toContain('"session.resumed"');
-    expect(plugin).toContain('"session.compacted"');
-    expect(plugin).toContain('"session.cleared"');
-    expect(plugin).toContain('"session.updated"');
-    expect(plugin).toContain('runHookScript("pre-compact.sh"');
-    expect(plugin).toContain('"tool.execute.before"');
-    expect(plugin).toContain('"tool.execute.after"');
-    expect(plugin).not.toContain('eventType === "tool.execute.before"');
-    expect(plugin).not.toContain('eventType === "tool.execute.after"');
-    expect(plugin).toContain("run-hook.mjs");
-    expect(plugin).toContain("process.execPath");
-    expect(plugin).toContain("prompt-guard.sh");
-    expect(plugin).toContain("workflow-guard.sh");
-    expect(plugin).toContain("context-monitor.sh");
-    expect(plugin).toContain('"session.idle"');
-    expect(plugin).toContain('"experimental.chat.system.transform"');
-    expect(plugin).toContain("activeRunId");
-    expect(plugin).not.toContain(".cclaw/runs/");
-    expect(plugin).toContain("Knowledge digest");
-    expect(plugin).toContain("Last session:");
-    expect(plugin).toContain("Latest context warning:");
   });
 
   it("opencode plugin blocks when workflow guard exits non-zero", async () => {
@@ -837,7 +247,7 @@ printf '%s\n' "$*" >> "${callsPath}"
     await fs.writeFile(
       path.join(root, ".cclaw/hooks/run-hook.mjs"),
       `#!/usr/bin/env node
-if ((process.argv[2] || "") === "workflow-guard.sh") {
+if ((process.argv[2] || "") === "workflow-guard") {
   process.exit(1);
 }
 process.exit(0);

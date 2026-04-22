@@ -1533,12 +1533,12 @@ async function handleVerifyCurrentState(runtime) {
 
 function normalizeHookName(rawName) {
   const value = normalizeText(rawName).toLowerCase();
-  if (value === "session-start" || value === "session-start.sh") return "session-start";
-  if (value === "stop-checkpoint" || value === "stop-checkpoint.sh") return "stop-checkpoint";
-  if (value === "pre-compact" || value === "pre-compact.sh") return "pre-compact";
-  if (value === "prompt-guard" || value === "prompt-guard.sh") return "prompt-guard";
-  if (value === "workflow-guard" || value === "workflow-guard.sh") return "workflow-guard";
-  if (value === "context-monitor" || value === "context-monitor.sh") return "context-monitor";
+  if (value === "session-start") return "session-start";
+  if (value === "stop-checkpoint") return "stop-checkpoint";
+  if (value === "pre-compact") return "pre-compact";
+  if (value === "prompt-guard") return "prompt-guard";
+  if (value === "workflow-guard") return "workflow-guard";
+  if (value === "context-monitor") return "context-monitor";
   if (value === "verify-current-state") return "verify-current-state";
   return "";
 }

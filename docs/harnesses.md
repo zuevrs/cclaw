@@ -34,11 +34,11 @@ Design-stage research fleet uses the same parity model:
 | Event | Claude | Cursor | OpenCode | Codex |
 |---|---|---|---|---|
 | `session_rehydrate` | SessionStart matcher startup|resume|clear|compact | sessionStart/sessionResume/sessionClear/sessionCompact | plugin event handlers + transform rehydration | SessionStart matcher startup|resume |
-| `pre_tool_prompt_guard` | PreToolUse -> prompt-guard.sh | preToolUse -> prompt-guard.sh | plugin tool.execute.before -> prompt-guard.sh | PreToolUse matcher Bash -> prompt-guard.sh (plus UserPromptSubmit for non-Bash prompts) |
-| `pre_tool_workflow_guard` | PreToolUse -> workflow-guard.sh | preToolUse -> workflow-guard.sh | plugin tool.execute.before -> workflow-guard.sh | PreToolUse matcher Bash -> workflow-guard.sh (Bash-only) |
-| `post_tool_context_monitor` | PostToolUse -> context-monitor.sh | postToolUse -> context-monitor.sh | plugin tool.execute.after -> context-monitor.sh | PostToolUse matcher Bash -> context-monitor.sh (Bash-only) |
-| `stop_checkpoint` | Stop -> stop-checkpoint.sh | stop -> stop-checkpoint.sh | plugin session.idle -> stop-checkpoint.sh | Stop -> stop-checkpoint.sh |
-| `precompact_digest` | PreCompact -> pre-compact.sh | sessionCompact -> pre-compact.sh | plugin session.compacted -> pre-compact.sh | missing |
+| `pre_tool_prompt_guard` | PreToolUse -> prompt-guard | preToolUse -> prompt-guard | plugin tool.execute.before -> prompt-guard | PreToolUse matcher Bash -> prompt-guard (plus UserPromptSubmit for non-Bash prompts) |
+| `pre_tool_workflow_guard` | PreToolUse -> workflow-guard | preToolUse -> workflow-guard | plugin tool.execute.before -> workflow-guard | PreToolUse matcher Bash -> workflow-guard (Bash-only) |
+| `post_tool_context_monitor` | PostToolUse -> context-monitor | postToolUse -> context-monitor | plugin tool.execute.after -> context-monitor | PostToolUse matcher Bash -> context-monitor (Bash-only) |
+| `stop_checkpoint` | Stop -> stop-checkpoint | stop -> stop-checkpoint | plugin session.idle -> stop-checkpoint | Stop -> stop-checkpoint |
+| `precompact_digest` | PreCompact -> pre-compact | sessionCompact -> pre-compact | plugin session.compacted -> pre-compact | missing |
 
 ## Hook event casing
 
@@ -61,7 +61,7 @@ shared casing silently breaks generated wiring.
 - Codex-specific ceiling: `PreToolUse` can only intercept `Bash`. Direct
   `Write`/`Edit` to `.cclaw/state/flow-state.json` cannot be hard-blocked
   at hook level, so the canonical path is
-  `bash .cclaw/hooks/stage-complete.sh <stage>` plus the non-blocking
+  `node .cclaw/hooks/stage-complete.mjs <stage>` plus the non-blocking
   `UserPromptSubmit` state nudge.
 - In `strict` mode, Codex additionally runs `cclaw internal verify-current-state`
   on `UserPromptSubmit` as a fail-closed check (advisory mode remains non-blocking).

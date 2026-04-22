@@ -110,7 +110,7 @@ shared casing silently breaks generated wiring.
 - Codex-specific ceiling: \`PreToolUse\` can only intercept \`Bash\`. Direct
   \`Write\`/\`Edit\` to \`.cclaw/state/flow-state.json\` cannot be hard-blocked
   at hook level, so the canonical path is
-  \`bash .cclaw/hooks/stage-complete.sh <stage>\` plus the non-blocking
+  \`node .cclaw/hooks/stage-complete.mjs <stage>\` plus the non-blocking
   \`UserPromptSubmit\` state nudge.
 
 ## Shared command contract
