@@ -25,6 +25,7 @@ import { readFlowState, writeFlowState } from "../runs.js";
 import { FLOW_STAGES, type FlowStage } from "../types.js";
 import { runEnvelopeValidateCommand } from "./envelope-validate.js";
 import { runKnowledgeDigestCommand } from "./knowledge-digest.js";
+import { runTddRedEvidenceCommand } from "./tdd-red-evidence.js";
 
 interface InternalIo {
   stdout: Writable;
@@ -850,7 +851,7 @@ export async function runInternalCommand(
   const [subcommand, ...tokens] = argv;
   if (!subcommand) {
     io.stderr.write(
-      "cclaw internal requires a subcommand: advance-stage | verify-flow-state-diff | verify-current-state | knowledge-digest | envelope-validate\n"
+      "cclaw internal requires a subcommand: advance-stage | verify-flow-state-diff | verify-current-state | knowledge-digest | envelope-validate | tdd-red-evidence\n"
     );
     return 1;
   }
@@ -871,8 +872,11 @@ export async function runInternalCommand(
     if (subcommand === "envelope-validate") {
       return await runEnvelopeValidateCommand(projectRoot, tokens, io);
     }
+    if (subcommand === "tdd-red-evidence") {
+      return await runTddRedEvidenceCommand(projectRoot, tokens, io);
+    }
     io.stderr.write(
-      `Unknown internal subcommand: ${subcommand}. Expected advance-stage | verify-flow-state-diff | verify-current-state | knowledge-digest | envelope-validate\n`
+      `Unknown internal subcommand: ${subcommand}. Expected advance-stage | verify-flow-state-diff | verify-current-state | knowledge-digest | envelope-validate | tdd-red-evidence\n`
     );
     return 1;
   } catch (err) {

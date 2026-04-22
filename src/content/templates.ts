@@ -611,6 +611,14 @@ inputs_hash: sha256:pending
     "duplicatesCollapsed": 0,
     "conflicts": [],
     "multiSpecialistConfirmed": [],
+    "layerCoverage": {
+      "spec": false,
+      "correctness": false,
+      "security": false,
+      "performance": false,
+      "architecture": false,
+      "external-safety": false
+    },
     "shipBlockers": []
   }
 }

@@ -467,4 +467,86 @@ describe("internal advance-stage commands", () => {
     const artifact = await fs.readFile(path.join(root, ".cclaw/artifacts/01-brainstorm.md"), "utf8");
     expect(artifact).toContain("<!-- cclaw:learnings-harvested:");
   });
+
+  it("tdd-red-evidence exits 2 when no failing RED evidence exists for path", async () => {
+    const root = await createTempProject("internal-tdd-red-evidence-missing");
+    await ensureRunSystem(root);
+
+    const captured = captureIo();
+    const code = await runInternalCommand(
+      root,
+      ["tdd-red-evidence", "--path=src/app.ts"],
+      captured.io
+    );
+    expect(code).toBe(2);
+    const payload = JSON.parse(captured.stdout()) as { ok: boolean };
+    expect(payload.ok).toBe(false);
+  });
+
+  it("tdd-red-evidence returns success when cycle-log has matching failing RED entry", async () => {
+    const root = await createTempProject("internal-tdd-red-evidence-cycle-log");
+    await ensureRunSystem(root);
+    const flow = await readFlowState(root);
+    await fs.mkdir(path.join(root, ".cclaw/state"), { recursive: true });
+    await fs.writeFile(path.join(root, ".cclaw/state/tdd-cycle-log.jsonl"), [
+      JSON.stringify({
+        ts: "2026-04-20T00:00:00Z",
+        runId: flow.activeRunId,
+        stage: "tdd",
+        slice: "S-1",
+        phase: "red",
+        command: "npm test -- tests/unit/app.test.ts",
+        files: ["src/app.ts"],
+        exitCode: 1
+      })
+    ].join("\n"), "utf8");
+
+    const captured = captureIo();
+    const code = await runInternalCommand(
+      root,
+      ["tdd-red-evidence", "--path=src/app.ts", `--run-id=${flow.activeRunId}`],
+      captured.io
+    );
+    expect(code).toBe(0);
+    const payload = JSON.parse(captured.stdout()) as {
+      ok: boolean;
+      sources: { tddCycleLog: boolean; autoEvidence: boolean };
+    };
+    expect(payload.ok).toBe(true);
+    expect(payload.sources.tddCycleLog).toBe(true);
+    expect(payload.sources.autoEvidence).toBe(false);
+  });
+
+  it("tdd-red-evidence accepts auto evidence when cycle log is absent", async () => {
+    const root = await createTempProject("internal-tdd-red-evidence-auto");
+    await ensureRunSystem(root);
+    const flow = await readFlowState(root);
+    await fs.mkdir(path.join(root, ".cclaw/state"), { recursive: true });
+    await fs.writeFile(path.join(root, ".cclaw/state/tdd-red-evidence.jsonl"), [
+      JSON.stringify({
+        ts: "2026-04-20T00:05:00Z",
+        runId: flow.activeRunId,
+        stage: "tdd",
+        source: "posttool-auto",
+        command: "npm test -- tests/unit/app.test.ts",
+        exitCode: 1,
+        paths: ["src/feature.ts"]
+      })
+    ].join("\n"), "utf8");
+
+    const captured = captureIo();
+    const code = await runInternalCommand(
+      root,
+      ["tdd-red-evidence", "--path=src/feature.ts", `--run-id=${flow.activeRunId}`],
+      captured.io
+    );
+    expect(code).toBe(0);
+    const payload = JSON.parse(captured.stdout()) as {
+      ok: boolean;
+      sources: { tddCycleLog: boolean; autoEvidence: boolean };
+    };
+    expect(payload.ok).toBe(true);
+    expect(payload.sources.tddCycleLog).toBe(false);
+    expect(payload.sources.autoEvidence).toBe(true);
+  });
 });

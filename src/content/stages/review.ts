@@ -19,8 +19,7 @@ export const REVIEW: StageSchemaInput = {
   ],
   whenNotToUse: [
     "There is no implementation diff to review",
-    "TDD stage evidence is missing or stale",
-    "The goal is direct release execution without layered quality checks"
+    "TDD stage evidence is missing or stale"
   ],
   checklist: [
     "Diff Scope — Run `git diff` against base branch. If no diff, exit early with APPROVED (no changes to review). Scope the review to changed files unless blast-radius analysis requires wider inspection.",
@@ -65,6 +64,7 @@ export const REVIEW: StageSchemaInput = {
   requiredGates: [
     { id: "review_layer1_spec_compliance", description: "Spec compliance check completed with per-criterion verdict." },
     { id: "review_layer2_security", description: "Security review completed." },
+    { id: "review_layer_coverage_complete", description: "Layer coverage map in 07-review-army.json confirms spec/correctness/security/performance/architecture/external-safety passes." },
     { id: "review_criticals_resolved", description: "No unresolved critical blockers remain." },
     { id: "review_army_json_valid", description: "07-review-army.json passes schema validation (validateReviewArmy)." },
     { id: "review_trace_matrix_clean", description: "Trace matrix has no orphaned criteria/tasks/test slices for the active run." }

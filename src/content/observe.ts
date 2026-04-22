@@ -22,15 +22,6 @@ set -uo pipefail
 shopt -s globstar 2>/dev/null || true
 PROMPT_GUARD_MODE="${promptGuardMode}"
 
-HARNESS="codex"
-if [ -n "\${CLAUDE_PROJECT_DIR:-}" ]; then
-  HARNESS="claude"
-elif [ -n "\${CURSOR_PROJECT_DIR:-}" ] || [ -n "\${CURSOR_PROJECT_ROOT:-}" ]; then
-  HARNESS="cursor"
-elif [ -n "\${OPENCODE_PROJECT_DIR:-}" ] || [ -n "\${OPENCODE_PROJECT_ROOT:-}" ]; then
-  HARNESS="opencode"
-fi
-
 ${RUNTIME_SHELL_DETECT_ROOT}
 
 STATE_DIR="$ROOT/${RUNTIME_ROOT}/state"
@@ -41,8 +32,12 @@ INPUT=$(cat 2>/dev/null || echo '{}')
 [ -n "$INPUT" ] || exit 0
 
 TOOL="unknown"
-PAYLOAD=""
-if command -v jq >/dev/null 2>&1; then
+PAYLOAD="$INPUT"
+if command -v cclaw_hook_extract_tool_and_payload >/dev/null 2>&1; then
+  cclaw_hook_extract_tool_and_payload "$INPUT"
+  TOOL="\${CCLAW_HOOK_TOOL:-unknown}"
+  PAYLOAD="\${CCLAW_HOOK_PAYLOAD:-$INPUT}"
+elif command -v jq >/dev/null 2>&1; then
   TOOL=$(printf '%s' "$INPUT" | jq -r '.tool_name // .tool // .toolName // .name // .id // .command // .tool.name // .tool.id // .input.tool_name // .input.tool // .input.toolName // .input.name // .input.id // .input.command // .input.tool.name // .input.tool.id // "unknown"' 2>/dev/null || echo "unknown")
   PAYLOAD=$(printf '%s' "$INPUT" | jq -r '.tool_input // .input // .arguments // .params // .payload // {} | tostring' 2>/dev/null || echo "")
 elif command -v python3 >/dev/null 2>&1; then
@@ -99,8 +94,13 @@ if [ -z "$PAYLOAD" ]; then
   PAYLOAD=$(printf '%s' "$INPUT")
 fi
 
-PAYLOAD_LOWER=$(printf '%s' "$PAYLOAD" | tr '[:upper:]' '[:lower:]')
-TOOL_LOWER=$(printf '%s' "$TOOL" | tr '[:upper:]' '[:lower:]')
+if command -v cclaw_hook_lower >/dev/null 2>&1; then
+  PAYLOAD_LOWER=$(cclaw_hook_lower "$PAYLOAD")
+  TOOL_LOWER=$(cclaw_hook_lower "$TOOL")
+else
+  PAYLOAD_LOWER=$(printf '%s' "$PAYLOAD" | tr '[:upper:]' '[:lower:]')
+  TOOL_LOWER=$(printf '%s' "$TOOL" | tr '[:upper:]' '[:lower:]')
+fi
 TS=$(date -u +"%Y-%m-%dT%H:%M:%SZ" 2>/dev/null || echo "")
 REASONS=""
 
@@ -195,6 +195,7 @@ STATE_DIR="$ROOT/${RUNTIME_ROOT}/state"
 FLOW_STATE_FILE="$STATE_DIR/flow-state.json"
 TDD_LOG_FILE="$STATE_DIR/tdd-cycle-log.jsonl"
 IRON_LAWS_FILE="$STATE_DIR/iron-laws.json"
+REVIEW_ARMY_FILE="$ROOT/${RUNTIME_ROOT}/artifacts/07-review-army.json"
 GUARD_STATE_FILE="$STATE_DIR/workflow-guard.json"
 GUARD_LOG="$STATE_DIR/workflow-guard.jsonl"
 mkdir -p "$STATE_DIR" 2>/dev/null || true
@@ -203,8 +204,12 @@ INPUT=$(cat 2>/dev/null || echo '{}')
 [ -n "$INPUT" ] || exit 0
 
 TOOL="unknown"
-PAYLOAD=""
-if command -v jq >/dev/null 2>&1; then
+PAYLOAD="$INPUT"
+if command -v cclaw_hook_extract_tool_and_payload >/dev/null 2>&1; then
+  cclaw_hook_extract_tool_and_payload "$INPUT"
+  TOOL="\${CCLAW_HOOK_TOOL:-unknown}"
+  PAYLOAD="\${CCLAW_HOOK_PAYLOAD:-$INPUT}"
+elif command -v jq >/dev/null 2>&1; then
   TOOL=$(printf '%s' "$INPUT" | jq -r '.tool_name // .tool // .toolName // .name // .id // .command // .tool.name // .tool.id // .input.tool_name // .input.tool // .input.toolName // .input.name // .input.id // .input.command // .input.tool.name // .input.tool.id // "unknown"' 2>/dev/null || echo "unknown")
   PAYLOAD=$(printf '%s' "$INPUT" | jq -r '.tool_input // .input // .arguments // .params // .payload // {} | tostring' 2>/dev/null || echo "")
 elif command -v python3 >/dev/null 2>&1; then
@@ -257,8 +262,13 @@ else
 fi
 
 [ -n "$PAYLOAD" ] || PAYLOAD=$(printf '%s' "$INPUT")
-TOOL_LOWER=$(printf '%s' "$TOOL" | tr '[:upper:]' '[:lower:]')
-PAYLOAD_LOWER=$(printf '%s' "$PAYLOAD" | tr '[:upper:]' '[:lower:]')
+if command -v cclaw_hook_lower >/dev/null 2>&1; then
+  TOOL_LOWER=$(cclaw_hook_lower "$TOOL")
+  PAYLOAD_LOWER=$(cclaw_hook_lower "$PAYLOAD")
+else
+  TOOL_LOWER=$(printf '%s' "$TOOL" | tr '[:upper:]' '[:lower:]')
+  PAYLOAD_LOWER=$(printf '%s' "$PAYLOAD" | tr '[:upper:]' '[:lower:]')
+fi
 TS=$(date -u +"%Y-%m-%dT%H:%M:%SZ" 2>/dev/null || echo "")
 NOW_EPOCH=$(date +%s 2>/dev/null || echo "0")
 REASONS=""
@@ -269,11 +279,19 @@ if [ -z "$ACTIVE_AGENT" ]; then
     ACTIVE_AGENT=$(printf '%s' "$INPUT" | jq -r '.agent_name // .agent // .input.agent_name // .input.agent // .tool_input.agent_name // .tool_input.agent // ""' 2>/dev/null || echo "")
   fi
 fi
-ACTIVE_AGENT_LOWER=$(printf '%s' "$ACTIVE_AGENT" | tr '[:upper:]' '[:lower:]')
+if command -v cclaw_hook_lower >/dev/null 2>&1; then
+  ACTIVE_AGENT_LOWER=$(cclaw_hook_lower "$ACTIVE_AGENT")
+else
+  ACTIVE_AGENT_LOWER=$(printf '%s' "$ACTIVE_AGENT" | tr '[:upper:]' '[:lower:]')
+fi
 
 CURRENT_STAGE="none"
 CURRENT_RUN="active"
-if [ -f "$FLOW_STATE_FILE" ]; then
+if command -v cclaw_hook_read_flow_state_minimal >/dev/null 2>&1; then
+  cclaw_hook_read_flow_state_minimal "$FLOW_STATE_FILE"
+  CURRENT_STAGE="\${CCLAW_HOOK_FLOW_STAGE:-none}"
+  CURRENT_RUN="\${CCLAW_HOOK_FLOW_RUN_ID:-active}"
+elif [ -f "$FLOW_STATE_FILE" ]; then
   if command -v jq >/dev/null 2>&1; then
     CURRENT_STAGE=$(jq -r '.currentStage // "none"' "$FLOW_STATE_FILE" 2>/dev/null || echo "none")
     CURRENT_RUN=$(jq -r '.activeRunId // "active"' "$FLOW_STATE_FILE" 2>/dev/null || echo "active")
@@ -689,6 +707,62 @@ is_tdd_production_write_payload() {
   return 0
 }
 
+collect_tdd_production_paths() {
+  local payload_paths="$1"
+  local out=""
+  [ -n "$payload_paths" ] || {
+    printf ''
+    return 0
+  }
+  while IFS= read -r raw_path; do
+    [ -n "$raw_path" ] || continue
+    local normalized
+    normalized=$(normalize_payload_path "$raw_path")
+    if is_tdd_production_path "$normalized"; then
+      if [ -n "$out" ]; then
+        out="$out"$'\n'"$raw_path"
+      else
+        out="$raw_path"
+      fi
+    fi
+  done <<< "$payload_paths"
+  printf '%s' "$out"
+}
+
+review_layer_coverage_complete() {
+  if [ ! -f "$REVIEW_ARMY_FILE" ]; then
+    return 1
+  fi
+  if command -v jq >/dev/null 2>&1; then
+    jq -e '
+      ((.reconciliation.layerCoverage.spec // false) == true) and
+      ((.reconciliation.layerCoverage.correctness // false) == true) and
+      ((.reconciliation.layerCoverage.security // false) == true) and
+      ((.reconciliation.layerCoverage.performance // false) == true) and
+      ((.reconciliation.layerCoverage.architecture // false) == true) and
+      ((.reconciliation.layerCoverage["external-safety"] // false) == true)
+    ' "$REVIEW_ARMY_FILE" >/dev/null 2>&1
+    return $?
+  fi
+  if command -v python3 >/dev/null 2>&1; then
+    python3 - "$REVIEW_ARMY_FILE" <<'PY'
+import json
+import sys
+keys = ["spec", "correctness", "security", "performance", "architecture", "external-safety"]
+try:
+    with open(sys.argv[1], "r", encoding="utf-8") as handle:
+        parsed = json.load(handle)
+    coverage = ((parsed.get("reconciliation") or {}).get("layerCoverage") or {})
+    ok = all(coverage.get(key) is True for key in keys)
+except Exception:
+    ok = False
+raise SystemExit(0 if ok else 1)
+PY
+    return $?
+  fi
+  return 1
+}
+
 tdd_cycle_counts() {
   if [ ! -f "$TDD_LOG_FILE" ] || [ ! -s "$TDD_LOG_FILE" ]; then
     printf '0:0'
@@ -898,54 +972,100 @@ if is_preimplementation_stage "$CURRENT_STAGE" && is_mutating_tool "$TOOL_LOWER"
 fi
 
 if [ "$CURRENT_STAGE" = "tdd" ] && is_mutating_tool "$TOOL_LOWER"; then
+  TDD_MISSING_RED_PATHS=""
   if is_tdd_production_write_payload "$PAYLOAD_LOWER" "$MUTATION_PATHS"; then
-    if has_open_red_cycle; then
-      TDD_CYCLE_STATE="red_open"
-    else
-      OPEN_RED_STATUS=$?
-      if [ "$OPEN_RED_STATUS" -eq 2 ]; then
-        TDD_CYCLE_STATE="counts_unavailable"
+    PRODUCTION_PATHS=$(collect_tdd_production_paths "$MUTATION_PATHS")
+    PER_PATH_RED_CHECKED="false"
+    if [ -n "$PRODUCTION_PATHS" ] && command -v cclaw >/dev/null 2>&1; then
+      PER_PATH_RED_CHECKED="true"
+      while IFS= read -r production_path; do
+        [ -n "$production_path" ] || continue
+        cclaw internal tdd-red-evidence --path="$production_path" --run-id="$CURRENT_RUN" --quiet >/dev/null 2>&1
+        EVIDENCE_STATUS=$?
+        if [ "$EVIDENCE_STATUS" -eq 0 ]; then
+          continue
+        fi
+        if [ "$EVIDENCE_STATUS" -eq 2 ]; then
+          if [ -n "$TDD_MISSING_RED_PATHS" ]; then
+            TDD_MISSING_RED_PATHS="$TDD_MISSING_RED_PATHS, $production_path"
+          else
+            TDD_MISSING_RED_PATHS="$production_path"
+          fi
+          continue
+        fi
+        if [ -n "$REASONS" ]; then
+          REASONS="$REASONS,tdd_red_evidence_check_failed"
+        else
+          REASONS="tdd_red_evidence_check_failed"
+        fi
+      done <<< "$PRODUCTION_PATHS"
+      if [ -n "$TDD_MISSING_RED_PATHS" ]; then
+        if [ -n "$REASONS" ]; then
+          REASONS="$REASONS,tdd_write_without_red_for_path"
+        else
+          REASONS="tdd_write_without_red_for_path"
+        fi
+      fi
+    fi
+    if [ "$PER_PATH_RED_CHECKED" != "true" ]; then
+      if has_open_red_cycle; then
+        TDD_CYCLE_STATE="red_open"
+      else
+        OPEN_RED_STATUS=$?
+        if [ "$OPEN_RED_STATUS" -eq 2 ]; then
+          TDD_CYCLE_STATE="counts_unavailable"
+          if [ -n "$REASONS" ]; then
+            REASONS="$REASONS,tdd_cycle_counts_unavailable"
+          else
+            REASONS="tdd_cycle_counts_unavailable"
+          fi
+        else
+          TDD_CYCLE_STATE=$(tdd_cycle_state)
+        fi
+      fi
+      if [ "$TDD_CYCLE_STATE" = "need_red" ]; then
+        if [ -n "$REASONS" ]; then
+          REASONS="$REASONS,tdd_write_without_open_red"
+        else
+          REASONS="tdd_write_without_open_red"
+        fi
+      elif [ "$TDD_CYCLE_STATE" = "__UNAVAILABLE__" ]; then
         if [ -n "$REASONS" ]; then
           REASONS="$REASONS,tdd_cycle_counts_unavailable"
         else
           REASONS="tdd_cycle_counts_unavailable"
         fi
-      else
-        TDD_CYCLE_STATE=$(tdd_cycle_state)
-      fi
-    fi
-    if [ "$TDD_CYCLE_STATE" = "need_red" ]; then
-      if [ -n "$REASONS" ]; then
-        REASONS="$REASONS,tdd_write_without_open_red"
-      else
-        REASONS="tdd_write_without_open_red"
-      fi
-    elif [ "$TDD_CYCLE_STATE" = "__UNAVAILABLE__" ]; then
-      if [ -n "$REASONS" ]; then
-        REASONS="$REASONS,tdd_cycle_counts_unavailable"
-      else
-        REASONS="tdd_cycle_counts_unavailable"
       fi
     fi
   fi
 fi
 
 if [ "$CURRENT_STAGE" = "tdd" ] && is_mutating_tool "$TOOL_LOWER"; then
-  if [ "$ACTIVE_AGENT_LOWER" = "tdd-red" ] && is_tdd_production_write_payload "$PAYLOAD_LOWER" "$MUTATION_PATHS"; then
+  ACTIVE_AGENT_EFFECTIVE="$ACTIVE_AGENT_LOWER"
+  if [ -z "$ACTIVE_AGENT_EFFECTIVE" ]; then
+    INFERRED_TDD_PHASE=$(tdd_cycle_state)
+    case "$INFERRED_TDD_PHASE" in
+      need_red) ACTIVE_AGENT_EFFECTIVE="tdd-red" ;;
+      red_open) ACTIVE_AGENT_EFFECTIVE="tdd-green" ;;
+      green_done) ACTIVE_AGENT_EFFECTIVE="tdd-refactor" ;;
+      *) ACTIVE_AGENT_EFFECTIVE="" ;;
+    esac
+  fi
+  if [ "$ACTIVE_AGENT_EFFECTIVE" = "tdd-red" ] && is_tdd_production_write_payload "$PAYLOAD_LOWER" "$MUTATION_PATHS"; then
     if [ -n "$REASONS" ]; then
       REASONS="$REASONS,tdd_red_agent_cannot_write_production"
     else
       REASONS="tdd_red_agent_cannot_write_production"
     fi
   fi
-  if [ "$ACTIVE_AGENT_LOWER" = "tdd-green" ] && is_tdd_test_payload "$PAYLOAD_LOWER" "$MUTATION_PATHS"; then
+  if [ "$ACTIVE_AGENT_EFFECTIVE" = "tdd-green" ] && is_tdd_test_payload "$PAYLOAD_LOWER" "$MUTATION_PATHS"; then
     if [ -n "$REASONS" ]; then
       REASONS="$REASONS,tdd_green_agent_cannot_write_tests"
     else
       REASONS="tdd_green_agent_cannot_write_tests"
     fi
   fi
-  if [ "$ACTIVE_AGENT_LOWER" = "tdd-refactor" ]; then
+  if [ "$ACTIVE_AGENT_EFFECTIVE" = "tdd-refactor" ]; then
     TDD_AGENT_STATE=$(tdd_cycle_state)
     if [ "$TDD_AGENT_STATE" != "green_done" ]; then
       if [ -n "$REASONS" ]; then
@@ -984,6 +1104,13 @@ if [ "$CURRENT_STAGE" = "ship" ] && is_execution_or_mutating_tool "$TOOL_LOWER";
         REASONS="$REASONS,ship_preflight_required"
       else
         REASONS="ship_preflight_required"
+      fi
+    fi
+    if ! review_layer_coverage_complete; then
+      if [ -n "$REASONS" ]; then
+        REASONS="$REASONS,ship_review_coverage_required"
+      else
+        REASONS="ship_review_coverage_required"
       fi
     fi
   fi
@@ -1054,16 +1181,22 @@ PY
 fi
 
 if [ -n "$REASONS" ]; then
-  if printf '%s' "$REASONS" | grep -Eq 'tdd_red_agent_cannot_write_production'; then
+  if printf '%s' "$REASONS" | grep -Eq 'tdd_write_without_red_for_path'; then
+    NOTE="Cclaw workflow guard: missing failing RED evidence for production path(s): \${TDD_MISSING_RED_PATHS:-unknown}. Log failing tests before touching these files."
+  elif printf '%s' "$REASONS" | grep -Eq 'tdd_write_without_open_red'; then
+    NOTE="Cclaw workflow guard: Write a failing test first before editing production files during tdd stage (state=\${TDD_CYCLE_STATE})."
+  elif printf '%s' "$REASONS" | grep -Eq 'tdd_red_evidence_check_failed'; then
+    NOTE="Cclaw workflow guard: failed to validate per-path RED evidence via \`cclaw internal tdd-red-evidence\`; refusing write until evidence check succeeds."
+  elif printf '%s' "$REASONS" | grep -Eq 'tdd_red_agent_cannot_write_production'; then
     NOTE="Cclaw workflow guard: tdd-red agent is limited to test-side RED work and cannot edit production files."
   elif printf '%s' "$REASONS" | grep -Eq 'tdd_green_agent_cannot_write_tests'; then
     NOTE="Cclaw workflow guard: tdd-green agent can implement production fixes but should not author new RED tests."
   elif printf '%s' "$REASONS" | grep -Eq 'tdd_refactor_before_green'; then
     NOTE="Cclaw workflow guard: tdd-refactor requires a green_done cycle state before refactor edits."
-  elif printf '%s' "$REASONS" | grep -Eq 'tdd_write_without_open_red'; then
-    NOTE="Cclaw workflow guard: Write a failing test first before editing production files during tdd stage (state=\${TDD_CYCLE_STATE})."
   elif printf '%s' "$REASONS" | grep -Eq 'ship_preflight_required'; then
     NOTE="Cclaw workflow guard: ship finalization command detected before ship_preflight_passed gate. Run preflight and record evidence first."
+  elif printf '%s' "$REASONS" | grep -Eq 'ship_review_coverage_required'; then
+    NOTE="Cclaw workflow guard: ship finalization requires review layer coverage for spec/correctness/security/performance/architecture/external-safety in 07-review-army.json."
   elif printf '%s' "$REASONS" | grep -Eq 'tdd_cycle_counts_unavailable'; then
     NOTE="Cclaw workflow guard: unable to inspect run-scoped tdd-cycle counts (missing usable jq/python3/awk). Install one of these tools before writing production code in tdd."
   elif printf '%s' "$REASONS" | grep -Eq 'runtime_write_requires_managed_only|direct_flow_state_edit'; then
@@ -1092,10 +1225,10 @@ if [ -n "$REASONS" ]; then
   if printf '%s' "$REASONS" | grep -Eq 'implementation_write_before_'; then
     SHOULD_BLOCK="true"
   fi
-  if printf '%s' "$REASONS" | grep -Eq 'tdd_write_without_open_red' && [ "$TDD_ENFORCEMENT_MODE" = "strict" ]; then
+  if printf '%s' "$REASONS" | grep -Eq 'tdd_write_without_open_red|tdd_write_without_red_for_path' && [ "$TDD_ENFORCEMENT_MODE" = "strict" ]; then
     SHOULD_BLOCK="true"
   fi
-  if printf '%s' "$REASONS" | grep -Eq 'tdd_write_without_open_red' && iron_law_is_strict "tdd-red-before-write"; then
+  if printf '%s' "$REASONS" | grep -Eq 'tdd_write_without_open_red|tdd_write_without_red_for_path' && iron_law_is_strict "tdd-red-before-write"; then
     SHOULD_BLOCK="true"
   fi
   if printf '%s' "$REASONS" | grep -Eq 'runtime_write_requires_managed_only|direct_flow_state_edit' && iron_law_is_strict "runtime-writes-managed-only"; then
@@ -1107,10 +1240,13 @@ if [ -n "$REASONS" ]; then
   if printf '%s' "$REASONS" | grep -Eq 'ship_preflight_required' && iron_law_is_strict "ship-preflight-required"; then
     SHOULD_BLOCK="true"
   fi
+  if printf '%s' "$REASONS" | grep -Eq 'ship_review_coverage_required' && iron_law_is_strict "review-coverage-complete-before-ship"; then
+    SHOULD_BLOCK="true"
+  fi
   if printf '%s' "$REASONS" | grep -Eq 'implementation_write_before_plan_completion' && iron_law_is_strict "plan-requires-approval"; then
     SHOULD_BLOCK="true"
   fi
-  if printf '%s' "$REASONS" | grep -Eq 'tdd_cycle_counts_unavailable'; then
+  if printf '%s' "$REASONS" | grep -Eq 'tdd_cycle_counts_unavailable|tdd_red_evidence_check_failed'; then
     SHOULD_BLOCK="true"
   fi
   if printf '%s' "$REASONS" | grep -Eq 'tdd_red_agent_cannot_write_production|tdd_green_agent_cannot_write_tests|tdd_refactor_before_green'; then
@@ -1133,24 +1269,213 @@ export function contextMonitorScript(): string {
 # Advisory-only context pressure warnings (best effort).
 set -uo pipefail
 
-HARNESS="codex"
-if [ -n "\${CLAUDE_PROJECT_DIR:-}" ]; then
-  HARNESS="claude"
-elif [ -n "\${CURSOR_PROJECT_DIR:-}" ] || [ -n "\${CURSOR_PROJECT_ROOT:-}" ]; then
-  HARNESS="cursor"
-elif [ -n "\${OPENCODE_PROJECT_DIR:-}" ] || [ -n "\${OPENCODE_PROJECT_ROOT:-}" ]; then
-  HARNESS="opencode"
-fi
-
 ${RUNTIME_SHELL_DETECT_ROOT}
 
 STATE_DIR="$ROOT/${RUNTIME_ROOT}/state"
 MONITOR_STATE="$STATE_DIR/context-monitor.json"
 WARNINGS_FILE="$STATE_DIR/context-warnings.jsonl"
+FLOW_STATE_FILE="$STATE_DIR/flow-state.json"
+TDD_AUTO_EVIDENCE_FILE="$STATE_DIR/tdd-red-evidence.jsonl"
 mkdir -p "$STATE_DIR" 2>/dev/null || true
 
 INPUT=$(cat 2>/dev/null || echo '{}')
 [ -n "$INPUT" ] || exit 0
+
+CURRENT_STAGE="none"
+CURRENT_RUN="active"
+if command -v cclaw_hook_read_flow_state_minimal >/dev/null 2>&1; then
+  cclaw_hook_read_flow_state_minimal "$FLOW_STATE_FILE"
+  CURRENT_STAGE="\${CCLAW_HOOK_FLOW_STAGE:-none}"
+  CURRENT_RUN="\${CCLAW_HOOK_FLOW_RUN_ID:-active}"
+elif [ -f "$FLOW_STATE_FILE" ]; then
+  if command -v jq >/dev/null 2>&1; then
+    CURRENT_STAGE=$(jq -r '.currentStage // "none"' "$FLOW_STATE_FILE" 2>/dev/null || echo "none")
+    CURRENT_RUN=$(jq -r '.activeRunId // "active"' "$FLOW_STATE_FILE" 2>/dev/null || echo "active")
+  elif command -v python3 >/dev/null 2>&1; then
+    FLOW_META=$(python3 - "$FLOW_STATE_FILE" <<'PY'
+import json
+import sys
+stage = "none"
+run_id = "active"
+try:
+    with open(sys.argv[1], "r", encoding="utf-8") as fh:
+        payload = json.load(fh)
+    stage_value = payload.get("currentStage")
+    run_value = payload.get("activeRunId")
+    if isinstance(stage_value, str) and stage_value:
+        stage = stage_value
+    if isinstance(run_value, str) and run_value:
+        run_id = run_value
+except Exception:
+    pass
+print(stage)
+print(run_id)
+PY
+)
+    {
+      IFS= read -r CURRENT_STAGE
+      IFS= read -r CURRENT_RUN
+    } <<EOF
+$FLOW_META
+EOF
+  fi
+fi
+
+AUTO_TOOL=""
+AUTO_COMMAND=""
+AUTO_EXIT_CODE=""
+AUTO_PATHS_CSV=""
+if command -v python3 >/dev/null 2>&1; then
+  AUTO_META=$(INPUT_JSON="$INPUT" python3 - <<'PY'
+import json
+import os
+import re
+from typing import Any, Iterator
+
+raw = os.environ.get("INPUT_JSON", "{}")
+try:
+    payload = json.loads(raw)
+except Exception:
+    payload = {}
+
+def walk(node: Any) -> Iterator[Any]:
+    if isinstance(node, dict):
+        yield node
+        for value in node.values():
+            yield from walk(value)
+    elif isinstance(node, list):
+        for value in node:
+            yield from walk(value)
+
+def first_string(keys: list[str]) -> str:
+    for node in walk(payload):
+        if not isinstance(node, dict):
+            continue
+        for key in keys:
+            value = node.get(key)
+            if isinstance(value, str) and value.strip():
+                return value.strip()
+    return ""
+
+tool = first_string(["tool_name", "tool", "toolName", "name", "id"])
+command = ""
+for node in walk(payload):
+    if not isinstance(node, dict):
+        continue
+    for key in ("command", "cmd"):
+        value = node.get(key)
+        if isinstance(value, str) and value.strip():
+            command = value.strip()
+            break
+    if command:
+        break
+
+exit_code = ""
+for node in walk(payload):
+    if not isinstance(node, dict):
+        continue
+    for key in ("exitCode", "exit_code", "code", "status"):
+        value = node.get(key)
+        if isinstance(value, bool):
+            exit_code = "0" if value else "1"
+            break
+        if isinstance(value, (int, float)):
+            exit_code = str(int(value))
+            break
+    if exit_code:
+        break
+
+blob_parts: list[str] = []
+for node in walk(payload):
+    if not isinstance(node, dict):
+        continue
+    for key in ("stderr", "stdout", "output", "text", "message"):
+        value = node.get(key)
+        if isinstance(value, str) and value:
+            blob_parts.append(value)
+blob_parts.append(command)
+blob = "\\n".join(blob_parts)
+path_pattern = re.compile(r"(?:[A-Za-z0-9_.-]+/)+[A-Za-z0-9_.-]+\.(?:ts|tsx|js|jsx|mjs|cjs|py|go|rs|java|kt|rb|php|cs|swift)")
+seen: set[str] = set()
+paths: list[str] = []
+for match in path_pattern.findall(blob):
+    normalized = match.strip().strip("\\"'.,:;()[]{}<>")
+    if not normalized or normalized in seen:
+        continue
+    seen.add(normalized)
+    paths.append(normalized)
+
+print(tool.replace("\\t", " ").replace("\\n", " "))
+print(command.replace("\\t", " ").replace("\\n", " "))
+print(exit_code)
+print(",".join(paths[:20]).replace("\\t", " ").replace("\\n", " "))
+PY
+)
+  {
+    IFS= read -r AUTO_TOOL
+    IFS= read -r AUTO_COMMAND
+    IFS= read -r AUTO_EXIT_CODE
+    IFS= read -r AUTO_PATHS_CSV
+  } <<EOF
+$AUTO_META
+EOF
+fi
+
+if [ "$CURRENT_STAGE" = "tdd" ] && [ -n "$AUTO_COMMAND" ] && [ -n "$AUTO_EXIT_CODE" ]; then
+  if command -v cclaw_hook_lower >/dev/null 2>&1; then
+    AUTO_COMMAND_LOWER=$(cclaw_hook_lower "$AUTO_COMMAND")
+  else
+    AUTO_COMMAND_LOWER=$(printf '%s' "$AUTO_COMMAND" | tr '[:upper:]' '[:lower:]')
+  fi
+  if printf '%s' "$AUTO_COMMAND_LOWER" | grep -Eq '(npm test|npm run test|pnpm test|pnpm run test|yarn test|bun test|vitest|jest|pytest|go test|cargo test|mvn test|gradle test|dotnet test)'; then
+    if printf '%s' "$AUTO_EXIT_CODE" | grep -Eq '^-?[0-9]+$' && [ "$AUTO_EXIT_CODE" -ne 0 ]; then
+      TS_AUTO=$(date -u +"%Y-%m-%dT%H:%M:%SZ" 2>/dev/null || echo "")
+      if command -v jq >/dev/null 2>&1; then
+        AUTO_ENTRY=$(jq -n -c \
+          --arg ts "$TS_AUTO" \
+          --arg run "$CURRENT_RUN" \
+          --arg command "$AUTO_COMMAND" \
+          --arg tool "$AUTO_TOOL" \
+          --argjson exitCode "$AUTO_EXIT_CODE" \
+          --arg paths "$AUTO_PATHS_CSV" \
+          '{
+            ts: $ts,
+            runId: $run,
+            stage: "tdd",
+            source: "posttool-auto",
+            command: $command,
+            tool: $tool,
+            exitCode: $exitCode,
+            paths: ($paths | split(",") | map(select(length > 0)))
+          }' 2>/dev/null || echo "")
+      elif command -v python3 >/dev/null 2>&1; then
+        AUTO_ENTRY=$(python3 - "$TS_AUTO" "$CURRENT_RUN" "$AUTO_COMMAND" "$AUTO_TOOL" "$AUTO_EXIT_CODE" "$AUTO_PATHS_CSV" <<'PY'
+import json
+import sys
+ts, run_id, command, tool, exit_code, paths_csv = sys.argv[1:7]
+paths = [value for value in paths_csv.split(",") if value]
+entry = {
+    "ts": ts,
+    "runId": run_id,
+    "stage": "tdd",
+    "source": "posttool-auto",
+    "command": command,
+    "tool": tool,
+    "exitCode": int(exit_code),
+    "paths": paths
+}
+print(json.dumps(entry, ensure_ascii=False))
+PY
+)
+      else
+        AUTO_ENTRY=""
+      fi
+      if [ -n "$AUTO_ENTRY" ]; then
+        printf '%s\n' "$AUTO_ENTRY" >> "$TDD_AUTO_EVIDENCE_FILE" 2>/dev/null || true
+      fi
+    fi
+  fi
+fi
 
 REMAINING_PERCENT=""
 if command -v python3 >/dev/null 2>&1; then

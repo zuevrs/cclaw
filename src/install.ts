@@ -41,6 +41,7 @@ import { subagentDrivenDevSkill, parallelAgentsSkill } from "./content/subagents
 import { sessionHooksSkillMarkdown } from "./content/session-hooks.js";
 import { ironLawRuntimeDocument, ironLawsSkillMarkdown } from "./content/iron-laws.js";
 import {
+  hookLibScript,
   sessionStartScript,
   stopCheckpointScript,
   runHookDispatcherScript,
@@ -867,6 +868,7 @@ async function writeHooks(projectRoot: string, config: CclawConfig): Promise<voi
     )}\n`
   );
 
+  await writeFileSafe(path.join(hooksDir, "_lib.sh"), hookLibScript());
   await writeFileSafe(path.join(hooksDir, "session-start.sh"), sessionStartScript());
   await writeFileSafe(path.join(hooksDir, "stop-checkpoint.sh"), stopCheckpointScript());
   await writeFileSafe(path.join(hooksDir, "run-hook.cmd"), runHookDispatcherScript());
@@ -890,6 +892,7 @@ async function writeHooks(projectRoot: string, config: CclawConfig): Promise<voi
 
   try {
     for (const script of [
+      "_lib.sh",
       "session-start.sh",
       "stop-checkpoint.sh",
       "run-hook.cmd",

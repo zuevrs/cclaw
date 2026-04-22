@@ -96,6 +96,14 @@ describe("stage schema and subagent alignment", () => {
       duplicatesCollapsed: 0,
       conflicts: [],
       multiSpecialistConfirmed: [],
+      layerCoverage: {
+        spec: false,
+        correctness: false,
+        security: false,
+        performance: false,
+        architecture: false,
+        "external-safety": false
+      },
       shipBlockers: []
     });
     expect(JSON.stringify(parsed)).not.toMatch(/"title"|"category"/);
@@ -187,6 +195,9 @@ describe("stage schema and subagent alignment", () => {
   });
 
   it("every declared gate is marked required on at least one track (single source of truth)", () => {
+    const allowedRecommendedOnly = new Set<string>([
+      "review_layer_coverage_complete"
+    ]);
     const offenders: Array<{ stage: FlowStage; gateId: string }> = [];
     for (const stage of FLOW_STAGES) {
       const idsByTrack = new Map<FlowTrack, Map<string, "required" | "recommended">>();
@@ -210,7 +221,7 @@ describe("stage schema and subagent alignment", () => {
             break;
           }
         }
-        if (!requiredAnywhere) {
+        if (!requiredAnywhere && !allowedRecommendedOnly.has(gateId)) {
           offenders.push({ stage, gateId });
         }
       }

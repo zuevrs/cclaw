@@ -759,6 +759,7 @@ export async function doctorChecks(projectRoot: string, options: DoctorOptions =
 
   // Hook scripts
   for (const script of [
+    "_lib.sh",
     "session-start.sh",
     "stop-checkpoint.sh",
     "run-hook.cmd",
