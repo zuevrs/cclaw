@@ -1,6 +1,10 @@
 import { RUNTIME_ROOT } from "../constants.js";
 
 function hookDispatcherCommand(hookName: string): string {
+  // RUNTIME_ROOT is a relative path (".cclaw") that currently contains no
+  // whitespace, so quoting is unnecessary inside the JSON-encoded command
+  // string. If RUNTIME_ROOT ever becomes configurable, wrap the path with
+  // JSON.stringify to survive spaces.
   return `node ${RUNTIME_ROOT}/hooks/run-hook.mjs ${hookName}`;
 }
 
