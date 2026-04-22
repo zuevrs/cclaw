@@ -1,4 +1,5 @@
 import { RUNTIME_ROOT } from "../constants.js";
+import { FLOW_MAP_REL_PATH } from "./flow-map.js";
 import { stageSchema } from "./stage-schema.js";
 import { stageSkillFolder } from "./skills.js";
 
@@ -133,6 +134,12 @@ Validate envelopes with:
 ## Primary skill
 
 **${skillRel}** — full protocol and stage table.
+
+## Surface reference
+
+When you need the full shape of cclaw (stages, routers, Ralph Loop,
+state files) load \`${FLOW_MAP_REL_PATH}\`. It is the single-page
+overview and is safe to read at any time.
 `;
 }
 

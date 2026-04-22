@@ -186,6 +186,37 @@ describe("flow command contracts", () => {
     );
   });
 
+  it("writes the consolidated flow-map reference and links from meta-skill and /cc-next", async () => {
+    const root = await createTempProject("flow-map-ref");
+    await initCclaw({ projectRoot: root });
+
+    const flowMap = await fs.readFile(
+      path.join(root, ".cclaw/references/flow-map.md"),
+      "utf8"
+    );
+    expect(flowMap).toContain("# cclaw Flow Map");
+    expect(flowMap).toContain("## Stages (8)");
+    expect(flowMap).toContain("brainstorm");
+    expect(flowMap).toContain("ship");
+    expect(flowMap).toContain("/cc-view");
+    expect(flowMap).toContain("/cc-ops");
+    expect(flowMap).toContain("## Ralph Loop");
+    expect(flowMap).toContain("## Key state files");
+    expect(flowMap).toContain(".cclaw/state/ralph-loop.json");
+
+    const metaSkill = await fs.readFile(
+      path.join(root, ".cclaw/skills/using-cclaw/SKILL.md"),
+      "utf8"
+    );
+    expect(metaSkill).toContain(".cclaw/references/flow-map.md");
+
+    const nextCommand = await fs.readFile(
+      path.join(root, ".cclaw/commands/next.md"),
+      "utf8"
+    );
+    expect(nextCommand).toContain(".cclaw/references/flow-map.md");
+  });
+
   it("requires the meta-skill to declare a skill-before-response gate", async () => {
     const root = await createTempProject("skill-gate");
     await initCclaw({ projectRoot: root });

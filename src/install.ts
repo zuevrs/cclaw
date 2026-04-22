@@ -54,6 +54,7 @@ import {
   completionProtocolMarkdown,
   ethosProtocolMarkdown
 } from "./content/protocols.js";
+import { FLOW_MAP_REL_PATH, flowMapMarkdown } from "./content/flow-map.js";
 import {
   ARTIFACT_TEMPLATES,
   CURSOR_WORKFLOW_RULE_MDC,
@@ -522,6 +523,10 @@ async function writeSkills(projectRoot: string, config?: CclawConfig): Promise<v
   await writeFileSafe(
     runtimePath(projectRoot, "references", "protocols", "ethos.md"),
     ethosProtocolMarkdown()
+  );
+  await writeFileSafe(
+    runtimePath(projectRoot, "references", "flow-map.md"),
+    flowMapMarkdown()
   );
 
   for (const folder of UTILITY_SKILL_FOLDERS) {

@@ -1,4 +1,5 @@
 import { RUNTIME_ROOT } from "../constants.js";
+import { FLOW_MAP_REL_PATH } from "./flow-map.js";
 import {
   COMPLETION_PROTOCOL_REL_PATH,
   DECISION_PROTOCOL_REL_PATH,
@@ -83,6 +84,8 @@ Before stage work:
 brainstorm -> scope -> design -> spec -> plan -> tdd -> review -> ship
 
 Tracks may skip stages via \`flow-state.track\` + \`skippedStages\`.
+For the full surface (stages, routers, Ralph Loop, state files) load
+\`${FLOW_MAP_REL_PATH}\` — it is the single-page overview of cclaw.
 
 ## Contextual skill activation
 
