@@ -317,8 +317,7 @@ describe("install lifecycle", { timeout: 30_000 }, () => {
     const initial = await readConfig(root);
     await writeConfig(root, {
       ...initial,
-      promptGuardMode: "strict",
-      tddEnforcement: "strict",
+      strictness: "strict",
       gitHookGuards: true,
       languageRulePacks: ["typescript", "python", "go"],
       trackHeuristics: {
@@ -332,8 +331,7 @@ describe("install lifecycle", { timeout: 30_000 }, () => {
     });
 
     const before = await readConfig(root);
-    expect(before.promptGuardMode).toBe("strict");
-    expect(before.tddEnforcement).toBe("strict");
+    expect(before.strictness).toBe("strict");
     expect(before.gitHookGuards).toBe(true);
     expect(before.languageRulePacks.length).toBeGreaterThan(0);
 
@@ -343,8 +341,7 @@ describe("install lifecycle", { timeout: 30_000 }, () => {
     await upgradeCclaw(root);
 
     const after = await readConfig(root);
-    expect(after.promptGuardMode).toBe("strict");
-    expect(after.tddEnforcement).toBe("strict");
+    expect(after.strictness).toBe("strict");
     expect(after.gitHookGuards).toBe(true);
     expect(after.languageRulePacks).toEqual(before.languageRulePacks);
     expect(after.trackHeuristics?.tracks?.quick?.triggers).toEqual(["hotfix"]);
@@ -437,7 +434,7 @@ describe("install lifecycle", { timeout: 30_000 }, () => {
     const current = await readConfig(root);
     await writeConfig(root, {
       ...current,
-      promptGuardMode: "strict",
+      strictness: "strict",
       gitHookGuards: true
     });
     await syncCclaw(root);
@@ -453,7 +450,7 @@ describe("install lifecycle", { timeout: 30_000 }, () => {
     expect(runtimePrePush).toContain("run-hook.mjs");
 
     const hookRuntime = await fs.readFile(path.join(root, ".cclaw/hooks/run-hook.mjs"), "utf8");
-    expect(hookRuntime).toContain('const DEFAULT_PROMPT_GUARD_MODE = "strict";');
+    expect(hookRuntime).toContain('const DEFAULT_STRICTNESS = "strict";');
   });
 
   it("sync removes managed artifacts for harnesses removed from config", async () => {

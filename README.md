@@ -158,7 +158,7 @@ If cclaw detects a Node / Python / Go project at init time, a sixth
 `pyproject.toml` / `requirements.txt`, `go.mod`). That is the full
 default surface — a new user sees nothing they need to understand yet.
 
-Advanced knobs (`promptGuardMode` / `tddEnforcement` per-axis overrides,
+Advanced knobs (`ironLaws.strictLaws` per-law escapes,
 `tdd.testPathPatterns` / `tdd.productionPathPatterns`,
 `compound.recurrenceThreshold`, `defaultTrack`, `trackHeuristics`,
 `sliceReview`) are **opt-in**: add them by hand when you need them.

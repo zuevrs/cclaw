@@ -1013,7 +1013,7 @@ async function runCommand(parsed: ParsedArgs, ctx: CliContext): Promise<number> 
       ctx.stdout.write(`${JSON.stringify({
         track: previewConfig.defaultTrack ?? "standard",
         harnesses: previewConfig.harnesses,
-        promptGuardMode: previewConfig.promptGuardMode,
+        strictness: previewConfig.strictness ?? "advisory",
         gitHookGuards: previewConfig.gitHookGuards,
         languageRulePacks: previewConfig.languageRulePacks,
         generatedSurfaces: previewSurfaces

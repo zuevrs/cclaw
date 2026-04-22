@@ -19,8 +19,6 @@ const ALLOWED_CONFIG_KEYS = new Set<string>([
   "flowVersion",
   "harnesses",
   "strictness",
-  "promptGuardMode",
-  "tddEnforcement",
   "tddTestGlobs",
   "tdd",
   "compound",
@@ -30,6 +28,17 @@ const ALLOWED_CONFIG_KEYS = new Set<string>([
   "trackHeuristics",
   "sliceReview",
   "ironLaws"
+]);
+
+/**
+ * Config keys removed in the advisory-by-default consolidation. Kept here so
+ * the parser can emit a helpful migration error pointing users at the new
+ * single `strictness` knob instead of a generic "unknown key" message.
+ */
+const RETIRED_GUARD_CONFIG_KEYS = new Set<string>([
+  "promptGuardMode",
+  "tddEnforcement",
+  "workflowGuardMode"
 ]);
 
 /**
@@ -153,8 +162,6 @@ export function createDefaultConfig(
     flowVersion: FLOW_VERSION,
     harnesses,
     strictness: "advisory",
-    promptGuardMode: "advisory",
-    tddEnforcement: "advisory",
     tddTestGlobs: [...tddTestPathPatterns],
     tdd: {
       testPathPatterns: tddTestPathPatterns,
@@ -167,7 +174,6 @@ export function createDefaultConfig(
     defaultTrack,
     languageRulePacks: [],
     ironLaws: {
-      mode: "advisory",
       strictLaws: []
     }
   };
@@ -236,6 +242,17 @@ export async function readConfig(projectRoot: string): Promise<CclawConfig> {
   const parsed = (parsedUnknown && typeof parsedUnknown === "object"
     ? parsedUnknown
     : {}) as Partial<CclawConfig>;
+  const retiredGuardKeys = Object.keys(parsed).filter((key) =>
+    RETIRED_GUARD_CONFIG_KEYS.has(key)
+  );
+  if (retiredGuardKeys.length > 0) {
+    throw configValidationError(
+      fullPath,
+      `config key(s) ${retiredGuardKeys.join(", ")} were removed; ` +
+        `use the single \`strictness: advisory|strict\` knob instead ` +
+        `(advisory is the default). See docs/config.md#strictness for migration.`
+    );
+  }
   const unknownKeys = Object.keys(parsed).filter((key) => !ALLOWED_CONFIG_KEYS.has(key));
   if (unknownKeys.length > 0) {
     throw configValidationError(fullPath, `unknown top-level key(s): ${unknownKeys.join(", ")}`);
@@ -271,35 +288,6 @@ export async function readConfig(projectRoot: string): Promise<CclawConfig> {
     throw configValidationError(fullPath, `"strictness" must be "advisory" or "strict"`);
   }
   const strictness: "advisory" | "strict" = strictnessRaw === "strict" ? "strict" : "advisory";
-
-  // Legacy guard fields — keep honouring explicit values for power users who
-  // want asymmetric behaviour (e.g. strict prompt guard + advisory TDD).
-  // When the user only set `strictness`, both axes inherit from it.
-  const hasExplicitPromptGuard = Object.prototype.hasOwnProperty.call(parsed, "promptGuardMode");
-  const promptGuardModeRaw = parsed.promptGuardMode;
-  if (
-    hasExplicitPromptGuard &&
-    promptGuardModeRaw !== "advisory" &&
-    promptGuardModeRaw !== "strict"
-  ) {
-    throw configValidationError(fullPath, `"promptGuardMode" must be "advisory" or "strict"`);
-  }
-  const promptGuardMode: "advisory" | "strict" = hasExplicitPromptGuard
-    ? (promptGuardModeRaw === "strict" ? "strict" : "advisory")
-    : strictness;
-
-  const hasExplicitTddEnforcement = Object.prototype.hasOwnProperty.call(parsed, "tddEnforcement");
-  const tddEnforcementRaw = (parsed as { tddEnforcement?: unknown }).tddEnforcement;
-  if (
-    hasExplicitTddEnforcement &&
-    tddEnforcementRaw !== "advisory" &&
-    tddEnforcementRaw !== "strict"
-  ) {
-    throw configValidationError(fullPath, `"tddEnforcement" must be "advisory" or "strict"`);
-  }
-  const tddEnforcement: "advisory" | "strict" = hasExplicitTddEnforcement
-    ? (tddEnforcementRaw === "strict" ? "strict" : "advisory")
-    : strictness;
 
   const tddTestGlobsRaw = (parsed as { tddTestGlobs?: unknown }).tddTestGlobs;
   const tddTestGlobs = validateStringArray(tddTestGlobsRaw, "tddTestGlobs", fullPath)
@@ -562,18 +550,19 @@ export async function readConfig(projectRoot: string): Promise<CclawConfig> {
     if (!isRecord(ironLawsRaw)) {
       throw configValidationError(fullPath, `"ironLaws" must be an object`);
     }
-    const unknownIronLawKeys = Object.keys(ironLawsRaw).filter(
-      (key) => key !== "mode" && key !== "strictLaws"
-    );
+    if (Object.prototype.hasOwnProperty.call(ironLawsRaw, "mode")) {
+      throw configValidationError(
+        fullPath,
+        `"ironLaws.mode" was removed; the project-wide \`strictness\` knob now ` +
+          `controls iron-law enforcement. Use \`ironLaws.strictLaws\` for per-law overrides.`
+      );
+    }
+    const unknownIronLawKeys = Object.keys(ironLawsRaw).filter((key) => key !== "strictLaws");
     if (unknownIronLawKeys.length > 0) {
       throw configValidationError(
         fullPath,
         `"ironLaws" has unknown key(s): ${unknownIronLawKeys.join(", ")}`
       );
-    }
-    const modeRaw = ironLawsRaw.mode;
-    if (modeRaw !== undefined && modeRaw !== "advisory" && modeRaw !== "strict") {
-      throw configValidationError(fullPath, `"ironLaws.mode" must be "advisory" or "strict"`);
     }
     const strictLawIdsRaw = validateStringArray(
       ironLawsRaw.strictLaws,
@@ -588,14 +577,10 @@ export async function readConfig(projectRoot: string): Promise<CclawConfig> {
       );
     }
     ironLaws = {
-      mode: modeRaw === "strict" ? "strict" : "advisory",
       strictLaws: normalizeStrictLawIds(strictLawIdsRaw)
     };
   } else {
-    ironLaws = {
-      mode: strictness,
-      strictLaws: []
-    };
+    ironLaws = { strictLaws: [] };
   }
 
   return {
@@ -603,8 +588,6 @@ export async function readConfig(projectRoot: string): Promise<CclawConfig> {
     flowVersion: parsed.flowVersion ?? FLOW_VERSION,
     harnesses,
     strictness,
-    promptGuardMode,
-    tddEnforcement,
     tddTestGlobs,
     tdd: {
       testPathPatterns: resolvedTddTestPathPatterns,
@@ -630,8 +613,6 @@ export async function readConfig(projectRoot: string): Promise<CclawConfig> {
  * only knobs a new user would meaningfully flip show up.
  */
 type AdvancedConfigKey =
-  | "promptGuardMode"
-  | "tddEnforcement"
   | "tddTestGlobs"
   | "tdd"
   | "compound"
@@ -678,8 +659,6 @@ function buildSerializableConfig(
     "flowVersion",
     "harnesses",
     "strictness",
-    "promptGuardMode",
-    "tddEnforcement",
     "tddTestGlobs",
     "tdd",
     "compound",
@@ -741,8 +720,6 @@ export async function detectAdvancedKeys(
     const parsedUnknown = parse(await fs.readFile(fullPath, "utf8"));
     if (!isRecord(parsedUnknown)) return new Set();
     const advancedCandidates: AdvancedConfigKey[] = [
-      "promptGuardMode",
-      "tddEnforcement",
       "tddTestGlobs",
       "tdd",
       "compound",

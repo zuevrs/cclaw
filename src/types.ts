@@ -134,7 +134,12 @@ export interface CompoundConfig {
 }
 
 export interface IronLawsConfig {
-  mode?: "advisory" | "strict";
+  /**
+   * Per-law escape hatch: list the iron-law ids that must always be strict,
+   * independent of the project-wide `strictness` knob. Kept as an advanced
+   * override for teams that want e.g. `tdd-red-before-write` strict while the
+   * rest of the pipeline stays advisory.
+   */
   strictLaws?: string[];
 }
 
@@ -143,30 +148,16 @@ export interface CclawConfig {
   flowVersion: string;
   harnesses: HarnessId[];
   /**
-   * Single-knob strictness for both guard families. When set, cclaw derives
-   * `promptGuardMode` and `tddEnforcement` from this value unless the legacy
-   * fields are explicitly provided. Default: "advisory".
+   * Single knob that controls enforcement behaviour of all hook-driven guards
+   * (prompt guard, workflow guard, TDD enforcement, iron laws). Default:
+   * `"advisory"` — hooks append a stderr nudge and exit 0. `"strict"` flips
+   * the same hooks to fail-closed (non-zero exit) so the harness refuses the
+   * offending action.
    *
-   * Added in v0.43.0 to collapse two fields that always moved together for
-   * ~99% of users. Power users who want asymmetric strictness (e.g. strict
-   * prompt guard, advisory TDD) can still set the legacy fields directly —
-   * explicit per-axis values override the derived strictness.
+   * Per-law escapes live on `ironLaws.strictLaws` for teams that need to keep
+   * specific iron laws strict while the project-wide knob stays advisory.
    */
   strictness?: "advisory" | "strict";
-  /**
-   * Prompt guard behavior for runtime write-risk detection hooks.
-   *
-   * Since v0.43.0 this is an advanced override. Prefer `strictness` in new
-   * configs; set this explicitly only when you need strict prompt guarding
-   * while keeping TDD advisory, or vice versa.
-   */
-  promptGuardMode?: "advisory" | "strict";
-  /**
-   * TDD RED -> GREEN -> REFACTOR enforcement mode used by workflow guard hooks.
-   *
-   * Since v0.43.0 this is an advanced override — see `strictness`.
-   */
-  tddEnforcement?: "advisory" | "strict";
   /**
    * Legacy alias for test-side path detection in workflow-guard.
    * Prefer `tdd.testPathPatterns` in new configs.

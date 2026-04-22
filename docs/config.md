@@ -66,10 +66,10 @@ check on `UserPromptSubmit` (strict blocks, advisory logs).
 Use `strict` on teams where agents tend to skip the preamble, skip RED
 tests, or bypass stage gates. Most projects can stay on `advisory`.
 
-Power-user note: if you need asymmetric strictness (for example, strict
-prompt guard but advisory TDD during a migration), set the legacy keys
-`promptGuardMode` and `tddEnforcement` directly — they override
-`strictness` per-axis. See [Advanced overrides](#advanced-overrides).
+Per-law escape: if you need **one specific iron law** to always block
+while the rest of the pipeline stays advisory, list its id under
+`ironLaws.strictLaws`. There is no longer a per-axis (prompt-vs-TDD)
+override — the single `strictness` knob drives all guard families.
 
 ### `gitHookGuards` (boolean, default `false`)
 
@@ -96,11 +96,13 @@ If you need manual operations, use `/cc-learn` (search, add/backfill, curate).
 Add any of these keys by hand when you need them. `cclaw upgrade`
 preserves whatever you wrote; it never silently adds them back.
 
-### `promptGuardMode`, `tddEnforcement` (`advisory` | `strict`)
+### Removed in this release: `promptGuardMode`, `tddEnforcement`, `workflowGuardMode`, `ironLaws.mode`
 
-Explicit per-axis overrides for the `strictness` knob. Useful when you
-want, say, strict TDD during a red-green push but advisory prompt
-guarding. When set, these values win over the derived `strictness`.
+The three per-axis guard-mode knobs and `ironLaws.mode` were collapsed into
+the single project-wide `strictness` field. If your config still sets any
+of them, `readConfig` throws with a migration hint. Use `strictness: strict`
+for project-wide strict enforcement, or `ironLaws.strictLaws: [<law-id>,...]`
+for per-law escapes.
 
 ### `tdd` (object)
 
@@ -249,11 +251,12 @@ trackHeuristics:
       triggers: [hotfix, patch, typo, rename, "fix:"]
 ```
 
-### Strict TDD, advisory prompt guard
+### Strict on a single iron law, advisory elsewhere
 
 ```yaml
 strictness: advisory
-tddEnforcement: strict
+ironLaws:
+  strictLaws: [tdd-red-before-write]
 ```
 
 ## Validation

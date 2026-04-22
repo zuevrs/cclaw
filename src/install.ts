@@ -941,11 +941,12 @@ async function writeHooks(projectRoot: string, config: CclawConfig): Promise<voi
   await ensureDir(hooksDir);
   await ensureDir(stateDir);
 
+  const effectiveStrictness: "advisory" | "strict" = config.strictness ?? "advisory";
   await writeFileSafe(
     runtimePath(projectRoot, "state", "iron-laws.json"),
     `${JSON.stringify(
       ironLawRuntimeDocument({
-        mode: config.ironLaws?.mode,
+        mode: effectiveStrictness,
         strictLaws: config.ironLaws?.strictLaws
       }),
       null,
@@ -955,9 +956,7 @@ async function writeHooks(projectRoot: string, config: CclawConfig): Promise<voi
 
   await writeFileSafe(path.join(hooksDir, "stage-complete.mjs"), stageCompleteScript());
   await writeFileSafe(path.join(hooksDir, "run-hook.mjs"), nodeHookRuntimeScript({
-    promptGuardMode: config.promptGuardMode ?? config.strictness ?? "advisory",
-    workflowGuardMode: config.strictness ?? "advisory",
-    tddEnforcementMode: config.tddEnforcement ?? config.strictness ?? "advisory",
+    strictness: effectiveStrictness,
     tddTestPathPatterns: config.tdd?.testPathPatterns ?? config.tddTestGlobs,
     tddProductionPathPatterns: config.tdd?.productionPathPatterns
   }));
