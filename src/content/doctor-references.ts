@@ -118,7 +118,7 @@ Reference docs for \`cclaw doctor\` checks.
 
 ## Required
 
-- \`node\` (>=18) — the only runtime dependency. All hooks, git-hook relays, and the
+- \`node\` (>=20) — the only runtime dependency. All hooks, git-hook relays, and the
   \`cclaw\` CLI itself run on Node.js. No \`bash\`, \`python3\`, or \`jq\` required.
 - \`git\` — needed for worktree and pre-commit/pre-push relays.
 
@@ -131,7 +131,7 @@ are no longer part of the supported runtime contract.
 
 ## Typical fixes
 
-1. Install Node.js 18 or newer and ensure \`node\` is on \`PATH\`.
+1. Install Node.js 20 or newer (matches \`package.json\` \`engines\`) and ensure \`node\` is on \`PATH\`.
 2. Re-run \`cclaw sync\` to regenerate hook configs after upgrading Node.
 `,
   "config-and-policy.md": `# Config And Policy
