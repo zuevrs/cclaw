@@ -120,7 +120,8 @@ async function runCclawInternal(root, args) {
     };
     let child;
     try {
-      child = spawn("cclaw", ["internal", ...args], {
+      const cclawCommand = process.platform === "win32" ? "cclaw.cmd" : "cclaw";
+      child = spawn(cclawCommand, ["internal", ...args], {
         cwd: root,
         env: process.env,
         stdio: ["ignore", "ignore", "pipe"]

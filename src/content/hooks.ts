@@ -59,7 +59,8 @@ async function main() {
     return;
   }
 
-  const child = spawn("cclaw", ["internal", "advance-stage", stage, ...flags], {
+  const cclawCommand = process.platform === "win32" ? "cclaw.cmd" : "cclaw";
+  const child = spawn(cclawCommand, ["internal", "advance-stage", stage, ...flags], {
     cwd: root,
     env: process.env,
     stdio: "inherit"
