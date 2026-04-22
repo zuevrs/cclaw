@@ -1,4 +1,5 @@
 import { RUNTIME_ROOT } from "../constants.js";
+import { FLOW_MAP_REL_PATH } from "./flow-map.js";
 
 const START_SKILL_FOLDER = "flow-start";
 const START_SKILL_NAME = "flow-start";
@@ -118,6 +119,12 @@ Validate envelopes with:
 ## Primary skill
 
 **${RUNTIME_ROOT}/skills/${START_SKILL_FOLDER}/SKILL.md**
+
+## Surface reference
+
+For the 1-page overview of cclaw (stages, routers, Ralph Loop, state
+files) load \`${FLOW_MAP_REL_PATH}\` — useful when a fresh session
+needs orientation before \`/cc <prompt>\` runs.
 `;
 }
 
