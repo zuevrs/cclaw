@@ -382,6 +382,40 @@ describe("internal advance-stage commands", () => {
     );
   });
 
+  it("hook subcommand reports missing runtime script", async () => {
+    const root = await createTempProject("internal-hook-missing-runtime");
+    await ensureRunSystem(root);
+    await fs.rm(path.join(root, ".cclaw/hooks/run-hook.mjs"), { force: true });
+
+    const captured = captureIo();
+    const code = await runInternalCommand(root, ["hook", "session-start"], captured.io);
+
+    expect(code).toBe(1);
+    expect(captured.stderr()).toContain("missing hook runtime");
+  });
+
+  it("hook subcommand executes run-hook runtime with hook name", async () => {
+    const root = await createTempProject("internal-hook-runtime");
+    await ensureRunSystem(root);
+    const hookRuntimePath = path.join(root, ".cclaw/hooks/run-hook.mjs");
+    await fs.mkdir(path.dirname(hookRuntimePath), { recursive: true });
+    await fs.writeFile(
+      hookRuntimePath,
+      `#!/usr/bin/env node
+process.stdout.write(JSON.stringify({ hook: process.argv[2] }) + "\\n");
+`,
+      "utf8"
+    );
+    await fs.chmod(hookRuntimePath, 0o755);
+
+    const captured = captureIo();
+    const code = await runInternalCommand(root, ["hook", "workflow-guard"], captured.io);
+
+    expect(code).toBe(0);
+    expect(captured.stderr()).toBe("");
+    expect(captured.stdout()).toContain('"hook":"workflow-guard"');
+  });
+
   it("advance-stage routes review back to tdd when review_verdict_blocked is passed", async () => {
     const root = await createTempProject("internal-advance-stage-review-rewind");
     await ensureRunSystem(root);

@@ -1,5 +1,7 @@
 import fs from "node:fs/promises";
 import path from "node:path";
+import { spawn } from "node:child_process";
+import process from "node:process";
 import type { Writable } from "node:stream";
 import { RUNTIME_ROOT, SHIP_FINALIZATION_MODES } from "../constants.js";
 import { stageSchema } from "../content/stage-schema.js";
@@ -49,6 +51,10 @@ interface VerifyFlowStateDiffArgs {
 
 interface VerifyCurrentStateArgs {
   quiet: boolean;
+}
+
+interface HookArgs {
+  hookName: string;
 }
 
 interface InternalValidationReport {
@@ -413,6 +419,18 @@ function parseVerifyCurrentStateArgs(tokens: string[]): VerifyCurrentStateArgs {
     throw new Error(`Unknown flag for internal verify-current-state: ${token}`);
   }
   return { quiet };
+}
+
+function parseHookArgs(tokens: string[]): HookArgs {
+  const [hookName, ...rest] = tokens;
+  const normalizedHook = typeof hookName === "string" ? hookName.trim() : "";
+  if (normalizedHook.length === 0) {
+    throw new Error("internal hook requires a hook name: cclaw internal hook <name>.");
+  }
+  if (rest.length > 0) {
+    throw new Error(`Unknown arguments for internal hook: ${rest.join(" ")}`);
+  }
+  return { hookName: normalizedHook };
 }
 
 async function buildValidationReport(
@@ -843,6 +861,50 @@ async function runVerifyCurrentState(
   return validation.ok ? 0 : 1;
 }
 
+async function runHookCommand(
+  projectRoot: string,
+  args: HookArgs,
+  io: InternalIo
+): Promise<number> {
+  const runHookPath = path.join(projectRoot, RUNTIME_ROOT, "hooks", "run-hook.mjs");
+  try {
+    await fs.access(runHookPath);
+  } catch {
+    io.stderr.write(
+      `cclaw internal hook: missing hook runtime at ${runHookPath}. Run \`cclaw sync\` first.\n`
+    );
+    return 1;
+  }
+
+  return await new Promise<number>((resolve) => {
+    const child = spawn(process.execPath, [runHookPath, args.hookName], {
+      cwd: projectRoot,
+      env: process.env,
+      stdio: ["inherit", "pipe", "pipe"]
+    });
+    child.stdout.on("data", (chunk) => {
+      io.stdout.write(chunk);
+    });
+    child.stderr.on("data", (chunk) => {
+      io.stderr.write(chunk);
+    });
+    child.on("error", (err) => {
+      io.stderr.write(
+        `cclaw internal hook: failed to launch runtime (${err instanceof Error ? err.message : String(err)}).\n`
+      );
+      resolve(1);
+    });
+    child.on("close", (code, signal) => {
+      if (signal) {
+        io.stderr.write(`cclaw internal hook: runtime terminated by signal ${signal}.\n`);
+        resolve(1);
+        return;
+      }
+      resolve(typeof code === "number" ? code : 1);
+    });
+  });
+}
+
 export async function runInternalCommand(
   projectRoot: string,
   argv: string[],
@@ -851,7 +913,7 @@ export async function runInternalCommand(
   const [subcommand, ...tokens] = argv;
   if (!subcommand) {
     io.stderr.write(
-      "cclaw internal requires a subcommand: advance-stage | verify-flow-state-diff | verify-current-state | knowledge-digest | envelope-validate | tdd-red-evidence\n"
+      "cclaw internal requires a subcommand: advance-stage | verify-flow-state-diff | verify-current-state | knowledge-digest | envelope-validate | tdd-red-evidence | hook\n"
     );
     return 1;
   }
@@ -875,8 +937,11 @@ export async function runInternalCommand(
     if (subcommand === "tdd-red-evidence") {
       return await runTddRedEvidenceCommand(projectRoot, tokens, io);
     }
+    if (subcommand === "hook") {
+      return await runHookCommand(projectRoot, parseHookArgs(tokens), io);
+    }
     io.stderr.write(
-      `Unknown internal subcommand: ${subcommand}. Expected advance-stage | verify-flow-state-diff | verify-current-state | knowledge-digest | envelope-validate | tdd-red-evidence\n`
+      `Unknown internal subcommand: ${subcommand}. Expected advance-stage | verify-flow-state-diff | verify-current-state | knowledge-digest | envelope-validate | tdd-red-evidence | hook\n`
     );
     return 1;
   } catch (err) {
