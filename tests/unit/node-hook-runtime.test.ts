@@ -266,6 +266,11 @@ exit 0
       );
       await fs.chmod(shimPath, 0o755);
     }
+    const joinedPath = `${binDir}${path.delimiter}${process.env.PATH ?? process.env.Path ?? ""}`;
+    const pathEnv =
+      process.platform === "win32"
+        ? { PATH: joinedPath, Path: joinedPath }
+        : { PATH: joinedPath };
 
     const strictFail = await runNodeHook(
       root,
@@ -273,7 +278,7 @@ exit 0
       nodeHookRuntimeScript(),
       {},
       {
-        PATH: `${binDir}${path.delimiter}${process.env.PATH ?? ""}`,
+        ...pathEnv,
         CCLAW_WORKFLOW_GUARD_MODE: "strict",
         CCLAW_FAKE_VERIFY_EXIT: "1"
       }
@@ -286,7 +291,7 @@ exit 0
       nodeHookRuntimeScript(),
       {},
       {
-        PATH: `${binDir}${path.delimiter}${process.env.PATH ?? ""}`,
+        ...pathEnv,
         CCLAW_WORKFLOW_GUARD_MODE: "advisory",
         CCLAW_FAKE_VERIFY_EXIT: "1"
       }
@@ -298,7 +303,7 @@ exit 0
       "verify-current-state",
       nodeHookRuntimeScript(),
       {},
-      { PATH: "" }
+      process.platform === "win32" ? { PATH: "", Path: "" } : { PATH: "" }
     );
     expect(missingBinary.code).toBe(1);
     expect(missingBinary.stderr).toContain("cclaw binary is required for verify-current-state");

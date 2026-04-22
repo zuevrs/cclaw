@@ -117,6 +117,11 @@ printf '%s\\n' "$*" >> "${callsPath}"
       );
       await fs.chmod(cclawShimPath, 0o755);
     }
+    const joinedPath = `${binDir}${path.delimiter}${process.env.PATH ?? process.env.Path ?? ""}`;
+    const pathEnv =
+      process.platform === "win32"
+        ? { PATH: joinedPath, Path: joinedPath }
+        : { PATH: joinedPath };
 
     const result = await runNodeScript(
       root,
@@ -124,7 +129,7 @@ printf '%s\\n' "$*" >> "${callsPath}"
       stageCompleteScript(),
       ["scope", "--passed=scope_contract_written"],
       "",
-      { PATH: `${binDir}${path.delimiter}${process.env.PATH ?? ""}` }
+      pathEnv
     );
     expect(result.code).toBe(0);
     expect(result.stderr).toBe("");
@@ -141,7 +146,7 @@ printf '%s\\n' "$*" >> "${callsPath}"
       stageCompleteScript(),
       ["scope"],
       "",
-      { PATH: "" }
+      process.platform === "win32" ? { PATH: "", Path: "" } : { PATH: "" }
     );
     expect(result.code).toBe(1);
     expect(result.stderr).toContain("cclaw binary not found in PATH");
