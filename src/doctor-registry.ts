@@ -101,7 +101,7 @@ const RULES: DoctorRegistryRule[] = [
     }
   },
   {
-    test: /^(meta_skill:|protocol:|stage_skill:|context_mode:)/,
+    test: /^(meta_skill:|protocol:|stage_skill:|context_mode:|reference:)/,
     metadata: {
       severity: "error",
       summary: "Routing skill and protocol integrity check.",
