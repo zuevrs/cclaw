@@ -24,7 +24,7 @@ export const TDD: StageSchemaInput = {
     "The stage intent is review/ship sign-off rather than implementation"
   ],
   checklist: [
-    "Select plan slice — pick one task from the plan. Do not batch multiple tasks.",
+    "Select plan slice — pick one task from the plan. Do not batch multiple tasks. Before starting, read `.cclaw/state/ralph-loop.json` (`loopIteration`, `acClosed[]`, `redOpenSlices[]`) so you skip cycles already closed.",
     "Map to acceptance criterion — identify the specific spec criterion this test proves.",
     "Dispatch mandatory `tdd-red` execution (or `test-author` in TEST_RED_ONLY mode) — produce failing behavior tests and RED evidence only (no production edits). Set `CCLAW_ACTIVE_AGENT=tdd-red` when supported.",
     "RED: Capture failure output — copy the exact failure output as RED evidence. Record in artifact.",
@@ -33,7 +33,7 @@ export const TDD: StageSchemaInput = {
     "GREEN: Verify no regressions — if any existing test breaks, fix the regression before proceeding.",
     "Run verification-before-completion discipline for the slice — capture a fresh test command, commit SHA, and explicit PASS/FAIL status before completion claims.",
     "REFACTOR: Dispatch `tdd-refactor` execution (or dedicated refactor mode) to improve code quality without behavior changes. Set `CCLAW_ACTIVE_AGENT=tdd-refactor` when supported.",
-    "Record evidence — capture RED failure, GREEN output, and REFACTOR notes in the TDD artifact.",
+    "Record evidence — capture RED failure, GREEN output, and REFACTOR notes in the TDD artifact. When logging the `green` row via `/cc-ops tdd-log green`, attach the closed acceptance-criterion IDs in `acIds` so Ralph Loop status counts them.",
     "Annotate traceability — link to plan task ID and spec criterion.",
     "Per-Slice Review (conditional) — if `.cclaw/config.yaml::sliceReview.enabled` is true and the slice meets any trigger (touchCount >= filesChangedThreshold, touchPaths match touchTriggers, or highRisk=true), append a `## Per-Slice Review` entry for this slice before moving on (see the dedicated section below).",
     "Repeat for each slice — return to step 1 for the next plan slice."

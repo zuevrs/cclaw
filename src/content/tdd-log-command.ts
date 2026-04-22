@@ -39,7 +39,9 @@ Each JSON line must include:
 - \`slice\` (e.g. \`S-1\`)
 - \`phase\` (\`red\` | \`green\` | \`refactor\`)
 - \`command\`
-- optional: \`files\`, \`exitCode\`, \`note\`
+- optional: \`files\`, \`exitCode\`, \`note\`, \`acIds\` (array of acceptance
+  criterion IDs like \`["AC-1"]\` — GREEN rows use this to drive the Ralph
+  Loop status summary at \`.cclaw/state/ralph-loop.json\`).
 
 ## Primary skill
 
@@ -69,8 +71,16 @@ Do not fake RED evidence. A \`red\` entry must correspond to a failing test comm
    - \`slice\`: user-provided slice id
    - \`phase\`: red|green|refactor
    - \`command\`: test command or refactor verification command
+   - \`acIds\` (optional, recommended on \`green\`): the acceptance-criterion
+     IDs this GREEN row closes (e.g. \`["AC-1","AC-3"]\`). The SessionStart
+     hook aggregates distinct \`acIds\` from green rows into \`acClosed\`
+     inside \`.cclaw/state/ralph-loop.json\` so \`/cc-next\` can answer
+     "is the Ralph Loop done?" without parsing the artifact.
 3. Append one line to \`${logPath()}\`.
-4. \`show\`: print the last 20 lines grouped by slice.
+4. After append, refresh Ralph Loop status with
+   \`cclaw internal tdd-loop-status --quiet\` (the SessionStart hook also
+   refreshes it, but a manual refresh is safe and idempotent).
+5. \`show\`: print the last 20 lines grouped by slice.
 
 ## Validation
 
