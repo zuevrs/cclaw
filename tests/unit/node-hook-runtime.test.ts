@@ -185,14 +185,14 @@ describe("node hook runtime", () => {
     const strict = await runNodeHook(
       root,
       "prompt-guard",
-      nodeHookRuntimeScript({ promptGuardMode: "strict" }),
+      nodeHookRuntimeScript({ strictness: "strict" }),
       payload
     );
     expect(strict.code).toBe(1);
     expect(strict.stderr).toContain("blocked by strict mode");
   });
 
-  it("workflow-guard enforces per-path RED evidence in strict tdd mode", async () => {
+  it("workflow-guard enforces per-path RED evidence when tdd-red-before-write is strict", async () => {
     const root = await createTempProject("node-hook-workflow-guard");
     await fs.mkdir(path.join(root, ".cclaw/state"), { recursive: true });
     await fs.writeFile(path.join(root, ".cclaw/state/flow-state.json"), JSON.stringify({
@@ -200,11 +200,36 @@ describe("node hook runtime", () => {
       activeRunId: "run-tdd",
       completedStages: ["brainstorm", "scope", "design", "spec", "plan"]
     }, null, 2), "utf8");
+    // Keep the project-wide strictness advisory; opt the single TDD iron law
+    // into strict mode so this test asserts ironLaws.strictLaws per-law escape.
+    // `strictLawSet` in run-hook.mjs reads the `strict` flag off each laws[]
+    // entry (see src/content/iron-laws.ts#ironLawRuntimeDocument).
+    await fs.writeFile(
+      path.join(root, ".cclaw/state/iron-laws.json"),
+      JSON.stringify(
+        {
+          mode: "advisory",
+          strictLaws: ["tdd-red-before-write"],
+          laws: [{ id: "tdd-red-before-write", strict: true }]
+        },
+        null,
+        2
+      ),
+      "utf8"
+    );
+    // Pretend a recent flow-state read already happened so staleness reasons
+    // don't fire alongside the TDD evidence check.
+    const nowEpoch = Math.floor(Date.now() / 1000);
+    await fs.writeFile(
+      path.join(root, ".cclaw/state/workflow-guard.json"),
+      JSON.stringify({ lastFlowReadAtEpoch: nowEpoch }, null, 2),
+      "utf8"
+    );
 
     const missingRed = await runNodeHook(
       root,
       "workflow-guard",
-      nodeHookRuntimeScript({ tddEnforcementMode: "strict" }),
+      nodeHookRuntimeScript(),
       {
         tool_name: "Write",
         tool_input: {
@@ -232,7 +257,7 @@ describe("node hook runtime", () => {
     const hasRed = await runNodeHook(
       root,
       "workflow-guard",
-      nodeHookRuntimeScript({ tddEnforcementMode: "strict" }),
+      nodeHookRuntimeScript(),
       {
         tool_name: "Write",
         tool_input: {
@@ -287,7 +312,7 @@ exit 0
       {},
       {
         ...pathEnv,
-        CCLAW_WORKFLOW_GUARD_MODE: "strict",
+        CCLAW_STRICTNESS: "strict",
         CCLAW_FAKE_VERIFY_EXIT: "1"
       }
     );
@@ -300,7 +325,7 @@ exit 0
       {},
       {
         ...pathEnv,
-        CCLAW_WORKFLOW_GUARD_MODE: "advisory",
+        CCLAW_STRICTNESS: "advisory",
         CCLAW_FAKE_VERIFY_EXIT: "1"
       }
     );
@@ -388,7 +413,7 @@ exit 0
     const result = await runNodeHook(
       root,
       "prompt-guard",
-      nodeHookRuntimeScript({ promptGuardMode: "strict" }),
+      nodeHookRuntimeScript({ strictness: "strict" }),
       {
         tool_name: "Write",
         tool_input: { path: "src/app.ts", content: "x" }

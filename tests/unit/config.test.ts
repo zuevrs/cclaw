@@ -99,31 +99,31 @@ describe("config", () => {
     await expect(readConfig(root)).rejects.toThrow(/Supported tracks: quick, medium, standard/);
   });
 
-  it("parses prompt guard and git hook settings", async () => {
-    const root = await createTempProject("config-global-learnings");
+  it("parses strictness + git hook settings", async () => {
+    const root = await createTempProject("config-strictness-githooks");
     await fs.mkdir(path.join(root, ".cclaw"), { recursive: true });
     await fs.writeFile(
       configPath(root),
-      "harnesses:\n  - claude\npromptGuardMode: strict\ngitHookGuards: true\n",
+      "harnesses:\n  - claude\nstrictness: strict\ngitHookGuards: true\n",
       "utf8"
     );
     const config = await readConfig(root);
-    expect(config.promptGuardMode).toBe("strict");
+    expect(config.strictness).toBe("strict");
     expect(config.gitHookGuards).toBe(true);
   });
 
-  it("parses tdd enforcement settings", async () => {
-    const root = await createTempProject("config-tdd-enforcement");
+  it("parses tdd test path settings under single strictness knob", async () => {
+    const root = await createTempProject("config-tdd-paths");
     await fs.mkdir(path.join(root, ".cclaw"), { recursive: true });
     await fs.writeFile(
       configPath(root),
-      "harnesses:\n  - claude\ntddEnforcement: strict\ntddTestGlobs:\n  - \"**/*.test.ts\"\n",
+      "harnesses:\n  - claude\nstrictness: strict\ntddTestGlobs:\n  - \"**/*.test.ts\"\n",
       "utf8"
     );
     const warningSpy = vi.spyOn(process, "emitWarning").mockImplementation(() => {});
     try {
       const config = await readConfig(root);
-      expect(config.tddEnforcement).toBe("strict");
+      expect(config.strictness).toBe("strict");
       expect(config.tddTestGlobs).toEqual(["**/*.test.ts"]);
       expect(warningSpy).not.toHaveBeenCalled();
     } finally {
@@ -323,11 +323,32 @@ trackHeuristics:
     await expect(readConfig(root)).rejects.toThrow(/no longer supported/);
   });
 
-  it("rejects invalid prompt guard modes", async () => {
-    const root = await createTempProject("config-invalid-guard-mode");
+  it("rejects retired guard-mode config keys with a migration hint", async () => {
+    const root = await createTempProject("config-retired-guard-keys");
     await fs.mkdir(path.join(root, ".cclaw"), { recursive: true });
     await fs.writeFile(configPath(root), "promptGuardMode: hard\n", "utf8");
-    await expect(readConfig(root)).rejects.toThrow(/"promptGuardMode" must be "advisory" or "strict"/);
+    await expect(readConfig(root)).rejects.toThrow(
+      /promptGuardMode.*were removed; use the single `strictness: advisory\|strict` knob/
+    );
+
+    await fs.writeFile(configPath(root), "tddEnforcement: strict\n", "utf8");
+    await expect(readConfig(root)).rejects.toThrow(/tddEnforcement.*were removed/);
+
+    await fs.writeFile(configPath(root), "workflowGuardMode: strict\n", "utf8");
+    await expect(readConfig(root)).rejects.toThrow(/workflowGuardMode.*were removed/);
+  });
+
+  it("rejects retired ironLaws.mode with a migration hint", async () => {
+    const root = await createTempProject("config-ironlaws-mode-retired");
+    await fs.mkdir(path.join(root, ".cclaw"), { recursive: true });
+    await fs.writeFile(
+      configPath(root),
+      "harnesses:\n  - claude\nironLaws:\n  mode: strict\n",
+      "utf8"
+    );
+    await expect(readConfig(root)).rejects.toThrow(
+      /"ironLaws\.mode" was removed.*strictness/
+    );
   });
 
   it("parses sliceReview with sane defaults when enabled", async () => {
@@ -406,9 +427,9 @@ sliceReview:
     await expect(readConfig(root)).rejects.toThrow(/must contain only/);
   });
 
-  // -- v0.43.0: strictness collapses promptGuardMode + tddEnforcement -------
+  // -- advisory-by-default: single `strictness` knob ------------------------
 
-  it("strictness=strict derives both legacy guard modes when they are absent", async () => {
+  it("strictness=strict is accepted as the single enforcement knob", async () => {
     const root = await createTempProject("config-strictness-strict");
     await fs.mkdir(path.join(root, ".cclaw"), { recursive: true });
     await fs.writeFile(
@@ -418,8 +439,6 @@ sliceReview:
     );
     const config = await readConfig(root);
     expect(config.strictness).toBe("strict");
-    expect(config.promptGuardMode).toBe("strict");
-    expect(config.tddEnforcement).toBe("strict");
   });
 
   it("strictness defaults to advisory when no knob is provided", async () => {
@@ -428,22 +447,6 @@ sliceReview:
     await fs.writeFile(configPath(root), "harnesses:\n  - claude\n", "utf8");
     const config = await readConfig(root);
     expect(config.strictness).toBe("advisory");
-    expect(config.promptGuardMode).toBe("advisory");
-    expect(config.tddEnforcement).toBe("advisory");
-  });
-
-  it("explicit promptGuardMode overrides derived strictness per-axis", async () => {
-    const root = await createTempProject("config-asymmetric");
-    await fs.mkdir(path.join(root, ".cclaw"), { recursive: true });
-    await fs.writeFile(
-      configPath(root),
-      "harnesses:\n  - claude\nstrictness: advisory\npromptGuardMode: strict\n",
-      "utf8"
-    );
-    const config = await readConfig(root);
-    expect(config.strictness).toBe("advisory");
-    expect(config.promptGuardMode).toBe("strict"); // explicit override wins
-    expect(config.tddEnforcement).toBe("advisory"); // falls back to strictness
   });
 
   it("rejects invalid strictness values", async () => {
