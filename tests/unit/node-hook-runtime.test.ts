@@ -118,6 +118,110 @@ describe("node hook runtime", () => {
     expect(digest).toContain("split into focused diffs");
   });
 
+  it("session-start refreshes compound-readiness.json and surfaces a nudge during review", async () => {
+    const root = await createTempProject("node-hook-compound-readiness");
+    await fs.mkdir(path.join(root, ".cclaw/state"), { recursive: true });
+    await fs.mkdir(path.join(root, ".cclaw/contexts"), { recursive: true });
+    await fs.mkdir(path.join(root, ".cclaw/skills/using-cclaw"), { recursive: true });
+    await fs.writeFile(path.join(root, ".cclaw/state/flow-state.json"), JSON.stringify({
+      currentStage: "review",
+      activeRunId: "run-compound",
+      completedStages: ["brainstorm", "scope", "design", "spec", "plan", "tdd"]
+    }, null, 2), "utf8");
+    await fs.writeFile(path.join(root, ".cclaw/contexts/review.md"), "# review\n", "utf8");
+    await fs.writeFile(path.join(root, ".cclaw/skills/using-cclaw/SKILL.md"), "# Using cclaw\n", "utf8");
+
+    const baseRow = {
+      type: "pattern",
+      confidence: "medium",
+      domain: null,
+      stage: "review",
+      origin_stage: "review",
+      origin_feature: null,
+      project: "cclaw",
+      universality: "project",
+      maturity: "raw",
+      created: "2026-04-15T00:00:00Z",
+      first_seen_ts: "2026-04-15T00:00:00Z",
+      last_seen_ts: "2026-04-15T00:00:00Z"
+    };
+    await fs.writeFile(path.join(root, ".cclaw/knowledge.jsonl"), [
+      JSON.stringify({
+        ...baseRow,
+        trigger: "swallowed errors",
+        action: "rethrow with context",
+        frequency: 4
+      })
+    ].join("\n"), "utf8");
+
+    const result = await runNodeHook(root, "session-start", nodeHookRuntimeScript());
+    expect(result.code).toBe(0);
+    const payload = JSON.parse(result.stdout) as {
+      hookSpecificOutput?: { additionalContext?: string };
+      additional_context?: string;
+    };
+    const context =
+      payload.hookSpecificOutput?.additionalContext ??
+      payload.additional_context ??
+      "";
+    expect(context).toContain("Compound readiness: clusters=1, ready=1");
+
+    const readiness = JSON.parse(
+      await fs.readFile(path.join(root, ".cclaw/state/compound-readiness.json"), "utf8")
+    ) as { schemaVersion: number; threshold: number; readyCount: number };
+    expect(readiness.schemaVersion).toBe(1);
+    expect(readiness.threshold).toBe(3);
+    expect(readiness.readyCount).toBe(1);
+  });
+
+  it("session-start refreshes compound-readiness.json silently outside review/ship", async () => {
+    const root = await createTempProject("node-hook-compound-readiness-silent");
+    await fs.mkdir(path.join(root, ".cclaw/state"), { recursive: true });
+    await fs.mkdir(path.join(root, ".cclaw/contexts"), { recursive: true });
+    await fs.mkdir(path.join(root, ".cclaw/skills/using-cclaw"), { recursive: true });
+    await fs.writeFile(path.join(root, ".cclaw/state/flow-state.json"), JSON.stringify({
+      currentStage: "plan",
+      activeRunId: "run-plan",
+      completedStages: ["brainstorm", "scope", "design", "spec"]
+    }, null, 2), "utf8");
+    await fs.writeFile(path.join(root, ".cclaw/contexts/plan.md"), "# plan\n", "utf8");
+    await fs.writeFile(path.join(root, ".cclaw/skills/using-cclaw/SKILL.md"), "# Using cclaw\n", "utf8");
+    await fs.writeFile(path.join(root, ".cclaw/knowledge.jsonl"), JSON.stringify({
+      type: "pattern",
+      confidence: "medium",
+      domain: null,
+      stage: "review",
+      origin_stage: "review",
+      origin_feature: null,
+      project: "cclaw",
+      universality: "project",
+      maturity: "raw",
+      created: "2026-04-15T00:00:00Z",
+      first_seen_ts: "2026-04-15T00:00:00Z",
+      last_seen_ts: "2026-04-15T00:00:00Z",
+      trigger: "x",
+      action: "y",
+      frequency: 5
+    }), "utf8");
+
+    const result = await runNodeHook(root, "session-start", nodeHookRuntimeScript());
+    expect(result.code).toBe(0);
+    const payload = JSON.parse(result.stdout) as {
+      hookSpecificOutput?: { additionalContext?: string };
+      additional_context?: string;
+    };
+    const context =
+      payload.hookSpecificOutput?.additionalContext ??
+      payload.additional_context ??
+      "";
+    expect(context).not.toContain("Compound readiness:");
+
+    const readiness = JSON.parse(
+      await fs.readFile(path.join(root, ".cclaw/state/compound-readiness.json"), "utf8")
+    ) as { readyCount: number };
+    expect(readiness.readyCount).toBe(1);
+  });
+
   it("stop-checkpoint preserves progress fields while syncing stage/run", async () => {
     const root = await createTempProject("node-hook-stop");
     await fs.mkdir(path.join(root, ".cclaw/state"), { recursive: true });

@@ -739,6 +739,28 @@ async function handleSessionStart(runtime) {
     }
   }
 
+  // Keep compound-readiness.json fresh on every session-start (cheap derived
+  // summary). Surface a one-line nudge only from review and ship stages
+  // where lifting becomes relevant; earlier stages update the file silently.
+  let compoundReadinessLine = "";
+  try {
+    const readiness = await computeCompoundReadinessInline(runtime.root, {});
+    await writeJsonFile(path.join(stateDir, "compound-readiness.json"), readiness);
+    if (state.currentStage === "review" || state.currentStage === "ship") {
+      if (readiness.readyCount === 0) {
+        compoundReadinessLine = "Compound readiness: no candidates (clusters=" +
+          String(readiness.clusterCount) + ", threshold=" + String(readiness.threshold) + ")";
+      } else {
+        const critical = readiness.ready.filter((entry) => entry.severity === "critical").length;
+        const criticalSuffix = critical > 0 ? " (critical=" + String(critical) + ")" : "";
+        compoundReadinessLine = "Compound readiness: clusters=" + String(readiness.clusterCount) +
+          ", ready=" + String(readiness.readyCount) + criticalSuffix;
+      }
+    }
+  } catch (_err) {
+    // best-effort — a malformed knowledge.jsonl must never break session-start.
+  }
+
   const suggestionMemory = toObject(await readJsonFile(suggestionMemoryFile, {})) || {};
   const suggestionsEnabled = suggestionMemory.enabled !== false;
   const mutedStages = Array.isArray(suggestionMemory.mutedStages)
@@ -805,6 +827,9 @@ async function handleSessionStart(runtime) {
   }
   if (ralphLoopLine.length > 0) {
     parts.push(ralphLoopLine);
+  }
+  if (compoundReadinessLine.length > 0) {
+    parts.push(compoundReadinessLine);
   }
   if (contextWarning.length > 0) {
     parts.push("Latest context warning:\\n" + contextWarning);
@@ -1124,6 +1149,104 @@ async function tddCycleCounts(stateDir, runId) {
     }
   }
   return { red, green };
+}
+
+// Mirrors src/knowledge-store.ts::computeCompoundReadiness — kept inline so
+// SessionStart can refresh compound-readiness.json without the CLI binary.
+// Any schema change must update src/knowledge-store.ts::computeCompoundReadiness
+// and src/internal/compound-readiness.ts in lockstep.
+async function computeCompoundReadinessInline(root, options) {
+  const filePath = path.join(root, RUNTIME_ROOT, "knowledge.jsonl");
+  const raw = await readTextFile(filePath, "");
+  const threshold = Number.isInteger(options && options.threshold) && options.threshold >= 1
+    ? options.threshold
+    : 3;
+  const maxReady = Number.isInteger(options && options.maxReady) && options.maxReady >= 1
+    ? options.maxReady
+    : 10;
+  const normalize = (value) => String(value == null ? "" : value).trim().replace(/\\s+/gu, " ").toLowerCase();
+  const severityWeight = (sev) => {
+    if (sev === "critical") return 3;
+    if (sev === "important") return 2;
+    if (sev === "suggestion") return 1;
+    return 0;
+  };
+  const buckets = new Map();
+  for (const rawLine of raw.split(/\\r?\\n/gu)) {
+    const line = rawLine.trim();
+    if (line.length === 0) continue;
+    let row;
+    try { row = JSON.parse(line); } catch { continue; }
+    if (!row || typeof row !== "object" || Array.isArray(row)) continue;
+    if (row.maturity === "lifted-to-enforcement") continue;
+    const type = typeof row.type === "string" ? row.type : "";
+    const trigger = typeof row.trigger === "string" ? row.trigger : "";
+    const action = typeof row.action === "string" ? row.action : "";
+    if (type.length === 0 || trigger.length === 0 || action.length === 0) continue;
+    const key = type + "||" + normalize(trigger) + "||" + normalize(action);
+    const frequency = Number.isInteger(row.frequency) && row.frequency > 0 ? Math.floor(row.frequency) : 1;
+    const lastSeen = typeof row.last_seen_ts === "string" ? row.last_seen_ts : "";
+    let bucket = buckets.get(key);
+    if (!bucket) {
+      bucket = {
+        trigger,
+        action,
+        recurrence: frequency,
+        entryCount: 1,
+        severity: typeof row.severity === "string" ? row.severity : undefined,
+        lastSeenTs: lastSeen,
+        types: new Set([type]),
+        maturity: new Set([typeof row.maturity === "string" ? row.maturity : "raw"])
+      };
+      buckets.set(key, bucket);
+      continue;
+    }
+    bucket.recurrence += frequency;
+    bucket.entryCount += 1;
+    bucket.types.add(type);
+    bucket.maturity.add(typeof row.maturity === "string" ? row.maturity : "raw");
+    if (row.severity === "critical") {
+      bucket.severity = "critical";
+    } else if (row.severity === "important" && bucket.severity !== "critical") {
+      bucket.severity = "important";
+    }
+    if (lastSeen && Date.parse(lastSeen) > Date.parse(bucket.lastSeenTs || "0")) {
+      bucket.lastSeenTs = lastSeen;
+    }
+  }
+  const ready = [];
+  for (const bucket of buckets.values()) {
+    const criticalOverride = bucket.severity === "critical";
+    const meetsRecurrence = bucket.recurrence >= threshold;
+    if (!criticalOverride && !meetsRecurrence) continue;
+    ready.push({
+      trigger: bucket.trigger,
+      action: bucket.action,
+      recurrence: bucket.recurrence,
+      entryCount: bucket.entryCount,
+      qualification: criticalOverride && !meetsRecurrence ? "critical_override" : "recurrence",
+      ...(bucket.severity ? { severity: bucket.severity } : {}),
+      lastSeenTs: bucket.lastSeenTs,
+      types: Array.from(bucket.types).sort(),
+      maturity: Array.from(bucket.maturity).sort()
+    });
+  }
+  ready.sort((a, b) => {
+    const sevDiff = severityWeight(b.severity) - severityWeight(a.severity);
+    if (sevDiff !== 0) return sevDiff;
+    if (b.recurrence !== a.recurrence) return b.recurrence - a.recurrence;
+    const recencyDiff = Date.parse(b.lastSeenTs || "0") - Date.parse(a.lastSeenTs || "0");
+    if (!Number.isNaN(recencyDiff) && recencyDiff !== 0) return recencyDiff;
+    return String(a.trigger).localeCompare(String(b.trigger));
+  });
+  return {
+    schemaVersion: 1,
+    threshold,
+    clusterCount: buckets.size,
+    readyCount: ready.length,
+    ready: ready.slice(0, maxReady),
+    lastUpdatedAt: new Date().toISOString()
+  };
 }
 
 // Mirrors src/tdd-cycle.ts::computeRalphLoopStatus — kept inline so the
