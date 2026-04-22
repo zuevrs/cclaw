@@ -57,6 +57,7 @@ import {
   promptGuardScript,
   workflowGuardScript
 } from "./content/observe.js";
+import { nodeHookRuntimeScript } from "./content/node-hooks.js";
 import { META_SKILL_NAME, usingCclawSkillMarkdown } from "./content/meta-skill.js";
 import {
   decisionProtocolMarkdown,
@@ -887,6 +888,13 @@ async function writeHooks(projectRoot: string, config: CclawConfig): Promise<voi
     })
   );
   await writeFileSafe(path.join(hooksDir, "context-monitor.sh"), contextMonitorScript());
+  await writeFileSafe(path.join(hooksDir, "run-hook.mjs"), nodeHookRuntimeScript({
+    promptGuardMode: config.promptGuardMode ?? config.strictness ?? "advisory",
+    workflowGuardMode: config.strictness ?? "advisory",
+    tddEnforcementMode: config.tddEnforcement ?? config.strictness ?? "advisory",
+    tddTestPathPatterns: config.tdd?.testPathPatterns ?? config.tddTestGlobs,
+    tddProductionPathPatterns: config.tdd?.productionPathPatterns
+  }));
   const opencodePluginSource = opencodePluginJs();
   await writeFileSafe(path.join(hooksDir, "opencode-plugin.mjs"), opencodePluginSource);
 
@@ -901,6 +909,7 @@ async function writeHooks(projectRoot: string, config: CclawConfig): Promise<voi
       "prompt-guard.sh",
       "workflow-guard.sh",
       "context-monitor.sh",
+      "run-hook.mjs",
       "opencode-plugin.mjs"
     ]) {
       await fs.chmod(path.join(hooksDir, script), 0o755);

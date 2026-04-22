@@ -1242,6 +1242,7 @@ exit 0
 export { claudeHooksJsonWithObservation as claudeHooksJson } from "./observe.js";
 export { cursorHooksJsonWithObservation as cursorHooksJson } from "./observe.js";
 export { codexHooksJsonWithObservation as codexHooksJson } from "./observe.js";
+export { nodeHookRuntimeScript } from "./node-hooks.js";
 
 // ---------------------------------------------------------------------------
 // OpenCode plugin — JS module
