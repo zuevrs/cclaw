@@ -719,6 +719,26 @@ async function handleSessionStart(runtime) {
   const contextWarning = await readLatestContextWarningLine(contextWarningsFile);
   const knowledge = await buildKnowledgeDigest(runtime.root, state.currentStage);
 
+  // Refresh Ralph Loop status each session-start so /cc-next and the model
+  // both read a consistent "iter=N, acClosed=[...]" snapshot. Runs only when
+  // we are in tdd — other stages skip the write to keep the file stable.
+  let ralphLoopLine = "";
+  if (state.currentStage === "tdd") {
+    try {
+      const ralphStatus = await computeRalphLoopStatusInline(stateDir, state.activeRunId);
+      await writeJsonFile(path.join(stateDir, "ralph-loop.json"), ralphStatus);
+      const redOpen = ralphStatus.redOpenSlices.length > 0
+        ? ralphStatus.redOpenSlices.join(",")
+        : "none";
+      ralphLoopLine = "Ralph Loop: iter=" + String(ralphStatus.loopIteration) +
+        ", slices=" + String(ralphStatus.sliceCount) +
+        ", acClosed=" + String(ralphStatus.acClosed.length) +
+        ", redOpen=" + redOpen;
+    } catch (_err) {
+      // best-effort — a malformed cycle log should never break session-start.
+    }
+  }
+
   const suggestionMemory = toObject(await readJsonFile(suggestionMemoryFile, {})) || {};
   const suggestionsEnabled = suggestionMemory.enabled !== false;
   const mutedStages = Array.isArray(suggestionMemory.mutedStages)
@@ -782,6 +802,9 @@ async function handleSessionStart(runtime) {
   }
   if (activitySummary.length > 0) {
     parts.push("Recent stage activity:\\n" + activitySummary.join("\\n"));
+  }
+  if (ralphLoopLine.length > 0) {
+    parts.push(ralphLoopLine);
   }
   if (contextWarning.length > 0) {
     parts.push("Latest context warning:\\n" + contextWarning);
@@ -1101,6 +1124,66 @@ async function tddCycleCounts(stateDir, runId) {
     }
   }
   return { red, green };
+}
+
+// Mirrors src/tdd-cycle.ts::computeRalphLoopStatus — kept inline so the
+// SessionStart hook can write ralph-loop.json without depending on the CLI
+// binary being installed globally. Any schema change must update both copies.
+async function computeRalphLoopStatusInline(stateDir, runId) {
+  const filePath = path.join(stateDir, "tdd-cycle-log.jsonl");
+  const raw = await readTextFile(filePath, "");
+  const sliceMap = new Map();
+  const acClosed = new Set();
+  const redOpenSlices = [];
+  let loopIteration = 0;
+  for (const rawLine of raw.split(/\\r?\\n/gu)) {
+    const line = rawLine.trim();
+    if (line.length === 0) continue;
+    let row;
+    try { row = JSON.parse(line); } catch { continue; }
+    if (!row || typeof row !== "object" || Array.isArray(row)) continue;
+    const rowRun = typeof row.runId === "string" && row.runId.length > 0 ? row.runId : runId;
+    if (rowRun !== runId) continue;
+    const slice = typeof row.slice === "string" && row.slice.length > 0 ? row.slice : "S-unknown";
+    let state = sliceMap.get(slice);
+    if (!state) {
+      state = { slice, redCount: 0, greenCount: 0, refactorCount: 0, redOpen: false, acIds: [] };
+      sliceMap.set(slice, state);
+    }
+    const exitCode = typeof row.exitCode === "number" ? row.exitCode : undefined;
+    if (row.phase === "red") {
+      state.redCount += 1;
+      if (exitCode !== undefined && exitCode !== 0) state.redOpen = true;
+    } else if (row.phase === "green") {
+      state.greenCount += 1;
+      state.redOpen = false;
+      loopIteration += 1;
+      if (Array.isArray(row.acIds)) {
+        for (const acId of row.acIds) {
+          if (typeof acId !== "string" || acId.length === 0) continue;
+          acClosed.add(acId);
+          if (!state.acIds.includes(acId)) state.acIds.push(acId);
+        }
+      }
+    } else if (row.phase === "refactor") {
+      state.refactorCount += 1;
+    }
+  }
+  for (const state of sliceMap.values()) {
+    if (state.redOpen) redOpenSlices.push(state.slice);
+  }
+  const slices = Array.from(sliceMap.values()).sort((a, b) => a.slice.localeCompare(b.slice, "en"));
+  return {
+    schemaVersion: 1,
+    runId,
+    loopIteration,
+    redOpen: redOpenSlices.length > 0,
+    redOpenSlices,
+    acClosed: Array.from(acClosed).sort(),
+    sliceCount: slices.length,
+    slices,
+    lastUpdatedAt: new Date().toISOString()
+  };
 }
 
 function tddCycleStateFromCounts(counts) {

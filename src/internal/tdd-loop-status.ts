@@ -2,7 +2,7 @@ import fs from "node:fs/promises";
 import path from "node:path";
 import type { Writable } from "node:stream";
 import { RUNTIME_ROOT } from "../constants.js";
-import { writeFileSafe } from "../file-utils.js";
+import { writeFileSafe } from "../fs-utils.js";
 import { readFlowState } from "../runs.js";
 import {
   computeRalphLoopStatus,
@@ -65,8 +65,8 @@ export async function runTddLoopStatusCommand(
   io: InternalIo
 ): Promise<number> {
   const args = parseArgs(argv);
-  const flow = await readFlowState(projectRoot);
-  const runId = flow.raw.activeRunId;
+  const flow = await readFlowState(projectRoot).catch(() => null);
+  const runId = flow?.activeRunId ?? "active";
   const text = await readCycleLog(projectRoot);
   const entries = parseTddCycleLog(text);
   const status = computeRalphLoopStatus(entries, { runId });
