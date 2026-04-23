@@ -6,7 +6,12 @@ import { readActiveFeature, syncActiveFeatureSnapshot } from "./feature-system.j
 import { ensureDir, exists, withDirectoryLock, writeFileSafe } from "./fs-utils.js";
 import { readKnowledgeSafely } from "./knowledge-store.js";
 import { evaluateRetroGate } from "./retro-gate.js";
-import { ensureRunSystem, readFlowState, writeFlowState } from "./run-persistence.js";
+import {
+  ensureRunSystem,
+  flowStateLockPathFor,
+  readFlowState,
+  writeFlowState
+} from "./run-persistence.js";
 import type { FlowStage } from "./types.js";
 
 const RUNS_DIR_REL_PATH = `${RUNTIME_ROOT}/runs`;
@@ -234,7 +239,13 @@ export async function archiveRun(
   options: ArchiveRunOptions = {}
 ): Promise<ArchiveRunResult> {
   await ensureRunSystem(projectRoot);
+  // Hold BOTH archive.lock and flow-state.lock for the entire archive:
+  // the outer archive lock serializes two concurrent archives; the
+  // inner flow-state lock prevents CLI / hook paths from mutating
+  // flow-state between the archive snapshot and the subsequent reset,
+  // which used to cause lost-update races.
   return withDirectoryLock(archiveLockPath(projectRoot), async () => {
+  return withDirectoryLock(flowStateLockPathFor(projectRoot), async () => {
   const activeFeature = await readActiveFeature(projectRoot);
   const artifactsDir = activeArtifactsPath(projectRoot);
   const runsDir = runsRoot(projectRoot);
@@ -298,7 +309,7 @@ export async function archiveRun(
         compoundEntries: retroGate.compoundEntries
       }
     };
-    await writeFlowState(projectRoot, sourceState, { allowReset: true });
+    await writeFlowState(projectRoot, sourceState, { allowReset: true, skipLock: true });
   }
   const retroSummary: ArchiveRunResult["retro"] = {
     required: retroGate.required,
@@ -338,7 +349,7 @@ export async function archiveRun(
     const snapshottedStateFiles = await snapshotStateDirectory(projectRoot, archiveStatePath);
 
     const resetState = createInitialFlowState();
-    await writeFlowState(projectRoot, resetState, { allowReset: true });
+    await writeFlowState(projectRoot, resetState, { allowReset: true, skipLock: true });
     stateReset = true;
     await resetCarryoverStateFiles(projectRoot, resetState.activeRunId);
 
@@ -390,7 +401,7 @@ export async function archiveRun(
     }
     if (stateReset) {
       try {
-        await writeFlowState(projectRoot, stateBeforeReset, { allowReset: true });
+        await writeFlowState(projectRoot, stateBeforeReset, { allowReset: true, skipLock: true });
         await resetCarryoverStateFiles(projectRoot, stateBeforeReset.activeRunId);
       } catch {
         // If rollback of state fails, keep sentinel + archive remnants for
@@ -399,6 +410,7 @@ export async function archiveRun(
     }
     throw err;
   }
+  });
   }, {
     retries: 400,
     retryDelayMs: 25,

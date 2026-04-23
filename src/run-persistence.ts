@@ -37,6 +37,13 @@ export interface WriteFlowStateOptions {
    * bootstrap, or explicit recovery; never set from normal stage handlers.
    */
   allowReset?: boolean;
+  /**
+   * When true, skip the internal directory-lock acquisition. The caller
+   * MUST already hold `flowStateLockPath(projectRoot)` for the duration
+   * of this call. Used by run-archive to keep the full archive +
+   * flow-state reset inside one atomic lock window.
+   */
+  skipLock?: boolean;
 }
 
 export interface ReadFlowStateOptions {
@@ -460,7 +467,7 @@ export async function writeFlowState(
   options: WriteFlowStateOptions = {}
 ): Promise<void> {
   await ensureFeatureSystem(projectRoot);
-  await withDirectoryLock(flowStateLockPath(projectRoot), async () => {
+  const doWrite = async (): Promise<void> => {
     const statePath = flowStatePath(projectRoot);
     if (!options.allowReset && (await exists(statePath))) {
       try {
@@ -483,8 +490,22 @@ export async function writeFlowState(
     }
     const safe = coerceFlowState({ ...(state as unknown as Record<string, unknown>) });
     await writeFileSafe(statePath, `${JSON.stringify(safe, null, 2)}\n`, { mode: 0o600 });
-  });
+  };
+  if (options.skipLock) {
+    await doWrite();
+  } else {
+    await withDirectoryLock(flowStateLockPath(projectRoot), doWrite);
+  }
   await syncActiveFeatureSnapshot(projectRoot);
+}
+
+/**
+ * Exposed path helper so callers that need to serialize a multi-step
+ * state operation with flow-state writes (e.g. run archival) can
+ * acquire the SAME lock directory used internally by `writeFlowState`.
+ */
+export function flowStateLockPathFor(projectRoot: string): string {
+  return flowStateLockPath(projectRoot);
 }
 
 interface EnsureRunSystemOptions {
