@@ -1,4 +1,5 @@
 import { RUNTIME_ROOT } from "../constants.js";
+import { resolveIdeateFrames, type IdeateFrameId } from "./ideate-frames.js";
 
 const IDEATE_SKILL_FOLDER = "flow-ideate";
 const IDEATE_SKILL_NAME = "flow-ideate";
@@ -23,7 +24,26 @@ const STRUCTURED_ASK_TOOLS =
   "`request_user_input` on Codex in Plan / Collaboration mode; " +
   "fall back to a plain-text lettered list when the tool is hidden or errors";
 
-export function ideateCommandContract(): string {
+export interface IdeateCommandOptions {
+  frameIds?: readonly IdeateFrameId[];
+}
+
+function renderFrameBullets(frameIds?: readonly IdeateFrameId[]): string {
+  return resolveIdeateFrames(frameIds)
+    .map((frame) => `   - ${frame.label} (\`${frame.id}\`)`)
+    .join("\n");
+}
+
+function renderFrameNames(frameIds?: readonly IdeateFrameId[]): string {
+  return resolveIdeateFrames(frameIds)
+    .map((frame) => frame.label)
+    .join(", ");
+}
+
+export function ideateCommandContract(options: IdeateCommandOptions = {}): string {
+  const frames = resolveIdeateFrames(options.frameIds);
+  const frameBullets = renderFrameBullets(options.frameIds);
+  const minimumDistinctFrames = Math.min(4, frames.length);
   return `# /cc-ideate
 
 ## Purpose
@@ -56,15 +76,18 @@ same session, or save/discard the backlog.
      repetition scan.
    - Elsewhere-software: docs-first grounding (Context7 and official docs).
    - Elsewhere-non-software: constraints and objective grounding.
-4. **Divergent ideation frames (parallel).** Generate candidates with at least
-   4 distinct frames: pain/friction, inversion, assumption-break, leverage,
-   cross-domain analogy, constraint-flip.
+4. **Divergent ideation frames (parallel).** Generate candidates with
+   configured frames (${frames.length} total):
+${frameBullets}
+   Keep at least ${minimumDistinctFrames} distinct frame outputs in every run.
 5. **Adversarial critique pass.** For each candidate, write the strongest
    counter-argument, kill weak ideas, and keep survivors only.
 6. **Produce 5-10 survivors** with impact (High/Medium/Low),
    effort (S/M/L), confidence (High/Medium/Low), and one evidence path per
    survivor.
-7. **Rank by impact/effort**, recommend the top survivor.
+7. **Rank by impact/effort/confidence** using
+   \`(impact points / effort cost) * confidence multiplier\` and recommend
+   the top survivor.
 8. **Write the artifact** at
    \`${IDEATE_ARTIFACT_PATTERN}\` using the schema in the skill.
 9. **Present the handoff prompt** with four concrete options — not A/B/C
@@ -83,11 +106,15 @@ Validate envelopes with:
 
 ## Primary skill
 
-**${RUNTIME_ROOT}/skills/${IDEATE_SKILL_FOLDER}/SKILL.md**
+   **${RUNTIME_ROOT}/skills/${IDEATE_SKILL_FOLDER}/SKILL.md**
 `;
 }
 
-export function ideateCommandSkillMarkdown(): string {
+export function ideateCommandSkillMarkdown(options: IdeateCommandOptions = {}): string {
+  const frames = resolveIdeateFrames(options.frameIds);
+  const frameBullets = renderFrameBullets(options.frameIds);
+  const minimumDistinctFrames = Math.min(4, frames.length);
+  const frameNames = renderFrameNames(options.frameIds);
   return `---
 name: ${IDEATE_SKILL_NAME}
 description: "Repository ideate mode: detect and rank high-leverage improvements, persist a backlog artifact, and hand off to /cc or save/discard."
@@ -156,14 +183,9 @@ Record each finding with exact evidence (path, command, or doc source).
 
 Generate candidate ideas by frame, in parallel when possible:
 
-- pain/friction
-- inversion
-- assumption-break
-- leverage
-- cross-domain analogy
-- constraint-flip
+${frameBullets}
 
-Require at least 4 distinct frames in every run. Avoid frame-collapse
+Require at least ${minimumDistinctFrames} distinct frames in every run. Avoid frame-collapse
 (same idea rewritten 6 times). Keep raw outputs for auditability.
 
 ### Phase 3 — Critique all, keep survivors
@@ -188,7 +210,8 @@ Only survivors advance to ranking.
    - **Evidence** — path(s) or command output, inline if short
    - **Counter-argument** — strongest concern that survived
    - **Proposed handoff** — exact \`/cc <phrase>\`
-3. Sort by impact/effort ratio; break ties with confidence.
+3. Sort by score \`(impact points / effort cost) * confidence multiplier\`
+   and break ties with rationale strength.
 4. Compute the artifact filename:
    - \`slug\` = first 3–5 words of the top recommendation, lowercase,
      non-alphanumeric collapsed to \`-\`, trimmed. When ideate mode is
@@ -276,6 +299,8 @@ lettered list with the same four labels. Do not invent extra options.
 - Do not mutate \`.cclaw/state/flow-state.json\` at any phase.
 - Do not end the turn with an ungrounded "pick one" question — every
   option in the handoff prompt must reference a concrete command.
+- Do not collapse all ideas into one frame; distribute across:
+  ${frameNames}.
 `;
 }
 
