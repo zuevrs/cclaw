@@ -57,11 +57,27 @@ export async function withDirectoryLock<T>(
 
       try {
         const stat = await fs.stat(lockPath);
+        if (!stat.isDirectory()) {
+          // A non-directory lives at the lock path (e.g. a stray file).
+          // Retrying mkdir() will keep returning EEXIST forever, and no
+          // other cclaw process is holding the lock - the path is simply
+          // unusable. Fail loudly rather than burning the full retry
+          // budget, so the caller sees a deterministic error.
+          throw new Error(
+            `Lock path exists but is not a directory: ${lockPath}`
+          );
+        }
         if (Date.now() - stat.mtimeMs > staleAfterMs) {
           await fs.rm(lockPath, { recursive: true, force: true });
           continue;
         }
-      } catch {
+      } catch (statError) {
+        if (
+          statError instanceof Error &&
+          statError.message.startsWith("Lock path exists but is not a directory")
+        ) {
+          throw statError;
+        }
         // Lock directory disappeared between retries.
       }
       await sleep(retryDelayMs);
