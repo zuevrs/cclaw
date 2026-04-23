@@ -27,7 +27,8 @@ const ALLOWED_CONFIG_KEYS = new Set<string>([
   "languageRulePacks",
   "trackHeuristics",
   "sliceReview",
-  "ironLaws"
+  "ironLaws",
+  "optInAudits"
 ]);
 
 /**
@@ -583,6 +584,45 @@ export async function readConfig(projectRoot: string): Promise<CclawConfig> {
     ironLaws = { strictLaws: [] };
   }
 
+  const optInAuditsRaw = (parsed as { optInAudits?: unknown }).optInAudits;
+  let optInAudits: CclawConfig["optInAudits"] = undefined;
+  if (Object.prototype.hasOwnProperty.call(parsed, "optInAudits")) {
+    if (!isRecord(optInAuditsRaw)) {
+      throw configValidationError(fullPath, `"optInAudits" must be an object`);
+    }
+    const unknownOptInAuditKeys = Object.keys(optInAuditsRaw).filter(
+      (key) => key !== "scopePreAudit" && key !== "staleDiagramAudit"
+    );
+    if (unknownOptInAuditKeys.length > 0) {
+      throw configValidationError(
+        fullPath,
+        `"optInAudits" has unknown key(s): ${unknownOptInAuditKeys.join(", ")}`
+      );
+    }
+    if (
+      optInAuditsRaw.scopePreAudit !== undefined &&
+      typeof optInAuditsRaw.scopePreAudit !== "boolean"
+    ) {
+      throw configValidationError(fullPath, `"optInAudits.scopePreAudit" must be a boolean`);
+    }
+    if (
+      optInAuditsRaw.staleDiagramAudit !== undefined &&
+      typeof optInAuditsRaw.staleDiagramAudit !== "boolean"
+    ) {
+      throw configValidationError(fullPath, `"optInAudits.staleDiagramAudit" must be a boolean`);
+    }
+    optInAudits = {
+      scopePreAudit:
+        typeof optInAuditsRaw.scopePreAudit === "boolean"
+          ? optInAuditsRaw.scopePreAudit
+          : false,
+      staleDiagramAudit:
+        typeof optInAuditsRaw.staleDiagramAudit === "boolean"
+          ? optInAuditsRaw.staleDiagramAudit
+          : false
+    };
+  }
+
   return {
     version: parsed.version ?? CCLAW_VERSION,
     flowVersion: parsed.flowVersion ?? FLOW_VERSION,
@@ -601,7 +641,8 @@ export async function readConfig(projectRoot: string): Promise<CclawConfig> {
     languageRulePacks,
     trackHeuristics,
     sliceReview,
-    ironLaws
+    ironLaws,
+    optInAudits
   };
 }
 
@@ -620,7 +661,8 @@ type AdvancedConfigKey =
   | "languageRulePacks"
   | "trackHeuristics"
   | "sliceReview"
-  | "ironLaws";
+  | "ironLaws"
+  | "optInAudits";
 
 /**
  * Options controlling the serialisation shape of `config.yaml`.
@@ -667,7 +709,8 @@ function buildSerializableConfig(
     "languageRulePacks",
     "trackHeuristics",
     "sliceReview",
-    "ironLaws"
+    "ironLaws",
+    "optInAudits"
   ];
   for (const key of ordered) {
     const value = config[key];
@@ -727,7 +770,8 @@ export async function detectAdvancedKeys(
       "languageRulePacks",
       "trackHeuristics",
       "sliceReview",
-      "ironLaws"
+      "ironLaws",
+      "optInAudits"
     ];
     const present = new Set<AdvancedConfigKey>();
     for (const key of advancedCandidates) {

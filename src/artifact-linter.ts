@@ -1,6 +1,7 @@
 import fs from "node:fs/promises";
 import path from "node:path";
 import { resolveArtifactPath as resolveStageArtifactPath } from "./artifact-paths.js";
+import { readConfig } from "./config.js";
 import { RUNTIME_ROOT, SHIP_FINALIZATION_MODES } from "./constants.js";
 import { exists } from "./fs-utils.js";
 import { stageSchema } from "./content/stage-schema.js";
@@ -19,14 +20,6 @@ export interface LintResult {
   file: string;
   passed: boolean;
   findings: LintFinding[];
-}
-
-export const CCLAW_ENABLE_SCOPE_PRE_AUDIT_ENV = "CCLAW_ENABLE_SCOPE_PRE_AUDIT";
-export const CCLAW_ENABLE_STALE_DIAGRAM_AUDIT_ENV = "CCLAW_ENABLE_STALE_DIAGRAM_AUDIT";
-
-function isOptInFlagEnabled(envName: string): boolean {
-  const value = process.env[envName];
-  return typeof value === "string" && /^(?:1|true|yes|on)$/iu.test(value.trim());
 }
 
 interface ResolvedArtifactPath {
@@ -1449,6 +1442,7 @@ export async function lintArtifact(
 
   const raw = await fs.readFile(absFile, "utf8");
   const sections = extractH2Sections(raw);
+  const projectConfig = await readConfig(projectRoot);
   const parsedFrontmatter = parseFrontmatter(raw);
   const frontmatterMissingKeys = FRONTMATTER_REQUIRED_KEYS.filter((key) => {
     const value = parsedFrontmatter.values[key];
@@ -1486,8 +1480,8 @@ export async function lintArtifact(
     stage === "brainstorm" ? sectionBodyByName(sections, "Short-Circuit Decision") : null;
   const brainstormShortCircuitActivated =
     stage === "brainstorm" && isShortCircuitActivated(brainstormShortCircuitBody);
-  const scopePreAuditEnabled = isOptInFlagEnabled(CCLAW_ENABLE_SCOPE_PRE_AUDIT_ENV);
-  const staleDiagramAuditEnabled = isOptInFlagEnabled(CCLAW_ENABLE_STALE_DIAGRAM_AUDIT_ENV);
+  const scopePreAuditEnabled = projectConfig.optInAudits?.scopePreAudit === true;
+  const staleDiagramAuditEnabled = projectConfig.optInAudits?.staleDiagramAudit === true;
   const isTrivialOverride =
     schema.trivialOverrideSections &&
     schema.trivialOverrideSections.length > 0 &&
@@ -1722,7 +1716,7 @@ export async function lintArtifact(
         findings.push({
           section: "Stale Diagram Drift Check",
           required: true,
-          rule: `When \`${CCLAW_ENABLE_STALE_DIAGRAM_AUDIT_ENV}=1\`, stale diagram audit requires Codebase Investigation blast-radius files.`,
+          rule: "When `.cclaw/config.yaml::optInAudits.staleDiagramAudit` is true, stale diagram audit requires Codebase Investigation blast-radius files.",
           found: false,
           details: "No ## heading matching required section \"Codebase Investigation\"."
         });
@@ -1736,7 +1730,7 @@ export async function lintArtifact(
         findings.push({
           section: "Stale Diagram Drift Check",
           required: true,
-          rule: `When \`${CCLAW_ENABLE_STALE_DIAGRAM_AUDIT_ENV}=1\`, blast-radius files must not be newer than current design diagram baseline.`,
+          rule: "When `.cclaw/config.yaml::optInAudits.staleDiagramAudit` is true, blast-radius files must not be newer than current design diagram baseline.",
           found: staleAudit.ok,
           details: staleAudit.details
         });

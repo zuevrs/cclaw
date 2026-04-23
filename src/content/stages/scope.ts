@@ -47,7 +47,7 @@ export const SCOPE: StageSchemaInput = {
   },
   executionModel: {
     checklist: [
-      "**Pre-Scope System Audit (opt-in)** — when `CCLAW_ENABLE_SCOPE_PRE_AUDIT=1`, before premise challenge gather reality snapshot: recent commits (`git log -30 --oneline`), current diff (`git diff --stat`), stash state (`git stash list`), and deferred debt markers (`rg -n 'TODO|FIXME|XXX|HACK'`). Record findings in scope artifact.",
+      "**Pre-Scope System Audit (opt-in)** — when `.cclaw/config.yaml::optInAudits.scopePreAudit` is true, before premise challenge gather reality snapshot: recent commits (`git log -30 --oneline`), current diff (`git diff --stat`), stash state (`git stash list`), and deferred debt markers (`rg -n 'TODO|FIXME|XXX|HACK'`). Record findings in scope artifact.",
       "**Assess complexity** — Read the brainstorm artifact. If project is simple (single component, clear architecture, personal/prototype), run light-touch scope: mode selection, 3-5 key in/out boundaries, deferred items. Skip Dream State Mapping and Temporal Interrogation. If project is complex (multi-component, team delivery, production), run the full checklist.",
       "**Prime Directives** — Zero silent failures. For each in-scope capability, name concrete failure modes, the exact error surface, and trace all four data-flow paths (happy, nil, empty, upstream error). Include interaction edge cases (double-click, navigate-away, stale state), observability commitments, and explicit deferred-item logging.",
       "**Premise Challenge** — Is this the right problem? What if we do nothing? What are we optimizing for?",
@@ -78,7 +78,7 @@ export const SCOPE: StageSchemaInput = {
       "**STOP BEFORE ADVANCE.** Mandatory delegation `planner` must be marked completed or explicitly waived in `.cclaw/state/delegation-log.json`. Then close the stage via `node .cclaw/hooks/stage-complete.mjs scope` (do not hand-edit `.cclaw/state/flow-state.json`)."
     ],
     process: [
-      "When `CCLAW_ENABLE_SCOPE_PRE_AUDIT=1`, run pre-scope system audit (git log/diff/stash/debt markers).",
+      "When `.cclaw/config.yaml::optInAudits.scopePreAudit` is true, run pre-scope system audit (git log/diff/stash/debt markers).",
       "Run premise challenge and existing-solution leverage check.",
       "When mode is EXPAND/SELECTIVE, run brief landscape check before final scope lock.",
       "Calibrate quality bar against 2-3 strong existing modules/files.",
@@ -98,7 +98,7 @@ export const SCOPE: StageSchemaInput = {
     ],
     requiredEvidence: [
       "Artifact written to `.cclaw/artifacts/02-scope-<slug>.md`.",
-      "When `CCLAW_ENABLE_SCOPE_PRE_AUDIT=1`, Pre-Scope System Audit findings are captured (git log/diff/stash/debt markers).",
+      "When `.cclaw/config.yaml::optInAudits.scopePreAudit` is true, Pre-Scope System Audit findings are captured (git log/diff/stash/debt markers).",
       "In-scope and out-of-scope lists are explicit.",
       "Discretion areas are explicit (or marked as `None`).",
       "Selected mode and rationale are documented.",
@@ -143,7 +143,7 @@ export const SCOPE: StageSchemaInput = {
       traceabilityRule: "Every scope boundary must be traceable to a brainstorm decision. Every downstream design choice must stay within the scope contract."
     },
     artifactValidation: [
-      { section: "Pre-Scope System Audit", required: false, validationRule: "When `CCLAW_ENABLE_SCOPE_PRE_AUDIT=1`: must capture git log -30, git diff --stat, git stash list, and debt-marker scan (TODO/FIXME/XXX/HACK) before premise challenge." },
+      { section: "Pre-Scope System Audit", required: false, validationRule: "When `.cclaw/config.yaml::optInAudits.scopePreAudit` is true: must capture git log -30, git diff --stat, git stash list, and debt-marker scan (TODO/FIXME/XXX/HACK) before premise challenge." },
       { section: "Prime Directives", required: false, validationRule: "For each scoped capability: named failure modes, explicit error surface, four data-flow paths, interaction edge cases, observability expectations, and deferred-item handling." },
       { section: "Premise Challenge", required: false, validationRule: "Must contain explicit answers to: right problem? direct path? what if nothing?" },
       { section: "Landscape Check", required: false, validationRule: "When mode is EXPAND/SELECTIVE, include at least one external reference insight and its impact on scope." },

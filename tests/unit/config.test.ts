@@ -427,6 +427,45 @@ sliceReview:
     await expect(readConfig(root)).rejects.toThrow(/must contain only/);
   });
 
+  it("parses optInAudits toggles", async () => {
+    const root = await createTempProject("config-opt-in-audits");
+    await fs.mkdir(path.join(root, ".cclaw"), { recursive: true });
+    await fs.writeFile(
+      configPath(root),
+      `harnesses:
+  - claude
+optInAudits:
+  scopePreAudit: true
+  staleDiagramAudit: false
+`,
+      "utf8"
+    );
+    const config = await readConfig(root);
+    expect(config.optInAudits?.scopePreAudit).toBe(true);
+    expect(config.optInAudits?.staleDiagramAudit).toBe(false);
+  });
+
+  it("rejects malformed optInAudits config", async () => {
+    const root = await createTempProject("config-opt-in-audits-malformed");
+    await fs.mkdir(path.join(root, ".cclaw"), { recursive: true });
+    await fs.writeFile(configPath(root), "optInAudits: true\n", "utf8");
+    await expect(readConfig(root)).rejects.toThrow(/"optInAudits" must be an object/);
+  });
+
+  it("rejects unknown optInAudits keys", async () => {
+    const root = await createTempProject("config-opt-in-audits-unknown-key");
+    await fs.mkdir(path.join(root, ".cclaw"), { recursive: true });
+    await fs.writeFile(
+      configPath(root),
+      `optInAudits:
+  staleDiagramAudit: true
+  randomAudit: true
+`,
+      "utf8"
+    );
+    await expect(readConfig(root)).rejects.toThrow(/"optInAudits" has unknown key\(s\): randomAudit/);
+  });
+
   // -- advisory-by-default: single `strictness` knob ------------------------
 
   it("strictness=strict is accepted as the single enforcement knob", async () => {
@@ -479,7 +518,8 @@ sliceReview:
       "compound",
       "defaultTrack",
       "trackHeuristics",
-      "sliceReview"
+      "sliceReview",
+      "optInAudits"
     ];
     for (const advanced of unexpectedAdvanced) {
       expect(keys).not.toContain(advanced);

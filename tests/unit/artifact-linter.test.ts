@@ -2,8 +2,6 @@ import fs from "node:fs/promises";
 import path from "node:path";
 import { describe, expect, it } from "vitest";
 import {
-  CCLAW_ENABLE_SCOPE_PRE_AUDIT_ENV,
-  CCLAW_ENABLE_STALE_DIAGRAM_AUDIT_ENV,
   checkReviewSecurityNoChangeAttestation,
   checkReviewVerdictConsistency,
   extractMarkdownSectionBody,
@@ -24,18 +22,17 @@ async function writeRuntimeArtifact(root: string, fileName: string, content: str
   await fs.writeFile(path.join(root, ".cclaw/artifacts", fileName), content, "utf8");
 }
 
-async function withEnvFlag<T>(name: string, value: string, run: () => Promise<T>): Promise<T> {
-  const previous = process.env[name];
-  process.env[name] = value;
-  try {
-    return await run();
-  } finally {
-    if (previous === undefined) {
-      delete process.env[name];
-    } else {
-      process.env[name] = previous;
-    }
-  }
+async function writeOptInAuditsConfig(
+  root: string,
+  flags: { scopePreAudit?: boolean; staleDiagramAudit?: boolean }
+): Promise<void> {
+  await fs.mkdir(path.join(root, ".cclaw"), { recursive: true });
+  const lines = [
+    "optInAudits:",
+    `  scopePreAudit: ${flags.scopePreAudit === true ? "true" : "false"}`,
+    `  staleDiagramAudit: ${flags.staleDiagramAudit === true ? "true" : "false"}`
+  ];
+  await fs.writeFile(path.join(root, ".cclaw/config.yaml"), `${lines.join("\n")}\n`, "utf8");
 }
 
 function completePlanArtifact(frontmatter = ""): string {
@@ -1033,6 +1030,7 @@ describe("artifact linter heuristics", () => {
 
   it("requires pre-scope audit section when opt-in flag is enabled", async () => {
     const root = await createTempProject("scope-pre-audit-required");
+    await writeOptInAuditsConfig(root, { scopePreAudit: true });
     await writeRuntimeArtifact(root, "02-scope.md", `# Scope Artifact
 
 ## Scope Mode
@@ -1056,17 +1054,16 @@ describe("artifact linter heuristics", () => {
 - Explicitly excluded: outbound channels
 `);
 
-    await withEnvFlag(CCLAW_ENABLE_SCOPE_PRE_AUDIT_ENV, "1", async () => {
-      const result = await lintArtifact(root, "scope");
-      const preAudit = result.findings.find((f) => f.section === "Pre-Scope System Audit");
-      expect(result.passed).toBe(false);
-      expect(preAudit?.required).toBe(true);
-      expect(preAudit?.found).toBe(false);
-    });
+    const result = await lintArtifact(root, "scope");
+    const preAudit = result.findings.find((f) => f.section === "Pre-Scope System Audit");
+    expect(result.passed).toBe(false);
+    expect(preAudit?.required).toBe(true);
+    expect(preAudit?.found).toBe(false);
   });
 
   it("passes pre-scope audit section when opt-in flag is enabled and commands are captured", async () => {
     const root = await createTempProject("scope-pre-audit-pass");
+    await writeOptInAuditsConfig(root, { scopePreAudit: true });
     await writeRuntimeArtifact(root, "02-scope.md", `# Scope Artifact
 
 ## Pre-Scope System Audit
@@ -1098,12 +1095,10 @@ describe("artifact linter heuristics", () => {
 - Explicitly excluded: outbound channels
 `);
 
-    await withEnvFlag(CCLAW_ENABLE_SCOPE_PRE_AUDIT_ENV, "1", async () => {
-      const result = await lintArtifact(root, "scope");
-      const preAudit = result.findings.find((f) => f.section === "Pre-Scope System Audit");
-      expect(preAudit?.required).toBe(true);
-      expect(preAudit?.found).toBe(true);
-    });
+    const result = await lintArtifact(root, "scope");
+    const preAudit = result.findings.find((f) => f.section === "Pre-Scope System Audit");
+    expect(preAudit?.required).toBe(true);
+    expect(preAudit?.found).toBe(true);
   });
 
   it("enforces scope-reduction scan when locked decisions section is present", async () => {
@@ -1578,6 +1573,7 @@ Fallback_Cache -->|degraded response| API_Gateway`;
 
   it("flags stale diagram audit when blast-radius file is newer than design baseline", async () => {
     const root = await createTempProject("design-stale-diagram-audit-fail");
+    await writeOptInAuditsConfig(root, { staleDiagramAudit: true });
     const apiPath = path.join(root, "src/api.ts");
     const storagePath = path.join(root, "src/storage.ts");
     await fs.mkdir(path.dirname(apiPath), { recursive: true });
@@ -1593,18 +1589,17 @@ Fallback_Cache -->|degraded response| API_Gateway`;
     const futureSeconds = Date.now() / 1000 + 2;
     await fs.utimes(apiPath, futureSeconds, futureSeconds);
 
-    await withEnvFlag(CCLAW_ENABLE_STALE_DIAGRAM_AUDIT_ENV, "1", async () => {
-      const result = await lintArtifact(root, "design");
-      const staleAudit = result.findings.find((f) => f.section === "Stale Diagram Drift Check");
-      expect(result.passed).toBe(false);
-      expect(staleAudit?.required).toBe(true);
-      expect(staleAudit?.found).toBe(false);
-      expect(staleAudit?.details).toContain("src/api.ts");
-    });
+    const result = await lintArtifact(root, "design");
+    const staleAudit = result.findings.find((f) => f.section === "Stale Diagram Drift Check");
+    expect(result.passed).toBe(false);
+    expect(staleAudit?.required).toBe(true);
+    expect(staleAudit?.found).toBe(false);
+    expect(staleAudit?.details).toContain("src/api.ts");
   });
 
   it("passes stale diagram audit when blast-radius files are not newer than design baseline", async () => {
     const root = await createTempProject("design-stale-diagram-audit-pass");
+    await writeOptInAuditsConfig(root, { staleDiagramAudit: true });
     const apiPath = path.join(root, "src/api.ts");
     const storagePath = path.join(root, "src/storage.ts");
     await fs.mkdir(path.dirname(apiPath), { recursive: true });
@@ -1620,12 +1615,10 @@ Storage_Adapter -->|timeout| Fallback_Cache
 Fallback_Cache -->|degraded response| API_Gateway`;
     await writeRuntimeArtifact(root, "03-design.md", completeDesignArtifact(diagram));
 
-    await withEnvFlag(CCLAW_ENABLE_STALE_DIAGRAM_AUDIT_ENV, "1", async () => {
-      const result = await lintArtifact(root, "design");
-      const staleAudit = result.findings.find((f) => f.section === "Stale Diagram Drift Check");
-      expect(staleAudit?.required).toBe(true);
-      expect(staleAudit?.found).toBe(true);
-    });
+    const result = await lintArtifact(root, "design");
+    const staleAudit = result.findings.find((f) => f.section === "Stale Diagram Drift Check");
+    expect(staleAudit?.required).toBe(true);
+    expect(staleAudit?.found).toBe(true);
   });
 
   it("fails design artifact when Failure Mode Table uses legacy header shape", async () => {
