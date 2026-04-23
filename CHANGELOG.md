@@ -1,6 +1,12 @@
 # Changelog
 
-## Unreleased
+## 0.48.24
+
+Roll-up of the lock-aware knowledge read + diagnostics (PR #131)
+and the `reference:*` doctor severity demotion (PR #132). Both
+landed on `main` under `0.48.23` but needed a version bump to
+reach npm.
+
 
 ### Changed
 
