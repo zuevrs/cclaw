@@ -109,11 +109,36 @@ async function writeScopeArtifact(root: string): Promise<void> {
 - User approval: pending
 
 ## Scope Summary
-- Summary: define clear boundaries before design.
+- Selected mode: broad
+- Strongest challenges: balancing reliability with delivery speed
+- Recommended path: lock interfaces and failure boundaries first
+- Accepted scope: scope contract and decision boundaries
+- Deferred: implementation details
+- Explicitly excluded: rollout execution and deployment changes
 
 ## Learnings
 - None this stage.
 `, "utf8");
+}
+
+async function writeDesignArtifact(root: string): Promise<void> {
+  await fs.mkdir(path.join(root, ".cclaw/artifacts"), { recursive: true });
+  const designTemplate = ARTIFACT_TEMPLATES["03-design.md"] ?? `# Design Artifact
+
+## Architecture Boundaries
+| Component | Responsibility | Owner |
+|---|---|---|
+| api | request handling | team |
+
+## Completion Dashboard
+| Review Section | Status | Issues |
+|---|---|---|
+| Architecture Review | clear | none |
+
+## Learnings
+- None this stage.
+`;
+  await fs.writeFile(path.join(root, ".cclaw/artifacts/03-design.md"), designTemplate, "utf8");
 }
 
 async function writeTddArtifact(root: string): Promise<void> {
@@ -154,6 +179,29 @@ async function writeReviewArtifacts(root: string): Promise<void> {
     ARTIFACT_TEMPLATES["07-review-army.json"] ?? "{}",
     "utf8"
   );
+}
+
+function reviewLoopEvidence(
+  stage: "scope" | "design",
+  qualityScores: number[],
+  stopReason: "quality_threshold_met" | "max_iterations_reached" | "user_opt_out",
+  targetScore = 0.8,
+  maxIterations = 3
+): string {
+  return JSON.stringify({
+    type: "review-loop",
+    version: "1",
+    stage,
+    artifactPath: `.cclaw/artifacts/${stage === "scope" ? "02-scope.md" : "03-design.md"}`,
+    targetScore,
+    maxIterations,
+    stopReason,
+    iterations: qualityScores.map((score, index) => ({
+      iteration: index + 1,
+      qualityScore: score,
+      findingsCount: Math.max(0, Math.round((1 - score) * 10))
+    }))
+  });
 }
 
 describe("internal advance-stage commands", () => {
@@ -242,6 +290,141 @@ describe("internal advance-stage commands", () => {
     expect(code).toBe(1);
     expect(captured.stderr()).toContain("gate evidence format check failed");
     expect(captured.stderr()).toContain("tdd_verified_before_complete");
+  });
+
+  it("advance-stage rejects scope_user_approved evidence without review-loop envelope", async () => {
+    const root = await createTempProject("internal-advance-stage-scope-review-loop-invalid");
+    await ensureRunSystem(root);
+    await writeScopeArtifact(root);
+    const state = await readFlowState(root);
+    await writeFlowState(
+      root,
+      {
+        ...state,
+        currentStage: "scope",
+        completedStages: []
+      },
+      { allowReset: true }
+    );
+
+    const required = stageSchema("scope").requiredGates
+      .filter((gate) => gate.tier === "required")
+      .map((gate) => gate.id);
+    const malformedEvidence = Object.fromEntries(
+      required.map((gateId) => [gateId, `evidence for ${gateId}`])
+    ) as Record<string, string>;
+    malformedEvidence.scope_user_approved = "approved by user";
+
+    const captured = captureIo();
+    const code = await runInternalCommand(
+      root,
+      [
+        "advance-stage",
+        "scope",
+        `--evidence-json=${JSON.stringify(malformedEvidence)}`,
+        "--waive-delegation=planner",
+        "--waiver-reason=unit_test",
+        "--quiet"
+      ],
+      captured.io
+    );
+
+    expect(code).toBe(1);
+    expect(captured.stderr()).toContain("gate evidence format check failed");
+    expect(captured.stderr()).toContain("scope_user_approved");
+  });
+
+  it("advance-stage accepts scope review-loop envelope evidence and advances", async () => {
+    const root = await createTempProject("internal-advance-stage-scope-review-loop-valid");
+    await ensureRunSystem(root);
+    await writeScopeArtifact(root);
+    const state = await readFlowState(root);
+    await writeFlowState(
+      root,
+      {
+        ...state,
+        currentStage: "scope",
+        completedStages: []
+      },
+      { allowReset: true }
+    );
+
+    const required = stageSchema("scope").requiredGates
+      .filter((gate) => gate.tier === "required")
+      .map((gate) => gate.id);
+    const evidence = Object.fromEntries(
+      required.map((gateId) => [gateId, `evidence for ${gateId}`])
+    ) as Record<string, string>;
+    evidence.scope_user_approved = reviewLoopEvidence(
+      "scope",
+      [0.61, 0.83],
+      "quality_threshold_met"
+    );
+
+    const captured = captureIo();
+    const code = await runInternalCommand(
+      root,
+      [
+        "advance-stage",
+        "scope",
+        `--evidence-json=${JSON.stringify(evidence)}`,
+        "--waive-delegation=planner",
+        "--waiver-reason=unit_test",
+        "--quiet"
+      ],
+      captured.io
+    );
+
+    expect(code, captured.stderr()).toBe(0);
+    const next = await readFlowState(root);
+    expect(next.currentStage).toBe("design");
+    expect(next.guardEvidence.scope_user_approved).toContain(`"type":"review-loop"`);
+  });
+
+  it("advance-stage rejects design architecture gate evidence with mismatched review-loop stage", async () => {
+    const root = await createTempProject("internal-advance-stage-design-review-loop-stage-mismatch");
+    await ensureRunSystem(root);
+    await writeDesignArtifact(root);
+    const state = await readFlowState(root);
+    await writeFlowState(
+      root,
+      {
+        ...state,
+        currentStage: "design",
+        completedStages: []
+      },
+      { allowReset: true }
+    );
+
+    const required = stageSchema("design").requiredGates
+      .filter((gate) => gate.tier === "required")
+      .map((gate) => gate.id);
+    const evidence = Object.fromEntries(
+      required.map((gateId) => [gateId, `evidence for ${gateId}`])
+    ) as Record<string, string>;
+    evidence.design_architecture_locked = reviewLoopEvidence(
+      "scope",
+      [0.65, 0.82],
+      "quality_threshold_met"
+    );
+
+    const captured = captureIo();
+    const code = await runInternalCommand(
+      root,
+      [
+        "advance-stage",
+        "design",
+        `--evidence-json=${JSON.stringify(evidence)}`,
+        "--waive-delegation=planner",
+        "--waiver-reason=unit_test",
+        "--quiet"
+      ],
+      captured.io
+    );
+
+    expect(code).toBe(1);
+    expect(captured.stderr()).toContain("design_architecture_locked");
+    expect(captured.stderr()).toContain('stage must be "design"');
   });
 
   it("verify-flow-state-diff rejects candidate state with passed gate but no evidence", async () => {
