@@ -332,10 +332,12 @@ async function readStdin() {
   });
 }
 
-async function runCclawInternal(root, args) {
+async function runCclawInternal(root, args, options = {}) {
   return await new Promise((resolve) => {
     const isWindows = process.platform === "win32";
+    const captureStdout = options && options.captureStdout === true;
     let settled = false;
+    let stdout = "";
     let stderr = "";
     const finalize = (value) => {
       if (settled) return;
@@ -350,17 +352,26 @@ async function runCclawInternal(root, args) {
         {
         cwd: root,
         env: process.env,
-        stdio: ["ignore", "ignore", "pipe"]
+        stdio: ["ignore", captureStdout ? "pipe" : "ignore", "pipe"]
       }
       );
     } catch (error) {
       const code = error && typeof error === "object" && "code" in error ? String(error.code) : "";
       finalize({
         code: 1,
+        stdout,
         stderr,
         missingBinary: code === "ENOENT" || (isWindows && code === "EINVAL")
       });
       return;
+    }
+    if (captureStdout) {
+      child.stdout?.on("data", (chunk) => {
+        stdout += String(chunk ?? "");
+        if (stdout.length > 16000) {
+          stdout = stdout.slice(-16000);
+        }
+      });
     }
     child.stderr?.on("data", (chunk) => {
       stderr += String(chunk ?? "");
@@ -372,6 +383,7 @@ async function runCclawInternal(root, args) {
       const code = error && typeof error === "object" && "code" in error ? String(error.code) : "";
       finalize({
         code: 1,
+        stdout,
         stderr,
         missingBinary: code === "ENOENT" || (isWindows && code === "EINVAL")
       });
@@ -380,6 +392,7 @@ async function runCclawInternal(root, args) {
       if (signal) {
         finalize({
           code: 1,
+          stdout,
           stderr,
           missingBinary: false
         });
@@ -391,6 +404,7 @@ async function runCclawInternal(root, args) {
         : false;
       finalize({
         code: typeof code === "number" ? code : 1,
+        stdout,
         stderr,
         missingBinary
       });
@@ -1027,21 +1041,55 @@ async function handleSessionStart(runtime) {
   // where lifting becomes relevant; earlier stages update the file silently.
   let compoundReadinessLine = "";
   try {
-    const archivedRunsCount = await countArchivedRunsInline(runtime.root);
-    const readiness = await computeCompoundReadinessInline(runtime.root, {
-      prereadRaw: knowledgeRaw,
-      ...(typeof archivedRunsCount === "number" ? { archivedRunsCount } : {})
-    });
-    await writeJsonFile(path.join(stateDir, "compound-readiness.json"), readiness);
+    let readiness = null;
+    const internalReadiness = await runCclawInternal(
+      runtime.root,
+      ["compound-readiness", "--json"],
+      { captureStdout: true }
+    );
+    if (internalReadiness.code === 0 && internalReadiness.stdout.trim().length > 0) {
+      try {
+        const parsed = JSON.parse(internalReadiness.stdout);
+        if (parsed && typeof parsed === "object" && !Array.isArray(parsed)) {
+          readiness = parsed;
+        }
+      } catch {
+        readiness = null;
+      }
+    }
+    if (!readiness) {
+      const archivedRunsCount = await countArchivedRunsInline(runtime.root);
+      readiness = await computeCompoundReadinessInline(runtime.root, {
+        prereadRaw: knowledgeRaw,
+        ...(typeof archivedRunsCount === "number" ? { archivedRunsCount } : {})
+      });
+      await writeJsonFile(path.join(stateDir, "compound-readiness.json"), readiness);
+    }
+    const readinessObj = toObject(readiness) || {};
+    const ready = Array.isArray(readinessObj.ready) ? readinessObj.ready : [];
+    const readyCount =
+      typeof readinessObj.readyCount === "number" && Number.isFinite(readinessObj.readyCount)
+        ? Math.trunc(readinessObj.readyCount)
+        : ready.length;
+    const clusterCount =
+      typeof readinessObj.clusterCount === "number" && Number.isFinite(readinessObj.clusterCount)
+        ? Math.trunc(readinessObj.clusterCount)
+        : 0;
+    const threshold =
+      typeof readinessObj.threshold === "number" && Number.isFinite(readinessObj.threshold)
+        ? Math.trunc(readinessObj.threshold)
+        : COMPOUND_RECURRENCE_THRESHOLD;
     if (state.currentStage === "review" || state.currentStage === "ship") {
-      if (readiness.readyCount === 0) {
+      if (readyCount === 0) {
         compoundReadinessLine = "Compound readiness: no candidates (clusters=" +
-          String(readiness.clusterCount) + ", threshold=" + String(readiness.threshold) + ")";
+          String(clusterCount) + ", threshold=" + String(threshold) + ")";
       } else {
-        const critical = readiness.ready.filter((entry) => entry.severity === "critical").length;
+        const critical = ready.filter(
+          (entry) => entry && typeof entry === "object" && entry.severity === "critical"
+        ).length;
         const criticalSuffix = critical > 0 ? " (critical=" + String(critical) + ")" : "";
-        compoundReadinessLine = "Compound readiness: clusters=" + String(readiness.clusterCount) +
-          ", ready=" + String(readiness.readyCount) + criticalSuffix;
+        compoundReadinessLine = "Compound readiness: clusters=" + String(clusterCount) +
+          ", ready=" + String(readyCount) + criticalSuffix;
       }
     }
   } catch (err) {
