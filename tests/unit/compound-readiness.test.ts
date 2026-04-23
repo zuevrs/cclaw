@@ -29,11 +29,50 @@ function entry(partial: Partial<KnowledgeEntry>): KnowledgeEntry {
 describe("computeCompoundReadiness", () => {
   it("returns empty status on empty knowledge", () => {
     const status = computeCompoundReadiness([]);
-    expect(status.schemaVersion).toBe(1);
+    expect(status.schemaVersion).toBe(2);
     expect(status.clusterCount).toBe(0);
     expect(status.readyCount).toBe(0);
     expect(status.ready).toEqual([]);
     expect(status.threshold).toBe(3);
+    expect(status.baseThreshold).toBe(3);
+    expect(status.smallProjectRelaxationApplied).toBe(false);
+    expect(status.archivedRunsCount).toBeUndefined();
+  });
+
+  it("applies small-project relaxation when archivedRunsCount < 5", () => {
+    const entries = [
+      entry({ trigger: "t", action: "a", frequency: 1 }),
+      entry({ trigger: "t", action: "a", frequency: 1 })
+    ];
+    const status = computeCompoundReadiness(entries, {
+      threshold: 3,
+      archivedRunsCount: 2
+    });
+    expect(status.baseThreshold).toBe(3);
+    expect(status.threshold).toBe(2);
+    expect(status.smallProjectRelaxationApplied).toBe(true);
+    expect(status.archivedRunsCount).toBe(2);
+    expect(status.readyCount).toBe(1);
+  });
+
+  it("does not apply small-project relaxation when threshold already <= 2", () => {
+    const status = computeCompoundReadiness([], {
+      threshold: 2,
+      archivedRunsCount: 0
+    });
+    expect(status.baseThreshold).toBe(2);
+    expect(status.threshold).toBe(2);
+    expect(status.smallProjectRelaxationApplied).toBe(false);
+  });
+
+  it("does not apply small-project relaxation when archivedRunsCount >= 5", () => {
+    const status = computeCompoundReadiness([], {
+      threshold: 3,
+      archivedRunsCount: 5
+    });
+    expect(status.baseThreshold).toBe(3);
+    expect(status.threshold).toBe(3);
+    expect(status.smallProjectRelaxationApplied).toBe(false);
   });
 
   it("clusters by (type, normalized trigger, normalized action) and sums frequency", () => {

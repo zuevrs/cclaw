@@ -1,4 +1,9 @@
+import { DEFAULT_COMPOUND_RECURRENCE_THRESHOLD } from "../config.js";
 import { RUNTIME_ROOT } from "../constants.js";
+import {
+  SMALL_PROJECT_ARCHIVE_RUNS_THRESHOLD,
+  SMALL_PROJECT_RECURRENCE_THRESHOLD
+} from "../knowledge-store.js";
 
 export interface NodeHookRuntimeOptions {
   /**
@@ -10,6 +15,13 @@ export interface NodeHookRuntimeOptions {
   strictness?: "advisory" | "strict";
   tddTestPathPatterns?: string[];
   tddProductionPathPatterns?: string[];
+  /**
+   * Baked-in default recurrence threshold for compound-readiness computed
+   * by the session-start hook. Derived from
+   * `config.compound.recurrenceThreshold` at install time; re-run
+   * `cclaw sync` after changing the config value so hook and CLI agree.
+   */
+  compoundRecurrenceThreshold?: number;
 }
 
 function normalizePatterns(patterns: string[] | undefined, fallback: string[]): string[] {
@@ -31,6 +43,12 @@ export function nodeHookRuntimeScript(options: NodeHookRuntimeOptions = {}): str
     "**/__tests__/**"
   ]);
   const tddProductionPathPatterns = normalizePatterns(options.tddProductionPathPatterns, []);
+  const compoundRecurrenceThreshold =
+    typeof options.compoundRecurrenceThreshold === "number" &&
+    Number.isInteger(options.compoundRecurrenceThreshold) &&
+    options.compoundRecurrenceThreshold >= 1
+      ? options.compoundRecurrenceThreshold
+      : DEFAULT_COMPOUND_RECURRENCE_THRESHOLD;
 
   return `#!/usr/bin/env node
 import fs from "node:fs/promises";
@@ -45,6 +63,14 @@ const RUNTIME_ROOT = ${JSON.stringify(RUNTIME_ROOT)};
 const DEFAULT_STRICTNESS = ${JSON.stringify(strictness)};
 const DEFAULT_TDD_TEST_PATH_PATTERNS = ${JSON.stringify(tddTestPathPatterns)};
 const DEFAULT_TDD_PRODUCTION_PATH_PATTERNS = ${JSON.stringify(tddProductionPathPatterns)};
+// Compound-readiness recurrence threshold. Baked from
+// \`config.compound.recurrenceThreshold\` at install time so the hook and
+// \`cclaw internal compound-readiness\` agree on the same number. The
+// small-project relaxation rule (<${SMALL_PROJECT_ARCHIVE_RUNS_THRESHOLD} archived runs
+// -> min(base, ${SMALL_PROJECT_RECURRENCE_THRESHOLD})) is applied at runtime.
+const COMPOUND_RECURRENCE_THRESHOLD = ${JSON.stringify(compoundRecurrenceThreshold)};
+const SMALL_PROJECT_ARCHIVE_RUNS_THRESHOLD = ${JSON.stringify(SMALL_PROJECT_ARCHIVE_RUNS_THRESHOLD)};
+const SMALL_PROJECT_RECURRENCE_THRESHOLD = ${JSON.stringify(SMALL_PROJECT_RECURRENCE_THRESHOLD)};
 
 function resolveStrictness() {
   return process.env.CCLAW_STRICTNESS === "strict" ? "strict" : DEFAULT_STRICTNESS;
@@ -766,10 +792,14 @@ function stageSuggestion(stage) {
   return map[stage] || "";
 }
 
-async function buildKnowledgeDigest(root, currentStage) {
+async function buildKnowledgeDigest(root, currentStage, prereadRaw) {
   const knowledgeFile = path.join(root, RUNTIME_ROOT, "knowledge.jsonl");
   const digestFile = path.join(root, RUNTIME_ROOT, "state", "knowledge-digest.md");
-  const raw = await readTextFile(knowledgeFile, "");
+  // Caller may supply pre-read raw bytes to avoid re-reading knowledge.jsonl.
+  // Falls back to a local read if nothing is passed in.
+  const raw = typeof prereadRaw === "string"
+    ? prereadRaw
+    : await readTextFile(knowledgeFile, "");
   const lines = raw.split(/\\r?\\n/gu).map((line) => line.trim()).filter((line) => line.length > 0);
   let learningsCount = 0;
   const parsedRows = [];
@@ -899,7 +929,11 @@ async function handleSessionStart(runtime) {
   const sessionDigest = (await readTextFile(sessionDigestFile, "")).trim();
   const activitySummary = await readRecentActivityLines(activityFile);
   const contextWarning = await readLatestContextWarningLine(contextWarningsFile);
-  const knowledge = await buildKnowledgeDigest(runtime.root, state.currentStage);
+  // Read knowledge.jsonl exactly once per session-start; both the digest
+  // and compound-readiness derive from the same snapshot.
+  const knowledgeFilePath = path.join(runtime.root, RUNTIME_ROOT, "knowledge.jsonl");
+  const knowledgeRaw = await readTextFile(knowledgeFilePath, "");
+  const knowledge = await buildKnowledgeDigest(runtime.root, state.currentStage, knowledgeRaw);
 
   // Refresh Ralph Loop status each session-start so /cc-next and the model
   // both read a consistent "iter=N, acClosed=[...]" snapshot. Runs only when
@@ -926,7 +960,11 @@ async function handleSessionStart(runtime) {
   // where lifting becomes relevant; earlier stages update the file silently.
   let compoundReadinessLine = "";
   try {
-    const readiness = await computeCompoundReadinessInline(runtime.root, {});
+    const archivedRunsCount = await countArchivedRunsInline(runtime.root);
+    const readiness = await computeCompoundReadinessInline(runtime.root, {
+      prereadRaw: knowledgeRaw,
+      ...(typeof archivedRunsCount === "number" ? { archivedRunsCount } : {})
+    });
     await writeJsonFile(path.join(stateDir, "compound-readiness.json"), readiness);
     if (state.currentStage === "review" || state.currentStage === "ship") {
       if (readiness.readyCount === 0) {
@@ -1311,16 +1349,53 @@ async function handlePromptGuard(runtime) {
   return 0;
 }
 
+function normalizeCompoundLastUpdatedAt(date) {
+  return date.toISOString().replace(/\\.\\d{3}Z$/u, "Z");
+}
+
+// Count archived runs as sub-directories under \`.cclaw/runs/\`. Missing
+// dir returns 0; unexpected errors return undefined so the caller can
+// skip the small-project relaxation rather than guess.
+async function countArchivedRunsInline(root) {
+  const dir = path.join(root, RUNTIME_ROOT, "runs");
+  try {
+    const entries = await fs.readdir(dir, { withFileTypes: true });
+    return entries.filter((entry) => entry.isDirectory()).length;
+  } catch (error) {
+    const code = error && typeof error === "object" && "code" in error ? error.code : null;
+    if (code === "ENOENT") return 0;
+    return undefined;
+  }
+}
+
 // Mirrors src/knowledge-store.ts::computeCompoundReadiness — kept inline so
 // SessionStart can refresh compound-readiness.json without the CLI binary.
 // Any schema change must update src/knowledge-store.ts::computeCompoundReadiness
-// and src/internal/compound-readiness.ts in lockstep.
+// and src/internal/compound-readiness.ts in lockstep. Parity is enforced by
+// tests/unit/ralph-loop-parity.test.ts.
 async function computeCompoundReadinessInline(root, options) {
   const filePath = path.join(root, RUNTIME_ROOT, "knowledge.jsonl");
-  const raw = await readTextFile(filePath, "");
-  const threshold = Number.isInteger(options && options.threshold) && options.threshold >= 1
-    ? options.threshold
-    : 3;
+  // Caller may supply pre-read raw to avoid double-reading knowledge.jsonl.
+  const raw = typeof (options && options.prereadRaw) === "string"
+    ? options.prereadRaw
+    : await readTextFile(filePath, "");
+  const baseThresholdRaw = options && options.threshold;
+  const baseThreshold = Number.isInteger(baseThresholdRaw) && baseThresholdRaw >= 1
+    ? baseThresholdRaw
+    : COMPOUND_RECURRENCE_THRESHOLD;
+  const archivedRunsCount =
+    typeof (options && options.archivedRunsCount) === "number" &&
+    Number.isFinite(options.archivedRunsCount) &&
+    options.archivedRunsCount >= 0
+      ? Math.floor(options.archivedRunsCount)
+      : undefined;
+  const smallProjectRelaxationApplied =
+    archivedRunsCount !== undefined &&
+    archivedRunsCount < SMALL_PROJECT_ARCHIVE_RUNS_THRESHOLD &&
+    baseThreshold > SMALL_PROJECT_RECURRENCE_THRESHOLD;
+  const threshold = smallProjectRelaxationApplied
+    ? SMALL_PROJECT_RECURRENCE_THRESHOLD
+    : baseThreshold;
   const maxReady = Number.isInteger(options && options.maxReady) && options.maxReady >= 1
     ? options.maxReady
     : 10;
@@ -1400,12 +1475,15 @@ async function computeCompoundReadinessInline(root, options) {
     return String(a.trigger).localeCompare(String(b.trigger));
   });
   return {
-    schemaVersion: 1,
+    schemaVersion: 2,
     threshold,
+    baseThreshold,
+    ...(archivedRunsCount !== undefined ? { archivedRunsCount } : {}),
+    smallProjectRelaxationApplied,
     clusterCount: buckets.size,
     readyCount: ready.length,
     ready: ready.slice(0, maxReady),
-    lastUpdatedAt: new Date().toISOString()
+    lastUpdatedAt: normalizeCompoundLastUpdatedAt(new Date())
   };
 }
 

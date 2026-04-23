@@ -4,6 +4,35 @@
 
 ### Fixed
 
+- Compound-readiness is now computed consistently across CLI and
+  runtime. Previously `cclaw internal compound-readiness` honored
+  `config.compound.recurrenceThreshold` while the SessionStart hook
+  hard-coded `threshold = 3`, so the two paths could report different
+  `readyCount` values on the same knowledge file. The hook now
+  inherits the configured threshold at install time
+  (`nodeHookRuntimeScript({ compoundRecurrenceThreshold })`), and both
+  paths also apply the documented **small-project relaxation**
+  (`<5` archived runs → effective threshold = `min(base, 2)`) that
+  had previously existed only in the `/cc-ops compound` skill
+  instructions. The derived status now includes `baseThreshold`,
+  `archivedRunsCount`, and `smallProjectRelaxationApplied` so
+  consumers can tell which rule fired. Schema bumped to `2`.
+- `cclaw internal compound-readiness --threshold` now rejects
+  non-integer values (`2abc`, `2.9`, `""`, negative) with a loud
+  error instead of silently truncating via `parseInt`.
+- `runCompoundReadinessCommand` now surfaces a stderr warning when
+  `readConfig` fails instead of swallowing the error. The command
+  also reads knowledge lock-aware by default so an in-flight
+  `appendKnowledge` cannot produce a partial snapshot.
+- SessionStart reads `knowledge.jsonl` exactly once per invocation
+  and shares the raw content between the digest and the
+  compound-readiness recomputation, eliminating the redundant
+  second read on large knowledge logs.
+- `lastUpdatedAt` in `compound-readiness.json` is now normalized
+  identically in canonical and inline paths (milliseconds stripped),
+  removing spurious diff noise.
+- Parity tests (`tests/unit/ralph-loop-parity.test.ts`) extended to
+  cover the new schema fields and the small-project relaxation.
 - Atomic write on Windows: `fs.rename` sometimes fails transiently with
   `EPERM`/`EBUSY`/`EACCES` when the target file is briefly held open by
   antivirus, indexer, or a sibling hook process. Both the CLI-side

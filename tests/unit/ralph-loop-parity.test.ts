@@ -130,6 +130,15 @@ describe("ralph-loop + compound-readiness parity (inline hook vs main)", () => {
       "utf8"
     );
 
+    // Seed archived runs so both sides see the same archivedRunsCount. The
+    // hook counts directories under `.cclaw/runs/`; without this seed the
+    // small-project relaxation would fire on the hook side only.
+    const archiveDir = path.join(root, ".cclaw/runs");
+    await fs.mkdir(archiveDir, { recursive: true });
+    for (const name of ["run-a", "run-b", "run-c", "run-d", "run-e", "run-f"]) {
+      await fs.mkdir(path.join(archiveDir, name), { recursive: true });
+    }
+
     const result = await runHook(root, nodeHookRuntimeScript(), "session-start", {});
     expect(result.code).toBe(0);
 
@@ -137,12 +146,79 @@ describe("ralph-loop + compound-readiness parity (inline hook vs main)", () => {
       await fs.readFile(path.join(root, ".cclaw/state/compound-readiness.json"), "utf8")
     ) as { [key: string]: unknown };
 
-    const mainStatus = computeCompoundReadiness(rows, { now: new Date("2026-04-20T00:00:00Z") });
+    const mainStatus = computeCompoundReadiness(rows, {
+      now: new Date("2026-04-20T00:00:00Z"),
+      archivedRunsCount: 6
+    });
 
     expect(inlineStatus.schemaVersion).toBe(mainStatus.schemaVersion);
     expect(inlineStatus.threshold).toBe(mainStatus.threshold);
+    expect(inlineStatus.baseThreshold).toBe(mainStatus.baseThreshold);
+    expect(inlineStatus.archivedRunsCount).toBe(mainStatus.archivedRunsCount);
+    expect(inlineStatus.smallProjectRelaxationApplied).toBe(mainStatus.smallProjectRelaxationApplied);
     expect(inlineStatus.clusterCount).toBe(mainStatus.clusterCount);
     expect(inlineStatus.readyCount).toBe(mainStatus.readyCount);
     expect(inlineStatus.ready).toEqual(mainStatus.ready);
+  });
+
+  it("small-project relaxation: inline applies when archive count < 5", async () => {
+    const root = await createTempProject("compound-readiness-small-project");
+    await fs.mkdir(path.join(root, ".cclaw/state"), { recursive: true });
+    await fs.mkdir(path.join(root, ".cclaw/contexts"), { recursive: true });
+    await fs.mkdir(path.join(root, ".cclaw/skills/using-cclaw"), { recursive: true });
+    await fs.writeFile(path.join(root, ".cclaw/state/flow-state.json"), JSON.stringify({
+      currentStage: "review",
+      activeRunId: "run-small",
+      completedStages: ["brainstorm", "scope", "design", "spec", "plan", "tdd"]
+    }, null, 2), "utf8");
+    await fs.writeFile(path.join(root, ".cclaw/contexts/review.md"), "# review\n", "utf8");
+    await fs.writeFile(path.join(root, ".cclaw/skills/using-cclaw/SKILL.md"), "# Using cclaw\n", "utf8");
+    // A single cluster with recurrence=2 would fail the default threshold=3
+    // but the small-project relaxation (<5 archived runs -> min(3,2)=2)
+    // should let it through.
+    const base: Omit<KnowledgeEntry, "trigger" | "action" | "frequency"> = {
+      type: "pattern",
+      confidence: "medium",
+      domain: null,
+      stage: "review",
+      origin_stage: "review",
+      origin_feature: null,
+      project: "cclaw",
+      source: "stage",
+      universality: "project",
+      maturity: "raw",
+      created: "2026-04-15T00:00:00Z",
+      first_seen_ts: "2026-04-15T00:00:00Z",
+      last_seen_ts: "2026-04-15T00:00:00Z"
+    };
+    const rows: KnowledgeEntry[] = [
+      { ...base, trigger: "review gap", action: "add regression", frequency: 1 },
+      { ...base, trigger: "review gap", action: "add regression", frequency: 1 }
+    ];
+    await fs.writeFile(
+      path.join(root, ".cclaw/knowledge.jsonl"),
+      rows.map((row) => JSON.stringify(row)).join("\n") + "\n",
+      "utf8"
+    );
+    // Exactly 2 archived runs -> small-project relaxation fires.
+    await fs.mkdir(path.join(root, ".cclaw/runs/run-a"), { recursive: true });
+    await fs.mkdir(path.join(root, ".cclaw/runs/run-b"), { recursive: true });
+
+    const result = await runHook(root, nodeHookRuntimeScript(), "session-start", {});
+    expect(result.code).toBe(0);
+    const inlineStatus = JSON.parse(
+      await fs.readFile(path.join(root, ".cclaw/state/compound-readiness.json"), "utf8")
+    ) as {
+      baseThreshold: number;
+      threshold: number;
+      archivedRunsCount: number;
+      smallProjectRelaxationApplied: boolean;
+      readyCount: number;
+    };
+    expect(inlineStatus.baseThreshold).toBe(3);
+    expect(inlineStatus.threshold).toBe(2);
+    expect(inlineStatus.archivedRunsCount).toBe(2);
+    expect(inlineStatus.smallProjectRelaxationApplied).toBe(true);
+    expect(inlineStatus.readyCount).toBe(1);
   });
 });

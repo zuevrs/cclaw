@@ -39,6 +39,18 @@ async function seedKnowledge(root: string, rows: Record<string, unknown>[]): Pro
   await fs.writeFile(path.join(root, ".cclaw/knowledge.jsonl"), `${lines}\n`, "utf8");
 }
 
+/**
+ * Seed enough archived runs that the small-project relaxation does NOT
+ * fire. Individual tests opt into the relaxation explicitly.
+ */
+async function seedNonSmallProjectArchive(root: string): Promise<void> {
+  const dir = path.join(root, ".cclaw/runs");
+  await fs.mkdir(dir, { recursive: true });
+  for (const name of ["run-a", "run-b", "run-c", "run-d", "run-e"]) {
+    await fs.mkdir(path.join(dir, name), { recursive: true });
+  }
+}
+
 const baseRow = {
   type: "pattern",
   confidence: "medium",
@@ -59,6 +71,7 @@ const baseRow = {
 describe("cclaw internal compound-readiness", () => {
   it("writes compound-readiness.json and emits a one-line summary by default", async () => {
     const root = await createTempProject("internal-compound-readiness");
+    await seedNonSmallProjectArchive(root);
     await seedKnowledge(root, [
       { ...baseRow, trigger: "swallowed errors", action: "rethrow with context", frequency: 2 },
       {
@@ -81,8 +94,11 @@ describe("cclaw internal compound-readiness", () => {
       "utf8"
     );
     const status = JSON.parse(raw);
-    expect(status.schemaVersion).toBe(1);
+    expect(status.schemaVersion).toBe(2);
     expect(status.threshold).toBe(3);
+    expect(status.baseThreshold).toBe(3);
+    expect(status.archivedRunsCount).toBe(5);
+    expect(status.smallProjectRelaxationApplied).toBe(false);
     expect(status.readyCount).toBe(1);
     expect(status.ready[0]).toMatchObject({
       recurrence: 3,
@@ -92,6 +108,7 @@ describe("cclaw internal compound-readiness", () => {
 
   it("respects --threshold and --no-write", async () => {
     const root = await createTempProject("internal-compound-readiness-threshold");
+    await seedNonSmallProjectArchive(root);
     await seedKnowledge(root, [
       { ...baseRow, trigger: "spike", action: "alert", frequency: 2 }
     ]);
@@ -112,8 +129,48 @@ describe("cclaw internal compound-readiness", () => {
     ).rejects.toMatchObject({ code: "ENOENT" });
   });
 
+  it("rejects malformed --threshold values loudly", async () => {
+    const root = await createTempProject("internal-compound-readiness-threshold-bad");
+    const captured = captureIo();
+    const exit = await runInternalCommand(
+      root,
+      ["compound-readiness", "--threshold", "2abc", "--no-write"],
+      captured.io
+    );
+    expect(exit).toBe(1);
+    expect(captured.stderr()).toMatch(/--threshold must be a positive integer, got 2abc/);
+  });
+
+  it("applies small-project relaxation when archive has < 5 runs", async () => {
+    const root = await createTempProject("internal-compound-readiness-small");
+    // Seed two knowledge entries for the same cluster (recurrence=2).
+    // Default threshold=3, but with only 2 archived runs the relaxation
+    // lowers the effective threshold to 2, so the cluster qualifies.
+    await seedKnowledge(root, [
+      { ...baseRow, trigger: "review gap", action: "regression", frequency: 1 },
+      { ...baseRow, trigger: "review gap", action: "regression", frequency: 1 }
+    ]);
+    await fs.mkdir(path.join(root, ".cclaw/runs/run-a"), { recursive: true });
+    await fs.mkdir(path.join(root, ".cclaw/runs/run-b"), { recursive: true });
+
+    const captured = captureIo();
+    const exit = await runInternalCommand(
+      root,
+      ["compound-readiness", "--json"],
+      captured.io
+    );
+    expect(exit).toBe(0);
+    const parsed = JSON.parse(captured.stdout());
+    expect(parsed.baseThreshold).toBe(3);
+    expect(parsed.threshold).toBe(2);
+    expect(parsed.archivedRunsCount).toBe(2);
+    expect(parsed.smallProjectRelaxationApplied).toBe(true);
+    expect(parsed.readyCount).toBe(1);
+  });
+
   it("emits a 'no candidates' line when nothing qualifies", async () => {
     const root = await createTempProject("internal-compound-readiness-empty");
+    await seedNonSmallProjectArchive(root);
     await seedKnowledge(root, [
       { ...baseRow, trigger: "lonely", action: "alone", frequency: 1 }
     ]);
