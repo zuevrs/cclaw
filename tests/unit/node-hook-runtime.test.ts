@@ -153,6 +153,11 @@ describe("node hook runtime", () => {
         frequency: 4
       })
     ].join("\n"), "utf8");
+    // Seed enough archived runs so the small-project relaxation does
+    // NOT fire — we want to assert the baked-in threshold here.
+    for (const name of ["run-a", "run-b", "run-c", "run-d", "run-e"]) {
+      await fs.mkdir(path.join(root, ".cclaw/runs", name), { recursive: true });
+    }
 
     const result = await runNodeHook(root, "session-start", nodeHookRuntimeScript());
     expect(result.code).toBe(0);
@@ -168,9 +173,19 @@ describe("node hook runtime", () => {
 
     const readiness = JSON.parse(
       await fs.readFile(path.join(root, ".cclaw/state/compound-readiness.json"), "utf8")
-    ) as { schemaVersion: number; threshold: number; readyCount: number };
-    expect(readiness.schemaVersion).toBe(1);
+    ) as {
+      schemaVersion: number;
+      threshold: number;
+      baseThreshold: number;
+      archivedRunsCount: number;
+      smallProjectRelaxationApplied: boolean;
+      readyCount: number;
+    };
+    expect(readiness.schemaVersion).toBe(2);
     expect(readiness.threshold).toBe(3);
+    expect(readiness.baseThreshold).toBe(3);
+    expect(readiness.archivedRunsCount).toBe(5);
+    expect(readiness.smallProjectRelaxationApplied).toBe(false);
     expect(readiness.readyCount).toBe(1);
   });
 

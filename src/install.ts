@@ -963,7 +963,8 @@ async function writeHooks(projectRoot: string, config: CclawConfig): Promise<voi
   await writeFileSafe(path.join(hooksDir, "run-hook.mjs"), nodeHookRuntimeScript({
     strictness: effectiveStrictness,
     tddTestPathPatterns: config.tdd?.testPathPatterns ?? config.tddTestGlobs,
-    tddProductionPathPatterns: config.tdd?.productionPathPatterns
+    tddProductionPathPatterns: config.tdd?.productionPathPatterns,
+    compoundRecurrenceThreshold: config.compound?.recurrenceThreshold
   }));
   const opencodePluginSource = opencodePluginJs();
   await writeFileSafe(path.join(hooksDir, "opencode-plugin.mjs"), opencodePluginSource);

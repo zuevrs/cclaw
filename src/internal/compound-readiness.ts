@@ -1,3 +1,4 @@
+import fs from "node:fs/promises";
 import path from "node:path";
 import type { Writable } from "node:stream";
 import { RUNTIME_ROOT } from "../constants.js";
@@ -32,6 +33,11 @@ function parseArgs(tokens: string[]): CompoundReadinessArgs {
     else if (token === "--threshold") {
       const value = tokens[i + 1];
       if (!value) throw new Error("--threshold requires a numeric value");
+      // Strict: reject "2abc", "2.9", "-1", "" — parseInt would silently
+      // accept the first two and produce surprising behavior.
+      if (!/^\d+$/u.test(value)) {
+        throw new Error(`--threshold must be a positive integer, got ${value}`);
+      }
       const parsed = Number.parseInt(value, 10);
       if (!Number.isInteger(parsed) || parsed < 1) {
         throw new Error(`--threshold must be a positive integer, got ${value}`);
@@ -47,6 +53,29 @@ function parseArgs(tokens: string[]): CompoundReadinessArgs {
 
 function stateDir(projectRoot: string): string {
   return path.join(projectRoot, RUNTIME_ROOT, "state");
+}
+
+function archiveRunsDir(projectRoot: string): string {
+  return path.join(projectRoot, RUNTIME_ROOT, "runs");
+}
+
+/**
+ * Count archived runs as sub-directories under `.cclaw/runs/`. Missing
+ * dir / ENOENT is interpreted as zero — callers should NOT conflate
+ * that with "unknown" (undefined); we only return undefined on
+ * unexpected errors so the caller can choose to skip the relaxation
+ * rather than guess a number.
+ */
+export async function countArchivedRunsSafely(projectRoot: string): Promise<number | undefined> {
+  const dir = archiveRunsDir(projectRoot);
+  try {
+    const entries = await fs.readdir(dir, { withFileTypes: true });
+    return entries.filter((entry) => entry.isDirectory()).length;
+  } catch (error) {
+    const code = (error as NodeJS.ErrnoException | undefined)?.code;
+    if (code === "ENOENT") return 0;
+    return undefined;
+  }
 }
 
 /**
@@ -70,16 +99,31 @@ export async function runCompoundReadinessCommand(
   io: InternalIo
 ): Promise<number> {
   const args = parseArgs(argv);
-  const config = await readConfig(projectRoot).catch(() => null);
+
+  // Reading config is best-effort — but DO surface a stderr warning so
+  // mis-wired / malformed config shows up in hook-errors / CI logs
+  // instead of silently degrading to default threshold.
+  let config: Awaited<ReturnType<typeof readConfig>> | null = null;
+  try {
+    config = await readConfig(projectRoot);
+  } catch (error) {
+    const detail = error instanceof Error ? error.message : String(error);
+    io.stderr.write(
+      `[cclaw] compound-readiness: failed to read config (${detail}); falling back to default threshold\n`
+    );
+  }
   const threshold =
     args.threshold ??
     (typeof config?.compound?.recurrenceThreshold === "number"
       ? config!.compound!.recurrenceThreshold!
       : undefined);
 
-  const { entries } = await readKnowledgeSafely(projectRoot, { lockAware: false });
+  const archivedRunsCount = await countArchivedRunsSafely(projectRoot);
+
+  const { entries } = await readKnowledgeSafely(projectRoot, { lockAware: true });
   const status = computeCompoundReadiness(entries, {
-    ...(typeof threshold === "number" ? { threshold } : {})
+    ...(typeof threshold === "number" ? { threshold } : {}),
+    ...(typeof archivedRunsCount === "number" ? { archivedRunsCount } : {})
   });
 
   if (args.write) {

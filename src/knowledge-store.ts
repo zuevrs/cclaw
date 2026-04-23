@@ -113,9 +113,28 @@ export interface CompoundReadinessCluster {
 }
 
 export interface CompoundReadiness {
-  schemaVersion: 1;
-  /** Effective recurrence threshold applied to this computation. */
+  schemaVersion: 2;
+  /**
+   * Effective recurrence threshold actually used. When
+   * `archivedRunsCount < SMALL_PROJECT_ARCHIVE_RUNS_THRESHOLD`, this is
+   * `min(baseThreshold, SMALL_PROJECT_RECURRENCE_THRESHOLD)` — otherwise
+   * it equals `baseThreshold`.
+   */
   threshold: number;
+  /** Base threshold from config/CLI before small-project relaxation. */
+  baseThreshold: number;
+  /**
+   * Archived-run count observed at compute time (used to gate the
+   * small-project relaxation). Optional — the computation can run
+   * without knowing this and then no relaxation is applied.
+   */
+  archivedRunsCount?: number;
+  /**
+   * True iff the effective threshold was lowered by the small-project
+   * relaxation rule. Always false when `archivedRunsCount` is not
+   * supplied.
+   */
+  smallProjectRelaxationApplied: boolean;
   /** Total number of (trigger, action) clusters seen, regardless of threshold. */
   clusterCount: number;
   /** Number of clusters that passed the threshold or critical override. */
@@ -133,9 +152,44 @@ export interface ComputeCompoundReadinessOptions {
   /** Hard cap on `ready[]` to keep the surface digest concise. Default 10. */
   maxReady?: number;
   now?: Date;
+  /**
+   * Count of archived runs under `.cclaw/runs/`. When supplied and
+   * `< SMALL_PROJECT_ARCHIVE_RUNS_THRESHOLD`, the effective threshold
+   * is lowered to `min(threshold, SMALL_PROJECT_RECURRENCE_THRESHOLD)`.
+   * Matches the rule documented in `src/content/compound-command.ts`
+   * and `docs/config.md`.
+   */
+  archivedRunsCount?: number;
 }
 
 const DEFAULT_COMPOUND_READINESS_MAX_READY = 10;
+
+/**
+ * Single source of truth for the small-project relaxation rule.
+ *
+ * Kept exported so the inline hook mirror, the CLI command, and
+ * the `/cc-ops compound` skill all agree on the same numbers.
+ */
+export const SMALL_PROJECT_ARCHIVE_RUNS_THRESHOLD = 5;
+export const SMALL_PROJECT_RECURRENCE_THRESHOLD = 2;
+
+export function effectiveCompoundThreshold(
+  baseThreshold: number,
+  archivedRunsCount: number | undefined
+): { threshold: number; relaxationApplied: boolean } {
+  if (
+    typeof archivedRunsCount === "number" &&
+    Number.isFinite(archivedRunsCount) &&
+    archivedRunsCount < SMALL_PROJECT_ARCHIVE_RUNS_THRESHOLD &&
+    baseThreshold > SMALL_PROJECT_RECURRENCE_THRESHOLD
+  ) {
+    return {
+      threshold: SMALL_PROJECT_RECURRENCE_THRESHOLD,
+      relaxationApplied: true
+    };
+  }
+  return { threshold: baseThreshold, relaxationApplied: false };
+}
 
 /**
  * Pure function — no filesystem side effects. Callers pass entries from
@@ -152,7 +206,7 @@ export function computeCompoundReadiness(
   options: ComputeCompoundReadinessOptions = {}
 ): CompoundReadiness {
   const thresholdRaw = options.threshold ?? DEFAULT_COMPOUND_RECURRENCE_THRESHOLD;
-  const threshold =
+  const baseThreshold =
     Number.isInteger(thresholdRaw) && thresholdRaw >= 1
       ? thresholdRaw
       : DEFAULT_COMPOUND_RECURRENCE_THRESHOLD;
@@ -162,6 +216,16 @@ export function computeCompoundReadiness(
       ? maxReadyRaw
       : DEFAULT_COMPOUND_READINESS_MAX_READY;
   const now = options.now ?? new Date();
+  const archivedRunsCount =
+    typeof options.archivedRunsCount === "number" &&
+    Number.isFinite(options.archivedRunsCount) &&
+    options.archivedRunsCount >= 0
+      ? Math.floor(options.archivedRunsCount)
+      : undefined;
+  const { threshold, relaxationApplied } = effectiveCompoundThreshold(
+    baseThreshold,
+    archivedRunsCount
+  );
 
   const buckets = new Map<
     string,
@@ -247,8 +311,11 @@ export function computeCompoundReadiness(
   });
 
   return {
-    schemaVersion: 1,
+    schemaVersion: 2,
     threshold,
+    baseThreshold,
+    ...(archivedRunsCount !== undefined ? { archivedRunsCount } : {}),
+    smallProjectRelaxationApplied: relaxationApplied,
     clusterCount: buckets.size,
     readyCount: ready.length,
     ready: ready.slice(0, maxReady),
