@@ -39,12 +39,14 @@ Rewritten on every `cclaw upgrade`. Do not edit.
 
 Which harnesses receive generated shims and hooks.
 
-| Value      | Harness                                                      |
-|------------|--------------------------------------------------------------|
-| `claude`   | Claude Code — full native subagent + hook support            |
-| `cursor`   | Cursor IDE — partial subagent, full hooks                    |
-| `opencode` | OpenCode — partial subagent, plugin hooks, `question` tool   |
+
+| Value      | Harness                                                                                             |
+| ---------- | --------------------------------------------------------------------------------------------------- |
+| `claude`   | Claude Code — full native subagent + hook support                                                   |
+| `cursor`   | Cursor IDE — partial subagent, full hooks                                                           |
+| `opencode` | OpenCode — partial subagent, plugin hooks, `question` tool                                          |
 | `codex`    | OpenAI Codex — no native subagent; experimental lifecycle hooks + `request_user_input` in Plan mode |
+
 
 Re-run `npx cclaw-cli upgrade` after editing so shims and hooks line up
 with the new list.
@@ -54,10 +56,10 @@ with the new list.
 One knob that controls both guard families:
 
 - `advisory` — prompt-guard and TDD violations are **logged** to
-  `.cclaw/state/preamble-log.jsonl` and `stage-activity.jsonl` but do
-  not block the agent.
+`.cclaw/state/preamble-log.jsonl` and `stage-activity.jsonl` but do
+not block the agent.
 - `strict` — violations **block** stage transitions until the agent
-  corrects them.
+corrects them.
 
 Codex note: because Codex hooks can hard-intercept only `Bash`, strict mode for
 non-Bash edits is enforced at stage-closeout and via a `verify-current-state`
@@ -83,11 +85,12 @@ their git hooks via `husky` / `lefthook` / etc.
 ### Knowledge capture (always-on, no config key)
 
 Continuous knowledge capture does **not** require a config knob:
+
 - Every stage artifact template includes `## Learnings`.
 - Use either `- None this stage.` or JSON bullets (`type`, `trigger`,
-  `action`, `confidence`, optional schema fields).
+`action`, `confidence`, optional schema fields).
 - `node .cclaw/hooks/stage-complete.mjs <stage>` validates and harvests those
-  bullets into `.cclaw/knowledge.jsonl` with dedupe + schema checks.
+bullets into `.cclaw/knowledge.jsonl` with dedupe + schema checks.
 
 If you need manual operations, use `/cc-learn` (search, add/backfill, curate).
 
@@ -110,7 +113,7 @@ Path-pattern routing for real-time TDD guard classification:
 
 - `testPathPatterns` — files counted as test-side writes (RED work).
 - `productionPathPatterns` — optional allowlist for production writes that
-  should be blocked when RED is missing.
+should be blocked when RED is missing.
 
 Default `testPathPatterns`:
 
@@ -141,22 +144,22 @@ should prefer `tdd.testPathPatterns`.
 Compound-stage clustering policy.
 
 - `recurrenceThreshold` (positive integer, default `3`) — base minimum repeat
-  count for trigger/action clusters before lift candidates are proposed.
+count for trigger/action clusters before lift candidates are proposed.
 
 Runtime tuning applied everywhere compound readiness is computed (the
 `/cc-ops compound` skill, `cclaw internal compound-readiness`, and the
 session-start hook that writes `.cclaw/state/compound-readiness.json`):
 
 - For repositories with `< 5` archived runs under `.cclaw/runs/`, the
-  effective threshold is temporarily lowered to
-  `min(recurrenceThreshold, 2)` and `smallProjectRelaxationApplied` is
-  set to `true` in the derived status.
+effective threshold is temporarily lowered to
+`min(recurrenceThreshold, 2)` and `smallProjectRelaxationApplied` is
+set to `true` in the derived status.
 - Any cluster containing a `severity: critical` knowledge entry is
-  eligible even at recurrence `1` (critical override, reported as
-  `qualification: "critical_override"`).
+eligible even at recurrence `1` (critical override, reported as
+`qualification: "critical_override"`).
 - After changing `recurrenceThreshold` in `cclaw.yaml`, re-run
-  `cclaw sync` so the hook picks up the new default (the CLI reads
-  the live config on every invocation).
+`cclaw sync` so the hook picks up the new default (the CLI reads
+the live config on every invocation).
 
 ```yaml
 compound:
@@ -170,11 +173,13 @@ track from the prompt. In practice `/cc` almost always picks a track
 itself; only set this on teams that routinely run many quick-track
 hotfixes.
 
-| Track     | Critical path                                               |
-|-----------|-------------------------------------------------------------|
-| `standard`| all 8 stages (brainstorm → ship)                            |
-| `medium`  | skips scope + design; starts at brainstorm                  |
-| `quick`   | starts at spec with RED-first TDD; good for hotfixes/typos  |
+
+| Track      | Critical path                                              |
+| ---------- | ---------------------------------------------------------- |
+| `standard` | all 8 stages (brainstorm → ship)                           |
+| `medium`   | skips scope + design; starts at brainstorm                 |
+| `quick`    | starts at spec with RED-first TDD; good for hotfixes/typos |
+
 
 ### `languageRulePacks` (list of `typescript` | `python` | `go`)
 

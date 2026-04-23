@@ -1238,6 +1238,55 @@ inputs_hash: sha256:pending
     expect(reduction?.found).toBe(false);
   });
 
+  it("prefers slugged scope artifact over legacy file during plan trace checks", async () => {
+    const root = await createTempProject("plan-prefers-slugged-scope");
+    const frontmatter = `---
+stage: plan
+schema_version: 1
+version: 0.18.0
+feature: test-feature
+locked_decisions: []
+inputs_hash: sha256:pending
+---`;
+    const planWithDecisionCoverage = `${completePlanArtifact(frontmatter)}
+
+## Locked Decision Coverage
+| ID | Task IDs | Rationale |
+|---|---|---|
+| D-77 | T-1 | maps migration decision to first implementation task |
+`;
+    await writeRuntimeArtifact(root, "05-plan.md", planWithDecisionCoverage);
+    await fs.writeFile(
+      path.join(root, ".cclaw/artifacts/02-scope.md"),
+      `# Scope Artifact
+
+## Locked Decisions (D-XX)
+| ID | Decision | Rationale |
+|---|---|---|
+| D-01 | Legacy scope decision | historical baseline |
+`,
+      "utf8"
+    );
+    await fs.writeFile(
+      path.join(root, ".cclaw/artifacts/02-scope-payment-hardening.md"),
+      `# Scope Artifact
+
+## Locked Decisions (D-XX)
+| ID | Decision | Rationale |
+|---|---|---|
+| D-77 | New scope decision | active run decision |
+`,
+      "utf8"
+    );
+
+    const result = await lintArtifact(root, "plan");
+    const trace = result.findings.find((f) => f.section === "Locked Decision Traceability");
+
+    expect(trace?.required).toBe(true);
+    expect(trace?.found).toBe(true);
+    expect(trace?.details).toContain("All 1 scope decision IDs are referenced in plan");
+  });
+
   it("keeps plan guard checks advisory in legacy artifacts without strict markers", async () => {
     const root = await createTempProject("plan-legacy-guards");
     const legacyPlan = completePlanArtifact().replace(

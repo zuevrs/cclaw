@@ -103,7 +103,7 @@ export const DESIGN: StageSchemaInput = {
     ],
     requiredEvidence: [
       "Research artifact written to `.cclaw/artifacts/02a-research.md` with stack/features/architecture/pitfalls sections plus synthesis.",
-      "Artifact written to `.cclaw/artifacts/03-design.md`.",
+      "Artifact written to `.cclaw/artifacts/03-design-<slug>.md`.",
       "Failure-mode table exists in Method/Exception/Rescue/UserSees format.",
       "Data-flow shadow and error-flow diagrams are present for Standard+ complexity.",
       "Security & threat model findings are documented with mitigations.",
@@ -141,15 +141,15 @@ export const DESIGN: StageSchemaInput = {
     ]
   },
   artifactRules: {
-    artifactFile: "03-design.md",
+    artifactFile: "03-design-<slug>.md",
     completionStatus: ["DONE", "DONE_WITH_CONCERNS", "BLOCKED"],
     crossStageTrace: {
       readsFrom: [
-        ".cclaw/artifacts/01-brainstorm.md",
-        ".cclaw/artifacts/02-scope.md",
+        ".cclaw/artifacts/01-brainstorm-<slug>.md",
+        ".cclaw/artifacts/02-scope-<slug>.md",
         ".cclaw/artifacts/02a-research.md"
       ],
-      writesTo: [".cclaw/artifacts/03-design.md"],
+      writesTo: [".cclaw/artifacts/03-design-<slug>.md"],
       traceabilityRule: "Every architecture decision must trace to a scope boundary. Every downstream spec requirement must trace to a design decision."
     },
     artifactValidation: [

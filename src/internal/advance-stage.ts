@@ -3,6 +3,7 @@ import path from "node:path";
 import { spawn } from "node:child_process";
 import process from "node:process";
 import type { Writable } from "node:stream";
+import { resolveArtifactPath } from "../artifact-paths.js";
 import { RUNTIME_ROOT, SHIP_FINALIZATION_MODES } from "../constants.js";
 import { stageSchema } from "../content/stage-schema.js";
 import {
@@ -492,9 +493,14 @@ function withLearningsHarvestMarker(
 async function harvestStageLearnings(
   projectRoot: string,
   stage: FlowStage,
-  artifactFile: string
+  track: FlowState["track"]
 ): Promise<HarvestLearningsResult> {
-  const artifactPath = path.join(projectRoot, RUNTIME_ROOT, "artifacts", artifactFile);
+  const resolvedArtifact = await resolveArtifactPath(stage, {
+    projectRoot,
+    track,
+    intent: "read"
+  });
+  const artifactPath = resolvedArtifact.absPath;
   let raw = "";
   try {
     raw = await fs.readFile(artifactPath, "utf8");
@@ -750,7 +756,7 @@ async function runAdvanceStage(
   const learningsHarvest = await harvestStageLearnings(
     projectRoot,
     args.stage,
-    schema.artifactFile
+    flowState.track
   );
   if (!learningsHarvest.ok) {
     io.stderr.write(

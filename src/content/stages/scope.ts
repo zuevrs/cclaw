@@ -96,7 +96,7 @@ export const SCOPE: StageSchemaInput = {
       { id: "scope_user_approved", description: "User approved the final scope direction." }
     ],
     requiredEvidence: [
-      "Artifact written to `.cclaw/artifacts/02-scope.md`.",
+      "Artifact written to `.cclaw/artifacts/02-scope-<slug>.md`.",
       "Pre-Scope System Audit findings are captured (git log/diff/stash/debt markers).",
       "In-scope and out-of-scope lists are explicit.",
       "Discretion areas are explicit (or marked as `None`).",
@@ -134,11 +134,11 @@ export const SCOPE: StageSchemaInput = {
     ]
   },
   artifactRules: {
-    artifactFile: "02-scope.md",
+    artifactFile: "02-scope-<slug>.md",
     completionStatus: ["DONE", "DONE_WITH_CONCERNS", "BLOCKED"],
     crossStageTrace: {
-      readsFrom: [".cclaw/artifacts/01-brainstorm.md"],
-      writesTo: [".cclaw/artifacts/02-scope.md"],
+      readsFrom: [".cclaw/artifacts/01-brainstorm-<slug>.md"],
+      writesTo: [".cclaw/artifacts/02-scope-<slug>.md"],
       traceabilityRule: "Every scope boundary must be traceable to a brainstorm decision. Every downstream design choice must stay within the scope contract."
     },
     artifactValidation: [

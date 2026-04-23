@@ -53,8 +53,8 @@ describe("stage schema and subagent alignment", () => {
   it("plan stage reads spec, design, and scope artifacts", () => {
     const plan = stageSchema("plan");
     expect(plan.crossStageTrace.readsFrom).toContain(".cclaw/artifacts/04-spec.md");
-    expect(plan.crossStageTrace.readsFrom).toContain(".cclaw/artifacts/03-design.md");
-    expect(plan.crossStageTrace.readsFrom).toContain(".cclaw/artifacts/02-scope.md");
+    expect(plan.crossStageTrace.readsFrom).toContain(".cclaw/artifacts/03-design-<slug>.md");
+    expect(plan.crossStageTrace.readsFrom).toContain(".cclaw/artifacts/02-scope-<slug>.md");
     expect(plan.requiredGates.map((gate) => gate.id)).toContain("plan_dependency_batches_defined");
     expect(stagePolicyNeedles("plan")).toContain("Dependency Batches");
   });
@@ -62,8 +62,11 @@ describe("stage schema and subagent alignment", () => {
   it("filters cross-stage reads to artifacts that exist on the active track", () => {
     const artifactStage: Partial<Record<string, FlowStage>> = {
       ".cclaw/artifacts/01-brainstorm.md": "brainstorm",
+      ".cclaw/artifacts/01-brainstorm-<slug>.md": "brainstorm",
       ".cclaw/artifacts/02-scope.md": "scope",
+      ".cclaw/artifacts/02-scope-<slug>.md": "scope",
       ".cclaw/artifacts/03-design.md": "design",
+      ".cclaw/artifacts/03-design-<slug>.md": "design",
       ".cclaw/artifacts/04-spec.md": "spec",
       ".cclaw/artifacts/05-plan.md": "plan",
       ".cclaw/artifacts/06-tdd.md": "tdd",

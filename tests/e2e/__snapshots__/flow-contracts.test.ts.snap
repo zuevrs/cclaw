@@ -679,8 +679,8 @@ Before execution:
 2. Load active artifacts from \`.cclaw/artifacts/\`.
 3. Load upstream artifacts required by this stage:
 - \`.cclaw/artifacts/04-spec.md\`
-- \`.cclaw/artifacts/03-design.md\`
-- \`.cclaw/artifacts/02-scope.md\`
+- \`.cclaw/artifacts/03-design-<slug>.md\`
+- \`.cclaw/artifacts/02-scope-<slug>.md\`
 4. Use the injected knowledge digest from session-start; only fall back to full
    \`.cclaw/knowledge.jsonl\` when the digest is insufficient.
 
@@ -831,8 +831,8 @@ Shared decision/ask-user protocol:
 
 Reads from:
 - .cclaw/artifacts/04-spec.md
-- .cclaw/artifacts/03-design.md
-- .cclaw/artifacts/02-scope.md
+- .cclaw/artifacts/03-design-<slug>.md
+- .cclaw/artifacts/02-scope-<slug>.md
 
 Writes to:
 - .cclaw/artifacts/05-plan.md
@@ -966,7 +966,7 @@ Before execution:
 3. Load upstream artifacts required by this stage:
 - \`.cclaw/artifacts/05-plan.md\`
 - \`.cclaw/artifacts/04-spec.md\`
-- \`.cclaw/artifacts/03-design.md\`
+- \`.cclaw/artifacts/03-design-<slug>.md\`
 4. Use the injected knowledge digest from session-start; only fall back to full
    \`.cclaw/knowledge.jsonl\` when the digest is insufficient.
 
@@ -1178,7 +1178,7 @@ Reference utility skill:
 Reads from:
 - .cclaw/artifacts/05-plan.md
 - .cclaw/artifacts/04-spec.md
-- .cclaw/artifacts/03-design.md
+- .cclaw/artifacts/03-design-<slug>.md
 
 Writes to:
 - .cclaw/artifacts/06-tdd.md
@@ -1270,7 +1270,7 @@ If you are about to violate the Iron Law, STOP. No amount of urgency, partial pr
 
 1. Announce at start: "Using \`brainstorming\` to Turn an initial idea into an approved design direction through natural collaborative dialogue — understanding the problem before proposing solutions.".
 2. Obey HARD-GATE and Iron Law.
-3. Execute checklist in order and persist \`.cclaw/artifacts/01-brainstorm.md\`.
+3. Execute checklist in order and persist \`.cclaw/artifacts/01-brainstorm-<slug>.md\`.
 4. Satisfy gates (\`brainstorm_approaches_compared\`, \`brainstorm_direction_approved\`, \`brainstorm_artifact_reviewed\`).
 
 
@@ -1349,7 +1349,7 @@ You MUST complete these steps in order:
 8. **Recommend only after reaction** — present final recommendation with rationale that explicitly references user feedback.
 9. **Present design by sections** — scale each section to its complexity. Ask after each section whether it looks right so far. Cover: architecture, key components, data flow.
 10. **Optional visual companion** — when architecture/data flow complexity is medium+ offer a compact diagram (ASCII or Mermaid) before artifact write-up.
-11. **Write artifact** to \`.cclaw/artifacts/01-brainstorm.md\`.
+11. **Write artifact** to \`.cclaw/artifacts/01-brainstorm-<slug>.md\`.
 12. **Document-quality pass** — run a brief adversarial review of the artifact (gaps, contradictions, missing trade-offs), then patch before user review.
 13. **Self-review** — scan for placeholders/TODOs, check internal consistency, verify scope is focused, resolve any ambiguity.
 14. **User reviews artifact** — ask the user to review the written artifact and explicitly approve or request changes.
@@ -1435,7 +1435,7 @@ Shared decision/ask-user protocol:
 - \`brainstorm_artifact_reviewed\` — User reviewed the written brainstorm artifact and confirmed readiness.
 
 ## Required Evidence
-- [ ] Artifact written to \`.cclaw/artifacts/01-brainstorm.md\`.
+- [ ] Artifact written to \`.cclaw/artifacts/01-brainstorm-<slug>.md\`.
 - [ ] Project context was explored (files, docs, or recent activity referenced).
 - [ ] Clarifying questions and their answers are captured.
 - [ ] 2-3 approaches with trade-offs are recorded, including one higher-upside challenger option.
@@ -1461,7 +1461,7 @@ Reads from:
 - (first stage — no upstream artifacts)
 
 Writes to:
-- .cclaw/artifacts/01-brainstorm.md
+- .cclaw/artifacts/01-brainstorm-<slug>.md
 
 Rule: Scope and design decisions must trace back to explored context and approved brainstorm direction.
 
@@ -1506,7 +1506,7 @@ Rule: Scope and design decisions must trace back to explored context and approve
 - \`stage\`: \`brainstorm\`
 - \`next\`: \`scope\` (Strategic scope stage. Challenge premise and lock explicit in-scope/out-of-scope boundaries using CEO-level thinking.)
 - \`gates\`: \`brainstorm_approaches_compared\`, \`brainstorm_direction_approved\`, \`brainstorm_artifact_reviewed\`
-- \`artifact\`: \`.cclaw/artifacts/01-brainstorm.md\`
+- \`artifact\`: \`.cclaw/artifacts/01-brainstorm-<slug>.md\`
 - \`mandatory delegations\`: none
 - \`completion helper\`: \`node .cclaw/hooks/stage-complete.mjs brainstorm\`
 - Fill \`## Learnings\` before closeout: either \`- None this stage.\` or JSON bullets with required keys \`type\`, \`trigger\`, \`action\`, \`confidence\` (knowledge-schema compatible).

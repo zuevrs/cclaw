@@ -172,7 +172,7 @@ export const TDD: StageSchemaLegacyInput = {
   ],
   completionStatus: ["DONE", "DONE_WITH_CONCERNS", "BLOCKED"],
   crossStageTrace: {
-    readsFrom: [".cclaw/artifacts/05-plan.md", ".cclaw/artifacts/04-spec.md", ".cclaw/artifacts/03-design.md"],
+    readsFrom: [".cclaw/artifacts/05-plan.md", ".cclaw/artifacts/04-spec.md", ".cclaw/artifacts/03-design-<slug>.md"],
     writesTo: [".cclaw/artifacts/06-tdd.md"],
     traceabilityRule: "Every RED test traces to a plan task. Every GREEN change traces to a RED test. Every plan task traces to a spec criterion. Design decisions inform test strategy. Evidence chain must be unbroken."
   },

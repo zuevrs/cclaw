@@ -139,17 +139,34 @@ export function parseSkillEnvelope(raw: string): SkillEnvelope | null {
  */
 type RequiredGateSet = string[] | ((track: FlowTrack) => string[]);
 
-const ARTIFACT_STAGE_BY_PATH: Partial<Record<string, FlowStage>> = {
-  ".cclaw/artifacts/01-brainstorm.md": "brainstorm",
-  ".cclaw/artifacts/02-scope.md": "scope",
-  ".cclaw/artifacts/02a-research.md": "design",
-  ".cclaw/artifacts/03-design.md": "design",
-  ".cclaw/artifacts/04-spec.md": "spec",
-  ".cclaw/artifacts/05-plan.md": "plan",
-  ".cclaw/artifacts/06-tdd.md": "tdd",
-  ".cclaw/artifacts/07-review.md": "review",
-  ".cclaw/artifacts/08-ship.md": "ship"
+const ARTIFACT_STAGE_BY_PREFIX: Record<string, FlowStage> = {
+  "01": "brainstorm",
+  "02": "scope",
+  "03": "design",
+  "04": "spec",
+  "05": "plan",
+  "06": "tdd",
+  "07": "review",
+  "08": "ship"
 };
+
+const ARTIFACT_STAGE_BY_SPECIAL_FILE: Partial<Record<string, FlowStage>> = {
+  "02a-research.md": "design"
+};
+
+function stageFromArtifactPath(artifactPath: string): FlowStage | null {
+  const normalized = artifactPath.replace(/\\/gu, "/");
+  const fileName = normalized.split("/").pop() ?? normalized;
+  const special = ARTIFACT_STAGE_BY_SPECIAL_FILE[fileName];
+  if (special) {
+    return special;
+  }
+  const match = /^(\d{2})(?:[a-z])?-/u.exec(fileName);
+  if (!match) {
+    return null;
+  }
+  return ARTIFACT_STAGE_BY_PREFIX[match[1]!] ?? null;
+}
 
 const REQUIRED_GATE_IDS: Record<FlowStage, RequiredGateSet> = {
   brainstorm: [
@@ -250,7 +267,7 @@ function tieredArtifactValidation(stage: FlowStage, rows: ArtifactValidation[]):
 function readsFromForTrack(readsFrom: string[], track: FlowTrack): string[] {
   const stageSet = new Set(TRACK_STAGES[track]);
   return readsFrom.filter((artifactPath) => {
-    const stage = ARTIFACT_STAGE_BY_PATH[artifactPath];
+    const stage = stageFromArtifactPath(artifactPath);
     if (!stage) {
       return true;
     }

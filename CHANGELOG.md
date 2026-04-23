@@ -1,5 +1,28 @@
 # Changelog
 
+## 0.48.29
+
+Phase-0 artifact slug rollout for brainstorm/scope/design. This cut introduces
+runtime-aware artifact path resolution with legacy fallback and updates stage
+contracts to use slugged artifact patterns.
+
+### Changed
+
+- Added `resolveArtifactPath(stage, context)` in `src/artifact-paths.ts` with:
+  topic slugification, collision-safe write naming (`-2`, `-3`, ...), and
+  read-time fallback to legacy file names during migration.
+- Updated runtime artifact readers (`artifact-linter`, `gate-evidence`,
+  `internal/advance-stage`) to resolve stage artifacts via the shared helper
+  instead of fixed file names.
+- Switched audited stage artifact targets to slug patterns:
+  `01-brainstorm-<slug>.md`, `02-scope-<slug>.md`, `03-design-<slug>.md`, and
+  propagated the new upstream references to downstream stage traces.
+- Replaced strict path-to-stage mapping in `stage-schema` with numeric-prefix
+  inference so cross-stage filtering keeps working with slugged file names.
+- Added resolver coverage tests (slugification, legacy fallback, collision
+  handling) plus integration coverage proving plan lint reads the active
+  slugged scope artifact when legacy + new files coexist.
+
 ## 0.48.28
 
 Phase-0 schema consolidation follow-up. This cut migrates stage policy anchors
