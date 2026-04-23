@@ -92,7 +92,7 @@ Before stage work:
 
 - Managed hook dispatch uses \`.cclaw/hooks/run-hook.cmd\` (cross-platform wrapper).
 - If hooks fail due missing runtime deps (for example \`node\` not on \`PATH\`), run \`cclaw doctor\` before continuing.
-- Prefer cross-platform commands in artifacts/examples (\`npm test\`, \`pnpm test\`, \`python -m pytest\`, etc.) over shell-specific aliases.
+- Prefer cross-platform commands in artifacts/examples (\`npm test\`, \`pnpm test\`, \`python -m pytest\`, etc.) over shell-specific aliases whenever possible.
 
 ## Stage quick map
 
