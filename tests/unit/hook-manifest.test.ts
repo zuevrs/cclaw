@@ -67,7 +67,7 @@ describe("hook manifest", () => {
     ];
     const handlerSet = new Set<string>(HOOK_HANDLERS);
     for (const payload of payloads) {
-      const handlers = [...payload.matchAll(/run-hook\.mjs ([a-z-]+)/g)].map(
+      const handlers = [...payload.matchAll(/run-hook\.(?:mjs|cmd) ([a-z-]+)/g)].map(
         (match) => match[1] as string
       );
       expect(handlers.length).toBeGreaterThan(0);
