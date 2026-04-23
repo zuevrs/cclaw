@@ -1,5 +1,6 @@
 import fs from "node:fs/promises";
 import path from "node:path";
+import { resolveArtifactPath as resolveStageArtifactPath } from "./artifact-paths.js";
 import { RUNTIME_ROOT, SHIP_FINALIZATION_MODES } from "./constants.js";
 import { exists } from "./fs-utils.js";
 import { stageSchema } from "./content/stage-schema.js";
@@ -25,7 +26,7 @@ interface ResolvedArtifactPath {
   relPath: string;
 }
 
-async function resolveArtifactPath(projectRoot: string, fileName: string): Promise<ResolvedArtifactPath> {
+async function resolveNamedArtifactPath(projectRoot: string, fileName: string): Promise<ResolvedArtifactPath> {
   const relPath = path.join(RUNTIME_ROOT, "artifacts", fileName);
   const absPath = path.join(projectRoot, relPath);
   return { absPath, relPath };
@@ -930,7 +931,11 @@ export async function lintArtifact(
   track: FlowTrack = "standard"
 ): Promise<LintResult> {
   const schema = stageSchema(stage, track);
-  const { absPath: absFile, relPath: relFile } = await resolveArtifactPath(projectRoot, schema.artifactFile);
+  const { absPath: absFile, relPath: relFile } = await resolveStageArtifactPath(stage, {
+    projectRoot,
+    track,
+    intent: "read"
+  });
   const findings: LintFinding[] = [];
 
   if (!(await exists(absFile))) {
@@ -1100,8 +1105,14 @@ export async function lintArtifact(
           : `Detected placeholder token(s) in Task List: ${placeholderHits.join(", ")}.`
     });
 
-    const scopePath = path.join(projectRoot, RUNTIME_ROOT, "artifacts", "02-scope.md");
-    const scopeRaw = (await exists(scopePath)) ? await fs.readFile(scopePath, "utf8") : "";
+    const scopeArtifact = await resolveStageArtifactPath("scope", {
+      projectRoot,
+      track,
+      intent: "read"
+    });
+    const scopeRaw = (await exists(scopeArtifact.absPath))
+      ? await fs.readFile(scopeArtifact.absPath, "utf8")
+      : "";
     const scopeDecisionIds = extractDecisionIds(scopeRaw);
     const missingDecisionRefs = scopeDecisionIds.filter((id) => !raw.includes(id));
     findings.push({
@@ -1221,7 +1232,7 @@ export async function validateReviewArmy(
   projectRoot: string
 ): Promise<{ valid: boolean; errors: string[] }> {
   const errors: string[] = [];
-  const { absPath, relPath } = await resolveArtifactPath(projectRoot, "07-review-army.json");
+  const { absPath, relPath } = await resolveNamedArtifactPath(projectRoot, "07-review-army.json");
 
   if (!(await exists(absPath))) {
     return { valid: false, errors: [`Missing file: ${relPath}`] };

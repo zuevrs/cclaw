@@ -49,7 +49,7 @@ export const BRAINSTORM: StageSchemaInput = {
       "**Recommend only after reaction** — present final recommendation with rationale that explicitly references user feedback.",
       "**Present design by sections** — scale each section to its complexity. Ask after each section whether it looks right so far. Cover: architecture, key components, data flow.",
       "**Optional visual companion** — when architecture/data flow complexity is medium+ offer a compact diagram (ASCII or Mermaid) before artifact write-up.",
-      "**Write artifact** to `.cclaw/artifacts/01-brainstorm.md`.",
+      "**Write artifact** to `.cclaw/artifacts/01-brainstorm-<slug>.md`.",
       "**Document-quality pass** — run a brief adversarial review of the artifact (gaps, contradictions, missing trade-offs), then patch before user review.",
       "**Self-review** — scan for placeholders/TODOs, check internal consistency, verify scope is focused, resolve any ambiguity.",
       "**User reviews artifact** — ask the user to review the written artifact and explicitly approve or request changes.",
@@ -78,7 +78,7 @@ export const BRAINSTORM: StageSchemaInput = {
       "Collect user reaction before giving your recommendation.",
       "Recommend after reaction and explain how feedback changed the recommendation.",
       "Present design sections incrementally, get approval after each.",
-      "Write approved direction to `.cclaw/artifacts/01-brainstorm.md`.",
+      "Write approved direction to `.cclaw/artifacts/01-brainstorm-<slug>.md`.",
       "Run document-quality pass to close contradictions and weak trade-off reasoning.",
       "Self-review: placeholder scan, internal consistency, scope check, ambiguity check.",
       "Request explicit user approval of the artifact.",
@@ -90,7 +90,7 @@ export const BRAINSTORM: StageSchemaInput = {
       { id: "brainstorm_artifact_reviewed", description: "User reviewed the written brainstorm artifact and confirmed readiness." }
     ],
     requiredEvidence: [
-      "Artifact written to `.cclaw/artifacts/01-brainstorm.md`.",
+      "Artifact written to `.cclaw/artifacts/01-brainstorm-<slug>.md`.",
       "Project context was explored (files, docs, or recent activity referenced).",
       "Clarifying questions and their answers are captured.",
       "2-3 approaches with trade-offs are recorded, including one higher-upside challenger option.",
@@ -122,11 +122,11 @@ export const BRAINSTORM: StageSchemaInput = {
     ]
   },
   artifactRules: {
-    artifactFile: "01-brainstorm.md",
+    artifactFile: "01-brainstorm-<slug>.md",
     completionStatus: ["DONE", "DONE_WITH_CONCERNS", "BLOCKED"],
     crossStageTrace: {
       readsFrom: [],
-      writesTo: [".cclaw/artifacts/01-brainstorm.md"],
+      writesTo: [".cclaw/artifacts/01-brainstorm-<slug>.md"],
       traceabilityRule: "Scope and design decisions must trace back to explored context and approved brainstorm direction."
     },
     artifactValidation: [

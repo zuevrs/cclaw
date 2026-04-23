@@ -7,6 +7,7 @@ import {
   lintArtifact,
   validateReviewArmy
 } from "./artifact-linter.js";
+import { resolveArtifactPath } from "./artifact-paths.js";
 import { RUNTIME_ROOT } from "./constants.js";
 import { stageSchema } from "./content/stage-schema.js";
 import { readDelegationLedger } from "./delegation.js";
@@ -23,21 +24,12 @@ async function currentStageArtifactExists(
   stage: FlowStage,
   track: FlowState["track"]
 ): Promise<boolean> {
-  const artifactFile = stageSchema(stage, track).artifactFile;
-  const candidates = [
-    path.join(projectRoot, RUNTIME_ROOT, "artifacts", artifactFile),
-    path.join(projectRoot, artifactFile)
-  ];
-  for (const candidate of candidates) {
-    if (await exists(candidate)) return true;
-  }
-  // Artifact-linter also accepts the file under current working directory fallback; stat once more.
-  try {
-    await fs.access(path.join(projectRoot, artifactFile));
-    return true;
-  } catch {
-    return false;
-  }
+  const resolved = await resolveArtifactPath(stage, {
+    projectRoot,
+    track,
+    intent: "read"
+  });
+  return exists(resolved.absPath);
 }
 
 async function readArtifactMarkdown(projectRoot: string, artifactFile: string): Promise<string | null> {

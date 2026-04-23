@@ -138,7 +138,7 @@ export const PLAN: StageSchemaInput = {
   ],
   completionStatus: ["DONE", "DONE_WITH_CONCERNS", "BLOCKED"],
   crossStageTrace: {
-    readsFrom: [".cclaw/artifacts/04-spec.md", ".cclaw/artifacts/03-design.md", ".cclaw/artifacts/02-scope.md"],
+    readsFrom: [".cclaw/artifacts/04-spec.md", ".cclaw/artifacts/03-design-<slug>.md", ".cclaw/artifacts/02-scope-<slug>.md"],
     writesTo: [".cclaw/artifacts/05-plan.md"],
     traceabilityRule: "Every task must trace to a spec acceptance criterion. Every locked scope decision (D-XX) must trace to at least one plan task or explicit defer rationale. Every downstream RED test must trace to a plan task."
   },
