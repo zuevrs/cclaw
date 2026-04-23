@@ -1,5 +1,28 @@
 # Changelog
 
+## 0.48.26
+
+Stage-audit implementation release. This cut upgrades the upstream shaping
+surface (`/cc-ideate`, brainstorm, scope, design) with stronger divergence,
+adversarial review loops, and richer design-review coverage.
+
+### Changed
+
+- `/cc-ideate` now runs explicit mode classification, frame-based divergent
+  ideation, adversarial critique, and survivor-only ranking before handoff.
+- Brainstorm stage now supports depth tiering, a concrete-requirements
+  short-circuit, and a strict propose -> react -> recommend flow with a
+  mandatory higher-upside challenger option.
+- Scope stage now includes a pre-scope system audit, optional landscape/taste
+  calibration, and a bounded outside-voice review loop with quality-score
+  tracking.
+- Design stage now emphasizes Security/Threat, Observability, and
+  Deployment/Rollout lenses; adds Standard+ shadow/error-flow diagram
+  expectations; and tightens failure-mode guidance around rescue visibility.
+- Design artifact template (`03-design.md`) now matches the upgraded design
+  process with sections for shadow/error flow, threat modeling, observability,
+  and rollout planning.
+
 ## 0.48.24
 
 Roll-up of the lock-aware knowledge read + diagnostics (PR #131)
