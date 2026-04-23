@@ -27,6 +27,20 @@
   matching across all historical runs. Closes a false-positive
   path where a past failing RED for the same file could satisfy
   the guard on the current run.
+- Unified TDD path-matcher across the CLI (`tdd-red-evidence`),
+  the library (`src/tdd-cycle.ts`), and the runtime hook
+  (`node-hooks.ts`). A new `normalizeTddPath` + `pathMatchesTarget`
+  pair lives in `tdd-cycle.ts`; the inline hook mirrors the same
+  rules and now matches `endsWith('/'+target)` instead of strict
+  equality. Fixes a blind spot where the hook silently failed to
+  find matching RED evidence when the recorded file path carried
+  a repo-root prefix.
+- Slice-aware workflow guard: when a TDD production write has no
+  explicit path info, the fallback now consults the canonical
+  Ralph Loop status (`computeRalphLoopStatusInline`) and blocks
+  unless at least one slice has an OPEN RED. Previously a flat
+  red/green tally could unlock writes for a new slice just because
+  an older slice had balanced out.
 - Runtime hooks (`run-hook.mjs`) now write JSON state atomically (temp
   file + rename, with EXDEV fallback) and serialize concurrent writes
   to the same file via per-file directory locks. This closes a class
@@ -70,7 +84,3 @@
 
 - Compound command/skill contracts now document qualification source
   (`recurrence` vs `critical_override`) for every promoted cluster.
-- Harness integration docs now include explicit parallel-research dispatch
-  semantics per harness family (native parallel dispatch vs role-switch).
-- README + config reference updated for research artifact flow and the new TDD
-  and compound policy knobs.
