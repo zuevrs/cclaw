@@ -156,6 +156,19 @@ export interface OptInAuditsConfig {
   staleDiagramAudit?: boolean;
 }
 
+export interface ReviewLoopExternalSecondOpinionConfig {
+  /** Enables a second outside-voice pass for review-loop iterations. */
+  enabled?: boolean;
+  /** Optional model label for traceability in artifacts/logs. */
+  model?: string;
+  /** Minimum score delta that should be surfaced as disagreement context. */
+  scoreDeltaThreshold?: number;
+}
+
+export interface ReviewLoopConfig {
+  externalSecondOpinion?: ReviewLoopExternalSecondOpinionConfig;
+}
+
 export interface CclawConfig {
   version: string;
   flowVersion: string;
@@ -210,6 +223,8 @@ export interface CclawConfig {
   ironLaws?: IronLawsConfig;
   /** Optional opt-in audit gates for scope/design stages. */
   optInAudits?: OptInAuditsConfig;
+  /** Optional runtime knobs for outside-voice review loops. */
+  reviewLoop?: ReviewLoopConfig;
 }
 
 /**

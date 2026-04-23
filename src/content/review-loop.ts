@@ -107,6 +107,21 @@ export type ReviewLoopDispatchAdapter = (
   payload: ReviewLoopDispatchAdapterRequest
 ) => Promise<unknown>;
 
+export interface ReviewLoopSecondOpinionPolicy {
+  enabled?: boolean;
+  scoreDeltaThreshold?: number;
+  modelLabel?: string;
+}
+
+export interface ReviewLoopSecondOpinionMeta {
+  enabled: boolean;
+  modelLabel?: string;
+  primaryScore: number;
+  secondOpinionScore: number;
+  scoreDelta: number;
+  threshold: number;
+}
+
 export type ReviewLoopApplyFindings = (
   iteration: ReviewLoopIterationResult
 ) => Promise<void> | void;
@@ -450,6 +465,121 @@ export function parseReviewLoopDispatcherResult(
     findings
   );
   return { findings, dimensionScores };
+}
+
+function normalizeSecondOpinionPolicy(
+  policy?: ReviewLoopSecondOpinionPolicy
+): Required<Omit<ReviewLoopSecondOpinionPolicy, "modelLabel">> & {
+  modelLabel?: string;
+} {
+  const enabled = policy?.enabled === true;
+  const scoreDeltaThreshold =
+    typeof policy?.scoreDeltaThreshold === "number"
+      ? clampScore(policy.scoreDeltaThreshold)
+      : 0.2;
+  const modelLabel =
+    typeof policy?.modelLabel === "string" && policy.modelLabel.trim().length > 0
+      ? policy.modelLabel.trim()
+      : undefined;
+  return { enabled, scoreDeltaThreshold, modelLabel };
+}
+
+function dedupeFindings(findings: readonly ReviewFinding[]): ReviewFinding[] {
+  const seen = new Set<string>();
+  const out: ReviewFinding[] = [];
+  for (const finding of findings) {
+    const key = `${finding.dimensionId}:${finding.severity}:${finding.summary.trim().toLowerCase()}`;
+    if (seen.has(key)) continue;
+    seen.add(key);
+    out.push(finding);
+  }
+  return out;
+}
+
+export function mergeSecondOpinionResults(
+  primaryRaw: unknown,
+  secondOpinionRaw: unknown,
+  checklist: readonly ReviewLoopDimension[],
+  policy?: ReviewLoopSecondOpinionPolicy
+): {
+  findings: ReviewFinding[];
+  dimensionScores: ReviewLoopDimensionScore[];
+  secondOpinion: ReviewLoopSecondOpinionMeta;
+} {
+  const normalizedPolicy = normalizeSecondOpinionPolicy(policy);
+  const primary = parseReviewLoopDispatcherResult(primaryRaw, checklist);
+  const secondOpinion = parseReviewLoopDispatcherResult(secondOpinionRaw, checklist);
+  const primaryScore = aggregateQualityScore(primary.dimensionScores, checklist);
+  const secondOpinionScore = aggregateQualityScore(secondOpinion.dimensionScores, checklist);
+  const scoreDelta = Math.abs(primaryScore - secondOpinionScore);
+
+  const byDimension = new Map<string, number[]>();
+  for (const dimension of checklist) {
+    byDimension.set(dimension.id, []);
+  }
+  for (const row of [...primary.dimensionScores, ...secondOpinion.dimensionScores]) {
+    const bucket = byDimension.get(row.dimensionId);
+    if (!bucket) continue;
+    bucket.push(clampScore(row.score));
+  }
+  const dimensionScores: ReviewLoopDimensionScore[] = checklist.map((dimension) => {
+    const bucket = byDimension.get(dimension.id) ?? [];
+    const average =
+      bucket.length > 0 ? bucket.reduce((sum, score) => sum + score, 0) / bucket.length : 0;
+    return {
+      dimensionId: dimension.id,
+      score: clampScore(average),
+      weight: dimension.weight
+    };
+  });
+
+  const findings = dedupeFindings([...primary.findings, ...secondOpinion.findings]);
+  if (scoreDelta >= normalizedPolicy.scoreDeltaThreshold) {
+    findings.push({
+      id: "F-cross-model-disagreement",
+      dimensionId: checklist[0]?.id ?? "general",
+      severity: "important",
+      summary:
+        "Cross-model second opinion found a meaningful quality-score disagreement that needs explicit disposition.",
+      evidence: `primary=${primaryScore.toFixed(3)} secondOpinion=${secondOpinionScore.toFixed(3)} threshold=${normalizedPolicy.scoreDeltaThreshold.toFixed(3)}`,
+      recommendation:
+        "Record why the team accepts one view or synthesize both findings before closing the review loop."
+    });
+  }
+
+  return {
+    findings,
+    dimensionScores,
+    secondOpinion: {
+      enabled: true,
+      modelLabel: normalizedPolicy.modelLabel,
+      primaryScore,
+      secondOpinionScore,
+      scoreDelta,
+      threshold: normalizedPolicy.scoreDeltaThreshold
+    }
+  };
+}
+
+export function createSecondOpinionDispatcher(args: {
+  primary: ReviewLoopDispatcher;
+  secondOpinion?: ReviewLoopDispatcher;
+  policy?: ReviewLoopSecondOpinionPolicy;
+}): ReviewLoopDispatcher {
+  const normalizedPolicy = normalizeSecondOpinionPolicy(args.policy);
+  return async (request) => {
+    const primaryRaw = await args.primary(request);
+    if (!normalizedPolicy.enabled || !args.secondOpinion) {
+      return primaryRaw;
+    }
+    const secondOpinionRaw = await args.secondOpinion(request);
+    return mergeSecondOpinionResults(
+      primaryRaw,
+      secondOpinionRaw,
+      request.checklist,
+      normalizedPolicy
+    );
+  };
 }
 
 export function aggregateQualityScore(

@@ -4,8 +4,10 @@ import {
   REVIEW_LOOP_CHECKLISTS,
   aggregateQualityScore,
   buildOutsideVoiceReviewPrompt,
+  createSecondOpinionDispatcher,
   createOutsideVoiceDispatcher,
   extractReviewLoopEnvelopeFromArtifact,
+  mergeSecondOpinionResults,
   parseReviewLoopDispatcherResult,
   renderReviewLoopHeader,
   renderReviewLoopSummarySection,
@@ -160,6 +162,137 @@ describe("review-loop contracts", () => {
     expect(payload.prompt).toContain("Stage: scope");
     expect(payload.responseSchema).toContain("\"findings\"");
     expect(result).toBeTruthy();
+  });
+
+  it("merges primary and second-opinion findings with averaged scores", () => {
+    const checklist = REVIEW_LOOP_CHECKLISTS.scope;
+    const merged = mergeSecondOpinionResults(
+      {
+        findings: [
+          {
+            id: "F-1",
+            dimensionId: checklist[0]!.id,
+            severity: "important",
+            summary: "Primary says premise fit needs tightening."
+          }
+        ],
+        dimensionScores: checklist.map((dimension) => ({
+          dimensionId: dimension.id,
+          score: 0.9
+        }))
+      },
+      {
+        findings: [
+          {
+            id: "F-2",
+            dimensionId: checklist[1]!.id,
+            severity: "critical",
+            summary: "Second opinion sees alternatives coverage gap."
+          }
+        ],
+        dimensionScores: checklist.map((dimension) => ({
+          dimensionId: dimension.id,
+          score: 0.4
+        }))
+      },
+      checklist,
+      { enabled: true, scoreDeltaThreshold: 0.2, modelLabel: "external-model" }
+    );
+
+    expect(merged.findings.some((finding) => finding.id === "F-1")).toBe(true);
+    expect(merged.findings.some((finding) => finding.id === "F-2")).toBe(true);
+    expect(
+      merged.findings.some((finding) => finding.id === "F-cross-model-disagreement")
+    ).toBe(true);
+    expect(merged.dimensionScores).toHaveLength(5);
+    expect(merged.dimensionScores[0]?.score).toBeCloseTo(0.65, 6);
+    expect(merged.secondOpinion.enabled).toBe(true);
+    expect(merged.secondOpinion.modelLabel).toBe("external-model");
+    expect(merged.secondOpinion.scoreDelta).toBeCloseTo(0.5, 6);
+  });
+
+  it("createSecondOpinionDispatcher falls back to primary when disabled", async () => {
+    const primary = vi.fn(async () => ({
+      findings: [{ id: "F-1", dimensionId: "premise_fit", severity: "important", summary: "Gap" }],
+      dimensionScores: [{ dimensionId: "premise_fit", score: 0.5 }]
+    }));
+    const second = vi.fn(async () => ({
+      findings: [{ id: "F-2", dimensionId: "premise_fit", severity: "critical", summary: "Deeper gap" }],
+      dimensionScores: [{ dimensionId: "premise_fit", score: 0.1 }]
+    }));
+    const dispatcher = createSecondOpinionDispatcher({
+      primary,
+      secondOpinion: second,
+      policy: { enabled: false }
+    });
+    const result = await dispatcher({
+      stage: "scope",
+      artifactPath: "/tmp/scope.md",
+      checklist: REVIEW_LOOP_CHECKLISTS.scope,
+      priorIterations: [],
+      iteration: 1,
+      budget: { maxIterations: 3, targetScore: 0.8 }
+    });
+    expect(primary).toHaveBeenCalledTimes(1);
+    expect(second).toHaveBeenCalledTimes(0);
+    const parsed = parseReviewLoopDispatcherResult(result, REVIEW_LOOP_CHECKLISTS.scope);
+    expect(parsed.findings).toHaveLength(1);
+    expect(parsed.findings[0]?.id).toBe("F-1");
+  });
+
+  it("createSecondOpinionDispatcher merges when enabled", async () => {
+    const checklist = REVIEW_LOOP_CHECKLISTS.scope;
+    const primary = vi.fn(async (request: { checklist: readonly { id: string }[] }) => ({
+      findings: [
+        {
+          id: "F-1",
+          dimensionId: request.checklist[0]!.id,
+          severity: "important",
+          summary: "Primary finding"
+        }
+      ],
+      dimensionScores: request.checklist.map((dimension) => ({
+        dimensionId: dimension.id,
+        score: 0.9
+      }))
+    }));
+    const second = vi.fn(async (request: { checklist: readonly { id: string }[] }) => ({
+      findings: [
+        {
+          id: "F-2",
+          dimensionId: request.checklist[1]!.id,
+          severity: "critical",
+          summary: "Second finding"
+        }
+      ],
+      dimensionScores: request.checklist.map((dimension) => ({
+        dimensionId: dimension.id,
+        score: 0.3
+      }))
+    }));
+    const dispatcher = createSecondOpinionDispatcher({
+      primary,
+      secondOpinion: second,
+      policy: { enabled: true, scoreDeltaThreshold: 0.2, modelLabel: "external-reviewer" }
+    });
+    const raw = await dispatcher({
+      stage: "scope",
+      artifactPath: "/tmp/scope.md",
+      checklist,
+      priorIterations: [],
+      iteration: 1,
+      budget: { maxIterations: 3, targetScore: 0.8 }
+    });
+    expect(primary).toHaveBeenCalledTimes(1);
+    expect(second).toHaveBeenCalledTimes(1);
+    const merged = raw as {
+      findings?: Array<{ id?: string }>;
+      secondOpinion?: { modelLabel?: string };
+    };
+    expect(merged.findings?.some((finding) => finding.id === "F-cross-model-disagreement")).toBe(
+      true
+    );
+    expect(merged.secondOpinion?.modelLabel).toBe("external-reviewer");
   });
 
   it("runs until retry budget is exhausted when score stays below target", async () => {

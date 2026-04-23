@@ -47,6 +47,7 @@ export const BRAINSTORM: StageSchemaInput = {
       "**Propose 2-3 architecturally distinct approaches** — with real trade-offs and no recommendation yet. At least one option must be a higher-upside challenger that raises ambition vs the user's initial ask.",
       "**Collect user reaction** — ask which approach feels closest and what concerns remain before stating your recommendation.",
       "**Recommend only after reaction** — present final recommendation with rationale that explicitly references user feedback.",
+      "**Plant-seed shelf (optional)** — when a non-selected approach is still promising, capture it as `.cclaw/seeds/SEED-<YYYY-MM-DD>-<slug>.md` with `trigger_when`, hypothesis, and suggested action instead of losing it.",
       "**Present design by sections** — scale each section to its complexity. Ask after each section whether it looks right so far. Cover: architecture, key components, data flow.",
       "**Optional visual companion** — when architecture/data flow complexity is medium+ offer a compact diagram (ASCII or Mermaid) before artifact write-up.",
       "**Write artifact** to `.cclaw/artifacts/01-brainstorm-<slug>.md`.",
@@ -77,6 +78,7 @@ export const BRAINSTORM: StageSchemaInput = {
       "Propose 2-3 architecturally distinct approaches with trade-offs (one must be higher-upside challenger).",
       "Collect user reaction before giving your recommendation.",
       "Recommend after reaction and explain how feedback changed the recommendation.",
+      "Optionally plant promising non-selected approaches into `.cclaw/seeds/SEED-<YYYY-MM-DD>-<slug>.md` with trigger_when/action notes.",
       "Present design sections incrementally, get approval after each.",
       "Write approved direction to `.cclaw/artifacts/01-brainstorm-<slug>.md`.",
       "Run document-quality pass to close contradictions and weak trade-off reasoning.",
@@ -96,6 +98,7 @@ export const BRAINSTORM: StageSchemaInput = {
       "2-3 approaches with trade-offs are recorded, including one higher-upside challenger option.",
       "User reaction to approaches is captured before final recommendation.",
       "Final recommendation explicitly reflects user reaction.",
+      "When a promising option is parked, a seed file is created under `.cclaw/seeds/` and referenced in the artifact.",
       "Approved direction and approval marker are present.",
       "Assumptions and open questions are captured (or explicitly marked as none)."
     ],

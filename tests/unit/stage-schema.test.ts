@@ -311,6 +311,16 @@ describe("stage schema and subagent alignment", () => {
     expect(designTemplate).toContain("## Spec Review Loop");
   });
 
+  it("brainstorm scope and design templates expose seed shelf section", () => {
+    const brainstorm = ARTIFACT_TEMPLATES["01-brainstorm.md"];
+    const scope = ARTIFACT_TEMPLATES["02-scope.md"];
+    const design = ARTIFACT_TEMPLATES["03-design.md"];
+    expect(brainstorm).toContain("## Seed Shelf Candidates (optional)");
+    expect(scope).toContain("## Seed Shelf Candidates (optional)");
+    expect(design).toContain("## Seed Shelf Candidates (optional)");
+    expect(scope).toContain(".cclaw/seeds/SEED-YYYY-MM-DD-<slug>.md");
+  });
+
   it("stage skills render explicit when-not-to-use guidance", () => {
     const review = stageSchema("review");
     expect(review.whenNotToUse.length).toBeGreaterThan(0);

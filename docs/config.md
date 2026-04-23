@@ -256,6 +256,25 @@ optInAudits:
   listed under `## Codebase Investigation` against the current design artifact's
   diagram baseline and fails when code changed after the diagrams were last updated.
 
+### `reviewLoop` (object, opt-in)
+
+Outside-voice review-loop tuning. Keep disabled unless you explicitly want a
+second model/opinion in scope/design review loops.
+
+```yaml
+reviewLoop:
+  externalSecondOpinion:
+    enabled: true
+    model: "external-reviewer"
+    scoreDeltaThreshold: 0.2
+```
+
+- `externalSecondOpinion.enabled` — when true, review-loop integrations may run
+  a second independent pass and reconcile differences.
+- `externalSecondOpinion.model` — optional label included in review metadata.
+- `externalSecondOpinion.scoreDeltaThreshold` — disagreement threshold (0..1)
+  at which the loop surfaces an explicit "cross-model disagreement" finding.
+
 ## Common recipes
 
 ### Single-harness minimal install

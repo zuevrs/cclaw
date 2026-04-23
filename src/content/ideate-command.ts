@@ -90,6 +90,10 @@ ${frameBullets}
    the top survivor.
 8. **Write the artifact** at
    \`${IDEATE_ARTIFACT_PATTERN}\` using the schema in the skill.
+8.5 **Seed shelf (optional).** For critiqued-out or deferred ideas that still
+   show upside, write seed notes to
+   \`${RUNTIME_ROOT}/seeds/SEED-<YYYY-MM-DD>-<slug>.md\` with
+   \`trigger_when\`, hypothesis, and suggested action.
 9. **Present the handoff prompt** with four concrete options — not A/B/C
    letters. Default = "Start /cc on the top recommendation".
 
@@ -260,7 +264,11 @@ Only survivors advance to ranking.
    ### I-2 — …
    \`\`\`
 
-6. Confirm in chat: "Wrote <path>."
+6. Optional: for promising non-selected ideas, write
+   \`${RUNTIME_ROOT}/seeds/SEED-<YYYY-MM-DD>-<slug>.md\` entries with:
+   \`title\`, \`trigger_when\`, \`hypothesis\`, \`action\`, and
+   \`source_artifact\` = ideate artifact path.
+7. Confirm in chat: "Wrote <path>."
 
 ### Phase 5 — Handoff prompt
 

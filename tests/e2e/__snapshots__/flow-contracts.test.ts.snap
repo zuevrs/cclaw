@@ -1219,13 +1219,14 @@ You MUST complete these steps in order:
 6. **Propose 2-3 architecturally distinct approaches** — with real trade-offs and no recommendation yet. At least one option must be a higher-upside challenger that raises ambition vs the user's initial ask.
 7. **Collect user reaction** — ask which approach feels closest and what concerns remain before stating your recommendation.
 8. **Recommend only after reaction** — present final recommendation with rationale that explicitly references user feedback.
-9. **Present design by sections** — scale each section to its complexity. Ask after each section whether it looks right so far. Cover: architecture, key components, data flow.
-10. **Optional visual companion** — when architecture/data flow complexity is medium+ offer a compact diagram (ASCII or Mermaid) before artifact write-up.
-11. **Write artifact** to \`.cclaw/artifacts/01-brainstorm-<slug>.md\`.
-12. **Document-quality pass** — run a brief adversarial review of the artifact (gaps, contradictions, missing trade-offs), then patch before user review.
-13. **Self-review** — scan for placeholders/TODOs, check internal consistency, verify scope is focused, resolve any ambiguity.
-14. **User reviews artifact** — ask the user to review the written artifact and explicitly approve or request changes.
-15. **Handoff** — only then complete stage and point to \`/cc-next\`.
+9. **Plant-seed shelf (optional)** — when a non-selected approach is still promising, capture it as \`.cclaw/seeds/SEED-<YYYY-MM-DD>-<slug>.md\` with \`trigger_when\`, hypothesis, and suggested action instead of losing it.
+10. **Present design by sections** — scale each section to its complexity. Ask after each section whether it looks right so far. Cover: architecture, key components, data flow.
+11. **Optional visual companion** — when architecture/data flow complexity is medium+ offer a compact diagram (ASCII or Mermaid) before artifact write-up.
+12. **Write artifact** to \`.cclaw/artifacts/01-brainstorm-<slug>.md\`.
+13. **Document-quality pass** — run a brief adversarial review of the artifact (gaps, contradictions, missing trade-offs), then patch before user review.
+14. **Self-review** — scan for placeholders/TODOs, check internal consistency, verify scope is focused, resolve any ambiguity.
+15. **User reviews artifact** — ask the user to review the written artifact and explicitly approve or request changes.
+16. **Handoff** — only then complete stage and point to \`/cc-next\`.
 
 ## Examples
 
@@ -1260,6 +1261,7 @@ Decision protocol reference: \`.cclaw/references/protocols/decision.md\`
 - [ ] 2-3 approaches with trade-offs are recorded, including one higher-upside challenger option.
 - [ ] User reaction to approaches is captured before final recommendation.
 - [ ] Final recommendation explicitly reflects user reaction.
+- [ ] When a promising option is parked, a seed file is created under \`.cclaw/seeds/\` and referenced in the artifact.
 - [ ] Approved direction and approval marker are present.
 - [ ] Assumptions and open questions are captured (or explicitly marked as none).
 

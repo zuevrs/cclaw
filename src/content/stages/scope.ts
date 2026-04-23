@@ -59,7 +59,8 @@ export const SCOPE: StageSchemaInput = {
       "**Temporal Interrogation** — (complex projects only) simulate implementation timeline: HOUR 1 foundations, HOUR 2-3 core logic, HOUR 4-5 integration surprises, HOUR 6+ polish/tests. Decide what must be locked now vs safely deferred.",
       "**Mode Selection** — Present expand/selective/hold/reduce with recommendation and default heuristic: greenfield -> expand, feature enhancement -> selective, bugfix/hotfix/refactor -> hold, broad blast radius (>15 files or multi-team impact) -> reduce.",
       "**Mode-Specific Analysis** — After mode is selected, run the matching analysis: EXPAND (10x and delight opportunities), SELECTIVE (hold-scope rigor then cherry-picked expansions), HOLD (minimum-change-set hardening), REDUCE (ruthless cuts and follow-up split).",
-      "**Outside Voice + Spec Review Loop** — run an adversarial second-opinion pass on the scope artifact, reconcile findings, and iterate up to 3 cycles or until quality score >= 0.8.",
+      "**Plant-seed shelf (optional)** — when a deferred/out-of-scope idea still has upside, capture it as `.cclaw/seeds/SEED-<YYYY-MM-DD>-<slug>.md` with trigger_when and action instead of losing it in prose-only notes.",
+      "**Outside Voice + Spec Review Loop** — run an adversarial second-opinion pass on the scope artifact, reconcile findings, and iterate up to 3 cycles or until quality score >= 0.8. When `.cclaw/config.yaml::reviewLoop.externalSecondOpinion.enabled` is true, run an additional external-model pass and explicitly resolve score/finding disagreements.",
       "**Error and Rescue Registry** — For each capability: what breaks, how detected, what fallback."
     ],
     interactionProtocol: [
@@ -85,8 +86,9 @@ export const SCOPE: StageSchemaInput = {
       "Produce 2-3 scope alternatives in a structured format (Name, Summary, Effort, Risk, Pros, Cons, Reuses) with minimum viable and ideal architecture options included.",
       "Choose scope mode with user approval.",
       "Run mode-specific analysis that matches the selected scope mode.",
+      "Optionally plant high-upside deferred ideas into `.cclaw/seeds/SEED-<YYYY-MM-DD>-<slug>.md` with trigger_when/action notes.",
       "Walk through scope review sections one at a time.",
-      "Run outside-voice spec review loop (up to 3 iterations, quality score target >= 0.8).",
+      "Run outside-voice spec review loop (up to 3 iterations, quality score target >= 0.8). If configured, include external second opinion and reconcile deltas.",
       "Write explicit scope contract, discretion areas, and deferred items.",
       "Freeze non-negotiable boundaries as stable Locked Decisions (D-XX IDs).",
       "Produce scope summary plus completion dashboard (section status, critical gaps, resolved decisions, unresolved items or `None`)."
@@ -106,7 +108,9 @@ export const SCOPE: StageSchemaInput = {
       "Premise challenge findings documented.",
       "Outside Voice findings and dispositions are recorded (accept/reject/defer with rationale).",
       "Spec review loop summary includes iteration count and quality score trajectory.",
+      "When `.cclaw/config.yaml::reviewLoop.externalSecondOpinion.enabled` is true, external second-opinion disposition is captured.",
       "Deferred items list with one-line rationale for each.",
+      "When an upside deferred idea is parked, a seed file is created under `.cclaw/seeds/` and referenced in the artifact.",
       "Completion dashboard lists per-section status, critical/open gaps, decision count, and unresolved items (or `None`)."
     ],
     inputs: ["brainstorm artifact", "timeline constraints", "product priorities"],

@@ -56,8 +56,9 @@ export const DESIGN: StageSchemaInput = {
       "Observability & Debuggability Review — logging, metrics, traces, alerts, and on-call diagnosis path for each critical failure mode.",
       "Deployment & Rollout Review — migration sequencing, flag strategy, rollback plan, compatibility window, and post-deploy verification steps.",
       "Parallelization Strategy — If multiple independent modules, produce dependency table: which can be built in parallel? Where are conflict risks? Flag shared-state modules.",
-      "Outside Voice + Spec Review Loop — run adversarial second-opinion review, reconcile findings, and iterate up to 3 cycles or until quality score >= 0.8.",
+      "Outside Voice + Spec Review Loop — run adversarial second-opinion review, reconcile findings, and iterate up to 3 cycles or until quality score >= 0.8. When `.cclaw/config.yaml::reviewLoop.externalSecondOpinion.enabled` is true, run an additional external-model pass and explicitly resolve score/finding disagreements.",
       "Stale Diagram Audit (opt-in) — when `.cclaw/config.yaml::optInAudits.staleDiagramAudit` is true, compare blast-radius file mtimes against diagram-marker freshness and flag stale diagrams before design lock.",
+      "Plant-seed shelf (optional) — when an unresolved/deferred design idea has upside, capture it as `.cclaw/seeds/SEED-<YYYY-MM-DD>-<slug>.md` with trigger_when and action so it can be recalled on future `/cc` starts.",
       "Unresolved Decisions — List any design decisions that could not be resolved in this session. For each: what information is missing? Who can provide it? What is the default if no answer comes?",
       "Distribution Check — If the plan creates new artifact types (packages, CLI tools, configs), document the build/publish story. How does it reach the user?",
       "Deferred Items Cross-Reference — Collect every item explicitly deferred during design review. Each must appear in the Unresolved Decisions table or in the upstream scope artifact's deferred list. No deferred item may exist only in conversation — it must be written down."
@@ -92,7 +93,8 @@ export const DESIGN: StageSchemaInput = {
       "Run stale-diagram audit in touched files and reconcile drift.",
       "Define test coverage strategy and performance budget.",
       "Produce required outputs: NOT-in-scope section, What-already-exists section, tier-required diagrams with markers, failure mode table.",
-      "Run outside-voice spec review loop (up to 3 iterations, quality score target >= 0.8).",
+      "Optionally plant unresolved high-upside ideas into `.cclaw/seeds/SEED-<YYYY-MM-DD>-<slug>.md` with trigger_when/action notes.",
+      "Run outside-voice spec review loop (up to 3 iterations, quality score target >= 0.8). If configured, include external second opinion and reconcile deltas.",
       "Produce completion dashboard: status per review section, critical/open gap counts, decision count, unresolved items.",
       "Write design lock artifact for downstream spec/plan."
     ],
@@ -113,7 +115,9 @@ export const DESIGN: StageSchemaInput = {
       "Observability and deployment plans are explicit for critical flows.",
       "Outside-voice findings and dispositions are recorded (accept/reject/defer).",
       "Spec review loop summary includes iteration count and quality score trajectory.",
+      "When `.cclaw/config.yaml::reviewLoop.externalSecondOpinion.enabled` is true, external second-opinion disposition is captured.",
       "Test strategy includes unit/integration/e2e expectations.",
+      "When a high-upside idea is deferred, a seed file is created under `.cclaw/seeds/` and referenced in the artifact.",
       "NOT-in-scope section produced.",
       "What-already-exists section produced.",
       "Completion dashboard lists review section status, critical/open gap counts, decision count, and unresolved items (or 'None')."

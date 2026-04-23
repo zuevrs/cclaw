@@ -55,6 +55,11 @@ inputs_hash: sha256:pending
 - **Rationale:**
 - **Approval:** pending
 
+## Seed Shelf Candidates (optional)
+| Seed file | Trigger when | Suggested action | Status (planted/deferred/ignored) |
+|---|---|---|---|
+| .cclaw/seeds/SEED-YYYY-MM-DD-<slug>.md |  |  |  |
+
 ## Design
 - **Architecture:**
 - **Key components:**
@@ -161,6 +166,11 @@ inputs_hash: sha256:pending
 | Item | Rationale |
 |---|---|
 |  |  |
+
+## Seed Shelf Candidates (optional)
+| Seed file | Trigger when | Suggested action | Status (planted/deferred/ignored) |
+|---|---|---|---|
+| .cclaw/seeds/SEED-YYYY-MM-DD-<slug>.md |  |  |  |
 
 ## Error & Rescue Registry
 | Capability | Failure mode | Detection | Fallback |
@@ -404,6 +414,11 @@ inputs_hash: sha256:pending
 | Decision | Missing info | Owner | Default |
 |---|---|---|---|
 |  |  |  |  |
+
+## Seed Shelf Candidates (optional)
+| Seed file | Trigger when | Suggested action | Status (planted/deferred/ignored) |
+|---|---|---|---|
+| .cclaw/seeds/SEED-YYYY-MM-DD-<slug>.md |  |  |  |
 
 ## Completion Dashboard
 | Review Section | Status | Issues |

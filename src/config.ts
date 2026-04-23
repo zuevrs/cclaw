@@ -28,7 +28,8 @@ const ALLOWED_CONFIG_KEYS = new Set<string>([
   "trackHeuristics",
   "sliceReview",
   "ironLaws",
-  "optInAudits"
+  "optInAudits",
+  "reviewLoop"
 ]);
 
 /**
@@ -623,6 +624,78 @@ export async function readConfig(projectRoot: string): Promise<CclawConfig> {
     };
   }
 
+  const reviewLoopRaw = (parsed as { reviewLoop?: unknown }).reviewLoop;
+  let reviewLoop: CclawConfig["reviewLoop"] = undefined;
+  if (Object.prototype.hasOwnProperty.call(parsed, "reviewLoop")) {
+    if (!isRecord(reviewLoopRaw)) {
+      throw configValidationError(fullPath, `"reviewLoop" must be an object`);
+    }
+    const unknownReviewLoopKeys = Object.keys(reviewLoopRaw).filter(
+      (key) => key !== "externalSecondOpinion"
+    );
+    if (unknownReviewLoopKeys.length > 0) {
+      throw configValidationError(
+        fullPath,
+        `"reviewLoop" has unknown key(s): ${unknownReviewLoopKeys.join(", ")}`
+      );
+    }
+    const externalRaw = reviewLoopRaw.externalSecondOpinion;
+    let externalSecondOpinion: NonNullable<CclawConfig["reviewLoop"]>["externalSecondOpinion"] =
+      undefined;
+    if (externalRaw !== undefined) {
+      if (!isRecord(externalRaw)) {
+        throw configValidationError(
+          fullPath,
+          `"reviewLoop.externalSecondOpinion" must be an object`
+        );
+      }
+      const unknownExternalKeys = Object.keys(externalRaw).filter(
+        (key) => key !== "enabled" && key !== "model" && key !== "scoreDeltaThreshold"
+      );
+      if (unknownExternalKeys.length > 0) {
+        throw configValidationError(
+          fullPath,
+          `"reviewLoop.externalSecondOpinion" has unknown key(s): ${unknownExternalKeys.join(", ")}`
+        );
+      }
+      if (externalRaw.enabled !== undefined && typeof externalRaw.enabled !== "boolean") {
+        throw configValidationError(
+          fullPath,
+          `"reviewLoop.externalSecondOpinion.enabled" must be a boolean`
+        );
+      }
+      if (externalRaw.model !== undefined && typeof externalRaw.model !== "string") {
+        throw configValidationError(
+          fullPath,
+          `"reviewLoop.externalSecondOpinion.model" must be a string`
+        );
+      }
+      if (
+        externalRaw.scoreDeltaThreshold !== undefined &&
+        (
+          typeof externalRaw.scoreDeltaThreshold !== "number" ||
+          Number.isNaN(externalRaw.scoreDeltaThreshold) ||
+          externalRaw.scoreDeltaThreshold < 0 ||
+          externalRaw.scoreDeltaThreshold > 1
+        )
+      ) {
+        throw configValidationError(
+          fullPath,
+          `"reviewLoop.externalSecondOpinion.scoreDeltaThreshold" must be a number between 0 and 1`
+        );
+      }
+      externalSecondOpinion = {
+        enabled: externalRaw.enabled === true,
+        model: typeof externalRaw.model === "string" ? externalRaw.model : undefined,
+        scoreDeltaThreshold:
+          typeof externalRaw.scoreDeltaThreshold === "number"
+            ? externalRaw.scoreDeltaThreshold
+            : 0.2
+      };
+    }
+    reviewLoop = { externalSecondOpinion };
+  }
+
   return {
     version: parsed.version ?? CCLAW_VERSION,
     flowVersion: parsed.flowVersion ?? FLOW_VERSION,
@@ -642,7 +715,8 @@ export async function readConfig(projectRoot: string): Promise<CclawConfig> {
     trackHeuristics,
     sliceReview,
     ironLaws,
-    optInAudits
+    optInAudits,
+    reviewLoop
   };
 }
 
@@ -662,7 +736,8 @@ type AdvancedConfigKey =
   | "trackHeuristics"
   | "sliceReview"
   | "ironLaws"
-  | "optInAudits";
+  | "optInAudits"
+  | "reviewLoop";
 
 /**
  * Options controlling the serialisation shape of `config.yaml`.
@@ -710,7 +785,8 @@ function buildSerializableConfig(
     "trackHeuristics",
     "sliceReview",
     "ironLaws",
-    "optInAudits"
+    "optInAudits",
+    "reviewLoop"
   ];
   for (const key of ordered) {
     const value = config[key];
@@ -771,7 +847,8 @@ export async function detectAdvancedKeys(
       "trackHeuristics",
       "sliceReview",
       "ironLaws",
-      "optInAudits"
+      "optInAudits",
+      "reviewLoop"
     ];
     const present = new Set<AdvancedConfigKey>();
     for (const key of advancedCandidates) {
