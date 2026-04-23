@@ -128,11 +128,20 @@ async function withDirectoryLockInline(lockPath, fn, options = {}) {
       }
       try {
         const stat = await fs.stat(lockPath);
+        if (!stat.isDirectory()) {
+          throw new Error("Lock path exists but is not a directory: " + lockPath);
+        }
         if (Date.now() - stat.mtimeMs > staleAfterMs) {
           await fs.rm(lockPath, { recursive: true, force: true });
           continue;
         }
-      } catch {
+      } catch (statError) {
+        if (
+          statError instanceof Error &&
+          statError.message.startsWith("Lock path exists but is not a directory")
+        ) {
+          throw statError;
+        }
         // lock vanished between retries
       }
       await hookSleep(retryDelayMs);

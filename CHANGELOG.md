@@ -14,6 +14,15 @@
   as breadcrumbs in `.cclaw/state/hook-errors.jsonl` (still
   soft-fail so hooks never block on a malformed derived state, but
   `cclaw doctor` can now surface chronic failures).
+- Directory locks (`withDirectoryLock` / the hook-inline variant)
+  now fail fast with a clear "Lock path exists but is not a
+  directory" error when the configured lock path is occupied by
+  a non-directory instead of burning the entire retry budget.
+  This stabilizes the session-start breadcrumb test on Windows,
+  where `fs.mkdir(path)` against a file returns `EEXIST` (same
+  as a held lock) and the old code could loop for seconds before
+  giving up.
+
 - Compound-readiness is now computed consistently across CLI and
   runtime. Previously `cclaw internal compound-readiness` honored
   `config.compound.recurrenceThreshold` while the SessionStart hook
