@@ -72,28 +72,28 @@ describe("hooks lifecycle wiring", () => {
     const cursor = cursorHooksJsonWithObservation();
     const codex = codexHooksJsonWithObservation();
 
-    expect(claude).toContain("node .cclaw/hooks/run-hook.mjs session-start");
-    expect(claude).toContain("node .cclaw/hooks/run-hook.mjs prompt-guard");
-    expect(claude).toContain("node .cclaw/hooks/run-hook.mjs workflow-guard");
-    expect(claude).toContain("node .cclaw/hooks/run-hook.mjs context-monitor");
-    expect(claude).toContain("node .cclaw/hooks/run-hook.mjs stop-checkpoint");
-    expect(claude).toContain("node .cclaw/hooks/run-hook.mjs pre-compact");
+    expect(claude).toContain(".cclaw/hooks/run-hook.cmd session-start");
+    expect(claude).toContain(".cclaw/hooks/run-hook.cmd prompt-guard");
+    expect(claude).toContain(".cclaw/hooks/run-hook.cmd workflow-guard");
+    expect(claude).toContain(".cclaw/hooks/run-hook.cmd context-monitor");
+    expect(claude).toContain(".cclaw/hooks/run-hook.cmd stop-checkpoint");
+    expect(claude).toContain(".cclaw/hooks/run-hook.cmd pre-compact");
     expect(claude).not.toContain(".sh");
 
-    expect(cursor).toContain("node .cclaw/hooks/run-hook.mjs session-start");
-    expect(cursor).toContain("node .cclaw/hooks/run-hook.mjs prompt-guard");
-    expect(cursor).toContain("node .cclaw/hooks/run-hook.mjs workflow-guard");
-    expect(cursor).toContain("node .cclaw/hooks/run-hook.mjs context-monitor");
-    expect(cursor).toContain("node .cclaw/hooks/run-hook.mjs stop-checkpoint");
-    expect(cursor).toContain("node .cclaw/hooks/run-hook.mjs pre-compact");
+    expect(cursor).toContain(".cclaw/hooks/run-hook.cmd session-start");
+    expect(cursor).toContain(".cclaw/hooks/run-hook.cmd prompt-guard");
+    expect(cursor).toContain(".cclaw/hooks/run-hook.cmd workflow-guard");
+    expect(cursor).toContain(".cclaw/hooks/run-hook.cmd context-monitor");
+    expect(cursor).toContain(".cclaw/hooks/run-hook.cmd stop-checkpoint");
+    expect(cursor).toContain(".cclaw/hooks/run-hook.cmd pre-compact");
     expect(cursor).not.toContain(".sh");
 
-    expect(codex).toContain("node .cclaw/hooks/run-hook.mjs session-start");
-    expect(codex).toContain("node .cclaw/hooks/run-hook.mjs prompt-guard");
-    expect(codex).toContain("node .cclaw/hooks/run-hook.mjs workflow-guard");
-    expect(codex).toContain("node .cclaw/hooks/run-hook.mjs context-monitor");
-    expect(codex).toContain("node .cclaw/hooks/run-hook.mjs stop-checkpoint");
-    expect(codex).toContain("node .cclaw/hooks/run-hook.mjs verify-current-state");
+    expect(codex).toContain(".cclaw/hooks/run-hook.cmd session-start");
+    expect(codex).toContain(".cclaw/hooks/run-hook.cmd prompt-guard");
+    expect(codex).toContain(".cclaw/hooks/run-hook.cmd workflow-guard");
+    expect(codex).toContain(".cclaw/hooks/run-hook.cmd context-monitor");
+    expect(codex).toContain(".cclaw/hooks/run-hook.cmd stop-checkpoint");
+    expect(codex).toContain(".cclaw/hooks/run-hook.cmd verify-current-state");
     expect(codex).not.toContain(".sh");
   });
 

@@ -7,11 +7,9 @@ import {
 } from "./hook-manifest.js";
 
 function hookDispatcherCommand(hookName: HookHandlerId): string {
-  // RUNTIME_ROOT is a relative path (".cclaw") that currently contains no
-  // whitespace, so quoting is unnecessary inside the JSON-encoded command
-  // string. If RUNTIME_ROOT ever becomes configurable, wrap the path with
-  // JSON.stringify to survive spaces.
-  return `node ${RUNTIME_ROOT}/hooks/run-hook.mjs ${hookName}`;
+  // Dispatch through the polyglot .cmd wrapper so Windows harnesses can run
+  // hooks even when command execution happens under CMD-style shells.
+  return `${RUNTIME_ROOT}/hooks/run-hook.cmd ${hookName}`;
 }
 
 interface ClaudeCommandEntry {

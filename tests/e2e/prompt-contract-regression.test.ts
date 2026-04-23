@@ -48,12 +48,12 @@ describe("prompt-contract regression harness", () => {
     const cursorHooks = await fs.readFile(path.join(root, ".cursor/hooks.json"), "utf8");
     const hookRuntime = await fs.readFile(path.join(root, ".cclaw/hooks/run-hook.mjs"), "utf8");
 
-    expect(claudeHooks).toContain("node .cclaw/hooks/run-hook.mjs prompt-guard");
-    expect(claudeHooks).toContain("node .cclaw/hooks/run-hook.mjs workflow-guard");
-    expect(claudeHooks).toContain("node .cclaw/hooks/run-hook.mjs context-monitor");
-    expect(cursorHooks).toContain("node .cclaw/hooks/run-hook.mjs prompt-guard");
-    expect(cursorHooks).toContain("node .cclaw/hooks/run-hook.mjs workflow-guard");
-    expect(cursorHooks).toContain("node .cclaw/hooks/run-hook.mjs context-monitor");
+    expect(claudeHooks).toContain(".cclaw/hooks/run-hook.cmd prompt-guard");
+    expect(claudeHooks).toContain(".cclaw/hooks/run-hook.cmd workflow-guard");
+    expect(claudeHooks).toContain(".cclaw/hooks/run-hook.cmd context-monitor");
+    expect(cursorHooks).toContain(".cclaw/hooks/run-hook.cmd prompt-guard");
+    expect(cursorHooks).toContain(".cclaw/hooks/run-hook.cmd workflow-guard");
+    expect(cursorHooks).toContain(".cclaw/hooks/run-hook.cmd context-monitor");
     expect(hookRuntime).toContain("suggestion-memory.json");
     expect(hookRuntime).toContain("context-warnings.jsonl");
     expect(hookRuntime).toContain("knowledge.jsonl");
