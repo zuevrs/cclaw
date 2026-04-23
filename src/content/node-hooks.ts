@@ -1367,7 +1367,9 @@ async function handlePromptGuard(runtime) {
   const reasons = [];
 
   if (/^(write|edit|multiedit|multi_edit|delete|applypatch|runcommand|shell|terminal|execcommand)$/u.test(toolLower)) {
-    if (/\\.cclaw\\/(state|artifacts|hooks|skills|commands|agents|runs|knowledge)/u.test(payloadLower)) {
+    // Artifacts, runs, and knowledge writes are part of normal stage flow.
+    // Guard only managed internals that should be mutated via installer/CLI.
+    if (/\\.cclaw\\/(state|hooks|skills|commands|agents)/u.test(payloadLower)) {
       reasons.push("write_to_cclaw_runtime");
     }
   }
@@ -1381,7 +1383,7 @@ async function handlePromptGuard(runtime) {
       RUNTIME_ROOT +
       " runtime (" +
       reasons.join(",") +
-      "). Prefer installer commands or explicit confirmation before mutating runtime internals.";
+      "). Prefer installer commands before mutating managed runtime internals (.cclaw/state|hooks|skills|commands|agents).";
     await appendJsonLine(guardLog, {
       ts: new Date().toISOString(),
       harness: runtime.harness,

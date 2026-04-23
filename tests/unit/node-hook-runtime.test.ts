@@ -376,6 +376,27 @@ describe("node hook runtime", () => {
     expect(strict.stderr).toContain("blocked by strict mode");
   });
 
+  it("prompt-guard allows normal artifact writes", async () => {
+    const root = await createTempProject("node-hook-prompt-guard-artifacts");
+    await fs.mkdir(path.join(root, ".cclaw/state"), { recursive: true });
+    const payload = {
+      tool_name: "Write",
+      tool_input: {
+        path: ".cclaw/artifacts/01-brainstorm.md",
+        content: "# brainstorm\n"
+      }
+    };
+
+    const result = await runNodeHook(
+      root,
+      "prompt-guard",
+      nodeHookRuntimeScript(),
+      payload
+    );
+    expect(result.code).toBe(0);
+    expect(result.stderr).not.toContain("write_to_cclaw_runtime");
+  });
+
   it("workflow-guard enforces per-path RED evidence when tdd-red-before-write is strict", async () => {
     const root = await createTempProject("node-hook-workflow-guard");
     await fs.mkdir(path.join(root, ".cclaw/state"), { recursive: true });
