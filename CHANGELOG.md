@@ -1,5 +1,25 @@
 # Changelog
 
+## 0.48.31
+
+Phase-0 renderer migration to grouped v2 stage views. This cut switches stage
+skill generation to a group-first layout and trims repetitive sections to keep
+skill bodies concise.
+
+### Changed
+
+- Updated `stageSkillMarkdown` rendering to consume grouped metadata directly in
+  fixed order: `philosophy` -> `executionModel` -> `artifactRules` ->
+  `reviewLens`.
+- Added explicit `## Complexity Tier` output in stage skills so active tier and
+  tier-scoped mandatory delegations are visible at runtime.
+- Moved `HARD-GATE` and anti-pattern rendering into the Philosophy block and
+  moved outputs/review sections under Review Lens to match v2 schema semantics.
+- Removed always-inline Good/Bad and Domain example blocks from stage skills
+  while retaining the concise examples pointer section, reducing generated skill
+  line counts across all stages while preserving stage instructions.
+- Updated flow contract snapshots to match the new stage skill layout.
+
 ## 0.48.30
 
 Phase-0 v2 schema migration completion for downstream stages. This cut ports the
