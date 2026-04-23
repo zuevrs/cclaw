@@ -1562,6 +1562,15 @@ Do NOT ship, merge, or release until both review layers complete with an explici
 - all review sections evaluated
 - critical blockers resolved
 - ship readiness explicitly stated
+
+## Anchors
+- Layer 1
+- Layer 2
+- Critical
+- Review Army
+- Ready to Ship
+- ROUTE_BACK_TO_TDD
+- One issue at a time
 "
 `;
 
@@ -1597,5 +1606,15 @@ Do NOT merge, push, or finalize without a passed preflight check, written rollba
 - preflight completed
 - rollback and release notes complete
 - finalization action explicitly chosen and executed
+
+## Anchors
+- Pre-Ship Checks
+- Release Notes
+- Rollback Plan
+- FINALIZE_MERGE_LOCAL
+- FINALIZE_OPEN_PR
+- FINALIZE_KEEP_BRANCH
+- FINALIZE_DISCARD_BRANCH
+- FINALIZE_NO_VCS
 "
 `;
