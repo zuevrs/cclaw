@@ -1,4 +1,5 @@
 import type { StageSchemaInput } from "./schema-types.js";
+import { REVIEW_LOOP_CHECKLISTS } from "../review-loop.js";
 
 // ---------------------------------------------------------------------------
 // DESIGN — reference: gstack Eng review
@@ -185,13 +186,7 @@ export const DESIGN: StageSchemaInput = {
     ],
     reviewLoop: {
       stage: "design",
-      checklist: [
-        "architecture_fit",
-        "failure_mode_coverage",
-        "test_coverage_realism",
-        "performance_budget",
-        "observability_adequacy"
-      ],
+      checklist: REVIEW_LOOP_CHECKLISTS.design.map((dimension) => dimension.id),
       maxIterations: 3,
       targetScore: 0.8
     },

@@ -1,4 +1,5 @@
 import type { StageSchemaInput } from "./schema-types.js";
+import { REVIEW_LOOP_CHECKLISTS } from "../review-loop.js";
 
 // ---------------------------------------------------------------------------
 // SCOPE — reference: gstack CEO review
@@ -168,13 +169,7 @@ export const SCOPE: StageSchemaInput = {
     outputs: ["scope mode decision", "scope contract", "discretion areas list", "deferred scope list", "scope summary", "scope completion dashboard"],
     reviewLoop: {
       stage: "scope",
-      checklist: [
-        "premise_fit",
-        "alternatives_coverage",
-        "error_rescue_registry",
-        "scope_creep_risk",
-        "completion_status_fidelity"
-      ],
+      checklist: REVIEW_LOOP_CHECKLISTS.scope.map((dimension) => dimension.id),
       maxIterations: 3,
       targetScore: 0.8
     },
