@@ -3181,4 +3181,45 @@ describe("review army schema validation", () => {
     expect(result.ok).toBe(false);
     expect(result.errors.join("\n")).toMatch(/Layer 2 security evidence missing/);
   });
+
+  it("fails review security attestation when layer 2 security section is missing", async () => {
+    const root = await createTempProject("review-security-attestation-missing-section");
+    await writeRuntimeArtifact(
+      root,
+      "07-review.md",
+      `# Review Artifact
+
+## Layer 1 Findings
+| ID | Severity | Category | Description | Status |
+|---|---|---|---|---|
+| R-1 | Suggestion | correctness | naming cleanup | open |
+`
+    );
+
+    const result = await checkReviewSecurityNoChangeAttestation(root);
+    expect(result.ok).toBe(false);
+    expect(result.errors.join("\n")).toMatch(/missing a Layer 2 security section/);
+    expect(result.hasSecurityFinding).toBe(false);
+    expect(result.hasNoChangeAttestation).toBe(false);
+  });
+
+  it("fails review security attestation when NO_CHANGE_ATTESTATION is empty", async () => {
+    const root = await createTempProject("review-security-attestation-empty-value");
+    await writeRuntimeArtifact(
+      root,
+      "07-review.md",
+      `# Review Artifact
+
+## Layer 2 Findings
+| ID | Severity | Category | Description | Status |
+|---|---|---|---|---|
+| R-1 | Suggestion | correctness | naming cleanup | open |
+- NO_CHANGE_ATTESTATION:
+`
+    );
+
+    const result = await checkReviewSecurityNoChangeAttestation(root);
+    expect(result.ok).toBe(false);
+    expect(result.errors.join("\n")).toMatch(/must include a non-empty rationale/);
+  });
 });
