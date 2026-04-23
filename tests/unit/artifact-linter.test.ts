@@ -114,9 +114,9 @@ ${diagramBody}
 - Upstream error path: Storage Adapter timeout enters fallback path before final response.
 
 ## Failure Mode Table
-| Failure mode | Trigger | Detection | Mitigation | User impact |
-|---|---|---|---|---|
-| Storage timeout | Upstream latency spike | timeout metric alarm | fallback cache read + retry queue | stale but available response |
+| Method | Exception | Rescue | UserSees |
+|---|---|---|---|
+| Persist write | timeout: upstream latency spike | RESCUED=Y TEST=Y (fallback cache read + retry queue) | stale but available response |
 
 ## Test Strategy
 - Unit: validator and adapter tests with >=90% statement coverage target.
@@ -898,9 +898,9 @@ API -> Service -> DB
 - Timeout/downstream path: 504
 
 ## Failure Mode Table
-| Failure mode | Trigger | Detection | Mitigation | User impact |
-|---|---|---|---|---|
-| DB down | outage | health check | failover | degraded |
+| Method | Exception | Rescue | UserSees |
+|---|---|---|---|
+| Query path | outage | RESCUED=Y TEST=Y (failover) | degraded |
 
 ## Test Strategy
 - Unit: validators
@@ -966,9 +966,9 @@ API -> Service -> DB
 - Timeout/downstream path: 504
 
 ## Failure Mode Table
-| Failure mode | Trigger | Detection | Mitigation | User impact |
-|---|---|---|---|---|
-| DB down | outage | health check | failover | degraded |
+| Method | Exception | Rescue | UserSees |
+|---|---|---|---|
+| Query path | outage | RESCUED=Y TEST=Y (failover) | degraded |
 
 ## Test Strategy
 - Unit: validators
@@ -1056,6 +1056,50 @@ Fallback_Cache -->|degraded response| API_Gateway`
     const diagram = result.findings.find((f) => f.section === "Architecture Diagram");
     expect(result.passed).toBe(true);
     expect(diagram?.found).toBe(true);
+  });
+
+  it("fails design artifact when Failure Mode Table uses legacy header shape", async () => {
+    const root = await createTempProject("design-failure-table-legacy-header");
+    const diagram = `API_Gateway -->|sync: validated request| App_Service
+App_Service -.->|async: enqueue write| Storage_Adapter
+Storage_Adapter -->|timeout| Fallback_Cache
+Fallback_Cache -->|degraded response| API_Gateway`;
+    const artifact = completeDesignArtifact(diagram)
+      .replace(
+        "| Method | Exception | Rescue | UserSees |",
+        "| Failure mode | Trigger | Detection | Mitigation | User impact |"
+      )
+      .replace("|---|---|---|---|", "|---|---|---|---|---|")
+      .replace(
+        "| Persist write | timeout: upstream latency spike | RESCUED=Y TEST=Y (fallback cache read + retry queue) | stale but available response |",
+        "| Persist write | timeout: upstream latency spike | alarm fired | fallback cache read + retry queue | stale but available response |"
+      );
+    await writeRuntimeArtifact(root, "03-design.md", artifact);
+
+    const result = await lintArtifact(root, "design");
+    const failureTable = result.findings.find((f) => f.section === "Failure Mode Table");
+    expect(result.passed).toBe(false);
+    expect(failureTable?.found).toBe(false);
+    expect(failureTable?.details).toContain("header must be exactly");
+  });
+
+  it("fails design artifact when Failure Mode Table has unresolved CRITICAL row", async () => {
+    const root = await createTempProject("design-failure-table-critical-row");
+    const diagram = `API_Gateway -->|sync: validated request| App_Service
+App_Service -.->|async: enqueue write| Storage_Adapter
+Storage_Adapter -->|timeout| Fallback_Cache
+Fallback_Cache -->|degraded response| API_Gateway`;
+    const artifact = completeDesignArtifact(diagram).replace(
+      "| Persist write | timeout: upstream latency spike | RESCUED=Y TEST=Y (fallback cache read + retry queue) | stale but available response |",
+      "| Persist write | timeout: upstream latency spike | RESCUED=N TEST=N | Silent |"
+    );
+    await writeRuntimeArtifact(root, "03-design.md", artifact);
+
+    const result = await lintArtifact(root, "design");
+    const failureTable = result.findings.find((f) => f.section === "Failure Mode Table");
+    expect(result.passed).toBe(false);
+    expect(failureTable?.found).toBe(false);
+    expect(failureTable?.details).toContain("CRITICAL");
   });
 
   it("rejects spec artifact when an acceptance criterion uses vague adjectives", async () => {

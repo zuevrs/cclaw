@@ -242,6 +242,107 @@ function getMarkdownTableRows(sectionBody: string): string[][] {
   return rows;
 }
 
+type BinaryFlag = "yes" | "no" | "unknown";
+
+function parseBinaryFlag(value: string): BinaryFlag {
+  const normalized = value.trim().toLowerCase();
+  if (/^(?:y|yes|true|1)$/u.test(normalized)) return "yes";
+  if (/^(?:n|no|false|0|none)$/u.test(normalized)) return "no";
+  return "unknown";
+}
+
+function parseKeyedBinaryFlag(value: string, key: string): BinaryFlag {
+  const match = new RegExp(`${key}\\s*=\\s*(y|yes|true|1|n|no|false|0)`, "iu").exec(value);
+  if (!match) return "unknown";
+  return /^(?:y|yes|true|1)$/iu.test(match[1] ?? "") ? "yes" : "no";
+}
+
+function parseFailureModeRescueFlag(rescueCell: string): BinaryFlag {
+  const keyed = parseKeyedBinaryFlag(rescueCell, "rescued");
+  if (keyed !== "unknown") return keyed;
+  const direct = parseBinaryFlag(rescueCell);
+  if (direct !== "unknown") return direct;
+  if (/\b(?:no rescue|without rescue|unrescued|no fallback|none|absent)\b/iu.test(rescueCell)) {
+    return "no";
+  }
+  if (/\b(?:fallback|retry|degrade|recover|rescue|mitigat)\b/iu.test(rescueCell)) {
+    return "yes";
+  }
+  return "unknown";
+}
+
+function parseFailureModeTestFlag(rowText: string): BinaryFlag {
+  const keyed = parseKeyedBinaryFlag(rowText, "test");
+  if (keyed !== "unknown") return keyed;
+  if (/\b(?:no tests?|untested|without tests?)\b/iu.test(rowText)) {
+    return "no";
+  }
+  if (/\b(?:tested|has tests?|with tests?|covered by tests?)\b/iu.test(rowText)) {
+    return "yes";
+  }
+  return "unknown";
+}
+
+function validateFailureModeTable(sectionBody: string): { ok: boolean; details: string } {
+  const header = tableHeaderCells(sectionBody);
+  if (!header) {
+    return {
+      ok: false,
+      details: "Failure Mode Table must include a markdown header row and separator."
+    };
+  }
+  const expectedHeader = ["Method", "Exception", "Rescue", "UserSees"];
+  const normalizedHeader = header.map((cell) => cell.toLowerCase());
+  const normalizedExpected = expectedHeader.map((cell) => cell.toLowerCase());
+  const headerMatches =
+    normalizedHeader.length === normalizedExpected.length &&
+    normalizedHeader.every((cell, index) => cell === normalizedExpected[index]);
+  if (!headerMatches) {
+    return {
+      ok: false,
+      details: `Failure Mode Table header must be exactly: ${expectedHeader.join(" | ")}.`
+    };
+  }
+  const rows = getMarkdownTableRows(sectionBody);
+  if (rows.length === 0) {
+    return {
+      ok: false,
+      details: "Failure Mode Table must include at least one data row."
+    };
+  }
+  for (const [index, row] of rows.entries()) {
+    if (row.length < 4) {
+      return {
+        ok: false,
+        details: `Failure Mode Table row ${index + 1} must provide 4 columns (Method, Exception, Rescue, UserSees).`
+      };
+    }
+    const method = (row[0] ?? "").trim();
+    const exception = (row[1] ?? "").trim();
+    const rescue = (row[2] ?? "").trim();
+    const userSees = (row[3] ?? "").trim();
+    if (!method || !exception || !rescue || !userSees) {
+      return {
+        ok: false,
+        details: `Failure Mode Table row ${index + 1} must populate all columns (Method, Exception, Rescue, UserSees).`
+      };
+    }
+    const rescueFlag = parseFailureModeRescueFlag(rescue);
+    const testFlag = parseFailureModeTestFlag(`${method} ${exception} ${rescue} ${userSees}`);
+    const userSilent = /\bsilent\b/iu.test(userSees);
+    if (rescueFlag === "no" && testFlag === "no" && userSilent) {
+      return {
+        ok: false,
+        details: `Failure Mode Table CRITICAL row ${index + 1} (${method}): RESCUED=N + TEST=N + UserSees=Silent. Add rescue path, add test coverage, or make user impact explicit.`
+      };
+    }
+  }
+  return {
+    ok: true,
+    details: "Failure Mode Table header and critical-risk checks passed."
+  };
+}
+
 const DIAGRAM_ARROW_PATTERN = /(?:<--?>|<?==?>|--?>|->>|=>|-\.->|→|⟶|↦)/u;
 const DIAGRAM_FAILURE_EDGE_PATTERN = /\b(fail(?:ed|ure)?|error|timeout|fallback|degrad(?:e|ed|ation)|retry|backoff|circuit|unavailable|recover(?:y)?|rescue|mitigat(?:e|ion)|rollback|exception|abort|dead[\s-]?letter|dlq)\b/iu;
 const DIAGRAM_GENERIC_NODE_PATTERN = /\b(service|component|module|system)\s*(?:[A-Z0-9])?\b/iu;
@@ -839,6 +940,9 @@ function validateSectionBody(
   }
   if (sectionNameNormalized === "verification ladder") {
     return validateVerificationLadder(sectionBody);
+  }
+  if (sectionNameNormalized === "failure mode table") {
+    return validateFailureModeTable(sectionBody);
   }
   if (sectionNameNormalized === "architecture diagram") {
     const edgeLines = diagramEdgeLines(sectionBody);
