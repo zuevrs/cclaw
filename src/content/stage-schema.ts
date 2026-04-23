@@ -14,6 +14,11 @@ import {
 import { tddStageForTrack } from "./stages/tdd.js";
 import type {
   ArtifactValidation,
+  StageComplexityTier,
+  StageExecutionModel,
+  StagePhilosophy,
+  StageArtifactRules,
+  StageReviewLens,
   StageAutoSubagentDispatch,
   StageGate,
   StageSchema,
@@ -26,6 +31,11 @@ export type {
   ArtifactValidation,
   CrossStageTrace,
   ReviewSection,
+  StageComplexityTier,
+  StageExecutionModel,
+  StagePhilosophy,
+  StageArtifactRules,
+  StageReviewLens,
   StageAutoSubagentDispatch,
   StageGate,
   StageSchema,
@@ -415,13 +425,54 @@ export function stageSchema(stage: FlowStage, track: FlowTrack = "standard"): St
     ...base.crossStageTrace,
     readsFrom: readsFromForTrack(base.crossStageTrace.readsFrom, track)
   };
+  const complexityTier: StageComplexityTier = base.complexityTier ?? "standard";
+  const mandatoryDelegations = mandatoryDelegationsForStage(stage);
+  const philosophy: StagePhilosophy = {
+    hardGate: base.hardGate,
+    ironLaw: base.ironLaw,
+    purpose: base.purpose,
+    whenToUse: base.whenToUse,
+    whenNotToUse: base.whenNotToUse,
+    commonRationalizations: base.commonRationalizations
+  };
+  const executionModel: StageExecutionModel = {
+    interactionProtocol: base.interactionProtocol,
+    process: base.process,
+    checklist: base.checklist,
+    requiredGates: tieredGates,
+    requiredEvidence: base.requiredEvidence,
+    inputs: base.inputs,
+    requiredContext: base.requiredContext,
+    researchPlaybooks: base.researchPlaybooks,
+    blockers: base.blockers,
+    exitCriteria: base.exitCriteria
+  };
+  const artifactRules: StageArtifactRules = {
+    artifactFile: base.artifactFile,
+    completionStatus: base.completionStatus,
+    crossStageTrace,
+    artifactValidation: tieredValidation,
+    trivialOverrideSections: base.trivialOverrideSections
+  };
+  const reviewLens: StageReviewLens = {
+    outputs: base.outputs,
+    reviewSections: base.reviewSections,
+    mandatoryDelegations,
+    policyNeedles: base.policyNeedles
+  };
   return {
     ...base,
+    schemaShape: "v2",
+    complexityTier,
+    philosophy,
+    executionModel,
+    artifactRules,
+    reviewLens,
     skillFolder: STAGE_TO_SKILL_FOLDER[stage],
     crossStageTrace,
     requiredGates: tieredGates,
     artifactValidation: tieredValidation,
-    mandatoryDelegations: mandatoryDelegationsForStage(stage)
+    mandatoryDelegations
   };
 }
 

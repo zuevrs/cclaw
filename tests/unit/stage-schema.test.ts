@@ -13,6 +13,30 @@ import { FLOW_STAGES, FLOW_TRACKS, TRACK_STAGES, type FlowStage, type FlowTrack 
 import { createTempProject } from "../helpers/index.js";
 
 describe("stage schema and subagent alignment", () => {
+  it("exposes v2 grouped schema metadata with legacy parity", () => {
+    for (const stage of FLOW_STAGES) {
+      const schema = stageSchema(stage);
+      expect(schema.schemaShape).toBe("v2");
+      expect(["lightweight", "standard", "deep"]).toContain(schema.complexityTier);
+      expect(schema.philosophy.hardGate).toBe(schema.hardGate);
+      expect(schema.philosophy.ironLaw).toBe(schema.ironLaw);
+      expect(schema.executionModel.checklist).toEqual(schema.checklist);
+      expect(schema.executionModel.requiredGates).toEqual(schema.requiredGates);
+      expect(schema.artifactRules.artifactFile).toBe(schema.artifactFile);
+      expect(schema.artifactRules.artifactValidation).toEqual(schema.artifactValidation);
+      expect(schema.reviewLens.reviewSections).toEqual(schema.reviewSections);
+      expect(schema.reviewLens.mandatoryDelegations).toEqual(schema.mandatoryDelegations);
+    }
+  });
+
+  it("resolves explicit and default complexity tiers", () => {
+    expect(stageSchema("brainstorm").complexityTier).toBe("standard");
+    expect(stageSchema("scope").complexityTier).toBe("standard");
+    expect(stageSchema("design").complexityTier).toBe("deep");
+    // Plan does not set complexityTier explicitly and should fall back.
+    expect(stageSchema("plan").complexityTier).toBe("standard");
+  });
+
   it("plan stage reads spec, design, and scope artifacts", () => {
     const plan = stageSchema("plan");
     expect(plan.crossStageTrace.readsFrom).toContain(".cclaw/artifacts/04-spec.md");

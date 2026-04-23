@@ -44,11 +44,56 @@ export interface StageAutoSubagentDispatch {
   skill?: string;
 }
 
+export type StageComplexityTier = "lightweight" | "standard" | "deep";
+
+export interface StagePhilosophy {
+  hardGate: string;
+  ironLaw: string;
+  purpose: string;
+  whenToUse: string[];
+  whenNotToUse: string[];
+  commonRationalizations: string[];
+}
+
+export interface StageExecutionModel {
+  interactionProtocol: string[];
+  process: string[];
+  checklist: string[];
+  requiredGates: StageGate[];
+  requiredEvidence: string[];
+  inputs: string[];
+  requiredContext: string[];
+  researchPlaybooks?: string[];
+  blockers: string[];
+  exitCriteria: string[];
+}
+
+export interface StageArtifactRules {
+  artifactFile: string;
+  completionStatus: string[];
+  crossStageTrace: CrossStageTrace;
+  artifactValidation: ArtifactValidation[];
+  trivialOverrideSections?: string[];
+}
+
+export interface StageReviewLens {
+  outputs: string[];
+  reviewSections: ReviewSection[];
+  mandatoryDelegations: string[];
+  policyNeedles: string[];
+}
+
 export interface StageSchema {
+  schemaShape: "v2";
   stage: FlowStage;
   skillFolder: string;
   skillName: string;
   skillDescription: string;
+  complexityTier: StageComplexityTier;
+  philosophy: StagePhilosophy;
+  executionModel: StageExecutionModel;
+  artifactRules: StageArtifactRules;
+  reviewLens: StageReviewLens;
   hardGate: string;
   /**
    * One-line "Iron Law" punchcard — the single rule that, if broken,
@@ -96,4 +141,15 @@ export interface StageSchema {
   mandatoryDelegations: string[];
 }
 
-export type StageSchemaInput = Omit<StageSchema, "mandatoryDelegations">;
+export type StageSchemaInput = Omit<
+  StageSchema,
+  "schemaShape" |
+  "philosophy" |
+  "executionModel" |
+  "artifactRules" |
+  "reviewLens" |
+  "mandatoryDelegations" |
+  "complexityTier"
+> & {
+  complexityTier?: StageComplexityTier;
+};

@@ -6,6 +6,7 @@ import type { StageSchemaInput } from "./schema-types.js";
 
 export const BRAINSTORM: StageSchemaInput = {
   stage: "brainstorm",
+  complexityTier: "standard",
   skillFolder: "brainstorming",
   skillName: "brainstorming",
   skillDescription: "Design-first stage. Explore context, understand intent through collaborative dialogue, propose distinct approaches, and lock an approved direction before scope/design work.",

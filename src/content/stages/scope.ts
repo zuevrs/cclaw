@@ -6,6 +6,7 @@ import type { StageSchemaInput } from "./schema-types.js";
 
 export const SCOPE: StageSchemaInput = {
   stage: "scope",
+  complexityTier: "standard",
   skillFolder: "scope-shaping",
   skillName: "scope-shaping",
   skillDescription: "Strategic scope stage. Challenge premise and lock explicit in-scope/out-of-scope boundaries using CEO-level thinking.",
