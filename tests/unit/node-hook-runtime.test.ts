@@ -237,6 +237,71 @@ describe("node hook runtime", () => {
     expect(readiness.readyCount).toBe(1);
   });
 
+  it("session-start acquires the CLI-compatible knowledge lock before reading knowledge.jsonl", async () => {
+    const root = await createTempProject("node-hook-knowledge-lock");
+    await fs.mkdir(path.join(root, ".cclaw/state"), { recursive: true });
+    await fs.mkdir(path.join(root, ".cclaw/contexts"), { recursive: true });
+    await fs.mkdir(path.join(root, ".cclaw/skills/using-cclaw"), { recursive: true });
+    await fs.writeFile(path.join(root, ".cclaw/state/flow-state.json"), JSON.stringify({
+      currentStage: "plan",
+      activeRunId: "run-lock",
+      completedStages: ["brainstorm", "scope", "design", "spec"]
+    }, null, 2), "utf8");
+    await fs.writeFile(path.join(root, ".cclaw/contexts/plan.md"), "# plan\n", "utf8");
+    await fs.writeFile(path.join(root, ".cclaw/skills/using-cclaw/SKILL.md"), "# Using cclaw\n", "utf8");
+    await fs.writeFile(path.join(root, ".cclaw/knowledge.jsonl"), "", "utf8");
+
+    // Pre-acquire the CLI's knowledge lock so the hook MUST wait on it.
+    // We release after a short delay; if the hook were still doing a raw
+    // readFile it would complete before the delay and the test would be
+    // meaningless. With the lock-aware read the hook's elapsed time is
+    // bounded below by our hold duration.
+    const lockDir = path.join(root, ".cclaw/state/.knowledge.lock");
+    await fs.mkdir(path.dirname(lockDir), { recursive: true });
+    await fs.mkdir(lockDir);
+    const holdMs = 400;
+    const release = setTimeout(() => {
+      fs.rm(lockDir, { recursive: true, force: true }).catch(() => undefined);
+    }, holdMs);
+
+    const started = Date.now();
+    const result = await runNodeHook(root, "session-start", nodeHookRuntimeScript());
+    const elapsed = Date.now() - started;
+    clearTimeout(release);
+    expect(result.code).toBe(0);
+    expect(elapsed).toBeGreaterThanOrEqual(holdMs - 80);
+  });
+
+  it("session-start records a breadcrumb when ralph-loop / compound-readiness fail", async () => {
+    const root = await createTempProject("node-hook-breadcrumb");
+    await fs.mkdir(path.join(root, ".cclaw/state"), { recursive: true });
+    await fs.mkdir(path.join(root, ".cclaw/contexts"), { recursive: true });
+    await fs.mkdir(path.join(root, ".cclaw/skills/using-cclaw"), { recursive: true });
+    await fs.writeFile(path.join(root, ".cclaw/state/flow-state.json"), JSON.stringify({
+      currentStage: "tdd",
+      activeRunId: "run-bad",
+      completedStages: ["brainstorm", "scope", "design", "spec", "plan"]
+    }, null, 2), "utf8");
+    await fs.writeFile(path.join(root, ".cclaw/contexts/tdd.md"), "# tdd\n", "utf8");
+    await fs.writeFile(path.join(root, ".cclaw/skills/using-cclaw/SKILL.md"), "# Using cclaw\n", "utf8");
+    await fs.writeFile(path.join(root, ".cclaw/knowledge.jsonl"), "", "utf8");
+
+    // Pre-create a FILE at the ralph-loop.json lock directory path; this
+    // makes `fs.mkdir(lockPath)` fail repeatedly with ENOTDIR-adjacent
+    // errors, which surfaces as "failed to acquire lock". The session
+    // must still exit 0 but leave a breadcrumb.
+    const ralphPath = path.join(root, ".cclaw/state/ralph-loop.json");
+    await fs.writeFile(ralphPath + ".lock", "not-a-dir", "utf8");
+
+    const result = await runNodeHook(root, "session-start", nodeHookRuntimeScript());
+    expect(result.code).toBe(0);
+
+    const breadcrumbs = await fs
+      .readFile(path.join(root, ".cclaw/state/hook-errors.jsonl"), "utf8")
+      .catch(() => "");
+    expect(breadcrumbs).toContain("session-start:ralph-loop");
+  });
+
   it("stop-checkpoint preserves progress fields while syncing stage/run", async () => {
     const root = await createTempProject("node-hook-stop");
     await fs.mkdir(path.join(root, ".cclaw/state"), { recursive: true });
