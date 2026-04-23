@@ -132,26 +132,54 @@ async function writeFileAtomic(filePath, content, options = {}) {
     "." + path.basename(filePath) + ".tmp-" + process.pid + "-" + Date.now() + "-" + Math.random().toString(36).slice(2, 8)
   );
   await fs.writeFile(tempPath, content, { encoding: "utf8" });
-  try {
-    await fs.rename(tempPath, filePath);
-    if (options.mode !== undefined) {
-      await fs.chmod(filePath, options.mode).catch(() => undefined);
-    }
-  } catch (error) {
-    const code = error && typeof error === "object" && "code" in error ? error.code : null;
-    if (code === "EXDEV") {
-      try {
-        await fs.copyFile(tempPath, filePath);
-      } finally {
-        await fs.unlink(tempPath).catch(() => undefined);
-      }
+  // Windows' fs.rename can fail transiently with EPERM/EBUSY/EACCES when the
+  // destination file is held open by another process (antivirus, indexer,
+  // or a sibling hook invocation racing on the same file). Retry with tiny
+  // backoff before falling back to copyFile.
+  const renameRetryableCodes = new Set(["EPERM", "EBUSY", "EACCES"]);
+  let attempt = 0;
+  const maxAttempts = 6;
+  while (true) {
+    try {
+      await fs.rename(tempPath, filePath);
       if (options.mode !== undefined) {
         await fs.chmod(filePath, options.mode).catch(() => undefined);
       }
       return;
+    } catch (error) {
+      const code = error && typeof error === "object" && "code" in error ? error.code : null;
+      if (code === "EXDEV") {
+        try {
+          await fs.copyFile(tempPath, filePath);
+        } finally {
+          await fs.unlink(tempPath).catch(() => undefined);
+        }
+        if (options.mode !== undefined) {
+          await fs.chmod(filePath, options.mode).catch(() => undefined);
+        }
+        return;
+      }
+      if (renameRetryableCodes.has(code) && attempt < maxAttempts) {
+        attempt += 1;
+        await hookSleep(10 * attempt + Math.floor(Math.random() * 10));
+        continue;
+      }
+      if (renameRetryableCodes.has(code)) {
+        // Last-resort fallback: copy-then-unlink. Not atomic, but the
+        // directory lock around this call already serializes writers.
+        try {
+          await fs.copyFile(tempPath, filePath);
+          if (options.mode !== undefined) {
+            await fs.chmod(filePath, options.mode).catch(() => undefined);
+          }
+          return;
+        } finally {
+          await fs.unlink(tempPath).catch(() => undefined);
+        }
+      }
+      await fs.unlink(tempPath).catch(() => undefined);
+      throw error;
     }
-    await fs.unlink(tempPath).catch(() => undefined);
-    throw error;
   }
 }
 

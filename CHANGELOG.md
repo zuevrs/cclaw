@@ -4,6 +4,15 @@
 
 ### Fixed
 
+- Atomic write on Windows: `fs.rename` sometimes fails transiently with
+  `EPERM`/`EBUSY`/`EACCES` when the target file is briefly held open by
+  antivirus, indexer, or a sibling hook process. Both the CLI-side
+  `writeFileSafe` (`src/fs-utils.ts`) and the inline hook
+  `writeFileAtomic` (`src/content/node-hooks.ts`) now retry up to 6
+  times with ~10–70ms backoff before falling back to a non-atomic
+  copy+unlink (still safe because callers hold a directory lock).
+  Closes the Windows CI regression surfaced by
+  `tests/unit/hook-atomic-writes.test.ts`.
 - Runtime hooks (`run-hook.mjs`) now write JSON state atomically (temp
   file + rename, with EXDEV fallback) and serialize concurrent writes
   to the same file via per-file directory locks. This closes a class

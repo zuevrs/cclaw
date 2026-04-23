@@ -104,33 +104,64 @@ export async function writeFileSafe(
   );
   const targetMode = options.mode;
   await fs.writeFile(tempPath, content, { encoding: "utf8", ...(targetMode !== undefined ? { mode: targetMode } : {}) });
-  try {
-    await fs.rename(tempPath, filePath);
-    if (targetMode !== undefined) {
-      await fs.chmod(filePath, targetMode).catch(() => undefined);
-    }
-  } catch (error) {
-    const code = (error as NodeJS.ErrnoException | undefined)?.code;
-    // `rename` fails with EXDEV when the temp file and target live on
-    // different filesystems (container bind mounts, tmpfs + rootfs,
-    // cross-volume setups). Fall back to copy + unlink so atomic writes
-    // still work — copyFile is not fully atomic but is the best we can
-    // do across devices, and we remove the temp even if copy fails.
-    if (code === "EXDEV") {
-      try {
-        await fs.copyFile(tempPath, filePath);
-        if (targetMode !== undefined) {
-          await fs.chmod(filePath, targetMode).catch(() => undefined);
-        }
-      } finally {
-        await fs.unlink(tempPath).catch(() => undefined);
+  // On Windows, `fs.rename` can fail transiently with EPERM / EBUSY / EACCES
+  // when the target file is briefly held open by another process (antivirus,
+  // search indexer, or a concurrent cclaw hook). Retry with small backoff
+  // before falling back to a non-atomic copy + unlink.
+  const renameRetryableCodes = new Set(["EPERM", "EBUSY", "EACCES"]);
+  let attempt = 0;
+  const maxAttempts = 6;
+  // eslint-disable-next-line no-constant-condition
+  while (true) {
+    try {
+      await fs.rename(tempPath, filePath);
+      if (targetMode !== undefined) {
+        await fs.chmod(filePath, targetMode).catch(() => undefined);
       }
       return;
+    } catch (error) {
+      const code = (error as NodeJS.ErrnoException | undefined)?.code;
+      // `rename` fails with EXDEV when the temp file and target live on
+      // different filesystems (container bind mounts, tmpfs + rootfs,
+      // cross-volume setups). Fall back to copy + unlink so atomic writes
+      // still work — copyFile is not fully atomic but is the best we can
+      // do across devices, and we remove the temp even if copy fails.
+      if (code === "EXDEV") {
+        try {
+          await fs.copyFile(tempPath, filePath);
+          if (targetMode !== undefined) {
+            await fs.chmod(filePath, targetMode).catch(() => undefined);
+          }
+        } finally {
+          await fs.unlink(tempPath).catch(() => undefined);
+        }
+        return;
+      }
+      if (code !== undefined && renameRetryableCodes.has(code) && attempt < maxAttempts) {
+        attempt += 1;
+        const waitMs = 10 * attempt + Math.floor(Math.random() * 10);
+        await new Promise((resolve) => setTimeout(resolve, waitMs));
+        continue;
+      }
+      if (code !== undefined && renameRetryableCodes.has(code)) {
+        // Last-resort fallback on Windows: copy-then-unlink. Not atomic,
+        // but the caller is expected to have serialized via a directory
+        // lock so this only loses atomicity under extreme contention.
+        try {
+          await fs.copyFile(tempPath, filePath);
+          if (targetMode !== undefined) {
+            await fs.chmod(filePath, targetMode).catch(() => undefined);
+          }
+          return;
+        } finally {
+          await fs.unlink(tempPath).catch(() => undefined);
+        }
+      }
+      // Other errors: try to clean up the temp to avoid littering the
+      // directory with orphaned `.tmp-<pid>-*` files, then rethrow.
+      await fs.unlink(tempPath).catch(() => undefined);
+      throw error;
     }
-    // Other errors: try to clean up the temp to avoid littering the
-    // directory with orphaned `.tmp-<pid>-*` files, then rethrow.
-    await fs.unlink(tempPath).catch(() => undefined);
-    throw error;
   }
 }
 
