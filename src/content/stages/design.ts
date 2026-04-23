@@ -6,6 +6,7 @@ import type { StageSchemaInput } from "./schema-types.js";
 
 export const DESIGN: StageSchemaInput = {
   stage: "design",
+  complexityTier: "deep",
   skillFolder: "engineering-design-lock",
   skillName: "engineering-design-lock",
   skillDescription: "Engineering lock-in stage. Build a concrete technical spine before spec and planning, with section-by-section interactive review.",

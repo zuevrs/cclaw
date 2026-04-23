@@ -1,5 +1,24 @@
 # Changelog
 
+## 0.48.27
+
+Phase-0 schema consolidation slice. This release introduces a v2 stage-schema
+surface with grouped metadata views and tier-aware mandatory delegation policy.
+
+### Changed
+
+- Added `schemaShape: "v2"` metadata to stage schemas, plus grouped views for
+  philosophy, execution model, artifact rules, and review lens fields while
+  retaining backward-compatible top-level properties.
+- Added first-class `complexityTier` support on `StageSchema` with explicit
+  defaults for audited stages (`brainstorm`, `scope`, `design`) and a standard
+  fallback for stages that have not opted in yet.
+- Added `requiredAtTier` to mandatory auto-subagent policies and updated
+  delegation resolution so mandatory requirements can be gated by complexity
+  tier without weakening current standard/deep paths.
+- Expanded `stage-schema` tests to verify v2 parity, complexity-tier fallback,
+  and tier-gated mandatory delegation behavior.
+
 ## 0.48.26
 
 Stage-audit implementation release. This cut upgrades the upstream shaping
