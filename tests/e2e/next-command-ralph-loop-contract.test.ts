@@ -1,0 +1,77 @@
+import { describe, it, expect } from "vitest";
+import {
+  nextCommandContract,
+  nextCommandSkillMarkdown,
+  ralphLoopContractSnippet,
+  RALPH_LOOP_CONTRACT_MARKER
+} from "../../src/content/next-command.js";
+
+/**
+ * Behavior-backed contract test for #4 (conflicting Ralph Loop semantics
+ * inside src/content/next-command.ts) and #10 (contract tests that only
+ * check for keywords, not behavior).
+ *
+ * We assert three things:
+ *
+ * 1. There is EXACTLY ONE canonical Ralph Loop paragraph, rendered from
+ *    `ralphLoopContractSnippet()` and tagged with a hidden marker.
+ * 2. The paragraph appears in BOTH the command contract and the skill
+ *    document, and in BOTH places the text is byte-identical (via marker
+ *    count == 2).
+ * 3. The canonical paragraph encodes the resolved policy: Ralph Loop is
+ *    a SOFT NUDGE and hard enforcement goes through `stage-complete.mjs`
+ *    and `flow-state.json` gates. It must NOT contain any "hard" gating
+ *    language like "advance only when" against ralph-loop fields.
+ */
+describe("next-command Ralph Loop contract parity", () => {
+  const snippet = ralphLoopContractSnippet();
+  const command = nextCommandContract();
+  const skill = nextCommandSkillMarkdown();
+
+  it("exposes a marker-tagged canonical snippet", () => {
+    expect(snippet).toContain(RALPH_LOOP_CONTRACT_MARKER);
+    expect(snippet).toContain("ralph-loop.json");
+  });
+
+  it("renders the canonical snippet in both the contract and the skill (byte-equal)", () => {
+    const commandMarkerCount = command.split(RALPH_LOOP_CONTRACT_MARKER).length - 1;
+    const skillMarkerCount = skill.split(RALPH_LOOP_CONTRACT_MARKER).length - 1;
+    expect(commandMarkerCount).toBe(1);
+    expect(skillMarkerCount).toBe(1);
+    expect(command).toContain(snippet);
+    expect(skill).toContain(snippet);
+  });
+
+  it("encodes the resolved policy: Ralph Loop is a soft nudge, gates flow through stage-complete.mjs", () => {
+    expect(snippet).toContain("soft pre-advance nudge");
+    expect(snippet).toContain("not a gate");
+    expect(snippet).toContain("stage-complete.mjs");
+    expect(snippet).toContain("flow-state.json");
+  });
+
+  it("never uses hard-gating wording against ralph-loop fields", () => {
+    const hardPhrases = [
+      "Advance only when",
+      "advance only when",
+      "must be empty before",
+      "blocks stage advance"
+    ];
+    for (const phrase of hardPhrases) {
+      expect(
+        snippet.includes(phrase),
+        `snippet should NOT contain hard-gating phrase "${phrase}"`
+      ).toBe(false);
+    }
+  });
+
+  it("does not leave behind the pre-unification wording anywhere in next-command outputs", () => {
+    const legacy = [
+      "is a soft nudge, not a gate",
+      'Advance only when\nevery planned slice'
+    ];
+    for (const text of legacy) {
+      expect(command.includes(text)).toBe(false);
+      expect(skill.includes(text)).toBe(false);
+    }
+  });
+});

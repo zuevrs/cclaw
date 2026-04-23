@@ -19,6 +19,36 @@ function reconciliationNoticesPathLine(): string {
 }
 
 /**
+ * Single source of truth for how /cc-next should treat Ralph Loop status.
+ *
+ * IMPORTANT: Ralph Loop is a **progress indicator + soft pre-advance nudge**,
+ * not a hard gate. Hard enforcement always flows through flow-state.json
+ * gates via `stage-complete.mjs`. Both the command contract and the skill
+ * document render this same paragraph to prevent drift — see
+ * `tests/e2e/next-command-ralph-loop-contract.test.ts`.
+ */
+export const RALPH_LOOP_CONTRACT_MARKER = "ralph-loop-contract:v1";
+
+export function ralphLoopContractSnippet(): string {
+  return `**Ralph Loop (tdd only).** When \`currentStage === "tdd"\`, read
+\`${RUNTIME_ROOT}/state/ralph-loop.json\` (refreshed on every session-start
+while the flow is in tdd) as a **progress indicator**:
+
+- \`loopIteration\` — running count of RED → GREEN cycles already landed.
+- \`acClosed\` — distinct acceptance-criterion IDs closed by GREEN rows
+  (populated from \`acIds\` in \`tdd-cycle-log.jsonl\`).
+- \`redOpenSlices\` — slices with an unsatisfied RED.
+
+Ralph Loop is a **soft pre-advance nudge**, not a gate: do not advance
+toward review while \`redOpenSlices\` is non-empty unless the user
+explicitly defers a slice. Hard gate enforcement always flows through
+\`flow-state.json\` gates via \`node .cclaw/hooks/stage-complete.mjs <stage>\`;
+Ralph Loop fields never gate-check on their own.
+
+<!-- ${RALPH_LOOP_CONTRACT_MARKER} -->`;
+}
+
+/**
  * Command contract for /cc-next — the primary progression command.
  * Reads flow-state, starts the current stage if unfinished, or advances if all gates pass.
  */
@@ -65,17 +95,8 @@ This is the only progression command the user needs to drive the entire flow. St
 → Load **\`${RUNTIME_ROOT}/skills/<skillFolder>/SKILL.md\`** and **\`${RUNTIME_ROOT}/commands/<currentStage>.md\`** for the current stage.
 → Execute that stage's protocol. The stage skill handles the full interaction including STOP points and gate tracking.
 → Stage completion must use \`node .cclaw/hooks/stage-complete.mjs <currentStage>\` (canonical), which validates delegations + gate evidence before mutating \`flow-state.json\`.
-→ **Ralph Loop (tdd only).** When \`currentStage === "tdd"\`, also read
-  \`${RUNTIME_ROOT}/state/ralph-loop.json\` (refreshed on every session-start
-  while the flow is in tdd). Use it as a ground-truth progress indicator:
-  - \`loopIteration\` tells you how many RED → GREEN cycles already landed.
-  - \`acClosed\` lists the distinct acceptance-criterion IDs a GREEN row has
-    closed so far — if your plan tasks map to ACs, this is the "tasks
-    remaining" signal without needing a separate counter.
-  - \`redOpenSlices\` is the set of slices with an unsatisfied RED. Do not
-    advance to review while this is non-empty.
-  - Stage advancement to \`review\` still requires the normal gates in
-    \`flow-state.json\`; Ralph Loop status is a soft nudge, not a gate.
+
+${ralphLoopContractSnippet()}
 
 ### Path B: Current stage IS complete (all gates passed, all delegations satisfied)
 
@@ -216,14 +237,7 @@ Load the current stage's skill and command contract:
 
 Execute the stage protocol. The stage skill handles interaction, STOP points, gate tracking, and stage completion via \`node .cclaw/hooks/stage-complete.mjs <stage>\` (canonical flow-state mutation path).
 
-**Ralph Loop (tdd only).** When the current stage is \`tdd\`, pair the
-normal gate-evidence view with \`${RUNTIME_ROOT}/state/ralph-loop.json\`:
-\`loopIteration\` is the running count of RED → GREEN cycles,
-\`acClosed\` lists distinct acceptance-criterion IDs already closed by
-GREEN rows (populated from \`acIds\` in \`tdd-cycle-log.jsonl\`), and
-\`redOpenSlices\` is the "tasks remaining" indicator. Advance only when
-every planned slice is in \`acClosed\` (or explicitly deferred) and
-\`redOpenSlices\` is empty.
+${ralphLoopContractSnippet()}
 
 Special-case for review: if \`review_criticals_resolved\` is in \`blocked\`, route to rework instead of looping review forever — recommend \`/cc-ops rewind tdd "review_blocked_by_critical"\`.
 
