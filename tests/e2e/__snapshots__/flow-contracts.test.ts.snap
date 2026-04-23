@@ -30,7 +30,6 @@ Validate that implementation matches spec and meets quality/security/performance
 ## Complexity Tier
 - Active tier: \`standard\`
 - Mandatory delegations at this tier: \`reviewer\`, \`security-reviewer\`
-- Schema mode: \`v2\` (grouped stage metadata)
 
 ## When to Use
 - After TDD stage completes
@@ -61,8 +60,6 @@ Do NOT ship, merge, or release until both review layers complete with an explici
 3. Layer 2b: check security — validation, auth, secrets, injection.
 4. Layer 2c: check performance — queries, memory, caching, hot paths.
 5. Layer 2d: check architecture fit — design compliance, coupling, interfaces.
-
-- Follow the Checklist above for remaining execution detail (+4 condensed steps).
 
 ## Inputs
 - implementation diff
@@ -140,8 +137,7 @@ Summary of what the reference covers:
 4. For each Critical finding: use the Decision Protocol — present resolution options (A/B/C) with trade-offs, and mark one as (recommended). Do NOT use a numeric Completeness rubric; recommend the option that fully closes the finding with no carry-over risk and the smallest blast radius. If the harness's native structured-ask tool is available (\`AskUserQuestion\` on Claude, \`AskQuestion\` on Cursor, \`question\` on OpenCode with \`permission.question: "allow"\`, \`request_user_input\` on Codex in Plan/Collaboration mode), send exactly ONE question per call, validate fields against the runtime schema, and on schema error immediately fall back to a plain-text lettered list instead of retrying guessed payloads.
 5. Resolve all critical blockers before ship.
 
-Shared decision/ask-user protocol:
-\`.cclaw/references/protocols/decision.md\`
+Decision protocol reference: \`.cclaw/references/protocols/decision.md\`
 
 
 ## Required Gates
@@ -191,12 +187,10 @@ Reference utility skill:
 - Fill \`## Learnings\` before closeout: either \`- None this stage.\` or JSON bullets with required keys \`type\`, \`trigger\`, \`action\`, \`confidence\` (knowledge-schema compatible).
 - Record mandatory delegation completion/waiver in \`.cclaw/state/delegation-log.json\` with rationale as needed.
 - Use the completion helper instead of raw \`flow-state.json\` edits (legacy direct edits trigger workflow-guard warnings or strict-mode blocks).
-Apply shared completion logic from:
-\`.cclaw/references/protocols/completion.md\`
+- Completion protocol reference: \`.cclaw/references/protocols/completion.md\`
 
 ## Artifact Rules
 - Artifact target: \`.cclaw/artifacts/07-review.md\`
-- Allowed completion statuses: \`APPROVED\`, \`APPROVED_WITH_CONCERNS\`, \`BLOCKED\`
 
 ## Cross-Stage Traceability
 
@@ -338,7 +332,6 @@ Prepare a safe release handoff with clear rollback and branch finalization decis
 ## Complexity Tier
 - Active tier: \`standard\`
 - Mandatory delegations at this tier: \`doc-updater\`
-- Schema mode: \`v2\` (grouped stage metadata)
 
 ## When to Use
 - After review passes with APPROVED or APPROVED_WITH_CONCERNS verdict
@@ -378,8 +371,6 @@ Do NOT merge, push, or finalize without a passed preflight check, written rollba
 3. Generate release notes and rollback procedure.
 4. Choose one finalization enum: FINALIZE_MERGE_LOCAL, FINALIZE_OPEN_PR, FINALIZE_KEEP_BRANCH, FINALIZE_DISCARD_BRANCH, or FINALIZE_NO_VCS.
 5. Execute finalization action.
-
-- Follow the Checklist above for remaining execution detail (+1 condensed step).
 
 ## Inputs
 - review verdict
@@ -451,8 +442,7 @@ Summary of what the reference covers:
 4. Do not proceed if critical blockers remain from review.
 5. **STOP.** Present finalization options and wait for user selection before executing any finalization action.
 
-Shared decision/ask-user protocol:
-\`.cclaw/references/protocols/decision.md\`
+Decision protocol reference: \`.cclaw/references/protocols/decision.md\`
 
 
 ## Required Gates
@@ -496,12 +486,10 @@ Reference utility skill:
 - Fill \`## Learnings\` before closeout: either \`- None this stage.\` or JSON bullets with required keys \`type\`, \`trigger\`, \`action\`, \`confidence\` (knowledge-schema compatible).
 - Record mandatory delegation completion/waiver in \`.cclaw/state/delegation-log.json\` with rationale as needed.
 - Use the completion helper instead of raw \`flow-state.json\` edits (legacy direct edits trigger workflow-guard warnings or strict-mode blocks).
-Apply shared completion logic from:
-\`.cclaw/references/protocols/completion.md\`
+- Completion protocol reference: \`.cclaw/references/protocols/completion.md\`
 
 ## Artifact Rules
 - Artifact target: \`.cclaw/artifacts/08-ship.md\`
-- Allowed completion statuses: \`SHIPPED\`, \`SHIPPED_WITH_EXCEPTIONS\`, \`BLOCKED\`
 
 ## Cross-Stage Traceability
 
@@ -598,7 +586,6 @@ Create small executable tasks with dependencies and pause for explicit user conf
 ## Complexity Tier
 - Active tier: \`standard\`
 - Mandatory delegations at this tier: \`planner\`
-- Schema mode: \`v2\` (grouped stage metadata)
 
 ## When to Use
 - After spec approval
@@ -639,8 +626,6 @@ Do NOT write code or tests. Planning only. This stage produces a task graph and 
 3. Define each task with acceptance mapping and verification commands.
 4. Trace every locked decision (D-XX) to plan tasks or explicit defer rationale.
 5. Record checkpoints and blockers.
-
-- Follow the Checklist above for remaining execution detail (+1 condensed step).
 
 ## Inputs
 - approved spec
@@ -708,8 +693,7 @@ Summary of what the reference covers:
 4. Attach verification step to every task.
 5. Preserve locked scope boundaries: no silent scope reduction language in task rows.
 
-Shared decision/ask-user protocol:
-\`.cclaw/references/protocols/decision.md\`
+Decision protocol reference: \`.cclaw/references/protocols/decision.md\`
 
 
 ## Required Gates
@@ -745,12 +729,10 @@ Shared decision/ask-user protocol:
 - Fill \`## Learnings\` before closeout: either \`- None this stage.\` or JSON bullets with required keys \`type\`, \`trigger\`, \`action\`, \`confidence\` (knowledge-schema compatible).
 - Record mandatory delegation completion/waiver in \`.cclaw/state/delegation-log.json\` with rationale as needed.
 - Use the completion helper instead of raw \`flow-state.json\` edits (legacy direct edits trigger workflow-guard warnings or strict-mode blocks).
-Apply shared completion logic from:
-\`.cclaw/references/protocols/completion.md\`
+- Completion protocol reference: \`.cclaw/references/protocols/completion.md\`
 
 ## Artifact Rules
 - Artifact target: \`.cclaw/artifacts/05-plan.md\`
-- Allowed completion statuses: \`DONE\`, \`DONE_WITH_CONCERNS\`, \`BLOCKED\`
 
 ## Cross-Stage Traceability
 
@@ -855,7 +837,6 @@ Implement features through the TDD cycle: write failing tests, make them pass wi
 ## Complexity Tier
 - Active tier: \`standard\`
 - Mandatory delegations at this tier: \`test-author\`
-- Schema mode: \`v2\` (grouped stage metadata)
 
 ## When to Use
 - After plan confirmation
@@ -889,8 +870,6 @@ Do NOT merge, ship, or skip review. Follow RED → GREEN → REFACTOR strictly f
 3. Run tests and capture failure output.
 4. Dispatch \`tdd-green\` (or \`test-author\` BUILD_GREEN_REFACTOR mode) and implement smallest change needed for GREEN.
 5. Run full tests and build checks.
-
-- Follow the Checklist above for remaining execution detail (+4 condensed steps).
 
 ## Inputs
 - approved plan slice
@@ -966,8 +945,7 @@ Summary of what the reference covers:
 4. Capture and store failing output as RED evidence.
 5. Apply minimal change to satisfy RED tests (GREEN).
 
-Shared decision/ask-user protocol:
-\`.cclaw/references/protocols/decision.md\`
+Decision protocol reference: \`.cclaw/references/protocols/decision.md\`
 
 ## Batch Execution Mode
 
@@ -1027,12 +1005,10 @@ Reference utility skill:
 - Fill \`## Learnings\` before closeout: either \`- None this stage.\` or JSON bullets with required keys \`type\`, \`trigger\`, \`action\`, \`confidence\` (knowledge-schema compatible).
 - Record mandatory delegation completion/waiver in \`.cclaw/state/delegation-log.json\` with rationale as needed.
 - Use the completion helper instead of raw \`flow-state.json\` edits (legacy direct edits trigger workflow-guard warnings or strict-mode blocks).
-Apply shared completion logic from:
-\`.cclaw/references/protocols/completion.md\`
+- Completion protocol reference: \`.cclaw/references/protocols/completion.md\`
 
 ## Artifact Rules
 - Artifact target: \`.cclaw/artifacts/06-tdd.md\`
-- Allowed completion statuses: \`DONE\`, \`DONE_WITH_CONCERNS\`, \`BLOCKED\`
 
 ## Cross-Stage Traceability
 
@@ -1156,7 +1132,6 @@ Turn an initial idea into an approved design direction through natural collabora
 ## Complexity Tier
 - Active tier: \`standard\`
 - Mandatory delegations at this tier: none
-- Schema mode: \`v2\` (grouped stage metadata)
 
 ## When to Use
 - Starting a new feature or behavior change
@@ -1192,8 +1167,6 @@ Do NOT invoke implementation skills, write code, scaffold projects, or mutate pr
 3. Assess scope: flag if request is too broad, help decompose first.
 4. Apply short-circuit when requirements are already concrete enough for scope.
 5. Ask clarifying questions one at a time — focus on purpose, constraints, success criteria.
-
-- Follow the Checklist above for remaining execution detail (+9 condensed steps).
 
 ## Inputs
 - problem statement
@@ -1272,8 +1245,7 @@ Summary of what the reference covers:
 4. After 2-3 questions, summarize your emerging understanding before continuing so the user can correct course early.
 5. Each question should change a concrete design decision. Litmus test: if the two most likely answers do not lead to different architectures, make the choice yourself and state it.
 
-Shared decision/ask-user protocol:
-\`.cclaw/references/protocols/decision.md\`
+Decision protocol reference: \`.cclaw/references/protocols/decision.md\`
 
 
 ## Required Gates
@@ -1310,12 +1282,10 @@ Shared decision/ask-user protocol:
 - Fill \`## Learnings\` before closeout: either \`- None this stage.\` or JSON bullets with required keys \`type\`, \`trigger\`, \`action\`, \`confidence\` (knowledge-schema compatible).
 - Record mandatory delegation completion/waiver in \`.cclaw/state/delegation-log.json\` with rationale as needed.
 - Use the completion helper instead of raw \`flow-state.json\` edits (legacy direct edits trigger workflow-guard warnings or strict-mode blocks).
-Apply shared completion logic from:
-\`.cclaw/references/protocols/completion.md\`
+- Completion protocol reference: \`.cclaw/references/protocols/completion.md\`
 
 ## Artifact Rules
 - Artifact target: \`.cclaw/artifacts/01-brainstorm-<slug>.md\`
-- Allowed completion statuses: \`DONE\`, \`DONE_WITH_CONCERNS\`, \`BLOCKED\`
 
 ## Cross-Stage Traceability
 

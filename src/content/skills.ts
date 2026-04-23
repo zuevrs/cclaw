@@ -240,8 +240,7 @@ function completionParametersBlock(schema: StageSchema, track: FlowTrack): strin
 - Fill \`## Learnings\` before closeout: either \`- None this stage.\` or JSON bullets with required keys \`type\`, \`trigger\`, \`action\`, \`confidence\` (knowledge-schema compatible).
 - Record mandatory delegation completion/waiver in \`${RUNTIME_ROOT}/state/delegation-log.json\` with rationale as needed.
 - Use the completion helper instead of raw \`flow-state.json\` edits (legacy direct edits trigger workflow-guard warnings or strict-mode blocks).
-Apply shared completion logic from:
-\`${COMPLETION_PROTOCOL_PATH}\`
+- Completion protocol reference: \`${COMPLETION_PROTOCOL_PATH}\`
 `;
 }
 
@@ -368,12 +367,6 @@ export function stageSkillMarkdown(stage: FlowStage, track: FlowTrack = "standar
     [...executionModel.checklist, ...executionModel.process]
   ).slice(0, 5);
   const processSummary = dedupeGuidance(executionModel.process, executionModel.checklist).slice(0, 5);
-  const processNote =
-    executionModel.process.length > processSummary.length
-      ? `- Follow the Checklist above for remaining execution detail (+${executionModel.process.length - processSummary.length} condensed step${
-          executionModel.process.length - processSummary.length === 1 ? "" : "s"
-        }).`
-      : "";
   const stageRefs = stageSpecificSeeAlso(stage);
   const mandatoryDelegationSummary = mandatoryDelegations.length > 0
     ? mandatoryDelegations.map((name) => `\`${name}\``).join(", ")
@@ -402,7 +395,6 @@ ${philosophy.purpose}
 ## Complexity Tier
 - Active tier: \`${schema.complexityTier}\`
 - Mandatory delegations at this tier: ${mandatoryDelegationSummary}
-- Schema mode: \`${schema.schemaShape}\` (grouped stage metadata)
 
 ## When to Use
 ${philosophy.whenToUse.map((item) => `- ${item}`).join("\n")}
@@ -416,7 +408,6 @@ ${mergedAntiPatterns(philosophy, executionModel)}
 
 ## Process
 ${processSummary.length > 0 ? processSummary.map((item, i) => `${i + 1}. ${item}`).join("\n") : "1. Execute the Checklist in order.\n2. Satisfy every required gate.\n3. Complete verification before stage closeout."}
-${processNote.length > 0 ? `\n${processNote}` : ""}
 
 ## Inputs
 ${executionModel.inputs.length > 0 ? executionModel.inputs.map((item) => `- ${item}`).join("\n") : "- (first stage — no required inputs)"}
@@ -439,8 +430,7 @@ ${stageExamples(stage)}
 ## Interaction Protocol
 ${interactionFocus.length > 0 ? interactionFocus.map((item, i) => `${i + 1}. ${item}`).join("\n") : "- Keep communication concise and decision-focused; rely on the Checklist for execution order."}
 
-Shared decision/ask-user protocol:
-\`${DECISION_PROTOCOL_PATH}\`
+Decision protocol reference: \`${DECISION_PROTOCOL_PATH}\`
 
 ${batchExecutionModeBlock(stage, track)}
 ## Required Gates
@@ -457,7 +447,6 @@ ${executionModel.exitCriteria.map((item) => `- [ ] ${item}`).join("\n")}
 ${completionParametersBlock(schema, track)}
 ## Artifact Rules
 - Artifact target: \`${RUNTIME_ROOT}/artifacts/${artifactRules.artifactFile}\`
-- Allowed completion statuses: ${artifactRules.completionStatus.map((status) => `\`${status}\``).join(", ")}
 
 ${crossStageTraceBlock(artifactRules.crossStageTrace)}
 ${artifactValidationBlock(artifactRules.artifactValidation)}
