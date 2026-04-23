@@ -67,19 +67,145 @@ function safeParseJson(raw, fallback = {}) {
   }
 }
 
-async function readJsonFile(filePath, fallback = {}) {
+// === atomic/locked state I/O =========================================
+//
+// The generated hook script runs OUTSIDE the cclaw CLI process, so it
+// cannot import \`fs-utils.ts\`. These helpers mirror \`writeFileSafe\` and
+// \`withDirectoryLock\` just enough to keep hook-owned state files
+// atomic and free of interleaved concurrent writes.
+
+function hookSleep(ms) {
+  return new Promise((resolve) => setTimeout(resolve, ms));
+}
+
+async function withDirectoryLockInline(lockPath, fn, options = {}) {
+  const retries = Number.isFinite(options.retries) ? options.retries : 200;
+  const retryDelayMs = Number.isFinite(options.retryDelayMs) ? options.retryDelayMs : 20;
+  const staleAfterMs = Number.isFinite(options.staleAfterMs) ? options.staleAfterMs : 60000;
+  try {
+    await fs.mkdir(path.dirname(lockPath), { recursive: true });
+  } catch {
+    // parent may already exist
+  }
+  let acquired = false;
+  let lastError = null;
+  for (let attempt = 0; attempt < retries; attempt += 1) {
+    try {
+      await fs.mkdir(lockPath);
+      acquired = true;
+      break;
+    } catch (error) {
+      lastError = error;
+      const code = error && typeof error === "object" && "code" in error ? error.code : null;
+      if (code !== "EEXIST") {
+        throw error;
+      }
+      try {
+        const stat = await fs.stat(lockPath);
+        if (Date.now() - stat.mtimeMs > staleAfterMs) {
+          await fs.rm(lockPath, { recursive: true, force: true });
+          continue;
+        }
+      } catch {
+        // lock vanished between retries
+      }
+      await hookSleep(retryDelayMs);
+    }
+  }
+  if (!acquired) {
+    const details = lastError instanceof Error ? lastError.message : String(lastError);
+    throw new Error(
+      "cclaw hook: failed to acquire lock " + lockPath + " (attempts=" + retries + ", lastError=" + details + ")"
+    );
+  }
+  try {
+    return await fn();
+  } finally {
+    await fs.rm(lockPath, { recursive: true, force: true }).catch(() => undefined);
+  }
+}
+
+async function writeFileAtomic(filePath, content, options = {}) {
+  await fs.mkdir(path.dirname(filePath), { recursive: true });
+  const tempPath = path.join(
+    path.dirname(filePath),
+    "." + path.basename(filePath) + ".tmp-" + process.pid + "-" + Date.now() + "-" + Math.random().toString(36).slice(2, 8)
+  );
+  await fs.writeFile(tempPath, content, { encoding: "utf8" });
+  try {
+    await fs.rename(tempPath, filePath);
+    if (options.mode !== undefined) {
+      await fs.chmod(filePath, options.mode).catch(() => undefined);
+    }
+  } catch (error) {
+    const code = error && typeof error === "object" && "code" in error ? error.code : null;
+    if (code === "EXDEV") {
+      try {
+        await fs.copyFile(tempPath, filePath);
+      } finally {
+        await fs.unlink(tempPath).catch(() => undefined);
+      }
+      if (options.mode !== undefined) {
+        await fs.chmod(filePath, options.mode).catch(() => undefined);
+      }
+      return;
+    }
+    await fs.unlink(tempPath).catch(() => undefined);
+    throw error;
+  }
+}
+
+function lockPathFor(filePath) {
+  return filePath + ".lock";
+}
+
+async function recordHookError(root, stage, detail) {
+  try {
+    const errorsPath = path.join(root, RUNTIME_ROOT, "state", "hook-errors.jsonl");
+    await fs.mkdir(path.dirname(errorsPath), { recursive: true });
+    const payload = JSON.stringify({
+      ts: new Date().toISOString(),
+      stage: typeof stage === "string" ? stage : "unknown",
+      detail: typeof detail === "string" ? detail : String(detail)
+    });
+    await fs.appendFile(errorsPath, payload + "\\n", "utf8");
+  } catch {
+    // diagnostics must never cascade
+  }
+}
+
+async function readJsonFile(filePath, fallback = {}, options = {}) {
   try {
     const raw = await fs.readFile(filePath, "utf8");
-    return safeParseJson(raw, fallback);
+    if (typeof raw !== "string" || raw.trim().length === 0) {
+      return fallback;
+    }
+    try {
+      const parsed = JSON.parse(raw);
+      return parsed === undefined ? fallback : parsed;
+    } catch (parseErr) {
+      // Emit a diagnostic breadcrumb instead of silently returning fallback.
+      // The hook must still continue (soft-fail), but the corruption is
+      // now visible in \`state/hook-errors.jsonl\` and to \`cclaw doctor\`.
+      if (options.root) {
+        await recordHookError(
+          options.root,
+          options.stage || "read-json",
+          "corrupt-json file=" + filePath + " error=" + (parseErr instanceof Error ? parseErr.message : String(parseErr))
+        );
+      }
+      return fallback;
+    }
   } catch {
     return fallback;
   }
 }
 
 async function writeJsonFile(filePath, value) {
-  await fs.mkdir(path.dirname(filePath), { recursive: true });
   const next = JSON.stringify(value, null, 2) + "\\n";
-  await fs.writeFile(filePath, next, "utf8");
+  await withDirectoryLockInline(lockPathFor(filePath), async () => {
+    await writeFileAtomic(filePath, next);
+  });
 }
 
 async function fileExists(filePath) {
@@ -100,8 +226,17 @@ async function readTextFile(filePath, fallback = "") {
 }
 
 async function appendJsonLine(filePath, value) {
-  await fs.mkdir(path.dirname(filePath), { recursive: true });
-  await fs.appendFile(filePath, JSON.stringify(value) + "\\n", "utf8");
+  const payload = JSON.stringify(value) + "\\n";
+  await withDirectoryLockInline(lockPathFor(filePath), async () => {
+    await fs.mkdir(path.dirname(filePath), { recursive: true });
+    await fs.appendFile(filePath, payload, "utf8");
+  });
+}
+
+async function writeTextFileAtomic(filePath, content) {
+  await withDirectoryLockInline(lockPathFor(filePath), async () => {
+    await writeFileAtomic(filePath, content);
+  });
 }
 
 async function readStdin() {
@@ -546,7 +681,10 @@ function extractCodePathsFromText(value) {
 
 async function readFlowState(root) {
   const statePath = path.join(root, RUNTIME_ROOT, "state", "flow-state.json");
-  const parsed = await readJsonFile(statePath, {});
+  // Loud-on-corrupt: if flow-state.json exists but fails JSON.parse, log
+  // a breadcrumb into state/hook-errors.jsonl before falling back to an
+  // empty object. Silent fallbacks used to mask stale CLI+hook drift.
+  const parsed = await readJsonFile(statePath, {}, { root, stage: "read-flow-state" });
   const obj = toObject(parsed) || {};
   const completed = Array.isArray(obj.completedStages) ? obj.completedStages : [];
   return {
@@ -616,11 +754,9 @@ async function buildKnowledgeDigest(root, currentStage) {
     });
   const body =
     relevant.length > 0 ? relevant.join("\\n") : "(no matching entries for current stage)";
-  await fs.mkdir(path.dirname(digestFile), { recursive: true });
-  await fs.writeFile(
+  await writeTextFileAtomic(
     digestFile,
-    "# Knowledge digest (auto-generated)\\n\\n" + body + "\\n",
-    "utf8"
+    "# Knowledge digest (auto-generated)\\n\\n" + body + "\\n"
   );
   return {
     digestLines: relevant,
@@ -1083,8 +1219,7 @@ async function handlePreCompact(runtime) {
     digest.push("", "## Knowledge tail", knowledgeTail);
   }
   const digestFile = path.join(stateDir, "session-digest.md");
-  await fs.mkdir(path.dirname(digestFile), { recursive: true });
-  await fs.writeFile(digestFile, digest.join("\\n") + "\\n", "utf8");
+  await writeTextFileAtomic(digestFile, digest.join("\\n") + "\\n");
   return 0;
 }
 

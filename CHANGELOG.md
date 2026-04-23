@@ -2,6 +2,25 @@
 
 ## Unreleased
 
+### Fixed
+
+- Runtime hooks (`run-hook.mjs`) now write JSON state atomically (temp
+  file + rename, with EXDEV fallback) and serialize concurrent writes
+  to the same file via per-file directory locks. This closes a class
+  of torn-write and interleaved-JSONL races that could leave
+  `ralph-loop.json`, `compound-readiness.json`, `checkpoint.json`,
+  and `stage-activity.jsonl` in partial states under parallel session
+  events.
+- `readFlowState()` in the hook runtime now records a breadcrumb to
+  `.cclaw/state/hook-errors.jsonl` when `flow-state.json` exists but
+  fails JSON.parse, instead of silently falling back to `{}`. Makes
+  latent CLI↔hook drift surfaceable via `cclaw doctor`.
+- `archiveRun()` now holds both the archive lock and the flow-state
+  lock for the entire archive window. Internal `writeFlowState`
+  calls pass `skipLock: true` so no nested-lock deadlock occurs. This
+  eliminates lost-update races where a concurrent stage mutation
+  between archive snapshot and reset would be silently clobbered.
+
 ### Added
 
 - Hook manifest as single source of truth (`src/content/hook-manifest.ts`).
