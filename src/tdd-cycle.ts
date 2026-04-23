@@ -25,42 +25,101 @@ export interface TddCycleValidation {
   sliceCount: number;
 }
 
-export function parseTddCycleLog(text: string): TddCycleEntry[] {
+export interface TddCycleParseIssue {
+  lineNumber: number;
+  reason: string;
+  rawLine: string;
+}
+
+export interface ParseTddCycleLogOptions {
+  /**
+   * Collect one issue per dropped/malformed line. Callers that care
+   * (doctor, red-evidence) can surface them; hooks keep soft-fail.
+   */
+  issues?: TddCycleParseIssue[];
+  /**
+   * When true, reject lines that omit required fields instead of
+   * back-filling them with defaults. Used by validation paths
+   * (`validateTddCycleOrder`, `cclaw doctor`) to avoid silently
+   * bucketing unscoped rows into "runId=active, stage=tdd". Soft paths
+   * (generated hooks) keep the legacy defaults so a half-written file
+   * never takes the session down.
+   */
+  strict?: boolean;
+}
+
+export function parseTddCycleLog(
+  text: string,
+  options: ParseTddCycleLogOptions = {}
+): TddCycleEntry[] {
+  const issues = options.issues;
+  const strict = options.strict === true;
   const out: TddCycleEntry[] = [];
   // Strip a leading UTF-8 BOM on the whole blob so the first line parses
   // cleanly; `trim()` handles BOM on subsequent lines through the same
   // codepath (empty/whitespace-only lines are skipped).
   const normalized = text.charCodeAt(0) === 0xfeff ? text.slice(1) : text;
-  for (const raw of normalized.split(/\r?\n/)) {
+  const lines = normalized.split(/\r?\n/);
+  for (let index = 0; index < lines.length; index += 1) {
+    const raw = lines[index] ?? "";
     const line = raw.trim();
     if (!line) continue;
+    const lineNumber = index + 1;
+    let parsed: Record<string, unknown>;
     try {
-      const parsed = JSON.parse(line) as Record<string, unknown>;
-      const phase = parsed.phase;
-      if (phase !== "red" && phase !== "green" && phase !== "refactor") {
+      parsed = JSON.parse(line) as Record<string, unknown>;
+    } catch (err) {
+      issues?.push({
+        lineNumber,
+        reason: `json-parse-failed: ${err instanceof Error ? err.message : String(err)}`,
+        rawLine: raw
+      });
+      continue;
+    }
+    const phase = parsed.phase;
+    if (phase !== "red" && phase !== "green" && phase !== "refactor") {
+      issues?.push({
+        lineNumber,
+        reason: `invalid-phase: ${JSON.stringify(parsed.phase)}`,
+        rawLine: raw
+      });
+      continue;
+    }
+    const runIdField = typeof parsed.runId === "string" ? parsed.runId : null;
+    const stageField = typeof parsed.stage === "string" ? parsed.stage : null;
+    const sliceField = typeof parsed.slice === "string" ? parsed.slice : null;
+    if (strict) {
+      const missing: string[] = [];
+      if (!runIdField) missing.push("runId");
+      if (!stageField) missing.push("stage");
+      if (!sliceField) missing.push("slice");
+      if (missing.length > 0) {
+        issues?.push({
+          lineNumber,
+          reason: `missing-required-fields: ${missing.join(",")}`,
+          rawLine: raw
+        });
         continue;
       }
-      const entry: TddCycleEntry = {
-        ts: typeof parsed.ts === "string" ? parsed.ts : "",
-        runId: typeof parsed.runId === "string" ? parsed.runId : "active",
-        stage: typeof parsed.stage === "string" ? parsed.stage : "tdd",
-        slice: typeof parsed.slice === "string" ? parsed.slice : "S-unknown",
-        phase,
-        command: typeof parsed.command === "string" ? parsed.command : "",
-        files: Array.isArray(parsed.files)
-          ? parsed.files.filter((item): item is string => typeof item === "string")
-          : undefined,
-        exitCode: typeof parsed.exitCode === "number" ? parsed.exitCode : undefined,
-        note: typeof parsed.note === "string" ? parsed.note : undefined,
-        acIds: Array.isArray(parsed.acIds)
-          ? parsed.acIds
-              .filter((item): item is string => typeof item === "string" && item.length > 0)
-          : undefined
-      };
-      out.push(entry);
-    } catch {
-      // skip malformed line
     }
+    const entry: TddCycleEntry = {
+      ts: typeof parsed.ts === "string" ? parsed.ts : "",
+      runId: runIdField ?? "active",
+      stage: stageField ?? "tdd",
+      slice: sliceField ?? "S-unknown",
+      phase,
+      command: typeof parsed.command === "string" ? parsed.command : "",
+      files: Array.isArray(parsed.files)
+        ? parsed.files.filter((item): item is string => typeof item === "string")
+        : undefined,
+      exitCode: typeof parsed.exitCode === "number" ? parsed.exitCode : undefined,
+      note: typeof parsed.note === "string" ? parsed.note : undefined,
+      acIds: Array.isArray(parsed.acIds)
+        ? parsed.acIds
+            .filter((item): item is string => typeof item === "string" && item.length > 0)
+        : undefined
+    };
+    out.push(entry);
   }
   return out;
 }
