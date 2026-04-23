@@ -118,6 +118,32 @@ export function extractMarkdownSectionBody(markdown: string, section: string): s
   return sectionBodyByName(extractH2Sections(markdown), section);
 }
 
+function headingLineIndex(markdown: string, section: string): number {
+  const want = normalizeHeadingTitle(section).toLowerCase();
+  const lines = markdown.split(/\r?\n/);
+  let fenced: string | null = null;
+  for (let i = 0; i < lines.length; i++) {
+    const line = lines[i]!;
+    const fence = /^\s*(```+|~~~+)\s*([A-Za-z0-9_-]+)?\s*$/u.exec(line);
+    if (fence) {
+      const marker = fence[1]!;
+      if (fenced === null) {
+        fenced = marker;
+      } else if (fenced === marker) {
+        fenced = null;
+      }
+      continue;
+    }
+    if (fenced !== null) continue;
+    const heading = /^##\s+(.+)$/u.exec(line);
+    if (!heading) continue;
+    if (normalizeHeadingTitle(heading[1] ?? "").toLowerCase() === want) {
+      return i;
+    }
+  }
+  return -1;
+}
+
 function meaningfulLineCount(sectionBody: string): number {
   return sectionBody
     .split(/\r?\n/)
@@ -1151,19 +1177,36 @@ export async function lintArtifact(
     // prose-only — nothing failed when the Selected Direction section
     // omitted an approval marker, or when the Approaches table collapsed
     // to a single row (defeating the "2-3 distinct approaches" gate).
+    const tierBody = sectionBodyByName(sections, "Approach Tier");
+    if (tierBody !== null) {
+      const hasTierToken = /\b(?:lightweight|standard|deep)\b/iu.test(tierBody);
+      findings.push({
+        section: "Approach Tier Classification",
+        required: true,
+        rule: "Approach Tier must explicitly classify depth as Lightweight, Standard, or Deep.",
+        found: hasTierToken,
+        details: hasTierToken
+          ? "Approach Tier includes a recognized depth token."
+          : "Approach Tier is missing a recognized depth token (Lightweight/Standard/Deep)."
+      });
+    }
+
     const approachesBody = sectionBodyByName(sections, "Approaches");
     if (approachesBody !== null) {
-      const tableRows = approachesBody
-        .split(/\r?\n/u)
-        .map((line) => line.trim())
-        .filter((line) => line.startsWith("|"))
-        .filter((line) => !/^\|\s*[-: |]+\|\s*$/u.test(line))
-        .filter((line) => !/^\|\s*approach\b/iu.test(line));
+      const tableRows = getMarkdownTableRows(approachesBody);
       const bulletRows = approachesBody
         .split(/\r?\n/u)
         .map((line) => line.trim())
         .filter((line) => /^(?:[-*]|\d+\.)\s+\S/u.test(line));
       const rowCount = Math.max(tableRows.length, bulletRows.length);
+      const hasChallengerFromTable = tableRows.some((row) => {
+        const joined = row.join(" ");
+        return /\bchallenger\b/iu.test(joined) && /\bhigher[-\s]?upside\b/iu.test(joined);
+      });
+      const hasChallengerFromBullets = bulletRows.some((row) =>
+        /\bchallenger\b/iu.test(row) && /\bhigher[-\s]?upside\b/iu.test(row)
+      );
+      const hasChallenger = hasChallengerFromTable || hasChallengerFromBullets;
       findings.push({
         section: "Distinct Approaches Enforcement",
         required: true,
@@ -1174,10 +1217,37 @@ export async function lintArtifact(
             ? `Detected ${rowCount} approach row(s).`
             : `Detected ${rowCount} approach row(s); at least 2 required.`
       });
+      findings.push({
+        section: "Challenger Alternative Enforcement",
+        required: true,
+        rule: "Approaches must include one option labeled `challenger: higher-upside`.",
+        found: hasChallenger,
+        details: hasChallenger
+          ? "Challenger higher-upside alternative detected."
+          : "Missing `challenger: higher-upside` alternative in Approaches."
+      });
     }
+
+    const reactionBody = sectionBodyByName(sections, "Approach Reaction");
+    const reactionIndex = headingLineIndex(raw, "Approach Reaction");
+    const directionIndex = headingLineIndex(raw, "Selected Direction");
+    if (directionIndex >= 0) {
+      const orderOk = reactionIndex >= 0 && reactionIndex < directionIndex;
+      findings.push({
+        section: "Approach Reaction Ordering",
+        required: true,
+        rule: "Approach Reaction must appear before Selected Direction (propose -> react -> recommend).",
+        found: orderOk,
+        details: orderOk
+          ? "Approach Reaction appears before Selected Direction."
+          : "Approach Reaction must be present before Selected Direction."
+      });
+    }
+
     const directionBody = sectionBodyByName(sections, "Selected Direction");
     if (directionBody !== null) {
       const approvalMarker = /\bapprov(?:ed|al)\b/iu.test(directionBody);
+      const reactionTrace = /\b(?:reaction|feedback|concern(?:s)?)\b/iu.test(directionBody);
       findings.push({
         section: "Direction Approval Marker",
         required: true,
@@ -1187,6 +1257,60 @@ export async function lintArtifact(
           ? "Approval marker present in Selected Direction."
           : "No explicit `approved`/`approval` marker found in Selected Direction."
       });
+      findings.push({
+        section: "Direction Reaction Trace",
+        required: true,
+        rule: "Selected Direction rationale must reference user reaction/feedback before recommendation.",
+        found: reactionTrace,
+        details: reactionTrace
+          ? "Selected Direction rationale references user reaction/feedback."
+          : "Selected Direction rationale does not reference user reaction/feedback."
+      });
+    }
+
+    const shortCircuitBody = sectionBodyByName(sections, "Short-Circuit Decision");
+    if (shortCircuitBody !== null) {
+      const shortCircuitLines = shortCircuitBody.split(/\r?\n/u);
+      const statusValue = shortCircuitLines
+        .map((line) => line.replace(/[*_`]/gu, "").trim())
+        .map((line) => /^[-*]?\s*status\s*:\s*(.+)$/iu.exec(line)?.[1] ?? "")
+        .find((value) => value.trim().length > 0)?.trim().toLowerCase() ?? "";
+      const hasStatus = statusValue.length > 0;
+      findings.push({
+        section: "Short-Circuit Status",
+        required: true,
+        rule: "Short-Circuit Decision must include a `Status:` line (`activated` or `bypassed`).",
+        found: hasStatus,
+        details: hasStatus
+          ? `Short-circuit status declared as "${statusValue}".`
+          : "Short-Circuit Decision is missing a `Status:` line."
+      });
+      const activated =
+        /^(?:activated|yes|true)$/u.test(statusValue) ||
+        /\bstatus\s*:\s*activated\b/iu.test(shortCircuitBody);
+      if (activated) {
+        const artifactLines = meaningfulLineCount(raw);
+        const withinStubLimit = artifactLines <= 30;
+        const hasScopeHandoff = /\bscope\b/iu.test(shortCircuitBody);
+        findings.push({
+          section: "Short-Circuit Stub Size",
+          required: true,
+          rule: "When short-circuit is activated, brainstorm artifact must remain a <=30 meaningful-line stub.",
+          found: withinStubLimit,
+          details: withinStubLimit
+            ? `Short-circuit stub size within limit (${artifactLines} meaningful lines).`
+            : `Short-circuit stub too large (${artifactLines} meaningful lines); expected <= 30.`
+        });
+        findings.push({
+          section: "Short-Circuit Scope Handoff",
+          required: true,
+          rule: "When short-circuit is activated, the section must explicitly hand off to scope.",
+          found: hasScopeHandoff,
+          details: hasScopeHandoff
+            ? "Short-circuit section includes explicit scope handoff."
+            : "Short-circuit section is missing explicit scope handoff guidance."
+        });
+      }
     }
   }
 

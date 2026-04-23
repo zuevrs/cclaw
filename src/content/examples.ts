@@ -20,18 +20,35 @@ const STAGE_EXAMPLES: Record<FlowStage, string> = {
 | 2 | Should the validation logic live in a reusable module or stay as shell scripts? | Reusable module. | Architecture: shared TypeScript module imported by CI and local tooling, not duplicated shell scripts. |
 | 3 | For v1, prioritize rapid delivery or maximum configurability? | Rapid delivery. | Minimal deterministic validation surface; defer plugin/config system to v2. |
 
+## Approach Tier
+
+- **Tier:** Standard
+- **Why this tier:** Change spans CI + local release workflow and shared module boundaries, but remains bounded to one subsystem.
+
+## Short-Circuit Decision
+
+- **Status:** bypassed
+- **Why:** Core requirements were not concrete enough initially; we still needed options + trade-off conversation.
+- **Scope handoff:** Continue full brainstorm flow before scope.
+
 ## Approaches
 
-| Approach | Architecture | Trade-offs | Recommendation |
-| --- | --- | --- | --- |
-| A: Reusable validation module | Shared TS module with typed validators, imported by CI scripts and local CLI. Existing \`pre-publish.sh\` calls the module. | Medium upfront effort, high reuse. Requires test coverage for the module. | **Recommended** — best balance of reuse and delivery speed. |
-| B: Hardened shell scripts | Keep existing script approach, add stricter checks and error messages. | Lowest effort. Weak reuse, CI/local divergence risk grows over time. | Viable fallback if TS module is blocked. |
-| C: Full release framework | New release orchestrator with plugin system, config files, rollback commands. | Maximum flexibility. High risk, delivery delay, over-engineered for current needs. | Not recommended for v1. |
+| Approach | Role | Architecture | Trade-offs | Recommendation |
+| --- | --- | --- | --- | --- |
+| A: Reusable validation module | baseline | Shared TS module with typed validators, imported by CI scripts and local CLI. Existing \`pre-publish.sh\` calls the module. | Medium upfront effort, high reuse. Requires test coverage for the module. | **Recommended** — best balance of reuse and delivery speed. |
+| B: Hardened shell scripts | fallback | Keep existing script approach, add stricter checks and error messages. | Lowest effort. Weak reuse, CI/local divergence risk grows over time. | Viable fallback if TS module is blocked. |
+| C: Full release framework | challenger: higher-upside | New release orchestrator with plugin system, config files, rollback commands. | Maximum flexibility. High risk, delivery delay, over-engineered for current needs. | Not recommended for v1. |
+
+## Approach Reaction
+
+- **Closest option:** A (reusable validation module).
+- **Concerns:** User wanted to avoid framework-level overbuild and keep v1 delivery speed high.
+- **What changed after reaction:** Recommendation stayed on A, but added explicit fallback path via existing shell entrypoint to reduce migration risk.
 
 ## Selected Direction
 
 - **Approach:** A — Reusable validation module
-- **Rationale:** shared TS module gives consistent behavior in CI and local, avoids script duplication, and stays within the no-new-dependency constraint.
+- **Rationale:** based on user reaction favoring fast delivery and lower complexity, shared TS module gives consistent behavior in CI/local, avoids script duplication, and stays within the no-new-dependency constraint.
 - **Approval:** approved
 
 ## Design

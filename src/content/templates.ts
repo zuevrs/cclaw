@@ -30,11 +30,25 @@ inputs_hash: sha256:pending
 |---|---|---|---|
 | 1 |  |  |  |
 
+## Approach Tier
+- Tier: Lightweight | Standard | Deep
+- Why this tier:
+
+## Short-Circuit Decision
+- Status: bypassed
+- Why:
+- Scope handoff:
+
 ## Approaches
-| Approach | Architecture | Trade-offs | Recommendation |
-|---|---|---|---|
-| A |  |  |  |
-| B |  |  |  |
+| Approach | Role | Architecture | Trade-offs | Recommendation |
+|---|---|---|---|---|
+| A | baseline |  |  |  |
+| B | challenger: higher-upside |  |  |  |
+
+## Approach Reaction
+- Closest option:
+- Concerns:
+- What changed after reaction:
 
 ## Selected Direction
 - **Approach:**

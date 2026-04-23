@@ -1304,10 +1304,11 @@ Rule: Scope and design decisions must trace back to explored context and approve
 | Context | REQUIRED | Must reference project state and relevant existing code or patterns. |
 | Problem | REQUIRED | Must define what we're solving, success criteria, and constraints. |
 | Clarifying Questions | recommended | Must capture question, answer, and decision impact for each clarifying question. |
-| Approach Tier | recommended | Must classify depth as Lightweight/Standard/Deep and explain why. |
-| Approaches | REQUIRED | Must compare 2-3 architecturally distinct options with real trade-offs and include one higher-upside challenger option. |
-| Approach Reaction | recommended | Must summarize user reaction before recommendation, including concerns that changed direction. |
-| Selected Direction | REQUIRED | Must include the selected approach, rationale tied to user reaction, and explicit approval marker. |
+| Approach Tier | REQUIRED | Must classify depth as Lightweight/Standard/Deep and explain why. |
+| Short-Circuit Decision | recommended | If activated: include status, why requirements are already concrete, and explicit handoff to scope. |
+| Approaches | REQUIRED | Must compare 2-3 architecturally distinct options with real trade-offs and include one row labeled \`challenger: higher-upside\`. |
+| Approach Reaction | REQUIRED | Must summarize user reaction before recommendation, including concerns that changed direction. |
+| Selected Direction | REQUIRED | Must include the selected approach, rationale tied to user reaction/feedback, and explicit approval marker. |
 | Design | recommended | Must cover architecture, key components, and data flow scaled to complexity. |
 | Visual Companion | recommended | If architecture/data-flow complexity is medium+, include compact ASCII/Mermaid diagram or explicitly justify omission. |
 | Assumptions and Open Questions | recommended | Must capture unresolved assumptions/open questions, or explicitly state none. |

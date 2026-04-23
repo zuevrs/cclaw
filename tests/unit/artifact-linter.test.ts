@@ -228,15 +228,29 @@ describe("artifact linter heuristics", () => {
 | 1 | Block invalid metadata or warn? | Block | hard gate required |
 | 2 | Add runtime dependencies? | No | stay on existing runtime stack |
 
+## Approach Tier
+- Tier: Standard
+- Why this tier: multiple workflow touchpoints with bounded complexity.
+
+## Short-Circuit Decision
+- Status: bypassed
+- Why: trade-offs still required explicit comparison.
+- Scope handoff: continue full brainstorm flow before scope.
+
 ## Approaches
-| Approach | Architecture | Trade-offs | Recommendation |
-|---|---|---|---|
-| A | script-only checks | faster but weaker reuse |  |
-| B | reusable validation module | slightly more effort, better long-term reuse | recommended |
+| Approach | Role | Architecture | Trade-offs | Recommendation |
+|---|---|---|---|---|
+| A | baseline | script-only checks | faster but weaker reuse |  |
+| B | challenger: higher-upside | reusable validation module | slightly more effort, better long-term reuse | recommended |
+
+## Approach Reaction
+- Closest option: B
+- Concerns: avoid overbuild while keeping long-term reuse.
+- What changed after reaction: selected reusable module with strict v1 scope boundaries.
 
 ## Selected Direction
 - Approach: B — reusable validation module
-- Rationale: best balance of reuse and delivery speed
+- Rationale: user reaction favored reusable module with bounded v1 scope, balancing reuse and delivery speed
 - Approval: approved by user
 
 ## Design
@@ -268,13 +282,23 @@ describe("artifact linter heuristics", () => {
 |---|---|---|---|
 | 1 | Block or warn? | Block | hard gate |
 
+## Approach Tier
+- Tier: Standard
+- Why this tier: release workflow affects CI + local command path.
+
 ## Approaches
-| Approach | Architecture | Trade-offs | Recommendation |
-|---|---|---|---|
-| A | script-only checks | fast and cheap | recommended |
+| Approach | Role | Architecture | Trade-offs | Recommendation |
+|---|---|---|---|---|
+| A | challenger: higher-upside | script-only checks | fast and cheap | recommended |
+
+## Approach Reaction
+- Closest option: A
+- Concerns: none
+- What changed after reaction: no alternative survived.
 
 ## Selected Direction
 - Approach: A
+- Rationale: user reaction prioritized delivery speed over reuse.
 - Approval: approved by user
 
 ## Design
@@ -307,15 +331,24 @@ describe("artifact linter heuristics", () => {
 |---|---|---|---|
 | 1 | Block or warn? | Block | hard gate |
 
+## Approach Tier
+- Tier: Standard
+- Why this tier: changes local + CI release path together.
+
 ## Approaches
-| Approach | Architecture | Trade-offs | Recommendation |
-|---|---|---|---|
-| A | script-only checks | fast | |
-| B | reusable module | balanced | recommended |
+| Approach | Role | Architecture | Trade-offs | Recommendation |
+|---|---|---|---|---|
+| A | baseline | script-only checks | fast | |
+| B | challenger: higher-upside | reusable module | balanced | recommended |
+
+## Approach Reaction
+- Closest option: B
+- Concerns: keep rollout low-risk.
+- What changed after reaction: recommendation narrowed to module-only surface.
 
 ## Selected Direction
 - Approach: B
-- Rationale: best balance
+- Rationale: user reaction confirmed balanced path with controlled rollout
 
 ## Design
 - Architecture: module
@@ -329,6 +362,118 @@ describe("artifact linter heuristics", () => {
       (finding) => finding.section === "Direction Approval Marker"
     );
     expect(approval?.found).toBe(false);
+  });
+
+  it("fails brainstorm when no challenger higher-upside approach is present", async () => {
+    const root = await createTempProject("artifact-lint-no-challenger");
+    await writeRuntimeArtifact(root, "01-brainstorm.md", `# Brainstorm Artifact
+
+## Context
+- Project state: monorepo with CI
+- Relevant existing code/patterns: release scripts
+
+## Problem
+- What we're solving: release regressions
+- Success criteria: preflight checks always block invalid metadata
+- Constraints: no runtime dependency changes
+
+## Clarifying Questions
+| # | Question | Answer | Decision impact |
+|---|---|---|---|
+| 1 | Block or warn? | Block | hard gate |
+
+## Approach Tier
+- Tier: Standard
+- Why this tier: bounded but cross-cutting.
+
+## Approaches
+| Approach | Role | Architecture | Trade-offs | Recommendation |
+|---|---|---|---|---|
+| A | baseline | script-only checks | fast | |
+| B | fallback | reusable module | balanced | recommended |
+
+## Approach Reaction
+- Closest option: B
+- Concerns: rollout complexity.
+- What changed after reaction: reduced scope to validator-only path.
+
+## Selected Direction
+- Approach: B
+- Rationale: user reaction favored reusable path with bounded scope
+- Approval: approved
+
+## Design
+- Architecture: module
+- Key components: validators
+- Data flow: metadata -> checks -> report
+
+## Assumptions and Open Questions
+- Assumptions: CI remains source of truth
+- Open questions (or "None"): None
+`);
+
+    const result = await lintArtifact(root, "brainstorm");
+    const challenger = result.findings.find(
+      (finding) => finding.section === "Challenger Alternative Enforcement"
+    );
+    expect(challenger?.found).toBe(false);
+    expect(challenger?.details).toContain("higher-upside");
+  });
+
+  it("fails brainstorm when reaction section appears after selected direction", async () => {
+    const root = await createTempProject("artifact-lint-reaction-order");
+    await writeRuntimeArtifact(root, "01-brainstorm.md", `# Brainstorm Artifact
+
+## Context
+- Project state: monorepo with CI
+- Relevant existing code/patterns: release scripts
+
+## Problem
+- What we're solving: release regressions
+- Success criteria: preflight checks always block invalid metadata
+- Constraints: no runtime dependency changes
+
+## Clarifying Questions
+| # | Question | Answer | Decision impact |
+|---|---|---|---|
+| 1 | Block or warn? | Block | hard gate |
+
+## Approach Tier
+- Tier: Standard
+- Why this tier: bounded but cross-cutting.
+
+## Approaches
+| Approach | Role | Architecture | Trade-offs | Recommendation |
+|---|---|---|---|---|
+| A | baseline | script-only checks | fast | |
+| B | challenger: higher-upside | reusable module | balanced | recommended |
+
+## Selected Direction
+- Approach: B
+- Rationale: user feedback favored reusable path
+- Approval: approved
+
+## Approach Reaction
+- Closest option: B
+- Concerns: rollout complexity.
+- What changed after reaction: reduced scope to validator-only path.
+
+## Design
+- Architecture: module
+- Key components: validators
+- Data flow: metadata -> checks -> report
+
+## Assumptions and Open Questions
+- Assumptions: CI remains source of truth
+- Open questions (or "None"): None
+`);
+
+    const result = await lintArtifact(root, "brainstorm");
+    const ordering = result.findings.find(
+      (finding) => finding.section === "Approach Reaction Ordering"
+    );
+    expect(ordering?.found).toBe(false);
+    expect(ordering?.details).toContain("before Selected Direction");
   });
 
   it("fails brainstorm clarifying questions section when empty", async () => {
@@ -346,15 +491,24 @@ describe("artifact linter heuristics", () => {
 
 ## Clarifying Questions
 
+## Approach Tier
+- Tier: Standard
+- Why this tier: bounded but cross-cutting.
+
 ## Approaches
-| Approach | Architecture | Trade-offs | Recommendation |
-|---|---|---|---|
-| A | script-only checks | quick but weaker reuse |  |
-| B | reusable validation module | more effort, better reuse | recommended |
+| Approach | Role | Architecture | Trade-offs | Recommendation |
+|---|---|---|---|---|
+| A | baseline | script-only checks | quick but weaker reuse |  |
+| B | challenger: higher-upside | reusable validation module | more effort, better reuse | recommended |
+
+## Approach Reaction
+- Closest option: B
+- Concerns: avoid scope growth.
+- What changed after reaction: recommendation constrained to core validators.
 
 ## Selected Direction
 - Approach: B
-- Rationale: reusable module
+- Rationale: user reaction preferred stronger reuse while keeping v1 scoped
 - Approval: approved
 
 ## Design

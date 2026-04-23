@@ -209,6 +209,15 @@ describe("stage schema and subagent alignment", () => {
     }
   });
 
+  it("brainstorm artifact requires tier and reaction sections", () => {
+    const brainstorm = stageSchema("brainstorm");
+    for (const section of ["Approach Tier", "Approach Reaction"] as const) {
+      const rule = brainstorm.artifactValidation.find((row) => row.section === section);
+      expect(rule).toBeDefined();
+      expect(rule?.required).toBe(true);
+    }
+  });
+
   it("scope and design expose shared review-loop config", () => {
     const scope = stageSchema("scope");
     const design = stageSchema("design");

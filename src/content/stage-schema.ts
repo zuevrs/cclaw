@@ -223,7 +223,14 @@ const REQUIRED_GATE_IDS: Record<FlowStage, RequiredGateSet> = {
 };
 
 const REQUIRED_ARTIFACT_SECTIONS: Record<FlowStage, string[]> = {
-  brainstorm: ["Context", "Problem", "Approaches", "Selected Direction"],
+  brainstorm: [
+    "Context",
+    "Problem",
+    "Approach Tier",
+    "Approaches",
+    "Approach Reaction",
+    "Selected Direction"
+  ],
   scope: ["Scope Mode", "In Scope / Out of Scope", "Completion Dashboard", "Scope Summary"],
   design: [
     "Research Fleet Synthesis",

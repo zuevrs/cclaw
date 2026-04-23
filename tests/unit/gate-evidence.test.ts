@@ -78,15 +78,29 @@ describe("gate evidence verification", () => {
 | 1 | Block invalid metadata or warn? | Block | enforce mandatory gate |
 | 2 | Add runtime dependencies? | No | keep existing runtime stack |
 
+## Approach Tier
+- Tier: Standard
+- Why this tier: multiple workflow touchpoints but bounded blast radius.
+
+## Short-Circuit Decision
+- Status: bypassed
+- Why: requirements needed explicit trade-off discussion.
+- Scope handoff: continue full brainstorm before scope.
+
 ## Approaches
-| Approach | Architecture | Trade-offs | Recommendation |
-|---|---|---|---|
-| A | narrow fix | lower risk, weaker reuse |  |
-| B | reusable validation module | moderate effort, stronger reuse | recommended |
+| Approach | Role | Architecture | Trade-offs | Recommendation |
+|---|---|---|---|---|
+| A | baseline | narrow fix | lower risk, weaker reuse |  |
+| B | challenger: higher-upside | reusable validation module | moderate effort, stronger reuse | recommended |
+
+## Approach Reaction
+- Closest option: B
+- Concerns: avoid over-building and keep rollout deterministic.
+- What changed after reaction: kept module approach but constrained scope to v1 essentials.
 
 ## Selected Direction
 - Approach: B — reusable validation module
-- Rationale: best balance of reuse and delivery speed
+- Rationale: user reaction favored reuse with bounded scope, giving best balance of reuse and delivery speed
 - Approval: approved
 
 ## Design

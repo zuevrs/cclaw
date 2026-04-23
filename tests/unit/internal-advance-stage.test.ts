@@ -68,15 +68,29 @@ async function writeBrainstormArtifact(
 | 1 | Block invalid metadata or warn? | Block | enforce mandatory gate |
 | 2 | Add runtime dependencies? | No | keep existing runtime stack |
 
+## Approach Tier
+- Tier: Standard
+- Why this tier: spans CI + local release scripts but remains bounded.
+
+## Short-Circuit Decision
+- Status: bypassed
+- Why: options and trade-offs were still needed before locking direction.
+- Scope handoff: continue full brainstorm flow before scope.
+
 ## Approaches
-| Approach | Architecture | Trade-offs | Recommendation |
-|---|---|---|---|
-| A | narrow fix | lower risk, weaker reuse |  |
-| B | reusable validation module | moderate effort, stronger reuse | recommended |
+| Approach | Role | Architecture | Trade-offs | Recommendation |
+|---|---|---|---|---|
+| A | baseline | narrow fix | lower risk, weaker reuse |  |
+| B | challenger: higher-upside | reusable validation module | moderate effort, stronger reuse | recommended |
+
+## Approach Reaction
+- Closest option: B
+- Concerns: prevent v1 overbuild while maximizing reuse.
+- What changed after reaction: recommendation stayed on B with reduced initial scope.
 
 ## Selected Direction
 - Approach: B - reusable validation module
-- Rationale: best balance of reuse and delivery speed
+- Rationale: user reaction emphasized bounded v1 scope, so B gives best balance of reuse and delivery speed
 - Approval: approved
 
 ## Design
