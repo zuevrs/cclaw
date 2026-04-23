@@ -48,8 +48,5 @@ ${gateIds}
 
 ## Exit
 ${schema.exitCriteria.map((v) => `- ${v}`).join("\n")}
-
-## Anchors
-${schema.policyNeedles.map((v) => `- ${v}`).join("\n")}
 `;
 }

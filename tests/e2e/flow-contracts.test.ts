@@ -16,7 +16,7 @@ describe("flow command contracts", () => {
       expect(content).toContain("## HARD-GATE");
       expect(content).toContain("## Gates");
       expect(content).toContain("## Exit");
-      expect(content).toContain("## Anchors");
+      expect(content).not.toContain("## Anchors");
       expect(content).toContain("SKILL.md");
 
       const lineCount = content.split("\n").length;
