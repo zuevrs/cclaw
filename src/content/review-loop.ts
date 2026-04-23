@@ -97,6 +97,16 @@ export type ReviewLoopDispatcher = (
   request: ReviewLoopDispatchRequest
 ) => Promise<unknown>;
 
+export interface ReviewLoopDispatchAdapterRequest {
+  request: ReviewLoopDispatchRequest;
+  prompt: string;
+  responseSchema: string;
+}
+
+export type ReviewLoopDispatchAdapter = (
+  payload: ReviewLoopDispatchAdapterRequest
+) => Promise<unknown>;
+
 export type ReviewLoopApplyFindings = (
   iteration: ReviewLoopIterationResult
 ) => Promise<void> | void;
@@ -107,6 +117,25 @@ export interface RunReviewLoopOptions {
   shouldOptOut?: () => boolean;
   emitEnvelope?: (envelope: ReviewLoopEnvelope) => void;
 }
+
+const REVIEW_LOOP_RESPONSE_SCHEMA = `{
+  "findings": [
+    {
+      "id": "F-1",
+      "dimensionId": "<one checklist id>",
+      "severity": "critical|important|suggestion",
+      "summary": "what is wrong",
+      "evidence": "artifact quote/path",
+      "recommendation": "concrete fix"
+    }
+  ],
+  "dimensionScores": [
+    {
+      "dimensionId": "<one checklist id>",
+      "score": 0.0
+    }
+  ]
+}`;
 
 export const REVIEW_LOOP_CHECKLISTS = {
   scope: [
@@ -202,6 +231,61 @@ function normalizeBudget(budget?: ReviewLoopBudget): Required<ReviewLoopBudget> 
       ? clampScore(budget.targetScore)
       : REVIEW_LOOP_DEFAULT_TARGET_SCORE;
   return { maxIterations, targetScore };
+}
+
+function formatChecklistForPrompt(checklist: readonly ReviewLoopDimension[]): string {
+  return checklist
+    .map((dimension, index) => {
+      return `${index + 1}. [${dimension.id}] ${dimension.label} (weight=${dimension.weight})\n   - ${dimension.guidance}`;
+    })
+    .join("\n");
+}
+
+function formatPriorIterationsForPrompt(
+  priorIterations: ReadonlyArray<ReviewLoopIterationSummary>
+): string {
+  if (priorIterations.length === 0) {
+    return "- none";
+  }
+  return priorIterations
+    .map((row) => {
+      return `- iteration ${row.iteration}: score=${row.qualityScore.toFixed(3)}, findings=${row.findingsCount}`;
+    })
+    .join("\n");
+}
+
+export function buildOutsideVoiceReviewPrompt(
+  request: ReviewLoopDispatchRequest
+): string {
+  return [
+    "You are the Outside Voice adversarial reviewer.",
+    "Review ONLY the provided artifact markdown and return strict JSON (no prose).",
+    "",
+    `Stage: ${request.stage}`,
+    `Iteration: ${request.iteration}/${request.budget.maxIterations}`,
+    `Target quality score: ${request.budget.targetScore}`,
+    "",
+    "Checklist dimensions:",
+    formatChecklistForPrompt(request.checklist),
+    "",
+    "Prior iterations:",
+    formatPriorIterationsForPrompt(request.priorIterations),
+    "",
+    "Return JSON schema:",
+    REVIEW_LOOP_RESPONSE_SCHEMA
+  ].join("\n");
+}
+
+export function createOutsideVoiceDispatcher(
+  adapter: ReviewLoopDispatchAdapter
+): ReviewLoopDispatcher {
+  return async (request) => {
+    return adapter({
+      request,
+      prompt: buildOutsideVoiceReviewPrompt(request),
+      responseSchema: REVIEW_LOOP_RESPONSE_SCHEMA
+    });
+  };
 }
 
 function normalizeSeverity(value: unknown): ReviewFindingSeverity {
@@ -318,20 +402,46 @@ function parseDimensionScores(
   return parsed;
 }
 
-function parseDispatcherResult(
-  raw: unknown,
-  checklist: readonly ReviewLoopDimension[]
-): { findings: ReviewFinding[]; dimensionScores: ReviewLoopDimensionScore[] } {
-  let payload: unknown = raw;
+function unwrapDispatcherPayload(raw: unknown): unknown {
   if (typeof raw === "string") {
     try {
-      payload = JSON.parse(raw);
+      return JSON.parse(raw);
     } catch {
-      payload = {
-        findings: [{ summary: raw, severity: "important", dimensionId: checklist[0]?.id }]
+      return {
+        findings: [{ summary: raw, severity: "important" }]
       };
     }
   }
+  const record = asRecord(raw);
+  if (!record) {
+    return raw;
+  }
+  const payload = asRecord(record.payload);
+  if (payload && (Array.isArray(payload.findings) || Array.isArray(payload.dimensionScores))) {
+    return payload;
+  }
+  if (typeof record.output === "string") {
+    try {
+      return JSON.parse(record.output);
+    } catch {
+      return { findings: [{ summary: record.output, severity: "important" }] };
+    }
+  }
+  if (typeof record.text === "string") {
+    try {
+      return JSON.parse(record.text);
+    } catch {
+      return { findings: [{ summary: record.text, severity: "important" }] };
+    }
+  }
+  return raw;
+}
+
+export function parseReviewLoopDispatcherResult(
+  raw: unknown,
+  checklist: readonly ReviewLoopDimension[]
+): { findings: ReviewFinding[]; dimensionScores: ReviewLoopDimensionScore[] } {
+  const payload = unwrapDispatcherPayload(raw);
   const record = asRecord(payload);
   const findings = parseFindings(record?.findings, checklist);
   const dimensionScores = parseDimensionScores(
@@ -397,7 +507,7 @@ export async function runReviewLoopIteration(
       iteration: input.iteration,
       budget
     });
-    const { findings, dimensionScores } = parseDispatcherResult(raw, checklist);
+    const { findings, dimensionScores } = parseReviewLoopDispatcherResult(raw, checklist);
     const qualityScore = aggregateQualityScore(dimensionScores, checklist);
     return {
       qualityScore,
@@ -430,6 +540,48 @@ export function buildReviewLoopEnvelope(args: {
     stopReason: args.stopReason,
     iterations: [...args.iterations]
   };
+}
+
+function formatScore(value: number): string {
+  return clampScore(value).toFixed(3);
+}
+
+export function renderReviewLoopSummarySection(
+  envelope: ReviewLoopEnvelope
+): string {
+  const rows = envelope.iterations.length > 0
+    ? envelope.iterations
+      .map((row) => {
+        return `| ${row.iteration} | ${formatScore(row.qualityScore)} | ${row.findingsCount} |`;
+      })
+      .join("\n")
+    : "| 0 | 0.000 | 0 |";
+  return `## Spec Review Loop
+| Iteration | Quality Score | Findings |
+|---|---|---|
+${rows}
+
+- Stop reason: ${envelope.stopReason}
+- Target score: ${formatScore(envelope.targetScore)}
+- Max iterations: ${envelope.maxIterations}`;
+}
+
+export function upsertReviewLoopSummary(
+  markdown: string,
+  envelope: ReviewLoopEnvelope
+): string {
+  const section = renderReviewLoopSummarySection(envelope);
+  const headingRe = /^##\s+Spec Review Loop\s*$/m;
+  const match = headingRe.exec(markdown);
+  if (!match || match.index < 0) {
+    const needsBreak = markdown.endsWith("\n") ? "" : "\n";
+    return `${markdown}${needsBreak}\n${section}\n`;
+  }
+  const start = match.index;
+  const afterStart = markdown.slice(start + match[0].length);
+  const nextHeading = /\n##\s+/m.exec(afterStart);
+  const end = nextHeading ? start + match[0].length + nextHeading.index + 1 : markdown.length;
+  return `${markdown.slice(0, start)}${section}\n${markdown.slice(end)}`.replace(/\n{3,}/g, "\n\n");
 }
 
 export function toSkillEnvelope(

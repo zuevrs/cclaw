@@ -145,6 +145,18 @@ inputs_hash: sha256:pending
 |---|---|---|---|
 |  |  |  |  |
 
+## Outside Voice Findings
+| ID | Dimension | Finding | Disposition | Rationale |
+|---|---|---|---|---|
+| F-1 | premise_fit |  | accept/reject/defer |  |
+
+## Spec Review Loop
+| Iteration | Quality Score | Findings | Stop decision |
+|---|---|---|---|
+| 1 | 0.00 | 0 | continue/stop |
+- Stop reason:
+- Unresolved concerns:
+
 ## Completion Dashboard
 - Checklist findings:
 - Resolved decisions count:
@@ -293,6 +305,18 @@ inputs_hash: sha256:pending
 | Step | Strategy | Rollback plan |
 |---|---|---|
 |  |  |  |
+
+## Outside Voice Findings
+| ID | Dimension | Finding | Disposition | Rationale |
+|---|---|---|---|---|
+| F-1 | architecture_fit |  | accept/reject/defer |  |
+
+## Spec Review Loop
+| Iteration | Quality Score | Findings | Stop decision |
+|---|---|---|---|
+| 1 | 0.00 | 0 | continue/stop |
+- Stop reason:
+- Unresolved concerns:
 
 ## NOT in scope
 - 

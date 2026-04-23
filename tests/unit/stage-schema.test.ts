@@ -222,6 +222,15 @@ describe("stage schema and subagent alignment", () => {
     expect(diagramBlock).toMatch(/\n```\n[\s\S]*?\n```\n/);
   });
 
+  it("scope and design templates include review-loop artifact sections", () => {
+    const scopeTemplate = ARTIFACT_TEMPLATES["02-scope.md"];
+    const designTemplate = ARTIFACT_TEMPLATES["03-design.md"];
+    expect(scopeTemplate).toContain("## Outside Voice Findings");
+    expect(scopeTemplate).toContain("## Spec Review Loop");
+    expect(designTemplate).toContain("## Outside Voice Findings");
+    expect(designTemplate).toContain("## Spec Review Loop");
+  });
+
   it("stage skills render explicit when-not-to-use guidance", () => {
     const review = stageSchema("review");
     expect(review.whenNotToUse.length).toBeGreaterThan(0);

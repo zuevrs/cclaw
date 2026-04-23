@@ -3,9 +3,14 @@ import { describe, expect, it, vi } from "vitest";
 import {
   REVIEW_LOOP_CHECKLISTS,
   aggregateQualityScore,
+  buildOutsideVoiceReviewPrompt,
+  createOutsideVoiceDispatcher,
+  parseReviewLoopDispatcherResult,
+  renderReviewLoopSummarySection,
   runReviewLoop,
   runReviewLoopIteration,
-  toSkillEnvelope
+  toSkillEnvelope,
+  upsertReviewLoopSummary
 } from "../../src/content/review-loop.js";
 import { validateSkillEnvelope } from "../../src/content/stage-schema.js";
 import { createTempProject, writeProjectFile } from "../helpers/index.js";
@@ -79,6 +84,79 @@ describe("review-loop contracts", () => {
     expect(result.qualityScore).toBeLessThan(0.8);
     expect(result.shouldContinue).toBe(true);
     expect(result.findings).toHaveLength(1);
+  });
+
+  it("builds dispatcher prompt with checklist and prior iterations context", () => {
+    const checklist = REVIEW_LOOP_CHECKLISTS.scope;
+    const prompt = buildOutsideVoiceReviewPrompt({
+      stage: "scope",
+      artifactPath: "/tmp/artifact.md",
+      checklist,
+      priorIterations: [
+        { iteration: 1, qualityScore: 0.42, findingsCount: 5 },
+        { iteration: 2, qualityScore: 0.67, findingsCount: 3 }
+      ],
+      iteration: 3,
+      budget: { maxIterations: 3, targetScore: 0.8 }
+    });
+    expect(prompt).toContain("Outside Voice adversarial reviewer");
+    expect(prompt).toContain("Iteration: 3/3");
+    expect(prompt).toContain("[premise_fit]");
+    expect(prompt).toContain("iteration 2: score=0.670, findings=3");
+    expect(prompt).toContain("\"dimensionScores\"");
+  });
+
+  it("parses nested payload responses from a dispatcher adapter", () => {
+    const checklist = REVIEW_LOOP_CHECKLISTS.design;
+    const parsed = parseReviewLoopDispatcherResult(
+      {
+        version: "1",
+        kind: "stage-output",
+        payload: {
+          findings: [
+            {
+              id: "F-9",
+              dimensionId: checklist[1]!.id,
+              severity: "critical",
+              summary: "Failure mode rescue is missing."
+            }
+          ],
+          dimensionScores: checklist.map((dimension) => ({
+            dimensionId: dimension.id,
+            score: dimension.id === checklist[1]!.id ? 0.1 : 0.8
+          }))
+        }
+      },
+      checklist
+    );
+    expect(parsed.findings).toHaveLength(1);
+    expect(parsed.findings[0]).toMatchObject({
+      id: "F-9",
+      severity: "critical",
+      dimensionId: checklist[1]!.id
+    });
+    expect(parsed.dimensionScores).toHaveLength(5);
+  });
+
+  it("adapts outside-voice adapter into dispatcher shape", async () => {
+    const adapter = vi.fn(async () => ({
+      findings: [{ id: "F-1", dimensionId: "premise_fit", severity: "important", summary: "Gap" }],
+      dimensionScores: [{ dimensionId: "premise_fit", score: 0.5 }]
+    }));
+    const dispatcher = createOutsideVoiceDispatcher(adapter);
+    const result = await dispatcher({
+      stage: "scope",
+      artifactPath: "/tmp/scope.md",
+      checklist: REVIEW_LOOP_CHECKLISTS.scope,
+      priorIterations: [],
+      iteration: 1,
+      budget: { maxIterations: 3, targetScore: 0.8 }
+    });
+    expect(adapter).toHaveBeenCalledTimes(1);
+    const payload = adapter.mock.calls[0]![0] as { prompt: string; responseSchema: string };
+    expect(payload.prompt).toContain("Stage: scope");
+    expect(payload.responseSchema).toContain("\"findings\"");
+    expect(result).toBeTruthy();
   });
 
   it("runs until retry budget is exhausted when score stays below target", async () => {
@@ -184,5 +262,58 @@ describe("review-loop contracts", () => {
       stage: "scope",
       stopReason: "quality_threshold_met"
     });
+  });
+
+  it("renders and upserts spec review loop summary section", () => {
+    const section = renderReviewLoopSummarySection({
+      type: "review-loop",
+      version: "1",
+      stage: "scope",
+      artifactPath: ".cclaw/artifacts/02-scope-demo.md",
+      targetScore: 0.8,
+      maxIterations: 3,
+      stopReason: "quality_threshold_met",
+      iterations: [
+        { iteration: 1, qualityScore: 0.62, findingsCount: 4 },
+        { iteration: 2, qualityScore: 0.81, findingsCount: 1 }
+      ]
+    });
+    expect(section).toContain("## Spec Review Loop");
+    expect(section).toContain("| 2 | 0.810 | 1 |");
+    expect(section).toContain("Stop reason: quality_threshold_met");
+
+    const baseArtifact = `# Scope Artifact
+
+## Scope Mode
+- [x] selective
+
+## Completion Dashboard
+- Checklist findings: open
+`;
+    const withSection = upsertReviewLoopSummary(baseArtifact, {
+      type: "review-loop",
+      version: "1",
+      stage: "scope",
+      artifactPath: ".cclaw/artifacts/02-scope-demo.md",
+      targetScore: 0.8,
+      maxIterations: 3,
+      stopReason: "max_iterations_reached",
+      iterations: [{ iteration: 1, qualityScore: 0.5, findingsCount: 5 }]
+    });
+    expect(withSection).toContain("## Spec Review Loop");
+
+    const replaced = upsertReviewLoopSummary(withSection, {
+      type: "review-loop",
+      version: "1",
+      stage: "scope",
+      artifactPath: ".cclaw/artifacts/02-scope-demo.md",
+      targetScore: 0.8,
+      maxIterations: 3,
+      stopReason: "quality_threshold_met",
+      iterations: [{ iteration: 1, qualityScore: 0.82, findingsCount: 1 }]
+    });
+    expect((replaced.match(/## Spec Review Loop/g) ?? []).length).toBe(1);
+    expect(replaced).toContain("| 1 | 0.820 | 1 |");
+    expect(replaced).toContain("Stop reason: quality_threshold_met");
   });
 });

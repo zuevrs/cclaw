@@ -164,6 +164,8 @@ export const DESIGN: StageSchemaInput = {
       { section: "Test Strategy", required: false, validationRule: "Must define unit/integration/e2e expectations with coverage targets." },
       { section: "Performance Budget", required: false, validationRule: "For each critical path: metric name, target threshold, and measurement method." },
       { section: "What Already Exists", required: false, validationRule: "For each sub-problem: existing code/library found (Layer 1-3/EUREKA label), reuse decision, and adaptation needed." },
+      { section: "Outside Voice Findings", required: false, validationRule: "List adversarial findings and disposition (accept/reject/defer) with rationale per finding." },
+      { section: "Spec Review Loop", required: false, validationRule: "Record iteration table (max 3) with quality score per iteration, stop reason, and unresolved concerns." },
       { section: "NOT in scope", required: false, validationRule: "Work considered and explicitly deferred with one-line rationale." },
       { section: "Parallelization Strategy", required: false, validationRule: "If multi-module: dependency table, parallel lanes, conflict flags." },
       { section: "Unresolved Decisions", required: false, validationRule: "If any: what info is missing, who provides it, default if unanswered." },
