@@ -50,13 +50,18 @@ This is the **recommended way to start** working with cclaw. Use \`/cc-next\` fo
 
    Record the chosen class in \`.cclaw/artifacts/00-idea.md\` on the \`Class:\` line. Do NOT silently treat a non-software task as software.
 
-2. **Phase 1 — Origin-document discovery.** Before asking the user for context, scan for existing requirements/plan artifacts and merge them into initial context:
+2. **Phase 0.5 — Seed shelf recall.** Before routing, scan \`${RUNTIME_ROOT}/seeds/SEED-*.md\` and match each seed's \`trigger_when\` tokens against the prompt text (substring match is enough). If any match:
+   - Surface up to 3 matches (file + title + one-line action) as \`Seed recalls\`.
+   - Ask whether to apply now, keep as reference, or ignore for this run.
+   - If applied/reference, append selected seeds to \`00-idea.md\` under \`Discovered context\` so downstream stages keep the trace.
+
+3. **Phase 1 — Origin-document discovery.** Before asking the user for context, scan for existing requirements/plan artifacts and merge them into initial context:
    - \`.cclaw/artifacts/00-idea.md\` if it already exists (resumed flow).
    - Common origin locations: \`docs/prd/**\`, \`docs/rfcs/**\`, \`docs/adr/**\`, \`docs/design/**\`, \`specs/**\`, \`prd/**\`, \`rfc/**\`, \`design/**\`, root-level \`PRD.md\` / \`SPEC.md\` / \`DESIGN.md\` / \`REQUIREMENTS.md\` / \`ROADMAP.md\`.
    - Summarize each discovered doc in \`00-idea.md\` under a \`Discovered context\` section with path + 1-line summary.
    - If an origin doc contradicts the prompt, surface the conflict to the user before routing.
 
-3. **Phase 2 — Tech-stack + version detection.** Sniff the repo for stack + language versions and record under \`Stack:\`:
+4. **Phase 2 — Tech-stack + version detection.** Sniff the repo for stack + language versions and record under \`Stack:\`:
    - Node: \`package.json\` \`engines\` / \`volta\` / \`packageManager\` / \`devDependencies\`.
    - Python: \`pyproject.toml\` / \`requirements*.txt\` / \`.python-version\`.
    - Go: \`go.mod\` (module + Go version).
@@ -66,9 +71,9 @@ This is the **recommended way to start** working with cclaw. Use \`/cc-next\` fo
    - CI: \`.github/workflows\`, \`.gitlab-ci.yml\`.
    Skip detection quietly if no markers are found — do NOT invent a stack.
 
-4. Read \`${flowPath}\`.
-5. If flow already has completed stages, warn the user that starting a new tracked flow will reset progress. Ask for confirmation before proceeding.
-6. **Track heuristic** — classify the idea text and **recommend** a track (the user can override before any state mutation):
+5. Read \`${flowPath}\`.
+6. If flow already has completed stages, warn the user that starting a new tracked flow will reset progress. Ask for confirmation before proceeding.
+7. **Track heuristic** — classify the idea text and **recommend** a track (the user can override before any state mutation):
    - First, load \`${RUNTIME_ROOT}/config.yaml\`. If \`trackHeuristics\` is defined, apply those per-track vocabulary hints (\`fallback\`, \`tracks.<id>.{triggers,veto}\`) on top of the built-in defaults. Evaluation order is always \`standard -> medium -> quick\` (narrow-to-broad).
    - **quick** (\`spec → tdd → review → ship\`) — single-purpose work where the spec is essentially already known.
      Triggers (case-insensitive substring or close variant): \`bug\`, \`bugfix\`, \`fix\`, \`hotfix\`, \`patch\`, \`typo\`, \`regression\`, \`copy change\`, \`rename\`, \`bump\`, \`upgrade dep\`, \`config tweak\`, \`docs only\`, \`comment\`, \`lint\`, \`format\`, \`small\`, \`tiny\`, \`one-liner\`, \`revert\`.
@@ -77,17 +82,17 @@ This is the **recommended way to start** working with cclaw. Use \`/cc-next\` fo
    - **standard** (full 8 stages — default fallback) — anything that introduces a new capability with architecture uncertainty, touches many modules, or has unclear scope.
      Triggers: \`new feature\`, \`refactor\`, \`migration\`, \`platform\`, \`architecture\`, \`schema\`, \`integrate\`, \`workflow\`, \`onboarding\`, or any prompt that does not match quick/medium confidently.
    - When triggers conflict, prefer **standard** over **medium**, and **medium** over **quick**.
-7. Present the recommendation as a single decision with explicit options:
+8. Present the recommendation as a single decision with explicit options:
    > \`Recommended track: <quick|medium|standard>\` because \`<one-line reason citing matched triggers>\`.
    > Override? (A) keep \`<recommended>\`  (B) switch track  (C) cancel.
    If the harness's native ask tool is available (\`AskUserQuestion\` / \`AskQuestion\` / \`question\` / \`request_user_input\`), send exactly ONE question; on schema error, fall back to a plain-text lettered list.
-8. Persist the chosen track to \`${flowPath}\` (\`track\` field). Compute \`skippedStages\` from the track and write that too. Use the **first stage of the chosen track** as \`currentStage\` (quick → \`spec\`, medium/standard → \`brainstorm\`, trivial fast-path → \`design\` or \`spec\` per Phase 0).
-9. Write the prompt to \`.cclaw/artifacts/00-idea.md\` with the following header lines: \`Class:\` (from Phase 0), \`Track:\` (chosen track + matched heuristic), \`Stack:\` (from Phase 2 detection, or \`unknown\`), and a \`Discovered context\` section if Phase 1 found origin docs.
-10. Load the **first-stage skill for the chosen track** and its command file:
+9. Persist the chosen track to \`${flowPath}\` (\`track\` field). Compute \`skippedStages\` from the track and write that too. Use the **first stage of the chosen track** as \`currentStage\` (quick → \`spec\`, medium/standard → \`brainstorm\`, trivial fast-path → \`design\` or \`spec\` per Phase 0).
+10. Write the prompt to \`.cclaw/artifacts/00-idea.md\` with the following header lines: \`Class:\` (from Phase 0), \`Track:\` (chosen track + matched heuristic), \`Stack:\` (from Phase 2 detection, or \`unknown\`), and a \`Discovered context\` section if Phase 1/seed recall found references.
+11. Load the **first-stage skill for the chosen track** and its command file:
     - quick → \`.cclaw/skills/specification-authoring/SKILL.md\` + \`.cclaw/commands/spec.md\`
     - medium/standard → \`.cclaw/skills/brainstorming/SKILL.md\` + \`.cclaw/commands/brainstorm.md\`
     - trivial fast-path → design or spec skill per Phase 0 decision.
-11. Execute that stage with the prompt + Phase 1/Phase 2 context as initial input.
+12. Execute that stage with the prompt + Phase 1/Phase 2 + seed context as initial input.
 
 ### Reclassification on discovery
 
@@ -156,14 +161,15 @@ Do **not** silently discard an existing flow when the user provides a prompt. If
 ### Path A: \`/cc <prompt>\`
 
 1. **Task classification (Phase 0).** Decide whether the prompt is \`software-standard\`, \`software-trivial\`, \`software-bugfix\`, \`pure-question\`, or \`non-software\`. Non-software and pure-question exit immediately — answer directly, do not open a stage.
-2. **Origin-document discovery (Phase 1).** Scan for \`docs/prd/**\`, \`docs/rfcs/**\`, \`docs/adr/**\`, \`docs/design/**\`, \`specs/**\`, root-level \`PRD.md\` / \`SPEC.md\` / \`DESIGN.md\` / \`REQUIREMENTS.md\`. Summarize any hits in \`00-idea.md\` under \`Discovered context\`. Surface conflicts with the prompt before routing.
-3. **Stack detection (Phase 2).** Inspect \`package.json\` engines, \`pyproject.toml\`, \`go.mod\`, \`Cargo.toml\`, \`pom.xml\`, \`build.gradle*\`, \`Dockerfile\`, \`docker-compose*.yml\`, and CI configs. Record stack + versions on the \`Stack:\` line. Do not invent stack details.
-4. Read \`${flowPath}\`.
-5. If \`completedStages\` is non-empty:
+2. **Seed shelf recall (Phase 0.5).** Scan \`${RUNTIME_ROOT}/seeds/SEED-*.md\` and match \`trigger_when\` tokens against the prompt text. Surface up to 3 matching seeds with file/title/action and ask whether to apply or ignore. When applied, add them to \`00-idea.md\` under \`Discovered context\`.
+3. **Origin-document discovery (Phase 1).** Scan for \`docs/prd/**\`, \`docs/rfcs/**\`, \`docs/adr/**\`, \`docs/design/**\`, \`specs/**\`, root-level \`PRD.md\` / \`SPEC.md\` / \`DESIGN.md\` / \`REQUIREMENTS.md\`. Summarize any hits in \`00-idea.md\` under \`Discovered context\`. Surface conflicts with the prompt before routing.
+4. **Stack detection (Phase 2).** Inspect \`package.json\` engines, \`pyproject.toml\`, \`go.mod\`, \`Cargo.toml\`, \`pom.xml\`, \`build.gradle*\`, \`Dockerfile\`, \`docker-compose*.yml\`, and CI configs. Record stack + versions on the \`Stack:\` line. Do not invent stack details.
+5. Read \`${flowPath}\`.
+6. If \`completedStages\` is non-empty:
    - Inform: "You have an active flow at stage **{currentStage}** with {N} completed stages. Starting a new tracked flow will reset progress."
    - Ask: "Continue with reset? (A) Yes, start fresh (B) No, resume current flow"
    - If (B) → switch to Path B behavior.
-6. **Classify the idea** using the heuristic below and present a single track recommendation. Wait for explicit confirmation or override before mutating any state.
+7. **Classify the idea** using the heuristic below and present a single track recommendation. Wait for explicit confirmation or override before mutating any state.
    - If \`${RUNTIME_ROOT}/config.yaml\` defines \`trackHeuristics\`, apply those vocabulary hints (\`fallback\`, \`tracks.<id>.{triggers,veto}\`) on top of built-in defaults. Evaluation order is fixed: \`standard -> medium -> quick\`. (Honest note: this is advisory prose; the LLM applies it, not a Node-level router.)
 
    **Track heuristic** (lowercase substring match against the user prompt):
@@ -176,9 +182,9 @@ Do **not** silently discard an existing flow when the user provides a prompt. If
 
    - On conflict, prefer \`standard\` over \`medium\`, and \`medium\` over \`quick\`.
    - Always state the recommendation as a one-line reason citing matched triggers.
-7. Persist the chosen track in \`${flowPath}\` (\`track\` + \`skippedStages\`). Set \`currentStage\` to the first stage of the chosen track (\`quick\` → \`spec\`, \`medium\`/ \`standard\` → \`brainstorm\`, trivial fast-path → \`design\` or \`spec\`). Reset gate catalog.
-8. Write \`${RUNTIME_ROOT}/artifacts/00-idea.md\` with the user's prompt plus header lines: \`Class:\`, \`Track:\`, \`Stack:\`, and a \`Discovered context\` section from Phase 1.
-9. Load and execute the **first stage skill of the chosen track** (\`brainstorming\` for medium/standard, \`specification-authoring\` for quick) plus its matching command file.
+8. Persist the chosen track in \`${flowPath}\` (\`track\` + \`skippedStages\`). Set \`currentStage\` to the first stage of the chosen track (\`quick\` → \`spec\`, \`medium\`/ \`standard\` → \`brainstorm\`, trivial fast-path → \`design\` or \`spec\`). Reset gate catalog.
+9. Write \`${RUNTIME_ROOT}/artifacts/00-idea.md\` with the user's prompt plus header lines: \`Class:\`, \`Track:\`, \`Stack:\`, and a \`Discovered context\` section from Phase 0.5/1.
+10. Load and execute the **first stage skill of the chosen track** (\`brainstorming\` for medium/standard, \`specification-authoring\` for quick) plus its matching command file.
 
 ### Reclassification on discovery
 

@@ -30,16 +30,35 @@ inputs_hash: sha256:pending
 |---|---|---|---|
 | 1 |  |  |  |
 
+## Approach Tier
+- Tier: Lightweight | Standard | Deep
+- Why this tier:
+
+## Short-Circuit Decision
+- Status: bypassed
+- Why:
+- Scope handoff:
+
 ## Approaches
-| Approach | Architecture | Trade-offs | Recommendation |
-|---|---|---|---|
-| A |  |  |  |
-| B |  |  |  |
+| Approach | Role | Architecture | Trade-offs | Recommendation |
+|---|---|---|---|---|
+| A | baseline |  |  |  |
+| B | challenger: higher-upside |  |  |  |
+
+## Approach Reaction
+- Closest option:
+- Concerns:
+- What changed after reaction:
 
 ## Selected Direction
 - **Approach:**
 - **Rationale:**
 - **Approval:** pending
+
+## Seed Shelf Candidates (optional)
+| Seed file | Trigger when | Suggested action | Status (planted/deferred/ignored) |
+|---|---|---|---|
+| .cclaw/seeds/SEED-YYYY-MM-DD-<slug>.md |  |  |  |
 
 ## Design
 - **Architecture:**
@@ -63,6 +82,14 @@ inputs_hash: sha256:pending
 ---
 
 # Scope Artifact
+
+## Pre-Scope System Audit
+| Check | Command | Findings |
+|---|---|---|
+| Recent commits | \`git log -30 --oneline\` |  |
+| Current diff | \`git diff --stat\` |  |
+| Stash state | \`git stash list\` |  |
+| Debt markers | \`rg -n "TODO|FIXME|XXX|HACK"\` |  |
 
 ## Prime Directives
 - Zero silent failures:
@@ -140,10 +167,27 @@ inputs_hash: sha256:pending
 |---|---|
 |  |  |
 
+## Seed Shelf Candidates (optional)
+| Seed file | Trigger when | Suggested action | Status (planted/deferred/ignored) |
+|---|---|---|---|
+| .cclaw/seeds/SEED-YYYY-MM-DD-<slug>.md |  |  |  |
+
 ## Error & Rescue Registry
 | Capability | Failure mode | Detection | Fallback |
 |---|---|---|---|
 |  |  |  |  |
+
+## Outside Voice Findings
+| ID | Dimension | Finding | Disposition | Rationale |
+|---|---|---|---|---|
+| F-1 | premise_fit |  | accept/reject/defer |  |
+
+## Spec Review Loop
+| Iteration | Quality Score | Findings | Stop decision |
+|---|---|---|---|
+| 1 | 0.00 | 0 | continue/stop |
+- Stop reason:
+- Unresolved concerns:
 
 ## Completion Dashboard
 - Checklist findings:
@@ -238,20 +282,54 @@ inputs_hash: sha256:pending
 
 ## Architecture Diagram
 
+<!-- diagram: architecture -->
+
 \`\`\`
 (ASCII, Mermaid, or tool-generated diagram showing component boundaries and data flow direction)
 \`\`\`
 
 ## Data-Flow Shadow Paths
+<!-- diagram: data-flow-shadow-paths -->
 | Path | Trigger | Fallback/Degrade behavior |
 |---|---|---|
 |  |  |  |
 
 ## Error Flow Diagram
 
+<!-- diagram: error-flow -->
+
 \`\`\`
 (failure detection -> rescue action -> user-visible outcome)
 \`\`\`
+
+## State Machine Diagram
+
+<!-- diagram: state-machine -->
+
+\`\`\`
+(state transitions for the critical flow lifecycle)
+\`\`\`
+
+## Rollback Flowchart
+
+<!-- diagram: rollback-flowchart -->
+
+\`\`\`
+(trigger -> rollback actions -> verification)
+\`\`\`
+
+## Deployment Sequence Diagram
+
+<!-- diagram: deployment-sequence -->
+
+\`\`\`
+(rollout order, guard checks, and verification sequence)
+\`\`\`
+
+## Stale Diagram Audit
+| File | Last modified | Diagram marker baseline | Status | Notes |
+|---|---|---|---|---|
+|  |  |  | clear/stale |  |
 
 ## What Already Exists
 | Sub-problem | Existing code/library | Layer | Reuse decision |
@@ -263,6 +341,15 @@ inputs_hash: sha256:pending
 - Nil/empty input path:
 - Upstream error path:
 - Timeout/downstream path:
+
+### Interaction Edge Case Matrix
+| Edge case | Handled? | Design response | Deferred item (if not handled) |
+|---|---|---|---|
+| double-click | yes/no |  | None / D-XX |
+| nav-away-mid-request | yes/no |  | None / D-XX |
+| 10K-result dataset | yes/no |  | None / D-XX |
+| background-job abandonment | yes/no |  | None / D-XX |
+| zombie connection | yes/no |  | None / D-XX |
 
 ## Security & Threat Model
 | Boundary | Threat | Mitigation | Owner |
@@ -294,6 +381,18 @@ inputs_hash: sha256:pending
 |---|---|---|
 |  |  |  |
 
+## Outside Voice Findings
+| ID | Dimension | Finding | Disposition | Rationale |
+|---|---|---|---|---|
+| F-1 | architecture_fit |  | accept/reject/defer |  |
+
+## Spec Review Loop
+| Iteration | Quality Score | Findings | Stop decision |
+|---|---|---|---|
+| 1 | 0.00 | 0 | continue/stop |
+- Stop reason:
+- Unresolved concerns:
+
 ## NOT in scope
 - 
 
@@ -315,6 +414,11 @@ inputs_hash: sha256:pending
 | Decision | Missing info | Owner | Default |
 |---|---|---|---|
 |  |  |  |  |
+
+## Seed Shelf Candidates (optional)
+| Seed file | Trigger when | Suggested action | Status (planted/deferred/ignored) |
+|---|---|---|---|
+| .cclaw/seeds/SEED-YYYY-MM-DD-<slug>.md |  |  |  |
 
 ## Completion Dashboard
 | Review Section | Status | Issues |

@@ -1,4 +1,5 @@
 import type { StageSchemaInput } from "./schema-types.js";
+import { REVIEW_LOOP_CHECKLISTS } from "../review-loop.js";
 
 // ---------------------------------------------------------------------------
 // DESIGN — reference: gstack Eng review
@@ -47,7 +48,7 @@ export const DESIGN: StageSchemaInput = {
       "Codebase Investigation — Before any design decision, read the actual code in the blast radius. List every file that will be touched, its current responsibilities, and existing patterns (error handling, naming, test style). Design must conform to discovered patterns, not impose new ones without justification.",
       "Step 0: Scope Challenge — what existing code solves sub-problems? Minimum change set? Complexity check: 8+ files or 2+ new services = complexity smell → flag for possible scope reduction.",
       "Search Before Building — For each technical choice (library, pattern, architecture), search for existing solutions. Label findings: Layer 1 (exact match), Layer 2 (partial match, needs adaptation), Layer 3 (inspiration only), EUREKA (unexpected perfect solution). Default to existing before custom.",
-      "Architecture Review — lock component boundaries and one realistic failure scenario per new codepath. **Mandatory diagrams:** architecture for all tiers; Standard/Deep adds Data-Flow Shadow Paths and Error Flow.",
+      "Architecture Review — lock component boundaries and one realistic failure scenario per new codepath. **Mandatory diagrams by tier:** Lightweight=Architecture Diagram, Standard=+Data-Flow Shadow Paths + Error Flow Diagram, Deep=+State Machine Diagram + Rollback Flowchart + Deployment Sequence Diagram.",
       "Security & Threat Model Review — trust boundaries, authn/authz, input validation, secrets handling, data exposure risks, abuse cases, and mitigation ownership.",
       "Code Quality Review — code organization, DRY violations, error handling patterns, over/under-engineering assessment. Include stale-diagram audit for touched files.",
       "Test Review — diagram every new flow, data path, error path. For each: what test type covers it? Does one exist? What is the gap? Produce test plan artifact.",
@@ -55,7 +56,9 @@ export const DESIGN: StageSchemaInput = {
       "Observability & Debuggability Review — logging, metrics, traces, alerts, and on-call diagnosis path for each critical failure mode.",
       "Deployment & Rollout Review — migration sequencing, flag strategy, rollback plan, compatibility window, and post-deploy verification steps.",
       "Parallelization Strategy — If multiple independent modules, produce dependency table: which can be built in parallel? Where are conflict risks? Flag shared-state modules.",
-      "Outside Voice + Spec Review Loop — run adversarial second-opinion review, reconcile findings, and iterate up to 3 cycles or until quality score >= 0.8.",
+      "Outside Voice + Spec Review Loop — run adversarial second-opinion review, reconcile findings, and iterate up to 3 cycles or until quality score >= 0.8. When `.cclaw/config.yaml::reviewLoop.externalSecondOpinion.enabled` is true, run an additional external-model pass and explicitly resolve score/finding disagreements.",
+      "Stale Diagram Audit (opt-in) — when `.cclaw/config.yaml::optInAudits.staleDiagramAudit` is true, compare blast-radius file mtimes against diagram-marker freshness and flag stale diagrams before design lock.",
+      "Plant-seed shelf (optional) — when an unresolved/deferred design idea has upside, capture it as `.cclaw/seeds/SEED-<YYYY-MM-DD>-<slug>.md` with trigger_when and action so it can be recalled on future `/cc` starts.",
       "Unresolved Decisions — List any design decisions that could not be resolved in this session. For each: what information is missing? Who can provide it? What is the default if no answer comes?",
       "Distribution Check — If the plan creates new artifact types (packages, CLI tools, configs), document the build/publish story. How does it reach the user?",
       "Deferred Items Cross-Reference — Collect every item explicitly deferred during design review. Each must appear in the Unresolved Decisions table or in the upstream scope artifact's deferred list. No deferred item may exist only in conversation — it must be written down."
@@ -89,8 +92,9 @@ export const DESIGN: StageSchemaInput = {
       "Add security, observability, and deployment reviews for Standard+ changes.",
       "Run stale-diagram audit in touched files and reconcile drift.",
       "Define test coverage strategy and performance budget.",
-      "Produce required outputs: NOT-in-scope section, What-already-exists section, architecture + shadow/error diagrams, failure mode table.",
-      "Run outside-voice spec review loop (up to 3 iterations, quality score target >= 0.8).",
+      "Produce required outputs: NOT-in-scope section, What-already-exists section, tier-required diagrams with markers, failure mode table.",
+      "Optionally plant unresolved high-upside ideas into `.cclaw/seeds/SEED-<YYYY-MM-DD>-<slug>.md` with trigger_when/action notes.",
+      "Run outside-voice spec review loop (up to 3 iterations, quality score target >= 0.8). If configured, include external second opinion and reconcile deltas.",
       "Produce completion dashboard: status per review section, critical/open gap counts, decision count, unresolved items.",
       "Write design lock artifact for downstream spec/plan."
     ],
@@ -105,12 +109,15 @@ export const DESIGN: StageSchemaInput = {
       "Research artifact written to `.cclaw/artifacts/02a-research.md` with stack/features/architecture/pitfalls sections plus synthesis.",
       "Artifact written to `.cclaw/artifacts/03-design-<slug>.md`.",
       "Failure-mode table exists in Method/Exception/Rescue/UserSees format.",
-      "Data-flow shadow and error-flow diagrams are present for Standard+ complexity.",
+      "Tier-required diagram markers are present: architecture (all tiers), +shadow/error (Standard+), +state-machine/rollback/deployment-sequence (Deep).",
+      "When `.cclaw/config.yaml::optInAudits.staleDiagramAudit` is true, stale diagram audit finding is clear (no blast-radius file newer than diagram markers without explicit update).",
       "Security & threat model findings are documented with mitigations.",
       "Observability and deployment plans are explicit for critical flows.",
       "Outside-voice findings and dispositions are recorded (accept/reject/defer).",
       "Spec review loop summary includes iteration count and quality score trajectory.",
+      "When `.cclaw/config.yaml::reviewLoop.externalSecondOpinion.enabled` is true, external second-opinion disposition is captured.",
       "Test strategy includes unit/integration/e2e expectations.",
+      "When a high-upside idea is deferred, a seed file is created under `.cclaw/seeds/` and referenced in the artifact.",
       "NOT-in-scope section produced.",
       "What-already-exists section produced.",
       "Completion dashboard lists review section status, critical/open gap counts, decision count, and unresolved items (or 'None')."
@@ -157,13 +164,23 @@ export const DESIGN: StageSchemaInput = {
       { section: "Codebase Investigation", required: false, validationRule: "Must list blast-radius files with current responsibilities and discovered patterns." },
       { section: "Search Before Building", required: false, validationRule: "For each technical choice: Layer 1 (exact match), Layer 2 (partial match), Layer 3 (inspiration), EUREKA labels with reuse-first default." },
       { section: "Architecture Boundaries", required: true, validationRule: "Must list component boundaries with ownership." },
-      { section: "Architecture Diagram", required: true, validationRule: "At least one diagram (ASCII, Mermaid, or image) showing component boundaries and data flow direction. Diagram must: (1) label every node with a concrete component name (no generic 'Service A/B'), (2) label every arrow with the action or message (no unlabeled arrows), (3) mark direction of data flow explicitly, (4) distinguish synchronous from asynchronous edges (e.g. solid vs dashed, or `sync:` / `async:` prefix), (5) include at least one failure/degraded edge line that contains an arrow plus a failure keyword (`timeout`, `error`, `fallback`, `degraded`, `retry`, etc.). Standard/Deep complexity must also include `Data-Flow Shadow Paths` and `Error Flow Diagram` sections." },
-      { section: "Data Flow", required: false, validationRule: "Must include happy path, nil input, empty input, upstream error paths, plus interaction edge-case matrix (double-click, navigate-away, stale-state, large-result, background-job abandonment)." },
+      { section: "Architecture Diagram", required: true, validationRule: "Must include `<!-- diagram: architecture -->` marker. Diagram must label concrete nodes, label arrows, mark direction, distinguish sync/async edges, and include at least one failure/degraded edge." },
+      { section: "Data-Flow Shadow Paths", required: false, validationRule: "Standard/Deep: include `<!-- diagram: data-flow-shadow-paths -->` marker and path table with trigger plus fallback/degrade behavior." },
+      { section: "Error Flow Diagram", required: false, validationRule: "Standard/Deep: include `<!-- diagram: error-flow -->` marker and failure-detection -> rescue -> user-visible outcome flow." },
+      { section: "State Machine Diagram", required: false, validationRule: "Deep: include `<!-- diagram: state-machine -->` marker and state transitions for critical flow lifecycle." },
+      { section: "Rollback Flowchart", required: false, validationRule: "Deep: include `<!-- diagram: rollback-flowchart -->` marker with trigger -> rollback actions -> verification." },
+      { section: "Deployment Sequence Diagram", required: false, validationRule: "Deep: include `<!-- diagram: deployment-sequence -->` marker with rollout order and guard checks." },
+      { section: "Data Flow", required: false, validationRule: "Must include happy path, nil input, empty input, upstream error paths, plus Interaction Edge Case matrix rows for: double-click, nav-away-mid-request, 10K-result dataset, background-job abandonment, zombie connection. Each row must declare handled yes/no and deferred item when not handled." },
+      { section: "Stale Diagram Audit", required: false, validationRule: "When `.cclaw/config.yaml::optInAudits.staleDiagramAudit` is true: blast-radius files from Codebase Investigation must not be newer than the current design diagram-marker baseline unless explicitly refreshed." },
       { section: "Failure Mode Table", required: true, validationRule: "Use Method/Exception/Rescue/UserSees columns and treat silent user impact without rescue as critical." },
-      { section: "Security & Threat Model", required: false, validationRule: "Must list trust boundaries, abuse/failure scenarios, mitigations, and residual risks." },
+      { section: "Security & Threat Model", required: true, validationRule: "Must list trust boundaries, abuse/failure scenarios, mitigations, and residual risks." },
       { section: "Test Strategy", required: false, validationRule: "Must define unit/integration/e2e expectations with coverage targets." },
       { section: "Performance Budget", required: false, validationRule: "For each critical path: metric name, target threshold, and measurement method." },
+      { section: "Observability & Debuggability", required: true, validationRule: "Must define logs/metrics/traces plus alerting/debug path for critical failure modes." },
+      { section: "Deployment & Rollout", required: true, validationRule: "Must define migration/flag strategy, rollback plan, and post-deploy verification steps." },
       { section: "What Already Exists", required: false, validationRule: "For each sub-problem: existing code/library found (Layer 1-3/EUREKA label), reuse decision, and adaptation needed." },
+      { section: "Outside Voice Findings", required: false, validationRule: "List adversarial findings and disposition (accept/reject/defer) with rationale per finding." },
+      { section: "Spec Review Loop", required: false, validationRule: "Record iteration table (max 3) with quality score per iteration, stop reason, and unresolved concerns." },
       { section: "NOT in scope", required: false, validationRule: "Work considered and explicitly deferred with one-line rationale." },
       { section: "Parallelization Strategy", required: false, validationRule: "If multi-module: dependency table, parallel lanes, conflict flags." },
       { section: "Unresolved Decisions", required: false, validationRule: "If any: what info is missing, who provides it, default if unanswered." },
@@ -181,6 +198,12 @@ export const DESIGN: StageSchemaInput = {
       "What-already-exists section",
       "design completion dashboard"
     ],
+    reviewLoop: {
+      stage: "design",
+      checklist: REVIEW_LOOP_CHECKLISTS.design.map((dimension) => dimension.id),
+      maxIterations: 3,
+      targetScore: 0.8
+    },
     reviewSections: [
       {
         title: "Architecture Review",

@@ -427,6 +427,93 @@ sliceReview:
     await expect(readConfig(root)).rejects.toThrow(/must contain only/);
   });
 
+  it("parses optInAudits toggles", async () => {
+    const root = await createTempProject("config-opt-in-audits");
+    await fs.mkdir(path.join(root, ".cclaw"), { recursive: true });
+    await fs.writeFile(
+      configPath(root),
+      `harnesses:
+  - claude
+optInAudits:
+  scopePreAudit: true
+  staleDiagramAudit: false
+`,
+      "utf8"
+    );
+    const config = await readConfig(root);
+    expect(config.optInAudits?.scopePreAudit).toBe(true);
+    expect(config.optInAudits?.staleDiagramAudit).toBe(false);
+  });
+
+  it("rejects malformed optInAudits config", async () => {
+    const root = await createTempProject("config-opt-in-audits-malformed");
+    await fs.mkdir(path.join(root, ".cclaw"), { recursive: true });
+    await fs.writeFile(configPath(root), "optInAudits: true\n", "utf8");
+    await expect(readConfig(root)).rejects.toThrow(/"optInAudits" must be an object/);
+  });
+
+  it("rejects unknown optInAudits keys", async () => {
+    const root = await createTempProject("config-opt-in-audits-unknown-key");
+    await fs.mkdir(path.join(root, ".cclaw"), { recursive: true });
+    await fs.writeFile(
+      configPath(root),
+      `optInAudits:
+  staleDiagramAudit: true
+  randomAudit: true
+`,
+      "utf8"
+    );
+    await expect(readConfig(root)).rejects.toThrow(/"optInAudits" has unknown key\(s\): randomAudit/);
+  });
+
+  it("parses reviewLoop external second opinion settings", async () => {
+    const root = await createTempProject("config-review-loop-second-opinion");
+    await fs.mkdir(path.join(root, ".cclaw"), { recursive: true });
+    await fs.writeFile(
+      configPath(root),
+      `reviewLoop:
+  externalSecondOpinion:
+    enabled: true
+    model: external-reviewer
+    scoreDeltaThreshold: 0.35
+`,
+      "utf8"
+    );
+    const config = await readConfig(root);
+    expect(config.reviewLoop?.externalSecondOpinion?.enabled).toBe(true);
+    expect(config.reviewLoop?.externalSecondOpinion?.model).toBe("external-reviewer");
+    expect(config.reviewLoop?.externalSecondOpinion?.scoreDeltaThreshold).toBe(0.35);
+  });
+
+  it("rejects malformed reviewLoop external second opinion settings", async () => {
+    const root = await createTempProject("config-review-loop-second-opinion-malformed");
+    await fs.mkdir(path.join(root, ".cclaw"), { recursive: true });
+    await fs.writeFile(
+      configPath(root),
+      `reviewLoop:
+  externalSecondOpinion: true
+`,
+      "utf8"
+    );
+    await expect(readConfig(root)).rejects.toThrow(
+      /"reviewLoop\.externalSecondOpinion" must be an object/
+    );
+  });
+
+  it("rejects out-of-range reviewLoop scoreDeltaThreshold", async () => {
+    const root = await createTempProject("config-review-loop-second-opinion-bad-threshold");
+    await fs.mkdir(path.join(root, ".cclaw"), { recursive: true });
+    await fs.writeFile(
+      configPath(root),
+      `reviewLoop:
+  externalSecondOpinion:
+    scoreDeltaThreshold: 2
+`,
+      "utf8"
+    );
+    await expect(readConfig(root)).rejects.toThrow(/scoreDeltaThreshold.*between 0 and 1/);
+  });
+
   // -- advisory-by-default: single `strictness` knob ------------------------
 
   it("strictness=strict is accepted as the single enforcement knob", async () => {
@@ -479,7 +566,9 @@ sliceReview:
       "compound",
       "defaultTrack",
       "trackHeuristics",
-      "sliceReview"
+      "sliceReview",
+      "optInAudits",
+      "reviewLoop"
     ];
     for (const advanced of unexpectedAdvanced) {
       expect(keys).not.toContain(advanced);

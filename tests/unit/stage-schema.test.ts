@@ -26,6 +26,7 @@ describe("stage schema and subagent alignment", () => {
       expect(schema.artifactRules.artifactValidation).toEqual(schema.artifactValidation);
       expect(schema.reviewLens.reviewSections).toEqual(schema.reviewSections);
       expect(schema.reviewLens.mandatoryDelegations).toEqual(schema.mandatoryDelegations);
+      expect(schema.reviewLens.reviewLoop).toEqual(schema.reviewLoop);
     }
   });
 
@@ -194,12 +195,130 @@ describe("stage schema and subagent alignment", () => {
     expect(researchGate?.tier).toBe("required");
   });
 
+  it("design artifact requires security, observability, and rollout sections", () => {
+    const design = stageSchema("design");
+    const requiredSections = [
+      "Security & Threat Model",
+      "Observability & Debuggability",
+      "Deployment & Rollout"
+    ];
+    for (const section of requiredSections) {
+      const rule = design.artifactValidation.find((row) => row.section === section);
+      expect(rule).toBeDefined();
+      expect(rule?.required).toBe(true);
+    }
+  });
+
+  it("design artifact exposes tiered diagram section contracts", () => {
+    const design = stageSchema("design");
+    for (const section of [
+      "Data-Flow Shadow Paths",
+      "Error Flow Diagram",
+      "State Machine Diagram",
+      "Rollback Flowchart",
+      "Deployment Sequence Diagram"
+    ] as const) {
+      const rule = design.artifactValidation.find((row) => row.section === section);
+      expect(rule).toBeDefined();
+      expect(rule?.required).toBe(false);
+    }
+  });
+
+  it("brainstorm artifact requires tier and reaction sections", () => {
+    const brainstorm = stageSchema("brainstorm");
+    for (const section of ["Approach Tier", "Approach Reaction"] as const) {
+      const rule = brainstorm.artifactValidation.find((row) => row.section === section);
+      expect(rule).toBeDefined();
+      expect(rule?.required).toBe(true);
+    }
+    expect(brainstorm.trivialOverrideSections).toEqual([
+      "Context",
+      "Problem",
+      "Approach Tier",
+      "Short-Circuit Decision",
+      "Selected Direction"
+    ]);
+  });
+
+  it("scope and design expose shared review-loop config", () => {
+    const scope = stageSchema("scope");
+    const design = stageSchema("design");
+    const spec = stageSchema("spec");
+    expect(scope.reviewLoop).toMatchObject({
+      stage: "scope",
+      maxIterations: 3,
+      targetScore: 0.8
+    });
+    expect(scope.reviewLoop?.checklist).toHaveLength(5);
+    expect(design.reviewLoop).toMatchObject({
+      stage: "design",
+      maxIterations: 3,
+      targetScore: 0.8
+    });
+    expect(design.reviewLoop?.checklist).toHaveLength(5);
+    expect(spec.reviewLoop).toBeUndefined();
+  });
+
   it("design template renders architecture diagram with clean triple-backtick fences", () => {
     const design = ARTIFACT_TEMPLATES["03-design.md"];
     expect(design).toContain("## Architecture Diagram");
     expect(design).not.toMatch(/\\`\\`\\`/);
     const diagramBlock = design.split("## Architecture Diagram")[1];
     expect(diagramBlock).toMatch(/\n```\n[\s\S]*?\n```\n/);
+  });
+
+  it("design template includes tiered diagram markers", () => {
+    const design = ARTIFACT_TEMPLATES["03-design.md"];
+    expect(design).toContain("<!-- diagram: architecture -->");
+    expect(design).toContain("<!-- diagram: data-flow-shadow-paths -->");
+    expect(design).toContain("<!-- diagram: error-flow -->");
+    expect(design).toContain("<!-- diagram: state-machine -->");
+    expect(design).toContain("<!-- diagram: rollback-flowchart -->");
+    expect(design).toContain("<!-- diagram: deployment-sequence -->");
+  });
+
+  it("design template includes interaction edge-case matrix rows", () => {
+    const design = ARTIFACT_TEMPLATES["03-design.md"];
+    expect(design).toContain("### Interaction Edge Case Matrix");
+    expect(design).toContain("| double-click |");
+    expect(design).toContain("| nav-away-mid-request |");
+    expect(design).toContain("| 10K-result dataset |");
+    expect(design).toContain("| background-job abandonment |");
+    expect(design).toContain("| zombie connection |");
+  });
+
+  it("design template includes stale diagram audit section", () => {
+    const design = ARTIFACT_TEMPLATES["03-design.md"];
+    expect(design).toContain("## Stale Diagram Audit");
+    expect(design).toContain("| Diagram marker baseline |");
+  });
+
+  it("scope template includes pre-scope system audit section", () => {
+    const scope = ARTIFACT_TEMPLATES["02-scope.md"];
+    expect(scope).toContain("## Pre-Scope System Audit");
+    expect(scope).toContain("git log -30 --oneline");
+    expect(scope).toContain("git diff --stat");
+    expect(scope).toContain("git stash list");
+    expect(scope).toContain('rg -n "TODO|FIXME|XXX|HACK"');
+  });
+
+  it("scope and design templates include review-loop artifact sections", () => {
+    const scopeTemplate = ARTIFACT_TEMPLATES["02-scope.md"];
+    const designTemplate = ARTIFACT_TEMPLATES["03-design.md"];
+    expect(scopeTemplate).toContain("## Outside Voice Findings");
+    expect(scopeTemplate).toContain("## Spec Review Loop");
+    expect(designTemplate).toContain("## Outside Voice Findings");
+    expect(designTemplate).toContain("## Spec Review Loop");
+  });
+
+  it("brainstorm scope and design templates expose seed shelf section", () => {
+    const brainstorm = ARTIFACT_TEMPLATES["01-brainstorm.md"];
+    const scope = ARTIFACT_TEMPLATES["02-scope.md"];
+    const design = ARTIFACT_TEMPLATES["03-design.md"];
+    expect(brainstorm).toContain("## Seed Shelf Candidates (optional)");
+    expect(scope).toContain("## Seed Shelf Candidates (optional)");
+    expect(design).toContain("## Seed Shelf Candidates (optional)");
+    expect(scope).toContain(".cclaw/seeds/SEED-YYYY-MM-DD-<slug>.md");
   });
 
   it("stage skills render explicit when-not-to-use guidance", () => {

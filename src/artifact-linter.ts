@@ -1,6 +1,7 @@
 import fs from "node:fs/promises";
 import path from "node:path";
 import { resolveArtifactPath as resolveStageArtifactPath } from "./artifact-paths.js";
+import { readConfig } from "./config.js";
 import { RUNTIME_ROOT, SHIP_FINALIZATION_MODES } from "./constants.js";
 import { exists } from "./fs-utils.js";
 import { stageSchema } from "./content/stage-schema.js";
@@ -116,6 +117,165 @@ function sectionBodyByName(sections: H2SectionMap, section: string): string | nu
 
 export function extractMarkdownSectionBody(markdown: string, section: string): string | null {
   return sectionBodyByName(extractH2Sections(markdown), section);
+}
+
+function headingLineIndex(markdown: string, section: string): number {
+  const want = normalizeHeadingTitle(section).toLowerCase();
+  const lines = markdown.split(/\r?\n/);
+  let fenced: string | null = null;
+  for (let i = 0; i < lines.length; i++) {
+    const line = lines[i]!;
+    const fence = /^\s*(```+|~~~+)\s*([A-Za-z0-9_-]+)?\s*$/u.exec(line);
+    if (fence) {
+      const marker = fence[1]!;
+      if (fenced === null) {
+        fenced = marker;
+      } else if (fenced === marker) {
+        fenced = null;
+      }
+      continue;
+    }
+    if (fenced !== null) continue;
+    const heading = /^##\s+(.+)$/u.exec(line);
+    if (!heading) continue;
+    if (normalizeHeadingTitle(heading[1] ?? "").toLowerCase() === want) {
+      return i;
+    }
+  }
+  return -1;
+}
+
+function parseShortCircuitStatus(sectionBody: string | null): string {
+  if (!sectionBody) return "";
+  const lines = sectionBody.split(/\r?\n/u);
+  return lines
+    .map((line) => line.replace(/[*_`]/gu, "").trim())
+    .map((line) => /^[-*]?\s*status\s*:\s*(.+)$/iu.exec(line)?.[1] ?? "")
+    .find((value) => value.trim().length > 0)?.trim().toLowerCase() ?? "";
+}
+
+function isShortCircuitActivated(sectionBody: string | null): boolean {
+  const statusValue = parseShortCircuitStatus(sectionBody);
+  return /^(?:activated|yes|true)$/u.test(statusValue) || /\bactivated\b/iu.test(statusValue);
+}
+
+type DesignDiagramTier = "lightweight" | "standard" | "deep";
+
+interface DesignDiagramRequirement {
+  section: string;
+  marker: string;
+  note: string;
+}
+
+const DESIGN_DIAGRAM_REQUIREMENTS: Record<DesignDiagramTier, DesignDiagramRequirement[]> = {
+  lightweight: [
+    {
+      section: "Architecture Diagram",
+      marker: "architecture",
+      note: "Architecture diagram is required for all tiers."
+    }
+  ],
+  standard: [
+    {
+      section: "Architecture Diagram",
+      marker: "architecture",
+      note: "Architecture diagram is required for all tiers."
+    },
+    {
+      section: "Data-Flow Shadow Paths",
+      marker: "data-flow-shadow-paths",
+      note: "Standard+ requires data-flow shadow path coverage."
+    },
+    {
+      section: "Error Flow Diagram",
+      marker: "error-flow",
+      note: "Standard+ requires explicit error-flow rescue mapping."
+    }
+  ],
+  deep: [
+    {
+      section: "Architecture Diagram",
+      marker: "architecture",
+      note: "Architecture diagram is required for all tiers."
+    },
+    {
+      section: "Data-Flow Shadow Paths",
+      marker: "data-flow-shadow-paths",
+      note: "Standard+ requires data-flow shadow path coverage."
+    },
+    {
+      section: "Error Flow Diagram",
+      marker: "error-flow",
+      note: "Standard+ requires explicit error-flow rescue mapping."
+    },
+    {
+      section: "State Machine Diagram",
+      marker: "state-machine",
+      note: "Deep tier requires state-machine coverage for lifecycle transitions."
+    },
+    {
+      section: "Rollback Flowchart",
+      marker: "rollback-flowchart",
+      note: "Deep tier requires rollback flowchart coverage."
+    },
+    {
+      section: "Deployment Sequence Diagram",
+      marker: "deployment-sequence",
+      note: "Deep tier requires deployment sequence coverage."
+    }
+  ]
+};
+
+function normalizeDesignDiagramTier(value: string | null): DesignDiagramTier | null {
+  if (!value) return null;
+  const normalized = value.trim().toLowerCase();
+  if (/^light(?:weight)?$/u.test(normalized)) return "lightweight";
+  if (/^standard$/u.test(normalized)) return "standard";
+  if (/^deep$/u.test(normalized)) return "deep";
+  return null;
+}
+
+function parseApproachTierSection(sectionBody: string | null): DesignDiagramTier | null {
+  if (!sectionBody) return null;
+  for (const line of sectionBody.split(/\r?\n/u)) {
+    const cleaned = line.replace(/[*_`]/gu, "").trim();
+    const directMatch = /(?:^|\b)tier\s*:\s*(lightweight|light|standard|deep)\b/iu.exec(cleaned);
+    if (directMatch) {
+      return normalizeDesignDiagramTier(directMatch[1] ?? null);
+    }
+  }
+  const token = /\b(lightweight|light|standard|deep)\b/iu.exec(sectionBody)?.[1] ?? null;
+  return normalizeDesignDiagramTier(token);
+}
+
+async function resolveDesignDiagramTier(
+  projectRoot: string,
+  track: FlowTrack,
+  designRaw: string
+): Promise<{ tier: DesignDiagramTier; source: string }> {
+  const fromDesign = parseApproachTierSection(extractMarkdownSectionBody(designRaw, "Approach Tier"));
+  if (fromDesign) {
+    return { tier: fromDesign, source: "design-artifact:Approach Tier" };
+  }
+  try {
+    const brainstormArtifact = await resolveStageArtifactPath("brainstorm", {
+      projectRoot,
+      track,
+      intent: "read"
+    });
+    if (await exists(brainstormArtifact.absPath)) {
+      const brainstormRaw = await fs.readFile(brainstormArtifact.absPath, "utf8");
+      const fromBrainstorm = parseApproachTierSection(
+        extractMarkdownSectionBody(brainstormRaw, "Approach Tier")
+      );
+      if (fromBrainstorm) {
+        return { tier: fromBrainstorm, source: "brainstorm-artifact:Approach Tier" };
+      }
+    }
+  } catch {
+    // Ignore read/resolve errors and fall back to default tier.
+  }
+  return { tier: "standard", source: "default:standard" };
 }
 
 function meaningfulLineCount(sectionBody: string): number {
@@ -240,6 +400,321 @@ function getMarkdownTableRows(sectionBody: string): string[][] {
     rows.push(parseMarkdownTableRow(line));
   }
   return rows;
+}
+
+type BinaryFlag = "yes" | "no" | "unknown";
+
+function parseBinaryFlag(value: string): BinaryFlag {
+  const normalized = value.trim().toLowerCase();
+  if (/^(?:y|yes|true|1)$/u.test(normalized)) return "yes";
+  if (/^(?:n|no|false|0|none)$/u.test(normalized)) return "no";
+  return "unknown";
+}
+
+function parseKeyedBinaryFlag(value: string, key: string): BinaryFlag {
+  const match = new RegExp(`${key}\\s*=\\s*(y|yes|true|1|n|no|false|0)`, "iu").exec(value);
+  if (!match) return "unknown";
+  return /^(?:y|yes|true|1)$/iu.test(match[1] ?? "") ? "yes" : "no";
+}
+
+function parseFailureModeRescueFlag(rescueCell: string): BinaryFlag {
+  const keyed = parseKeyedBinaryFlag(rescueCell, "rescued");
+  if (keyed !== "unknown") return keyed;
+  const direct = parseBinaryFlag(rescueCell);
+  if (direct !== "unknown") return direct;
+  if (/\b(?:no rescue|without rescue|unrescued|no fallback|none|absent)\b/iu.test(rescueCell)) {
+    return "no";
+  }
+  if (/\b(?:fallback|retry|degrade|recover|rescue|mitigat)\b/iu.test(rescueCell)) {
+    return "yes";
+  }
+  return "unknown";
+}
+
+function parseFailureModeTestFlag(rowText: string): BinaryFlag {
+  const keyed = parseKeyedBinaryFlag(rowText, "test");
+  if (keyed !== "unknown") return keyed;
+  if (/\b(?:no tests?|untested|without tests?)\b/iu.test(rowText)) {
+    return "no";
+  }
+  if (/\b(?:tested|has tests?|with tests?|covered by tests?)\b/iu.test(rowText)) {
+    return "yes";
+  }
+  return "unknown";
+}
+
+function validateFailureModeTable(sectionBody: string): { ok: boolean; details: string } {
+  const header = tableHeaderCells(sectionBody);
+  if (!header) {
+    return {
+      ok: false,
+      details: "Failure Mode Table must include a markdown header row and separator."
+    };
+  }
+  const expectedHeader = ["Method", "Exception", "Rescue", "UserSees"];
+  const normalizedHeader = header.map((cell) => cell.toLowerCase());
+  const normalizedExpected = expectedHeader.map((cell) => cell.toLowerCase());
+  const headerMatches =
+    normalizedHeader.length === normalizedExpected.length &&
+    normalizedHeader.every((cell, index) => cell === normalizedExpected[index]);
+  if (!headerMatches) {
+    return {
+      ok: false,
+      details: `Failure Mode Table header must be exactly: ${expectedHeader.join(" | ")}.`
+    };
+  }
+  const rows = getMarkdownTableRows(sectionBody);
+  if (rows.length === 0) {
+    return {
+      ok: false,
+      details: "Failure Mode Table must include at least one data row."
+    };
+  }
+  for (const [index, row] of rows.entries()) {
+    if (row.length < 4) {
+      return {
+        ok: false,
+        details: `Failure Mode Table row ${index + 1} must provide 4 columns (Method, Exception, Rescue, UserSees).`
+      };
+    }
+    const method = (row[0] ?? "").trim();
+    const exception = (row[1] ?? "").trim();
+    const rescue = (row[2] ?? "").trim();
+    const userSees = (row[3] ?? "").trim();
+    if (!method || !exception || !rescue || !userSees) {
+      return {
+        ok: false,
+        details: `Failure Mode Table row ${index + 1} must populate all columns (Method, Exception, Rescue, UserSees).`
+      };
+    }
+    const rescueFlag = parseFailureModeRescueFlag(rescue);
+    const testFlag = parseFailureModeTestFlag(`${method} ${exception} ${rescue} ${userSees}`);
+    const userSilent = /\bsilent\b/iu.test(userSees);
+    if (rescueFlag === "no" && testFlag === "no" && userSilent) {
+      return {
+        ok: false,
+        details: `Failure Mode Table CRITICAL row ${index + 1} (${method}): RESCUED=N + TEST=N + UserSees=Silent. Add rescue path, add test coverage, or make user impact explicit.`
+      };
+    }
+  }
+  return {
+    ok: true,
+    details: "Failure Mode Table header and critical-risk checks passed."
+  };
+}
+
+interface InteractionEdgeCaseRequirement {
+  label: string;
+  pattern: RegExp;
+}
+
+const INTERACTION_EDGE_CASE_REQUIREMENTS: readonly InteractionEdgeCaseRequirement[] = [
+  { label: "double-click", pattern: /\bdouble[\s-]?click\b/iu },
+  {
+    label: "nav-away-mid-request",
+    pattern: /\b(?:nav(?:igate)?[\s-]?away(?:[\s-]?mid[\s-]?request)?|leave\s+(?:page|view|screen).*(?:request|save|submit)|close\s+tab.*(?:request|save|submit))\b/iu
+  },
+  {
+    label: "10K-result dataset",
+    pattern: /\b(?:10k(?:[\s-]?result)?|10,?000|large[\s-]?result(?:[\s-]?dataset)?)\b/iu
+  },
+  {
+    label: "background-job abandonment",
+    pattern: /\b(?:background[\s-]?job.*abandon(?:ed|ment)?|abandon(?:ed|ment)?.*background[\s-]?job)\b/iu
+  },
+  { label: "zombie connection", pattern: /\bzombie[\s-]?connection\b/iu }
+];
+
+function validateInteractionEdgeCaseMatrix(sectionBody: string): { ok: boolean; details: string } {
+  const rows = getMarkdownTableRows(sectionBody);
+  if (rows.length === 0) {
+    return {
+      ok: false,
+      details: "Data Flow must include an Interaction Edge Case matrix table with required rows."
+    };
+  }
+
+  const seen = new Map<string, true>();
+  for (const [index, row] of rows.entries()) {
+    const labelCell = (row[0] ?? "").trim();
+    if (!labelCell) continue;
+    const requirement = INTERACTION_EDGE_CASE_REQUIREMENTS.find((candidate) =>
+      candidate.pattern.test(labelCell)
+    );
+    if (!requirement) continue;
+
+    if (row.length < 4) {
+      return {
+        ok: false,
+        details: `Interaction Edge Case row "${requirement.label}" must include 4 columns: Edge case | Handled? | Design response | Deferred item.`
+      };
+    }
+
+    const handled = parseBinaryFlag((row[1] ?? "").trim());
+    const response = (row[2] ?? "").trim();
+    const deferred = (row[3] ?? "").trim();
+    if (handled === "unknown") {
+      return {
+        ok: false,
+        details: `Interaction Edge Case row "${requirement.label}" must mark Handled? as yes/no.`
+      };
+    }
+    if (!response) {
+      return {
+        ok: false,
+        details: `Interaction Edge Case row "${requirement.label}" must describe the design response.`
+      };
+    }
+    if (handled === "no" && (!deferred || /\bnone\b/iu.test(deferred))) {
+      return {
+        ok: false,
+        details: `Interaction Edge Case row "${requirement.label}" is unhandled and must reference a deferred item id (for example D-12).`
+      };
+    }
+    seen.set(requirement.label, true);
+  }
+
+  const missing = INTERACTION_EDGE_CASE_REQUIREMENTS
+    .map((requirement) => requirement.label)
+    .filter((label) => !seen.has(label));
+  if (missing.length > 0) {
+    return {
+      ok: false,
+      details: `Interaction Edge Case matrix is missing required row(s): ${missing.join(", ")}.`
+    };
+  }
+  return {
+    ok: true,
+    details: "Interaction Edge Case matrix contains all required rows with handled/deferred status."
+  };
+}
+
+const PRE_SCOPE_AUDIT_SIGNALS: ReadonlyArray<{ label: string; pattern: RegExp }> = [
+  { label: "git log -30 --oneline", pattern: /\bgit\s+log\b[^\n]*-30[^\n]*\boneline\b/iu },
+  { label: "git diff --stat", pattern: /\bgit\s+diff\b[^\n]*--stat\b/iu },
+  { label: "git stash list", pattern: /\bgit\s+stash\s+list\b/iu },
+  {
+    label: "debt marker scan (TODO|FIXME|XXX|HACK)",
+    pattern: /\b(?:rg|ripgrep)\b[^\n]*(?:TODO|FIXME|XXX|HACK)|\bTODO\b|\bFIXME\b|\bXXX\b|\bHACK\b/iu
+  }
+];
+
+function validatePreScopeSystemAudit(sectionBody: string): { ok: boolean; details: string } {
+  const missing = PRE_SCOPE_AUDIT_SIGNALS
+    .filter((signal) => !signal.pattern.test(sectionBody))
+    .map((signal) => signal.label);
+  if (missing.length > 0) {
+    return {
+      ok: false,
+      details: `Pre-Scope System Audit is missing required signal(s): ${missing.join(", ")}.`
+    };
+  }
+  return {
+    ok: true,
+    details: "Pre-Scope System Audit captures git log/diff/stash/debt-marker checks."
+  };
+}
+
+function normalizeCodebaseInvestigationFileRef(value: string): string | null {
+  const cleaned = value
+    .replace(/`/gu, "")
+    .replace(/^\s*[-*]\s*/u, "")
+    .trim();
+  if (!cleaned) return null;
+  if (/^(?:file|n\/a|none|\(none\)|tbd|\?)$/iu.test(cleaned)) return null;
+  return cleaned;
+}
+
+function collectCodebaseInvestigationFiles(sectionBody: string): string[] {
+  const refs: string[] = [];
+  for (const row of getMarkdownTableRows(sectionBody)) {
+    const fileCell = normalizeCodebaseInvestigationFileRef(row[0] ?? "");
+    if (fileCell) refs.push(fileCell);
+  }
+  return [...new Set(refs)];
+}
+
+interface StaleDiagramAuditResult {
+  ok: boolean;
+  details: string;
+}
+
+async function runStaleDiagramAudit(
+  projectRoot: string,
+  artifactPath: string,
+  artifactRaw: string,
+  codebaseInvestigationBody: string
+): Promise<StaleDiagramAuditResult> {
+  const markerCount = (artifactRaw.match(/<!--\s*diagram:\s*[a-z0-9-]+\s*-->/giu) ?? []).length;
+  if (markerCount === 0) {
+    return {
+      ok: false,
+      details: "No diagram markers found in design artifact; stale-diagram baseline cannot be computed."
+    };
+  }
+  let artifactStat: Awaited<ReturnType<typeof fs.stat>>;
+  try {
+    artifactStat = await fs.stat(artifactPath);
+  } catch {
+    return {
+      ok: false,
+      details: "Cannot stat design artifact to compute diagram marker baseline."
+    };
+  }
+
+  const refs = collectCodebaseInvestigationFiles(codebaseInvestigationBody);
+  if (refs.length === 0) {
+    return {
+      ok: false,
+      details: "Codebase Investigation must list at least one blast-radius file for stale-diagram audit."
+    };
+  }
+
+  const stale: string[] = [];
+  const missing: string[] = [];
+  let scanned = 0;
+  for (const ref of refs) {
+    const absPath = path.isAbsolute(ref) ? ref : path.join(projectRoot, ref);
+    if (!(await exists(absPath))) {
+      missing.push(ref);
+      continue;
+    }
+    let fileStat: Awaited<ReturnType<typeof fs.stat>>;
+    try {
+      fileStat = await fs.stat(absPath);
+    } catch {
+      missing.push(ref);
+      continue;
+    }
+    if (!fileStat.isFile()) continue;
+    scanned += 1;
+    if (fileStat.mtimeMs > artifactStat.mtimeMs) {
+      stale.push(ref);
+    }
+  }
+
+  if (missing.length > 0) {
+    return {
+      ok: false,
+      details: `Stale Diagram Audit could not read blast-radius file(s): ${missing.join(", ")}.`
+    };
+  }
+  if (scanned === 0) {
+    return {
+      ok: false,
+      details: "Stale Diagram Audit found no readable blast-radius files in Codebase Investigation."
+    };
+  }
+  if (stale.length > 0) {
+    return {
+      ok: false,
+      details: `Stale Diagram Audit flagged stale file(s) newer than diagram baseline: ${stale.join(", ")}.`
+    };
+  }
+  return {
+    ok: true,
+    details: `Stale Diagram Audit clear: ${scanned} blast-radius file(s) are not newer than diagram baseline.`
+  };
 }
 
 const DIAGRAM_ARROW_PATTERN = /(?:<--?>|<?==?>|--?>|->>|=>|-\.->|→|⟶|↦)/u;
@@ -840,6 +1315,15 @@ function validateSectionBody(
   if (sectionNameNormalized === "verification ladder") {
     return validateVerificationLadder(sectionBody);
   }
+  if (sectionNameNormalized === "failure mode table") {
+    return validateFailureModeTable(sectionBody);
+  }
+  if (sectionNameNormalized === "pre-scope system audit") {
+    return validatePreScopeSystemAudit(sectionBody);
+  }
+  if (sectionNameNormalized === "data flow") {
+    return validateInteractionEdgeCaseMatrix(sectionBody);
+  }
   if (sectionNameNormalized === "architecture diagram") {
     const edgeLines = diagramEdgeLines(sectionBody);
     if (edgeLines.length === 0) {
@@ -958,6 +1442,7 @@ export async function lintArtifact(
 
   const raw = await fs.readFile(absFile, "utf8");
   const sections = extractH2Sections(raw);
+  const projectConfig = await readConfig(projectRoot);
   const parsedFrontmatter = parseFrontmatter(raw);
   const frontmatterMissingKeys = FRONTMATTER_REQUIRED_KEYS.filter((key) => {
     const value = parsedFrontmatter.values[key];
@@ -991,19 +1476,35 @@ export async function lintArtifact(
               : "Frontmatter integrity checks passed."
   });
 
+  const brainstormShortCircuitBody =
+    stage === "brainstorm" ? sectionBodyByName(sections, "Short-Circuit Decision") : null;
+  const brainstormShortCircuitActivated =
+    stage === "brainstorm" && isShortCircuitActivated(brainstormShortCircuitBody);
+  const scopePreAuditEnabled = projectConfig.optInAudits?.scopePreAudit === true;
+  const staleDiagramAuditEnabled = projectConfig.optInAudits?.staleDiagramAudit === true;
   const isTrivialOverride =
     schema.trivialOverrideSections &&
     schema.trivialOverrideSections.length > 0 &&
-    /trivial.change|mini.design|escape.hatch/iu.test(raw);
+    (
+      /trivial.change|mini.design|escape.hatch/iu.test(raw) ||
+      brainstormShortCircuitActivated
+    );
   const overrideSet = isTrivialOverride
     ? new Set(schema.trivialOverrideSections!.map((s) => normalizeHeadingTitle(s).toLowerCase()))
     : null;
 
   for (const v of schema.artifactValidation) {
-    const effectiveRequired = overrideSet
-      ? overrideSet.has(normalizeHeadingTitle(v.section).toLowerCase()) ? true : false
-      : v.required;
+    const sectionKey = normalizeHeadingTitle(v.section).toLowerCase();
     const hasHeading = headingPresent(sections, v.section);
+    const effectiveRequiredFromOverride = overrideSet
+      ? overrideSet.has(sectionKey) ? true : false
+      : v.required;
+    const effectiveRequired =
+      stage === "design" && sectionKey === "data flow" && hasHeading
+        ? true
+        : stage === "scope" && sectionKey === "pre-scope system audit" && scopePreAuditEnabled
+          ? true
+        : effectiveRequiredFromOverride;
     const body = hasHeading ? sectionBodyByName(sections, v.section) : null;
     const validation = body === null
       ? { ok: false, details: `No ## heading matching required section "${v.section}".` }
@@ -1047,19 +1548,36 @@ export async function lintArtifact(
     // prose-only — nothing failed when the Selected Direction section
     // omitted an approval marker, or when the Approaches table collapsed
     // to a single row (defeating the "2-3 distinct approaches" gate).
+    const tierBody = sectionBodyByName(sections, "Approach Tier");
+    if (tierBody !== null) {
+      const hasTierToken = /\b(?:lightweight|standard|deep)\b/iu.test(tierBody);
+      findings.push({
+        section: "Approach Tier Classification",
+        required: true,
+        rule: "Approach Tier must explicitly classify depth as Lightweight, Standard, or Deep.",
+        found: hasTierToken,
+        details: hasTierToken
+          ? "Approach Tier includes a recognized depth token."
+          : "Approach Tier is missing a recognized depth token (Lightweight/Standard/Deep)."
+      });
+    }
+
     const approachesBody = sectionBodyByName(sections, "Approaches");
     if (approachesBody !== null) {
-      const tableRows = approachesBody
-        .split(/\r?\n/u)
-        .map((line) => line.trim())
-        .filter((line) => line.startsWith("|"))
-        .filter((line) => !/^\|\s*[-: |]+\|\s*$/u.test(line))
-        .filter((line) => !/^\|\s*approach\b/iu.test(line));
+      const tableRows = getMarkdownTableRows(approachesBody);
       const bulletRows = approachesBody
         .split(/\r?\n/u)
         .map((line) => line.trim())
         .filter((line) => /^(?:[-*]|\d+\.)\s+\S/u.test(line));
       const rowCount = Math.max(tableRows.length, bulletRows.length);
+      const hasChallengerFromTable = tableRows.some((row) => {
+        const joined = row.join(" ");
+        return /\bchallenger\b/iu.test(joined) && /\bhigher[-\s]?upside\b/iu.test(joined);
+      });
+      const hasChallengerFromBullets = bulletRows.some((row) =>
+        /\bchallenger\b/iu.test(row) && /\bhigher[-\s]?upside\b/iu.test(row)
+      );
+      const hasChallenger = hasChallengerFromTable || hasChallengerFromBullets;
       findings.push({
         section: "Distinct Approaches Enforcement",
         required: true,
@@ -1070,7 +1588,32 @@ export async function lintArtifact(
             ? `Detected ${rowCount} approach row(s).`
             : `Detected ${rowCount} approach row(s); at least 2 required.`
       });
+      findings.push({
+        section: "Challenger Alternative Enforcement",
+        required: true,
+        rule: "Approaches must include one option labeled `challenger: higher-upside`.",
+        found: hasChallenger,
+        details: hasChallenger
+          ? "Challenger higher-upside alternative detected."
+          : "Missing `challenger: higher-upside` alternative in Approaches."
+      });
     }
+
+    const reactionIndex = headingLineIndex(raw, "Approach Reaction");
+    const directionIndex = headingLineIndex(raw, "Selected Direction");
+    if (directionIndex >= 0 && !brainstormShortCircuitActivated) {
+      const orderOk = reactionIndex >= 0 && reactionIndex < directionIndex;
+      findings.push({
+        section: "Approach Reaction Ordering",
+        required: true,
+        rule: "Approach Reaction must appear before Selected Direction (propose -> react -> recommend).",
+        found: orderOk,
+        details: orderOk
+          ? "Approach Reaction appears before Selected Direction."
+          : "Approach Reaction must be present before Selected Direction."
+      });
+    }
+
     const directionBody = sectionBodyByName(sections, "Selected Direction");
     if (directionBody !== null) {
       const approvalMarker = /\bapprov(?:ed|al)\b/iu.test(directionBody);
@@ -1083,6 +1626,115 @@ export async function lintArtifact(
           ? "Approval marker present in Selected Direction."
           : "No explicit `approved`/`approval` marker found in Selected Direction."
       });
+      if (!brainstormShortCircuitActivated) {
+        const reactionTrace = /\b(?:reaction|feedback|concern(?:s)?)\b/iu.test(directionBody);
+        findings.push({
+          section: "Direction Reaction Trace",
+          required: true,
+          rule: "Selected Direction rationale must reference user reaction/feedback before recommendation.",
+          found: reactionTrace,
+          details: reactionTrace
+            ? "Selected Direction rationale references user reaction/feedback."
+            : "Selected Direction rationale does not reference user reaction/feedback."
+        });
+      }
+    }
+
+    const shortCircuitBody = brainstormShortCircuitBody;
+    if (shortCircuitBody !== null) {
+      const statusValue = parseShortCircuitStatus(shortCircuitBody);
+      const hasStatus = statusValue.length > 0;
+      findings.push({
+        section: "Short-Circuit Status",
+        required: true,
+        rule: "Short-Circuit Decision must include a `Status:` line (`activated` or `bypassed`).",
+        found: hasStatus,
+        details: hasStatus
+          ? `Short-circuit status declared as "${statusValue}".`
+          : "Short-Circuit Decision is missing a `Status:` line."
+      });
+      if (brainstormShortCircuitActivated) {
+        const artifactLines = meaningfulLineCount(raw);
+        const withinStubLimit = artifactLines <= 30;
+        const hasScopeHandoff = /\bscope\b/iu.test(shortCircuitBody);
+        findings.push({
+          section: "Short-Circuit Stub Size",
+          required: true,
+          rule: "When short-circuit is activated, brainstorm artifact must remain a <=30 meaningful-line stub.",
+          found: withinStubLimit,
+          details: withinStubLimit
+            ? `Short-circuit stub size within limit (${artifactLines} meaningful lines).`
+            : `Short-circuit stub too large (${artifactLines} meaningful lines); expected <= 30.`
+        });
+        findings.push({
+          section: "Short-Circuit Scope Handoff",
+          required: true,
+          rule: "When short-circuit is activated, the section must explicitly hand off to scope.",
+          found: hasScopeHandoff,
+          details: hasScopeHandoff
+            ? "Short-circuit section includes explicit scope handoff."
+            : "Short-circuit section is missing explicit scope handoff guidance."
+        });
+      }
+    }
+  }
+
+  if (stage === "design") {
+    const tierResolution = await resolveDesignDiagramTier(projectRoot, track, raw);
+    const diagramTier: DesignDiagramTier = isTrivialOverride
+      ? "lightweight"
+      : tierResolution.tier;
+    const tierSource = isTrivialOverride
+      ? `${tierResolution.source}; trivial override forced lightweight`
+      : tierResolution.source;
+    for (const requirement of DESIGN_DIAGRAM_REQUIREMENTS[diagramTier]) {
+      const sectionBody = sectionBodyByName(sections, requirement.section);
+      const hasSection = sectionBody !== null;
+      const escapedMarker = requirement.marker.replace(/[.*+?^${}()|[\]\\]/gu, "\\$&");
+      const markerRegex = new RegExp(`<!--\\s*diagram:\\s*${escapedMarker}\\s*-->`, "iu");
+      const hasMarker = sectionBody !== null && markerRegex.test(sectionBody);
+      const hasContent = sectionBody !== null && meaningfulLineCount(sectionBody) > 0;
+      const found = hasSection && hasMarker && hasContent;
+      findings.push({
+        section: `Diagram Requirement: ${requirement.section}`,
+        required: true,
+        rule: `Design tier "${diagramTier}" requires "${requirement.section}" with marker \`<!-- diagram: ${requirement.marker} -->\`. ${requirement.note}`,
+        found,
+        details: found
+          ? `Satisfied (${tierSource}).`
+          : !hasSection
+            ? `Missing section "${requirement.section}" (${tierSource}).`
+            : !hasMarker
+              ? `Missing marker \`<!-- diagram: ${requirement.marker} -->\` in section "${requirement.section}" (${tierSource}).`
+              : `Section "${requirement.section}" has marker but no meaningful content (${tierSource}).`
+      });
+    }
+
+    if (staleDiagramAuditEnabled) {
+      const codebaseInvestigation = sectionBodyByName(sections, "Codebase Investigation");
+      if (codebaseInvestigation === null) {
+        findings.push({
+          section: "Stale Diagram Drift Check",
+          required: true,
+          rule: "When `.cclaw/config.yaml::optInAudits.staleDiagramAudit` is true, stale diagram audit requires Codebase Investigation blast-radius files.",
+          found: false,
+          details: "No ## heading matching required section \"Codebase Investigation\"."
+        });
+      } else {
+        const staleAudit = await runStaleDiagramAudit(
+          projectRoot,
+          absFile,
+          raw,
+          codebaseInvestigation
+        );
+        findings.push({
+          section: "Stale Diagram Drift Check",
+          required: true,
+          rule: "When `.cclaw/config.yaml::optInAudits.staleDiagramAudit` is true, blast-radius files must not be newer than current design diagram baseline.",
+          found: staleAudit.ok,
+          details: staleAudit.details
+        });
+      }
     }
   }
 

@@ -85,11 +85,20 @@ export interface StageReviewLens {
   outputs: string[];
   reviewSections: ReviewSection[];
   mandatoryDelegations: string[];
+  reviewLoop?: StageReviewLoop;
 }
 
 export interface StageReviewLensInput {
   outputs: string[];
   reviewSections: ReviewSection[];
+  reviewLoop?: StageReviewLoop;
+}
+
+export interface StageReviewLoop {
+  stage: "scope" | "design";
+  checklist: string[];
+  maxIterations: number;
+  targetScore: number;
 }
 
 export interface StageSchema {
@@ -147,6 +156,8 @@ export interface StageSchema {
   trivialOverrideSections?: string[];
   /** Agent names that MUST be dispatched (or waived) before stage transition — derived from mandatory auto-subagent rows. */
   mandatoryDelegations: string[];
+  /** Optional shared outside-voice loop config for scope/design stages. */
+  reviewLoop?: StageReviewLoop;
 }
 
 export type StageSchemaLegacyInput = Omit<

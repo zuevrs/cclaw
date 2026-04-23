@@ -1,5 +1,30 @@
 # Changelog
 
+## 0.48.32
+
+Stage-audit implementation release (Phase 6 completion). This cut finalizes the
+remaining opt-in upgrades with config-driven toggles, a reusable seed shelf, and
+an optional second-opinion path for review loops.
+
+### Changed
+
+- Replaced env-based scope/design audit toggles with config-driven switches under
+  `.cclaw/config.yaml::optInAudits` (`scopePreAudit`, `staleDiagramAudit`) and
+  updated lint/runtime tests accordingly.
+- Added seed shelf support via `src/content/seed-shelf.ts` with collision-safe
+  `SEED-YYYY-MM-DD-<slug>.md` naming, `trigger_when` matching, and seed-template
+  rendering for deferred high-upside ideas.
+- Extended `/cc` startup protocol with a dedicated seed-recall step so matching
+  seeds are surfaced before routing when prompt triggers align.
+- Added “plant as seed” guidance + template sections across ideate, brainstorm,
+  scope, and design artifacts to preserve promising non-selected directions.
+- Extended review-loop internals with `createSecondOpinionDispatcher` and merged
+  second-opinion scoring/findings behind
+  `.cclaw/config.yaml::reviewLoop.externalSecondOpinion.*`.
+- Added config schema/docs/tests for `reviewLoop.externalSecondOpinion` (`enabled`,
+  `model`, `scoreDeltaThreshold`) and disagreement surfacing when score deltas
+  exceed the configured threshold.
+
 ## 0.48.31
 
 Phase-0 renderer migration to grouped v2 stage views. This cut switches stage

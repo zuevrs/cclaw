@@ -143,6 +143,32 @@ export interface IronLawsConfig {
   strictLaws?: string[];
 }
 
+/**
+ * Optional opt-in audit toggles for additional stage lint gates.
+ *
+ * Disabled by default so existing projects are not forced into stricter
+ * checks until they explicitly enable them in config.
+ */
+export interface OptInAuditsConfig {
+  /** When true, scope lint requires a filled `Pre-Scope System Audit` section. */
+  scopePreAudit?: boolean;
+  /** When true, design lint runs stale diagram drift checks against blast radius files. */
+  staleDiagramAudit?: boolean;
+}
+
+export interface ReviewLoopExternalSecondOpinionConfig {
+  /** Enables a second outside-voice pass for review-loop iterations. */
+  enabled?: boolean;
+  /** Optional model label for traceability in artifacts/logs. */
+  model?: string;
+  /** Minimum score delta that should be surfaced as disagreement context. */
+  scoreDeltaThreshold?: number;
+}
+
+export interface ReviewLoopConfig {
+  externalSecondOpinion?: ReviewLoopExternalSecondOpinionConfig;
+}
+
 export interface CclawConfig {
   version: string;
   flowVersion: string;
@@ -195,6 +221,10 @@ export interface CclawConfig {
   sliceReview?: SliceReviewConfig;
   /** Optional per-law strictness controls for hook-enforced iron laws. */
   ironLaws?: IronLawsConfig;
+  /** Optional opt-in audit gates for scope/design stages. */
+  optInAudits?: OptInAuditsConfig;
+  /** Optional runtime knobs for outside-voice review loops. */
+  reviewLoop?: ReviewLoopConfig;
 }
 
 /**

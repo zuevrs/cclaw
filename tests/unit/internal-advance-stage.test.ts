@@ -68,15 +68,29 @@ async function writeBrainstormArtifact(
 | 1 | Block invalid metadata or warn? | Block | enforce mandatory gate |
 | 2 | Add runtime dependencies? | No | keep existing runtime stack |
 
+## Approach Tier
+- Tier: Standard
+- Why this tier: spans CI + local release scripts but remains bounded.
+
+## Short-Circuit Decision
+- Status: bypassed
+- Why: options and trade-offs were still needed before locking direction.
+- Scope handoff: continue full brainstorm flow before scope.
+
 ## Approaches
-| Approach | Architecture | Trade-offs | Recommendation |
-|---|---|---|---|
-| A | narrow fix | lower risk, weaker reuse |  |
-| B | reusable validation module | moderate effort, stronger reuse | recommended |
+| Approach | Role | Architecture | Trade-offs | Recommendation |
+|---|---|---|---|---|
+| A | baseline | narrow fix | lower risk, weaker reuse |  |
+| B | challenger: higher-upside | reusable validation module | moderate effort, stronger reuse | recommended |
+
+## Approach Reaction
+- Closest option: B
+- Concerns: prevent v1 overbuild while maximizing reuse.
+- What changed after reaction: recommendation stayed on B with reduced initial scope.
 
 ## Selected Direction
 - Approach: B - reusable validation module
-- Rationale: best balance of reuse and delivery speed
+- Rationale: user reaction emphasized bounded v1 scope, so B gives best balance of reuse and delivery speed
 - Approval: approved
 
 ## Design
@@ -97,6 +111,8 @@ async function writeScopeArtifact(root: string): Promise<void> {
   await fs.mkdir(path.join(root, ".cclaw/artifacts"), { recursive: true });
   await fs.writeFile(path.join(root, ".cclaw/artifacts/02-scope.md"), `# Scope Artifact
 
+> Review Loop Quality: 0.830 | stop: quality_threshold_met | iterations: 2/3
+
 ## Scope Mode
 - Mode: broad
 
@@ -104,15 +120,163 @@ async function writeScopeArtifact(root: string): Promise<void> {
 - In scope: lock down requirements and interfaces.
 - Out of scope: implementation and rollout.
 
+## Outside Voice Findings
+| ID | Dimension | Finding | Disposition | Rationale |
+|---|---|---|---|---|
+| F-1 | premise_fit | Scope accepted but lacked explicit fallback edges in first draft. | accept | Added failure/rescue boundaries. |
+
+## Spec Review Loop
+| Iteration | Quality Score | Findings | Stop decision |
+|---|---|---|---|
+| 1 | 0.610 | 4 | continue |
+| 2 | 0.830 | 1 | stop |
+- Stop reason: quality_threshold_met
+- Target score: 0.800
+- Max iterations: 3
+- Unresolved concerns: None
+
 ## Completion Dashboard
 - Required gates: pending
 - User approval: pending
 
 ## Scope Summary
-- Summary: define clear boundaries before design.
+- Selected mode: broad
+- Strongest challenges: balancing reliability with delivery speed
+- Recommended path: lock interfaces and failure boundaries first
+- Accepted scope: scope contract and decision boundaries
+- Deferred: implementation details
+- Explicitly excluded: rollout execution and deployment changes
 
 ## Learnings
 - None this stage.
+`, "utf8");
+}
+
+async function writeDesignArtifact(root: string): Promise<void> {
+  await fs.mkdir(path.join(root, ".cclaw/artifacts"), { recursive: true });
+  await fs.writeFile(path.join(root, ".cclaw/artifacts/03-design.md"), `# Design Artifact
+
+> Review Loop Quality: 0.810 | stop: quality_threshold_met | iterations: 2/3
+
+## Research Fleet Synthesis
+| Lens | Key findings | Design impact | Evidence |
+|---|---|---|---|
+| stack-researcher | Existing queue infra available | Reuse existing queue primitives | docs/queue.md |
+| features-researcher | Retry + fallback needed | Explicit rescue paths in diagram | docs/features.md |
+| architecture-researcher | Service boundary should remain stable | Keep API + worker split | docs/architecture.md |
+| pitfalls-researcher | Silent failures were prior outage root cause | Add user-visible rescue output | docs/pitfalls.md |
+
+## Architecture Boundaries
+| Component | Responsibility | Owner |
+|---|---|---|
+| API_Gateway | Validate and route requests | platform |
+| App_Service | Orchestrate domain actions | product |
+| Storage_Adapter | Persist state with retries | data |
+
+## Architecture Diagram
+<!-- diagram: architecture -->
+\`\`\`
+API_Gateway -->|sync: validated request| App_Service
+App_Service -.->|async: enqueue persistence| Storage_Adapter
+Storage_Adapter -->|timeout error| Fallback_Cache
+Fallback_Cache -->|degraded response| API_Gateway
+\`\`\`
+
+## Data-Flow Shadow Paths
+<!-- diagram: data-flow-shadow-paths -->
+| Path | Trigger | Fallback/Degrade behavior |
+|---|---|---|
+| persistState | DBTimeout | fallback to cache + retry queue |
+
+## Error Flow Diagram
+<!-- diagram: error-flow -->
+\`\`\`
+DBTimeout -> fallback cache -> degraded response with warning
+\`\`\`
+
+## Failure Mode Table
+| Method | Exception | Rescue | UserSees |
+|---|---|---|---|
+| persistState | DBTimeout | fallback to cache + retry queue | degraded but explicit warning |
+
+## Security & Threat Model
+| Boundary | Threat | Mitigation | Owner |
+|---|---|---|---|
+| API to service | malformed payload abuse | schema validation + authz checks | platform |
+
+## Observability & Debuggability
+| Signal | Source | Alert/Debug path |
+|---|---|---|
+| retry_queue_depth | queue metric | page on-call + inspect retry_queue_depth dashboard |
+| fallback_mode_enabled | structured warning log | trace by request id in log explorer |
+
+## Deployment & Rollout
+| Step | Strategy | Rollback plan |
+|---|---|---|
+| Enable design changes | feature-flag canary rollout | disable flag + redeploy previous build |
+
+## Outside Voice Findings
+| ID | Dimension | Finding | Disposition | Rationale |
+|---|---|---|---|---|
+| F-1 | architecture_fit | First draft missed async/sync distinction. | accept | Diagram now labels sync/async edges. |
+
+## Spec Review Loop
+| Iteration | Quality Score | Findings | Stop decision |
+|---|---|---|---|
+| 1 | 0.620 | 3 | continue |
+| 2 | 0.810 | 1 | stop |
+- Stop reason: quality_threshold_met
+- Target score: 0.800
+- Max iterations: 3
+- Unresolved concerns: None
+
+## Completion Dashboard
+| Review Section | Status | Issues |
+|---|---|---|
+| Architecture Review | clear | none |
+| Security & Threat Model | clear | none |
+| Code Quality Review | clear | none |
+| Data Flow & Interaction Edge Cases | clear | none |
+| Test Review | clear | none |
+| Performance Review | clear | none |
+| Observability & Debuggability | clear | none |
+| Deployment & Rollout Review | clear | none |
+
+**Decisions made:** 4 | **Unresolved:** 0
+
+## Learnings
+- None this stage.
+`, "utf8");
+}
+
+async function writeDesignResearchArtifact(root: string): Promise<void> {
+  await fs.mkdir(path.join(root, ".cclaw/artifacts"), { recursive: true });
+  await fs.writeFile(path.join(root, ".cclaw/artifacts/02a-research.md"), `# Research Report
+
+## Stack Analysis
+| Topic | Finding | Evidence |
+|---|---|---|
+| runtime | existing stack supports design changes | docs/runtime.md |
+
+## Features & Patterns
+| Topic | Finding | Evidence |
+|---|---|---|
+| retry behavior | bounded retries already used in adjacent modules | docs/patterns.md |
+
+## Architecture Options
+| Option | Trade-offs | Recommendation | Evidence |
+|---|---|---|---|
+| A | less change, weaker resilience | no | docs/options.md |
+| B | moderate change, stronger resilience | yes | docs/options.md |
+
+## Pitfalls & Risks
+| Risk | Impact | Mitigation | Evidence |
+|---|---|---|---|
+| silent failure | high | explicit rescue + user-visible fallback | docs/risks.md |
+
+## Synthesis
+- Key decisions informed by research: keep API boundary stable, harden rescue paths.
+- Open questions: None.
 `, "utf8");
 }
 
@@ -154,6 +318,29 @@ async function writeReviewArtifacts(root: string): Promise<void> {
     ARTIFACT_TEMPLATES["07-review-army.json"] ?? "{}",
     "utf8"
   );
+}
+
+function reviewLoopEvidence(
+  stage: "scope" | "design",
+  qualityScores: number[],
+  stopReason: "quality_threshold_met" | "max_iterations_reached" | "user_opt_out",
+  targetScore = 0.8,
+  maxIterations = 3
+): string {
+  return JSON.stringify({
+    type: "review-loop",
+    version: "1",
+    stage,
+    artifactPath: `.cclaw/artifacts/${stage === "scope" ? "02-scope.md" : "03-design.md"}`,
+    targetScore,
+    maxIterations,
+    stopReason,
+    iterations: qualityScores.map((score, index) => ({
+      iteration: index + 1,
+      qualityScore: score,
+      findingsCount: Math.max(0, Math.round((1 - score) * 10))
+    }))
+  });
 }
 
 describe("internal advance-stage commands", () => {
@@ -242,6 +429,230 @@ describe("internal advance-stage commands", () => {
     expect(code).toBe(1);
     expect(captured.stderr()).toContain("gate evidence format check failed");
     expect(captured.stderr()).toContain("tdd_verified_before_complete");
+  });
+
+  it("advance-stage rejects scope_user_approved evidence without review-loop envelope", async () => {
+    const root = await createTempProject("internal-advance-stage-scope-review-loop-invalid");
+    await ensureRunSystem(root);
+    await writeScopeArtifact(root);
+    const state = await readFlowState(root);
+    await writeFlowState(
+      root,
+      {
+        ...state,
+        currentStage: "scope",
+        completedStages: []
+      },
+      { allowReset: true }
+    );
+
+    const required = stageSchema("scope").requiredGates
+      .filter((gate) => gate.tier === "required")
+      .map((gate) => gate.id);
+    const malformedEvidence = Object.fromEntries(
+      required.map((gateId) => [gateId, `evidence for ${gateId}`])
+    ) as Record<string, string>;
+    malformedEvidence.scope_user_approved = "approved by user";
+
+    const captured = captureIo();
+    const code = await runInternalCommand(
+      root,
+      [
+        "advance-stage",
+        "scope",
+        `--evidence-json=${JSON.stringify(malformedEvidence)}`,
+        "--waive-delegation=planner",
+        "--waiver-reason=unit_test",
+        "--quiet"
+      ],
+      captured.io
+    );
+
+    expect(code).toBe(1);
+    expect(captured.stderr()).toContain("gate evidence format check failed");
+    expect(captured.stderr()).toContain("scope_user_approved");
+  });
+
+  it("advance-stage accepts scope review-loop envelope evidence and advances", async () => {
+    const root = await createTempProject("internal-advance-stage-scope-review-loop-valid");
+    await ensureRunSystem(root);
+    await writeScopeArtifact(root);
+    const state = await readFlowState(root);
+    await writeFlowState(
+      root,
+      {
+        ...state,
+        currentStage: "scope",
+        completedStages: []
+      },
+      { allowReset: true }
+    );
+
+    const required = stageSchema("scope").requiredGates
+      .filter((gate) => gate.tier === "required")
+      .map((gate) => gate.id);
+    const evidence = Object.fromEntries(
+      required.map((gateId) => [gateId, `evidence for ${gateId}`])
+    ) as Record<string, string>;
+    evidence.scope_user_approved = reviewLoopEvidence(
+      "scope",
+      [0.61, 0.83],
+      "quality_threshold_met"
+    );
+
+    const captured = captureIo();
+    const code = await runInternalCommand(
+      root,
+      [
+        "advance-stage",
+        "scope",
+        `--evidence-json=${JSON.stringify(evidence)}`,
+        "--waive-delegation=planner",
+        "--waiver-reason=unit_test",
+        "--quiet"
+      ],
+      captured.io
+    );
+
+    expect(code, captured.stderr()).toBe(0);
+    const next = await readFlowState(root);
+    expect(next.currentStage).toBe("design");
+    expect(next.guardEvidence.scope_user_approved).toContain(`"type":"review-loop"`);
+  });
+
+  it("advance-stage auto-hydrates scope review-loop evidence from artifact when omitted", async () => {
+    const root = await createTempProject("internal-advance-stage-scope-review-loop-autofill");
+    await ensureRunSystem(root);
+    await writeScopeArtifact(root);
+    const state = await readFlowState(root);
+    await writeFlowState(
+      root,
+      {
+        ...state,
+        currentStage: "scope",
+        completedStages: []
+      },
+      { allowReset: true }
+    );
+
+    const required = stageSchema("scope").requiredGates
+      .filter((gate) => gate.tier === "required")
+      .map((gate) => gate.id);
+    const evidence = Object.fromEntries(
+      required.map((gateId) => [gateId, `evidence for ${gateId}`])
+    ) as Record<string, string>;
+    delete evidence.scope_user_approved;
+
+    const captured = captureIo();
+    const code = await runInternalCommand(
+      root,
+      [
+        "advance-stage",
+        "scope",
+        `--evidence-json=${JSON.stringify(evidence)}`,
+        "--waive-delegation=planner",
+        "--waiver-reason=unit_test",
+        "--quiet"
+      ],
+      captured.io
+    );
+
+    expect(code, captured.stderr()).toBe(0);
+    const next = await readFlowState(root);
+    expect(next.currentStage).toBe("design");
+    expect(next.guardEvidence.scope_user_approved).toContain(`"type":"review-loop"`);
+    expect(next.guardEvidence.scope_user_approved).toContain(`"stage":"scope"`);
+  });
+
+  it("advance-stage rejects design architecture gate evidence with mismatched review-loop stage", async () => {
+    const root = await createTempProject("internal-advance-stage-design-review-loop-stage-mismatch");
+    await ensureRunSystem(root);
+    await writeDesignArtifact(root);
+    const state = await readFlowState(root);
+    await writeFlowState(
+      root,
+      {
+        ...state,
+        currentStage: "design",
+        completedStages: []
+      },
+      { allowReset: true }
+    );
+
+    const required = stageSchema("design").requiredGates
+      .filter((gate) => gate.tier === "required")
+      .map((gate) => gate.id);
+    const evidence = Object.fromEntries(
+      required.map((gateId) => [gateId, `evidence for ${gateId}`])
+    ) as Record<string, string>;
+    evidence.design_architecture_locked = reviewLoopEvidence(
+      "scope",
+      [0.65, 0.82],
+      "quality_threshold_met"
+    );
+
+    const captured = captureIo();
+    const code = await runInternalCommand(
+      root,
+      [
+        "advance-stage",
+        "design",
+        `--evidence-json=${JSON.stringify(evidence)}`,
+        "--waive-delegation=planner",
+        "--waiver-reason=unit_test",
+        "--quiet"
+      ],
+      captured.io
+    );
+
+    expect(code).toBe(1);
+    expect(captured.stderr()).toContain("design_architecture_locked");
+    expect(captured.stderr()).toContain('stage must be "design"');
+  });
+
+  it("advance-stage auto-hydrates design review-loop evidence from artifact when omitted", async () => {
+    const root = await createTempProject("internal-advance-stage-design-review-loop-autofill");
+    await ensureRunSystem(root);
+    await writeDesignArtifact(root);
+    await writeDesignResearchArtifact(root);
+    const state = await readFlowState(root);
+    await writeFlowState(
+      root,
+      {
+        ...state,
+        currentStage: "design",
+        completedStages: []
+      },
+      { allowReset: true }
+    );
+
+    const required = stageSchema("design").requiredGates
+      .filter((gate) => gate.tier === "required")
+      .map((gate) => gate.id);
+    const evidence = Object.fromEntries(
+      required.map((gateId) => [gateId, `evidence for ${gateId}`])
+    ) as Record<string, string>;
+    delete evidence.design_architecture_locked;
+
+    const captured = captureIo();
+    const code = await runInternalCommand(
+      root,
+      [
+        "advance-stage",
+        "design",
+        `--evidence-json=${JSON.stringify(evidence)}`,
+        "--waive-delegation=planner",
+        "--waiver-reason=unit_test",
+        "--quiet"
+      ],
+      captured.io
+    );
+
+    expect(code, captured.stderr()).toBe(0);
+    const next = await readFlowState(root);
+    expect(next.currentStage).toBe("spec");
+    expect(next.guardEvidence.design_architecture_locked).toContain(`"type":"review-loop"`);
+    expect(next.guardEvidence.design_architecture_locked).toContain(`"stage":"design"`);
   });
 
   it("verify-flow-state-diff rejects candidate state with passed gate but no evidence", async () => {

@@ -22,6 +22,19 @@ async function writeRuntimeArtifact(root: string, fileName: string, content: str
   await fs.writeFile(path.join(root, ".cclaw/artifacts", fileName), content, "utf8");
 }
 
+async function writeOptInAuditsConfig(
+  root: string,
+  flags: { scopePreAudit?: boolean; staleDiagramAudit?: boolean }
+): Promise<void> {
+  await fs.mkdir(path.join(root, ".cclaw"), { recursive: true });
+  const lines = [
+    "optInAudits:",
+    `  scopePreAudit: ${flags.scopePreAudit === true ? "true" : "false"}`,
+    `  staleDiagramAudit: ${flags.staleDiagramAudit === true ? "true" : "false"}`
+  ];
+  await fs.writeFile(path.join(root, ".cclaw/config.yaml"), `${lines.join("\n")}\n`, "utf8");
+}
+
 function completePlanArtifact(frontmatter = ""): string {
   const header = frontmatter.trim().length > 0 ? `${frontmatter.trim()}\n\n` : "";
   return `${header}# Plan Artifact
@@ -102,9 +115,24 @@ function completeDesignArtifact(diagramBody: string): string {
 | Storage Adapter | Persistence and fallback reads | data-team |
 
 ## Architecture Diagram
+<!-- diagram: architecture -->
 \`\`\`mermaid
 flowchart LR
 ${diagramBody}
+\`\`\`
+
+## Data-Flow Shadow Paths
+<!-- diagram: data-flow-shadow-paths -->
+| Path | Trigger | Fallback/Degrade behavior |
+|---|---|---|
+| storage-write | storage timeout | fallback cache read + retry queue |
+
+## Error Flow Diagram
+<!-- diagram: error-flow -->
+\`\`\`mermaid
+flowchart TD
+  DetectTimeout --> TriggerFallback
+  TriggerFallback --> WarnUser
 \`\`\`
 
 ## Data Flow
@@ -113,10 +141,24 @@ ${diagramBody}
 - Empty input path: API Gateway rejects empty payload with 422 and returns a field-level hint.
 - Upstream error path: Storage Adapter timeout enters fallback path before final response.
 
+### Interaction Edge Case Matrix
+| Edge case | Handled? | Design response | Deferred item (if not handled) |
+|---|---|---|---|
+| double-click | yes | request idempotency key deduplicates concurrent submits | None |
+| nav-away-mid-request | yes | in-flight request continues server-side; UI shows resumable status on return | None |
+| 10K-result dataset | yes | cursor pagination limits each page to 100 rows and streams chunks | None |
+| background-job abandonment | no | abandoned jobs are marked stale after timeout watchdog sweep | D-17 |
+| zombie connection | yes | heartbeat timeout closes stale socket and retries on reconnect | None |
+
+## Security & Threat Model
+| Boundary | Threat | Mitigation | Owner |
+|---|---|---|---|
+| API input boundary | abuse via malformed payload or auth bypass | strict input validation + authz checks + audit logs | platform-api |
+
 ## Failure Mode Table
-| Failure mode | Trigger | Detection | Mitigation | User impact |
-|---|---|---|---|---|
-| Storage timeout | Upstream latency spike | timeout metric alarm | fallback cache read + retry queue | stale but available response |
+| Method | Exception | Rescue | UserSees |
+|---|---|---|---|
+| Persist write | timeout: upstream latency spike | RESCUED=Y TEST=Y (fallback cache read + retry queue) | stale but available response |
 
 ## Test Strategy
 - Unit: validator and adapter tests with >=90% statement coverage target.
@@ -128,6 +170,18 @@ ${diagramBody}
 |---|---|---|---|
 | Create request | p95 latency | <=250ms | k6 synthetic test in CI |
 | Fallback read | error recovery latency | <=400ms | chaos timeout scenario replay |
+
+## Observability & Debuggability
+| Signal | Source | Alert/Debug path |
+|---|---|---|
+| timeout_rate | app service metric | Pager alert + runbook docs/runbooks/timeout.md |
+| fallback_activation | structured application log | Correlate request ID and replay trace |
+
+## Deployment & Rollout
+| Step | Strategy | Rollback plan |
+|---|---|---|
+| Enable write path | Canary 10% -> 50% -> 100% over 2 hours | Disable feature flag and restore prior release |
+| Enable fallback path | Shadow mode for one release cycle | Revert to strict-error response path |
 
 ## What Already Exists
 | Sub-problem | Existing code/library found | Layer | Reuse decision | Adaptation needed |
@@ -150,6 +204,23 @@ ${diagramBody}
 - Decisions made: 4
 - Unresolved items: None
 `;
+}
+
+function removeMarkdownSection(markdown: string, title: string): string {
+  const escaped = title.replace(/[.*+?^${}()|[\]\\]/gu, "\\$&");
+  return markdown.replace(new RegExp(`\\n##\\s+${escaped}[\\s\\S]*?(?=\\n##\\s+|$)`, "u"), "\n");
+}
+
+async function writeBrainstormTierArtifact(
+  root: string,
+  tier: "lightweight" | "standard" | "deep"
+): Promise<void> {
+  await writeRuntimeArtifact(root, "01-brainstorm.md", `# Brainstorm Artifact
+
+## Approach Tier
+- Tier: ${tier}
+- Why this tier: fixture for design diagram requirement tests.
+`);
 }
 
 describe("artifact linter heuristics", () => {
@@ -211,15 +282,29 @@ describe("artifact linter heuristics", () => {
 | 1 | Block invalid metadata or warn? | Block | hard gate required |
 | 2 | Add runtime dependencies? | No | stay on existing runtime stack |
 
+## Approach Tier
+- Tier: Standard
+- Why this tier: multiple workflow touchpoints with bounded complexity.
+
+## Short-Circuit Decision
+- Status: bypassed
+- Why: trade-offs still required explicit comparison.
+- Scope handoff: continue full brainstorm flow before scope.
+
 ## Approaches
-| Approach | Architecture | Trade-offs | Recommendation |
-|---|---|---|---|
-| A | script-only checks | faster but weaker reuse |  |
-| B | reusable validation module | slightly more effort, better long-term reuse | recommended |
+| Approach | Role | Architecture | Trade-offs | Recommendation |
+|---|---|---|---|---|
+| A | baseline | script-only checks | faster but weaker reuse |  |
+| B | challenger: higher-upside | reusable validation module | slightly more effort, better long-term reuse | recommended |
+
+## Approach Reaction
+- Closest option: B
+- Concerns: avoid overbuild while keeping long-term reuse.
+- What changed after reaction: selected reusable module with strict v1 scope boundaries.
 
 ## Selected Direction
 - Approach: B — reusable validation module
-- Rationale: best balance of reuse and delivery speed
+- Rationale: user reaction favored reusable module with bounded v1 scope, balancing reuse and delivery speed
 - Approval: approved by user
 
 ## Design
@@ -251,13 +336,23 @@ describe("artifact linter heuristics", () => {
 |---|---|---|---|
 | 1 | Block or warn? | Block | hard gate |
 
+## Approach Tier
+- Tier: Standard
+- Why this tier: release workflow affects CI + local command path.
+
 ## Approaches
-| Approach | Architecture | Trade-offs | Recommendation |
-|---|---|---|---|
-| A | script-only checks | fast and cheap | recommended |
+| Approach | Role | Architecture | Trade-offs | Recommendation |
+|---|---|---|---|---|
+| A | challenger: higher-upside | script-only checks | fast and cheap | recommended |
+
+## Approach Reaction
+- Closest option: A
+- Concerns: none
+- What changed after reaction: no alternative survived.
 
 ## Selected Direction
 - Approach: A
+- Rationale: user reaction prioritized delivery speed over reuse.
 - Approval: approved by user
 
 ## Design
@@ -290,15 +385,24 @@ describe("artifact linter heuristics", () => {
 |---|---|---|---|
 | 1 | Block or warn? | Block | hard gate |
 
+## Approach Tier
+- Tier: Standard
+- Why this tier: changes local + CI release path together.
+
 ## Approaches
-| Approach | Architecture | Trade-offs | Recommendation |
-|---|---|---|---|
-| A | script-only checks | fast | |
-| B | reusable module | balanced | recommended |
+| Approach | Role | Architecture | Trade-offs | Recommendation |
+|---|---|---|---|---|
+| A | baseline | script-only checks | fast | |
+| B | challenger: higher-upside | reusable module | balanced | recommended |
+
+## Approach Reaction
+- Closest option: B
+- Concerns: keep rollout low-risk.
+- What changed after reaction: recommendation narrowed to module-only surface.
 
 ## Selected Direction
 - Approach: B
-- Rationale: best balance
+- Rationale: user reaction confirmed balanced path with controlled rollout
 
 ## Design
 - Architecture: module
@@ -312,6 +416,185 @@ describe("artifact linter heuristics", () => {
       (finding) => finding.section === "Direction Approval Marker"
     );
     expect(approval?.found).toBe(false);
+  });
+
+  it("fails brainstorm when no challenger higher-upside approach is present", async () => {
+    const root = await createTempProject("artifact-lint-no-challenger");
+    await writeRuntimeArtifact(root, "01-brainstorm.md", `# Brainstorm Artifact
+
+## Context
+- Project state: monorepo with CI
+- Relevant existing code/patterns: release scripts
+
+## Problem
+- What we're solving: release regressions
+- Success criteria: preflight checks always block invalid metadata
+- Constraints: no runtime dependency changes
+
+## Clarifying Questions
+| # | Question | Answer | Decision impact |
+|---|---|---|---|
+| 1 | Block or warn? | Block | hard gate |
+
+## Approach Tier
+- Tier: Standard
+- Why this tier: bounded but cross-cutting.
+
+## Approaches
+| Approach | Role | Architecture | Trade-offs | Recommendation |
+|---|---|---|---|---|
+| A | baseline | script-only checks | fast | |
+| B | fallback | reusable module | balanced | recommended |
+
+## Approach Reaction
+- Closest option: B
+- Concerns: rollout complexity.
+- What changed after reaction: reduced scope to validator-only path.
+
+## Selected Direction
+- Approach: B
+- Rationale: user reaction favored reusable path with bounded scope
+- Approval: approved
+
+## Design
+- Architecture: module
+- Key components: validators
+- Data flow: metadata -> checks -> report
+
+## Assumptions and Open Questions
+- Assumptions: CI remains source of truth
+- Open questions (or "None"): None
+`);
+
+    const result = await lintArtifact(root, "brainstorm");
+    const challenger = result.findings.find(
+      (finding) => finding.section === "Challenger Alternative Enforcement"
+    );
+    expect(challenger?.found).toBe(false);
+    expect(challenger?.details).toContain("higher-upside");
+  });
+
+  it("fails brainstorm when reaction section appears after selected direction", async () => {
+    const root = await createTempProject("artifact-lint-reaction-order");
+    await writeRuntimeArtifact(root, "01-brainstorm.md", `# Brainstorm Artifact
+
+## Context
+- Project state: monorepo with CI
+- Relevant existing code/patterns: release scripts
+
+## Problem
+- What we're solving: release regressions
+- Success criteria: preflight checks always block invalid metadata
+- Constraints: no runtime dependency changes
+
+## Clarifying Questions
+| # | Question | Answer | Decision impact |
+|---|---|---|---|
+| 1 | Block or warn? | Block | hard gate |
+
+## Approach Tier
+- Tier: Standard
+- Why this tier: bounded but cross-cutting.
+
+## Approaches
+| Approach | Role | Architecture | Trade-offs | Recommendation |
+|---|---|---|---|---|
+| A | baseline | script-only checks | fast | |
+| B | challenger: higher-upside | reusable module | balanced | recommended |
+
+## Selected Direction
+- Approach: B
+- Rationale: user feedback favored reusable path
+- Approval: approved
+
+## Approach Reaction
+- Closest option: B
+- Concerns: rollout complexity.
+- What changed after reaction: reduced scope to validator-only path.
+
+## Design
+- Architecture: module
+- Key components: validators
+- Data flow: metadata -> checks -> report
+
+## Assumptions and Open Questions
+- Assumptions: CI remains source of truth
+- Open questions (or "None"): None
+`);
+
+    const result = await lintArtifact(root, "brainstorm");
+    const ordering = result.findings.find(
+      (finding) => finding.section === "Approach Reaction Ordering"
+    );
+    expect(ordering?.found).toBe(false);
+    expect(ordering?.details).toContain("before Selected Direction");
+  });
+
+  it("passes brainstorm short-circuit stub when activated with scope handoff", async () => {
+    const root = await createTempProject("artifact-lint-short-circuit-pass");
+    await writeRuntimeArtifact(root, "01-brainstorm.md", `# Brainstorm Artifact
+
+## Context
+- Project state: targeted retry fix in one module.
+- Relevant existing code/patterns: src/retry.ts already contains retry boundary helpers.
+
+## Problem
+- What we're solving: add one missing retry guard in existing request flow.
+- Success criteria: retry guard triggers on timeout and preserves current API shape.
+- Constraints: no architecture change, no new dependencies.
+
+## Approach Tier
+- Tier: Lightweight
+- Why this tier: narrow single-module adjustment.
+
+## Short-Circuit Decision
+- Status: activated
+- Why: requirements are concrete and bounded; full alternatives are unnecessary.
+- Scope handoff: proceed directly to scope with this bounded ask.
+
+## Selected Direction
+- Approach: direct bounded fix in existing retry helper
+- Rationale: approved concrete ask with minimal blast radius
+- Approval: approved
+`);
+
+    const result = await lintArtifact(root, "brainstorm");
+    expect(result.passed).toBe(true);
+    const shortCircuit = result.findings.find((f) => f.section === "Short-Circuit Status");
+    expect(shortCircuit?.found).toBe(true);
+  });
+
+  it("fails brainstorm short-circuit stub when scope handoff is missing", async () => {
+    const root = await createTempProject("artifact-lint-short-circuit-no-handoff");
+    await writeRuntimeArtifact(root, "01-brainstorm.md", `# Brainstorm Artifact
+
+## Context
+- Project state: targeted retry fix in one module.
+- Relevant existing code/patterns: src/retry.ts already contains retry boundary helpers.
+
+## Problem
+- What we're solving: add one missing retry guard in existing request flow.
+- Success criteria: retry guard triggers on timeout and preserves current API shape.
+- Constraints: no architecture change, no new dependencies.
+
+## Approach Tier
+- Tier: Lightweight
+- Why this tier: narrow single-module adjustment.
+
+## Short-Circuit Decision
+- Status: activated
+- Why: requirements are concrete and bounded; full alternatives are unnecessary.
+
+## Selected Direction
+- Approach: direct bounded fix in existing retry helper
+- Rationale: approved concrete ask with minimal blast radius
+- Approval: approved
+`);
+
+    const result = await lintArtifact(root, "brainstorm");
+    const handoff = result.findings.find((f) => f.section === "Short-Circuit Scope Handoff");
+    expect(handoff?.found).toBe(false);
+    expect(handoff?.details).toContain("scope handoff");
   });
 
   it("fails brainstorm clarifying questions section when empty", async () => {
@@ -329,15 +612,24 @@ describe("artifact linter heuristics", () => {
 
 ## Clarifying Questions
 
+## Approach Tier
+- Tier: Standard
+- Why this tier: bounded but cross-cutting.
+
 ## Approaches
-| Approach | Architecture | Trade-offs | Recommendation |
-|---|---|---|---|
-| A | script-only checks | quick but weaker reuse |  |
-| B | reusable validation module | more effort, better reuse | recommended |
+| Approach | Role | Architecture | Trade-offs | Recommendation |
+|---|---|---|---|---|
+| A | baseline | script-only checks | quick but weaker reuse |  |
+| B | challenger: higher-upside | reusable validation module | more effort, better reuse | recommended |
+
+## Approach Reaction
+- Closest option: B
+- Concerns: avoid scope growth.
+- What changed after reaction: recommendation constrained to core validators.
 
 ## Selected Direction
 - Approach: B
-- Rationale: reusable module
+- Rationale: user reaction preferred stronger reuse while keeping v1 scoped
 - Approval: approved
 
 ## Design
@@ -736,6 +1028,79 @@ describe("artifact linter heuristics", () => {
     expect(modeAnalysis?.required).toBe(false);
   });
 
+  it("requires pre-scope audit section when opt-in flag is enabled", async () => {
+    const root = await createTempProject("scope-pre-audit-required");
+    await writeOptInAuditsConfig(root, { scopePreAudit: true });
+    await writeRuntimeArtifact(root, "02-scope.md", `# Scope Artifact
+
+## Scope Mode
+- [x] selective
+
+## In Scope / Out of Scope
+### In Scope
+- Durable event feed
+### Out of Scope
+- Email channel
+
+## Completion Dashboard
+- Checklist findings: 3/3 complete
+- Resolved decisions count: 2
+- Unresolved decisions: None
+
+## Scope Summary
+- Selected mode: selective
+- Accepted scope: durable event feed
+- Deferred: websocket channel
+- Explicitly excluded: outbound channels
+`);
+
+    const result = await lintArtifact(root, "scope");
+    const preAudit = result.findings.find((f) => f.section === "Pre-Scope System Audit");
+    expect(result.passed).toBe(false);
+    expect(preAudit?.required).toBe(true);
+    expect(preAudit?.found).toBe(false);
+  });
+
+  it("passes pre-scope audit section when opt-in flag is enabled and commands are captured", async () => {
+    const root = await createTempProject("scope-pre-audit-pass");
+    await writeOptInAuditsConfig(root, { scopePreAudit: true });
+    await writeRuntimeArtifact(root, "02-scope.md", `# Scope Artifact
+
+## Pre-Scope System Audit
+| Check | Command | Findings |
+|---|---|---|
+| Recent commits | git log -30 --oneline | release touched feed parser + retry helper |
+| Current diff | git diff --stat | 5 files changed in notifications module |
+| Stash state | git stash list | no pending stash entries |
+| Debt markers | rg -n "TODO|FIXME|XXX|HACK" | TODO in src/feed/cache.ts to retire fallback cache |
+
+## Scope Mode
+- [x] selective
+
+## In Scope / Out of Scope
+### In Scope
+- Durable event feed
+### Out of Scope
+- Email channel
+
+## Completion Dashboard
+- Checklist findings: 4/4 complete
+- Resolved decisions count: 2
+- Unresolved decisions: None
+
+## Scope Summary
+- Selected mode: selective
+- Accepted scope: durable event feed
+- Deferred: websocket channel
+- Explicitly excluded: outbound channels
+`);
+
+    const result = await lintArtifact(root, "scope");
+    const preAudit = result.findings.find((f) => f.section === "Pre-Scope System Audit");
+    expect(preAudit?.required).toBe(true);
+    expect(preAudit?.found).toBe(true);
+  });
+
   it("enforces scope-reduction scan when locked decisions section is present", async () => {
     const root = await createTempProject("scope-strict-reduction");
     await writeRuntimeArtifact(root, "02-scope.md", `# Scope Artifact
@@ -898,9 +1263,9 @@ API -> Service -> DB
 - Timeout/downstream path: 504
 
 ## Failure Mode Table
-| Failure mode | Trigger | Detection | Mitigation | User impact |
-|---|---|---|---|---|
-| DB down | outage | health check | failover | degraded |
+| Method | Exception | Rescue | UserSees |
+|---|---|---|---|
+| Query path | outage | RESCUED=Y TEST=Y (failover) | degraded |
 
 ## Test Strategy
 - Unit: validators
@@ -966,9 +1331,9 @@ API -> Service -> DB
 - Timeout/downstream path: 504
 
 ## Failure Mode Table
-| Failure mode | Trigger | Detection | Mitigation | User impact |
-|---|---|---|---|---|
-| DB down | outage | health check | failover | degraded |
+| Method | Exception | Rescue | UserSees |
+|---|---|---|---|
+| Query path | outage | RESCUED=Y TEST=Y (failover) | degraded |
 
 ## Test Strategy
 - Unit: validators
@@ -1001,6 +1366,12 @@ API -> Service -> DB
 | Component | Responsibility | Owner |
 |---|---|---|
 | config parser | reads YAML config | core team |
+
+## Architecture Diagram
+<!-- diagram: architecture -->
+\`\`\`
+Config_Reader -->|sync: parse| Config_Model
+\`\`\`
 
 ## NOT in scope
 - Full config migration tool
@@ -1056,6 +1427,242 @@ Fallback_Cache -->|degraded response| API_Gateway`
     const diagram = result.findings.find((f) => f.section === "Architecture Diagram");
     expect(result.passed).toBe(true);
     expect(diagram?.found).toBe(true);
+  });
+
+  it("requires standard-tier shadow/error diagram markers", async () => {
+    const root = await createTempProject("design-standard-diagrams-required");
+    await writeBrainstormTierArtifact(root, "standard");
+    const diagram = `API_Gateway -->|sync: validated request| App_Service
+App_Service -.->|async: enqueue write| Storage_Adapter
+Storage_Adapter -->|timeout| Fallback_Cache
+Fallback_Cache -->|degraded response| API_Gateway`;
+    const artifact = completeDesignArtifact(diagram).replace(
+      "<!-- diagram: data-flow-shadow-paths -->",
+      "<!-- diagram: missing-shadow -->"
+    );
+    await writeRuntimeArtifact(root, "03-design.md", artifact);
+
+    const result = await lintArtifact(root, "design");
+    const shadowRequirement = result.findings.find(
+      (f) => f.section === "Diagram Requirement: Data-Flow Shadow Paths"
+    );
+    expect(shadowRequirement?.found).toBe(false);
+    expect(shadowRequirement?.details).toContain("data-flow-shadow-paths");
+  });
+
+  it("allows lightweight-tier design to omit standard-only diagram sections", async () => {
+    const root = await createTempProject("design-lightweight-no-shadow-error");
+    await writeBrainstormTierArtifact(root, "lightweight");
+    const diagram = `API_Gateway -->|sync: validated request| App_Service
+App_Service -.->|async: enqueue write| Storage_Adapter
+Storage_Adapter -->|timeout| Fallback_Cache
+Fallback_Cache -->|degraded response| API_Gateway`;
+    let artifact = completeDesignArtifact(diagram);
+    artifact = removeMarkdownSection(artifact, "Data-Flow Shadow Paths");
+    artifact = removeMarkdownSection(artifact, "Error Flow Diagram");
+    await writeRuntimeArtifact(root, "03-design.md", artifact);
+
+    const result = await lintArtifact(root, "design");
+    expect(result.passed).toBe(true);
+    const architectureRequirement = result.findings.find(
+      (f) => f.section === "Diagram Requirement: Architecture Diagram"
+    );
+    expect(architectureRequirement?.found).toBe(true);
+  });
+
+  it("requires deep-tier state/rollback/deployment diagrams", async () => {
+    const root = await createTempProject("design-deep-diagrams-required");
+    await writeBrainstormTierArtifact(root, "deep");
+    const diagram = `API_Gateway -->|sync: validated request| App_Service
+App_Service -.->|async: enqueue write| Storage_Adapter
+Storage_Adapter -->|timeout| Fallback_Cache
+Fallback_Cache -->|degraded response| API_Gateway`;
+    await writeRuntimeArtifact(root, "03-design.md", completeDesignArtifact(diagram));
+
+    const result = await lintArtifact(root, "design");
+    const stateMachineRequirement = result.findings.find(
+      (f) => f.section === "Diagram Requirement: State Machine Diagram"
+    );
+    expect(stateMachineRequirement?.found).toBe(false);
+    expect(stateMachineRequirement?.details).toContain("State Machine Diagram");
+  });
+
+  it("passes deep-tier design when all deep diagram markers are present", async () => {
+    const root = await createTempProject("design-deep-diagrams-pass");
+    await writeBrainstormTierArtifact(root, "deep");
+    const diagram = `API_Gateway -->|sync: validated request| App_Service
+App_Service -.->|async: enqueue write| Storage_Adapter
+Storage_Adapter -->|timeout| Fallback_Cache
+Fallback_Cache -->|degraded response| API_Gateway`;
+    const artifact = `${completeDesignArtifact(diagram)}
+
+## State Machine Diagram
+<!-- diagram: state-machine -->
+\`\`\`mermaid
+stateDiagram-v2
+  [*] --> Requested
+  Requested --> Persisted
+  Requested --> Degraded
+  Degraded --> Persisted
+\`\`\`
+
+## Rollback Flowchart
+<!-- diagram: rollback-flowchart -->
+\`\`\`mermaid
+flowchart TD
+  Trigger --> DisableFlag
+  DisableFlag --> RestorePreviousBuild
+  RestorePreviousBuild --> Verify
+\`\`\`
+
+## Deployment Sequence Diagram
+<!-- diagram: deployment-sequence -->
+\`\`\`mermaid
+sequenceDiagram
+  participant CI
+  participant API
+  participant Queue
+  CI->>API: deploy canary
+  API->>Queue: enable async write path
+  API->>CI: report health checks
+\`\`\`
+`;
+    await writeRuntimeArtifact(root, "03-design.md", artifact);
+
+    const result = await lintArtifact(root, "design");
+    expect(result.passed).toBe(true);
+  });
+
+  it("fails design artifact when interaction edge-case matrix misses required rows", async () => {
+    const root = await createTempProject("design-missing-edge-case-row");
+    const diagram = `API_Gateway -->|sync: validated request| App_Service
+App_Service -.->|async: enqueue write| Storage_Adapter
+Storage_Adapter -->|timeout| Fallback_Cache
+Fallback_Cache -->|degraded response| API_Gateway`;
+    const artifact = completeDesignArtifact(diagram).replace(
+      "| zombie connection | yes | heartbeat timeout closes stale socket and retries on reconnect | None |\n",
+      ""
+    );
+    await writeRuntimeArtifact(root, "03-design.md", artifact);
+
+    const result = await lintArtifact(root, "design");
+    const dataFlow = result.findings.find((f) => f.section === "Data Flow");
+    expect(result.passed).toBe(false);
+    expect(dataFlow?.found).toBe(false);
+    expect(dataFlow?.details).toContain("zombie connection");
+  });
+
+  it("fails design artifact when unhandled edge case has no deferred item id", async () => {
+    const root = await createTempProject("design-unhandled-edge-case-without-deferred-id");
+    const diagram = `API_Gateway -->|sync: validated request| App_Service
+App_Service -.->|async: enqueue write| Storage_Adapter
+Storage_Adapter -->|timeout| Fallback_Cache
+Fallback_Cache -->|degraded response| API_Gateway`;
+    const artifact = completeDesignArtifact(diagram).replace(
+      "| background-job abandonment | no | abandoned jobs are marked stale after timeout watchdog sweep | D-17 |",
+      "| background-job abandonment | no | abandoned jobs are marked stale after timeout watchdog sweep | None |"
+    );
+    await writeRuntimeArtifact(root, "03-design.md", artifact);
+
+    const result = await lintArtifact(root, "design");
+    const dataFlow = result.findings.find((f) => f.section === "Data Flow");
+    expect(result.passed).toBe(false);
+    expect(dataFlow?.found).toBe(false);
+    expect(dataFlow?.details).toContain("deferred item id");
+  });
+
+  it("flags stale diagram audit when blast-radius file is newer than design baseline", async () => {
+    const root = await createTempProject("design-stale-diagram-audit-fail");
+    await writeOptInAuditsConfig(root, { staleDiagramAudit: true });
+    const apiPath = path.join(root, "src/api.ts");
+    const storagePath = path.join(root, "src/storage.ts");
+    await fs.mkdir(path.dirname(apiPath), { recursive: true });
+    await fs.writeFile(apiPath, "export const api = 1;\n", "utf8");
+    await fs.writeFile(storagePath, "export const storage = 1;\n", "utf8");
+
+    const diagram = `API_Gateway -->|sync: validated request| App_Service
+App_Service -.->|async: enqueue write| Storage_Adapter
+Storage_Adapter -->|timeout| Fallback_Cache
+Fallback_Cache -->|degraded response| API_Gateway`;
+    await writeRuntimeArtifact(root, "03-design.md", completeDesignArtifact(diagram));
+
+    const futureSeconds = Date.now() / 1000 + 2;
+    await fs.utimes(apiPath, futureSeconds, futureSeconds);
+
+    const result = await lintArtifact(root, "design");
+    const staleAudit = result.findings.find((f) => f.section === "Stale Diagram Drift Check");
+    expect(result.passed).toBe(false);
+    expect(staleAudit?.required).toBe(true);
+    expect(staleAudit?.found).toBe(false);
+    expect(staleAudit?.details).toContain("src/api.ts");
+  });
+
+  it("passes stale diagram audit when blast-radius files are not newer than design baseline", async () => {
+    const root = await createTempProject("design-stale-diagram-audit-pass");
+    await writeOptInAuditsConfig(root, { staleDiagramAudit: true });
+    const apiPath = path.join(root, "src/api.ts");
+    const storagePath = path.join(root, "src/storage.ts");
+    await fs.mkdir(path.dirname(apiPath), { recursive: true });
+    await fs.writeFile(apiPath, "export const api = 1;\n", "utf8");
+    await fs.writeFile(storagePath, "export const storage = 1;\n", "utf8");
+    const pastSeconds = Date.now() / 1000 - 60;
+    await fs.utimes(apiPath, pastSeconds, pastSeconds);
+    await fs.utimes(storagePath, pastSeconds, pastSeconds);
+
+    const diagram = `API_Gateway -->|sync: validated request| App_Service
+App_Service -.->|async: enqueue write| Storage_Adapter
+Storage_Adapter -->|timeout| Fallback_Cache
+Fallback_Cache -->|degraded response| API_Gateway`;
+    await writeRuntimeArtifact(root, "03-design.md", completeDesignArtifact(diagram));
+
+    const result = await lintArtifact(root, "design");
+    const staleAudit = result.findings.find((f) => f.section === "Stale Diagram Drift Check");
+    expect(staleAudit?.required).toBe(true);
+    expect(staleAudit?.found).toBe(true);
+  });
+
+  it("fails design artifact when Failure Mode Table uses legacy header shape", async () => {
+    const root = await createTempProject("design-failure-table-legacy-header");
+    const diagram = `API_Gateway -->|sync: validated request| App_Service
+App_Service -.->|async: enqueue write| Storage_Adapter
+Storage_Adapter -->|timeout| Fallback_Cache
+Fallback_Cache -->|degraded response| API_Gateway`;
+    const artifact = completeDesignArtifact(diagram)
+      .replace(
+        "| Method | Exception | Rescue | UserSees |",
+        "| Failure mode | Trigger | Detection | Mitigation | User impact |"
+      )
+      .replace("|---|---|---|---|", "|---|---|---|---|---|")
+      .replace(
+        "| Persist write | timeout: upstream latency spike | RESCUED=Y TEST=Y (fallback cache read + retry queue) | stale but available response |",
+        "| Persist write | timeout: upstream latency spike | alarm fired | fallback cache read + retry queue | stale but available response |"
+      );
+    await writeRuntimeArtifact(root, "03-design.md", artifact);
+
+    const result = await lintArtifact(root, "design");
+    const failureTable = result.findings.find((f) => f.section === "Failure Mode Table");
+    expect(result.passed).toBe(false);
+    expect(failureTable?.found).toBe(false);
+    expect(failureTable?.details).toContain("header must be exactly");
+  });
+
+  it("fails design artifact when Failure Mode Table has unresolved CRITICAL row", async () => {
+    const root = await createTempProject("design-failure-table-critical-row");
+    const diagram = `API_Gateway -->|sync: validated request| App_Service
+App_Service -.->|async: enqueue write| Storage_Adapter
+Storage_Adapter -->|timeout| Fallback_Cache
+Fallback_Cache -->|degraded response| API_Gateway`;
+    const artifact = completeDesignArtifact(diagram).replace(
+      "| Persist write | timeout: upstream latency spike | RESCUED=Y TEST=Y (fallback cache read + retry queue) | stale but available response |",
+      "| Persist write | timeout: upstream latency spike | RESCUED=N TEST=N | Silent |"
+    );
+    await writeRuntimeArtifact(root, "03-design.md", artifact);
+
+    const result = await lintArtifact(root, "design");
+    const failureTable = result.findings.find((f) => f.section === "Failure Mode Table");
+    expect(result.passed).toBe(false);
+    expect(failureTable?.found).toBe(false);
+    expect(failureTable?.details).toContain("CRITICAL");
   });
 
   it("rejects spec artifact when an acceptance criterion uses vague adjectives", async () => {
@@ -2573,5 +3180,46 @@ describe("review army schema validation", () => {
     const result = await checkReviewSecurityNoChangeAttestation(root);
     expect(result.ok).toBe(false);
     expect(result.errors.join("\n")).toMatch(/Layer 2 security evidence missing/);
+  });
+
+  it("fails review security attestation when layer 2 security section is missing", async () => {
+    const root = await createTempProject("review-security-attestation-missing-section");
+    await writeRuntimeArtifact(
+      root,
+      "07-review.md",
+      `# Review Artifact
+
+## Layer 1 Findings
+| ID | Severity | Category | Description | Status |
+|---|---|---|---|---|
+| R-1 | Suggestion | correctness | naming cleanup | open |
+`
+    );
+
+    const result = await checkReviewSecurityNoChangeAttestation(root);
+    expect(result.ok).toBe(false);
+    expect(result.errors.join("\n")).toMatch(/missing a Layer 2 security section/);
+    expect(result.hasSecurityFinding).toBe(false);
+    expect(result.hasNoChangeAttestation).toBe(false);
+  });
+
+  it("fails review security attestation when NO_CHANGE_ATTESTATION is empty", async () => {
+    const root = await createTempProject("review-security-attestation-empty-value");
+    await writeRuntimeArtifact(
+      root,
+      "07-review.md",
+      `# Review Artifact
+
+## Layer 2 Findings
+| ID | Severity | Category | Description | Status |
+|---|---|---|---|---|
+| R-1 | Suggestion | correctness | naming cleanup | open |
+- NO_CHANGE_ATTESTATION:
+`
+    );
+
+    const result = await checkReviewSecurityNoChangeAttestation(root);
+    expect(result.ok).toBe(false);
+    expect(result.errors.join("\n")).toMatch(/must include a non-empty rationale/);
   });
 });

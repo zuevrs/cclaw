@@ -19,6 +19,7 @@ import type {
   StageExecutionModel,
   StagePhilosophy,
   StageArtifactRules,
+  StageReviewLoop,
   StageReviewLens,
   StageAutoSubagentDispatch,
   StageGate,
@@ -38,6 +39,7 @@ export type {
   StageExecutionModel,
   StagePhilosophy,
   StageArtifactRules,
+  StageReviewLoop,
   StageReviewLens,
   StageAutoSubagentDispatch,
   StageGate,
@@ -221,13 +223,23 @@ const REQUIRED_GATE_IDS: Record<FlowStage, RequiredGateSet> = {
 };
 
 const REQUIRED_ARTIFACT_SECTIONS: Record<FlowStage, string[]> = {
-  brainstorm: ["Context", "Problem", "Approaches", "Selected Direction"],
+  brainstorm: [
+    "Context",
+    "Problem",
+    "Approach Tier",
+    "Approaches",
+    "Approach Reaction",
+    "Selected Direction"
+  ],
   scope: ["Scope Mode", "In Scope / Out of Scope", "Completion Dashboard", "Scope Summary"],
   design: [
     "Research Fleet Synthesis",
     "Architecture Boundaries",
     "Architecture Diagram",
     "Failure Mode Table",
+    "Security & Threat Model",
+    "Observability & Debuggability",
+    "Deployment & Rollout",
     "Completion Dashboard"
   ],
   spec: ["Acceptance Criteria", "Edge Cases", "Testability Map", "Approval"],
@@ -309,6 +321,7 @@ function normalizeStageSchemaInput(value: StageSchemaInput): StageSchemaLegacyIn
     next: value.next,
     checklist: value.executionModel.checklist,
     reviewSections: value.reviewLens.reviewSections,
+    reviewLoop: value.reviewLens.reviewLoop,
     completionStatus: value.artifactRules.completionStatus,
     crossStageTrace: value.artifactRules.crossStageTrace,
     artifactValidation: value.artifactRules.artifactValidation,
@@ -545,7 +558,8 @@ export function stageSchema(stage: FlowStage, track: FlowTrack = "standard"): St
   const reviewLens: StageReviewLens = {
     outputs: base.outputs,
     reviewSections: base.reviewSections,
-    mandatoryDelegations
+    mandatoryDelegations,
+    reviewLoop: base.reviewLoop
   };
   return {
     ...base,

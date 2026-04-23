@@ -32,6 +32,7 @@ import { runEnvelopeValidateCommand } from "./envelope-validate.js";
 import { runKnowledgeDigestCommand } from "./knowledge-digest.js";
 import { runTddLoopStatusCommand } from "./tdd-loop-status.js";
 import { runTddRedEvidenceCommand } from "./tdd-red-evidence.js";
+import { extractReviewLoopEnvelopeFromArtifact } from "../content/review-loop.js";
 
 interface InternalIo {
   stdout: Writable;
@@ -84,6 +85,11 @@ interface InternalValidationReport {
   };
 }
 
+const AUTO_REVIEW_LOOP_GATE_BY_STAGE: Partial<Record<FlowStage, string>> = {
+  scope: "scope_user_approved",
+  design: "design_architecture_locked"
+};
+
 function unique<T extends string>(values: T[]): T[] {
   return [...new Set(values)];
 }
@@ -131,6 +137,120 @@ const PASS_STATUS_PATTERN = /\b(?:pass|passed|green|ok)\b/iu;
 const SHIP_FINALIZATION_MODE_PATTERN =
   new RegExp(`\\b(?:${SHIP_FINALIZATION_MODES.join("|")})\\b`, "u");
 const SHIP_FINALIZATION_MODE_HINT = SHIP_FINALIZATION_MODES.join(", ");
+const REVIEW_LOOP_STOP_REASONS = new Set([
+  "quality_threshold_met",
+  "max_iterations_reached",
+  "user_opt_out"
+]);
+
+function asRecord(value: unknown): Record<string, unknown> | null {
+  if (!value || typeof value !== "object" || Array.isArray(value)) {
+    return null;
+  }
+  return value as Record<string, unknown>;
+}
+
+function pickReviewLoopEnvelope(value: unknown): Record<string, unknown> | null {
+  const direct = asRecord(value);
+  if (!direct) return null;
+  if (direct.type === "review-loop") return direct;
+  const payload = asRecord(direct.payload);
+  if (payload?.type === "review-loop") return payload;
+  const nested = asRecord(direct.reviewLoop);
+  if (nested?.type === "review-loop") return nested;
+  return null;
+}
+
+function validateReviewLoopGateEvidence(stage: "scope" | "design", evidence: string): string | null {
+  let parsed: unknown;
+  try {
+    parsed = JSON.parse(evidence);
+  } catch {
+    return "must be JSON containing a review-loop envelope (`type: \"review-loop\"`) in top-level, `payload`, or `reviewLoop`.";
+  }
+  const envelope = pickReviewLoopEnvelope(parsed);
+  if (!envelope) {
+    return "must include a review-loop envelope (`type: \"review-loop\"`) in top-level, `payload`, or `reviewLoop`.";
+  }
+  if (envelope.stage !== stage) {
+    return `review-loop envelope stage must be "${stage}".`;
+  }
+  const targetScore = envelope.targetScore;
+  if (typeof targetScore !== "number" || Number.isNaN(targetScore) || targetScore < 0 || targetScore > 1) {
+    return "review-loop targetScore must be a number between 0 and 1.";
+  }
+  const maxIterations = envelope.maxIterations;
+  if (
+    typeof maxIterations !== "number" ||
+    Number.isNaN(maxIterations) ||
+    !Number.isInteger(maxIterations) ||
+    maxIterations < 1
+  ) {
+    return "review-loop maxIterations must be an integer >= 1.";
+  }
+  if (typeof envelope.stopReason !== "string" || !REVIEW_LOOP_STOP_REASONS.has(envelope.stopReason)) {
+    return "review-loop stopReason must be one of quality_threshold_met, max_iterations_reached, user_opt_out.";
+  }
+  const rows = envelope.iterations;
+  if (!Array.isArray(rows) || rows.length === 0) {
+    return "review-loop iterations must be a non-empty array.";
+  }
+  if (rows.length > maxIterations) {
+    return "review-loop iterations count cannot exceed maxIterations.";
+  }
+
+  let prevScore = -Infinity;
+  let reachedTarget = false;
+  for (let index = 0; index < rows.length; index++) {
+    const row = asRecord(rows[index]);
+    if (!row) {
+      return `review-loop iterations[${index}] must be an object.`;
+    }
+    const iteration = row.iteration;
+    const qualityScore = row.qualityScore;
+    const findingsCount = row.findingsCount;
+    if (
+      typeof iteration !== "number" ||
+      Number.isNaN(iteration) ||
+      !Number.isInteger(iteration) ||
+      iteration < 1
+    ) {
+      return `review-loop iterations[${index}].iteration must be an integer >= 1.`;
+    }
+    if (
+      typeof qualityScore !== "number" ||
+      Number.isNaN(qualityScore) ||
+      qualityScore < 0 ||
+      qualityScore > 1
+    ) {
+      return `review-loop iterations[${index}].qualityScore must be between 0 and 1.`;
+    }
+    if (
+      typeof findingsCount !== "number" ||
+      Number.isNaN(findingsCount) ||
+      !Number.isInteger(findingsCount) ||
+      findingsCount < 0
+    ) {
+      return `review-loop iterations[${index}].findingsCount must be an integer >= 0.`;
+    }
+    if (qualityScore + Number.EPSILON < prevScore) {
+      return "review-loop qualityScore must be monotonic non-decreasing across iterations.";
+    }
+    if (qualityScore >= targetScore) {
+      reachedTarget = true;
+    }
+    prevScore = qualityScore;
+  }
+
+  if (envelope.stopReason === "quality_threshold_met" && !reachedTarget) {
+    return "review-loop stopReason is quality_threshold_met but no iteration reached targetScore.";
+  }
+  if (envelope.stopReason === "max_iterations_reached" && rows.length < maxIterations) {
+    return "review-loop stopReason is max_iterations_reached but iterations are below maxIterations.";
+  }
+
+  return null;
+}
 
 // Per-gate validators keyed by `${stage}:${gateId}`. Returning a non-null
 // string surfaces the reason as an `advance-stage` failure so evidence is
@@ -154,7 +274,11 @@ const GATE_EVIDENCE_VALIDATORS: Record<string, (evidence: string) => string | nu
       return `must name the finalization mode that ran (for example ${SHIP_FINALIZATION_MODE_HINT}).`;
     }
     return null;
-  }
+  },
+  "scope:scope_user_approved": (evidence) =>
+    validateReviewLoopGateEvidence("scope", evidence),
+  "design:design_architecture_locked": (evidence) =>
+    validateReviewLoopGateEvidence("design", evidence)
 };
 
 function validateGateEvidenceShape(stage: FlowStage, gateId: string, evidence: string): string | null {
@@ -332,6 +456,36 @@ function parseCsv(raw: string | undefined): string[] {
     .split(",")
     .map((item) => item.trim())
     .filter((item) => item.length > 0);
+}
+
+async function hydrateReviewLoopEvidenceFromArtifact(
+  projectRoot: string,
+  stage: FlowStage,
+  track: FlowState["track"],
+  selectedGateIds: string[],
+  evidenceByGate: Record<string, string>
+): Promise<void> {
+  const gateId = AUTO_REVIEW_LOOP_GATE_BY_STAGE[stage];
+  if (!gateId) return;
+  if (!selectedGateIds.includes(gateId)) return;
+  const existing = evidenceByGate[gateId];
+  if (typeof existing === "string" && existing.trim().length > 0) return;
+  const resolved = await resolveArtifactPath(stage, {
+    projectRoot,
+    track,
+    intent: "read"
+  });
+  let raw = "";
+  try {
+    raw = await fs.readFile(resolved.absPath, "utf8");
+  } catch {
+    return;
+  }
+  const reviewStage = stage === "scope" || stage === "design" ? stage : null;
+  if (!reviewStage) return;
+  const envelope = extractReviewLoopEnvelopeFromArtifact(raw, reviewStage, resolved.relPath);
+  if (!envelope) return;
+  evidenceByGate[gateId] = JSON.stringify(envelope);
 }
 
 function parseAdvanceStageArgs(tokens: string[]): AdvanceStageArgs {
@@ -656,6 +810,14 @@ async function runAdvanceStage(
       });
     }
   }
+
+  await hydrateReviewLoopEvidenceFromArtifact(
+    projectRoot,
+    args.stage,
+    flowState.track,
+    selectedGateIds,
+    args.evidenceByGate
+  );
 
   const catalog = flowState.stageGateCatalog[args.stage];
   const nextPassed = unique([...catalog.passed, ...selectedGateIds]).filter((gateId) =>

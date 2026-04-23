@@ -9,7 +9,8 @@ import type {
   CrossStageTrace,
   ReviewSection,
   StageExecutionModel,
-  StagePhilosophy
+  StagePhilosophy,
+  StageReviewLoop
 } from "./stages/schema-types.js";
 
 const VERIFICATION_STAGES: FlowStage[] = ["tdd", "review", "ship"];
@@ -96,6 +97,18 @@ function reviewSectionsBlock(sectionsInput: ReviewSection[]): string {
   return `## Review Sections
 
 ${sections}
+`;
+}
+
+function reviewLoopBlock(reviewLoop?: StageReviewLoop): string {
+  if (!reviewLoop) return "";
+  const checklist = reviewLoop.checklist.map((item) => `- \`${item}\``).join("\n");
+  return `## Outside Voice Review Loop
+- Stage: \`${reviewLoop.stage}\`
+- Target score: \`${reviewLoop.targetScore}\`
+- Max iterations: \`${reviewLoop.maxIterations}\`
+- Checklist dimensions:
+${checklist}
 `;
 }
 
@@ -368,6 +381,7 @@ export function stageSkillMarkdown(stage: FlowStage, track: FlowTrack = "standar
   ).slice(0, 5);
   const processSummary = dedupeGuidance(executionModel.process, executionModel.checklist).slice(0, 5);
   const stageRefs = stageSpecificSeeAlso(stage);
+  const reviewLoopSection = reviewLoopBlock(reviewLens.reviewLoop);
   const mandatoryDelegationSummary = mandatoryDelegations.length > 0
     ? mandatoryDelegations.map((name) => `\`${name}\``).join(", ")
     : "none";
@@ -452,7 +466,7 @@ ${crossStageTraceBlock(artifactRules.crossStageTrace)}
 ${artifactValidationBlock(artifactRules.artifactValidation)}
 
 ## Review Lens
-## Outputs
+${reviewLoopSection ? `${reviewLoopSection}\n` : ""}## Outputs
 ${reviewLens.outputs.map((item) => `- ${item}`).join("\n")}
 
 ${reviewSectionsBlock(reviewLens.reviewSections)}
