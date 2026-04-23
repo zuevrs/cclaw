@@ -546,6 +546,35 @@ function formatScore(value: number): string {
   return clampScore(value).toFixed(3);
 }
 
+function finalEnvelopeScore(envelope: ReviewLoopEnvelope): number {
+  if (envelope.iterations.length === 0) return 0;
+  return envelope.iterations[envelope.iterations.length - 1]!.qualityScore;
+}
+
+export function renderReviewLoopHeader(
+  envelope: ReviewLoopEnvelope
+): string {
+  return `> Review Loop Quality: ${formatScore(finalEnvelopeScore(envelope))} | stop: ${envelope.stopReason} | iterations: ${envelope.iterations.length}/${envelope.maxIterations}`;
+}
+
+export function upsertReviewLoopHeader(
+  markdown: string,
+  envelope: ReviewLoopEnvelope
+): string {
+  const header = renderReviewLoopHeader(envelope);
+  const existingHeader = /^>\s+Review Loop Quality:.*$/m;
+  if (existingHeader.test(markdown)) {
+    return markdown.replace(existingHeader, header);
+  }
+  const firstHeading = /^# .+$/m.exec(markdown);
+  if (!firstHeading || firstHeading.index < 0) {
+    const prefix = markdown.length > 0 ? `${header}\n\n` : `${header}\n`;
+    return `${prefix}${markdown}`;
+  }
+  const headingEnd = firstHeading.index + firstHeading[0].length;
+  return `${markdown.slice(0, headingEnd)}\n\n${header}${markdown.slice(headingEnd)}`;
+}
+
 export function renderReviewLoopSummarySection(
   envelope: ReviewLoopEnvelope
 ): string {
@@ -570,18 +599,19 @@ export function upsertReviewLoopSummary(
   markdown: string,
   envelope: ReviewLoopEnvelope
 ): string {
+  const withHeader = upsertReviewLoopHeader(markdown, envelope);
   const section = renderReviewLoopSummarySection(envelope);
   const headingRe = /^##\s+Spec Review Loop\s*$/m;
-  const match = headingRe.exec(markdown);
+  const match = headingRe.exec(withHeader);
   if (!match || match.index < 0) {
-    const needsBreak = markdown.endsWith("\n") ? "" : "\n";
-    return `${markdown}${needsBreak}\n${section}\n`;
+    const needsBreak = withHeader.endsWith("\n") ? "" : "\n";
+    return `${withHeader}${needsBreak}\n${section}\n`;
   }
   const start = match.index;
-  const afterStart = markdown.slice(start + match[0].length);
+  const afterStart = withHeader.slice(start + match[0].length);
   const nextHeading = /\n##\s+/m.exec(afterStart);
-  const end = nextHeading ? start + match[0].length + nextHeading.index + 1 : markdown.length;
-  return `${markdown.slice(0, start)}${section}\n${markdown.slice(end)}`.replace(/\n{3,}/g, "\n\n");
+  const end = nextHeading ? start + match[0].length + nextHeading.index + 1 : withHeader.length;
+  return `${withHeader.slice(0, start)}${section}\n${withHeader.slice(end)}`.replace(/\n{3,}/g, "\n\n");
 }
 
 export function toSkillEnvelope(

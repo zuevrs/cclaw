@@ -6,10 +6,12 @@ import {
   buildOutsideVoiceReviewPrompt,
   createOutsideVoiceDispatcher,
   parseReviewLoopDispatcherResult,
+  renderReviewLoopHeader,
   renderReviewLoopSummarySection,
   runReviewLoop,
   runReviewLoopIteration,
   toSkillEnvelope,
+  upsertReviewLoopHeader,
   upsertReviewLoopSummary
 } from "../../src/content/review-loop.js";
 import { validateSkillEnvelope } from "../../src/content/stage-schema.js";
@@ -265,7 +267,7 @@ describe("review-loop contracts", () => {
   });
 
   it("renders and upserts spec review loop summary section", () => {
-    const section = renderReviewLoopSummarySection({
+    const envelope = {
       type: "review-loop",
       version: "1",
       stage: "scope",
@@ -277,10 +279,14 @@ describe("review-loop contracts", () => {
         { iteration: 1, qualityScore: 0.62, findingsCount: 4 },
         { iteration: 2, qualityScore: 0.81, findingsCount: 1 }
       ]
-    });
+    } as const;
+    const section = renderReviewLoopSummarySection(envelope);
     expect(section).toContain("## Spec Review Loop");
     expect(section).toContain("| 2 | 0.810 | 1 |");
     expect(section).toContain("Stop reason: quality_threshold_met");
+    const header = renderReviewLoopHeader(envelope);
+    expect(header).toContain("Review Loop Quality: 0.810");
+    expect(header).toContain("iterations: 2/3");
 
     const baseArtifact = `# Scope Artifact
 
@@ -290,6 +296,18 @@ describe("review-loop contracts", () => {
 ## Completion Dashboard
 - Checklist findings: open
 `;
+    const withHeaderOnly = upsertReviewLoopHeader(baseArtifact, {
+      type: "review-loop",
+      version: "1",
+      stage: "scope",
+      artifactPath: ".cclaw/artifacts/02-scope-demo.md",
+      targetScore: 0.8,
+      maxIterations: 3,
+      stopReason: "max_iterations_reached",
+      iterations: [{ iteration: 1, qualityScore: 0.5, findingsCount: 5 }]
+    });
+    expect(withHeaderOnly).toContain("> Review Loop Quality: 0.500");
+
     const withSection = upsertReviewLoopSummary(baseArtifact, {
       type: "review-loop",
       version: "1",
@@ -300,6 +318,7 @@ describe("review-loop contracts", () => {
       stopReason: "max_iterations_reached",
       iterations: [{ iteration: 1, qualityScore: 0.5, findingsCount: 5 }]
     });
+    expect(withSection).toContain("> Review Loop Quality: 0.500");
     expect(withSection).toContain("## Spec Review Loop");
 
     const replaced = upsertReviewLoopSummary(withSection, {
@@ -312,7 +331,9 @@ describe("review-loop contracts", () => {
       stopReason: "quality_threshold_met",
       iterations: [{ iteration: 1, qualityScore: 0.82, findingsCount: 1 }]
     });
+    expect((replaced.match(/Review Loop Quality:/g) ?? []).length).toBe(1);
     expect((replaced.match(/## Spec Review Loop/g) ?? []).length).toBe(1);
+    expect(replaced).toContain("> Review Loop Quality: 0.820");
     expect(replaced).toContain("| 1 | 0.820 | 1 |");
     expect(replaced).toContain("Stop reason: quality_threshold_met");
   });
