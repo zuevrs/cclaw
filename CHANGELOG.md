@@ -41,6 +41,21 @@
   unless at least one slice has an OPEN RED. Previously a flat
   red/green tally could unlock writes for a new slice just because
   an older slice had balanced out.
+- Single Ralph Loop contract inside `src/content/next-command.ts`. The
+  command contract and the skill document previously carried two
+  different paragraphs — one called Ralph Loop a "soft nudge, not a
+  gate", the other said "Advance only when every planned slice is in
+  `acClosed` and `redOpenSlices` is empty" (hard-gating language). Both
+  sections now render the SAME canonical snippet
+  (`ralphLoopContractSnippet()` / `RALPH_LOOP_CONTRACT_MARKER`) stating
+  the resolved policy: Ralph Loop is a progress indicator + soft
+  pre-advance nudge; hard gate enforcement flows through
+  `flow-state.json` gates via `stage-complete.mjs`. A new
+  behavior-backed parity test in
+  `tests/e2e/next-command-ralph-loop-contract.test.ts` asserts the
+  canonical paragraph appears byte-identical in both places, that no
+  hard-gating wording is used against ralph-loop fields, and that the
+  legacy wording is gone.
 - Runtime hooks (`run-hook.mjs`) now write JSON state atomically (temp
   file + rename, with EXDEV fallback) and serialize concurrent writes
   to the same file via per-file directory locks. This closes a class
