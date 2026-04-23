@@ -101,11 +101,26 @@ const RULES: DoctorRegistryRule[] = [
     }
   },
   {
-    test: /^(meta_skill:|protocol:|stage_skill:|context_mode:|reference:)/,
+    test: /^(meta_skill:|protocol:|stage_skill:|context_mode:)/,
     metadata: {
       severity: "error",
       summary: "Routing skill and protocol integrity check.",
       fix: "Regenerate runtime references and skills via `cclaw sync`, then re-run doctor.",
+      docRef: ref("harness-and-routing.md")
+    }
+  },
+  {
+    // `reference:*` checks (flow-map.md and similar overview documents)
+    // are useful to detect drift from the generated baseline, but they
+    // document the surface rather than gate it. A missing section here
+    // means the map is out of date, not that a runtime contract is
+    // broken — so they report as a warning instead of hard-failing
+    // doctor / CI. `cclaw sync` rewrites the file.
+    test: /^reference:/,
+    metadata: {
+      severity: "warning",
+      summary: "Reference/overview doc integrity (non-blocking).",
+      fix: "Run `cclaw sync` to regenerate the reference doc from the canonical source.",
       docRef: ref("harness-and-routing.md")
     }
   },

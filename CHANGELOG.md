@@ -2,6 +2,17 @@
 
 ## Unreleased
 
+### Changed
+
+- Doctor severity for `reference:*` checks (currently the
+  `flow-map.md` section anchors, including
+  `reference:flow_map:compound_readiness`) is demoted from
+  `error` to `warning`. These docs document the surface rather
+  than gate it; a missing section means the generated overview
+  is out of date, not that a runtime contract is broken. The
+  remediation hint still points at `cclaw sync`, so CI surfaces
+  drift without hard-failing.
+
 ### Fixed
 
 - SessionStart now reads `knowledge.jsonl` while holding the
