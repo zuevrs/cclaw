@@ -34,3 +34,8 @@ docs/*
 .codex/hooks.json
 .opencode/plugins/cclaw-plugin.mjs
 .cursor/rules/cclaw-workflow.mdc
+# editor / agent workspace state — local only
+.cursor/
+# graphify knowledge graph outputs — generated locally, not committed
+graphify-out/
+graphify-out-full/
