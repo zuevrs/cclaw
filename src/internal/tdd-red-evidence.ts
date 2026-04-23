@@ -115,7 +115,30 @@ export async function runTddRedEvidenceCommand(
 ): Promise<number> {
   const args = parseArgs(tokens);
   const flowState = await readFlowState(projectRoot).catch(() => null);
+  // Strict runId scoping: a previous implementation fell back to no
+  // filter when both `--runId` and `flowState.activeRunId` were missing,
+  // which let evidence rows from past runs satisfy the current check
+  // (false positive). Now: require an explicit or inferred runId or
+  // fail loud so the caller cannot silently inherit cross-run state.
   const effectiveRunId = args.runId ?? flowState?.activeRunId;
+  if (!effectiveRunId || effectiveRunId.trim().length === 0) {
+    const reason =
+      "tdd-red-evidence: cannot scope check — no --runId provided and " +
+      "flow-state.json has no activeRunId. Pass --runId=<id> explicitly " +
+      "or run `cclaw doctor` to reconcile state.";
+    if (!args.quiet) {
+      io.stdout.write(`${JSON.stringify({
+        ok: false,
+        path: args.targetPath,
+        runId: null,
+        error: reason,
+        sources: { tddCycleLog: false, autoEvidence: false }
+      }, null, 2)}\n`);
+    } else {
+      io.stderr.write(`${reason}\n`);
+    }
+    return 2;
+  }
 
   const tddLogPath = path.join(projectRoot, RUNTIME_ROOT, "state", "tdd-cycle-log.jsonl");
   const autoEvidencePath = path.join(projectRoot, RUNTIME_ROOT, "state", "tdd-red-evidence.jsonl");
@@ -125,7 +148,10 @@ export async function runTddRedEvidenceCommand(
 
   try {
     const raw = await fs.readFile(tddLogPath, "utf8");
-    const entries = parseTddCycleLog(raw);
+    // Strict parse: drop malformed/underspecified rows rather than
+    // backfilling runId=active / stage=tdd defaults, which used to
+    // silently glue foreign entries to the current run.
+    const entries = parseTddCycleLog(raw, { strict: true });
     cycleLogHasRed = hasFailingTestForPath(entries, args.targetPath, {
       runId: effectiveRunId
     });
@@ -148,7 +174,7 @@ export async function runTddRedEvidenceCommand(
     io.stdout.write(`${JSON.stringify({
       ok: hasRed,
       path: args.targetPath,
-      runId: effectiveRunId ?? null,
+      runId: effectiveRunId,
       sources: {
         tddCycleLog: cycleLogHasRed,
         autoEvidence: autoEvidenceHasRed

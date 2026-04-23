@@ -13,6 +13,20 @@
   copy+unlink (still safe because callers hold a directory lock).
   Closes the Windows CI regression surfaced by
   `tests/unit/hook-atomic-writes.test.ts`.
+- `parseTddCycleLog` now accepts an `issues` sink and a `strict` flag.
+  In strict mode (used by `cclaw internal tdd-red-evidence` and
+  validation paths), rows missing `runId`, `stage`, or `slice` are
+  rejected instead of silently back-filling `runId=active,
+  stage=tdd, slice=S-unknown`, which used to glue unrelated lines
+  into the current run. Soft mode keeps the legacy defaults but
+  can now surface per-line reasons (JSON parse failure, invalid
+  phase, missing fields) via the issues array.
+- `cclaw internal tdd-red-evidence` now requires a scoped `runId`.
+  If neither `--runId` nor `flowState.activeRunId` is available,
+  the command fails loud with a clear error instead of silently
+  matching across all historical runs. Closes a false-positive
+  path where a past failing RED for the same file could satisfy
+  the guard on the current run.
 - Runtime hooks (`run-hook.mjs`) now write JSON state atomically (temp
   file + rename, with EXDEV fallback) and serialize concurrent writes
   to the same file via per-file directory locks. This closes a class
