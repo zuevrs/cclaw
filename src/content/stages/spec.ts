@@ -90,7 +90,6 @@ export const SPEC: StageSchemaInput = {
     "No testability mapping",
     "Edge cases missing or deferred"
   ],
-  policyNeedles: ["Acceptance Criteria", "Constraints", "Testability", "approved spec", "Edge Cases"],
   artifactFile: "04-spec.md",
   next: "plan",
   reviewSections: [

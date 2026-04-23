@@ -85,7 +85,11 @@ export interface StageReviewLens {
   outputs: string[];
   reviewSections: ReviewSection[];
   mandatoryDelegations: string[];
-  policyNeedles: string[];
+}
+
+export interface StageReviewLensInput {
+  outputs: string[];
+  reviewSections: ReviewSection[];
 }
 
 export interface StageSchema {
@@ -130,7 +134,6 @@ export interface StageSchema {
    * near-duplicate entries and forced downstream code to merge them anyway.
    */
   commonRationalizations: string[];
-  policyNeedles: string[];
   artifactFile: string;
   next: FlowStage | "done";
   checklist: string[];
@@ -146,7 +149,7 @@ export interface StageSchema {
   mandatoryDelegations: string[];
 }
 
-export type StageSchemaInput = Omit<
+export type StageSchemaLegacyInput = Omit<
   StageSchema,
   "schemaShape" |
   "philosophy" |
@@ -156,5 +159,24 @@ export type StageSchemaInput = Omit<
   "mandatoryDelegations" |
   "complexityTier"
 > & {
+  schemaShape?: "legacy";
   complexityTier?: StageComplexityTier;
 };
+
+export interface StageSchemaV2Input {
+  schemaShape: "v2";
+  stage: FlowStage;
+  skillFolder: string;
+  skillName: string;
+  skillDescription: string;
+  complexityTier?: StageComplexityTier;
+  philosophy: StagePhilosophy;
+  executionModel: StageExecutionModel;
+  artifactRules: StageArtifactRules;
+  reviewLens: StageReviewLensInput;
+  next: FlowStage | "done";
+  /** When true, stage skill includes batch auto-execute guidance (tdd). */
+  batchExecutionAllowed?: boolean;
+}
+
+export type StageSchemaInput = StageSchemaLegacyInput | StageSchemaV2Input;

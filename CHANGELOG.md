@@ -1,5 +1,23 @@
 # Changelog
 
+## 0.48.28
+
+Phase-0 schema consolidation follow-up. This cut migrates stage policy anchors
+to a lint-metadata sidecar and starts v2 literal adoption in audited stages.
+
+### Changed
+
+- Moved `policyNeedles` out of stage literals and runtime schema fields into a
+  dedicated sidecar module at `src/content/stages/_lint-metadata/index.ts`.
+- Updated stage command-contract rendering to source anchors from
+  `stagePolicyNeedles(...)` backed by lint metadata, preserving command output
+  while decoupling policy anchors from runtime stage objects.
+- Migrated `brainstorm`, `scope`, and `design` stage literals to
+  `schemaShape: "v2"` grouped inputs (`philosophy`, `executionModel`,
+  `artifactRules`, `reviewLens`) with normalization in `stageSchema(...)`.
+- Updated schema types and tests to support mixed legacy/v2 stage inputs and
+  verify policy-needle track transforms through the new metadata source.
+
 ## 0.48.27
 
 Phase-0 schema consolidation slice. This release introduces a v2 stage-schema

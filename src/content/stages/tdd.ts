@@ -1,11 +1,11 @@
-import type { StageSchemaInput } from "./schema-types.js";
+import type { StageSchemaInput, StageSchemaLegacyInput } from "./schema-types.js";
 import type { FlowTrack } from "../../types.js";
 
 // ---------------------------------------------------------------------------
 // TDD — RED → GREEN → REFACTOR cycle (merged test + build)
 // ---------------------------------------------------------------------------
 
-export const TDD: StageSchemaInput = {
+export const TDD: StageSchemaLegacyInput = {
   stage: "tdd",
   skillFolder: "test-driven-development",
   skillName: "test-driven-development",
@@ -104,7 +104,6 @@ export const TDD: StageSchemaInput = {
     "No full-suite GREEN evidence",
     "Multiple tasks implemented in one pass without justification"
   ],
-  policyNeedles: ["RED", "GREEN", "REFACTOR", "failing test", "full test suite", "acceptance criteria", "traceable to plan slice"],
   artifactFile: "06-tdd.md",
   next: "review",
   reviewSections: [
@@ -205,7 +204,7 @@ function quickTrackText(value: string): string {
     .replace(/05-plan\.md/gu, "04-spec.md");
 }
 
-function tddQuickTrackVariant(): StageSchemaInput {
+function tddQuickTrackVariant(): StageSchemaLegacyInput {
   return {
     ...TDD,
     skillDescription: quickTrackText(TDD.skillDescription),
@@ -222,7 +221,6 @@ function tddQuickTrackVariant(): StageSchemaInput {
     requiredEvidence: TDD.requiredEvidence.map(quickTrackText),
     inputs: TDD.inputs.map(quickTrackText),
     requiredContext: ["spec artifact", "existing test patterns"],
-    policyNeedles: TDD.policyNeedles.map(quickTrackText),
     reviewSections: TDD.reviewSections.map((section) => ({
       ...section,
       evaluationPoints: section.evaluationPoints.map(quickTrackText)

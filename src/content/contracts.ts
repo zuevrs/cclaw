@@ -1,5 +1,5 @@
 import type { FlowStage, FlowTrack } from "../types.js";
-import { stageSchema } from "./stage-schema.js";
+import { stagePolicyNeedles, stageSchema } from "./stage-schema.js";
 import { stageSkillFolder } from "./skills.js";
 
 export function stageCommandContract(stage: FlowStage, track: FlowTrack = "standard"): string {
@@ -21,6 +21,7 @@ export function stageCommandContract(stage: FlowStage, track: FlowTrack = "stand
   const writeStepPaths = writes.length > 1
     ? writes.map((w) => `\`${w}\``).join(" and ")
     : `\`${primaryArtifact}\``;
+  const policyNeedles = stagePolicyNeedles(stage, track);
 
   return `# /cc-${stage}
 
@@ -50,6 +51,6 @@ ${gateIds}
 ${schema.exitCriteria.map((v) => `- ${v}`).join("\n")}
 
 ## Anchors
-${schema.policyNeedles.map((v) => `- ${v}`).join("\n")}
+${policyNeedles.map((v) => `- ${v}`).join("\n")}
 `;
 }

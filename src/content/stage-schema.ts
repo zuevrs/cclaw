@@ -11,6 +11,7 @@ import {
   REVIEW,
   SHIP
 } from "./stages/index.js";
+import { stagePolicyNeedlesFromMetadata } from "./stages/_lint-metadata/index.js";
 import { tddStageForTrack } from "./stages/tdd.js";
 import type {
   ArtifactValidation,
@@ -21,8 +22,10 @@ import type {
   StageReviewLens,
   StageAutoSubagentDispatch,
   StageGate,
+  StageSchemaLegacyInput,
   StageSchema,
-  StageSchemaInput
+  StageSchemaInput,
+  StageSchemaV2Input
 } from "./stages/schema-types.js";
 
 // Re-export the canonical type surface so downstream callers keep their existing
@@ -38,8 +41,10 @@ export type {
   StageReviewLens,
   StageAutoSubagentDispatch,
   StageGate,
+  StageSchemaLegacyInput,
   StageSchema,
-  StageSchemaInput
+  StageSchemaInput,
+  StageSchemaV2Input
 } from "./stages/schema-types.js";
 
 // ---------------------------------------------------------------------------
@@ -253,6 +258,48 @@ function readsFromForTrack(readsFrom: string[], track: FlowTrack): string[] {
   });
 }
 
+function isStageSchemaV2Input(value: StageSchemaInput): value is StageSchemaV2Input {
+  return value.schemaShape === "v2";
+}
+
+function normalizeStageSchemaInput(value: StageSchemaInput): StageSchemaLegacyInput {
+  if (!isStageSchemaV2Input(value)) {
+    return value;
+  }
+  return {
+    stage: value.stage,
+    skillFolder: value.skillFolder,
+    skillName: value.skillName,
+    skillDescription: value.skillDescription,
+    complexityTier: value.complexityTier,
+    hardGate: value.philosophy.hardGate,
+    ironLaw: value.philosophy.ironLaw,
+    purpose: value.philosophy.purpose,
+    whenToUse: value.philosophy.whenToUse,
+    whenNotToUse: value.philosophy.whenNotToUse,
+    interactionProtocol: value.executionModel.interactionProtocol,
+    process: value.executionModel.process,
+    requiredGates: value.executionModel.requiredGates,
+    requiredEvidence: value.executionModel.requiredEvidence,
+    inputs: value.executionModel.inputs,
+    requiredContext: value.executionModel.requiredContext,
+    researchPlaybooks: value.executionModel.researchPlaybooks,
+    outputs: value.reviewLens.outputs,
+    blockers: value.executionModel.blockers,
+    exitCriteria: value.executionModel.exitCriteria,
+    commonRationalizations: value.philosophy.commonRationalizations,
+    artifactFile: value.artifactRules.artifactFile,
+    next: value.next,
+    checklist: value.executionModel.checklist,
+    reviewSections: value.reviewLens.reviewSections,
+    completionStatus: value.artifactRules.completionStatus,
+    crossStageTrace: value.artifactRules.crossStageTrace,
+    artifactValidation: value.artifactRules.artifactValidation,
+    batchExecutionAllowed: value.batchExecutionAllowed,
+    trivialOverrideSections: value.artifactRules.trivialOverrideSections
+  };
+}
+
 // ---------------------------------------------------------------------------
 // Stage map and accessors
 // ---------------------------------------------------------------------------
@@ -441,7 +488,8 @@ export function mandatoryDelegationsForStage(
 }
 
 export function stageSchema(stage: FlowStage, track: FlowTrack = "standard"): StageSchema {
-  const base = stage === "tdd" ? tddStageForTrack(track) : STAGE_SCHEMA_MAP[stage];
+  const rawInput = stage === "tdd" ? tddStageForTrack(track) : STAGE_SCHEMA_MAP[stage];
+  const base = normalizeStageSchemaInput(rawInput);
   const tieredGates = tieredStageGates(stage, base.requiredGates, track);
   const tieredValidation = tieredArtifactValidation(stage, base.artifactValidation);
   const crossStageTrace = {
@@ -480,8 +528,7 @@ export function stageSchema(stage: FlowStage, track: FlowTrack = "standard"): St
   const reviewLens: StageReviewLens = {
     outputs: base.outputs,
     reviewSections: base.reviewSections,
-    mandatoryDelegations,
-    policyNeedles: base.policyNeedles
+    mandatoryDelegations
   };
   return {
     ...base,
@@ -553,7 +600,7 @@ export function buildTransitionRules(): TransitionRule[] {
 }
 
 export function stagePolicyNeedles(stage: FlowStage, track: FlowTrack = "standard"): string[] {
-  return stageSchema(stage, track).policyNeedles;
+  return stagePolicyNeedlesFromMetadata(stage, track);
 }
 
 export function stageAutoSubagentDispatch(stage: FlowStage): StageAutoSubagentDispatch[] {

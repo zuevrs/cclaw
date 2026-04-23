@@ -100,7 +100,6 @@ export const PLAN: StageSchemaInput = {
     "Locked decisions are missing or not mapped",
     "Scope-reduction language appears without explicit approved defer decision"
   ],
-  policyNeedles: ["WAIT_FOR_CONFIRM", "Task Graph", "Dependency Batches", "Acceptance Mapping", "verification steps", "Locked Decision Coverage"],
   artifactFile: "05-plan.md",
   next: "tdd",
   reviewSections: [
