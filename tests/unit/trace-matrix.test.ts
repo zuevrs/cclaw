@@ -19,6 +19,7 @@ describe("trace-matrix", () => {
     expect(matrix.orphanedCriteria).toEqual([]);
     expect(matrix.orphanedTasks).toEqual([]);
     expect(matrix.orphanedTests).toEqual([]);
+    expect(matrix.reviewLoops).toEqual([]);
   });
 
   it("traces AC-1 through tasks, slices, and Layer 1 review findings", async () => {
@@ -58,6 +59,7 @@ describe("trace-matrix", () => {
     expect(matrix.orphanedCriteria).toEqual([]);
     expect(matrix.orphanedTasks).toEqual([]);
     expect(matrix.orphanedTests).toEqual([]);
+    expect(matrix.reviewLoops).toEqual([]);
   });
 
   it("detects criteria with no linked tasks as orphans", async () => {
@@ -200,5 +202,73 @@ describe("trace-matrix", () => {
 
     const ac1 = matrix.entries.find((entry) => entry.criterionId === "AC-1");
     expect(ac1?.taskIds).toEqual(["T-1"]);
+  });
+
+  it("includes scope/design review-loop envelopes with iterations", async () => {
+    const root = await createTempProject("trace-review-loop-envelopes");
+    await ensureArtifactsDir(root);
+
+    await writeProjectFile(
+      root,
+      ".cclaw/artifacts/02-scope.md",
+      `# Scope Artifact
+
+> Review Loop Quality: 0.830 | stop: quality_threshold_met | iterations: 2/3
+
+## Scope Mode
+- [x] selective
+
+## Spec Review Loop
+| Iteration | Quality Score | Findings | Stop decision |
+|---|---|---|---|
+| 1 | 0.610 | 4 | continue |
+| 2 | 0.830 | 1 | stop |
+- Stop reason: quality_threshold_met
+- Target score: 0.800
+- Max iterations: 3
+`
+    );
+    await writeProjectFile(
+      root,
+      ".cclaw/artifacts/03-design.md",
+      `# Design Artifact
+
+> Review Loop Quality: 0.780 | stop: max_iterations_reached | iterations: 3/3
+
+## Architecture Boundaries
+| Component | Responsibility | Owner |
+|---|---|---|
+| API | routes | team |
+
+## Spec Review Loop
+| Iteration | Quality Score | Findings | Stop decision |
+|---|---|---|---|
+| 1 | 0.520 | 6 | continue |
+| 2 | 0.690 | 3 | continue |
+| 3 | 0.780 | 2 | stop |
+- Stop reason: max_iterations_reached
+- Target score: 0.800
+- Max iterations: 3
+`
+    );
+
+    const matrix = await buildTraceMatrix(root);
+
+    expect(matrix.reviewLoops).toHaveLength(2);
+    const scopeLoop = matrix.reviewLoops.find((entry) => entry.stage === "scope");
+    expect(scopeLoop).toBeDefined();
+    expect(scopeLoop?.stopReason).toBe("quality_threshold_met");
+    expect(scopeLoop?.finalScore).toBeCloseTo(0.83, 6);
+    expect(scopeLoop?.iterations).toHaveLength(2);
+
+    const designLoop = matrix.reviewLoops.find((entry) => entry.stage === "design");
+    expect(designLoop).toBeDefined();
+    expect(designLoop?.stopReason).toBe("max_iterations_reached");
+    expect(designLoop?.iterations).toHaveLength(3);
+    expect(designLoop?.iterations[2]).toMatchObject({
+      iteration: 3,
+      qualityScore: 0.78,
+      findingsCount: 2
+    });
   });
 });

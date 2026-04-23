@@ -1,6 +1,8 @@
 import fs from "node:fs/promises";
 import path from "node:path";
+import { resolveArtifactPath } from "./artifact-paths.js";
 import { RUNTIME_ROOT } from "./constants.js";
+import { extractReviewLoopEnvelopeFromArtifact } from "./content/review-loop.js";
 import { exists } from "./fs-utils.js";
 
 export interface TraceEntry {
@@ -10,11 +12,26 @@ export interface TraceEntry {
   reviewFindings: string[];
 }
 
+export interface ReviewLoopTraceEntry {
+  stage: "scope" | "design";
+  artifactPath: string;
+  targetScore: number;
+  maxIterations: number;
+  stopReason: "quality_threshold_met" | "max_iterations_reached" | "user_opt_out";
+  finalScore: number;
+  iterations: Array<{
+    iteration: number;
+    qualityScore: number;
+    findingsCount: number;
+  }>;
+}
+
 export interface TraceMatrix {
   entries: TraceEntry[];
   orphanedCriteria: string[];
   orphanedTasks: string[];
   orphanedTests: string[];
+  reviewLoops: ReviewLoopTraceEntry[];
 }
 
 function activeArtifactPath(projectRoot: string, name: string): string {
@@ -138,6 +155,64 @@ function layer1LinesForCriterion(layer1: string, criterionId: string): string[] 
   return out;
 }
 
+async function readStageArtifact(
+  projectRoot: string,
+  stage: "scope" | "design"
+): Promise<{ markdown: string; relPath: string } | null> {
+  let resolved: Awaited<ReturnType<typeof resolveArtifactPath>> | null = null;
+  try {
+    resolved = await resolveArtifactPath(stage, {
+      projectRoot,
+      intent: "read"
+    });
+  } catch {
+    resolved = null;
+  }
+  if (!resolved || !(await exists(resolved.absPath))) {
+    return null;
+  }
+  try {
+    const markdown = await fs.readFile(resolved.absPath, "utf8");
+    return { markdown, relPath: resolved.relPath };
+  } catch {
+    return null;
+  }
+}
+
+async function collectReviewLoopTraceEntries(
+  projectRoot: string
+): Promise<ReviewLoopTraceEntry[]> {
+  const entries: ReviewLoopTraceEntry[] = [];
+  for (const stage of ["scope", "design"] as const) {
+    const artifact = await readStageArtifact(projectRoot, stage);
+    if (!artifact) continue;
+    const envelope = extractReviewLoopEnvelopeFromArtifact(
+      artifact.markdown,
+      stage,
+      artifact.relPath
+    );
+    if (!envelope) continue;
+    const finalScore =
+      envelope.iterations.length > 0
+        ? envelope.iterations[envelope.iterations.length - 1]!.qualityScore
+        : 0;
+    entries.push({
+      stage,
+      artifactPath: artifact.relPath,
+      targetScore: envelope.targetScore,
+      maxIterations: envelope.maxIterations,
+      stopReason: envelope.stopReason,
+      finalScore,
+      iterations: envelope.iterations.map((row) => ({
+        iteration: row.iteration,
+        qualityScore: row.qualityScore,
+        findingsCount: row.findingsCount
+      }))
+    });
+  }
+  return entries;
+}
+
 export async function buildTraceMatrix(projectRoot: string): Promise<TraceMatrix> {
   const spec = await readArtifact(projectRoot, "04-spec.md");
   const plan = await readArtifact(projectRoot, "05-plan.md");
@@ -197,11 +272,13 @@ export async function buildTraceMatrix(projectRoot: string): Promise<TraceMatrix
       return !acs || acs.length === 0;
     });
   });
+  const reviewLoops = await collectReviewLoopTraceEntries(projectRoot);
 
   return {
     entries,
     orphanedCriteria,
     orphanedTasks,
-    orphanedTests
+    orphanedTests,
+    reviewLoops
   };
 }
