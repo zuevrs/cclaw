@@ -614,6 +614,131 @@ export function upsertReviewLoopSummary(
   return `${withHeader.slice(0, start)}${section}\n${withHeader.slice(end)}`.replace(/\n{3,}/g, "\n\n");
 }
 
+function extractH2Section(markdown: string, heading: string): string | null {
+  const escaped = heading.replace(/[.*+?^${}()|[\]\\]/gu, "\\$&");
+  const sectionStartRe = new RegExp(`^##\\s+${escaped}\\s*$`, "mi");
+  const startMatch = sectionStartRe.exec(markdown);
+  if (!startMatch || startMatch.index < 0) {
+    return null;
+  }
+  const start = startMatch.index + startMatch[0].length;
+  const rest = markdown.slice(start);
+  const nextHeading = /\n##\s+/m.exec(rest);
+  const end = nextHeading ? start + nextHeading.index + 1 : markdown.length;
+  return markdown.slice(start, end).trim();
+}
+
+function normalizeStopReason(value: unknown): ReviewLoopStopReason | null {
+  if (typeof value !== "string") return null;
+  const normalized = value.trim();
+  if (normalized === "quality_threshold_met") return "quality_threshold_met";
+  if (normalized === "max_iterations_reached") return "max_iterations_reached";
+  if (normalized === "user_opt_out") return "user_opt_out";
+  return null;
+}
+
+function parseIterationsTable(sectionBody: string): ReviewLoopIterationSummary[] {
+  const rows: ReviewLoopIterationSummary[] = [];
+  const lines = sectionBody.split(/\r?\n/gu);
+  for (const line of lines) {
+    const trimmed = line.trim();
+    if (!trimmed.startsWith("|")) continue;
+    const cells = trimmed
+      .split("|")
+      .slice(1, -1)
+      .map((cell) => cell.trim());
+    if (cells.length < 3) continue;
+    if (/iteration/iu.test(cells[0] ?? "")) continue;
+    if (/^-+$/u.test((cells[0] ?? "").replace(/:/gu, ""))) continue;
+    const iteration = Number(cells[0]);
+    const qualityScore = Number(cells[1]);
+    const findingsCount = Number(cells[2]);
+    if (!Number.isInteger(iteration) || iteration < 1) continue;
+    if (!Number.isFinite(qualityScore)) continue;
+    if (!Number.isInteger(findingsCount) || findingsCount < 0) continue;
+    rows.push({
+      iteration,
+      qualityScore: clampScore(qualityScore),
+      findingsCount
+    });
+  }
+  rows.sort((a, b) => a.iteration - b.iteration);
+  return rows;
+}
+
+function parseHeaderMeta(markdown: string): {
+  score?: number;
+  stopReason?: ReviewLoopStopReason;
+  iterations?: number;
+  maxIterations?: number;
+} {
+  const match =
+    /^>\s*Review Loop Quality:\s*([0-9]*\.?[0-9]+)\s*\|\s*stop:\s*([a-z_]+)\s*\|\s*iterations:\s*(\d+)\s*\/\s*(\d+)\s*$/mi.exec(
+      markdown
+    );
+  if (!match) return {};
+  const score = Number(match[1]);
+  const stopReason = normalizeStopReason(match[2] ?? "");
+  const iterations = Number(match[3]);
+  const maxIterations = Number(match[4]);
+  return {
+    score: Number.isFinite(score) ? clampScore(score) : undefined,
+    stopReason: stopReason ?? undefined,
+    iterations: Number.isInteger(iterations) ? iterations : undefined,
+    maxIterations: Number.isInteger(maxIterations) ? maxIterations : undefined
+  };
+}
+
+export function extractReviewLoopEnvelopeFromArtifact(
+  markdown: string,
+  stage: ReviewLoopStage,
+  artifactPath: string
+): ReviewLoopEnvelope | null {
+  const sectionBody = extractH2Section(markdown, "Spec Review Loop");
+  if (!sectionBody) return null;
+  const iterations = parseIterationsTable(sectionBody);
+  if (iterations.length === 0) return null;
+
+  const stopReasonFromSection = normalizeStopReason(
+    /-\s*Stop reason:\s*([a-z_]+)/iu.exec(sectionBody)?.[1]
+  );
+  const targetFromSection = Number(
+    /-\s*Target score:\s*([0-9]*\.?[0-9]+)/iu.exec(sectionBody)?.[1] ?? ""
+  );
+  const maxFromSection = Number(
+    /-\s*Max iterations:\s*(\d+)/iu.exec(sectionBody)?.[1] ?? ""
+  );
+  const header = parseHeaderMeta(markdown);
+  const targetScore = Number.isFinite(targetFromSection)
+    ? clampScore(targetFromSection)
+    : REVIEW_LOOP_DEFAULT_TARGET_SCORE;
+  const maxIterationsCandidate = Number.isInteger(maxFromSection) && maxFromSection > 0
+    ? maxFromSection
+    : Number.isInteger(header.maxIterations) && (header.maxIterations ?? 0) > 0
+      ? (header.maxIterations as number)
+      : REVIEW_LOOP_DEFAULT_MAX_ITERATIONS;
+  const maxIterations = Math.max(maxIterationsCandidate, iterations.length);
+  const stopReason =
+    stopReasonFromSection
+    ?? header.stopReason
+    ?? (iterations[iterations.length - 1]!.qualityScore >= targetScore
+      ? "quality_threshold_met"
+      : iterations.length >= maxIterations
+        ? "max_iterations_reached"
+        : "user_opt_out");
+
+  return {
+    type: "review-loop",
+    version: "1",
+    stage,
+    artifactPath,
+    targetScore,
+    maxIterations,
+    stopReason,
+    iterations
+  };
+}
+
 export function toSkillEnvelope(
   envelope: ReviewLoopEnvelope,
   emittedAt: string = new Date().toISOString(),

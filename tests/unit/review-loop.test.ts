@@ -5,6 +5,7 @@ import {
   aggregateQualityScore,
   buildOutsideVoiceReviewPrompt,
   createOutsideVoiceDispatcher,
+  extractReviewLoopEnvelopeFromArtifact,
   parseReviewLoopDispatcherResult,
   renderReviewLoopHeader,
   renderReviewLoopSummarySection,
@@ -336,5 +337,54 @@ describe("review-loop contracts", () => {
     expect(replaced).toContain("> Review Loop Quality: 0.820");
     expect(replaced).toContain("| 1 | 0.820 | 1 |");
     expect(replaced).toContain("Stop reason: quality_threshold_met");
+  });
+
+  it("extracts review-loop envelope from artifact markdown", () => {
+    const markdown = `# Scope Artifact
+
+> Review Loop Quality: 0.830 | stop: quality_threshold_met | iterations: 2/3
+
+## Scope Mode
+- selective
+
+## Spec Review Loop
+| Iteration | Quality Score | Findings | Stop decision |
+|---|---|---|---|
+| 1 | 0.610 | 4 | continue |
+| 2 | 0.830 | 1 | stop |
+- Stop reason: quality_threshold_met
+- Target score: 0.800
+- Max iterations: 3
+- Unresolved concerns: None
+`;
+    const envelope = extractReviewLoopEnvelopeFromArtifact(
+      markdown,
+      "scope",
+      ".cclaw/artifacts/02-scope-demo.md"
+    );
+    expect(envelope).toBeTruthy();
+    expect(envelope?.type).toBe("review-loop");
+    expect(envelope?.stage).toBe("scope");
+    expect(envelope?.iterations).toHaveLength(2);
+    expect(envelope?.iterations[1]).toMatchObject({
+      iteration: 2,
+      qualityScore: 0.83,
+      findingsCount: 1
+    });
+    expect(envelope?.stopReason).toBe("quality_threshold_met");
+  });
+
+  it("returns null when artifact has no valid spec review loop table", () => {
+    const markdown = `# Design Artifact
+
+## Spec Review Loop
+- Stop reason: quality_threshold_met
+`;
+    const envelope = extractReviewLoopEnvelopeFromArtifact(
+      markdown,
+      "design",
+      ".cclaw/artifacts/03-design-demo.md"
+    );
+    expect(envelope).toBeNull();
   });
 });

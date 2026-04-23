@@ -32,6 +32,7 @@ import { runEnvelopeValidateCommand } from "./envelope-validate.js";
 import { runKnowledgeDigestCommand } from "./knowledge-digest.js";
 import { runTddLoopStatusCommand } from "./tdd-loop-status.js";
 import { runTddRedEvidenceCommand } from "./tdd-red-evidence.js";
+import { extractReviewLoopEnvelopeFromArtifact } from "../content/review-loop.js";
 
 interface InternalIo {
   stdout: Writable;
@@ -83,6 +84,11 @@ interface InternalValidationReport {
     issues: string[];
   };
 }
+
+const AUTO_REVIEW_LOOP_GATE_BY_STAGE: Partial<Record<FlowStage, string>> = {
+  scope: "scope_user_approved",
+  design: "design_architecture_locked"
+};
 
 function unique<T extends string>(values: T[]): T[] {
   return [...new Set(values)];
@@ -452,6 +458,36 @@ function parseCsv(raw: string | undefined): string[] {
     .filter((item) => item.length > 0);
 }
 
+async function hydrateReviewLoopEvidenceFromArtifact(
+  projectRoot: string,
+  stage: FlowStage,
+  track: FlowState["track"],
+  selectedGateIds: string[],
+  evidenceByGate: Record<string, string>
+): Promise<void> {
+  const gateId = AUTO_REVIEW_LOOP_GATE_BY_STAGE[stage];
+  if (!gateId) return;
+  if (!selectedGateIds.includes(gateId)) return;
+  const existing = evidenceByGate[gateId];
+  if (typeof existing === "string" && existing.trim().length > 0) return;
+  const resolved = await resolveArtifactPath(stage, {
+    projectRoot,
+    track,
+    intent: "read"
+  });
+  let raw = "";
+  try {
+    raw = await fs.readFile(resolved.absPath, "utf8");
+  } catch {
+    return;
+  }
+  const reviewStage = stage === "scope" || stage === "design" ? stage : null;
+  if (!reviewStage) return;
+  const envelope = extractReviewLoopEnvelopeFromArtifact(raw, reviewStage, resolved.relPath);
+  if (!envelope) return;
+  evidenceByGate[gateId] = JSON.stringify(envelope);
+}
+
 function parseAdvanceStageArgs(tokens: string[]): AdvanceStageArgs {
   const [stageRaw, ...flagTokens] = tokens;
   if (!isFlowStageValue(stageRaw)) {
@@ -774,6 +810,14 @@ async function runAdvanceStage(
       });
     }
   }
+
+  await hydrateReviewLoopEvidenceFromArtifact(
+    projectRoot,
+    args.stage,
+    flowState.track,
+    selectedGateIds,
+    args.evidenceByGate
+  );
 
   const catalog = flowState.stageGateCatalog[args.stage];
   const nextPassed = unique([...catalog.passed, ...selectedGateIds]).filter((gateId) =>
