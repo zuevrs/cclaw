@@ -279,6 +279,24 @@ async function readTextFile(filePath, fallback = "") {
   }
 }
 
+// CLI-compatible knowledge lock. Must match
+// src/knowledge-store.ts::knowledgeLockPath exactly so the hook and the
+// CLI serialize on the same mutex when reading / appending
+// knowledge.jsonl. Drift here re-introduces the race we just closed.
+function knowledgeLockPathInline(root) {
+  return path.join(root, RUNTIME_ROOT, "state", ".knowledge.lock");
+}
+
+async function readTextFileLocked(lockPath, filePath, fallback = "") {
+  return withDirectoryLockInline(lockPath, async () => {
+    try {
+      return await fs.readFile(filePath, "utf8");
+    } catch {
+      return fallback;
+    }
+  });
+}
+
 async function appendJsonLine(filePath, value) {
   const payload = JSON.stringify(value) + "\\n";
   await withDirectoryLockInline(lockPathFor(filePath), async () => {
@@ -929,10 +947,16 @@ async function handleSessionStart(runtime) {
   const sessionDigest = (await readTextFile(sessionDigestFile, "")).trim();
   const activitySummary = await readRecentActivityLines(activityFile);
   const contextWarning = await readLatestContextWarningLine(contextWarningsFile);
-  // Read knowledge.jsonl exactly once per session-start; both the digest
-  // and compound-readiness derive from the same snapshot.
+  // Read knowledge.jsonl exactly once per session-start while holding the
+  // SAME lock CLI writers acquire in \`appendKnowledge\`. Guarantees we never
+  // see a partial (mid-write) snapshot. Both the digest and
+  // compound-readiness derive from this single read.
   const knowledgeFilePath = path.join(runtime.root, RUNTIME_ROOT, "knowledge.jsonl");
-  const knowledgeRaw = await readTextFile(knowledgeFilePath, "");
+  const knowledgeRaw = await readTextFileLocked(
+    knowledgeLockPathInline(runtime.root),
+    knowledgeFilePath,
+    ""
+  );
   const knowledge = await buildKnowledgeDigest(runtime.root, state.currentStage, knowledgeRaw);
 
   // Refresh Ralph Loop status each session-start so /cc-next and the model
@@ -950,8 +974,16 @@ async function handleSessionStart(runtime) {
         ", slices=" + String(ralphStatus.sliceCount) +
         ", acClosed=" + String(ralphStatus.acClosed.length) +
         ", redOpen=" + redOpen;
-    } catch (_err) {
-      // best-effort — a malformed cycle log should never break session-start.
+    } catch (err) {
+      // Best-effort — a malformed cycle log should never break
+      // session-start. But we DO leave a breadcrumb in
+      // hook-errors.jsonl so \`cclaw doctor\` can surface chronic
+      // failures (previously this was a silent swallow).
+      await recordHookError(
+        runtime.root,
+        "session-start:ralph-loop",
+        err instanceof Error ? err.message : String(err)
+      );
     }
   }
 
@@ -977,8 +1009,16 @@ async function handleSessionStart(runtime) {
           ", ready=" + String(readiness.readyCount) + criticalSuffix;
       }
     }
-  } catch (_err) {
-    // best-effort — a malformed knowledge.jsonl must never break session-start.
+  } catch (err) {
+    // Best-effort — a malformed knowledge.jsonl must never break
+    // session-start. But we DO leave a breadcrumb in
+    // hook-errors.jsonl so config/IO problems become visible in
+    // \`cclaw doctor\` instead of silently degrading readiness output.
+    await recordHookError(
+      runtime.root,
+      "session-start:compound-readiness",
+      err instanceof Error ? err.message : String(err)
+    );
   }
 
   const suggestionMemory = toObject(await readJsonFile(suggestionMemoryFile, {})) || {};

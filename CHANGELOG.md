@@ -4,6 +4,16 @@
 
 ### Fixed
 
+- SessionStart now reads `knowledge.jsonl` while holding the
+  **same** mutex CLI writers use in `appendKnowledge`
+  (`.cclaw/state/.knowledge.lock`). Closes a latent race where a
+  concurrent `/cc-ops knowledge` append could produce a partial
+  snapshot visible to the digest / compound-readiness computations.
+- SessionStart's ralph-loop and compound-readiness error handlers
+  no longer silently swallow exceptions — failures are now recorded
+  as breadcrumbs in `.cclaw/state/hook-errors.jsonl` (still
+  soft-fail so hooks never block on a malformed derived state, but
+  `cclaw doctor` can now surface chronic failures).
 - Compound-readiness is now computed consistently across CLI and
   runtime. Previously `cclaw internal compound-readiness` honored
   `config.compound.recurrenceThreshold` while the SessionStart hook
