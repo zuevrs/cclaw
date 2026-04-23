@@ -287,6 +287,21 @@ describe("stage schema and subagent alignment", () => {
     expect(design).toContain("| zombie connection |");
   });
 
+  it("design template includes stale diagram audit section", () => {
+    const design = ARTIFACT_TEMPLATES["03-design.md"];
+    expect(design).toContain("## Stale Diagram Audit");
+    expect(design).toContain("| Diagram marker baseline |");
+  });
+
+  it("scope template includes pre-scope system audit section", () => {
+    const scope = ARTIFACT_TEMPLATES["02-scope.md"];
+    expect(scope).toContain("## Pre-Scope System Audit");
+    expect(scope).toContain("git log -30 --oneline");
+    expect(scope).toContain("git diff --stat");
+    expect(scope).toContain("git stash list");
+    expect(scope).toContain('rg -n "TODO|FIXME|XXX|HACK"');
+  });
+
   it("scope and design templates include review-loop artifact sections", () => {
     const scopeTemplate = ARTIFACT_TEMPLATES["02-scope.md"];
     const designTemplate = ARTIFACT_TEMPLATES["03-design.md"];

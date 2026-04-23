@@ -21,6 +21,14 @@ export interface LintResult {
   findings: LintFinding[];
 }
 
+export const CCLAW_ENABLE_SCOPE_PRE_AUDIT_ENV = "CCLAW_ENABLE_SCOPE_PRE_AUDIT";
+export const CCLAW_ENABLE_STALE_DIAGRAM_AUDIT_ENV = "CCLAW_ENABLE_STALE_DIAGRAM_AUDIT";
+
+function isOptInFlagEnabled(envName: string): boolean {
+  const value = process.env[envName];
+  return typeof value === "string" && /^(?:1|true|yes|on)$/iu.test(value.trim());
+}
+
 interface ResolvedArtifactPath {
   absPath: string;
   relPath: string;
@@ -585,6 +593,134 @@ function validateInteractionEdgeCaseMatrix(sectionBody: string): { ok: boolean; 
   return {
     ok: true,
     details: "Interaction Edge Case matrix contains all required rows with handled/deferred status."
+  };
+}
+
+const PRE_SCOPE_AUDIT_SIGNALS: ReadonlyArray<{ label: string; pattern: RegExp }> = [
+  { label: "git log -30 --oneline", pattern: /\bgit\s+log\b[^\n]*-30[^\n]*\boneline\b/iu },
+  { label: "git diff --stat", pattern: /\bgit\s+diff\b[^\n]*--stat\b/iu },
+  { label: "git stash list", pattern: /\bgit\s+stash\s+list\b/iu },
+  {
+    label: "debt marker scan (TODO|FIXME|XXX|HACK)",
+    pattern: /\b(?:rg|ripgrep)\b[^\n]*(?:TODO|FIXME|XXX|HACK)|\bTODO\b|\bFIXME\b|\bXXX\b|\bHACK\b/iu
+  }
+];
+
+function validatePreScopeSystemAudit(sectionBody: string): { ok: boolean; details: string } {
+  const missing = PRE_SCOPE_AUDIT_SIGNALS
+    .filter((signal) => !signal.pattern.test(sectionBody))
+    .map((signal) => signal.label);
+  if (missing.length > 0) {
+    return {
+      ok: false,
+      details: `Pre-Scope System Audit is missing required signal(s): ${missing.join(", ")}.`
+    };
+  }
+  return {
+    ok: true,
+    details: "Pre-Scope System Audit captures git log/diff/stash/debt-marker checks."
+  };
+}
+
+function normalizeCodebaseInvestigationFileRef(value: string): string | null {
+  const cleaned = value
+    .replace(/`/gu, "")
+    .replace(/^\s*[-*]\s*/u, "")
+    .trim();
+  if (!cleaned) return null;
+  if (/^(?:file|n\/a|none|\(none\)|tbd|\?)$/iu.test(cleaned)) return null;
+  return cleaned;
+}
+
+function collectCodebaseInvestigationFiles(sectionBody: string): string[] {
+  const refs: string[] = [];
+  for (const row of getMarkdownTableRows(sectionBody)) {
+    const fileCell = normalizeCodebaseInvestigationFileRef(row[0] ?? "");
+    if (fileCell) refs.push(fileCell);
+  }
+  return [...new Set(refs)];
+}
+
+interface StaleDiagramAuditResult {
+  ok: boolean;
+  details: string;
+}
+
+async function runStaleDiagramAudit(
+  projectRoot: string,
+  artifactPath: string,
+  artifactRaw: string,
+  codebaseInvestigationBody: string
+): Promise<StaleDiagramAuditResult> {
+  const markerCount = (artifactRaw.match(/<!--\s*diagram:\s*[a-z0-9-]+\s*-->/giu) ?? []).length;
+  if (markerCount === 0) {
+    return {
+      ok: false,
+      details: "No diagram markers found in design artifact; stale-diagram baseline cannot be computed."
+    };
+  }
+  let artifactStat: Awaited<ReturnType<typeof fs.stat>>;
+  try {
+    artifactStat = await fs.stat(artifactPath);
+  } catch {
+    return {
+      ok: false,
+      details: "Cannot stat design artifact to compute diagram marker baseline."
+    };
+  }
+
+  const refs = collectCodebaseInvestigationFiles(codebaseInvestigationBody);
+  if (refs.length === 0) {
+    return {
+      ok: false,
+      details: "Codebase Investigation must list at least one blast-radius file for stale-diagram audit."
+    };
+  }
+
+  const stale: string[] = [];
+  const missing: string[] = [];
+  let scanned = 0;
+  for (const ref of refs) {
+    const absPath = path.isAbsolute(ref) ? ref : path.join(projectRoot, ref);
+    if (!(await exists(absPath))) {
+      missing.push(ref);
+      continue;
+    }
+    let fileStat: Awaited<ReturnType<typeof fs.stat>>;
+    try {
+      fileStat = await fs.stat(absPath);
+    } catch {
+      missing.push(ref);
+      continue;
+    }
+    if (!fileStat.isFile()) continue;
+    scanned += 1;
+    if (fileStat.mtimeMs > artifactStat.mtimeMs) {
+      stale.push(ref);
+    }
+  }
+
+  if (missing.length > 0) {
+    return {
+      ok: false,
+      details: `Stale Diagram Audit could not read blast-radius file(s): ${missing.join(", ")}.`
+    };
+  }
+  if (scanned === 0) {
+    return {
+      ok: false,
+      details: "Stale Diagram Audit found no readable blast-radius files in Codebase Investigation."
+    };
+  }
+  if (stale.length > 0) {
+    return {
+      ok: false,
+      details: `Stale Diagram Audit flagged stale file(s) newer than diagram baseline: ${stale.join(", ")}.`
+    };
+  }
+  return {
+    ok: true,
+    details: `Stale Diagram Audit clear: ${scanned} blast-radius file(s) are not newer than diagram baseline.`
   };
 }
 
@@ -1189,6 +1325,9 @@ function validateSectionBody(
   if (sectionNameNormalized === "failure mode table") {
     return validateFailureModeTable(sectionBody);
   }
+  if (sectionNameNormalized === "pre-scope system audit") {
+    return validatePreScopeSystemAudit(sectionBody);
+  }
   if (sectionNameNormalized === "data flow") {
     return validateInteractionEdgeCaseMatrix(sectionBody);
   }
@@ -1347,6 +1486,8 @@ export async function lintArtifact(
     stage === "brainstorm" ? sectionBodyByName(sections, "Short-Circuit Decision") : null;
   const brainstormShortCircuitActivated =
     stage === "brainstorm" && isShortCircuitActivated(brainstormShortCircuitBody);
+  const scopePreAuditEnabled = isOptInFlagEnabled(CCLAW_ENABLE_SCOPE_PRE_AUDIT_ENV);
+  const staleDiagramAuditEnabled = isOptInFlagEnabled(CCLAW_ENABLE_STALE_DIAGRAM_AUDIT_ENV);
   const isTrivialOverride =
     schema.trivialOverrideSections &&
     schema.trivialOverrideSections.length > 0 &&
@@ -1367,6 +1508,8 @@ export async function lintArtifact(
     const effectiveRequired =
       stage === "design" && sectionKey === "data flow" && hasHeading
         ? true
+        : stage === "scope" && sectionKey === "pre-scope system audit" && scopePreAuditEnabled
+          ? true
         : effectiveRequiredFromOverride;
     const body = hasHeading ? sectionBodyByName(sections, v.section) : null;
     const validation = body === null
@@ -1571,6 +1714,33 @@ export async function lintArtifact(
               ? `Missing marker \`<!-- diagram: ${requirement.marker} -->\` in section "${requirement.section}" (${tierSource}).`
               : `Section "${requirement.section}" has marker but no meaningful content (${tierSource}).`
       });
+    }
+
+    if (staleDiagramAuditEnabled) {
+      const codebaseInvestigation = sectionBodyByName(sections, "Codebase Investigation");
+      if (codebaseInvestigation === null) {
+        findings.push({
+          section: "Stale Diagram Drift Check",
+          required: true,
+          rule: `When \`${CCLAW_ENABLE_STALE_DIAGRAM_AUDIT_ENV}=1\`, stale diagram audit requires Codebase Investigation blast-radius files.`,
+          found: false,
+          details: "No ## heading matching required section \"Codebase Investigation\"."
+        });
+      } else {
+        const staleAudit = await runStaleDiagramAudit(
+          projectRoot,
+          absFile,
+          raw,
+          codebaseInvestigation
+        );
+        findings.push({
+          section: "Stale Diagram Drift Check",
+          required: true,
+          rule: `When \`${CCLAW_ENABLE_STALE_DIAGRAM_AUDIT_ENV}=1\`, blast-radius files must not be newer than current design diagram baseline.`,
+          found: staleAudit.ok,
+          details: staleAudit.details
+        });
+      }
     }
   }
 

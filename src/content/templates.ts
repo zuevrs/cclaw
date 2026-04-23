@@ -78,6 +78,14 @@ inputs_hash: sha256:pending
 
 # Scope Artifact
 
+## Pre-Scope System Audit
+| Check | Command | Findings |
+|---|---|---|
+| Recent commits | \`git log -30 --oneline\` |  |
+| Current diff | \`git diff --stat\` |  |
+| Stash state | \`git stash list\` |  |
+| Debt markers | \`rg -n "TODO|FIXME|XXX|HACK"\` |  |
+
 ## Prime Directives
 - Zero silent failures:
 - Every error has a name:
@@ -307,6 +315,11 @@ inputs_hash: sha256:pending
 \`\`\`
 (rollout order, guard checks, and verification sequence)
 \`\`\`
+
+## Stale Diagram Audit
+| File | Last modified | Diagram marker baseline | Status | Notes |
+|---|---|---|---|---|
+|  |  |  | clear/stale |  |
 
 ## What Already Exists
 | Sub-problem | Existing code/library | Layer | Reuse decision |

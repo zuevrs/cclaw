@@ -57,6 +57,7 @@ export const DESIGN: StageSchemaInput = {
       "Deployment & Rollout Review — migration sequencing, flag strategy, rollback plan, compatibility window, and post-deploy verification steps.",
       "Parallelization Strategy — If multiple independent modules, produce dependency table: which can be built in parallel? Where are conflict risks? Flag shared-state modules.",
       "Outside Voice + Spec Review Loop — run adversarial second-opinion review, reconcile findings, and iterate up to 3 cycles or until quality score >= 0.8.",
+      "Stale Diagram Audit (opt-in) — when `CCLAW_ENABLE_STALE_DIAGRAM_AUDIT=1`, compare blast-radius file mtimes against diagram-marker freshness and flag stale diagrams before design lock.",
       "Unresolved Decisions — List any design decisions that could not be resolved in this session. For each: what information is missing? Who can provide it? What is the default if no answer comes?",
       "Distribution Check — If the plan creates new artifact types (packages, CLI tools, configs), document the build/publish story. How does it reach the user?",
       "Deferred Items Cross-Reference — Collect every item explicitly deferred during design review. Each must appear in the Unresolved Decisions table or in the upstream scope artifact's deferred list. No deferred item may exist only in conversation — it must be written down."
@@ -107,6 +108,7 @@ export const DESIGN: StageSchemaInput = {
       "Artifact written to `.cclaw/artifacts/03-design-<slug>.md`.",
       "Failure-mode table exists in Method/Exception/Rescue/UserSees format.",
       "Tier-required diagram markers are present: architecture (all tiers), +shadow/error (Standard+), +state-machine/rollback/deployment-sequence (Deep).",
+      "When `CCLAW_ENABLE_STALE_DIAGRAM_AUDIT=1`, stale diagram audit finding is clear (no blast-radius file newer than diagram markers without explicit update).",
       "Security & threat model findings are documented with mitigations.",
       "Observability and deployment plans are explicit for critical flows.",
       "Outside-voice findings and dispositions are recorded (accept/reject/defer).",
@@ -165,6 +167,7 @@ export const DESIGN: StageSchemaInput = {
       { section: "Rollback Flowchart", required: false, validationRule: "Deep: include `<!-- diagram: rollback-flowchart -->` marker with trigger -> rollback actions -> verification." },
       { section: "Deployment Sequence Diagram", required: false, validationRule: "Deep: include `<!-- diagram: deployment-sequence -->` marker with rollout order and guard checks." },
       { section: "Data Flow", required: false, validationRule: "Must include happy path, nil input, empty input, upstream error paths, plus Interaction Edge Case matrix rows for: double-click, nav-away-mid-request, 10K-result dataset, background-job abandonment, zombie connection. Each row must declare handled yes/no and deferred item when not handled." },
+      { section: "Stale Diagram Audit", required: false, validationRule: "When `CCLAW_ENABLE_STALE_DIAGRAM_AUDIT=1`: blast-radius files from Codebase Investigation must not be newer than the current design diagram-marker baseline unless explicitly refreshed." },
       { section: "Failure Mode Table", required: true, validationRule: "Use Method/Exception/Rescue/UserSees columns and treat silent user impact without rescue as critical." },
       { section: "Security & Threat Model", required: true, validationRule: "Must list trust boundaries, abuse/failure scenarios, mitigations, and residual risks." },
       { section: "Test Strategy", required: false, validationRule: "Must define unit/integration/e2e expectations with coverage targets." },
