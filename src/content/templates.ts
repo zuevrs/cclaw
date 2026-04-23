@@ -242,6 +242,17 @@ inputs_hash: sha256:pending
 (ASCII, Mermaid, or tool-generated diagram showing component boundaries and data flow direction)
 \`\`\`
 
+## Data-Flow Shadow Paths
+| Path | Trigger | Fallback/Degrade behavior |
+|---|---|---|
+|  |  |  |
+
+## Error Flow Diagram
+
+\`\`\`
+(failure detection -> rescue action -> user-visible outcome)
+\`\`\`
+
 ## What Already Exists
 | Sub-problem | Existing code/library | Layer | Reuse decision |
 |---|---|---|---|
@@ -253,10 +264,15 @@ inputs_hash: sha256:pending
 - Upstream error path:
 - Timeout/downstream path:
 
+## Security & Threat Model
+| Boundary | Threat | Mitigation | Owner |
+|---|---|---|---|
+|  |  |  |  |
+
 ## Failure Mode Table
-| Failure mode | Trigger | Detection | Mitigation | User impact |
-|---|---|---|---|---|
-|  |  |  |  |  |
+| Method | Exception | Rescue | UserSees |
+|---|---|---|---|
+|  |  |  |  |
 
 ## Test Strategy
 - Unit:
@@ -267,6 +283,16 @@ inputs_hash: sha256:pending
 | Critical path | Metric | Target | Measurement method |
 |---|---|---|---|
 |  |  |  |  |
+
+## Observability & Debuggability
+| Signal | Source | Alert/Debug path |
+|---|---|---|
+|  |  |  |
+
+## Deployment & Rollout
+| Step | Strategy | Rollback plan |
+|---|---|---|
+|  |  |  |
 
 ## NOT in scope
 - 
@@ -294,10 +320,13 @@ inputs_hash: sha256:pending
 | Review Section | Status | Issues |
 |---|---|---|
 | Architecture Review |  |  |
+| Security & Threat Model |  |  |
 | Code Quality Review |  |  |
+| Data Flow & Interaction Edge Cases |  |  |
 | Test Review |  |  |
 | Performance Review |  |  |
-| Distribution & Delivery Review |  |  |
+| Observability & Debuggability |  |  |
+| Deployment & Rollout Review |  |  |
 
 **Decisions made:** 0 | **Unresolved:** 0
 
