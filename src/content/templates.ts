@@ -264,19 +264,48 @@ inputs_hash: sha256:pending
 
 ## Architecture Diagram
 
+<!-- diagram: architecture -->
+
 \`\`\`
 (ASCII, Mermaid, or tool-generated diagram showing component boundaries and data flow direction)
 \`\`\`
 
 ## Data-Flow Shadow Paths
+<!-- diagram: data-flow-shadow-paths -->
 | Path | Trigger | Fallback/Degrade behavior |
 |---|---|---|
 |  |  |  |
 
 ## Error Flow Diagram
 
+<!-- diagram: error-flow -->
+
 \`\`\`
 (failure detection -> rescue action -> user-visible outcome)
+\`\`\`
+
+## State Machine Diagram
+
+<!-- diagram: state-machine -->
+
+\`\`\`
+(state transitions for the critical flow lifecycle)
+\`\`\`
+
+## Rollback Flowchart
+
+<!-- diagram: rollback-flowchart -->
+
+\`\`\`
+(trigger -> rollback actions -> verification)
+\`\`\`
+
+## Deployment Sequence Diagram
+
+<!-- diagram: deployment-sequence -->
+
+\`\`\`
+(rollout order, guard checks, and verification sequence)
 \`\`\`
 
 ## What Already Exists
@@ -289,6 +318,15 @@ inputs_hash: sha256:pending
 - Nil/empty input path:
 - Upstream error path:
 - Timeout/downstream path:
+
+### Interaction Edge Case Matrix
+| Edge case | Handled? | Design response | Deferred item (if not handled) |
+|---|---|---|---|
+| double-click | yes/no |  | None / D-XX |
+| nav-away-mid-request | yes/no |  | None / D-XX |
+| 10K-result dataset | yes/no |  | None / D-XX |
+| background-job abandonment | yes/no |  | None / D-XX |
+| zombie connection | yes/no |  | None / D-XX |
 
 ## Security & Threat Model
 | Boundary | Threat | Mitigation | Owner |

@@ -174,11 +174,24 @@ async function writeDesignArtifact(root: string): Promise<void> {
 | Storage_Adapter | Persist state with retries | data |
 
 ## Architecture Diagram
+<!-- diagram: architecture -->
 \`\`\`
 API_Gateway -->|sync: validated request| App_Service
 App_Service -.->|async: enqueue persistence| Storage_Adapter
 Storage_Adapter -->|timeout error| Fallback_Cache
 Fallback_Cache -->|degraded response| API_Gateway
+\`\`\`
+
+## Data-Flow Shadow Paths
+<!-- diagram: data-flow-shadow-paths -->
+| Path | Trigger | Fallback/Degrade behavior |
+|---|---|---|
+| persistState | DBTimeout | fallback to cache + retry queue |
+
+## Error Flow Diagram
+<!-- diagram: error-flow -->
+\`\`\`
+DBTimeout -> fallback cache -> degraded response with warning
 \`\`\`
 
 ## Failure Mode Table

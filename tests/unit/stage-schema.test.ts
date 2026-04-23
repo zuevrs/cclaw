@@ -209,6 +209,21 @@ describe("stage schema and subagent alignment", () => {
     }
   });
 
+  it("design artifact exposes tiered diagram section contracts", () => {
+    const design = stageSchema("design");
+    for (const section of [
+      "Data-Flow Shadow Paths",
+      "Error Flow Diagram",
+      "State Machine Diagram",
+      "Rollback Flowchart",
+      "Deployment Sequence Diagram"
+    ] as const) {
+      const rule = design.artifactValidation.find((row) => row.section === section);
+      expect(rule).toBeDefined();
+      expect(rule?.required).toBe(false);
+    }
+  });
+
   it("brainstorm artifact requires tier and reaction sections", () => {
     const brainstorm = stageSchema("brainstorm");
     for (const section of ["Approach Tier", "Approach Reaction"] as const) {
@@ -250,6 +265,26 @@ describe("stage schema and subagent alignment", () => {
     expect(design).not.toMatch(/\\`\\`\\`/);
     const diagramBlock = design.split("## Architecture Diagram")[1];
     expect(diagramBlock).toMatch(/\n```\n[\s\S]*?\n```\n/);
+  });
+
+  it("design template includes tiered diagram markers", () => {
+    const design = ARTIFACT_TEMPLATES["03-design.md"];
+    expect(design).toContain("<!-- diagram: architecture -->");
+    expect(design).toContain("<!-- diagram: data-flow-shadow-paths -->");
+    expect(design).toContain("<!-- diagram: error-flow -->");
+    expect(design).toContain("<!-- diagram: state-machine -->");
+    expect(design).toContain("<!-- diagram: rollback-flowchart -->");
+    expect(design).toContain("<!-- diagram: deployment-sequence -->");
+  });
+
+  it("design template includes interaction edge-case matrix rows", () => {
+    const design = ARTIFACT_TEMPLATES["03-design.md"];
+    expect(design).toContain("### Interaction Edge Case Matrix");
+    expect(design).toContain("| double-click |");
+    expect(design).toContain("| nav-away-mid-request |");
+    expect(design).toContain("| 10K-result dataset |");
+    expect(design).toContain("| background-job abandonment |");
+    expect(design).toContain("| zombie connection |");
   });
 
   it("scope and design templates include review-loop artifact sections", () => {

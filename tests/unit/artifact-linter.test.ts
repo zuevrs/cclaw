@@ -102,9 +102,24 @@ function completeDesignArtifact(diagramBody: string): string {
 | Storage Adapter | Persistence and fallback reads | data-team |
 
 ## Architecture Diagram
+<!-- diagram: architecture -->
 \`\`\`mermaid
 flowchart LR
 ${diagramBody}
+\`\`\`
+
+## Data-Flow Shadow Paths
+<!-- diagram: data-flow-shadow-paths -->
+| Path | Trigger | Fallback/Degrade behavior |
+|---|---|---|
+| storage-write | storage timeout | fallback cache read + retry queue |
+
+## Error Flow Diagram
+<!-- diagram: error-flow -->
+\`\`\`mermaid
+flowchart TD
+  DetectTimeout --> TriggerFallback
+  TriggerFallback --> WarnUser
 \`\`\`
 
 ## Data Flow
@@ -112,6 +127,15 @@ ${diagramBody}
 - Nil input path: API Gateway rejects null payload with 400 and logs validation code.
 - Empty input path: API Gateway rejects empty payload with 422 and returns a field-level hint.
 - Upstream error path: Storage Adapter timeout enters fallback path before final response.
+
+### Interaction Edge Case Matrix
+| Edge case | Handled? | Design response | Deferred item (if not handled) |
+|---|---|---|---|
+| double-click | yes | request idempotency key deduplicates concurrent submits | None |
+| nav-away-mid-request | yes | in-flight request continues server-side; UI shows resumable status on return | None |
+| 10K-result dataset | yes | cursor pagination limits each page to 100 rows and streams chunks | None |
+| background-job abandonment | no | abandoned jobs are marked stale after timeout watchdog sweep | D-17 |
+| zombie connection | yes | heartbeat timeout closes stale socket and retries on reconnect | None |
 
 ## Security & Threat Model
 | Boundary | Threat | Mitigation | Owner |
@@ -167,6 +191,23 @@ ${diagramBody}
 - Decisions made: 4
 - Unresolved items: None
 `;
+}
+
+function removeMarkdownSection(markdown: string, title: string): string {
+  const escaped = title.replace(/[.*+?^${}()|[\]\\]/gu, "\\$&");
+  return markdown.replace(new RegExp(`\\n##\\s+${escaped}[\\s\\S]*?(?=\\n##\\s+|$)`, "u"), "\n");
+}
+
+async function writeBrainstormTierArtifact(
+  root: string,
+  tier: "lightweight" | "standard" | "deep"
+): Promise<void> {
+  await writeRuntimeArtifact(root, "01-brainstorm.md", `# Brainstorm Artifact
+
+## Approach Tier
+- Tier: ${tier}
+- Why this tier: fixture for design diagram requirement tests.
+`);
 }
 
 describe("artifact linter heuristics", () => {
@@ -1240,6 +1281,12 @@ API -> Service -> DB
 |---|---|---|
 | config parser | reads YAML config | core team |
 
+## Architecture Diagram
+<!-- diagram: architecture -->
+\`\`\`
+Config_Reader -->|sync: parse| Config_Model
+\`\`\`
+
 ## NOT in scope
 - Full config migration tool
 
@@ -1294,6 +1341,148 @@ Fallback_Cache -->|degraded response| API_Gateway`
     const diagram = result.findings.find((f) => f.section === "Architecture Diagram");
     expect(result.passed).toBe(true);
     expect(diagram?.found).toBe(true);
+  });
+
+  it("requires standard-tier shadow/error diagram markers", async () => {
+    const root = await createTempProject("design-standard-diagrams-required");
+    await writeBrainstormTierArtifact(root, "standard");
+    const diagram = `API_Gateway -->|sync: validated request| App_Service
+App_Service -.->|async: enqueue write| Storage_Adapter
+Storage_Adapter -->|timeout| Fallback_Cache
+Fallback_Cache -->|degraded response| API_Gateway`;
+    const artifact = completeDesignArtifact(diagram).replace(
+      "<!-- diagram: data-flow-shadow-paths -->",
+      "<!-- diagram: missing-shadow -->"
+    );
+    await writeRuntimeArtifact(root, "03-design.md", artifact);
+
+    const result = await lintArtifact(root, "design");
+    const shadowRequirement = result.findings.find(
+      (f) => f.section === "Diagram Requirement: Data-Flow Shadow Paths"
+    );
+    expect(shadowRequirement?.found).toBe(false);
+    expect(shadowRequirement?.details).toContain("data-flow-shadow-paths");
+  });
+
+  it("allows lightweight-tier design to omit standard-only diagram sections", async () => {
+    const root = await createTempProject("design-lightweight-no-shadow-error");
+    await writeBrainstormTierArtifact(root, "lightweight");
+    const diagram = `API_Gateway -->|sync: validated request| App_Service
+App_Service -.->|async: enqueue write| Storage_Adapter
+Storage_Adapter -->|timeout| Fallback_Cache
+Fallback_Cache -->|degraded response| API_Gateway`;
+    let artifact = completeDesignArtifact(diagram);
+    artifact = removeMarkdownSection(artifact, "Data-Flow Shadow Paths");
+    artifact = removeMarkdownSection(artifact, "Error Flow Diagram");
+    await writeRuntimeArtifact(root, "03-design.md", artifact);
+
+    const result = await lintArtifact(root, "design");
+    expect(result.passed).toBe(true);
+    const architectureRequirement = result.findings.find(
+      (f) => f.section === "Diagram Requirement: Architecture Diagram"
+    );
+    expect(architectureRequirement?.found).toBe(true);
+  });
+
+  it("requires deep-tier state/rollback/deployment diagrams", async () => {
+    const root = await createTempProject("design-deep-diagrams-required");
+    await writeBrainstormTierArtifact(root, "deep");
+    const diagram = `API_Gateway -->|sync: validated request| App_Service
+App_Service -.->|async: enqueue write| Storage_Adapter
+Storage_Adapter -->|timeout| Fallback_Cache
+Fallback_Cache -->|degraded response| API_Gateway`;
+    await writeRuntimeArtifact(root, "03-design.md", completeDesignArtifact(diagram));
+
+    const result = await lintArtifact(root, "design");
+    const stateMachineRequirement = result.findings.find(
+      (f) => f.section === "Diagram Requirement: State Machine Diagram"
+    );
+    expect(stateMachineRequirement?.found).toBe(false);
+    expect(stateMachineRequirement?.details).toContain("State Machine Diagram");
+  });
+
+  it("passes deep-tier design when all deep diagram markers are present", async () => {
+    const root = await createTempProject("design-deep-diagrams-pass");
+    await writeBrainstormTierArtifact(root, "deep");
+    const diagram = `API_Gateway -->|sync: validated request| App_Service
+App_Service -.->|async: enqueue write| Storage_Adapter
+Storage_Adapter -->|timeout| Fallback_Cache
+Fallback_Cache -->|degraded response| API_Gateway`;
+    const artifact = `${completeDesignArtifact(diagram)}
+
+## State Machine Diagram
+<!-- diagram: state-machine -->
+\`\`\`mermaid
+stateDiagram-v2
+  [*] --> Requested
+  Requested --> Persisted
+  Requested --> Degraded
+  Degraded --> Persisted
+\`\`\`
+
+## Rollback Flowchart
+<!-- diagram: rollback-flowchart -->
+\`\`\`mermaid
+flowchart TD
+  Trigger --> DisableFlag
+  DisableFlag --> RestorePreviousBuild
+  RestorePreviousBuild --> Verify
+\`\`\`
+
+## Deployment Sequence Diagram
+<!-- diagram: deployment-sequence -->
+\`\`\`mermaid
+sequenceDiagram
+  participant CI
+  participant API
+  participant Queue
+  CI->>API: deploy canary
+  API->>Queue: enable async write path
+  API->>CI: report health checks
+\`\`\`
+`;
+    await writeRuntimeArtifact(root, "03-design.md", artifact);
+
+    const result = await lintArtifact(root, "design");
+    expect(result.passed).toBe(true);
+  });
+
+  it("fails design artifact when interaction edge-case matrix misses required rows", async () => {
+    const root = await createTempProject("design-missing-edge-case-row");
+    const diagram = `API_Gateway -->|sync: validated request| App_Service
+App_Service -.->|async: enqueue write| Storage_Adapter
+Storage_Adapter -->|timeout| Fallback_Cache
+Fallback_Cache -->|degraded response| API_Gateway`;
+    const artifact = completeDesignArtifact(diagram).replace(
+      "| zombie connection | yes | heartbeat timeout closes stale socket and retries on reconnect | None |\n",
+      ""
+    );
+    await writeRuntimeArtifact(root, "03-design.md", artifact);
+
+    const result = await lintArtifact(root, "design");
+    const dataFlow = result.findings.find((f) => f.section === "Data Flow");
+    expect(result.passed).toBe(false);
+    expect(dataFlow?.found).toBe(false);
+    expect(dataFlow?.details).toContain("zombie connection");
+  });
+
+  it("fails design artifact when unhandled edge case has no deferred item id", async () => {
+    const root = await createTempProject("design-unhandled-edge-case-without-deferred-id");
+    const diagram = `API_Gateway -->|sync: validated request| App_Service
+App_Service -.->|async: enqueue write| Storage_Adapter
+Storage_Adapter -->|timeout| Fallback_Cache
+Fallback_Cache -->|degraded response| API_Gateway`;
+    const artifact = completeDesignArtifact(diagram).replace(
+      "| background-job abandonment | no | abandoned jobs are marked stale after timeout watchdog sweep | D-17 |",
+      "| background-job abandonment | no | abandoned jobs are marked stale after timeout watchdog sweep | None |"
+    );
+    await writeRuntimeArtifact(root, "03-design.md", artifact);
+
+    const result = await lintArtifact(root, "design");
+    const dataFlow = result.findings.find((f) => f.section === "Data Flow");
+    expect(result.passed).toBe(false);
+    expect(dataFlow?.found).toBe(false);
+    expect(dataFlow?.details).toContain("deferred item id");
   });
 
   it("fails design artifact when Failure Mode Table uses legacy header shape", async () => {

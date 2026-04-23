@@ -158,6 +158,125 @@ function isShortCircuitActivated(sectionBody: string | null): boolean {
   return /^(?:activated|yes|true)$/u.test(statusValue) || /\bactivated\b/iu.test(statusValue);
 }
 
+type DesignDiagramTier = "lightweight" | "standard" | "deep";
+
+interface DesignDiagramRequirement {
+  section: string;
+  marker: string;
+  note: string;
+}
+
+const DESIGN_DIAGRAM_REQUIREMENTS: Record<DesignDiagramTier, DesignDiagramRequirement[]> = {
+  lightweight: [
+    {
+      section: "Architecture Diagram",
+      marker: "architecture",
+      note: "Architecture diagram is required for all tiers."
+    }
+  ],
+  standard: [
+    {
+      section: "Architecture Diagram",
+      marker: "architecture",
+      note: "Architecture diagram is required for all tiers."
+    },
+    {
+      section: "Data-Flow Shadow Paths",
+      marker: "data-flow-shadow-paths",
+      note: "Standard+ requires data-flow shadow path coverage."
+    },
+    {
+      section: "Error Flow Diagram",
+      marker: "error-flow",
+      note: "Standard+ requires explicit error-flow rescue mapping."
+    }
+  ],
+  deep: [
+    {
+      section: "Architecture Diagram",
+      marker: "architecture",
+      note: "Architecture diagram is required for all tiers."
+    },
+    {
+      section: "Data-Flow Shadow Paths",
+      marker: "data-flow-shadow-paths",
+      note: "Standard+ requires data-flow shadow path coverage."
+    },
+    {
+      section: "Error Flow Diagram",
+      marker: "error-flow",
+      note: "Standard+ requires explicit error-flow rescue mapping."
+    },
+    {
+      section: "State Machine Diagram",
+      marker: "state-machine",
+      note: "Deep tier requires state-machine coverage for lifecycle transitions."
+    },
+    {
+      section: "Rollback Flowchart",
+      marker: "rollback-flowchart",
+      note: "Deep tier requires rollback flowchart coverage."
+    },
+    {
+      section: "Deployment Sequence Diagram",
+      marker: "deployment-sequence",
+      note: "Deep tier requires deployment sequence coverage."
+    }
+  ]
+};
+
+function normalizeDesignDiagramTier(value: string | null): DesignDiagramTier | null {
+  if (!value) return null;
+  const normalized = value.trim().toLowerCase();
+  if (/^light(?:weight)?$/u.test(normalized)) return "lightweight";
+  if (/^standard$/u.test(normalized)) return "standard";
+  if (/^deep$/u.test(normalized)) return "deep";
+  return null;
+}
+
+function parseApproachTierSection(sectionBody: string | null): DesignDiagramTier | null {
+  if (!sectionBody) return null;
+  for (const line of sectionBody.split(/\r?\n/u)) {
+    const cleaned = line.replace(/[*_`]/gu, "").trim();
+    const directMatch = /(?:^|\b)tier\s*:\s*(lightweight|light|standard|deep)\b/iu.exec(cleaned);
+    if (directMatch) {
+      return normalizeDesignDiagramTier(directMatch[1] ?? null);
+    }
+  }
+  const token = /\b(lightweight|light|standard|deep)\b/iu.exec(sectionBody)?.[1] ?? null;
+  return normalizeDesignDiagramTier(token);
+}
+
+async function resolveDesignDiagramTier(
+  projectRoot: string,
+  track: FlowTrack,
+  designRaw: string
+): Promise<{ tier: DesignDiagramTier; source: string }> {
+  const fromDesign = parseApproachTierSection(extractMarkdownSectionBody(designRaw, "Approach Tier"));
+  if (fromDesign) {
+    return { tier: fromDesign, source: "design-artifact:Approach Tier" };
+  }
+  try {
+    const brainstormArtifact = await resolveStageArtifactPath("brainstorm", {
+      projectRoot,
+      track,
+      intent: "read"
+    });
+    if (await exists(brainstormArtifact.absPath)) {
+      const brainstormRaw = await fs.readFile(brainstormArtifact.absPath, "utf8");
+      const fromBrainstorm = parseApproachTierSection(
+        extractMarkdownSectionBody(brainstormRaw, "Approach Tier")
+      );
+      if (fromBrainstorm) {
+        return { tier: fromBrainstorm, source: "brainstorm-artifact:Approach Tier" };
+      }
+    }
+  } catch {
+    // Ignore read/resolve errors and fall back to default tier.
+  }
+  return { tier: "standard", source: "default:standard" };
+}
+
 function meaningfulLineCount(sectionBody: string): number {
   return sectionBody
     .split(/\r?\n/)
@@ -380,6 +499,92 @@ function validateFailureModeTable(sectionBody: string): { ok: boolean; details: 
   return {
     ok: true,
     details: "Failure Mode Table header and critical-risk checks passed."
+  };
+}
+
+interface InteractionEdgeCaseRequirement {
+  label: string;
+  pattern: RegExp;
+}
+
+const INTERACTION_EDGE_CASE_REQUIREMENTS: readonly InteractionEdgeCaseRequirement[] = [
+  { label: "double-click", pattern: /\bdouble[\s-]?click\b/iu },
+  {
+    label: "nav-away-mid-request",
+    pattern: /\b(?:nav(?:igate)?[\s-]?away(?:[\s-]?mid[\s-]?request)?|leave\s+(?:page|view|screen).*(?:request|save|submit)|close\s+tab.*(?:request|save|submit))\b/iu
+  },
+  {
+    label: "10K-result dataset",
+    pattern: /\b(?:10k(?:[\s-]?result)?|10,?000|large[\s-]?result(?:[\s-]?dataset)?)\b/iu
+  },
+  {
+    label: "background-job abandonment",
+    pattern: /\b(?:background[\s-]?job.*abandon(?:ed|ment)?|abandon(?:ed|ment)?.*background[\s-]?job)\b/iu
+  },
+  { label: "zombie connection", pattern: /\bzombie[\s-]?connection\b/iu }
+];
+
+function validateInteractionEdgeCaseMatrix(sectionBody: string): { ok: boolean; details: string } {
+  const rows = getMarkdownTableRows(sectionBody);
+  if (rows.length === 0) {
+    return {
+      ok: false,
+      details: "Data Flow must include an Interaction Edge Case matrix table with required rows."
+    };
+  }
+
+  const seen = new Map<string, true>();
+  for (const [index, row] of rows.entries()) {
+    const labelCell = (row[0] ?? "").trim();
+    if (!labelCell) continue;
+    const requirement = INTERACTION_EDGE_CASE_REQUIREMENTS.find((candidate) =>
+      candidate.pattern.test(labelCell)
+    );
+    if (!requirement) continue;
+
+    if (row.length < 4) {
+      return {
+        ok: false,
+        details: `Interaction Edge Case row "${requirement.label}" must include 4 columns: Edge case | Handled? | Design response | Deferred item.`
+      };
+    }
+
+    const handled = parseBinaryFlag((row[1] ?? "").trim());
+    const response = (row[2] ?? "").trim();
+    const deferred = (row[3] ?? "").trim();
+    if (handled === "unknown") {
+      return {
+        ok: false,
+        details: `Interaction Edge Case row "${requirement.label}" must mark Handled? as yes/no.`
+      };
+    }
+    if (!response) {
+      return {
+        ok: false,
+        details: `Interaction Edge Case row "${requirement.label}" must describe the design response.`
+      };
+    }
+    if (handled === "no" && (!deferred || /\bnone\b/iu.test(deferred))) {
+      return {
+        ok: false,
+        details: `Interaction Edge Case row "${requirement.label}" is unhandled and must reference a deferred item id (for example D-12).`
+      };
+    }
+    seen.set(requirement.label, true);
+  }
+
+  const missing = INTERACTION_EDGE_CASE_REQUIREMENTS
+    .map((requirement) => requirement.label)
+    .filter((label) => !seen.has(label));
+  if (missing.length > 0) {
+    return {
+      ok: false,
+      details: `Interaction Edge Case matrix is missing required row(s): ${missing.join(", ")}.`
+    };
+  }
+  return {
+    ok: true,
+    details: "Interaction Edge Case matrix contains all required rows with handled/deferred status."
   };
 }
 
@@ -984,6 +1189,9 @@ function validateSectionBody(
   if (sectionNameNormalized === "failure mode table") {
     return validateFailureModeTable(sectionBody);
   }
+  if (sectionNameNormalized === "data flow") {
+    return validateInteractionEdgeCaseMatrix(sectionBody);
+  }
   if (sectionNameNormalized === "architecture diagram") {
     const edgeLines = diagramEdgeLines(sectionBody);
     if (edgeLines.length === 0) {
@@ -1151,10 +1359,15 @@ export async function lintArtifact(
     : null;
 
   for (const v of schema.artifactValidation) {
-    const effectiveRequired = overrideSet
-      ? overrideSet.has(normalizeHeadingTitle(v.section).toLowerCase()) ? true : false
-      : v.required;
+    const sectionKey = normalizeHeadingTitle(v.section).toLowerCase();
     const hasHeading = headingPresent(sections, v.section);
+    const effectiveRequiredFromOverride = overrideSet
+      ? overrideSet.has(sectionKey) ? true : false
+      : v.required;
+    const effectiveRequired =
+      stage === "design" && sectionKey === "data flow" && hasHeading
+        ? true
+        : effectiveRequiredFromOverride;
     const body = hasHeading ? sectionBodyByName(sections, v.section) : null;
     const validation = body === null
       ? { ok: false, details: `No ## heading matching required section "${v.section}".` }
@@ -1326,6 +1539,38 @@ export async function lintArtifact(
             : "Short-circuit section is missing explicit scope handoff guidance."
         });
       }
+    }
+  }
+
+  if (stage === "design") {
+    const tierResolution = await resolveDesignDiagramTier(projectRoot, track, raw);
+    const diagramTier: DesignDiagramTier = isTrivialOverride
+      ? "lightweight"
+      : tierResolution.tier;
+    const tierSource = isTrivialOverride
+      ? `${tierResolution.source}; trivial override forced lightweight`
+      : tierResolution.source;
+    for (const requirement of DESIGN_DIAGRAM_REQUIREMENTS[diagramTier]) {
+      const sectionBody = sectionBodyByName(sections, requirement.section);
+      const hasSection = sectionBody !== null;
+      const escapedMarker = requirement.marker.replace(/[.*+?^${}()|[\]\\]/gu, "\\$&");
+      const markerRegex = new RegExp(`<!--\\s*diagram:\\s*${escapedMarker}\\s*-->`, "iu");
+      const hasMarker = sectionBody !== null && markerRegex.test(sectionBody);
+      const hasContent = sectionBody !== null && meaningfulLineCount(sectionBody) > 0;
+      const found = hasSection && hasMarker && hasContent;
+      findings.push({
+        section: `Diagram Requirement: ${requirement.section}`,
+        required: true,
+        rule: `Design tier "${diagramTier}" requires "${requirement.section}" with marker \`<!-- diagram: ${requirement.marker} -->\`. ${requirement.note}`,
+        found,
+        details: found
+          ? `Satisfied (${tierSource}).`
+          : !hasSection
+            ? `Missing section "${requirement.section}" (${tierSource}).`
+            : !hasMarker
+              ? `Missing marker \`<!-- diagram: ${requirement.marker} -->\` in section "${requirement.section}" (${tierSource}).`
+              : `Section "${requirement.section}" has marker but no meaningful content (${tierSource}).`
+      });
     }
   }
 
