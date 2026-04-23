@@ -216,8 +216,44 @@ export function validateTddCycleOrder(
   };
 }
 
+/**
+ * Canonical path normalization used by ALL TDD path-matching layers
+ * (cycle-log analysis, internal CLI `tdd-red-evidence`, and the
+ * inline runtime hook). Previously each layer had its own near-copy,
+ * which produced subtle drift (e.g. `./src/app.ts` vs `src/app.ts`
+ * differing between hook and CLI). Keep this function in one place
+ * so all callers agree.
+ */
+export function normalizeTddPath(value: string): string {
+  const trimmed = String(value ?? "").trim();
+  return trimmed
+    .replace(/\\/gu, "/")
+    .replace(/^\.\//u, "")
+    .toLowerCase();
+}
+
+// Legacy alias kept for local callers below.
 function normalizePath(value: string): string {
-  return value.replace(/\\/gu, "/").toLowerCase();
+  return normalizeTddPath(value);
+}
+
+/**
+ * Shared "does the recorded file path refer to the target" matcher.
+ * Uses canonical normalization plus the traditional `endsWith('/'+x)`
+ * rule so a recorded `src/app.ts` matches either `src/app.ts` or
+ * `subdir/src/app.ts` but NOT `src/app.test.ts`. All TDD path checks
+ * MUST go through this helper.
+ */
+export function pathMatchesTarget(candidate: string, target: string): boolean {
+  const normalizedCandidate = normalizeTddPath(candidate);
+  const normalizedTarget = normalizeTddPath(target);
+  if (normalizedCandidate.length === 0 || normalizedTarget.length === 0) {
+    return false;
+  }
+  return (
+    normalizedCandidate === normalizedTarget ||
+    normalizedCandidate.endsWith(`/${normalizedTarget}`)
+  );
 }
 
 export interface RalphLoopSliceState {
@@ -331,7 +367,6 @@ export function hasFailingTestForPath(
   productionPath: string,
   options: { runId?: string } = {}
 ): boolean {
-  const normalizedTarget = normalizePath(productionPath);
   const filtered = options.runId
     ? entries.filter((entry) => entry.runId === options.runId)
     : entries;
@@ -340,10 +375,7 @@ export function hasFailingTestForPath(
     if (entry.phase !== "red") continue;
     if (entry.exitCode === undefined || entry.exitCode === 0) continue;
     if (!Array.isArray(entry.files) || entry.files.length === 0) continue;
-    const hasMatch = entry.files.some((filePath) => {
-      const normalized = normalizePath(filePath);
-      return normalized === normalizedTarget || normalized.endsWith(`/${normalizedTarget}`);
-    });
+    const hasMatch = entry.files.some((filePath) => pathMatchesTarget(filePath, productionPath));
     if (hasMatch) {
       return true;
     }

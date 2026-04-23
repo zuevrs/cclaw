@@ -3,7 +3,11 @@ import path from "node:path";
 import type { Writable } from "node:stream";
 import { RUNTIME_ROOT } from "../constants.js";
 import { readFlowState } from "../runs.js";
-import { hasFailingTestForPath, parseTddCycleLog } from "../tdd-cycle.js";
+import {
+  hasFailingTestForPath,
+  parseTddCycleLog,
+  pathMatchesTarget
+} from "../tdd-cycle.js";
 
 interface InternalIo {
   stdout: Writable;
@@ -22,9 +26,9 @@ interface AutoEvidenceEntry {
   paths: string[];
 }
 
-function normalizePath(value: string): string {
-  return value.replace(/\\/gu, "/").toLowerCase();
-}
+// normalizePath and the path matcher live in src/tdd-cycle.ts so all
+// TDD-related guards (internal CLI, runtime hook, unit tests) agree on
+// what "path X matches recorded file Y" means.
 
 function parseArgs(tokens: string[]): TddRedEvidenceArgs {
   const args: Partial<TddRedEvidenceArgs> = { quiet: false };
@@ -95,14 +99,10 @@ function hasFailingAutoEvidenceForPath(
   targetPath: string,
   options: { runId?: string } = {}
 ): boolean {
-  const normalizedTarget = normalizePath(targetPath);
   for (const entry of entries) {
     if (options.runId && entry.runId !== options.runId) continue;
     for (const filePath of entry.paths) {
-      const normalized = normalizePath(filePath);
-      if (normalized === normalizedTarget || normalized.endsWith(`/${normalizedTarget}`)) {
-        return true;
-      }
+      if (pathMatchesTarget(filePath, targetPath)) return true;
     }
   }
   return false;

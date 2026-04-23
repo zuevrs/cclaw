@@ -382,11 +382,29 @@ function normalizeText(value) {
   return String(value || "").replace(/\\s+/gu, " ").trim();
 }
 
+// Mirrors \`src/tdd-cycle.ts::normalizeTddPath\`. Any change to
+// canonical normalization must be updated in BOTH places; the
+// tdd-parity test asserts matcher behavior agrees end-to-end.
 function normalizePathForMatch(rawPath) {
-  return normalizeText(rawPath)
+  return String(rawPath == null ? "" : rawPath)
+    .trim()
     .replace(/\\\\/gu, "/")
     .replace(/^\\.\\//u, "")
     .toLowerCase();
+}
+
+// Mirrors \`src/tdd-cycle.ts::pathMatchesTarget\`. Use instead of raw
+// \`===\` when checking recorded files against a target path.
+function pathMatchesTargetInline(candidate, target) {
+  const normalizedCandidate = normalizePathForMatch(candidate);
+  const normalizedTarget = normalizePathForMatch(target);
+  if (normalizedCandidate.length === 0 || normalizedTarget.length === 0) {
+    return false;
+  }
+  return (
+    normalizedCandidate === normalizedTarget ||
+    normalizedCandidate.endsWith("/" + normalizedTarget)
+  );
 }
 
 function normalizeToolName(value) {
@@ -1293,27 +1311,6 @@ async function handlePromptGuard(runtime) {
   return 0;
 }
 
-async function tddCycleCounts(stateDir, runId) {
-  const filePath = path.join(stateDir, "tdd-cycle-log.jsonl");
-  const raw = await readTextFile(filePath, "");
-  const lines = raw.split(/\\r?\\n/gu).map((line) => line.trim()).filter((line) => line.length > 0);
-  let red = 0;
-  let green = 0;
-  for (const line of lines) {
-    try {
-      const row = JSON.parse(line);
-      if (!row || typeof row !== "object" || Array.isArray(row)) continue;
-      const rowRun = typeof row.runId === "string" && row.runId.length > 0 ? row.runId : runId;
-      if (rowRun !== runId) continue;
-      if (row.phase === "red") red += 1;
-      if (row.phase === "green") green += 1;
-    } catch {
-      // ignore malformed rows
-    }
-  }
-  return { red, green };
-}
-
 // Mirrors src/knowledge-store.ts::computeCompoundReadiness — kept inline so
 // SessionStart can refresh compound-readiness.json without the CLI binary.
 // Any schema change must update src/knowledge-store.ts::computeCompoundReadiness
@@ -1472,14 +1469,7 @@ async function computeRalphLoopStatusInline(stateDir, runId) {
   };
 }
 
-function tddCycleStateFromCounts(counts) {
-  if (counts.red <= 0) return "need_red";
-  if (counts.red > counts.green) return "red_open";
-  return "green_done";
-}
-
 async function hasFailingRedEvidenceForPath(stateDir, runId, rawPath) {
-  const normalizedTarget = normalizePathForMatch(rawPath);
   const cycleRaw = await readTextFile(path.join(stateDir, "tdd-cycle-log.jsonl"), "");
   for (const line of cycleRaw.split(/\\r?\\n/gu)) {
     const trimmed = line.trim();
@@ -1498,7 +1488,10 @@ async function hasFailingRedEvidenceForPath(stateDir, runId, rawPath) {
       const files = Array.isArray(row.files) ? row.files : [];
       for (const filePath of files) {
         if (typeof filePath !== "string") continue;
-        if (normalizePathForMatch(filePath) === normalizedTarget) return true;
+        // endsWith-aware match (mirrors tdd-cycle.ts::pathMatchesTarget)
+        // — previously the inline impl used strict === which disagreed
+        // with the CLI/internal path and produced guard blind spots.
+        if (pathMatchesTargetInline(filePath, rawPath)) return true;
       }
     } catch {
       // ignore malformed line
@@ -1522,7 +1515,7 @@ async function hasFailingRedEvidenceForPath(stateDir, runId, rawPath) {
       const paths = Array.isArray(row.paths) ? row.paths : [];
       for (const filePath of paths) {
         if (typeof filePath !== "string") continue;
-        if (normalizePathForMatch(filePath) === normalizedTarget) return true;
+        if (pathMatchesTargetInline(filePath, rawPath)) return true;
       }
     } catch {
       // ignore malformed line
@@ -1681,9 +1674,14 @@ async function handleWorkflowGuard(runtime) {
         reasons.push("tdd_write_without_red_for_path");
       }
     } else if (productionPatterns.length === 0 && !isTestPayload(payloadLower, payloadPaths, testPatterns)) {
-      const counts = await tddCycleCounts(stateDir, currentRun);
-      const cycleState = tddCycleStateFromCounts(counts);
-      if (cycleState === "need_red") {
+      // Slice-aware fallback: the previous implementation used a flat
+      // red/green count which said "ok" as long as the totals balanced
+      // across ALL slices, so a closed S-1 could unlock production
+      // writes that actually belonged to a new, not-yet-red S-2. Now
+      // we reuse the canonical Ralph Loop status: if NO slice has an
+      // open RED, we block.
+      const ralphStatus = await computeRalphLoopStatusInline(stateDir, currentRun);
+      if (!ralphStatus.redOpen) {
         reasons.push("tdd_write_without_open_red");
       }
     }
