@@ -42,6 +42,7 @@ import { sessionHooksSkillMarkdown } from "./content/session-hooks.js";
 import { ironLawRuntimeDocument, ironLawsSkillMarkdown } from "./content/iron-laws.js";
 import {
   stageCompleteScript,
+  runHookCmdScript,
   opencodePluginJs,
   claudeHooksJson,
   codexHooksJson,
@@ -966,6 +967,7 @@ async function writeHooks(projectRoot: string, config: CclawConfig): Promise<voi
     tddProductionPathPatterns: config.tdd?.productionPathPatterns,
     compoundRecurrenceThreshold: config.compound?.recurrenceThreshold
   }));
+  await writeFileSafe(path.join(hooksDir, "run-hook.cmd"), runHookCmdScript());
   const opencodePluginSource = opencodePluginJs();
   await writeFileSafe(path.join(hooksDir, "opencode-plugin.mjs"), opencodePluginSource);
 
@@ -973,6 +975,7 @@ async function writeHooks(projectRoot: string, config: CclawConfig): Promise<voi
     for (const script of [
       "stage-complete.mjs",
       "run-hook.mjs",
+      "run-hook.cmd",
       "opencode-plugin.mjs"
     ]) {
       await fs.chmod(path.join(hooksDir, script), 0o755);
@@ -1741,7 +1744,7 @@ function isManagedRuntimeHookCommand(command: string): boolean {
   // sync without being duplicated alongside freshly generated entries.
   const normalized = command.trim().replace(/\s+/gu, " ").replace(/\\/gu, "/");
   if (
-    /(^|\s)(?:node\s+)?(?:"|')?(?:\.\/)?\.cclaw\/hooks\/run-hook\.mjs(?:"|')?\s+(?:session-start|stop-checkpoint|pre-compact|prompt-guard|workflow-guard|context-monitor|verify-current-state)(?:\s|$)/u.test(
+    /(^|\s)(?:node\s+)?(?:"|')?(?:\.\/)?\.cclaw\/hooks\/run-hook\.(?:mjs|cmd)(?:"|')?\s+(?:session-start|stop-checkpoint|pre-compact|prompt-guard|workflow-guard|context-monitor|verify-current-state)(?:\s|$)/u.test(
       normalized
     )
   ) {

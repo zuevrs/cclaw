@@ -126,7 +126,8 @@ Reference docs for \`cclaw doctor\` checks.
 
 Earlier releases relied on \`bash\` to execute generated shell hooks and on
 \`python3\`/\`jq\` as JSON fallback parsers. Node-only mode removes both: hooks
-dispatch through \`node .cclaw/hooks/run-hook.mjs <hook-name>\`, so these tools
+dispatch through \`.cclaw/hooks/run-hook.cmd <hook-name>\` (which forwards to
+Node), so these tools
 are no longer part of the supported runtime contract.
 
 ## Typical fixes

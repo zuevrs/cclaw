@@ -161,9 +161,6 @@ Summary of what the reference covers:
 3. Classify every finding as Critical, Important, or Suggestion.
 4. For each Critical finding: use the Decision Protocol — present resolution options (A/B/C) with trade-offs, and mark one as (recommended). Do NOT use a numeric Completeness rubric; recommend the option that fully closes the finding with no carry-over risk and the smallest blast radius. If the harness's native structured-ask tool is available (\`AskUserQuestion\` on Claude, \`AskQuestion\` on Cursor, \`question\` on OpenCode with \`permission.question: "allow"\`, \`request_user_input\` on Codex in Plan/Collaboration mode), send exactly ONE question per call, validate fields against the runtime schema, and on schema error immediately fall back to a plain-text lettered list instead of retrying guessed payloads.
 5. Resolve all critical blockers before ship.
-6. When verdict is BLOCKED, do not end with a passive stop: explicitly route remediation to TDD via \`ROUTE_BACK_TO_TDD\` and point to \`/cc-ops rewind tdd\` with the blocking IDs.
-7. For final verdict: use the native structured-ask tool (\`AskUserQuestion\` / \`AskQuestion\` / \`question\` / \`request_user_input\`) only if runtime schema is confirmed; otherwise collect verdict with a plain-text single-choice prompt (APPROVED / APPROVED_WITH_CONCERNS / BLOCKED).
-8. **STOP.** Do NOT proceed to ship until the user provides an explicit verdict.
 
 Shared decision/ask-user protocol:
 \`.cclaw/references/protocols/decision.md\`
@@ -193,10 +190,8 @@ Shared decision/ask-user protocol:
 3. Layer 2b: check security — validation, auth, secrets, injection.
 4. Layer 2c: check performance — queries, memory, caching, hot paths.
 5. Layer 2d: check architecture fit — design compliance, coupling, interfaces.
-6. Reconcile multi-agent findings into \`.cclaw/artifacts/07-review-army.json\` (dedup + confidence + conflict notes + source tags from spec/correctness/security/performance/architecture/external-safety passes).
-7. Classify and prioritize all findings.
-8. Write review report artifact with explicit verdict.
-9. If verdict is BLOCKED, include the remediation route token \`ROUTE_BACK_TO_TDD\` and the rewind command payload.
+
+- Follow the Checklist above for remaining execution detail (+4 condensed steps).
 
 ## Review Sections
 
@@ -533,7 +528,8 @@ Shared decision/ask-user protocol:
 3. Generate release notes and rollback procedure.
 4. Choose one finalization enum: FINALIZE_MERGE_LOCAL, FINALIZE_OPEN_PR, FINALIZE_KEEP_BRANCH, FINALIZE_DISCARD_BRANCH, or FINALIZE_NO_VCS.
 5. Execute finalization action.
-6. Write ship artifact with decision, rationale, and execution result.
+
+- Follow the Checklist above for remaining execution detail (+1 condensed step).
 
 ## Review Sections
 
@@ -796,9 +792,6 @@ Summary of what the reference covers:
 3. Publish explicit dependency batches with entry and exit checks for each batch.
 4. Attach verification step to every task.
 5. Preserve locked scope boundaries: no silent scope reduction language in task rows.
-6. Enforce WAIT_FOR_CONFIRM: present the plan summary with options (A) Approve / (B) Revise / (C) Reject.
-7. **STOP.** Do NOT proceed until user explicitly approves.
-8. **STOP BEFORE ADVANCE.** Mandatory delegation \`planner\` must be marked completed or explicitly waived in \`.cclaw/state/delegation-log.json\`. Then close the stage via \`node .cclaw/hooks/stage-complete.mjs plan\` and tell the user to run \`/cc-next\`.
 
 Shared decision/ask-user protocol:
 \`.cclaw/references/protocols/decision.md\`
@@ -824,7 +817,8 @@ Shared decision/ask-user protocol:
 3. Define each task with acceptance mapping and verification commands.
 4. Trace every locked decision (D-XX) to plan tasks or explicit defer rationale.
 5. Record checkpoints and blockers.
-6. Write plan artifact and pause at WAIT_FOR_CONFIRM.
+
+- Follow the Checklist above for remaining execution detail (+1 condensed step).
 
 ## Review Sections
 
@@ -1109,12 +1103,6 @@ Summary of what the reference covers:
 3. Write behavior-focused tests before changing implementation (RED).
 4. Capture and store failing output as RED evidence.
 5. Apply minimal change to satisfy RED tests (GREEN).
-6. Run full suite, not partial checks, for GREEN validation.
-7. Before declaring the slice complete, run a fresh verification check and record command + commit SHA + PASS/FAIL.
-8. Refactor without changing behavior and document rationale (REFACTOR).
-9. Stop if regressions appear and fix before proceeding.
-10. If a test passes unexpectedly, investigate: does the behavior already exist, or is the test wrong?
-11. **Per-Slice Review checkpoint (conditional, opt-in).** When \`.cclaw/config.yaml::sliceReview.enabled\` is true, check every slice against the triggers before declaring it DONE. Triggers: \`touchCount >= filesChangedThreshold\`, any \`touchPaths\` match a \`touchTriggers\` glob, or the plan row declares \`highRisk: true\`. On a trigger, run two passes on the slice alone — (1) Spec-Compliance: trace RED/GREEN/REFACTOR evidence back to its plan task + spec criterion, noting edge cases the tests skip; (2) Quality: diff-scan for naming, error handling, dead code, simpler alternatives. Record both under \`## Per-Slice Review\` in \`06-tdd.md\`, naming the trigger that fired. Dispatch the \`reviewer\` subagent natively when available (log \`fulfillmentMode: "isolated"\`); otherwise fulfil via in-session role switch (\`fulfillmentMode: "role-switch"\`). Never fabricate an isolated pass from memory. Tracks outside \`sliceReview.enforceOnTracks\` still emit the section; doctor only escalates missed reviews on enforced tracks.
 
 Shared decision/ask-user protocol:
 \`.cclaw/references/protocols/decision.md\`
@@ -1153,10 +1141,8 @@ Detailed walkthrough:
 3. Run tests and capture failure output.
 4. Dispatch \`tdd-green\` (or \`test-author\` BUILD_GREEN_REFACTOR mode) and implement smallest change needed for GREEN.
 5. Run full tests and build checks.
-6. Run a fresh verification-before-completion check and capture command + commit SHA + PASS/FAIL in guard evidence.
-7. Dispatch \`tdd-refactor\` pass preserving behavior.
-8. Record RED, GREEN, and REFACTOR evidence in artifact.
-9. Annotate traceability to plan task and spec criterion; on \`sliceReview\` triggers, append a Per-Slice Review entry before closing the slice.
+
+- Follow the Checklist above for remaining execution detail (+4 condensed steps).
 
 ## Review Sections
 
@@ -1458,11 +1444,6 @@ Summary of what the reference covers:
 3. Ask exactly one question per turn. Prefer multiple choice. No bundled questions.
 4. After 2-3 questions, summarize your emerging understanding before continuing so the user can correct course early.
 5. Each question should change a concrete design decision. Litmus test: if the two most likely answers do not lead to different architectures, make the choice yourself and state it.
-6. Present design in sections scaled to their complexity — a few sentences for simple aspects, detailed for nuanced ones. Get approval after each section.
-7. When proposing approaches, lead with your recommendation and explain why.
-8. State explicitly what is being approved when requesting approval.
-9. Run a brief self-review (placeholders, contradictions, scope, ambiguity) before presenting the artifact.
-10. **STOP.** Wait for explicit user approval after writing the artifact. Do NOT auto-advance.
 
 Shared decision/ask-user protocol:
 \`.cclaw/references/protocols/decision.md\`
@@ -1487,10 +1468,8 @@ Shared decision/ask-user protocol:
 3. Ask clarifying questions one at a time — focus on purpose, constraints, success criteria.
 4. Propose 2-3 architecturally distinct approaches with trade-offs and a recommendation.
 5. Present design sections incrementally, get approval after each.
-6. Write approved direction to \`.cclaw/artifacts/01-brainstorm.md\`.
-7. Self-review: placeholder scan, internal consistency, scope check, ambiguity check.
-8. Request explicit user approval of the artifact.
-9. Handoff to scope only after approval is explicit.
+
+- Follow the Checklist above for remaining execution detail (+4 condensed steps).
 
 
 

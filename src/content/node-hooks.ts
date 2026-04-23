@@ -332,10 +332,12 @@ async function readStdin() {
   });
 }
 
-async function runCclawInternal(root, args) {
+async function runCclawInternal(root, args, options = {}) {
   return await new Promise((resolve) => {
     const isWindows = process.platform === "win32";
+    const captureStdout = options && options.captureStdout === true;
     let settled = false;
+    let stdout = "";
     let stderr = "";
     const finalize = (value) => {
       if (settled) return;
@@ -350,17 +352,26 @@ async function runCclawInternal(root, args) {
         {
         cwd: root,
         env: process.env,
-        stdio: ["ignore", "ignore", "pipe"]
+        stdio: ["ignore", captureStdout ? "pipe" : "ignore", "pipe"]
       }
       );
     } catch (error) {
       const code = error && typeof error === "object" && "code" in error ? String(error.code) : "";
       finalize({
         code: 1,
+        stdout,
         stderr,
         missingBinary: code === "ENOENT" || (isWindows && code === "EINVAL")
       });
       return;
+    }
+    if (captureStdout) {
+      child.stdout?.on("data", (chunk) => {
+        stdout += String(chunk ?? "");
+        if (stdout.length > 16000) {
+          stdout = stdout.slice(-16000);
+        }
+      });
     }
     child.stderr?.on("data", (chunk) => {
       stderr += String(chunk ?? "");
@@ -372,6 +383,7 @@ async function runCclawInternal(root, args) {
       const code = error && typeof error === "object" && "code" in error ? String(error.code) : "";
       finalize({
         code: 1,
+        stdout,
         stderr,
         missingBinary: code === "ENOENT" || (isWindows && code === "EINVAL")
       });
@@ -380,6 +392,7 @@ async function runCclawInternal(root, args) {
       if (signal) {
         finalize({
           code: 1,
+          stdout,
           stderr,
           missingBinary: false
         });
@@ -391,6 +404,7 @@ async function runCclawInternal(root, args) {
         : false;
       finalize({
         code: typeof code === "number" ? code : 1,
+        stdout,
         stderr,
         missingBinary
       });
@@ -403,6 +417,32 @@ function detectHarness(env) {
   if (env.CURSOR_PROJECT_DIR || env.CURSOR_PROJECT_ROOT) return "cursor";
   if (env.OPENCODE_PROJECT_DIR || env.OPENCODE_PROJECT_ROOT) return "opencode";
   return "codex";
+}
+
+function hookEventNameForOutput(hookName) {
+  if (hookName === "session-start") return "SessionStart";
+  if (hookName === "prompt-guard") return "PreToolUse";
+  if (hookName === "workflow-guard") return "PreToolUse";
+  if (hookName === "context-monitor") return "PostToolUse";
+  if (hookName === "stop-checkpoint") return "Stop";
+  if (hookName === "pre-compact") return "PreCompact";
+  if (hookName === "verify-current-state") return "UserPromptSubmit";
+  return "SessionStart";
+}
+
+function emitAdvisoryContext(runtime, hookName, note) {
+  const normalized = normalizeText(note);
+  if (normalized.length === 0) return;
+  if (runtime.harness === "claude" || runtime.harness === "codex") {
+    runtime.writeJson({
+      hookSpecificOutput: {
+        hookEventName: hookEventNameForOutput(hookName),
+        additionalContext: normalized
+      }
+    });
+    return;
+  }
+  runtime.writeJson({ additional_context: normalized });
 }
 
 async function detectRoot(env) {
@@ -1001,21 +1041,55 @@ async function handleSessionStart(runtime) {
   // where lifting becomes relevant; earlier stages update the file silently.
   let compoundReadinessLine = "";
   try {
-    const archivedRunsCount = await countArchivedRunsInline(runtime.root);
-    const readiness = await computeCompoundReadinessInline(runtime.root, {
-      prereadRaw: knowledgeRaw,
-      ...(typeof archivedRunsCount === "number" ? { archivedRunsCount } : {})
-    });
-    await writeJsonFile(path.join(stateDir, "compound-readiness.json"), readiness);
+    let readiness = null;
+    const internalReadiness = await runCclawInternal(
+      runtime.root,
+      ["compound-readiness", "--json"],
+      { captureStdout: true }
+    );
+    if (internalReadiness.code === 0 && internalReadiness.stdout.trim().length > 0) {
+      try {
+        const parsed = JSON.parse(internalReadiness.stdout);
+        if (parsed && typeof parsed === "object" && !Array.isArray(parsed)) {
+          readiness = parsed;
+        }
+      } catch {
+        readiness = null;
+      }
+    }
+    if (!readiness) {
+      const archivedRunsCount = await countArchivedRunsInline(runtime.root);
+      readiness = await computeCompoundReadinessInline(runtime.root, {
+        prereadRaw: knowledgeRaw,
+        ...(typeof archivedRunsCount === "number" ? { archivedRunsCount } : {})
+      });
+      await writeJsonFile(path.join(stateDir, "compound-readiness.json"), readiness);
+    }
+    const readinessObj = toObject(readiness) || {};
+    const ready = Array.isArray(readinessObj.ready) ? readinessObj.ready : [];
+    const readyCount =
+      typeof readinessObj.readyCount === "number" && Number.isFinite(readinessObj.readyCount)
+        ? Math.trunc(readinessObj.readyCount)
+        : ready.length;
+    const clusterCount =
+      typeof readinessObj.clusterCount === "number" && Number.isFinite(readinessObj.clusterCount)
+        ? Math.trunc(readinessObj.clusterCount)
+        : 0;
+    const threshold =
+      typeof readinessObj.threshold === "number" && Number.isFinite(readinessObj.threshold)
+        ? Math.trunc(readinessObj.threshold)
+        : COMPOUND_RECURRENCE_THRESHOLD;
     if (state.currentStage === "review" || state.currentStage === "ship") {
-      if (readiness.readyCount === 0) {
+      if (readyCount === 0) {
         compoundReadinessLine = "Compound readiness: no candidates (clusters=" +
-          String(readiness.clusterCount) + ", threshold=" + String(readiness.threshold) + ")";
+          String(clusterCount) + ", threshold=" + String(threshold) + ")";
       } else {
-        const critical = readiness.ready.filter((entry) => entry.severity === "critical").length;
+        const critical = ready.filter(
+          (entry) => entry && typeof entry === "object" && entry.severity === "critical"
+        ).length;
         const criticalSuffix = critical > 0 ? " (critical=" + String(critical) + ")" : "";
-        compoundReadinessLine = "Compound readiness: clusters=" + String(readiness.clusterCount) +
-          ", ready=" + String(readiness.readyCount) + criticalSuffix;
+        compoundReadinessLine = "Compound readiness: clusters=" + String(clusterCount) +
+          ", ready=" + String(readyCount) + criticalSuffix;
       }
     }
   } catch (err) {
@@ -1367,7 +1441,9 @@ async function handlePromptGuard(runtime) {
   const reasons = [];
 
   if (/^(write|edit|multiedit|multi_edit|delete|applypatch|runcommand|shell|terminal|execcommand)$/u.test(toolLower)) {
-    if (/\\.cclaw\\/(state|artifacts|hooks|skills|commands|agents|runs|knowledge)/u.test(payloadLower)) {
+    // Artifacts, runs, and knowledge writes are part of normal stage flow.
+    // Guard only managed internals that should be mutated via installer/CLI.
+    if (/\\.cclaw\\/(state|hooks|skills|commands|agents)/u.test(payloadLower)) {
       reasons.push("write_to_cclaw_runtime");
     }
   }
@@ -1381,7 +1457,7 @@ async function handlePromptGuard(runtime) {
       RUNTIME_ROOT +
       " runtime (" +
       reasons.join(",") +
-      "). Prefer installer commands or explicit confirmation before mutating runtime internals.";
+      "). Prefer installer commands before mutating managed runtime internals (.cclaw/state|hooks|skills|commands|agents).";
     await appendJsonLine(guardLog, {
       ts: new Date().toISOString(),
       harness: runtime.harness,
@@ -1389,6 +1465,8 @@ async function handlePromptGuard(runtime) {
       reasons,
       note
     });
+    const advisoryNote = mode === "strict" ? note + " Blocked by strict mode." : note;
+    emitAdvisoryContext(runtime, "prompt-guard", advisoryNote);
     if (mode === "strict") {
       process.stderr.write("[cclaw] " + note + " (blocked by strict mode)\\n");
       return 1;
@@ -1902,9 +1980,11 @@ async function handleWorkflowGuard(runtime) {
     }
 
     if (shouldBlock) {
+      emitAdvisoryContext(runtime, "workflow-guard", note + " Blocked by workflow guard.");
       process.stderr.write("[cclaw] " + note + " (blocked by workflow guard)\\n");
       return 1;
     }
+    emitAdvisoryContext(runtime, "workflow-guard", note);
     process.stderr.write("[cclaw] " + note + "\\n");
   }
 
@@ -2003,6 +2083,7 @@ async function handleContextMonitor(runtime) {
       remainingPercent,
       note
     });
+    emitAdvisoryContext(runtime, "context-monitor", note);
     process.stderr.write("[cclaw] " + note + "\\n");
     nextAdvisoryBand = band;
     nextAdvisoryAt = now.toISOString();
@@ -2023,10 +2104,24 @@ async function handleVerifyCurrentState(runtime) {
   const mode = resolveStrictness();
   const result = await runCclawInternal(runtime.root, ["verify-current-state", "--quiet"]);
   if (result.missingBinary) {
+    emitAdvisoryContext(
+      runtime,
+      "verify-current-state",
+      "Cclaw verify-current-state requires cclaw binary on PATH."
+    );
     process.stderr.write("[cclaw] hook: cclaw binary is required for verify-current-state\\n");
     return 1;
   }
   if (mode === "strict") {
+    if (result.code !== 0) {
+      emitAdvisoryContext(
+        runtime,
+        "verify-current-state",
+        result.stderr.trim().length > 0
+          ? result.stderr.trim()
+          : "Cclaw verify-current-state failed in strict mode."
+      );
+    }
     if (result.code !== 0 && result.stderr.trim().length > 0) {
       process.stderr.write(result.stderr);
     }

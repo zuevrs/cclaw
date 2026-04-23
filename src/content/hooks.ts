@@ -122,6 +122,37 @@ void main();
 `;
 }
 
+export function runHookCmdScript(): string {
+  return `: << 'CMDBLOCK'
+@echo off
+REM Cross-platform wrapper for cclaw Node hook runtime.
+REM Windows executes this batch block; Unix shells treat it as a heredoc comment.
+if "%~1"=="" (
+  echo [cclaw] run-hook.cmd: missing hook name >&2
+  exit /b 1
+)
+set "HOOK_DIR=%~dp0"
+set "RUNTIME=%HOOK_DIR%run-hook.mjs"
+where node >nul 2>nul
+if %ERRORLEVEL% neq 0 (
+  REM Best-effort: missing node should not block harness execution loops.
+  exit /b 0
+)
+node "%RUNTIME%" %*
+exit /b %ERRORLEVEL%
+CMDBLOCK
+SCRIPT_DIR="$(cd "$(dirname "$0")" && pwd)"
+if [ "$#" -lt 1 ]; then
+  echo "[cclaw] run-hook.cmd: missing hook name" >&2
+  exit 1
+fi
+if ! command -v node >/dev/null 2>&1; then
+  exit 0
+fi
+exec node "\${SCRIPT_DIR}/run-hook.mjs" "$@"
+`;
+}
+
 export { claudeHooksJsonWithObservation as claudeHooksJson } from "./observe.js";
 export { cursorHooksJsonWithObservation as cursorHooksJson } from "./observe.js";
 export { codexHooksJsonWithObservation as codexHooksJson } from "./observe.js";

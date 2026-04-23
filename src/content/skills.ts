@@ -316,6 +316,38 @@ export function stageSkillFolder(stage: FlowStage): string {
   return STAGE_TO_SKILL_FOLDER[stage];
 }
 
+function normalizedGuidanceKey(value: string): string {
+  return value
+    .replace(/`[^`]+`/gu, " ")
+    .replace(/[*_]/gu, " ")
+    .replace(/[^a-z0-9]+/giu, " ")
+    .replace(/\s+/gu, " ")
+    .trim()
+    .toLowerCase();
+}
+
+function dedupeGuidance(
+  items: string[],
+  blockedBy: string[]
+): string[] {
+  const blocked = new Set(
+    blockedBy
+      .map((item) => normalizedGuidanceKey(item))
+      .filter((item) => item.length > 0)
+  );
+  const seen = new Set<string>();
+  const result: string[] = [];
+  for (const item of items) {
+    const key = normalizedGuidanceKey(item);
+    if (key.length === 0) continue;
+    if (blocked.has(key)) continue;
+    if (seen.has(key)) continue;
+    seen.add(key);
+    result.push(item);
+  }
+  return result;
+}
+
 export function stageSkillMarkdown(stage: FlowStage, track: FlowTrack = "standard"): string {
   const schema = stageSchema(stage, track);
   const gateList = schema.requiredGates
@@ -327,6 +359,17 @@ export function stageSkillMarkdown(stage: FlowStage, track: FlowTrack = "standar
   const checklistItems = schema.checklist
     .map((item, i) => `${i + 1}. ${item}`)
     .join("\n");
+  const interactionFocus = dedupeGuidance(
+    schema.interactionProtocol,
+    [...schema.checklist, ...schema.process]
+  ).slice(0, 5);
+  const processSummary = dedupeGuidance(schema.process, schema.checklist).slice(0, 5);
+  const processNote =
+    schema.process.length > processSummary.length
+      ? `- Follow the Checklist above for remaining execution detail (+${schema.process.length - processSummary.length} condensed step${
+          schema.process.length - processSummary.length === 1 ? "" : "s"
+        }).`
+      : "";
   const stageRefs = stageSpecificSeeAlso(stage);
 
   return `---
@@ -380,7 +423,7 @@ ${stageDomainExamples(stage)}
 ${stageExamples(stage)}
 
 ## Interaction Protocol
-${schema.interactionProtocol.map((item, i) => `${i + 1}. ${item}`).join("\n")}
+${interactionFocus.length > 0 ? interactionFocus.map((item, i) => `${i + 1}. ${item}`).join("\n") : "- Keep communication concise and decision-focused; rely on the Checklist for execution order."}
 
 Shared decision/ask-user protocol:
 \`${DECISION_PROTOCOL_PATH}\`
@@ -393,7 +436,8 @@ ${gateList}
 ${evidenceList}
 
 ## Process
-${schema.process.map((item, i) => `${i + 1}. ${item}`).join("\n")}
+${processSummary.length > 0 ? processSummary.map((item, i) => `${i + 1}. ${item}`).join("\n") : "1. Execute the Checklist in order.\n2. Satisfy every required gate.\n3. Complete verification before stage closeout."}
+${processNote.length > 0 ? `\n${processNote}` : ""}
 
 ${reviewSectionsBlock(stage, track)}
 ${verificationBlock(stage)}

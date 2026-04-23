@@ -47,6 +47,15 @@ If the current stage is ambiguous because \`flow-state.json\` is missing
 or corrupt, stop and route through \`/cc\` before any substantive
 response.
 
+## Red Flags (stop and re-route)
+
+If you think any of these, stop and follow the routing flow:
+
+- "This looks simple, I can skip the stage." -> No. Route through \`/cc\`.
+- "I can answer from memory without loading the active stage skill." -> No. Load the skill first.
+- "Hook guard warned, but I can ignore it." -> No. Resolve the warning before continuing.
+- "I'll edit \`.cclaw/state\` directly to move faster." -> No. Use managed commands only.
+
 ## Routing flow
 
 \`\`\`
@@ -78,6 +87,12 @@ Before stage work:
 1. Read \`.cclaw/state/flow-state.json\`.
 2. If active stage exists, continue with \`/cc\` or \`/cc-next\`.
 3. Do not jump directly to stage-specific commands.
+
+## Platform reliability notes
+
+- Managed hook dispatch uses \`.cclaw/hooks/run-hook.cmd\` (cross-platform wrapper).
+- If hooks fail due missing runtime deps (for example \`node\` not on \`PATH\`), run \`cclaw doctor\` before continuing.
+- Prefer cross-platform commands in artifacts/examples (\`npm test\`, \`pnpm test\`, \`python -m pytest\`, etc.) over shell-specific aliases whenever possible.
 
 ## Stage quick map
 

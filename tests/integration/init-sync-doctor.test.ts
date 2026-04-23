@@ -67,6 +67,8 @@ describe("install lifecycle", { timeout: 30_000 }, () => {
     expect(doctorSucceeded(checks)).toBe(true);
     expect(checks.some((check) => check.name === "hook:script:run-hook.mjs" && check.ok)).toBe(true);
     expect(checks.some((check) => check.name === "hook:script:run-hook.mjs:executable" && check.ok)).toBe(true);
+    expect(checks.some((check) => check.name === "hook:script:run-hook.cmd" && check.ok)).toBe(true);
+    expect(checks.some((check) => check.name === "hook:script:run-hook.cmd:executable" && check.ok)).toBe(true);
     expect(checks.some((check) => check.name === "hook:script:stage-complete.mjs" && check.ok)).toBe(true);
     expect(checks.some((check) => check.name === "hook:script:stage-complete.mjs:executable" && check.ok)).toBe(true);
     expect(checks.some((check) => check.name === "hook:wiring:codex" && check.ok)).toBe(true);
@@ -519,17 +521,17 @@ describe("install lifecycle", { timeout: 30_000 }, () => {
 
     expect(mergedClaude).toContain("user-stop-hook");
     expect(mergedClaude).toContain("user-prompt-submit");
-    expect(countOccurrences(mergedClaude, "node .cclaw/hooks/run-hook.mjs prompt-guard")).toBe(1);
-    expect(countOccurrences(mergedClaude, "node .cclaw/hooks/run-hook.mjs workflow-guard")).toBe(1);
-    expect(countOccurrences(mergedClaude, "node .cclaw/hooks/run-hook.mjs context-monitor")).toBe(1);
-    expect(countOccurrences(mergedClaude, "node .cclaw/hooks/run-hook.mjs stop-checkpoint")).toBe(1);
+    expect(countOccurrences(mergedClaude, ".cclaw/hooks/run-hook.cmd prompt-guard")).toBe(1);
+    expect(countOccurrences(mergedClaude, ".cclaw/hooks/run-hook.cmd workflow-guard")).toBe(1);
+    expect(countOccurrences(mergedClaude, ".cclaw/hooks/run-hook.cmd context-monitor")).toBe(1);
+    expect(countOccurrences(mergedClaude, ".cclaw/hooks/run-hook.cmd stop-checkpoint")).toBe(1);
 
     expect(mergedCursor).toContain("cursor-user-stop");
     expect(mergedCursor).toContain("cursor-user-pre");
-    expect(countOccurrences(mergedCursor, "node .cclaw/hooks/run-hook.mjs prompt-guard")).toBe(1);
-    expect(countOccurrences(mergedCursor, "node .cclaw/hooks/run-hook.mjs workflow-guard")).toBe(1);
-    expect(countOccurrences(mergedCursor, "node .cclaw/hooks/run-hook.mjs context-monitor")).toBe(1);
-    expect(countOccurrences(mergedCursor, "node .cclaw/hooks/run-hook.mjs stop-checkpoint")).toBe(1);
+    expect(countOccurrences(mergedCursor, ".cclaw/hooks/run-hook.cmd prompt-guard")).toBe(1);
+    expect(countOccurrences(mergedCursor, ".cclaw/hooks/run-hook.cmd workflow-guard")).toBe(1);
+    expect(countOccurrences(mergedCursor, ".cclaw/hooks/run-hook.cmd context-monitor")).toBe(1);
+    expect(countOccurrences(mergedCursor, ".cclaw/hooks/run-hook.cmd stop-checkpoint")).toBe(1);
   });
 
   it("sync recovers relaxed JSON hooks and preserves user commands", async () => {
@@ -552,7 +554,7 @@ describe("install lifecycle", { timeout: 30_000 }, () => {
     await syncCclaw(root);
     const merged = await fs.readFile(claudeHooksPath, "utf8");
     expect(merged).toContain("user-relaxed-stop");
-    expect(countOccurrences(merged, "node .cclaw/hooks/run-hook.mjs prompt-guard")).toBe(1);
+    expect(countOccurrences(merged, ".cclaw/hooks/run-hook.cmd prompt-guard")).toBe(1);
 
     const backupsDir = path.join(root, ".cclaw/backups/hooks");
     const backups = await fs.readdir(backupsDir);

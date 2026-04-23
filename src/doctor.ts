@@ -760,6 +760,7 @@ export async function doctorChecks(projectRoot: string, options: DoctorOptions =
   // Hook scripts
   for (const script of [
     "run-hook.mjs",
+    "run-hook.cmd",
     "stage-complete.mjs",
     "opencode-plugin.mjs"
   ]) {
@@ -1122,7 +1123,7 @@ export async function doctorChecks(projectRoot: string, options: DoctorOptions =
   for (const candidate of windowsHookConfigCandidates) {
     if (!(await exists(candidate))) continue;
     const content = await fs.readFile(candidate, "utf8");
-    if (/run-hook\.cmd|bash\s+\.cclaw\/hooks\//u.test(content)) {
+    if (/bash\s+\.cclaw\/hooks\/|\.cclaw\/hooks\/(?:session-start|stop-checkpoint|pre-compact|prompt-guard|workflow-guard|context-monitor)\.sh/u.test(content)) {
       legacyDispatchFiles.push(path.relative(projectRoot, candidate));
     }
   }
@@ -1130,7 +1131,7 @@ export async function doctorChecks(projectRoot: string, options: DoctorOptions =
     name: "warning:windows:hook_dispatch_node_only",
     ok: legacyDispatchFiles.length === 0,
     details: legacyDispatchFiles.length === 0
-      ? "hook configs use node-dispatched .cclaw/hooks/run-hook.mjs commands"
+      ? "hook configs use managed .cclaw/hooks/run-hook.cmd dispatch commands"
       : `warning: legacy shell hook dispatch remains in ${legacyDispatchFiles.join(", ")}`
   });
 
