@@ -144,6 +144,20 @@ function headingLineIndex(markdown: string, section: string): number {
   return -1;
 }
 
+function parseShortCircuitStatus(sectionBody: string | null): string {
+  if (!sectionBody) return "";
+  const lines = sectionBody.split(/\r?\n/u);
+  return lines
+    .map((line) => line.replace(/[*_`]/gu, "").trim())
+    .map((line) => /^[-*]?\s*status\s*:\s*(.+)$/iu.exec(line)?.[1] ?? "")
+    .find((value) => value.trim().length > 0)?.trim().toLowerCase() ?? "";
+}
+
+function isShortCircuitActivated(sectionBody: string | null): boolean {
+  const statusValue = parseShortCircuitStatus(sectionBody);
+  return /^(?:activated|yes|true)$/u.test(statusValue) || /\bactivated\b/iu.test(statusValue);
+}
+
 function meaningfulLineCount(sectionBody: string): number {
   return sectionBody
     .split(/\r?\n/)
@@ -1121,10 +1135,17 @@ export async function lintArtifact(
               : "Frontmatter integrity checks passed."
   });
 
+  const brainstormShortCircuitBody =
+    stage === "brainstorm" ? sectionBodyByName(sections, "Short-Circuit Decision") : null;
+  const brainstormShortCircuitActivated =
+    stage === "brainstorm" && isShortCircuitActivated(brainstormShortCircuitBody);
   const isTrivialOverride =
     schema.trivialOverrideSections &&
     schema.trivialOverrideSections.length > 0 &&
-    /trivial.change|mini.design|escape.hatch/iu.test(raw);
+    (
+      /trivial.change|mini.design|escape.hatch/iu.test(raw) ||
+      brainstormShortCircuitActivated
+    );
   const overrideSet = isTrivialOverride
     ? new Set(schema.trivialOverrideSections!.map((s) => normalizeHeadingTitle(s).toLowerCase()))
     : null;
@@ -1228,10 +1249,9 @@ export async function lintArtifact(
       });
     }
 
-    const reactionBody = sectionBodyByName(sections, "Approach Reaction");
     const reactionIndex = headingLineIndex(raw, "Approach Reaction");
     const directionIndex = headingLineIndex(raw, "Selected Direction");
-    if (directionIndex >= 0) {
+    if (directionIndex >= 0 && !brainstormShortCircuitActivated) {
       const orderOk = reactionIndex >= 0 && reactionIndex < directionIndex;
       findings.push({
         section: "Approach Reaction Ordering",
@@ -1247,7 +1267,6 @@ export async function lintArtifact(
     const directionBody = sectionBodyByName(sections, "Selected Direction");
     if (directionBody !== null) {
       const approvalMarker = /\bapprov(?:ed|al)\b/iu.test(directionBody);
-      const reactionTrace = /\b(?:reaction|feedback|concern(?:s)?)\b/iu.test(directionBody);
       findings.push({
         section: "Direction Approval Marker",
         required: true,
@@ -1257,24 +1276,23 @@ export async function lintArtifact(
           ? "Approval marker present in Selected Direction."
           : "No explicit `approved`/`approval` marker found in Selected Direction."
       });
-      findings.push({
-        section: "Direction Reaction Trace",
-        required: true,
-        rule: "Selected Direction rationale must reference user reaction/feedback before recommendation.",
-        found: reactionTrace,
-        details: reactionTrace
-          ? "Selected Direction rationale references user reaction/feedback."
-          : "Selected Direction rationale does not reference user reaction/feedback."
-      });
+      if (!brainstormShortCircuitActivated) {
+        const reactionTrace = /\b(?:reaction|feedback|concern(?:s)?)\b/iu.test(directionBody);
+        findings.push({
+          section: "Direction Reaction Trace",
+          required: true,
+          rule: "Selected Direction rationale must reference user reaction/feedback before recommendation.",
+          found: reactionTrace,
+          details: reactionTrace
+            ? "Selected Direction rationale references user reaction/feedback."
+            : "Selected Direction rationale does not reference user reaction/feedback."
+        });
+      }
     }
 
-    const shortCircuitBody = sectionBodyByName(sections, "Short-Circuit Decision");
+    const shortCircuitBody = brainstormShortCircuitBody;
     if (shortCircuitBody !== null) {
-      const shortCircuitLines = shortCircuitBody.split(/\r?\n/u);
-      const statusValue = shortCircuitLines
-        .map((line) => line.replace(/[*_`]/gu, "").trim())
-        .map((line) => /^[-*]?\s*status\s*:\s*(.+)$/iu.exec(line)?.[1] ?? "")
-        .find((value) => value.trim().length > 0)?.trim().toLowerCase() ?? "";
+      const statusValue = parseShortCircuitStatus(shortCircuitBody);
       const hasStatus = statusValue.length > 0;
       findings.push({
         section: "Short-Circuit Status",
@@ -1285,10 +1303,7 @@ export async function lintArtifact(
           ? `Short-circuit status declared as "${statusValue}".`
           : "Short-Circuit Decision is missing a `Status:` line."
       });
-      const activated =
-        /^(?:activated|yes|true)$/u.test(statusValue) ||
-        /\bstatus\s*:\s*activated\b/iu.test(shortCircuitBody);
-      if (activated) {
+      if (brainstormShortCircuitActivated) {
         const artifactLines = meaningfulLineCount(raw);
         const withinStubLimit = artifactLines <= 30;
         const hasScopeHandoff = /\bscope\b/iu.test(shortCircuitBody);

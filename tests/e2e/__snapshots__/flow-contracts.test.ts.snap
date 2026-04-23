@@ -1305,7 +1305,7 @@ Rule: Scope and design decisions must trace back to explored context and approve
 | Problem | REQUIRED | Must define what we're solving, success criteria, and constraints. |
 | Clarifying Questions | recommended | Must capture question, answer, and decision impact for each clarifying question. |
 | Approach Tier | REQUIRED | Must classify depth as Lightweight/Standard/Deep and explain why. |
-| Short-Circuit Decision | recommended | If activated: include status, why requirements are already concrete, and explicit handoff to scope. |
+| Short-Circuit Decision | recommended | Must include Status/Why/Scope handoff lines when short-circuit is discussed. |
 | Approaches | REQUIRED | Must compare 2-3 architecturally distinct options with real trade-offs and include one row labeled \`challenger: higher-upside\`. |
 | Approach Reaction | REQUIRED | Must summarize user reaction before recommendation, including concerns that changed direction. |
 | Selected Direction | REQUIRED | Must include the selected approach, rationale tied to user reaction/feedback, and explicit approval marker. |

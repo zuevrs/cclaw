@@ -134,13 +134,20 @@ export const BRAINSTORM: StageSchemaInput = {
       { section: "Problem", required: true, validationRule: "Must define what we're solving, success criteria, and constraints." },
       { section: "Clarifying Questions", required: false, validationRule: "Must capture question, answer, and decision impact for each clarifying question." },
       { section: "Approach Tier", required: true, validationRule: "Must classify depth as Lightweight/Standard/Deep and explain why." },
-      { section: "Short-Circuit Decision", required: false, validationRule: "If activated: include status, why requirements are already concrete, and explicit handoff to scope." },
+      { section: "Short-Circuit Decision", required: false, validationRule: "Must include Status/Why/Scope handoff lines when short-circuit is discussed." },
       { section: "Approaches", required: true, validationRule: "Must compare 2-3 architecturally distinct options with real trade-offs and include one row labeled `challenger: higher-upside`." },
       { section: "Approach Reaction", required: true, validationRule: "Must summarize user reaction before recommendation, including concerns that changed direction." },
       { section: "Selected Direction", required: true, validationRule: "Must include the selected approach, rationale tied to user reaction/feedback, and explicit approval marker." },
       { section: "Design", required: false, validationRule: "Must cover architecture, key components, and data flow scaled to complexity." },
       { section: "Visual Companion", required: false, validationRule: "If architecture/data-flow complexity is medium+, include compact ASCII/Mermaid diagram or explicitly justify omission." },
       { section: "Assumptions and Open Questions", required: false, validationRule: "Must capture unresolved assumptions/open questions, or explicitly state none." }
+    ],
+    trivialOverrideSections: [
+      "Context",
+      "Problem",
+      "Approach Tier",
+      "Short-Circuit Decision",
+      "Selected Direction"
     ]
   },
   reviewLens: {

@@ -216,6 +216,13 @@ describe("stage schema and subagent alignment", () => {
       expect(rule).toBeDefined();
       expect(rule?.required).toBe(true);
     }
+    expect(brainstorm.trivialOverrideSections).toEqual([
+      "Context",
+      "Problem",
+      "Approach Tier",
+      "Short-Circuit Decision",
+      "Selected Direction"
+    ]);
   });
 
   it("scope and design expose shared review-loop config", () => {

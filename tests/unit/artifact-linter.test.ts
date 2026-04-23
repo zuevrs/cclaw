@@ -476,6 +476,73 @@ describe("artifact linter heuristics", () => {
     expect(ordering?.details).toContain("before Selected Direction");
   });
 
+  it("passes brainstorm short-circuit stub when activated with scope handoff", async () => {
+    const root = await createTempProject("artifact-lint-short-circuit-pass");
+    await writeRuntimeArtifact(root, "01-brainstorm.md", `# Brainstorm Artifact
+
+## Context
+- Project state: targeted retry fix in one module.
+- Relevant existing code/patterns: src/retry.ts already contains retry boundary helpers.
+
+## Problem
+- What we're solving: add one missing retry guard in existing request flow.
+- Success criteria: retry guard triggers on timeout and preserves current API shape.
+- Constraints: no architecture change, no new dependencies.
+
+## Approach Tier
+- Tier: Lightweight
+- Why this tier: narrow single-module adjustment.
+
+## Short-Circuit Decision
+- Status: activated
+- Why: requirements are concrete and bounded; full alternatives are unnecessary.
+- Scope handoff: proceed directly to scope with this bounded ask.
+
+## Selected Direction
+- Approach: direct bounded fix in existing retry helper
+- Rationale: approved concrete ask with minimal blast radius
+- Approval: approved
+`);
+
+    const result = await lintArtifact(root, "brainstorm");
+    expect(result.passed).toBe(true);
+    const shortCircuit = result.findings.find((f) => f.section === "Short-Circuit Status");
+    expect(shortCircuit?.found).toBe(true);
+  });
+
+  it("fails brainstorm short-circuit stub when scope handoff is missing", async () => {
+    const root = await createTempProject("artifact-lint-short-circuit-no-handoff");
+    await writeRuntimeArtifact(root, "01-brainstorm.md", `# Brainstorm Artifact
+
+## Context
+- Project state: targeted retry fix in one module.
+- Relevant existing code/patterns: src/retry.ts already contains retry boundary helpers.
+
+## Problem
+- What we're solving: add one missing retry guard in existing request flow.
+- Success criteria: retry guard triggers on timeout and preserves current API shape.
+- Constraints: no architecture change, no new dependencies.
+
+## Approach Tier
+- Tier: Lightweight
+- Why this tier: narrow single-module adjustment.
+
+## Short-Circuit Decision
+- Status: activated
+- Why: requirements are concrete and bounded; full alternatives are unnecessary.
+
+## Selected Direction
+- Approach: direct bounded fix in existing retry helper
+- Rationale: approved concrete ask with minimal blast radius
+- Approval: approved
+`);
+
+    const result = await lintArtifact(root, "brainstorm");
+    const handoff = result.findings.find((f) => f.section === "Short-Circuit Scope Handoff");
+    expect(handoff?.found).toBe(false);
+    expect(handoff?.details).toContain("scope handoff");
+  });
+
   it("fails brainstorm clarifying questions section when empty", async () => {
     const root = await createTempProject("artifact-lint-empty-questions");
     await writeRuntimeArtifact(root, "01-brainstorm.md", `# Brainstorm Artifact
