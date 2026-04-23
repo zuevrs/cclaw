@@ -113,6 +113,11 @@ ${diagramBody}
 - Empty input path: API Gateway rejects empty payload with 422 and returns a field-level hint.
 - Upstream error path: Storage Adapter timeout enters fallback path before final response.
 
+## Security & Threat Model
+| Boundary | Threat | Mitigation | Owner |
+|---|---|---|---|
+| API input boundary | abuse via malformed payload or auth bypass | strict input validation + authz checks + audit logs | platform-api |
+
 ## Failure Mode Table
 | Method | Exception | Rescue | UserSees |
 |---|---|---|---|
@@ -128,6 +133,18 @@ ${diagramBody}
 |---|---|---|---|
 | Create request | p95 latency | <=250ms | k6 synthetic test in CI |
 | Fallback read | error recovery latency | <=400ms | chaos timeout scenario replay |
+
+## Observability & Debuggability
+| Signal | Source | Alert/Debug path |
+|---|---|---|
+| timeout_rate | app service metric | Pager alert + runbook docs/runbooks/timeout.md |
+| fallback_activation | structured application log | Correlate request ID and replay trace |
+
+## Deployment & Rollout
+| Step | Strategy | Rollback plan |
+|---|---|---|
+| Enable write path | Canary 10% -> 50% -> 100% over 2 hours | Disable feature flag and restore prior release |
+| Enable fallback path | Shadow mode for one release cycle | Revert to strict-error response path |
 
 ## What Already Exists
 | Sub-problem | Existing code/library found | Layer | Reuse decision | Adaptation needed |

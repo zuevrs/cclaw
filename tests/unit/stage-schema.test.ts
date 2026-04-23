@@ -195,6 +195,20 @@ describe("stage schema and subagent alignment", () => {
     expect(researchGate?.tier).toBe("required");
   });
 
+  it("design artifact requires security, observability, and rollout sections", () => {
+    const design = stageSchema("design");
+    const requiredSections = [
+      "Security & Threat Model",
+      "Observability & Debuggability",
+      "Deployment & Rollout"
+    ];
+    for (const section of requiredSections) {
+      const rule = design.artifactValidation.find((row) => row.section === section);
+      expect(rule).toBeDefined();
+      expect(rule?.required).toBe(true);
+    }
+  });
+
   it("scope and design expose shared review-loop config", () => {
     const scope = stageSchema("scope");
     const design = stageSchema("design");

@@ -172,6 +172,22 @@ Fallback_Cache -->|degraded response| API_Gateway
 |---|---|---|---|
 | persistState | DBTimeout | fallback to cache + retry queue | degraded but explicit warning |
 
+## Security & Threat Model
+| Boundary | Threat | Mitigation | Owner |
+|---|---|---|---|
+| API to service | malformed payload abuse | schema validation + authz checks | platform |
+
+## Observability & Debuggability
+| Signal | Source | Alert/Debug path |
+|---|---|---|
+| retry_queue_depth | queue metric | page on-call + inspect retry_queue_depth dashboard |
+| fallback_mode_enabled | structured warning log | trace by request id in log explorer |
+
+## Deployment & Rollout
+| Step | Strategy | Rollback plan |
+|---|---|---|
+| Enable design changes | feature-flag canary rollout | disable flag + redeploy previous build |
+
 ## Outside Voice Findings
 | ID | Dimension | Finding | Disposition | Rationale |
 |---|---|---|---|---|

@@ -230,6 +230,9 @@ const REQUIRED_ARTIFACT_SECTIONS: Record<FlowStage, string[]> = {
     "Architecture Boundaries",
     "Architecture Diagram",
     "Failure Mode Table",
+    "Security & Threat Model",
+    "Observability & Debuggability",
+    "Deployment & Rollout",
     "Completion Dashboard"
   ],
   spec: ["Acceptance Criteria", "Edge Cases", "Testability Map", "Approval"],
