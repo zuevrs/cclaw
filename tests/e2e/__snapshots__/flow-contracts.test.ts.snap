@@ -155,7 +155,7 @@ Summary of what the reference covers:
 - Go / no-go verdict
 
 
-## Interaction Focus
+## Interaction Protocol
 1. Run Layer 1 (spec compliance) completely before starting Layer 2.
 2. In each review section, present findings ONE AT A TIME. Do NOT batch.
 3. Classify every finding as Critical, Important, or Suggestion.
@@ -498,7 +498,7 @@ Summary of what the reference covers:
 - Sign-off block
 
 
-## Interaction Focus
+## Interaction Protocol
 1. Run preflight checks before any release action.
 2. Document release notes and rollback plan explicitly.
 3. For finalization mode: use the Decision Protocol — present modes as labeled options (A/B/C/D/E) with consequences, and mark one as (recommended). Do NOT use a numeric Completeness rubric; recommend the mode that best addresses release blast-radius, rollback readiness, observability, and stakeholder communication — ties go to the most reversible option. If the harness's native structured-ask tool is available (\`AskUserQuestion\` / \`AskQuestion\` / \`question\` / \`request_user_input\`), send exactly ONE question per call, validate fields against the runtime schema, and on schema error immediately fall back to a plain-text lettered list instead of retrying guessed payloads.
@@ -786,7 +786,7 @@ Summary of what the reference covers:
 - No-Placeholder scan row + WAIT_FOR_CONFIRM marker
 
 
-## Interaction Focus
+## Interaction Protocol
 1. Plan in read-only mode relative to implementation.
 2. Split work into small vertical slices (target 2-5 minute tasks).
 3. Publish explicit dependency batches with entry and exit checks for each batch.
@@ -1097,7 +1097,7 @@ Summary of what the reference covers:
 - Test-pyramid shape + prove-it reproduction when applicable
 
 
-## Interaction Focus
+## Interaction Protocol
 1. Pick one planned slice at a time.
 2. Controller owns orchestration; execution runs through phase-specific delegation (\`tdd-red\` -> \`tdd-green\` -> \`tdd-refactor\`) or equivalent \`test-author\` modes.
 3. Write behavior-focused tests before changing implementation (RED).
@@ -1438,7 +1438,7 @@ Summary of what the reference covers:
 - Clarification log and decision record
 
 
-## Interaction Focus
+## Interaction Protocol
 1. Explore what exists before asking what to build — check project files first.
 2. If the idea is vague or could mean many different things, your FIRST question narrows to a specific kind of project. Do not ask detail questions until the project type is clear.
 3. Ask exactly one question per turn. Prefer multiple choice. No bundled questions.

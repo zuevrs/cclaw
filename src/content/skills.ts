@@ -422,7 +422,7 @@ ${stageGoodBadExamples(stage)}
 ${stageDomainExamples(stage)}
 ${stageExamples(stage)}
 
-## Interaction Focus
+## Interaction Protocol
 ${interactionFocus.length > 0 ? interactionFocus.map((item, i) => `${i + 1}. ${item}`).join("\n") : "- Keep communication concise and decision-focused; rely on the Checklist for execution order."}
 
 Shared decision/ask-user protocol:
