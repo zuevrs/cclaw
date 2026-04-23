@@ -1,5 +1,22 @@
 # Changelog
 
+## 0.48.30
+
+Phase-0 v2 schema migration completion for downstream stages. This cut ports the
+remaining legacy stage literals (`spec`, `plan`, `tdd`, `review`, `ship`) to
+the grouped `schemaShape: "v2"` format without changing runtime contracts.
+
+### Changed
+
+- Migrated `spec`, `plan`, `tdd`, `review`, and `ship` stage definitions to v2
+  grouped sections (`philosophy`, `executionModel`, `artifactRules`,
+  `reviewLens`) and added explicit `complexityTier: "standard"` defaults.
+- Kept stage behavior/contracts stable by preserving existing content and gate
+  metadata while moving fields into grouped sections only.
+- Updated TDD quick-track variant generation to transform nested v2 fields
+  (checklists, required gates/evidence, traceability, and review sections)
+  instead of legacy top-level keys.
+
 ## 0.48.29
 
 Phase-0 artifact slug rollout for brainstorm/scope/design. This cut introduces
