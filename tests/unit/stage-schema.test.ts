@@ -5,7 +5,7 @@ import { SHIP_FINALIZATION_MODES } from "../../src/constants.js";
 import { lintArtifact } from "../../src/artifact-linter.js";
 import { CCLAW_AGENTS } from "../../src/content/core-agents.js";
 import { stageExamples, stageExamplesReferenceMarkdown } from "../../src/content/examples.js";
-import { stageSchema } from "../../src/content/stage-schema.js";
+import { mandatoryDelegationsForStage, stageSchema } from "../../src/content/stage-schema.js";
 import { stageSkillMarkdown } from "../../src/content/skills.js";
 import { enhancedAgentBody } from "../../src/content/subagents.js";
 import { ARTIFACT_TEMPLATES } from "../../src/content/templates.js";
@@ -35,6 +35,13 @@ describe("stage schema and subagent alignment", () => {
     expect(stageSchema("design").complexityTier).toBe("deep");
     // Plan does not set complexityTier explicitly and should fall back.
     expect(stageSchema("plan").complexityTier).toBe("standard");
+  });
+
+  it("supports complexity-tier gates for mandatory delegations", () => {
+    expect(mandatoryDelegationsForStage("scope", "lightweight")).toEqual([]);
+    expect(mandatoryDelegationsForStage("scope", "standard")).toContain("planner");
+    expect(mandatoryDelegationsForStage("review", "lightweight")).toContain("reviewer");
+    expect(mandatoryDelegationsForStage("ship", "lightweight")).toContain("doc-updater");
   });
 
   it("plan stage reads spec, design, and scope artifacts", () => {

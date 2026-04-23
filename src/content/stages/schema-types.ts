@@ -37,6 +37,11 @@ export interface StageAutoSubagentDispatch {
    * - `proactive` — should be dispatched automatically when context matches `when`.
    */
   mode: "mandatory" | "proactive";
+  /**
+   * Minimum complexity tier where this dispatch policy applies.
+   * Defaults to `standard` for mandatory dispatches when omitted.
+   */
+  requiredAtTier?: StageComplexityTier;
   when: string;
   purpose: string;
   requiresUserGate: boolean;

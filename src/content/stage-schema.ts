@@ -73,6 +73,11 @@ export interface SkillEnvelopeValidation {
 
 const FLOW_STAGE_SET = new Set<FlowStage>(FLOW_STAGES);
 const SKILL_ENVELOPE_KIND_SET = new Set<string>(SKILL_ENVELOPE_KINDS);
+const COMPLEXITY_TIER_ORDER: Record<StageComplexityTier, number> = {
+  lightweight: 0,
+  standard: 1,
+  deep: 2
+};
 
 function asRecord(value: unknown): Record<string, unknown> | null {
   if (!value || typeof value !== "object" || Array.isArray(value)) {
@@ -277,6 +282,7 @@ const STAGE_AUTO_SUBAGENT_DISPATCH: Record<FlowStage, StageAutoSubagentDispatch[
     {
       agent: "planner",
       mode: "mandatory",
+      requiredAtTier: "standard",
       when: "Always during scope shaping.",
       purpose: "Challenge premise, map alternatives, and produce explicit in/out contract.",
       requiresUserGate: false
@@ -286,6 +292,7 @@ const STAGE_AUTO_SUBAGENT_DISPATCH: Record<FlowStage, StageAutoSubagentDispatch[
     {
       agent: "planner",
       mode: "mandatory",
+      requiredAtTier: "standard",
       when: "Always during design lock.",
       purpose: "Stress architecture boundaries and dependency graph.",
       requiresUserGate: false
@@ -318,6 +325,7 @@ const STAGE_AUTO_SUBAGENT_DISPATCH: Record<FlowStage, StageAutoSubagentDispatch[
     {
       agent: "planner",
       mode: "mandatory",
+      requiredAtTier: "standard",
       when: "Always when producing execution slices.",
       purpose: "Create dependency-aware task graph with verification steps.",
       requiresUserGate: false
@@ -327,6 +335,7 @@ const STAGE_AUTO_SUBAGENT_DISPATCH: Record<FlowStage, StageAutoSubagentDispatch[
     {
       agent: "test-author",
       mode: "mandatory",
+      requiredAtTier: "lightweight",
       when: "Always during TDD cycle (RED phase).",
       purpose: "Produce failing RED tests only; no production writes.",
       requiresUserGate: false,
@@ -335,6 +344,7 @@ const STAGE_AUTO_SUBAGENT_DISPATCH: Record<FlowStage, StageAutoSubagentDispatch[
     {
       agent: "test-author",
       mode: "mandatory",
+      requiredAtTier: "lightweight",
       when: "Always during TDD cycle (GREEN phase).",
       purpose: "Implement minimum production changes to satisfy RED and prove full-suite GREEN.",
       requiresUserGate: false,
@@ -343,6 +353,7 @@ const STAGE_AUTO_SUBAGENT_DISPATCH: Record<FlowStage, StageAutoSubagentDispatch[
     {
       agent: "test-author",
       mode: "mandatory",
+      requiredAtTier: "lightweight",
       when: "Always during TDD cycle (REFACTOR phase).",
       purpose: "Refactor only after GREEN proof, preserving behavior and test pass state.",
       requiresUserGate: false,
@@ -360,6 +371,7 @@ const STAGE_AUTO_SUBAGENT_DISPATCH: Record<FlowStage, StageAutoSubagentDispatch[
     {
       agent: "reviewer",
       mode: "mandatory",
+      requiredAtTier: "lightweight",
       when: "Always in review stage.",
       purpose: "Layer 1 spec compliance pass plus coordination of parallel Layer 2 fan-out (correctness, performance, architecture, external-safety) with source-tagged findings.",
       requiresUserGate: false,
@@ -368,6 +380,7 @@ const STAGE_AUTO_SUBAGENT_DISPATCH: Record<FlowStage, StageAutoSubagentDispatch[
     {
       agent: "security-reviewer",
       mode: "mandatory",
+      requiredAtTier: "lightweight",
       when: "Always in review stage. Even when no trust boundaries changed, produce an explicit 'no-change' security attestation.",
       purpose: "Guarantee a dedicated security pass on every diff: auth, input validation, secrets, injection, privilege, and blast-radius review are never opt-in. MUST load the `security-audit` skill and run a pattern-based sweep across the diff scope and touched modules in addition to the per-diff Layer 2 security checklist.",
       requiresUserGate: false,
@@ -376,6 +389,7 @@ const STAGE_AUTO_SUBAGENT_DISPATCH: Record<FlowStage, StageAutoSubagentDispatch[
     {
       agent: "reviewer",
       mode: "mandatory",
+      requiredAtTier: "lightweight",
       when: "Mandatory when the diff exceeds 100 changed lines, touches more than 10 files, or modifies trust boundaries — dispatch a SECOND, independent reviewer with the adversarial-review skill loaded so the review army has at least two voices on a high-blast-radius change.",
       purpose: "Adversarial second-opinion review on large or trust-sensitive diffs. The second reviewer treats the implementation as hostile and tries to break it (hostile-user, future-maintainer, competitor lenses) instead of sympathetically explaining it.",
       requiresUserGate: false,
@@ -394,6 +408,7 @@ const STAGE_AUTO_SUBAGENT_DISPATCH: Record<FlowStage, StageAutoSubagentDispatch[
     {
       agent: "doc-updater",
       mode: "mandatory",
+      requiredAtTier: "lightweight",
       when: "Always in ship stage.",
       purpose: "Ensure release notes and docs reflect actual shipped behavior.",
       requiresUserGate: false
@@ -409,10 +424,18 @@ const STAGE_AUTO_SUBAGENT_DISPATCH: Record<FlowStage, StageAutoSubagentDispatch[
 };
 
 /** Transition guard: agents with `mode: "mandatory"` in auto-subagent dispatch for this stage. */
-export function mandatoryDelegationsForStage(stage: FlowStage): string[] {
+export function mandatoryDelegationsForStage(
+  stage: FlowStage,
+  complexityTier: StageComplexityTier = "standard"
+): string[] {
+  const currentTierRank = COMPLEXITY_TIER_ORDER[complexityTier];
   return [...new Set(
     STAGE_AUTO_SUBAGENT_DISPATCH[stage]
       .filter((d) => d.mode === "mandatory")
+      .filter((d) => {
+        const requiredAt = d.requiredAtTier ?? "standard";
+        return currentTierRank >= COMPLEXITY_TIER_ORDER[requiredAt];
+      })
       .map((d) => d.agent)
   )];
 }
@@ -426,7 +449,7 @@ export function stageSchema(stage: FlowStage, track: FlowTrack = "standard"): St
     readsFrom: readsFromForTrack(base.crossStageTrace.readsFrom, track)
   };
   const complexityTier: StageComplexityTier = base.complexityTier ?? "standard";
-  const mandatoryDelegations = mandatoryDelegationsForStage(stage);
+  const mandatoryDelegations = mandatoryDelegationsForStage(stage, complexityTier);
   const philosophy: StagePhilosophy = {
     hardGate: base.hardGate,
     ironLaw: base.ironLaw,
