@@ -93,12 +93,6 @@ export const SHIP: StageSchemaInput = {
     "Finalization not executed, only planned",
     "Selecting git-dependent finalization mode when `.git` is unavailable"
   ],
-  policyNeedles: [
-    "Pre-Ship Checks",
-    "Release Notes",
-    "Rollback Plan",
-    ...SHIP_FINALIZATION_MODES
-  ],
   artifactFile: "08-ship.md",
   // `done` exits the stage pipeline. Archive semantics are handled by the
   // closeout substate machine (`idle` -> ... -> `archived`) in flow-state.

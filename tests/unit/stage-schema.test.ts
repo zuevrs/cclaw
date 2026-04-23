@@ -5,7 +5,7 @@ import { SHIP_FINALIZATION_MODES } from "../../src/constants.js";
 import { lintArtifact } from "../../src/artifact-linter.js";
 import { CCLAW_AGENTS } from "../../src/content/core-agents.js";
 import { stageExamples, stageExamplesReferenceMarkdown } from "../../src/content/examples.js";
-import { mandatoryDelegationsForStage, stageSchema } from "../../src/content/stage-schema.js";
+import { mandatoryDelegationsForStage, stagePolicyNeedles, stageSchema } from "../../src/content/stage-schema.js";
 import { stageSkillMarkdown } from "../../src/content/skills.js";
 import { enhancedAgentBody } from "../../src/content/subagents.js";
 import { ARTIFACT_TEMPLATES } from "../../src/content/templates.js";
@@ -44,13 +44,19 @@ describe("stage schema and subagent alignment", () => {
     expect(mandatoryDelegationsForStage("ship", "lightweight")).toContain("doc-updater");
   });
 
+  it("derives policy needles from lint metadata with track transforms", () => {
+    expect(stagePolicyNeedles("plan")).toContain("Dependency Batches");
+    expect(stagePolicyNeedles("tdd", "quick")).toContain("traceable to acceptance slice");
+    expect(stagePolicyNeedles("tdd", "quick")).not.toContain("traceable to plan slice");
+  });
+
   it("plan stage reads spec, design, and scope artifacts", () => {
     const plan = stageSchema("plan");
     expect(plan.crossStageTrace.readsFrom).toContain(".cclaw/artifacts/04-spec.md");
     expect(plan.crossStageTrace.readsFrom).toContain(".cclaw/artifacts/03-design.md");
     expect(plan.crossStageTrace.readsFrom).toContain(".cclaw/artifacts/02-scope.md");
     expect(plan.requiredGates.map((gate) => gate.id)).toContain("plan_dependency_batches_defined");
-    expect(plan.policyNeedles).toContain("Dependency Batches");
+    expect(stagePolicyNeedles("plan")).toContain("Dependency Batches");
   });
 
   it("filters cross-stage reads to artifacts that exist on the active track", () => {
@@ -100,19 +106,19 @@ describe("stage schema and subagent alignment", () => {
   it("review stage includes review-army structured reconciliation", () => {
     const review = stageSchema("review");
     expect(review.requiredEvidence).toContain("Artifact written to `.cclaw/artifacts/07-review-army.json`.");
-    expect(review.policyNeedles).toContain("Review Army");
+    expect(stagePolicyNeedles("review")).toContain("Review Army");
   });
 
   it("ship finalization enums are sourced from canonical constants", () => {
     const ship = stageSchema("ship");
     const template = ARTIFACT_TEMPLATES["08-ship.md"] ?? "";
     for (const mode of SHIP_FINALIZATION_MODES) {
-      expect(ship.policyNeedles).toContain(mode);
+      expect(stagePolicyNeedles("ship")).toContain(mode);
       expect(template).toContain(mode);
     }
-    expect(ship.policyNeedles).not.toContain("FINALIZE_HANDOFF");
-    expect(ship.policyNeedles).not.toContain("FINALIZE_QUEUE");
-    expect(ship.policyNeedles).not.toContain("FINALIZE_SKIP");
+    expect(stagePolicyNeedles("ship")).not.toContain("FINALIZE_HANDOFF");
+    expect(stagePolicyNeedles("ship")).not.toContain("FINALIZE_QUEUE");
+    expect(stagePolicyNeedles("ship")).not.toContain("FINALIZE_SKIP");
   });
 
   it("07-review-army.json template matches validator schema shape", () => {

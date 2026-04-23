@@ -100,7 +100,6 @@ export const REVIEW: StageSchemaInput = {
     "Batching multiple findings into one report without individual resolution",
     "Skipping Layer 2 sections because Layer 1 passed"
   ],
-  policyNeedles: ["Layer 1", "Layer 2", "Critical", "Review Army", "Ready to Ship", "ROUTE_BACK_TO_TDD", "One issue at a time"],
   artifactFile: "07-review.md",
   next: "ship",
   reviewSections: [
