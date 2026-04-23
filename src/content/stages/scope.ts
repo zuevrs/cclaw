@@ -23,15 +23,19 @@ export const SCOPE: StageSchemaInput = {
     "The work is a pure implementation or debugging pass within existing scope"
   ],
   checklist: [
+    "**Pre-Scope System Audit** — before premise challenge, gather reality snapshot: recent commits (`git log -30 --oneline`), current diff (`git diff --stat`), stash state (`git stash list`), and deferred debt markers (`rg -n 'TODO|FIXME|XXX|HACK'`). Record findings in scope artifact.",
     "**Assess complexity** — Read the brainstorm artifact. If project is simple (single component, clear architecture, personal/prototype), run light-touch scope: mode selection, 3-5 key in/out boundaries, deferred items. Skip Dream State Mapping and Temporal Interrogation. If project is complex (multi-component, team delivery, production), run the full checklist.",
     "**Prime Directives** — Zero silent failures. For each in-scope capability, name concrete failure modes, the exact error surface, and trace all four data-flow paths (happy, nil, empty, upstream error). Include interaction edge cases (double-click, navigate-away, stale state), observability commitments, and explicit deferred-item logging.",
     "**Premise Challenge** — Is this the right problem? What if we do nothing? What are we optimizing for?",
+    "**Landscape Check** — for EXPAND/SELECTIVE candidates, perform a brief external scan of comparable products/patterns to calibrate ambition and avoid local maxima.",
     "**Existing Code Leverage** — Search for existing solutions before deciding to build new.",
+    "**Taste Calibration** — identify 2-3 high-quality files/modules in this codebase and explicitly align scope quality bar to them.",
     "**Dream State Mapping** — (complex projects only) describe the ideal state 12 months out using `CURRENT STATE -> THIS PLAN -> 12-MONTH IDEAL`, then verify this scope moves toward that target.",
     "**Implementation Alternatives** — Produce 2-3 distinct approaches. For each: Name, Summary, Effort (S/M/L/XL), Risk (Low/Med/High), 2-3 Pros, 2-3 Cons, and explicit Reuses. One option must be minimal viable, one must be ideal architecture.",
     "**Temporal Interrogation** — (complex projects only) simulate implementation timeline: HOUR 1 foundations, HOUR 2-3 core logic, HOUR 4-5 integration surprises, HOUR 6+ polish/tests. Decide what must be locked now vs safely deferred.",
     "**Mode Selection** — Present expand/selective/hold/reduce with recommendation and default heuristic: greenfield -> expand, feature enhancement -> selective, bugfix/hotfix/refactor -> hold, broad blast radius (>15 files or multi-team impact) -> reduce.",
     "**Mode-Specific Analysis** — After mode is selected, run the matching analysis: EXPAND (10x and delight opportunities), SELECTIVE (hold-scope rigor then cherry-picked expansions), HOLD (minimum-change-set hardening), REDUCE (ruthless cuts and follow-up split).",
+    "**Outside Voice + Spec Review Loop** — run an adversarial second-opinion pass on the scope artifact, reconcile findings, and iterate up to 3 cycles or until quality score >= 0.8.",
     "**Error and Rescue Registry** — For each capability: what breaks, how detected, what fallback."
   ],
   interactionProtocol: [
@@ -43,19 +47,25 @@ export const SCOPE: StageSchemaInput = {
     "Present one structural scope issue at a time for decision. Do NOT batch. Use structured options for each scope boundary question.",
     "Record explicit in-scope and out-of-scope contract.",
     "Once the user accepts or rejects a recommendation, commit fully. Do not re-argue.",
+    "Before final scope approval, run an adversarial outside-voice review and reconcile every finding explicitly (accept/reject/defer with rationale).",
+    "Bound review-loop retries: max 3 iterations or early stop at quality score >= 0.8.",
     "Produce a clean scope summary after all issues are resolved.",
     "**STOP.** Wait for explicit user approval of scope contract before advancing to design.",
     "**STOP BEFORE ADVANCE.** Mandatory delegation `planner` must be marked completed or explicitly waived in `.cclaw/state/delegation-log.json`. Then close the stage via `node .cclaw/hooks/stage-complete.mjs scope` (do not hand-edit `.cclaw/state/flow-state.json`)."
   ],
   process: [
+    "Run pre-scope system audit (git log/diff/stash/debt markers).",
     "Run premise challenge and existing-solution leverage check.",
+    "When mode is EXPAND/SELECTIVE, run brief landscape check before final scope lock.",
+    "Calibrate quality bar against 2-3 strong existing modules/files.",
     "Produce 2-3 scope alternatives in a structured format (Name, Summary, Effort, Risk, Pros, Cons, Reuses) with minimum viable and ideal architecture options included.",
     "Choose scope mode with user approval.",
     "Run mode-specific analysis that matches the selected scope mode.",
     "Walk through scope review sections one at a time.",
+    "Run outside-voice spec review loop (up to 3 iterations, quality score target >= 0.8).",
     "Write explicit scope contract, discretion areas, and deferred items.",
     "Freeze non-negotiable boundaries as stable Locked Decisions (D-XX IDs).",
-    "Produce scope summary plus completion dashboard (checklist findings, number of resolved decisions, unresolved items or `None`)."
+    "Produce scope summary plus completion dashboard (section status, critical gaps, resolved decisions, unresolved items or `None`)."
   ],
   requiredGates: [
     { id: "scope_mode_selected", description: "One scope mode was explicitly selected." },
@@ -64,13 +74,16 @@ export const SCOPE: StageSchemaInput = {
   ],
   requiredEvidence: [
     "Artifact written to `.cclaw/artifacts/02-scope.md`.",
+    "Pre-Scope System Audit findings are captured (git log/diff/stash/debt markers).",
     "In-scope and out-of-scope lists are explicit.",
     "Discretion areas are explicit (or marked as `None`).",
     "Selected mode and rationale are documented.",
     "Locked Decisions section lists stable D-XX IDs for non-negotiable boundaries.",
     "Premise challenge findings documented.",
+    "Outside Voice findings and dispositions are recorded (accept/reject/defer with rationale).",
+    "Spec review loop summary includes iteration count and quality score trajectory.",
     "Deferred items list with one-line rationale for each.",
-    "Completion dashboard lists checklist findings, decision count, and unresolved items (or `None`)."
+    "Completion dashboard lists per-section status, critical/open gaps, decision count, and unresolved items (or `None`)."
   ],
   inputs: ["brainstorm artifact", "timeline constraints", "product priorities"],
   requiredContext: [
@@ -98,6 +111,7 @@ export const SCOPE: StageSchemaInput = {
     "scope summary produced"
   ],
   commonRationalizations: [
+    "Skipping pre-scope audit because the task looks small",
     "Scope silently expanded during discussion",
     "No explicit out-of-scope section",
     "Premise accepted without challenge",
@@ -111,7 +125,8 @@ export const SCOPE: StageSchemaInput = {
     "No discretion section (or explicit `None`) in artifact",
     "No deferred/not-in-scope section",
     "No user approval marker",
-    "Missing Locked Decisions section or decisions without D-XX IDs"
+    "Missing Locked Decisions section or decisions without D-XX IDs",
+    "Skipping outside-voice review loop and treating first draft as final"
   ],
   policyNeedles: ["Scope mode", "In Scope", "Out of Scope", "Discretion Areas", "NOT in scope", "Premise Challenge", "Locked Decisions"],
   artifactFile: "02-scope.md",
@@ -163,6 +178,16 @@ export const SCOPE: StageSchemaInput = {
         "Is observability (logging, metrics, alerts) explicitly in or out of scope?"
       ],
       stopGate: true
+    },
+    {
+      title: "Outside Voice Reconciliation",
+      evaluationPoints: [
+        "Were adversarial findings categorized as accept/reject/defer with rationale?",
+        "Did any rejected finding still expose a real gap in assumptions?",
+        "Is quality score trajectory improving across iterations?",
+        "Did the review loop stop because quality threshold was met (>=0.8) or because retry budget was exhausted?"
+      ],
+      stopGate: true
     }
   ],
   completionStatus: ["DONE", "DONE_WITH_CONCERNS", "BLOCKED"],
@@ -172,8 +197,11 @@ export const SCOPE: StageSchemaInput = {
     traceabilityRule: "Every scope boundary must be traceable to a brainstorm decision. Every downstream design choice must stay within the scope contract."
   },
   artifactValidation: [
+    { section: "Pre-Scope System Audit", required: false, validationRule: "Must capture git log/diff/stash/debt-marker findings before premise challenge." },
     { section: "Prime Directives", required: false, validationRule: "For each scoped capability: named failure modes, explicit error surface, four data-flow paths, interaction edge cases, observability expectations, and deferred-item handling." },
     { section: "Premise Challenge", required: false, validationRule: "Must contain explicit answers to: right problem? direct path? what if nothing?" },
+    { section: "Landscape Check", required: false, validationRule: "When mode is EXPAND/SELECTIVE, include at least one external reference insight and its impact on scope." },
+    { section: "Taste Calibration", required: false, validationRule: "Must reference 2-3 strong in-repo modules/files that define the quality bar or explicitly justify omission." },
     { section: "Requirements", required: false, validationRule: "Table of stable requirement IDs (R1, R2, R3…) one per row with observable outcome, priority, and source. IDs are assigned once and never renumbered across scope/design/spec/plan/review; dropped requirements stay with Priority `DROPPED`." },
     { section: "Locked Decisions (D-XX)", required: false, validationRule: "List of stable locked decisions with IDs D-01, D-02... Each ID appears once, includes rationale, and is intended for downstream cross-stage traceability." },
     { section: "Implementation Alternatives", required: false, validationRule: "2-3 options with Name, Summary, Effort, Risk, Pros, Cons, and Reuses. Must include minimal viable and ideal architecture options." },
@@ -183,7 +211,9 @@ export const SCOPE: StageSchemaInput = {
     { section: "Discretion Areas", required: false, validationRule: "Explicit list of implementer decision zones, or 'None' if scope is fully locked." },
     { section: "Deferred Items", required: false, validationRule: "Each item has one-line rationale. If empty, state 'None' explicitly." },
     { section: "Error & Rescue Registry", required: false, validationRule: "Each scoped capability has: failure mode, detection method, fallback decision." },
-    { section: "Completion Dashboard", required: true, validationRule: "Lists checklist findings, count of resolved decisions, and unresolved decisions (or 'None')." },
+    { section: "Outside Voice Findings", required: false, validationRule: "Must list external/adversarial findings and disposition (accept/reject/defer) with rationale." },
+    { section: "Spec Review Loop", required: false, validationRule: "Must record iterations (max 3), quality score per iteration, stop reason, and unresolved concerns." },
+    { section: "Completion Dashboard", required: true, validationRule: "Lists per-review-section status, count of critical/open gaps, resolved decisions, and unresolved decisions (or 'None')." },
     { section: "Scope Summary", required: true, validationRule: "Clean summary: mode, strongest challenges, recommended path, accepted scope, deferred, excluded." },
     { section: "Dream State Mapping", required: false, validationRule: "If present (complex projects): CURRENT STATE, THIS PLAN, 12-MONTH IDEAL, and alignment verdict." },
     { section: "Temporal Interrogation", required: false, validationRule: "If present (complex projects): timeline simulation table with decision pressures and lock-now vs defer verdicts." }

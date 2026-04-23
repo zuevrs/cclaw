@@ -195,54 +195,42 @@ Shared decision/ask-user protocol:
 
 ## Review Sections
 
-### Layer 1: Spec Compliance
+### Layer 1: Spec Compliance (STOP gate)
 - For each acceptance criterion: does the implementation satisfy it?
 - Are there spec requirements with no corresponding implementation?
 - Are there implementations with no corresponding spec requirement (scope creep)?
 - Is every edge case from the spec handled?
 
-**STOP:** resolve findings in this section before moving forward.
-
-### Layer 2a: Correctness
+### Layer 2a: Correctness (STOP gate)
 - Logic errors and boundary violations
 - Race conditions and concurrency issues
 - Null/undefined handling
 - Error propagation and recovery paths
 
-**STOP:** resolve findings in this section before moving forward.
-
-### Layer 2b: Security
+### Layer 2b: Security (STOP gate)
 - Input validation completeness
 - Authorization boundary enforcement
 - Secrets exposure risk
 - Injection vector assessment
 
-**STOP:** resolve findings in this section before moving forward.
-
-### Layer 2c: Performance
+### Layer 2c: Performance (STOP gate)
 - N+1 query patterns
 - Memory leak potential
 - Missing caching opportunities
 - Hot path complexity analysis
 
-**STOP:** resolve findings in this section before moving forward.
-
-### Layer 2d: Architecture Fit
+### Layer 2d: Architecture Fit (STOP gate)
 - Does implementation match the locked design?
 - Coupling and cohesion assessment
 - Interface contract compliance
 - Unintended architectural drift
 
-**STOP:** resolve findings in this section before moving forward.
-
-### Layer 2e: External Safety Checklist
+### Layer 2e: External Safety Checklist (STOP gate)
 - SQL/database: parameterized queries, no raw string interpolation, migration safety
 - Concurrency: race conditions in shared state, lock ordering, timeout handling
 - Secrets: no hardcoded tokens, no secrets in logs, env vars for sensitive config
 - Enum/constant completeness: grep for sibling values OUTSIDE the diff — are all cases handled?
 - Trust boundaries: if LLM/AI output is used, is it validated before acting on it?
-
-**STOP:** resolve findings in this section before moving forward.
 
 ### Specialist Lens: Data & Migration Safety
 - Schema/data migrations are reversible and include backfill/rollback strategy
@@ -533,22 +521,18 @@ Shared decision/ask-user protocol:
 
 ## Review Sections
 
-### Preflight Verification
+### Preflight Verification (STOP gate)
 - Test suite: full run, all pass, output captured
 - Build: clean build, exit code 0
 - Lint/format: no violations
 - Type-check: no errors
 - Working tree: no uncommitted changes
 
-**STOP:** resolve findings in this section before moving forward.
-
-### Release Readiness
+### Release Readiness (STOP gate)
 - Release notes are accurate and reference spec criteria
 - Breaking changes are documented with migration steps
 - Rollback plan has trigger, steps, and verification
 - If applicable: monitoring/alerting is in place for the change
-
-**STOP:** resolve findings in this section before moving forward.
 
 ## Verification Before Completion
 
@@ -822,31 +806,25 @@ Shared decision/ask-user protocol:
 
 ## Review Sections
 
-### Task Decomposition Audit
+### Task Decomposition Audit (STOP gate)
 - Does every task target a single coherent area (vertical slice)?
 - Can each task be completed in 2-5 minutes?
 - Does every task have an acceptance criterion link and verification command?
 - Are there tasks that touch multiple unrelated areas?
 - Would a new engineer understand and start each task within two minutes?
 
-**STOP:** resolve findings in this section before moving forward.
-
-### Batch Completeness Audit
+### Batch Completeness Audit (STOP gate)
 - Does every task belong to exactly one batch?
 - Does each batch have a verification gate?
 - Are batch dependencies explicit and acyclic?
 - Is the acceptance mapping complete — every spec criterion covered?
 - Are there hidden dependencies between tasks in different batches?
 
-**STOP:** resolve findings in this section before moving forward.
-
-### Five-Minute Budget + No-Placeholders Audit
+### Five-Minute Budget + No-Placeholders Audit (STOP gate)
 - Does every task carry an explicit minutes estimate (e.g. \`[~3m]\`) and does every estimate fit the 2-to-5-minute budget? Estimates >5 minutes must be split.
 - Are all file paths, test commands, and verification commands copy-pasteable as written — no \`TODO\`, \`TBD\`, \`FIXME\`, \`<fill-in>\`, \`<your-*-here>\`, \`xxx\`, or ellipsis standing in for omitted args?
 - Does every acceptance-criterion reference resolve to a real R# / AC-### in the spec (not a blank link)?
 - If an estimate is genuinely uncertain (first-time integration, unfamiliar library), is the uncertainty named explicitly and scheduled as a spike task in batch 0, rather than hidden behind a large estimate?
-
-**STOP:** resolve findings in this section before moving forward.
 
 
 ## Cross-Stage Traceability
@@ -1146,23 +1124,19 @@ Detailed walkthrough:
 
 ## Review Sections
 
-### RED Evidence Audit
+### RED Evidence Audit (STOP gate)
 - Does every slice have a captured failing test output?
 - Does each failure reason match the expected missing behavior (not a typo or config error)?
 - Were tests written BEFORE any production code for that slice?
 - Does each RED test assert observable behavior, not implementation details?
 - Is there a test for each acceptance criterion mapped in the plan?
 
-**STOP:** resolve findings in this section before moving forward.
-
-### GREEN/REFACTOR Audit
+### GREEN/REFACTOR Audit (STOP gate)
 - Does GREEN evidence show a FULL suite pass (not partial)?
 - Is the GREEN implementation minimal — no features beyond what RED tests require?
 - Does the REFACTOR step preserve all existing behavior (no new failures)?
 - Are REFACTOR notes documented with rationale?
 - Is traceability complete: every change links to plan task ID and spec criterion?
-
-**STOP:** resolve findings in this section before moving forward.
 
 ### Test Pyramid + Size Audit
 - Is the tests-added count skewed toward Small (unit) tests, with Medium and Large used only when a real boundary justifies the cost?
@@ -1366,14 +1340,20 @@ Do NOT invoke implementation skills, write code, scaffold projects, or mutate pr
 You MUST complete these steps in order:
 
 1. **Explore project context** — check files, docs, recent commits to understand what already exists.
-2. **Assess scope** — if the request covers multiple independent subsystems, flag it and help decompose before deep-diving. Each sub-project gets its own brainstorm cycle.
-3. **Ask clarifying questions** — one at a time, understand purpose, constraints, and success criteria. Prefer multiple choice when possible. Each question should change what we build, not just gather trivia.
-4. **Propose 2-3 architecturally distinct approaches** — with real trade-offs and your recommendation. Lead with the recommended option and explain why.
-5. **Present design by sections** — scale each section to its complexity. Ask after each section whether it looks right so far. Cover: architecture, key components, data flow.
-6. **Write artifact** to \`.cclaw/artifacts/01-brainstorm.md\`.
-7. **Self-review** — scan for placeholders/TODOs, check internal consistency, verify scope is focused, resolve any ambiguity.
-8. **User reviews artifact** — ask the user to review the written artifact and explicitly approve or request changes.
-9. **Handoff** — only then complete stage and point to \`/cc-next\`.
+2. **Assess depth tier first** — classify the request as Lightweight / Standard / Deep. Lightweight = narrow/localized ask; Standard = cross-module but bounded; Deep = platform or multi-surface product change.
+3. **Assess scope** — if the request covers multiple independent subsystems, flag it and help decompose before deep-diving. Each sub-project gets its own brainstorm cycle.
+4. **Short-circuit gate** — if requirements are already concrete and unambiguous, write a minimal brainstorm stub (problem + approved intent + constraints) and hand off to scope.
+5. **Ask clarifying questions** — one at a time, understand purpose, constraints, and success criteria. Prefer multiple choice when possible. Each question should change what we build, not just gather trivia.
+6. **Propose 2-3 architecturally distinct approaches** — with real trade-offs and no recommendation yet. At least one option must be a higher-upside challenger that raises ambition vs the user's initial ask.
+7. **Collect user reaction** — ask which approach feels closest and what concerns remain before stating your recommendation.
+8. **Recommend only after reaction** — present final recommendation with rationale that explicitly references user feedback.
+9. **Present design by sections** — scale each section to its complexity. Ask after each section whether it looks right so far. Cover: architecture, key components, data flow.
+10. **Optional visual companion** — when architecture/data flow complexity is medium+ offer a compact diagram (ASCII or Mermaid) before artifact write-up.
+11. **Write artifact** to \`.cclaw/artifacts/01-brainstorm.md\`.
+12. **Document-quality pass** — run a brief adversarial review of the artifact (gaps, contradictions, missing trade-offs), then patch before user review.
+13. **Self-review** — scan for placeholders/TODOs, check internal consistency, verify scope is focused, resolve any ambiguity.
+14. **User reviews artifact** — ask the user to review the written artifact and explicitly approve or request changes.
+15. **Handoff** — only then complete stage and point to \`/cc-next\`.
 
 ## Good vs Bad (at-a-glance)
 
@@ -1458,18 +1438,20 @@ Shared decision/ask-user protocol:
 - [ ] Artifact written to \`.cclaw/artifacts/01-brainstorm.md\`.
 - [ ] Project context was explored (files, docs, or recent activity referenced).
 - [ ] Clarifying questions and their answers are captured.
-- [ ] 2-3 approaches with trade-offs and recommendation are recorded.
+- [ ] 2-3 approaches with trade-offs are recorded, including one higher-upside challenger option.
+- [ ] User reaction to approaches is captured before final recommendation.
+- [ ] Final recommendation explicitly reflects user reaction.
 - [ ] Approved direction and approval marker are present.
 - [ ] Assumptions and open questions are captured (or explicitly marked as none).
 
 ## Process
 1. Explore project context: check files, docs, recent activity.
-2. Assess scope: flag if request is too broad, help decompose first.
-3. Ask clarifying questions one at a time — focus on purpose, constraints, success criteria.
-4. Propose 2-3 architecturally distinct approaches with trade-offs and a recommendation.
-5. Present design sections incrementally, get approval after each.
+2. Classify depth tier (Lightweight / Standard / Deep) before diving.
+3. Assess scope: flag if request is too broad, help decompose first.
+4. Apply short-circuit when requirements are already concrete enough for scope.
+5. Ask clarifying questions one at a time — focus on purpose, constraints, success criteria.
 
-- Follow the Checklist above for remaining execution detail (+4 condensed steps).
+- Follow the Checklist above for remaining execution detail (+9 condensed steps).
 
 
 
@@ -1490,9 +1472,12 @@ Rule: Scope and design decisions must trace back to explored context and approve
 | Context | REQUIRED | Must reference project state and relevant existing code or patterns. |
 | Problem | REQUIRED | Must define what we're solving, success criteria, and constraints. |
 | Clarifying Questions | recommended | Must capture question, answer, and decision impact for each clarifying question. |
-| Approaches | REQUIRED | Must compare 2-3 architecturally distinct options with real trade-offs and recommendation. |
-| Selected Direction | REQUIRED | Must include the selected approach, rationale, and explicit approval marker. |
+| Approach Tier | recommended | Must classify depth as Lightweight/Standard/Deep and explain why. |
+| Approaches | REQUIRED | Must compare 2-3 architecturally distinct options with real trade-offs and include one higher-upside challenger option. |
+| Approach Reaction | recommended | Must summarize user reaction before recommendation, including concerns that changed direction. |
+| Selected Direction | REQUIRED | Must include the selected approach, rationale tied to user reaction, and explicit approval marker. |
 | Design | recommended | Must cover architecture, key components, and data flow scaled to complexity. |
+| Visual Companion | recommended | If architecture/data-flow complexity is medium+, include compact ASCII/Mermaid diagram or explicitly justify omission. |
 | Assumptions and Open Questions | recommended | Must capture unresolved assumptions/open questions, or explicitly state none. |
 
 
@@ -1500,6 +1485,8 @@ Rule: Scope and design decisions must trace back to explored context and approve
 - Asking questions without exploring existing project context first
 - Asking bundled or purely informational questions that don't change decisions
 - Proposing cosmetic option variants instead of architecturally distinct approaches
+- Revealing recommendation before collecting user reaction
+- Three same-altitude approaches with no higher-upside challenger
 - Jumping directly into implementation
 - Requesting approval without stating what decision is being approved
 - Questions that only gather preferences without design impact

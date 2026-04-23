@@ -85,10 +85,8 @@ function reviewSectionsBlock(stage: FlowStage, track: FlowTrack): string {
   const sections = schema.reviewSections
     .map((sec) => {
       const points = sec.evaluationPoints.map((p) => `- ${p}`).join("\n");
-      const stop = sec.stopGate
-        ? "\n\n**STOP:** resolve findings in this section before moving forward."
-        : "";
-      return `### ${sec.title}\n${points}${stop}`;
+      const title = sec.stopGate ? `${sec.title} (STOP gate)` : sec.title;
+      return `### ${title}\n${points}`;
     })
     .join("\n\n");
 
