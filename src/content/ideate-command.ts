@@ -48,19 +48,26 @@ same session, or save/discard the backlog.
 1. **Resume check.** Glob \`${IDEATE_ARTIFACT_GLOB}\`. If any artifact
    has been modified within the last ${IDEATE_RESUME_WINDOW_DAYS} days,
    offer the user: continue that backlog, start fresh, or cancel.
-2. **Scan repo signals:**
-   - open TODO/FIXME/XXX/HACK notes,
-   - flaky or failing tests,
-   - oversized modules / complexity hotspots,
-   - docs drift vs changed code,
-   - repeated entries in \`${RUNTIME_ROOT}/knowledge.jsonl\`.
-3. **Produce 5-10 candidates** with impact (High/Medium/Low),
-   effort (S/M/L), confidence (High/Medium/Low), and one evidence path
-   per candidate.
-4. **Rank by impact/effort**, recommend the top item.
-5. **Write the artifact** at
+2. **Mode classification.** Explicitly classify subject:
+   \`repo-grounded\` / \`elsewhere-software\` / \`elsewhere-non-software\`.
+   Do not assume repo-grounded by default.
+3. **Mode-aware grounding (parallel).**
+   - Repo-grounded: repo signal scan + \`${RUNTIME_ROOT}/knowledge.jsonl\`
+     repetition scan.
+   - Elsewhere-software: docs-first grounding (Context7 and official docs).
+   - Elsewhere-non-software: constraints and objective grounding.
+4. **Divergent ideation frames (parallel).** Generate candidates with at least
+   4 distinct frames: pain/friction, inversion, assumption-break, leverage,
+   cross-domain analogy, constraint-flip.
+5. **Adversarial critique pass.** For each candidate, write the strongest
+   counter-argument, kill weak ideas, and keep survivors only.
+6. **Produce 5-10 survivors** with impact (High/Medium/Low),
+   effort (S/M/L), confidence (High/Medium/Low), and one evidence path per
+   survivor.
+7. **Rank by impact/effort**, recommend the top survivor.
+8. **Write the artifact** at
    \`${IDEATE_ARTIFACT_PATTERN}\` using the schema in the skill.
-6. **Present the handoff prompt** with four concrete options — not A/B/C
+9. **Present the handoff prompt** with four concrete options — not A/B/C
    letters. Default = "Start /cc on the top recommendation".
 
 ## Headless mode
@@ -105,7 +112,7 @@ repository. Will persist a ranked backlog to
 
 ## Protocol
 
-### Phase 0 — Resume check
+### Phase 0 — Resume and classify
 
 1. Use the harness's file-glob tool (\`Glob\` pattern
    \`${IDEATE_ARTIFACT_GLOB}\` or equivalent \`ls\`/\`find\`).
@@ -118,57 +125,102 @@ repository. Will persist a ranked backlog to
      on disk for history.
    - **Cancel** — stop; do not scan or write anything.
 4. If no recent artifact exists, proceed to Phase 1 silently.
+5. Classify the ideation mode before grounding:
+   - \`repo-grounded\` — explicitly tied to this repository.
+   - \`elsewhere-software\` — software problem not tied to this repository.
+   - \`elsewhere-non-software\` — process/business/non-software problem.
+6. Record the chosen mode in the artifact.
 
-### Phase 1 — Collect evidence
+### Phase 1 — Mode-aware grounding
 
-Scan the current repo. Examples of signals (not exhaustive):
+Run grounding in parallel where available:
 
-- \`rg -n 'TODO|FIXME|XXX|HACK|TBD'\` grouped by file.
-- Test-runner output (\`npm test\`, \`pytest\`, \`go test ./...\`) — note
-  failures, timeouts, deprecation warnings.
-- Module size outliers (\`wc -l\` or \`du\`) with weak direct test coverage.
-- Docs drift: check that \`README.md\` / \`docs/\` reference files that
-  still exist and flags/APIs that still match \`src/\`.
-- \`${RUNTIME_ROOT}/knowledge.jsonl\` entries with \`type: "heuristic"\`
-  or repeated \`subject:\` values.
+- For \`repo-grounded\`:
+  - \`rg -n 'TODO|FIXME|XXX|HACK|TBD'\` grouped by file.
+  - Test-runner output (\`npm test\`, \`pytest\`, \`go test ./...\`) — note
+    failures, timeouts, deprecation warnings.
+  - Module size outliers (\`wc -l\` or \`du\`) with weak direct test coverage.
+  - Docs drift: check that \`README.md\` / \`docs/\` reference files that still
+    exist and flags/APIs that still match \`src/\`.
+  - \`${RUNTIME_ROOT}/knowledge.jsonl\` entries with \`type: "heuristic"\`
+    or repeated \`subject:\` values.
+- For \`elsewhere-software\`:
+  - Gather current framework/library docs first.
+  - Add one comparison scan for established solutions.
+- For \`elsewhere-non-software\`:
+  - Capture objective, constraints, and measured friction before proposing fixes.
 
-Record each finding with the exact file path or command that produced it.
+Record each finding with exact evidence (path, command, or doc source).
 
-### Phase 2 — Build candidates
+### Phase 2 — Divergent ideation
 
-For each high-signal finding, construct a candidate:
+Generate candidate ideas by frame, in parallel when possible:
 
-- **ID** — \`I-1\`, \`I-2\`, …
-- **Title** — one short imperative phrase
-- **Impact** — High / Medium / Low
-- **Effort** — S / M / L
-- **Confidence** — High / Medium / Low
-- **Evidence** — path(s) or command output, inline if short
-- **Proposed handoff** — the exact \`/cc <phrase>\` the user would run
-  to act on this candidate
+- pain/friction
+- inversion
+- assumption-break
+- leverage
+- cross-domain analogy
+- constraint-flip
 
-Aim for 5–10 candidates. Do not invent candidates without evidence.
+Require at least 4 distinct frames in every run. Avoid frame-collapse
+(same idea rewritten 6 times). Keep raw outputs for auditability.
 
-### Phase 3 — Rank and write the artifact
+### Phase 3 — Critique all, keep survivors
 
-1. Sort by impact/effort ratio; break ties with confidence.
-2. Compute the artifact filename:
+For each raw candidate:
+
+- Write strongest argument **against** this idea.
+- Identify disqualifiers (duplicate, weak evidence, poor ROI, wrong timing).
+- Mark as \`survivor\` or \`critiqued-out\`.
+
+Only survivors advance to ranking.
+
+### Phase 4 — Rank and write the artifact
+
+1. Keep 5–10 survivors.
+2. For each survivor, include:
+   - **ID** — \`I-1\`, \`I-2\`, …
+   - **Title** — one short imperative phrase
+   - **Impact** — High / Medium / Low
+   - **Effort** — S / M / L
+   - **Confidence** — High / Medium / Low
+   - **Evidence** — path(s) or command output, inline if short
+   - **Counter-argument** — strongest concern that survived
+   - **Proposed handoff** — exact \`/cc <phrase>\`
+3. Sort by impact/effort ratio; break ties with confidence.
+4. Compute the artifact filename:
    - \`slug\` = first 3–5 words of the top recommendation, lowercase,
      non-alphanumeric collapsed to \`-\`, trimmed. When ideate mode is
      focus-hinted (user passed an argument), use the focus hint instead.
    - \`date\` = today in \`YYYY-MM-DD\` (local time).
    - Path = \`.cclaw/artifacts/ideate-<date>-<slug>.md\`.
-3. Use the harness's write-file tool (\`Write\`, \`apply_patch\`, or shell
+5. Use the harness's write-file tool (\`Write\`, \`apply_patch\`, or shell
    \`cat <<EOF > path\`) to create the artifact with this schema:
 
    \`\`\`markdown
    # Ideation — <date>
 
    **Focus:** <user-supplied focus or "open-ended scan">
+   **Mode:** <repo-grounded | elsewhere-software | elsewhere-non-software>
    **Generated:** <ISO-8601 timestamp>
+   **Frames used:** <comma-separated list>
+   **Raw candidates:** <N>
+   **Critiqued out:** <M>
    **Recommendation:** I-1
 
-   ## Ranked backlog
+   ## Grounding evidence
+
+   - <signal and evidence>
+   - ...
+
+   ## Critiqued out
+
+   | Idea | Why it was rejected |
+   |---|---|
+   | ... | ... |
+
+   ## Ranked survivors
 
    | ID | Improvement | Impact | Effort | Confidence | Evidence |
    |---|---|---|---|---|---|
@@ -179,14 +231,15 @@ Aim for 5–10 candidates. Do not invent candidates without evidence.
 
    ### I-1 — Fix feature-worktree test timeouts
    - **Evidence:** \`npm test\` hangs 40s on tests/unit/feature-system.test.ts:31.
+   - **Counter-argument:** Fix may hide deeper orchestration race.
    - **Handoff:** \`/cc Fix feature-worktree test timeouts on macOS\`
 
    ### I-2 — …
    \`\`\`
 
-4. Confirm in chat: "Wrote <path>."
+6. Confirm in chat: "Wrote <path>."
 
-### Phase 4 — Handoff prompt
+### Phase 5 — Handoff prompt
 
 Present **one** structured ask using the harness's native tool
 (${STRUCTURED_ASK_TOOLS}). Each option must name the concrete follow-up —
@@ -207,7 +260,7 @@ Required options, in this order:
 When the structured-ask tool is unavailable, fall back to a plain-text
 lettered list with the same four labels. Do not invent extra options.
 
-### Phase 5 — Execute the choice
+### Phase 6 — Execute the choice
 
 - **Start /cc on I-1** or **different candidate:** announce
   "Handing off to /cc <phrase>" and load the \`using-cclaw\` router
