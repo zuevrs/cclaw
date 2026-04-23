@@ -405,6 +405,32 @@ function detectHarness(env) {
   return "codex";
 }
 
+function hookEventNameForOutput(hookName) {
+  if (hookName === "session-start") return "SessionStart";
+  if (hookName === "prompt-guard") return "PreToolUse";
+  if (hookName === "workflow-guard") return "PreToolUse";
+  if (hookName === "context-monitor") return "PostToolUse";
+  if (hookName === "stop-checkpoint") return "Stop";
+  if (hookName === "pre-compact") return "PreCompact";
+  if (hookName === "verify-current-state") return "UserPromptSubmit";
+  return "SessionStart";
+}
+
+function emitAdvisoryContext(runtime, hookName, note) {
+  const normalized = normalizeText(note);
+  if (normalized.length === 0) return;
+  if (runtime.harness === "claude" || runtime.harness === "codex") {
+    runtime.writeJson({
+      hookSpecificOutput: {
+        hookEventName: hookEventNameForOutput(hookName),
+        additionalContext: normalized
+      }
+    });
+    return;
+  }
+  runtime.writeJson({ additional_context: normalized });
+}
+
 async function detectRoot(env) {
   const candidates = [
     env.CCLAW_PROJECT_ROOT,
@@ -1391,6 +1417,8 @@ async function handlePromptGuard(runtime) {
       reasons,
       note
     });
+    const advisoryNote = mode === "strict" ? note + " Blocked by strict mode." : note;
+    emitAdvisoryContext(runtime, "prompt-guard", advisoryNote);
     if (mode === "strict") {
       process.stderr.write("[cclaw] " + note + " (blocked by strict mode)\\n");
       return 1;
@@ -1904,9 +1932,11 @@ async function handleWorkflowGuard(runtime) {
     }
 
     if (shouldBlock) {
+      emitAdvisoryContext(runtime, "workflow-guard", note + " Blocked by workflow guard.");
       process.stderr.write("[cclaw] " + note + " (blocked by workflow guard)\\n");
       return 1;
     }
+    emitAdvisoryContext(runtime, "workflow-guard", note);
     process.stderr.write("[cclaw] " + note + "\\n");
   }
 
@@ -2005,6 +2035,7 @@ async function handleContextMonitor(runtime) {
       remainingPercent,
       note
     });
+    emitAdvisoryContext(runtime, "context-monitor", note);
     process.stderr.write("[cclaw] " + note + "\\n");
     nextAdvisoryBand = band;
     nextAdvisoryAt = now.toISOString();
@@ -2025,10 +2056,24 @@ async function handleVerifyCurrentState(runtime) {
   const mode = resolveStrictness();
   const result = await runCclawInternal(runtime.root, ["verify-current-state", "--quiet"]);
   if (result.missingBinary) {
+    emitAdvisoryContext(
+      runtime,
+      "verify-current-state",
+      "Cclaw verify-current-state requires cclaw binary on PATH."
+    );
     process.stderr.write("[cclaw] hook: cclaw binary is required for verify-current-state\\n");
     return 1;
   }
   if (mode === "strict") {
+    if (result.code !== 0) {
+      emitAdvisoryContext(
+        runtime,
+        "verify-current-state",
+        result.stderr.trim().length > 0
+          ? result.stderr.trim()
+          : "Cclaw verify-current-state failed in strict mode."
+      );
+    }
     if (result.code !== 0 && result.stderr.trim().length > 0) {
       process.stderr.write(result.stderr);
     }

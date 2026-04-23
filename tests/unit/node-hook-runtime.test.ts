@@ -363,6 +363,15 @@ describe("node hook runtime", () => {
     );
     expect(advisory.code).toBe(0);
     expect(advisory.stderr).toContain("Cclaw advisory");
+    const advisoryPayload = JSON.parse(advisory.stdout) as {
+      hookSpecificOutput?: { additionalContext?: string };
+      additional_context?: string;
+    };
+    const advisoryContext =
+      advisoryPayload.hookSpecificOutput?.additionalContext ??
+      advisoryPayload.additional_context ??
+      "";
+    expect(advisoryContext).toContain("potential risky write intent");
     const log = await fs.readFile(path.join(root, ".cclaw/state/prompt-guard.jsonl"), "utf8");
     expect(log).toContain("write_to_cclaw_runtime");
 
@@ -374,6 +383,15 @@ describe("node hook runtime", () => {
     );
     expect(strict.code).toBe(1);
     expect(strict.stderr).toContain("blocked by strict mode");
+    const strictPayload = JSON.parse(strict.stdout) as {
+      hookSpecificOutput?: { additionalContext?: string };
+      additional_context?: string;
+    };
+    const strictContext =
+      strictPayload.hookSpecificOutput?.additionalContext ??
+      strictPayload.additional_context ??
+      "";
+    expect(strictContext).toContain("Blocked by strict mode");
   });
 
   it("prompt-guard allows normal artifact writes", async () => {
@@ -567,6 +585,15 @@ exit 0
     );
     expect(first.code).toBe(0);
     expect(first.stderr).toContain("Cclaw advisory");
+    const firstPayload = JSON.parse(first.stdout) as {
+      hookSpecificOutput?: { additionalContext?: string };
+      additional_context?: string;
+    };
+    const firstContext =
+      firstPayload.hookSpecificOutput?.additionalContext ??
+      firstPayload.additional_context ??
+      "";
+    expect(firstContext).toContain("context remaining is");
 
     const second = await runNodeHook(
       root,
