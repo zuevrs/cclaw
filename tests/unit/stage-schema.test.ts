@@ -26,6 +26,7 @@ describe("stage schema and subagent alignment", () => {
       expect(schema.artifactRules.artifactValidation).toEqual(schema.artifactValidation);
       expect(schema.reviewLens.reviewSections).toEqual(schema.reviewSections);
       expect(schema.reviewLens.mandatoryDelegations).toEqual(schema.mandatoryDelegations);
+      expect(schema.reviewLens.reviewLoop).toEqual(schema.reviewLoop);
     }
   });
 
@@ -192,6 +193,25 @@ describe("stage schema and subagent alignment", () => {
     const researchGate = design.requiredGates.find((gate) => gate.id === "design_research_complete");
     expect(researchGate).toBeDefined();
     expect(researchGate?.tier).toBe("required");
+  });
+
+  it("scope and design expose shared review-loop config", () => {
+    const scope = stageSchema("scope");
+    const design = stageSchema("design");
+    const spec = stageSchema("spec");
+    expect(scope.reviewLoop).toMatchObject({
+      stage: "scope",
+      maxIterations: 3,
+      targetScore: 0.8
+    });
+    expect(scope.reviewLoop?.checklist).toHaveLength(5);
+    expect(design.reviewLoop).toMatchObject({
+      stage: "design",
+      maxIterations: 3,
+      targetScore: 0.8
+    });
+    expect(design.reviewLoop?.checklist).toHaveLength(5);
+    expect(spec.reviewLoop).toBeUndefined();
   });
 
   it("design template renders architecture diagram with clean triple-backtick fences", () => {

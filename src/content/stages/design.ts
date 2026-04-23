@@ -181,6 +181,18 @@ export const DESIGN: StageSchemaInput = {
       "What-already-exists section",
       "design completion dashboard"
     ],
+    reviewLoop: {
+      stage: "design",
+      checklist: [
+        "architecture_fit",
+        "failure_mode_coverage",
+        "test_coverage_realism",
+        "performance_budget",
+        "observability_adequacy"
+      ],
+      maxIterations: 3,
+      targetScore: 0.8
+    },
     reviewSections: [
       {
         title: "Architecture Review",

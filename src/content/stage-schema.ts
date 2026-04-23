@@ -19,6 +19,7 @@ import type {
   StageExecutionModel,
   StagePhilosophy,
   StageArtifactRules,
+  StageReviewLoop,
   StageReviewLens,
   StageAutoSubagentDispatch,
   StageGate,
@@ -38,6 +39,7 @@ export type {
   StageExecutionModel,
   StagePhilosophy,
   StageArtifactRules,
+  StageReviewLoop,
   StageReviewLens,
   StageAutoSubagentDispatch,
   StageGate,
@@ -309,6 +311,7 @@ function normalizeStageSchemaInput(value: StageSchemaInput): StageSchemaLegacyIn
     next: value.next,
     checklist: value.executionModel.checklist,
     reviewSections: value.reviewLens.reviewSections,
+    reviewLoop: value.reviewLens.reviewLoop,
     completionStatus: value.artifactRules.completionStatus,
     crossStageTrace: value.artifactRules.crossStageTrace,
     artifactValidation: value.artifactRules.artifactValidation,
@@ -545,7 +548,8 @@ export function stageSchema(stage: FlowStage, track: FlowTrack = "standard"): St
   const reviewLens: StageReviewLens = {
     outputs: base.outputs,
     reviewSections: base.reviewSections,
-    mandatoryDelegations
+    mandatoryDelegations,
+    reviewLoop: base.reviewLoop
   };
   return {
     ...base,
