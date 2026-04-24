@@ -408,7 +408,7 @@ export async function doctorChecks(projectRoot: string, options: DoctorOptions =
       { id: "routing_flow", pattern: /Routing flow/i, label: "Routing flow" },
       { id: "task_classification", pattern: /Task classification/i, label: "Task classification" },
       { id: "stage_map", pattern: /Stage quick map/i, label: "Stage quick map" },
-      { id: "protocol_refs", pattern: /Protocol references/i, label: "Protocol references" },
+      { id: "protocol_behavior", pattern: /Protocol Behavior/i, label: "Protocol Behavior" },
       { id: "knowledge_guidance", pattern: /Knowledge guidance/i, label: "Knowledge guidance" },
       { id: "failure_guardrails", pattern: /Failure guardrails/i, label: "Failure guardrails" }
     ];

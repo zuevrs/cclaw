@@ -74,21 +74,13 @@ All harnesses receive the same utility commands:
 - `/cc-next` - stage progression
 - `/cc-ideate` - ideate mode for ranked repo-improvement backlog
 - `/cc-view` - read-only router for status/tree/diff
-- `/cc-ops` - operations router for feature/tdd-log/retro/compound/archive/rewind
 
 Read-only subcommands:
 - `/cc-view status` - visual flow snapshot
 - `/cc-view tree` - deep flow tree (stages, artifacts, stale markers)
 - `/cc-view diff` - before/after flow-state diff map
 
-Operations subcommands:
-- `/cc-ops feature ...` - git-worktree feature isolation and routing
-- `/cc-ops tdd-log ...` - explicit RED/GREEN/REFACTOR evidence log
-- `/cc-ops retro` - mandatory retrospective gate before archive
-- `/cc-ops compound` - lift repeated learnings into durable rules/skills
-- `/cc-ops archive` - archive active run from harness flow
-- `/cc-ops rewind ...` - rewind flow and invalidate downstream stages
-- `/cc-ops rewind --ack ...` - clear stale stage markers after redo
+Operational work is handled by `/cc-next` and the CLI (`cclaw archive`, `cclaw internal ...`) rather than a separate slash-command router.
 
 Stage order remains canonical:
 `brainstorm -> scope -> design -> spec -> plan -> tdd -> review -> ship`
@@ -116,7 +108,6 @@ Always generated:
 
 - `.cclaw/commands/*.md`
 - `.cclaw/skills/*/SKILL.md`
-- `.cclaw/references/**`
 - `.cclaw/state/*.json|*.jsonl`
 - `AGENTS.md` managed block
 
@@ -125,7 +116,7 @@ Harness-specific additions:
 - `claude`: `.claude/commands/cc*.md`, `.claude/hooks/hooks.json`
 - `cursor`: `.cursor/commands/cc*.md`, `.cursor/hooks.json`, `.cursor/rules/cclaw-workflow.mdc`
 - `opencode`: `.opencode/commands/cc*.md`, `.opencode/plugins/cclaw-plugin.mjs`, opencode plugin registration (`permission.question: "allow"` + `OPENCODE_ENABLE_QUESTION_TOOL=1` so structured asks can route through ACP question tooling)
-- `codex`: `.agents/skills/cc/SKILL.md`, `.agents/skills/cc-next/SKILL.md`, `.agents/skills/cc-ideate/SKILL.md`, `.agents/skills/cc-view/SKILL.md`, `.agents/skills/cc-ops/SKILL.md`, `.codex/hooks.json` (Codex CLI reads `.agents/skills/` for custom skills and consumes `.codex/hooks.json` on v0.114+ when `[features] codex_hooks = true` is set in `~/.codex/config.toml`. `.codex/commands/` and the legacy `.agents/skills/cclaw-cc*/` layout from v0.39.x are auto-cleaned on sync.)
+- `codex`: `.agents/skills/cc/SKILL.md`, `.agents/skills/cc-next/SKILL.md`, `.agents/skills/cc-ideate/SKILL.md`, `.agents/skills/cc-view/SKILL.md`, `.codex/hooks.json` (Codex CLI reads `.agents/skills/` for custom skills and consumes `.codex/hooks.json` on v0.114+ when `[features] codex_hooks = true` is set in `~/.codex/config.toml`. `.codex/commands/` and the legacy `.agents/skills/cclaw-cc*/` layout from v0.39.x are auto-cleaned on sync.)
 
 ## Runtime observability
 

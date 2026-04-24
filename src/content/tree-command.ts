@@ -19,10 +19,6 @@ function rewindLogPath(): string {
   return `${RUNTIME_ROOT}/state/rewind-log.jsonl`;
 }
 
-function harnessPlaybooksDir(): string {
-  return `${RUNTIME_ROOT}/references/harnesses`;
-}
-
 export function treeCommandContract(): string {
   return `# /cc-view tree
 
@@ -44,8 +40,7 @@ and per-harness playbook availability.
 3. Detect artifact files in \`${artifactsPath()}\` (\`01-brainstorm.md\` …
    \`08-ship.md\` plus \`09-retro.md\`).
 4. Read rewind records from \`${rewindLogPath()}\` when present for stale-stage context.
-5. Inspect \`${harnessPlaybooksDir()}\` to confirm per-harness playbooks exist
-   for the installed harness set.
+5. Use \`cclaw doctor --explain\` for harness capability status when needed.
 6. Render the tree using stage order from active track:
    - stage node marker: passed/current/pending/skipped/stale
    - gate summary: \`passed/required\`
@@ -87,7 +82,7 @@ harnesses:
   \`shipSubstate === "idle"\`.
 - Delegations sub-branch is omitted when the stage has no mandatory agents.
 - Playbook marker is \`✗ missing\` when the file under
-  \`${harnessPlaybooksDir()}/<harness>-playbook.md\` is absent.
+  \`cclaw doctor --explain\` reports missing harness capability details.
 
 Use UTF markers by default, ASCII fallback when terminal cannot render UTF.
 
@@ -100,7 +95,7 @@ Use UTF markers by default, ASCII fallback when terminal cannot render UTF.
 export function treeCommandSkillMarkdown(): string {
   return `---
 name: ${TREE_SKILL_NAME}
-description: "Render a visual flow tree for stages, gates, delegations (fulfillmentMode), ship closeout substate, artifacts, and per-harness playbooks."
+description: "Render a visual flow tree for stages, gates, delegations (fulfillmentMode), ship closeout substate, artifacts, and harness status."
 ---
 
 # /cc-view tree
@@ -116,7 +111,7 @@ Do not modify state in this command. It is a pure read/render operation.
    \`fulfillmentMode\` / \`evidenceRefs\`.
 3. Inspect \`${artifactsPath()}\` for per-stage artifact presence and stale copies,
    and for the retro artifact \`09-retro.md\`.
-4. Inspect \`${harnessPlaybooksDir()}\` for \`<harness>-playbook.md\` files.
+4. Use \`cclaw doctor --explain\` for harness capability status when needed.
 5. Render one compact tree:
    - stage marker: passed/current/pending/skipped/stale,
    - gates summary,
@@ -133,7 +128,7 @@ Do not modify state in this command. It is a pure read/render operation.
      archive step failed mid-run.
 7. Append a \`harnesses:\` branch. For each installed harness derive the tier
    from the harness-gaps report and mark \`playbook ✓/✗ missing\` based on
-   \`${harnessPlaybooksDir()}/<harness>-playbook.md\` existence.
+  \`cclaw doctor --explain\` reports missing harness capability details.
 8. If rewind records exist in \`${rewindLogPath()}\`, include latest rewind note in footer.
 
 ## Validation

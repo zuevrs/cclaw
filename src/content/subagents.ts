@@ -75,10 +75,10 @@ can enforce phase-appropriate write boundaries.
 
 | Harness | Fallback | Delegation tool | Structured ask | Parity playbook |
 |---|---|---|---|---|
-| Claude | \`native\` | Task (named subagent_type) | AskUserQuestion | \`.cclaw/references/harnesses/claude-playbook.md\` |
-| Cursor | \`generic-dispatch\` | Task (generic subagent_type: explore/generalPurpose/…) | AskQuestion | \`.cclaw/references/harnesses/cursor-playbook.md\` |
-| OpenCode | \`role-switch\` | plugin dispatch _or_ in-session role-switch | \`question\` (permission-gated; \`permission.question: "allow"\`) | \`.cclaw/references/harnesses/opencode-playbook.md\` |
-| Codex | \`role-switch\` | in-session role-switch (mandatory evidenceRefs) | \`request_user_input\` (experimental; Plan / Collaboration mode) | \`.cclaw/references/harnesses/codex-playbook.md\` |
+| Claude | \`native\` | Task (named subagent_type) | AskUserQuestion | \`cclaw doctor\` |
+| Cursor | \`generic-dispatch\` | Task (generic subagent_type: explore/generalPurpose/…) | AskQuestion | \`cclaw doctor\` |
+| OpenCode | \`role-switch\` | plugin dispatch _or_ in-session role-switch | \`question\` (permission-gated; \`permission.question: "allow"\`) | \`cclaw doctor\` |
+| Codex | \`role-switch\` | in-session role-switch (mandatory evidenceRefs) | \`request_user_input\` (experimental; Plan / Collaboration mode) | \`cclaw doctor\` |
 
 **Dispatch rules driven by \`subagentFallback\`:**
 

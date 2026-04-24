@@ -1,10 +1,4 @@
 import { RUNTIME_ROOT } from "../constants.js";
-import { FLOW_MAP_REL_PATH } from "./flow-map.js";
-import {
-  COMPLETION_PROTOCOL_REL_PATH,
-  DECISION_PROTOCOL_REL_PATH,
-  ETHOS_PROTOCOL_REL_PATH
-} from "./protocols.js";
 
 export const META_SKILL_NAME = "using-cclaw";
 
@@ -99,27 +93,21 @@ Before stage work:
 brainstorm -> scope -> design -> spec -> plan -> tdd -> review -> ship
 
 Tracks may skip stages via \`flow-state.track\` + \`skippedStages\`.
-For the full surface (stages, routers, Ralph Loop, state files) load
-\`${FLOW_MAP_REL_PATH}\` — it is the single-page overview of cclaw.
+Use the current stage skill plus \`.cclaw/state/flow-state.json\` for orientation.
 
-## Contextual skill activation
+## Contextual Skill Activation
 
-Load utility skills only when triggered by the current task:
+Use built-in judgment only when triggered by the current task:
 
-- security, performance, debugging, docs, ci-cd
-- verification-before-completion before completion claims
-- finishing-a-development-branch during ship/finalization
-- document-review, receiving-code-review, and execution context skills
+- security, performance, debugging, docs, and CI/CD review lenses
+- verification discipline before completion claims
+- branch-finishing discipline during ship/finalization
 - iron-laws as policy arbitration when instructions conflict
 - language rule packs from \`.cclaw/config.yaml\` when enabled
 
-## Protocol references
+## Protocol Behavior
 
-Do not inline these protocols in stage skills; cite by path:
-
-- Decision protocol: \`${DECISION_PROTOCOL_REL_PATH}\`
-- Completion/resume protocol: \`${COMPLETION_PROTOCOL_REL_PATH}\`
-- Engineering ethos + announce discipline: \`${ETHOS_PROTOCOL_REL_PATH}\`
+Keep decision, completion, and preamble discipline inline: ask only decision-changing questions, verify gates before advancing, and keep context compact.
 
 ## Knowledge guidance
 

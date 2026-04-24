@@ -144,9 +144,7 @@ You MUST complete these steps in order:
 
 ## Examples
 
-Full artifact sample for this stage lives at \`.cclaw/references/stages/review-examples.md\`. Open it when you need a complete reference; do NOT paste the example into the artifact verbatim — it is a shape guide, not a template.
-
-Summary of what the reference covers:
+Shape cues to follow; do not paste these headings verbatim unless they match the work:
 - Spec-compliance findings (Layer 1)
 - Code-quality findings (Layer 2)
 - Severity, evidence, and status per finding
@@ -163,7 +161,7 @@ These are **rules for HOW you interact with the user** during this stage — ton
 4. For each Critical finding: use the Decision Protocol — present resolution options (A/B/C) with trade-offs, and mark one as (recommended). Do NOT use a numeric Completeness rubric; recommend the option that fully closes the finding with no carry-over risk and the smallest blast radius. If the harness's native structured-ask tool is available (\`AskUserQuestion\` on Claude, \`AskQuestion\` on Cursor, \`question\` on OpenCode with \`permission.question: "allow"\`, \`request_user_input\` on Codex in Plan/Collaboration mode), send exactly ONE question per call, validate fields against the runtime schema, and on schema error immediately fall back to a plain-text lettered list instead of retrying guessed payloads.
 5. Resolve all critical blockers before ship.
 
-Decision protocol reference: \`.cclaw/references/protocols/decision.md\`
+Decision protocol: ask only decision-changing questions, record the chosen option, rationale, risk, and rollback when the stage makes a non-trivial call.
 
 
 ## Required Gates
@@ -212,7 +210,7 @@ Keep this verification evidence in the artifact before completion.
 - Fill \`## Learnings\` before closeout: either \`- None this stage.\` or JSON bullets with required keys \`type\`, \`trigger\`, \`action\`, \`confidence\` (knowledge-schema compatible).
 - Record mandatory delegation completion/waiver in \`.cclaw/state/delegation-log.json\` with rationale as needed.
 - Use the completion helper instead of raw \`flow-state.json\` edits (legacy direct edits trigger workflow-guard warnings or strict-mode blocks).
-- Completion protocol reference: \`.cclaw/references/protocols/completion.md\`
+- Completion protocol: verify required gates, update the artifact, then use the completion helper.
 
 ## Artifact Rules
 - Artifact target: \`.cclaw/artifacts/07-review.md\`
@@ -312,16 +310,14 @@ Rule: Review verdict must reference specific spec criteria and TDD evidence. Dow
 
 
 ## Shared Stage Guidance
-See:
-- \`.cclaw/references/stages/common-guidance.md\`
-- \`.cclaw/references/protocols/decision.md\`
-- \`.cclaw/references/protocols/completion.md\`
+- Follow the handoff menu: advance, revise, pause, rewind, or archive only when the user explicitly chooses it.
+- Before closeout, fill \`## Learnings\` with \`- None this stage.\` or 1-3 strict JSON bullets.
+- Keep decisions explicit: context, options, chosen option, rationale, risk, and rollback.
 
 ## See Also
 - \`.cclaw/skills/using-cclaw/SKILL.md\`
 - \`.cclaw/skills/session/SKILL.md\`
 - \`.cclaw/skills/parallel-dispatch/SKILL.md\`
-- \`.cclaw/commands/review.md\`
 "
 `;
 
@@ -467,9 +463,7 @@ You MUST complete these steps in order:
 
 ## Examples
 
-Full artifact sample for this stage lives at \`.cclaw/references/stages/ship-examples.md\`. Open it when you need a complete reference; do NOT paste the example into the artifact verbatim — it is a shape guide, not a template.
-
-Summary of what the reference covers:
+Shape cues to follow; do not paste these headings verbatim unless they match the work:
 - Release checklist (version, changelog, tag, artifacts)
 - Rollback plan with trigger, steps, verification
 - Runbook (how to verify the release post-deploy)
@@ -486,7 +480,7 @@ These are **rules for HOW you interact with the user** during this stage — ton
 4. Do not proceed if critical blockers remain from review.
 5. **STOP.** Present finalization options and wait for user selection before executing any finalization action.
 
-Decision protocol reference: \`.cclaw/references/protocols/decision.md\`
+Decision protocol: ask only decision-changing questions, record the chosen option, rationale, risk, and rollback when the stage makes a non-trivial call.
 
 
 ## Required Gates
@@ -529,7 +523,7 @@ Keep this verification evidence in the artifact before completion.
 - Fill \`## Learnings\` before closeout: either \`- None this stage.\` or JSON bullets with required keys \`type\`, \`trigger\`, \`action\`, \`confidence\` (knowledge-schema compatible).
 - Record mandatory delegation completion/waiver in \`.cclaw/state/delegation-log.json\` with rationale as needed.
 - Use the completion helper instead of raw \`flow-state.json\` edits (legacy direct edits trigger workflow-guard warnings or strict-mode blocks).
-- Completion protocol reference: \`.cclaw/references/protocols/completion.md\`
+- Completion protocol: verify required gates, update the artifact, then use the completion helper.
 
 ## Artifact Rules
 - Artifact target: \`.cclaw/artifacts/08-ship.md\`
@@ -583,16 +577,14 @@ Rule: Ship artifact must reference review verdict and resolution status. Release
 
 
 ## Shared Stage Guidance
-See:
-- \`.cclaw/references/stages/common-guidance.md\`
-- \`.cclaw/references/protocols/decision.md\`
-- \`.cclaw/references/protocols/completion.md\`
+- Follow the handoff menu: advance, revise, pause, rewind, or archive only when the user explicitly chooses it.
+- Before closeout, fill \`## Learnings\` with \`- None this stage.\` or 1-3 strict JSON bullets.
+- Keep decisions explicit: context, options, chosen option, rationale, risk, and rollback.
 
 ## See Also
 - \`.cclaw/skills/using-cclaw/SKILL.md\`
 - \`.cclaw/skills/session/SKILL.md\`
 - Use release, docs, and verification discipline inline before finalization.
-- \`.cclaw/commands/ship.md\`
 "
 `;
 
@@ -734,9 +726,7 @@ You MUST complete these steps in order:
 
 ## Examples
 
-Full artifact sample for this stage lives at \`.cclaw/references/stages/plan-examples.md\`. Open it when you need a complete reference; do NOT paste the example into the artifact verbatim — it is a shape guide, not a template.
-
-Summary of what the reference covers:
+Shape cues to follow; do not paste these headings verbatim unless they match the work:
 - Dependency graph + dependency batches
 - Task list with effort + minutes estimate per task
 - Acceptance mapping (every AC → task IDs)
@@ -753,7 +743,7 @@ These are **rules for HOW you interact with the user** during this stage — ton
 4. Attach verification step to every task.
 5. Preserve locked scope boundaries: no silent scope reduction language in task rows.
 
-Decision protocol reference: \`.cclaw/references/protocols/decision.md\`
+Decision protocol: ask only decision-changing questions, record the chosen option, rationale, risk, and rollback when the stage makes a non-trivial call.
 
 
 ## Required Gates
@@ -789,7 +779,7 @@ Decision protocol reference: \`.cclaw/references/protocols/decision.md\`
 - Fill \`## Learnings\` before closeout: either \`- None this stage.\` or JSON bullets with required keys \`type\`, \`trigger\`, \`action\`, \`confidence\` (knowledge-schema compatible).
 - Record mandatory delegation completion/waiver in \`.cclaw/state/delegation-log.json\` with rationale as needed.
 - Use the completion helper instead of raw \`flow-state.json\` edits (legacy direct edits trigger workflow-guard warnings or strict-mode blocks).
-- Completion protocol reference: \`.cclaw/references/protocols/completion.md\`
+- Completion protocol: verify required gates, update the artifact, then use the completion helper.
 
 ## Artifact Rules
 - Artifact target: \`.cclaw/artifacts/05-plan.md\`
@@ -853,17 +843,15 @@ Rule: Every task must trace to a spec acceptance criterion. Every locked scope d
 
 
 ## Shared Stage Guidance
-See:
-- \`.cclaw/references/stages/common-guidance.md\`
-- \`.cclaw/references/protocols/decision.md\`
-- \`.cclaw/references/protocols/completion.md\`
+- Follow the handoff menu: advance, revise, pause, rewind, or archive only when the user explicitly chooses it.
+- Before closeout, fill \`## Learnings\` with \`- None this stage.\` or 1-3 strict JSON bullets.
+- Keep decisions explicit: context, options, chosen option, rationale, risk, and rollback.
 
 ## See Also
 - \`.cclaw/skills/using-cclaw/SKILL.md\`
 - \`.cclaw/skills/session/SKILL.md\`
 - \`.cclaw/skills/subagent-dev/SKILL.md\`
 - \`.cclaw/skills/parallel-dispatch/SKILL.md\`
-- \`.cclaw/commands/plan.md\`
 "
 `;
 
@@ -1012,9 +1000,7 @@ You MUST complete these steps in order:
 
 ## Examples
 
-Full artifact sample for this stage lives at \`.cclaw/references/stages/tdd-examples.md\`. Open it when you need a complete reference; do NOT paste the example into the artifact verbatim — it is a shape guide, not a template.
-
-Summary of what the reference covers:
+Shape cues to follow; do not paste these headings verbatim unless they match the work:
 - RED evidence per slice (failing test output)
 - Acceptance mapping per slice
 - GREEN evidence (full-suite pass)
@@ -1032,7 +1018,7 @@ These are **rules for HOW you interact with the user** during this stage — ton
 4. Capture and store failing output as RED evidence.
 5. Apply minimal change to satisfy RED tests (GREEN).
 
-Decision protocol reference: \`.cclaw/references/protocols/decision.md\`
+Decision protocol: ask only decision-changing questions, record the chosen option, rationale, risk, and rollback when the stage makes a non-trivial call.
 
 ## Batch Execution Mode
 
@@ -1042,7 +1028,7 @@ Apply concise turn announces: one announce per batch boundary (or when risk/plan
 changes materially), then execute tasks without repetitive boilerplate.
 
 Detailed walkthrough:
-\`.cclaw/references/stages/tdd-batch-walkthrough.md\`
+Use the current plan artifact for batch order and keep RED -> GREEN -> REFACTOR evidence in the TDD artifact.
 
 ## Required Gates
 - \`tdd_red_test_written\` — Failing tests exist before implementation changes.
@@ -1091,7 +1077,7 @@ Keep this verification evidence in the artifact before completion.
 - Fill \`## Learnings\` before closeout: either \`- None this stage.\` or JSON bullets with required keys \`type\`, \`trigger\`, \`action\`, \`confidence\` (knowledge-schema compatible).
 - Record mandatory delegation completion/waiver in \`.cclaw/state/delegation-log.json\` with rationale as needed.
 - Use the completion helper instead of raw \`flow-state.json\` edits (legacy direct edits trigger workflow-guard warnings or strict-mode blocks).
-- Completion protocol reference: \`.cclaw/references/protocols/completion.md\`
+- Completion protocol: verify required gates, update the artifact, then use the completion helper.
 
 ## Artifact Rules
 - Artifact target: \`.cclaw/artifacts/06-tdd.md\`
@@ -1174,16 +1160,14 @@ Rule: Every RED test traces to a plan task. Every GREEN change traces to a RED t
 
 
 ## Shared Stage Guidance
-See:
-- \`.cclaw/references/stages/common-guidance.md\`
-- \`.cclaw/references/protocols/decision.md\`
-- \`.cclaw/references/protocols/completion.md\`
+- Follow the handoff menu: advance, revise, pause, rewind, or archive only when the user explicitly chooses it.
+- Before closeout, fill \`## Learnings\` with \`- None this stage.\` or 1-3 strict JSON bullets.
+- Keep decisions explicit: context, options, chosen option, rationale, risk, and rollback.
 
 ## See Also
 - \`.cclaw/skills/using-cclaw/SKILL.md\`
 - \`.cclaw/skills/session/SKILL.md\`
 - Use RED -> GREEN -> REFACTOR evidence in the artifact; debug in-session when tests fail.
-- \`.cclaw/commands/tdd.md\`
 "
 `;
 
@@ -1341,9 +1325,7 @@ You MUST complete these steps in order:
 
 ## Examples
 
-Full artifact sample for this stage lives at \`.cclaw/references/stages/brainstorm-examples.md\`. Open it when you need a complete reference; do NOT paste the example into the artifact verbatim — it is a shape guide, not a template.
-
-Summary of what the reference covers:
+Shape cues to follow; do not paste these headings verbatim unless they match the work:
 - Problem framing (problem, success, constraints)
 - Candidate approaches with trade-offs
 - Recommended direction + open questions
@@ -1360,7 +1342,7 @@ These are **rules for HOW you interact with the user** during this stage — ton
 4. After 2-3 questions, summarize your emerging understanding before continuing so the user can correct course early.
 5. Each question should change a concrete design decision. Litmus test: if the two most likely answers do not lead to different architectures, make the choice yourself and state it.
 
-Decision protocol reference: \`.cclaw/references/protocols/decision.md\`
+Decision protocol: ask only decision-changing questions, record the chosen option, rationale, risk, and rollback when the stage makes a non-trivial call.
 
 
 ## Required Gates
@@ -1398,7 +1380,7 @@ Decision protocol reference: \`.cclaw/references/protocols/decision.md\`
 - Fill \`## Learnings\` before closeout: either \`- None this stage.\` or JSON bullets with required keys \`type\`, \`trigger\`, \`action\`, \`confidence\` (knowledge-schema compatible).
 - Record mandatory delegation completion/waiver in \`.cclaw/state/delegation-log.json\` with rationale as needed.
 - Use the completion helper instead of raw \`flow-state.json\` edits (legacy direct edits trigger workflow-guard warnings or strict-mode blocks).
-- Completion protocol reference: \`.cclaw/references/protocols/completion.md\`
+- Completion protocol: verify required gates, update the artifact, then use the completion helper.
 
 ## Artifact Rules
 - Artifact target: \`.cclaw/artifacts/01-brainstorm-<slug>.md\`
@@ -1439,15 +1421,13 @@ Rule: Scope and design decisions must trace back to explored context and approve
 
 
 ## Shared Stage Guidance
-See:
-- \`.cclaw/references/stages/common-guidance.md\`
-- \`.cclaw/references/protocols/decision.md\`
-- \`.cclaw/references/protocols/completion.md\`
+- Follow the handoff menu: advance, revise, pause, rewind, or archive only when the user explicitly chooses it.
+- Before closeout, fill \`## Learnings\` with \`- None this stage.\` or 1-3 strict JSON bullets.
+- Keep decisions explicit: context, options, chosen option, rationale, risk, and rollback.
 
 ## See Also
 - \`.cclaw/skills/using-cclaw/SKILL.md\`
 - \`.cclaw/skills/session/SKILL.md\`
 - \`.cclaw/skills/learnings/SKILL.md\`
-- \`.cclaw/commands/brainstorm.md\`
 "
 `;

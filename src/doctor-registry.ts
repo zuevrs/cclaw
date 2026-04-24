@@ -1,5 +1,3 @@
-import { DOCTOR_REFERENCE_DIR } from "./content/doctor-references.js";
-
 export type DoctorSeverity = "error" | "warning" | "info";
 
 export interface DoctorCheckMetadata {
@@ -15,7 +13,7 @@ interface DoctorRegistryRule {
 }
 
 function ref(fileName: string): string {
-  return `${DOCTOR_REFERENCE_DIR}/${fileName}`;
+  return `docs/${fileName}`;
 }
 
 const RULES: DoctorRegistryRule[] = [
@@ -25,7 +23,7 @@ const RULES: DoctorRegistryRule[] = [
       severity: "info",
       summary: "Gate reconciliation status update.",
       fix: "No action required unless subsequent gate checks fail.",
-      docRef: ref("state-and-gates.md")
+      docRef: ref("config.md")
     }
   },
   {
@@ -34,7 +32,7 @@ const RULES: DoctorRegistryRule[] = [
       severity: "warning",
       summary: "Advisory signal; runtime can continue with caution.",
       fix: "Address when possible to prevent future drift or degraded behavior.",
-      docRef: ref("README.md")
+      docRef: "README.md"
     }
   },
   {
@@ -43,7 +41,7 @@ const RULES: DoctorRegistryRule[] = [
       severity: "warning",
       summary: "Stage skill quality guardrail check.",
       fix: "Tune generated stage skill content and re-run `cclaw sync`.",
-      docRef: ref("runtime-layout.md")
+      docRef: "README.md"
     }
   },
   {
@@ -52,7 +50,7 @@ const RULES: DoctorRegistryRule[] = [
       severity: "error",
       summary: "Required runtime tooling availability check.",
       fix: "Install the missing required tool and re-run `cclaw doctor`.",
-      docRef: ref("tooling-capabilities.md")
+      docRef: "README.md"
     }
   },
   {
@@ -61,7 +59,7 @@ const RULES: DoctorRegistryRule[] = [
       severity: "error",
       summary: "Generated runtime surface presence check.",
       fix: "Run `cclaw sync` to regenerate runtime files, then re-run doctor.",
-      docRef: ref("runtime-layout.md")
+      docRef: "README.md"
     }
   },
   {
@@ -70,7 +68,7 @@ const RULES: DoctorRegistryRule[] = [
       severity: "error",
       summary: "Hook wiring and lifecycle integration check.",
       fix: "Repair hook/plugin wiring (usually via `cclaw sync`) and validate harness config.",
-      docRef: ref("hooks-and-lifecycle.md")
+      docRef: ref("harnesses.md")
     }
   },
   {
@@ -79,7 +77,7 @@ const RULES: DoctorRegistryRule[] = [
       severity: "error",
       summary: "Harness shim and routing file consistency check.",
       fix: "Regenerate harness adapters via `cclaw sync`; confirm enabled harness list.",
-      docRef: ref("harness-and-routing.md")
+      docRef: ref("harnesses.md")
     }
   },
   {
@@ -88,7 +86,7 @@ const RULES: DoctorRegistryRule[] = [
       severity: "error",
       summary: "Flow state and gate evidence consistency check.",
       fix: "Repair flow-state artifacts and gate evidence, then run `cclaw doctor --reconcile-gates`.",
-      docRef: ref("state-and-gates.md")
+      docRef: ref("config.md")
     }
   },
   {
@@ -97,7 +95,7 @@ const RULES: DoctorRegistryRule[] = [
       severity: "error",
       summary: "Knowledge and artifact runtime integrity check.",
       fix: "Restore missing runtime files under `.cclaw/` or re-run `cclaw sync`.",
-      docRef: ref("runtime-layout.md")
+      docRef: "README.md"
     }
   },
   {
@@ -106,7 +104,7 @@ const RULES: DoctorRegistryRule[] = [
       severity: "error",
       summary: "Routing skill and protocol integrity check.",
       fix: "Regenerate runtime references and skills via `cclaw sync`, then re-run doctor.",
-      docRef: ref("harness-and-routing.md")
+      docRef: ref("harnesses.md")
     }
   },
   {
@@ -121,7 +119,7 @@ const RULES: DoctorRegistryRule[] = [
       severity: "warning",
       summary: "Reference/overview doc integrity (non-blocking).",
       fix: "Run `cclaw sync` to regenerate the reference doc from the canonical source.",
-      docRef: ref("harness-and-routing.md")
+      docRef: ref("harnesses.md")
     }
   },
   {
@@ -163,7 +161,7 @@ export function doctorCheckMetadata(checkName: string): DoctorCheckMetadata {
     severity: "error",
     summary: "Unclassified doctor check.",
     fix: "Report this check name to cclaw maintainers so doctor-registry can classify it explicitly.",
-    docRef: ref("README.md")
+    docRef: "README.md"
   };
 }
 

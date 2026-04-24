@@ -1,7 +1,3 @@
-import { RUNTIME_ROOT } from "../constants.js";
-
-export const STAGE_COMMON_GUIDANCE_REL_PATH = `${RUNTIME_ROOT}/references/stages/common-guidance.md`;
-
 export function stageCommonGuidanceMarkdown(): string {
   return `# Common Stage Guidance
 

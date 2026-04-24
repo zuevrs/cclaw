@@ -724,10 +724,7 @@ export function stageExamplesReferenceMarkdown(stage: FlowStage): string | null 
 }
 
 /**
- * Returns the short inline pointer rendered directly inside the stage skill.
- * Replaces the previous always-inline ~50-100 line fenced block and
- * delivers true progressive disclosure: the full example lives in a
- * reference file loaded on demand.
+ * Returns short inline shape cues rendered directly inside the stage skill.
  */
 export function stageExamples(stage: FlowStage): string {
   const examples = STAGE_EXAMPLES[stage];
@@ -735,9 +732,7 @@ export function stageExamples(stage: FlowStage): string {
   return [
     "## Examples",
     "",
-    `Full artifact sample for this stage lives at \`${stageExamplesReferencePath(stage)}\`. Open it when you need a complete reference; do NOT paste the example into the artifact verbatim — it is a shape guide, not a template.`,
-    "",
-    "Summary of what the reference covers:",
+    "Shape cues to follow; do not paste these headings verbatim unless they match the work:",
     ...exampleSummaryBullets(stage),
     ""
   ].join("\n");

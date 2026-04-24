@@ -960,8 +960,6 @@ async function readLatestContextWarningLine(filePath) {
 async function handleSessionStart(runtime) {
   const state = await readFlowState(runtime.root);
   const stateDir = path.join(runtime.root, RUNTIME_ROOT, "state");
-  const contextsDir = path.join(runtime.root, RUNTIME_ROOT, "contexts");
-  const activeFeatureFile = path.join(stateDir, "active-feature.json");
   const checkpointFile = path.join(stateDir, "checkpoint.json");
   const activityFile = path.join(stateDir, "stage-activity.jsonl");
   const contextWarningsFile = path.join(stateDir, "context-warnings.jsonl");
@@ -971,27 +969,12 @@ async function handleSessionStart(runtime) {
   const sessionDigestFile = path.join(stateDir, "session-digest.md");
   const metaSkillFile = path.join(runtime.root, RUNTIME_ROOT, "skills", "using-cclaw", "SKILL.md");
 
-  const activeFeatureObj = toObject(await readJsonFile(activeFeatureFile, {})) || {};
-  const activeFeature =
-    typeof activeFeatureObj.activeFeature === "string" && activeFeatureObj.activeFeature.length > 0
-      ? activeFeatureObj.activeFeature
-      : "default";
-
   const contextModeObj = toObject(await readJsonFile(contextModeFile, {})) || {};
   const activeContextMode =
     typeof contextModeObj.activeMode === "string" && contextModeObj.activeMode.length > 0
       ? contextModeObj.activeMode
       : "default";
-  const contextGuidePath = path.join(contextsDir, activeContextMode + ".md");
-  const contextModeNote = (await fileExists(contextGuidePath))
-    ? "Context mode: " +
-      activeContextMode +
-      " (guide: " +
-      RUNTIME_ROOT +
-      "/contexts/" +
-      activeContextMode +
-      ".md)"
-    : "Context mode: " + activeContextMode;
+  const contextModeNote = "Context mode: " + activeContextMode;
 
   const checkpointObj = toObject(await readJsonFile(checkpointFile, {})) || {};
   const checkpointSummary = Object.keys(checkpointObj).length > 0
@@ -1151,15 +1134,9 @@ async function handleSessionStart(runtime) {
       String(state.completedCount) +
       "/8 completed, run=" +
       state.activeRunId +
-      ", feature=" +
-      activeFeature +
       "). Active artifacts: " +
       RUNTIME_ROOT +
-      "/artifacts/. Feature registry: " +
-      RUNTIME_ROOT +
-      "/state/worktrees.json (managed roots: " +
-      RUNTIME_ROOT +
-      "/worktrees/). Learnings: " +
+      "/artifacts/. Learnings: " +
       String(knowledge.learningsCount) +
       " entries."
   ];

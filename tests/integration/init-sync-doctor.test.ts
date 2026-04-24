@@ -158,7 +158,7 @@ describe("install lifecycle", { timeout: 30_000 }, () => {
     expect(configCheck).toBeDefined();
     expect(configCheck?.severity).toBe("error");
     expect(configCheck?.fix.length).toBeGreaterThan(0);
-    expect(configCheck?.docRef).toContain(".cclaw/references/doctor/");
+    expect(configCheck?.docRef).toContain("docs/config-and-policy.md");
 
     expect(warningCheck).toBeDefined();
     expect(warningCheck?.severity).toBe("warning");
@@ -193,7 +193,6 @@ describe("install lifecycle", { timeout: 30_000 }, () => {
       "runs:",
       "flow_state:",
       "state:",
-      "contexts:",
       "gates:",
       "trace:",
       "delegation:",

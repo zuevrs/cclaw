@@ -146,9 +146,7 @@ Compound-stage clustering policy.
 - `recurrenceThreshold` (positive integer, default `3`) — base minimum repeat
 count for trigger/action clusters before lift candidates are proposed.
 
-Runtime tuning applied everywhere compound readiness is computed (the
-`/cc-ops compound` skill, `cclaw internal compound-readiness`, and the
-session-start hook that writes `.cclaw/state/compound-readiness.json`):
+Runtime tuning applied everywhere compound readiness is computed (`cclaw internal compound-readiness` and the session-start hook that writes derived readiness status when needed):
 
 - For repositories with `< 5` archived runs under `.cclaw/runs/`, the
 effective threshold is temporarily lowered to

@@ -93,7 +93,7 @@ describe("flow command contracts", () => {
     await expect(fs.stat(path.join(root, ".codex/commands"))).rejects.toThrow(/ENOENT/);
   });
 
-  it("keeps completion protocol externalized and stage parameters explicit", async () => {
+  it("keeps completion protocol inline and stage parameters explicit", async () => {
     const root = await createTempProject("delegation-protocol");
     await initCclaw({ projectRoot: root });
 
@@ -110,7 +110,7 @@ describe("flow command contracts", () => {
       "utf8"
     );
 
-    expect(scopeSkill).toContain("`.cclaw/references/protocols/completion.md`");
+    expect(scopeSkill).toContain("Completion protocol: verify required gates");
     expect(scopeSkill).toContain("`mandatory delegations`");
     expect(scopeSkill).toContain("`planner`");
     expect(designSkill).toContain("`mandatory delegations`");
@@ -118,7 +118,7 @@ describe("flow command contracts", () => {
     expect(brainstormSkill).toContain("`mandatory delegations`: none");
   });
 
-  it("routes meta skill to shared protocol references", async () => {
+  it("routes meta skill to inline protocol behavior", async () => {
     const root = await createTempProject("doctor-protocol");
     await initCclaw({ projectRoot: root });
 
@@ -126,9 +126,9 @@ describe("flow command contracts", () => {
       path.join(root, ".cclaw/skills/using-cclaw/SKILL.md"),
       "utf8"
     );
-    expect(metaSkill).toContain("Protocol references");
-    expect(metaSkill).toContain(".cclaw/references/protocols/decision.md");
-    expect(metaSkill).toContain(".cclaw/references/protocols/completion.md");
+    expect(metaSkill).toContain("Protocol Behavior");
+    expect(metaSkill).toContain("ask only decision-changing questions");
+    expect(metaSkill).toContain("verify gates before advancing");
   });
 
   it("requires spec skill to chunk acceptance criteria for sign-off", async () => {
@@ -148,7 +148,7 @@ describe("flow command contracts", () => {
     );
   });
 
-  it("keeps flow-map references in meta-skill and /cc-next pointers", async () => {
+  it("keeps compact orientation pointers in meta-skill and /cc-next", async () => {
     const root = await createTempProject("flow-map-ref");
     await initCclaw({ projectRoot: root });
 
@@ -156,13 +156,13 @@ describe("flow command contracts", () => {
       path.join(root, ".cclaw/skills/using-cclaw/SKILL.md"),
       "utf8"
     );
-    expect(metaSkill).toContain(".cclaw/references/flow-map.md");
+    expect(metaSkill).toContain(".cclaw/state/flow-state.json");
 
     const nextCommand = await fs.readFile(
       path.join(root, ".cclaw/commands/next.md"),
       "utf8"
     );
-    expect(nextCommand).toContain(".cclaw/references/flow-map.md");
+    expect(nextCommand).toContain(".cclaw/state/flow-state.json");
   });
 
   it("requires the meta-skill to declare a skill-before-response gate", async () => {
@@ -181,7 +181,7 @@ describe("flow command contracts", () => {
     expect(metaSkill).toContain("/cc");
   });
 
-  it("includes shared guidance references in spec and plan skills", async () => {
+  it("includes inline shared guidance in spec and plan skills", async () => {
     const root = await createTempProject("spec-anti");
     await initCclaw({ projectRoot: root });
 
@@ -193,8 +193,10 @@ describe("flow command contracts", () => {
       path.join(root, ".cclaw/skills/planning-and-task-breakdown/SKILL.md"),
       "utf8"
     );
-    expect(specSkill).toContain("common-guidance.md");
-    expect(planSkill).toContain("common-guidance.md");
+    expect(specSkill).toContain("## Shared Stage Guidance");
+    expect(specSkill).toContain("Keep decisions explicit");
+    expect(planSkill).toContain("## Shared Stage Guidance");
+    expect(planSkill).toContain("Keep decisions explicit");
   });
 
   it("includes review sections in spec and plan skills", async () => {
@@ -228,7 +230,7 @@ describe("flow command contracts", () => {
     expect(planSkill).toContain("`mandatory delegations`");
   });
 
-  it("references decision protocol in design and spec skills", async () => {
+  it("inlines decision protocol in design and spec skills", async () => {
     const root = await createTempProject("ambiguity");
     await initCclaw({ projectRoot: root });
 
@@ -240,8 +242,8 @@ describe("flow command contracts", () => {
       path.join(root, ".cclaw/skills/specification-authoring/SKILL.md"),
       "utf8"
     );
-    expect(designSkill).toContain(".cclaw/references/protocols/decision.md");
-    expect(specSkill).toContain(".cclaw/references/protocols/decision.md");
+    expect(designSkill).toContain("Decision protocol: ask only decision-changing questions");
+    expect(specSkill).toContain("Decision protocol: ask only decision-changing questions");
   });
 
   it("matches golden snapshots for strict-stage content", async () => {

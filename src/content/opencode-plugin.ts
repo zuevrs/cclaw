@@ -19,7 +19,6 @@ export default function cclawPlugin(ctx) {
   const activityPath = join(stateDir, "stage-activity.jsonl");
   const contextWarningsPath = join(stateDir, "context-warnings.jsonl");
   const contextModePath = join(stateDir, "context-mode.json");
-  const contextsDir = join(runtimeDir, "contexts");
   const sessionDigestPath = join(stateDir, "session-digest.md");
   const knowledgePath = join(runtimeDir, "knowledge.jsonl");
   const knowledgeDigestPath = join(stateDir, "knowledge-digest.md");
@@ -108,9 +107,7 @@ export default function cclawPlugin(ctx) {
     } catch {
       // keep default
     }
-    const guidePath = join(contextsDir, mode + ".md");
-    const guide = existsSync(guidePath) ? "${RUNTIME_ROOT}/contexts/" + mode + ".md" : "";
-    return { mode, guide };
+    return { mode };
   }
 
   async function readRecentActivity() {

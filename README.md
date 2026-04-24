@@ -166,7 +166,7 @@ Full key-by-key reference: [`docs/config.md`](./docs/config.md).
 
 All four appear as slash commands in every supported harness. This is the
 top-level user surface — everything else is either automatic or happens
-inside `/cc-ops` subcommands.
+inside `/cc-next`, automatic closeout, or `cclaw archive`.
 
 | Command | What it does |
 |---|---|
@@ -175,11 +175,7 @@ inside `/cc-ops` subcommands.
 | **`/cc-ideate`** | Repository improvement ideate mode. Scans for TODOs, flaky tests, oversized modules, docs drift, and recurring knowledge-store lessons, **persists the ranked backlog** to `.cclaw/artifacts/ideate-<date>-<slug>.md`, and ends with a concrete handoff: launch `/cc` on the selected candidate in the same session, save-and-close, or discard. Resume check on next run reuses any ideate artifact younger than 30 days. Never mutates `flow-state.json`. |
 | **`/cc-view`** | Read-only flow visibility. `/cc-view status` (default) shows stage progress, mandatory delegations with their fulfillment mode (isolated / generic-dispatch / role-switch), the ship closeout substate (retro → compound → archive), and the active harness parity row. `/cc-view tree` renders the same picture as a tree with a closeout sub-branch under ship and a per-harness playbook summary. `/cc-view diff` shows stage/gate/closeout/delegation deltas since the last run. Never mutates state (except diff's snapshot baseline). |
 
-> Power-user surface: `/cc-ops` is an operational router for manual
-> overrides (rewind a stale stage, manage parallel features, re-run a
-> compound pass). `/cc-learn` is the strict-schema knowledge writer —
-> agents call it automatically from completion protocols; you rarely
-> invoke it by hand.
+Operational extras stay off the slash-command surface: `/cc-next` handles progression and closeout, while `cclaw archive` handles explicit archival/reset.
 
 ### Example first-run
 
@@ -305,9 +301,7 @@ it into ceremony:
 - **Mandatory subagent delegation** at TDD, with per-harness waivers.
 - **Turn Announce Discipline.** Every stage entry/exit emits a visible
   line so users can see what the agent is doing, not just what it says.
-- **Extracted protocols.** Decision, Completion, and Ethos protocols live
-  in a single place (`.cclaw/contexts/`), so every skill speaks the same
-  dialect.
+- **Inline protocols.** Decision, Completion, and Ethos discipline is embedded in the active stage skill so users do not need to chase generated reference files.
 - **Knowledge capture throughout the flow.** Every stage completion
   protocol emits typed entries (`rule` / `pattern` / `lesson`) to
   `.cclaw/knowledge.jsonl` as the flow progresses — not only at retro.
@@ -368,9 +362,7 @@ If your session dies mid-closeout, a new `/cc-next` resumes at the
 exact step — retro drafts are not regenerated and no structured ask is
 repeated silently.
 
-You can still invoke each step manually (`/cc-ops retro`, `/cc-ops
-compound`, `/cc-ops archive`), but for the default path you do not need
-to: `/cc-next` is the only command.
+For the default path, `/cc-next` is the only command; explicit archival/reset remains available through `cclaw archive`.
 
 ---
 
@@ -411,7 +403,7 @@ What the fallbacks mean:
 > (Jan 2026), but Codex ≥ v0.114 (Mar 2026) grew an experimental
 > lifecycle hooks API. cclaw installs Codex entry points as native
 > **skills** under `.agents/skills/cc*/SKILL.md` (invoke with `/use cc`,
-> `/use cc-next`, `/use cc-view`, `/use cc-ops`, `/use cc-ideate`, or
+> `/use cc-next`, `/use cc-view`, `/use cc-ideate`, or
 > by typing `/cc …` in plain text — Codex auto-matches from the skill
 > description) **and** writes `.codex/hooks.json` so session-start
 > rehydration, stop-checkpoint, prompt-guard, workflow-guard, and

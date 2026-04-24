@@ -414,7 +414,7 @@ describe("stage schema and subagent alignment", () => {
 
   it("brainstorm example is a valid artifact when copy-pasted verbatim", async () => {
     const inlinePointer = stageExamples("brainstorm");
-    expect(inlinePointer).toContain(".cclaw/references/stages/brainstorm-examples.md");
+    expect(inlinePointer).toContain("Shape cues to follow");
 
     const reference = stageExamplesReferenceMarkdown("brainstorm");
     expect(reference, "stage examples reference should exist").toBeTruthy();

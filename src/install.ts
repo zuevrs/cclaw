@@ -54,9 +54,6 @@ import {
   LEGACY_LANGUAGE_RULE_PACK_FOLDERS
 } from "./content/utility-skills.js";
 import { RESEARCH_PLAYBOOKS } from "./content/research-playbooks.js";
-import {
-  HARNESS_PLAYBOOKS_DIR
-} from "./content/harness-playbooks.js";
 import { HOOK_EVENTS_BY_HARNESS, HOOK_SEMANTIC_EVENTS } from "./content/hook-events.js";
 import { createInitialFlowState, type FlowState } from "./flow-state.js";
 import { ensureDir, exists, writeFileSafe } from "./fs-utils.js";

@@ -118,11 +118,11 @@ export async function policyChecks(projectRoot: string, options: PolicyOptions =
     { file: runtimeFile("skills/using-cclaw/SKILL.md"), needle: "## Routing flow", name: "meta_skill:routing_flow" },
     { file: runtimeFile("skills/using-cclaw/SKILL.md"), needle: "## Task classification", name: "meta_skill:task_classification" },
     { file: runtimeFile("skills/using-cclaw/SKILL.md"), needle: "## Stage quick map", name: "meta_skill:stage_quick_map" },
-    { file: runtimeFile("skills/using-cclaw/SKILL.md"), needle: "## Contextual skill activation", name: "meta_skill:contextual_skills" },
-    { file: runtimeFile("skills/using-cclaw/SKILL.md"), needle: "## Protocol references", name: "meta_skill:protocol_refs" },
+    { file: runtimeFile("skills/using-cclaw/SKILL.md"), needle: "## Contextual Skill Activation", name: "meta_skill:contextual_skills" },
+    { file: runtimeFile("skills/using-cclaw/SKILL.md"), needle: "## Protocol Behavior", name: "meta_skill:protocol_behavior" },
     { file: runtimeFile("skills/using-cclaw/SKILL.md"), needle: "## Failure guardrails", name: "meta_skill:failure_guardrails" },
     { file: runtimeFile("skills/session/SKILL.md"), needle: "## Session Resume Protocol", name: "utility_skill:session:resume" },
-    { file: runtimeFile("skills/brainstorming/SKILL.md"), needle: "common-guidance.md", name: "stage_skill:shared_guidance_reference" },
+    { file: runtimeFile("skills/brainstorming/SKILL.md"), needle: "## Shared Stage Guidance", name: "stage_skill:shared_guidance_inline" },
 
 
     { file: runtimeFile("hooks/run-hook.mjs"), needle: "activeRunId", name: "hooks:session_start:active_run" },

@@ -1,7 +1,6 @@
 import { RUNTIME_ROOT, STAGE_TO_SKILL_FOLDER } from "../constants.js";
 import type { FlowStage, FlowTrack } from "../types.js";
-import { STAGE_EXAMPLES_REFERENCE_DIR, stageExamples } from "./examples.js";
-import { STAGE_COMMON_GUIDANCE_REL_PATH } from "./stage-common-guidance.js";
+import { stageExamples } from "./examples.js";
 import { stageAutoSubagentDispatch, stageSchema } from "./stage-schema.js";
 import type { StageSchema } from "./stage-schema.js";
 import type {
@@ -14,8 +13,6 @@ import type {
 } from "./stages/schema-types.js";
 
 const VERIFICATION_STAGES: FlowStage[] = ["tdd", "review", "ship"];
-const DECISION_PROTOCOL_PATH = `${RUNTIME_ROOT}/references/protocols/decision.md`;
-const COMPLETION_PROTOCOL_PATH = `${RUNTIME_ROOT}/references/protocols/completion.md`;
 
 function whenNotToUseBlock(items: string[]): string {
   if (items.length === 0) {
@@ -138,7 +135,7 @@ Apply concise turn announces: one announce per batch boundary (or when risk/plan
 changes materially), then execute tasks without repetitive boilerplate.
 
 Detailed walkthrough:
-\`.cclaw/${STAGE_EXAMPLES_REFERENCE_DIR}/tdd-batch-walkthrough.md\`
+Use the current plan artifact for batch order and keep RED -> GREEN -> REFACTOR evidence in the TDD artifact.
 `;
 }
 
@@ -228,7 +225,7 @@ function completionParametersBlock(schema: StageSchema, track: FlowTrack): strin
 - Fill \`## Learnings\` before closeout: either \`- None this stage.\` or JSON bullets with required keys \`type\`, \`trigger\`, \`action\`, \`confidence\` (knowledge-schema compatible).
 - Record mandatory delegation completion/waiver in \`${RUNTIME_ROOT}/state/delegation-log.json\` with rationale as needed.
 - Use the completion helper instead of raw \`flow-state.json\` edits (legacy direct edits trigger workflow-guard warnings or strict-mode blocks).
-- Completion protocol reference: \`${COMPLETION_PROTOCOL_PATH}\`
+- Completion protocol: verify required gates, update the artifact, then use the completion helper.
 `;
 }
 
@@ -483,7 +480,7 @@ These are **rules for HOW you interact with the user** during this stage — ton
 
 ${interactionFocus.length > 0 ? interactionFocus.map((item, i) => `${i + 1}. ${item}`).join("\n") : "- Keep communication concise and decision-focused; rely on the Checklist for execution order."}
 
-Decision protocol reference: \`${DECISION_PROTOCOL_PATH}\`
+Decision protocol: ask only decision-changing questions, record the chosen option, rationale, risk, and rollback when the stage makes a non-trivial call.
 
 ${batchExecutionModeBlock(stage, track)}
 ## Required Gates
@@ -511,15 +508,13 @@ ${reviewLens.outputs.map((item) => `- ${item}`).join("\n")}
 ${reviewSectionsBlock(reviewLens.reviewSections)}
 
 ## Shared Stage Guidance
-See:
-- \`${STAGE_COMMON_GUIDANCE_REL_PATH}\`
-- \`${DECISION_PROTOCOL_PATH}\`
-- \`${COMPLETION_PROTOCOL_PATH}\`
+- Follow the handoff menu: advance, revise, pause, rewind, or archive only when the user explicitly chooses it.
+- Before closeout, fill \`## Learnings\` with \`- None this stage.\` or 1-3 strict JSON bullets.
+- Keep decisions explicit: context, options, chosen option, rationale, risk, and rollback.
 
 ## See Also
 - \`${RUNTIME_ROOT}/skills/using-cclaw/SKILL.md\`
 - \`${RUNTIME_ROOT}/skills/session/SKILL.md\`
 ${stageRefs.join("\n")}
-- \`${RUNTIME_ROOT}/commands/${stage}.md\`
 `;
 }
