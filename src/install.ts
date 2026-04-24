@@ -16,7 +16,6 @@ import {
   detectLanguageRulePacks,
   detectAdvancedKeys
 } from "./config.js";
-import { createInitialContextModeState } from "./content/contexts.js";
 import { learnSkillMarkdown } from "./content/learnings.js";
 import { nextCommandContract, nextCommandSkillMarkdown } from "./content/next-command.js";
 import { ideateCommandContract, ideateCommandSkillMarkdown } from "./content/ideate-command.js";
@@ -830,73 +829,12 @@ async function ensureKnowledgeStore(projectRoot: string): Promise<void> {
 async function ensureSessionStateFiles(projectRoot: string): Promise<void> {
   const stateDir = runtimePath(projectRoot, "state");
   await ensureDir(stateDir);
-  // If flow-state.json is corrupt, `readFlowState` quarantines the bad
-  // file and throws. During install we'd rather continue than abort:
-  // the user just asked to set up cclaw, and the corrupt file is already
-  // preserved next to the original path. Fall back to a fresh initial
-  // state so the rest of install completes and the user can inspect the
-  // `.corrupt-<timestamp>.json` quarantine afterwards.
-  let flow: FlowState;
-  try {
-    flow = await readFlowState(projectRoot);
-  } catch (err) {
-    if (err instanceof CorruptFlowStateError) {
-      flow = createInitialFlowState();
-    } else {
-      throw err;
+
+  for (const fileName of ["stage-activity.jsonl", "tdd-cycle-log.jsonl"] as const) {
+    const filePath = path.join(stateDir, fileName);
+    if (!(await exists(filePath))) {
+      await writeFileSafe(filePath, "", { mode: 0o600 });
     }
-  }
-
-  const activityPath = path.join(stateDir, "stage-activity.jsonl");
-  if (!(await exists(activityPath))) {
-    await writeFileSafe(activityPath, "", { mode: 0o600 });
-  }
-
-  const checkpointPath = path.join(stateDir, "checkpoint.json");
-  if (!(await exists(checkpointPath))) {
-    const initialCheckpoint = {
-      stage: flow.currentStage,
-      runId: flow.activeRunId,
-      status: "not_started",
-      lastCompletedStep: "",
-      remainingSteps: [] as string[],
-      blockers: [] as string[],
-      timestamp: new Date().toISOString()
-    };
-    await writeFileSafe(checkpointPath, `${JSON.stringify(initialCheckpoint, null, 2)}\n`, { mode: 0o600 });
-  }
-
-  const suggestionMemoryPath = path.join(stateDir, "suggestion-memory.json");
-  if (!(await exists(suggestionMemoryPath))) {
-    const suggestionMemory = {
-      enabled: true,
-      mutedStages: [] as string[],
-      lastSuggestedStage: "",
-      lastSuggestedAt: ""
-    };
-    await writeFileSafe(suggestionMemoryPath, `${JSON.stringify(suggestionMemory, null, 2)}\n`, { mode: 0o600 });
-  }
-
-  const contextModePath = path.join(stateDir, "context-mode.json");
-  if (!(await exists(contextModePath))) {
-    await writeFileSafe(
-      contextModePath,
-      `${JSON.stringify(createInitialContextModeState(), null, 2)}\n`,
-      { mode: 0o600 }
-    );
-  }
-
-  const knowledgeDigestPath = path.join(stateDir, "knowledge-digest.md");
-  if (!(await exists(knowledgeDigestPath))) {
-    await writeFileSafe(
-      knowledgeDigestPath,
-      "# Knowledge digest (auto-generated)\n\n(no entries yet)\n"
-    );
-  }
-
-  const tddCycleLogPath = path.join(stateDir, "tdd-cycle-log.jsonl");
-  if (!(await exists(tddCycleLogPath))) {
-    await writeFileSafe(tddCycleLogPath, "", { mode: 0o600 });
   }
 
   const reconciliationNoticesPath = path.join(stateDir, "reconciliation-notices.json");
@@ -906,14 +844,6 @@ async function ensureSessionStateFiles(projectRoot: string): Promise<void> {
       `${JSON.stringify({ schemaVersion: 1, notices: [] }, null, 2)}\n`,
       { mode: 0o600 }
     );
-  }
-
-  const flowSnapshotPath = path.join(stateDir, "flow-state.snapshot.json");
-  if (!(await exists(flowSnapshotPath))) {
-    await writeFileSafe(flowSnapshotPath, `${JSON.stringify({
-      capturedAt: new Date().toISOString(),
-      state: flow
-    }, null, 2)}\n`, { mode: 0o600 });
   }
 }
 
@@ -974,102 +904,6 @@ async function writeState(projectRoot: string, config: CclawConfig, forceReset =
 
   const state = createInitialFlowState({ track: config.defaultTrack ?? "standard" });
   await writeFileSafe(statePath, `${JSON.stringify(state, null, 2)}\n`, { mode: 0o600 });
-}
-
-async function writeHarnessGapsState(projectRoot: string, harnesses: HarnessId[]): Promise<void> {
-  const report = harnesses.map((harness) => {
-    const capabilities = HARNESS_ADAPTERS[harness].capabilities;
-    const hookMap = HOOK_EVENTS_BY_HARNESS[harness];
-    const missingHookEvents = HOOK_SEMANTIC_EVENTS.filter((eventName) => !hookMap[eventName]);
-    const missingCapabilities: string[] = [];
-    if (capabilities.nativeSubagentDispatch !== "full") {
-      missingCapabilities.push(`nativeSubagentDispatch:${capabilities.nativeSubagentDispatch}`);
-    }
-    if (capabilities.hookSurface !== "full") {
-      missingCapabilities.push(`hookSurface:${capabilities.hookSurface}`);
-    }
-    if (capabilities.structuredAsk === "plain-text") {
-      missingCapabilities.push("structuredAsk:none");
-    }
-
-    const remediation: string[] = [];
-    switch (capabilities.subagentFallback) {
-      case "native":
-        // nothing to remediate — harness has first-class dispatch
-        break;
-      case "generic-dispatch":
-        remediation.push(
-          `subagent dispatch → map named cclaw agents onto generic Task subagent_type per ${HARNESS_PLAYBOOKS_DIR}/${harness}-playbook.md`
-        );
-        break;
-      case "role-switch":
-        remediation.push(
-          `subagent dispatch → role-switch in-session with evidenceRefs per ${HARNESS_PLAYBOOKS_DIR}/${harness}-playbook.md`
-        );
-        break;
-      case "waiver":
-        remediation.push(
-          `subagent dispatch → record explicit harness_limitation waiver; no parity path available`
-        );
-        break;
-    }
-    // Per-harness structuredAsk remediation: record either the fallback
-    // requirement (plain-text) or the gating / experimental status of the
-    // native primitive so `cclaw doctor` and harness-gaps.json stay
-    // honest about *why* a primitive might silently not fire.
-    switch (capabilities.structuredAsk) {
-      case "plain-text":
-        remediation.push(
-          "structured ask → fall back to a numbered plain-text list; first option is default"
-        );
-        break;
-      case "question":
-        remediation.push(
-          `structured ask → OpenCode \`question\` tool; enable with \`permission.question: "allow"\` in \`opencode.json\` (ACP clients additionally need \`OPENCODE_ENABLE_QUESTION_TOOL=1\`). Fallback: shared plain-text lettered list.`
-        );
-        break;
-      case "request_user_input":
-        remediation.push(
-          "structured ask → Codex `request_user_input` tool (experimental; surfaced in Plan / Collaboration mode). Fallback: shared plain-text lettered list when the tool is hidden."
-        );
-        break;
-      case "AskUserQuestion":
-      case "AskQuestion":
-        // Native first-class ask — no remediation required.
-        break;
-    }
-    for (const event of missingHookEvents) {
-      if (harness === "codex" && event === "precompact_digest") {
-        // Codex CLI has no PreCompact event. Generic "schedule the script
-        // manually" copy doesn't help; instead, point the agent at the
-        // in-thread substitute that already exists in cclaw content.
-        remediation.push(
-          "hook event precompact_digest → Codex has no PreCompact event; run `/cc-view status` before compaction to capture the same digest context"
-        );
-        continue;
-      }
-      remediation.push(`hook event ${event} → schedule the corresponding script manually or accept reduced observability`);
-    }
-
-    return {
-      harness,
-      tier: harnessTier(harness),
-      subagentFallback: capabilities.subagentFallback,
-      playbookPath: `${RUNTIME_ROOT}/${HARNESS_PLAYBOOKS_DIR}/${harness}-playbook.md`,
-      missingCapabilities,
-      missingHookEvents,
-      remediation
-    };
-  });
-
-  await writeFileSafe(
-    runtimePath(projectRoot, "state", "harness-gaps.json"),
-    `${JSON.stringify({
-      generatedAt: new Date().toISOString(),
-      schemaVersion: 2,
-      harnesses: report
-    }, null, 2)}\n`
-  );
 }
 
 async function cleanLegacyArtifacts(projectRoot: string): Promise<void> {
@@ -1152,6 +986,12 @@ async function cleanLegacyArtifacts(projectRoot: string): Promise<void> {
     runtimePath(projectRoot, "skills", "flow-compound", "SKILL.md"),
     runtimePath(projectRoot, "skills", "flow-archive", "SKILL.md"),
     runtimePath(projectRoot, "skills", "flow-rewind", "SKILL.md"),
+    runtimePath(projectRoot, "state", "checkpoint.json"),
+    runtimePath(projectRoot, "state", "flow-state.snapshot.json"),
+    runtimePath(projectRoot, "state", "knowledge-digest.md"),
+    runtimePath(projectRoot, "state", "suggestion-memory.json"),
+    runtimePath(projectRoot, "state", "harness-gaps.json"),
+    runtimePath(projectRoot, "state", "context-mode.json"),
     runtimePath(projectRoot, "skills", "using-git-worktrees", "SKILL.md"),
     runtimePath(projectRoot, "learnings.jsonl"),
     runtimePath(projectRoot, "observations.jsonl"),
@@ -1255,7 +1095,6 @@ async function materializeRuntime(projectRoot: string, config: CclawConfig, forc
   await writeState(projectRoot, config, forceStateReset);
   await ensureRunSystem(projectRoot, { createIfMissing: false });
   await ensureSessionStateFiles(projectRoot);
-  await writeHarnessGapsState(projectRoot, harnesses);
   await ensureKnowledgeStore(projectRoot);
   await writeHooks(projectRoot, config);
   await syncDisabledHarnessArtifacts(projectRoot, harnesses);

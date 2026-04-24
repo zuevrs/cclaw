@@ -1034,12 +1034,6 @@ export async function doctorChecks(projectRoot: string, options: DoctorOptions =
     ok: await exists(path.join(projectRoot, RUNTIME_ROOT, "knowledge.jsonl")),
     details: `${RUNTIME_ROOT}/knowledge.jsonl must exist`
   });
-  checks.push({
-    name: "knowledge:digest_exists",
-    ok: await exists(path.join(projectRoot, RUNTIME_ROOT, "state", "knowledge-digest.md")),
-    details: `${RUNTIME_ROOT}/state/knowledge-digest.md must exist`
-  });
-
   // There must be NO legacy markdown knowledge store — JSONL is the only store.
   const legacyKnowledgeMdPath = path.join(projectRoot, RUNTIME_ROOT, "knowledge.md");
   const legacyExists = await exists(legacyKnowledgeMdPath);
@@ -1174,11 +1168,6 @@ export async function doctorChecks(projectRoot: string, options: DoctorOptions =
   }
 
   checks.push({
-    name: "state:checkpoint_exists",
-    ok: await exists(path.join(projectRoot, RUNTIME_ROOT, "state", "checkpoint.json")),
-    details: `${RUNTIME_ROOT}/state/checkpoint.json must exist`
-  });
-  checks.push({
     name: "state:stage_activity_exists",
     ok: await exists(path.join(projectRoot, RUNTIME_ROOT, "state", "stage-activity.jsonl")),
     details: `${RUNTIME_ROOT}/state/stage-activity.jsonl must exist`
@@ -1231,22 +1220,7 @@ export async function doctorChecks(projectRoot: string, options: DoctorOptions =
             : `warning: ${missingSchemaVersion}/${parsedActivityLines} stage-activity line(s) missing schemaVersion=1`
     });
   }
-  checks.push({
-    name: "state:suggestion_memory_exists",
-    ok: await exists(path.join(projectRoot, RUNTIME_ROOT, "state", "suggestion-memory.json")),
-    details: `${RUNTIME_ROOT}/state/suggestion-memory.json must exist for proactive suggestion memory`
-  });
-  checks.push({
-    name: "state:harness_gaps_exists",
-    ok: await exists(path.join(projectRoot, RUNTIME_ROOT, "state", "harness-gaps.json")),
-    details: `${RUNTIME_ROOT}/state/harness-gaps.json must exist for tiered harness capability tracking`
-  });
   const contextModeStatePath = path.join(projectRoot, RUNTIME_ROOT, "state", "context-mode.json");
-  checks.push({
-    name: "state:context_mode_exists",
-    ok: await exists(contextModeStatePath),
-    details: `${RUNTIME_ROOT}/state/context-mode.json must exist for context mode switching`
-  });
   if (await exists(contextModeStatePath)) {
     let contextModeOk = false;
     try {
@@ -1472,26 +1446,6 @@ export async function doctorChecks(projectRoot: string, options: DoctorOptions =
         ? `retro gate complete (${flowState.retro.compoundEntries} compound entries)`
         : "retro gate not required yet (ship not completed)"
       : "retro gate incomplete: ship flow requires recorded retrospective evidence."
-  });
-  const flowSnapshotPath = path.join(projectRoot, RUNTIME_ROOT, "state", "flow-state.snapshot.json");
-  const flowSnapshotExists = await exists(flowSnapshotPath);
-  let flowSnapshotValid = flowSnapshotExists;
-  if (flowSnapshotExists) {
-    try {
-      JSON.parse(await fs.readFile(flowSnapshotPath, "utf8"));
-      flowSnapshotValid = true;
-    } catch {
-      flowSnapshotValid = false;
-    }
-  }
-  checks.push({
-    name: "state:flow_snapshot",
-    ok: flowSnapshotExists && flowSnapshotValid,
-    details: flowSnapshotExists
-      ? flowSnapshotValid
-        ? `${RUNTIME_ROOT}/state/flow-state.snapshot.json exists and is valid JSON`
-        : `${RUNTIME_ROOT}/state/flow-state.snapshot.json exists but is invalid JSON`
-      : `${RUNTIME_ROOT}/state/flow-state.snapshot.json is missing`
   });
   const tddLogPath = path.join(projectRoot, RUNTIME_ROOT, "state", "tdd-cycle-log.jsonl");
   const tddLogExists = await exists(tddLogPath);

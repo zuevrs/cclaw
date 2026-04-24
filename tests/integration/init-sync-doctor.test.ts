@@ -6,6 +6,7 @@ import { describe, expect, it } from "vitest";
 import { readConfig, writeConfig } from "../../src/config.js";
 import { doctorChecks, doctorSucceeded } from "../../src/doctor.js";
 import { initCclaw, syncCclaw, uninstallCclaw, upgradeCclaw } from "../../src/install.js";
+import { HARNESS_ADAPTERS } from "../../src/harness-adapters.js";
 import { createTempProject } from "../helpers/index.js";
 
 const execFileAsync = promisify(execFile);
@@ -68,10 +69,12 @@ describe("install lifecycle", { timeout: 30_000 }, () => {
     ) as { activeRunId?: string };
     expect(typeof flow.activeRunId).toBe("string");
     expect(flow.activeRunId).toMatch(/^run-/);
-    await expect(fs.stat(path.join(root, ".cclaw/state/checkpoint.json"))).resolves.toBeDefined();
     await expect(fs.stat(path.join(root, ".cclaw/state/stage-activity.jsonl"))).resolves.toBeDefined();
-    await expect(fs.stat(path.join(root, ".cclaw/state/flow-state.snapshot.json"))).resolves.toBeDefined();
-    await expect(fs.stat(path.join(root, ".cclaw/state/harness-gaps.json"))).resolves.toBeDefined();
+    await expect(fs.stat(path.join(root, ".cclaw/state/tdd-cycle-log.jsonl"))).resolves.toBeDefined();
+    await expect(fs.stat(path.join(root, ".cclaw/state/reconciliation-notices.json"))).resolves.toBeDefined();
+    await expect(fs.stat(path.join(root, ".cclaw/state/checkpoint.json"))).rejects.toBeDefined();
+    await expect(fs.stat(path.join(root, ".cclaw/state/flow-state.snapshot.json"))).rejects.toBeDefined();
+    await expect(fs.stat(path.join(root, ".cclaw/state/harness-gaps.json"))).rejects.toBeDefined();
     const commandFiles = (await fs.readdir(path.join(root, ".cclaw/commands"))).sort();
     expect(commandFiles).toEqual(["ideate.md", "next.md", "start.md", "view.md"]);
     await expect(fs.stat(path.join(root, ".claude/commands/cc-view.md"))).resolves.toBeDefined();
@@ -84,65 +87,17 @@ describe("install lifecycle", { timeout: 30_000 }, () => {
       "cc-view.md",
       "cc.md"
     ]);
-    const harnessGaps = JSON.parse(
-      await fs.readFile(path.join(root, ".cclaw/state/harness-gaps.json"), "utf8")
-    ) as {
-      schemaVersion?: number;
-      harnesses: Array<{
-        harness: string;
-        tier: string;
-        subagentFallback?: string;
-        playbookPath?: string;
-        missingCapabilities: string[];
-        missingHookEvents?: string[];
-        remediation?: string[];
-      }>;
-    };
-    expect(harnessGaps.schemaVersion).toBe(2);
-    const codexGap = harnessGaps.harnesses.find((entry) => entry.harness === "codex");
-    // Codex regained tier2 in v0.40.0: Codex CLI ≥ v0.114 supports
-    // lifecycle hooks (`.codex/hooks.json`, gated by the `codex_hooks`
-    // feature flag). PreToolUse/PostToolUse are Bash-only — reported via
-    // `hookSurface:limited` instead of `none`. No custom slash commands
-    // and no native subagent dispatch persist as gaps.
-    expect(codexGap?.tier).toBe("tier2");
-    expect(codexGap?.missingCapabilities).toContain("nativeSubagentDispatch:none");
-    expect(codexGap?.missingCapabilities).toContain("hookSurface:limited");
-    // Wave Q (v0.41.0): Codex exposes `request_user_input` (experimental
-    // Plan / Collaboration mode tool), so structuredAsk is no longer a
-    // missing capability. Remediation still records the gating note.
-    expect(codexGap?.missingCapabilities).not.toContain("structuredAsk:none");
-    expect(
-      codexGap?.remediation?.some((line) => line.includes("request_user_input"))
-    ).toBe(true);
-    expect(codexGap?.subagentFallback).toBe("role-switch");
-    expect(codexGap?.playbookPath).toBe(".cclaw/references/harnesses/codex-playbook.md");
-    expect(codexGap?.remediation?.some((line) => line.includes("role-switch"))).toBe(true);
-    // `precompact_digest` must still land in missingHookEvents — Codex
-    // has no PreCompact event — but the other five semantic events are
-    // now mapped.
-    expect(codexGap?.missingHookEvents).toContain("precompact_digest");
-    expect(codexGap?.missingHookEvents).not.toContain("session_rehydrate");
-    // H-08: the `precompact_digest` remediation line for Codex points at
-    // the in-thread `/cc-view status` substitute instead of the generic
-    // "schedule the script manually" copy, because Codex has no
-    // PreCompact event that could run it.
-    const precompactLine = codexGap?.remediation?.find((line) =>
-      line.includes("precompact_digest")
-    );
-    expect(precompactLine).toMatch(/\/cc-view status/);
-    expect(precompactLine).not.toMatch(/schedule the corresponding script manually/);
+    const codexAdapter = HARNESS_ADAPTERS.codex;
+    expect(codexAdapter.capabilities.nativeSubagentDispatch).toBe("none");
+    expect(codexAdapter.capabilities.hookSurface).toBe("limited");
+    expect(codexAdapter.capabilities.structuredAsk).toBe("request_user_input");
+    expect(codexAdapter.capabilities.subagentFallback).toBe("role-switch");
 
     // Wave Q (v0.41.0): OpenCode's native `question` tool is honest as
     // permission-gated, not missing — assert the remediation mentions
     // the config knob.
-    const opencodeGap = harnessGaps.harnesses.find(
-      (entry) => entry.harness === "opencode"
-    );
-    expect(opencodeGap?.missingCapabilities).not.toContain("structuredAsk:none");
-    expect(
-      opencodeGap?.remediation?.some((line) => line.includes("permission.question"))
-    ).toBe(true);
+    const opencodeAdapter = HARNESS_ADAPTERS.opencode;
+    expect(opencodeAdapter.capabilities.structuredAsk).toBe("question");
 
     // Runtime simplification: `.cclaw/references/` is no longer materialized.
     await expect(
