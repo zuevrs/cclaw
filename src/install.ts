@@ -51,9 +51,7 @@ import {
   LANGUAGE_RULE_PACK_DIR,
   LANGUAGE_RULE_PACK_FILES,
   LANGUAGE_RULE_PACK_GENERATORS,
-  LEGACY_LANGUAGE_RULE_PACK_FOLDERS,
-  UTILITY_SKILL_FOLDERS,
-  UTILITY_SKILL_MAP
+  LEGACY_LANGUAGE_RULE_PACK_FOLDERS
 } from "./content/utility-skills.js";
 import { RESEARCH_PLAYBOOKS } from "./content/research-playbooks.js";
 import {
@@ -381,12 +379,6 @@ async function writeSkills(projectRoot: string, config?: CclawConfig): Promise<v
     runtimePath(projectRoot, "skills", META_SKILL_NAME, "SKILL.md"),
     usingCclawSkillMarkdown()
   );
-
-  for (const folder of UTILITY_SKILL_FOLDERS) {
-    const generator = UTILITY_SKILL_MAP[folder];
-    await writeFileSafe(runtimePath(projectRoot, "skills", folder, "SKILL.md"), generator());
-  }
-
   // In-thread research procedures (no YAML frontmatter, not delegated personas).
   for (const [fileName, markdown] of Object.entries(RESEARCH_PLAYBOOKS)) {
     await writeFileSafe(runtimePath(projectRoot, "skills", "research", fileName), markdown);
@@ -920,7 +912,25 @@ async function cleanLegacyArtifacts(projectRoot: string): Promise<void> {
     "security-review",
     "documentation",
     "browser-qa-testing",
-    "feature-workspaces"
+    "feature-workspaces",
+    "security",
+    "debugging",
+    "performance",
+    "ci-cd",
+    "docs",
+    "executing-plans",
+    "verification-before-completion",
+    "finishing-a-development-branch",
+    "context-engineering",
+    "source-driven-development",
+    "frontend-accessibility",
+    "landscape-check",
+    "adversarial-review",
+    "security-audit",
+    "knowledge-curation",
+    "retrospective",
+    "document-review",
+    "receiving-code-review"
   ]) {
     try {
       await fs.rm(runtimePath(projectRoot, "skills", legacyFolder), {

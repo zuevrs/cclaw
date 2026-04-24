@@ -41,8 +41,7 @@ import {
 import {
   LANGUAGE_RULE_PACK_DIR,
   LANGUAGE_RULE_PACK_FILES,
-  LEGACY_LANGUAGE_RULE_PACK_FOLDERS,
-  UTILITY_SKILL_FOLDERS
+  LEGACY_LANGUAGE_RULE_PACK_FOLDERS
 } from "./content/utility-skills.js";
 import { CONTEXT_MODES, DEFAULT_CONTEXT_MODE } from "./content/contexts.js";
 import { validateHookDocument } from "./hook-schema.js";
@@ -583,8 +582,6 @@ export async function doctorChecks(projectRoot: string, options: DoctorOptions =
     ["flow-ideate", "flow-ideate"],
     ["flow-tree", "flow-tree"],
     ["flow-diff", "flow-diff"],
-    ["verification-before-completion", "verification-before-completion"],
-    ["finishing-a-development-branch", "finishing-a-development-branch"],
     ["subagent-dev", "sdd"],
     ["parallel-dispatch", "parallel-agents"],
     ["session", "session"],
@@ -593,16 +590,6 @@ export async function doctorChecks(projectRoot: string, options: DoctorOptions =
     const skillPath = path.join(projectRoot, RUNTIME_ROOT, "skills", folder, "SKILL.md");
     checks.push({
       name: `utility_skill:${label}`,
-      ok: await exists(skillPath),
-      details: skillPath
-    });
-  }
-
-  // Extended utility skills generated from utility skill map.
-  for (const folder of UTILITY_SKILL_FOLDERS) {
-    const skillPath = path.join(projectRoot, RUNTIME_ROOT, "skills", folder, "SKILL.md");
-    checks.push({
-      name: `utility_skill:${folder}`,
       ok: await exists(skillPath),
       details: skillPath
     });

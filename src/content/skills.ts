@@ -122,8 +122,7 @@ Provide fresh, stage-local verification evidence from this turn:
 2. Confirm output, do not infer success from prior runs.
 3. If this is a bug fix, capture RED -> GREEN evidence for the regression path.
 
-Reference utility skill:
-\`.cclaw/skills/verification-before-completion/SKILL.md\`
+Keep this verification evidence in the artifact before completion.
 `;
 }
 
@@ -193,41 +192,17 @@ function mergedAntiPatterns(philosophy: StagePhilosophy, execution: StageExecuti
 
 function stageSpecificSeeAlso(stage: FlowStage): string[] {
   const refs: Record<FlowStage, string[]> = {
-    brainstorm: [
-      `- \`${RUNTIME_ROOT}/skills/learnings/SKILL.md\``,
-      `- \`${RUNTIME_ROOT}/references/stages/brainstorm-examples.md\``
-    ],
-    scope: [
-      `- \`${RUNTIME_ROOT}/skills/learnings/SKILL.md\``,
-      `- \`${RUNTIME_ROOT}/references/stages/scope-examples.md\``
-    ],
-    design: [
-      `- \`${RUNTIME_ROOT}/skills/security/SKILL.md\``,
-      `- \`${RUNTIME_ROOT}/skills/performance/SKILL.md\``
-    ],
-    spec: [
-      `- \`${RUNTIME_ROOT}/skills/docs/SKILL.md\``,
-      `- \`${RUNTIME_ROOT}/references/stages/spec-examples.md\``
-    ],
+    brainstorm: [`- \`${RUNTIME_ROOT}/skills/learnings/SKILL.md\``],
+    scope: [`- \`${RUNTIME_ROOT}/skills/learnings/SKILL.md\``],
+    design: [`- Use built-in security and performance review lenses when risk triggers them.`],
+    spec: [`- Keep acceptance criteria testable and docs-ready in the artifact.`],
     plan: [
       `- \`${RUNTIME_ROOT}/skills/subagent-dev/SKILL.md\``,
       `- \`${RUNTIME_ROOT}/skills/parallel-dispatch/SKILL.md\``
     ],
-    tdd: [
-      `- \`${RUNTIME_ROOT}/skills/debugging/SKILL.md\``,
-      `- \`${RUNTIME_ROOT}/references/stages/tdd-batch-walkthrough.md\``
-    ],
-    review: [
-      `- \`${RUNTIME_ROOT}/skills/security/SKILL.md\``,
-      `- \`${RUNTIME_ROOT}/skills/parallel-dispatch/SKILL.md\``,
-      `- \`${RUNTIME_ROOT}/skills/verification-before-completion/SKILL.md\``
-    ],
-    ship: [
-      `- \`${RUNTIME_ROOT}/skills/ci-cd/SKILL.md\``,
-      `- \`${RUNTIME_ROOT}/skills/docs/SKILL.md\``,
-      `- \`${RUNTIME_ROOT}/skills/verification-before-completion/SKILL.md\``,
-      `- \`${RUNTIME_ROOT}/skills/finishing-a-development-branch/SKILL.md\``
-    ]
+    tdd: [`- Use RED -> GREEN -> REFACTOR evidence in the artifact; debug in-session when tests fail.`],
+    review: [`- \`${RUNTIME_ROOT}/skills/parallel-dispatch/SKILL.md\``],
+    ship: [`- Use release, docs, and verification discipline inline before finalization.`]
   };
   return refs[stage];
 }

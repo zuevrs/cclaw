@@ -131,11 +131,11 @@ You MUST complete these steps in order:
 5. Run traceability matrix — execute \`cclaw internal trace-matrix\` (or equivalent helper) and confirm there are no orphaned criteria/tasks/tests before declaring ship readiness.
 6. Layer 1: Spec Compliance — check every acceptance criterion against implementation. Verdict: pass/fail per criterion.
 7. Layer 2a: Correctness — logic errors, race conditions, boundary violations, null handling.
-8. Layer 2b: Security — input validation, auth boundaries, secrets exposure, injection vectors. **Mandatory:** also load and execute the \`.cclaw/skills/security-audit/SKILL.md\` utility skill (proactive pattern sweep across diff + touched modules, not just the diff itself) and merge findings into the review army. The Layer 2 security pass is not complete until the audit sweep records a finding count (0 acceptable) with file:line evidence for every Critical.
+8. Layer 2b: Security — input validation, auth boundaries, secrets exposure, injection vectors. Mandatory: run a proactive security sweep across diff + touched modules, not just the diff itself, and merge findings into the review army. The Layer 2 security pass is not complete until the sweep records a finding count (0 acceptable) with file:line evidence for every Critical.
 9. Layer 2c: Performance — N+1 queries, memory leaks, missing caching, hot paths.
 10. Layer 2d: Architecture Fit — does the implementation match the locked design? Coupling, cohesion, interface contracts.
 11. Layer 2e: External Safety — SQL safety, concurrency, secrets in logs, enum completeness (grep outside diff), LLM trust boundaries.
-12. Incoming Feedback Intake — when human reviewer comments, bot findings, or CI annotations exist, run \`.cclaw/skills/receiving-code-review/SKILL.md\`, keep a per-comment disposition queue, and mirror outcomes into \`07-review.md\` + \`07-review-army.json\` before final verdict.
+12. Incoming Feedback Intake — when human reviewer comments, bot findings, or CI annotations exist, keep a per-comment disposition queue and mirror outcomes into \`07-review.md\` + \`07-review-army.json\` before final verdict.
 13. Review Army reconciliation — normalize findings into structured records, dedup by fingerprint, and mark multi-specialist confirmations.
 14. Meta-Review — Were tests actually run? Do test names match what they test? Are there real assertions?
 15. Classify findings — Critical (blocks ship), Important (should fix), Suggestion (optional improvement).
@@ -192,8 +192,7 @@ Provide fresh, stage-local verification evidence from this turn:
 2. Confirm output, do not infer success from prior runs.
 3. If this is a bug fix, capture RED -> GREEN evidence for the regression path.
 
-Reference utility skill:
-\`.cclaw/skills/verification-before-completion/SKILL.md\`
+Keep this verification evidence in the artifact before completion.
 
 
 ## Verification
@@ -321,9 +320,7 @@ See:
 ## See Also
 - \`.cclaw/skills/using-cclaw/SKILL.md\`
 - \`.cclaw/skills/session/SKILL.md\`
-- \`.cclaw/skills/security/SKILL.md\`
 - \`.cclaw/skills/parallel-dispatch/SKILL.md\`
-- \`.cclaw/skills/verification-before-completion/SKILL.md\`
 - \`.cclaw/commands/review.md\`
 "
 `;
@@ -513,8 +510,7 @@ Provide fresh, stage-local verification evidence from this turn:
 2. Confirm output, do not infer success from prior runs.
 3. If this is a bug fix, capture RED -> GREEN evidence for the regression path.
 
-Reference utility skill:
-\`.cclaw/skills/verification-before-completion/SKILL.md\`
+Keep this verification evidence in the artifact before completion.
 
 
 ## Verification
@@ -595,10 +591,7 @@ See:
 ## See Also
 - \`.cclaw/skills/using-cclaw/SKILL.md\`
 - \`.cclaw/skills/session/SKILL.md\`
-- \`.cclaw/skills/ci-cd/SKILL.md\`
-- \`.cclaw/skills/docs/SKILL.md\`
-- \`.cclaw/skills/verification-before-completion/SKILL.md\`
-- \`.cclaw/skills/finishing-a-development-branch/SKILL.md\`
+- Use release, docs, and verification discipline inline before finalization.
 - \`.cclaw/commands/ship.md\`
 "
 `;
@@ -1077,8 +1070,7 @@ Provide fresh, stage-local verification evidence from this turn:
 2. Confirm output, do not infer success from prior runs.
 3. If this is a bug fix, capture RED -> GREEN evidence for the regression path.
 
-Reference utility skill:
-\`.cclaw/skills/verification-before-completion/SKILL.md\`
+Keep this verification evidence in the artifact before completion.
 
 
 ## Verification
@@ -1190,8 +1182,7 @@ See:
 ## See Also
 - \`.cclaw/skills/using-cclaw/SKILL.md\`
 - \`.cclaw/skills/session/SKILL.md\`
-- \`.cclaw/skills/debugging/SKILL.md\`
-- \`.cclaw/references/stages/tdd-batch-walkthrough.md\`
+- Use RED -> GREEN -> REFACTOR evidence in the artifact; debug in-session when tests fail.
 - \`.cclaw/commands/tdd.md\`
 "
 `;
@@ -1457,7 +1448,6 @@ See:
 - \`.cclaw/skills/using-cclaw/SKILL.md\`
 - \`.cclaw/skills/session/SKILL.md\`
 - \`.cclaw/skills/learnings/SKILL.md\`
-- \`.cclaw/references/stages/brainstorm-examples.md\`
 - \`.cclaw/commands/brainstorm.md\`
 "
 `;
