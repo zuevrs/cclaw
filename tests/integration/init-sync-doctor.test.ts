@@ -23,20 +23,10 @@ describe("install lifecycle", { timeout: 30_000 }, () => {
 
     const checks = await doctorChecks(root);
     expect(doctorSucceeded(checks)).toBe(true);
-    expect(checks.some((check) => check.name === "state:adapter_manifest_exists" && check.ok)).toBe(true);
-    expect(checks.some((check) => check.name === "state:adapter_manifest_harnesses" && check.ok)).toBe(true);
-    expect(checks.some((check) => check.name === "state:adapter_manifest_sources" && check.ok)).toBe(true);
 
-    const adapterManifest = JSON.parse(
-      await fs.readFile(path.join(root, ".cclaw/adapters/manifest.json"), "utf8")
-    ) as {
-      harnesses?: string[];
-      commandSource?: string;
-      skillSource?: string;
-    };
-    expect(adapterManifest.harnesses).toEqual(["claude"]);
-    expect(adapterManifest.commandSource).toBe(".cclaw/commands/*.md");
-    expect(adapterManifest.skillSource).toBe(".cclaw/skills/*/SKILL.md");
+    await expect(
+      fs.stat(path.join(root, ".cclaw/adapters"))
+    ).rejects.toBeDefined();
 
     await expect(fs.stat(path.join(root, ".cursor/rules/cclaw-workflow.mdc"))).rejects.toBeDefined();
     await expect(fs.stat(path.join(root, ".opencode/plugins/cclaw-plugin.mjs"))).rejects.toBeDefined();

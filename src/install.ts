@@ -1337,20 +1337,6 @@ async function writeState(projectRoot: string, config: CclawConfig, forceReset =
   await writeFileSafe(statePath, `${JSON.stringify(state, null, 2)}\n`, { mode: 0o600 });
 }
 
-async function writeAdapterManifest(projectRoot: string, harnesses: HarnessId[]): Promise<void> {
-  const manifest = {
-    generatedAt: new Date().toISOString(),
-    harnesses,
-    commandSource: `${RUNTIME_ROOT}/commands/*.md`,
-    skillSource: `${RUNTIME_ROOT}/skills/*/SKILL.md`
-  };
-
-  await writeFileSafe(
-    runtimePath(projectRoot, "adapters", "manifest.json"),
-    `${JSON.stringify(manifest, null, 2)}\n`
-  );
-}
-
 async function writeHarnessGapsState(projectRoot: string, harnesses: HarnessId[]): Promise<void> {
   const report = harnesses.map((harness) => {
     const capabilities = HARNESS_ADAPTERS[harness].capabilities;
@@ -1600,7 +1586,6 @@ async function materializeRuntime(projectRoot: string, config: CclawConfig, forc
   await writeState(projectRoot, config, forceStateReset);
   await ensureRunSystem(projectRoot, { createIfMissing: false });
   await ensureSessionStateFiles(projectRoot);
-  await writeAdapterManifest(projectRoot, harnesses);
   await writeHarnessGapsState(projectRoot, harnesses);
   await ensureKnowledgeStore(projectRoot);
   await ensureCustomSkillsScaffold(projectRoot);

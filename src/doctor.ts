@@ -1348,67 +1348,6 @@ export async function doctorChecks(projectRoot: string, options: DoctorOptions =
     ok: await exists(path.join(projectRoot, RUNTIME_ROOT, "state", "harness-gaps.json")),
     details: `${RUNTIME_ROOT}/state/harness-gaps.json must exist for tiered harness capability tracking`
   });
-  const adapterManifestPath = path.join(projectRoot, RUNTIME_ROOT, "adapters", "manifest.json");
-  const adapterManifestExists = await exists(adapterManifestPath);
-  checks.push({
-    name: "state:adapter_manifest_exists",
-    ok: adapterManifestExists,
-    details: `${RUNTIME_ROOT}/adapters/manifest.json must exist for harness adapter provenance`
-  });
-  if (adapterManifestExists) {
-    let harnessesOk = false;
-    let harnessesDetails = "";
-    let sourcesOk = false;
-    let sourcesDetails = "";
-    try {
-      const parsed = JSON.parse(await fs.readFile(adapterManifestPath, "utf8")) as {
-        harnesses?: unknown;
-        commandSource?: unknown;
-        skillSource?: unknown;
-      };
-      const manifestHarnesses =
-        Array.isArray(parsed.harnesses)
-          ? parsed.harnesses.filter((entry): entry is string => typeof entry === "string")
-          : [];
-      const expectedHarnesses =
-        configuredHarnesses.length > 0
-          ? [...new Set(configuredHarnesses)].sort()
-          : null;
-      const actualHarnesses = [...new Set(manifestHarnesses)].sort();
-      harnessesOk = expectedHarnesses
-        ? actualHarnesses.length === expectedHarnesses.length &&
-          actualHarnesses.every((harness, index) => harness === expectedHarnesses[index])
-        : actualHarnesses.length > 0;
-      harnessesDetails = expectedHarnesses
-        ? harnessesOk
-          ? `adapter manifest harnesses match config.yaml: ${actualHarnesses.join(", ")}`
-          : `adapter manifest harnesses [${actualHarnesses.join(", ")}] do not match config.yaml [${expectedHarnesses.join(", ")}]`
-        : harnessesOk
-          ? `adapter manifest declares harnesses: ${actualHarnesses.join(", ")}`
-          : "adapter manifest must declare at least one harness";
-      const commandSource = typeof parsed.commandSource === "string" ? parsed.commandSource.trim() : "";
-      const skillSource = typeof parsed.skillSource === "string" ? parsed.skillSource.trim() : "";
-      sourcesOk = commandSource.length > 0 && skillSource.length > 0;
-      sourcesDetails = sourcesOk
-        ? `adapter manifest source globs are set (commandSource=${commandSource}; skillSource=${skillSource})`
-        : "adapter manifest must include non-empty commandSource and skillSource";
-    } catch {
-      harnessesOk = false;
-      harnessesDetails = "adapter manifest must be valid JSON with a harnesses array";
-      sourcesOk = false;
-      sourcesDetails = "adapter manifest must be valid JSON with source globs";
-    }
-    checks.push({
-      name: "state:adapter_manifest_harnesses",
-      ok: harnessesOk,
-      details: harnessesDetails
-    });
-    checks.push({
-      name: "state:adapter_manifest_sources",
-      ok: sourcesOk,
-      details: sourcesDetails
-    });
-  }
   const contextModeStatePath = path.join(projectRoot, RUNTIME_ROOT, "state", "context-mode.json");
   checks.push({
     name: "state:context_mode_exists",

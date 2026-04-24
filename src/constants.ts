@@ -85,7 +85,6 @@ export const REQUIRED_DIRS = [
   `${RUNTIME_ROOT}/state`,
   `${RUNTIME_ROOT}/runs`,
   `${RUNTIME_ROOT}/rules`,
-  `${RUNTIME_ROOT}/adapters`,
   `${RUNTIME_ROOT}/agents`,
   `${RUNTIME_ROOT}/hooks`,
   `${RUNTIME_ROOT}/custom-skills`,
