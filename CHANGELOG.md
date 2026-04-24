@@ -1,5 +1,56 @@
 # Changelog
 
+## 0.48.35
+
+Second pass on the OpenCode plugin guard-UX fix. 0.48.34 covered the
+obvious cases (read-only bypass, graceful degradation, killswitch,
+actionable error), but a real-world `/cc` session still hit three
+remaining failure modes:
+
+1. `strictness: advisory` in `.cclaw/config.yaml` was ignored by the
+   plugin — guard non-zero exits still threw.
+2. OpenCode's `question` / `AskUserQuestion` tool (and friends) were
+   not on the safe-tool whitelist, so track-selection prompts were
+   blocked mid-flow.
+3. Hook-runtime infrastructure failures (unrelated CLI help in
+   stderr, crashes, missing binaries) were surfaced to the user as
+   policy blocks with the yargs help text showing up as the "Reason".
+
+### Fixed
+
+- Plugin now reads the same strictness knob as the hook runtime
+  (`CCLAW_STRICTNESS` env → `strictness:` key in
+  `.cclaw/config.yaml` → library default `advisory`). In advisory
+  mode — which is the default — guard refusals are logged as
+  `advisory:` lines in `.cclaw/logs/opencode-plugin.log` and the tool
+  call proceeds. Only `strictness: strict` ever throws.
+- Safe-tool whitelist now exempts question / ask / `AskUserQuestion`
+  / `ask_user_question` / `request_user_input` / prompt, think /
+  thinking, todo / `TodoRead` / `TodoWrite` (with `find` added
+  alongside ls/list). These tools cannot mutate project state or
+  execute arbitrary code, so running guards on them was overhead at
+  best and a blocker at worst.
+- Hook infrastructure failures are no longer treated as policy
+  blocks. A non-zero hook exit whose stderr looks like yargs help
+  (`Usage:` / `Options:` / `-- name  [string]` lines), a Node crash
+  fingerprint (`Cannot find module`, `(Reference|Syntax|Type|Range)Error`,
+  `at file:line:col`, `node:internal`), a "command not found" shell
+  message, or empty output now logs an `infra:` line and lets the
+  tool through regardless of strictness. Strict mode still blocks on
+  cleanly-structured guard refusals.
+- Strict-mode block error now also points at switching to
+  `strictness: advisory` in `.cclaw/config.yaml` as a recovery path
+  alongside `CCLAW_DISABLE=1`.
+
+### Changed
+
+- `tests/unit/hooks-lifecycle.test.ts` grows three coverage cases
+  (advisory-default log-only path, extended whitelist bypass across 9
+  tool-name variants, infra-noise bypass under strict config) and
+  the existing strict-block test now emits a short refusal reason so
+  it still exercises the thrown path after the infra-noise
+  heuristic tightened.
+
 ## 0.48.34
 
 OpenCode guard UX fix. A user hitting a freshly-installed cclaw project
