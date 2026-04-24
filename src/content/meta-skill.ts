@@ -113,9 +113,6 @@ Load utility skills only when triggered by the current task:
 - iron-laws as policy arbitration when instructions conflict
 - language rule packs from \`.cclaw/config.yaml\` when enabled
 
-Custom project skills under \`.cclaw/custom-skills/\` are opt-in supplements,
-never mandatory delegations.
-
 ## Protocol references
 
 Do not inline these protocols in stage skills; cite by path:

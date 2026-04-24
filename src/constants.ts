@@ -87,7 +87,6 @@ export const REQUIRED_DIRS = [
   `${RUNTIME_ROOT}/rules`,
   `${RUNTIME_ROOT}/agents`,
   `${RUNTIME_ROOT}/hooks`,
-  `${RUNTIME_ROOT}/custom-skills`,
   ...EVALS_DIRS
 ] as const;
 
