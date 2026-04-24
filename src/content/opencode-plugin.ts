@@ -395,6 +395,31 @@ export default function cclawPlugin(ctx) {
     return false;
   }
 
+  /**
+   * cclaw considers itself "active" in a project when both the state
+   * file and the hook runtime script exist. If either is missing the
+   * plugin behaves as a no-op for guards — this project hasn't been
+   * initialized (or the install is corrupt) and blocking every tool
+   * call would strand the user.
+   */
+  function isCclawInitialized() {
+    try {
+      const hookRuntimePath = join(runtimeDir, "hooks/run-hook.mjs");
+      return existsSync(flowStatePath) && existsSync(hookRuntimePath);
+    } catch {
+      return false;
+    }
+  }
+
+  let notInitializedAdvised = false;
+  function noteNotInitialized() {
+    if (notInitializedAdvised) return;
+    notInitializedAdvised = true;
+    // Silent by default — initialization state is project-level setup,
+    // not a per-tool concern. Users who want the nudge can tail
+    // .cclaw/logs/opencode-plugin.log (added by later fixes).
+  }
+
   function resolveEventType(payload) {
     if (typeof payload === "string") return payload;
     if (payload && typeof payload === "object") {
@@ -480,6 +505,13 @@ export default function cclawPlugin(ctx) {
         // Read-only tools bypass guards — they cannot mutate state and
         // blocking them gives users an unusable session when guards are
         // misconfigured or cclaw isn't fully initialized.
+        return;
+      }
+      if (!isCclawInitialized()) {
+        // Project has no flow-state or hook runtime: cclaw isn't in use
+        // here. Never block the user's tools because of setup they didn't
+        // ask for. Surface a single advisory so they can notice.
+        noteNotInitialized();
         return;
       }
       const promptOk = await runHookScript("prompt-guard", payload);
