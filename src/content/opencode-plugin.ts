@@ -408,14 +408,42 @@ export default function cclawPlugin(ctx) {
    * still runs through guards.
    */
   const SAFE_READONLY_TOOLS = new Set([
+    // Filesystem / search reads — no state mutation possible.
     "read",
     "glob",
     "grep",
     "list",
     "ls",
     "view",
+    "find",
+    // Network reads — no local state mutation.
     "webfetch",
-    "websearch"
+    "websearch",
+    // User-facing question / ask tools: they only ask the human for
+    // input and cannot touch the filesystem or execute code. Blocking
+    // them strands the plugin mid-decision (see OpenCode's \`question\`).
+    "question",
+    "ask",
+    "askuser",
+    "askquestion",
+    "ask_question",
+    "ask_user",
+    "ask_user_question",
+    "askuserquestion",
+    "request_user_input",
+    "requestuserinput",
+    "prompt",
+    // Thinking / scratchpad tools — pure reasoning with no side effects.
+    "think",
+    "thinking",
+    // Todo bookkeeping tools — they write only inside the harness's own
+    // session state, not project files, and blocking them breaks agent
+    // planning without protecting anything.
+    "todo",
+    "todoread",
+    "todowrite",
+    "todo_read",
+    "todo_write"
   ]);
 
   function isSafeReadOnlyTool(payload) {
