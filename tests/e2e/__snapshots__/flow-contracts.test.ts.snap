@@ -89,6 +89,11 @@ flowchart TD
 - tdd artifact
 - rulebook constraints
 
+## Platform Notes
+- When citing file locations in findings, use repo-relative forward-slash paths with a line number (\`src/foo/bar.ts:42\`). Avoid IDE-generated hyperlinks that embed absolute machine-specific paths.
+- Line-range or diff-range references must match \`git diff --unified=0\` output format so reviewers on any OS can reproduce the range locally without GUI tooling.
+- Commands in remediation suggestions must be portable (\`npm run lint\`, \`pytest -x path/to/test\`) — if a platform-specific command is required, tag the note explicitly (\`# PowerShell only\`, \`# macOS only\`).
+
 ## Context Loading
 
 Before execution:
@@ -415,6 +420,12 @@ flowchart TD
 - changelog scope
 - deployment constraints
 
+## Platform Notes
+- Release commands (\`npm publish\`, \`git tag -s\`, \`gh release create\`, \`cargo publish\`, \`goreleaser\`) behave the same across OSes, but signing keys differ: macOS Keychain, Windows credential store, Linux GPG agent. Verify the signing flow on the actual release machine before running the real publish.
+- Version tags must be pure ASCII and lowercase after an optional \`v\` prefix (\`v1.2.3\`, \`v1.2.3-rc.1\`). Avoid Unicode dashes and non-breaking spaces that sneak in via copy-paste from docs.
+- When the rollback plan references timestamps (CI run windows, DB snapshot IDs), pin them to UTC ISO-8601 so the plan reads identically across CI runners in different regions.
+- \`gh release create\` requires a repo-level \`GH_TOKEN\`/\`GITHUB_TOKEN\`; document whether it is sourced from the shell env, \`.env\`, or the OS keychain so another operator on a different OS can reproduce the release.
+
 ## Context Loading
 
 Before execution:
@@ -685,6 +696,11 @@ flowchart TD
 - current architecture
 - known technical debt and dependencies
 
+## Platform Notes
+- Per-task verification commands must be runnable on Windows PowerShell, macOS bash/zsh, and Linux bash. Prefer \`npm run <script>\` / \`pnpm <script>\` / \`pytest -k <name>\` over raw shell one-liners so the command portability is handled by the script runner.
+- If a task command needs globbing, wrap the glob in single quotes on POSIX and escape as needed on PowerShell (\`'src/**/*.ts'\` vs \`"src/**/*.ts"\`). Note the quoting variant when the task is expected to run in mixed-OS CI.
+- Environment variables referenced from tasks must be named in uppercase with underscores (\`CCLAW_PROJECT_ROOT\`) and set via a cross-shell wrapper (e.g. \`cross-env\` for Node tasks) — do not inline \`KEY=value cmd\` style that fails in PowerShell/cmd.exe.
+
 ## Context Loading
 
 Before execution:
@@ -950,6 +966,12 @@ flowchart TD
 - plan artifact
 - spec artifact
 - existing test patterns
+
+## Platform Notes
+- Record the **exact** test command run (\`npm test -- path/to/file\`, \`pytest path/to/file\`, \`go test ./...\`) so RED/GREEN evidence is reproducible on any OS. Do not paraphrase to a shorter alias.
+- Line-ending drift (CRLF vs LF) can turn a passing test red on Windows if the repo mixes styles. When a GREEN flip happens only after whitespace normalization, record it as a refactor note, not a hidden fix.
+- When invoking a test file path from Windows PowerShell, use forward slashes (\`npm test -- tests/foo.test.ts\`) — backslashes trip globbing on \`cross-env\` and similar wrappers.
+- Flaky tests that only fail on one OS must be marked as such in the TDD artifact (OS + runner + one failing output snippet) — do not retry until green without evidence.
 
 ## Context Loading
 
@@ -1270,6 +1292,11 @@ flowchart TD
 - existing project context and patterns
 - current behavior of affected area
 - business and delivery constraints
+
+## Platform Notes
+- Write artifact paths in POSIX form (\`.cclaw/artifacts/01-brainstorm-<slug>.md\`) even on Windows — the runtime normalizes separators. Do NOT commit Windows-style backslashes into the artifact or flow-state.
+- Slugify titles with lowercase ASCII letters, digits, and single dashes only — avoid spaces and case-sensitive names so the file resolves identically on case-insensitive filesystems (macOS/Windows default).
+- When linking to files inside the artifact, use repo-relative forward-slash paths (\`src/foo/bar.ts\`) so reviewers on any OS can click through.
 
 ## Context Loading
 

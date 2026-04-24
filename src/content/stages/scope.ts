@@ -136,6 +136,11 @@ export const SCOPE: StageSchemaInput = {
       "locked decisions captured with stable D-XX IDs",
       "completion dashboard produced",
       "scope summary produced"
+    ],
+    platformNotes: [
+      "Scope contract paths must be repo-relative with forward slashes so they resolve identically on Windows, macOS, and Linux (`src/pkg/mod.ts`, NOT `src\\pkg\\mod.ts`).",
+      "When invoking `git log`/`git diff` for the Pre-Scope audit, wrap glob patterns in single quotes on POSIX shells and double quotes on PowerShell (`git log -- 'src/**/*.ts'` vs `git log -- \"src/**/*.ts\"`). Document the command with the quoting style you actually ran.",
+      "Do not hard-code machine-specific absolute paths (home dirs, drive letters) into the scope contract — keep boundaries repo-relative."
     ]
   },
   artifactRules: {

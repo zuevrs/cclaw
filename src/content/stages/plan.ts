@@ -103,6 +103,11 @@ export const PLAN: StageSchemaInput = {
       "WAIT_FOR_CONFIRM present and unresolved until user approves",
       "artifact ready for TDD execution",
       "acceptance mapping complete"
+    ],
+    platformNotes: [
+      "Per-task verification commands must be runnable on Windows PowerShell, macOS bash/zsh, and Linux bash. Prefer `npm run <script>` / `pnpm <script>` / `pytest -k <name>` over raw shell one-liners so the command portability is handled by the script runner.",
+      "If a task command needs globbing, wrap the glob in single quotes on POSIX and escape as needed on PowerShell (`'src/**/*.ts'` vs `\"src/**/*.ts\"`). Note the quoting variant when the task is expected to run in mixed-OS CI.",
+      "Environment variables referenced from tasks must be named in uppercase with underscores (`CCLAW_PROJECT_ROOT`) and set via a cross-shell wrapper (e.g. `cross-env` for Node tasks) — do not inline `KEY=value cmd` style that fails in PowerShell/cmd.exe."
     ]
   },
   artifactRules: {

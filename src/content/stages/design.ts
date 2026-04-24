@@ -145,6 +145,11 @@ export const DESIGN: StageSchemaInput = {
       "required gates marked satisfied",
       "completion dashboard present with all review-section statuses",
       "artifact complete for spec handoff"
+    ],
+    platformNotes: [
+      "Architecture diagrams (ASCII, Mermaid) must use plain ASCII punctuation — avoid smart quotes and em-dashes that render differently across Windows CMD (cp1252), macOS Terminal (UTF-8), and Linux consoles.",
+      "When referencing build or runtime tools in the design, name them by binary (`node`, `python`, `go`) rather than by IDE-specific run configurations (`npm: start (WebStorm)`, `launch.json:Debug`) so the design stays OS-agnostic.",
+      "File system layouts drawn in the artifact use forward slashes; explicitly note when a platform-specific path style is required (e.g. Windows long-path `\\\\?\\` prefix, macOS bundle `.app/Contents/MacOS/`)."
     ]
   },
   artifactRules: {
