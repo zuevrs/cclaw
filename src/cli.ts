@@ -223,7 +223,6 @@ function buildInitSurfacePreview(harnesses: HarnessId[]): string[] {
     ".cclaw/config.yaml",
     ".cclaw/commands/*.md",
     ".cclaw/skills/*/SKILL.md",
-    ".cclaw/contexts/*.md",
     ".cclaw/templates/*",
     ".cclaw/agents/*.md",
     ".cclaw/hooks/*",

@@ -217,10 +217,6 @@ export async function policyChecks(projectRoot: string, options: PolicyOptions =
     { file: runtimeFile("skills/frontend-accessibility/SKILL.md"), needle: "## HARD-GATE", name: "utility_skill:frontend_accessibility:hard_gate" },
     { file: runtimeFile("skills/frontend-accessibility/SKILL.md"), needle: "## Checklist", name: "utility_skill:frontend_accessibility:checklist" },
     { file: runtimeFile("skills/frontend-accessibility/SKILL.md"), needle: "## Anti-Patterns", name: "utility_skill:frontend_accessibility:anti_patterns" },
-    { file: runtimeFile("contexts/default.md"), needle: "Context Mode: default", name: "context_mode:default" },
-    { file: runtimeFile("contexts/execution.md"), needle: "Context Mode: execution", name: "context_mode:execution" },
-    { file: runtimeFile("contexts/review.md"), needle: "Context Mode: review", name: "context_mode:review" },
-    { file: runtimeFile("contexts/incident.md"), needle: "Context Mode: incident", name: "context_mode:incident" },
 
     { file: runtimeFile("hooks/run-hook.mjs"), needle: "activeRunId", name: "hooks:session_start:active_run" },
     { file: runtimeFile("hooks/run-hook.mjs"), needle: "checkpoint.json", name: "hooks:session_start:checkpoint_ref" },

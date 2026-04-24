@@ -18,7 +18,7 @@ import {
   detectAdvancedKeys
 } from "./config.js";
 import { stageCommandContract } from "./content/contracts.js";
-import { contextModeFiles, createInitialContextModeState } from "./content/contexts.js";
+import { createInitialContextModeState } from "./content/contexts.js";
 import { learnSkillMarkdown, learnCommandContract } from "./content/learnings.js";
 import { nextCommandContract, nextCommandSkillMarkdown } from "./content/next-command.js";
 import { ideateCommandContract, ideateCommandSkillMarkdown } from "./content/ideate-command.js";
@@ -1133,12 +1133,6 @@ async function writeRulebook(projectRoot: string): Promise<void> {
   );
 }
 
-async function writeContextModes(projectRoot: string): Promise<void> {
-  for (const [mode, content] of Object.entries(contextModeFiles())) {
-    await writeFileSafe(runtimePath(projectRoot, "contexts", `${mode}.md`), content);
-  }
-}
-
 async function writeCursorWorkflowRule(projectRoot: string, harnesses: HarnessId[]): Promise<void> {
   const rulePath = path.join(projectRoot, CURSOR_RULE_REL_PATH);
   if (!harnesses.includes("cursor")) {
@@ -1431,7 +1425,6 @@ async function materializeRuntime(projectRoot: string, config: CclawConfig, forc
     writeCommandContracts(projectRoot, config.defaultTrack ?? "standard"),
     writeUtilityCommands(projectRoot, config),
     writeSkills(projectRoot, config),
-    writeContextModes(projectRoot),
     writeArtifactTemplates(projectRoot),
     writeEvalScaffold(projectRoot),
     writeRulebook(projectRoot)

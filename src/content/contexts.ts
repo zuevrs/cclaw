@@ -1,63 +1,24 @@
 export const DEFAULT_CONTEXT_MODE = "default";
 
-export const CONTEXT_MODES: Record<string, string> = {
-  default: `# Context Mode: default
+/**
+ * Valid context mode identifiers used by the session hooks and the
+ * `context-engineering` skill. Mode bodies no longer live as separate
+ * `.cclaw/contexts/<mode>.md` files — the guidance was merged into the
+ * `context-engineering` skill. This list only exists so `doctor` can
+ * validate that `state/context-mode.json#activeMode` references a known
+ * mode name.
+ */
+export const AVAILABLE_CONTEXT_MODES = [
+  "default",
+  "execution",
+  "review",
+  "incident"
+] as const;
 
-Use for most day-to-day feature work.
-
-## Focus
-- Follow the active cclaw stage strictly.
-- Keep changes within the current task blast radius.
-- Prefer incremental progress with frequent verification.
-
-## Decision posture
-- Escalate only meaningful trade-offs.
-- Ask for user confirmation only at explicit stage gates.
-`,
-  execution: `# Context Mode: execution
-
-Use when plan/spec are approved and the goal is high-throughput delivery.
-
-## Focus
-- Prioritize deterministic implementation flow (RED -> GREEN -> REFACTOR).
-- Minimize conversational overhead; keep updates concise and evidence-first.
-- Batch machine-only checks through subagent dispatch where supported.
-
-## Decision posture
-- Avoid reopening settled design debates unless a blocker appears.
-- Stop immediately on failing quality gates or unresolved critical findings.
-`,
-  review: `# Context Mode: review
-
-Use for deep validation, risk discovery, and merge readiness.
-
-## Focus
-- Bias toward finding concrete defects, regressions, and evidence gaps.
-- Cross-check spec, plan, tests, and implementation alignment.
-- Treat unsupported claims as unverified until backed by command output.
-
-## Decision posture
-- Classify findings by severity and expected blast radius.
-- Block ship decisions when critical issues remain unresolved.
-`,
-  incident: `# Context Mode: incident
-
-Use for production failures, emergency regressions, or urgent stabilization.
-
-## Focus
-- Reproduce first, then isolate, then fix.
-- Favor smallest safe change with rollback clarity.
-- Preserve timeline and evidence for post-incident learning.
-
-## Decision posture
-- Prefer containment over optimization.
-- Require explicit evidence for declaring recovery complete.
-`
-};
-
-export function contextModeFiles(): Record<string, string> {
-  return { ...CONTEXT_MODES };
-}
+/** Legacy alias: kept so existing imports keep typechecking. */
+export const CONTEXT_MODES: Record<string, true> = Object.fromEntries(
+  AVAILABLE_CONTEXT_MODES.map((mode) => [mode, true])
+);
 
 export interface ContextModeState {
   activeMode: string;
@@ -69,6 +30,6 @@ export function createInitialContextModeState(nowIso = new Date().toISOString())
   return {
     activeMode: DEFAULT_CONTEXT_MODE,
     updatedAt: nowIso,
-    availableModes: Object.keys(CONTEXT_MODES)
+    availableModes: [...AVAILABLE_CONTEXT_MODES]
   };
 }

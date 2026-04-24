@@ -1369,15 +1369,6 @@ export async function doctorChecks(projectRoot: string, options: DoctorOptions =
       details: `${RUNTIME_ROOT}/state/context-mode.json must reference one of: ${Object.keys(CONTEXT_MODES).join(", ")} (default=${DEFAULT_CONTEXT_MODE})`
     });
   }
-  for (const mode of Object.keys(CONTEXT_MODES)) {
-    const modePath = path.join(projectRoot, RUNTIME_ROOT, "contexts", `${mode}.md`);
-    checks.push({
-      name: `contexts:mode:${mode}`,
-      ok: await exists(modePath),
-      details: modePath
-    });
-  }
-
   await ensureFeatureSystem(projectRoot, { repair: false });
   const activeFeature = await readActiveFeature(projectRoot, { repair: false });
   let flowState = createInitialFlowState();
