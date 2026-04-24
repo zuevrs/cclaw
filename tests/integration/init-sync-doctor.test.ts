@@ -456,14 +456,14 @@ describe("install lifecycle", { timeout: 30_000 }, () => {
     expect(countOccurrences(mergedClaude, ".cclaw/hooks/run-hook.cmd prompt-guard")).toBe(1);
     expect(countOccurrences(mergedClaude, ".cclaw/hooks/run-hook.cmd workflow-guard")).toBe(1);
     expect(countOccurrences(mergedClaude, ".cclaw/hooks/run-hook.cmd context-monitor")).toBe(1);
-    expect(countOccurrences(mergedClaude, ".cclaw/hooks/run-hook.cmd stop-checkpoint")).toBe(1);
+    expect(countOccurrences(mergedClaude, ".cclaw/hooks/run-hook.cmd stop-handoff")).toBe(1);
 
     expect(mergedCursor).toContain("cursor-user-stop");
     expect(mergedCursor).toContain("cursor-user-pre");
     expect(countOccurrences(mergedCursor, ".cclaw/hooks/run-hook.cmd prompt-guard")).toBe(1);
     expect(countOccurrences(mergedCursor, ".cclaw/hooks/run-hook.cmd workflow-guard")).toBe(1);
     expect(countOccurrences(mergedCursor, ".cclaw/hooks/run-hook.cmd context-monitor")).toBe(1);
-    expect(countOccurrences(mergedCursor, ".cclaw/hooks/run-hook.cmd stop-checkpoint")).toBe(1);
+    expect(countOccurrences(mergedCursor, ".cclaw/hooks/run-hook.cmd stop-handoff")).toBe(1);
   });
 
   it("sync recovers relaxed JSON hooks and preserves user commands", async () => {
@@ -982,7 +982,7 @@ describe("install lifecycle", { timeout: 30_000 }, () => {
       hooks: {
         Stop: [{
           hooks: [
-            { type: "command", command: "node .cclaw/hooks/run-hook.mjs stop-checkpoint" },
+            { type: "command", command: "node .cclaw/hooks/run-hook.mjs stop-handoff" },
             { type: "command", command: "echo user-stop-hook" }
           ]
         }],

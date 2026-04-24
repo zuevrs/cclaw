@@ -30,7 +30,7 @@ export const HOOK_HANDLERS = [
   "prompt-guard",
   "workflow-guard",
   "context-monitor",
-  "stop-checkpoint",
+  "stop-handoff",
   "pre-compact",
   "verify-current-state"
 ] as const;
@@ -72,7 +72,7 @@ export const HOOK_SEMANTIC_EVENTS = [
   "pre_tool_prompt_guard",
   "pre_tool_workflow_guard",
   "post_tool_context_monitor",
-  "stop_checkpoint",
+  "stop_handoff",
   "precompact_digest"
 ] as const;
 export type HookSemanticEvent = (typeof HOOK_SEMANTIC_EVENTS)[number];
@@ -130,9 +130,9 @@ export const HOOK_MANIFEST: readonly HookHandlerSpec[] = [
     }
   },
   {
-    handler: "stop-checkpoint",
+    handler: "stop-handoff",
     description: "Remind about clean handoff with stage + run context on session stop.",
-    semantic: "stop_checkpoint",
+    semantic: "stop_handoff",
     bindings: {
       claude: [{ event: "Stop", timeout: 10 }],
       cursor: [{ event: "stop", timeout: 10 }],

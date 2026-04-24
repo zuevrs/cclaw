@@ -662,7 +662,7 @@ flowchart TD
   S2["Group slices into execution"]
   S3["Define each task with"]
   S4["Trace every locked decision"]
-  S5["Record checkpoints and blockers"]
+  S5["Record validation points and"]
   S6["Write plan artifact and"]
   S1 --> S2
   S2 --> S3
@@ -718,10 +718,10 @@ You MUST complete these steps in order:
 3. Group tasks into dependency batches — batch N+1 cannot start until batch N has verification evidence.
 4. Slice into vertical tasks — each task targets 2-5 minutes, produces one testable outcome, and touches one coherent area.
 5. Attach verification — every task has an acceptance criterion mapping and a concrete verification command.
-6. Annotate slice-review metadata — if \`.cclaw/config.yaml::sliceReview.enabled\` is true, every task row additionally carries \`touchCount\` (rough number of files expected to change) and \`touchPaths\` (glob hints, e.g. \`migrations/**\`, \`src/auth/**\`). A task may set \`highRisk: true\` to force a review pass regardless of thresholds. These fields feed the TDD stage's Per-Slice Review checkpoint; when \`sliceReview\` is disabled they are optional.
+6. Annotate slice-review metadata — if \`.cclaw/config.yaml::sliceReview.enabled\` is true, every task row additionally carries \`touchCount\` (rough number of files expected to change) and \`touchPaths\` (glob hints, e.g. \`migrations/**\`, \`src/auth/**\`). A task may set \`highRisk: true\` to force a review pass regardless of thresholds. These fields feed the TDD stage's Per-Slice Review point; when \`sliceReview\` is disabled they are optional.
 7. Map scope Locked Decisions — every D-XX from scope is referenced by at least one plan task (or explicitly marked deferred with reason).
 8. Run anti-placeholder + anti-scope-reduction scans — block \`TODO/TBD/...\` and phrasing like \`v1\`, \`for now\`, \`later\` for locked boundaries.
-9. Define checkpoints — mark points where progress should be validated before continuing.
+9. Define validation points — mark where progress must be checked before continuing.
 10. WAIT_FOR_CONFIRM — write plan artifact and explicitly pause. **STOP.** Do NOT proceed until user confirms. Then close the stage with \`node .cclaw/hooks/stage-complete.mjs plan\` and tell user to run \`/cc-next\`.
 
 ## Examples
@@ -817,7 +817,7 @@ Rule: Every task must trace to a spec acceptance criterion. Every locked scope d
 - task graph
 - dependency batch plan
 - ordered plan
-- explicit confirmation checkpoint
+- explicit confirmation gate
 
 ## Review Sections
 

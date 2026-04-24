@@ -423,7 +423,7 @@ function hookEventNameForOutput(hookName) {
   if (hookName === "prompt-guard") return "PreToolUse";
   if (hookName === "workflow-guard") return "PreToolUse";
   if (hookName === "context-monitor") return "PostToolUse";
-  if (hookName === "stop-checkpoint") return "Stop";
+  if (hookName === "stop-handoff") return "Stop";
   if (hookName === "pre-compact") return "PreCompact";
   if (hookName === "verify-current-state") return "UserPromptSubmit";
   return "SessionStart";
@@ -1127,7 +1127,7 @@ function stopLawIsStrict(ironLawsObj) {
   );
 }
 
-async function handleStopCheckpoint(runtime) {
+async function handleStopHandoff(runtime) {
   const state = await readFlowState(runtime.root);
   const stateDir = path.join(runtime.root, RUNTIME_ROOT, "state");
   const ironLawsFile = path.join(stateDir, "iron-laws.json");
@@ -1629,7 +1629,7 @@ async function handleContextMonitor(runtime) {
       String(remainingPercent.toFixed(2)) +
       "% (" +
       band +
-      "). Consider checkpointing or compacting soon.";
+      "). Consider leaving a handoff note or compacting soon.";
     emitAdvisoryContext(runtime, "context-monitor", note);
     process.stderr.write("[cclaw] " + note + "\\n");
     nextAdvisoryBand = band;
@@ -1680,7 +1680,8 @@ async function handleVerifyCurrentState(runtime) {
 function normalizeHookName(rawName) {
   const value = normalizeText(rawName).toLowerCase();
   if (value === "session-start") return "session-start";
-  if (value === "stop-checkpoint") return "stop-checkpoint";
+  if (value === "stop-handoff") return "stop-handoff";
+  if (value === "stop-checkpoint") return "stop-handoff";
   if (value === "pre-compact") return "pre-compact";
   if (value === "prompt-guard") return "prompt-guard";
   if (value === "workflow-guard") return "workflow-guard";
@@ -1695,7 +1696,7 @@ async function main() {
     process.stderr.write(
       "[cclaw] run-hook: usage: node " +
         RUNTIME_ROOT +
-        "/hooks/run-hook.mjs <session-start|stop-checkpoint|pre-compact|prompt-guard|workflow-guard|context-monitor|verify-current-state>\\n"
+        "/hooks/run-hook.mjs <session-start|stop-handoff|pre-compact|prompt-guard|workflow-guard|context-monitor|verify-current-state>\\n"
     );
     process.exitCode = 1;
     return;
@@ -1727,8 +1728,8 @@ async function main() {
       process.exitCode = await handleSessionStart(runtime);
       return;
     }
-    if (hookName === "stop-checkpoint") {
-      process.exitCode = await handleStopCheckpoint(runtime);
+    if (hookName === "stop-handoff") {
+      process.exitCode = await handleStopHandoff(runtime);
       return;
     }
     if (hookName === "pre-compact") {

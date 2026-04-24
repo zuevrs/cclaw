@@ -745,11 +745,11 @@ export async function doctorChecks(projectRoot: string, options: DoctorOptions =
       preCommands.some((cmd) => cmd.includes("prompt-guard")) &&
       preCommands.some((cmd) => cmd.includes("workflow-guard")) &&
       postCommands.some((cmd) => cmd.includes("context-monitor")) &&
-      stopCommands.some((cmd) => cmd.includes("stop-checkpoint"));
+      stopCommands.some((cmd) => cmd.includes("stop-handoff"));
     checks.push({
       name: "hook:wiring:claude",
       ok: wiringOk,
-      details: `${file} must wire session-start/prompt-guard/workflow-guard/context-monitor/stop-checkpoint`
+      details: `${file} must wire session-start/prompt-guard/workflow-guard/context-monitor/stop-handoff`
     });
   }
 
@@ -782,11 +782,11 @@ export async function doctorChecks(projectRoot: string, options: DoctorOptions =
       preCommands.some((cmd) => cmd.includes("prompt-guard")) &&
       preCommands.some((cmd) => cmd.includes("workflow-guard")) &&
       postCommands.some((cmd) => cmd.includes("context-monitor")) &&
-      stopCommands.some((cmd) => cmd.includes("stop-checkpoint"));
+      stopCommands.some((cmd) => cmd.includes("stop-handoff"));
     checks.push({
       name: "hook:wiring:cursor",
       ok: wiringOk,
-      details: `${file} must wire session-start/prompt-guard/workflow-guard/context-monitor/stop-checkpoint`
+      details: `${file} must wire session-start/prompt-guard/workflow-guard/context-monitor/stop-handoff`
     });
 
     const cursorRulePath = path.join(projectRoot, ".cursor/rules/cclaw-workflow.mdc");
@@ -856,11 +856,11 @@ export async function doctorChecks(projectRoot: string, options: DoctorOptions =
       codexPreCmds.some((cmd) => cmd.includes("prompt-guard")) &&
       codexPreCmds.some((cmd) => cmd.includes("workflow-guard")) &&
       codexPostCmds.some((cmd) => cmd.includes("context-monitor")) &&
-      codexStopCmds.some((cmd) => cmd.includes("stop-checkpoint"));
+      codexStopCmds.some((cmd) => cmd.includes("stop-handoff"));
     checks.push({
       name: "hook:wiring:codex",
       ok: codexWiringOk,
-      details: `${codexHooksFile} must wire SessionStart, UserPromptSubmit(prompt/workflow/verify-current-state), PreToolUse(prompt/workflow), PostToolUse(context-monitor), and Stop(stop-checkpoint). PreToolUse/PostToolUse run Bash-only in Codex v0.114+`
+      details: `${codexHooksFile} must wire SessionStart, UserPromptSubmit(prompt/workflow/verify-current-state), PreToolUse(prompt/workflow), PostToolUse(context-monitor), and Stop(stop-handoff). PreToolUse/PostToolUse run Bash-only in Codex v0.114+`
     });
 
     // Feature flag warning: Codex ignores `.codex/hooks.json` unless the
@@ -961,7 +961,7 @@ export async function doctorChecks(projectRoot: string, options: DoctorOptions =
     checks.push({
       name: "lifecycle:opencode:rehydration_events",
       ok,
-      details: `${file} must include event lifecycle handler, session.created/updated/resumed/cleared/compacted rehydration, tool.execute.before/after with prompt/workflow/context hooks, session.idle checkpoint, and transform rehydration`
+      details: `${file} must include event lifecycle handler, session.created/updated/resumed/cleared/compacted rehydration, tool.execute.before/after with prompt/workflow/context hooks, session.idle handoff, and transform rehydration`
     });
     checks.push({
       name: "hook:opencode:single_tool_handler_path",
@@ -1002,7 +1002,7 @@ export async function doctorChecks(projectRoot: string, options: DoctorOptions =
   for (const candidate of windowsHookConfigCandidates) {
     if (!(await exists(candidate))) continue;
     const content = await fs.readFile(candidate, "utf8");
-    if (/bash\s+\.cclaw\/hooks\/|\.cclaw\/hooks\/(?:session-start|stop-checkpoint|pre-compact|prompt-guard|workflow-guard|context-monitor)\.sh/u.test(content)) {
+    if (/bash\s+\.cclaw\/hooks\/|\.cclaw\/hooks\/(?:session-start|stop-handoff|stop-checkpoint|pre-compact|prompt-guard|workflow-guard|context-monitor)\.sh/u.test(content)) {
       legacyDispatchFiles.push(path.relative(projectRoot, candidate));
     }
   }

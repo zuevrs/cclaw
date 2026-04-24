@@ -280,7 +280,7 @@ describe("node hook runtime", () => {
     expect(breadcrumbs).toContain("session-start:ralph-loop");
   });
 
-  it("stop-checkpoint emits a handoff reminder without writing checkpoint state", async () => {
+  it("stop-handoff emits a handoff reminder without writing checkpoint state", async () => {
     const root = await createTempProject("node-hook-stop");
     await fs.mkdir(path.join(root, ".cclaw/state"), { recursive: true });
     await fs.writeFile(path.join(root, ".cclaw/state/flow-state.json"), JSON.stringify({
@@ -291,7 +291,7 @@ describe("node hook runtime", () => {
 
     const result = await runNodeHook(
       root,
-      "stop-checkpoint",
+      "stop-handoff",
       nodeHookRuntimeScript(),
       { loop_count: 0 }
     );

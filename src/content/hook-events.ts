@@ -24,7 +24,7 @@ const OPENCODE_SEMANTIC_COVERAGE: Partial<Record<HookSemanticEvent, string>> = {
   pre_tool_prompt_guard: "plugin tool.execute.before -> prompt-guard",
   pre_tool_workflow_guard: "plugin tool.execute.before -> workflow-guard",
   post_tool_context_monitor: "plugin tool.execute.after -> context-monitor",
-  stop_checkpoint: "plugin session.idle -> stop-checkpoint",
+  stop_handoff: "plugin session.idle -> stop-handoff",
   precompact_digest: "plugin session.compacted -> pre-compact"
 };
 

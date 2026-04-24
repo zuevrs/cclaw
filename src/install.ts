@@ -1234,7 +1234,7 @@ function isManagedRuntimeHookCommand(command: string): boolean {
   // sync without being duplicated alongside freshly generated entries.
   const normalized = command.trim().replace(/\s+/gu, " ").replace(/\\/gu, "/");
   if (
-    /(^|\s)(?:node\s+)?(?:"|')?(?:\.\/)?\.cclaw\/hooks\/run-hook\.(?:mjs|cmd)(?:"|')?\s+(?:session-start|stop-checkpoint|pre-compact|prompt-guard|workflow-guard|context-monitor|verify-current-state)(?:\s|$)/u.test(
+    /(^|\s)(?:node\s+)?(?:"|')?(?:\.\/)?\.cclaw\/hooks\/run-hook\.(?:mjs|cmd)(?:"|')?\s+(?:session-start|stop-handoff|stop-checkpoint|pre-compact|prompt-guard|workflow-guard|context-monitor|verify-current-state)(?:\s|$)/u.test(
       normalized
     )
   ) {

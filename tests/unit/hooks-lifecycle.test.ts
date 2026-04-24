@@ -76,7 +76,7 @@ describe("hooks lifecycle wiring", () => {
     expect(claude).toContain(".cclaw/hooks/run-hook.cmd prompt-guard");
     expect(claude).toContain(".cclaw/hooks/run-hook.cmd workflow-guard");
     expect(claude).toContain(".cclaw/hooks/run-hook.cmd context-monitor");
-    expect(claude).toContain(".cclaw/hooks/run-hook.cmd stop-checkpoint");
+    expect(claude).toContain(".cclaw/hooks/run-hook.cmd stop-handoff");
     expect(claude).toContain(".cclaw/hooks/run-hook.cmd pre-compact");
     expect(claude).not.toContain(".sh");
 
@@ -84,7 +84,7 @@ describe("hooks lifecycle wiring", () => {
     expect(cursor).toContain(".cclaw/hooks/run-hook.cmd prompt-guard");
     expect(cursor).toContain(".cclaw/hooks/run-hook.cmd workflow-guard");
     expect(cursor).toContain(".cclaw/hooks/run-hook.cmd context-monitor");
-    expect(cursor).toContain(".cclaw/hooks/run-hook.cmd stop-checkpoint");
+    expect(cursor).toContain(".cclaw/hooks/run-hook.cmd stop-handoff");
     expect(cursor).toContain(".cclaw/hooks/run-hook.cmd pre-compact");
     expect(cursor).not.toContain(".sh");
 
@@ -92,7 +92,7 @@ describe("hooks lifecycle wiring", () => {
     expect(codex).toContain(".cclaw/hooks/run-hook.cmd prompt-guard");
     expect(codex).toContain(".cclaw/hooks/run-hook.cmd workflow-guard");
     expect(codex).toContain(".cclaw/hooks/run-hook.cmd context-monitor");
-    expect(codex).toContain(".cclaw/hooks/run-hook.cmd stop-checkpoint");
+    expect(codex).toContain(".cclaw/hooks/run-hook.cmd stop-handoff");
     expect(codex).toContain(".cclaw/hooks/run-hook.cmd verify-current-state");
     expect(codex).not.toContain(".sh");
   });
@@ -166,12 +166,12 @@ printf '%s\\n' "$*" >> "${callsPath}"
     expect(plugin).toContain('runHookScript("prompt-guard"');
     expect(plugin).toContain('runHookScript("workflow-guard"');
     expect(plugin).toContain('runHookScript("context-monitor"');
-    expect(plugin).toContain('runHookScript("stop-checkpoint"');
+    expect(plugin).toContain('runHookScript("stop-handoff"');
     expect(plugin).not.toContain("prompt-guard.sh");
     expect(plugin).not.toContain("workflow-guard.sh");
     expect(plugin).not.toContain("context-monitor.sh");
     expect(plugin).not.toContain("pre-compact.sh");
-    expect(plugin).not.toContain("stop-checkpoint.sh");
+    expect(plugin).not.toContain("stop-handoff.sh");
   });
 
   it("opencode plugin rehydrates and runs node hook runtime", async () => {

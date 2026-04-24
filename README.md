@@ -405,7 +405,7 @@ What the fallbacks mean:
 > `/use cc-next`, `/use cc-view`, `/use cc-ideate`, or
 > by typing `/cc …` in plain text — Codex auto-matches from the skill
 > description) **and** writes `.codex/hooks.json` so session-start
-> rehydration, stop-checkpoint, prompt-guard, workflow-guard, and
+> rehydration, stop-handoff, prompt-guard, workflow-guard, and
 > context-monitor fire automatically — as long as you enable the
 > `codex_hooks` feature flag in `~/.codex/config.toml`. `cclaw init
 > --codex` asks for consent before patching that file. Codex's

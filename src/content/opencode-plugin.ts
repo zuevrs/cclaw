@@ -612,7 +612,7 @@ export default function cclawPlugin(ctx) {
         await refreshBootstrapCache(true);
       }
       if (eventType === "session.idle") {
-        await runHookScript("stop-checkpoint", { loop_count: 0 });
+        await runHookScript("stop-handoff", { loop_count: 0 });
       }
     },
     "tool.execute.before": async (input, output) => {

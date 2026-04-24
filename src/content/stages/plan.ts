@@ -47,10 +47,10 @@ export const PLAN: StageSchemaInput = {
       "Group tasks into dependency batches — batch N+1 cannot start until batch N has verification evidence.",
       "Slice into vertical tasks — each task targets 2-5 minutes, produces one testable outcome, and touches one coherent area.",
       "Attach verification — every task has an acceptance criterion mapping and a concrete verification command.",
-      "Annotate slice-review metadata — if `.cclaw/config.yaml::sliceReview.enabled` is true, every task row additionally carries `touchCount` (rough number of files expected to change) and `touchPaths` (glob hints, e.g. `migrations/**`, `src/auth/**`). A task may set `highRisk: true` to force a review pass regardless of thresholds. These fields feed the TDD stage's Per-Slice Review checkpoint; when `sliceReview` is disabled they are optional.",
+      "Annotate slice-review metadata — if `.cclaw/config.yaml::sliceReview.enabled` is true, every task row additionally carries `touchCount` (rough number of files expected to change) and `touchPaths` (glob hints, e.g. `migrations/**`, `src/auth/**`). A task may set `highRisk: true` to force a review pass regardless of thresholds. These fields feed the TDD stage's Per-Slice Review point; when `sliceReview` is disabled they are optional.",
       "Map scope Locked Decisions — every D-XX from scope is referenced by at least one plan task (or explicitly marked deferred with reason).",
       "Run anti-placeholder + anti-scope-reduction scans — block `TODO/TBD/...` and phrasing like `v1`, `for now`, `later` for locked boundaries.",
-      "Define checkpoints — mark points where progress should be validated before continuing.",
+      "Define validation points — mark where progress must be checked before continuing.",
       "WAIT_FOR_CONFIRM — write plan artifact and explicitly pause. **STOP.** Do NOT proceed until user confirms. Then close the stage with `node .cclaw/hooks/stage-complete.mjs plan` and tell user to run `/cc-next`."
     ],
     interactionProtocol: [
@@ -68,7 +68,7 @@ export const PLAN: StageSchemaInput = {
       "Group slices into execution batches and define gate criteria per batch.",
       "Define each task with acceptance mapping and verification commands.",
       "Trace every locked decision (D-XX) to plan tasks or explicit defer rationale.",
-      "Record checkpoints and blockers.",
+      "Record validation points and blockers.",
       "Write plan artifact and pause at WAIT_FOR_CONFIRM."
     ],
     requiredGates: [
@@ -132,7 +132,7 @@ export const PLAN: StageSchemaInput = {
     ]
   },
   reviewLens: {
-    outputs: ["task graph", "dependency batch plan", "ordered plan", "explicit confirmation checkpoint"],
+    outputs: ["task graph", "dependency batch plan", "ordered plan", "explicit confirmation gate"],
     reviewSections: [
       {
         title: "Task Decomposition Audit",
