@@ -308,6 +308,8 @@ function normalizeStageSchemaInput(value: StageSchemaInput): StageSchemaLegacyIn
     whenNotToUse: value.philosophy.whenNotToUse,
     interactionProtocol: value.executionModel.interactionProtocol,
     process: value.executionModel.process,
+    processFlow: value.executionModel.processFlow,
+    platformNotes: value.executionModel.platformNotes,
     requiredGates: value.executionModel.requiredGates,
     requiredEvidence: value.executionModel.requiredEvidence,
     inputs: value.executionModel.inputs,
@@ -539,6 +541,8 @@ export function stageSchema(stage: FlowStage, track: FlowTrack = "standard"): St
   const executionModel: StageExecutionModel = {
     interactionProtocol: base.interactionProtocol,
     process: base.process,
+    processFlow: base.processFlow,
+    platformNotes: base.platformNotes,
     checklist: base.checklist,
     requiredGates: tieredGates,
     requiredEvidence: base.requiredEvidence,

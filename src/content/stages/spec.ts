@@ -43,6 +43,7 @@ export const SPEC: StageSchemaInput = {
       "Capture edge cases — for each criterion, define at least one boundary condition and one error condition.",
       "Document constraints and assumptions — regulatory, system, integration, and performance boundaries. Surface implicit assumptions explicitly.",
       "Confirm testability — for each acceptance criterion, describe the test that would prove it. If untestable, rewrite the criterion.",
+      "Present acceptance criteria to the user in 3-5-item batches, pausing for explicit ACK between batches (see Interaction Protocol).",
       "Write spec artifact and request user approval — wait for explicit confirmation before proceeding."
     ],
     interactionProtocol: [

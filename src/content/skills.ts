@@ -337,6 +337,63 @@ function normalizedGuidanceKey(value: string): string {
     .toLowerCase();
 }
 
+function mermaidNodeLabel(raw: string, index: number): string {
+  const stripped = raw
+    .replace(/`[^`]+`/gu, "")
+    .replace(/\*\*/gu, "")
+    .replace(/[*_]/gu, "")
+    .replace(/\[[^\]]*\]\([^)]*\)/gu, "")
+    .split(/[—:.;]/u)[0]
+    ?.trim() ?? "";
+  const words = stripped.split(/\s+/u).filter((word) => word.length > 0);
+  const short = words.slice(0, 4).join(" ");
+  const label = short.length === 0
+    ? `Step ${index + 1}`
+    : short.replace(/["`]/gu, "");
+  return label.length > 48 ? `${label.slice(0, 45)}...` : label;
+}
+
+const MERMAID_PROCESS_MAX_NODES = 10;
+
+function renderProcessFlowMermaid(executionModel: StageExecutionModel): string {
+  if (executionModel.processFlow && executionModel.processFlow.trim().length > 0) {
+    return `\`\`\`mermaid\n${executionModel.processFlow.trim()}\n\`\`\``;
+  }
+  const source = executionModel.process.length > 0
+    ? executionModel.process
+    : executionModel.checklist;
+  if (source.length === 0) {
+    return "";
+  }
+  const limited = source.slice(0, MERMAID_PROCESS_MAX_NODES);
+  const nodes = limited.map((item, index) => ({
+    id: `S${index + 1}`,
+    label: mermaidNodeLabel(item, index)
+  }));
+  const lines = ["flowchart TD"];
+  for (const node of nodes) {
+    lines.push(`  ${node.id}["${node.label}"]`);
+  }
+  for (let i = 0; i < nodes.length - 1; i += 1) {
+    lines.push(`  ${nodes[i]!.id} --> ${nodes[i + 1]!.id}`);
+  }
+  if (source.length > MERMAID_PROCESS_MAX_NODES) {
+    lines.push(`  S${nodes.length} --> More["...see full Checklist"]`);
+  }
+  return `\`\`\`mermaid\n${lines.join("\n")}\n\`\`\``;
+}
+
+function renderPlatformNotesBlock(notes: string[] | undefined): string {
+  if (!notes || notes.length === 0) {
+    return "";
+  }
+  const body = notes.map((item) => `- ${item}`).join("\n");
+  return `## Platform Notes
+${body}
+
+`;
+}
+
 function dedupeGuidance(
   items: string[],
   blockedBy: string[]
@@ -379,7 +436,8 @@ export function stageSkillMarkdown(stage: FlowStage, track: FlowTrack = "standar
     executionModel.interactionProtocol,
     [...executionModel.checklist, ...executionModel.process]
   ).slice(0, 5);
-  const processSummary = dedupeGuidance(executionModel.process, executionModel.checklist).slice(0, 5);
+  const processFlowMermaid = renderProcessFlowMermaid(executionModel);
+  const platformNotesBlock = renderPlatformNotesBlock(executionModel.platformNotes);
   const stageRefs = stageSpecificSeeAlso(stage);
   const reviewLoopSection = reviewLoopBlock(reviewLens.reviewLoop);
   const mandatoryDelegationSummary = mandatoryDelegations.length > 0
@@ -421,7 +479,10 @@ ${philosophy.hardGate}
 ${mergedAntiPatterns(philosophy, executionModel)}
 
 ## Process
-${processSummary.length > 0 ? processSummary.map((item, i) => `${i + 1}. ${item}`).join("\n") : "1. Execute the Checklist in order.\n2. Satisfy every required gate.\n3. Complete verification before stage closeout."}
+
+This is the stage **state machine** — the canonical ordered flow. For every detailed step, gate, and wording, follow the Checklist below; this diagram is the map, not the territory.
+
+${processFlowMermaid.length > 0 ? processFlowMermaid : "```mermaid\nflowchart TD\n  S1[\"Execute Checklist\"] --> S2[\"Satisfy required gates\"] --> S3[\"Verify before closeout\"]\n```"}
 
 ## Inputs
 ${executionModel.inputs.length > 0 ? executionModel.inputs.map((item) => `- ${item}`).join("\n") : "- (first stage — no required inputs)"}
@@ -429,7 +490,7 @@ ${executionModel.inputs.length > 0 ? executionModel.inputs.map((item) => `- ${it
 ## Required Context
 ${executionModel.requiredContext.length > 0 ? executionModel.requiredContext.map((item) => `- ${item}`).join("\n") : "- None beyond this skill"}
 
-${contextLoadingBlock(artifactRules.crossStageTrace)}
+${platformNotesBlock}${contextLoadingBlock(artifactRules.crossStageTrace)}
 ${autoSubagentDispatchBlock(stage, track)}
 ${researchPlaybooksBlock(executionModel.researchPlaybooks ?? [])}
 
@@ -442,6 +503,9 @@ ${checklistItems}
 ${stageExamples(stage)}
 
 ## Interaction Protocol
+
+These are **rules for HOW you interact with the user** during this stage — tone, question shape, decision gating. Ordered steps of *what to do* live in the Checklist; do not treat these as an alternative sequence.
+
 ${interactionFocus.length > 0 ? interactionFocus.map((item, i) => `${i + 1}. ${item}`).join("\n") : "- Keep communication concise and decision-focused; rely on the Checklist for execution order."}
 
 Decision protocol reference: \`${DECISION_PROTOCOL_PATH}\`
