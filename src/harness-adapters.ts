@@ -372,7 +372,7 @@ If the same approach fails three times in a row (same command, same finding, sam
 - This managed AGENTS block is intentionally minimal for cross-project use.
 - Harness coverage is tiered: Tier1 (claude), Tier2 (cursor/opencode/codex — codex has Bash-only tool hooks), Tier3 (fallback/manual-only).
 - Detailed operating procedures live in \`.cclaw/skills/using-cclaw/SKILL.md\`.
-- Preamble budget and cooldown rules live in \`.cclaw/references/protocols/ethos.md\`.
+- Keep preambles brief; re-announce role/stage only when either changes.
 - Subagent orchestration patterns: \`.cclaw/skills/subagent-dev/SKILL.md\` and \`.cclaw/skills/parallel-dispatch/SKILL.md\`.
 
 ### Codex users

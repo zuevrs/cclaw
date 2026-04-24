@@ -75,7 +75,7 @@ You ──► /cc <idea>
    cclaw reads state + knowledge, guides execution
         │
         ▼
-   artifacts written, checkpoint saved
+   artifacts written, handoff captured
         │
         ▼
    next stage is explicit in flow-state.json

@@ -4,7 +4,7 @@ import path from "node:path";
 import { SHIP_FINALIZATION_MODES } from "../../src/constants.js";
 import { lintArtifact } from "../../src/artifact-linter.js";
 import { CCLAW_AGENTS } from "../../src/content/core-agents.js";
-import { stageExamples, stageExamplesReferenceMarkdown } from "../../src/content/examples.js";
+import { stageExamples, stageFullArtifactExampleMarkdown } from "../../src/content/examples.js";
 import { mandatoryDelegationsForStage, stagePolicyNeedles, stageSchema } from "../../src/content/stage-schema.js";
 import { stageSkillMarkdown } from "../../src/content/skills.js";
 import { enhancedAgentBody } from "../../src/content/subagents.js";
@@ -416,9 +416,9 @@ describe("stage schema and subagent alignment", () => {
     const inlinePointer = stageExamples("brainstorm");
     expect(inlinePointer).toContain("Shape cues to follow");
 
-    const reference = stageExamplesReferenceMarkdown("brainstorm");
-    expect(reference, "stage examples reference should exist").toBeTruthy();
-    const fenceMatch = /```markdown\n([\s\S]+?)\n```/u.exec(reference!);
+    const fullExample = stageFullArtifactExampleMarkdown("brainstorm");
+    expect(fullExample, "stage full example should exist").toBeTruthy();
+    const fenceMatch = /```markdown\n([\s\S]+?)\n```/u.exec(fullExample!);
     expect(fenceMatch, "example should be wrapped in a markdown fence").toBeTruthy();
     const body = fenceMatch![1]!;
     expect(body).toMatch(/^## Context/);

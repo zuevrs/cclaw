@@ -940,8 +940,9 @@ Track-specific skips are allowed only when \`flow-state.track\` + \`skippedStage
 ## Routing Source Of Truth
 
 - Primary router: \`.cclaw/skills/using-cclaw/SKILL.md\`.
-- Protocols: \`.cclaw/references/protocols/*.md\`.
-- Preamble budget: \`.cclaw/references/protocols/ethos.md\`.
+- Stage behavior: current stage skill plus \`.cclaw/state/flow-state.json\`.
+- Preamble budget: keep role/status announcements brief and avoid repeating
+  them unless the stage or role changes.
 `;
 
 export function buildRulesJson(): Record<string, unknown> {

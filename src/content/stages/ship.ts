@@ -54,7 +54,7 @@ export const SHIP: StageSchemaInput = {
       "Detect repository mode — if `.git/` is absent or inaccessible, lock finalization choices to FINALIZE_NO_VCS only and document manual handoff + rollback.",
       "Select finalization mode — exactly ONE enum: (A) FINALIZE_MERGE_LOCAL, (B) FINALIZE_OPEN_PR, (C) FINALIZE_KEEP_BRANCH, (D) FINALIZE_DISCARD_BRANCH, (E) FINALIZE_NO_VCS. For discard: list what will be deleted, require typed confirmation.",
       "Execute finalization — perform the selected action. For merge: verify clean merge. For PR: include structured body (summary, test plan, rollback). For discard: verify deletion. For NO_VCS: record handoff target, artifact bundle path, and manual rollback owner.",
-      "Worktree cleanup — if using git worktrees, clean up the worktree after merge/discard. Keep it only for 'keep branch' mode. Skip for FINALIZE_NO_VCS."
+      "Branch cleanup — after merge/discard, remove only branches or temporary files the user explicitly approved. Skip for FINALIZE_NO_VCS."
     ],
     interactionProtocol: [
       "Run preflight checks before any release action.",

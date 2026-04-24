@@ -691,30 +691,23 @@ export function stageGoodBadExamples(stage: FlowStage): string {
   return blocks.join("\n");
 }
 
-export const STAGE_EXAMPLES_REFERENCE_DIR = "references/stages";
-
-export function stageExamplesReferencePath(stage: FlowStage): string {
-  return `.cclaw/${STAGE_EXAMPLES_REFERENCE_DIR}/${stage}-examples.md`;
-}
-
 /**
- * Returns the full example artifact body as a standalone reference markdown
- * file. Materialized under .cclaw/references/stages/<stage>-examples.md so
- * the always-rendered skill body can link instead of inlining.
+ * Returns the full example artifact body for tests and internal quality checks.
+ * Generated user projects keep only short inline shape cues.
  */
-export function stageExamplesReferenceMarkdown(stage: FlowStage): string | null {
+export function stageFullArtifactExampleMarkdown(stage: FlowStage): string | null {
   const examples = STAGE_EXAMPLES[stage];
   if (!examples) return null;
   return [
     `---`,
     `stage: ${stage}`,
     `name: ${stage}-stage-examples`,
-    `description: "Full sample artifact for the ${stage} stage. Loaded only when an agent explicitly needs a complete example; the stage skill links here rather than inlining."`,
+    `description: "Full sample artifact for the ${stage} stage."`,
     `---`,
     "",
     `# ${stage} stage — full artifact sample`,
     "",
-    `This file is linked from \`.cclaw/skills/<${stage}-stage>/SKILL.md\` under **Examples → See also**. The sample uses H2 headings that mirror the artifact a cclaw session must produce, so the markdown is wrapped in a fence to avoid collapsing into the outline.`,
+    `The sample uses H2 headings that mirror the artifact a cclaw session must produce, so the markdown is wrapped in a fence to avoid collapsing into the outline.`,
     "",
     "```markdown",
     examples,

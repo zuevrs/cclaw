@@ -6,15 +6,18 @@ per-stage skills can stay focused on stage-specific work.
 
 ## Shared completion protocol
 
-- Stage-specific skills expose **Completion Parameters** only.
-- Generic execution steps live in \`.cclaw/references/protocols/completion.md\`.
-- Do not restate the protocol in each stage file.
+- Stage-specific skills expose **Completion Parameters** plus the gates that
+  matter for that stage.
+- Generic execution stays inline: verify required gates, update the artifact,
+  harvest learnings, then use \`/cc-next\` for progression.
+- Do not create separate protocol files.
 
 ## Shared decision protocol
 
-- Decision wording, ask-tool format, retry budget, and escalation rules live in
-  \`.cclaw/references/protocols/decision.md\`.
-- Stage files should reference that path, not duplicate the full text.
+- Ask only decision-changing questions.
+- Prefer one focused question over broad questionnaires.
+- When choices are equivalent, recommend one path and state the trade-off.
+- If a blocker remains after a short retry, stop and ask the user.
 
 ## Shared handoff menu
 
@@ -78,8 +81,8 @@ insight (for example, purely mechanical edits with no new decisions).
 ## Progressive disclosure baseline
 
 - Start with the current stage skill.
-- Load deeper references only when required by a blocker or gate.
-- Prefer \`.cclaw/references/stages/<stage>-examples.md\` and protocol files over
-  copying large instruction blocks into stage skills.
+- Load deeper skills or docs only when required by a blocker or gate.
+- Keep examples as short shape cues inside the current skill instead of
+  materializing separate reference files.
 `;
 }

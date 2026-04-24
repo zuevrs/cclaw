@@ -241,10 +241,6 @@ function quickStartBlock(stage: FlowStage, track: FlowTrack): string {
 `;
 }
 
-/**
- * Long-form Batch Execution walkthrough. Rendered once into
- * \`.cclaw/references/stages/tdd-batch-walkthrough.md\` by the installer.
- */
 export const TDD_BATCH_WALKTHROUGH_MARKDOWN = `# TDD — Batch Execution Walkthrough
 
 Detailed RED / GREEN / REFACTOR transcript for a 3-task batch. Illustrative

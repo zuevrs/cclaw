@@ -459,7 +459,7 @@ You MUST complete these steps in order:
 9. Detect repository mode — if \`.git/\` is absent or inaccessible, lock finalization choices to FINALIZE_NO_VCS only and document manual handoff + rollback.
 10. Select finalization mode — exactly ONE enum: (A) FINALIZE_MERGE_LOCAL, (B) FINALIZE_OPEN_PR, (C) FINALIZE_KEEP_BRANCH, (D) FINALIZE_DISCARD_BRANCH, (E) FINALIZE_NO_VCS. For discard: list what will be deleted, require typed confirmation.
 11. Execute finalization — perform the selected action. For merge: verify clean merge. For PR: include structured body (summary, test plan, rollback). For discard: verify deletion. For NO_VCS: record handoff target, artifact bundle path, and manual rollback owner.
-12. Worktree cleanup — if using git worktrees, clean up the worktree after merge/discard. Keep it only for 'keep branch' mode. Skip for FINALIZE_NO_VCS.
+12. Branch cleanup — after merge/discard, remove only branches or temporary files the user explicitly approved. Skip for FINALIZE_NO_VCS.
 
 ## Examples
 
