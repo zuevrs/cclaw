@@ -13,7 +13,7 @@ Unified read-only command surface for flow visibility.
 Subcommands:
 - \`/cc-view\` or \`/cc-view status\` -> status snapshot
 - \`/cc-view tree\` -> structural flow tree
-- \`/cc-view diff\` -> read-only worktree delta map
+- \`/cc-view diff\` -> read-only git delta map
 
 ## HARD-GATE
 

@@ -81,7 +81,7 @@ const RULES: DoctorRegistryRule[] = [
     }
   },
   {
-    test: /^(flow_state:|state:|contexts:|gates:)/,
+    test: /^(flow_state:|state:|gates:)/,
     metadata: {
       severity: "error",
       summary: "Flow state and gate evidence consistency check.",
@@ -99,11 +99,11 @@ const RULES: DoctorRegistryRule[] = [
     }
   },
   {
-    test: /^(meta_skill:|protocol:|stage_skill:|context_mode:)/,
+    test: /^(meta_skill:|protocol:|stage_skill:)/,
     metadata: {
       severity: "error",
       summary: "Routing skill and protocol integrity check.",
-      fix: "Regenerate runtime references and skills via `cclaw sync`, then re-run doctor.",
+      fix: "Regenerate runtime skills via `cclaw sync`, then re-run doctor.",
       docRef: ref("harnesses.md")
     }
   },

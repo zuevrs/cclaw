@@ -113,8 +113,8 @@ describe("/cc-view diff content", () => {
     expect(contract).toContain("read-only mode");
   });
 
-  it("uses git/worktree evidence instead of a saved baseline", () => {
-    expect(contract).toContain("git/worktree evidence");
+  it("uses git evidence instead of a saved baseline", () => {
+    expect(contract).toContain("git evidence");
     expect(skill).toContain("Inspect git diff");
   });
 });

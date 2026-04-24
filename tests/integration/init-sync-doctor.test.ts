@@ -187,7 +187,6 @@ describe("install lifecycle", { timeout: 30_000 }, () => {
       "meta_skill:",
       "protocol:",
       "stage_skill:",
-      "context_mode:",
       "knowledge:",
       "artifacts:",
       "runs:",

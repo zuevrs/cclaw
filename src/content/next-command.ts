@@ -72,7 +72,7 @@ This is the only progression command the user needs to drive the entire flow. St
 
 - **Do not** invent gate completion: use only \`${flowPath}\` plus observable evidence in repo artifacts.
 - **Do not** skip stages: advance only from \`currentStage\` to its configured successor.
-- After ship completes, the closeout chain **retro -> compound -> archive** runs automatically, driven by \`closeout.shipSubstate\`. Do not route through removed \`/cc-ops\` commands.
+- After ship completes, the closeout chain **retro -> compound -> archive** runs automatically, driven by \`closeout.shipSubstate\`. Continue through \`/cc-next\`; do not branch into a separate operations router.
 
 ## Algorithm (mandatory)
 

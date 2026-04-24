@@ -75,8 +75,7 @@ describe("tdd-red-evidence runId scoping", () => {
   it("fails loud when readFlowState throws and --runId is absent", async () => {
     const root = await createTempProject("red-evidence-no-run");
     // Break flow-state.json enough that readFlowState rejects (the
-    // file is present but feature-system validation fails because we
-    // corrupted the active-feature sidecar). The command used to fall
+    // file is present but invalid JSON). The command used to fall
     // back to unscoped matching; now it must fail loud.
     await fs.mkdir(path.join(root, ".cclaw/state"), { recursive: true });
     await fs.writeFile(

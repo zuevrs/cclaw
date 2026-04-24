@@ -21,7 +21,7 @@ export function diffCommandContract(): string {
 ## Purpose
 
 Show a visual change map for flow-state progression without writing a baseline
-file. Covers the current stage/gate state plus available worktree deltas for:
+file. Covers the current stage/gate state plus available git deltas for:
 
 - ship **closeout substate** transitions (\`retro_review\` → \`compound_review\` → \`ready_to_archive\`),
 - delegation **fulfillmentMode** changes visible in \`git diff\`,
@@ -30,7 +30,7 @@ file. Covers the current stage/gate state plus available worktree deltas for:
 ## HARD-GATE
 
 - This command is read-only. Do not write \`${flowStatePath()}\`, \`${delegationLogPath()}\`, or any derived snapshot.
-- Prefer git/worktree evidence when available; otherwise render the current state summary and say that no baseline is available.
+- Prefer git evidence when available; otherwise render the current state summary and say that no baseline is available.
 
 ## Algorithm
 
@@ -80,7 +80,7 @@ cclaw flow diff
 export function diffCommandSkillMarkdown(): string {
   return `---
 name: ${DIFF_SKILL_NAME}
-description: "Render read-only flow-state, closeout, artifact, and delegation deltas from git/worktree evidence."
+description: "Render read-only flow-state, closeout, artifact, and delegation deltas from git evidence."
 ---
 
 # /cc-view diff

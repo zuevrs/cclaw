@@ -94,7 +94,7 @@ Optional fields \`source\` and \`severity\` may be appended after \`project\`.
 | \`domain\` | string \\| null | yes | Free-form taxonomy (\`api\`, \`infra\`, \`ui\`, \`security\`, \`testing\`, …). Use \`null\` when cross-cutting. |
 | \`stage\` | \`FlowStage\` \\| null | yes | One of brainstorm / scope / design / spec / plan / tdd / review / ship, or \`null\` when cross-stage. |
 | \`origin_stage\` | \`FlowStage\` \\| null | yes | Stage where this learning was first observed. |
-| \`origin_feature\` | string \\| null | yes | Feature/worktree label where it was observed first. |
+| \`origin_feature\` | string \\| null | yes | Optional run, branch, or topic label where it was observed first. |
 | \`frequency\` | integer >= 1 | yes | Number of times this same trigger/action pair has been observed. |
 | \`universality\` | \`"project" \\| "personal" \\| "universal"\` | yes | Scope of applicability. |
 | \`maturity\` | \`"raw" \\| "lifted-to-rule" \\| "lifted-to-enforcement"\` | yes | Lifecycle state of the learning. |

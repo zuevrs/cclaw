@@ -49,9 +49,8 @@ export interface WriteFlowStateOptions {
 
 export interface ReadFlowStateOptions {
   /**
-   * Reserved compatibility switch for callers that previously opted out of
-   * feature-system repair writes. The feature-system layer was removed, so this
-   * flag is now a no-op and only preserved for API stability.
+   * Reserved compatibility switch from older runtimes. The repair layer was removed,
+   * so this flag is now a no-op and only preserved for API stability.
    */
   repairFeatureSystem?: boolean;
 }
