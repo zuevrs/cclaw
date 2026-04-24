@@ -107,14 +107,12 @@ describe("node hook runtime", () => {
   it("session-start refreshes compound-readiness.json and surfaces a nudge during review", async () => {
     const root = await createTempProject("node-hook-compound-readiness");
     await fs.mkdir(path.join(root, ".cclaw/state"), { recursive: true });
-    await fs.mkdir(path.join(root, ".cclaw/contexts"), { recursive: true });
     await fs.mkdir(path.join(root, ".cclaw/skills/using-cclaw"), { recursive: true });
     await fs.writeFile(path.join(root, ".cclaw/state/flow-state.json"), JSON.stringify({
       currentStage: "review",
       activeRunId: "run-compound",
       completedStages: ["brainstorm", "scope", "design", "spec", "plan", "tdd"]
     }, null, 2), "utf8");
-    await fs.writeFile(path.join(root, ".cclaw/contexts/review.md"), "# review\n", "utf8");
     await fs.writeFile(path.join(root, ".cclaw/skills/using-cclaw/SKILL.md"), "# Using cclaw\n", "utf8");
 
     const baseRow = {
@@ -178,14 +176,12 @@ describe("node hook runtime", () => {
   it("session-start refreshes compound-readiness.json silently outside review/ship", async () => {
     const root = await createTempProject("node-hook-compound-readiness-silent");
     await fs.mkdir(path.join(root, ".cclaw/state"), { recursive: true });
-    await fs.mkdir(path.join(root, ".cclaw/contexts"), { recursive: true });
     await fs.mkdir(path.join(root, ".cclaw/skills/using-cclaw"), { recursive: true });
     await fs.writeFile(path.join(root, ".cclaw/state/flow-state.json"), JSON.stringify({
       currentStage: "plan",
       activeRunId: "run-plan",
       completedStages: ["brainstorm", "scope", "design", "spec"]
     }, null, 2), "utf8");
-    await fs.writeFile(path.join(root, ".cclaw/contexts/plan.md"), "# plan\n", "utf8");
     await fs.writeFile(path.join(root, ".cclaw/skills/using-cclaw/SKILL.md"), "# Using cclaw\n", "utf8");
     await fs.writeFile(path.join(root, ".cclaw/knowledge.jsonl"), JSON.stringify({
       type: "pattern",
@@ -226,14 +222,12 @@ describe("node hook runtime", () => {
   it("session-start acquires the CLI-compatible knowledge lock before reading knowledge.jsonl", async () => {
     const root = await createTempProject("node-hook-knowledge-lock");
     await fs.mkdir(path.join(root, ".cclaw/state"), { recursive: true });
-    await fs.mkdir(path.join(root, ".cclaw/contexts"), { recursive: true });
     await fs.mkdir(path.join(root, ".cclaw/skills/using-cclaw"), { recursive: true });
     await fs.writeFile(path.join(root, ".cclaw/state/flow-state.json"), JSON.stringify({
       currentStage: "plan",
       activeRunId: "run-lock",
       completedStages: ["brainstorm", "scope", "design", "spec"]
     }, null, 2), "utf8");
-    await fs.writeFile(path.join(root, ".cclaw/contexts/plan.md"), "# plan\n", "utf8");
     await fs.writeFile(path.join(root, ".cclaw/skills/using-cclaw/SKILL.md"), "# Using cclaw\n", "utf8");
     await fs.writeFile(path.join(root, ".cclaw/knowledge.jsonl"), "", "utf8");
 
@@ -261,14 +255,12 @@ describe("node hook runtime", () => {
   it("session-start records a breadcrumb when ralph-loop / compound-readiness fail", async () => {
     const root = await createTempProject("node-hook-breadcrumb");
     await fs.mkdir(path.join(root, ".cclaw/state"), { recursive: true });
-    await fs.mkdir(path.join(root, ".cclaw/contexts"), { recursive: true });
     await fs.mkdir(path.join(root, ".cclaw/skills/using-cclaw"), { recursive: true });
     await fs.writeFile(path.join(root, ".cclaw/state/flow-state.json"), JSON.stringify({
       currentStage: "tdd",
       activeRunId: "run-bad",
       completedStages: ["brainstorm", "scope", "design", "spec", "plan"]
     }, null, 2), "utf8");
-    await fs.writeFile(path.join(root, ".cclaw/contexts/tdd.md"), "# tdd\n", "utf8");
     await fs.writeFile(path.join(root, ".cclaw/skills/using-cclaw/SKILL.md"), "# Using cclaw\n", "utf8");
     await fs.writeFile(path.join(root, ".cclaw/knowledge.jsonl"), "", "utf8");
 

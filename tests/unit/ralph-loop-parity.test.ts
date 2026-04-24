@@ -56,14 +56,12 @@ describe("ralph-loop + compound-readiness parity (inline hook vs main)", () => {
   it("computeRalphLoopStatusInline matches computeRalphLoopStatus for a seeded cycle log", async () => {
     const root = await createTempProject("ralph-loop-parity");
     await fs.mkdir(path.join(root, ".cclaw/state"), { recursive: true });
-    await fs.mkdir(path.join(root, ".cclaw/contexts"), { recursive: true });
     await fs.mkdir(path.join(root, ".cclaw/skills/using-cclaw"), { recursive: true });
     await fs.writeFile(path.join(root, ".cclaw/state/flow-state.json"), JSON.stringify({
       currentStage: "tdd",
       activeRunId: "run-parity",
       completedStages: ["brainstorm", "scope", "design", "spec", "plan"]
     }, null, 2), "utf8");
-    await fs.writeFile(path.join(root, ".cclaw/contexts/tdd.md"), "# tdd\n", "utf8");
     await fs.writeFile(path.join(root, ".cclaw/skills/using-cclaw/SKILL.md"), "# Using cclaw\n", "utf8");
 
     const raw = CYCLE_LINES.map((row) => JSON.stringify(row)).join("\n") + "\n";
@@ -92,14 +90,12 @@ describe("ralph-loop + compound-readiness parity (inline hook vs main)", () => {
   it("computeCompoundReadinessInline matches computeCompoundReadiness for a seeded knowledge file", async () => {
     const root = await createTempProject("compound-readiness-parity");
     await fs.mkdir(path.join(root, ".cclaw/state"), { recursive: true });
-    await fs.mkdir(path.join(root, ".cclaw/contexts"), { recursive: true });
     await fs.mkdir(path.join(root, ".cclaw/skills/using-cclaw"), { recursive: true });
     await fs.writeFile(path.join(root, ".cclaw/state/flow-state.json"), JSON.stringify({
       currentStage: "review",
       activeRunId: "run-parity",
       completedStages: ["brainstorm", "scope", "design", "spec", "plan", "tdd"]
     }, null, 2), "utf8");
-    await fs.writeFile(path.join(root, ".cclaw/contexts/review.md"), "# review\n", "utf8");
     await fs.writeFile(path.join(root, ".cclaw/skills/using-cclaw/SKILL.md"), "# Using cclaw\n", "utf8");
 
     const baseRow: Omit<KnowledgeEntry, "trigger" | "action" | "frequency" | "severity"> = {
@@ -164,14 +160,12 @@ describe("ralph-loop + compound-readiness parity (inline hook vs main)", () => {
   it("small-project relaxation: inline applies when archive count < 5", async () => {
     const root = await createTempProject("compound-readiness-small-project");
     await fs.mkdir(path.join(root, ".cclaw/state"), { recursive: true });
-    await fs.mkdir(path.join(root, ".cclaw/contexts"), { recursive: true });
     await fs.mkdir(path.join(root, ".cclaw/skills/using-cclaw"), { recursive: true });
     await fs.writeFile(path.join(root, ".cclaw/state/flow-state.json"), JSON.stringify({
       currentStage: "review",
       activeRunId: "run-small",
       completedStages: ["brainstorm", "scope", "design", "spec", "plan", "tdd"]
     }, null, 2), "utf8");
-    await fs.writeFile(path.join(root, ".cclaw/contexts/review.md"), "# review\n", "utf8");
     await fs.writeFile(path.join(root, ".cclaw/skills/using-cclaw/SKILL.md"), "# Using cclaw\n", "utf8");
     // A single cluster with recurrence=2 would fail the default threshold=3
     // but the small-project relaxation (<5 archived runs -> min(3,2)=2)

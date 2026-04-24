@@ -35,14 +35,12 @@ describe("hook atomic/locked state writes", () => {
   it("parallel session-start invocations write a valid ralph-loop.json (no torn writes)", async () => {
     const root = await createTempProject("atomic-hook");
     await fs.mkdir(path.join(root, ".cclaw/state"), { recursive: true });
-    await fs.mkdir(path.join(root, ".cclaw/contexts"), { recursive: true });
     await fs.mkdir(path.join(root, ".cclaw/skills/using-cclaw"), { recursive: true });
     await fs.writeFile(path.join(root, ".cclaw/state/flow-state.json"), JSON.stringify({
       currentStage: "tdd",
       activeRunId: "run-concurrent",
       completedStages: ["brainstorm", "scope", "design", "spec", "plan"]
     }, null, 2), "utf8");
-    await fs.writeFile(path.join(root, ".cclaw/contexts/tdd.md"), "# tdd\n", "utf8");
     await fs.writeFile(path.join(root, ".cclaw/skills/using-cclaw/SKILL.md"), "# using\n", "utf8");
 
     const log = Array.from({ length: 20 }, (_, i) => ({
@@ -88,7 +86,6 @@ describe("hook atomic/locked state writes", () => {
   it("records a breadcrumb when flow-state.json is corrupt instead of silently fallbacking", async () => {
     const root = await createTempProject("corrupt-flow-state");
     await fs.mkdir(path.join(root, ".cclaw/state"), { recursive: true });
-    await fs.mkdir(path.join(root, ".cclaw/contexts"), { recursive: true });
     await fs.mkdir(path.join(root, ".cclaw/skills/using-cclaw"), { recursive: true });
     // Intentionally broken JSON.
     await fs.writeFile(path.join(root, ".cclaw/state/flow-state.json"), "{not: valid json", "utf8");
