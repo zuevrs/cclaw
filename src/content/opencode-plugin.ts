@@ -332,6 +332,10 @@ export default function cclawPlugin(ctx) {
         return;
       }
 
+      // Tool.execute.before is a user-facing hot path: 20s is far too
+      // long to wait on a guard. 5s gives the hook real breathing room
+      // (typical runtime is well under 500ms) while capping the worst-
+      // case stall at a number the user will still tolerate.
       const timer = setTimeout(() => {
         child.kill("SIGKILL");
         if (stderr.length > 0) {
@@ -340,7 +344,7 @@ export default function cclawPlugin(ctx) {
           logToFile("hook timeout: " + hookName + " (no stderr)");
         }
         finish(false);
-      }, 20_000);
+      }, 5_000);
 
       child.stderr?.on("data", (chunk) => {
         stderr += String(chunk ?? "");
@@ -607,8 +611,10 @@ export default function cclawPlugin(ctx) {
         noteNotInitialized();
         return;
       }
-      const promptOk = await runHookScript("prompt-guard", payload);
-      const workflowOk = await runHookScript("workflow-guard", payload);
+      const [promptOk, workflowOk] = await Promise.all([
+        runHookScript("prompt-guard", payload),
+        runHookScript("workflow-guard", payload)
+      ]);
       if (!promptOk || !workflowOk) {
         const failed = !promptOk ? "prompt-guard" : "workflow-guard";
         const rawDetail = lastHookStderr.get(failed) || "";
