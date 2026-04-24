@@ -58,22 +58,6 @@ export const DEFAULT_HARNESSES: HarnessId[] = [
   "codex"
 ];
 
-/**
- * Evals subtree. Scaffolds the directory layout and a default config.yaml; the
- * structural verifier, rule verifiers, and LLM wiring layer on incrementally.
- * Keeping this separate from the main REQUIRED_DIRS list makes it explicit that
- * the evals runtime is additive and does not affect non-eval cclaw behavior.
- */
-export const EVALS_ROOT = `${RUNTIME_ROOT}/evals`;
-export const EVALS_CONFIG_PATH = `${EVALS_ROOT}/config.yaml`;
-export const EVALS_DIRS = [
-  EVALS_ROOT,
-  `${EVALS_ROOT}/corpus`,
-  `${EVALS_ROOT}/rubrics`,
-  `${EVALS_ROOT}/baselines`,
-  `${EVALS_ROOT}/reports`
-] as const;
-
 export const REQUIRED_DIRS = [
   RUNTIME_ROOT,
   `${RUNTIME_ROOT}/commands`,

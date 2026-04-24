@@ -75,7 +75,7 @@ describe("cli parser", () => {
 
   it("usage message documents the public user surface", () => {
     const text = usage();
-    for (const cmd of ["init", "sync", "archive", "upgrade", "uninstall", "eval"]) {
+    for (const cmd of ["init", "sync", "archive", "upgrade", "uninstall"]) {
       expect(text).toContain(cmd);
     }
     expect(text).toContain("--help");

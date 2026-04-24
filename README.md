@@ -25,8 +25,7 @@ operational knobs to memorise.
   changes across multiple harnesses and languages.
 - Staff engineers and tech leads who want **enforceable discipline**:
   locked-in decisions, no placeholders, mandatory TDD, traceable plans.
-- Maintainers of AI agents/skills who want **measurable prompt engineering**
-  via the built-in eval harness.
+- Maintainers who want a compact, file-backed flow their harness agents can actually follow.
 
 ---
 
@@ -106,22 +105,16 @@ CLI reference.
 
 ```text
 .cclaw/
-├── commands/           # stage + utility command contracts (markdown)
-├── skills/             # stage + utility skills loaded by the harness
-├── contexts/           # cross-cutting context modes (research, debugging, …)
+├── commands/           # four entrypoints: /cc, /cc-next, /cc-ideate, /cc-view
+├── skills/             # flow-critical skills loaded by the harness
 ├── templates/          # artifact skeletons for each stage
-├── rules/              # lint-style rules surfaced to the agent
-├── adapters/           # per-harness translation notes
-├── agents/             # subagent definitions (planner, reviewer, …)
-├── hooks/              # harness-agnostic hook scripts
-├── worktrees/          # isolated feature worktrees (power-user, via /cc-ops)
-├── artifacts/          # active feature artifacts (00-idea.md → 09-retro.md)
-├── runs/               # archived feature snapshots: YYYY-MM-DD-slug/
-├── references/         # (optional) pinned copies of reference frameworks
-├── evals/              # eval corpus, rubrics, baselines, reports
-├── custom-skills/      # user-authored skills (never overwritten)
-├── state/              # flow-state.json + delegation-log.json + activity
-└── knowledge.jsonl     # append-only, strict-schema lessons + patterns
+├── rules/              # opt-in language rule packs
+├── agents/             # subagent definitions
+├── hooks/              # harness-agnostic hook runtime
+├── artifacts/          # active run artifacts (00-idea.md -> 09-retro.md)
+├── runs/               # archived run snapshots: YYYY-MM-DD-slug/
+├── state/              # flow-state.json + stage activity log
+└── knowledge.jsonl     # append-only lessons + patterns
 ```
 
 Plus harness-specific shims:
@@ -431,40 +424,13 @@ What the fallbacks mean:
 > and any legacy layout to clean up.
 
 The full capability matrix lives in
-[`docs/harnesses.md`](./docs/harnesses.md). Per-harness playbooks are
-generated into `.cclaw/references/harnesses/` on every install and
-upgrade; stage skills cite them by path.
+[`docs/harnesses.md`](./docs/harnesses.md). Harness capability gaps are
+reported by `cclaw doctor` instead of generating reference files into the
+user project.
 
-Runtime state:
-
-- `.cclaw/state/harness-gaps.json` (schema v2) — per-harness list of
-  missing capabilities, missing hook events, the declared fallback, the
-  playbook path, and a `remediation[]` list you can act on.
-- `cclaw doctor` — asserts every installed harness has its playbook on
-  disk and surfaces the expected fulfillment mode inside the
-  `delegation:mandatory:current_stage` check.
-
----
-
-## Eval-driven prompt engineering
-
-cclaw ships with `cclaw-cli eval` — a three-tier regression harness for
-the skills and contracts the runtime generates. Use it when you change a
-stage skill, tweak a prompt, or swap a model.
-
-Works with any OpenAI-compatible endpoint — Zhipu AI GLM, OpenAI, Together,
-self-hosted vLLM — via three environment variables:
-
-```bash
-CCLAW_EVAL_API_KEY=...
-CCLAW_EVAL_BASE_URL=https://api.z.ai/api/coding/paas/v4   # default
-CCLAW_EVAL_MODEL=glm-5.1                                  # default
-```
-
-Full details, corpus format, and the eval contract live in
-[`docs/evals.md`](./docs/evals.md).
-Mutation-testing setup lives in `stryker.config.mjs` and
-`.github/workflows/mutation.yml` (manual + weekly run).
+Runtime state stays small: `flow-state.json` is the source of truth, while
+stage activity is an append-only trace for what happened during the run.
+Derived diagnostics are produced on demand by `cclaw doctor`.
 
 ---
 
@@ -480,7 +446,6 @@ npx cclaw-cli sync              # re-materialize generated runtime from config.y
 npx cclaw-cli upgrade           # refresh generated files; preserves .cclaw/config.yaml
 npx cclaw-cli archive           # archive current run and reset flow-state
 npx cclaw-cli uninstall         # remove .cclaw + generated harness shims
-npx cclaw-cli eval …            # maintainer surface (see docs/evals.md)
 npx cclaw-cli --version
 ```
 
