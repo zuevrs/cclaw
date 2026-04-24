@@ -356,6 +356,45 @@ export default function cclawPlugin(ctx) {
     return { input: input ?? {}, output: output ?? {} };
   }
 
+  /**
+   * Read-only tools cannot mutate state or execute arbitrary code, so
+   * running prompt/workflow guards on them is pure overhead and — worse —
+   * surfaces a hard block when guards are misconfigured. OpenCode tool
+   * names vary (Claude/Codex use PascalCase; opencode-native often uses
+   * lowercase), so we normalize and match against a tight allow-list.
+   * Anything not in this list (bash, edit, write, patch, task, run, …)
+   * still runs through guards.
+   */
+  const SAFE_READONLY_TOOLS = new Set([
+    "read",
+    "glob",
+    "grep",
+    "list",
+    "ls",
+    "view",
+    "webfetch",
+    "websearch"
+  ]);
+
+  function isSafeReadOnlyTool(payload) {
+    if (!payload || typeof payload !== "object") return false;
+    const candidates = [
+      payload.tool,
+      payload.name,
+      payload.tool_name,
+      payload.toolName
+    ];
+    const inner = payload.input;
+    if (inner && typeof inner === "object") {
+      candidates.push(inner.tool, inner.name, inner.tool_name, inner.toolName);
+    }
+    for (const candidate of candidates) {
+      if (typeof candidate !== "string" || candidate.length === 0) continue;
+      if (SAFE_READONLY_TOOLS.has(candidate.toLowerCase())) return true;
+    }
+    return false;
+  }
+
   function resolveEventType(payload) {
     if (typeof payload === "string") return payload;
     if (payload && typeof payload === "object") {
@@ -437,6 +476,12 @@ export default function cclawPlugin(ctx) {
     },
     "tool.execute.before": async (input, output) => {
       const payload = normalizeToolPayload(input, output);
+      if (isSafeReadOnlyTool(payload)) {
+        // Read-only tools bypass guards — they cannot mutate state and
+        // blocking them gives users an unusable session when guards are
+        // misconfigured or cclaw isn't fully initialized.
+        return;
+      }
       const promptOk = await runHookScript("prompt-guard", payload);
       const workflowOk = await runHookScript("workflow-guard", payload);
       if (!promptOk || !workflowOk) {
