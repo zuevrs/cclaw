@@ -273,6 +273,17 @@ export default function cclawPlugin(ctx) {
     });
   }
 
+  const lastHookStderr = new Map();
+  function recordHookStderr(hookName, stderr) {
+    if (typeof hookName !== "string" || hookName.length === 0) return;
+    const trimmed = typeof stderr === "string" ? stderr.trim() : "";
+    if (trimmed.length === 0) {
+      lastHookStderr.delete(hookName);
+      return;
+    }
+    lastHookStderr.set(hookName, trimmed);
+  }
+
   async function runHookScript(hookName, payload = {}) {
     const { spawn } = await import("node:child_process");
     const hookRuntimePath = join(root, "${RUNTIME_ROOT}/hooks/run-hook.mjs");
@@ -283,6 +294,7 @@ export default function cclawPlugin(ctx) {
       const finish = (ok) => {
         if (settled) return;
         settled = true;
+        recordHookStderr(hookName, stderr);
         resolve(ok);
       };
 
@@ -517,8 +529,14 @@ export default function cclawPlugin(ctx) {
       const promptOk = await runHookScript("prompt-guard", payload);
       const workflowOk = await runHookScript("workflow-guard", payload);
       if (!promptOk || !workflowOk) {
+        const failed = !promptOk ? "prompt-guard" : "workflow-guard";
+        const rawDetail = lastHookStderr.get(failed) || "";
+        const detail = rawDetail.length > 0 ? rawDetail.slice(-400) : "(no stderr captured)";
         throw new Error(
-          "cclaw OpenCode guard blocked tool.execute.before (prompt/workflow guard non-zero exit)."
+          "cclaw " + failed + " blocked tool.execute.before.\\n" +
+          "Reason: " + detail + "\\n" +
+          "Diagnose: run \`cclaw doctor\` in project root.\\n" +
+          "Bypass (temporary): export CCLAW_DISABLE=1 before starting OpenCode."
         );
       }
     },
