@@ -1,5 +1,62 @@
 # Changelog
 
+## 0.48.34
+
+OpenCode guard UX fix. A user hitting a freshly-installed cclaw project
+in OpenCode previously saw every tool call — including innocuous
+`read`/`glob`/`grep` — blocked by the cryptic error
+`cclaw OpenCode guard blocked tool.execute.before (prompt/workflow
+guard non-zero exit).`, with `console.error` stderr spam overlapping
+the TUI render. The failure mode was the same whether the guards had
+legitimately refused a mutation, the hook runtime was missing, the
+script crashed, or cclaw wasn't initialized in the project at all.
+This release reshapes the plugin so users can actually use OpenCode.
+
+### Fixed
+
+- Read-only tools (`read`, `glob`, `grep`, `list`, `view`, `webfetch`,
+  `websearch`) now bypass the prompt/workflow guard chain — they
+  cannot mutate state or execute arbitrary code, so the guard spawn
+  was pure overhead and a single point of failure for the whole
+  session.
+- Projects without `.cclaw/state/flow-state.json` or
+  `.cclaw/hooks/run-hook.mjs` are treated as "cclaw not initialized"
+  and no longer block tool calls; a one-shot advisory is recorded in
+  the plugin log instead of throwing.
+- Hot-path `console.error` calls in `runHookScript` and the event
+  dispatcher are replaced with file-based logging to
+  `.cclaw/logs/opencode-plugin.log` — eliminates the overlapping-text
+  TUI artifact that made failing sessions unreadable.
+- Guard block errors now name the failing guard, include the last
+  ~400 bytes of its stderr as `Reason`, and suggest
+  `cclaw doctor` + `CCLAW_DISABLE=1` recovery moves, replacing the
+  uniform unactionable block message.
+
+### Added
+
+- `CCLAW_DISABLE=1` env killswitch (also honoured via `CCLAW_GUARDS=off`
+  and `CCLAW_STRICTNESS=off|disabled|none`) lets users bypass the
+  plugin's guards when they are stuck, without editing the generated
+  plugin file. The bypass is logged once to the plugin log.
+- `.cclaw/logs/opencode-plugin.log` — timestamped append-only
+  diagnostic log for plugin-side hook failures, timeouts, unknown
+  events, and the advisory states above. Best-effort; never blocks a
+  hook on I/O failure.
+
+### Changed
+
+- Prompt-guard and workflow-guard now run in parallel via
+  `Promise.all` on each mutating `tool.execute.before`, halving the
+  steady-state guard latency (bounded already by
+  `MAX_CONCURRENT_HOOKS = 2`, so no queue change needed).
+- Per-hook timeout reduced from 20 s to 5 s. Typical guard runtime is
+  well under 500 ms, so 5 s keeps real hooks working while capping the
+  worst-case stall at a number a user will still tolerate.
+- `tests/unit/hooks-lifecycle.test.ts` gains four coverage cases
+  (read-only bypass, uninitialized project, `CCLAW_DISABLE`
+  killswitch, actionable error shape) alongside the existing
+  non-zero-exit block test.
+
 ## 0.48.33
 
 Stage-flow consolidation, cross-platform notes, and inline-hook locality
