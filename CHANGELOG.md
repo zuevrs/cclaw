@@ -1,5 +1,40 @@
 # Changelog
 
+## 0.50.0
+
+Full phase-1 cleanup. This release removes the remaining heavy surfaces
+that made a fresh install feel like a framework dump instead of a harness
+workflow tool.
+
+### Removed
+
+- Removed the feature/worktree system, including the `feature-system`
+  runtime, generated worktree state, and the user-facing feature command
+  surface.
+- Removed `/cc-ops` and its legacy subcommands. Flow progression and
+  closeout now stay on `/cc-next`; explicit archival/reset stays on
+  `cclaw archive`.
+- Shrank generated commands to the four real entrypoints: `/cc`,
+  `/cc-next`, `/cc-ideate`, and `/cc-view`.
+- Stopped scaffolding derived/cache state files on init. Runtime hooks now
+  create optional diagnostics only when needed.
+- Removed broad default utility skills and kept the generated skill surface
+  focused on flow stages, cclaw routing, subagent/parallel dispatch,
+  session, learnings, research playbooks, and opt-in language rule packs.
+- Removed the internal eval harness, its CLI command, fixtures, docs,
+  tests, and the unused `openai` runtime dependency.
+- Removed stale generated-reference templates and docs that pointed users
+  at `.cclaw/references`, `.cclaw/contexts`, worktrees, or `/cc-ops`.
+
+### Preserved
+
+- `retro -> compound -> archive` remains part of ship closeout through
+  `/cc-next`.
+- `cclaw archive` still archives active runs into `.cclaw/runs/`.
+- Stage skills still keep decision, completion, verification, and
+  closeout discipline, but now inline the needed guidance instead of
+  making users chase generated reference files.
+
 ## 0.49.0
 
 Dead-weight cut, pass 1. `.cclaw/` was shipping four scaffolded
