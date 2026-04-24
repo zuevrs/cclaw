@@ -253,7 +253,7 @@ printf '%s\\n' "$*" >> "${callsPath}"
     expect(checkpoint.stage).toBe("design");
   });
 
-  it("opencode plugin blocks when workflow guard exits non-zero", async () => {
+  it("opencode plugin blocks when workflow guard exits non-zero under strict config", async () => {
     const root = await createTempProject("opencode-strict-block");
     await fs.mkdir(path.join(root, ".cclaw/hooks"), { recursive: true });
     await fs.mkdir(path.join(root, ".cclaw/state"), { recursive: true });
@@ -264,6 +264,10 @@ printf '%s\\n' "$*" >> "${callsPath}"
       completedStages: ["brainstorm"]
     }, null, 2), "utf8");
     await fs.writeFile(path.join(root, ".cclaw/skills/using-cclaw/SKILL.md"), "# Using Cclaw\n", "utf8");
+    // Under the new advisory-by-default behavior, blocking only happens
+    // when the user opts into strict mode — mirror that in this test
+    // via the canonical config.yaml key.
+    await fs.writeFile(path.join(root, ".cclaw/config.yaml"), "strictness: strict\n", "utf8");
 
     const pluginPath = path.join(root, ".cclaw/hooks/opencode-plugin.mjs");
     await fs.writeFile(pluginPath, opencodePluginJs(), "utf8");
@@ -403,6 +407,9 @@ process.exit(0);
       JSON.stringify({ currentStage: "scope", activeRunId: "active", completedStages: ["brainstorm"] }, null, 2),
       "utf8"
     );
+    // Strict config is required for the thrown-error path; advisory
+    // mode logs and lets the tool through.
+    await fs.writeFile(path.join(root, ".cclaw/config.yaml"), "strictness: strict\n", "utf8");
     await fs.writeFile(
       path.join(root, ".cclaw/hooks/run-hook.mjs"),
       `#!/usr/bin/env node

@@ -13,6 +13,7 @@ export default function cclawPlugin(ctx) {
   const stateDir = join(runtimeDir, "state");
   const logsDir = join(runtimeDir, "logs");
   const pluginLogPath = join(logsDir, "opencode-plugin.log");
+  const configPath = join(runtimeDir, "config.yaml");
   const flowStatePath = join(stateDir, "flow-state.json");
   const checkpointPath = join(stateDir, "checkpoint.json");
   const activityPath = join(stateDir, "stage-activity.jsonl");
@@ -437,6 +438,42 @@ export default function cclawPlugin(ctx) {
   }
 
   /**
+   * Strictness derived from (in order of precedence): CCLAW_STRICTNESS
+   * env override, \`.cclaw/config.yaml\` key \`strictness\`, or the
+   * library default of "advisory". The plugin only ever *blocks* tool
+   * execution when strictness resolves to "strict"; in advisory mode
+   * guard failures are logged and the tool call proceeds. This mirrors
+   * the Ralph-loop / hook-runtime semantics of
+   * \`DEFAULT_STRICTNESS = advisory\`, so the plugin can no longer
+   * accidentally be the stricter half of a mismatched pair.
+   */
+  function readConfigStrictness() {
+    try {
+      if (!existsSync(configPath)) return "";
+      const { readFileSync } = require("node:fs");
+      const raw = readFileSync(configPath, "utf8");
+      if (typeof raw !== "string" || raw.length === 0) return "";
+      const match = raw.match(/^\\s*strictness\\s*:\\s*([A-Za-z0-9_-]+)/m);
+      return match && typeof match[1] === "string" ? match[1].trim().toLowerCase() : "";
+    } catch {
+      return "";
+    }
+  }
+
+  function resolveStrictness() {
+    const envRaw = typeof process.env.CCLAW_STRICTNESS === "string"
+      ? process.env.CCLAW_STRICTNESS.trim().toLowerCase()
+      : "";
+    if (envRaw === "strict") return "strict";
+    if (envRaw === "advisory" || envRaw === "off" || envRaw === "disabled" || envRaw === "none") {
+      return "advisory";
+    }
+    const fileRaw = readConfigStrictness();
+    if (fileRaw === "strict") return "strict";
+    return "advisory";
+  }
+
+  /**
    * cclaw considers itself "active" in a project when both the state
    * file and the hook runtime script exist. If either is missing the
    * plugin behaves as a no-op for guards — this project hasn't been
@@ -619,11 +656,24 @@ export default function cclawPlugin(ctx) {
         const failed = !promptOk ? "prompt-guard" : "workflow-guard";
         const rawDetail = lastHookStderr.get(failed) || "";
         const detail = rawDetail.length > 0 ? rawDetail.slice(-400) : "(no stderr captured)";
+        const strictness = resolveStrictness();
+        if (strictness !== "strict") {
+          // Advisory mode (the default) — every guard refusal is a hint,
+          // not a hard stop. Users report the "failure" as a log line
+          // and keep working. Only \`strictness: strict\` in config.yaml
+          // or CCLAW_STRICTNESS=strict upgrades this to a thrown block.
+          logToFile(
+            "advisory: " + failed + " flagged tool.execute.before (strictness=" +
+            strictness + "). detail=" + detail.replace(/\\s+/g, " ").slice(0, 300)
+          );
+          return;
+        }
         throw new Error(
           "cclaw " + failed + " blocked tool.execute.before.\\n" +
           "Reason: " + detail + "\\n" +
           "Diagnose: run \`cclaw doctor\` in project root.\\n" +
-          "Bypass (temporary): export CCLAW_DISABLE=1 before starting OpenCode."
+          "Bypass (temporary): export CCLAW_DISABLE=1 before starting OpenCode,\\n" +
+          "or set \`strictness: advisory\` in .cclaw/config.yaml."
         );
       }
     },
