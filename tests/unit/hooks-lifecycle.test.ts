@@ -275,6 +275,7 @@ printf '%s\\n' "$*" >> "${callsPath}"
       path.join(root, ".cclaw/hooks/run-hook.mjs"),
       `#!/usr/bin/env node
 if ((process.argv[2] || "") === "workflow-guard") {
+  process.stderr.write("workflow guard refused: gate evidence missing");
   process.exit(1);
 }
 process.exit(0);

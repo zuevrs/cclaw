@@ -308,6 +308,41 @@ export default function cclawPlugin(ctx) {
     lastHookStderr.set(hookName, trimmed);
   }
 
+  /**
+   * A hook process can exit non-zero for two very different reasons:
+   *   (a) the guard legitimately decided to refuse an operation
+   *       (strict-mode refusal — this is the *only* case we ever want
+   *       to surface as a block to the user), or
+   *   (b) the hook infrastructure itself failed — the runtime crashed,
+   *       a child binary was missing, stderr is a chunk of yargs help
+   *       from some unrelated process, timeout, etc.
+   *
+   * Treating (b) as a block is what produces the "guard blocked
+   * tool.execute.before" error on a user who did nothing wrong. The
+   * heuristic below trims guaranteed-infra signals so only cleanly
+   * structured guard output is eligible for a real strict-mode block.
+   */
+  const INFRA_NOISE_PATTERNS = [
+    /^\\s*(Usage|Options|Commands|Examples|Positionals|Aliases):/im,
+    /^\\s*--[a-z][a-z0-9-]*\\b.*\\[(string|boolean|number|array)\\]/im,
+    /\\bcommand (not found|failed)\\b/i,
+    /\\bno such file or directory\\b/i,
+    /\\bCannot find module\\b/i,
+    /\\bThrowsCompletion\\b/,
+    /\\b(Reference|Syntax|Type|Range)Error\\b/,
+    /^\\s*at [^\\n]+\\([^)]*:\\d+:\\d+\\)/im,
+    /^\\s*node:internal\\b/im
+  ];
+  function looksLikeInfrastructureFailure(stderr) {
+    if (typeof stderr !== "string") return true;
+    const trimmed = stderr.trim();
+    if (trimmed.length === 0) return true;
+    for (const pattern of INFRA_NOISE_PATTERNS) {
+      if (pattern.test(trimmed)) return true;
+    }
+    return false;
+  }
+
   async function runHookScript(hookName, payload = {}) {
     const { spawn } = await import("node:child_process");
     const hookRuntimePath = join(root, "${RUNTIME_ROOT}/hooks/run-hook.mjs");
@@ -684,6 +719,17 @@ export default function cclawPlugin(ctx) {
         const failed = !promptOk ? "prompt-guard" : "workflow-guard";
         const rawDetail = lastHookStderr.get(failed) || "";
         const detail = rawDetail.length > 0 ? rawDetail.slice(-400) : "(no stderr captured)";
+        if (looksLikeInfrastructureFailure(rawDetail)) {
+          // Never let a broken hook runtime or misrouted child-process
+          // stderr (yargs help, Node crash, ENOENT, timeout) masquerade
+          // as a policy block. Log the infra hit and let the user keep
+          // working regardless of strictness.
+          logToFile(
+            "infra: " + failed + " non-zero exit with non-guard stderr — treated as infrastructure failure, tool allowed. " +
+            "stderr=" + detail.replace(/\\s+/g, " ").slice(0, 300)
+          );
+          return;
+        }
         const strictness = resolveStrictness();
         if (strictness !== "strict") {
           // Advisory mode (the default) — every guard refusal is a hint,
