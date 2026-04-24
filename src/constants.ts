@@ -81,14 +81,11 @@ export const REQUIRED_DIRS = [
   `${RUNTIME_ROOT}/contexts`,
   `${RUNTIME_ROOT}/templates`,
   `${RUNTIME_ROOT}/artifacts`,
-  `${RUNTIME_ROOT}/worktrees`,
   `${RUNTIME_ROOT}/state`,
   `${RUNTIME_ROOT}/runs`,
   `${RUNTIME_ROOT}/rules`,
-  `${RUNTIME_ROOT}/adapters`,
   `${RUNTIME_ROOT}/agents`,
   `${RUNTIME_ROOT}/hooks`,
-  `${RUNTIME_ROOT}/custom-skills`,
   ...EVALS_DIRS
 ] as const;
 

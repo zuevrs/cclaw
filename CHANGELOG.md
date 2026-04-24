@@ -1,5 +1,56 @@
 # Changelog
 
+## 0.49.0
+
+Dead-weight cut, pass 1. `.cclaw/` was shipping four scaffolded
+directories whose content no runtime code ever consumed, no user ever
+edited, and no test depended on beyond "file exists". Each added noise
+to `ls .cclaw`, `cclaw doctor`, and `cclaw sync` without moving any
+flow decision. This release removes them.
+
+### Removed
+
+- `.cclaw/adapters/manifest.json` — the "harness adapter provenance"
+  file was never read outside of the three doctor gates that verified
+  its own existence. Dropped the file, its three
+  `state:adapter_manifest_*` gates, and the init preview line.
+- `.cclaw/custom-skills/` — opt-in scaffold for user-authored skills
+  with a ~150-line README and a placeholder `example/SKILL.md`. In
+  practice users either never opened the folder or put skills under
+  `.cclaw/skills/` anyway. No routing layer ever discovered
+  `custom-skills/*.md`. Dropped the dir, the install helper, the
+  two template strings, and the using-cclaw meta-skill paragraph
+  advertising it.
+- `.cclaw/worktrees/` **empty scaffold** — the git-worktree feature
+  itself (feature-system, using-git-worktrees skill, state/worktrees.json)
+  stays in place for now, but init no longer pre-creates an empty
+  top-level folder. Full feature removal is out of scope for this
+  release.
+- `.cclaw/contexts/*.md` — the four static mode guides
+  (`default.md`, `execution.md`, `review.md`, `incident.md`) are gone.
+  Context mode switching is still a first-class feature (tracked via
+  `state/context-mode.json`, surfaced by session hooks, described in
+  the `context-engineering` skill), but the mode bodies now live
+  inline in the skill rather than as separate files. Session hooks
+  already gracefully degrade when `contexts/<mode>.md` is missing
+  (`existsSync` check), so users see no behavioral change beyond
+  four fewer files per install and four fewer `contexts:mode:*`
+  gates in `doctor`.
+
+### Why
+
+Each of these folders was individually defensible but collectively
+turned a fresh `cclaw init` into a 167-file dump across 15
+top-level directories. Comparing against the reference implementations
+under `~/Projects/cclaw/docs/references/` (obra-superpowers ships
+14 skills / 3 commands; addyosmani-skills ships 21 skills flat;
+everyinc-compound ships ~25 files total), cclaw was an order of
+magnitude heavier without being an order of magnitude more useful.
+This pass removes ~305 LOC of installer code and four user-visible
+folders without changing any runtime behavior. Subsequent releases
+will apply the same lens to `.cclaw/references/`, `.cclaw/evals/`,
+`.cclaw/commands/`, `.cclaw/state/`, and `.cclaw/skills/`.
+
 ## 0.48.35
 
 Second pass on the OpenCode plugin guard-UX fix. 0.48.34 covered the

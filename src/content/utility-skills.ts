@@ -572,11 +572,12 @@ Do not keep stale or oversized context loaded when task intent changes. Context 
 
 ## Context Modes
 
-Modes are stored in \`.cclaw/contexts/\`:
-- \`default\` — balanced execution
-- \`execution\` — fast plan/tdd throughput
-- \`review\` — defect/risk discovery
-- \`incident\` — stabilization and recovery
+Four intentional postures tracked via \`.cclaw/state/context-mode.json\`:
+
+- \`default\` — balanced execution. Follow active stage, keep changes scoped, escalate real trade-offs only.
+- \`execution\` — high-throughput delivery after spec/plan lock. RED→GREEN→REFACTOR. Evidence-first, minimal chatter.
+- \`review\` — deep validation. Bias toward concrete defects, unsupported claims treated as unverified.
+- \`incident\` — stabilization. Reproduce, isolate, fix smallest safe change first. Preserve evidence.
 
 ## Mode Switching Protocol
 
@@ -585,7 +586,7 @@ Modes are stored in \`.cclaw/contexts/\`:
    - \`activeMode\`: target mode id
    - \`updatedAt\`: current ISO timestamp
 3. Announce mode change in-session with one-line reason.
-4. Continue using the corresponding \`.cclaw/contexts/<mode>.md\` guidance.
+4. Keep applying the posture above until the next explicit mode switch.
 
 ## Payload Hygiene Rules
 

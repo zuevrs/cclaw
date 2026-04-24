@@ -18,7 +18,7 @@ import {
   detectAdvancedKeys
 } from "./config.js";
 import { stageCommandContract } from "./content/contracts.js";
-import { contextModeFiles, createInitialContextModeState } from "./content/contexts.js";
+import { createInitialContextModeState } from "./content/contexts.js";
 import { learnSkillMarkdown, learnCommandContract } from "./content/learnings.js";
 import { nextCommandContract, nextCommandSkillMarkdown } from "./content/next-command.js";
 import { ideateCommandContract, ideateCommandSkillMarkdown } from "./content/ideate-command.js";
@@ -1033,153 +1033,6 @@ async function ensureKnowledgeStore(projectRoot: string): Promise<void> {
   }
 }
 
-async function ensureCustomSkillsScaffold(projectRoot: string): Promise<void> {
-  const customDir = runtimePath(projectRoot, "custom-skills");
-  await ensureDir(customDir);
-  const readmePath = path.join(customDir, "README.md");
-  if (!(await exists(readmePath))) {
-    await writeFileSafe(readmePath, CUSTOM_SKILLS_README);
-  }
-  const examplePath = path.join(customDir, "example", "SKILL.md");
-  if (!(await exists(examplePath))) {
-    await writeFileSafe(examplePath, CUSTOM_SKILLS_EXAMPLE);
-  }
-}
-
-const CUSTOM_SKILLS_README = `# Custom Skills (sync-safe)
-
-This directory is **never overwritten** by \`cclaw sync\` or \`cclaw upgrade\`. Use it
-to add project-specific skills that complement the managed skills under
-\`.cclaw/skills/\`.
-
-## When to add a custom skill
-
-- A repeatable lens specific to **this project** (e.g. "billing-domain", "kafka-message-contracts").
-- A team convention you want every agent session to load.
-- A domain checklist that does not generalize to other projects.
-
-If the skill is general (security, performance, accessibility, etc.) prefer
-contributing it upstream instead — the managed skills receive maintenance.
-
-## File format — public API (stable contract)
-
-Each skill lives at \`.cclaw/custom-skills/<folder>/SKILL.md\`. The format is a
-**stable public API**: \`cclaw sync\` and \`cclaw upgrade\` will not rewrite
-custom skills, and the fields below are guaranteed to be respected by the
-meta-skill router and the stage hooks.
-
-### Frontmatter (YAML, required)
-
-\`\`\`yaml
----
-# Required fields
-name: <kebab-case-skill-name>
-description: >
-  One sentence (≤180 chars) that triggers semantic routing. Include the
-  concrete situation and the expected action
-  (e.g. "Audit Kafka topic contracts when a producer or consumer signature changes").
-
-# Optional fields (omit when not applicable)
-stages: [design, spec, tdd, review]    # flow stages this skill applies to
-triggers:
-  - "kafka topic"
-  - "producer.schema"
-  - "consumer.schema"
-hardGate: false                        # true => skill body MUST include a ## HARD-GATE section
-owners: ["@team-messaging"]            # informational routing hint, not enforced
-version: 0.1.0                         # semver; bump when hardGate or algorithm changes
----
-\`\`\`
-
-### Field contract
-
-| Field | Type | Required | Meaning |
-|---|---|---|---|
-| \`name\` | string (kebab-case) | yes | Unique id used by the router and by \`/cc-view status\` diagnostics. |
-| \`description\` | string ≤180 chars (single line OR YAML \`>\` folded) | yes | Drives semantic routing. Include trigger + action. |
-| \`stages\` | array of flow stages | no | When present, the meta-skill only surfaces this skill during those stages. Omit for "any stage". |
-| \`triggers\` | array of strings | no | Extra literal substrings that route to this skill when found in the user prompt or the active artifact. |
-| \`hardGate\` | boolean | no | When \`true\`, the body MUST include a \`## HARD-GATE\` section; the agent treats the rule as non-skippable. |
-| \`owners\` | array of strings | no | Informational only — surfaced to the user, never enforced. |
-| \`version\` | semver string | no | Bump when you change the HARD-GATE or algorithm so reviewers can spot changes. |
-
-### Body sections (markdown, recommended order)
-
-\`\`\`markdown
-# <Skill title>
-
-## Overview
-One-paragraph summary; context for when this skill is loaded.
-
-## When to use
-- Bullet list of situations where this skill adds value.
-
-## When NOT to use
-- Situations where loading this skill is context bloat or wrong.
-
-## HARD-GATE   (REQUIRED when frontmatter hardGate: true)
-Phrase it as a refusal:
-> Do not <X> while <Y>.
-
-## Algorithm / checklist
-1. Concrete, observable steps with evidence (file:line, artifact, or knowledge entry).
-
-## Output protocol
-Where the artifact / chat output lives and what shape it takes.
-
-## Anti-patterns
-- Common failure modes to reject.
-\`\`\`
-
-### Stage association semantics
-
-- \`stages: []\` or missing → skill is available at any stage. The meta-skill still only surfaces it when \`description\` or \`triggers\` match the prompt.
-- \`stages: [review]\` → skill is offered only during the review stage.
-- Custom skills **never** become mandatory delegations. They are opt-in lenses. If you need a mandatory dispatch, add a proper managed specialist under \`.cclaw/skills/\` instead.
-
-## Routing
-
-Custom skills are surfaced via the \`using-cclaw\` meta-skill at session start.
-Mention the skill name in your prompt or let the agent semantic-route to it
-based on the description + triggers + stages frontmatter.
-
-## Versioning & removal
-
-Custom skills are user-owned. Bump \`version\` when you change the HARD-GATE or
-algorithm; delete or edit them at any time — \`cclaw sync\` will not touch them.
-`;
-
-const CUSTOM_SKILLS_EXAMPLE = `---
-name: example-custom-skill
-description: "Replace this with a one-sentence description that triggers when the skill should be used. Delete or rename this folder when you add a real skill."
----
-
-# Example Custom Skill
-
-This is a placeholder. Use it as a starting template, then delete or rename
-the \`example/\` folder.
-
-## When to use
-
-- A real, repeatable situation in **this** project that needs a consistent lens.
-
-## HARD-GATE (optional)
-
-Drop this section if no hard rule applies. Keep it crisp:
-
-> Do not <X> while <Y>.
-
-## Algorithm
-
-1. Step one — observable, file:line evidence required.
-2. Step two — produce a named artifact, not a vibe.
-3. Step three — escalate / hand off / record knowledge entry.
-
-## Anti-patterns
-
-- Treating this skill as advisory when the situation matches the trigger.
-- Loading this skill when the situation clearly does not match (context bloat).
-`;
 
 
 async function ensureSessionStateFiles(projectRoot: string): Promise<void> {
@@ -1280,12 +1133,6 @@ async function writeRulebook(projectRoot: string): Promise<void> {
   );
 }
 
-async function writeContextModes(projectRoot: string): Promise<void> {
-  for (const [mode, content] of Object.entries(contextModeFiles())) {
-    await writeFileSafe(runtimePath(projectRoot, "contexts", `${mode}.md`), content);
-  }
-}
-
 async function writeCursorWorkflowRule(projectRoot: string, harnesses: HarnessId[]): Promise<void> {
   const rulePath = path.join(projectRoot, CURSOR_RULE_REL_PATH);
   if (!harnesses.includes("cursor")) {
@@ -1335,20 +1182,6 @@ async function writeState(projectRoot: string, config: CclawConfig, forceReset =
 
   const state = createInitialFlowState({ track: config.defaultTrack ?? "standard" });
   await writeFileSafe(statePath, `${JSON.stringify(state, null, 2)}\n`, { mode: 0o600 });
-}
-
-async function writeAdapterManifest(projectRoot: string, harnesses: HarnessId[]): Promise<void> {
-  const manifest = {
-    generatedAt: new Date().toISOString(),
-    harnesses,
-    commandSource: `${RUNTIME_ROOT}/commands/*.md`,
-    skillSource: `${RUNTIME_ROOT}/skills/*/SKILL.md`
-  };
-
-  await writeFileSafe(
-    runtimePath(projectRoot, "adapters", "manifest.json"),
-    `${JSON.stringify(manifest, null, 2)}\n`
-  );
 }
 
 async function writeHarnessGapsState(projectRoot: string, harnesses: HarnessId[]): Promise<void> {
@@ -1592,7 +1425,6 @@ async function materializeRuntime(projectRoot: string, config: CclawConfig, forc
     writeCommandContracts(projectRoot, config.defaultTrack ?? "standard"),
     writeUtilityCommands(projectRoot, config),
     writeSkills(projectRoot, config),
-    writeContextModes(projectRoot),
     writeArtifactTemplates(projectRoot),
     writeEvalScaffold(projectRoot),
     writeRulebook(projectRoot)
@@ -1600,10 +1432,8 @@ async function materializeRuntime(projectRoot: string, config: CclawConfig, forc
   await writeState(projectRoot, config, forceStateReset);
   await ensureRunSystem(projectRoot, { createIfMissing: false });
   await ensureSessionStateFiles(projectRoot);
-  await writeAdapterManifest(projectRoot, harnesses);
   await writeHarnessGapsState(projectRoot, harnesses);
   await ensureKnowledgeStore(projectRoot);
-  await ensureCustomSkillsScaffold(projectRoot);
   await writeHooks(projectRoot, config);
   await syncDisabledHarnessArtifacts(projectRoot, harnesses);
   await syncManagedGitHooks(projectRoot, config);
