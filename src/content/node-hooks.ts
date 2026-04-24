@@ -1194,7 +1194,7 @@ async function handleSessionStart(runtime) {
     parts.push(
       "Stale stages pending acknowledgement: " +
         staleStageNames.join(", ") +
-        " (use /cc-ops rewind --ack <stage> after redo)."
+        " (use cclaw internal rewind --ack <stage> after redo)."
     );
   }
   if (knowledge.digestLines.length > 0) {
@@ -1305,7 +1305,7 @@ async function handleStopCheckpoint(runtime) {
     RUNTIME_ROOT +
     "/state/checkpoint.json. Run metadata sync removed; active artifacts stay in " +
     RUNTIME_ROOT +
-    "/artifacts until /cc-ops archive (or cclaw archive runtime). Before stopping: (1) confirm flow-state reflects reality, (2) ensure artifact changes match current feature intent, (3) if you discovered a non-obvious rule/pattern, append one strict-schema JSON line to " +
+    "/artifacts until cclaw archive. Before stopping: (1) confirm flow-state reflects reality, (2) ensure artifact changes match current feature intent, (3) if you discovered a non-obvious rule/pattern, append one strict-schema JSON line to " +
     RUNTIME_ROOT +
     "/knowledge.jsonl, (4) commit or revert pending changes.";
 

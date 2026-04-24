@@ -58,7 +58,7 @@ describe("flow command contracts", () => {
       ".cursor/commands",
       ".opencode/commands"
     ]) {
-      for (const shim of ["cc.md", "cc-next.md", "cc-ideate.md", "cc-view.md", "cc-ops.md"]) {
+      for (const shim of ["cc.md", "cc-next.md", "cc-ideate.md", "cc-view.md"]) {
         const shimPath = path.join(root, harnessDir, shim);
         const content = await fs.readFile(shimPath, "utf8");
         expect(content).toContain(".cclaw/skills/");
@@ -68,7 +68,7 @@ describe("flow command contracts", () => {
     // Codex uses skill-kind shims under `.agents/skills/cc*/SKILL.md`
     // since v0.40.0 (renamed from `cclaw-cc*` in v0.39.x). Codex CLI
     // reads that path, not `.codex/commands/`.
-    for (const skillName of ["cc", "cc-next", "cc-ideate", "cc-view", "cc-ops"]) {
+    for (const skillName of ["cc", "cc-next", "cc-ideate", "cc-view"]) {
       const skillPath = path.join(root, ".agents/skills", skillName, "SKILL.md");
       const content = await fs.readFile(skillPath, "utf8");
       expect(content).toContain(`name: ${skillName}`);

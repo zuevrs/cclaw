@@ -75,14 +75,12 @@ describe("install lifecycle", { timeout: 30_000 }, () => {
     await expect(fs.stat(path.join(root, ".cclaw/commands/tree.md"))).resolves.toBeDefined();
     await expect(fs.stat(path.join(root, ".cclaw/commands/diff.md"))).resolves.toBeDefined();
     await expect(fs.stat(path.join(root, ".claude/commands/cc-view.md"))).resolves.toBeDefined();
-    await expect(fs.stat(path.join(root, ".claude/commands/cc-ops.md"))).resolves.toBeDefined();
     const claudeShims = (await fs.readdir(path.join(root, ".claude/commands")))
       .filter((name) => /^cc(?:-.*)?\.md$/u.test(name))
       .sort();
     expect(claudeShims).toEqual([
       "cc-ideate.md",
       "cc-next.md",
-      "cc-ops.md",
       "cc-view.md",
       "cc.md"
     ]);
@@ -126,13 +124,13 @@ describe("install lifecycle", { timeout: 30_000 }, () => {
     expect(codexGap?.missingHookEvents).toContain("precompact_digest");
     expect(codexGap?.missingHookEvents).not.toContain("session_rehydrate");
     // H-08: the `precompact_digest` remediation line for Codex points at
-    // the in-thread `/cc-ops retro` substitute instead of the generic
+    // the in-thread `/cc-view status` substitute instead of the generic
     // "schedule the script manually" copy, because Codex has no
     // PreCompact event that could run it.
     const precompactLine = codexGap?.remediation?.find((line) =>
       line.includes("precompact_digest")
     );
-    expect(precompactLine).toMatch(/\/cc-ops retro/);
+    expect(precompactLine).toMatch(/\/cc-view status/);
     expect(precompactLine).not.toMatch(/schedule the corresponding script manually/);
 
     // Wave Q (v0.41.0): OpenCode's native `question` tool is honest as
@@ -952,7 +950,7 @@ describe("install lifecycle", { timeout: 30_000 }, () => {
     const root = await createTempProject("codex-skills-fresh");
     await initCclaw({ projectRoot: root, harnesses: ["codex"] });
 
-    const expectedSkills = ["cc", "cc-next", "cc-view", "cc-ideate", "cc-ops"];
+    const expectedSkills = ["cc", "cc-next", "cc-view", "cc-ideate"];
     for (const slug of expectedSkills) {
       const skillPath = path.join(root, ".agents/skills", slug, "SKILL.md");
       const body = await fs.readFile(skillPath, "utf8");

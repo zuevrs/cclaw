@@ -27,15 +27,6 @@ import { statusCommandContract, statusCommandSkillMarkdown } from "./content/sta
 import { treeCommandContract, treeCommandSkillMarkdown } from "./content/tree-command.js";
 import { diffCommandContract, diffCommandSkillMarkdown } from "./content/diff-command.js";
 import { viewCommandContract, viewCommandSkillMarkdown } from "./content/view-command.js";
-import { opsCommandContract, opsCommandSkillMarkdown } from "./content/ops-command.js";
-import { tddLogCommandContract, tddLogCommandSkillMarkdown } from "./content/tdd-log-command.js";
-import { retroCommandContract, retroCommandSkillMarkdown } from "./content/retro-command.js";
-import { compoundCommandContract, compoundCommandSkillMarkdown } from "./content/compound-command.js";
-import { archiveCommandContract, archiveCommandSkillMarkdown } from "./content/archive-command.js";
-import {
-  rewindCommandContract,
-  rewindCommandSkillMarkdown
-} from "./content/rewind-command.js";
 import { subagentDrivenDevSkill, parallelAgentsSkill } from "./content/subagents.js";
 import { sessionHooksSkillMarkdown } from "./content/session-hooks.js";
 import { ironLawRuntimeDocument, ironLawsSkillMarkdown } from "./content/iron-laws.js";
@@ -381,32 +372,6 @@ async function writeSkills(projectRoot: string, config?: CclawConfig): Promise<v
     runtimePath(projectRoot, "skills", "flow-diff", "SKILL.md"),
     diffCommandSkillMarkdown()
   );
-  await writeFileSafe(
-    runtimePath(projectRoot, "skills", "flow-ops", "SKILL.md"),
-    opsCommandSkillMarkdown()
-  );
-  await writeFileSafe(
-    runtimePath(projectRoot, "skills", "tdd-cycle-log", "SKILL.md"),
-    tddLogCommandSkillMarkdown()
-  );
-  await writeFileSafe(
-    runtimePath(projectRoot, "skills", "flow-retro", "SKILL.md"),
-    retroCommandSkillMarkdown()
-  );
-  await writeFileSafe(
-    runtimePath(projectRoot, "skills", "flow-compound", "SKILL.md"),
-    compoundCommandSkillMarkdown({
-      recurrenceThreshold: config?.compound?.recurrenceThreshold
-    })
-  );
-  await writeFileSafe(
-    runtimePath(projectRoot, "skills", "flow-rewind", "SKILL.md"),
-    rewindCommandSkillMarkdown()
-  );
-  await writeFileSafe(
-    runtimePath(projectRoot, "skills", "flow-archive", "SKILL.md"),
-    archiveCommandSkillMarkdown()
-  );
 
   await writeFileSafe(
     runtimePath(projectRoot, "skills", "subagent-dev", "SKILL.md"),
@@ -464,6 +429,7 @@ async function writeSkills(projectRoot: string, config?: CclawConfig): Promise<v
 }
 
 async function writeUtilityCommands(projectRoot: string, config: CclawConfig): Promise<void> {
+  void config;
   await writeFileSafe(runtimePath(projectRoot, "commands", "learn.md"), learnCommandContract());
   await writeFileSafe(runtimePath(projectRoot, "commands", "next.md"), nextCommandContract());
   await writeFileSafe(runtimePath(projectRoot, "commands", "ideate.md"), ideateCommandContract());
@@ -472,17 +438,6 @@ async function writeUtilityCommands(projectRoot: string, config: CclawConfig): P
   await writeFileSafe(runtimePath(projectRoot, "commands", "status.md"), statusCommandContract());
   await writeFileSafe(runtimePath(projectRoot, "commands", "tree.md"), treeCommandContract());
   await writeFileSafe(runtimePath(projectRoot, "commands", "diff.md"), diffCommandContract());
-  await writeFileSafe(runtimePath(projectRoot, "commands", "ops.md"), opsCommandContract());
-  await writeFileSafe(runtimePath(projectRoot, "commands", "tdd-log.md"), tddLogCommandContract());
-  await writeFileSafe(runtimePath(projectRoot, "commands", "retro.md"), retroCommandContract());
-  await writeFileSafe(
-    runtimePath(projectRoot, "commands", "compound.md"),
-    compoundCommandContract({
-      recurrenceThreshold: config.compound?.recurrenceThreshold
-    })
-  );
-  await writeFileSafe(runtimePath(projectRoot, "commands", "archive.md"), archiveCommandContract());
-  await writeFileSafe(runtimePath(projectRoot, "commands", "rewind.md"), rewindCommandContract());
 }
 
 function toObject(value: unknown): Record<string, unknown> | null {
@@ -1103,10 +1058,9 @@ async function writeHarnessGapsState(projectRoot: string, harnesses: HarnessId[]
       if (harness === "codex" && event === "precompact_digest") {
         // Codex CLI has no PreCompact event. Generic "schedule the script
         // manually" copy doesn't help; instead, point the agent at the
-        // in-thread substitute that already exists in cclaw content
-        // (`/cc-ops retro` reads the same digest the hook would emit).
+        // in-thread substitute that already exists in cclaw content.
         remediation.push(
-          "hook event precompact_digest → Codex has no PreCompact event; run `/cc-ops retro` in-thread before compaction instead of relying on a hook"
+          "hook event precompact_digest → Codex has no PreCompact event; run `/cc-view status` before compaction to capture the same digest context"
         );
         continue;
       }
@@ -1197,6 +1151,18 @@ async function cleanLegacyArtifacts(projectRoot: string): Promise<void> {
 
   for (const legacyRuntimeFile of [
     runtimePath(projectRoot, "commands", "feature.md"),
+    runtimePath(projectRoot, "commands", "ops.md"),
+    runtimePath(projectRoot, "commands", "tdd-log.md"),
+    runtimePath(projectRoot, "commands", "retro.md"),
+    runtimePath(projectRoot, "commands", "compound.md"),
+    runtimePath(projectRoot, "commands", "archive.md"),
+    runtimePath(projectRoot, "commands", "rewind.md"),
+    runtimePath(projectRoot, "skills", "flow-ops", "SKILL.md"),
+    runtimePath(projectRoot, "skills", "tdd-cycle-log", "SKILL.md"),
+    runtimePath(projectRoot, "skills", "flow-retro", "SKILL.md"),
+    runtimePath(projectRoot, "skills", "flow-compound", "SKILL.md"),
+    runtimePath(projectRoot, "skills", "flow-archive", "SKILL.md"),
+    runtimePath(projectRoot, "skills", "flow-rewind", "SKILL.md"),
     runtimePath(projectRoot, "skills", "using-git-worktrees", "SKILL.md"),
     runtimePath(projectRoot, "learnings.jsonl"),
     runtimePath(projectRoot, "observations.jsonl"),

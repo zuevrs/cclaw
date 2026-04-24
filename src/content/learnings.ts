@@ -103,7 +103,7 @@ Optional fields \`source\` and \`severity\` may be appended after \`project\`.
 | \`last_seen_ts\` | ISO 8601 UTC string | yes | Last re-confirmed timestamp. |
 | \`project\` | string \\| null | yes | Repo or scope name. Use \`null\` when the entry crosses projects. |
 | \`source\` | \`"stage" \\| "retro" \\| "compound" \\| "ideate" \\| "manual" \\| null\` | no | Origin channel for the entry when known. |
-| \`severity\` | \`"critical" \\| "important" \\| "suggestion"\` | no | Priority signal for compound lifts; \`critical\` enables single-hit override in \`/cc-ops compound\`. |
+| \`severity\` | \`"critical" \\| "important" \\| "suggestion"\` | no | Priority signal for compound lifts; \`critical\` enables single-hit override in compound readiness analysis. |
 
 Rules:
 - No other fields beyond the table above. Extra keys are forbidden and MUST be rejected by any writer.

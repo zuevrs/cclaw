@@ -140,7 +140,7 @@ You MUST complete these steps in order:
 14. Meta-Review — Were tests actually run? Do test names match what they test? Are there real assertions?
 15. Classify findings — Critical (blocks ship), Important (should fix), Suggestion (optional improvement).
 16. Produce verdict — APPROVED, APPROVED_WITH_CONCERNS, or BLOCKED.
-17. If verdict is BLOCKED, emit remediation route token \`ROUTE_BACK_TO_TDD\` and include \`/cc-ops rewind tdd "review_blocked_by_critical"\` with the blocking finding IDs.
+17. If verdict is BLOCKED, emit remediation route token \`ROUTE_BACK_TO_TDD\` and include \`cclaw internal rewind tdd "review_blocked_by_critical"\` with the blocking finding IDs.
 
 ## Examples
 
@@ -1012,7 +1012,7 @@ You MUST complete these steps in order:
 7. GREEN: Verify no regressions — if any existing test breaks, fix the regression before proceeding.
 8. Run verification-before-completion discipline for the slice — capture a fresh test command, commit SHA, and explicit PASS/FAIL status before completion claims.
 9. REFACTOR: Dispatch \`tdd-refactor\` execution (or dedicated refactor mode) to improve code quality without behavior changes. Set \`CCLAW_ACTIVE_AGENT=tdd-refactor\` when supported.
-10. Record evidence — capture RED failure, GREEN output, and REFACTOR notes in the TDD artifact. When logging the \`green\` row via \`/cc-ops tdd-log green\`, attach the closed acceptance-criterion IDs in \`acIds\` so Ralph Loop status counts them.
+10. Record evidence — capture RED failure, GREEN output, and REFACTOR notes in the TDD artifact. When logging a \`green\` row, attach the closed acceptance-criterion IDs in \`acIds\` so Ralph Loop status counts them.
 11. Annotate traceability — link to plan task ID and spec criterion.
 12. Per-Slice Review (conditional) — if \`.cclaw/config.yaml::sliceReview.enabled\` is true and the slice meets any trigger (touchCount >= filesChangedThreshold, touchPaths match touchTriggers, or highRisk=true), append a \`## Per-Slice Review\` entry for this slice before moving on (see the dedicated section below).
 13. Repeat for each slice — return to step 1 for the next plan slice.
@@ -1484,7 +1484,7 @@ Do NOT ship, merge, or release until both review layers complete with an explici
 - \`.cclaw/artifacts/05-plan.md\`
 4. Stream \`.cclaw/knowledge.jsonl\` and apply relevant JSON-line entries (strict schema: type, trigger, action, confidence, domain, stage, origin_stage, origin_feature, frequency, universality, maturity, created, first_seen_ts, last_seen_ts, project; optional: source, severity).
 5. Write stage output to \`.cclaw/artifacts/07-review.md\` and \`.cclaw/artifacts/07-review-army.json\`.
-6. Do NOT copy artifacts into \`.cclaw/runs/\`; archival is handled by \`/cc-ops archive\` (agent-facing wrapper over archive runtime).
+6. Do NOT copy artifacts into \`.cclaw/runs/\`; archival is handled by \`cclaw archive\`.
 
 ## Gates
 \`review_layer1_spec_compliance\`, \`review_layer2_security\`, \`review_layer_coverage_complete\`, \`review_criticals_resolved\`, \`review_army_json_valid\`, \`review_trace_matrix_clean\`
@@ -1529,7 +1529,7 @@ Do NOT merge, push, or finalize without a passed preflight check, written rollba
 - \`.cclaw/artifacts/04-spec.md\`
 4. Stream \`.cclaw/knowledge.jsonl\` and apply relevant JSON-line entries (strict schema: type, trigger, action, confidence, domain, stage, origin_stage, origin_feature, frequency, universality, maturity, created, first_seen_ts, last_seen_ts, project; optional: source, severity).
 5. Write stage output to \`.cclaw/artifacts/08-ship.md\`.
-6. Do NOT copy artifacts into \`.cclaw/runs/\`; archival is handled by \`/cc-ops archive\` (agent-facing wrapper over archive runtime).
+6. Do NOT copy artifacts into \`.cclaw/runs/\`; archival is handled by \`cclaw archive\`.
 
 ## Gates
 \`ship_review_verdict_valid\`, \`ship_preflight_passed\`, \`ship_rollback_plan_ready\`, \`ship_finalization_executed\`

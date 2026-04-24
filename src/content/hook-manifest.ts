@@ -141,7 +141,7 @@ export const HOOK_MANIFEST: readonly HookHandlerSpec[] = [
   },
   {
     handler: "pre-compact",
-    description: "Write pre-compact digest (Claude+Cursor have a native event; Codex has no PreCompact — covered by `/cc-ops retro`).",
+    description: "Write pre-compact digest (Claude+Cursor have a native event; Codex has no PreCompact — covered by flow-state + checkpoint summary).",
     semantic: "precompact_digest",
     bindings: {
       claude: [{ event: "PreCompact", matcher: "manual|auto", timeout: 10 }],

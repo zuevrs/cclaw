@@ -800,7 +800,7 @@ ${SHIP_FINALIZATION_ENUM_LINES}
 - Exceptions (if any):
 
 ## Retro Gate Handoff
-- Run \`/cc-ops retro\` before archive.
+- Complete the retro gate before archive.
 - Retro artifact path: \`.cclaw/artifacts/09-retro.md\`
 - Archive remains blocked until retro gate is complete.
 
@@ -929,7 +929,7 @@ Track-specific skips are allowed only when \`flow-state.track\` + \`skippedStage
 
 - No completion claim without fresh command evidence in this turn.
 - Do not mark gates passed from memory.
-- Keep evidence in \`.cclaw/artifacts/\`; archive via \`/cc-ops archive\` (agent flow) or archive runtime.
+- Keep evidence in \`.cclaw/artifacts/\`; archive via \`cclaw archive\`.
 
 ## Delegation And Approvals
 

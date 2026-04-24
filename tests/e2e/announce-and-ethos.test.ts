@@ -26,6 +26,6 @@ describe("announce-at-start discipline and ethos principles", () => {
     expect(reviewSkill).toContain("Announce at start:");
     expect(reviewSkill).toContain("Decision protocol reference:");
     expect(metaSkill).toContain("/cc-ideate");
-    expect(metaSkill).toContain("/cc-ops [feature|tdd-log|retro|compound|archive|rewind]");
+    expect(metaSkill).toContain("cclaw archive [--name=<slug>]");
   });
 });

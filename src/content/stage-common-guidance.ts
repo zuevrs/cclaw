@@ -27,8 +27,8 @@ Use this same closeout menu for every stage:
 - **A) Advance** — run \`/cc-next\` and continue.
 - **B) Revise this stage** — stay on current stage and apply feedback.
 - **C) Pause / park** — run \`/cc-view status\`, then stop and resume later.
-- **D) Rewind** — run \`/cc-ops rewind <target-stage>\`.
-- **E) Abandon** — archive with \`/cc-ops archive --skip-retro --retro-reason="<reason>"\` when user explicitly wants to end the run.
+- **D) Rewind** — run \`cclaw internal rewind <target-stage> "<reason>"\`.
+- **E) Abandon** — archive with \`cclaw archive --skip-retro --retro-reason="<reason>"\` when user explicitly wants to end the run.
 
 Recommendation defaults:
 

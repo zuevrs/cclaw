@@ -136,13 +136,7 @@ export const UTILITY_COMMANDS = [
   "view",
   "status",
   "tree",
-  "diff",
-  "ops",
-  "tdd-log",
-  "retro",
-  "compound",
-  "archive",
-  "rewind"
+  "diff"
 ] as const;
 
 export const SUBAGENT_SKILL_FOLDERS = [

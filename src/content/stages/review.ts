@@ -50,7 +50,7 @@ export const REVIEW: StageSchemaInput = {
       "Meta-Review — Were tests actually run? Do test names match what they test? Are there real assertions?",
       "Classify findings — Critical (blocks ship), Important (should fix), Suggestion (optional improvement).",
       "Produce verdict — APPROVED, APPROVED_WITH_CONCERNS, or BLOCKED.",
-      "If verdict is BLOCKED, emit remediation route token `ROUTE_BACK_TO_TDD` and include `/cc-ops rewind tdd \"review_blocked_by_critical\"` with the blocking finding IDs."
+      "If verdict is BLOCKED, emit remediation route token `ROUTE_BACK_TO_TDD` and include `cclaw internal rewind tdd \"review_blocked_by_critical\"` with the blocking finding IDs."
     ],
     interactionProtocol: [
       "Run Layer 1 (spec compliance) completely before starting Layer 2.",
@@ -58,7 +58,7 @@ export const REVIEW: StageSchemaInput = {
       "Classify every finding as Critical, Important, or Suggestion.",
       "For each Critical finding: use the Decision Protocol — present resolution options (A/B/C) with trade-offs, and mark one as (recommended). Do NOT use a numeric Completeness rubric; recommend the option that fully closes the finding with no carry-over risk and the smallest blast radius. If the harness's native structured-ask tool is available (`AskUserQuestion` on Claude, `AskQuestion` on Cursor, `question` on OpenCode with `permission.question: \"allow\"`, `request_user_input` on Codex in Plan/Collaboration mode), send exactly ONE question per call, validate fields against the runtime schema, and on schema error immediately fall back to a plain-text lettered list instead of retrying guessed payloads.",
       "Resolve all critical blockers before ship.",
-      "When verdict is BLOCKED, do not end with a passive stop: explicitly route remediation to TDD via `ROUTE_BACK_TO_TDD` and point to `/cc-ops rewind tdd` with the blocking IDs.",
+      "When verdict is BLOCKED, do not end with a passive stop: explicitly route remediation to TDD via `ROUTE_BACK_TO_TDD` and point to `cclaw internal rewind tdd` with the blocking IDs.",
       "For final verdict: use the native structured-ask tool (`AskUserQuestion` / `AskQuestion` / `question` / `request_user_input`) only if runtime schema is confirmed; otherwise collect verdict with a plain-text single-choice prompt (APPROVED / APPROVED_WITH_CONCERNS / BLOCKED).",
       "**STOP.** Do NOT proceed to ship until the user provides an explicit verdict."
     ],

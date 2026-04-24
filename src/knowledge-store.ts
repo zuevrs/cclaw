@@ -98,7 +98,7 @@ export interface CompoundReadinessCluster {
   action: string;
   /**
    * Sum of `frequency` across entries in the cluster — matches the
-   * recurrence count used by `/cc-ops compound`.
+   * recurrence count used by compound readiness analysis.
    */
   recurrence: number;
   /** Distinct entry lines contributing to this cluster. */
@@ -156,8 +156,7 @@ export interface ComputeCompoundReadinessOptions {
    * Count of archived runs under `.cclaw/runs/`. When supplied and
    * `< SMALL_PROJECT_ARCHIVE_RUNS_THRESHOLD`, the effective threshold
    * is lowered to `min(threshold, SMALL_PROJECT_RECURRENCE_THRESHOLD)`.
-   * Matches the rule documented in `src/content/compound-command.ts`
-   * and `docs/config.md`.
+   * Matches the rule documented in `docs/config.md`.
    */
   archivedRunsCount?: number;
 }
@@ -167,8 +166,8 @@ const DEFAULT_COMPOUND_READINESS_MAX_READY = 10;
 /**
  * Single source of truth for the small-project relaxation rule.
  *
- * Kept exported so the inline hook mirror, the CLI command, and
- * the `/cc-ops compound` skill all agree on the same numbers.
+ * Kept exported so the inline hook mirror and CLI/runtime paths all agree on
+ * the same numbers.
  */
 export const SMALL_PROJECT_ARCHIVE_RUNS_THRESHOLD = 5;
 export const SMALL_PROJECT_RECURRENCE_THRESHOLD = 2;
@@ -197,7 +196,7 @@ export function effectiveCompoundThreshold(
  * for persisting to `.cclaw/state/compound-readiness.json`.
  *
  * Clustering key: `(type, normalizeText(trigger), normalizeText(action))`
- * which mirrors the clustering used by the `/cc-ops compound` skill.
+ * which mirrors the compound readiness clustering in runtime state.
  * Entries with `maturity === "lifted-to-enforcement"` are excluded —
  * they were already promoted and should not re-appear as ready.
  */

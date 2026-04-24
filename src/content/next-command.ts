@@ -73,13 +73,13 @@ This is the only progression command the user needs to drive the entire flow. St
 
 - **Do not** invent gate completion: use only \`${flowPath}\` plus observable evidence in repo artifacts.
 - **Do not** skip stages: advance only from \`currentStage\` to its configured successor.
-- After ship completes, the closeout chain **retro -> compound -> archive** runs automatically, driven by \`closeout.shipSubstate\`. Do not ask the user to type those commands manually — follow the substate switch in Path B below.
+- After ship completes, the closeout chain **retro -> compound -> archive** runs automatically, driven by \`closeout.shipSubstate\`. Do not route through removed \`/cc-ops\` commands.
 
 ## Algorithm (mandatory)
 
 1. Read **\`${flowPath}\`**. If missing → **BLOCKED** (state missing).
 2. Parse JSON. Capture \`currentStage\` and \`stageGateCatalog[currentStage]\`.
-3. If \`staleStages[currentStage]\` exists, do not advance automatically. Re-run the stage artifact work, then clear the marker with \`/cc-ops rewind --ack <currentStage>\`.
+3. If \`staleStages[currentStage]\` exists, do not advance automatically. Re-run the stage artifact work, then clear the marker with \`cclaw internal rewind --ack <currentStage>\`.
 4. Read **\`${reconciliationNoticesPath}\`** when present. If it contains entries for \`activeRunId + currentStage\` and the listed gate is still blocked in \`stageGateCatalog[currentStage].blocked\`, emit a structured warning before any stage-advance decision.
 5. Let \`G\` = \`requiredGates\` for **\`currentStage\`** from the stage schema.
 6. Let \`catalog\` = \`stageGateCatalog[currentStage]\` from flow state.
@@ -88,7 +88,7 @@ This is the only progression command the user needs to drive the entire flow. St
 9. If \`M\` is non-empty, inspect **\`${delegationPath}\`**. Treat as satisfied only if each mandatory agent is **completed** or **waived**.
 10. For each satisfied mandatory delegation row, verify \`evidenceRefs\` is a non-empty array (unless status is \`waived\` with rationale). Missing evidenceRefs means delegation is unresolved.
 11. If any mandatory delegation is missing and no waiver exists: **STOP** and ask the user whether to dispatch now or waive with rationale. Do not mark gates passed while delegation is unresolved.
-12. If \`currentStage === "review"\` and \`catalog.blocked\` includes \`review_criticals_resolved\`, treat this as a hard remediation branch: recommend \`/cc-ops rewind tdd "review_blocked_by_critical"\` with the blocking finding IDs, and do not attempt to advance toward ship.
+12. If \`currentStage === "review"\` and \`catalog.blocked\` includes \`review_criticals_resolved\`, treat this as a hard remediation branch: recommend \`cclaw internal rewind tdd "review_blocked_by_critical"\` with the blocking finding IDs, and do not attempt to advance toward ship.
 
 ### Path A: Current stage is NOT complete (any gate unmet or delegation missing)
 
@@ -104,17 +104,13 @@ ${ralphLoopContractSnippet()}
 
   When \`currentStage === "ship"\`, route by **\`closeout.shipSubstate\`**:
   - \`"idle"\` or missing -> set \`closeout.shipSubstate = "retro_review"\`, then
-    load \`${RUNTIME_ROOT}/commands/retro.md\` + \`${RUNTIME_ROOT}/skills/flow-retro/SKILL.md\`
-    and execute the retro protocol (draft + one structured accept/edit/skip ask).
+    execute the in-stage retro protocol (draft + one structured accept/edit/skip ask).
   - \`"retro_review"\` -> continue the retro protocol (re-ask the structured
     question; the draft already exists — do not regenerate it).
-  - \`"compound_review"\` -> load \`${RUNTIME_ROOT}/commands/compound.md\` +
-    \`${RUNTIME_ROOT}/skills/flow-compound/SKILL.md\`, execute the compound
-    scan, ask user **one** structured question (apply / skip) per candidate
-    cluster or a single accept-all / skip choice, and advance substate on
-    completion or skip.
-  - \`"ready_to_archive"\` -> load \`${RUNTIME_ROOT}/commands/archive.md\` +
-    \`${RUNTIME_ROOT}/skills/flow-archive/SKILL.md\`, run archive, reset state.
+  - \`"compound_review"\` -> execute the in-stage compound scan and ask user
+    **one** structured question (apply / skip) per candidate cluster or a
+    single accept-all / skip choice, then advance substate.
+  - \`"ready_to_archive"\` -> run \`cclaw archive\` (or \`cclaw archive --name=<slug>\`) and reset state.
   - \`"archived"\` (transient) -> report "run archived" and stop.
 
   Otherwise report **"Flow complete. All stages finished."** and stop.
@@ -210,7 +206,7 @@ Do **not** mark gates satisfied from memory alone. Cite **artifact evidence** (p
 
 1. Open **\`${flowPath}\`**.
 2. Record \`currentStage\` and \`stageGateCatalog[currentStage]\`.
-3. If \`staleStages[currentStage]\` exists, re-run the stage and clear marker via \`/cc-ops rewind --ack <currentStage>\` before advancing.
+3. If \`staleStages[currentStage]\` exists, re-run the stage and clear marker via \`cclaw internal rewind --ack <currentStage>\` before advancing.
 4. If the file is missing or invalid JSON → **BLOCKED** (report and stop).
 5. Read \`${reconciliationNoticesPath}\` when present. For entries matching \`activeRunId + currentStage\` whose gate is still in \`stageGateCatalog[currentStage].blocked\`, show a warning with gate id + reason before proceeding.
 
@@ -239,7 +235,7 @@ Execute the stage protocol. The stage skill handles interaction, STOP points, ga
 
 ${ralphLoopContractSnippet()}
 
-Special-case for review: if \`review_criticals_resolved\` is in \`blocked\`, route to rework instead of looping review forever — recommend \`/cc-ops rewind tdd "review_blocked_by_critical"\`.
+Special-case for review: if \`review_criticals_resolved\` is in \`blocked\`, route to rework instead of looping review forever — recommend \`cclaw internal rewind tdd "review_blocked_by_critical"\`.
 
 **Path B — stage IS complete (all gates met, all delegations done):**
 

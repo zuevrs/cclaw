@@ -146,13 +146,6 @@ const UTILITY_SHIMS: UtilityShimSpec[] = [
     command: "view",
     skillFolder: "flow-view",
     commandFile: "view.md"
-  },
-  {
-    fileName: "cc-ops.md",
-    skillName: "cc-ops",
-    command: "ops",
-    skillFolder: "flow-ops",
-    commandFile: "ops.md"
   }
 ];
 
@@ -171,10 +164,9 @@ const LEGACY_CODEX_SKILL_NAMES: readonly string[] = [
   "cclaw-cc-view",
   "cclaw-cc-ops",
   "cclaw-cc-ideate",
-  // Pre-v0.40 installed `/cc-learn` as a top-level skill before it was
-  // folded into `/cc-ops`. Without this entry the orphan stays behind
-  // after upgrade and Codex lists both the new in-thread workflow and
-  // the legacy slash command.
+  // Pre-v0.40 installed `/cc-learn` as a top-level skill. Without this
+  // entry the orphan stays behind after upgrade and Codex lists both the
+  // modern in-thread workflow and the legacy slash command.
   "cclaw-cc-learn"
 ];
 
@@ -360,7 +352,6 @@ When in doubt, prefer **non-trivial** — the quick track is opt-in and only saf
 | \`/cc-next\` | **Progression.** Advances to the next stage when current is complete. |
 | \`/cc-ideate\` | **Ideate mode.** Generates a ranked repo-improvement backlog before implementation. |
 | \`/cc-view\` | **Read-only router.** Unified entry for status/tree/diff views. |
-| \`/cc-ops\` | **Operations router.** Unified entry for feature/tdd-log/retro/compound/archive/rewind actions. |
 
 Knowledge capture and curation run automatically as part of stage completion
 protocols via the internal \`learnings\` skill — no user-facing command.
@@ -388,7 +379,7 @@ If the same approach fails three times in a row (same command, same finding, sam
 
 OpenAI Codex CLI has **no native \`/cc\` slash command** (custom prompts
 were deprecated in v0.89, Jan 2026). The \`/cc\`, \`/cc-next\`,
-\`/cc-ideate\`, \`/cc-view\`, \`/cc-ops\` tokens above describe intent — in
+\`/cc-ideate\`, \`/cc-view\` tokens above describe intent — in
 Codex they map onto skills cclaw installs at
 \`.agents/skills/cc*/SKILL.md\`. Activate one of two ways:
 
@@ -504,8 +495,6 @@ function codexSkillDescription(command: string): string {
       return `Read-only repo-improvement ideate mode for cclaw. Use when the user types \`/cc-ideate\` or asks to "ideate", "scan the repo for TODOs/tech debt", "generate a backlog", or wants a ranked list of candidate ideas before committing to a single flow. Does not mutate \`.cclaw/state/flow-state.json\`.`;
     case "view":
       return `Read-only router for cclaw flow views. Use when the user types \`/cc-view\`, \`/cc-view status\`, \`/cc-view tree\`, \`/cc-view diff\`, or asks to "show cclaw status", "show the flow tree", "diff flow state", or wants a snapshot without mutation.`;
-    case "ops":
-      return `Operations router for cclaw post-flow actions. Use when the user types \`/cc-ops\`, \`/cc-ops tdd-log\`, \`/cc-ops retro\`, \`/cc-ops compound\`, \`/cc-ops archive\`, \`/cc-ops rewind\`, or asks to "archive the run", "run the retro", "compound knowledge", or "rewind to an earlier stage".`;
     default:
       return `Generated cclaw skill for ${command}.`;
   }
