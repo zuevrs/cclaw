@@ -49,7 +49,7 @@ async function readCycleLog(projectRoot: string): Promise<string> {
 
 /**
  * Produces a one-line "Ralph Loop: iter=X, slices=Y, acClosed=Z, redOpen=..."
- * summary — suitable for session-digest / bootstrap surfaces where the user
+ * summary — suitable for bootstrap surfaces where the user
  * just needs a progress indicator, not the full slice breakdown.
  */
 export function formatRalphLoopStatusLine(status: RalphLoopStatus): string {

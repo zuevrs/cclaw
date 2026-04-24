@@ -319,12 +319,6 @@ async function appendJsonLine(filePath, value) {
   });
 }
 
-async function writeTextFileAtomic(filePath, content) {
-  await withDirectoryLockInline(lockPathFor(filePath), async () => {
-    await writeFileAtomic(filePath, content);
-  });
-}
-
 async function readStdin() {
   return await new Promise((resolve) => {
     let data = "";
@@ -840,33 +834,9 @@ async function readFlowState(root) {
   };
 }
 
-function formatCheckpointSummary(checkpointObj) {
-  const stage = typeof checkpointObj.stage === "string" ? checkpointObj.stage : "none";
-  const status = typeof checkpointObj.status === "string" ? checkpointObj.status : "unknown";
-  const runId = typeof checkpointObj.runId === "string" ? checkpointObj.runId : "none";
-  const timestamp = typeof checkpointObj.timestamp === "string" ? checkpointObj.timestamp : "unknown";
-  return "Checkpoint: stage=" + stage + ", status=" + status + ", run=" + runId + ", at=" + timestamp;
-}
-
-function stageSuggestion(stage) {
-  const map = {
-    brainstorm:
-      "Suggestion: list 2-3 alternatives and ask a single focused clarifying question before direction lock.",
-    scope: "Suggestion: lock explicit in-scope/out-of-scope boundaries and choose one scope mode.",
-    design:
-      "Suggestion: map failure modes per new codepath and confirm architecture boundaries before moving forward.",
-    spec: "Suggestion: ensure every acceptance criterion is measurable and mapped to a concrete test.",
-    plan: "Suggestion: group tasks into dependency batches and keep WAIT_FOR_CONFIRM pending until approval.",
-    tdd: "Suggestion: execute RED -> GREEN -> REFACTOR for each selected slice and capture evidence per cycle.",
-    review: "Suggestion: run Layer 1 before Layer 2 and reconcile findings into 07-review-army.json.",
-    ship: "Suggestion: verify preflight + rollback plan before selecting exactly one finalization mode."
-  };
-  return map[stage] || "";
-}
 
 async function buildKnowledgeDigest(root, currentStage, prereadRaw) {
   const knowledgeFile = path.join(root, RUNTIME_ROOT, "knowledge.jsonl");
-  const digestFile = path.join(root, RUNTIME_ROOT, "state", "knowledge-digest.md");
   // Caller may supply pre-read raw bytes to avoid re-reading knowledge.jsonl.
   // Falls back to a local read if nothing is passed in.
   const raw = typeof prereadRaw === "string"
@@ -902,10 +872,6 @@ async function buildKnowledgeDigest(root, currentStage, prereadRaw) {
     });
   const body =
     relevant.length > 0 ? relevant.join("\\n") : "(no matching entries for current stage)";
-  await writeTextFileAtomic(
-    digestFile,
-    "# Knowledge digest (auto-generated)\\n\\n" + body + "\\n"
-  );
   return {
     digestLines: relevant,
     learningsCount
@@ -941,49 +907,15 @@ async function readRecentActivityLines(activityFile) {
   return out;
 }
 
-async function readLatestContextWarningLine(filePath) {
-  const raw = await readTextFile(filePath, "");
-  const lines = raw.split(/\\r?\\n/gu).map((line) => line.trim()).filter((line) => line.length > 0);
-  const line = lines[lines.length - 1] || "";
-  if (line.length === 0) return "";
-  try {
-    const parsed = JSON.parse(line);
-    if (parsed && typeof parsed === "object" && typeof parsed.note === "string") {
-      return parsed.note;
-    }
-  } catch {
-    // fallback
-  }
-  return line;
-}
-
 async function handleSessionStart(runtime) {
   const state = await readFlowState(runtime.root);
   const stateDir = path.join(runtime.root, RUNTIME_ROOT, "state");
-  const checkpointFile = path.join(stateDir, "checkpoint.json");
   const activityFile = path.join(stateDir, "stage-activity.jsonl");
-  const contextWarningsFile = path.join(stateDir, "context-warnings.jsonl");
-  const contextModeFile = path.join(stateDir, "context-mode.json");
-  const suggestionMemoryFile = path.join(stateDir, "suggestion-memory.json");
   const ironLawsFile = path.join(stateDir, "iron-laws.json");
-  const sessionDigestFile = path.join(stateDir, "session-digest.md");
   const metaSkillFile = path.join(runtime.root, RUNTIME_ROOT, "skills", "using-cclaw", "SKILL.md");
 
-  const contextModeObj = toObject(await readJsonFile(contextModeFile, {})) || {};
-  const activeContextMode =
-    typeof contextModeObj.activeMode === "string" && contextModeObj.activeMode.length > 0
-      ? contextModeObj.activeMode
-      : "default";
-  const contextModeNote = "Context mode: " + activeContextMode;
 
-  const checkpointObj = toObject(await readJsonFile(checkpointFile, {})) || {};
-  const checkpointSummary = Object.keys(checkpointObj).length > 0
-    ? formatCheckpointSummary(checkpointObj)
-    : "";
-
-  const sessionDigest = (await readTextFile(sessionDigestFile, "")).trim();
   const activitySummary = await readRecentActivityLines(activityFile);
-  const contextWarning = await readLatestContextWarningLine(contextWarningsFile);
   // Read knowledge.jsonl exactly once per session-start while holding the
   // SAME lock CLI writers acquire in \`appendKnowledge\`. Guarantees we never
   // see a partial (mid-write) snapshot. Both the digest and
@@ -1092,26 +1024,6 @@ async function handleSessionStart(runtime) {
     );
   }
 
-  const suggestionMemory = toObject(await readJsonFile(suggestionMemoryFile, {})) || {};
-  const suggestionsEnabled = suggestionMemory.enabled !== false;
-  const mutedStages = Array.isArray(suggestionMemory.mutedStages)
-    ? suggestionMemory.mutedStages.filter((value) => typeof value === "string")
-    : [];
-  const stageMuted = mutedStages.includes(state.currentStage);
-  let stageHint = "";
-  if (suggestionsEnabled && !stageMuted) {
-    stageHint = stageSuggestion(state.currentStage);
-    if (stageHint.length > 0) {
-      const nextSuggestionMemory = {
-        enabled: suggestionsEnabled,
-        mutedStages,
-        lastSuggestedStage: state.currentStage,
-        lastSuggestedAt: new Date().toISOString()
-      };
-      await writeJsonFile(suggestionMemoryFile, nextSuggestionMemory);
-    }
-  }
-
   const ironLawsObj = toObject(await readJsonFile(ironLawsFile, {})) || {};
   const laws = Array.isArray(ironLawsObj.laws) ? ironLawsObj.laws : [];
   const ironLawLines = laws
@@ -1140,13 +1052,6 @@ async function handleSessionStart(runtime) {
       String(knowledge.learningsCount) +
       " entries."
   ];
-  parts.push(contextModeNote);
-  if (checkpointSummary.length > 0) {
-    parts.push(checkpointSummary);
-  }
-  if (sessionDigest.length > 0) {
-    parts.push("Last session:\\n" + sessionDigest);
-  }
   if (activitySummary.length > 0) {
     parts.push("Recent stage activity:\\n" + activitySummary.join("\\n"));
   }
@@ -1155,17 +1060,6 @@ async function handleSessionStart(runtime) {
   }
   if (compoundReadinessLine.length > 0) {
     parts.push(compoundReadinessLine);
-  }
-  if (contextWarning.length > 0) {
-    parts.push("Latest context warning:\\n" + contextWarning);
-  }
-  if (stageHint.length > 0) {
-    parts.push(
-      stageHint +
-        "\\nTo disable suggestions persistently set " +
-        RUNTIME_ROOT +
-        "/state/suggestion-memory.json -> enabled=false."
-    );
   }
   if (staleStageNames.length > 0) {
     parts.push(
@@ -1236,7 +1130,6 @@ function stopLawIsStrict(ironLawsObj) {
 async function handleStopCheckpoint(runtime) {
   const state = await readFlowState(runtime.root);
   const stateDir = path.join(runtime.root, RUNTIME_ROOT, "state");
-  const checkpointFile = path.join(stateDir, "checkpoint.json");
   const ironLawsFile = path.join(stateDir, "iron-laws.json");
   const input = toObject(runtime.inputData) || {};
   const loopCount =
@@ -1244,31 +1137,11 @@ async function handleStopCheckpoint(runtime) {
       ? Math.trunc(input.loop_count)
       : 0;
 
-  const existing = toObject(await readJsonFile(checkpointFile, {})) || {};
-  const timestamp = new Date().toISOString();
   const dirtyState = await isGitDirty(runtime.root);
-  const nextCheckpoint = {
-    ...existing,
-    stage: state.currentStage,
-    runId: state.activeRunId,
-    status:
-      typeof existing.status === "string" && existing.status.trim().length > 0
-        ? existing.status
-        : "in_progress",
-    dirtyState,
-    lastCompletedStep:
-      typeof existing.lastCompletedStep === "string" ? existing.lastCompletedStep : "",
-    remainingSteps: Array.isArray(existing.remainingSteps) ? existing.remainingSteps : [],
-    blockers: Array.isArray(existing.blockers) ? existing.blockers : [],
-    harness: runtime.harness,
-    timestamp
-  };
-  await writeJsonFile(checkpointFile, nextCheckpoint);
-
   const strictStop = stopLawIsStrict(toObject(await readJsonFile(ironLawsFile, {})) || {});
   if (dirtyState === "dirty" && strictStop) {
     process.stderr.write(
-      '[cclaw] Stop blocked by iron law "stop-clean-or-checkpointed": working tree is dirty. Commit/revert changes or update checkpoint blockers before ending the session.\\n'
+      '[cclaw] Stop blocked by iron law "stop-clean-or-checkpointed": working tree is dirty. Commit/revert changes or record blockers in the current artifact before ending the session.\\n'
     );
     return 1;
   }
@@ -1278,11 +1151,9 @@ async function handleStopCheckpoint(runtime) {
     state.currentStage +
     ", run=" +
     state.activeRunId +
-    "). Checkpoint updated at " +
+    "). Active artifacts stay in " +
     RUNTIME_ROOT +
-    "/state/checkpoint.json. Run metadata sync removed; active artifacts stay in " +
-    RUNTIME_ROOT +
-    "/artifacts until cclaw archive. Before stopping: (1) confirm flow-state reflects reality, (2) ensure artifact changes match current feature intent, (3) if you discovered a non-obvious rule/pattern, append one strict-schema JSON line to " +
+    "/artifacts until cclaw archive. Before stopping: (1) confirm flow-state reflects reality, (2) ensure artifact changes match current intent, (3) if you discovered a non-obvious rule/pattern, append one strict-schema JSON line to " +
     RUNTIME_ROOT +
     "/knowledge.jsonl, (4) commit or revert pending changes.";
 
@@ -1299,116 +1170,7 @@ async function handleStopCheckpoint(runtime) {
   return 0;
 }
 
-async function handlePreCompact(runtime) {
-  const state = await readFlowState(runtime.root);
-  const stateDir = path.join(runtime.root, RUNTIME_ROOT, "state");
-  const flow = state.raw;
-  const stage = state.currentStage;
-  const track = typeof flow.track === "string" ? flow.track : "standard";
-  const skipped = Array.isArray(flow.skippedStages)
-    ? flow.skippedStages.filter((value) => typeof value === "string").join(",")
-    : "";
-
-  const stageGateCatalog = toObject(flow.stageGateCatalog) || {};
-  const stageGate = toObject(stageGateCatalog[stage]) || {};
-  const passed = Array.isArray(stageGate.passed)
-    ? stageGate.passed.filter((value) => typeof value === "string").join(",")
-    : "";
-  const blocked = Array.isArray(stageGate.blocked)
-    ? stageGate.blocked.filter((value) => typeof value === "string").join(",")
-    : "";
-
-  let delegationPending = "";
-  const delegationLog = await readJsonFile(path.join(stateDir, "delegation-log.json"), {});
-  const delegationObj = toObject(delegationLog) || {};
-  const entries = Array.isArray(delegationObj.entries) ? delegationObj.entries : [];
-  const pendingAgents = entries
-    .filter((row) => row && typeof row === "object")
-    .filter(
-      (row) =>
-        row.stage === stage &&
-        row.status !== "completed" &&
-        row.status !== "waived" &&
-        typeof row.agent === "string"
-    )
-    .map((row) => row.agent);
-  if (pendingAgents.length > 0) {
-    delegationPending = [...new Set(pendingAgents)].join(",");
-  }
-
-  const knowledgeRaw = await readTextFile(path.join(runtime.root, RUNTIME_ROOT, "knowledge.jsonl"), "");
-  const knowledgeTail = knowledgeRaw
-    .split(/\\r?\\n/gu)
-    .filter((line) => line.trim().length > 0)
-    .slice(-12)
-    .join("\\n");
-
-  let gitBranch = "unknown";
-  let gitHead = "unknown";
-  let gitDirty = "unknown";
-  await new Promise((resolve) => {
-    const child = spawn("git", ["-C", runtime.root, "rev-parse", "--abbrev-ref", "HEAD"], {
-      stdio: ["ignore", "pipe", "ignore"]
-    });
-    let output = "";
-    child.stdout.on("data", (chunk) => {
-      output += String(chunk);
-    });
-    child.on("close", (code) => {
-      if (code === 0 && output.trim().length > 0) {
-        gitBranch = output.trim();
-      }
-      resolve(undefined);
-    });
-    child.on("error", () => resolve(undefined));
-  });
-  await new Promise((resolve) => {
-    const child = spawn("git", ["-C", runtime.root, "rev-parse", "--short", "HEAD"], {
-      stdio: ["ignore", "pipe", "ignore"]
-    });
-    let output = "";
-    child.stdout.on("data", (chunk) => {
-      output += String(chunk);
-    });
-    child.on("close", (code) => {
-      if (code === 0 && output.trim().length > 0) {
-        gitHead = output.trim();
-      }
-      resolve(undefined);
-    });
-    child.on("error", () => resolve(undefined));
-  });
-  gitDirty = await isGitDirty(runtime.root);
-
-  const timestamp = new Date().toISOString();
-  const digest = [
-    "# Session Digest",
-    "_Generated by pre-compact hook at " + timestamp + "_",
-    "",
-    "## Flow snapshot",
-    "- track: " + track,
-    "- current stage: " + stage,
-    "- completed: " + String(state.completedCount) + " stages",
-    "- skipped: " + (skipped.length > 0 ? skipped : "(none)"),
-    "- run: " + state.activeRunId,
-    "",
-    "## Gates (current stage)",
-    "- passed: " + (passed.length > 0 ? passed : "(none)"),
-    "- blocked: " + (blocked.length > 0 ? blocked : "(none)"),
-    "",
-    "## Outstanding delegations",
-    "- pending: " + (delegationPending.length > 0 ? delegationPending : "(none)"),
-    "",
-    "## Git",
-    "- branch: " + gitBranch,
-    "- head: " + gitHead,
-    "- worktree: " + gitDirty
-  ];
-  if (knowledgeTail.length > 0) {
-    digest.push("", "## Knowledge tail", knowledgeTail);
-  }
-  const digestFile = path.join(stateDir, "session-digest.md");
-  await writeTextFileAtomic(digestFile, digest.join("\\n") + "\\n");
+async function handlePreCompact(_runtime) {
   return 0;
 }
 
@@ -1787,7 +1549,6 @@ async function handleWorkflowGuard(runtime) {
 async function handleContextMonitor(runtime) {
   const stateDir = path.join(runtime.root, RUNTIME_ROOT, "state");
   const monitorStateFile = path.join(stateDir, "context-monitor.json");
-  const warningsFile = path.join(stateDir, "context-warnings.jsonl");
   const autoEvidenceFile = path.join(stateDir, "tdd-red-evidence.jsonl");
   const flowState = await readFlowState(runtime.root);
 
@@ -1869,13 +1630,6 @@ async function handleContextMonitor(runtime) {
       "% (" +
       band +
       "). Consider checkpointing or compacting soon.";
-    await appendJsonLine(warningsFile, {
-      ts: now.toISOString(),
-      harness: runtime.harness,
-      band,
-      remainingPercent,
-      note
-    });
     emitAdvisoryContext(runtime, "context-monitor", note);
     process.stderr.write("[cclaw] " + note + "\\n");
     nextAdvisoryBand = band;

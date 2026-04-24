@@ -47,8 +47,8 @@ describe("prompt-contract regression harness", () => {
     expect(cursorHooks).toContain(".cclaw/hooks/run-hook.cmd prompt-guard");
     expect(cursorHooks).toContain(".cclaw/hooks/run-hook.cmd workflow-guard");
     expect(cursorHooks).toContain(".cclaw/hooks/run-hook.cmd context-monitor");
-    expect(hookRuntime).toContain("suggestion-memory.json");
-    expect(hookRuntime).toContain("context-warnings.jsonl");
+    expect(hookRuntime).not.toContain("suggestion-memory.json");
+    expect(hookRuntime).not.toContain("context-warnings.jsonl");
     expect(hookRuntime).toContain("knowledge.jsonl");
     expect(hookRuntime).toContain("write_to_cclaw_runtime");
     expect(hookRuntime).toContain("stage_invocation_without_recent_flow_read");

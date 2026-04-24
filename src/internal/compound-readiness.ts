@@ -79,7 +79,7 @@ export async function countArchivedRunsSafely(projectRoot: string): Promise<numb
 }
 
 /**
- * Compact one-liner for session-digest / bootstrap surfaces.
+ * Compact one-liner for bootstrap surfaces.
  *
  * Example: `Compound readiness: clusters=12, ready=2 (critical=1)`.
  * When `ready === 0`, emit `Compound readiness: no candidates`.

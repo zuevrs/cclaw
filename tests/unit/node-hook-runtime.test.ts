@@ -57,26 +57,15 @@ async function runNodeHook(
 }
 
 describe("node hook runtime", () => {
-  it("session-start emits bootstrap payload and writes knowledge digest", async () => {
+  it("session-start emits bootstrap payload with inline knowledge digest", async () => {
     const root = await createTempProject("node-hook-session-start");
     await fs.mkdir(path.join(root, ".cclaw/state"), { recursive: true });
-    await fs.mkdir(path.join(root, ".cclaw/contexts"), { recursive: true });
     await fs.mkdir(path.join(root, ".cclaw/skills/using-cclaw"), { recursive: true });
     await fs.writeFile(path.join(root, ".cclaw/state/flow-state.json"), JSON.stringify({
       currentStage: "review",
       activeRunId: "run-node",
       completedStages: ["brainstorm", "scope", "design", "spec", "plan", "tdd"]
     }, null, 2), "utf8");
-    await fs.writeFile(path.join(root, ".cclaw/state/checkpoint.json"), JSON.stringify({
-      stage: "review",
-      runId: "run-node",
-      status: "in_progress",
-      timestamp: "2026-04-20T00:00:00Z"
-    }, null, 2), "utf8");
-    await fs.writeFile(path.join(root, ".cclaw/state/context-mode.json"), JSON.stringify({
-      activeMode: "review"
-    }, null, 2), "utf8");
-    await fs.writeFile(path.join(root, ".cclaw/contexts/review.md"), "# review\n", "utf8");
     await fs.writeFile(path.join(root, ".cclaw/knowledge.jsonl"), [
       JSON.stringify({
         type: "pattern",
@@ -110,12 +99,9 @@ describe("node hook runtime", () => {
       "";
     expect(context).toContain("cclaw loaded. Flow: stage=review");
     expect(context).toContain("run=run-node");
-    expect(context).toContain("Context mode: review");
-    expect(context).toContain("Checkpoint: stage=review");
     expect(context).toContain("Knowledge digest");
-    const digest = await fs.readFile(path.join(root, ".cclaw/state/knowledge-digest.md"), "utf8");
-    expect(digest).toContain("Knowledge digest (auto-generated)");
-    expect(digest).toContain("split into focused diffs");
+    expect(context).toContain("split into focused diffs");
+    await expect(fs.stat(path.join(root, ".cclaw/state/knowledge-digest.md"))).rejects.toBeDefined();
   });
 
   it("session-start refreshes compound-readiness.json and surfaces a nudge during review", async () => {
@@ -302,21 +288,13 @@ describe("node hook runtime", () => {
     expect(breadcrumbs).toContain("session-start:ralph-loop");
   });
 
-  it("stop-checkpoint preserves progress fields while syncing stage/run", async () => {
+  it("stop-checkpoint emits a handoff reminder without writing checkpoint state", async () => {
     const root = await createTempProject("node-hook-stop");
     await fs.mkdir(path.join(root, ".cclaw/state"), { recursive: true });
     await fs.writeFile(path.join(root, ".cclaw/state/flow-state.json"), JSON.stringify({
       currentStage: "plan",
       activeRunId: "run-plan",
       completedStages: ["brainstorm", "scope"]
-    }, null, 2), "utf8");
-    await fs.writeFile(path.join(root, ".cclaw/state/checkpoint.json"), JSON.stringify({
-      stage: "scope",
-      runId: "old",
-      status: "blocked",
-      lastCompletedStep: "captured assumptions",
-      remainingSteps: ["ask approval"],
-      blockers: ["need PM answer"]
     }, null, 2), "utf8");
 
     const result = await runNodeHook(
@@ -326,22 +304,8 @@ describe("node hook runtime", () => {
       { loop_count: 0 }
     );
     expect(result.code).toBe(0);
-    const checkpoint = JSON.parse(
-      await fs.readFile(path.join(root, ".cclaw/state/checkpoint.json"), "utf8")
-    ) as {
-      stage: string;
-      runId: string;
-      status: string;
-      lastCompletedStep: string;
-      remainingSteps: string[];
-      blockers: string[];
-    };
-    expect(checkpoint.stage).toBe("plan");
-    expect(checkpoint.runId).toBe("run-plan");
-    expect(checkpoint.status).toBe("blocked");
-    expect(checkpoint.lastCompletedStep).toBe("captured assumptions");
-    expect(checkpoint.remainingSteps).toEqual(["ask approval"]);
-    expect(checkpoint.blockers).toEqual(["need PM answer"]);
+    expect(result.stdout).toContain("session ending (stage=plan");
+    await expect(fs.stat(path.join(root, ".cclaw/state/checkpoint.json"))).rejects.toBeDefined();
   });
 
   it("prompt-guard supports advisory and strict modes", async () => {

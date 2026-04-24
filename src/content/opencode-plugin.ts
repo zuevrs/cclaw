@@ -15,13 +15,8 @@ export default function cclawPlugin(ctx) {
   const pluginLogPath = join(logsDir, "opencode-plugin.log");
   const configPath = join(runtimeDir, "config.yaml");
   const flowStatePath = join(stateDir, "flow-state.json");
-  const checkpointPath = join(stateDir, "checkpoint.json");
   const activityPath = join(stateDir, "stage-activity.jsonl");
-  const contextWarningsPath = join(stateDir, "context-warnings.jsonl");
-  const contextModePath = join(stateDir, "context-mode.json");
-  const sessionDigestPath = join(stateDir, "session-digest.md");
   const knowledgePath = join(runtimeDir, "knowledge.jsonl");
-  const knowledgeDigestPath = join(stateDir, "knowledge-digest.md");
   const metaSkillPath = join(runtimeDir, "skills/${META_SKILL_NAME}/SKILL.md");
 
   function ensureRuntimeDirs() {
@@ -86,30 +81,6 @@ export default function cclawPlugin(ctx) {
     return text.split(/\\r?\\n/).slice(-maxLines);
   }
 
-  async function readCheckpointSummary() {
-    try {
-      const raw = await readFileText(checkpointPath);
-      if (!raw) return "";
-      const cp = JSON.parse(raw);
-      return \`Checkpoint: stage=\${cp.stage || "none"}, status=\${cp.status || "unknown"}, run=\${cp.runId || "none"}, at=\${cp.timestamp || "unknown"}\`;
-    } catch {
-      return "";
-    }
-  }
-
-  async function readContextMode() {
-    let mode = "default";
-    try {
-      const parsed = JSON.parse(await readFileText(contextModePath));
-      if (parsed && typeof parsed.activeMode === "string" && parsed.activeMode.trim().length > 0) {
-        mode = parsed.activeMode.trim();
-      }
-    } catch {
-      // keep default
-    }
-    return { mode };
-  }
-
   async function readRecentActivity() {
     try {
       const lines = await readTailLines(activityPath, 5);
@@ -129,32 +100,8 @@ export default function cclawPlugin(ctx) {
     }
   }
 
-  async function readLatestContextWarning() {
-    try {
-      const line = (await readTailLines(contextWarningsPath, 1))[0];
-      if (!line) return "";
-      try {
-        const parsed = JSON.parse(line);
-        if (parsed && typeof parsed.note === "string") return parsed.note;
-      } catch {
-        // non-json fallback
-      }
-      return line;
-    } catch {
-      return "";
-    }
-  }
-
   async function readKnowledgeDigest() {
-    const digest = (await readFileText(knowledgeDigestPath)).trim();
-    if (!digest) {
-      return readTailLines(knowledgePath, 12);
-    }
-    return digest
-      .split(/\\r?\\n/)
-      .map((line) => line.trim())
-      .filter((line) => line.length > 0)
-      .filter((line) => !line.startsWith("#"));
+    return readTailLines(knowledgePath, 12);
   }
 
   const BOOTSTRAP_MARKER = "<!-- cclaw-bootstrap-v1 -->";
@@ -165,24 +112,12 @@ export default function cclawPlugin(ctx) {
       BOOTSTRAP_MARKER,
       \`cclaw loaded. Flow: stage=\${flow.stage} (\${flow.completed}/8 completed, run=\${flow.activeRunId}). Active artifacts: ${RUNTIME_ROOT}/artifacts/\`
     ];
-    const contextMode = await readContextMode();
-    parts.push(
-      contextMode.guide
-        ? \`Context mode: \${contextMode.mode} (guide: \${contextMode.guide})\`
-        : \`Context mode: \${contextMode.mode}\`
-    );
 
-    const checkpoint = await readCheckpointSummary();
-    if (checkpoint) parts.push(checkpoint);
 
-    const digest = (await readFileText(sessionDigestPath)).trim();
-    if (digest) parts.push("Last session:", digest);
 
     const activity = await readRecentActivity();
     if (activity.length > 0) parts.push("Recent stage activity:", ...activity);
 
-    const warning = await readLatestContextWarning();
-    if (warning) parts.push("Latest context warning:", warning);
 
     const knowledge = await readKnowledgeDigest();
     if (knowledge.length > 0) parts.push("Knowledge digest (top relevant entries):", ...knowledge);
@@ -201,13 +136,8 @@ export default function cclawPlugin(ctx) {
   let bootstrapRefreshPromise = null;
   const BOOTSTRAP_SOURCE_PATHS = [
     flowStatePath,
-    checkpointPath,
     activityPath,
-    contextWarningsPath,
-    contextModePath,
-    sessionDigestPath,
     knowledgePath,
-    knowledgeDigestPath,
     metaSkillPath
   ];
 

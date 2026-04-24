@@ -20,7 +20,7 @@ These are prompt-discipline guidelines that complement the real hooks cclaw gene
 
 ## HARD-GATE
 
-**Never end a session with uncommitted or untested changes.** If you must stop, create a checkpoint first.
+**Never end a session with uncommitted or untested changes.** If you must stop, leave a short handoff in the current artifact or commit message.
 
 ## Session Start Protocol
 
@@ -29,9 +29,8 @@ When a new session begins in any harness:
 1. **Read flow state:** Load \`.cclaw/state/flow-state.json\` to find the current stage and completed stages.
 2. **Load knowledge:** Stream the tail of \`.cclaw/knowledge.jsonl\` (strict JSONL store) and surface the most relevant rules/patterns.
 3. **Check for in-progress work:** If the last stage is incomplete, remind the user and offer to resume.
-4. **Load suggestion memory:** Read \`.cclaw/state/suggestion-memory.json\` and honor \`enabled=false\` opt-out.
-5. **Load iron laws:** Read \`.cclaw/state/iron-laws.json\` to know which laws are strict in this repo.
-6. **Read AGENTS.md:** The cclaw block contains routing and rules — follow them.
+4. **Load iron laws:** Read \`.cclaw/state/iron-laws.json\` to know which laws are strict in this repo.
+5. **Read AGENTS.md:** The cclaw block contains routing and rules — follow them.
 
 ### What to show the user at session start
 
@@ -48,7 +47,7 @@ Before ending a session or when context is full:
 1. **Verify no pending changes:** All modified files must be either committed or explicitly reverted.
 2. **Update flow state:** Mark the current stage as its actual status (DONE / DONE_WITH_CONCERNS / BLOCKED).
 3. **Write knowledge:** If any non-obvious reusable insight appears, append one strict-schema JSON line to \`.cclaw/knowledge.jsonl\` with type \`rule\`, \`pattern\`, \`lesson\`, or \`compound\`.
-4. **Create checkpoint:** Write a brief status note to the current artifact or as a comment in flow-state.json.
+4. **Leave handoff context:** Put blockers and remaining work in the current stage artifact, not a separate state file.
 
 ### Stop conditions (agent must halt and report)
 
@@ -62,44 +61,9 @@ Before ending a session or when context is full:
 When resuming work after a break:
 
 1. Re-read \`.cclaw/state/flow-state.json\` (may have changed externally).
-2. Re-read the current stage's artifact to verify it matches your last checkpoint.
+2. Re-read the current stage's artifact to verify it matches the last handoff.
 3. Re-load recent knowledge entries.
 4. Continue from the last incomplete step — do not restart the stage.
-
-## Proactive Suggestion Memory
-
-Cclaw can emit short stage-specific reminders at session start to reduce misses.
-
-- State file: \`.cclaw/state/suggestion-memory.json\`
-- Default: \`enabled: true\`
-- Persistent opt-out: set \`enabled: false\` and keep the file in repo-local state
-- Optional per-stage mute: add stage names to \`mutedStages\`
-
-Example:
-
-\`\`\`json
-{
-  "enabled": false,
-  "mutedStages": ["plan"],
-  "lastSuggestedStage": "review",
-  "lastSuggestedAt": "2026-04-11T14:30:00Z"
-}
-\`\`\`
-
-## Checkpoint Format
-
-When creating a checkpoint at session boundaries:
-
-\`\`\`json
-{
-  "stage": "tdd",
-  "status": "in_progress",
-  "lastCompletedStep": "GREEN for task T2",
-  "remainingSteps": ["REFACTOR T2", "RED T3", "GREEN T3", "REFACTOR T3"],
-  "blockers": [],
-  "timestamp": "2026-04-11T14:30:00Z"
-}
-\`\`\`
 
 ## Context Management
 
@@ -115,14 +79,14 @@ When approaching context limits:
 | Rationalization | Reality |
 |---|---|
 | "I'll remember where I was" | Context is lost between sessions. Write it down. |
-| "This is almost done, no need for checkpoint" | "Almost done" is the most dangerous state — changes are half-applied. |
+| "This is almost done, no need for handoff" | "Almost done" is the most dangerous state — changes are half-applied. |
 | "The tests will tell me the state" | Tests tell you pass/fail, not intent or remaining work. |
 
 ## Red Flags
 
 - Ending a session with modified but uncommitted files
 - No flow state update after completing work
-- Restarting a stage from scratch instead of resuming from checkpoint
+- Restarting a stage from scratch instead of resuming from artifact context
 - Ignoring knowledge from prior sessions
 `;
 }
@@ -132,7 +96,7 @@ export function sessionHooksAgentsMdBlock(): string {
 
 Session boundary behavior (real hooks inject context automatically; guidelines cover manual steps):
 - **Start:** Hooks inject flow state + knowledge snapshot. Check for in-progress work, show status.
-- **Stop:** Hooks remind about checkpoint. Verify no pending changes, update flow state, append useful knowledge.
+- **Stop:** Hooks remind about handoff. Verify no pending changes, update flow state, append useful knowledge.
 - **Resume:** Re-read state, verify artifact, re-load knowledge, continue from last step.
 
 Skill: \`.cclaw/skills/session/SKILL.md\`

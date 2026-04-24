@@ -147,8 +147,8 @@ export const IRON_LAWS = [
   },
   {
     id: "stop-clean-or-checkpointed",
-    title: "Stop only from clean checkpoint",
-    rule: "Do not end a session with dirty state unless checkpoint explicitly records unresolved work and blockers.",
+    title: "Stop only from clean handoff",
+    rule: "Do not end a session with dirty state unless the current artifact records unresolved work and blockers.",
     rationale: "Protects continuity and prevents silent half-finished sessions.",
     enforcement: "Stop",
     severity: "hard-gate",

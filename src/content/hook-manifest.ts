@@ -131,7 +131,7 @@ export const HOOK_MANIFEST: readonly HookHandlerSpec[] = [
   },
   {
     handler: "stop-checkpoint",
-    description: "Persist checkpoint with stage + run context on session stop.",
+    description: "Remind about clean handoff with stage + run context on session stop.",
     semantic: "stop_checkpoint",
     bindings: {
       claude: [{ event: "Stop", timeout: 10 }],
@@ -141,7 +141,7 @@ export const HOOK_MANIFEST: readonly HookHandlerSpec[] = [
   },
   {
     handler: "pre-compact",
-    description: "Write pre-compact digest (Claude+Cursor have a native event; Codex has no PreCompact — covered by flow-state + checkpoint summary).",
+    description: "No-op compatibility hook for harness pre-compact events; session-start rehydrates from flow-state, artifacts, and knowledge.",
     semantic: "precompact_digest",
     bindings: {
       claude: [{ event: "PreCompact", matcher: "manual|auto", timeout: 10 }],

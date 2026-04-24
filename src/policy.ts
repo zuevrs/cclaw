@@ -126,11 +126,7 @@ export async function policyChecks(projectRoot: string, options: PolicyOptions =
 
 
     { file: runtimeFile("hooks/run-hook.mjs"), needle: "activeRunId", name: "hooks:session_start:active_run" },
-    { file: runtimeFile("hooks/run-hook.mjs"), needle: "checkpoint.json", name: "hooks:session_start:checkpoint_ref" },
     { file: runtimeFile("hooks/run-hook.mjs"), needle: "stage-activity.jsonl", name: "hooks:session_start:activity_ref" },
-    { file: runtimeFile("hooks/run-hook.mjs"), needle: "suggestion-memory.json", name: "hooks:session_start:suggestion_memory" },
-    { file: runtimeFile("hooks/run-hook.mjs"), needle: "context-warnings.jsonl", name: "hooks:session_start:context_warning_ref" },
-    { file: runtimeFile("hooks/run-hook.mjs"), needle: "checkpoint.json", name: "hooks:stop:checkpoint_write" },
     { file: runtimeFile("hooks/run-hook.mjs"), needle: "write_to_cclaw_runtime", name: "hooks:guard:risky_write_advisory" },
     { file: runtimeFile("hooks/run-hook.mjs"), needle: "stage_invocation_without_recent_flow_read", name: "hooks:workflow_guard:flow_read_reason" },
     { file: runtimeFile("hooks/run-hook.mjs"), needle: "stage_jump_", name: "hooks:workflow_guard:stage_jump_reason" },

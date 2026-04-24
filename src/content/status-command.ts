@@ -15,14 +15,6 @@ function knowledgePath(): string {
   return `${RUNTIME_ROOT}/knowledge.jsonl`;
 }
 
-function contextModePath(): string {
-  return `${RUNTIME_ROOT}/state/context-mode.json`;
-}
-
-function checkpointPath(): string {
-  return `${RUNTIME_ROOT}/state/checkpoint.json`;
-}
-
 function stageActivityPath(): string {
   return `${RUNTIME_ROOT}/state/stage-activity.jsonl`;
 }
@@ -67,20 +59,18 @@ time to answer "where are we?" without advancing the flow.
    (shipSubstate + retro/compound flags).
 2. Read **\`${delegationPath}\`** — for each mandatory agent of the current stage,
    capture \`status\`, \`fulfillmentMode\`, and whether \`evidenceRefs\` are present.
-3. Read **\`${contextModePath()}\`** — surface \`activeMode\` (default if missing).
-4. Compute **time in current stage** from the most recent stage-entry signal:
-   - Prefer \`${checkpointPath()}\`'s \`timestamp\` when its \`stage\` matches \`currentStage\`.
-   - Otherwise scan \`${stageActivityPath()}\` from the end for the first entry whose \`stage\` matches \`currentStage\` and use its \`ts\`.
+3. Compute **time in current stage** from \`${stageActivityPath()}\`:
+   - Scan from the end for the first entry whose \`stage\` matches \`currentStage\` and use its \`ts\`.
    - Compute the duration as \`now - signalTimestamp\` and render compactly: \`<X>m\`, \`<X>h<Y>m\`, or \`<X>d<Y>h\`.
    - If no signal exists, render \`(unknown)\`.
-5. Optionally read **\`${snapshotPath()}\`** to compute gate delta versus prior baseline:
+4. Optionally read **\`${snapshotPath()}\`** to compute gate delta versus prior baseline:
    - If missing or invalid, render \`delta: (baseline unavailable; run /cc-view diff)\`.
-6. Derive harness \`tier\` and fallback from cclaw capability metadata; use \`cclaw doctor --explain\` when details are needed.
-7. Read the top of **\`${knowledgePath()}\`** — surface up to 3 most recent entries
+5. Derive harness \`tier\` and fallback from cclaw capability metadata; use \`cclaw doctor --explain\` when details are needed.
+6. Read the top of **\`${knowledgePath()}\`** — surface up to 3 most recent entries
    (by trailing timestamp or source marker).
-8. Detect **closeout artifacts**: check whether \`${retroArtifactPath()}\` exists on
+7. Detect **closeout artifacts**: check whether \`${retroArtifactPath()}\` exists on
    disk and annotate the closeout row accordingly.
-9. Emit the visual status block described below. Do **not** load any stage skill.
+8. Emit the visual status block described below. Do **not** load any stage skill.
 
 ## Visual markers
 
@@ -95,7 +85,7 @@ harness; **blocks stage**), \`○\` scheduled/pending, \`⊘\` waived, \`✗\` f
 \`\`\`
 cclaw status
   flow:    <track> · run=<runId> · feature=<feature-id>
-  stage:   <stage> (<N>/<total>) · time <Xd|XhYm|Xm|unknown> · mode <activeMode>
+  stage:   <stage> (<N>/<total>) · time <Xd|XhYm|Xm|unknown>
   bar:     [✓ brainstorm] [✓ scope] [▶ design] [○ spec] [○ plan] [○ tdd] [○ review] [○ ship]
   gates:   now <passed>/<required> · blocked <count> · delta <summary or baseline-unavailable>
   delegations (<expectedMode>):
@@ -166,19 +156,16 @@ a read-only command. Do **not** update \`${snapshotPath()}\` here.
 
 1. Read \`${flowPath}\`. If missing → report **BLOCKED: flow state absent** and suggest \`cclaw init\`.
 2. Read \`${delegationPath}\`. Missing → treat all mandatory delegations as pending.
-3. Read \`${contextModePath()}\` for \`activeMode\`. Missing → render \`activeMode = default\`.
-4. Compute **time in stage**:
-   - Prefer \`${checkpointPath()}\` when \`stage === currentStage\` and \`timestamp\` parses as ISO 8601.
-   - Else scan \`${stageActivityPath()}\` from tail for the most recent entry whose \`stage === currentStage\`; use its \`ts\`.
+3. Compute **time in stage** by scanning \`${stageActivityPath()}\` from tail for the most recent entry whose \`stage === currentStage\`; use its \`ts\`.
    - Render \`<X>d<Y>h\`, \`<X>h<Y>m\`, \`<X>m\`, or \`(unknown)\`.
-5. Try reading \`${snapshotPath()}\` for gate delta:
+4. Try reading \`${snapshotPath()}\` for gate delta:
    - If available, compare current stage \`passed\` / \`blocked\` sets against baseline.
    - If unavailable, render \`delta: (baseline unavailable; run /cc-view diff)\`.
-6. Derive harness \`<tier>/<fallback>\` rows from cclaw capability metadata.
+5. Derive harness \`<tier>/<fallback>\` rows from cclaw capability metadata.
 7. Read \`${RUNTIME_ROOT}/knowledge.jsonl\`. If missing or empty → knowledge highlights are \`(none recorded)\`. Parse each line as JSON and surface its \`trigger\`/\`action\`.
-8. For each gate in \`stageGateCatalog[currentStage].required\`:
+7. For each gate in \`stageGateCatalog[currentStage].required\`:
    - Satisfied if present in \`passed\` and absent from \`blocked\`.
-9. For each mandatory delegation of the current stage, evaluate:
+8. For each mandatory delegation of the current stage, evaluate:
    - \`✓ completed\` when \`status === "completed"\` and (harness is not role-switch
      **or** \`evidenceRefs.length >= 1\`).
    - \`◎ missing-evidence\` when \`status === "completed"\`, harness declares
@@ -186,14 +173,14 @@ a read-only command. Do **not** update \`${snapshotPath()}\` here.
    - \`○ <status>\` for \`scheduled\` / pending.
    - \`⊘ waived\` when \`status === "waived"\`.
    - \`✗ failed\` when \`status === "failed"\`.
-10. Compute **closeout row** when \`currentStage === "ship"\` or
+9. Compute **closeout row** when \`currentStage === "ship"\` or
     \`closeout.shipSubstate !== "idle"\`:
     - \`shipSubstate\` verbatim,
     - \`retro=drafted|accepted|skipped|—\` derived from \`closeout.retroDraftedAt\`,
       \`closeout.retroAcceptedAt\`, \`closeout.retroSkipped\`,
     - \`compound=<N promoted>|skipped|—\` from
       \`closeout.compoundPromoted\` / \`closeout.compoundSkipped\`.
-11. Build and print the visual status block:
+10. Build and print the visual status block:
     - stage header
     - one-line progress bar with per-stage markers
     - gate summary + delta
@@ -201,7 +188,7 @@ a read-only command. Do **not** update \`${snapshotPath()}\` here.
     - closeout row (when active)
     - harness row
     - stale stage row
-12. Suggest the next action:
+11. Suggest the next action:
     - If current stage has unmet gates → \`/cc-next\` to resume.
     - If closeout substate is non-idle → \`/cc-next\` to continue the chain.
     - If current stage is complete → \`/cc-next\` to advance (or report "Flow complete" if terminal).

@@ -999,6 +999,8 @@ async function cleanLegacyArtifacts(projectRoot: string): Promise<void> {
     runtimePath(projectRoot, "state", "suggestion-memory.json"),
     runtimePath(projectRoot, "state", "harness-gaps.json"),
     runtimePath(projectRoot, "state", "context-mode.json"),
+    runtimePath(projectRoot, "state", "session-digest.md"),
+    runtimePath(projectRoot, "state", "context-warnings.jsonl"),
     runtimePath(projectRoot, "skills", "using-git-worktrees", "SKILL.md"),
     runtimePath(projectRoot, "learnings.jsonl"),
     runtimePath(projectRoot, "observations.jsonl"),

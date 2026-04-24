@@ -43,7 +43,6 @@ import {
   LANGUAGE_RULE_PACK_FILES,
   LEGACY_LANGUAGE_RULE_PACK_FOLDERS
 } from "./content/utility-skills.js";
-import { CONTEXT_MODES, DEFAULT_CONTEXT_MODE } from "./content/contexts.js";
 import { validateHookDocument } from "./hook-schema.js";
 import type { HarnessId } from "./types.js";
 import type { DoctorSeverity } from "./doctor-registry.js";
@@ -1205,22 +1204,6 @@ export async function doctorChecks(projectRoot: string, options: DoctorOptions =
           : missingSchemaVersion === 0
             ? `all ${parsedActivityLines} stage-activity line(s) include schemaVersion=1`
             : `warning: ${missingSchemaVersion}/${parsedActivityLines} stage-activity line(s) missing schemaVersion=1`
-    });
-  }
-  const contextModeStatePath = path.join(projectRoot, RUNTIME_ROOT, "state", "context-mode.json");
-  if (await exists(contextModeStatePath)) {
-    let contextModeOk = false;
-    try {
-      const parsed = JSON.parse(await fs.readFile(contextModeStatePath, "utf8")) as Record<string, unknown>;
-      const activeMode = typeof parsed.activeMode === "string" ? parsed.activeMode : "";
-      contextModeOk = activeMode.length > 0 && Object.prototype.hasOwnProperty.call(CONTEXT_MODES, activeMode);
-    } catch {
-      contextModeOk = false;
-    }
-    checks.push({
-      name: "state:context_mode_valid",
-      ok: contextModeOk,
-      details: `${RUNTIME_ROOT}/state/context-mode.json must reference one of: ${Object.keys(CONTEXT_MODES).join(", ")} (default=${DEFAULT_CONTEXT_MODE})`
     });
   }
   let flowState = createInitialFlowState();
