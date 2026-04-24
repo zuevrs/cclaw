@@ -28,6 +28,27 @@ async function setupProjectWithCase(root: string): Promise<void> {
     ].join("\n"),
     "utf8"
   );
+
+  const rubricPath = path.join(root, ".cclaw/evals/rubrics/brainstorm.yaml");
+  await fs.mkdir(path.dirname(rubricPath), { recursive: true });
+  await fs.writeFile(
+    rubricPath,
+    [
+      "stage: brainstorm",
+      "id: brainstorm",
+      "checks:",
+      "  - id: distinctness",
+      "    prompt: Distinct alternatives are presented",
+      "  - id: coverage",
+      "    prompt: Key constraints and tradeoffs are covered",
+      "  - id: actionability",
+      "    prompt: Recommendations are concrete and actionable",
+      "  - id: recommendation-clarity",
+      "    prompt: Recommended option is explicit and justified",
+      ""
+    ].join("\n"),
+    "utf8"
+  );
 }
 
 function fakeAgentResponse(content: string): ChatResponse {

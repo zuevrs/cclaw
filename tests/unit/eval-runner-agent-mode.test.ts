@@ -35,6 +35,27 @@ async function setupProjectWithSpecCase(root: string): Promise<void> {
     "# Demo project\n\nHandles orders.\n",
     "utf8"
   );
+
+  const rubricPath = path.join(root, ".cclaw/evals/rubrics/spec.yaml");
+  await fs.mkdir(path.dirname(rubricPath), { recursive: true });
+  await fs.writeFile(
+    rubricPath,
+    [
+      "stage: spec",
+      "id: spec",
+      "checks:",
+      "  - id: traceability",
+      "    prompt: Requirements are traceable to source context",
+      "  - id: acceptance-criteria-coverage",
+      "    prompt: Acceptance criteria coverage is sufficient",
+      "  - id: decision-traceability",
+      "    prompt: Key decisions and rationale are explicit",
+      "  - id: testability",
+      "    prompt: The spec is testable and verifiable",
+      ""
+    ].join("\n"),
+    "utf8"
+  );
 }
 
 function agentWithReadThenStop(): ChatResponse[] {
