@@ -25,6 +25,20 @@ workflow tool.
   tests, and the unused `openai` runtime dependency.
 - Removed stale generated-reference templates and docs that pointed users
   at `.cclaw/references`, `.cclaw/contexts`, worktrees, or `/cc-ops`.
+- Removed the unused internal `knowledge-digest` subcommand and stopped
+  materializing `knowledge-digest.md`; session bootstrap reads
+  `knowledge.jsonl` directly.
+- Removed saved `flow-state.snapshot.json` semantics from `/cc-view diff`.
+  The view command is now read-only and uses visible git evidence instead
+  of creating derived state.
+
+### Changed
+
+- Renamed the generated stop hook from `stop-checkpoint` to `stop-handoff`
+  to match the simplified session model. Old managed `stop-checkpoint`
+  entries are still recognized during sync cleanup.
+- Simplified session bootstrap and stop behavior around artifact handoff
+  instead of separate checkpoint/context/suggestion state files.
 
 ### Preserved
 
