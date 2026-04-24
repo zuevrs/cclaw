@@ -20,15 +20,6 @@ import { CorruptFlowStateError, readFlowState } from "./runs.js";
 import { createInitialFlowState, skippedStagesForTrack } from "./flow-state.js";
 import { FLOW_STAGES, TRACK_STAGES } from "./types.js";
 import { checkMandatoryDelegations } from "./delegation.js";
-import {
-  activeFeatureMetaPath,
-  ensureFeatureSystem,
-  listFeatures,
-  readActiveFeature,
-  readFeatureWorktreeRegistry,
-  resolveFeatureWorkspacePath,
-  worktreeRegistryPath
-} from "./feature-system.js";
 import { buildTraceMatrix } from "./trace-matrix.js";
 import {
   classifyReconciliationNotices,
@@ -84,25 +75,6 @@ async function isGitRepo(projectRoot: string): Promise<boolean> {
     return true;
   } catch {
     return false;
-  }
-}
-
-async function gitWorktreePaths(projectRoot: string): Promise<Set<string>> {
-  try {
-    const { stdout } = await execFileAsync("git", ["worktree", "list", "--porcelain"], {
-      cwd: projectRoot
-    });
-    const out = new Set<string>();
-    for (const line of stdout.split(/\r?\n/)) {
-      const trimmed = line.trim();
-      if (!trimmed.startsWith("worktree ")) continue;
-      const rawPath = trimmed.slice("worktree ".length).trim();
-      if (!rawPath) continue;
-      out.add(path.resolve(rawPath));
-    }
-    return out;
-  } catch {
-    return new Set<string>();
   }
 }
 
@@ -585,7 +557,6 @@ export async function doctorChecks(projectRoot: string, options: DoctorOptions =
     const hasCcNext = content.includes("/cc-next");
     const hasCcIdeate = content.includes("/cc-ideate");
     const hasCcView = content.includes("/cc-view");
-    const hasCcOps = content.includes("/cc-ops");
     const hasVerification = content.includes("Verification Discipline");
     const hasMinimalMarker = content.includes("intentionally minimal for cross-project use");
     const hasMetaSkillPointer = content.includes(".cclaw/skills/using-cclaw/SKILL.md");
@@ -594,7 +565,6 @@ export async function doctorChecks(projectRoot: string, options: DoctorOptions =
       && hasCcNext
       && hasCcIdeate
       && hasCcView
-      && hasCcOps
       && hasVerification
       && hasMinimalMarker
       && hasMetaSkillPointer;
@@ -621,10 +591,6 @@ export async function doctorChecks(projectRoot: string, options: DoctorOptions =
     ["flow-ideate", "flow-ideate"],
     ["flow-tree", "flow-tree"],
     ["flow-diff", "flow-diff"],
-    ["tdd-cycle-log", "tdd-cycle-log"],
-    ["flow-retro", "flow-retro"],
-    ["flow-compound", "flow-compound"],
-    ["flow-rewind", "flow-rewind"],
     ["verification-before-completion", "verification-before-completion"],
     ["finishing-a-development-branch", "finishing-a-development-branch"],
     ["subagent-dev", "sdd"],
@@ -1201,7 +1167,7 @@ export async function doctorChecks(projectRoot: string, options: DoctorOptions =
       details:
         repeatedClusters.length === 0
           ? "no high-frequency repeated trigger/action clusters detected"
-          : `warning: ${repeatedClusters.length} repeated learning cluster(s) detected (>=3 repeats). Consider /cc-ops compound to lift them into rules/skills.`
+          : `warning: ${repeatedClusters.length} repeated learning cluster(s) detected (>=3 repeats). Consider curating knowledge lifts into durable rules/skills.`
     });
     checks.push({
       name: "warning:knowledge:stale_raw_entries",
@@ -1211,7 +1177,7 @@ export async function doctorChecks(projectRoot: string, options: DoctorOptions =
           ? "knowledge.jsonl is empty"
           : staleRawEntries === 0
             ? `no raw knowledge entries older than 90 days`
-            : `warning: ${staleRawEntries} raw knowledge entry(ies) have last_seen_ts older than 90 days. Run /cc-learn curate or append a superseding entry before the next /cc-ops compound pass.`
+            : `warning: ${staleRawEntries} raw knowledge entry(ies) have last_seen_ts older than 90 days. Run /cc-learn curate or append a superseding entry before the next compound pass.`
     });
   }
 
@@ -1304,8 +1270,6 @@ export async function doctorChecks(projectRoot: string, options: DoctorOptions =
       details: `${RUNTIME_ROOT}/state/context-mode.json must reference one of: ${Object.keys(CONTEXT_MODES).join(", ")} (default=${DEFAULT_CONTEXT_MODE})`
     });
   }
-  await ensureFeatureSystem(projectRoot, { repair: false });
-  const activeFeature = await readActiveFeature(projectRoot, { repair: false });
   let flowState = createInitialFlowState();
   let flowStateCorruptError: CorruptFlowStateError | null = null;
   try {
@@ -1358,8 +1322,6 @@ export async function doctorChecks(projectRoot: string, options: DoctorOptions =
     path.join(projectRoot, RUNTIME_ROOT, "state", "flow-state.json"),
     path.join(projectRoot, RUNTIME_ROOT, "state", "delegation-log.json"),
     path.join(projectRoot, RUNTIME_ROOT, "state", "reconciliation-notices.json"),
-    path.join(projectRoot, RUNTIME_ROOT, "state", "worktrees.json"),
-    path.join(projectRoot, RUNTIME_ROOT, "state", "active-feature.json"),
     path.join(projectRoot, RUNTIME_ROOT, "knowledge.jsonl")
   ];
   const permissiveStateFiles: string[] = [];
@@ -1496,106 +1458,6 @@ export async function doctorChecks(projectRoot: string, options: DoctorOptions =
       ? "no TODO/TBD/FIXME placeholder markers found in active artifacts"
       : `warning: placeholder markers detected in active artifacts (${artifactPlaceholderHits.join(", ")}). Clear before marking completion.`
   });
-  const activeMetaStatus = await readJsonObjectStatus(activeFeatureMetaPath(projectRoot));
-  const worktreeRegistryStatus = await readJsonObjectStatus(worktreeRegistryPath(projectRoot));
-  const features = await listFeatures(projectRoot, { repair: false });
-  const worktreeRegistry = await readFeatureWorktreeRegistry(projectRoot, { repair: false });
-  const activeFeatureEntry = worktreeRegistry.entries.find((entry) => entry.featureId === activeFeature);
-  const activeFeatureWorkspacePath = activeFeatureEntry
-    ? resolveFeatureWorkspacePath(projectRoot, activeFeatureEntry)
-    : "";
-  checks.push({
-    name: "state:active_feature_meta",
-    ok: activeMetaStatus.exists,
-    details: `${RUNTIME_ROOT}/state/active-feature.json must exist`
-  });
-  checks.push({
-    name: "state:active_feature_meta_valid_json",
-    ok: activeMetaStatus.ok,
-    details: activeMetaStatus.ok
-      ? `${RUNTIME_ROOT}/state/active-feature.json parsed successfully`
-      : `${RUNTIME_ROOT}/state/active-feature.json is invalid: ${activeMetaStatus.error ?? "unknown error"}`
-  });
-  checks.push({
-    name: "state:worktree_registry_exists",
-    ok: worktreeRegistryStatus.exists,
-    details: `${RUNTIME_ROOT}/state/worktrees.json must exist and track feature->worktree mapping`
-  });
-  checks.push({
-    name: "state:worktree_registry_valid_json",
-    ok: worktreeRegistryStatus.ok,
-    details: worktreeRegistryStatus.ok
-      ? `${RUNTIME_ROOT}/state/worktrees.json parsed successfully`
-      : `${RUNTIME_ROOT}/state/worktrees.json is invalid: ${worktreeRegistryStatus.error ?? "unknown error"}`
-  });
-  checks.push({
-    name: "state:active_feature_exists",
-    ok: features.includes(activeFeature),
-    details: features.includes(activeFeature)
-      ? `active feature "${activeFeature}" is present in ${RUNTIME_ROOT}/state/worktrees.json`
-      : `active feature "${activeFeature}" is missing from ${RUNTIME_ROOT}/state/worktrees.json`
-  });
-  checks.push({
-    name: "state:features_nonempty",
-    ok: features.length > 0,
-    details: features.length > 0
-      ? `${features.length} registered feature workspace(s): ${features.join(", ")}`
-      : `no feature workspaces found in ${RUNTIME_ROOT}/state/worktrees.json`
-  });
-  checks.push({
-    name: "state:active_feature_workspace_path",
-    ok: activeFeatureEntry ? await exists(activeFeatureWorkspacePath) : false,
-    details: activeFeatureEntry
-      ? `active feature "${activeFeature}" maps to workspace path ${activeFeatureEntry.path} (${activeFeatureEntry.source})`
-      : `active feature "${activeFeature}" has no worktree registry entry`
-  });
-  const missingRegistryPaths: string[] = [];
-  for (const entry of worktreeRegistry.entries) {
-    const workspacePath = resolveFeatureWorkspacePath(projectRoot, entry);
-    if (!(await exists(workspacePath))) {
-      missingRegistryPaths.push(`${entry.featureId}:${entry.path}`);
-    }
-  }
-  checks.push({
-    name: "state:worktree_registry_paths_exist",
-    ok: missingRegistryPaths.length === 0,
-    details: missingRegistryPaths.length === 0
-      ? "all worktree registry entries resolve to existing paths"
-      : `missing worktree paths for registry entries: ${missingRegistryPaths.join(", ")}`
-  });
-  const gitTrackedPaths = await gitWorktreePaths(projectRoot);
-  const registryGitPaths = worktreeRegistry.entries
-    .filter((entry) => entry.source === "git-worktree")
-    .map((entry) => resolveFeatureWorkspacePath(projectRoot, entry));
-  const missingFromGitList = registryGitPaths.filter((workspacePath) => !gitTrackedPaths.has(path.resolve(workspacePath)));
-  checks.push({
-    name: "warning:state:worktree_registry_git_drift",
-    ok: true,
-    details: missingFromGitList.length === 0
-      ? "git-worktree registry entries align with `git worktree list`"
-      : `warning: ${missingFromGitList.length} registry worktree path(s) are missing from \`git worktree list\`: ${missingFromGitList.join(", ")}`
-  });
-  const managedWorktreeRoot = path.join(projectRoot, RUNTIME_ROOT, "worktrees");
-  const unregisteredManagedWorktrees = [...gitTrackedPaths]
-    .filter((workspacePath) => workspacePath.startsWith(path.resolve(managedWorktreeRoot)))
-    .filter((workspacePath) => !registryGitPaths.some((registeredPath) => path.resolve(registeredPath) === workspacePath));
-  checks.push({
-    name: "warning:state:worktree_unregistered_paths",
-    ok: true,
-    details: unregisteredManagedWorktrees.length === 0
-      ? "no unmanaged git worktrees under .cclaw/worktrees"
-      : `warning: unregistered git worktree paths detected: ${unregisteredManagedWorktrees.map((value) => path.relative(projectRoot, value)).join(", ")}`
-  });
-  const legacyWorkspaceEntries = worktreeRegistry.entries
-    .filter((entry) => entry.source === "legacy-snapshot")
-    .map((entry) => entry.featureId);
-  checks.push({
-    name: "warning:state:legacy_feature_snapshots",
-    ok: legacyWorkspaceEntries.length === 0,
-    details: legacyWorkspaceEntries.length === 0
-      ? "no legacy .cclaw/features snapshot entries remain"
-      : `legacy snapshot entries still present (read-only): ${legacyWorkspaceEntries.join(", ")}`
-  });
   const staleStages = Object.keys(flowState.staleStages).filter((value) =>
     FLOW_STAGES.includes(value as (typeof FLOW_STAGES)[number])
   );
@@ -1604,7 +1466,7 @@ export async function doctorChecks(projectRoot: string, options: DoctorOptions =
     ok: staleStages.length === 0,
     details: staleStages.length === 0
       ? "no stale stages pending acknowledgement"
-      : `stale stages must be acknowledged via /cc-ops rewind --ack <stage>: ${staleStages.join(", ")}`
+      : `stale stages pending acknowledgement: ${staleStages.join(", ")}`
   });
   const retroRequired = flowState.completedStages.includes("ship");
   const retroComplete =
@@ -1617,7 +1479,7 @@ export async function doctorChecks(projectRoot: string, options: DoctorOptions =
       ? retroRequired
         ? `retro gate complete (${flowState.retro.compoundEntries} compound entries)`
         : "retro gate not required yet (ship not completed)"
-      : "retro gate incomplete: run /cc-ops retro and record at least one compound knowledge entry"
+      : "retro gate incomplete: ship flow requires recorded retrospective evidence."
   });
   const flowSnapshotPath = path.join(projectRoot, RUNTIME_ROOT, "state", "flow-state.snapshot.json");
   const flowSnapshotExists = await exists(flowSnapshotPath);

@@ -2,7 +2,6 @@ import fs from "node:fs/promises";
 import path from "node:path";
 import { RUNTIME_ROOT } from "./constants.js";
 import { createInitialFlowState, type FlowState } from "./flow-state.js";
-import { readActiveFeature, syncActiveFeatureSnapshot } from "./feature-system.js";
 import { ensureDir, exists, withDirectoryLock, writeFileSafe } from "./fs-utils.js";
 import { readKnowledgeSafely } from "./knowledge-store.js";
 import { evaluateRetroGate } from "./retro-gate.js";
@@ -246,7 +245,7 @@ export async function archiveRun(
   // which used to cause lost-update races.
   return withDirectoryLock(archiveLockPath(projectRoot), async () => {
   return withDirectoryLock(flowStateLockPathFor(projectRoot), async () => {
-  const activeFeature = await readActiveFeature(projectRoot);
+  const activeFeature = "default";
   const artifactsDir = activeArtifactsPath(projectRoot);
   const runsDir = runsRoot(projectRoot);
   await ensureDir(runsDir);
@@ -373,7 +372,6 @@ export async function archiveRun(
     await fs.unlink(sentinelPath).catch(() => undefined);
 
     const knowledgeStats = await readKnowledgeStats(projectRoot);
-    await syncActiveFeatureSnapshot(projectRoot);
     return {
       archiveId,
       archivePath,

@@ -10,7 +10,6 @@ import {
   appendDelegation,
   checkMandatoryDelegations
 } from "../delegation.js";
-import { readActiveFeature } from "../feature-system.js";
 import {
   verifyCompletedStagesGateClosure,
   verifyCurrentStageGateEvidence
@@ -706,7 +705,7 @@ async function harvestStageLearnings(
     };
   }
 
-  const activeFeature = await readActiveFeature(projectRoot).catch(() => null);
+  const activeFeature = null;
   const appendResult = await appendKnowledge(projectRoot, parsed.entries, {
     stage,
     originStage: stage,

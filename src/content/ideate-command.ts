@@ -251,15 +251,15 @@ Only survivors advance to ranking.
 
    | ID | Improvement | Impact | Effort | Confidence | Evidence |
    |---|---|---|---|---|---|
-   | I-1 | Fix feature-worktree test timeouts | High | S | High | tests/unit/feature-system.test.ts:31 |
+| I-1 | Trim flow-state surface to user-visible minimum | High | S | High | src/run-persistence.ts |
    | …   | …                                  | …    | … | …    | …                                     |
 
    ## Candidate detail
 
-   ### I-1 — Fix feature-worktree test timeouts
-   - **Evidence:** \`npm test\` hangs 40s on tests/unit/feature-system.test.ts:31.
-   - **Counter-argument:** Fix may hide deeper orchestration race.
-   - **Handoff:** \`/cc Fix feature-worktree test timeouts on macOS\`
+### I-1 — Trim flow-state surface to user-visible minimum
+- **Evidence:** \`src/run-persistence.ts\` still carries legacy compatibility knobs.
+- **Counter-argument:** Aggressive trimming can break maintainer tooling parity.
+- **Handoff:** \`/cc Simplify flow-state files and keep only user-facing state\`
 
    ### I-2 — …
    \`\`\`

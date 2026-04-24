@@ -43,11 +43,11 @@ describe("ideate frame registry", () => {
   it("builds parallel dispatch prompts with frame context", () => {
     const plan = buildIdeateFrameDispatchPlan(
       {
-        focus: "reduce flaky tests in feature workflow",
+        focus: "reduce flaky tests in flow-state runtime",
         mode: "repo-grounded",
         signalSummary: [
-          "tests/unit/feature-system.test.ts reports occasional timeouts",
-          "TODO markers around worktree cleanup logic"
+          "tests/unit/runs.test.ts reports occasional timeout windows",
+          "TODO markers around state reset logic"
         ]
       },
       ["pain-friction", "assumption-break"]
@@ -56,7 +56,7 @@ describe("ideate frame registry", () => {
     expect(plan).toHaveLength(2);
     expect(plan[0]?.frameId).toBe("pain-friction");
     expect(plan[0]?.prompt).toContain("Mode: repo-grounded");
-    expect(plan[0]?.prompt).toContain("Focus: reduce flaky tests in feature workflow");
+    expect(plan[0]?.prompt).toContain("Focus: reduce flaky tests in flow-state runtime");
     expect(plan[1]?.frameId).toBe("assumption-break");
     expect(plan[1]?.prompt).toContain("Generate 3-5 concrete candidates");
   });
@@ -64,14 +64,14 @@ describe("ideate frame registry", () => {
   it("dedupes equivalent candidates across multiple frames", () => {
     const merged = dedupeIdeateCandidates([
       {
-        title: "Stabilize feature worktree cleanup",
-        evidencePath: "tests/unit/feature-system.test.ts",
+        title: "Stabilize flow-state reset cleanup",
+        evidencePath: "tests/unit/runs.test.ts",
         summary: "Address timeout-prone cleanup branch.",
         frameId: "pain-friction"
       },
       {
-        title: "stabilize feature   worktree cleanup",
-        evidencePath: "tests/unit/feature-system.test.ts",
+        title: "stabilize flow-state   reset cleanup",
+        evidencePath: "tests/unit/runs.test.ts",
         summary: "Same proposal from an assumption-break angle with deeper rationale.",
         frameId: "assumption-break"
       },
@@ -85,7 +85,7 @@ describe("ideate frame registry", () => {
 
     expect(merged).toHaveLength(2);
     const stabilized = merged.find((entry) =>
-      entry.title.toLowerCase().includes("stabilize feature")
+      entry.title.toLowerCase().includes("stabilize flow-state")
     );
     expect(stabilized?.frameIds).toEqual(["pain-friction", "assumption-break"]);
     expect(stabilized?.summary).toContain("deeper rationale");
