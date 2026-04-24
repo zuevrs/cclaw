@@ -101,20 +101,20 @@ describe("/cc-view diff content", () => {
     expect(skill).toContain("09-retro.md");
   });
 
-  it("captures per-agent fulfillmentMode transitions", () => {
+  it("captures visible per-agent fulfillmentMode changes", () => {
     expect(contract).toContain("mode=generic-dispatch");
     expect(contract).toContain("mode=? -> role-switch");
-    expect(skill).toContain("per-agent `fulfillmentMode` transitions");
-    expect(skill).toContain("`delegations` projection");
+    expect(skill).toContain("per-agent `fulfillmentMode` changes");
+    expect(skill).toContain("delegation diffs");
   });
 
-  it("embeds delegations projection in the new snapshot", () => {
-    expect(skill).toContain("{ agent, status, fulfillmentMode }[]");
-    expect(contract).toContain("{ agent, status, fulfillmentMode }[]");
+  it("does not create a derived snapshot file", () => {
+    expect(skill).toContain("must not create or update");
+    expect(contract).toContain("read-only mode");
   });
 
-  it("preserves baseline-first rendering contract", () => {
-    expect(contract).toContain("do not overwrite baseline before rendering");
-    expect(skill).toContain("Never lose baseline visibility");
+  it("uses git/worktree evidence instead of a saved baseline", () => {
+    expect(contract).toContain("git/worktree evidence");
+    expect(skill).toContain("Inspect git diff");
   });
 });

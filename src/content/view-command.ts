@@ -13,12 +13,12 @@ Unified read-only command surface for flow visibility.
 Subcommands:
 - \`/cc-view\` or \`/cc-view status\` -> status snapshot
 - \`/cc-view tree\` -> structural flow tree
-- \`/cc-view diff\` -> baseline delta map
+- \`/cc-view diff\` -> read-only worktree delta map
 
 ## HARD-GATE
 
 - \`/cc-view\` is strictly read-only at wrapper level.
-- Do not mutate flow-state unless routing to \`diff\` (which updates snapshot baseline by design).
+- Do not mutate flow-state or derived state from any subcommand.
 
 ## Routing
 

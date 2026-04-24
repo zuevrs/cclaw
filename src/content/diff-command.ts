@@ -7,10 +7,6 @@ function flowStatePath(): string {
   return `${RUNTIME_ROOT}/state/flow-state.json`;
 }
 
-function snapshotPath(): string {
-  return `${RUNTIME_ROOT}/state/flow-state.snapshot.json`;
-}
-
 function delegationLogPath(): string {
   return `${RUNTIME_ROOT}/state/delegation-log.json`;
 }
@@ -24,41 +20,35 @@ export function diffCommandContract(): string {
 
 ## Purpose
 
-Show a visual before/after diff map for flow-state progression. Covers the core
-stage/gate transitions plus:
+Show a visual change map for flow-state progression without writing a baseline
+file. Covers the current stage/gate state plus available worktree deltas for:
 
 - ship **closeout substate** transitions (\`retro_review\` → \`compound_review\` → \`ready_to_archive\`),
-- delegation **fulfillmentMode** transitions per mandatory agent,
+- delegation **fulfillmentMode** changes visible in \`git diff\`,
 - appearance or removal of the retro artifact \`09-retro.md\`.
 
 ## HARD-GATE
 
-- Compare against \`${snapshotPath()}\` first; do not overwrite baseline before rendering.
-- If no snapshot exists, initialize baseline and report "baseline created" explicitly.
+- This command is read-only. Do not write \`${flowStatePath()}\`, \`${delegationLogPath()}\`, or any derived snapshot.
+- Prefer git/worktree evidence when available; otherwise render the current state summary and say that no baseline is available.
 
 ## Algorithm
 
 1. Read current state from \`${flowStatePath()}\` (including \`closeout\`).
 2. Read current delegation log from \`${delegationLogPath()}\` (if missing treat as empty).
-3. Read baseline from \`${snapshotPath()}\` (if missing -> create baseline from
-   current state **plus** a copy of the current delegation log; report
-   \`flow diff baseline created\` and stop).
-4. Compute deltas:
+3. Inspect git diff for \`${flowStatePath()}\`, \`${delegationLogPath()}\`, and \`${retroArtifactPath()}\` when the repo is under git.
+4. Compute visible deltas from git output when available:
    - stage transition (\`from -> to\`),
-   - completed stage additions/removals,
-   - skipped stage additions/removals,
-   - stale stage additions/removals,
+   - completed/skipped/stale stage additions or removals,
    - current-stage gate \`passed\` and \`blocked\` changes,
    - \`closeout.shipSubstate\` transition (\`from -> to\`),
    - \`closeout.retroDraftedAt\` / \`retroAcceptedAt\` / \`retroSkipped\` flips,
    - \`closeout.compoundPromoted\` / \`compoundSkipped\` flips,
-   - per-agent \`fulfillmentMode\` transitions from the baseline delegation log,
+   - per-agent \`fulfillmentMode\` changes visible in delegation log diffs,
    - appearance (\`+\`) or disappearance (\`-\`) of \`${retroArtifactPath()}\`.
-5. Render a compact diff map (added \`+\`, removed \`-\`, changed \`->\`).
-6. Persist current state back to \`${snapshotPath()}\` as new baseline with
-   \`capturedAt\` and an embedded \`delegations\` projection
-   (\`{ agent, status, fulfillmentMode }[]\`) so fulfillmentMode transitions are
-   computable on the next run.
+5. If no git baseline is available, render a current-state summary with
+   \`baseline: unavailable (read-only mode)\`.
+6. Render a compact diff map (added \`+\`, removed \`-\`, changed \`->\`).
 
 ## Diff Map Format
 
@@ -90,44 +80,35 @@ cclaw flow diff
 export function diffCommandSkillMarkdown(): string {
   return `---
 name: ${DIFF_SKILL_NAME}
-description: "Compare current flow-state against saved snapshot and render gate/stage/closeout/delegation deltas."
+description: "Render read-only flow-state, closeout, artifact, and delegation deltas from git/worktree evidence."
 ---
 
 # /cc-view diff
 
 ## HARD-GATE
 
-Never lose baseline visibility: render deltas before writing a new snapshot.
+Never mutate state from \`/cc-view diff\`. It is a read-only inspection command.
 
 ## Protocol
 
 1. Read \`${flowStatePath()}\`.
 2. Read \`${delegationLogPath()}\` (missing → treat as empty list).
-3. Read \`${snapshotPath()}\`.
-4. If snapshot missing:
-   - write baseline snapshot from current state **plus** a
-     \`delegations\` projection (\`{ agent, status, fulfillmentMode }[]\`),
-   - print \`flow diff baseline created\`,
-   - stop.
-5. Build deltas for:
+3. Inspect git diff for \`${flowStatePath()}\`, \`${delegationLogPath()}\`, and \`${retroArtifactPath()}\`.
+4. Build deltas for:
    - stage, completed/skipped/stale sets,
    - current-stage gate arrays (\`passed\`, \`blocked\`),
    - \`closeout.shipSubstate\` transitions (\`from -> to\`),
    - \`closeout.retroDraftedAt\` / \`retroAcceptedAt\` / \`retroSkipped\` flips,
    - \`closeout.compoundPromoted\` / \`compoundSkipped\` / \`compoundCompletedAt\` flips,
-   - per-agent \`fulfillmentMode\` transitions by matching baseline delegations
-     against current delegations on \`agent\` + latest entry,
+   - per-agent \`fulfillmentMode\` changes visible in delegation diffs,
    - appearance or removal of \`${retroArtifactPath()}\` on disk.
+5. If git has no baseline for these files, print \`baseline: unavailable (read-only mode)\`.
 6. Print a compact diff map with explicit \`+\`, \`-\`, and \`->\` markers.
-7. Write updated snapshot with:
-   - \`capturedAt\` (ISO),
-   - \`state\` (full current flow-state object),
-   - \`delegations\` projection from the current log.
 
 ## Validation
 
-- Diff output must be deterministic for identical states ("no changes").
-- Snapshot file stays valid JSON after every run.
+- Diff output must be deterministic for identical states ("no visible changes").
+- The command must not create or update any \`.cclaw/state/*.snapshot*\` file.
 - Do not suppress removed values; removals are first-class evidence.
 - Closeout diff lines must use the same \`shipSubstate\` vocabulary as the
   state machine (\`idle\` / \`retro_review\` / \`compound_review\` /

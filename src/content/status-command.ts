@@ -19,10 +19,6 @@ function stageActivityPath(): string {
   return `${RUNTIME_ROOT}/state/stage-activity.jsonl`;
 }
 
-function snapshotPath(): string {
-  return `${RUNTIME_ROOT}/state/flow-state.snapshot.json`;
-}
-
 function retroArtifactPath(): string {
   return `${RUNTIME_ROOT}/artifacts/09-retro.md`;
 }
@@ -50,7 +46,7 @@ time to answer "where are we?" without advancing the flow.
 - **Do not** use \`/cc-view status\` output to infer gate completion for decisions — cite
   artifact evidence via \`/cc-next\` when advancing.
 - **Do not** mutate \`${flowPath}\` or delegation log from this command.
-- **Do not** rewrite \`${snapshotPath()}\` from this command (use \`/cc-view diff\`).
+- **Do not** mutate state from this command; use \`/cc-view diff\` for a read-only change map.
 
 ## Algorithm
 
@@ -63,8 +59,7 @@ time to answer "where are we?" without advancing the flow.
    - Scan from the end for the first entry whose \`stage\` matches \`currentStage\` and use its \`ts\`.
    - Compute the duration as \`now - signalTimestamp\` and render compactly: \`<X>m\`, \`<X>h<Y>m\`, or \`<X>d<Y>h\`.
    - If no signal exists, render \`(unknown)\`.
-4. Optionally read **\`${snapshotPath()}\`** to compute gate delta versus prior baseline:
-   - If missing or invalid, render \`delta: (baseline unavailable; run /cc-view diff)\`.
+4. Summarize current gate counts directly from \`${flowPath}\`.
 5. Derive harness \`tier\` and fallback from cclaw capability metadata; use \`cclaw doctor --explain\` when details are needed.
 6. Read the top of **\`${knowledgePath()}\`** — surface up to 3 most recent entries
    (by trailing timestamp or source marker).
@@ -87,7 +82,7 @@ cclaw status
   flow:    <track> · run=<runId> · feature=<feature-id>
   stage:   <stage> (<N>/<total>) · time <Xd|XhYm|Xm|unknown>
   bar:     [✓ brainstorm] [✓ scope] [▶ design] [○ spec] [○ plan] [○ tdd] [○ review] [○ ship]
-  gates:   now <passed>/<required> · blocked <count> · delta <summary or baseline-unavailable>
+  gates:   now <passed>/<required> · blocked <count>
   delegations (<expectedMode>):
     - planner      ✓ completed  mode=<isolated|generic-dispatch|role-switch>
     - reviewer     ○ pending
@@ -130,7 +125,7 @@ export function statusCommandSkillMarkdown(): string {
   const delegationPath = delegationLogPath();
   return `---
 name: ${STATUS_SKILL_NAME}
-description: "Read-only visual snapshot of the cclaw flow with progress bar, gate delta, delegations (fulfillmentMode + evidence), closeout substate, and harness parity row."
+description: "Read-only visual snapshot of the cclaw flow with progress bar, gate counts, delegations (fulfillmentMode + evidence), closeout substate, and harness parity row."
 ---
 
 # /cc-view status — Flow Status Snapshot
@@ -141,7 +136,7 @@ description: "Read-only visual snapshot of the cclaw flow with progress bar, gat
 advancing or mutating anything. Safe to run at any point. The snapshot reflects:
 
 - progress across stages with per-stage markers,
-- gate coverage and delta vs. baseline,
+- gate coverage,
 - mandatory delegations with **fulfillmentMode** (isolated / generic-dispatch /
   role-switch / harness-waiver) and evidence gate,
 - **closeout substate** after ship (retro → compound → archive),
@@ -150,7 +145,7 @@ advancing or mutating anything. Safe to run at any point. The snapshot reflects:
 ## HARD-GATE
 
 Do **not** mutate \`${flowPath}\` or \`${delegationPath}\` from this skill. This is
-a read-only command. Do **not** update \`${snapshotPath()}\` here.
+a read-only command.
 
 ## Algorithm
 
@@ -158,11 +153,9 @@ a read-only command. Do **not** update \`${snapshotPath()}\` here.
 2. Read \`${delegationPath}\`. Missing → treat all mandatory delegations as pending.
 3. Compute **time in stage** by scanning \`${stageActivityPath()}\` from tail for the most recent entry whose \`stage === currentStage\`; use its \`ts\`.
    - Render \`<X>d<Y>h\`, \`<X>h<Y>m\`, \`<X>m\`, or \`(unknown)\`.
-4. Try reading \`${snapshotPath()}\` for gate delta:
-   - If available, compare current stage \`passed\` / \`blocked\` sets against baseline.
-   - If unavailable, render \`delta: (baseline unavailable; run /cc-view diff)\`.
+4. Summarize current-stage gate counts from \`passed\`, \`blocked\`, and required gate metadata.
 5. Derive harness \`<tier>/<fallback>\` rows from cclaw capability metadata.
-7. Read \`${RUNTIME_ROOT}/knowledge.jsonl\`. If missing or empty → knowledge highlights are \`(none recorded)\`. Parse each line as JSON and surface its \`trigger\`/\`action\`.
+6. Read \`${RUNTIME_ROOT}/knowledge.jsonl\`. If missing or empty → knowledge highlights are \`(none recorded)\`. Parse each line as JSON and surface its \`trigger\`/\`action\`.
 7. For each gate in \`stageGateCatalog[currentStage].required\`:
    - Satisfied if present in \`passed\` and absent from \`blocked\`.
 8. For each mandatory delegation of the current stage, evaluate:
@@ -183,7 +176,7 @@ a read-only command. Do **not** update \`${snapshotPath()}\` here.
 10. Build and print the visual status block:
     - stage header
     - one-line progress bar with per-stage markers
-    - gate summary + delta
+    - gate summary
     - delegation rows (per mandatory agent)
     - closeout row (when active)
     - harness row
