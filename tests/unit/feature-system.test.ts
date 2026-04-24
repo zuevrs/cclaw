@@ -46,7 +46,7 @@ describe("feature system", () => {
     expect(
       (registry.entries ?? []).some((entry) => entry.featureId === "default")
     ).toBe(true);
-    await expect(fs.stat(path.join(root, ".cclaw/worktrees"))).resolves.toBeTruthy();
+    await expect(fs.stat(path.join(root, ".cclaw/worktrees"))).rejects.toBeDefined();
   });
 
   it("creates git worktrees and switches active feature pointer", async () => {

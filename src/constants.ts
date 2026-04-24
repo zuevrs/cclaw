@@ -138,7 +138,6 @@ export const UTILITY_COMMANDS = [
   "tree",
   "diff",
   "ops",
-  "feature",
   "tdd-log",
   "retro",
   "compound",

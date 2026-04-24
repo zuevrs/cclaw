@@ -308,7 +308,6 @@ async function ensureRegistryState(projectRoot: string): Promise<{
   activeMeta: ActiveFeatureMeta;
 }> {
   await ensureDir(path.join(projectRoot, RUNTIME_ROOT, "state"));
-  await ensureDir(worktreesRoot(projectRoot));
 
   const gitRepo = await isGitRepository(projectRoot);
   const source: FeatureWorkspaceSource = gitRepo ? "git-worktree" : "workspace";

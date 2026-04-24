@@ -137,7 +137,7 @@ Examples:
   npx cclaw-cli upgrade
   npx cclaw-cli eval --dry-run
 
-Everything operational (retro, archive, worktrees, doctor, learnings)
+Everything operational (retro, archive, doctor, learnings)
 happens inside your harness via slash commands. The CLI is just a
 launcher. See README.md for the four user-facing slash commands.
 

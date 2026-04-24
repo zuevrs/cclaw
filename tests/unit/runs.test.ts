@@ -22,7 +22,7 @@ describe("runs system", () => {
     expect(state.activeRunId).toMatch(/^run-/);
     expect(state.currentStage).toBe("brainstorm");
     await expect(fs.stat(path.join(root, ".cclaw/artifacts"))).resolves.toBeTruthy();
-    await expect(fs.stat(path.join(root, ".cclaw/worktrees"))).resolves.toBeTruthy();
+    await expect(fs.stat(path.join(root, ".cclaw/worktrees"))).rejects.toBeDefined();
     await expect(fs.stat(path.join(root, ".cclaw/state/active-feature.json"))).resolves.toBeTruthy();
     await expect(fs.stat(path.join(root, ".cclaw/state/worktrees.json"))).resolves.toBeTruthy();
     await expect(fs.stat(path.join(root, ".cclaw/runs"))).resolves.toBeTruthy();

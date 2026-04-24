@@ -505,7 +505,7 @@ function codexSkillDescription(command: string): string {
     case "view":
       return `Read-only router for cclaw flow views. Use when the user types \`/cc-view\`, \`/cc-view status\`, \`/cc-view tree\`, \`/cc-view diff\`, or asks to "show cclaw status", "show the flow tree", "diff flow state", or wants a snapshot without mutation.`;
     case "ops":
-      return `Operations router for cclaw post-flow actions. Use when the user types \`/cc-ops\`, \`/cc-ops feature\`, \`/cc-ops tdd-log\`, \`/cc-ops retro\`, \`/cc-ops compound\`, \`/cc-ops archive\`, \`/cc-ops rewind\`, or asks to "archive the run", "run the retro", "compound knowledge", "rewind to an earlier stage", or manage feature worktrees.`;
+      return `Operations router for cclaw post-flow actions. Use when the user types \`/cc-ops\`, \`/cc-ops tdd-log\`, \`/cc-ops retro\`, \`/cc-ops compound\`, \`/cc-ops archive\`, \`/cc-ops rewind\`, or asks to "archive the run", "run the retro", "compound knowledge", or "rewind to an earlier stage".`;
     default:
       return `Generated cclaw skill for ${command}.`;
   }

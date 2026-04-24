@@ -28,7 +28,6 @@ import { treeCommandContract, treeCommandSkillMarkdown } from "./content/tree-co
 import { diffCommandContract, diffCommandSkillMarkdown } from "./content/diff-command.js";
 import { viewCommandContract, viewCommandSkillMarkdown } from "./content/view-command.js";
 import { opsCommandContract, opsCommandSkillMarkdown } from "./content/ops-command.js";
-import { featureCommandContract, featureCommandSkillMarkdown } from "./content/feature-command.js";
 import { tddLogCommandContract, tddLogCommandSkillMarkdown } from "./content/tdd-log-command.js";
 import { retroCommandContract, retroCommandSkillMarkdown } from "./content/retro-command.js";
 import { compoundCommandContract, compoundCommandSkillMarkdown } from "./content/compound-command.js";
@@ -387,10 +386,6 @@ async function writeSkills(projectRoot: string, config?: CclawConfig): Promise<v
     opsCommandSkillMarkdown()
   );
   await writeFileSafe(
-    runtimePath(projectRoot, "skills", "using-git-worktrees", "SKILL.md"),
-    featureCommandSkillMarkdown()
-  );
-  await writeFileSafe(
     runtimePath(projectRoot, "skills", "tdd-cycle-log", "SKILL.md"),
     tddLogCommandSkillMarkdown()
   );
@@ -478,7 +473,6 @@ async function writeUtilityCommands(projectRoot: string, config: CclawConfig): P
   await writeFileSafe(runtimePath(projectRoot, "commands", "tree.md"), treeCommandContract());
   await writeFileSafe(runtimePath(projectRoot, "commands", "diff.md"), diffCommandContract());
   await writeFileSafe(runtimePath(projectRoot, "commands", "ops.md"), opsCommandContract());
-  await writeFileSafe(runtimePath(projectRoot, "commands", "feature.md"), featureCommandContract());
   await writeFileSafe(runtimePath(projectRoot, "commands", "tdd-log.md"), tddLogCommandContract());
   await writeFileSafe(runtimePath(projectRoot, "commands", "retro.md"), retroCommandContract());
   await writeFileSafe(
@@ -1202,6 +1196,8 @@ async function cleanLegacyArtifacts(projectRoot: string): Promise<void> {
   }
 
   for (const legacyRuntimeFile of [
+    runtimePath(projectRoot, "commands", "feature.md"),
+    runtimePath(projectRoot, "skills", "using-git-worktrees", "SKILL.md"),
     runtimePath(projectRoot, "learnings.jsonl"),
     runtimePath(projectRoot, "observations.jsonl"),
     runtimePath(projectRoot, "hooks", "observe.sh"),
@@ -1228,6 +1224,7 @@ async function cleanLegacyArtifacts(projectRoot: string): Promise<void> {
   // releases and are now intentionally removed from user projects.
   for (const legacyRuntimeDir of [
     runtimePath(projectRoot, "evals"),
+    runtimePath(projectRoot, "worktrees"),
     runtimePath(projectRoot, "references"),
     runtimePath(projectRoot, "contexts")
   ]) {

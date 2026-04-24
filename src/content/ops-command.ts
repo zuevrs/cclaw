@@ -11,7 +11,6 @@ export function opsCommandContract(): string {
 Unified operational command surface for non-stage flow actions.
 
 Subcommands:
-- \`feature\` -> \`/cc-ops feature\`
 - \`tdd-log\` -> \`/cc-ops tdd-log\`
 - \`retro\` -> \`/cc-ops retro\`
 - \`compound\` -> \`/cc-ops compound\`
@@ -27,7 +26,6 @@ Subcommands:
 
 1. Parse required subcommand token.
 2. Dispatch:
-   - \`feature\` -> \`${RUNTIME_ROOT}/commands/feature.md\`
    - \`tdd-log\` -> \`${RUNTIME_ROOT}/commands/tdd-log.md\`
    - \`retro\` -> \`${RUNTIME_ROOT}/commands/retro.md\`
    - \`compound\` -> \`${RUNTIME_ROOT}/commands/compound.md\`
@@ -55,7 +53,7 @@ Validate envelopes with:
 export function opsCommandSkillMarkdown(): string {
   return `---
 name: ${OPS_SKILL_NAME}
-description: "Unified operational router for feature/tdd-log/retro/compound/archive/rewind commands."
+description: "Unified operational router for tdd-log/retro/compound/archive/rewind commands."
 ---
 
 # /cc-ops
@@ -66,7 +64,7 @@ This wrapper only dispatches. It must not apply state mutations itself.
 
 ## Protocol
 
-1. Require a subcommand (\`feature|tdd-log|retro|compound|archive|rewind\`).
+1. Require a subcommand (\`tdd-log|retro|compound|archive|rewind\`).
 2. Route to the matching command contract + skill pair.
 3. Preserve pass-through args after the subcommand (e.g. \`/cc-ops rewind design\`).
 4. Echo which subcommand was dispatched for auditability.

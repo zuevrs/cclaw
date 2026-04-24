@@ -621,7 +621,6 @@ export async function doctorChecks(projectRoot: string, options: DoctorOptions =
     ["flow-ideate", "flow-ideate"],
     ["flow-tree", "flow-tree"],
     ["flow-diff", "flow-diff"],
-    ["using-git-worktrees", "using-git-worktrees"],
     ["tdd-cycle-log", "tdd-cycle-log"],
     ["flow-retro", "flow-retro"],
     ["flow-compound", "flow-compound"],
