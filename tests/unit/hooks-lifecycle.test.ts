@@ -445,4 +445,131 @@ process.exit(0);
       plugin["tool.execute.before"]({ tool: "RunCommand", tool_input: { cmd: "echo test" } })
     ).rejects.toThrow(/CCLAW_DISABLE=1/);
   });
+
+  it("opencode plugin defaults to advisory: logs without throwing when guard exits non-zero", async () => {
+    const root = await createTempProject("opencode-advisory-default");
+    await fs.mkdir(path.join(root, ".cclaw/hooks"), { recursive: true });
+    await fs.mkdir(path.join(root, ".cclaw/state"), { recursive: true });
+    await fs.writeFile(
+      path.join(root, ".cclaw/state/flow-state.json"),
+      JSON.stringify({ currentStage: "scope", activeRunId: "active", completedStages: ["brainstorm"] }, null, 2),
+      "utf8"
+    );
+    // NOTE: no config.yaml and no CCLAW_STRICTNESS — should default to advisory.
+    await fs.writeFile(
+      path.join(root, ".cclaw/hooks/run-hook.mjs"),
+      `#!/usr/bin/env node
+if ((process.argv[2] || "") === "workflow-guard") {
+  process.stderr.write("workflow guard refused: pretend a gate failed");
+  process.exit(1);
+}
+process.exit(0);
+`,
+      "utf8"
+    );
+    await fs.chmod(path.join(root, ".cclaw/hooks/run-hook.mjs"), 0o755);
+    const pluginPath = path.join(root, ".cclaw/hooks/opencode-plugin.mjs");
+    await fs.writeFile(pluginPath, opencodePluginJs(), "utf8");
+
+    const imported = await import(`${pathToFileURL(pluginPath).href}?t=${Date.now()}`);
+    const pluginFactory = imported.default as (ctx: { directory: string }) => {
+      "tool.execute.before": (input: unknown, output?: unknown) => Promise<void>;
+    };
+    const plugin = pluginFactory({ directory: root });
+
+    await expect(
+      plugin["tool.execute.before"]({ tool: "RunCommand", tool_input: { cmd: "echo test" } })
+    ).resolves.toBeUndefined();
+
+    const logPath = path.join(root, ".cclaw/logs/opencode-plugin.log");
+    const log = await fs.readFile(logPath, "utf8");
+    expect(log).toMatch(/advisory: workflow-guard flagged tool\.execute\.before/);
+  });
+
+  it("opencode plugin bypasses guards for ask / question / todo / think tools", async () => {
+    const root = await createTempProject("opencode-readonly-bypass-extended");
+    await fs.mkdir(path.join(root, ".cclaw/hooks"), { recursive: true });
+    await fs.mkdir(path.join(root, ".cclaw/state"), { recursive: true });
+    await fs.writeFile(
+      path.join(root, ".cclaw/state/flow-state.json"),
+      JSON.stringify({ currentStage: "scope", activeRunId: "active", completedStages: [] }, null, 2),
+      "utf8"
+    );
+    await fs.writeFile(path.join(root, ".cclaw/config.yaml"), "strictness: strict\n", "utf8");
+    await fs.writeFile(
+      path.join(root, ".cclaw/hooks/run-hook.mjs"),
+      `#!/usr/bin/env node\nprocess.stderr.write("should not run");\nprocess.exit(1);\n`,
+      "utf8"
+    );
+    await fs.chmod(path.join(root, ".cclaw/hooks/run-hook.mjs"), 0o755);
+    const pluginPath = path.join(root, ".cclaw/hooks/opencode-plugin.mjs");
+    await fs.writeFile(pluginPath, opencodePluginJs(), "utf8");
+
+    const imported = await import(`${pathToFileURL(pluginPath).href}?t=${Date.now()}`);
+    const pluginFactory = imported.default as (ctx: { directory: string }) => {
+      "tool.execute.before": (input: unknown, output?: unknown) => Promise<void>;
+    };
+    const plugin = pluginFactory({ directory: root });
+
+    for (const tool of [
+      "question",
+      "Question",
+      "AskUserQuestion",
+      "ask_user_question",
+      "request_user_input",
+      "TodoWrite",
+      "todoread",
+      "think",
+      "prompt"
+    ]) {
+      await expect(
+        plugin["tool.execute.before"]({ tool, tool_input: {} })
+      ).resolves.toBeUndefined();
+    }
+  });
+
+  it("opencode plugin never blocks on infra-looking stderr under strict mode", async () => {
+    const root = await createTempProject("opencode-infra-noise");
+    await fs.mkdir(path.join(root, ".cclaw/hooks"), { recursive: true });
+    await fs.mkdir(path.join(root, ".cclaw/state"), { recursive: true });
+    await fs.writeFile(
+      path.join(root, ".cclaw/state/flow-state.json"),
+      JSON.stringify({ currentStage: "scope", activeRunId: "active", completedStages: ["brainstorm"] }, null, 2),
+      "utf8"
+    );
+    await fs.writeFile(path.join(root, ".cclaw/config.yaml"), "strictness: strict\n", "utf8");
+    // Emit yargs-style help to stderr (mimics the real-world regression
+    // where a misrouted child process printed CLI help instead of a
+    // guard refusal).
+    await fs.writeFile(
+      path.join(root, ".cclaw/hooks/run-hook.mjs"),
+      `#!/usr/bin/env node
+process.stderr.write([
+  "Options:",
+  "  -s, --session      session id to continue                              [string]",
+  "      --fork         fork the session when continuing                    [boolean]",
+  "      --prompt       prompt to use                                       [string]"
+].join("\\n"));
+process.exit(1);
+`,
+      "utf8"
+    );
+    await fs.chmod(path.join(root, ".cclaw/hooks/run-hook.mjs"), 0o755);
+    const pluginPath = path.join(root, ".cclaw/hooks/opencode-plugin.mjs");
+    await fs.writeFile(pluginPath, opencodePluginJs(), "utf8");
+
+    const imported = await import(`${pathToFileURL(pluginPath).href}?t=${Date.now()}`);
+    const pluginFactory = imported.default as (ctx: { directory: string }) => {
+      "tool.execute.before": (input: unknown, output?: unknown) => Promise<void>;
+    };
+    const plugin = pluginFactory({ directory: root });
+
+    await expect(
+      plugin["tool.execute.before"]({ tool: "RunCommand", tool_input: { cmd: "echo test" } })
+    ).resolves.toBeUndefined();
+
+    const logPath = path.join(root, ".cclaw/logs/opencode-plugin.log");
+    const log = await fs.readFile(logPath, "utf8");
+    expect(log).toMatch(/infra: (prompt|workflow)-guard non-zero exit with non-guard stderr/);
+  });
 });
