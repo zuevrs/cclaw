@@ -458,6 +458,53 @@ export default function cclawPlugin(ctx) {
     );
   }
 
+  /**
+   * Escape hatch for a user stuck behind a misbehaving guard chain.
+   * Reads a small set of env vars that all mean "turn cclaw off for this
+   * session": CCLAW_DISABLE=1 (primary), CCLAW_STRICTNESS=off, or
+   * CCLAW_GUARDS=off. Anything truthy disables both guards and the
+   * advisory path. Logged once so users can confirm the bypass is in
+   * effect without cluttering the TUI.
+   */
+  const DISABLE_ENV_KEYS = ["CCLAW_DISABLE", "CCLAW_GUARDS", "CCLAW_STRICTNESS"];
+  let disabledAdvised = false;
+  function isCclawDisabled() {
+    for (const key of DISABLE_ENV_KEYS) {
+      const raw = process.env[key];
+      if (typeof raw !== "string") continue;
+      const value = raw.trim().toLowerCase();
+      if (value.length === 0) continue;
+      if (key === "CCLAW_STRICTNESS") {
+        if (value === "off" || value === "disabled" || value === "none") {
+          return { disabled: true, key, value };
+        }
+        continue;
+      }
+      if (
+        value === "1" ||
+        value === "true" ||
+        value === "yes" ||
+        value === "on" ||
+        value === "off" ||
+        value === "disabled"
+      ) {
+        if (key === "CCLAW_GUARDS" && (value === "on" || value === "true" || value === "yes" || value === "1")) {
+          continue;
+        }
+        return { disabled: true, key, value };
+      }
+    }
+    return { disabled: false, key: "", value: "" };
+  }
+  function noteDisabled(reason) {
+    if (disabledAdvised) return;
+    disabledAdvised = true;
+    logToFile(
+      "guards disabled by env " + reason.key + "=" + reason.value + ". " +
+      "All tool calls will pass through without prompt/workflow checks."
+    );
+  }
+
   function resolveEventType(payload) {
     if (typeof payload === "string") return payload;
     if (payload && typeof payload === "object") {
@@ -538,6 +585,14 @@ export default function cclawPlugin(ctx) {
       }
     },
     "tool.execute.before": async (input, output) => {
+      const disabled = isCclawDisabled();
+      if (disabled.disabled) {
+        // Explicit user override (CCLAW_DISABLE=1 et al): stay fully out
+        // of the way. Any real problem with the guard chain should not
+        // prevent the user from unblocking themselves.
+        noteDisabled(disabled);
+        return;
+      }
       const payload = normalizeToolPayload(input, output);
       if (isSafeReadOnlyTool(payload)) {
         // Read-only tools bypass guards — they cannot mutate state and
