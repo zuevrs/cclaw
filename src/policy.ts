@@ -2,7 +2,7 @@ import fs from "node:fs/promises";
 import path from "node:path";
 import { RUNTIME_ROOT } from "./constants.js";
 import { FLOW_STAGES } from "./types.js";
-import { stageSchema, stagePolicyNeedles } from "./content/stage-schema.js";
+import { stageSchema } from "./content/stage-schema.js";
 import { stageSkillFolder } from "./content/skills.js";
 import { exists } from "./fs-utils.js";
 import type { HarnessId } from "./types.js";
@@ -37,30 +37,7 @@ export async function policyChecks(projectRoot: string, options: PolicyOptions =
   for (const stage of FLOW_STAGES) {
     const folder = stageSkillFolder(stage);
     const schema = stageSchema(stage);
-    const commandFile = `${RUNTIME_ROOT}/commands/${stage}.md`;
     const skillFile = `${RUNTIME_ROOT}/skills/${folder}/SKILL.md`;
-
-    // --- thin command mandatory sections ---
-    for (const heading of [
-      "## HARD-GATE",
-      "## Gates",
-      "## Exit",
-      "## Anchors",
-      "## Context Hydration"
-    ]) {
-      rules.push({
-        filePath: commandFile,
-        needle: heading,
-        name: `command:${stage}:section:${heading.replace(/^## /, "").toLowerCase().replace(/[^a-z0-9]+/g, "_")}`
-      });
-    }
-
-    // --- command must reference the skill ---
-    rules.push({
-      filePath: commandFile,
-      needle: `${folder}/SKILL.md`,
-      name: `command:${stage}:skill_ref`
-    });
 
     // --- skill mandatory sections ---
     for (const heading of [
@@ -101,15 +78,6 @@ export async function policyChecks(projectRoot: string, options: PolicyOptions =
         name: `skill:${stage}:section:verification_before_completion`
       });
     }
-
-    // --- policy needles in commands ---
-    for (const needle of stagePolicyNeedles(stage)) {
-      rules.push({
-        filePath: commandFile,
-        needle,
-        name: `command:${stage}:anchor:${needle.toLowerCase().replace(/[^a-z0-9]+/g, "_")}`
-      });
-    }
   }
 
   // --- utility skill checks ---
@@ -120,16 +88,14 @@ export async function policyChecks(projectRoot: string, options: PolicyOptions =
     { file: runtimeFile("skills/learnings/SKILL.md"), needle: "type, trigger, action, confidence, domain, stage, origin_stage, origin_feature, frequency, universality, maturity, created, first_seen_ts, last_seen_ts, project", name: "utility_skill:learnings:field_order" },
     { file: runtimeFile("skills/learnings/SKILL.md"), needle: "## Subcommands", name: "utility_skill:learnings:subcommands" },
     { file: runtimeFile("skills/learnings/SKILL.md"), needle: "## HARD-GATE", name: "utility_skill:learnings:hard_gate" },
-    { file: runtimeFile("commands/learn.md"), needle: "## Subcommands", name: "utility_command:learn:subcommands" },
+    { file: runtimeFile("commands/start.md"), needle: "## Algorithm", name: "utility_command:start:algorithm" },
+    { file: runtimeFile("commands/next.md"), needle: "## Algorithm", name: "utility_command:next:algorithm" },
     { file: runtimeFile("commands/ideate.md"), needle: "## Algorithm", name: "utility_command:ideate:algorithm" },
     { file: runtimeFile("skills/flow-ideate/SKILL.md"), needle: "## Protocol", name: "utility_skill:ideate:protocol" },
     { file: runtimeFile("skills/flow-ideate/SKILL.md"), needle: "## HARD-GATE", name: "utility_skill:ideate:hard_gate" },
-    { file: runtimeFile("commands/status.md"), needle: "bar:", name: "utility_command:status:visual_bar" },
-    { file: runtimeFile("commands/status.md"), needle: "/cc-view tree · /cc-view diff", name: "utility_command:status:tree_diff_link" },
-    { file: runtimeFile("commands/tree.md"), needle: "## Algorithm", name: "utility_command:tree:algorithm" },
+    { file: runtimeFile("commands/view.md"), needle: "## Routing", name: "utility_command:view:routing" },
     { file: runtimeFile("skills/flow-tree/SKILL.md"), needle: "## Protocol", name: "utility_skill:tree:protocol" },
     { file: runtimeFile("skills/flow-tree/SKILL.md"), needle: "## HARD-GATE", name: "utility_skill:tree:hard_gate" },
-    { file: runtimeFile("commands/diff.md"), needle: "## Algorithm", name: "utility_command:diff:algorithm" },
     { file: runtimeFile("skills/flow-diff/SKILL.md"), needle: "## Protocol", name: "utility_skill:diff:protocol" },
     { file: runtimeFile("skills/flow-diff/SKILL.md"), needle: "## HARD-GATE", name: "utility_skill:diff:hard_gate" },
     { file: runtimeFile("skills/subagent-dev/SKILL.md"), needle: "## HARD-GATE", name: "utility_skill:sdd:hard_gate" },

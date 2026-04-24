@@ -92,7 +92,7 @@ This is the only progression command the user needs to drive the entire flow. St
 
 ### Path A: Current stage is NOT complete (any gate unmet or delegation missing)
 
-→ Load **\`${RUNTIME_ROOT}/skills/<skillFolder>/SKILL.md\`** and **\`${RUNTIME_ROOT}/commands/<currentStage>.md\`** for the current stage.
+→ Load **\`${RUNTIME_ROOT}/skills/<skillFolder>/SKILL.md\`** for the current stage.
 → Execute that stage's protocol. The stage skill handles the full interaction including STOP points and gate tracking.
 → Stage completion must use \`node .cclaw/hooks/stage-complete.mjs <currentStage>\` (canonical), which validates delegations + gate evidence before mutating \`flow-state.json\`.
 
@@ -115,7 +115,7 @@ ${ralphLoopContractSnippet()}
 
   Otherwise report **"Flow complete. All stages finished."** and stop.
 
-→ Otherwise: load **\`${RUNTIME_ROOT}/skills/<skillFolder>/SKILL.md\`** and **\`${RUNTIME_ROOT}/commands/<nextStage>.md\`** for the successor stage. Execute that stage's protocol.
+→ Otherwise: load **\`${RUNTIME_ROOT}/skills/<skillFolder>/SKILL.md\`** for the successor stage. Execute that stage's protocol.
 
 ### Track-aware successor resolution
 
@@ -227,9 +227,8 @@ If reconciliation warnings were emitted in Step 1, treat them as a pre-advance s
 
 **Path A — stage NOT complete (any gate unmet):**
 
-Load the current stage's skill and command contract:
+Load the current stage skill:
 - \`${RUNTIME_ROOT}/skills/<skillFolder>/SKILL.md\`
-- \`${RUNTIME_ROOT}/commands/<currentStage>.md\`
 
 Execute the stage protocol. The stage skill handles interaction, STOP points, gate tracking, and stage completion via \`node .cclaw/hooks/stage-complete.mjs <stage>\` (canonical flow-state mutation path).
 
@@ -247,19 +246,17 @@ by inspecting \`closeout.shipSubstate\`:
 | shipSubstate          | Action                                              |
 |-----------------------|-----------------------------------------------------|
 | \`idle\` / missing      | Flip to \`retro_review\` and start retro protocol     |
-| \`retro_review\`        | Continue retro protocol (re-ask accept/edit/skip)   |
-| \`compound_review\`     | Run compound scan with a single approve/skip ask    |
-| \`ready_to_archive\`    | Run archive skill; reset flow-state on success      |
+| \`retro_review\`        | Draft/update \`09-retro.md\`, ask accept/edit/skip  |
+| \`compound_review\`     | Scan repeated learnings, ask approve/skip           |
+| \`ready_to_archive\`    | Run \`cclaw archive\`; reset flow-state on success |
 | \`archived\`            | Report "run archived"; stop                         |
 
-Each step owns its own state transition. \`/cc-next\` never shells out to
-\`cclaw doctor\` or \`cclaw archive\` automatically — it loads the matching
-skill and command contract and executes the protocol in-session.
+Each step owns its own state transition. \`/cc-next\` keeps retro and compound
+in-session, then uses the archive runtime only at \`ready_to_archive\`.
 
 Otherwise report **"Flow complete. All stages finished."** and stop.
 
-Otherwise (non-terminal \`next\`): load the next stage's skill and command
-contract, begin execution.
+Otherwise (non-terminal \`next\`): load the next stage skill and begin execution.
 
 ## Stage order
 

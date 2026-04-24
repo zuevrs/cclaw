@@ -89,8 +89,8 @@ This is the **recommended way to start** working with cclaw. Use \`/cc-next\` fo
 9. Persist the chosen track to \`${flowPath}\` (\`track\` field). Compute \`skippedStages\` from the track and write that too. Use the **first stage of the chosen track** as \`currentStage\` (quick → \`spec\`, medium/standard → \`brainstorm\`, trivial fast-path → \`design\` or \`spec\` per Phase 0).
 10. Write the prompt to \`.cclaw/artifacts/00-idea.md\` with the following header lines: \`Class:\` (from Phase 0), \`Track:\` (chosen track + matched heuristic), \`Stack:\` (from Phase 2 detection, or \`unknown\`), and a \`Discovered context\` section if Phase 1/seed recall found references.
 11. Load the **first-stage skill for the chosen track** and its command file:
-    - quick → \`.cclaw/skills/specification-authoring/SKILL.md\` + \`.cclaw/commands/spec.md\`
-    - medium/standard → \`.cclaw/skills/brainstorming/SKILL.md\` + \`.cclaw/commands/brainstorm.md\`
+    - quick → \`.cclaw/skills/specification-authoring/SKILL.md\`
+    - medium/standard → \`.cclaw/skills/brainstorming/SKILL.md\`
     - trivial fast-path → design or spec skill per Phase 0 decision.
 12. Execute that stage with the prompt + Phase 1/Phase 2 + seed context as initial input.
 

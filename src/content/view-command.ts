@@ -24,9 +24,9 @@ Subcommands:
 
 1. Parse subcommand (default \`status\`).
 2. Route:
-   - \`status\` -> load \`${RUNTIME_ROOT}/commands/status.md\` + \`${RUNTIME_ROOT}/skills/flow-status/SKILL.md\`
-   - \`tree\` -> load \`${RUNTIME_ROOT}/commands/tree.md\` + \`${RUNTIME_ROOT}/skills/flow-tree/SKILL.md\`
-   - \`diff\` -> load \`${RUNTIME_ROOT}/commands/diff.md\` + \`${RUNTIME_ROOT}/skills/flow-diff/SKILL.md\`
+   - \`status\` -> load \`${RUNTIME_ROOT}/skills/flow-status/SKILL.md\`
+   - \`tree\` -> load \`${RUNTIME_ROOT}/skills/flow-tree/SKILL.md\`
+   - \`diff\` -> load \`${RUNTIME_ROOT}/skills/flow-diff/SKILL.md\`
 3. Unknown subcommand -> print supported values and stop.
 
 ## Headless mode
@@ -62,10 +62,10 @@ Wrapper is read-only and dispatch-only. It must not mutate flow state directly.
 
 1. Parse optional subcommand token:
    - missing -> \`status\`
-   - \`status\` -> dispatch to \`${RUNTIME_ROOT}/commands/status.md\`
-   - \`tree\` -> dispatch to \`${RUNTIME_ROOT}/commands/tree.md\`
-   - \`diff\` -> dispatch to \`${RUNTIME_ROOT}/commands/diff.md\`
-2. Execute the target command contract and skill.
+   - \`status\` -> dispatch to \`${RUNTIME_ROOT}/skills/flow-status/SKILL.md\`
+   - \`tree\` -> dispatch to \`${RUNTIME_ROOT}/skills/flow-tree/SKILL.md\`
+   - \`diff\` -> dispatch to \`${RUNTIME_ROOT}/skills/flow-diff/SKILL.md\`
+2. Execute the target skill.
 3. Return concise output and suggest \`/cc-view <subcommand>\` variants for navigation.
 `;
 }

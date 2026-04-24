@@ -7,20 +7,17 @@ import { FLOW_STAGES } from "../../src/types.js";
 import { createTempProject } from "../helpers/index.js";
 
 describe("flow command contracts", () => {
-  it("creates thin command contracts with required sections", async () => {
+  it("creates only the four user-facing command contracts", async () => {
     const root = await createTempProject("flow");
     await initCclaw({ projectRoot: root });
 
-    for (const stage of FLOW_STAGES) {
-      const content = await fs.readFile(path.join(root, ".cclaw/commands", `${stage}.md`), "utf8");
-      expect(content).toContain("## HARD-GATE");
-      expect(content).toContain("## Gates");
-      expect(content).toContain("## Exit");
-      expect(content).toContain("## Anchors");
-      expect(content).toContain("SKILL.md");
+    const entries = (await fs.readdir(path.join(root, ".cclaw/commands"))).sort();
+    expect(entries).toEqual(["ideate.md", "next.md", "start.md", "view.md"]);
 
-      const lineCount = content.split("\n").length;
-      expect(lineCount).toBeLessThan(45);
+    for (const fileName of entries) {
+      const content = await fs.readFile(path.join(root, ".cclaw/commands", fileName), "utf8");
+      expect(content).toContain("## HARD-GATE");
+      expect(content).toContain("SKILL.md");
     }
   });
 
@@ -255,18 +252,18 @@ describe("flow command contracts", () => {
       path.join(root, ".cclaw/skills/brainstorming/SKILL.md"),
       "utf8"
     );
-    const reviewContract = await fs.readFile(
-      path.join(root, ".cclaw/commands/review.md"),
+    const reviewSkill = await fs.readFile(
+      path.join(root, ".cclaw/skills/two-layer-review/SKILL.md"),
       "utf8"
     );
-    const shipContract = await fs.readFile(
-      path.join(root, ".cclaw/commands/ship.md"),
+    const shipSkill = await fs.readFile(
+      path.join(root, ".cclaw/skills/shipping-and-handoff/SKILL.md"),
       "utf8"
     );
 
     expect(brainstormSkill).toMatchSnapshot("brainstorm-skill");
-    expect(reviewContract).toMatchSnapshot("review-contract");
-    expect(shipContract).toMatchSnapshot("ship-contract");
+    expect(reviewSkill).toContain("Review Army");
+    expect(shipSkill).toContain("finalization mode");
   });
 
   it("emits conditional slice-review guidance in plan and tdd skills", async () => {

@@ -3,7 +3,7 @@ import path from "node:path";
 import { execFile } from "node:child_process";
 import { pathToFileURL } from "node:url";
 import { promisify } from "node:util";
-import { REQUIRED_DIRS, RUNTIME_ROOT, UTILITY_COMMANDS } from "./constants.js";
+import { REQUIRED_DIRS, RUNTIME_ROOT } from "./constants.js";
 import { CCLAW_AGENTS } from "./content/core-agents.js";
 import { detectAdvancedKeys, InvalidConfigError, readConfig } from "./config.js";
 import { exists } from "./fs-utils.js";
@@ -347,13 +347,6 @@ export async function doctorChecks(projectRoot: string, options: DoctorOptions =
   }
 
   for (const stage of FLOW_STAGES) {
-    const commandPath = path.join(projectRoot, RUNTIME_ROOT, "commands", `${stage}.md`);
-    checks.push({
-      name: `command:${stage}`,
-      ok: await exists(commandPath),
-      details: commandPath
-    });
-
     const skillPath = path.join(projectRoot, RUNTIME_ROOT, "skills", stageSkillFolder(stage), "SKILL.md");
     const skillExists = await exists(skillPath);
     checks.push({
@@ -389,7 +382,6 @@ export async function doctorChecks(projectRoot: string, options: DoctorOptions =
         { id: "checklist", pattern: /^## Checklist$/m, label: "## Checklist" },
         { id: "completion_parameters", pattern: /^## Completion Parameters$/m, label: "## Completion Parameters" },
         { id: "shared_guidance", pattern: /^## Shared Stage Guidance$/m, label: "## Shared Stage Guidance" },
-        { id: "good_vs_bad", pattern: /Good vs Bad/i, label: "Good vs Bad examples" },
         { id: "anti_patterns", pattern: /^## Anti-Patterns & Red Flags$/m, label: "## Anti-Patterns & Red Flags" }
       ];
       const missingSections = canonicalSections
@@ -575,8 +567,8 @@ export async function doctorChecks(projectRoot: string, options: DoctorOptions =
     details: `${agentsFile} must contain the managed cclaw marker block with routing, verification, and minimal detail pointer`
   });
 
-  // Utility commands — keep in sync with UTILITY_COMMANDS (src/constants.ts)
-  for (const cmd of UTILITY_COMMANDS) {
+  // User-facing entry commands only. Stage and view subcommands live in skills.
+  for (const cmd of ["start", "next", "ideate", "view"] as const) {
     const cmdPath = path.join(projectRoot, RUNTIME_ROOT, "commands", `${cmd}.md`);
     checks.push({
       name: `utility_command:${cmd}`,

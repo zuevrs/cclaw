@@ -72,8 +72,8 @@ describe("install lifecycle", { timeout: 30_000 }, () => {
     await expect(fs.stat(path.join(root, ".cclaw/state/stage-activity.jsonl"))).resolves.toBeDefined();
     await expect(fs.stat(path.join(root, ".cclaw/state/flow-state.snapshot.json"))).resolves.toBeDefined();
     await expect(fs.stat(path.join(root, ".cclaw/state/harness-gaps.json"))).resolves.toBeDefined();
-    await expect(fs.stat(path.join(root, ".cclaw/commands/tree.md"))).resolves.toBeDefined();
-    await expect(fs.stat(path.join(root, ".cclaw/commands/diff.md"))).resolves.toBeDefined();
+    const commandFiles = (await fs.readdir(path.join(root, ".cclaw/commands"))).sort();
+    expect(commandFiles).toEqual(["ideate.md", "next.md", "start.md", "view.md"]);
     await expect(fs.stat(path.join(root, ".claude/commands/cc-view.md"))).resolves.toBeDefined();
     const claudeShims = (await fs.readdir(path.join(root, ".claude/commands")))
       .filter((name) => /^cc(?:-.*)?\.md$/u.test(name))
@@ -330,27 +330,26 @@ describe("install lifecycle", { timeout: 30_000 }, () => {
     await expect(fs.stat(shim)).resolves.toBeDefined();
   });
 
-  it("sync regenerates shim files", async () => {
+  it("sync regenerates shim files and stage skills while pruning legacy command contracts", async () => {
     const root = await createTempProject("sync");
     await initCclaw({ projectRoot: root });
 
     const shim = path.join(root, ".claude/commands/cc.md");
-    const contract = path.join(root, ".cclaw/commands/plan.md");
+    const legacyContract = path.join(root, ".cclaw/commands/plan.md");
     const skill = path.join(root, ".cclaw/skills/planning-and-task-breakdown/SKILL.md");
     await fs.rm(shim);
-    await fs.writeFile(contract, "# corrupted\n", "utf8");
+    await fs.writeFile(legacyContract, "# legacy\n", "utf8");
     await fs.writeFile(skill, "# corrupted\n", "utf8");
     await syncCclaw(root);
 
     const restored = await fs.readFile(shim, "utf8");
-    const restoredContract = await fs.readFile(contract, "utf8");
     const restoredSkill = await fs.readFile(skill, "utf8");
     expect(restored).toContain(".cclaw/skills/flow-start/SKILL.md");
-    expect(restoredContract).toContain("WAIT_FOR_CONFIRM");
     expect(restoredSkill).toContain("## Required Gates");
+    await expect(fs.stat(legacyContract)).rejects.toBeDefined();
   });
 
-  it("sync regenerates stage command contracts when defaultTrack changes", async () => {
+  it("sync regenerates stage skills when defaultTrack changes", async () => {
     const root = await createTempProject("sync-track-contracts");
     await initCclaw({ projectRoot: root });
     const initialConfig = await readConfig(root);
@@ -359,16 +358,16 @@ describe("install lifecycle", { timeout: 30_000 }, () => {
       defaultTrack: "quick"
     });
     await syncCclaw(root);
-    const quickTddContract = await fs.readFile(path.join(root, ".cclaw/commands/tdd.md"), "utf8");
-    expect(quickTddContract).not.toContain("tdd_traceable_to_plan");
+    const quickTddSkill = await fs.readFile(path.join(root, ".cclaw/skills/test-driven-development/SKILL.md"), "utf8");
+    expect(quickTddSkill).not.toContain("tdd_traceable_to_plan");
 
     await writeConfig(root, {
       ...(await readConfig(root)),
       defaultTrack: "standard"
     });
     await syncCclaw(root);
-    const standardTddContract = await fs.readFile(path.join(root, ".cclaw/commands/tdd.md"), "utf8");
-    expect(standardTddContract).toContain("tdd_traceable_to_plan");
+    const standardTddSkill = await fs.readFile(path.join(root, ".cclaw/skills/test-driven-development/SKILL.md"), "utf8");
+    expect(standardTddSkill).toContain("tdd_traceable_to_plan");
   });
 
   it("sync removes stale generated shims, persists config, and keeps user-owned assets", async () => {

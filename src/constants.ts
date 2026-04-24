@@ -129,18 +129,7 @@ export const STAGE_TO_SKILL_FOLDER: Record<FlowStage, string> = {
   ship: "shipping-and-handoff"
 };
 
-export const UTILITY_COMMANDS = [
-  "learn",
-  "next",
-  "ideate",
-  "view",
-  "status",
-  "tree",
-  "diff"
-] as const;
-
 export const SUBAGENT_SKILL_FOLDERS = [
   "subagent-dev",
   "parallel-dispatch"
 ] as const;
-export type UtilityCommand = (typeof UTILITY_COMMANDS)[number];

@@ -6,8 +6,7 @@ import {
   CCLAW_VERSION,
   FLOW_VERSION,
   REQUIRED_DIRS,
-  RUNTIME_ROOT,
-  UTILITY_COMMANDS
+  RUNTIME_ROOT
 } from "./constants.js";
 import {
   writeConfig,
@@ -17,15 +16,14 @@ import {
   detectLanguageRulePacks,
   detectAdvancedKeys
 } from "./config.js";
-import { stageCommandContract } from "./content/contracts.js";
 import { createInitialContextModeState } from "./content/contexts.js";
-import { learnSkillMarkdown, learnCommandContract } from "./content/learnings.js";
+import { learnSkillMarkdown } from "./content/learnings.js";
 import { nextCommandContract, nextCommandSkillMarkdown } from "./content/next-command.js";
 import { ideateCommandContract, ideateCommandSkillMarkdown } from "./content/ideate-command.js";
 import { startCommandContract, startCommandSkillMarkdown } from "./content/start-command.js";
-import { statusCommandContract, statusCommandSkillMarkdown } from "./content/status-command.js";
-import { treeCommandContract, treeCommandSkillMarkdown } from "./content/tree-command.js";
-import { diffCommandContract, diffCommandSkillMarkdown } from "./content/diff-command.js";
+import { statusCommandSkillMarkdown } from "./content/status-command.js";
+import { treeCommandSkillMarkdown } from "./content/tree-command.js";
+import { diffCommandSkillMarkdown } from "./content/diff-command.js";
 import { viewCommandContract, viewCommandSkillMarkdown } from "./content/view-command.js";
 import { subagentDrivenDevSkill, parallelAgentsSkill } from "./content/subagents.js";
 import { sessionHooksSkillMarkdown } from "./content/session-hooks.js";
@@ -314,15 +312,6 @@ async function ensureStructure(projectRoot: string): Promise<void> {
   }
 }
 
-async function writeCommandContracts(projectRoot: string, track: FlowTrack = "standard"): Promise<void> {
-  await Promise.all(FLOW_STAGES.map(async (stage) => {
-    await writeFileSafe(
-      runtimePath(projectRoot, "commands", `${stage}.md`),
-      stageCommandContract(stage, track)
-    );
-  }));
-}
-
 async function writeArtifactTemplates(projectRoot: string): Promise<void> {
   await Promise.all(Object.entries(ARTIFACT_TEMPLATES).map(async ([fileName, content]) => {
     await writeFileSafe(runtimePath(projectRoot, "templates", fileName), content);
@@ -428,16 +417,11 @@ async function writeSkills(projectRoot: string, config?: CclawConfig): Promise<v
 
 }
 
-async function writeUtilityCommands(projectRoot: string, config: CclawConfig): Promise<void> {
-  void config;
-  await writeFileSafe(runtimePath(projectRoot, "commands", "learn.md"), learnCommandContract());
+async function writeEntryCommands(projectRoot: string): Promise<void> {
+  await writeFileSafe(runtimePath(projectRoot, "commands", "start.md"), startCommandContract());
   await writeFileSafe(runtimePath(projectRoot, "commands", "next.md"), nextCommandContract());
   await writeFileSafe(runtimePath(projectRoot, "commands", "ideate.md"), ideateCommandContract());
   await writeFileSafe(runtimePath(projectRoot, "commands", "view.md"), viewCommandContract());
-  await writeFileSafe(runtimePath(projectRoot, "commands", "start.md"), startCommandContract());
-  await writeFileSafe(runtimePath(projectRoot, "commands", "status.md"), statusCommandContract());
-  await writeFileSafe(runtimePath(projectRoot, "commands", "tree.md"), treeCommandContract());
-  await writeFileSafe(runtimePath(projectRoot, "commands", "diff.md"), diffCommandContract());
 }
 
 function toObject(value: unknown): Record<string, unknown> | null {
@@ -1150,6 +1134,11 @@ async function cleanLegacyArtifacts(projectRoot: string): Promise<void> {
   }
 
   for (const legacyRuntimeFile of [
+    ...FLOW_STAGES.map((stage) => runtimePath(projectRoot, "commands", `${stage}.md`)),
+    runtimePath(projectRoot, "commands", "learn.md"),
+    runtimePath(projectRoot, "commands", "status.md"),
+    runtimePath(projectRoot, "commands", "tree.md"),
+    runtimePath(projectRoot, "commands", "diff.md"),
     runtimePath(projectRoot, "commands", "feature.md"),
     runtimePath(projectRoot, "commands", "ops.md"),
     runtimePath(projectRoot, "commands", "tdd-log.md"),
@@ -1258,8 +1247,7 @@ async function materializeRuntime(projectRoot: string, config: CclawConfig, forc
   await cleanLegacyArtifacts(projectRoot);
   await cleanStaleFiles(projectRoot);
   await Promise.all([
-    writeCommandContracts(projectRoot, config.defaultTrack ?? "standard"),
-    writeUtilityCommands(projectRoot, config),
+    writeEntryCommands(projectRoot),
     writeSkills(projectRoot, config),
     writeArtifactTemplates(projectRoot),
     writeRulebook(projectRoot)

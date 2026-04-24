@@ -21,15 +21,9 @@ describe("prompt-contract regression harness", () => {
       path.join(root, ".cclaw/skills/test-driven-development/SKILL.md"),
       "utf8"
     );
-    const planContract = await fs.readFile(path.join(root, ".cclaw/commands/plan.md"), "utf8");
-    const reviewContract = await fs.readFile(path.join(root, ".cclaw/commands/review.md"), "utf8");
-
     expect(planSkill).toContain("Dependency Batches");
     expect(planSkill).toContain("WAIT_FOR_CONFIRM");
     expect(planSkill).toContain("/cc-next");
-    expect(planContract).toContain("Dependency Batches");
-    expect(planContract).toContain("Context Hydration");
-
     expect(tddSkill).toContain("RED");
     expect(tddSkill).toContain("GREEN");
     expect(tddSkill).toContain("REFACTOR");
@@ -37,7 +31,6 @@ describe("prompt-contract regression harness", () => {
     expect(reviewSkill).toContain("Layer 1");
     expect(reviewSkill).toContain("Layer 2");
     expect(reviewSkill).toContain("07-review-army.json");
-    expect(reviewContract).toContain("Review Army");
   });
 
   it("keeps advisory hooks wired for guards, context monitor, and suggestion memory", async () => {
