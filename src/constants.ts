@@ -84,22 +84,12 @@ export const REQUIRED_DIRS = [
   `${RUNTIME_ROOT}/runs`,
   `${RUNTIME_ROOT}/rules`,
   `${RUNTIME_ROOT}/agents`,
-  `${RUNTIME_ROOT}/hooks`,
-  ...EVALS_DIRS
+  `${RUNTIME_ROOT}/hooks`
 ] as const;
 
 export const REQUIRED_GITIGNORE_PATTERNS = [
   "# cclaw generated artifacts",
   `${RUNTIME_ROOT}/`,
-  "# cclaw evals: user-owned, track in git",
-  `!${EVALS_ROOT}/`,
-  `!${EVALS_ROOT}/config.yaml`,
-  `!${EVALS_ROOT}/corpus/`,
-  `!${EVALS_ROOT}/corpus/**`,
-  `!${EVALS_ROOT}/rubrics/`,
-  `!${EVALS_ROOT}/rubrics/**`,
-  `!${EVALS_ROOT}/baselines/`,
-  `!${EVALS_ROOT}/baselines/**`,
   ".claude/commands/cc-*.md",
   ".claude/commands/cc.md",
   ".cursor/commands/cc-*.md",

@@ -57,14 +57,9 @@ import {
   buildRulesJson
 } from "./content/templates.js";
 import {
-  EVAL_BASELINES_README,
-  EVAL_CONFIG_YAML,
-  EVAL_CORPUS_README,
-  EVAL_REPORTS_README,
-  EVAL_RUBRIC_FILES,
-  EVAL_RUBRICS_README
-} from "./content/eval-scaffold.js";
-import { stageSkillFolder, stageSkillMarkdown } from "./content/skills.js";
+  stageSkillFolder,
+  stageSkillMarkdown
+} from "./content/skills.js";
 import {
   LANGUAGE_RULE_PACK_DIR,
   LANGUAGE_RULE_PACK_FILES,
@@ -342,32 +337,6 @@ async function writeArtifactTemplates(projectRoot: string): Promise<void> {
   await Promise.all(Object.entries(ARTIFACT_TEMPLATES).map(async ([fileName, content]) => {
     await writeFileSafe(runtimePath(projectRoot, "templates", fileName), content);
   }));
-}
-
-/**
- * Seed the `.cclaw/evals/` scaffold. Only writes files that do not already
- * exist so that user-authored config.yaml / corpus / rubrics / baselines are
- * never clobbered by `cclaw sync`.
- */
-async function writeEvalScaffold(projectRoot: string): Promise<void> {
-  const targets: Array<{ rel: string; content: string }> = [
-    { rel: "evals/config.yaml", content: EVAL_CONFIG_YAML },
-    { rel: "evals/corpus/README.md", content: EVAL_CORPUS_README },
-    { rel: "evals/rubrics/README.md", content: EVAL_RUBRICS_README },
-    { rel: "evals/baselines/README.md", content: EVAL_BASELINES_README },
-    { rel: "evals/reports/README.md", content: EVAL_REPORTS_README }
-  ];
-  for (const rubric of EVAL_RUBRIC_FILES) {
-    targets.push({
-      rel: `evals/rubrics/${rubric.stage}.yaml`,
-      content: rubric.contents
-    });
-  }
-  for (const target of targets) {
-    const absolute = runtimePath(projectRoot, ...target.rel.split("/"));
-    if (await exists(absolute)) continue;
-    await writeFileSafe(absolute, target.content);
-  }
 }
 
 async function writeSkills(projectRoot: string, config?: CclawConfig): Promise<void> {
@@ -1258,6 +1227,7 @@ async function cleanLegacyArtifacts(projectRoot: string): Promise<void> {
   // Runtime simplification cleanup: these folders were generated in older
   // releases and are now intentionally removed from user projects.
   for (const legacyRuntimeDir of [
+    runtimePath(projectRoot, "evals"),
     runtimePath(projectRoot, "references"),
     runtimePath(projectRoot, "contexts")
   ]) {
@@ -1329,7 +1299,6 @@ async function materializeRuntime(projectRoot: string, config: CclawConfig, forc
     writeUtilityCommands(projectRoot, config),
     writeSkills(projectRoot, config),
     writeArtifactTemplates(projectRoot),
-    writeEvalScaffold(projectRoot),
     writeRulebook(projectRoot)
   ]);
   await writeState(projectRoot, config, forceStateReset);
