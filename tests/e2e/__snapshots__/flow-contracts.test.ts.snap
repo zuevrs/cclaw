@@ -55,11 +55,29 @@ Do NOT ship, merge, or release until both review layers complete with an explici
 - missing regression evidence
 
 ## Process
-1. Layer 1: check acceptance criteria and requirement coverage.
-2. Layer 2a: check correctness — logic, races, boundaries, null handling.
-3. Layer 2b: check security — validation, auth, secrets, injection.
-4. Layer 2c: check performance — queries, memory, caching, hot paths.
-5. Layer 2d: check architecture fit — design compliance, coupling, interfaces.
+
+This is the stage **state machine** — the canonical ordered flow. For every detailed step, gate, and wording, follow the Checklist below; this diagram is the map, not the territory.
+
+\`\`\`mermaid
+flowchart TD
+  S1["Layer 1"]
+  S2["Layer 2a"]
+  S3["Layer 2b"]
+  S4["Layer 2c"]
+  S5["Layer 2d"]
+  S6["Reconcile multi-agent findings into"]
+  S7["Classify and prioritize all"]
+  S8["Write review report artifact"]
+  S9["If verdict is BLOCKED,"]
+  S1 --> S2
+  S2 --> S3
+  S3 --> S4
+  S4 --> S5
+  S5 --> S6
+  S6 --> S7
+  S7 --> S8
+  S8 --> S9
+\`\`\`
 
 ## Inputs
 - implementation diff
@@ -70,6 +88,11 @@ Do NOT ship, merge, or release until both review layers complete with an explici
 - spec criteria
 - tdd artifact
 - rulebook constraints
+
+## Platform Notes
+- When citing file locations in findings, use repo-relative forward-slash paths with a line number (\`src/foo/bar.ts:42\`). Avoid IDE-generated hyperlinks that embed absolute machine-specific paths.
+- Line-range or diff-range references must match \`git diff --unified=0\` output format so reviewers on any OS can reproduce the range locally without GUI tooling.
+- Commands in remediation suggestions must be portable (\`npm run lint\`, \`pytest -x path/to/test\`) — if a platform-specific command is required, tag the note explicitly (\`# PowerShell only\`, \`# macOS only\`).
 
 ## Context Loading
 
@@ -131,6 +154,9 @@ Summary of what the reference covers:
 
 
 ## Interaction Protocol
+
+These are **rules for HOW you interact with the user** during this stage — tone, question shape, decision gating. Ordered steps of *what to do* live in the Checklist; do not treat these as an alternative sequence.
+
 1. Run Layer 1 (spec compliance) completely before starting Layer 2.
 2. In each review section, present findings ONE AT A TIME. Do NOT batch.
 3. Classify every finding as Critical, Important, or Suggestion.
@@ -366,11 +392,23 @@ Do NOT merge, push, or finalize without a passed preflight check, written rollba
 - finalization mode not selected
 
 ## Process
-1. Validate review and test gates.
-2. Run preflight: build, test, lint, uncommitted-changes check.
-3. Generate release notes and rollback procedure.
-4. Choose one finalization enum: FINALIZE_MERGE_LOCAL, FINALIZE_OPEN_PR, FINALIZE_KEEP_BRANCH, FINALIZE_DISCARD_BRANCH, or FINALIZE_NO_VCS.
-5. Execute finalization action.
+
+This is the stage **state machine** — the canonical ordered flow. For every detailed step, gate, and wording, follow the Checklist below; this diagram is the map, not the territory.
+
+\`\`\`mermaid
+flowchart TD
+  S1["Validate review and test"]
+  S2["Run preflight"]
+  S3["Generate release notes and"]
+  S4["Choose one finalization enum"]
+  S5["Execute finalization action"]
+  S6["Write ship artifact with"]
+  S1 --> S2
+  S2 --> S3
+  S3 --> S4
+  S4 --> S5
+  S5 --> S6
+\`\`\`
 
 ## Inputs
 - review verdict
@@ -381,6 +419,12 @@ Do NOT merge, push, or finalize without a passed preflight check, written rollba
 - review artifact
 - changelog scope
 - deployment constraints
+
+## Platform Notes
+- Release commands (\`npm publish\`, \`git tag -s\`, \`gh release create\`, \`cargo publish\`, \`goreleaser\`) behave the same across OSes, but signing keys differ: macOS Keychain, Windows credential store, Linux GPG agent. Verify the signing flow on the actual release machine before running the real publish.
+- Version tags must be pure ASCII and lowercase after an optional \`v\` prefix (\`v1.2.3\`, \`v1.2.3-rc.1\`). Avoid Unicode dashes and non-breaking spaces that sneak in via copy-paste from docs.
+- When the rollback plan references timestamps (CI run windows, DB snapshot IDs), pin them to UTC ISO-8601 so the plan reads identically across CI runners in different regions.
+- \`gh release create\` requires a repo-level \`GH_TOKEN\`/\`GITHUB_TOKEN\`; document whether it is sourced from the shell env, \`.env\`, or the OS keychain so another operator on a different OS can reproduce the release.
 
 ## Context Loading
 
@@ -436,6 +480,9 @@ Summary of what the reference covers:
 
 
 ## Interaction Protocol
+
+These are **rules for HOW you interact with the user** during this stage — tone, question shape, decision gating. Ordered steps of *what to do* live in the Checklist; do not treat these as an alternative sequence.
+
 1. Run preflight checks before any release action.
 2. Document release notes and rollback plan explicitly.
 3. For finalization mode: use the Decision Protocol — present modes as labeled options (A/B/C/D/E) with consequences, and mark one as (recommended). Do NOT use a numeric Completeness rubric; recommend the mode that best addresses release blast-radius, rollback readiness, observability, and stakeholder communication — ties go to the most reversible option. If the harness's native structured-ask tool is available (\`AskUserQuestion\` / \`AskQuestion\` / \`question\` / \`request_user_input\`), send exactly ONE question per call, validate fields against the runtime schema, and on schema error immediately fall back to a plain-text lettered list instead of retrying guessed payloads.
@@ -621,11 +668,23 @@ Do NOT write code or tests. Planning only. This stage produces a task graph and 
 - no explicit confirmation
 
 ## Process
-1. Build dependency graph and ordered slices.
-2. Group slices into execution batches and define gate criteria per batch.
-3. Define each task with acceptance mapping and verification commands.
-4. Trace every locked decision (D-XX) to plan tasks or explicit defer rationale.
-5. Record checkpoints and blockers.
+
+This is the stage **state machine** — the canonical ordered flow. For every detailed step, gate, and wording, follow the Checklist below; this diagram is the map, not the territory.
+
+\`\`\`mermaid
+flowchart TD
+  S1["Build dependency graph and"]
+  S2["Group slices into execution"]
+  S3["Define each task with"]
+  S4["Trace every locked decision"]
+  S5["Record checkpoints and blockers"]
+  S6["Write plan artifact and"]
+  S1 --> S2
+  S2 --> S3
+  S3 --> S4
+  S4 --> S5
+  S5 --> S6
+\`\`\`
 
 ## Inputs
 - approved spec
@@ -636,6 +695,11 @@ Do NOT write code or tests. Planning only. This stage produces a task graph and 
 - spec acceptance criteria
 - current architecture
 - known technical debt and dependencies
+
+## Platform Notes
+- Per-task verification commands must be runnable on Windows PowerShell, macOS bash/zsh, and Linux bash. Prefer \`npm run <script>\` / \`pnpm <script>\` / \`pytest -k <name>\` over raw shell one-liners so the command portability is handled by the script runner.
+- If a task command needs globbing, wrap the glob in single quotes on POSIX and escape as needed on PowerShell (\`'src/**/*.ts'\` vs \`"src/**/*.ts"\`). Note the quoting variant when the task is expected to run in mixed-OS CI.
+- Environment variables referenced from tasks must be named in uppercase with underscores (\`CCLAW_PROJECT_ROOT\`) and set via a cross-shell wrapper (e.g. \`cross-env\` for Node tasks) — do not inline \`KEY=value cmd\` style that fails in PowerShell/cmd.exe.
 
 ## Context Loading
 
@@ -687,6 +751,9 @@ Summary of what the reference covers:
 
 
 ## Interaction Protocol
+
+These are **rules for HOW you interact with the user** during this stage — tone, question shape, decision gating. Ordered steps of *what to do* live in the Checklist; do not treat these as an alternative sequence.
+
 1. Plan in read-only mode relative to implementation.
 2. Split work into small vertical slices (target 2-5 minute tasks).
 3. Publish explicit dependency batches with entry and exit checks for each batch.
@@ -865,11 +932,29 @@ Do NOT merge, ship, or skip review. Follow RED → GREEN → REFACTOR strictly f
 - no evidence recorded
 
 ## Process
-1. Select slice and map to acceptance criterion.
-2. Dispatch \`tdd-red\` (or \`test-author\` TEST_RED_ONLY mode) and produce failing test(s) for expected reason (RED).
-3. Run tests and capture failure output.
-4. Dispatch \`tdd-green\` (or \`test-author\` BUILD_GREEN_REFACTOR mode) and implement smallest change needed for GREEN.
-5. Run full tests and build checks.
+
+This is the stage **state machine** — the canonical ordered flow. For every detailed step, gate, and wording, follow the Checklist below; this diagram is the map, not the territory.
+
+\`\`\`mermaid
+flowchart TD
+  S1["Select slice and map"]
+  S2["Dispatch (or TESTREDONLY mode)"]
+  S3["Run tests and capture"]
+  S4["Dispatch (or BUILDGREENREFACTOR mode)"]
+  S5["Run full tests and"]
+  S6["Run a fresh verification-before-completion"]
+  S7["Dispatch pass preserving behavior"]
+  S8["Record RED, GREEN, and"]
+  S9["Annotate traceability to plan"]
+  S1 --> S2
+  S2 --> S3
+  S3 --> S4
+  S4 --> S5
+  S5 --> S6
+  S6 --> S7
+  S7 --> S8
+  S8 --> S9
+\`\`\`
 
 ## Inputs
 - approved plan slice
@@ -881,6 +966,12 @@ Do NOT merge, ship, or skip review. Follow RED → GREEN → REFACTOR strictly f
 - plan artifact
 - spec artifact
 - existing test patterns
+
+## Platform Notes
+- Record the **exact** test command run (\`npm test -- path/to/file\`, \`pytest path/to/file\`, \`go test ./...\`) so RED/GREEN evidence is reproducible on any OS. Do not paraphrase to a shorter alias.
+- Line-ending drift (CRLF vs LF) can turn a passing test red on Windows if the repo mixes styles. When a GREEN flip happens only after whitespace normalization, record it as a refactor note, not a hidden fix.
+- When invoking a test file path from Windows PowerShell, use forward slashes (\`npm test -- tests/foo.test.ts\`) — backslashes trip globbing on \`cross-env\` and similar wrappers.
+- Flaky tests that only fail on one OS must be marked as such in the TDD artifact (OS + runner + one failing output snippet) — do not retry until green without evidence.
 
 ## Context Loading
 
@@ -939,6 +1030,9 @@ Summary of what the reference covers:
 
 
 ## Interaction Protocol
+
+These are **rules for HOW you interact with the user** during this stage — tone, question shape, decision gating. Ordered steps of *what to do* live in the Checklist; do not treat these as an alternative sequence.
+
 1. Pick one planned slice at a time.
 2. Controller owns orchestration; execution runs through phase-specific delegation (\`tdd-red\` -> \`tdd-green\` -> \`tdd-refactor\`) or equivalent \`test-author\` modes.
 3. Write behavior-focused tests before changing implementation (RED).
@@ -1162,11 +1256,32 @@ Do NOT invoke implementation skills, write code, scaffold projects, or mutate pr
 - project context not explored
 
 ## Process
-1. Explore project context: check files, docs, recent activity.
-2. Classify depth tier (Lightweight / Standard / Deep) before diving.
-3. Assess scope: flag if request is too broad, help decompose first.
-4. Apply short-circuit when requirements are already concrete enough for scope.
-5. Ask clarifying questions one at a time — focus on purpose, constraints, success criteria.
+
+This is the stage **state machine** — the canonical ordered flow. For every detailed step, gate, and wording, follow the Checklist below; this diagram is the map, not the territory.
+
+\`\`\`mermaid
+flowchart TD
+  S1["Explore project context"]
+  S2["Classify depth tier (Lightweight"]
+  S3["Assess scope"]
+  S4["Apply short-circuit when requirements"]
+  S5["Ask clarifying questions one"]
+  S6["Propose 2-3 architecturally distinct"]
+  S7["Collect user reaction before"]
+  S8["Recommend after reaction and"]
+  S9["Optionally plant promising non-selected"]
+  S10["Present design sections incrementally,"]
+  S1 --> S2
+  S2 --> S3
+  S3 --> S4
+  S4 --> S5
+  S5 --> S6
+  S6 --> S7
+  S7 --> S8
+  S8 --> S9
+  S9 --> S10
+  S10 --> More["...see full Checklist"]
+\`\`\`
 
 ## Inputs
 - problem statement
@@ -1177,6 +1292,11 @@ Do NOT invoke implementation skills, write code, scaffold projects, or mutate pr
 - existing project context and patterns
 - current behavior of affected area
 - business and delivery constraints
+
+## Platform Notes
+- Write artifact paths in POSIX form (\`.cclaw/artifacts/01-brainstorm-<slug>.md\`) even on Windows — the runtime normalizes separators. Do NOT commit Windows-style backslashes into the artifact or flow-state.
+- Slugify titles with lowercase ASCII letters, digits, and single dashes only — avoid spaces and case-sensitive names so the file resolves identically on case-insensitive filesystems (macOS/Windows default).
+- When linking to files inside the artifact, use repo-relative forward-slash paths (\`src/foo/bar.ts\`) so reviewers on any OS can click through.
 
 ## Context Loading
 
@@ -1240,6 +1360,9 @@ Summary of what the reference covers:
 
 
 ## Interaction Protocol
+
+These are **rules for HOW you interact with the user** during this stage — tone, question shape, decision gating. Ordered steps of *what to do* live in the Checklist; do not treat these as an alternative sequence.
+
 1. Explore what exists before asking what to build — check project files first.
 2. If the idea is vague or could mean many different things, your FIRST question narrows to a specific kind of project. Do not ask detail questions until the project type is clear.
 3. Ask exactly one question per turn. Prefer multiple choice. No bundled questions.

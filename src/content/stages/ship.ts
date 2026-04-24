@@ -96,6 +96,12 @@ export const SHIP: StageSchemaInput = {
       "preflight completed",
       "rollback and release notes complete",
       "finalization action explicitly chosen and executed"
+    ],
+    platformNotes: [
+      "Release commands (`npm publish`, `git tag -s`, `gh release create`, `cargo publish`, `goreleaser`) behave the same across OSes, but signing keys differ: macOS Keychain, Windows credential store, Linux GPG agent. Verify the signing flow on the actual release machine before running the real publish.",
+      "Version tags must be pure ASCII and lowercase after an optional `v` prefix (`v1.2.3`, `v1.2.3-rc.1`). Avoid Unicode dashes and non-breaking spaces that sneak in via copy-paste from docs.",
+      "When the rollback plan references timestamps (CI run windows, DB snapshot IDs), pin them to UTC ISO-8601 so the plan reads identically across CI runners in different regions.",
+      "`gh release create` requires a repo-level `GH_TOKEN`/`GITHUB_TOKEN`; document whether it is sourced from the shell env, `.env`, or the OS keychain so another operator on a different OS can reproduce the release."
     ]
   },
   artifactRules: {

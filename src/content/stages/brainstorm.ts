@@ -122,6 +122,11 @@ export const BRAINSTORM: StageSchemaInput = {
       "required gates marked satisfied",
       "no implementation action taken",
       "artifact reviewed by user"
+    ],
+    platformNotes: [
+      "Write artifact paths in POSIX form (`.cclaw/artifacts/01-brainstorm-<slug>.md`) even on Windows — the runtime normalizes separators. Do NOT commit Windows-style backslashes into the artifact or flow-state.",
+      "Slugify titles with lowercase ASCII letters, digits, and single dashes only — avoid spaces and case-sensitive names so the file resolves identically on case-insensitive filesystems (macOS/Windows default).",
+      "When linking to files inside the artifact, use repo-relative forward-slash paths (`src/foo/bar.ts`) so reviewers on any OS can click through."
     ]
   },
   artifactRules: {

@@ -1,5 +1,46 @@
 # Changelog
 
+## 0.48.33
+
+Stage-flow consolidation, cross-platform notes, and inline-hook locality
+release. Addresses three flow-quality issues flagged in the user-flow
+audit: overlapping parallel instruction lists inside stage skills,
+accidental platform-agnostic-by-default stage guidance, and inline JS
+bodies buried in the 2000-line `node-hooks.ts` template.
+
+### Changed
+
+- Stage SKILL.md `## Process` now renders a **mermaid flowchart TD**
+  derived from `executionModel.process` (or from
+  `executionModel.processFlow` when a stage defines a custom
+  non-linear graph), replacing the previous dedupe'd top-5 flat list.
+  `## Interaction Protocol` keeps its dedupe'd top-5 list but opens with
+  an explicit preamble stating the section is *behavioral rules*, not an
+  alternative sequence of steps.
+- Added optional `StageExecutionModel.processFlow` (custom mermaid body)
+  and `StageExecutionModel.platformNotes` (rendered under a new
+  `## Platform Notes` section). Bumped the stage-skill line budget from
+  350 to 400 to accommodate the mermaid state-machine diagram and
+  platform-notes block.
+- Filled `platformNotes` for all eight stages with concrete cross-OS
+  guidance — path separators, shell quoting, CRLF/LF drift, PowerShell
+  vs POSIX env-var syntax, UTC timestamps, and release-flow signing
+  differences — so agent-generated instructions stay portable.
+- Extracted the inline JS bodies (`computeCompoundReadinessInline`,
+  `computeRalphLoopStatusInline`, and shared helpers) out of
+  `src/content/node-hooks.ts` into a dedicated
+  `src/content/hook-inline-snippets.ts` module. Each snippet carries an
+  explicit "mirrors X, parity enforced by Y" header.
+  `tests/unit/ralph-loop-parity.test.ts` keeps the parity contract
+  intact; `run-hook.mjs` output is byte-identical.
+
+### Fixed
+
+- `spec` checklist now includes the "present acceptance criteria in
+  3-5-item batches, pause for ACK" step that previously only lived in
+  the `process` duplicate list and would have silently dropped out of
+  the rendered skill after the mermaid rewrite.
+
 ## 0.48.32
 
 Stage-audit implementation release (Phase 6 completion). This cut finalizes the

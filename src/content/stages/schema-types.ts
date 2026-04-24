@@ -63,6 +63,14 @@ export interface StagePhilosophy {
 export interface StageExecutionModel {
   interactionProtocol: string[];
   process: string[];
+  /**
+   * Optional custom mermaid `flowchart` body (without the fenced `mermaid`
+   * code block) that overrides the auto-generated linear flowchart in the
+   * rendered `## Process` section. Use for stages whose state machine is
+   * non-linear (loops, conditional branches) — otherwise leave unset and
+   * let the renderer derive a simple `A --> B --> C` chart from `process`.
+   */
+  processFlow?: string;
   checklist: string[];
   requiredGates: StageGate[];
   requiredEvidence: string[];
@@ -71,6 +79,13 @@ export interface StageExecutionModel {
   researchPlaybooks?: string[];
   blockers: string[];
   exitCriteria: string[];
+  /**
+   * Optional platform-specific notes (Windows/macOS/Linux path separators,
+   * PowerShell vs cmd, harness-specific tool names). Rendered under
+   * "## Platform Notes" when present. Omit when the stage is
+   * platform-agnostic.
+   */
+  platformNotes?: string[];
 }
 
 export interface StageArtifactRules {
@@ -126,6 +141,10 @@ export interface StageSchema {
   whenNotToUse: string[];
   interactionProtocol: string[];
   process: string[];
+  /** See {@link StageExecutionModel.processFlow}. */
+  processFlow?: string;
+  /** See {@link StageExecutionModel.platformNotes}. */
+  platformNotes?: string[];
   requiredGates: StageGate[];
   requiredEvidence: string[];
   inputs: string[];

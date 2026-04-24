@@ -103,6 +103,11 @@ export const REVIEW: StageSchemaInput = {
       "all review sections evaluated",
       "critical blockers resolved",
       "ship readiness explicitly stated"
+    ],
+    platformNotes: [
+      "When citing file locations in findings, use repo-relative forward-slash paths with a line number (`src/foo/bar.ts:42`). Avoid IDE-generated hyperlinks that embed absolute machine-specific paths.",
+      "Line-range or diff-range references must match `git diff --unified=0` output format so reviewers on any OS can reproduce the range locally without GUI tooling.",
+      "Commands in remediation suggestions must be portable (`npm run lint`, `pytest -x path/to/test`) — if a platform-specific command is required, tag the note explicitly (`# PowerShell only`, `# macOS only`)."
     ]
   },
   artifactRules: {

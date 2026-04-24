@@ -4,6 +4,11 @@ import {
   SMALL_PROJECT_ARCHIVE_RUNS_THRESHOLD,
   SMALL_PROJECT_RECURRENCE_THRESHOLD
 } from "../knowledge-store.js";
+import {
+  HOOK_INLINE_SHARED_HELPERS,
+  COMPOUND_READINESS_INLINE_SOURCE,
+  RALPH_LOOP_INLINE_SOURCE
+} from "./hook-inline-snippets.js";
 
 export interface NodeHookRuntimeOptions {
   /**
@@ -1476,203 +1481,14 @@ async function handlePromptGuard(runtime) {
   return 0;
 }
 
-function normalizeCompoundLastUpdatedAt(date) {
-  return date.toISOString().replace(/\\.\\d{3}Z$/u, "Z");
-}
-
-// Count archived runs as sub-directories under \`.cclaw/runs/\`. Missing
-// dir returns 0; unexpected errors return undefined so the caller can
-// skip the small-project relaxation rather than guess.
-async function countArchivedRunsInline(root) {
-  const dir = path.join(root, RUNTIME_ROOT, "runs");
-  try {
-    const entries = await fs.readdir(dir, { withFileTypes: true });
-    return entries.filter((entry) => entry.isDirectory()).length;
-  } catch (error) {
-    const code = error && typeof error === "object" && "code" in error ? error.code : null;
-    if (code === "ENOENT") return 0;
-    return undefined;
-  }
-}
-
-// Mirrors src/knowledge-store.ts::computeCompoundReadiness — kept inline so
-// SessionStart can refresh compound-readiness.json without the CLI binary.
-// Any schema change must update src/knowledge-store.ts::computeCompoundReadiness
-// and src/internal/compound-readiness.ts in lockstep. Parity is enforced by
-// tests/unit/ralph-loop-parity.test.ts.
-async function computeCompoundReadinessInline(root, options) {
-  const filePath = path.join(root, RUNTIME_ROOT, "knowledge.jsonl");
-  // Caller may supply pre-read raw to avoid double-reading knowledge.jsonl.
-  const raw = typeof (options && options.prereadRaw) === "string"
-    ? options.prereadRaw
-    : await readTextFile(filePath, "");
-  const baseThresholdRaw = options && options.threshold;
-  const baseThreshold = Number.isInteger(baseThresholdRaw) && baseThresholdRaw >= 1
-    ? baseThresholdRaw
-    : COMPOUND_RECURRENCE_THRESHOLD;
-  const archivedRunsCount =
-    typeof (options && options.archivedRunsCount) === "number" &&
-    Number.isFinite(options.archivedRunsCount) &&
-    options.archivedRunsCount >= 0
-      ? Math.floor(options.archivedRunsCount)
-      : undefined;
-  const smallProjectRelaxationApplied =
-    archivedRunsCount !== undefined &&
-    archivedRunsCount < SMALL_PROJECT_ARCHIVE_RUNS_THRESHOLD &&
-    baseThreshold > SMALL_PROJECT_RECURRENCE_THRESHOLD;
-  const threshold = smallProjectRelaxationApplied
-    ? SMALL_PROJECT_RECURRENCE_THRESHOLD
-    : baseThreshold;
-  const maxReady = Number.isInteger(options && options.maxReady) && options.maxReady >= 1
-    ? options.maxReady
-    : 10;
-  const normalize = (value) => String(value == null ? "" : value).trim().replace(/\\s+/gu, " ").toLowerCase();
-  const severityWeight = (sev) => {
-    if (sev === "critical") return 3;
-    if (sev === "important") return 2;
-    if (sev === "suggestion") return 1;
-    return 0;
-  };
-  const buckets = new Map();
-  for (const rawLine of raw.split(/\\r?\\n/gu)) {
-    const line = rawLine.trim();
-    if (line.length === 0) continue;
-    let row;
-    try { row = JSON.parse(line); } catch { continue; }
-    if (!row || typeof row !== "object" || Array.isArray(row)) continue;
-    if (row.maturity === "lifted-to-enforcement") continue;
-    const type = typeof row.type === "string" ? row.type : "";
-    const trigger = typeof row.trigger === "string" ? row.trigger : "";
-    const action = typeof row.action === "string" ? row.action : "";
-    if (type.length === 0 || trigger.length === 0 || action.length === 0) continue;
-    const key = type + "||" + normalize(trigger) + "||" + normalize(action);
-    const frequency = Number.isInteger(row.frequency) && row.frequency > 0 ? Math.floor(row.frequency) : 1;
-    const lastSeen = typeof row.last_seen_ts === "string" ? row.last_seen_ts : "";
-    let bucket = buckets.get(key);
-    if (!bucket) {
-      bucket = {
-        trigger,
-        action,
-        recurrence: frequency,
-        entryCount: 1,
-        severity: typeof row.severity === "string" ? row.severity : undefined,
-        lastSeenTs: lastSeen,
-        types: new Set([type]),
-        maturity: new Set([typeof row.maturity === "string" ? row.maturity : "raw"])
-      };
-      buckets.set(key, bucket);
-      continue;
-    }
-    bucket.recurrence += frequency;
-    bucket.entryCount += 1;
-    bucket.types.add(type);
-    bucket.maturity.add(typeof row.maturity === "string" ? row.maturity : "raw");
-    if (row.severity === "critical") {
-      bucket.severity = "critical";
-    } else if (row.severity === "important" && bucket.severity !== "critical") {
-      bucket.severity = "important";
-    }
-    if (lastSeen && Date.parse(lastSeen) > Date.parse(bucket.lastSeenTs || "0")) {
-      bucket.lastSeenTs = lastSeen;
-    }
-  }
-  const ready = [];
-  for (const bucket of buckets.values()) {
-    const criticalOverride = bucket.severity === "critical";
-    const meetsRecurrence = bucket.recurrence >= threshold;
-    if (!criticalOverride && !meetsRecurrence) continue;
-    ready.push({
-      trigger: bucket.trigger,
-      action: bucket.action,
-      recurrence: bucket.recurrence,
-      entryCount: bucket.entryCount,
-      qualification: criticalOverride && !meetsRecurrence ? "critical_override" : "recurrence",
-      ...(bucket.severity ? { severity: bucket.severity } : {}),
-      lastSeenTs: bucket.lastSeenTs,
-      types: Array.from(bucket.types).sort(),
-      maturity: Array.from(bucket.maturity).sort()
-    });
-  }
-  ready.sort((a, b) => {
-    const sevDiff = severityWeight(b.severity) - severityWeight(a.severity);
-    if (sevDiff !== 0) return sevDiff;
-    if (b.recurrence !== a.recurrence) return b.recurrence - a.recurrence;
-    const recencyDiff = Date.parse(b.lastSeenTs || "0") - Date.parse(a.lastSeenTs || "0");
-    if (!Number.isNaN(recencyDiff) && recencyDiff !== 0) return recencyDiff;
-    return String(a.trigger).localeCompare(String(b.trigger));
-  });
-  return {
-    schemaVersion: 2,
-    threshold,
-    baseThreshold,
-    ...(archivedRunsCount !== undefined ? { archivedRunsCount } : {}),
-    smallProjectRelaxationApplied,
-    clusterCount: buckets.size,
-    readyCount: ready.length,
-    ready: ready.slice(0, maxReady),
-    lastUpdatedAt: normalizeCompoundLastUpdatedAt(new Date())
-  };
-}
-
-// Mirrors src/tdd-cycle.ts::computeRalphLoopStatus — kept inline so the
-// SessionStart hook can write ralph-loop.json without depending on the CLI
-// binary being installed globally. Any schema change must update both copies.
-async function computeRalphLoopStatusInline(stateDir, runId) {
-  const filePath = path.join(stateDir, "tdd-cycle-log.jsonl");
-  const raw = await readTextFile(filePath, "");
-  const sliceMap = new Map();
-  const acClosed = new Set();
-  const redOpenSlices = [];
-  let loopIteration = 0;
-  for (const rawLine of raw.split(/\\r?\\n/gu)) {
-    const line = rawLine.trim();
-    if (line.length === 0) continue;
-    let row;
-    try { row = JSON.parse(line); } catch { continue; }
-    if (!row || typeof row !== "object" || Array.isArray(row)) continue;
-    const rowRun = typeof row.runId === "string" && row.runId.length > 0 ? row.runId : runId;
-    if (rowRun !== runId) continue;
-    const slice = typeof row.slice === "string" && row.slice.length > 0 ? row.slice : "S-unknown";
-    let state = sliceMap.get(slice);
-    if (!state) {
-      state = { slice, redCount: 0, greenCount: 0, refactorCount: 0, redOpen: false, acIds: [] };
-      sliceMap.set(slice, state);
-    }
-    const exitCode = typeof row.exitCode === "number" ? row.exitCode : undefined;
-    if (row.phase === "red") {
-      state.redCount += 1;
-      if (exitCode !== undefined && exitCode !== 0) state.redOpen = true;
-    } else if (row.phase === "green") {
-      state.greenCount += 1;
-      state.redOpen = false;
-      loopIteration += 1;
-      if (Array.isArray(row.acIds)) {
-        for (const acId of row.acIds) {
-          if (typeof acId !== "string" || acId.length === 0) continue;
-          acClosed.add(acId);
-          if (!state.acIds.includes(acId)) state.acIds.push(acId);
-        }
-      }
-    } else if (row.phase === "refactor") {
-      state.refactorCount += 1;
-    }
-  }
-  for (const state of sliceMap.values()) {
-    if (state.redOpen) redOpenSlices.push(state.slice);
-  }
-  const slices = Array.from(sliceMap.values()).sort((a, b) => a.slice.localeCompare(b.slice, "en"));
-  return {
-    schemaVersion: 1,
-    runId,
-    loopIteration,
-    redOpen: redOpenSlices.length > 0,
-    redOpenSlices,
-    acClosed: Array.from(acClosed).sort(),
-    sliceCount: slices.length,
-    slices,
-    lastUpdatedAt: new Date().toISOString()
-  };
-}
+// Inline mirrors of canonical CLI computations (compound-readiness,
+// ralph-loop) are factored into src/content/hook-inline-snippets.ts so
+// this 2000+-line file no longer owns their bodies. Each snippet carries
+// an explicit "mirrors X, parity enforced by Y" comment in the snippets
+// module. Parity is enforced by tests/unit/ralph-loop-parity.test.ts.
+${HOOK_INLINE_SHARED_HELPERS}
+${COMPOUND_READINESS_INLINE_SOURCE}
+${RALPH_LOOP_INLINE_SOURCE}
 
 async function hasFailingRedEvidenceForPath(stateDir, runId, rawPath) {
   const cycleRaw = await readTextFile(path.join(stateDir, "tdd-cycle-log.jsonl"), "");

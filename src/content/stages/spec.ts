@@ -43,6 +43,7 @@ export const SPEC: StageSchemaInput = {
       "Capture edge cases — for each criterion, define at least one boundary condition and one error condition.",
       "Document constraints and assumptions — regulatory, system, integration, and performance boundaries. Surface implicit assumptions explicitly.",
       "Confirm testability — for each acceptance criterion, describe the test that would prove it. If untestable, rewrite the criterion.",
+      "Present acceptance criteria to the user in 3-5-item batches, pausing for explicit ACK between batches (see Interaction Protocol).",
       "Write spec artifact and request user approval — wait for explicit confirmation before proceeding."
     ],
     interactionProtocol: [
@@ -89,6 +90,11 @@ export const SPEC: StageSchemaInput = {
       "required gates marked satisfied",
       "plan-ready acceptance mapping exists",
       "testability confirmed for all criteria"
+    ],
+    platformNotes: [
+      "Acceptance criteria that reference CLI commands must name the executable portably (`node`, `npm`, `pytest`) and avoid OS-specific shell features (`&&` is safe, `||` differs subtly between cmd.exe and POSIX — prefer explicit multi-step descriptions).",
+      "When a criterion specifies file-content expectations, use `LF` as the canonical newline and state any CRLF-on-Windows tolerance explicitly (most git-managed repos normalize via `.gitattributes`; the criterion should not implicitly depend on autocrlf).",
+      "Timezone-sensitive criteria (timestamps, retention windows) must pin UTC or note the source of truth — clocks differ across CI runners (GitHub macOS vs Linux image vs Windows image)."
     ]
   },
   artifactRules: {
