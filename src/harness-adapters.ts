@@ -394,9 +394,8 @@ in \`~/.codex/config.toml\`. cclaw generates \`.codex/hooks.json\` on
 sync; if the feature flag is off, hooks are inert and cclaw's
 session-start rehydration simply does not fire. Run \`cclaw doctor\` to
 see if the flag is missing. \`.codex/commands/*\` is still unused by
-Codex CLI and is removed on every sync. See
-\`.cclaw/references/harnesses/codex-playbook.md\` for the hook coverage
-matrix (Bash-only \`PreToolUse\`/\`PostToolUse\`; other events are full).
+Codex CLI and is removed on every sync. Run \`cclaw doctor --explain\` for
+hook coverage details (Bash-only \`PreToolUse\`/\`PostToolUse\`; other events are full).
 ${CCLAW_MARKER_END}`;
 }
 
@@ -550,8 +549,7 @@ what the hook surface does and does not cover.
   (v0.33+).
 - Codex's \`PreToolUse\` / \`PostToolUse\` hooks currently only intercept
   the \`Bash\` tool. \`Write\`, \`Edit\`, \`WebSearch\`, and MCP tool calls
-  are **not** gated by hooks — read
-  \`.cclaw/references/harnesses/codex-playbook.md\` for what cclaw
+  are **not** gated by hooks — use \`cclaw doctor --explain\` for what cclaw
   substitutes with in-turn agent steps for those call classes.
 - Codex's \`SessionStart\` matcher only supports \`startup|resume\`. Claude
   and Cursor also fire on \`clear\` and \`compact\`, so mid-session

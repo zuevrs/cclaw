@@ -371,12 +371,12 @@ For the default path, `/cc-next` is the only command; explicit archival/reset re
 cclaw is honest about what each harness can and cannot do, and it
 closes every real gap with a documented fallback — not a silent waiver.
 
-| Harness | Dispatch | Fallback | Hook surface | Structured ask | Playbook |
-|---|---|---|---|---|---|
-| Claude Code | full (named subagents) | `native` | full | `AskUserQuestion` | [`claude-playbook.md`](./src/content/harness-playbooks.ts) |
-| Cursor | generic Task dispatcher | `generic-dispatch` | full | `AskQuestion` | `cursor-playbook.md` |
-| OpenCode | plugin / in-session | `role-switch` | plugin | `question` (permission-gated; `permission.question: "allow"`) | `opencode-playbook.md` |
-| OpenAI Codex | in-session only | `role-switch` (evidenceRefs required) | limited (Bash-only `PreToolUse`/`PostToolUse`; requires `codex_hooks` feature flag) | `request_user_input` (experimental; Plan / Collaboration mode) | `codex-playbook.md` |
+| Harness | Dispatch | Fallback | Hook surface | Structured ask |
+|---|---|---|---|---|
+| Claude Code | full (named subagents) | `native` | full | `AskUserQuestion` |
+| Cursor | generic Task dispatcher | `generic-dispatch` | full | `AskQuestion` |
+| OpenCode | plugin / in-session | `role-switch` | plugin | `question` (permission-gated; `permission.question: "allow"`) |
+| OpenAI Codex | in-session only | `role-switch` (evidenceRefs required) | limited (Bash-only `PreToolUse`/`PostToolUse`; requires `codex_hooks` feature flag) | `request_user_input` (experimental; Plan / Collaboration mode) |
 
 What the fallbacks mean:
 
@@ -386,8 +386,7 @@ What the fallbacks mean:
   vocabulary of `subagent_type`s (`explore`, `generalPurpose`, …).
   cclaw maps each named agent (planner / reviewer / test-author /
   security-reviewer / doc-updater) onto the generic dispatcher with a
-  structured role prompt. Per-agent mapping lives in the Cursor
-  playbook.
+  structured role prompt.
 - `role-switch` — OpenCode and Codex lack an isolated worker primitive.
   The agent announces the role in-session, performs the work, and
   records a delegation row with `fulfillmentMode: "role-switch"` and at

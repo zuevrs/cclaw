@@ -38,11 +38,11 @@ describe("/cc-view status content", () => {
     expect(skill).toContain(`currentStage === "ship"`);
   });
 
-  it("includes a harness parity row backed by harness-gaps.json v2", () => {
+  it("includes a harness parity row backed by capability metadata", () => {
     expect(contract).toContain("harness: <id>=<tier>/<fallback>");
-    expect(contract).toContain("playbooks: <M>/<N>");
-    expect(skill).toContain("harness-gaps.json");
-    expect(skill).toContain("schemaVersion === 2");
+    expect(contract).toContain("cclaw capability metadata");
+    expect(skill).toContain("cclaw capability metadata");
+    expect(skill).toContain("<tier>/<fallback>");
   });
 
   it("keeps the read-only hard-gate intact", () => {
@@ -69,13 +69,13 @@ describe("/cc-view tree content", () => {
     expect(skill).toContain(`ready_to_archive`);
   });
 
-  it("adds a harnesses branch with tier/fallback/playbook marker", () => {
+  it("adds a harnesses branch with tier/fallback metadata", () => {
     expect(contract).toContain("harnesses:");
     expect(contract).toContain("fallback=native");
     expect(contract).toContain("fallback=generic-dispatch");
     expect(contract).toContain("fallback=role-switch");
-    expect(contract).toContain("playbook ✓");
-    expect(skill).toContain("playbook ✓/✗ missing");
+    expect(contract).toContain("cclaw doctor --explain");
+    expect(skill).toContain("and fallback from cclaw capability metadata");
   });
 
   it("omits optional sub-trees only under documented conditions", () => {

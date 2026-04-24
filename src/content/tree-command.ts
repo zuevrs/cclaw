@@ -72,17 +72,16 @@ closeout (shipSubstate=retro_review):
   └─ archive:  pending
 
 harnesses:
-  ├─ claude    tier=tier1 fallback=native           playbook ✓
-  ├─ cursor    tier=tier2 fallback=generic-dispatch playbook ✓
-  ├─ opencode  tier=tier2 fallback=role-switch      playbook ✓
-  └─ codex     tier=tier2 fallback=role-switch      playbook ✓
+  ├─ claude    tier=tier1 fallback=native
+  ├─ cursor    tier=tier2 fallback=generic-dispatch
+  ├─ opencode  tier=tier2 fallback=role-switch
+  └─ codex     tier=tier2 fallback=role-switch
 \`\`\`
 
 - Closeout sub-tree is **omitted** when \`currentStage !== "ship"\` and
   \`shipSubstate === "idle"\`.
 - Delegations sub-branch is omitted when the stage has no mandatory agents.
-- Playbook marker is \`✗ missing\` when the file under
-  \`cclaw doctor --explain\` reports missing harness capability details.
+- Harness capability details come from \`cclaw doctor --explain\`, not generated playbook files.
 
 Use UTF markers by default, ASCII fallback when terminal cannot render UTF.
 
@@ -127,8 +126,8 @@ Do not modify state in this command. It is a pure read/render operation.
      then \`next\`; the transient \`archived\` substate surfaces only if the
      archive step failed mid-run.
 7. Append a \`harnesses:\` branch. For each installed harness derive the tier
-   from the harness-gaps report and mark \`playbook ✓/✗ missing\` based on
-  \`cclaw doctor --explain\` reports missing harness capability details.
+   and fallback from cclaw capability metadata; use \`cclaw doctor --explain\`
+   for remediation details when needed.
 8. If rewind records exist in \`${rewindLogPath()}\`, include latest rewind note in footer.
 
 ## Validation

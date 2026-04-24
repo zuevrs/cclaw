@@ -31,10 +31,6 @@ function snapshotPath(): string {
   return `${RUNTIME_ROOT}/state/flow-state.snapshot.json`;
 }
 
-function harnessGapsPath(): string {
-  return `${RUNTIME_ROOT}/state/harness-gaps.json`;
-}
-
 function retroArtifactPath(): string {
   return `${RUNTIME_ROOT}/artifacts/09-retro.md`;
 }
@@ -79,8 +75,7 @@ time to answer "where are we?" without advancing the flow.
    - If no signal exists, render \`(unknown)\`.
 5. Optionally read **\`${snapshotPath()}\`** to compute gate delta versus prior baseline:
    - If missing or invalid, render \`delta: (baseline unavailable; run /cc-view diff)\`.
-6. Read **\`${harnessGapsPath()}\`** (schemaVersion 2). For every installed harness
-   capture \`tier\`, \`subagentFallback\`, and \`playbookPath\` for the harness row.
+6. Derive harness \`tier\` and fallback from cclaw capability metadata; use \`cclaw doctor --explain\` when details are needed.
 7. Read the top of **\`${knowledgePath()}\`** — surface up to 3 most recent entries
    (by trailing timestamp or source marker).
 8. Detect **closeout artifacts**: check whether \`${retroArtifactPath()}\` exists on
@@ -108,7 +103,7 @@ cclaw status
     - reviewer     ○ pending
     - test-author  ◎ missing-evidence (role-switch; add evidenceRefs)
   closeout: <shipSubstate> · retro=<drafted|accepted|skipped|—> · compound=<N promoted|skipped|—>
-  harness: <id>=<tier>/<fallback>, ... · playbooks: <M>/<N>
+  harness: <id>=<tier>/<fallback>, ...
   stale:   <list or none>
   knowledge:
     - <latest entry summary>
@@ -119,8 +114,7 @@ cclaw status
 
 - Omit the \`closeout:\` row when \`currentStage !== "ship"\` and \`shipSubstate === "idle"\`.
 - Omit \`delegations\` line when the current stage has zero mandatory delegations.
-- Omit \`harness\` line only when \`${harnessGapsPath()}\` is missing or invalid
-  (render \`harness: (report unavailable; run cclaw upgrade)\`).
+- Omit the \`harness\` line only when no installed harness metadata is available.
 
 ## Anti-patterns
 
@@ -180,11 +174,7 @@ a read-only command. Do **not** update \`${snapshotPath()}\` here.
 5. Try reading \`${snapshotPath()}\` for gate delta:
    - If available, compare current stage \`passed\` / \`blocked\` sets against baseline.
    - If unavailable, render \`delta: (baseline unavailable; run /cc-view diff)\`.
-6. Read \`${harnessGapsPath()}\`:
-   - If \`schemaVersion === 2\`, for each entry render \`<harness>=<tier>/<subagentFallback>\`.
-   - Count existing \`playbookPath\` files on disk to print \`playbooks: <M>/<N>\`.
-   - If the file is missing or has an older schema, render
-     \`harness: (report unavailable; run cclaw upgrade)\`.
+6. Derive harness \`<tier>/<fallback>\` rows from cclaw capability metadata.
 7. Read \`${RUNTIME_ROOT}/knowledge.jsonl\`. If missing or empty → knowledge highlights are \`(none recorded)\`. Parse each line as JSON and surface its \`trigger\`/\`action\`.
 8. For each gate in \`stageGateCatalog[currentStage].required\`:
    - Satisfied if present in \`passed\` and absent from \`blocked\`.

@@ -244,8 +244,7 @@ export function requiredEventsFor(harness: HookManifestHarness): string[] {
 }
 
 /**
- * Human-readable per-harness semantic coverage used by docs and by
- * the doctor's `harness-gaps.json` synthesis.
+ * Human-readable per-harness semantic coverage used by docs and doctor output.
  */
 export function semanticEventCoverage(
   harness: HookManifestHarness

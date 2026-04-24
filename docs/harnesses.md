@@ -4,12 +4,12 @@ Generated from `src/harness-adapters.ts` capabilities and hook event mappings.
 
 ## Capability tiers
 
-| Harness | ID | Tier | Native dispatch | Fallback | Hook surface | Structured ask | Playbook |
-|---|---|---|---|---|---|---|---|
-| Claude Code | `claude` | `tier1` (full native automation) | full | native | full | AskUserQuestion | `references/harnesses/claude-playbook.md` |
-| Cursor | `cursor` | `tier2` (partial automation with waivers) | generic | generic-dispatch | full | AskQuestion | `references/harnesses/cursor-playbook.md` |
-| OpenCode | `opencode` | `tier2` (partial automation with waivers) | partial | role-switch | plugin | question | `references/harnesses/opencode-playbook.md` |
-| OpenAI Codex | `codex` | `tier2` (partial automation with waivers) | none | role-switch | limited | request_user_input | `references/harnesses/codex-playbook.md` |
+| Harness | ID | Tier | Native dispatch | Fallback | Hook surface | Structured ask |
+|---|---|---|---|---|---|---|
+| Claude Code | `claude` | `tier1` (full native automation) | full | native | full | AskUserQuestion |
+| Cursor | `cursor` | `tier2` (partial automation with waivers) | generic | generic-dispatch | full | AskQuestion |
+| OpenCode | `opencode` | `tier2` (partial automation with waivers) | partial | role-switch | plugin | question |
+| OpenAI Codex | `codex` | `tier2` (partial automation with waivers) | none | role-switch | limited | request_user_input |
 
 Fallback legend:
 
@@ -120,6 +120,6 @@ Harness-specific additions:
 
 ## Runtime observability
 
-- `.cclaw/state/harness-gaps.json` captures per-harness capability gaps for the active config.
 - `cclaw doctor` validates shim, hook, and lifecycle surfaces against this capability model.
+- `/cc-view status` and `/cc-view tree` surface the same harness tier/fallback facts without requiring generated playbook files.
 
