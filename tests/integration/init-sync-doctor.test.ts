@@ -70,8 +70,8 @@ describe("install lifecycle", { timeout: 30_000 }, () => {
     expect(typeof flow.activeRunId).toBe("string");
     expect(flow.activeRunId).toMatch(/^run-/);
     await expect(fs.stat(path.join(root, ".cclaw/state/stage-activity.jsonl"))).resolves.toBeDefined();
-    await expect(fs.stat(path.join(root, ".cclaw/state/tdd-cycle-log.jsonl"))).resolves.toBeDefined();
-    await expect(fs.stat(path.join(root, ".cclaw/state/reconciliation-notices.json"))).resolves.toBeDefined();
+    await expect(fs.stat(path.join(root, ".cclaw/state/tdd-cycle-log.jsonl"))).rejects.toBeDefined();
+    await expect(fs.stat(path.join(root, ".cclaw/state/reconciliation-notices.json"))).rejects.toBeDefined();
     await expect(fs.stat(path.join(root, ".cclaw/state/checkpoint.json"))).rejects.toBeDefined();
     await expect(fs.stat(path.join(root, ".cclaw/state/flow-state.snapshot.json"))).rejects.toBeDefined();
     await expect(fs.stat(path.join(root, ".cclaw/state/harness-gaps.json"))).rejects.toBeDefined();

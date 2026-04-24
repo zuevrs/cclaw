@@ -819,20 +819,9 @@ async function ensureSessionStateFiles(projectRoot: string): Promise<void> {
   const stateDir = runtimePath(projectRoot, "state");
   await ensureDir(stateDir);
 
-  for (const fileName of ["stage-activity.jsonl", "tdd-cycle-log.jsonl"] as const) {
-    const filePath = path.join(stateDir, fileName);
-    if (!(await exists(filePath))) {
-      await writeFileSafe(filePath, "", { mode: 0o600 });
-    }
-  }
-
-  const reconciliationNoticesPath = path.join(stateDir, "reconciliation-notices.json");
-  if (!(await exists(reconciliationNoticesPath))) {
-    await writeFileSafe(
-      reconciliationNoticesPath,
-      `${JSON.stringify({ schemaVersion: 1, notices: [] }, null, 2)}\n`,
-      { mode: 0o600 }
-    );
+  const activityPath = path.join(stateDir, "stage-activity.jsonl");
+  if (!(await exists(activityPath))) {
+    await writeFileSafe(activityPath, "", { mode: 0o600 });
   }
 }
 

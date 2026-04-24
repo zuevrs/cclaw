@@ -1419,13 +1419,17 @@ export async function doctorChecks(projectRoot: string, options: DoctorOptions =
   });
   const tddLogPath = path.join(projectRoot, RUNTIME_ROOT, "state", "tdd-cycle-log.jsonl");
   const tddLogExists = await exists(tddLogPath);
-  checks.push({
-    name: "state:tdd_cycle_log_exists",
-    ok: tddLogExists,
-    details: `${RUNTIME_ROOT}/state/tdd-cycle-log.jsonl must exist`
-  });
   const tddCompleted = flowState.completedStages.includes("tdd")
     || (flowState.currentStage === "review" || flowState.currentStage === "ship");
+  checks.push({
+    name: "state:tdd_cycle_log_exists",
+    ok: tddLogExists || !tddCompleted,
+    details: tddLogExists
+      ? `${RUNTIME_ROOT}/state/tdd-cycle-log.jsonl exists`
+      : tddCompleted
+        ? `${RUNTIME_ROOT}/state/tdd-cycle-log.jsonl must exist once TDD is complete`
+        : `${RUNTIME_ROOT}/state/tdd-cycle-log.jsonl will be created when TDD evidence is generated`
+  });
   if (tddLogExists) {
     const tddLogRaw = await fs.readFile(tddLogPath, "utf8");
     const parsedCycles = parseTddCycleLog(tddLogRaw);
