@@ -13,6 +13,7 @@ export default function cclawPlugin(ctx) {
   const stateDir = join(runtimeDir, "state");
   const logsDir = join(runtimeDir, "logs");
   const pluginLogPath = join(logsDir, "opencode-plugin.log");
+  const configPath = join(runtimeDir, "config.yaml");
   const flowStatePath = join(stateDir, "flow-state.json");
   const checkpointPath = join(stateDir, "checkpoint.json");
   const activityPath = join(stateDir, "stage-activity.jsonl");
@@ -307,6 +308,41 @@ export default function cclawPlugin(ctx) {
     lastHookStderr.set(hookName, trimmed);
   }
 
+  /**
+   * A hook process can exit non-zero for two very different reasons:
+   *   (a) the guard legitimately decided to refuse an operation
+   *       (strict-mode refusal — this is the *only* case we ever want
+   *       to surface as a block to the user), or
+   *   (b) the hook infrastructure itself failed — the runtime crashed,
+   *       a child binary was missing, stderr is a chunk of yargs help
+   *       from some unrelated process, timeout, etc.
+   *
+   * Treating (b) as a block is what produces the "guard blocked
+   * tool.execute.before" error on a user who did nothing wrong. The
+   * heuristic below trims guaranteed-infra signals so only cleanly
+   * structured guard output is eligible for a real strict-mode block.
+   */
+  const INFRA_NOISE_PATTERNS = [
+    /^\\s*(Usage|Options|Commands|Examples|Positionals|Aliases):/im,
+    /^\\s*--[a-z][a-z0-9-]*\\b.*\\[(string|boolean|number|array)\\]/im,
+    /\\bcommand (not found|failed)\\b/i,
+    /\\bno such file or directory\\b/i,
+    /\\bCannot find module\\b/i,
+    /\\bThrowsCompletion\\b/,
+    /\\b(Reference|Syntax|Type|Range)Error\\b/,
+    /^\\s*at [^\\n]+\\([^)]*:\\d+:\\d+\\)/im,
+    /^\\s*node:internal\\b/im
+  ];
+  function looksLikeInfrastructureFailure(stderr) {
+    if (typeof stderr !== "string") return true;
+    const trimmed = stderr.trim();
+    if (trimmed.length === 0) return true;
+    for (const pattern of INFRA_NOISE_PATTERNS) {
+      if (pattern.test(trimmed)) return true;
+    }
+    return false;
+  }
+
   async function runHookScript(hookName, payload = {}) {
     const { spawn } = await import("node:child_process");
     const hookRuntimePath = join(root, "${RUNTIME_ROOT}/hooks/run-hook.mjs");
@@ -407,14 +443,42 @@ export default function cclawPlugin(ctx) {
    * still runs through guards.
    */
   const SAFE_READONLY_TOOLS = new Set([
+    // Filesystem / search reads — no state mutation possible.
     "read",
     "glob",
     "grep",
     "list",
     "ls",
     "view",
+    "find",
+    // Network reads — no local state mutation.
     "webfetch",
-    "websearch"
+    "websearch",
+    // User-facing question / ask tools: they only ask the human for
+    // input and cannot touch the filesystem or execute code. Blocking
+    // them strands the plugin mid-decision (see OpenCode's \`question\`).
+    "question",
+    "ask",
+    "askuser",
+    "askquestion",
+    "ask_question",
+    "ask_user",
+    "ask_user_question",
+    "askuserquestion",
+    "request_user_input",
+    "requestuserinput",
+    "prompt",
+    // Thinking / scratchpad tools — pure reasoning with no side effects.
+    "think",
+    "thinking",
+    // Todo bookkeeping tools — they write only inside the harness's own
+    // session state, not project files, and blocking them breaks agent
+    // planning without protecting anything.
+    "todo",
+    "todoread",
+    "todowrite",
+    "todo_read",
+    "todo_write"
   ]);
 
   function isSafeReadOnlyTool(payload) {
@@ -434,6 +498,42 @@ export default function cclawPlugin(ctx) {
       if (SAFE_READONLY_TOOLS.has(candidate.toLowerCase())) return true;
     }
     return false;
+  }
+
+  /**
+   * Strictness derived from (in order of precedence): CCLAW_STRICTNESS
+   * env override, \`.cclaw/config.yaml\` key \`strictness\`, or the
+   * library default of "advisory". The plugin only ever *blocks* tool
+   * execution when strictness resolves to "strict"; in advisory mode
+   * guard failures are logged and the tool call proceeds. This mirrors
+   * the Ralph-loop / hook-runtime semantics of
+   * \`DEFAULT_STRICTNESS = advisory\`, so the plugin can no longer
+   * accidentally be the stricter half of a mismatched pair.
+   */
+  function readConfigStrictness() {
+    try {
+      if (!existsSync(configPath)) return "";
+      const { readFileSync } = require("node:fs");
+      const raw = readFileSync(configPath, "utf8");
+      if (typeof raw !== "string" || raw.length === 0) return "";
+      const match = raw.match(/^\\s*strictness\\s*:\\s*([A-Za-z0-9_-]+)/m);
+      return match && typeof match[1] === "string" ? match[1].trim().toLowerCase() : "";
+    } catch {
+      return "";
+    }
+  }
+
+  function resolveStrictness() {
+    const envRaw = typeof process.env.CCLAW_STRICTNESS === "string"
+      ? process.env.CCLAW_STRICTNESS.trim().toLowerCase()
+      : "";
+    if (envRaw === "strict") return "strict";
+    if (envRaw === "advisory" || envRaw === "off" || envRaw === "disabled" || envRaw === "none") {
+      return "advisory";
+    }
+    const fileRaw = readConfigStrictness();
+    if (fileRaw === "strict") return "strict";
+    return "advisory";
   }
 
   /**
@@ -619,11 +719,35 @@ export default function cclawPlugin(ctx) {
         const failed = !promptOk ? "prompt-guard" : "workflow-guard";
         const rawDetail = lastHookStderr.get(failed) || "";
         const detail = rawDetail.length > 0 ? rawDetail.slice(-400) : "(no stderr captured)";
+        if (looksLikeInfrastructureFailure(rawDetail)) {
+          // Never let a broken hook runtime or misrouted child-process
+          // stderr (yargs help, Node crash, ENOENT, timeout) masquerade
+          // as a policy block. Log the infra hit and let the user keep
+          // working regardless of strictness.
+          logToFile(
+            "infra: " + failed + " non-zero exit with non-guard stderr — treated as infrastructure failure, tool allowed. " +
+            "stderr=" + detail.replace(/\\s+/g, " ").slice(0, 300)
+          );
+          return;
+        }
+        const strictness = resolveStrictness();
+        if (strictness !== "strict") {
+          // Advisory mode (the default) — every guard refusal is a hint,
+          // not a hard stop. Users report the "failure" as a log line
+          // and keep working. Only \`strictness: strict\` in config.yaml
+          // or CCLAW_STRICTNESS=strict upgrades this to a thrown block.
+          logToFile(
+            "advisory: " + failed + " flagged tool.execute.before (strictness=" +
+            strictness + "). detail=" + detail.replace(/\\s+/g, " ").slice(0, 300)
+          );
+          return;
+        }
         throw new Error(
           "cclaw " + failed + " blocked tool.execute.before.\\n" +
           "Reason: " + detail + "\\n" +
           "Diagnose: run \`cclaw doctor\` in project root.\\n" +
-          "Bypass (temporary): export CCLAW_DISABLE=1 before starting OpenCode."
+          "Bypass (temporary): export CCLAW_DISABLE=1 before starting OpenCode,\\n" +
+          "or set \`strictness: advisory\` in .cclaw/config.yaml."
         );
       }
     },
