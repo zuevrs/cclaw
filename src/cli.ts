@@ -232,7 +232,6 @@ function buildInitSurfacePreview(harnesses: HarnessId[]): string[] {
     ".cclaw/artifacts/**",
     ".cclaw/knowledge.jsonl",
     ".cclaw/state/*.json|*.jsonl",
-    ".cclaw/references/**",
     "AGENTS.md (managed block)"
   ];
   for (const harness of harnesses) {

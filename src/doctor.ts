@@ -54,11 +54,6 @@ import {
   UTILITY_SKILL_FOLDERS
 } from "./content/utility-skills.js";
 import { CONTEXT_MODES, DEFAULT_CONTEXT_MODE } from "./content/contexts.js";
-import { DOCTOR_REFERENCE_MARKDOWN } from "./content/doctor-references.js";
-import {
-  HARNESS_PLAYBOOKS_DIR,
-  harnessPlaybookFileName
-} from "./content/harness-playbooks.js";
 import { validateHookDocument } from "./hook-schema.js";
 import type { HarnessId } from "./types.js";
 import type { DoctorSeverity } from "./doctor-registry.js";
@@ -402,7 +397,7 @@ export async function doctorChecks(projectRoot: string, options: DoctorOptions =
       // Soft max tightened from 650 → 500 after externalising the TDD
       // batch-execution walkthrough and collapsing the duplicate "what
       // goes wrong" lists. Stage skills beyond 500 lines drift into unread
-      // bloat; long-form content belongs under `.cclaw/references/` instead.
+      // bloat; long-form content belongs in shared guidance sections instead.
       const MAX_SKILL_LINES = 500;
       checks.push({
         name: `skill:${stage}:min_lines`,
@@ -464,54 +459,6 @@ export async function doctorChecks(projectRoot: string, options: DoctorOptions =
         missingMeta.length === 0
           ? `${metaSkillPath} contains all required routing signals`
           : `${metaSkillPath} missing signals: ${missingMeta.join(", ")}`
-    });
-  }
-
-  // Harness tool-map references (A.1#4) must always be present — stage skills
-  // cite the paths by name.
-  const harnessRefDir = path.join(projectRoot, RUNTIME_ROOT, "references", "harness-tools");
-  const harnessRefFiles = ["README.md", "claude.md", "cursor.md", "opencode.md", "codex.md"];
-  for (const fileName of harnessRefFiles) {
-    const refPath = path.join(harnessRefDir, fileName);
-    checks.push({
-      name: `harness_tool_ref:${fileName.replace(/\.md$/, "")}`,
-      ok: await exists(refPath),
-      details: refPath
-    });
-  }
-
-  // Per-stage example references (A.2#8, progressive disclosure). Each stage
-  // skill's Examples section points here; the file MUST exist or the pointer
-  // is a dangling link.
-  const stageRefDir = path.join(projectRoot, RUNTIME_ROOT, "references", "stages");
-  for (const stage of FLOW_STAGES) {
-    const refPath = path.join(stageRefDir, `${stage}-examples.md`);
-    checks.push({
-      name: `stage_examples_ref:${stage}`,
-      ok: await exists(refPath),
-      details: refPath
-    });
-  }
-  checks.push({
-    name: "harness_ref:matrix",
-    ok: await exists(path.join(projectRoot, RUNTIME_ROOT, "references", "harnesses.md")),
-    details: `${RUNTIME_ROOT}/references/harnesses.md`
-  });
-
-  const playbookDir = path.join(projectRoot, RUNTIME_ROOT, ...HARNESS_PLAYBOOKS_DIR.split("/"));
-  checks.push({
-    name: "harness_ref:playbooks_index",
-    ok: await exists(path.join(playbookDir, "README.md")),
-    details: `${RUNTIME_ROOT}/${HARNESS_PLAYBOOKS_DIR}/README.md`
-  });
-
-  const doctorRefDir = path.join(projectRoot, RUNTIME_ROOT, "references", "doctor");
-  for (const fileName of Object.keys(DOCTOR_REFERENCE_MARKDOWN)) {
-    const refPath = path.join(doctorRefDir, fileName);
-    checks.push({
-      name: `doctor_ref:${fileName.replace(/\.md$/, "")}`,
-      ok: await exists(refPath),
-      details: refPath
     });
   }
 
@@ -627,17 +574,6 @@ export async function doctorChecks(projectRoot: string, options: DoctorOptions =
         });
       }
     }
-    const playbookFile = path.join(
-      projectRoot,
-      RUNTIME_ROOT,
-      ...HARNESS_PLAYBOOKS_DIR.split("/"),
-      harnessPlaybookFileName(harness)
-    );
-    checks.push({
-      name: `harness_ref:playbook:${harness}`,
-      ok: await exists(playbookFile),
-      details: `${RUNTIME_ROOT}/${HARNESS_PLAYBOOKS_DIR}/${harnessPlaybookFileName(harness)}`
-    });
   }
 
   const agentsFile = path.join(projectRoot, "AGENTS.md");

@@ -78,7 +78,6 @@ export const REQUIRED_DIRS = [
   RUNTIME_ROOT,
   `${RUNTIME_ROOT}/commands`,
   `${RUNTIME_ROOT}/skills`,
-  `${RUNTIME_ROOT}/contexts`,
   `${RUNTIME_ROOT}/templates`,
   `${RUNTIME_ROOT}/artifacts`,
   `${RUNTIME_ROOT}/state`,

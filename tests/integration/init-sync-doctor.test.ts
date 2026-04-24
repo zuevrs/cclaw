@@ -146,19 +146,10 @@ describe("install lifecycle", { timeout: 30_000 }, () => {
       opencodeGap?.remediation?.some((line) => line.includes("permission.question"))
     ).toBe(true);
 
-    // Parity playbooks must be materialised for every supported harness.
-    for (const harness of ["claude", "cursor", "opencode", "codex"] as const) {
-      const playbookPath = path.join(
-        root,
-        `.cclaw/references/harnesses/${harness}-playbook.md`
-      );
-      const body = await fs.readFile(playbookPath, "utf8");
-      expect(body).toContain(`harness: ${harness}`);
-      expect(body).toContain("# ");
-    }
+    // Runtime simplification: `.cclaw/references/` is no longer materialized.
     await expect(
-      fs.stat(path.join(root, ".cclaw/references/harnesses/README.md"))
-    ).resolves.toBeDefined();
+      fs.stat(path.join(root, ".cclaw/references"))
+    ).rejects.toBeDefined();
 
     const claudeHooks = JSON.parse(
       await fs.readFile(path.join(root, ".claude/hooks/hooks.json"), "utf8")

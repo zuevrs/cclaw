@@ -51,12 +51,6 @@ import {
 import { nodeHookRuntimeScript } from "./content/node-hooks.js";
 import { META_SKILL_NAME, usingCclawSkillMarkdown } from "./content/meta-skill.js";
 import {
-  decisionProtocolMarkdown,
-  completionProtocolMarkdown,
-  ethosProtocolMarkdown
-} from "./content/protocols.js";
-import { FLOW_MAP_REL_PATH, flowMapMarkdown } from "./content/flow-map.js";
-import {
   ARTIFACT_TEMPLATES,
   CURSOR_WORKFLOW_RULE_MDC,
   RULEBOOK_MARKDOWN,
@@ -70,12 +64,7 @@ import {
   EVAL_RUBRIC_FILES,
   EVAL_RUBRICS_README
 } from "./content/eval-scaffold.js";
-import { TDD_BATCH_WALKTHROUGH_MARKDOWN, stageSkillFolder, stageSkillMarkdown } from "./content/skills.js";
-import { stageCommonGuidanceMarkdown } from "./content/stage-common-guidance.js";
-import {
-  STAGE_EXAMPLES_REFERENCE_DIR,
-  stageExamplesReferenceMarkdown
-} from "./content/examples.js";
+import { stageSkillFolder, stageSkillMarkdown } from "./content/skills.js";
 import {
   LANGUAGE_RULE_PACK_DIR,
   LANGUAGE_RULE_PACK_FILES,
@@ -86,20 +75,7 @@ import {
 } from "./content/utility-skills.js";
 import { RESEARCH_PLAYBOOKS } from "./content/research-playbooks.js";
 import {
-  HARNESS_TOOL_REFS_DIR,
-  HARNESS_TOOL_REFS_INDEX_MD,
-  harnessToolRefMarkdown
-} from "./content/harness-tool-refs.js";
-import { DOCTOR_REFERENCE_MARKDOWN } from "./content/doctor-references.js";
-import {
-  harnessDocsOverviewMarkdown,
-  harnessIntegrationDocMarkdown
-} from "./content/harness-doc.js";
-import {
-  HARNESS_PLAYBOOKS_DIR,
-  harnessPlaybookFileName,
-  harnessPlaybookMarkdown,
-  harnessPlaybooksIndexMarkdown
+  HARNESS_PLAYBOOKS_DIR
 } from "./content/harness-playbooks.js";
 import { HOOK_EVENTS_BY_HARNESS, HOOK_SEMANTIC_EVENTS } from "./content/hook-events.js";
 import { createInitialFlowState, type FlowState } from "./flow-state.js";
@@ -402,32 +378,7 @@ async function writeSkills(projectRoot: string, config?: CclawConfig): Promise<v
       runtimePath(projectRoot, "skills", folder, "SKILL.md"),
       stageSkillMarkdown(stage, skillTrack)
     );
-
-    // Progressive disclosure (A.2#8): materialize the full example artifact as
-    // a sibling reference file. The stage skill only links to it; agents load
-    // the reference on demand.
-    const referenceMarkdown = stageExamplesReferenceMarkdown(stage);
-    if (referenceMarkdown) {
-      const referenceDir = STAGE_EXAMPLES_REFERENCE_DIR.split("/");
-      await writeFileSafe(
-        runtimePath(projectRoot, ...referenceDir, `${stage}-examples.md`),
-        referenceMarkdown
-      );
-    }
   }
-
-  // Progressive disclosure for the TDD Batch Execution walkthrough (A.1#1).
-  // The detailed 3-task transcript lives next to stage examples so the
-  // always-rendered TDD skill stays under the line-budget and the reference
-  // is loaded on demand.
-  await writeFileSafe(
-    runtimePath(projectRoot, ...STAGE_EXAMPLES_REFERENCE_DIR.split("/"), "tdd-batch-walkthrough.md"),
-    TDD_BATCH_WALKTHROUGH_MARKDOWN
-  );
-  await writeFileSafe(
-    runtimePath(projectRoot, ...STAGE_EXAMPLES_REFERENCE_DIR.split("/"), "common-guidance.md"),
-    stageCommonGuidanceMarkdown()
-  );
 
   // Utility skills (not flow stages)
   await writeFileSafe(
@@ -513,22 +464,6 @@ async function writeSkills(projectRoot: string, config?: CclawConfig): Promise<v
     runtimePath(projectRoot, "skills", META_SKILL_NAME, "SKILL.md"),
     usingCclawSkillMarkdown()
   );
-  await writeFileSafe(
-    runtimePath(projectRoot, "references", "protocols", "decision.md"),
-    decisionProtocolMarkdown()
-  );
-  await writeFileSafe(
-    runtimePath(projectRoot, "references", "protocols", "completion.md"),
-    completionProtocolMarkdown()
-  );
-  await writeFileSafe(
-    runtimePath(projectRoot, "references", "protocols", "ethos.md"),
-    ethosProtocolMarkdown()
-  );
-  await writeFileSafe(
-    runtimePath(projectRoot, "references", "flow-map.md"),
-    flowMapMarkdown()
-  );
 
   for (const folder of UTILITY_SKILL_FOLDERS) {
     const generator = UTILITY_SKILL_MAP[folder];
@@ -562,51 +497,6 @@ async function writeSkills(projectRoot: string, config?: CclawConfig): Promise<v
     }
   }
 
-  // Per-harness tool maps (A.1#4). One reference file per supported harness
-  // plus an index; stage/utility skills cite these instead of hardcoding
-  // tool names inline.
-  const harnessIds: HarnessId[] = ["claude", "cursor", "opencode", "codex"];
-  const harnessRefsDir = HARNESS_TOOL_REFS_DIR.split("/");
-  await writeFileSafe(
-    runtimePath(projectRoot, ...harnessRefsDir, "README.md"),
-    HARNESS_TOOL_REFS_INDEX_MD
-  );
-  for (const harness of harnessIds) {
-    await writeFileSafe(
-      runtimePath(projectRoot, ...harnessRefsDir, `${harness}.md`),
-      harnessToolRefMarkdown(harness)
-    );
-  }
-
-  const doctorRefsDir = ["references", "doctor"] as const;
-  for (const [fileName, markdown] of Object.entries(DOCTOR_REFERENCE_MARKDOWN)) {
-    await writeFileSafe(runtimePath(projectRoot, ...doctorRefsDir, fileName), markdown);
-  }
-
-  await writeFileSafe(
-    runtimePath(projectRoot, "references", "harnesses.md"),
-    harnessIntegrationDocMarkdown()
-  );
-  await writeFileSafe(
-    runtimePath(projectRoot, "references", "harnesses-overview.md"),
-    harnessDocsOverviewMarkdown()
-  );
-
-  // Per-harness parity playbooks. Generated for every supported harness
-  // regardless of which harnesses the project installed — the index always
-  // resolves, and doctor only asserts presence of the installed harnesses'
-  // playbooks (see runtime-integrity checks).
-  const playbookDirSegments = HARNESS_PLAYBOOKS_DIR.split("/");
-  await writeFileSafe(
-    runtimePath(projectRoot, ...playbookDirSegments, "README.md"),
-    harnessPlaybooksIndexMarkdown()
-  );
-  for (const harness of harnessIds) {
-    await writeFileSafe(
-      runtimePath(projectRoot, ...playbookDirSegments, harnessPlaybookFileName(harness)),
-      harnessPlaybookMarkdown(harness)
-    );
-  }
 }
 
 async function writeUtilityCommands(projectRoot: string, config: CclawConfig): Promise<void> {
@@ -1360,6 +1250,19 @@ async function cleanLegacyArtifacts(projectRoot: string): Promise<void> {
   ]) {
     try {
       await fs.rm(legacyRuntimeFile, { force: true });
+    } catch {
+      // best-effort cleanup
+    }
+  }
+
+  // Runtime simplification cleanup: these folders were generated in older
+  // releases and are now intentionally removed from user projects.
+  for (const legacyRuntimeDir of [
+    runtimePath(projectRoot, "references"),
+    runtimePath(projectRoot, "contexts")
+  ]) {
+    try {
+      await fs.rm(legacyRuntimeDir, { recursive: true, force: true });
     } catch {
       // best-effort cleanup
     }

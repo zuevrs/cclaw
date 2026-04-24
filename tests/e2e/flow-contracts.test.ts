@@ -100,10 +100,6 @@ describe("flow command contracts", () => {
     const root = await createTempProject("delegation-protocol");
     await initCclaw({ projectRoot: root });
 
-    const completionProtocol = await fs.readFile(
-      path.join(root, ".cclaw/references/protocols/completion.md"),
-      "utf8"
-    );
     const scopeSkill = await fs.readFile(
       path.join(root, ".cclaw/skills/scope-shaping/SKILL.md"),
       "utf8"
@@ -117,8 +113,6 @@ describe("flow command contracts", () => {
       "utf8"
     );
 
-    expect(completionProtocol).toContain("mandatory delegations are completed");
-    expect(completionProtocol).toContain("Run `npx cclaw doctor`");
     expect(scopeSkill).toContain("`.cclaw/references/protocols/completion.md`");
     expect(scopeSkill).toContain("`mandatory delegations`");
     expect(scopeSkill).toContain("`planner`");
@@ -135,14 +129,9 @@ describe("flow command contracts", () => {
       path.join(root, ".cclaw/skills/using-cclaw/SKILL.md"),
       "utf8"
     );
-    const decisionProtocol = await fs.readFile(
-      path.join(root, ".cclaw/references/protocols/decision.md"),
-      "utf8"
-    );
     expect(metaSkill).toContain("Protocol references");
     expect(metaSkill).toContain(".cclaw/references/protocols/decision.md");
     expect(metaSkill).toContain(".cclaw/references/protocols/completion.md");
-    expect(decisionProtocol).toContain("# Decision Protocol");
   });
 
   it("requires spec skill to chunk acceptance criteria for sign-off", async () => {
@@ -162,49 +151,9 @@ describe("flow command contracts", () => {
     );
   });
 
-  it("encodes the Decision Protocol skeleton and completeness calibration", async () => {
-    const root = await createTempProject("decision-skeleton");
-    await initCclaw({ projectRoot: root });
-
-    const decisionProtocol = await fs.readFile(
-      path.join(root, ".cclaw/references/protocols/decision.md"),
-      "utf8"
-    );
-
-    expect(decisionProtocol).toContain("## Decision skeleton");
-    expect(decisionProtocol).toContain("Re-ground");
-    expect(decisionProtocol).toContain("Simplify");
-    expect(decisionProtocol).toContain("RECOMMENDATION: Choose [Letter]");
-    expect(decisionProtocol).toContain("Completeness: X/10");
-
-    expect(decisionProtocol).toContain("## Completeness calibration");
-    expect(decisionProtocol).toContain("**10** = complete implementation");
-    expect(decisionProtocol).toContain("**3** = shortcut");
-
-    expect(decisionProtocol).toContain(
-      "Log the chosen letter into the stage artifact's decision log"
-    );
-  });
-
-  it("writes the consolidated flow-map reference and links from meta-skill and /cc-next", async () => {
+  it("keeps flow-map references in meta-skill and /cc-next pointers", async () => {
     const root = await createTempProject("flow-map-ref");
     await initCclaw({ projectRoot: root });
-
-    const flowMap = await fs.readFile(
-      path.join(root, ".cclaw/references/flow-map.md"),
-      "utf8"
-    );
-    expect(flowMap).toContain("# cclaw Flow Map");
-    expect(flowMap).toContain("## Stages (8)");
-    expect(flowMap).toContain("brainstorm");
-    expect(flowMap).toContain("ship");
-    expect(flowMap).toContain("/cc-view");
-    expect(flowMap).toContain("/cc-ops");
-    expect(flowMap).toContain("## Ralph Loop");
-    expect(flowMap).toContain("## Compound readiness");
-    expect(flowMap).toContain("## Key state files");
-    expect(flowMap).toContain(".cclaw/state/ralph-loop.json");
-    expect(flowMap).toContain(".cclaw/state/compound-readiness.json");
 
     const metaSkill = await fs.readFile(
       path.join(root, ".cclaw/skills/using-cclaw/SKILL.md"),
