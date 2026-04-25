@@ -2,6 +2,8 @@ import fs from "node:fs/promises";
 import { describe, expect, it, vi } from "vitest";
 import {
   REVIEW_LOOP_CHECKLISTS,
+  reviewLoopPolicySummary,
+  reviewLoopSecondOpinionSummary,
   aggregateQualityScore,
   buildOutsideVoiceReviewPrompt,
   createSecondOpinionDispatcher,
@@ -28,6 +30,12 @@ describe("review-loop contracts", () => {
     expect(design).toHaveLength(5);
     expect(new Set(scope.map((row) => row.id)).size).toBe(5);
     expect(new Set(design.map((row) => row.id)).size).toBe(5);
+  });
+
+  it("renders compact outside-voice policy summaries", () => {
+    expect(reviewLoopPolicySummary("scope")).toContain("quality score >= 0.8");
+    expect(reviewLoopPolicySummary("design")).toContain("max 3 iterations");
+    expect(reviewLoopSecondOpinionSummary("scope")).toContain("externalSecondOpinion.enabled");
   });
 
   it("aggregates weighted quality scores per checklist dimension", () => {

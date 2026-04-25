@@ -1,5 +1,9 @@
 import type { StageSchemaInput } from "./schema-types.js";
-import { REVIEW_LOOP_CHECKLISTS } from "../review-loop.js";
+import {
+  REVIEW_LOOP_CHECKLISTS,
+  reviewLoopPolicySummary,
+  reviewLoopSecondOpinionSummary
+} from "../review-loop.js";
 import { decisionProtocolInstruction } from "../decision-protocol.js";
 
 // ---------------------------------------------------------------------------
@@ -61,7 +65,7 @@ export const SCOPE: StageSchemaInput = {
       "**Mode Selection** — Present expand/selective/hold/reduce with recommendation and default heuristic: greenfield -> expand, feature enhancement -> selective, bugfix/hotfix/refactor -> hold, broad blast radius (>15 files or multi-team impact) -> reduce.",
       "**Mode-Specific Analysis** — After mode is selected, run the matching analysis: EXPAND (10x and delight opportunities), SELECTIVE (hold-scope rigor then cherry-picked expansions), HOLD (minimum-change-set hardening), REDUCE (ruthless cuts and follow-up split).",
       "**Plant-seed shelf (optional)** — when a deferred/out-of-scope idea still has upside, capture it as `.cclaw/seeds/SEED-<YYYY-MM-DD>-<slug>.md` with trigger_when and action instead of losing it in prose-only notes.",
-      "**Outside Voice + Spec Review Loop** — run an adversarial second-opinion pass on the scope artifact, reconcile findings, and iterate up to 3 cycles or until quality score >= 0.8. When `.cclaw/config.yaml::reviewLoop.externalSecondOpinion.enabled` is true, run an additional external-model pass and explicitly resolve score/finding disagreements.",
+      `**Outside Voice + Spec Review Loop** — ${reviewLoopPolicySummary("scope")} ${reviewLoopSecondOpinionSummary("scope")}`,
       "**Error and Rescue Registry** — For each capability: what breaks, how detected, what fallback."
     ],
     interactionProtocol: [
@@ -77,8 +81,8 @@ export const SCOPE: StageSchemaInput = {
       "Present one structural scope issue at a time for decision only when it changes the contract. Otherwise state the assumption and move on.",
       "Record explicit in-scope and out-of-scope contract.",
       "Once the user accepts or rejects a recommendation, commit fully. Do not re-argue.",
-      "Before final scope approval, run an adversarial outside-voice review and reconcile every finding explicitly (accept/reject/defer with rationale).",
-      "Bound review-loop retries: max 3 iterations or early stop at quality score >= 0.8.",
+      `Before final scope approval, run an adversarial outside-voice review and reconcile every finding explicitly (accept/reject/defer with rationale) using ${reviewLoopPolicySummary("scope")}`,
+      `Bound review-loop retries with ${reviewLoopPolicySummary("scope")}`,
       "Produce a clean scope summary after all issues are resolved.",
       "**STOP.** Wait for explicit user approval of scope contract before advancing to design.",
       "**STOP BEFORE ADVANCE.** Mandatory delegation `planner` must be marked completed or explicitly waived in `.cclaw/state/delegation-log.json`. Then close the stage via `node .cclaw/hooks/stage-complete.mjs scope` (do not hand-edit `.cclaw/state/flow-state.json`)."
@@ -93,7 +97,7 @@ export const SCOPE: StageSchemaInput = {
       "Run mode-specific analysis that matches the selected scope mode.",
       "Optionally plant high-upside deferred ideas into `.cclaw/seeds/SEED-<YYYY-MM-DD>-<slug>.md` with trigger_when/action notes.",
       "Walk through scope review sections one at a time.",
-      "Run outside-voice review loop only when scope is complex/high-risk or configured; otherwise do a short adversarial self-check.",
+      `Run outside-voice review loop only when scope is complex/high-risk or configured; otherwise do a short adversarial self-check. If loop runs, enforce ${reviewLoopPolicySummary("scope")}`,
       "Write explicit scope contract, discretion areas, and deferred items.",
       "Freeze non-negotiable boundaries as stable Locked Decisions (D-XX IDs).",
       "Produce scope summary plus completion dashboard (section status, critical gaps, resolved decisions, unresolved items or `None`)."
@@ -112,8 +116,8 @@ export const SCOPE: StageSchemaInput = {
       "Locked Decisions section lists stable D-XX IDs for non-negotiable boundaries.",
       "Premise challenge findings documented.",
       "Outside Voice findings and dispositions are recorded (accept/reject/defer with rationale).",
-      "Spec review loop summary includes iteration count and quality score trajectory.",
-      "When `.cclaw/config.yaml::reviewLoop.externalSecondOpinion.enabled` is true, external second-opinion disposition is captured.",
+      `Spec review loop summary includes iteration count and quality score trajectory per ${reviewLoopPolicySummary("scope")}`,
+      reviewLoopSecondOpinionSummary("scope"),
       "Deferred items list with one-line rationale for each.",
       "When an upside deferred idea is parked, a seed file is created under `.cclaw/seeds/` and referenced in the artifact.",
       "Completion dashboard lists per-section status, critical/open gaps, decision count, and unresolved items (or `None`)."
@@ -173,7 +177,7 @@ export const SCOPE: StageSchemaInput = {
       { section: "Deferred Items", required: false, validationRule: "Each item has one-line rationale. If empty, state 'None' explicitly." },
       { section: "Error & Rescue Registry", required: false, validationRule: "Each scoped capability has: failure mode, detection method, fallback decision." },
       { section: "Outside Voice Findings", required: false, validationRule: "Must list external/adversarial findings and disposition (accept/reject/defer) with rationale." },
-      { section: "Spec Review Loop", required: false, validationRule: "Must record iterations (max 3), quality score per iteration, stop reason, and unresolved concerns." },
+      { section: "Spec Review Loop", required: false, validationRule: `Must record iterations, quality score per iteration, stop reason, and unresolved concerns. Enforce ${reviewLoopPolicySummary("scope")}` },
       { section: "Completion Dashboard", required: true, validationRule: "Lists per-review-section status, count of critical/open gaps, resolved decisions, and unresolved decisions (or 'None')." },
       { section: "Scope Summary", required: true, validationRule: "Clean summary: mode, strongest challenges, recommended path, accepted scope, deferred, excluded." },
       { section: "Dream State Mapping", required: false, validationRule: "If present (complex projects): CURRENT STATE, THIS PLAN, 12-MONTH IDEAL, and alignment verdict." },

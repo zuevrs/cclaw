@@ -105,6 +105,8 @@ workflow tool.
   prose where schema and validator tests already cover the contract.
 - Decision Protocol / structured-ask fallback wording is now shared across
   scope/design/review/ship/ideate to reduce drift between stage prompts.
+- Scope/design outside-voice loop guidance now renders from compact policy helpers
+  in `review-loop.ts` instead of repeated prose blocks.
 
 ### Preserved
 

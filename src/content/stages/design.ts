@@ -1,5 +1,9 @@
 import type { StageSchemaInput } from "./schema-types.js";
-import { REVIEW_LOOP_CHECKLISTS } from "../review-loop.js";
+import {
+  REVIEW_LOOP_CHECKLISTS,
+  reviewLoopPolicySummary,
+  reviewLoopSecondOpinionSummary
+} from "../review-loop.js";
 import { decisionProtocolInstruction } from "../decision-protocol.js";
 
 // ---------------------------------------------------------------------------
@@ -57,7 +61,7 @@ export const DESIGN: StageSchemaInput = {
       "Observability & Debuggability Review — logging, metrics, traces, alerts, and on-call diagnosis path for each critical failure mode.",
       "Deployment & Rollout Review — migration sequencing, flag strategy, rollback plan, compatibility window, and post-deploy verification steps.",
       "Parallelization Strategy — If multiple independent modules, produce dependency table: which can be built in parallel? Where are conflict risks? Flag shared-state modules.",
-      "Critic pass — run an adversarial second-opinion review of the chosen architecture, hidden coupling, failure modes, and cheaper alternatives. Iterate up to 3 cycles or until quality score >= 0.8 only when findings are material. When `.cclaw/config.yaml::reviewLoop.externalSecondOpinion.enabled` is true, run an additional external-model pass and explicitly resolve score/finding disagreements.",
+      `Critic pass — run an adversarial second-opinion review of the chosen architecture, hidden coupling, failure modes, and cheaper alternatives. ${reviewLoopPolicySummary("design")} ${reviewLoopSecondOpinionSummary("design")}`,
       "Stale Diagram Audit (opt-in) — when `.cclaw/config.yaml::optInAudits.staleDiagramAudit` is true, compare blast-radius file mtimes against diagram-marker freshness and flag stale diagrams before design lock.",
       "Plant-seed shelf (optional) — when an unresolved/deferred design idea has upside, capture it as `.cclaw/seeds/SEED-<YYYY-MM-DD>-<slug>.md` with trigger_when and action so it can be recalled on future `/cc` starts.",
       "Unresolved Decisions — List any design decisions that could not be resolved in this session. For each: what information is missing? Who can provide it? What is the default if no answer comes?",
@@ -83,7 +87,7 @@ export const DESIGN: StageSchemaInput = {
       "When the user's proposed architecture is suboptimal, say so directly. Offer the alternative with concrete trade-offs, do not bury criticism in praise.",
       "When encountering ambiguity, classify it before acting: (A) ask user for missing info, (B) enumerate interpretations and pick one with justification, (C) propose hypothesis with validation path. Do NOT silently resolve ambiguity.",
       "Before final approval, run the critic pass and reconcile each material finding (accept/reject/defer) with rationale.",
-      "Bound review-loop retries: max 3 iterations or early stop at quality score >= 0.8."
+      `Bound review-loop retries with ${reviewLoopPolicySummary("design")}`
     ],
     process: [
       "Read upstream artifacts (brainstorm, scope).",
@@ -99,7 +103,7 @@ export const DESIGN: StageSchemaInput = {
       "Define test coverage strategy and performance budget.",
       "Produce required outputs: NOT-in-scope section, What-already-exists section, tier-required diagrams with markers, failure mode table.",
       "Optionally plant unresolved high-upside ideas into `.cclaw/seeds/SEED-<YYYY-MM-DD>-<slug>.md` with trigger_when/action notes.",
-      "Run critic pass / outside-voice review loop when risk warrants it; reconcile deltas and record material accepted/rejected/deferred findings.",
+      `Run critic pass / outside-voice review loop when risk warrants it; reconcile deltas and record material accepted/rejected/deferred findings using ${reviewLoopPolicySummary("design")}`,
       "Produce completion dashboard: status per review section, critical/open gap counts, decision count, unresolved items.",
       "Write design lock artifact for downstream spec/plan."
     ],
@@ -119,8 +123,8 @@ export const DESIGN: StageSchemaInput = {
       "Security & threat model findings are documented with mitigations.",
       "Observability and deployment plans are explicit for critical flows.",
       "Outside-voice findings and dispositions are recorded (accept/reject/defer).",
-      "Spec review loop summary includes iteration count and quality score trajectory.",
-      "When `.cclaw/config.yaml::reviewLoop.externalSecondOpinion.enabled` is true, external second-opinion disposition is captured.",
+      `Spec review loop summary includes iteration count and quality score trajectory per ${reviewLoopPolicySummary("design")}`,
+      reviewLoopSecondOpinionSummary("design"),
       "Test strategy includes unit/integration/e2e expectations.",
       "When a high-upside idea is deferred, a seed file is created under `.cclaw/seeds/` and referenced in the artifact.",
       "NOT-in-scope section produced.",
@@ -191,7 +195,7 @@ export const DESIGN: StageSchemaInput = {
       { section: "Deployment & Rollout", required: true, validationRule: "Must define migration/flag strategy, rollback plan, and post-deploy verification steps." },
       { section: "What Already Exists", required: false, validationRule: "For each sub-problem: existing code/library found (Layer 1-3/EUREKA label), reuse decision, and adaptation needed." },
       { section: "Outside Voice Findings", required: false, validationRule: "Critic pass: list adversarial findings and disposition (accept/reject/defer) with rationale per material finding." },
-      { section: "Spec Review Loop", required: false, validationRule: "Record iteration table (max 3) with quality score per iteration, stop reason, and unresolved concerns." },
+      { section: "Spec Review Loop", required: false, validationRule: `Record iteration table with quality score per iteration, stop reason, and unresolved concerns. Enforce ${reviewLoopPolicySummary("design")}` },
       { section: "NOT in scope", required: false, validationRule: "Work considered and explicitly deferred with one-line rationale." },
       { section: "Parallelization Strategy", required: false, validationRule: "If multi-module: dependency table, parallel lanes, conflict flags." },
       { section: "Unresolved Decisions", required: false, validationRule: "If any: what info is missing, who provides it, default if unanswered." },
