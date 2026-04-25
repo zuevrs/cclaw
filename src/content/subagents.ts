@@ -1,3 +1,6 @@
+import type { FlowStage } from "../types.js";
+import { stageDelegationSummary } from "./stage-schema.js";
+
 /**
  * Markdown content generators for Cclaw’s subagent orchestration skills and enhanced
  * specialist payloads. Cclaw materializes static instructions — this module does not
@@ -13,6 +16,28 @@ const SUBAGENT_AGENT_NAMES = [
 ] as const;
 
 type SubagentCclawAgentName = (typeof SUBAGENT_AGENT_NAMES)[number];
+
+function formatAgentList(agents: string[]): string {
+  return agents.length > 0 ? agents.join(", ") : "none";
+}
+
+function automaticStageDelegationTable(): string {
+  const summary = stageDelegationSummary("standard");
+  const rows = summary.map((row) => {
+    return `| ${row.stage} | ${formatAgentList(row.mandatoryAgents)} | ${formatAgentList(row.proactiveAgents)} |`;
+  }).join("\n");
+
+  return `| Stage | Mandatory agents | Proactive agents |
+|---|---|---|
+${rows}`;
+}
+
+type StageAgentSummary = ReturnType<typeof stageDelegationSummary>[number];
+
+function stageSummary(stage: FlowStage): StageAgentSummary {
+  return stageDelegationSummary("standard").find((row) => row.stage === stage)
+    ?? { stage, mandatoryAgents: [], proactiveAgents: [], primaryAgents: [] };
+}
 
 export function subagentDrivenDevSkill(): string {
   return `---
@@ -34,18 +59,15 @@ This pattern is intentionally **Superpowers-style**: cheap parallelism where it 
 
 ## Automatic Stage Delegation in Cclaw
 
-For cclaw flow stages, machine-only specialist work should auto-dispatch without waiting for a manual user request:
+For cclaw flow stages, machine-only specialist work should auto-dispatch without waiting for a manual user request. The table below is generated from the canonical stage dispatch registry:
 
-- **design/plan:** planner
-- **tdd:** test-author
-- **review:** reviewer + security-reviewer (security-reviewer is always mandatory; produce an explicit no-change attestation when no trust boundaries moved)
-- **ship:** doc-updater
+${automaticStageDelegationTable()}
 
 Human input remains mandatory only at explicit approval gates (plan approval, user challenge resolution, release finalization mode).
 
 ### Review dispatch protocol
 
-In review stage, run one reviewer and one security-reviewer by default:
+In review stage, run mandatory specialists \`${formatAgentList(stageSummary("review").mandatoryAgents)}\` by default:
 
 1. \`reviewer\` owns Layer 1 spec compliance plus integrated Layer 2 tags (correctness, performance, architecture, external-safety).
 2. \`security-reviewer\` owns the mandatory security sweep or no-change attestation.
@@ -114,9 +136,9 @@ Concrete per-stage rules so the controller does not have to guess which tier fit
 | design | planner (always) | security-reviewer (if trust boundary touched) | run \`research/framework-docs-lookup.md\` + \`research/best-practices-lookup.md\` in-thread | escalate one specialist to \`deep\` only if a failure mode is Critical-severity |
 | spec | — | reviewer (if spec > 200 lines or multiple ACs) | — | escalate to \`deep\` only for spec ↔ design contradictions |
 | plan | planner (solo, always) | — | — | never fan out at plan stage; one owner for dependency graph |
-| tdd | — | test-author (per slice, carrying RED/GREEN/REFACTOR evidence) · reviewer (slice-local only when sliceReview triggers) | doc-updater (API surface changes) | escalate to \`deep\` only when a RED test cannot be expressed (design leak) |
-| review | — | reviewer · security-reviewer (both mandatory) | doc-updater for release-note drift checks | escalate a \`balanced\` reviewer to \`deep\` only when two reviewers disagree on severity |
-| ship | — | security-reviewer (if blast radius is high) | doc-updater (changelog/migration notes) | escalate to \`balanced\` reviewer only if preflight finds a regression |
+| tdd | — | ${formatAgentList(stageSummary("tdd").primaryAgents)} (per slice, carrying RED/GREEN/REFACTOR evidence) · reviewer (slice-local only when sliceReview triggers) | doc-updater (API surface changes) | escalate to \`deep\` only when a RED test cannot be expressed (design leak) |
+| review | — | ${formatAgentList(stageSummary("review").mandatoryAgents)} (both mandatory) | doc-updater for release-note drift checks | escalate a \`balanced\` reviewer to \`deep\` only when two reviewers disagree on severity |
+| ship | — | ${formatAgentList(stageSummary("ship").proactiveAgents)} (if blast radius is high) | doc-updater (changelog/migration notes) | escalate to \`balanced\` reviewer only if preflight finds a regression |
 
 **De-escalation rules (avoid over-spending):**
 - If a \`deep\` planner run returns low-uncertainty output (single unambiguous plan), do **not** add a second \`deep\` pass in the same stage.

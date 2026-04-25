@@ -5,7 +5,7 @@ import { SHIP_FINALIZATION_MODES } from "../../src/constants.js";
 import { lintArtifact } from "../../src/artifact-linter.js";
 import { CCLAW_AGENTS } from "../../src/content/core-agents.js";
 import { stageExamples, stageFullArtifactExampleMarkdown } from "../../src/content/examples.js";
-import { mandatoryDelegationsForStage, stageAutoSubagentDispatch, stagePolicyNeedles, stageSchema } from "../../src/content/stage-schema.js";
+import { mandatoryDelegationsForStage, stageAutoSubagentDispatch, stageDelegationSummary, stagePolicyNeedles, stageSchema } from "../../src/content/stage-schema.js";
 import { stageSkillMarkdown } from "../../src/content/skills.js";
 import { enhancedAgentBody } from "../../src/content/subagents.js";
 import { ARTIFACT_TEMPLATES } from "../../src/content/templates.js";
@@ -43,6 +43,20 @@ describe("stage schema and subagent alignment", () => {
     expect(mandatoryDelegationsForStage("scope", "standard")).toContain("planner");
     expect(mandatoryDelegationsForStage("review", "lightweight")).toContain("reviewer");
     expect(mandatoryDelegationsForStage("ship", "lightweight")).toContain("doc-updater");
+  });
+
+  it("exposes canonical delegation summaries per stage", () => {
+    const standard = stageDelegationSummary("standard");
+    const review = standard.find((row) => row.stage === "review");
+    expect(review?.mandatoryAgents).toEqual(["reviewer", "security-reviewer"]);
+    expect(review?.primaryAgents).toContain("reviewer");
+
+    const lightweight = stageDelegationSummary("lightweight");
+    const scope = lightweight.find((row) => row.stage === "scope");
+    expect(scope?.mandatoryAgents).toEqual([]);
+
+    const tdd = lightweight.find((row) => row.stage === "tdd");
+    expect(tdd?.mandatoryAgents).toEqual(["test-author"]);
   });
 
   it("keeps tdd dispatch to one mandatory test-author evidence cycle", () => {

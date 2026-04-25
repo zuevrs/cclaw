@@ -86,6 +86,59 @@ const COMPLEXITY_TIER_ORDER: Record<StageComplexityTier, number> = {
   deep: 2
 };
 
+export interface StageDelegationSummary {
+  stage: FlowStage;
+  mandatoryAgents: string[];
+  proactiveAgents: string[];
+  primaryAgents: string[];
+}
+
+function dedupeAgentsInOrder(agents: string[]): string[] {
+  const out: string[] = [];
+  const seen = new Set<string>();
+  for (const agent of agents) {
+    if (seen.has(agent)) continue;
+    seen.add(agent);
+    out.push(agent);
+  }
+  return out;
+}
+
+/**
+ * Canonical delegation summary derived from STAGE_AUTO_SUBAGENT_DISPATCH.
+ *
+ * Keep all generated routing surfaces (skills, AGENTS.md) on this helper so
+ * stage->agent defaults are maintained in one place.
+ */
+export function stageDelegationSummary(
+  complexityTier: StageComplexityTier = "standard"
+): StageDelegationSummary[] {
+  const currentTierRank = COMPLEXITY_TIER_ORDER[complexityTier];
+  return FLOW_STAGES.map((stage) => {
+    const eligibleRows = STAGE_AUTO_SUBAGENT_DISPATCH[stage].filter((row) => {
+      const requiredAt = row.requiredAtTier ?? "standard";
+      return currentTierRank >= COMPLEXITY_TIER_ORDER[requiredAt];
+    });
+    const mandatoryAgents = dedupeAgentsInOrder(
+      eligibleRows
+        .filter((row) => row.mode === "mandatory")
+        .map((row) => row.agent)
+    );
+    const proactiveAgents = dedupeAgentsInOrder(
+      eligibleRows
+        .filter((row) => row.mode === "proactive")
+        .map((row) => row.agent)
+    );
+    const primaryAgents = dedupeAgentsInOrder([...mandatoryAgents, ...proactiveAgents]);
+    return {
+      stage,
+      mandatoryAgents,
+      proactiveAgents,
+      primaryAgents
+    };
+  });
+}
+
 function asRecord(value: unknown): Record<string, unknown> | null {
   if (!value || typeof value !== "object" || Array.isArray(value)) {
     return null;
@@ -488,16 +541,9 @@ export function mandatoryDelegationsForStage(
   stage: FlowStage,
   complexityTier: StageComplexityTier = "standard"
 ): string[] {
-  const currentTierRank = COMPLEXITY_TIER_ORDER[complexityTier];
-  return [...new Set(
-    STAGE_AUTO_SUBAGENT_DISPATCH[stage]
-      .filter((d) => d.mode === "mandatory")
-      .filter((d) => {
-        const requiredAt = d.requiredAtTier ?? "standard";
-        return currentTierRank >= COMPLEXITY_TIER_ORDER[requiredAt];
-      })
-      .map((d) => d.agent)
-  )];
+  const summary = stageDelegationSummary(complexityTier)
+    .find((row) => row.stage === stage);
+  return summary ? summary.mandatoryAgents : [];
 }
 
 export function stageSchema(stage: FlowStage, track: FlowTrack = "standard"): StageSchema {
