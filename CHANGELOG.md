@@ -40,6 +40,9 @@ workflow tool.
   Knowledge work remains available through the `learnings` skill, while
   the visible slash-command surface stays at `/cc`, `/cc-next`,
   `/cc-ideate`, and `/cc-view`.
+- Removed an unused TDD batch walkthrough export and the large stage-skill
+  golden snapshot file; contract tests now assert behavioral anchors instead
+  of pinning generated prose.
 
 ### Changed
 
@@ -54,6 +57,12 @@ workflow tool.
   easier to audit without changing upgrade cleanup behavior.
 - Renamed pre-compact semantic coverage from digest wording to compatibility
   wording and aligned harness/view docs with `cclaw doctor --explain`.
+- Compact stage skills now fold inputs and required context into the existing
+  context-loading block, reducing repeated generated sections while preserving
+  the process map, gates, evidence, and artifact validation.
+- Downstream stage artifacts now include a lightweight `Upstream Handoff`
+  section for carried decisions, constraints, open questions, and drift
+  reasons, so agents do not silently rewrite earlier stage choices.
 
 ### Preserved
 
