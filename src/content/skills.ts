@@ -238,10 +238,11 @@ function completionParametersBlock(schema: StageSchema, track: FlowTrack): strin
 - \`artifact\`: \`${RUNTIME_ROOT}/artifacts/${schema.artifactRules.artifactFile}\`
 - \`mandatory delegations\`: ${mandatory}
 - \`completion helper\`: \`node .cclaw/hooks/stage-complete.mjs ${schema.stage}\`
+- \`completion helper with evidence\`: \`node .cclaw/hooks/stage-complete.mjs ${schema.stage} --evidence-json '{"<gate_id>":"<evidence note>"}' --passed=<gate_id>[,<gate_id>]\`
 - Fill \`## Learnings\` before closeout: either \`- None this stage.\` or JSON bullets with required keys \`type\`, \`trigger\`, \`action\`, \`confidence\` (knowledge-schema compatible).
 - Record mandatory delegation completion/waiver in \`${RUNTIME_ROOT}/state/delegation-log.json\` with rationale as needed.
-- Use the completion helper instead of raw \`flow-state.json\` edits (legacy direct edits trigger workflow-guard warnings or strict-mode blocks).
-- Completion protocol: verify required gates, update the artifact, then use the completion helper.
+- Never edit raw \`flow-state.json\` to complete a stage, even in advisory mode; that bypasses validation, gate evidence, and Learnings harvest. If the helper fails, stop and report the exact command/output instead of applying a manual state workaround.
+- Completion protocol: verify required gates, update the artifact, then use the completion helper with \`--evidence-json\` and \`--passed\` for every satisfied gate.
 `;
 }
 

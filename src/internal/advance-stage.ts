@@ -421,6 +421,15 @@ function coerceCandidateFlowState(raw: unknown, fallback: FlowState): FlowState 
   };
 }
 
+function stringifyGateEvidenceValue(value: unknown): string {
+  if (typeof value === "string") return value;
+  if (typeof value === "boolean") return value ? "passed" : "failed";
+  if (typeof value === "number" || typeof value === "bigint") return String(value);
+  if (value === null || value === undefined) return "";
+  if (typeof value === "object") return JSON.stringify(value);
+  return String(value);
+}
+
 function parseEvidenceByGate(raw: string | undefined): Record<string, string> {
   if (!raw || raw.trim().length === 0) {
     return {};
@@ -440,10 +449,9 @@ function parseEvidenceByGate(raw: string | undefined): Record<string, string> {
   }
   const next: Record<string, string> = {};
   for (const [key, value] of Object.entries(parsed as Record<string, unknown>)) {
-    if (typeof value !== "string") continue;
-    const trimmed = value.trim();
-    if (trimmed.length === 0) continue;
-    next[key] = trimmed;
+    const normalized = stringifyGateEvidenceValue(value).trim();
+    if (normalized.length === 0) continue;
+    next[key] = normalized;
   }
   return next;
 }
@@ -499,28 +507,62 @@ function parseAdvanceStageArgs(tokens: string[]): AdvanceStageArgs {
   let waiverReason: string | undefined;
   let quiet = false;
 
-  for (const token of flagTokens) {
+  for (let i = 0; i < flagTokens.length; i += 1) {
+    const token = flagTokens[i]!;
+    const nextToken = flagTokens[i + 1];
     if (token === "--quiet") {
       quiet = true;
       continue;
     }
+    if (token === "--evidence-json") {
+      if (!nextToken || nextToken.startsWith("--")) {
+        throw new Error("--evidence-json requires a JSON object value.");
+      }
+      evidenceJson = nextToken;
+      i += 1;
+      continue;
+    }
     if (token.startsWith("--evidence-json=")) {
-      evidenceJson = token.replace("--evidence-json=", "");
+      evidenceJson = token.slice("--evidence-json=".length);
+      continue;
+    }
+    if (token === "--passed") {
+      if (!nextToken || nextToken.startsWith("--")) {
+        throw new Error("--passed requires a comma-separated gate list.");
+      }
+      passed = [...passed, ...parseCsv(nextToken)];
+      i += 1;
       continue;
     }
     if (token.startsWith("--passed=")) {
-      passed = [...passed, ...parseCsv(token.replace("--passed=", ""))];
+      passed = [...passed, ...parseCsv(token.slice("--passed=".length))];
+      continue;
+    }
+    if (token === "--waive-delegation") {
+      if (!nextToken || nextToken.startsWith("--")) {
+        throw new Error("--waive-delegation requires a comma-separated agent list.");
+      }
+      waiveDelegations = [...waiveDelegations, ...parseCsv(nextToken)];
+      i += 1;
       continue;
     }
     if (token.startsWith("--waive-delegation=")) {
       waiveDelegations = [
         ...waiveDelegations,
-        ...parseCsv(token.replace("--waive-delegation=", ""))
+        ...parseCsv(token.slice("--waive-delegation=".length))
       ];
       continue;
     }
+    if (token === "--waiver-reason") {
+      if (!nextToken || nextToken.startsWith("--")) {
+        throw new Error("--waiver-reason requires a text value.");
+      }
+      waiverReason = nextToken.trim();
+      i += 1;
+      continue;
+    }
     if (token.startsWith("--waiver-reason=")) {
-      waiverReason = token.replace("--waiver-reason=", "").trim();
+      waiverReason = token.slice("--waiver-reason=".length).trim();
       continue;
     }
     throw new Error(`Unknown flag for internal advance-stage: ${token}`);

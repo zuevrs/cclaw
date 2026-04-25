@@ -1,5 +1,13 @@
 # Changelog
 
+## 0.51.2
+
+### Fixed
+
+- Fixed `internal advance-stage` and generated `stage-complete.mjs` compatibility with real shell usage by accepting both `--evidence-json=<json>` and `--evidence-json <json>` forms.
+- Coerced boolean/object/number gate evidence JSON values into stored evidence strings so copied completion commands do not silently drop non-string evidence.
+- Strengthened generated stage completion guidance to stop on helper failures instead of manually editing `flow-state.json`, preserving validation and `## Learnings` harvest.
+
 ## 0.51.1
 
 ### Fixed
