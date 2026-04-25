@@ -6,8 +6,7 @@ import {
   CCLAW_VERSION,
   FLOW_VERSION,
   REQUIRED_DIRS,
-  RUNTIME_ROOT,
-  UTILITY_COMMANDS
+  RUNTIME_ROOT
 } from "./constants.js";
 import {
   writeConfig,
@@ -17,26 +16,11 @@ import {
   detectLanguageRulePacks,
   detectAdvancedKeys
 } from "./config.js";
-import { stageCommandContract } from "./content/contracts.js";
-import { createInitialContextModeState } from "./content/contexts.js";
-import { learnSkillMarkdown, learnCommandContract } from "./content/learnings.js";
+import { learnSkillMarkdown } from "./content/learnings.js";
 import { nextCommandContract, nextCommandSkillMarkdown } from "./content/next-command.js";
 import { ideateCommandContract, ideateCommandSkillMarkdown } from "./content/ideate-command.js";
 import { startCommandContract, startCommandSkillMarkdown } from "./content/start-command.js";
-import { statusCommandContract, statusCommandSkillMarkdown } from "./content/status-command.js";
-import { treeCommandContract, treeCommandSkillMarkdown } from "./content/tree-command.js";
-import { diffCommandContract, diffCommandSkillMarkdown } from "./content/diff-command.js";
 import { viewCommandContract, viewCommandSkillMarkdown } from "./content/view-command.js";
-import { opsCommandContract, opsCommandSkillMarkdown } from "./content/ops-command.js";
-import { featureCommandContract, featureCommandSkillMarkdown } from "./content/feature-command.js";
-import { tddLogCommandContract, tddLogCommandSkillMarkdown } from "./content/tdd-log-command.js";
-import { retroCommandContract, retroCommandSkillMarkdown } from "./content/retro-command.js";
-import { compoundCommandContract, compoundCommandSkillMarkdown } from "./content/compound-command.js";
-import { archiveCommandContract, archiveCommandSkillMarkdown } from "./content/archive-command.js";
-import {
-  rewindCommandContract,
-  rewindCommandSkillMarkdown
-} from "./content/rewind-command.js";
 import { subagentDrivenDevSkill, parallelAgentsSkill } from "./content/subagents.js";
 import { sessionHooksSkillMarkdown } from "./content/session-hooks.js";
 import { ironLawRuntimeDocument, ironLawsSkillMarkdown } from "./content/iron-laws.js";
@@ -51,56 +35,22 @@ import {
 import { nodeHookRuntimeScript } from "./content/node-hooks.js";
 import { META_SKILL_NAME, usingCclawSkillMarkdown } from "./content/meta-skill.js";
 import {
-  decisionProtocolMarkdown,
-  completionProtocolMarkdown,
-  ethosProtocolMarkdown
-} from "./content/protocols.js";
-import { FLOW_MAP_REL_PATH, flowMapMarkdown } from "./content/flow-map.js";
-import {
   ARTIFACT_TEMPLATES,
   CURSOR_WORKFLOW_RULE_MDC,
   RULEBOOK_MARKDOWN,
   buildRulesJson
 } from "./content/templates.js";
 import {
-  EVAL_BASELINES_README,
-  EVAL_CONFIG_YAML,
-  EVAL_CORPUS_README,
-  EVAL_REPORTS_README,
-  EVAL_RUBRIC_FILES,
-  EVAL_RUBRICS_README
-} from "./content/eval-scaffold.js";
-import { TDD_BATCH_WALKTHROUGH_MARKDOWN, stageSkillFolder, stageSkillMarkdown } from "./content/skills.js";
-import { stageCommonGuidanceMarkdown } from "./content/stage-common-guidance.js";
-import {
-  STAGE_EXAMPLES_REFERENCE_DIR,
-  stageExamplesReferenceMarkdown
-} from "./content/examples.js";
+  stageSkillFolder,
+  stageSkillMarkdown
+} from "./content/skills.js";
 import {
   LANGUAGE_RULE_PACK_DIR,
   LANGUAGE_RULE_PACK_FILES,
   LANGUAGE_RULE_PACK_GENERATORS,
-  LEGACY_LANGUAGE_RULE_PACK_FOLDERS,
-  UTILITY_SKILL_FOLDERS,
-  UTILITY_SKILL_MAP
+  LEGACY_LANGUAGE_RULE_PACK_FOLDERS
 } from "./content/utility-skills.js";
 import { RESEARCH_PLAYBOOKS } from "./content/research-playbooks.js";
-import {
-  HARNESS_TOOL_REFS_DIR,
-  HARNESS_TOOL_REFS_INDEX_MD,
-  harnessToolRefMarkdown
-} from "./content/harness-tool-refs.js";
-import { DOCTOR_REFERENCE_MARKDOWN } from "./content/doctor-references.js";
-import {
-  harnessDocsOverviewMarkdown,
-  harnessIntegrationDocMarkdown
-} from "./content/harness-doc.js";
-import {
-  HARNESS_PLAYBOOKS_DIR,
-  harnessPlaybookFileName,
-  harnessPlaybookMarkdown,
-  harnessPlaybooksIndexMarkdown
-} from "./content/harness-playbooks.js";
 import { HOOK_EVENTS_BY_HARNESS, HOOK_SEMANTIC_EVENTS } from "./content/hook-events.js";
 import { createInitialFlowState, type FlowState } from "./flow-state.js";
 import { ensureDir, exists, writeFileSafe } from "./fs-utils.js";
@@ -133,6 +83,115 @@ const execFileAsync = promisify(execFile);
 function runtimePath(projectRoot: string, ...segments: string[]): string {
   return path.join(projectRoot, RUNTIME_ROOT, ...segments);
 }
+
+async function removeBestEffort(targetPath: string, recursive = false): Promise<void> {
+  try {
+    await fs.rm(targetPath, { recursive, force: true });
+  } catch {
+    // best-effort cleanup
+  }
+}
+
+const DEPRECATED_UTILITY_SKILL_FOLDERS = [
+  "project-learnings",
+  "auto-orchestration",
+  "autoplan",
+  "red-first-testing",
+  "incremental-implementation",
+  "subagent-driven-development",
+  "dispatching-parallel-agents",
+  "session-guidelines",
+  "security-review",
+  "documentation",
+  "browser-qa-testing",
+  "feature-workspaces",
+  "security",
+  "debugging",
+  "performance",
+  "ci-cd",
+  "docs",
+  "executing-plans",
+  "verification-before-completion",
+  "finishing-a-development-branch",
+  "context-engineering",
+  "source-driven-development",
+  "frontend-accessibility",
+  "landscape-check",
+  "adversarial-review",
+  "security-audit",
+  "knowledge-curation",
+  "retrospective",
+  "document-review",
+  "receiving-code-review",
+  "flow-status",
+  "flow-tree",
+  "flow-diff"
+] as const;
+
+const DEPRECATED_AGENT_FILES = [
+  "securityer.md",
+  "spec-reviewer.md",
+  "code-reviewer.md",
+  "repo-research-analyst.md",
+  "learnings-researcher.md",
+  "framework-docs-researcher.md",
+  "best-practices-researcher.md",
+  "git-history-analyzer.md"
+] as const;
+
+const DEPRECATED_COMMAND_FILES = [
+  "learn.md",
+  "status.md",
+  "tree.md",
+  "diff.md",
+  "feature.md",
+  "ops.md",
+  "tdd-log.md",
+  "retro.md",
+  "compound.md",
+  "archive.md",
+  "rewind.md"
+] as const;
+
+const DEPRECATED_SKILL_FILES = [
+  ["flow-ops", "SKILL.md"],
+  ["tdd-cycle-log", "SKILL.md"],
+  ["flow-retro", "SKILL.md"],
+  ["flow-compound", "SKILL.md"],
+  ["flow-archive", "SKILL.md"],
+  ["flow-rewind", "SKILL.md"],
+  ["using-git-worktrees", "SKILL.md"]
+] as const;
+
+const DEPRECATED_STATE_FILES = [
+  "checkpoint.json",
+  "flow-state.snapshot.json",
+  "stage-activity.jsonl",
+  "knowledge-digest.md",
+  "suggestion-memory.json",
+  "harness-gaps.json",
+  "context-mode.json",
+  "session-digest.md",
+  "context-warnings.jsonl"
+] as const;
+
+const DEPRECATED_HOOK_FILES = [
+  "observe.sh",
+  "summarize-observations.sh",
+  "summarize-observations.mjs",
+  "_lib.sh",
+  "session-start.sh",
+  "stop-checkpoint.sh",
+  "run-hook.cmd",
+  "stage-complete.sh",
+  "pre-compact.sh",
+  "prompt-guard.sh",
+  "workflow-guard.sh",
+  "context-monitor.sh"
+] as const;
+
+const DEPRECATED_RUNTIME_ROOT_FILES = ["learnings.jsonl", "observations.jsonl"] as const;
+const DEPRECATED_RUNTIME_DIRS = ["evals", "worktrees", "references", "contexts"] as const;
 
 async function resolveGitHooksDir(projectRoot: string): Promise<string | null> {
   try {
@@ -353,45 +412,10 @@ async function ensureStructure(projectRoot: string): Promise<void> {
   }
 }
 
-async function writeCommandContracts(projectRoot: string, track: FlowTrack = "standard"): Promise<void> {
-  await Promise.all(FLOW_STAGES.map(async (stage) => {
-    await writeFileSafe(
-      runtimePath(projectRoot, "commands", `${stage}.md`),
-      stageCommandContract(stage, track)
-    );
-  }));
-}
-
 async function writeArtifactTemplates(projectRoot: string): Promise<void> {
   await Promise.all(Object.entries(ARTIFACT_TEMPLATES).map(async ([fileName, content]) => {
     await writeFileSafe(runtimePath(projectRoot, "templates", fileName), content);
   }));
-}
-
-/**
- * Seed the `.cclaw/evals/` scaffold. Only writes files that do not already
- * exist so that user-authored config.yaml / corpus / rubrics / baselines are
- * never clobbered by `cclaw sync`.
- */
-async function writeEvalScaffold(projectRoot: string): Promise<void> {
-  const targets: Array<{ rel: string; content: string }> = [
-    { rel: "evals/config.yaml", content: EVAL_CONFIG_YAML },
-    { rel: "evals/corpus/README.md", content: EVAL_CORPUS_README },
-    { rel: "evals/rubrics/README.md", content: EVAL_RUBRICS_README },
-    { rel: "evals/baselines/README.md", content: EVAL_BASELINES_README },
-    { rel: "evals/reports/README.md", content: EVAL_REPORTS_README }
-  ];
-  for (const rubric of EVAL_RUBRIC_FILES) {
-    targets.push({
-      rel: `evals/rubrics/${rubric.stage}.yaml`,
-      content: rubric.contents
-    });
-  }
-  for (const target of targets) {
-    const absolute = runtimePath(projectRoot, ...target.rel.split("/"));
-    if (await exists(absolute)) continue;
-    await writeFileSafe(absolute, target.content);
-  }
 }
 
 async function writeSkills(projectRoot: string, config?: CclawConfig): Promise<void> {
@@ -402,32 +426,7 @@ async function writeSkills(projectRoot: string, config?: CclawConfig): Promise<v
       runtimePath(projectRoot, "skills", folder, "SKILL.md"),
       stageSkillMarkdown(stage, skillTrack)
     );
-
-    // Progressive disclosure (A.2#8): materialize the full example artifact as
-    // a sibling reference file. The stage skill only links to it; agents load
-    // the reference on demand.
-    const referenceMarkdown = stageExamplesReferenceMarkdown(stage);
-    if (referenceMarkdown) {
-      const referenceDir = STAGE_EXAMPLES_REFERENCE_DIR.split("/");
-      await writeFileSafe(
-        runtimePath(projectRoot, ...referenceDir, `${stage}-examples.md`),
-        referenceMarkdown
-      );
-    }
   }
-
-  // Progressive disclosure for the TDD Batch Execution walkthrough (A.1#1).
-  // The detailed 3-task transcript lives next to stage examples so the
-  // always-rendered TDD skill stays under the line-budget and the reference
-  // is loaded on demand.
-  await writeFileSafe(
-    runtimePath(projectRoot, ...STAGE_EXAMPLES_REFERENCE_DIR.split("/"), "tdd-batch-walkthrough.md"),
-    TDD_BATCH_WALKTHROUGH_MARKDOWN
-  );
-  await writeFileSafe(
-    runtimePath(projectRoot, ...STAGE_EXAMPLES_REFERENCE_DIR.split("/"), "common-guidance.md"),
-    stageCommonGuidanceMarkdown()
-  );
 
   // Utility skills (not flow stages)
   await writeFileSafe(
@@ -450,48 +449,6 @@ async function writeSkills(projectRoot: string, config?: CclawConfig): Promise<v
     runtimePath(projectRoot, "skills", "flow-view", "SKILL.md"),
     viewCommandSkillMarkdown()
   );
-  await writeFileSafe(
-    runtimePath(projectRoot, "skills", "flow-status", "SKILL.md"),
-    statusCommandSkillMarkdown()
-  );
-  await writeFileSafe(
-    runtimePath(projectRoot, "skills", "flow-tree", "SKILL.md"),
-    treeCommandSkillMarkdown()
-  );
-  await writeFileSafe(
-    runtimePath(projectRoot, "skills", "flow-diff", "SKILL.md"),
-    diffCommandSkillMarkdown()
-  );
-  await writeFileSafe(
-    runtimePath(projectRoot, "skills", "flow-ops", "SKILL.md"),
-    opsCommandSkillMarkdown()
-  );
-  await writeFileSafe(
-    runtimePath(projectRoot, "skills", "using-git-worktrees", "SKILL.md"),
-    featureCommandSkillMarkdown()
-  );
-  await writeFileSafe(
-    runtimePath(projectRoot, "skills", "tdd-cycle-log", "SKILL.md"),
-    tddLogCommandSkillMarkdown()
-  );
-  await writeFileSafe(
-    runtimePath(projectRoot, "skills", "flow-retro", "SKILL.md"),
-    retroCommandSkillMarkdown()
-  );
-  await writeFileSafe(
-    runtimePath(projectRoot, "skills", "flow-compound", "SKILL.md"),
-    compoundCommandSkillMarkdown({
-      recurrenceThreshold: config?.compound?.recurrenceThreshold
-    })
-  );
-  await writeFileSafe(
-    runtimePath(projectRoot, "skills", "flow-rewind", "SKILL.md"),
-    rewindCommandSkillMarkdown()
-  );
-  await writeFileSafe(
-    runtimePath(projectRoot, "skills", "flow-archive", "SKILL.md"),
-    archiveCommandSkillMarkdown()
-  );
 
   await writeFileSafe(
     runtimePath(projectRoot, "skills", "subagent-dev", "SKILL.md"),
@@ -513,28 +470,6 @@ async function writeSkills(projectRoot: string, config?: CclawConfig): Promise<v
     runtimePath(projectRoot, "skills", META_SKILL_NAME, "SKILL.md"),
     usingCclawSkillMarkdown()
   );
-  await writeFileSafe(
-    runtimePath(projectRoot, "references", "protocols", "decision.md"),
-    decisionProtocolMarkdown()
-  );
-  await writeFileSafe(
-    runtimePath(projectRoot, "references", "protocols", "completion.md"),
-    completionProtocolMarkdown()
-  );
-  await writeFileSafe(
-    runtimePath(projectRoot, "references", "protocols", "ethos.md"),
-    ethosProtocolMarkdown()
-  );
-  await writeFileSafe(
-    runtimePath(projectRoot, "references", "flow-map.md"),
-    flowMapMarkdown()
-  );
-
-  for (const folder of UTILITY_SKILL_FOLDERS) {
-    const generator = UTILITY_SKILL_MAP[folder];
-    await writeFileSafe(runtimePath(projectRoot, "skills", folder, "SKILL.md"), generator());
-  }
-
   // In-thread research procedures (no YAML frontmatter, not delegated personas).
   for (const [fileName, markdown] of Object.entries(RESEARCH_PLAYBOOKS)) {
     await writeFileSafe(runtimePath(projectRoot, "skills", "research", fileName), markdown);
@@ -562,74 +497,13 @@ async function writeSkills(projectRoot: string, config?: CclawConfig): Promise<v
     }
   }
 
-  // Per-harness tool maps (A.1#4). One reference file per supported harness
-  // plus an index; stage/utility skills cite these instead of hardcoding
-  // tool names inline.
-  const harnessIds: HarnessId[] = ["claude", "cursor", "opencode", "codex"];
-  const harnessRefsDir = HARNESS_TOOL_REFS_DIR.split("/");
-  await writeFileSafe(
-    runtimePath(projectRoot, ...harnessRefsDir, "README.md"),
-    HARNESS_TOOL_REFS_INDEX_MD
-  );
-  for (const harness of harnessIds) {
-    await writeFileSafe(
-      runtimePath(projectRoot, ...harnessRefsDir, `${harness}.md`),
-      harnessToolRefMarkdown(harness)
-    );
-  }
-
-  const doctorRefsDir = ["references", "doctor"] as const;
-  for (const [fileName, markdown] of Object.entries(DOCTOR_REFERENCE_MARKDOWN)) {
-    await writeFileSafe(runtimePath(projectRoot, ...doctorRefsDir, fileName), markdown);
-  }
-
-  await writeFileSafe(
-    runtimePath(projectRoot, "references", "harnesses.md"),
-    harnessIntegrationDocMarkdown()
-  );
-  await writeFileSafe(
-    runtimePath(projectRoot, "references", "harnesses-overview.md"),
-    harnessDocsOverviewMarkdown()
-  );
-
-  // Per-harness parity playbooks. Generated for every supported harness
-  // regardless of which harnesses the project installed — the index always
-  // resolves, and doctor only asserts presence of the installed harnesses'
-  // playbooks (see runtime-integrity checks).
-  const playbookDirSegments = HARNESS_PLAYBOOKS_DIR.split("/");
-  await writeFileSafe(
-    runtimePath(projectRoot, ...playbookDirSegments, "README.md"),
-    harnessPlaybooksIndexMarkdown()
-  );
-  for (const harness of harnessIds) {
-    await writeFileSafe(
-      runtimePath(projectRoot, ...playbookDirSegments, harnessPlaybookFileName(harness)),
-      harnessPlaybookMarkdown(harness)
-    );
-  }
 }
 
-async function writeUtilityCommands(projectRoot: string, config: CclawConfig): Promise<void> {
-  await writeFileSafe(runtimePath(projectRoot, "commands", "learn.md"), learnCommandContract());
+async function writeEntryCommands(projectRoot: string): Promise<void> {
+  await writeFileSafe(runtimePath(projectRoot, "commands", "start.md"), startCommandContract());
   await writeFileSafe(runtimePath(projectRoot, "commands", "next.md"), nextCommandContract());
   await writeFileSafe(runtimePath(projectRoot, "commands", "ideate.md"), ideateCommandContract());
   await writeFileSafe(runtimePath(projectRoot, "commands", "view.md"), viewCommandContract());
-  await writeFileSafe(runtimePath(projectRoot, "commands", "start.md"), startCommandContract());
-  await writeFileSafe(runtimePath(projectRoot, "commands", "status.md"), statusCommandContract());
-  await writeFileSafe(runtimePath(projectRoot, "commands", "tree.md"), treeCommandContract());
-  await writeFileSafe(runtimePath(projectRoot, "commands", "diff.md"), diffCommandContract());
-  await writeFileSafe(runtimePath(projectRoot, "commands", "ops.md"), opsCommandContract());
-  await writeFileSafe(runtimePath(projectRoot, "commands", "feature.md"), featureCommandContract());
-  await writeFileSafe(runtimePath(projectRoot, "commands", "tdd-log.md"), tddLogCommandContract());
-  await writeFileSafe(runtimePath(projectRoot, "commands", "retro.md"), retroCommandContract());
-  await writeFileSafe(
-    runtimePath(projectRoot, "commands", "compound.md"),
-    compoundCommandContract({
-      recurrenceThreshold: config.compound?.recurrenceThreshold
-    })
-  );
-  await writeFileSafe(runtimePath(projectRoot, "commands", "archive.md"), archiveCommandContract());
-  await writeFileSafe(runtimePath(projectRoot, "commands", "rewind.md"), rewindCommandContract());
 }
 
 function toObject(value: unknown): Record<string, unknown> | null {
@@ -1035,96 +909,6 @@ async function ensureKnowledgeStore(projectRoot: string): Promise<void> {
 
 
 
-async function ensureSessionStateFiles(projectRoot: string): Promise<void> {
-  const stateDir = runtimePath(projectRoot, "state");
-  await ensureDir(stateDir);
-  // If flow-state.json is corrupt, `readFlowState` quarantines the bad
-  // file and throws. During install we'd rather continue than abort:
-  // the user just asked to set up cclaw, and the corrupt file is already
-  // preserved next to the original path. Fall back to a fresh initial
-  // state so the rest of install completes and the user can inspect the
-  // `.corrupt-<timestamp>.json` quarantine afterwards.
-  let flow: FlowState;
-  try {
-    flow = await readFlowState(projectRoot);
-  } catch (err) {
-    if (err instanceof CorruptFlowStateError) {
-      flow = createInitialFlowState();
-    } else {
-      throw err;
-    }
-  }
-
-  const activityPath = path.join(stateDir, "stage-activity.jsonl");
-  if (!(await exists(activityPath))) {
-    await writeFileSafe(activityPath, "", { mode: 0o600 });
-  }
-
-  const checkpointPath = path.join(stateDir, "checkpoint.json");
-  if (!(await exists(checkpointPath))) {
-    const initialCheckpoint = {
-      stage: flow.currentStage,
-      runId: flow.activeRunId,
-      status: "not_started",
-      lastCompletedStep: "",
-      remainingSteps: [] as string[],
-      blockers: [] as string[],
-      timestamp: new Date().toISOString()
-    };
-    await writeFileSafe(checkpointPath, `${JSON.stringify(initialCheckpoint, null, 2)}\n`, { mode: 0o600 });
-  }
-
-  const suggestionMemoryPath = path.join(stateDir, "suggestion-memory.json");
-  if (!(await exists(suggestionMemoryPath))) {
-    const suggestionMemory = {
-      enabled: true,
-      mutedStages: [] as string[],
-      lastSuggestedStage: "",
-      lastSuggestedAt: ""
-    };
-    await writeFileSafe(suggestionMemoryPath, `${JSON.stringify(suggestionMemory, null, 2)}\n`, { mode: 0o600 });
-  }
-
-  const contextModePath = path.join(stateDir, "context-mode.json");
-  if (!(await exists(contextModePath))) {
-    await writeFileSafe(
-      contextModePath,
-      `${JSON.stringify(createInitialContextModeState(), null, 2)}\n`,
-      { mode: 0o600 }
-    );
-  }
-
-  const knowledgeDigestPath = path.join(stateDir, "knowledge-digest.md");
-  if (!(await exists(knowledgeDigestPath))) {
-    await writeFileSafe(
-      knowledgeDigestPath,
-      "# Knowledge digest (auto-generated)\n\n(no entries yet)\n"
-    );
-  }
-
-  const tddCycleLogPath = path.join(stateDir, "tdd-cycle-log.jsonl");
-  if (!(await exists(tddCycleLogPath))) {
-    await writeFileSafe(tddCycleLogPath, "", { mode: 0o600 });
-  }
-
-  const reconciliationNoticesPath = path.join(stateDir, "reconciliation-notices.json");
-  if (!(await exists(reconciliationNoticesPath))) {
-    await writeFileSafe(
-      reconciliationNoticesPath,
-      `${JSON.stringify({ schemaVersion: 1, notices: [] }, null, 2)}\n`,
-      { mode: 0o600 }
-    );
-  }
-
-  const flowSnapshotPath = path.join(stateDir, "flow-state.snapshot.json");
-  if (!(await exists(flowSnapshotPath))) {
-    await writeFileSafe(flowSnapshotPath, `${JSON.stringify({
-      capturedAt: new Date().toISOString(),
-      state: flow
-    }, null, 2)}\n`, { mode: 0o600 });
-  }
-}
-
 async function writeRulebook(projectRoot: string): Promise<void> {
   await writeFileSafe(runtimePath(projectRoot, "rules", "RULES.md"), RULEBOOK_MARKDOWN);
   await writeFileSafe(
@@ -1184,150 +968,13 @@ async function writeState(projectRoot: string, config: CclawConfig, forceReset =
   await writeFileSafe(statePath, `${JSON.stringify(state, null, 2)}\n`, { mode: 0o600 });
 }
 
-async function writeHarnessGapsState(projectRoot: string, harnesses: HarnessId[]): Promise<void> {
-  const report = harnesses.map((harness) => {
-    const capabilities = HARNESS_ADAPTERS[harness].capabilities;
-    const hookMap = HOOK_EVENTS_BY_HARNESS[harness];
-    const missingHookEvents = HOOK_SEMANTIC_EVENTS.filter((eventName) => !hookMap[eventName]);
-    const missingCapabilities: string[] = [];
-    if (capabilities.nativeSubagentDispatch !== "full") {
-      missingCapabilities.push(`nativeSubagentDispatch:${capabilities.nativeSubagentDispatch}`);
-    }
-    if (capabilities.hookSurface !== "full") {
-      missingCapabilities.push(`hookSurface:${capabilities.hookSurface}`);
-    }
-    if (capabilities.structuredAsk === "plain-text") {
-      missingCapabilities.push("structuredAsk:none");
-    }
-
-    const remediation: string[] = [];
-    switch (capabilities.subagentFallback) {
-      case "native":
-        // nothing to remediate — harness has first-class dispatch
-        break;
-      case "generic-dispatch":
-        remediation.push(
-          `subagent dispatch → map named cclaw agents onto generic Task subagent_type per ${HARNESS_PLAYBOOKS_DIR}/${harness}-playbook.md`
-        );
-        break;
-      case "role-switch":
-        remediation.push(
-          `subagent dispatch → role-switch in-session with evidenceRefs per ${HARNESS_PLAYBOOKS_DIR}/${harness}-playbook.md`
-        );
-        break;
-      case "waiver":
-        remediation.push(
-          `subagent dispatch → record explicit harness_limitation waiver; no parity path available`
-        );
-        break;
-    }
-    // Per-harness structuredAsk remediation: record either the fallback
-    // requirement (plain-text) or the gating / experimental status of the
-    // native primitive so `cclaw doctor` and harness-gaps.json stay
-    // honest about *why* a primitive might silently not fire.
-    switch (capabilities.structuredAsk) {
-      case "plain-text":
-        remediation.push(
-          "structured ask → fall back to a numbered plain-text list; first option is default"
-        );
-        break;
-      case "question":
-        remediation.push(
-          `structured ask → OpenCode \`question\` tool; enable with \`permission.question: "allow"\` in \`opencode.json\` (ACP clients additionally need \`OPENCODE_ENABLE_QUESTION_TOOL=1\`). Fallback: shared plain-text lettered list.`
-        );
-        break;
-      case "request_user_input":
-        remediation.push(
-          "structured ask → Codex `request_user_input` tool (experimental; surfaced in Plan / Collaboration mode). Fallback: shared plain-text lettered list when the tool is hidden."
-        );
-        break;
-      case "AskUserQuestion":
-      case "AskQuestion":
-        // Native first-class ask — no remediation required.
-        break;
-    }
-    for (const event of missingHookEvents) {
-      if (harness === "codex" && event === "precompact_digest") {
-        // Codex CLI has no PreCompact event. Generic "schedule the script
-        // manually" copy doesn't help; instead, point the agent at the
-        // in-thread substitute that already exists in cclaw content
-        // (`/cc-ops retro` reads the same digest the hook would emit).
-        remediation.push(
-          "hook event precompact_digest → Codex has no PreCompact event; run `/cc-ops retro` in-thread before compaction instead of relying on a hook"
-        );
-        continue;
-      }
-      remediation.push(`hook event ${event} → schedule the corresponding script manually or accept reduced observability`);
-    }
-
-    return {
-      harness,
-      tier: harnessTier(harness),
-      subagentFallback: capabilities.subagentFallback,
-      playbookPath: `${RUNTIME_ROOT}/${HARNESS_PLAYBOOKS_DIR}/${harness}-playbook.md`,
-      missingCapabilities,
-      missingHookEvents,
-      remediation
-    };
-  });
-
-  await writeFileSafe(
-    runtimePath(projectRoot, "state", "harness-gaps.json"),
-    `${JSON.stringify({
-      generatedAt: new Date().toISOString(),
-      schemaVersion: 2,
-      harnesses: report
-    }, null, 2)}\n`
-  );
-}
-
 async function cleanLegacyArtifacts(projectRoot: string): Promise<void> {
-  // Remove deprecated utility skill folders from older releases.
-  for (const legacyFolder of [
-    "project-learnings",
-    "auto-orchestration",
-    "autoplan",
-    "red-first-testing",
-    "incremental-implementation",
-    "subagent-driven-development",
-    "dispatching-parallel-agents",
-    "session-guidelines",
-    "security-review",
-    "documentation",
-    "browser-qa-testing",
-    "feature-workspaces"
-  ]) {
-    try {
-      await fs.rm(runtimePath(projectRoot, "skills", legacyFolder), {
-        recursive: true,
-        force: true
-      });
-    } catch {
-      // best-effort cleanup
-    }
+  for (const legacyFolder of DEPRECATED_UTILITY_SKILL_FOLDERS) {
+    await removeBestEffort(runtimePath(projectRoot, "skills", legacyFolder), true);
   }
 
-  // Remove legacy duplicate security agent file when present.
-  try {
-    await fs.rm(runtimePath(projectRoot, "agents", "securityer.md"), { force: true });
-  } catch {
-    // best-effort cleanup
-  }
-  // Core-5 migration: remove deprecated generated agent personas.
-  for (const legacyAgentFile of [
-    "spec-reviewer.md",
-    "code-reviewer.md",
-    "repo-research-analyst.md",
-    "learnings-researcher.md",
-    "framework-docs-researcher.md",
-    "best-practices-researcher.md",
-    "git-history-analyzer.md"
-  ]) {
-    try {
-      await fs.rm(runtimePath(projectRoot, "agents", legacyAgentFile), { force: true });
-    } catch {
-      // best-effort cleanup
-    }
+  for (const legacyAgentFile of DEPRECATED_AGENT_FILES) {
+    await removeBestEffort(runtimePath(projectRoot, "agents", legacyAgentFile));
   }
 
   for (const legacyPlugin of [
@@ -1335,34 +982,24 @@ async function cleanLegacyArtifacts(projectRoot: string): Promise<void> {
     path.join(projectRoot, ".opencode/plugins/opencode-plugin.mjs"),
     path.join(projectRoot, OPENCODE_PLUGIN_REL_PATH)
   ]) {
-    try {
-      await fs.rm(legacyPlugin, { force: true });
-    } catch {
-      // best-effort cleanup
-    }
+    await removeBestEffort(legacyPlugin);
   }
 
   for (const legacyRuntimeFile of [
-    runtimePath(projectRoot, "learnings.jsonl"),
-    runtimePath(projectRoot, "observations.jsonl"),
-    runtimePath(projectRoot, "hooks", "observe.sh"),
-    runtimePath(projectRoot, "hooks", "summarize-observations.sh"),
-    runtimePath(projectRoot, "hooks", "summarize-observations.mjs"),
-    runtimePath(projectRoot, "hooks", "_lib.sh"),
-    runtimePath(projectRoot, "hooks", "session-start.sh"),
-    runtimePath(projectRoot, "hooks", "stop-checkpoint.sh"),
-    runtimePath(projectRoot, "hooks", "run-hook.cmd"),
-    runtimePath(projectRoot, "hooks", "stage-complete.sh"),
-    runtimePath(projectRoot, "hooks", "pre-compact.sh"),
-    runtimePath(projectRoot, "hooks", "prompt-guard.sh"),
-    runtimePath(projectRoot, "hooks", "workflow-guard.sh"),
-    runtimePath(projectRoot, "hooks", "context-monitor.sh")
+    ...FLOW_STAGES.map((stage) => runtimePath(projectRoot, "commands", `${stage}.md`)),
+    ...DEPRECATED_COMMAND_FILES.map((file) => runtimePath(projectRoot, "commands", file)),
+    ...DEPRECATED_SKILL_FILES.map((segments) => runtimePath(projectRoot, "skills", ...segments)),
+    ...DEPRECATED_STATE_FILES.map((file) => runtimePath(projectRoot, "state", file)),
+    ...DEPRECATED_RUNTIME_ROOT_FILES.map((file) => runtimePath(projectRoot, file)),
+    ...DEPRECATED_HOOK_FILES.map((file) => runtimePath(projectRoot, "hooks", file))
   ]) {
-    try {
-      await fs.rm(legacyRuntimeFile, { force: true });
-    } catch {
-      // best-effort cleanup
-    }
+    await removeBestEffort(legacyRuntimeFile);
+  }
+
+  // Runtime simplification cleanup: these folders were generated in older
+  // releases and are now intentionally removed from user projects.
+  for (const legacyRuntimeDir of DEPRECATED_RUNTIME_DIRS) {
+    await removeBestEffort(runtimePath(projectRoot, legacyRuntimeDir), true);
   }
 
   // D-4 terminology migration: rename historical ideation artifacts to the
@@ -1422,17 +1059,13 @@ async function materializeRuntime(projectRoot: string, config: CclawConfig, forc
   await cleanLegacyArtifacts(projectRoot);
   await cleanStaleFiles(projectRoot);
   await Promise.all([
-    writeCommandContracts(projectRoot, config.defaultTrack ?? "standard"),
-    writeUtilityCommands(projectRoot, config),
+    writeEntryCommands(projectRoot),
     writeSkills(projectRoot, config),
     writeArtifactTemplates(projectRoot),
-    writeEvalScaffold(projectRoot),
     writeRulebook(projectRoot)
   ]);
   await writeState(projectRoot, config, forceStateReset);
   await ensureRunSystem(projectRoot, { createIfMissing: false });
-  await ensureSessionStateFiles(projectRoot);
-  await writeHarnessGapsState(projectRoot, harnesses);
   await ensureKnowledgeStore(projectRoot);
   await writeHooks(projectRoot, config);
   await syncDisabledHarnessArtifacts(projectRoot, harnesses);
@@ -1574,7 +1207,7 @@ function isManagedRuntimeHookCommand(command: string): boolean {
   // sync without being duplicated alongside freshly generated entries.
   const normalized = command.trim().replace(/\s+/gu, " ").replace(/\\/gu, "/");
   if (
-    /(^|\s)(?:node\s+)?(?:"|')?(?:\.\/)?\.cclaw\/hooks\/run-hook\.(?:mjs|cmd)(?:"|')?\s+(?:session-start|stop-checkpoint|pre-compact|prompt-guard|workflow-guard|context-monitor|verify-current-state)(?:\s|$)/u.test(
+    /(^|\s)(?:node\s+)?(?:"|')?(?:\.\/)?\.cclaw\/hooks\/run-hook\.(?:mjs|cmd)(?:"|')?\s+(?:session-start|stop-handoff|stop-checkpoint|pre-compact|prompt-guard|workflow-guard|context-monitor|verify-current-state)(?:\s|$)/u.test(
       normalized
     )
   ) {

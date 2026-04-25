@@ -1,5 +1,6 @@
 import type { StageSchemaInput, StageSchemaV2Input } from "./schema-types.js";
 import type { FlowTrack } from "../../types.js";
+import { renderTrackTerminology, trackRenderContext } from "../track-render-context.js";
 
 // ---------------------------------------------------------------------------
 // TDD — RED → GREEN → REFACTOR cycle (merged test + build)
@@ -11,9 +12,9 @@ export const TDD: StageSchemaV2Input = {
   complexityTier: "standard",
   skillFolder: "test-driven-development",
   skillName: "test-driven-development",
-  skillDescription: "Full TDD cycle: RED (failing tests), GREEN (minimal implementation), REFACTOR (cleanup). One plan slice at a time with strict traceability.",
+  skillDescription: "Full TDD cycle: discover existing tests and system impact, then RED (failing tests), GREEN (minimal implementation), REFACTOR (cleanup). One plan slice at a time with strict traceability.",
   philosophy: {
-    hardGate: "Do NOT merge, ship, or skip review. Follow RED → GREEN → REFACTOR strictly for each plan slice. Do NOT write implementation code before RED tests exist. Do NOT skip the REFACTOR step.",
+    hardGate: "Do NOT merge, ship, or skip review. Follow RED → GREEN → REFACTOR strictly for each plan slice. Do NOT write implementation code before RED tests exist. Do NOT write RED tests before discovering relevant existing tests and impacted contracts. Do NOT skip the REFACTOR step.",
     ironLaw: "NO PRODUCTION CODE WITHOUT A FAILING TEST FIRST — THE RED FAILURE IS THE SPEC.",
     purpose: "Implement features through the TDD cycle: write failing tests, make them pass with minimal code, then refactor.",
     whenToUse: [
@@ -32,50 +33,64 @@ export const TDD: StageSchemaV2Input = {
       "Skipping evidence capture",
       "Undocumented refactor changes",
       "No full-suite GREEN evidence",
-      "Multiple tasks implemented in one pass without justification"
+      "Multiple tasks implemented in one pass without justification",
+      "Skipping test discovery and duplicating an existing test pattern blindly",
+      "Ignoring callbacks, state transitions, interfaces, or contract surfaces affected by the slice",
+      "Collapsing RED/GREEN/REFACTOR into one unreviewable checkpoint"
     ]
   },
   executionModel: {
     checklist: [
-      "Select plan slice — pick one task from the plan. Do not batch multiple tasks. Before starting, read `.cclaw/state/ralph-loop.json` (`loopIteration`, `acClosed[]`, `redOpenSlices[]`) so you skip cycles already closed.",
+      "Select plan slice — pick one task from the plan. Do not batch multiple tasks. Before starting, read `.cclaw/state/ralph-loop.json` (`loopIteration`, `acClosed[]`, `redOpenSlices[]`) so you skip cycles already closed. If `redOpenSlices[]` is non-empty, repair or explicitly park those slices before opening a new RED.",
       "Map to acceptance criterion — identify the specific spec criterion this test proves.",
-      "Dispatch mandatory `tdd-red` execution (or `test-author` in TEST_RED_ONLY mode) — produce failing behavior tests and RED evidence only (no production edits). Set `CCLAW_ACTIVE_AGENT=tdd-red` when supported.",
+      "Discover the test surface — inspect existing tests, fixtures, helpers, test commands, and nearby assertions before authoring RED. Reuse the local test style unless the slice genuinely needs a new pattern.",
+      "Run a system-wide impact check — name callbacks, state transitions, interfaces, schemas, CLI/config/API contracts, persistence, or event boundaries that this slice can affect. Add RED coverage for each affected public contract or record why it is out of scope.",
+      "Set execution posture — record whether this slice is sequential, batch-safe, or blocked; when the existing git workflow permits small commits, checkpoint after RED, GREEN, and REFACTOR (or record why commits are deferred).",
+      "Use the mandatory `test-author` delegation for RED — after discovery and impact check, produce failing behavior tests and RED evidence only (no production edits). Set `CCLAW_ACTIVE_AGENT=tdd-red` when the harness supports phase labels.",
       "RED: Capture failure output — copy the exact failure output as RED evidence. Record in artifact.",
-      "Dispatch `tdd-green` execution (or `test-author` in BUILD_GREEN_REFACTOR mode) — minimal implementation + full-suite GREEN. Set `CCLAW_ACTIVE_AGENT=tdd-green` when supported.",
+      "Continue the same `test-author` delegation intent for GREEN — minimal implementation plus full-suite GREEN evidence. Set `CCLAW_ACTIVE_AGENT=tdd-green` when the harness supports phase labels.",
       "GREEN: Run full suite — execute ALL tests, not just the ones you wrote. The full suite must be GREEN.",
       "GREEN: Verify no regressions — if any existing test breaks, fix the regression before proceeding.",
       "Run verification-before-completion discipline for the slice — capture a fresh test command, commit SHA, and explicit PASS/FAIL status before completion claims.",
-      "REFACTOR: Dispatch `tdd-refactor` execution (or dedicated refactor mode) to improve code quality without behavior changes. Set `CCLAW_ACTIVE_AGENT=tdd-refactor` when supported.",
-      "Record evidence — capture RED failure, GREEN output, and REFACTOR notes in the TDD artifact. When logging the `green` row via `/cc-ops tdd-log green`, attach the closed acceptance-criterion IDs in `acIds` so Ralph Loop status counts them.",
+      "REFACTOR: continue the `test-author` evidence cycle (or a dedicated refactor mode when available) to improve code quality without behavior changes. Set `CCLAW_ACTIVE_AGENT=tdd-refactor` when the harness supports phase labels.",
+      "Record evidence — capture test discovery, system-wide impact check, RED failure, GREEN output, and REFACTOR notes in the TDD artifact. When logging a `green` row, attach the closed acceptance-criterion IDs in `acIds` so Ralph Loop status counts them.",
       "Annotate traceability — link to plan task ID and spec criterion.",
       "Per-Slice Review (conditional) — if `.cclaw/config.yaml::sliceReview.enabled` is true and the slice meets any trigger (touchCount >= filesChangedThreshold, touchPaths match touchTriggers, or highRisk=true), append a `## Per-Slice Review` entry for this slice before moving on (see the dedicated section below).",
       "Repeat for each slice — return to step 1 for the next plan slice."
     ],
     interactionProtocol: [
       "Pick one planned slice at a time.",
-      "Controller owns orchestration; execution runs through phase-specific delegation (`tdd-red` -> `tdd-green` -> `tdd-refactor`) or equivalent `test-author` modes.",
+      "Controller owns orchestration; one mandatory `test-author` delegation carries phase-specific RED -> GREEN -> REFACTOR evidence instead of spawning separate workers by default.",
+      "Before writing RED tests, discover relevant existing tests and commands so the new test extends the suite instead of fighting it.",
+      "Before implementation, perform a system-wide impact check across callbacks, state, interfaces, schemas, and external contracts touched by the slice.",
       "Write behavior-focused tests before changing implementation (RED).",
       "Capture and store failing output as RED evidence.",
       "Apply minimal change to satisfy RED tests (GREEN).",
       "Run full suite, not partial checks, for GREEN validation.",
       "Before declaring the slice complete, run a fresh verification check and record command + commit SHA + PASS/FAIL.",
       "Refactor without changing behavior and document rationale (REFACTOR).",
+      "Use incremental RED/GREEN/REFACTOR commits when the repository workflow and working tree make that appropriate; otherwise record the checkpoint boundaries in the artifact.",
       "Stop if regressions appear and fix before proceeding.",
       "If a test passes unexpectedly, investigate: does the behavior already exist, or is the test wrong?",
-      "**Per-Slice Review checkpoint (conditional, opt-in).** When `.cclaw/config.yaml::sliceReview.enabled` is true, check every slice against the triggers before declaring it DONE. Triggers: `touchCount >= filesChangedThreshold`, any `touchPaths` match a `touchTriggers` glob, or the plan row declares `highRisk: true`. On a trigger, run two passes on the slice alone — (1) Spec-Compliance: trace RED/GREEN/REFACTOR evidence back to its plan task + spec criterion, noting edge cases the tests skip; (2) Quality: diff-scan for naming, error handling, dead code, simpler alternatives. Record both under `## Per-Slice Review` in `06-tdd.md`, naming the trigger that fired. Dispatch the `reviewer` subagent natively when available (log `fulfillmentMode: \"isolated\"`); otherwise fulfil via in-session role switch (`fulfillmentMode: \"role-switch\"`). Never fabricate an isolated pass from memory. Tracks outside `sliceReview.enforceOnTracks` still emit the section; doctor only escalates missed reviews on enforced tracks."
+      "**Per-Slice Review point (conditional, opt-in).** When `.cclaw/config.yaml::sliceReview.enabled` is true, check every slice against the triggers before declaring it DONE. Triggers: `touchCount >= filesChangedThreshold`, any `touchPaths` match a `touchTriggers` glob, or the plan row declares `highRisk: true`. On a trigger, run two passes on the slice alone — (1) Spec-Compliance: trace RED/GREEN/REFACTOR evidence back to its plan task + spec criterion, noting edge cases the tests skip; (2) Quality: diff-scan for naming, error handling, dead code, simpler alternatives. Record both under `## Per-Slice Review` in `06-tdd.md`, naming the trigger that fired. Dispatch the `reviewer` subagent natively when available (log `fulfillmentMode: \"isolated\"`); otherwise fulfil via in-session role switch (`fulfillmentMode: \"role-switch\"`). Never fabricate an isolated pass from memory. Tracks outside `sliceReview.enforceOnTracks` still emit the section; doctor only escalates missed reviews on enforced tracks."
     ],
     process: [
       "Select slice and map to acceptance criterion.",
-      "Dispatch `tdd-red` (or `test-author` TEST_RED_ONLY mode) and produce failing test(s) for expected reason (RED).",
+      "Discover existing tests, fixtures, helpers, and exact test commands for the affected area.",
+      "Check system-wide impact across callbacks, state transitions, interfaces, schemas, and external contracts.",
+      "Record execution posture and checkpoint plan for RED/GREEN/REFACTOR commits or deferred commits.",
+      "Use `test-author` in RED intent and produce failing test(s) for the expected reason (RED).",
       "Run tests and capture failure output.",
-      "Dispatch `tdd-green` (or `test-author` BUILD_GREEN_REFACTOR mode) and implement smallest change needed for GREEN.",
+      "Use `test-author` in GREEN intent and implement the smallest change needed for GREEN.",
       "Run full tests and build checks.",
       "Run a fresh verification-before-completion check and capture command + commit SHA + PASS/FAIL in guard evidence.",
-      "Dispatch `tdd-refactor` pass preserving behavior.",
+      "Run the REFACTOR intent preserving behavior.",
       "Record RED, GREEN, and REFACTOR evidence in artifact.",
       "Annotate traceability to plan task and spec criterion; on `sliceReview` triggers, append a Per-Slice Review entry before closing the slice."
     ],
     requiredGates: [
+      { id: "tdd_test_discovery_complete", description: "Relevant existing tests, fixtures, helpers, and runnable commands were discovered before RED tests were written." },
+      { id: "tdd_impact_check_complete", description: "Callbacks, state transitions, interfaces, schemas, and contracts affected by the slice were checked before implementation." },
       { id: "tdd_red_test_written", description: "Failing tests exist before implementation changes." },
       { id: "tdd_green_full_suite", description: "Full relevant suite passes in GREEN state." },
       { id: "tdd_refactor_completed", description: "Refactor pass completed with behavior preservation verified." },
@@ -84,7 +99,10 @@ export const TDD: StageSchemaV2Input = {
       { id: "tdd_docs_drift_check", description: "When public API/config/CLI surfaces change, docs drift is addressed via a completed doc-updater pass." }
     ],
     requiredEvidence: [
-      "Artifact updated at `.cclaw/artifacts/06-tdd.md` with RED, GREEN, and REFACTOR sections.",
+      "Artifact updated at `.cclaw/artifacts/06-tdd.md` with Test Discovery, System-Wide Impact Check, RED, GREEN, and REFACTOR sections.",
+      "Relevant existing test files, helpers, fixtures, and exact commands identified before RED.",
+      "Callbacks, state transitions, interfaces, schemas, and contracts checked for impact before implementation.",
+      "Execution posture and RED/GREEN/REFACTOR checkpoint plan recorded, including commit boundaries when the repo workflow supports them.",
       "Failing command output captured (RED).",
       "Full test/build output recorded (GREEN).",
       "Fresh verification evidence recorded with command, commit SHA, and PASS/FAIL status before completion.",
@@ -94,14 +112,17 @@ export const TDD: StageSchemaV2Input = {
       "Traceability to task identifier is documented."
     ],
     inputs: ["approved plan slice", "spec acceptance criterion", "test harness configuration", "coding standards and constraints"],
-    requiredContext: ["plan artifact", "spec artifact", "existing test patterns"],
+    requiredContext: ["plan artifact", "spec artifact", "existing test patterns", "affected contracts and state boundaries"],
     blockers: [
+      "test discovery skipped before RED",
+      "system-wide impact check missing for callbacks/state/interfaces/contracts",
       "tests pass before behavior change (RED failure missing)",
       "full suite not green",
       "behavior changed during refactor",
       "no evidence recorded"
     ],
     exitCriteria: [
+      "test discovery and system-wide impact check are recorded",
       "RED evidence exists and is traceable",
       "GREEN evidence captured with full suite pass",
       "REFACTOR evidence captured",
@@ -124,6 +145,10 @@ export const TDD: StageSchemaV2Input = {
       traceabilityRule: "Every RED test traces to a plan task. Every GREEN change traces to a RED test. Every plan task traces to a spec criterion. Design decisions inform test strategy. Evidence chain must be unbroken."
     },
     artifactValidation: [
+      { section: "Upstream Handoff", required: false, validationRule: "Summarizes plan/spec/design decisions, constraints, open questions, and explicit drift before RED work." },
+      { section: "Test Discovery", required: true, validationRule: "Before RED: lists existing tests, fixtures/helpers, exact commands, and the chosen local pattern to extend." },
+      { section: "System-Wide Impact Check", required: true, validationRule: "Before implementation: names affected callbacks, state transitions, interfaces, schemas, public APIs/config/CLI, persistence, or event contracts, with coverage or explicit out-of-scope notes." },
+      { section: "Execution Posture", required: false, validationRule: "Records sequential/batch/blocked posture and RED/GREEN/REFACTOR checkpoint plan, including incremental commit boundaries when consistent with the repository git workflow." },
       { section: "RED Evidence", required: true, validationRule: "Failing test output captured per slice." },
       { section: "Acceptance Mapping", required: false, validationRule: "Each RED test links to a plan task and spec criterion." },
       { section: "Failure Analysis", required: false, validationRule: "Failure reason matches expected missing behavior." },
@@ -143,6 +168,8 @@ export const TDD: StageSchemaV2Input = {
       {
         title: "RED Evidence Audit",
         evaluationPoints: [
+          "Did every slice discover relevant existing tests, helpers, fixtures, and commands before adding RED coverage?",
+          "Does the system-wide impact check cover callbacks, state transitions, interfaces, schemas, and public contracts touched by the slice?",
           "Does every slice have a captured failing test output?",
           "Does each failure reason match the expected missing behavior (not a typo or config error)?",
           "Were tests written BEFORE any production code for that slice?",
@@ -156,6 +183,7 @@ export const TDD: StageSchemaV2Input = {
         evaluationPoints: [
           "Does GREEN evidence show a FULL suite pass (not partial)?",
           "Is the GREEN implementation minimal — no features beyond what RED tests require?",
+          "Do checkpoint notes or commits keep RED, GREEN, and REFACTOR reviewable according to the repository git workflow?",
           "Does the REFACTOR step preserve all existing behavior (no new failures)?",
           "Are REFACTOR notes documented with rationale?",
           "Is traceability complete: every change links to plan task ID and spec criterion?"
@@ -208,54 +236,49 @@ export const TDD: StageSchemaV2Input = {
   batchExecutionAllowed: true
 };
 
-function quickTrackText(value: string): string {
-  return value
-    .replace(/\btask from the plan\b/giu, "acceptance criterion from the spec")
-    .replace(/\bplan task ID\b/giu, "acceptance criterion ID")
-    .replace(/\bplan task\b/giu, "acceptance criterion")
-    .replace(/\bplan row\b/giu, "acceptance row")
-    .replace(/\bplan slice\b/giu, "acceptance slice")
-    .replace(/\bplan artifact\b/giu, "spec artifact")
-    .replace(/\btraceable to plan slice\b/giu, "traceable to acceptance criterion")
-    .replace(/05-plan\.md/gu, "04-spec.md");
-}
+function tddStageVariantForTrack(track: FlowTrack): StageSchemaV2Input {
+  const renderContext = trackRenderContext(track);
+  if (renderContext.usesPlanTerminology) {
+    return TDD;
+  }
 
-function tddQuickTrackVariant(): StageSchemaV2Input {
   return {
     ...TDD,
-    // Quick track keeps the same stage intent but rewrites plan-centric language to spec-centric language.
-    skillDescription: quickTrackText(TDD.skillDescription),
+    skillDescription: renderTrackTerminology(TDD.skillDescription, renderContext),
     philosophy: {
       ...TDD.philosophy,
-      hardGate: quickTrackText(TDD.philosophy.hardGate)
+      hardGate: renderTrackTerminology(TDD.philosophy.hardGate, renderContext)
     },
     executionModel: {
       ...TDD.executionModel,
-      checklist: TDD.executionModel.checklist.map(quickTrackText),
-      interactionProtocol: TDD.executionModel.interactionProtocol.map(quickTrackText),
-      process: TDD.executionModel.process.map(quickTrackText),
+      checklist: TDD.executionModel.checklist.map((value) => renderTrackTerminology(value, renderContext)),
+      interactionProtocol: TDD.executionModel.interactionProtocol
+        .map((value) => renderTrackTerminology(value, renderContext)),
+      process: TDD.executionModel.process.map((value) => renderTrackTerminology(value, renderContext)),
       requiredGates: TDD.executionModel.requiredGates
         .filter((gate) => gate.id !== "tdd_traceable_to_plan")
         .map((gate) => ({
           ...gate,
-          description: quickTrackText(gate.description)
+          description: renderTrackTerminology(gate.description, renderContext)
         })),
-      requiredEvidence: TDD.executionModel.requiredEvidence.map(quickTrackText),
-      inputs: TDD.executionModel.inputs.map(quickTrackText),
-      requiredContext: ["spec artifact", "existing test patterns"]
+      requiredEvidence: TDD.executionModel.requiredEvidence
+        .map((value) => renderTrackTerminology(value, renderContext)),
+      inputs: TDD.executionModel.inputs.map((value) => renderTrackTerminology(value, renderContext)),
+      requiredContext: [renderContext.upstreamArtifactLabel, "existing test patterns", "affected contracts and state boundaries"]
     },
     reviewLens: {
       ...TDD.reviewLens,
       reviewSections: TDD.reviewLens.reviewSections.map((section) => ({
         ...section,
-        evaluationPoints: section.evaluationPoints.map(quickTrackText)
+        evaluationPoints: section.evaluationPoints
+          .map((point) => renderTrackTerminology(point, renderContext))
       }))
     },
     artifactRules: {
       ...TDD.artifactRules,
       crossStageTrace: {
         ...TDD.artifactRules.crossStageTrace,
-        readsFrom: [".cclaw/artifacts/04-spec.md"],
+        readsFrom: [renderContext.upstreamArtifactPath],
         traceabilityRule:
           "Every RED test traces to an acceptance criterion. Every GREEN change traces to a RED test. Evidence chain must be unbroken."
       },
@@ -275,7 +298,7 @@ function tddQuickTrackVariant(): StageSchemaV2Input {
         }
         return {
           ...row,
-          validationRule: quickTrackText(row.validationRule)
+          validationRule: renderTrackTerminology(row.validationRule, renderContext)
         };
       })
     }
@@ -283,8 +306,5 @@ function tddQuickTrackVariant(): StageSchemaV2Input {
 }
 
 export function tddStageForTrack(track: FlowTrack): StageSchemaInput {
-  if (track === "quick") {
-    return tddQuickTrackVariant();
-  }
-  return TDD;
+  return tddStageVariantForTrack(track);
 }

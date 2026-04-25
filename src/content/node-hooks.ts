@@ -319,12 +319,6 @@ async function appendJsonLine(filePath, value) {
   });
 }
 
-async function writeTextFileAtomic(filePath, content) {
-  await withDirectoryLockInline(lockPathFor(filePath), async () => {
-    await writeFileAtomic(filePath, content);
-  });
-}
-
 async function readStdin() {
   return await new Promise((resolve) => {
     let data = "";
@@ -429,7 +423,7 @@ function hookEventNameForOutput(hookName) {
   if (hookName === "prompt-guard") return "PreToolUse";
   if (hookName === "workflow-guard") return "PreToolUse";
   if (hookName === "context-monitor") return "PostToolUse";
-  if (hookName === "stop-checkpoint") return "Stop";
+  if (hookName === "stop-handoff") return "Stop";
   if (hookName === "pre-compact") return "PreCompact";
   if (hookName === "verify-current-state") return "UserPromptSubmit";
   return "SessionStart";
@@ -840,33 +834,9 @@ async function readFlowState(root) {
   };
 }
 
-function formatCheckpointSummary(checkpointObj) {
-  const stage = typeof checkpointObj.stage === "string" ? checkpointObj.stage : "none";
-  const status = typeof checkpointObj.status === "string" ? checkpointObj.status : "unknown";
-  const runId = typeof checkpointObj.runId === "string" ? checkpointObj.runId : "none";
-  const timestamp = typeof checkpointObj.timestamp === "string" ? checkpointObj.timestamp : "unknown";
-  return "Checkpoint: stage=" + stage + ", status=" + status + ", run=" + runId + ", at=" + timestamp;
-}
-
-function stageSuggestion(stage) {
-  const map = {
-    brainstorm:
-      "Suggestion: list 2-3 alternatives and ask a single focused clarifying question before direction lock.",
-    scope: "Suggestion: lock explicit in-scope/out-of-scope boundaries and choose one scope mode.",
-    design:
-      "Suggestion: map failure modes per new codepath and confirm architecture boundaries before moving forward.",
-    spec: "Suggestion: ensure every acceptance criterion is measurable and mapped to a concrete test.",
-    plan: "Suggestion: group tasks into dependency batches and keep WAIT_FOR_CONFIRM pending until approval.",
-    tdd: "Suggestion: execute RED -> GREEN -> REFACTOR for each selected slice and capture evidence per cycle.",
-    review: "Suggestion: run Layer 1 before Layer 2 and reconcile findings into 07-review-army.json.",
-    ship: "Suggestion: verify preflight + rollback plan before selecting exactly one finalization mode."
-  };
-  return map[stage] || "";
-}
 
 async function buildKnowledgeDigest(root, currentStage, prereadRaw) {
   const knowledgeFile = path.join(root, RUNTIME_ROOT, "knowledge.jsonl");
-  const digestFile = path.join(root, RUNTIME_ROOT, "state", "knowledge-digest.md");
   // Caller may supply pre-read raw bytes to avoid re-reading knowledge.jsonl.
   // Falls back to a local read if nothing is passed in.
   const raw = typeof prereadRaw === "string"
@@ -902,105 +872,19 @@ async function buildKnowledgeDigest(root, currentStage, prereadRaw) {
     });
   const body =
     relevant.length > 0 ? relevant.join("\\n") : "(no matching entries for current stage)";
-  await writeTextFileAtomic(
-    digestFile,
-    "# Knowledge digest (auto-generated)\\n\\n" + body + "\\n"
-  );
   return {
     digestLines: relevant,
     learningsCount
   };
 }
 
-async function readRecentActivityLines(activityFile) {
-  const raw = await readTextFile(activityFile, "");
-  const lines = raw.split(/\\r?\\n/gu).map((line) => line.trim()).filter((line) => line.length > 0);
-  const tail = lines.slice(-5);
-  const out = [];
-  for (const line of tail) {
-    try {
-      const parsed = JSON.parse(line);
-      if (!parsed || typeof parsed !== "object" || Array.isArray(parsed)) continue;
-      out.push(
-        "- " +
-          (typeof parsed.ts === "string" ? parsed.ts : "unknown") +
-          " [" +
-          (typeof parsed.phase === "string" ? parsed.phase : "unknown") +
-          "] " +
-          (typeof parsed.tool === "string" ? parsed.tool : "unknown") +
-          " (stage=" +
-          (typeof parsed.stage === "string" ? parsed.stage : "unknown") +
-          ", run=" +
-          (typeof parsed.runId === "string" ? parsed.runId : "none") +
-          ")"
-      );
-    } catch {
-      // ignore malformed activity lines
-    }
-  }
-  return out;
-}
-
-async function readLatestContextWarningLine(filePath) {
-  const raw = await readTextFile(filePath, "");
-  const lines = raw.split(/\\r?\\n/gu).map((line) => line.trim()).filter((line) => line.length > 0);
-  const line = lines[lines.length - 1] || "";
-  if (line.length === 0) return "";
-  try {
-    const parsed = JSON.parse(line);
-    if (parsed && typeof parsed === "object" && typeof parsed.note === "string") {
-      return parsed.note;
-    }
-  } catch {
-    // fallback
-  }
-  return line;
-}
-
 async function handleSessionStart(runtime) {
   const state = await readFlowState(runtime.root);
   const stateDir = path.join(runtime.root, RUNTIME_ROOT, "state");
-  const contextsDir = path.join(runtime.root, RUNTIME_ROOT, "contexts");
-  const activeFeatureFile = path.join(stateDir, "active-feature.json");
-  const checkpointFile = path.join(stateDir, "checkpoint.json");
-  const activityFile = path.join(stateDir, "stage-activity.jsonl");
-  const contextWarningsFile = path.join(stateDir, "context-warnings.jsonl");
-  const contextModeFile = path.join(stateDir, "context-mode.json");
-  const suggestionMemoryFile = path.join(stateDir, "suggestion-memory.json");
   const ironLawsFile = path.join(stateDir, "iron-laws.json");
-  const sessionDigestFile = path.join(stateDir, "session-digest.md");
   const metaSkillFile = path.join(runtime.root, RUNTIME_ROOT, "skills", "using-cclaw", "SKILL.md");
 
-  const activeFeatureObj = toObject(await readJsonFile(activeFeatureFile, {})) || {};
-  const activeFeature =
-    typeof activeFeatureObj.activeFeature === "string" && activeFeatureObj.activeFeature.length > 0
-      ? activeFeatureObj.activeFeature
-      : "default";
 
-  const contextModeObj = toObject(await readJsonFile(contextModeFile, {})) || {};
-  const activeContextMode =
-    typeof contextModeObj.activeMode === "string" && contextModeObj.activeMode.length > 0
-      ? contextModeObj.activeMode
-      : "default";
-  const contextGuidePath = path.join(contextsDir, activeContextMode + ".md");
-  const contextModeNote = (await fileExists(contextGuidePath))
-    ? "Context mode: " +
-      activeContextMode +
-      " (guide: " +
-      RUNTIME_ROOT +
-      "/contexts/" +
-      activeContextMode +
-      ".md)"
-    : "Context mode: " + activeContextMode;
-
-  const checkpointObj = toObject(await readJsonFile(checkpointFile, {})) || {};
-  const checkpointSummary = Object.keys(checkpointObj).length > 0
-    ? formatCheckpointSummary(checkpointObj)
-    : "";
-
-  const sessionDigest = (await readTextFile(sessionDigestFile, "")).trim();
-  const activitySummary = await readRecentActivityLines(activityFile);
-  const contextWarning = await readLatestContextWarningLine(contextWarningsFile);
   // Read knowledge.jsonl exactly once per session-start while holding the
   // SAME lock CLI writers acquire in \`appendKnowledge\`. Guarantees we never
   // see a partial (mid-write) snapshot. Both the digest and
@@ -1070,32 +954,8 @@ async function handleSessionStart(runtime) {
       });
       await writeJsonFile(path.join(stateDir, "compound-readiness.json"), readiness);
     }
-    const readinessObj = toObject(readiness) || {};
-    const ready = Array.isArray(readinessObj.ready) ? readinessObj.ready : [];
-    const readyCount =
-      typeof readinessObj.readyCount === "number" && Number.isFinite(readinessObj.readyCount)
-        ? Math.trunc(readinessObj.readyCount)
-        : ready.length;
-    const clusterCount =
-      typeof readinessObj.clusterCount === "number" && Number.isFinite(readinessObj.clusterCount)
-        ? Math.trunc(readinessObj.clusterCount)
-        : 0;
-    const threshold =
-      typeof readinessObj.threshold === "number" && Number.isFinite(readinessObj.threshold)
-        ? Math.trunc(readinessObj.threshold)
-        : COMPOUND_RECURRENCE_THRESHOLD;
     if (state.currentStage === "review" || state.currentStage === "ship") {
-      if (readyCount === 0) {
-        compoundReadinessLine = "Compound readiness: no candidates (clusters=" +
-          String(clusterCount) + ", threshold=" + String(threshold) + ")";
-      } else {
-        const critical = ready.filter(
-          (entry) => entry && typeof entry === "object" && entry.severity === "critical"
-        ).length;
-        const criticalSuffix = critical > 0 ? " (critical=" + String(critical) + ")" : "";
-        compoundReadinessLine = "Compound readiness: clusters=" + String(clusterCount) +
-          ", ready=" + String(readyCount) + criticalSuffix;
-      }
+      compoundReadinessLine = formatCompoundReadinessLineInline(toObject(readiness) || {});
     }
   } catch (err) {
     // Best-effort — a malformed knowledge.jsonl must never break
@@ -1107,26 +967,6 @@ async function handleSessionStart(runtime) {
       "session-start:compound-readiness",
       err instanceof Error ? err.message : String(err)
     );
-  }
-
-  const suggestionMemory = toObject(await readJsonFile(suggestionMemoryFile, {})) || {};
-  const suggestionsEnabled = suggestionMemory.enabled !== false;
-  const mutedStages = Array.isArray(suggestionMemory.mutedStages)
-    ? suggestionMemory.mutedStages.filter((value) => typeof value === "string")
-    : [];
-  const stageMuted = mutedStages.includes(state.currentStage);
-  let stageHint = "";
-  if (suggestionsEnabled && !stageMuted) {
-    stageHint = stageSuggestion(state.currentStage);
-    if (stageHint.length > 0) {
-      const nextSuggestionMemory = {
-        enabled: suggestionsEnabled,
-        mutedStages,
-        lastSuggestedStage: state.currentStage,
-        lastSuggestedAt: new Date().toISOString()
-      };
-      await writeJsonFile(suggestionMemoryFile, nextSuggestionMemory);
-    }
   }
 
   const ironLawsObj = toObject(await readJsonFile(ironLawsFile, {})) || {};
@@ -1151,50 +991,23 @@ async function handleSessionStart(runtime) {
       String(state.completedCount) +
       "/8 completed, run=" +
       state.activeRunId +
-      ", feature=" +
-      activeFeature +
       "). Active artifacts: " +
       RUNTIME_ROOT +
-      "/artifacts/. Feature registry: " +
-      RUNTIME_ROOT +
-      "/state/worktrees.json (managed roots: " +
-      RUNTIME_ROOT +
-      "/worktrees/). Learnings: " +
+      "/artifacts/. Learnings: " +
       String(knowledge.learningsCount) +
       " entries."
   ];
-  parts.push(contextModeNote);
-  if (checkpointSummary.length > 0) {
-    parts.push(checkpointSummary);
-  }
-  if (sessionDigest.length > 0) {
-    parts.push("Last session:\\n" + sessionDigest);
-  }
-  if (activitySummary.length > 0) {
-    parts.push("Recent stage activity:\\n" + activitySummary.join("\\n"));
-  }
   if (ralphLoopLine.length > 0) {
     parts.push(ralphLoopLine);
   }
   if (compoundReadinessLine.length > 0) {
     parts.push(compoundReadinessLine);
   }
-  if (contextWarning.length > 0) {
-    parts.push("Latest context warning:\\n" + contextWarning);
-  }
-  if (stageHint.length > 0) {
-    parts.push(
-      stageHint +
-        "\\nTo disable suggestions persistently set " +
-        RUNTIME_ROOT +
-        "/state/suggestion-memory.json -> enabled=false."
-    );
-  }
   if (staleStageNames.length > 0) {
     parts.push(
       "Stale stages pending acknowledgement: " +
         staleStageNames.join(", ") +
-        " (use /cc-ops rewind --ack <stage> after redo)."
+        " (use cclaw internal rewind --ack <stage> after redo)."
     );
   }
   if (knowledge.digestLines.length > 0) {
@@ -1251,15 +1064,14 @@ function stopLawIsStrict(ironLawsObj) {
     (row) =>
       row &&
       typeof row === "object" &&
-      row.id === "stop-clean-or-checkpointed" &&
+      (row.id === "stop-clean-or-handoff" || row.id === "stop-clean-or-checkpointed") &&
       row.strict === true
   );
 }
 
-async function handleStopCheckpoint(runtime) {
+async function handleStopHandoff(runtime) {
   const state = await readFlowState(runtime.root);
   const stateDir = path.join(runtime.root, RUNTIME_ROOT, "state");
-  const checkpointFile = path.join(stateDir, "checkpoint.json");
   const ironLawsFile = path.join(stateDir, "iron-laws.json");
   const input = toObject(runtime.inputData) || {};
   const loopCount =
@@ -1267,31 +1079,11 @@ async function handleStopCheckpoint(runtime) {
       ? Math.trunc(input.loop_count)
       : 0;
 
-  const existing = toObject(await readJsonFile(checkpointFile, {})) || {};
-  const timestamp = new Date().toISOString();
   const dirtyState = await isGitDirty(runtime.root);
-  const nextCheckpoint = {
-    ...existing,
-    stage: state.currentStage,
-    runId: state.activeRunId,
-    status:
-      typeof existing.status === "string" && existing.status.trim().length > 0
-        ? existing.status
-        : "in_progress",
-    dirtyState,
-    lastCompletedStep:
-      typeof existing.lastCompletedStep === "string" ? existing.lastCompletedStep : "",
-    remainingSteps: Array.isArray(existing.remainingSteps) ? existing.remainingSteps : [],
-    blockers: Array.isArray(existing.blockers) ? existing.blockers : [],
-    harness: runtime.harness,
-    timestamp
-  };
-  await writeJsonFile(checkpointFile, nextCheckpoint);
-
   const strictStop = stopLawIsStrict(toObject(await readJsonFile(ironLawsFile, {})) || {});
   if (dirtyState === "dirty" && strictStop) {
     process.stderr.write(
-      '[cclaw] Stop blocked by iron law "stop-clean-or-checkpointed": working tree is dirty. Commit/revert changes or update checkpoint blockers before ending the session.\\n'
+      '[cclaw] Stop blocked by iron law "stop-clean-or-handoff": working tree is dirty. Commit/revert changes or record blockers in the current artifact before ending the session.\\n'
     );
     return 1;
   }
@@ -1301,11 +1093,9 @@ async function handleStopCheckpoint(runtime) {
     state.currentStage +
     ", run=" +
     state.activeRunId +
-    "). Checkpoint updated at " +
+    "). Active artifacts stay in " +
     RUNTIME_ROOT +
-    "/state/checkpoint.json. Run metadata sync removed; active artifacts stay in " +
-    RUNTIME_ROOT +
-    "/artifacts until /cc-ops archive (or cclaw archive runtime). Before stopping: (1) confirm flow-state reflects reality, (2) ensure artifact changes match current feature intent, (3) if you discovered a non-obvious rule/pattern, append one strict-schema JSON line to " +
+    "/artifacts until cclaw archive. Before stopping: (1) confirm flow-state reflects reality, (2) ensure artifact changes match current intent, (3) if you discovered a non-obvious rule/pattern, append one strict-schema JSON line to " +
     RUNTIME_ROOT +
     "/knowledge.jsonl, (4) commit or revert pending changes.";
 
@@ -1322,116 +1112,7 @@ async function handleStopCheckpoint(runtime) {
   return 0;
 }
 
-async function handlePreCompact(runtime) {
-  const state = await readFlowState(runtime.root);
-  const stateDir = path.join(runtime.root, RUNTIME_ROOT, "state");
-  const flow = state.raw;
-  const stage = state.currentStage;
-  const track = typeof flow.track === "string" ? flow.track : "standard";
-  const skipped = Array.isArray(flow.skippedStages)
-    ? flow.skippedStages.filter((value) => typeof value === "string").join(",")
-    : "";
-
-  const stageGateCatalog = toObject(flow.stageGateCatalog) || {};
-  const stageGate = toObject(stageGateCatalog[stage]) || {};
-  const passed = Array.isArray(stageGate.passed)
-    ? stageGate.passed.filter((value) => typeof value === "string").join(",")
-    : "";
-  const blocked = Array.isArray(stageGate.blocked)
-    ? stageGate.blocked.filter((value) => typeof value === "string").join(",")
-    : "";
-
-  let delegationPending = "";
-  const delegationLog = await readJsonFile(path.join(stateDir, "delegation-log.json"), {});
-  const delegationObj = toObject(delegationLog) || {};
-  const entries = Array.isArray(delegationObj.entries) ? delegationObj.entries : [];
-  const pendingAgents = entries
-    .filter((row) => row && typeof row === "object")
-    .filter(
-      (row) =>
-        row.stage === stage &&
-        row.status !== "completed" &&
-        row.status !== "waived" &&
-        typeof row.agent === "string"
-    )
-    .map((row) => row.agent);
-  if (pendingAgents.length > 0) {
-    delegationPending = [...new Set(pendingAgents)].join(",");
-  }
-
-  const knowledgeRaw = await readTextFile(path.join(runtime.root, RUNTIME_ROOT, "knowledge.jsonl"), "");
-  const knowledgeTail = knowledgeRaw
-    .split(/\\r?\\n/gu)
-    .filter((line) => line.trim().length > 0)
-    .slice(-12)
-    .join("\\n");
-
-  let gitBranch = "unknown";
-  let gitHead = "unknown";
-  let gitDirty = "unknown";
-  await new Promise((resolve) => {
-    const child = spawn("git", ["-C", runtime.root, "rev-parse", "--abbrev-ref", "HEAD"], {
-      stdio: ["ignore", "pipe", "ignore"]
-    });
-    let output = "";
-    child.stdout.on("data", (chunk) => {
-      output += String(chunk);
-    });
-    child.on("close", (code) => {
-      if (code === 0 && output.trim().length > 0) {
-        gitBranch = output.trim();
-      }
-      resolve(undefined);
-    });
-    child.on("error", () => resolve(undefined));
-  });
-  await new Promise((resolve) => {
-    const child = spawn("git", ["-C", runtime.root, "rev-parse", "--short", "HEAD"], {
-      stdio: ["ignore", "pipe", "ignore"]
-    });
-    let output = "";
-    child.stdout.on("data", (chunk) => {
-      output += String(chunk);
-    });
-    child.on("close", (code) => {
-      if (code === 0 && output.trim().length > 0) {
-        gitHead = output.trim();
-      }
-      resolve(undefined);
-    });
-    child.on("error", () => resolve(undefined));
-  });
-  gitDirty = await isGitDirty(runtime.root);
-
-  const timestamp = new Date().toISOString();
-  const digest = [
-    "# Session Digest",
-    "_Generated by pre-compact hook at " + timestamp + "_",
-    "",
-    "## Flow snapshot",
-    "- track: " + track,
-    "- current stage: " + stage,
-    "- completed: " + String(state.completedCount) + " stages",
-    "- skipped: " + (skipped.length > 0 ? skipped : "(none)"),
-    "- run: " + state.activeRunId,
-    "",
-    "## Gates (current stage)",
-    "- passed: " + (passed.length > 0 ? passed : "(none)"),
-    "- blocked: " + (blocked.length > 0 ? blocked : "(none)"),
-    "",
-    "## Outstanding delegations",
-    "- pending: " + (delegationPending.length > 0 ? delegationPending : "(none)"),
-    "",
-    "## Git",
-    "- branch: " + gitBranch,
-    "- head: " + gitHead,
-    "- worktree: " + gitDirty
-  ];
-  if (knowledgeTail.length > 0) {
-    digest.push("", "## Knowledge tail", knowledgeTail);
-  }
-  const digestFile = path.join(stateDir, "session-digest.md");
-  await writeTextFileAtomic(digestFile, digest.join("\\n") + "\\n");
+async function handlePreCompact(_runtime) {
   return 0;
 }
 
@@ -1810,7 +1491,6 @@ async function handleWorkflowGuard(runtime) {
 async function handleContextMonitor(runtime) {
   const stateDir = path.join(runtime.root, RUNTIME_ROOT, "state");
   const monitorStateFile = path.join(stateDir, "context-monitor.json");
-  const warningsFile = path.join(stateDir, "context-warnings.jsonl");
   const autoEvidenceFile = path.join(stateDir, "tdd-red-evidence.jsonl");
   const flowState = await readFlowState(runtime.root);
 
@@ -1891,14 +1571,7 @@ async function handleContextMonitor(runtime) {
       String(remainingPercent.toFixed(2)) +
       "% (" +
       band +
-      "). Consider checkpointing or compacting soon.";
-    await appendJsonLine(warningsFile, {
-      ts: now.toISOString(),
-      harness: runtime.harness,
-      band,
-      remainingPercent,
-      note
-    });
+      "). Consider leaving a handoff note or compacting soon.";
     emitAdvisoryContext(runtime, "context-monitor", note);
     process.stderr.write("[cclaw] " + note + "\\n");
     nextAdvisoryBand = band;
@@ -1949,7 +1622,8 @@ async function handleVerifyCurrentState(runtime) {
 function normalizeHookName(rawName) {
   const value = normalizeText(rawName).toLowerCase();
   if (value === "session-start") return "session-start";
-  if (value === "stop-checkpoint") return "stop-checkpoint";
+  if (value === "stop-handoff") return "stop-handoff";
+  if (value === "stop-checkpoint") return "stop-handoff";
   if (value === "pre-compact") return "pre-compact";
   if (value === "prompt-guard") return "prompt-guard";
   if (value === "workflow-guard") return "workflow-guard";
@@ -1964,7 +1638,7 @@ async function main() {
     process.stderr.write(
       "[cclaw] run-hook: usage: node " +
         RUNTIME_ROOT +
-        "/hooks/run-hook.mjs <session-start|stop-checkpoint|pre-compact|prompt-guard|workflow-guard|context-monitor|verify-current-state>\\n"
+        "/hooks/run-hook.mjs <session-start|stop-handoff|pre-compact|prompt-guard|workflow-guard|context-monitor|verify-current-state>\\n"
     );
     process.exitCode = 1;
     return;
@@ -1996,8 +1670,8 @@ async function main() {
       process.exitCode = await handleSessionStart(runtime);
       return;
     }
-    if (hookName === "stop-checkpoint") {
-      process.exitCode = await handleStopCheckpoint(runtime);
+    if (hookName === "stop-handoff") {
+      process.exitCode = await handleStopHandoff(runtime);
       return;
     }
     if (hookName === "pre-compact") {

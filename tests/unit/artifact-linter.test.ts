@@ -35,6 +35,33 @@ async function writeOptInAuditsConfig(
   await fs.writeFile(path.join(root, ".cclaw/config.yaml"), `${lines.join("\n")}\n`, "utf8");
 }
 
+const PLAN_EXECUTION_POSTURE = `## Execution Posture
+- Posture: sequential dependency batches; parallel work blocked until batch gates pass.
+- Stop conditions: failing verification, unclear dependency, or unresolved risk trigger.
+- Risk triggers: public API/config/CLI changes, schema migration, or cross-module state transition.
+- TDD checkpoints: RED commit/checkpoint, GREEN commit/checkpoint, REFACTOR commit/checkpoint when the repo workflow allows small commits.
+`;
+
+const SPEC_ASSUMPTIONS_BEFORE_FINALIZATION = `## Assumptions Before Finalization
+| Assumption | Source / confidence | Validation path | Disposition |
+|---|---|---|---|
+| Release automation runs on CI | design artifact / high | verify CI workflow before plan | accepted |
+`;
+
+const TDD_PREFLIGHT_SECTIONS = `## Test Discovery
+- Lists existing tests: tests/unit/dedupe.test.ts
+- Fixtures/helpers: test factory and temp project helper
+- Exact commands: pnpm vitest run dedupe.test.ts
+- The chosen local pattern to extend: behavior-focused unit assertions
+
+## System-Wide Impact Check
+- Callbacks: none affected
+- State transitions: no persisted state transition change
+- Interfaces/schemas: public dedupe function contract covered
+- Public APIs/config/CLI: no public CLI or config surface change
+- Persistence/event contracts: out of scope for this slice
+`;
+
 function completePlanArtifact(frontmatter = ""): string {
   const header = frontmatter.trim().length > 0 ? `${frontmatter.trim()}\n\n` : "";
   return `${header}# Plan Artifact
@@ -64,6 +91,8 @@ function completePlanArtifact(frontmatter = ""): string {
 |---|---|
 | AC-1 | T-1, T-2 |
 | AC-2 | T-2 |
+
+${PLAN_EXECUTION_POSTURE}
 
 ## WAIT_FOR_CONFIRM
 - Status: pending
@@ -731,6 +760,23 @@ describe("artifact linter heuristics", () => {
     expect(parsed.details).toContain("field \"severity\"");
   });
 
+  it("accepts optional Learnings supersession fields", () => {
+    const parsed = parseLearningsSection(
+      `- {"type":"lesson","trigger":"when old guidance overlaps","action":"append a focused replacement","confidence":"medium","supersedes":["old-guidance"],"superseded_by":"new-guidance"}`
+    );
+    expect(parsed.ok).toBe(true);
+    expect(parsed.entries[0]?.supersedes).toEqual(["old-guidance"]);
+    expect(parsed.entries[0]?.superseded_by).toBe("new-guidance");
+  });
+
+  it("rejects malformed Learnings supersession fields", () => {
+    const parsed = parseLearningsSection(
+      `- {"type":"lesson","trigger":"when old guidance overlaps","action":"append a focused replacement","confidence":"medium","supersedes":[]}`
+    );
+    expect(parsed.ok).toBe(false);
+    expect(parsed.details).toContain("field \"supersedes\"");
+  });
+
   it("rejects Learnings sections that contain non-bullet lines", () => {
     const parsed = parseLearningsSection(`summary line\n- None this stage.`);
     expect(parsed.ok).toBe(false);
@@ -942,7 +988,7 @@ describe("artifact linter heuristics", () => {
 |---|---|---|---|---|
 | R-1 | Suggestion | correctness | tighten naming | open |
 
-## Review Army Contract
+## Review Findings Contract
 - See \`07-review-army.json\`
 - Reconciliation summary: none
 
@@ -956,7 +1002,7 @@ describe("artifact linter heuristics", () => {
 `);
 
     const result = await lintArtifact(root, "review");
-    const readiness = result.findings.find((finding) => finding.section === "Review Readiness Dashboard");
+    const readiness = result.findings.find((finding) => finding.section === "Review Readiness Snapshot");
     expect(result.passed).toBe(true);
     expect(readiness?.found).toBe(false);
     expect(readiness?.required).toBe(false);
@@ -1752,6 +1798,8 @@ Fallback_Cache -->|degraded response| API_Gateway`;
 - Constraints: Node 20+ only
 - Assumptions: Release automation runs on CI
 
+${SPEC_ASSUMPTIONS_BEFORE_FINALIZATION}
+
 ## Testability Map
 | Criterion ID | Verification approach | Command/manual steps |
 |---|---|---|
@@ -1795,6 +1843,8 @@ Fallback_Cache -->|degraded response| API_Gateway`;
 |---|---|
 | AC-1 | T-1, T-2 |
 | AC-2 | T-2 |
+
+${PLAN_EXECUTION_POSTURE}
 
 ## WAIT_FOR_CONFIRM
 - Status: pending
@@ -2019,6 +2069,8 @@ inputs_hash: sha256:not-a-real-hash
 |---|---|
 | AC-1 | T-1 |
 
+${PLAN_EXECUTION_POSTURE}
+
 ## WAIT_FOR_CONFIRM
 - Status: pending
 - Confirmed by:
@@ -2166,6 +2218,8 @@ inputs_hash: sha256:not-a-real-hash
     const root = await createTempProject("tdd-full-pass");
     await writeRuntimeArtifact(root, "06-tdd.md", `# TDD Artifact
 
+${TDD_PREFLIGHT_SECTIONS}
+
 ## RED Evidence
 | Slice | Test name | Command | Failure output summary |
 |---|---|---|---|
@@ -2206,6 +2260,8 @@ inputs_hash: sha256:not-a-real-hash
   it("fails tdd when RED Evidence does not include explicit failure markers", async () => {
     const root = await createTempProject("tdd-red-no-failure-marker");
     await writeRuntimeArtifact(root, "06-tdd.md", `# TDD Artifact
+
+${TDD_PREFLIGHT_SECTIONS}
 
 ## RED Evidence
 - Command: pnpm vitest run dedupe.test.ts
@@ -2251,6 +2307,8 @@ inputs_hash: sha256:not-a-real-hash
     const root = await createTempProject("tdd-green-no-pass-marker");
     await writeRuntimeArtifact(root, "06-tdd.md", `# TDD Artifact
 
+${TDD_PREFLIGHT_SECTIONS}
+
 ## RED Evidence
 | Slice | Test name | Command | Failure output summary |
 |---|---|---|---|
@@ -2295,6 +2353,8 @@ inputs_hash: sha256:not-a-real-hash
     const root = await createTempProject("tdd-no-red");
     await writeRuntimeArtifact(root, "06-tdd.md", `# TDD Artifact
 
+${TDD_PREFLIGHT_SECTIONS}
+
 ## Acceptance Mapping
 | Slice | Plan task ID | Spec criterion ID |
 |---|---|---|
@@ -2329,6 +2389,8 @@ inputs_hash: sha256:not-a-real-hash
   it("fails tdd when GREEN Evidence is empty", async () => {
     const root = await createTempProject("tdd-empty-green");
     await writeRuntimeArtifact(root, "06-tdd.md", `# TDD Artifact
+
+${TDD_PREFLIGHT_SECTIONS}
 
 ## RED Evidence
 | Slice | Test name | Command | Failure output summary |
@@ -2366,6 +2428,8 @@ inputs_hash: sha256:not-a-real-hash
   it("fails tdd when Acceptance Mapping is missing", async () => {
     const root = await createTempProject("tdd-no-am");
     await writeRuntimeArtifact(root, "06-tdd.md", `# TDD Artifact
+
+${TDD_PREFLIGHT_SECTIONS}
 
 ## RED Evidence
 | Slice | Test name | Command | Failure output summary |
@@ -2406,6 +2470,8 @@ inputs_hash: sha256:not-a-real-hash
     const root = await createTempProject("tdd-no-fa");
     await writeRuntimeArtifact(root, "06-tdd.md", `# TDD Artifact
 
+${TDD_PREFLIGHT_SECTIONS}
+
 ## RED Evidence
 | Slice | Test name | Command | Failure output summary |
 |---|---|---|---|
@@ -2445,6 +2511,8 @@ inputs_hash: sha256:not-a-real-hash
     const root = await createTempProject("tdd-no-refactor");
     await writeRuntimeArtifact(root, "06-tdd.md", `# TDD Artifact
 
+${TDD_PREFLIGHT_SECTIONS}
+
 ## RED Evidence
 | Slice | Test name | Command | Failure output summary |
 |---|---|---|---|
@@ -2479,6 +2547,8 @@ inputs_hash: sha256:not-a-real-hash
   it("fails tdd when Traceability is missing", async () => {
     const root = await createTempProject("tdd-no-trace");
     await writeRuntimeArtifact(root, "06-tdd.md", `# TDD Artifact
+
+${TDD_PREFLIGHT_SECTIONS}
 
 ## RED Evidence
 | Slice | Test name | Command | Failure output summary |
@@ -2528,18 +2598,18 @@ inputs_hash: sha256:not-a-real-hash
 | R-1 | Critical | correctness | Snapshot cursor gap | open |
 | R-2 | Suggestion | architecture | Extract shared hook | open |
 
-## Review Army Contract
+## Review Findings Contract
 - See \`07-review-army.json\`
 - Reconciliation summary: 0 conflicts
 
-## Review Readiness Dashboard
+## Review Readiness Snapshot
 - Layer 1 complete: yes
 - Layer 2 complete: yes
-- Review army schema valid: yes
+- Review findings schema valid: yes
 - Open critical blockers: 1
 - Adversarial review pass: false
 
-## Completeness Score
+## Completeness Snapshot
 - AC coverage: 2/2 (100%)
 - Task coverage: 2/2
 - Slice coverage: 2/2
@@ -2568,14 +2638,14 @@ inputs_hash: sha256:not-a-real-hash
 |---|---|---|---|---|
 | R-1 | Suggestion | correctness | Minor naming | open |
 
-## Review Army Contract
+## Review Findings Contract
 - See \`07-review-army.json\`
 - Reconciliation summary: none
 
-## Review Readiness Dashboard
+## Review Readiness Snapshot
 - Layer 1 complete: no
 - Layer 2 complete: yes
-- Review army schema valid: yes
+- Review findings schema valid: yes
 - Open critical blockers: 0
 
 ## Severity Summary
@@ -2594,7 +2664,7 @@ inputs_hash: sha256:not-a-real-hash
     expect(l1?.required).toBe(true);
   });
 
-  it("fails review when Review Army Contract is missing", async () => {
+  it("fails review when Review Findings Contract is missing", async () => {
     const root = await createTempProject("review-no-army");
     await writeRuntimeArtifact(root, "07-review.md", `# Review Artifact
 
@@ -2608,10 +2678,10 @@ inputs_hash: sha256:not-a-real-hash
 |---|---|---|---|---|
 | R-1 | Suggestion | correctness | Minor naming | open |
 
-## Review Readiness Dashboard
+## Review Readiness Snapshot
 - Layer 1 complete: yes
 - Layer 2 complete: yes
-- Review army schema valid: no
+- Review findings schema valid: no
 - Open critical blockers: 0
 
 ## Severity Summary
@@ -2625,9 +2695,9 @@ inputs_hash: sha256:not-a-real-hash
 
     const result = await lintArtifact(root, "review");
     expect(result.passed).toBe(false);
-    const army = result.findings.find((f) => f.section === "Review Army Contract");
-    expect(army?.found).toBe(false);
-    expect(army?.required).toBe(true);
+    const findings = result.findings.find((f) => f.section === "Review Findings Contract");
+    expect(findings?.found).toBe(false);
+    expect(findings?.required).toBe(true);
   });
 
   it("fails review when Layer 2 Findings is missing", async () => {
@@ -2639,14 +2709,14 @@ inputs_hash: sha256:not-a-real-hash
 |---|---|---|
 | AC-1 | PASS | e2e test evidence |
 
-## Review Army Contract
+## Review Findings Contract
 - See \`07-review-army.json\`
 - Reconciliation summary: none
 
-## Review Readiness Dashboard
+## Review Readiness Snapshot
 - Layer 1 complete: yes
 - Layer 2 complete: no
-- Review army schema valid: yes
+- Review findings schema valid: yes
 - Open critical blockers: 0
 
 ## Severity Summary
@@ -2679,14 +2749,14 @@ inputs_hash: sha256:not-a-real-hash
 |---|---|---|---|---|
 | R-1 | Suggestion | correctness | Minor naming | open |
 
-## Review Army Contract
+## Review Findings Contract
 - See \`07-review-army.json\`
 - Reconciliation summary: none
 
-## Review Readiness Dashboard
+## Review Readiness Snapshot
 - Layer 1 complete: yes
 - Layer 2 complete: yes
-- Review army schema valid: yes
+- Review findings schema valid: yes
 - Open critical blockers: 0
 
 ## Severity Summary
@@ -2718,14 +2788,14 @@ inputs_hash: sha256:not-a-real-hash
 |---|---|---|---|---|
 | R-1 | Suggestion | correctness | Minor naming | open |
 
-## Review Army Contract
+## Review Findings Contract
 - See \`07-review-army.json\`
 - Reconciliation summary: none
 
-## Review Readiness Dashboard
+## Review Readiness Snapshot
 - Layer 1 complete: yes
 - Layer 2 complete: yes
-- Review army schema valid: yes
+- Review findings schema valid: yes
 - Open critical blockers: 0
 
 ## Final Verdict

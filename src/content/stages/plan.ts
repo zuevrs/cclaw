@@ -34,6 +34,7 @@ export const PLAN: StageSchemaInput = {
       "No dependency graph",
       "No WAIT_FOR_CONFIRM marker",
       "No explicit dependency batches",
+      "No execution posture for sequencing, risk, and checkpoint cadence",
       "Tasks exceed one coherent outcome",
       "No acceptance mapping",
       "Locked decisions are missing or not mapped",
@@ -46,18 +47,20 @@ export const PLAN: StageSchemaInput = {
       "Build dependency graph — identify task ordering, parallel opportunities, and blocking dependencies.",
       "Group tasks into dependency batches — batch N+1 cannot start until batch N has verification evidence.",
       "Slice into vertical tasks — each task targets 2-5 minutes, produces one testable outcome, and touches one coherent area.",
-      "Attach verification — every task has an acceptance criterion mapping and a concrete verification command.",
-      "Annotate slice-review metadata — if `.cclaw/config.yaml::sliceReview.enabled` is true, every task row additionally carries `touchCount` (rough number of files expected to change) and `touchPaths` (glob hints, e.g. `migrations/**`, `src/auth/**`). A task may set `highRisk: true` to force a review pass regardless of thresholds. These fields feed the TDD stage's Per-Slice Review checkpoint; when `sliceReview` is disabled they are optional.",
+      "Task Contract — every task has one coherent outcome, AC mapping, exact verification command/manual step, and expected evidence snippet or pass condition. Avoid vague `run tests` wording.",
+      "Annotate slice-review metadata — if `.cclaw/config.yaml::sliceReview.enabled` is true, every task row additionally carries `touchCount` (rough number of files expected to change) and `touchPaths` (glob hints, e.g. `migrations/**`, `src/auth/**`). A task may set `highRisk: true` to force a review pass regardless of thresholds. These fields feed the TDD stage's Per-Slice Review point; when `sliceReview` is disabled they are optional.",
       "Map scope Locked Decisions — every D-XX from scope is referenced by at least one plan task (or explicitly marked deferred with reason).",
       "Run anti-placeholder + anti-scope-reduction scans — block `TODO/TBD/...` and phrasing like `v1`, `for now`, `later` for locked boundaries.",
-      "Define checkpoints — mark points where progress should be validated before continuing.",
+      "Define validation points — mark where progress must be checked before continuing, with concrete command and expected evidence.",
+      "Define execution posture — record whether execution should be sequential, dependency-batched, parallel-safe, or blocked; include risk triggers and RED/GREEN/REFACTOR checkpoint/commit expectations when the repo workflow supports them.",
       "WAIT_FOR_CONFIRM — write plan artifact and explicitly pause. **STOP.** Do NOT proceed until user confirms. Then close the stage with `node .cclaw/hooks/stage-complete.mjs plan` and tell user to run `/cc-next`."
     ],
     interactionProtocol: [
       "Plan in read-only mode relative to implementation.",
       "Split work into small vertical slices (target 2-5 minute tasks).",
       "Publish explicit dependency batches with entry and exit checks for each batch.",
-      "Attach verification step to every task.",
+      "Expose execution posture: sequential vs batch/parallel, stop conditions, and checkpoint cadence for the TDD handoff.",
+      "Attach exact verification command/manual step and expected evidence to every task.",
       "Preserve locked scope boundaries: no silent scope reduction language in task rows.",
       "Enforce WAIT_FOR_CONFIRM: present the plan summary with options (A) Approve / (B) Revise / (C) Reject.",
       "**STOP.** Do NOT proceed until user explicitly approves.",
@@ -66,23 +69,24 @@ export const PLAN: StageSchemaInput = {
     process: [
       "Build dependency graph and ordered slices.",
       "Group slices into execution batches and define gate criteria per batch.",
-      "Define each task with acceptance mapping and verification commands.",
+      "Define each task with acceptance mapping, verification command/manual step, and expected evidence/pass condition.",
       "Trace every locked decision (D-XX) to plan tasks or explicit defer rationale.",
-      "Record checkpoints and blockers.",
+      "Record validation points, blockers, and execution posture.",
       "Write plan artifact and pause at WAIT_FOR_CONFIRM."
     ],
     requiredGates: [
       { id: "plan_tasks_sliced_2_5_min", description: "Tasks are small, executable slices." },
-      { id: "plan_dependency_batches_defined", description: "Tasks are grouped into executable batches with gate checks." },
+      { id: "plan_dependency_batches_defined", description: "Tasks are grouped into executable batches with gate checks and execution posture." },
       { id: "plan_acceptance_mapped", description: "Each task maps to a spec acceptance criterion." },
       { id: "plan_wait_for_confirm", description: "Execution blocked until explicit user confirmation." }
     ],
     requiredEvidence: [
       "Artifact written to `.cclaw/artifacts/05-plan.md`.",
-      "Task list includes acceptance mapping.",
+      "Task list includes acceptance mapping, exact verification command/manual step, and expected evidence/pass condition.",
       "Locked decision coverage table present with D-XX trace links.",
       "Dependency graph documented.",
       "Dependency batches documented with batch-by-batch verification gates.",
+      "Execution posture documented with sequencing, stop conditions, and TDD checkpoint expectations.",
       "WAIT_FOR_CONFIRM status recorded."
     ],
     inputs: ["approved spec", "codebase context", "delivery constraints"],
@@ -95,6 +99,7 @@ export const PLAN: StageSchemaInput = {
       "tasks too broad",
       "dependency uncertainty unresolved",
       "batch boundaries are unclear",
+      "execution posture is missing or contradicts dependency batches",
       "locked decisions from scope are not mapped to tasks",
       "no explicit confirmation"
     ],
@@ -102,6 +107,7 @@ export const PLAN: StageSchemaInput = {
       "plan quality gates complete",
       "WAIT_FOR_CONFIRM present and unresolved until user approves",
       "artifact ready for TDD execution",
+      "execution posture ready for TDD handoff",
       "acceptance mapping complete"
     ],
     platformNotes: [
@@ -119,10 +125,12 @@ export const PLAN: StageSchemaInput = {
       traceabilityRule: "Every task must trace to a spec acceptance criterion. Every locked scope decision (D-XX) must trace to at least one plan task or explicit defer rationale. Every downstream RED test must trace to a plan task."
     },
     artifactValidation: [
+      { section: "Upstream Handoff", required: false, validationRule: "Summarizes spec/design/scope decisions, constraints, open questions, and explicit drift before task breakdown." },
       { section: "Dependency Graph", required: false, validationRule: "Ordering and parallel opportunities explicit. No circular dependencies." },
       { section: "Dependency Batches", required: true, validationRule: "Every task belongs to a batch. Each batch has an exit gate and dependency statement." },
-      { section: "Task List", required: true, validationRule: "Each task row includes ID, description, acceptance criterion, verification command, and effort estimate (S/M/L). Every task must also carry a minutes estimate within the 2-5 minute budget. When the sliceReview feature is enabled in the cclaw config, each task row additionally declares touchCount, touchPaths, and an optional highRisk flag so the TDD stage can decide whether a Per-Slice Review pass is required." },
+      { section: "Task List", required: true, validationRule: "Each task row includes ID, description, acceptance criterion, exact verification command/manual step, expected evidence/pass condition, and effort estimate (S/M/L). Every task must also carry a minutes estimate within the 2-5 minute budget. When the sliceReview option is enabled in the cclaw config, each task row additionally declares touchCount, touchPaths, and an optional highRisk flag so the TDD stage can decide whether a Per-Slice Review pass is required." },
       { section: "Acceptance Mapping", required: true, validationRule: "Every spec criterion is covered by at least one task." },
+      { section: "Execution Posture", required: true, validationRule: "States sequential/batch/parallel posture, stop conditions, risk triggers, and RED/GREEN/REFACTOR checkpoint or commit expectations for TDD when consistent with the repo workflow." },
       { section: "Locked Decision Coverage", required: false, validationRule: "Every locked decision ID (D-XX) from scope is listed with linked task IDs or explicit defer rationale." },
       { section: "Risk Assessment", required: false, validationRule: "If present: per-task or per-batch risk identification with likelihood, impact, and mitigation strategy." },
       { section: "Boundary Map", required: false, validationRule: "If present: per-batch or per-task interface contracts listing what each task produces (exports) and consumes (imports) from other tasks." },
@@ -132,14 +140,14 @@ export const PLAN: StageSchemaInput = {
     ]
   },
   reviewLens: {
-    outputs: ["task graph", "dependency batch plan", "ordered plan", "explicit confirmation checkpoint"],
+    outputs: ["task graph", "dependency batch plan", "ordered plan", "explicit confirmation gate"],
     reviewSections: [
       {
         title: "Task Decomposition Audit",
         evaluationPoints: [
           "Does every task target a single coherent area (vertical slice)?",
           "Can each task be completed in 2-5 minutes?",
-          "Does every task have an acceptance criterion link and verification command?",
+          "Does every task have an acceptance criterion link, exact verification command/manual step, and expected evidence/pass condition?",
           "Are there tasks that touch multiple unrelated areas?",
           "Would a new engineer understand and start each task within two minutes?"
         ],
@@ -152,7 +160,8 @@ export const PLAN: StageSchemaInput = {
           "Does each batch have a verification gate?",
           "Are batch dependencies explicit and acyclic?",
           "Is the acceptance mapping complete — every spec criterion covered?",
-          "Are there hidden dependencies between tasks in different batches?"
+          "Are there hidden dependencies between tasks in different batches?",
+          "Does the Execution Posture match the dependency graph and stop risky parallelism?"
         ],
         stopGate: true
       },
@@ -160,7 +169,7 @@ export const PLAN: StageSchemaInput = {
         title: "Five-Minute Budget + No-Placeholders Audit",
         evaluationPoints: [
           "Does every task carry an explicit minutes estimate (e.g. `[~3m]`) and does every estimate fit the 2-to-5-minute budget? Estimates >5 minutes must be split.",
-          "Are all file paths, test commands, and verification commands copy-pasteable as written — no `TODO`, `TBD`, `FIXME`, `<fill-in>`, `<your-*-here>`, `xxx`, or ellipsis standing in for omitted args?",
+          "Are all file paths, test commands, verification commands, and expected evidence copy-pasteable/specific as written — no `TODO`, `TBD`, `FIXME`, `<fill-in>`, `<your-*-here>`, `xxx`, bare `run tests`, or ellipsis standing in for omitted args?",
           "Does every acceptance-criterion reference resolve to a real R# / AC-### in the spec (not a blank link)?",
           "If an estimate is genuinely uncertain (first-time integration, unfamiliar library), is the uncertainty named explicitly and scheduled as a spike task in batch 0, rather than hidden behind a large estimate?"
         ],

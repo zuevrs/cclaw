@@ -82,7 +82,7 @@ describe("hook manifest", () => {
       const coverage = semanticEventCoverage(harness);
       expect(coverage.session_rehydrate).toBeTruthy();
       expect(coverage.pre_tool_prompt_guard).toBeTruthy();
-      expect(coverage.stop_checkpoint).toBeTruthy();
+      expect(coverage.stop_handoff).toBeTruthy();
     }
   });
 });

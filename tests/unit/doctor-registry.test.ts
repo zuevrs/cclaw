@@ -12,24 +12,24 @@ describe("doctor registry", () => {
   it("classifies hook wiring checks as error severity", () => {
     const meta = doctorCheckMetadata("hook:wiring:claude");
     expect(meta.severity).toBe("error");
-    expect(meta.docRef).toContain("hooks-and-lifecycle.md");
+    expect(meta.docRef).toContain("harnesses.md");
   });
 
   it("classifies plural hooks-prefixed checks as error severity", () => {
     const meta = doctorCheckMetadata("hooks:workflow_guard:tdd_red_first");
     expect(meta.severity).toBe("error");
-    expect(meta.docRef).toContain("hooks-and-lifecycle.md");
+    expect(meta.docRef).toContain("harnesses.md");
   });
 
   it("classifies protocol checks as error severity", () => {
     const meta = doctorCheckMetadata("protocol:completion");
     expect(meta.severity).toBe("error");
-    expect(meta.docRef).toContain("harness-and-routing.md");
+    expect(meta.docRef).toContain("harnesses.md");
   });
 
-  it("falls back to error metadata for unknown checks", () => {
+  it("falls back to warning metadata for unknown checks", () => {
     const meta = doctorCheckMetadata("custom:unknown");
-    expect(meta.severity).toBe("error");
+    expect(meta.severity).toBe("warning");
     expect(meta.summary).toContain("Unclassified doctor check");
   });
 

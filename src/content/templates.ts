@@ -3,16 +3,26 @@ import { orderedStageSchemas } from "./stage-schema.js";
 import { FLOW_STAGES } from "../types.js";
 
 const SHIP_FINALIZATION_ENUM_LINES = SHIP_FINALIZATION_MODES.map((mode) => `  - ${mode}`).join("\n");
+const MARKDOWN_CODE_FENCE = "```";
 
-export const ARTIFACT_TEMPLATES: Record<string, string> = {
-  "01-brainstorm.md": `---
-stage: brainstorm
+function artifactFrontmatter(stage: string): string {
+  return `---
+stage: ${stage}
 schema_version: 1
 version: ${CCLAW_VERSION}
-feature: <feature-id>
+run: <run-id>
 locked_decisions: []
 inputs_hash: sha256:pending
----
+---`;
+}
+
+const SEED_SHELF_SECTION = `## Seed Shelf Candidates (optional)
+| Seed file | Trigger when | Suggested action | Status (planted/deferred/ignored) |
+|---|---|---|---|
+| .cclaw/seeds/SEED-YYYY-MM-DD-<slug>.md |  |  |  |`;
+
+export const ARTIFACT_TEMPLATES: Record<string, string> = {
+  "01-brainstorm.md": `${artifactFrontmatter("brainstorm")}
 
 # Brainstorm Artifact
 
@@ -55,10 +65,7 @@ inputs_hash: sha256:pending
 - **Rationale:**
 - **Approval:** pending
 
-## Seed Shelf Candidates (optional)
-| Seed file | Trigger when | Suggested action | Status (planted/deferred/ignored) |
-|---|---|---|---|
-| .cclaw/seeds/SEED-YYYY-MM-DD-<slug>.md |  |  |  |
+${SEED_SHELF_SECTION}
 
 ## Design
 - **Architecture:**
@@ -72,16 +79,16 @@ inputs_hash: sha256:pending
 ## Learnings
 - None this stage.
 `,
-  "02-scope.md": `---
-stage: scope
-schema_version: 1
-version: ${CCLAW_VERSION}
-feature: <feature-id>
-locked_decisions: []
-inputs_hash: sha256:pending
----
+  "02-scope.md": `${artifactFrontmatter("scope")}
 
 # Scope Artifact
+
+## Upstream Handoff
+- Source artifacts: \`00-idea.md\`, \`01-brainstorm-<slug>.md\`
+- Decisions carried forward:
+- Constraints carried forward:
+- Open questions:
+- Drift from upstream (or \`None\`):
 
 ## Pre-Scope System Audit
 | Check | Command | Findings |
@@ -167,10 +174,7 @@ inputs_hash: sha256:pending
 |---|---|
 |  |  |
 
-## Seed Shelf Candidates (optional)
-| Seed file | Trigger when | Suggested action | Status (planted/deferred/ignored) |
-|---|---|---|---|
-| .cclaw/seeds/SEED-YYYY-MM-DD-<slug>.md |  |  |  |
+${SEED_SHELF_SECTION}
 
 ## Error & Rescue Registry
 | Capability | Failure mode | Detection | Fallback |
@@ -203,14 +207,7 @@ inputs_hash: sha256:pending
 ## Learnings
 - None this stage.
 `,
-  "02a-research.md": `---
-stage: design
-schema_version: 1
-version: ${CCLAW_VERSION}
-feature: <feature-id>
-locked_decisions: []
-inputs_hash: sha256:pending
----
+  "02a-research.md": `${artifactFrontmatter("design")}
 
 # Research Report
 
@@ -244,16 +241,16 @@ inputs_hash: sha256:pending
 ## Learnings
 - None this stage.
 `,
-  "03-design.md": `---
-stage: design
-schema_version: 1
-version: ${CCLAW_VERSION}
-feature: <feature-id>
-locked_decisions: []
-inputs_hash: sha256:pending
----
+  "03-design.md": `${artifactFrontmatter("design")}
 
 # Design Artifact
+
+## Upstream Handoff
+- Source artifacts: \`02-scope-<slug>.md\`, \`02a-research.md\` when present
+- Decisions carried forward:
+- Constraints carried forward:
+- Open questions:
+- Drift from upstream (or \`None\`):
 
 ## Codebase Investigation
 | File | Current responsibility | Patterns discovered |
@@ -284,9 +281,9 @@ inputs_hash: sha256:pending
 
 <!-- diagram: architecture -->
 
-\`\`\`
+${MARKDOWN_CODE_FENCE}
 (ASCII, Mermaid, or tool-generated diagram showing component boundaries and data flow direction)
-\`\`\`
+${MARKDOWN_CODE_FENCE}
 
 ## Data-Flow Shadow Paths
 <!-- diagram: data-flow-shadow-paths -->
@@ -298,33 +295,33 @@ inputs_hash: sha256:pending
 
 <!-- diagram: error-flow -->
 
-\`\`\`
+${MARKDOWN_CODE_FENCE}
 (failure detection -> rescue action -> user-visible outcome)
-\`\`\`
+${MARKDOWN_CODE_FENCE}
 
 ## State Machine Diagram
 
 <!-- diagram: state-machine -->
 
-\`\`\`
+${MARKDOWN_CODE_FENCE}
 (state transitions for the critical flow lifecycle)
-\`\`\`
+${MARKDOWN_CODE_FENCE}
 
 ## Rollback Flowchart
 
 <!-- diagram: rollback-flowchart -->
 
-\`\`\`
+${MARKDOWN_CODE_FENCE}
 (trigger -> rollback actions -> verification)
-\`\`\`
+${MARKDOWN_CODE_FENCE}
 
 ## Deployment Sequence Diagram
 
 <!-- diagram: deployment-sequence -->
 
-\`\`\`
+${MARKDOWN_CODE_FENCE}
 (rollout order, guard checks, and verification sequence)
-\`\`\`
+${MARKDOWN_CODE_FENCE}
 
 ## Stale Diagram Audit
 | File | Last modified | Diagram marker baseline | Status | Notes |
@@ -415,10 +412,7 @@ inputs_hash: sha256:pending
 |---|---|---|---|
 |  |  |  |  |
 
-## Seed Shelf Candidates (optional)
-| Seed file | Trigger when | Suggested action | Status (planted/deferred/ignored) |
-|---|---|---|---|
-| .cclaw/seeds/SEED-YYYY-MM-DD-<slug>.md |  |  |  |
+${SEED_SHELF_SECTION}
 
 ## Completion Dashboard
 | Review Section | Status | Issues |
@@ -437,16 +431,16 @@ inputs_hash: sha256:pending
 ## Learnings
 - None this stage.
 `,
-  "04-spec.md": `---
-stage: spec
-schema_version: 1
-version: ${CCLAW_VERSION}
-feature: <feature-id>
-locked_decisions: []
-inputs_hash: sha256:pending
----
+  "04-spec.md": `${artifactFrontmatter("spec")}
 
 # Specification Artifact
+
+## Upstream Handoff
+- Source artifacts: \`02-scope-<slug>.md\`, \`03-design-<slug>.md\`
+- Decisions carried forward:
+- Constraints carried forward:
+- Open questions:
+- Drift from upstream (or \`None\`):
 
 ## Acceptance Criteria
 | ID | Requirement Ref (R#) | Criterion (observable/measurable/falsifiable) | Design Decision Ref |
@@ -465,6 +459,11 @@ inputs_hash: sha256:pending
 ## Constraints and Assumptions
 - Constraints:
 - Assumptions:
+
+## Assumptions Before Finalization
+| Assumption | Source / confidence | Validation path | Disposition |
+|---|---|---|---|
+|  |  |  | accepted/rejected/open |
 
 ## Testability Map
 | Criterion ID | Verification approach | Command/manual steps |
@@ -493,16 +492,16 @@ inputs_hash: sha256:pending
 ## Learnings
 - None this stage.
 `,
-  "05-plan.md": `---
-stage: plan
-schema_version: 1
-version: ${CCLAW_VERSION}
-feature: <feature-id>
-locked_decisions: []
-inputs_hash: sha256:pending
----
+  "05-plan.md": `${artifactFrontmatter("plan")}
 
 # Plan Artifact
+
+## Upstream Handoff
+- Source artifacts: \`03-design-<slug>.md\`, \`04-spec.md\`
+- Decisions carried forward:
+- Constraints carried forward:
+- Open questions:
+- Drift from upstream (or \`None\`):
 
 ## Dependency Graph
 - 
@@ -542,6 +541,12 @@ Execution rule: complete and verify each batch before starting the next batch.
 |---|---|
 | AC-1 | T-1 |
 
+## Execution Posture
+- Posture: sequential | dependency-batched | parallel-safe | blocked
+- Stop conditions:
+- Risk triggers:
+- TDD checkpoint plan: RED commit/checkpoint -> GREEN commit/checkpoint -> REFACTOR commit/checkpoint (or deferred because: )
+
 ## Locked Decision Coverage
 | Decision ID | Source section | Plan tasks implementing decision | Status |
 |---|---|---|---|
@@ -572,16 +577,31 @@ Execution rule: complete and verify each batch before starting the next batch.
 ## Learnings
 - None this stage.
 `,
-  "06-tdd.md": `---
-stage: tdd
-schema_version: 1
-version: ${CCLAW_VERSION}
-feature: <feature-id>
-locked_decisions: []
-inputs_hash: sha256:pending
----
+  "06-tdd.md": `${artifactFrontmatter("tdd")}
 
 # TDD Artifact
+
+## Upstream Handoff
+- Source artifacts: \`04-spec.md\`, \`05-plan.md\`
+- Decisions carried forward:
+- Constraints carried forward:
+- Open questions:
+- Drift from upstream (or \`None\`):
+
+## Test Discovery
+| Slice | Existing tests / helpers / fixtures | Exact command(s) | Pattern to extend |
+|---|---|---|---|
+| S-1 |  |  |  |
+
+## System-Wide Impact Check
+| Slice | Callbacks/state/interfaces/contracts affected | Coverage decision |
+|---|---|---|
+| S-1 |  | covered/out-of-scope because  |
+
+## Execution Posture
+- Posture: sequential | dependency-batched | blocked
+- RED/GREEN/REFACTOR checkpoint plan:
+- Incremental commits: yes/no/deferred because
 
 ## RED Evidence
 | Slice | Test name | Command | Failure output summary |
@@ -639,16 +659,16 @@ inputs_hash: sha256:pending
 ## Learnings
 - None this stage.
 `,
-  "07-review.md": `---
-stage: review
-schema_version: 1
-version: ${CCLAW_VERSION}
-feature: <feature-id>
-locked_decisions: []
-inputs_hash: sha256:pending
----
+  "07-review.md": `${artifactFrontmatter("review")}
 
 # Review Artifact
+
+## Upstream Handoff
+- Source artifacts: \`04-spec.md\`, \`05-plan.md\`, \`06-tdd.md\`
+- Decisions carried forward:
+- Constraints carried forward:
+- Open questions:
+- Drift from upstream (or \`None\`):
 
 ## Layer 1 Verdict
 | Criterion | Verdict | Evidence |
@@ -666,46 +686,25 @@ inputs_hash: sha256:pending
 |---|---|---|---|---|---|---|
 | CR-1 | reviewer / bot / ci | Critical/Important/Suggestion | path:line or n/a |  | open/in-progress/resolved/accepted-risk/rejected-with-evidence |  |
 
-## Review Army Contract
+## Review Findings Contract
 - See \`07-review-army.json\`
 - Reconciliation summary:
 
-## Review Readiness Dashboard
+## Review Readiness Snapshot
 
-| Pass | Status | Completed at (UTC) | Reviewer / source | Commit at review | Drift vs HEAD |
-|---|---|---|---|---|---|
-| Layer 1 — spec compliance | pass / fail / pending | <ISO 8601> | reviewer | <short sha> | <files changed since> |
-| Layer 2 — correctness | pass / fail / pending | <ISO 8601> | reviewer | <short sha> | <files changed since> |
-| Layer 2 — security | pass / fail / pending | <ISO 8601> | security-reviewer | <short sha> | <files changed since> |
-| Layer 2 — performance | pass / fail / pending | <ISO 8601> | reviewer | <short sha> | <files changed since> |
-| Layer 2 — architecture | pass / fail / pending | <ISO 8601> | reviewer | <short sha> | <files changed since> |
-| Adversarial review | pass / fail / n/a | <ISO 8601 or —> | adversarial-review skill | <short sha or —> | <drift or —> |
-| Review army schema valid | pass / fail | <ISO 8601> | jsonschema | <short sha> | n/a |
-
-### Delegation log snapshot (current run, current stage)
-- Path: \`.cclaw/state/delegation-log.json\`
-- Required: <list of mandatory specialists>
-- Completed: <list with timestamps>
-- Waived (with reason): <list or "none">
-- Pending: <list or "none">
-
-### Staleness signal
-- Worktree commit at last review pass: \`<short sha>\`
-- Worktree commit now: \`<short sha>\`
-- Files changed since last review pass: \`<count>\` (run \`git diff --stat <sha>..HEAD\` to inspect)
-- If drift > 0 lines, mark Layer 1 / Layer 2 results as **STALE — re-run before ship**.
-
-### Headline
-- Open critical blockers: <count>
-- Adversarial review pass: pass / fail / n/a
+- Completed checks: Layer 1, Layer 2 tags, security sweep, schema validation
+- Delegation log: \`.cclaw/state/delegation-log.json\` required/completed/waived/pending
+- Staleness signal: commit at last review pass vs current commit
+- Open critical blockers:
 - Ship recommendation: APPROVED | APPROVED_WITH_CONCERNS | BLOCKED
 
-## Completeness Score
+
+## Completeness Snapshot
 - AC coverage: <N>/<M> (<percent>%)
 - Task coverage (tasks backed by ≥1 test slice): <N>/<M>
 - Slice coverage (slices linked to ≥1 AC): <N>/<M>
-- Adversarial review pass: true | false
-- Overall score: <0-100>
+- Adversarial review: not triggered | pass | fail
+- Overall: complete | concerns | blocked
 
 ## Trace Matrix Check
 - Command: \`cclaw internal trace-matrix\`
@@ -756,16 +755,16 @@ inputs_hash: sha256:pending
   }
 }
 `,
-  "08-ship.md": `---
-stage: ship
-schema_version: 1
-version: ${CCLAW_VERSION}
-feature: <feature-id>
-locked_decisions: []
-inputs_hash: sha256:pending
----
+  "08-ship.md": `${artifactFrontmatter("ship")}
 
 # Ship Artifact
+
+## Upstream Handoff
+- Source artifacts: \`06-tdd.md\`, \`07-review.md\`
+- Decisions carried forward:
+- Constraints carried forward:
+- Open questions:
+- Drift from upstream (or \`None\`):
 
 ## Preflight Results
 - Review verdict:
@@ -800,21 +799,14 @@ ${SHIP_FINALIZATION_ENUM_LINES}
 - Exceptions (if any):
 
 ## Retro Gate Handoff
-- Run \`/cc-ops retro\` before archive.
+- Complete the retro gate before archive.
 - Retro artifact path: \`.cclaw/artifacts/09-retro.md\`
 - Archive remains blocked until retro gate is complete.
 
 ## Learnings
 - None this stage.
 `,
-  "09-retro.md": `---
-stage: retro
-schema_version: 1
-version: ${CCLAW_VERSION}
-feature: <feature-id>
-locked_decisions: []
-inputs_hash: sha256:pending
----
+  "09-retro.md": `${artifactFrontmatter("retro")}
 
 # Retro Artifact
 
@@ -923,13 +915,13 @@ Track-specific skips are allowed only when \`flow-state.track\` + \`skippedStage
 
 - \`/cc\` = entry and resume.
 - \`/cc-next\` = only progression path.
-- \`/cc-learn\` = knowledge capture and recall.
+- Knowledge capture and recall use the \`learnings\` skill when requested.
 
 ## Verification Discipline
 
 - No completion claim without fresh command evidence in this turn.
 - Do not mark gates passed from memory.
-- Keep evidence in \`.cclaw/artifacts/\`; archive via \`/cc-ops archive\` (agent flow) or archive runtime.
+- Keep evidence in \`.cclaw/artifacts/\`; archive via \`cclaw archive\`.
 
 ## Delegation And Approvals
 
@@ -940,8 +932,9 @@ Track-specific skips are allowed only when \`flow-state.track\` + \`skippedStage
 ## Routing Source Of Truth
 
 - Primary router: \`.cclaw/skills/using-cclaw/SKILL.md\`.
-- Protocols: \`.cclaw/references/protocols/*.md\`.
-- Preamble budget: \`.cclaw/references/protocols/ethos.md\`.
+- Stage behavior: current stage skill plus \`.cclaw/state/flow-state.json\`.
+- Preamble budget: keep role/status announcements brief and avoid repeating
+  them unless the stage or role changes.
 `;
 
 export function buildRulesJson(): Record<string, unknown> {

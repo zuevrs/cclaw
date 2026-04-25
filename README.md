@@ -25,8 +25,7 @@ operational knobs to memorise.
   changes across multiple harnesses and languages.
 - Staff engineers and tech leads who want **enforceable discipline**:
   locked-in decisions, no placeholders, mandatory TDD, traceable plans.
-- Maintainers of AI agents/skills who want **measurable prompt engineering**
-  via the built-in eval harness.
+- Maintainers who want a compact, file-backed flow their harness agents can actually follow.
 
 ---
 
@@ -76,7 +75,7 @@ You ──► /cc <idea>
    cclaw reads state + knowledge, guides execution
         │
         ▼
-   artifacts written, checkpoint saved
+   artifacts written, handoff captured
         │
         ▼
    next stage is explicit in flow-state.json
@@ -86,7 +85,14 @@ You ──► /cc <idea>
 
 ## 30-second install
 
+Requirements:
+
+- Node.js **20+** (matches the package `engines` field).
+- Run from the **git project root** you want cclaw to manage, not from `~`
+  or a nested package directory.
+
 ```bash
+cd /path/to/your/repo
 npx cclaw-cli
 ```
 
@@ -102,26 +108,23 @@ Everything day-to-day happens inside your harness (Claude Code, Cursor,
 OpenCode, or Codex); optional maintenance commands are listed in the
 CLI reference.
 
+If cclaw says it is not installed, either run `npx cclaw-cli init` in the
+repo root or `cd` to the project that already contains `.cclaw/`.
+
 ### What gets generated
 
 ```text
 .cclaw/
-├── commands/           # stage + utility command contracts (markdown)
-├── skills/             # stage + utility skills loaded by the harness
-├── contexts/           # cross-cutting context modes (research, debugging, …)
+├── commands/           # four entrypoints: /cc, /cc-next, /cc-ideate, /cc-view
+├── skills/             # flow-critical skills loaded by the harness
 ├── templates/          # artifact skeletons for each stage
-├── rules/              # lint-style rules surfaced to the agent
-├── adapters/           # per-harness translation notes
-├── agents/             # subagent definitions (planner, reviewer, …)
-├── hooks/              # harness-agnostic hook scripts
-├── worktrees/          # isolated feature worktrees (power-user, via /cc-ops)
-├── artifacts/          # active feature artifacts (00-idea.md → 09-retro.md)
-├── runs/               # archived feature snapshots: YYYY-MM-DD-slug/
-├── references/         # (optional) pinned copies of reference frameworks
-├── evals/              # eval corpus, rubrics, baselines, reports
-├── custom-skills/      # user-authored skills (never overwritten)
-├── state/              # flow-state.json + delegation-log.json + activity
-└── knowledge.jsonl     # append-only, strict-schema lessons + patterns
+├── rules/              # opt-in language rule packs
+├── agents/             # subagent definitions
+├── hooks/              # harness-agnostic hook runtime
+├── artifacts/          # active run artifacts (00-idea.md -> 09-retro.md)
+├── runs/               # archived run snapshots: YYYY-MM-DD-slug/
+├── state/              # flow-state.json + stage activity log
+└── knowledge.jsonl     # append-only lessons + patterns
 ```
 
 Plus harness-specific shims:
@@ -133,9 +136,10 @@ Plus harness-specific shims:
   activated via `/use cc` or description-based auto-matching. Hooks
   require Codex CLI ≥ v0.114 and `[features] codex_hooks = true` in
   `~/.codex/config.toml`; `cclaw init --codex` offers to patch that flag
-  for you. `.codex/commands/` and the legacy `.agents/skills/cclaw-cc*/`
-  folders are auto-cleaned on sync.)
+  for you. `cclaw doctor` reports stale legacy Codex layouts.)
 - `AGENTS.md` with a managed routing block (includes a Codex-specific note)
+  — see [`docs/agents-block.example.md`](./docs/agents-block.example.md)
+  for a static example of what the harness reads.
 
 ### `.cclaw/config.yaml` — the minimal surface
 
@@ -172,21 +176,22 @@ Full key-by-key reference: [`docs/config.md`](./docs/config.md).
 ## The four commands you actually use
 
 All four appear as slash commands in every supported harness. This is the
-top-level user surface — everything else is either automatic or happens
-inside `/cc-ops` subcommands.
+top-level user surface: `/cc`, `/cc-next`, `/cc-ideate`, and `/cc-view status`
+cover the happy path. Operator/support tools stay separate so the harness
+does not feel like a command framework.
 
 | Command | What it does |
 |---|---|
 | **`/cc <idea>`** | Classify the task, discover origin docs (`docs/prd/**`, ADRs, root `PRD.md`, …), sniff the stack, recommend a track, then start the first stage of that track. `/cc` without arguments resumes the current flow. |
 | **`/cc-next`** | The one progression primitive. Reads `flow-state.json`, checks gates + mandatory subagent delegations, and either resumes the current stage or advances to the next. `/cc-next` in a new session is how you **resume**. |
 | **`/cc-ideate`** | Repository improvement ideate mode. Scans for TODOs, flaky tests, oversized modules, docs drift, and recurring knowledge-store lessons, **persists the ranked backlog** to `.cclaw/artifacts/ideate-<date>-<slug>.md`, and ends with a concrete handoff: launch `/cc` on the selected candidate in the same session, save-and-close, or discard. Resume check on next run reuses any ideate artifact younger than 30 days. Never mutates `flow-state.json`. |
-| **`/cc-view`** | Read-only flow visibility. `/cc-view status` (default) shows stage progress, mandatory delegations with their fulfillment mode (isolated / generic-dispatch / role-switch), the ship closeout substate (retro → compound → archive), and the active harness parity row. `/cc-view tree` renders the same picture as a tree with a closeout sub-branch under ship and a per-harness playbook summary. `/cc-view diff` shows stage/gate/closeout/delegation deltas since the last run. Never mutates state (except diff's snapshot baseline). |
+| **`/cc-view`** | Read-only flow visibility. `/cc-view status` (default) shows stage progress, mandatory delegations with their fulfillment mode (isolated / generic-dispatch / role-switch), the ship closeout substate (retro → compound → archive), and the active harness parity row. `/cc-view tree` renders the same picture as a tree with a closeout sub-branch under ship and harness capability status from `cclaw doctor --explain`. `/cc-view diff` shows stage/gate/closeout/delegation changes from visible state and git evidence. Never mutates state. |
 
-> Power-user surface: `/cc-ops` is an operational router for manual
-> overrides (rewind a stale stage, manage parallel features, re-run a
-> compound pass). `/cc-learn` is the strict-schema knowledge writer —
-> agents call it automatically from completion protocols; you rarely
-> invoke it by hand.
+Operational extras stay off the main surface: `/cc-next` handles progression
+and closeout, `cclaw archive` handles explicit archival/reset, and
+`cclaw doctor` verifies install/runtime wiring. Doctor is not a replacement
+for a real harness smoke test; it catches broken files, stale hooks, and
+schema drift before the user loses a run.
 
 ### Example first-run
 
@@ -260,7 +265,7 @@ Each critical-path stage produces a dated artifact under
 `02a-research.md` (design research fleet synthesis), `03-design.md` through
 `08-ship.md`. Closeout adds `09-retro.md`; archive then rolls the whole
 bundle into `.cclaw/runs/<YYYY-MM-DD-slug>/` and resets the active flow for
-the next feature.
+the next run.
 
 ### Track heuristics are configurable (advisory)
 
@@ -312,9 +317,7 @@ it into ceremony:
 - **Mandatory subagent delegation** at TDD, with per-harness waivers.
 - **Turn Announce Discipline.** Every stage entry/exit emits a visible
   line so users can see what the agent is doing, not just what it says.
-- **Extracted protocols.** Decision, Completion, and Ethos protocols live
-  in a single place (`.cclaw/contexts/`), so every skill speaks the same
-  dialect.
+- **Inline protocols.** Decision, Completion, and Ethos discipline is embedded in the active stage skill so users do not need to chase generated reference files.
 - **Knowledge capture throughout the flow.** Every stage completion
   protocol emits typed entries (`rule` / `pattern` / `lesson`) to
   `.cclaw/knowledge.jsonl` as the flow progresses — not only at retro.
@@ -334,7 +337,7 @@ it into ceremony:
 
 The `tdd` stage is not prose guidance. It requires:
 
-- an explicit **RED** test run (logged to `.cclaw/state/stage-activity.jsonl`)
+- an explicit **RED** test run (captured in `.cclaw/artifacts/06-tdd.md`)
 - a mandatory **`test-author`** subagent dispatch (logged to
   `.cclaw/state/delegation-log.json`)
 - a **GREEN** full-suite run before exit
@@ -349,7 +352,7 @@ subagent as `completed` (or, on Codex / OpenCode, role-switched with
 ## Ship and closeout — automatic, resumable
 
 Shipping writes `08-ship.md`. `/cc-next` then automatically walks the
-feature through a deterministic three-step closeout without extra
+run through a deterministic three-step closeout without extra
 commands from you:
 
 1. **Retro (`09-retro.md`).** cclaw drafts a retrospective from your
@@ -375,9 +378,7 @@ If your session dies mid-closeout, a new `/cc-next` resumes at the
 exact step — retro drafts are not regenerated and no structured ask is
 repeated silently.
 
-You can still invoke each step manually (`/cc-ops retro`, `/cc-ops
-compound`, `/cc-ops archive`), but for the default path you do not need
-to: `/cc-next` is the only command.
+For the default path, `/cc-next` is the only command; explicit archival/reset remains available through `cclaw archive`.
 
 ---
 
@@ -386,12 +387,12 @@ to: `/cc-next` is the only command.
 cclaw is honest about what each harness can and cannot do, and it
 closes every real gap with a documented fallback — not a silent waiver.
 
-| Harness | Dispatch | Fallback | Hook surface | Structured ask | Playbook |
-|---|---|---|---|---|---|
-| Claude Code | full (named subagents) | `native` | full | `AskUserQuestion` | [`claude-playbook.md`](./src/content/harness-playbooks.ts) |
-| Cursor | generic Task dispatcher | `generic-dispatch` | full | `AskQuestion` | `cursor-playbook.md` |
-| OpenCode | plugin / in-session | `role-switch` | plugin | `question` (permission-gated; `permission.question: "allow"`) | `opencode-playbook.md` |
-| OpenAI Codex | in-session only | `role-switch` (evidenceRefs required) | limited (Bash-only `PreToolUse`/`PostToolUse`; requires `codex_hooks` feature flag) | `request_user_input` (experimental; Plan / Collaboration mode) | `codex-playbook.md` |
+| Harness | Dispatch | Fallback | Hook surface | Structured ask |
+|---|---|---|---|---|
+| Claude Code | full (named subagents) | `native` | full | `AskUserQuestion` |
+| Cursor | generic Task dispatcher | `generic-dispatch` | full | `AskQuestion` |
+| OpenCode | plugin / in-session | `role-switch` | plugin | `question` (permission-gated; `permission.question: "allow"`) |
+| OpenAI Codex | in-session only | `role-switch` (evidenceRefs required) | limited (Bash-only `PreToolUse`/`PostToolUse`; requires `codex_hooks` feature flag) | `request_user_input` (experimental; Plan / Collaboration mode) |
 
 What the fallbacks mean:
 
@@ -401,8 +402,7 @@ What the fallbacks mean:
   vocabulary of `subagent_type`s (`explore`, `generalPurpose`, …).
   cclaw maps each named agent (planner / reviewer / test-author /
   security-reviewer / doc-updater) onto the generic dispatcher with a
-  structured role prompt. Per-agent mapping lives in the Cursor
-  playbook.
+  structured role prompt.
 - `role-switch` — OpenCode and Codex lack an isolated worker primitive.
   The agent announces the role in-session, performs the work, and
   records a delegation row with `fulfillmentMode: "role-switch"` and at
@@ -418,10 +418,10 @@ What the fallbacks mean:
 > (Jan 2026), but Codex ≥ v0.114 (Mar 2026) grew an experimental
 > lifecycle hooks API. cclaw installs Codex entry points as native
 > **skills** under `.agents/skills/cc*/SKILL.md` (invoke with `/use cc`,
-> `/use cc-next`, `/use cc-view`, `/use cc-ops`, `/use cc-ideate`, or
+> `/use cc-next`, `/use cc-view`, `/use cc-ideate`, or
 > by typing `/cc …` in plain text — Codex auto-matches from the skill
 > description) **and** writes `.codex/hooks.json` so session-start
-> rehydration, stop-checkpoint, prompt-guard, workflow-guard, and
+> rehydration, stop-handoff, prompt-guard, workflow-guard, and
 > context-monitor fire automatically — as long as you enable the
 > `codex_hooks` feature flag in `~/.codex/config.toml`. `cclaw init
 > --codex` asks for consent before patching that file. Codex's
@@ -431,40 +431,13 @@ What the fallbacks mean:
 > and any legacy layout to clean up.
 
 The full capability matrix lives in
-[`docs/harnesses.md`](./docs/harnesses.md). Per-harness playbooks are
-generated into `.cclaw/references/harnesses/` on every install and
-upgrade; stage skills cite them by path.
+[`docs/harnesses.md`](./docs/harnesses.md). Harness capability gaps are
+reported by `cclaw doctor` instead of generating reference files into the
+user project.
 
-Runtime state:
-
-- `.cclaw/state/harness-gaps.json` (schema v2) — per-harness list of
-  missing capabilities, missing hook events, the declared fallback, the
-  playbook path, and a `remediation[]` list you can act on.
-- `cclaw doctor` — asserts every installed harness has its playbook on
-  disk and surfaces the expected fulfillment mode inside the
-  `delegation:mandatory:current_stage` check.
-
----
-
-## Eval-driven prompt engineering
-
-cclaw ships with `cclaw-cli eval` — a three-tier regression harness for
-the skills and contracts the runtime generates. Use it when you change a
-stage skill, tweak a prompt, or swap a model.
-
-Works with any OpenAI-compatible endpoint — Zhipu AI GLM, OpenAI, Together,
-self-hosted vLLM — via three environment variables:
-
-```bash
-CCLAW_EVAL_API_KEY=...
-CCLAW_EVAL_BASE_URL=https://api.z.ai/api/coding/paas/v4   # default
-CCLAW_EVAL_MODEL=glm-5.1                                  # default
-```
-
-Full details, corpus format, and the eval contract live in
-[`docs/evals.md`](./docs/evals.md).
-Mutation-testing setup lives in `stryker.config.mjs` and
-`.github/workflows/mutation.yml` (manual + weekly run).
+Runtime state stays small: `flow-state.json` is the source of truth, while
+stage activity is an append-only trace for what happened during the run.
+Derived diagnostics are produced on demand by `cclaw doctor`.
 
 ---
 
@@ -478,9 +451,8 @@ npx cclaw-cli                   # launches interactive setup (or prints
                                 # a one-line status hint if already installed)
 npx cclaw-cli sync              # re-materialize generated runtime from config.yaml
 npx cclaw-cli upgrade           # refresh generated files; preserves .cclaw/config.yaml
-npx cclaw-cli archive           # archive current run and reset flow-state
+npx cclaw-cli archive           # explicit/manual archive; normal post-ship closeout uses /cc-next
 npx cclaw-cli uninstall         # remove .cclaw + generated harness shims
-npx cclaw-cli eval …            # maintainer surface (see docs/evals.md)
 npx cclaw-cli --version
 ```
 

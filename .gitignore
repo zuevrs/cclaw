@@ -5,22 +5,12 @@ coverage/
 *.tgz
 .DS_Store
 release-artifacts/
-scripts/reference-sync.sh
 docs/*
 !docs/harnesses.md
-!docs/evals.md
 !docs/config.md
+!docs/agents-block.example.md
 # cclaw generated artifacts
 .cclaw/
-# cclaw evals: user-owned, track in git
-!.cclaw/evals/
-!.cclaw/evals/config.yaml
-!.cclaw/evals/corpus/
-!.cclaw/evals/corpus/**
-!.cclaw/evals/rubrics/
-!.cclaw/evals/rubrics/**
-!.cclaw/evals/baselines/
-!.cclaw/evals/baselines/**
 .claude/commands/cc-*.md
 .claude/commands/cc.md
 .cursor/commands/cc-*.md

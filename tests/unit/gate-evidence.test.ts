@@ -131,6 +131,19 @@ describe("gate evidence verification", () => {
       path.join(root, ".cclaw/artifacts/06-tdd.md"),
       `# TDD Artifact
 
+## Test Discovery
+- Lists existing tests: tests/unit/api.test.ts
+- Fixtures/helpers: temp project helper
+- Exact commands: pnpm vitest run api.test.ts
+- The chosen local pattern to extend: public API behavior assertions
+
+## System-Wide Impact Check
+- Callbacks: none affected
+- State transitions: no persisted state transition change
+- Interfaces/schemas: public exported API contract changed and covered
+- Public APIs/config/CLI: public API docs drift checked
+- Persistence/event contracts: out of scope for this slice
+
 ## RED Evidence
 | Slice | Test name | Command | Failure output summary |
 |---|---|---|---|
@@ -221,11 +234,11 @@ describe("gate evidence verification", () => {
 |---|---|---|---|---|
 | F-1 | Critical | security | unpatched SSRF | open |
 
-## Review Army Contract
+## Review Findings Contract
 - See \`07-review-army.json\`
 - Reconciliation summary: pending
 
-## Review Readiness Dashboard
+## Review Readiness Snapshot
 - Layer 1 complete: yes
 - Layer 2 complete: yes
 - Review army schema valid: pending
@@ -297,7 +310,7 @@ describe("gate evidence verification", () => {
 |---|---|---|---|---|
 | F-99 | Critical | security | auth bypass | open |
 
-## Review Army Contract
+## Review Findings Contract
 - See \`07-review-army.json\`
 
 ## Severity Summary
@@ -366,11 +379,11 @@ describe("gate evidence verification", () => {
 |---|---|---|---|---|
 | F-1 | Critical | security | missing auth check | open |
 
-## Review Army Contract
+## Review Findings Contract
 - See \`07-review-army.json\`
 - Reconciliation summary: pending
 
-## Review Readiness Dashboard
+## Review Readiness Snapshot
 - Layer 1 complete: yes
 - Layer 2 complete: yes
 - Review army schema valid: pending
@@ -464,7 +477,7 @@ describe("gate evidence verification", () => {
 |---|---|---|---|---|
 | R-1 | Suggestion | architecture | tighten naming | resolved |
 
-## Review Army Contract
+## Review Findings Contract
 - See \`07-review-army.json\`
 - Reconciliation summary: clean
 

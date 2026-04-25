@@ -1,5 +1,6 @@
 import { SHIP_FINALIZATION_MODES } from "../../../constants.js";
 import type { FlowStage, FlowTrack } from "../../../types.js";
+import { renderTrackTerminology, trackRenderContext } from "../../track-render-context.js";
 
 const STAGE_POLICY_NEEDLES: Record<FlowStage, string[]> = {
   brainstorm: [
@@ -27,13 +28,14 @@ const STAGE_POLICY_NEEDLES: Record<FlowStage, string[]> = {
     "Performance Budget",
     "One issue at a time"
   ],
-  spec: ["Acceptance Criteria", "Constraints", "Testability", "approved spec", "Edge Cases"],
+  spec: ["Acceptance Criteria", "Constraints", "Assumptions Before Finalization", "Testability", "approved spec", "Edge Cases"],
   plan: [
     "WAIT_FOR_CONFIRM",
     "Task Graph",
     "Dependency Batches",
     "Acceptance Mapping",
     "verification steps",
+    "Execution Posture",
     "Locked Decision Coverage"
   ],
   tdd: [
@@ -41,6 +43,8 @@ const STAGE_POLICY_NEEDLES: Record<FlowStage, string[]> = {
     "GREEN",
     "REFACTOR",
     "failing test",
+    "Test Discovery",
+    "System-Wide Impact Check",
     "full test suite",
     "acceptance criteria",
     "traceable to plan slice"
@@ -49,7 +53,7 @@ const STAGE_POLICY_NEEDLES: Record<FlowStage, string[]> = {
     "Layer 1",
     "Layer 2",
     "Critical",
-    "Review Army",
+    "Review Findings",
     "Ready to Ship",
     "ROUTE_BACK_TO_TDD",
     "One issue at a time"
@@ -62,22 +66,11 @@ const STAGE_POLICY_NEEDLES: Record<FlowStage, string[]> = {
   ]
 };
 
-function quickTrackText(value: string): string {
-  return value
-    .replace(/\btask from the plan\b/giu, "acceptance criterion from the spec")
-    .replace(/\bplan task ID\b/giu, "acceptance criterion ID")
-    .replace(/\bplan task\b/giu, "acceptance criterion")
-    .replace(/\bplan row\b/giu, "acceptance row")
-    .replace(/\bplan slice\b/giu, "acceptance slice")
-    .replace(/\bplan artifact\b/giu, "spec artifact")
-    .replace(/\btraceable to plan slice\b/giu, "traceable to acceptance criterion")
-    .replace(/05-plan\.md/gu, "04-spec.md");
-}
-
 export function stagePolicyNeedlesFromMetadata(stage: FlowStage, track: FlowTrack = "standard"): string[] {
   const needles = STAGE_POLICY_NEEDLES[stage];
-  if (stage === "tdd" && track === "quick") {
-    return needles.map(quickTrackText);
+  const renderContext = trackRenderContext(track);
+  if (stage === "tdd" && !renderContext.usesPlanTerminology) {
+    return needles.map((needle) => renderTrackTerminology(needle, renderContext));
   }
   return [...needles];
 }

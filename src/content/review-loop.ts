@@ -152,6 +152,16 @@ const REVIEW_LOOP_RESPONSE_SCHEMA = `{
   ]
 }`;
 
+export function reviewLoopPolicySummary(stage: ReviewLoopStage): string {
+  const checklist = REVIEW_LOOP_CHECKLISTS[stage];
+  const ids = checklist.map((dimension) => `\`${dimension.id}\``).join(", ");
+  return `outside-voice review loop policy: use checklist dimensions ${ids}; stop at quality score >= ${REVIEW_LOOP_DEFAULT_TARGET_SCORE} or max ${REVIEW_LOOP_DEFAULT_MAX_ITERATIONS} iterations.`;
+}
+
+export function reviewLoopSecondOpinionSummary(stage: ReviewLoopStage): string {
+  return `when \`.cclaw/config.yaml::reviewLoop.externalSecondOpinion.enabled\` is true, run an extra external-model pass for ${stage} and explicitly reconcile score/finding disagreements.`;
+}
+
 export const REVIEW_LOOP_CHECKLISTS = {
   scope: [
     {

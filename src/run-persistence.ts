@@ -5,6 +5,7 @@ import {
   canTransition,
   createInitialCloseoutState,
   createInitialFlowState,
+  FLOW_STATE_SCHEMA_VERSION,
   isFlowTrack,
   skippedStagesForTrack,
   SHIP_SUBSTATES,
@@ -13,10 +14,11 @@ import {
   type ShipSubstate
 } from "./flow-state.js";
 import {
-  ensureFeatureSystem,
-  syncActiveFeatureSnapshot
-} from "./feature-system.js";
-import { ensureDir, exists, withDirectoryLock, writeFileSafe } from "./fs-utils.js";
+  ensureDir,
+  exists,
+  withDirectoryLock,
+  writeFileSafe
+} from "./fs-utils.js";
 import { FLOW_STAGES } from "./types.js";
 import type { FlowStage, FlowTrack } from "./types.js";
 
@@ -48,8 +50,8 @@ export interface WriteFlowStateOptions {
 
 export interface ReadFlowStateOptions {
   /**
-   * When false, skip feature-system auto-repair writes and read flow-state in
-   * pure diagnostic mode.
+   * Reserved compatibility switch from older runtimes. The repair layer was removed,
+   * so this flag is now a no-op and only preserved for API stability.
    */
   repairFeatureSystem?: boolean;
 }
@@ -375,6 +377,7 @@ function coerceFlowState(parsed: Record<string, unknown>): FlowState {
     : next.activeRunId;
 
   return {
+    schemaVersion: FLOW_STATE_SCHEMA_VERSION,
     activeRunId,
     currentStage: isFlowStage(parsed.currentStage) ? parsed.currentStage : next.currentStage,
     completedStages: sanitizeCompletedStages(parsed.completedStages),
@@ -433,9 +436,7 @@ export async function readFlowState(
   projectRoot: string,
   options: ReadFlowStateOptions = {}
 ): Promise<FlowState> {
-  if (options.repairFeatureSystem !== false) {
-    await ensureFeatureSystem(projectRoot);
-  }
+  void options;
   const statePath = flowStatePath(projectRoot);
   if (!(await exists(statePath))) {
     return createInitialFlowState();
@@ -466,7 +467,6 @@ export async function writeFlowState(
   state: FlowState,
   options: WriteFlowStateOptions = {}
 ): Promise<void> {
-  await ensureFeatureSystem(projectRoot);
   const doWrite = async (): Promise<void> => {
     const statePath = flowStatePath(projectRoot);
     if (!options.allowReset && (await exists(statePath))) {
@@ -496,7 +496,6 @@ export async function writeFlowState(
   } else {
     await withDirectoryLock(flowStateLockPath(projectRoot), doWrite);
   }
-  await syncActiveFeatureSnapshot(projectRoot);
 }
 
 /**
@@ -516,7 +515,6 @@ export async function ensureRunSystem(
   projectRoot: string,
   _options: EnsureRunSystemOptions = {}
 ): Promise<FlowState> {
-  await ensureFeatureSystem(projectRoot);
   await ensureDir(runsRoot(projectRoot));
   await ensureDir(activeArtifactsPath(projectRoot));
   const statePath = flowStatePath(projectRoot);
@@ -524,6 +522,5 @@ export async function ensureRunSystem(
   if (!(await exists(statePath))) {
     await writeFlowState(projectRoot, state, { allowReset: true });
   }
-  await syncActiveFeatureSnapshot(projectRoot);
   return state;
 }

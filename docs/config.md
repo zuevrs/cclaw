@@ -55,9 +55,9 @@ with the new list.
 
 One knob that controls both guard families:
 
-- `advisory` — prompt-guard and TDD violations are **logged** to
-`.cclaw/state/preamble-log.jsonl` and `stage-activity.jsonl` but do
-not block the agent.
+- `advisory` — prompt-guard and workflow/TDD violations are **logged** to
+`.cclaw/state/prompt-guard.jsonl` and `.cclaw/state/workflow-guard.jsonl`
+only when a guard actually fires; they do not block the agent.
 - `strict` — violations **block** stage transitions until the agent
 corrects them.
 
@@ -92,7 +92,8 @@ Continuous knowledge capture does **not** require a config knob:
 - `node .cclaw/hooks/stage-complete.mjs <stage>` validates and harvests those
 bullets into `.cclaw/knowledge.jsonl` with dedupe + schema checks.
 
-If you need manual operations, use `/cc-learn` (search, add/backfill, curate).
+If you need manual operations, ask your harness to use the `learnings` skill
+for search, add/backfill, or curation.
 
 ## Advanced overrides (opt-in)
 
@@ -146,9 +147,7 @@ Compound-stage clustering policy.
 - `recurrenceThreshold` (positive integer, default `3`) — base minimum repeat
 count for trigger/action clusters before lift candidates are proposed.
 
-Runtime tuning applied everywhere compound readiness is computed (the
-`/cc-ops compound` skill, `cclaw internal compound-readiness`, and the
-session-start hook that writes `.cclaw/state/compound-readiness.json`):
+Runtime tuning applied everywhere compound readiness is computed (`cclaw internal compound-readiness` and the session-start hook that writes derived readiness status when needed):
 
 - For repositories with `< 5` archived runs under `.cclaw/runs/`, the
 effective threshold is temporarily lowered to

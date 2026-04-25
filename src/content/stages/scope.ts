@@ -1,5 +1,10 @@
 import type { StageSchemaInput } from "./schema-types.js";
-import { REVIEW_LOOP_CHECKLISTS } from "../review-loop.js";
+import {
+  REVIEW_LOOP_CHECKLISTS,
+  reviewLoopPolicySummary,
+  reviewLoopSecondOpinionSummary
+} from "../review-loop.js";
+import { decisionProtocolInstruction } from "../decision-protocol.js";
 
 // ---------------------------------------------------------------------------
 // SCOPE — reference: gstack CEO review
@@ -47,51 +52,41 @@ export const SCOPE: StageSchemaInput = {
   },
   executionModel: {
     checklist: [
-      "**Pre-Scope System Audit (opt-in)** — when `.cclaw/config.yaml::optInAudits.scopePreAudit` is true, before premise challenge gather reality snapshot: recent commits (`git log -30 --oneline`), current diff (`git diff --stat`), stash state (`git stash list`), and deferred debt markers (`rg -n 'TODO|FIXME|XXX|HACK'`). Record findings in scope artifact.",
-      "**Assess complexity** — Read the brainstorm artifact. If project is simple (single component, clear architecture, personal/prototype), run light-touch scope: mode selection, 3-5 key in/out boundaries, deferred items. Skip Dream State Mapping and Temporal Interrogation. If project is complex (multi-component, team delivery, production), run the full checklist.",
-      "**Prime Directives** — Zero silent failures. For each in-scope capability, name concrete failure modes, the exact error surface, and trace all four data-flow paths (happy, nil, empty, upstream error). Include interaction edge cases (double-click, navigate-away, stale state), observability commitments, and explicit deferred-item logging.",
-      "**Premise Challenge** — Is this the right problem? What if we do nothing? What are we optimizing for?",
-      "**Landscape Check** — for EXPAND/SELECTIVE candidates, perform a brief external scan of comparable products/patterns to calibrate ambition and avoid local maxima.",
-      "**Existing Code Leverage** — Search for existing solutions before deciding to build new.",
-      "**Taste Calibration** — identify 2-3 high-quality files/modules in this codebase and explicitly align scope quality bar to them.",
-      "**Dream State Mapping** — (complex projects only) describe the ideal state 12 months out using `CURRENT STATE -> THIS PLAN -> 12-MONTH IDEAL`, then verify this scope moves toward that target.",
-      "**Implementation Alternatives** — Produce 2-3 distinct approaches. For each: Name, Summary, Effort (S/M/L/XL), Risk (Low/Med/High), 2-3 Pros, 2-3 Cons, and explicit Reuses. One option must be minimal viable, one must be ideal architecture.",
-      "**Temporal Interrogation** — (complex projects only) simulate implementation timeline: HOUR 1 foundations, HOUR 2-3 core logic, HOUR 4-5 integration surprises, HOUR 6+ polish/tests. Decide what must be locked now vs safely deferred.",
-      "**Mode Selection** — Present expand/selective/hold/reduce with recommendation and default heuristic: greenfield -> expand, feature enhancement -> selective, bugfix/hotfix/refactor -> hold, broad blast radius (>15 files or multi-team impact) -> reduce.",
-      "**Mode-Specific Analysis** — After mode is selected, run the matching analysis: EXPAND (10x and delight opportunities), SELECTIVE (hold-scope rigor then cherry-picked expansions), HOLD (minimum-change-set hardening), REDUCE (ruthless cuts and follow-up split).",
-      "**Plant-seed shelf (optional)** — when a deferred/out-of-scope idea still has upside, capture it as `.cclaw/seeds/SEED-<YYYY-MM-DD>-<slug>.md` with trigger_when and action instead of losing it in prose-only notes.",
-      "**Outside Voice + Spec Review Loop** — run an adversarial second-opinion pass on the scope artifact, reconcile findings, and iterate up to 3 cycles or until quality score >= 0.8. When `.cclaw/config.yaml::reviewLoop.externalSecondOpinion.enabled` is true, run an additional external-model pass and explicitly resolve score/finding disagreements.",
-      "**Error and Rescue Registry** — For each capability: what breaks, how detected, what fallback."
+      "**Default path first** — read brainstorm, challenge premise, recommend one mode, draft 3-5 key in/out boundaries plus deferred items, then seek approval.",
+      "**Optional audits by trigger** — run the pre-scope system audit only when configured; use deep-mode prime directives, dream-state mapping, and temporal interrogation only for complex/high-risk scope.",
+      "**Premise and leverage check** — test whether this is the right problem, what happens if nothing changes, and what existing code can be reused.",
+      "**Calibrate ambition** — for EXPAND/SELECTIVE candidates, do a brief landscape scan and align the quality bar to 2-3 strong in-repo modules.",
+      "**Compare implementation alternatives** — give 2-3 distinct options with effort, risk, pros/cons, and explicit reuse; include minimal viable and ideal architecture options.",
+      "**Select scope mode explicitly** — present expand/selective/hold/reduce with a recommendation and default heuristic justification.",
+      "**Run mode-specific analysis** — expand, selective, hold, or reduce according to the selected mode; do not silently add or trim scope.",
+      "**Handle deferred upside** — optionally park high-upside deferred/out-of-scope ideas in `.cclaw/seeds/`.",
+      `**Outside voice when warranted** — run/reconcile the loop for complex/high-risk or configured scope; otherwise do a concise adversarial self-check. ${reviewLoopPolicySummary("scope")} ${reviewLoopSecondOpinionSummary("scope")}`,
+      "**Write the scope contract** — include in-scope/out-of-scope, discretion areas, deferred items, locked decisions, error/rescue notes, completion dashboard, and explicit approval."
     ],
     interactionProtocol: [
-      "For scope mode selection: use the Decision Protocol — present expand/selective/hold/reduce as labeled options with trade-offs and mark one as (recommended). Do NOT use a numeric Completeness rubric; recommend the option that best covers the prime-directive failure modes, four data-flow paths, observability, and deferred handling for the in-scope set with the smallest blast radius. Base your recommendation on default heuristics: greenfield -> expand, enhancement -> selective, bugfix/hotfix/refactor -> hold, broad blast radius -> reduce. If the harness's native structured-ask tool is available (`AskUserQuestion` / `AskQuestion` / `question` / `request_user_input`), send exactly ONE question per call, validate fields against the runtime schema, and on schema error immediately fall back to a plain-text lettered list instead of retrying guessed payloads.",
-      "Walk through the scope checklist interactively. Each checklist item that surfaces a decision should be presented to the user as a question, not as a monologue. Do not dump all items at once.",
-      "Challenge premise and verify the problem framing before anything else.",
-      "Take a position on every scope decision. Avoid hedging phrases like 'this could work' or 'there are many ways'; state your recommendation and one concrete condition that would change it.",
-      "Use pushback patterns when framing is weak: vague scope -> force a specific user/problem, platform vision -> force a narrowest viable wedge, social proof -> demand behavioral evidence.",
-      "Present one structural scope issue at a time for decision. Do NOT batch. Use structured options for each scope boundary question.",
-      "Record explicit in-scope and out-of-scope contract.",
-      "Once the user accepts or rejects a recommendation, commit fully. Do not re-argue.",
-      "Before final scope approval, run an adversarial outside-voice review and reconcile every finding explicitly (accept/reject/defer with rationale).",
-      "Bound review-loop retries: max 3 iterations or early stop at quality score >= 0.8.",
-      "Produce a clean scope summary after all issues are resolved.",
-      "**STOP.** Wait for explicit user approval of scope contract before advancing to design.",
-      "**STOP BEFORE ADVANCE.** Mandatory delegation `planner` must be marked completed or explicitly waived in `.cclaw/state/delegation-log.json`. Then close the stage via `node .cclaw/hooks/stage-complete.mjs scope` (do not hand-edit `.cclaw/state/flow-state.json`)."
+      decisionProtocolInstruction(
+        "scope mode selection",
+        "present expand/selective/hold/reduce as labeled options with trade-offs and mark one as (recommended)",
+        "recommend the option that best covers the prime-directive failure modes, four data-flow paths, observability, and deferred handling for the in-scope set with the smallest blast radius. Base your recommendation on default heuristics: greenfield -> expand, enhancement -> selective, bugfix/hotfix/refactor -> hold, broad blast radius -> reduce"
+      ),
+      "Do not walk the full checklist by default. Lead with the default scope contract; ask only when the answer changes in/out/deferred boundaries.",
+      "Challenge premise first, take a firm position, and name one concrete condition that would change it.",
+      "Push back on weak framing: vague scope needs a specific user/problem, platform vision needs a narrow wedge, social proof needs behavioral evidence.",
+      "Resolve one structural scope issue at a time; otherwise state the assumption and move on.",
+      "After acceptance/rejection, commit fully and do not re-argue.",
+      `Before final approval, reconcile outside-voice findings when the loop runs and bound retries with ${reviewLoopPolicySummary("scope")}`,
+      "**STOP.** Wait for explicit approval of the scope contract before advancing.",
+      "**STOP BEFORE ADVANCE.** Mandatory delegation `planner` must be completed or explicitly waived, then close via `node .cclaw/hooks/stage-complete.mjs scope`."
     ],
     process: [
-      "When `.cclaw/config.yaml::optInAudits.scopePreAudit` is true, run pre-scope system audit (git log/diff/stash/debt markers).",
-      "Run premise challenge and existing-solution leverage check.",
-      "When mode is EXPAND/SELECTIVE, run brief landscape check before final scope lock.",
-      "Calibrate quality bar against 2-3 strong existing modules/files.",
-      "Produce 2-3 scope alternatives in a structured format (Name, Summary, Effort, Risk, Pros, Cons, Reuses) with minimum viable and ideal architecture options included.",
-      "Choose scope mode with user approval.",
-      "Run mode-specific analysis that matches the selected scope mode.",
-      "Optionally plant high-upside deferred ideas into `.cclaw/seeds/SEED-<YYYY-MM-DD>-<slug>.md` with trigger_when/action notes.",
-      "Walk through scope review sections one at a time.",
-      "Run outside-voice spec review loop (up to 3 iterations, quality score target >= 0.8). If configured, include external second opinion and reconcile deltas.",
-      "Write explicit scope contract, discretion areas, and deferred items.",
-      "Freeze non-negotiable boundaries as stable Locked Decisions (D-XX IDs).",
-      "Produce scope summary plus completion dashboard (section status, critical gaps, resolved decisions, unresolved items or `None`)."
+      "Run configured pre-scope audit only when enabled.",
+      "Challenge premise, check existing-code leverage, and calibrate ambition/quality bar.",
+      "Compare structured scope alternatives with minimum viable and ideal architecture options.",
+      "Select scope mode with explicit user approval.",
+      "Run the selected mode analysis and park high-upside deferred ideas when useful.",
+      `Use outside-voice review only when complex/high-risk or configured; otherwise run a short adversarial self-check. If loop runs, enforce ${reviewLoopPolicySummary("scope")}`,
+      "Write explicit scope contract, discretion areas, deferred items, and D-XX locked decisions.",
+      "Produce scope summary and completion dashboard."
     ],
     requiredGates: [
       { id: "scope_mode_selected", description: "One scope mode was explicitly selected." },
@@ -107,8 +102,8 @@ export const SCOPE: StageSchemaInput = {
       "Locked Decisions section lists stable D-XX IDs for non-negotiable boundaries.",
       "Premise challenge findings documented.",
       "Outside Voice findings and dispositions are recorded (accept/reject/defer with rationale).",
-      "Spec review loop summary includes iteration count and quality score trajectory.",
-      "When `.cclaw/config.yaml::reviewLoop.externalSecondOpinion.enabled` is true, external second-opinion disposition is captured.",
+      `Spec review loop summary includes iteration count and quality score trajectory per ${reviewLoopPolicySummary("scope")}`,
+      reviewLoopSecondOpinionSummary("scope"),
       "Deferred items list with one-line rationale for each.",
       "When an upside deferred idea is parked, a seed file is created under `.cclaw/seeds/` and referenced in the artifact.",
       "Completion dashboard lists per-section status, critical/open gaps, decision count, and unresolved items (or `None`)."
@@ -152,6 +147,7 @@ export const SCOPE: StageSchemaInput = {
       traceabilityRule: "Every scope boundary must be traceable to a brainstorm decision. Every downstream design choice must stay within the scope contract."
     },
     artifactValidation: [
+      { section: "Upstream Handoff", required: false, validationRule: "Summarizes brainstorm/idea decisions, constraints, open questions, and explicit drift before scope decisions." },
       { section: "Pre-Scope System Audit", required: false, validationRule: "When `.cclaw/config.yaml::optInAudits.scopePreAudit` is true: must capture git log -30, git diff --stat, git stash list, and debt-marker scan (TODO/FIXME/XXX/HACK) before premise challenge." },
       { section: "Prime Directives", required: false, validationRule: "For each scoped capability: named failure modes, explicit error surface, four data-flow paths, interaction edge cases, observability expectations, and deferred-item handling." },
       { section: "Premise Challenge", required: false, validationRule: "Must contain explicit answers to: right problem? direct path? what if nothing?" },
@@ -161,13 +157,13 @@ export const SCOPE: StageSchemaInput = {
       { section: "Locked Decisions (D-XX)", required: false, validationRule: "List of stable locked decisions with IDs D-01, D-02... Each ID appears once, includes rationale, and is intended for downstream cross-stage traceability." },
       { section: "Implementation Alternatives", required: false, validationRule: "2-3 options with Name, Summary, Effort, Risk, Pros, Cons, and Reuses. Must include minimal viable and ideal architecture options." },
       { section: "Scope Mode", required: true, validationRule: "Must state selected mode and rationale with default heuristic justification." },
-      { section: "Mode-Specific Analysis", required: false, validationRule: "Must document the analysis matching the selected scope mode: EXPAND (10x and delight opportunities), SELECTIVE (hold-scope baseline then cherry-picked expansions), HOLD (minimum-change-set hardening), REDUCE (ruthless cuts and follow-up split)." },
+      { section: "Mode-Specific Analysis", required: false, validationRule: "Deep/complex scope only: document the analysis matching the selected mode. Default path may record a concise mode rationale instead." },
       { section: "In Scope / Out of Scope", required: true, validationRule: "Two separate explicit lists. Out-of-scope must not be empty." },
       { section: "Discretion Areas", required: false, validationRule: "Explicit list of implementer decision zones, or 'None' if scope is fully locked." },
       { section: "Deferred Items", required: false, validationRule: "Each item has one-line rationale. If empty, state 'None' explicitly." },
       { section: "Error & Rescue Registry", required: false, validationRule: "Each scoped capability has: failure mode, detection method, fallback decision." },
       { section: "Outside Voice Findings", required: false, validationRule: "Must list external/adversarial findings and disposition (accept/reject/defer) with rationale." },
-      { section: "Spec Review Loop", required: false, validationRule: "Must record iterations (max 3), quality score per iteration, stop reason, and unresolved concerns." },
+      { section: "Spec Review Loop", required: false, validationRule: `Must record iterations, quality score per iteration, stop reason, and unresolved concerns. Enforce ${reviewLoopPolicySummary("scope")}` },
       { section: "Completion Dashboard", required: true, validationRule: "Lists per-review-section status, count of critical/open gaps, resolved decisions, and unresolved decisions (or 'None')." },
       { section: "Scope Summary", required: true, validationRule: "Clean summary: mode, strongest challenges, recommended path, accepted scope, deferred, excluded." },
       { section: "Dream State Mapping", required: false, validationRule: "If present (complex projects): CURRENT STATE, THIS PLAN, 12-MONTH IDEAL, and alignment verdict." },

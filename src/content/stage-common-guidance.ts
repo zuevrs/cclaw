@@ -1,7 +1,3 @@
-import { RUNTIME_ROOT } from "../constants.js";
-
-export const STAGE_COMMON_GUIDANCE_REL_PATH = `${RUNTIME_ROOT}/references/stages/common-guidance.md`;
-
 export function stageCommonGuidanceMarkdown(): string {
   return `# Common Stage Guidance
 
@@ -10,25 +6,28 @@ per-stage skills can stay focused on stage-specific work.
 
 ## Shared completion protocol
 
-- Stage-specific skills expose **Completion Parameters** only.
-- Generic execution steps live in \`.cclaw/references/protocols/completion.md\`.
-- Do not restate the protocol in each stage file.
+- Stage-specific skills expose **Completion Parameters** plus the gates that
+  matter for that stage.
+- Generic execution stays inline: verify required gates, update the artifact,
+  harvest learnings, then use \`/cc-next\` for progression.
+- Do not create separate protocol files.
 
 ## Shared decision protocol
 
-- Decision wording, ask-tool format, retry budget, and escalation rules live in
-  \`.cclaw/references/protocols/decision.md\`.
-- Stage files should reference that path, not duplicate the full text.
+- Ask only decision-changing questions.
+- Prefer one focused question over broad questionnaires.
+- When choices are equivalent, recommend one path and state the trade-off.
+- If a blocker remains after a short retry, stop and ask the user.
 
 ## Shared handoff menu
 
 Use this same closeout menu for every stage:
 
-- **A) Advance** — run \`/cc-next\` and continue.
+- **A) Advance** — run \`/cc-next\` and continue the critical path; after \`ship\`, the same command drives \`retro -> compound -> archive\`.
 - **B) Revise this stage** — stay on current stage and apply feedback.
 - **C) Pause / park** — run \`/cc-view status\`, then stop and resume later.
-- **D) Rewind** — run \`/cc-ops rewind <target-stage>\`.
-- **E) Abandon** — archive with \`/cc-ops archive --skip-retro --retro-reason="<reason>"\` when user explicitly wants to end the run.
+- **D) Rewind** — run \`cclaw internal rewind <target-stage> "<reason>"\`.
+- **E) Abandon** — only when the user explicitly wants to end a non-ship active run early, archive with \`cclaw archive --skip-retro --retro-reason="<reason>"\`. Once in post-ship closeout, continue \`/cc-next\` through retro/compound/archive instead.
 
 Recommendation defaults:
 
@@ -82,8 +81,8 @@ insight (for example, purely mechanical edits with no new decisions).
 ## Progressive disclosure baseline
 
 - Start with the current stage skill.
-- Load deeper references only when required by a blocker or gate.
-- Prefer \`.cclaw/references/stages/<stage>-examples.md\` and protocol files over
-  copying large instruction blocks into stage skills.
+- Load deeper skills or docs only when required by a blocker or gate.
+- Keep examples as short shape cues inside the current skill instead of
+  materializing separate reference files.
 `;
 }

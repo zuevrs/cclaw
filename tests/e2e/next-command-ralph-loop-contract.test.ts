@@ -42,9 +42,8 @@ describe("next-command Ralph Loop contract parity", () => {
     expect(skill).toContain(snippet);
   });
 
-  it("encodes the resolved policy: Ralph Loop is a soft nudge, gates flow through stage-complete.mjs", () => {
-    expect(snippet).toContain("soft pre-advance nudge");
-    expect(snippet).toContain("not a gate");
+  it("encodes the resolved policy: Ralph Loop observes state, gates flow elsewhere", () => {
+    expect(snippet).toContain("ralph-loop.json");
     expect(snippet).toContain("stage-complete.mjs");
     expect(snippet).toContain("flow-state.json");
   });
@@ -64,14 +63,26 @@ describe("next-command Ralph Loop contract parity", () => {
     }
   });
 
-  it("does not leave behind the pre-unification wording anywhere in next-command outputs", () => {
-    const legacy = [
-      "is a soft nudge, not a gate",
-      'Advance only when\nevery planned slice'
-    ];
-    for (const text of legacy) {
-      expect(command.includes(text)).toBe(false);
-      expect(skill.includes(text)).toBe(false);
-    }
+  it("does not leave behind hard-gate wording anywhere in next-command outputs", () => {
+    expect(command).not.toContain('Advance only when\nevery planned slice');
+    expect(skill).not.toContain('Advance only when\nevery planned slice');
   });
+
+  it("keeps compound closeout on /cc-next with overlap and supersession guidance", () => {
+    expect(command).toContain("not `ce:compound`");
+    expect(command).toContain("assess overlap before adding duplicate knowledge");
+    expect(command).toContain("bug-track learnings");
+    expect(command).toContain("knowledge-track learnings");
+    expect(command).toContain("supersedes");
+    expect(command).toContain("session transcripts");
+  });
+
+  it("documents a compact operator output contract", () => {
+    expect(skill).toContain("## Operator Output Contract");
+    expect(skill).toContain("Stage: <currentStage> (<track>)");
+    expect(skill).toContain("Gates: <passed>/<required> passed");
+    expect(skill).toContain("Delegations: <done>/<mandatory> done");
+    expect(skill).toContain("Do not dump full artifacts");
+  });
+
 });

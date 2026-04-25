@@ -1,6 +1,11 @@
 import { RUNTIME_ROOT } from "../constants.js";
-import { FLOW_MAP_REL_PATH } from "./flow-map.js";
 import { stageSchema } from "./stage-schema.js";
+import {
+  closeoutChainInline,
+  closeoutNextCommandGuidance,
+  closeoutSubstateInline,
+  closeoutSubstateProtocolBullets
+} from "./closeout-guidance.js";
 import { stageSkillFolder } from "./skills.js";
 
 const NEXT_SKILL_FOLDER = "flow-next-step";
@@ -65,7 +70,8 @@ export function nextCommandContract(): string {
 
 - **Current stage not started / in progress** → load its skill and execute it.
 - **Current stage complete (all gates passed)** → advance \`currentStage\` and load the next skill.
-- **Flow complete** → report done.
+- **Ship complete** → continue the resumable ${closeoutChainInline()} closeout via \`/cc-next\`.
+- **Flow complete** → report done after closeout has archived the run.
 
 This is the only progression command the user needs to drive the entire flow. Stage command contracts are internal implementation details loaded by \`/cc-next\`.
 
@@ -73,13 +79,13 @@ This is the only progression command the user needs to drive the entire flow. St
 
 - **Do not** invent gate completion: use only \`${flowPath}\` plus observable evidence in repo artifacts.
 - **Do not** skip stages: advance only from \`currentStage\` to its configured successor.
-- After ship completes, the closeout chain **retro -> compound -> archive** runs automatically, driven by \`closeout.shipSubstate\`. Do not ask the user to type those commands manually — follow the substate switch in Path B below.
+- ${closeoutNextCommandGuidance()}
 
 ## Algorithm (mandatory)
 
 1. Read **\`${flowPath}\`**. If missing → **BLOCKED** (state missing).
 2. Parse JSON. Capture \`currentStage\` and \`stageGateCatalog[currentStage]\`.
-3. If \`staleStages[currentStage]\` exists, do not advance automatically. Re-run the stage artifact work, then clear the marker with \`/cc-ops rewind --ack <currentStage>\`.
+3. If \`staleStages[currentStage]\` exists, do not advance automatically. Re-run the stage artifact work, then clear the marker with \`cclaw internal rewind --ack <currentStage>\`.
 4. Read **\`${reconciliationNoticesPath}\`** when present. If it contains entries for \`activeRunId + currentStage\` and the listed gate is still blocked in \`stageGateCatalog[currentStage].blocked\`, emit a structured warning before any stage-advance decision.
 5. Let \`G\` = \`requiredGates\` for **\`currentStage\`** from the stage schema.
 6. Let \`catalog\` = \`stageGateCatalog[currentStage]\` from flow state.
@@ -88,11 +94,11 @@ This is the only progression command the user needs to drive the entire flow. St
 9. If \`M\` is non-empty, inspect **\`${delegationPath}\`**. Treat as satisfied only if each mandatory agent is **completed** or **waived**.
 10. For each satisfied mandatory delegation row, verify \`evidenceRefs\` is a non-empty array (unless status is \`waived\` with rationale). Missing evidenceRefs means delegation is unresolved.
 11. If any mandatory delegation is missing and no waiver exists: **STOP** and ask the user whether to dispatch now or waive with rationale. Do not mark gates passed while delegation is unresolved.
-12. If \`currentStage === "review"\` and \`catalog.blocked\` includes \`review_criticals_resolved\`, treat this as a hard remediation branch: recommend \`/cc-ops rewind tdd "review_blocked_by_critical"\` with the blocking finding IDs, and do not attempt to advance toward ship.
+12. If \`currentStage === "review"\` and \`catalog.blocked\` includes \`review_criticals_resolved\`, treat this as a hard remediation branch: recommend \`cclaw internal rewind tdd "review_blocked_by_critical"\` with the blocking finding IDs, and do not attempt to advance toward ship.
 
 ### Path A: Current stage is NOT complete (any gate unmet or delegation missing)
 
-→ Load **\`${RUNTIME_ROOT}/skills/<skillFolder>/SKILL.md\`** and **\`${RUNTIME_ROOT}/commands/<currentStage>.md\`** for the current stage.
+→ Load **\`${RUNTIME_ROOT}/skills/<skillFolder>/SKILL.md\`** for the current stage.
 → Execute that stage's protocol. The stage skill handles the full interaction including STOP points and gate tracking.
 → Stage completion must use \`node .cclaw/hooks/stage-complete.mjs <currentStage>\` (canonical), which validates delegations + gate evidence before mutating \`flow-state.json\`.
 
@@ -102,24 +108,11 @@ ${ralphLoopContractSnippet()}
 
 → If current stage's \`next\` is **\`done\`**:
 
-  When \`currentStage === "ship"\`, route by **\`closeout.shipSubstate\`**:
-  - \`"idle"\` or missing -> set \`closeout.shipSubstate = "retro_review"\`, then
-    load \`${RUNTIME_ROOT}/commands/retro.md\` + \`${RUNTIME_ROOT}/skills/flow-retro/SKILL.md\`
-    and execute the retro protocol (draft + one structured accept/edit/skip ask).
-  - \`"retro_review"\` -> continue the retro protocol (re-ask the structured
-    question; the draft already exists — do not regenerate it).
-  - \`"compound_review"\` -> load \`${RUNTIME_ROOT}/commands/compound.md\` +
-    \`${RUNTIME_ROOT}/skills/flow-compound/SKILL.md\`, execute the compound
-    scan, ask user **one** structured question (apply / skip) per candidate
-    cluster or a single accept-all / skip choice, and advance substate on
-    completion or skip.
-  - \`"ready_to_archive"\` -> load \`${RUNTIME_ROOT}/commands/archive.md\` +
-    \`${RUNTIME_ROOT}/skills/flow-archive/SKILL.md\`, run archive, reset state.
-  - \`"archived"\` (transient) -> report "run archived" and stop.
+  ${closeoutSubstateProtocolBullets()}
 
   Otherwise report **"Flow complete. All stages finished."** and stop.
 
-→ Otherwise: load **\`${RUNTIME_ROOT}/skills/<skillFolder>/SKILL.md\`** and **\`${RUNTIME_ROOT}/commands/<nextStage>.md\`** for the successor stage. Execute that stage's protocol.
+→ Otherwise: load **\`${RUNTIME_ROOT}/skills/<skillFolder>/SKILL.md\`** for the successor stage. Execute that stage's protocol.
 
 ### Track-aware successor resolution
 
@@ -135,7 +128,7 @@ ${ralphLoopContractSnippet()}
 \`/cc-next\` in a **new session** = resume from where you left off:
 - Flow-state records \`currentStage\` and which gates have passed.
 - The stage skill reads upstream artifacts and picks up context.
-- \`closeout.shipSubstate\` carries the post-ship substate, so a crashed
+- ${closeoutSubstateInline()} carries the post-ship substate, so a crashed
   session during retro/compound/archive resumes at the exact step without
   regenerating the retro draft.
 - No special resume command needed — \`/cc-next\` IS the resume command.
@@ -158,9 +151,7 @@ Validate envelopes with:
 
 ## Surface reference
 
-When you need the full shape of cclaw (stages, routers, Ralph Loop,
-state files) load \`${FLOW_MAP_REL_PATH}\`. It is the single-page
-overview and is safe to read at any time.
+Use the flow-start skill plus \`.cclaw/state/flow-state.json\` for orientation when needed.
 `;
 }
 
@@ -192,6 +183,21 @@ description: "The primary progression command. Reads flow state, starts/resumes 
 
 \`/cc-next\` is **the only command you need** to drive the entire cclaw flow.
 
+## Operator Output Contract
+
+Default output should be compact, like OMC/OMX operator surfaces:
+
+\`\`\`
+Stage: <currentStage> (<track>)
+Gates: <passed>/<required> passed, <blocked> blocked
+Delegations: <done>/<mandatory> done
+Blockers: <none | gate/delegation/reconciliation ids>
+Next: <exact next action, usually /cc-next or one named remediation>
+\`\`\`
+
+Only expand beyond this when blocked, when asking a structured question, or when
+the user explicitly requests detail. Do not dump full artifacts in progression output.
+
 **How it works:**
 1. Reads \`flow-state.json\` to find \`currentStage\`
 2. Checks if all gates for that stage are satisfied
@@ -210,7 +216,7 @@ Do **not** mark gates satisfied from memory alone. Cite **artifact evidence** (p
 
 1. Open **\`${flowPath}\`**.
 2. Record \`currentStage\` and \`stageGateCatalog[currentStage]\`.
-3. If \`staleStages[currentStage]\` exists, re-run the stage and clear marker via \`/cc-ops rewind --ack <currentStage>\` before advancing.
+3. If \`staleStages[currentStage]\` exists, re-run the stage and clear marker via \`cclaw internal rewind --ack <currentStage>\` before advancing.
 4. If the file is missing or invalid JSON → **BLOCKED** (report and stop).
 5. Read \`${reconciliationNoticesPath}\` when present. For entries matching \`activeRunId + currentStage\` whose gate is still in \`stageGateCatalog[currentStage].blocked\`, show a warning with gate id + reason before proceeding.
 
@@ -231,41 +237,40 @@ If reconciliation warnings were emitted in Step 1, treat them as a pre-advance s
 
 **Path A — stage NOT complete (any gate unmet):**
 
-Load the current stage's skill and command contract:
+Load the current stage skill:
 - \`${RUNTIME_ROOT}/skills/<skillFolder>/SKILL.md\`
-- \`${RUNTIME_ROOT}/commands/<currentStage>.md\`
 
 Execute the stage protocol. The stage skill handles interaction, STOP points, gate tracking, and stage completion via \`node .cclaw/hooks/stage-complete.mjs <stage>\` (canonical flow-state mutation path).
 
 ${ralphLoopContractSnippet()}
 
-Special-case for review: if \`review_criticals_resolved\` is in \`blocked\`, route to rework instead of looping review forever — recommend \`/cc-ops rewind tdd "review_blocked_by_critical"\`.
+Special-case for review: if \`review_criticals_resolved\` is in \`blocked\`, route to rework instead of looping review forever — recommend \`cclaw internal rewind tdd "review_blocked_by_critical"\`.
 
 **Path B — stage IS complete (all gates met, all delegations done):**
 
 If \`next\` is \`done\`:
 
 When \`currentStage\` is \`ship\`, automatically drive the **closeout chain**
-by inspecting \`closeout.shipSubstate\`:
+by inspecting ${closeoutSubstateInline()}:
 
 | shipSubstate          | Action                                              |
 |-----------------------|-----------------------------------------------------|
 | \`idle\` / missing      | Flip to \`retro_review\` and start retro protocol     |
-| \`retro_review\`        | Continue retro protocol (re-ask accept/edit/skip)   |
-| \`compound_review\`     | Run compound scan with a single approve/skip ask    |
-| \`ready_to_archive\`    | Run archive skill; reset flow-state on success      |
+| \`retro_review\`        | Draft/update \`09-retro.md\`, ask accept/edit/skip  |
+| \`compound_review\`     | Compound closeout: overlap scan, refresh/supersede, ask approve/skip |
+| \`ready_to_archive\`    | Run \`cclaw archive\`; reset flow-state on success |
 | \`archived\`            | Report "run archived"; stop                         |
 
-Each step owns its own state transition. \`/cc-next\` never shells out to
-\`cclaw doctor\` or \`cclaw archive\` automatically — it loads the matching
-skill and command contract and executes the protocol in-session.
+Each step owns its own state transition. \`/cc-next\` keeps retro and compound
+in-session, then uses the archive runtime only at \`ready_to_archive\`.
 
 Otherwise report **"Flow complete. All stages finished."** and stop.
 
-Otherwise (non-terminal \`next\`): load the next stage's skill and command
-contract, begin execution.
+Otherwise (non-terminal \`next\`): load the next stage skill and begin execution.
 
 ## Stage order
+
+This table is the critical path. After \`ship\`, \`/cc-next\` continues closeout via ${closeoutSubstateInline()}: ${closeoutChainInline()}.
 
 | Stage | Next | Skill path |
 |---|---|---|

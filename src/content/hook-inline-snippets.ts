@@ -46,6 +46,9 @@
  * - `countArchivedRunsInline` counts immediate subdirectories of
  *   `<root>/.cclaw/runs/` so both the hook and the CLI see the same
  *   `archivedRunsCount` for the small-project relaxation.
+ * - `formatCompoundReadinessLineInline` mirrors the one-line summary shape
+ *   used by `src/internal/compound-readiness.ts::formatCompoundReadinessLine`
+ *   so session-start and internal CLI command stay wording-compatible.
  */
 export const HOOK_INLINE_SHARED_HELPERS = `
 function normalizeCompoundLastUpdatedAt(date) {
@@ -65,6 +68,35 @@ async function countArchivedRunsInline(root) {
     if (code === "ENOENT") return 0;
     return undefined;
   }
+}
+
+function formatCompoundReadinessLineInline(readiness) {
+  if (!readiness || typeof readiness !== "object") {
+    return "";
+  }
+  const ready = Array.isArray(readiness.ready) ? readiness.ready : [];
+  const readyCount =
+    typeof readiness.readyCount === "number" && Number.isFinite(readiness.readyCount)
+      ? Math.trunc(readiness.readyCount)
+      : ready.length;
+  const clusterCount =
+    typeof readiness.clusterCount === "number" && Number.isFinite(readiness.clusterCount)
+      ? Math.trunc(readiness.clusterCount)
+      : 0;
+  const threshold =
+    typeof readiness.threshold === "number" && Number.isFinite(readiness.threshold)
+      ? Math.trunc(readiness.threshold)
+      : COMPOUND_RECURRENCE_THRESHOLD;
+  if (readyCount === 0) {
+    return "Compound readiness: no candidates (clusters=" +
+      String(clusterCount) + ", threshold=" + String(threshold) + ")";
+  }
+  const critical = ready.filter(
+    (entry) => entry && typeof entry === "object" && entry.severity === "critical"
+  ).length;
+  const criticalSuffix = critical > 0 ? " (critical=" + String(critical) + ")" : "";
+  return "Compound readiness: clusters=" + String(clusterCount) +
+    ", ready=" + String(readyCount) + criticalSuffix;
 }
 `;
 
@@ -129,7 +161,7 @@ async function computeCompoundReadinessInline(root, options) {
     let row;
     try { row = JSON.parse(line); } catch { continue; }
     if (!row || typeof row !== "object" || Array.isArray(row)) continue;
-    if (row.maturity === "lifted-to-enforcement") continue;
+    if (row.maturity === "lifted-to-enforcement" || typeof row.superseded_by === "string") continue;
     const type = typeof row.type === "string" ? row.type : "";
     const trigger = typeof row.trigger === "string" ? row.trigger : "";
     const action = typeof row.action === "string" ? row.action : "";

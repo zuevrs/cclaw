@@ -1,5 +1,6 @@
 import { RUNTIME_ROOT } from "../constants.js";
 import { resolveIdeateFrames, type IdeateFrameId } from "./ideate-frames.js";
+import { ideateStructuredAskToolsWithFallback } from "./decision-protocol.js";
 
 const IDEATE_SKILL_FOLDER = "flow-ideate";
 const IDEATE_SKILL_NAME = "flow-ideate";
@@ -13,19 +14,20 @@ const IDEATE_ARTIFACT_GLOB = ".cclaw/artifacts/ideate-*.md";
 const IDEATE_ARTIFACT_PATTERN = ".cclaw/artifacts/ideate-<YYYY-MM-DD-slug>.md";
 const IDEATE_RESUME_WINDOW_DAYS = 30;
 
-/**
- * Structured-ask tool list reused across cclaw skills. Kept inline here (small
- * enough) to avoid cross-module coupling; larger stage skills cite the shared
- * protocol file instead.
- */
-const STRUCTURED_ASK_TOOLS =
-  "`AskUserQuestion` on Claude, `AskQuestion` on Cursor, " +
-  "`question` on OpenCode when `permission.question: \"allow\"` is set, " +
-  "`request_user_input` on Codex in Plan / Collaboration mode; " +
-  "fall back to a plain-text lettered list when the tool is hidden or errors";
+const STRUCTURED_ASK_TOOLS = ideateStructuredAskToolsWithFallback();
 
 export interface IdeateCommandOptions {
   frameIds?: readonly IdeateFrameId[];
+  mode?: "repo-grounded" | "elsewhere-software" | "elsewhere-non-software" | "narrow";
+}
+
+export function minimumDistinctIdeateFrames(
+  frameCount: number,
+  mode: IdeateCommandOptions["mode"] = "repo-grounded"
+): number {
+  if (frameCount <= 0) return 0;
+  const cap = mode === "repo-grounded" ? 4 : 2;
+  return Math.min(cap, frameCount);
 }
 
 function renderFrameBullets(frameIds?: readonly IdeateFrameId[]): string {
@@ -43,7 +45,7 @@ function renderFrameNames(frameIds?: readonly IdeateFrameId[]): string {
 export function ideateCommandContract(options: IdeateCommandOptions = {}): string {
   const frames = resolveIdeateFrames(options.frameIds);
   const frameBullets = renderFrameBullets(options.frameIds);
-  const minimumDistinctFrames = Math.min(4, frames.length);
+  const minimumDistinctFrames = minimumDistinctIdeateFrames(frames.length, options.mode);
   return `# /cc-ideate
 
 ## Purpose
@@ -69,8 +71,10 @@ same session, or save/discard the backlog.
    has been modified within the last ${IDEATE_RESUME_WINDOW_DAYS} days,
    offer the user: continue that backlog, start fresh, or cancel.
 2. **Mode classification.** Explicitly classify subject:
-   \`repo-grounded\` / \`elsewhere-software\` / \`elsewhere-non-software\`.
-   Do not assume repo-grounded by default.
+   \`repo-grounded\` / \`elsewhere-software\` / \`elsewhere-non-software\` / \`narrow\`.
+   Do not assume repo-grounded by default. Repo-grounded scans keep the
+   broadest frame minimum; narrow and non-repo modes use the smaller minimum
+   shown below.
 3. **Mode-aware grounding (parallel).**
    - Repo-grounded: repo signal scan + \`${RUNTIME_ROOT}/knowledge.jsonl\`
      repetition scan.
@@ -79,7 +83,9 @@ same session, or save/discard the backlog.
 4. **Divergent ideation frames (parallel).** Generate candidates with
    configured frames (${frames.length} total):
 ${frameBullets}
-   Keep at least ${minimumDistinctFrames} distinct frame outputs in every run.
+   Keep at least ${minimumDistinctFrames} distinct frame outputs in this rendered mode.
+   Deterministic minimum: repo-grounded = 4, narrow/non-repo = 2, always capped
+   by configured frame count.
 5. **Adversarial critique pass.** For each candidate, write the strongest
    counter-argument, kill weak ideas, and keep survivors only.
 6. **Produce 5-10 survivors** with impact (High/Medium/Low),
@@ -102,7 +108,7 @@ ${frameBullets}
 For skill-to-skill invocation, emit exactly one JSON envelope:
 
 \`\`\`json
-{"version":"1","kind":"stage-output","stage":"brainstorm","payload":{"command":"/cc-ideate","artifact":".cclaw/artifacts/ideate-<date>-<slug>.md","recommendation":"I-1"},"emittedAt":"<ISO-8601>"}
+{"version":"1","kind":"stage-output","stage":"non-flow","payload":{"command":"/cc-ideate","artifact":".cclaw/artifacts/ideate-<date>-<slug>.md","recommendation":"I-1"},"emittedAt":"<ISO-8601>"}
 \`\`\`
 
 Validate envelopes with:
@@ -117,7 +123,7 @@ Validate envelopes with:
 export function ideateCommandSkillMarkdown(options: IdeateCommandOptions = {}): string {
   const frames = resolveIdeateFrames(options.frameIds);
   const frameBullets = renderFrameBullets(options.frameIds);
-  const minimumDistinctFrames = Math.min(4, frames.length);
+  const minimumDistinctFrames = minimumDistinctIdeateFrames(frames.length, options.mode);
   const frameNames = renderFrameNames(options.frameIds);
   return `---
 name: ${IDEATE_SKILL_NAME}
@@ -160,6 +166,7 @@ repository. Will persist a ranked backlog to
    - \`repo-grounded\` — explicitly tied to this repository.
    - \`elsewhere-software\` — software problem not tied to this repository.
    - \`elsewhere-non-software\` — process/business/non-software problem.
+   - \`narrow\` — a focused prompt where broad frame coverage would be performative.
 6. Record the chosen mode in the artifact.
 
 ### Phase 1 — Mode-aware grounding
@@ -173,8 +180,7 @@ Run grounding in parallel where available:
   - Module size outliers (\`wc -l\` or \`du\`) with weak direct test coverage.
   - Docs drift: check that \`README.md\` / \`docs/\` reference files that still
     exist and flags/APIs that still match \`src/\`.
-  - \`${RUNTIME_ROOT}/knowledge.jsonl\` entries with \`type: "heuristic"\`
-    or repeated \`subject:\` values.
+  - \`${RUNTIME_ROOT}/knowledge.jsonl\` entries with recurring \`type\` in \`rule | pattern | lesson | compound\` and repeated \`trigger/action\` pairs; prefer clusters that already show stable \`origin_run\` history.
 - For \`elsewhere-software\`:
   - Gather current framework/library docs first.
   - Add one comparison scan for established solutions.
@@ -189,8 +195,11 @@ Generate candidate ideas by frame, in parallel when possible:
 
 ${frameBullets}
 
-Require at least ${minimumDistinctFrames} distinct frames in every run. Avoid frame-collapse
-(same idea rewritten 6 times). Keep raw outputs for auditability.
+Require at least ${minimumDistinctFrames} distinct frames in this rendered mode. The
+runtime rule is deterministic: repo-grounded scans require 4 distinct frames;
+narrow, elsewhere-software, and elsewhere-non-software runs require 2; all modes
+are capped by the configured frame count. Avoid frame-collapse (same idea
+rewritten many times). Keep raw outputs for auditability.
 
 ### Phase 3 — Critique all, keep survivors
 
@@ -229,7 +238,7 @@ Only survivors advance to ranking.
    # Ideation — <date>
 
    **Focus:** <user-supplied focus or "open-ended scan">
-   **Mode:** <repo-grounded | elsewhere-software | elsewhere-non-software>
+   **Mode:** <repo-grounded | elsewhere-software | elsewhere-non-software | narrow>
    **Generated:** <ISO-8601 timestamp>
    **Frames used:** <comma-separated list>
    **Raw candidates:** <N>
@@ -251,15 +260,15 @@ Only survivors advance to ranking.
 
    | ID | Improvement | Impact | Effort | Confidence | Evidence |
    |---|---|---|---|---|---|
-   | I-1 | Fix feature-worktree test timeouts | High | S | High | tests/unit/feature-system.test.ts:31 |
+| I-1 | Simplify a confusing generated prompt surface | High | S | High | <path-to-generated-surface> |
    | …   | …                                  | …    | … | …    | …                                     |
 
    ## Candidate detail
 
-   ### I-1 — Fix feature-worktree test timeouts
-   - **Evidence:** \`npm test\` hangs 40s on tests/unit/feature-system.test.ts:31.
-   - **Counter-argument:** Fix may hide deeper orchestration race.
-   - **Handoff:** \`/cc Fix feature-worktree test timeouts on macOS\`
+### I-1 — Simplify a confusing generated prompt surface
+- **Evidence:** \`<path>\` contains repeated or stale guidance that a user would see.
+- **Counter-argument:** Trimming too hard can remove useful orientation for new users.
+- **Handoff:** \`/cc Simplify the confusing generated prompt surface while preserving behavior\`
 
    ### I-2 — …
    \`\`\`

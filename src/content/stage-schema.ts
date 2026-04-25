@@ -13,6 +13,7 @@ import {
 } from "./stages/index.js";
 import { stagePolicyNeedlesFromMetadata } from "./stages/_lint-metadata/index.js";
 import { tddStageForTrack } from "./stages/tdd.js";
+import { trackRenderContext } from "./track-render-context.js";
 import type {
   ArtifactValidation,
   StageComplexityTier,
@@ -63,11 +64,13 @@ export const SKILL_ENVELOPE_KINDS = [
 ] as const;
 
 export type SkillEnvelopeKind = (typeof SKILL_ENVELOPE_KINDS)[number];
+export const NON_FLOW_ENVELOPE_STAGE = "non-flow" as const;
+export type SkillEnvelopeStage = FlowStage | typeof NON_FLOW_ENVELOPE_STAGE;
 
 export interface SkillEnvelope {
   version: "1";
   kind: SkillEnvelopeKind;
-  stage: FlowStage;
+  stage: SkillEnvelopeStage;
   payload: unknown;
   emittedAt: string;
   agent?: string;
@@ -85,6 +88,119 @@ const COMPLEXITY_TIER_ORDER: Record<StageComplexityTier, number> = {
   standard: 1,
   deep: 2
 };
+
+export interface StageStackAwareReviewRoute {
+  stack: string;
+  agent: "reviewer";
+  signals: string[];
+  focus: string;
+}
+
+export interface StageDelegationSummary {
+  stage: FlowStage;
+  mandatoryAgents: string[];
+  proactiveAgents: string[];
+  primaryAgents: string[];
+  stackAwareRoutes: StageStackAwareReviewRoute[];
+}
+
+const REVIEW_STACK_AWARE_ROUTES: StageStackAwareReviewRoute[] = [
+  {
+    stack: "TypeScript/JavaScript",
+    agent: "reviewer",
+    signals: ["package.json", "tsconfig.json"],
+    focus: "type safety, package scripts, build/test config, dependency boundaries"
+  },
+  {
+    stack: "Python",
+    agent: "reviewer",
+    signals: ["pyproject.toml", "requirements.txt"],
+    focus: "packaging, virtualenv assumptions, typing, pytest or unittest evidence"
+  },
+  {
+    stack: "Ruby/Rails",
+    agent: "reviewer",
+    signals: ["Gemfile", "config/"],
+    focus: "Rails conventions, migrations, routes/controllers, RSpec or Minitest evidence"
+  },
+  {
+    stack: "Go",
+    agent: "reviewer",
+    signals: ["go.mod"],
+    focus: "interfaces, concurrency, error handling, go test coverage"
+  },
+  {
+    stack: "Rust",
+    agent: "reviewer",
+    signals: ["Cargo.toml"],
+    focus: "ownership, error/result handling, feature flags, cargo test coverage"
+  }
+];
+
+function stackAwareRoutesForStage(stage: FlowStage): StageStackAwareReviewRoute[] {
+  return stage === "review" ? reviewStackAwareRoutes() : [];
+}
+
+export function reviewStackAwareRoutes(): StageStackAwareReviewRoute[] {
+  return REVIEW_STACK_AWARE_ROUTES.map((route) => ({
+    ...route,
+    signals: [...route.signals]
+  }));
+}
+
+export function reviewStackAwareRoutingSummary(): string {
+  const routeList = REVIEW_STACK_AWARE_ROUTES
+    .map((route) => `${route.stack} via ${route.signals.join("/")}`)
+    .join("; ");
+  return `Stack-aware review routing: keep the default reviewer and security-reviewer passes, then proactively route matching reviewer lenses when repo signals or review context match (${routeList}). Do not run every stack lens unconditionally.`;
+}
+
+function dedupeAgentsInOrder(agents: string[]): string[] {
+  const out: string[] = [];
+  const seen = new Set<string>();
+  for (const agent of agents) {
+    if (seen.has(agent)) continue;
+    seen.add(agent);
+    out.push(agent);
+  }
+  return out;
+}
+
+/**
+ * Canonical delegation summary derived from STAGE_AUTO_SUBAGENT_DISPATCH.
+ *
+ * Keep all generated routing surfaces (skills, AGENTS.md) on this helper so
+ * stage->agent defaults are maintained in one place.
+ */
+export function stageDelegationSummary(
+  complexityTier: StageComplexityTier = "standard"
+): StageDelegationSummary[] {
+  const currentTierRank = COMPLEXITY_TIER_ORDER[complexityTier];
+  return FLOW_STAGES.map((stage) => {
+    const eligibleRows = STAGE_AUTO_SUBAGENT_DISPATCH[stage].filter((row) => {
+      const requiredAt = row.requiredAtTier ?? "standard";
+      return currentTierRank >= COMPLEXITY_TIER_ORDER[requiredAt];
+    });
+    const mandatoryAgents = dedupeAgentsInOrder(
+      eligibleRows
+        .filter((row) => row.mode === "mandatory")
+        .map((row) => row.agent)
+    );
+    const proactiveAgents = dedupeAgentsInOrder(
+      eligibleRows
+        .filter((row) => row.mode === "proactive")
+        .map((row) => row.agent)
+    );
+    const primaryAgents = dedupeAgentsInOrder([...mandatoryAgents, ...proactiveAgents]);
+    return {
+      stage,
+      mandatoryAgents,
+      proactiveAgents,
+      primaryAgents,
+      stackAwareRoutes: stackAwareRoutesForStage(stage)
+    };
+  });
+}
 
 function asRecord(value: unknown): Record<string, unknown> | null {
   if (!value || typeof value !== "object" || Array.isArray(value)) {
@@ -105,8 +221,13 @@ export function validateSkillEnvelope(value: unknown): SkillEnvelopeValidation {
   if (typeof record.kind !== "string" || !SKILL_ENVELOPE_KIND_SET.has(record.kind)) {
     errors.push(`envelope.kind must be one of: ${SKILL_ENVELOPE_KINDS.join(", ")}.`);
   }
-  if (typeof record.stage !== "string" || !FLOW_STAGE_SET.has(record.stage as FlowStage)) {
-    errors.push(`envelope.stage must be one of: ${FLOW_STAGES.join(", ")}.`);
+  if (
+    typeof record.stage !== "string" ||
+    (record.stage !== NON_FLOW_ENVELOPE_STAGE && !FLOW_STAGE_SET.has(record.stage as FlowStage))
+  ) {
+    errors.push(
+      `envelope.stage must be one of: ${FLOW_STAGES.join(", ")} or ${NON_FLOW_ENVELOPE_STAGE}.`
+    );
   }
   if (!Object.prototype.hasOwnProperty.call(record, "payload")) {
     errors.push("envelope.payload is required.");
@@ -191,15 +312,19 @@ const REQUIRED_GATE_IDS: Record<FlowStage, RequiredGateSet> = {
   spec: [
     "spec_acceptance_measurable",
     "spec_testability_confirmed",
+    "spec_assumptions_surfaced",
     "spec_user_approved"
   ],
   plan: [
     "plan_tasks_sliced_2_5_min",
     "plan_dependency_batches_defined",
     "plan_acceptance_mapped",
+    "plan_execution_posture_recorded",
     "plan_wait_for_confirm"
   ],
   tdd: (track) => [
+    "tdd_test_discovery_complete",
+    "tdd_impact_check_complete",
     "tdd_red_test_written",
     "tdd_green_full_suite",
     "tdd_refactor_completed",
@@ -242,10 +367,10 @@ const REQUIRED_ARTIFACT_SECTIONS: Record<FlowStage, string[]> = {
     "Deployment & Rollout",
     "Completion Dashboard"
   ],
-  spec: ["Acceptance Criteria", "Edge Cases", "Testability Map", "Approval"],
-  plan: ["Task List", "Dependency Batches", "Acceptance Mapping", "WAIT_FOR_CONFIRM"],
-  tdd: ["RED Evidence", "GREEN Evidence", "REFACTOR Notes", "Traceability", "Verification Ladder"],
-  review: ["Layer 1 Verdict", "Review Army Contract", "Severity Summary", "Final Verdict"],
+  spec: ["Acceptance Criteria", "Edge Cases", "Assumptions Before Finalization", "Testability Map", "Approval"],
+  plan: ["Task List", "Dependency Batches", "Acceptance Mapping", "Execution Posture", "WAIT_FOR_CONFIRM"],
+  tdd: ["Test Discovery", "System-Wide Impact Check", "RED Evidence", "GREEN Evidence", "REFACTOR Notes", "Traceability", "Verification Ladder"],
+  review: ["Layer 1 Verdict", "Review Findings Contract", "Severity Summary", "Final Verdict"],
   ship: ["Preflight Results", "Release Notes", "Rollback Plan", "Finalization"]
 };
 
@@ -415,28 +540,10 @@ const STAGE_AUTO_SUBAGENT_DISPATCH: Record<FlowStage, StageAutoSubagentDispatch[
       agent: "test-author",
       mode: "mandatory",
       requiredAtTier: "lightweight",
-      when: "Always during TDD cycle (RED phase).",
-      purpose: "Produce failing RED tests only; no production writes.",
+      when: "Always during the TDD cycle.",
+      purpose: "Own phase-specific RED/GREEN/REFACTOR evidence for each slice: failing tests before production writes, minimal GREEN implementation, then behavior-preserving refactor notes.",
       requiresUserGate: false,
-      skill: "tdd-red-phase"
-    },
-    {
-      agent: "test-author",
-      mode: "mandatory",
-      requiredAtTier: "lightweight",
-      when: "Always during TDD cycle (GREEN phase).",
-      purpose: "Implement minimum production changes to satisfy RED and prove full-suite GREEN.",
-      requiresUserGate: false,
-      skill: "tdd-green-phase"
-    },
-    {
-      agent: "test-author",
-      mode: "mandatory",
-      requiredAtTier: "lightweight",
-      when: "Always during TDD cycle (REFACTOR phase).",
-      purpose: "Refactor only after GREEN proof, preserving behavior and test pass state.",
-      requiresUserGate: false,
-      skill: "tdd-refactor-phase"
+      skill: "tdd-cycle-evidence"
     },
     {
       agent: "doc-updater",
@@ -452,7 +559,7 @@ const STAGE_AUTO_SUBAGENT_DISPATCH: Record<FlowStage, StageAutoSubagentDispatch[
       mode: "mandatory",
       requiredAtTier: "lightweight",
       when: "Always in review stage.",
-      purpose: "Layer 1 spec compliance pass plus coordination of parallel Layer 2 fan-out (correctness, performance, architecture, external-safety) with source-tagged findings.",
+      purpose: "Layer 1 spec compliance plus integrated Layer 2 review across correctness, performance, architecture, and external-safety tags with source-tagged findings.",
       requiresUserGate: false,
       skill: "review-spec-pass"
     },
@@ -467,10 +574,9 @@ const STAGE_AUTO_SUBAGENT_DISPATCH: Record<FlowStage, StageAutoSubagentDispatch[
     },
     {
       agent: "reviewer",
-      mode: "mandatory",
-      requiredAtTier: "lightweight",
-      when: "Mandatory when the diff exceeds 100 changed lines, touches more than 10 files, or modifies trust boundaries — dispatch a SECOND, independent reviewer with the adversarial-review skill loaded so the review army has at least two voices on a high-blast-radius change.",
-      purpose: "Adversarial second-opinion review on large or trust-sensitive diffs. The second reviewer treats the implementation as hostile and tries to break it (hostile-user, future-maintainer, competitor lenses) instead of sympathetically explaining it.",
+      mode: "proactive",
+      when: "When trust boundaries changed, Critical/Important ambiguity remains, or the diff is both large and high-risk.",
+      purpose: "Adversarial second-opinion review for genuinely high-blast-radius changes. Treat the implementation as hostile and try to break it before ship.",
       requiresUserGate: false,
       skill: "adversarial-review"
     },
@@ -481,6 +587,14 @@ const STAGE_AUTO_SUBAGENT_DISPATCH: Record<FlowStage, StageAutoSubagentDispatch[
       purpose: "Run the receiving-code-review workflow so every incoming feedback item gets an explicit disposition with evidence, and the queue is mirrored into review artifacts.",
       requiresUserGate: false,
       skill: "receiving-code-review"
+    },
+    {
+      agent: "reviewer",
+      mode: "proactive",
+      when: "When repo signals or review context indicate TypeScript/JavaScript, Python, Ruby/Rails, Go, or Rust coverage is relevant.",
+      purpose: "Route a matching stack-aware reviewer lens while keeping the default general review pass intact; do not run every stack lens unconditionally.",
+      requiresUserGate: false,
+      skill: "stack-aware-review"
     }
   ],
   ship: [
@@ -507,16 +621,9 @@ export function mandatoryDelegationsForStage(
   stage: FlowStage,
   complexityTier: StageComplexityTier = "standard"
 ): string[] {
-  const currentTierRank = COMPLEXITY_TIER_ORDER[complexityTier];
-  return [...new Set(
-    STAGE_AUTO_SUBAGENT_DISPATCH[stage]
-      .filter((d) => d.mode === "mandatory")
-      .filter((d) => {
-        const requiredAt = d.requiredAtTier ?? "standard";
-        return currentTierRank >= COMPLEXITY_TIER_ORDER[requiredAt];
-      })
-      .map((d) => d.agent)
-  )];
+  const summary = stageDelegationSummary(complexityTier)
+    .find((row) => row.stage === stage);
+  return summary ? summary.mandatoryAgents : [];
 }
 
 export function stageSchema(stage: FlowStage, track: FlowTrack = "standard"): StageSchema {
@@ -636,6 +743,10 @@ export function buildTransitionRules(): TransitionRule[] {
 
 export function stagePolicyNeedles(stage: FlowStage, track: FlowTrack = "standard"): string[] {
   return stagePolicyNeedlesFromMetadata(stage, track);
+}
+
+export function stageTrackRenderContext(track: FlowTrack = "standard") {
+  return trackRenderContext(track);
 }
 
 export function stageAutoSubagentDispatch(stage: FlowStage): StageAutoSubagentDispatch[] {

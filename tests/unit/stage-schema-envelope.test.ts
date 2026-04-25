@@ -19,6 +19,17 @@ describe("skill envelope schema", () => {
     expect(validation.errors).toEqual([]);
   });
 
+  it("allows non-flow envelopes for read-only/operator commands", () => {
+    const validation = validateSkillEnvelope({
+      version: "1",
+      kind: "stage-output",
+      stage: "non-flow",
+      payload: { command: "/cc-view", subcommand: "status" },
+      emittedAt: "2026-01-01T00:00:00Z"
+    });
+    expect(validation.ok).toBe(true);
+  });
+
   it("rejects malformed envelope", () => {
     const validation = validateSkillEnvelope({
       version: "2",

@@ -1,8 +1,7 @@
 import { RUNTIME_ROOT, STAGE_TO_SKILL_FOLDER } from "../constants.js";
 import type { FlowStage, FlowTrack } from "../types.js";
-import { STAGE_EXAMPLES_REFERENCE_DIR, stageExamples } from "./examples.js";
-import { STAGE_COMMON_GUIDANCE_REL_PATH } from "./stage-common-guidance.js";
-import { stageAutoSubagentDispatch, stageSchema } from "./stage-schema.js";
+import { stageExamples } from "./examples.js";
+import { reviewStackAwareRoutes, reviewStackAwareRoutingSummary, stageAutoSubagentDispatch, stageSchema, stageTrackRenderContext } from "./stage-schema.js";
 import type { StageSchema } from "./stage-schema.js";
 import type {
   ArtifactValidation,
@@ -14,8 +13,6 @@ import type {
 } from "./stages/schema-types.js";
 
 const VERIFICATION_STAGES: FlowStage[] = ["tdd", "review", "ship"];
-const DECISION_PROTOCOL_PATH = `${RUNTIME_ROOT}/references/protocols/decision.md`;
-const COMPLETION_PROTOCOL_PATH = `${RUNTIME_ROOT}/references/protocols/completion.md`;
 
 function whenNotToUseBlock(items: string[]): string {
   if (items.length === 0) {
@@ -27,10 +24,16 @@ ${items.map((item) => `- ${item}`).join("\n")}
 `;
 }
 
-function contextLoadingBlock(trace: CrossStageTrace): string {
+function contextLoadingBlock(trace: CrossStageTrace, executionModel: StageExecutionModel): string {
   const readLines = trace.readsFrom.length > 0
     ? trace.readsFrom.map((value) => `- \`${value}\``).join("\n")
     : "- (first stage — no upstream artifacts)";
+  const inputs = executionModel.inputs.length > 0
+    ? executionModel.inputs.map((item) => `- ${item}`).join("\n")
+    : "- (first stage — no required inputs)";
+  const requiredContext = executionModel.requiredContext.length > 0
+    ? executionModel.requiredContext.map((item) => `- ${item}`).join("\n")
+    : "- None beyond this skill";
 
   return `## Context Loading
 
@@ -39,7 +42,16 @@ Before execution:
 2. Load active artifacts from \`.cclaw/artifacts/\`.
 3. Load upstream artifacts required by this stage:
 ${readLines}
-4. Use the injected knowledge digest from session-start; only fall back to full
+4. Extract upstream decisions, constraints, and open questions into the current
+   artifact's \`Upstream Handoff\` section when that section exists.
+5. Before doing stage work, give a compact user-facing drift preamble: "Carrying forward: <1-3 bullets>. Drift since upstream: None / <specific drift>. Recommendation: continue / re-scope."
+6. If you change an upstream decision, record an explicit drift reason in the
+   current artifact before continuing.
+7. Confirm stage inputs:
+${inputs}
+8. Confirm required context:
+${requiredContext}
+9. Use the injected knowledge digest from session-start; only fall back to full
    \`.cclaw/knowledge.jsonl\` when the digest is insufficient.
 `;
 }
@@ -100,6 +112,20 @@ ${sections}
 `;
 }
 
+function stackAwareReviewRoutingBlock(stage: FlowStage): string {
+  if (stage !== "review") return "";
+  const routes = reviewStackAwareRoutes()
+    .map((route) => `- ${route.stack}: ${route.signals.map((signal) => `\`${signal}\``).join(", ")} -> ${route.agent} lens for ${route.focus}.`)
+    .join("\n");
+  return `## Stack-Aware Review Routing
+${reviewStackAwareRoutingSummary()}
+
+Default general review still runs. Add only the matching stack lens when repo signals or changed files justify it.
+
+${routes}
+`;
+}
+
 function reviewLoopBlock(reviewLoop?: StageReviewLoop): string {
   if (!reviewLoop) return "";
   const checklist = reviewLoop.checklist.map((item) => `- \`${item}\``).join("\n");
@@ -116,14 +142,16 @@ function verificationBlock(stage: FlowStage): string {
   if (!VERIFICATION_STAGES.includes(stage)) return "";
   return `## Verification Before Completion
 
-Provide fresh, stage-local verification evidence from this turn:
+This is the gate function for completion claims. No "done", "all good", or
+"tests pass" unless fresh evidence from this turn proves it.
 
-1. Run verification commands (tests/build/lint/type-check) for the changed scope.
-2. Confirm output, do not infer success from prior runs.
-3. If this is a bug fix, capture RED -> GREEN evidence for the regression path.
+- Run verification commands (tests/build/lint/type-check) for the changed scope.
+- Confirm output directly; do not infer success from prior runs or green memories.
+- If this is a bug fix, capture RED -> GREEN evidence for the regression path.
+- If a command fails, report the failure as diagnostic evidence and stop before completion.
+- If you only inspected files or reasoned about the change, say so; that is not verification.
 
-Reference utility skill:
-\`.cclaw/skills/verification-before-completion/SKILL.md\`
+Keep this verification evidence in the artifact before completion.
 `;
 }
 
@@ -139,7 +167,7 @@ Apply concise turn announces: one announce per batch boundary (or when risk/plan
 changes materially), then execute tasks without repetitive boilerplate.
 
 Detailed walkthrough:
-\`.cclaw/${STAGE_EXAMPLES_REFERENCE_DIR}/tdd-batch-walkthrough.md\`
+Use the current plan artifact for batch order and keep RED -> GREEN -> REFACTOR evidence in the TDD artifact.
 `;
 }
 
@@ -191,47 +219,6 @@ function mergedAntiPatterns(philosophy: StagePhilosophy, execution: StageExecuti
   return merged.map((item) => `- ${item}`).join("\n");
 }
 
-function stageSpecificSeeAlso(stage: FlowStage): string[] {
-  const refs: Record<FlowStage, string[]> = {
-    brainstorm: [
-      `- \`${RUNTIME_ROOT}/skills/learnings/SKILL.md\``,
-      `- \`${RUNTIME_ROOT}/references/stages/brainstorm-examples.md\``
-    ],
-    scope: [
-      `- \`${RUNTIME_ROOT}/skills/learnings/SKILL.md\``,
-      `- \`${RUNTIME_ROOT}/references/stages/scope-examples.md\``
-    ],
-    design: [
-      `- \`${RUNTIME_ROOT}/skills/security/SKILL.md\``,
-      `- \`${RUNTIME_ROOT}/skills/performance/SKILL.md\``
-    ],
-    spec: [
-      `- \`${RUNTIME_ROOT}/skills/docs/SKILL.md\``,
-      `- \`${RUNTIME_ROOT}/references/stages/spec-examples.md\``
-    ],
-    plan: [
-      `- \`${RUNTIME_ROOT}/skills/subagent-dev/SKILL.md\``,
-      `- \`${RUNTIME_ROOT}/skills/parallel-dispatch/SKILL.md\``
-    ],
-    tdd: [
-      `- \`${RUNTIME_ROOT}/skills/debugging/SKILL.md\``,
-      `- \`${RUNTIME_ROOT}/references/stages/tdd-batch-walkthrough.md\``
-    ],
-    review: [
-      `- \`${RUNTIME_ROOT}/skills/security/SKILL.md\``,
-      `- \`${RUNTIME_ROOT}/skills/parallel-dispatch/SKILL.md\``,
-      `- \`${RUNTIME_ROOT}/skills/verification-before-completion/SKILL.md\``
-    ],
-    ship: [
-      `- \`${RUNTIME_ROOT}/skills/ci-cd/SKILL.md\``,
-      `- \`${RUNTIME_ROOT}/skills/docs/SKILL.md\``,
-      `- \`${RUNTIME_ROOT}/skills/verification-before-completion/SKILL.md\``,
-      `- \`${RUNTIME_ROOT}/skills/finishing-a-development-branch/SKILL.md\``
-    ]
-  };
-  return refs[stage];
-}
-
 function completionParametersBlock(schema: StageSchema, track: FlowTrack): string {
   const gateList = schema.executionModel.requiredGates.map((g) => `\`${g.id}\``).join(", ");
   const mandatory = schema.reviewLens.mandatoryDelegations.length > 0
@@ -253,7 +240,7 @@ function completionParametersBlock(schema: StageSchema, track: FlowTrack): strin
 - Fill \`## Learnings\` before closeout: either \`- None this stage.\` or JSON bullets with required keys \`type\`, \`trigger\`, \`action\`, \`confidence\` (knowledge-schema compatible).
 - Record mandatory delegation completion/waiver in \`${RUNTIME_ROOT}/state/delegation-log.json\` with rationale as needed.
 - Use the completion helper instead of raw \`flow-state.json\` edits (legacy direct edits trigger workflow-guard warnings or strict-mode blocks).
-- Completion protocol reference: \`${COMPLETION_PROTOCOL_PATH}\`
+- Completion protocol: verify required gates, update the artifact, then use the completion helper.
 `;
 }
 
@@ -268,60 +255,6 @@ function quickStartBlock(stage: FlowStage, track: FlowTrack): string {
 4. Satisfy gates (${gatePreview}${schema.executionModel.requiredGates.length > 3 ? ` +${schema.executionModel.requiredGates.length - 3}` : ""}).
 `;
 }
-
-/**
- * Long-form Batch Execution walkthrough. Rendered once into
- * \`.cclaw/references/stages/tdd-batch-walkthrough.md\` by the installer.
- */
-export const TDD_BATCH_WALKTHROUGH_MARKDOWN = `# TDD — Batch Execution Walkthrough
-
-Detailed RED / GREEN / REFACTOR transcript for a 3-task batch. Illustrative
-only — do not copy the command names blindly, match them to your stack.
-
-## Batch 1 example tasks
-
-| Task ID | Description | AC | Verification |
-|---|---|---|---|
-| T-1 \`[~3m]\` | Add \`User.emailNormalized\` column | AC-1 | \`npm test -- users/schema\` |
-| T-2 \`[~4m]\` | Normalize on write in \`UserRepo.save\` | AC-1 | \`npm test -- users/repo\` |
-| T-3 \`[~3m]\` | Reject duplicates in \`UserService.signup\` | AC-2 | \`npm test -- users/service\` |
-
-## Execution transcript
-
-### T-1 — RED
-
-> Run: \`npm test -- users/schema\` → **FAIL** (missing column: \`emailNormalized\`). Captured the failure stack as RED evidence. No production code touched yet.
-
-### T-1 — GREEN
-
-> Added the column in the schema module. Re-ran \`npm test -- users/schema\` → **PASS**. Ran the full suite \`npm test\` → **PASS**. Captured both outputs as GREEN evidence.
-
-### T-1 — REFACTOR
-
-> Extracted the column definition into a shared \`NormalizedEmail\` type used by T-2/T-3. Re-ran \`npm test\` → **PASS**. Captured REFACTOR note: "Extracted NormalizedEmail type to keep T-2/T-3 DRY; zero behavior change, all tests still green."
-
-### T-2 — RED / GREEN / REFACTOR
-
-Write the repo test that expects normalised writes, watch it fail (RED), implement normalisation inside \`UserRepo.save\` only (GREEN), then refactor the normaliser out of the repo into a helper shared with T-3 (REFACTOR).
-
-### T-3 — RED / GREEN / REFACTOR
-
-Write the service-level duplicate test that expects a rejection, watch it fail (RED), add the duplicate check in \`UserService.signup\` (GREEN), refactor the error message into a named constant (REFACTOR).
-
-## Batch gate check
-
-After T-3 REFACTOR, before declaring Batch 1 done:
-
-1. Run the full suite (\`npm test\`) one final time → **PASS** captured as batch-exit evidence.
-2. Verify the TDD artifact contains RED, GREEN, and REFACTOR evidence for T-1, T-2, **and** T-3. No partial batches.
-3. Only now mark Batch 1 complete. Batch 2 cannot start until this step.
-
-## When to stop mid-batch (do NOT push through)
-
-- A RED test fails for a reason you did not predict (e.g. an unrelated flaky test) → **pause**, diagnose, log an operational-self-improvement entry, and decide with the user before proceeding.
-- A GREEN step would require touching code outside the task's acceptance criterion → **pause**, the task is scoped wrong; adjust the plan or open a follow-up task.
-- The same RED failure reappears after a GREEN change → **escalate** per the 3-attempts rule; do not keep patching.
-`;
 
 export function stageSkillFolder(stage: FlowStage): string {
   return STAGE_TO_SKILL_FOLDER[stage];
@@ -418,6 +351,7 @@ function dedupeGuidance(
 
 export function stageSkillMarkdown(stage: FlowStage, track: FlowTrack = "standard"): string {
   const schema = stageSchema(stage, track);
+  const trackContext = stageTrackRenderContext(track);
   const philosophy = schema.philosophy;
   const executionModel = schema.executionModel;
   const artifactRules = schema.artifactRules;
@@ -438,7 +372,6 @@ export function stageSkillMarkdown(stage: FlowStage, track: FlowTrack = "standar
   ).slice(0, 5);
   const processFlowMermaid = renderProcessFlowMermaid(executionModel);
   const platformNotesBlock = renderPlatformNotesBlock(executionModel.platformNotes);
-  const stageRefs = stageSpecificSeeAlso(stage);
   const reviewLoopSection = reviewLoopBlock(reviewLens.reviewLoop);
   const mandatoryDelegationSummary = mandatoryDelegations.length > 0
     ? mandatoryDelegations.map((name) => `\`${name}\``).join(", ")
@@ -467,6 +400,7 @@ ${philosophy.purpose}
 ## Complexity Tier
 - Active tier: \`${schema.complexityTier}\`
 - Mandatory delegations at this tier: ${mandatoryDelegationSummary}
+- Track render context: \`${trackContext.track}\` (${trackContext.usesPlanTerminology ? "plan-first wording" : "acceptance-first wording"})
 
 ## When to Use
 ${philosophy.whenToUse.map((item) => `- ${item}`).join("\n")}
@@ -484,14 +418,9 @@ This is the stage **state machine** — the canonical ordered flow. For every de
 
 ${processFlowMermaid.length > 0 ? processFlowMermaid : "```mermaid\nflowchart TD\n  S1[\"Execute Checklist\"] --> S2[\"Satisfy required gates\"] --> S3[\"Verify before closeout\"]\n```"}
 
-## Inputs
-${executionModel.inputs.length > 0 ? executionModel.inputs.map((item) => `- ${item}`).join("\n") : "- (first stage — no required inputs)"}
-
-## Required Context
-${executionModel.requiredContext.length > 0 ? executionModel.requiredContext.map((item) => `- ${item}`).join("\n") : "- None beyond this skill"}
-
-${platformNotesBlock}${contextLoadingBlock(artifactRules.crossStageTrace)}
+${platformNotesBlock}${contextLoadingBlock(artifactRules.crossStageTrace, executionModel)}
 ${autoSubagentDispatchBlock(stage, track)}
+${stackAwareReviewRoutingBlock(stage)}
 ${researchPlaybooksBlock(executionModel.researchPlaybooks ?? [])}
 
 ## Checklist
@@ -508,7 +437,7 @@ These are **rules for HOW you interact with the user** during this stage — ton
 
 ${interactionFocus.length > 0 ? interactionFocus.map((item, i) => `${i + 1}. ${item}`).join("\n") : "- Keep communication concise and decision-focused; rely on the Checklist for execution order."}
 
-Decision protocol reference: \`${DECISION_PROTOCOL_PATH}\`
+Decision protocol: ask only decision-changing questions, record the chosen option, rationale, risk, and rollback when the stage makes a non-trivial call.
 
 ${batchExecutionModeBlock(stage, track)}
 ## Required Gates
@@ -519,7 +448,7 @@ ${evidenceList}
 
 ${verificationBlock(stage)}
 
-## Verification
+## Exit Criteria
 ${executionModel.exitCriteria.map((item) => `- [ ] ${item}`).join("\n")}
 
 ${completionParametersBlock(schema, track)}
@@ -536,15 +465,9 @@ ${reviewLens.outputs.map((item) => `- ${item}`).join("\n")}
 ${reviewSectionsBlock(reviewLens.reviewSections)}
 
 ## Shared Stage Guidance
-See:
-- \`${STAGE_COMMON_GUIDANCE_REL_PATH}\`
-- \`${DECISION_PROTOCOL_PATH}\`
-- \`${COMPLETION_PROTOCOL_PATH}\`
-
-## See Also
-- \`${RUNTIME_ROOT}/skills/using-cclaw/SKILL.md\`
-- \`${RUNTIME_ROOT}/skills/session/SKILL.md\`
-${stageRefs.join("\n")}
-- \`${RUNTIME_ROOT}/commands/${stage}.md\`
+- Follow the handoff menu: advance, revise, pause, rewind, or archive only when the user explicitly chooses it.
+- Carry upstream decisions forward explicitly; record drift instead of silently changing direction.
+- Before closeout, fill \`## Learnings\` with \`- None this stage.\` or 1-3 strict JSON bullets.
+- Keep decisions explicit: context, options, chosen option, rationale, risk, and rollback.
 `;
 }

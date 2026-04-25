@@ -8,6 +8,7 @@ import { FLOW_STAGES, FLOW_TRACKS, TRACK_STAGES } from "./types.js";
 import type { FlowStage, FlowTrack, TransitionRule } from "./types.js";
 
 export const TRANSITION_RULES: TransitionRule[] = buildTransitionRules();
+export const FLOW_STATE_SCHEMA_VERSION = 1;
 
 export interface StageGateState {
   required: string[];
@@ -99,6 +100,8 @@ export function createInitialCloseoutState(): CloseoutState {
 }
 
 export interface FlowState {
+  /** Backward-compatible schema marker for future migrations. */
+  schemaVersion: typeof FLOW_STATE_SCHEMA_VERSION;
   activeRunId: string;
   currentStage: FlowStage;
   completedStages: FlowStage[];
@@ -171,6 +174,7 @@ export function createInitialFlowState(
   }
 
   return {
+    schemaVersion: FLOW_STATE_SCHEMA_VERSION,
     activeRunId,
     currentStage: firstStageForTrack(track),
     completedStages: [],

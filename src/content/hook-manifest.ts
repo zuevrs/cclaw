@@ -30,7 +30,7 @@ export const HOOK_HANDLERS = [
   "prompt-guard",
   "workflow-guard",
   "context-monitor",
-  "stop-checkpoint",
+  "stop-handoff",
   "pre-compact",
   "verify-current-state"
 ] as const;
@@ -72,8 +72,8 @@ export const HOOK_SEMANTIC_EVENTS = [
   "pre_tool_prompt_guard",
   "pre_tool_workflow_guard",
   "post_tool_context_monitor",
-  "stop_checkpoint",
-  "precompact_digest"
+  "stop_handoff",
+  "precompact_compat"
 ] as const;
 export type HookSemanticEvent = (typeof HOOK_SEMANTIC_EVENTS)[number];
 
@@ -130,9 +130,9 @@ export const HOOK_MANIFEST: readonly HookHandlerSpec[] = [
     }
   },
   {
-    handler: "stop-checkpoint",
-    description: "Persist checkpoint with stage + run context on session stop.",
-    semantic: "stop_checkpoint",
+    handler: "stop-handoff",
+    description: "Remind about clean handoff with stage + run context on session stop.",
+    semantic: "stop_handoff",
     bindings: {
       claude: [{ event: "Stop", timeout: 10 }],
       cursor: [{ event: "stop", timeout: 10 }],
@@ -141,12 +141,12 @@ export const HOOK_MANIFEST: readonly HookHandlerSpec[] = [
   },
   {
     handler: "pre-compact",
-    description: "Write pre-compact digest (Claude+Cursor have a native event; Codex has no PreCompact — covered by `/cc-ops retro`).",
-    semantic: "precompact_digest",
+    description: "No-op compatibility hook for harness pre-compact events; session-start rehydrates from flow-state, artifacts, and knowledge.",
+    semantic: "precompact_compat",
     bindings: {
       claude: [{ event: "PreCompact", matcher: "manual|auto", timeout: 10 }],
-      // pre-compact must capture the digest BEFORE session-start
-      // rehydrates on cursor `sessionCompact`.
+      // Keep this before session-start on cursor `sessionCompact` so the
+      // compatibility handler runs before rehydration.
       cursor: [{ event: "sessionCompact", priority: -10 }]
     }
   },
@@ -244,8 +244,7 @@ export function requiredEventsFor(harness: HookManifestHarness): string[] {
 }
 
 /**
- * Human-readable per-harness semantic coverage used by docs and by
- * the doctor's `harness-gaps.json` synthesis.
+ * Human-readable per-harness semantic coverage used by docs and doctor output.
  */
 export function semanticEventCoverage(
   harness: HookManifestHarness

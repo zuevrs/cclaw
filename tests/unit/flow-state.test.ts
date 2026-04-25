@@ -3,6 +3,7 @@ import {
   canTransition,
   createInitialCloseoutState,
   createInitialFlowState,
+  FLOW_STATE_SCHEMA_VERSION,
   getAvailableTransitions,
   getTransitionGuards,
   nextStage,
@@ -18,6 +19,10 @@ describe("flow state", () => {
   it("initializes with active run id", () => {
     expect(createInitialFlowState().activeRunId).toMatch(/^run-/);
     expect(createInitialFlowState("run-custom").activeRunId).toBe("run-custom");
+  });
+
+  it("includes a schema version for migrations", () => {
+    expect(createInitialFlowState().schemaVersion).toBe(FLOW_STATE_SCHEMA_VERSION);
   });
 
   it("allows tdd -> review, allows review -> tdd rewind, and blocks tdd -> ship", () => {

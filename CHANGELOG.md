@@ -1,5 +1,152 @@
 # Changelog
 
+## 0.51.0
+
+### Fixed
+
+- Made `cclaw doctor` discoverable in CLI help, always print fixes for
+  failing checks, and point recovery docs at existing local files.
+- Fixed non-flow headless envelopes for `/cc-ideate` and `/cc-view` so they no
+  longer masquerade as brainstorm/review stage outputs.
+- Made `doctor --only` JSON and exit-code semantics scoped to the filtered
+  checks while preserving `globalOk` for the full suite.
+- Replaced bash-based Node probing in doctor with platform-native command
+  checks, and made hook wrappers loudly report skipped hooks when `node` is
+  missing.
+
+### Changed
+
+- Added digest-first knowledge wording to session/research guidance and
+  standardized resume wording on `/cc-next`.
+- Centralized post-ship closeout substate guidance and strengthened
+  verification-before-completion wording.
+- Added a flow-state schema version for future migrations.
+- Improved onboarding with Node 20+, repo-root install guidance, local docs
+  pointers, and a static generated `AGENTS.md` block example.
+
+## 0.50.0
+
+Full phase-1 cleanup. This release removes the remaining heavy surfaces
+that made a fresh install feel like a framework dump instead of a harness
+workflow tool.
+
+### Removed
+
+- Removed the feature/worktree system, including the `feature-system`
+  runtime, generated worktree state, and the user-facing feature command
+  surface.
+- Removed `/cc-ops` and its legacy subcommands. Flow progression and
+  closeout now stay on `/cc-next`; explicit archival/reset stays on
+  `cclaw archive`.
+- Shrank generated commands to the four real entrypoints: `/cc`,
+  `/cc-next`, `/cc-ideate`, and `/cc-view`.
+- Stopped scaffolding derived/cache state files on init. Runtime hooks now
+  create optional diagnostics only when needed.
+- Removed broad default utility skills and kept the generated skill surface
+  focused on flow stages, cclaw routing, subagent/parallel dispatch,
+  session, learnings, research playbooks, and opt-in language rule packs.
+- Removed the internal eval harness, its CLI command, fixtures, docs,
+  tests, and the unused `openai` runtime dependency.
+- Removed stale generated-reference templates and docs that pointed users
+  at `.cclaw/references`, `.cclaw/contexts`, worktrees, or `/cc-ops`.
+- Removed the unused internal `knowledge-digest` subcommand and stopped
+  materializing `knowledge-digest.md`; session bootstrap reads
+  `knowledge.jsonl` directly.
+- Removed saved `flow-state.snapshot.json` semantics from `/cc-view diff`.
+  The view command is now read-only and uses visible git evidence instead
+  of creating derived state.
+- Removed the stale `.cclaw/features/**` preview line and remaining
+  "active feature" wording from generated guidance after the feature
+  system removal.
+- Removed feature-system fields from new archive manifests; archives now
+  record `runName` instead of `featureName` / `activeFeature`.
+- Removed the legacy `/cc-learn` command surface from generated guidance.
+  Knowledge work remains available through the `learnings` skill, while
+  the visible slash-command surface stays at `/cc`, `/cc-next`,
+  `/cc-ideate`, and `/cc-view`.
+- Removed an unused TDD batch walkthrough export and the large stage-skill
+  golden snapshot file; contract tests now assert behavioral anchors instead
+  of pinning generated prose.
+- Stopped scaffolding the unused `stage-activity.jsonl` ledger. Fresh installs
+  now start with only `flow-state.json` and `iron-laws.json` under
+  `.cclaw/state`.
+- Removed stale eval GitHub Actions workflows and `.gitignore` exceptions that
+  still referenced deleted `.cclaw/evals` fixtures.
+- Removed stale ignore/config entries for the deleted `docs/references` and
+  `scripts/reference-sync.sh` reference-research surface.
+- Consolidated `/cc-view` generated guidance into one `flow-view` skill with
+  embedded `status`, `tree`, and `diff` subcommand sections. Sync now removes
+  the old `flow-status`, `flow-tree`, and `flow-diff` skill folders.
+- Removed obsolete standalone `status`, `tree`, and `diff` command contract
+  generators that were only kept alive by tests after `/cc-view` consolidation.
+- Converted view subcommand generators into embedded bodies without standalone
+  skill frontmatter, matching the single generated `flow-view` surface.
+- Replaced generated artifact template frontmatter `feature: <feature-id>` with
+  `run: <run-id>` while keeping legacy `feature` frontmatter accepted for
+  existing artifacts during migration.
+
+### Changed
+
+- Renamed the generated stop hook from `stop-checkpoint` to `stop-handoff`
+  to match the simplified session model. Old managed `stop-checkpoint`
+  entries are still recognized during sync cleanup.
+- Renamed the stop safety law id to `stop-clean-or-handoff`; existing
+  configs using the old checkpoint id are still honored.
+- Simplified session bootstrap and stop behavior around artifact handoff
+  instead of separate checkpoint/context/suggestion state files.
+- Centralized legacy cleanup lists in init/sync so removed surfaces are
+  easier to audit without changing upgrade cleanup behavior.
+- Renamed pre-compact semantic coverage from digest wording to compatibility
+  wording and aligned harness/view docs with `cclaw doctor --explain`.
+- Compact stage skills now fold inputs and required context into the existing
+  context-loading block, reducing repeated generated sections while preserving
+  the process map, gates, evidence, and artifact validation.
+- Downstream stage artifacts now include a lightweight `Upstream Handoff`
+  section for carried decisions, constraints, open questions, and drift
+  reasons, so agents do not silently rewrite earlier stage choices.
+- Knowledge JSONL entries now use `origin_run` instead of feature wording for
+  new writes and generated guidance, while legacy `origin_feature` rows remain
+  readable as an input alias.
+- Codex legacy skill cleanup now removes any old `cclaw-cc*` folder by prefix
+  instead of carrying a hardcoded list of obsolete command names.
+- The generated meta-skill, shared stage guidance, `/cc-next`, and harness shims
+  now show the whole flow explicitly: critical-path stages finish with
+  `retro -> compound -> archive` through `/cc-next`.
+- TDD dispatch guidance now presents one mandatory `test-author` evidence cycle
+  for RED/GREEN/REFACTOR instead of implying three default subagents.
+- Stage guidance now starts with a compact drift preamble, treats seed recall as
+  reference context by default, and makes brainstorm/scope use lightweight
+  compact paths before deeper checklists.
+- Design/spec/plan guidance now adopts prompt-level investigator/critic, shadow
+  alternative, acceptance mapping, and exact verification-command discipline
+  without adding new runtime machinery.
+- Review guidance now defaults to one reviewer plus mandatory security-reviewer,
+  with adversarial review as a risk-triggered pass instead of ceremony for every
+  large-ish diff.
+- Generated status/docs/ideate guidance now avoids stale waiver and legacy-layout
+  wording in the primary user surface.
+- Prompt-surface tests now prefer durable behavioral anchors over exact generated
+  prose where schema and validator tests already cover the contract.
+- Decision Protocol / structured-ask fallback wording is now shared across
+  scope/design/review/ship/ideate to reduce drift between stage prompts.
+- Scope/design outside-voice loop guidance now renders from compact policy helpers
+  in `review-loop.ts` instead of repeated prose blocks.
+- Post-ship closeout wording is now sourced from shared closeout guidance
+  helpers so /cc-next and meta-skill stay aligned on retro/compound/archive.
+- /cc-ideate knowledge scan guidance now matches the live knowledge schema
+  (`rule|pattern|lesson|compound`, `origin_run`, trigger/action clustering).
+- Track-aware render context now drives quick-track wording transforms for TDD/lint metadata, replacing duplicated brittle string-rewrite chains.
+- Hook runtime compound-readiness summary now uses a shared inline formatter helper, with added parity coverage to reduce drift against canonical CLI wording.
+
+### Preserved
+
+- `retro -> compound -> archive` remains part of ship closeout through
+  `/cc-next`.
+- `cclaw archive` still archives active runs into `.cclaw/runs/`.
+- Stage skills still keep decision, completion, verification, and
+  closeout discipline, but now inline the needed guidance instead of
+  making users chase generated reference files.
+
 ## 0.49.0
 
 Dead-weight cut, pass 1. `.cclaw/` was shipping four scaffolded

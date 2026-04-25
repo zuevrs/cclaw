@@ -33,6 +33,42 @@ function yamlFlowSequence(values: string[]): string {
   return JSON.stringify(values);
 }
 
+function formattedAgentsForStages(stages: FlowStage[]): string {
+  const summary = stageDelegationSummary("standard");
+  const merged: string[] = [];
+  for (const stage of stages) {
+    const row = summary.find((item) => item.stage === stage);
+    if (!row) continue;
+    for (const agent of row.primaryAgents) {
+      if (!merged.includes(agent)) {
+        merged.push(agent);
+      }
+    }
+  }
+  return merged.length > 0 ? merged.join(", ") : "none";
+}
+
+function activationModeSummary(): {
+  mandatory: string;
+  proactive: string;
+} {
+  const summary = stageDelegationSummary("standard");
+  const mandatory = new Set<string>();
+  const proactive = new Set<string>();
+  for (const row of summary) {
+    for (const agent of row.mandatoryAgents) {
+      mandatory.add(agent);
+    }
+    for (const agent of row.proactiveAgents) {
+      proactive.add(agent);
+    }
+  }
+  return {
+    mandatory: [...mandatory].join(", "),
+    proactive: [...proactive].join(", ")
+  };
+}
+
 /**
  * Canonical specialist roster (core-5) materialized under `.cclaw/agents/`.
  *
@@ -168,6 +204,8 @@ export const CCLAW_AGENTS = [
  */
 export type AgentName = (typeof CCLAW_AGENTS)[number]["name"];
 
+import type { FlowStage } from "../types.js";
+import { stageDelegationSummary } from "./stage-schema.js";
 import { enhancedAgentBody } from "./subagents.js";
 
 /**
@@ -214,14 +252,21 @@ ${taskDelegation}
  * Markdown table mapping cclaw stage entry points to specialist agents.
  */
 export function agentRoutingTable(): string {
+  const brainstormPrimary = formattedAgentsForStages(["brainstorm"]);
+  const scopeDesignPlanPrimary = formattedAgentsForStages(["scope", "design", "plan"]);
+  const specPrimary = formattedAgentsForStages(["spec"]);
+  const tddPrimary = formattedAgentsForStages(["tdd"]);
+  const reviewPrimary = formattedAgentsForStages(["review"]);
+  const shipPrimary = formattedAgentsForStages(["ship"]);
+
   return `| Stage Entry | Primary Agent(s) | Supporting guidance |
 |---|---|---|
-| Brainstorm (start with \`/cc <idea>\`) | planner | Run in-thread research playbooks: \`research/repo-scan.md\`, \`research/learnings-lookup.md\` |
-| Scope / Design / Plan (via \`/cc-next\`) | planner | Use \`research/git-history.md\` (scope) and \`research/framework-docs-lookup.md\` + \`research/best-practices-lookup.md\` (design) as needed |
-| Spec (via \`/cc-next\`) | reviewer | planner (if ambiguity or conflicts remain) |
-| TDD (via \`/cc-next\`) | test-author | doc-updater on public behavior/config changes |
-| Review (via \`/cc-next\`) | reviewer, security-reviewer | conditional second reviewer for high blast-radius diffs |
-| Ship (via \`/cc-next\`) | doc-updater | security-reviewer when release risk is elevated |
+| Brainstorm (start with \`/cc <idea>\`) | ${brainstormPrimary} | Run in-thread research playbooks: \`research/repo-scan.md\`, \`research/learnings-lookup.md\` |
+| Scope / Design / Plan (via \`/cc-next\`) | ${scopeDesignPlanPrimary} | Use \`research/git-history.md\` (scope) and \`research/framework-docs-lookup.md\` + \`research/best-practices-lookup.md\` (design) as needed |
+| Spec (via \`/cc-next\`) | ${specPrimary} | planner (if ambiguity or conflicts remain) |
+| TDD (via \`/cc-next\`) | ${tddPrimary} | doc-updater on public behavior/config changes |
+| Review (via \`/cc-next\`) | ${reviewPrimary} | conditional second reviewer for high blast-radius diffs |
+| Ship (via \`/cc-next\`) | ${shipPrimary} | security-reviewer when release risk is elevated |
 `;
 }
 
@@ -259,9 +304,12 @@ Research work is no longer modeled as standalone personas. Use in-thread playboo
 
 ### Activation modes
 
-- **Mandatory:** planner (scope/design/plan), reviewer + security-reviewer (review), test-author (tdd), doc-updater (ship).
-- **Proactive:** planner on ambiguity, security-reviewer on trust-boundary movement outside review, doc-updater on behavior/config drift.
-- **On-demand:** none in the core-5 roster; research playbooks are in-thread procedures.
+${(() => {
+  const mode = activationModeSummary();
+  return `- **Mandatory:** ${mode.mandatory}.
+- **Proactive:** ${mode.proactive}.
+- **On-demand:** none in the core-5 roster; research playbooks are in-thread procedures.`;
+})()}
 
 ### Cost-aware routing
 

@@ -13,7 +13,7 @@ function entry(partial: Partial<KnowledgeEntry>): KnowledgeEntry {
     domain: null,
     stage: "review",
     origin_stage: "review",
-    origin_feature: null,
+    origin_run: null,
     project: "cclaw",
     source: "stage",
     universality: "project",
@@ -172,4 +172,26 @@ describe("computeCompoundReadiness", () => {
     expect(status.readyCount).toBe(12);
     expect(status.ready).toHaveLength(5);
   });
+
+  it("excludes superseded entries from readiness", () => {
+    const entries = [
+      entry({
+        trigger: "stale workaround",
+        action: "use old retry path",
+        frequency: 5,
+        superseded_by: "knowledge-2026-04-new-retry-path"
+      }),
+      entry({
+        trigger: "fresh workaround",
+        action: "use bounded retry path",
+        frequency: 3,
+        supersedes: ["knowledge-2026-04-old-retry-path"]
+      })
+    ];
+    const status = computeCompoundReadiness(entries, { threshold: 3 });
+    expect(status.clusterCount).toBe(1);
+    expect(status.readyCount).toBe(1);
+    expect(status.ready[0]?.trigger).toBe("fresh workaround");
+  });
+
 });

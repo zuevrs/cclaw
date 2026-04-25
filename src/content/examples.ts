@@ -401,16 +401,16 @@ Execution rule: complete and verify each batch before starting the next batch.
 | R-2 | Important | performance | \`feedStore.merge()\` does full-array scan on every SSE event; O(n) per event where n is feed length. | open |
 | R-3 | Suggestion | architecture | SSE reconnect logic duplicated across \`useNotifications\` and \`usePresence\`; extract shared hook. | open |
 
-## Review Army Contract
+## Review Findings Contract
 
 - See \`07-review-army.json\`
 - Reconciliation summary: 1 duplicate collapsed (R-1 reported by reviewer and security-reviewer), 0 conflicts
 
-## Review Readiness Dashboard
+## Review Readiness Snapshot
 
 - Layer 1 complete: yes (3/3 criteria)
 - Layer 2 complete: yes (5 sections reviewed)
-- Review army schema valid: yes
+- Review findings schema valid: yes
 - Open critical blockers: 1 (R-1)
 - Ship recommendation: BLOCKED until R-1 resolved
 
@@ -691,30 +691,23 @@ export function stageGoodBadExamples(stage: FlowStage): string {
   return blocks.join("\n");
 }
 
-export const STAGE_EXAMPLES_REFERENCE_DIR = "references/stages";
-
-export function stageExamplesReferencePath(stage: FlowStage): string {
-  return `.cclaw/${STAGE_EXAMPLES_REFERENCE_DIR}/${stage}-examples.md`;
-}
-
 /**
- * Returns the full example artifact body as a standalone reference markdown
- * file. Materialized under .cclaw/references/stages/<stage>-examples.md so
- * the always-rendered skill body can link instead of inlining.
+ * Returns the full example artifact body for tests and internal quality checks.
+ * Generated user projects keep only short inline shape cues.
  */
-export function stageExamplesReferenceMarkdown(stage: FlowStage): string | null {
+export function stageFullArtifactExampleMarkdown(stage: FlowStage): string | null {
   const examples = STAGE_EXAMPLES[stage];
   if (!examples) return null;
   return [
     `---`,
     `stage: ${stage}`,
     `name: ${stage}-stage-examples`,
-    `description: "Full sample artifact for the ${stage} stage. Loaded only when an agent explicitly needs a complete example; the stage skill links here rather than inlining."`,
+    `description: "Full sample artifact for the ${stage} stage."`,
     `---`,
     "",
     `# ${stage} stage — full artifact sample`,
     "",
-    `This file is linked from \`.cclaw/skills/<${stage}-stage>/SKILL.md\` under **Examples → See also**. The sample uses H2 headings that mirror the artifact a cclaw session must produce, so the markdown is wrapped in a fence to avoid collapsing into the outline.`,
+    `The sample uses H2 headings that mirror the artifact a cclaw session must produce, so the markdown is wrapped in a fence to avoid collapsing into the outline.`,
     "",
     "```markdown",
     examples,
@@ -724,10 +717,7 @@ export function stageExamplesReferenceMarkdown(stage: FlowStage): string | null 
 }
 
 /**
- * Returns the short inline pointer rendered directly inside the stage skill.
- * Replaces the previous always-inline ~50-100 line fenced block and
- * delivers true progressive disclosure: the full example lives in a
- * reference file loaded on demand.
+ * Returns short inline shape cues rendered directly inside the stage skill.
  */
 export function stageExamples(stage: FlowStage): string {
   const examples = STAGE_EXAMPLES[stage];
@@ -735,9 +725,7 @@ export function stageExamples(stage: FlowStage): string {
   return [
     "## Examples",
     "",
-    `Full artifact sample for this stage lives at \`${stageExamplesReferencePath(stage)}\`. Open it when you need a complete reference; do NOT paste the example into the artifact verbatim — it is a shape guide, not a template.`,
-    "",
-    "Summary of what the reference covers:",
+    "Shape cues to follow; do not paste these headings verbatim unless they match the work:",
     ...exampleSummaryBullets(stage),
     ""
   ].join("\n");

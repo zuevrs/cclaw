@@ -17,10 +17,6 @@ describe("announce-at-start discipline and ethos principles", () => {
       path.join(root, ".cclaw/skills/two-layer-review/SKILL.md"),
       "utf8"
     );
-    const ethos = await fs.readFile(
-      path.join(root, ".cclaw/references/protocols/ethos.md"),
-      "utf8"
-    );
     const metaSkill = await fs.readFile(
       path.join(root, ".cclaw/skills/using-cclaw/SKILL.md"),
       "utf8"
@@ -28,9 +24,8 @@ describe("announce-at-start discipline and ethos principles", () => {
 
     expect(planSkill).toContain("Announce at start:");
     expect(reviewSkill).toContain("Announce at start:");
-    expect(ethos).toContain("Boil the Lake");
-    expect(ethos).toContain("User Sovereignty");
+    expect(reviewSkill).toContain("Decision protocol: ask only decision-changing questions");
     expect(metaSkill).toContain("/cc-ideate");
-    expect(metaSkill).toContain("/cc-ops [feature|tdd-log|retro|compound|archive|rewind]");
+    expect(metaSkill).toContain("cclaw archive [--name=<slug>]");
   });
 });

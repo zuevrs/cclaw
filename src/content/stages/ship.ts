@@ -1,5 +1,7 @@
 import type { StageSchemaInput } from "./schema-types.js";
 import { SHIP_FINALIZATION_MODES } from "../../constants.js";
+import { closeoutSubstateInline } from "../closeout-guidance.js";
+import { decisionProtocolInstruction } from "../decision-protocol.js";
 
 // ---------------------------------------------------------------------------
 // SHIP — reference: superpowers finishing-a-development-branch + gstack /ship
@@ -54,12 +56,16 @@ export const SHIP: StageSchemaInput = {
       "Detect repository mode — if `.git/` is absent or inaccessible, lock finalization choices to FINALIZE_NO_VCS only and document manual handoff + rollback.",
       "Select finalization mode — exactly ONE enum: (A) FINALIZE_MERGE_LOCAL, (B) FINALIZE_OPEN_PR, (C) FINALIZE_KEEP_BRANCH, (D) FINALIZE_DISCARD_BRANCH, (E) FINALIZE_NO_VCS. For discard: list what will be deleted, require typed confirmation.",
       "Execute finalization — perform the selected action. For merge: verify clean merge. For PR: include structured body (summary, test plan, rollback). For discard: verify deletion. For NO_VCS: record handoff target, artifact bundle path, and manual rollback owner.",
-      "Worktree cleanup — if using git worktrees, clean up the worktree after merge/discard. Keep it only for 'keep branch' mode. Skip for FINALIZE_NO_VCS."
+      "Branch cleanup — after merge/discard, remove only branches or temporary files the user explicitly approved. Skip for FINALIZE_NO_VCS."
     ],
     interactionProtocol: [
       "Run preflight checks before any release action.",
       "Document release notes and rollback plan explicitly.",
-      "For finalization mode: use the Decision Protocol — present modes as labeled options (A/B/C/D/E) with consequences, and mark one as (recommended). Do NOT use a numeric Completeness rubric; recommend the mode that best addresses release blast-radius, rollback readiness, observability, and stakeholder communication — ties go to the most reversible option. If the harness's native structured-ask tool is available (`AskUserQuestion` / `AskQuestion` / `question` / `request_user_input`), send exactly ONE question per call, validate fields against the runtime schema, and on schema error immediately fall back to a plain-text lettered list instead of retrying guessed payloads.",
+      decisionProtocolInstruction(
+        "finalization mode",
+        "present modes as labeled options (A/B/C/D/E) with consequences, and mark one as (recommended)",
+        "recommend the mode that best addresses release blast-radius, rollback readiness, observability, and stakeholder communication — ties go to the most reversible option"
+      ),
       "Do not proceed if critical blockers remain from review.",
       "**STOP.** Present finalization options and wait for user selection before executing any finalization action."
     ],
@@ -113,13 +119,14 @@ export const SHIP: StageSchemaInput = {
       traceabilityRule: "Ship artifact must reference review verdict and resolution status. Release notes must reference spec criteria. Rollback plan must reference specific changes that could fail."
     },
     artifactValidation: [
+      { section: "Upstream Handoff", required: false, validationRule: "Summarizes review/tdd decisions, constraints, open questions, and explicit drift before finalization." },
       { section: "Preflight Results", required: true, validationRule: "Build, test, lint, type-check results captured with fresh output. Exceptions documented if any." },
       { section: "Release Notes", required: true, validationRule: "What changed, why, impact. References spec criteria. Breaking changes flagged." },
       { section: "Rollback Plan", required: true, validationRule: "Trigger conditions, rollback steps (exact commands), verification steps." },
       { section: "Monitoring", required: false, validationRule: "If applicable: what metrics/logs to watch post-deploy. Risk note if no monitoring." },
       { section: "Finalization", required: true, validationRule: "Exactly one finalization enum token selected (FINALIZE_MERGE_LOCAL | FINALIZE_OPEN_PR | FINALIZE_KEEP_BRANCH | FINALIZE_DISCARD_BRANCH | FINALIZE_NO_VCS). Execution result documented. Worktree cleaned if applicable." },
       { section: "Completion Status", required: false, validationRule: "If present: exactly one of SHIPPED, SHIPPED_WITH_EXCEPTIONS, BLOCKED. Exceptions documented when applicable." },
-      { section: "Compound Step", required: false, validationRule: "Optional retrospective: at least one bullet of the form 'Insight: ... | Action: append [compound] entry to .cclaw/knowledge.jsonl', or an explicit 'No compound insight this run.' line." }
+      { section: "Compound Step", required: false, validationRule: "Optional retrospective: include overlap assessment before appending duplicate knowledge; distinguish bug-track fixes/tests from knowledge-track process/project guidance; use supersedes/superseded_by only for clear refreshes; or include an explicit 'No compound insight this run.' line." }
     ]
   },
   reviewLens: {
@@ -149,6 +156,7 @@ export const SHIP: StageSchemaInput = {
     ]
   },
   // `done` exits the stage pipeline. Archive semantics are handled by the
-  // closeout substate machine (`idle` -> ... -> `archived`) in flow-state.
+  // closeout substate machine (`idle` -> ... -> `archived`) in flow-state under
+  // ${closeoutSubstateInline()}.
   next: "done",
 };

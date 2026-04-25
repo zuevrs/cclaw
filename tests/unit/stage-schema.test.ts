@@ -1,13 +1,13 @@
 import { describe, expect, it } from "vitest";
 import fs from "node:fs/promises";
 import path from "node:path";
-import { SHIP_FINALIZATION_MODES } from "../../src/constants.js";
+import { CCLAW_VERSION, SHIP_FINALIZATION_MODES } from "../../src/constants.js";
 import { lintArtifact } from "../../src/artifact-linter.js";
 import { CCLAW_AGENTS } from "../../src/content/core-agents.js";
-import { stageExamples, stageExamplesReferenceMarkdown } from "../../src/content/examples.js";
-import { mandatoryDelegationsForStage, stagePolicyNeedles, stageSchema } from "../../src/content/stage-schema.js";
+import { stageExamples, stageFullArtifactExampleMarkdown } from "../../src/content/examples.js";
+import { mandatoryDelegationsForStage, reviewStackAwareRoutingSummary, stageAutoSubagentDispatch, stageDelegationSummary, stagePolicyNeedles, stageSchema, stageTrackRenderContext } from "../../src/content/stage-schema.js";
 import { stageSkillMarkdown } from "../../src/content/skills.js";
-import { enhancedAgentBody } from "../../src/content/subagents.js";
+import { enhancedAgentBody, subagentDrivenDevSkill } from "../../src/content/subagents.js";
 import { ARTIFACT_TEMPLATES } from "../../src/content/templates.js";
 import { FLOW_STAGES, FLOW_TRACKS, TRACK_STAGES, type FlowStage, type FlowTrack } from "../../src/types.js";
 import { createTempProject } from "../helpers/index.js";
@@ -45,10 +45,48 @@ describe("stage schema and subagent alignment", () => {
     expect(mandatoryDelegationsForStage("ship", "lightweight")).toContain("doc-updater");
   });
 
+  it("exposes canonical delegation summaries per stage", () => {
+    const standard = stageDelegationSummary("standard");
+    const review = standard.find((row) => row.stage === "review");
+    expect(review?.mandatoryAgents).toEqual(["reviewer", "security-reviewer"]);
+    expect(review?.primaryAgents).toContain("reviewer");
+
+    const lightweight = stageDelegationSummary("lightweight");
+    const scope = lightweight.find((row) => row.stage === "scope");
+    expect(scope?.mandatoryAgents).toEqual([]);
+
+    const tdd = lightweight.find((row) => row.stage === "tdd");
+    expect(tdd?.mandatoryAgents).toEqual(["test-author"]);
+  });
+
+  it("keeps tdd dispatch to one mandatory test-author evidence cycle", () => {
+    const testAuthorRows = stageAutoSubagentDispatch("tdd")
+      .filter((row) => row.agent === "test-author");
+
+    expect(testAuthorRows).toHaveLength(1);
+    expect(testAuthorRows[0]?.mode).toBe("mandatory");
+    expect(testAuthorRows[0]?.skill).toBe("tdd-cycle-evidence");
+    expect(testAuthorRows[0]?.purpose).toContain("RED/GREEN/REFACTOR evidence");
+    expect(mandatoryDelegationsForStage("tdd", "lightweight")).toEqual(["test-author"]);
+  });
+
   it("derives policy needles from lint metadata with track transforms", () => {
     expect(stagePolicyNeedles("plan")).toContain("Dependency Batches");
-    expect(stagePolicyNeedles("tdd", "quick")).toContain("traceable to acceptance slice");
-    expect(stagePolicyNeedles("tdd", "quick")).not.toContain("traceable to plan slice");
+    expect(stagePolicyNeedles("tdd", "quick")).toContain("acceptance criteria");
+    expect(stagePolicyNeedles("tdd", "quick")).toContain("RED");
+  });
+
+  it("exposes track render context for safe wording decisions", () => {
+    const quick = stageTrackRenderContext("quick");
+    const standard = stageTrackRenderContext("standard");
+    expect(quick.track).toBe("quick");
+    expect(quick.usesPlanTerminology).toBe(false);
+    expect(quick.traceabilitySliceNoun).toBe("acceptance slice");
+    expect(quick.upstreamArtifactPath).toBe(".cclaw/artifacts/04-spec.md");
+    expect(standard.track).toBe("standard");
+    expect(standard.usesPlanTerminology).toBe(true);
+    expect(standard.traceabilitySliceNoun).toBe("plan slice");
+    expect(standard.upstreamArtifactPath).toBe(".cclaw/artifacts/05-plan.md");
   });
 
   it("plan stage reads spec, design, and scope artifacts", () => {
@@ -107,10 +145,19 @@ describe("stage schema and subagent alignment", () => {
     expect(template).toContain("GREEN — minimal production code");
   });
 
+  it("subagent orchestration includes anti-drift team defaults", () => {
+    const skill = subagentDrivenDevSkill();
+    expect(skill).toContain("## Anti-Drift Team Defaults");
+    expect(skill).toContain("One controller owns alignment");
+    expect(skill).toContain("at most 3-5 parallel agents");
+    expect(skill).toContain("No parallel writes to adjacent surfaces");
+    expect(skill).toContain("Consensus is for hard calls only");
+  });
+
   it("review stage includes review-army structured reconciliation", () => {
     const review = stageSchema("review");
     expect(review.requiredEvidence).toContain("Artifact written to `.cclaw/artifacts/07-review-army.json`.");
-    expect(stagePolicyNeedles("review")).toContain("Review Army");
+    expect(stagePolicyNeedles("review")).toContain("Review Findings");
   });
 
   it("ship finalization enums are sourced from canonical constants", () => {
@@ -150,10 +197,38 @@ describe("stage schema and subagent alignment", () => {
     expect(JSON.stringify(parsed)).not.toMatch(/"title"|"category"/);
   });
 
-  it("review stage mandates reviewer and security-reviewer", () => {
+  it("review stage mandates reviewer and security-reviewer only by default", () => {
     const review = stageSchema("review");
-    expect(review.mandatoryDelegations).toContain("reviewer");
-    expect(review.mandatoryDelegations).toContain("security-reviewer");
+    expect(review.mandatoryDelegations).toEqual(["reviewer", "security-reviewer"]);
+    const adversarial = stageAutoSubagentDispatch("review").find((row) => row.skill === "adversarial-review");
+    expect(adversarial?.mode).toBe("proactive");
+    const stackAware = stageAutoSubagentDispatch("review").find((row) => row.skill === "stack-aware-review");
+    expect(stackAware?.mode).toBe("proactive");
+  });
+
+  it("renders stack-aware review routing without making every stack mandatory", () => {
+    const review = stageSchema("review");
+    const summary = stageDelegationSummary("standard").find((row) => row.stage === "review");
+    const markdown = stageSkillMarkdown("review");
+
+    expect(review.mandatoryDelegations).toEqual(["reviewer", "security-reviewer"]);
+    expect(summary?.stackAwareRoutes.map((route) => route.stack)).toEqual([
+      "TypeScript/JavaScript",
+      "Python",
+      "Ruby/Rails",
+      "Go",
+      "Rust"
+    ]);
+    expect(reviewStackAwareRoutingSummary()).toContain("package.json/tsconfig.json");
+    expect(reviewStackAwareRoutingSummary()).toContain("pyproject.toml/requirements.txt");
+    expect(reviewStackAwareRoutingSummary()).toContain("Gemfile/config/");
+    expect(reviewStackAwareRoutingSummary()).toContain("go.mod");
+    expect(reviewStackAwareRoutingSummary()).toContain("Cargo.toml");
+    expect(reviewStackAwareRoutingSummary()).toContain("Do not run every stack lens unconditionally");
+    expect(markdown).toContain("## Stack-Aware Review Routing");
+    expect(markdown).toContain("Default general review still runs");
+    expect(markdown).toContain("`package.json`, `tsconfig.json` -> reviewer lens");
+    expect(markdown).toContain("`Cargo.toml` -> reviewer lens");
   });
 
   it("security-reviewer agent registry entry is mandatory", () => {
@@ -186,6 +261,24 @@ describe("stage schema and subagent alignment", () => {
     expect(markdown).toContain(".cclaw/skills/research/framework-docs-lookup.md");
     expect(markdown).toContain(".cclaw/skills/research/best-practices-lookup.md");
     expect(markdown).not.toContain("framework-docs-researcher");
+  });
+
+  it("middle stages include prompt-level investigation and verification mechanics", () => {
+    const design = stageSchema("design");
+    const spec = stageSchema("spec");
+    const plan = stageSchema("plan");
+
+    expect(design.executionModel.checklist).toEqual(expect.arrayContaining([
+      expect.stringContaining("Investigator pass"),
+      expect.stringContaining("shadow alternative"),
+      expect.stringContaining("Critic pass")
+    ]));
+    expect(design.artifactValidation.find((row) => row.section === "Data-Flow Shadow Paths")?.validationRule)
+      .toContain("switch trigger");
+    expect(spec.artifactValidation.find((row) => row.section === "Acceptance Mapping")?.validationRule)
+      .toContain("observable evidence");
+    expect(plan.artifactValidation.find((row) => row.section === "Task List")?.validationRule)
+      .toContain("expected evidence/pass condition");
   });
 
   it("design stage requires research-fleet completion gate", () => {
@@ -238,6 +331,24 @@ describe("stage schema and subagent alignment", () => {
       "Short-Circuit Decision",
       "Selected Direction"
     ]);
+  });
+
+  it("brainstorm and scope default to compact user-facing flow", () => {
+    const brainstorm = stageSchema("brainstorm");
+    const scope = stageSchema("scope");
+
+    expect(brainstorm.executionModel.checklist).toEqual(expect.arrayContaining([
+      expect.stringContaining("compact brainstorm stub")
+    ]));
+    expect(brainstorm.executionModel.interactionProtocol).toEqual(expect.arrayContaining([
+      expect.stringContaining("Ask at most one question per turn")
+    ]));
+    expect(scope.executionModel.checklist).toEqual(expect.arrayContaining([
+      expect.stringContaining("Default path first")
+    ]));
+    expect(scope.executionModel.interactionProtocol).toEqual(expect.arrayContaining([
+      expect.stringContaining("Do not walk the full checklist by default")
+    ]));
   });
 
   it("scope and design expose shared review-loop config", () => {
@@ -321,6 +432,88 @@ describe("stage schema and subagent alignment", () => {
     expect(scope).toContain(".cclaw/seeds/SEED-YYYY-MM-DD-<slug>.md");
   });
 
+  it("downstream stage templates expose an upstream handoff section", () => {
+    for (const templateName of [
+      "02-scope.md",
+      "03-design.md",
+      "04-spec.md",
+      "05-plan.md",
+      "06-tdd.md",
+      "07-review.md",
+      "08-ship.md"
+    ] as const) {
+      expect(ARTIFACT_TEMPLATES[templateName]).toContain("## Upstream Handoff");
+      expect(ARTIFACT_TEMPLATES[templateName]).toContain("Drift from upstream");
+    }
+
+    for (const stage of ["scope", "design", "spec", "plan", "tdd", "review", "ship"] as const) {
+      const schema = stageSchema(stage);
+      expect(schema.artifactValidation.some((row) => row.section === "Upstream Handoff")).toBe(true);
+    }
+  });
+
+  it("artifact templates use run frontmatter after feature cleanup", () => {
+    for (const [templateName, template] of Object.entries(ARTIFACT_TEMPLATES)) {
+      if (!templateName.endsWith(".md")) continue;
+      expect(template).toContain("run: <run-id>");
+      expect(template).not.toContain("feature: <feature-id>");
+    }
+  });
+
+  it("markdown artifact templates render complete frontmatter consistently", () => {
+    const templateStages: Record<string, string> = {
+      "01-brainstorm.md": "brainstorm",
+      "02-scope.md": "scope",
+      "02a-research.md": "design",
+      "03-design.md": "design",
+      "04-spec.md": "spec",
+      "05-plan.md": "plan",
+      "06-tdd.md": "tdd",
+      "07-review.md": "review",
+      "08-ship.md": "ship",
+      "09-retro.md": "retro"
+    };
+
+    for (const [templateName, stage] of Object.entries(templateStages)) {
+      const expectedFrontmatter = [
+        "---",
+        `stage: ${stage}`,
+        "schema_version: 1",
+        `version: ${CCLAW_VERSION}`,
+        "run: <run-id>",
+        "locked_decisions: []",
+        "inputs_hash: sha256:pending",
+        "---",
+        ""
+      ].join("\n");
+
+      expect(
+        ARTIFACT_TEMPLATES[templateName]?.startsWith(expectedFrontmatter),
+        `${templateName} frontmatter`
+      ).toBe(true);
+    }
+  });
+
+  it("artifact templates do not leak source escaping helpers into generated content", () => {
+    for (const [templateName, template] of Object.entries(ARTIFACT_TEMPLATES)) {
+      expect(template, `${templateName} should not contain escaped markdown fences`).not.toContain("\\`\\`\\`");
+      expect(template, `${templateName} should not leak template variables`).not.toMatch(/\$\{[A-Z_]+\}/);
+    }
+  });
+
+  it("seed shelf section renders identically in early-stage templates", () => {
+    const expectedSeedShelf = [
+      "## Seed Shelf Candidates (optional)",
+      "| Seed file | Trigger when | Suggested action | Status (planted/deferred/ignored) |",
+      "|---|---|---|---|",
+      "| .cclaw/seeds/SEED-YYYY-MM-DD-<slug>.md |  |  |  |"
+    ].join("\n");
+
+    for (const templateName of ["01-brainstorm.md", "02-scope.md", "03-design.md"] as const) {
+      expect(ARTIFACT_TEMPLATES[templateName]).toContain(expectedSeedShelf);
+    }
+  });
+
   it("stage skills render explicit when-not-to-use guidance", () => {
     const review = stageSchema("review");
     expect(review.whenNotToUse.length).toBeGreaterThan(0);
@@ -340,8 +533,8 @@ describe("stage schema and subagent alignment", () => {
 
     const markdown = stageSkillMarkdown("tdd", "quick");
     expect(markdown).not.toContain(".cclaw/artifacts/05-plan.md");
-    expect(markdown).not.toContain("plan slice");
-    expect(markdown).toContain("acceptance slice");
+    expect(markdown).toContain(".cclaw/artifacts/04-spec.md");
+    expect(markdown).toContain("Track render context: `quick` (acceptance-first wording)");
   });
 
   it("tdd verification ladder is required and explicit", () => {
@@ -351,6 +544,40 @@ describe("stage schema and subagent alignment", () => {
     expect(ladder?.required).toBe(true);
     expect(ladder?.tier).toBe("required");
     expect(ladder?.validationRule).toMatch(/highest tier reached/i);
+  });
+
+  it("flow mechanics stages render discovery assumptions and posture guidance", () => {
+    const spec = stageSchema("spec");
+    const plan = stageSchema("plan");
+    const tdd = stageSchema("tdd");
+
+    expect(spec.requiredGates.map((gate) => gate.id)).toContain("spec_assumptions_surfaced");
+    expect(spec.artifactValidation.find((row) => row.section === "Assumptions Before Finalization"))
+      .toMatchObject({ required: true, tier: "required" });
+    expect(stageSkillMarkdown("spec")).toContain("Before final spec approval, present the assumptions section");
+    expect(ARTIFACT_TEMPLATES["04-spec.md"]).toContain("## Assumptions Before Finalization");
+    expect(ARTIFACT_TEMPLATES["04-spec.md"]).toContain("Source / confidence");
+
+    expect(plan.requiredGates.find((gate) => gate.id === "plan_dependency_batches_defined")?.description)
+      .toContain("execution posture");
+    expect(plan.artifactValidation.find((row) => row.section === "Execution Posture"))
+      .toMatchObject({ required: true, tier: "required" });
+    expect(stageSkillMarkdown("plan")).toContain("Expose execution posture");
+    expect(ARTIFACT_TEMPLATES["05-plan.md"]).toContain("## Execution Posture");
+    expect(ARTIFACT_TEMPLATES["05-plan.md"]).toContain("RED commit/checkpoint -> GREEN commit/checkpoint -> REFACTOR commit/checkpoint");
+
+    expect(tdd.requiredGates.map((gate) => gate.id)).toEqual(expect.arrayContaining([
+      "tdd_test_discovery_complete",
+      "tdd_impact_check_complete"
+    ]));
+    expect(tdd.artifactValidation.find((row) => row.section === "Test Discovery"))
+      .toMatchObject({ required: true, tier: "required" });
+    expect(tdd.artifactValidation.find((row) => row.section === "System-Wide Impact Check"))
+      .toMatchObject({ required: true, tier: "required" });
+    expect(stageSkillMarkdown("tdd")).toContain("Before writing RED tests, discover relevant existing tests");
+    expect(stageSkillMarkdown("tdd")).toContain("system-wide impact check across callbacks, state, interfaces, schemas, and external contracts");
+    expect(ARTIFACT_TEMPLATES["06-tdd.md"]).toContain("## Test Discovery");
+    expect(ARTIFACT_TEMPLATES["06-tdd.md"]).toContain("## System-Wide Impact Check");
   });
 
   it("every declared gate is marked required on at least one track (single source of truth)", () => {
@@ -414,11 +641,11 @@ describe("stage schema and subagent alignment", () => {
 
   it("brainstorm example is a valid artifact when copy-pasted verbatim", async () => {
     const inlinePointer = stageExamples("brainstorm");
-    expect(inlinePointer).toContain(".cclaw/references/stages/brainstorm-examples.md");
+    expect(inlinePointer).toContain("Shape cues to follow");
 
-    const reference = stageExamplesReferenceMarkdown("brainstorm");
-    expect(reference, "stage examples reference should exist").toBeTruthy();
-    const fenceMatch = /```markdown\n([\s\S]+?)\n```/u.exec(reference!);
+    const fullExample = stageFullArtifactExampleMarkdown("brainstorm");
+    expect(fullExample, "stage full example should exist").toBeTruthy();
+    const fenceMatch = /```markdown\n([\s\S]+?)\n```/u.exec(fullExample!);
     expect(fenceMatch, "example should be wrapped in a markdown fence").toBeTruthy();
     const body = fenceMatch![1]!;
     expect(body).toMatch(/^## Context/);

@@ -22,9 +22,9 @@ describe("runs system", () => {
     expect(state.activeRunId).toMatch(/^run-/);
     expect(state.currentStage).toBe("brainstorm");
     await expect(fs.stat(path.join(root, ".cclaw/artifacts"))).resolves.toBeTruthy();
-    await expect(fs.stat(path.join(root, ".cclaw/worktrees"))).resolves.toBeTruthy();
-    await expect(fs.stat(path.join(root, ".cclaw/state/active-feature.json"))).resolves.toBeTruthy();
-    await expect(fs.stat(path.join(root, ".cclaw/state/worktrees.json"))).resolves.toBeTruthy();
+    await expect(fs.stat(path.join(root, ".cclaw/worktrees"))).rejects.toBeDefined();
+    await expect(fs.stat(path.join(root, ".cclaw/state/active-feature.json"))).rejects.toBeDefined();
+    await expect(fs.stat(path.join(root, ".cclaw/state/worktrees.json"))).rejects.toBeDefined();
     await expect(fs.stat(path.join(root, ".cclaw/runs"))).resolves.toBeTruthy();
   });
 
@@ -46,7 +46,7 @@ describe("runs system", () => {
     const state = await readFlowState(root);
 
     expect(archived.archiveId).toMatch(/^\d{4}-\d{2}-\d{2}-payments-revamp/);
-    expect(archived.activeFeature).toBe("default");
+    expect(archived.runName).toBe("Payments Revamp");
     await expect(
       fs.readFile(path.join(archived.archivePath, "artifacts", "01-brainstorm.md"), "utf8")
     ).resolves.toContain("# draft");
@@ -72,7 +72,7 @@ describe("runs system", () => {
     ).resolves.toBeTruthy();
   });
 
-  it("creates unique archive ids for same-day feature names", async () => {
+  it("creates unique archive ids for same-day run names", async () => {
     const root = await createTempProject("runs-archive-unique");
     await ensureRunSystem(root);
     await fs.writeFile(path.join(root, ".cclaw/artifacts/00-idea.md"), "# Payments\n", "utf8");
@@ -246,7 +246,7 @@ describe("runs system", () => {
         domain: "workflow",
         stage: null,
         origin_stage: "ship",
-        origin_feature: "retro-substate-check",
+        origin_run: "retro-substate-check",
         frequency: 1,
         universality: "project",
         maturity: "raw",
@@ -292,7 +292,7 @@ describe("runs system", () => {
         domain: "ship",
         stage: null,
         origin_stage: "ship",
-        origin_feature: "retro-ready",
+        origin_run: "retro-ready",
         frequency: 1,
         universality: "project",
         maturity: "raw",
@@ -400,7 +400,7 @@ describe("runs system", () => {
         domain: "ship",
         stage: null,
         origin_stage: "ship",
-        origin_feature: "old-run",
+        origin_run: "old-run",
         frequency: 1,
         universality: "project",
         maturity: "raw",
@@ -448,7 +448,7 @@ describe("runs system", () => {
         domain: "ship",
         stage: "retro",
         origin_stage: "ship",
-        origin_feature: "retro-fallback",
+        origin_run: "retro-fallback",
         frequency: 1,
         universality: "project",
         maturity: "raw",
@@ -617,10 +617,11 @@ describe("runs system", () => {
 
     const manifestPath = path.join(archived.archivePath, "archive-manifest.json");
     const manifest = JSON.parse(await fs.readFile(manifestPath, "utf8"));
-    expect(manifest.version).toBe(1);
+    expect(manifest.version).toBe(2);
     expect(manifest.archiveId).toBe(archived.archiveId);
-    expect(manifest.featureName).toBe("Search Revamp");
-    expect(manifest.activeFeature).toBe("default");
+    expect(manifest.runName).toBe("Search Revamp");
+    expect(manifest).not.toHaveProperty("featureName");
+    expect(manifest).not.toHaveProperty("activeFeature");
     expect(manifest.sourceCurrentStage).toBe("plan");
     expect(manifest.sourceCompletedStages).toEqual([
       "brainstorm",

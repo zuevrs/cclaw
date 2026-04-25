@@ -6,6 +6,7 @@ import { describe, expect, it } from "vitest";
 import { readConfig, writeConfig } from "../../src/config.js";
 import { doctorChecks, doctorSucceeded } from "../../src/doctor.js";
 import { initCclaw, syncCclaw, uninstallCclaw, upgradeCclaw } from "../../src/install.js";
+import { HARNESS_ADAPTERS } from "../../src/harness-adapters.js";
 import { createTempProject } from "../helpers/index.js";
 
 const execFileAsync = promisify(execFile);
@@ -63,102 +64,67 @@ describe("install lifecycle", { timeout: 30_000 }, () => {
     expect(checks.some((check) => check.name === "hook:script:stage-complete.mjs:executable" && check.ok)).toBe(true);
     expect(checks.some((check) => check.name === "hook:wiring:codex" && check.ok)).toBe(true);
 
+    const runtimeEntries = (await fs.readdir(path.join(root, ".cclaw"))).sort();
+    expect(runtimeEntries).toEqual([
+      "agents",
+      "artifacts",
+      "commands",
+      "config.yaml",
+      "hooks",
+      "knowledge.jsonl",
+      "rules",
+      "runs",
+      "skills",
+      "state",
+      "templates"
+    ]);
+    const stateEntries = (await fs.readdir(path.join(root, ".cclaw/state"))).sort();
+    expect(stateEntries).toEqual(["flow-state.json", "iron-laws.json"]);
+    const skillEntries = (await fs.readdir(path.join(root, ".cclaw/skills"))).sort();
+    expect(skillEntries).toContain("flow-view");
+    expect(skillEntries).not.toContain("flow-status");
+    expect(skillEntries).not.toContain("flow-tree");
+    expect(skillEntries).not.toContain("flow-diff");
+
     const flow = JSON.parse(
       await fs.readFile(path.join(root, ".cclaw/state/flow-state.json"), "utf8")
     ) as { activeRunId?: string };
     expect(typeof flow.activeRunId).toBe("string");
     expect(flow.activeRunId).toMatch(/^run-/);
-    await expect(fs.stat(path.join(root, ".cclaw/state/checkpoint.json"))).resolves.toBeDefined();
-    await expect(fs.stat(path.join(root, ".cclaw/state/stage-activity.jsonl"))).resolves.toBeDefined();
-    await expect(fs.stat(path.join(root, ".cclaw/state/flow-state.snapshot.json"))).resolves.toBeDefined();
-    await expect(fs.stat(path.join(root, ".cclaw/state/harness-gaps.json"))).resolves.toBeDefined();
-    await expect(fs.stat(path.join(root, ".cclaw/commands/tree.md"))).resolves.toBeDefined();
-    await expect(fs.stat(path.join(root, ".cclaw/commands/diff.md"))).resolves.toBeDefined();
+    await expect(fs.stat(path.join(root, ".cclaw/state/stage-activity.jsonl"))).rejects.toBeDefined();
+    await expect(fs.stat(path.join(root, ".cclaw/state/tdd-cycle-log.jsonl"))).rejects.toBeDefined();
+    await expect(fs.stat(path.join(root, ".cclaw/state/reconciliation-notices.json"))).rejects.toBeDefined();
+    await expect(fs.stat(path.join(root, ".cclaw/state/checkpoint.json"))).rejects.toBeDefined();
+    await expect(fs.stat(path.join(root, ".cclaw/state/flow-state.snapshot.json"))).rejects.toBeDefined();
+    await expect(fs.stat(path.join(root, ".cclaw/state/harness-gaps.json"))).rejects.toBeDefined();
+    const commandFiles = (await fs.readdir(path.join(root, ".cclaw/commands"))).sort();
+    expect(commandFiles).toEqual(["ideate.md", "next.md", "start.md", "view.md"]);
     await expect(fs.stat(path.join(root, ".claude/commands/cc-view.md"))).resolves.toBeDefined();
-    await expect(fs.stat(path.join(root, ".claude/commands/cc-ops.md"))).resolves.toBeDefined();
     const claudeShims = (await fs.readdir(path.join(root, ".claude/commands")))
       .filter((name) => /^cc(?:-.*)?\.md$/u.test(name))
       .sort();
     expect(claudeShims).toEqual([
       "cc-ideate.md",
       "cc-next.md",
-      "cc-ops.md",
       "cc-view.md",
       "cc.md"
     ]);
-    const harnessGaps = JSON.parse(
-      await fs.readFile(path.join(root, ".cclaw/state/harness-gaps.json"), "utf8")
-    ) as {
-      schemaVersion?: number;
-      harnesses: Array<{
-        harness: string;
-        tier: string;
-        subagentFallback?: string;
-        playbookPath?: string;
-        missingCapabilities: string[];
-        missingHookEvents?: string[];
-        remediation?: string[];
-      }>;
-    };
-    expect(harnessGaps.schemaVersion).toBe(2);
-    const codexGap = harnessGaps.harnesses.find((entry) => entry.harness === "codex");
-    // Codex regained tier2 in v0.40.0: Codex CLI ≥ v0.114 supports
-    // lifecycle hooks (`.codex/hooks.json`, gated by the `codex_hooks`
-    // feature flag). PreToolUse/PostToolUse are Bash-only — reported via
-    // `hookSurface:limited` instead of `none`. No custom slash commands
-    // and no native subagent dispatch persist as gaps.
-    expect(codexGap?.tier).toBe("tier2");
-    expect(codexGap?.missingCapabilities).toContain("nativeSubagentDispatch:none");
-    expect(codexGap?.missingCapabilities).toContain("hookSurface:limited");
-    // Wave Q (v0.41.0): Codex exposes `request_user_input` (experimental
-    // Plan / Collaboration mode tool), so structuredAsk is no longer a
-    // missing capability. Remediation still records the gating note.
-    expect(codexGap?.missingCapabilities).not.toContain("structuredAsk:none");
-    expect(
-      codexGap?.remediation?.some((line) => line.includes("request_user_input"))
-    ).toBe(true);
-    expect(codexGap?.subagentFallback).toBe("role-switch");
-    expect(codexGap?.playbookPath).toBe(".cclaw/references/harnesses/codex-playbook.md");
-    expect(codexGap?.remediation?.some((line) => line.includes("role-switch"))).toBe(true);
-    // `precompact_digest` must still land in missingHookEvents — Codex
-    // has no PreCompact event — but the other five semantic events are
-    // now mapped.
-    expect(codexGap?.missingHookEvents).toContain("precompact_digest");
-    expect(codexGap?.missingHookEvents).not.toContain("session_rehydrate");
-    // H-08: the `precompact_digest` remediation line for Codex points at
-    // the in-thread `/cc-ops retro` substitute instead of the generic
-    // "schedule the script manually" copy, because Codex has no
-    // PreCompact event that could run it.
-    const precompactLine = codexGap?.remediation?.find((line) =>
-      line.includes("precompact_digest")
-    );
-    expect(precompactLine).toMatch(/\/cc-ops retro/);
-    expect(precompactLine).not.toMatch(/schedule the corresponding script manually/);
+    const codexAdapter = HARNESS_ADAPTERS.codex;
+    expect(codexAdapter.capabilities.nativeSubagentDispatch).toBe("none");
+    expect(codexAdapter.capabilities.hookSurface).toBe("limited");
+    expect(codexAdapter.capabilities.structuredAsk).toBe("request_user_input");
+    expect(codexAdapter.capabilities.subagentFallback).toBe("role-switch");
 
     // Wave Q (v0.41.0): OpenCode's native `question` tool is honest as
     // permission-gated, not missing — assert the remediation mentions
     // the config knob.
-    const opencodeGap = harnessGaps.harnesses.find(
-      (entry) => entry.harness === "opencode"
-    );
-    expect(opencodeGap?.missingCapabilities).not.toContain("structuredAsk:none");
-    expect(
-      opencodeGap?.remediation?.some((line) => line.includes("permission.question"))
-    ).toBe(true);
+    const opencodeAdapter = HARNESS_ADAPTERS.opencode;
+    expect(opencodeAdapter.capabilities.structuredAsk).toBe("question");
 
-    // Parity playbooks must be materialised for every supported harness.
-    for (const harness of ["claude", "cursor", "opencode", "codex"] as const) {
-      const playbookPath = path.join(
-        root,
-        `.cclaw/references/harnesses/${harness}-playbook.md`
-      );
-      const body = await fs.readFile(playbookPath, "utf8");
-      expect(body).toContain(`harness: ${harness}`);
-      expect(body).toContain("# ");
-    }
+    // Runtime simplification: `.cclaw/references/` is no longer materialized.
     await expect(
-      fs.stat(path.join(root, ".cclaw/references/harnesses/README.md"))
-    ).resolves.toBeDefined();
+      fs.stat(path.join(root, ".cclaw/references"))
+    ).rejects.toBeDefined();
 
     const claudeHooks = JSON.parse(
       await fs.readFile(path.join(root, ".claude/hooks/hooks.json"), "utf8")
@@ -178,6 +144,7 @@ describe("install lifecycle", { timeout: 30_000 }, () => {
     const agentsMd = await fs.readFile(path.join(root, "AGENTS.md"), "utf8");
     expect(agentsMd).toContain("## Cclaw — Workflow Adapter");
     expect(agentsMd).toContain("intentionally minimal for cross-project use");
+    expect(agentsMd).toContain("then closeout: retro > compound > archive");
     expect(agentsMd).not.toContain("### Agent Specialists");
     expect(agentsMd).not.toContain("### Hooks (real lifecycle integration)");
     expect(agentsMd).not.toContain("### Runtime Details (full mode)");
@@ -214,7 +181,7 @@ describe("install lifecycle", { timeout: 30_000 }, () => {
     expect(configCheck).toBeDefined();
     expect(configCheck?.severity).toBe("error");
     expect(configCheck?.fix.length).toBeGreaterThan(0);
-    expect(configCheck?.docRef).toContain(".cclaw/references/doctor/");
+    expect(configCheck?.docRef).toContain("docs/config.md");
 
     expect(warningCheck).toBeDefined();
     expect(warningCheck?.severity).toBe("warning");
@@ -243,13 +210,11 @@ describe("install lifecycle", { timeout: 30_000 }, () => {
       "meta_skill:",
       "protocol:",
       "stage_skill:",
-      "context_mode:",
       "knowledge:",
       "artifacts:",
       "runs:",
       "flow_state:",
       "state:",
-      "contexts:",
       "gates:",
       "trace:",
       "delegation:",
@@ -341,27 +306,26 @@ describe("install lifecycle", { timeout: 30_000 }, () => {
     await expect(fs.stat(shim)).resolves.toBeDefined();
   });
 
-  it("sync regenerates shim files", async () => {
+  it("sync regenerates shim files and stage skills while pruning legacy command contracts", async () => {
     const root = await createTempProject("sync");
     await initCclaw({ projectRoot: root });
 
     const shim = path.join(root, ".claude/commands/cc.md");
-    const contract = path.join(root, ".cclaw/commands/plan.md");
+    const legacyContract = path.join(root, ".cclaw/commands/plan.md");
     const skill = path.join(root, ".cclaw/skills/planning-and-task-breakdown/SKILL.md");
     await fs.rm(shim);
-    await fs.writeFile(contract, "# corrupted\n", "utf8");
+    await fs.writeFile(legacyContract, "# legacy\n", "utf8");
     await fs.writeFile(skill, "# corrupted\n", "utf8");
     await syncCclaw(root);
 
     const restored = await fs.readFile(shim, "utf8");
-    const restoredContract = await fs.readFile(contract, "utf8");
     const restoredSkill = await fs.readFile(skill, "utf8");
     expect(restored).toContain(".cclaw/skills/flow-start/SKILL.md");
-    expect(restoredContract).toContain("WAIT_FOR_CONFIRM");
     expect(restoredSkill).toContain("## Required Gates");
+    await expect(fs.stat(legacyContract)).rejects.toBeDefined();
   });
 
-  it("sync regenerates stage command contracts when defaultTrack changes", async () => {
+  it("sync regenerates stage skills when defaultTrack changes", async () => {
     const root = await createTempProject("sync-track-contracts");
     await initCclaw({ projectRoot: root });
     const initialConfig = await readConfig(root);
@@ -370,16 +334,16 @@ describe("install lifecycle", { timeout: 30_000 }, () => {
       defaultTrack: "quick"
     });
     await syncCclaw(root);
-    const quickTddContract = await fs.readFile(path.join(root, ".cclaw/commands/tdd.md"), "utf8");
-    expect(quickTddContract).not.toContain("tdd_traceable_to_plan");
+    const quickTddSkill = await fs.readFile(path.join(root, ".cclaw/skills/test-driven-development/SKILL.md"), "utf8");
+    expect(quickTddSkill).not.toContain("tdd_traceable_to_plan");
 
     await writeConfig(root, {
       ...(await readConfig(root)),
       defaultTrack: "standard"
     });
     await syncCclaw(root);
-    const standardTddContract = await fs.readFile(path.join(root, ".cclaw/commands/tdd.md"), "utf8");
-    expect(standardTddContract).toContain("tdd_traceable_to_plan");
+    const standardTddSkill = await fs.readFile(path.join(root, ".cclaw/skills/test-driven-development/SKILL.md"), "utf8");
+    expect(standardTddSkill).toContain("tdd_traceable_to_plan");
   });
 
   it("sync removes stale generated shims, persists config, and keeps user-owned assets", async () => {
@@ -514,14 +478,14 @@ describe("install lifecycle", { timeout: 30_000 }, () => {
     expect(countOccurrences(mergedClaude, ".cclaw/hooks/run-hook.cmd prompt-guard")).toBe(1);
     expect(countOccurrences(mergedClaude, ".cclaw/hooks/run-hook.cmd workflow-guard")).toBe(1);
     expect(countOccurrences(mergedClaude, ".cclaw/hooks/run-hook.cmd context-monitor")).toBe(1);
-    expect(countOccurrences(mergedClaude, ".cclaw/hooks/run-hook.cmd stop-checkpoint")).toBe(1);
+    expect(countOccurrences(mergedClaude, ".cclaw/hooks/run-hook.cmd stop-handoff")).toBe(1);
 
     expect(mergedCursor).toContain("cursor-user-stop");
     expect(mergedCursor).toContain("cursor-user-pre");
     expect(countOccurrences(mergedCursor, ".cclaw/hooks/run-hook.cmd prompt-guard")).toBe(1);
     expect(countOccurrences(mergedCursor, ".cclaw/hooks/run-hook.cmd workflow-guard")).toBe(1);
     expect(countOccurrences(mergedCursor, ".cclaw/hooks/run-hook.cmd context-monitor")).toBe(1);
-    expect(countOccurrences(mergedCursor, ".cclaw/hooks/run-hook.cmd stop-checkpoint")).toBe(1);
+    expect(countOccurrences(mergedCursor, ".cclaw/hooks/run-hook.cmd stop-handoff")).toBe(1);
   });
 
   it("sync recovers relaxed JSON hooks and preserves user commands", async () => {
@@ -818,7 +782,7 @@ describe("install lifecycle", { timeout: 30_000 }, () => {
       domain: "api",
       stage: "review",
       origin_stage: "review",
-      origin_feature: "payload-hardening",
+      origin_run: "payload-hardening",
       frequency: 1,
       universality: "project",
       maturity: "raw",
@@ -850,7 +814,7 @@ describe("install lifecycle", { timeout: 30_000 }, () => {
       domain: "api",
       stage: "review",
       origin_stage: "review",
-      origin_feature: "payload-hardening",
+      origin_run: "payload-hardening",
       frequency: 1,
       universality: "project",
       maturity: "raw",
@@ -866,6 +830,130 @@ describe("install lifecycle", { timeout: 30_000 }, () => {
     expect(warning).toBeDefined();
     expect(warning?.ok).toBe(true);
     expect(warning?.details).toMatch(/no raw knowledge entries older than 90 days/);
+  });
+
+  it("warns when knowledge entries violate the current schema", async () => {
+    const root = await createTempProject("knowledge-current-schema");
+    await initCclaw({ projectRoot: root });
+
+    const nowIso = new Date().toISOString().replace(/\.\d{3}Z$/u, "Z");
+    const invalidLine = JSON.stringify({
+      type: "note",
+      trigger: "",
+      action: "parse through zod",
+      confidence: "medium",
+      domain: "api",
+      stage: "review",
+      origin_stage: "review",
+      origin_run: "payload-hardening",
+      frequency: 1,
+      universality: "project",
+      maturity: "raw",
+      created: nowIso,
+      first_seen_ts: nowIso,
+      last_seen_ts: nowIso,
+      project: "demo"
+    });
+    await fs.writeFile(path.join(root, ".cclaw/knowledge.jsonl"), invalidLine + "\n", "utf8");
+
+    const checks = await doctorChecks(root);
+    const warning = checks.find((c) => c.name === "warning:knowledge:current_schema");
+    expect(warning).toBeDefined();
+    expect(warning?.ok).toBe(false);
+    expect(warning?.severity).toBe("warning");
+    expect(warning?.details).toMatch(/type must be one of: rule, pattern, lesson, compound/);
+    expect(doctorSucceeded(checks)).toBe(true);
+  });
+
+  it("warns when routing docs do not surface knowledge store usage", async () => {
+    const root = await createTempProject("knowledge-discoverability");
+    await initCclaw({ projectRoot: root });
+
+    await fs.writeFile(path.join(root, "AGENTS.md"), "# Agents\n\nUse the workflow.\n", "utf8");
+    await fs.writeFile(path.join(root, "CLAUDE.md"), "# Claude\n\nUse the workflow.\n", "utf8");
+
+    const checks = await doctorChecks(root);
+    const warning = checks.find((c) => c.name === "warning:knowledge:discoverability");
+    expect(warning).toBeDefined();
+    expect(warning?.ok).toBe(false);
+    expect(warning?.severity).toBe("warning");
+    expect(warning?.details).toContain(".cclaw/knowledge.jsonl");
+    expect(warning?.details).toContain("type/trigger/action/origin_run");
+  });
+
+  it("accepts routing docs that surface knowledge store usage", async () => {
+    const root = await createTempProject("knowledge-discoverability-ok");
+    await initCclaw({ projectRoot: root });
+
+    await fs.writeFile(
+      path.join(root, "AGENTS.md"),
+      "# Agents\n\nKnowledge lives in .cclaw/knowledge.jsonl. Use type rule|pattern|lesson|compound with trigger, action, and origin_run fields.\n",
+      "utf8"
+    );
+    await fs.rm(path.join(root, "CLAUDE.md"), { force: true });
+
+    const checks = await doctorChecks(root);
+    const warning = checks.find((c) => c.name === "warning:knowledge:discoverability");
+    expect(warning).toBeDefined();
+    expect(warning?.ok).toBe(true);
+    expect(warning?.details).toContain("AGENTS.md");
+  });
+
+  it("warns about orphan seed shelf entries", async () => {
+    const root = await createTempProject("knowledge-orphan-seeds");
+    await initCclaw({ projectRoot: root });
+
+    const seedPath = path.join(root, ".cclaw/seeds/SEED-2026-04-25-api-shape.md");
+    await fs.mkdir(path.dirname(seedPath), { recursive: true });
+    await fs.writeFile(
+      seedPath,
+      `---
+title: API shape
+trigger_when:
+  - api
+---
+# API shape
+
+Capture this later.
+`,
+      "utf8"
+    );
+
+    const checks = await doctorChecks(root);
+    const warning = checks.find((c) => c.name === "warning:knowledge:orphan_seeds");
+    expect(warning).toBeDefined();
+    expect(warning?.ok).toBe(false);
+    expect(warning?.severity).toBe("warning");
+    expect(warning?.details.replace(/\\/gu, "/")).toContain(".cclaw/seeds/SEED-2026-04-25-api-shape.md");
+  });
+
+  it("accepts discoverable seed shelf entries", async () => {
+    const root = await createTempProject("knowledge-seeds-ok");
+    await initCclaw({ projectRoot: root });
+
+    const seedPath = path.join(root, ".cclaw/seeds/SEED-2026-04-25-api-shape.md");
+    await fs.mkdir(path.dirname(seedPath), { recursive: true });
+    await fs.writeFile(
+      seedPath,
+      `---
+title: API shape
+source_artifact: .cclaw/artifacts/00-idea.md
+trigger_when:
+  - api
+action: Revisit the API shape before spec.
+---
+# API shape
+
+Capture this later.
+`,
+      "utf8"
+    );
+
+    const checks = await doctorChecks(root);
+    const warning = checks.find((c) => c.name === "warning:knowledge:orphan_seeds");
+    expect(warning).toBeDefined();
+    expect(warning?.ok).toBe(true);
+    expect(warning?.details).toMatch(/all 1 seed shelf entry is discoverable/);
   });
 
   it("flags unsynced reconciliation notices and clears them with reconcile-gates", async () => {
@@ -961,7 +1049,7 @@ describe("install lifecycle", { timeout: 30_000 }, () => {
     const root = await createTempProject("codex-skills-fresh");
     await initCclaw({ projectRoot: root, harnesses: ["codex"] });
 
-    const expectedSkills = ["cc", "cc-next", "cc-view", "cc-ideate", "cc-ops"];
+    const expectedSkills = ["cc", "cc-next", "cc-view", "cc-ideate"];
     for (const slug of expectedSkills) {
       const skillPath = path.join(root, ".agents/skills", slug, "SKILL.md");
       const body = await fs.readFile(skillPath, "utf8");
@@ -1013,12 +1101,19 @@ describe("install lifecycle", { timeout: 30_000 }, () => {
       "---\nname: cclaw-cc\ndescription: legacy\n---\nlegacy body\n",
       "utf8"
     );
+    await fs.mkdir(path.join(root, ".agents/skills/cclaw-cc-obsolete"), { recursive: true });
+    await fs.writeFile(
+      path.join(root, ".agents/skills/cclaw-cc-obsolete/SKILL.md"),
+      "---\nname: cclaw-cc-obsolete\ndescription: legacy\n---\nlegacy body\n",
+      "utf8"
+    );
 
     await syncCclaw(root);
 
     // .codex/commands/ and the legacy cclaw-cc folder must both be gone.
     await expect(fs.stat(path.join(root, ".codex/commands"))).rejects.toThrow(/ENOENT/);
     await expect(fs.stat(path.join(root, ".agents/skills/cclaw-cc"))).rejects.toThrow(/ENOENT/);
+    await expect(fs.stat(path.join(root, ".agents/skills/cclaw-cc-obsolete"))).rejects.toThrow(/ENOENT/);
 
     // The managed .codex/hooks.json must still be in place, and the
     // fresh v0.40.0 skills must exist under the new `cc*` layout.
@@ -1040,7 +1135,7 @@ describe("install lifecycle", { timeout: 30_000 }, () => {
       hooks: {
         Stop: [{
           hooks: [
-            { type: "command", command: "node .cclaw/hooks/run-hook.mjs stop-checkpoint" },
+            { type: "command", command: "node .cclaw/hooks/run-hook.mjs stop-handoff" },
             { type: "command", command: "echo user-stop-hook" }
           ]
         }],

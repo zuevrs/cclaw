@@ -102,7 +102,7 @@ export interface HarnessAdapter {
     /**
      * Declared fallback pattern used when the harness cannot satisfy a
      * mandatory delegation natively. Drives `checkMandatoryDelegations`
-     * and the generated playbook per harness.
+     * and generated harness guidance.
      */
     subagentFallback: SubagentFallback;
   };
@@ -146,37 +146,13 @@ const UTILITY_SHIMS: UtilityShimSpec[] = [
     command: "view",
     skillFolder: "flow-view",
     commandFile: "view.md"
-  },
-  {
-    fileName: "cc-ops.md",
-    skillName: "cc-ops",
-    command: "ops",
-    skillFolder: "flow-ops",
-    commandFile: "ops.md"
   }
 ];
 
 /** Skill-kind shim name for the root `/cc` entry point. */
 const ENTRY_SHIM_SKILL_NAME = "cc";
 
-/**
- * Skill directory names that v0.39.0 / v0.39.1 installed under
- * `.agents/skills/` before the rename. We delete these on every sync so
- * upgrades from those versions do not leave orphaned `cclaw-cc*`
- * folders that would double-register in Codex's skill listing.
- */
-const LEGACY_CODEX_SKILL_NAMES: readonly string[] = [
-  "cclaw-cc",
-  "cclaw-cc-next",
-  "cclaw-cc-view",
-  "cclaw-cc-ops",
-  "cclaw-cc-ideate",
-  // Pre-v0.40 installed `/cc-learn` as a top-level skill before it was
-  // folded into `/cc-ops`. Without this entry the orphan stays behind
-  // after upgrade and Codex lists both the new in-thread workflow and
-  // the legacy slash command.
-  "cclaw-cc-learn"
-];
+const LEGACY_CODEX_SKILL_PREFIX = "cclaw-cc";
 
 /**
  * Shims that older cclaw versions installed as top-level slash commands but
@@ -215,7 +191,7 @@ export const HARNESS_ADAPTERS: Record<HarnessId, HarnessAdapter> = {
       // Cursor has a real Task tool with subagent_type (generalPurpose,
       // explore, shell, browser-use, …) but no user-defined named
       // subagents. cclaw maps each named agent (planner/reviewer/…) onto
-      // generic dispatch with a role prompt — see the cursor playbook.
+      // generic dispatch with a role prompt.
       nativeSubagentDispatch: "generic",
       hookSurface: "full",
       structuredAsk: "AskQuestion",
@@ -234,9 +210,8 @@ export const HARNESS_ADAPTERS: Record<HarnessId, HarnessAdapter> = {
       // permission-gated — `opencode.json` must set
       // `permission.question: "allow"` and ACP clients must export
       // `OPENCODE_ENABLE_QUESTION_TOOL=1`. cclaw surfaces the tool name
-      // in the Decision Protocol and in the OpenCode playbook; skills
-      // fall back to the shared plain-text lettered list when the tool
-      // is denied or unavailable.
+      // in generated harness guidance; skills fall back to the shared
+      // plain-text lettered list when the tool is denied or unavailable.
       structuredAsk: "question",
       subagentFallback: "role-switch"
     }
@@ -263,9 +238,8 @@ export const HARNESS_ADAPTERS: Record<HarnessId, HarnessAdapter> = {
       // It is the primitive the built-in Plan / Collaboration mode
       // templates use (see `codex-rs/collaboration-mode-templates`).
       // Agents running inside Codex can call it directly; cclaw wires
-      // it into the Decision Protocol and the Codex playbook. The
-      // shared plain-text lettered list is the documented fallback
-      // when the tool is unavailable.
+      // it into generated harness guidance. The shared plain-text
+      // lettered list is the documented fallback when the tool is unavailable.
       structuredAsk: "request_user_input",
       subagentFallback: "role-switch"
     }
@@ -346,11 +320,10 @@ When in doubt, prefer **non-trivial** — the quick track is opt-in and only saf
 ### Instruction Priority (top wins)
 
 1. User message in the current turn.
-2. Active stage skill HARD-GATE (\`.cclaw/skills/<stage>/SKILL.md\`).
-3. Command contract gates (\`.cclaw/commands/<stage>.md\`).
-4. The \`using-cclaw\` meta-skill.
-5. Contextual utility skills.
-6. Training priors.
+2. Active stage skill and command contract.
+3. The \`using-cclaw\` meta-skill.
+4. Contextual utility skills.
+5. Training priors.
 
 ### Commands
 
@@ -360,13 +333,12 @@ When in doubt, prefer **non-trivial** — the quick track is opt-in and only saf
 | \`/cc-next\` | **Progression.** Advances to the next stage when current is complete. |
 | \`/cc-ideate\` | **Ideate mode.** Generates a ranked repo-improvement backlog before implementation. |
 | \`/cc-view\` | **Read-only router.** Unified entry for status/tree/diff views. |
-| \`/cc-ops\` | **Operations router.** Unified entry for feature/tdd-log/retro/compound/archive/rewind actions. |
 
 Knowledge capture and curation run automatically as part of stage completion
 protocols via the internal \`learnings\` skill — no user-facing command.
 
-**Stage order:** brainstorm > scope > design > spec > plan > tdd > review > ship.
-\`/cc-next\` loads the right stage skill automatically. Gates must pass before handoff.
+**Stage order:** brainstorm > scope > design > spec > plan > tdd > review > ship, then closeout: retro > compound > archive.
+\`/cc-next\` loads the right stage skill automatically and also drives post-ship closeout. Gates must pass before handoff.
 
 ### Verification Discipline
 
@@ -381,14 +353,14 @@ If the same approach fails three times in a row (same command, same finding, sam
 - This managed AGENTS block is intentionally minimal for cross-project use.
 - Harness coverage is tiered: Tier1 (claude), Tier2 (cursor/opencode/codex — codex has Bash-only tool hooks), Tier3 (fallback/manual-only).
 - Detailed operating procedures live in \`.cclaw/skills/using-cclaw/SKILL.md\`.
-- Preamble budget and cooldown rules live in \`.cclaw/references/protocols/ethos.md\`.
+- Keep preambles brief; re-announce role/stage only when either changes.
 - Subagent orchestration patterns: \`.cclaw/skills/subagent-dev/SKILL.md\` and \`.cclaw/skills/parallel-dispatch/SKILL.md\`.
 
 ### Codex users
 
 OpenAI Codex CLI has **no native \`/cc\` slash command** (custom prompts
 were deprecated in v0.89, Jan 2026). The \`/cc\`, \`/cc-next\`,
-\`/cc-ideate\`, \`/cc-view\`, \`/cc-ops\` tokens above describe intent — in
+\`/cc-ideate\`, \`/cc-view\` tokens above describe intent — in
 Codex they map onto skills cclaw installs at
 \`.agents/skills/cc*/SKILL.md\`. Activate one of two ways:
 
@@ -403,9 +375,8 @@ in \`~/.codex/config.toml\`. cclaw generates \`.codex/hooks.json\` on
 sync; if the feature flag is off, hooks are inert and cclaw's
 session-start rehydration simply does not fire. Run \`cclaw doctor\` to
 see if the flag is missing. \`.codex/commands/*\` is still unused by
-Codex CLI and is removed on every sync. See
-\`.cclaw/references/harnesses/codex-playbook.md\` for the hook coverage
-matrix (Bash-only \`PreToolUse\`/\`PostToolUse\`; other events are full).
+Codex CLI and is removed on every sync. Run \`cclaw doctor --explain\` for
+hook coverage details (Bash-only \`PreToolUse\`/\`PostToolUse\`; other events are full).
 ${CCLAW_MARKER_END}`;
 }
 
@@ -470,6 +441,21 @@ export async function removeCclawFromAgentsMd(projectRoot: string): Promise<void
   await removeCclawFromRoutingFile(path.join(projectRoot, "CLAUDE.md"));
 }
 
+function utilityShimBehavior(command: string): string {
+  switch (command) {
+    case "cc":
+      return "This is the entry command, not a flow stage. It may initialize or resume flow state after confirmation.";
+    case "next":
+      return "This is the progression command, not a flow stage. It may advance stages and post-ship closeout through managed helpers.";
+    case "ideate":
+      return "This is an ideation command, not a flow stage. It may write ideation artifacts/seeds but does not advance flow state.";
+    case "view":
+      return "This is a read-only view command, not a flow stage. It never mutates flow state.";
+    default:
+      return "This is a utility command, not a flow stage.";
+  }
+}
+
 function utilityShimContent(harness: HarnessId, command: string, skillFolder: string, commandFile: string): string {
   const shimName = command === "cc" ? "cc" : `cc-${command}`;
   return `---
@@ -484,7 +470,7 @@ Load and execute:
 1. \`.cclaw/skills/${skillFolder}/SKILL.md\`
 2. \`.cclaw/commands/${commandFile}\`
 
-This is a utility command (not a flow stage). It does not advance flow state.
+${utilityShimBehavior(command)}
 `;
 }
 
@@ -497,15 +483,13 @@ This is a utility command (not a flow stage). It does not advance flow state.
 function codexSkillDescription(command: string): string {
   switch (command) {
     case "cc":
-      return `Entry point for the cclaw 8-stage workflow (brainstorm → scope → design → spec → plan → tdd → review → ship). Use whenever the user types \`/cc\`, \`/cclaw\`, or asks to "start the flow", "begin cclaw", "kick off the workflow", "classify this task", or wants to start/resume a non-trivial software change. No args = resume the active stage from \`.cclaw/state/flow-state.json\`. With a prompt = classify and pick a track (quick/medium/standard).`;
+      return `Entry point for the cclaw track-aware workflow ending in ship plus auto-closeout (retro → compound → archive). Use whenever the user types \`/cc\`, \`/cclaw\`, or asks to "start the flow", "begin cclaw", "kick off the workflow", "classify this task", or wants to start/resume a non-trivial software change. No args = resume the active stage from \`.cclaw/state/flow-state.json\`. With a prompt = classify and pick a track (quick/medium/standard).`;
     case "next":
-      return `Advance the cclaw flow to the next stage. Use when the user types \`/cc-next\` or asks to "move to the next stage", "continue the flow", "advance cclaw", "progress the workflow", or when the current stage skill reports completion and gates have passed.`;
+      return `Advance the cclaw flow to the next stage or post-ship closeout substate. Use when the user types \`/cc-next\` or asks to "move to the next stage", "continue the flow", "advance cclaw", "progress the workflow", or when the current stage skill reports completion and gates have passed.`;
     case "ideate":
       return `Read-only repo-improvement ideate mode for cclaw. Use when the user types \`/cc-ideate\` or asks to "ideate", "scan the repo for TODOs/tech debt", "generate a backlog", or wants a ranked list of candidate ideas before committing to a single flow. Does not mutate \`.cclaw/state/flow-state.json\`.`;
     case "view":
       return `Read-only router for cclaw flow views. Use when the user types \`/cc-view\`, \`/cc-view status\`, \`/cc-view tree\`, \`/cc-view diff\`, or asks to "show cclaw status", "show the flow tree", "diff flow state", or wants a snapshot without mutation.`;
-    case "ops":
-      return `Operations router for cclaw post-flow actions. Use when the user types \`/cc-ops\`, \`/cc-ops feature\`, \`/cc-ops tdd-log\`, \`/cc-ops retro\`, \`/cc-ops compound\`, \`/cc-ops archive\`, \`/cc-ops rewind\`, or asks to "archive the run", "run the retro", "compound knowledge", "rewind to an earlier stage", or manage feature worktrees.`;
     default:
       return `Generated cclaw skill for ${command}.`;
   }
@@ -538,8 +522,8 @@ under \`.agents/skills/${skillSlug}/\` so the user can either:
 
 Lifecycle hooks **are** available in Codex CLI v0.114+ (behind the
 \`[features] codex_hooks = true\` flag in \`~/.codex/config.toml\`) and
-cclaw installs a matching \`.codex/hooks.json\` — see the playbook for
-what the hook surface does and does not cover.
+cclaw installs a matching \`.codex/hooks.json\`; run \`cclaw doctor --explain\`
+for the current hook surface and limitations.
 
 ## Protocol
 
@@ -561,8 +545,7 @@ what the hook surface does and does not cover.
   (v0.33+).
 - Codex's \`PreToolUse\` / \`PostToolUse\` hooks currently only intercept
   the \`Bash\` tool. \`Write\`, \`Edit\`, \`WebSearch\`, and MCP tool calls
-  are **not** gated by hooks — read
-  \`.cclaw/references/harnesses/codex-playbook.md\` for what cclaw
+  are **not** gated by hooks — use \`cclaw doctor --explain\` for what cclaw
   substitutes with in-turn agent steps for those call classes.
 - Codex's \`SessionStart\` matcher only supports \`startup|resume\`. Claude
   and Cursor also fire on \`clear\` and \`compact\`, so mid-session
@@ -642,10 +625,18 @@ async function cleanupLegacyCodexSurfaces(projectRoot: string): Promise<void> {
     // best-effort cleanup
   }
 
-  // Remove the old `cclaw-cc*` skill folders if they exist from a
-  // previous cclaw install. Idempotent; best-effort.
+  // Remove old `cclaw-cc*` skill folders if they exist from a previous
+  // cclaw install. Idempotent; best-effort.
   const legacySkillsRoot = path.join(projectRoot, ".agents/skills");
-  for (const name of LEGACY_CODEX_SKILL_NAMES) {
+  let legacySkillNames: string[] = [];
+  try {
+    legacySkillNames = (await fs.readdir(legacySkillsRoot, { withFileTypes: true }))
+      .filter((entry) => entry.isDirectory() && entry.name.startsWith(LEGACY_CODEX_SKILL_PREFIX))
+      .map((entry) => entry.name);
+  } catch {
+    legacySkillNames = [];
+  }
+  for (const name of legacySkillNames) {
     const folder = path.join(legacySkillsRoot, name);
     try {
       await fs.rm(folder, { recursive: true, force: true });

@@ -5,6 +5,5 @@ release-artifacts/
 .git/
 graphify-out/
 graphify-out-full/
-docs/references/
 *.log
 *.tgz

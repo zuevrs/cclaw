@@ -1,3 +1,6 @@
+import type { FlowStage } from "../types.js";
+import { stageDelegationSummary } from "./stage-schema.js";
+
 /**
  * Markdown content generators for Cclaw’s subagent orchestration skills and enhanced
  * specialist payloads. Cclaw materializes static instructions — this module does not
@@ -13,6 +16,28 @@ const SUBAGENT_AGENT_NAMES = [
 ] as const;
 
 type SubagentCclawAgentName = (typeof SUBAGENT_AGENT_NAMES)[number];
+
+function formatAgentList(agents: string[]): string {
+  return agents.length > 0 ? agents.join(", ") : "none";
+}
+
+function automaticStageDelegationTable(): string {
+  const summary = stageDelegationSummary("standard");
+  const rows = summary.map((row) => {
+    return `| ${row.stage} | ${formatAgentList(row.mandatoryAgents)} | ${formatAgentList(row.proactiveAgents)} |`;
+  }).join("\n");
+
+  return `| Stage | Mandatory agents | Proactive agents |
+|---|---|---|
+${rows}`;
+}
+
+type StageAgentSummary = ReturnType<typeof stageDelegationSummary>[number];
+
+function stageSummary(stage: FlowStage): StageAgentSummary {
+  return stageDelegationSummary("standard").find((row) => row.stage === stage)
+    ?? { stage, mandatoryAgents: [], proactiveAgents: [], primaryAgents: [], stackAwareRoutes: [] };
+}
 
 export function subagentDrivenDevSkill(): string {
   return `---
@@ -34,56 +59,48 @@ This pattern is intentionally **Superpowers-style**: cheap parallelism where it 
 
 ## Automatic Stage Delegation in Cclaw
 
-For cclaw flow stages, machine-only specialist work should auto-dispatch without waiting for a manual user request:
+For cclaw flow stages, machine-only specialist work should auto-dispatch without waiting for a manual user request. The table below is generated from the canonical stage dispatch registry:
 
-- **design/plan:** planner
-- **tdd:** test-author
-- **review:** reviewer + security-reviewer (security-reviewer is always mandatory; produce an explicit no-change attestation when no trust boundaries moved)
-- **ship:** doc-updater
+${automaticStageDelegationTable()}
 
 Human input remains mandatory only at explicit approval gates (plan approval, user challenge resolution, release finalization mode).
 
-### Review parallel fan-out protocol
+### Review dispatch protocol
 
-In review stage, prefer a fixed six-pass fan-out before reconciliation:
+In review stage, run mandatory specialists \`${formatAgentList(stageSummary("review").mandatoryAgents)}\` by default:
 
-1. \`review-spec\` (Layer 1)
-2. \`review-correctness\` (Layer 2a)
-3. \`review-security\` (Layer 2b)
-4. \`review-performance\` (Layer 2c)
-5. \`review-architecture\` (Layer 2d)
-6. \`review-external-safety\` (Layer 2e)
+1. \`reviewer\` owns Layer 1 spec compliance plus integrated Layer 2 tags (correctness, performance, architecture, external-safety).
+2. \`security-reviewer\` owns the mandatory security sweep or no-change attestation.
+3. Add \`adversarial-review\` only when trust boundaries changed, Critical/Important ambiguity remains, or the diff is both large and high-risk.
 
-Dispatch these in parallel where the harness supports isolated workers, then run
-one reconciliation pass that merges findings into \`.cclaw/artifacts/07-review-army.json\`
-with explicit source tags per finding.
+Reconcile findings into \`.cclaw/artifacts/07-review-army.json\` with explicit source tags per finding.
 
-### TDD phase fan-out protocol
+### TDD evidence protocol
 
-Treat RED, GREEN, and REFACTOR as separate delegated intents:
+Treat RED, GREEN, and REFACTOR as phase intents inside one mandatory \`test-author\` delegation by default:
 
 - \`tdd-red\`: tests only, no production writes
 - \`tdd-green\`: minimal production implementation, no new RED tests
 - \`tdd-refactor\`: cleanup only after GREEN is proven
 
 Set \`CCLAW_ACTIVE_AGENT\` to the active phase name when possible so workflow-guard
-can enforce phase-appropriate write boundaries.
+can enforce phase-appropriate write boundaries. Use separate workers only when the harness and slice boundary make the split genuinely useful; the mandatory gate is the evidence-backed \`test-author\` row, not three default subagents.
 
 ## Model & Harness Routing Notes
 
 ### Harness routing
 
-| Harness | Fallback | Delegation tool | Structured ask | Parity playbook |
+| Harness | Fallback | Delegation tool | Structured ask | Capability source |
 |---|---|---|---|---|
-| Claude | \`native\` | Task (named subagent_type) | AskUserQuestion | \`.cclaw/references/harnesses/claude-playbook.md\` |
-| Cursor | \`generic-dispatch\` | Task (generic subagent_type: explore/generalPurpose/…) | AskQuestion | \`.cclaw/references/harnesses/cursor-playbook.md\` |
-| OpenCode | \`role-switch\` | plugin dispatch _or_ in-session role-switch | \`question\` (permission-gated; \`permission.question: "allow"\`) | \`.cclaw/references/harnesses/opencode-playbook.md\` |
-| Codex | \`role-switch\` | in-session role-switch (mandatory evidenceRefs) | \`request_user_input\` (experimental; Plan / Collaboration mode) | \`.cclaw/references/harnesses/codex-playbook.md\` |
+| Claude | \`native\` | Task (named subagent_type) | AskUserQuestion | \`cclaw doctor\` |
+| Cursor | \`generic-dispatch\` | Task (generic subagent_type: explore/generalPurpose/…) | AskQuestion | \`cclaw doctor\` |
+| OpenCode | \`role-switch\` | plugin dispatch _or_ in-session role-switch | \`question\` (permission-gated; \`permission.question: "allow"\`) | \`cclaw doctor\` |
+| Codex | \`role-switch\` | in-session role-switch (mandatory evidenceRefs) | \`request_user_input\` (experimental; Plan / Collaboration mode) | \`cclaw doctor\` |
 
 **Dispatch rules driven by \`subagentFallback\`:**
 
 - \`native\` — use the harness's own named subagent primitive; delegation entry uses \`fulfillmentMode: "isolated"\`.
-- \`generic-dispatch\` — map each cclaw agent onto the generic dispatcher via the harness playbook; delegation entry uses \`fulfillmentMode: "generic-dispatch"\`.
+- \`generic-dispatch\` — map each cclaw agent onto the generic dispatcher with a role prompt; delegation entry uses \`fulfillmentMode: "generic-dispatch"\`.
 - \`role-switch\` — announce the role in-session, perform the work, append a delegation row with \`fulfillmentMode: "role-switch"\` and ≥1 \`evidenceRef\`. Without evidenceRefs the \`delegation:mandatory:current_stage\` check reports \`missingEvidence\` and blocks stage completion.
 
 The only time a \`harness_limitation\` waiver fires automatically is when every installed harness declares \`subagentFallback: "waiver"\`. cclaw 0.33 no longer maps Codex onto auto-waiver — the agent must role-switch with evidence.
@@ -119,9 +136,9 @@ Concrete per-stage rules so the controller does not have to guess which tier fit
 | design | planner (always) | security-reviewer (if trust boundary touched) | run \`research/framework-docs-lookup.md\` + \`research/best-practices-lookup.md\` in-thread | escalate one specialist to \`deep\` only if a failure mode is Critical-severity |
 | spec | — | reviewer (if spec > 200 lines or multiple ACs) | — | escalate to \`deep\` only for spec ↔ design contradictions |
 | plan | planner (solo, always) | — | — | never fan out at plan stage; one owner for dependency graph |
-| tdd | — | test-author (each slice) · reviewer (slice-local) | doc-updater (API surface changes) | escalate to \`deep\` only when a RED test cannot be expressed (design leak) |
-| review | — | reviewer · security-reviewer (both mandatory) | doc-updater for release-note drift checks | escalate a \`balanced\` reviewer to \`deep\` only when two reviewers disagree on severity |
-| ship | — | security-reviewer (if blast radius is high) | doc-updater (changelog/migration notes) | escalate to \`balanced\` reviewer only if preflight finds a regression |
+| tdd | — | ${formatAgentList(stageSummary("tdd").primaryAgents)} (per slice, carrying RED/GREEN/REFACTOR evidence) · reviewer (slice-local only when sliceReview triggers) | doc-updater (API surface changes) | escalate to \`deep\` only when a RED test cannot be expressed (design leak) |
+| review | — | ${formatAgentList(stageSummary("review").mandatoryAgents)} (both mandatory) | doc-updater for release-note drift checks | escalate a \`balanced\` reviewer to \`deep\` only when two reviewers disagree on severity |
+| ship | — | ${formatAgentList(stageSummary("ship").proactiveAgents)} (if blast radius is high) | doc-updater (changelog/migration notes) | escalate to \`balanced\` reviewer only if preflight finds a regression |
 
 **De-escalation rules (avoid over-spending):**
 - If a \`deep\` planner run returns low-uncertainty output (single unambiguous plan), do **not** add a second \`deep\` pass in the same stage.
@@ -134,6 +151,16 @@ Concrete per-stage rules so the controller does not have to guess which tier fit
 **Never dispatch a subagent without a concrete, self-contained task description pasted into the prompt. Do not pass file references the subagent must read to understand its task.**
 
 If you catch yourself writing “read PLAN.md Task 3” or “implement the next unchecked item,” stop: expand the work into explicit text in the Task body before dispatching.
+
+## Anti-Drift Team Defaults
+
+Borrow the good part of Team/Ruflo-style orchestration without adding a swarm runtime:
+
+- **One controller owns alignment.** The parent keeps the task list, gate state, and final synthesis.
+- **Small fan-out by default.** Run at most 3-5 parallel agents, and only for independent read-only research or non-overlapping files.
+- **No parallel writes to adjacent surfaces.** If tasks may touch the same module, serialize them.
+- **Checkpoint before synthesis.** Each agent returns status, files inspected/changed, evidence, and blockers before the parent acts.
+- **Consensus is for hard calls only.** Use two reviewers when severity or architecture is disputed; otherwise one evidence-backed reviewer is enough.
 
 ## When to Use
 

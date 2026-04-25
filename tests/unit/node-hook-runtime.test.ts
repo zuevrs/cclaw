@@ -57,26 +57,15 @@ async function runNodeHook(
 }
 
 describe("node hook runtime", () => {
-  it("session-start emits bootstrap payload and writes knowledge digest", async () => {
+  it("session-start emits bootstrap payload with inline knowledge digest", async () => {
     const root = await createTempProject("node-hook-session-start");
     await fs.mkdir(path.join(root, ".cclaw/state"), { recursive: true });
-    await fs.mkdir(path.join(root, ".cclaw/contexts"), { recursive: true });
     await fs.mkdir(path.join(root, ".cclaw/skills/using-cclaw"), { recursive: true });
     await fs.writeFile(path.join(root, ".cclaw/state/flow-state.json"), JSON.stringify({
       currentStage: "review",
       activeRunId: "run-node",
       completedStages: ["brainstorm", "scope", "design", "spec", "plan", "tdd"]
     }, null, 2), "utf8");
-    await fs.writeFile(path.join(root, ".cclaw/state/checkpoint.json"), JSON.stringify({
-      stage: "review",
-      runId: "run-node",
-      status: "in_progress",
-      timestamp: "2026-04-20T00:00:00Z"
-    }, null, 2), "utf8");
-    await fs.writeFile(path.join(root, ".cclaw/state/context-mode.json"), JSON.stringify({
-      activeMode: "review"
-    }, null, 2), "utf8");
-    await fs.writeFile(path.join(root, ".cclaw/contexts/review.md"), "# review\n", "utf8");
     await fs.writeFile(path.join(root, ".cclaw/knowledge.jsonl"), [
       JSON.stringify({
         type: "pattern",
@@ -86,7 +75,7 @@ describe("node hook runtime", () => {
         domain: "review",
         stage: "review",
         origin_stage: "review",
-        origin_feature: "feature-a",
+        origin_run: "feature-a",
         frequency: 2,
         universality: "project",
         maturity: "raw",
@@ -110,25 +99,20 @@ describe("node hook runtime", () => {
       "";
     expect(context).toContain("cclaw loaded. Flow: stage=review");
     expect(context).toContain("run=run-node");
-    expect(context).toContain("Context mode: review");
-    expect(context).toContain("Checkpoint: stage=review");
     expect(context).toContain("Knowledge digest");
-    const digest = await fs.readFile(path.join(root, ".cclaw/state/knowledge-digest.md"), "utf8");
-    expect(digest).toContain("Knowledge digest (auto-generated)");
-    expect(digest).toContain("split into focused diffs");
+    expect(context).toContain("split into focused diffs");
+    await expect(fs.stat(path.join(root, ".cclaw/state/knowledge-digest.md"))).rejects.toBeDefined();
   });
 
   it("session-start refreshes compound-readiness.json and surfaces a nudge during review", async () => {
     const root = await createTempProject("node-hook-compound-readiness");
     await fs.mkdir(path.join(root, ".cclaw/state"), { recursive: true });
-    await fs.mkdir(path.join(root, ".cclaw/contexts"), { recursive: true });
     await fs.mkdir(path.join(root, ".cclaw/skills/using-cclaw"), { recursive: true });
     await fs.writeFile(path.join(root, ".cclaw/state/flow-state.json"), JSON.stringify({
       currentStage: "review",
       activeRunId: "run-compound",
       completedStages: ["brainstorm", "scope", "design", "spec", "plan", "tdd"]
     }, null, 2), "utf8");
-    await fs.writeFile(path.join(root, ".cclaw/contexts/review.md"), "# review\n", "utf8");
     await fs.writeFile(path.join(root, ".cclaw/skills/using-cclaw/SKILL.md"), "# Using cclaw\n", "utf8");
 
     const baseRow = {
@@ -137,7 +121,7 @@ describe("node hook runtime", () => {
       domain: null,
       stage: "review",
       origin_stage: "review",
-      origin_feature: null,
+      origin_run: null,
       project: "cclaw",
       universality: "project",
       maturity: "raw",
@@ -192,14 +176,12 @@ describe("node hook runtime", () => {
   it("session-start refreshes compound-readiness.json silently outside review/ship", async () => {
     const root = await createTempProject("node-hook-compound-readiness-silent");
     await fs.mkdir(path.join(root, ".cclaw/state"), { recursive: true });
-    await fs.mkdir(path.join(root, ".cclaw/contexts"), { recursive: true });
     await fs.mkdir(path.join(root, ".cclaw/skills/using-cclaw"), { recursive: true });
     await fs.writeFile(path.join(root, ".cclaw/state/flow-state.json"), JSON.stringify({
       currentStage: "plan",
       activeRunId: "run-plan",
       completedStages: ["brainstorm", "scope", "design", "spec"]
     }, null, 2), "utf8");
-    await fs.writeFile(path.join(root, ".cclaw/contexts/plan.md"), "# plan\n", "utf8");
     await fs.writeFile(path.join(root, ".cclaw/skills/using-cclaw/SKILL.md"), "# Using cclaw\n", "utf8");
     await fs.writeFile(path.join(root, ".cclaw/knowledge.jsonl"), JSON.stringify({
       type: "pattern",
@@ -207,7 +189,7 @@ describe("node hook runtime", () => {
       domain: null,
       stage: "review",
       origin_stage: "review",
-      origin_feature: null,
+      origin_run: null,
       project: "cclaw",
       universality: "project",
       maturity: "raw",
@@ -240,14 +222,12 @@ describe("node hook runtime", () => {
   it("session-start acquires the CLI-compatible knowledge lock before reading knowledge.jsonl", async () => {
     const root = await createTempProject("node-hook-knowledge-lock");
     await fs.mkdir(path.join(root, ".cclaw/state"), { recursive: true });
-    await fs.mkdir(path.join(root, ".cclaw/contexts"), { recursive: true });
     await fs.mkdir(path.join(root, ".cclaw/skills/using-cclaw"), { recursive: true });
     await fs.writeFile(path.join(root, ".cclaw/state/flow-state.json"), JSON.stringify({
       currentStage: "plan",
       activeRunId: "run-lock",
       completedStages: ["brainstorm", "scope", "design", "spec"]
     }, null, 2), "utf8");
-    await fs.writeFile(path.join(root, ".cclaw/contexts/plan.md"), "# plan\n", "utf8");
     await fs.writeFile(path.join(root, ".cclaw/skills/using-cclaw/SKILL.md"), "# Using cclaw\n", "utf8");
     await fs.writeFile(path.join(root, ".cclaw/knowledge.jsonl"), "", "utf8");
 
@@ -275,14 +255,12 @@ describe("node hook runtime", () => {
   it("session-start records a breadcrumb when ralph-loop / compound-readiness fail", async () => {
     const root = await createTempProject("node-hook-breadcrumb");
     await fs.mkdir(path.join(root, ".cclaw/state"), { recursive: true });
-    await fs.mkdir(path.join(root, ".cclaw/contexts"), { recursive: true });
     await fs.mkdir(path.join(root, ".cclaw/skills/using-cclaw"), { recursive: true });
     await fs.writeFile(path.join(root, ".cclaw/state/flow-state.json"), JSON.stringify({
       currentStage: "tdd",
       activeRunId: "run-bad",
       completedStages: ["brainstorm", "scope", "design", "spec", "plan"]
     }, null, 2), "utf8");
-    await fs.writeFile(path.join(root, ".cclaw/contexts/tdd.md"), "# tdd\n", "utf8");
     await fs.writeFile(path.join(root, ".cclaw/skills/using-cclaw/SKILL.md"), "# Using cclaw\n", "utf8");
     await fs.writeFile(path.join(root, ".cclaw/knowledge.jsonl"), "", "utf8");
 
@@ -302,7 +280,7 @@ describe("node hook runtime", () => {
     expect(breadcrumbs).toContain("session-start:ralph-loop");
   });
 
-  it("stop-checkpoint preserves progress fields while syncing stage/run", async () => {
+  it("stop-handoff emits a handoff reminder without writing checkpoint state", async () => {
     const root = await createTempProject("node-hook-stop");
     await fs.mkdir(path.join(root, ".cclaw/state"), { recursive: true });
     await fs.writeFile(path.join(root, ".cclaw/state/flow-state.json"), JSON.stringify({
@@ -310,38 +288,16 @@ describe("node hook runtime", () => {
       activeRunId: "run-plan",
       completedStages: ["brainstorm", "scope"]
     }, null, 2), "utf8");
-    await fs.writeFile(path.join(root, ".cclaw/state/checkpoint.json"), JSON.stringify({
-      stage: "scope",
-      runId: "old",
-      status: "blocked",
-      lastCompletedStep: "captured assumptions",
-      remainingSteps: ["ask approval"],
-      blockers: ["need PM answer"]
-    }, null, 2), "utf8");
 
     const result = await runNodeHook(
       root,
-      "stop-checkpoint",
+      "stop-handoff",
       nodeHookRuntimeScript(),
       { loop_count: 0 }
     );
     expect(result.code).toBe(0);
-    const checkpoint = JSON.parse(
-      await fs.readFile(path.join(root, ".cclaw/state/checkpoint.json"), "utf8")
-    ) as {
-      stage: string;
-      runId: string;
-      status: string;
-      lastCompletedStep: string;
-      remainingSteps: string[];
-      blockers: string[];
-    };
-    expect(checkpoint.stage).toBe("plan");
-    expect(checkpoint.runId).toBe("run-plan");
-    expect(checkpoint.status).toBe("blocked");
-    expect(checkpoint.lastCompletedStep).toBe("captured assumptions");
-    expect(checkpoint.remainingSteps).toEqual(["ask approval"]);
-    expect(checkpoint.blockers).toEqual(["need PM answer"]);
+    expect(result.stdout).toContain("session ending (stage=plan");
+    await expect(fs.stat(path.join(root, ".cclaw/state/checkpoint.json"))).rejects.toBeDefined();
   });
 
   it("prompt-guard supports advisory and strict modes", async () => {

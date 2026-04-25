@@ -14,7 +14,6 @@ const config = {
     "tests/unit/tdd-cycle.test.ts",
     "tests/unit/runs.test.ts"
   ],
-  ignorePatterns: ["docs/references/**"],
   reporters: ["clear-text", "progress", "html"],
   thresholds: {
     high: 95,

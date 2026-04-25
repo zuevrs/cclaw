@@ -1,6 +1,5 @@
 import { describe, expect, it } from "vitest";
 import { HARNESS_ADAPTERS, harnessTier } from "../../src/harness-adapters.js";
-import { harnessIntegrationDocMarkdown } from "../../src/content/harness-doc.js";
 
 describe("harness parity model", () => {
   it("classifies harnesses into explicit tiers", () => {
@@ -48,12 +47,5 @@ describe("harness parity model", () => {
     expect(HARNESS_ADAPTERS.codex.capabilities.structuredAsk).toBe("request_user_input");
   });
 
-  it("renders harness docs from capability metadata", () => {
-    const markdown = harnessIntegrationDocMarkdown();
-    expect(markdown).toContain("Generated from `src/harness-adapters.ts` capabilities");
-    expect(markdown).toContain("`tier1` (full native automation)");
-    expect(markdown).toContain("`tier2` (partial automation with waivers)");
-    expect(markdown).toContain("Semantic hook event coverage");
-  });
 });
 

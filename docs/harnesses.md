@@ -4,12 +4,12 @@ Generated from `src/harness-adapters.ts` capabilities and hook event mappings.
 
 ## Capability tiers
 
-| Harness | ID | Tier | Native dispatch | Fallback | Hook surface | Structured ask | Playbook |
-|---|---|---|---|---|---|---|---|
-| Claude Code | `claude` | `tier1` (full native automation) | full | native | full | AskUserQuestion | `references/harnesses/claude-playbook.md` |
-| Cursor | `cursor` | `tier2` (partial automation with waivers) | generic | generic-dispatch | full | AskQuestion | `references/harnesses/cursor-playbook.md` |
-| OpenCode | `opencode` | `tier2` (partial automation with waivers) | partial | role-switch | plugin | question | `references/harnesses/opencode-playbook.md` |
-| OpenAI Codex | `codex` | `tier2` (partial automation with waivers) | none | role-switch | limited | request_user_input | `references/harnesses/codex-playbook.md` |
+| Harness | ID | Tier | Native dispatch | Fallback | Hook surface | Structured ask |
+|---|---|---|---|---|---|---|
+| Claude Code | `claude` | `tier1` (full native automation) | full | native | full | AskUserQuestion |
+| Cursor | `cursor` | `tier2` (supported with fallback paths) | generic | generic-dispatch | full | AskQuestion |
+| OpenCode | `opencode` | `tier2` (supported with fallback paths) | partial | role-switch | plugin | question |
+| OpenAI Codex | `codex` | `tier2` (supported with fallback paths) | none | role-switch | limited | request_user_input |
 
 Fallback legend:
 
@@ -37,8 +37,8 @@ Design-stage research fleet uses the same parity model:
 | `pre_tool_prompt_guard` | PreToolUse -> prompt-guard | preToolUse -> prompt-guard | plugin tool.execute.before -> prompt-guard | PreToolUse matcher Bash -> prompt-guard (plus UserPromptSubmit for non-Bash prompts) |
 | `pre_tool_workflow_guard` | PreToolUse -> workflow-guard | preToolUse -> workflow-guard | plugin tool.execute.before -> workflow-guard | PreToolUse matcher Bash -> workflow-guard (Bash-only) |
 | `post_tool_context_monitor` | PostToolUse -> context-monitor | postToolUse -> context-monitor | plugin tool.execute.after -> context-monitor | PostToolUse matcher Bash -> context-monitor (Bash-only) |
-| `stop_checkpoint` | Stop -> stop-checkpoint | stop -> stop-checkpoint | plugin session.idle -> stop-checkpoint | Stop -> stop-checkpoint |
-| `precompact_digest` | PreCompact -> pre-compact | sessionCompact -> pre-compact | plugin session.compacted -> pre-compact | missing |
+| `stop_handoff` | Stop -> stop-handoff | stop -> stop-handoff | plugin session.idle -> stop-handoff | Stop -> stop-handoff |
+| `precompact_compat` | PreCompact -> pre-compact | sessionCompact -> pre-compact | plugin session.compacted -> pre-compact | missing |
 
 ## Hook event casing
 
@@ -71,27 +71,22 @@ shared casing silently breaks generated wiring.
 All harnesses receive the same utility commands:
 
 - `/cc` - flow entry and resume
-- `/cc-next` - stage progression
+- `/cc-next` - stage progression and post-ship closeout
 - `/cc-ideate` - ideate mode for ranked repo-improvement backlog
 - `/cc-view` - read-only router for status/tree/diff
-- `/cc-ops` - operations router for feature/tdd-log/retro/compound/archive/rewind
 
 Read-only subcommands:
 - `/cc-view status` - visual flow snapshot
 - `/cc-view tree` - deep flow tree (stages, artifacts, stale markers)
 - `/cc-view diff` - before/after flow-state diff map
 
-Operations subcommands:
-- `/cc-ops feature ...` - git-worktree feature isolation and routing
-- `/cc-ops tdd-log ...` - explicit RED/GREEN/REFACTOR evidence log
-- `/cc-ops retro` - mandatory retrospective gate before archive
-- `/cc-ops compound` - lift repeated learnings into durable rules/skills
-- `/cc-ops archive` - archive active run from harness flow
-- `/cc-ops rewind ...` - rewind flow and invalidate downstream stages
-- `/cc-ops rewind --ack ...` - clear stale stage markers after redo
+Operational work is handled by `/cc-next` and the CLI (`cclaw archive`, `cclaw internal ...`) rather than a separate slash-command router. Normal post-ship closeout stays on `/cc-next`; `cclaw archive` is the explicit/manual archive path and the runtime used when closeout reaches `ready_to_archive`.
 
-Stage order remains canonical:
+Critical-path stage order remains canonical:
 `brainstorm -> scope -> design -> spec -> plan -> tdd -> review -> ship`
+
+Every track then closes out through:
+`retro -> compound -> archive`
 
 ## Stage -> skill folder mapping
 
@@ -116,7 +111,6 @@ Always generated:
 
 - `.cclaw/commands/*.md`
 - `.cclaw/skills/*/SKILL.md`
-- `.cclaw/references/**`
 - `.cclaw/state/*.json|*.jsonl`
 - `AGENTS.md` managed block
 
@@ -125,10 +119,10 @@ Harness-specific additions:
 - `claude`: `.claude/commands/cc*.md`, `.claude/hooks/hooks.json`
 - `cursor`: `.cursor/commands/cc*.md`, `.cursor/hooks.json`, `.cursor/rules/cclaw-workflow.mdc`
 - `opencode`: `.opencode/commands/cc*.md`, `.opencode/plugins/cclaw-plugin.mjs`, opencode plugin registration (`permission.question: "allow"` + `OPENCODE_ENABLE_QUESTION_TOOL=1` so structured asks can route through ACP question tooling)
-- `codex`: `.agents/skills/cc/SKILL.md`, `.agents/skills/cc-next/SKILL.md`, `.agents/skills/cc-ideate/SKILL.md`, `.agents/skills/cc-view/SKILL.md`, `.agents/skills/cc-ops/SKILL.md`, `.codex/hooks.json` (Codex CLI reads `.agents/skills/` for custom skills and consumes `.codex/hooks.json` on v0.114+ when `[features] codex_hooks = true` is set in `~/.codex/config.toml`. `.codex/commands/` and the legacy `.agents/skills/cclaw-cc*/` layout from v0.39.x are auto-cleaned on sync.)
+- `codex`: `.agents/skills/cc/SKILL.md`, `.agents/skills/cc-next/SKILL.md`, `.agents/skills/cc-ideate/SKILL.md`, `.agents/skills/cc-view/SKILL.md`, `.codex/hooks.json` (Codex CLI reads `.agents/skills/` for custom skills and consumes `.codex/hooks.json` on v0.114+ when `[features] codex_hooks = true` is set in `~/.codex/config.toml`. `.codex/commands/` and the legacy `.agents/skills/cclaw-cc*/` layout from v0.39.x are auto-cleaned on sync.)
 
 ## Runtime observability
 
-- `.cclaw/state/harness-gaps.json` captures per-harness capability gaps for the active config.
 - `cclaw doctor` validates shim, hook, and lifecycle surfaces against this capability model.
+- `/cc-view status` and `/cc-view tree` surface the same harness tier/fallback facts from the generated runtime metadata.
 

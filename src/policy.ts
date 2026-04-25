@@ -2,7 +2,7 @@ import fs from "node:fs/promises";
 import path from "node:path";
 import { RUNTIME_ROOT } from "./constants.js";
 import { FLOW_STAGES } from "./types.js";
-import { stageSchema, stagePolicyNeedles } from "./content/stage-schema.js";
+import { stageSchema } from "./content/stage-schema.js";
 import { stageSkillFolder } from "./content/skills.js";
 import { exists } from "./fs-utils.js";
 import type { HarnessId } from "./types.js";
@@ -37,35 +37,12 @@ export async function policyChecks(projectRoot: string, options: PolicyOptions =
   for (const stage of FLOW_STAGES) {
     const folder = stageSkillFolder(stage);
     const schema = stageSchema(stage);
-    const commandFile = `${RUNTIME_ROOT}/commands/${stage}.md`;
     const skillFile = `${RUNTIME_ROOT}/skills/${folder}/SKILL.md`;
-
-    // --- thin command mandatory sections ---
-    for (const heading of [
-      "## HARD-GATE",
-      "## Gates",
-      "## Exit",
-      "## Anchors",
-      "## Context Hydration"
-    ]) {
-      rules.push({
-        filePath: commandFile,
-        needle: heading,
-        name: `command:${stage}:section:${heading.replace(/^## /, "").toLowerCase().replace(/[^a-z0-9]+/g, "_")}`
-      });
-    }
-
-    // --- command must reference the skill ---
-    rules.push({
-      filePath: commandFile,
-      needle: `${folder}/SKILL.md`,
-      name: `command:${stage}:skill_ref`
-    });
 
     // --- skill mandatory sections ---
     for (const heading of [
       "## Process",
-      "## Verification",
+      "## Exit Criteria",
       "## Interaction Protocol",
       "## Anti-Patterns & Red Flags",
       "## HARD-GATE",
@@ -101,15 +78,6 @@ export async function policyChecks(projectRoot: string, options: PolicyOptions =
         name: `skill:${stage}:section:verification_before_completion`
       });
     }
-
-    // --- policy needles in commands ---
-    for (const needle of stagePolicyNeedles(stage)) {
-      rules.push({
-        filePath: commandFile,
-        needle,
-        name: `command:${stage}:anchor:${needle.toLowerCase().replace(/[^a-z0-9]+/g, "_")}`
-      });
-    }
   }
 
   // --- utility skill checks ---
@@ -117,36 +85,19 @@ export async function policyChecks(projectRoot: string, options: PolicyOptions =
   const utilitySkillChecks: Array<{ file: string; needle: string; name: string }> = [
     { file: runtimeFile("skills/learnings/SKILL.md"), needle: "strict JSONL schema", name: "utility_skill:learnings:jsonl_schema" },
     { file: runtimeFile("skills/learnings/SKILL.md"), needle: "knowledge.jsonl", name: "utility_skill:learnings:jsonl_store" },
-    { file: runtimeFile("skills/learnings/SKILL.md"), needle: "type, trigger, action, confidence, domain, stage, origin_stage, origin_feature, frequency, universality, maturity, created, first_seen_ts, last_seen_ts, project", name: "utility_skill:learnings:field_order" },
-    { file: runtimeFile("skills/learnings/SKILL.md"), needle: "## Subcommands", name: "utility_skill:learnings:subcommands" },
+    { file: runtimeFile("skills/learnings/SKILL.md"), needle: "type, trigger, action, confidence, domain, stage, origin_stage, origin_run, frequency, universality, maturity, created, first_seen_ts, last_seen_ts, project", name: "utility_skill:learnings:field_order" },
+    { file: runtimeFile("skills/learnings/SKILL.md"), needle: "## Manual Actions", name: "utility_skill:learnings:manual_actions" },
     { file: runtimeFile("skills/learnings/SKILL.md"), needle: "## HARD-GATE", name: "utility_skill:learnings:hard_gate" },
-    { file: runtimeFile("commands/learn.md"), needle: "## Subcommands", name: "utility_command:learn:subcommands" },
+    { file: runtimeFile("commands/start.md"), needle: "## Algorithm", name: "utility_command:start:algorithm" },
+    { file: runtimeFile("commands/next.md"), needle: "## Algorithm", name: "utility_command:next:algorithm" },
+    { file: runtimeFile("commands/next.md"), needle: "closeout.shipSubstate", name: "utility_command:next:closeout_chain" },
     { file: runtimeFile("commands/ideate.md"), needle: "## Algorithm", name: "utility_command:ideate:algorithm" },
     { file: runtimeFile("skills/flow-ideate/SKILL.md"), needle: "## Protocol", name: "utility_skill:ideate:protocol" },
     { file: runtimeFile("skills/flow-ideate/SKILL.md"), needle: "## HARD-GATE", name: "utility_skill:ideate:hard_gate" },
-    { file: runtimeFile("commands/status.md"), needle: "bar:", name: "utility_command:status:visual_bar" },
-    { file: runtimeFile("commands/status.md"), needle: "/cc-view tree · /cc-view diff", name: "utility_command:status:tree_diff_link" },
-    { file: runtimeFile("commands/tree.md"), needle: "## Algorithm", name: "utility_command:tree:algorithm" },
-    { file: runtimeFile("skills/flow-tree/SKILL.md"), needle: "## Protocol", name: "utility_skill:tree:protocol" },
-    { file: runtimeFile("skills/flow-tree/SKILL.md"), needle: "## HARD-GATE", name: "utility_skill:tree:hard_gate" },
-    { file: runtimeFile("commands/diff.md"), needle: "## Algorithm", name: "utility_command:diff:algorithm" },
-    { file: runtimeFile("skills/flow-diff/SKILL.md"), needle: "## Protocol", name: "utility_skill:diff:protocol" },
-    { file: runtimeFile("skills/flow-diff/SKILL.md"), needle: "## HARD-GATE", name: "utility_skill:diff:hard_gate" },
-    { file: runtimeFile("commands/feature.md"), needle: "## Subcommands", name: "utility_command:feature:subcommands" },
-    { file: runtimeFile("skills/using-git-worktrees/SKILL.md"), needle: "## Protocol", name: "utility_skill:feature:protocol" },
-    { file: runtimeFile("skills/using-git-worktrees/SKILL.md"), needle: "## HARD-GATE", name: "utility_skill:feature:hard_gate" },
-    { file: runtimeFile("commands/tdd-log.md"), needle: "## Subcommands", name: "utility_command:tdd_log:subcommands" },
-    { file: runtimeFile("skills/tdd-cycle-log/SKILL.md"), needle: "## Protocol", name: "utility_skill:tdd_log:protocol" },
-    { file: runtimeFile("skills/tdd-cycle-log/SKILL.md"), needle: "## HARD-GATE", name: "utility_skill:tdd_log:hard_gate" },
-    { file: runtimeFile("commands/retro.md"), needle: "## Algorithm", name: "utility_command:retro:algorithm" },
-    { file: runtimeFile("skills/flow-retro/SKILL.md"), needle: "## Protocol", name: "utility_skill:retro:protocol" },
-    { file: runtimeFile("skills/flow-retro/SKILL.md"), needle: "## HARD-GATE", name: "utility_skill:retro:hard_gate" },
-    { file: runtimeFile("commands/compound.md"), needle: "## Algorithm", name: "utility_command:compound:algorithm" },
-    { file: runtimeFile("skills/flow-compound/SKILL.md"), needle: "## Protocol", name: "utility_skill:compound:protocol" },
-    { file: runtimeFile("skills/flow-compound/SKILL.md"), needle: "## HARD-GATE", name: "utility_skill:compound:hard_gate" },
-    { file: runtimeFile("commands/rewind.md"), needle: "## Algorithm", name: "utility_command:rewind:algorithm" },
-    { file: runtimeFile("skills/flow-rewind/SKILL.md"), needle: "## Protocol", name: "utility_skill:rewind:protocol" },
-    { file: runtimeFile("skills/flow-rewind/SKILL.md"), needle: "## HARD-GATE", name: "utility_skill:rewind:hard_gate" },
+    { file: runtimeFile("commands/view.md"), needle: "## Routing", name: "utility_command:view:routing" },
+    { file: runtimeFile("skills/flow-view/SKILL.md"), needle: "## Status Subcommand", name: "utility_skill:view:status_section" },
+    { file: runtimeFile("skills/flow-view/SKILL.md"), needle: "## Tree Subcommand", name: "utility_skill:view:tree_section" },
+    { file: runtimeFile("skills/flow-view/SKILL.md"), needle: "## Diff Subcommand", name: "utility_skill:view:diff_section" },
     { file: runtimeFile("skills/subagent-dev/SKILL.md"), needle: "## HARD-GATE", name: "utility_skill:sdd:hard_gate" },
     { file: runtimeFile("skills/subagent-dev/SKILL.md"), needle: "## Status Contract", name: "utility_skill:sdd:status_contract" },
     { file: runtimeFile("skills/subagent-dev/SKILL.md"), needle: "Implementer", name: "utility_skill:sdd:implementer_template" },
@@ -167,63 +118,16 @@ export async function policyChecks(projectRoot: string, options: PolicyOptions =
     { file: runtimeFile("skills/using-cclaw/SKILL.md"), needle: "## Routing flow", name: "meta_skill:routing_flow" },
     { file: runtimeFile("skills/using-cclaw/SKILL.md"), needle: "## Task classification", name: "meta_skill:task_classification" },
     { file: runtimeFile("skills/using-cclaw/SKILL.md"), needle: "## Stage quick map", name: "meta_skill:stage_quick_map" },
-    { file: runtimeFile("skills/using-cclaw/SKILL.md"), needle: "## Contextual skill activation", name: "meta_skill:contextual_skills" },
-    { file: runtimeFile("skills/using-cclaw/SKILL.md"), needle: "## Protocol references", name: "meta_skill:protocol_refs" },
+    { file: runtimeFile("skills/using-cclaw/SKILL.md"), needle: "## Whole flow map", name: "meta_skill:whole_flow_map" },
+    { file: runtimeFile("skills/using-cclaw/SKILL.md"), needle: "retro -> compound -> archive", name: "meta_skill:closeout_chain" },
+    { file: runtimeFile("skills/using-cclaw/SKILL.md"), needle: "## Contextual Skill Activation", name: "meta_skill:contextual_skills" },
+    { file: runtimeFile("skills/using-cclaw/SKILL.md"), needle: "## Protocol Behavior", name: "meta_skill:protocol_behavior" },
     { file: runtimeFile("skills/using-cclaw/SKILL.md"), needle: "## Failure guardrails", name: "meta_skill:failure_guardrails" },
-    { file: runtimeFile("references/protocols/decision.md"), needle: "# Decision Protocol", name: "protocol:decision" },
-    { file: runtimeFile("references/protocols/completion.md"), needle: "# Stage Completion Protocol", name: "protocol:completion" },
-    { file: runtimeFile("references/protocols/ethos.md"), needle: "# Engineering Ethos", name: "protocol:ethos" },
-    { file: runtimeFile("references/flow-map.md"), needle: "# cclaw Flow Map", name: "reference:flow_map:header" },
-    { file: runtimeFile("references/flow-map.md"), needle: "## Stages (8)", name: "reference:flow_map:stages" },
-    { file: runtimeFile("references/flow-map.md"), needle: "## Ralph Loop", name: "reference:flow_map:ralph_loop" },
-    { file: runtimeFile("references/flow-map.md"), needle: "## Key state files", name: "reference:flow_map:state_files" },
-    { file: runtimeFile("references/flow-map.md"), needle: "## Compound readiness", name: "reference:flow_map:compound_readiness" },
     { file: runtimeFile("skills/session/SKILL.md"), needle: "## Session Resume Protocol", name: "utility_skill:session:resume" },
-    { file: runtimeFile("skills/brainstorming/SKILL.md"), needle: "common-guidance.md", name: "stage_skill:shared_guidance_reference" },
+    { file: runtimeFile("skills/brainstorming/SKILL.md"), needle: "## Shared Stage Guidance", name: "stage_skill:shared_guidance_inline" },
 
-    { file: runtimeFile("skills/security/SKILL.md"), needle: "## HARD-GATE", name: "utility_skill:security:hard_gate" },
-    { file: runtimeFile("skills/security/SKILL.md"), needle: "## Checklist", name: "utility_skill:security:checklist" },
-    { file: runtimeFile("skills/security/SKILL.md"), needle: "## Severity Classification", name: "utility_skill:security:severity" },
-
-    { file: runtimeFile("skills/debugging/SKILL.md"), needle: "## HARD-GATE", name: "utility_skill:debugging:hard_gate" },
-    { file: runtimeFile("skills/debugging/SKILL.md"), needle: "## The Protocol", name: "utility_skill:debugging:protocol" },
-    { file: runtimeFile("skills/debugging/SKILL.md"), needle: "Step 1 — Reproduce", name: "utility_skill:debugging:reproduce" },
-    { file: runtimeFile("skills/debugging/SKILL.md"), needle: "## Testing-Specific Anti-Patterns", name: "utility_skill:debugging:test_antipatterns" },
-
-    { file: runtimeFile("skills/performance/SKILL.md"), needle: "## HARD-GATE", name: "utility_skill:performance:hard_gate" },
-    { file: runtimeFile("skills/performance/SKILL.md"), needle: "## Workflow", name: "utility_skill:performance:workflow" },
-    { file: runtimeFile("skills/performance/SKILL.md"), needle: "## Core Web Vitals Reference", name: "utility_skill:performance:cwv" },
-
-    { file: runtimeFile("skills/ci-cd/SKILL.md"), needle: "## HARD-GATE", name: "utility_skill:cicd:hard_gate" },
-    { file: runtimeFile("skills/ci-cd/SKILL.md"), needle: "## Quality Gate Pipeline", name: "utility_skill:cicd:pipeline" },
-    { file: runtimeFile("skills/ci-cd/SKILL.md"), needle: "## CI Debugging Protocol", name: "utility_skill:cicd:debugging" },
-
-    { file: runtimeFile("skills/docs/SKILL.md"), needle: "## HARD-GATE", name: "utility_skill:docs:hard_gate" },
-    { file: runtimeFile("skills/docs/SKILL.md"), needle: "## ADR (Architecture Decision Record)", name: "utility_skill:docs:adr" },
-    { file: runtimeFile("skills/docs/SKILL.md"), needle: "## README Guidance", name: "utility_skill:docs:readme" },
-    { file: runtimeFile("skills/executing-plans/SKILL.md"), needle: "## HARD-GATE", name: "utility_skill:executing_plans:hard_gate" },
-    { file: runtimeFile("skills/executing-plans/SKILL.md"), needle: "## Execution Protocol", name: "utility_skill:executing_plans:protocol" },
-    { file: runtimeFile("skills/executing-plans/SKILL.md"), needle: "## Batch Checklist", name: "utility_skill:executing_plans:batches" },
-    { file: runtimeFile("skills/verification-before-completion/SKILL.md"), needle: "## HARD-GATE", name: "utility_skill:verification_before_completion:hard_gate" },
-    { file: runtimeFile("skills/verification-before-completion/SKILL.md"), needle: "## Protocol", name: "utility_skill:verification_before_completion:protocol" },
-    { file: runtimeFile("skills/finishing-a-development-branch/SKILL.md"), needle: "## HARD-GATE", name: "utility_skill:finishing_branch:hard_gate" },
-    { file: runtimeFile("skills/finishing-a-development-branch/SKILL.md"), needle: "## Protocol", name: "utility_skill:finishing_branch:protocol" },
-    { file: runtimeFile("skills/context-engineering/SKILL.md"), needle: "## HARD-GATE", name: "utility_skill:context_engineering:hard_gate" },
-    { file: runtimeFile("skills/context-engineering/SKILL.md"), needle: "## Context Modes", name: "utility_skill:context_engineering:modes" },
-    { file: runtimeFile("skills/context-engineering/SKILL.md"), needle: "## Mode Switching Protocol", name: "utility_skill:context_engineering:switch" },
-    { file: runtimeFile("skills/source-driven-development/SKILL.md"), needle: "## HARD-GATE", name: "utility_skill:source_driven:hard_gate" },
-    { file: runtimeFile("skills/source-driven-development/SKILL.md"), needle: "## Protocol", name: "utility_skill:source_driven:protocol" },
-    { file: runtimeFile("skills/source-driven-development/SKILL.md"), needle: "## Selection Heuristics", name: "utility_skill:source_driven:heuristics" },
-    { file: runtimeFile("skills/frontend-accessibility/SKILL.md"), needle: "## HARD-GATE", name: "utility_skill:frontend_accessibility:hard_gate" },
-    { file: runtimeFile("skills/frontend-accessibility/SKILL.md"), needle: "## Checklist", name: "utility_skill:frontend_accessibility:checklist" },
-    { file: runtimeFile("skills/frontend-accessibility/SKILL.md"), needle: "## Anti-Patterns", name: "utility_skill:frontend_accessibility:anti_patterns" },
 
     { file: runtimeFile("hooks/run-hook.mjs"), needle: "activeRunId", name: "hooks:session_start:active_run" },
-    { file: runtimeFile("hooks/run-hook.mjs"), needle: "checkpoint.json", name: "hooks:session_start:checkpoint_ref" },
-    { file: runtimeFile("hooks/run-hook.mjs"), needle: "stage-activity.jsonl", name: "hooks:session_start:activity_ref" },
-    { file: runtimeFile("hooks/run-hook.mjs"), needle: "suggestion-memory.json", name: "hooks:session_start:suggestion_memory" },
-    { file: runtimeFile("hooks/run-hook.mjs"), needle: "context-warnings.jsonl", name: "hooks:session_start:context_warning_ref" },
-    { file: runtimeFile("hooks/run-hook.mjs"), needle: "checkpoint.json", name: "hooks:stop:checkpoint_write" },
     { file: runtimeFile("hooks/run-hook.mjs"), needle: "write_to_cclaw_runtime", name: "hooks:guard:risky_write_advisory" },
     { file: runtimeFile("hooks/run-hook.mjs"), needle: "stage_invocation_without_recent_flow_read", name: "hooks:workflow_guard:flow_read_reason" },
     { file: runtimeFile("hooks/run-hook.mjs"), needle: "stage_jump_", name: "hooks:workflow_guard:stage_jump_reason" },

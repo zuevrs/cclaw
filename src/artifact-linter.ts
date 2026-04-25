@@ -853,6 +853,8 @@ export interface LearningSeedEntry {
   domain?: string | null;
   stage?: FlowStage | null;
   origin_stage?: FlowStage | null;
+  origin_run?: string | null;
+  /** @deprecated Use `origin_run`. Accepted only for legacy learning bullets. */
   origin_feature?: string | null;
   frequency?: number;
   universality?: LearningUniversality;
@@ -862,6 +864,8 @@ export interface LearningSeedEntry {
   last_seen_ts?: string;
   project?: string | null;
   source?: LearningSource | null;
+  supersedes?: string[];
+  superseded_by?: string;
 }
 
 export interface LearningsParseResult {
@@ -894,6 +898,7 @@ const LEARNING_ALLOWED_KEYS = new Set([
   "domain",
   "stage",
   "origin_stage",
+  "origin_run",
   "origin_feature",
   "frequency",
   "universality",
@@ -902,7 +907,9 @@ const LEARNING_ALLOWED_KEYS = new Set([
   "first_seen_ts",
   "last_seen_ts",
   "project",
-  "source"
+  "source",
+  "supersedes",
+  "superseded_by"
 ]);
 
 function isIsoUtcTimestamp(value: string): boolean {
@@ -985,6 +992,9 @@ function parseLearningSeedEntry(raw: unknown, index: number): { ok: boolean; ent
       error: `Learnings bullet #${index} field "origin_stage" must be one of ${FLOW_STAGES.join(", ")} or null.`
     };
   }
+  if (obj.origin_run !== undefined && !isNullableString(obj.origin_run)) {
+    return { ok: false, error: `Learnings bullet #${index} field "origin_run" must be string or null.` };
+  }
   if (obj.origin_feature !== undefined && !isNullableString(obj.origin_feature)) {
     return { ok: false, error: `Learnings bullet #${index} field "origin_feature" must be string or null.` };
   }
@@ -1035,6 +1045,21 @@ function parseLearningSeedEntry(raw: unknown, index: number): { ok: boolean; ent
         error: `Learnings bullet #${index} field "${timestampField}" must be ISO UTC (YYYY-MM-DDTHH:MM:SSZ).`
       };
     }
+  }
+  if (obj.supersedes !== undefined) {
+    if (
+      !Array.isArray(obj.supersedes) ||
+      obj.supersedes.length === 0 ||
+      obj.supersedes.some((value) => typeof value !== "string" || value.trim().length === 0)
+    ) {
+      return { ok: false, error: `Learnings bullet #${index} field "supersedes" must be a non-empty array of strings.` };
+    }
+  }
+  if (
+    obj.superseded_by !== undefined &&
+    (typeof obj.superseded_by !== "string" || obj.superseded_by.trim().length === 0)
+  ) {
+    return { ok: false, error: `Learnings bullet #${index} field "superseded_by" must be a non-empty string.` };
   }
 
   return {
@@ -1149,7 +1174,6 @@ const FRONTMATTER_REQUIRED_KEYS = [
   "stage",
   "schema_version",
   "version",
-  "feature",
   "locked_decisions",
   "inputs_hash"
 ] as const;
@@ -1444,10 +1468,17 @@ export async function lintArtifact(
   const sections = extractH2Sections(raw);
   const projectConfig = await readConfig(projectRoot);
   const parsedFrontmatter = parseFrontmatter(raw);
-  const frontmatterMissingKeys = FRONTMATTER_REQUIRED_KEYS.filter((key) => {
+  const frontmatterMissingKeys: string[] = FRONTMATTER_REQUIRED_KEYS.filter((key) => {
     const value = parsedFrontmatter.values[key];
     return typeof value !== "string" || value.trim().length === 0;
   });
+  if (
+    parsedFrontmatter.hasFrontmatter &&
+    typeof parsedFrontmatter.values.run !== "string" &&
+    typeof parsedFrontmatter.values.feature !== "string"
+  ) {
+    frontmatterMissingKeys.push("run");
+  }
   const frontmatterStage = parsedFrontmatter.values.stage?.replace(/^['"]|['"]$/gu, "");
   const frontmatterSchemaVersion = parsedFrontmatter.values.schema_version?.replace(/^['"]|['"]$/gu, "");
   const frontmatterInputsHash = parsedFrontmatter.values.inputs_hash?.replace(/^['"]|['"]$/gu, "");
@@ -1461,7 +1492,7 @@ export async function lintArtifact(
   findings.push({
     section: "Frontmatter",
     required: requireFrontmatter,
-    rule: "Artifact must include frontmatter keys (stage, schema_version=1, version, feature, locked_decisions, inputs_hash=sha256:pending|sha256:<64hex>).",
+    rule: "Artifact must include frontmatter keys (stage, schema_version=1, version, run, locked_decisions, inputs_hash=sha256:pending|sha256:<64hex>). Legacy feature is accepted during migration.",
     found: parsedFrontmatter.hasFrontmatter ? frontmatterValid : true,
     details: !parsedFrontmatter.hasFrontmatter
       ? "Legacy artifact without YAML frontmatter (allowed for backward compatibility)."
