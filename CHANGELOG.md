@@ -31,14 +31,21 @@ workflow tool.
 - Removed saved `flow-state.snapshot.json` semantics from `/cc-view diff`.
   The view command is now read-only and uses visible git evidence instead
   of creating derived state.
+- Removed the stale `.cclaw/features/**` preview line and remaining
+  "active feature" wording from generated guidance after the feature
+  system removal.
 
 ### Changed
 
 - Renamed the generated stop hook from `stop-checkpoint` to `stop-handoff`
   to match the simplified session model. Old managed `stop-checkpoint`
   entries are still recognized during sync cleanup.
+- Renamed the stop safety law id to `stop-clean-or-handoff`; existing
+  configs using the old checkpoint id are still honored.
 - Simplified session bootstrap and stop behavior around artifact handoff
   instead of separate checkpoint/context/suggestion state files.
+- Centralized legacy cleanup lists in init/sync so removed surfaces are
+  easier to audit without changing upgrade cleanup behavior.
 
 ### Preserved
 
