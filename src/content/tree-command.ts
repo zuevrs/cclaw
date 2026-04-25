@@ -26,7 +26,7 @@ export function treeCommandContract(): string {
 
 Render a visual flow tree for quick orientation across stages, gates, delegations
 (with fulfillmentMode), ship closeout substate, stale markers, artifact presence,
-and per-harness playbook availability.
+and harness capability status.
 
 ## HARD-GATE
 

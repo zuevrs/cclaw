@@ -173,7 +173,7 @@ inside `/cc-next`, automatic closeout, or `cclaw archive`.
 | **`/cc <idea>`** | Classify the task, discover origin docs (`docs/prd/**`, ADRs, root `PRD.md`, …), sniff the stack, recommend a track, then start the first stage of that track. `/cc` without arguments resumes the current flow. |
 | **`/cc-next`** | The one progression primitive. Reads `flow-state.json`, checks gates + mandatory subagent delegations, and either resumes the current stage or advances to the next. `/cc-next` in a new session is how you **resume**. |
 | **`/cc-ideate`** | Repository improvement ideate mode. Scans for TODOs, flaky tests, oversized modules, docs drift, and recurring knowledge-store lessons, **persists the ranked backlog** to `.cclaw/artifacts/ideate-<date>-<slug>.md`, and ends with a concrete handoff: launch `/cc` on the selected candidate in the same session, save-and-close, or discard. Resume check on next run reuses any ideate artifact younger than 30 days. Never mutates `flow-state.json`. |
-| **`/cc-view`** | Read-only flow visibility. `/cc-view status` (default) shows stage progress, mandatory delegations with their fulfillment mode (isolated / generic-dispatch / role-switch), the ship closeout substate (retro → compound → archive), and the active harness parity row. `/cc-view tree` renders the same picture as a tree with a closeout sub-branch under ship and a per-harness playbook summary. `/cc-view diff` shows stage/gate/closeout/delegation deltas since the last run. Never mutates state (except diff's snapshot baseline). |
+| **`/cc-view`** | Read-only flow visibility. `/cc-view status` (default) shows stage progress, mandatory delegations with their fulfillment mode (isolated / generic-dispatch / role-switch), the ship closeout substate (retro → compound → archive), and the active harness parity row. `/cc-view tree` renders the same picture as a tree with a closeout sub-branch under ship and harness capability status from `cclaw doctor --explain`. `/cc-view diff` shows stage/gate/closeout/delegation changes from visible state and git evidence. Never mutates state. |
 
 Operational extras stay off the slash-command surface: `/cc-next` handles progression and closeout, while `cclaw archive` handles explicit archival/reset.
 
@@ -336,7 +336,7 @@ subagent as `completed` (or, on Codex / OpenCode, role-switched with
 ## Ship and closeout — automatic, resumable
 
 Shipping writes `08-ship.md`. `/cc-next` then automatically walks the
-feature through a deterministic three-step closeout without extra
+run through a deterministic three-step closeout without extra
 commands from you:
 
 1. **Retro (`09-retro.md`).** cclaw drafts a retrospective from your
