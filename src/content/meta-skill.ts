@@ -1,4 +1,10 @@
 import { RUNTIME_ROOT } from "../constants.js";
+import {
+  CLOSEOUT_CHAIN,
+  closeoutChainInline,
+  closeoutFlowMapSentence,
+  closeoutProtocolBehaviorSentence
+} from "./closeout-guidance.js";
 
 export const META_SKILL_NAME = "using-cclaw";
 
@@ -61,7 +67,7 @@ Task arrives
   ├─ Resume existing flow? -> /cc or /cc-next
   ├─ Knowledge operation? -> load the learnings skill
   ├─ Read-only workspace view? -> /cc-view [status|tree|diff]
-  ├─ Normal post-ship closeout? -> /cc-next drives retro -> compound -> archive
+  ├─ Normal post-ship closeout? -> /cc-next drives ${closeoutChainInline()}
   └─ Explicit early archival/reset? -> cclaw archive [--name=<slug>]
 \`\`\`
 
@@ -95,11 +101,11 @@ Use \`/cc <idea>\` for new work, \`/cc-next\` for progression and closeout, \`/c
 
 ## Whole flow map
 
-standard: brainstorm -> scope -> design -> spec -> plan -> tdd -> review -> ship -> retro -> compound -> archive
-medium: brainstorm -> spec -> plan -> tdd -> review -> ship -> retro -> compound -> archive
-quick: spec -> tdd -> review -> ship -> retro -> compound -> archive
+standard: brainstorm -> scope -> design -> spec -> plan -> tdd -> review -> ship -> ${CLOSEOUT_CHAIN}
+medium: brainstorm -> spec -> plan -> tdd -> review -> ship -> ${CLOSEOUT_CHAIN}
+quick: spec -> tdd -> review -> ship -> ${CLOSEOUT_CHAIN}
 
-The first stage names are the critical path. \`retro\`, \`compound\`, and \`archive\` are post-ship closeout substates under \`closeout.shipSubstate\`, not separate stage schemas or commands. Continue them with \`/cc-next\`.
+${closeoutFlowMapSentence()}
 
 Tracks may skip critical-path stages via \`flow-state.track\` + \`skippedStages\`.
 Use the current stage skill plus \`.cclaw/state/flow-state.json\` for orientation.
@@ -116,7 +122,7 @@ Use built-in judgment only when triggered by the current task:
 
 ## Protocol Behavior
 
-Keep decision, completion, and preamble discipline inline: ask only decision-changing questions, verify gates before advancing, and keep context compact. After \`ship\`, keep using \`/cc-next\` through \`retro -> compound -> archive\`; do not route normal closeout through a separate operations command.
+${closeoutProtocolBehaviorSentence()}
 
 ## Knowledge guidance
 

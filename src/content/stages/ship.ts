@@ -1,5 +1,6 @@
 import type { StageSchemaInput } from "./schema-types.js";
 import { SHIP_FINALIZATION_MODES } from "../../constants.js";
+import { closeoutSubstateInline } from "../closeout-guidance.js";
 import { decisionProtocolInstruction } from "../decision-protocol.js";
 
 // ---------------------------------------------------------------------------
@@ -155,6 +156,7 @@ export const SHIP: StageSchemaInput = {
     ]
   },
   // `done` exits the stage pipeline. Archive semantics are handled by the
-  // closeout substate machine (`idle` -> ... -> `archived`) in flow-state.
+  // closeout substate machine (`idle` -> ... -> `archived`) in flow-state under
+  // ${closeoutSubstateInline()}.
   next: "done",
 };

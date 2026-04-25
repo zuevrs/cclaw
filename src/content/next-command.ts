@@ -1,5 +1,10 @@
 import { RUNTIME_ROOT } from "../constants.js";
 import { stageSchema } from "./stage-schema.js";
+import {
+  closeoutChainInline,
+  closeoutNextCommandGuidance,
+  closeoutSubstateInline
+} from "./closeout-guidance.js";
 import { stageSkillFolder } from "./skills.js";
 
 const NEXT_SKILL_FOLDER = "flow-next-step";
@@ -72,7 +77,7 @@ This is the only progression command the user needs to drive the entire flow. St
 
 - **Do not** invent gate completion: use only \`${flowPath}\` plus observable evidence in repo artifacts.
 - **Do not** skip stages: advance only from \`currentStage\` to its configured successor.
-- After ship completes, the closeout chain **retro -> compound -> archive** runs automatically, driven by \`closeout.shipSubstate\`. Continue through \`/cc-next\`; do not branch into a separate operations router.
+- ${closeoutNextCommandGuidance()}
 
 ## Algorithm (mandatory)
 
@@ -101,8 +106,8 @@ ${ralphLoopContractSnippet()}
 
 → If current stage's \`next\` is **\`done\`**:
 
-  When \`currentStage === "ship"\`, route by **\`closeout.shipSubstate\`**:
-  - \`"idle"\` or missing -> set \`closeout.shipSubstate = "retro_review"\`, then
+  When \`currentStage === "ship"\`, route by **${closeoutSubstateInline()}**:
+  - \`"idle"\` or missing -> set ${closeoutSubstateInline()} = \`"retro_review"\`, then
     execute the in-stage retro protocol (draft + one structured accept/edit/skip ask).
   - \`"retro_review"\` -> continue the retro protocol (re-ask the structured
     question; the draft already exists — do not regenerate it).
@@ -130,7 +135,7 @@ ${ralphLoopContractSnippet()}
 \`/cc-next\` in a **new session** = resume from where you left off:
 - Flow-state records \`currentStage\` and which gates have passed.
 - The stage skill reads upstream artifacts and picks up context.
-- \`closeout.shipSubstate\` carries the post-ship substate, so a crashed
+- ${closeoutSubstateInline()} carries the post-ship substate, so a crashed
   session during retro/compound/archive resumes at the exact step without
   regenerating the retro draft.
 - No special resume command needed — \`/cc-next\` IS the resume command.
@@ -238,7 +243,7 @@ Special-case for review: if \`review_criticals_resolved\` is in \`blocked\`, rou
 If \`next\` is \`done\`:
 
 When \`currentStage\` is \`ship\`, automatically drive the **closeout chain**
-by inspecting \`closeout.shipSubstate\`:
+by inspecting ${closeoutSubstateInline()}:
 
 | shipSubstate          | Action                                              |
 |-----------------------|-----------------------------------------------------|
@@ -257,7 +262,7 @@ Otherwise (non-terminal \`next\`): load the next stage skill and begin execution
 
 ## Stage order
 
-This table is the critical path. After \`ship\`, \`/cc-next\` continues closeout via \`closeout.shipSubstate\`: \`retro -> compound -> archive\`.
+This table is the critical path. After \`ship\`, \`/cc-next\` continues closeout via ${closeoutSubstateInline()}: ${closeoutChainInline()}.
 
 | Stage | Next | Skill path |
 |---|---|---|

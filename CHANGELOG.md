@@ -107,6 +107,8 @@ workflow tool.
   scope/design/review/ship/ideate to reduce drift between stage prompts.
 - Scope/design outside-voice loop guidance now renders from compact policy helpers
   in `review-loop.ts` instead of repeated prose blocks.
+- Post-ship closeout wording is now sourced from shared closeout guidance
+  helpers so /cc-next and meta-skill stay aligned on retro/compound/archive.
 
 ### Preserved
 
