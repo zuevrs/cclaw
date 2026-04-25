@@ -53,6 +53,8 @@ workflow tool.
 - Consolidated `/cc-view` generated guidance into one `flow-view` skill with
   embedded `status`, `tree`, and `diff` subcommand sections. Sync now removes
   the old `flow-status`, `flow-tree`, and `flow-diff` skill folders.
+- Removed obsolete standalone `status`, `tree`, and `diff` command contract
+  generators that were only kept alive by tests after `/cc-view` consolidation.
 
 ### Changed
 
