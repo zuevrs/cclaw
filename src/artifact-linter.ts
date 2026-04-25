@@ -350,25 +350,6 @@ function tokensFromRule(rule: string): string[] {
   return [];
 }
 
-/**
- * Extract required keywords from validation rules that contain *backticked*
- * stable tokens after a colon. We only fire on machine-surface enumerations
- * (e.g., `` Must contain: `Status:`, `WAIT_FOR_CONFIRM`, `Approved:` ``);
- * descriptive English prose with bare comma lists is intentionally ignored so
- * authors can write rationale freely without triggering hardcoded keyword
- * matches. Sections that need richer structural enforcement use a dedicated
- * `validateSectionBody` dispatch (see `validateScopeSummary`, etc.).
- */
-function extractRequiredKeywords(rule: string): string[] {
-  const colonMatch = /:\s*(.+)$/u.exec(rule);
-  if (!colonMatch) return [];
-  const tail = colonMatch[1]!;
-  const backtickedTokens = Array.from(tail.matchAll(/`([^`]+)`/gu)).map((m) => m[1]!.trim());
-  const phrases = backtickedTokens.filter((p) => p.length >= 2);
-  if (phrases.length < 3) return [];
-  return phrases;
-}
-
 const VAGUE_AC_ADJECTIVES = [
   "fast",
   "quick",
@@ -608,13 +589,14 @@ function validatePremiseChallenge(sectionBody: string): { ok: boolean; details: 
   if (rowCount < 3) {
     return {
       ok: false,
-      details: `Premise Challenge needs at least 3 question/answer rows in a table or bullet list (right problem? / direct path? / what if nothing? are the gstack default trio). Found ${rowCount}.`
+      details: `Premise Challenge needs at least 3 substantive rows in a table or bullet list. Found ${rowCount}.`
     };
   }
   // For tables, each data row must have at least 2 non-empty cells so the
-  // section is genuinely a Q/A comparison, not a list of headlines. For
-  // bullet lists, each line must be substantive (>= 8 characters of letters
-  // or digits) so we don't accept three-letter placeholders like `- a`.
+  // section is genuinely a premise/answer comparison, not a list of headlines.
+  // For bullet lists, each line must be substantive so we don't accept
+  // placeholders like `- a`; punctuation style and natural language do not
+  // matter.
   if (tableRows.length >= 3) {
     const sparseRows = tableRows.filter((row) => {
       const filledCells = row.filter((cell) => cell.replace(/[\s|]/gu, "").length >= 2);
@@ -629,14 +611,13 @@ function validatePremiseChallenge(sectionBody: string): { ok: boolean; details: 
   } else if (bulletRows.length >= 3) {
     const sparseBullets = bulletRows.filter((line) => {
       const cleaned = line.replace(/^[-*\d.\s]+/u, "").replace(/[`*_]/gu, "").trim();
-      const hasQuestionMark = /\?/u.test(cleaned);
       const meaningful = cleaned.match(/[\p{L}\p{N}]/gu)?.length ?? 0;
-      return !hasQuestionMark && meaningful < 12;
+      return meaningful < 12;
     });
-    if (sparseBullets.length > bulletRows.length - 3) {
+    if (sparseBullets.length > 0) {
       return {
         ok: false,
-        details: "Premise Challenge bullet list must include at least 3 substantive Q/A lines (a question mark plus the answer, or a labelled `Question: answer` pair)."
+        details: "Premise Challenge bullet list must include at least 3 substantive rows, not placeholders."
       };
     }
   }
@@ -1565,22 +1546,6 @@ function validateSectionBody(
         ok: false,
         details: "Architecture Diagram must include at least one failure-edge arrow with a failure keyword (for example: timeout, error, fallback, degraded, retry)."
       };
-    }
-  }
-
-  if (sectionNameNormalized !== "architecture diagram") {
-    const keywords = extractRequiredKeywords(rule);
-    if (keywords.length > 0) {
-      const bodyLower = sectionBody.toLowerCase();
-      const found = keywords.filter((kw) => bodyLower.includes(kw.toLowerCase()));
-      const threshold = Math.ceil(keywords.length * 0.5);
-      if (found.length < threshold) {
-        const missing = keywords.filter((kw) => !bodyLower.includes(kw.toLowerCase()));
-        return {
-          ok: false,
-          details: `Rule expects keywords (${threshold}/${keywords.length} minimum): missing ${missing.join(", ")}.`
-        };
-      }
     }
   }
 

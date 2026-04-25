@@ -1424,6 +1424,22 @@ ${premiseBody}
       expect(premise?.found).toBe(true);
     });
 
+    it("accepts a Premise Challenge bullet list in non-Latin scripts without question marks", async () => {
+      const root = await createTempProject("premise-list-non-latin-no-question-mark");
+      await writeRuntimeArtifact(
+        root,
+        "02-scope.md",
+        baseScopeWithPremise(
+          `- Проблема верная — нужен публичный вход для клиентов.\n` +
+            `- 直接路径 — 静态页面先锁定信息架构。\n` +
+            `- بدون هذا العمل — يبقى المنتج بلا صفحة واضحة للزوار.`
+        )
+      );
+      const result = await lintArtifact(root, "scope");
+      const premise = result.findings.find((f) => f.section === "Premise Challenge");
+      expect(premise?.found).toBe(true);
+    });
+
     it("accepts a Premise Challenge written as a markdown table with Q/A columns in any language", async () => {
       const root = await createTempProject("premise-table-multilingual");
       await writeRuntimeArtifact(
@@ -1465,13 +1481,18 @@ ${premiseBody}
     });
   });
 
-  it("accepts a compact bilingual Russian Scope Summary that names the mode + handoff (no English keyword hardcodes)", async () => {
-    // Regression for the user-reported failure: a Russian-prose Scope Summary
-    // used to fail because the legacy linter required English keywords like
-    // "strongest challenges", "recommended path", "accepted scope", "deferred",
-    // "excluded", "track-aware next-stage handoff". The replacement contract
-    // is structural: canonical mode token + next-stage handoff.
-    const root = await createTempProject("scope-summary-russian");
+  it("accepts a compact non-Latin-script Scope Summary that names the canonical mode + handoff", async () => {
+    // Regression for the legacy contract: the linter used to extract
+    // English keyword phrases (strongest challenges / recommended path /
+    // accepted scope / deferred / excluded / track-aware next-stage
+    // handoff) from the validation rule and require them verbatim. That
+    // forced any non-English author to copy English boilerplate into a
+    // section the user never reads in English. The replacement contract is
+    // purely structural: canonical mode token + next-stage handoff. The
+    // body content here is intentionally non-Latin (Cyrillic + CJK +
+    // Arabic) so future contributors cannot accidentally reintroduce a
+    // language-specific check by tuning to one alphabet.
+    const root = await createTempProject("scope-summary-non-latin");
     await writeRuntimeArtifact(root, "02-scope.md", `# Scope Artifact
 
 ## Scope Mode
@@ -1479,9 +1500,9 @@ ${premiseBody}
 
 ## In Scope / Out of Scope
 ### In Scope
-- Лендинг
+- Лендинг / 着陆页 / صفحة الهبوط
 ### Out of Scope
-- Бэкенд
+- Бэкенд / 后端 / الواجهة الخلفية
 
 ## Completion Dashboard
 - Checklist findings: 1/1
@@ -1490,10 +1511,10 @@ ${premiseBody}
 
 ## Scope Summary
 - **Mode:** SELECTIVE EXPANSION
-- **Core:** 4-секционный лендинг (Hero, О нас, Услуги, Контакты) с адаптивным дизайном
+- **Core:** 4-секционный лендинг — 着陆页 — landing
 - **Cherry-pick:** SEO-мета, smooth scroll, расширяемая архитектура
-- **Stack:** Next.js App Router + Tailwind CSS + TypeScript, static export, Vercel deploy
-- **Next stage:** \`design\` — lock architecture, data flow, failure modes
+- **Stack:** Next.js App Router + Tailwind CSS + TypeScript
+- **Next stage:** \`design\` — lock architecture and failure modes
 `);
     const result = await lintArtifact(root, "scope");
     const summary = result.findings.find((f) => f.section === "Scope Summary");
