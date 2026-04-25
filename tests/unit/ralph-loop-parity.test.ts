@@ -157,6 +157,69 @@ describe("ralph-loop + compound-readiness parity (inline hook vs main)", () => {
     expect(inlineStatus.ready).toEqual(mainStatus.ready);
   });
 
+  it("session-start compound summary line matches internal formatter shape", async () => {
+    const root = await createTempProject("compound-summary-line-parity");
+    await fs.mkdir(path.join(root, ".cclaw/state"), { recursive: true });
+    await fs.mkdir(path.join(root, ".cclaw/skills/using-cclaw"), { recursive: true });
+    await fs.writeFile(path.join(root, ".cclaw/state/flow-state.json"), JSON.stringify({
+      currentStage: "review",
+      activeRunId: "run-summary",
+      completedStages: ["brainstorm", "scope", "design", "spec", "plan", "tdd"]
+    }, null, 2), "utf8");
+    await fs.writeFile(path.join(root, ".cclaw/skills/using-cclaw/SKILL.md"), "# Using cclaw\n", "utf8");
+
+    const base: Omit<KnowledgeEntry, "trigger" | "action" | "frequency" | "severity"> = {
+      type: "pattern",
+      confidence: "medium",
+      domain: null,
+      stage: "review",
+      origin_stage: "review",
+      origin_run: null,
+      project: "cclaw",
+      source: "stage",
+      universality: "project",
+      maturity: "raw",
+      created: "2026-04-15T00:00:00Z",
+      first_seen_ts: "2026-04-15T00:00:00Z",
+      last_seen_ts: "2026-04-15T00:00:00Z"
+    };
+    const rows: KnowledgeEntry[] = [
+      { ...base, trigger: "swallowed errors", action: "rethrow with context", frequency: 2 },
+      { ...base, trigger: "swallowed errors", action: "rethrow with context", frequency: 1 },
+      { ...base, trigger: "auth bypass", action: "validate signature", severity: "critical", frequency: 1 },
+      { ...base, trigger: "low signal", action: "skip", frequency: 1 }
+    ];
+    await fs.writeFile(
+      path.join(root, ".cclaw/knowledge.jsonl"),
+      rows.map((row) => JSON.stringify(row)).join("\n") + "\n",
+      "utf8"
+    );
+    await fs.mkdir(path.join(root, ".cclaw/runs/run-a"), { recursive: true });
+    await fs.mkdir(path.join(root, ".cclaw/runs/run-b"), { recursive: true });
+    await fs.mkdir(path.join(root, ".cclaw/runs/run-c"), { recursive: true });
+    await fs.mkdir(path.join(root, ".cclaw/runs/run-d"), { recursive: true });
+    await fs.mkdir(path.join(root, ".cclaw/runs/run-e"), { recursive: true });
+
+    const result = await runHook(root, nodeHookRuntimeScript(), "session-start", {});
+    expect(result.code).toBe(0);
+
+    const payload = JSON.parse(result.stdout) as {
+      hookSpecificOutput?: { additionalContext?: string };
+      additional_context?: string;
+    };
+    const context = payload.hookSpecificOutput?.additionalContext ?? payload.additional_context ?? "";
+
+    const mainStatus = computeCompoundReadiness(rows, {
+      now: new Date("2026-04-20T00:00:00Z"),
+      archivedRunsCount: 5
+    });
+    const criticalCount = mainStatus.ready.filter((cluster) => cluster.severity === "critical").length;
+    const expectedLine = mainStatus.readyCount === 0
+      ? `Compound readiness: no candidates (clusters=${mainStatus.clusterCount}, threshold=${mainStatus.threshold})`
+      : `Compound readiness: clusters=${mainStatus.clusterCount}, ready=${mainStatus.readyCount}${criticalCount > 0 ? ` (critical=${criticalCount})` : ""}`;
+    expect(context).toContain(expectedLine);
+  });
+
   it("small-project relaxation: inline applies when archive count < 5", async () => {
     const root = await createTempProject("compound-readiness-small-project");
     await fs.mkdir(path.join(root, ".cclaw/state"), { recursive: true });

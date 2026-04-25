@@ -954,32 +954,8 @@ async function handleSessionStart(runtime) {
       });
       await writeJsonFile(path.join(stateDir, "compound-readiness.json"), readiness);
     }
-    const readinessObj = toObject(readiness) || {};
-    const ready = Array.isArray(readinessObj.ready) ? readinessObj.ready : [];
-    const readyCount =
-      typeof readinessObj.readyCount === "number" && Number.isFinite(readinessObj.readyCount)
-        ? Math.trunc(readinessObj.readyCount)
-        : ready.length;
-    const clusterCount =
-      typeof readinessObj.clusterCount === "number" && Number.isFinite(readinessObj.clusterCount)
-        ? Math.trunc(readinessObj.clusterCount)
-        : 0;
-    const threshold =
-      typeof readinessObj.threshold === "number" && Number.isFinite(readinessObj.threshold)
-        ? Math.trunc(readinessObj.threshold)
-        : COMPOUND_RECURRENCE_THRESHOLD;
     if (state.currentStage === "review" || state.currentStage === "ship") {
-      if (readyCount === 0) {
-        compoundReadinessLine = "Compound readiness: no candidates (clusters=" +
-          String(clusterCount) + ", threshold=" + String(threshold) + ")";
-      } else {
-        const critical = ready.filter(
-          (entry) => entry && typeof entry === "object" && entry.severity === "critical"
-        ).length;
-        const criticalSuffix = critical > 0 ? " (critical=" + String(critical) + ")" : "";
-        compoundReadinessLine = "Compound readiness: clusters=" + String(clusterCount) +
-          ", ready=" + String(readyCount) + criticalSuffix;
-      }
+      compoundReadinessLine = formatCompoundReadinessLineInline(toObject(readiness) || {});
     }
   } catch (err) {
     // Best-effort — a malformed knowledge.jsonl must never break

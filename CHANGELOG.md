@@ -112,6 +112,7 @@ workflow tool.
 - /cc-ideate knowledge scan guidance now matches the live knowledge schema
   (`rule|pattern|lesson|compound`, `origin_run`, trigger/action clustering).
 - Track-aware render context now drives quick-track wording transforms for TDD/lint metadata, replacing duplicated brittle string-rewrite chains.
+- Hook runtime compound-readiness summary now uses a shared inline formatter helper, with added parity coverage to reduce drift against canonical CLI wording.
 
 ### Preserved
 
