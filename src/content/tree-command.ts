@@ -49,8 +49,8 @@ and harness capability status.
    - artifact marker per stage (exists / stale copy / missing)
 7. When \`currentStage === "ship"\` or \`closeout.shipSubstate !== "idle"\`,
    append a closeout sub-tree under ship with substate and retro/compound flags.
-8. Append a final \`harnesses\` branch summarising tier + fallback +
-   playbook-present for each installed harness.
+8. Append a final \`harnesses\` branch summarising tier + fallback for each
+   installed harness.
 
 ## Tree Format
 

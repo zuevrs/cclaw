@@ -73,7 +73,7 @@ can enforce phase-appropriate write boundaries.
 
 ### Harness routing
 
-| Harness | Fallback | Delegation tool | Structured ask | Parity playbook |
+| Harness | Fallback | Delegation tool | Structured ask | Capability source |
 |---|---|---|---|---|
 | Claude | \`native\` | Task (named subagent_type) | AskUserQuestion | \`cclaw doctor\` |
 | Cursor | \`generic-dispatch\` | Task (generic subagent_type: explore/generalPurpose/…) | AskQuestion | \`cclaw doctor\` |
@@ -83,7 +83,7 @@ can enforce phase-appropriate write boundaries.
 **Dispatch rules driven by \`subagentFallback\`:**
 
 - \`native\` — use the harness's own named subagent primitive; delegation entry uses \`fulfillmentMode: "isolated"\`.
-- \`generic-dispatch\` — map each cclaw agent onto the generic dispatcher via the harness playbook; delegation entry uses \`fulfillmentMode: "generic-dispatch"\`.
+- \`generic-dispatch\` — map each cclaw agent onto the generic dispatcher with a role prompt; delegation entry uses \`fulfillmentMode: "generic-dispatch"\`.
 - \`role-switch\` — announce the role in-session, perform the work, append a delegation row with \`fulfillmentMode: "role-switch"\` and ≥1 \`evidenceRef\`. Without evidenceRefs the \`delegation:mandatory:current_stage\` check reports \`missingEvidence\` and blocks stage completion.
 
 The only time a \`harness_limitation\` waiver fires automatically is when every installed harness declares \`subagentFallback: "waiver"\`. cclaw 0.33 no longer maps Codex onto auto-waiver — the agent must role-switch with evidence.

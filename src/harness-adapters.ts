@@ -102,7 +102,7 @@ export interface HarnessAdapter {
     /**
      * Declared fallback pattern used when the harness cannot satisfy a
      * mandatory delegation natively. Drives `checkMandatoryDelegations`
-     * and the generated playbook per harness.
+     * and generated harness guidance.
      */
     subagentFallback: SubagentFallback;
   };
@@ -207,7 +207,7 @@ export const HARNESS_ADAPTERS: Record<HarnessId, HarnessAdapter> = {
       // Cursor has a real Task tool with subagent_type (generalPurpose,
       // explore, shell, browser-use, …) but no user-defined named
       // subagents. cclaw maps each named agent (planner/reviewer/…) onto
-      // generic dispatch with a role prompt — see the cursor playbook.
+      // generic dispatch with a role prompt.
       nativeSubagentDispatch: "generic",
       hookSurface: "full",
       structuredAsk: "AskQuestion",
@@ -226,9 +226,8 @@ export const HARNESS_ADAPTERS: Record<HarnessId, HarnessAdapter> = {
       // permission-gated — `opencode.json` must set
       // `permission.question: "allow"` and ACP clients must export
       // `OPENCODE_ENABLE_QUESTION_TOOL=1`. cclaw surfaces the tool name
-      // in the Decision Protocol and in the OpenCode playbook; skills
-      // fall back to the shared plain-text lettered list when the tool
-      // is denied or unavailable.
+      // in generated harness guidance; skills fall back to the shared
+      // plain-text lettered list when the tool is denied or unavailable.
       structuredAsk: "question",
       subagentFallback: "role-switch"
     }
@@ -255,9 +254,8 @@ export const HARNESS_ADAPTERS: Record<HarnessId, HarnessAdapter> = {
       // It is the primitive the built-in Plan / Collaboration mode
       // templates use (see `codex-rs/collaboration-mode-templates`).
       // Agents running inside Codex can call it directly; cclaw wires
-      // it into the Decision Protocol and the Codex playbook. The
-      // shared plain-text lettered list is the documented fallback
-      // when the tool is unavailable.
+      // it into generated harness guidance. The shared plain-text
+      // lettered list is the documented fallback when the tool is unavailable.
       structuredAsk: "request_user_input",
       subagentFallback: "role-switch"
     }
@@ -526,8 +524,8 @@ under \`.agents/skills/${skillSlug}/\` so the user can either:
 
 Lifecycle hooks **are** available in Codex CLI v0.114+ (behind the
 \`[features] codex_hooks = true\` flag in \`~/.codex/config.toml\`) and
-cclaw installs a matching \`.codex/hooks.json\` — see the playbook for
-what the hook surface does and does not cover.
+cclaw installs a matching \`.codex/hooks.json\`; run \`cclaw doctor --explain\`
+for the current hook surface and limitations.
 
 ## Protocol
 
