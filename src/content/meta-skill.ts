@@ -99,6 +99,14 @@ Before stage work:
 
 Use \`/cc <idea>\` for new work, \`/cc-next\` for progression and closeout, \`/cc-view\` for read-only state, and \`/cc-ideate\` for backlog discovery.
 
+## Main vs Operator Surfaces
+
+- **Main workflow:** \`/cc\`, \`/cc-next\`, \`/cc-ideate\`, \`/cc-view status\`.
+- **Operator/support:** \`cclaw doctor\`, \`cclaw sync\`, \`cclaw archive\`,
+  \`/cc-view tree\`, and \`/cc-view diff\`.
+- Use operator/support surfaces only for install/runtime diagnosis, explicit
+  archival, or deeper inspection. Do not make them part of the happy path.
+
 ## Whole flow map
 
 standard: brainstorm -> scope -> design -> spec -> plan -> tdd -> review -> ship -> ${CLOSEOUT_CHAIN}

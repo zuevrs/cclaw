@@ -93,9 +93,10 @@ Examples:
   npx cclaw-cli archive --name=my-run
   npx cclaw-cli upgrade
 
-Everything operational (retro, archive, doctor, learnings)
-happens inside your harness via slash commands. The CLI is just a
-launcher. See README.md for the four user-facing slash commands.
+Happy-path work happens inside your harness via /cc, /cc-next,
+/cc-ideate, and /cc-view. Doctor is an operator/support surface:
+it verifies install/runtime wiring, but a real harness smoke test is
+still needed to prove provider auth and model execution.
 
 Docs:   https://github.com/zuevrs/cclaw
 Issues: https://github.com/zuevrs/cclaw/issues

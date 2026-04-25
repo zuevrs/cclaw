@@ -32,6 +32,14 @@ describe("/cc-view status content", () => {
   it("keeps the read-only hard-gate intact", () => {
     expect(skill).toContain("read-only command");
   });
+
+  it("aligns with the compact operator output rows", () => {
+    expect(skill).toContain("Stage");
+    expect(skill).toContain("Gates");
+    expect(skill).toContain("Delegations");
+    expect(skill).toContain("Blockers");
+    expect(skill).toContain("Next");
+  });
 });
 
 describe("/cc-view tree content", () => {

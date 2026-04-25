@@ -197,6 +197,21 @@ description: "The primary progression command. Reads flow state, starts/resumes 
 
 \`/cc-next\` is **the only command you need** to drive the entire cclaw flow.
 
+## Operator Output Contract
+
+Default output should be compact, like OMC/OMX operator surfaces:
+
+\`\`\`
+Stage: <currentStage> (<track>)
+Gates: <passed>/<required> passed, <blocked> blocked
+Delegations: <done>/<mandatory> done
+Blockers: <none | gate/delegation/reconciliation ids>
+Next: <exact next action, usually /cc-next or one named remediation>
+\`\`\`
+
+Only expand beyond this when blocked, when asking a structured question, or when
+the user explicitly requests detail. Do not dump full artifacts in progression output.
+
 **How it works:**
 1. Reads \`flow-state.json\` to find \`currentStage\`
 2. Checks if all gates for that stage are satisfied

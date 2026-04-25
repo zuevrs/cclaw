@@ -77,4 +77,12 @@ describe("next-command Ralph Loop contract parity", () => {
     expect(command).toContain("session transcripts");
   });
 
+  it("documents a compact operator output contract", () => {
+    expect(skill).toContain("## Operator Output Contract");
+    expect(skill).toContain("Stage: <currentStage> (<track>)");
+    expect(skill).toContain("Gates: <passed>/<required> passed");
+    expect(skill).toContain("Delegations: <done>/<mandatory> done");
+    expect(skill).toContain("Do not dump full artifacts");
+  });
+
 });

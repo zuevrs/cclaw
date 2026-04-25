@@ -7,7 +7,7 @@ import { CCLAW_AGENTS } from "../../src/content/core-agents.js";
 import { stageExamples, stageFullArtifactExampleMarkdown } from "../../src/content/examples.js";
 import { mandatoryDelegationsForStage, reviewStackAwareRoutingSummary, stageAutoSubagentDispatch, stageDelegationSummary, stagePolicyNeedles, stageSchema, stageTrackRenderContext } from "../../src/content/stage-schema.js";
 import { stageSkillMarkdown } from "../../src/content/skills.js";
-import { enhancedAgentBody } from "../../src/content/subagents.js";
+import { enhancedAgentBody, subagentDrivenDevSkill } from "../../src/content/subagents.js";
 import { ARTIFACT_TEMPLATES } from "../../src/content/templates.js";
 import { FLOW_STAGES, FLOW_TRACKS, TRACK_STAGES, type FlowStage, type FlowTrack } from "../../src/types.js";
 import { createTempProject } from "../helpers/index.js";
@@ -143,6 +143,15 @@ describe("stage schema and subagent alignment", () => {
     expect(template).toContain("STAGE_MODE: {TEST_RED_ONLY | BUILD_GREEN_REFACTOR}");
     expect(template).toContain("Do NOT edit production code.");
     expect(template).toContain("GREEN — minimal production code");
+  });
+
+  it("subagent orchestration includes anti-drift team defaults", () => {
+    const skill = subagentDrivenDevSkill();
+    expect(skill).toContain("## Anti-Drift Team Defaults");
+    expect(skill).toContain("One controller owns alignment");
+    expect(skill).toContain("at most 3-5 parallel agents");
+    expect(skill).toContain("No parallel writes to adjacent surfaces");
+    expect(skill).toContain("Consensus is for hard calls only");
   });
 
   it("review stage includes review-army structured reconciliation", () => {

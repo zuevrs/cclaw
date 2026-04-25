@@ -152,6 +152,16 @@ Concrete per-stage rules so the controller does not have to guess which tier fit
 
 If you catch yourself writing “read PLAN.md Task 3” or “implement the next unchecked item,” stop: expand the work into explicit text in the Task body before dispatching.
 
+## Anti-Drift Team Defaults
+
+Borrow the good part of Team/Ruflo-style orchestration without adding a swarm runtime:
+
+- **One controller owns alignment.** The parent keeps the task list, gate state, and final synthesis.
+- **Small fan-out by default.** Run at most 3-5 parallel agents, and only for independent read-only research or non-overlapping files.
+- **No parallel writes to adjacent surfaces.** If tasks may touch the same module, serialize them.
+- **Checkpoint before synthesis.** Each agent returns status, files inspected/changed, evidence, and blockers before the parent acts.
+- **Consensus is for hard calls only.** Use two reviewers when severity or architecture is disputed; otherwise one evidence-backed reviewer is enough.
+
 ## When to Use
 
 - Mid/large plans with multiple discrete tasks, dependencies, or risky overlap.

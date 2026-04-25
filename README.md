@@ -164,8 +164,9 @@ Full key-by-key reference: [`docs/config.md`](./docs/config.md).
 ## The four commands you actually use
 
 All four appear as slash commands in every supported harness. This is the
-top-level user surface — everything else is either automatic or happens
-inside `/cc-next`, automatic closeout, or `cclaw archive`.
+top-level user surface: `/cc`, `/cc-next`, `/cc-ideate`, and `/cc-view status`
+cover the happy path. Operator/support tools stay separate so the harness
+does not feel like a command framework.
 
 | Command | What it does |
 |---|---|
@@ -174,7 +175,11 @@ inside `/cc-next`, automatic closeout, or `cclaw archive`.
 | **`/cc-ideate`** | Repository improvement ideate mode. Scans for TODOs, flaky tests, oversized modules, docs drift, and recurring knowledge-store lessons, **persists the ranked backlog** to `.cclaw/artifacts/ideate-<date>-<slug>.md`, and ends with a concrete handoff: launch `/cc` on the selected candidate in the same session, save-and-close, or discard. Resume check on next run reuses any ideate artifact younger than 30 days. Never mutates `flow-state.json`. |
 | **`/cc-view`** | Read-only flow visibility. `/cc-view status` (default) shows stage progress, mandatory delegations with their fulfillment mode (isolated / generic-dispatch / role-switch), the ship closeout substate (retro → compound → archive), and the active harness parity row. `/cc-view tree` renders the same picture as a tree with a closeout sub-branch under ship and harness capability status from `cclaw doctor --explain`. `/cc-view diff` shows stage/gate/closeout/delegation changes from visible state and git evidence. Never mutates state. |
 
-Operational extras stay off the slash-command surface: `/cc-next` handles progression and closeout, while `cclaw archive` handles explicit archival/reset.
+Operational extras stay off the main surface: `/cc-next` handles progression
+and closeout, `cclaw archive` handles explicit archival/reset, and
+`cclaw doctor` verifies install/runtime wiring. Doctor is not a replacement
+for a real harness smoke test; it catches broken files, stale hooks, and
+schema drift before the user loses a run.
 
 ### Example first-run
 
