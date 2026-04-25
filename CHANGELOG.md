@@ -99,6 +99,8 @@ workflow tool.
 - Review guidance now defaults to one reviewer plus mandatory security-reviewer,
   with adversarial review as a risk-triggered pass instead of ceremony for every
   large-ish diff.
+- Generated status/docs/ideate guidance now avoids stale waiver and legacy-layout
+  wording in the primary user surface.
 
 ### Preserved
 

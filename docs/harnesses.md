@@ -7,9 +7,9 @@ Generated from `src/harness-adapters.ts` capabilities and hook event mappings.
 | Harness | ID | Tier | Native dispatch | Fallback | Hook surface | Structured ask |
 |---|---|---|---|---|---|---|
 | Claude Code | `claude` | `tier1` (full native automation) | full | native | full | AskUserQuestion |
-| Cursor | `cursor` | `tier2` (partial automation with waivers) | generic | generic-dispatch | full | AskQuestion |
-| OpenCode | `opencode` | `tier2` (partial automation with waivers) | partial | role-switch | plugin | question |
-| OpenAI Codex | `codex` | `tier2` (partial automation with waivers) | none | role-switch | limited | request_user_input |
+| Cursor | `cursor` | `tier2` (supported with fallback paths) | generic | generic-dispatch | full | AskQuestion |
+| OpenCode | `opencode` | `tier2` (supported with fallback paths) | partial | role-switch | plugin | question |
+| OpenAI Codex | `codex` | `tier2` (supported with fallback paths) | none | role-switch | limited | request_user_input |
 
 Fallback legend:
 

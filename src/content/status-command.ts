@@ -32,7 +32,7 @@ advancing or mutating anything. Safe to run at any point. The snapshot reflects:
 - progress across stages with per-stage markers,
 - gate coverage,
 - mandatory delegations with **fulfillmentMode** (isolated / generic-dispatch /
-  role-switch / harness-waiver) and evidence gate,
+  role-switch) plus explicit waived status and evidence gate,
 - **closeout substate** after ship (retro → compound → archive),
 - **harness parity row** (tier + fallback) for the active harness set.
 

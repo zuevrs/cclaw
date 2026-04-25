@@ -91,6 +91,8 @@ Before stage work:
 
 ## Stage quick map
 
+Use \`/cc <idea>\` for new work, \`/cc-next\` for progression and closeout, \`/cc-view\` for read-only state, and \`/cc-ideate\` for backlog discovery.
+
 ## Whole flow map
 
 standard: brainstorm -> scope -> design -> spec -> plan -> tdd -> review -> ship -> retro -> compound -> archive

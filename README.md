@@ -126,8 +126,7 @@ Plus harness-specific shims:
   activated via `/use cc` or description-based auto-matching. Hooks
   require Codex CLI ≥ v0.114 and `[features] codex_hooks = true` in
   `~/.codex/config.toml`; `cclaw init --codex` offers to patch that flag
-  for you. `.codex/commands/` and the legacy `.agents/skills/cclaw-cc*/`
-  folders are auto-cleaned on sync.)
+  for you. `cclaw doctor` reports stale legacy Codex layouts.)
 - `AGENTS.md` with a managed routing block (includes a Codex-specific note)
 
 ### `.cclaw/config.yaml` — the minimal surface

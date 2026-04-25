@@ -7,9 +7,10 @@ import { viewCommandSkillMarkdown } from "../../src/content/view-command.js";
 describe("/cc-view status content", () => {
   const skill = statusSubcommandMarkdown();
 
-  it("renders delegations row with expectedMode and fulfillmentMode guidance", () => {
+  it("renders delegations row with fulfillmentMode and waived status guidance", () => {
     expect(skill).toContain("fulfillmentMode");
-    expect(skill).toContain("harness-waiver");
+    expect(skill).toContain("role-switch");
+    expect(skill).toContain("waived");
   });
 
   it("flags completed-without-evidence on role-switch harnesses", () => {
@@ -25,7 +26,7 @@ describe("/cc-view status content", () => {
 
   it("includes a harness parity row backed by capability metadata", () => {
     expect(skill).toContain("cclaw capability metadata");
-    expect(skill).toContain("<tier>/<fallback>");
+    expect(skill).toContain("tier + fallback");
   });
 
   it("keeps the read-only hard-gate intact", () => {

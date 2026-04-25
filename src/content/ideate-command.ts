@@ -251,15 +251,15 @@ Only survivors advance to ranking.
 
    | ID | Improvement | Impact | Effort | Confidence | Evidence |
    |---|---|---|---|---|---|
-| I-1 | Trim flow-state surface to user-visible minimum | High | S | High | src/run-persistence.ts |
+| I-1 | Simplify a confusing generated prompt surface | High | S | High | <path-to-generated-surface> |
    | …   | …                                  | …    | … | …    | …                                     |
 
    ## Candidate detail
 
-### I-1 — Trim flow-state surface to user-visible minimum
-- **Evidence:** \`src/run-persistence.ts\` still carries legacy compatibility knobs.
-- **Counter-argument:** Aggressive trimming can break maintainer tooling parity.
-- **Handoff:** \`/cc Simplify flow-state files and keep only user-facing state\`
+### I-1 — Simplify a confusing generated prompt surface
+- **Evidence:** \`<path>\` contains repeated or stale guidance that a user would see.
+- **Counter-argument:** Trimming too hard can remove useful orientation for new users.
+- **Handoff:** \`/cc Simplify the confusing generated prompt surface while preserving behavior\`
 
    ### I-2 — …
    \`\`\`
