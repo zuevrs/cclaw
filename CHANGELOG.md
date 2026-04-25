@@ -80,6 +80,9 @@ workflow tool.
 - Downstream stage artifacts now include a lightweight `Upstream Handoff`
   section for carried decisions, constraints, open questions, and drift
   reasons, so agents do not silently rewrite earlier stage choices.
+- Knowledge JSONL entries now use `origin_run` instead of feature wording for
+  new writes and generated guidance, while legacy `origin_feature` rows remain
+  readable as an input alias.
 
 ### Preserved
 

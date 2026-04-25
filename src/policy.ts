@@ -85,7 +85,7 @@ export async function policyChecks(projectRoot: string, options: PolicyOptions =
   const utilitySkillChecks: Array<{ file: string; needle: string; name: string }> = [
     { file: runtimeFile("skills/learnings/SKILL.md"), needle: "strict JSONL schema", name: "utility_skill:learnings:jsonl_schema" },
     { file: runtimeFile("skills/learnings/SKILL.md"), needle: "knowledge.jsonl", name: "utility_skill:learnings:jsonl_store" },
-    { file: runtimeFile("skills/learnings/SKILL.md"), needle: "type, trigger, action, confidence, domain, stage, origin_stage, origin_feature, frequency, universality, maturity, created, first_seen_ts, last_seen_ts, project", name: "utility_skill:learnings:field_order" },
+    { file: runtimeFile("skills/learnings/SKILL.md"), needle: "type, trigger, action, confidence, domain, stage, origin_stage, origin_run, frequency, universality, maturity, created, first_seen_ts, last_seen_ts, project", name: "utility_skill:learnings:field_order" },
     { file: runtimeFile("skills/learnings/SKILL.md"), needle: "## Manual Actions", name: "utility_skill:learnings:manual_actions" },
     { file: runtimeFile("skills/learnings/SKILL.md"), needle: "## HARD-GATE", name: "utility_skill:learnings:hard_gate" },
     { file: runtimeFile("commands/start.md"), needle: "## Algorithm", name: "utility_command:start:algorithm" },

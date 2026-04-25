@@ -25,7 +25,7 @@ describe("knowledge store append helper", () => {
       ],
       {
         stage: "review",
-        originFeature: "queue-hardening",
+        originRun: "queue-hardening",
         project: "cclaw",
         source: "stage",
         nowIso: "2026-04-19T11:00:00Z"
@@ -43,7 +43,7 @@ describe("knowledge store append helper", () => {
     expect(parsed.trigger).toBe("when dependency queue spikes");
     expect(parsed.stage).toBe("review");
     expect(parsed.origin_stage).toBe("review");
-    expect(parsed.origin_feature).toBe("queue-hardening");
+    expect(parsed.origin_run).toBe("queue-hardening");
     expect(parsed.frequency).toBe(1);
     expect(parsed.source).toBe("stage");
     expect(parsed.severity).toBe("critical");
@@ -141,7 +141,7 @@ describe("knowledge store append helper", () => {
       domain: null,
       stage: "plan",
       origin_stage: "plan",
-      origin_feature: null,
+      origin_run: null,
       project: "cclaw",
       frequency: 1,
       universality: "project",
@@ -207,7 +207,7 @@ describe("knowledge store append helper", () => {
       domain: null,
       stage: "plan",
       origin_stage: "plan",
-      origin_feature: null,
+      origin_run: null,
       frequency: 1,
       universality: "project",
       maturity: "raw",
@@ -230,5 +230,37 @@ describe("knowledge store append helper", () => {
     expect(parsed.malformedLines).toBe(1);
     expect(parsed.entries[0]?.trigger).toBe("stable trigger");
     expect(parsed.entries[1]?.trigger).toBe("second trigger");
+  });
+
+  it("reads legacy origin_feature rows as origin_run", async () => {
+    const root = await createTempProject("knowledge-legacy-origin-feature");
+    const knowledgePath = path.join(root, ".cclaw/knowledge.jsonl");
+    await fs.mkdir(path.dirname(knowledgePath), { recursive: true });
+    await fs.writeFile(
+      knowledgePath,
+      `${JSON.stringify({
+        type: "pattern",
+        trigger: "legacy trigger",
+        action: "preserve legacy origin label",
+        confidence: "medium",
+        domain: null,
+        stage: "plan",
+        origin_stage: "plan",
+        origin_feature: "legacy-run",
+        frequency: 1,
+        universality: "project",
+        maturity: "raw",
+        created: "2026-04-20T11:00:00Z",
+        first_seen_ts: "2026-04-20T11:00:00Z",
+        last_seen_ts: "2026-04-20T11:00:00Z",
+        project: "cclaw"
+      })}\n`,
+      "utf8"
+    );
+
+    const parsed = await readKnowledgeSafely(root);
+    expect(parsed.entries).toHaveLength(1);
+    expect(parsed.entries[0]?.origin_run).toBe("legacy-run");
+    expect(parsed.malformedLines).toBe(0);
   });
 });

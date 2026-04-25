@@ -56,7 +56,7 @@ const baseRow = {
   confidence: "medium",
   domain: null,
   project: "cclaw",
-  origin_feature: null,
+  origin_run: null,
   origin_stage: "review",
   stage: "review",
   source: "stage",

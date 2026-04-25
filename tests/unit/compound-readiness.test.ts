@@ -13,7 +13,7 @@ function entry(partial: Partial<KnowledgeEntry>): KnowledgeEntry {
     domain: null,
     stage: "review",
     origin_stage: "review",
-    origin_feature: null,
+    origin_run: null,
     project: "cclaw",
     source: "stage",
     universality: "project",

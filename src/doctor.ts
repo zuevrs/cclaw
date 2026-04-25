@@ -1050,7 +1050,7 @@ export async function doctorChecks(projectRoot: string, options: DoctorOptions =
       "domain",
       "stage",
       "origin_stage",
-      "origin_feature",
+      "origin_run",
       "frequency",
       "universality",
       "maturity",
@@ -1083,7 +1083,12 @@ export async function doctorChecks(projectRoot: string, options: DoctorOptions =
             const key = `${trigger} => ${action}`;
             triggerActionCounts.set(key, (triggerActionCounts.get(key) ?? 0) + 1);
           }
-          const missing = requiredV2Fields.some((field) => !Object.prototype.hasOwnProperty.call(parsed, field));
+          const missing = requiredV2Fields.some((field) => {
+            if (field === "origin_run" && Object.prototype.hasOwnProperty.call(parsed, "origin_feature")) {
+              return false;
+            }
+            return !Object.prototype.hasOwnProperty.call(parsed, field);
+          });
           if (missing) {
             missingSchemaV2Fields += 1;
           }

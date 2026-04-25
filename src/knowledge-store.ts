@@ -21,7 +21,7 @@ export interface KnowledgeEntry {
   domain: string | null;
   stage: FlowStage | null;
   origin_stage: FlowStage | null;
-  origin_feature: string | null;
+  origin_run: string | null;
   frequency: number;
   universality: KnowledgeEntryUniversality;
   maturity: KnowledgeEntryMaturity;
@@ -41,6 +41,8 @@ export interface KnowledgeSeedEntry {
   domain?: string | null;
   stage?: FlowStage | null;
   origin_stage?: FlowStage | null;
+  origin_run?: string | null;
+  /** @deprecated Use `origin_run`. Accepted only for legacy JSONL/backfill inputs. */
   origin_feature?: string | null;
   frequency?: number;
   universality?: KnowledgeEntryUniversality;
@@ -55,6 +57,8 @@ export interface KnowledgeSeedEntry {
 export interface AppendKnowledgeDefaults {
   stage?: FlowStage | null;
   originStage?: FlowStage | null;
+  originRun?: string | null;
+  /** @deprecated Use `originRun`. Accepted only for legacy callers. */
   originFeature?: string | null;
   project?: string | null;
   source?: KnowledgeEntrySource | null;
@@ -343,7 +347,7 @@ const KNOWLEDGE_REQUIRED_KEYS = [
   "domain",
   "stage",
   "origin_stage",
-  "origin_feature",
+  "origin_run",
   "frequency",
   "universality",
   "maturity",
@@ -353,6 +357,7 @@ const KNOWLEDGE_REQUIRED_KEYS = [
   "project"
 ] as const;
 const KNOWLEDGE_ALLOWED_KEYS = new Set<string>(KNOWLEDGE_REQUIRED_KEYS);
+KNOWLEDGE_ALLOWED_KEYS.add("origin_feature");
 KNOWLEDGE_ALLOWED_KEYS.add("source");
 KNOWLEDGE_ALLOWED_KEYS.add("severity");
 
@@ -378,7 +383,7 @@ function normalizeText(value: string): string {
 
 function dedupeKey(entry: Pick<
   KnowledgeEntry,
-  "type" | "trigger" | "action" | "domain" | "stage" | "origin_stage" | "origin_feature" | "universality" | "project" | "source" | "severity"
+  "type" | "trigger" | "action" | "domain" | "stage" | "origin_stage" | "origin_run" | "universality" | "project" | "source" | "severity"
 >): string {
   return [
     entry.type,
@@ -387,7 +392,7 @@ function dedupeKey(entry: Pick<
     entry.domain === null ? "null" : normalizeText(entry.domain),
     entry.stage ?? "null",
     entry.origin_stage ?? "null",
-    entry.origin_feature === null ? "null" : normalizeText(entry.origin_feature),
+    entry.origin_run === null ? "null" : normalizeText(entry.origin_run),
     entry.universality,
     entry.project === null ? "null" : normalizeText(entry.project),
     entry.source === undefined || entry.source === null ? "null" : entry.source,
@@ -413,6 +418,14 @@ function emptyKnowledgeSnapshot(): KnowledgeSnapshot {
   };
 }
 
+function normalizeLegacyKnowledgeEntry(entry: Record<string, unknown>): KnowledgeEntry {
+  const { origin_feature: legacyOriginRun, ...rest } = entry;
+  return {
+    ...rest,
+    origin_run: entry.origin_run ?? legacyOriginRun ?? null
+  } as KnowledgeEntry;
+}
+
 function parseKnowledgeSnapshot(raw: string): KnowledgeSnapshot {
   const lines = stripBom(raw).split(/\r?\n/u);
   const entries: KnowledgeEntry[] = [];
@@ -430,7 +443,7 @@ function parseKnowledgeSnapshot(raw: string): KnowledgeSnapshot {
         malformedLines += 1;
         continue;
       }
-      const entry = parsed as KnowledgeEntry;
+      const entry = normalizeLegacyKnowledgeEntry(parsed as Record<string, unknown>);
       entries.push(entry);
       const key = dedupeKey(entry);
       if (!keyToIndex.has(key)) {
@@ -502,7 +515,9 @@ export function validateKnowledgeEntry(entry: unknown): { ok: boolean; errors: s
   }
   for (const key of KNOWLEDGE_REQUIRED_KEYS) {
     if (!Object.prototype.hasOwnProperty.call(obj, key)) {
-      errors.push(`Missing required key "${key}".`);
+      if (key !== "origin_run" || !Object.prototype.hasOwnProperty.call(obj, "origin_feature")) {
+        errors.push(`Missing required key "${key}".`);
+      }
     }
   }
 
@@ -533,8 +548,11 @@ export function validateKnowledgeEntry(entry: unknown): { ok: boolean; errors: s
   if (!isNullableStage(obj.origin_stage)) {
     errors.push(`origin_stage must be one of ${FLOW_STAGES.join(", ")} or null.`);
   }
-  if (!isNullableString(obj.origin_feature)) {
-    errors.push("origin_feature must be string or null.");
+  const originRun = Object.prototype.hasOwnProperty.call(obj, "origin_run")
+    ? obj.origin_run
+    : obj.origin_feature;
+  if (!isNullableString(originRun)) {
+    errors.push("origin_run must be string or null.");
   }
   if (
     typeof obj.frequency !== "number" ||
@@ -576,6 +594,7 @@ export function materializeKnowledgeEntry(
   const now = normalizeUtcIso(defaults.nowIso ?? nowUtcIso());
   const stage = seed.stage ?? defaults.stage ?? null;
   const originStage = seed.origin_stage ?? defaults.originStage ?? stage ?? null;
+  const originRun = seed.origin_run ?? seed.origin_feature ?? defaults.originRun ?? defaults.originFeature ?? null;
   const source = seed.source ?? defaults.source ?? null;
   const entry: KnowledgeEntry = {
     type: seed.type,
@@ -585,7 +604,7 @@ export function materializeKnowledgeEntry(
     domain: seed.domain ?? null,
     stage,
     origin_stage: originStage,
-    origin_feature: seed.origin_feature ?? defaults.originFeature ?? null,
+    origin_run: originRun,
     frequency: seed.frequency ?? 1,
     universality: seed.universality ?? "project",
     maturity: seed.maturity ?? "raw",
@@ -762,7 +781,7 @@ export async function selectRelevantLearnings(
       ...tokenizeText(entry.domain),
       ...tokenizeText(entry.trigger),
       ...tokenizeText(entry.action),
-      ...tokenizeText(entry.origin_feature),
+      ...tokenizeText(entry.origin_run),
       ...tokenizeText(entry.project)
     ];
     const searchSet = new Set(searchable);
