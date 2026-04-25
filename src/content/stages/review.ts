@@ -1,4 +1,9 @@
 import type { StageSchemaInput } from "./schema-types.js";
+import {
+  decisionProtocolInstruction,
+  STRUCTURED_ASK_TOOL_LIST_REVIEW,
+  structuredAskSingleChoiceInstruction
+} from "../decision-protocol.js";
 
 // ---------------------------------------------------------------------------
 // REVIEW — reference: superpowers code-review + gstack /review
@@ -53,10 +58,18 @@ export const REVIEW: StageSchemaInput = {
       "Run Layer 1 (spec compliance) completely before starting Layer 2.",
       "In each review section, present findings ONE AT A TIME. Do NOT batch.",
       "Classify every finding as Critical, Important, or Suggestion.",
-      "For each Critical finding: use the Decision Protocol — present resolution options (A/B/C) with trade-offs, and mark one as (recommended). Do NOT use a numeric Completeness rubric; recommend the option that fully closes the finding with no carry-over risk and the smallest blast radius. If the harness's native structured-ask tool is available (`AskUserQuestion` on Claude, `AskQuestion` on Cursor, `question` on OpenCode with `permission.question: \"allow\"`, `request_user_input` on Codex in Plan/Collaboration mode), send exactly ONE question per call, validate fields against the runtime schema, and on schema error immediately fall back to a plain-text lettered list instead of retrying guessed payloads.",
+      decisionProtocolInstruction(
+        "each Critical finding",
+        "present resolution options (A/B/C) with trade-offs, and mark one as (recommended)",
+        "recommend the option that fully closes the finding with no carry-over risk and the smallest blast radius",
+        STRUCTURED_ASK_TOOL_LIST_REVIEW
+      ),
       "Resolve all critical blockers before ship.",
       "When verdict is BLOCKED, do not end with a passive stop: explicitly route remediation to TDD via `ROUTE_BACK_TO_TDD` and point to `cclaw internal rewind tdd` with the blocking IDs.",
-      "For final verdict: use the native structured-ask tool (`AskUserQuestion` / `AskQuestion` / `question` / `request_user_input`) only if runtime schema is confirmed; otherwise collect verdict with a plain-text single-choice prompt (APPROVED / APPROVED_WITH_CONCERNS / BLOCKED).",
+      structuredAskSingleChoiceInstruction(
+        "final verdict",
+        "verdict (APPROVED / APPROVED_WITH_CONCERNS / BLOCKED)"
+      ),
       "**STOP.** Do NOT proceed to ship until the user provides an explicit verdict."
     ],
     process: [

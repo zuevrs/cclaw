@@ -1,5 +1,6 @@
 import type { StageSchemaInput } from "./schema-types.js";
 import { REVIEW_LOOP_CHECKLISTS } from "../review-loop.js";
+import { decisionProtocolInstruction } from "../decision-protocol.js";
 
 // ---------------------------------------------------------------------------
 // SCOPE — reference: gstack CEO review
@@ -64,7 +65,11 @@ export const SCOPE: StageSchemaInput = {
       "**Error and Rescue Registry** — For each capability: what breaks, how detected, what fallback."
     ],
     interactionProtocol: [
-      "For scope mode selection: use the Decision Protocol — present expand/selective/hold/reduce as labeled options with trade-offs and mark one as (recommended). Do NOT use a numeric Completeness rubric; recommend the option that best covers the prime-directive failure modes, four data-flow paths, observability, and deferred handling for the in-scope set with the smallest blast radius. Base your recommendation on default heuristics: greenfield -> expand, enhancement -> selective, bugfix/hotfix/refactor -> hold, broad blast radius -> reduce. If the harness's native structured-ask tool is available (`AskUserQuestion` / `AskQuestion` / `question` / `request_user_input`), send exactly ONE question per call, validate fields against the runtime schema, and on schema error immediately fall back to a plain-text lettered list instead of retrying guessed payloads.",
+      decisionProtocolInstruction(
+        "scope mode selection",
+        "present expand/selective/hold/reduce as labeled options with trade-offs and mark one as (recommended)",
+        "recommend the option that best covers the prime-directive failure modes, four data-flow paths, observability, and deferred handling for the in-scope set with the smallest blast radius. Base your recommendation on default heuristics: greenfield -> expand, enhancement -> selective, bugfix/hotfix/refactor -> hold, broad blast radius -> reduce"
+      ),
       "Do not walk the full checklist by default. Present the default scope contract first; ask only for boundaries where user answers would change in/out/deferred decisions.",
       "Challenge premise and verify the problem framing before anything else.",
       "Take a position on every scope decision. Avoid hedging phrases like 'this could work' or 'there are many ways'; state your recommendation and one concrete condition that would change it.",

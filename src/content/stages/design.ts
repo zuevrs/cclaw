@@ -1,5 +1,6 @@
 import type { StageSchemaInput } from "./schema-types.js";
 import { REVIEW_LOOP_CHECKLISTS } from "../review-loop.js";
+import { decisionProtocolInstruction } from "../decision-protocol.js";
 
 // ---------------------------------------------------------------------------
 // DESIGN — reference: gstack Eng review
@@ -66,7 +67,11 @@ export const DESIGN: StageSchemaInput = {
     interactionProtocol: [
       "Review architecture decisions section-by-section: investigator first, critic second, then reconcile.",
       "For EACH issue found in a review section, present it ONE AT A TIME. Do NOT batch multiple issues.",
-      "For each issue: use the Decision Protocol — describe concretely with file/line references, present labeled options (A/B/C) with trade-offs, effort estimate (S/M/L/XL), risk level (Low/Med/High), and mark one as (recommended). Do NOT use a numeric Completeness rubric. If the harness's native structured-ask tool is available (`AskUserQuestion` / `AskQuestion` / `question` / `request_user_input`), send exactly ONE question per call and fall back to plain-text letters on schema/tool failure.",
+      decisionProtocolInstruction(
+        "each issue",
+        "describe concretely with file/line references, present labeled options (A/B/C) with trade-offs, effort estimate (S/M/L/XL), risk level (Low/Med/High), and mark one as (recommended)",
+        "recommend the option that closes the issue with the smallest blast radius and clearest verification path"
+      ),
       "Only proceed to the next review section after ALL issues in the current section are resolved.",
       "If a section has no issues, say 'No issues found' and move on.",
       "Do not skip failure-mode mapping.",

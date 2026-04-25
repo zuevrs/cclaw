@@ -103,6 +103,8 @@ workflow tool.
   wording in the primary user surface.
 - Prompt-surface tests now prefer durable behavioral anchors over exact generated
   prose where schema and validator tests already cover the contract.
+- Decision Protocol / structured-ask fallback wording is now shared across
+  scope/design/review/ship/ideate to reduce drift between stage prompts.
 
 ### Preserved
 

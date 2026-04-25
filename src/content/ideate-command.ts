@@ -1,5 +1,6 @@
 import { RUNTIME_ROOT } from "../constants.js";
 import { resolveIdeateFrames, type IdeateFrameId } from "./ideate-frames.js";
+import { ideateStructuredAskToolsWithFallback } from "./decision-protocol.js";
 
 const IDEATE_SKILL_FOLDER = "flow-ideate";
 const IDEATE_SKILL_NAME = "flow-ideate";
@@ -13,16 +14,7 @@ const IDEATE_ARTIFACT_GLOB = ".cclaw/artifacts/ideate-*.md";
 const IDEATE_ARTIFACT_PATTERN = ".cclaw/artifacts/ideate-<YYYY-MM-DD-slug>.md";
 const IDEATE_RESUME_WINDOW_DAYS = 30;
 
-/**
- * Structured-ask tool list reused across cclaw skills. Kept inline here (small
- * enough) to avoid cross-module coupling; larger stage skills cite the shared
- * protocol file instead.
- */
-const STRUCTURED_ASK_TOOLS =
-  "`AskUserQuestion` on Claude, `AskQuestion` on Cursor, " +
-  "`question` on OpenCode when `permission.question: \"allow\"` is set, " +
-  "`request_user_input` on Codex in Plan / Collaboration mode; " +
-  "fall back to a plain-text lettered list when the tool is hidden or errors";
+const STRUCTURED_ASK_TOOLS = ideateStructuredAskToolsWithFallback();
 
 export interface IdeateCommandOptions {
   frameIds?: readonly IdeateFrameId[];
