@@ -19,12 +19,13 @@ import {
   getAvailableTransitions,
   getTransitionGuards,
   isFlowTrack,
+  createInitialFlowState,
   type FlowState,
   type StageGateState
 } from "../flow-state.js";
 import { appendKnowledge } from "../knowledge-store.js";
 import { readFlowState, writeFlowState } from "../runs.js";
-import { FLOW_STAGES, type FlowStage } from "../types.js";
+import { FLOW_STAGES, TRACK_STAGES, type FlowStage, type FlowTrack } from "../types.js";
 import { runCompoundReadinessCommand } from "./compound-readiness.js";
 import { runHookManifestCommand } from "./hook-manifest.js";
 import { runEnvelopeValidateCommand } from "./envelope-validate.js";
@@ -58,6 +59,17 @@ interface VerifyCurrentStateArgs {
 
 interface HookArgs {
   hookName: string;
+}
+
+interface StartFlowArgs {
+  track: FlowTrack;
+  className?: string;
+  prompt?: string;
+  reason?: string;
+  stack?: string;
+  forceReset: boolean;
+  reclassify: boolean;
+  quiet: boolean;
 }
 
 interface InternalValidationReport {
@@ -631,6 +643,72 @@ function parseHookArgs(tokens: string[]): HookArgs {
   return { hookName: normalizedHook };
 }
 
+function parseStartFlowArgs(tokens: string[]): StartFlowArgs {
+  let track: FlowTrack | undefined;
+  let className: string | undefined;
+  let prompt: string | undefined;
+  let reason: string | undefined;
+  let stack: string | undefined;
+  let forceReset = false;
+  let reclassify = false;
+  let quiet = false;
+
+  for (let i = 0; i < tokens.length; i += 1) {
+    const token = tokens[i]!;
+    const nextToken = tokens[i + 1];
+    const readValue = (flag: string): string => {
+      if (token.startsWith(`${flag}=`)) return token.slice(flag.length + 1);
+      if (token === flag && nextToken && !nextToken.startsWith("--")) {
+        i += 1;
+        return nextToken;
+      }
+      throw new Error(`${flag} requires a value.`);
+    };
+    if (token === "--quiet") {
+      quiet = true;
+      continue;
+    }
+    if (token === "--force-reset") {
+      forceReset = true;
+      continue;
+    }
+    if (token === "--reclassify") {
+      reclassify = true;
+      continue;
+    }
+    if (token === "--track" || token.startsWith("--track=")) {
+      const raw = readValue("--track").trim();
+      if (!isFlowTrack(raw)) {
+        throw new Error(`--track must be one of: standard, medium, quick.`);
+      }
+      track = raw;
+      continue;
+    }
+    if (token === "--class" || token.startsWith("--class=")) {
+      className = readValue("--class").trim();
+      continue;
+    }
+    if (token === "--prompt" || token.startsWith("--prompt=")) {
+      prompt = readValue("--prompt").trim();
+      continue;
+    }
+    if (token === "--reason" || token.startsWith("--reason=")) {
+      reason = readValue("--reason").trim();
+      continue;
+    }
+    if (token === "--stack" || token.startsWith("--stack=")) {
+      stack = readValue("--stack").trim();
+      continue;
+    }
+    throw new Error(`Unknown flag for internal start-flow: ${token}`);
+  }
+
+  if (!track) {
+    throw new Error("internal start-flow requires --track=<standard|medium|quick>.");
+  }
+  return { track, className, prompt, reason, stack, forceReset, reclassify, quiet };
+}
+
 async function buildValidationReport(
   projectRoot: string,
   flowState: FlowState
@@ -1071,6 +1149,90 @@ async function runVerifyCurrentState(
   return validation.ok ? 0 : 1;
 }
 
+function firstIncompleteStageForTrack(track: FlowTrack, completedStages: FlowStage[]): FlowStage {
+  const completed = new Set(completedStages);
+  const stages = TRACK_STAGES[track];
+  return stages.find((stage) => !completed.has(stage)) ?? stages[stages.length - 1] ?? "brainstorm";
+}
+
+async function appendIdeaArtifact(projectRoot: string, args: StartFlowArgs, previous?: FlowState): Promise<void> {
+  const artifactPath = path.join(projectRoot, RUNTIME_ROOT, "artifacts", "00-idea.md");
+  await fs.mkdir(path.dirname(artifactPath), { recursive: true });
+  const now = new Date().toISOString();
+  if (args.reclassify) {
+    const entry = [
+      "",
+      `Reclassification: ${now}`,
+      `- From: ${previous?.track ?? "unknown"}`,
+      `- To: ${args.track}`,
+      `- Class: ${args.className || "unspecified"}`,
+      `- Reason: ${args.reason || "unspecified"}`
+    ].join("\n") + "\n";
+    await fs.appendFile(artifactPath, entry, "utf8");
+    return;
+  }
+  const body = [
+    "# Idea",
+    `Class: ${args.className || "unspecified"}`,
+    `Track: ${args.track}${args.reason ? ` (${args.reason})` : ""}`,
+    `Stack: ${args.stack || "unknown"}`,
+    "",
+    "## User prompt",
+    args.prompt || "(not provided)",
+    "",
+    "## Discovered context",
+    "- None recorded by managed start-flow."
+  ].join("\n") + "\n";
+  await fs.writeFile(artifactPath, body, "utf8");
+}
+
+async function runStartFlow(
+  projectRoot: string,
+  args: StartFlowArgs,
+  io: InternalIo
+): Promise<number> {
+  const current = await readFlowState(projectRoot);
+  const hasProgress = current.completedStages.length > 0;
+  if (!args.reclassify && hasProgress && !args.forceReset) {
+    io.stderr.write(
+      "cclaw internal start-flow: refusing to reset an active flow with completed stages without --force-reset. Ask the user before resetting.\n"
+    );
+    return 1;
+  }
+
+  let nextState: FlowState;
+  if (args.reclassify) {
+    const completedInNewTrack = current.completedStages.filter((stage) =>
+      TRACK_STAGES[args.track].includes(stage)
+    );
+    const fresh = createInitialFlowState({ activeRunId: current.activeRunId, track: args.track });
+    nextState = {
+      ...fresh,
+      completedStages: completedInNewTrack,
+      currentStage: firstIncompleteStageForTrack(args.track, completedInNewTrack),
+      rewinds: current.rewinds,
+      staleStages: current.staleStages
+    };
+  } else {
+    nextState = createInitialFlowState({ track: args.track });
+  }
+
+  await writeFlowState(projectRoot, nextState, { allowReset: true });
+  await appendIdeaArtifact(projectRoot, args, current);
+  if (!args.quiet) {
+    io.stdout.write(`${JSON.stringify({
+      ok: true,
+      command: "start-flow",
+      reclassify: args.reclassify,
+      track: nextState.track,
+      currentStage: nextState.currentStage,
+      skippedStages: nextState.skippedStages,
+      activeRunId: nextState.activeRunId
+    }, null, 2)}\n`);
+  }
+  return 0;
+}
+
 async function runHookCommand(
   projectRoot: string,
   args: HookArgs,
@@ -1123,7 +1285,7 @@ export async function runInternalCommand(
   const [subcommand, ...tokens] = argv;
   if (!subcommand) {
     io.stderr.write(
-      "cclaw internal requires a subcommand: advance-stage | verify-flow-state-diff | verify-current-state | envelope-validate | tdd-red-evidence | tdd-loop-status | compound-readiness | hook-manifest | hook\n"
+      "cclaw internal requires a subcommand: advance-stage | start-flow | verify-flow-state-diff | verify-current-state | envelope-validate | tdd-red-evidence | tdd-loop-status | compound-readiness | hook-manifest | hook\n"
     );
     return 1;
   }
@@ -1131,6 +1293,9 @@ export async function runInternalCommand(
   try {
     if (subcommand === "advance-stage") {
       return await runAdvanceStage(projectRoot, parseAdvanceStageArgs(tokens), io);
+    }
+    if (subcommand === "start-flow") {
+      return await runStartFlow(projectRoot, parseStartFlowArgs(tokens), io);
     }
     if (subcommand === "verify-flow-state-diff") {
       return await runVerifyFlowStateDiff(projectRoot, parseVerifyFlowStateDiffArgs(tokens), io);
@@ -1157,7 +1322,7 @@ export async function runInternalCommand(
       return await runHookCommand(projectRoot, parseHookArgs(tokens), io);
     }
     io.stderr.write(
-      `Unknown internal subcommand: ${subcommand}. Expected advance-stage | verify-flow-state-diff | verify-current-state | envelope-validate | tdd-red-evidence | tdd-loop-status | compound-readiness | hook-manifest | hook\n`
+      `Unknown internal subcommand: ${subcommand}. Expected advance-stage | start-flow | verify-flow-state-diff | verify-current-state | envelope-validate | tdd-red-evidence | tdd-loop-status | compound-readiness | hook-manifest | hook\n`
     );
     return 1;
   } catch (err) {

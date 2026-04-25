@@ -88,8 +88,10 @@ ${conversationLanguagePolicyMarkdown()}
    > \`Recommended track: <quick|medium|standard>\` because \`<one-line reason citing matched triggers>\`.
    > Override? (A) keep \`<recommended>\`  (B) switch track  (C) cancel.
    If the harness's native ask tool is available (\`AskUserQuestion\` / \`AskQuestion\` / \`question\` / \`request_user_input\`), send exactly ONE question; on schema error, fall back to a plain-text lettered list.
-10. Persist the chosen track to \`${flowPath}\` (\`track\` field). Compute \`skippedStages\` from the track and write that too. Use the **first stage of the chosen track** as \`currentStage\` (quick → \`spec\`, medium/standard → \`brainstorm\`, trivial fast-path → \`design\` or \`spec\` per Phase 0).
-11. Write the prompt to \`.cclaw/artifacts/00-idea.md\` with the following header lines: \`Class:\` (from Phase 0), \`Track:\` (chosen track + matched heuristic), \`Stack:\` (from Phase 2 detection, or \`unknown\`), and a \`Discovered context\` section if Phase 1/seed recall found references.
+10. Start the tracked flow only through the managed helper:
+   \`cclaw internal start-flow --track=<quick|medium|standard> --class=<class> --prompt=<prompt> --stack=<stack> --reason=<matched heuristic>\`
+   If this helper fails, STOP and report the exact command/output. Do **not** manually edit \`${flowPath}\`.
+11. The helper persists \`${flowPath}\`, computes \`skippedStages\`, sets the first stage for the track, resets the gate catalog, and writes \`.cclaw/artifacts/00-idea.md\`.
 12. Load the **first-stage skill for the chosen track** and its command file:
     - quick → \`.cclaw/skills/specification-authoring/SKILL.md\`
     - medium/standard → \`.cclaw/skills/brainstorming/SKILL.md\`
@@ -103,7 +105,7 @@ If during any stage the agent discovers evidence that contradicts the initial Ph
 1. Surface the new evidence in plain text.
 2. Propose the updated \`Class\` + \`Track\` with a one-line reason.
 3. Use the Decision Protocol to let the user accept, override, or cancel.
-4. On acceptance: update \`00-idea.md\` with a \`Reclassification:\` entry (old → new, reason, ISO timestamp) and update \`flow-state.json\` accordingly — do NOT rewrite prior artifacts, they stay as history.
+4. On acceptance: run \`cclaw internal start-flow --reclassify --track=<new-track> --class=<new-class> --reason=<why>\`. The helper appends a \`Reclassification:\` entry to \`00-idea.md\` and updates flow state atomically. If it fails, STOP and report the exact output; do NOT manually edit \`flow-state.json\`.
 
 ### Without prompt (\`/cc\`)
 
@@ -183,13 +185,12 @@ ${conversationLanguagePolicyMarkdown()}
 
    - On conflict, prefer \`standard\` over \`medium\`, and \`medium\` over \`quick\`.
    - Always state the recommendation as a one-line reason citing matched triggers.
-8. Persist the chosen track in \`${flowPath}\` (\`track\` + \`skippedStages\`). Set \`currentStage\` to the first stage of the chosen track (\`quick\` → \`spec\`, \`medium\`/ \`standard\` → \`brainstorm\`, trivial fast-path → \`design\` or \`spec\`). Reset gate catalog.
-9. Write \`${RUNTIME_ROOT}/artifacts/00-idea.md\` with the user's prompt plus header lines: \`Class:\`, \`Track:\`, \`Stack:\`, and a \`Discovered context\` section from Phase 0.5/1.
-10. Load and execute the **first stage skill of the chosen track** (\`brainstorming\` for medium/standard, \`specification-authoring\` for quick) plus its matching command file.
+8. Run the managed start helper: \`cclaw internal start-flow --track=<quick|medium|standard> --class=<class> --prompt=<prompt> --stack=<stack> --reason=<matched heuristic>\`. The helper writes \`${flowPath}\`, computes \`skippedStages\`, resets the gate catalog, and writes \`${RUNTIME_ROOT}/artifacts/00-idea.md\`. If it fails, STOP and report the exact command/output; do not manually edit flow state.
+9. Load and execute the **first stage skill of the chosen track** (\`brainstorming\` for medium/standard, \`specification-authoring\` for quick) plus its matching command file.
 
 ### Reclassification on discovery
 
-If mid-stage evidence contradicts the initial Class/Track decision (the "trivial" change needs a migration, the "quick" bug fix needs architecture work, an origin doc multiplies scope), STOP and re-classify using the Decision Protocol. Record \`Reclassification:\` in \`00-idea.md\` with old/new class and a one-line reason. Do NOT rewrite prior artifacts — they stay as history.
+If mid-stage evidence contradicts the initial Class/Track decision (the "trivial" change needs a migration, the "quick" bug fix needs architecture work, an origin doc multiplies scope), STOP and re-classify using the Decision Protocol. On acceptance, run \`cclaw internal start-flow --reclassify --track=<new-track> --class=<new-class> --reason=<why>\`; the helper records \`Reclassification:\` in \`00-idea.md\` and updates state atomically. Do NOT rewrite prior artifacts or manually edit flow-state.
 
 ### Path B: \`/cc\` (no arguments)
 

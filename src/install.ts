@@ -182,7 +182,6 @@ const DEPRECATED_HOOK_FILES = [
   "_lib.sh",
   "session-start.sh",
   "stop-checkpoint.sh",
-  "run-hook.cmd",
   "stage-complete.sh",
   "pre-compact.sh",
   "prompt-guard.sh",

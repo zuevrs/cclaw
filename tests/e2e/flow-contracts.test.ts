@@ -66,6 +66,24 @@ describe("flow command contracts", () => {
     expect(codexCc).not.toContain("intent in English");
   });
 
+  it("routes /cc start and reclassification through managed start-flow helper", async () => {
+    const root = await createTempProject("managed-start-flow-contract");
+    await initCclaw({ projectRoot: root });
+
+    const startCommand = await fs.readFile(path.join(root, ".cclaw/commands/start.md"), "utf8");
+    const startSkill = await fs.readFile(path.join(root, ".cclaw/skills/flow-start/SKILL.md"), "utf8");
+
+    for (const [label, content] of [["command", startCommand], ["skill", startSkill]] as const) {
+      expect(content, label).toContain("cclaw internal start-flow");
+      expect(content, label).toContain("--reclassify");
+      expect(content, label).toMatch(/do not manually edit/i);
+    }
+
+    expect(startCommand).not.toContain("Persist the chosen track to `.cclaw/state/flow-state.json`");
+    expect(startSkill).not.toContain("Persist the chosen track in `.cclaw/state/flow-state.json`");
+    expect(startCommand).not.toContain("update `flow-state.json` accordingly");
+  });
+
   it("documents cclaw-cli as installer/support and node hooks as runtime", async () => {
     const root = await createTempProject("runtime-boundary");
     await initCclaw({ projectRoot: root });
