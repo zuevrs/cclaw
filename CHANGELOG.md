@@ -101,6 +101,8 @@ workflow tool.
   large-ish diff.
 - Generated status/docs/ideate guidance now avoids stale waiver and legacy-layout
   wording in the primary user surface.
+- Prompt-surface tests now prefer durable behavioral anchors over exact generated
+  prose where schema and validator tests already cover the contract.
 
 ### Preserved
 

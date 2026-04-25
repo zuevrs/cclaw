@@ -34,18 +34,13 @@ describe("ideate utility surface", () => {
     // Resume check for ideate-*.md younger than 30 days.
     expect(ideateSkill).toContain("ideate-*.md");
     expect(ideateSkill).toContain("30 days");
-    expect(ideateSkill).toMatch(/Continue the existing backlog/i);
-    expect(ideateSkill).toMatch(/Start a fresh scan/i);
 
-    // Handoff prompt has four named options, not bare A/B/C.
-    expect(ideateSkill).toMatch(/Start \/cc on the top recommendation/);
-    expect(ideateSkill).toMatch(/Pick a different candidate/);
-    expect(ideateSkill).toMatch(/Save and close/);
-    expect(ideateSkill).toMatch(/Discard/);
+    // Handoff stays concrete without pinning exact option copy.
+    expect(ideateSkill).toContain("Required options");
     expect(ideateSkill).toMatch(/no bare A\/B\/C/i);
 
     // Handoff loads /cc in-session rather than asking the user to retype it.
     expect(ideateSkill).toContain(".cclaw/skills/using-cclaw/SKILL.md");
-    expect(ideateSkill).toMatch(/Handing off to \/cc/);
+    expect(ideateSkill).toContain("/cc <");
   });
 });

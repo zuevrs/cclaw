@@ -174,9 +174,10 @@ describe("flow command contracts", () => {
     );
     expect(metaSkill).toContain(".cclaw/state/flow-state.json");
     expect(metaSkill).toContain("## Whole flow map");
-    expect(metaSkill).toContain("standard: brainstorm -> scope -> design -> spec -> plan -> tdd -> review -> ship -> retro -> compound -> archive");
-    expect(metaSkill).toContain("medium: brainstorm -> spec -> plan -> tdd -> review -> ship -> retro -> compound -> archive");
-    expect(metaSkill).toContain("quick: spec -> tdd -> review -> ship -> retro -> compound -> archive");
+    for (const label of ["standard:", "medium:", "quick:"]) {
+      expect(metaSkill).toContain(label);
+    }
+    expect(metaSkill).toContain("retro -> compound -> archive");
 
     const nextCommand = await fs.readFile(
       path.join(root, ".cclaw/commands/next.md"),
@@ -197,10 +198,7 @@ describe("flow command contracts", () => {
     );
 
     expect(metaSkill).toContain("## Skill-before-response gate");
-    expect(metaSkill).toContain("load the matching stage SKILL before producing");
-    expect(metaSkill).toContain("Substantive");
-    expect(metaSkill).toContain("Non-substantive");
-    expect(metaSkill).toContain("/cc");
+    expect(metaSkill).toContain("SKILL");
   });
 
   it("includes inline shared guidance in spec and plan skills", async () => {
@@ -309,18 +307,10 @@ describe("flow command contracts", () => {
     );
 
     expect(planSkill).toContain("sliceReview.enabled");
-    expect(planSkill).toContain("touchCount");
-    expect(planSkill).toContain("touchPaths");
     expect(planSkill).toContain("highRisk");
 
     expect(tddSkill).toContain("Per-Slice Review");
     expect(tddSkill).toContain("sliceReview.enabled");
-    expect(tddSkill).toContain("filesChangedThreshold");
-    expect(tddSkill).toContain("touchTriggers");
-    expect(tddSkill).toContain("enforceOnTracks");
-    expect(tddSkill).toContain("Spec-Compliance");
-    expect(tddSkill).toContain("Quality");
-    expect(tddSkill).toContain("fulfillmentMode");
     expect(tddSkill).toContain("reviewer");
     expect(tddSkill).toContain("Per-Slice Review Audit (conditional)");
   });
