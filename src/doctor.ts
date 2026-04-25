@@ -1153,59 +1153,6 @@ export async function doctorChecks(projectRoot: string, options: DoctorOptions =
     });
   }
 
-  checks.push({
-    name: "state:stage_activity_exists",
-    ok: await exists(path.join(projectRoot, RUNTIME_ROOT, "state", "stage-activity.jsonl")),
-    details: `${RUNTIME_ROOT}/state/stage-activity.jsonl must exist`
-  });
-  const stageActivityPath = path.join(projectRoot, RUNTIME_ROOT, "state", "stage-activity.jsonl");
-  if (await exists(stageActivityPath)) {
-    let malformedActivityLines = 0;
-    let missingSchemaVersion = 0;
-    let parsedActivityLines = 0;
-    try {
-      const raw = await fs.readFile(stageActivityPath, "utf8");
-      const lines = raw
-        .split("\n")
-        .map((line) => line.trim())
-        .filter((line) => line.length > 0);
-      for (const line of lines) {
-        try {
-          const parsed = JSON.parse(line) as Record<string, unknown>;
-          if (!parsed || typeof parsed !== "object" || Array.isArray(parsed)) {
-            malformedActivityLines += 1;
-            continue;
-          }
-          parsedActivityLines += 1;
-          if (parsed.schemaVersion !== 1) {
-            missingSchemaVersion += 1;
-          }
-        } catch {
-          malformedActivityLines += 1;
-        }
-      }
-    } catch {
-      malformedActivityLines += 1;
-    }
-    checks.push({
-      name: "state:stage_activity_jsonl_parseable",
-      ok: malformedActivityLines === 0,
-      details:
-        malformedActivityLines === 0
-          ? "stage-activity.jsonl lines parse as JSON objects"
-          : `stage-activity.jsonl contains ${malformedActivityLines} malformed line(s)`
-    });
-    checks.push({
-      name: "warning:state:stage_activity_schema_version",
-      ok: true,
-      details:
-        parsedActivityLines === 0
-          ? "stage-activity.jsonl is empty"
-          : missingSchemaVersion === 0
-            ? `all ${parsedActivityLines} stage-activity line(s) include schemaVersion=1`
-            : `warning: ${missingSchemaVersion}/${parsedActivityLines} stage-activity line(s) missing schemaVersion=1`
-    });
-  }
   let flowState = createInitialFlowState();
   let flowStateCorruptError: CorruptFlowStateError | null = null;
   try {

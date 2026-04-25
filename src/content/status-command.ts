@@ -15,10 +15,6 @@ function knowledgePath(): string {
   return `${RUNTIME_ROOT}/knowledge.jsonl`;
 }
 
-function stageActivityPath(): string {
-  return `${RUNTIME_ROOT}/state/stage-activity.jsonl`;
-}
-
 function retroArtifactPath(): string {
   return `${RUNTIME_ROOT}/artifacts/09-retro.md`;
 }
@@ -55,10 +51,8 @@ time to answer "where are we?" without advancing the flow.
    (shipSubstate + retro/compound flags).
 2. Read **\`${delegationPath}\`** — for each mandatory agent of the current stage,
    capture \`status\`, \`fulfillmentMode\`, and whether \`evidenceRefs\` are present.
-3. Compute **time in current stage** from \`${stageActivityPath()}\`:
-   - Scan from the end for the first entry whose \`stage\` matches \`currentStage\` and use its \`ts\`.
-   - Compute the duration as \`now - signalTimestamp\` and render compactly: \`<X>m\`, \`<X>h<Y>m\`, or \`<X>d<Y>h\`.
-   - If no signal exists, render \`(unknown)\`.
+3. Render **time in current stage** as \`(unknown)\` unless the harness provides
+   a visible timestamp in the conversation or artifact handoff.
 4. Summarize current gate counts directly from \`${flowPath}\`.
 5. Derive harness \`tier\` and fallback from cclaw capability metadata; use \`cclaw doctor --explain\` when details are needed.
 6. Read the top of **\`${knowledgePath()}\`** — surface up to 3 most recent entries
@@ -151,8 +145,8 @@ a read-only command.
 
 1. Read \`${flowPath}\`. If missing → report **BLOCKED: flow state absent** and suggest \`cclaw init\`.
 2. Read \`${delegationPath}\`. Missing → treat all mandatory delegations as pending.
-3. Compute **time in stage** by scanning \`${stageActivityPath()}\` from tail for the most recent entry whose \`stage === currentStage\`; use its \`ts\`.
-   - Render \`<X>d<Y>h\`, \`<X>h<Y>m\`, \`<X>m\`, or \`(unknown)\`.
+3. Render **time in stage** as \`(unknown)\` unless visible conversation or
+   artifact handoff context gives a timestamp.
 4. Summarize current-stage gate counts from \`passed\`, \`blocked\`, and required gate metadata.
 5. Derive harness \`<tier>/<fallback>\` rows from cclaw capability metadata.
 6. Read \`${RUNTIME_ROOT}/knowledge.jsonl\`. If missing or empty → knowledge highlights are \`(none recorded)\`. Parse each line as JSON and surface its \`trigger\`/\`action\`.

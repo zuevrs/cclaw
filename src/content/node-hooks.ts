@@ -878,44 +878,13 @@ async function buildKnowledgeDigest(root, currentStage, prereadRaw) {
   };
 }
 
-async function readRecentActivityLines(activityFile) {
-  const raw = await readTextFile(activityFile, "");
-  const lines = raw.split(/\\r?\\n/gu).map((line) => line.trim()).filter((line) => line.length > 0);
-  const tail = lines.slice(-5);
-  const out = [];
-  for (const line of tail) {
-    try {
-      const parsed = JSON.parse(line);
-      if (!parsed || typeof parsed !== "object" || Array.isArray(parsed)) continue;
-      out.push(
-        "- " +
-          (typeof parsed.ts === "string" ? parsed.ts : "unknown") +
-          " [" +
-          (typeof parsed.phase === "string" ? parsed.phase : "unknown") +
-          "] " +
-          (typeof parsed.tool === "string" ? parsed.tool : "unknown") +
-          " (stage=" +
-          (typeof parsed.stage === "string" ? parsed.stage : "unknown") +
-          ", run=" +
-          (typeof parsed.runId === "string" ? parsed.runId : "none") +
-          ")"
-      );
-    } catch {
-      // ignore malformed activity lines
-    }
-  }
-  return out;
-}
-
 async function handleSessionStart(runtime) {
   const state = await readFlowState(runtime.root);
   const stateDir = path.join(runtime.root, RUNTIME_ROOT, "state");
-  const activityFile = path.join(stateDir, "stage-activity.jsonl");
   const ironLawsFile = path.join(stateDir, "iron-laws.json");
   const metaSkillFile = path.join(runtime.root, RUNTIME_ROOT, "skills", "using-cclaw", "SKILL.md");
 
 
-  const activitySummary = await readRecentActivityLines(activityFile);
   // Read knowledge.jsonl exactly once per session-start while holding the
   // SAME lock CLI writers acquire in \`appendKnowledge\`. Guarantees we never
   // see a partial (mid-write) snapshot. Both the digest and
@@ -1052,9 +1021,6 @@ async function handleSessionStart(runtime) {
       String(knowledge.learningsCount) +
       " entries."
   ];
-  if (activitySummary.length > 0) {
-    parts.push("Recent stage activity:\\n" + activitySummary.join("\\n"));
-  }
   if (ralphLoopLine.length > 0) {
     parts.push(ralphLoopLine);
   }

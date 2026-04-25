@@ -55,9 +55,9 @@ with the new list.
 
 One knob that controls both guard families:
 
-- `advisory` — prompt-guard and TDD violations are **logged** to
-`.cclaw/state/preamble-log.jsonl` and `stage-activity.jsonl` but do
-not block the agent.
+- `advisory` — prompt-guard and workflow/TDD violations are **logged** to
+`.cclaw/state/prompt-guard.jsonl` and `.cclaw/state/workflow-guard.jsonl`
+only when a guard actually fires; they do not block the agent.
 - `strict` — violations **block** stage transitions until the agent
 corrects them.
 

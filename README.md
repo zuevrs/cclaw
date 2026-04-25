@@ -321,7 +321,7 @@ it into ceremony:
 
 The `tdd` stage is not prose guidance. It requires:
 
-- an explicit **RED** test run (logged to `.cclaw/state/stage-activity.jsonl`)
+- an explicit **RED** test run (captured in `.cclaw/artifacts/06-tdd.md`)
 - a mandatory **`test-author`** subagent dispatch (logged to
   `.cclaw/state/delegation-log.json`)
 - a **GREEN** full-suite run before exit

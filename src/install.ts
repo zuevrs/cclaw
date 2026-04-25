@@ -166,6 +166,7 @@ const DEPRECATED_SKILL_FILES = [
 const DEPRECATED_STATE_FILES = [
   "checkpoint.json",
   "flow-state.snapshot.json",
+  "stage-activity.jsonl",
   "knowledge-digest.md",
   "suggestion-memory.json",
   "harness-gaps.json",
@@ -920,16 +921,6 @@ async function ensureKnowledgeStore(projectRoot: string): Promise<void> {
 
 
 
-async function ensureSessionStateFiles(projectRoot: string): Promise<void> {
-  const stateDir = runtimePath(projectRoot, "state");
-  await ensureDir(stateDir);
-
-  const activityPath = path.join(stateDir, "stage-activity.jsonl");
-  if (!(await exists(activityPath))) {
-    await writeFileSafe(activityPath, "", { mode: 0o600 });
-  }
-}
-
 async function writeRulebook(projectRoot: string): Promise<void> {
   await writeFileSafe(runtimePath(projectRoot, "rules", "RULES.md"), RULEBOOK_MARKDOWN);
   await writeFileSafe(
@@ -1087,7 +1078,6 @@ async function materializeRuntime(projectRoot: string, config: CclawConfig, forc
   ]);
   await writeState(projectRoot, config, forceStateReset);
   await ensureRunSystem(projectRoot, { createIfMissing: false });
-  await ensureSessionStateFiles(projectRoot);
   await ensureKnowledgeStore(projectRoot);
   await writeHooks(projectRoot, config);
   await syncDisabledHarnessArtifacts(projectRoot, harnesses);

@@ -15,7 +15,6 @@ export default function cclawPlugin(ctx) {
   const pluginLogPath = join(logsDir, "opencode-plugin.log");
   const configPath = join(runtimeDir, "config.yaml");
   const flowStatePath = join(stateDir, "flow-state.json");
-  const activityPath = join(stateDir, "stage-activity.jsonl");
   const knowledgePath = join(runtimeDir, "knowledge.jsonl");
   const metaSkillPath = join(runtimeDir, "skills/${META_SKILL_NAME}/SKILL.md");
 
@@ -81,25 +80,6 @@ export default function cclawPlugin(ctx) {
     return text.split(/\\r?\\n/).slice(-maxLines);
   }
 
-  async function readRecentActivity() {
-    try {
-      const lines = await readTailLines(activityPath, 5);
-      if (lines.length === 0) return [];
-      return lines
-        .map((line) => {
-          try {
-            return JSON.parse(line);
-          } catch {
-            return null;
-          }
-        })
-        .filter(Boolean)
-        .map((entry) => \`- \${entry.ts || "unknown"} [\${entry.phase || "unknown"}] \${entry.tool || "unknown"} (stage=\${entry.stage || "unknown"}, run=\${entry.runId || "none"})\`);
-    } catch {
-      return [];
-    }
-  }
-
   async function readKnowledgeDigest() {
     return readTailLines(knowledgePath, 12);
   }
@@ -113,10 +93,6 @@ export default function cclawPlugin(ctx) {
       \`cclaw loaded. Flow: stage=\${flow.stage} (\${flow.completed}/8 completed, run=\${flow.activeRunId}). Active artifacts: ${RUNTIME_ROOT}/artifacts/\`
     ];
 
-
-
-    const activity = await readRecentActivity();
-    if (activity.length > 0) parts.push("Recent stage activity:", ...activity);
 
 
     const knowledge = await readKnowledgeDigest();
@@ -136,7 +112,6 @@ export default function cclawPlugin(ctx) {
   let bootstrapRefreshPromise = null;
   const BOOTSTRAP_SOURCE_PATHS = [
     flowStatePath,
-    activityPath,
     knowledgePath,
     metaSkillPath
   ];
