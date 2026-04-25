@@ -62,6 +62,8 @@ describe("install lifecycle", { timeout: 30_000 }, () => {
     expect(checks.some((check) => check.name === "hook:script:run-hook.cmd:executable" && check.ok)).toBe(true);
     expect(checks.some((check) => check.name === "hook:script:stage-complete.mjs" && check.ok)).toBe(true);
     expect(checks.some((check) => check.name === "hook:script:stage-complete.mjs:executable" && check.ok)).toBe(true);
+    expect(checks.some((check) => check.name === "hook:script:start-flow.mjs" && check.ok)).toBe(true);
+    expect(checks.some((check) => check.name === "hook:script:start-flow.mjs:executable" && check.ok)).toBe(true);
     expect(checks.some((check) => check.name === "hook:wiring:codex" && check.ok)).toBe(true);
 
     const runtimeEntries = (await fs.readdir(path.join(root, ".cclaw"))).sort();
