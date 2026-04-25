@@ -173,12 +173,18 @@ describe("flow command contracts", () => {
       "utf8"
     );
     expect(metaSkill).toContain(".cclaw/state/flow-state.json");
+    expect(metaSkill).toContain("## Whole flow map");
+    expect(metaSkill).toContain("standard: brainstorm -> scope -> design -> spec -> plan -> tdd -> review -> ship -> retro -> compound -> archive");
+    expect(metaSkill).toContain("medium: brainstorm -> spec -> plan -> tdd -> review -> ship -> retro -> compound -> archive");
+    expect(metaSkill).toContain("quick: spec -> tdd -> review -> ship -> retro -> compound -> archive");
 
     const nextCommand = await fs.readFile(
       path.join(root, ".cclaw/commands/next.md"),
       "utf8"
     );
     expect(nextCommand).toContain(".cclaw/state/flow-state.json");
+    expect(nextCommand).toContain("closeout.shipSubstate");
+    expect(nextCommand).toContain("retro -> compound -> archive");
   });
 
   it("requires the meta-skill to declare a skill-before-response gate", async () => {

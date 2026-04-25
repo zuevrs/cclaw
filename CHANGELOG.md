@@ -85,6 +85,9 @@ workflow tool.
   readable as an input alias.
 - Codex legacy skill cleanup now removes any old `cclaw-cc*` folder by prefix
   instead of carrying a hardcoded list of obsolete command names.
+- The generated meta-skill, shared stage guidance, `/cc-next`, and harness shims
+  now show the whole flow explicitly: critical-path stages finish with
+  `retro -> compound -> archive` through `/cc-next`.
 
 ### Preserved
 

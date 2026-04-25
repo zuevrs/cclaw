@@ -257,6 +257,8 @@ Otherwise (non-terminal \`next\`): load the next stage skill and begin execution
 
 ## Stage order
 
+This table is the critical path. After \`ship\`, \`/cc-next\` continues closeout via \`closeout.shipSubstate\`: \`retro -> compound -> archive\`.
+
 | Stage | Next | Skill path |
 |---|---|---|
 ${stageRows}

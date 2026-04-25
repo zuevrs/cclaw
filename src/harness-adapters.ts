@@ -338,8 +338,8 @@ When in doubt, prefer **non-trivial** — the quick track is opt-in and only saf
 Knowledge capture and curation run automatically as part of stage completion
 protocols via the internal \`learnings\` skill — no user-facing command.
 
-**Stage order:** brainstorm > scope > design > spec > plan > tdd > review > ship.
-\`/cc-next\` loads the right stage skill automatically. Gates must pass before handoff.
+**Stage order:** brainstorm > scope > design > spec > plan > tdd > review > ship, then closeout: retro > compound > archive.
+\`/cc-next\` loads the right stage skill automatically and also drives post-ship closeout. Gates must pass before handoff.
 
 ### Verification Discipline
 
@@ -442,6 +442,21 @@ export async function removeCclawFromAgentsMd(projectRoot: string): Promise<void
   await removeCclawFromRoutingFile(path.join(projectRoot, "CLAUDE.md"));
 }
 
+function utilityShimBehavior(command: string): string {
+  switch (command) {
+    case "cc":
+      return "This is the entry command, not a flow stage. It may initialize or resume flow state after confirmation.";
+    case "next":
+      return "This is the progression command, not a flow stage. It may advance stages and post-ship closeout through managed helpers.";
+    case "ideate":
+      return "This is an ideation command, not a flow stage. It may write ideation artifacts/seeds but does not advance flow state.";
+    case "view":
+      return "This is a read-only view command, not a flow stage. It never mutates flow state.";
+    default:
+      return "This is a utility command, not a flow stage.";
+  }
+}
+
 function utilityShimContent(harness: HarnessId, command: string, skillFolder: string, commandFile: string): string {
   const shimName = command === "cc" ? "cc" : `cc-${command}`;
   return `---
@@ -456,7 +471,7 @@ Load and execute:
 1. \`.cclaw/skills/${skillFolder}/SKILL.md\`
 2. \`.cclaw/commands/${commandFile}\`
 
-This is a utility command (not a flow stage). It does not advance flow state.
+${utilityShimBehavior(command)}
 `;
 }
 
@@ -469,9 +484,9 @@ This is a utility command (not a flow stage). It does not advance flow state.
 function codexSkillDescription(command: string): string {
   switch (command) {
     case "cc":
-      return `Entry point for the cclaw 8-stage workflow (brainstorm → scope → design → spec → plan → tdd → review → ship). Use whenever the user types \`/cc\`, \`/cclaw\`, or asks to "start the flow", "begin cclaw", "kick off the workflow", "classify this task", or wants to start/resume a non-trivial software change. No args = resume the active stage from \`.cclaw/state/flow-state.json\`. With a prompt = classify and pick a track (quick/medium/standard).`;
+      return `Entry point for the cclaw track-aware workflow ending in ship plus auto-closeout (retro → compound → archive). Use whenever the user types \`/cc\`, \`/cclaw\`, or asks to "start the flow", "begin cclaw", "kick off the workflow", "classify this task", or wants to start/resume a non-trivial software change. No args = resume the active stage from \`.cclaw/state/flow-state.json\`. With a prompt = classify and pick a track (quick/medium/standard).`;
     case "next":
-      return `Advance the cclaw flow to the next stage. Use when the user types \`/cc-next\` or asks to "move to the next stage", "continue the flow", "advance cclaw", "progress the workflow", or when the current stage skill reports completion and gates have passed.`;
+      return `Advance the cclaw flow to the next stage or post-ship closeout substate. Use when the user types \`/cc-next\` or asks to "move to the next stage", "continue the flow", "advance cclaw", "progress the workflow", or when the current stage skill reports completion and gates have passed.`;
     case "ideate":
       return `Read-only repo-improvement ideate mode for cclaw. Use when the user types \`/cc-ideate\` or asks to "ideate", "scan the repo for TODOs/tech debt", "generate a backlog", or wants a ranked list of candidate ideas before committing to a single flow. Does not mutate \`.cclaw/state/flow-state.json\`.`;
     case "view":

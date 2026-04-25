@@ -144,6 +144,7 @@ describe("install lifecycle", { timeout: 30_000 }, () => {
     const agentsMd = await fs.readFile(path.join(root, "AGENTS.md"), "utf8");
     expect(agentsMd).toContain("## Cclaw — Workflow Adapter");
     expect(agentsMd).toContain("intentionally minimal for cross-project use");
+    expect(agentsMd).toContain("then closeout: retro > compound > archive");
     expect(agentsMd).not.toContain("### Agent Specialists");
     expect(agentsMd).not.toContain("### Hooks (real lifecycle integration)");
     expect(agentsMd).not.toContain("### Runtime Details (full mode)");

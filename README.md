@@ -435,7 +435,7 @@ npx cclaw-cli                   # launches interactive setup (or prints
                                 # a one-line status hint if already installed)
 npx cclaw-cli sync              # re-materialize generated runtime from config.yaml
 npx cclaw-cli upgrade           # refresh generated files; preserves .cclaw/config.yaml
-npx cclaw-cli archive           # archive current run and reset flow-state
+npx cclaw-cli archive           # explicit/manual archive; normal post-ship closeout uses /cc-next
 npx cclaw-cli uninstall         # remove .cclaw + generated harness shims
 npx cclaw-cli --version
 ```

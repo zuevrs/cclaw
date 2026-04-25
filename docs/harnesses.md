@@ -71,7 +71,7 @@ shared casing silently breaks generated wiring.
 All harnesses receive the same utility commands:
 
 - `/cc` - flow entry and resume
-- `/cc-next` - stage progression
+- `/cc-next` - stage progression and post-ship closeout
 - `/cc-ideate` - ideate mode for ranked repo-improvement backlog
 - `/cc-view` - read-only router for status/tree/diff
 
@@ -80,10 +80,13 @@ Read-only subcommands:
 - `/cc-view tree` - deep flow tree (stages, artifacts, stale markers)
 - `/cc-view diff` - before/after flow-state diff map
 
-Operational work is handled by `/cc-next` and the CLI (`cclaw archive`, `cclaw internal ...`) rather than a separate slash-command router.
+Operational work is handled by `/cc-next` and the CLI (`cclaw archive`, `cclaw internal ...`) rather than a separate slash-command router. Normal post-ship closeout stays on `/cc-next`; `cclaw archive` is the explicit/manual archive path and the runtime used when closeout reaches `ready_to_archive`.
 
-Stage order remains canonical:
+Critical-path stage order remains canonical:
 `brainstorm -> scope -> design -> spec -> plan -> tdd -> review -> ship`
+
+Every track then closes out through:
+`retro -> compound -> archive`
 
 ## Stage -> skill folder mapping
 

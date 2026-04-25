@@ -61,7 +61,8 @@ Task arrives
   ├─ Resume existing flow? -> /cc or /cc-next
   ├─ Knowledge operation? -> load the learnings skill
   ├─ Read-only workspace view? -> /cc-view [status|tree|diff]
-  └─ Run archival/reset from CLI? -> cclaw archive [--name=<slug>]
+  ├─ Normal post-ship closeout? -> /cc-next drives retro -> compound -> archive
+  └─ Explicit early archival/reset? -> cclaw archive [--name=<slug>]
 \`\`\`
 
 ## Task classification
@@ -90,9 +91,15 @@ Before stage work:
 
 ## Stage quick map
 
-brainstorm -> scope -> design -> spec -> plan -> tdd -> review -> ship
+## Whole flow map
 
-Tracks may skip stages via \`flow-state.track\` + \`skippedStages\`.
+standard: brainstorm -> scope -> design -> spec -> plan -> tdd -> review -> ship -> retro -> compound -> archive
+medium: brainstorm -> spec -> plan -> tdd -> review -> ship -> retro -> compound -> archive
+quick: spec -> tdd -> review -> ship -> retro -> compound -> archive
+
+The first stage names are the critical path. \`retro\`, \`compound\`, and \`archive\` are post-ship closeout substates under \`closeout.shipSubstate\`, not separate stage schemas or commands. Continue them with \`/cc-next\`.
+
+Tracks may skip critical-path stages via \`flow-state.track\` + \`skippedStages\`.
 Use the current stage skill plus \`.cclaw/state/flow-state.json\` for orientation.
 
 ## Contextual Skill Activation
@@ -107,7 +114,7 @@ Use built-in judgment only when triggered by the current task:
 
 ## Protocol Behavior
 
-Keep decision, completion, and preamble discipline inline: ask only decision-changing questions, verify gates before advancing, and keep context compact.
+Keep decision, completion, and preamble discipline inline: ask only decision-changing questions, verify gates before advancing, and keep context compact. After \`ship\`, keep using \`/cc-next\` through \`retro -> compound -> archive\`; do not route normal closeout through a separate operations command.
 
 ## Knowledge guidance
 
