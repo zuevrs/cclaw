@@ -832,6 +832,130 @@ describe("install lifecycle", { timeout: 30_000 }, () => {
     expect(warning?.details).toMatch(/no raw knowledge entries older than 90 days/);
   });
 
+  it("warns when knowledge entries violate the current schema", async () => {
+    const root = await createTempProject("knowledge-current-schema");
+    await initCclaw({ projectRoot: root });
+
+    const nowIso = new Date().toISOString().replace(/\.\d{3}Z$/u, "Z");
+    const invalidLine = JSON.stringify({
+      type: "note",
+      trigger: "",
+      action: "parse through zod",
+      confidence: "medium",
+      domain: "api",
+      stage: "review",
+      origin_stage: "review",
+      origin_run: "payload-hardening",
+      frequency: 1,
+      universality: "project",
+      maturity: "raw",
+      created: nowIso,
+      first_seen_ts: nowIso,
+      last_seen_ts: nowIso,
+      project: "demo"
+    });
+    await fs.writeFile(path.join(root, ".cclaw/knowledge.jsonl"), invalidLine + "\n", "utf8");
+
+    const checks = await doctorChecks(root);
+    const warning = checks.find((c) => c.name === "warning:knowledge:current_schema");
+    expect(warning).toBeDefined();
+    expect(warning?.ok).toBe(false);
+    expect(warning?.severity).toBe("warning");
+    expect(warning?.details).toMatch(/type must be one of: rule, pattern, lesson, compound/);
+    expect(doctorSucceeded(checks)).toBe(true);
+  });
+
+  it("warns when routing docs do not surface knowledge store usage", async () => {
+    const root = await createTempProject("knowledge-discoverability");
+    await initCclaw({ projectRoot: root });
+
+    await fs.writeFile(path.join(root, "AGENTS.md"), "# Agents\n\nUse the workflow.\n", "utf8");
+    await fs.writeFile(path.join(root, "CLAUDE.md"), "# Claude\n\nUse the workflow.\n", "utf8");
+
+    const checks = await doctorChecks(root);
+    const warning = checks.find((c) => c.name === "warning:knowledge:discoverability");
+    expect(warning).toBeDefined();
+    expect(warning?.ok).toBe(false);
+    expect(warning?.severity).toBe("warning");
+    expect(warning?.details).toContain(".cclaw/knowledge.jsonl");
+    expect(warning?.details).toContain("type/trigger/action/origin_run");
+  });
+
+  it("accepts routing docs that surface knowledge store usage", async () => {
+    const root = await createTempProject("knowledge-discoverability-ok");
+    await initCclaw({ projectRoot: root });
+
+    await fs.writeFile(
+      path.join(root, "AGENTS.md"),
+      "# Agents\n\nKnowledge lives in .cclaw/knowledge.jsonl. Use type rule|pattern|lesson|compound with trigger, action, and origin_run fields.\n",
+      "utf8"
+    );
+    await fs.rm(path.join(root, "CLAUDE.md"), { force: true });
+
+    const checks = await doctorChecks(root);
+    const warning = checks.find((c) => c.name === "warning:knowledge:discoverability");
+    expect(warning).toBeDefined();
+    expect(warning?.ok).toBe(true);
+    expect(warning?.details).toContain("AGENTS.md");
+  });
+
+  it("warns about orphan seed shelf entries", async () => {
+    const root = await createTempProject("knowledge-orphan-seeds");
+    await initCclaw({ projectRoot: root });
+
+    const seedPath = path.join(root, ".cclaw/seeds/SEED-2026-04-25-api-shape.md");
+    await fs.mkdir(path.dirname(seedPath), { recursive: true });
+    await fs.writeFile(
+      seedPath,
+      `---
+title: API shape
+trigger_when:
+  - api
+---
+# API shape
+
+Capture this later.
+`,
+      "utf8"
+    );
+
+    const checks = await doctorChecks(root);
+    const warning = checks.find((c) => c.name === "warning:knowledge:orphan_seeds");
+    expect(warning).toBeDefined();
+    expect(warning?.ok).toBe(false);
+    expect(warning?.severity).toBe("warning");
+    expect(warning?.details).toContain(".cclaw/seeds/SEED-2026-04-25-api-shape.md");
+  });
+
+  it("accepts discoverable seed shelf entries", async () => {
+    const root = await createTempProject("knowledge-seeds-ok");
+    await initCclaw({ projectRoot: root });
+
+    const seedPath = path.join(root, ".cclaw/seeds/SEED-2026-04-25-api-shape.md");
+    await fs.mkdir(path.dirname(seedPath), { recursive: true });
+    await fs.writeFile(
+      seedPath,
+      `---
+title: API shape
+source_artifact: .cclaw/artifacts/00-idea.md
+trigger_when:
+  - api
+action: Revisit the API shape before spec.
+---
+# API shape
+
+Capture this later.
+`,
+      "utf8"
+    );
+
+    const checks = await doctorChecks(root);
+    const warning = checks.find((c) => c.name === "warning:knowledge:orphan_seeds");
+    expect(warning).toBeDefined();
+    expect(warning?.ok).toBe(true);
+    expect(warning?.details).toMatch(/all 1 seed shelf entry is discoverable/);
+  });
+
   it("flags unsynced reconciliation notices and clears them with reconcile-gates", async () => {
     const root = await createTempProject("doctor-reconciliation-notices");
     await initCclaw({ projectRoot: root });

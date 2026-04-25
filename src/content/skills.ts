@@ -1,7 +1,7 @@
 import { RUNTIME_ROOT, STAGE_TO_SKILL_FOLDER } from "../constants.js";
 import type { FlowStage, FlowTrack } from "../types.js";
 import { stageExamples } from "./examples.js";
-import { stageAutoSubagentDispatch, stageSchema, stageTrackRenderContext } from "./stage-schema.js";
+import { reviewStackAwareRoutes, reviewStackAwareRoutingSummary, stageAutoSubagentDispatch, stageSchema, stageTrackRenderContext } from "./stage-schema.js";
 import type { StageSchema } from "./stage-schema.js";
 import type {
   ArtifactValidation,
@@ -109,6 +109,20 @@ function reviewSectionsBlock(sectionsInput: ReviewSection[]): string {
   return `## Review Sections
 
 ${sections}
+`;
+}
+
+function stackAwareReviewRoutingBlock(stage: FlowStage): string {
+  if (stage !== "review") return "";
+  const routes = reviewStackAwareRoutes()
+    .map((route) => `- ${route.stack}: ${route.signals.map((signal) => `\`${signal}\``).join(", ")} -> ${route.agent} lens for ${route.focus}.`)
+    .join("\n");
+  return `## Stack-Aware Review Routing
+${reviewStackAwareRoutingSummary()}
+
+Default general review still runs. Add only the matching stack lens when repo signals or changed files justify it.
+
+${routes}
 `;
 }
 
@@ -403,6 +417,7 @@ ${processFlowMermaid.length > 0 ? processFlowMermaid : "```mermaid\nflowchart TD
 
 ${platformNotesBlock}${contextLoadingBlock(artifactRules.crossStageTrace, executionModel)}
 ${autoSubagentDispatchBlock(stage, track)}
+${stackAwareReviewRoutingBlock(stage)}
 ${researchPlaybooksBlock(executionModel.researchPlaybooks ?? [])}
 
 ## Checklist

@@ -87,11 +87,70 @@ const COMPLEXITY_TIER_ORDER: Record<StageComplexityTier, number> = {
   deep: 2
 };
 
+export interface StageStackAwareReviewRoute {
+  stack: string;
+  agent: "reviewer";
+  signals: string[];
+  focus: string;
+}
+
 export interface StageDelegationSummary {
   stage: FlowStage;
   mandatoryAgents: string[];
   proactiveAgents: string[];
   primaryAgents: string[];
+  stackAwareRoutes: StageStackAwareReviewRoute[];
+}
+
+const REVIEW_STACK_AWARE_ROUTES: StageStackAwareReviewRoute[] = [
+  {
+    stack: "TypeScript/JavaScript",
+    agent: "reviewer",
+    signals: ["package.json", "tsconfig.json"],
+    focus: "type safety, package scripts, build/test config, dependency boundaries"
+  },
+  {
+    stack: "Python",
+    agent: "reviewer",
+    signals: ["pyproject.toml", "requirements.txt"],
+    focus: "packaging, virtualenv assumptions, typing, pytest or unittest evidence"
+  },
+  {
+    stack: "Ruby/Rails",
+    agent: "reviewer",
+    signals: ["Gemfile", "config/"],
+    focus: "Rails conventions, migrations, routes/controllers, RSpec or Minitest evidence"
+  },
+  {
+    stack: "Go",
+    agent: "reviewer",
+    signals: ["go.mod"],
+    focus: "interfaces, concurrency, error handling, go test coverage"
+  },
+  {
+    stack: "Rust",
+    agent: "reviewer",
+    signals: ["Cargo.toml"],
+    focus: "ownership, error/result handling, feature flags, cargo test coverage"
+  }
+];
+
+function stackAwareRoutesForStage(stage: FlowStage): StageStackAwareReviewRoute[] {
+  return stage === "review" ? reviewStackAwareRoutes() : [];
+}
+
+export function reviewStackAwareRoutes(): StageStackAwareReviewRoute[] {
+  return REVIEW_STACK_AWARE_ROUTES.map((route) => ({
+    ...route,
+    signals: [...route.signals]
+  }));
+}
+
+export function reviewStackAwareRoutingSummary(): string {
+  const routeList = REVIEW_STACK_AWARE_ROUTES
+    .map((route) => `${route.stack} via ${route.signals.join("/")}`)
+    .join("; ");
+  return `Stack-aware review routing: keep the default reviewer and security-reviewer passes, then proactively route matching reviewer lenses when repo signals or review context match (${routeList}). Do not run every stack lens unconditionally.`;
 }
 
 function dedupeAgentsInOrder(agents: string[]): string[] {
@@ -135,7 +194,8 @@ export function stageDelegationSummary(
       stage,
       mandatoryAgents,
       proactiveAgents,
-      primaryAgents
+      primaryAgents,
+      stackAwareRoutes: stackAwareRoutesForStage(stage)
     };
   });
 }
@@ -245,15 +305,19 @@ const REQUIRED_GATE_IDS: Record<FlowStage, RequiredGateSet> = {
   spec: [
     "spec_acceptance_measurable",
     "spec_testability_confirmed",
+    "spec_assumptions_surfaced",
     "spec_user_approved"
   ],
   plan: [
     "plan_tasks_sliced_2_5_min",
     "plan_dependency_batches_defined",
     "plan_acceptance_mapped",
+    "plan_execution_posture_recorded",
     "plan_wait_for_confirm"
   ],
   tdd: (track) => [
+    "tdd_test_discovery_complete",
+    "tdd_impact_check_complete",
     "tdd_red_test_written",
     "tdd_green_full_suite",
     "tdd_refactor_completed",
@@ -296,9 +360,9 @@ const REQUIRED_ARTIFACT_SECTIONS: Record<FlowStage, string[]> = {
     "Deployment & Rollout",
     "Completion Dashboard"
   ],
-  spec: ["Acceptance Criteria", "Edge Cases", "Testability Map", "Approval"],
-  plan: ["Task List", "Dependency Batches", "Acceptance Mapping", "WAIT_FOR_CONFIRM"],
-  tdd: ["RED Evidence", "GREEN Evidence", "REFACTOR Notes", "Traceability", "Verification Ladder"],
+  spec: ["Acceptance Criteria", "Edge Cases", "Assumptions Before Finalization", "Testability Map", "Approval"],
+  plan: ["Task List", "Dependency Batches", "Acceptance Mapping", "Execution Posture", "WAIT_FOR_CONFIRM"],
+  tdd: ["Test Discovery", "System-Wide Impact Check", "RED Evidence", "GREEN Evidence", "REFACTOR Notes", "Traceability", "Verification Ladder"],
   review: ["Layer 1 Verdict", "Review Findings Contract", "Severity Summary", "Final Verdict"],
   ship: ["Preflight Results", "Release Notes", "Rollback Plan", "Finalization"]
 };
@@ -516,6 +580,14 @@ const STAGE_AUTO_SUBAGENT_DISPATCH: Record<FlowStage, StageAutoSubagentDispatch[
       purpose: "Run the receiving-code-review workflow so every incoming feedback item gets an explicit disposition with evidence, and the queue is mirrored into review artifacts.",
       requiresUserGate: false,
       skill: "receiving-code-review"
+    },
+    {
+      agent: "reviewer",
+      mode: "proactive",
+      when: "When repo signals or review context indicate TypeScript/JavaScript, Python, Ruby/Rails, Go, or Rust coverage is relevant.",
+      purpose: "Route a matching stack-aware reviewer lens while keeping the default general review pass intact; do not run every stack lens unconditionally.",
+      requiresUserGate: false,
+      skill: "stack-aware-review"
     }
   ],
   ship: [

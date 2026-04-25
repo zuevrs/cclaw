@@ -36,7 +36,7 @@ type StageAgentSummary = ReturnType<typeof stageDelegationSummary>[number];
 
 function stageSummary(stage: FlowStage): StageAgentSummary {
   return stageDelegationSummary("standard").find((row) => row.stage === stage)
-    ?? { stage, mandatoryAgents: [], proactiveAgents: [], primaryAgents: [] };
+    ?? { stage, mandatoryAgents: [], proactiveAgents: [], primaryAgents: [], stackAwareRoutes: [] };
 }
 
 export function subagentDrivenDevSkill(): string {

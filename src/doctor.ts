@@ -44,6 +44,8 @@ import {
   LEGACY_LANGUAGE_RULE_PACK_FOLDERS
 } from "./content/utility-skills.js";
 import { validateHookDocument } from "./hook-schema.js";
+import { validateKnowledgeEntry } from "./knowledge-store.js";
+import { readSeedShelf } from "./content/seed-shelf.js";
 import type { HarnessId } from "./types.js";
 import type { DoctorSeverity } from "./doctor-registry.js";
 
@@ -125,6 +127,13 @@ function extractUserPromptFromIdeaArtifact(markdown: string): string | null {
   const nextHeadingIndex = tail.search(/^##\s+/mu);
   const body = (nextHeadingIndex >= 0 ? tail.slice(0, nextHeadingIndex) : tail).trim();
   return body.length > 0 ? body : null;
+}
+
+function knowledgeRoutingSurfaceIsDiscoverable(content: string): boolean {
+  const normalized = content.toLowerCase();
+  if (!normalized.includes(".cclaw/knowledge.jsonl")) return false;
+  if (!/\b(rule|pattern|lesson|compound)\b/u.test(normalized)) return false;
+  return ["trigger", "action", "origin_run"].every((term) => normalized.includes(term));
 }
 
 async function commandAvailable(command: string): Promise<boolean> {
@@ -1036,6 +1045,7 @@ export async function doctorChecks(projectRoot: string, options: DoctorOptions =
     let parsedKnowledgeLines = 0;
     let lowConfidenceLines = 0;
     let staleRawEntries = 0;
+    const schemaErrors: string[] = [];
     const triggerActionCounts = new Map<string, number>();
     // Stale threshold for raw entries: ~90 days with no re-observation.
     // Chosen to match the compound drift checklist language; anything newer is
@@ -1073,6 +1083,10 @@ export async function doctorChecks(projectRoot: string, options: DoctorOptions =
             continue;
           }
           parsedKnowledgeLines += 1;
+          const validation = validateKnowledgeEntry(parsed);
+          if (!validation.ok) {
+            schemaErrors.push(`line ${parsedKnowledgeLines}: ${validation.errors.slice(0, 3).join(" ")}`);
+          }
           const confidence = typeof parsed.confidence === "string" ? parsed.confidence.toLowerCase() : "";
           if (confidence === "low") {
             lowConfidenceLines += 1;
@@ -1125,6 +1139,16 @@ export async function doctorChecks(projectRoot: string, options: DoctorOptions =
             ? `all ${parsedKnowledgeLines} knowledge line(s) include schema v2 fields`
             : `warning: ${missingSchemaV2Fields}/${parsedKnowledgeLines} knowledge line(s) miss schema v2 fields (origin/maturity/frequency metadata)`
     });
+    checks.push({
+      name: "warning:knowledge:current_schema",
+      ok: schemaErrors.length === 0,
+      details:
+        parsedKnowledgeLines === 0
+          ? "knowledge.jsonl is empty"
+          : schemaErrors.length === 0
+            ? `all ${parsedKnowledgeLines} knowledge line(s) match the current strict schema`
+            : `warning: ${schemaErrors.length}/${parsedKnowledgeLines} knowledge line(s) fail current schema validation (${schemaErrors.slice(0, 3).join("; ")})`
+    });
     const lowConfidenceRatio = parsedKnowledgeLines === 0 ? 0 : lowConfidenceLines / parsedKnowledgeLines;
     checks.push({
       name: "warning:knowledge:low_confidence_density",
@@ -1156,6 +1180,39 @@ export async function doctorChecks(projectRoot: string, options: DoctorOptions =
             : `warning: ${staleRawEntries} raw knowledge entry(ies) have last_seen_ts older than 90 days. Run a learnings curation pass or append a superseding entry before the next compound pass.`
     });
   }
+
+  const routingKnowledgeSurfaces: string[] = [];
+  for (const routingFileName of ["AGENTS.md", "CLAUDE.md"] as const) {
+    const routingFilePath = path.join(projectRoot, routingFileName);
+    if (!(await exists(routingFilePath))) continue;
+    const content = await fs.readFile(routingFilePath, "utf8");
+    if (knowledgeRoutingSurfaceIsDiscoverable(content)) {
+      routingKnowledgeSurfaces.push(routingFileName);
+    }
+  }
+  checks.push({
+    name: "warning:knowledge:discoverability",
+    ok: routingKnowledgeSurfaces.length > 0,
+    details:
+      routingKnowledgeSurfaces.length > 0
+        ? `knowledge store schema is discoverable from ${routingKnowledgeSurfaces.join(", ")}`
+        : "warning: AGENTS.md or CLAUDE.md should mention .cclaw/knowledge.jsonl and its type/trigger/action/origin_run usage"
+  });
+
+  const seedEntries = await readSeedShelf(projectRoot);
+  const orphanSeeds = seedEntries.filter(
+    (seed) => seed.sourceArtifact === null || seed.triggerWhen.length === 0 || seed.action === null || seed.action.trim().length === 0
+  );
+  checks.push({
+    name: "warning:knowledge:orphan_seeds",
+    ok: orphanSeeds.length === 0,
+    details:
+      seedEntries.length === 0
+        ? "no seed shelf entries present"
+        : orphanSeeds.length === 0
+          ? `all ${seedEntries.length} seed shelf entr${seedEntries.length === 1 ? "y is" : "ies are"} discoverable`
+          : `warning: ${orphanSeeds.length}/${seedEntries.length} seed shelf entr${seedEntries.length === 1 ? "y is" : "ies are"} missing source_artifact, trigger_when, or action (${orphanSeeds.slice(0, 3).map((seed) => seed.relPath).join(", ")})`
+  });
 
   let flowState = createInitialFlowState();
   let flowStateCorruptError: CorruptFlowStateError | null = null;
