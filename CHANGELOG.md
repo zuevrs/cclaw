@@ -1,5 +1,18 @@
 # Changelog
 
+## 0.51.10
+
+### Fixed
+
+- Replaced the brittle keyword-grep on `Scope Summary` with structural validation that requires a canonical scope mode token (`SCOPE EXPANSION` / `SELECTIVE EXPANSION` / `HOLD SCOPE` / `SCOPE REDUCTION`) and a track-aware next-stage handoff, so non-English scope artifacts no longer fail validation for missing English keywords.
+- Made `Premise Challenge` validation purely structural (≥3 substantive Q/A rows in a table or bullet list); answers may be in any language and the linter no longer requires the literal English question phrasing.
+- Tightened `extractRequiredKeywords` to fire only on backticked machine-surface tokens, so descriptive prose in validation rules stops being mis-treated as required keywords.
+
+### Changed
+
+- Strengthened the `brainstorm` execution model and template with reference-grade structure: `Premise Check`, `How Might We` reframing, `Sharpening Questions` (decision-impact column), `Not Doing` list, `Self-Review Notes`, and a stable `Approaches` table with canonical `Role` (`baseline` | `challenger` | `wild-card`) and `Upside` (`low` | `modest` | `high` | `higher`) columns.
+- Strengthened the `scope` execution model with an explicit premise + leverage check and mode-specific analysis matched to the chosen gstack mode (SCOPE EXPANSION / SELECTIVE EXPANSION / HOLD SCOPE / SCOPE REDUCTION); template now exposes `Strongest challenges resolved` and `Recommended path` as explicit Scope Summary fields.
+
 ## 0.51.3
 
 ### Fixed

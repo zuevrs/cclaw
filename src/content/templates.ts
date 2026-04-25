@@ -30,10 +30,28 @@ export const ARTIFACT_TEMPLATES: Record<string, string> = {
 - **Project state:**
 - **Relevant existing code/patterns:**
 
+### Discovered context
+- (paths, prior artifacts, seeds, prompt fragments — referenced by downstream stages, or \`- None.\`)
+
 ## Problem
 - **What we're solving:**
 - **Success criteria:**
 - **Constraints:**
+
+## Premise Check
+- **Right problem?** (yes/no + one-line justification — take a position)
+- **Direct path?** (yes/no + one-line justification)
+- **What if we do nothing?** (concrete consequence, not "nothing happens")
+
+## How Might We
+- *How might we …?* — one line naming the user, the desired outcome, and the binding constraint.
+
+## Sharpening Questions
+| # | Question | Answer / Assumption | Decision impact |
+|---|---|---|---|
+| 1 |  |  |  |
+| 2 |  |  |  |
+| 3 |  |  |  |
 
 ## Clarifying Questions
 | # | Question | Answer | Decision impact |
@@ -50,10 +68,12 @@ export const ARTIFACT_TEMPLATES: Record<string, string> = {
 - Scope handoff:
 
 ## Approaches
-| Approach | Role | Upside | Architecture | Trade-offs | Recommendation |
-|---|---|---|---|---|---|
-| A | baseline | modest |  |  |  |
-| B | challenger | high |  |  |  |
+| Approach | Role | Upside | Architecture | Trade-offs | Reuses | Recommendation |
+|---|---|---|---|---|---|---|
+| A | baseline | modest |  |  |  |  |
+| B | challenger | high |  |  |  |  |
+
+> Role values: \`baseline\` | \`challenger\` | \`wild-card\`. Upside values: \`low\` | \`modest\` | \`high\` | \`higher\`. Exactly one row must be a \`challenger\` with \`high\` or \`higher\` upside.
 
 ## Approach Reaction
 - Closest option:
@@ -66,12 +86,21 @@ export const ARTIFACT_TEMPLATES: Record<string, string> = {
 - **Approval:** pending
 - **Next-stage handoff:** On standard track, hand this to \`scope\`; on medium track, hand this directly to \`spec\` with explicit requirements/constraints.
 
+## Not Doing
+- (3-5 things this brainstorm is *not* committing to — distinct from \`Deferred\`. These will not appear in scope unless the user explicitly opts in.)
+
 ${SEED_SHELF_SECTION}
 
 ## Design
 - **Architecture:**
 - **Key components:**
 - **Data flow:**
+
+## Visual Companion
+- (compact ASCII/Mermaid diagram for medium+ complexity, or one-line justification for omission.)
+
+## Self-Review Notes
+- (list patches applied to this artifact during self-review, or \`- None.\`)
 
 ## Assumptions and Open Questions
 - **Assumptions:**
@@ -105,9 +134,13 @@ ${SEED_SHELF_SECTION}
 - Four paths per data flow:
 
 ## Premise Challenge
-- Is this the right problem?
-- Why this path?
-- What if we do nothing?
+| Question | Answer (take a position) | Evidence / leverage |
+|---|---|---|
+| Right problem? |  |  |
+| Direct path? |  |  |
+| What if we do nothing? |  |  |
+| Existing-code leverage? |  |  |
+| Reversibility cost? |  |  |
 
 ## Dream State Mapping
 - CURRENT STATE:
@@ -202,7 +235,9 @@ ${SEED_SHELF_SECTION}
 - Unresolved decisions (or \`None\`):
 
 ## Scope Summary
-- Selected mode:
+- Selected mode: (one of \`SCOPE EXPANSION\` | \`SELECTIVE EXPANSION\` | \`HOLD SCOPE\` | \`SCOPE REDUCTION\`)
+- Strongest challenges resolved:
+- Recommended path:
 - Accepted scope:
 - Deferred:
 - Explicitly excluded:

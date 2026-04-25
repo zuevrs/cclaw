@@ -1186,6 +1186,7 @@ describe("artifact linter heuristics", () => {
 - Accepted scope: durable feed + SSE
 - Deferred: WebSocket channel
 - Explicitly excluded: outbound channels
+- Next-stage handoff: design — lock data flow + failure paths.
 `);
 
     const result = await lintArtifact(root, "scope");
@@ -1219,6 +1220,7 @@ describe("artifact linter heuristics", () => {
 - Accepted scope: durable event feed
 - Deferred: websocket channel
 - Explicitly excluded: outbound channels
+- Next-stage handoff: design — lock data flow + failure paths.
 `);
 
     const result = await lintArtifact(root, "scope");
@@ -1260,12 +1262,244 @@ describe("artifact linter heuristics", () => {
 - Accepted scope: durable event feed
 - Deferred: websocket channel
 - Explicitly excluded: outbound channels
+- Next-stage handoff: design — lock data flow + failure paths.
 `);
 
     const result = await lintArtifact(root, "scope");
     const preAudit = result.findings.find((f) => f.section === "Pre-Scope System Audit");
     expect(preAudit?.required).toBe(true);
     expect(preAudit?.found).toBe(true);
+  });
+
+  describe("Scope Summary semantic validation", () => {
+    const baseScope = (summaryBody: string): string => `# Scope Artifact
+
+## Scope Mode
+- [x] hold
+
+## In Scope / Out of Scope
+### In Scope
+- Local todo interactions
+### Out of Scope
+- Backend API
+
+## Completion Dashboard
+- Checklist findings: 1/1
+- Resolved decisions count: 1
+- Unresolved decisions: None
+
+## Scope Summary
+${summaryBody}
+`;
+
+    it("rejects Scope Summary that omits the canonical mode token", async () => {
+      const root = await createTempProject("scope-summary-no-mode");
+      await writeRuntimeArtifact(
+        root,
+        "02-scope.md",
+        baseScope(`- Accepted scope: build a thing\n- Next-stage handoff: design — proceed.`)
+      );
+      const result = await lintArtifact(root, "scope");
+      const summary = result.findings.find((f) => f.section === "Scope Summary");
+      expect(summary?.required).toBe(true);
+      expect(summary?.found).toBe(false);
+      expect(summary?.details ?? "").toMatch(/canonical token/iu);
+    });
+
+    it("rejects Scope Summary that omits the next-stage handoff", async () => {
+      const root = await createTempProject("scope-summary-no-handoff");
+      await writeRuntimeArtifact(
+        root,
+        "02-scope.md",
+        baseScope(`- Selected mode: HOLD SCOPE\n- Accepted scope: build a thing\n- Deferred: none`)
+      );
+      const result = await lintArtifact(root, "scope");
+      const summary = result.findings.find((f) => f.section === "Scope Summary");
+      expect(summary?.required).toBe(true);
+      expect(summary?.found).toBe(false);
+      expect(summary?.details ?? "").toMatch(/next-stage handoff/iu);
+    });
+
+    it("accepts Scope Summary written in non-English prose with canonical mode + handoff", async () => {
+      const root = await createTempProject("scope-summary-multilingual");
+      await writeRuntimeArtifact(
+        root,
+        "02-scope.md",
+        baseScope(
+          `- Selected mode: SELECTIVE EXPANSION\n` +
+            `- Сильнейшие челленджи: баланс между простотой и расширяемостью.\n` +
+            `- Принято в scope: 4 секции лендинга и адаптив.\n` +
+            `- Отложено: контактная форма, аналитика.\n` +
+            `- Исключено: бэкенд, CMS.\n` +
+            `- Next-stage handoff: design — lock architecture and failure modes.`
+        )
+      );
+      const result = await lintArtifact(root, "scope");
+      const summary = result.findings.find((f) => f.section === "Scope Summary");
+      expect(summary?.required).toBe(true);
+      expect(summary?.found).toBe(true);
+      expect(summary?.details ?? "").not.toMatch(/Rule expects keywords/);
+    });
+
+    it("accepts Scope Summary using a short-form mode token on a Mode line", async () => {
+      const root = await createTempProject("scope-summary-short-form");
+      await writeRuntimeArtifact(
+        root,
+        "02-scope.md",
+        baseScope(`- Selected mode: hold\n- Accepted scope: build a thing\n- Next-stage handoff: design.`)
+      );
+      const result = await lintArtifact(root, "scope");
+      const summary = result.findings.find((f) => f.section === "Scope Summary");
+      expect(summary?.required).toBe(true);
+      expect(summary?.found).toBe(true);
+    });
+
+    it("rejects Scope Summary that uses a non-canonical mode word like `strict`", async () => {
+      const root = await createTempProject("scope-summary-non-canonical");
+      await writeRuntimeArtifact(
+        root,
+        "02-scope.md",
+        baseScope(
+          `- Selected mode: strict\n- Accepted scope: build a thing\n- Next-stage handoff: design.`
+        )
+      );
+      const result = await lintArtifact(root, "scope");
+      const summary = result.findings.find((f) => f.section === "Scope Summary");
+      expect(summary?.found).toBe(false);
+      expect(summary?.details ?? "").toMatch(/canonical token/iu);
+    });
+  });
+
+  describe("Premise Challenge structural validation", () => {
+    const baseScopeWithPremise = (premiseBody: string): string => `# Scope Artifact
+
+## Premise Challenge
+${premiseBody}
+
+## Scope Mode
+- [x] hold
+
+## In Scope / Out of Scope
+### In Scope
+- A
+### Out of Scope
+- B
+
+## Completion Dashboard
+- Checklist findings: 1/1
+- Resolved decisions count: 1
+- Unresolved decisions: None
+
+## Scope Summary
+- Selected mode: HOLD SCOPE
+- Next-stage handoff: design.
+`;
+
+    it("rejects a Premise Challenge that has fewer than 3 Q/A rows", async () => {
+      const root = await createTempProject("premise-thin");
+      await writeRuntimeArtifact(
+        root,
+        "02-scope.md",
+        baseScopeWithPremise(`- Right problem? Yes.\n- Direct path? Yes.`)
+      );
+      const result = await lintArtifact(root, "scope");
+      const premise = result.findings.find((f) => f.section === "Premise Challenge");
+      expect(premise?.found).toBe(false);
+      expect(premise?.details ?? "").toMatch(/at least 3/iu);
+    });
+
+    it("accepts a Premise Challenge as a 3-bullet list of question/answer pairs", async () => {
+      const root = await createTempProject("premise-list-3");
+      await writeRuntimeArtifact(
+        root,
+        "02-scope.md",
+        baseScopeWithPremise(
+          `- Right problem? Yes — users miss follow-ups.\n` +
+            `- Direct path? Yes — durable feed is the most direct fix.\n` +
+            `- What if nothing? Users keep missing important updates.`
+        )
+      );
+      const result = await lintArtifact(root, "scope");
+      const premise = result.findings.find((f) => f.section === "Premise Challenge");
+      expect(premise?.found).toBe(true);
+    });
+
+    it("accepts a Premise Challenge written as a markdown table with Q/A columns in any language", async () => {
+      const root = await createTempProject("premise-table-multilingual");
+      await writeRuntimeArtifact(
+        root,
+        "02-scope.md",
+        baseScopeWithPremise(
+          `| Question | Answer | Evidence |\n` +
+            `|---|---|---|\n` +
+            `| Правильная ли проблема? | Да — нужна веб-презентация. | brainstorm |\n` +
+            `| Прямой путь? | Да — статический сайт без бэкенда. | стек |\n` +
+            `| Что если ничего не делать? | Нет онлайн-присутствия. | контекст |\n` +
+            `| Где использовать существующий код? | Greenfield. | repo |\n` +
+            `| Стоимость отката? | Низкая, статический сайт. | risk |`
+        )
+      );
+      const result = await lintArtifact(root, "scope");
+      const premise = result.findings.find((f) => f.section === "Premise Challenge");
+      expect(premise?.found).toBe(true);
+      expect(premise?.details ?? "").not.toMatch(/Rule expects keywords/);
+    });
+
+    it("rejects a Premise Challenge table where answer cells are empty", async () => {
+      const root = await createTempProject("premise-table-empty");
+      await writeRuntimeArtifact(
+        root,
+        "02-scope.md",
+        baseScopeWithPremise(
+          `| Question | Answer | Evidence |\n` +
+            `|---|---|---|\n` +
+            `| Right problem? |  |  |\n` +
+            `| Direct path? |  |  |\n` +
+            `| What if nothing? |  |  |`
+        )
+      );
+      const result = await lintArtifact(root, "scope");
+      const premise = result.findings.find((f) => f.section === "Premise Challenge");
+      expect(premise?.found).toBe(false);
+      expect(premise?.details ?? "").toMatch(/no empty answers/iu);
+    });
+  });
+
+  it("accepts a compact bilingual Russian Scope Summary that names the mode + handoff (no English keyword hardcodes)", async () => {
+    // Regression for the user-reported failure: a Russian-prose Scope Summary
+    // used to fail because the legacy linter required English keywords like
+    // "strongest challenges", "recommended path", "accepted scope", "deferred",
+    // "excluded", "track-aware next-stage handoff". The replacement contract
+    // is structural: canonical mode token + next-stage handoff.
+    const root = await createTempProject("scope-summary-russian");
+    await writeRuntimeArtifact(root, "02-scope.md", `# Scope Artifact
+
+## Scope Mode
+- [x] selective
+
+## In Scope / Out of Scope
+### In Scope
+- Лендинг
+### Out of Scope
+- Бэкенд
+
+## Completion Dashboard
+- Checklist findings: 1/1
+- Resolved decisions count: 1
+- Unresolved decisions: None
+
+## Scope Summary
+- **Mode:** SELECTIVE EXPANSION
+- **Core:** 4-секционный лендинг (Hero, О нас, Услуги, Контакты) с адаптивным дизайном
+- **Cherry-pick:** SEO-мета, smooth scroll, расширяемая архитектура
+- **Stack:** Next.js App Router + Tailwind CSS + TypeScript, static export, Vercel deploy
+- **Next stage:** \`design\` — lock architecture, data flow, failure modes
+`);
+    const result = await lintArtifact(root, "scope");
+    const summary = result.findings.find((f) => f.section === "Scope Summary");
+    expect(summary?.required).toBe(true);
+    expect(summary?.found).toBe(true);
+    expect(summary?.details ?? "").not.toMatch(/Rule expects keywords/);
   });
 
   it("accepts split In Scope and Out of Scope headings for scope boundaries", async () => {
@@ -1297,6 +1531,7 @@ describe("artifact linter heuristics", () => {
 - Accepted scope: local todo interactions plus categories/projects.
 - Deferred: persistence beyond local browser session.
 - Explicitly excluded: backend, auth, cloud sync.
+- Next-stage handoff: design — lock local-only data shape + UX flow.
 `);
 
     const result = await lintArtifact(root, "scope");
@@ -1371,6 +1606,7 @@ describe("artifact linter heuristics", () => {
 - Accepted scope: durable feed + SSE
 - Deferred: WebSocket channel
 - Explicitly excluded: outbound channels
+- Next-stage handoff: design — lock data flow + failure paths.
 `);
 
     const result = await lintArtifact(root, "scope");
@@ -1384,7 +1620,7 @@ describe("artifact linter heuristics", () => {
     await writeRuntimeArtifact(root, "02-scope.md", `# Scope Artifact
 
 ## Scope Mode
-- Mode: strict
+- Mode: hold
 
 ## In Scope / Out of Scope
 - In scope: audit log storage
@@ -1398,7 +1634,8 @@ describe("artifact linter heuristics", () => {
 - Checklist findings: 1/1
 
 ## Scope Summary
-- Selected mode: strict
+- Selected mode: hold
+- Next-stage handoff: design — lock JSONL audit-log contract.
 `);
 
     const result = await lintArtifact(root, "scope");
@@ -1433,6 +1670,7 @@ describe("artifact linter heuristics", () => {
 
 ## Scope Summary
 - Selected mode: hold
+- Next-stage handoff: design — lock build/deploy + styling.
 
 ## Learnings
 - None this stage.
@@ -1450,7 +1688,7 @@ describe("artifact linter heuristics", () => {
     await writeRuntimeArtifact(root, "02-scope.md", `# Scope Artifact
 
 ## Scope Mode
-- Mode: strict
+- Mode: hold
 
 ## In Scope / Out of Scope
 - In scope: audit log storage
@@ -1464,7 +1702,8 @@ describe("artifact linter heuristics", () => {
 - Checklist findings: 1/1
 
 ## Scope Summary
-- Selected mode: strict
+- Selected mode: hold
+- Next-stage handoff: design — lock JSONL audit-log contract.
 `);
 
     const result = await lintArtifact(root, "scope");
@@ -3004,12 +3243,18 @@ ${TDD_PREFLIGHT_SECTIONS}
     expect(sev?.required).toBe(true);
   });
 
-  it("fails Prime Directives when required keywords are missing", async () => {
-    const root = await createTempProject("scope-keywords");
+  it("does not fire a brittle English-keyword check on Prime Directives prose", async () => {
+    // Regression: the legacy linter extracted comma-separated phrases from the
+    // Prime Directives validation rule and required them verbatim in the
+    // section body. That penalised non-English summaries and forced authors
+    // to copy-paste schema wording. The replacement contract is structural —
+    // sections only fail when a dedicated semantic validator says so.
+    const root = await createTempProject("scope-prime-directives-prose");
     await writeRuntimeArtifact(root, "02-scope.md", `# Scope Artifact
 
 ## Prime Directives
-- Basic error handling is in scope.
+- Базовая обработка ошибок и наблюдаемость покрыты в scope.
+- Каждая отказоустойчивая ветка имеет понятный fallback.
 
 ## Premise Challenge
 - Right problem? Yes.
@@ -3060,12 +3305,13 @@ ${TDD_PREFLIGHT_SECTIONS}
 - Accepted scope: notification feed hardening
 - Deferred: none
 - Explicitly excluded: email/SMS
+- Next-stage handoff: design — lock failure paths + observability.
 `);
 
     const result = await lintArtifact(root, "scope");
     const primeDirectives = result.findings.find((f) => f.section === "Prime Directives");
-    expect(primeDirectives?.found).toBe(false);
-    expect(primeDirectives?.details).toContain("missing");
+    expect(primeDirectives?.found).toBe(true);
+    expect(primeDirectives?.details ?? "").not.toMatch(/Rule expects keywords/);
   });
 });
 

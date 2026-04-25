@@ -140,12 +140,13 @@ async function writeScopeArtifact(root: string): Promise<void> {
 - User approval: pending
 
 ## Scope Summary
-- Selected mode: broad
+- Selected mode: SCOPE EXPANSION
 - Strongest challenges: balancing reliability with delivery speed
 - Recommended path: lock interfaces and failure boundaries first
 - Accepted scope: scope contract and decision boundaries
 - Deferred: implementation details
 - Explicitly excluded: rollout execution and deployment changes
+- Next-stage handoff: design — lock interfaces, failure boundaries, observability.
 
 ## Learnings
 - None this stage.
