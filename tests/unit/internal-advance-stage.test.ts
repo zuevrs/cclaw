@@ -982,7 +982,12 @@ process.stdout.write(JSON.stringify({ hook: process.argv[2] }) + "\\n");
     const blockedGuard = "review_verdict_blocked";
     const passed = [...required, blockedGuard];
     const evidence = Object.fromEntries(
-      passed.map((gateId) => [gateId, `evidence for ${gateId}`])
+      passed.map((gateId) => [
+        gateId,
+        gateId === "review_trace_matrix_clean"
+          ? "npm test PASS"
+          : `evidence for ${gateId}`
+      ])
     );
 
     const captured = captureIo();

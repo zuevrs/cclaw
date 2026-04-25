@@ -303,6 +303,15 @@ const GATE_EVIDENCE_VALIDATORS: Record<string, (evidence: string) => string | nu
     }
     return null;
   },
+  "review:review_trace_matrix_clean": (evidence) => {
+    if (!TEST_COMMAND_HINT_PATTERN.test(evidence)) {
+      return "must include the fresh verification command that was run before ship handoff (for example `npm test`, `pytest`, `go test`, or equivalent).";
+    }
+    if (!PASS_STATUS_PATTERN.test(evidence)) {
+      return "must include explicit success status (for example `PASS` or `GREEN`).";
+    }
+    return null;
+  },
   "ship:ship_finalization_executed": (evidence) => {
     if (!SHIP_FINALIZATION_MODE_PATTERN.test(evidence)) {
       return `must name the finalization mode that ran (for example ${SHIP_FINALIZATION_MODE_HINT}).`;

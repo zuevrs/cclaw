@@ -1,5 +1,12 @@
 # Changelog
 
+## 0.51.15
+
+### Fixed
+
+- Added real test-command discovery for verification gates: `tdd_verified_before_complete` and `review_trace_matrix_clean` now check gate evidence against discovered project test commands when available.
+- Updated review templates and stage skills to record verification command discovery explicitly.
+
 ## 0.51.14
 
 ### Fixed

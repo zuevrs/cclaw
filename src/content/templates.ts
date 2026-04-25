@@ -758,6 +758,11 @@ Execution rule: complete and verify each batch before starting the next batch.
 - Orphaned tests: 0
 - Evidence ref:
 
+## Verification Command Discovery
+| Source | Discovered command | Result | Evidence ref |
+|---|---|---|---|
+| package.json / pytest / go.mod / Cargo.toml / pom.xml / gradle |  | PASS/FAIL |  |
+
 ## Blocked Route
 - ROUTE_BACK_TO_TDD: only when Final Verdict = BLOCKED
 - Target stage: tdd
