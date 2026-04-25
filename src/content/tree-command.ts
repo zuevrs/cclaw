@@ -1,7 +1,5 @@
 import { RUNTIME_ROOT } from "../constants.js";
 
-const TREE_SKILL_NAME = "flow-tree";
-
 function flowStatePath(): string {
   return `${RUNTIME_ROOT}/state/flow-state.json`;
 }
@@ -18,13 +16,8 @@ function rewindLogPath(): string {
   return `${RUNTIME_ROOT}/state/rewind-log.jsonl`;
 }
 
-export function treeCommandSkillMarkdown(): string {
-  return `---
-name: ${TREE_SKILL_NAME}
-description: "Render a visual flow tree for stages, gates, delegations (fulfillmentMode), ship closeout substate, artifacts, and harness status."
----
-
-# /cc-view tree
+export function treeSubcommandMarkdown(): string {
+  return `# /cc-view tree
 
 ## HARD-GATE
 

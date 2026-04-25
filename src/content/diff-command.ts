@@ -1,7 +1,5 @@
 import { RUNTIME_ROOT } from "../constants.js";
 
-const DIFF_SKILL_NAME = "flow-diff";
-
 function flowStatePath(): string {
   return `${RUNTIME_ROOT}/state/flow-state.json`;
 }
@@ -14,13 +12,8 @@ function retroArtifactPath(): string {
   return `${RUNTIME_ROOT}/artifacts/09-retro.md`;
 }
 
-export function diffCommandSkillMarkdown(): string {
-  return `---
-name: ${DIFF_SKILL_NAME}
-description: "Render read-only flow-state, closeout, artifact, and delegation deltas from git evidence."
----
-
-# /cc-view diff
+export function diffSubcommandMarkdown(): string {
+  return `# /cc-view diff
 
 ## HARD-GATE
 

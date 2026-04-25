@@ -1,7 +1,5 @@
 import { RUNTIME_ROOT } from "../constants.js";
 
-const STATUS_SKILL_NAME = "flow-status";
-
 function flowStatePath(): string {
   return `${RUNTIME_ROOT}/state/flow-state.json`;
 }
@@ -19,17 +17,12 @@ function retroArtifactPath(): string {
 }
 
 /**
- * Skill body for /cc-view status — read-only status snapshot.
+ * Body for /cc-view status — read-only status snapshot embedded in flow-view.
  */
-export function statusCommandSkillMarkdown(): string {
+export function statusSubcommandMarkdown(): string {
   const flowPath = flowStatePath();
   const delegationPath = delegationLogPath();
-  return `---
-name: ${STATUS_SKILL_NAME}
-description: "Read-only visual snapshot of the cclaw flow with progress bar, gate counts, delegations (fulfillmentMode + evidence), closeout substate, and harness parity row."
----
-
-# /cc-view status — Flow Status Snapshot
+  return `# /cc-view status — Flow Status Snapshot
 
 ## Overview
 

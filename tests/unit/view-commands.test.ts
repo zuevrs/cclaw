@@ -1,11 +1,11 @@
 import { describe, expect, it } from "vitest";
-import { diffCommandSkillMarkdown } from "../../src/content/diff-command.js";
-import { statusCommandSkillMarkdown } from "../../src/content/status-command.js";
-import { treeCommandSkillMarkdown } from "../../src/content/tree-command.js";
+import { diffSubcommandMarkdown } from "../../src/content/diff-command.js";
+import { statusSubcommandMarkdown } from "../../src/content/status-command.js";
+import { treeSubcommandMarkdown } from "../../src/content/tree-command.js";
 import { viewCommandSkillMarkdown } from "../../src/content/view-command.js";
 
 describe("/cc-view status content", () => {
-  const skill = statusCommandSkillMarkdown();
+  const skill = statusSubcommandMarkdown();
 
   it("renders delegations row with expectedMode and fulfillmentMode guidance", () => {
     expect(skill).toContain("fulfillmentMode");
@@ -34,7 +34,7 @@ describe("/cc-view status content", () => {
 });
 
 describe("/cc-view tree content", () => {
-  const skill = treeCommandSkillMarkdown();
+  const skill = treeSubcommandMarkdown();
 
   it("renders delegation branch with fulfillmentMode labels", () => {
     expect(skill).toContain("fulfillmentMode");
@@ -60,7 +60,7 @@ describe("/cc-view tree content", () => {
 });
 
 describe("/cc-view diff content", () => {
-  const skill = diffCommandSkillMarkdown();
+  const skill = diffSubcommandMarkdown();
 
   it("diffs the ship closeout substate transitions", () => {
     expect(skill).toContain("closeout.shipSubstate");

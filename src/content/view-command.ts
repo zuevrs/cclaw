@@ -1,16 +1,10 @@
 import { RUNTIME_ROOT } from "../constants.js";
-import { diffCommandSkillMarkdown } from "./diff-command.js";
-import { statusCommandSkillMarkdown } from "./status-command.js";
-import { treeCommandSkillMarkdown } from "./tree-command.js";
+import { diffSubcommandMarkdown } from "./diff-command.js";
+import { statusSubcommandMarkdown } from "./status-command.js";
+import { treeSubcommandMarkdown } from "./tree-command.js";
 
 const VIEW_SKILL_FOLDER = "flow-view";
 const VIEW_SKILL_NAME = "flow-view";
-
-function embeddedSkillBody(markdown: string): string {
-  return markdown
-    .replace(/^---\n[\s\S]*?\n---\n\n/u, "")
-    .trim();
-}
 
 export function viewCommandContract(): string {
   return `# /cc-view
@@ -56,9 +50,9 @@ Validate envelopes with:
 }
 
 export function viewCommandSkillMarkdown(): string {
-  const status = embeddedSkillBody(statusCommandSkillMarkdown());
-  const tree = embeddedSkillBody(treeCommandSkillMarkdown());
-  const diff = embeddedSkillBody(diffCommandSkillMarkdown());
+  const status = statusSubcommandMarkdown();
+  const tree = treeSubcommandMarkdown();
+  const diff = diffSubcommandMarkdown();
   return `---
 name: ${VIEW_SKILL_NAME}
 description: "Unified read-only view skill for status/tree/diff flow visibility commands."
