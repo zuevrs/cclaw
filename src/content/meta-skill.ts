@@ -5,7 +5,7 @@ export const META_SKILL_NAME = "using-cclaw";
 export function usingCclawSkillMarkdown(): string {
   return `---
 name: using-cclaw
-description: "Routing brain for cclaw. Decide whether to start/resume a stage, answer directly, or use utility commands like /cc-learn, /cc-ideate, and /cc-view."
+description: "Routing brain for cclaw. Decide whether to start/resume a stage, answer directly, or use visible commands like /cc, /cc-next, /cc-ideate, and /cc-view."
 ---
 
 # Using Cclaw
@@ -59,7 +59,7 @@ Task arrives
   ├─ New software work? -> /cc <idea>
   ├─ Repo-improvement discovery? -> /cc-ideate
   ├─ Resume existing flow? -> /cc or /cc-next
-  ├─ Knowledge operation? -> /cc-learn
+  ├─ Knowledge operation? -> load the learnings skill
   ├─ Read-only workspace view? -> /cc-view [status|tree|diff]
   └─ Run archival/reset from CLI? -> cclaw archive [--name=<slug>]
 \`\`\`

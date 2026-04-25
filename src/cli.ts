@@ -681,17 +681,17 @@ async function runCommand(parsed: ParsedArgs, ctx: CliContext): Promise<number> 
     if (k.overThreshold) {
       info(
         ctx,
-        `Knowledge curation recommended: ${k.knowledgePath} now has ${k.activeEntryCount} active entries (soft threshold ${k.softThreshold}). Run \`/cc-learn curate\` to plan a soft-archive of stale/duplicate entries to ${RUNTIME_ROOT}/knowledge.archive.jsonl.`
+        `Knowledge curation recommended: ${k.knowledgePath} now has ${k.activeEntryCount} active entries (soft threshold ${k.softThreshold}). Ask your harness to curate cclaw knowledge and plan a soft-archive of stale/duplicate entries to ${RUNTIME_ROOT}/knowledge.archive.jsonl.`
       );
     } else if (k.activeEntryCount > 0) {
       info(
         ctx,
-        `Knowledge: ${k.activeEntryCount}/${k.softThreshold} active entries. Run \`/cc-learn curate\` if you want a sweep before the next run.`
+        `Knowledge: ${k.activeEntryCount}/${k.softThreshold} active entries. Ask your harness for a cclaw knowledge curation sweep before the next run if needed.`
       );
     } else {
       info(
         ctx,
-        `Knowledge: 0 active entries in ${k.knowledgePath}. Capture lessons from this run with \`/cc-learn add\` before they fade.`
+        `Knowledge: 0 active entries in ${k.knowledgePath}. Capture lessons from this run through the learnings skill before they fade.`
       );
     }
     return 0;

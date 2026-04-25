@@ -92,7 +92,8 @@ Continuous knowledge capture does **not** require a config knob:
 - `node .cclaw/hooks/stage-complete.mjs <stage>` validates and harvests those
 bullets into `.cclaw/knowledge.jsonl` with dedupe + schema checks.
 
-If you need manual operations, use `/cc-learn` (search, add/backfill, curate).
+If you need manual operations, ask your harness to use the `learnings` skill
+for search, add/backfill, or curation.
 
 ## Advanced overrides (opt-in)
 

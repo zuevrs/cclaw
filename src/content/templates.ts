@@ -923,7 +923,7 @@ Track-specific skips are allowed only when \`flow-state.track\` + \`skippedStage
 
 - \`/cc\` = entry and resume.
 - \`/cc-next\` = only progression path.
-- \`/cc-learn\` = knowledge capture and recall.
+- Knowledge capture and recall use the \`learnings\` skill when requested.
 
 ## Verification Discipline
 

@@ -1130,7 +1130,7 @@ export async function doctorChecks(projectRoot: string, options: DoctorOptions =
           ? "knowledge.jsonl is empty"
           : lowConfidenceRatio <= 0.35
             ? `low-confidence entries: ${lowConfidenceLines}/${parsedKnowledgeLines}`
-            : `warning: low-confidence entries are high (${lowConfidenceLines}/${parsedKnowledgeLines}, ${(lowConfidenceRatio * 100).toFixed(1)}%). Consider /cc-learn curate before adding more.`
+            : `warning: low-confidence entries are high (${lowConfidenceLines}/${parsedKnowledgeLines}, ${(lowConfidenceRatio * 100).toFixed(1)}%). Consider a learnings curation pass before adding more.`
     });
     const repeatedClusters = [...triggerActionCounts.entries()].filter(([, count]) => count >= 3);
     checks.push({
@@ -1149,7 +1149,7 @@ export async function doctorChecks(projectRoot: string, options: DoctorOptions =
           ? "knowledge.jsonl is empty"
           : staleRawEntries === 0
             ? `no raw knowledge entries older than 90 days`
-            : `warning: ${staleRawEntries} raw knowledge entry(ies) have last_seen_ts older than 90 days. Run /cc-learn curate or append a superseding entry before the next compound pass.`
+            : `warning: ${staleRawEntries} raw knowledge entry(ies) have last_seen_ts older than 90 days. Run a learnings curation pass or append a superseding entry before the next compound pass.`
     });
   }
 

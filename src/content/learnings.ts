@@ -1,5 +1,5 @@
 // ---------------------------------------------------------------------------
-// Knowledge store content for /cc-learn and stage self-improvement prompts.
+// Knowledge store content for the learnings skill and stage self-improvement prompts.
 //
 // The knowledge store is a single canonical JSONL file. Each line is one
 // self-contained JSON object matching the strict schema in this module.
@@ -53,7 +53,7 @@ Use the store to keep durable knowledge that should survive sessions:
 - **rule**: hard constraint to follow every time.
 - **pattern**: repeatable way that works well in this project.
 - **lesson**: non-obvious outcome from a failure or trade-off.
-- **compound**: post-ship insight about how to make the *next* feature faster (process accelerator, not domain rule).
+- **compound**: post-ship insight about how to make the *next* run faster (process accelerator, not domain rule).
 
 ## Continuous capture (stage closeout path)
 
@@ -67,11 +67,12 @@ Knowledge capture is now stage-native:
   2. appends deduped entries to \`${KNOWLEDGE_PATH}\`,
   3. writes a harvest marker into the artifact.
 
-\`/cc-learn\` remains the manual/query surface (search, backfill, curation).
+Manual/query operations (search, backfill, curation) use this skill when the
+user asks for knowledge work.
 
 ## HARD-GATE
 
-Under \`/cc-learn\`, only modify \`${KNOWLEDGE_PATH}\`, \`${KNOWLEDGE_ARCHIVE_PATH}\`,
+During manual knowledge operations, only modify \`${KNOWLEDGE_PATH}\`, \`${KNOWLEDGE_ARCHIVE_PATH}\`,
 or an explicitly user-approved summary file. Do not modify application code here.
 Do not invent alternate stores (no markdown mirror, no SQLite, no per-stage files).
 
@@ -115,24 +116,26 @@ Rules:
 ## Curation policy (target: ≤ 50 active entries)
 
 - The file is append-only — entries are never physically deleted.
-- When the canonical file exceeds 50 lines, \`/cc-learn curate\` proposes
+- When the canonical file exceeds 50 lines, a curation pass proposes
   soft-archiving: the approved lines are **moved** to \`${KNOWLEDGE_ARCHIVE_PATH}\`
   verbatim (same JSONL shape). The working file stays lean.
-- See the **knowledge-curation** utility skill for the full curation protocol.
+- Use the **Curate** action below for the full read-only audit and
+  user-approved soft-archive plan.
 
-## Subcommands
+## Manual Actions
 
-### \`/cc-learn\` (default)
+### Show recent entries
 - Read \`${KNOWLEDGE_PATH}\`. Stream the last 30 lines; pretty-print each
   line's \`type\` / \`trigger\` / \`action\` for human review.
-- If file is missing or empty, report that clearly and suggest \`/cc-learn add\`.
+- If file is missing or empty, report that clearly and suggest adding a
+  manual entry through this skill.
 
-### \`/cc-learn search <query>\`
+### Search \`<query>\`
 - Stream \`${KNOWLEDGE_PATH}\`, JSON.parse each line, filter where any of
   \`trigger\`, \`action\`, \`domain\`, \`project\` contains \`<query>\` (case-insensitive).
 - Return the matched lines pretty-printed (do not mutate the file).
 
-### \`/cc-learn add\`
+### Add
 - Ask for required user-facing fields in order: \`type\`, \`trigger\`, \`action\`, \`confidence\`, \`domain\`, \`stage\`, \`universality\`, \`project\`.
 - \`confidence\` must be one of \`high\`, \`medium\`, \`low\`. Default to \`medium\` if the user declines to set it.
 - \`domain\`, \`stage\`, and \`project\` may be explicitly \`null\`.
@@ -144,40 +147,10 @@ Rules:
 - Append exactly one JSON line to \`${KNOWLEDGE_PATH}\` with the field order from the schema table above.
 - Re-read the file tail to confirm the new line is valid JSON and parses back to the same object.
 
-### \`/cc-learn curate\`
-- Hand off to the **knowledge-curation** skill (read-only audit + soft-archive plan).
+### Curate
+- Produce a read-only audit + soft-archive plan.
 - Never deletes. Soft-archive means **moving** full JSON lines from
   \`${KNOWLEDGE_PATH}\` to \`${KNOWLEDGE_ARCHIVE_PATH}\` as part of a
   user-approved curation pass.
-`;
-}
-
-export function learnCommandContract(): string {
-  return `# /cc-learn
-
-## Purpose
-
-Manage the project knowledge store. One canonical file, strict JSONL:
-- \`${KNOWLEDGE_PATH}\` — append-only JSONL, one entry per line.
-- \`${KNOWLEDGE_ARCHIVE_PATH}\` — soft-archive target written only by curate.
-
-Stage-native pipeline:
-- During \`stage-complete.mjs\`, cclaw harvests \`## Learnings\` from the current
-  stage artifact into \`${KNOWLEDGE_PATH}\` automatically.
-- Use \`/cc-learn\` for query, backfill, and curation workflows.
-
-## HARD-GATE
-
-Do not edit source code from this command. Only operate on \`${KNOWLEDGE_PATH}\`,
-\`${KNOWLEDGE_ARCHIVE_PATH}\`, or user-approved summary output.
-
-## Subcommands
-
-| subcommand | args | description |
-|---|---|---|
-| (default) | — | Show recent knowledge entries (tail of JSONL, pretty-printed). |
-| \`search\` | \`<query>\` | Stream-filter the JSONL for matching \`trigger\`, \`action\`, \`domain\`, \`project\`. |
-| \`add\` | — | Append one JSON line (\`rule\` / \`pattern\` / \`lesson\` / \`compound\`) with the strict JSONL schema (15 required fields + optional \`source\` / \`severity\`). |
-| \`curate\` | — | Hand off to the **knowledge-curation** skill: read-only audit + soft-archive plan when the file exceeds the curation threshold. |
 `;
 }
