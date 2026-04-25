@@ -62,7 +62,7 @@ export const ARTIFACT_TEMPLATES: Record<string, string> = {
 
 ## Selected Direction
 - **Approach:**
-- **Rationale:**
+- **Rationale:** Based on user reaction/feedback/concerns, ...
 - **Approval:** pending
 
 ${SEED_SHELF_SECTION}
