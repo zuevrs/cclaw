@@ -396,38 +396,6 @@ function getMarkdownTableRows(sectionBody: string): string[][] {
   return rows;
 }
 
-function getApproachRows(sectionBody: string): string[] {
-  const tableRows = getMarkdownTableRows(sectionBody).map((row) => row.join(" "));
-  const headingRows = sectionBody
-    .split(/\r?\n/u)
-    .map((line) => line.trim())
-    .filter((line) => /^#{3,6}\s+\S/u.test(line))
-    .map((line) => line.replace(/^#{3,6}\s+/u, ""));
-  const bulletRows = sectionBody
-    .split(/\r?\n/u)
-    .map((line) => line.trim())
-    .filter((line) => /^(?:[-*]|\d+\.)\s+\S/u.test(line));
-  return [...tableRows, ...headingRows, ...bulletRows];
-}
-
-function hasSemanticChallenger(row: string): boolean {
-  const normalized = row
-    .replace(/[_`*]/gu, " ")
-    .replace(/\s+/gu, " ")
-    .trim()
-    .toLowerCase();
-  const isChallenger = /\bchallenger\b/u.test(normalized);
-  if (!isChallenger) return false;
-  return (
-    /\bhigher[-\s]?upside\b/u.test(normalized) ||
-    /\bhigh[-\s]?upside\b/u.test(normalized) ||
-    /\bupside\s*:?\s*(?:high|higher|strong|large|meaningful)\b/u.test(normalized) ||
-    /\b(?:high|higher|strong|large|meaningful)\s+upside\b/u.test(normalized) ||
-    /\b(?:10-star|ten-star|ambitious|higher leverage|leverage)\b/u.test(normalized) ||
-    /\bhigh\b/u.test(normalized)
-  );
-}
-
 type BinaryFlag = "yes" | "no" | "unknown";
 
 function parseBinaryFlag(value: string): BinaryFlag {
@@ -660,6 +628,128 @@ function validateScopeSummary(sectionBody: string): { ok: boolean; details: stri
   return {
     ok: true,
     details: "Scope Summary names the selected mode and the next-stage handoff."
+  };
+}
+
+const APPROACH_ROLE_VALUES = ["baseline", "challenger", "wild-card"] as const;
+const APPROACH_UPSIDE_VALUES = ["low", "modest", "high", "higher"] as const;
+const REQUIREMENT_PRIORITY_VALUES = ["P0", "P1", "P2", "P3", "DROPPED"] as const;
+
+function normalizeTableToken(value: string): string {
+  return value
+    .replace(/[`*_]/gu, "")
+    .trim()
+    .toLowerCase()
+    .replace(/\s+/gu, "-");
+}
+
+function columnIndex(header: string[], expected: string): number {
+  return header.findIndex((cell) => normalizeTableToken(cell) === expected);
+}
+
+function validateApproachesTaxonomy(sectionBody: string): {
+  rowCount: number;
+  roleUpsideOk: boolean;
+  challengerOk: boolean;
+  details: string;
+} {
+  const header = tableHeaderCells(sectionBody);
+  const rows = getMarkdownTableRows(sectionBody);
+  if (!header) {
+    return {
+      rowCount: 0,
+      roleUpsideOk: false,
+      challengerOk: false,
+      details: "Approaches must be a markdown table with canonical Role and Upside columns."
+    };
+  }
+
+  const roleIndex = columnIndex(header, "role");
+  const upsideIndex = columnIndex(header, "upside");
+  if (roleIndex < 0 || upsideIndex < 0) {
+    return {
+      rowCount: rows.length,
+      roleUpsideOk: false,
+      challengerOk: false,
+      details:
+        "Approaches table must include canonical `Role` and `Upside` columns (Role: baseline | challenger | wild-card; Upside: low | modest | high | higher)."
+    };
+  }
+
+  let challengerRows = 0;
+  let challengerHasHighUpside = false;
+  for (const [index, row] of rows.entries()) {
+    const role = normalizeTableToken(row[roleIndex] ?? "");
+    const upside = normalizeTableToken(row[upsideIndex] ?? "");
+    if (!APPROACH_ROLE_VALUES.includes(role as (typeof APPROACH_ROLE_VALUES)[number])) {
+      return {
+        rowCount: rows.length,
+        roleUpsideOk: false,
+        challengerOk: false,
+        details: `Approaches row ${index + 1} has invalid Role "${row[roleIndex] ?? ""}". Expected one of: ${APPROACH_ROLE_VALUES.join(", ")}.`
+      };
+    }
+    if (!APPROACH_UPSIDE_VALUES.includes(upside as (typeof APPROACH_UPSIDE_VALUES)[number])) {
+      return {
+        rowCount: rows.length,
+        roleUpsideOk: false,
+        challengerOk: false,
+        details: `Approaches row ${index + 1} has invalid Upside "${row[upsideIndex] ?? ""}". Expected one of: ${APPROACH_UPSIDE_VALUES.join(", ")}.`
+      };
+    }
+    if (role === "challenger") {
+      challengerRows += 1;
+      if (upside === "high" || upside === "higher") {
+        challengerHasHighUpside = true;
+      }
+    }
+  }
+
+  const challengerOk = challengerRows === 1 && challengerHasHighUpside;
+  return {
+    rowCount: rows.length,
+    roleUpsideOk: true,
+    challengerOk,
+    details: challengerOk
+      ? "Approaches table uses canonical Role/Upside values and exactly one high/higher-upside challenger."
+      : `Approaches table must include exactly one challenger row with Upside high or higher. Found ${challengerRows} challenger row(s).`
+  };
+}
+
+function validateRequirementsTaxonomy(sectionBody: string): { ok: boolean; details: string } {
+  const header = tableHeaderCells(sectionBody);
+  if (!header) {
+    return {
+      ok: false,
+      details: "Requirements must be a markdown table with a Priority column."
+    };
+  }
+  const priorityIndex = columnIndex(header, "priority");
+  if (priorityIndex < 0) {
+    return {
+      ok: false,
+      details: "Requirements table must include a canonical `Priority` column."
+    };
+  }
+  const rows = getMarkdownTableRows(sectionBody);
+  if (rows.length === 0) {
+    return {
+      ok: false,
+      details: "Requirements table must include at least one requirement row."
+    };
+  }
+  for (const [index, row] of rows.entries()) {
+    const rawPriority = (row[priorityIndex] ?? "").replace(/[`*_]/gu, "").trim().toUpperCase();
+    if (!REQUIREMENT_PRIORITY_VALUES.includes(rawPriority as (typeof REQUIREMENT_PRIORITY_VALUES)[number])) {
+      return {
+        ok: false,
+        details: `Requirements row ${index + 1} has invalid Priority "${row[priorityIndex] ?? ""}". Expected one of: ${REQUIREMENT_PRIORITY_VALUES.join(", ")}.`
+      };
+    }
+  }
+  return {
+    ok: true,
+    details: "Requirements table uses canonical Priority values."
   };
 }
 
@@ -1511,6 +1601,9 @@ function validateSectionBody(
   if (sectionNameNormalized === "premise challenge") {
     return validatePremiseChallenge(sectionBody);
   }
+  if (sectionNameNormalized === "requirements") {
+    return validateRequirementsTaxonomy(sectionBody);
+  }
   if (sectionNameNormalized === "data flow") {
     return validateInteractionEdgeCaseMatrix(sectionBody);
   }
@@ -1749,32 +1842,30 @@ export async function lintArtifact(
 
     const approachesBody = sectionBodyByName(sections, "Approaches");
     if (approachesBody !== null) {
-      const tableRows = getMarkdownTableRows(approachesBody);
-      const bulletRows = approachesBody
-        .split(/\r?\n/u)
-        .map((line) => line.trim())
-        .filter((line) => /^(?:[-*]|\d+\.)\s+\S/u.test(line));
-      const rowCount = Math.max(tableRows.length, bulletRows.length);
-      const approachRows = getApproachRows(approachesBody);
-      const hasChallenger = approachRows.some(hasSemanticChallenger);
+      const approachesTaxonomy = validateApproachesTaxonomy(approachesBody);
       findings.push({
         section: "Distinct Approaches Enforcement",
         required: true,
         rule: "Approaches section must document at least 2 distinct approaches so the Iron Law comparison is meaningful.",
-        found: rowCount >= 2,
+        found: approachesTaxonomy.rowCount >= 2,
         details:
-          rowCount >= 2
-            ? `Detected ${rowCount} approach row(s).`
-            : `Detected ${rowCount} approach row(s); at least 2 required.`
+          approachesTaxonomy.rowCount >= 2
+            ? `Detected ${approachesTaxonomy.rowCount} approach row(s).`
+            : `Detected ${approachesTaxonomy.rowCount} approach row(s); at least 2 required.`
+      });
+      findings.push({
+        section: "Approaches Role/Upside Taxonomy",
+        required: true,
+        rule: "Approaches table must use canonical Role and Upside enum values.",
+        found: approachesTaxonomy.roleUpsideOk,
+        details: approachesTaxonomy.details
       });
       findings.push({
         section: "Challenger Alternative Enforcement",
         required: true,
         rule: "Approaches must include one challenger option with explicit high/higher upside.",
-        found: hasChallenger,
-        details: hasChallenger
-          ? "Semantic challenger with high/higher upside detected."
-          : "Missing a challenger option with explicit high/higher upside. Example: `| C | challenger | high upside | More ambitious path with clear trade-offs |`."
+        found: approachesTaxonomy.challengerOk,
+        details: approachesTaxonomy.details
       });
     }
 

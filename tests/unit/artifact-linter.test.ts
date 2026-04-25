@@ -321,10 +321,10 @@ describe("artifact linter heuristics", () => {
 - Scope handoff: continue full brainstorm flow before scope.
 
 ## Approaches
-| Approach | Role | Architecture | Trade-offs | Recommendation |
-|---|---|---|---|---|
-| A | baseline | script-only checks | faster but weaker reuse |  |
-| B | challenger: higher-upside | reusable validation module | slightly more effort, better long-term reuse | recommended |
+| Approach | Role | Upside | Architecture | Trade-offs | Recommendation |
+|---|---|---|---|---|---|
+| A | baseline | modest | script-only checks | faster but weaker reuse |  |
+| B | challenger | higher | reusable validation module | slightly more effort, better long-term reuse | recommended |
 
 ## Approach Reaction
 - Closest option: B
@@ -370,9 +370,9 @@ describe("artifact linter heuristics", () => {
 - Why this tier: release workflow affects CI + local command path.
 
 ## Approaches
-| Approach | Role | Architecture | Trade-offs | Recommendation |
-|---|---|---|---|---|
-| A | challenger: higher-upside | script-only checks | fast and cheap | recommended |
+| Approach | Role | Upside | Architecture | Trade-offs | Recommendation |
+|---|---|---|---|---|---|
+| A | challenger | higher | script-only checks | fast and cheap | recommended |
 
 ## Approach Reaction
 - Closest option: A
@@ -419,10 +419,10 @@ describe("artifact linter heuristics", () => {
 - Why this tier: changes local + CI release path together.
 
 ## Approaches
-| Approach | Role | Architecture | Trade-offs | Recommendation |
-|---|---|---|---|---|
-| A | baseline | script-only checks | fast | |
-| B | challenger: higher-upside | reusable module | balanced | recommended |
+| Approach | Role | Upside | Architecture | Trade-offs | Recommendation |
+|---|---|---|---|---|---|
+| A | baseline | modest | script-only checks | fast | |
+| B | challenger | higher | reusable module | balanced | recommended |
 
 ## Approach Reaction
 - Closest option: B
@@ -470,10 +470,10 @@ describe("artifact linter heuristics", () => {
 - Why this tier: bounded but cross-cutting.
 
 ## Approaches
-| Approach | Role | Architecture | Trade-offs | Recommendation |
-|---|---|---|---|---|
-| A | baseline | script-only checks | fast | |
-| B | fallback | reusable module | balanced | recommended |
+| Approach | Role | Upside | Architecture | Trade-offs | Recommendation |
+|---|---|---|---|---|---|
+| A | baseline | low | script-only checks | fast | |
+| B | baseline | modest | reusable module | balanced | recommended |
 
 ## Approach Reaction
 - Closest option: B
@@ -500,11 +500,11 @@ describe("artifact linter heuristics", () => {
       (finding) => finding.section === "Challenger Alternative Enforcement"
     );
     expect(challenger?.found).toBe(false);
-    expect(challenger?.details).toContain("high/higher upside");
+    expect(challenger?.details).toContain("high or higher");
   });
 
-  it("accepts semantic challenger columns without exact hidden token", async () => {
-    const root = await createTempProject("artifact-lint-semantic-challenger");
+  it("accepts canonical challenger columns without hidden prose tokens", async () => {
+    const root = await createTempProject("artifact-lint-canonical-challenger");
     await writeRuntimeArtifact(root, "01-brainstorm.md", `# Brainstorm Artifact
 
 ## Context
@@ -559,8 +559,55 @@ describe("artifact linter heuristics", () => {
     expect(challenger?.found).toBe(true);
   });
 
-  it("accepts Cyrillic brainstorm prose and heading-based challenger upside", async () => {
-    const root = await createTempProject("artifact-lint-cyrillic-heading-challenger");
+  it("fails brainstorm when Approaches table uses non-canonical Role/Upside values", async () => {
+    const root = await createTempProject("artifact-lint-approach-taxonomy-invalid");
+    await writeRuntimeArtifact(root, "01-brainstorm.md", `# Brainstorm Artifact
+
+## Context
+- Project state: fresh simple web app flow.
+- Relevant existing code/patterns: no existing app scaffold.
+
+## Problem
+- What we're solving: choose a bounded product slice.
+
+## Clarifying Questions
+| # | Question | Answer | Decision impact |
+|---|---|---|---|
+| 1 | Include persistence? | Local only | no backend scope |
+
+## Approach Tier
+- Tier: Standard
+
+## Approaches
+| Approach | Role | Upside | Trade-offs | Recommendation |
+|---|---|---|---|---|
+| A | baseline | modest | simplest single-list todo | |
+| B | fallback | strong | ambiguous role/upside wording | recommended |
+
+## Approach Reaction
+- Closest option: B
+- Concerns: avoid backend or account system.
+- What changed after reaction: categories stay local and simple.
+
+## Selected Direction
+- Approach: B
+- Rationale: user reaction favored the second option.
+- Approval: approved by user
+
+## Design
+- Architecture: static client app.
+`);
+
+    const result = await lintArtifact(root, "brainstorm");
+    const taxonomy = result.findings.find(
+      (finding) => finding.section === "Approaches Role/Upside Taxonomy"
+    );
+    expect(taxonomy?.found).toBe(false);
+    expect(taxonomy?.details).toContain("invalid Role");
+  });
+
+  it("accepts non-Latin brainstorm prose with canonical Role/Upside columns", async () => {
+    const root = await createTempProject("artifact-lint-non-latin-canonical-approaches");
     await writeRuntimeArtifact(root, "01-brainstorm-landing.md", `# Brainstorm: Лендинг
 
 ## Context
@@ -586,14 +633,10 @@ describe("artifact linter heuristics", () => {
 **Lightweight** — конкретный низкорискованный лендинг.
 
 ## Approaches
-### A. Next.js (App Router) + Tailwind CSS (selected)
-- Плюсы: компонентная архитектура, Vercel деплой.
-- Минусы: зависимости и сборка.
-
-### B. Чистый HTML/CSS/JS (Challenger — high upside)
-- Плюсы: нулевые зависимости и мгновенный деплой.
-- Минусы: хуже масштабируется.
-- High upside: можно опубликовать за минуты без сборки.
+| Approach | Role | Upside | Architecture | Trade-offs | Recommendation |
+|---|---|---|---|---|---|
+| A | baseline | modest | Next.js (App Router) + Tailwind CSS | Компонентная архитектура, Vercel деплой; больше зависимостей | selected |
+| B | challenger | high | Чистый HTML/CSS/JS | Нулевые зависимости и мгновенный деплой; хуже масштабируется |  |
 
 ## Approach Reaction
 - Closest option: A
@@ -647,10 +690,10 @@ describe("artifact linter heuristics", () => {
 - Why this tier: bounded but cross-cutting.
 
 ## Approaches
-| Approach | Role | Architecture | Trade-offs | Recommendation |
-|---|---|---|---|---|
-| A | baseline | script-only checks | fast | |
-| B | challenger: higher-upside | reusable module | balanced | recommended |
+| Approach | Role | Upside | Architecture | Trade-offs | Recommendation |
+|---|---|---|---|---|---|
+| A | baseline | modest | script-only checks | fast | |
+| B | challenger | higher | reusable module | balanced | recommended |
 
 ## Selected Direction
 - Approach: B
@@ -767,10 +810,10 @@ describe("artifact linter heuristics", () => {
 - Why this tier: bounded but cross-cutting.
 
 ## Approaches
-| Approach | Role | Architecture | Trade-offs | Recommendation |
-|---|---|---|---|---|
-| A | baseline | script-only checks | quick but weaker reuse |  |
-| B | challenger: higher-upside | reusable validation module | more effort, better reuse | recommended |
+| Approach | Role | Upside | Architecture | Trade-offs | Recommendation |
+|---|---|---|---|---|---|
+| A | baseline | modest | script-only checks | quick but weaker reuse |  |
+| B | challenger | higher | reusable validation module | more effort, better reuse | recommended |
 
 ## Approach Reaction
 - Closest option: B
@@ -1269,6 +1312,67 @@ describe("artifact linter heuristics", () => {
     const preAudit = result.findings.find((f) => f.section === "Pre-Scope System Audit");
     expect(preAudit?.required).toBe(true);
     expect(preAudit?.found).toBe(true);
+  });
+
+  describe("Requirements Priority structural validation", () => {
+    const scopeWithRequirements = (requirementsBody: string): string => `# Scope Artifact
+
+## Requirements
+${requirementsBody}
+
+## Scope Mode
+- [x] hold
+
+## In Scope / Out of Scope
+### In Scope
+- Local todo interactions
+### Out of Scope
+- Backend API
+
+## Completion Dashboard
+- Checklist findings: 1/1
+- Resolved decisions count: 1
+- Unresolved decisions: None
+
+## Scope Summary
+- Selected mode: HOLD SCOPE
+- Next-stage handoff: design.
+`;
+
+    it("accepts canonical Requirement Priority values", async () => {
+      const root = await createTempProject("requirements-priority-valid");
+      await writeRuntimeArtifact(
+        root,
+        "02-scope.md",
+        scopeWithRequirements(
+          `| ID | Observable outcome | Priority | Source |\n` +
+            `|---|---|---|---|\n` +
+            `| R1 | User can add todos | P0 | user |\n` +
+            `| R2 | Cloud sync is out of current slice | DROPPED | scope |`
+        )
+      );
+      const result = await lintArtifact(root, "scope");
+      const requirements = result.findings.find((f) => f.section === "Requirements");
+      expect(requirements?.found).toBe(true);
+      expect(requirements?.details).toContain("canonical Priority");
+    });
+
+    it("rejects non-canonical Requirement Priority values", async () => {
+      const root = await createTempProject("requirements-priority-invalid");
+      await writeRuntimeArtifact(
+        root,
+        "02-scope.md",
+        scopeWithRequirements(
+          `| ID | Observable outcome | Priority | Source |\n` +
+            `|---|---|---|---|\n` +
+            `| R1 | User can add todos | must-have | user |`
+        )
+      );
+      const result = await lintArtifact(root, "scope");
+      const requirements = result.findings.find((f) => f.section === "Requirements");
+      expect(requirements?.found).toBe(false);
+      expect(requirements?.details).toContain("invalid Priority");
+    });
   });
 
   describe("Scope Summary semantic validation", () => {

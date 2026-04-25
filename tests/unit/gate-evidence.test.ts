@@ -88,10 +88,10 @@ describe("gate evidence verification", () => {
 - Scope handoff: continue full brainstorm before scope.
 
 ## Approaches
-| Approach | Role | Architecture | Trade-offs | Recommendation |
-|---|---|---|---|---|
-| A | baseline | narrow fix | lower risk, weaker reuse |  |
-| B | challenger: higher-upside | reusable validation module | moderate effort, stronger reuse | recommended |
+| Approach | Role | Upside | Architecture | Trade-offs | Recommendation |
+|---|---|---|---|---|---|
+| A | baseline | modest | narrow fix | lower risk, weaker reuse |  |
+| B | challenger | higher | reusable validation module | moderate effort, stronger reuse | recommended |
 
 ## Approach Reaction
 - Closest option: B

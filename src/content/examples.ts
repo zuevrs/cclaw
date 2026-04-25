@@ -33,11 +33,11 @@ const STAGE_EXAMPLES: Record<FlowStage, string> = {
 
 ## Approaches
 
-| Approach | Role | Architecture | Trade-offs | Recommendation |
-| --- | --- | --- | --- | --- |
-| A: Reusable validation module | baseline | Shared TS module with typed validators, imported by CI scripts and local CLI. Existing \`pre-publish.sh\` calls the module. | Medium upfront effort, high reuse. Requires test coverage for the module. | **Recommended** — best balance of reuse and delivery speed. |
-| B: Hardened shell scripts | fallback | Keep existing script approach, add stricter checks and error messages. | Lowest effort. Weak reuse, CI/local divergence risk grows over time. | Viable fallback if TS module is blocked. |
-| C: Full release framework | challenger: higher-upside | New release orchestrator with plugin system, config files, rollback commands. | Maximum flexibility. High risk, delivery delay, over-engineered for current needs. | Not recommended for v1. |
+| Approach | Role | Upside | Architecture | Trade-offs | Recommendation |
+| --- | --- | --- | --- | --- | --- |
+| A: Reusable validation module | baseline | high | Shared TS module with typed validators, imported by CI scripts and local CLI. Existing \`pre-publish.sh\` calls the module. | Medium upfront effort, high reuse. Requires test coverage for the module. | **Recommended** — best balance of reuse and delivery speed. |
+| B: Hardened shell scripts | baseline | modest | Keep existing script approach, add stricter checks and error messages. | Lowest effort. Weak reuse, CI/local divergence risk grows over time. | Viable fallback if TS module is blocked. |
+| C: Full release framework | challenger | higher | New release orchestrator with plugin system, config files, rollback commands. | Maximum flexibility. High risk, delivery delay, over-engineered for current needs. | Not recommended for v1. |
 
 ## Approach Reaction
 
