@@ -291,7 +291,7 @@ describe("flow command contracts", () => {
     expect(brainstormSkill).toContain("Selected Direction");
     expect(brainstormSkill).toContain("Carrying forward: <1-3 bullets>");
     expect(brainstormSkill).toContain("Ask only decision-changing questions");
-    expect(reviewSkill).toContain("Review Army");
+    expect(reviewSkill).toContain("Review Findings");
     expect(shipSkill).toContain("finalization mode");
   });
 
@@ -354,7 +354,7 @@ describe("flow command contracts", () => {
     );
 
     expectStageSkillContract(reviewSkill);
-    expect(reviewSkill).toContain("Review Army");
+    expect(reviewSkill).toContain("Review Findings");
     expect(reviewSkill).toContain("Layer 1");
     expect(reviewSkill).toContain("Layer 2");
   });

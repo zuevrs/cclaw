@@ -708,46 +708,25 @@ inputs_hash: sha256:pending
 |---|---|---|---|---|---|---|
 | CR-1 | reviewer / bot / ci | Critical/Important/Suggestion | path:line or n/a |  | open/in-progress/resolved/accepted-risk/rejected-with-evidence |  |
 
-## Review Army Contract
+## Review Findings Contract
 - See \`07-review-army.json\`
 - Reconciliation summary:
 
-## Review Readiness Dashboard
+## Review Readiness Snapshot
 
-| Pass | Status | Completed at (UTC) | Reviewer / source | Commit at review | Drift vs HEAD |
-|---|---|---|---|---|---|
-| Layer 1 — spec compliance | pass / fail / pending | <ISO 8601> | reviewer | <short sha> | <files changed since> |
-| Layer 2 — correctness | pass / fail / pending | <ISO 8601> | reviewer | <short sha> | <files changed since> |
-| Layer 2 — security | pass / fail / pending | <ISO 8601> | security-reviewer | <short sha> | <files changed since> |
-| Layer 2 — performance | pass / fail / pending | <ISO 8601> | reviewer | <short sha> | <files changed since> |
-| Layer 2 — architecture | pass / fail / pending | <ISO 8601> | reviewer | <short sha> | <files changed since> |
-| Adversarial review | pass / fail / n/a | <ISO 8601 or —> | adversarial-review skill | <short sha or —> | <drift or —> |
-| Review army schema valid | pass / fail | <ISO 8601> | jsonschema | <short sha> | n/a |
-
-### Delegation log snapshot (current run, current stage)
-- Path: \`.cclaw/state/delegation-log.json\`
-- Required: <list of mandatory specialists>
-- Completed: <list with timestamps>
-- Waived (with reason): <list or "none">
-- Pending: <list or "none">
-
-### Staleness signal
-- Worktree commit at last review pass: \`<short sha>\`
-- Worktree commit now: \`<short sha>\`
-- Files changed since last review pass: \`<count>\` (run \`git diff --stat <sha>..HEAD\` to inspect)
-- If drift > 0 lines, mark Layer 1 / Layer 2 results as **STALE — re-run before ship**.
-
-### Headline
-- Open critical blockers: <count>
-- Adversarial review pass: pass / fail / n/a
+- Completed checks: Layer 1, Layer 2 tags, security sweep, schema validation
+- Delegation log: \`.cclaw/state/delegation-log.json\` required/completed/waived/pending
+- Staleness signal: commit at last review pass vs current commit
+- Open critical blockers:
 - Ship recommendation: APPROVED | APPROVED_WITH_CONCERNS | BLOCKED
 
-## Completeness Score
+
+## Completeness Snapshot
 - AC coverage: <N>/<M> (<percent>%)
 - Task coverage (tasks backed by ≥1 test slice): <N>/<M>
 - Slice coverage (slices linked to ≥1 AC): <N>/<M>
-- Adversarial review pass: true | false
-- Overall score: <0-100>
+- Adversarial review: not triggered | pass | fail
+- Overall: complete | concerns | blocked
 
 ## Trace Matrix Check
 - Command: \`cclaw internal trace-matrix\`

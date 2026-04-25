@@ -96,6 +96,9 @@ workflow tool.
 - Design/spec/plan guidance now adopts prompt-level investigator/critic, shadow
   alternative, acceptance mapping, and exact verification-command discipline
   without adding new runtime machinery.
+- Review guidance now defaults to one reviewer plus mandatory security-reviewer,
+  with adversarial review as a risk-triggered pass instead of ceremony for every
+  large-ish diff.
 
 ### Preserved
 

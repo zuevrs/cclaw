@@ -245,7 +245,7 @@ const REQUIRED_ARTIFACT_SECTIONS: Record<FlowStage, string[]> = {
   spec: ["Acceptance Criteria", "Edge Cases", "Testability Map", "Approval"],
   plan: ["Task List", "Dependency Batches", "Acceptance Mapping", "WAIT_FOR_CONFIRM"],
   tdd: ["RED Evidence", "GREEN Evidence", "REFACTOR Notes", "Traceability", "Verification Ladder"],
-  review: ["Layer 1 Verdict", "Review Army Contract", "Severity Summary", "Final Verdict"],
+  review: ["Layer 1 Verdict", "Review Findings Contract", "Severity Summary", "Final Verdict"],
   ship: ["Preflight Results", "Release Notes", "Rollback Plan", "Finalization"]
 };
 
@@ -434,7 +434,7 @@ const STAGE_AUTO_SUBAGENT_DISPATCH: Record<FlowStage, StageAutoSubagentDispatch[
       mode: "mandatory",
       requiredAtTier: "lightweight",
       when: "Always in review stage.",
-      purpose: "Layer 1 spec compliance pass plus coordination of parallel Layer 2 fan-out (correctness, performance, architecture, external-safety) with source-tagged findings.",
+      purpose: "Layer 1 spec compliance plus integrated Layer 2 review across correctness, performance, architecture, and external-safety tags with source-tagged findings.",
       requiresUserGate: false,
       skill: "review-spec-pass"
     },
@@ -449,10 +449,9 @@ const STAGE_AUTO_SUBAGENT_DISPATCH: Record<FlowStage, StageAutoSubagentDispatch[
     },
     {
       agent: "reviewer",
-      mode: "mandatory",
-      requiredAtTier: "lightweight",
-      when: "Mandatory when the diff exceeds 100 changed lines, touches more than 10 files, or modifies trust boundaries — dispatch a SECOND, independent reviewer with the adversarial-review skill loaded so the review army has at least two voices on a high-blast-radius change.",
-      purpose: "Adversarial second-opinion review on large or trust-sensitive diffs. The second reviewer treats the implementation as hostile and tries to break it (hostile-user, future-maintainer, competitor lenses) instead of sympathetically explaining it.",
+      mode: "proactive",
+      when: "When trust boundaries changed, Critical/Important ambiguity remains, or the diff is both large and high-risk.",
+      purpose: "Adversarial second-opinion review for genuinely high-blast-radius changes. Treat the implementation as hostile and try to break it before ship.",
       requiresUserGate: false,
       skill: "adversarial-review"
     },

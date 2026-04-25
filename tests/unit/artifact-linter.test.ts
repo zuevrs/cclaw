@@ -942,7 +942,7 @@ describe("artifact linter heuristics", () => {
 |---|---|---|---|---|
 | R-1 | Suggestion | correctness | tighten naming | open |
 
-## Review Army Contract
+## Review Findings Contract
 - See \`07-review-army.json\`
 - Reconciliation summary: none
 
@@ -956,7 +956,7 @@ describe("artifact linter heuristics", () => {
 `);
 
     const result = await lintArtifact(root, "review");
-    const readiness = result.findings.find((finding) => finding.section === "Review Readiness Dashboard");
+    const readiness = result.findings.find((finding) => finding.section === "Review Readiness Snapshot");
     expect(result.passed).toBe(true);
     expect(readiness?.found).toBe(false);
     expect(readiness?.required).toBe(false);
@@ -2528,18 +2528,18 @@ inputs_hash: sha256:not-a-real-hash
 | R-1 | Critical | correctness | Snapshot cursor gap | open |
 | R-2 | Suggestion | architecture | Extract shared hook | open |
 
-## Review Army Contract
+## Review Findings Contract
 - See \`07-review-army.json\`
 - Reconciliation summary: 0 conflicts
 
-## Review Readiness Dashboard
+## Review Readiness Snapshot
 - Layer 1 complete: yes
 - Layer 2 complete: yes
-- Review army schema valid: yes
+- Review findings schema valid: yes
 - Open critical blockers: 1
 - Adversarial review pass: false
 
-## Completeness Score
+## Completeness Snapshot
 - AC coverage: 2/2 (100%)
 - Task coverage: 2/2
 - Slice coverage: 2/2
@@ -2568,14 +2568,14 @@ inputs_hash: sha256:not-a-real-hash
 |---|---|---|---|---|
 | R-1 | Suggestion | correctness | Minor naming | open |
 
-## Review Army Contract
+## Review Findings Contract
 - See \`07-review-army.json\`
 - Reconciliation summary: none
 
-## Review Readiness Dashboard
+## Review Readiness Snapshot
 - Layer 1 complete: no
 - Layer 2 complete: yes
-- Review army schema valid: yes
+- Review findings schema valid: yes
 - Open critical blockers: 0
 
 ## Severity Summary
@@ -2594,7 +2594,7 @@ inputs_hash: sha256:not-a-real-hash
     expect(l1?.required).toBe(true);
   });
 
-  it("fails review when Review Army Contract is missing", async () => {
+  it("fails review when Review Findings Contract is missing", async () => {
     const root = await createTempProject("review-no-army");
     await writeRuntimeArtifact(root, "07-review.md", `# Review Artifact
 
@@ -2608,10 +2608,10 @@ inputs_hash: sha256:not-a-real-hash
 |---|---|---|---|---|
 | R-1 | Suggestion | correctness | Minor naming | open |
 
-## Review Readiness Dashboard
+## Review Readiness Snapshot
 - Layer 1 complete: yes
 - Layer 2 complete: yes
-- Review army schema valid: no
+- Review findings schema valid: no
 - Open critical blockers: 0
 
 ## Severity Summary
@@ -2625,9 +2625,9 @@ inputs_hash: sha256:not-a-real-hash
 
     const result = await lintArtifact(root, "review");
     expect(result.passed).toBe(false);
-    const army = result.findings.find((f) => f.section === "Review Army Contract");
-    expect(army?.found).toBe(false);
-    expect(army?.required).toBe(true);
+    const findings = result.findings.find((f) => f.section === "Review Findings Contract");
+    expect(findings?.found).toBe(false);
+    expect(findings?.required).toBe(true);
   });
 
   it("fails review when Layer 2 Findings is missing", async () => {
@@ -2639,14 +2639,14 @@ inputs_hash: sha256:not-a-real-hash
 |---|---|---|
 | AC-1 | PASS | e2e test evidence |
 
-## Review Army Contract
+## Review Findings Contract
 - See \`07-review-army.json\`
 - Reconciliation summary: none
 
-## Review Readiness Dashboard
+## Review Readiness Snapshot
 - Layer 1 complete: yes
 - Layer 2 complete: no
-- Review army schema valid: yes
+- Review findings schema valid: yes
 - Open critical blockers: 0
 
 ## Severity Summary
@@ -2679,14 +2679,14 @@ inputs_hash: sha256:not-a-real-hash
 |---|---|---|---|---|
 | R-1 | Suggestion | correctness | Minor naming | open |
 
-## Review Army Contract
+## Review Findings Contract
 - See \`07-review-army.json\`
 - Reconciliation summary: none
 
-## Review Readiness Dashboard
+## Review Readiness Snapshot
 - Layer 1 complete: yes
 - Layer 2 complete: yes
-- Review army schema valid: yes
+- Review findings schema valid: yes
 - Open critical blockers: 0
 
 ## Severity Summary
@@ -2718,14 +2718,14 @@ inputs_hash: sha256:not-a-real-hash
 |---|---|---|---|---|
 | R-1 | Suggestion | correctness | Minor naming | open |
 
-## Review Army Contract
+## Review Findings Contract
 - See \`07-review-army.json\`
 - Reconciliation summary: none
 
-## Review Readiness Dashboard
+## Review Readiness Snapshot
 - Layer 1 complete: yes
 - Layer 2 complete: yes
-- Review army schema valid: yes
+- Review findings schema valid: yes
 - Open critical blockers: 0
 
 ## Final Verdict

@@ -121,7 +121,7 @@ describe("stage schema and subagent alignment", () => {
   it("review stage includes review-army structured reconciliation", () => {
     const review = stageSchema("review");
     expect(review.requiredEvidence).toContain("Artifact written to `.cclaw/artifacts/07-review-army.json`.");
-    expect(stagePolicyNeedles("review")).toContain("Review Army");
+    expect(stagePolicyNeedles("review")).toContain("Review Findings");
   });
 
   it("ship finalization enums are sourced from canonical constants", () => {
@@ -161,10 +161,11 @@ describe("stage schema and subagent alignment", () => {
     expect(JSON.stringify(parsed)).not.toMatch(/"title"|"category"/);
   });
 
-  it("review stage mandates reviewer and security-reviewer", () => {
+  it("review stage mandates reviewer and security-reviewer only by default", () => {
     const review = stageSchema("review");
-    expect(review.mandatoryDelegations).toContain("reviewer");
-    expect(review.mandatoryDelegations).toContain("security-reviewer");
+    expect(review.mandatoryDelegations).toEqual(["reviewer", "security-reviewer"]);
+    const adversarial = stageAutoSubagentDispatch("review").find((row) => row.skill === "adversarial-review");
+    expect(adversarial?.mode).toBe("proactive");
   });
 
   it("security-reviewer agent registry entry is mandatory", () => {

@@ -49,7 +49,7 @@ const STAGE_POLICY_NEEDLES: Record<FlowStage, string[]> = {
     "Layer 1",
     "Layer 2",
     "Critical",
-    "Review Army",
+    "Review Findings",
     "Ready to Ship",
     "ROUTE_BACK_TO_TDD",
     "One issue at a time"

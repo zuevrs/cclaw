@@ -291,8 +291,8 @@ describe("delegation ledger run scoping", () => {
     expect(result.expectedMode).toBe("isolated");
   });
 
-  it("requires a second reviewer completion when adversarial triggers are active", async () => {
-    const root = await createTempProject("delegation-adversarial-review");
+  it("does not require adversarial review as a mandatory delegation by default", async () => {
+    const root = await createTempProject("delegation-review-defaults");
     await seedFlowState(root, "run-review", "review");
     await writeConfig(root, createDefaultConfig(["claude"]));
     await initGitRepoWithLargeReviewDiff(root);
@@ -302,6 +302,7 @@ describe("delegation ledger run scoping", () => {
       agent: "reviewer",
       mode: "mandatory",
       status: "completed",
+      evidenceRefs: [".cclaw/artifacts/07-review.md#layer-1"],
       ts: new Date().toISOString()
     });
     await appendDelegation(root, {
@@ -309,37 +310,13 @@ describe("delegation ledger run scoping", () => {
       agent: "security-reviewer",
       mode: "mandatory",
       status: "completed",
+      evidenceRefs: [".cclaw/artifacts/07-review.md#security"],
       ts: new Date().toISOString()
     });
 
-    const firstPass = await checkMandatoryDelegations(root, "review");
-    expect(firstPass.satisfied).toBe(false);
-    expect(firstPass.missing).toContain("reviewer");
-
-    await appendDelegation(root, {
-      stage: "review",
-      agent: "reviewer",
-      mode: "mandatory",
-      status: "completed",
-      ts: new Date().toISOString()
-    });
-
-    const secondPass = await checkMandatoryDelegations(root, "review");
-    expect(secondPass.satisfied).toBe(false);
-    expect(secondPass.missing).toContain("reviewer");
-
-    await appendDelegation(root, {
-      stage: "review",
-      agent: "reviewer",
-      mode: "mandatory",
-      status: "completed",
-      skill: "adversarial-review",
-      ts: new Date().toISOString()
-    });
-
-    const thirdPass = await checkMandatoryDelegations(root, "review");
-    expect(thirdPass.satisfied).toBe(true);
-    expect(thirdPass.missing).toEqual([]);
+    const result = await checkMandatoryDelegations(root, "review");
+    expect(result.satisfied).toBe(true);
+    expect(result.missing).toEqual([]);
   });
 
   describe("isTrustBoundaryPath", () => {

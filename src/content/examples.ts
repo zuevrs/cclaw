@@ -401,16 +401,16 @@ Execution rule: complete and verify each batch before starting the next batch.
 | R-2 | Important | performance | \`feedStore.merge()\` does full-array scan on every SSE event; O(n) per event where n is feed length. | open |
 | R-3 | Suggestion | architecture | SSE reconnect logic duplicated across \`useNotifications\` and \`usePresence\`; extract shared hook. | open |
 
-## Review Army Contract
+## Review Findings Contract
 
 - See \`07-review-army.json\`
 - Reconciliation summary: 1 duplicate collapsed (R-1 reported by reviewer and security-reviewer), 0 conflicts
 
-## Review Readiness Dashboard
+## Review Readiness Snapshot
 
 - Layer 1 complete: yes (3/3 criteria)
 - Layer 2 complete: yes (5 sections reviewed)
-- Review army schema valid: yes
+- Review findings schema valid: yes
 - Open critical blockers: 1 (R-1)
 - Ship recommendation: BLOCKED until R-1 resolved
 

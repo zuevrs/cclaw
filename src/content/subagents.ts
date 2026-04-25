@@ -43,20 +43,15 @@ For cclaw flow stages, machine-only specialist work should auto-dispatch without
 
 Human input remains mandatory only at explicit approval gates (plan approval, user challenge resolution, release finalization mode).
 
-### Review parallel fan-out protocol
+### Review dispatch protocol
 
-In review stage, prefer a fixed six-pass fan-out before reconciliation:
+In review stage, run one reviewer and one security-reviewer by default:
 
-1. \`review-spec\` (Layer 1)
-2. \`review-correctness\` (Layer 2a)
-3. \`review-security\` (Layer 2b)
-4. \`review-performance\` (Layer 2c)
-5. \`review-architecture\` (Layer 2d)
-6. \`review-external-safety\` (Layer 2e)
+1. \`reviewer\` owns Layer 1 spec compliance plus integrated Layer 2 tags (correctness, performance, architecture, external-safety).
+2. \`security-reviewer\` owns the mandatory security sweep or no-change attestation.
+3. Add \`adversarial-review\` only when trust boundaries changed, Critical/Important ambiguity remains, or the diff is both large and high-risk.
 
-Dispatch these in parallel where the harness supports isolated workers, then run
-one reconciliation pass that merges findings into \`.cclaw/artifacts/07-review-army.json\`
-with explicit source tags per finding.
+Reconcile findings into \`.cclaw/artifacts/07-review-army.json\` with explicit source tags per finding.
 
 ### TDD evidence protocol
 

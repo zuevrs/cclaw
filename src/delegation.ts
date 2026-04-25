@@ -93,7 +93,6 @@ interface ReviewTriggerMetrics {
   changedFiles: number;
   changedLines: number;
   trustBoundaryChanged: boolean;
-  requireAdversarialReviewer: boolean;
 }
 
 function delegationLogPath(projectRoot: string): string {
@@ -143,7 +142,7 @@ async function resolveReviewDiffBase(projectRoot: string): Promise<string | null
 
 /**
  * Heuristic: does a changed file path strongly imply a trust-boundary
- * surface? Used to gate adversarial-reviewer requirements on review.
+ * surface? Used by tests and prompt guidance for risk-triggered review.
  *
  * Matches authN/Z, credentials, crypto, policy, or explicit sanitization
  * or injection handling. Intentionally excludes broad terms like `input`
@@ -160,8 +159,7 @@ async function detectReviewTriggers(projectRoot: string): Promise<ReviewTriggerM
   const empty: ReviewTriggerMetrics = {
     changedFiles: 0,
     changedLines: 0,
-    trustBoundaryChanged: false,
-    requireAdversarialReviewer: false
+    trustBoundaryChanged: false
   };
   const base = await resolveReviewDiffBase(projectRoot);
   if (!base) {
@@ -186,13 +184,10 @@ async function detectReviewTriggers(projectRoot: string): Promise<ReviewTriggerM
       .map((line) => line.trim())
       .filter((line) => line.length > 0);
     const trustBoundaryChanged = changedPaths.some((p) => isTrustBoundaryPath(p));
-    const requireAdversarialReviewer =
-      changedLines > 100 || changedFiles > 10 || trustBoundaryChanged;
     return {
       changedFiles,
       changedLines,
-      trustBoundaryChanged,
-      requireAdversarialReviewer
+      trustBoundaryChanged
     };
   } catch {
     return empty;
@@ -397,24 +392,13 @@ export async function checkMandatoryDelegations(
   const harnesses = config?.harnesses ?? [];
   const fallbacks = harnesses.map((h) => HARNESS_ADAPTERS[h].capabilities.subagentFallback);
   const expectedMode = expectedFulfillmentMode(fallbacks);
-  const reviewTriggers =
-    stage === "review" ? await detectReviewTriggers(projectRoot) : null;
-
   for (const agent of mandatory) {
     const rows = forRun.filter((e) => e.agent === agent);
     const completedRows = rows.filter((e) => e.status === "completed");
     const waivedRows = rows.filter((e) => e.status === "waived");
-    const adversarialReviewerRequired =
-      stage === "review" &&
-      agent === "reviewer" &&
-      reviewTriggers?.requireAdversarialReviewer === true;
-    const requiredCompletedCount = adversarialReviewerRequired ? 2 : 1;
-    const hasCompleted = completedRows.length >= requiredCompletedCount;
+    const hasCompleted = completedRows.length >= 1;
     const hasWaived = waivedRows.length > 0;
-    const hasAdversarialSkill =
-      !adversarialReviewerRequired ||
-      completedRows.some((row) => row.skill === "adversarial-review");
-    const ok = hasWaived || (hasCompleted && hasAdversarialSkill);
+    const ok = hasWaived || hasCompleted;
 
     if (!ok) {
       missing.push(agent);
