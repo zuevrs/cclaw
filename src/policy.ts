@@ -42,7 +42,7 @@ export async function policyChecks(projectRoot: string, options: PolicyOptions =
     // --- skill mandatory sections ---
     for (const heading of [
       "## Process",
-      "## Verification",
+      "## Exit Criteria",
       "## Interaction Protocol",
       "## Anti-Patterns & Red Flags",
       "## HARD-GATE",

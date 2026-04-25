@@ -64,11 +64,13 @@ export const SKILL_ENVELOPE_KINDS = [
 ] as const;
 
 export type SkillEnvelopeKind = (typeof SKILL_ENVELOPE_KINDS)[number];
+export const NON_FLOW_ENVELOPE_STAGE = "non-flow" as const;
+export type SkillEnvelopeStage = FlowStage | typeof NON_FLOW_ENVELOPE_STAGE;
 
 export interface SkillEnvelope {
   version: "1";
   kind: SkillEnvelopeKind;
-  stage: FlowStage;
+  stage: SkillEnvelopeStage;
   payload: unknown;
   emittedAt: string;
   agent?: string;
@@ -219,8 +221,13 @@ export function validateSkillEnvelope(value: unknown): SkillEnvelopeValidation {
   if (typeof record.kind !== "string" || !SKILL_ENVELOPE_KIND_SET.has(record.kind)) {
     errors.push(`envelope.kind must be one of: ${SKILL_ENVELOPE_KINDS.join(", ")}.`);
   }
-  if (typeof record.stage !== "string" || !FLOW_STAGE_SET.has(record.stage as FlowStage)) {
-    errors.push(`envelope.stage must be one of: ${FLOW_STAGES.join(", ")}.`);
+  if (
+    typeof record.stage !== "string" ||
+    (record.stage !== NON_FLOW_ENVELOPE_STAGE && !FLOW_STAGE_SET.has(record.stage as FlowStage))
+  ) {
+    errors.push(
+      `envelope.stage must be one of: ${FLOW_STAGES.join(", ")} or ${NON_FLOW_ENVELOPE_STAGE}.`
+    );
   }
   if (!Object.prototype.hasOwnProperty.call(record, "payload")) {
     errors.push("envelope.payload is required.");

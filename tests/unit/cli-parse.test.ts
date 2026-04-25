@@ -75,7 +75,7 @@ describe("cli parser", () => {
 
   it("usage message documents the public user surface", () => {
     const text = usage();
-    for (const cmd of ["init", "sync", "archive", "upgrade", "uninstall"]) {
+    for (const cmd of ["init", "sync", "doctor", "archive", "upgrade", "uninstall"]) {
       expect(text).toContain(cmd);
     }
     expect(text).toContain("--help");
@@ -84,21 +84,25 @@ describe("cli parser", () => {
     expect(text).toContain("-v");
     expect(text).toContain("--harnesses");
     expect(text).toContain("--no-interactive");
+    expect(text).toContain("--json");
+    expect(text).toContain("--only");
+    expect(text).toContain("docs/config.md");
   });
 
   it("usage message keeps internal maintainer switches out of public help", () => {
     const text = usage();
-    for (const hiddenCmd of ["doctor"]) {
-      expect(text).not.toContain(`\n  ${hiddenCmd} `);
-    }
     for (const hiddenFlag of [
       "--profile",
       "--track",
-      "--interactive",
-      "--reconcile-gates"
+      "--interactive"
     ]) {
       expect(text).not.toContain(hiddenFlag);
     }
+  });
+
+  it("rejects command-specific flags on the wrong command", () => {
+    expect(() => parseArgs(["archive", "--json"])).toThrowError(/not supported/);
+    expect(() => parseArgs(["sync", "--dry-run"])).toThrowError(/not supported/);
   });
 
   it("parses init with --track=quick", () => {

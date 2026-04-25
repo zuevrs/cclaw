@@ -142,11 +142,14 @@ function verificationBlock(stage: FlowStage): string {
   if (!VERIFICATION_STAGES.includes(stage)) return "";
   return `## Verification Before Completion
 
-Provide fresh, stage-local verification evidence from this turn:
+This is the gate function for completion claims. No "done", "all good", or
+"tests pass" unless fresh evidence from this turn proves it.
 
-1. Run verification commands (tests/build/lint/type-check) for the changed scope.
-2. Confirm output, do not infer success from prior runs.
-3. If this is a bug fix, capture RED -> GREEN evidence for the regression path.
+- Run verification commands (tests/build/lint/type-check) for the changed scope.
+- Confirm output directly; do not infer success from prior runs or green memories.
+- If this is a bug fix, capture RED -> GREEN evidence for the regression path.
+- If a command fails, report the failure as diagnostic evidence and stop before completion.
+- If you only inspected files or reasoned about the change, say so; that is not verification.
 
 Keep this verification evidence in the artifact before completion.
 `;
@@ -445,7 +448,7 @@ ${evidenceList}
 
 ${verificationBlock(stage)}
 
-## Verification
+## Exit Criteria
 ${executionModel.exitCriteria.map((item) => `- [ ] ${item}`).join("\n")}
 
 ${completionParametersBlock(schema, track)}

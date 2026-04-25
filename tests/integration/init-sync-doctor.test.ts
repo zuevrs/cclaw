@@ -181,7 +181,7 @@ describe("install lifecycle", { timeout: 30_000 }, () => {
     expect(configCheck).toBeDefined();
     expect(configCheck?.severity).toBe("error");
     expect(configCheck?.fix.length).toBeGreaterThan(0);
-    expect(configCheck?.docRef).toContain("docs/config-and-policy.md");
+    expect(configCheck?.docRef).toContain("docs/config.md");
 
     expect(warningCheck).toBeDefined();
     expect(warningCheck?.severity).toBe("warning");

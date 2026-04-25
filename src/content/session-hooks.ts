@@ -27,7 +27,7 @@ These are prompt-discipline guidelines that complement the real hooks cclaw gene
 When a new session begins in any harness:
 
 1. **Read flow state:** Load \`.cclaw/state/flow-state.json\` to find the current stage and completed stages.
-2. **Load knowledge:** Stream the tail of \`.cclaw/knowledge.jsonl\` (strict JSONL store) and surface the most relevant rules/patterns.
+2. **Load knowledge:** Use the session-injected knowledge digest first; stream \`.cclaw/knowledge.jsonl\` only when the digest is missing or insufficient.
 3. **Check for in-progress work:** If the last stage is incomplete, remind the user and offer to resume.
 4. **Load iron laws:** Read \`.cclaw/state/iron-laws.json\` to know which laws are strict in this repo.
 5. **Read AGENTS.md:** The cclaw block contains routing and rules — follow them.
@@ -37,7 +37,7 @@ When a new session begins in any harness:
 \`\`\`
 Cclaw flow state: [current stage] ([N] of 8 stages completed)
 Knowledge highlights: [rule/pattern 1], [rule/pattern 2], [rule/pattern 3]
-Next action: /cc-[stage] to continue, or describe what you'd like to do.
+Next action: /cc-next to continue, /cc to start new work, or describe what you'd like to do.
 \`\`\`
 
 ## Session Stop Protocol
@@ -62,7 +62,7 @@ When resuming work after a break:
 
 1. Re-read \`.cclaw/state/flow-state.json\` (may have changed externally).
 2. Re-read the current stage's artifact to verify it matches the last handoff.
-3. Re-load recent knowledge entries.
+3. Re-load the knowledge digest first, then scan \`.cclaw/knowledge.jsonl\` only if the digest lacks enough evidence.
 4. Continue from the last incomplete step — do not restart the stage.
 
 ### Optional session-history scan for compound

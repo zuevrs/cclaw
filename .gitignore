@@ -8,6 +8,7 @@ release-artifacts/
 docs/*
 !docs/harnesses.md
 !docs/config.md
+!docs/agents-block.example.md
 # cclaw generated artifacts
 .cclaw/
 .claude/commands/cc-*.md

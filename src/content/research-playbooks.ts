@@ -39,10 +39,11 @@ Reuse prior project knowledge before choosing a direction.
 
 ## Steps
 
-1. Read \`.cclaw/knowledge.jsonl\`.
-2. Match by stage/domain keywords from the current task.
-3. Rank matches by confidence and recency.
-4. Return the top entries verbatim.
+1. Use the session-injected knowledge digest first.
+2. Read \`.cclaw/knowledge.jsonl\` only if the digest is missing or too thin.
+3. Match by stage/domain keywords from the current task.
+4. Rank matches by confidence and recency.
+5. Return the top entries verbatim.
 
 ## Output Contract
 

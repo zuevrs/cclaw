@@ -108,7 +108,7 @@ ${frameBullets}
 For skill-to-skill invocation, emit exactly one JSON envelope:
 
 \`\`\`json
-{"version":"1","kind":"stage-output","stage":"brainstorm","payload":{"command":"/cc-ideate","artifact":".cclaw/artifacts/ideate-<date>-<slug>.md","recommendation":"I-1"},"emittedAt":"<ISO-8601>"}
+{"version":"1","kind":"stage-output","stage":"non-flow","payload":{"command":"/cc-ideate","artifact":".cclaw/artifacts/ideate-<date>-<slug>.md","recommendation":"I-1"},"emittedAt":"<ISO-8601>"}
 \`\`\`
 
 Validate envelopes with:

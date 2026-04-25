@@ -37,7 +37,7 @@ Subcommands:
 For machine orchestration, emit one JSON envelope:
 
 \`\`\`json
-{"version":"1","kind":"stage-output","stage":"review","payload":{"command":"/cc-view","subcommand":"status","summary":"<short>"},"emittedAt":"<ISO-8601>"}
+{"version":"1","kind":"stage-output","stage":"non-flow","payload":{"command":"/cc-view","subcommand":"status","summary":"<short>"},"emittedAt":"<ISO-8601>"}
 \`\`\`
 
 Validate envelopes with:

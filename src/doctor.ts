@@ -138,7 +138,11 @@ function knowledgeRoutingSurfaceIsDiscoverable(content: string): boolean {
 
 async function commandAvailable(command: string): Promise<boolean> {
   try {
-    await execFileAsync("bash", ["-lc", `command -v ${command} >/dev/null 2>&1`]);
+    if (process.platform === "win32") {
+      await execFileAsync("where", [command]);
+      return true;
+    }
+    await execFileAsync(command, ["--version"]);
     return true;
   } catch {
     return false;

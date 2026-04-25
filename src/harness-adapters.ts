@@ -320,11 +320,10 @@ When in doubt, prefer **non-trivial** — the quick track is opt-in and only saf
 ### Instruction Priority (top wins)
 
 1. User message in the current turn.
-2. Active stage skill HARD-GATE (\`.cclaw/skills/<stage>/SKILL.md\`).
-3. Command contract gates (\`.cclaw/commands/<stage>.md\`).
-4. The \`using-cclaw\` meta-skill.
-5. Contextual utility skills.
-6. Training priors.
+2. Active stage skill and command contract.
+3. The \`using-cclaw\` meta-skill.
+4. Contextual utility skills.
+5. Training priors.
 
 ### Commands
 

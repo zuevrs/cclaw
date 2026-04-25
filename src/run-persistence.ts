@@ -5,6 +5,7 @@ import {
   canTransition,
   createInitialCloseoutState,
   createInitialFlowState,
+  FLOW_STATE_SCHEMA_VERSION,
   isFlowTrack,
   skippedStagesForTrack,
   SHIP_SUBSTATES,
@@ -376,6 +377,7 @@ function coerceFlowState(parsed: Record<string, unknown>): FlowState {
     : next.activeRunId;
 
   return {
+    schemaVersion: FLOW_STATE_SCHEMA_VERSION,
     activeRunId,
     currentStage: isFlowStage(parsed.currentStage) ? parsed.currentStage : next.currentStage,
     completedStages: sanitizeCompletedStages(parsed.completedStages),

@@ -60,7 +60,7 @@ describe("flow command contracts", () => {
       const skillPath = path.join(root, ".cclaw/skills", stageSkillFolder(stage), "SKILL.md");
       const content = await fs.readFile(skillPath, "utf8");
       expect(content).toContain("## Process");
-      expect(content).toContain("## Verification");
+      expect(content).toContain("## Exit Criteria");
       expect(content).toContain("## Completion Parameters");
       expect(content).toContain("## Shared Stage Guidance");
       expect(content).toContain("## Anti-Patterns & Red Flags");

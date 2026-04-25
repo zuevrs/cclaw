@@ -3,7 +3,8 @@ import { stageSchema } from "./stage-schema.js";
 import {
   closeoutChainInline,
   closeoutNextCommandGuidance,
-  closeoutSubstateInline
+  closeoutSubstateInline,
+  closeoutSubstateProtocolBullets
 } from "./closeout-guidance.js";
 import { stageSkillFolder } from "./skills.js";
 
@@ -69,7 +70,8 @@ export function nextCommandContract(): string {
 
 - **Current stage not started / in progress** → load its skill and execute it.
 - **Current stage complete (all gates passed)** → advance \`currentStage\` and load the next skill.
-- **Flow complete** → report done.
+- **Ship complete** → continue the resumable ${closeoutChainInline()} closeout via \`/cc-next\`.
+- **Flow complete** → report done after closeout has archived the run.
 
 This is the only progression command the user needs to drive the entire flow. Stage command contracts are internal implementation details loaded by \`/cc-next\`.
 
@@ -106,23 +108,7 @@ ${ralphLoopContractSnippet()}
 
 → If current stage's \`next\` is **\`done\`**:
 
-  When \`currentStage === "ship"\`, route by **${closeoutSubstateInline()}**:
-  - \`"idle"\` or missing -> set ${closeoutSubstateInline()} = \`"retro_review"\`, then
-    execute the in-stage retro protocol (draft + one structured accept/edit/skip ask).
-  - \`"retro_review"\` -> continue the retro protocol (re-ask the structured
-    question; the draft already exists — do not regenerate it).
-  - \`"compound_review"\` -> execute the in-stage compound closeout scan (not \`ce:compound\`):
-    read \`.cclaw/state/compound-readiness.json\` plus the relevant tail of
-    \`.cclaw/knowledge.jsonl\`, assess overlap before adding duplicate knowledge,
-    separate bug-track learnings (turn into rules/tests/remediation) from
-    knowledge-track learnings (durable project/process guidance), and use
-    lightweight \`supersedes\` / \`superseded_by\` fields when refreshing stale or
-    partially replaced entries. Optionally ask whether to scan Cursor/Claude/Codex
-    session transcripts for matching historical learnings; only do it after opt-in.
-    Ask **one** structured question (apply / skip) per candidate cluster or a
-    single accept-all / skip choice, then advance substate.
-  - \`"ready_to_archive"\` -> run \`cclaw archive\` (or \`cclaw archive --name=<slug>\`) and reset state.
-  - \`"archived"\` (transient) -> report "run archived" and stop.
+  ${closeoutSubstateProtocolBullets()}
 
   Otherwise report **"Flow complete. All stages finished."** and stop.
 

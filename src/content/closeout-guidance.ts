@@ -20,6 +20,26 @@ export function closeoutNextCommandGuidance(): string {
   return `After ship completes, the closeout chain ${closeoutChainInline()} runs automatically, driven by ${closeoutSubstateInline()}. Continue through \`/cc-next\`; do not branch into \`ce:compound\`, a separate operations router, or a one-off closeout command. Ralph Loop may be mentioned only as tdd carry-forward context when it explains the next \`/cc-next\` move; it is not part of compound/archive routing.`;
 }
 
+export function closeoutSubstateProtocolBullets(): string {
+  return `When \`currentStage === "ship"\`, route by **${closeoutSubstateInline()}**:
+  - \`"idle"\` or missing -> set ${closeoutSubstateInline()} = \`"retro_review"\`, then
+    execute the in-stage retro protocol (draft + one structured accept/edit/skip ask).
+  - \`"retro_review"\` -> continue the retro protocol (re-ask the structured
+    question; the draft already exists — do not regenerate it).
+  - \`"compound_review"\` -> execute the in-stage compound closeout scan (not \`ce:compound\`):
+    read \`.cclaw/state/compound-readiness.json\` plus the relevant tail of
+    \`.cclaw/knowledge.jsonl\`, assess overlap before adding duplicate knowledge,
+    separate bug-track learnings (turn into rules/tests/remediation) from
+    knowledge-track learnings (durable project/process guidance), and use
+    lightweight \`supersedes\` / \`superseded_by\` fields when refreshing stale or
+    partially replaced entries. Optionally ask whether to scan Cursor/Claude/Codex
+    session transcripts for matching historical learnings; only do it after opt-in.
+    Ask **one** structured question (apply / skip) per candidate cluster or a
+    single accept-all / skip choice, then advance substate.
+  - \`"ready_to_archive"\` -> run \`cclaw archive\` (or \`cclaw archive --name=<slug>\`) and reset state.
+  - \`"archived"\` (transient) -> report "run archived" and stop.`;
+}
+
 export function closeoutFlowMapSentence(): string {
   return `The first stage names are the critical path. \`retro\`, \`compound\`, and \`archive\` are post-ship closeout substates under ${closeoutSubstateInline()}, not separate stage schemas or commands. Continue them with \`/cc-next\`; do not route compound closeout through \`ce:compound\`.`;
 }

@@ -96,8 +96,8 @@ export const IRON_LAWS = [
     title: "Review layers are sequential",
     rule: "Review stage must complete Layer 1 spec compliance before Layer 2 quality/security passes.",
     rationale: "Stops premature quality discussion when acceptance criteria are not yet satisfied.",
-    enforcement: "advisory",
-    severity: "soft-gate",
+    enforcement: "PreToolUse",
+    severity: "hard-gate",
     appliesTo: ["review"]
   },
   {

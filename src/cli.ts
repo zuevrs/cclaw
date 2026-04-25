@@ -75,6 +75,12 @@ Commands:
              Flags: --harnesses=<list>  Comma list of harnesses (claude,cursor,opencode,codex).
                     --no-interactive    Skip interactive prompts even on TTY (for CI/scripts).
   sync       Reconcile generated runtime files with the current config.
+  doctor     Check install/runtime wiring and print concrete fixes for failures.
+             Flags: --explain           Include docs pointers for every check.
+                    --json              Emit machine-readable check results.
+                    --quiet             Show only failing checks.
+                    --only=<filter>     Limit displayed checks (error,warning,hook:,state:,...).
+                    --reconcile-gates   Refresh derived gate status before checking.
   upgrade    Refresh generated files in .cclaw. Preserves your config.yaml.
   archive    Archive the active run and reset flow state for the next run.
              Flags: --name=<slug>        Override archive folder suffix.
@@ -99,6 +105,7 @@ it verifies install/runtime wiring, but a real harness smoke test is
 still needed to prove provider auth and model execution.
 
 Docs:   https://github.com/zuevrs/cclaw
+Local:  docs/config.md and docs/harnesses.md
 Issues: https://github.com/zuevrs/cclaw/issues
 `;
 }
@@ -446,7 +453,7 @@ function printDoctorText(
       if (!options.quiet) {
         ctx.stdout.write(`  details: ${check.details}\n`);
       }
-      if (options.explain) {
+      if (!check.ok || options.explain) {
         ctx.stdout.write(`  fix: ${check.fix}\n`);
         if (check.docRef) {
           ctx.stdout.write(`  docs: ${check.docRef}\n`);
@@ -497,8 +504,34 @@ function parseArgs(argv: string[]): ParsedArgs {
   }
 
   const flags: string[] = rest;
+  const isAllowedForCommand = (flag: string): boolean => {
+    if (parsed.command === "init") {
+      return flag.startsWith("--harnesses=") ||
+        flag.startsWith("--track=") ||
+        flag.startsWith("--profile=") ||
+        flag === "--interactive" ||
+        flag === "--no-interactive" ||
+        flag === "--dry-run";
+    }
+    if (parsed.command === "doctor") {
+      return flag === "--reconcile-gates" ||
+        flag === "--json" ||
+        flag === "--explain" ||
+        flag === "--quiet" ||
+        flag.startsWith("--only=");
+    }
+    if (parsed.command === "archive") {
+      return flag.startsWith("--name=") ||
+        flag === "--skip-retro" ||
+        flag.startsWith("--retro-reason=");
+    }
+    return false;
+  };
 
   for (const flag of flags) {
+    if (!isAllowedForCommand(flag)) {
+      throw new Error(`Flag ${flag} is not supported for ${parsed.command ?? "this command"}.`);
+    }
     if (flag.startsWith("--harnesses=")) {
       parsed.harnesses = parseHarnesses(flag.replace("--harnesses=", ""));
       continue;
@@ -644,7 +677,8 @@ async function runCommand(parsed: ParsedArgs, ctx: CliContext): Promise<number> 
       const counts = doctorCountsBySeverity(filteredChecks);
       ctx.stdout.write(
         `${JSON.stringify({
-          ok: doctorSucceeded(checks),
+          ok: doctorSucceeded(filteredChecks),
+          globalOk: doctorSucceeded(checks),
           filters: parsed.doctorOnly ?? [],
           counts,
           checks: filteredChecks
@@ -657,7 +691,7 @@ async function runCommand(parsed: ParsedArgs, ctx: CliContext): Promise<number> 
         printDoctorText(ctx, filteredChecks, { explain, quiet });
       }
     }
-    return doctorSucceeded(checks) ? 0 : 2;
+    return doctorSucceeded(filteredChecks) ? 0 : 2;
   }
 
   if (command === "upgrade") {
@@ -704,7 +738,6 @@ async function runCommand(parsed: ParsedArgs, ctx: CliContext): Promise<number> 
 }
 
 async function main(): Promise<void> {
-  const parsed = parseArgs(process.argv.slice(2));
   const ctx: CliContext = {
     cwd: process.cwd(),
     stdout: process.stdout,
@@ -712,6 +745,7 @@ async function main(): Promise<void> {
   };
 
   try {
+    const parsed = parseArgs(process.argv.slice(2));
     const code = await runCommand(parsed, ctx);
     process.exitCode = code;
   } catch (err) {

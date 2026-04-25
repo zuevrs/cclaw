@@ -3,7 +3,7 @@ import path from "node:path";
 import { pathToFileURL } from "node:url";
 import { spawn } from "node:child_process";
 import { describe, expect, it } from "vitest";
-import { opencodePluginJs, stageCompleteScript } from "../../src/content/hooks.js";
+import { opencodePluginJs, runHookCmdScript, stageCompleteScript } from "../../src/content/hooks.js";
 import {
   claudeHooksJsonWithObservation,
   codexHooksJsonWithObservation,
@@ -95,6 +95,12 @@ describe("hooks lifecycle wiring", () => {
     expect(codex).toContain(".cclaw/hooks/run-hook.cmd stop-handoff");
     expect(codex).toContain(".cclaw/hooks/run-hook.cmd verify-current-state");
     expect(codex).not.toContain(".sh");
+  });
+
+  it("run-hook wrapper reports missing node instead of silently skipping", () => {
+    const wrapper = runHookCmdScript();
+    expect(wrapper).toContain("node not found; cclaw hook skipped");
+    expect(wrapper).toContain("Run cclaw doctor");
   });
 
   it("stage-complete helper delegates to internal advance-stage", async () => {

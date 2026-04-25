@@ -85,7 +85,14 @@ You ──► /cc <idea>
 
 ## 30-second install
 
+Requirements:
+
+- Node.js **20+** (matches the package `engines` field).
+- Run from the **git project root** you want cclaw to manage, not from `~`
+  or a nested package directory.
+
 ```bash
+cd /path/to/your/repo
 npx cclaw-cli
 ```
 
@@ -100,6 +107,9 @@ That's the entire required CLI interaction for the normal workflow.
 Everything day-to-day happens inside your harness (Claude Code, Cursor,
 OpenCode, or Codex); optional maintenance commands are listed in the
 CLI reference.
+
+If cclaw says it is not installed, either run `npx cclaw-cli init` in the
+repo root or `cd` to the project that already contains `.cclaw/`.
 
 ### What gets generated
 
@@ -128,6 +138,8 @@ Plus harness-specific shims:
   `~/.codex/config.toml`; `cclaw init --codex` offers to patch that flag
   for you. `cclaw doctor` reports stale legacy Codex layouts.)
 - `AGENTS.md` with a managed routing block (includes a Codex-specific note)
+  — see [`docs/agents-block.example.md`](./docs/agents-block.example.md)
+  for a static example of what the harness reads.
 
 ### `.cclaw/config.yaml` — the minimal surface
 

@@ -1,5 +1,29 @@
 # Changelog
 
+## 0.51.0
+
+### Fixed
+
+- Made `cclaw doctor` discoverable in CLI help, always print fixes for
+  failing checks, and point recovery docs at existing local files.
+- Fixed non-flow headless envelopes for `/cc-ideate` and `/cc-view` so they no
+  longer masquerade as brainstorm/review stage outputs.
+- Made `doctor --only` JSON and exit-code semantics scoped to the filtered
+  checks while preserving `globalOk` for the full suite.
+- Replaced bash-based Node probing in doctor with platform-native command
+  checks, and made hook wrappers loudly report skipped hooks when `node` is
+  missing.
+
+### Changed
+
+- Added digest-first knowledge wording to session/research guidance and
+  standardized resume wording on `/cc-next`.
+- Centralized post-ship closeout substate guidance and strengthened
+  verification-before-completion wording.
+- Added a flow-state schema version for future migrations.
+- Improved onboarding with Node 20+, repo-root install guidance, local docs
+  pointers, and a static generated `AGENTS.md` block example.
+
 ## 0.50.0
 
 Full phase-1 cleanup. This release removes the remaining heavy surfaces

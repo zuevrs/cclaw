@@ -27,9 +27,9 @@ describe("doctor registry", () => {
     expect(meta.docRef).toContain("harnesses.md");
   });
 
-  it("falls back to error metadata for unknown checks", () => {
+  it("falls back to warning metadata for unknown checks", () => {
     const meta = doctorCheckMetadata("custom:unknown");
-    expect(meta.severity).toBe("error");
+    expect(meta.severity).toBe("warning");
     expect(meta.summary).toContain("Unclassified doctor check");
   });
 

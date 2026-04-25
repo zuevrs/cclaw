@@ -128,7 +128,7 @@ const RULES: DoctorRegistryRule[] = [
       severity: "error",
       summary: "Mandatory delegation completion check.",
       fix: "Complete or explicitly waive missing mandatory delegations in delegation log.",
-      docRef: ref("delegation-and-preamble.md")
+      docRef: ref("harnesses.md")
     }
   },
   {
@@ -137,7 +137,7 @@ const RULES: DoctorRegistryRule[] = [
       severity: "error",
       summary: "Cross-artifact traceability integrity check.",
       fix: "Restore criterion/task/test ID mappings across spec, plan, and tdd artifacts.",
-      docRef: ref("traceability.md")
+      docRef: "README.md"
     }
   },
   {
@@ -146,7 +146,7 @@ const RULES: DoctorRegistryRule[] = [
       severity: "error",
       summary: "Config or policy schema consistency check.",
       fix: "Fix config/rules drift, then run `cclaw sync` and re-run doctor.",
-      docRef: ref("config-and-policy.md")
+      docRef: ref("config.md")
     }
   }
 ];
@@ -158,7 +158,7 @@ export function doctorCheckMetadata(checkName: string): DoctorCheckMetadata {
     }
   }
   return {
-    severity: "error",
+    severity: "warning",
     summary: "Unclassified doctor check.",
     fix: "Report this check name to cclaw maintainers so doctor-registry can classify it explicitly.",
     docRef: "README.md"
