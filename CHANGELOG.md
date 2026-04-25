@@ -36,6 +36,10 @@ workflow tool.
   system removal.
 - Removed feature-system fields from new archive manifests; archives now
   record `runName` instead of `featureName` / `activeFeature`.
+- Removed the legacy `/cc-learn` command surface from generated guidance.
+  Knowledge work remains available through the `learnings` skill, while
+  the visible slash-command surface stays at `/cc`, `/cc-next`,
+  `/cc-ideate`, and `/cc-view`.
 
 ### Changed
 
@@ -48,6 +52,8 @@ workflow tool.
   instead of separate checkpoint/context/suggestion state files.
 - Centralized legacy cleanup lists in init/sync so removed surfaces are
   easier to audit without changing upgrade cleanup behavior.
+- Renamed pre-compact semantic coverage from digest wording to compatibility
+  wording and aligned harness/view docs with `cclaw doctor --explain`.
 
 ### Preserved
 
