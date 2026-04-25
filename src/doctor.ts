@@ -1460,7 +1460,7 @@ export async function doctorChecks(projectRoot: string, options: DoctorOptions =
   checks.push({
     name: "runs:archive_root",
     ok: await exists(path.join(projectRoot, RUNTIME_ROOT, "runs")),
-    details: `${RUNTIME_ROOT}/runs must exist for archived feature snapshots`
+    details: `${RUNTIME_ROOT}/runs must exist for archived run snapshots`
   });
 
   const delegation = await checkMandatoryDelegations(projectRoot, flowState.currentStage, {
