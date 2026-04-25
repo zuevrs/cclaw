@@ -9,7 +9,7 @@ export const ARTIFACT_TEMPLATES: Record<string, string> = {
 stage: brainstorm
 schema_version: 1
 version: ${CCLAW_VERSION}
-feature: <feature-id>
+run: <run-id>
 locked_decisions: []
 inputs_hash: sha256:pending
 ---
@@ -76,7 +76,7 @@ inputs_hash: sha256:pending
 stage: scope
 schema_version: 1
 version: ${CCLAW_VERSION}
-feature: <feature-id>
+run: <run-id>
 locked_decisions: []
 inputs_hash: sha256:pending
 ---
@@ -214,7 +214,7 @@ inputs_hash: sha256:pending
 stage: design
 schema_version: 1
 version: ${CCLAW_VERSION}
-feature: <feature-id>
+run: <run-id>
 locked_decisions: []
 inputs_hash: sha256:pending
 ---
@@ -255,7 +255,7 @@ inputs_hash: sha256:pending
 stage: design
 schema_version: 1
 version: ${CCLAW_VERSION}
-feature: <feature-id>
+run: <run-id>
 locked_decisions: []
 inputs_hash: sha256:pending
 ---
@@ -455,7 +455,7 @@ inputs_hash: sha256:pending
 stage: spec
 schema_version: 1
 version: ${CCLAW_VERSION}
-feature: <feature-id>
+run: <run-id>
 locked_decisions: []
 inputs_hash: sha256:pending
 ---
@@ -518,7 +518,7 @@ inputs_hash: sha256:pending
 stage: plan
 schema_version: 1
 version: ${CCLAW_VERSION}
-feature: <feature-id>
+run: <run-id>
 locked_decisions: []
 inputs_hash: sha256:pending
 ---
@@ -604,7 +604,7 @@ Execution rule: complete and verify each batch before starting the next batch.
 stage: tdd
 schema_version: 1
 version: ${CCLAW_VERSION}
-feature: <feature-id>
+run: <run-id>
 locked_decisions: []
 inputs_hash: sha256:pending
 ---
@@ -678,7 +678,7 @@ inputs_hash: sha256:pending
 stage: review
 schema_version: 1
 version: ${CCLAW_VERSION}
-feature: <feature-id>
+run: <run-id>
 locked_decisions: []
 inputs_hash: sha256:pending
 ---
@@ -802,7 +802,7 @@ inputs_hash: sha256:pending
 stage: ship
 schema_version: 1
 version: ${CCLAW_VERSION}
-feature: <feature-id>
+run: <run-id>
 locked_decisions: []
 inputs_hash: sha256:pending
 ---
@@ -860,7 +860,7 @@ ${SHIP_FINALIZATION_ENUM_LINES}
 stage: retro
 schema_version: 1
 version: ${CCLAW_VERSION}
-feature: <feature-id>
+run: <run-id>
 locked_decisions: []
 inputs_hash: sha256:pending
 ---

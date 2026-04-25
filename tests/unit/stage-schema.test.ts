@@ -341,6 +341,14 @@ describe("stage schema and subagent alignment", () => {
     }
   });
 
+  it("artifact templates use run frontmatter after feature cleanup", () => {
+    for (const [templateName, template] of Object.entries(ARTIFACT_TEMPLATES)) {
+      if (!templateName.endsWith(".md")) continue;
+      expect(template).toContain("run: <run-id>");
+      expect(template).not.toContain("feature: <feature-id>");
+    }
+  });
+
   it("stage skills render explicit when-not-to-use guidance", () => {
     const review = stageSchema("review");
     expect(review.whenNotToUse.length).toBeGreaterThan(0);

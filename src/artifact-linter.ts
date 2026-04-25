@@ -1149,7 +1149,6 @@ const FRONTMATTER_REQUIRED_KEYS = [
   "stage",
   "schema_version",
   "version",
-  "feature",
   "locked_decisions",
   "inputs_hash"
 ] as const;
@@ -1444,10 +1443,17 @@ export async function lintArtifact(
   const sections = extractH2Sections(raw);
   const projectConfig = await readConfig(projectRoot);
   const parsedFrontmatter = parseFrontmatter(raw);
-  const frontmatterMissingKeys = FRONTMATTER_REQUIRED_KEYS.filter((key) => {
+  const frontmatterMissingKeys: string[] = FRONTMATTER_REQUIRED_KEYS.filter((key) => {
     const value = parsedFrontmatter.values[key];
     return typeof value !== "string" || value.trim().length === 0;
   });
+  if (
+    parsedFrontmatter.hasFrontmatter &&
+    typeof parsedFrontmatter.values.run !== "string" &&
+    typeof parsedFrontmatter.values.feature !== "string"
+  ) {
+    frontmatterMissingKeys.push("run");
+  }
   const frontmatterStage = parsedFrontmatter.values.stage?.replace(/^['"]|['"]$/gu, "");
   const frontmatterSchemaVersion = parsedFrontmatter.values.schema_version?.replace(/^['"]|['"]$/gu, "");
   const frontmatterInputsHash = parsedFrontmatter.values.inputs_hash?.replace(/^['"]|['"]$/gu, "");
@@ -1461,7 +1467,7 @@ export async function lintArtifact(
   findings.push({
     section: "Frontmatter",
     required: requireFrontmatter,
-    rule: "Artifact must include frontmatter keys (stage, schema_version=1, version, feature, locked_decisions, inputs_hash=sha256:pending|sha256:<64hex>).",
+    rule: "Artifact must include frontmatter keys (stage, schema_version=1, version, run, locked_decisions, inputs_hash=sha256:pending|sha256:<64hex>). Legacy feature is accepted during migration.",
     found: parsedFrontmatter.hasFrontmatter ? frontmatterValid : true,
     details: !parsedFrontmatter.hasFrontmatter
       ? "Legacy artifact without YAML frontmatter (allowed for backward compatibility)."
