@@ -90,6 +90,9 @@ workflow tool.
   `retro -> compound -> archive` through `/cc-next`.
 - TDD dispatch guidance now presents one mandatory `test-author` evidence cycle
   for RED/GREEN/REFACTOR instead of implying three default subagents.
+- Stage guidance now starts with a compact drift preamble, treats seed recall as
+  reference context by default, and makes brainstorm/scope use lightweight
+  compact paths before deeper checklists.
 
 ### Preserved
 

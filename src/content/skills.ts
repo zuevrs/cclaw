@@ -44,13 +44,14 @@ Before execution:
 ${readLines}
 4. Extract upstream decisions, constraints, and open questions into the current
    artifact's \`Upstream Handoff\` section when that section exists.
-5. If you change an upstream decision, record an explicit drift reason in the
+5. Before doing stage work, give a compact user-facing drift preamble: "Carrying forward: <1-3 bullets>. Drift since upstream: None / <specific drift>. Recommendation: continue / re-scope."
+6. If you change an upstream decision, record an explicit drift reason in the
    current artifact before continuing.
-6. Confirm stage inputs:
+7. Confirm stage inputs:
 ${inputs}
-7. Confirm required context:
+8. Confirm required context:
 ${requiredContext}
-8. Use the injected knowledge digest from session-start; only fall back to full
+9. Use the injected knowledge digest from session-start; only fall back to full
    \`.cclaw/knowledge.jsonl\` when the digest is insufficient.
 `;
 }

@@ -81,17 +81,18 @@ This is the **recommended way to start** working with cclaw. Use \`/cc-next\` fo
    - **standard** (full 8 stages — default fallback) — anything that introduces a new capability with architecture uncertainty, touches many modules, or has unclear scope.
      Triggers: \`new feature\`, \`refactor\`, \`migration\`, \`platform\`, \`architecture\`, \`schema\`, \`integrate\`, \`workflow\`, \`onboarding\`, or any prompt that does not match quick/medium confidently.
    - When triggers conflict, prefer **standard** over **medium**, and **medium** over **quick**.
-8. Present the recommendation as a single decision with explicit options:
+8. Present one compact **Start framing** summary: class, recommended track, stack, origin docs, seed recalls, and the recommended next action. Ask a single confirmation question only when there is a destructive reset, a real contradiction, or ambiguous software/non-software classification.
+9. Present the recommendation as a single decision with explicit options:
    > \`Recommended track: <quick|medium|standard>\` because \`<one-line reason citing matched triggers>\`.
    > Override? (A) keep \`<recommended>\`  (B) switch track  (C) cancel.
    If the harness's native ask tool is available (\`AskUserQuestion\` / \`AskQuestion\` / \`question\` / \`request_user_input\`), send exactly ONE question; on schema error, fall back to a plain-text lettered list.
-9. Persist the chosen track to \`${flowPath}\` (\`track\` field). Compute \`skippedStages\` from the track and write that too. Use the **first stage of the chosen track** as \`currentStage\` (quick → \`spec\`, medium/standard → \`brainstorm\`, trivial fast-path → \`design\` or \`spec\` per Phase 0).
-10. Write the prompt to \`.cclaw/artifacts/00-idea.md\` with the following header lines: \`Class:\` (from Phase 0), \`Track:\` (chosen track + matched heuristic), \`Stack:\` (from Phase 2 detection, or \`unknown\`), and a \`Discovered context\` section if Phase 1/seed recall found references.
-11. Load the **first-stage skill for the chosen track** and its command file:
+10. Persist the chosen track to \`${flowPath}\` (\`track\` field). Compute \`skippedStages\` from the track and write that too. Use the **first stage of the chosen track** as \`currentStage\` (quick → \`spec\`, medium/standard → \`brainstorm\`, trivial fast-path → \`design\` or \`spec\` per Phase 0).
+11. Write the prompt to \`.cclaw/artifacts/00-idea.md\` with the following header lines: \`Class:\` (from Phase 0), \`Track:\` (chosen track + matched heuristic), \`Stack:\` (from Phase 2 detection, or \`unknown\`), and a \`Discovered context\` section if Phase 1/seed recall found references.
+12. Load the **first-stage skill for the chosen track** and its command file:
     - quick → \`.cclaw/skills/specification-authoring/SKILL.md\`
     - medium/standard → \`.cclaw/skills/brainstorming/SKILL.md\`
     - trivial fast-path → design or spec skill per Phase 0 decision.
-12. Execute that stage with the prompt + Phase 1/Phase 2 + seed context as initial input.
+13. Execute that stage with the prompt + Phase 1/Phase 2 + seed context as initial input.
 
 ### Reclassification on discovery
 
@@ -166,7 +167,7 @@ Do **not** silently discard an existing flow when the user provides a prompt. If
    - Inform: "You have an active flow at stage **{currentStage}** with {N} completed stages. Starting a new tracked flow will reset progress."
    - Ask: "Continue with reset? (A) Yes, start fresh (B) No, resume current flow"
    - If (B) → switch to Path B behavior.
-7. **Classify the idea** using the heuristic below and present a single track recommendation. Wait for explicit confirmation or override before mutating any state.
+7. **Classify the idea** using the heuristic below and present one compact Start framing summary (class, track, stack, origin docs, seed recalls, next action). Wait for explicit confirmation or override before mutating any state only when reset/conflict/ambiguity makes it necessary.
    - If \`${RUNTIME_ROOT}/config.yaml\` defines \`trackHeuristics\`, apply those vocabulary hints (\`fallback\`, \`tracks.<id>.{triggers,veto}\`) on top of built-in defaults. Evaluation order is fixed: \`standard -> medium -> quick\`. (Honest note: this is advisory prose; the LLM applies it, not a Node-level router.)
 
    **Track heuristic** (lowercase substring match against the user prompt):

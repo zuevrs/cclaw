@@ -251,6 +251,24 @@ describe("stage schema and subagent alignment", () => {
     ]);
   });
 
+  it("brainstorm and scope default to compact user-facing flow", () => {
+    const brainstorm = stageSchema("brainstorm");
+    const scope = stageSchema("scope");
+
+    expect(brainstorm.executionModel.checklist).toEqual(expect.arrayContaining([
+      expect.stringContaining("compact brainstorm stub")
+    ]));
+    expect(brainstorm.executionModel.interactionProtocol).toEqual(expect.arrayContaining([
+      expect.stringContaining("Ask at most one question per turn")
+    ]));
+    expect(scope.executionModel.checklist).toEqual(expect.arrayContaining([
+      expect.stringContaining("Default path first")
+    ]));
+    expect(scope.executionModel.interactionProtocol).toEqual(expect.arrayContaining([
+      expect.stringContaining("Do not walk the full checklist by default")
+    ]));
+  });
+
   it("scope and design expose shared review-loop config", () => {
     const scope = stageSchema("scope");
     const design = stageSchema("design");
