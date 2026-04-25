@@ -44,16 +44,20 @@ Before execution:
 2. Load active artifacts from \`.cclaw/artifacts/\`.
 3. Load upstream artifacts required by this stage:
 ${readLines}
-4. Extract upstream decisions, constraints, and open questions into the current
+4. Read the state contract for this stage from \`.cclaw/templates/state-contracts/<stage>.json\`.
+   Treat it as the machine-readable skeleton: required top-level fields,
+   closed taxonomies, and the derived markdown path. Do not validate natural-language
+   prose by regex; put semantic quality checks in the review prompts.
+5. Extract upstream decisions, constraints, and open questions into the current
    artifact's \`Upstream Handoff\` section when that section exists.
-5. Before doing stage work, give a compact user-facing drift preamble: "Carrying forward: <1-3 bullets>. Drift since upstream: None / <specific drift>. Recommendation: continue / re-scope."
-6. If you change an upstream decision, record an explicit drift reason in the
+6. Before doing stage work, give a compact user-facing drift preamble: "Carrying forward: <1-3 bullets>. Drift since upstream: None / <specific drift>. Recommendation: continue / re-scope."
+7. If you change an upstream decision, record an explicit drift reason in the
    current artifact before continuing.
-7. Confirm stage inputs:
+8. Confirm stage inputs:
 ${inputs}
-8. Confirm required context:
+9. Confirm required context:
 ${requiredContext}
-9. Use the injected knowledge digest from session-start; only fall back to full
+10. Use the injected knowledge digest from session-start; only fall back to full
    \`.cclaw/knowledge.jsonl\` when the digest is insufficient.
 `;
 }
