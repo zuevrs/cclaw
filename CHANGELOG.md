@@ -83,6 +83,8 @@ workflow tool.
 - Knowledge JSONL entries now use `origin_run` instead of feature wording for
   new writes and generated guidance, while legacy `origin_feature` rows remain
   readable as an input alias.
+- Codex legacy skill cleanup now removes any old `cclaw-cc*` folder by prefix
+  instead of carrying a hardcoded list of obsolete command names.
 
 ### Preserved
 

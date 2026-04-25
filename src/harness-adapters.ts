@@ -152,23 +152,7 @@ const UTILITY_SHIMS: UtilityShimSpec[] = [
 /** Skill-kind shim name for the root `/cc` entry point. */
 const ENTRY_SHIM_SKILL_NAME = "cc";
 
-/**
- * Skill directory names that v0.39.0 / v0.39.1 installed under
- * `.agents/skills/` before the rename. We delete these on every sync so
- * upgrades from those versions do not leave orphaned `cclaw-cc*`
- * folders that would double-register in Codex's skill listing.
- */
-const LEGACY_CODEX_SKILL_NAMES: readonly string[] = [
-  "cclaw-cc",
-  "cclaw-cc-next",
-  "cclaw-cc-view",
-  "cclaw-cc-ops",
-  "cclaw-cc-ideate",
-  // Pre-v0.40 installed `/cc-learn` as a top-level skill. Without this
-  // entry the orphan stays behind after upgrade and Codex lists both the
-  // modern in-thread workflow and the legacy slash command.
-  "cclaw-cc-learn"
-];
+const LEGACY_CODEX_SKILL_PREFIX = "cclaw-cc";
 
 /**
  * Shims that older cclaw versions installed as top-level slash commands but
@@ -627,10 +611,18 @@ async function cleanupLegacyCodexSurfaces(projectRoot: string): Promise<void> {
     // best-effort cleanup
   }
 
-  // Remove the old `cclaw-cc*` skill folders if they exist from a
-  // previous cclaw install. Idempotent; best-effort.
+  // Remove old `cclaw-cc*` skill folders if they exist from a previous
+  // cclaw install. Idempotent; best-effort.
   const legacySkillsRoot = path.join(projectRoot, ".agents/skills");
-  for (const name of LEGACY_CODEX_SKILL_NAMES) {
+  let legacySkillNames: string[] = [];
+  try {
+    legacySkillNames = (await fs.readdir(legacySkillsRoot, { withFileTypes: true }))
+      .filter((entry) => entry.isDirectory() && entry.name.startsWith(LEGACY_CODEX_SKILL_PREFIX))
+      .map((entry) => entry.name);
+  } catch {
+    legacySkillNames = [];
+  }
+  for (const name of legacySkillNames) {
     const folder = path.join(legacySkillsRoot, name);
     try {
       await fs.rm(folder, { recursive: true, force: true });

@@ -976,12 +976,19 @@ describe("install lifecycle", { timeout: 30_000 }, () => {
       "---\nname: cclaw-cc\ndescription: legacy\n---\nlegacy body\n",
       "utf8"
     );
+    await fs.mkdir(path.join(root, ".agents/skills/cclaw-cc-obsolete"), { recursive: true });
+    await fs.writeFile(
+      path.join(root, ".agents/skills/cclaw-cc-obsolete/SKILL.md"),
+      "---\nname: cclaw-cc-obsolete\ndescription: legacy\n---\nlegacy body\n",
+      "utf8"
+    );
 
     await syncCclaw(root);
 
     // .codex/commands/ and the legacy cclaw-cc folder must both be gone.
     await expect(fs.stat(path.join(root, ".codex/commands"))).rejects.toThrow(/ENOENT/);
     await expect(fs.stat(path.join(root, ".agents/skills/cclaw-cc"))).rejects.toThrow(/ENOENT/);
+    await expect(fs.stat(path.join(root, ".agents/skills/cclaw-cc-obsolete"))).rejects.toThrow(/ENOENT/);
 
     // The managed .codex/hooks.json must still be in place, and the
     // fresh v0.40.0 skills must exist under the new `cc*` layout.
