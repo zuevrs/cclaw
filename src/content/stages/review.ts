@@ -87,7 +87,7 @@ export const REVIEW: StageSchemaInput = {
       { id: "review_layer_coverage_complete", description: "Layer coverage map in 07-review-army.json confirms spec/correctness/security/performance/architecture/external-safety tags were considered." },
       { id: "review_criticals_resolved", description: "No unresolved critical blockers remain." },
       { id: "review_army_json_valid", description: "07-review-army.json passes schema validation (validateReviewArmy)." },
-      { id: "review_trace_matrix_clean", description: "Trace matrix has no orphaned criteria/tasks/test slices for the active run." }
+      { id: "review_trace_matrix_clean", description: "Trace matrix has no orphaned criteria/tasks/test slices for the active run, and evidence cites a discovered real test command before ship handoff." }
     ],
     requiredEvidence: [
       "Artifact written to `.cclaw/artifacts/07-review.md`.",
@@ -97,6 +97,7 @@ export const REVIEW: StageSchemaInput = {
       "Layer 2 sections completed with findings.",
       "Severity log includes critical/important/suggestion buckets.",
       "Explicit final verdict: APPROVED, APPROVED_WITH_CONCERNS, or BLOCKED.",
+      "Fresh verification command discovery recorded, and the command cited in `review_trace_matrix_clean` evidence before ship handoff.",
       "If BLOCKED: include explicit remediation route (`ROUTE_BACK_TO_TDD`) with blocking finding IDs."
     ],
     inputs: ["implementation diff", "spec and plan artifacts", "test/build evidence"],

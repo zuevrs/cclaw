@@ -152,6 +152,9 @@ This is the gate function for completion claims. No "done", "all good", or
 "tests pass" unless fresh evidence from this turn proves it.
 
 - Run verification commands (tests/build/lint/type-check) for the changed scope.
+- Before \`tdd -> review\` and \`review -> ship\`, discover the real test command
+  from repo config (package scripts, pytest/go/cargo/maven/gradle signals) and
+  cite that exact command in the gate evidence.
 - Confirm output directly; do not infer success from prior runs or green memories.
 - If this is a bug fix, capture RED -> GREEN evidence for the regression path.
 - If a command fails, report the failure as diagnostic evidence and stop before completion.

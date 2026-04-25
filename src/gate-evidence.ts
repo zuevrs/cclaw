@@ -88,6 +88,68 @@ function sameStringArray(a: string[], b: string[]): boolean {
   return a.every((value, index) => value === b[index]);
 }
 
+async function readJsonFile(filePath: string): Promise<Record<string, unknown> | null> {
+  try {
+    const parsed = JSON.parse(await fs.readFile(filePath, "utf8")) as unknown;
+    return parsed && typeof parsed === "object" && !Array.isArray(parsed)
+      ? parsed as Record<string, unknown>
+      : null;
+  } catch {
+    return null;
+  }
+}
+
+async function discoverRealTestCommands(projectRoot: string): Promise<string[]> {
+  const commands: string[] = [];
+  const packageJson = await readJsonFile(path.join(projectRoot, "package.json"));
+  const scripts = packageJson?.scripts;
+  if (scripts && typeof scripts === "object" && !Array.isArray(scripts)) {
+    const scriptNames = Object.keys(scripts).filter((name) => {
+      const value = (scripts as Record<string, unknown>)[name];
+      return typeof value === "string" && (name === "test" || name.startsWith("test:"));
+    });
+    for (const name of scriptNames.sort()) {
+      commands.push(name === "test" ? "npm test" : `npm run ${name}`);
+      commands.push(name === "test" ? "pnpm test" : `pnpm ${name}`);
+      commands.push(name === "test" ? "yarn test" : `yarn ${name}`);
+      commands.push(name === "test" ? "bun test" : `bun run ${name}`);
+    }
+  }
+  if (await exists(path.join(projectRoot, "pyproject.toml"))) commands.push("pytest");
+  if (await exists(path.join(projectRoot, "pytest.ini"))) commands.push("pytest");
+  if (await exists(path.join(projectRoot, "go.mod"))) commands.push("go test ./...");
+  if (await exists(path.join(projectRoot, "Cargo.toml"))) commands.push("cargo test");
+  if (await exists(path.join(projectRoot, "pom.xml"))) commands.push("mvn test");
+  if (
+    await exists(path.join(projectRoot, "build.gradle")) ||
+    await exists(path.join(projectRoot, "build.gradle.kts"))
+  ) {
+    commands.push("gradle test", "./gradlew test");
+  }
+  return unique(commands);
+}
+
+async function verifyDiscoveredCommandEvidence(
+  projectRoot: string,
+  stage: FlowStage,
+  gateId: string,
+  flowState: FlowState
+): Promise<string | null> {
+  if (
+    !(stage === "tdd" && gateId === "tdd_verified_before_complete") &&
+    !(stage === "review" && gateId === "review_trace_matrix_clean")
+  ) {
+    return null;
+  }
+  const commands = await discoverRealTestCommands(projectRoot);
+  if (commands.length === 0) return null;
+  const evidence = flowState.guardEvidence[gateId];
+  const normalizedEvidence = typeof evidence === "string" ? evidence.toLowerCase() : "";
+  const matched = commands.some((command) => normalizedEvidence.includes(command.toLowerCase()));
+  if (matched) return null;
+  return `${stage} verification gate blocked (${gateId}): guard evidence must cite one discovered real test command: ${commands.join(", ")}.`;
+}
+
 const RECONCILIATION_NOTICES_FILE = "reconciliation-notices.json";
 const RECONCILIATION_NOTICES_SCHEMA_VERSION = 1;
 const DESIGN_RESEARCH_REQUIRED_SECTIONS = [
@@ -305,6 +367,11 @@ export async function verifyCurrentStageGateEvidence(
     const evidence = flowState.guardEvidence[gateId];
     if (typeof evidence !== "string" || evidence.trim().length === 0) {
       issues.push(`passed gate "${gateId}" is missing guardEvidence entry.`);
+      continue;
+    }
+    const discoveredCommandIssue = await verifyDiscoveredCommandEvidence(projectRoot, stage, gateId, flowState);
+    if (discoveredCommandIssue) {
+      issues.push(discoveredCommandIssue);
     }
   }
   for (const gateId of catalog.blocked) {

@@ -217,6 +217,78 @@ describe("gate evidence verification", () => {
     expect(cleared.ok).toBe(true);
   });
 
+  it("blocks tdd completion evidence that does not cite a discovered real test command", async () => {
+    const root = await createTempProject("gate-evidence-tdd-real-command");
+    await prepareRoot(root);
+    await fs.writeFile(path.join(root, "package.json"), JSON.stringify({
+      scripts: { test: "vitest run", "test:unit": "vitest run tests/unit" }
+    }), "utf8");
+    await fs.writeFile(path.join(root, ".cclaw/artifacts/06-tdd.md"), `# TDD Artifact
+
+## Test Discovery
+- Exact commands: npm test
+
+## System-Wide Impact Check
+- Public APIs/config/CLI: unchanged
+
+## RED Evidence
+| Slice | Test name | Command | Failure output summary |
+|---|---|---|---|
+| S-1 | sample | npm test | FAIL first |
+
+## Acceptance Mapping
+| Slice | Plan task ID | Spec criterion ID |
+|---|---|---|
+| S-1 | T-1 | AC-1 |
+
+## Failure Analysis
+- Expected missing behavior: sample
+
+## GREEN Evidence
+- Full suite command: npm test
+- Full suite result: PASS
+
+## REFACTOR Notes
+- Behavior preserved: PASS
+
+## Traceability
+- T-1 -> AC-1
+
+## Verification Ladder
+- Evidence: npm test PASS
+`, "utf8");
+
+    const state = createInitialFlowState("run-tdd-real-command");
+    state.currentStage = "tdd";
+    state.stageGateCatalog.tdd.passed = ["tdd_verified_before_complete"];
+    state.guardEvidence.tdd_verified_before_complete = "custom smoke command; sha: abc1234; PASS";
+
+    const blocked = await verifyCurrentStageGateEvidence(root, state);
+    expect(blocked.issues.join("\n")).toContain("must cite one discovered real test command");
+    expect(blocked.issues.join("\n")).toContain("npm test");
+
+    state.guardEvidence.tdd_verified_before_complete = "npm test; sha: abc1234; PASS";
+    const cleared = await verifyCurrentStageGateEvidence(root, state);
+    expect(cleared.issues.join("\n")).not.toContain("must cite one discovered real test command");
+  });
+
+  it("blocks review-to-ship trace evidence that does not cite a discovered real test command", async () => {
+    const root = await createTempProject("gate-evidence-review-real-command");
+    await prepareRoot(root);
+    await fs.writeFile(path.join(root, "package.json"), JSON.stringify({
+      scripts: { test: "vitest run" }
+    }), "utf8");
+
+    const state = createInitialFlowState("run-review-real-command");
+    state.currentStage = "review";
+    state.stageGateCatalog.review.passed = ["review_trace_matrix_clean"];
+    state.guardEvidence.review_trace_matrix_clean = "manual QA PASS";
+
+    const blocked = await verifyCurrentStageGateEvidence(root, state);
+    expect(blocked.issues.join("\n")).toContain("review verification gate blocked");
+    expect(blocked.issues.join("\n")).toContain("npm test");
+  });
+
   it("fails review stage when Final Verdict is APPROVED but open Critical findings exist", async () => {
     const root = await createTempProject("review-verdict-mismatch");
     await prepareRoot(root);
