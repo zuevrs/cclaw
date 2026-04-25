@@ -1,5 +1,13 @@
 # Changelog
 
+## 0.51.13
+
+### Fixed
+
+- Added generated per-stage state contracts under `.cclaw/templates/state-contracts/*.json` with `requiredTopLevelFields`, `taxonomies`, and `derivedMarkdownPath` so machine-readable stage shape is explicit.
+- Added calibrated review prompt files for brainstorm self-review, scope CEO review, and design engineering review under `.cclaw/skills/review-prompts/`.
+- Added a macOS Node 20 PR-gate job alongside Linux and Windows, and added install smoke coverage for state contracts and review prompts.
+
 ## 0.51.12
 
 ### Fixed

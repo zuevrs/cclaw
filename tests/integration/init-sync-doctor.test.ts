@@ -7,6 +7,7 @@ import { readConfig, writeConfig } from "../../src/config.js";
 import { doctorChecks, doctorSucceeded } from "../../src/doctor.js";
 import { initCclaw, syncCclaw, uninstallCclaw, upgradeCclaw } from "../../src/install.js";
 import { HARNESS_ADAPTERS } from "../../src/harness-adapters.js";
+import { FLOW_STAGES } from "../../src/types.js";
 import { createTempProject } from "../helpers/index.js";
 
 const execFileAsync = promisify(execFile);
@@ -168,6 +169,24 @@ describe("install lifecycle", { timeout: 30_000 }, () => {
     );
     expect(researchPlaybook).toContain("# Repo Scan Playbook");
     expect(researchPlaybook.startsWith("---")).toBe(false);
+  });
+
+  it("materializes state contracts and calibrated review prompts", async () => {
+    const root = await createTempProject("init-state-contracts");
+    await initCclaw({ projectRoot: root });
+    for (const stage of FLOW_STAGES) {
+      const raw = await fs.readFile(path.join(root, ".cclaw/templates/state-contracts", `${stage}.json`), "utf8");
+      const parsed = JSON.parse(raw) as { stage?: string; requiredTopLevelFields?: unknown[]; taxonomies?: object; derivedMarkdownPath?: string };
+      expect(parsed.stage).toBe(stage);
+      expect(parsed.derivedMarkdownPath).toContain(".cclaw/artifacts/");
+      expect(Array.isArray(parsed.requiredTopLevelFields)).toBe(true);
+      expect(parsed.requiredTopLevelFields?.length).toBeGreaterThan(0);
+      expect(parsed.taxonomies && typeof parsed.taxonomies).toBe("object");
+    }
+    for (const file of ["brainstorm-self-review.md", "scope-ceo-review.md", "design-eng-review.md"]) {
+      const prompt = await fs.readFile(path.join(root, ".cclaw/skills/review-prompts", file), "utf8");
+      expect(prompt).toContain("## Calibration");
+    }
   });
 
   it("doctor reports broken generated CLI entrypoints in hook scripts", async () => {

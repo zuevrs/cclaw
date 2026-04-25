@@ -41,6 +41,8 @@ import {
   RULEBOOK_MARKDOWN,
   buildRulesJson
 } from "./content/templates.js";
+import { STATE_CONTRACTS } from "./content/state-contracts.js";
+import { REVIEW_PROMPTS } from "./content/review-prompts.js";
 import {
   stageSkillFolder,
   stageSkillMarkdown
@@ -416,6 +418,9 @@ async function writeArtifactTemplates(projectRoot: string): Promise<void> {
   await Promise.all(Object.entries(ARTIFACT_TEMPLATES).map(async ([fileName, content]) => {
     await writeFileSafe(runtimePath(projectRoot, "templates", fileName), content);
   }));
+  await Promise.all(Object.entries(STATE_CONTRACTS).map(async ([fileName, content]) => {
+    await writeFileSafe(runtimePath(projectRoot, "templates", "state-contracts", fileName), content);
+  }));
 }
 
 async function writeSkills(projectRoot: string, config?: CclawConfig): Promise<void> {
@@ -473,6 +478,9 @@ async function writeSkills(projectRoot: string, config?: CclawConfig): Promise<v
   // In-thread research procedures (no YAML frontmatter, not delegated personas).
   for (const [fileName, markdown] of Object.entries(RESEARCH_PLAYBOOKS)) {
     await writeFileSafe(runtimePath(projectRoot, "skills", "research", fileName), markdown);
+  }
+  for (const [fileName, markdown] of Object.entries(REVIEW_PROMPTS)) {
+    await writeFileSafe(runtimePath(projectRoot, "skills", "review-prompts", fileName), markdown);
   }
 
   // Language rule packs live under .cclaw/rules/lang/<pack>.md. They are opt-in:

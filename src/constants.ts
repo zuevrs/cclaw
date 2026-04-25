@@ -63,12 +63,14 @@ export const REQUIRED_DIRS = [
   `${RUNTIME_ROOT}/commands`,
   `${RUNTIME_ROOT}/skills`,
   `${RUNTIME_ROOT}/templates`,
+  `${RUNTIME_ROOT}/templates/state-contracts`,
   `${RUNTIME_ROOT}/artifacts`,
   `${RUNTIME_ROOT}/state`,
   `${RUNTIME_ROOT}/runs`,
   `${RUNTIME_ROOT}/rules`,
   `${RUNTIME_ROOT}/agents`,
-  `${RUNTIME_ROOT}/hooks`
+  `${RUNTIME_ROOT}/hooks`,
+  `${RUNTIME_ROOT}/skills/review-prompts`
 ] as const;
 
 export const REQUIRED_GITIGNORE_PATTERNS = [
