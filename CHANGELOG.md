@@ -1,5 +1,13 @@
 # Changelog
 
+## 0.51.11
+
+### Fixed
+
+- Removed the generic validation-rule keyword matcher entirely, so artifact prose is no longer checked by copied English/backticked words from schema descriptions.
+- Made `Premise Challenge` bullet validation depend only on substantive row content, not question marks or English Q/A phrasing.
+- Replaced the Russian-specific Scope Summary regression with a non-Latin-script regression spanning multiple scripts, so the guard protects all natural languages rather than one test case.
+
 ## 0.51.10
 
 ### Fixed
