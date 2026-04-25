@@ -486,8 +486,15 @@ async function hydrateReviewLoopEvidenceFromArtifact(
   const gateId = AUTO_REVIEW_LOOP_GATE_BY_STAGE[stage];
   if (!gateId) return;
   if (!selectedGateIds.includes(gateId)) return;
+  const reviewStage = stage === "scope" || stage === "design" ? stage : null;
+  if (!reviewStage) return;
+
   const existing = evidenceByGate[gateId];
-  if (typeof existing === "string" && existing.trim().length > 0) return;
+  if (typeof existing === "string" && existing.trim().length > 0) {
+    const existingIssue = validateGateEvidenceShape(stage, gateId, existing);
+    if (!existingIssue) return;
+  }
+
   const resolved = await resolveArtifactPath(stage, {
     projectRoot,
     track,
@@ -499,8 +506,6 @@ async function hydrateReviewLoopEvidenceFromArtifact(
   } catch {
     return;
   }
-  const reviewStage = stage === "scope" || stage === "design" ? stage : null;
-  if (!reviewStage) return;
   const envelope = extractReviewLoopEnvelopeFromArtifact(raw, reviewStage, resolved.relPath);
   if (!envelope) return;
   evidenceByGate[gateId] = JSON.stringify(envelope);

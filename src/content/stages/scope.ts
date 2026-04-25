@@ -52,16 +52,14 @@ export const SCOPE: StageSchemaInput = {
   },
   executionModel: {
     checklist: [
-      "**Default path first** — read brainstorm, challenge premise, recommend one mode, draft 3-5 key in/out boundaries plus deferred items, then seek approval.",
-      "**Optional audits by trigger** — run the pre-scope system audit only when configured; use deep-mode prime directives, dream-state mapping, and temporal interrogation only for complex/high-risk scope.",
-      "**Premise and leverage check** — test whether this is the right problem, what happens if nothing changes, and what existing code can be reused.",
-      "**Calibrate ambition** — for EXPAND/SELECTIVE candidates, do a brief landscape scan and align the quality bar to 2-3 strong in-repo modules.",
-      "**Compare implementation alternatives** — give 2-3 distinct options with effort, risk, pros/cons, and explicit reuse; include minimal viable and ideal architecture options.",
-      "**Select scope mode explicitly** — present expand/selective/hold/reduce with a recommendation and default heuristic justification.",
-      "**Run mode-specific analysis** — expand, selective, hold, or reduce according to the selected mode; do not silently add or trim scope.",
-      "**Handle deferred upside** — optionally park high-upside deferred/out-of-scope ideas in `.cclaw/seeds/`.",
-      `**Outside voice when warranted** — run/reconcile the loop for complex/high-risk or configured scope; otherwise do a concise adversarial self-check. ${reviewLoopPolicySummary("scope")} ${reviewLoopSecondOpinionSummary("scope")}`,
-      "**Write the scope contract** — include in-scope/out-of-scope, discretion areas, deferred items, locked decisions, error/rescue notes, completion dashboard, and explicit approval."
+      "**CEO pass first** — read brainstorm, name the job-to-be-done, challenge whether this is the right product slice, and propose the highest-leverage scope in one pass.",
+      "**Pick one of four gstack modes** — SCOPE EXPANSION, SELECTIVE EXPANSION, HOLD SCOPE, or SCOPE REDUCTION. State why and what user signal would change the mode.",
+      "**Draft the 10-star vs v1 boundary** — show what would make the product meaningfully better, then explicitly choose what ships now, what is deferred, and what is excluded.",
+      "**Premise and leverage check** — test right problem, direct path, no-action outcome, existing-code leverage, and reversibility before asking the user anything.",
+      "**Compare implementation alternatives** — include minimum viable, product-grade, and ideal architecture options with effort/risk/reuse, then recommend one.",
+      "**Run outside voice before final approval** — always do at least a concise adversarial self-check for scope; for complex/high-risk/configured scope, iterate until threshold. Record the loop summary in `## Spec Review Loop` before asking approval.",
+      "**Ask only one decision-changing question** — if the user rejects the contract but is unsure, offer 3-4 concrete scope moves instead of open-ended interrogation.",
+      "**Write the scope contract** — include in-scope/out-of-scope, discretion areas, deferred items, locked decisions, error/rescue notes, completion dashboard, scope summary, and explicit approval."
     ],
     interactionProtocol: [
       decisionProtocolInstruction(
@@ -69,24 +67,23 @@ export const SCOPE: StageSchemaInput = {
         "present expand/selective/hold/reduce as labeled options with trade-offs and mark one as (recommended)",
         "recommend the option that best covers the prime-directive failure modes, four data-flow paths, observability, and deferred handling for the in-scope set with the smallest blast radius. Base your recommendation on default heuristics: greenfield -> expand, enhancement -> selective, bugfix/hotfix/refactor -> hold, broad blast radius -> reduce"
       ),
-      "Do not walk the full checklist by default. Lead with the default scope contract; ask only when the answer changes in/out/deferred boundaries.",
+      "Do not walk the full checklist by default. Lead with an opinionated scope contract and the one decision that matters most.",
       "Challenge premise first, take a firm position, and name one concrete condition that would change it.",
       "Push back on weak framing: vague scope needs a specific user/problem, platform vision needs a narrow wedge, social proof needs behavioral evidence.",
       "Resolve one structural scope issue at a time; otherwise state the assumption and move on.",
-      "After acceptance/rejection, commit fully and do not re-argue.",
-      `Before final approval, reconcile outside-voice findings when the loop runs and bound retries with ${reviewLoopPolicySummary("scope")}`,
+      "If the user says no but cannot name the change, offer concrete moves: keep scope, add one obvious adjacent capability, reduce to wedge, or re-open stack/product direction.",
+      `Before final approval, record outside-voice findings and a \`## Spec Review Loop\` table using ${reviewLoopPolicySummary("scope")}`,
       "**STOP.** Wait for explicit approval of the scope contract before advancing.",
-      "**STOP BEFORE ADVANCE.** Mandatory delegation `planner` must be completed or explicitly waived, then close via `node .cclaw/hooks/stage-complete.mjs scope`."
+      "**STOP BEFORE ADVANCE.** Mandatory delegation `planner` must be completed or explicitly waived. Then close with `node .cclaw/hooks/stage-complete.mjs scope --passed=scope_mode_selected,scope_contract_written,scope_user_approved --evidence-json '{\"scope_mode_selected\":\"<mode + rationale>\",\"scope_contract_written\":\"<artifact path + sections>\"}'`. Do not include `scope_user_approved` manually; stage-complete auto-hydrates its review-loop envelope from `## Spec Review Loop`."
     ],
     process: [
       "Run configured pre-scope audit only when enabled.",
-      "Challenge premise, check existing-code leverage, and calibrate ambition/quality bar.",
-      "Compare structured scope alternatives with minimum viable and ideal architecture options.",
-      "Select scope mode with explicit user approval.",
-      "Run the selected mode analysis and park high-upside deferred ideas when useful.",
-      `Use outside-voice review only when complex/high-risk or configured; otherwise run a short adversarial self-check. If loop runs, enforce ${reviewLoopPolicySummary("scope")}`,
-      "Write explicit scope contract, discretion areas, deferred items, and D-XX locked decisions.",
-      "Produce scope summary and completion dashboard."
+      "Run the gstack-style CEO scope pass: job-to-be-done, premise challenge, 10-star upside, smallest useful wedge, and what would change the recommendation.",
+      "Compare minimum viable, product-grade, and ideal architecture scope alternatives with explicit reuse/effort/risk.",
+      "Select scope mode with explicit rationale; ask for user opt-in only when changing or expanding scope.",
+      "Run outside voice / adversarial self-check before final approval and record a valid `## Spec Review Loop` table.",
+      "Write explicit scope contract, discretion areas, deferred items, error/rescue registry, and D-XX locked decisions.",
+      "Produce scope summary and completion dashboard before asking final approval."
     ],
     requiredGates: [
       { id: "scope_mode_selected", description: "One scope mode was explicitly selected." },
@@ -101,8 +98,8 @@ export const SCOPE: StageSchemaInput = {
       "Selected mode and rationale are documented.",
       "Locked Decisions section lists stable D-XX IDs for non-negotiable boundaries.",
       "Premise challenge findings documented.",
-      "Outside Voice findings and dispositions are recorded (accept/reject/defer with rationale).",
-      `Spec review loop summary includes iteration count and quality score trajectory per ${reviewLoopPolicySummary("scope")}`,
+      "Outside Voice findings and dispositions are recorded (accept/reject/defer with rationale) before final approval.",
+      `Spec review loop summary includes a table with columns Iteration, Quality Score, Findings, plus Stop reason, Target score, and Max iterations. stage-complete auto-hydrates scope_user_approved evidence from this section. ${reviewLoopPolicySummary("scope")}`,
       reviewLoopSecondOpinionSummary("scope"),
       "Deferred items list with one-line rationale for each.",
       "When an upside deferred idea is parked, a seed file is created under `.cclaw/seeds/` and referenced in the artifact.",

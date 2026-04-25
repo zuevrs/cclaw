@@ -359,7 +359,7 @@ describe("stage schema and subagent alignment", () => {
       expect.stringContaining("Ask at most one question per turn")
     ]));
     expect(scope.executionModel.checklist).toEqual(expect.arrayContaining([
-      expect.stringContaining("Default path first")
+      expect.stringContaining("CEO pass first")
     ]));
     expect(scope.executionModel.interactionProtocol).toEqual(expect.arrayContaining([
       expect.stringContaining("Do not walk the full checklist by default")

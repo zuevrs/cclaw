@@ -517,7 +517,7 @@ describe("internal advance-stage commands", () => {
     expect(captured.stderr()).toContain("tdd_verified_before_complete");
   });
 
-  it("advance-stage rejects scope_user_approved evidence without review-loop envelope", async () => {
+  it("advance-stage replaces malformed scope_user_approved evidence from artifact", async () => {
     const root = await createTempProject("internal-advance-stage-scope-review-loop-invalid");
     await ensureRunSystem(root);
     await writeScopeArtifact(root);
@@ -554,9 +554,11 @@ describe("internal advance-stage commands", () => {
       captured.io
     );
 
-    expect(code).toBe(1);
-    expect(captured.stderr()).toContain("gate evidence format check failed");
-    expect(captured.stderr()).toContain("scope_user_approved");
+    expect(code, captured.stderr()).toBe(0);
+    const next = await readFlowState(root);
+    expect(next.currentStage).toBe("design");
+    expect(next.guardEvidence.scope_user_approved).toContain(`"type":"review-loop"`);
+    expect(next.guardEvidence.scope_user_approved).not.toBe("approved by user");
   });
 
   it("advance-stage accepts scope review-loop envelope evidence and advances", async () => {
@@ -692,8 +694,7 @@ describe("internal advance-stage commands", () => {
     );
 
     expect(code).toBe(1);
-    expect(captured.stderr()).toContain("design_architecture_locked");
-    expect(captured.stderr()).toContain('stage must be "design"');
+    expect(captured.stderr()).toContain("design research gate blocked");
   });
 
   it("advance-stage auto-hydrates design review-loop evidence from artifact when omitted", async () => {
