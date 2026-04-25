@@ -57,6 +57,9 @@ workflow tool.
   generators that were only kept alive by tests after `/cc-view` consolidation.
 - Converted view subcommand generators into embedded bodies without standalone
   skill frontmatter, matching the single generated `flow-view` surface.
+- Replaced generated artifact template frontmatter `feature: <feature-id>` with
+  `run: <run-id>` while keeping legacy `feature` frontmatter accepted for
+  existing artifacts during migration.
 
 ### Changed
 
