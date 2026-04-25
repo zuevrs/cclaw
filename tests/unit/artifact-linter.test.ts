@@ -559,6 +559,71 @@ describe("artifact linter heuristics", () => {
     expect(challenger?.found).toBe(true);
   });
 
+  it("accepts Cyrillic brainstorm prose and heading-based challenger upside", async () => {
+    const root = await createTempProject("artifact-lint-cyrillic-heading-challenger");
+    await writeRuntimeArtifact(root, "01-brainstorm-landing.md", `# Brainstorm: Лендинг
+
+## Context
+- Greenfield проект, пустая директория.
+- Relevant existing code/patterns: none.
+
+## Problem
+Нужен лендинг — одностраничный сайт-визитка для представления продукта или услуги.
+
+**Успех когда:**
+- Лендинг доступен по публичному URL.
+- Адаптивная вёрстка корректно отображается на мобильных и десктопе.
+
+**Ограничения:** бесплатный хостинг, placeholder-контент, без backend.
+
+## Clarifying Questions
+| # | Question | Answer | Decision impact |
+|---|---|---|---|
+| 1 | Тип приложения? | Лендинг / сайт-визитка | Зафиксировал продуктовый тип. |
+| 2 | Какой подход ближе? | Next.js + Tailwind | Зафиксировал стек. |
+
+## Approach Tier
+**Lightweight** — конкретный низкорискованный лендинг.
+
+## Approaches
+### A. Next.js (App Router) + Tailwind CSS (selected)
+- Плюсы: компонентная архитектура, Vercel деплой.
+- Минусы: зависимости и сборка.
+
+### B. Чистый HTML/CSS/JS (Challenger — high upside)
+- Плюсы: нулевые зависимости и мгновенный деплой.
+- Минусы: хуже масштабируется.
+- High upside: можно опубликовать за минуты без сборки.
+
+## Approach Reaction
+- Closest option: A
+- Concerns: none
+- What changed after reaction: recommendation stayed on A.
+
+## Selected Direction
+- Approach: A — Next.js + Tailwind
+- Rationale: prior Approach Reaction selected A with no concerns.
+- Approval: approved by user.
+- Next-stage handoff: scope.
+
+## Assumptions and Open Questions
+- None.
+
+## Learnings
+- None this stage.
+`);
+
+    const result = await lintArtifact(root, "brainstorm");
+    const problem = result.findings.find((finding) => finding.section === "Problem");
+    const challenger = result.findings.find(
+      (finding) => finding.section === "Challenger Alternative Enforcement"
+    );
+
+    expect(result.passed).toBe(true);
+    expect(problem?.found).toBe(true);
+    expect(challenger?.found).toBe(true);
+  });
+
   it("fails brainstorm when reaction section appears after selected direction", async () => {
     const root = await createTempProject("artifact-lint-reaction-order");
     await writeRuntimeArtifact(root, "01-brainstorm.md", `# Brainstorm Artifact

@@ -78,6 +78,8 @@ describe("flow command contracts", () => {
       expect(content, label).not.toContain("cclaw internal start-flow");
       expect(content, label).toContain("--reclassify");
       expect(content, label).toMatch(/do not manually edit/i);
+      expect(content, label).toContain("fresh init placeholder");
+      expect(content, label).toMatch(/do (?:\*\*)?not(?:\*\*)? ask/i);
     }
 
     expect(startCommand).not.toContain("Persist the chosen track to `.cclaw/state/flow-state.json`");

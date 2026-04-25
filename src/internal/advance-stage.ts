@@ -97,7 +97,6 @@ interface InternalValidationReport {
 }
 
 const AUTO_REVIEW_LOOP_GATE_BY_STAGE: Partial<Record<FlowStage, string>> = {
-  scope: "scope_user_approved",
   design: "design_architecture_locked"
 };
 
@@ -263,6 +262,30 @@ function validateReviewLoopGateEvidence(stage: "scope" | "design", evidence: str
   return null;
 }
 
+function validateUserApprovalEvidence(evidence: string): string | null {
+  const normalized = evidence.trim();
+  if (normalized.length === 0) {
+    return "must cite explicit user approval.";
+  }
+  const reviewLoopEnvelope = (() => {
+    try {
+      return pickReviewLoopEnvelope(JSON.parse(normalized));
+    } catch {
+      return null;
+    }
+  })();
+  if (reviewLoopEnvelope) {
+    return "must cite explicit user approval; review-loop evidence is outside-voice evidence, not user approval.";
+  }
+  if (/\b(?:approved|approval|user approved|confirmed|accepted|yes|ok)\b/iu.test(normalized)) {
+    return null;
+  }
+  if (/\b(?:утвержд(?:аю|ено|ен|ена)|подтвержд(?:аю|ено|ен|ена)|соглас(?:ен|на|овано)|да|ок|принято)\b/iu.test(normalized)) {
+    return null;
+  }
+  return "must cite explicit user approval (for example `user approved the scope contract` or `пользователь утвердил scope`).";
+}
+
 // Per-gate validators keyed by `${stage}:${gateId}`. Returning a non-null
 // string surfaces the reason as an `advance-stage` failure so evidence is
 // guaranteed to carry the structural breadcrumbs downstream tooling
@@ -287,7 +310,7 @@ const GATE_EVIDENCE_VALIDATORS: Record<string, (evidence: string) => string | nu
     return null;
   },
   "scope:scope_user_approved": (evidence) =>
-    validateReviewLoopGateEvidence("scope", evidence),
+    validateUserApprovalEvidence(evidence),
   "design:design_architecture_locked": (evidence) =>
     validateReviewLoopGateEvidence("design", evidence)
 };
