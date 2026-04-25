@@ -37,6 +37,51 @@ describe("flow command contracts", () => {
     }
   });
 
+
+  it("preserves user language in generated prompts while keeping machine surfaces stable", async () => {
+    const root = await createTempProject("language-policy");
+    await initCclaw({ projectRoot: root });
+
+    const paths = [
+      ".cclaw/skills/using-cclaw/SKILL.md",
+      ".cclaw/commands/start.md",
+      ".cclaw/commands/next.md",
+      ".cclaw/commands/ideate.md",
+      ".cclaw/commands/view.md",
+      ".cclaw/skills/brainstorming/SKILL.md",
+      ".cclaw/skills/subagent-dev/SKILL.md",
+      ".cclaw/agents/reviewer.md",
+      "AGENTS.md"
+    ];
+
+    for (const rel of paths) {
+      const content = await fs.readFile(path.join(root, rel), "utf8");
+      expect(content, rel).toContain("Conversation Language Policy");
+      expect(content, rel).toContain("latest substantive user message");
+      expect(content, rel).toContain("Do not translate");
+    }
+
+    const codexCc = await fs.readFile(path.join(root, ".agents/skills/cc/SKILL.md"), "utf8");
+    expect(codexCc).toContain("natural language");
+    expect(codexCc).not.toContain("intent in English");
+  });
+
+  it("documents cclaw-cli as installer/support and node hooks as runtime", async () => {
+    const root = await createTempProject("runtime-boundary");
+    await initCclaw({ projectRoot: root });
+
+    const metaSkill = await fs.readFile(path.join(root, ".cclaw/skills/using-cclaw/SKILL.md"), "utf8");
+    expect(metaSkill).toContain("Installer/support surface");
+    expect(metaSkill).toContain("npx cclaw-cli sync");
+    expect(metaSkill).toContain("node .cclaw/hooks/stage-complete.mjs <stage>");
+
+    const stageComplete = await fs.readFile(path.join(root, ".cclaw/hooks/stage-complete.mjs"), "utf8");
+    expect(stageComplete).toContain("CCLAW_CLI_ENTRYPOINT");
+    expect(stageComplete).toContain("advance-stage");
+    expect(stageComplete).not.toContain("cclaw binary not found");
+    expect(stageComplete).not.toContain("cmd.exe");
+  });
+
   it("enforces TDD and two-layer review semantics in skills", async () => {
     const root = await createTempProject("tdd");
     await initCclaw({ projectRoot: root });

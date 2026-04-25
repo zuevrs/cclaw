@@ -1,7 +1,7 @@
 # Example AGENTS.md Managed Block
 
 This is a compact example of the routing block cclaw writes into `AGENTS.md`
-during `cclaw init` / `cclaw sync`. The generated block in a real project is
+during `npx cclaw-cli init` / `npx cclaw-cli sync`. The generated block in a real project is
 authoritative; this file exists so readers can see what the harness will read.
 
 ## Instruction Priority

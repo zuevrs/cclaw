@@ -1,4 +1,5 @@
 import { RUNTIME_ROOT } from "../constants.js";
+import { conversationLanguagePolicyMarkdown } from "./language-policy.js";
 import {
   CLOSEOUT_CHAIN,
   closeoutChainInline,
@@ -26,6 +27,7 @@ description: "Routing brain for cclaw. Decide whether to start/resume a stage, a
 
 If the user explicitly overrides a stage rule, record it in the artifact.
 
+${conversationLanguagePolicyMarkdown()}
 ## Skill-before-response gate
 
 If \`.cclaw/state/flow-state.json\` exists and \`currentStage\` is set,
@@ -68,7 +70,7 @@ Task arrives
   ├─ Knowledge operation? -> load the learnings skill
   ├─ Read-only workspace view? -> /cc-view [status|tree|diff]
   ├─ Normal post-ship closeout? -> /cc-next drives ${closeoutChainInline()}
-  └─ Explicit early archival/reset? -> cclaw archive [--name=<slug>]
+  └─ Explicit early archival/reset? -> npx cclaw-cli archive [--name=<slug>]
 \`\`\`
 
 ## Task classification
@@ -92,7 +94,7 @@ Before stage work:
 ## Platform reliability notes
 
 - Managed hook dispatch uses \`.cclaw/hooks/run-hook.cmd\` (cross-platform wrapper).
-- If hooks fail due missing runtime deps (for example \`node\` not on \`PATH\`), run \`cclaw doctor\` before continuing.
+- If hooks fail due missing runtime deps (for example \`node\` not on \`PATH\`), run \`npx cclaw-cli doctor\` before continuing.
 - Prefer cross-platform commands in artifacts/examples (\`npm test\`, \`pnpm test\`, \`python -m pytest\`, etc.) over shell-specific aliases whenever possible.
 
 ## Stage quick map
@@ -101,11 +103,10 @@ Use \`/cc <idea>\` for new work, \`/cc-next\` for progression and closeout, \`/c
 
 ## Main vs Operator Surfaces
 
-- **Main workflow:** \`/cc\`, \`/cc-next\`, \`/cc-ideate\`, \`/cc-view status\`.
-- **Operator/support:** \`cclaw doctor\`, \`cclaw sync\`, \`cclaw archive\`,
-  \`/cc-view tree\`, and \`/cc-view diff\`.
-- Use operator/support surfaces only for install/runtime diagnosis, explicit
-  archival, or deeper inspection. Do not make them part of the happy path.
+- **Main workflow:** \`/cc\`, \`/cc-next\`, \`/cc-ideate\`, \`/cc-view status\`, and \`node .cclaw/hooks/stage-complete.mjs <stage>\` inside the installed harness runtime.
+- **Installer/support surface:** \`npx cclaw-cli init\`, \`npx cclaw-cli sync\`, \`npx cclaw-cli upgrade\`, \`npx cclaw-cli doctor\`, and explicit support/archive actions. Do not ask users to install or run a \`cclaw\` binary during normal stage flow.
+- **Read-only support:** \`/cc-view tree\` and \`/cc-view diff\`.
+- Use operator/support surfaces only for install/runtime diagnosis, explicit archival, or deeper inspection. Do not make them part of the happy path.
 
 ## Whole flow map
 

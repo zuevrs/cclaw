@@ -1,13 +1,32 @@
+import { existsSync } from "node:fs";
+import path from "node:path";
+import { fileURLToPath } from "node:url";
 import { RUNTIME_ROOT } from "../constants.js";
 
+function resolveCliEntrypointForGeneratedHook(): string | null {
+  const here = fileURLToPath(import.meta.url);
+  const candidates = [
+    path.resolve(path.dirname(here), "..", "cli.js"),
+    path.resolve(path.dirname(here), "..", "..", "dist", "cli.js")
+  ];
+  for (const candidate of candidates) {
+    // Synchronous probe runs only during cclaw-cli init/sync generation.
+    // The generated hook receives a concrete path and does not need a global bin.
+    if (existsSync(candidate)) return candidate;
+  }
+  return null;
+}
+
 export function stageCompleteScript(): string {
+  const cliEntrypoint = resolveCliEntrypointForGeneratedHook();
   return `#!/usr/bin/env node
 import fs from "node:fs/promises";
 import path from "node:path";
 import process from "node:process";
-import { spawn, spawnSync } from "node:child_process";
+import { spawn } from "node:child_process";
 
 const RUNTIME_ROOT = ${JSON.stringify(RUNTIME_ROOT)};
+const CCLAW_CLI_ENTRYPOINT = ${JSON.stringify(cliEntrypoint)};
 
 async function detectRoot() {
   const candidates = [
@@ -59,27 +78,29 @@ async function main() {
     return;
   }
 
-  if (process.platform === "win32") {
-    const probe = spawnSync("where", ["cclaw"], {
-      cwd: root,
-      env: process.env,
-      stdio: "ignore"
-    });
-    if ((probe.status ?? 1) !== 0) {
-      process.stderr.write(
-        "[cclaw] stage-complete: cclaw binary not found in PATH. Install cclaw CLI and rerun stage completion.\\n"
-      );
-      process.exitCode = 1;
-      return;
-    }
+  const cliEntrypoint = process.env.CCLAW_CLI_JS || CCLAW_CLI_ENTRYPOINT;
+  if (!cliEntrypoint || cliEntrypoint.trim().length === 0) {
+    process.stderr.write(
+      "[cclaw] stage-complete: local Node runtime entrypoint is missing. Re-run npx cclaw-cli sync or npx cclaw-cli upgrade to regenerate hooks.\\n"
+    );
+    process.exitCode = 1;
+    return;
   }
 
-  const isWindows = process.platform === "win32";
+  try {
+    const stat = await fs.stat(cliEntrypoint);
+    if (!stat.isFile()) throw new Error("not-file");
+  } catch {
+    process.stderr.write(
+      "[cclaw] stage-complete: local Node runtime entrypoint not found at " + cliEntrypoint + ". Re-run npx cclaw-cli sync or npx cclaw-cli upgrade to regenerate hooks.\\n"
+    );
+    process.exitCode = 1;
+    return;
+  }
+
   const child = spawn(
-    isWindows ? "cmd.exe" : "cclaw",
-    isWindows
-      ? ["/d", "/s", "/c", "cclaw", "internal", "advance-stage", stage, ...flags]
-      : ["internal", "advance-stage", stage, ...flags],
+    process.execPath,
+    [cliEntrypoint, "internal", "advance-stage", stage, ...flags],
     {
     cwd: root,
     env: process.env,
@@ -93,11 +114,11 @@ async function main() {
     const code = error && typeof error === "object" && "code" in error ? String(error.code) : "";
     if (code === "ENOENT") {
       process.stderr.write(
-        "[cclaw] stage-complete: cclaw binary not found in PATH. Install cclaw CLI and rerun stage completion.\\n"
+        "[cclaw] stage-complete: node executable not found while invoking local runtime. Re-run npx cclaw-cli doctor.\\n"
       );
     } else {
       process.stderr.write(
-        "[cclaw] stage-complete: failed to invoke cclaw internal advance-stage (" +
+        "[cclaw] stage-complete: failed to invoke local Node advance-stage runtime (" +
           (error instanceof Error ? error.message : String(error)) +
           ").\\n"
       );
@@ -136,7 +157,7 @@ set "RUNTIME=%HOOK_DIR%run-hook.mjs"
 where node >nul 2>nul
 if %ERRORLEVEL% neq 0 (
   REM Best-effort: missing node should not block harness execution loops.
-  echo [cclaw] run-hook.cmd: node not found; cclaw hook skipped. Run cclaw doctor. >&2
+  echo [cclaw] run-hook.cmd: node not found; cclaw hook skipped. Run npx cclaw-cli doctor. >&2
   exit /b 0
 )
 node "%RUNTIME%" %*
@@ -148,7 +169,7 @@ if [ "$#" -lt 1 ]; then
   exit 1
 fi
 if ! command -v node >/dev/null 2>&1; then
-  echo "[cclaw] run-hook.cmd: node not found; cclaw hook skipped. Run cclaw doctor." >&2
+  echo "[cclaw] run-hook.cmd: node not found; cclaw hook skipped. Run npx cclaw-cli doctor." >&2
   exit 0
 fi
 exec node "\${SCRIPT_DIR}/run-hook.mjs" "$@"

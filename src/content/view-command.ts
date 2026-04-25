@@ -3,6 +3,7 @@ import { diffSubcommandMarkdown } from "./diff-command.js";
 import { statusSubcommandMarkdown } from "./status-command.js";
 import { treeSubcommandMarkdown } from "./tree-command.js";
 
+import { conversationLanguagePolicyMarkdown } from "./language-policy.js";
 const VIEW_SKILL_FOLDER = "flow-view";
 const VIEW_SKILL_NAME = "flow-view";
 
@@ -20,6 +21,7 @@ Subcommands:
 
 ## HARD-GATE
 
+${conversationLanguagePolicyMarkdown()}
 - \`/cc-view\` is strictly read-only at wrapper level.
 - Do not mutate flow-state or derived state from any subcommand.
 

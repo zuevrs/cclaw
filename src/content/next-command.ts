@@ -1,4 +1,5 @@
 import { RUNTIME_ROOT } from "../constants.js";
+import { conversationLanguagePolicyMarkdown } from "./language-policy.js";
 import { stageSchema } from "./stage-schema.js";
 import {
   closeoutChainInline,
@@ -77,6 +78,7 @@ This is the only progression command the user needs to drive the entire flow. St
 
 ## HARD-GATE
 
+${conversationLanguagePolicyMarkdown()}
 - **Do not** invent gate completion: use only \`${flowPath}\` plus observable evidence in repo artifacts.
 - **Do not** skip stages: advance only from \`currentStage\` to its configured successor.
 - ${closeoutNextCommandGuidance()}
@@ -185,6 +187,7 @@ description: "The primary progression command. Reads flow state, starts/resumes 
 
 ## Operator Output Contract
 
+${conversationLanguagePolicyMarkdown()}
 Default output should be compact, like OMC/OMX operator surfaces:
 
 \`\`\`
@@ -258,7 +261,7 @@ by inspecting ${closeoutSubstateInline()}:
 | \`idle\` / missing      | Flip to \`retro_review\` and start retro protocol     |
 | \`retro_review\`        | Draft/update \`09-retro.md\`, ask accept/edit/skip  |
 | \`compound_review\`     | Compound closeout: overlap scan, refresh/supersede, ask approve/skip |
-| \`ready_to_archive\`    | Run \`cclaw archive\`; reset flow-state on success |
+| \`ready_to_archive\`    | Run \`npx cclaw-cli archive\`; reset flow-state on success |
 | \`archived\`            | Report "run archived"; stop                         |
 
 Each step owns its own state transition. \`/cc-next\` keeps retro and compound

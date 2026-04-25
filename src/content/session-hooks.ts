@@ -46,7 +46,7 @@ Before ending a session or when context is full:
 
 1. **Verify no pending changes:** All modified files must be either committed or explicitly reverted.
 2. **Update flow state:** Mark the current stage as its actual status (DONE / DONE_WITH_CONCERNS / BLOCKED).
-3. **Write knowledge:** If any non-obvious reusable insight appears, append one strict-schema JSON line to \`.cclaw/knowledge.jsonl\` with type \`rule\`, \`pattern\`, \`lesson\`, or \`compound\`.
+3. **Capture knowledge:** If any non-obvious reusable insight appears during stage work, add a strict JSON bullet to the current artifact \`## Learnings\`; stage completion harvests it into \`.cclaw/knowledge.jsonl\`.
 4. **Leave handoff context:** Put blockers and remaining work in the current stage artifact, not a separate state file.
 
 ### Stop conditions (agent must halt and report)
@@ -100,7 +100,7 @@ export function sessionHooksAgentsMdBlock(): string {
 
 Session boundary behavior (real hooks inject context automatically; guidelines cover manual steps):
 - **Start:** Hooks inject flow state + knowledge snapshot. Check for in-progress work, show status.
-- **Stop:** Hooks remind about handoff. Verify no pending changes, update flow state, append useful knowledge after overlap check.
+- **Stop:** Hooks remind about handoff. Verify no pending changes, update the current artifact handoff, and capture reusable knowledge in \`## Learnings\`; stage completion harvests it.
 - **Resume:** Re-read state, verify artifact, re-load knowledge, continue from last step. For compound closeout, optional session-history scans require user opt-in.
 
 Skill: \`.cclaw/skills/session/SKILL.md\`

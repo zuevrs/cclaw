@@ -1,5 +1,6 @@
 import { RUNTIME_ROOT } from "../constants.js";
 
+import { conversationLanguagePolicyMarkdown } from "./language-policy.js";
 const START_SKILL_FOLDER = "flow-start";
 const START_SKILL_NAME = "flow-start";
 
@@ -28,6 +29,7 @@ This is the **recommended way to start** working with cclaw. Use \`/cc-next\` fo
 
 ## HARD-GATE
 
+${conversationLanguagePolicyMarkdown()}
 - **Do not** skip reading \`${flowPath}\` — always check current state before acting.
 - **Do not** start implementation stages directly from \`/cc <prompt>\` — always begin at the first stage of the resolved track (brainstorm for medium/standard, spec for quick).
 - **Do not** start a stage pipeline for a task that is not a software change (pure question, non-software task, conversation).
@@ -154,6 +156,7 @@ description: "Unified entry point for the cclaw flow. No args = resume/next. Wit
 
 Do **not** silently discard an existing flow when the user provides a prompt. If completed stages exist, inform and confirm before resetting.
 
+${conversationLanguagePolicyMarkdown()}
 ## Protocol
 
 ### Path A: \`/cc <prompt>\`

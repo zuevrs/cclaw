@@ -1,6 +1,7 @@
 import type { FlowStage } from "../types.js";
 import { stageDelegationSummary } from "./stage-schema.js";
 
+import { conversationLanguagePolicyBullets, conversationLanguagePolicyMarkdown } from "./language-policy.js";
 /**
  * Markdown content generators for Cclaw’s subagent orchestration skills and enhanced
  * specialist payloads. Cclaw materializes static instructions — this module does not
@@ -92,10 +93,10 @@ can enforce phase-appropriate write boundaries. Use separate workers only when t
 
 | Harness | Fallback | Delegation tool | Structured ask | Capability source |
 |---|---|---|---|---|
-| Claude | \`native\` | Task (named subagent_type) | AskUserQuestion | \`cclaw doctor\` |
-| Cursor | \`generic-dispatch\` | Task (generic subagent_type: explore/generalPurpose/…) | AskQuestion | \`cclaw doctor\` |
-| OpenCode | \`role-switch\` | plugin dispatch _or_ in-session role-switch | \`question\` (permission-gated; \`permission.question: "allow"\`) | \`cclaw doctor\` |
-| Codex | \`role-switch\` | in-session role-switch (mandatory evidenceRefs) | \`request_user_input\` (experimental; Plan / Collaboration mode) | \`cclaw doctor\` |
+| Claude | \`native\` | Task (named subagent_type) | AskUserQuestion | \`npx cclaw-cli doctor\` |
+| Cursor | \`generic-dispatch\` | Task (generic subagent_type: explore/generalPurpose/…) | AskQuestion | \`npx cclaw-cli doctor\` |
+| OpenCode | \`role-switch\` | plugin dispatch _or_ in-session role-switch | \`question\` (permission-gated; \`permission.question: "allow"\`) | \`npx cclaw-cli doctor\` |
+| Codex | \`role-switch\` | in-session role-switch (mandatory evidenceRefs) | \`request_user_input\` (experimental; Plan / Collaboration mode) | \`npx cclaw-cli doctor\` |
 
 **Dispatch rules driven by \`subagentFallback\`:**
 
@@ -148,6 +149,7 @@ Concrete per-stage rules so the controller does not have to guess which tier fit
 
 ## HARD-GATE
 
+${conversationLanguagePolicyMarkdown()}
 **Never dispatch a subagent without a concrete, self-contained task description pasted into the prompt. Do not pass file references the subagent must read to understand its task.**
 
 If you catch yourself writing “read PLAN.md Task 3” or “implement the next unchecked item,” stop: expand the work into explicit text in the Task body before dispatching.
@@ -206,6 +208,7 @@ CONTEXT: {paste relevant file paths, types, patterns}
 CONSTRAINTS: {paste from spec — what NOT to do}
 
 After implementation:
+0. Write user-facing narrative in the parent/user language; keep status tokens unchanged.
 1. Run the full test suite
 2. Report your status: DONE / DONE_WITH_CONCERNS / NEEDS_CONTEXT / BLOCKED
 3. If DONE_WITH_CONCERNS, list each concern
@@ -348,6 +351,7 @@ This document bridges **Superpowers-style task isolation** with the **gstack “
 
 ## HARD-GATE
 
+${conversationLanguagePolicyMarkdown()}
 **Never dispatch parallel IMPLEMENTATION agents that write to the same codebase. Parallel agents are for investigation, analysis, and review ONLY.**
 
 Implementation that touches shared source trees must remain **sequential** unless you have proven disjoint filesystem ownership (rare) and an explicit merge protocol.

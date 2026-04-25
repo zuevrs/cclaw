@@ -443,8 +443,7 @@ Derived diagnostics are produced on demand by `cclaw doctor`.
 
 ## CLI reference
 
-The CLI is deliberately small. Everything operational happens inside
-your harness.
+`cclaw-cli` is deliberately small: it installs, syncs, upgrades, diagnoses, and removes the generated harness runtime. Day-to-day flow work happens inside your harness via `/cc*` commands and Node hooks.
 
 ```bash
 npx cclaw-cli                   # launches interactive setup (or prints
@@ -455,6 +454,8 @@ npx cclaw-cli archive           # explicit/manual archive; normal post-ship clos
 npx cclaw-cli uninstall         # remove .cclaw + generated harness shims
 npx cclaw-cli --version
 ```
+
+The generated `node .cclaw/hooks/stage-complete.mjs <stage>` helper is the canonical stage-closeout path and must not require a runtime `cclaw` binary in `PATH`.
 
 For CI or scripted installs, `cclaw-cli init --harnesses=<list>
 --no-interactive` is the non-interactive form. All other tunables

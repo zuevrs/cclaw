@@ -2,6 +2,7 @@ import { RUNTIME_ROOT } from "../constants.js";
 import { resolveIdeateFrames, type IdeateFrameId } from "./ideate-frames.js";
 import { ideateStructuredAskToolsWithFallback } from "./decision-protocol.js";
 
+import { conversationLanguagePolicyMarkdown } from "./language-policy.js";
 const IDEATE_SKILL_FOLDER = "flow-ideate";
 const IDEATE_SKILL_NAME = "flow-ideate";
 
@@ -57,6 +58,7 @@ same session, or save/discard the backlog.
 
 ## HARD-GATE
 
+${conversationLanguagePolicyMarkdown()}
 - Ideate mode only. Never mutate \`.cclaw/state/flow-state.json\`.
 - Every recommendation cites evidence from the current repository
   (file path, command output, or knowledge-store entry id).
@@ -140,6 +142,7 @@ repository. Will persist a ranked backlog to
 
 ## HARD-GATE
 
+${conversationLanguagePolicyMarkdown()}
 - Do not start coding in ideate mode.
 - Do not mutate \`.cclaw/state/flow-state.json\` — ideate mode sits outside
   the critical-path flow.

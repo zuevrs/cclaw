@@ -1,9 +1,11 @@
+import { conversationLanguagePolicyMarkdown } from "./language-policy.js";
 export function stageCommonGuidanceMarkdown(): string {
   return `# Common Stage Guidance
 
 Shared guidance loaded by every stage skill. Keep this file concise and stable so
 per-stage skills can stay focused on stage-specific work.
 
+${conversationLanguagePolicyMarkdown()}
 ## Shared completion protocol
 
 - Stage-specific skills expose **Completion Parameters** plus the gates that
@@ -26,8 +28,8 @@ Use this same closeout menu for every stage:
 - **A) Advance** — run \`/cc-next\` and continue the critical path; after \`ship\`, the same command drives \`retro -> compound -> archive\`.
 - **B) Revise this stage** — stay on current stage and apply feedback.
 - **C) Pause / park** — run \`/cc-view status\`, then stop and resume later.
-- **D) Rewind** — run \`cclaw internal rewind <target-stage> "<reason>"\`.
-- **E) Abandon** — only when the user explicitly wants to end a non-ship active run early, archive with \`cclaw archive --skip-retro --retro-reason="<reason>"\`. Once in post-ship closeout, continue \`/cc-next\` through retro/compound/archive instead.
+- **D) Rewind** — run \`npx cclaw-cli internal rewind <target-stage> "<reason>"\` as a support/runtime repair action.
+- **E) Abandon** — only when the user explicitly wants to end a non-ship active run early, archive with \`npx cclaw-cli archive --skip-retro --retro-reason="<reason>"\`. Once in post-ship closeout, continue \`/cc-next\` through retro/compound/archive instead.
 
 Recommendation defaults:
 

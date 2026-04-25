@@ -1095,9 +1095,7 @@ async function handleStopHandoff(runtime) {
     state.activeRunId +
     "). Active artifacts stay in " +
     RUNTIME_ROOT +
-    "/artifacts until cclaw archive. Before stopping: (1) confirm flow-state reflects reality, (2) ensure artifact changes match current intent, (3) if you discovered a non-obvious rule/pattern, append one strict-schema JSON line to " +
-    RUNTIME_ROOT +
-    "/knowledge.jsonl, (4) commit or revert pending changes.";
+    "/artifacts until archive. Before stopping: (1) confirm flow-state reflects reality, (2) ensure artifact changes match current intent, (3) if you discovered a non-obvious rule/pattern during stage work, add it to the current artifact ## Learnings section so stage-complete can harvest it, (4) commit or revert pending changes.";
 
   if (runtime.harness === "cursor") {
     if (loopCount === 0) {
