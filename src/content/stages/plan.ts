@@ -49,7 +49,7 @@ export const PLAN: StageSchemaInput = {
       "Slice into vertical tasks — each task targets 2-5 minutes, produces one testable outcome, and touches one coherent area.",
       "Task Contract — every task has one coherent outcome, AC mapping, exact verification command/manual step, and expected evidence snippet or pass condition. Avoid vague `run tests` wording.",
       "Annotate slice-review metadata — if `.cclaw/config.yaml::sliceReview.enabled` is true, every task row additionally carries `touchCount` (rough number of files expected to change) and `touchPaths` (glob hints, e.g. `migrations/**`, `src/auth/**`). A task may set `highRisk: true` to force a review pass regardless of thresholds. These fields feed the TDD stage's Per-Slice Review point; when `sliceReview` is disabled they are optional.",
-      "Map scope Locked Decisions — every D-XX from scope is referenced by at least one plan task (or explicitly marked deferred with reason).",
+      "Map scope Locked Decisions — every LD#hash anchor from scope is referenced by at least one plan task (or explicitly marked deferred with reason).",
       "Run anti-placeholder + anti-scope-reduction scans — block `TODO/TBD/...` and phrasing like `v1`, `for now`, `later` for locked boundaries.",
       "Define validation points — mark where progress must be checked before continuing, with concrete command and expected evidence.",
       "Define execution posture — record whether execution should be sequential, dependency-batched, parallel-safe, or blocked; include risk triggers and RED/GREEN/REFACTOR checkpoint/commit expectations when the repo workflow supports them.",

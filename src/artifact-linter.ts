@@ -1,4 +1,5 @@
 import fs from "node:fs/promises";
+import { createHash } from "node:crypto";
 import path from "node:path";
 import { resolveArtifactPath as resolveStageArtifactPath } from "./artifact-paths.js";
 import { readConfig } from "./config.js";
@@ -122,6 +123,16 @@ function sectionBodyByAnyName(sections: H2SectionMap, sectionNames: string[]): s
   });
   if (bodies.length === 0) return null;
   return bodies.join("\n");
+}
+
+function sectionBodyByHeadingPrefix(sections: H2SectionMap, prefix: string): string | null {
+  const want = normalizeHeadingTitle(prefix).toLowerCase();
+  for (const [heading, body] of sections.entries()) {
+    if (heading.toLowerCase().startsWith(want)) {
+      return body;
+    }
+  }
+  return null;
 }
 
 export function extractMarkdownSectionBody(markdown: string, section: string): string | null {
@@ -750,6 +761,57 @@ function validateRequirementsTaxonomy(sectionBody: string): { ok: boolean; detai
   return {
     ok: true,
     details: "Requirements table uses canonical Priority values."
+  };
+}
+
+function validateLockedDecisionAnchors(sectionBody: string): { ok: boolean; anchors: string[]; details: string } {
+  const rows = getMarkdownTableRows(sectionBody);
+  const lines = sectionBody
+    .split(/\r?\n/u)
+    .map((line) => line.trim())
+    .filter((line) => /^[-*]\s+\S/u.test(line));
+  const anchors: string[] = [];
+  const issues: string[] = [];
+
+  for (const [index, row] of rows.entries()) {
+    const anchor = (row[0] ?? "").trim().toLowerCase();
+    const decisionText = (row[1] ?? "").trim();
+    if (!/^ld#[0-9a-f]{8}$/u.test(anchor)) {
+      issues.push(`row ${index + 1} has invalid anchor "${row[0] ?? ""}"`);
+      continue;
+    }
+    anchors.push(anchor);
+    if (decisionText.length > 0) {
+      const expected = lockedDecisionHash(decisionText).toLowerCase();
+      if (anchor !== expected) {
+        issues.push(`row ${index + 1} anchor should be ${expected} for its Decision text`);
+      }
+    }
+  }
+
+  for (const [index, line] of lines.entries()) {
+    const anchor = /\bLD#[0-9a-f]{8}\b/iu.exec(line)?.[0]?.toLowerCase();
+    if (!anchor) {
+      issues.push(`bullet ${index + 1} is missing an LD#<sha8> anchor`);
+      continue;
+    }
+    anchors.push(anchor);
+  }
+
+  const duplicateAnchors = [...new Set(anchors.filter((anchor, index) => anchors.indexOf(anchor) !== index))];
+  if (duplicateAnchors.length > 0) {
+    issues.push(`duplicate anchors: ${duplicateAnchors.join(", ")}`);
+  }
+  if (anchors.length === 0 && (rows.length > 0 || lines.length > 0)) {
+    issues.push("no LD#<sha8> anchors found");
+  }
+
+  return {
+    ok: issues.length === 0,
+    anchors: [...new Set(anchors)],
+    details: issues.length === 0
+      ? `${anchors.length} LD#hash anchor(s) recorded with no duplicates.`
+      : issues.join("; ")
   };
 }
 
@@ -1474,6 +1536,21 @@ function extractDecisionIds(text: string): string[] {
   return [...new Set(ids)];
 }
 
+function extractRequirementIdsFromMarkdown(text: string): string[] {
+  const ids = text.match(/\bR\d+\b/gu) ?? [];
+  return [...new Set(ids)];
+}
+
+function extractLockedDecisionAnchors(text: string): string[] {
+  const ids = text.match(/\bLD#[0-9a-f]{8}\b/giu) ?? [];
+  return [...new Set(ids.map((id) => id.replace(/^LD#/iu, "LD#").toLowerCase()))];
+}
+
+function lockedDecisionHash(value: string): string {
+  const normalized = value.replace(/\s+/gu, " ").trim().toLowerCase();
+  return `LD#${createHash("sha256").update(normalized).digest("hex").slice(0, 8)}`;
+}
+
 function collectPatternHits(
   text: string,
   patterns: Array<{ label: string; regex: RegExp }>
@@ -1601,7 +1678,7 @@ function validateSectionBody(
   if (sectionNameNormalized === "premise challenge") {
     return validatePremiseChallenge(sectionBody);
   }
-  if (sectionNameNormalized === "requirements") {
+  if (sectionNameNormalized.startsWith("requirements")) {
     return validateRequirementsTaxonomy(sectionBody);
   }
   if (sectionNameNormalized === "data flow") {
@@ -2069,10 +2146,10 @@ export async function lintArtifact(
   }
 
   if (stage === "scope") {
-    const lockedDecisionsBody = sectionBodyByName(sections, "Locked Decisions (D-XX)") ?? "";
+    const lockedDecisionsBody = sectionBodyByHeadingPrefix(sections, "Locked Decisions") ?? "";
     const strictScopeGuards =
       parsedFrontmatter.hasFrontmatter ||
-      headingPresent(sections, "Locked Decisions (D-XX)");
+      sectionBodyByHeadingPrefix(sections, "Locked Decisions") !== null;
     const scopeSections = [
       sectionBodyByAnyName(sections, ["In Scope / Out of Scope", "In Scope", "Out of Scope"]) ?? "",
       sectionBodyByName(sections, "Scope Summary") ?? "",
@@ -2090,12 +2167,19 @@ export async function lintArtifact(
           : `Detected scope-reduction phrase(s): ${reductionHits.join(", ")}.`
     });
 
-    // When the Locked Decisions section is present we must enforce the
-    // D-XX ID contract at runtime (previously this was prose-only in the
-    // artifactValidation rule). Empty body, missing IDs, and duplicate
-    // IDs all fail the lint; absence of the section remains advisory so
-    // scope stays optional for small/quick tracks.
-    if (headingPresent(sections, "Locked Decisions (D-XX)")) {
+    if (sectionBodyByHeadingPrefix(sections, "Locked Decisions") !== null) {
+      const anchorValidation = validateLockedDecisionAnchors(lockedDecisionsBody);
+      findings.push({
+        section: "Locked Decisions Hash Integrity",
+        required: true,
+        rule: "Locked Decisions section must list unique LD#<sha8> content-derived anchors.",
+        found: anchorValidation.ok,
+        details: anchorValidation.details
+      });
+
+      // Legacy D-XX rows remain advisory for older artifacts, but new templates
+      // use LD#hash anchors. This check keeps D-XX duplicates visible without
+      // making old artifacts the primary contract.
       const listDecisionLines = lockedDecisionsBody
         .split(/\r?\n/u)
         .map((line) => line.trim())
@@ -2131,13 +2215,58 @@ export async function lintArtifact(
       }
       findings.push({
         section: "Locked Decisions ID Integrity",
-        required: true,
+        required: false,
         rule: "Locked Decisions section must list each decision with a unique stable D-XX ID.",
         found: issues.length === 0,
         details:
           issues.length === 0
             ? `${rowDecisionIds.length} decision ID(s) recorded with no duplicates.`
             : issues.join("; ")
+      });
+    }
+  }
+
+  if (["design", "spec", "plan", "review"].includes(stage)) {
+    const scopeArtifact = await resolveStageArtifactPath("scope", {
+      projectRoot,
+      track,
+      intent: "read"
+    });
+    if (await exists(scopeArtifact.absPath)) {
+      const scopeRaw = await fs.readFile(scopeArtifact.absPath, "utf8");
+      const scopeSections = extractH2Sections(scopeRaw);
+      const requirementsBody = sectionBodyByHeadingPrefix(scopeSections, "Requirements") ?? "";
+      const lockedDecisionsBody = sectionBodyByHeadingPrefix(scopeSections, "Locked Decisions") ?? "";
+      const requirementIds = extractRequirementIdsFromMarkdown(requirementsBody);
+      const lockedDecisionAnchors = extractLockedDecisionAnchors(lockedDecisionsBody);
+      const missingRequirementRefs = requirementIds.filter((id) => !raw.includes(id));
+      const normalizedCurrentRaw = raw.toLowerCase();
+      const missingDecisionRefs = lockedDecisionAnchors.filter((id) => !normalizedCurrentRaw.includes(id));
+
+      findings.push({
+        section: "Scope Requirement Reference Integrity",
+        required: requirementIds.length > 0,
+        rule: "Every R# requirement ID from scope must be referenced by downstream artifacts.",
+        found: missingRequirementRefs.length === 0,
+        details:
+          requirementIds.length === 0
+            ? "No R# requirement IDs found in scope artifact; reference check skipped."
+            : missingRequirementRefs.length === 0
+              ? `All ${requirementIds.length} scope requirement ID(s) are referenced.`
+              : `Missing scope requirement reference(s): ${missingRequirementRefs.join(", ")}.`
+      });
+
+      findings.push({
+        section: "Locked Decision Hash Reference Integrity",
+        required: lockedDecisionAnchors.length > 0,
+        rule: "Every LD#hash locked decision anchor from scope must be referenced by downstream artifacts.",
+        found: missingDecisionRefs.length === 0,
+        details:
+          lockedDecisionAnchors.length === 0
+            ? "No LD#hash anchors found in scope artifact; reference check skipped."
+            : missingDecisionRefs.length === 0
+              ? `All ${lockedDecisionAnchors.length} locked decision anchor(s) are referenced.`
+              : `Missing locked decision reference(s): ${missingDecisionRefs.join(", ")}.`
       });
     }
   }

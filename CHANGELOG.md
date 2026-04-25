@@ -1,5 +1,13 @@
 # Changelog
 
+## 0.51.14
+
+### Fixed
+
+- Added cross-stage reference checks so downstream design/spec/plan/review artifacts must reference every scope `R#` requirement and `LD#hash` locked-decision anchor.
+- Updated scope/design/spec/plan templates to use `LD#hash` decision anchors instead of the legacy `D-XX` convention.
+- Added structural validation for `LD#<sha8>` locked-decision anchors, including uniqueness and table hash consistency.
+
 ## 0.51.13
 
 ### Fixed

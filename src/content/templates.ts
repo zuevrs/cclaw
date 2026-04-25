@@ -187,10 +187,14 @@ ${SEED_SHELF_SECTION}
 > is later dropped, keep the row and mark Priority \`DROPPED\`; if a new one is
 > added mid-flow, append with the next free R-number — do NOT reuse numbers.
 
-## Locked Decisions (D-XX)
-| Decision ID | Decision | Why locked now | Downstream impact |
+## Locked Decisions (LD#hash)
+| Decision Anchor | Decision | Why locked now | Downstream impact |
 |---|---|---|---|
-| D-01 |  |  |  |
+| LD#<sha8> |  |  |  |
+
+> Decision Anchor is \`LD#\` + the first 8 lowercase hex chars of SHA-256 over
+> the normalized \`Decision\` cell (trim, collapse whitespace, lowercase). Downstream
+> design/spec/plan/review artifacts reference these anchors verbatim.
 
 ## In Scope / Out of Scope
 
@@ -312,9 +316,9 @@ ${SEED_SHELF_SECTION}
 | pitfalls-researcher |  |  |  |
 
 ## Architecture Boundaries
-| Component | Responsibility | Owner |
-|---|---|---|
-|  |  |  |
+| Component | Responsibility | Requirement Refs (R#) | Decision Refs (LD#hash) | Owner |
+|---|---|---|---|---|
+|  |  |  |  |  |
 
 ## Architecture Diagram
 
@@ -381,11 +385,11 @@ ${MARKDOWN_CODE_FENCE}
 ### Interaction Edge Case Matrix
 | Edge case | Handled? | Design response | Deferred item (if not handled) |
 |---|---|---|---|
-| double-click | yes/no |  | None / D-XX |
-| nav-away-mid-request | yes/no |  | None / D-XX |
-| 10K-result dataset | yes/no |  | None / D-XX |
-| background-job abandonment | yes/no |  | None / D-XX |
-| zombie connection | yes/no |  | None / D-XX |
+| double-click | yes/no |  | None / LD#hash |
+| nav-away-mid-request | yes/no |  | None / LD#hash |
+| 10K-result dataset | yes/no |  | None / LD#hash |
+| background-job abandonment | yes/no |  | None / LD#hash |
+| zombie connection | yes/no |  | None / LD#hash |
 
 ## Security & Threat Model
 | Boundary | Threat | Mitigation | Owner |
@@ -484,7 +488,7 @@ ${SEED_SHELF_SECTION}
 - Drift from upstream (or \`None\`):
 
 ## Acceptance Criteria
-| ID | Requirement Ref (R#) | Criterion (observable/measurable/falsifiable) | Design Decision Ref |
+| ID | Requirement Ref (R#) | Criterion (observable/measurable/falsifiable) | Design Decision Ref (LD#hash) |
 |---|---|---|---|
 | AC-1 | R1 |  |  |
 
@@ -589,9 +593,9 @@ Execution rule: complete and verify each batch before starting the next batch.
 - TDD checkpoint plan: RED commit/checkpoint -> GREEN commit/checkpoint -> REFACTOR commit/checkpoint (or deferred because: )
 
 ## Locked Decision Coverage
-| Decision ID | Source section | Plan tasks implementing decision | Status |
+| Decision Ref (LD#hash) | Source section | Plan tasks implementing decision | Status |
 |---|---|---|---|
-| D-01 | 02-scope.md > Locked Decisions | T-1 | covered |
+| LD#<sha8> | 02-scope.md > Locked Decisions | T-1 | covered |
 
 ## Risk Assessment
 | Task/Batch | Risk | Likelihood | Impact | Mitigation |
@@ -609,7 +613,7 @@ Execution rule: complete and verify each batch before starting the next batch.
 
 ## No Scope Reduction Language Scan
 - Scanned phrases: \`v1\`, \`for now\`, \`later\`, \`temporary\`, \`placeholder\`, \`mock for now\`, \`hardcoded for now\`, \`will improve later\`.
-- Hits: 0 (required when Locked Decisions section is non-empty).
+- Hits: 0 (required when Locked Decisions section is non-empty; use LD#hash anchors).
 
 ## WAIT_FOR_CONFIRM
 - Status: pending
