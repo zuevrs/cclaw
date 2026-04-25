@@ -200,6 +200,8 @@ describe("flow command contracts", () => {
     expect(scopeSkill).toContain("Completion protocol: verify required gates");
     expect(scopeSkill).toContain("`mandatory delegations`");
     expect(scopeSkill).toContain("`planner`");
+    expect(scopeSkill).toContain("--waive-delegation=planner");
+    expect(scopeSkill).toContain("completion helper JSON diagnostics");
     expect(designSkill).toContain("`mandatory delegations`");
     expect(designSkill).toContain("`planner`");
     expect(brainstormSkill).toContain("`mandatory delegations`: none");

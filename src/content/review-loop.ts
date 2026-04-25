@@ -777,6 +777,31 @@ function normalizeStopReason(value: unknown): ReviewLoopStopReason | null {
   return null;
 }
 
+function parseScoreCell(value: string): number | null {
+  const percent = /([0-9]*\.?[0-9]+)\s*%/u.exec(value)?.[1];
+  if (percent !== undefined) {
+    const score = Number(percent) / 100;
+    return Number.isFinite(score) ? clampScore(score) : null;
+  }
+  const direct = Number(value.trim());
+  if (Number.isFinite(direct)) {
+    return clampScore(direct > 1 ? direct / 100 : direct);
+  }
+  const embedded = /([0-9]*\.?[0-9]+)/u.exec(value)?.[1];
+  if (embedded === undefined) return null;
+  const score = Number(embedded);
+  if (!Number.isFinite(score)) return null;
+  return clampScore(score > 1 ? score / 100 : score);
+}
+
+function parseFindingsCountCell(value: string): number | null {
+  if (/\b(?:none|zero|clear|no findings?|0)\b/iu.test(value)) return 0;
+  const match = /(\d+)/u.exec(value);
+  if (!match) return null;
+  const count = Number(match[1]);
+  return Number.isInteger(count) && count >= 0 ? count : null;
+}
+
 function parseIterationsTable(sectionBody: string): ReviewLoopIterationSummary[] {
   const rows: ReviewLoopIterationSummary[] = [];
   const lines = sectionBody.split(/\r?\n/gu);
@@ -788,17 +813,17 @@ function parseIterationsTable(sectionBody: string): ReviewLoopIterationSummary[]
       .slice(1, -1)
       .map((cell) => cell.trim());
     if (cells.length < 3) continue;
-    if (/iteration/iu.test(cells[0] ?? "")) continue;
+    if (/^iteration$/iu.test(cells[0] ?? "")) continue;
     if (/^-+$/u.test((cells[0] ?? "").replace(/:/gu, ""))) continue;
-    const iteration = Number(cells[0]);
-    const qualityScore = Number(cells[1]);
-    const findingsCount = Number(cells[2]);
+    const iteration = Number(/(\d+)/u.exec(cells[0] ?? "")?.[1] ?? "");
+    const qualityScore = parseScoreCell(cells[1] ?? "");
+    const findingsCount = parseFindingsCountCell(cells[2] ?? "");
     if (!Number.isInteger(iteration) || iteration < 1) continue;
-    if (!Number.isFinite(qualityScore)) continue;
-    if (!Number.isInteger(findingsCount) || findingsCount < 0) continue;
+    if (qualityScore === null) continue;
+    if (findingsCount === null) continue;
     rows.push({
       iteration,
-      qualityScore: clampScore(qualityScore),
+      qualityScore,
       findingsCount
     });
   }
@@ -842,15 +867,15 @@ export function extractReviewLoopEnvelopeFromArtifact(
   const stopReasonFromSection = normalizeStopReason(
     /-\s*Stop reason:\s*([a-z_]+)/iu.exec(sectionBody)?.[1]
   );
-  const targetFromSection = Number(
-    /-\s*Target score:\s*([0-9]*\.?[0-9]+)/iu.exec(sectionBody)?.[1] ?? ""
+  const targetFromSection = parseScoreCell(
+    /-\s*Target score:\s*([^\n]+)/iu.exec(sectionBody)?.[1] ?? ""
   );
   const maxFromSection = Number(
     /-\s*Max iterations:\s*(\d+)/iu.exec(sectionBody)?.[1] ?? ""
   );
   const header = parseHeaderMeta(markdown);
-  const targetScore = Number.isFinite(targetFromSection)
-    ? clampScore(targetFromSection)
+  const targetScore = targetFromSection !== null
+    ? targetFromSection
     : REVIEW_LOOP_DEFAULT_TARGET_SCORE;
   const maxIterationsCandidate = Number.isInteger(maxFromSection) && maxFromSection > 0
     ? maxFromSection

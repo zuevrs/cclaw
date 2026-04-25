@@ -652,6 +652,56 @@ describe("internal advance-stage commands", () => {
     expect(next.guardEvidence.scope_user_approved).toContain(`"stage":"scope"`);
   });
 
+  it("advance-stage emits JSON diagnostics for validation failures", async () => {
+    const root = await createTempProject("internal-advance-stage-json-failure");
+    await ensureRunSystem(root);
+    await writeScopeArtifact(root);
+    const state = await readFlowState(root);
+    await writeFlowState(
+      root,
+      {
+        ...state,
+        currentStage: "scope",
+        completedStages: []
+      },
+      { allowReset: true }
+    );
+
+    const required = stageSchema("scope").requiredGates
+      .filter((gate) => gate.tier === "required")
+      .map((gate) => gate.id);
+    const evidence = Object.fromEntries(
+      required.map((gateId) => [gateId, `evidence for ${gateId}`])
+    ) as Record<string, string>;
+    delete evidence.scope_user_approved;
+
+    const captured = captureIo();
+    const code = await runInternalCommand(
+      root,
+      [
+        "advance-stage",
+        "scope",
+        `--evidence-json=${JSON.stringify(evidence)}`,
+        "--json",
+        "--quiet"
+      ],
+      captured.io
+    );
+
+    expect(code).toBe(1);
+    const diagnostics = JSON.parse(captured.stdout()) as {
+      ok: boolean;
+      kind: string;
+      delegation: { missing: string[] };
+      nextActions: string[];
+    };
+    expect(diagnostics.ok).toBe(false);
+    expect(diagnostics.kind).toBe("validation-failed");
+    expect(diagnostics.delegation.missing).toContain("planner");
+    expect(diagnostics.nextActions.join(" ")).toContain("Complete or waive");
+    expect(captured.stderr()).toContain("--waive-delegation=planner");
+  });
+
   it("advance-stage rejects design architecture gate evidence with mismatched review-loop stage", async () => {
     const root = await createTempProject("internal-advance-stage-design-review-loop-stage-mismatch");
     await ensureRunSystem(root);
@@ -1052,8 +1102,8 @@ process.stdout.write(JSON.stringify({ hook: process.argv[2] }) + "\\n");
     await fs.writeFile(
       artifactPath,
       artifact.replace(
-        "- Rationale: user reaction emphasized bounded v1 scope, so B gives best balance of reuse and delivery speed",
-        "- Rationale: B gives best balance of reuse and delivery speed"
+        "| B | challenger: higher-upside | reusable validation module | moderate effort, stronger reuse | recommended |",
+        "| B | fallback | reusable validation module | moderate effort, stronger reuse | recommended |"
       ),
       "utf8"
     );
@@ -1066,8 +1116,9 @@ process.stdout.write(JSON.stringify({ hook: process.argv[2] }) + "\\n");
     );
 
     expect(code).toBe(1);
-    expect(io.stderr()).toContain("Direction Reaction Trace");
-    expect(io.stderr()).toContain("Selected Direction rationale does not reference user reaction/feedback");
+    expect(io.stderr()).toContain("Challenger Alternative Enforcement");
+    expect(io.stderr()).toContain("Missing a challenger option with explicit high/higher upside");
+    expect(io.stderr()).toContain("| C | challenger | high upside |");
   });
 
   it("accepts boolean and object evidence JSON values from stage-complete copy-paste commands", async () => {

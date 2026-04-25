@@ -1,4 +1,5 @@
 import { RUNTIME_ROOT, STAGE_TO_SKILL_FOLDER } from "../constants.js";
+import { nextStage as nextStageForTrack } from "../flow-state.js";
 import type { FlowStage, FlowTrack } from "../types.js";
 import { stageExamples } from "./examples.js";
 import { reviewStackAwareRoutes, reviewStackAwareRoutingSummary, stageAutoSubagentDispatch, stageSchema, stageTrackRenderContext } from "./stage-schema.js";
@@ -222,13 +223,15 @@ function mergedAntiPatterns(philosophy: StagePhilosophy, execution: StageExecuti
 
 function completionParametersBlock(schema: StageSchema, track: FlowTrack): string {
   const gateList = schema.executionModel.requiredGates.map((g) => `\`${g.id}\``).join(", ");
+  const mandatoryAgents = schema.reviewLens.mandatoryDelegations;
   const mandatory = schema.reviewLens.mandatoryDelegations.length > 0
     ? schema.reviewLens.mandatoryDelegations.map((a) => `\`${a}\``).join(", ")
     : "none";
-  const nextStage = schema.next === "done" ? "done" : schema.next;
-  const nextDescription = schema.next === "done"
+  const resolvedNextStage = nextStageForTrack(schema.stage, track);
+  const nextStage = resolvedNextStage ?? "done";
+  const nextDescription = nextStage === "done"
     ? "flow complete"
-    : stageSchema(schema.next as FlowStage, track).skillDescription;
+    : stageSchema(nextStage, track).skillDescription;
 
   return `## Completion Parameters
 
@@ -239,8 +242,9 @@ function completionParametersBlock(schema: StageSchema, track: FlowTrack): strin
 - \`mandatory delegations\`: ${mandatory}
 - \`completion helper\`: \`node .cclaw/hooks/stage-complete.mjs ${schema.stage}\`
 - \`completion helper with evidence\`: \`node .cclaw/hooks/stage-complete.mjs ${schema.stage} --evidence-json '{"<gate_id>":"<evidence note>"}' --passed=<gate_id>[,<gate_id>]\`
+- \`completion helper JSON diagnostics\`: append \`--json\` to receive a machine-readable validation failure summary.
 - Fill \`## Learnings\` before closeout: either \`- None this stage.\` or JSON bullets with required keys \`type\`, \`trigger\`, \`action\`, \`confidence\` (knowledge-schema compatible).
-- Record mandatory delegation completion/waiver in \`${RUNTIME_ROOT}/state/delegation-log.json\` with rationale as needed.
+- Record mandatory delegation completion/waiver in \`${RUNTIME_ROOT}/state/delegation-log.json\` with rationale as needed.${mandatoryAgents.length > 0 ? ` If a mandatory delegation cannot run in this harness, use \`--waive-delegation=${mandatoryAgents.join(",")} --waiver-reason="<why safe>"\` on the completion helper.` : ""}
 - Never edit raw \`flow-state.json\` to complete a stage, even in advisory mode; that bypasses validation, gate evidence, and Learnings harvest. If the helper fails, stop and report the exact command/output instead of applying a manual state workaround.
 - Completion protocol: verify required gates, update the artifact, then use the completion helper with \`--evidence-json\` and \`--passed\` for every satisfied gate.
 `;

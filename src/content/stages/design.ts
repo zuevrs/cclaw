@@ -47,6 +47,7 @@ export const DESIGN: StageSchemaInput = {
   },
   executionModel: {
     checklist: [
+      "Compact design lock — for simple greenfield/product slices, produce a tight but complete design spine: codebase investigation, architecture boundary, one labeled diagram, data flow, failure/rescue table, test/perf expectations, and handoff. Do not run a sprawling workshop when a strong engineering lock fits on one page.",
       "Trivial-Change Escape Hatch — for <=3 files, no new interfaces, and no cross-module data flow, produce a mini-design (rationale, changed files, one risk) and proceed to spec.",
       "Tiered Research Fleet — run `research/research-fleet.md` before lock; record `.cclaw/artifacts/02a-research.md` and summarize concrete decisions in `## Research Fleet Synthesis`.",
       "Design Doc Check — read upstream artifacts and current design docs; latest superseding doc wins.",
@@ -59,7 +60,7 @@ export const DESIGN: StageSchemaInput = {
       "Capture leftovers — seed high-upside deferred ideas, list unresolved decisions with defaults, document distribution for new artifact types, and cross-reference deferred items to scope or unresolved decisions."
     ],
     interactionProtocol: [
-      "Review section-by-section: investigator first, critic second, then reconcile.",
+      "Review section-by-section: investigator first, critic second, then reconcile. For simple apps, collapse this into one compact design lock with explicit risks and a single approval stop.",
       "Present each issue one at a time; do not batch issues or move sections until current issues are resolved.",
       decisionProtocolInstruction(
         "each issue",
@@ -71,7 +72,7 @@ export const DESIGN: StageSchemaInput = {
       "Take a firm position, push back on weak framing, and call out suboptimal architecture with concrete alternatives.",
       "Classify ambiguity before acting: ask, enumerate-and-pick, or propose a hypothesis with validation path.",
       "Before final approval, run the critic pass, reconcile material findings, and bound retries with the review-loop policy.",
-      "For baseline approval, present the full design and **STOP** until explicit approval.",
+      "For baseline approval, present the full design plus exact spec handoff and **STOP** until explicit approval.",
       "**STOP BEFORE ADVANCE.** Mandatory delegation `planner` must be completed or explicitly waived, then close via `node .cclaw/hooks/stage-complete.mjs design`."
     ],
     process: [

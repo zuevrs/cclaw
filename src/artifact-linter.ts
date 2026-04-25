@@ -115,6 +115,15 @@ function sectionBodyByName(sections: H2SectionMap, section: string): string | nu
   return null;
 }
 
+function sectionBodyByAnyName(sections: H2SectionMap, sectionNames: string[]): string | null {
+  const bodies = sectionNames.flatMap((section) => {
+    const body = sectionBodyByName(sections, section);
+    return body === null ? [] : [`### ${section}\n${body}`];
+  });
+  if (bodies.length === 0) return null;
+  return bodies.join("\n");
+}
+
 export function extractMarkdownSectionBody(markdown: string, section: string): string | null {
   return sectionBodyByName(extractH2Sections(markdown), section);
 }
@@ -400,6 +409,33 @@ function getMarkdownTableRows(sectionBody: string): string[][] {
     rows.push(parseMarkdownTableRow(line));
   }
   return rows;
+}
+
+function getApproachRows(sectionBody: string): string[] {
+  const tableRows = getMarkdownTableRows(sectionBody).map((row) => row.join(" "));
+  const bulletRows = sectionBody
+    .split(/\r?\n/u)
+    .map((line) => line.trim())
+    .filter((line) => /^(?:[-*]|\d+\.)\s+\S/u.test(line));
+  return [...tableRows, ...bulletRows];
+}
+
+function hasSemanticChallenger(row: string): boolean {
+  const normalized = row
+    .replace(/[_`*]/gu, " ")
+    .replace(/\s+/gu, " ")
+    .trim()
+    .toLowerCase();
+  const isChallenger = /\bchallenger\b/u.test(normalized);
+  if (!isChallenger) return false;
+  return (
+    /\bhigher[-\s]?upside\b/u.test(normalized) ||
+    /\bhigh[-\s]?upside\b/u.test(normalized) ||
+    /\bupside\s*:?\s*(?:high|higher|strong|large|meaningful)\b/u.test(normalized) ||
+    /\b(?:high|higher|strong|large|meaningful)\s+upside\b/u.test(normalized) ||
+    /\b(?:10-star|ten-star|ambitious|higher leverage|leverage)\b/u.test(normalized) ||
+    /\bhigh\b/u.test(normalized)
+  );
 }
 
 type BinaryFlag = "yes" | "no" | "unknown";
@@ -1526,7 +1562,12 @@ export async function lintArtifact(
 
   for (const v of schema.artifactValidation) {
     const sectionKey = normalizeHeadingTitle(v.section).toLowerCase();
-    const hasHeading = headingPresent(sections, v.section);
+    const scopeBoundaryAlias =
+      stage === "scope" && sectionKey === "in scope / out of scope";
+    const body = scopeBoundaryAlias
+      ? sectionBodyByAnyName(sections, ["In Scope / Out of Scope", "In Scope", "Out of Scope"])
+      : sectionBodyByName(sections, v.section);
+    const hasHeading = body !== null;
     const effectiveRequiredFromOverride = overrideSet
       ? overrideSet.has(sectionKey) ? true : false
       : v.required;
@@ -1536,7 +1577,6 @@ export async function lintArtifact(
         : stage === "scope" && sectionKey === "pre-scope system audit" && scopePreAuditEnabled
           ? true
         : effectiveRequiredFromOverride;
-    const body = hasHeading ? sectionBodyByName(sections, v.section) : null;
     const validation = body === null
       ? { ok: false, details: `No ## heading matching required section "${v.section}".` }
       : validateSectionBody(body, v.validationRule, v.section);
@@ -1601,14 +1641,8 @@ export async function lintArtifact(
         .map((line) => line.trim())
         .filter((line) => /^(?:[-*]|\d+\.)\s+\S/u.test(line));
       const rowCount = Math.max(tableRows.length, bulletRows.length);
-      const hasChallengerFromTable = tableRows.some((row) => {
-        const joined = row.join(" ");
-        return /\bchallenger\b/iu.test(joined) && /\bhigher[-\s]?upside\b/iu.test(joined);
-      });
-      const hasChallengerFromBullets = bulletRows.some((row) =>
-        /\bchallenger\b/iu.test(row) && /\bhigher[-\s]?upside\b/iu.test(row)
-      );
-      const hasChallenger = hasChallengerFromTable || hasChallengerFromBullets;
+      const approachRows = getApproachRows(approachesBody);
+      const hasChallenger = approachRows.some(hasSemanticChallenger);
       findings.push({
         section: "Distinct Approaches Enforcement",
         required: true,
@@ -1622,11 +1656,11 @@ export async function lintArtifact(
       findings.push({
         section: "Challenger Alternative Enforcement",
         required: true,
-        rule: "Approaches must include one option labeled `challenger: higher-upside`.",
+        rule: "Approaches must include one challenger option with explicit high/higher upside.",
         found: hasChallenger,
         details: hasChallenger
-          ? "Challenger higher-upside alternative detected."
-          : "Missing `challenger: higher-upside` alternative in Approaches."
+          ? "Semantic challenger with high/higher upside detected."
+          : "Missing a challenger option with explicit high/higher upside. Example: `| C | challenger | high upside | More ambitious path with clear trade-offs |`."
       });
     }
 
@@ -1658,15 +1692,18 @@ export async function lintArtifact(
           : "No explicit `approved`/`approval` marker found in Selected Direction."
       });
       if (!brainstormShortCircuitActivated) {
-        const reactionTrace = /\b(?:reaction|feedback|concern(?:s)?)\b/iu.test(directionBody);
+        const reactionBody = sectionBodyByName(sections, "Approach Reaction");
+        const reactionTrace =
+          /\b(?:reaction|feedback|concern(?:s)?)\b/iu.test(directionBody) ||
+          (reactionIndex >= 0 && reactionIndex < directionIndex && meaningfulLineCount(reactionBody ?? "") > 0);
         findings.push({
           section: "Direction Reaction Trace",
           required: true,
-          rule: "Selected Direction rationale must reference user reaction/feedback before recommendation.",
+          rule: "Selected Direction must be traceable to a prior Approach Reaction section or explicitly reference user reaction/feedback/concerns.",
           found: reactionTrace,
           details: reactionTrace
-            ? "Selected Direction rationale references user reaction/feedback."
-            : "Selected Direction rationale does not reference user reaction/feedback."
+            ? "Selected Direction is traceable to prior user reaction."
+            : "Selected Direction is not traceable to user reaction. Add `## Approach Reaction` before it, or mention the user's reaction/concerns in the rationale."
         });
       }
     }
@@ -1832,7 +1869,7 @@ export async function lintArtifact(
       parsedFrontmatter.hasFrontmatter ||
       headingPresent(sections, "Locked Decisions (D-XX)");
     const scopeSections = [
-      sectionBodyByName(sections, "In Scope / Out of Scope") ?? "",
+      sectionBodyByAnyName(sections, ["In Scope / Out of Scope", "In Scope", "Out of Scope"]) ?? "",
       sectionBodyByName(sections, "Scope Summary") ?? "",
       lockedDecisionsBody
     ].join("\n");

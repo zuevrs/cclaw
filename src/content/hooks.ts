@@ -80,7 +80,7 @@ async function main() {
   const cliEntrypoint = process.env.CCLAW_CLI_JS || CCLAW_CLI_ENTRYPOINT;
   if (!cliEntrypoint || cliEntrypoint.trim().length === 0) {
     process.stderr.write(
-      "[cclaw] " + HELPER_NAME + ": local Node runtime entrypoint is missing. Re-run npx cclaw-cli sync or npx cclaw-cli upgrade to regenerate hooks.\\n"
+      "[cclaw] " + HELPER_NAME + ": local Node runtime entrypoint is missing. Re-run npx cclaw-cli sync, or set CCLAW_CLI_JS=/absolute/path/to/dist/cli.js for this session.\\n"
     );
     process.exitCode = 1;
     return;
@@ -91,7 +91,7 @@ async function main() {
     if (!stat.isFile()) throw new Error("not-file");
   } catch {
     process.stderr.write(
-      "[cclaw] " + HELPER_NAME + ": local Node runtime entrypoint not found at " + cliEntrypoint + ". Re-run npx cclaw-cli sync or npx cclaw-cli upgrade to regenerate hooks.\\n"
+      "[cclaw] " + HELPER_NAME + ": local Node runtime entrypoint not found at " + cliEntrypoint + ". Re-run npx cclaw-cli sync, or set CCLAW_CLI_JS=/absolute/path/to/dist/cli.js for this session.\\n"
     );
     process.exitCode = 1;
     return;
@@ -184,7 +184,7 @@ function printUsage() {
   process.stderr.write(
     "Usage: node " +
       RUNTIME_ROOT +
-      "/hooks/stage-complete.mjs <stage> [--passed=...] [--evidence-json=...] [--waive-delegation=...] [--waiver-reason=...]\\n"
+      "/hooks/stage-complete.mjs <stage> [--passed=...] [--evidence-json=...] [--waive-delegation=...] [--waiver-reason=...] [--json]\\n"
   );
 }
 
@@ -210,7 +210,7 @@ async function main() {
   const cliEntrypoint = process.env.CCLAW_CLI_JS || CCLAW_CLI_ENTRYPOINT;
   if (!cliEntrypoint || cliEntrypoint.trim().length === 0) {
     process.stderr.write(
-      "[cclaw] stage-complete: local Node runtime entrypoint is missing. Re-run npx cclaw-cli sync or npx cclaw-cli upgrade to regenerate hooks.\\n"
+      "[cclaw] stage-complete: local Node runtime entrypoint is missing. Re-run npx cclaw-cli sync, or set CCLAW_CLI_JS=/absolute/path/to/dist/cli.js for this session.\\n"
     );
     process.exitCode = 1;
     return;
@@ -221,7 +221,7 @@ async function main() {
     if (!stat.isFile()) throw new Error("not-file");
   } catch {
     process.stderr.write(
-      "[cclaw] stage-complete: local Node runtime entrypoint not found at " + cliEntrypoint + ". Re-run npx cclaw-cli sync or npx cclaw-cli upgrade to regenerate hooks.\\n"
+      "[cclaw] stage-complete: local Node runtime entrypoint not found at " + cliEntrypoint + ". Re-run npx cclaw-cli sync, or set CCLAW_CLI_JS=/absolute/path/to/dist/cli.js for this session.\\n"
     );
     process.exitCode = 1;
     return;

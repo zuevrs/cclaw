@@ -41,11 +41,12 @@ export const BRAINSTORM: StageSchemaInput = {
     checklist: [
       "**Explore project context** — inspect existing files/docs/recent activity before asking what to build.",
       "**Classify depth and scope** — pick Lightweight / Standard / Deep; decompose independent subsystems before deeper work.",
-      "**Short-circuit concrete asks** — for unambiguous requests, write a compact brainstorm stub (context, problem, approved intent, constraints, assumptions) and ask for one explicit approval.",
+      "**Use compact discovery for simple apps** — for concrete low-risk asks (todo app, landing page, local widget), do one context pass, compare one baseline and one challenger, then ask for one explicit approval; do not drag the user through a full workshop.",
+      "**Short-circuit concrete asks** — for unambiguous implementation-only requests, write a compact brainstorm stub (context, problem, approved intent, constraints, assumptions) and ask for one explicit approval.",
       "**Ask only decision-changing questions** — one at a time; if answers would not change approach, state the assumption and continue.",
       "**Compare 2-3 distinct approaches** — include real trade-offs, withhold recommendation, and include one higher-upside challenger.",
       "**Collect reaction before recommending** — ask which option feels closest and what concern remains, then recommend based on that reaction.",
-      "**Write and tighten the artifact** — scale sections to complexity, optionally add a compact diagram, then patch contradictions, weak trade-offs, placeholders, and ambiguity.",
+      "**Write and tighten the artifact** — scale sections to complexity, optionally add a compact diagram, then patch contradictions, weak trade-offs, placeholders, ambiguity, and weak handoff language.",
       "**Request explicit approval** — state exactly what direction is being approved; do not advance without approval and artifact review.",
       "**Handoff** — only after approval, complete the stage and point to `/cc-next`."
     ],
@@ -53,12 +54,13 @@ export const BRAINSTORM: StageSchemaInput = {
       "Start from observed project context; if the idea is vague, first narrow the project type.",
       "Ask at most one question per turn, only when decision-changing; if using a structured question tool, send exactly one question object, not a multi-question form.",
       "If likely answers do not change architecture or scope boundaries, choose the default and state the assumption.",
+      "For simple greenfield web apps, present a compact A/B choice with one recommended path and one higher-upside challenger; keep the artifact concise but structurally complete.",
       "Show approaches before the recommendation; include a higher-upside challenger and gather reaction first.",
       "State exactly what is being approved, then **STOP** until the user explicitly approves the artifact."
     ],
     process: [
       "Explore project context and classify depth/scope.",
-      "Short-circuit concrete asks or ask one decision-changing question at a time.",
+      "Use compact discovery for simple apps, short-circuit implementation-only asks, or ask one decision-changing question at a time.",
       "Compare 2-3 distinct approaches, including a higher-upside challenger.",
       "Collect reaction, then recommend with rationale tied to that reaction.",
       "Optionally park promising non-selected ideas in `.cclaw/seeds/`.",
@@ -77,6 +79,7 @@ export const BRAINSTORM: StageSchemaInput = {
       "2-3 approaches with trade-offs are recorded, including one higher-upside challenger option.",
       "User reaction to approaches is captured before final recommendation.",
       "Final recommendation explicitly reflects user reaction.",
+      "Selected Direction includes the handoff to the track-aware next stage: scope on standard, spec on medium when scope/design are skipped.",
       "When a promising option is parked, a seed file is created under `.cclaw/seeds/` and referenced in the artifact.",
       "Approved direction and approval marker are present.",
       "Assumptions and open questions are captured (or explicitly marked as none)."
@@ -122,9 +125,9 @@ export const BRAINSTORM: StageSchemaInput = {
       { section: "Clarifying Questions", required: false, validationRule: "Must capture question, answer, and decision impact for each clarifying question." },
       { section: "Approach Tier", required: true, validationRule: "Must classify depth as Lightweight/Standard/Deep and explain why." },
       { section: "Short-Circuit Decision", required: false, validationRule: "Must include Status/Why/Scope handoff lines when short-circuit is discussed; compact stubs are valid for concrete asks." },
-      { section: "Approaches", required: true, validationRule: "Must compare 2-3 architecturally distinct options with real trade-offs; include at least one table/bullet row containing both `challenger` and `higher-upside`." },
+      { section: "Approaches", required: true, validationRule: "Must compare 2-3 distinct options with real trade-offs; include one option marked as a challenger with explicit high/higher upside." },
       { section: "Approach Reaction", required: true, validationRule: "Must appear before Selected Direction and summarize user reaction before recommendation, including `Closest option`, `Concerns`, and what changed after reaction." },
-      { section: "Selected Direction", required: true, validationRule: "Must include the selected approach, an explicit approval marker, and rationale tied to user reaction/feedback/concerns so the recommendation traces to the user response." },
+      { section: "Selected Direction", required: true, validationRule: "Must include the selected approach, an explicit approval marker, rationale traceable to the prior Approach Reaction, and a track-aware next-stage handoff." },
       { section: "Design", required: false, validationRule: "Must cover architecture, key components, and data flow scaled to complexity." },
       { section: "Visual Companion", required: false, validationRule: "If architecture/data-flow complexity is medium+, include compact ASCII/Mermaid diagram or explicitly justify omission." },
       { section: "Assumptions and Open Questions", required: false, validationRule: "Must capture unresolved assumptions/open questions, or explicitly state none." }
