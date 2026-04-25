@@ -5,7 +5,6 @@ coverage/
 *.tgz
 .DS_Store
 release-artifacts/
-scripts/reference-sync.sh
 docs/*
 !docs/harnesses.md
 !docs/config.md
