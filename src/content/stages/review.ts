@@ -119,6 +119,7 @@ export const REVIEW: StageSchemaInput = {
       traceabilityRule: "Review verdict must reference specific spec criteria and TDD evidence. Downstream ship stage must reference review verdict."
     },
     artifactValidation: [
+      { section: "Upstream Handoff", required: false, validationRule: "Summarizes spec/plan/tdd decisions, constraints, open questions, and explicit drift before review verdicts." },
       { section: "Layer 1 Verdict", required: true, validationRule: "Per-criterion pass/fail with references." },
       { section: "Layer 2 Findings", required: false, validationRule: "Each finding has severity, description, and resolution status. Security coverage must include either explicit security findings or `NO_CHANGE_ATTESTATION: <reason>` when no security-relevant changes were found." },
       { section: "Review Army Contract", required: true, validationRule: "Structured findings include id/severity/confidence/fingerprint/reportedBy/status and source tags from {spec, correctness, security, performance, architecture, external-safety} with dedup reconciliation summary." },

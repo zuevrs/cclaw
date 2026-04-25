@@ -93,15 +93,19 @@ Before execution:
 - \`.cclaw/artifacts/06-tdd.md\`
 - \`.cclaw/artifacts/04-spec.md\`
 - \`.cclaw/artifacts/05-plan.md\`
-4. Confirm stage inputs:
+4. Extract upstream decisions, constraints, and open questions into the current
+   artifact's \`Upstream Handoff\` section when that section exists.
+5. If you change an upstream decision, record an explicit drift reason in the
+   current artifact before continuing.
+6. Confirm stage inputs:
 - implementation diff
 - spec and plan artifacts
 - test/build evidence
-5. Confirm required context:
+7. Confirm required context:
 - spec criteria
 - tdd artifact
 - rulebook constraints
-6. Use the injected knowledge digest from session-start; only fall back to full
+8. Use the injected knowledge digest from session-start; only fall back to full
    \`.cclaw/knowledge.jsonl\` when the digest is insufficient.
 
 ## Automatic Subagent Dispatch
@@ -230,6 +234,7 @@ Rule: Review verdict must reference specific spec criteria and TDD evidence. Dow
 
 | Section | Tier | Validation rule |
 |---|---|---|
+| Upstream Handoff | recommended | Summarizes spec/plan/tdd decisions, constraints, open questions, and explicit drift before review verdicts. |
 | Layer 1 Verdict | REQUIRED | Per-criterion pass/fail with references. |
 | Layer 2 Findings | recommended | Each finding has severity, description, and resolution status. Security coverage must include either explicit security findings or \`NO_CHANGE_ATTESTATION: <reason>\` when no security-relevant changes were found. |
 | Review Army Contract | REQUIRED | Structured findings include id/severity/confidence/fingerprint/reportedBy/status and source tags from {spec, correctness, security, performance, architecture, external-safety} with dedup reconciliation summary. |
@@ -309,6 +314,7 @@ Rule: Review verdict must reference specific spec criteria and TDD evidence. Dow
 
 ## Shared Stage Guidance
 - Follow the handoff menu: advance, revise, pause, rewind, or archive only when the user explicitly chooses it.
+- Carry upstream decisions forward explicitly; record drift instead of silently changing direction.
 - Before closeout, fill \`## Learnings\` with \`- None this stage.\` or 1-3 strict JSON bullets.
 - Keep decisions explicit: context, options, chosen option, rationale, risk, and rollback.
 "
@@ -412,15 +418,19 @@ Before execution:
 - \`.cclaw/artifacts/06-tdd.md\`
 - \`.cclaw/artifacts/05-plan.md\`
 - \`.cclaw/artifacts/04-spec.md\`
-4. Confirm stage inputs:
+4. Extract upstream decisions, constraints, and open questions into the current
+   artifact's \`Upstream Handoff\` section when that section exists.
+5. If you change an upstream decision, record an explicit drift reason in the
+   current artifact before continuing.
+6. Confirm stage inputs:
 - review verdict
 - test/build outputs
 - release context
-5. Confirm required context:
+7. Confirm required context:
 - review artifact
 - changelog scope
 - deployment constraints
-6. Use the injected knowledge digest from session-start; only fall back to full
+8. Use the injected knowledge digest from session-start; only fall back to full
    \`.cclaw/knowledge.jsonl\` when the digest is insufficient.
 
 ## Automatic Subagent Dispatch
@@ -536,6 +546,7 @@ Rule: Ship artifact must reference review verdict and resolution status. Release
 
 | Section | Tier | Validation rule |
 |---|---|---|
+| Upstream Handoff | recommended | Summarizes review/tdd decisions, constraints, open questions, and explicit drift before finalization. |
 | Preflight Results | REQUIRED | Build, test, lint, type-check results captured with fresh output. Exceptions documented if any. |
 | Release Notes | REQUIRED | What changed, why, impact. References spec criteria. Breaking changes flagged. |
 | Rollback Plan | REQUIRED | Trigger conditions, rollback steps (exact commands), verification steps. |
@@ -569,6 +580,7 @@ Rule: Ship artifact must reference review verdict and resolution status. Release
 
 ## Shared Stage Guidance
 - Follow the handoff menu: advance, revise, pause, rewind, or archive only when the user explicitly chooses it.
+- Carry upstream decisions forward explicitly; record drift instead of silently changing direction.
 - Before closeout, fill \`## Learnings\` with \`- None this stage.\` or 1-3 strict JSON bullets.
 - Keep decisions explicit: context, options, chosen option, rationale, risk, and rollback.
 "
@@ -671,15 +683,19 @@ Before execution:
 - \`.cclaw/artifacts/04-spec.md\`
 - \`.cclaw/artifacts/03-design-<slug>.md\`
 - \`.cclaw/artifacts/02-scope-<slug>.md\`
-4. Confirm stage inputs:
+4. Extract upstream decisions, constraints, and open questions into the current
+   artifact's \`Upstream Handoff\` section when that section exists.
+5. If you change an upstream decision, record an explicit drift reason in the
+   current artifact before continuing.
+6. Confirm stage inputs:
 - approved spec
 - codebase context
 - delivery constraints
-5. Confirm required context:
+7. Confirm required context:
 - spec acceptance criteria
 - current architecture
 - known technical debt and dependencies
-6. Use the injected knowledge digest from session-start; only fall back to full
+8. Use the injected knowledge digest from session-start; only fall back to full
    \`.cclaw/knowledge.jsonl\` when the digest is insufficient.
 
 ## Automatic Subagent Dispatch
@@ -784,6 +800,7 @@ Rule: Every task must trace to a spec acceptance criterion. Every locked scope d
 
 | Section | Tier | Validation rule |
 |---|---|---|
+| Upstream Handoff | recommended | Summarizes spec/design/scope decisions, constraints, open questions, and explicit drift before task breakdown. |
 | Dependency Graph | recommended | Ordering and parallel opportunities explicit. No circular dependencies. |
 | Dependency Batches | REQUIRED | Every task belongs to a batch. Each batch has an exit gate and dependency statement. |
 | Task List | REQUIRED | Each task row includes ID, description, acceptance criterion, verification command, and effort estimate (S/M/L). Every task must also carry a minutes estimate within the 2-5 minute budget. When the sliceReview feature is enabled in the cclaw config, each task row additionally declares touchCount, touchPaths, and an optional highRisk flag so the TDD stage can decide whether a Per-Slice Review pass is required. |
@@ -828,6 +845,7 @@ Rule: Every task must trace to a spec acceptance criterion. Every locked scope d
 
 ## Shared Stage Guidance
 - Follow the handoff menu: advance, revise, pause, rewind, or archive only when the user explicitly chooses it.
+- Carry upstream decisions forward explicitly; record drift instead of silently changing direction.
 - Before closeout, fill \`## Learnings\` with \`- None this stage.\` or 1-3 strict JSON bullets.
 - Keep decisions explicit: context, options, chosen option, rationale, risk, and rollback.
 "
@@ -930,16 +948,20 @@ Before execution:
 - \`.cclaw/artifacts/05-plan.md\`
 - \`.cclaw/artifacts/04-spec.md\`
 - \`.cclaw/artifacts/03-design-<slug>.md\`
-4. Confirm stage inputs:
+4. Extract upstream decisions, constraints, and open questions into the current
+   artifact's \`Upstream Handoff\` section when that section exists.
+5. If you change an upstream decision, record an explicit drift reason in the
+   current artifact before continuing.
+6. Confirm stage inputs:
 - approved plan slice
 - spec acceptance criterion
 - test harness configuration
 - coding standards and constraints
-5. Confirm required context:
+7. Confirm required context:
 - plan artifact
 - spec artifact
 - existing test patterns
-6. Use the injected knowledge digest from session-start; only fall back to full
+8. Use the injected knowledge digest from session-start; only fall back to full
    \`.cclaw/knowledge.jsonl\` when the digest is insufficient.
 
 ## Automatic Subagent Dispatch
@@ -1074,6 +1096,7 @@ Rule: Every RED test traces to a plan task. Every GREEN change traces to a RED t
 
 | Section | Tier | Validation rule |
 |---|---|---|
+| Upstream Handoff | recommended | Summarizes plan/spec/design decisions, constraints, open questions, and explicit drift before RED work. |
 | RED Evidence | REQUIRED | Failing test output captured per slice. |
 | Acceptance Mapping | recommended | Each RED test links to a plan task and spec criterion. |
 | Failure Analysis | recommended | Failure reason matches expected missing behavior. |
@@ -1137,6 +1160,7 @@ Rule: Every RED test traces to a plan task. Every GREEN change traces to a RED t
 
 ## Shared Stage Guidance
 - Follow the handoff menu: advance, revise, pause, rewind, or archive only when the user explicitly chooses it.
+- Carry upstream decisions forward explicitly; record drift instead of silently changing direction.
 - Before closeout, fill \`## Learnings\` with \`- None this stage.\` or 1-3 strict JSON bullets.
 - Keep decisions explicit: context, options, chosen option, rationale, risk, and rollback.
 "
@@ -1241,15 +1265,19 @@ Before execution:
 2. Load active artifacts from \`.cclaw/artifacts/\`.
 3. Load upstream artifacts required by this stage:
 - (first stage — no upstream artifacts)
-4. Confirm stage inputs:
+4. Extract upstream decisions, constraints, and open questions into the current
+   artifact's \`Upstream Handoff\` section when that section exists.
+5. If you change an upstream decision, record an explicit drift reason in the
+   current artifact before continuing.
+6. Confirm stage inputs:
 - problem statement
 - constraints
 - success criteria
-5. Confirm required context:
+7. Confirm required context:
 - existing project context and patterns
 - current behavior of affected area
 - business and delivery constraints
-6. Use the injected knowledge digest from session-start; only fall back to full
+8. Use the injected knowledge digest from session-start; only fall back to full
    \`.cclaw/knowledge.jsonl\` when the digest is insufficient.
 
 ## Automatic Subagent Dispatch
@@ -1391,6 +1419,7 @@ Rule: Scope and design decisions must trace back to explored context and approve
 
 ## Shared Stage Guidance
 - Follow the handoff menu: advance, revise, pause, rewind, or archive only when the user explicitly chooses it.
+- Carry upstream decisions forward explicitly; record drift instead of silently changing direction.
 - Before closeout, fill \`## Learnings\` with \`- None this stage.\` or 1-3 strict JSON bullets.
 - Keep decisions explicit: context, options, chosen option, rationale, risk, and rollback.
 "

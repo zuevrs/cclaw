@@ -83,6 +83,13 @@ inputs_hash: sha256:pending
 
 # Scope Artifact
 
+## Upstream Handoff
+- Source artifacts: \`00-idea.md\`, \`01-brainstorm-<slug>.md\`
+- Decisions carried forward:
+- Constraints carried forward:
+- Open questions:
+- Drift from upstream (or \`None\`):
+
 ## Pre-Scope System Audit
 | Check | Command | Findings |
 |---|---|---|
@@ -254,6 +261,13 @@ inputs_hash: sha256:pending
 ---
 
 # Design Artifact
+
+## Upstream Handoff
+- Source artifacts: \`02-scope-<slug>.md\`, \`02a-research.md\` when present
+- Decisions carried forward:
+- Constraints carried forward:
+- Open questions:
+- Drift from upstream (or \`None\`):
 
 ## Codebase Investigation
 | File | Current responsibility | Patterns discovered |
@@ -448,6 +462,13 @@ inputs_hash: sha256:pending
 
 # Specification Artifact
 
+## Upstream Handoff
+- Source artifacts: \`02-scope-<slug>.md\`, \`03-design-<slug>.md\`
+- Decisions carried forward:
+- Constraints carried forward:
+- Open questions:
+- Drift from upstream (or \`None\`):
+
 ## Acceptance Criteria
 | ID | Requirement Ref (R#) | Criterion (observable/measurable/falsifiable) | Design Decision Ref |
 |---|---|---|---|
@@ -503,6 +524,13 @@ inputs_hash: sha256:pending
 ---
 
 # Plan Artifact
+
+## Upstream Handoff
+- Source artifacts: \`03-design-<slug>.md\`, \`04-spec.md\`
+- Decisions carried forward:
+- Constraints carried forward:
+- Open questions:
+- Drift from upstream (or \`None\`):
 
 ## Dependency Graph
 - 
@@ -583,6 +611,13 @@ inputs_hash: sha256:pending
 
 # TDD Artifact
 
+## Upstream Handoff
+- Source artifacts: \`04-spec.md\`, \`05-plan.md\`
+- Decisions carried forward:
+- Constraints carried forward:
+- Open questions:
+- Drift from upstream (or \`None\`):
+
 ## RED Evidence
 | Slice | Test name | Command | Failure output summary |
 |---|---|---|---|
@@ -649,6 +684,13 @@ inputs_hash: sha256:pending
 ---
 
 # Review Artifact
+
+## Upstream Handoff
+- Source artifacts: \`04-spec.md\`, \`05-plan.md\`, \`06-tdd.md\`
+- Decisions carried forward:
+- Constraints carried forward:
+- Open questions:
+- Drift from upstream (or \`None\`):
 
 ## Layer 1 Verdict
 | Criterion | Verdict | Evidence |
@@ -766,6 +808,13 @@ inputs_hash: sha256:pending
 ---
 
 # Ship Artifact
+
+## Upstream Handoff
+- Source artifacts: \`06-tdd.md\`, \`07-review.md\`
+- Decisions carried forward:
+- Constraints carried forward:
+- Open questions:
+- Drift from upstream (or \`None\`):
 
 ## Preflight Results
 - Review verdict:

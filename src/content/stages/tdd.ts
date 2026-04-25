@@ -124,6 +124,7 @@ export const TDD: StageSchemaV2Input = {
       traceabilityRule: "Every RED test traces to a plan task. Every GREEN change traces to a RED test. Every plan task traces to a spec criterion. Design decisions inform test strategy. Evidence chain must be unbroken."
     },
     artifactValidation: [
+      { section: "Upstream Handoff", required: false, validationRule: "Summarizes plan/spec/design decisions, constraints, open questions, and explicit drift before RED work." },
       { section: "RED Evidence", required: true, validationRule: "Failing test output captured per slice." },
       { section: "Acceptance Mapping", required: false, validationRule: "Each RED test links to a plan task and spec criterion." },
       { section: "Failure Analysis", required: false, validationRule: "Failure reason matches expected missing behavior." },

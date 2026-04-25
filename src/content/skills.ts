@@ -42,11 +42,15 @@ Before execution:
 2. Load active artifacts from \`.cclaw/artifacts/\`.
 3. Load upstream artifacts required by this stage:
 ${readLines}
-4. Confirm stage inputs:
+4. Extract upstream decisions, constraints, and open questions into the current
+   artifact's \`Upstream Handoff\` section when that section exists.
+5. If you change an upstream decision, record an explicit drift reason in the
+   current artifact before continuing.
+6. Confirm stage inputs:
 ${inputs}
-5. Confirm required context:
+7. Confirm required context:
 ${requiredContext}
-6. Use the injected knowledge digest from session-start; only fall back to full
+8. Use the injected knowledge digest from session-start; only fall back to full
    \`.cclaw/knowledge.jsonl\` when the digest is insufficient.
 `;
 }
@@ -441,6 +445,7 @@ ${reviewSectionsBlock(reviewLens.reviewSections)}
 
 ## Shared Stage Guidance
 - Follow the handoff menu: advance, revise, pause, rewind, or archive only when the user explicitly chooses it.
+- Carry upstream decisions forward explicitly; record drift instead of silently changing direction.
 - Before closeout, fill \`## Learnings\` with \`- None this stage.\` or 1-3 strict JSON bullets.
 - Keep decisions explicit: context, options, chosen option, rationale, risk, and rollback.
 `;

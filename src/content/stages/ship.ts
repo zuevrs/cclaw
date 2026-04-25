@@ -113,6 +113,7 @@ export const SHIP: StageSchemaInput = {
       traceabilityRule: "Ship artifact must reference review verdict and resolution status. Release notes must reference spec criteria. Rollback plan must reference specific changes that could fail."
     },
     artifactValidation: [
+      { section: "Upstream Handoff", required: false, validationRule: "Summarizes review/tdd decisions, constraints, open questions, and explicit drift before finalization." },
       { section: "Preflight Results", required: true, validationRule: "Build, test, lint, type-check results captured with fresh output. Exceptions documented if any." },
       { section: "Release Notes", required: true, validationRule: "What changed, why, impact. References spec criteria. Breaking changes flagged." },
       { section: "Rollback Plan", required: true, validationRule: "Trigger conditions, rollback steps (exact commands), verification steps." },

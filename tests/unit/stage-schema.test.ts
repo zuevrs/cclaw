@@ -321,6 +321,26 @@ describe("stage schema and subagent alignment", () => {
     expect(scope).toContain(".cclaw/seeds/SEED-YYYY-MM-DD-<slug>.md");
   });
 
+  it("downstream stage templates expose an upstream handoff section", () => {
+    for (const templateName of [
+      "02-scope.md",
+      "03-design.md",
+      "04-spec.md",
+      "05-plan.md",
+      "06-tdd.md",
+      "07-review.md",
+      "08-ship.md"
+    ] as const) {
+      expect(ARTIFACT_TEMPLATES[templateName]).toContain("## Upstream Handoff");
+      expect(ARTIFACT_TEMPLATES[templateName]).toContain("Drift from upstream");
+    }
+
+    for (const stage of ["scope", "design", "spec", "plan", "tdd", "review", "ship"] as const) {
+      const schema = stageSchema(stage);
+      expect(schema.artifactValidation.some((row) => row.section === "Upstream Handoff")).toBe(true);
+    }
+  });
+
   it("stage skills render explicit when-not-to-use guidance", () => {
     const review = stageSchema("review");
     expect(review.whenNotToUse.length).toBeGreaterThan(0);

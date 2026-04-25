@@ -106,6 +106,7 @@ export const SPEC: StageSchemaInput = {
       traceabilityRule: "Every acceptance criterion must trace to a design decision. Every downstream plan task must trace to a spec criterion."
     },
     artifactValidation: [
+      { section: "Upstream Handoff", required: false, validationRule: "Summarizes scope/design decisions, constraints, open questions, and explicit drift before acceptance criteria." },
       { section: "Acceptance Criteria", required: true, validationRule: "Each criterion is observable, measurable, and falsifiable. Table must include a Requirement Ref column linking to R# IDs in 02-scope-<slug>.md (legacy 02-scope.md is accepted during migration) and a Design Decision Ref column tracing back to design artifact. AC IDs (AC-1, AC-2…) are stable across revisions — dropped ACs stay with Priority `DROPPED`." },
       { section: "Edge Cases", required: true, validationRule: "At least one boundary and one error condition per criterion." },
       { section: "Constraints and Assumptions", required: false, validationRule: "All implicit assumptions surfaced. Constraints have sources." },

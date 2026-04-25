@@ -165,6 +165,7 @@ export const DESIGN: StageSchemaInput = {
       traceabilityRule: "Every architecture decision must trace to a scope boundary. Every downstream spec requirement must trace to a design decision."
     },
     artifactValidation: [
+      { section: "Upstream Handoff", required: false, validationRule: "Summarizes scope/research decisions, constraints, open questions, and explicit drift before design choices." },
       { section: "Research Fleet Synthesis", required: true, validationRule: "Must summarize all four lenses (stack/features/architecture/pitfalls) and map findings to concrete design decisions." },
       { section: "Codebase Investigation", required: false, validationRule: "Must list blast-radius files with current responsibilities and discovered patterns." },
       { section: "Search Before Building", required: false, validationRule: "For each technical choice: Layer 1 (exact match), Layer 2 (partial match), Layer 3 (inspiration), EUREKA labels with reuse-first default." },

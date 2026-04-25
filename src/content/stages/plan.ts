@@ -119,6 +119,7 @@ export const PLAN: StageSchemaInput = {
       traceabilityRule: "Every task must trace to a spec acceptance criterion. Every locked scope decision (D-XX) must trace to at least one plan task or explicit defer rationale. Every downstream RED test must trace to a plan task."
     },
     artifactValidation: [
+      { section: "Upstream Handoff", required: false, validationRule: "Summarizes spec/design/scope decisions, constraints, open questions, and explicit drift before task breakdown." },
       { section: "Dependency Graph", required: false, validationRule: "Ordering and parallel opportunities explicit. No circular dependencies." },
       { section: "Dependency Batches", required: true, validationRule: "Every task belongs to a batch. Each batch has an exit gate and dependency statement." },
       { section: "Task List", required: true, validationRule: "Each task row includes ID, description, acceptance criterion, verification command, and effort estimate (S/M/L). Every task must also carry a minutes estimate within the 2-5 minute budget. When the sliceReview feature is enabled in the cclaw config, each task row additionally declares touchCount, touchPaths, and an optional highRisk flag so the TDD stage can decide whether a Per-Slice Review pass is required." },
