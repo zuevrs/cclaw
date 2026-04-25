@@ -344,6 +344,92 @@ function reviewLoopEvidence(
 }
 
 describe("internal advance-stage commands", () => {
+  it("start-flow initializes track state and writes the idea artifact via managed helper", async () => {
+    const root = await createTempProject("internal-start-flow");
+    await ensureRunSystem(root);
+
+    const captured = captureIo();
+    const code = await runInternalCommand(
+      root,
+      [
+        "start-flow",
+        "--track=quick",
+        "--class=software-bugfix",
+        "--prompt=Fix login regression",
+        "--stack=Next.js",
+        "--reason=bugfix with repro",
+        "--quiet"
+      ],
+      captured.io
+    );
+
+    expect(code, captured.stderr()).toBe(0);
+    const state = await readFlowState(root);
+    expect(state.track).toBe("quick");
+    expect(state.currentStage).toBe("spec");
+    expect(state.completedStages).toEqual([]);
+    expect(state.skippedStages).toEqual(["brainstorm", "scope", "design", "plan"]);
+    expect(state.stageGateCatalog.spec.required.length).toBeGreaterThan(0);
+
+    const idea = await fs.readFile(path.join(root, ".cclaw/artifacts/00-idea.md"), "utf8");
+    expect(idea).toContain("Class: software-bugfix");
+    expect(idea).toContain("Track: quick (bugfix with repro)");
+    expect(idea).toContain("Stack: Next.js");
+    expect(idea).toContain("Fix login regression");
+  });
+
+  it("start-flow refuses to reset progress without force and reclassifies atomically", async () => {
+    const root = await createTempProject("internal-start-flow-reclassify");
+    await ensureRunSystem(root);
+    await writeFlowState(
+      root,
+      {
+        ...(await readFlowState(root)),
+        currentStage: "scope",
+        completedStages: ["brainstorm"]
+      },
+      { allowReset: true }
+    );
+
+    const refused = captureIo();
+    const refusedCode = await runInternalCommand(
+      root,
+      ["start-flow", "--track=quick", "--quiet"],
+      refused.io
+    );
+    expect(refusedCode).toBe(1);
+    expect(refused.stderr()).toContain("refusing to reset an active flow");
+
+    const before = await readFlowState(root);
+    const reclassified = captureIo();
+    const code = await runInternalCommand(
+      root,
+      [
+        "start-flow",
+        "--reclassify",
+        "--track=medium",
+        "--class=software-medium",
+        "--reason=scope simplified",
+        "--quiet"
+      ],
+      reclassified.io
+    );
+
+    expect(code, reclassified.stderr()).toBe(0);
+    const after = await readFlowState(root);
+    expect(after.activeRunId).toBe(before.activeRunId);
+    expect(after.track).toBe("medium");
+    expect(after.completedStages).toEqual(["brainstorm"]);
+    expect(after.currentStage).toBe("spec");
+    expect(after.skippedStages).toEqual(["scope", "design"]);
+
+    const idea = await fs.readFile(path.join(root, ".cclaw/artifacts/00-idea.md"), "utf8");
+    expect(idea).toContain("Reclassification:");
+    expect(idea).toContain("- From: standard");
+    expect(idea).toContain("- To: medium");
+    expect(idea).toContain("scope simplified");
+  });
+
   it("advance-stage promotes stage and writes required gate evidence", async () => {
     const root = await createTempProject("internal-advance-stage");
     await ensureRunSystem(root);

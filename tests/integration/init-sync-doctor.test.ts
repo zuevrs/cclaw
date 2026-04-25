@@ -168,6 +168,48 @@ describe("install lifecycle", { timeout: 30_000 }, () => {
     expect(researchPlaybook.startsWith("---")).toBe(false);
   });
 
+  it("doctor reports broken generated CLI entrypoints in hook scripts", async () => {
+    const root = await createTempProject("doctor-local-cli-entrypoint-broken");
+    await initCclaw({ projectRoot: root });
+
+    const stageCompletePath = path.join(root, ".cclaw/hooks/stage-complete.mjs");
+    const original = await fs.readFile(stageCompletePath, "utf8");
+    await fs.writeFile(
+      stageCompletePath,
+      original.replace(
+        /const CCLAW_CLI_ENTRYPOINT = .*?;/u,
+        `const CCLAW_CLI_ENTRYPOINT = ${JSON.stringify(path.join(root, "missing-cli.mjs"))};`
+      ),
+      "utf8"
+    );
+
+    const checks = await doctorChecks(root);
+    const localCli = checks.find((c) => c.name === "hook:script:local_cli_entrypoint");
+    expect(localCli).toBeDefined();
+    expect(localCli?.ok).toBe(false);
+    expect(localCli?.details).toContain("points to missing");
+    expect(doctorSucceeded(checks)).toBe(false);
+  });
+
+  it("doctor reports semantic hook wiring drift for Codex", async () => {
+    const root = await createTempProject("doctor-codex-wiring-drift");
+    await initCclaw({ projectRoot: root, harnesses: ["codex"] });
+
+    const codexHooksPath = path.join(root, ".codex/hooks.json");
+    const codexHooks = JSON.parse(await fs.readFile(codexHooksPath, "utf8")) as {
+      hooks: Record<string, unknown>;
+    };
+    codexHooks.hooks.UserPromptSubmit = [];
+    await fs.writeFile(codexHooksPath, JSON.stringify(codexHooks, null, 2), "utf8");
+
+    const checks = await doctorChecks(root);
+    const wiring = checks.find((c) => c.name === "hook:wiring:codex");
+    expect(wiring).toBeDefined();
+    expect(wiring?.ok).toBe(false);
+    expect(wiring?.details).toContain("verify-current-state");
+    expect(doctorSucceeded(checks)).toBe(false);
+  });
+
   it("doctor emits severity, fix, and doc references", async () => {
     const root = await createTempProject("doctor-metadata");
     await initCclaw({ projectRoot: root });

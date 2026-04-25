@@ -449,76 +449,73 @@ describe("node hook runtime", () => {
     expect(hasRed.stderr).not.toContain("missing failing RED evidence");
   });
 
-  it("verify-current-state honors strict/advisory mode without bash wrappers", async () => {
+  it("verify-current-state uses local CLI entrypoint instead of cclaw on PATH", async () => {
     const root = await createTempProject("node-hook-verify-current-state");
     await fs.mkdir(path.join(root, ".cclaw/state"), { recursive: true });
-    const binDir = path.join(root, "bin");
-    await fs.mkdir(binDir, { recursive: true });
-    const shimName = process.platform === "win32" ? "cclaw.cmd" : "cclaw";
-    const shimPath = path.join(binDir, shimName);
-    if (process.platform === "win32") {
-      await fs.writeFile(
-        shimPath,
-        `@echo off
-if /I "%1"=="internal" if /I "%2"=="verify-current-state" exit /b %CCLAW_FAKE_VERIFY_EXIT%
-exit /b 0
+    const callsPath = path.join(root, "verify-calls.log");
+    const cliPath = path.join(root, "local-cli.mjs");
+    await fs.writeFile(
+      cliPath,
+      `#!/usr/bin/env node
+import fs from "node:fs";
+fs.appendFileSync(${JSON.stringify(callsPath)}, process.argv.slice(2).join(" ") + "\\n");
+if (process.argv[2] === "internal" && process.argv[3] === "verify-current-state") {
+  process.exit(Number(process.env.CCLAW_FAKE_VERIFY_EXIT || "0"));
+}
+process.exit(0);
 `,
-        "utf8"
-      );
-    } else {
-      await fs.writeFile(
-        shimPath,
-        `#!/usr/bin/env bash
-if [ "$1" = "internal" ] && [ "$2" = "verify-current-state" ]; then
-  exit "\${CCLAW_FAKE_VERIFY_EXIT:-0}"
-fi
-exit 0
-`,
-        "utf8"
-      );
-      await fs.chmod(shimPath, 0o755);
-    }
-    const joinedPath = `${binDir}${path.delimiter}${process.env.PATH ?? process.env.Path ?? ""}`;
-    const pathEnv =
-      process.platform === "win32"
-        ? { PATH: joinedPath, Path: joinedPath }
-        : { PATH: joinedPath };
+      "utf8"
+    );
+    await fs.chmod(cliPath, 0o755);
+    const emptyPathEnv = process.platform === "win32" ? { PATH: "", Path: "" } : { PATH: "" };
+
+    const runtime = nodeHookRuntimeScript();
+    expect(runtime).not.toContain('spawn(\n        isWindows ? "cmd.exe" : "cclaw"');
+    expect(runtime).toContain("process.execPath");
 
     const strictFail = await runNodeHook(
       root,
       "verify-current-state",
-      nodeHookRuntimeScript(),
+      runtime,
       {},
       {
-        ...pathEnv,
+        ...emptyPathEnv,
+        CCLAW_CLI_JS: cliPath,
         CCLAW_STRICTNESS: "strict",
         CCLAW_FAKE_VERIFY_EXIT: "1"
       }
     );
-    expect(strictFail.code).toBe(1);
+    expect(strictFail.code, strictFail.stderr).toBe(1);
 
     const advisoryFail = await runNodeHook(
+      root,
+      "verify-current-state",
+      runtime,
+      {},
+      {
+        ...emptyPathEnv,
+        CCLAW_CLI_JS: cliPath,
+        CCLAW_STRICTNESS: "advisory",
+        CCLAW_FAKE_VERIFY_EXIT: "1"
+      }
+    );
+    expect(advisoryFail.code, advisoryFail.stderr).toBe(0);
+
+    const calls = await fs.readFile(callsPath, "utf8");
+    expect(calls).toContain("internal verify-current-state --quiet");
+
+    const missingEntrypoint = await runNodeHook(
       root,
       "verify-current-state",
       nodeHookRuntimeScript(),
       {},
       {
-        ...pathEnv,
-        CCLAW_STRICTNESS: "advisory",
-        CCLAW_FAKE_VERIFY_EXIT: "1"
+        ...emptyPathEnv,
+        CCLAW_CLI_JS: path.join(root, "missing-cli.mjs")
       }
     );
-    expect(advisoryFail.code).toBe(0);
-
-    const missingBinary = await runNodeHook(
-      root,
-      "verify-current-state",
-      nodeHookRuntimeScript(),
-      {},
-      process.platform === "win32" ? { PATH: "", Path: "" } : { PATH: "" }
-    );
-    expect(missingBinary.code).toBe(1);
-    expect(missingBinary.stderr).toContain("cclaw binary is required for verify-current-state");
+    expect(missingEntrypoint.code).toBe(1);
+    expect(missingEntrypoint.stderr).toContain("local Node runtime entrypoint not found");
   });
 
   it("context-monitor debounces advisories and auto-captures failing tests", async () => {

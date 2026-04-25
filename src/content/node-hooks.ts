@@ -1,3 +1,6 @@
+import { existsSync } from "node:fs";
+import path from "node:path";
+import { fileURLToPath } from "node:url";
 import { DEFAULT_COMPOUND_RECURRENCE_THRESHOLD } from "../config.js";
 import { RUNTIME_ROOT } from "../constants.js";
 import {
@@ -34,6 +37,19 @@ function normalizePatterns(patterns: string[] | undefined, fallback: string[]): 
   return patterns.map((value) => value.trim()).filter((value) => value.length > 0);
 }
 
+function resolveCliEntrypointForGeneratedHook(): string | null {
+  const here = fileURLToPath(import.meta.url);
+  const candidates = [
+    path.resolve(path.dirname(here), "..", "cli.js"),
+    path.resolve(path.dirname(here), "..", "..", "dist", "cli.js")
+  ];
+  for (const candidate of candidates) {
+    // Synchronous probe runs only during cclaw-cli init/sync generation.
+    if (existsSync(candidate)) return candidate;
+  }
+  return null;
+}
+
 /**
  * Node-only hook runtime (single entrypoint).
  *
@@ -54,6 +70,7 @@ export function nodeHookRuntimeScript(options: NodeHookRuntimeOptions = {}): str
     options.compoundRecurrenceThreshold >= 1
       ? options.compoundRecurrenceThreshold
       : DEFAULT_COMPOUND_RECURRENCE_THRESHOLD;
+  const cliEntrypoint = resolveCliEntrypointForGeneratedHook();
 
   return `#!/usr/bin/env node
 import fs from "node:fs/promises";
@@ -76,6 +93,7 @@ const DEFAULT_TDD_PRODUCTION_PATH_PATTERNS = ${JSON.stringify(tddProductionPathP
 const COMPOUND_RECURRENCE_THRESHOLD = ${JSON.stringify(compoundRecurrenceThreshold)};
 const SMALL_PROJECT_ARCHIVE_RUNS_THRESHOLD = ${JSON.stringify(SMALL_PROJECT_ARCHIVE_RUNS_THRESHOLD)};
 const SMALL_PROJECT_RECURRENCE_THRESHOLD = ${JSON.stringify(SMALL_PROJECT_RECURRENCE_THRESHOLD)};
+const CCLAW_CLI_ENTRYPOINT = ${JSON.stringify(cliEntrypoint)};
 
 function resolveStrictness() {
   return process.env.CCLAW_STRICTNESS === "strict" ? "strict" : DEFAULT_STRICTNESS;
@@ -332,8 +350,28 @@ async function readStdin() {
 }
 
 async function runCclawInternal(root, args, options = {}) {
+  const cliEntrypoint = process.env.CCLAW_CLI_JS || CCLAW_CLI_ENTRYPOINT;
+  if (!cliEntrypoint || String(cliEntrypoint).trim().length === 0) {
+    return {
+      code: 1,
+      stdout: "",
+      stderr: "[cclaw] hook: local Node runtime entrypoint is missing. Re-run npx cclaw-cli sync or npx cclaw-cli upgrade.\\n",
+      missingBinary: true
+    };
+  }
+  try {
+    const stat = await fs.stat(cliEntrypoint);
+    if (!stat.isFile()) throw new Error("not-file");
+  } catch {
+    return {
+      code: 1,
+      stdout: "",
+      stderr: "[cclaw] hook: local Node runtime entrypoint not found at " + cliEntrypoint + ". Re-run npx cclaw-cli sync or npx cclaw-cli upgrade.\\n",
+      missingBinary: true
+    };
+  }
+
   return await new Promise((resolve) => {
-    const isWindows = process.platform === "win32";
     const captureStdout = options && options.captureStdout === true;
     let settled = false;
     let stdout = "";
@@ -345,22 +383,18 @@ async function runCclawInternal(root, args, options = {}) {
     };
     let child;
     try {
-      child = spawn(
-        isWindows ? "cmd.exe" : "cclaw",
-        isWindows ? ["/d", "/s", "/c", "cclaw", "internal", ...args] : ["internal", ...args],
-        {
+      child = spawn(process.execPath, [cliEntrypoint, "internal", ...args], {
         cwd: root,
         env: process.env,
         stdio: ["ignore", captureStdout ? "pipe" : "ignore", "pipe"]
-      }
-      );
+      });
     } catch (error) {
       const code = error && typeof error === "object" && "code" in error ? String(error.code) : "";
       finalize({
         code: 1,
         stdout,
         stderr,
-        missingBinary: code === "ENOENT" || (isWindows && code === "EINVAL")
+        missingBinary: code === "ENOENT"
       });
       return;
     }
@@ -384,7 +418,7 @@ async function runCclawInternal(root, args, options = {}) {
         code: 1,
         stdout,
         stderr,
-        missingBinary: code === "ENOENT" || (isWindows && code === "EINVAL")
+        missingBinary: code === "ENOENT"
       });
     });
     child.on("close", (code, signal) => {
@@ -397,15 +431,11 @@ async function runCclawInternal(root, args, options = {}) {
         });
         return;
       }
-      const stderrLower = stderr.toLowerCase();
-      const missingBinary = isWindows
-        ? stderrLower.includes("is not recognized as an internal or external command")
-        : false;
       finalize({
         code: typeof code === "number" ? code : 1,
         stdout,
         stderr,
-        missingBinary
+        missingBinary: false
       });
     });
   });
@@ -1591,12 +1621,13 @@ async function handleVerifyCurrentState(runtime) {
   const mode = resolveStrictness();
   const result = await runCclawInternal(runtime.root, ["verify-current-state", "--quiet"]);
   if (result.missingBinary) {
-    emitAdvisoryContext(
-      runtime,
-      "verify-current-state",
-      "Cclaw verify-current-state requires cclaw binary on PATH."
-    );
-    process.stderr.write("[cclaw] hook: cclaw binary is required for verify-current-state\\n");
+    const message = result.stderr.trim().length > 0
+      ? result.stderr.trim()
+      : "Cclaw verify-current-state requires a local Node runtime entrypoint.";
+    emitAdvisoryContext(runtime, "verify-current-state", message);
+    process.stderr.write(result.stderr.trim().length > 0
+      ? result.stderr
+      : "[cclaw] hook: local Node runtime entrypoint is required for verify-current-state\\n");
     return 1;
   }
   if (mode === "strict") {

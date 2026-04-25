@@ -173,6 +173,70 @@ describe("hooks lifecycle wiring", () => {
     expect(wrapper).toContain("Run npx cclaw-cli doctor");
   });
 
+  it("run-hook wrapper dispatches to node runtime on POSIX shells", async () => {
+    if (process.platform === "win32") return;
+
+    const root = await createTempProject("run-hook-cmd-posix");
+    await fs.mkdir(path.join(root, ".cclaw/hooks"), { recursive: true });
+    const callsPath = path.join(root, "run-hook-wrapper-calls.log");
+    await fs.writeFile(path.join(root, ".cclaw/hooks/run-hook.cmd"), runHookCmdScript(), "utf8");
+    await fs.chmod(path.join(root, ".cclaw/hooks/run-hook.cmd"), 0o755);
+    await fs.writeFile(
+      path.join(root, ".cclaw/hooks/run-hook.mjs"),
+      `#!/usr/bin/env node
+import fs from "node:fs";
+fs.appendFileSync(${JSON.stringify(callsPath)}, process.argv.slice(2).join(" ") + "\\n");
+`,
+      "utf8"
+    );
+    await fs.chmod(path.join(root, ".cclaw/hooks/run-hook.mjs"), 0o755);
+
+    const result = await new Promise<ScriptResult>((resolve, reject) => {
+      const child = spawn("sh", [path.join(root, ".cclaw/hooks/run-hook.cmd"), "session-start"], {
+        cwd: root,
+        env: { ...process.env, CCLAW_PROJECT_ROOT: root }
+      });
+      let stdout = "";
+      let stderr = "";
+      child.stdout.on("data", (chunk) => { stdout += chunk.toString(); });
+      child.stderr.on("data", (chunk) => { stderr += chunk.toString(); });
+      child.on("error", reject);
+      child.on("close", (code) => resolve({ code, stdout, stderr }));
+    });
+
+    expect(result.code, result.stderr).toBe(0);
+    await expect(fs.readFile(callsPath, "utf8")).resolves.toBe("session-start\n");
+  });
+
+  it("stage-complete helper reports missing CLI entrypoint before spawning", async () => {
+    const root = await createTempProject("stage-complete-missing-entrypoint");
+    await fs.mkdir(path.join(root, ".cclaw/hooks"), { recursive: true });
+
+    const result = await runNodeScript(
+      root,
+      ".cclaw/hooks/stage-complete.mjs",
+      stageCompleteScript(),
+      ["brainstorm"],
+      "",
+      { CCLAW_CLI_JS: path.join(root, "missing-cli.mjs") }
+    );
+
+    expect(result.code).toBe(1);
+    expect(result.stderr).toContain("local Node runtime entrypoint not found");
+  });
+
+  it("stage-complete helper prints usage when stage is omitted", async () => {
+    const root = await createTempProject("stage-complete-usage");
+    const result = await runNodeScript(
+      root,
+      ".cclaw/hooks/stage-complete.mjs",
+      stageCompleteScript()
+    );
+
+    expect(result.code).toBe(1);
+    expect(result.stderr).toContain("Usage: node .cclaw/hooks/stage-complete.mjs <stage>");
+  });
+
   it("stage-complete helper invokes a local Node runtime instead of a cclaw PATH binary", async () => {
     const root = await createTempProject("stage-complete-helper");
     await fs.mkdir(path.join(root, ".cclaw/hooks"), { recursive: true });

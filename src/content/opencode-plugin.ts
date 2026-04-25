@@ -565,25 +565,25 @@ export default function cclawPlugin(ctx) {
             : typeof payload;
         logToFile("unknown event payload keys: " + keys);
       }
-      // session.compacted must run pre-compact BEFORE refreshing the bootstrap
-      // cache, otherwise the injected system prompt still shows the pre-compact
-      // digest/state until the next lifecycle event.
-      if (eventType === "session.compacted") {
-        await runHookScript("pre-compact", eventData ?? {});
-      }
-      if (
+      const isSessionLifecycle =
         eventType === "session.created" ||
         eventType === "session.resumed" ||
         eventType === "session.compacted" ||
         eventType === "session.cleared" ||
-        eventType === "session.updated"
-      ) {
-        // Avoid writing directly to stdout in lifecycle hooks because it can
-        // interfere with OpenCode TUI rendering. Bootstrap is injected via
-        // the system transform hook instead.
-        // session.updated covers config reloads and artifact/rules edits
-        // that happen mid-session; without it the cache would stay stale
-        // until the next compaction or restart.
+        eventType === "session.updated";
+      // session.compacted must run pre-compact BEFORE canonical rehydration,
+      // otherwise the injected system prompt can show the pre-compact
+      // digest/state until the next lifecycle event.
+      if (eventType === "session.compacted") {
+        await runHookScript("pre-compact", eventData ?? {});
+      }
+      if (isSessionLifecycle) {
+        // Keep OpenCode aligned with Claude/Cursor/Codex: session-start is
+        // the canonical rehydrate path that refreshes derived state such as
+        // Ralph Loop, compound readiness, and hook-error breadcrumbs. The
+        // plugin refreshes its local bootstrap cache afterwards so the system
+        // transform sees the side effects from the hook runtime.
+        await runHookScript("session-start", eventData ?? {});
         await refreshBootstrapCache(true);
       }
       if (eventType === "session.idle") {

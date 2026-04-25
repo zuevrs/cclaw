@@ -116,6 +116,59 @@ function collectHookCommands(value: unknown): string[] {
   return [...direct, ...nested];
 }
 
+function extractGeneratedCliEntrypoints(scriptContent: string): string[] {
+  const paths: string[] = [];
+  for (const match of scriptContent.matchAll(/const\s+CCLAW_CLI_ENTRYPOINT\s*=\s*("(?:\\.|[^"\\])*"|null);/gu)) {
+    const raw = match[1];
+    if (!raw || raw === "null") continue;
+    try {
+      const parsed = JSON.parse(raw) as unknown;
+      if (typeof parsed === "string" && parsed.trim().length > 0) {
+        paths.push(parsed);
+      }
+    } catch {
+      // malformed generated constant; treat below as missing/unusable
+    }
+  }
+  return paths;
+}
+
+async function generatedCliEntrypointsOk(projectRoot: string): Promise<{ ok: boolean; details: string }> {
+  const hookScripts = ["stage-complete.mjs", "run-hook.mjs"] as const;
+  const problems: string[] = [];
+  const checked: string[] = [];
+  for (const script of hookScripts) {
+    const scriptPath = path.join(projectRoot, RUNTIME_ROOT, "hooks", script);
+    if (!(await exists(scriptPath))) continue;
+    const content = await fs.readFile(scriptPath, "utf8");
+    const entrypoints = extractGeneratedCliEntrypoints(content);
+    if (entrypoints.length === 0) {
+      problems.push(`${RUNTIME_ROOT}/hooks/${script} has no local CLI entrypoint`);
+      continue;
+    }
+    for (const entrypoint of entrypoints) {
+      checked.push(`${RUNTIME_ROOT}/hooks/${script} -> ${entrypoint}`);
+      try {
+        const stat = await fs.stat(entrypoint);
+        if (!stat.isFile()) {
+          problems.push(`${RUNTIME_ROOT}/hooks/${script} points to non-file ${entrypoint}`);
+        }
+      } catch {
+        problems.push(`${RUNTIME_ROOT}/hooks/${script} points to missing ${entrypoint}`);
+      }
+    }
+  }
+  if (problems.length > 0) {
+    return { ok: false, details: problems.join("; ") };
+  }
+  return {
+    ok: true,
+    details: checked.length > 0
+      ? `local CLI entrypoints valid: ${checked.join("; ")}`
+      : "local CLI entrypoint check skipped because generated hook scripts are absent"
+  };
+}
+
 function extractUserPromptFromIdeaArtifact(markdown: string): string | null {
   const normalized = markdown.replace(/\r\n?/gu, "\n");
   const heading = /^##\s+User prompt\s*$/imu.exec(normalized);
@@ -682,6 +735,13 @@ export async function doctorChecks(projectRoot: string, options: DoctorOptions =
     }
   }
 
+  const localCliEntrypoints = await generatedCliEntrypointsOk(projectRoot);
+  checks.push({
+    name: "hook:script:local_cli_entrypoint",
+    ok: localCliEntrypoints.ok,
+    details: localCliEntrypoints.details
+  });
+
   // Hook JSON files per harness. OpenCode ships hooks through its plugin
   // system (covered below). Codex joined the managed list in v0.40.0 — Codex
   // CLI ≥ v0.114 consumes `.codex/hooks.json` behind the `codex_hooks`
@@ -1013,7 +1073,7 @@ export async function doctorChecks(projectRoot: string, options: DoctorOptions =
   const legacyDispatchFiles: string[] = [];
   for (const candidate of windowsHookConfigCandidates) {
     if (!(await exists(candidate))) continue;
-    const content = await fs.readFile(candidate, "utf8");
+    const content = (await fs.readFile(candidate, "utf8")).replace(/\\/gu, "/");
     if (/bash\s+\.cclaw\/hooks\/|\.cclaw\/hooks\/(?:session-start|stop-handoff|stop-checkpoint|pre-compact|prompt-guard|workflow-guard|context-monitor)\.sh/u.test(content)) {
       legacyDispatchFiles.push(path.relative(projectRoot, candidate));
     }
