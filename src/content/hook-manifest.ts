@@ -73,7 +73,7 @@ export const HOOK_SEMANTIC_EVENTS = [
   "pre_tool_workflow_guard",
   "post_tool_context_monitor",
   "stop_handoff",
-  "precompact_digest"
+  "precompact_compat"
 ] as const;
 export type HookSemanticEvent = (typeof HOOK_SEMANTIC_EVENTS)[number];
 
@@ -142,11 +142,11 @@ export const HOOK_MANIFEST: readonly HookHandlerSpec[] = [
   {
     handler: "pre-compact",
     description: "No-op compatibility hook for harness pre-compact events; session-start rehydrates from flow-state, artifacts, and knowledge.",
-    semantic: "precompact_digest",
+    semantic: "precompact_compat",
     bindings: {
       claude: [{ event: "PreCompact", matcher: "manual|auto", timeout: 10 }],
-      // pre-compact must capture the digest BEFORE session-start
-      // rehydrates on cursor `sessionCompact`.
+      // Keep this before session-start on cursor `sessionCompact` so the
+      // compatibility handler runs before rehydration.
       cursor: [{ event: "sessionCompact", priority: -10 }]
     }
   },

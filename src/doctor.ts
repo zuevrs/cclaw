@@ -969,7 +969,7 @@ export async function doctorChecks(projectRoot: string, options: DoctorOptions =
       details: `${file} must route tool.execute.before/after through dedicated handlers exactly once (no duplicate event() branches).`
     });
     checks.push({
-      name: "hook:opencode:precompact_digest",
+      name: "hook:opencode:precompact_compat",
       ok: precompactHookOk,
       details: `${file} must run pre-compact on session.compacted before bootstrap refresh.`
     });
