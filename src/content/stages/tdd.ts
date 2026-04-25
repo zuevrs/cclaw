@@ -1,5 +1,6 @@
 import type { StageSchemaInput, StageSchemaV2Input } from "./schema-types.js";
 import type { FlowTrack } from "../../types.js";
+import { renderTrackTerminology, trackRenderContext } from "../track-render-context.js";
 
 // ---------------------------------------------------------------------------
 // TDD — RED → GREEN → REFACTOR cycle (merged test + build)
@@ -209,54 +210,52 @@ export const TDD: StageSchemaV2Input = {
   batchExecutionAllowed: true
 };
 
-function quickTrackText(value: string): string {
-  return value
-    .replace(/\btask from the plan\b/giu, "acceptance criterion from the spec")
-    .replace(/\bplan task ID\b/giu, "acceptance criterion ID")
-    .replace(/\bplan task\b/giu, "acceptance criterion")
-    .replace(/\bplan row\b/giu, "acceptance row")
-    .replace(/\bplan slice\b/giu, "acceptance slice")
-    .replace(/\bplan artifact\b/giu, "spec artifact")
-    .replace(/\btraceable to plan slice\b/giu, "traceable to acceptance criterion")
-    .replace(/05-plan\.md/gu, "04-spec.md");
-}
-
-function tddQuickTrackVariant(): StageSchemaV2Input {
+function tddStageVariantForTrack(track: FlowTrack): StageSchemaV2Input {
+  const renderContext = trackRenderContext(track);
   return {
     ...TDD,
-    // Quick track keeps the same stage intent but rewrites plan-centric language to spec-centric language.
-    skillDescription: quickTrackText(TDD.skillDescription),
+    complexityTier: TDD.complexityTier,
+    skillFolder: TDD.skillFolder,
+    skillName: TDD.skillName,
+    stage: TDD.stage,
+    schemaShape: TDD.schemaShape,
+    next: TDD.next,
+    batchExecutionAllowed: TDD.batchExecutionAllowed,
+    skillDescription: renderTrackTerminology(TDD.skillDescription, renderContext),
     philosophy: {
       ...TDD.philosophy,
-      hardGate: quickTrackText(TDD.philosophy.hardGate)
+      hardGate: renderTrackTerminology(TDD.philosophy.hardGate, renderContext)
     },
     executionModel: {
       ...TDD.executionModel,
-      checklist: TDD.executionModel.checklist.map(quickTrackText),
-      interactionProtocol: TDD.executionModel.interactionProtocol.map(quickTrackText),
-      process: TDD.executionModel.process.map(quickTrackText),
+      checklist: TDD.executionModel.checklist.map((value) => renderTrackTerminology(value, renderContext)),
+      interactionProtocol: TDD.executionModel.interactionProtocol
+        .map((value) => renderTrackTerminology(value, renderContext)),
+      process: TDD.executionModel.process.map((value) => renderTrackTerminology(value, renderContext)),
       requiredGates: TDD.executionModel.requiredGates
         .filter((gate) => gate.id !== "tdd_traceable_to_plan")
         .map((gate) => ({
           ...gate,
-          description: quickTrackText(gate.description)
+          description: renderTrackTerminology(gate.description, renderContext)
         })),
-      requiredEvidence: TDD.executionModel.requiredEvidence.map(quickTrackText),
-      inputs: TDD.executionModel.inputs.map(quickTrackText),
-      requiredContext: ["spec artifact", "existing test patterns"]
+      requiredEvidence: TDD.executionModel.requiredEvidence
+        .map((value) => renderTrackTerminology(value, renderContext)),
+      inputs: TDD.executionModel.inputs.map((value) => renderTrackTerminology(value, renderContext)),
+      requiredContext: [renderContext.upstreamArtifactLabel, "existing test patterns"]
     },
     reviewLens: {
       ...TDD.reviewLens,
       reviewSections: TDD.reviewLens.reviewSections.map((section) => ({
         ...section,
-        evaluationPoints: section.evaluationPoints.map(quickTrackText)
+        evaluationPoints: section.evaluationPoints
+          .map((point) => renderTrackTerminology(point, renderContext))
       }))
     },
     artifactRules: {
       ...TDD.artifactRules,
       crossStageTrace: {
         ...TDD.artifactRules.crossStageTrace,
-        readsFrom: [".cclaw/artifacts/04-spec.md"],
+        readsFrom: [renderContext.upstreamArtifactPath],
         traceabilityRule:
           "Every RED test traces to an acceptance criterion. Every GREEN change traces to a RED test. Evidence chain must be unbroken."
       },
@@ -276,7 +275,7 @@ function tddQuickTrackVariant(): StageSchemaV2Input {
         }
         return {
           ...row,
-          validationRule: quickTrackText(row.validationRule)
+          validationRule: renderTrackTerminology(row.validationRule, renderContext)
         };
       })
     }
@@ -284,8 +283,5 @@ function tddQuickTrackVariant(): StageSchemaV2Input {
 }
 
 export function tddStageForTrack(track: FlowTrack): StageSchemaInput {
-  if (track === "quick") {
-    return tddQuickTrackVariant();
-  }
-  return TDD;
+  return tddStageVariantForTrack(track);
 }

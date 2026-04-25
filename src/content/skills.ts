@@ -1,7 +1,7 @@
 import { RUNTIME_ROOT, STAGE_TO_SKILL_FOLDER } from "../constants.js";
 import type { FlowStage, FlowTrack } from "../types.js";
 import { stageExamples } from "./examples.js";
-import { stageAutoSubagentDispatch, stageSchema } from "./stage-schema.js";
+import { stageAutoSubagentDispatch, stageSchema, stageTrackRenderContext } from "./stage-schema.js";
 import type { StageSchema } from "./stage-schema.js";
 import type {
   ArtifactValidation,
@@ -334,6 +334,7 @@ function dedupeGuidance(
 
 export function stageSkillMarkdown(stage: FlowStage, track: FlowTrack = "standard"): string {
   const schema = stageSchema(stage, track);
+  const trackContext = stageTrackRenderContext(track);
   const philosophy = schema.philosophy;
   const executionModel = schema.executionModel;
   const artifactRules = schema.artifactRules;
@@ -382,6 +383,7 @@ ${philosophy.purpose}
 ## Complexity Tier
 - Active tier: \`${schema.complexityTier}\`
 - Mandatory delegations at this tier: ${mandatoryDelegationSummary}
+- Track render context: \`${trackContext.track}\` (${trackContext.usesPlanTerminology ? "plan-first wording" : "acceptance-first wording"})
 
 ## When to Use
 ${philosophy.whenToUse.map((item) => `- ${item}`).join("\n")}

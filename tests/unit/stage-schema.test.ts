@@ -5,7 +5,7 @@ import { SHIP_FINALIZATION_MODES } from "../../src/constants.js";
 import { lintArtifact } from "../../src/artifact-linter.js";
 import { CCLAW_AGENTS } from "../../src/content/core-agents.js";
 import { stageExamples, stageFullArtifactExampleMarkdown } from "../../src/content/examples.js";
-import { mandatoryDelegationsForStage, stageAutoSubagentDispatch, stageDelegationSummary, stagePolicyNeedles, stageSchema } from "../../src/content/stage-schema.js";
+import { mandatoryDelegationsForStage, stageAutoSubagentDispatch, stageDelegationSummary, stagePolicyNeedles, stageSchema, stageTrackRenderContext } from "../../src/content/stage-schema.js";
 import { stageSkillMarkdown } from "../../src/content/skills.js";
 import { enhancedAgentBody } from "../../src/content/subagents.js";
 import { ARTIFACT_TEMPLATES } from "../../src/content/templates.js";
@@ -72,8 +72,21 @@ describe("stage schema and subagent alignment", () => {
 
   it("derives policy needles from lint metadata with track transforms", () => {
     expect(stagePolicyNeedles("plan")).toContain("Dependency Batches");
-    expect(stagePolicyNeedles("tdd", "quick")).toContain("traceable to acceptance slice");
-    expect(stagePolicyNeedles("tdd", "quick")).not.toContain("traceable to plan slice");
+    expect(stagePolicyNeedles("tdd", "quick")).toContain("acceptance criteria");
+    expect(stagePolicyNeedles("tdd", "quick")).toContain("RED");
+  });
+
+  it("exposes track render context for safe wording decisions", () => {
+    const quick = stageTrackRenderContext("quick");
+    const standard = stageTrackRenderContext("standard");
+    expect(quick.track).toBe("quick");
+    expect(quick.usesPlanTerminology).toBe(false);
+    expect(quick.traceabilitySliceNoun).toBe("acceptance slice");
+    expect(quick.upstreamArtifactPath).toBe(".cclaw/artifacts/04-spec.md");
+    expect(standard.track).toBe("standard");
+    expect(standard.usesPlanTerminology).toBe(true);
+    expect(standard.traceabilitySliceNoun).toBe("plan slice");
+    expect(standard.upstreamArtifactPath).toBe(".cclaw/artifacts/05-plan.md");
   });
 
   it("plan stage reads spec, design, and scope artifacts", () => {
@@ -430,8 +443,8 @@ describe("stage schema and subagent alignment", () => {
 
     const markdown = stageSkillMarkdown("tdd", "quick");
     expect(markdown).not.toContain(".cclaw/artifacts/05-plan.md");
-    expect(markdown).not.toContain("plan slice");
-    expect(markdown).toContain("acceptance slice");
+    expect(markdown).toContain(".cclaw/artifacts/04-spec.md");
+    expect(markdown).toContain("Track render context: `quick` (acceptance-first wording)");
   });
 
   it("tdd verification ladder is required and explicit", () => {

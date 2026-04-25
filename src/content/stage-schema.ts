@@ -13,6 +13,7 @@ import {
 } from "./stages/index.js";
 import { stagePolicyNeedlesFromMetadata } from "./stages/_lint-metadata/index.js";
 import { tddStageForTrack } from "./stages/tdd.js";
+import { trackRenderContext } from "./track-render-context.js";
 import type {
   ArtifactValidation,
   StageComplexityTier,
@@ -663,6 +664,10 @@ export function buildTransitionRules(): TransitionRule[] {
 
 export function stagePolicyNeedles(stage: FlowStage, track: FlowTrack = "standard"): string[] {
   return stagePolicyNeedlesFromMetadata(stage, track);
+}
+
+export function stageTrackRenderContext(track: FlowTrack = "standard") {
+  return trackRenderContext(track);
 }
 
 export function stageAutoSubagentDispatch(stage: FlowStage): StageAutoSubagentDispatch[] {

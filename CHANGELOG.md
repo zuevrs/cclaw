@@ -111,6 +111,7 @@ workflow tool.
   helpers so /cc-next and meta-skill stay aligned on retro/compound/archive.
 - /cc-ideate knowledge scan guidance now matches the live knowledge schema
   (`rule|pattern|lesson|compound`, `origin_run`, trigger/action clustering).
+- Track-aware render context now drives quick-track wording transforms for TDD/lint metadata, replacing duplicated brittle string-rewrite chains.
 
 ### Preserved
 
