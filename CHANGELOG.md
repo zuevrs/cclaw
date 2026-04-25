@@ -48,6 +48,8 @@ workflow tool.
   `.cclaw/state`.
 - Removed stale eval GitHub Actions workflows and `.gitignore` exceptions that
   still referenced deleted `.cclaw/evals` fixtures.
+- Removed stale ignore/config entries for the deleted `docs/references` and
+  `scripts/reference-sync.sh` reference-research surface.
 
 ### Changed
 
