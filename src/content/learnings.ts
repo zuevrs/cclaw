@@ -137,7 +137,7 @@ Rules:
 - \`confidence\` must be one of \`high\`, \`medium\`, \`low\`. Default to \`medium\` if the user declines to set it.
 - \`domain\`, \`stage\`, and \`project\` may be explicitly \`null\`.
 - Prefer stage-native \`## Learnings\` capture for new flow work; use \`add\` mainly for backfilling historical lessons or ad-hoc entries outside a stage closeout.
-- \`origin_stage\` defaults to \`stage\`; \`origin_feature\` defaults to active feature (or \`null\` if unknown).
+- \`origin_stage\` defaults to \`stage\`; \`origin_feature\` defaults to the current run, branch, or topic label (or \`null\` if unknown).
 - \`frequency\` starts at \`1\`.
 - \`maturity\` starts at \`raw\`.
 - \`created\`, \`first_seen_ts\`, and \`last_seen_ts\` are set automatically to current UTC ISO timestamp.

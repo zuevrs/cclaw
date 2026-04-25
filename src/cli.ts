@@ -76,7 +76,7 @@ Commands:
                     --no-interactive    Skip interactive prompts even on TTY (for CI/scripts).
   sync       Reconcile generated runtime files with the current config.
   upgrade    Refresh generated files in .cclaw. Preserves your config.yaml.
-  archive    Archive the active run and reset flow state for next feature.
+  archive    Archive the active run and reset flow state for the next run.
              Flags: --name=<slug>        Override archive folder suffix.
                     --skip-retro         Skip retro gate only when runtime allows it.
                     --retro-reason=<txt> Required rationale with --skip-retro.
@@ -90,7 +90,7 @@ Examples:
   npx cclaw-cli
   npx cclaw-cli init --harnesses=claude,cursor --no-interactive
   npx cclaw-cli sync
-  npx cclaw-cli archive --name=my-feature
+  npx cclaw-cli archive --name=my-run
   npx cclaw-cli upgrade
 
 Everything operational (retro, archive, doctor, learnings)

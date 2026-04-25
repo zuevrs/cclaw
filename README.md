@@ -249,7 +249,7 @@ Each critical-path stage produces a dated artifact under
 `02a-research.md` (design research fleet synthesis), `03-design.md` through
 `08-ship.md`. Closeout adds `09-retro.md`; archive then rolls the whole
 bundle into `.cclaw/runs/<YYYY-MM-DD-slug>/` and resets the active flow for
-the next feature.
+the next run.
 
 ### Track heuristics are configurable (advisory)
 

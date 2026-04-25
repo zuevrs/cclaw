@@ -79,7 +79,7 @@ harness; **blocks stage**), \`○\` scheduled/pending, \`⊘\` waived, \`✗\` f
 
 \`\`\`
 cclaw status
-  flow:    <track> · run=<runId> · feature=<feature-id>
+  flow:    <track> · run=<runId>
   stage:   <stage> (<N>/<total>) · time <Xd|XhYm|Xm|unknown>
   bar:     [✓ brainstorm] [✓ scope] [▶ design] [○ spec] [○ plan] [○ tdd] [○ review] [○ ship]
   gates:   now <passed>/<required> · blocked <count>
