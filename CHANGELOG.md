@@ -1,5 +1,13 @@
 # Changelog
 
+## 0.51.3
+
+### Fixed
+
+- Aligned brainstorm artifact templates and generated skill validation guidance with the hidden linter checks for `Approach Reaction`, `Selected Direction`, and `challenger: higher-upside` rows.
+- Made brainstorm artifact validation failures include actionable rule/details text instead of only opaque check names such as `Direction Reaction Trace`.
+- Reinforced brainstorm interaction guidance so structured question tools ask one decision-changing question at a time instead of bundled multi-question forms.
+
 ## 0.51.2
 
 ### Fixed

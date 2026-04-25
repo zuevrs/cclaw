@@ -872,6 +872,117 @@ process.stdout.write(JSON.stringify({ hook: process.argv[2] }) + "\\n");
     expect(state.currentStage).toBe("tdd");
   });
 
+  it("advances a simple dashboard brainstorm artifact without hidden validator fixes", async () => {
+    const root = await createTempProject("internal-dashboard-brainstorm");
+    await ensureRunSystem(root);
+    await fs.mkdir(path.join(root, ".cclaw/artifacts"), { recursive: true });
+    await fs.writeFile(path.join(root, ".cclaw/artifacts/01-brainstorm-dashboard-viz.md"), `# Brainstorm: Dashboard with Visualization
+
+## Context
+- Project state: empty greenfield project with no app code, no origin docs, and no seeds.
+- Relevant existing code/patterns: none.
+
+## Problem
+- What we're solving: build a simple web dashboard/admin panel focused on charts and diagrams.
+- Success criteria: responsive dashboard page, line/bar/pie charts, mock JSON data, clean extension-ready structure.
+- Constraints: no backend, no database, no auth, fast simple MVP.
+
+## Clarifying Questions
+| # | Question | Answer | Decision impact |
+|---|---|---|---|
+| 1 | Type of web app? | Dashboard/admin panel | Locks scope to visualization dashboard. |
+| 2 | Data source? | Mock JSON/no backend | Removes backend architecture from v1. |
+| 3 | Stack? | Next.js + React | Confirms frontend stack. |
+
+## Approach Tier
+- Tier: Lightweight
+- Why this tier: single-page dashboard with mock data and no backend.
+
+## Short-Circuit Decision
+- Status: bypassed
+- Why: chart/UI library choice still needed a small comparison.
+- Scope handoff: continue to scope after approval.
+
+## Approaches
+| Approach | Role | Architecture | Trade-offs | Recommendation |
+|---|---|---|---|---|
+| A — Next.js + Recharts | baseline | Next.js App Router with React chart components and Tailwind layout | Fast, low learning curve, good enough customization; less low-level SVG control. | Recommended after user reaction. |
+| B — Next.js + D3.js | challenger: higher-upside | Next.js App Router with D3 SVG/Canvas visualizations | Maximum flexibility for custom visuals; slower and overkill for simple MVP. | Keep as future option. |
+| C — Next.js + Tremor | alternative | Prebuilt dashboard components over Tailwind/Recharts | Fastest polished UI; constrained by component API. | Good but less direct control. |
+
+## Approach Reaction
+- Closest option: A — Next.js + Recharts.
+- Concerns: none raised.
+- What changed after reaction: recommendation stayed on A because user reaction favored the practical middle-ground.
+
+## Selected Direction
+- Approach: A — Next.js App Router + Recharts + Tailwind CSS.
+- Rationale: Based on user reaction and feedback selecting A with no concerns, Recharts gives the simplest practical chart layer without D3 overhead or Tremor constraints.
+- Approval: approved by user.
+
+## Design
+- Architecture: Next.js App Router single-page dashboard; chart components are client components fed by local mock data.
+- Key components: dashboard page, chart cards, line/bar/pie chart components, mock data module.
+- Data flow: mock-data.ts -> chart components -> dashboard page grid.
+
+## Assumptions and Open Questions
+- Assumptions: TypeScript, no auth, no realtime updates, one dashboard page for MVP.
+- Open questions (or "None"): None.
+
+## Learnings
+- None this stage.
+`, "utf8");
+
+    const io = captureIo();
+    const code = await runInternalCommand(
+      root,
+      [
+        "advance-stage",
+        "brainstorm",
+        "--evidence-json",
+        JSON.stringify({
+          brainstorm_approaches_compared: "A/B/C approaches compared with challenger higher-upside row",
+          brainstorm_direction_approved: "user approved Approach A",
+          brainstorm_artifact_reviewed: "artifact reviewed by user"
+        }),
+        "--passed=brainstorm_approaches_compared,brainstorm_direction_approved,brainstorm_artifact_reviewed"
+      ],
+      io.io
+    );
+
+    expect(code, io.stderr()).toBe(0);
+    const state = await readFlowState(root);
+    expect(state.completedStages).toContain("brainstorm");
+    expect(state.currentStage).toBe("scope");
+  });
+
+  it("explains brainstorm validator failures with actionable details", async () => {
+    const root = await createTempProject("internal-brainstorm-actionable-error");
+    await ensureRunSystem(root);
+    await writeBrainstormArtifact(root);
+    const artifactPath = path.join(root, ".cclaw/artifacts/01-brainstorm.md");
+    const artifact = await fs.readFile(artifactPath, "utf8");
+    await fs.writeFile(
+      artifactPath,
+      artifact.replace(
+        "- Rationale: user reaction emphasized bounded v1 scope, so B gives best balance of reuse and delivery speed",
+        "- Rationale: B gives best balance of reuse and delivery speed"
+      ),
+      "utf8"
+    );
+
+    const io = captureIo();
+    const code = await runInternalCommand(
+      root,
+      ["advance-stage", "brainstorm", `--evidence-json=${requiredGateEvidenceJson("brainstorm")}`],
+      io.io
+    );
+
+    expect(code).toBe(1);
+    expect(io.stderr()).toContain("Direction Reaction Trace");
+    expect(io.stderr()).toContain("Selected Direction rationale does not reference user reaction/feedback");
+  });
+
   it("accepts boolean and object evidence JSON values from stage-complete copy-paste commands", async () => {
     const root = await createTempProject("internal-evidence-coercion");
     await ensureRunSystem(root);

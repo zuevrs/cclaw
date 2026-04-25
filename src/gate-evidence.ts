@@ -319,11 +319,23 @@ export async function verifyCurrentStageGateEvidence(
   if (shouldValidateArtifact) {
     const lint = await lintArtifact(projectRoot, stage, flowState.track);
     if (!lint.passed) {
-      const failedRequired = lint.findings
-        .filter((finding) => finding.required && !finding.found)
-        .map((finding) => finding.section);
+      const failedRequiredFindings = lint.findings
+        .filter((finding) => finding.required && !finding.found);
+      const failedRequired = failedRequiredFindings.map((finding) => finding.section);
       if (failedRequired.length > 0) {
-        issues.push(`artifact validation failed for required sections: ${failedRequired.join(", ")}.`);
+        const failureDetails = failedRequiredFindings
+          .map((finding) => {
+            const details = finding.details?.trim();
+            const rule = finding.rule?.trim();
+            const explanation = details && details.length > 0 ? details : rule;
+            return explanation && explanation.length > 0
+              ? `${finding.section}: ${explanation}`
+              : finding.section;
+          })
+          .join("; ");
+        issues.push(
+          `artifact validation failed for required sections: ${failedRequired.join(", ")}. ${failureDetails}`
+        );
       }
     }
     if (stage === "review") {

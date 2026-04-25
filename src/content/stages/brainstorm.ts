@@ -51,7 +51,7 @@ export const BRAINSTORM: StageSchemaInput = {
     ],
     interactionProtocol: [
       "Start from observed project context; if the idea is vague, first narrow the project type.",
-      "Ask at most one question per turn, only when decision-changing; prefer multiple choice, and summarize after 2-3 answers.",
+      "Ask at most one question per turn, only when decision-changing; if using a structured question tool, send exactly one question object, not a multi-question form.",
       "If likely answers do not change architecture or scope boundaries, choose the default and state the assumption.",
       "Show approaches before the recommendation; include a higher-upside challenger and gather reaction first.",
       "State exactly what is being approved, then **STOP** until the user explicitly approves the artifact."
@@ -122,9 +122,9 @@ export const BRAINSTORM: StageSchemaInput = {
       { section: "Clarifying Questions", required: false, validationRule: "Must capture question, answer, and decision impact for each clarifying question." },
       { section: "Approach Tier", required: true, validationRule: "Must classify depth as Lightweight/Standard/Deep and explain why." },
       { section: "Short-Circuit Decision", required: false, validationRule: "Must include Status/Why/Scope handoff lines when short-circuit is discussed; compact stubs are valid for concrete asks." },
-      { section: "Approaches", required: true, validationRule: "Must compare 2-3 architecturally distinct options with real trade-offs and include one row labeled `challenger: higher-upside`." },
-      { section: "Approach Reaction", required: true, validationRule: "Must summarize user reaction before recommendation, including concerns that changed direction." },
-      { section: "Selected Direction", required: true, validationRule: "Must include the selected approach, rationale tied to user reaction/feedback, and explicit approval marker." },
+      { section: "Approaches", required: true, validationRule: "Must compare 2-3 architecturally distinct options with real trade-offs; include at least one table/bullet row containing both `challenger` and `higher-upside`." },
+      { section: "Approach Reaction", required: true, validationRule: "Must appear before Selected Direction and summarize user reaction before recommendation, including `Closest option`, `Concerns`, and what changed after reaction." },
+      { section: "Selected Direction", required: true, validationRule: "Must include the selected approach, an explicit approval marker, and rationale tied to user reaction/feedback/concerns so the recommendation traces to the user response." },
       { section: "Design", required: false, validationRule: "Must cover architecture, key components, and data flow scaled to complexity." },
       { section: "Visual Companion", required: false, validationRule: "If architecture/data-flow complexity is medium+, include compact ASCII/Mermaid diagram or explicitly justify omission." },
       { section: "Assumptions and Open Questions", required: false, validationRule: "Must capture unresolved assumptions/open questions, or explicitly state none." }

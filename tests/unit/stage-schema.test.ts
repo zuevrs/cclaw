@@ -317,6 +317,21 @@ describe("stage schema and subagent alignment", () => {
     }
   });
 
+  it("brainstorm visible guidance exposes validator-only requirements", () => {
+    const brainstorm = stageSchema("brainstorm");
+    const template = ARTIFACT_TEMPLATES["01-brainstorm.md"] ?? "";
+    const skill = stageSkillMarkdown("brainstorm");
+
+    expect(template).toContain("challenger: higher-upside");
+    expect(template).toContain("Based on user reaction/feedback/concerns");
+    expect(brainstorm.artifactValidation.find((row) => row.section === "Selected Direction")?.validationRule)
+      .toContain("reaction/feedback/concerns");
+    expect(brainstorm.artifactValidation.find((row) => row.section === "Approach Reaction")?.validationRule)
+      .toContain("before Selected Direction");
+    expect(skill).toContain("if using a structured question tool, send exactly one question object");
+    expect(skill).toContain("rationale tied to user reaction/feedback/concerns");
+  });
+
   it("brainstorm artifact requires tier and reaction sections", () => {
     const brainstorm = stageSchema("brainstorm");
     for (const section of ["Approach Tier", "Approach Reaction"] as const) {
