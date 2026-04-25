@@ -34,6 +34,8 @@ workflow tool.
 - Removed the stale `.cclaw/features/**` preview line and remaining
   "active feature" wording from generated guidance after the feature
   system removal.
+- Removed feature-system fields from new archive manifests; archives now
+  record `runName` instead of `featureName` / `activeFeature`.
 
 ### Changed
 

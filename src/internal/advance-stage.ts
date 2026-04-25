@@ -704,11 +704,10 @@ async function harvestStageLearnings(
     };
   }
 
-  const activeFeature = null;
   const appendResult = await appendKnowledge(projectRoot, parsed.entries, {
     stage,
     originStage: stage,
-    originFeature: activeFeature,
+    originFeature: null,
     project: path.basename(projectRoot)
   });
   if (appendResult.invalid > 0) {

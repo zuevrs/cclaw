@@ -42,8 +42,7 @@ export interface ArchiveRunResult {
   archiveId: string;
   archivePath: string;
   archivedAt: string;
-  featureName: string;
-  activeFeature: string;
+  runName: string;
   resetState: FlowState;
   snapshottedStateFiles: string[];
   /** Knowledge curation hint: total active entries + soft threshold (50). */
@@ -63,11 +62,10 @@ export interface ArchiveRunResult {
 }
 
 export interface ArchiveManifest {
-  version: 1;
+  version: 2;
   archiveId: string;
   archivedAt: string;
-  featureName: string;
-  activeFeature: string;
+  runName: string;
   sourceRunId: string;
   sourceCurrentStage: FlowStage;
   sourceCompletedStages: FlowStage[];
@@ -161,7 +159,7 @@ function toArchiveDate(date = new Date()): string {
   return `${yyyy}-${mm}-${dd}`;
 }
 
-function slugifyFeatureName(value: string): string {
+function slugifyRunName(value: string): string {
   const slug = value
     .toLowerCase()
     .trim()
@@ -169,15 +167,15 @@ function slugifyFeatureName(value: string): string {
     .replace(/^-+/u, "")
     .replace(/-+$/u, "");
   if (slug.length === 0) {
-    return "feature";
+    return "run";
   }
   return slug.slice(0, 64);
 }
 
-async function inferFeatureNameFromArtifacts(projectRoot: string): Promise<string> {
+async function inferRunNameFromArtifacts(projectRoot: string): Promise<string> {
   const ideaPath = path.join(projectRoot, ACTIVE_ARTIFACTS_REL_PATH, "00-idea.md");
   if (!(await exists(ideaPath))) {
-    return "feature";
+    return "run";
   }
   try {
     const raw = await fs.readFile(ideaPath, "utf8");
@@ -186,11 +184,11 @@ async function inferFeatureNameFromArtifacts(projectRoot: string): Promise<strin
       .map((line) => line.trim())
       .find((line) => line.length > 0);
     if (!firstMeaningful) {
-      return "feature";
+      return "run";
     }
-    return firstMeaningful.replace(/^[-#*\s]+/u, "").trim() || "feature";
+    return firstMeaningful.replace(/^[-#*\s]+/u, "").trim() || "run";
   } catch {
-    return "feature";
+    return "run";
   }
 }
 
@@ -234,7 +232,7 @@ export async function listRuns(projectRoot: string): Promise<CclawRunMeta[]> {
 
 export async function archiveRun(
   projectRoot: string,
-  featureName?: string,
+  runName?: string,
   options: ArchiveRunOptions = {}
 ): Promise<ArchiveRunResult> {
   await ensureRunSystem(projectRoot);
@@ -245,16 +243,15 @@ export async function archiveRun(
   // which used to cause lost-update races.
   return withDirectoryLock(archiveLockPath(projectRoot), async () => {
   return withDirectoryLock(flowStateLockPathFor(projectRoot), async () => {
-  const activeFeature = "default";
   const artifactsDir = activeArtifactsPath(projectRoot);
   const runsDir = runsRoot(projectRoot);
   await ensureDir(runsDir);
   await ensureDir(artifactsDir);
 
-  const feature = (featureName?.trim() && featureName.trim().length > 0)
-    ? featureName.trim()
-    : await inferFeatureNameFromArtifacts(projectRoot);
-  const archiveBaseId = `${toArchiveDate()}-${slugifyFeatureName(feature)}`;
+  const archiveRunName = (runName?.trim() && runName.trim().length > 0)
+    ? runName.trim()
+    : await inferRunNameFromArtifacts(projectRoot);
+  const archiveBaseId = `${toArchiveDate()}-${slugifyRunName(archiveRunName)}`;
   const archiveId = await uniqueArchiveId(projectRoot, archiveBaseId);
   const archivePath = path.join(runsDir, archiveId);
   const archiveArtifactsPath = path.join(archivePath, "artifacts");
@@ -353,11 +350,10 @@ export async function archiveRun(
     await resetCarryoverStateFiles(projectRoot, resetState.activeRunId);
 
     const manifest: ArchiveManifest = {
-      version: 1,
+      version: 2,
       archiveId,
       archivedAt,
-      featureName: feature,
-      activeFeature,
+      runName: archiveRunName,
       sourceRunId: sourceState.activeRunId,
       sourceCurrentStage: sourceState.currentStage,
       sourceCompletedStages: sourceState.completedStages,
@@ -376,8 +372,7 @@ export async function archiveRun(
       archiveId,
       archivePath,
       archivedAt,
-      featureName: feature,
-      activeFeature,
+      runName: archiveRunName,
       resetState,
       snapshottedStateFiles,
       knowledge: knowledgeStats,
