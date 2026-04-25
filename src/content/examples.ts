@@ -145,9 +145,11 @@ The original premise (“add notifications”) was reframed to **“ensure users
 
 ## Scope Summary
 
+- Selected mode: SELECTIVE EXPANSION (cherry-pick durable feed on hold-scope baseline).
 - Accepted scope: durable feed + SSE + explicit degraded UX.
 - Deferred: WebSocket channel and rich-media/search enhancements.
-- Explicitly excluded: outbound channels and marketing workflows for v1.`,
+- Explicitly excluded: outbound channels and marketing workflows for v1.
+- Next-stage handoff: design — carry the durable-feed contract, SSE failover paths, and degraded-UX expectations into architecture lock-in.`,
 
   design: `## Codebase Investigation (blast-radius files)
 

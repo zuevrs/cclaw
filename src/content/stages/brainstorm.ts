@@ -39,23 +39,29 @@ export const BRAINSTORM: StageSchemaInput = {
   },
   executionModel: {
     checklist: [
-      "**Explore project context** — inspect existing files/docs/recent activity before asking what to build.",
+      "**Explore project context** — inspect existing files/docs/recent activity before asking what to build; capture matching files/patterns/seeds in `Context > Discovered context` so downstream stages don't redo discovery.",
       "**Classify depth and scope** — pick Lightweight / Standard / Deep; decompose independent subsystems before deeper work.",
+      "**Premise check (one pass)** — answer the three gstack-style questions in the artifact body: *Right problem? Direct path? What if we do nothing?* Take a position; do not hedge.",
+      "**Reframe with How Might We** — write a single `How Might We …?` line that names the user, the desired outcome, and the constraint. This is the altitude check before approaches.",
+      "**Sharpening questions (3-5)** — capture decision-changing question/answer pairs in the `Sharpening Questions` table with the actual decision impact; if a question would not change architecture/scope/UX, state the assumption and skip it.",
       "**Use compact discovery for simple apps** — for concrete low-risk asks (todo app, landing page, local widget), do one context pass, compare one baseline and one challenger, then ask for one explicit approval; do not drag the user through a full workshop.",
       "**Short-circuit concrete asks** — for unambiguous implementation-only requests, write a compact brainstorm stub (context, problem, approved intent, constraints, assumptions) and ask for one explicit approval.",
       "**Ask only decision-changing questions** — one at a time; if answers would not change approach, state the assumption and continue.",
-      "**Compare 2-3 distinct approaches** — include real trade-offs, withhold recommendation, and include one higher-upside challenger.",
+      "**Compare 2-3 distinct approaches with stable Role/Upside columns** — Role values are `baseline` | `challenger` | `wild-card`; Upside is `low` | `modest` | `high` | `higher`; include real trade-offs and reuse notes; include exactly one challenger with explicit `high` or `higher` upside.",
       "**Collect reaction before recommending** — ask which option feels closest and what concern remains, then recommend based on that reaction.",
-      "**Write and tighten the artifact** — scale sections to complexity, optionally add a compact diagram, then patch contradictions, weak trade-offs, placeholders, ambiguity, and weak handoff language.",
+      "**Write the `Not Doing` list** — name 3-5 things this brainstorm explicitly is not committing to (vs. deferred). This protects scope from silent enlargement and the next stage from rework.",
+      "**Self-review before user approval** — re-read the artifact and patch contradictions, weak trade-offs, placeholders, ambiguity, and weak handoff language; record the patch list in `Self-Review Notes` (or `- None.`).",
       "**Request explicit approval** — state exactly what direction is being approved; do not advance without approval and artifact review.",
       "**Handoff** — only after approval, complete the stage and point to `/cc-next`."
     ],
     interactionProtocol: [
-      "Start from observed project context; if the idea is vague, first narrow the project type.",
+      "Start from observed project context; if the idea is vague, first narrow the project type with **one** structured question, then keep going.",
+      "Lead with the premise check (right problem / direct path / what if nothing) and the `How Might We` reframing before approaches; both go in the artifact, not just the chat.",
       "Ask at most one question per turn, only when decision-changing; if using a structured question tool, send exactly one question object, not a multi-question form.",
-      "If likely answers do not change architecture or scope boundaries, choose the default and state the assumption.",
-      "For simple greenfield web apps, present a compact A/B choice with one recommended path and one higher-upside challenger; keep the artifact concise but structurally complete.",
+      "If likely answers do not change architecture or scope boundaries, choose the default and state the assumption inline.",
+      "For simple greenfield web apps, present a compact A/B choice with one recommended path and one higher-upside challenger; keep the artifact concise but structurally complete (Context, Premise, How Might We, Sharpening Questions, Approaches, Reaction, Selected Direction, Not Doing).",
       "Show approaches before the recommendation; include a higher-upside challenger and gather reaction first.",
+      "Self-review before approval: re-read the artifact, fix contradictions/placeholders/weak trade-offs, then ask for approval. Do not ask for approval on a draft you have not re-read.",
       "State exactly what is being approved, then **STOP** until the user explicitly approves the artifact."
     ],
     process: [
@@ -120,16 +126,21 @@ export const BRAINSTORM: StageSchemaInput = {
       traceabilityRule: "Scope and design decisions must trace back to explored context and approved brainstorm direction."
     },
     artifactValidation: [
-      { section: "Context", required: true, validationRule: "Must reference project state and relevant existing code or patterns." },
+      { section: "Context", required: true, validationRule: "Must reference project state and relevant existing code or patterns. A `Discovered context` subsection (or list) is recommended for downstream traceability." },
       { section: "Problem", required: true, validationRule: "Must define what we're solving, success criteria, and constraints." },
+      { section: "Premise Check", required: false, validationRule: "Recommended: explicit answers to `Right problem?`, `Direct path?`, `What if we do nothing?` — take a position, do not hedge." },
+      { section: "How Might We", required: false, validationRule: "Recommended: a single `How Might We …?` line naming the user, the outcome, and the binding constraint." },
+      { section: "Sharpening Questions", required: false, validationRule: "Recommended: 3-5 question/answer pairs with explicit `Decision impact` so downstream stages see what each answer changed." },
       { section: "Clarifying Questions", required: false, validationRule: "Must capture question, answer, and decision impact for each clarifying question." },
       { section: "Approach Tier", required: true, validationRule: "Must classify depth as Lightweight/Standard/Deep and explain why." },
       { section: "Short-Circuit Decision", required: false, validationRule: "Must include Status/Why/Scope handoff lines when short-circuit is discussed; compact stubs are valid for concrete asks." },
-      { section: "Approaches", required: true, validationRule: "Must compare 2-3 distinct options with real trade-offs; include one option marked as a challenger with explicit high/higher upside." },
+      { section: "Approaches", required: true, validationRule: "Must compare 2-3 distinct options with real trade-offs. Use the canonical `Role` column with `baseline` | `challenger` | `wild-card` and the `Upside` column with `low` | `modest` | `high` | `higher`; include exactly one challenger row with `high` or `higher` upside." },
       { section: "Approach Reaction", required: true, validationRule: "Must appear before Selected Direction and summarize user reaction before recommendation, including `Closest option`, `Concerns`, and what changed after reaction." },
       { section: "Selected Direction", required: true, validationRule: "Must include the selected approach, an explicit approval marker, rationale traceable to the prior Approach Reaction, and a track-aware next-stage handoff." },
+      { section: "Not Doing", required: false, validationRule: "Recommended: 3-5 explicitly non-committed items (distinct from deferred). Protects scope from silent enlargement and the next stage from rework." },
       { section: "Design", required: false, validationRule: "Must cover architecture, key components, and data flow scaled to complexity." },
       { section: "Visual Companion", required: false, validationRule: "If architecture/data-flow complexity is medium+, include compact ASCII/Mermaid diagram or explicitly justify omission." },
+      { section: "Self-Review Notes", required: false, validationRule: "Recommended: list of patches applied during self-review (or `- None.`) — done before requesting user approval." },
       { section: "Assumptions and Open Questions", required: false, validationRule: "Must capture unresolved assumptions/open questions, or explicitly state none." }
     ],
     trivialOverrideSections: [

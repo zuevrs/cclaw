@@ -351,16 +351,20 @@ function tokensFromRule(rule: string): string[] {
 }
 
 /**
- * Extract required keywords from validation rules that contain comma-separated
- * concept lists. Activates only for rules with structured enumerations like
- * "failure modes, error surface, data-flow paths" — not for short rules.
+ * Extract required keywords from validation rules that contain *backticked*
+ * stable tokens after a colon. We only fire on machine-surface enumerations
+ * (e.g., `` Must contain: `Status:`, `WAIT_FOR_CONFIRM`, `Approved:` ``);
+ * descriptive English prose with bare comma lists is intentionally ignored so
+ * authors can write rationale freely without triggering hardcoded keyword
+ * matches. Sections that need richer structural enforcement use a dedicated
+ * `validateSectionBody` dispatch (see `validateScopeSummary`, etc.).
  */
 function extractRequiredKeywords(rule: string): string[] {
   const colonMatch = /:\s*(.+)$/u.exec(rule);
   if (!colonMatch) return [];
   const tail = colonMatch[1]!;
-  const parts = tail.split(/,\s*(?:and\s+)?/u).map((p) => p.trim().replace(/\.$/u, ""));
-  const phrases = parts.filter((p) => p.length >= 4 && !/^(must|should|at least|if |or )/iu.test(p));
+  const backtickedTokens = Array.from(tail.matchAll(/`([^`]+)`/gu)).map((m) => m[1]!.trim());
+  const phrases = backtickedTokens.filter((p) => p.length >= 2);
   if (phrases.length < 3) return [];
   return phrases;
 }
@@ -541,6 +545,140 @@ function validateFailureModeTable(sectionBody: string): { ok: boolean; details: 
   return {
     ok: true,
     details: "Failure Mode Table header and critical-risk checks passed."
+  };
+}
+
+// Canonical scope mode tokens (gstack CEO review). The four mode names live in
+// the scope skill, the artifact template, and downstream traces. Requiring one
+// of them in Scope Summary is **structural** — not free-form English keyword
+// matching on user prose. Authors may also use the canonical short form on a
+// `Mode:` / `Selected mode:` line (e.g. `Selected mode: hold`) as a courtesy.
+const SCOPE_MODE_FULL_TOKENS: readonly string[] = [
+  "SCOPE EXPANSION",
+  "SELECTIVE EXPANSION",
+  "HOLD SCOPE",
+  "SCOPE REDUCTION"
+];
+
+const SCOPE_MODE_FULL_REGEX = new RegExp(
+  "\\b(?:" +
+    SCOPE_MODE_FULL_TOKENS
+      .map((token) => token.replace(/[.*+?^${}()|[\]\\]/g, "\\$&").replace(/\s+/g, "[\\s_-]+"))
+      .join("|") +
+    ")\\b",
+  "iu"
+);
+
+// Short-form synonyms accepted only when stamped on an explicit `Mode:` /
+// `Selected mode:` / `Scope mode:` line. Plain prose with the same word does
+// not count, so `strict` / `broad` / `narrow` / similar non-mode adjectives
+// remain rejected.
+const SCOPE_MODE_LINE_REGEX = /(?:^|\n)\s*[-*]?\s*\**\s*(?:Selected\s+|Scope\s+)?Mode\**\s*:\s*\**\s*([^\n]+)/iu;
+const SCOPE_MODE_SHORT_TOKEN_REGEX = /\b(?:hold(?:[\s_-]?scope)?|selective(?:[\s_-]?expansion)?|scope[\s_-]?expansion|expansion|scope[\s_-]?reduction|reduction|expand|reduce)\b/iu;
+
+// Next-stage handoff token. We only enforce the canonical machine-surface stage
+// IDs (`design`, `spec`) plus stable handoff phrases. The surrounding prose may
+// be written in any language — this guards the downstream cross-stage trace,
+// not the wording of the rationale.
+const NEXT_STAGE_HANDOFF_REGEX = /(?:`(?:design|spec)`|\bdesign\b|\bspec\b|next[-\s_]stage|next stage|handoff|hand[-\s]off)/iu;
+
+function hasCanonicalScopeMode(body: string): boolean {
+  if (SCOPE_MODE_FULL_REGEX.test(body)) return true;
+  for (const match of body.matchAll(new RegExp(SCOPE_MODE_LINE_REGEX, "giu"))) {
+    const value = match[1] ?? "";
+    if (SCOPE_MODE_SHORT_TOKEN_REGEX.test(value)) return true;
+  }
+  return false;
+}
+
+function validatePremiseChallenge(sectionBody: string): { ok: boolean; details: string } {
+  // gstack-style premise challenge requires a real Q/A structure (table or
+  // list), not free-form prose. The validation is *structural* only — we do
+  // NOT keyword-grep for English phrases like "right problem"; authors may
+  // write the questions in any language, and the answers carry the meaning.
+  // The template ships with canonical question labels as scaffolding, but
+  // the linter only enforces that the section actually compares premise
+  // questions to answers.
+  const tableRows = getMarkdownTableRows(sectionBody);
+  const bulletRows = sectionBody
+    .split(/\r?\n/u)
+    .map((line) => line.trim())
+    .filter((line) => /^(?:[-*]|\d+\.)\s+\S/u.test(line));
+  const rowCount = Math.max(tableRows.length, bulletRows.length);
+  if (rowCount < 3) {
+    return {
+      ok: false,
+      details: `Premise Challenge needs at least 3 question/answer rows in a table or bullet list (right problem? / direct path? / what if nothing? are the gstack default trio). Found ${rowCount}.`
+    };
+  }
+  // For tables, each data row must have at least 2 non-empty cells so the
+  // section is genuinely a Q/A comparison, not a list of headlines. For
+  // bullet lists, each line must be substantive (>= 8 characters of letters
+  // or digits) so we don't accept three-letter placeholders like `- a`.
+  if (tableRows.length >= 3) {
+    const sparseRows = tableRows.filter((row) => {
+      const filledCells = row.filter((cell) => cell.replace(/[\s|]/gu, "").length >= 2);
+      return filledCells.length < 2;
+    });
+    if (sparseRows.length > 0) {
+      return {
+        ok: false,
+        details: "Premise Challenge table rows must populate at least the question and answer columns (no empty answers)."
+      };
+    }
+  } else if (bulletRows.length >= 3) {
+    const sparseBullets = bulletRows.filter((line) => {
+      const cleaned = line.replace(/^[-*\d.\s]+/u, "").replace(/[`*_]/gu, "").trim();
+      const hasQuestionMark = /\?/u.test(cleaned);
+      const meaningful = cleaned.match(/[\p{L}\p{N}]/gu)?.length ?? 0;
+      return !hasQuestionMark && meaningful < 12;
+    });
+    if (sparseBullets.length > bulletRows.length - 3) {
+      return {
+        ok: false,
+        details: "Premise Challenge bullet list must include at least 3 substantive Q/A lines (a question mark plus the answer, or a labelled `Question: answer` pair)."
+      };
+    }
+  }
+  return {
+    ok: true,
+    details: `Premise Challenge structures ${rowCount} Q/A rows.`
+  };
+}
+
+function validateScopeSummary(sectionBody: string): { ok: boolean; details: string } {
+  const meaningfulLines = sectionBody
+    .split(/\r?\n/)
+    .map((line) => line.trim())
+    .filter((line) => line.length > 0 && /[\p{L}\p{N}]/u.test(line));
+
+  if (meaningfulLines.length < 2) {
+    return {
+      ok: false,
+      details:
+        "Scope Summary must list at least 2 substantive lines covering the selected mode and the next-stage handoff."
+    };
+  }
+
+  if (!hasCanonicalScopeMode(sectionBody)) {
+    return {
+      ok: false,
+      details:
+        "Scope Summary must name the selected mode using a canonical token (SCOPE EXPANSION, SELECTIVE EXPANSION, HOLD SCOPE, SCOPE REDUCTION) or a short form on a `Mode:` line (hold, selective, expansion, reduction)."
+    };
+  }
+
+  if (!NEXT_STAGE_HANDOFF_REGEX.test(sectionBody)) {
+    return {
+      ok: false,
+      details:
+        "Scope Summary must record the track-aware next-stage handoff (mention `design` for standard, `spec` for medium, or include a `Next-stage handoff:` line)."
+    };
+  }
+
+  return {
+    ok: true,
+    details: "Scope Summary names the selected mode and the next-stage handoff."
   };
 }
 
@@ -1385,6 +1523,12 @@ function validateSectionBody(
   }
   if (sectionNameNormalized === "pre-scope system audit") {
     return validatePreScopeSystemAudit(sectionBody);
+  }
+  if (sectionNameNormalized === "scope summary") {
+    return validateScopeSummary(sectionBody);
+  }
+  if (sectionNameNormalized === "premise challenge") {
+    return validatePremiseChallenge(sectionBody);
   }
   if (sectionNameNormalized === "data flow") {
     return validateInteractionEdgeCaseMatrix(sectionBody);
