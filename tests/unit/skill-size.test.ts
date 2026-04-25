@@ -4,19 +4,16 @@ import { stageSkillMarkdown } from "../../src/content/skills.js";
 import { FLOW_STAGES } from "../../src/types.js";
 
 describe("stage skill size budgets", () => {
-  // Budget bumped from 350 → 400 to accommodate the mermaid `## Process`
-  // state-machine diagram and platform-notes block introduced by the
-  // stage-flow consolidation (fix #2 / #7). The extra ~15–25 lines per
-  // stage replace a flat duplicated top-5 list with a structured graph
-  // that the model reads as a map — net readability gain.
-  it("keeps every stage skill under 400 lines", () => {
+  // Keep stage skills compact enough to scan while preserving the process map,
+  // gate/evidence lists, artifact validation, and closeout instructions.
+  it("keeps every stage skill under 360 lines", () => {
     for (const stage of FLOW_STAGES) {
       const markdown = stageSkillMarkdown(stage);
       const lines = markdown.split(/\r?\n/u).length;
       expect(
         lines,
-        `stage "${stage}" exceeded 400 lines (${lines})`
-      ).toBeLessThanOrEqual(400);
+        `stage "${stage}" exceeded 360 lines (${lines})`
+      ).toBeLessThanOrEqual(360);
     }
   });
 

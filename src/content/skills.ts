@@ -24,10 +24,16 @@ ${items.map((item) => `- ${item}`).join("\n")}
 `;
 }
 
-function contextLoadingBlock(trace: CrossStageTrace): string {
+function contextLoadingBlock(trace: CrossStageTrace, executionModel: StageExecutionModel): string {
   const readLines = trace.readsFrom.length > 0
     ? trace.readsFrom.map((value) => `- \`${value}\``).join("\n")
     : "- (first stage — no upstream artifacts)";
+  const inputs = executionModel.inputs.length > 0
+    ? executionModel.inputs.map((item) => `- ${item}`).join("\n")
+    : "- (first stage — no required inputs)";
+  const requiredContext = executionModel.requiredContext.length > 0
+    ? executionModel.requiredContext.map((item) => `- ${item}`).join("\n")
+    : "- None beyond this skill";
 
   return `## Context Loading
 
@@ -36,7 +42,11 @@ Before execution:
 2. Load active artifacts from \`.cclaw/artifacts/\`.
 3. Load upstream artifacts required by this stage:
 ${readLines}
-4. Use the injected knowledge digest from session-start; only fall back to full
+4. Confirm stage inputs:
+${inputs}
+5. Confirm required context:
+${requiredContext}
+6. Use the injected knowledge digest from session-start; only fall back to full
    \`.cclaw/knowledge.jsonl\` when the digest is insufficient.
 `;
 }
@@ -185,23 +195,6 @@ function mergedAntiPatterns(philosophy: StagePhilosophy, execution: StageExecuti
     merged.push(item);
   }
   return merged.map((item) => `- ${item}`).join("\n");
-}
-
-function stageSpecificSeeAlso(stage: FlowStage): string[] {
-  const refs: Record<FlowStage, string[]> = {
-    brainstorm: [`- \`${RUNTIME_ROOT}/skills/learnings/SKILL.md\``],
-    scope: [`- \`${RUNTIME_ROOT}/skills/learnings/SKILL.md\``],
-    design: [`- Use built-in security and performance review lenses when risk triggers them.`],
-    spec: [`- Keep acceptance criteria testable and docs-ready in the artifact.`],
-    plan: [
-      `- \`${RUNTIME_ROOT}/skills/subagent-dev/SKILL.md\``,
-      `- \`${RUNTIME_ROOT}/skills/parallel-dispatch/SKILL.md\``
-    ],
-    tdd: [`- Use RED -> GREEN -> REFACTOR evidence in the artifact; debug in-session when tests fail.`],
-    review: [`- \`${RUNTIME_ROOT}/skills/parallel-dispatch/SKILL.md\``],
-    ship: [`- Use release, docs, and verification discipline inline before finalization.`]
-  };
-  return refs[stage];
 }
 
 function completionParametersBlock(schema: StageSchema, track: FlowTrack): string {
@@ -356,7 +349,6 @@ export function stageSkillMarkdown(stage: FlowStage, track: FlowTrack = "standar
   ).slice(0, 5);
   const processFlowMermaid = renderProcessFlowMermaid(executionModel);
   const platformNotesBlock = renderPlatformNotesBlock(executionModel.platformNotes);
-  const stageRefs = stageSpecificSeeAlso(stage);
   const reviewLoopSection = reviewLoopBlock(reviewLens.reviewLoop);
   const mandatoryDelegationSummary = mandatoryDelegations.length > 0
     ? mandatoryDelegations.map((name) => `\`${name}\``).join(", ")
@@ -402,13 +394,7 @@ This is the stage **state machine** — the canonical ordered flow. For every de
 
 ${processFlowMermaid.length > 0 ? processFlowMermaid : "```mermaid\nflowchart TD\n  S1[\"Execute Checklist\"] --> S2[\"Satisfy required gates\"] --> S3[\"Verify before closeout\"]\n```"}
 
-## Inputs
-${executionModel.inputs.length > 0 ? executionModel.inputs.map((item) => `- ${item}`).join("\n") : "- (first stage — no required inputs)"}
-
-## Required Context
-${executionModel.requiredContext.length > 0 ? executionModel.requiredContext.map((item) => `- ${item}`).join("\n") : "- None beyond this skill"}
-
-${platformNotesBlock}${contextLoadingBlock(artifactRules.crossStageTrace)}
+${platformNotesBlock}${contextLoadingBlock(artifactRules.crossStageTrace, executionModel)}
 ${autoSubagentDispatchBlock(stage, track)}
 ${researchPlaybooksBlock(executionModel.researchPlaybooks ?? [])}
 
@@ -457,10 +443,5 @@ ${reviewSectionsBlock(reviewLens.reviewSections)}
 - Follow the handoff menu: advance, revise, pause, rewind, or archive only when the user explicitly chooses it.
 - Before closeout, fill \`## Learnings\` with \`- None this stage.\` or 1-3 strict JSON bullets.
 - Keep decisions explicit: context, options, chosen option, rationale, risk, and rollback.
-
-## See Also
-- \`${RUNTIME_ROOT}/skills/using-cclaw/SKILL.md\`
-- \`${RUNTIME_ROOT}/skills/session/SKILL.md\`
-${stageRefs.join("\n")}
 `;
 }

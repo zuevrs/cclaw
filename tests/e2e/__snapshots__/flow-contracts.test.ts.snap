@@ -79,16 +79,6 @@ flowchart TD
   S8 --> S9
 \`\`\`
 
-## Inputs
-- implementation diff
-- spec and plan artifacts
-- test/build evidence
-
-## Required Context
-- spec criteria
-- tdd artifact
-- rulebook constraints
-
 ## Platform Notes
 - When citing file locations in findings, use repo-relative forward-slash paths with a line number (\`src/foo/bar.ts:42\`). Avoid IDE-generated hyperlinks that embed absolute machine-specific paths.
 - Line-range or diff-range references must match \`git diff --unified=0\` output format so reviewers on any OS can reproduce the range locally without GUI tooling.
@@ -103,7 +93,15 @@ Before execution:
 - \`.cclaw/artifacts/06-tdd.md\`
 - \`.cclaw/artifacts/04-spec.md\`
 - \`.cclaw/artifacts/05-plan.md\`
-4. Use the injected knowledge digest from session-start; only fall back to full
+4. Confirm stage inputs:
+- implementation diff
+- spec and plan artifacts
+- test/build evidence
+5. Confirm required context:
+- spec criteria
+- tdd artifact
+- rulebook constraints
+6. Use the injected knowledge digest from session-start; only fall back to full
    \`.cclaw/knowledge.jsonl\` when the digest is insufficient.
 
 ## Automatic Subagent Dispatch
@@ -313,11 +311,6 @@ Rule: Review verdict must reference specific spec criteria and TDD evidence. Dow
 - Follow the handoff menu: advance, revise, pause, rewind, or archive only when the user explicitly chooses it.
 - Before closeout, fill \`## Learnings\` with \`- None this stage.\` or 1-3 strict JSON bullets.
 - Keep decisions explicit: context, options, chosen option, rationale, risk, and rollback.
-
-## See Also
-- \`.cclaw/skills/using-cclaw/SKILL.md\`
-- \`.cclaw/skills/session/SKILL.md\`
-- \`.cclaw/skills/parallel-dispatch/SKILL.md\`
 "
 `;
 
@@ -403,16 +396,6 @@ flowchart TD
   S5 --> S6
 \`\`\`
 
-## Inputs
-- review verdict
-- test/build outputs
-- release context
-
-## Required Context
-- review artifact
-- changelog scope
-- deployment constraints
-
 ## Platform Notes
 - Release commands (\`npm publish\`, \`git tag -s\`, \`gh release create\`, \`cargo publish\`, \`goreleaser\`) behave the same across OSes, but signing keys differ: macOS Keychain, Windows credential store, Linux GPG agent. Verify the signing flow on the actual release machine before running the real publish.
 - Version tags must be pure ASCII and lowercase after an optional \`v\` prefix (\`v1.2.3\`, \`v1.2.3-rc.1\`). Avoid Unicode dashes and non-breaking spaces that sneak in via copy-paste from docs.
@@ -429,7 +412,15 @@ Before execution:
 - \`.cclaw/artifacts/06-tdd.md\`
 - \`.cclaw/artifacts/05-plan.md\`
 - \`.cclaw/artifacts/04-spec.md\`
-4. Use the injected knowledge digest from session-start; only fall back to full
+4. Confirm stage inputs:
+- review verdict
+- test/build outputs
+- release context
+5. Confirm required context:
+- review artifact
+- changelog scope
+- deployment constraints
+6. Use the injected knowledge digest from session-start; only fall back to full
    \`.cclaw/knowledge.jsonl\` when the digest is insufficient.
 
 ## Automatic Subagent Dispatch
@@ -580,11 +571,6 @@ Rule: Ship artifact must reference review verdict and resolution status. Release
 - Follow the handoff menu: advance, revise, pause, rewind, or archive only when the user explicitly chooses it.
 - Before closeout, fill \`## Learnings\` with \`- None this stage.\` or 1-3 strict JSON bullets.
 - Keep decisions explicit: context, options, chosen option, rationale, risk, and rollback.
-
-## See Also
-- \`.cclaw/skills/using-cclaw/SKILL.md\`
-- \`.cclaw/skills/session/SKILL.md\`
-- Use release, docs, and verification discipline inline before finalization.
 "
 `;
 
@@ -671,16 +657,6 @@ flowchart TD
   S5 --> S6
 \`\`\`
 
-## Inputs
-- approved spec
-- codebase context
-- delivery constraints
-
-## Required Context
-- spec acceptance criteria
-- current architecture
-- known technical debt and dependencies
-
 ## Platform Notes
 - Per-task verification commands must be runnable on Windows PowerShell, macOS bash/zsh, and Linux bash. Prefer \`npm run <script>\` / \`pnpm <script>\` / \`pytest -k <name>\` over raw shell one-liners so the command portability is handled by the script runner.
 - If a task command needs globbing, wrap the glob in single quotes on POSIX and escape as needed on PowerShell (\`'src/**/*.ts'\` vs \`"src/**/*.ts"\`). Note the quoting variant when the task is expected to run in mixed-OS CI.
@@ -695,7 +671,15 @@ Before execution:
 - \`.cclaw/artifacts/04-spec.md\`
 - \`.cclaw/artifacts/03-design-<slug>.md\`
 - \`.cclaw/artifacts/02-scope-<slug>.md\`
-4. Use the injected knowledge digest from session-start; only fall back to full
+4. Confirm stage inputs:
+- approved spec
+- codebase context
+- delivery constraints
+5. Confirm required context:
+- spec acceptance criteria
+- current architecture
+- known technical debt and dependencies
+6. Use the injected knowledge digest from session-start; only fall back to full
    \`.cclaw/knowledge.jsonl\` when the digest is insufficient.
 
 ## Automatic Subagent Dispatch
@@ -846,12 +830,6 @@ Rule: Every task must trace to a spec acceptance criterion. Every locked scope d
 - Follow the handoff menu: advance, revise, pause, rewind, or archive only when the user explicitly chooses it.
 - Before closeout, fill \`## Learnings\` with \`- None this stage.\` or 1-3 strict JSON bullets.
 - Keep decisions explicit: context, options, chosen option, rationale, risk, and rollback.
-
-## See Also
-- \`.cclaw/skills/using-cclaw/SKILL.md\`
-- \`.cclaw/skills/session/SKILL.md\`
-- \`.cclaw/skills/subagent-dev/SKILL.md\`
-- \`.cclaw/skills/parallel-dispatch/SKILL.md\`
 "
 `;
 
@@ -937,17 +915,6 @@ flowchart TD
   S8 --> S9
 \`\`\`
 
-## Inputs
-- approved plan slice
-- spec acceptance criterion
-- test harness configuration
-- coding standards and constraints
-
-## Required Context
-- plan artifact
-- spec artifact
-- existing test patterns
-
 ## Platform Notes
 - Record the **exact** test command run (\`npm test -- path/to/file\`, \`pytest path/to/file\`, \`go test ./...\`) so RED/GREEN evidence is reproducible on any OS. Do not paraphrase to a shorter alias.
 - Line-ending drift (CRLF vs LF) can turn a passing test red on Windows if the repo mixes styles. When a GREEN flip happens only after whitespace normalization, record it as a refactor note, not a hidden fix.
@@ -963,7 +930,16 @@ Before execution:
 - \`.cclaw/artifacts/05-plan.md\`
 - \`.cclaw/artifacts/04-spec.md\`
 - \`.cclaw/artifacts/03-design-<slug>.md\`
-4. Use the injected knowledge digest from session-start; only fall back to full
+4. Confirm stage inputs:
+- approved plan slice
+- spec acceptance criterion
+- test harness configuration
+- coding standards and constraints
+5. Confirm required context:
+- plan artifact
+- spec artifact
+- existing test patterns
+6. Use the injected knowledge digest from session-start; only fall back to full
    \`.cclaw/knowledge.jsonl\` when the digest is insufficient.
 
 ## Automatic Subagent Dispatch
@@ -1163,11 +1139,6 @@ Rule: Every RED test traces to a plan task. Every GREEN change traces to a RED t
 - Follow the handoff menu: advance, revise, pause, rewind, or archive only when the user explicitly chooses it.
 - Before closeout, fill \`## Learnings\` with \`- None this stage.\` or 1-3 strict JSON bullets.
 - Keep decisions explicit: context, options, chosen option, rationale, risk, and rollback.
-
-## See Also
-- \`.cclaw/skills/using-cclaw/SKILL.md\`
-- \`.cclaw/skills/session/SKILL.md\`
-- Use RED -> GREEN -> REFACTOR evidence in the artifact; debug in-session when tests fail.
 "
 `;
 
@@ -1258,16 +1229,6 @@ flowchart TD
   S10 --> More["...see full Checklist"]
 \`\`\`
 
-## Inputs
-- problem statement
-- constraints
-- success criteria
-
-## Required Context
-- existing project context and patterns
-- current behavior of affected area
-- business and delivery constraints
-
 ## Platform Notes
 - Write artifact paths in POSIX form (\`.cclaw/artifacts/01-brainstorm-<slug>.md\`) even on Windows — the runtime normalizes separators. Do NOT commit Windows-style backslashes into the artifact or flow-state.
 - Slugify titles with lowercase ASCII letters, digits, and single dashes only — avoid spaces and case-sensitive names so the file resolves identically on case-insensitive filesystems (macOS/Windows default).
@@ -1280,7 +1241,15 @@ Before execution:
 2. Load active artifacts from \`.cclaw/artifacts/\`.
 3. Load upstream artifacts required by this stage:
 - (first stage — no upstream artifacts)
-4. Use the injected knowledge digest from session-start; only fall back to full
+4. Confirm stage inputs:
+- problem statement
+- constraints
+- success criteria
+5. Confirm required context:
+- existing project context and patterns
+- current behavior of affected area
+- business and delivery constraints
+6. Use the injected knowledge digest from session-start; only fall back to full
    \`.cclaw/knowledge.jsonl\` when the digest is insufficient.
 
 ## Automatic Subagent Dispatch
@@ -1424,10 +1393,5 @@ Rule: Scope and design decisions must trace back to explored context and approve
 - Follow the handoff menu: advance, revise, pause, rewind, or archive only when the user explicitly chooses it.
 - Before closeout, fill \`## Learnings\` with \`- None this stage.\` or 1-3 strict JSON bullets.
 - Keep decisions explicit: context, options, chosen option, rationale, risk, and rollback.
-
-## See Also
-- \`.cclaw/skills/using-cclaw/SKILL.md\`
-- \`.cclaw/skills/session/SKILL.md\`
-- \`.cclaw/skills/learnings/SKILL.md\`
 "
 `;
