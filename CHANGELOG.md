@@ -50,6 +50,9 @@ workflow tool.
   still referenced deleted `.cclaw/evals` fixtures.
 - Removed stale ignore/config entries for the deleted `docs/references` and
   `scripts/reference-sync.sh` reference-research surface.
+- Consolidated `/cc-view` generated guidance into one `flow-view` skill with
+  embedded `status`, `tree`, and `diff` subcommand sections. Sync now removes
+  the old `flow-status`, `flow-tree`, and `flow-diff` skill folders.
 
 ### Changed
 
