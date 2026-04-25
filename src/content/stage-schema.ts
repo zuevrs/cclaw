@@ -415,28 +415,10 @@ const STAGE_AUTO_SUBAGENT_DISPATCH: Record<FlowStage, StageAutoSubagentDispatch[
       agent: "test-author",
       mode: "mandatory",
       requiredAtTier: "lightweight",
-      when: "Always during TDD cycle (RED phase).",
-      purpose: "Produce failing RED tests only; no production writes.",
+      when: "Always during the TDD cycle.",
+      purpose: "Own phase-specific RED/GREEN/REFACTOR evidence for each slice: failing tests before production writes, minimal GREEN implementation, then behavior-preserving refactor notes.",
       requiresUserGate: false,
-      skill: "tdd-red-phase"
-    },
-    {
-      agent: "test-author",
-      mode: "mandatory",
-      requiredAtTier: "lightweight",
-      when: "Always during TDD cycle (GREEN phase).",
-      purpose: "Implement minimum production changes to satisfy RED and prove full-suite GREEN.",
-      requiresUserGate: false,
-      skill: "tdd-green-phase"
-    },
-    {
-      agent: "test-author",
-      mode: "mandatory",
-      requiredAtTier: "lightweight",
-      when: "Always during TDD cycle (REFACTOR phase).",
-      purpose: "Refactor only after GREEN proof, preserving behavior and test pass state.",
-      requiresUserGate: false,
-      skill: "tdd-refactor-phase"
+      skill: "tdd-cycle-evidence"
     },
     {
       agent: "doc-updater",

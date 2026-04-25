@@ -58,16 +58,16 @@ Dispatch these in parallel where the harness supports isolated workers, then run
 one reconciliation pass that merges findings into \`.cclaw/artifacts/07-review-army.json\`
 with explicit source tags per finding.
 
-### TDD phase fan-out protocol
+### TDD evidence protocol
 
-Treat RED, GREEN, and REFACTOR as separate delegated intents:
+Treat RED, GREEN, and REFACTOR as phase intents inside one mandatory \`test-author\` delegation by default:
 
 - \`tdd-red\`: tests only, no production writes
 - \`tdd-green\`: minimal production implementation, no new RED tests
 - \`tdd-refactor\`: cleanup only after GREEN is proven
 
 Set \`CCLAW_ACTIVE_AGENT\` to the active phase name when possible so workflow-guard
-can enforce phase-appropriate write boundaries.
+can enforce phase-appropriate write boundaries. Use separate workers only when the harness and slice boundary make the split genuinely useful; the mandatory gate is the evidence-backed \`test-author\` row, not three default subagents.
 
 ## Model & Harness Routing Notes
 
@@ -119,7 +119,7 @@ Concrete per-stage rules so the controller does not have to guess which tier fit
 | design | planner (always) | security-reviewer (if trust boundary touched) | run \`research/framework-docs-lookup.md\` + \`research/best-practices-lookup.md\` in-thread | escalate one specialist to \`deep\` only if a failure mode is Critical-severity |
 | spec | — | reviewer (if spec > 200 lines or multiple ACs) | — | escalate to \`deep\` only for spec ↔ design contradictions |
 | plan | planner (solo, always) | — | — | never fan out at plan stage; one owner for dependency graph |
-| tdd | — | test-author (each slice) · reviewer (slice-local) | doc-updater (API surface changes) | escalate to \`deep\` only when a RED test cannot be expressed (design leak) |
+| tdd | — | test-author (per slice, carrying RED/GREEN/REFACTOR evidence) · reviewer (slice-local only when sliceReview triggers) | doc-updater (API surface changes) | escalate to \`deep\` only when a RED test cannot be expressed (design leak) |
 | review | — | reviewer · security-reviewer (both mandatory) | doc-updater for release-note drift checks | escalate a \`balanced\` reviewer to \`deep\` only when two reviewers disagree on severity |
 | ship | — | security-reviewer (if blast radius is high) | doc-updater (changelog/migration notes) | escalate to \`balanced\` reviewer only if preflight finds a regression |
 

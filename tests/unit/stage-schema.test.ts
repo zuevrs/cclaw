@@ -5,7 +5,7 @@ import { SHIP_FINALIZATION_MODES } from "../../src/constants.js";
 import { lintArtifact } from "../../src/artifact-linter.js";
 import { CCLAW_AGENTS } from "../../src/content/core-agents.js";
 import { stageExamples, stageFullArtifactExampleMarkdown } from "../../src/content/examples.js";
-import { mandatoryDelegationsForStage, stagePolicyNeedles, stageSchema } from "../../src/content/stage-schema.js";
+import { mandatoryDelegationsForStage, stageAutoSubagentDispatch, stagePolicyNeedles, stageSchema } from "../../src/content/stage-schema.js";
 import { stageSkillMarkdown } from "../../src/content/skills.js";
 import { enhancedAgentBody } from "../../src/content/subagents.js";
 import { ARTIFACT_TEMPLATES } from "../../src/content/templates.js";
@@ -43,6 +43,17 @@ describe("stage schema and subagent alignment", () => {
     expect(mandatoryDelegationsForStage("scope", "standard")).toContain("planner");
     expect(mandatoryDelegationsForStage("review", "lightweight")).toContain("reviewer");
     expect(mandatoryDelegationsForStage("ship", "lightweight")).toContain("doc-updater");
+  });
+
+  it("keeps tdd dispatch to one mandatory test-author evidence cycle", () => {
+    const testAuthorRows = stageAutoSubagentDispatch("tdd")
+      .filter((row) => row.agent === "test-author");
+
+    expect(testAuthorRows).toHaveLength(1);
+    expect(testAuthorRows[0]?.mode).toBe("mandatory");
+    expect(testAuthorRows[0]?.skill).toBe("tdd-cycle-evidence");
+    expect(testAuthorRows[0]?.purpose).toContain("RED/GREEN/REFACTOR evidence");
+    expect(mandatoryDelegationsForStage("tdd", "lightweight")).toEqual(["test-author"]);
   });
 
   it("derives policy needles from lint metadata with track transforms", () => {

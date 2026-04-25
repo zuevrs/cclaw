@@ -88,6 +88,8 @@ workflow tool.
 - The generated meta-skill, shared stage guidance, `/cc-next`, and harness shims
   now show the whole flow explicitly: critical-path stages finish with
   `retro -> compound -> archive` through `/cc-next`.
+- TDD dispatch guidance now presents one mandatory `test-author` evidence cycle
+  for RED/GREEN/REFACTOR instead of implying three default subagents.
 
 ### Preserved
 
