@@ -212,15 +212,12 @@ export const TDD: StageSchemaV2Input = {
 
 function tddStageVariantForTrack(track: FlowTrack): StageSchemaV2Input {
   const renderContext = trackRenderContext(track);
+  if (renderContext.usesPlanTerminology) {
+    return TDD;
+  }
+
   return {
     ...TDD,
-    complexityTier: TDD.complexityTier,
-    skillFolder: TDD.skillFolder,
-    skillName: TDD.skillName,
-    stage: TDD.stage,
-    schemaShape: TDD.schemaShape,
-    next: TDD.next,
-    batchExecutionAllowed: TDD.batchExecutionAllowed,
     skillDescription: renderTrackTerminology(TDD.skillDescription, renderContext),
     philosophy: {
       ...TDD.philosophy,
