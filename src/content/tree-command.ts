@@ -1,6 +1,5 @@
 import { RUNTIME_ROOT } from "../constants.js";
 
-const TREE_SKILL_FOLDER = "flow-tree";
 const TREE_SKILL_NAME = "flow-tree";
 
 function flowStatePath(): string {
@@ -17,78 +16,6 @@ function artifactsPath(): string {
 
 function rewindLogPath(): string {
   return `${RUNTIME_ROOT}/state/rewind-log.jsonl`;
-}
-
-export function treeCommandContract(): string {
-  return `# /cc-view tree
-
-## Purpose
-
-Render a visual flow tree for quick orientation across stages, gates, delegations
-(with fulfillmentMode), ship closeout substate, stale markers, artifact presence,
-and harness capability status.
-
-## HARD-GATE
-
-- \`/cc-view tree\` is read-only. Do not mutate flow-state or artifacts.
-- Use values from \`${flowStatePath()}\` and \`${delegationLogPath()}\`; never infer missing evidence.
-
-## Algorithm
-
-1. Read \`${flowStatePath()}\`.
-2. Read \`${delegationLogPath()}\` (if missing, treat current-stage delegations as pending).
-3. Detect artifact files in \`${artifactsPath()}\` (\`01-brainstorm.md\` …
-   \`08-ship.md\` plus \`09-retro.md\`).
-4. Read rewind records from \`${rewindLogPath()}\` when present for stale-stage context.
-5. Use \`cclaw doctor --explain\` for harness capability status when needed.
-6. Render the tree using stage order from active track:
-   - stage node marker: passed/current/pending/skipped/stale
-   - gate summary: \`passed/required\`
-   - delegation summary for current stage (each agent carries its
-     \`fulfillmentMode\` label)
-   - artifact marker per stage (exists / stale copy / missing)
-7. When \`currentStage === "ship"\` or \`closeout.shipSubstate !== "idle"\`,
-   append a closeout sub-tree under ship with substate and retro/compound flags.
-8. Append a final \`harnesses\` branch summarising tier + fallback for each
-   installed harness.
-
-## Tree Format
-
-\`\`\`
-cclaw flow tree (track=<track>, run=<runId>)
-├─ [✓] brainstorm  gates 6/6   artifact 01-brainstorm.md
-├─ [✓] scope       gates 5/5   artifact 02-scope.md
-├─ [▶] design      gates 2/7   artifact 03-design.md
-│  ├─ delegations:
-│  │   ├─ planner   ✓ completed  mode=isolated
-│  │   └─ reviewer  ○ pending
-│  └─ stale: none
-├─ [○] spec        gates -     artifact missing
-└─ [○] plan        gates -     artifact missing
-
-closeout (shipSubstate=retro_review):
-  ├─ retro:    drafted 09-retro.md · awaiting accept/edit/skip
-  ├─ compound: —
-  └─ archive:  pending
-
-harnesses:
-  ├─ claude    tier=tier1 fallback=native
-  ├─ cursor    tier=tier2 fallback=generic-dispatch
-  ├─ opencode  tier=tier2 fallback=role-switch
-  └─ codex     tier=tier2 fallback=role-switch
-\`\`\`
-
-- Closeout sub-tree is **omitted** when \`currentStage !== "ship"\` and
-  \`shipSubstate === "idle"\`.
-- Delegations sub-branch is omitted when the stage has no mandatory agents.
-- Harness capability details come from \`cclaw doctor --explain\`.
-
-Use UTF markers by default, ASCII fallback when terminal cannot render UTF.
-
-## Primary skill
-
-**${RUNTIME_ROOT}/skills/${TREE_SKILL_FOLDER}/SKILL.md**
-`;
 }
 
 export function treeCommandSkillMarkdown(): string {

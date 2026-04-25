@@ -1,6 +1,5 @@
 import { RUNTIME_ROOT } from "../constants.js";
 
-const STATUS_SKILL_FOLDER = "flow-status";
 const STATUS_SKILL_NAME = "flow-status";
 
 function flowStatePath(): string {
@@ -17,98 +16,6 @@ function knowledgePath(): string {
 
 function retroArtifactPath(): string {
   return `${RUNTIME_ROOT}/artifacts/09-retro.md`;
-}
-
-/**
- * Command contract for /cc-view status — a read-only snapshot command.
- * Does not mutate state. Always safe to run.
- */
-export function statusCommandContract(): string {
-  const flowPath = flowStatePath();
-  const delegationPath = delegationLogPath();
-  return `# /cc-view status
-
-## Purpose
-
-**Read-only visual snapshot of the cclaw run.** Shows progress bar, current stage,
-gate coverage, delegation status with fulfillmentMode, closeout substate after
-ship, harness parity fallback, stale markers, and top knowledge highlights.
-
-This command **never mutates state**. Use it at session start to orient, or at any
-time to answer "where are we?" without advancing the flow.
-
-## HARD-GATE
-
-- **Do not** use \`/cc-view status\` output to infer gate completion for decisions — cite
-  artifact evidence via \`/cc-next\` when advancing.
-- **Do not** mutate \`${flowPath}\` or delegation log from this command.
-- **Do not** mutate state from this command; use \`/cc-view diff\` for a read-only change map.
-
-## Algorithm
-
-1. Read **\`${flowPath}\`** — capture \`track\`, \`currentStage\`, \`completedStages\`,
-   \`skippedStages\`, \`staleStages\`, per-stage gate catalog, and **\`closeout\`**
-   (shipSubstate + retro/compound flags).
-2. Read **\`${delegationPath}\`** — for each mandatory agent of the current stage,
-   capture \`status\`, \`fulfillmentMode\`, and whether \`evidenceRefs\` are present.
-3. Render **time in current stage** as \`(unknown)\` unless the harness provides
-   a visible timestamp in the conversation or artifact handoff.
-4. Summarize current gate counts directly from \`${flowPath}\`.
-5. Derive harness \`tier\` and fallback from cclaw capability metadata; use \`cclaw doctor --explain\` when details are needed.
-6. Read the top of **\`${knowledgePath()}\`** — surface up to 3 most recent entries
-   (by trailing timestamp or source marker).
-7. Detect **closeout artifacts**: check whether \`${retroArtifactPath()}\` exists on
-   disk and annotate the closeout row accordingly.
-8. Emit the visual status block described below. Do **not** load any stage skill.
-
-## Visual markers
-
-Default UTF markers: \`✓\` passed, \`▶\` current, \`○\` pending, \`⊘\` skipped, \`⏸\` stale, \`✗\` blocked.  
-ASCII fallback (no UTF locale): \`[x]\`, \`[>]\`, \`[ ]\`, \`[-]\`, \`[=]\`, \`[!]\`.
-
-Delegation markers: \`✓\` completed, \`◎\` completed-no-evidence (role-switch
-harness; **blocks stage**), \`○\` scheduled/pending, \`⊘\` waived, \`✗\` failed.
-
-## Status Block Format
-
-\`\`\`
-cclaw status
-  flow:    <track> · run=<runId>
-  stage:   <stage> (<N>/<total>) · time <Xd|XhYm|Xm|unknown>
-  bar:     [✓ brainstorm] [✓ scope] [▶ design] [○ spec] [○ plan] [○ tdd] [○ review] [○ ship]
-  gates:   now <passed>/<required> · blocked <count>
-  delegations (<expectedMode>):
-    - planner      ✓ completed  mode=<isolated|generic-dispatch|role-switch>
-    - reviewer     ○ pending
-    - test-author  ◎ missing-evidence (role-switch; add evidenceRefs)
-  closeout: <shipSubstate> · retro=<drafted|accepted|skipped|—> · compound=<N promoted|skipped|—>
-  harness: <id>=<tier>/<fallback>, ...
-  stale:   <list or none>
-  knowledge:
-    - <latest entry summary>
-    - <second entry summary>
-    - <third entry summary>
-  next: /cc-next · /cc-view tree · /cc-view diff
-\`\`\`
-
-- Omit the \`closeout:\` row when \`currentStage !== "ship"\` and \`shipSubstate === "idle"\`.
-- Omit \`delegations\` line when the current stage has zero mandatory delegations.
-- Omit the \`harness\` line only when no installed harness metadata is available.
-
-## Anti-patterns
-
-- Inventing gate status without reading \`${flowPath}\`.
-- Reporting delegations as satisfied when the log says \`pending\`.
-- Treating a \`completed\` role-switch delegation without \`evidenceRefs\` as green
-  — it must surface as \`◎ missing-evidence\`.
-- Advancing the stage from \`/cc-view status\` — progression belongs to \`/cc-next\`.
-- Hiding the closeout substate after ship; retro/compound/archive progress must
-  be visible so \`/cc-next\` resumes at the right step.
-
-## Primary skill
-
-**${RUNTIME_ROOT}/skills/${STATUS_SKILL_FOLDER}/SKILL.md**
-`;
 }
 
 /**
