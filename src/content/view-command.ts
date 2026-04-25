@@ -1,7 +1,16 @@
 import { RUNTIME_ROOT } from "../constants.js";
+import { diffCommandSkillMarkdown } from "./diff-command.js";
+import { statusCommandSkillMarkdown } from "./status-command.js";
+import { treeCommandSkillMarkdown } from "./tree-command.js";
 
 const VIEW_SKILL_FOLDER = "flow-view";
 const VIEW_SKILL_NAME = "flow-view";
+
+function embeddedSkillBody(markdown: string): string {
+  return markdown
+    .replace(/^---\n[\s\S]*?\n---\n\n/u, "")
+    .trim();
+}
 
 export function viewCommandContract(): string {
   return `# /cc-view
@@ -24,9 +33,9 @@ Subcommands:
 
 1. Parse subcommand (default \`status\`).
 2. Route:
-   - \`status\` -> load \`${RUNTIME_ROOT}/skills/flow-status/SKILL.md\`
-   - \`tree\` -> load \`${RUNTIME_ROOT}/skills/flow-tree/SKILL.md\`
-   - \`diff\` -> load \`${RUNTIME_ROOT}/skills/flow-diff/SKILL.md\`
+   - \`status\` -> use the **Status Subcommand** section in \`${RUNTIME_ROOT}/skills/${VIEW_SKILL_FOLDER}/SKILL.md\`
+   - \`tree\` -> use the **Tree Subcommand** section in \`${RUNTIME_ROOT}/skills/${VIEW_SKILL_FOLDER}/SKILL.md\`
+   - \`diff\` -> use the **Diff Subcommand** section in \`${RUNTIME_ROOT}/skills/${VIEW_SKILL_FOLDER}/SKILL.md\`
 3. Unknown subcommand -> print supported values and stop.
 
 ## Headless mode
@@ -47,9 +56,12 @@ Validate envelopes with:
 }
 
 export function viewCommandSkillMarkdown(): string {
+  const status = embeddedSkillBody(statusCommandSkillMarkdown());
+  const tree = embeddedSkillBody(treeCommandSkillMarkdown());
+  const diff = embeddedSkillBody(diffCommandSkillMarkdown());
   return `---
 name: ${VIEW_SKILL_NAME}
-description: "Unified read-only view router for status/tree/diff flow visibility commands."
+description: "Unified read-only view skill for status/tree/diff flow visibility commands."
 ---
 
 # /cc-view
@@ -62,11 +74,23 @@ Wrapper is read-only and dispatch-only. It must not mutate flow state directly.
 
 1. Parse optional subcommand token:
    - missing -> \`status\`
-   - \`status\` -> dispatch to \`${RUNTIME_ROOT}/skills/flow-status/SKILL.md\`
-   - \`tree\` -> dispatch to \`${RUNTIME_ROOT}/skills/flow-tree/SKILL.md\`
-   - \`diff\` -> dispatch to \`${RUNTIME_ROOT}/skills/flow-diff/SKILL.md\`
-2. Execute the target skill.
+   - \`status\` -> run **Status Subcommand** below
+   - \`tree\` -> run **Tree Subcommand** below
+   - \`diff\` -> run **Diff Subcommand** below
+2. Execute only the chosen subcommand section.
 3. Return concise output and suggest \`/cc-view <subcommand>\` variants for navigation.
+
+## Status Subcommand
+
+${status}
+
+## Tree Subcommand
+
+${tree}
+
+## Diff Subcommand
+
+${diff}
 `;
 }
 

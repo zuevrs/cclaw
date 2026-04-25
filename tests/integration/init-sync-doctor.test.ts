@@ -80,6 +80,11 @@ describe("install lifecycle", { timeout: 30_000 }, () => {
     ]);
     const stateEntries = (await fs.readdir(path.join(root, ".cclaw/state"))).sort();
     expect(stateEntries).toEqual(["flow-state.json", "iron-laws.json"]);
+    const skillEntries = (await fs.readdir(path.join(root, ".cclaw/skills"))).sort();
+    expect(skillEntries).toContain("flow-view");
+    expect(skillEntries).not.toContain("flow-status");
+    expect(skillEntries).not.toContain("flow-tree");
+    expect(skillEntries).not.toContain("flow-diff");
 
     const flow = JSON.parse(
       await fs.readFile(path.join(root, ".cclaw/state/flow-state.json"), "utf8")

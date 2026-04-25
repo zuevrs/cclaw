@@ -20,9 +20,6 @@ import { learnSkillMarkdown } from "./content/learnings.js";
 import { nextCommandContract, nextCommandSkillMarkdown } from "./content/next-command.js";
 import { ideateCommandContract, ideateCommandSkillMarkdown } from "./content/ideate-command.js";
 import { startCommandContract, startCommandSkillMarkdown } from "./content/start-command.js";
-import { statusCommandSkillMarkdown } from "./content/status-command.js";
-import { treeCommandSkillMarkdown } from "./content/tree-command.js";
-import { diffCommandSkillMarkdown } from "./content/diff-command.js";
 import { viewCommandContract, viewCommandSkillMarkdown } from "./content/view-command.js";
 import { subagentDrivenDevSkill, parallelAgentsSkill } from "./content/subagents.js";
 import { sessionHooksSkillMarkdown } from "./content/session-hooks.js";
@@ -125,7 +122,10 @@ const DEPRECATED_UTILITY_SKILL_FOLDERS = [
   "knowledge-curation",
   "retrospective",
   "document-review",
-  "receiving-code-review"
+  "receiving-code-review",
+  "flow-status",
+  "flow-tree",
+  "flow-diff"
 ] as const;
 
 const DEPRECATED_AGENT_FILES = [
@@ -448,18 +448,6 @@ async function writeSkills(projectRoot: string, config?: CclawConfig): Promise<v
   await writeFileSafe(
     runtimePath(projectRoot, "skills", "flow-view", "SKILL.md"),
     viewCommandSkillMarkdown()
-  );
-  await writeFileSafe(
-    runtimePath(projectRoot, "skills", "flow-status", "SKILL.md"),
-    statusCommandSkillMarkdown()
-  );
-  await writeFileSafe(
-    runtimePath(projectRoot, "skills", "flow-tree", "SKILL.md"),
-    treeCommandSkillMarkdown()
-  );
-  await writeFileSafe(
-    runtimePath(projectRoot, "skills", "flow-diff", "SKILL.md"),
-    diffCommandSkillMarkdown()
   );
 
   await writeFileSafe(

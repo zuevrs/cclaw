@@ -579,8 +579,7 @@ export async function doctorChecks(projectRoot: string, options: DoctorOptions =
   for (const [folder, label] of [
     ["learnings", "learnings"],
     ["flow-ideate", "flow-ideate"],
-    ["flow-tree", "flow-tree"],
-    ["flow-diff", "flow-diff"],
+    ["flow-view", "flow-view"],
     ["subagent-dev", "sdd"],
     ["parallel-dispatch", "parallel-agents"],
     ["session", "session"],
