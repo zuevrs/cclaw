@@ -924,7 +924,7 @@ Capture this later.
     expect(warning).toBeDefined();
     expect(warning?.ok).toBe(false);
     expect(warning?.severity).toBe("warning");
-    expect(warning?.details).toContain(".cclaw/seeds/SEED-2026-04-25-api-shape.md");
+    expect(warning?.details.replace(/\\/gu, "/")).toContain(".cclaw/seeds/SEED-2026-04-25-api-shape.md");
   });
 
   it("accepts discoverable seed shelf entries", async () => {
