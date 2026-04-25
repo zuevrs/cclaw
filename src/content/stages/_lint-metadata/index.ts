@@ -28,13 +28,14 @@ const STAGE_POLICY_NEEDLES: Record<FlowStage, string[]> = {
     "Performance Budget",
     "One issue at a time"
   ],
-  spec: ["Acceptance Criteria", "Constraints", "Testability", "approved spec", "Edge Cases"],
+  spec: ["Acceptance Criteria", "Constraints", "Assumptions Before Finalization", "Testability", "approved spec", "Edge Cases"],
   plan: [
     "WAIT_FOR_CONFIRM",
     "Task Graph",
     "Dependency Batches",
     "Acceptance Mapping",
     "verification steps",
+    "Execution Posture",
     "Locked Decision Coverage"
   ],
   tdd: [
@@ -42,6 +43,8 @@ const STAGE_POLICY_NEEDLES: Record<FlowStage, string[]> = {
     "GREEN",
     "REFACTOR",
     "failing test",
+    "Test Discovery",
+    "System-Wide Impact Check",
     "full test suite",
     "acceptance criteria",
     "traceable to plan slice"

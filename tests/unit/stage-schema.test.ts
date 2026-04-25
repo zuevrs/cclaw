@@ -1,11 +1,11 @@
 import { describe, expect, it } from "vitest";
 import fs from "node:fs/promises";
 import path from "node:path";
-import { SHIP_FINALIZATION_MODES } from "../../src/constants.js";
+import { CCLAW_VERSION, SHIP_FINALIZATION_MODES } from "../../src/constants.js";
 import { lintArtifact } from "../../src/artifact-linter.js";
 import { CCLAW_AGENTS } from "../../src/content/core-agents.js";
 import { stageExamples, stageFullArtifactExampleMarkdown } from "../../src/content/examples.js";
-import { mandatoryDelegationsForStage, stageAutoSubagentDispatch, stageDelegationSummary, stagePolicyNeedles, stageSchema, stageTrackRenderContext } from "../../src/content/stage-schema.js";
+import { mandatoryDelegationsForStage, reviewStackAwareRoutingSummary, stageAutoSubagentDispatch, stageDelegationSummary, stagePolicyNeedles, stageSchema, stageTrackRenderContext } from "../../src/content/stage-schema.js";
 import { stageSkillMarkdown } from "../../src/content/skills.js";
 import { enhancedAgentBody } from "../../src/content/subagents.js";
 import { ARTIFACT_TEMPLATES } from "../../src/content/templates.js";
@@ -193,6 +193,33 @@ describe("stage schema and subagent alignment", () => {
     expect(review.mandatoryDelegations).toEqual(["reviewer", "security-reviewer"]);
     const adversarial = stageAutoSubagentDispatch("review").find((row) => row.skill === "adversarial-review");
     expect(adversarial?.mode).toBe("proactive");
+    const stackAware = stageAutoSubagentDispatch("review").find((row) => row.skill === "stack-aware-review");
+    expect(stackAware?.mode).toBe("proactive");
+  });
+
+  it("renders stack-aware review routing without making every stack mandatory", () => {
+    const review = stageSchema("review");
+    const summary = stageDelegationSummary("standard").find((row) => row.stage === "review");
+    const markdown = stageSkillMarkdown("review");
+
+    expect(review.mandatoryDelegations).toEqual(["reviewer", "security-reviewer"]);
+    expect(summary?.stackAwareRoutes.map((route) => route.stack)).toEqual([
+      "TypeScript/JavaScript",
+      "Python",
+      "Ruby/Rails",
+      "Go",
+      "Rust"
+    ]);
+    expect(reviewStackAwareRoutingSummary()).toContain("package.json/tsconfig.json");
+    expect(reviewStackAwareRoutingSummary()).toContain("pyproject.toml/requirements.txt");
+    expect(reviewStackAwareRoutingSummary()).toContain("Gemfile/config/");
+    expect(reviewStackAwareRoutingSummary()).toContain("go.mod");
+    expect(reviewStackAwareRoutingSummary()).toContain("Cargo.toml");
+    expect(reviewStackAwareRoutingSummary()).toContain("Do not run every stack lens unconditionally");
+    expect(markdown).toContain("## Stack-Aware Review Routing");
+    expect(markdown).toContain("Default general review still runs");
+    expect(markdown).toContain("`package.json`, `tsconfig.json` -> reviewer lens");
+    expect(markdown).toContain("`Cargo.toml` -> reviewer lens");
   });
 
   it("security-reviewer agent registry entry is mandatory", () => {
@@ -424,6 +451,60 @@ describe("stage schema and subagent alignment", () => {
     }
   });
 
+  it("markdown artifact templates render complete frontmatter consistently", () => {
+    const templateStages: Record<string, string> = {
+      "01-brainstorm.md": "brainstorm",
+      "02-scope.md": "scope",
+      "02a-research.md": "design",
+      "03-design.md": "design",
+      "04-spec.md": "spec",
+      "05-plan.md": "plan",
+      "06-tdd.md": "tdd",
+      "07-review.md": "review",
+      "08-ship.md": "ship",
+      "09-retro.md": "retro"
+    };
+
+    for (const [templateName, stage] of Object.entries(templateStages)) {
+      const expectedFrontmatter = [
+        "---",
+        `stage: ${stage}`,
+        "schema_version: 1",
+        `version: ${CCLAW_VERSION}`,
+        "run: <run-id>",
+        "locked_decisions: []",
+        "inputs_hash: sha256:pending",
+        "---",
+        ""
+      ].join("\n");
+
+      expect(
+        ARTIFACT_TEMPLATES[templateName]?.startsWith(expectedFrontmatter),
+        `${templateName} frontmatter`
+      ).toBe(true);
+    }
+  });
+
+  it("artifact templates do not leak source escaping helpers into generated content", () => {
+    for (const [templateName, template] of Object.entries(ARTIFACT_TEMPLATES)) {
+      expect(template, `${templateName} should not contain escaped markdown fences`).not.toContain("\\`\\`\\`");
+      expect(template, `${templateName} should not leak template variables`).not.toMatch(/\$\{[A-Z_]+\}/);
+    }
+  });
+
+  it("seed shelf section renders identically in early-stage templates", () => {
+    const expectedSeedShelf = [
+      "## Seed Shelf Candidates (optional)",
+      "| Seed file | Trigger when | Suggested action | Status (planted/deferred/ignored) |",
+      "|---|---|---|---|",
+      "| .cclaw/seeds/SEED-YYYY-MM-DD-<slug>.md |  |  |  |"
+    ].join("\n");
+
+    for (const templateName of ["01-brainstorm.md", "02-scope.md", "03-design.md"] as const) {
+      expect(ARTIFACT_TEMPLATES[templateName]).toContain(expectedSeedShelf);
+    }
+  });
+
   it("stage skills render explicit when-not-to-use guidance", () => {
     const review = stageSchema("review");
     expect(review.whenNotToUse.length).toBeGreaterThan(0);
@@ -454,6 +535,40 @@ describe("stage schema and subagent alignment", () => {
     expect(ladder?.required).toBe(true);
     expect(ladder?.tier).toBe("required");
     expect(ladder?.validationRule).toMatch(/highest tier reached/i);
+  });
+
+  it("flow mechanics stages render discovery assumptions and posture guidance", () => {
+    const spec = stageSchema("spec");
+    const plan = stageSchema("plan");
+    const tdd = stageSchema("tdd");
+
+    expect(spec.requiredGates.map((gate) => gate.id)).toContain("spec_assumptions_surfaced");
+    expect(spec.artifactValidation.find((row) => row.section === "Assumptions Before Finalization"))
+      .toMatchObject({ required: true, tier: "required" });
+    expect(stageSkillMarkdown("spec")).toContain("Before final spec approval, present the assumptions section");
+    expect(ARTIFACT_TEMPLATES["04-spec.md"]).toContain("## Assumptions Before Finalization");
+    expect(ARTIFACT_TEMPLATES["04-spec.md"]).toContain("Source / confidence");
+
+    expect(plan.requiredGates.find((gate) => gate.id === "plan_dependency_batches_defined")?.description)
+      .toContain("execution posture");
+    expect(plan.artifactValidation.find((row) => row.section === "Execution Posture"))
+      .toMatchObject({ required: true, tier: "required" });
+    expect(stageSkillMarkdown("plan")).toContain("Expose execution posture");
+    expect(ARTIFACT_TEMPLATES["05-plan.md"]).toContain("## Execution Posture");
+    expect(ARTIFACT_TEMPLATES["05-plan.md"]).toContain("RED commit/checkpoint -> GREEN commit/checkpoint -> REFACTOR commit/checkpoint");
+
+    expect(tdd.requiredGates.map((gate) => gate.id)).toEqual(expect.arrayContaining([
+      "tdd_test_discovery_complete",
+      "tdd_impact_check_complete"
+    ]));
+    expect(tdd.artifactValidation.find((row) => row.section === "Test Discovery"))
+      .toMatchObject({ required: true, tier: "required" });
+    expect(tdd.artifactValidation.find((row) => row.section === "System-Wide Impact Check"))
+      .toMatchObject({ required: true, tier: "required" });
+    expect(stageSkillMarkdown("tdd")).toContain("Before writing RED tests, discover relevant existing tests");
+    expect(stageSkillMarkdown("tdd")).toContain("system-wide impact check across callbacks, state, interfaces, schemas, and external contracts");
+    expect(ARTIFACT_TEMPLATES["06-tdd.md"]).toContain("## Test Discovery");
+    expect(ARTIFACT_TEMPLATES["06-tdd.md"]).toContain("## System-Wide Impact Check");
   });
 
   it("every declared gate is marked required on at least one track (single source of truth)", () => {

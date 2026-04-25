@@ -131,6 +131,19 @@ describe("gate evidence verification", () => {
       path.join(root, ".cclaw/artifacts/06-tdd.md"),
       `# TDD Artifact
 
+## Test Discovery
+- Lists existing tests: tests/unit/api.test.ts
+- Fixtures/helpers: temp project helper
+- Exact commands: pnpm vitest run api.test.ts
+- The chosen local pattern to extend: public API behavior assertions
+
+## System-Wide Impact Check
+- Callbacks: none affected
+- State transitions: no persisted state transition change
+- Interfaces/schemas: public exported API contract changed and covered
+- Public APIs/config/CLI: public API docs drift checked
+- Persistence/event contracts: out of scope for this slice
+
 ## RED Evidence
 | Slice | Test name | Command | Failure output summary |
 |---|---|---|---|

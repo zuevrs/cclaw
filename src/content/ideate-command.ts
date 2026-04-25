@@ -18,6 +18,16 @@ const STRUCTURED_ASK_TOOLS = ideateStructuredAskToolsWithFallback();
 
 export interface IdeateCommandOptions {
   frameIds?: readonly IdeateFrameId[];
+  mode?: "repo-grounded" | "elsewhere-software" | "elsewhere-non-software" | "narrow";
+}
+
+export function minimumDistinctIdeateFrames(
+  frameCount: number,
+  mode: IdeateCommandOptions["mode"] = "repo-grounded"
+): number {
+  if (frameCount <= 0) return 0;
+  const cap = mode === "repo-grounded" ? 4 : 2;
+  return Math.min(cap, frameCount);
 }
 
 function renderFrameBullets(frameIds?: readonly IdeateFrameId[]): string {
@@ -35,7 +45,7 @@ function renderFrameNames(frameIds?: readonly IdeateFrameId[]): string {
 export function ideateCommandContract(options: IdeateCommandOptions = {}): string {
   const frames = resolveIdeateFrames(options.frameIds);
   const frameBullets = renderFrameBullets(options.frameIds);
-  const minimumDistinctFrames = Math.min(4, frames.length);
+  const minimumDistinctFrames = minimumDistinctIdeateFrames(frames.length, options.mode);
   return `# /cc-ideate
 
 ## Purpose
@@ -61,8 +71,10 @@ same session, or save/discard the backlog.
    has been modified within the last ${IDEATE_RESUME_WINDOW_DAYS} days,
    offer the user: continue that backlog, start fresh, or cancel.
 2. **Mode classification.** Explicitly classify subject:
-   \`repo-grounded\` / \`elsewhere-software\` / \`elsewhere-non-software\`.
-   Do not assume repo-grounded by default.
+   \`repo-grounded\` / \`elsewhere-software\` / \`elsewhere-non-software\` / \`narrow\`.
+   Do not assume repo-grounded by default. Repo-grounded scans keep the
+   broadest frame minimum; narrow and non-repo modes use the smaller minimum
+   shown below.
 3. **Mode-aware grounding (parallel).**
    - Repo-grounded: repo signal scan + \`${RUNTIME_ROOT}/knowledge.jsonl\`
      repetition scan.
@@ -71,7 +83,9 @@ same session, or save/discard the backlog.
 4. **Divergent ideation frames (parallel).** Generate candidates with
    configured frames (${frames.length} total):
 ${frameBullets}
-   Keep at least ${minimumDistinctFrames} distinct frame outputs in every run.
+   Keep at least ${minimumDistinctFrames} distinct frame outputs in this rendered mode.
+   Deterministic minimum: repo-grounded = 4, narrow/non-repo = 2, always capped
+   by configured frame count.
 5. **Adversarial critique pass.** For each candidate, write the strongest
    counter-argument, kill weak ideas, and keep survivors only.
 6. **Produce 5-10 survivors** with impact (High/Medium/Low),
@@ -109,7 +123,7 @@ Validate envelopes with:
 export function ideateCommandSkillMarkdown(options: IdeateCommandOptions = {}): string {
   const frames = resolveIdeateFrames(options.frameIds);
   const frameBullets = renderFrameBullets(options.frameIds);
-  const minimumDistinctFrames = Math.min(4, frames.length);
+  const minimumDistinctFrames = minimumDistinctIdeateFrames(frames.length, options.mode);
   const frameNames = renderFrameNames(options.frameIds);
   return `---
 name: ${IDEATE_SKILL_NAME}
@@ -152,6 +166,7 @@ repository. Will persist a ranked backlog to
    - \`repo-grounded\` — explicitly tied to this repository.
    - \`elsewhere-software\` — software problem not tied to this repository.
    - \`elsewhere-non-software\` — process/business/non-software problem.
+   - \`narrow\` — a focused prompt where broad frame coverage would be performative.
 6. Record the chosen mode in the artifact.
 
 ### Phase 1 — Mode-aware grounding
@@ -180,8 +195,11 @@ Generate candidate ideas by frame, in parallel when possible:
 
 ${frameBullets}
 
-Require at least ${minimumDistinctFrames} distinct frames in every run. Avoid frame-collapse
-(same idea rewritten 6 times). Keep raw outputs for auditability.
+Require at least ${minimumDistinctFrames} distinct frames in this rendered mode. The
+runtime rule is deterministic: repo-grounded scans require 4 distinct frames;
+narrow, elsewhere-software, and elsewhere-non-software runs require 2; all modes
+are capped by the configured frame count. Avoid frame-collapse (same idea
+rewritten many times). Keep raw outputs for auditability.
 
 ### Phase 3 — Critique all, keep survivors
 
@@ -220,7 +238,7 @@ Only survivors advance to ranking.
    # Ideation — <date>
 
    **Focus:** <user-supplied focus or "open-ended scan">
-   **Mode:** <repo-grounded | elsewhere-software | elsewhere-non-software>
+   **Mode:** <repo-grounded | elsewhere-software | elsewhere-non-software | narrow>
    **Generated:** <ISO-8601 timestamp>
    **Frames used:** <comma-separated list>
    **Raw candidates:** <N>
