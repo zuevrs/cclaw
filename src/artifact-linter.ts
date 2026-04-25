@@ -1854,25 +1854,34 @@ export async function lintArtifact(
     // IDs all fail the lint; absence of the section remains advisory so
     // scope stays optional for small/quick tracks.
     if (headingPresent(sections, "Locked Decisions (D-XX)")) {
-      const decisionIds = extractDecisionIds(lockedDecisionsBody);
-      const bulletLines = lockedDecisionsBody
+      const listDecisionLines = lockedDecisionsBody
         .split(/\r?\n/u)
         .map((line) => line.trim())
-        .filter((line) => /^(?:[-*]|\|)\s+\S/u.test(line));
-      const orphanBullets = bulletLines.filter((line) => !/\bD-\d+\b/u.test(line));
+        .filter((line) => /^[-*]\s+\S/u.test(line));
+      const tableDecisionRows = getMarkdownTableRows(lockedDecisionsBody);
+      const tableDecisionLines = tableDecisionRows.map((row) => row.join(" | "));
+      const decisionLines = [...listDecisionLines, ...tableDecisionLines];
+      const orphanDecisionLines = decisionLines.filter((line) => !/\bD-\d+\b/u.test(line));
+      const rowDecisionIds = [
+        ...listDecisionLines.map((line) => /\bD-\d+\b/u.exec(line)?.[0]),
+        ...tableDecisionRows.map((row) => /\bD-\d+\b/u.exec(row[0] ?? "")?.[0])
+      ].filter((id): id is string => typeof id === "string");
       const duplicateIds: string[] = (() => {
-        const all = lockedDecisionsBody.match(/\bD-\d+\b/gu) ?? [];
         const counts = new Map<string, number>();
-        for (const id of all) counts.set(id, (counts.get(id) ?? 0) + 1);
+        for (const id of rowDecisionIds) counts.set(id, (counts.get(id) ?? 0) + 1);
         return [...counts.entries()].filter(([, n]) => n > 1).map(([id]) => id);
       })();
       const issues: string[] = [];
-      if (decisionIds.length === 0 && bulletLines.length === 0) {
+      if (rowDecisionIds.length === 0 && decisionLines.length === 0) {
         issues.push("section is empty");
       }
-      if (orphanBullets.length > 0) {
+      if (orphanDecisionLines.length > 0) {
+        const examples = orphanDecisionLines
+          .slice(0, 3)
+          .map((line) => `\`${line.slice(0, 120)}\``)
+          .join(", ");
         issues.push(
-          `${orphanBullets.length} bullet(s) missing a D-XX ID`
+          `${orphanDecisionLines.length} decision row(s) missing a D-XX ID${examples.length > 0 ? `: ${examples}` : ""}`
         );
       }
       if (duplicateIds.length > 0) {
@@ -1885,7 +1894,7 @@ export async function lintArtifact(
         found: issues.length === 0,
         details:
           issues.length === 0
-            ? `${decisionIds.length} decision ID(s) recorded with no duplicates.`
+            ? `${rowDecisionIds.length} decision ID(s) recorded with no duplicates.`
             : issues.join("; ")
       });
     }

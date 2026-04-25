@@ -1247,7 +1247,44 @@ describe("artifact linter heuristics", () => {
     const integrity = result.findings.find((f) => f.section === "Locked Decisions ID Integrity");
     expect(integrity?.required).toBe(true);
     expect(integrity?.found).toBe(false);
-    expect(integrity?.details).toContain("missing a D-XX ID");
+    expect(integrity?.details).toContain("decision row(s) missing a D-XX ID");
+    expect(integrity?.details).toContain("freeform note without an ID");
+  });
+
+  it("accepts Locked Decisions markdown table header without a D-XX ID", async () => {
+    const root = await createTempProject("scope-decision-table-header-ok");
+    await writeRuntimeArtifact(root, "02-scope.md", `# Scope Artifact
+
+## Scope Mode
+- [x] hold
+
+## In Scope / Out of Scope
+### In Scope
+- Portfolio landing page
+### Out of Scope
+- Backend API
+
+## Locked Decisions (D-XX)
+| Decision ID | Decision | Why locked now | Downstream impact |
+|---|---|---|---|
+| D-01 | Next.js App Router + static export | Brainstorm approved | Defines build and deploy path |
+| D-02 | Tailwind CSS for styling | Brainstorm approved | Defines styling approach |
+
+## Completion Dashboard
+- Checklist findings: 1/1
+
+## Scope Summary
+- Selected mode: hold
+
+## Learnings
+- None this stage.
+`);
+
+    const result = await lintArtifact(root, "scope");
+    const integrity = result.findings.find((f) => f.section === "Locked Decisions ID Integrity");
+    expect(integrity?.required).toBe(true);
+    expect(integrity?.found).toBe(true);
+    expect(integrity?.details).toContain("2 decision ID(s) recorded with no duplicates");
   });
 
   it("flags duplicate Locked Decision IDs", async () => {
