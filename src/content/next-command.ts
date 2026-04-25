@@ -111,8 +111,15 @@ ${ralphLoopContractSnippet()}
     execute the in-stage retro protocol (draft + one structured accept/edit/skip ask).
   - \`"retro_review"\` -> continue the retro protocol (re-ask the structured
     question; the draft already exists — do not regenerate it).
-  - \`"compound_review"\` -> execute the in-stage compound scan and ask user
-    **one** structured question (apply / skip) per candidate cluster or a
+  - \`"compound_review"\` -> execute the in-stage compound closeout scan (not \`ce:compound\`):
+    read \`.cclaw/state/compound-readiness.json\` plus the relevant tail of
+    \`.cclaw/knowledge.jsonl\`, assess overlap before adding duplicate knowledge,
+    separate bug-track learnings (turn into rules/tests/remediation) from
+    knowledge-track learnings (durable project/process guidance), and use
+    lightweight \`supersedes\` / \`superseded_by\` fields when refreshing stale or
+    partially replaced entries. Optionally ask whether to scan Cursor/Claude/Codex
+    session transcripts for matching historical learnings; only do it after opt-in.
+    Ask **one** structured question (apply / skip) per candidate cluster or a
     single accept-all / skip choice, then advance substate.
   - \`"ready_to_archive"\` -> run \`cclaw archive\` (or \`cclaw archive --name=<slug>\`) and reset state.
   - \`"archived"\` (transient) -> report "run archived" and stop.
@@ -249,7 +256,7 @@ by inspecting ${closeoutSubstateInline()}:
 |-----------------------|-----------------------------------------------------|
 | \`idle\` / missing      | Flip to \`retro_review\` and start retro protocol     |
 | \`retro_review\`        | Draft/update \`09-retro.md\`, ask accept/edit/skip  |
-| \`compound_review\`     | Scan repeated learnings, ask approve/skip           |
+| \`compound_review\`     | Compound closeout: overlap scan, refresh/supersede, ask approve/skip |
 | \`ready_to_archive\`    | Run \`cclaw archive\`; reset flow-state on success |
 | \`archived\`            | Report "run archived"; stop                         |
 

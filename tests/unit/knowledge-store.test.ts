@@ -263,4 +263,50 @@ describe("knowledge store append helper", () => {
     expect(parsed.entries[0]?.origin_run).toBe("legacy-run");
     expect(parsed.malformedLines).toBe(0);
   });
+
+  it("accepts optional supersession fields while reading existing schema rows", async () => {
+    const root = await createTempProject("knowledge-supersession-fields");
+    const result = await appendKnowledge(
+      root,
+      [
+        {
+          type: "lesson",
+          trigger: "when compound refresh replaces stale guidance",
+          action: "append a focused replacement and mark the relationship",
+          confidence: "medium",
+          supersedes: ["old-compound-guidance"],
+          superseded_by: "new-compound-guidance"
+        }
+      ],
+      { stage: "ship", project: "cclaw", source: "compound", nowIso: "2026-04-20T11:30:00Z" }
+    );
+
+    expect(result.appended).toBe(1);
+    expect(result.invalid).toBe(0);
+    const parsed = await readKnowledgeSafely(root);
+    expect(parsed.entries[0]?.supersedes).toEqual(["old-compound-guidance"]);
+    expect(parsed.entries[0]?.superseded_by).toBe("new-compound-guidance");
+  });
+
+  it("rejects malformed supersession fields", async () => {
+    const root = await createTempProject("knowledge-invalid-supersession");
+    const result = await appendKnowledge(
+      root,
+      [
+        {
+          type: "lesson",
+          trigger: "when supersession metadata is malformed",
+          action: "reject the learning",
+          confidence: "medium",
+          supersedes: []
+        }
+      ],
+      { stage: "ship", project: "cclaw", nowIso: "2026-04-20T11:31:00Z" }
+    );
+
+    expect(result.appended).toBe(0);
+    expect(result.invalid).toBe(1);
+    expect(result.errors.join(" ")).toContain("supersedes");
+  });
+
 });

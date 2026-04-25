@@ -161,7 +161,7 @@ async function computeCompoundReadinessInline(root, options) {
     let row;
     try { row = JSON.parse(line); } catch { continue; }
     if (!row || typeof row !== "object" || Array.isArray(row)) continue;
-    if (row.maturity === "lifted-to-enforcement") continue;
+    if (row.maturity === "lifted-to-enforcement" || typeof row.superseded_by === "string") continue;
     const type = typeof row.type === "string" ? row.type : "";
     const trigger = typeof row.trigger === "string" ? row.trigger : "";
     const action = typeof row.action === "string" ? row.action : "";

@@ -65,6 +65,10 @@ When resuming work after a break:
 3. Re-load recent knowledge entries.
 4. Continue from the last incomplete step — do not restart the stage.
 
+### Optional session-history scan for compound
+
+During post-ship \`compound_review\`, ask before scanning external session history. If the user opts in, inspect only relevant Cursor/Claude/Codex transcripts for repeated failures or process lessons, summarize matches, and then apply the same overlap/refresh/supersede rules before touching \`.cclaw/knowledge.jsonl\`.
+
 ## Context Management
 
 When approaching context limits:
@@ -96,8 +100,8 @@ export function sessionHooksAgentsMdBlock(): string {
 
 Session boundary behavior (real hooks inject context automatically; guidelines cover manual steps):
 - **Start:** Hooks inject flow state + knowledge snapshot. Check for in-progress work, show status.
-- **Stop:** Hooks remind about handoff. Verify no pending changes, update flow state, append useful knowledge.
-- **Resume:** Re-read state, verify artifact, re-load knowledge, continue from last step.
+- **Stop:** Hooks remind about handoff. Verify no pending changes, update flow state, append useful knowledge after overlap check.
+- **Resume:** Re-read state, verify artifact, re-load knowledge, continue from last step. For compound closeout, optional session-history scans require user opt-in.
 
 Skill: \`.cclaw/skills/session/SKILL.md\`
 Policy: \`.cclaw/skills/iron-laws/SKILL.md\`

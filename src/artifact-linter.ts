@@ -864,6 +864,8 @@ export interface LearningSeedEntry {
   last_seen_ts?: string;
   project?: string | null;
   source?: LearningSource | null;
+  supersedes?: string[];
+  superseded_by?: string;
 }
 
 export interface LearningsParseResult {
@@ -905,7 +907,9 @@ const LEARNING_ALLOWED_KEYS = new Set([
   "first_seen_ts",
   "last_seen_ts",
   "project",
-  "source"
+  "source",
+  "supersedes",
+  "superseded_by"
 ]);
 
 function isIsoUtcTimestamp(value: string): boolean {
@@ -1041,6 +1045,21 @@ function parseLearningSeedEntry(raw: unknown, index: number): { ok: boolean; ent
         error: `Learnings bullet #${index} field "${timestampField}" must be ISO UTC (YYYY-MM-DDTHH:MM:SSZ).`
       };
     }
+  }
+  if (obj.supersedes !== undefined) {
+    if (
+      !Array.isArray(obj.supersedes) ||
+      obj.supersedes.length === 0 ||
+      obj.supersedes.some((value) => typeof value !== "string" || value.trim().length === 0)
+    ) {
+      return { ok: false, error: `Learnings bullet #${index} field "supersedes" must be a non-empty array of strings.` };
+    }
+  }
+  if (
+    obj.superseded_by !== undefined &&
+    (typeof obj.superseded_by !== "string" || obj.superseded_by.trim().length === 0)
+  ) {
+    return { ok: false, error: `Learnings bullet #${index} field "superseded_by" must be a non-empty string.` };
   }
 
   return {

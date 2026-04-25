@@ -67,4 +67,14 @@ describe("next-command Ralph Loop contract parity", () => {
     expect(command).not.toContain('Advance only when\nevery planned slice');
     expect(skill).not.toContain('Advance only when\nevery planned slice');
   });
+
+  it("keeps compound closeout on /cc-next with overlap and supersession guidance", () => {
+    expect(command).toContain("not `ce:compound`");
+    expect(command).toContain("assess overlap before adding duplicate knowledge");
+    expect(command).toContain("bug-track learnings");
+    expect(command).toContain("knowledge-track learnings");
+    expect(command).toContain("supersedes");
+    expect(command).toContain("session transcripts");
+  });
+
 });

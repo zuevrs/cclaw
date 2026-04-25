@@ -118,7 +118,9 @@ describe("ralph-loop + compound-readiness parity (inline hook vs main)", () => {
       { ...baseRow, trigger: "swallowed errors", action: "rethrow with context", frequency: 1 },
       { ...baseRow, trigger: "auth bypass", action: "validate signature", severity: "critical", frequency: 1 },
       { ...baseRow, trigger: "unique", action: "skip", frequency: 1 },
-      { ...baseRow, trigger: "already promoted", action: "do not recount", frequency: 5, maturity: "lifted-to-enforcement" }
+      { ...baseRow, trigger: "already promoted", action: "do not recount", frequency: 5, maturity: "lifted-to-enforcement" },
+      { ...baseRow, trigger: "superseded workaround", action: "do not recount", frequency: 5, superseded_by: "new-workaround" },
+      { ...baseRow, trigger: "refreshed workaround", action: "count refreshed guidance", frequency: 3, supersedes: ["superseded-workaround"] }
     ];
     await fs.writeFile(
       path.join(root, ".cclaw/knowledge.jsonl"),

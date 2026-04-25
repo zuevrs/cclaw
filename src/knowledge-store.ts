@@ -30,6 +30,8 @@ export interface KnowledgeEntry {
   last_seen_ts: string;
   project: string | null;
   source?: KnowledgeEntrySource | null;
+  supersedes?: string[];
+  superseded_by?: string;
 }
 
 export interface KnowledgeSeedEntry {
@@ -52,6 +54,8 @@ export interface KnowledgeSeedEntry {
   last_seen_ts?: string;
   project?: string | null;
   source?: KnowledgeEntrySource | null;
+  supersedes?: string[];
+  superseded_by?: string;
 }
 
 export interface AppendKnowledgeDefaults {
@@ -199,8 +203,9 @@ export function effectiveCompoundThreshold(
  *
  * Clustering key: `(type, normalizeText(trigger), normalizeText(action))`
  * which mirrors the compound readiness clustering in runtime state.
- * Entries with `maturity === "lifted-to-enforcement"` are excluded —
- * they were already promoted and should not re-appear as ready.
+ * Entries with `maturity === "lifted-to-enforcement"` or `superseded_by`
+ * are excluded — they were already promoted/replaced and should not re-appear
+ * as ready.
  */
 export function computeCompoundReadiness(
   entries: KnowledgeEntry[],
@@ -243,7 +248,7 @@ export function computeCompoundReadiness(
   >();
 
   for (const entry of entries) {
-    if (entry.maturity === "lifted-to-enforcement") continue;
+    if (entry.maturity === "lifted-to-enforcement" || entry.superseded_by !== undefined) continue;
     const key = [
       entry.type,
       normalizeText(entry.trigger),
@@ -358,6 +363,8 @@ const KNOWLEDGE_ALLOWED_KEYS = new Set<string>(KNOWLEDGE_REQUIRED_KEYS);
 KNOWLEDGE_ALLOWED_KEYS.add("origin_feature");
 KNOWLEDGE_ALLOWED_KEYS.add("source");
 KNOWLEDGE_ALLOWED_KEYS.add("severity");
+KNOWLEDGE_ALLOWED_KEYS.add("supersedes");
+KNOWLEDGE_ALLOWED_KEYS.add("superseded_by");
 
 function knowledgePath(projectRoot: string): string {
   return path.join(projectRoot, RUNTIME_ROOT, "knowledge.jsonl");
@@ -381,7 +388,7 @@ function normalizeText(value: string): string {
 
 function dedupeKey(entry: Pick<
   KnowledgeEntry,
-  "type" | "trigger" | "action" | "domain" | "stage" | "origin_stage" | "origin_run" | "universality" | "project" | "source" | "severity"
+  "type" | "trigger" | "action" | "domain" | "stage" | "origin_stage" | "origin_run" | "universality" | "project" | "source" | "severity" | "supersedes" | "superseded_by"
 >): string {
   return [
     entry.type,
@@ -394,7 +401,9 @@ function dedupeKey(entry: Pick<
     entry.universality,
     entry.project === null ? "null" : normalizeText(entry.project),
     entry.source === undefined || entry.source === null ? "null" : entry.source,
-    entry.severity === undefined ? "none" : entry.severity
+    entry.severity === undefined ? "none" : entry.severity,
+    Array.isArray(entry.supersedes) ? entry.supersedes.map(normalizeText).sort().join(",") : "none",
+    entry.superseded_by === undefined ? "none" : normalizeText(entry.superseded_by)
   ].join("|");
 }
 
@@ -574,6 +583,21 @@ export function validateKnowledgeEntry(entry: unknown): { ok: boolean; errors: s
   if (!isNullableString(obj.project)) {
     errors.push("project must be string or null.");
   }
+  if (obj.supersedes !== undefined) {
+    if (
+      !Array.isArray(obj.supersedes) ||
+      obj.supersedes.length === 0 ||
+      obj.supersedes.some((value) => typeof value !== "string" || value.trim().length === 0)
+    ) {
+      errors.push("supersedes must be a non-empty array of strings when present.");
+    }
+  }
+  if (
+    obj.superseded_by !== undefined &&
+    (typeof obj.superseded_by !== "string" || obj.superseded_by.trim().length === 0)
+  ) {
+    errors.push("superseded_by must be a non-empty string when present.");
+  }
   if (
     obj.source !== undefined &&
     obj.source !== null &&
@@ -613,6 +637,12 @@ export function materializeKnowledgeEntry(
   };
   if (seed.severity !== undefined) {
     entry.severity = seed.severity;
+  }
+  if (seed.supersedes !== undefined) {
+    entry.supersedes = seed.supersedes.map((value) => value.trim());
+  }
+  if (seed.superseded_by !== undefined) {
+    entry.superseded_by = seed.superseded_by.trim();
   }
   if (source !== null) {
     entry.source = source;

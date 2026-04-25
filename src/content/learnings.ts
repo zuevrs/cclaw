@@ -14,8 +14,8 @@ const LEARN_SKILL_DESCRIPTION =
 
 /**
  * Canonical required JSONL field order (matches strict validator keys).
- * Optional keys (for now: `source`, `severity`) may be appended after these
- * required fields.
+ * Optional keys (`source`, `severity`, `supersedes`, `superseded_by`) may
+ * be appended after these required fields.
  * Exported for tests and any programmatic writer that wants a stable base shape.
  */
 export const KNOWLEDGE_JSONL_FIELDS = [
