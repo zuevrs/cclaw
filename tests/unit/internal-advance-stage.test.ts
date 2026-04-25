@@ -872,6 +872,40 @@ process.stdout.write(JSON.stringify({ hook: process.argv[2] }) + "\\n");
     expect(state.currentStage).toBe("tdd");
   });
 
+  it("accepts boolean and object evidence JSON values from stage-complete copy-paste commands", async () => {
+    const root = await createTempProject("internal-evidence-coercion");
+    await ensureRunSystem(root);
+    await writeBrainstormArtifact(root);
+
+    const io = captureIo();
+    const code = await runInternalCommand(
+      root,
+      [
+        "advance-stage",
+        "brainstorm",
+        "--passed=brainstorm_approaches_compared,brainstorm_direction_approved,brainstorm_artifact_reviewed",
+        "--evidence-json",
+        JSON.stringify({
+          brainstorm_approaches_compared: true,
+          brainstorm_direction_approved: {
+            status: true,
+            note: "user approved the direction"
+          },
+          brainstorm_artifact_reviewed: "artifact reviewed in chat"
+        })
+      ],
+      io.io
+    );
+
+    expect(code, io.stderr()).toBe(0);
+    const state = await readFlowState(root);
+    expect(state.completedStages).toContain("brainstorm");
+    expect(state.currentStage).toBe("scope");
+    expect(state.guardEvidence.brainstorm_approaches_compared).toBe("passed");
+    expect(state.guardEvidence.brainstorm_direction_approved).toContain("user approved the direction");
+    expect(state.guardEvidence.brainstorm_artifact_reviewed).toBe("artifact reviewed in chat");
+  });
+
   it("harvests Learnings JSON bullets into knowledge store and marks artifact", async () => {
     const root = await createTempProject("internal-harvest-learnings");
     await ensureRunSystem(root);

@@ -211,7 +211,7 @@ fs.appendFileSync(${JSON.stringify(callsPath)}, process.argv.slice(2).join(" ") 
       root,
       ".cclaw/hooks/stage-complete.mjs",
       scriptBody,
-      ["brainstorm", `--evidence-json=${requiredGateEvidenceJson("brainstorm")}`],
+      ["brainstorm", "--evidence-json", requiredGateEvidenceJson("brainstorm")],
       "",
       process.platform === "win32" ? { PATH: "", Path: "" } : { PATH: "" }
     );
@@ -226,6 +226,37 @@ fs.appendFileSync(${JSON.stringify(callsPath)}, process.argv.slice(2).join(" ") 
 
     const artifact = await fs.readFile(path.join(root, ".cclaw/artifacts/01-brainstorm.md"), "utf8");
     expect(artifact).toContain("<!-- cclaw:learnings-harvested:");
+    expect(state.guardEvidence.brainstorm_approaches_compared).toBe("evidence for brainstorm_approaches_compared");
+  });
+
+  it("stage-complete helper accepts boolean evidence from copied shell commands", async () => {
+    const root = await createTempProject("stage-complete-boolean-evidence");
+    await initCclaw({ projectRoot: root });
+    await writeBrainstormArtifact(root);
+
+    const scriptBody = await fs.readFile(path.join(root, ".cclaw/hooks/stage-complete.mjs"), "utf8");
+    const evidence = JSON.stringify({
+      brainstorm_approaches_compared: true,
+      brainstorm_direction_approved: true,
+      brainstorm_artifact_reviewed: true
+    });
+    const result = await runNodeScript(
+      root,
+      ".cclaw/hooks/stage-complete.mjs",
+      scriptBody,
+      [
+        "brainstorm",
+        `--evidence-json=${evidence}`,
+        "--passed=brainstorm_approaches_compared,brainstorm_direction_approved,brainstorm_artifact_reviewed"
+      ],
+      "",
+      process.platform === "win32" ? { PATH: "", Path: "" } : { PATH: "" }
+    );
+
+    expect(result.code, result.stderr).toBe(0);
+    const state = await readFlowState(root);
+    expect(state.completedStages).toContain("brainstorm");
+    expect(state.guardEvidence.brainstorm_approaches_compared).toBe("passed");
   });
 
   it("opencode plugin source references node-only hook names", () => {
