@@ -42,7 +42,7 @@ export const SPEC: StageSchemaInput = {
       "Define measurable acceptance criteria — each criterion must be observable and falsifiable. No vague adjectives.",
       "Capture edge cases — for each criterion, define at least one boundary condition and one error condition.",
       "Document constraints and assumptions — regulatory, system, integration, and performance boundaries. Surface implicit assumptions explicitly.",
-      "Confirm testability — for each acceptance criterion, describe the test that would prove it. If untestable, rewrite the criterion.",
+      "Build the Acceptance Mapping contract — for each AC, map upstream design decision, observable evidence, verification method, and likely test level. If any column is unclear, rewrite the criterion.",
       "Present acceptance criteria to the user in 3-5-item batches, pausing for explicit ACK between batches (see Interaction Protocol).",
       "Write spec artifact and request user approval — wait for explicit confirmation before proceeding."
     ],
@@ -52,14 +52,14 @@ export const SPEC: StageSchemaInput = {
       "Capture assumptions explicitly, not implicitly.",
       "**Chunk acceptance criteria for review.** When presenting the spec to the user for sign-off, deliver acceptance criteria in batches of 3-5 and **pause for explicit ACK** (via Decision Protocol) before sending the next batch. Do not dump the full criteria wall in one message — small batches surface objections earlier and keep the sign-off meaningful. Full spec writeup still lands in `04-spec.md`, but the conversation itself must be digestible.",
       "Require user confirmation on the written spec. **STOP.** Do NOT proceed to plan until user approves.",
-      "For each criterion, ask: how would you test this? If the answer is unclear, rewrite.",
+      "For each criterion, ask: what exact evidence proves this passed? If the evidence or verification command/manual step is vague, rewrite.",
       "When encountering ambiguity, classify it before acting: (A) ask user for missing info, (B) enumerate interpretations and pick one with justification, (C) propose hypothesis with validation path. Do NOT silently resolve ambiguity."
     ],
     process: [
       "Define measurable acceptance criteria.",
       "Capture constraints, assumptions, and edge cases.",
-      "Build testability map: criterion -> test description.",
-      "Confirm testability for each criterion.",
+      "Build Acceptance Mapping: AC -> design decision -> observable evidence -> verification method -> likely test level.",
+      "Confirm every verification method is concrete enough for plan/TDD to use later.",
       "Present acceptance criteria to the user in 3-5-item batches, pausing for explicit ACK between batches (see Interaction Protocol).",
       "Write spec artifact and request approval."
     ],
@@ -70,7 +70,7 @@ export const SPEC: StageSchemaInput = {
     ],
     requiredEvidence: [
       "Artifact written to `.cclaw/artifacts/04-spec.md`.",
-      "Each acceptance criterion maps to a testable outcome.",
+      "Each acceptance criterion maps to upstream design decision, observable evidence, verification method, and likely test level.",
       "Edge cases documented per criterion.",
       "Approval marker captured in artifact."
     ],
@@ -110,7 +110,7 @@ export const SPEC: StageSchemaInput = {
       { section: "Acceptance Criteria", required: true, validationRule: "Each criterion is observable, measurable, and falsifiable. Table must include a Requirement Ref column linking to R# IDs in 02-scope-<slug>.md (legacy 02-scope.md is accepted during migration) and a Design Decision Ref column tracing back to design artifact. AC IDs (AC-1, AC-2…) are stable across revisions — dropped ACs stay with Priority `DROPPED`." },
       { section: "Edge Cases", required: true, validationRule: "At least one boundary and one error condition per criterion." },
       { section: "Constraints and Assumptions", required: false, validationRule: "All implicit assumptions surfaced. Constraints have sources." },
-      { section: "Testability Map", required: true, validationRule: "Each criterion maps to a concrete test description with verification approach (unit, integration, e2e, manual) and command or manual steps." },
+      { section: "Acceptance Mapping", required: true, validationRule: "Each criterion maps to upstream design decision, observable evidence, verification method, likely test level (unit/integration/e2e/manual), and command or manual steps when known." },
       { section: "Vague to Fixed", required: false, validationRule: "If present: table with original vague wording and rewritten observable/testable version for each ambiguous requirement." },
       { section: "Non-Functional Requirements", required: false, validationRule: "If present: performance thresholds, security constraints, scalability limits, reliability targets with measurable values." },
       { section: "Interface Contracts", required: false, validationRule: "If present: for each module boundary list produces (outputs) and consumes (inputs) with data types." },
@@ -138,11 +138,11 @@ export const SPEC: StageSchemaInput = {
       {
         title: "Testability Audit",
         evaluationPoints: [
-          "Does every criterion have a concrete test description in the Testability Map?",
+          "Does every criterion have a concrete row in Acceptance Mapping?",
           "Does every test specify a verification approach (unit, integration, e2e, manual)?",
-          "Does every test include a runnable command or manual steps?",
+          "Does every verification method include a runnable command or concrete manual steps when known?",
           "Are edge cases (boundary + error) defined for every criterion?",
-          "Can you run every verification command right now and get a meaningful result?"
+          "Are commands specific enough to run later (not vague `run tests` wording)?"
         ],
         stopGate: true
       }

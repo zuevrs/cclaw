@@ -199,6 +199,24 @@ describe("stage schema and subagent alignment", () => {
     expect(markdown).not.toContain("framework-docs-researcher");
   });
 
+  it("middle stages include prompt-level investigation and verification mechanics", () => {
+    const design = stageSchema("design");
+    const spec = stageSchema("spec");
+    const plan = stageSchema("plan");
+
+    expect(design.executionModel.checklist).toEqual(expect.arrayContaining([
+      expect.stringContaining("Investigator pass"),
+      expect.stringContaining("shadow alternative"),
+      expect.stringContaining("Critic pass")
+    ]));
+    expect(design.artifactValidation.find((row) => row.section === "Data-Flow Shadow Paths")?.validationRule)
+      .toContain("switch trigger");
+    expect(spec.artifactValidation.find((row) => row.section === "Acceptance Mapping")?.validationRule)
+      .toContain("observable evidence");
+    expect(plan.artifactValidation.find((row) => row.section === "Task List")?.validationRule)
+      .toContain("expected evidence/pass condition");
+  });
+
   it("design stage requires research-fleet completion gate", () => {
     const design = stageSchema("design");
     const researchGate = design.requiredGates.find((gate) => gate.id === "design_research_complete");

@@ -93,6 +93,9 @@ workflow tool.
 - Stage guidance now starts with a compact drift preamble, treats seed recall as
   reference context by default, and makes brainstorm/scope use lightweight
   compact paths before deeper checklists.
+- Design/spec/plan guidance now adopts prompt-level investigator/critic, shadow
+  alternative, acceptance mapping, and exact verification-command discipline
+  without adding new runtime machinery.
 
 ### Preserved
 

@@ -108,18 +108,17 @@ Summarize citable domain practices for a narrow design decision.
 
 ## Purpose
 
-Run a four-lens investigation before design lock so architecture choices are grounded
+Run a tiered investigation before design lock so architecture choices are grounded
 in current ecosystem data, not intuition.
 
-## Dispatch Lenses (fan-out)
+## Dispatch Lenses (tiered)
 
-Launch four independent investigation threads in parallel when the harness supports it
-(or sequentially with explicit role-switch logs when it does not):
+Choose the smallest tier that matches the change; use parallel threads only when the
+harness supports it and the lenses are independent:
 
-1. **stack-researcher** — dependency compatibility, alternatives, deprecations.
-2. **features-researcher** — domain conventions and product/UX patterns.
-3. **architecture-researcher** — architecture options and trade-off matrix.
-4. **pitfalls-researcher** — known failure modes, CVEs, and operational traps.
+- **Lightweight:** pitfalls-researcher only — known failure modes, CVEs, and operational traps.
+- **Standard:** architecture-researcher + pitfalls-researcher.
+- **Deep:** stack-researcher + features-researcher + architecture-researcher + pitfalls-researcher.
 
 ## Output Contract
 
@@ -131,8 +130,8 @@ Write findings to \`.cclaw/artifacts/02a-research.md\` with these sections:
 - \`## Pitfalls & Risks\`
 - \`## Synthesis\`
 
-Each section must contain concrete notes and at least one evidence reference
-(source URL, file path, or command output anchor).
+Each section that was run must contain concrete notes and at least one evidence reference
+(source URL, file path, or command output anchor). Sections skipped by tier should say \`Not run for this tier\`.
 
 ## Guardrails
 
