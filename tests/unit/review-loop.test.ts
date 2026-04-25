@@ -515,6 +515,31 @@ describe("review-loop contracts", () => {
     expect(envelope?.stopReason).toBe("quality_threshold_met");
   });
 
+  it("extracts review-loop envelope from practical markdown cells", () => {
+    const markdown = `# Scope Artifact
+
+## Spec Review Loop
+| Iteration | Quality Score | Findings | Notes |
+|---|---|---|---|
+| Iteration 1 | 61% | 4 findings | first pass |
+| Iteration 2 | score: 0.83 | no findings | threshold met |
+- Stop reason: quality_threshold_met
+- Target score: 80%
+- Max iterations: 3
+`;
+    const envelope = extractReviewLoopEnvelopeFromArtifact(
+      markdown,
+      "scope",
+      ".cclaw/artifacts/02-scope-demo.md"
+    );
+    expect(envelope).toBeTruthy();
+    expect(envelope?.targetScore).toBe(0.8);
+    expect(envelope?.iterations).toEqual([
+      { iteration: 1, qualityScore: 0.61, findingsCount: 4 },
+      { iteration: 2, qualityScore: 0.83, findingsCount: 0 }
+    ]);
+  });
+
   it("returns null when artifact has no valid spec review loop table", () => {
     const markdown = `# Design Artifact
 

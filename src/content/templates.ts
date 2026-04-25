@@ -50,10 +50,10 @@ export const ARTIFACT_TEMPLATES: Record<string, string> = {
 - Scope handoff:
 
 ## Approaches
-| Approach | Role | Architecture | Trade-offs | Recommendation |
-|---|---|---|---|---|
-| A | baseline |  |  |  |
-| B | challenger: higher-upside |  |  |  |
+| Approach | Role | Upside | Architecture | Trade-offs | Recommendation |
+|---|---|---|---|---|---|
+| A | baseline | modest |  |  |  |
+| B | challenger | high |  |  |  |
 
 ## Approach Reaction
 - Closest option:
@@ -62,8 +62,9 @@ export const ARTIFACT_TEMPLATES: Record<string, string> = {
 
 ## Selected Direction
 - **Approach:**
-- **Rationale:** Based on user reaction/feedback/concerns, ...
+- **Rationale:** Trace this to the prior Approach Reaction.
 - **Approval:** pending
+- **Next-stage handoff:** On standard track, hand this to \`scope\`; on medium track, hand this directly to \`spec\` with explicit requirements/constraints.
 
 ${SEED_SHELF_SECTION}
 
@@ -130,18 +131,18 @@ ${SEED_SHELF_SECTION}
 | HOUR 6+ (polish/tests) |  |  |  |
 
 ## Scope Mode
-- [ ] expand
-- [ ] selective
-- [ ] hold
-- [ ] reduce
+- [ ] SCOPE EXPANSION — dream bigger; user explicitly opts into the larger product slice.
+- [ ] SELECTIVE EXPANSION — hold baseline scope and cherry-pick one high-leverage addition.
+- [ ] HOLD SCOPE — preserve the approved brainstorm direction with maximum rigor.
+- [ ] SCOPE REDUCTION — strip to the smallest useful wedge when risk/blast radius is too high.
 
 ## Mode-Specific Analysis
 - **Selected mode:**
 - **Analysis:**
-  - (EXPAND: 10x opportunities, delight features)
-  - (SELECTIVE: hold-scope baseline, cherry-picked expansions)
-  - (HOLD: minimum-change-set hardening)
-  - (REDUCE: ruthless cuts, follow-up split)
+  - (SCOPE EXPANSION: 10-star opportunities, delight features)
+  - (SELECTIVE EXPANSION: hold-scope baseline, cherry-picked expansions)
+  - (HOLD SCOPE: approved slice with maximum rigor)
+  - (SCOPE REDUCTION: ruthless cuts, follow-up split)
 
 ## Requirements (stable IDs)
 | ID | Requirement (observable outcome) | Priority | Source (origin doc / prompt line) |
@@ -191,6 +192,8 @@ ${SEED_SHELF_SECTION}
 |---|---|---|---|
 | 1 | 0.00 | 0 | continue/stop |
 - Stop reason:
+- Target score: 0.800
+- Max iterations: 3
 - Unresolved concerns:
 
 ## Completion Dashboard
@@ -203,6 +206,7 @@ ${SEED_SHELF_SECTION}
 - Accepted scope:
 - Deferred:
 - Explicitly excluded:
+- Next-stage handoff: identify whether the next stage is \`design\` (standard track) or \`spec\` (medium track), and list the exact artifacts/decisions it must carry forward.
 
 ## Learnings
 - None this stage.
@@ -388,6 +392,8 @@ ${MARKDOWN_CODE_FENCE}
 |---|---|---|---|
 | 1 | 0.00 | 0 | continue/stop |
 - Stop reason:
+- Target score: 0.800
+- Max iterations: 3
 - Unresolved concerns:
 
 ## NOT in scope

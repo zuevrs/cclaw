@@ -7,6 +7,7 @@ import { CCLAW_AGENTS } from "../../src/content/core-agents.js";
 import { stageExamples, stageFullArtifactExampleMarkdown } from "../../src/content/examples.js";
 import { mandatoryDelegationsForStage, reviewStackAwareRoutingSummary, stageAutoSubagentDispatch, stageDelegationSummary, stagePolicyNeedles, stageSchema, stageTrackRenderContext } from "../../src/content/stage-schema.js";
 import { stageSkillMarkdown } from "../../src/content/skills.js";
+import { nextCommandSkillMarkdown } from "../../src/content/next-command.js";
 import { enhancedAgentBody, subagentDrivenDevSkill } from "../../src/content/subagents.js";
 import { ARTIFACT_TEMPLATES } from "../../src/content/templates.js";
 import { FLOW_STAGES, FLOW_TRACKS, TRACK_STAGES, type FlowStage, type FlowTrack } from "../../src/types.js";
@@ -322,14 +323,24 @@ describe("stage schema and subagent alignment", () => {
     const template = ARTIFACT_TEMPLATES["01-brainstorm.md"] ?? "";
     const skill = stageSkillMarkdown("brainstorm");
 
-    expect(template).toContain("challenger: higher-upside");
-    expect(template).toContain("Based on user reaction/feedback/concerns");
+    expect(template).toContain("| B | challenger | high |");
+    expect(template).toContain("Trace this to the prior Approach Reaction");
+    expect(template).toContain("Next-stage handoff");
     expect(brainstorm.artifactValidation.find((row) => row.section === "Selected Direction")?.validationRule)
-      .toContain("reaction/feedback/concerns");
+      .toContain("Approach Reaction");
     expect(brainstorm.artifactValidation.find((row) => row.section === "Approach Reaction")?.validationRule)
       .toContain("before Selected Direction");
     expect(skill).toContain("if using a structured question tool, send exactly one question object");
-    expect(skill).toContain("rationale tied to user reaction/feedback/concerns");
+    expect(skill).toContain("rationale traceable to the prior Approach Reaction");
+    expect(skill).toContain("track-aware next-stage handoff");
+  });
+
+  it("next command skill shows track-aware critical path", () => {
+    const skill = nextCommandSkillMarkdown();
+
+    expect(skill).toContain("| Stage | Standard next | Medium next | Quick next | Skill path |");
+    expect(skill).toContain("| `brainstorm` | `scope` | `spec` | `not in track` |");
+    expect(skill).toContain("Natural schema edge reference for diagnostics only");
   });
 
   it("brainstorm artifact requires tier and reaction sections", () => {
@@ -353,17 +364,27 @@ describe("stage schema and subagent alignment", () => {
     const scope = stageSchema("scope");
 
     expect(brainstorm.executionModel.checklist).toEqual(expect.arrayContaining([
+      expect.stringContaining("Use compact discovery for simple apps"),
       expect.stringContaining("compact brainstorm stub")
     ]));
     expect(brainstorm.executionModel.interactionProtocol).toEqual(expect.arrayContaining([
       expect.stringContaining("Ask at most one question per turn")
     ]));
     expect(scope.executionModel.checklist).toEqual(expect.arrayContaining([
-      expect.stringContaining("CEO pass first")
+      expect.stringContaining("Compact CEO pass first")
     ]));
     expect(scope.executionModel.interactionProtocol).toEqual(expect.arrayContaining([
       expect.stringContaining("Do not walk the full checklist by default")
     ]));
+  });
+
+  it("stage skill completion parameters use track-aware next stage", () => {
+    const mediumBrainstorm = stageSkillMarkdown("brainstorm", "medium");
+    const standardBrainstorm = stageSkillMarkdown("brainstorm", "standard");
+
+    expect(mediumBrainstorm).toContain("`next`: `spec`");
+    expect(mediumBrainstorm).not.toContain("`next`: `scope`");
+    expect(standardBrainstorm).toContain("`next`: `scope`");
   });
 
   it("scope and design expose shared review-loop config", () => {

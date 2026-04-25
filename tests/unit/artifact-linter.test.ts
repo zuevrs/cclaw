@@ -500,7 +500,63 @@ describe("artifact linter heuristics", () => {
       (finding) => finding.section === "Challenger Alternative Enforcement"
     );
     expect(challenger?.found).toBe(false);
-    expect(challenger?.details).toContain("higher-upside");
+    expect(challenger?.details).toContain("high/higher upside");
+  });
+
+  it("accepts semantic challenger columns without exact hidden token", async () => {
+    const root = await createTempProject("artifact-lint-semantic-challenger");
+    await writeRuntimeArtifact(root, "01-brainstorm.md", `# Brainstorm Artifact
+
+## Context
+- Project state: fresh simple web app flow.
+- Relevant existing code/patterns: no existing app scaffold; use package scripts once created.
+
+## Problem
+- What we're solving: a minimal todo web app needs a clear first product slice.
+- Success criteria: user can add, delete, and complete todos locally.
+- Constraints: no backend and no auth.
+
+## Clarifying Questions
+| # | Question | Answer | Decision impact |
+|---|---|---|---|
+| 1 | Include persistence? | Local only | no backend scope |
+
+## Approach Tier
+- Tier: Standard
+- Why this tier: small product choice but still needs stack and scope clarity.
+
+## Approaches
+| Approach | Role | Upside | Trade-offs | Recommendation |
+|---|---|---|---|---|
+| A | baseline | modest | simplest single-list todo | |
+| B | challenger | high | adds categories/projects for better long-term usefulness | recommended |
+
+## Approach Reaction
+- Closest option: B
+- Concerns: avoid backend or account system.
+- What changed after reaction: categories stay local and simple.
+
+## Selected Direction
+- Approach: B — local todo list with categories/projects
+- Rationale: categories give more product value while staying within the user's no-backend constraint
+- Approval: approved by user
+
+## Design
+- Architecture: static client app with local component state.
+- Key components: todo input, list, category filter.
+- Data flow: user action -> state update -> rendered list.
+
+## Assumptions and Open Questions
+- Assumptions: local browser session is enough.
+- Open questions (or "None"): None
+`);
+
+    const result = await lintArtifact(root, "brainstorm");
+    const challenger = result.findings.find(
+      (finding) => finding.section === "Challenger Alternative Enforcement"
+    );
+    expect(result.passed).toBe(true);
+    expect(challenger?.found).toBe(true);
   });
 
   it("fails brainstorm when reaction section appears after selected direction", async () => {
@@ -1145,6 +1201,43 @@ describe("artifact linter heuristics", () => {
     const preAudit = result.findings.find((f) => f.section === "Pre-Scope System Audit");
     expect(preAudit?.required).toBe(true);
     expect(preAudit?.found).toBe(true);
+  });
+
+  it("accepts split In Scope and Out of Scope headings for scope boundaries", async () => {
+    const root = await createTempProject("scope-split-boundaries");
+    await writeRuntimeArtifact(root, "02-scope.md", `# Scope Artifact
+
+## Scope Mode
+- Mode: HOLD SCOPE
+- Rationale: simple local todo app should not silently grow into backend/auth.
+
+## In Scope
+- Add todo item
+- Delete todo item
+- Mark todo complete
+- Local categories/projects
+
+## Out of Scope
+- Backend API
+- User accounts
+- Cloud sync
+
+## Completion Dashboard
+- Checklist findings: 4/4 complete
+- Resolved decisions count: 3
+- Unresolved decisions: None
+
+## Scope Summary
+- Selected mode: HOLD SCOPE
+- Accepted scope: local todo interactions plus categories/projects.
+- Deferred: persistence beyond local browser session.
+- Explicitly excluded: backend, auth, cloud sync.
+`);
+
+    const result = await lintArtifact(root, "scope");
+    const boundaries = result.findings.find((f) => f.section === "In Scope / Out of Scope");
+    expect(result.passed).toBe(true);
+    expect(boundaries?.found).toBe(true);
   });
 
   it("enforces scope-reduction scan when locked decisions section is present", async () => {

@@ -1,4 +1,5 @@
 import { RUNTIME_ROOT } from "../constants.js";
+import { nextStage as nextStageForTrack } from "../flow-state.js";
 import { conversationLanguagePolicyMarkdown } from "./language-policy.js";
 import { stageSchema } from "./stage-schema.js";
 import {
@@ -167,6 +168,16 @@ export function nextCommandSkillMarkdown(): string {
 
   const stageRows = (["brainstorm", "scope", "design", "spec", "plan", "tdd", "review", "ship"] as const)
     .map((stage) => {
+      const skillMd = `${RUNTIME_ROOT}/skills/${stageSkillFolder(stage)}/SKILL.md`;
+      const standardNext = nextStageForTrack(stage, "standard") ?? "(terminal)";
+      const mediumNext = nextStageForTrack(stage, "medium") ?? "not in track";
+      const quickNext = nextStageForTrack(stage, "quick") ?? "not in track";
+      return `| \`${stage}\` | \`${standardNext}\` | \`${mediumNext}\` | \`${quickNext}\` | \`${skillMd}\` |`;
+    })
+    .join("\n");
+
+  const naturalStageRows = (["brainstorm", "scope", "design", "spec", "plan", "tdd", "review", "ship"] as const)
+    .map((stage) => {
       const schema = stageSchema(stage);
       const next = schema.next === "done" ? "(terminal)" : schema.next;
       const skillMd = `${RUNTIME_ROOT}/skills/${stageSkillFolder(stage)}/SKILL.md`;
@@ -273,11 +284,17 @@ Otherwise (non-terminal \`next\`): load the next stage skill and begin execution
 
 ## Stage order
 
-This table is the critical path. After \`ship\`, \`/cc-next\` continues closeout via ${closeoutSubstateInline()}: ${closeoutChainInline()}.
+This table is the track-aware critical path. It must match \`flow-state.json.track\`; do not follow the natural schema edge when the active track skips a stage. After \`ship\`, \`/cc-next\` continues closeout via ${closeoutSubstateInline()}: ${closeoutChainInline()}.
 
-| Stage | Next | Skill path |
-|---|---|---|
+| Stage | Standard next | Medium next | Quick next | Skill path |
+|---|---|---|---|---|
 ${stageRows}
+
+Natural schema edge reference for diagnostics only:
+
+| Stage | Natural next | Skill path |
+|---|---|---|
+${naturalStageRows}
 
 ## Anti-patterns
 

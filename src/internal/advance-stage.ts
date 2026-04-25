@@ -45,6 +45,7 @@ interface AdvanceStageArgs {
   waiveDelegations: string[];
   waiverReason?: string;
   quiet: boolean;
+  json: boolean;
 }
 
 interface VerifyFlowStateDiffArgs {
@@ -297,6 +298,11 @@ function validateGateEvidenceShape(stage: FlowStage, gateId: string, evidence: s
   return validator(evidence.trim());
 }
 
+function reviewLoopArtifactFixHint(stage: FlowStage, gateId: string): string {
+  if (AUTO_REVIEW_LOOP_GATE_BY_STAGE[stage] !== gateId) return "";
+  return " Add a `## Spec Review Loop` table to the artifact with rows like `| 1 | 0.80 | 0 |` plus `- Stop reason: quality_threshold_met`, `- Target score: 0.80`, and `- Max iterations: 3`; then omit this gate from manual evidence so stage-complete can auto-hydrate it.";
+}
+
 function parseStringList(raw: unknown): string[] {
   if (!Array.isArray(raw)) return [];
   return raw
@@ -523,10 +529,15 @@ function parseAdvanceStageArgs(tokens: string[]): AdvanceStageArgs {
   let waiveDelegations: string[] = [];
   let waiverReason: string | undefined;
   let quiet = false;
+  let json = false;
 
   for (let i = 0; i < flagTokens.length; i += 1) {
     const token = flagTokens[i]!;
     const nextToken = flagTokens[i + 1];
+    if (token === "--json") {
+      json = true;
+      continue;
+    }
     if (token === "--quiet") {
       quiet = true;
       continue;
@@ -591,7 +602,8 @@ function parseAdvanceStageArgs(tokens: string[]): AdvanceStageArgs {
     evidenceByGate: parseEvidenceByGate(evidenceJson),
     waiveDelegations: unique(waiveDelegations),
     waiverReason,
-    quiet
+    quiet,
+    json
   };
 }
 
@@ -980,7 +992,7 @@ async function runAdvanceStage(
           ? existing
           : "";
     const issue = validateGateEvidenceShape(args.stage, gateId, effectiveEvidence);
-    return issue ? [`${gateId}: ${issue}`] : [];
+    return issue ? [`${gateId}: ${issue}${reviewLoopArtifactFixHint(args.stage, gateId)}`] : [];
   });
   if (malformedGateEvidence.length > 0) {
     io.stderr.write(
@@ -1015,11 +1027,39 @@ async function runAdvanceStage(
 
   const validation = await buildValidationReport(projectRoot, candidateState);
   if (!validation.ok) {
+    if (args.json) {
+      io.stdout.write(`${JSON.stringify({
+        ok: false,
+        command: "advance-stage",
+        stage: args.stage,
+        kind: "validation-failed",
+        delegation: validation.delegation,
+        gates: validation.gates,
+        completedStages: validation.completedStages,
+        nextActions: [
+          ...(validation.delegation.missing.length > 0
+            ? [`Complete or waive mandatory delegation(s): ${validation.delegation.missing.join(", ")}.`]
+            : []),
+          ...(validation.delegation.missingEvidence.length > 0
+            ? ["Add evidenceRefs for role-switch delegation completion or use an explicit waiver reason."]
+            : []),
+          ...(validation.gates.issues.length > 0
+            ? ["Fix the artifact/gate issue shown in gates.issues, then rerun stage-complete."]
+            : []),
+          ...(validation.completedStages.issues.length > 0
+            ? ["Repair previously completed stage gate closure before advancing."]
+            : [])
+        ]
+      })}\n`);
+    }
     io.stderr.write(
       `cclaw internal advance-stage: validation failed for stage "${args.stage}".\n`
     );
     if (validation.delegation.missing.length > 0) {
       io.stderr.write(`- missing delegations: ${validation.delegation.missing.join(", ")}\n`);
+      io.stderr.write(
+        `  next action: complete the delegation, or rerun with --waive-delegation=${validation.delegation.missing.join(",")} --waiver-reason="<why safe>".\n`
+      );
     }
     if (validation.delegation.missingEvidence.length > 0) {
       io.stderr.write(
