@@ -1122,7 +1122,7 @@ function stopLawIsStrict(ironLawsObj) {
     (row) =>
       row &&
       typeof row === "object" &&
-      row.id === "stop-clean-or-checkpointed" &&
+      (row.id === "stop-clean-or-handoff" || row.id === "stop-clean-or-checkpointed") &&
       row.strict === true
   );
 }
@@ -1141,7 +1141,7 @@ async function handleStopHandoff(runtime) {
   const strictStop = stopLawIsStrict(toObject(await readJsonFile(ironLawsFile, {})) || {});
   if (dirtyState === "dirty" && strictStop) {
     process.stderr.write(
-      '[cclaw] Stop blocked by iron law "stop-clean-or-checkpointed": working tree is dirty. Commit/revert changes or record blockers in the current artifact before ending the session.\\n'
+      '[cclaw] Stop blocked by iron law "stop-clean-or-handoff": working tree is dirty. Commit/revert changes or record blockers in the current artifact before ending the session.\\n'
     );
     return 1;
   }
