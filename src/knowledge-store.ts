@@ -58,8 +58,6 @@ export interface AppendKnowledgeDefaults {
   stage?: FlowStage | null;
   originStage?: FlowStage | null;
   originRun?: string | null;
-  /** @deprecated Use `originRun`. Accepted only for legacy callers. */
-  originFeature?: string | null;
   project?: string | null;
   source?: KnowledgeEntrySource | null;
   nowIso?: string;
@@ -594,7 +592,7 @@ export function materializeKnowledgeEntry(
   const now = normalizeUtcIso(defaults.nowIso ?? nowUtcIso());
   const stage = seed.stage ?? defaults.stage ?? null;
   const originStage = seed.origin_stage ?? defaults.originStage ?? stage ?? null;
-  const originRun = seed.origin_run ?? seed.origin_feature ?? defaults.originRun ?? defaults.originFeature ?? null;
+  const originRun = seed.origin_run ?? seed.origin_feature ?? defaults.originRun ?? null;
   const source = seed.source ?? defaults.source ?? null;
   const entry: KnowledgeEntry = {
     type: seed.type,
