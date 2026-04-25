@@ -121,5 +121,5 @@ Harness-specific additions:
 ## Runtime observability
 
 - `cclaw doctor` validates shim, hook, and lifecycle surfaces against this capability model.
-- `/cc-view status` and `/cc-view tree` surface the same harness tier/fallback facts without requiring generated playbook files.
+- `/cc-view status` and `/cc-view tree` surface the same harness tier/fallback facts from the generated runtime metadata.
 

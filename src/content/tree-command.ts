@@ -81,7 +81,7 @@ harnesses:
 - Closeout sub-tree is **omitted** when \`currentStage !== "ship"\` and
   \`shipSubstate === "idle"\`.
 - Delegations sub-branch is omitted when the stage has no mandatory agents.
-- Harness capability details come from \`cclaw doctor --explain\`, not generated playbook files.
+- Harness capability details come from \`cclaw doctor --explain\`.
 
 Use UTF markers by default, ASCII fallback when terminal cannot render UTF.
 
