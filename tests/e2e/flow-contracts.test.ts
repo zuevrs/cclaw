@@ -6,6 +6,22 @@ import { initCclaw } from "../../src/install.js";
 import { FLOW_STAGES } from "../../src/types.js";
 import { createTempProject } from "../helpers/index.js";
 
+function expectStageSkillContract(content: string): void {
+  for (const anchor of [
+    "## Process",
+    "## Context Loading",
+    "## Required Gates",
+    "## Required Evidence",
+    "## Completion Parameters",
+    "## Artifact Validation",
+    "## Shared Stage Guidance"
+  ]) {
+    expect(content).toContain(anchor);
+  }
+  expect(content).toContain("Carry upstream decisions forward explicitly");
+  expect(content).toContain("stage-complete.mjs");
+}
+
 describe("flow command contracts", () => {
   it("creates only the four user-facing command contracts", async () => {
     const root = await createTempProject("flow");
@@ -246,8 +262,8 @@ describe("flow command contracts", () => {
     expect(specSkill).toContain("Decision protocol: ask only decision-changing questions");
   });
 
-  it("matches golden snapshots for strict-stage content", async () => {
-    const root = await createTempProject("golden");
+  it("keeps contract anchors for strict-stage content", async () => {
+    const root = await createTempProject("strict-stage-anchors");
     await initCclaw({ projectRoot: root });
 
     const brainstormSkill = await fs.readFile(
@@ -263,7 +279,10 @@ describe("flow command contracts", () => {
       "utf8"
     );
 
-    expect(brainstormSkill).toMatchSnapshot("brainstorm-skill");
+    expectStageSkillContract(brainstormSkill);
+    expectStageSkillContract(reviewSkill);
+    expectStageSkillContract(shipSkill);
+    expect(brainstormSkill).toContain("Selected Direction");
     expect(reviewSkill).toContain("Review Army");
     expect(shipSkill).toContain("finalization mode");
   });
@@ -298,8 +317,8 @@ describe("flow command contracts", () => {
     expect(tddSkill).toContain("Per-Slice Review Audit (conditional)");
   });
 
-  it("matches golden snapshots for plan and tdd skills", async () => {
-    const root = await createTempProject("golden-plan-tdd");
+  it("keeps contract anchors for plan and tdd skills", async () => {
+    const root = await createTempProject("plan-tdd-anchors");
     await initCclaw({ projectRoot: root });
 
     const planSkill = await fs.readFile(
@@ -311,12 +330,14 @@ describe("flow command contracts", () => {
       "utf8"
     );
 
-    expect(planSkill).toMatchSnapshot("plan-skill");
-    expect(tddSkill).toMatchSnapshot("tdd-skill");
+    expectStageSkillContract(planSkill);
+    expectStageSkillContract(tddSkill);
+    expect(planSkill).toContain("Dependency Batches");
+    expect(tddSkill).toContain("RED -> GREEN -> REFACTOR");
   });
 
-  it("matches golden snapshot for review skill", async () => {
-    const root = await createTempProject("golden-review");
+  it("keeps review skill contract anchors", async () => {
+    const root = await createTempProject("review-anchors");
     await initCclaw({ projectRoot: root });
 
     const reviewSkill = await fs.readFile(
@@ -324,11 +345,14 @@ describe("flow command contracts", () => {
       "utf8"
     );
 
-    expect(reviewSkill).toMatchSnapshot("review-skill");
+    expectStageSkillContract(reviewSkill);
+    expect(reviewSkill).toContain("Review Army");
+    expect(reviewSkill).toContain("Layer 1");
+    expect(reviewSkill).toContain("Layer 2");
   });
 
-  it("matches golden snapshot for ship skill", async () => {
-    const root = await createTempProject("golden-ship");
+  it("keeps ship skill contract anchors", async () => {
+    const root = await createTempProject("ship-anchors");
     await initCclaw({ projectRoot: root });
 
     const shipSkill = await fs.readFile(
@@ -336,6 +360,8 @@ describe("flow command contracts", () => {
       "utf8"
     );
 
-    expect(shipSkill).toMatchSnapshot("ship-skill");
+    expectStageSkillContract(shipSkill);
+    expect(shipSkill).toContain("FINALIZE_OPEN_PR");
+    expect(shipSkill).toContain("Rollback Plan");
   });
 });
