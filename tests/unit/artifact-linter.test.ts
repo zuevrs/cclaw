@@ -1740,7 +1740,7 @@ ${premiseBody}
     expect(reduction?.found).toBe(false);
   });
 
-  it("flags Locked Decisions rows that are missing a D-XX ID", async () => {
+  it("flags Locked Decisions rows that are missing an LD#hash anchor", async () => {
     const root = await createTempProject("scope-decision-ids-missing");
     await writeRuntimeArtifact(root, "02-scope.md", `# Scope Artifact
 
@@ -1751,8 +1751,8 @@ ${premiseBody}
 - In scope: audit log storage
 - Out of scope: archival
 
-## Locked Decisions (D-XX)
-- D-01 — JSONL format for audit trail (compliance)
+## Locked Decisions (LD#hash)
+- LD#9a950776 — JSONL format for audit trail (compliance)
 - freeform note without an ID
 
 ## Completion Dashboard
@@ -1764,14 +1764,13 @@ ${premiseBody}
 `);
 
     const result = await lintArtifact(root, "scope");
-    const integrity = result.findings.find((f) => f.section === "Locked Decisions ID Integrity");
+    const integrity = result.findings.find((f) => f.section === "Locked Decisions Hash Integrity");
     expect(integrity?.required).toBe(true);
     expect(integrity?.found).toBe(false);
-    expect(integrity?.details).toContain("decision row(s) missing a D-XX ID");
-    expect(integrity?.details).toContain("freeform note without an ID");
+    expect(integrity?.details).toContain("bullet 2 is missing an LD#<sha8> anchor");
   });
 
-  it("accepts Locked Decisions markdown table header without a D-XX ID", async () => {
+  it("accepts Locked Decisions markdown table header without an LD#hash anchor", async () => {
     const root = await createTempProject("scope-decision-table-header-ok");
     await writeRuntimeArtifact(root, "02-scope.md", `# Scope Artifact
 
@@ -1784,11 +1783,11 @@ ${premiseBody}
 ### Out of Scope
 - Backend API
 
-## Locked Decisions (D-XX)
-| Decision ID | Decision | Why locked now | Downstream impact |
+## Locked Decisions (LD#hash)
+| Decision Anchor | Decision | Why locked now | Downstream impact |
 |---|---|---|---|
-| D-01 | Next.js App Router + static export | Brainstorm approved | Defines build and deploy path |
-| D-02 | Tailwind CSS for styling | Brainstorm approved | Defines styling approach |
+| LD#4c91c2a8 | Next.js App Router + static export | Brainstorm approved | Defines build and deploy path |
+| LD#ced076be | Tailwind CSS for styling | Brainstorm approved | Defines styling approach |
 
 ## Completion Dashboard
 - Checklist findings: 1/1
@@ -1802,10 +1801,10 @@ ${premiseBody}
 `);
 
     const result = await lintArtifact(root, "scope");
-    const integrity = result.findings.find((f) => f.section === "Locked Decisions ID Integrity");
+    const integrity = result.findings.find((f) => f.section === "Locked Decisions Hash Integrity");
     expect(integrity?.required).toBe(true);
     expect(integrity?.found).toBe(true);
-    expect(integrity?.details).toContain("2 decision ID(s) recorded with no duplicates");
+    expect(integrity?.details).toContain("2 LD#hash anchor(s) recorded with no duplicates");
   });
 
   it("flags duplicate Locked Decision IDs", async () => {
@@ -2531,6 +2530,71 @@ inputs_hash: sha256:pending
     expect(placeholder?.required).toBe(false);
     expect(trace?.required).toBe(false);
     expect(reduction?.required).toBe(false);
+  });
+
+  it("requires downstream artifacts to reference scope R-IDs and LD#hash anchors", async () => {
+    const root = await createTempProject("downstream-scope-xref-missing");
+    await writeRuntimeArtifact(root, "02-scope.md", `# Scope Artifact
+
+## Requirements (stable IDs)
+| ID | Requirement | Priority | Source |
+|---|---|---|---|
+| R1 | Render static landing page | P0 | prompt |
+| R2 | Preserve static export deployability | P1 | scope |
+
+## Locked Decisions (LD#hash)
+| Decision Anchor | Decision | Why locked now | Downstream impact |
+|---|---|---|---|
+| LD#4677cc9d | Static export stays non-negotiable | deploy constraint | design/build path |
+`);
+    await writeRuntimeArtifact(root, "03-design.md", `# Design Artifact
+
+## Architecture Boundaries
+| Component | Responsibility | Requirement Refs (R#) | Decision Refs (LD#hash) | Owner |
+|---|---|---|---|---|
+| Landing | Render hero | R1 |  | web |
+`);
+
+    const result = await lintArtifact(root, "design");
+    const rRefs = result.findings.find((f) => f.section === "Scope Requirement Reference Integrity");
+    const ldRefs = result.findings.find((f) => f.section === "Locked Decision Hash Reference Integrity");
+
+    expect(rRefs?.required).toBe(true);
+    expect(rRefs?.found).toBe(false);
+    expect(rRefs?.details).toContain("R2");
+    expect(ldRefs?.required).toBe(true);
+    expect(ldRefs?.found).toBe(false);
+    expect(ldRefs?.details).toContain("ld#4677cc9d");
+  });
+
+  it("accepts downstream artifacts that reference all scope R-IDs and LD#hash anchors", async () => {
+    const root = await createTempProject("downstream-scope-xref-covered");
+    await writeRuntimeArtifact(root, "02-scope.md", `# Scope Artifact
+
+## Requirements (stable IDs)
+| ID | Requirement | Priority | Source |
+|---|---|---|---|
+| R1 | Render static landing page | P0 | prompt |
+
+## Locked Decisions (LD#hash)
+| Decision Anchor | Decision | Why locked now | Downstream impact |
+|---|---|---|---|
+| LD#4677cc9d | Static export stays non-negotiable | deploy constraint | design/build path |
+`);
+    await writeRuntimeArtifact(root, "03-design.md", `# Design Artifact
+
+## Architecture Boundaries
+| Component | Responsibility | Requirement Refs (R#) | Decision Refs (LD#hash) | Owner |
+|---|---|---|---|---|
+| Landing | Render hero | R1 | LD#4677cc9d | web |
+`);
+
+    const result = await lintArtifact(root, "design");
+    const rRefs = result.findings.find((f) => f.section === "Scope Requirement Reference Integrity");
+    const ldRefs = result.findings.find((f) => f.section === "Locked Decision Hash Reference Integrity");
+
+    expect(rRefs?.found).toBe(true);
+    expect(ldRefs?.found).toBe(true);
   });
 
   it("reports frontmatter validation errors for stage/schema/hash mismatches", async () => {
