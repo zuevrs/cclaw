@@ -241,56 +241,6 @@ function quickStartBlock(stage: FlowStage, track: FlowTrack): string {
 `;
 }
 
-export const TDD_BATCH_WALKTHROUGH_MARKDOWN = `# TDD — Batch Execution Walkthrough
-
-Detailed RED / GREEN / REFACTOR transcript for a 3-task batch. Illustrative
-only — do not copy the command names blindly, match them to your stack.
-
-## Batch 1 example tasks
-
-| Task ID | Description | AC | Verification |
-|---|---|---|---|
-| T-1 \`[~3m]\` | Add \`User.emailNormalized\` column | AC-1 | \`npm test -- users/schema\` |
-| T-2 \`[~4m]\` | Normalize on write in \`UserRepo.save\` | AC-1 | \`npm test -- users/repo\` |
-| T-3 \`[~3m]\` | Reject duplicates in \`UserService.signup\` | AC-2 | \`npm test -- users/service\` |
-
-## Execution transcript
-
-### T-1 — RED
-
-> Run: \`npm test -- users/schema\` → **FAIL** (missing column: \`emailNormalized\`). Captured the failure stack as RED evidence. No production code touched yet.
-
-### T-1 — GREEN
-
-> Added the column in the schema module. Re-ran \`npm test -- users/schema\` → **PASS**. Ran the full suite \`npm test\` → **PASS**. Captured both outputs as GREEN evidence.
-
-### T-1 — REFACTOR
-
-> Extracted the column definition into a shared \`NormalizedEmail\` type used by T-2/T-3. Re-ran \`npm test\` → **PASS**. Captured REFACTOR note: "Extracted NormalizedEmail type to keep T-2/T-3 DRY; zero behavior change, all tests still green."
-
-### T-2 — RED / GREEN / REFACTOR
-
-Write the repo test that expects normalised writes, watch it fail (RED), implement normalisation inside \`UserRepo.save\` only (GREEN), then refactor the normaliser out of the repo into a helper shared with T-3 (REFACTOR).
-
-### T-3 — RED / GREEN / REFACTOR
-
-Write the service-level duplicate test that expects a rejection, watch it fail (RED), add the duplicate check in \`UserService.signup\` (GREEN), refactor the error message into a named constant (REFACTOR).
-
-## Batch gate check
-
-After T-3 REFACTOR, before declaring Batch 1 done:
-
-1. Run the full suite (\`npm test\`) one final time → **PASS** captured as batch-exit evidence.
-2. Verify the TDD artifact contains RED, GREEN, and REFACTOR evidence for T-1, T-2, **and** T-3. No partial batches.
-3. Only now mark Batch 1 complete. Batch 2 cannot start until this step.
-
-## When to stop mid-batch (do NOT push through)
-
-- A RED test fails for a reason you did not predict (e.g. an unrelated flaky test) → **pause**, diagnose, log an operational-self-improvement entry, and decide with the user before proceeding.
-- A GREEN step would require touching code outside the task's acceptance criterion → **pause**, the task is scoped wrong; adjust the plan or open a follow-up task.
-- The same RED failure reappears after a GREEN change → **escalate** per the 3-attempts rule; do not keep patching.
-`;
-
 export function stageSkillFolder(stage: FlowStage): string {
   return STAGE_TO_SKILL_FOLDER[stage];
 }
