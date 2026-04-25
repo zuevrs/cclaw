@@ -43,6 +43,9 @@ workflow tool.
 - Removed an unused TDD batch walkthrough export and the large stage-skill
   golden snapshot file; contract tests now assert behavioral anchors instead
   of pinning generated prose.
+- Stopped scaffolding the unused `stage-activity.jsonl` ledger. Fresh installs
+  now start with only `flow-state.json` and `iron-laws.json` under
+  `.cclaw/state`.
 
 ### Changed
 
