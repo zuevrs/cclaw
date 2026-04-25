@@ -26,6 +26,7 @@ import { sessionHooksSkillMarkdown } from "./content/session-hooks.js";
 import { ironLawRuntimeDocument, ironLawsSkillMarkdown } from "./content/iron-laws.js";
 import {
   stageCompleteScript,
+  startFlowScript,
   runHookCmdScript,
   opencodePluginJs,
   claudeHooksJson,
@@ -834,6 +835,7 @@ async function writeHooks(projectRoot: string, config: CclawConfig): Promise<voi
   );
 
   await writeFileSafe(path.join(hooksDir, "stage-complete.mjs"), stageCompleteScript());
+  await writeFileSafe(path.join(hooksDir, "start-flow.mjs"), startFlowScript());
   await writeFileSafe(path.join(hooksDir, "run-hook.mjs"), nodeHookRuntimeScript({
     strictness: effectiveStrictness,
     tddTestPathPatterns: config.tdd?.testPathPatterns ?? config.tddTestGlobs,
@@ -847,6 +849,7 @@ async function writeHooks(projectRoot: string, config: CclawConfig): Promise<voi
   try {
     for (const script of [
       "stage-complete.mjs",
+      "start-flow.mjs",
       "run-hook.mjs",
       "run-hook.cmd",
       "opencode-plugin.mjs"

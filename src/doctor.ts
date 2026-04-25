@@ -134,7 +134,7 @@ function extractGeneratedCliEntrypoints(scriptContent: string): string[] {
 }
 
 async function generatedCliEntrypointsOk(projectRoot: string): Promise<{ ok: boolean; details: string }> {
-  const hookScripts = ["stage-complete.mjs", "run-hook.mjs"] as const;
+  const hookScripts = ["stage-complete.mjs", "start-flow.mjs", "run-hook.mjs"] as const;
   const problems: string[] = [];
   const checked: string[] = [];
   for (const script of hookScripts) {
@@ -706,6 +706,7 @@ export async function doctorChecks(projectRoot: string, options: DoctorOptions =
     "run-hook.mjs",
     "run-hook.cmd",
     "stage-complete.mjs",
+    "start-flow.mjs",
     "opencode-plugin.mjs"
   ]) {
     const scriptPath = path.join(projectRoot, RUNTIME_ROOT, "hooks", script);

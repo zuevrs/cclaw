@@ -6,7 +6,7 @@ import { describe, expect, it } from "vitest";
 import { initCclaw } from "../../src/install.js";
 import { readFlowState } from "../../src/runs.js";
 import { stageSchema } from "../../src/content/stage-schema.js";
-import { opencodePluginJs, runHookCmdScript, stageCompleteScript } from "../../src/content/hooks.js";
+import { opencodePluginJs, runHookCmdScript, stageCompleteScript, startFlowScript } from "../../src/content/hooks.js";
 import {
   claudeHooksJsonWithObservation,
   codexHooksJsonWithObservation,
@@ -235,6 +235,34 @@ fs.appendFileSync(${JSON.stringify(callsPath)}, process.argv.slice(2).join(" ") 
 
     expect(result.code).toBe(1);
     expect(result.stderr).toContain("Usage: node .cclaw/hooks/stage-complete.mjs <stage>");
+  });
+
+  it("start-flow helper invokes managed start through the local Node runtime without cclaw on PATH", async () => {
+    const root = await createTempProject("start-flow-helper-no-path");
+    await fs.mkdir(path.join(root, ".cclaw/hooks"), { recursive: true });
+
+    const callsPath = path.join(root, "start-flow-calls.log");
+    const runtimeShimPath = path.join(root, "local-runtime.mjs");
+    await fs.writeFile(runtimeShimPath, `#!/usr/bin/env node
+import fs from "node:fs";
+fs.appendFileSync(${JSON.stringify(callsPath)}, process.argv.slice(2).join(" ") + "\\n");
+`, "utf8");
+    await fs.chmod(runtimeShimPath, 0o755);
+
+    const result = await runNodeScript(
+      root,
+      ".cclaw/hooks/start-flow.mjs",
+      startFlowScript(),
+      ["--track=standard", "--class=software-standard", "--prompt=простое веб приложение"],
+      "",
+      process.platform === "win32"
+        ? { PATH: "", Path: "", CCLAW_CLI_JS: runtimeShimPath }
+        : { PATH: "", CCLAW_CLI_JS: runtimeShimPath }
+    );
+
+    expect(result.code, result.stderr).toBe(0);
+    const calls = await fs.readFile(callsPath, "utf8");
+    expect(calls).toContain("internal start-flow --track=standard --class=software-standard --prompt=простое веб приложение");
   });
 
   it("stage-complete helper invokes a local Node runtime instead of a cclaw PATH binary", async () => {

@@ -74,7 +74,8 @@ describe("flow command contracts", () => {
     const startSkill = await fs.readFile(path.join(root, ".cclaw/skills/flow-start/SKILL.md"), "utf8");
 
     for (const [label, content] of [["command", startCommand], ["skill", startSkill]] as const) {
-      expect(content, label).toContain("cclaw internal start-flow");
+      expect(content, label).toContain("node .cclaw/hooks/start-flow.mjs");
+      expect(content, label).not.toContain("cclaw internal start-flow");
       expect(content, label).toContain("--reclassify");
       expect(content, label).toMatch(/do not manually edit/i);
     }
@@ -98,6 +99,13 @@ describe("flow command contracts", () => {
     expect(stageComplete).toContain("advance-stage");
     expect(stageComplete).not.toContain("cclaw binary not found");
     expect(stageComplete).not.toContain("cmd.exe");
+
+    const startFlow = await fs.readFile(path.join(root, ".cclaw/hooks/start-flow.mjs"), "utf8");
+    expect(startFlow).toContain("CCLAW_CLI_ENTRYPOINT");
+    expect(startFlow).toContain("start-flow");
+    expect(startFlow).toContain("process.execPath");
+    expect(startFlow).not.toContain("cclaw binary not found");
+    expect(startFlow).not.toContain("cmd.exe");
   });
 
   it("enforces TDD and two-layer review semantics in skills", async () => {

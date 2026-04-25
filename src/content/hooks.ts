@@ -17,6 +17,135 @@ function resolveCliEntrypointForGeneratedHook(): string | null {
   return null;
 }
 
+
+function internalHelperScript(helperName: string, internalSubcommand: string, usage: string): string {
+  const cliEntrypoint = resolveCliEntrypointForGeneratedHook();
+  return `#!/usr/bin/env node
+import fs from "node:fs/promises";
+import path from "node:path";
+import process from "node:process";
+import { spawn } from "node:child_process";
+
+const RUNTIME_ROOT = ${JSON.stringify(RUNTIME_ROOT)};
+const CCLAW_CLI_ENTRYPOINT = ${JSON.stringify(cliEntrypoint)};
+const HELPER_NAME = ${JSON.stringify(helperName)};
+const INTERNAL_SUBCOMMAND = ${JSON.stringify(internalSubcommand)};
+const USAGE = ${JSON.stringify(usage)};
+
+async function detectRoot() {
+  const candidates = [
+    process.env.CCLAW_PROJECT_ROOT,
+    process.env.CLAUDE_PROJECT_DIR,
+    process.env.CURSOR_PROJECT_DIR,
+    process.env.CURSOR_PROJECT_ROOT,
+    process.env.OPENCODE_PROJECT_DIR,
+    process.env.OPENCODE_PROJECT_ROOT,
+    process.cwd()
+  ].filter((value) => typeof value === "string" && value.length > 0);
+
+  for (const candidate of candidates) {
+    try {
+      const runtimePath = path.join(candidate, RUNTIME_ROOT);
+      const stat = await fs.stat(runtimePath);
+      if (stat.isDirectory()) return candidate;
+    } catch {
+      // continue
+    }
+  }
+  return candidates[0] || process.cwd();
+}
+
+function printUsage() {
+  process.stderr.write(USAGE + "\\n");
+}
+
+async function main() {
+  const [, , ...flags] = process.argv;
+  if (flags.includes("--help") || flags.includes("-h")) {
+    printUsage();
+    return;
+  }
+
+  const root = await detectRoot();
+  const runtimePath = path.join(root, RUNTIME_ROOT);
+  try {
+    const stat = await fs.stat(runtimePath);
+    if (!stat.isDirectory()) throw new Error("not-dir");
+  } catch {
+    process.stderr.write("[cclaw] " + HELPER_NAME + ": runtime root not found at " + runtimePath + "\\n");
+    process.exitCode = 1;
+    return;
+  }
+
+  const cliEntrypoint = process.env.CCLAW_CLI_JS || CCLAW_CLI_ENTRYPOINT;
+  if (!cliEntrypoint || cliEntrypoint.trim().length === 0) {
+    process.stderr.write(
+      "[cclaw] " + HELPER_NAME + ": local Node runtime entrypoint is missing. Re-run npx cclaw-cli sync or npx cclaw-cli upgrade to regenerate hooks.\\n"
+    );
+    process.exitCode = 1;
+    return;
+  }
+
+  try {
+    const stat = await fs.stat(cliEntrypoint);
+    if (!stat.isFile()) throw new Error("not-file");
+  } catch {
+    process.stderr.write(
+      "[cclaw] " + HELPER_NAME + ": local Node runtime entrypoint not found at " + cliEntrypoint + ". Re-run npx cclaw-cli sync or npx cclaw-cli upgrade to regenerate hooks.\\n"
+    );
+    process.exitCode = 1;
+    return;
+  }
+
+  const child = spawn(process.execPath, [cliEntrypoint, "internal", INTERNAL_SUBCOMMAND, ...flags], {
+    cwd: root,
+    env: process.env,
+    stdio: "inherit"
+  });
+  let spawnErrored = false;
+
+  child.on("error", (error) => {
+    spawnErrored = true;
+    const code = error && typeof error === "object" && "code" in error ? String(error.code) : "";
+    if (code === "ENOENT") {
+      process.stderr.write(
+        "[cclaw] " + HELPER_NAME + ": node executable not found while invoking local runtime. Re-run npx cclaw-cli doctor.\\n"
+      );
+    } else {
+      process.stderr.write(
+        "[cclaw] " + HELPER_NAME + ": failed to invoke local Node runtime (" +
+          (error instanceof Error ? error.message : String(error)) +
+          ").\\n"
+      );
+    }
+    process.exitCode = 1;
+  });
+
+  child.on("close", (code, signal) => {
+    if (spawnErrored) {
+      process.exitCode = 1;
+      return;
+    }
+    if (signal) {
+      process.exitCode = 1;
+      return;
+    }
+    process.exitCode = typeof code === "number" && code >= 0 ? code : 1;
+  });
+}
+
+void main();
+`;
+}
+
+export function startFlowScript(): string {
+  return internalHelperScript(
+    "start-flow",
+    "start-flow",
+    "Usage: node " + RUNTIME_ROOT + "/hooks/start-flow.mjs --track=<standard|medium|quick> [--class=...] [--prompt=...] [--stack=...] [--reason=...] [--reclassify] [--force-reset]"
+  );
+}
+
 export function stageCompleteScript(): string {
   const cliEntrypoint = resolveCliEntrypointForGeneratedHook();
   return `#!/usr/bin/env node
