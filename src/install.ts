@@ -87,6 +87,111 @@ function runtimePath(projectRoot: string, ...segments: string[]): string {
   return path.join(projectRoot, RUNTIME_ROOT, ...segments);
 }
 
+async function removeBestEffort(targetPath: string, recursive = false): Promise<void> {
+  try {
+    await fs.rm(targetPath, { recursive, force: true });
+  } catch {
+    // best-effort cleanup
+  }
+}
+
+const DEPRECATED_UTILITY_SKILL_FOLDERS = [
+  "project-learnings",
+  "auto-orchestration",
+  "autoplan",
+  "red-first-testing",
+  "incremental-implementation",
+  "subagent-driven-development",
+  "dispatching-parallel-agents",
+  "session-guidelines",
+  "security-review",
+  "documentation",
+  "browser-qa-testing",
+  "feature-workspaces",
+  "security",
+  "debugging",
+  "performance",
+  "ci-cd",
+  "docs",
+  "executing-plans",
+  "verification-before-completion",
+  "finishing-a-development-branch",
+  "context-engineering",
+  "source-driven-development",
+  "frontend-accessibility",
+  "landscape-check",
+  "adversarial-review",
+  "security-audit",
+  "knowledge-curation",
+  "retrospective",
+  "document-review",
+  "receiving-code-review"
+] as const;
+
+const DEPRECATED_AGENT_FILES = [
+  "securityer.md",
+  "spec-reviewer.md",
+  "code-reviewer.md",
+  "repo-research-analyst.md",
+  "learnings-researcher.md",
+  "framework-docs-researcher.md",
+  "best-practices-researcher.md",
+  "git-history-analyzer.md"
+] as const;
+
+const DEPRECATED_COMMAND_FILES = [
+  "learn.md",
+  "status.md",
+  "tree.md",
+  "diff.md",
+  "feature.md",
+  "ops.md",
+  "tdd-log.md",
+  "retro.md",
+  "compound.md",
+  "archive.md",
+  "rewind.md"
+] as const;
+
+const DEPRECATED_SKILL_FILES = [
+  ["flow-ops", "SKILL.md"],
+  ["tdd-cycle-log", "SKILL.md"],
+  ["flow-retro", "SKILL.md"],
+  ["flow-compound", "SKILL.md"],
+  ["flow-archive", "SKILL.md"],
+  ["flow-rewind", "SKILL.md"],
+  ["using-git-worktrees", "SKILL.md"]
+] as const;
+
+const DEPRECATED_STATE_FILES = [
+  "checkpoint.json",
+  "flow-state.snapshot.json",
+  "knowledge-digest.md",
+  "suggestion-memory.json",
+  "harness-gaps.json",
+  "context-mode.json",
+  "session-digest.md",
+  "context-warnings.jsonl"
+] as const;
+
+const DEPRECATED_HOOK_FILES = [
+  "observe.sh",
+  "summarize-observations.sh",
+  "summarize-observations.mjs",
+  "_lib.sh",
+  "session-start.sh",
+  "stop-checkpoint.sh",
+  "run-hook.cmd",
+  "stage-complete.sh",
+  "pre-compact.sh",
+  "prompt-guard.sh",
+  "workflow-guard.sh",
+  "context-monitor.sh"
+] as const;
+
+const DEPRECATED_RUNTIME_ROOT_FILES = ["learnings.jsonl", "observations.jsonl"] as const;
+const DEPRECATED_RUNTIME_DIRS = ["evals", "worktrees", "references", "contexts"] as const;
+
 async function resolveGitHooksDir(projectRoot: string): Promise<string | null> {
   try {
     const { stdout } = await execFileAsync("git", ["rev-parse", "--git-path", "hooks"], {
@@ -885,70 +990,12 @@ async function writeState(projectRoot: string, config: CclawConfig, forceReset =
 }
 
 async function cleanLegacyArtifacts(projectRoot: string): Promise<void> {
-  // Remove deprecated utility skill folders from older releases.
-  for (const legacyFolder of [
-    "project-learnings",
-    "auto-orchestration",
-    "autoplan",
-    "red-first-testing",
-    "incremental-implementation",
-    "subagent-driven-development",
-    "dispatching-parallel-agents",
-    "session-guidelines",
-    "security-review",
-    "documentation",
-    "browser-qa-testing",
-    "feature-workspaces",
-    "security",
-    "debugging",
-    "performance",
-    "ci-cd",
-    "docs",
-    "executing-plans",
-    "verification-before-completion",
-    "finishing-a-development-branch",
-    "context-engineering",
-    "source-driven-development",
-    "frontend-accessibility",
-    "landscape-check",
-    "adversarial-review",
-    "security-audit",
-    "knowledge-curation",
-    "retrospective",
-    "document-review",
-    "receiving-code-review"
-  ]) {
-    try {
-      await fs.rm(runtimePath(projectRoot, "skills", legacyFolder), {
-        recursive: true,
-        force: true
-      });
-    } catch {
-      // best-effort cleanup
-    }
+  for (const legacyFolder of DEPRECATED_UTILITY_SKILL_FOLDERS) {
+    await removeBestEffort(runtimePath(projectRoot, "skills", legacyFolder), true);
   }
 
-  // Remove legacy duplicate security agent file when present.
-  try {
-    await fs.rm(runtimePath(projectRoot, "agents", "securityer.md"), { force: true });
-  } catch {
-    // best-effort cleanup
-  }
-  // Core-5 migration: remove deprecated generated agent personas.
-  for (const legacyAgentFile of [
-    "spec-reviewer.md",
-    "code-reviewer.md",
-    "repo-research-analyst.md",
-    "learnings-researcher.md",
-    "framework-docs-researcher.md",
-    "best-practices-researcher.md",
-    "git-history-analyzer.md"
-  ]) {
-    try {
-      await fs.rm(runtimePath(projectRoot, "agents", legacyAgentFile), { force: true });
-    } catch {
-      // best-effort cleanup
-    }
+  for (const legacyAgentFile of DEPRECATED_AGENT_FILES) {
+    await removeBestEffort(runtimePath(projectRoot, "agents", legacyAgentFile));
   }
 
   for (const legacyPlugin of [
@@ -956,76 +1003,24 @@ async function cleanLegacyArtifacts(projectRoot: string): Promise<void> {
     path.join(projectRoot, ".opencode/plugins/opencode-plugin.mjs"),
     path.join(projectRoot, OPENCODE_PLUGIN_REL_PATH)
   ]) {
-    try {
-      await fs.rm(legacyPlugin, { force: true });
-    } catch {
-      // best-effort cleanup
-    }
+    await removeBestEffort(legacyPlugin);
   }
 
   for (const legacyRuntimeFile of [
     ...FLOW_STAGES.map((stage) => runtimePath(projectRoot, "commands", `${stage}.md`)),
-    runtimePath(projectRoot, "commands", "learn.md"),
-    runtimePath(projectRoot, "commands", "status.md"),
-    runtimePath(projectRoot, "commands", "tree.md"),
-    runtimePath(projectRoot, "commands", "diff.md"),
-    runtimePath(projectRoot, "commands", "feature.md"),
-    runtimePath(projectRoot, "commands", "ops.md"),
-    runtimePath(projectRoot, "commands", "tdd-log.md"),
-    runtimePath(projectRoot, "commands", "retro.md"),
-    runtimePath(projectRoot, "commands", "compound.md"),
-    runtimePath(projectRoot, "commands", "archive.md"),
-    runtimePath(projectRoot, "commands", "rewind.md"),
-    runtimePath(projectRoot, "skills", "flow-ops", "SKILL.md"),
-    runtimePath(projectRoot, "skills", "tdd-cycle-log", "SKILL.md"),
-    runtimePath(projectRoot, "skills", "flow-retro", "SKILL.md"),
-    runtimePath(projectRoot, "skills", "flow-compound", "SKILL.md"),
-    runtimePath(projectRoot, "skills", "flow-archive", "SKILL.md"),
-    runtimePath(projectRoot, "skills", "flow-rewind", "SKILL.md"),
-    runtimePath(projectRoot, "state", "checkpoint.json"),
-    runtimePath(projectRoot, "state", "flow-state.snapshot.json"),
-    runtimePath(projectRoot, "state", "knowledge-digest.md"),
-    runtimePath(projectRoot, "state", "suggestion-memory.json"),
-    runtimePath(projectRoot, "state", "harness-gaps.json"),
-    runtimePath(projectRoot, "state", "context-mode.json"),
-    runtimePath(projectRoot, "state", "session-digest.md"),
-    runtimePath(projectRoot, "state", "context-warnings.jsonl"),
-    runtimePath(projectRoot, "skills", "using-git-worktrees", "SKILL.md"),
-    runtimePath(projectRoot, "learnings.jsonl"),
-    runtimePath(projectRoot, "observations.jsonl"),
-    runtimePath(projectRoot, "hooks", "observe.sh"),
-    runtimePath(projectRoot, "hooks", "summarize-observations.sh"),
-    runtimePath(projectRoot, "hooks", "summarize-observations.mjs"),
-    runtimePath(projectRoot, "hooks", "_lib.sh"),
-    runtimePath(projectRoot, "hooks", "session-start.sh"),
-    runtimePath(projectRoot, "hooks", "stop-checkpoint.sh"),
-    runtimePath(projectRoot, "hooks", "run-hook.cmd"),
-    runtimePath(projectRoot, "hooks", "stage-complete.sh"),
-    runtimePath(projectRoot, "hooks", "pre-compact.sh"),
-    runtimePath(projectRoot, "hooks", "prompt-guard.sh"),
-    runtimePath(projectRoot, "hooks", "workflow-guard.sh"),
-    runtimePath(projectRoot, "hooks", "context-monitor.sh")
+    ...DEPRECATED_COMMAND_FILES.map((file) => runtimePath(projectRoot, "commands", file)),
+    ...DEPRECATED_SKILL_FILES.map((segments) => runtimePath(projectRoot, "skills", ...segments)),
+    ...DEPRECATED_STATE_FILES.map((file) => runtimePath(projectRoot, "state", file)),
+    ...DEPRECATED_RUNTIME_ROOT_FILES.map((file) => runtimePath(projectRoot, file)),
+    ...DEPRECATED_HOOK_FILES.map((file) => runtimePath(projectRoot, "hooks", file))
   ]) {
-    try {
-      await fs.rm(legacyRuntimeFile, { force: true });
-    } catch {
-      // best-effort cleanup
-    }
+    await removeBestEffort(legacyRuntimeFile);
   }
 
   // Runtime simplification cleanup: these folders were generated in older
   // releases and are now intentionally removed from user projects.
-  for (const legacyRuntimeDir of [
-    runtimePath(projectRoot, "evals"),
-    runtimePath(projectRoot, "worktrees"),
-    runtimePath(projectRoot, "references"),
-    runtimePath(projectRoot, "contexts")
-  ]) {
-    try {
-      await fs.rm(legacyRuntimeDir, { recursive: true, force: true });
-    } catch {
-      // best-effort cleanup
-    }
+  for (const legacyRuntimeDir of DEPRECATED_RUNTIME_DIRS) {
+    await removeBestEffort(runtimePath(projectRoot, legacyRuntimeDir), true);
   }
 
   // D-4 terminology migration: rename historical ideation artifacts to the
