@@ -517,8 +517,8 @@ describe("internal advance-stage commands", () => {
     expect(captured.stderr()).toContain("tdd_verified_before_complete");
   });
 
-  it("advance-stage replaces malformed scope_user_approved evidence from artifact", async () => {
-    const root = await createTempProject("internal-advance-stage-scope-review-loop-invalid");
+  it("advance-stage accepts explicit scope user approval evidence", async () => {
+    const root = await createTempProject("internal-advance-stage-scope-user-approval");
     await ensureRunSystem(root);
     await writeScopeArtifact(root);
     const state = await readFlowState(root);
@@ -557,12 +557,11 @@ describe("internal advance-stage commands", () => {
     expect(code, captured.stderr()).toBe(0);
     const next = await readFlowState(root);
     expect(next.currentStage).toBe("design");
-    expect(next.guardEvidence.scope_user_approved).toContain(`"type":"review-loop"`);
-    expect(next.guardEvidence.scope_user_approved).not.toBe("approved by user");
+    expect(next.guardEvidence.scope_user_approved).toBe("approved by user");
   });
 
-  it("advance-stage accepts scope review-loop envelope evidence and advances", async () => {
-    const root = await createTempProject("internal-advance-stage-scope-review-loop-valid");
+  it("advance-stage rejects scope review-loop evidence as user approval", async () => {
+    const root = await createTempProject("internal-advance-stage-scope-review-loop-not-approval");
     await ensureRunSystem(root);
     await writeScopeArtifact(root);
     const state = await readFlowState(root);
@@ -602,14 +601,13 @@ describe("internal advance-stage commands", () => {
       captured.io
     );
 
-    expect(code, captured.stderr()).toBe(0);
-    const next = await readFlowState(root);
-    expect(next.currentStage).toBe("design");
-    expect(next.guardEvidence.scope_user_approved).toContain(`"type":"review-loop"`);
+    expect(code).toBe(1);
+    expect(captured.stderr()).toContain("gate evidence format check failed");
+    expect(captured.stderr()).toContain("review-loop evidence is outside-voice evidence, not user approval");
   });
 
-  it("advance-stage auto-hydrates scope review-loop evidence from artifact when omitted", async () => {
-    const root = await createTempProject("internal-advance-stage-scope-review-loop-autofill");
+  it("advance-stage requires explicit scope user approval evidence when omitted", async () => {
+    const root = await createTempProject("internal-advance-stage-scope-user-approval-required");
     await ensureRunSystem(root);
     await writeScopeArtifact(root);
     const state = await readFlowState(root);
@@ -645,11 +643,9 @@ describe("internal advance-stage commands", () => {
       captured.io
     );
 
-    expect(code, captured.stderr()).toBe(0);
-    const next = await readFlowState(root);
-    expect(next.currentStage).toBe("design");
-    expect(next.guardEvidence.scope_user_approved).toContain(`"type":"review-loop"`);
-    expect(next.guardEvidence.scope_user_approved).toContain(`"stage":"scope"`);
+    expect(code).toBe(1);
+    expect(captured.stderr()).toContain("missing --evidence-json entries");
+    expect(captured.stderr()).toContain("scope_user_approved");
   });
 
   it("advance-stage emits JSON diagnostics for validation failures", async () => {
@@ -673,7 +669,7 @@ describe("internal advance-stage commands", () => {
     const evidence = Object.fromEntries(
       required.map((gateId) => [gateId, `evidence for ${gateId}`])
     ) as Record<string, string>;
-    delete evidence.scope_user_approved;
+    evidence.scope_user_approved = "user approved the scope contract";
 
     const captured = captureIo();
     const code = await runInternalCommand(

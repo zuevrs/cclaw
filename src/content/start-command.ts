@@ -73,7 +73,7 @@ ${conversationLanguagePolicyMarkdown()}
    Skip detection quietly if no markers are found — do NOT invent a stack.
 
 5. Read \`${flowPath}\`.
-6. If flow already has completed stages, warn the user that starting a new tracked flow will reset progress. Ask for confirmation before proceeding.
+6. If flow already has completed stages, warn the user that starting a new tracked flow will reset progress. Ask for confirmation before proceeding. A fresh init placeholder state with \`completedStages: []\`, no passed gates, and no \`00-idea.md\` is **not** an active flow; do not ask the user to resume it.
 7. **Track heuristic** — classify the idea text and **recommend** a track (the user can override before any state mutation):
    - First, load \`${RUNTIME_ROOT}/config.yaml\`. If \`trackHeuristics\` is defined, apply those per-track vocabulary hints (\`fallback\`, \`tracks.<id>.{triggers,veto}\`) on top of the built-in defaults. Evaluation order is always \`standard -> medium -> quick\` (narrow-to-broad).
    - **quick** (\`spec → tdd → review → ship\`) — single-purpose work where the spec is essentially already known.
@@ -156,7 +156,7 @@ description: "Unified entry point for the cclaw flow. No args = resume/next. Wit
 
 ## HARD-GATE
 
-Do **not** silently discard an existing flow when the user provides a prompt. If completed stages exist, inform and confirm before resetting.
+Do **not** silently discard an existing flow when the user provides a prompt. If completed stages exist, inform and confirm before resetting. A freshly initialized placeholder state with \`completedStages: []\`, no passed gates, and no \`${RUNTIME_ROOT}/artifacts/00-idea.md\` is not an active flow; classify the prompt and start normally.
 
 ${conversationLanguagePolicyMarkdown()}
 ## Protocol
@@ -172,6 +172,7 @@ ${conversationLanguagePolicyMarkdown()}
    - Inform: "You have an active flow at stage **{currentStage}** with {N} completed stages. Starting a new tracked flow will reset progress."
    - Ask: "Continue with reset? (A) Yes, start fresh (B) No, resume current flow"
    - If (B) → switch to Path B behavior.
+   If \`completedStages\` is empty, all gate \`passed\` arrays are empty, and \`${RUNTIME_ROOT}/artifacts/00-idea.md\` is missing, treat it as a fresh init placeholder — do **not** ask whether to continue the current flow.
 7. **Classify the idea** using the heuristic below and present one compact Start framing summary (class, track, stack, origin docs, seed recalls, next action). Wait for explicit confirmation or override before mutating any state only when reset/conflict/ambiguity makes it necessary.
    - If \`${RUNTIME_ROOT}/config.yaml\` defines \`trackHeuristics\`, apply those vocabulary hints (\`fallback\`, \`tracks.<id>.{triggers,veto}\`) on top of built-in defaults. Evaluation order is fixed: \`standard -> medium -> quick\`. (Honest note: this is advisory prose; the LLM applies it, not a Node-level router.)
 

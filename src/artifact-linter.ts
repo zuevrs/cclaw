@@ -294,7 +294,7 @@ function meaningfulLineCount(sectionBody: string): number {
     .filter((line) => line.length > 0)
     .filter((line) => !line.startsWith("<!--"))
     .filter((line) => !/^[-:| ]+$/u.test(line))
-    .filter((line) => /[A-Za-z0-9]/u.test(line))
+    .filter((line) => /[\p{L}\p{N}]/u.test(line))
     .length;
 }
 
@@ -413,11 +413,16 @@ function getMarkdownTableRows(sectionBody: string): string[][] {
 
 function getApproachRows(sectionBody: string): string[] {
   const tableRows = getMarkdownTableRows(sectionBody).map((row) => row.join(" "));
+  const headingRows = sectionBody
+    .split(/\r?\n/u)
+    .map((line) => line.trim())
+    .filter((line) => /^#{3,6}\s+\S/u.test(line))
+    .map((line) => line.replace(/^#{3,6}\s+/u, ""));
   const bulletRows = sectionBody
     .split(/\r?\n/u)
     .map((line) => line.trim())
     .filter((line) => /^(?:[-*]|\d+\.)\s+\S/u.test(line));
-  return [...tableRows, ...bulletRows];
+  return [...tableRows, ...headingRows, ...bulletRows];
 }
 
 function hasSemanticChallenger(row: string): boolean {
