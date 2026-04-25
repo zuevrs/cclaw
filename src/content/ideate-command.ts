@@ -165,8 +165,7 @@ Run grounding in parallel where available:
   - Module size outliers (\`wc -l\` or \`du\`) with weak direct test coverage.
   - Docs drift: check that \`README.md\` / \`docs/\` reference files that still
     exist and flags/APIs that still match \`src/\`.
-  - \`${RUNTIME_ROOT}/knowledge.jsonl\` entries with \`type: "heuristic"\`
-    or repeated \`subject:\` values.
+  - \`${RUNTIME_ROOT}/knowledge.jsonl\` entries with recurring \`type\` in \`rule | pattern | lesson | compound\` and repeated \`trigger/action\` pairs; prefer clusters that already show stable \`origin_run\` history.
 - For \`elsewhere-software\`:
   - Gather current framework/library docs first.
   - Add one comparison scan for established solutions.

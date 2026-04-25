@@ -3,6 +3,15 @@ import { ideateCommandContract, ideateCommandSkillMarkdown } from "../../src/con
 import { resolveIdeateFrames } from "../../src/content/ideate-frames.js";
 
 describe("ideate command surfaces", () => {
+  it("uses current knowledge schema terms in repo-grounded guidance", () => {
+    const skill = ideateCommandSkillMarkdown();
+    expect(skill).toContain("rule | pattern | lesson | compound");
+    expect(skill).toContain("origin_run");
+    expect(skill).toContain("trigger/action");
+    expect(skill).not.toContain("type: \"heuristic\"");
+    expect(skill).not.toContain("subject:");
+  });
+
   it("renders default frame registry in command contract and skill", () => {
     const contract = ideateCommandContract();
     const skill = ideateCommandSkillMarkdown();

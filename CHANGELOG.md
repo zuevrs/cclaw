@@ -109,6 +109,8 @@ workflow tool.
   in `review-loop.ts` instead of repeated prose blocks.
 - Post-ship closeout wording is now sourced from shared closeout guidance
   helpers so /cc-next and meta-skill stay aligned on retro/compound/archive.
+- /cc-ideate knowledge scan guidance now matches the live knowledge schema
+  (`rule|pattern|lesson|compound`, `origin_run`, trigger/action clustering).
 
 ### Preserved
 
