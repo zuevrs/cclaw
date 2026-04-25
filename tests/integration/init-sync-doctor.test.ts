@@ -64,6 +64,23 @@ describe("install lifecycle", { timeout: 30_000 }, () => {
     expect(checks.some((check) => check.name === "hook:script:stage-complete.mjs:executable" && check.ok)).toBe(true);
     expect(checks.some((check) => check.name === "hook:wiring:codex" && check.ok)).toBe(true);
 
+    const runtimeEntries = (await fs.readdir(path.join(root, ".cclaw"))).sort();
+    expect(runtimeEntries).toEqual([
+      "agents",
+      "artifacts",
+      "commands",
+      "config.yaml",
+      "hooks",
+      "knowledge.jsonl",
+      "rules",
+      "runs",
+      "skills",
+      "state",
+      "templates"
+    ]);
+    const stateEntries = (await fs.readdir(path.join(root, ".cclaw/state"))).sort();
+    expect(stateEntries).toEqual(["flow-state.json", "iron-laws.json"]);
+
     const flow = JSON.parse(
       await fs.readFile(path.join(root, ".cclaw/state/flow-state.json"), "utf8")
     ) as { activeRunId?: string };
