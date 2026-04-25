@@ -46,6 +46,8 @@ workflow tool.
 - Stopped scaffolding the unused `stage-activity.jsonl` ledger. Fresh installs
   now start with only `flow-state.json` and `iron-laws.json` under
   `.cclaw/state`.
+- Removed stale eval GitHub Actions workflows and `.gitignore` exceptions that
+  still referenced deleted `.cclaw/evals` fixtures.
 
 ### Changed
 
