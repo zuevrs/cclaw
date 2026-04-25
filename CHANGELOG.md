@@ -55,6 +55,8 @@ workflow tool.
   the old `flow-status`, `flow-tree`, and `flow-diff` skill folders.
 - Removed obsolete standalone `status`, `tree`, and `diff` command contract
   generators that were only kept alive by tests after `/cc-view` consolidation.
+- Converted view subcommand generators into embedded bodies without standalone
+  skill frontmatter, matching the single generated `flow-view` surface.
 
 ### Changed
 
