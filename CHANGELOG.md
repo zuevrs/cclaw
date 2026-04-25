@@ -1,5 +1,13 @@
 # Changelog
 
+## 0.51.12
+
+### Fixed
+
+- Replaced brainstorm challenger detection with structural `Approaches` table validation: `Role` must be `baseline`, `challenger`, or `wild-card`; `Upside` must be `low`, `modest`, `high`, or `higher`; exactly one challenger must have `high` or `higher` upside.
+- Added structural `Requirements` priority validation for scope artifacts (`P0`, `P1`, `P2`, `P3`, or `DROPPED`) instead of leaving priority as unchecked prose.
+- Updated brainstorm regressions to use canonical `Role`/`Upside` columns, including non-Latin artifact prose with stable machine-readable taxonomy fields.
+
 ## 0.51.11
 
 ### Fixed

@@ -78,10 +78,10 @@ async function writeBrainstormArtifact(
 - Scope handoff: continue full brainstorm flow before scope.
 
 ## Approaches
-| Approach | Role | Architecture | Trade-offs | Recommendation |
-|---|---|---|---|---|
-| A | baseline | narrow fix | lower risk, weaker reuse |  |
-| B | challenger: higher-upside | reusable validation module | moderate effort, stronger reuse | recommended |
+| Approach | Role | Upside | Architecture | Trade-offs | Recommendation |
+|---|---|---|---|---|---|
+| A | baseline | modest | narrow fix | lower risk, weaker reuse |  |
+| B | challenger | higher | reusable validation module | moderate effort, stronger reuse | recommended |
 
 ## Approach Reaction
 - Closest option: B
@@ -1038,11 +1038,11 @@ process.stdout.write(JSON.stringify({ hook: process.argv[2] }) + "\\n");
 - Scope handoff: continue to scope after approval.
 
 ## Approaches
-| Approach | Role | Architecture | Trade-offs | Recommendation |
-|---|---|---|---|---|
-| A — Next.js + Recharts | baseline | Next.js App Router with React chart components and Tailwind layout | Fast, low learning curve, good enough customization; less low-level SVG control. | Recommended after user reaction. |
-| B — Next.js + D3.js | challenger: higher-upside | Next.js App Router with D3 SVG/Canvas visualizations | Maximum flexibility for custom visuals; slower and overkill for simple MVP. | Keep as future option. |
-| C — Next.js + Tremor | alternative | Prebuilt dashboard components over Tailwind/Recharts | Fastest polished UI; constrained by component API. | Good but less direct control. |
+| Approach | Role | Upside | Architecture | Trade-offs | Recommendation |
+|---|---|---|---|---|---|
+| A — Next.js + Recharts | baseline | high | Next.js App Router with React chart components and Tailwind layout | Fast, low learning curve, good enough customization; less low-level SVG control. | Recommended after user reaction. |
+| B — Next.js + D3.js | challenger | higher | Next.js App Router with D3 SVG/Canvas visualizations | Maximum flexibility for custom visuals; slower and overkill for simple MVP. | Keep as future option. |
+| C — Next.js + Tremor | baseline | modest | Prebuilt dashboard components over Tailwind/Recharts | Fastest polished UI; constrained by component API. | Good but less direct control. |
 
 ## Approach Reaction
 - Closest option: A — Next.js + Recharts.
@@ -1099,8 +1099,8 @@ process.stdout.write(JSON.stringify({ hook: process.argv[2] }) + "\\n");
     await fs.writeFile(
       artifactPath,
       artifact.replace(
-        "| B | challenger: higher-upside | reusable validation module | moderate effort, stronger reuse | recommended |",
-        "| B | fallback | reusable validation module | moderate effort, stronger reuse | recommended |"
+        "| B | challenger | higher | reusable validation module | moderate effort, stronger reuse | recommended |",
+        "| B | fallback | strong | reusable validation module | moderate effort, stronger reuse | recommended |"
       ),
       "utf8"
     );
@@ -1114,8 +1114,8 @@ process.stdout.write(JSON.stringify({ hook: process.argv[2] }) + "\\n");
 
     expect(code).toBe(1);
     expect(io.stderr()).toContain("Challenger Alternative Enforcement");
-    expect(io.stderr()).toContain("Missing a challenger option with explicit high/higher upside");
-    expect(io.stderr()).toContain("| C | challenger | high upside |");
+    expect(io.stderr()).toContain("Approaches Role/Upside Taxonomy");
+    expect(io.stderr()).toContain("invalid Role");
   });
 
   it("accepts boolean and object evidence JSON values from stage-complete copy-paste commands", async () => {

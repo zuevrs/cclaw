@@ -58,11 +58,11 @@ async function writeBrainstormArtifact(root: string): Promise<void> {
 - Scope handoff: continue with selected frontend direction.
 
 ## Approaches
-| Approach | Role | Architecture | Trade-offs | Recommendation |
-|---|---|---|---|---|
-| A | baseline | Astro static site | fastest, smaller ecosystem |  |
-| B | selected | Next.js static export | richer ecosystem, more overhead | recommended |
-| C | challenger: higher-upside | Vite vanilla | maximum control, more manual work |  |
+| Approach | Role | Upside | Architecture | Trade-offs | Recommendation |
+|---|---|---|---|---|---|
+| A | baseline | modest | Astro static site | fastest, smaller ecosystem |  |
+| B | baseline | high | Next.js static export | richer ecosystem, more overhead | recommended |
+| C | challenger | higher | Vite vanilla | maximum control, more manual work |  |
 
 ## Approach Reaction
 - Closest option: B
