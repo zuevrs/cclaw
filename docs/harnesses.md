@@ -63,8 +63,7 @@ shared casing silently breaks generated wiring.
   at hook level, so the canonical path is
   `node .cclaw/hooks/stage-complete.mjs <stage>` plus the non-blocking
   `UserPromptSubmit` state nudge.
-- In `strict` mode, Codex additionally runs `cclaw internal verify-current-state`
-  on `UserPromptSubmit` as a fail-closed check (advisory mode remains non-blocking).
+- In `strict` mode, Codex additionally runs the generated Node/runtime verify-current-state path on `UserPromptSubmit` as a fail-closed check (advisory mode remains non-blocking).
 
 ## Shared command contract
 
@@ -80,7 +79,7 @@ Read-only subcommands:
 - `/cc-view tree` - deep flow tree (stages, artifacts, stale markers)
 - `/cc-view diff` - before/after flow-state diff map
 
-Operational work is handled by `/cc-next` and the CLI (`cclaw archive`, `cclaw internal ...`) rather than a separate slash-command router. Normal post-ship closeout stays on `/cc-next`; `cclaw archive` is the explicit/manual archive path and the runtime used when closeout reaches `ready_to_archive`.
+Operational work is handled by `/cc`, `/cc-next`, `/cc-ideate`, `/cc-view`, and `node .cclaw/hooks/stage-complete.mjs <stage>` inside the installed harness runtime. `npx cclaw-cli` is the installer/support surface for init, sync, upgrade, doctor, and explicit/manual archive; the normal stage flow must not depend on a runtime `cclaw` binary in PATH.
 
 Critical-path stage order remains canonical:
 `brainstorm -> scope -> design -> spec -> plan -> tdd -> review -> ship`
@@ -123,6 +122,6 @@ Harness-specific additions:
 
 ## Runtime observability
 
-- `cclaw doctor` validates shim, hook, and lifecycle surfaces against this capability model.
+- `npx cclaw-cli doctor` validates shim, hook, and lifecycle surfaces against this capability model.
 - `/cc-view status` and `/cc-view tree` surface the same harness tier/fallback facts from the generated runtime metadata.
 

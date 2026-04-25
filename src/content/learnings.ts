@@ -68,7 +68,9 @@ Knowledge capture is now stage-native:
   3. writes a harvest marker into the artifact.
 
 Manual/query operations (search, backfill, curation) use this skill when the
-user asks for knowledge work.
+user asks for knowledge work. If a stage artifact contains JSON learnings but
+\`${KNOWLEDGE_PATH}\` did not change, the missing step is almost always running
+\`node .cclaw/hooks/stage-complete.mjs <stage>\` successfully.
 
 ## HARD-GATE
 

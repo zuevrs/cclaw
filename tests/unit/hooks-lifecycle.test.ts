@@ -3,6 +3,9 @@ import path from "node:path";
 import { pathToFileURL } from "node:url";
 import { spawn } from "node:child_process";
 import { describe, expect, it } from "vitest";
+import { initCclaw } from "../../src/install.js";
+import { readFlowState } from "../../src/runs.js";
+import { stageSchema } from "../../src/content/stage-schema.js";
 import { opencodePluginJs, runHookCmdScript, stageCompleteScript } from "../../src/content/hooks.js";
 import {
   claudeHooksJsonWithObservation,
@@ -16,6 +19,73 @@ interface ScriptResult {
   code: number | null;
   stdout: string;
   stderr: string;
+}
+
+function requiredGateEvidenceJson(stage: Parameters<typeof stageSchema>[0]): string {
+  const requiredGateIds = stageSchema(stage).requiredGates
+    .filter((gate) => gate.tier === "required")
+    .map((gate) => gate.id);
+  return JSON.stringify(Object.fromEntries(
+    requiredGateIds.map((gateId) => [gateId, `evidence for ${gateId}`])
+  ));
+}
+
+async function writeBrainstormArtifact(root: string): Promise<void> {
+  await fs.mkdir(path.join(root, ".cclaw/artifacts"), { recursive: true });
+  await fs.writeFile(path.join(root, ".cclaw/artifacts/01-brainstorm.md"), `# Brainstorm Artifact
+
+## Context
+- Project state: greenfield static landing page.
+- Relevant existing code/patterns: none; initial flow stage.
+
+## Problem
+- What we're solving: pick a reliable frontend direction.
+- Success criteria: approved direction and traceable trade-offs.
+- Constraints: no implementation during brainstorm.
+
+## Clarifying Questions
+| # | Question | Answer | Decision impact |
+|---|---|---|---|
+| 1 | Static or dynamic? | Static | removes backend/CMS from v1 |
+
+## Approach Tier
+- Tier: Lightweight
+- Why this tier: single static landing page.
+
+## Short-Circuit Decision
+- Status: bypassed
+- Why: options still needed comparison.
+- Scope handoff: continue with selected frontend direction.
+
+## Approaches
+| Approach | Role | Architecture | Trade-offs | Recommendation |
+|---|---|---|---|---|
+| A | baseline | Astro static site | fastest, smaller ecosystem |  |
+| B | selected | Next.js static export | richer ecosystem, more overhead | recommended |
+| C | challenger: higher-upside | Vite vanilla | maximum control, more manual work |  |
+
+## Approach Reaction
+- Closest option: B
+- Concerns: wants ecosystem and animation support.
+- What changed after reaction: recommendation moved to Next.js static export.
+
+## Selected Direction
+- Approach: B - Next.js static export
+- Rationale: user reaction favored ecosystem and ready animation tooling.
+- Approval: approved
+
+## Design
+- Architecture: static exported Next.js app.
+- Key components: app router page, Tailwind styles, animation layer.
+- Data flow: static content -> build -> exported HTML/CSS/JS.
+
+## Assumptions and Open Questions
+- Assumptions: single-page landing v1.
+- Open questions (or "None"): None
+
+## Learnings
+- {"type":"pattern","trigger":"when stage completion runs without global cclaw","action":"invoke the generated Node stage-complete helper so learnings harvest still writes knowledge","confidence":"high","domain":"workflow","universality":"project","maturity":"raw"}
+`, "utf8");
 }
 
 async function runNodeScript(
@@ -100,41 +170,20 @@ describe("hooks lifecycle wiring", () => {
   it("run-hook wrapper reports missing node instead of silently skipping", () => {
     const wrapper = runHookCmdScript();
     expect(wrapper).toContain("node not found; cclaw hook skipped");
-    expect(wrapper).toContain("Run cclaw doctor");
+    expect(wrapper).toContain("Run npx cclaw-cli doctor");
   });
 
-  it("stage-complete helper delegates to internal advance-stage", async () => {
+  it("stage-complete helper invokes a local Node runtime instead of a cclaw PATH binary", async () => {
     const root = await createTempProject("stage-complete-helper");
     await fs.mkdir(path.join(root, ".cclaw/hooks"), { recursive: true });
 
-    const binDir = path.join(root, "bin");
-    await fs.mkdir(binDir, { recursive: true });
-    const callsPath = path.join(root, "cclaw-calls.log");
-    const cclawShimPath = path.join(binDir, process.platform === "win32" ? "cclaw.cmd" : "cclaw");
-    if (process.platform === "win32") {
-      await fs.writeFile(
-        cclawShimPath,
-        `@echo off
->>"${callsPath}" echo %*
-exit /b 0
-`,
-        "utf8"
-      );
-    } else {
-      await fs.writeFile(
-        cclawShimPath,
-        `#!/usr/bin/env bash
-printf '%s\\n' "$*" >> "${callsPath}"
-`,
-        "utf8"
-      );
-      await fs.chmod(cclawShimPath, 0o755);
-    }
-    const joinedPath = `${binDir}${path.delimiter}${process.env.PATH ?? process.env.Path ?? ""}`;
-    const pathEnv =
-      process.platform === "win32"
-        ? { PATH: joinedPath, Path: joinedPath }
-        : { PATH: joinedPath };
+    const callsPath = path.join(root, "node-runtime-calls.log");
+    const runtimeShimPath = path.join(root, "local-runtime.mjs");
+    await fs.writeFile(runtimeShimPath, `#!/usr/bin/env node
+import fs from "node:fs";
+fs.appendFileSync(${JSON.stringify(callsPath)}, process.argv.slice(2).join(" ") + "\\n");
+`, "utf8");
+    await fs.chmod(runtimeShimPath, 0o755);
 
     const result = await runNodeScript(
       root,
@@ -142,7 +191,9 @@ printf '%s\\n' "$*" >> "${callsPath}"
       stageCompleteScript(),
       ["scope", "--passed=scope_contract_written"],
       "",
-      pathEnv
+      process.platform === "win32"
+        ? { PATH: "", Path: "", CCLAW_CLI_JS: runtimeShimPath }
+        : { PATH: "", CCLAW_CLI_JS: runtimeShimPath }
     );
     expect(result.code).toBe(0);
     expect(result.stderr).toBe("");
@@ -150,19 +201,31 @@ printf '%s\\n' "$*" >> "${callsPath}"
     expect(calls).toContain("internal advance-stage scope --passed=scope_contract_written");
   });
 
-  it("stage-complete helper fails closed when cclaw binary is unavailable", async () => {
-    const root = await createTempProject("stage-complete-no-cclaw");
-    await fs.mkdir(path.join(root, ".cclaw/hooks"), { recursive: true });
+  it("stage-complete helper advances state and harvests learnings without cclaw on PATH", async () => {
+    const root = await createTempProject("stage-complete-no-path-harvest");
+    await initCclaw({ projectRoot: root });
+    await writeBrainstormArtifact(root);
+
+    const scriptBody = await fs.readFile(path.join(root, ".cclaw/hooks/stage-complete.mjs"), "utf8");
     const result = await runNodeScript(
       root,
       ".cclaw/hooks/stage-complete.mjs",
-      stageCompleteScript(),
-      ["scope"],
+      scriptBody,
+      ["brainstorm", `--evidence-json=${requiredGateEvidenceJson("brainstorm")}`],
       "",
       process.platform === "win32" ? { PATH: "", Path: "" } : { PATH: "" }
     );
-    expect(result.code).toBe(1);
-    expect(result.stderr).toContain("cclaw binary not found in PATH");
+
+    expect(result.code, result.stderr).toBe(0);
+    const state = await readFlowState(root);
+    expect(state.completedStages).toContain("brainstorm");
+    expect(state.currentStage).toBe("scope");
+
+    const knowledgeRaw = await fs.readFile(path.join(root, ".cclaw/knowledge.jsonl"), "utf8");
+    expect(knowledgeRaw).toContain("when stage completion runs without global cclaw");
+
+    const artifact = await fs.readFile(path.join(root, ".cclaw/artifacts/01-brainstorm.md"), "utf8");
+    expect(artifact).toContain("<!-- cclaw:learnings-harvested:");
   });
 
   it("opencode plugin source references node-only hook names", () => {
@@ -438,7 +501,7 @@ process.exit(0);
     ).rejects.toThrow(/workflow boundary failed: missing evidence/);
     await expect(
       plugin["tool.execute.before"]({ tool: "RunCommand", tool_input: { cmd: "echo test" } })
-    ).rejects.toThrow(/cclaw doctor/);
+    ).rejects.toThrow(/npx cclaw-cli doctor/);
     await expect(
       plugin["tool.execute.before"]({ tool: "RunCommand", tool_input: { cmd: "echo test" } })
     ).rejects.toThrow(/CCLAW_DISABLE=1/);

@@ -59,7 +59,7 @@ describe("/cc-view tree content", () => {
 
   it("adds a harnesses branch with tier/fallback metadata", () => {
     expect(skill).toContain("and fallback from cclaw capability metadata");
-    expect(skill).toContain("cclaw doctor --explain");
+    expect(skill).toContain("npx cclaw-cli doctor --explain");
   });
 
   it("omits optional sub-trees only under documented conditions", () => {

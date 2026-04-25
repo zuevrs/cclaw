@@ -1,5 +1,14 @@
 # Changelog
 
+## 0.51.1
+
+### Fixed
+
+- Made generated `stage-complete.mjs` advance stages through the local Node runtime instead of requiring a runtime `cclaw` binary in `PATH`, preserving gate validation and `## Learnings` harvest.
+- Clarified generated prompts and docs so `cclaw-cli` is the installer/support surface while `/cc*` commands and Node hooks are the normal in-session runtime.
+- Added a generated Conversation Language Policy so user-facing prose follows the user's language while stable commands, ids, schemas, and artifact headings remain canonical.
+- Aligned normal-flow knowledge guidance around artifact-first `## Learnings` capture and reserved direct JSONL writes for explicit manual learning operations.
+
 ## 0.51.0
 
 ### Fixed

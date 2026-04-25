@@ -3,6 +3,7 @@ import type { FlowStage, FlowTrack } from "../types.js";
 import { stageExamples } from "./examples.js";
 import { reviewStackAwareRoutes, reviewStackAwareRoutingSummary, stageAutoSubagentDispatch, stageSchema, stageTrackRenderContext } from "./stage-schema.js";
 import type { StageSchema } from "./stage-schema.js";
+import { conversationLanguagePolicyMarkdown } from "./language-policy.js";
 import type {
   ArtifactValidation,
   CrossStageTrace,
@@ -394,6 +395,7 @@ If you are about to violate the Iron Law, STOP. No amount of urgency, partial pr
 
 ${quickStartBlock(stage, track)}
 
+${conversationLanguagePolicyMarkdown()}
 ## Philosophy
 ${philosophy.purpose}
 

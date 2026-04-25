@@ -1,3 +1,4 @@
+import { conversationLanguagePolicyBullets, conversationLanguagePolicyMarkdown } from "./language-policy.js";
 /**
  * Agent persona content for cclaw.
  *
@@ -239,6 +240,9 @@ ${agent.body}
 
 ## Rules
 
+## Conversation Language Policy
+
+${conversationLanguagePolicyBullets()}
 - Cite file:line for every finding
 - Do not make changes outside your specialist domain
 - Report findings with severity classification

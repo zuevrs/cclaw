@@ -36,7 +36,7 @@ export function closeoutSubstateProtocolBullets(): string {
     session transcripts for matching historical learnings; only do it after opt-in.
     Ask **one** structured question (apply / skip) per candidate cluster or a
     single accept-all / skip choice, then advance substate.
-  - \`"ready_to_archive"\` -> run \`cclaw archive\` (or \`cclaw archive --name=<slug>\`) and reset state.
+  - \`"ready_to_archive"\` -> run \`npx cclaw-cli archive\` (or \`npx cclaw-cli archive --name=<slug>\`) and reset state.
   - \`"archived"\` (transient) -> report "run archived" and stop.`;
 }
 
