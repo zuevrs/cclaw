@@ -50,7 +50,7 @@ export const BRAINSTORM: StageSchemaInput = {
       "**Compare 2-3 distinct approaches with stable Role/Upside columns** — Role values are `baseline` | `challenger` | `wild-card`; Upside is `low` | `modest` | `high` | `higher`; include real trade-offs and reuse notes; include exactly one challenger with explicit `high` or `higher` upside.",
       "**Collect reaction before recommending** — ask which option feels closest and what concern remains, then recommend based on that reaction.",
       "**Write the `Not Doing` list** — name 3-5 things this brainstorm explicitly is not committing to (vs. deferred). This protects scope from silent enlargement and the next stage from rework.",
-      "**Self-review before user approval** — re-read the artifact and patch contradictions, weak trade-offs, placeholders, ambiguity, and weak handoff language; record the patch list in `Self-Review Notes` (or `- None.`).",
+      "**Self-review before user approval** — re-read the artifact and patch contradictions, weak trade-offs, placeholders, ambiguity, and weak handoff language. Record the result in `Self-Review Notes` using the calibrated review format: `- Status: Approved` (or `Issues Found`), `- Patches applied:` with inline note or sub-bullets, `- Remaining concerns:` with inline note or sub-bullets. Use `Patches applied: None` and `Remaining concerns: None` when there is nothing to record.",
       "**Request explicit approval** — state exactly what direction is being approved; do not advance without approval and artifact review.",
       "**Handoff** — only after approval, complete the stage and point to `/cc-next`."
     ],
@@ -140,7 +140,7 @@ export const BRAINSTORM: StageSchemaInput = {
       { section: "Not Doing", required: false, validationRule: "Recommended: 3-5 explicitly non-committed items (distinct from deferred). Protects scope from silent enlargement and the next stage from rework." },
       { section: "Design", required: false, validationRule: "Must cover architecture, key components, and data flow scaled to complexity." },
       { section: "Visual Companion", required: false, validationRule: "If architecture/data-flow complexity is medium+, include compact ASCII/Mermaid diagram or explicitly justify omission." },
-      { section: "Self-Review Notes", required: false, validationRule: "Recommended: list of patches applied during self-review (or `- None.`) — done before requesting user approval." },
+      { section: "Self-Review Notes", required: false, validationRule: "Recommended: use the calibrated review format — `- Status: Approved` (or `Issues Found`), `- Patches applied:` (inline note or sub-bullets, use `None` if nothing changed), `- Remaining concerns:` (inline note or sub-bullets, use `None` if nothing remains). Done before requesting user approval." },
       { section: "Assumptions and Open Questions", required: false, validationRule: "Must capture unresolved assumptions/open questions, or explicitly state none." }
     ],
     trivialOverrideSections: [

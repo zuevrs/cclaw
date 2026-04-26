@@ -1,6 +1,6 @@
 import { RUNTIME_ROOT, STAGE_TO_SKILL_FOLDER } from "../constants.js";
 import { nextStage as nextStageForTrack } from "../flow-state.js";
-import type { FlowStage, FlowTrack } from "../types.js";
+import { FLOW_STAGES, type FlowStage, type FlowTrack } from "../types.js";
 import { stageExamples } from "./examples.js";
 import { reviewStackAwareRoutes, reviewStackAwareRoutingSummary, stageAutoSubagentDispatch, stageSchema, stageTrackRenderContext } from "./stage-schema.js";
 import type { StageSchema } from "./stage-schema.js";
@@ -26,7 +26,17 @@ ${items.map((item) => `- ${item}`).join("\n")}
 `;
 }
 
-function contextLoadingBlock(trace: CrossStageTrace, executionModel: StageExecutionModel): string {
+function artifactTemplatePathForStage(stage: FlowStage): string {
+  const stageIndex = FLOW_STAGES.indexOf(stage) + 1;
+  const stageNumber = String(stageIndex).padStart(2, "0");
+  return `${RUNTIME_ROOT}/templates/${stageNumber}-${stage}.md`;
+}
+
+function contextLoadingBlock(
+  stage: FlowStage,
+  trace: CrossStageTrace,
+  executionModel: StageExecutionModel
+): string {
   const readLines = trace.readsFrom.length > 0
     ? trace.readsFrom.map((value) => `- \`${value}\``).join("\n")
     : "- (first stage — no upstream artifacts)";
@@ -36,6 +46,7 @@ function contextLoadingBlock(trace: CrossStageTrace, executionModel: StageExecut
   const requiredContext = executionModel.requiredContext.length > 0
     ? executionModel.requiredContext.map((item) => `- ${item}`).join("\n")
     : "- None beyond this skill";
+  const artifactTemplatePath = artifactTemplatePathForStage(stage);
 
   return `## Context Loading
 
@@ -48,16 +59,19 @@ ${readLines}
    Treat it as the machine-readable skeleton: required top-level fields,
    closed taxonomies, and the derived markdown path. Do not validate natural-language
    prose by regex; put semantic quality checks in the review prompts.
-5. Extract upstream decisions, constraints, and open questions into the current
+5. Read the canonical artifact template at \`${artifactTemplatePath}\` and reuse its
+   exact section layout — per-row tables with stable column order, calibrated review block;
+   do not invent layouts for sections the template already defines.
+6. Extract upstream decisions, constraints, and open questions into the current
    artifact's \`Upstream Handoff\` section when that section exists.
-6. Before doing stage work, give a compact user-facing drift preamble: "Carrying forward: <1-3 bullets>. Drift since upstream: None / <specific drift>. Recommendation: continue / re-scope."
-7. If you change an upstream decision, record an explicit drift reason in the
+7. Before doing stage work, give a compact user-facing drift preamble: "Carrying forward: <1-3 bullets>. Drift since upstream: None / <specific drift>. Recommendation: continue / re-scope."
+8. If you change an upstream decision, record an explicit drift reason in the
    current artifact before continuing.
-8. Confirm stage inputs:
+9. Confirm stage inputs:
 ${inputs}
-9. Confirm required context:
+10. Confirm required context:
 ${requiredContext}
-10. Use the injected knowledge digest from session-start; only fall back to full
+11. Use the injected knowledge digest from session-start; only fall back to full
    \`.cclaw/knowledge.jsonl\` when the digest is insufficient.
 `;
 }
@@ -432,7 +446,7 @@ This is the stage **state machine** — the canonical ordered flow. For every de
 
 ${processFlowMermaid.length > 0 ? processFlowMermaid : "```mermaid\nflowchart TD\n  S1[\"Execute Checklist\"] --> S2[\"Satisfy required gates\"] --> S3[\"Verify before closeout\"]\n```"}
 
-${platformNotesBlock}${contextLoadingBlock(artifactRules.crossStageTrace, executionModel)}
+${platformNotesBlock}${contextLoadingBlock(stage, artifactRules.crossStageTrace, executionModel)}
 ${autoSubagentDispatchBlock(stage, track)}
 ${stackAwareReviewRoutingBlock(stage)}
 ${researchPlaybooksBlock(executionModel.researchPlaybooks ?? [])}

@@ -1,5 +1,12 @@
 # Changelog
 
+## 0.51.18
+
+### Fixed
+
+- Aligned the brainstorm SKILL guidance and `Self-Review Notes` validation rule with the calibrated review format (`Status: Approved` | `Issues Found`, `Patches applied:`, `Remaining concerns:`); removed the legacy "or - None." shortcut that contradicted the structural validator and caused first-attempt stage-complete failures.
+- Added a Context Loading step that points every stage skill at its canonical artifact template (`.cclaw/templates/<NN>-<stage>.md`) so agents draft per-row Approaches tables and the calibrated review block from the start instead of inventing layouts that fail validation.
+
 ## 0.51.17
 
 ### Fixed
