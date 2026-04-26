@@ -9,6 +9,7 @@ import { mandatoryDelegationsForStage, reviewStackAwareRoutingSummary, stageAuto
 import { stageSkillMarkdown } from "../../src/content/skills.js";
 import { nextCommandSkillMarkdown } from "../../src/content/next-command.js";
 import { enhancedAgentBody, subagentDrivenDevSkill } from "../../src/content/subagents.js";
+import { SUBAGENT_CONTEXT_SKILLS } from "../../src/content/subagent-context-skills.js";
 import { ARTIFACT_TEMPLATES } from "../../src/content/templates.js";
 import { FLOW_STAGES, FLOW_TRACKS, TRACK_STAGES, type FlowStage, type FlowTrack } from "../../src/types.js";
 import { createTempProject } from "../helpers/index.js";
@@ -153,6 +154,29 @@ describe("stage schema and subagent alignment", () => {
     expect(skill).toContain("at most 3-5 parallel agents");
     expect(skill).toContain("No parallel writes to adjacent surfaces");
     expect(skill).toContain("Consensus is for hard calls only");
+  });
+
+  it("materializes every subagent dispatch skill reference", () => {
+    const knownAgents = new Set(CCLAW_AGENTS.map((agent) => agent.name));
+    const expectedSkillRefs = new Set<string>();
+
+    for (const stage of FLOW_STAGES) {
+      for (const row of stageAutoSubagentDispatch(stage)) {
+        expect(knownAgents.has(row.agent), `${stage} dispatch references unknown agent ${row.agent}`).toBe(true);
+        if (row.skill) {
+          expectedSkillRefs.add(row.skill);
+          expect(SUBAGENT_CONTEXT_SKILLS[row.skill], `${stage} dispatch references missing skill ${row.skill}`)
+            .toBeTruthy();
+        }
+      }
+    }
+
+    expect([...expectedSkillRefs].sort()).toEqual(Object.keys(SUBAGENT_CONTEXT_SKILLS).sort());
+    for (const [skillName, body] of Object.entries(SUBAGENT_CONTEXT_SKILLS)) {
+      expect(body, `${skillName} frontmatter`).toContain(`name: ${skillName}`);
+      expect(body, `${skillName} required output`).toContain("## Required Output");
+      expect(body, `${skillName} guardrails`).toContain("## Guardrails");
+    }
   });
 
   it("review stage includes review-army structured reconciliation", () => {
@@ -384,6 +408,31 @@ describe("stage schema and subagent alignment", () => {
       expect(skill).toContain(expectedTemplates[stage]);
       expect(skill).toContain("per-row tables");
       expect(skill).toContain("calibrated review block");
+    }
+  });
+
+  it("canonical templates include every required artifact validation section", () => {
+    const templateByStage: Record<FlowStage, keyof typeof ARTIFACT_TEMPLATES> = {
+      brainstorm: "01-brainstorm.md",
+      scope: "02-scope.md",
+      design: "03-design.md",
+      spec: "04-spec.md",
+      plan: "05-plan.md",
+      tdd: "06-tdd.md",
+      review: "07-review.md",
+      ship: "08-ship.md"
+    };
+
+    for (const stage of FLOW_STAGES) {
+      const templateName = templateByStage[stage];
+      const template = ARTIFACT_TEMPLATES[templateName] ?? "";
+      for (const rule of stageSchema(stage).artifactValidation) {
+        if (!rule.required) continue;
+        expect(
+          template,
+          `${templateName} must expose required validator section ## ${rule.section}`
+        ).toContain(`## ${rule.section}`);
+      }
     }
   });
 

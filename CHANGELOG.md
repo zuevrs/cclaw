@@ -1,5 +1,12 @@
 # Changelog
 
+## 0.51.19
+
+### Fixed
+
+- Materialized every subagent dispatch `skill` reference as a generated `.cclaw/skills/<skill>/SKILL.md` context skill, so mandatory/proactive routing no longer points agents at missing or deprecated skill folders.
+- Added regression coverage that every dispatch `skill` reference is generated, every referenced agent exists in the core roster, install writes those context skills, and every required artifact validator section appears in that stage's canonical template.
+
 ## 0.51.18
 
 ### Fixed
