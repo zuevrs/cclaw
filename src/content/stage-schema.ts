@@ -704,11 +704,6 @@ export function stageRecommendedGateIds(stage: FlowStage, track: FlowTrack = "st
     .map((gate) => gate.id);
 }
 
-export function nextCclawCommand(stage: FlowStage): string {
-  const next = stageSchema(stage).next;
-  return next === "done" ? "none" : `/cc-${next}`;
-}
-
 export function buildTransitionRules(): TransitionRule[] {
   const rules: TransitionRule[] = [];
   const seen = new Set<string>();

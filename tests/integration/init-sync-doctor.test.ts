@@ -670,6 +670,41 @@ describe("install lifecycle", { timeout: 30_000 }, () => {
     expect(checks.some((c) => c.name === "language_rule_pack:python")).toBe(false);
   });
 
+  it("sync removes language pack files when their pack is disabled in config", async () => {
+    const root = await createTempProject("lang-rule-packs-disable");
+    await initCclaw({ projectRoot: root });
+
+    const current = await readConfig(root);
+    await writeConfig(root, {
+      ...current,
+      languageRulePacks: ["typescript", "python", "go"]
+    });
+    await syncCclaw(root);
+
+    await expect(
+      fs.stat(path.join(root, ".cclaw/rules/lang/typescript.md"))
+    ).resolves.toBeDefined();
+    await expect(
+      fs.stat(path.join(root, ".cclaw/rules/lang/python.md"))
+    ).resolves.toBeDefined();
+    await expect(
+      fs.stat(path.join(root, ".cclaw/rules/lang/go.md"))
+    ).resolves.toBeDefined();
+
+    await writeConfig(root, { ...current, languageRulePacks: ["typescript"] });
+    await syncCclaw(root);
+
+    await expect(
+      fs.stat(path.join(root, ".cclaw/rules/lang/typescript.md"))
+    ).resolves.toBeDefined();
+    await expect(
+      fs.stat(path.join(root, ".cclaw/rules/lang/python.md"))
+    ).rejects.toBeDefined();
+    await expect(
+      fs.stat(path.join(root, ".cclaw/rules/lang/go.md"))
+    ).rejects.toBeDefined();
+  });
+
   it("sync migrates legacy .cclaw/skills/language-* folders to .cclaw/rules/lang/", async () => {
     const root = await createTempProject("lang-rule-packs-legacy");
     await initCclaw({ projectRoot: root });

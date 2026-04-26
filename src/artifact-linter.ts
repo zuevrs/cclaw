@@ -543,12 +543,33 @@ const SCOPE_MODE_SHORT_TOKEN_REGEX = /\b(?:hold(?:[\s_-]?scope)?|selective(?:[\s
 const NEXT_STAGE_HANDOFF_REGEX = /(?:`(?:design|spec)`|\bdesign\b|\bspec\b|next[-\s_]stage|next stage|handoff|hand[-\s]off)/iu;
 
 function hasCanonicalScopeMode(body: string): boolean {
-  if (SCOPE_MODE_FULL_REGEX.test(body)) return true;
+  // Strict: a Mode: / Selected mode: line that picks exactly ONE canonical mode
+  // is the strongest signal. The template scaffolding contains all four mode
+  // tokens inside an instructional `(one of ...)` placeholder; we ignore that
+  // line so authors who never replace the scaffolding still fail validation.
   for (const match of body.matchAll(new RegExp(SCOPE_MODE_LINE_REGEX, "giu"))) {
-    const value = match[1] ?? "";
-    if (SCOPE_MODE_SHORT_TOKEN_REGEX.test(value)) return true;
+    const raw = (match[1] ?? "").trim();
+    const sanitized = raw.replace(/\(.*?\)/gu, "").trim();
+    if (sanitized.length === 0) continue;
+    if (countCanonicalModeMentions(sanitized) === 1) return true;
+    if (countCanonicalModeMentions(sanitized) === 0 && SCOPE_MODE_SHORT_TOKEN_REGEX.test(sanitized)) return true;
+  }
+  // Fallback: any line outside an instructional `(one of ...)` placeholder
+  // names exactly one mode. Block lines that list multiple modes (the
+  // unfilled template) or are wrapped in an instructional parenthetical.
+  for (const rawLine of body.split(/\r?\n/u)) {
+    const line = rawLine.trim();
+    if (line.length === 0) continue;
+    if (/\(\s*one\s+of\b/iu.test(line)) continue;
+    const sanitized = line.replace(/\(.*?\)/gu, "");
+    if (countCanonicalModeMentions(sanitized) === 1) return true;
   }
   return false;
+}
+
+function countCanonicalModeMentions(text: string): number {
+  const matches = text.match(new RegExp(SCOPE_MODE_FULL_REGEX, "giu"));
+  return matches ? matches.length : 0;
 }
 
 function validatePremiseChallenge(sectionBody: string): { ok: boolean; details: string } {
@@ -1168,10 +1189,13 @@ function validateTddGreenEvidence(sectionBody: string): { ok: boolean; details: 
 }
 
 function validateVerificationLadder(sectionBody: string): { ok: boolean; details: string } {
-  if (!/highest tier reached/iu.test(sectionBody)) {
+  const hasTextLine = /highest tier reached/iu.test(sectionBody);
+  const hasCanonicalTable = hasVerificationLadderTableRow(sectionBody);
+  if (!hasTextLine && !hasCanonicalTable) {
     return {
       ok: false,
-      details: "Verification Ladder must include a 'Highest tier reached' line."
+      details:
+        "Verification Ladder must include either a 'Highest tier reached' line or a canonical table row (Slice | Tier reached | Evidence) with non-empty tier and evidence."
     };
   }
   if (!/\b(static|command|behavioral|human)\b/iu.test(sectionBody)) {
@@ -1190,6 +1214,50 @@ function validateVerificationLadder(sectionBody: string): { ok: boolean; details
     ok: true,
     details: "Verification Ladder includes tier + evidence fields."
   };
+}
+
+function hasVerificationLadderTableRow(sectionBody: string): boolean {
+  const lines = sectionBody.split(/\r?\n/u);
+  let sawHeader = false;
+  let sawSeparator = false;
+  for (const line of lines) {
+    const trimmed = line.trim();
+    if (!trimmed.startsWith("|")) {
+      sawHeader = false;
+      sawSeparator = false;
+      continue;
+    }
+    const cells = trimmed
+      .replace(/^\|/u, "")
+      .replace(/\|$/u, "")
+      .split("|")
+      .map((cell) => cell.trim());
+    if (!sawHeader) {
+      const lowered = cells.map((cell) => cell.toLowerCase());
+      const hasTierColumn = lowered.some((cell) => /tier(?:\s+reached)?/u.test(cell));
+      const hasEvidenceColumn = lowered.some((cell) => cell.includes("evidence"));
+      if (hasTierColumn && hasEvidenceColumn) {
+        sawHeader = true;
+        continue;
+      }
+      continue;
+    }
+    if (!sawSeparator) {
+      if (cells.every((cell) => /^[:\-\s]+$/u.test(cell))) {
+        sawSeparator = true;
+        continue;
+      }
+      sawHeader = false;
+      continue;
+    }
+    if (cells.length >= 2 && cells.some((cell) => /\b(static|command|behavioral|human)\b/iu.test(cell))) {
+      const evidenceCellHasContent = cells.some((cell) => cell.length > 0 && !/^\s*$/u.test(cell) && !/^[:\-\s]+$/u.test(cell));
+      if (evidenceCellHasContent) {
+        return true;
+      }
+    }
+  }
+  return false;
 }
 
 export type LearningEntryType = "rule" | "pattern" | "lesson" | "compound";

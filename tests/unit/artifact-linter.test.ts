@@ -1706,6 +1706,23 @@ ${summaryBody}
       expect(summary?.found).toBe(false);
       expect(summary?.details ?? "").toMatch(/canonical token/iu);
     });
+
+    it("rejects Scope Summary left as an unfilled template that lists all four mode tokens", async () => {
+      const root = await createTempProject("scope-summary-template-unfilled");
+      await writeRuntimeArtifact(
+        root,
+        "02-scope.md",
+        baseScope(
+          `- Selected mode: (one of \`SCOPE EXPANSION\` | \`SELECTIVE EXPANSION\` | \`HOLD SCOPE\` | \`SCOPE REDUCTION\`)\n` +
+            `- Accepted scope: build a thing\n` +
+            `- Next-stage handoff: design — proceed.`
+        )
+      );
+      const result = await lintArtifact(root, "scope");
+      const summary = result.findings.find((f) => f.section === "Scope Summary");
+      expect(summary?.found).toBe(false);
+      expect(summary?.details ?? "").toMatch(/canonical token/iu);
+    });
   });
 
   describe("Premise Challenge structural validation", () => {
@@ -3112,6 +3129,98 @@ ${TDD_PREFLIGHT_SECTIONS}
 
     const result = await lintArtifact(root, "tdd");
     expect(result.passed).toBe(true);
+  });
+
+  it("accepts canonical Verification Ladder table form without 'Highest tier reached' phrase", async () => {
+    const root = await createTempProject("tdd-verification-ladder-table");
+    await writeRuntimeArtifact(root, "06-tdd.md", `# TDD Artifact
+
+${TDD_PREFLIGHT_SECTIONS}
+
+## RED Evidence
+| Slice | Test name | Command | Failure output summary |
+|---|---|---|---|
+| S-1 | dedupe fails on duplicate key | pnpm vitest run dedupe.test.ts | FAIL AssertionError expected unique list |
+
+## Acceptance Mapping
+| Slice | Plan task ID | Spec criterion ID |
+|---|---|---|
+| S-1 | T-1 | AC-1 |
+
+## Failure Analysis
+| Slice | Expected missing behavior | Actual failure reason |
+|---|---|---|
+| S-1 | Module not implemented | Module import fails — correct |
+
+## GREEN Evidence
+- Full suite command: pnpm vitest run
+- Full suite result: 12 passed, 0 failed
+
+## Verification Ladder
+| Slice | Tier reached | Evidence |
+|---|---|---|
+| S-1 | command | pnpm vitest run dedupe.test.ts (pass) |
+
+## REFACTOR Notes
+- What changed: Extracted helper function
+- Why: Reuse across tests
+- Behavior preserved: Full suite green after refactor
+
+## Traceability
+- Plan task IDs: T-1
+- Spec criterion IDs: AC-1
+`);
+
+    const result = await lintArtifact(root, "tdd");
+    expect(result.passed).toBe(true);
+    const ladder = result.findings.find((f) => f.section === "Verification Ladder");
+    expect(ladder?.found).toBe(true);
+  });
+
+  it("rejects empty Verification Ladder table that has no tier or evidence", async () => {
+    const root = await createTempProject("tdd-verification-ladder-empty-table");
+    await writeRuntimeArtifact(root, "06-tdd.md", `# TDD Artifact
+
+${TDD_PREFLIGHT_SECTIONS}
+
+## RED Evidence
+| Slice | Test name | Command | Failure output summary |
+|---|---|---|---|
+| S-1 | dedupe fails on duplicate key | pnpm vitest run dedupe.test.ts | FAIL AssertionError expected unique list |
+
+## Acceptance Mapping
+| Slice | Plan task ID | Spec criterion ID |
+|---|---|---|
+| S-1 | T-1 | AC-1 |
+
+## Failure Analysis
+| Slice | Expected missing behavior | Actual failure reason |
+|---|---|---|
+| S-1 | Module not implemented | Module import fails — correct |
+
+## GREEN Evidence
+- Full suite command: pnpm vitest run
+- Full suite result: 12 passed, 0 failed
+
+## Verification Ladder
+| Slice | Tier reached | Evidence |
+|---|---|---|
+| S-1 |  |  |
+
+## REFACTOR Notes
+- What changed: Extracted helper function
+- Why: Reuse across tests
+- Behavior preserved: Full suite green after refactor
+
+## Traceability
+- Plan task IDs: T-1
+- Spec criterion IDs: AC-1
+`);
+
+    const result = await lintArtifact(root, "tdd");
+    expect(result.passed).toBe(false);
+    const ladder = result.findings.find((f) => f.section === "Verification Ladder");
+    expect(ladder?.found).toBe(false);
   });
 
   it("fails tdd when RED Evidence does not include explicit failure markers", async () => {

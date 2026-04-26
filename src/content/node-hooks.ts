@@ -294,15 +294,6 @@ async function writeJsonFile(filePath, value) {
   });
 }
 
-async function fileExists(filePath) {
-  try {
-    await fs.stat(filePath);
-    return true;
-  } catch {
-    return false;
-  }
-}
-
 async function readTextFile(filePath, fallback = "") {
   try {
     return await fs.readFile(filePath, "utf8");
@@ -900,8 +891,6 @@ async function buildKnowledgeDigest(root, currentStage, prereadRaw) {
       const action = typeof row.action === "string" ? row.action : "action";
       return "- [" + confidence + " • " + stage + " • " + domain + "] " + trigger + " -> " + action;
     });
-  const body =
-    relevant.length > 0 ? relevant.join("\\n") : "(no matching entries for current stage)";
   return {
     digestLines: relevant,
     learningsCount

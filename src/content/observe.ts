@@ -1,6 +1,5 @@
 import { RUNTIME_ROOT } from "../constants.js";
 import {
-  HOOK_MANIFEST,
   groupBindingsByEvent,
   type HookHandlerId,
   type HookManifestHarness
@@ -127,10 +126,7 @@ export function hookManifestSnapshot(): Array<{
     entries: Array<{ handler: HookHandlerId; matcher?: string; timeout?: number }>;
   }>;
 }> {
-  return (HOOK_MANIFEST.length === 0
-    ? (["claude", "cursor", "codex"] as const)
-    : (["claude", "cursor", "codex"] as const)
-  ).map((harness) => ({
+  return (["claude", "cursor", "codex"] as const).map((harness) => ({
     harness,
     events: groupBindingsByEvent(harness)
   }));

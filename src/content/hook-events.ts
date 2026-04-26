@@ -1,17 +1,10 @@
 import type { HarnessId } from "../types.js";
 import {
-  HOOK_SEMANTIC_EVENTS,
-  HOOK_MANIFEST_HARNESSES,
   semanticEventCoverage,
-  type HookSemanticEvent,
-  type HookManifestHarness
+  type HookSemanticEvent
 } from "./hook-manifest.js";
 
 export { HOOK_SEMANTIC_EVENTS, type HookSemanticEvent } from "./hook-manifest.js";
-
-function isManifestHarness(value: HarnessId): value is HookManifestHarness {
-  return (HOOK_MANIFEST_HARNESSES as readonly HarnessId[]).includes(value);
-}
 
 /**
  * OpenCode is covered by the inline plugin (`opencode-plugin.ts`), not
@@ -44,5 +37,3 @@ export const HOOK_EVENTS_BY_HARNESS: Record<
     opencode: OPENCODE_SEMANTIC_COVERAGE
   } satisfies Record<HarnessId, Partial<Record<HookSemanticEvent, string>>>
 );
-
-void isManifestHarness;
