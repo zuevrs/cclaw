@@ -395,7 +395,7 @@ export async function checkMandatoryDelegations(
   for (const agent of mandatory) {
     const rows = forRun.filter((e) => e.agent === agent);
     const completedRows = rows.filter((e) => e.status === "completed");
-    const waivedRows = rows.filter((e) => e.status === "waived");
+    const waivedRows = rows.filter((e) => e.status === "waived" && e.mode === "mandatory");
     const hasCompleted = completedRows.length >= 1;
     const hasWaived = waivedRows.length > 0;
     const ok = hasWaived || hasCompleted;

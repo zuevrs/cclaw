@@ -464,11 +464,10 @@ export default function cclawPlugin(ctx) {
    * \`DEFAULT_STRICTNESS = advisory\`, so the plugin can no longer
    * accidentally be the stricter half of a mismatched pair.
    */
-  function readConfigStrictness() {
+  async function readConfigStrictness() {
     try {
       if (!existsSync(configPath)) return "";
-      const { readFileSync } = require("node:fs");
-      const raw = readFileSync(configPath, "utf8");
+      const raw = await readFileText(configPath);
       if (typeof raw !== "string" || raw.length === 0) return "";
       const match = raw.match(/^\\s*strictness\\s*:\\s*([A-Za-z0-9_-]+)/m);
       return match && typeof match[1] === "string" ? match[1].trim().toLowerCase() : "";
@@ -477,7 +476,7 @@ export default function cclawPlugin(ctx) {
     }
   }
 
-  function resolveStrictness() {
+  async function resolveStrictness() {
     const envRaw = typeof process.env.CCLAW_STRICTNESS === "string"
       ? process.env.CCLAW_STRICTNESS.trim().toLowerCase()
       : "";
@@ -485,7 +484,7 @@ export default function cclawPlugin(ctx) {
     if (envRaw === "advisory" || envRaw === "off" || envRaw === "disabled" || envRaw === "none") {
       return "advisory";
     }
-    const fileRaw = readConfigStrictness();
+    const fileRaw = await readConfigStrictness();
     if (fileRaw === "strict") return "strict";
     return "advisory";
   }
@@ -684,7 +683,7 @@ export default function cclawPlugin(ctx) {
           );
           return;
         }
-        const strictness = resolveStrictness();
+        const strictness = await resolveStrictness();
         if (strictness !== "strict") {
           // Advisory mode (the default) — every guard refusal is a hint,
           // not a hard stop. Users report the "failure" as a log line

@@ -2,7 +2,7 @@ import fs from "node:fs/promises";
 import path from "node:path";
 import { RUNTIME_ROOT } from "./constants.js";
 import {
-  canTransition,
+  nextStage,
   createInitialCloseoutState,
   createInitialFlowState,
   FLOW_STATE_SCHEMA_VERSION,
@@ -97,11 +97,14 @@ function validateFlowTransition(prev: FlowState, next: FlowState): void {
     return;
   }
 
-  if (!canTransition(prev.currentStage, next.currentStage)) {
+  const naturalForward = nextStage(prev.currentStage, prev.track);
+  const isNaturalForward = naturalForward === next.currentStage;
+  const isReviewRewind = prev.currentStage === "review" && next.currentStage === "tdd";
+  if (!isNaturalForward && !isReviewRewind) {
     throw new InvalidStageTransitionError(
       prev.currentStage,
       next.currentStage,
-      `no transition rule allows "${prev.currentStage}" -> "${next.currentStage}". Use /cc-next to advance stages or archive the run to reset.`
+      `no transition rule allows "${prev.currentStage}" -> "${next.currentStage}" for track "${prev.track}". Use /cc-next to advance stages or archive the run to reset.`
     );
   }
 }

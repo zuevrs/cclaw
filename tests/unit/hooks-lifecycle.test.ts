@@ -689,6 +689,56 @@ process.exit(0);
     expect(log).toMatch(/advisory: workflow-guard flagged tool\.execute\.before/);
   });
 
+
+  it("opencode plugin reads strictness from config.yaml when env override is absent", async () => {
+    const root = await createTempProject("opencode-strict-from-config-only");
+    await fs.mkdir(path.join(root, ".cclaw/hooks"), { recursive: true });
+    await fs.mkdir(path.join(root, ".cclaw/state"), { recursive: true });
+    await fs.writeFile(
+      path.join(root, ".cclaw/state/flow-state.json"),
+      JSON.stringify({ currentStage: "scope", activeRunId: "active", completedStages: ["brainstorm"] }, null, 2),
+      "utf8"
+    );
+    await fs.writeFile(path.join(root, ".cclaw/config.yaml"), "strictness: strict\n", "utf8");
+    await fs.writeFile(
+      path.join(root, ".cclaw/hooks/run-hook.mjs"),
+      `#!/usr/bin/env node
+if ((process.argv[2] || "") === "workflow-guard") {
+  process.stderr.write("workflow guard refused from strict config");
+  process.exit(1);
+}
+process.exit(0);
+`,
+      "utf8"
+    );
+    await fs.chmod(path.join(root, ".cclaw/hooks/run-hook.mjs"), 0o755);
+    const pluginPath = path.join(root, ".cclaw/hooks/opencode-plugin.mjs");
+    await fs.writeFile(pluginPath, opencodePluginJs(), "utf8");
+
+    const previousStrictness = process.env.CCLAW_STRICTNESS;
+    try {
+      delete process.env.CCLAW_STRICTNESS;
+      const imported = await import(`${pathToFileURL(pluginPath).href}?t=${Date.now()}`);
+      const pluginFactory = imported.default as (ctx: { directory: string }) => {
+        "tool.execute.before": (input: unknown, output?: unknown) => Promise<void>;
+      };
+      const plugin = pluginFactory({ directory: root });
+
+      await expect(
+        plugin["tool.execute.before"]({ tool: "RunCommand", tool_input: { cmd: "echo test" } })
+      ).rejects.toThrow(/cclaw workflow-guard blocked tool\.execute\.before/);
+      await expect(
+        plugin["tool.execute.before"]({ tool: "RunCommand", tool_input: { cmd: "echo test" } })
+      ).rejects.toThrow(/workflow guard refused from strict config/);
+    } finally {
+      if (previousStrictness === undefined) {
+        delete process.env.CCLAW_STRICTNESS;
+      } else {
+        process.env.CCLAW_STRICTNESS = previousStrictness;
+      }
+    }
+  });
+
   it("opencode plugin bypasses guards for ask / question / todo / think tools", async () => {
     const root = await createTempProject("opencode-readonly-bypass-extended");
     await fs.mkdir(path.join(root, ".cclaw/hooks"), { recursive: true });
