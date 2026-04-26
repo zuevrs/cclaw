@@ -50,6 +50,7 @@ const STAGE_EXAMPLES: Record<FlowStage, string> = {
 - **Approach:** A — Reusable validation module
 - **Rationale:** based on user reaction favoring fast delivery and lower complexity, shared TS module gives consistent behavior in CI/local, avoids script duplication, and stays within the no-new-dependency constraint.
 - **Approval:** approved
+- **Next-stage handoff:** \`scope\` — carry the locked stack constraints and the validator module boundary forward.
 
 ## Design
 

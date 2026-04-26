@@ -447,6 +447,57 @@ describe("artifact linter heuristics", () => {
     expect(approval?.found).toBe(false);
   });
 
+  it("fails brainstorm when Selected Direction omits the next-stage handoff token", async () => {
+    const root = await createTempProject("artifact-lint-no-handoff");
+    await writeRuntimeArtifact(root, "01-brainstorm.md", `# Brainstorm Artifact
+
+## Context
+- Project state: monorepo with CI
+
+## Problem
+- What we're solving: release regressions
+
+## Clarifying Questions
+| # | Question | Answer | Decision impact |
+|---|---|---|---|
+| 1 | Block or warn? | Block | hard gate |
+
+## Approach Tier
+- Tier: Standard
+- Why this tier: changes local + CI release path together.
+
+## Approaches
+| Approach | Role | Upside | Architecture | Trade-offs | Recommendation |
+|---|---|---|---|---|---|
+| A | baseline | modest | script-only checks | fast | |
+| B | challenger | higher | reusable module | balanced | recommended |
+
+## Approach Reaction
+- Closest option: B
+- Concerns: keep rollout low-risk.
+- What changed after reaction: recommendation narrowed to module-only surface.
+
+## Selected Direction
+- Approach: B
+- Rationale: user reaction confirmed balanced path with controlled rollout
+- Approval: approved by user
+
+## Design
+- Architecture: module
+
+## Assumptions and Open Questions
+- None
+`);
+
+    const result = await lintArtifact(root, "brainstorm");
+    const handoff = result.findings.find(
+      (finding) => finding.section === "Direction Next-Stage Handoff"
+    );
+    expect(handoff?.required).toBe(true);
+    expect(handoff?.found).toBe(false);
+    expect(handoff?.details ?? "").toMatch(/scope|spec/iu);
+  });
+
   it("fails brainstorm when no challenger higher-upside approach is present", async () => {
     const root = await createTempProject("artifact-lint-no-challenger");
     await writeRuntimeArtifact(root, "01-brainstorm.md", `# Brainstorm Artifact
@@ -540,6 +591,7 @@ describe("artifact linter heuristics", () => {
 - Approach: B — local todo list with categories/projects
 - Rationale: categories give more product value while staying within the user's no-backend constraint
 - Approval: approved by user
+- Next-stage handoff: scope — carry the local-only constraint and the categories slice forward.
 
 ## Design
 - Architecture: static client app with local component state.
@@ -1058,6 +1110,7 @@ describe("artifact linter heuristics", () => {
 - Approach: B
 - Rationale: user reaction preferred stronger reuse while keeping v1 scoped
 - Approval: approved
+- Next-stage handoff: scope — lock the validator module boundary and reuse target.
 
 ## Design
 - Architecture: shared module

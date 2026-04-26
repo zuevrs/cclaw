@@ -2098,6 +2098,24 @@ export async function lintArtifact(
             ? "Selected Direction is traceable to prior user reaction."
             : "Selected Direction is not traceable to user reaction. Add `## Approach Reaction` before it, or mention the user's reaction/concerns in the rationale."
         });
+
+        // Track-aware handoff: standard track goes to `scope`; medium track
+        // goes directly to `spec`; the quick track skips brainstorm entirely.
+        // We accept either canonical successor token plus a generic
+        // `next-stage` / `handoff` phrase to preserve i18n flexibility.
+        const handoffTrace =
+          /(?:`(?:scope|spec)`|\bscope\b|\bspec\b|next[-\s_]stage|next stage|\bhandoff\b|hand[-\s]off)/iu.test(
+            directionBody
+          );
+        findings.push({
+          section: "Direction Next-Stage Handoff",
+          required: true,
+          rule: "Selected Direction must record the track-aware next-stage handoff (mention `scope` for standard, `spec` for medium, or include a `Next-stage handoff:` line).",
+          found: handoffTrace,
+          details: handoffTrace
+            ? "Selected Direction names the next-stage handoff."
+            : "Selected Direction is missing a next-stage handoff token. Mention `scope` (standard) or `spec` (medium), or add a `Next-stage handoff:` line so downstream stages can trace the contract."
+        });
       }
     }
 

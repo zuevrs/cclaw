@@ -73,6 +73,7 @@ async function writeBrainstormArtifact(root: string): Promise<void> {
 - Approach: B - Next.js static export
 - Rationale: user reaction favored ecosystem and ready animation tooling.
 - Approval: approved
+- Next-stage handoff: scope — carry the static-export landing slice forward.
 
 ## Design
 - Architecture: static exported Next.js app.
