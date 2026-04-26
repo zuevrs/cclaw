@@ -707,6 +707,139 @@ describe("artifact linter heuristics", () => {
     expect(selfReview?.details).toContain("calibrated review prompt format");
   });
 
+  it("accepts calibrated self-review with inline patches/concerns content", async () => {
+    const root = await createTempProject("artifact-lint-self-review-inline");
+    await writeRuntimeArtifact(root, "01-brainstorm.md", `# Brainstorm Artifact
+
+## Context
+- Project state: fresh simple web app flow.
+
+## Problem
+- What we're solving: choose a bounded product slice.
+
+## Approach Tier
+- Tier: Standard
+
+## Approaches
+| Approach | Role | Upside | Trade-offs | Recommendation |
+|---|---|---|---|---|
+| A | baseline | modest | simplest single-list todo | |
+| B | challenger | high | adds categories for long-term usefulness | recommended |
+
+## Approach Reaction
+- Closest option: B
+- Concerns: keep it local-only.
+- What changed after reaction: scope confirmed.
+
+## Selected Direction
+- Approach: B
+- Rationale: traces to Approach Reaction.
+- Approval: approved by user
+
+## Self-Review Notes
+- Status: Approved
+- Patches applied: filled Approach Reaction and Selected Direction; tightened Not Doing list.
+- Remaining concerns: None.
+`);
+
+    const result = await lintArtifact(root, "brainstorm");
+    const selfReview = result.findings.find(
+      (finding) => finding.section === "Calibrated Self-Review Format"
+    );
+    expect(selfReview?.found).toBe(true);
+    expect(selfReview?.details).toContain("calibrated review prompt format");
+  });
+
+  it("accepts calibrated self-review with sub-bullet patches/concerns", async () => {
+    const root = await createTempProject("artifact-lint-self-review-sub-bullets");
+    await writeRuntimeArtifact(root, "01-brainstorm.md", `# Brainstorm Artifact
+
+## Context
+- Project state: fresh simple web app flow.
+
+## Problem
+- What we're solving: choose a bounded product slice.
+
+## Approach Tier
+- Tier: Standard
+
+## Approaches
+| Approach | Role | Upside | Trade-offs | Recommendation |
+|---|---|---|---|---|
+| A | baseline | modest | simplest single-list todo | |
+| B | challenger | high | categories for long-term usefulness | recommended |
+
+## Approach Reaction
+- Closest option: B
+- Concerns: avoid backend.
+- What changed after reaction: scope confirmed.
+
+## Selected Direction
+- Approach: B
+- Rationale: traces to Approach Reaction.
+- Approval: approved by user
+
+## Self-Review Notes
+- Status: Issues Found - one open trade-off
+- Patches applied:
+  - Filled Approach Reaction
+  - Added APPROVED marker
+- Remaining concerns:
+  - Confirm hosting target before scope
+`);
+
+    const result = await lintArtifact(root, "brainstorm");
+    const selfReview = result.findings.find(
+      (finding) => finding.section === "Calibrated Self-Review Format"
+    );
+    expect(selfReview?.found).toBe(true);
+  });
+
+  it("rejects unfilled `Approved | Issues Found` placeholder in self-review status", async () => {
+    const root = await createTempProject("artifact-lint-self-review-placeholder");
+    await writeRuntimeArtifact(root, "01-brainstorm.md", `# Brainstorm Artifact
+
+## Context
+- Project state: fresh simple web app flow.
+
+## Problem
+- What we're solving: choose a bounded product slice.
+
+## Approach Tier
+- Tier: Standard
+
+## Approaches
+| Approach | Role | Upside | Trade-offs | Recommendation |
+|---|---|---|---|---|
+| A | baseline | modest | simplest single-list todo | |
+| B | challenger | high | categories for long-term usefulness | recommended |
+
+## Approach Reaction
+- Closest option: B
+- Concerns: keep it local.
+- What changed after reaction: scope confirmed.
+
+## Selected Direction
+- Approach: B
+- Rationale: traces to Approach Reaction.
+- Approval: approved by user
+
+## Self-Review Notes
+- Status: Approved | Issues Found
+- Patches applied:
+  - None
+- Remaining concerns:
+  - None
+`);
+
+    const result = await lintArtifact(root, "brainstorm");
+    const selfReview = result.findings.find(
+      (finding) => finding.section === "Calibrated Self-Review Format"
+    );
+    expect(selfReview?.found).toBe(false);
+    expect(selfReview?.details).toContain("pick exactly one");
+  });
+
   it("accepts non-Latin brainstorm prose with canonical Role/Upside columns", async () => {
     const root = await createTempProject("artifact-lint-non-latin-canonical-approaches");
     await writeRuntimeArtifact(root, "01-brainstorm-landing.md", `# Brainstorm: Лендинг

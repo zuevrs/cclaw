@@ -1,5 +1,12 @@
 # Changelog
 
+## 0.51.17
+
+### Fixed
+
+- Relaxed the brainstorm calibrated `Self-Review Notes` validator: it now accepts `Status:` lines with trailing context, treats both inline notes and sub-bullets as valid for `Patches applied:` / `Remaining concerns:`, and reports per-line problems instead of one opaque message. The unfilled placeholder `Status: Approved | Issues Found` is now explicitly rejected with an actionable hint to pick exactly one value.
+- Updated the brainstorm artifact template default to `Status: Approved` so freshly drafted artifacts pass validation without manual placeholder cleanup, while review-prompt documentation continues to show both canonical values.
+
 ## 0.51.16
 
 ### Fixed

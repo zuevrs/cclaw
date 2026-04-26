@@ -100,7 +100,7 @@ ${SEED_SHELF_SECTION}
 - (compact ASCII/Mermaid diagram for medium+ complexity, or one-line justification for omission.)
 
 ## Self-Review Notes
-- Status: Approved | Issues Found
+- Status: Approved
 - Patches applied:
   - None
 - Remaining concerns:
