@@ -1,5 +1,15 @@
 # Changelog
 
+## 0.51.16
+
+### Fixed
+
+- Fixed OpenCode hook execution so generated plugins spawn a real Node executable instead of accidentally re-entering the OpenCode CLI through `process.execPath`.
+- Added active stage contracts and calibrated review prompts to session bootstrap context, making stage structure and self-review expectations visible before artifact drafting.
+- Improved brainstorm validation feedback for transposed `Approaches` tables and enforced calibrated `Self-Review Notes` format when that section is present.
+- Made managed `start-flow` record seed, origin-document, and stack-marker discovery in `00-idea.md`.
+- Added automatic delegation-log waivers for untriggered proactive dispatch rows so skipped helper reviews remain auditable.
+
 ## 0.51.15
 
 ### Fixed
