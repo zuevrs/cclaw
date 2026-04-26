@@ -100,7 +100,11 @@ ${SEED_SHELF_SECTION}
 - (compact ASCII/Mermaid diagram for medium+ complexity, or one-line justification for omission.)
 
 ## Self-Review Notes
-- (list patches applied to this artifact during self-review, or \`- None.\`)
+- Status: Approved | Issues Found
+- Patches applied:
+  - None
+- Remaining concerns:
+  - None
 
 ## Assumptions and Open Questions
 - **Assumptions:**

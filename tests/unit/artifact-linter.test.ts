@@ -606,6 +606,107 @@ describe("artifact linter heuristics", () => {
     expect(taxonomy?.details).toContain("invalid Role");
   });
 
+  it("explains when the Approaches table is transposed", async () => {
+    const root = await createTempProject("artifact-lint-approaches-transposed");
+    await writeRuntimeArtifact(root, "01-brainstorm.md", `# Brainstorm Artifact
+
+## Context
+- Project state: fresh dashboard flow.
+- Relevant existing code/patterns: none.
+
+## Problem
+- What we're solving: choose the first dashboard stack.
+
+## Clarifying Questions
+| # | Question | Answer | Decision impact |
+|---|---|---|---|
+| 1 | Data source? | Mock | no backend |
+
+## Approach Tier
+- Tier: Lightweight
+
+## Approaches
+| | A: React + Vite | B: Next.js |
+|---|---|---|
+| Role | baseline | challenger |
+| Stack | React, Vite, Tailwind | Next.js, shadcn/ui |
+| Upside | modest | higher |
+| Trade-offs | lighter | heavier |
+
+## Approach Reaction
+- Closest option: A
+- Concerns: none.
+- What changed after reaction: selected lightweight route.
+
+## Selected Direction
+- Approach: A
+- Rationale: user reaction favored simpler stack.
+- Approval: approved by user
+
+## Design
+- Architecture: static client app.
+`);
+
+    const result = await lintArtifact(root, "brainstorm");
+    const taxonomy = result.findings.find(
+      (finding) => finding.section === "Approaches Role/Upside Taxonomy"
+    );
+    expect(taxonomy?.found).toBe(false);
+    expect(taxonomy?.details).toContain("appears transposed");
+    expect(taxonomy?.details).toContain("| Approach | Role | Upside |");
+  });
+
+  it("fails weak freeform brainstorm self-review notes when present", async () => {
+    const root = await createTempProject("artifact-lint-weak-self-review");
+    await writeRuntimeArtifact(root, "01-brainstorm.md", `# Brainstorm Artifact
+
+## Context
+- Project state: fresh simple web app flow.
+- Relevant existing code/patterns: none.
+
+## Problem
+- What we're solving: choose a bounded product slice.
+
+## Clarifying Questions
+| # | Question | Answer | Decision impact |
+|---|---|---|---|
+| 1 | Include persistence? | Local only | no backend scope |
+
+## Approach Tier
+- Tier: Standard
+
+## Approaches
+| Approach | Role | Upside | Trade-offs | Recommendation |
+|---|---|---|---|---|
+| A | baseline | modest | simplest single-list todo | |
+| B | challenger | high | adds categories/projects for better long-term usefulness | recommended |
+
+## Approach Reaction
+- Closest option: B
+- Concerns: avoid backend or account system.
+- What changed after reaction: categories stay local and simple.
+
+## Selected Direction
+- Approach: B
+- Rationale: user reaction favored the second option.
+- Approval: approved by user
+
+## Design
+- Architecture: static client app.
+
+## Self-Review Notes
+- Looks good.
+- All gates addressed.
+`);
+
+    const result = await lintArtifact(root, "brainstorm");
+    const selfReview = result.findings.find(
+      (finding) => finding.section === "Calibrated Self-Review Format"
+    );
+    expect(selfReview?.found).toBe(false);
+    expect(selfReview?.details).toContain("calibrated review prompt format");
+  });
+
   it("accepts non-Latin brainstorm prose with canonical Role/Upside columns", async () => {
     const root = await createTempProject("artifact-lint-non-latin-canonical-approaches");
     await writeRuntimeArtifact(root, "01-brainstorm-landing.md", `# Brainstorm: Лендинг
