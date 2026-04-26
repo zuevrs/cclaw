@@ -17,6 +17,13 @@ export default function cclawPlugin(ctx) {
   const flowStatePath = join(stateDir, "flow-state.json");
   const knowledgePath = join(runtimeDir, "knowledge.jsonl");
   const metaSkillPath = join(runtimeDir, "skills/${META_SKILL_NAME}/SKILL.md");
+  const STAGE_IDS = ["brainstorm", "scope", "design", "spec", "plan", "tdd", "review", "ship"];
+  const REVIEW_PROMPT_BY_STAGE = {
+    brainstorm: "brainstorm-self-review.md",
+    scope: "scope-ceo-review.md",
+    design: "design-eng-review.md"
+  };
+  const REVIEW_PROMPT_FILES = Object.values(REVIEW_PROMPT_BY_STAGE);
 
   function ensureRuntimeDirs() {
     try {
@@ -84,6 +91,29 @@ export default function cclawPlugin(ctx) {
     return readTailLines(knowledgePath, 12);
   }
 
+  async function readStageSupportContext(stage) {
+    if (typeof stage !== "string" || !STAGE_IDS.includes(stage)) return [];
+    const parts = [];
+    const contract = (await readFileText(join(runtimeDir, "templates/state-contracts", stage + ".json"))).trim();
+    if (contract.length > 0) {
+      parts.push(
+        "Current stage state contract (read before drafting or editing the stage artifact):\\n" +
+          contract
+      );
+    }
+    const reviewPromptName = REVIEW_PROMPT_BY_STAGE[stage];
+    if (reviewPromptName) {
+      const prompt = (await readFileText(join(runtimeDir, "skills/review-prompts", reviewPromptName))).trim();
+      if (prompt.length > 0) {
+        parts.push(
+          "Current stage calibrated review prompt (use before asking for approval/completion):\\n" +
+            prompt
+        );
+      }
+    }
+    return parts;
+  }
+
   const BOOTSTRAP_MARKER = "<!-- cclaw-bootstrap-v1 -->";
 
   async function buildBootstrap() {
@@ -97,6 +127,9 @@ export default function cclawPlugin(ctx) {
 
     const knowledge = await readKnowledgeDigest();
     if (knowledge.length > 0) parts.push("Knowledge digest (top relevant entries):", ...knowledge);
+
+    const stageSupport = await readStageSupportContext(flow.stage);
+    if (stageSupport.length > 0) parts.push(...stageSupport);
 
     parts.push(
       "If you discover a non-obvious rule or pattern during stage work, add it to the current artifact ## Learnings section; stage-complete harvests it into .cclaw/knowledge.jsonl. Direct JSONL append is only for explicit manual learnings operations."
@@ -113,7 +146,9 @@ export default function cclawPlugin(ctx) {
   const BOOTSTRAP_SOURCE_PATHS = [
     flowStatePath,
     knowledgePath,
-    metaSkillPath
+    metaSkillPath,
+    ...STAGE_IDS.map((stage) => join(runtimeDir, "templates/state-contracts", stage + ".json")),
+    ...REVIEW_PROMPT_FILES.map((file) => join(runtimeDir, "skills/review-prompts", file))
   ];
 
   async function readMtimeMs(filePath) {

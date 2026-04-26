@@ -374,6 +374,8 @@ fs.appendFileSync(${JSON.stringify(callsPath)}, process.argv.slice(2).join(" ") 
     await fs.mkdir(path.join(root, ".cclaw/hooks"), { recursive: true });
     await fs.mkdir(path.join(root, ".cclaw/state"), { recursive: true });
     await fs.mkdir(path.join(root, ".cclaw/skills/using-cclaw"), { recursive: true });
+    await fs.mkdir(path.join(root, ".cclaw/templates/state-contracts"), { recursive: true });
+    await fs.mkdir(path.join(root, ".cclaw/skills/review-prompts"), { recursive: true });
     await fs.writeFile(path.join(root, ".cclaw/state/flow-state.json"), JSON.stringify({
       currentStage: "design",
       activeRunId: "active",
@@ -392,6 +394,16 @@ fs.appendFileSync(${JSON.stringify(callsPath)}, process.argv.slice(2).join(" ") 
       })
     ].join("\n"), "utf8");
     await fs.writeFile(path.join(root, ".cclaw/skills/using-cclaw/SKILL.md"), "# Using Cclaw\n", "utf8");
+    await fs.writeFile(
+      path.join(root, ".cclaw/templates/state-contracts/design.json"),
+      JSON.stringify({ stage: "design", requiredTopLevelFields: ["architecture", "dataFlow"] }, null, 2),
+      "utf8"
+    );
+    await fs.writeFile(
+      path.join(root, ".cclaw/skills/review-prompts/design-eng-review.md"),
+      "# Design Eng Review\n\n## Calibration\nCheck architecture, data flow, failure modes.\n",
+      "utf8"
+    );
 
     const pluginPath = path.join(root, ".cclaw/hooks/opencode-plugin.mjs");
     const hookRuntimePath = path.join(root, ".cclaw/hooks/run-hook.mjs");
@@ -430,6 +442,10 @@ fs.appendFileSync(${JSON.stringify(callsPath)}, process.argv.slice(2).join(" ") 
     expect(transformed.system).toContain("Active artifacts: .cclaw/artifacts/");
     expect(transformed.system).toContain("Knowledge digest");
     expect(transformed.system).toContain("make trade-offs explicit");
+    expect(transformed.system).toContain("Current stage state contract");
+    expect(transformed.system).toContain('"stage": "design"');
+    expect(transformed.system).toContain("Current stage calibrated review prompt");
+    expect(transformed.system).toContain("Check architecture, data flow");
 
     const guardLog = await fs.readFile(path.join(root, ".cclaw/state/prompt-guard.jsonl"), "utf8");
     expect(guardLog).toContain("write_to_cclaw_runtime");
