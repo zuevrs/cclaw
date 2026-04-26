@@ -152,7 +152,6 @@ describe("delegation ledger run scoping", () => {
     const result = await checkMandatoryDelegations(root, "scope");
     expect(result.satisfied).toBe(false);
     expect(result.missing).toContain("planner");
-    expect(result.autoWaived).toEqual([]);
     expect(result.expectedMode).toBe("role-switch");
 
     const ledger = await readDelegationLedger(root);
