@@ -107,6 +107,7 @@ describe("stage schema and subagent alignment", () => {
     expect(plan.crossStageTrace.readsFrom).toContain(".cclaw/artifacts/03-design-<slug>.md");
     expect(plan.crossStageTrace.readsFrom).toContain(".cclaw/artifacts/02-scope-<slug>.md");
     expect(plan.requiredGates.map((gate) => gate.id)).toContain("plan_dependency_batches_defined");
+    expect(plan.artifactValidation.some((row) => row.section === "Execution Posture")).toBe(true);
     expect(stagePolicyNeedles("plan")).toContain("Dependency Batches");
   });
 
@@ -571,6 +572,7 @@ describe("stage schema and subagent alignment", () => {
     expect(scopeTemplate).toContain("## Scope Outside Voice Loop");
     expect(designTemplate).toContain("## Outside Voice Findings");
     expect(designTemplate).toContain("## Design Outside Voice Loop");
+    expect(scopeTemplate).not.toContain("Spec review loop summary");
   });
 
   it("brainstorm scope and design templates expose seed shelf section", () => {

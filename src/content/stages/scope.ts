@@ -101,7 +101,7 @@ export const SCOPE: StageSchemaInput = {
       "Locked Decisions section lists stable LD#hash anchors for non-negotiable boundaries.",
       "Premise challenge findings documented.",
       "Outside Voice findings and dispositions are recorded (accept/reject/defer with rationale) before final approval.",
-      `Spec review loop summary includes a table with columns Iteration, Quality Score, Findings, plus Stop reason, Target score, and Max iterations. This is outside-voice evidence only; it does not satisfy user approval. ${reviewLoopPolicySummary("scope")}`,
+      `Scope outside-voice loop summary includes a table with columns Iteration, Quality Score, Findings, plus Stop reason, Target score, and Max iterations. This is outside-voice evidence only; it does not satisfy user approval. ${reviewLoopPolicySummary("scope")}`,
       reviewLoopSecondOpinionSummary("scope"),
       "Deferred items list with one-line rationale for each.",
       "When an upside deferred idea is parked, a seed file is created under `.cclaw/seeds/` and referenced in the artifact.",

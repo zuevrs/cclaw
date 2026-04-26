@@ -961,7 +961,7 @@ Track-specific skips are allowed only when \`flow-state.track\` + \`skippedStage
 | Class | Route |
 |---|---|
 | non-trivial software work | \`/cc <idea>\` |
-| trivial software fix | \`/cc <idea>\` (quick or medium track) |
+| trivial software fix | \`/cc <idea>\` (quick track) |
 | bugfix with repro | \`/cc <idea>\` and enforce RED-first in tdd |
 | pure question / non-software | direct answer (no stage flow) |
 

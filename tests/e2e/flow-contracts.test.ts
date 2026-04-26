@@ -97,6 +97,15 @@ describe("flow command contracts", () => {
     expect(startCommand).not.toContain("Persist the chosen track to `.cclaw/state/flow-state.json`");
     expect(startSkill).not.toContain("Persist the chosen track in `.cclaw/state/flow-state.json`");
     expect(startCommand).not.toContain("update `flow-state.json` accordingly");
+    expect(startCommand).toContain("quick track");
+    expect(startSkill).toContain("`quick` track starts at `spec`");
+    expect(startCommand).toContain("\"stage\":\"spec\"");
+  });
+
+  it("keeps trivial routing quick-only in the source templates", async () => {
+    const templatesSource = await fs.readFile(path.join(process.cwd(), "src/content/templates.ts"), "utf8");
+    expect(templatesSource).toContain("| trivial software fix | \\`/cc <idea>\\` (quick track) |");
+    expect(templatesSource).not.toContain("quick or medium track");
   });
 
   it("documents cclaw-cli as installer/support and node hooks as runtime", async () => {

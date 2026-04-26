@@ -121,7 +121,7 @@ When called by another skill or subagent in machine mode, emit exactly one
 JSON envelope (no prose) and stop:
 
 \`\`\`json
-{"version":"1","kind":"stage-output","stage":"brainstorm","payload":{"command":"/cc","track":"standard","action":"start_or_resume"},"emittedAt":"<ISO-8601>"}
+{"version":"1","kind":"stage-output","stage":"spec","payload":{"command":"/cc","track":"quick","action":"start_or_resume"},"emittedAt":"<ISO-8601>"}
 \`\`\`
 
 Validate envelopes with:
