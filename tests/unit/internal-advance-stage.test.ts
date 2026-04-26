@@ -348,6 +348,11 @@ describe("internal advance-stage commands", () => {
   it("start-flow initializes track state and writes the idea artifact via managed helper", async () => {
     const root = await createTempProject("internal-start-flow");
     await ensureRunSystem(root);
+    await fs.mkdir(path.join(root, ".cclaw/seeds"), { recursive: true });
+    await fs.mkdir(path.join(root, "docs/prd"), { recursive: true });
+    await fs.writeFile(path.join(root, ".cclaw/seeds/SEED-dashboard.md"), "# Dashboard seed\n", "utf8");
+    await fs.writeFile(path.join(root, "docs/prd/web-app.md"), "# Web app PRD\n", "utf8");
+    await fs.writeFile(path.join(root, "package.json"), JSON.stringify({ scripts: { test: "vitest run" } }, null, 2), "utf8");
 
     const captured = captureIo();
     const code = await runInternalCommand(
@@ -377,6 +382,9 @@ describe("internal advance-stage commands", () => {
     expect(idea).toContain("Track: quick (bugfix with repro)");
     expect(idea).toContain("Stack: Next.js");
     expect(idea).toContain("Fix login regression");
+    expect(idea).toContain("Seed shelf scanned: .cclaw/seeds/SEED-dashboard.md");
+    expect(idea).toContain("Origin docs scanned: found docs/prd/web-app.md");
+    expect(idea).toContain("Stack markers scanned: found package.json");
   });
 
   it("start-flow refuses to reset progress without force and reclassifies atomically", async () => {
