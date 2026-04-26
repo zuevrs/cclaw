@@ -2,6 +2,7 @@ import fs from "node:fs/promises";
 import path from "node:path";
 import { describe, expect, it } from "vitest";
 import { stageSkillFolder } from "../../src/content/skills.js";
+import { SUBAGENT_CONTEXT_SKILLS } from "../../src/content/subagent-context-skills.js";
 import { initCclaw } from "../../src/install.js";
 import { FLOW_STAGES } from "../../src/types.js";
 import { createTempProject } from "../helpers/index.js";
@@ -64,6 +65,17 @@ describe("flow command contracts", () => {
     const codexCc = await fs.readFile(path.join(root, ".agents/skills/cc/SKILL.md"), "utf8");
     expect(codexCc).toContain("natural language");
     expect(codexCc).not.toContain("intent in English");
+  });
+
+  it("materializes subagent dispatch context skills", async () => {
+    const root = await createTempProject("subagent-context-skills");
+    await initCclaw({ projectRoot: root });
+
+    for (const [skillName, expectedContent] of Object.entries(SUBAGENT_CONTEXT_SKILLS)) {
+      const skillPath = path.join(root, ".cclaw/skills", skillName, "SKILL.md");
+      const content = await fs.readFile(skillPath, "utf8");
+      expect(content, skillName).toBe(expectedContent);
+    }
   });
 
   it("routes /cc start and reclassification through managed start-flow helper", async () => {

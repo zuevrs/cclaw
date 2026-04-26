@@ -54,6 +54,7 @@ import {
   LEGACY_LANGUAGE_RULE_PACK_FOLDERS
 } from "./content/utility-skills.js";
 import { RESEARCH_PLAYBOOKS } from "./content/research-playbooks.js";
+import { SUBAGENT_CONTEXT_SKILLS } from "./content/subagent-context-skills.js";
 import { HOOK_EVENTS_BY_HARNESS, HOOK_SEMANTIC_EVENTS } from "./content/hook-events.js";
 import { createInitialFlowState, type FlowState } from "./flow-state.js";
 import { ensureDir, exists, writeFileSafe } from "./fs-utils.js";
@@ -120,12 +121,9 @@ const DEPRECATED_UTILITY_SKILL_FOLDERS = [
   "source-driven-development",
   "frontend-accessibility",
   "landscape-check",
-  "adversarial-review",
-  "security-audit",
   "knowledge-curation",
   "retrospective",
   "document-review",
-  "receiving-code-review",
   "flow-status",
   "flow-tree",
   "flow-diff"
@@ -481,6 +479,9 @@ async function writeSkills(projectRoot: string, config?: CclawConfig): Promise<v
   }
   for (const [fileName, markdown] of Object.entries(REVIEW_PROMPTS)) {
     await writeFileSafe(runtimePath(projectRoot, "skills", "review-prompts", fileName), markdown);
+  }
+  for (const [folderName, markdown] of Object.entries(SUBAGENT_CONTEXT_SKILLS)) {
+    await writeFileSafe(runtimePath(projectRoot, "skills", folderName, "SKILL.md"), markdown);
   }
 
   // Language rule packs live under .cclaw/rules/lang/<pack>.md. They are opt-in:
