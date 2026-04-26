@@ -13,7 +13,7 @@ import { decisionProtocolInstruction } from "../decision-protocol.js";
 export const DESIGN: StageSchemaInput = {
   schemaShape: "v2",
   stage: "design",
-  complexityTier: "deep",
+  complexityTier: "standard",
   skillFolder: "engineering-design-lock",
   skillName: "engineering-design-lock",
   skillDescription: "Engineering lock-in stage. Build a concrete technical spine before spec and planning, with section-by-section interactive review.",
@@ -49,7 +49,7 @@ export const DESIGN: StageSchemaInput = {
     checklist: [
       "Compact design lock — for simple greenfield/product slices, produce a tight but complete design spine: codebase investigation, architecture boundary, one labeled diagram, data flow, failure/rescue table, test/perf expectations, and handoff. Do not run a sprawling workshop when a strong engineering lock fits on one page.",
       "Trivial-Change Escape Hatch — for <=3 files, no new interfaces, and no cross-module data flow, produce a mini-design (rationale, changed files, one risk) and proceed to spec.",
-      "Tiered Research Fleet — run `research/research-fleet.md` before lock; record `.cclaw/artifacts/02a-research.md` and summarize concrete decisions in `## Research Fleet Synthesis`.",
+      "Tiered Research — for simple/medium work, do a compact codebase investigation and record a concise `Research Fleet Synthesis` in the design artifact; write `.cclaw/artifacts/02a-research.md` and run the full fleet only for deep/high-risk work or when external framework/architecture uncertainty exists.",
       "Design Doc Check — read upstream artifacts and current design docs; latest superseding doc wins.",
       "Investigator pass — before design decisions, read blast-radius code and record touched files, responsibilities, reuse candidates, and existing patterns.",
       "Scope Challenge + Search Before Building — find existing solutions, minimum change set, and complexity smells before custom architecture.",
@@ -70,14 +70,14 @@ export const DESIGN: StageSchemaInput = {
       "If a section has no issues, say 'No issues found' and move on.",
       "Do not skip failure-mode mapping; use Method/Exception/Rescue/UserSees and treat silent user impact without rescue as critical.",
       "Take a firm position, push back on weak framing, and call out suboptimal architecture with concrete alternatives.",
-      "Classify ambiguity before acting: ask, enumerate-and-pick, or propose a hypothesis with validation path.",
+      "Classify ambiguity before acting. Only non-critical preference/default assumptions may continue; STOP on uncertainty about scope, architecture, security, data loss, public API, migration, auth/pricing, or required user approval. Design hypotheses must name validation path, rollback trigger, and owner before they can be carried forward.",
       "Before final approval, run the critic pass, reconcile material findings, and bound retries with the review-loop policy.",
       "For baseline approval, present the full design plus exact spec handoff and **STOP** until explicit approval.",
       "**STOP BEFORE ADVANCE.** Mandatory delegation `planner` must be completed or explicitly waived, then close via `node .cclaw/hooks/stage-complete.mjs design`."
     ],
     process: [
       "Read upstream artifacts and current design docs.",
-      "Run tiered research fleet and write `.cclaw/artifacts/02a-research.md` before architecture lock.",
+      "Run compact research by default; write `.cclaw/artifacts/02a-research.md` only when deep/high-risk uncertainty requires a separate research artifact.",
       "Run investigator pass plus scope challenge/search-before-building.",
       "Walk review sections interactively and lock boundaries, data flow, state transitions, edge cases, and failure modes.",
       "Cover security, observability, deployment, tests, and performance for Standard+ changes.",
@@ -174,7 +174,7 @@ export const DESIGN: StageSchemaInput = {
       { section: "Deployment & Rollout", required: true, validationRule: "Must define migration/flag strategy, rollback plan, and post-deploy verification steps." },
       { section: "What Already Exists", required: false, validationRule: "For each sub-problem: existing code/library found (Layer 1-3/EUREKA label), reuse decision, and adaptation needed." },
       { section: "Outside Voice Findings", required: false, validationRule: "Critic pass: list adversarial findings and disposition (accept/reject/defer) with rationale per material finding." },
-      { section: "Spec Review Loop", required: false, validationRule: `Record iteration table with quality score per iteration, stop reason, and unresolved concerns. Enforce ${reviewLoopPolicySummary("design")}` },
+      { section: "Design Outside Voice Loop", required: false, validationRule: `Record iteration table with quality score per iteration, stop reason, and unresolved concerns. Enforce ${reviewLoopPolicySummary("design")}` },
       { section: "NOT in scope", required: false, validationRule: "Work considered and explicitly deferred with one-line rationale." },
       { section: "Parallelization Strategy", required: false, validationRule: "If multi-module: dependency table, parallel lanes, conflict flags." },
       { section: "Unresolved Decisions", required: false, validationRule: "If any: what info is missing, who provides it, default if unanswered." },

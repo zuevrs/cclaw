@@ -46,6 +46,7 @@ import {
 import { validateHookDocument } from "./hook-schema.js";
 import { validateKnowledgeEntry } from "./knowledge-store.js";
 import { readSeedShelf } from "./content/seed-shelf.js";
+import { evaluateRetroGate } from "./retro-gate.js";
 import type { HarnessId } from "./types.js";
 import type { DoctorSeverity } from "./doctor-registry.js";
 
@@ -1477,18 +1478,17 @@ export async function doctorChecks(projectRoot: string, options: DoctorOptions =
       ? "no stale stages pending acknowledgement"
       : `stale stages pending acknowledgement: ${staleStages.join(", ")}`
   });
-  const retroRequired = flowState.completedStages.includes("ship");
-  const retroComplete =
-    !retroRequired ||
-    (typeof flowState.retro.completedAt === "string" && flowState.retro.compoundEntries > 0);
+  const retroGateStatus = await evaluateRetroGate(projectRoot, flowState);
   checks.push({
     name: "state:retro_gate",
-    ok: retroComplete,
-    details: retroComplete
-      ? retroRequired
-        ? `retro gate complete (${flowState.retro.compoundEntries} compound entries)`
+    ok: retroGateStatus.completed,
+    details: retroGateStatus.completed
+      ? retroGateStatus.required
+        ? retroGateStatus.skipped
+          ? "retro gate complete (retro skipped with recorded closeout decision)"
+          : `retro gate complete (${retroGateStatus.compoundEntries} compound entries)`
         : "retro gate not required yet (ship not completed)"
-      : "retro gate incomplete: ship flow requires recorded retrospective evidence."
+      : "retro gate incomplete: ship flow requires recorded retrospective evidence or an explicit retro skip."
   });
   const tddLogPath = path.join(projectRoot, RUNTIME_ROOT, "state", "tdd-cycle-log.jsonl");
   const tddLogExists = await exists(tddLogPath);

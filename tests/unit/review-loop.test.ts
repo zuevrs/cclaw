@@ -408,7 +408,7 @@ describe("review-loop contracts", () => {
     });
   });
 
-  it("renders and upserts spec review loop summary section", () => {
+  it("renders and upserts outside voice loop summary section", () => {
     const envelope = {
       type: "review-loop",
       version: "1",
@@ -423,7 +423,7 @@ describe("review-loop contracts", () => {
       ]
     } as const;
     const section = renderReviewLoopSummarySection(envelope);
-    expect(section).toContain("## Spec Review Loop");
+    expect(section).toContain("## Scope Outside Voice Loop");
     expect(section).toContain("| 2 | 0.810 | 1 |");
     expect(section).toContain("Stop reason: quality_threshold_met");
     const header = renderReviewLoopHeader(envelope);
@@ -461,7 +461,7 @@ describe("review-loop contracts", () => {
       iterations: [{ iteration: 1, qualityScore: 0.5, findingsCount: 5 }]
     });
     expect(withSection).toContain("> Review Loop Quality: 0.500");
-    expect(withSection).toContain("## Spec Review Loop");
+    expect(withSection).toContain("## Scope Outside Voice Loop");
 
     const replaced = upsertReviewLoopSummary(withSection, {
       type: "review-loop",
@@ -474,7 +474,7 @@ describe("review-loop contracts", () => {
       iterations: [{ iteration: 1, qualityScore: 0.82, findingsCount: 1 }]
     });
     expect((replaced.match(/Review Loop Quality:/g) ?? []).length).toBe(1);
-    expect((replaced.match(/## Spec Review Loop/g) ?? []).length).toBe(1);
+    expect((replaced.match(/## Scope Outside Voice Loop/g) ?? []).length).toBe(1);
     expect(replaced).toContain("> Review Loop Quality: 0.820");
     expect(replaced).toContain("| 1 | 0.820 | 1 |");
     expect(replaced).toContain("Stop reason: quality_threshold_met");

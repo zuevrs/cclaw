@@ -392,12 +392,27 @@ describe("internal advance-stage commands", () => {
   it("start-flow refuses to reset progress without force and reclassifies atomically", async () => {
     const root = await createTempProject("internal-start-flow-reclassify");
     await ensureRunSystem(root);
+    const initial = await readFlowState(root);
+    const brainstormRequired = stageSchema("brainstorm").requiredGates
+      .filter((gate) => gate.tier === "required")
+      .map((gate) => gate.id);
     await writeFlowState(
       root,
       {
-        ...(await readFlowState(root)),
+        ...initial,
         currentStage: "scope",
-        completedStages: ["brainstorm"]
+        completedStages: ["brainstorm"],
+        guardEvidence: Object.fromEntries(
+          brainstormRequired.map((gateId) => [gateId, `evidence for ${gateId}`])
+        ),
+        stageGateCatalog: {
+          ...initial.stageGateCatalog,
+          brainstorm: {
+            ...initial.stageGateCatalog.brainstorm,
+            passed: brainstormRequired,
+            blocked: []
+          }
+        }
       },
       { allowReset: true }
     );
@@ -433,12 +448,46 @@ describe("internal advance-stage commands", () => {
     expect(after.completedStages).toEqual(["brainstorm"]);
     expect(after.currentStage).toBe("spec");
     expect(after.skippedStages).toEqual(["scope", "design"]);
+    for (const gateId of brainstormRequired) {
+      expect(after.stageGateCatalog.brainstorm.passed).toContain(gateId);
+      expect(after.guardEvidence[gateId]).toBe(`evidence for ${gateId}`);
+    }
 
     const idea = await fs.readFile(path.join(root, ".cclaw/artifacts/00-idea.md"), "utf8");
     expect(idea).toContain("Reclassification:");
     expect(idea).toContain("- From: standard");
     expect(idea).toContain("- To: medium");
     expect(idea).toContain("scope simplified");
+  });
+
+
+  it("reclassification fails when carried completed-stage gates lack closure evidence", async () => {
+    const root = await createTempProject("internal-start-flow-reclassify-open-gates");
+    await ensureRunSystem(root);
+    const initial = await readFlowState(root);
+    await fs.writeFile(path.join(root, ".cclaw/artifacts/00-idea.md"), "# Idea\n", "utf8");
+    await writeFlowState(
+      root,
+      {
+        ...initial,
+        currentStage: "scope",
+        completedStages: ["brainstorm"]
+      },
+      { allowReset: true }
+    );
+
+    const captured = captureIo();
+    const code = await runInternalCommand(
+      root,
+      ["start-flow", "--reclassify", "--track=medium", "--reason=missing evidence", "--quiet"],
+      captured.io
+    );
+
+    expect(code).toBe(1);
+    expect(captured.stderr()).toContain("completed stages without valid gate closure");
+    const after = await readFlowState(root);
+    expect(after.track).toBe("standard");
+    expect(after.currentStage).toBe("scope");
   });
 
   it("advance-stage promotes stage and writes required gate evidence", async () => {

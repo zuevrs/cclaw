@@ -190,7 +190,7 @@ Apply concise turn announces: one announce per batch boundary (or when risk/plan
 changes materially), then execute tasks without repetitive boilerplate.
 
 Detailed walkthrough:
-Use the current plan artifact for batch order and keep RED -> GREEN -> REFACTOR evidence in the TDD artifact.
+Use the active track's upstream artifact for ordering: plan slices on standard/medium, or spec acceptance items / bug reproduction slices on quick. Keep RED -> GREEN -> REFACTOR evidence in the TDD artifact.
 `;
 }
 
@@ -427,6 +427,7 @@ ${philosophy.purpose}
 
 ## Complexity Tier
 - Active tier: \`${schema.complexityTier}\`
+- Scale-to-complexity rule: execute required gates and artifact sections, but keep optional/deep sections compact unless risk, novelty, or configuration triggers them. Do not mechanically expand lightweight work into a strategy workshop.
 - Mandatory delegations at this tier: ${mandatoryDelegationSummary}
 - Track render context: \`${trackContext.track}\` (${trackContext.usesPlanTerminology ? "plan-first wording" : "acceptance-first wording"})
 

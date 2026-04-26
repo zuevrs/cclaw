@@ -152,6 +152,23 @@ async function resetCarryoverStateFiles(projectRoot: string, activeRunId: string
   );
 }
 
+async function restoreStateSnapshot(projectRoot: string, archiveStatePath: string): Promise<void> {
+  if (!(await exists(archiveStatePath))) return;
+  const stateDir = stateDirPath(projectRoot);
+  await ensureDir(stateDir);
+  const entries = await fs.readdir(archiveStatePath, { withFileTypes: true });
+  for (const entry of entries) {
+    const from = path.join(archiveStatePath, entry.name);
+    const to = path.join(stateDir, entry.name);
+    if (entry.isDirectory()) {
+      await fs.rm(to, { recursive: true, force: true });
+      await fs.cp(from, to, { recursive: true });
+    } else if (entry.isFile()) {
+      await fs.copyFile(from, to);
+    }
+  }
+}
+
 function toArchiveDate(date = new Date()): string {
   const yyyy = date.getFullYear().toString();
   const mm = (date.getMonth() + 1).toString().padStart(2, "0");
@@ -394,8 +411,8 @@ export async function archiveRun(
     }
     if (stateReset) {
       try {
+        await restoreStateSnapshot(projectRoot, path.join(archivePath, "state"));
         await writeFlowState(projectRoot, stateBeforeReset, { allowReset: true, skipLock: true });
-        await resetCarryoverStateFiles(projectRoot, stateBeforeReset.activeRunId);
       } catch {
         // If rollback of state fails, keep sentinel + archive remnants for
         // manual reconciliation.

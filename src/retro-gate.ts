@@ -18,6 +18,7 @@ export interface RetroGateStatus {
   completed: boolean;
   compoundEntries: number;
   hasRetroArtifact: boolean;
+  skipped: boolean;
 }
 
 // Fallback window for compound-entry scanning when `retroDraftedAt` /
@@ -154,6 +155,7 @@ export async function evaluateRetroGate(
     required,
     completed,
     compoundEntries,
-    hasRetroArtifact
+    hasRetroArtifact,
+    skipped: retroSkipped
   };
 }

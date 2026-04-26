@@ -310,6 +310,35 @@ describe("delegation ledger run scoping", () => {
     expect(result.expectedMode).toBe("isolated");
   });
 
+  it("uses active harness when inferring fulfillment mode for mixed installs", async () => {
+    const root = await createTempProject("delegation-active-harness");
+    await seedFlowState(root, "run-active-harness");
+    await writeConfig(root, createDefaultConfig(["claude", "codex"]));
+    const prior = process.env.CCLAW_ACTIVE_HARNESS;
+    process.env.CCLAW_ACTIVE_HARNESS = "codex";
+    try {
+      await appendDelegation(root, {
+        stage: "scope",
+        agent: "planner",
+        mode: "mandatory",
+        status: "completed",
+        ts: new Date().toISOString()
+      });
+    } finally {
+      if (prior === undefined) {
+        delete process.env.CCLAW_ACTIVE_HARNESS;
+      } else {
+        process.env.CCLAW_ACTIVE_HARNESS = prior;
+      }
+    }
+
+    const ledger = await readDelegationLedger(root);
+    expect(ledger.entries[0]?.fulfillmentMode).toBe("role-switch");
+    const result = await checkMandatoryDelegations(root, "scope");
+    expect(result.satisfied).toBe(false);
+    expect(result.missingEvidence).toContain("planner");
+  });
+
   it("does not require adversarial review as a mandatory delegation by default", async () => {
     const root = await createTempProject("delegation-review-defaults");
     await seedFlowState(root, "run-review", "review");

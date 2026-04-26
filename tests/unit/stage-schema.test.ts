@@ -35,7 +35,7 @@ describe("stage schema and subagent alignment", () => {
   it("resolves explicit and default complexity tiers", () => {
     expect(stageSchema("brainstorm").complexityTier).toBe("standard");
     expect(stageSchema("scope").complexityTier).toBe("standard");
-    expect(stageSchema("design").complexityTier).toBe("deep");
+    expect(stageSchema("design").complexityTier).toBe("standard");
     // Plan does not set complexityTier explicitly and should fall back.
     expect(stageSchema("plan").complexityTier).toBe("standard");
   });
@@ -89,6 +89,16 @@ describe("stage schema and subagent alignment", () => {
     expect(standard.usesPlanTerminology).toBe(true);
     expect(standard.traceabilitySliceNoun).toBe("plan slice");
     expect(standard.upstreamArtifactPath).toBe(".cclaw/artifacts/05-plan.md");
+  });
+
+  it("keeps quick-track TDD and review traceability independent of plan artifacts", () => {
+    const quickTdd = stageSkillMarkdown("tdd", "quick");
+    const quickReview = stageSkillMarkdown("review", "quick");
+
+    expect(stageSchema("tdd", "quick").requiredGates.map((gate) => gate.id)).not.toContain("tdd_traceable_to_plan");
+    expect(quickTdd).toContain("spec acceptance items / bug reproduction slices on quick");
+    expect(quickTdd).toContain("No plan artifact is required on quick");
+    expect(quickReview).toContain("bug reproduction slices instead of nonexistent plan artifacts");
   });
 
   it("plan stage reads spec, design, and scope artifacts", () => {
@@ -472,7 +482,7 @@ describe("stage schema and subagent alignment", () => {
       expect.stringContaining("Ask at most one question per turn")
     ]));
     expect(scope.executionModel.checklist).toEqual(expect.arrayContaining([
-      expect.stringContaining("Compact CEO pass first")
+      expect.stringContaining("Scope contract first")
     ]));
     expect(scope.executionModel.interactionProtocol).toEqual(expect.arrayContaining([
       expect.stringContaining("Do not walk the full checklist by default"),
@@ -558,9 +568,9 @@ describe("stage schema and subagent alignment", () => {
     const scopeTemplate = ARTIFACT_TEMPLATES["02-scope.md"];
     const designTemplate = ARTIFACT_TEMPLATES["03-design.md"];
     expect(scopeTemplate).toContain("## Outside Voice Findings");
-    expect(scopeTemplate).toContain("## Spec Review Loop");
+    expect(scopeTemplate).toContain("## Scope Outside Voice Loop");
     expect(designTemplate).toContain("## Outside Voice Findings");
-    expect(designTemplate).toContain("## Spec Review Loop");
+    expect(designTemplate).toContain("## Design Outside Voice Loop");
   });
 
   it("brainstorm scope and design templates expose seed shelf section", () => {

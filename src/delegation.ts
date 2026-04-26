@@ -322,10 +322,18 @@ export async function appendDelegation(projectRoot: string, entry: DelegationEnt
       stamped.evidenceRefs = [];
     }
     if (stamped.status === "completed" && stamped.fulfillmentMode === undefined) {
-      const config = await readConfig(projectRoot).catch(() => null);
-      const harnesses = config?.harnesses ?? [];
-      const fallbacks = harnesses.map((h) => HARNESS_ADAPTERS[h].capabilities.subagentFallback);
-      stamped.fulfillmentMode = expectedFulfillmentMode(fallbacks);
+      const activeFallback = process.env.CCLAW_ACTIVE_HARNESS
+        ? HARNESS_ADAPTERS[process.env.CCLAW_ACTIVE_HARNESS as keyof typeof HARNESS_ADAPTERS]
+          ?.capabilities.subagentFallback
+        : undefined;
+      if (activeFallback) {
+        stamped.fulfillmentMode = expectedFulfillmentMode([activeFallback]);
+      } else {
+        const config = await readConfig(projectRoot).catch(() => null);
+        const harnesses = config?.harnesses ?? [];
+        const fallbacks = harnesses.map((h) => HARNESS_ADAPTERS[h].capabilities.subagentFallback);
+        stamped.fulfillmentMode = expectedFulfillmentMode(fallbacks);
+      }
     }
     // Idempotency: if a caller (or a retried hook) tries to append a row
     // with a spanId that already exists in the ledger, treat it as a no-op

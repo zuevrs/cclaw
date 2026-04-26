@@ -333,7 +333,7 @@ function validateGateEvidenceShape(stage: FlowStage, gateId: string, evidence: s
 
 function reviewLoopArtifactFixHint(stage: FlowStage, gateId: string): string {
   if (AUTO_REVIEW_LOOP_GATE_BY_STAGE[stage] !== gateId) return "";
-  return " Add a `## Spec Review Loop` table to the artifact with rows like `| 1 | 0.80 | 0 |` plus `- Stop reason: quality_threshold_met`, `- Target score: 0.80`, and `- Max iterations: 3`; then omit this gate from manual evidence so stage-complete can auto-hydrate it.";
+  return ` Add a \`## ${stage === "scope" ? "Scope Outside Voice Loop" : "Design Outside Voice Loop"}\` table to the artifact with rows like \`| 1 | 0.80 | 0 |\` plus \`- Stop reason: quality_threshold_met\`, \`- Target score: 0.80\`, and \`- Max iterations: 3\`; then omit this gate from manual evidence so stage-complete can auto-hydrate it.`;
 }
 
 function parseStringList(raw: unknown): string[] {
@@ -1234,6 +1234,58 @@ function firstIncompleteStageForTrack(track: FlowTrack, completedStages: FlowSta
   return stages.find((stage) => !completed.has(stage)) ?? stages[stages.length - 1] ?? "brainstorm";
 }
 
+function carriedCompletedStageCatalog(
+  current: FlowState,
+  fresh: FlowState,
+  stage: FlowStage
+): { catalog: StageGateState; evidence: Record<string, string> } {
+  const previousCatalog = current.stageGateCatalog[stage];
+  const freshCatalog = fresh.stageGateCatalog[stage];
+  const allowed = new Set([...freshCatalog.required, ...freshCatalog.recommended]);
+  const previousPassed = new Set(previousCatalog.passed.filter((gateId) => allowed.has(gateId)));
+  const previousBlocked = new Set(previousCatalog.blocked.filter((gateId) => allowed.has(gateId)));
+  const orderedAllowed = [...freshCatalog.required, ...freshCatalog.recommended];
+  const evidence: Record<string, string> = {};
+  const passed = orderedAllowed.filter((gateId) => {
+    if (!previousPassed.has(gateId)) return false;
+    const note = current.guardEvidence[gateId];
+    if (typeof note !== "string" || note.trim().length === 0) return false;
+    evidence[gateId] = note.trim();
+    return true;
+  });
+  const passedSet = new Set(passed);
+  return {
+    catalog: {
+      required: [...freshCatalog.required],
+      recommended: [...freshCatalog.recommended],
+      conditional: [],
+      triggered: [],
+      passed,
+      blocked: orderedAllowed.filter((gateId) => previousBlocked.has(gateId) && !passedSet.has(gateId))
+    },
+    evidence
+  };
+}
+
+function completedStageClosureEvidenceIssues(flowState: FlowState): string[] {
+  const issues: string[] = [];
+  for (const stage of flowState.completedStages) {
+    const schema = stageSchema(stage, flowState.track);
+    const catalog = flowState.stageGateCatalog[stage];
+    const required = schema.requiredGates
+      .filter((gate) => gate.tier === "required")
+      .map((gate) => gate.id);
+    for (const gateId of required) {
+      if (!catalog.passed.includes(gateId)) continue;
+      const note = flowState.guardEvidence[gateId];
+      if (typeof note !== "string" || note.trim().length === 0) {
+        issues.push(`completed stage "${stage}" passed gate "${gateId}" is missing guardEvidence.`);
+      }
+    }
+  }
+  return issues;
+}
+
 async function ensureProactiveDelegationTrace(projectRoot: string, stage: FlowStage): Promise<void> {
   const proactiveRules = stageAutoSubagentDispatch(stage).filter((rule) => rule.mode === "proactive");
   if (proactiveRules.length === 0) return;
@@ -1409,13 +1461,34 @@ async function runStartFlow(
       TRACK_STAGES[args.track].includes(stage)
     );
     const fresh = createInitialFlowState({ activeRunId: current.activeRunId, track: args.track });
+    const stageGateCatalog = { ...fresh.stageGateCatalog };
+    const guardEvidence: Record<string, string> = {};
+    for (const stage of completedInNewTrack) {
+      const carried = carriedCompletedStageCatalog(current, fresh, stage);
+      stageGateCatalog[stage] = carried.catalog;
+      Object.assign(guardEvidence, carried.evidence);
+    }
     nextState = {
       ...fresh,
       completedStages: completedInNewTrack,
       currentStage: firstIncompleteStageForTrack(args.track, completedInNewTrack),
+      guardEvidence,
+      stageGateCatalog,
       rewinds: current.rewinds,
       staleStages: current.staleStages
     };
+    const validation = await buildValidationReport(projectRoot, nextState);
+    const evidenceIssues = completedStageClosureEvidenceIssues(nextState);
+    if (!validation.completedStages.ok || evidenceIssues.length > 0) {
+      io.stderr.write(
+        "cclaw internal start-flow: reclassification would leave completed stages without valid gate closure.\n"
+      );
+      const issues = [...validation.completedStages.issues, ...evidenceIssues];
+      if (issues.length > 0) {
+        io.stderr.write(`- completed-stage closure issues: ${issues.join(" | ")}\n`);
+      }
+      return 1;
+    }
   } else {
     nextState = createInitialFlowState({ track: args.track });
   }

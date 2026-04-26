@@ -228,7 +228,7 @@ ${SEED_SHELF_SECTION}
 |---|---|---|---|---|
 | F-1 | premise_fit |  | accept/reject/defer |  |
 
-## Spec Review Loop
+## Scope Outside Voice Loop
 | Iteration | Quality Score | Findings | Stop decision |
 |---|---|---|---|
 | 1 | 0.00 | 0 | continue/stop |
@@ -430,7 +430,7 @@ ${MARKDOWN_CODE_FENCE}
 |---|---|---|---|---|
 | F-1 | architecture_fit |  | accept/reject/defer |  |
 
-## Spec Review Loop
+## Design Outside Voice Loop
 | Iteration | Quality Score | Findings | Stop decision |
 |---|---|---|---|
 | 1 | 0.00 | 0 | continue/stop |

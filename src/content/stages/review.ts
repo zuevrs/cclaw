@@ -42,8 +42,8 @@ export const REVIEW: StageSchemaInput = {
       "Diff Scope — Run `git diff` against base branch. If no diff, exit early with APPROVED (no changes to review). Scope the review to changed files unless blast-radius analysis requires wider inspection.",
       "Change-Size Check — ~100 lines = normal. ~300 lines = consider splitting. ~1000+ lines = strongly recommend stacked PRs. Flag large diffs to the user.",
       "Risk-Based Second Opinion — compute changed-line count, files-touched count, and trust-boundary movement. Dispatch an adversarial reviewer only when trust boundaries changed, Critical/Important ambiguity remains, or the diff is both large and high-risk; otherwise record `not triggered`.",
-      "Load upstream evidence — read TDD artifact (RED + GREEN + REFACTOR), spec, and plan. Verify evidence chain is unbroken.",
-      "Run traceability matrix — execute `cclaw internal trace-matrix` (or equivalent helper) and confirm there are no orphaned criteria/tasks/tests before declaring ship readiness.",
+      "Load upstream evidence — read TDD artifact (RED + GREEN + REFACTOR), spec, and plan when present. On quick track, use spec acceptance items / bug reproduction slices instead of nonexistent plan artifacts.",
+      "Run traceability matrix when plan artifacts exist or the active track enforces it; on quick, confirm spec acceptance/reproduction slices are covered without requiring plan-task coverage.",
       "Layer 1: Spec Compliance — check every acceptance criterion against implementation. Verdict: pass/fail per criterion.",
       "Layer 2: Integrated findings — one structured pass tagged by category: correctness, security, performance, architecture, external-safety.",
       "Security sweep — mandatory dedicated security-reviewer pass across diff + touched modules. A zero-finding pass must include `NO_CHANGE_ATTESTATION` with rationale.",
@@ -52,7 +52,7 @@ export const REVIEW: StageSchemaInput = {
       "Meta-Review — Were tests actually run? Do test names match what they test? Are there real assertions?",
       "Classify findings — Critical (blocks ship), Important (should fix), Suggestion (optional improvement).",
       "Produce verdict — APPROVED, APPROVED_WITH_CONCERNS, or BLOCKED.",
-      "If verdict is BLOCKED, emit remediation route token `ROUTE_BACK_TO_TDD` and include `cclaw internal rewind tdd \"review_blocked_by_critical\"` with the blocking finding IDs."
+      "If verdict is BLOCKED, emit remediation route token `ROUTE_BACK_TO_TDD`, include `cclaw internal rewind tdd \"review_blocked_by_critical\"` with the blocking finding IDs, and satisfy the special transition guard `review_verdict_blocked` instead of `review_criticals_resolved`."
     ],
     interactionProtocol: [
       "Run Layer 1 (spec compliance) completely before starting Layer 2.",
@@ -64,7 +64,7 @@ export const REVIEW: StageSchemaInput = {
         "recommend the option that fully closes the finding with no carry-over risk and the smallest blast radius",
         STRUCTURED_ASK_TOOL_LIST_REVIEW
       ),
-      "Resolve all critical blockers before ship.",
+      "Resolve all critical blockers before ship. If verdict is BLOCKED, do not pass `review_criticals_resolved`; pass only the remediation route gate `review_verdict_blocked` when routing back to TDD.",
       "When verdict is BLOCKED, do not end with a passive stop: explicitly route remediation to TDD via `ROUTE_BACK_TO_TDD` and point to `cclaw internal rewind tdd` with the blocking IDs.",
       structuredAskSingleChoiceInstruction(
         "final verdict",

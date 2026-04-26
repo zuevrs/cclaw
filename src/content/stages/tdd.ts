@@ -54,7 +54,7 @@ export const TDD: StageSchemaV2Input = {
       "Run verification-before-completion discipline for the slice — capture a fresh test command, commit SHA, and explicit PASS/FAIL status before completion claims.",
       "REFACTOR: continue the `test-author` evidence cycle (or a dedicated refactor mode when available) to improve code quality without behavior changes. Set `CCLAW_ACTIVE_AGENT=tdd-refactor` when the harness supports phase labels.",
       "Record evidence — capture test discovery, system-wide impact check, RED failure, GREEN output, and REFACTOR notes in the TDD artifact. When logging a `green` row, attach the closed acceptance-criterion IDs in `acIds` so Ralph Loop status counts them.",
-      "Annotate traceability — link to plan task ID and spec criterion.",
+      "Annotate traceability — link to the active track's source: plan task ID + spec criterion on standard/medium, or spec acceptance item / bug reproduction slice on quick.",
       "Per-Slice Review (conditional) — if `.cclaw/config.yaml::sliceReview.enabled` is true and the slice meets any trigger (touchCount >= filesChangedThreshold, touchPaths match touchTriggers, or highRisk=true), append a `## Per-Slice Review` entry for this slice before moving on (see the dedicated section below).",
       "Repeat for each slice — return to step 1 for the next plan slice."
     ],
@@ -293,7 +293,7 @@ function tddStageVariantForTrack(track: FlowTrack): StageSchemaV2Input {
         if (row.section === "Traceability") {
           return {
             ...row,
-            validationRule: "Acceptance criterion IDs are linked to RED/GREEN evidence."
+            validationRule: "Spec acceptance item IDs and, for bug fixes, reproduction slice IDs are linked to RED/GREEN evidence. No plan artifact is required on quick."
           };
         }
         return {

@@ -649,6 +649,29 @@ describe("runs system", () => {
     expect(resetReconciliation.notices).toEqual([]);
   });
 
+  it("evaluateRetroGate reports retroSkipped=true as completed skipped retro", async () => {
+    const root = await createTempProject("runs-retro-gate-skipped-status");
+    await ensureRunSystem(root);
+    const state = {
+      ...createInitialFlowState("active"),
+      currentStage: "ship" as const,
+      completedStages: ["brainstorm", "scope", "design", "spec", "plan", "tdd", "review", "ship" as const],
+      closeout: {
+        ...createInitialFlowState("active").closeout,
+        shipSubstate: "ready_to_archive" as const,
+        retroSkipped: true,
+        retroSkipReason: "operator skipped empty retro"
+      }
+    };
+    await writeFlowState(root, state, { allowReset: true });
+
+    const status = await evaluateRetroGate(root, state);
+    expect(status.required).toBe(true);
+    expect(status.completed).toBe(true);
+    expect(status.skipped).toBe(true);
+    expect(status.hasRetroArtifact).toBe(false);
+  });
+
   it("quarantines flow-state.json when top-level value is not an object", async () => {
     const root = await createTempProject("runs-corrupt-array");
     await ensureRunSystem(root);
