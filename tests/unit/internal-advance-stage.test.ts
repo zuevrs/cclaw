@@ -4,6 +4,7 @@ import { Writable } from "node:stream";
 import { describe, expect, it } from "vitest";
 import { stageSchema } from "../../src/content/stage-schema.js";
 import { ARTIFACT_TEMPLATES } from "../../src/content/templates.js";
+import { readDelegationLedger } from "../../src/delegation.js";
 import { runInternalCommand } from "../../src/internal/advance-stage.js";
 import { ensureRunSystem, readFlowState, writeFlowState } from "../../src/runs.js";
 import { createTempProject } from "../helpers/index.js";
@@ -466,6 +467,13 @@ describe("internal advance-stage commands", () => {
       expect(state.stageGateCatalog.brainstorm.passed).toContain(gateId);
       expect(state.guardEvidence[gateId]).toBeTruthy();
     }
+
+    const ledger = await readDelegationLedger(root);
+    const proactivePlanner = ledger.entries.find(
+      (entry) => entry.stage === "brainstorm" && entry.agent === "planner" && entry.mode === "proactive"
+    );
+    expect(proactivePlanner?.status).toBe("waived");
+    expect(proactivePlanner?.waiverReason).toContain("auto-recorded");
   });
 
   it("advance-stage rejects passed gates without evidence payload", async () => {

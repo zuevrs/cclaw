@@ -5,10 +5,11 @@ import process from "node:process";
 import type { Writable } from "node:stream";
 import { resolveArtifactPath } from "../artifact-paths.js";
 import { RUNTIME_ROOT, SHIP_FINALIZATION_MODES } from "../constants.js";
-import { stageSchema } from "../content/stage-schema.js";
+import { stageAutoSubagentDispatch, stageSchema } from "../content/stage-schema.js";
 import {
   appendDelegation,
-  checkMandatoryDelegations
+  checkMandatoryDelegations,
+  readDelegationLedger
 } from "../delegation.js";
 import {
   verifyCompletedStagesGateClosure,
@@ -1039,6 +1040,7 @@ async function runAdvanceStage(
       nextGuardEvidence[gateId] = provided.trim();
     }
   }
+  await ensureProactiveDelegationTrace(projectRoot, args.stage);
 
   const nextStageCatalog: StageGateState = {
     required: [...catalog.required],
@@ -1230,6 +1232,30 @@ function firstIncompleteStageForTrack(track: FlowTrack, completedStages: FlowSta
   const completed = new Set(completedStages);
   const stages = TRACK_STAGES[track];
   return stages.find((stage) => !completed.has(stage)) ?? stages[stages.length - 1] ?? "brainstorm";
+}
+
+async function ensureProactiveDelegationTrace(projectRoot: string, stage: FlowStage): Promise<void> {
+  const proactiveRules = stageAutoSubagentDispatch(stage).filter((rule) => rule.mode === "proactive");
+  if (proactiveRules.length === 0) return;
+
+  const ledger = await readDelegationLedger(projectRoot);
+  const currentRunEntries = ledger.entries.filter((entry) => entry.runId === ledger.runId);
+  for (const rule of proactiveRules) {
+    const alreadyRecorded = currentRunEntries.some(
+      (entry) => entry.stage === stage && entry.agent === rule.agent && entry.mode === "proactive"
+    );
+    if (alreadyRecorded) continue;
+    await appendDelegation(projectRoot, {
+      stage,
+      agent: rule.agent,
+      mode: "proactive",
+      status: "waived",
+      waiverReason: "auto-recorded: proactive delegation was not explicitly triggered before stage completion",
+      conditionTrigger: rule.when,
+      skill: rule.skill,
+      ts: new Date().toISOString()
+    });
+  }
 }
 
 async function pathExists(projectRoot: string, relPath: string): Promise<boolean> {
