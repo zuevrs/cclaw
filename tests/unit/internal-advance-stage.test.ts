@@ -807,7 +807,7 @@ describe("internal advance-stage commands", () => {
     );
 
     expect(code).toBe(1);
-    expect(captured.stderr()).toContain("design research gate blocked");
+    expect(captured.stderr()).toContain('review-loop envelope stage must be "design"');
   });
 
   it("advance-stage auto-hydrates design review-loop evidence from artifact when omitted", async () => {
@@ -1046,7 +1046,10 @@ process.stdout.write(JSON.stringify({ hook: process.argv[2] }) + "\\n");
       .filter((gate) => gate.tier === "required")
       .map((gate) => gate.id);
     const blockedGuard = "review_verdict_blocked";
-    const passed = [...required, blockedGuard];
+    const passed = [
+      ...required.filter((gateId) => gateId !== "review_criticals_resolved"),
+      blockedGuard
+    ];
     const evidence = Object.fromEntries(
       passed.map((gateId) => [
         gateId,
@@ -1075,6 +1078,9 @@ process.stdout.write(JSON.stringify({ hook: process.argv[2] }) + "\\n");
     expect(captured.stderr()).toBe("");
     const state = await readFlowState(root);
     expect(state.currentStage).toBe("tdd");
+    expect(state.completedStages).not.toContain("review");
+    expect(state.stageGateCatalog.review.passed).not.toContain("review_criticals_resolved");
+    expect(state.guardEvidence.review_verdict_blocked).toBe("evidence for review_verdict_blocked");
   });
 
   it("advances a simple dashboard brainstorm artifact without hidden validator fixes", async () => {

@@ -494,7 +494,7 @@ ${reviewLens.outputs.map((item) => `- ${item}`).join("\n")}
 ${reviewSectionsBlock(reviewLens.reviewSections)}
 
 ## Shared Stage Guidance
-- Follow the handoff menu: advance, revise, pause, rewind, or archive only when the user explicitly chooses it.
+- At STOP/closeout points, offer the shared handoff choices only when a user decision is needed.
 - Carry upstream decisions forward explicitly; record drift instead of silently changing direction.
 - Before closeout, fill \`## Learnings\` with \`- None this stage.\` or 1-3 strict JSON bullets.
 - Keep decisions explicit: context, options, chosen option, rationale, risk, and rollback.

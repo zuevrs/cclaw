@@ -78,7 +78,7 @@ Task arrives
 | Class | Route |
 |---|---|
 | non-trivial software work | \`/cc <idea>\` |
-| trivial software fix | \`/cc <idea>\` (quick/medium track as recommended) |
+| trivial software fix | \`/cc <idea>\` (quick track) |
 | bugfix with clear repro | \`/cc <idea>\` and enforce RED-first in tdd |
 | pure question / conversation | answer directly |
 | non-software work | answer directly |

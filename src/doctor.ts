@@ -351,6 +351,69 @@ async function opencodeRegistrationCheck(projectRoot: string): Promise<{ ok: boo
   return { ok: false, details: `No opencode.json/opencode.jsonc found with plugin ${expected}` };
 }
 
+async function archiveIntegrityCheck(projectRoot: string): Promise<{ ok: boolean; details: string }> {
+  const runsDir = path.join(projectRoot, RUNTIME_ROOT, "runs");
+  if (!(await exists(runsDir))) {
+    return { ok: true, details: `${RUNTIME_ROOT}/runs is absent; no archives to inspect yet` };
+  }
+  let entries: Array<{ name: string; isDirectory: () => boolean }>;
+  try {
+    entries = await fs.readdir(runsDir, { withFileTypes: true });
+  } catch (error) {
+    const reason = error instanceof Error ? error.message : String(error);
+    return { ok: false, details: `unable to inspect ${RUNTIME_ROOT}/runs (${reason})` };
+  }
+
+  const problems: string[] = [];
+  for (const entry of entries) {
+    if (!entry.isDirectory()) continue;
+    const runId = entry.name;
+    const runPath = path.join(runsDir, runId);
+    const relRunPath = `${RUNTIME_ROOT}/runs/${runId}`;
+    if (await exists(path.join(runPath, ".archive-in-progress"))) {
+      problems.push(`${relRunPath}/.archive-in-progress sentinel present`);
+    }
+
+    const manifestPath = path.join(runPath, "archive-manifest.json");
+    if (!(await exists(manifestPath))) {
+      problems.push(`${relRunPath} missing archive-manifest.json`);
+      continue;
+    }
+
+    let manifest: { snapshottedStateFiles?: unknown };
+    try {
+      manifest = JSON.parse(await fs.readFile(manifestPath, "utf8")) as { snapshottedStateFiles?: unknown };
+    } catch (error) {
+      const reason = error instanceof Error ? error.message : String(error);
+      problems.push(`${relRunPath}/archive-manifest.json unreadable (${reason})`);
+      continue;
+    }
+
+    const stateFiles = Array.isArray(manifest.snapshottedStateFiles)
+      ? manifest.snapshottedStateFiles.filter((value): value is string => typeof value === "string")
+      : [];
+    const stateDir = path.join(runPath, "state");
+    if (stateFiles.length > 0 && !(await exists(stateDir))) {
+      problems.push(`${relRunPath} manifest lists state snapshot files but state/ is missing`);
+      continue;
+    }
+    for (const stateFile of stateFiles) {
+      if (stateFile.endsWith("/")) continue;
+      if (!(await exists(path.join(stateDir, stateFile)))) {
+        problems.push(`${relRunPath}/state missing ${stateFile} listed in manifest`);
+      }
+    }
+  }
+
+  if (problems.length === 0) {
+    return { ok: true, details: "no partial archive sentinels or incomplete archive snapshots found" };
+  }
+  return {
+    ok: false,
+    details: `${problems.join("; ")}. Fix: inspect the archive directory, retry archive if the active run was restored, or recover/rollback artifacts and state from the snapshot before removing the sentinel.`
+  };
+}
+
 async function opencodePluginRuntimeShapeCheck(projectRoot: string): Promise<{ ok: boolean; details: string }> {
   const pluginPath = path.join(projectRoot, ".opencode/plugins/cclaw-plugin.mjs");
   if (!(await exists(pluginPath))) {
@@ -1534,6 +1597,12 @@ export async function doctorChecks(projectRoot: string, options: DoctorOptions =
     name: "runs:archive_root",
     ok: await exists(path.join(projectRoot, RUNTIME_ROOT, "runs")),
     details: `${RUNTIME_ROOT}/runs must exist for archived run snapshots`
+  });
+  const archiveIntegrity = await archiveIntegrityCheck(projectRoot);
+  checks.push({
+    name: "runs:archive_integrity",
+    ok: archiveIntegrity.ok,
+    details: archiveIntegrity.details
   });
 
   const delegation = await checkMandatoryDelegations(projectRoot, flowState.currentStage, {

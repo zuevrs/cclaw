@@ -85,7 +85,7 @@ export const REVIEW: StageSchemaInput = {
       { id: "review_layer1_spec_compliance", description: "Spec compliance check completed with per-criterion verdict." },
       { id: "review_layer2_security", description: "Security review completed." },
       { id: "review_layer_coverage_complete", description: "Layer coverage map in 07-review-army.json confirms spec/correctness/security/performance/architecture/external-safety tags were considered." },
-      { id: "review_criticals_resolved", description: "No unresolved critical blockers remain." },
+      { id: "review_criticals_resolved", description: "Normal APPROVED or APPROVED_WITH_CONCERNS path only: no unresolved critical blockers remain. BLOCKED routes use review_verdict_blocked instead." },
       { id: "review_army_json_valid", description: "07-review-army.json passes schema validation (validateReviewArmy)." },
       { id: "review_trace_matrix_clean", description: "Trace matrix has no orphaned criteria/tasks/test slices for the active run, and evidence cites a discovered real test command before ship handoff." }
     ],
@@ -94,7 +94,7 @@ export const REVIEW: StageSchemaInput = {
       "Artifact written to `.cclaw/artifacts/07-review-army.json`.",
       "Traceability matrix run recorded (no orphaned criteria/tasks/tests for enforced tracks).",
       "Layer 1 verdict captured with per-criterion pass/fail.",
-      "Layer 2 sections completed with findings.",
+      "Layer 2 sections completed across correctness, security, performance, architecture, and external-safety findings.",
       "Severity log includes critical/important/suggestion buckets.",
       "Explicit final verdict: APPROVED, APPROVED_WITH_CONCERNS, or BLOCKED.",
       "Fresh verification command discovery recorded, and the command cited in `review_trace_matrix_clean` evidence before ship handoff.",
@@ -110,8 +110,8 @@ export const REVIEW: StageSchemaInput = {
     exitCriteria: [
       "both layers completed",
       "all review sections evaluated",
-      "critical blockers resolved",
-      "ship readiness explicitly stated"
+      "critical blockers resolved for APPROVED paths, or BLOCKED routes through review_verdict_blocked",
+      "ship readiness or remediation route explicitly stated"
     ],
     platformNotes: [
       "When citing file locations in findings, use repo-relative forward-slash paths with a line number (`src/foo/bar.ts:42`). Avoid IDE-generated hyperlinks that embed absolute machine-specific paths.",
@@ -130,7 +130,7 @@ export const REVIEW: StageSchemaInput = {
     artifactValidation: [
       { section: "Upstream Handoff", required: false, validationRule: "Summarizes spec/plan/tdd decisions, constraints, open questions, and explicit drift before review verdicts." },
       { section: "Layer 1 Verdict", required: true, validationRule: "Per-criterion pass/fail with references." },
-      { section: "Layer 2 Findings", required: false, validationRule: "Each finding has severity, description, and resolution status. Security coverage must include either explicit security findings or `NO_CHANGE_ATTESTATION: <reason>` when no security-relevant changes were found." },
+      { section: "Layer 2 Findings", required: false, validationRule: "Each finding has severity, description, and resolution status across correctness, security, performance, architecture, and external-safety. Security coverage must include either explicit security findings or `NO_CHANGE_ATTESTATION: <reason>` when no security-relevant changes were found." },
       { section: "Review Findings Contract", required: true, validationRule: "Structured findings in 07-review-army.json include id/severity/confidence/fingerprint/reportedBy/status and source tags from {spec, correctness, security, performance, architecture, external-safety} with dedup reconciliation summary." },
       { section: "Review Readiness Snapshot", required: false, validationRule: "Optional compact summary: completed checks, delegation-log status, staleness signal, open critical blockers, and ship recommendation." },
       { section: "Completeness Snapshot", required: false, validationRule: "Optional compact coverage summary for AC coverage, task coverage, test-slice coverage, and adversarial-review status when triggered." },
@@ -155,7 +155,7 @@ export const REVIEW: StageSchemaInput = {
         stopGate: true
       },
       {
-        title: "Layer 2: Integrated Correctness / Performance / Architecture",
+        title: "Layer 2: Integrated Correctness / Security / Performance / Architecture / External-Safety",
         evaluationPoints: [
           "Logic errors and boundary violations",
           "Race conditions and concurrency issues",

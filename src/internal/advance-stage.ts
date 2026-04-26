@@ -530,8 +530,7 @@ async function hydrateReviewLoopEvidenceFromArtifact(
 
   const existing = evidenceByGate[gateId];
   if (typeof existing === "string" && existing.trim().length > 0) {
-    const existingIssue = validateGateEvidenceShape(stage, gateId, existing);
-    if (!existingIssue) return;
+    return;
   }
 
   const resolved = await resolveArtifactPath(stage, {
@@ -761,12 +760,18 @@ function parseStartFlowArgs(tokens: string[]): StartFlowArgs {
 
 async function buildValidationReport(
   projectRoot: string,
-  flowState: FlowState
+  flowState: FlowState,
+  options: { allowBlockedReviewRoute?: boolean } = {}
 ): Promise<InternalValidationReport> {
   const delegation = await checkMandatoryDelegations(projectRoot, flowState.currentStage);
   const gates = await verifyCurrentStageGateEvidence(projectRoot, flowState);
   const completedStages = verifyCompletedStagesGateClosure(flowState);
-  const ok = delegation.satisfied && gates.ok && gates.complete && completedStages.ok;
+  const blockedReviewRouteComplete = options.allowBlockedReviewRoute === true
+    && flowState.currentStage === "review"
+    && typeof flowState.guardEvidence.review_verdict_blocked === "string"
+    && flowState.guardEvidence.review_verdict_blocked.trim().length > 0
+    && !flowState.stageGateCatalog.review.passed.includes("review_criticals_resolved");
+  const ok = delegation.satisfied && gates.ok && (gates.complete || blockedReviewRouteComplete) && completedStages.ok;
 
   return {
     ok,
@@ -943,7 +948,11 @@ async function runAdvanceStage(
       : requiredGateIds;
   const selectedGateIdSet = new Set(selectedGateIds);
   const selectedTransitionGuards = selectedGateIds.filter((gateId) => transitionGuardIds.has(gateId));
-  const missingRequired = requiredGateIds.filter((gateId) => !selectedGateIdSet.has(gateId));
+  const blockedReviewRoute = args.stage === "review" && selectedGateIdSet.has("review_verdict_blocked");
+  const requiredForSelectedRoute = blockedReviewRoute
+    ? requiredGateIds.filter((gateId) => gateId !== "review_criticals_resolved")
+    : requiredGateIds;
+  const missingRequired = requiredForSelectedRoute.filter((gateId) => !selectedGateIdSet.has(gateId));
   if (missingRequired.length > 0) {
     io.stderr.write(
       `cclaw internal advance-stage: required gates not selected as passed: ${missingRequired.join(", ")}.\n`
@@ -1059,7 +1068,9 @@ async function runAdvanceStage(
     }
   };
 
-  const validation = await buildValidationReport(projectRoot, candidateState);
+  const validation = await buildValidationReport(projectRoot, candidateState, {
+    allowBlockedReviewRoute: blockedReviewRoute
+  });
   if (!validation.ok) {
     if (args.json) {
       io.stdout.write(`${JSON.stringify({
@@ -1131,9 +1142,11 @@ async function runAdvanceStage(
     satisfiedGuards,
     new Set(selectedTransitionGuards)
   );
-  const completedStages = flowState.completedStages.includes(args.stage)
-    ? [...flowState.completedStages]
-    : [...flowState.completedStages, args.stage];
+  const completedStages = blockedReviewRoute
+    ? flowState.completedStages.filter((stage) => stage !== args.stage)
+    : flowState.completedStages.includes(args.stage)
+      ? [...flowState.completedStages]
+      : [...flowState.completedStages, args.stage];
   const finalState: FlowState = {
     ...candidateState,
     completedStages,

@@ -11,6 +11,7 @@ import {
   readFlowState,
   writeFlowState
 } from "../../src/runs.js";
+import { doctorChecks } from "../../src/doctor.js";
 import { evaluateRetroGate } from "../../src/retro-gate.js";
 import { createTempProject } from "../helpers/index.js";
 
@@ -70,6 +71,27 @@ describe("runs system", () => {
     await expect(
       fs.stat(path.join(archived.archivePath, "archive-manifest.json"))
     ).resolves.toBeTruthy();
+  });
+
+  it("surfaces partial archive sentinels through doctor", async () => {
+    const root = await createTempProject("runs-partial-archive-doctor");
+    await ensureRunSystem(root);
+    const archiveDir = path.join(root, ".cclaw/runs/2026-04-26-partial");
+    await fs.mkdir(archiveDir, { recursive: true });
+    await fs.writeFile(
+      path.join(archiveDir, ".archive-in-progress"),
+      `${JSON.stringify({ archiveId: "2026-04-26-partial", startedAt: "2026-04-26T00:00:00Z" })}
+`,
+      "utf8"
+    );
+
+    const checks = await doctorChecks(root);
+    const archiveIntegrity = checks.find((check) => check.name === "runs:archive_integrity");
+    expect(archiveIntegrity).toBeDefined();
+    expect(archiveIntegrity?.ok).toBe(false);
+    expect(archiveIntegrity?.details).toContain(".archive-in-progress");
+    expect(archiveIntegrity?.details).toContain("retry archive");
+    expect(archiveIntegrity?.details).toContain("recover/rollback");
   });
 
   it("creates unique archive ids for same-day run names", async () => {

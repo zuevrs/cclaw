@@ -46,7 +46,7 @@ ${conversationLanguagePolicyMarkdown()}
    | **non-software** | legal text / docs / marketing copy / meeting notes / therapy-style conversation | Respond directly, do NOT open a stage, do NOT mutate flow state. |
    | **pure-question** | "how does X work?", "explain Y", "what are the trade-offs of Z?" | Answer directly, do NOT open a stage. |
    | **trivial** | typo, one-liner, rename, config tweak, copy change, version bump with zero behavior change | Fast-path: set track to \`quick\`, seed \`00-idea.md\`, and enter \`spec\`. Runtime quick never starts at design. |
-   | **software — bug fix with repro** | regression / hotfix / named symptom + repro steps | Fast-path: set track to \`quick\`, seed \`04-spec.md\` with the reproduction, enter \`tdd\` with a RED reproduction test first. |
+   | **software — bug fix with repro** | regression / hotfix / named symptom + repro steps | Fast-path: set track to \`quick\`, enter \`spec\`, and capture a reproduction contract first. TDD later writes the RED reproduction test from that contract. |
    | **software — medium** | additive feature following existing architecture | medium track (\`brainstorm → spec → plan → tdd → review → ship\`). |
    | **software — standard** | feature, refactor, migration, integration, architecture change | Full 8-stage flow starting at \`brainstorm\`. |
 
@@ -121,7 +121,7 @@ When called by another skill or subagent in machine mode, emit exactly one
 JSON envelope (no prose) and stop:
 
 \`\`\`json
-{"version":"1","kind":"stage-output","stage":"spec","payload":{"command":"/cc","track":"quick","action":"start_or_resume"},"emittedAt":"<ISO-8601>"}
+{"version":"1","kind":"stage-output","stage":"<currentStage>","payload":{"command":"/cc","track":"<track>","action":"start_or_resume"},"emittedAt":"<ISO-8601>"}
 \`\`\`
 
 Validate envelopes with:
@@ -165,7 +165,7 @@ ${conversationLanguagePolicyMarkdown()}
 
 ### Path A: \`/cc <prompt>\`
 
-1. **Task classification (Phase 0).** Decide whether the prompt is \`software-standard\`, \`software-trivial\`, \`software-bugfix\`, \`pure-question\`, or \`non-software\`. Non-software and pure-question exit immediately — answer directly, do not open a stage.
+1. **Task classification (Phase 0).** Decide whether the prompt is \`software-standard\`, \`software-trivial\`, \`software-bugfix\`, \`pure-question\`, or \`non-software\`. Non-software and pure-question exit immediately — answer directly, do not open a stage. Bugfixes with a clear repro still start on quick \`spec\`: capture the reproduction contract first, then TDD writes the RED reproduction test from that contract.
 2. **Seed shelf recall (Phase 0.5).** Scan \`${RUNTIME_ROOT}/seeds/SEED-*.md\` and match \`trigger_when\` tokens against the prompt text. Surface up to 3 matching seeds with file/title/action and ask whether to apply or ignore. When applied, add them to \`00-idea.md\` under \`Discovered context\`.
 3. **Origin-document discovery (Phase 1).** Scan for \`docs/prd/**\`, \`docs/rfcs/**\`, \`docs/adr/**\`, \`docs/design/**\`, \`specs/**\`, root-level \`PRD.md\` / \`SPEC.md\` / \`DESIGN.md\` / \`REQUIREMENTS.md\`. Summarize any hits in \`00-idea.md\` under \`Discovered context\`. Surface conflicts with the prompt before routing.
 4. **Stack detection (Phase 2).** Inspect \`package.json\` engines, \`pyproject.toml\`, \`go.mod\`, \`Cargo.toml\`, \`pom.xml\`, \`build.gradle*\`, \`Dockerfile\`, \`docker-compose*.yml\`, and CI configs. Record stack + versions on the \`Stack:\` line. Do not invent stack details.

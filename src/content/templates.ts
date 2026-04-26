@@ -147,6 +147,7 @@ ${SEED_SHELF_SECTION}
 | Reversibility cost? |  |  |
 
 ## Dream State Mapping
+- Deep/optional only; omit for compact scope.
 - CURRENT STATE:
 - THIS PLAN:
 - 12-MONTH IDEAL:
@@ -160,6 +161,7 @@ ${SEED_SHELF_SECTION}
 | C (optional) |  |  |  |  |  |  |
 
 ## Temporal Interrogation
+- Deep/optional only; omit for compact scope.
 | Time slice | Likely decision pressure | Lock now or defer? | Reason |
 |---|---|---|---|
 | HOUR 1 (foundations) |  |  |  |
@@ -174,12 +176,11 @@ ${SEED_SHELF_SECTION}
 - [ ] SCOPE REDUCTION — strip to the smallest useful wedge when risk/blast radius is too high.
 
 ## Mode-Specific Analysis
-- **Selected mode:**
-- **Analysis:**
-  - (SCOPE EXPANSION: 10-star opportunities, delight features)
-  - (SELECTIVE EXPANSION: hold-scope baseline, cherry-picked expansions)
-  - (HOLD SCOPE: approved slice with maximum rigor)
-  - (SCOPE REDUCTION: ruthless cuts, follow-up split)
+| Selected mode | Rationale | Depth |
+|---|---|---|
+|  |  | default / deep |
+
+> Default path: one selected-mode row plus rationale. Deep/high-risk scope may expand below with mode-specific analysis.
 
 ## Requirements (stable IDs)
 | ID | Requirement (observable outcome) | Priority | Source (origin doc / prompt line) |
@@ -312,12 +313,11 @@ ${SEED_SHELF_SECTION}
 | Layer 3 |  |  |
 
 ## Research Fleet Synthesis
-| Lens | Key findings | Design impact | Evidence |
+| Lens actually run | Key findings | Design impact | Evidence |
 |---|---|---|---|
-| stack-researcher |  |  |  |
-| features-researcher |  |  |  |
-| architecture-researcher |  |  |  |
-| pitfalls-researcher |  |  |  |
+| compact inline synthesis |  |  |  |
+
+> Default path: compact inline synthesis here. Deep/high-risk work may also write \`.cclaw/artifacts/02a-research.md\`.
 
 ## Architecture Boundaries
 | Component | Responsibility | Requirement Refs (R#) | Decision Refs (LD#hash) | Owner |
@@ -333,12 +333,14 @@ ${MARKDOWN_CODE_FENCE}
 ${MARKDOWN_CODE_FENCE}
 
 ## Data-Flow Shadow Paths
+- Standard/Deep add-on; omit when compact design does not need a shadow path.
 <!-- diagram: data-flow-shadow-paths -->
 | Path | Trigger | Fallback/Degrade behavior |
 |---|---|---|
 |  |  |  |
 
 ## Error Flow Diagram
+- Standard/Deep add-on; omit when the Failure Mode Table is sufficient.
 
 <!-- diagram: error-flow -->
 
@@ -347,6 +349,7 @@ ${MARKDOWN_CODE_FENCE}
 ${MARKDOWN_CODE_FENCE}
 
 ## State Machine Diagram
+- Deep add-on; omit for compact design.
 
 <!-- diagram: state-machine -->
 
@@ -355,6 +358,7 @@ ${MARKDOWN_CODE_FENCE}
 ${MARKDOWN_CODE_FENCE}
 
 ## Rollback Flowchart
+- Deep add-on; omit for compact design.
 
 <!-- diagram: rollback-flowchart -->
 
@@ -363,6 +367,7 @@ ${MARKDOWN_CODE_FENCE}
 ${MARKDOWN_CODE_FENCE}
 
 ## Deployment Sequence Diagram
+- Deep add-on; omit for compact design.
 
 <!-- diagram: deployment-sequence -->
 
@@ -443,6 +448,7 @@ ${MARKDOWN_CODE_FENCE}
 - 
 
 ## Parallelization Strategy
+- Standard/Deep add-on when multi-module; omit for compact sequential work.
 - Parallel lanes:
 - Conflict risks:
 
@@ -452,11 +458,13 @@ ${MARKDOWN_CODE_FENCE}
 |  |  |  |
 
 ## Interface Contracts
+- Standard/Deep add-on when module boundaries or APIs change; omit for compact local changes.
 | Module | Produces | Consumes |
 |---|---|---|
 |  |  |  |
 
 ## Unresolved Decisions
+- Standard/Deep add-on; use \`None\` for compact design with no unresolved decisions.
 | Decision | Missing info | Owner | Default |
 |---|---|---|---|
 |  |  |  |  |
@@ -727,7 +735,7 @@ Execution rule: complete and verify each batch before starting the next batch.
 ## Layer 2 Findings
 | ID | Severity | Category | Description | Status |
 |---|---|---|---|---|
-| R-1 | Critical/Important/Suggestion | correctness/security/performance/architecture |  | open/resolved |
+| R-1 | Critical/Important/Suggestion | correctness/security/performance/architecture/external-safety |  | open/resolved |
 - NO_CHANGE_ATTESTATION: <required when Category=security has no entries; explain why no security-relevant changes were detected>
 
 ## Incoming Feedback Queue

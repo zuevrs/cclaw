@@ -142,7 +142,7 @@ When orchestrated by another skill/subagent, emit exactly one JSON envelope and
 no narrative text:
 
 \`\`\`json
-{"version":"1","kind":"gate-result","stage":"review","payload":{"command":"/cc-next","decision":"resume_or_advance","nextStage":"ship"},"emittedAt":"<ISO-8601>"}
+{"version":"1","kind":"gate-result","stage":"<currentStage>","payload":{"command":"/cc-next","decision":"resume_or_advance","nextStage":"<nextStage>"},"emittedAt":"<ISO-8601>"}
 \`\`\`
 
 Validate envelopes with:

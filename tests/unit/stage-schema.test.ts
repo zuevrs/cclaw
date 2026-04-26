@@ -471,6 +471,74 @@ describe("stage schema and subagent alignment", () => {
     ]);
   });
 
+  it("scope right-sizing keeps required gates while marking deep workshop sections optional", () => {
+    const scope = stageSchema("scope");
+    const scopeTemplate = ARTIFACT_TEMPLATES["02-scope.md"];
+
+    expect(scope.requiredGates.filter((gate) => gate.tier === "required").map((gate) => gate.id)).toEqual([
+      "scope_mode_selected",
+      "scope_contract_written",
+      "scope_user_approved"
+    ]);
+    expect(scope.executionModel.checklist).toEqual(expect.arrayContaining([
+      expect.stringContaining("This is the default path"),
+      expect.stringContaining("ordinary path is a selected-mode row plus rationale")
+    ]));
+    expect(scope.artifactValidation.find((row) => row.section === "Dream State Mapping")?.validationRule)
+      .toContain("Omit for compact scope");
+    expect(scope.artifactValidation.find((row) => row.section === "Temporal Interrogation")?.validationRule)
+      .toContain("Omit for compact scope");
+    expect(scope.artifactValidation.find((row) => row.section === "Mode-Specific Analysis")?.validationRule)
+      .toContain("one selected-mode row with rationale");
+    expect(scopeTemplate).toContain("Deep/optional only; omit for compact scope");
+    expect(scopeTemplate).toContain("| Selected mode | Rationale | Depth |");
+  });
+
+  it("design right-sizing keeps gates and treats heavy diagrams as add-ons", () => {
+    const design = stageSchema("design");
+    const designTemplate = ARTIFACT_TEMPLATES["03-design.md"];
+
+    expect(design.requiredGates.filter((gate) => gate.tier === "required").map((gate) => gate.id)).toEqual([
+      "design_research_complete",
+      "design_architecture_locked",
+      "design_data_flow_mapped",
+      "design_failure_modes_mapped",
+      "design_test_and_perf_defined"
+    ]);
+    expect(design.requiredGates.find((gate) => gate.id === "design_research_complete")?.description)
+      .toContain("compact inline synthesis by default");
+    expect(design.requiredEvidence).toEqual(expect.arrayContaining([
+      expect.stringContaining("Research Fleet Synthesis is filled in `03-design.md`")
+    ]));
+    for (const section of [
+      "Data-Flow Shadow Paths",
+      "Error Flow Diagram",
+      "Parallelization Strategy",
+      "Interface Contracts",
+      "Unresolved Decisions"
+    ] as const) {
+      expect(design.artifactValidation.find((row) => row.section === section)?.validationRule)
+        .toMatch(/add-on/);
+    }
+    expect(designTemplate).toContain("compact inline synthesis here");
+    expect(designTemplate).toContain("Standard/Deep add-on; omit");
+  });
+
+  it("review contract aligns required layer coverage and blocked route gates", () => {
+    const review = stageSchema("review", "quick");
+    const requiredGateIds = review.requiredGates
+      .filter((gate) => gate.tier === "required")
+      .map((gate) => gate.id);
+
+    expect(requiredGateIds).toContain("review_layer_coverage_complete");
+    expect(review.requiredGates.find((gate) => gate.id === "review_criticals_resolved")?.description)
+      .toContain("BLOCKED routes use review_verdict_blocked instead");
+    expect(review.requiredEvidence).toEqual(expect.arrayContaining([
+      expect.stringContaining("correctness, security, performance, architecture, and external-safety")
+    ]));
+    expect(ARTIFACT_TEMPLATES["07-review.md"]).toContain("correctness/security/performance/architecture/external-safety");
+  });
+
   it("brainstorm and scope default to compact user-facing flow", () => {
     const brainstorm = stageSchema("brainstorm");
     const scope = stageSchema("scope");

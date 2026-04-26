@@ -2,6 +2,8 @@ import fs from "node:fs/promises";
 import path from "node:path";
 import { describe, expect, it } from "vitest";
 import { stageSkillFolder } from "../../src/content/skills.js";
+import { nextCommandContract } from "../../src/content/next-command.js";
+import { startCommandContract } from "../../src/content/start-command.js";
 import { SUBAGENT_CONTEXT_SKILLS } from "../../src/content/subagent-context-skills.js";
 import { initCclaw } from "../../src/install.js";
 import { FLOW_STAGES } from "../../src/types.js";
@@ -99,13 +101,39 @@ describe("flow command contracts", () => {
     expect(startCommand).not.toContain("update `flow-state.json` accordingly");
     expect(startCommand).toContain("quick track");
     expect(startSkill).toContain("`quick` track starts at `spec`");
-    expect(startCommand).toContain("\"stage\":\"spec\"");
+    expect(startCommand).toContain("\"stage\":\"<currentStage>\"");
   });
 
-  it("keeps trivial routing quick-only in the source templates", async () => {
-    const templatesSource = await fs.readFile(path.join(process.cwd(), "src/content/templates.ts"), "utf8");
-    expect(templatesSource).toContain("| trivial software fix | \\`/cc <idea>\\` (quick track) |");
-    expect(templatesSource).not.toContain("quick or medium track");
+  it("keeps trivial routing quick-only in generated meta skill", async () => {
+    const root = await createTempProject("quick-only-meta");
+    await initCclaw({ projectRoot: root });
+
+    const metaSkill = await fs.readFile(path.join(root, ".cclaw/skills/using-cclaw/SKILL.md"), "utf8");
+    expect(metaSkill).toContain("| trivial software fix | `/cc <idea>` (quick track) |");
+    expect(metaSkill).not.toContain("quick/medium track as recommended");
+    expect(metaSkill).not.toContain("quick or medium track");
+  });
+
+  it("keeps bugfix fast path spec-first and examples placeholder-shaped", async () => {
+    const root = await createTempProject("bugfix-spec-first");
+    await initCclaw({ projectRoot: root });
+
+    const startCommand = await fs.readFile(path.join(root, ".cclaw/commands/start.md"), "utf8");
+    const startSkill = await fs.readFile(path.join(root, ".cclaw/skills/flow-start/SKILL.md"), "utf8");
+    const nextCommand = await fs.readFile(path.join(root, ".cclaw/commands/next.md"), "utf8");
+
+    for (const content of [startCommand, startSkill]) {
+      expect(content).toMatch(/capture (?:a|the) reproduction contract first/);
+      expect(content).toContain("RED reproduction test from that contract");
+      expect(content).not.toContain("enter `tdd` with a RED reproduction test first");
+    }
+
+    expect(startCommandContract()).toContain('"stage":"<currentStage>"');
+    expect(startCommandContract()).toContain('"track":"<track>"');
+    expect(nextCommandContract()).toContain('"stage":"<currentStage>"');
+    expect(nextCommandContract()).toContain('"nextStage":"<nextStage>"');
+    expect(startCommand).not.toContain('"stage":"spec","payload":{"command":"/cc","track":"quick"');
+    expect(nextCommand).not.toContain('"stage":"review","payload":{"command":"/cc-next","decision":"resume_or_advance","nextStage":"ship"');
   });
 
   it("documents cclaw-cli as installer/support and node hooks as runtime", async () => {

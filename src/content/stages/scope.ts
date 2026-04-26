@@ -52,11 +52,11 @@ export const SCOPE: StageSchemaInput = {
   },
   executionModel: {
     checklist: [
-      "**Scope contract first** — read brainstorm, name the job-to-be-done, and draft the explicit in-scope/out-of-scope/deferred contract first. For simple/medium work, keep this compact; use dream/10-star/temporal/deep strategy sections only when risk, novelty, or user ambition justifies them.",
+      "**Scope contract first** — read brainstorm, name the job-to-be-done, draft the explicit in-scope/out-of-scope/deferred contract, select one mode, and write the rationale. This is the default path; use dream/10-star/temporal/deep strategy sections only when risk, novelty, or user ambition justifies them.",
       "**Premise and leverage check** — answer in the artifact: *Right problem? Direct path? What if nothing? Where can we leverage existing code? What is the reversibility cost?* Take a position; do not hedge.",
       "**Conditional 10-star boundary** — for deep/high-risk/product-strategy work, show what would make the product meaningfully better, then explicitly choose what ships now, what is deferred, and what is excluded without vague `later/for now` placeholders. Skip this for straightforward repair work and record `not needed: compact scope`.",
       "**Pick one of four gstack modes with the user** — SCOPE EXPANSION, SELECTIVE EXPANSION, HOLD SCOPE, or SCOPE REDUCTION. Recommend one, state why and what signal would change it, then STOP for the user's mode/scope approval before writing the final artifact.",
-      "**Run mode-specific analysis only to needed depth** — for simple/medium work, one selected mode plus the scope contract is enough. For deep/high-risk work, match the analysis to the chosen mode: SCOPE EXPANSION enumerates 10x opportunities + delight features; SELECTIVE EXPANSION lists baseline + cherry-picked additions; HOLD SCOPE proves rigor on the current slice; SCOPE REDUCTION names the smallest useful wedge.",
+      "**Run mode-specific analysis only to needed depth** — ordinary path is a selected-mode row plus rationale tied to the scope contract. For deep/high-risk work, expand the analysis to match the chosen mode: SCOPE EXPANSION enumerates 10x opportunities + delight features; SELECTIVE EXPANSION lists baseline + cherry-picked additions; HOLD SCOPE proves rigor on the current slice; SCOPE REDUCTION names the smallest useful wedge.",
       "**Compare implementation alternatives** — include minimum viable, product-grade, and ideal architecture options with effort (S/M/L/XL), risk (Low/Med/High), pros, cons, and reuses. Recommend one and tie it to mode.",
       "**Run outside voice before final approval** — for simple/low-risk scope, record one concise adversarial self-check row; for complex/high-risk/configured scope, iterate until threshold. Record the loop summary in `## Scope Outside Voice Loop`, but do not treat it as user approval.",
       "**Ask only one decision-changing question** — if the user rejects the contract but is unsure, offer 3-4 concrete scope moves instead of open-ended interrogation.",
@@ -157,7 +157,7 @@ export const SCOPE: StageSchemaInput = {
       { section: "Locked Decisions (LD#hash)", required: false, validationRule: "List of stable locked decisions with unique `LD#<sha8>` anchors. Each anchor is derived from the normalized Decision cell and is referenced downstream for cross-stage traceability." },
       { section: "Implementation Alternatives", required: false, validationRule: "2-3 options with Name, Summary, Effort, Risk, Pros, Cons, and Reuses. Must include minimal viable and ideal architecture options." },
       { section: "Scope Mode", required: true, validationRule: "Must state selected mode and rationale with default heuristic justification." },
-      { section: "Mode-Specific Analysis", required: false, validationRule: "Deep/complex scope only: document the analysis matching the selected mode. Default path may record a concise mode rationale instead." },
+      { section: "Mode-Specific Analysis", required: false, validationRule: "Default path: one selected-mode row with rationale. Deep/complex scope only: document the expanded analysis matching the selected mode." },
       { section: "In Scope / Out of Scope", required: true, validationRule: "Two separate explicit lists. Canonical form is one `## In Scope / Out of Scope` section with `### In Scope` and `### Out of Scope`; legacy split `## In Scope` and `## Out of Scope` headings are accepted. Out-of-scope must not be empty." },
       { section: "Discretion Areas", required: false, validationRule: "Explicit list of implementer decision zones, or 'None' if scope is fully locked." },
       { section: "Deferred Items", required: false, validationRule: "Each item has one-line rationale. If empty, state 'None' explicitly." },
@@ -166,8 +166,8 @@ export const SCOPE: StageSchemaInput = {
       { section: "Scope Outside Voice Loop", required: false, validationRule: `Must record iterations, quality score per iteration, stop reason, and unresolved concerns. Enforce ${reviewLoopPolicySummary("scope")}` },
       { section: "Completion Dashboard", required: true, validationRule: "Lists per-review-section status, count of critical/open gaps, resolved decisions, and unresolved decisions (or 'None')." },
       { section: "Scope Summary", required: true, validationRule: "Compact recap of the locked scope. Must name the selected mode using one of the canonical tokens (`SCOPE EXPANSION`, `SELECTIVE EXPANSION`, `HOLD SCOPE`, `SCOPE REDUCTION`) and record the track-aware next-stage handoff (`design` for standard, `spec` for medium); the linter checks structure, not English wording." },
-      { section: "Dream State Mapping", required: false, validationRule: "If present (complex projects): CURRENT STATE, THIS PLAN, 12-MONTH IDEAL, and alignment verdict." },
-      { section: "Temporal Interrogation", required: false, validationRule: "If present (complex projects): timeline simulation table with decision pressures and lock-now vs defer verdicts." }
+      { section: "Dream State Mapping", required: false, validationRule: "Deep/optional only: CURRENT STATE, THIS PLAN, 12-MONTH IDEAL, and alignment verdict. Omit for compact scope." },
+      { section: "Temporal Interrogation", required: false, validationRule: "Deep/optional only: timeline simulation table with decision pressures and lock-now vs defer verdicts. Omit for compact scope." }
     ]
   },
   reviewLens: {
