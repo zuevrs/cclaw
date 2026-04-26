@@ -335,6 +335,58 @@ describe("stage schema and subagent alignment", () => {
     expect(skill).toContain("track-aware next-stage handoff");
   });
 
+  it("brainstorm skill teaches the calibrated Self-Review Notes format, not the legacy `- None.` shortcut", () => {
+    const brainstorm = stageSchema("brainstorm");
+    const skill = stageSkillMarkdown("brainstorm");
+
+    const selfReviewRule = brainstorm.artifactValidation.find(
+      (row) => row.section === "Self-Review Notes"
+    );
+    expect(selfReviewRule).toBeDefined();
+    expect(selfReviewRule?.validationRule).toContain("calibrated review format");
+    expect(selfReviewRule?.validationRule).toContain("`- Status: Approved`");
+    expect(selfReviewRule?.validationRule).toContain("`- Patches applied:`");
+    expect(selfReviewRule?.validationRule).toContain("`- Remaining concerns:`");
+    expect(selfReviewRule?.validationRule).not.toMatch(/\(or `- None\.`\)/);
+
+    const checklistSelfReview = brainstorm.executionModel.checklist.find((line) =>
+      line.startsWith("**Self-review before user approval**")
+    );
+    expect(checklistSelfReview).toBeDefined();
+    expect(checklistSelfReview).toContain("calibrated review format");
+    expect(checklistSelfReview).toContain("`- Status: Approved`");
+    expect(checklistSelfReview).toContain("`- Patches applied:`");
+    expect(checklistSelfReview).toContain("`- Remaining concerns:`");
+    expect(checklistSelfReview).not.toMatch(/\(or `- None\.`\)/);
+
+    expect(skill).toContain("calibrated review format");
+    expect(skill).toContain("`- Status: Approved`");
+    expect(skill).toContain("`- Patches applied:`");
+    expect(skill).toContain("`- Remaining concerns:`");
+    expect(skill).not.toMatch(/Self-Review Notes`?\s*\(or\s*`- None\.`\)/);
+  });
+
+  it("every stage skill points the agent at the canonical artifact template before drafting", () => {
+    const expectedTemplates: Record<FlowStage, string> = {
+      brainstorm: ".cclaw/templates/01-brainstorm.md",
+      scope: ".cclaw/templates/02-scope.md",
+      design: ".cclaw/templates/03-design.md",
+      spec: ".cclaw/templates/04-spec.md",
+      plan: ".cclaw/templates/05-plan.md",
+      tdd: ".cclaw/templates/06-tdd.md",
+      review: ".cclaw/templates/07-review.md",
+      ship: ".cclaw/templates/08-ship.md"
+    };
+
+    for (const stage of FLOW_STAGES) {
+      const skill = stageSkillMarkdown(stage);
+      expect(skill).toContain("Read the canonical artifact template");
+      expect(skill).toContain(expectedTemplates[stage]);
+      expect(skill).toContain("per-row tables");
+      expect(skill).toContain("calibrated review block");
+    }
+  });
+
   it("next command skill shows track-aware critical path", () => {
     const skill = nextCommandSkillMarkdown();
 
