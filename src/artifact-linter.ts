@@ -731,19 +731,42 @@ function validateApproachesTaxonomy(sectionBody: string): {
 }
 
 function validateCalibratedSelfReview(sectionBody: string): { ok: boolean; details: string } {
-  const hasStatus = /^\s*-\s*Status:\s*(?:Approved|Issues Found)\s*$/imu.test(sectionBody);
-  const hasPatches = /^\s*-\s*Patches applied:\s*$/imu.test(sectionBody);
-  const hasConcerns = /^\s*-\s*Remaining concerns:\s*$/imu.test(sectionBody);
-  if (!hasStatus || !hasPatches || !hasConcerns) {
+  const statusLineMatch = /^\s*-\s*Status:\s*(.*)$/imu.exec(sectionBody);
+  const statusValue = statusLineMatch ? statusLineMatch[1].trim() : "";
+  const mentionsApproved = /\bApproved\b/iu.test(statusValue);
+  const mentionsIssuesFound = /\bIssues Found\b/iu.test(statusValue);
+  const statusPickedExactlyOne =
+    statusLineMatch !== null && (mentionsApproved !== mentionsIssuesFound);
+
+  const hasPatchesHeader = /^\s*-\s*Patches applied:/imu.test(sectionBody);
+  const hasConcernsHeader = /^\s*-\s*Remaining concerns:/imu.test(sectionBody);
+
+  if (statusPickedExactlyOne && hasPatchesHeader && hasConcernsHeader) {
     return {
-      ok: false,
-      details:
-        "Self-Review Notes must use the calibrated review prompt format: `- Status: Approved | Issues Found`, `- Patches applied:`, and `- Remaining concerns:`."
+      ok: true,
+      details: "Self-Review Notes use the calibrated review prompt format."
     };
   }
+
+  const problems: string[] = [];
+  if (!statusLineMatch) {
+    problems.push("missing `- Status:` line");
+  } else if (!mentionsApproved && !mentionsIssuesFound) {
+    problems.push("`- Status:` must include `Approved` or `Issues Found`");
+  } else if (mentionsApproved && mentionsIssuesFound) {
+    problems.push(
+      "`- Status:` must pick exactly one of `Approved` or `Issues Found` (the placeholder `Approved | Issues Found` is not a decision)"
+    );
+  }
+  if (!hasPatchesHeader) problems.push("missing `- Patches applied:` line");
+  if (!hasConcernsHeader) problems.push("missing `- Remaining concerns:` line");
+
   return {
-    ok: true,
-    details: "Self-Review Notes use the calibrated review prompt format."
+    ok: false,
+    details:
+      "Self-Review Notes must use the calibrated review prompt format: `- Status: Approved` (or `Issues Found`), `- Patches applied:` (inline note or sub-bullets), and `- Remaining concerns:` (inline note or sub-bullets). Issues: " +
+      problems.join("; ") +
+      "."
   };
 }
 
