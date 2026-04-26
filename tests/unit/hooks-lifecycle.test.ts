@@ -354,6 +354,9 @@ fs.appendFileSync(${JSON.stringify(callsPath)}, process.argv.slice(2).join(" ") 
   it("opencode plugin source references node-only hook names", () => {
     const plugin = opencodePluginJs();
     expect(plugin).toContain("run-hook.mjs");
+    expect(plugin).toContain("resolveNodeExecutable()");
+    expect(plugin).toContain('return "node";');
+    expect(plugin).not.toContain("spawn(process.execPath, [hookRuntimePath");
     expect(plugin).toContain('runHookScript("pre-compact"');
     expect(plugin).toContain('runHookScript("prompt-guard"');
     expect(plugin).toContain('runHookScript("workflow-guard"');
