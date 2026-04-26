@@ -908,6 +908,41 @@ async function buildKnowledgeDigest(root, currentStage, prereadRaw) {
   };
 }
 
+async function readStageSupportContext(root, currentStage) {
+  const stage = typeof currentStage === "string" ? currentStage : "";
+  const validStages = new Set(["brainstorm", "scope", "design", "spec", "plan", "tdd", "review", "ship"]);
+  if (!validStages.has(stage)) return [];
+
+  const parts = [];
+  const contractPath = path.join(root, RUNTIME_ROOT, "templates", "state-contracts", stage + ".json");
+  const contract = (await readTextFile(contractPath, "")).trim();
+  if (contract.length > 0) {
+    parts.push(
+      "Current stage state contract (read before drafting or editing the stage artifact):\\n" +
+        contract
+    );
+  }
+
+  const reviewPromptByStage = {
+    brainstorm: "brainstorm-self-review.md",
+    scope: "scope-ceo-review.md",
+    design: "design-eng-review.md"
+  };
+  const promptName = reviewPromptByStage[stage];
+  if (typeof promptName === "string") {
+    const promptPath = path.join(root, RUNTIME_ROOT, "skills", "review-prompts", promptName);
+    const prompt = (await readTextFile(promptPath, "")).trim();
+    if (prompt.length > 0) {
+      parts.push(
+        "Current stage calibrated review prompt (use before asking for approval/completion):\\n" +
+          prompt
+      );
+    }
+  }
+
+  return parts;
+}
+
 async function handleSessionStart(runtime) {
   const state = await readFlowState(runtime.root);
   const stateDir = path.join(runtime.root, RUNTIME_ROOT, "state");
@@ -1013,6 +1048,7 @@ async function handleSessionStart(runtime) {
   const staleStages = toObject(state.raw.staleStages) || {};
   const staleStageNames = Object.keys(staleStages);
   const metaContent = (await readTextFile(metaSkillFile, "")).trim();
+  const stageSupportContext = await readStageSupportContext(runtime.root, state.currentStage);
 
   const parts = [
     "cclaw loaded. Flow: stage=" +
@@ -1045,6 +1081,9 @@ async function handleSessionStart(runtime) {
       "Knowledge digest (top relevant entries):\\n" +
         knowledge.digestLines.join("\\n")
     );
+  }
+  if (stageSupportContext.length > 0) {
+    parts.push(...stageSupportContext);
   }
   if (ironLawLines.length > 0) {
     parts.push("Iron laws (enforced policy highlights):\\n" + ironLawLines.join("\\n"));

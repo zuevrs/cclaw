@@ -5,10 +5,11 @@ import process from "node:process";
 import type { Writable } from "node:stream";
 import { resolveArtifactPath } from "../artifact-paths.js";
 import { RUNTIME_ROOT, SHIP_FINALIZATION_MODES } from "../constants.js";
-import { stageSchema } from "../content/stage-schema.js";
+import { stageAutoSubagentDispatch, stageSchema } from "../content/stage-schema.js";
 import {
   appendDelegation,
-  checkMandatoryDelegations
+  checkMandatoryDelegations,
+  readDelegationLedger
 } from "../delegation.js";
 import {
   verifyCompletedStagesGateClosure,
@@ -1039,6 +1040,7 @@ async function runAdvanceStage(
       nextGuardEvidence[gateId] = provided.trim();
     }
   }
+  await ensureProactiveDelegationTrace(projectRoot, args.stage);
 
   const nextStageCatalog: StageGateState = {
     required: [...catalog.required],
@@ -1232,6 +1234,129 @@ function firstIncompleteStageForTrack(track: FlowTrack, completedStages: FlowSta
   return stages.find((stage) => !completed.has(stage)) ?? stages[stages.length - 1] ?? "brainstorm";
 }
 
+async function ensureProactiveDelegationTrace(projectRoot: string, stage: FlowStage): Promise<void> {
+  const proactiveRules = stageAutoSubagentDispatch(stage).filter((rule) => rule.mode === "proactive");
+  if (proactiveRules.length === 0) return;
+
+  const ledger = await readDelegationLedger(projectRoot);
+  const currentRunEntries = ledger.entries.filter((entry) => entry.runId === ledger.runId);
+  for (const rule of proactiveRules) {
+    const alreadyRecorded = currentRunEntries.some(
+      (entry) => entry.stage === stage && entry.agent === rule.agent && entry.mode === "proactive"
+    );
+    if (alreadyRecorded) continue;
+    await appendDelegation(projectRoot, {
+      stage,
+      agent: rule.agent,
+      mode: "proactive",
+      status: "waived",
+      waiverReason: "auto-recorded: proactive delegation was not explicitly triggered before stage completion",
+      conditionTrigger: rule.when,
+      skill: rule.skill,
+      ts: new Date().toISOString()
+    });
+  }
+}
+
+async function pathExists(projectRoot: string, relPath: string): Promise<boolean> {
+  try {
+    await fs.stat(path.join(projectRoot, relPath));
+    return true;
+  } catch {
+    return false;
+  }
+}
+
+async function listExistingFiles(projectRoot: string, relPaths: string[]): Promise<string[]> {
+  const matches: string[] = [];
+  for (const relPath of relPaths) {
+    try {
+      const stat = await fs.stat(path.join(projectRoot, relPath));
+      if (stat.isFile()) matches.push(relPath);
+    } catch {
+      // continue
+    }
+  }
+  return matches;
+}
+
+async function listFilesUnder(projectRoot: string, relDir: string, limit = 20): Promise<string[]> {
+  const root = path.join(projectRoot, relDir);
+  const out: string[] = [];
+  async function walk(absDir: string): Promise<void> {
+    if (out.length >= limit) return;
+    let entries: Array<{ name: string; isDirectory: () => boolean; isFile: () => boolean }>;
+    try {
+      entries = await fs.readdir(absDir, { withFileTypes: true });
+    } catch {
+      return;
+    }
+    for (const entry of entries) {
+      if (out.length >= limit) return;
+      if (entry.name.startsWith(".")) continue;
+      const abs = path.join(absDir, entry.name);
+      if (entry.isDirectory()) {
+        await walk(abs);
+      } else if (entry.isFile()) {
+        out.push(path.relative(projectRoot, abs).split(path.sep).join("/"));
+      }
+    }
+  }
+  await walk(root);
+  return out;
+}
+
+async function discoverStartFlowContext(projectRoot: string): Promise<string[]> {
+  const lines: string[] = [];
+
+  const seedFiles = (await listFilesUnder(projectRoot, path.join(RUNTIME_ROOT, "seeds"), 10))
+    .filter((relPath) => /^\.cclaw\/seeds\/SEED-.*\.md$/u.test(relPath));
+  lines.push(
+    seedFiles.length > 0
+      ? `- Seed shelf scanned: ${seedFiles.join(", ")}.`
+      : "- Seed shelf scanned: no `.cclaw/seeds/SEED-*.md` files found."
+  );
+
+  const originDirs = ["docs/prd", "docs/rfcs", "docs/adr", "docs/design", "specs", "prd", "rfc", "design"];
+  const originRootFiles = ["PRD.md", "SPEC.md", "DESIGN.md", "REQUIREMENTS.md", "ROADMAP.md"];
+  const originFiles = [
+    ...(await listExistingFiles(projectRoot, originRootFiles)),
+    ...(await Promise.all(originDirs.map((dir) => listFilesUnder(projectRoot, dir, 6)))).flat()
+  ].slice(0, 20);
+  lines.push(
+    originFiles.length > 0
+      ? `- Origin docs scanned: found ${originFiles.join(", ")}.`
+      : "- Origin docs scanned: no PRD/RFC/ADR/design/spec files found in configured locations."
+  );
+
+  const stackMarkers = await listExistingFiles(projectRoot, [
+    "package.json",
+    "pyproject.toml",
+    "requirements.txt",
+    "requirements-dev.txt",
+    ".python-version",
+    "go.mod",
+    "Cargo.toml",
+    "pom.xml",
+    "build.gradle",
+    "build.gradle.kts",
+    "Dockerfile",
+    "docker-compose.yml",
+    "docker-compose.yaml",
+    ".gitlab-ci.yml"
+  ]);
+  if (await pathExists(projectRoot, ".github/workflows")) {
+    stackMarkers.push(".github/workflows/");
+  }
+  lines.push(
+    stackMarkers.length > 0
+      ? `- Stack markers scanned: found ${stackMarkers.join(", ")}.`
+      : "- Stack markers scanned: no root stack markers found."
+  );
+
+  return lines;
+}
+
 async function appendIdeaArtifact(projectRoot: string, args: StartFlowArgs, previous?: FlowState): Promise<void> {
   const artifactPath = path.join(projectRoot, RUNTIME_ROOT, "artifacts", "00-idea.md");
   await fs.mkdir(path.dirname(artifactPath), { recursive: true });
@@ -1248,6 +1373,7 @@ async function appendIdeaArtifact(projectRoot: string, args: StartFlowArgs, prev
     await fs.appendFile(artifactPath, entry, "utf8");
     return;
   }
+  const discoveredContext = await discoverStartFlowContext(projectRoot);
   const body = [
     "# Idea",
     `Class: ${args.className || "unspecified"}`,
@@ -1258,7 +1384,7 @@ async function appendIdeaArtifact(projectRoot: string, args: StartFlowArgs, prev
     args.prompt || "(not provided)",
     "",
     "## Discovered context",
-    "- None recorded by managed start-flow."
+    ...discoveredContext
   ].join("\n") + "\n";
   await fs.writeFile(artifactPath, body, "utf8");
 }

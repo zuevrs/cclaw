@@ -678,12 +678,15 @@ function validateApproachesTaxonomy(sectionBody: string): {
   const roleIndex = columnIndex(header, "role");
   const upsideIndex = columnIndex(header, "upside");
   if (roleIndex < 0 || upsideIndex < 0) {
+    const firstColumnTokens = rows.map((row) => normalizeTableToken(row[0] ?? ""));
+    const appearsTransposed = firstColumnTokens.includes("role") || firstColumnTokens.includes("upside");
     return {
       rowCount: rows.length,
       roleUpsideOk: false,
       challengerOk: false,
-      details:
-        "Approaches table must include canonical `Role` and `Upside` columns (Role: baseline | challenger | wild-card; Upside: low | modest | high | higher)."
+      details: appearsTransposed
+        ? "Approaches table appears transposed: `Role`/`Upside` are rows, but must be columns. Use `| Approach | Role | Upside | ... |` with one approach per row."
+        : "Approaches table must include canonical `Role` and `Upside` columns (Role: baseline | challenger | wild-card; Upside: low | modest | high | higher)."
     };
   }
 
@@ -724,6 +727,23 @@ function validateApproachesTaxonomy(sectionBody: string): {
     details: challengerOk
       ? "Approaches table uses canonical Role/Upside values and exactly one high/higher-upside challenger."
       : `Approaches table must include exactly one challenger row with Upside high or higher. Found ${challengerRows} challenger row(s).`
+  };
+}
+
+function validateCalibratedSelfReview(sectionBody: string): { ok: boolean; details: string } {
+  const hasStatus = /^\s*-\s*Status:\s*(?:Approved|Issues Found)\s*$/imu.test(sectionBody);
+  const hasPatches = /^\s*-\s*Patches applied:\s*$/imu.test(sectionBody);
+  const hasConcerns = /^\s*-\s*Remaining concerns:\s*$/imu.test(sectionBody);
+  if (!hasStatus || !hasPatches || !hasConcerns) {
+    return {
+      ok: false,
+      details:
+        "Self-Review Notes must use the calibrated review prompt format: `- Status: Approved | Issues Found`, `- Patches applied:`, and `- Remaining concerns:`."
+    };
+  }
+  return {
+    ok: true,
+    details: "Self-Review Notes use the calibrated review prompt format."
   };
 }
 
@@ -2026,6 +2046,18 @@ export async function lintArtifact(
             : "Short-circuit section is missing explicit scope handoff guidance."
         });
       }
+    }
+
+    const selfReviewBody = sectionBodyByName(sections, "Self-Review Notes");
+    if (selfReviewBody !== null) {
+      const selfReview = validateCalibratedSelfReview(selfReviewBody);
+      findings.push({
+        section: "Calibrated Self-Review Format",
+        required: true,
+        rule: "When Self-Review Notes are present, they must use the calibrated review prompt output shape.",
+        found: selfReview.ok,
+        details: selfReview.details
+      });
     }
   }
 

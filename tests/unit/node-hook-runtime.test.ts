@@ -61,6 +61,8 @@ describe("node hook runtime", () => {
     const root = await createTempProject("node-hook-session-start");
     await fs.mkdir(path.join(root, ".cclaw/state"), { recursive: true });
     await fs.mkdir(path.join(root, ".cclaw/skills/using-cclaw"), { recursive: true });
+    await fs.mkdir(path.join(root, ".cclaw/templates/state-contracts"), { recursive: true });
+    await fs.mkdir(path.join(root, ".cclaw/skills/review-prompts"), { recursive: true });
     await fs.writeFile(path.join(root, ".cclaw/state/flow-state.json"), JSON.stringify({
       currentStage: "review",
       activeRunId: "run-node",
@@ -86,6 +88,11 @@ describe("node hook runtime", () => {
       })
     ].join("\n"), "utf8");
     await fs.writeFile(path.join(root, ".cclaw/skills/using-cclaw/SKILL.md"), "# Using cclaw\n", "utf8");
+    await fs.writeFile(
+      path.join(root, ".cclaw/templates/state-contracts/review.json"),
+      JSON.stringify({ stage: "review", requiredTopLevelFields: ["stage", "verdict"] }, null, 2),
+      "utf8"
+    );
 
     const result = await runNodeHook(root, "session-start", nodeHookRuntimeScript());
     expect(result.code).toBe(0);
@@ -101,6 +108,8 @@ describe("node hook runtime", () => {
     expect(context).toContain("run=run-node");
     expect(context).toContain("Knowledge digest");
     expect(context).toContain("split into focused diffs");
+    expect(context).toContain("Current stage state contract");
+    expect(context).toContain('"stage": "review"');
     await expect(fs.stat(path.join(root, ".cclaw/state/knowledge-digest.md"))).rejects.toBeDefined();
   });
 
