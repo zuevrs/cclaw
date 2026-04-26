@@ -367,7 +367,7 @@ const REQUIRED_ARTIFACT_SECTIONS: Record<FlowStage, string[]> = {
     "Deployment & Rollout",
     "Completion Dashboard"
   ],
-  spec: ["Acceptance Criteria", "Edge Cases", "Assumptions Before Finalization", "Testability Map", "Approval"],
+  spec: ["Acceptance Criteria", "Edge Cases", "Assumptions Before Finalization", "Acceptance Mapping", "Approval"],
   plan: ["Task List", "Dependency Batches", "Acceptance Mapping", "Execution Posture", "WAIT_FOR_CONFIRM"],
   tdd: ["Test Discovery", "System-Wide Impact Check", "RED Evidence", "GREEN Evidence", "REFACTOR Notes", "Traceability", "Verification Ladder"],
   review: ["Layer 1 Verdict", "Review Findings Contract", "Severity Summary", "Final Verdict"],
@@ -702,11 +702,6 @@ export function stageRecommendedGateIds(stage: FlowStage, track: FlowTrack = "st
   return stageSchema(stage, track).requiredGates
     .filter((gate) => gate.tier === "recommended")
     .map((gate) => gate.id);
-}
-
-export function nextCclawCommand(stage: FlowStage): string {
-  const next = stageSchema(stage).next;
-  return next === "done" ? "none" : `/cc-${next}`;
 }
 
 export function buildTransitionRules(): TransitionRule[] {

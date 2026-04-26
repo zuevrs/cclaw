@@ -95,7 +95,7 @@ ${conversationLanguagePolicyMarkdown()}
 12. Load the **first-stage skill for the chosen track** and its command file:
     - quick → \`.cclaw/skills/specification-authoring/SKILL.md\`
     - medium/standard → \`.cclaw/skills/brainstorming/SKILL.md\`
-    - trivial fast-path → design or spec skill per Phase 0 decision.
+    - trivial fast-path → spec skill per Phase 0 decision.
 13. Execute that stage with the prompt + Phase 1/Phase 2 + seed context as initial input.
 
 ### Reclassification on discovery

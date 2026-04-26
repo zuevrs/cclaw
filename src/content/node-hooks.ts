@@ -294,15 +294,6 @@ async function writeJsonFile(filePath, value) {
   });
 }
 
-async function fileExists(filePath) {
-  try {
-    await fs.stat(filePath);
-    return true;
-  } catch {
-    return false;
-  }
-}
-
 async function readTextFile(filePath, fallback = "") {
   try {
     return await fs.readFile(filePath, "utf8");
@@ -654,7 +645,7 @@ function isCodeLikePath(rawPath) {
 }
 
 function isMutatingTool(toolLower) {
-  return /^(write|edit|multiedit|multi_edit|delete|applypatch|apply_patch)$/u.test(toolLower);
+  return /^(write|edit|multiedit|multi_edit|delete|applypatch|apply_patch|notebookedit|notebook_edit)$/u.test(toolLower);
 }
 
 function isExecutionOrMutatingTool(toolLower) {
@@ -900,8 +891,6 @@ async function buildKnowledgeDigest(root, currentStage, prereadRaw) {
       const action = typeof row.action === "string" ? row.action : "action";
       return "- [" + confidence + " • " + stage + " • " + domain + "] " + trigger + " -> " + action;
     });
-  const body =
-    relevant.length > 0 ? relevant.join("\\n") : "(no matching entries for current stage)";
   return {
     digestLines: relevant,
     learningsCount
@@ -1193,7 +1182,7 @@ async function handlePromptGuard(runtime) {
   const payloadLower = toLower(payloadText);
   const reasons = [];
 
-  if (/^(write|edit|multiedit|multi_edit|delete|applypatch|runcommand|shell|terminal|execcommand)$/u.test(toolLower)) {
+  if (/^(write|edit|multiedit|multi_edit|delete|applypatch|notebookedit|runcommand|shell|terminal|execcommand)$/u.test(toolLower)) {
     // Artifacts, runs, and knowledge writes are part of normal stage flow.
     // Guard only managed internals that should be mutated via installer/CLI.
     if (/\\.cclaw\\/(state|hooks|skills|commands|agents)/u.test(payloadLower)) {

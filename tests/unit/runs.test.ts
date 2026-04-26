@@ -729,6 +729,27 @@ describe("runs system", () => {
     expect(stored.completedStages).toEqual(["brainstorm"]);
   });
 
+
+  it("rejects cross-track transitions even if globally valid in another track", async () => {
+    const root = await createTempProject("runs-transition-cross-track-illegal");
+    await ensureRunSystem(root);
+    await writeFlowState(
+      root,
+      {
+        ...createInitialFlowState("active", "quick"),
+        currentStage: "brainstorm"
+      },
+      { allowReset: true }
+    );
+
+    await expect(
+      writeFlowState(root, {
+        ...createInitialFlowState("active", "quick"),
+        currentStage: "spec"
+      })
+    ).rejects.toBeInstanceOf(InvalidStageTransitionError);
+  });
+
   it("accepts review -> tdd rewind transition via writeFlowState", async () => {
     const root = await createTempProject("runs-transition-review-rewind");
     await ensureRunSystem(root);

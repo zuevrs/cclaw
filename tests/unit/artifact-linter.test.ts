@@ -447,6 +447,57 @@ describe("artifact linter heuristics", () => {
     expect(approval?.found).toBe(false);
   });
 
+  it("fails brainstorm when Selected Direction omits the next-stage handoff token", async () => {
+    const root = await createTempProject("artifact-lint-no-handoff");
+    await writeRuntimeArtifact(root, "01-brainstorm.md", `# Brainstorm Artifact
+
+## Context
+- Project state: monorepo with CI
+
+## Problem
+- What we're solving: release regressions
+
+## Clarifying Questions
+| # | Question | Answer | Decision impact |
+|---|---|---|---|
+| 1 | Block or warn? | Block | hard gate |
+
+## Approach Tier
+- Tier: Standard
+- Why this tier: changes local + CI release path together.
+
+## Approaches
+| Approach | Role | Upside | Architecture | Trade-offs | Recommendation |
+|---|---|---|---|---|---|
+| A | baseline | modest | script-only checks | fast | |
+| B | challenger | higher | reusable module | balanced | recommended |
+
+## Approach Reaction
+- Closest option: B
+- Concerns: keep rollout low-risk.
+- What changed after reaction: recommendation narrowed to module-only surface.
+
+## Selected Direction
+- Approach: B
+- Rationale: user reaction confirmed balanced path with controlled rollout
+- Approval: approved by user
+
+## Design
+- Architecture: module
+
+## Assumptions and Open Questions
+- None
+`);
+
+    const result = await lintArtifact(root, "brainstorm");
+    const handoff = result.findings.find(
+      (finding) => finding.section === "Direction Next-Stage Handoff"
+    );
+    expect(handoff?.required).toBe(true);
+    expect(handoff?.found).toBe(false);
+    expect(handoff?.details ?? "").toMatch(/scope|spec/iu);
+  });
+
   it("fails brainstorm when no challenger higher-upside approach is present", async () => {
     const root = await createTempProject("artifact-lint-no-challenger");
     await writeRuntimeArtifact(root, "01-brainstorm.md", `# Brainstorm Artifact
@@ -540,6 +591,7 @@ describe("artifact linter heuristics", () => {
 - Approach: B — local todo list with categories/projects
 - Rationale: categories give more product value while staying within the user's no-backend constraint
 - Approval: approved by user
+- Next-stage handoff: scope — carry the local-only constraint and the categories slice forward.
 
 ## Design
 - Architecture: static client app with local component state.
@@ -1058,6 +1110,7 @@ describe("artifact linter heuristics", () => {
 - Approach: B
 - Rationale: user reaction preferred stronger reuse while keeping v1 scoped
 - Approval: approved
+- Next-stage handoff: scope — lock the validator module boundary and reuse target.
 
 ## Design
 - Architecture: shared module
@@ -1699,6 +1752,23 @@ ${summaryBody}
         "02-scope.md",
         baseScope(
           `- Selected mode: strict\n- Accepted scope: build a thing\n- Next-stage handoff: design.`
+        )
+      );
+      const result = await lintArtifact(root, "scope");
+      const summary = result.findings.find((f) => f.section === "Scope Summary");
+      expect(summary?.found).toBe(false);
+      expect(summary?.details ?? "").toMatch(/canonical token/iu);
+    });
+
+    it("rejects Scope Summary left as an unfilled template that lists all four mode tokens", async () => {
+      const root = await createTempProject("scope-summary-template-unfilled");
+      await writeRuntimeArtifact(
+        root,
+        "02-scope.md",
+        baseScope(
+          `- Selected mode: (one of \`SCOPE EXPANSION\` | \`SELECTIVE EXPANSION\` | \`HOLD SCOPE\` | \`SCOPE REDUCTION\`)\n` +
+            `- Accepted scope: build a thing\n` +
+            `- Next-stage handoff: design — proceed.`
         )
       );
       const result = await lintArtifact(root, "scope");
@@ -2521,7 +2591,7 @@ Fallback_Cache -->|degraded response| API_Gateway`;
 - Constraints: None
 - Assumptions: None
 
-## Testability Map
+## Acceptance Mapping
 | Criterion ID | Verification approach | Command/manual steps |
 |---|---|---|
 | AC-1 | manual | Check it works |
@@ -2556,7 +2626,7 @@ Fallback_Cache -->|degraded response| API_Gateway`;
 - Constraints: None
 - Assumptions: None
 
-## Testability Map
+## Acceptance Mapping
 | Criterion ID | Verification approach | Command/manual steps |
 |---|---|---|
 | AC-1 | unit | npm test |
@@ -2592,7 +2662,7 @@ Fallback_Cache -->|degraded response| API_Gateway`;
 
 ${SPEC_ASSUMPTIONS_BEFORE_FINALIZATION}
 
-## Testability Map
+## Acceptance Mapping
 | Criterion ID | Verification approach | Command/manual steps |
 |---|---|---|
 | AC-1 | unit | npm run test -- publish-guard |
@@ -3112,6 +3182,98 @@ ${TDD_PREFLIGHT_SECTIONS}
 
     const result = await lintArtifact(root, "tdd");
     expect(result.passed).toBe(true);
+  });
+
+  it("accepts canonical Verification Ladder table form without 'Highest tier reached' phrase", async () => {
+    const root = await createTempProject("tdd-verification-ladder-table");
+    await writeRuntimeArtifact(root, "06-tdd.md", `# TDD Artifact
+
+${TDD_PREFLIGHT_SECTIONS}
+
+## RED Evidence
+| Slice | Test name | Command | Failure output summary |
+|---|---|---|---|
+| S-1 | dedupe fails on duplicate key | pnpm vitest run dedupe.test.ts | FAIL AssertionError expected unique list |
+
+## Acceptance Mapping
+| Slice | Plan task ID | Spec criterion ID |
+|---|---|---|
+| S-1 | T-1 | AC-1 |
+
+## Failure Analysis
+| Slice | Expected missing behavior | Actual failure reason |
+|---|---|---|
+| S-1 | Module not implemented | Module import fails — correct |
+
+## GREEN Evidence
+- Full suite command: pnpm vitest run
+- Full suite result: 12 passed, 0 failed
+
+## Verification Ladder
+| Slice | Tier reached | Evidence |
+|---|---|---|
+| S-1 | command | pnpm vitest run dedupe.test.ts (pass) |
+
+## REFACTOR Notes
+- What changed: Extracted helper function
+- Why: Reuse across tests
+- Behavior preserved: Full suite green after refactor
+
+## Traceability
+- Plan task IDs: T-1
+- Spec criterion IDs: AC-1
+`);
+
+    const result = await lintArtifact(root, "tdd");
+    expect(result.passed).toBe(true);
+    const ladder = result.findings.find((f) => f.section === "Verification Ladder");
+    expect(ladder?.found).toBe(true);
+  });
+
+  it("rejects empty Verification Ladder table that has no tier or evidence", async () => {
+    const root = await createTempProject("tdd-verification-ladder-empty-table");
+    await writeRuntimeArtifact(root, "06-tdd.md", `# TDD Artifact
+
+${TDD_PREFLIGHT_SECTIONS}
+
+## RED Evidence
+| Slice | Test name | Command | Failure output summary |
+|---|---|---|---|
+| S-1 | dedupe fails on duplicate key | pnpm vitest run dedupe.test.ts | FAIL AssertionError expected unique list |
+
+## Acceptance Mapping
+| Slice | Plan task ID | Spec criterion ID |
+|---|---|---|
+| S-1 | T-1 | AC-1 |
+
+## Failure Analysis
+| Slice | Expected missing behavior | Actual failure reason |
+|---|---|---|
+| S-1 | Module not implemented | Module import fails — correct |
+
+## GREEN Evidence
+- Full suite command: pnpm vitest run
+- Full suite result: 12 passed, 0 failed
+
+## Verification Ladder
+| Slice | Tier reached | Evidence |
+|---|---|---|
+| S-1 |  |  |
+
+## REFACTOR Notes
+- What changed: Extracted helper function
+- Why: Reuse across tests
+- Behavior preserved: Full suite green after refactor
+
+## Traceability
+- Plan task IDs: T-1
+- Spec criterion IDs: AC-1
+`);
+
+    const result = await lintArtifact(root, "tdd");
+    expect(result.passed).toBe(false);
+    const ladder = result.findings.find((f) => f.section === "Verification Ladder");
+    expect(ladder?.found).toBe(false);
   });
 
   it("fails tdd when RED Evidence does not include explicit failure markers", async () => {

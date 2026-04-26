@@ -55,7 +55,6 @@ import {
 } from "./content/utility-skills.js";
 import { RESEARCH_PLAYBOOKS } from "./content/research-playbooks.js";
 import { SUBAGENT_CONTEXT_SKILLS } from "./content/subagent-context-skills.js";
-import { HOOK_EVENTS_BY_HARNESS, HOOK_SEMANTIC_EVENTS } from "./content/hook-events.js";
 import { createInitialFlowState, type FlowState } from "./flow-state.js";
 import { ensureDir, exists, writeFileSafe } from "./fs-utils.js";
 import { ensureGitignore, removeGitignorePatterns } from "./gitignore.js";
@@ -489,14 +488,36 @@ async function writeSkills(projectRoot: string, config?: CclawConfig): Promise<v
   // legacy per-language skill folders from v0.7.0 (.cclaw/skills/language-*)
   // are cleaned up below so the new rules/lang layout is the only truth.
   const enabledPacks = config?.languageRulePacks ?? [];
+  const enabledPackFileNames = new Set<string>();
   for (const pack of enabledPacks) {
     const fileName = LANGUAGE_RULE_PACK_FILES[pack];
     const generator = LANGUAGE_RULE_PACK_GENERATORS[pack];
     if (!fileName || !generator) continue;
+    enabledPackFileNames.add(fileName);
     await writeFileSafe(
       runtimePath(projectRoot, ...LANGUAGE_RULE_PACK_DIR, fileName),
       generator()
     );
+  }
+
+  // Strict idempotence: once a pack is removed from config, its generated
+  // file under .cclaw/rules/lang/ must disappear on the next sync. Without
+  // this loop the directory accumulates a superset of every pack ever
+  // enabled, which silently keeps stale guidance alive.
+  const langDir = runtimePath(projectRoot, ...LANGUAGE_RULE_PACK_DIR);
+  if (await exists(langDir)) {
+    const knownPackFileNames = new Set<string>(Object.values(LANGUAGE_RULE_PACK_FILES));
+    let entries: string[] = [];
+    try {
+      entries = await fs.readdir(langDir);
+    } catch {
+      entries = [];
+    }
+    for (const entry of entries) {
+      if (!knownPackFileNames.has(entry)) continue;
+      if (enabledPackFileNames.has(entry)) continue;
+      await fs.rm(path.join(langDir, entry), { force: true });
+    }
   }
 
   for (const legacyFolder of LEGACY_LANGUAGE_RULE_PACK_FOLDERS) {

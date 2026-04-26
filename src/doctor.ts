@@ -1554,11 +1554,7 @@ export async function doctorChecks(projectRoot: string, options: DoctorOptions =
     name: "warning:delegation:waived",
     ok: true,
     details: delegation.waived.length > 0
-      ? `warning: waived mandatory delegations for stage "${flowState.currentStage}": ${delegation.waived.join(", ")}${
-          delegation.autoWaived.length > 0
-            ? ` (auto-waived due to harness limitation: ${delegation.autoWaived.join(", ")})`
-            : ""
-        }`
+      ? `warning: waived mandatory delegations for stage "${flowState.currentStage}": ${delegation.waived.join(", ")}`
       : "no waived mandatory delegations for current stage"
   });
   checks.push({

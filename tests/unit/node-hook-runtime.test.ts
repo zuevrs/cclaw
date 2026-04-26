@@ -458,6 +458,37 @@ describe("node hook runtime", () => {
     expect(hasRed.stderr).not.toContain("missing failing RED evidence");
   });
 
+
+  it("workflow-guard treats notebook edits as mutating writes in tdd", async () => {
+    const root = await createTempProject("node-hook-workflow-guard-notebook-edit");
+    await fs.mkdir(path.join(root, ".cclaw/state"), { recursive: true });
+    await fs.writeFile(path.join(root, ".cclaw/state/flow-state.json"), JSON.stringify({
+      currentStage: "tdd",
+      activeRunId: "run-tdd-notebook",
+      completedStages: ["brainstorm", "scope", "design", "spec", "plan"]
+    }, null, 2), "utf8");
+    await fs.writeFile(
+      path.join(root, ".cclaw/state/workflow-guard.json"),
+      JSON.stringify({ lastFlowReadAtEpoch: Math.floor(Date.now() / 1000) }, null, 2),
+      "utf8"
+    );
+
+    const result = await runNodeHook(
+      root,
+      "workflow-guard",
+      nodeHookRuntimeScript({ strictness: "strict" }),
+      {
+        tool_name: "NotebookEdit",
+        tool_input: {
+          path: "src/app.ts",
+          content: "export const value = 3;\n"
+        }
+      }
+    );
+    expect(result.code).toBe(1);
+    expect(result.stderr).toContain("missing failing RED evidence");
+  });
+
   it("verify-current-state uses local CLI entrypoint instead of cclaw on PATH", async () => {
     const root = await createTempProject("node-hook-verify-current-state");
     await fs.mkdir(path.join(root, ".cclaw/state"), { recursive: true });

@@ -366,7 +366,6 @@ export async function checkMandatoryDelegations(
   satisfied: boolean;
   missing: string[];
   waived: string[];
-  autoWaived: string[];
   staleIgnored: string[];
   /** Delegation rows missing required evidence under a role-switch fallback. */
   missingEvidence: string[];
@@ -386,7 +385,6 @@ export async function checkMandatoryDelegations(
 
   const missing: string[] = [];
   const waived: string[] = [];
-  const autoWaived: string[] = [];
   const missingEvidence: string[] = [];
   const config = await readConfig(projectRoot).catch(() => null);
   const harnesses = config?.harnesses ?? [];
@@ -395,7 +393,7 @@ export async function checkMandatoryDelegations(
   for (const agent of mandatory) {
     const rows = forRun.filter((e) => e.agent === agent);
     const completedRows = rows.filter((e) => e.status === "completed");
-    const waivedRows = rows.filter((e) => e.status === "waived");
+    const waivedRows = rows.filter((e) => e.status === "waived" && e.mode === "mandatory");
     const hasCompleted = completedRows.length >= 1;
     const hasWaived = waivedRows.length > 0;
     const ok = hasWaived || hasCompleted;
@@ -429,7 +427,6 @@ export async function checkMandatoryDelegations(
     satisfied: missing.length === 0 && missingEvidence.length === 0,
     missing,
     waived,
-    autoWaived,
     staleIgnored,
     missingEvidence,
     expectedMode

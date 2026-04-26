@@ -124,6 +124,26 @@ describe("delegation ledger run scoping", () => {
     expect(result.staleIgnored).toEqual([]);
   });
 
+
+  it("does not satisfy mandatory coverage from proactive waived rows", async () => {
+    const root = await createTempProject("delegation-proactive-waiver-not-sufficient");
+    await seedFlowState(root, "run-current");
+
+    await appendDelegation(root, {
+      stage: "scope",
+      agent: "planner",
+      mode: "proactive",
+      status: "waived",
+      waiverReason: "not triggered",
+      ts: new Date().toISOString()
+    });
+
+    const result = await checkMandatoryDelegations(root, "scope");
+    expect(result.satisfied).toBe(false);
+    expect(result.missing).toContain("planner");
+    expect(result.waived).toEqual([]);
+  });
+
   it("requires explicit role-switch evidence on Codex instead of silent auto-waiver", async () => {
     const root = await createTempProject("delegation-role-switch-missing");
     await seedFlowState(root, "run-codex");
@@ -132,7 +152,6 @@ describe("delegation ledger run scoping", () => {
     const result = await checkMandatoryDelegations(root, "scope");
     expect(result.satisfied).toBe(false);
     expect(result.missing).toContain("planner");
-    expect(result.autoWaived).toEqual([]);
     expect(result.expectedMode).toBe("role-switch");
 
     const ledger = await readDelegationLedger(root);

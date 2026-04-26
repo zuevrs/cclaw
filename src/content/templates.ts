@@ -514,7 +514,7 @@ ${SEED_SHELF_SECTION}
 |---|---|---|---|
 |  |  |  | accepted/rejected/open |
 
-## Testability Map
+## Acceptance Mapping
 | Criterion ID | Verification approach | Command/manual steps |
 |---|---|---|
 | AC-1 |  |  |

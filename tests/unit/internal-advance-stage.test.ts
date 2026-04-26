@@ -93,6 +93,7 @@ async function writeBrainstormArtifact(
 - Approach: B - reusable validation module
 - Rationale: user reaction emphasized bounded v1 scope, so B gives best balance of reuse and delivery speed
 - Approval: approved
+- Next-stage handoff: scope — lock the validator module boundary and bounded v1 reach.
 
 ## Design
 - Architecture: shared TS module with typed validators
@@ -1074,6 +1075,7 @@ process.stdout.write(JSON.stringify({ hook: process.argv[2] }) + "\\n");
 - Approach: A — Next.js App Router + Recharts + Tailwind CSS.
 - Rationale: Based on user reaction and feedback selecting A with no concerns, Recharts gives the simplest practical chart layer without D3 overhead or Tremor constraints.
 - Approval: approved by user.
+- Next-stage handoff: scope — carry the Next.js + Recharts stack lock and the single-page dashboard slice forward.
 
 ## Design
 - Architecture: Next.js App Router single-page dashboard; chart components are client components fed by local mock data.
