@@ -2521,7 +2521,7 @@ Fallback_Cache -->|degraded response| API_Gateway`;
 - Constraints: None
 - Assumptions: None
 
-## Testability Map
+## Acceptance Mapping
 | Criterion ID | Verification approach | Command/manual steps |
 |---|---|---|
 | AC-1 | manual | Check it works |
@@ -2556,7 +2556,7 @@ Fallback_Cache -->|degraded response| API_Gateway`;
 - Constraints: None
 - Assumptions: None
 
-## Testability Map
+## Acceptance Mapping
 | Criterion ID | Verification approach | Command/manual steps |
 |---|---|---|
 | AC-1 | unit | npm test |
@@ -2592,7 +2592,7 @@ Fallback_Cache -->|degraded response| API_Gateway`;
 
 ${SPEC_ASSUMPTIONS_BEFORE_FINALIZATION}
 
-## Testability Map
+## Acceptance Mapping
 | Criterion ID | Verification approach | Command/manual steps |
 |---|---|---|
 | AC-1 | unit | npm run test -- publish-guard |
