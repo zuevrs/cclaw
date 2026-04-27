@@ -11,6 +11,87 @@ import {
 } from "../../src/artifact-linter.js";
 import { createTempProject } from "../helpers/index.js";
 
+function normalizeFixtureArtifact(fileName: string, content: string): string {
+  let normalized = content;
+
+  if (fileName.startsWith("01-brainstorm")) {
+    normalized = normalized.replace(/^## Problem$/gmu, "## Problem Decision Record");
+  }
+
+  if (fileName.startsWith("02-scope") && !/^## Scope Contract$/mu.test(normalized)) {
+    const scopeContract = `## Scope Contract
+- Selected mode: HOLD SCOPE
+- In scope: fixture-defined implementation slice.
+- Out of scope: fixture-defined exclusions.
+- Requirements: covered by the fixture body.
+- Locked decisions: none for this fixture.
+- Discretion areas: none.
+- Deferred ideas: none.
+- Accepted reference ideas: none.
+- Rejected reference ideas: none.
+- Success definition: fixture validation exercises the intended linter rule.
+- Design handoff: design - carry fixture constraints forward.
+
+`;
+    normalized = normalized.replace(/(# Scope Artifact[^\n]*\n\n)/u, `$1${scopeContract}`);
+  }
+
+  if (fileName.startsWith("03-design")) {
+    if (!/^## Engineering Lock$/mu.test(normalized)) {
+      const engineeringLock = `## Engineering Lock
+- Chosen path: fixture-defined implementation path.
+- Shadow alternative: keep the previous behavior unchanged.
+- Switch trigger: validation evidence contradicts the chosen path.
+- Failure/rescue/degraded behavior: explicit fallback or visible error path.
+- Verification evidence: targeted linter fixture.
+- Critical path: request -> service -> response.
+- Rollout/rollback: revert fixture change if validation fails.
+- Confidence: high.
+
+`;
+      normalized = normalized.replace(/(## Architecture Boundaries\n)/u, `${engineeringLock}$1`);
+    }
+    if (!/^## Spec Handoff$/mu.test(normalized)) {
+      const specHandoff = `## Spec Handoff
+- Requirements: preserve fixture-specific acceptance behavior.
+- Design decisions: use the existing component boundaries.
+- Risks: fixture omits production-only details by design.
+- Test/perf expectations: validate with the targeted linter test.
+- Unresolved questions: None.
+
+`;
+      normalized = normalized.replace(/(## Completion Dashboard\n)/u, `${specHandoff}$1`);
+    }
+  }
+
+  if (fileName.startsWith("07-review")) {
+    if (!/^## Review Evidence Scope$/mu.test(normalized)) {
+      const reviewEvidenceScope = `## Review Evidence Scope
+- Base/head: fixture-base..fixture-head
+- Files inspected: src/fixture.ts
+- Changed-file coverage summary: all fixture changes inspected or marked no-impact.
+- Diagnostics run: targeted linter fixture.
+- Omitted files with explicit reason: None.
+- Reviewer delegation evidence: waived for unit fixture.
+- Security-reviewer delegation evidence: waived for unit fixture.
+
+`;
+      normalized = normalized.replace(/(## Layer 1 Verdict\n)/u, `${reviewEvidenceScope}$1`);
+    }
+    if (!/^## Changed-File Coverage$/mu.test(normalized)) {
+      const changedFileCoverage = `## Changed-File Coverage
+| File | Coverage status | Evidence / no-impact reason |
+|---|---|---|
+| src/fixture.ts | inspected | targeted unit fixture covers the review contract |
+
+`;
+      normalized = normalized.replace(/(## Layer 1 Verdict\n)/u, `${changedFileCoverage}$1`);
+    }
+  }
+
+  return normalized;
+}
+
 async function writeRuntimeArtifact(root: string, fileName: string, content: string): Promise<void> {
   await fs.mkdir(path.join(root, ".cclaw/state"), { recursive: true });
   await fs.mkdir(path.join(root, ".cclaw/artifacts"), { recursive: true });
@@ -19,7 +100,11 @@ async function writeRuntimeArtifact(root: string, fileName: string, content: str
     activeRunId: "active",
     completedStages: []
   }, null, 2), "utf8");
-  await fs.writeFile(path.join(root, ".cclaw/artifacts", fileName), content, "utf8");
+  await fs.writeFile(
+    path.join(root, ".cclaw/artifacts", fileName),
+    normalizeFixtureArtifact(fileName, content),
+    "utf8"
+  );
 }
 
 async function writeOptInAuditsConfig(
@@ -943,7 +1028,7 @@ describe("artifact linter heuristics", () => {
 `);
 
     const result = await lintArtifact(root, "brainstorm");
-    const problem = result.findings.find((finding) => finding.section === "Problem");
+    const problem = result.findings.find((finding) => finding.section === "Problem Decision Record");
     const challenger = result.findings.find(
       (finding) => finding.section === "Challenger Alternative Enforcement"
     );

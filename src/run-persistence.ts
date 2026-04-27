@@ -345,22 +345,28 @@ function sanitizeCloseoutState(value: unknown): CloseoutState {
     ? true
     : undefined;
   const compoundCompletedAt = typeof typed.compoundCompletedAt === "string" ? typed.compoundCompletedAt : undefined;
-  const compoundSkipped = typeof typed.compoundSkipped === "boolean" ? typed.compoundSkipped : undefined;
+  const compoundSkipReason = typeof typed.compoundSkipReason === "string"
+    ? typed.compoundSkipReason.trim() || undefined
+    : undefined;
+  const compoundSkipped = typed.compoundSkipped === true && compoundSkipReason !== undefined
+    ? true
+    : undefined;
   const promotedRaw = typed.compoundPromoted;
   const compoundPromoted =
     typeof promotedRaw === "number" && Number.isFinite(promotedRaw) && promotedRaw >= 0
       ? Math.floor(promotedRaw)
       : 0;
 
-  // Demote shipSubstate when its retro invariant is violated on disk. A
-  // hand-edited flow-state could claim `ready_to_archive` or `compound_review`
-  // without ever going through the retro step, which would let `archive`
-  // proceed and skip the gate. Compound completion is not independently
-  // tracked in all flows (some runs rely on knowledge.jsonl + the retro
-  // window), so we only demote when the retro leg is missing outright.
+  // Demote shipSubstate when its closeout invariants are violated on disk. A
+  // hand-edited flow-state could claim `ready_to_archive` without completing
+  // the compound leg, which would let `archive` skip durable closeout proof.
   const retroDone = retroAcceptedAt !== undefined || retroSkipped === true;
+  const compoundDone =
+    compoundCompletedAt !== undefined || compoundPromoted > 0 || compoundSkipped === true;
   if (!retroDone && (shipSubstate === "ready_to_archive" || shipSubstate === "compound_review")) {
     shipSubstate = "retro_review";
+  } else if (shipSubstate === "ready_to_archive" && !compoundDone) {
+    shipSubstate = "compound_review";
   }
 
   return {
@@ -371,6 +377,7 @@ function sanitizeCloseoutState(value: unknown): CloseoutState {
     retroSkipReason,
     compoundCompletedAt,
     compoundSkipped,
+    compoundSkipReason,
     compoundPromoted
   };
 }

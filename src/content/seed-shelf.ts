@@ -5,6 +5,8 @@ import { RUNTIME_ROOT } from "../constants.js";
 
 const SEED_FILE_NAME_PATTERN = /^SEED-(\d{4}-\d{2}-\d{2})-([a-z0-9]+(?:-[a-z0-9]+)*)(?:-(\d+))?\.md$/u;
 const DEFAULT_MAX_MATCHES = 3;
+const MAX_SEED_MATCHES = 10;
+const MIN_TOKEN_OVERLAP = 2;
 
 interface ParsedFrontmatter {
   values: Record<string, unknown>;
@@ -243,11 +245,54 @@ export async function readSeedShelf(projectRoot: string): Promise<SeedShelfEntry
   return entries;
 }
 
+function normalizeMatchText(value: string): string {
+  return value.toLowerCase().trim().replace(/\s+/gu, " ");
+}
+
+function tokenizeSeedText(value: string | null | undefined): string[] {
+  if (!value) return [];
+  return value
+    .toLowerCase()
+    .split(/[^a-z0-9]+/u)
+    .map((token) => token.trim())
+    .filter((token) => token.length >= 3);
+}
+
+function uniqueTokens(values: string[]): Set<string> {
+  return new Set(values);
+}
+
+function exactTriggerMatch(seed: SeedShelfEntry, normalizedPrompt: string): boolean {
+  if (normalizedPrompt.length === 0 || seed.triggerWhen.length === 0) return false;
+  return seed.triggerWhen.some((trigger) => {
+    const normalizedTrigger = normalizeMatchText(trigger);
+    return normalizedTrigger.length > 0 && normalizedPrompt.includes(normalizedTrigger);
+  });
+}
+
+function seedContentTokens(seed: SeedShelfEntry): Set<string> {
+  return uniqueTokens([
+    ...tokenizeSeedText(seed.title),
+    ...tokenizeSeedText(seed.summary),
+    ...tokenizeSeedText(seed.hypothesis),
+    ...tokenizeSeedText(seed.action)
+  ]);
+}
+
+function tokenOverlap(seed: SeedShelfEntry, promptTokens: Set<string>): number {
+  if (promptTokens.size === 0) return 0;
+  const contentTokens = seedContentTokens(seed);
+  let overlap = 0;
+  for (const token of promptTokens) {
+    if (contentTokens.has(token)) overlap += 1;
+  }
+  return overlap;
+}
+
 export function seedMatchesPrompt(seed: SeedShelfEntry, prompt: string): boolean {
-  const normalizedPrompt = prompt.toLowerCase().trim();
-  if (normalizedPrompt.length === 0) return false;
-  if (seed.triggerWhen.length === 0) return false;
-  return seed.triggerWhen.some((trigger) => normalizedPrompt.includes(trigger.toLowerCase()));
+  const normalizedPrompt = normalizeMatchText(prompt);
+  if (exactTriggerMatch(seed, normalizedPrompt)) return true;
+  return tokenOverlap(seed, uniqueTokens(tokenizeSeedText(prompt))) >= MIN_TOKEN_OVERLAP;
 }
 
 export async function findMatchingSeeds(
@@ -256,8 +301,30 @@ export async function findMatchingSeeds(
   maxMatches = DEFAULT_MAX_MATCHES
 ): Promise<SeedShelfEntry[]> {
   const seeds = await readSeedShelf(projectRoot);
-  const matches = seeds.filter((seed) => seedMatchesPrompt(seed, prompt));
-  return matches.slice(0, Math.max(1, maxMatches));
+  const normalizedPrompt = normalizeMatchText(prompt);
+  if (normalizedPrompt.length === 0) return [];
+  const promptTokens = uniqueTokens(tokenizeSeedText(prompt));
+  const cappedMax =
+    typeof maxMatches === "number" && Number.isFinite(maxMatches) && maxMatches > 0
+      ? Math.min(MAX_SEED_MATCHES, Math.max(1, Math.floor(maxMatches)))
+      : DEFAULT_MAX_MATCHES;
+  const ranked = seeds
+    .map((seed, index) => {
+      const exact = exactTriggerMatch(seed, normalizedPrompt);
+      const overlap = tokenOverlap(seed, promptTokens);
+      return { seed, index, exact, overlap };
+    })
+    .filter((row) => row.exact || row.overlap >= MIN_TOKEN_OVERLAP);
+
+  ranked.sort((a, b) => {
+    if (a.exact !== b.exact) return a.exact ? -1 : 1;
+    if (b.overlap !== a.overlap) return b.overlap - a.overlap;
+    const recency = b.seed.createdOn.localeCompare(a.seed.createdOn);
+    if (recency !== 0) return recency;
+    return a.index - b.index;
+  });
+
+  return ranked.slice(0, cappedMax).map((row) => row.seed);
 }
 
 export function renderSeedTemplate(input: SeedTemplateInput): string {

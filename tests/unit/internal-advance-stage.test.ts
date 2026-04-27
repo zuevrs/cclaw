@@ -58,7 +58,7 @@ async function writeBrainstormArtifact(
 - Project state: monorepo with CI pipeline
 - Relevant existing code/patterns: scripts/pre-publish.sh does metadata checks
 
-## Problem
+## Problem Decision Record
 - What we're solving: harden release flow to prevent unsafe publishes
 - Success criteria: invalid release metadata blocks publish
 - Constraints: no new runtime dependencies
@@ -115,6 +115,19 @@ async function writeScopeArtifact(root: string): Promise<void> {
 
 > Review Loop Quality: 0.830 | stop: quality_threshold_met | iterations: 2/3
 
+## Scope Contract
+- Selected mode: SCOPE EXPANSION
+- In scope: lock down requirements and interfaces.
+- Out of scope: implementation and rollout.
+- Requirements: explicit interfaces, failure boundaries, and observability expectations.
+- Locked decisions: keep API and worker boundaries stable.
+- Discretion areas: naming and low-risk local structure.
+- Deferred ideas: rollout execution and deployment changes.
+- Accepted reference ideas: existing queue primitives.
+- Rejected reference ideas: unbounded platform migration.
+- Success definition: scope is approved and ready for design handoff.
+- Design handoff: design - lock interfaces, failure boundaries, observability.
+
 ## Scope Mode
 - Mode: broad
 
@@ -168,6 +181,16 @@ async function writeDesignArtifact(root: string): Promise<void> {
 | features-researcher | Retry + fallback needed | Explicit rescue paths in diagram | docs/features.md |
 | architecture-researcher | Service boundary should remain stable | Keep API + worker split | docs/architecture.md |
 | pitfalls-researcher | Silent failures were prior outage root cause | Add user-visible rescue output | docs/pitfalls.md |
+
+## Engineering Lock
+- Chosen path: reuse existing queue primitives behind stable API and worker boundaries.
+- Shadow alternative: introduce a new persistence pipeline only if retry/fallback evidence fails.
+- Switch trigger: fallback path cannot produce user-visible degraded response under timeout.
+- Failure/rescue/degraded behavior: timeout enters fallback cache and retry queue with explicit warning.
+- Verification evidence: review-loop quality threshold met and diagram rescue path captured.
+- Critical path: API_Gateway -> App_Service -> Storage_Adapter -> Fallback_Cache.
+- Rollout/rollback: feature-flag canary with prior build rollback.
+- Confidence: high.
 
 ## Architecture Boundaries
 | Component | Responsibility | Owner |
@@ -232,6 +255,13 @@ DBTimeout -> fallback cache -> degraded response with warning
 - Target score: 0.800
 - Max iterations: 3
 - Unresolved concerns: None
+
+## Spec Handoff
+- Requirements: preserve API boundary and explicit fallback/degraded response paths.
+- Design decisions: API/service/storage split, retry queue, fallback cache, feature-flag rollout.
+- Risks: silent persistence failure and timeout-induced degraded response.
+- Test/perf expectations: cover timeout rescue, fallback response, and retry queue observability.
+- Unresolved questions: None.
 
 ## Completion Dashboard
 | Review Section | Status | Issues |
@@ -310,7 +340,11 @@ async function writeTddArtifact(root: string): Promise<void> {
 async function writeReviewArtifacts(root: string): Promise<void> {
   await fs.mkdir(path.join(root, ".cclaw/artifacts"), { recursive: true });
   const reviewArtifact = (ARTIFACT_TEMPLATES["07-review.md"] ?? "")
-    .replace("- APPROVED | APPROVED_WITH_CONCERNS | BLOCKED", "- BLOCKED");
+    .replace("- APPROVED | APPROVED_WITH_CONCERNS | BLOCKED", "- BLOCKED")
+    .replace(
+      "- NO_FINDINGS_ATTESTATION: <required when no findings are reported; cite inspected coverage>",
+      "- NO_CHANGE_ATTESTATION: review rewind fixture has no security-impacting changes."
+    );
   await fs.writeFile(
     path.join(root, ".cclaw/artifacts/07-review.md"),
     reviewArtifact,
@@ -1093,7 +1127,7 @@ process.stdout.write(JSON.stringify({ hook: process.argv[2] }) + "\\n");
 - Project state: empty greenfield project with no app code, no origin docs, and no seeds.
 - Relevant existing code/patterns: none.
 
-## Problem
+## Problem Decision Record
 - What we're solving: build a simple web dashboard/admin panel focused on charts and diagrams.
 - Success criteria: responsive dashboard page, line/bar/pie charts, mock JSON data, clean extension-ready structure.
 - Constraints: no backend, no database, no auth, fast simple MVP.

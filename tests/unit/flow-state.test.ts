@@ -84,6 +84,8 @@ describe("flow state", () => {
     expect(state.closeout.retroAcceptedAt).toBeUndefined();
     expect(state.closeout.retroSkipped).toBeUndefined();
     expect(state.closeout.compoundCompletedAt).toBeUndefined();
+    expect(state.closeout.compoundSkipped).toBeUndefined();
+    expect(state.closeout.compoundSkipReason).toBeUndefined();
     expect(state.closeout.compoundPromoted).toBe(0);
   });
 

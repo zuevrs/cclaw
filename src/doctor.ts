@@ -37,7 +37,8 @@ import { resolveTrackFromPrompt } from "./track-heuristics.js";
 import {
   classifyCodexHooksFlag,
   codexConfigPath,
-  readCodexConfig
+  readCodexConfig,
+  type CodexHooksFlagState
 } from "./codex-feature-flag.js";
 import {
   LANGUAGE_RULE_PACK_DIR,
@@ -45,6 +46,7 @@ import {
   LEGACY_LANGUAGE_RULE_PACK_FOLDERS
 } from "./content/utility-skills.js";
 import { validateHookDocument } from "./hook-schema.js";
+import { HOOK_EVENTS_BY_HARNESS } from "./content/hook-events.js";
 import { validateKnowledgeEntry } from "./knowledge-store.js";
 import { readSeedShelf } from "./content/seed-shelf.js";
 import { evaluateRetroGate } from "./retro-gate.js";
@@ -340,8 +342,12 @@ function opencodeConfigCandidates(projectRoot: string): string[] {
   return [
     path.join(projectRoot, "opencode.json"),
     path.join(projectRoot, "opencode.jsonc"),
+    path.join(projectRoot, "oh-my-opencode.jsonc"),
+    path.join(projectRoot, "oh-my-openagent.jsonc"),
     path.join(projectRoot, ".opencode/opencode.json"),
-    path.join(projectRoot, ".opencode/opencode.jsonc")
+    path.join(projectRoot, ".opencode/opencode.jsonc"),
+    path.join(projectRoot, ".opencode/oh-my-opencode.jsonc"),
+    path.join(projectRoot, ".opencode/oh-my-openagent.jsonc")
   ];
 }
 
@@ -409,6 +415,91 @@ function opencodeQuestionEnvCheck(): { ok: boolean; details: string } {
     ok: false,
     details: "Set OPENCODE_ENABLE_QUESTION_TOOL=1 for OpenCode ACP clients so permission-gated structured questions can use the question tool."
   };
+}
+
+function codexFlagInactiveDetail(configPath: string, state: CodexHooksFlagState | "read-error", error?: unknown): string {
+  if (state === "enabled") {
+    return `codex_hooks feature flag is enabled in ${configPath}; Codex hooks are active.`;
+  }
+  if (state === "read-error") {
+    return `Codex hooks are inactive: could not read ${configPath} (${error instanceof Error ? error.message : String(error)}).`;
+  }
+  if (state === "missing-file") {
+    return `Codex hooks are inactive: ${configPath} does not exist; .codex/hooks.json is ignored until [features] codex_hooks = true is configured.`;
+  }
+  if (state === "missing-section") {
+    return `Codex hooks are inactive: ${configPath} has no [features] section; add codex_hooks = true to activate configured hooks.`;
+  }
+  if (state === "missing-key") {
+    return `Codex hooks are inactive: ${configPath} is missing codex_hooks under [features]; add codex_hooks = true to activate configured hooks.`;
+  }
+  return `Codex hooks are inactive: ${configPath} sets codex_hooks to a non-true value; set codex_hooks = true under [features].`;
+}
+
+function hookCommandsWithMatchers(value: unknown): Array<{ command: string; matcher?: string }> {
+  if (!Array.isArray(value)) {
+    return [];
+  }
+  const out: Array<{ command: string; matcher?: string }> = [];
+  for (const item of value) {
+    const obj = toObject(item);
+    if (!obj) continue;
+    const matcher = typeof obj.matcher === "string" ? obj.matcher : undefined;
+    if (typeof obj.command === "string") {
+      out.push({ command: obj.command, matcher });
+    }
+    const nested = hookCommandsWithMatchers(obj.hooks);
+    for (const child of nested) {
+      out.push({ ...child, matcher: child.matcher ?? matcher });
+    }
+  }
+  return out;
+}
+
+function commandHasHandler(entries: Array<{ command: string; matcher?: string }>, handler: string): boolean {
+  return entries.some((entry) => entry.command.includes(`run-hook.cmd ${handler}`) || entry.command.includes(`run-hook.mjs ${handler}`));
+}
+
+function codexBashOnly(entries: Array<{ command: string; matcher?: string }>, handler: string): boolean {
+  const matches = entries.filter((entry) => entry.command.includes(`run-hook.cmd ${handler}`) || entry.command.includes(`run-hook.mjs ${handler}`));
+  return matches.length > 0 && matches.every((entry) => entry.matcher === "Bash|bash");
+}
+
+function codexStructuralWiringCheck(codexHooks: Record<string, unknown>): { ok: boolean; details: string } {
+  const problems: string[] = [];
+  const expectedSession = HOOK_EVENTS_BY_HARNESS.codex.session_rehydrate;
+  if (expectedSession !== "SessionStart matcher=startup|resume") {
+    problems.push("semantic session_rehydrate mapping must remain SessionStart matcher=startup|resume");
+  }
+  const session = hookCommandsWithMatchers(codexHooks.SessionStart);
+  if (!commandHasHandler(session, "session-start") || !session.some((entry) => entry.matcher === "startup|resume")) {
+    problems.push("SessionStart must run session-start with matcher startup|resume");
+  }
+  const userPrompt = hookCommandsWithMatchers(codexHooks.UserPromptSubmit);
+  if (!commandHasHandler(userPrompt, "prompt-guard")) {
+    problems.push("UserPromptSubmit must run prompt-guard");
+  }
+  if (!commandHasHandler(userPrompt, "verify-current-state")) {
+    problems.push("UserPromptSubmit must run verify-current-state");
+  }
+  const pre = hookCommandsWithMatchers(codexHooks.PreToolUse);
+  if (!codexBashOnly(pre, "prompt-guard")) {
+    problems.push("PreToolUse prompt-guard must be Bash-only matcher Bash|bash");
+  }
+  if (!codexBashOnly(pre, "workflow-guard")) {
+    problems.push("PreToolUse workflow-guard must be Bash-only matcher Bash|bash");
+  }
+  const post = hookCommandsWithMatchers(codexHooks.PostToolUse);
+  if (!codexBashOnly(post, "context-monitor")) {
+    problems.push("PostToolUse context-monitor must be Bash-only matcher Bash|bash");
+  }
+  const stop = hookCommandsWithMatchers(codexHooks.Stop);
+  if (!commandHasHandler(stop, "stop-handoff")) {
+    problems.push("Stop must run stop-handoff");
+  }
+  return problems.length === 0
+    ? { ok: true, details: "Codex hook events, matchers, and manifest semantic mappings are structurally valid" }
+    : { ok: false, details: problems.join("; ") };
 }
 
 async function initRecoveryCheck(projectRoot: string): Promise<{ ok: boolean; details: string }> {
@@ -1093,34 +1184,48 @@ export async function doctorChecks(projectRoot: string, options: DoctorOptions =
       ok: codexWiringOk,
       details: `${codexHooksFile} must wire SessionStart, UserPromptSubmit(prompt/verify-current-state), Bash-only PreToolUse(prompt/workflow), Bash-only PostToolUse(context-monitor), and Stop(stop-handoff). Codex workflow-guard is intentionally strict Bash-only.`
     });
+    const codexStructural = codexStructuralWiringCheck(codexHooks);
+    checks.push({
+      name: "hook:wiring:codex:structure",
+      ok: codexStructural.ok,
+      details: codexStructural.details
+    });
 
-    // Feature flag warning: Codex ignores `.codex/hooks.json` unless the
-    // user has `[features] codex_hooks = true` in `~/.codex/config.toml`.
-    // Advisory warning — not a hard failure, because the skills still
-    // work without the flag.
+    // Codex ignores `.codex/hooks.json` unless the user has
+    // `[features] codex_hooks = true` in `~/.codex/config.toml`.
     const codexConfig = codexConfigPath();
-    let featureFlagNote = "";
+    let codexFlagState: CodexHooksFlagState | "read-error" = "read-error";
+    let codexFlagReadError: unknown;
     try {
       const content = await readCodexConfig(codexConfig);
-      const state = classifyCodexHooksFlag(content);
-      featureFlagNote =
-        state === "enabled"
-          ? `codex_hooks feature flag is enabled in ${codexConfig}`
-          : state === "missing-file"
-            ? `warning: ${codexConfig} does not exist; .codex/hooks.json will be ignored until you create it with \`[features]\\ncodex_hooks = true\\n\`.`
-            : state === "missing-section"
-              ? `warning: ${codexConfig} has no [features] section; add \`[features]\\ncodex_hooks = true\\n\` to enable cclaw hooks.`
-              : state === "missing-key"
-                ? `warning: ${codexConfig} is missing the codex_hooks key under [features]. Add \`codex_hooks = true\` to enable cclaw hooks.`
-                : `warning: ${codexConfig} sets codex_hooks to a non-true value; set \`codex_hooks = true\` under [features] to enable cclaw hooks.`;
+      codexFlagState = classifyCodexHooksFlag(content);
     } catch (err) {
-      featureFlagNote = `warning: could not read ${codexConfig}: ${err instanceof Error ? err.message : String(err)}`;
+      codexFlagReadError = err;
     }
+    const featureFlagNote = codexFlagInactiveDetail(codexConfig, codexFlagState, codexFlagReadError);
+    const featureFlagOk = codexFlagState === "enabled";
     checks.push({
       name: "warning:codex:feature_flag",
-      ok: true,
-      details: featureFlagNote
+      ok: featureFlagOk,
+      details: featureFlagNote,
+      summary: featureFlagOk
+        ? "Codex hooks are active."
+        : "Codex hooks are inactive; configured hooks will be ignored.",
+      fix: "Set `[features] codex_hooks = true` in the Codex config or run cclaw init/sync with Codex flag repair.",
+      docRef: "docs/harnesses.md"
     });
+    if (parsedConfig?.strictness === "strict") {
+      checks.push({
+        name: "hook:codex:feature_flag_active",
+        ok: featureFlagOk,
+        details: featureFlagNote,
+        summary: featureFlagOk
+          ? "Codex hooks are active for strict runtime enforcement."
+          : "Codex hooks are inactive; strict Codex hook enforcement is not ready.",
+        fix: "Set `[features] codex_hooks = true` in the Codex config so strict Codex hooks can run.",
+        docRef: "docs/harnesses.md"
+      });
+    }
 
     // Legacy `.codex/commands/*` must not linger from older cclaw installs.
     // (The `.codex/hooks.json` path is now managed and is validated above,

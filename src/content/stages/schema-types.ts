@@ -28,6 +28,8 @@ export interface ArtifactValidation {
 export interface StageAutoSubagentDispatch {
   agent:
     | "planner"
+    | "product-manager"
+    | "critic"
     | "reviewer"
     | "security-reviewer"
     | "test-author"

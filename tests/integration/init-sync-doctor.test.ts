@@ -2,7 +2,7 @@ import { execFile } from "node:child_process";
 import fs from "node:fs/promises";
 import path from "node:path";
 import { promisify } from "node:util";
-import { describe, expect, it } from "vitest";
+import { afterEach, describe, expect, it } from "vitest";
 import { readConfig, writeConfig } from "../../src/config.js";
 import { doctorChecks, doctorSucceeded } from "../../src/doctor.js";
 import { initCclaw, syncCclaw, uninstallCclaw, upgradeCclaw } from "../../src/install.js";
@@ -11,6 +11,21 @@ import { FLOW_STAGES } from "../../src/types.js";
 import { createTempProject } from "../helpers/index.js";
 
 const execFileAsync = promisify(execFile);
+const ORIGINAL_CODEX_HOME = process.env.CODEX_HOME;
+
+afterEach(() => {
+  if (ORIGINAL_CODEX_HOME === undefined) {
+    delete process.env.CODEX_HOME;
+  } else {
+    process.env.CODEX_HOME = ORIGINAL_CODEX_HOME;
+  }
+});
+
+async function enableCodexHooksForDoctor(): Promise<void> {
+  const root = await createTempProject("codex-home");
+  process.env.CODEX_HOME = root;
+  await fs.writeFile(path.join(root, "config.toml"), "[features]\ncodex_hooks = true\n", "utf8");
+}
 
 function countOccurrences(value: string, needle: string): number {
   const escaped = needle.replace(/[.*+?^${}()|[\]\\]/gu, "\\$&");
@@ -52,6 +67,7 @@ describe("install lifecycle", { timeout: 30_000 }, () => {
   });
 
   it("initializes runtime and passes doctor checks", async () => {
+    await enableCodexHooksForDoctor();
     const root = await createTempProject("init");
     await initCclaw({ projectRoot: root });
 
@@ -178,8 +194,10 @@ describe("install lifecycle", { timeout: 30_000 }, () => {
       .filter((fileName) => fileName.endsWith(".md"))
       .sort();
     expect(generatedAgents).toEqual([
+      "critic.md",
       "doc-updater.md",
       "planner.md",
+      "product-manager.md",
       "reviewer.md",
       "security-reviewer.md",
       "test-author.md"
@@ -192,8 +210,10 @@ describe("install lifecycle", { timeout: 30_000 }, () => {
       .filter((fileName) => fileName.endsWith(".toml"))
       .sort();
     expect(generatedCodexAgents).toEqual([
+      "critic.toml",
       "doc-updater.toml",
       "planner.toml",
+      "product-manager.toml",
       "reviewer.toml",
       "security-reviewer.toml",
       "test-author.toml"
@@ -307,6 +327,63 @@ describe("install lifecycle", { timeout: 30_000 }, () => {
     expect(doctorSucceeded(checks)).toBe(false);
   });
 
+  it("doctor detects non-Bash Codex PreToolUse matcher drift structurally", async () => {
+    await enableCodexHooksForDoctor();
+    const root = await createTempProject("doctor-codex-matcher-drift");
+    await initCclaw({ projectRoot: root, harnesses: ["codex"] });
+
+    const codexHooksPath = path.join(root, ".codex/hooks.json");
+    const codexHooks = JSON.parse(await fs.readFile(codexHooksPath, "utf8")) as {
+      hooks: { PreToolUse: Array<{ matcher?: string }> };
+    };
+    if (codexHooks.hooks.PreToolUse[0]) {
+      codexHooks.hooks.PreToolUse[0].matcher = "*";
+    }
+    await fs.writeFile(codexHooksPath, JSON.stringify(codexHooks, null, 2), "utf8");
+
+    const checks = await doctorChecks(root);
+    const structure = checks.find((c) => c.name === "hook:wiring:codex:structure");
+    expect(structure).toBeDefined();
+    expect(structure?.ok).toBe(false);
+    expect(structure?.details).toContain("Bash-only");
+    expect(doctorSucceeded(checks)).toBe(false);
+  });
+
+  it("doctor fails strict Codex installs when codex_hooks is inactive", async () => {
+    const codexHome = await createTempProject("codex-home-inactive");
+    process.env.CODEX_HOME = codexHome;
+    await fs.writeFile(path.join(codexHome, "config.toml"), "[features]\ncodex_hooks = false\n", "utf8");
+    const root = await createTempProject("doctor-codex-flag-strict");
+    await initCclaw({ projectRoot: root, harnesses: ["codex"] });
+    const current = await readConfig(root);
+    await writeConfig(root, { ...current, strictness: "strict" });
+
+    const checks = await doctorChecks(root);
+    const flag = checks.find((c) => c.name === "hook:codex:feature_flag_active");
+    expect(flag).toBeDefined();
+    expect(flag?.ok).toBe(false);
+    expect(flag?.summary).toContain("inactive");
+    expect(flag?.details).toContain("inactive");
+    expect(doctorSucceeded(checks)).toBe(false);
+  });
+
+  it("doctor warns advisory Codex installs when codex_hooks is inactive", async () => {
+    const codexHome = await createTempProject("codex-home-advisory-inactive");
+    process.env.CODEX_HOME = codexHome;
+    await fs.writeFile(path.join(codexHome, "config.toml"), "[features]\ncodex_hooks = false\n", "utf8");
+    const root = await createTempProject("doctor-codex-flag-advisory");
+    await initCclaw({ projectRoot: root, harnesses: ["codex"] });
+
+    const checks = await doctorChecks(root);
+    const flag = checks.find((c) => c.name === "warning:codex:feature_flag");
+    expect(flag).toBeDefined();
+    expect(flag?.ok).toBe(false);
+    expect(flag?.severity).toBe("warning");
+    expect(flag?.summary).toContain("inactive");
+    expect(flag?.details).toContain("inactive");
+    expect(doctorSucceeded(checks)).toBe(true);
+  });
+
   it("doctor treats legacy origin_feature as compatibility-only and warns canonical origin_run is missing", async () => {
     const root = await createTempProject("doctor-legacy-origin-feature");
     await initCclaw({ projectRoot: root, harnesses: ["claude"] });
@@ -341,6 +418,7 @@ describe("install lifecycle", { timeout: 30_000 }, () => {
   });
 
   it("doctor emits severity, fix, and doc references", async () => {
+    await enableCodexHooksForDoctor();
     const root = await createTempProject("doctor-metadata");
     await initCclaw({ projectRoot: root });
 
@@ -360,6 +438,7 @@ describe("install lifecycle", { timeout: 30_000 }, () => {
   });
 
   it("doctor classifies all checks in a fresh install", async () => {
+    await enableCodexHooksForDoctor();
     const root = await createTempProject("doctor-classification");
     await initCclaw({ projectRoot: root });
 
@@ -369,6 +448,7 @@ describe("install lifecycle", { timeout: 30_000 }, () => {
   });
 
   it("doctor keeps runtime-integrity check families at error severity", async () => {
+    await enableCodexHooksForDoctor();
     const root = await createTempProject("doctor-integrity-severity");
     await initCclaw({ projectRoot: root });
 
@@ -424,6 +504,7 @@ describe("install lifecycle", { timeout: 30_000 }, () => {
   });
 
   it("doctor classifies every emitted check via an explicit registry rule", async () => {
+    await enableCodexHooksForDoctor();
     const root = await createTempProject("doctor-fallback-free");
     await initCclaw({ projectRoot: root });
 
@@ -579,6 +660,9 @@ describe("install lifecycle", { timeout: 30_000 }, () => {
     const runtimePrePush = await fs.readFile(path.join(root, ".cclaw/hooks/git/pre-push.mjs"), "utf8");
     expect(runtimePreCommit).toContain("run-hook.mjs");
     expect(runtimePrePush).toContain("run-hook.mjs");
+    expect(runtimePrePush).toContain("changedFilesFromPrePushStdin");
+    expect(runtimePrePush).toContain('remoteSha + ".." + localSha');
+    expect(runtimePrePush).toContain("changedFilesFromUnpushedCommits");
 
     const hookRuntime = await fs.readFile(path.join(root, ".cclaw/hooks/run-hook.mjs"), "utf8");
     expect(hookRuntime).toContain('const DEFAULT_STRICTNESS = "strict";');

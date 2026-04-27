@@ -16,7 +16,7 @@ export const SCOPE: StageSchemaInput = {
   complexityTier: "standard",
   skillFolder: "scope-shaping",
   skillName: "scope-shaping",
-  skillDescription: "Strategic scope stage. Challenge premise and lock explicit in-scope/out-of-scope boundaries using CEO-level thinking.",
+  skillDescription: "Strategic contract stage. Select HOLD/SELECTIVE/EXPAND/REDUCE mode, lock the slice and boundaries, and hand stable discretion zones to design.",
   philosophy: {
     hardGate: "Do NOT begin architecture, design, or code. This stage produces scope decisions only. Do not silently add or remove scope — every change is an explicit user opt-in.",
     ironLaw: "EVERY SCOPE CHANGE IS AN EXPLICIT USER OPT-IN — NEVER A SILENT ENLARGEMENT OR TRIM.",
@@ -52,15 +52,15 @@ export const SCOPE: StageSchemaInput = {
   },
   executionModel: {
     checklist: [
-      "**Scope contract first** — read brainstorm, name the job-to-be-done, draft the explicit in-scope/out-of-scope/deferred contract, select one mode, and write the rationale. This is the default path; use dream/10-star/temporal/deep strategy sections only when risk, novelty, or user ambition justifies them.",
+      "**Scope contract first** — read brainstorm handoff, name upstream decisions used, explicit drift, confidence, unresolved questions, and next-stage risk hints; draft the in-scope/out-of-scope/deferred/discretion contract before any design choice.",
       "**Premise and leverage check** — answer in the artifact: *Right problem? Direct path? What if nothing? Where can we leverage existing code? What is the reversibility cost?* Take a position; do not hedge.",
       "**Conditional 10-star boundary** — for deep/high-risk/product-strategy work, show what would make the product meaningfully better, then explicitly choose what ships now, what is deferred, and what is excluded without vague `later/for now` placeholders. Skip this for straightforward repair work and record `not needed: compact scope`.",
-      "**Pick one of four gstack modes with the user** — SCOPE EXPANSION, SELECTIVE EXPANSION, HOLD SCOPE, or SCOPE REDUCTION. Recommend one, state why and what signal would change it, then STOP for the user's mode/scope approval before writing the final artifact.",
-      "**Run mode-specific analysis only to needed depth** — ordinary path is a selected-mode row plus rationale tied to the scope contract. For deep/high-risk work, expand the analysis to match the chosen mode: SCOPE EXPANSION enumerates 10x opportunities + delight features; SELECTIVE EXPANSION lists baseline + cherry-picked additions; HOLD SCOPE proves rigor on the current slice; SCOPE REDUCTION names the smallest useful wedge.",
+      "**Pick one operational mode with the user** — HOLD SCOPE preserves focus; SELECTIVE EXPANSION cherry-picks high-leverage reference ideas; SCOPE EXPANSION explores ambitious alternatives; SCOPE REDUCTION cuts to the essential wedge. Recommend one, state why and what signal would change it, then STOP for approval.",
+      "**Run mode-specific analysis only to needed depth** — lite keeps the selected-mode row compact; standard adds requirements/locked decisions/discretion; deep may add Landscape Check, Taste Calibration, Reference Pull, Ambitious Alternatives, and Ruthless Minimum Slice evidence when mode/risk warrants it.",
       "**Compare implementation alternatives** — include minimum viable, product-grade, and ideal architecture options with effort (S/M/L/XL), risk (Low/Med/High), pros, cons, and reuses. Recommend one and tie it to mode.",
       "**Run outside voice before final approval** — for simple/low-risk scope, record one concise adversarial self-check row; for complex/high-risk/configured scope, iterate until threshold. Record the loop summary in `## Scope Outside Voice Loop`, but do not treat it as user approval.",
       "**Ask only one decision-changing question** — if the user rejects the contract but is unsure, offer 3-4 concrete scope moves instead of open-ended interrogation.",
-      "**Write the scope contract after approval** — include in-scope/out-of-scope, discretion areas, deferred items, locked decisions, error/rescue notes, completion dashboard, scope summary (with canonical mode token + next-stage handoff), and explicit approval evidence."
+      "**Write the scope contract after approval** — include selected mode, in scope, out of scope, requirements, locked decisions, discretion areas, deferred ideas, accepted/rejected reference ideas, success definition, design handoff, completion dashboard, and explicit approval evidence."
     ],
     interactionProtocol: [
       decisionProtocolInstruction(
@@ -68,7 +68,7 @@ export const SCOPE: StageSchemaInput = {
         "present expand/selective/hold/reduce as labeled options with trade-offs and mark one as (recommended)",
         "recommend the option that best covers the prime-directive failure modes, four data-flow paths, observability, and deferred handling for the in-scope set with the smallest blast radius. Base your recommendation on default heuristics: greenfield -> expand, enhancement -> selective, bugfix/hotfix/refactor -> hold, broad blast radius -> reduce"
       ),
-      "Do not walk the full checklist by default. Lead with a proposed scope contract and the one decision that matters most; label the mode as recommended, not selected, until the user answers.",
+      "Do not walk the full checklist by default. Lead with a proposed scope contract, selected depth (`lite`/`standard`/`deep`), and the one decision that matters most; label the mode as recommended, not selected, until the user answers.",
       "For simple web-app flows, default to HOLD SCOPE or SELECTIVE EXPANSION, show the exact in/out/deferred contract as a proposal, and STOP for one explicit approval before writing the final scope artifact or completing the stage.",
       "Challenge premise first, take a firm position, and name one concrete condition that would change it.",
       "Push back on weak framing: vague scope needs a specific user/problem, platform vision needs a narrow wedge, social proof needs behavioral evidence.",
@@ -97,7 +97,8 @@ export const SCOPE: StageSchemaInput = {
       "When `.cclaw/config.yaml::optInAudits.scopePreAudit` is true, Pre-Scope System Audit findings are captured (git log/diff/stash/debt markers).",
       "In-scope and out-of-scope lists are explicit.",
       "Discretion areas are explicit (or marked as `None`).",
-      "Selected mode and rationale are documented.",
+      "Selected mode and rationale are documented using HOLD SCOPE, SELECTIVE EXPANSION, SCOPE EXPANSION, or SCOPE REDUCTION.",
+      "Scope Contract captures requirements, locked decisions, discretion areas, accepted/rejected reference ideas, success definition, and design handoff.",
       "Locked Decisions section lists stable LD#hash anchors for non-negotiable boundaries.",
       "Premise challenge findings documented.",
       "Outside Voice findings and dispositions are recorded (accept/reject/defer with rationale) before final approval.",
@@ -151,8 +152,12 @@ export const SCOPE: StageSchemaInput = {
       { section: "Pre-Scope System Audit", required: false, validationRule: "When `.cclaw/config.yaml::optInAudits.scopePreAudit` is true: must capture git log -30, git diff --stat, git stash list, and debt-marker scan (TODO/FIXME/XXX/HACK) before premise challenge." },
       { section: "Prime Directives", required: false, validationRule: "For each scoped capability: named failure modes, explicit error surface, four data-flow paths, interaction edge cases, observability expectations, and deferred-item handling." },
       { section: "Premise Challenge", required: false, validationRule: "Must list at least 3 question/answer rows in a markdown table or bullet list (gstack default trio: right problem? direct path? what if we do nothing? — extend with leverage and reversibility for richer scope). The linter enforces structure, not English wording — answers may be in any language." },
-      { section: "Landscape Check", required: false, validationRule: "When mode is EXPAND/SELECTIVE, include at least one external reference insight and its impact on scope." },
-      { section: "Taste Calibration", required: false, validationRule: "Must reference 2-3 strong in-repo modules/files that define the quality bar or explicitly justify omission." },
+      { section: "Scope Contract", required: true, validationRule: "Canonical contract: selected mode, in scope, out of scope, requirements, locked decisions, discretion areas, deferred ideas, accepted/rejected reference ideas, success definition, and design handoff." },
+      { section: "Landscape Check", required: false, validationRule: "Optional evidence heading for EXPAND/SELECTIVE/deep modes: include reference insight and impact on scope, or omit for compact HOLD SCOPE." },
+      { section: "Taste Calibration", required: false, validationRule: "Optional evidence heading: reference 2-3 strong in-repo modules/files that define the quality bar or justify omission." },
+      { section: "Reference Pull", required: false, validationRule: "Optional evidence heading: cite ideas pulled from `/Users/zuevrs/Downloads/references` or state no reference pull was needed for compact HOLD SCOPE." },
+      { section: "Ambitious Alternatives", required: false, validationRule: "Optional evidence heading for SCOPE EXPANSION/SELECTIVE: list larger alternatives considered and their disposition." },
+      { section: "Ruthless Minimum Slice", required: false, validationRule: "Optional evidence heading for SCOPE REDUCTION or high-risk scope: define the smallest useful wedge and what it proves." },
       { section: "Requirements", required: false, validationRule: "Table of stable requirement IDs (R1, R2, R3…) one per row with observable outcome, priority, and source. IDs are assigned once and never renumbered across scope/design/spec/plan/review; dropped requirements stay with Priority `DROPPED`." },
       { section: "Locked Decisions (LD#hash)", required: false, validationRule: "List of stable locked decisions with unique `LD#<sha8>` anchors. Each anchor is derived from the normalized Decision cell and is referenced downstream for cross-stage traceability." },
       { section: "Implementation Alternatives", required: false, validationRule: "2-3 options with Name, Summary, Effort, Risk, Pros, Cons, and Reuses. Must include minimal viable and ideal architecture options." },
@@ -165,7 +170,7 @@ export const SCOPE: StageSchemaInput = {
       { section: "Outside Voice Findings", required: false, validationRule: "Must list external/adversarial findings and disposition (accept/reject/defer) with rationale." },
       { section: "Scope Outside Voice Loop", required: false, validationRule: `Must record iterations, quality score per iteration, stop reason, and unresolved concerns. Enforce ${reviewLoopPolicySummary("scope")}` },
       { section: "Completion Dashboard", required: true, validationRule: "Lists per-review-section status, count of critical/open gaps, resolved decisions, and unresolved decisions (or 'None')." },
-      { section: "Scope Summary", required: true, validationRule: "Compact recap of the locked scope. Must name the selected mode using one of the canonical tokens (`SCOPE EXPANSION`, `SELECTIVE EXPANSION`, `HOLD SCOPE`, `SCOPE REDUCTION`) and record the track-aware next-stage handoff (`design` for standard, `spec` for medium); the linter checks structure, not English wording." },
+      { section: "Scope Summary", required: true, validationRule: "Compact recap of the locked scope. Must name the selected mode using one canonical token, confidence, explicit drift from brainstorm, unresolved questions, and the track-aware next-stage handoff (`design` for standard, `spec` for medium); the linter checks structure, not English wording." },
       { section: "Dream State Mapping", required: false, validationRule: "Deep/optional only: CURRENT STATE, THIS PLAN, 12-MONTH IDEAL, and alignment verdict. Omit for compact scope." },
       { section: "Temporal Interrogation", required: false, validationRule: "Deep/optional only: timeline simulation table with decision pressures and lock-now vs defer verdicts. Omit for compact scope." }
     ]

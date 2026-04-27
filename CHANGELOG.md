@@ -1,5 +1,13 @@
 # Changelog
 
+## 0.51.24
+
+### Fixed
+
+- Upgraded brainstorm, scope, and design into an adaptive reference-grade flow with product/technical discovery, strategic scope contracts, and engineering-lock evidence.
+- Strengthened staged specialist agents and review evidence so generated harness guidance requires anchored findings, changed-file coverage, security attestations, and dependency/version checks where relevant.
+- Hardened runtime correctness around pre-push range detection, Codex hook readiness/wiring diagnostics, compound-before-archive checks, and knowledge/seed retrieval quality.
+
 ## 0.51.23
 
 ### Fixed

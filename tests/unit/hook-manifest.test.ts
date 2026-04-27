@@ -110,6 +110,26 @@ describe("hook manifest", () => {
     );
   });
 
+  it("keeps Codex prompt and tool guards structurally explicit", () => {
+    const codexGroups = groupBindingsByEvent("codex");
+    const userPrompt = codexGroups.find((group) => group.event === "UserPromptSubmit");
+    const preTool = codexGroups.find((group) => group.event === "PreToolUse");
+    const postTool = codexGroups.find((group) => group.event === "PostToolUse");
+
+    expect(userPrompt?.entries.map((entry) => entry.handler)).toEqual([
+      "prompt-guard",
+      "verify-current-state"
+    ]);
+    expect(userPrompt?.entries.every((entry) => entry.matcher === undefined)).toBe(true);
+    expect(preTool?.entries).toEqual([
+      { handler: "prompt-guard", matcher: "Bash|bash" },
+      { handler: "workflow-guard", matcher: "Bash|bash" }
+    ]);
+    expect(postTool?.entries).toEqual([
+      { handler: "context-monitor", matcher: "Bash|bash" }
+    ]);
+  });
+
   it("keeps harness docs aligned with lifecycle aliases and strict-mode coverage", async () => {
     const docs = await fs.readFile(path.join(process.cwd(), "docs/harnesses.md"), "utf8");
     expect(docs).toContain("`strict_state_verify`");

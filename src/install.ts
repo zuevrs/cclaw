@@ -252,14 +252,83 @@ function resolveRepoRoot() {
   return process.cwd();
 }
 
+function isZeroSha(value) {
+  return /^0{40,64}$/u.test(value);
+}
+
+function readStdin() {
+  try {
+    return fs.readFileSync(0, "utf8");
+  } catch {
+    return "";
+  }
+}
+
+function uniqueLines(chunks) {
+  return [...new Set(chunks
+    .join("\n")
+    .split(/\r?\n/gu)
+    .map((line) => line.trim())
+    .filter((line) => line.length > 0))].join("\n");
+}
+
+function diffNames(root, range) {
+  const result = runGit(["diff", "--name-only", range], root);
+  return result.status === 0 ? result.stdout : "";
+}
+
+function changedFilesFromUnpushedCommits(root, localSha = "HEAD") {
+  const revList = runGit(["rev-list", "--reverse", localSha, "--not", "--remotes"], root);
+  if (revList.status !== 0 || revList.stdout.trim().length === 0) {
+    return "";
+  }
+  const chunks = [];
+  for (const commit of revList.stdout.split(/\r?\n/gu).map((line) => line.trim()).filter(Boolean)) {
+    const diffTree = runGit(["diff-tree", "--no-commit-id", "--name-only", "-r", "--root", commit], root);
+    if (diffTree.status === 0) chunks.push(diffTree.stdout);
+  }
+  return uniqueLines(chunks);
+}
+
+function changedFilesFromPrePushStdin(root, stdin) {
+  const chunks = [];
+  for (const rawLine of stdin.split(/\r?\n/gu)) {
+    const parts = rawLine.trim().split(/\s+/u);
+    if (parts.length < 4) continue;
+    const [localRef, localSha, remoteRef, remoteSha] = parts;
+    void localRef;
+    void remoteRef;
+    if (!localSha || isZeroSha(localSha)) continue;
+    if (remoteSha && !isZeroSha(remoteSha)) {
+      chunks.push(diffNames(root, remoteSha + ".." + localSha));
+      continue;
+    }
+    const upstream = runGit(["rev-parse", "--verify", "--quiet", "@{upstream}"], root);
+    if (upstream.status === 0 && upstream.stdout.trim().length > 0) {
+      chunks.push(diffNames(root, upstream.stdout.trim() + ".." + localSha));
+      continue;
+    }
+    chunks.push(changedFilesFromUnpushedCommits(root, localSha));
+  }
+  return uniqueLines(chunks);
+}
+
 function resolveChangedFiles(root) {
   if (HOOK_NAME === "pre-commit") {
     const result = runGit(["diff", "--cached", "--name-only"], root);
     return result.status === 0 ? result.stdout : "";
   }
-  const upstreamResult = runGit(["diff", "--name-only", "@{upstream}...HEAD"], root);
+  const stdinChanged = changedFilesFromPrePushStdin(root, readStdin());
+  if (stdinChanged.length > 0) {
+    return stdinChanged;
+  }
+  const upstreamResult = runGit(["diff", "--name-only", "@{upstream}..HEAD"], root);
   if (upstreamResult.status === 0) {
     return upstreamResult.stdout;
+  }
+  const unpushed = changedFilesFromUnpushedCommits(root);
+  if (unpushed.length > 0) {
+    return unpushed;
   }
   const fallback = runGit(["diff", "--name-only", "HEAD~1...HEAD"], root);
   return fallback.status === 0 ? fallback.stdout : "";
@@ -1458,6 +1527,8 @@ export async function uninstallCclaw(projectRoot: string): Promise<void> {
 
   const managedAgentNames = [
     "planner",
+    "product-manager",
+    "critic",
     "reviewer",
     "security-reviewer",
     "test-author",

@@ -179,7 +179,9 @@ describe("runs system", () => {
           shipSubstate: "ready_to_archive",
           retroSkipped: true,
           retroSkipReason: "trivial doc change",
-          retroAcceptedAt: "2026-01-01T00:00:00Z"
+          retroAcceptedAt: "2026-01-01T00:00:00Z",
+          compoundSkipped: true,
+          compoundSkipReason: "no compound patterns"
         }
       },
       { allowReset: true }
@@ -218,6 +220,76 @@ describe("runs system", () => {
     const read = await readFlowState(root);
     expect(read.closeout.shipSubstate).toBe("retro_review");
     await expect(archiveRun(root, "Tampered Closeout")).rejects.toThrow(/ready_to_archive/i);
+  });
+
+  it("demotes ready_to_archive when compound evidence is missing", async () => {
+    const root = await createTempProject("runs-closeout-compound-demote");
+    await ensureRunSystem(root);
+    const base = createInitialFlowState("active");
+    const statePath = path.join(root, ".cclaw/state/flow-state.json");
+    const tampered = {
+      ...base,
+      currentStage: "ship",
+      completedStages: ["brainstorm", "scope", "design", "spec", "plan", "tdd", "review", "ship"],
+      closeout: {
+        ...base.closeout,
+        shipSubstate: "ready_to_archive",
+        retroAcceptedAt: "2026-01-01T00:00:00Z"
+      }
+    };
+    await fs.writeFile(statePath, `${JSON.stringify(tampered, null, 2)}\n`, "utf8");
+
+    const read = await readFlowState(root);
+    expect(read.closeout.shipSubstate).toBe("compound_review");
+    await expect(archiveRun(root, "Compound Tampered")).rejects.toThrow(/ready_to_archive/i);
+  });
+
+  it("archive requires explicit compound closeout proof beyond retro knowledge", async () => {
+    const root = await createTempProject("runs-closeout-compound-block");
+    await ensureRunSystem(root);
+    const base = createInitialFlowState("active");
+    await writeFlowState(
+      root,
+      {
+        ...base,
+        currentStage: "ship",
+        completedStages: ["brainstorm", "scope", "design", "spec", "plan", "tdd", "review", "ship"],
+        closeout: {
+          ...base.closeout,
+          shipSubstate: "ready_to_archive",
+          retroDraftedAt: "2026-01-01T00:00:00Z",
+          retroAcceptedAt: "2026-01-02T00:00:00Z"
+        }
+      },
+      { allowReset: true }
+    );
+    await fs.writeFile(path.join(root, ".cclaw/artifacts/09-retro.md"), "# retro\n", "utf8");
+    await fs.writeFile(
+      path.join(root, ".cclaw/knowledge.jsonl"),
+      `${JSON.stringify({
+        type: "compound",
+        source: "retro",
+        trigger: "after high-risk release retrospective",
+        action: "run focused rollback drill before merge",
+        confidence: "high",
+        domain: "ship",
+        stage: null,
+        origin_stage: "ship",
+        origin_run: "compound-block",
+        frequency: 1,
+        universality: "project",
+        maturity: "raw",
+        created: "2026-01-01T12:00:00Z",
+        first_seen_ts: "2026-01-01T12:00:00Z",
+        last_seen_ts: "2026-01-01T12:00:00Z",
+        project: "cclaw"
+      })}\n`,
+      "utf8"
+    );
+
+    const read = await readFlowState(root);
+    expect(read.closeout.shipSubstate).toBe("compound_review");
+    await expect(archiveRun(root, "Compound Blocked")).rejects.toThrow(/ready_to_archive/i);
   });
 
   it("blocks archive when retro was skipped but closeout is not ready_to_archive", async () => {
@@ -297,7 +369,9 @@ describe("runs system", () => {
           ...base.closeout,
           shipSubstate: "ready_to_archive",
           retroDraftedAt: "2026-01-01T00:00:00Z",
-          retroAcceptedAt: "2026-01-02T00:00:00Z"
+          retroAcceptedAt: "2026-01-02T00:00:00Z",
+          compoundCompletedAt: "2026-01-02T00:30:00Z",
+          compoundPromoted: 1
         }
       },
       { allowReset: true }
@@ -347,7 +421,8 @@ describe("runs system", () => {
           shipSubstate: "ready_to_archive",
           retroDraftedAt: "2026-03-01T00:00:00Z",
           retroAcceptedAt: "2026-03-02T00:00:00Z",
-          compoundSkipped: true
+          compoundSkipped: true,
+          compoundSkipReason: "reviewed retro and found no reusable compound patterns"
         }
       },
       { allowReset: true }
@@ -405,7 +480,9 @@ describe("runs system", () => {
           ...base.closeout,
           shipSubstate: "ready_to_archive",
           retroDraftedAt: "2026-02-01T00:00:00Z",
-          retroAcceptedAt: "2026-02-02T00:00:00Z"
+          retroAcceptedAt: "2026-02-02T00:00:00Z",
+          compoundCompletedAt: "2026-02-02T00:30:00Z",
+          compoundPromoted: 1
         }
       },
       { allowReset: true }
@@ -739,7 +816,9 @@ describe("runs system", () => {
           ...base.closeout,
           shipSubstate: "ready_to_archive",
           retroDraftedAt: "2026-01-01T00:00:00Z",
-          retroAcceptedAt: "2026-01-02T00:00:00Z"
+          retroAcceptedAt: "2026-01-02T00:00:00Z",
+          compoundCompletedAt: "2026-01-02T00:30:00Z",
+          compoundPromoted: 1
         }
       },
       { allowReset: true }

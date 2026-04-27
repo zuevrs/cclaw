@@ -33,10 +33,28 @@ export const ARTIFACT_TEMPLATES: Record<string, string> = {
 ### Discovered context
 - (paths, prior artifacts, seeds, prompt fragments — referenced by downstream stages, or \`- None.\`)
 
-## Problem
-- **What we're solving:**
-- **Success criteria:**
-- **Constraints:**
+## Problem Decision Record
+- **Depth:** lite | standard | deep
+- **Frame type:** product | technical-maintenance
+
+### Product framing (use when applicable)
+- **Persona / user:**
+- **Job to be done:**
+- **Pain / trigger:**
+- **Value hypothesis:**
+- **Evidence / signal:**
+- **Success metric:**
+- **Why now:**
+- **Do-nothing consequence:**
+- **Non-goals:**
+
+### Technical-maintenance framing (use when product framing is not applicable)
+- **Affected operator/developer:**
+- **Current failure mode:**
+- **Expected operational improvement:**
+- **Verification signal:**
+- **Do-nothing cost:**
+- **Non-goals:**
 
 ## Premise Check
 - **Right problem?** (yes/no + one-line justification — take a position)
@@ -47,11 +65,10 @@ export const ARTIFACT_TEMPLATES: Record<string, string> = {
 - *How might we …?* — one line naming the user, the desired outcome, and the binding constraint.
 
 ## Sharpening Questions
+> Ask one decision-changing question at a time. For concrete early exits, record \`None - early exit\` with rationale.
 | # | Question | Answer / Assumption | Decision impact |
 |---|---|---|---|
 | 1 |  |  |  |
-| 2 |  |  |  |
-| 3 |  |  |  |
 
 ## Clarifying Questions
 | # | Question | Answer | Decision impact |
@@ -59,7 +76,7 @@ export const ARTIFACT_TEMPLATES: Record<string, string> = {
 | 1 |  |  |  |
 
 ## Approach Tier
-- Tier: Lightweight | Standard | Deep
+- Tier: lite | standard | deep
 - Why this tier:
 
 ## Short-Circuit Decision
@@ -84,7 +101,7 @@ export const ARTIFACT_TEMPLATES: Record<string, string> = {
 - **Approach:**
 - **Rationale:** Trace this to the prior Approach Reaction.
 - **Approval:** pending
-- **Next-stage handoff:** On standard track, hand this to \`scope\`; on medium track, hand this directly to \`spec\` with explicit requirements/constraints.
+- **Next-stage handoff:** On standard track, hand this to \`scope\`; on medium track, hand this directly to \`spec\`. Include upstream decisions used, drift, confidence, unresolved questions, risk hints, and non-goals.
 
 ## Not Doing
 - (3-5 things this brainstorm is *not* committing to — distinct from \`Deferred\`. These will not appear in scope unless the user explicitly opts in.)
@@ -169,8 +186,21 @@ ${SEED_SHELF_SECTION}
 | HOUR 4-5 (integration) |  |  |  |
 | HOUR 6+ (polish/tests) |  |  |  |
 
+## Scope Contract
+- **Selected mode:** HOLD SCOPE | SELECTIVE EXPANSION | SCOPE EXPANSION | SCOPE REDUCTION
+- **In scope:**
+- **Out of scope:**
+- **Requirements:**
+- **Locked decisions:**
+- **Discretion areas:**
+- **Deferred ideas:**
+- **Accepted reference ideas:**
+- **Rejected reference ideas:**
+- **Success definition:**
+- **Design handoff:**
+
 ## Scope Mode
-- [ ] SCOPE EXPANSION — dream bigger; user explicitly opts into the larger product slice.
+- [ ] SCOPE EXPANSION — explore ambitious alternatives; user explicitly opts into the larger product slice.
 - [ ] SELECTIVE EXPANSION — hold baseline scope and cherry-pick one high-leverage addition.
 - [ ] HOLD SCOPE — preserve the approved brainstorm direction with maximum rigor.
 - [ ] SCOPE REDUCTION — strip to the smallest useful wedge when risk/blast radius is too high.
@@ -178,9 +208,24 @@ ${SEED_SHELF_SECTION}
 ## Mode-Specific Analysis
 | Selected mode | Rationale | Depth |
 |---|---|---|
-|  |  | default / deep |
+|  |  | lite / standard / deep |
 
-> Default path: one selected-mode row plus rationale. Deep/high-risk scope may expand below with mode-specific analysis.
+> Default path: one selected-mode row plus rationale. Deep/high-risk scope may expand with optional evidence headings below.
+
+## Landscape Check
+- Optional for EXPAND/SELECTIVE/deep; omit for compact HOLD SCOPE.
+
+## Taste Calibration
+- Optional quality-bar references from in-repo modules/files.
+
+## Reference Pull
+- Optional evidence from \`/Users/zuevrs/Downloads/references\`; list accepted/rejected ideas or \`Not needed - compact scope\`.
+
+## Ambitious Alternatives
+- Optional for SCOPE EXPANSION/SELECTIVE; list larger alternatives and disposition.
+
+## Ruthless Minimum Slice
+- Optional for SCOPE REDUCTION/high-risk scope; define the smallest useful wedge.
 
 ## Requirements (stable IDs)
 | ID | Requirement (observable outcome) | Priority | Source (origin doc / prompt line) |
@@ -245,6 +290,9 @@ ${SEED_SHELF_SECTION}
 
 ## Scope Summary
 - Selected mode: (one of \`SCOPE EXPANSION\` | \`SELECTIVE EXPANSION\` | \`HOLD SCOPE\` | \`SCOPE REDUCTION\`)
+- Confidence: high | medium | low
+- Drift from brainstorm: None / <specific drift>
+- Unresolved questions: None / <questions>
 - Strongest challenges resolved:
 - Recommended path:
 - Accepted scope:
@@ -295,7 +343,7 @@ ${SEED_SHELF_SECTION}
 
 ## Compact-First Scaffold
 - Default to the compact design spine unless risk requires Standard/Deep add-ons.
-- Compact required spine: Codebase Investigation, Architecture Boundaries, Architecture Diagram, Data Flow, Failure Mode Table, Test Strategy, and Completion Dashboard.
+- Compact required spine: Upstream Handoff, Codebase Investigation, Engineering Lock, Architecture Boundaries, Architecture Diagram, Data Flow, Failure Mode Table, Test Strategy, Spec Handoff, and Completion Dashboard.
 - Mark optional Standard/Deep sections as \`Omitted - compact design\` when they do not apply; do not expand the scaffold just to fill empty tables.
 
 ## Upstream Handoff
@@ -306,9 +354,14 @@ ${SEED_SHELF_SECTION}
 - Drift from upstream (or \`None\`):
 
 ## Codebase Investigation
-| File | Current responsibility | Patterns discovered |
-|---|---|---|
-|  |  |  |
+| File | Current responsibility | Patterns discovered | Existing fit / reuse candidate |
+|---|---|---|---|
+|  |  |  |  |
+
+## Engineering Lock
+| Decision area | Chosen path | Shadow alternative | Switch trigger | Failure/rescue/degraded behavior | Verification evidence | Confidence |
+|---|---|---|---|---|---|---|
+|  |  |  |  |  |  |  |
 
 ## Search Before Building
 | Layer | Label | What to reuse first |
@@ -340,9 +393,9 @@ ${MARKDOWN_CODE_FENCE}
 ## Data-Flow Shadow Paths
 - Standard/Deep add-on; omit when compact design does not need a shadow path.
 <!-- diagram: data-flow-shadow-paths -->
-| Path | Trigger | Fallback/Degrade behavior |
-|---|---|---|
-|  |  |  |
+| Chosen path | Shadow alternative | Switch trigger | Failure/rescue/degraded behavior | Verification evidence |
+|---|---|---|---|---|
+|  |  |  |  |  |
 
 ## Error Flow Diagram
 - Standard/Deep add-on; omit when the Failure Mode Table is sufficient.
@@ -391,6 +444,8 @@ ${MARKDOWN_CODE_FENCE}
 |  |  |  |  |
 
 ## Data Flow
+- Data/state flow:
+- Critical path:
 - Happy path:
 - Nil/empty input path:
 - Upstream error path:
@@ -434,6 +489,23 @@ ${MARKDOWN_CODE_FENCE}
 | Step | Strategy | Rollback plan |
 |---|---|---|
 |  |  |  |
+
+## Rejected Alternatives
+| Alternative | Why rejected | Revival signal |
+|---|---|---|
+|  |  |  |
+
+## Design Decisions
+| Decision Ref | Requirement / LD refs | Decision | Spec impact |
+|---|---|---|---|
+| DD-1 |  |  |  |
+
+## Spec Handoff
+- Requirements to carry forward:
+- Design decisions to encode:
+- Risks and rescue paths:
+- Test/performance expectations:
+- Unresolved questions (or \`None\`):
 
 ## Outside Voice Findings
 | ID | Dimension | Finding | Disposition | Rationale |
@@ -739,16 +811,40 @@ Execution rule: complete and verify each batch before starting the next batch.
 - Open questions:
 - Drift from upstream (or \`None\`):
 
+## Review Evidence Scope
+- Base/head:
+- Files inspected:
+- Changed-file coverage summary:
+- Diagnostics run:
+- Omitted files with explicit reason:
+- Reviewer delegation evidence:
+- Security-reviewer delegation evidence:
+
+## Changed-File Coverage
+| File | Coverage status | Evidence / no-impact reason |
+|---|---|---|
+|  | inspected / broader-module / omitted-no-impact |  |
+
 ## Layer 1 Verdict
 | Criterion | Verdict | Evidence |
 |---|---|---|
 | AC-1 | PASS/FAIL |  |
 
 ## Layer 2 Findings
-| ID | Severity | Category | Description | Status |
-|---|---|---|---|---|
-| R-1 | Critical/Important/Suggestion | correctness/security/performance/architecture/external-safety |  | open/resolved |
-- NO_CHANGE_ATTESTATION: <required when Category=security has no entries; explain why no security-relevant changes were detected>
+| ID | Severity | Category | File:line / no-line reason | Description | Status |
+|---|---|---|---|---|---|
+| R-1 | Critical/Important/Suggestion | correctness/security/performance/architecture/external-safety | path:line |  | open/resolved |
+- NO_FINDINGS_ATTESTATION: <required when no findings are reported; cite inspected coverage>
+
+## Security Sweep Attestation
+- Result: findings | NO_CHANGE_ATTESTATION | NO_SECURITY_IMPACT
+- Inspected surfaces:
+- Rationale:
+
+## Dependency & Version Audit
+- Relevant: yes/no
+- Manifests/lockfiles/generated clients/CI/runtime config/external APIs inspected:
+- Result / no-impact rationale:
 
 ## Incoming Feedback Queue
 | ID | Source | Severity | File:line | Request | Status | Evidence |

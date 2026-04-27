@@ -246,6 +246,19 @@ describe("flow command contracts", () => {
       expect(content).toContain("Normal stage resume and advancement uses `/cc-next`");
     }
 
+    for (const agentName of ["product-manager", "critic", "planner", "reviewer", "security-reviewer", "test-author", "doc-updater"]) {
+      const opencodeAgent = await fs.readFile(path.join(root, ".opencode/agents", `${agentName}.md`), "utf8");
+      const codexAgent = await fs.readFile(path.join(root, ".codex/agents", `${agentName}.toml`), "utf8");
+      expect(opencodeAgent).toContain(`# ${agentName}`);
+      expect(codexAgent).toContain(`name = "${agentName}"`);
+      expect(codexAgent).toContain("developer_instructions");
+    }
+
+    const generatedPm = await fs.readFile(path.join(root, ".cclaw/agents/product-manager.md"), "utf8");
+    const generatedCritic = await fs.readFile(path.join(root, ".cclaw/agents/critic.md"), "utf8");
+    expect(generatedPm).toContain("VALUE_HYPOTHESIS");
+    expect(generatedCritic).toContain("shadow alternative");
+
     // Codex hooks are managed again since v0.40.0.
     const codexHooksPath = path.join(root, ".codex/hooks.json");
     const codexHooksRaw = await fs.readFile(codexHooksPath, "utf8");

@@ -38,10 +38,18 @@ async function writeBrainstormArtifact(root: string): Promise<void> {
 - Project state: greenfield static landing page.
 - Relevant existing code/patterns: none; initial flow stage.
 
-## Problem
-- What we're solving: pick a reliable frontend direction.
-- Success criteria: approved direction and traceable trade-offs.
-- Constraints: no implementation during brainstorm.
+## Problem Decision Record
+- Stage depth: lite
+- Work type: product
+- User / Persona: landing page visitor
+- Job To Be Done: understand the offer and choose a clear next action
+- Pain / Trigger: current direction is undecided before implementation
+- Value Hypothesis: a static frontend direction gives fast launch with traceable trade-offs
+- Evidence / Signal: user selected the richer frontend ecosystem direction
+- Success Metric: approved direction and traceable trade-offs
+- Why now: implementation should not start until the frontend direction is approved
+- What happens if we do nothing: frontend work starts with unstable assumptions
+- Non-goals: no implementation during brainstorm
 
 ## Clarifying Questions
 | # | Question | Answer | Decision impact |

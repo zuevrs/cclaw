@@ -763,17 +763,42 @@ export async function appendKnowledge(
   };
 }
 
+const SHORT_TECHNICAL_TOKEN_SET = new Set(["ci", "db", "ui", "qa", "ux"]);
+
 function tokenizeText(value: string | null | undefined): string[] {
   if (!value) return [];
-  return value
-    .toLowerCase()
-    .split(/[^a-z0-9]+/u)
-    .map((token) => token.trim())
-    .filter((token) => token.length >= 3);
+  const tokens: string[] = [];
+  const matches = value.matchAll(/[A-Za-z0-9]+/gu);
+  for (const match of matches) {
+    const raw = match[0] ?? "";
+    const normalized = raw.toLowerCase();
+    if (normalized.length >= 3) {
+      tokens.push(normalized);
+      continue;
+    }
+    if (/^[A-Z]{2}$/u.test(raw) || SHORT_TECHNICAL_TOKEN_SET.has(normalized)) {
+      tokens.push(normalized);
+    }
+  }
+  return tokens;
 }
 
 function uniqueTokens(values: string[]): string[] {
   return [...new Set(values)];
+}
+
+function supersededTriggerSet(entries: KnowledgeEntry[]): Set<string> {
+  const superseded = new Set<string>();
+  for (const entry of entries) {
+    for (const trigger of entry.supersedes ?? []) {
+      superseded.add(normalizeText(trigger));
+    }
+  }
+  return superseded;
+}
+
+function isSupersededLearning(entry: KnowledgeEntry, supersededTriggers: Set<string>): boolean {
+  return entry.superseded_by !== undefined || supersededTriggers.has(normalizeText(entry.trigger));
 }
 
 function pathTokens(paths: string[] | undefined): string[] {
@@ -803,7 +828,10 @@ export async function selectRelevantLearnings(
       ? Math.floor(options.limit)
       : 8;
 
-  const ranked = entries.map((entry, index) => {
+  const staleTriggers = supersededTriggerSet(entries);
+  const activeEntries = entries.filter((entry) => !isSupersededLearning(entry, staleTriggers));
+
+  const ranked = activeEntries.map((entry, index) => {
     let score = 0;
 
     let stageScore = 0;
