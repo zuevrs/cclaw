@@ -351,27 +351,29 @@ const REQUIRED_GATE_IDS: Record<FlowStage, RequiredGateSet> = {
 const REQUIRED_ARTIFACT_SECTIONS: Record<FlowStage, string[]> = {
   brainstorm: [
     "Context",
-    "Problem",
+    "Problem Decision Record",
     "Approach Tier",
     "Approaches",
     "Approach Reaction",
     "Selected Direction"
   ],
-  scope: ["Scope Mode", "In Scope / Out of Scope", "Completion Dashboard", "Scope Summary"],
+  scope: ["Scope Contract", "Scope Mode", "In Scope / Out of Scope", "Completion Dashboard", "Scope Summary"],
   design: [
     "Research Fleet Synthesis",
+    "Engineering Lock",
     "Architecture Boundaries",
     "Architecture Diagram",
     "Failure Mode Table",
     "Security & Threat Model",
     "Observability & Debuggability",
     "Deployment & Rollout",
+    "Spec Handoff",
     "Completion Dashboard"
   ],
   spec: ["Acceptance Criteria", "Edge Cases", "Assumptions Before Finalization", "Acceptance Mapping", "Approval"],
   plan: ["Task List", "Dependency Batches", "Acceptance Mapping", "Execution Posture", "WAIT_FOR_CONFIRM"],
   tdd: ["Test Discovery", "System-Wide Impact Check", "RED Evidence", "GREEN Evidence", "REFACTOR Notes", "Traceability", "Verification Ladder"],
-  review: ["Layer 1 Verdict", "Review Findings Contract", "Severity Summary", "Final Verdict"],
+  review: ["Review Evidence Scope", "Changed-File Coverage", "Layer 1 Verdict", "Review Findings Contract", "Severity Summary", "Final Verdict"],
   ship: ["Preflight Results", "Release Notes", "Rollback Plan", "Finalization"]
 };
 
@@ -476,9 +478,23 @@ const STAGE_SCHEMA_MAP: Record<FlowStage, StageSchemaInput> = {
 const STAGE_AUTO_SUBAGENT_DISPATCH: Record<FlowStage, StageAutoSubagentDispatch[]> = {
   brainstorm: [
     {
+      agent: "product-manager",
+      mode: "proactive",
+      when: "When product value, persona/JTBD, success metric, or why-now framing is ambiguous.",
+      purpose: "Pressure-test problem/value fit and produce product-discovery evidence for the Problem Decision Record.",
+      requiresUserGate: false
+    },
+    {
+      agent: "critic",
+      mode: "proactive",
+      when: "When the premise may be wrong, cheaper alternatives exist, or the do-nothing path could be acceptable.",
+      purpose: "Attack assumptions and surface non-goals before direction approval.",
+      requiresUserGate: false
+    },
+    {
       agent: "planner",
       mode: "proactive",
-      when: "When request is ambiguous, multi-surface, or spans multiple modules.",
+      when: "When request is ambiguous, multi-surface, or staged feasibility is unclear.",
       purpose: "Map scope and alternatives before direction lock.",
       requiresUserGate: false
     }
@@ -491,6 +507,20 @@ const STAGE_AUTO_SUBAGENT_DISPATCH: Record<FlowStage, StageAutoSubagentDispatch[
       when: "Always during scope shaping.",
       purpose: "Challenge premise, map alternatives, and produce explicit in/out contract.",
       requiresUserGate: false
+    },
+    {
+      agent: "critic",
+      mode: "proactive",
+      when: "When selecting SELECTIVE EXPANSION, SCOPE EXPANSION, or SCOPE REDUCTION, or when boundaries feel soft.",
+      purpose: "Test whether the selected scope mode is too timid, too broad, or hiding a smaller useful slice.",
+      requiresUserGate: false
+    },
+    {
+      agent: "product-manager",
+      mode: "proactive",
+      when: "When scope choices change user value, success metrics, or product positioning.",
+      purpose: "Keep accepted/deferred reference ideas tied to user value and measurable success.",
+      requiresUserGate: false
     }
   ],
   design: [
@@ -499,14 +529,28 @@ const STAGE_AUTO_SUBAGENT_DISPATCH: Record<FlowStage, StageAutoSubagentDispatch[
       mode: "mandatory",
       requiredAtTier: "standard",
       when: "Always during design lock.",
-      purpose: "Stress architecture boundaries and dependency graph.",
+      purpose: "Stress architecture boundaries, dependency graph, critical path, and spec handoff.",
+      requiresUserGate: false
+    },
+    {
+      agent: "critic",
+      mode: "proactive",
+      when: "When architecture alternatives, coupling, cost, or rollback risk remain debatable.",
+      purpose: "Produce a shadow alternative, switch trigger, and cheaper-path challenge for the engineering lock.",
       requiresUserGate: false
     },
     {
       agent: "security-reviewer",
       mode: "proactive",
-      when: "When trust boundaries, auth, secrets, or external inputs are involved.",
+      when: "When trust boundaries, auth, secrets, sensitive data, or external inputs are involved.",
       purpose: "Catch design-level security risks before implementation.",
+      requiresUserGate: false
+    },
+    {
+      agent: "test-author",
+      mode: "proactive",
+      when: "When testability, failure/rescue behavior, or verification evidence is unclear.",
+      purpose: "Check that the design can produce concrete RED/GREEN/REFACTOR and rollout verification evidence.",
       requiresUserGate: false
     }
   ],

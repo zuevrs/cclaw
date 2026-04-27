@@ -124,4 +124,108 @@ action: Add startup warmup job.
     expect(markdown).toContain("source_stage: design");
     expect(markdown).toContain("source_artifact: .cclaw/artifacts/03-design-queue.md");
   });
+  it("ranks exact trigger matches before token overlap and recency", async () => {
+    const root = await createTempProject("seed-shelf-rank-exact");
+    const seedsDir = seedShelfDir(root);
+    await fs.mkdir(seedsDir, { recursive: true });
+    await fs.writeFile(
+      path.join(seedsDir, "SEED-2026-04-25-recent-token-overlap.md"),
+      `---
+title: Recent webhook retry design
+trigger_when:
+  - other trigger
+hypothesis: Webhook retry failures need backoff.
+action: Add retry backoff for webhook failures.
+---
+
+# Recent webhook retry design
+Webhook retry failures need a bounded backoff design.
+`,
+      "utf8"
+    );
+    await fs.writeFile(
+      path.join(seedsDir, "SEED-2026-04-20-exact-webhook-trigger.md"),
+      `---
+title: Exact webhook retry seed
+trigger_when:
+  - webhook retry
+hypothesis: Exact triggers should win.
+action: Apply the exact trigger guidance.
+---
+
+# Exact webhook retry seed
+`,
+      "utf8"
+    );
+
+    const matches = await findMatchingSeeds(root, "Need webhook retry behavior for failed sends");
+    expect(matches.map((seed) => seed.title)).toEqual([
+      "Exact webhook retry seed",
+      "Recent webhook retry design"
+    ]);
+  });
+
+  it("matches seeds by bounded title summary hypothesis and action token overlap", async () => {
+    const root = await createTempProject("seed-shelf-token-overlap");
+    const seedsDir = seedShelfDir(root);
+    await fs.mkdir(seedsDir, { recursive: true });
+    await fs.writeFile(
+      path.join(seedsDir, "SEED-2026-04-23-cache-warming.md"),
+      `---
+title: Cache warming seed
+trigger_when:
+  - unrelated trigger
+hypothesis: Cold cache startup slows requests.
+action: Warm cache keys during startup.
+---
+
+# Cache warming seed
+Warm cache keys before serving traffic.
+`,
+      "utf8"
+    );
+    await fs.writeFile(
+      path.join(seedsDir, "SEED-2026-04-24-noisy-unrelated.md"),
+      `---
+title: Noisy unrelated seed
+trigger_when:
+  - unrelated trigger
+hypothesis: A different problem.
+action: Ignore this for cache work.
+---
+
+# Noisy unrelated seed
+`,
+      "utf8"
+    );
+
+    const matches = await findMatchingSeeds(root, "startup cache warming plan");
+    expect(matches.map((seed) => seed.title)).toEqual(["Cache warming seed"]);
+  });
+
+  it("caps seed retrieval to a conservative maximum", async () => {
+    const root = await createTempProject("seed-shelf-cap");
+    const seedsDir = seedShelfDir(root);
+    await fs.mkdir(seedsDir, { recursive: true });
+    for (let index = 0; index < 12; index += 1) {
+      const day = String(index + 1).padStart(2, "0");
+      await fs.writeFile(
+        path.join(seedsDir, `SEED-2026-04-${day}-shared-trigger-${index}.md`),
+        `---
+title: Shared trigger ${index}
+trigger_when:
+  - shared trigger
+action: Apply shared trigger.
+---
+
+# Shared trigger ${index}
+`,
+        "utf8"
+      );
+    }
+
+    const matches = await findMatchingSeeds(root, "shared trigger", 99);
+    expect(matches).toHaveLength(10);
+  });
+
 });

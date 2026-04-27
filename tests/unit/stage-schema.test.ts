@@ -311,10 +311,12 @@ describe("stage schema and subagent alignment", () => {
     expect(agent?.description.toLowerCase()).toMatch(/mandatory|no-change/);
   });
 
-  it("agent registry uses the core-5 roster", () => {
+  it("agent registry uses the specialist roster", () => {
     expect(CCLAW_AGENTS.map((agent) => agent.name).sort()).toEqual([
+      "critic",
       "doc-updater",
       "planner",
+      "product-manager",
       "reviewer",
       "security-reviewer",
       "test-author"
@@ -379,10 +381,7 @@ describe("stage schema and subagent alignment", () => {
     const design = stageSchema("design");
     for (const section of [
       "Data-Flow Shadow Paths",
-      "Error Flow Diagram",
-      "State Machine Diagram",
-      "Rollback Flowchart",
-      "Deployment Sequence Diagram"
+      "Error Flow Diagram"
     ] as const) {
       const rule = design.artifactValidation.find((row) => row.section === section);
       expect(rule).toBeDefined();
@@ -403,8 +402,8 @@ describe("stage schema and subagent alignment", () => {
     expect(brainstorm.artifactValidation.find((row) => row.section === "Approach Reaction")?.validationRule)
       .toContain("before Selected Direction");
     expect(skill).toContain("if using a structured question tool, send exactly one question object");
-    expect(skill).toContain("rationale traceable to the prior Approach Reaction");
-    expect(skill).toContain("track-aware next-stage handoff");
+    expect(skill).toContain("rationale traceable to Approach Reaction");
+    expect(skill).toContain("scope handoff with decisions, drift, confidence");
   });
 
   it("brainstorm skill teaches the calibrated Self-Review Notes format, not the legacy `- None.` shortcut", () => {
@@ -501,7 +500,7 @@ describe("stage schema and subagent alignment", () => {
     }
     expect(brainstorm.trivialOverrideSections).toEqual([
       "Context",
-      "Problem",
+      "Problem Decision Record",
       "Approach Tier",
       "Short-Circuit Decision",
       "Selected Direction"
@@ -518,8 +517,8 @@ describe("stage schema and subagent alignment", () => {
       "scope_user_approved"
     ]);
     expect(scope.executionModel.checklist).toEqual(expect.arrayContaining([
-      expect.stringContaining("This is the default path"),
-      expect.stringContaining("ordinary path is a selected-mode row plus rationale")
+      expect.stringContaining("draft the in-scope/out-of-scope/deferred/discretion contract"),
+      expect.stringContaining("lite keeps the selected-mode row compact")
     ]));
     expect(scope.artifactValidation.find((row) => row.section === "Dream State Mapping")?.validationRule)
       .toContain("Omit for compact scope");
@@ -550,9 +549,8 @@ describe("stage schema and subagent alignment", () => {
     for (const section of [
       "Data-Flow Shadow Paths",
       "Error Flow Diagram",
-      "Parallelization Strategy",
-      "Interface Contracts",
-      "Unresolved Decisions"
+      "Data-Flow Shadow Paths",
+      "Error Flow Diagram"
     ] as const) {
       expect(design.artifactValidation.find((row) => row.section === section)?.validationRule)
         .toMatch(/add-on/);
@@ -582,7 +580,7 @@ describe("stage schema and subagent alignment", () => {
 
     expect(brainstorm.executionModel.checklist).toEqual(expect.arrayContaining([
       expect.stringContaining("Use compact discovery for simple apps"),
-      expect.stringContaining("compact brainstorm stub")
+      expect.stringContaining("Problem Decision Record plus short-circuit handoff")
     ]));
     expect(brainstorm.executionModel.interactionProtocol).toEqual(expect.arrayContaining([
       expect.stringContaining("Ask at most one question per turn")

@@ -6,11 +6,19 @@ const STAGE_EXAMPLES: Record<FlowStage, string> = {
 - **Project state:** Monorepo with CI pipeline using custom release scripts. Release checks are scattered across shell scripts with no shared validation logic.
 - **Relevant existing code/patterns:** \`scripts/pre-publish.sh\` does metadata checks. \`src/release/\` has partial validation helpers.
 
-## Problem
+## Problem Decision Record
 
-- **What we're solving:** release checks are fragile and inconsistent between CI and local runs. Invalid metadata sometimes reaches npm publish.
-- **Success criteria:** invalid release preconditions are caught before publish with explicit operator feedback, in both CI and local workflows.
-- **Constraints:** no new runtime dependencies; must work within existing CI pipeline structure.
+- **Depth:** standard
+- **Frame type:** technical-maintenance
+
+### Technical-maintenance framing
+
+- **Affected operator/developer:** release operator and package maintainer.
+- **Current failure mode:** release checks are fragile and inconsistent between CI and local runs; invalid metadata sometimes reaches npm publish.
+- **Expected operational improvement:** invalid release preconditions are caught before publish with explicit operator feedback in CI and local workflows.
+- **Verification signal:** shared release validation tests and CI release-check command fail on invalid metadata.
+- **Do-nothing cost:** continued publish risk and duplicated local/CI fixes.
+- **Non-goals:** no new runtime dependencies; no release-framework rewrite.
 
 ## Clarifying Questions
 
@@ -745,7 +753,7 @@ function exampleSummaryBullets(stage: FlowStage): string[] {
 // sample in STAGE_EXAMPLES gains or loses a top-level section.
 const STAGE_EXAMPLE_SECTION_HEADINGS: Record<FlowStage, string[]> = {
   brainstorm: [
-    "Problem framing (problem, success, constraints)",
+    "Problem Decision Record (product or technical-maintenance framing)",
     "Candidate approaches with trade-offs",
     "Recommended direction + open questions",
     "Clarification log and decision record"

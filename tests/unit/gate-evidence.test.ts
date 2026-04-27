@@ -67,7 +67,7 @@ describe("gate evidence verification", () => {
 - Project state: monorepo with CI pipeline
 - Relevant existing code/patterns: scripts/pre-publish.sh does metadata checks
 
-## Problem
+## Problem Decision Record
 - What we're solving: harden release flow to prevent unsafe publishes
 - Success criteria: invalid release metadata blocks publish
 - Constraints: no new runtime dependencies
@@ -102,6 +102,7 @@ describe("gate evidence verification", () => {
 - Approach: B — reusable validation module
 - Rationale: user reaction favored reuse with bounded scope, giving best balance of reuse and delivery speed
 - Approval: approved
+- Next-stage handoff: scope - lock the validator module boundary and reuse target.
 
 ## Design
 - Architecture: shared TS module with typed validators

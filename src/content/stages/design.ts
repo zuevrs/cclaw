@@ -16,11 +16,11 @@ export const DESIGN: StageSchemaInput = {
   complexityTier: "standard",
   skillFolder: "engineering-design-lock",
   skillName: "engineering-design-lock",
-  skillDescription: "Engineering lock-in stage. Build a concrete technical spine before spec and planning, with section-by-section interactive review.",
+  skillDescription: "Engineering lock stage. Convert the approved scope contract into a buildable architecture with adversarial alternatives, failure/rescue paths, and spec handoff.",
   philosophy: {
     hardGate: "Do NOT write implementation code. This stage produces design decisions and architecture documents only. No code changes, no scaffolding, no test files.",
     ironLaw: "NO DESIGN DECISION WITHOUT A LABELED DIAGRAM, A REJECTED ALTERNATIVE, AND A NAMED FAILURE MODE.",
-    purpose: "Lock architecture, data flow, failure modes, and test/performance expectations through rigorous interactive review.",
+    purpose: "Lock how the scoped slice works: architecture boundary, existing fit, data/state flow, critical path, trust boundaries, failure/rescue behavior, verification, rollout, and spec handoff.",
     whenToUse: [
       "After scope agreement approval",
       "Before writing final spec and execution plan",
@@ -47,14 +47,14 @@ export const DESIGN: StageSchemaInput = {
   },
   executionModel: {
     checklist: [
-      "Compact design lock — for simple greenfield/product slices, produce a tight but complete design spine: codebase investigation, architecture boundary, one labeled diagram, data flow, failure/rescue table, test/perf expectations, and handoff. Do not run a sprawling workshop when a strong engineering lock fits on one page.",
+      "Compact design lock — design does not decide what to build; it decides how the approved scope works. For simple slices, produce a tight lock: upstream handoff, existing fit, architecture boundary, one labeled diagram, data/state flow, critical path, failure/rescue, trust boundaries, test/perf expectations, rollout/rollback, rejected alternative, and spec handoff.",
       "Trivial-Change Escape Hatch — for <=3 files, no new interfaces, and no cross-module data flow, produce a mini-design (rationale, changed files, one risk) and proceed to spec.",
       "Tiered Research — for simple/medium work, do compact inline codebase/research synthesis in `Research Fleet Synthesis`; write `.cclaw/artifacts/02a-research.md` and run the full fleet only for deep/high-risk work or when external framework/architecture uncertainty exists.",
       "Design Doc Check — read upstream artifacts and current design docs; latest superseding doc wins.",
       "Investigator pass — before design decisions, read blast-radius code and record touched files, responsibilities, reuse candidates, and existing patterns.",
       "Scope Challenge + Search Before Building — find existing solutions, minimum change set, and complexity smells before custom architecture.",
-      "Architecture Review — lock boundaries, one realistic failure scenario per new codepath, and high-risk choices with chosen path, one shadow alternative, switch trigger, and verification evidence; include tier-required diagrams.",
-      "Review core risk areas — security/threat model, code quality, tests, performance, observability/debuggability, deployment/rollout, and parallelization when modules are independent.",
+      "Architecture Review — lock boundaries, chosen path, shadow alternative, switch trigger, failure/rescue/degraded behavior, and verification evidence for every high-risk choice; include tier-required diagrams.",
+      "Review core risk areas — existing system fit, data/state flow, critical path, security/trust boundaries, tests, performance budget, observability/debuggability, rollout/rollback, rejected alternatives, and spec handoff.",
       `Critic pass — run/reconcile adversarial second opinion on architecture, coupling, failure modes, and cheaper alternatives. ${reviewLoopPolicySummary("design")} ${reviewLoopSecondOpinionSummary("design")}`,
       "Run optional stale-diagram audit only when configured.",
       "Capture leftovers — seed high-upside deferred ideas, list unresolved decisions with defaults, document distribution for new artifact types, and cross-reference deferred items to scope or unresolved decisions."
@@ -84,7 +84,7 @@ export const DESIGN: StageSchemaInput = {
       "Run configured stale-diagram audit when enabled.",
       "Produce required outputs: NOT-in-scope, What-already-exists, tier diagrams, failure table, completion dashboard.",
       "Plant high-upside deferred ideas when useful and reconcile critic/outside-voice findings.",
-      "Write design lock artifact for downstream spec/plan."
+      "Write design lock artifact for downstream spec/plan with design decisions, rejected alternatives, verification evidence, and exact spec handoff."
     ],
     requiredGates: [
       { id: "design_research_complete", description: "Research is complete: compact inline synthesis by default, or a separate research artifact for deep/high-risk work, and findings are mapped to design decisions." },
@@ -104,6 +104,7 @@ export const DESIGN: StageSchemaInput = {
       "Outside-voice findings and dispositions are recorded (accept/reject/defer).",
       `Spec review loop summary includes iteration count and quality score trajectory per ${reviewLoopPolicySummary("design")}`,
       reviewLoopSecondOpinionSummary("design"),
+      "Adversarial lock table includes chosen path, shadow alternative, switch trigger, failure/rescue/degraded behavior, and verification evidence.",
       "Test strategy includes unit/integration/e2e expectations.",
       "When a high-upside idea is deferred, a seed file is created under `.cclaw/seeds/` and referenced in the artifact.",
       "NOT-in-scope section produced.",
@@ -155,30 +156,28 @@ export const DESIGN: StageSchemaInput = {
     artifactValidation: [
       { section: "Upstream Handoff", required: false, validationRule: "Summarizes scope/research decisions, constraints, open questions, and explicit drift before design choices." },
       { section: "Research Fleet Synthesis", required: true, validationRule: "Must summarize the tiered lenses actually run and map findings to concrete design decisions. Default may be compact inline synthesis; full separate research pack is Deep/high-risk only." },
-      { section: "Codebase Investigation", required: false, validationRule: "Investigator pass: list blast-radius files with current responsibilities, discovered patterns, and reuse candidates." },
+      { section: "Codebase Investigation", required: false, validationRule: "Investigator pass: list blast-radius files with current responsibilities, discovered patterns, reuse candidates, and existing system fit." },
+      { section: "Engineering Lock", required: true, validationRule: "Canonical lock: chosen path, shadow alternative, switch trigger, failure/rescue/degraded behavior, verification evidence, critical path, rollout/rollback, and confidence." },
       { section: "Search Before Building", required: false, validationRule: "For each technical choice: Layer 1 (exact match), Layer 2 (partial match), Layer 3 (inspiration), EUREKA labels with reuse-first default." },
       { section: "Architecture Boundaries", required: true, validationRule: "Must list component boundaries with ownership." },
       { section: "Architecture Diagram", required: true, validationRule: "Must include `<!-- diagram: architecture -->` marker. Diagram must label concrete nodes, label arrows, mark direction, distinguish sync/async edges, and include at least one failure/degraded edge." },
-      { section: "Data-Flow Shadow Paths", required: false, validationRule: "Standard/Deep add-on: include `<!-- diagram: data-flow-shadow-paths -->` marker plus a table for high-risk choices: chosen path, shadow alternative, switch trigger, fallback/degrade behavior, and verification evidence." },
+      { section: "Data-Flow Shadow Paths", required: false, validationRule: "Standard/Deep add-on: include `<!-- diagram: data-flow-shadow-paths -->` marker plus a table for high-risk choices: chosen path, shadow alternative, switch trigger, failure/rescue/degraded behavior, and verification evidence." },
       { section: "Error Flow Diagram", required: false, validationRule: "Standard/Deep add-on: include `<!-- diagram: error-flow -->` marker and failure-detection -> rescue -> user-visible outcome flow." },
-      { section: "State Machine Diagram", required: false, validationRule: "Deep add-on: include `<!-- diagram: state-machine -->` marker and state transitions for critical flow lifecycle." },
-      { section: "Rollback Flowchart", required: false, validationRule: "Deep add-on: include `<!-- diagram: rollback-flowchart -->` marker with trigger -> rollback actions -> verification." },
-      { section: "Deployment Sequence Diagram", required: false, validationRule: "Deep add-on: include `<!-- diagram: deployment-sequence -->` marker with rollout order and guard checks." },
-      { section: "Data Flow", required: false, validationRule: "Must include happy path, nil input, empty input, upstream error paths, plus Interaction Edge Case matrix rows for: double-click, nav-away-mid-request, 10K-result dataset, background-job abandonment, zombie connection. Each row must declare handled yes/no and deferred item when not handled." },
+      { section: "Data Flow", required: false, validationRule: "Must include data/state flow, happy path, nil input, empty input, upstream error paths, plus Interaction Edge Case matrix rows for double-click, nav-away-mid-request, 10K-result dataset, background-job abandonment, zombie connection. Each row declares handled yes/no and deferred item when not handled." },
       { section: "Stale Diagram Audit", required: false, validationRule: "When `.cclaw/config.yaml::optInAudits.staleDiagramAudit` is true: blast-radius files from Codebase Investigation must not be newer than the current design diagram-marker baseline unless explicitly refreshed." },
       { section: "Failure Mode Table", required: true, validationRule: "Use Method/Exception/Rescue/UserSees columns and treat silent user impact without rescue as critical." },
       { section: "Security & Threat Model", required: true, validationRule: "Must list trust boundaries, abuse/failure scenarios, mitigations, and residual risks." },
       { section: "Test Strategy", required: false, validationRule: "Must define unit/integration/e2e expectations with coverage targets." },
       { section: "Performance Budget", required: false, validationRule: "For each critical path: metric name, target threshold, and measurement method." },
       { section: "Observability & Debuggability", required: true, validationRule: "Must define logs/metrics/traces plus alerting/debug path for critical failure modes." },
-      { section: "Deployment & Rollout", required: true, validationRule: "Must define migration/flag strategy, rollback plan, and post-deploy verification steps." },
+      { section: "Deployment & Rollout", required: true, validationRule: "Must define migration/flag strategy, rollout/rollback plan, switch trigger, and post-deploy verification steps." },
       { section: "What Already Exists", required: false, validationRule: "For each sub-problem: existing code/library found (Layer 1-3/EUREKA label), reuse decision, and adaptation needed." },
+      { section: "Rejected Alternatives", required: false, validationRule: "List alternatives considered, why rejected, and what signal would revive them." },
+      { section: "Design Decisions", required: false, validationRule: "Stable design decisions with requirement/locked-decision refs and downstream spec impact." },
+      { section: "Spec Handoff", required: true, validationRule: "Exact requirements, design decisions, risks, test/perf expectations, and unresolved questions that spec must carry forward." },
       { section: "Outside Voice Findings", required: false, validationRule: "Critic pass: list adversarial findings and disposition (accept/reject/defer) with rationale per material finding." },
       { section: "Design Outside Voice Loop", required: false, validationRule: `Record iteration table with quality score per iteration, stop reason, and unresolved concerns. Enforce ${reviewLoopPolicySummary("design")}` },
       { section: "NOT in scope", required: false, validationRule: "Work considered and explicitly deferred with one-line rationale." },
-      { section: "Parallelization Strategy", required: false, validationRule: "Standard/Deep add-on when multi-module: dependency table, parallel lanes, conflict flags." },
-      { section: "Interface Contracts", required: false, validationRule: "Standard/Deep add-on when module boundaries or APIs change: producers, consumers, and payload/interface expectations." },
-      { section: "Unresolved Decisions", required: false, validationRule: "Standard/Deep add-on if any: what info is missing, who provides it, default if unanswered." },
       { section: "Completion Dashboard", required: true, validationRule: "Lists every review section with status (clear / issues-found-resolved / issues-open), critical/open gap counts, decision count, and unresolved items (or 'None')." }
     ],
     trivialOverrideSections: ["Architecture Boundaries", "NOT in scope", "Completion Dashboard"]
@@ -191,6 +190,7 @@ export const DESIGN: StageSchemaInput = {
       "test and performance baseline",
       "NOT-in-scope section",
       "What-already-exists section",
+      "design decisions and spec handoff",
       "design completion dashboard"
     ],
     reviewLoop: {

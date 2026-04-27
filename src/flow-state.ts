@@ -83,6 +83,7 @@ export interface CloseoutState {
   retroSkipReason?: string;
   compoundCompletedAt?: string;
   compoundSkipped?: boolean;
+  compoundSkipReason?: string;
   compoundPromoted: number;
 }
 
@@ -95,6 +96,7 @@ export function createInitialCloseoutState(): CloseoutState {
     retroSkipReason: undefined,
     compoundCompletedAt: undefined,
     compoundSkipped: undefined,
+    compoundSkipReason: undefined,
     compoundPromoted: 0
   };
 }

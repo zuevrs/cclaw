@@ -94,6 +94,16 @@ function archiveLockPath(projectRoot: string): string {
   return path.join(projectRoot, RUNTIME_ROOT, "state", ".archive.lock");
 }
 
+function compoundCloseoutComplete(state: FlowState): boolean {
+  return (
+    state.closeout.compoundCompletedAt !== undefined ||
+    state.closeout.compoundPromoted > 0 ||
+    (state.closeout.compoundSkipped === true &&
+      typeof state.closeout.compoundSkipReason === "string" &&
+      state.closeout.compoundSkipReason.trim().length > 0)
+  );
+}
+
 async function snapshotStateDirectory(
   projectRoot: string,
   destinationRoot: string
@@ -287,6 +297,12 @@ export async function archiveRun(
     sourceState.closeout.retroSkipReason.trim().length > 0;
   const readyForArchive = sourceState.closeout.shipSubstate === "ready_to_archive";
   const inShipCloseout = sourceState.currentStage === "ship";
+  if (readyForArchive && !compoundCloseoutComplete(sourceState)) {
+    throw new Error(
+      "Archive blocked: compound closeout is incomplete. " +
+      "Promote compound guidance or skip compound review with an explicit reason before archiving."
+    );
+  }
   if (inShipCloseout && skipRetro) {
     throw new Error(
       "Archive blocked: --skip-retro is not allowed while current stage is ship. " +

@@ -10,11 +10,11 @@ export const BRAINSTORM: StageSchemaInput = {
   complexityTier: "standard",
   skillFolder: "brainstorming",
   skillName: "brainstorming",
-  skillDescription: "Design-first stage. Explore context, understand intent through collaborative dialogue, propose distinct approaches, and lock an approved direction before scope/design work.",
+  skillDescription: "Problem-discovery stage. Build a concise Problem Decision Record, choose lite/standard/deep depth, compare distinct directions, and hand approved decisions to scope.",
   philosophy: {
     hardGate: "Do NOT invoke implementation skills, write code, scaffold projects, or mutate product behavior until a concrete direction is approved by the user.",
     ironLaw: "NO ARTIFACT IS COMPLETE WITHOUT AN EXPLICITLY APPROVED DIRECTION — SILENCE IS NOT APPROVAL.",
-    purpose: "Turn an initial idea into an approved design direction through natural collaborative dialogue — understanding the problem before proposing solutions.",
+    purpose: "Turn an initial idea into an approved problem frame and direction, using product or technical-maintenance discovery before proposing solutions.",
     whenToUse: [
       "Starting a new feature or behavior change",
       "Requirements are ambiguous or trade-offs are unclear",
@@ -40,22 +40,24 @@ export const BRAINSTORM: StageSchemaInput = {
   executionModel: {
     checklist: [
       "**Explore project context** — inspect existing files/docs/recent activity before asking what to build; capture matching files/patterns/seeds in `Context > Discovered context` so downstream stages don't redo discovery.",
-      "**Classify depth and scope** — pick Lightweight / Standard / Deep; decompose independent subsystems before deeper work.",
+      "**Classify stage depth** — choose `lite` for clear low-risk tasks, `standard` for normal product/engineering changes, or `deep` for ambiguity, architecture, external dependency, security/data risk, or explicit think-bigger requests.",
+      "**Write the Problem Decision Record** — product work captures persona/JTBD/pain/value/evidence/success/why-now/do-nothing/non-goals; technical-maintenance work captures affected operator/developer, failure mode, operational improvement, verification signal, do-nothing cost, and non-goals.",
       "**Premise check (one pass)** — answer the three gstack-style questions in the artifact body: *Right problem? Direct path? What if we do nothing?* Take a position; do not hedge.",
-      "**Reframe with How Might We** — write a single `How Might We …?` line that names the user, the desired outcome, and the constraint. This is the altitude check before approaches.",
-      "**Sharpening questions (3-5)** — capture decision-changing question/answer pairs in the `Sharpening Questions` table with the actual decision impact; only non-critical preference/default assumptions may continue. STOP and ask on scope, architecture, security, data loss, public API, migration, auth/pricing, or user-approval uncertainty.",
+      "**Reframe with How Might We** — write a single `How Might We …?` line that names the user/operator, the desired outcome, and the constraint. This is the altitude check before approaches.",
+      "**Sharpening question discipline** — ask one decision-changing question at a time. Do not default to 3-5 batched questions; record only questions that changed the direction or a critical stop decision.",
       "**Use compact discovery for simple apps** — for concrete low-risk asks (todo app, landing page, local widget), do one context pass, compare one baseline and one challenger, then ask for one explicit approval; do not drag the user through a full workshop.",
-      "**Short-circuit concrete asks** — for unambiguous implementation-only requests, write a compact brainstorm stub (context, problem, approved intent, constraints, assumptions) and ask for one explicit approval.",
+      "**Early-exit concrete asks** — for unambiguous implementation-only requests, write a compact Problem Decision Record plus short-circuit handoff (context, approved intent, constraints, assumptions, next-stage risks) and ask for one explicit approval.",
       "**Ask only decision-changing questions** — one at a time; if answers would not change approach and are non-critical preference/default assumptions, state the assumption and continue; STOP on scope, architecture, security, data loss, public API, migration, auth/pricing, or user approval uncertainty.",
       "**Compare 2-3 distinct approaches with stable Role/Upside columns** — Role values are `baseline` | `challenger` | `wild-card`; Upside is `low` | `modest` | `high` | `higher`; include real trade-offs and reuse notes; include exactly one challenger with explicit `high` or `higher` upside.",
       "**Collect reaction before recommending** — ask which option feels closest and what concern remains, then recommend based on that reaction.",
       "**Write the `Not Doing` list** — name 3-5 things this brainstorm explicitly is not committing to (vs. deferred). This protects scope from silent enlargement and the next stage from rework.",
       "**Self-review before user approval** — re-read the artifact and patch contradictions, weak trade-offs, placeholders, ambiguity, and weak handoff language. Record the result in `Self-Review Notes` using the calibrated review format: `- Status: Approved` (or `Issues Found`), `- Patches applied:` with inline note or sub-bullets, `- Remaining concerns:` with inline note or sub-bullets. Use `Patches applied: None` and `Remaining concerns: None` when there is nothing to record.",
       "**Request explicit approval** — state exactly what direction is being approved; do not advance without approval and artifact review.",
-      "**Handoff** — only after approval, complete the stage and point to `/cc-next`."
+      "**Handoff** — only after approval, hand scope: upstream decisions used, explicit drift, confidence level, unresolved questions, next-stage risk hints, and non-goals."
     ],
     interactionProtocol: [
       "Start from observed project context; if the idea is vague, first narrow the project type with **one** structured question, then keep going.",
+      "Select depth explicitly: `lite`, `standard`, or `deep`; keep lite concise, but escalate when risk/ambiguity changes decisions.",
       "Lead with the premise check (right problem / direct path / what if nothing) and the `How Might We` reframing before approaches; both go in the artifact, not just the chat.",
       "Ask at most one question per turn, only when decision-changing; if using a structured question tool, send exactly one question object, not a multi-question form.",
       "Only non-critical preference/default assumptions may continue inline. STOP and ask when uncertainty affects scope, architecture, security, data loss, public API, migration, auth/pricing, or user approval.",
@@ -81,14 +83,16 @@ export const BRAINSTORM: StageSchemaInput = {
     requiredEvidence: [
       "Artifact written to `.cclaw/artifacts/01-brainstorm-<slug>.md`.",
       "Project context was explored (files, docs, or recent activity referenced).",
-      "Clarifying questions and their answers are captured.",
+      "Problem Decision Record includes product framing or technical-maintenance framing.",
+      "Clarifying questions are one-at-a-time and captured only when they change a decision or stop condition.",
       "2-3 approaches with trade-offs are recorded, including one higher-upside challenger option.",
       "User reaction to approaches is captured before final recommendation.",
       "Final recommendation explicitly reflects user reaction.",
       "Selected Direction includes the handoff to the track-aware next stage: scope on standard, spec on medium when scope/design are skipped.",
       "When a promising option is parked, a seed file is created under `.cclaw/seeds/` and referenced in the artifact.",
       "Approved direction and approval marker are present.",
-      "Assumptions and open questions are captured (or explicitly marked as none)."
+      "Assumptions and open questions are captured (or explicitly marked as none).",
+      "Scope handoff includes upstream decisions used, explicit drift, confidence, unresolved questions, next-stage risk hints, and non-goals."
     ],
     inputs: ["problem statement", "constraints", "success criteria"],
     requiredContext: [
@@ -127,16 +131,16 @@ export const BRAINSTORM: StageSchemaInput = {
     },
     artifactValidation: [
       { section: "Context", required: true, validationRule: "Must reference project state and relevant existing code or patterns. A `Discovered context` subsection (or list) is recommended for downstream traceability." },
-      { section: "Problem", required: true, validationRule: "Must define what we're solving, success criteria, and constraints." },
+      { section: "Problem Decision Record", required: true, validationRule: "Must include either product framing fields (persona/JTBD/pain/value/evidence/success/why-now/do-nothing/non-goals) or technical-maintenance fields (operator/developer, failure mode, operational improvement, verification signal, do-nothing cost, non-goals)." },
       { section: "Premise Check", required: false, validationRule: "Recommended: explicit answers to `Right problem?`, `Direct path?`, `What if we do nothing?` — take a position, do not hedge." },
       { section: "How Might We", required: false, validationRule: "Recommended: a single `How Might We …?` line naming the user, the outcome, and the binding constraint." },
-      { section: "Sharpening Questions", required: false, validationRule: "Recommended: 3-5 question/answer pairs with explicit `Decision impact` so downstream stages see what each answer changed." },
+      { section: "Sharpening Questions", required: false, validationRule: "Recommended only when needed: one decision-changing question per turn with explicit `Decision impact`; compact tasks may record `None - early exit` with rationale." },
       { section: "Clarifying Questions", required: false, validationRule: "Must capture question, answer, and decision impact for each clarifying question." },
-      { section: "Approach Tier", required: true, validationRule: "Must classify depth as Lightweight/Standard/Deep and explain why." },
+      { section: "Approach Tier", required: true, validationRule: "Must classify depth as lite/standard/deep and explain the risk/uncertainty signal." },
       { section: "Short-Circuit Decision", required: false, validationRule: "Must include Status/Why/Scope handoff lines when short-circuit is discussed; compact stubs are valid for concrete asks." },
       { section: "Approaches", required: true, validationRule: "Must compare 2-3 distinct options with real trade-offs. Use the canonical `Role` column with `baseline` | `challenger` | `wild-card` and the `Upside` column with `low` | `modest` | `high` | `higher`; include exactly one challenger row with `high` or `higher` upside." },
       { section: "Approach Reaction", required: true, validationRule: "Must appear before Selected Direction and summarize user reaction before recommendation, including `Closest option`, `Concerns`, and what changed after reaction." },
-      { section: "Selected Direction", required: true, validationRule: "Must include the selected approach, an explicit approval marker, rationale traceable to the prior Approach Reaction, and a track-aware next-stage handoff." },
+      { section: "Selected Direction", required: true, validationRule: "Must include the selected approach, explicit approval marker, rationale traceable to Approach Reaction, and scope handoff with decisions, drift, confidence, unresolved questions, risk hints, and non-goals." },
       { section: "Not Doing", required: false, validationRule: "Recommended: 3-5 explicitly non-committed items (distinct from deferred). Protects scope from silent enlargement and the next stage from rework." },
       { section: "Design", required: false, validationRule: "Must cover architecture, key components, and data flow scaled to complexity." },
       { section: "Visual Companion", required: false, validationRule: "If architecture/data-flow complexity is medium+, include compact ASCII/Mermaid diagram or explicitly justify omission." },
@@ -145,7 +149,7 @@ export const BRAINSTORM: StageSchemaInput = {
     ],
     trivialOverrideSections: [
       "Context",
-      "Problem",
+      "Problem Decision Record",
       "Approach Tier",
       "Short-Circuit Decision",
       "Selected Direction"
@@ -153,7 +157,8 @@ export const BRAINSTORM: StageSchemaInput = {
   },
   reviewLens: {
     outputs: [
-      "approved design direction",
+      "Problem Decision Record",
+      "approved direction",
       "alternatives with trade-offs",
       "brainstorm artifact"
     ],

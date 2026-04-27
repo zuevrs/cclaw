@@ -10,6 +10,8 @@ import { conversationLanguagePolicyBullets, conversationLanguagePolicyMarkdown }
 
 const SUBAGENT_AGENT_NAMES = [
   "planner",
+  "product-manager",
+  "critic",
   "reviewer",
   "security-reviewer",
   "test-author",
@@ -142,9 +144,9 @@ Concrete per-stage rules so the controller does not have to guess which tier fit
 
 | Stage | Deep slot | Balanced slot(s) | Fast fan-out | Trigger to escalate |
 |---|---|---|---|---|
-| brainstorm | planner (only if ambiguity spans >1 module) | — | run in-thread research playbooks | promote to \`balanced\` reviewer once direction locks |
-| scope | planner (always) | — | run \`research/git-history.md\` in-thread when churn is high | promote to \`balanced\` planner if scope touches external contracts |
-| design | planner (always) | security-reviewer (if trust boundary touched) | run \`research/framework-docs-lookup.md\` + \`research/best-practices-lookup.md\` in-thread | escalate one specialist to \`deep\` only if a failure mode is Critical-severity |
+| brainstorm | planner (only if ambiguity spans >1 module) | product-manager / critic when product value or premise is uncertain | run in-thread research playbooks | promote to \`balanced\` critic if the do-nothing path may beat the idea |
+| scope | planner (always) | product-manager / critic when mode changes user value or boundaries are soft | run \`research/git-history.md\` in-thread when churn is high | promote to \`balanced\` critic if scope mode is disputed |
+| design | planner (always) | critic, security-reviewer, test-author when alternatives/trust/testability apply | run \`research/framework-docs-lookup.md\` + \`research/best-practices-lookup.md\` in-thread | escalate one specialist to \`deep\` only if a failure mode is Critical-severity |
 | spec | — | reviewer (if spec > 200 lines or multiple ACs) | — | escalate to \`deep\` only for spec ↔ design contradictions |
 | plan | planner (solo, always) | — | — | never fan out at plan stage; one owner for dependency graph |
 | tdd | — | ${formatAgentList(stageSummary("tdd").primaryAgents)} (per slice, carrying RED/GREEN/REFACTOR evidence) · reviewer (slice-local only when sliceReview triggers) | doc-updater (API surface changes) | escalate to \`deep\` only when a RED test cannot be expressed (design leak) |
@@ -620,6 +622,59 @@ Output format (mandatory):
 `;
 }
 
+
+function productManagerEnhancedBody(): string {
+  return `
+
+## Task Tool Delegation
+
+Use this payload when product discovery needs an isolated lens:
+
+\`\`\`
+You are a product-manager subagent.
+
+DISCOVERY GOAL: {problem/value decision to clarify}
+CONTEXT: {existing artifact excerpts, user segment, constraints}
+DEPTH: {lite|standard|deep}
+
+Required output:
+- PERSONA_JTBD: persona, job, pain/trigger
+- VALUE_HYPOTHESIS: expected value and success metric
+- EVIDENCE_SIGNAL: strongest evidence, weakest assumption
+- WHY_NOW_AND_DO_NOTHING: why now plus consequence of no action
+- NON_GOALS: explicit exclusions
+- SCOPE_HANDOFF: one recommendation for hold/selective/expand/reduce
+\`\`\`
+
+`;
+}
+
+function criticEnhancedBody(): string {
+  return `
+
+## Task Tool Delegation
+
+Use this payload when a premise, scope mode, or engineering path needs adversarial pressure:
+
+\`\`\`
+You are a critic subagent.
+
+DECISION_UNDER_REVIEW: {direction/scope/design choice}
+CONTEXT: {artifact excerpts, constraints, known risks}
+DEPTH: {lite|standard|deep}
+
+Required output:
+- PREMISE_ATTACK: what could make this decision wrong
+- CHEAPER_ALTERNATIVE: smaller or more reversible option
+- SHADOW_ALTERNATIVE: viable competing path
+- SWITCH_TRIGGER: signal that should change the decision
+- FAILURE_RESCUE: likely failure and rescue/degraded behavior
+- VERIFICATION_EVIDENCE: evidence needed before locking
+\`\`\`
+
+`;
+}
+
 function reviewerEnhancedBody(): string {
   return `${specReviewerEnhancedBody()}${codeReviewerEnhancedBody()}`;
 }
@@ -710,6 +765,10 @@ export function enhancedAgentBody(agentName: string): string {
   switch (agentName as SubagentCclawAgentName) {
     case "planner":
       return plannerEnhancedBody();
+    case "product-manager":
+      return productManagerEnhancedBody();
+    case "critic":
+      return criticEnhancedBody();
     case "reviewer":
       return reviewerEnhancedBody();
     case "security-reviewer":

@@ -146,4 +146,107 @@ ${JSON.stringify({
     expect(selected[0]?.stage).toBeNull();
   });
 
+  it("preserves short uppercase technical tokens without enabling lowercase noise", async () => {
+    const root = await createTempProject("knowledge-select-short-tech");
+    const knowledgeDir = path.join(root, ".cclaw");
+    await fs.mkdir(knowledgeDir, { recursive: true });
+    const base = {
+      type: "pattern",
+      action: "keep the guidance focused",
+      confidence: "high",
+      domain: "workflow",
+      stage: null,
+      origin_stage: null,
+      origin_run: null,
+      frequency: 1,
+      universality: "project",
+      maturity: "raw",
+      created: "2026-01-01T00:00:00Z",
+      first_seen_ts: "2026-01-01T00:00:00Z",
+      last_seen_ts: "2026-01-01T00:00:00Z",
+      project: "cclaw"
+    };
+    await fs.writeFile(
+      path.join(knowledgeDir, "knowledge.jsonl"),
+      `${JSON.stringify({
+        ...base,
+        trigger: "CI workflow flakes",
+        action: "stabilize CI workflow"
+      })}
+${JSON.stringify({
+        ...base,
+        trigger: "in process note",
+        action: "do not match lowercase filler words"
+      })}
+`,
+      "utf8"
+    );
+
+    const ciSelected = await selectRelevantLearnings(root, {
+      stage: "review",
+      branch: "CI-fix",
+      diffFiles: [".github/workflows/CI.yml"]
+    });
+    expect(ciSelected.map((entry) => entry.trigger)).toEqual(["CI workflow flakes"]);
+
+    const lowercaseSelected = await selectRelevantLearnings(root, {
+      stage: "review",
+      branch: "in-fix",
+      diffFiles: ["docs/in.md"]
+    });
+    expect(lowercaseSelected).toEqual([]);
+  });
+
+  it("suppresses learnings superseded directly or by replacement entries", async () => {
+    const root = await createTempProject("knowledge-select-supersession");
+    const knowledgeDir = path.join(root, ".cclaw");
+    await fs.mkdir(knowledgeDir, { recursive: true });
+    const base = {
+      type: "lesson",
+      action: "use the current guidance",
+      confidence: "high",
+      domain: "auth",
+      stage: "review",
+      origin_stage: "review",
+      origin_run: "auth-hardening",
+      frequency: 3,
+      universality: "project",
+      maturity: "raw",
+      created: "2026-01-01T00:00:00Z",
+      first_seen_ts: "2026-01-01T00:00:00Z",
+      last_seen_ts: "2026-01-01T00:00:00Z",
+      project: "cclaw"
+    };
+    await fs.writeFile(
+      path.join(knowledgeDir, "knowledge.jsonl"),
+      `${JSON.stringify({
+        ...base,
+        trigger: "old auth logging workaround",
+        superseded_by: "new auth logging guidance",
+        last_seen_ts: "2026-01-04T00:00:00Z"
+      })}
+${JSON.stringify({
+        ...base,
+        trigger: "legacy auth redaction rule",
+        last_seen_ts: "2026-01-03T00:00:00Z"
+      })}
+${JSON.stringify({
+        ...base,
+        trigger: "new auth logging guidance",
+        supersedes: ["legacy auth redaction rule"],
+        last_seen_ts: "2026-01-02T00:00:00Z"
+      })}
+`,
+      "utf8"
+    );
+
+    const selected = await selectRelevantLearnings(root, {
+      stage: "review",
+      branch: "auth-hardening",
+      diffFiles: ["src/auth/logging.ts"]
+    });
+
+    expect(selected.map((entry) => entry.trigger)).toEqual(["new auth logging guidance"]);
+  });
+
 });
