@@ -190,7 +190,7 @@ Apply concise turn announces: one announce per batch boundary (or when risk/plan
 changes materially), then execute tasks without repetitive boilerplate.
 
 Detailed walkthrough:
-Use the current plan artifact for batch order and keep RED -> GREEN -> REFACTOR evidence in the TDD artifact.
+Use the active track's upstream artifact for ordering: plan slices on standard/medium, or spec acceptance items / bug reproduction slices on quick. Keep RED -> GREEN -> REFACTOR evidence in the TDD artifact.
 `;
 }
 
@@ -427,6 +427,7 @@ ${philosophy.purpose}
 
 ## Complexity Tier
 - Active tier: \`${schema.complexityTier}\`
+- Scale-to-complexity rule: execute required gates and artifact sections, but keep optional/deep sections compact unless risk, novelty, or configuration triggers them. Do not mechanically expand lightweight work into a strategy workshop.
 - Mandatory delegations at this tier: ${mandatoryDelegationSummary}
 - Track render context: \`${trackContext.track}\` (${trackContext.usesPlanTerminology ? "plan-first wording" : "acceptance-first wording"})
 
@@ -493,7 +494,7 @@ ${reviewLens.outputs.map((item) => `- ${item}`).join("\n")}
 ${reviewSectionsBlock(reviewLens.reviewSections)}
 
 ## Shared Stage Guidance
-- Follow the handoff menu: advance, revise, pause, rewind, or archive only when the user explicitly chooses it.
+- At STOP/closeout points, offer the shared handoff choices only when a user decision is needed.
 - Carry upstream decisions forward explicitly; record drift instead of silently changing direction.
 - Before closeout, fill \`## Learnings\` with \`- None this stage.\` or 1-3 strict JSON bullets.
 - Keep decisions explicit: context, options, chosen option, rationale, risk, and rollback.

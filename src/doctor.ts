@@ -46,6 +46,7 @@ import {
 import { validateHookDocument } from "./hook-schema.js";
 import { validateKnowledgeEntry } from "./knowledge-store.js";
 import { readSeedShelf } from "./content/seed-shelf.js";
+import { evaluateRetroGate } from "./retro-gate.js";
 import type { HarnessId } from "./types.js";
 import type { DoctorSeverity } from "./doctor-registry.js";
 
@@ -190,16 +191,33 @@ function knowledgeRoutingSurfaceIsDiscoverable(content: string): boolean {
 }
 
 async function commandAvailable(command: string): Promise<boolean> {
+  const version = await commandVersion(command);
+  return version.available;
+}
+
+async function commandVersion(
+  command: string,
+  args: string[] = ["--version"]
+): Promise<{ available: boolean; output: string }> {
   try {
     if (process.platform === "win32") {
       await execFileAsync("where", [command]);
-      return true;
     }
-    await execFileAsync(command, ["--version"]);
-    return true;
+    const { stdout, stderr } = await execFileAsync(command, args);
+    return { available: true, output: `${stdout}${stderr}`.trim() };
   } catch {
-    return false;
+    return { available: false, output: "" };
   }
+}
+
+function parseNodeMajor(versionOutput: string): number | null {
+  const match = /v?(\d+)\./u.exec(versionOutput);
+  if (!match) return null;
+  return Number(match[1]);
+}
+
+function gitVersionLooksUsable(versionOutput: string): boolean {
+  return /git version \d+\.\d+/iu.test(versionOutput);
 }
 
 function stripJsonCommentsOutsideStrings(input: string): string {
@@ -348,6 +366,92 @@ async function opencodeRegistrationCheck(projectRoot: string): Promise<{ ok: boo
     return { ok: false, details: mismatches.join(" | ") };
   }
   return { ok: false, details: `No opencode.json/opencode.jsonc found with plugin ${expected}` };
+}
+
+async function initRecoveryCheck(projectRoot: string): Promise<{ ok: boolean; details: string }> {
+  const sentinelPath = path.join(projectRoot, RUNTIME_ROOT, "state", ".init-in-progress");
+  if (!(await exists(sentinelPath))) {
+    return { ok: true, details: "no partial init/sync sentinel found" };
+  }
+  let summary = `${RUNTIME_ROOT}/state/.init-in-progress sentinel present`;
+  try {
+    const parsed = JSON.parse(await fs.readFile(sentinelPath, "utf8")) as {
+      operation?: unknown;
+      startedAt?: unknown;
+    };
+    const operation = typeof parsed.operation === "string" ? parsed.operation : "unknown";
+    const startedAt = typeof parsed.startedAt === "string" ? parsed.startedAt : "unknown";
+    summary = `${summary} (operation=${operation}, startedAt=${startedAt})`;
+  } catch {
+    summary = `${summary} (unreadable sentinel payload)`;
+  }
+  return {
+    ok: false,
+    details: `${summary}. Fix: inspect generated runtime files, then rerun cclaw sync or remove the sentinel only after confirming the runtime is complete.`
+  };
+}
+
+async function archiveIntegrityCheck(projectRoot: string): Promise<{ ok: boolean; details: string }> {
+  const runsDir = path.join(projectRoot, RUNTIME_ROOT, "runs");
+  if (!(await exists(runsDir))) {
+    return { ok: true, details: `${RUNTIME_ROOT}/runs is absent; no archives to inspect yet` };
+  }
+  let entries: Array<{ name: string; isDirectory: () => boolean }>;
+  try {
+    entries = await fs.readdir(runsDir, { withFileTypes: true });
+  } catch (error) {
+    const reason = error instanceof Error ? error.message : String(error);
+    return { ok: false, details: `unable to inspect ${RUNTIME_ROOT}/runs (${reason})` };
+  }
+
+  const problems: string[] = [];
+  for (const entry of entries) {
+    if (!entry.isDirectory()) continue;
+    const runId = entry.name;
+    const runPath = path.join(runsDir, runId);
+    const relRunPath = `${RUNTIME_ROOT}/runs/${runId}`;
+    if (await exists(path.join(runPath, ".archive-in-progress"))) {
+      problems.push(`${relRunPath}/.archive-in-progress sentinel present`);
+    }
+
+    const manifestPath = path.join(runPath, "archive-manifest.json");
+    if (!(await exists(manifestPath))) {
+      problems.push(`${relRunPath} missing archive-manifest.json`);
+      continue;
+    }
+
+    let manifest: { snapshottedStateFiles?: unknown };
+    try {
+      manifest = JSON.parse(await fs.readFile(manifestPath, "utf8")) as { snapshottedStateFiles?: unknown };
+    } catch (error) {
+      const reason = error instanceof Error ? error.message : String(error);
+      problems.push(`${relRunPath}/archive-manifest.json unreadable (${reason})`);
+      continue;
+    }
+
+    const stateFiles = Array.isArray(manifest.snapshottedStateFiles)
+      ? manifest.snapshottedStateFiles.filter((value): value is string => typeof value === "string")
+      : [];
+    const stateDir = path.join(runPath, "state");
+    if (stateFiles.length > 0 && !(await exists(stateDir))) {
+      problems.push(`${relRunPath} manifest lists state snapshot files but state/ is missing`);
+      continue;
+    }
+    for (const stateFile of stateFiles) {
+      if (stateFile.endsWith("/")) continue;
+      if (!(await exists(path.join(stateDir, stateFile)))) {
+        problems.push(`${relRunPath}/state missing ${stateFile} listed in manifest`);
+      }
+    }
+  }
+
+  if (problems.length === 0) {
+    return { ok: true, details: "no partial archive sentinels or incomplete archive snapshots found" };
+  }
+  return {
+    ok: false,
+    details: `${problems.join("; ")}. Fix: inspect the archive directory, retry archive if the active run was restored, or recover/rollback artifacts and state from the snapshot before removing the sentinel.`
+  };
 }
 
 async function opencodePluginRuntimeShapeCheck(projectRoot: string): Promise<{ ok: boolean; details: string }> {
@@ -1060,11 +1164,36 @@ export async function doctorChecks(projectRoot: string, options: DoctorOptions =
     });
   }
 
-  const hasNode = await commandAvailable("node");
+  const nodeVersion = await commandVersion("node");
+  const nodeMajor = parseNodeMajor(nodeVersion.output);
   checks.push({
     name: "capability:required:node",
-    ok: hasNode,
-    details: "node is required for cclaw runtime scripts and CLI wiring"
+    ok: nodeVersion.available,
+    details: nodeVersion.available
+      ? `node binary available (${nodeVersion.output || "version unknown"})`
+      : "node is required for cclaw runtime scripts and CLI wiring"
+  });
+  checks.push({
+    name: "capability:required:node_version",
+    ok: nodeVersion.available && nodeMajor !== null && nodeMajor >= 20,
+    details: nodeVersion.available
+      ? `node >=20 required; detected ${nodeVersion.output || "unknown version"}`
+      : "node version check skipped because node binary is unavailable"
+  });
+  const gitVersion = await commandVersion("git");
+  checks.push({
+    name: "capability:required:git",
+    ok: gitVersion.available,
+    details: gitVersion.available
+      ? `git binary available (${gitVersion.output || "version unknown"})`
+      : "git is required for repository detection, hook setup, and doctor checks"
+  });
+  checks.push({
+    name: "capability:required:git_version",
+    ok: gitVersion.available && gitVersionLooksUsable(gitVersion.output),
+    details: gitVersion.available
+      ? `git version output: ${gitVersion.output || "unknown version"}`
+      : "git version check skipped because git binary is unavailable"
   });
   const windowsHookConfigCandidates = [
     path.join(projectRoot, ".claude/hooks/hooks.json"),
@@ -1162,12 +1291,9 @@ export async function doctorChecks(projectRoot: string, options: DoctorOptions =
             const key = `${trigger} => ${action}`;
             triggerActionCounts.set(key, (triggerActionCounts.get(key) ?? 0) + 1);
           }
-          const missing = requiredV2Fields.some((field) => {
-            if (field === "origin_run" && Object.prototype.hasOwnProperty.call(parsed, "origin_feature")) {
-              return false;
-            }
-            return !Object.prototype.hasOwnProperty.call(parsed, field);
-          });
+          const missing = requiredV2Fields.some((field) =>
+            !Object.prototype.hasOwnProperty.call(parsed, field)
+          );
           if (missing) {
             missingSchemaV2Fields += 1;
           }
@@ -1477,18 +1603,17 @@ export async function doctorChecks(projectRoot: string, options: DoctorOptions =
       ? "no stale stages pending acknowledgement"
       : `stale stages pending acknowledgement: ${staleStages.join(", ")}`
   });
-  const retroRequired = flowState.completedStages.includes("ship");
-  const retroComplete =
-    !retroRequired ||
-    (typeof flowState.retro.completedAt === "string" && flowState.retro.compoundEntries > 0);
+  const retroGateStatus = await evaluateRetroGate(projectRoot, flowState);
   checks.push({
     name: "state:retro_gate",
-    ok: retroComplete,
-    details: retroComplete
-      ? retroRequired
-        ? `retro gate complete (${flowState.retro.compoundEntries} compound entries)`
+    ok: retroGateStatus.completed,
+    details: retroGateStatus.completed
+      ? retroGateStatus.required
+        ? retroGateStatus.skipped
+          ? "retro gate complete (retro skipped with recorded closeout decision)"
+          : `retro gate complete (${retroGateStatus.compoundEntries} compound entries)`
         : "retro gate not required yet (ship not completed)"
-      : "retro gate incomplete: ship flow requires recorded retrospective evidence."
+      : "retro gate incomplete: ship flow requires recorded retrospective evidence or an explicit retro skip."
   });
   const tddLogPath = path.join(projectRoot, RUNTIME_ROOT, "state", "tdd-cycle-log.jsonl");
   const tddLogExists = await exists(tddLogPath);
@@ -1534,6 +1659,18 @@ export async function doctorChecks(projectRoot: string, options: DoctorOptions =
     name: "runs:archive_root",
     ok: await exists(path.join(projectRoot, RUNTIME_ROOT, "runs")),
     details: `${RUNTIME_ROOT}/runs must exist for archived run snapshots`
+  });
+  const initRecovery = await initRecoveryCheck(projectRoot);
+  checks.push({
+    name: "state:init_recovery",
+    ok: initRecovery.ok,
+    details: initRecovery.details
+  });
+  const archiveIntegrity = await archiveIntegrityCheck(projectRoot);
+  checks.push({
+    name: "runs:archive_integrity",
+    ok: archiveIntegrity.ok,
+    details: archiveIntegrity.details
   });
 
   const delegation = await checkMandatoryDelegations(projectRoot, flowState.currentStage, {

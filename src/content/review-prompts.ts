@@ -57,7 +57,7 @@ value. Do not nitpick wording.
 
 ## Output
 
-Record in \`## Outside Voice Findings\` or \`## Spec Review Loop\`:
+Record in \`## Outside Voice Findings\` or the stage-specific outside voice loop section:
 
 \`\`\`markdown
 | ID | Dimension | Finding | Disposition | Rationale |

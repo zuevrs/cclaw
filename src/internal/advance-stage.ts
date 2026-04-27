@@ -333,7 +333,7 @@ function validateGateEvidenceShape(stage: FlowStage, gateId: string, evidence: s
 
 function reviewLoopArtifactFixHint(stage: FlowStage, gateId: string): string {
   if (AUTO_REVIEW_LOOP_GATE_BY_STAGE[stage] !== gateId) return "";
-  return " Add a `## Spec Review Loop` table to the artifact with rows like `| 1 | 0.80 | 0 |` plus `- Stop reason: quality_threshold_met`, `- Target score: 0.80`, and `- Max iterations: 3`; then omit this gate from manual evidence so stage-complete can auto-hydrate it.";
+  return ` Add a \`## ${stage === "scope" ? "Scope Outside Voice Loop" : "Design Outside Voice Loop"}\` table to the artifact with rows like \`| 1 | 0.80 | 0 |\` plus \`- Stop reason: quality_threshold_met\`, \`- Target score: 0.80\`, and \`- Max iterations: 3\`; then omit this gate from manual evidence so stage-complete can auto-hydrate it.`;
 }
 
 function parseStringList(raw: unknown): string[] {
@@ -530,8 +530,7 @@ async function hydrateReviewLoopEvidenceFromArtifact(
 
   const existing = evidenceByGate[gateId];
   if (typeof existing === "string" && existing.trim().length > 0) {
-    const existingIssue = validateGateEvidenceShape(stage, gateId, existing);
-    if (!existingIssue) return;
+    return;
   }
 
   const resolved = await resolveArtifactPath(stage, {
@@ -761,12 +760,18 @@ function parseStartFlowArgs(tokens: string[]): StartFlowArgs {
 
 async function buildValidationReport(
   projectRoot: string,
-  flowState: FlowState
+  flowState: FlowState,
+  options: { allowBlockedReviewRoute?: boolean } = {}
 ): Promise<InternalValidationReport> {
   const delegation = await checkMandatoryDelegations(projectRoot, flowState.currentStage);
   const gates = await verifyCurrentStageGateEvidence(projectRoot, flowState);
   const completedStages = verifyCompletedStagesGateClosure(flowState);
-  const ok = delegation.satisfied && gates.ok && gates.complete && completedStages.ok;
+  const blockedReviewRouteComplete = options.allowBlockedReviewRoute === true
+    && flowState.currentStage === "review"
+    && typeof flowState.guardEvidence.review_verdict_blocked === "string"
+    && flowState.guardEvidence.review_verdict_blocked.trim().length > 0
+    && !flowState.stageGateCatalog.review.passed.includes("review_criticals_resolved");
+  const ok = delegation.satisfied && gates.ok && (gates.complete || blockedReviewRouteComplete) && completedStages.ok;
 
   return {
     ok,
@@ -943,7 +948,11 @@ async function runAdvanceStage(
       : requiredGateIds;
   const selectedGateIdSet = new Set(selectedGateIds);
   const selectedTransitionGuards = selectedGateIds.filter((gateId) => transitionGuardIds.has(gateId));
-  const missingRequired = requiredGateIds.filter((gateId) => !selectedGateIdSet.has(gateId));
+  const blockedReviewRoute = args.stage === "review" && selectedGateIdSet.has("review_verdict_blocked");
+  const requiredForSelectedRoute = blockedReviewRoute
+    ? requiredGateIds.filter((gateId) => gateId !== "review_criticals_resolved")
+    : requiredGateIds;
+  const missingRequired = requiredForSelectedRoute.filter((gateId) => !selectedGateIdSet.has(gateId));
   if (missingRequired.length > 0) {
     io.stderr.write(
       `cclaw internal advance-stage: required gates not selected as passed: ${missingRequired.join(", ")}.\n`
@@ -1059,7 +1068,9 @@ async function runAdvanceStage(
     }
   };
 
-  const validation = await buildValidationReport(projectRoot, candidateState);
+  const validation = await buildValidationReport(projectRoot, candidateState, {
+    allowBlockedReviewRoute: blockedReviewRoute
+  });
   if (!validation.ok) {
     if (args.json) {
       io.stdout.write(`${JSON.stringify({
@@ -1131,9 +1142,11 @@ async function runAdvanceStage(
     satisfiedGuards,
     new Set(selectedTransitionGuards)
   );
-  const completedStages = flowState.completedStages.includes(args.stage)
-    ? [...flowState.completedStages]
-    : [...flowState.completedStages, args.stage];
+  const completedStages = blockedReviewRoute
+    ? flowState.completedStages.filter((stage) => stage !== args.stage)
+    : flowState.completedStages.includes(args.stage)
+      ? [...flowState.completedStages]
+      : [...flowState.completedStages, args.stage];
   const finalState: FlowState = {
     ...candidateState,
     completedStages,
@@ -1232,6 +1245,58 @@ function firstIncompleteStageForTrack(track: FlowTrack, completedStages: FlowSta
   const completed = new Set(completedStages);
   const stages = TRACK_STAGES[track];
   return stages.find((stage) => !completed.has(stage)) ?? stages[stages.length - 1] ?? "brainstorm";
+}
+
+function carriedCompletedStageCatalog(
+  current: FlowState,
+  fresh: FlowState,
+  stage: FlowStage
+): { catalog: StageGateState; evidence: Record<string, string> } {
+  const previousCatalog = current.stageGateCatalog[stage];
+  const freshCatalog = fresh.stageGateCatalog[stage];
+  const allowed = new Set([...freshCatalog.required, ...freshCatalog.recommended]);
+  const previousPassed = new Set(previousCatalog.passed.filter((gateId) => allowed.has(gateId)));
+  const previousBlocked = new Set(previousCatalog.blocked.filter((gateId) => allowed.has(gateId)));
+  const orderedAllowed = [...freshCatalog.required, ...freshCatalog.recommended];
+  const evidence: Record<string, string> = {};
+  const passed = orderedAllowed.filter((gateId) => {
+    if (!previousPassed.has(gateId)) return false;
+    const note = current.guardEvidence[gateId];
+    if (typeof note !== "string" || note.trim().length === 0) return false;
+    evidence[gateId] = note.trim();
+    return true;
+  });
+  const passedSet = new Set(passed);
+  return {
+    catalog: {
+      required: [...freshCatalog.required],
+      recommended: [...freshCatalog.recommended],
+      conditional: [],
+      triggered: [],
+      passed,
+      blocked: orderedAllowed.filter((gateId) => previousBlocked.has(gateId) && !passedSet.has(gateId))
+    },
+    evidence
+  };
+}
+
+function completedStageClosureEvidenceIssues(flowState: FlowState): string[] {
+  const issues: string[] = [];
+  for (const stage of flowState.completedStages) {
+    const schema = stageSchema(stage, flowState.track);
+    const catalog = flowState.stageGateCatalog[stage];
+    const required = schema.requiredGates
+      .filter((gate) => gate.tier === "required")
+      .map((gate) => gate.id);
+    for (const gateId of required) {
+      if (!catalog.passed.includes(gateId)) continue;
+      const note = flowState.guardEvidence[gateId];
+      if (typeof note !== "string" || note.trim().length === 0) {
+        issues.push(`completed stage "${stage}" passed gate "${gateId}" is missing guardEvidence.`);
+      }
+    }
+  }
+  return issues;
 }
 
 async function ensureProactiveDelegationTrace(projectRoot: string, stage: FlowStage): Promise<void> {
@@ -1409,13 +1474,34 @@ async function runStartFlow(
       TRACK_STAGES[args.track].includes(stage)
     );
     const fresh = createInitialFlowState({ activeRunId: current.activeRunId, track: args.track });
+    const stageGateCatalog = { ...fresh.stageGateCatalog };
+    const guardEvidence: Record<string, string> = {};
+    for (const stage of completedInNewTrack) {
+      const carried = carriedCompletedStageCatalog(current, fresh, stage);
+      stageGateCatalog[stage] = carried.catalog;
+      Object.assign(guardEvidence, carried.evidence);
+    }
     nextState = {
       ...fresh,
       completedStages: completedInNewTrack,
       currentStage: firstIncompleteStageForTrack(args.track, completedInNewTrack),
+      guardEvidence,
+      stageGateCatalog,
       rewinds: current.rewinds,
       staleStages: current.staleStages
     };
+    const validation = await buildValidationReport(projectRoot, nextState);
+    const evidenceIssues = completedStageClosureEvidenceIssues(nextState);
+    if (!validation.completedStages.ok || evidenceIssues.length > 0) {
+      io.stderr.write(
+        "cclaw internal start-flow: reclassification would leave completed stages without valid gate closure.\n"
+      );
+      const issues = [...validation.completedStages.issues, ...evidenceIssues];
+      if (issues.length > 0) {
+        io.stderr.write(`- completed-stage closure issues: ${issues.join(" | ")}\n`);
+      }
+      return 1;
+    }
   } else {
     nextState = createInitialFlowState({ track: args.track });
   }

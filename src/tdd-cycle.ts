@@ -201,7 +201,6 @@ export function validateTddCycleOrder(
         issues.push(`slice ${slice}: refactor logged before green`);
         continue;
       }
-      state = "need_red";
     }
     if (state === "red_open") {
       openRedSlices.push(slice);
@@ -250,10 +249,13 @@ export function pathMatchesTarget(candidate: string, target: string): boolean {
   if (normalizedCandidate.length === 0 || normalizedTarget.length === 0) {
     return false;
   }
-  return (
-    normalizedCandidate === normalizedTarget ||
-    normalizedCandidate.endsWith(`/${normalizedTarget}`)
-  );
+  if (normalizedCandidate === normalizedTarget) {
+    return true;
+  }
+
+  // Only allow suffix matching for multi-segment targets. A bare basename
+  // like `app.ts` is too broad and can match unrelated files in any folder.
+  return normalizedTarget.includes("/") && normalizedCandidate.endsWith(`/${normalizedTarget}`);
 }
 
 export interface RalphLoopSliceState {

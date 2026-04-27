@@ -10,9 +10,10 @@ function flowStatePath(): string {
 
 /**
  * Command contract for /cc — the unified entry point.
- * No args → behaves like /cc-next (resume or start the flow at its first stage).
- * With prompt → classifies the idea, selects a track, and starts the first
- * stage of that track (brainstorm for medium/standard, spec for quick).
+ * No args → reads existing flow state and behaves like /cc-next only when a
+ * tracked flow already exists; missing state/fresh placeholder state blocks with
+ * init/start guidance. With prompt → classifies the idea, selects a track, and
+ * starts the first stage of that track (brainstorm for medium/standard, spec for quick).
  */
 export function startCommandContract(): string {
   const flowPath = flowStatePath();
@@ -22,7 +23,7 @@ export function startCommandContract(): string {
 
 **The unified entry point for the cclaw flow.**
 
-- \`/cc\` (no arguments) → behaves exactly like \`/cc-next\`: reads flow state and resumes the current stage, or starts brainstorm if the flow is fresh.
+- \`/cc\` (no arguments) → reads existing flow state and resumes/progresses it through \`/cc-next\`. If flow state is missing or still a fresh init placeholder, stop and guide the user to run \`/cc <prompt>\` or \`cclaw init\`; do not silently create a brainstorm run.
 - \`/cc <prompt>\` (with an idea/description) → saves the prompt as idea context and starts the first stage of the resolved track.
 
 This is the **recommended way to start** working with cclaw. Use \`/cc-next\` for subsequent stage progression.
@@ -44,8 +45,8 @@ ${conversationLanguagePolicyMarkdown()}
    |---|---|---|
    | **non-software** | legal text / docs / marketing copy / meeting notes / therapy-style conversation | Respond directly, do NOT open a stage, do NOT mutate flow state. |
    | **pure-question** | "how does X work?", "explain Y", "what are the trade-offs of Z?" | Answer directly, do NOT open a stage. |
-   | **trivial** | typo, one-liner, rename, config tweak, copy change, version bump with zero behavior change | Fast-path: skip \`brainstorm\` and \`scope\`, seed \`00-idea.md\`, move straight to \`design\` or \`spec\` depending on whether an interface change is involved. |
-   | **software — bug fix with repro** | regression / hotfix / named symptom + repro steps | Fast-path: set track to \`quick\`, seed \`04-spec.md\` with the reproduction, enter \`tdd\` with a RED reproduction test first. |
+   | **trivial** | typo, one-liner, rename, config tweak, copy change, version bump with zero behavior change | Fast-path: set track to \`quick\`, seed \`00-idea.md\`, and enter \`spec\`. Runtime quick never starts at design. |
+   | **software — bug fix with repro** | regression / hotfix / named symptom + repro steps | Fast-path: set track to \`quick\`, enter \`spec\`, and capture a reproduction contract first. TDD later writes the RED reproduction test from that contract. |
    | **software — medium** | additive feature following existing architecture | medium track (\`brainstorm → spec → plan → tdd → review → ship\`). |
    | **software — standard** | feature, refactor, migration, integration, architecture change | Full 8-stage flow starting at \`brainstorm\`. |
 
@@ -95,7 +96,7 @@ ${conversationLanguagePolicyMarkdown()}
 12. Load the **first-stage skill for the chosen track** and its command file:
     - quick → \`.cclaw/skills/specification-authoring/SKILL.md\`
     - medium/standard → \`.cclaw/skills/brainstorming/SKILL.md\`
-    - trivial fast-path → spec skill per Phase 0 decision.
+    - trivial fast-path → quick track spec skill per Phase 0 decision.
 13. Execute that stage with the prompt + Phase 1/Phase 2 + seed context as initial input.
 
 ### Reclassification on discovery
@@ -110,8 +111,9 @@ If during any stage the agent discovers evidence that contradicts the initial Ph
 ### Without prompt (\`/cc\`)
 
 1. Read \`${flowPath}\`.
-2. If flow state is missing → run \`cclaw init\` guidance and stop.
-3. Behave exactly like \`/cc-next\`: check current stage gates, resume if incomplete, advance if complete.
+2. If flow state is missing → guide the user to run \`cclaw init\` and stop.
+3. If flow state is only a fresh init placeholder (\`completedStages: []\`, all \`passed\` arrays empty, and no \`00-idea.md\`) → stop and ask for \`/cc <prompt>\` to start a tracked run. Do not create a brainstorm state implicitly.
+4. Otherwise behave exactly like \`/cc-next\`: check current stage gates, resume if incomplete, advance if complete.
 
 ## Headless mode
 
@@ -119,7 +121,7 @@ When called by another skill or subagent in machine mode, emit exactly one
 JSON envelope (no prose) and stop:
 
 \`\`\`json
-{"version":"1","kind":"stage-output","stage":"brainstorm","payload":{"command":"/cc","track":"standard","action":"start_or_resume"},"emittedAt":"<ISO-8601>"}
+{"version":"1","kind":"stage-output","stage":"<currentStage>","payload":{"command":"/cc","track":"<track>","action":"start_or_resume"},"emittedAt":"<ISO-8601>"}
 \`\`\`
 
 Validate envelopes with:
@@ -151,7 +153,7 @@ description: "Unified entry point for the cclaw flow. No args = resume/next. Wit
 
 \`/cc\` is the **starting command** for cclaw. It intelligently routes:
 
-- **No arguments** → acts as \`/cc-next\` (resume current stage or advance to next)
+- **No arguments** → acts as \`/cc-next\` only for an existing tracked flow; missing/fresh placeholder state blocks with start guidance
 - **With a prompt** → classifies the task, picks a track (quick/medium/standard), and starts the **first stage of that track** (not always brainstorm — e.g. the \`quick\` track starts at \`spec\`)
 
 ## HARD-GATE
@@ -163,7 +165,7 @@ ${conversationLanguagePolicyMarkdown()}
 
 ### Path A: \`/cc <prompt>\`
 
-1. **Task classification (Phase 0).** Decide whether the prompt is \`software-standard\`, \`software-trivial\`, \`software-bugfix\`, \`pure-question\`, or \`non-software\`. Non-software and pure-question exit immediately — answer directly, do not open a stage.
+1. **Task classification (Phase 0).** Decide whether the prompt is \`software-standard\`, \`software-trivial\`, \`software-bugfix\`, \`pure-question\`, or \`non-software\`. Non-software and pure-question exit immediately — answer directly, do not open a stage. Bugfixes with a clear repro still start on quick \`spec\`: capture the reproduction contract first, then TDD writes the RED reproduction test from that contract.
 2. **Seed shelf recall (Phase 0.5).** Scan \`${RUNTIME_ROOT}/seeds/SEED-*.md\` and match \`trigger_when\` tokens against the prompt text. Surface up to 3 matching seeds with file/title/action and ask whether to apply or ignore. When applied, add them to \`00-idea.md\` under \`Discovered context\`.
 3. **Origin-document discovery (Phase 1).** Scan for \`docs/prd/**\`, \`docs/rfcs/**\`, \`docs/adr/**\`, \`docs/design/**\`, \`specs/**\`, root-level \`PRD.md\` / \`SPEC.md\` / \`DESIGN.md\` / \`REQUIREMENTS.md\`. Summarize any hits in \`00-idea.md\` under \`Discovered context\`. Surface conflicts with the prompt before routing.
 4. **Stack detection (Phase 2).** Inspect \`package.json\` engines, \`pyproject.toml\`, \`go.mod\`, \`Cargo.toml\`, \`pom.xml\`, \`build.gradle*\`, \`Dockerfile\`, \`docker-compose*.yml\`, and CI configs. Record stack + versions on the \`Stack:\` line. Do not invent stack details.
@@ -195,13 +197,15 @@ If mid-stage evidence contradicts the initial Class/Track decision (the "trivial
 
 ### Path B: \`/cc\` (no arguments)
 
-Delegate entirely to \`/cc-next\` behavior:
+Delegate to \`/cc-next\` behavior only when a tracked flow exists:
 
 1. Read \`${flowPath}\`.
-2. Check gates for \`currentStage\`.
-3. If incomplete → load current stage skill and execute.
-4. If complete → advance to next stage and execute.
-5. If flow is done → report completion.
+2. If missing, guide the user to run \`cclaw init\` and stop.
+3. If it is only a fresh init placeholder (\`completedStages: []\`, no passed gates, and no \`${RUNTIME_ROOT}/artifacts/00-idea.md\`), stop and ask for \`/cc <prompt>\` to start a tracked run. Do not silently create a brainstorm run.
+4. Check gates for \`currentStage\`.
+5. If incomplete → load current stage skill and execute.
+6. If complete → advance to next stage and execute.
+7. If flow is done → report completion.
 
 ## When to use \`/cc\` vs \`/cc-next\`
 

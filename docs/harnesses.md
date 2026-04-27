@@ -39,6 +39,11 @@ Design-stage research fleet uses the same parity model:
 | `post_tool_context_monitor` | PostToolUse -> context-monitor | postToolUse -> context-monitor | plugin tool.execute.after -> context-monitor | PostToolUse matcher Bash -> context-monitor (Bash-only) |
 | `stop_handoff` | Stop -> stop-handoff | stop -> stop-handoff | plugin session.idle -> stop-handoff | Stop -> stop-handoff |
 | `precompact_compat` | PreCompact -> pre-compact | sessionCompact -> pre-compact | plugin session.compacted -> pre-compact | missing |
+| `strict_state_verify` | missing | missing | missing | UserPromptSubmit -> verify-current-state (blocks only in strict mode) |
+
+## Hook lifecycle aliases
+
+The generated Node dispatcher accepts a small compatibility alias set for lifecycle names: `stop` and `stop-checkpoint` route to `stop-handoff`, `precompact` routes to `pre-compact`, and `session-rehydrate` routes to `session-start`. Harness JSON should still emit the canonical handler names from `src/content/hook-manifest.ts`.
 
 ## Hook event casing
 
@@ -63,7 +68,7 @@ shared casing silently breaks generated wiring.
   at hook level, so the canonical path is
   `node .cclaw/hooks/stage-complete.mjs <stage>` plus the non-blocking
   `UserPromptSubmit` state nudge.
-- In `strict` mode, Codex additionally runs the generated Node/runtime verify-current-state path on `UserPromptSubmit` as a fail-closed check (advisory mode remains non-blocking).
+- In `strict` mode, Codex additionally runs the generated Node/runtime `verify-current-state` path on `UserPromptSubmit` as a fail-closed check (advisory mode remains non-blocking). This strict-only coverage is represented explicitly by the `strict_state_verify` semantic row above.
 
 ## Shared command contract
 

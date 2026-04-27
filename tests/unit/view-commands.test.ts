@@ -2,7 +2,7 @@ import { describe, expect, it } from "vitest";
 import { diffSubcommandMarkdown } from "../../src/content/diff-command.js";
 import { statusSubcommandMarkdown } from "../../src/content/status-command.js";
 import { treeSubcommandMarkdown } from "../../src/content/tree-command.js";
-import { viewCommandSkillMarkdown } from "../../src/content/view-command.js";
+import { viewCommandContract, viewCommandSkillMarkdown } from "../../src/content/view-command.js";
 
 describe("/cc-view status content", () => {
   const skill = statusSubcommandMarkdown();
@@ -105,5 +105,16 @@ describe("/cc-view unified skill", () => {
     expect(skill).toContain("Flow Status Snapshot");
     expect(skill).toContain("# /cc-view tree");
     expect(skill).toContain("# /cc-view diff");
+  });
+});
+
+
+describe("/cc-view command contract", () => {
+  const contract = viewCommandContract();
+
+  it("requires headless envelopes to preserve the actual parsed subcommand", () => {
+    expect(contract).toContain('"subcommand":"<status|tree|diff>"');
+    expect(contract).toContain('"command":"/cc-view <status|tree|diff>"');
+    expect(contract).toContain("do not collapse `tree` or `diff` responses to `status`");
   });
 });

@@ -456,12 +456,30 @@ export async function verifyCurrentStageGateEvidence(
         (gate) => gate.id === "design_research_complete" && gate.tier === "required"
       );
       if (researchGateRequired) {
+        const designMarkdown = await readArtifactMarkdown(projectRoot, "03-design.md");
+        const inlineResearchBody = designMarkdown
+          ? extractMarkdownSectionBody(designMarkdown, "Research Fleet Synthesis")
+          : null;
+        const inlineResearchLines = inlineResearchBody
+          ? inlineResearchBody
+            .split(/\r?\n/gu)
+            .map((line) => line.trim())
+            .filter((line) => line.length > 0)
+            .filter((line) => !/^\|?(?:[-:\s|])+$/u.test(line))
+            .filter((line) =>
+              !/\b(?:TODO|TBD|FIXME|pending)\b/iu.test(line) &&
+              !/<fill-in>/iu.test(line) &&
+              !/^>\s*Default path:/iu.test(line) &&
+              !/^\|\s*compact inline synthesis\s*\|\s*\|\s*\|\s*\|?\s*$/iu.test(line)
+            )
+          : [];
+        const inlineResearchComplete = inlineResearchLines.length > 0;
         const researchMarkdown = await readArtifactMarkdown(projectRoot, "02a-research.md");
-        if (!researchMarkdown) {
+        if (!inlineResearchComplete && !researchMarkdown) {
           issues.push(
-            "design research gate blocked (design_research_complete): missing `.cclaw/artifacts/02a-research.md`."
+            "design research gate blocked (design_research_complete): fill `Research Fleet Synthesis` in `.cclaw/artifacts/03-design.md`, or write `.cclaw/artifacts/02a-research.md` for deep/high-risk research."
           );
-        } else {
+        } else if (researchMarkdown) {
           const missingSections: string[] = [];
           for (const section of DESIGN_RESEARCH_REQUIRED_SECTIONS) {
             const body = extractMarkdownSectionBody(researchMarkdown, section);
@@ -474,10 +492,6 @@ export async function verifyCurrentStageGateEvidence(
               .map((line) => line.trim())
               .filter((line) => line.length > 0)
               .filter((line) => !/^\|?(?:[-:\s|])+$/u.test(line));
-            // `<fill-in>` needs its own check because `\b` does not match
-            // around `<`/`>` (non-word characters), so the previous combined
-            // pattern `\b(?:...|<fill-in>)\b` silently never matched placeholder
-            // templates that used angle-bracket form.
             const nonPlaceholder = meaningfulLines.filter(
               (line) =>
                 !/\b(?:TODO|TBD|FIXME|pending)\b/iu.test(line) &&

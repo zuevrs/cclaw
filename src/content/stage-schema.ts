@@ -335,6 +335,7 @@ const REQUIRED_GATE_IDS: Record<FlowStage, RequiredGateSet> = {
   review: (track) => [
     "review_layer1_spec_compliance",
     "review_layer2_security",
+    "review_layer_coverage_complete",
     "review_criticals_resolved",
     "review_army_json_valid",
     ...(track === "quick" ? [] : ["review_trace_matrix_clean"])

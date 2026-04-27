@@ -61,14 +61,29 @@ const MINIMAL_CONFIG_KEYS = [
 
 const DEFAULT_SLICE_REVIEW_THRESHOLD = 5;
 const DEFAULT_SLICE_REVIEW_TRACKS: FlowTrack[] = ["standard"];
-const emittedConfigWarnings = new Set<string>();
 
-function emitConfigWarningOnce(code: string, message: string): void {
+export interface ConfigWarningState {
+  emitted: Set<string>;
+}
+
+export interface ReadConfigOptions {
+  warningState?: ConfigWarningState;
+}
+
+export function createConfigWarningState(): ConfigWarningState {
+  return { emitted: new Set<string>() };
+}
+
+function emitConfigWarningOnce(
+  warningState: ConfigWarningState,
+  code: string,
+  message: string
+): void {
   const key = `${code}:${message}`;
-  if (emittedConfigWarnings.has(key)) {
+  if (warningState.emitted.has(key)) {
     return;
   }
-  emittedConfigWarnings.add(key);
+  warningState.emitted.add(key);
   process.emitWarning(message, { code });
 }
 
@@ -224,7 +239,11 @@ export async function detectLanguageRulePacks(projectRoot: string): Promise<Lang
   return [...new Set(detected)];
 }
 
-export async function readConfig(projectRoot: string): Promise<CclawConfig> {
+export async function readConfig(
+  projectRoot: string,
+  options: ReadConfigOptions = {}
+): Promise<CclawConfig> {
+  const warningState = options.warningState ?? createConfigWarningState();
   const fullPath = configPath(projectRoot);
   if (!(await exists(fullPath))) {
     return createDefaultConfig();
@@ -330,6 +349,7 @@ export async function readConfig(projectRoot: string): Promise<CclawConfig> {
     !sameStringArray(tddTestGlobs, explicitTddTestPathPatterns)
   ) {
     emitConfigWarningOnce(
+      warningState,
       "CCLAW_CONFIG_DEPRECATED_TDD_TEST_GLOBS",
       `[cclaw] Both "tddTestGlobs" (deprecated) and "tdd.testPathPatterns" are set in ${fullPath}. ` +
         `Using "tdd.testPathPatterns".`

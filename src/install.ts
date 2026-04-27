@@ -81,11 +81,23 @@ const OPENCODE_PLUGIN_REL_PATH = ".opencode/plugins/cclaw-plugin.mjs";
 const CURSOR_RULE_REL_PATH = ".cursor/rules/cclaw-workflow.mdc";
 const GIT_HOOK_MANAGED_MARKER = "cclaw-managed-git-hook";
 const GIT_HOOK_RUNTIME_REL_DIR = `${RUNTIME_ROOT}/hooks/git`;
+const INIT_SENTINEL_FILE = ".init-in-progress";
 const execFileAsync = promisify(execFile);
 
 function runtimePath(projectRoot: string, ...segments: string[]): string {
   return path.join(projectRoot, RUNTIME_ROOT, ...segments);
 }
+
+async function writeInitSentinel(projectRoot: string, operation: string): Promise<string> {
+  const sentinelPath = runtimePath(projectRoot, "state", INIT_SENTINEL_FILE);
+  await ensureDir(path.dirname(sentinelPath));
+  await writeFileSafe(
+    sentinelPath,
+    `${JSON.stringify({ operation, startedAt: new Date().toISOString() }, null, 2)}\n`
+  );
+  return sentinelPath;
+}
+
 
 async function removeBestEffort(targetPath: string, recursive = false): Promise<void> {
   try {
@@ -758,6 +770,59 @@ async function backupHookFile(projectRoot: string, hookFilePath: string, rawCont
   return backupPath;
 }
 
+function normalizeHookCommandForDedupe(command: string): string {
+  return command.trim().replace(/\s+/gu, " ").replace(/\\/gu, "/");
+}
+
+function dedupeHookEntryByCommand(entry: unknown, seenCommands: Set<string>): unknown | undefined {
+  if (!entry || typeof entry !== "object" || Array.isArray(entry)) {
+    return entry;
+  }
+
+  const obj = entry as Record<string, unknown>;
+  let changed = false;
+  if (typeof obj.command === "string") {
+    const normalized = normalizeHookCommandForDedupe(obj.command);
+    if (seenCommands.has(normalized)) {
+      return undefined;
+    }
+    seenCommands.add(normalized);
+  }
+
+  if (Array.isArray(obj.hooks)) {
+    const hooks: unknown[] = [];
+    for (const nested of obj.hooks) {
+      const deduped = dedupeHookEntryByCommand(nested, seenCommands);
+      if (deduped !== undefined) {
+        hooks.push(deduped);
+      } else {
+        changed = true;
+      }
+    }
+    if (hooks.length !== obj.hooks.length) {
+      changed = true;
+    }
+    if (hooks.length === 0 && typeof obj.command !== "string") {
+      return undefined;
+    }
+    return changed ? { ...obj, hooks } : entry;
+  }
+
+  return entry;
+}
+
+function dedupeHookEntriesByCommand(entries: unknown[]): unknown[] {
+  const seenCommands = new Set<string>();
+  const deduped: unknown[] = [];
+  for (const entry of entries) {
+    const next = dedupeHookEntryByCommand(entry, seenCommands);
+    if (next !== undefined) {
+      deduped.push(next);
+    }
+  }
+  return deduped;
+}
+
 function mergeHookDocuments(existingDoc: unknown, generatedDoc: unknown): Record<string, unknown> {
   const generatedRoot = toObject(generatedDoc) ?? {};
   const generatedHooks = toObject(generatedRoot.hooks) ?? {};
@@ -771,7 +836,7 @@ function mergeHookDocuments(existingDoc: unknown, generatedDoc: unknown): Record
     const existingEntries = existingHooks[eventName];
     if (Array.isArray(generatedEntries)) {
       const preservedEntries = Array.isArray(existingEntries) ? existingEntries : [];
-      mergedHooks[eventName] = [...generatedEntries, ...preservedEntries];
+      mergedHooks[eventName] = dedupeHookEntriesByCommand([...generatedEntries, ...preservedEntries]);
       continue;
     }
     // Defensive: malformed generated event payload must not wipe user hooks.
@@ -1085,26 +1150,38 @@ async function cleanStaleFiles(projectRoot: string): Promise<void> {
   // Legacy managed removals happen in cleanLegacyArtifacts() with explicit paths.
 }
 
-async function materializeRuntime(projectRoot: string, config: CclawConfig, forceStateReset: boolean): Promise<void> {
-  const harnesses = config.harnesses;
-  await ensureStructure(projectRoot);
-  await cleanLegacyArtifacts(projectRoot);
-  await cleanStaleFiles(projectRoot);
-  await Promise.all([
-    writeEntryCommands(projectRoot),
-    writeSkills(projectRoot, config),
-    writeArtifactTemplates(projectRoot),
-    writeRulebook(projectRoot)
-  ]);
-  await writeState(projectRoot, config, forceStateReset);
-  await ensureRunSystem(projectRoot, { createIfMissing: false });
-  await ensureKnowledgeStore(projectRoot);
-  await writeHooks(projectRoot, config);
-  await syncDisabledHarnessArtifacts(projectRoot, harnesses);
-  await syncManagedGitHooks(projectRoot, config);
-  await syncHarnessShims(projectRoot, harnesses);
-  await writeCursorWorkflowRule(projectRoot, harnesses);
-  await ensureGitignore(projectRoot);
+async function materializeRuntime(
+  projectRoot: string,
+  config: CclawConfig,
+  forceStateReset: boolean,
+  operation = "sync"
+): Promise<void> {
+  const sentinelPath = await writeInitSentinel(projectRoot, operation);
+  try {
+    const harnesses = config.harnesses;
+    await ensureStructure(projectRoot);
+    await cleanLegacyArtifacts(projectRoot);
+    await cleanStaleFiles(projectRoot);
+    await Promise.all([
+      writeEntryCommands(projectRoot),
+      writeSkills(projectRoot, config),
+      writeArtifactTemplates(projectRoot),
+      writeRulebook(projectRoot)
+    ]);
+    await writeState(projectRoot, config, forceStateReset);
+    await ensureRunSystem(projectRoot, { createIfMissing: false });
+    await ensureKnowledgeStore(projectRoot);
+    await writeHooks(projectRoot, config);
+    await syncDisabledHarnessArtifacts(projectRoot, harnesses);
+    await syncManagedGitHooks(projectRoot, config);
+    await syncHarnessShims(projectRoot, harnesses);
+    await writeCursorWorkflowRule(projectRoot, harnesses);
+    await ensureGitignore(projectRoot);
+    await fs.unlink(sentinelPath).catch(() => undefined);
+  } catch (error) {
+    // Leave the sentinel in place so doctor can surface the interrupted run.
+    throw error;
+  }
 }
 
 export async function initCclaw(options: InitOptions): Promise<void> {
@@ -1120,7 +1197,7 @@ export async function initCclaw(options: InitOptions): Promise<void> {
   // and only appear in the on-disk file when the user sets them explicitly
   // or a non-default value was detected (e.g. languageRulePacks).
   await writeConfig(options.projectRoot, config, { mode: "minimal" });
-  await materializeRuntime(options.projectRoot, config, true);
+  await materializeRuntime(options.projectRoot, config, true, "init");
 }
 
 export async function syncCclaw(projectRoot: string): Promise<void> {
@@ -1139,7 +1216,7 @@ export async function syncCclaw(projectRoot: string): Promise<void> {
     await writeConfig(projectRoot, defaultConfig);
     config = defaultConfig;
   }
-  await materializeRuntime(projectRoot, config, false);
+  await materializeRuntime(projectRoot, config, false, "sync");
 }
 
 /**
@@ -1164,7 +1241,7 @@ export async function upgradeCclaw(projectRoot: string): Promise<void> {
     mode: "minimal",
     advancedKeysPresent
   });
-  await materializeRuntime(projectRoot, upgraded, false);
+  await materializeRuntime(projectRoot, upgraded, false, "upgrade");
 }
 
 function stripManagedHookCommands(value: unknown): { updated: unknown; changed: boolean } {

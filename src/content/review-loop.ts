@@ -686,6 +686,10 @@ function formatScore(value: number): string {
   return clampScore(value).toFixed(3);
 }
 
+function reviewLoopHeading(stage: ReviewLoopStage): string {
+  return stage === "scope" ? "Scope Outside Voice Loop" : "Design Outside Voice Loop";
+}
+
 function finalEnvelopeScore(envelope: ReviewLoopEnvelope): number {
   if (envelope.iterations.length === 0) return 0;
   return envelope.iterations[envelope.iterations.length - 1]!.qualityScore;
@@ -725,7 +729,8 @@ export function renderReviewLoopSummarySection(
       })
       .join("\n")
     : "| 0 | 0.000 | 0 |";
-  return `## Spec Review Loop
+  const heading = reviewLoopHeading(envelope.stage);
+  return `## ${heading}
 | Iteration | Quality Score | Findings |
 |---|---|---|
 ${rows}
@@ -741,9 +746,14 @@ export function upsertReviewLoopSummary(
 ): string {
   const withHeader = upsertReviewLoopHeader(markdown, envelope);
   const section = renderReviewLoopSummarySection(envelope);
-  const headingRe = /^##\s+Spec Review Loop\s*$/m;
-  const match = headingRe.exec(withHeader);
-  if (!match || match.index < 0) {
+  const headingCandidates = [reviewLoopHeading(envelope.stage), "Spec Review Loop"];
+  const match = headingCandidates
+    .map((heading) => {
+      const escapedHeading = heading.replace(/[.*+?^${}()|[\]\\]/gu, "\\$&");
+      return new RegExp(`^##\\s+${escapedHeading}\\s*$`, "m").exec(withHeader);
+    })
+    .find((candidate): candidate is RegExpExecArray => candidate !== null && candidate.index >= 0);
+  if (!match) {
     const needsBreak = withHeader.endsWith("\n") ? "" : "\n";
     return `${withHeader}${needsBreak}\n${section}\n`;
   }
@@ -859,7 +869,9 @@ export function extractReviewLoopEnvelopeFromArtifact(
   stage: ReviewLoopStage,
   artifactPath: string
 ): ReviewLoopEnvelope | null {
-  const sectionBody = extractH2Section(markdown, "Spec Review Loop");
+  const sectionBody =
+    extractH2Section(markdown, reviewLoopHeading(stage))
+    ?? extractH2Section(markdown, "Spec Review Loop");
   if (!sectionBody) return null;
   const iterations = parseIterationsTable(sectionBody);
   if (iterations.length === 0) return null;

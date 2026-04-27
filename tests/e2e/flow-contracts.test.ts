@@ -2,6 +2,8 @@ import fs from "node:fs/promises";
 import path from "node:path";
 import { describe, expect, it } from "vitest";
 import { stageSkillFolder } from "../../src/content/skills.js";
+import { nextCommandContract } from "../../src/content/next-command.js";
+import { startCommandContract } from "../../src/content/start-command.js";
 import { SUBAGENT_CONTEXT_SKILLS } from "../../src/content/subagent-context-skills.js";
 import { initCclaw } from "../../src/install.js";
 import { FLOW_STAGES } from "../../src/types.js";
@@ -97,6 +99,41 @@ describe("flow command contracts", () => {
     expect(startCommand).not.toContain("Persist the chosen track to `.cclaw/state/flow-state.json`");
     expect(startSkill).not.toContain("Persist the chosen track in `.cclaw/state/flow-state.json`");
     expect(startCommand).not.toContain("update `flow-state.json` accordingly");
+    expect(startCommand).toContain("quick track");
+    expect(startSkill).toContain("`quick` track starts at `spec`");
+    expect(startCommand).toContain("\"stage\":\"<currentStage>\"");
+  });
+
+  it("keeps trivial routing quick-only in generated meta skill", async () => {
+    const root = await createTempProject("quick-only-meta");
+    await initCclaw({ projectRoot: root });
+
+    const metaSkill = await fs.readFile(path.join(root, ".cclaw/skills/using-cclaw/SKILL.md"), "utf8");
+    expect(metaSkill).toContain("| trivial software fix | `/cc <idea>` (quick track) |");
+    expect(metaSkill).not.toContain("quick/medium track as recommended");
+    expect(metaSkill).not.toContain("quick or medium track");
+  });
+
+  it("keeps bugfix fast path spec-first and examples placeholder-shaped", async () => {
+    const root = await createTempProject("bugfix-spec-first");
+    await initCclaw({ projectRoot: root });
+
+    const startCommand = await fs.readFile(path.join(root, ".cclaw/commands/start.md"), "utf8");
+    const startSkill = await fs.readFile(path.join(root, ".cclaw/skills/flow-start/SKILL.md"), "utf8");
+    const nextCommand = await fs.readFile(path.join(root, ".cclaw/commands/next.md"), "utf8");
+
+    for (const content of [startCommand, startSkill]) {
+      expect(content).toMatch(/capture (?:a|the) reproduction contract first/);
+      expect(content).toContain("RED reproduction test from that contract");
+      expect(content).not.toContain("enter `tdd` with a RED reproduction test first");
+    }
+
+    expect(startCommandContract()).toContain('"stage":"<currentStage>"');
+    expect(startCommandContract()).toContain('"track":"<track>"');
+    expect(nextCommandContract()).toContain('"stage":"<currentStage>"');
+    expect(nextCommandContract()).toContain('"nextStage":"<nextStage>"');
+    expect(startCommand).not.toContain('"stage":"spec","payload":{"command":"/cc","track":"quick"');
+    expect(nextCommand).not.toContain('"stage":"review","payload":{"command":"/cc-next","decision":"resume_or_advance","nextStage":"ship"');
   });
 
   it("documents cclaw-cli as installer/support and node hooks as runtime", async () => {
@@ -434,6 +471,61 @@ describe("flow command contracts", () => {
     expect(reviewSkill).toContain("Review Findings");
     expect(reviewSkill).toContain("Layer 1");
     expect(reviewSkill).toContain("Layer 2");
+  });
+
+  it("keeps quick-track generated templates aligned with schema contracts", async () => {
+    const root = await createTempProject("quick-template-contracts");
+    await initCclaw({ projectRoot: root });
+
+    const designTemplate = await fs.readFile(path.join(root, ".cclaw/templates/03-design.md"), "utf8");
+    const specTemplate = await fs.readFile(path.join(root, ".cclaw/templates/04-spec.md"), "utf8");
+    const tddTemplate = await fs.readFile(path.join(root, ".cclaw/templates/06-tdd.md"), "utf8");
+    const reviewTemplate = await fs.readFile(path.join(root, ".cclaw/templates/07-review.md"), "utf8");
+
+    expect(designTemplate).toContain("## Compact-First Scaffold");
+    expect(designTemplate).toContain("Compact required spine");
+    expect(designTemplate).toContain("Omitted - compact design");
+
+    expect(specTemplate).toContain("quick uses `00-idea.md` plus reproduction context");
+    expect(specTemplate).toContain("## Quick Reproduction Contract");
+    expect(specTemplate).toContain("Expected RED test behavior");
+    expect(specTemplate).toContain("TDD turns this contract into the RED reproduction test");
+
+    expect(tddTemplate).toContain("Quick track uses spec acceptance items / bug reproduction slices");
+    expect(tddTemplate).toContain("Plan task ID or quick source");
+    expect(tddTemplate).toContain("Do not invent a plan task");
+
+    expect(reviewTemplate).toContain("Quick track reviews spec acceptance items / bug reproduction slices");
+    expect(reviewTemplate).toContain("N/A - quick track has no plan artifact");
+    expect(reviewTemplate).toContain("direct AC/reproduction-slice coverage");
+  });
+
+  it("keeps meta-skill utility routing limited to generated helper surfaces", async () => {
+    const root = await createTempProject("honest-meta-utilities");
+    await initCclaw({ projectRoot: root });
+
+    const metaSkill = await fs.readFile(path.join(root, ".cclaw/skills/using-cclaw/SKILL.md"), "utf8");
+    const generatedSkillDirs = (await fs.readdir(path.join(root, ".cclaw/skills"))).sort();
+
+    for (const expected of ["subagent-dev", "parallel-dispatch", "session", "iron-laws"]) {
+      expect(generatedSkillDirs).toContain(expected);
+      expect(metaSkill).toContain(expected);
+    }
+
+    for (const missingUtility of [
+      "verification-before-completion",
+      "finishing-a-development-branch",
+      "security",
+      "performance",
+      "debugging",
+      "docs"
+    ]) {
+      expect(generatedSkillDirs).not.toContain(missingUtility);
+      expect(metaSkill).not.toContain(`\`${missingUtility}\``);
+    }
+
+    expect(metaSkill).toContain("Do not invent helper-skill names");
+    expect(metaSkill).toContain(".cclaw/rules/lang/");
   });
 
   it("keeps ship skill contract anchors", async () => {

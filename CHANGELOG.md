@@ -1,5 +1,12 @@
 # Changelog
 
+## 0.51.22
+
+### Fixed
+
+- Repaired audit-found flow contract gaps across runtime gates, generated templates, hooks, knowledge retrieval, delegation validation, and installer diagnostics.
+- Added regressions for quick-track artifact scaffolds, retro/archive evidence validation, TDD refactor ordering, hook lifecycle coverage, init recovery, and canonical knowledge/delegation semantics.
+
 ## 0.51.19
 
 ### Fixed

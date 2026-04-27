@@ -39,10 +39,10 @@ export const SPEC: StageSchemaInput = {
   },
   executionModel: {
     checklist: [
-      "Read upstream — load design artifact and scope contract. Cross-reference architecture decisions.",
+      "Read upstream — standard track loads design + scope; medium loads brainstorm/spec handoff; quick loads `00-idea.md` plus any reproduction context. Cross-reference only artifacts that exist on the active track.",
       "Define measurable acceptance criteria — each criterion must be observable and falsifiable. No vague adjectives.",
       "Capture edge cases — for each criterion, define at least one boundary condition and one error condition.",
-      "Document constraints and assumptions — regulatory, system, integration, and performance boundaries. Surface implicit assumptions explicitly.",
+      "Document constraints and assumptions — regulatory, system, integration, and performance boundaries. Only non-critical preference/default assumptions may continue; STOP on uncertainty about scope, architecture, security, data loss, public API, migration, auth/pricing, or required user approval.",
       "Surface assumptions before finalization — list each assumption with source/confidence, validation path, and whether it is accepted, rejected, or still open.",
       "Build the Acceptance Mapping contract — for each AC, map upstream design decision, observable evidence, verification method, and likely test level. If any column is unclear, rewrite the criterion.",
       "Present acceptance criteria to the user in 3-5-item batches, pausing for explicit ACK between batches (see Interaction Protocol).",
@@ -56,7 +56,7 @@ export const SPEC: StageSchemaInput = {
       "**Chunk acceptance criteria for review.** When presenting the spec to the user for sign-off, deliver acceptance criteria in batches of 3-5 and **pause for explicit ACK** (via Decision Protocol) before sending the next batch. Do not dump the full criteria wall in one message — small batches surface objections earlier and keep the sign-off meaningful. Full spec writeup still lands in `04-spec.md`, but the conversation itself must be digestible.",
       "Require user confirmation on the written spec. **STOP.** Do NOT proceed to plan until user approves.",
       "For each criterion, ask: what exact evidence proves this passed? If the evidence or verification command/manual step is vague, rewrite.",
-      "When encountering ambiguity, classify it before acting: (A) ask user for missing info, (B) enumerate interpretations and pick one with justification, (C) propose hypothesis with validation path. Do NOT silently resolve ambiguity."
+      "When encountering ambiguity, classify it before acting: (A) ask user for missing info, (B) enumerate non-critical interpretations and pick one with justification, (C) propose hypothesis with validation path. Do NOT silently resolve ambiguity. STOP on scope, architecture, security, data loss, public API, migration, auth/pricing, or user-approval uncertainty."
     ],
     process: [
       "Define measurable acceptance criteria.",
@@ -78,7 +78,8 @@ export const SPEC: StageSchemaInput = {
       "Each acceptance criterion maps to upstream design decision, observable evidence, verification method, and likely test level.",
       "Edge cases documented per criterion.",
       "Assumptions Before Finalization section records source/confidence, validation path, and accepted/rejected/open disposition.",
-      "Approval marker captured in artifact."
+      "Approval marker captured in artifact.",
+      "For quick bug-fix specs, reproduction contract records symptom, repro steps, expected RED test, and acceptance criterion."
     ],
     inputs: ["design artifact", "business constraints", "quality requirements"],
     requiredContext: [
@@ -115,7 +116,8 @@ export const SPEC: StageSchemaInput = {
     },
     artifactValidation: [
       { section: "Upstream Handoff", required: false, validationRule: "Summarizes scope/design decisions, constraints, open questions, and explicit drift before acceptance criteria." },
-      { section: "Acceptance Criteria", required: true, validationRule: "Each criterion is observable, measurable, and falsifiable. Table must include a Requirement Ref column linking to R# IDs in 02-scope-<slug>.md (legacy 02-scope.md is accepted during migration) and a Design Decision Ref column tracing back to design artifact. AC IDs (AC-1, AC-2…) are stable across revisions — dropped ACs stay with Priority `DROPPED`." },
+      { section: "Acceptance Criteria", required: true, validationRule: "Each criterion is observable, measurable, and falsifiable. Standard track should include Requirement Ref and Design Decision Ref columns; quick track may instead link each AC to the reproduction contract or bug slice. AC IDs (AC-1, AC-2…) are stable across revisions — dropped ACs stay with Priority `DROPPED`." },
+      { section: "Quick Reproduction Contract", required: false, validationRule: "Quick bug-fix specs own the reproduction contract: symptom, repro steps, expected RED test behavior, and acceptance criterion." },
       { section: "Edge Cases", required: true, validationRule: "At least one boundary and one error condition per criterion." },
       { section: "Constraints and Assumptions", required: false, validationRule: "All implicit assumptions surfaced. Constraints have sources." },
       { section: "Assumptions Before Finalization", required: true, validationRule: "Each assumption has source/confidence, validation path, and accepted/rejected/open disposition before the Approval section is finalized." },

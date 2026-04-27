@@ -147,6 +147,7 @@ ${SEED_SHELF_SECTION}
 | Reversibility cost? |  |  |
 
 ## Dream State Mapping
+- Deep/optional only; omit for compact scope.
 - CURRENT STATE:
 - THIS PLAN:
 - 12-MONTH IDEAL:
@@ -160,6 +161,7 @@ ${SEED_SHELF_SECTION}
 | C (optional) |  |  |  |  |  |  |
 
 ## Temporal Interrogation
+- Deep/optional only; omit for compact scope.
 | Time slice | Likely decision pressure | Lock now or defer? | Reason |
 |---|---|---|---|
 | HOUR 1 (foundations) |  |  |  |
@@ -174,12 +176,11 @@ ${SEED_SHELF_SECTION}
 - [ ] SCOPE REDUCTION — strip to the smallest useful wedge when risk/blast radius is too high.
 
 ## Mode-Specific Analysis
-- **Selected mode:**
-- **Analysis:**
-  - (SCOPE EXPANSION: 10-star opportunities, delight features)
-  - (SELECTIVE EXPANSION: hold-scope baseline, cherry-picked expansions)
-  - (HOLD SCOPE: approved slice with maximum rigor)
-  - (SCOPE REDUCTION: ruthless cuts, follow-up split)
+| Selected mode | Rationale | Depth |
+|---|---|---|
+|  |  | default / deep |
+
+> Default path: one selected-mode row plus rationale. Deep/high-risk scope may expand below with mode-specific analysis.
 
 ## Requirements (stable IDs)
 | ID | Requirement (observable outcome) | Priority | Source (origin doc / prompt line) |
@@ -228,7 +229,7 @@ ${SEED_SHELF_SECTION}
 |---|---|---|---|---|
 | F-1 | premise_fit |  | accept/reject/defer |  |
 
-## Spec Review Loop
+## Scope Outside Voice Loop
 | Iteration | Quality Score | Findings | Stop decision |
 |---|---|---|---|
 | 1 | 0.00 | 0 | continue/stop |
@@ -292,8 +293,13 @@ ${SEED_SHELF_SECTION}
 
 # Design Artifact
 
+## Compact-First Scaffold
+- Default to the compact design spine unless risk requires Standard/Deep add-ons.
+- Compact required spine: Codebase Investigation, Architecture Boundaries, Architecture Diagram, Data Flow, Failure Mode Table, Test Strategy, and Completion Dashboard.
+- Mark optional Standard/Deep sections as \`Omitted - compact design\` when they do not apply; do not expand the scaffold just to fill empty tables.
+
 ## Upstream Handoff
-- Source artifacts: \`02-scope-<slug>.md\`, \`02a-research.md\` when present
+- Source artifacts: \`02-scope-<slug>.md\`, \`02a-research.md\` only when present for deep/high-risk research
 - Decisions carried forward:
 - Constraints carried forward:
 - Open questions:
@@ -312,12 +318,11 @@ ${SEED_SHELF_SECTION}
 | Layer 3 |  |  |
 
 ## Research Fleet Synthesis
-| Lens | Key findings | Design impact | Evidence |
+| Lens actually run | Key findings | Design impact | Evidence |
 |---|---|---|---|
-| stack-researcher |  |  |  |
-| features-researcher |  |  |  |
-| architecture-researcher |  |  |  |
-| pitfalls-researcher |  |  |  |
+| compact inline synthesis |  |  |  |
+
+> Default path: compact inline synthesis here. Deep/high-risk work may also write \`.cclaw/artifacts/02a-research.md\`.
 
 ## Architecture Boundaries
 | Component | Responsibility | Requirement Refs (R#) | Decision Refs (LD#hash) | Owner |
@@ -333,12 +338,14 @@ ${MARKDOWN_CODE_FENCE}
 ${MARKDOWN_CODE_FENCE}
 
 ## Data-Flow Shadow Paths
+- Standard/Deep add-on; omit when compact design does not need a shadow path.
 <!-- diagram: data-flow-shadow-paths -->
 | Path | Trigger | Fallback/Degrade behavior |
 |---|---|---|
 |  |  |  |
 
 ## Error Flow Diagram
+- Standard/Deep add-on; omit when the Failure Mode Table is sufficient.
 
 <!-- diagram: error-flow -->
 
@@ -347,6 +354,7 @@ ${MARKDOWN_CODE_FENCE}
 ${MARKDOWN_CODE_FENCE}
 
 ## State Machine Diagram
+- Deep add-on; omit for compact design.
 
 <!-- diagram: state-machine -->
 
@@ -355,6 +363,7 @@ ${MARKDOWN_CODE_FENCE}
 ${MARKDOWN_CODE_FENCE}
 
 ## Rollback Flowchart
+- Deep add-on; omit for compact design.
 
 <!-- diagram: rollback-flowchart -->
 
@@ -363,6 +372,7 @@ ${MARKDOWN_CODE_FENCE}
 ${MARKDOWN_CODE_FENCE}
 
 ## Deployment Sequence Diagram
+- Deep add-on; omit for compact design.
 
 <!-- diagram: deployment-sequence -->
 
@@ -430,7 +440,7 @@ ${MARKDOWN_CODE_FENCE}
 |---|---|---|---|---|
 | F-1 | architecture_fit |  | accept/reject/defer |  |
 
-## Spec Review Loop
+## Design Outside Voice Loop
 | Iteration | Quality Score | Findings | Stop decision |
 |---|---|---|---|
 | 1 | 0.00 | 0 | continue/stop |
@@ -443,6 +453,7 @@ ${MARKDOWN_CODE_FENCE}
 - 
 
 ## Parallelization Strategy
+- Standard/Deep add-on when multi-module; omit for compact sequential work.
 - Parallel lanes:
 - Conflict risks:
 
@@ -452,11 +463,13 @@ ${MARKDOWN_CODE_FENCE}
 |  |  |  |
 
 ## Interface Contracts
+- Standard/Deep add-on when module boundaries or APIs change; omit for compact local changes.
 | Module | Produces | Consumes |
 |---|---|---|
 |  |  |  |
 
 ## Unresolved Decisions
+- Standard/Deep add-on; use \`None\` for compact design with no unresolved decisions.
 | Decision | Missing info | Owner | Default |
 |---|---|---|---|
 |  |  |  |  |
@@ -485,7 +498,7 @@ ${SEED_SHELF_SECTION}
 # Specification Artifact
 
 ## Upstream Handoff
-- Source artifacts: \`02-scope-<slug>.md\`, \`03-design-<slug>.md\`
+- Source artifacts: standard uses \`02-scope-<slug>.md\` + \`03-design-<slug>.md\`; medium uses \`01-brainstorm-<slug>.md\` when present; quick uses \`00-idea.md\` plus reproduction context.
 - Decisions carried forward:
 - Constraints carried forward:
 - Open questions:
@@ -496,9 +509,14 @@ ${SEED_SHELF_SECTION}
 |---|---|---|---|
 | AC-1 | R1 |  |  |
 
-> Every AC must reference at least one \`R#\` from \`02-scope.md\`. ACs are
-> stable (never renumber): dropped ACs stay with Priority \`DROPPED\`; new
-> ones append with the next free \`AC-#\`.
+> Standard ACs reference at least one \`R#\` from \`02-scope.md\`. Quick-track ACs may instead put \`Quick Reproduction Contract\` / bug-slice refs in the Requirement Ref column and \`N/A\` for Design Decision Ref. ACs are stable (never renumber): dropped ACs stay with Priority \`DROPPED\`; new ones append with the next free \`AC-#\`.
+
+## Quick Reproduction Contract
+> Required for quick bug-fix specs; use \`N/A\` for non-bugfix or standard/medium tracks. TDD turns this contract into the RED reproduction test.
+
+| Bug slice | Symptom | Repro steps | Expected RED test behavior | Linked acceptance criterion |
+|---|---|---|---|---|
+| QS-1 |  |  |  | AC-1 |
 
 ## Edge Cases
 | Criterion ID | Boundary case | Error case |
@@ -631,7 +649,7 @@ Execution rule: complete and verify each batch before starting the next batch.
 # TDD Artifact
 
 ## Upstream Handoff
-- Source artifacts: \`04-spec.md\`, \`05-plan.md\`
+- Source artifacts: \`04-spec.md\`; \`05-plan.md\` when present. Quick track uses spec acceptance items / bug reproduction slices instead of nonexistent plan tasks.
 - Decisions carried forward:
 - Constraints carried forward:
 - Open questions:
@@ -658,9 +676,11 @@ Execution rule: complete and verify each batch before starting the next batch.
 | S-1 |  |  |  |
 
 ## Acceptance Mapping
-| Slice | Plan task ID | Spec criterion ID |
+| Slice | Plan task ID or quick source | Spec criterion ID |
 |---|---|---|
-| S-1 | T-1 | AC-1 |
+| S-1 | T-1 / QS-1 | AC-1 |
+
+> On quick track, map to the \`Quick Reproduction Contract\` bug slice or spec acceptance item. Do not invent a plan task just to satisfy this table.
 
 ## Failure Analysis
 | Slice | Expected missing behavior | Actual failure reason |
@@ -713,7 +733,7 @@ Execution rule: complete and verify each batch before starting the next batch.
 # Review Artifact
 
 ## Upstream Handoff
-- Source artifacts: \`04-spec.md\`, \`05-plan.md\`, \`06-tdd.md\`
+- Source artifacts: \`04-spec.md\`, \`06-tdd.md\`; \`05-plan.md\` only when present. Quick track reviews spec acceptance items / bug reproduction slices without requiring plan-task coverage.
 - Decisions carried forward:
 - Constraints carried forward:
 - Open questions:
@@ -727,7 +747,7 @@ Execution rule: complete and verify each batch before starting the next batch.
 ## Layer 2 Findings
 | ID | Severity | Category | Description | Status |
 |---|---|---|---|---|
-| R-1 | Critical/Important/Suggestion | correctness/security/performance/architecture |  | open/resolved |
+| R-1 | Critical/Important/Suggestion | correctness/security/performance/architecture/external-safety |  | open/resolved |
 - NO_CHANGE_ATTESTATION: <required when Category=security has no entries; explain why no security-relevant changes were detected>
 
 ## Incoming Feedback Queue
@@ -750,15 +770,15 @@ Execution rule: complete and verify each batch before starting the next batch.
 
 ## Completeness Snapshot
 - AC coverage: <N>/<M> (<percent>%)
-- Task coverage (tasks backed by ≥1 test slice): <N>/<M>
-- Slice coverage (slices linked to ≥1 AC): <N>/<M>
+- Task coverage (tasks backed by ≥1 test slice): <N>/<M> or \`N/A - quick track has no plan artifact\`
+- Slice coverage (slices linked to ≥1 AC or bug reproduction slice): <N>/<M>
 - Adversarial review: not triggered | pass | fail
 - Overall: complete | concerns | blocked
 
 ## Trace Matrix Check
-- Command: \`cclaw internal trace-matrix\`
+- Command: \`cclaw internal trace-matrix\` when plan artifacts exist or the active track enforces it; quick track may record direct AC/reproduction-slice coverage instead.
 - Orphaned criteria: 0
-- Orphaned tasks: 0
+- Orphaned tasks: 0 or \`N/A - quick track\`
 - Orphaned tests: 0
 - Evidence ref:
 
@@ -961,7 +981,7 @@ Track-specific skips are allowed only when \`flow-state.track\` + \`skippedStage
 | Class | Route |
 |---|---|
 | non-trivial software work | \`/cc <idea>\` |
-| trivial software fix | \`/cc <idea>\` (quick or medium track) |
+| trivial software fix | \`/cc <idea>\` (quick track) |
 | bugfix with repro | \`/cc <idea>\` and enforce RED-first in tdd |
 | pure question / non-software | direct answer (no stage flow) |
 

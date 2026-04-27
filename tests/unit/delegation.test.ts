@@ -310,6 +310,89 @@ describe("delegation ledger run scoping", () => {
     expect(result.expectedMode).toBe("isolated");
   });
 
+  it("uses active harness when inferring fulfillment mode for mixed installs", async () => {
+    const root = await createTempProject("delegation-active-harness");
+    await seedFlowState(root, "run-active-harness");
+    await writeConfig(root, createDefaultConfig(["claude", "codex"]));
+    const prior = process.env.CCLAW_ACTIVE_HARNESS;
+    process.env.CCLAW_ACTIVE_HARNESS = "codex";
+    try {
+      await appendDelegation(root, {
+        stage: "scope",
+        agent: "planner",
+        mode: "mandatory",
+        status: "completed",
+        ts: new Date().toISOString()
+      });
+    } finally {
+      if (prior === undefined) {
+        delete process.env.CCLAW_ACTIVE_HARNESS;
+      } else {
+        process.env.CCLAW_ACTIVE_HARNESS = prior;
+      }
+    }
+
+    const ledger = await readDelegationLedger(root);
+    expect(ledger.entries[0]?.fulfillmentMode).toBe("role-switch");
+    const result = await checkMandatoryDelegations(root, "scope");
+    expect(result.satisfied).toBe(false);
+    expect(result.missingEvidence).toContain("planner");
+  });
+
+
+  it("rejects waived entries without a non-empty waiverReason", async () => {
+    const root = await createTempProject("delegation-waiver-reason-required");
+    await seedFlowState(root, "run-waiver-reason");
+
+    await expect(appendDelegation(root, {
+      stage: "scope",
+      agent: "planner",
+      mode: "mandatory",
+      status: "waived",
+      ts: new Date().toISOString()
+    })).rejects.toThrow(/waiverReason/);
+  });
+
+  it("drops legacy waived rows without waiverReason during ledger parsing", async () => {
+    const root = await createTempProject("delegation-legacy-waiver-invalid");
+    await seedFlowState(root, "run-invalid-waiver");
+    await fs.writeFile(
+      path.join(root, ".cclaw/state/delegation-log.json"),
+      JSON.stringify({
+        runId: "run-invalid-waiver",
+        entries: [{
+          stage: "scope",
+          agent: "planner",
+          mode: "mandatory",
+          status: "waived",
+          ts: new Date().toISOString(),
+          runId: "run-invalid-waiver"
+        }]
+      }, null, 2),
+      "utf8"
+    );
+
+    const ledger = await readDelegationLedger(root);
+    expect(ledger.entries).toEqual([]);
+  });
+
+  it("uses track-specific requiredAtTier behavior for current-run mandatory checks", async () => {
+    const root = await createTempProject("delegation-track-required-at-tier");
+    await seedFlowState(root, "run-quick-review", "review");
+    const statePath = path.join(root, ".cclaw/state/flow-state.json");
+    const state = JSON.parse(await fs.readFile(statePath, "utf8")) as { track: string; skippedStages: string[] };
+    state.track = "quick";
+    state.skippedStages = ["brainstorm", "scope", "design", "plan"];
+    await fs.writeFile(statePath, `${JSON.stringify(state, null, 2)}
+`, "utf8");
+    await writeConfig(root, createDefaultConfig(["claude"], "quick"));
+
+    const result = await checkMandatoryDelegations(root, "review");
+    expect(result.satisfied).toBe(false);
+    expect(result.missing).toEqual(["reviewer", "security-reviewer"]);
+  });
+
+
   it("does not require adversarial review as a mandatory delegation by default", async () => {
     const root = await createTempProject("delegation-review-defaults");
     await seedFlowState(root, "run-review", "review");

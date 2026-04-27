@@ -171,6 +171,26 @@ describe("install lifecycle", { timeout: 30_000 }, () => {
     expect(researchPlaybook.startsWith("---")).toBe(false);
   });
 
+  it("init removes crash-recovery sentinel after successful materialization and doctor flags leftovers", async () => {
+    const root = await createTempProject("init-recovery-sentinel");
+    await initCclaw({ projectRoot: root });
+
+    const sentinelPath = path.join(root, ".cclaw/state/.init-in-progress");
+    await expect(fs.stat(sentinelPath)).rejects.toBeDefined();
+
+    await fs.writeFile(
+      sentinelPath,
+      `${JSON.stringify({ operation: "init", startedAt: "2026-04-27T00:00:00Z" }, null, 2)}
+`,
+      "utf8"
+    );
+    const checks = await doctorChecks(root);
+    const recovery = checks.find((check) => check.name === "state:init_recovery");
+    expect(recovery).toBeDefined();
+    expect(recovery?.ok).toBe(false);
+    expect(recovery?.details).toContain(".init-in-progress");
+  });
+
   it("materializes state contracts and calibrated review prompts", async () => {
     const root = await createTempProject("init-state-contracts");
     await initCclaw({ projectRoot: root });
@@ -212,6 +232,23 @@ describe("install lifecycle", { timeout: 30_000 }, () => {
     expect(doctorSucceeded(checks)).toBe(false);
   });
 
+  it("doctor reports node and git binary/version checks", async () => {
+    const root = await createTempProject("doctor-binary-version-checks");
+    await initCclaw({ projectRoot: root, harnesses: ["claude"] });
+
+    const checks = await doctorChecks(root);
+    for (const name of [
+      "capability:required:node",
+      "capability:required:node_version",
+      "capability:required:git",
+      "capability:required:git_version"
+    ]) {
+      const check = checks.find((candidate) => candidate.name === name);
+      expect(check).toBeDefined();
+      expect(check?.ok).toBe(true);
+    }
+  });
+
   it("doctor reports semantic hook wiring drift for Codex", async () => {
     const root = await createTempProject("doctor-codex-wiring-drift");
     await initCclaw({ projectRoot: root, harnesses: ["codex"] });
@@ -229,6 +266,39 @@ describe("install lifecycle", { timeout: 30_000 }, () => {
     expect(wiring?.ok).toBe(false);
     expect(wiring?.details).toContain("verify-current-state");
     expect(doctorSucceeded(checks)).toBe(false);
+  });
+
+  it("doctor treats legacy origin_feature as compatibility-only and warns canonical origin_run is missing", async () => {
+    const root = await createTempProject("doctor-legacy-origin-feature");
+    await initCclaw({ projectRoot: root, harnesses: ["claude"] });
+    await fs.writeFile(
+      path.join(root, ".cclaw/knowledge.jsonl"),
+      `${JSON.stringify({
+        type: "pattern",
+        trigger: "legacy origin",
+        action: "rewrite canonical origin_run",
+        confidence: "medium",
+        domain: null,
+        stage: "plan",
+        origin_stage: "plan",
+        origin_feature: "legacy-run",
+        frequency: 1,
+        universality: "project",
+        maturity: "raw",
+        created: "2026-04-20T11:00:00Z",
+        first_seen_ts: "2026-04-20T11:00:00Z",
+        last_seen_ts: "2026-04-20T11:00:00Z",
+        project: "cclaw"
+      })}
+`,
+      "utf8"
+    );
+
+    const checks = await doctorChecks(root);
+    const parseable = checks.find((check) => check.name === "knowledge:jsonl_parseable");
+    const schemaFields = checks.find((check) => check.name === "warning:knowledge:schema_v2_fields");
+    expect(parseable?.ok).toBe(true);
+    expect(schemaFields?.details).toContain("miss schema v2 fields");
   });
 
   it("doctor emits severity, fix, and doc references", async () => {
@@ -549,6 +619,26 @@ describe("install lifecycle", { timeout: 30_000 }, () => {
     expect(countOccurrences(mergedCursor, ".cclaw/hooks/run-hook.cmd workflow-guard")).toBe(1);
     expect(countOccurrences(mergedCursor, ".cclaw/hooks/run-hook.cmd context-monitor")).toBe(1);
     expect(countOccurrences(mergedCursor, ".cclaw/hooks/run-hook.cmd stop-handoff")).toBe(1);
+  });
+
+  it("sync collapses duplicate user-preserved hook commands during merge", async () => {
+    const root = await createTempProject("hooks-merge-command-dedupe");
+    await initCclaw({ projectRoot: root, harnesses: ["cursor"] });
+
+    const cursorHooksPath = path.join(root, ".cursor/hooks.json");
+    await fs.writeFile(cursorHooksPath, JSON.stringify({
+      version: 1,
+      hooks: {
+        stop: [
+          { command: "echo duplicate-user-hook" },
+          { command: " echo   duplicate-user-hook " }
+        ]
+      }
+    }, null, 2), "utf8");
+
+    await syncCclaw(root);
+    const merged = await fs.readFile(cursorHooksPath, "utf8");
+    expect(countOccurrences(merged, "duplicate-user-hook")).toBe(1);
   });
 
   it("sync recovers relaxed JSON hooks and preserves user commands", async () => {

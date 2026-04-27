@@ -52,7 +52,7 @@ export const PLAN: StageSchemaInput = {
       "Map scope Locked Decisions — every LD#hash anchor from scope is referenced by at least one plan task (or explicitly marked deferred with reason).",
       "Run anti-placeholder + anti-scope-reduction scans — block `TODO/TBD/...` and phrasing like `v1`, `for now`, `later` for locked boundaries.",
       "Define validation points — mark where progress must be checked before continuing, with concrete command and expected evidence.",
-      "Define execution posture — record whether execution should be sequential, dependency-batched, parallel-safe, or blocked; include risk triggers and RED/GREEN/REFACTOR checkpoint/commit expectations when the repo workflow supports them.",
+      "Define execution posture — record whether execution should be sequential, dependency-batched, parallel-safe, or blocked; include risk triggers and RED/GREEN/REFACTOR checkpoint/commit expectations when the repo workflow supports them. This fulfills the `plan_execution_posture_recorded` gate.",
       "WAIT_FOR_CONFIRM — write plan artifact and explicitly pause. **STOP.** Do NOT proceed until user confirms. Then close the stage with `node .cclaw/hooks/stage-complete.mjs plan` and tell user to run `/cc-next`."
     ],
     interactionProtocol: [
@@ -78,6 +78,7 @@ export const PLAN: StageSchemaInput = {
       { id: "plan_tasks_sliced_2_5_min", description: "Tasks are small, executable slices." },
       { id: "plan_dependency_batches_defined", description: "Tasks are grouped into executable batches with gate checks and execution posture." },
       { id: "plan_acceptance_mapped", description: "Each task maps to a spec acceptance criterion." },
+      { id: "plan_execution_posture_recorded", description: "Execution posture is recorded before implementation handoff." },
       { id: "plan_wait_for_confirm", description: "Execution blocked until explicit user confirmation." }
     ],
     requiredEvidence: [

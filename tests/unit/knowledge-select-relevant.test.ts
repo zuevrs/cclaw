@@ -67,4 +67,83 @@ describe("selectRelevantLearnings", () => {
     const selected = await selectRelevantLearnings(root, { stage: "tdd" });
     expect(selected).toEqual([]);
   });
+
+  it("does not include generic stage-null learnings in stage-specific retrieval without a strong match", async () => {
+    const root = await createTempProject("knowledge-select-stage-null");
+    const knowledgeDir = path.join(root, ".cclaw");
+    await fs.mkdir(knowledgeDir, { recursive: true });
+    const base = {
+      type: "lesson",
+      action: "capture specific evidence",
+      confidence: "high",
+      domain: "workflow",
+      origin_stage: null,
+      origin_run: null,
+      frequency: 1,
+      universality: "project",
+      maturity: "raw",
+      created: "2026-01-01T00:00:00Z",
+      first_seen_ts: "2026-01-01T00:00:00Z",
+      last_seen_ts: "2026-01-01T00:00:00Z",
+      project: "cclaw"
+    };
+    await fs.writeFile(
+      path.join(knowledgeDir, "knowledge.jsonl"),
+      `${JSON.stringify({
+        ...base,
+        trigger: "general process reminder",
+        stage: null
+      })}
+${JSON.stringify({
+        ...base,
+        trigger: "review stage needs explicit finding evidence",
+        stage: "review",
+        origin_stage: "review"
+      })}
+`,
+      "utf8"
+    );
+
+    const selected = await selectRelevantLearnings(root, { stage: "review" });
+    expect(selected.map((entry) => entry.trigger)).toEqual([
+      "review stage needs explicit finding evidence"
+    ]);
+  });
+
+  it("includes stage-null learnings when contextual tokens strongly match", async () => {
+    const root = await createTempProject("knowledge-select-stage-null-strong");
+    const knowledgeDir = path.join(root, ".cclaw");
+    await fs.mkdir(knowledgeDir, { recursive: true });
+    await fs.writeFile(
+      path.join(knowledgeDir, "knowledge.jsonl"),
+      `${JSON.stringify({
+        type: "pattern",
+        trigger: "auth token logging incident",
+        action: "redact auth token logs",
+        confidence: "high",
+        domain: "auth",
+        stage: null,
+        origin_stage: null,
+        origin_run: "auth-token-hardening",
+        frequency: 1,
+        universality: "project",
+        maturity: "raw",
+        created: "2026-01-01T00:00:00Z",
+        first_seen_ts: "2026-01-01T00:00:00Z",
+        last_seen_ts: "2026-01-01T00:00:00Z",
+        project: "cclaw"
+      })}
+`,
+      "utf8"
+    );
+
+    const selected = await selectRelevantLearnings(root, {
+      stage: "review",
+      branch: "auth-token-hardening",
+      diffFiles: ["src/auth/token.ts"]
+    });
+    expect(selected).toHaveLength(1);
+    expect(selected[0]?.stage).toBeNull();
+  });
+
 });

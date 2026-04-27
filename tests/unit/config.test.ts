@@ -186,6 +186,59 @@ tdd:
     }
   });
 
+
+  it("emits deprecated tdd conflict warnings per readConfig call by default", async () => {
+    const root = await createTempProject("config-warning-per-call");
+    await fs.mkdir(path.join(root, ".cclaw"), { recursive: true });
+    await fs.writeFile(
+      configPath(root),
+      `harnesses:
+  - claude
+tddTestGlobs:
+  - "**/*.legacy.ts"
+tdd:
+  testPathPatterns:
+    - "**/*.modern.ts"
+`,
+      "utf8"
+    );
+    const warningSpy = vi.spyOn(process, "emitWarning").mockImplementation(() => {});
+    try {
+      await readConfig(root);
+      await readConfig(root);
+      expect(warningSpy).toHaveBeenCalledTimes(2);
+    } finally {
+      warningSpy.mockRestore();
+    }
+  });
+
+  it("dedupes config warnings within an explicit caller warning state", async () => {
+    const root = await createTempProject("config-warning-state");
+    await fs.mkdir(path.join(root, ".cclaw"), { recursive: true });
+    await fs.writeFile(
+      configPath(root),
+      `harnesses:
+  - claude
+tddTestGlobs:
+  - "**/*.legacy.ts"
+tdd:
+  testPathPatterns:
+    - "**/*.modern.ts"
+`,
+      "utf8"
+    );
+    const warningSpy = vi.spyOn(process, "emitWarning").mockImplementation(() => {});
+    try {
+      const { createConfigWarningState } = await import("../../src/config.js");
+      const warningState = createConfigWarningState();
+      await readConfig(root, { warningState });
+      await readConfig(root, { warningState });
+      expect(warningSpy).toHaveBeenCalledTimes(1);
+    } finally {
+      warningSpy.mockRestore();
+    }
+  });
+
   it("rejects malformed nested tdd config", async () => {
     const root = await createTempProject("config-tdd-malformed");
     await fs.mkdir(path.join(root, ".cclaw"), { recursive: true });

@@ -35,7 +35,7 @@ describe("stage schema and subagent alignment", () => {
   it("resolves explicit and default complexity tiers", () => {
     expect(stageSchema("brainstorm").complexityTier).toBe("standard");
     expect(stageSchema("scope").complexityTier).toBe("standard");
-    expect(stageSchema("design").complexityTier).toBe("deep");
+    expect(stageSchema("design").complexityTier).toBe("standard");
     // Plan does not set complexityTier explicitly and should fall back.
     expect(stageSchema("plan").complexityTier).toBe("standard");
   });
@@ -91,12 +91,23 @@ describe("stage schema and subagent alignment", () => {
     expect(standard.upstreamArtifactPath).toBe(".cclaw/artifacts/05-plan.md");
   });
 
+  it("keeps quick-track TDD and review traceability independent of plan artifacts", () => {
+    const quickTdd = stageSkillMarkdown("tdd", "quick");
+    const quickReview = stageSkillMarkdown("review", "quick");
+
+    expect(stageSchema("tdd", "quick").requiredGates.map((gate) => gate.id)).not.toContain("tdd_traceable_to_plan");
+    expect(quickTdd).toContain("spec acceptance items / bug reproduction slices on quick");
+    expect(quickTdd).toContain("No plan artifact is required on quick");
+    expect(quickReview).toContain("bug reproduction slices instead of nonexistent plan artifacts");
+  });
+
   it("plan stage reads spec, design, and scope artifacts", () => {
     const plan = stageSchema("plan");
     expect(plan.crossStageTrace.readsFrom).toContain(".cclaw/artifacts/04-spec.md");
     expect(plan.crossStageTrace.readsFrom).toContain(".cclaw/artifacts/03-design-<slug>.md");
     expect(plan.crossStageTrace.readsFrom).toContain(".cclaw/artifacts/02-scope-<slug>.md");
     expect(plan.requiredGates.map((gate) => gate.id)).toContain("plan_dependency_batches_defined");
+    expect(plan.artifactValidation.some((row) => row.section === "Execution Posture")).toBe(true);
     expect(stagePolicyNeedles("plan")).toContain("Dependency Batches");
   });
 
@@ -460,6 +471,74 @@ describe("stage schema and subagent alignment", () => {
     ]);
   });
 
+  it("scope right-sizing keeps required gates while marking deep workshop sections optional", () => {
+    const scope = stageSchema("scope");
+    const scopeTemplate = ARTIFACT_TEMPLATES["02-scope.md"];
+
+    expect(scope.requiredGates.filter((gate) => gate.tier === "required").map((gate) => gate.id)).toEqual([
+      "scope_mode_selected",
+      "scope_contract_written",
+      "scope_user_approved"
+    ]);
+    expect(scope.executionModel.checklist).toEqual(expect.arrayContaining([
+      expect.stringContaining("This is the default path"),
+      expect.stringContaining("ordinary path is a selected-mode row plus rationale")
+    ]));
+    expect(scope.artifactValidation.find((row) => row.section === "Dream State Mapping")?.validationRule)
+      .toContain("Omit for compact scope");
+    expect(scope.artifactValidation.find((row) => row.section === "Temporal Interrogation")?.validationRule)
+      .toContain("Omit for compact scope");
+    expect(scope.artifactValidation.find((row) => row.section === "Mode-Specific Analysis")?.validationRule)
+      .toContain("one selected-mode row with rationale");
+    expect(scopeTemplate).toContain("Deep/optional only; omit for compact scope");
+    expect(scopeTemplate).toContain("| Selected mode | Rationale | Depth |");
+  });
+
+  it("design right-sizing keeps gates and treats heavy diagrams as add-ons", () => {
+    const design = stageSchema("design");
+    const designTemplate = ARTIFACT_TEMPLATES["03-design.md"];
+
+    expect(design.requiredGates.filter((gate) => gate.tier === "required").map((gate) => gate.id)).toEqual([
+      "design_research_complete",
+      "design_architecture_locked",
+      "design_data_flow_mapped",
+      "design_failure_modes_mapped",
+      "design_test_and_perf_defined"
+    ]);
+    expect(design.requiredGates.find((gate) => gate.id === "design_research_complete")?.description)
+      .toContain("compact inline synthesis by default");
+    expect(design.requiredEvidence).toEqual(expect.arrayContaining([
+      expect.stringContaining("Research Fleet Synthesis is filled in `03-design.md`")
+    ]));
+    for (const section of [
+      "Data-Flow Shadow Paths",
+      "Error Flow Diagram",
+      "Parallelization Strategy",
+      "Interface Contracts",
+      "Unresolved Decisions"
+    ] as const) {
+      expect(design.artifactValidation.find((row) => row.section === section)?.validationRule)
+        .toMatch(/add-on/);
+    }
+    expect(designTemplate).toContain("compact inline synthesis here");
+    expect(designTemplate).toContain("Standard/Deep add-on; omit");
+  });
+
+  it("review contract aligns required layer coverage and blocked route gates", () => {
+    const review = stageSchema("review", "quick");
+    const requiredGateIds = review.requiredGates
+      .filter((gate) => gate.tier === "required")
+      .map((gate) => gate.id);
+
+    expect(requiredGateIds).toContain("review_layer_coverage_complete");
+    expect(review.requiredGates.find((gate) => gate.id === "review_criticals_resolved")?.description)
+      .toContain("BLOCKED routes use review_verdict_blocked instead");
+    expect(review.requiredEvidence).toEqual(expect.arrayContaining([
+      expect.stringContaining("correctness, security, performance, architecture, and external-safety")
+    ]));
+    expect(ARTIFACT_TEMPLATES["07-review.md"]).toContain("correctness/security/performance/architecture/external-safety");
+  });
+
   it("brainstorm and scope default to compact user-facing flow", () => {
     const brainstorm = stageSchema("brainstorm");
     const scope = stageSchema("scope");
@@ -472,7 +551,7 @@ describe("stage schema and subagent alignment", () => {
       expect.stringContaining("Ask at most one question per turn")
     ]));
     expect(scope.executionModel.checklist).toEqual(expect.arrayContaining([
-      expect.stringContaining("Compact CEO pass first")
+      expect.stringContaining("Scope contract first")
     ]));
     expect(scope.executionModel.interactionProtocol).toEqual(expect.arrayContaining([
       expect.stringContaining("Do not walk the full checklist by default"),
@@ -558,9 +637,10 @@ describe("stage schema and subagent alignment", () => {
     const scopeTemplate = ARTIFACT_TEMPLATES["02-scope.md"];
     const designTemplate = ARTIFACT_TEMPLATES["03-design.md"];
     expect(scopeTemplate).toContain("## Outside Voice Findings");
-    expect(scopeTemplate).toContain("## Spec Review Loop");
+    expect(scopeTemplate).toContain("## Scope Outside Voice Loop");
     expect(designTemplate).toContain("## Outside Voice Findings");
-    expect(designTemplate).toContain("## Spec Review Loop");
+    expect(designTemplate).toContain("## Design Outside Voice Loop");
+    expect(scopeTemplate).not.toContain("Spec review loop summary");
   });
 
   it("brainstorm scope and design templates expose seed shelf section", () => {

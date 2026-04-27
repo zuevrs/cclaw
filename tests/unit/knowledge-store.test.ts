@@ -4,6 +4,7 @@ import { describe, expect, it } from "vitest";
 import {
   appendKnowledge,
   readKnowledgeSafely,
+  validateKnowledgeEntry,
   type KnowledgeEntry,
   type KnowledgeSeedEntry
 } from "../../src/knowledge-store.js";
@@ -307,6 +308,30 @@ describe("knowledge store append helper", () => {
     expect(result.appended).toBe(0);
     expect(result.invalid).toBe(1);
     expect(result.errors.join(" ")).toContain("supersedes");
+  });
+
+  it("requires canonical origin_run for direct validation while allowing legacy reads", async () => {
+    const legacyRow = {
+      type: "pattern",
+      trigger: "legacy trigger",
+      action: "normalize during reads",
+      confidence: "medium",
+      domain: null,
+      stage: "plan",
+      origin_stage: "plan",
+      origin_feature: "legacy-run",
+      frequency: 1,
+      universality: "project",
+      maturity: "raw",
+      created: "2026-04-20T11:00:00Z",
+      first_seen_ts: "2026-04-20T11:00:00Z",
+      last_seen_ts: "2026-04-20T11:00:00Z",
+      project: "cclaw"
+    };
+
+    expect(validateKnowledgeEntry(legacyRow).ok).toBe(false);
+    const compat = validateKnowledgeEntry(legacyRow, { allowLegacyOriginFeature: true });
+    expect(compat.ok).toBe(true);
   });
 
 });

@@ -124,7 +124,7 @@ ${ralphLoopContractSnippet()}
 - If \`track === "quick"\`, the critical path is **spec → tdd → review → ship**. When advancing, skip any stage listed in \`skippedStages\` — i.e. after the current stage completes, pick the next stage that is NOT in \`skippedStages\`.
 - If \`track === "medium"\`, the critical path is **brainstorm → spec → plan → tdd → review → ship**. Scope and design are intentionally skipped unless the run is reclassified to standard.
 - If \`track === "standard"\`, advance through all 8 stages in their natural order.
-- Never reintroduce a skipped stage mid-run. If the user wants upstream scoping work, they must archive the run and start a new one with \`track: "standard"\`.
+- Never manually reintroduce a skipped stage mid-run. If evidence shows the track was wrong, stop and use the managed start-flow helper with \`--reclassify\`; only that managed reclassification may add upstream stages back into the active track.
 
 ## Resume Semantics
 
@@ -142,7 +142,7 @@ When orchestrated by another skill/subagent, emit exactly one JSON envelope and
 no narrative text:
 
 \`\`\`json
-{"version":"1","kind":"gate-result","stage":"review","payload":{"command":"/cc-next","decision":"resume_or_advance","nextStage":"ship"},"emittedAt":"<ISO-8601>"}
+{"version":"1","kind":"gate-result","stage":"<currentStage>","payload":{"command":"/cc-next","decision":"resume_or_advance","nextStage":"<nextStage>"},"emittedAt":"<ISO-8601>"}
 \`\`\`
 
 Validate envelopes with:

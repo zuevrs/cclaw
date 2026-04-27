@@ -39,8 +39,10 @@ ${conversationLanguagePolicyMarkdown()}
 For machine orchestration, emit one JSON envelope:
 
 \`\`\`json
-{"version":"1","kind":"stage-output","stage":"non-flow","payload":{"command":"/cc-view","subcommand":"status","summary":"<short>"},"emittedAt":"<ISO-8601>"}
+{"version":"1","kind":"stage-output","stage":"non-flow","payload":{"command":"/cc-view <status|tree|diff>","subcommand":"<status|tree|diff>","summary":"<short>"},"emittedAt":"<ISO-8601>"}
 \`\`\`
+
+Use the parsed/defaulted subcommand in both \`payload.command\` and \`payload.subcommand\`; do not collapse \`tree\` or \`diff\` responses to \`status\`.
 
 Validate envelopes with:
 \`cclaw internal envelope-validate --stdin\`

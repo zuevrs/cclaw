@@ -25,6 +25,8 @@ describe("canonical path matcher", () => {
     expect(pathMatchesTarget("pkg/src/app.ts", "src/app.ts")).toBe(true);
     // Must not match when target is a suffix-but-not-segment (file vs. prefix).
     expect(pathMatchesTarget("src/app.test.ts", "src/app.ts")).toBe(false);
+    // Bare basename targets are too broad for suffix matching.
+    expect(pathMatchesTarget("src/app.ts", "app.ts")).toBe(false);
     expect(pathMatchesTarget("", "src/app.ts")).toBe(false);
     expect(pathMatchesTarget("src/app.ts", "")).toBe(false);
   });
