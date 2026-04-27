@@ -80,24 +80,28 @@ function autoSubagentDispatchBlock(stage: FlowStage, track: FlowTrack): string {
   const rules = stageAutoSubagentDispatch(stage);
   if (rules.length === 0) return "";
 
+  const schema = stageSchema(stage, track);
   const rows = rules
     .map((rule) => {
       const userGate = rule.requiresUserGate ? "required" : "not required";
-      return `| ${rule.agent} | ${rule.mode} | ${userGate} | ${rule.when} |`;
+      return `| ${rule.agent} | ${rule.mode} | ${userGate} | ${rule.when} | ${rule.purpose} |`;
     })
     .join("\n");
-  const mandatory = stageSchema(stage, track).mandatoryDelegations;
+  const mandatory = schema.mandatoryDelegations;
   const mandatoryList = mandatory.length > 0 ? mandatory.map((a) => `\`${a}\``).join(", ") : "none";
   const delegationLogRel = `${RUNTIME_ROOT}/state/delegation-log.json`;
+  const artifactRef = `${RUNTIME_ROOT}/artifacts/${schema.artifactRules.artifactFile}`;
+  const firstRule = rules[0];
+  const roleSwitchExample = firstRule ? `${stage}/${firstRule.agent} (${firstRule.mode})` : `${stage}/<agent>`;
 
   return `## Automatic Subagent Dispatch
-
-| Agent | Mode | User Gate | Trigger |
-|---|---|---|---|
+| Agent | Mode | User Gate | Trigger | Purpose |
+|---|---|---|---|---|
 ${rows}
 
-Mandatory delegations for this stage: ${mandatoryList}.
-Record completion/waiver in \`${delegationLogRel}\` before stage completion.
+Mandatory: ${mandatoryList}. Record completion/waiver in \`${delegationLogRel}\` before completion.
+### Stage-Aware Agent Workflow Contract
+OpenCode / Codex use sequential role-switch execution, not isolated workers. For each listed role use header \`## cclaw role-switch: ${roleSwitchExample}\`, write evidence into \`${artifactRef}\`, then append a \`${delegationLogRel}\` row with \`fulfillmentMode: "role-switch"\` and non-empty \`evidenceRefs\`. Missing evidence blocks completion.
 `;
 }
 
@@ -181,16 +185,19 @@ Keep this verification evidence in the artifact before completion.
 function batchExecutionModeBlock(stage: FlowStage, track: FlowTrack): string {
   const schema = stageSchema(stage, track);
   if (!schema.batchExecutionAllowed) return "";
+  const orderingGuidance = track === "quick"
+    ? "Use spec acceptance items / bug reproduction slices for ordering."
+    : "Use plan slices for ordering.";
 
   return `## Batch Execution Mode
 
 Execute the current dependency batch task-by-task (RED -> GREEN -> REFACTOR).
 Stop on BLOCKED status or when user input is required.
-Apply concise turn announces: one announce per batch boundary (or when risk/plan
+Apply concise turn announces: one announce per batch boundary (or when risk/source
 changes materially), then execute tasks without repetitive boilerplate.
 
 Detailed walkthrough:
-Use the active track's upstream artifact for ordering: plan slices on standard/medium, or spec acceptance items / bug reproduction slices on quick. Keep RED -> GREEN -> REFACTOR evidence in the TDD artifact.
+${orderingGuidance} Keep RED -> GREEN -> REFACTOR evidence in the TDD artifact.
 `;
 }
 

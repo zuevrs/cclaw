@@ -247,7 +247,12 @@ function tddStageVariantForTrack(track: FlowTrack): StageSchemaV2Input {
     skillDescription: renderTrackTerminology(TDD.skillDescription, renderContext),
     philosophy: {
       ...TDD.philosophy,
-      hardGate: renderTrackTerminology(TDD.philosophy.hardGate, renderContext)
+      hardGate: renderTrackTerminology(TDD.philosophy.hardGate, renderContext),
+      purpose: renderTrackTerminology(TDD.philosophy.purpose, renderContext),
+      whenToUse: TDD.philosophy.whenToUse.map((value) => renderTrackTerminology(value, renderContext)),
+      whenNotToUse: TDD.philosophy.whenNotToUse.map((value) => renderTrackTerminology(value, renderContext)),
+      commonRationalizations: TDD.philosophy.commonRationalizations
+        .map((value) => renderTrackTerminology(value, renderContext))
     },
     executionModel: {
       ...TDD.executionModel,
@@ -264,7 +269,9 @@ function tddStageVariantForTrack(track: FlowTrack): StageSchemaV2Input {
       requiredEvidence: TDD.executionModel.requiredEvidence
         .map((value) => renderTrackTerminology(value, renderContext)),
       inputs: TDD.executionModel.inputs.map((value) => renderTrackTerminology(value, renderContext)),
-      requiredContext: [renderContext.upstreamArtifactLabel, "existing test patterns", "affected contracts and state boundaries"]
+      requiredContext: [renderContext.upstreamArtifactLabel, "existing test patterns", "affected contracts and state boundaries"],
+      blockers: TDD.executionModel.blockers.map((value) => renderTrackTerminology(value, renderContext)),
+      exitCriteria: TDD.executionModel.exitCriteria.map((value) => renderTrackTerminology(value, renderContext))
     },
     reviewLens: {
       ...TDD.reviewLens,
@@ -293,7 +300,7 @@ function tddStageVariantForTrack(track: FlowTrack): StageSchemaV2Input {
         if (row.section === "Traceability") {
           return {
             ...row,
-            validationRule: "Spec acceptance item IDs and, for bug fixes, reproduction slice IDs are linked to RED/GREEN evidence. No plan artifact is required on quick."
+            validationRule: "Spec acceptance item IDs and, for bug fixes, reproduction slice IDs are linked to RED/GREEN evidence."
           };
         }
         return {

@@ -568,7 +568,7 @@ process.exit(0);
     const calls = await fs.readFile(callsPath, "utf8");
     expect(calls).toContain("internal verify-current-state --quiet");
 
-    const missingEntrypoint = await runNodeHook(
+    const advisoryMissingEntrypoint = await runNodeHook(
       root,
       "verify-current-state",
       nodeHookRuntimeScript(),
@@ -578,8 +578,22 @@ process.exit(0);
         CCLAW_CLI_JS: path.join(root, "missing-cli.mjs")
       }
     );
-    expect(missingEntrypoint.code).toBe(1);
-    expect(missingEntrypoint.stderr).toContain("local Node runtime entrypoint not found");
+    expect(advisoryMissingEntrypoint.code).toBe(0);
+    expect(advisoryMissingEntrypoint.stderr).toContain("local Node runtime entrypoint not found");
+
+    const strictMissingEntrypoint = await runNodeHook(
+      root,
+      "verify-current-state",
+      nodeHookRuntimeScript(),
+      {},
+      {
+        ...emptyPathEnv,
+        CCLAW_CLI_JS: path.join(root, "missing-cli.mjs"),
+        CCLAW_STRICTNESS: "strict"
+      }
+    );
+    expect(strictMissingEntrypoint.code).toBe(1);
+    expect(strictMissingEntrypoint.stderr).toContain("local Node runtime entrypoint not found");
   });
 
   it("context-monitor debounces advisories and auto-captures failing tests", async () => {

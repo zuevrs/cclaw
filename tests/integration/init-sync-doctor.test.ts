@@ -101,14 +101,35 @@ describe("install lifecycle", { timeout: 30_000 }, () => {
     await expect(fs.stat(path.join(root, ".cclaw/state/flow-state.snapshot.json"))).rejects.toBeDefined();
     await expect(fs.stat(path.join(root, ".cclaw/state/harness-gaps.json"))).rejects.toBeDefined();
     const commandFiles = (await fs.readdir(path.join(root, ".cclaw/commands"))).sort();
-    expect(commandFiles).toEqual(["ideate.md", "next.md", "start.md", "view.md"]);
+    expect(commandFiles).toEqual([
+      "brainstorm.md",
+      "design.md",
+      "ideate.md",
+      "next.md",
+      "plan.md",
+      "review.md",
+      "scope.md",
+      "ship.md",
+      "spec.md",
+      "start.md",
+      "tdd.md",
+      "view.md"
+    ]);
     await expect(fs.stat(path.join(root, ".claude/commands/cc-view.md"))).resolves.toBeDefined();
     const claudeShims = (await fs.readdir(path.join(root, ".claude/commands")))
       .filter((name) => /^cc(?:-.*)?\.md$/u.test(name))
       .sort();
     expect(claudeShims).toEqual([
+      "cc-brainstorm.md",
+      "cc-design.md",
       "cc-ideate.md",
       "cc-next.md",
+      "cc-plan.md",
+      "cc-review.md",
+      "cc-scope.md",
+      "cc-ship.md",
+      "cc-spec.md",
+      "cc-tdd.md",
       "cc-view.md",
       "cc.md"
     ]);
@@ -136,9 +157,10 @@ describe("install lifecycle", { timeout: 30_000 }, () => {
 
     const opencodeConfig = JSON.parse(
       await fs.readFile(path.join(root, "opencode.json"), "utf8")
-    ) as { plugin?: unknown[] };
+    ) as { plugin?: unknown[]; permission?: { question?: unknown } };
     expect(Array.isArray(opencodeConfig.plugin)).toBe(true);
     expect(opencodeConfig.plugin).toContain(".opencode/plugins/cclaw-plugin.mjs");
+    expect(opencodeConfig.permission?.question).toBe("allow");
 
     const cursorRule = await fs.readFile(path.join(root, ".cursor/rules/cclaw-workflow.mdc"), "utf8");
     expect(cursorRule).toContain("cclaw-managed-cursor-workflow-rule");
@@ -355,6 +377,7 @@ describe("install lifecycle", { timeout: 30_000 }, () => {
       "dir:",
       "command:",
       "utility_command:",
+      "stage_command:",
       "utility_skill:",
       "agent:",
       "harness_tool_ref:",
@@ -439,23 +462,25 @@ describe("install lifecycle", { timeout: 30_000 }, () => {
     await expect(fs.stat(shim)).resolves.toBeDefined();
   });
 
-  it("sync regenerates shim files and stage skills while pruning legacy command contracts", async () => {
+  it("sync regenerates shim files, stage commands, and stage skills", async () => {
     const root = await createTempProject("sync");
     await initCclaw({ projectRoot: root });
 
     const shim = path.join(root, ".claude/commands/cc.md");
-    const legacyContract = path.join(root, ".cclaw/commands/plan.md");
+    const stageContract = path.join(root, ".cclaw/commands/plan.md");
     const skill = path.join(root, ".cclaw/skills/planning-and-task-breakdown/SKILL.md");
     await fs.rm(shim);
-    await fs.writeFile(legacyContract, "# legacy\n", "utf8");
+    await fs.writeFile(stageContract, "# corrupted stage shim\n", "utf8");
     await fs.writeFile(skill, "# corrupted\n", "utf8");
     await syncCclaw(root);
 
     const restored = await fs.readFile(shim, "utf8");
+    const restoredStageContract = await fs.readFile(stageContract, "utf8");
     const restoredSkill = await fs.readFile(skill, "utf8");
     expect(restored).toContain(".cclaw/skills/flow-start/SKILL.md");
+    expect(restoredStageContract).toContain(".cclaw/skills/planning-and-task-breakdown/SKILL.md");
+    expect(restoredStageContract).toContain("Normal stage resume and advancement uses `/cc-next`");
     expect(restoredSkill).toContain("## Required Gates");
-    await expect(fs.stat(legacyContract)).rejects.toBeDefined();
   });
 
   it("sync regenerates stage skills when defaultTrack changes", async () => {
@@ -1212,8 +1237,8 @@ Capture this later.
     expect(flowReadable?.details).toMatch(/Corrupt flow-state\.json detected/i);
   });
 
-  it("accepts OpenCode plugin registration when a later config candidate is valid", async () => {
-    const root = await createTempProject("doctor-opencode-registration-multi-config");
+  it("checks OpenCode structured-question prerequisites", async () => {
+    const root = await createTempProject("doctor-opencode-question-prereqs");
     await initCclaw({ projectRoot: root });
     await fs.writeFile(
       path.join(root, "opencode.json"),
@@ -1227,10 +1252,29 @@ Capture this later.
       "utf8"
     );
 
-    const checks = await doctorChecks(root);
-    const registration = checks.find((c) => c.name === "hook:opencode:config_registration");
-    expect(registration).toBeDefined();
-    expect(registration?.ok).toBe(true);
+    const previousQuestionToolEnv = process.env.OPENCODE_ENABLE_QUESTION_TOOL;
+    delete process.env.OPENCODE_ENABLE_QUESTION_TOOL;
+    try {
+      const checks = await doctorChecks(root);
+      const registration = checks.find((c) => c.name === "hook:opencode:config_registration");
+      const permission = checks.find((c) => c.name === "hook:opencode:question_permission");
+      const env = checks.find((c) => c.name === "warning:opencode:question_tool_env");
+      expect(registration).toBeDefined();
+      expect(registration?.ok).toBe(true);
+      expect(permission).toBeDefined();
+      expect(permission?.ok).toBe(false);
+      expect(permission?.details).toContain('permission.question to "allow"');
+      expect(env).toBeDefined();
+      expect(env?.ok).toBe(false);
+      expect(env?.severity).toBe("warning");
+      expect(env?.details).toContain("OPENCODE_ENABLE_QUESTION_TOOL=1");
+    } finally {
+      if (previousQuestionToolEnv === undefined) {
+        delete process.env.OPENCODE_ENABLE_QUESTION_TOOL;
+      } else {
+        process.env.OPENCODE_ENABLE_QUESTION_TOOL = previousQuestionToolEnv;
+      }
+    }
   });
 
   it("codex install materializes .agents/skills/cc*/SKILL.md and .codex/hooks.json", async () => {
@@ -1261,6 +1305,7 @@ Capture this later.
     expect(codexHooks.hooks).toHaveProperty("PostToolUse");
     expect(codexHooks.hooks).toHaveProperty("Stop");
     expect(JSON.stringify(codexHooks)).toContain("verify-current-state");
+    expect(JSON.stringify(codexHooks.hooks.UserPromptSubmit)).not.toContain("workflow-guard");
 
     // `.codex/commands/*` is still never consumed by Codex.
     await expect(fs.stat(path.join(root, ".codex/commands"))).rejects.toThrow(/ENOENT/);

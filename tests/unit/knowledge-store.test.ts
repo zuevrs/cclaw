@@ -8,6 +8,7 @@ import {
   type KnowledgeEntry,
   type KnowledgeSeedEntry
 } from "../../src/knowledge-store.js";
+import { learnSkillMarkdown } from "../../src/content/learnings.js";
 import { createTempProject } from "../helpers/index.js";
 
 describe("knowledge store append helper", () => {
@@ -263,6 +264,14 @@ describe("knowledge store append helper", () => {
     expect(parsed.entries).toHaveLength(1);
     expect(parsed.entries[0]?.origin_run).toBe("legacy-run");
     expect(parsed.malformedLines).toBe(0);
+  });
+
+
+  it("documents supersession fields in the generated learnings skill", () => {
+    const markdown = learnSkillMarkdown();
+    expect(markdown).toContain("Optional fields `source`, `severity`, `supersedes`, and `superseded_by`");
+    expect(markdown).toContain("| `supersedes` | string[] | no |");
+    expect(markdown).toContain("| `superseded_by` | string | no |");
   });
 
   it("accepts optional supersession fields while reading existing schema rows", async () => {

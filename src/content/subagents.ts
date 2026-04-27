@@ -95,8 +95,8 @@ can enforce phase-appropriate write boundaries. Use separate workers only when t
 |---|---|---|---|---|
 | Claude | \`native\` | Task (named subagent_type) | AskUserQuestion | \`npx cclaw-cli doctor\` |
 | Cursor | \`generic-dispatch\` | Task (generic subagent_type: explore/generalPurpose/…) | AskQuestion | \`npx cclaw-cli doctor\` |
-| OpenCode | \`role-switch\` | plugin dispatch _or_ in-session role-switch | \`question\` (permission-gated; \`permission.question: "allow"\`) | \`npx cclaw-cli doctor\` |
-| Codex | \`role-switch\` | in-session role-switch (mandatory evidenceRefs) | \`request_user_input\` (experimental; Plan / Collaboration mode) | \`npx cclaw-cli doctor\` |
+| OpenCode | \`role-switch\` | sequential stage-aware role workflow (plugin hooks + in-session execution) | \`question\` (permission-gated; \`permission.question: "allow"\`) | \`npx cclaw-cli doctor\` |
+| Codex | \`role-switch\` | sequential stage-aware role workflow (mandatory evidenceRefs) | \`request_user_input\` (experimental; Plan / Collaboration mode) | \`npx cclaw-cli doctor\` |
 
 **Dispatch rules driven by \`subagentFallback\`:**
 
@@ -104,7 +104,17 @@ can enforce phase-appropriate write boundaries. Use separate workers only when t
 - \`generic-dispatch\` — map each cclaw agent onto the generic dispatcher with a role prompt; delegation entry uses \`fulfillmentMode: "generic-dispatch"\`.
 - \`role-switch\` — announce the role in-session, perform the work, append a delegation row with \`fulfillmentMode: "role-switch"\` and ≥1 \`evidenceRef\`. Without evidenceRefs the \`delegation:mandatory:current_stage\` check reports \`missingEvidence\` and blocks stage completion.
 
-The only time a \`harness_limitation\` waiver fires automatically is when every installed harness declares \`subagentFallback: "waiver"\`. cclaw 0.33 no longer maps Codex onto auto-waiver — the agent must role-switch with evidence.
+### Stage-aware role-switch contract
+
+For OpenCode and Codex, "subagent" means a concrete staged role workflow rather than an isolated worker. For each mandatory stage row, execute roles sequentially using the active stage's dispatch table:
+
+1. Start a visible header: \`## cclaw role-switch: <stage>/<agent> (<mandatory|proactive>)\`.
+2. Load the generated agent definition from \`.cclaw/agents/<agent>.md\` and keep the role boundary for that pass.
+3. Produce stage output in the current artifact, with anchors suitable for \`evidenceRefs\`.
+4. Append the delegation ledger row with \`stage\`, \`agent\`, \`mode\`, \`status: "completed"\`, \`fulfillmentMode: "role-switch"\`, and non-empty \`evidenceRefs\`.
+5. Move to the next required/recommended role only after the current role's evidence is recorded.
+
+The only time a \`harness_limitation\` waiver fires automatically is when every installed harness declares \`subagentFallback: "waiver"\`. cclaw 0.33 no longer maps Codex or OpenCode onto auto-waiver — the agent must role-switch with evidence.
 
 ### Model routing
 

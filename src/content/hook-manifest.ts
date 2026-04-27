@@ -112,10 +112,7 @@ export const HOOK_MANIFEST: readonly HookHandlerSpec[] = [
     bindings: {
       claude: [{ event: "PreToolUse", matcher: "Write|Edit|MultiEdit|NotebookEdit|Bash" }],
       cursor: [{ event: "preToolUse", matcher: "*" }],
-      codex: [
-        { event: "UserPromptSubmit" },
-        { event: "PreToolUse", matcher: "Bash|bash" }
-      ]
+      codex: [{ event: "PreToolUse", matcher: "Bash|bash" }]
     }
   },
   {

@@ -26,17 +26,39 @@ function expectStageSkillContract(content: string): void {
 }
 
 describe("flow command contracts", () => {
-  it("creates only the four user-facing command contracts", async () => {
+  it("creates user-facing command contracts and thin stage shims", async () => {
     const root = await createTempProject("flow");
     await initCclaw({ projectRoot: root });
 
     const entries = (await fs.readdir(path.join(root, ".cclaw/commands"))).sort();
-    expect(entries).toEqual(["ideate.md", "next.md", "start.md", "view.md"]);
+    expect(entries).toEqual([
+      "brainstorm.md",
+      "design.md",
+      "ideate.md",
+      "next.md",
+      "plan.md",
+      "review.md",
+      "scope.md",
+      "ship.md",
+      "spec.md",
+      "start.md",
+      "tdd.md",
+      "view.md"
+    ]);
 
-    for (const fileName of entries) {
+    for (const fileName of ["ideate.md", "next.md", "start.md", "view.md"]) {
       const content = await fs.readFile(path.join(root, ".cclaw/commands", fileName), "utf8");
       expect(content).toContain("## HARD-GATE");
       expect(content).toContain("SKILL.md");
+    }
+
+    for (const stage of FLOW_STAGES) {
+      const content = await fs.readFile(path.join(root, ".cclaw/commands", `${stage}.md`), "utf8");
+      expect(content).toContain(`.cclaw/skills/${stageSkillFolder(stage)}/SKILL.md`);
+      expect(content).toContain("Normal stage resume and advancement uses `/cc-next`");
+      expect(content).toContain("Do not duplicate the stage protocol here");
+      expect(content).not.toContain("## Process");
+      expect(content).not.toContain("## Required Gates");
     }
   });
 
@@ -198,6 +220,12 @@ describe("flow command contracts", () => {
         const content = await fs.readFile(shimPath, "utf8");
         expect(content).toContain(".cclaw/skills/");
       }
+      for (const stage of FLOW_STAGES) {
+        const shimPath = path.join(root, harnessDir, `cc-${stage}.md`);
+        const content = await fs.readFile(shimPath, "utf8");
+        expect(content).toContain(`.cclaw/skills/${stageSkillFolder(stage)}/SKILL.md`);
+        expect(content).toContain("Normal stage resume and advancement uses `/cc-next`");
+      }
     }
 
     // Codex uses skill-kind shims under `.agents/skills/cc*/SKILL.md`
@@ -208,6 +236,14 @@ describe("flow command contracts", () => {
       const content = await fs.readFile(skillPath, "utf8");
       expect(content).toContain(`name: ${skillName}`);
       expect(content).toContain(".cclaw/skills/");
+    }
+    for (const stage of FLOW_STAGES) {
+      const skillName = `cc-${stage}`;
+      const skillPath = path.join(root, ".agents/skills", skillName, "SKILL.md");
+      const content = await fs.readFile(skillPath, "utf8");
+      expect(content).toContain(`name: ${skillName}`);
+      expect(content).toContain(`.cclaw/skills/${stageSkillFolder(stage)}/SKILL.md`);
+      expect(content).toContain("Normal stage resume and advancement uses `/cc-next`");
     }
 
     // Codex hooks are managed again since v0.40.0.
@@ -491,13 +527,17 @@ describe("flow command contracts", () => {
     expect(specTemplate).toContain("Expected RED test behavior");
     expect(specTemplate).toContain("TDD turns this contract into the RED reproduction test");
 
-    expect(tddTemplate).toContain("Quick track uses spec acceptance items / bug reproduction slices");
-    expect(tddTemplate).toContain("Plan task ID or quick source");
-    expect(tddTemplate).toContain("Do not invent a plan task");
+    expect(tddTemplate).toContain("active track's upstream source item");
+    expect(tddTemplate).toContain("Source item ID");
+    expect(tddTemplate).toContain("Quick Reproduction Contract");
 
-    expect(reviewTemplate).toContain("Quick track reviews spec acceptance items / bug reproduction slices");
-    expect(reviewTemplate).toContain("N/A - quick track has no plan artifact");
+    expect(reviewTemplate).toContain("active track's upstream source item");
+    expect(reviewTemplate).toContain("N/A - direct spec/reproduction coverage");
     expect(reviewTemplate).toContain("direct AC/reproduction-slice coverage");
+    for (const phrase of ["05-plan.md", "Plan task IDs", "Task coverage", "orphaned tasks", "Do not invent a plan task"]) {
+      expect(tddTemplate, `TDD template leaked ${phrase}`).not.toContain(phrase);
+      expect(reviewTemplate, `review template leaked ${phrase}`).not.toContain(phrase);
+    }
   });
 
   it("keeps meta-skill utility routing limited to generated helper surfaces", async () => {
@@ -506,6 +546,11 @@ describe("flow command contracts", () => {
 
     const metaSkill = await fs.readFile(path.join(root, ".cclaw/skills/using-cclaw/SKILL.md"), "utf8");
     const generatedSkillDirs = (await fs.readdir(path.join(root, ".cclaw/skills"))).sort();
+
+    const helperMatches = [...metaSkill.matchAll(/`([a-z][a-z0-9-]*)`/gu)]
+      .map((match) => match[1]!)
+      .filter((name) => ["subagent-dev", "parallel-dispatch", "session", "iron-laws"].includes(name));
+    expect(new Set(helperMatches)).toEqual(new Set(["subagent-dev", "parallel-dispatch", "session", "iron-laws"]));
 
     for (const expected of ["subagent-dev", "parallel-dispatch", "session", "iron-laws"]) {
       expect(generatedSkillDirs).toContain(expected);

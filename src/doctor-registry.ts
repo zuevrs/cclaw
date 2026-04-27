@@ -54,7 +54,7 @@ const RULES: DoctorRegistryRule[] = [
     }
   },
   {
-    test: /^(dir:|command:|utility_command:|skill:|utility_skill:|agent:|harness_tool_ref:|harness_ref:|stage_examples_ref:|doctor_ref:)/,
+    test: /^(dir:|command:|utility_command:|stage_command:|skill:|utility_skill:|agent:|harness_tool_ref:|harness_ref:|stage_examples_ref:|doctor_ref:)/,
     metadata: {
       severity: "error",
       summary: "Generated runtime surface presence check.",

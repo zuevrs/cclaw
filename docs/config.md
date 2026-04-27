@@ -43,8 +43,8 @@ Which harnesses receive generated shims and hooks.
 | ---------- | --------------------------------------------------------------------------------------------------- |
 | `claude`   | Claude Code — full native subagent + hook support                                                   |
 | `cursor`   | Cursor IDE — partial subagent, full hooks                                                           |
-| `opencode` | OpenCode — partial subagent, plugin hooks, `question` tool                                          |
-| `codex`    | OpenAI Codex — no native subagent; experimental lifecycle hooks + `request_user_input` in Plan mode |
+| `opencode` | OpenCode — stage-aware role-switch agents, plugin hooks, `question` tool                            |
+| `codex`    | OpenAI Codex — stage-aware role-switch agents; experimental lifecycle hooks + `request_user_input` in Plan mode |
 
 
 Re-run `npx cclaw-cli upgrade` after editing so shims and hooks line up

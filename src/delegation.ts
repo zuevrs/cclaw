@@ -107,6 +107,13 @@ function createSpanId(): string {
   return `dspan-${Date.now().toString(36)}-${Math.random().toString(36).slice(2, 10)}`;
 }
 
+function activeHarnessSubagentFallback(): SubagentFallback | undefined {
+  const activeHarness = process.env.CCLAW_ACTIVE_HARNESS;
+  if (!activeHarness) return undefined;
+  return HARNESS_ADAPTERS[activeHarness as keyof typeof HARNESS_ADAPTERS]
+    ?.capabilities.subagentFallback;
+}
+
 async function resolveReviewDiffBase(projectRoot: string): Promise<string | null> {
   let head = "";
   try {
@@ -333,10 +340,7 @@ export async function appendDelegation(projectRoot: string, entry: DelegationEnt
       stamped.evidenceRefs = [];
     }
     if (stamped.status === "completed" && stamped.fulfillmentMode === undefined) {
-      const activeFallback = process.env.CCLAW_ACTIVE_HARNESS
-        ? HARNESS_ADAPTERS[process.env.CCLAW_ACTIVE_HARNESS as keyof typeof HARNESS_ADAPTERS]
-          ?.capabilities.subagentFallback
-        : undefined;
+      const activeFallback = activeHarnessSubagentFallback();
       if (activeFallback) {
         stamped.fulfillmentMode = expectedFulfillmentMode([activeFallback]);
       } else {
@@ -408,8 +412,9 @@ export async function checkMandatoryDelegations(
   const missingEvidence: string[] = [];
   const config = await readConfig(projectRoot).catch(() => null);
   const harnesses = config?.harnesses ?? [];
-  const fallbacks = harnesses.map((h) => HARNESS_ADAPTERS[h].capabilities.subagentFallback);
-  const expectedMode = expectedFulfillmentMode(fallbacks);
+  const configuredFallbacks = harnesses.map((h) => HARNESS_ADAPTERS[h].capabilities.subagentFallback);
+  const activeFallback = activeHarnessSubagentFallback();
+  const expectedMode = expectedFulfillmentMode(activeFallback ? [activeFallback] : configuredFallbacks);
   for (const agent of mandatory) {
     const rows = forRun.filter((e) => e.agent === agent);
     const completedRows = rows.filter((e) => e.status === "completed");
@@ -427,9 +432,12 @@ export async function checkMandatoryDelegations(
       waived.push(agent);
     }
 
-    // Evidence is required for any non-isolated completion mode. Legacy rows
-    // without fulfillmentMode are inferred to `isolated` during parse.
-    const evidenceRequired = completedRows.some(
+    // Evidence is required whenever the active harness semantics are not
+    // isolated, or when a row explicitly records a non-isolated fulfillment.
+    // This prevents mixed installs from letting an active OpenCode/Codex
+    // role-switch completion pass merely because another configured harness
+    // supports isolated subagents.
+    const evidenceRequired = expectedMode !== "isolated" || completedRows.some(
       (e) => (e.fulfillmentMode ?? "isolated") !== "isolated"
     );
     if (

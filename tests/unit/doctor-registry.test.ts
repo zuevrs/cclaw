@@ -27,6 +27,12 @@ describe("doctor registry", () => {
     expect(meta.docRef).toContain("harnesses.md");
   });
 
+  it("classifies stage command checks as generated runtime surface checks", () => {
+    const meta = doctorCheckMetadata("stage_command:plan");
+    expect(meta.severity).toBe("error");
+    expect(meta.summary).toContain("Generated runtime surface");
+  });
+
   it("falls back to warning metadata for unknown checks", () => {
     const meta = doctorCheckMetadata("custom:unknown");
     expect(meta.severity).toBe("warning");

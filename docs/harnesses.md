@@ -15,8 +15,20 @@ Fallback legend:
 
 - `native` — first-class named subagent dispatch (Claude).
 - `generic-dispatch` — generic Task dispatcher mapped to cclaw roles (Cursor).
-- `role-switch` — in-session role announce + delegation-log entry with evidenceRefs (OpenCode, Codex).
+- `role-switch` — sequential stage-aware role workflow with explicit role headers, artifact outputs, and delegation-log evidenceRefs (OpenCode, Codex).
 - `waiver` — no parity path; reserved for harnesses that cannot role-switch (none shipped).
+
+## Stage-aware role-switch workflow
+
+OpenCode and Codex do not receive generated native isolated subagents. They still must perform the same required/recommended stage agent work sequentially:
+
+1. Use the active stage skill's generated dispatch table as the source of truth.
+2. Start each role pass with `## cclaw role-switch: <stage>/<agent> (<mandatory|proactive>)`.
+3. Load `.cclaw/agents/<agent>.md`, execute only that role's stage task, and write outputs into the active stage artifact.
+4. Append `.cclaw/state/delegation-log.json` with `fulfillmentMode: "role-switch"` and non-empty `evidenceRefs` pointing at the artifact output.
+5. Treat completed role-switch rows without `evidenceRefs` as unresolved; they block stage completion even in mixed installs where another configured harness supports isolated subagents.
+
+This is reference-like staged agent work adapted to the harness limit. It is not a claim that OpenCode or Codex provide native isolated workers.
 
 ## Parallel research dispatch semantics
 
@@ -43,7 +55,7 @@ Design-stage research fleet uses the same parity model:
 
 ## Hook lifecycle aliases
 
-The generated Node dispatcher accepts a small compatibility alias set for lifecycle names: `stop` and `stop-checkpoint` route to `stop-handoff`, `precompact` routes to `pre-compact`, and `session-rehydrate` routes to `session-start`. Harness JSON should still emit the canonical handler names from `src/content/hook-manifest.ts`.
+The generated Node dispatcher accepts a small compatibility alias set for lifecycle names: `stop` and `stop-checkpoint` route to `stop-handoff`, `precompact` routes to `pre-compact`, and `session-rehydrate` routes to `session-start`. The `pre-compact` handler is intentionally a no-op compatibility marker; rehydration remains the `session-start` responsibility after compact events. Harness JSON should still emit the canonical handler names from `src/content/hook-manifest.ts`.
 
 ## Hook event casing
 
@@ -68,7 +80,7 @@ shared casing silently breaks generated wiring.
   at hook level, so the canonical path is
   `node .cclaw/hooks/stage-complete.mjs <stage>` plus the non-blocking
   `UserPromptSubmit` state nudge.
-- In `strict` mode, Codex additionally runs the generated Node/runtime `verify-current-state` path on `UserPromptSubmit` as a fail-closed check (advisory mode remains non-blocking). This strict-only coverage is represented explicitly by the `strict_state_verify` semantic row above.
+- In `strict` mode, Codex additionally runs the generated Node/runtime `verify-current-state` path on `UserPromptSubmit` as a fail-closed check. Advisory mode remains non-blocking, including when the generated local Node entrypoint is missing; doctor reports that install drift separately. This strict-only coverage is represented explicitly by the `strict_state_verify` semantic row above.
 
 ## Shared command contract
 
@@ -122,7 +134,7 @@ Harness-specific additions:
 
 - `claude`: `.claude/commands/cc*.md`, `.claude/hooks/hooks.json`
 - `cursor`: `.cursor/commands/cc*.md`, `.cursor/hooks.json`, `.cursor/rules/cclaw-workflow.mdc`
-- `opencode`: `.opencode/commands/cc*.md`, `.opencode/plugins/cclaw-plugin.mjs`, opencode plugin registration (`permission.question: "allow"` + `OPENCODE_ENABLE_QUESTION_TOOL=1` so structured asks can route through ACP question tooling)
+- `opencode`: `.opencode/commands/cc*.md`, `.opencode/plugins/cclaw-plugin.mjs`, opencode plugin registration with `permission.question: "allow"`; set `OPENCODE_ENABLE_QUESTION_TOOL=1` for ACP clients so structured asks can route through question tooling. Doctor validates the config permission and warns when the environment hint is absent.
 - `codex`: `.agents/skills/cc/SKILL.md`, `.agents/skills/cc-next/SKILL.md`, `.agents/skills/cc-ideate/SKILL.md`, `.agents/skills/cc-view/SKILL.md`, `.codex/hooks.json` (Codex CLI reads `.agents/skills/` for custom skills and consumes `.codex/hooks.json` on v0.114+ when `[features] codex_hooks = true` is set in `~/.codex/config.toml`. `.codex/commands/` and the legacy `.agents/skills/cclaw-cc*/` layout from v0.39.x are auto-cleaned on sync.)
 
 ## Runtime observability

@@ -9,6 +9,17 @@ import {
 
 export const META_SKILL_NAME = "using-cclaw";
 
+export const META_SKILL_GENERATED_HELPER_SKILLS = [
+  "subagent-dev",
+  "parallel-dispatch",
+  "session",
+  "iron-laws"
+] as const;
+
+function generatedHelperSkillList(): string {
+  return META_SKILL_GENERATED_HELPER_SKILLS.map((name) => `\`${name}\``).join(", ");
+}
+
 export function usingCclawSkillMarkdown(): string {
   return `---
 name: using-cclaw
@@ -33,7 +44,7 @@ ${conversationLanguagePolicyMarkdown()}
 If \`.cclaw/state/flow-state.json\` exists and \`currentStage\` is set,
 load the matching stage SKILL before producing **substantive** work
 (artifact edits, code, structured clarifying questions). Do not improvise
-from memory. Load only generated helper surfaces that actually exist in this install: \`subagent-dev\`, \`parallel-dispatch\`, \`session\`, \`iron-laws\`, research playbooks, review prompts, or enabled language rule packs under \`.cclaw/rules/lang/\`. Do not invent helper-skill names beyond those generated surfaces.
+from memory. Load only generated helper surfaces that actually exist in this install: ${generatedHelperSkillList()}, research playbooks, review prompts, or enabled language rule packs under \`.cclaw/rules/lang/\`. Do not invent helper-skill names beyond those generated surfaces.
 
 Substantive vs. non-substantive:
 

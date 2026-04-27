@@ -165,6 +165,10 @@ describe("hooks lifecycle wiring", () => {
     expect(codex).toContain(".cclaw/hooks/run-hook.cmd context-monitor");
     expect(codex).toContain(".cclaw/hooks/run-hook.cmd stop-handoff");
     expect(codex).toContain(".cclaw/hooks/run-hook.cmd verify-current-state");
+    const codexHooks = JSON.parse(codex) as {
+      hooks: { UserPromptSubmit?: Array<{ hooks?: Array<{ command?: string }> }> };
+    };
+    expect(JSON.stringify(codexHooks.hooks.UserPromptSubmit)).not.toContain("workflow-guard");
     expect(codex).not.toContain(".sh");
   });
 

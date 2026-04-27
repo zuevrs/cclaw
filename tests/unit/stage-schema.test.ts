@@ -94,11 +94,33 @@ describe("stage schema and subagent alignment", () => {
   it("keeps quick-track TDD and review traceability independent of plan artifacts", () => {
     const quickTdd = stageSkillMarkdown("tdd", "quick");
     const quickReview = stageSkillMarkdown("review", "quick");
+    const standardTdd = stageSkillMarkdown("tdd", "standard");
+    const standardReview = stageSkillMarkdown("review", "standard");
+    const forbiddenQuickPhrases = [
+      ".cclaw/artifacts/05-plan.md",
+      "05-plan.md",
+      "Plan task IDs",
+      "Task coverage",
+      "orphaned tasks",
+      "plan artifact",
+      "plan task",
+      "plan slice",
+      "plan approval",
+      "plan confirmation"
+    ];
 
     expect(stageSchema("tdd", "quick").requiredGates.map((gate) => gate.id)).not.toContain("tdd_traceable_to_plan");
-    expect(quickTdd).toContain("spec acceptance items / bug reproduction slices on quick");
-    expect(quickTdd).toContain("No plan artifact is required on quick");
-    expect(quickReview).toContain("bug reproduction slices instead of nonexistent plan artifacts");
+    expect(quickTdd).toContain("acceptance criterion");
+    expect(quickTdd).toContain("spec acceptance criterion ID");
+    expect(quickReview).toContain("source item coverage");
+    for (const phrase of forbiddenQuickPhrases) {
+      expect(quickTdd.toLowerCase(), `quick TDD leaked ${phrase}`).not.toContain(phrase.toLowerCase());
+      expect(quickReview.toLowerCase(), `quick review leaked ${phrase}`).not.toContain(phrase.toLowerCase());
+    }
+
+    expect(standardTdd).toContain(".cclaw/artifacts/05-plan.md");
+    expect(standardTdd).toContain("tdd_traceable_to_plan");
+    expect(standardReview).toContain(".cclaw/artifacts/05-plan.md");
   });
 
   it("plan stage reads spec, design, and scope artifacts", () => {
@@ -165,6 +187,20 @@ describe("stage schema and subagent alignment", () => {
     expect(skill).toContain("at most 3-5 parallel agents");
     expect(skill).toContain("No parallel writes to adjacent surfaces");
     expect(skill).toContain("Consensus is for hard calls only");
+  });
+
+  it("renders concrete stage-aware role-switch workflow guidance", () => {
+    const scope = stageSkillMarkdown("scope");
+    const orchestration = subagentDrivenDevSkill();
+
+    expect(scope).toContain("## Automatic Subagent Dispatch");
+    expect(scope).toContain("### Stage-Aware Agent Workflow Contract");
+    expect(scope).toContain("OpenCode / Codex use sequential role-switch execution, not isolated workers");
+    expect(scope).toContain("## cclaw role-switch: scope/planner (mandatory)");
+    expect(scope).toContain('fulfillmentMode: "role-switch"');
+    expect(scope).toContain("evidenceRefs");
+    expect(orchestration).toContain("### Stage-aware role-switch contract");
+    expect(orchestration).toContain("cclaw role-switch: <stage>/<agent>");
   });
 
   it("materializes every subagent dispatch skill reference", () => {

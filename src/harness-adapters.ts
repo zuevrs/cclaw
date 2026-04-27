@@ -1,11 +1,11 @@
 import fs from "node:fs/promises";
 import path from "node:path";
-import { RUNTIME_ROOT } from "./constants.js";
+import { RUNTIME_ROOT, STAGE_TO_SKILL_FOLDER } from "./constants.js";
 import { conversationLanguagePolicyMarkdown } from "./content/language-policy.js";
 import { CCLAW_AGENTS, agentMarkdown } from "./content/core-agents.js";
 import { ironLawsAgentsMdBlock } from "./content/iron-laws.js";
 import { ensureDir, exists, writeFileSafe } from "./fs-utils.js";
-import type { HarnessId } from "./types.js";
+import { FLOW_STAGES, type FlowStage, type HarnessId } from "./types.js";
 
 export const CCLAW_MARKER_START = "<!-- cclaw-start -->";
 export const CCLAW_MARKER_END = "<!-- cclaw-end -->";
@@ -163,13 +163,29 @@ const LEGACY_CODEX_SKILL_PREFIX = "cclaw-cc";
  */
 const LEGACY_HARNESS_SHIMS: readonly string[] = ["cc-learn.md"];
 
+function stageShimFileName(stage: FlowStage): string {
+  return `cc-${stage}.md`;
+}
+
+function stageShimSkillName(stage: FlowStage): string {
+  return `cc-${stage}`;
+}
+
 export function harnessShimFileNames(): string[] {
-  return ["cc.md", ...UTILITY_SHIMS.map((shim) => shim.fileName)];
+  return [
+    "cc.md",
+    ...UTILITY_SHIMS.map((shim) => shim.fileName),
+    ...FLOW_STAGES.map((stage) => stageShimFileName(stage))
+  ];
 }
 
 /** Skill folder names cclaw writes under `<commandDir>` for skill-kind harnesses. */
 export function harnessShimSkillNames(): string[] {
-  return [ENTRY_SHIM_SKILL_NAME, ...UTILITY_SHIMS.map((shim) => shim.skillName)];
+  return [
+    ENTRY_SHIM_SKILL_NAME,
+    ...UTILITY_SHIMS.map((shim) => shim.skillName),
+    ...FLOW_STAGES.map((stage) => stageShimSkillName(stage))
+  ];
 }
 
 export const HARNESS_ADAPTERS: Record<HarnessId, HarnessAdapter> = {
@@ -471,6 +487,52 @@ Load and execute:
 ${utilityShimBehavior(command)}
 `;
 }
+function stageShimContent(harness: HarnessId, stage: FlowStage): string {
+  const shimName = stageShimSkillName(stage);
+  const skillPath = `${RUNTIME_ROOT}/skills/${STAGE_TO_SKILL_FOLDER[stage]}/SKILL.md`;
+  return `---
+name: ${shimName}
+description: Generated shim for ${harness}. Flow stage pointer; normal advancement uses /cc-next.
+source: generated-by-cclaw
+---
+
+# cclaw ${stage}
+
+This is a thin compatibility shim for the \`${stage}\` flow stage.
+
+Load and follow the authoritative stage skill:
+
+- \`${skillPath}\`
+
+Normal stage resume and advancement uses \`/cc-next\`. Use \`/cc-next\` to read
+\`.cclaw/state/flow-state.json\`, select the active stage, and advance only after
+that stage's gates pass. Do not duplicate the stage protocol here.
+`;
+}
+
+function codexStageSkillMarkdown(stage: FlowStage): string {
+  const skillName = stageShimSkillName(stage);
+  const skillPath = `${RUNTIME_ROOT}/skills/${STAGE_TO_SKILL_FOLDER[stage]}/SKILL.md`;
+  return `---
+name: ${skillName}
+description: Thin cclaw stage shim for /cc-${stage}. Load ${skillPath}; normal stage resume and advancement uses /cc-next.
+source: generated-by-cclaw
+---
+
+# cclaw /cc-${stage} (Codex adapter)
+
+This is a thin compatibility shim for the \`${stage}\` flow stage.
+
+Load and follow the authoritative stage skill:
+
+- \`${skillPath}\`
+
+Normal stage resume and advancement uses \`/cc-next\`. Use \`/cc-next\` to read
+\`.cclaw/state/flow-state.json\`, select the active stage, and advance only after
+that stage's gates pass. Do not duplicate the stage protocol here.
+`;
+}
+
 
 /**
  * Frontmatter `description` that triggers the skill when the user types any
@@ -537,8 +599,11 @@ for the current hook surface and limitations.
 ## Honest caveats
 
 - Codex has no subagent dispatch primitive. Mandatory delegations
-  fall back to **role-switch** — announce the role, act in-session,
-  append a completed row with \`evidenceRefs\` to
+  run as a sequential **stage-aware role-switch workflow**: announce
+  \`## cclaw role-switch: <stage>/<agent> (<mode>)\`, load
+  \`.cclaw/agents/<agent>.md\`, write the role output into the active
+  stage artifact, then append a completed row with \`fulfillmentMode:
+  "role-switch"\` and non-empty \`evidenceRefs\` to
   \`.cclaw/state/delegation-log.json\`. Silent auto-waiver is disabled
   (v0.33+).
 - Codex's \`PreToolUse\` / \`PostToolUse\` hooks currently only intercept
@@ -578,6 +643,12 @@ async function writeCommandKindShims(commandDir: string, harness: HarnessId): Pr
       utilityShimContent(harness, shim.command, shim.skillFolder, shim.commandFile)
     );
   }
+  for (const stage of FLOW_STAGES) {
+    await writeFileSafe(
+      path.join(commandDir, stageShimFileName(stage)),
+      stageShimContent(harness, stage)
+    );
+  }
   for (const legacy of LEGACY_HARNESS_SHIMS) {
     const legacyPath = path.join(commandDir, legacy);
     try {
@@ -598,6 +669,12 @@ async function writeSkillKindShims(commandDir: string): Promise<void> {
     await writeFileSafe(
       path.join(commandDir, shim.skillName, "SKILL.md"),
       codexSkillMarkdown(shim.command, shim.skillName, shim.skillFolder, shim.commandFile)
+    );
+  }
+  for (const stage of FLOW_STAGES) {
+    await writeFileSafe(
+      path.join(commandDir, stageShimSkillName(stage), "SKILL.md"),
+      codexStageSkillMarkdown(stage)
     );
   }
 }

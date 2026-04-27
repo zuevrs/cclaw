@@ -404,12 +404,14 @@ What the fallbacks mean:
   security-reviewer / doc-updater) onto the generic dispatcher with a
   structured role prompt.
 - `role-switch` — OpenCode and Codex lack an isolated worker primitive.
-  The agent announces the role in-session, performs the work, and
-  records a delegation row with `fulfillmentMode: "role-switch"` and at
-  least one `evidenceRef` pointing at the artifact section that
-  captures the output. Under role-switch, a `completed` row **without**
-  evidenceRefs is classified as `missingEvidence` by `cclaw doctor` and
-  blocks stage completion.
+  They run the same required/recommended stage agent work as a sequential
+  role workflow: announce `## cclaw role-switch: <stage>/<agent>
+  (<mode>)`, load `.cclaw/agents/<agent>.md`, write outputs to the
+  stage artifact, and record a delegation row with `fulfillmentMode:
+  "role-switch"` plus at least one `evidenceRef` pointing at that
+  output. Under role-switch, a `completed` row **without** evidenceRefs
+  is classified as `missingEvidence` by `cclaw doctor` and blocks stage
+  completion.
 - `waiver` — reserved. Only fires auto-waivers if every installed
   harness declares it. Currently unused — v0.33 removed the old
   Codex-only auto-waiver path.

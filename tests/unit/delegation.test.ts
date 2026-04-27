@@ -324,6 +324,13 @@ describe("delegation ledger run scoping", () => {
         status: "completed",
         ts: new Date().toISOString()
       });
+
+      const ledger = await readDelegationLedger(root);
+      expect(ledger.entries[0]?.fulfillmentMode).toBe("role-switch");
+      const result = await checkMandatoryDelegations(root, "scope");
+      expect(result.satisfied).toBe(false);
+      expect(result.expectedMode).toBe("role-switch");
+      expect(result.missingEvidence).toContain("planner");
     } finally {
       if (prior === undefined) {
         delete process.env.CCLAW_ACTIVE_HARNESS;
@@ -331,12 +338,37 @@ describe("delegation ledger run scoping", () => {
         process.env.CCLAW_ACTIVE_HARNESS = prior;
       }
     }
+  });
 
-    const ledger = await readDelegationLedger(root);
-    expect(ledger.entries[0]?.fulfillmentMode).toBe("role-switch");
-    const result = await checkMandatoryDelegations(root, "scope");
-    expect(result.satisfied).toBe(false);
-    expect(result.missingEvidence).toContain("planner");
+  it("uses active OpenCode semantics in mixed installs instead of configured harness aggregate", async () => {
+    const root = await createTempProject("delegation-active-opencode-mixed");
+    await seedFlowState(root, "run-active-opencode");
+    await writeConfig(root, createDefaultConfig(["claude", "cursor", "opencode"]));
+    const prior = process.env.CCLAW_ACTIVE_HARNESS;
+    process.env.CCLAW_ACTIVE_HARNESS = "opencode";
+    try {
+      await appendDelegation(root, {
+        stage: "scope",
+        agent: "planner",
+        mode: "mandatory",
+        status: "completed",
+        ts: new Date().toISOString()
+      });
+
+      const ledger = await readDelegationLedger(root);
+      expect(ledger.entries[0]?.fulfillmentMode).toBe("role-switch");
+      const result = await checkMandatoryDelegations(root, "scope");
+      expect(result.satisfied).toBe(false);
+      expect(result.expectedMode).toBe("role-switch");
+      expect(result.missing).toEqual([]);
+      expect(result.missingEvidence).toContain("planner");
+    } finally {
+      if (prior === undefined) {
+        delete process.env.CCLAW_ACTIVE_HARNESS;
+      } else {
+        process.env.CCLAW_ACTIVE_HARNESS = prior;
+      }
+    }
   });
 
 
