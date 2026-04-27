@@ -258,13 +258,7 @@ export function harnessTier(harnessId: HarnessId): HarnessTier {
   ) {
     return "tier1";
   }
-  if (
-    capabilities.hookSurface === "full" ||
-    capabilities.hookSurface === "plugin" ||
-    capabilities.hookSurface === "limited" ||
-    capabilities.nativeSubagentDispatch === "generic" ||
-    capabilities.nativeSubagentDispatch === "partial"
-  ) {
+  if (capabilities.hookSurface !== "none" || capabilities.nativeSubagentDispatch !== "none") {
     return "tier2";
   }
   return "tier3";

@@ -293,8 +293,13 @@ ${SEED_SHELF_SECTION}
 
 # Design Artifact
 
+## Compact-First Scaffold
+- Default to the compact design spine unless risk requires Standard/Deep add-ons.
+- Compact required spine: Codebase Investigation, Architecture Boundaries, Architecture Diagram, Data Flow, Failure Mode Table, Test Strategy, and Completion Dashboard.
+- Mark optional Standard/Deep sections as \`Omitted - compact design\` when they do not apply; do not expand the scaffold just to fill empty tables.
+
 ## Upstream Handoff
-- Source artifacts: \`02-scope-<slug>.md\`, \`02a-research.md\` when present
+- Source artifacts: \`02-scope-<slug>.md\`, \`02a-research.md\` only when present for deep/high-risk research
 - Decisions carried forward:
 - Constraints carried forward:
 - Open questions:
@@ -493,7 +498,7 @@ ${SEED_SHELF_SECTION}
 # Specification Artifact
 
 ## Upstream Handoff
-- Source artifacts: \`02-scope-<slug>.md\`, \`03-design-<slug>.md\`
+- Source artifacts: standard uses \`02-scope-<slug>.md\` + \`03-design-<slug>.md\`; medium uses \`01-brainstorm-<slug>.md\` when present; quick uses \`00-idea.md\` plus reproduction context.
 - Decisions carried forward:
 - Constraints carried forward:
 - Open questions:
@@ -504,9 +509,14 @@ ${SEED_SHELF_SECTION}
 |---|---|---|---|
 | AC-1 | R1 |  |  |
 
-> Every AC must reference at least one \`R#\` from \`02-scope.md\`. ACs are
-> stable (never renumber): dropped ACs stay with Priority \`DROPPED\`; new
-> ones append with the next free \`AC-#\`.
+> Standard ACs reference at least one \`R#\` from \`02-scope.md\`. Quick-track ACs may instead put \`Quick Reproduction Contract\` / bug-slice refs in the Requirement Ref column and \`N/A\` for Design Decision Ref. ACs are stable (never renumber): dropped ACs stay with Priority \`DROPPED\`; new ones append with the next free \`AC-#\`.
+
+## Quick Reproduction Contract
+> Required for quick bug-fix specs; use \`N/A\` for non-bugfix or standard/medium tracks. TDD turns this contract into the RED reproduction test.
+
+| Bug slice | Symptom | Repro steps | Expected RED test behavior | Linked acceptance criterion |
+|---|---|---|---|---|
+| QS-1 |  |  |  | AC-1 |
 
 ## Edge Cases
 | Criterion ID | Boundary case | Error case |
@@ -639,7 +649,7 @@ Execution rule: complete and verify each batch before starting the next batch.
 # TDD Artifact
 
 ## Upstream Handoff
-- Source artifacts: \`04-spec.md\`, \`05-plan.md\`
+- Source artifacts: \`04-spec.md\`; \`05-plan.md\` when present. Quick track uses spec acceptance items / bug reproduction slices instead of nonexistent plan tasks.
 - Decisions carried forward:
 - Constraints carried forward:
 - Open questions:
@@ -666,9 +676,11 @@ Execution rule: complete and verify each batch before starting the next batch.
 | S-1 |  |  |  |
 
 ## Acceptance Mapping
-| Slice | Plan task ID | Spec criterion ID |
+| Slice | Plan task ID or quick source | Spec criterion ID |
 |---|---|---|
-| S-1 | T-1 | AC-1 |
+| S-1 | T-1 / QS-1 | AC-1 |
+
+> On quick track, map to the \`Quick Reproduction Contract\` bug slice or spec acceptance item. Do not invent a plan task just to satisfy this table.
 
 ## Failure Analysis
 | Slice | Expected missing behavior | Actual failure reason |
@@ -721,7 +733,7 @@ Execution rule: complete and verify each batch before starting the next batch.
 # Review Artifact
 
 ## Upstream Handoff
-- Source artifacts: \`04-spec.md\`, \`05-plan.md\`, \`06-tdd.md\`
+- Source artifacts: \`04-spec.md\`, \`06-tdd.md\`; \`05-plan.md\` only when present. Quick track reviews spec acceptance items / bug reproduction slices without requiring plan-task coverage.
 - Decisions carried forward:
 - Constraints carried forward:
 - Open questions:
@@ -758,15 +770,15 @@ Execution rule: complete and verify each batch before starting the next batch.
 
 ## Completeness Snapshot
 - AC coverage: <N>/<M> (<percent>%)
-- Task coverage (tasks backed by ≥1 test slice): <N>/<M>
-- Slice coverage (slices linked to ≥1 AC): <N>/<M>
+- Task coverage (tasks backed by ≥1 test slice): <N>/<M> or \`N/A - quick track has no plan artifact\`
+- Slice coverage (slices linked to ≥1 AC or bug reproduction slice): <N>/<M>
 - Adversarial review: not triggered | pass | fail
 - Overall: complete | concerns | blocked
 
 ## Trace Matrix Check
-- Command: \`cclaw internal trace-matrix\`
+- Command: \`cclaw internal trace-matrix\` when plan artifacts exist or the active track enforces it; quick track may record direct AC/reproduction-slice coverage instead.
 - Orphaned criteria: 0
-- Orphaned tasks: 0
+- Orphaned tasks: 0 or \`N/A - quick track\`
 - Orphaned tests: 0
 - Evidence ref:
 

@@ -59,9 +59,7 @@ export interface HookHandlerSpec {
   description: string;
   /**
    * Semantic event id used by `HOOK_EVENTS_BY_HARNESS` / docs.
-   * `null` means this handler contributes no semantic coverage row
-   * (e.g. `verify-current-state` on codex is a supplementary guard,
-   * not a top-level semantic event).
+   * `null` means this handler contributes no semantic coverage row.
    */
   semantic: HookSemanticEvent | null;
   bindings: Partial<Record<HookManifestHarness, HookBinding[]>>;
@@ -73,7 +71,8 @@ export const HOOK_SEMANTIC_EVENTS = [
   "pre_tool_workflow_guard",
   "post_tool_context_monitor",
   "stop_handoff",
-  "precompact_compat"
+  "precompact_compat",
+  "strict_state_verify"
 ] as const;
 export type HookSemanticEvent = (typeof HOOK_SEMANTIC_EVENTS)[number];
 
@@ -152,8 +151,8 @@ export const HOOK_MANIFEST: readonly HookHandlerSpec[] = [
   },
   {
     handler: "verify-current-state",
-    description: "Supplementary codex guard that runs on UserPromptSubmit to assert the live state matches the flow.",
-    semantic: null,
+    description: "Supplementary Codex strict-mode guard that runs on UserPromptSubmit to assert the live state matches the flow.",
+    semantic: "strict_state_verify",
     bindings: {
       codex: [{ event: "UserPromptSubmit" }]
     }

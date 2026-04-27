@@ -338,8 +338,12 @@ function sanitizeCloseoutState(value: unknown): CloseoutState {
   let shipSubstate = isShipSubstate(typed.shipSubstate) ? typed.shipSubstate : fallback.shipSubstate;
   const retroDraftedAt = typeof typed.retroDraftedAt === "string" ? typed.retroDraftedAt : undefined;
   const retroAcceptedAt = typeof typed.retroAcceptedAt === "string" ? typed.retroAcceptedAt : undefined;
-  const retroSkipped = typeof typed.retroSkipped === "boolean" ? typed.retroSkipped : undefined;
-  const retroSkipReason = typeof typed.retroSkipReason === "string" ? typed.retroSkipReason : undefined;
+  const retroSkipReason = typeof typed.retroSkipReason === "string"
+    ? typed.retroSkipReason.trim() || undefined
+    : undefined;
+  const retroSkipped = typed.retroSkipped === true && retroSkipReason !== undefined
+    ? true
+    : undefined;
   const compoundCompletedAt = typeof typed.compoundCompletedAt === "string" ? typed.compoundCompletedAt : undefined;
   const compoundSkipped = typeof typed.compoundSkipped === "boolean" ? typed.compoundSkipped : undefined;
   const promotedRaw = typed.compoundPromoted;

@@ -1,3 +1,5 @@
+import fs from "node:fs/promises";
+import path from "node:path";
 import { describe, expect, it } from "vitest";
 import claudeSchema from "../../src/hook-schemas/claude-hooks.v1.json" with { type: "json" };
 import cursorSchema from "../../src/hook-schemas/cursor-hooks.v1.json" with { type: "json" };
@@ -84,5 +86,21 @@ describe("hook manifest", () => {
       expect(coverage.pre_tool_prompt_guard).toBeTruthy();
       expect(coverage.stop_handoff).toBeTruthy();
     }
+  });
+
+  it("models Codex strict-mode verify-current-state as explicit semantic coverage", () => {
+    expect(semanticEventCoverage("codex").strict_state_verify).toContain("UserPromptSubmit");
+    expect(semanticEventCoverage("claude").strict_state_verify).toBeUndefined();
+    expect(semanticEventCoverage("cursor").strict_state_verify).toBeUndefined();
+  });
+
+  it("keeps harness docs aligned with lifecycle aliases and strict-mode coverage", async () => {
+    const docs = await fs.readFile(path.join(process.cwd(), "docs/harnesses.md"), "utf8");
+    expect(docs).toContain("`strict_state_verify`");
+    expect(docs).toContain("UserPromptSubmit -> verify-current-state");
+    expect(docs).toContain("## Hook lifecycle aliases");
+    expect(docs).toContain("`stop` and `stop-checkpoint` route to `stop-handoff`");
+    expect(docs).toContain("`precompact` routes to `pre-compact`");
+    expect(docs).toContain("`session-rehydrate` routes to `session-start`");
   });
 });

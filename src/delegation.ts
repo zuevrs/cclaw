@@ -194,6 +194,10 @@ async function detectReviewTriggers(projectRoot: string): Promise<ReviewTriggerM
   }
 }
 
+function hasValidWaiverReason(value: unknown): value is string {
+  return typeof value === "string" && value.trim().length > 0;
+}
+
 function isDelegationTokenUsage(value: unknown): value is DelegationTokenUsage {
   if (!value || typeof value !== "object" || Array.isArray(value)) return false;
   const o = value as Record<string, unknown>;
@@ -225,6 +229,7 @@ function isDelegationEntry(value: unknown): value is DelegationEntry {
       Number.isFinite(o.retryCount) &&
       Number.isInteger(o.retryCount) &&
       o.retryCount >= 0);
+  const waiverOk = o.status !== "waived" || hasValidWaiverReason(o.waiverReason);
   return (
     typeof o.stage === "string" &&
     typeof o.agent === "string" &&
@@ -237,6 +242,7 @@ function isDelegationEntry(value: unknown): value is DelegationEntry {
     (o.endTs === undefined || typeof o.endTs === "string") &&
     (o.taskId === undefined || typeof o.taskId === "string") &&
     (o.waiverReason === undefined || typeof o.waiverReason === "string") &&
+    waiverOk &&
     (o.runId === undefined || typeof o.runId === "string") &&
     (o.fulfillmentMode === undefined ||
       o.fulfillmentMode === "isolated" ||
@@ -263,9 +269,11 @@ function parseLedger(raw: unknown, runId: string): DelegationLedger {
     for (const item of entriesRaw) {
       if (isDelegationEntry(item)) {
         const ts = item.startTs ?? item.ts ?? new Date().toISOString();
-        const inferredFulfillmentMode =
-          item.fulfillmentMode
-          ?? (item.status === "completed" ? "isolated" : undefined);
+        const isLegacyCompletion =
+          item.fulfillmentMode === undefined &&
+          item.schemaVersion === undefined &&
+          item.status === "completed";
+        const inferredFulfillmentMode = item.fulfillmentMode ?? (isLegacyCompletion ? "isolated" : undefined);
         entries.push({
           ...item,
           spanId: item.spanId ?? createSpanId(),
@@ -306,6 +314,9 @@ export async function appendDelegation(projectRoot: string, entry: DelegationEnt
     const filePath = delegationLogPath(projectRoot);
     const prior = await readDelegationLedger(projectRoot);
     const startTs = entry.startTs ?? entry.ts ?? new Date().toISOString();
+    if (entry.status === "waived" && !hasValidWaiverReason(entry.waiverReason)) {
+      throw new Error("waived delegation entries require a non-empty waiverReason");
+    }
     const stamped: DelegationEntry = { ...entry, runId: entry.runId ?? activeRunId };
     stamped.spanId = entry.spanId ?? createSpanId();
     stamped.startTs = startTs;
@@ -380,10 +391,11 @@ export async function checkMandatoryDelegations(
   /** Expected fulfillment mode for the active harness set. */
   expectedMode: DelegationFulfillmentMode;
 }> {
-  const mandatory = stageSchema(stage).mandatoryDelegations;
-  const { activeRunId } = await readFlowState(projectRoot, {
+  const flowState = await readFlowState(projectRoot, {
     repairFeatureSystem: options.repairFeatureSystem
   });
+  const mandatory = stageSchema(stage, flowState.track).mandatoryDelegations;
+  const { activeRunId } = flowState;
   const ledger = await readDelegationLedger(projectRoot);
   const forStage = ledger.entries.filter((e) => e.stage === stage);
   const forRun = forStage.filter((e) => e.runId === activeRunId);

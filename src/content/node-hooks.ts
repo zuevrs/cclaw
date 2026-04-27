@@ -1146,12 +1146,21 @@ async function handleStopHandoff(runtime) {
     return 1;
   }
 
+  const closeoutObj = toObject(state.raw.closeout) || {};
+  const shipSubstate = typeof closeoutObj.shipSubstate === "string" ? closeoutObj.shipSubstate : "idle";
+  const closeoutContext =
+    state.currentStage === "ship" || shipSubstate !== "idle"
+      ? " closeout.shipSubstate=" + shipSubstate + "; closeout chain=retro -> compound -> archive; continue closeout with /cc-next."
+      : "";
+
   const message =
     "Cclaw: session ending (stage=" +
     state.currentStage +
     ", run=" +
     state.activeRunId +
-    "). Active artifacts stay in " +
+    ")." +
+    closeoutContext +
+    " Active artifacts stay in " +
     RUNTIME_ROOT +
     "/artifacts until archive. Before stopping: (1) confirm flow-state reflects reality, (2) ensure artifact changes match current intent, (3) if you discovered a non-obvious rule/pattern during stage work, add it to the current artifact ## Learnings section so stage-complete can harvest it, (4) commit or revert pending changes.";
 
@@ -1679,9 +1688,10 @@ async function handleVerifyCurrentState(runtime) {
 function normalizeHookName(rawName) {
   const value = normalizeText(rawName).toLowerCase();
   if (value === "session-start") return "session-start";
-  if (value === "stop-handoff") return "stop-handoff";
+  if (value === "stop-handoff" || value === "stop") return "stop-handoff";
   if (value === "stop-checkpoint") return "stop-handoff";
-  if (value === "pre-compact") return "pre-compact";
+  if (value === "pre-compact" || value === "precompact") return "pre-compact";
+  if (value === "session-rehydrate") return "session-start";
   if (value === "prompt-guard") return "prompt-guard";
   if (value === "workflow-guard") return "workflow-guard";
   if (value === "context-monitor") return "context-monitor";

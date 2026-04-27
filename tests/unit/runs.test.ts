@@ -694,6 +694,65 @@ describe("runs system", () => {
     expect(status.hasRetroArtifact).toBe(false);
   });
 
+  it("does not complete skipped retro without a skip reason", async () => {
+    const root = await createTempProject("runs-retro-gate-skip-no-reason");
+    await ensureRunSystem(root);
+    const state = {
+      ...createInitialFlowState("active"),
+      currentStage: "ship" as const,
+      completedStages: ["brainstorm", "scope", "design", "spec", "plan", "tdd", "review", "ship" as const],
+      closeout: {
+        ...createInitialFlowState("active").closeout,
+        shipSubstate: "ready_to_archive" as const,
+        retroSkipped: true
+      }
+    };
+    await writeFlowState(root, state, { allowReset: true });
+
+    const persisted = await readFlowState(root);
+    expect(persisted.closeout.retroSkipped).toBeUndefined();
+    expect(persisted.closeout.shipSubstate).toBe("retro_review");
+
+    const status = await evaluateRetroGate(root, state);
+    expect(status.required).toBe(true);
+    expect(status.completed).toBe(false);
+    expect(status.skipped).toBe(false);
+    await expect(archiveRun(root, "Skip Without Reason")).rejects.toThrow(/ready_to_archive/i);
+  });
+
+  it("does not trust stale positive retro compoundEntries without evidence", async () => {
+    const root = await createTempProject("runs-retro-stale-compound-count");
+    await ensureRunSystem(root);
+    const base = createInitialFlowState("active");
+    await writeFlowState(
+      root,
+      {
+        ...base,
+        currentStage: "ship",
+        completedStages: ["brainstorm", "scope", "design", "spec", "plan", "tdd", "review", "ship"],
+        retro: {
+          required: true,
+          completedAt: "2026-01-02T00:00:00Z",
+          compoundEntries: 1
+        },
+        closeout: {
+          ...base.closeout,
+          shipSubstate: "ready_to_archive",
+          retroDraftedAt: "2026-01-01T00:00:00Z",
+          retroAcceptedAt: "2026-01-02T00:00:00Z"
+        }
+      },
+      { allowReset: true }
+    );
+    await fs.writeFile(path.join(root, ".cclaw/artifacts/09-retro.md"), "# retro\n", "utf8");
+
+    const state = await readFlowState(root);
+    const status = await evaluateRetroGate(root, state);
+    expect(status.compoundEntries).toBe(0);
+    expect(status.completed).toBe(false);
+    await expect(archiveRun(root, "Stale Compound Count")).rejects.toThrow(/retro gate/i);
+  });
+
   it("quarantines flow-state.json when top-level value is not an object", async () => {
     const root = await createTempProject("runs-corrupt-array");
     await ensureRunSystem(root);

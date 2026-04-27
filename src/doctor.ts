@@ -191,16 +191,33 @@ function knowledgeRoutingSurfaceIsDiscoverable(content: string): boolean {
 }
 
 async function commandAvailable(command: string): Promise<boolean> {
+  const version = await commandVersion(command);
+  return version.available;
+}
+
+async function commandVersion(
+  command: string,
+  args: string[] = ["--version"]
+): Promise<{ available: boolean; output: string }> {
   try {
     if (process.platform === "win32") {
       await execFileAsync("where", [command]);
-      return true;
     }
-    await execFileAsync(command, ["--version"]);
-    return true;
+    const { stdout, stderr } = await execFileAsync(command, args);
+    return { available: true, output: `${stdout}${stderr}`.trim() };
   } catch {
-    return false;
+    return { available: false, output: "" };
   }
+}
+
+function parseNodeMajor(versionOutput: string): number | null {
+  const match = /v?(\d+)\./u.exec(versionOutput);
+  if (!match) return null;
+  return Number(match[1]);
+}
+
+function gitVersionLooksUsable(versionOutput: string): boolean {
+  return /git version \d+\.\d+/iu.test(versionOutput);
 }
 
 function stripJsonCommentsOutsideStrings(input: string): string {
@@ -349,6 +366,29 @@ async function opencodeRegistrationCheck(projectRoot: string): Promise<{ ok: boo
     return { ok: false, details: mismatches.join(" | ") };
   }
   return { ok: false, details: `No opencode.json/opencode.jsonc found with plugin ${expected}` };
+}
+
+async function initRecoveryCheck(projectRoot: string): Promise<{ ok: boolean; details: string }> {
+  const sentinelPath = path.join(projectRoot, RUNTIME_ROOT, "state", ".init-in-progress");
+  if (!(await exists(sentinelPath))) {
+    return { ok: true, details: "no partial init/sync sentinel found" };
+  }
+  let summary = `${RUNTIME_ROOT}/state/.init-in-progress sentinel present`;
+  try {
+    const parsed = JSON.parse(await fs.readFile(sentinelPath, "utf8")) as {
+      operation?: unknown;
+      startedAt?: unknown;
+    };
+    const operation = typeof parsed.operation === "string" ? parsed.operation : "unknown";
+    const startedAt = typeof parsed.startedAt === "string" ? parsed.startedAt : "unknown";
+    summary = `${summary} (operation=${operation}, startedAt=${startedAt})`;
+  } catch {
+    summary = `${summary} (unreadable sentinel payload)`;
+  }
+  return {
+    ok: false,
+    details: `${summary}. Fix: inspect generated runtime files, then rerun cclaw sync or remove the sentinel only after confirming the runtime is complete.`
+  };
 }
 
 async function archiveIntegrityCheck(projectRoot: string): Promise<{ ok: boolean; details: string }> {
@@ -1124,11 +1164,36 @@ export async function doctorChecks(projectRoot: string, options: DoctorOptions =
     });
   }
 
-  const hasNode = await commandAvailable("node");
+  const nodeVersion = await commandVersion("node");
+  const nodeMajor = parseNodeMajor(nodeVersion.output);
   checks.push({
     name: "capability:required:node",
-    ok: hasNode,
-    details: "node is required for cclaw runtime scripts and CLI wiring"
+    ok: nodeVersion.available,
+    details: nodeVersion.available
+      ? `node binary available (${nodeVersion.output || "version unknown"})`
+      : "node is required for cclaw runtime scripts and CLI wiring"
+  });
+  checks.push({
+    name: "capability:required:node_version",
+    ok: nodeVersion.available && nodeMajor !== null && nodeMajor >= 20,
+    details: nodeVersion.available
+      ? `node >=20 required; detected ${nodeVersion.output || "unknown version"}`
+      : "node version check skipped because node binary is unavailable"
+  });
+  const gitVersion = await commandVersion("git");
+  checks.push({
+    name: "capability:required:git",
+    ok: gitVersion.available,
+    details: gitVersion.available
+      ? `git binary available (${gitVersion.output || "version unknown"})`
+      : "git is required for repository detection, hook setup, and doctor checks"
+  });
+  checks.push({
+    name: "capability:required:git_version",
+    ok: gitVersion.available && gitVersionLooksUsable(gitVersion.output),
+    details: gitVersion.available
+      ? `git version output: ${gitVersion.output || "unknown version"}`
+      : "git version check skipped because git binary is unavailable"
   });
   const windowsHookConfigCandidates = [
     path.join(projectRoot, ".claude/hooks/hooks.json"),
@@ -1226,12 +1291,9 @@ export async function doctorChecks(projectRoot: string, options: DoctorOptions =
             const key = `${trigger} => ${action}`;
             triggerActionCounts.set(key, (triggerActionCounts.get(key) ?? 0) + 1);
           }
-          const missing = requiredV2Fields.some((field) => {
-            if (field === "origin_run" && Object.prototype.hasOwnProperty.call(parsed, "origin_feature")) {
-              return false;
-            }
-            return !Object.prototype.hasOwnProperty.call(parsed, field);
-          });
+          const missing = requiredV2Fields.some((field) =>
+            !Object.prototype.hasOwnProperty.call(parsed, field)
+          );
           if (missing) {
             missingSchemaV2Fields += 1;
           }
@@ -1597,6 +1659,12 @@ export async function doctorChecks(projectRoot: string, options: DoctorOptions =
     name: "runs:archive_root",
     ok: await exists(path.join(projectRoot, RUNTIME_ROOT, "runs")),
     details: `${RUNTIME_ROOT}/runs must exist for archived run snapshots`
+  });
+  const initRecovery = await initRecoveryCheck(projectRoot);
+  checks.push({
+    name: "state:init_recovery",
+    ok: initRecovery.ok,
+    details: initRecovery.details
   });
   const archiveIntegrity = await archiveIntegrityCheck(projectRoot);
   checks.push({

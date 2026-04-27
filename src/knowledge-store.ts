@@ -360,11 +360,18 @@ const KNOWLEDGE_REQUIRED_KEYS = [
   "project"
 ] as const;
 const KNOWLEDGE_ALLOWED_KEYS = new Set<string>(KNOWLEDGE_REQUIRED_KEYS);
-KNOWLEDGE_ALLOWED_KEYS.add("origin_feature");
 KNOWLEDGE_ALLOWED_KEYS.add("source");
 KNOWLEDGE_ALLOWED_KEYS.add("severity");
 KNOWLEDGE_ALLOWED_KEYS.add("supersedes");
 KNOWLEDGE_ALLOWED_KEYS.add("superseded_by");
+
+export interface ValidateKnowledgeEntryOptions {
+  allowLegacyOriginFeature?: boolean;
+}
+
+function keyAllowedInKnowledgeEntry(key: string, options: ValidateKnowledgeEntryOptions): boolean {
+  return KNOWLEDGE_ALLOWED_KEYS.has(key) || (options.allowLegacyOriginFeature === true && key === "origin_feature");
+}
 
 function knowledgePath(projectRoot: string): string {
   return path.join(projectRoot, RUNTIME_ROOT, "knowledge.jsonl");
@@ -445,7 +452,7 @@ function parseKnowledgeSnapshot(raw: string): KnowledgeSnapshot {
     if (trimmed.length === 0) continue;
     try {
       const parsed = JSON.parse(trimmed) as unknown;
-      const validated = validateKnowledgeEntry(parsed);
+      const validated = validateKnowledgeEntry(parsed, { allowLegacyOriginFeature: true });
       if (!validated.ok) {
         malformedLines += 1;
         continue;
@@ -508,7 +515,10 @@ function isNullableStage(value: unknown): value is FlowStage | null {
   return value === null || (typeof value === "string" && FLOW_STAGE_SET.has(value as FlowStage));
 }
 
-export function validateKnowledgeEntry(entry: unknown): { ok: boolean; errors: string[] } {
+export function validateKnowledgeEntry(
+  entry: unknown,
+  options: ValidateKnowledgeEntryOptions = {}
+): { ok: boolean; errors: string[] } {
   const errors: string[] = [];
   if (!entry || typeof entry !== "object" || Array.isArray(entry)) {
     return { ok: false, errors: ["Knowledge entry must be a JSON object."] };
@@ -516,13 +526,17 @@ export function validateKnowledgeEntry(entry: unknown): { ok: boolean; errors: s
   const obj = entry as Record<string, unknown>;
 
   for (const key of Object.keys(obj)) {
-    if (!KNOWLEDGE_ALLOWED_KEYS.has(key)) {
+    if (!keyAllowedInKnowledgeEntry(key, options)) {
       errors.push(`Unknown key "${key}" in knowledge entry.`);
     }
   }
   for (const key of KNOWLEDGE_REQUIRED_KEYS) {
     if (!Object.prototype.hasOwnProperty.call(obj, key)) {
-      if (key !== "origin_run" || !Object.prototype.hasOwnProperty.call(obj, "origin_feature")) {
+      if (
+        key !== "origin_run" ||
+        options.allowLegacyOriginFeature !== true ||
+        !Object.prototype.hasOwnProperty.call(obj, "origin_feature")
+      ) {
         errors.push(`Missing required key "${key}".`);
       }
     }
@@ -557,7 +571,9 @@ export function validateKnowledgeEntry(entry: unknown): { ok: boolean; errors: s
   }
   const originRun = Object.prototype.hasOwnProperty.call(obj, "origin_run")
     ? obj.origin_run
-    : obj.origin_feature;
+    : options.allowLegacyOriginFeature === true
+      ? obj.origin_feature
+      : undefined;
   if (!isNullableString(originRun)) {
     errors.push("origin_run must be string or null.");
   }
@@ -790,14 +806,14 @@ export async function selectRelevantLearnings(
   const ranked = entries.map((entry, index) => {
     let score = 0;
 
+    let stageScore = 0;
     if (stage) {
       if (entry.stage === stage) {
-        score += 4;
+        stageScore = 4;
       } else if (entry.origin_stage === stage) {
-        score += 3;
-      } else if (entry.stage === null) {
-        score += 1;
+        stageScore = 3;
       }
+      score += stageScore;
     }
 
     if (entry.confidence === "high") score += 2;
@@ -814,14 +830,20 @@ export async function selectRelevantLearnings(
     ];
     const searchSet = new Set(searchable);
 
+    let contextualScore = 0;
     for (const token of branchTokens) {
-      if (searchSet.has(token)) score += 2;
+      if (searchSet.has(token)) contextualScore += 2;
     }
     for (const token of diffTokens) {
-      if (searchSet.has(token)) score += 2;
+      if (searchSet.has(token)) contextualScore += 2;
     }
     for (const token of gateTokens) {
-      if (searchSet.has(token)) score += 2;
+      if (searchSet.has(token)) contextualScore += 2;
+    }
+    score += contextualScore;
+
+    if (stage && entry.stage === null && stageScore === 0 && contextualScore < 4) {
+      score = 0;
     }
 
     return {

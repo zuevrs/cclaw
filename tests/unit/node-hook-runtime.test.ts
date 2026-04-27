@@ -309,6 +309,30 @@ describe("node hook runtime", () => {
     await expect(fs.stat(path.join(root, ".cclaw/state/checkpoint.json"))).rejects.toBeDefined();
   });
 
+  it("stop alias includes closeout context after ship", async () => {
+    const root = await createTempProject("node-hook-stop-closeout");
+    await fs.mkdir(path.join(root, ".cclaw/state"), { recursive: true });
+    await fs.writeFile(path.join(root, ".cclaw/state/flow-state.json"), JSON.stringify({
+      currentStage: "ship",
+      activeRunId: "run-ship",
+      completedStages: ["brainstorm", "scope", "design", "spec", "plan", "tdd", "review"],
+      closeout: { shipSubstate: "compound_review" }
+    }, null, 2), "utf8");
+
+    const result = await runNodeHook(
+      root,
+      "stop",
+      nodeHookRuntimeScript(),
+      { loop_count: 0 }
+    );
+
+    expect(result.code).toBe(0);
+    expect(result.stdout).toContain("session ending (stage=ship");
+    expect(result.stdout).toContain("closeout.shipSubstate=compound_review");
+    expect(result.stdout).toContain("closeout chain=retro -> compound -> archive");
+    expect(result.stdout).toContain("continue closeout with /cc-next");
+  });
+
   it("prompt-guard supports advisory and strict modes", async () => {
     const root = await createTempProject("node-hook-prompt-guard");
     await fs.mkdir(path.join(root, ".cclaw/state"), { recursive: true });

@@ -60,12 +60,11 @@ export async function evaluateRetroGate(
       hasRetroArtifact = false;
     }
   }
-  let compoundEntries = state.retro.compoundEntries;
+  let compoundEntries = 0;
   let windowStartMs = parseIsoTimestamp(state.closeout.retroDraftedAt);
   let windowEndMs =
     parseIsoTimestamp(state.closeout.retroAcceptedAt) ?? parseIsoTimestamp(state.retro.completedAt);
   if (
-    compoundEntries <= 0 &&
     hasRetroArtifact &&
     windowStartMs === null &&
     windowEndMs === null
@@ -81,9 +80,8 @@ export async function evaluateRetroGate(
       // fallback scan remains disabled when mtime cannot be read
     }
   }
-  const shouldFallbackScan =
-    compoundEntries <= 0 && (windowStartMs !== null || windowEndMs !== null);
-  if (shouldFallbackScan) {
+  const shouldScanCompoundEvidence = windowStartMs !== null || windowEndMs !== null;
+  if (shouldScanCompoundEvidence) {
     const countIfEligible = (parsed: {
       type?: unknown;
       source?: unknown;
@@ -107,7 +105,6 @@ export async function evaluateRetroGate(
     try {
       const knowledgeFile = path.join(projectRoot, RUNTIME_ROOT, "knowledge.jsonl");
       const { entries } = await readKnowledgeSafely(projectRoot);
-      compoundEntries = 0;
       for (const parsed of entries) {
         compoundEntries += countIfEligible(parsed);
       }
@@ -142,12 +139,13 @@ export async function evaluateRetroGate(
   //     promoted during the retro window OR compound was explicitly skipped
   //     after reviewing the draft), or
   //   - the operator explicitly skipped the retro step itself
-  //     (`retroSkipped === true` with a reason). `retroSkipped` is an
+  //     (`retroSkipped === true` with a non-empty reason). `retroSkipped` is an
   //     operator-level override of the artifact requirement, so it must
   //     bypass `hasRetroArtifact` — otherwise a run that legitimately had
   //     nothing worth retro-ing dead-locks at closeout waiting for a
   //     file that will never exist.
-  const retroSkipped = state.closeout.retroSkipped === true;
+  const retroSkipReason = state.closeout.retroSkipReason?.trim() ?? "";
+  const retroSkipped = state.closeout.retroSkipped === true && retroSkipReason.length > 0;
   const compoundSkipped = state.closeout.compoundSkipped === true;
   const artifactPathComplete = hasRetroArtifact && (compoundEntries > 0 || compoundSkipped);
   const completed = required ? retroSkipped || artifactPathComplete : true;

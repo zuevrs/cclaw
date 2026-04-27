@@ -22,7 +22,7 @@ description: "Routing brain for cclaw. Decide whether to start/resume a stage, a
 1. User message in current turn.
 2. Active stage skill and command contract.
 3. This routing file.
-4. Contextual utility skills.
+4. Generated cclaw helper skills, research playbooks, and enabled rule packs.
 5. Default model behavior.
 
 If the user explicitly overrides a stage rule, record it in the artifact.
@@ -33,9 +33,7 @@ ${conversationLanguagePolicyMarkdown()}
 If \`.cclaw/state/flow-state.json\` exists and \`currentStage\` is set,
 load the matching stage SKILL before producing **substantive** work
 (artifact edits, code, structured clarifying questions). Do not improvise
-from memory. Also load a contextual utility skill when the task clearly
-triggers it (security, performance, debugging, docs, finishing-a-branch,
-verification-before-completion).
+from memory. Load only generated helper surfaces that actually exist in this install: \`subagent-dev\`, \`parallel-dispatch\`, \`session\`, \`iron-laws\`, research playbooks, review prompts, or enabled language rule packs under \`.cclaw/rules/lang/\`. Do not invent helper-skill names beyond those generated surfaces.
 
 Substantive vs. non-substantive:
 
@@ -123,10 +121,10 @@ Use the current stage skill plus \`.cclaw/state/flow-state.json\` for orientatio
 
 Use built-in judgment only when triggered by the current task:
 
-- security, performance, debugging, docs, and CI/CD review lenses
-- verification discipline before completion claims
-- branch-finishing discipline during ship/finalization
-- iron-laws as policy arbitration when instructions conflict
+- generated subagent context skills for mandatory review/delegation contracts
+- research playbooks and review prompts when a stage explicitly calls for them
+- inline verification and ship/finalization sections in the active stage skill
+- \`iron-laws\` as policy arbitration when instructions conflict
 - language rule packs from \`.cclaw/config.yaml\` when enabled
 
 ## Protocol Behavior
