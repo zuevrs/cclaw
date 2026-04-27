@@ -189,18 +189,19 @@ describe("stage schema and subagent alignment", () => {
     expect(skill).toContain("Consensus is for hard calls only");
   });
 
-  it("renders concrete stage-aware role-switch workflow guidance", () => {
+  it("renders true harness dispatch workflow guidance", () => {
     const scope = stageSkillMarkdown("scope");
     const orchestration = subagentDrivenDevSkill();
 
     expect(scope).toContain("## Automatic Subagent Dispatch");
-    expect(scope).toContain("### Stage-Aware Agent Workflow Contract");
-    expect(scope).toContain("OpenCode / Codex use sequential role-switch execution, not isolated workers");
-    expect(scope).toContain("## cclaw role-switch: scope/planner (mandatory)");
-    expect(scope).toContain('fulfillmentMode: "role-switch"');
-    expect(scope).toContain("evidenceRefs");
-    expect(orchestration).toContain("### Stage-aware role-switch contract");
-    expect(orchestration).toContain("cclaw role-switch: <stage>/<agent>");
+    expect(scope).toContain("### Harness Dispatch Contract");
+    expect(scope).toContain(".opencode/agents/<agent>.md");
+    expect(scope).toContain(".codex/agents/<agent>.toml");
+    expect(scope).toContain('fulfillmentMode: "isolated"');
+    expect(scope).toContain("Do not collapse OpenCode or Codex to role-switch by default");
+    expect(orchestration).toContain("### Native dispatch contract");
+    expect(orchestration).toContain("generated `.opencode/agents/<agent>.md` subagent");
+    expect(orchestration).toContain("spawn the generated `.codex/agents/<agent>.toml` custom agent");
   });
 
   it("materializes every subagent dispatch skill reference", () => {

@@ -8,27 +8,27 @@ Generated from `src/harness-adapters.ts` capabilities and hook event mappings.
 |---|---|---|---|---|---|---|
 | Claude Code | `claude` | `tier1` (full native automation) | full | native | full | AskUserQuestion |
 | Cursor | `cursor` | `tier2` (supported with fallback paths) | generic | generic-dispatch | full | AskQuestion |
-| OpenCode | `opencode` | `tier2` (supported with fallback paths) | partial | role-switch | plugin | question |
-| OpenAI Codex | `codex` | `tier2` (supported with fallback paths) | none | role-switch | limited | request_user_input |
+| OpenCode | `opencode` | `tier1` (native subagents plus plugin hooks) | full | native | plugin | question |
+| OpenAI Codex | `codex` | `tier1` for dispatch / `tier2` hooks | full | native | limited | request_user_input |
 
 Fallback legend:
 
 - `native` — first-class named subagent dispatch (Claude).
 - `generic-dispatch` — generic Task dispatcher mapped to cclaw roles (Cursor).
-- `role-switch` — sequential stage-aware role workflow with explicit role headers, artifact outputs, and delegation-log evidenceRefs (OpenCode, Codex).
+- `role-switch` — degraded fallback for a runtime where declared native/generic dispatch is unavailable; explicit role headers, artifact outputs, and non-empty delegation-log evidenceRefs are required.
 - `waiver` — no parity path; reserved for harnesses that cannot role-switch (none shipped).
 
-## Stage-aware role-switch workflow
+## Stage-Aware Native Dispatch Workflow
 
-OpenCode and Codex do not receive generated native isolated subagents. They still must perform the same required/recommended stage agent work sequentially:
+OpenCode and Codex receive generated native isolated subagents. Use them before considering role-switch fallback:
 
 1. Use the active stage skill's generated dispatch table as the source of truth.
-2. Start each role pass with `## cclaw role-switch: <stage>/<agent> (<mandatory|proactive>)`.
+2. OpenCode: invoke `.opencode/agents/<agent>.md` via Task or `@<agent>`; Codex: ask Codex to spawn `.codex/agents/<agent>.toml` by name, in parallel when lanes are independent.
 3. Load `.cclaw/agents/<agent>.md`, execute only that role's stage task, and write outputs into the active stage artifact.
-4. Append `.cclaw/state/delegation-log.json` with `fulfillmentMode: "role-switch"` and non-empty `evidenceRefs` pointing at the artifact output.
-5. Treat completed role-switch rows without `evidenceRefs` as unresolved; they block stage completion even in mixed installs where another configured harness supports isolated subagents.
+4. Append `.cclaw/state/delegation-log.json` with `fulfillmentMode: "isolated"` for native OpenCode/Codex dispatch (`"role-switch"` plus non-empty `evidenceRefs` only for degraded fallback).
+5. Treat completed role-switch rows without `evidenceRefs` as unresolved; native isolated rows are not a role-switch substitute and should reflect a real dispatched worker.
 
-This is reference-like staged agent work adapted to the harness limit. It is not a claim that OpenCode or Codex provide native isolated workers.
+This is staged agent work backed by the harness-native subagent surfaces. Role-switch remains only a degraded fallback when that surface is unavailable in the active runtime.
 
 ## Parallel research dispatch semantics
 
@@ -37,9 +37,9 @@ Design-stage research fleet uses the same parity model:
 - **Claude / Cursor**: dispatch all four research lenses in one turn
   (stack, features, architecture, pitfalls) and synthesize into
   `.cclaw/artifacts/02a-research.md`.
-- **OpenCode / Codex**: execute the same four lenses via sequential
-  role-switch, each with explicit announce -> execute -> evidence trail.
-  This preserves auditability when native parallel dispatch is unavailable.
+- **OpenCode / Codex**: dispatch generated native subagents for the same
+  four lenses and run independent lanes in parallel where the active runtime
+  permits. Use role-switch with evidence only as a degraded fallback.
 
 ## Semantic hook event coverage
 

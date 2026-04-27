@@ -144,22 +144,22 @@ describe("delegation ledger run scoping", () => {
     expect(result.waived).toEqual([]);
   });
 
-  it("requires explicit role-switch evidence on Codex instead of silent auto-waiver", async () => {
-    const root = await createTempProject("delegation-role-switch-missing");
+  it("expects Codex native subagent completion instead of role-switch by default", async () => {
+    const root = await createTempProject("delegation-codex-native-missing");
     await seedFlowState(root, "run-codex");
     await writeConfig(root, createDefaultConfig(["codex"]));
 
     const result = await checkMandatoryDelegations(root, "scope");
     expect(result.satisfied).toBe(false);
     expect(result.missing).toContain("planner");
-    expect(result.expectedMode).toBe("role-switch");
+    expect(result.expectedMode).toBe("isolated");
 
     const ledger = await readDelegationLedger(root);
     expect(ledger.entries).toEqual([]);
   });
 
-  it("accepts a role-switch delegation carrying evidence under a role-switch harness", async () => {
-    const root = await createTempProject("delegation-role-switch-ok");
+  it("accepts Codex native subagent completion without collapsing to role-switch", async () => {
+    const root = await createTempProject("delegation-codex-native-ok");
     await seedFlowState(root, "run-codex-ok");
     await writeConfig(root, createDefaultConfig(["codex"]));
 
@@ -168,8 +168,7 @@ describe("delegation ledger run scoping", () => {
       agent: "planner",
       mode: "mandatory",
       status: "completed",
-      fulfillmentMode: "role-switch",
-      evidenceRefs: [".cclaw/artifacts/02-scope.md#decisions"],
+      fulfillmentMode: "isolated",
       ts: new Date().toISOString()
     });
 
@@ -177,10 +176,10 @@ describe("delegation ledger run scoping", () => {
     expect(result.satisfied).toBe(true);
     expect(result.missing).toEqual([]);
     expect(result.missingEvidence).toEqual([]);
-    expect(result.expectedMode).toBe("role-switch");
+    expect(result.expectedMode).toBe("isolated");
   });
 
-  it("flags role-switch completion without evidenceRefs as missingEvidence", async () => {
+  it("still flags degraded role-switch completion without evidenceRefs", async () => {
     const root = await createTempProject("delegation-role-switch-no-evidence");
     await seedFlowState(root, "run-codex-thin");
     await writeConfig(root, createDefaultConfig(["codex"]));
@@ -198,9 +197,10 @@ describe("delegation ledger run scoping", () => {
     expect(result.satisfied).toBe(false);
     expect(result.missing).toEqual([]);
     expect(result.missingEvidence).toContain("planner");
+    expect(result.expectedMode).toBe("isolated");
   });
 
-  it("infers completion fulfillmentMode from harness fallback when omitted", async () => {
+  it("infers native completion fulfillmentMode from Codex harness when omitted", async () => {
     const root = await createTempProject("delegation-infer-fulfillment-mode");
     await seedFlowState(root, "run-codex-infer");
     await writeConfig(root, createDefaultConfig(["codex"]));
@@ -214,11 +214,11 @@ describe("delegation ledger run scoping", () => {
     });
 
     const ledger = await readDelegationLedger(root);
-    expect(ledger.entries[0]?.fulfillmentMode).toBe("role-switch");
+    expect(ledger.entries[0]?.fulfillmentMode).toBe("isolated");
 
     const result = await checkMandatoryDelegations(root, "scope");
-    expect(result.satisfied).toBe(false);
-    expect(result.missingEvidence).toContain("planner");
+    expect(result.satisfied).toBe(true);
+    expect(result.missingEvidence).toEqual([]);
   });
 
   it("requires evidence for generic-dispatch completions", async () => {
@@ -326,11 +326,11 @@ describe("delegation ledger run scoping", () => {
       });
 
       const ledger = await readDelegationLedger(root);
-      expect(ledger.entries[0]?.fulfillmentMode).toBe("role-switch");
+      expect(ledger.entries[0]?.fulfillmentMode).toBe("isolated");
       const result = await checkMandatoryDelegations(root, "scope");
-      expect(result.satisfied).toBe(false);
-      expect(result.expectedMode).toBe("role-switch");
-      expect(result.missingEvidence).toContain("planner");
+      expect(result.satisfied).toBe(true);
+      expect(result.expectedMode).toBe("isolated");
+      expect(result.missingEvidence).toEqual([]);
     } finally {
       if (prior === undefined) {
         delete process.env.CCLAW_ACTIVE_HARNESS;
@@ -356,12 +356,12 @@ describe("delegation ledger run scoping", () => {
       });
 
       const ledger = await readDelegationLedger(root);
-      expect(ledger.entries[0]?.fulfillmentMode).toBe("role-switch");
+      expect(ledger.entries[0]?.fulfillmentMode).toBe("isolated");
       const result = await checkMandatoryDelegations(root, "scope");
-      expect(result.satisfied).toBe(false);
-      expect(result.expectedMode).toBe("role-switch");
+      expect(result.satisfied).toBe(true);
+      expect(result.expectedMode).toBe("isolated");
       expect(result.missing).toEqual([]);
-      expect(result.missingEvidence).toContain("planner");
+      expect(result.missingEvidence).toEqual([]);
     } finally {
       if (prior === undefined) {
         delete process.env.CCLAW_ACTIVE_HARNESS;

@@ -134,10 +134,10 @@ describe("install lifecycle", { timeout: 30_000 }, () => {
       "cc.md"
     ]);
     const codexAdapter = HARNESS_ADAPTERS.codex;
-    expect(codexAdapter.capabilities.nativeSubagentDispatch).toBe("none");
+    expect(codexAdapter.capabilities.nativeSubagentDispatch).toBe("full");
     expect(codexAdapter.capabilities.hookSurface).toBe("limited");
     expect(codexAdapter.capabilities.structuredAsk).toBe("request_user_input");
-    expect(codexAdapter.capabilities.subagentFallback).toBe("role-switch");
+    expect(codexAdapter.capabilities.subagentFallback).toBe("native");
 
     // Wave Q (v0.41.0): OpenCode's native `question` tool is honest as
     // permission-gated, not missing — assert the remediation mentions
@@ -184,6 +184,23 @@ describe("install lifecycle", { timeout: 30_000 }, () => {
       "security-reviewer.md",
       "test-author.md"
     ]);
+    const generatedOpenCodeAgents = (await fs.readdir(path.join(root, ".opencode/agents")))
+      .filter((fileName) => fileName.endsWith(".md"))
+      .sort();
+    expect(generatedOpenCodeAgents).toEqual(generatedAgents);
+    const generatedCodexAgents = (await fs.readdir(path.join(root, ".codex/agents")))
+      .filter((fileName) => fileName.endsWith(".toml"))
+      .sort();
+    expect(generatedCodexAgents).toEqual([
+      "doc-updater.toml",
+      "planner.toml",
+      "reviewer.toml",
+      "security-reviewer.toml",
+      "test-author.toml"
+    ]);
+    const codexPlanner = await fs.readFile(path.join(root, ".codex/agents/planner.toml"), "utf8");
+    expect(codexPlanner).toContain('name = "planner"');
+    expect(codexPlanner).toContain("developer_instructions");
 
     const researchPlaybook = await fs.readFile(
       path.join(root, ".cclaw/skills/research/repo-scan.md"),

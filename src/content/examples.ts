@@ -825,8 +825,8 @@ const DOMAIN_LABELS: Record<ExampleDomain, string> = {
 export const RESEARCH_FLEET_USAGE_EXAMPLE = [
   "Before drafting `03-design.md`, run `research/research-fleet.md` once and",
   "capture all four lenses in `.cclaw/artifacts/02a-research.md`.",
-  "Dispatch semantics by harness: Claude/Cursor = parallel subagents in one turn;",
-  "OpenCode/Codex = sequential role-switch with explicit announcements.",
+  "Dispatch semantics by harness: Claude/OpenCode/Codex = native subagents;",
+  "Cursor = generic-dispatch Task mapping; role-switch only as degraded fallback.",
   "Design must include a `Research Fleet Synthesis` section that maps each",
   "lens to concrete architecture decisions and risks."
 ].join(" ");

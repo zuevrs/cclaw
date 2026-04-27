@@ -1455,6 +1455,19 @@ export async function uninstallCclaw(projectRoot: string): Promise<void> {
   await removeIfEmpty(codexSkillsRoot);
   await removeIfEmpty(path.join(projectRoot, ".agents"));
 
+
+  const managedAgentNames = [
+    "planner",
+    "reviewer",
+    "security-reviewer",
+    "test-author",
+    "doc-updater"
+  ];
+  for (const agentName of managedAgentNames) {
+    await removeBestEffort(path.join(projectRoot, ".opencode/agents", `${agentName}.md`));
+    await removeBestEffort(path.join(projectRoot, ".codex/agents", `${agentName}.toml`));
+  }
+
   for (const pluginPath of [
     path.join(projectRoot, ".opencode/plugins/viby-plugin.mjs"),
     path.join(projectRoot, ".opencode/plugins/opencode-plugin.mjs"),
@@ -1481,8 +1494,10 @@ export async function uninstallCclaw(projectRoot: string): Promise<void> {
     ".cursor/rules",
     ".cursor/commands",
     ".cursor",
+    ".codex/agents",
     ".codex/commands",
     ".codex",
+    ".opencode/agents",
     ".opencode/plugins",
     ".opencode/commands",
     ".opencode"

@@ -19,8 +19,8 @@ export type DelegationStatus = "scheduled" | "completed" | "failed" | "waived";
  * How a delegation was actually fulfilled. Advisory — mirrors the harness
  * `subagentFallback` that was in effect when the entry was recorded.
  *
- * - `isolated`         — Claude-style isolated subagent worker.
- * - `generic-dispatch` — Cursor-style Task dispatch mapped to a named role.
+ * - `isolated`         — native isolated subagent worker (Claude/OpenCode/Codex).
+ * - `generic-dispatch` — generic Task/Subagent dispatch mapped to a named role.
  * - `role-switch`      — performed in-session with explicit role announce.
  * - `harness-waiver`   — auto-waived due to missing dispatch capability.
  */
@@ -432,11 +432,10 @@ export async function checkMandatoryDelegations(
       waived.push(agent);
     }
 
-    // Evidence is required whenever the active harness semantics are not
-    // isolated, or when a row explicitly records a non-isolated fulfillment.
-    // This prevents mixed installs from letting an active OpenCode/Codex
-    // role-switch completion pass merely because another configured harness
-    // supports isolated subagents.
+    // Evidence is required for non-isolated completions and for explicit
+    // degraded role-switch rows. Native OpenCode/Codex/Claude isolated
+    // dispatch is accepted as true subagent work; role-switch remains a
+    // fallback that must point at artifact evidence.
     const evidenceRequired = expectedMode !== "isolated" || completedRows.some(
       (e) => (e.fulfillmentMode ?? "isolated") !== "isolated"
     );

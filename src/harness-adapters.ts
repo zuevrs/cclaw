@@ -20,18 +20,19 @@ const RUNTIME_AGENTS_BLOCK_PATTERN = new RegExp(RUNTIME_AGENTS_BLOCK_SOURCE, "u"
 const RUNTIME_AGENTS_BLOCK_GLOBAL_PATTERN = new RegExp(RUNTIME_AGENTS_BLOCK_SOURCE, "gu");
 
 export type SubagentFallback =
-  /** Harness has real, isolated subagent dispatch; no fallback needed. */
+  /** Harness has real, isolated named subagent dispatch; no fallback needed. */
   | "native"
   /**
-   * Harness has generic dispatch (e.g. Cursor's Task tool with
-   * `subagent_type`) but not user-defined named subagents; cclaw maps each
-   * named agent to the generic dispatcher with a structured role prompt.
+   * Harness has a real dispatcher but not cclaw-named agents. cclaw maps each
+   * named role to the available built-in/generic subagent surface with a
+   * structured role prompt.
    */
   | "generic-dispatch"
   /**
    * No isolated dispatch — the agent performs the named subagent's role
    * in-session with an explicit role announce + delegation-log entry
-   * carrying evidenceRefs. Accepted as `completed` in delegation checks.
+   * carrying evidenceRefs. Accepted as `completed` only when no true dispatch
+   * surface exists.
    */
   | "role-switch"
   /**
@@ -70,11 +71,11 @@ export interface HarnessAdapter {
   capabilities: {
     /**
      * Level of native subagent dispatch:
-     * - `full`    — isolated workers + user-defined named subagents (Claude).
-     * - `generic` — generic dispatcher (Task) without named agents (Cursor).
-     * - `partial` — plugin-based dispatch, not a first-class primitive
-     *   (OpenCode).
-     * - `none`    — no dispatch primitive at all (Codex).
+     * - `full`    — isolated workers + user-defined named subagents (Claude,
+     *   OpenCode, Codex custom agents).
+     * - `generic` — generic dispatcher without cclaw-named agents (Cursor).
+     * - `partial` — limited or plugin-only dispatch surface.
+     * - `none`    — no dispatch primitive at all.
      */
     nativeSubagentDispatch: "full" | "generic" | "partial" | "none";
     hookSurface: "full" | "plugin" | "limited" | "none";
@@ -220,7 +221,11 @@ export const HARNESS_ADAPTERS: Record<HarnessId, HarnessAdapter> = {
     commandDir: ".opencode/commands",
     shimKind: "command",
     capabilities: {
-      nativeSubagentDispatch: "partial",
+      // OpenCode supports project-local markdown subagents under
+      // `.opencode/agents/`; primary agents can invoke them via the Task
+      // tool or explicit `@agent` mention. cclaw materializes its core
+      // roster there, so mandatory delegations are real isolated subagents.
+      nativeSubagentDispatch: "full",
       hookSurface: "plugin",
       // OpenCode exposes a native `question` tool (header + options +
       // custom-answer fallback, multi-question navigation). It is
@@ -230,7 +235,7 @@ export const HARNESS_ADAPTERS: Record<HarnessId, HarnessAdapter> = {
       // in generated harness guidance; skills fall back to the shared
       // plain-text lettered list when the tool is denied or unavailable.
       structuredAsk: "question",
-      subagentFallback: "role-switch"
+      subagentFallback: "native"
     }
   },
   codex: {
@@ -238,8 +243,10 @@ export const HARNESS_ADAPTERS: Record<HarnessId, HarnessAdapter> = {
     // Codex CLI reads skills from the universal `.agents/skills/` path
     // (OpenAI Codex 0.89, Jan 2026). It does NOT have a native
     // `.codex/commands/*` slash-command discovery — cclaw installs
-    // its entry points as skills here. Since v0.114 (Mar 2026) Codex
-    // also exposes lifecycle hooks via `.codex/hooks.json`, behind
+    // its entry points as skills here. Current Codex releases also support
+    // native parallel subagents and project-local `.codex/agents/*.toml`
+    // custom agents; cclaw materializes its core roster there. Since v0.114
+    // (Mar 2026) Codex also exposes lifecycle hooks via `.codex/hooks.json`, behind
     // the `[features] codex_hooks = true` feature flag in
     // `~/.codex/config.toml`. cclaw writes that file on sync and
     // `hookSurface: "limited"` records the reality: SessionStart /
@@ -248,7 +255,7 @@ export const HARNESS_ADAPTERS: Record<HarnessId, HarnessAdapter> = {
     commandDir: ".agents/skills",
     shimKind: "skill",
     capabilities: {
-      nativeSubagentDispatch: "none",
+      nativeSubagentDispatch: "full",
       hookSurface: "limited",
       // Codex CLI exposes `request_user_input` — an experimental tool
       // that asks 1-3 short questions and returns the user's answers.
@@ -258,10 +265,32 @@ export const HARNESS_ADAPTERS: Record<HarnessId, HarnessAdapter> = {
       // it into generated harness guidance. The shared plain-text
       // lettered list is the documented fallback when the tool is unavailable.
       structuredAsk: "request_user_input",
-      subagentFallback: "role-switch"
+      subagentFallback: "native"
     }
   }
 };
+
+
+export function harnessDispatchSurface(harnessId: HarnessId): string {
+  switch (harnessId) {
+    case "claude":
+      return "Use Claude Code Task with the cclaw agent name as subagent_type; record fulfillmentMode: \"isolated\".";
+    case "cursor":
+      return "Use Cursor Subagent/Task with a generic subagent_type (explore for read-only mapping, generalPurpose for broader work, shell/browser-use when specifically needed) and paste the cclaw role prompt; record fulfillmentMode: \"generic-dispatch\" with evidenceRefs.";
+    case "opencode":
+      return "Use OpenCode subagents: invoke the generated .opencode/agents/<agent>.md agent via Task or @<agent>, run independent agents in parallel when safe, then record fulfillmentMode: \"isolated\".";
+    case "codex":
+      return "Use Codex native subagents: ask Codex to spawn the generated .codex/agents/<agent>.toml agent(s) by name, wait for all results, then record fulfillmentMode: \"isolated\".";
+  }
+}
+
+export function harnessDispatchFallback(harnessId: HarnessId): string {
+  const adapter = HARNESS_ADAPTERS[harnessId];
+  if (adapter.capabilities.subagentFallback !== "role-switch") {
+    return "Role-switch is only a degradation path if the active runtime cannot expose the declared dispatch surface; include non-empty evidenceRefs when used.";
+  }
+  return "Use a visible role-switch pass with non-empty evidenceRefs because this harness has no true dispatch surface.";
+}
 
 export type HarnessTier = "tier1" | "tier2" | "tier3";
 
@@ -365,7 +394,7 @@ If the same approach fails three times in a row (same command, same finding, sam
 ### Detail Level
 
 - This managed AGENTS block is intentionally minimal for cross-project use.
-- Harness coverage is tiered: Tier1 (claude), Tier2 (cursor/opencode/codex — codex has Bash-only tool hooks), Tier3 (fallback/manual-only).
+- Subagent dispatch coverage: Claude/OpenCode/Codex support native isolated workers; Cursor uses generic Task dispatch. Codex still has Bash-only tool hooks.
 - Detailed operating procedures live in \`.cclaw/skills/using-cclaw/SKILL.md\`.
 - Keep preambles brief; re-announce role/stage only when either changes.
 - Subagent orchestration patterns: \`.cclaw/skills/subagent-dev/SKILL.md\` and \`.cclaw/skills/parallel-dispatch/SKILL.md\`.
@@ -598,14 +627,12 @@ for the current hook surface and limitations.
 
 ## Honest caveats
 
-- Codex has no subagent dispatch primitive. Mandatory delegations
-  run as a sequential **stage-aware role-switch workflow**: announce
-  \`## cclaw role-switch: <stage>/<agent> (<mode>)\`, load
-  \`.cclaw/agents/<agent>.md\`, write the role output into the active
-  stage artifact, then append a completed row with \`fulfillmentMode:
-  "role-switch"\` and non-empty \`evidenceRefs\` to
-  \`.cclaw/state/delegation-log.json\`. Silent auto-waiver is disabled
-  (v0.33+).
+- Codex has native parallel subagents. cclaw writes project custom agents
+  under \`.codex/agents/*.toml\`; ask Codex to spawn the relevant cclaw
+  agent(s) by name, wait for their results, write evidence into the active
+  artifact, then append completed delegation rows with \`fulfillmentMode:
+  "isolated"\`. Use role-switch only if this Codex build has subagents
+  unavailable or disabled, and then include non-empty \`evidenceRefs\`.
 - Codex's \`PreToolUse\` / \`PostToolUse\` hooks currently only intercept
   the \`Bash\` tool. \`Write\`, \`Edit\`, \`WebSearch\`, and MCP tool calls
   are **not** gated by hooks — use \`cclaw doctor --explain\` for what cclaw
@@ -734,7 +761,41 @@ async function cleanupLegacyCodexSurfaces(projectRoot: string): Promise<void> {
   }
 }
 
-async function syncAgentFiles(projectRoot: string): Promise<void> {
+function codexAgentToml(agent: (typeof CCLAW_AGENTS)[number]): string {
+  const instructions = `${agent.body}\n\n${enhancedAgentInstruction(agent.name)}`.trim();
+  const sandboxMode = agent.tools.some((tool) => ["Write", "Edit", "Bash"].includes(tool))
+    ? "workspace-write"
+    : "read-only";
+  return [
+    `name = ${JSON.stringify(agent.name)}`,
+    `description = ${JSON.stringify(agent.description)}`,
+    `sandbox_mode = ${JSON.stringify(sandboxMode)}`,
+    'developer_instructions = """',
+    instructions.replace(/"""/gu, '\"\"\"'),
+    '"""',
+    ""
+  ].join("\n");
+}
+
+function opencodeAgentMarkdown(agent: (typeof CCLAW_AGENTS)[number]): string {
+  const editPermission = agent.tools.some((tool) => ["Write", "Edit"].includes(tool)) ? "ask" : "deny";
+  const bashPermission = (agent.tools as readonly string[]).includes("Bash") ? "ask" : "deny";
+  return `---
+description: ${JSON.stringify(agent.description)}
+mode: subagent
+permission:
+  edit: ${editPermission}
+  bash: ${bashPermission}
+---
+
+${agentMarkdown(agent)}`;
+}
+
+function enhancedAgentInstruction(agentName: string): string {
+  return `You are the cclaw ${agentName} subagent. Follow the parent prompt as the task boundary, produce evidence suitable for .cclaw/state/delegation-log.json, and do not recursively orchestrate other agents unless the parent explicitly asks.`;
+}
+
+async function syncAgentFiles(projectRoot: string, harnesses: HarnessId[]): Promise<void> {
   const agentsDir = path.join(projectRoot, RUNTIME_ROOT, "agents");
   await ensureDir(agentsDir);
   for (const agent of CCLAW_AGENTS) {
@@ -742,6 +803,28 @@ async function syncAgentFiles(projectRoot: string): Promise<void> {
       path.join(agentsDir, `${agent.name}.md`),
       agentMarkdown(agent)
     );
+  }
+
+  if (harnesses.includes("opencode")) {
+    const opencodeAgentsDir = path.join(projectRoot, ".opencode/agents");
+    await ensureDir(opencodeAgentsDir);
+    for (const agent of CCLAW_AGENTS) {
+      await writeFileSafe(
+        path.join(opencodeAgentsDir, `${agent.name}.md`),
+        opencodeAgentMarkdown(agent)
+      );
+    }
+  }
+
+  if (harnesses.includes("codex")) {
+    const codexAgentsDir = path.join(projectRoot, ".codex/agents");
+    await ensureDir(codexAgentsDir);
+    for (const agent of CCLAW_AGENTS) {
+      await writeFileSafe(
+        path.join(codexAgentsDir, `${agent.name}.toml`),
+        codexAgentToml(agent)
+      );
+    }
   }
 }
 
@@ -762,6 +845,6 @@ export async function syncHarnessShims(projectRoot: string, harnesses: HarnessId
     }
   }
 
-  await syncAgentFiles(projectRoot);
+  await syncAgentFiles(projectRoot, harnesses);
   await syncAgentsMd(projectRoot, harnesses);
 }

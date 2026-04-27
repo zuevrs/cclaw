@@ -91,17 +91,13 @@ function autoSubagentDispatchBlock(stage: FlowStage, track: FlowTrack): string {
   const mandatoryList = mandatory.length > 0 ? mandatory.map((a) => `\`${a}\``).join(", ") : "none";
   const delegationLogRel = `${RUNTIME_ROOT}/state/delegation-log.json`;
   const artifactRef = `${RUNTIME_ROOT}/artifacts/${schema.artifactRules.artifactFile}`;
-  const firstRule = rules[0];
-  const roleSwitchExample = firstRule ? `${stage}/${firstRule.agent} (${firstRule.mode})` : `${stage}/<agent>`;
-
   return `## Automatic Subagent Dispatch
 | Agent | Mode | User Gate | Trigger | Purpose |
 |---|---|---|---|---|
 ${rows}
-
 Mandatory: ${mandatoryList}. Record completion/waiver in \`${delegationLogRel}\` before completion.
-### Stage-Aware Agent Workflow Contract
-OpenCode / Codex use sequential role-switch execution, not isolated workers. For each listed role use header \`## cclaw role-switch: ${roleSwitchExample}\`, write evidence into \`${artifactRef}\`, then append a \`${delegationLogRel}\` row with \`fulfillmentMode: "role-switch"\` and non-empty \`evidenceRefs\`. Missing evidence blocks completion.
+### Harness Dispatch Contract
+Use true harness dispatch: Claude native Task, Cursor generic dispatch, OpenCode \`.opencode/agents/<agent>.md\`, Codex \`.codex/agents/<agent>.toml\`. Run independent read-only/review agents in parallel where safe, write evidence into \`${artifactRef}\`, then append \`${delegationLogRel}\` rows with matching \`fulfillmentMode: "isolated"\` or \`"generic-dispatch"\`. Do not collapse OpenCode or Codex to role-switch by default; role-switch is degraded fallback and must carry non-empty \`evidenceRefs\`. Missing evidence blocks completion.
 `;
 }
 
