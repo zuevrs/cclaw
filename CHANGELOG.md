@@ -1,5 +1,13 @@
 # Changelog
 
+## 0.51.23
+
+### Fixed
+
+- Materialized generated stage command shims so stage skills no longer point agents at missing `.cclaw/commands/<stage>.md` files.
+- Restored native subagent dispatch surfaces for OpenCode and Codex via generated `.opencode/agents/*.md` and `.codex/agents/*.toml` agent definitions, with role-switch retained only as a degraded fallback.
+- Tightened harness delegation, hook/doctor diagnostics, quick-track templates, and knowledge metadata regressions so installed runtime guidance matches validation behavior.
+
 ## 0.51.22
 
 ### Fixed
