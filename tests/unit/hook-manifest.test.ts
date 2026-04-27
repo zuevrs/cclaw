@@ -94,6 +94,22 @@ describe("hook manifest", () => {
     expect(semanticEventCoverage("cursor").strict_state_verify).toBeUndefined();
   });
 
+  it("keeps Codex workflow-guard Bash-only", () => {
+    const codexGroups = groupBindingsByEvent("codex");
+    const userPromptHandlers = codexGroups
+      .find((group) => group.event === "UserPromptSubmit")
+      ?.entries.map((entry) => entry.handler) ?? [];
+    const preToolWorkflow = codexGroups
+      .find((group) => group.event === "PreToolUse")
+      ?.entries.find((entry) => entry.handler === "workflow-guard");
+
+    expect(userPromptHandlers).not.toContain("workflow-guard");
+    expect(preToolWorkflow?.matcher).toBe("Bash|bash");
+    expect(semanticEventCoverage("codex").pre_tool_workflow_guard).toBe(
+      "PreToolUse matcher=Bash|bash"
+    );
+  });
+
   it("keeps harness docs aligned with lifecycle aliases and strict-mode coverage", async () => {
     const docs = await fs.readFile(path.join(process.cwd(), "docs/harnesses.md"), "utf8");
     expect(docs).toContain("`strict_state_verify`");

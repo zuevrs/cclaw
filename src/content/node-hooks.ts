@@ -1665,7 +1665,7 @@ async function handleVerifyCurrentState(runtime) {
     process.stderr.write(result.stderr.trim().length > 0
       ? result.stderr
       : "[cclaw] hook: local Node runtime entrypoint is required for verify-current-state\\n");
-    return 1;
+    return mode === "strict" ? 1 : 0;
   }
   if (mode === "strict") {
     if (result.code !== 0) {

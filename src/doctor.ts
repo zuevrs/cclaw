@@ -31,6 +31,7 @@ import {
 } from "./gate-evidence.js";
 import { parseTddCycleLog, validateTddCycleOrder } from "./tdd-cycle.js";
 import { stageSkillFolder } from "./content/skills.js";
+import { stageCommandShimMarkdown } from "./content/stage-command.js";
 import { doctorCheckMetadata } from "./doctor-registry.js";
 import { resolveTrackFromPrompt } from "./track-heuristics.js";
 import {
@@ -333,18 +334,26 @@ function normalizeOpenCodePluginEntry(entry: unknown): string | null {
   return null;
 }
 
-async function opencodeRegistrationCheck(projectRoot: string): Promise<{ ok: boolean; details: string }> {
-  const expected = ".opencode/plugins/cclaw-plugin.mjs";
-  const candidates = [
+const OPENCODE_PLUGIN_REL_PATH = ".opencode/plugins/cclaw-plugin.mjs";
+
+function opencodeConfigCandidates(projectRoot: string): string[] {
+  return [
     path.join(projectRoot, "opencode.json"),
     path.join(projectRoot, "opencode.jsonc"),
     path.join(projectRoot, ".opencode/opencode.json"),
     path.join(projectRoot, ".opencode/opencode.jsonc")
   ];
+}
 
+function openCodeConfigRegistersPlugin(parsed: Record<string, unknown>): boolean {
+  const plugins = Array.isArray(parsed.plugin) ? parsed.plugin : [];
+  return plugins.some((entry) => normalizeOpenCodePluginEntry(entry) === OPENCODE_PLUGIN_REL_PATH);
+}
+
+async function opencodeRegistrationCheck(projectRoot: string): Promise<{ ok: boolean; details: string }> {
   const mismatches: string[] = [];
   let foundAnyConfig = false;
-  for (const configPath of candidates) {
+  for (const configPath of opencodeConfigCandidates(projectRoot)) {
     if (!(await exists(configPath))) {
       continue;
     }
@@ -354,18 +363,52 @@ async function opencodeRegistrationCheck(projectRoot: string): Promise<{ ok: boo
       mismatches.push(`${path.relative(projectRoot, configPath)} is unreadable or invalid JSON`);
       continue;
     }
-    const plugins = Array.isArray(parsed.plugin) ? parsed.plugin : [];
-    const registered = plugins.some((entry) => normalizeOpenCodePluginEntry(entry) === expected);
-    if (registered) {
-      return { ok: true, details: `${path.relative(projectRoot, configPath)} registers ${expected}` };
+    if (openCodeConfigRegistersPlugin(parsed)) {
+      return { ok: true, details: `${path.relative(projectRoot, configPath)} registers ${OPENCODE_PLUGIN_REL_PATH}` };
     }
-    mismatches.push(`${path.relative(projectRoot, configPath)} missing plugin ${expected}`);
+    mismatches.push(`${path.relative(projectRoot, configPath)} missing plugin ${OPENCODE_PLUGIN_REL_PATH}`);
   }
 
   if (foundAnyConfig) {
     return { ok: false, details: mismatches.join(" | ") };
   }
-  return { ok: false, details: `No opencode.json/opencode.jsonc found with plugin ${expected}` };
+  return { ok: false, details: `No opencode.json/opencode.jsonc found with plugin ${OPENCODE_PLUGIN_REL_PATH}` };
+}
+
+async function opencodeQuestionPermissionCheck(projectRoot: string): Promise<{ ok: boolean; details: string }> {
+  const mismatches: string[] = [];
+  for (const configPath of opencodeConfigCandidates(projectRoot)) {
+    if (!(await exists(configPath))) continue;
+    const parsed = await readHookDocument(configPath);
+    if (!parsed || !openCodeConfigRegistersPlugin(parsed)) continue;
+    const permission = toObject(parsed.permission) ?? {};
+    if (permission.question === "allow") {
+      return {
+        ok: true,
+        details: `${path.relative(projectRoot, configPath)} sets permission.question to "allow" for structured questions`
+      };
+    }
+    mismatches.push(
+      `${path.relative(projectRoot, configPath)} registers ${OPENCODE_PLUGIN_REL_PATH} but must set permission.question to "allow"`
+    );
+  }
+  if (mismatches.length > 0) {
+    return { ok: false, details: mismatches.join(" | ") };
+  }
+  return {
+    ok: false,
+    details: `No opencode config with ${OPENCODE_PLUGIN_REL_PATH} registration found; cannot verify permission.question = "allow"`
+  };
+}
+
+function opencodeQuestionEnvCheck(): { ok: boolean; details: string } {
+  if (process.env.OPENCODE_ENABLE_QUESTION_TOOL === "1") {
+    return { ok: true, details: "OPENCODE_ENABLE_QUESTION_TOOL=1 is set for ACP question tooling" };
+  }
+  return {
+    ok: false,
+    details: "Set OPENCODE_ENABLE_QUESTION_TOOL=1 for OpenCode ACP clients so permission-gated structured questions can use the question tool."
+  };
 }
 
 async function initRecoveryCheck(projectRoot: string): Promise<{ ok: boolean; details: string }> {
@@ -735,13 +778,25 @@ export async function doctorChecks(projectRoot: string, options: DoctorOptions =
     details: `${agentsFile} must contain the managed cclaw marker block with routing, verification, and minimal detail pointer`
   });
 
-  // User-facing entry commands only. Stage and view subcommands live in skills.
   for (const cmd of ["start", "next", "ideate", "view"] as const) {
     const cmdPath = path.join(projectRoot, RUNTIME_ROOT, "commands", `${cmd}.md`);
     checks.push({
       name: `utility_command:${cmd}`,
       ok: await exists(cmdPath),
       details: cmdPath
+    });
+  }
+  for (const stage of FLOW_STAGES) {
+    const cmdPath = path.join(projectRoot, RUNTIME_ROOT, "commands", `${stage}.md`);
+    let stageCommandOk = false;
+    if (await exists(cmdPath)) {
+      const content = await fs.readFile(cmdPath, "utf8");
+      stageCommandOk = content === stageCommandShimMarkdown(stage);
+    }
+    checks.push({
+      name: `stage_command:${stage}`,
+      ok: stageCommandOk,
+      details: `${cmdPath} must be a thin shim to ${RUNTIME_ROOT}/skills/${stageSkillFolder(stage)}/SKILL.md and /cc-next`
     });
   }
 
@@ -1028,7 +1083,6 @@ export async function doctorChecks(projectRoot: string, options: DoctorOptions =
     const codexWiringOk =
       codexSessionCmds.some((cmd) => cmd.includes("session-start")) &&
       codexUserPromptCmds.some((cmd) => cmd.includes("prompt-guard")) &&
-      codexUserPromptCmds.some((cmd) => cmd.includes("workflow-guard")) &&
       codexUserPromptCmds.some((cmd) => cmd.includes("verify-current-state")) &&
       codexPreCmds.some((cmd) => cmd.includes("prompt-guard")) &&
       codexPreCmds.some((cmd) => cmd.includes("workflow-guard")) &&
@@ -1037,7 +1091,7 @@ export async function doctorChecks(projectRoot: string, options: DoctorOptions =
     checks.push({
       name: "hook:wiring:codex",
       ok: codexWiringOk,
-      details: `${codexHooksFile} must wire SessionStart, UserPromptSubmit(prompt/workflow/verify-current-state), PreToolUse(prompt/workflow), PostToolUse(context-monitor), and Stop(stop-handoff). PreToolUse/PostToolUse run Bash-only in Codex v0.114+`
+      details: `${codexHooksFile} must wire SessionStart, UserPromptSubmit(prompt/verify-current-state), Bash-only PreToolUse(prompt/workflow), Bash-only PostToolUse(context-monitor), and Stop(stop-handoff). Codex workflow-guard is intentionally strict Bash-only.`
     });
 
     // Feature flag warning: Codex ignores `.codex/hooks.json` unless the
@@ -1161,6 +1215,18 @@ export async function doctorChecks(projectRoot: string, options: DoctorOptions =
       name: "hook:opencode:config_registration",
       ok: registration.ok,
       details: registration.details
+    });
+    const questionPermission = await opencodeQuestionPermissionCheck(projectRoot);
+    checks.push({
+      name: "hook:opencode:question_permission",
+      ok: questionPermission.ok,
+      details: questionPermission.details
+    });
+    const questionEnv = opencodeQuestionEnvCheck();
+    checks.push({
+      name: "warning:opencode:question_tool_env",
+      ok: questionEnv.ok,
+      details: questionEnv.details
     });
   }
 

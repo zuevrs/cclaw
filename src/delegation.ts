@@ -19,8 +19,8 @@ export type DelegationStatus = "scheduled" | "completed" | "failed" | "waived";
  * How a delegation was actually fulfilled. Advisory — mirrors the harness
  * `subagentFallback` that was in effect when the entry was recorded.
  *
- * - `isolated`         — Claude-style isolated subagent worker.
- * - `generic-dispatch` — Cursor-style Task dispatch mapped to a named role.
+ * - `isolated`         — native isolated subagent worker (Claude/OpenCode/Codex).
+ * - `generic-dispatch` — generic Task/Subagent dispatch mapped to a named role.
  * - `role-switch`      — performed in-session with explicit role announce.
  * - `harness-waiver`   — auto-waived due to missing dispatch capability.
  */
@@ -105,6 +105,13 @@ function delegationLockPath(projectRoot: string): string {
 
 function createSpanId(): string {
   return `dspan-${Date.now().toString(36)}-${Math.random().toString(36).slice(2, 10)}`;
+}
+
+function activeHarnessSubagentFallback(): SubagentFallback | undefined {
+  const activeHarness = process.env.CCLAW_ACTIVE_HARNESS;
+  if (!activeHarness) return undefined;
+  return HARNESS_ADAPTERS[activeHarness as keyof typeof HARNESS_ADAPTERS]
+    ?.capabilities.subagentFallback;
 }
 
 async function resolveReviewDiffBase(projectRoot: string): Promise<string | null> {
@@ -333,10 +340,7 @@ export async function appendDelegation(projectRoot: string, entry: DelegationEnt
       stamped.evidenceRefs = [];
     }
     if (stamped.status === "completed" && stamped.fulfillmentMode === undefined) {
-      const activeFallback = process.env.CCLAW_ACTIVE_HARNESS
-        ? HARNESS_ADAPTERS[process.env.CCLAW_ACTIVE_HARNESS as keyof typeof HARNESS_ADAPTERS]
-          ?.capabilities.subagentFallback
-        : undefined;
+      const activeFallback = activeHarnessSubagentFallback();
       if (activeFallback) {
         stamped.fulfillmentMode = expectedFulfillmentMode([activeFallback]);
       } else {
@@ -408,8 +412,9 @@ export async function checkMandatoryDelegations(
   const missingEvidence: string[] = [];
   const config = await readConfig(projectRoot).catch(() => null);
   const harnesses = config?.harnesses ?? [];
-  const fallbacks = harnesses.map((h) => HARNESS_ADAPTERS[h].capabilities.subagentFallback);
-  const expectedMode = expectedFulfillmentMode(fallbacks);
+  const configuredFallbacks = harnesses.map((h) => HARNESS_ADAPTERS[h].capabilities.subagentFallback);
+  const activeFallback = activeHarnessSubagentFallback();
+  const expectedMode = expectedFulfillmentMode(activeFallback ? [activeFallback] : configuredFallbacks);
   for (const agent of mandatory) {
     const rows = forRun.filter((e) => e.agent === agent);
     const completedRows = rows.filter((e) => e.status === "completed");
@@ -427,9 +432,11 @@ export async function checkMandatoryDelegations(
       waived.push(agent);
     }
 
-    // Evidence is required for any non-isolated completion mode. Legacy rows
-    // without fulfillmentMode are inferred to `isolated` during parse.
-    const evidenceRequired = completedRows.some(
+    // Evidence is required for non-isolated completions and for explicit
+    // degraded role-switch rows. Native OpenCode/Codex/Claude isolated
+    // dispatch is accepted as true subagent work; role-switch remains a
+    // fallback that must point at artifact evidence.
+    const evidenceRequired = expectedMode !== "isolated" || completedRows.some(
       (e) => (e.fulfillmentMode ?? "isolated") !== "isolated"
     );
     if (

@@ -18,6 +18,7 @@ import {
 } from "./config.js";
 import { learnSkillMarkdown } from "./content/learnings.js";
 import { nextCommandContract, nextCommandSkillMarkdown } from "./content/next-command.js";
+import { stageCommandShimMarkdown } from "./content/stage-command.js";
 import { ideateCommandContract, ideateCommandSkillMarkdown } from "./content/ideate-command.js";
 import { startCommandContract, startCommandSkillMarkdown } from "./content/start-command.js";
 import { viewCommandContract, viewCommandSkillMarkdown } from "./content/view-command.js";
@@ -546,6 +547,12 @@ async function writeEntryCommands(projectRoot: string): Promise<void> {
   await writeFileSafe(runtimePath(projectRoot, "commands", "next.md"), nextCommandContract());
   await writeFileSafe(runtimePath(projectRoot, "commands", "ideate.md"), ideateCommandContract());
   await writeFileSafe(runtimePath(projectRoot, "commands", "view.md"), viewCommandContract());
+  for (const stage of FLOW_STAGES) {
+    await writeFileSafe(
+      runtimePath(projectRoot, "commands", `${stage}.md`),
+      stageCommandShimMarkdown(stage)
+    );
+  }
 }
 
 function toObject(value: unknown): Record<string, unknown> | null {
@@ -655,11 +662,21 @@ function mergeOpenCodePluginConfig(
   if (!normalized.has(pluginRelPath)) {
     pluginsRaw.push(pluginRelPath);
   }
-  const changed = !normalized.has(pluginRelPath) || !Array.isArray(root.plugin);
+  const permission = toObject(root.permission) ?? {};
+  const permissionChanged = permission.question !== "allow";
+  const changed =
+    !normalized.has(pluginRelPath) ||
+    !Array.isArray(root.plugin) ||
+    permissionChanged ||
+    !toObject(root.permission);
   return {
     merged: {
       ...root,
-      plugin: pluginsRaw
+      plugin: pluginsRaw,
+      permission: {
+        ...permission,
+        question: "allow"
+      }
     },
     changed
   };
@@ -1083,7 +1100,6 @@ async function cleanLegacyArtifacts(projectRoot: string): Promise<void> {
   }
 
   for (const legacyRuntimeFile of [
-    ...FLOW_STAGES.map((stage) => runtimePath(projectRoot, "commands", `${stage}.md`)),
     ...DEPRECATED_COMMAND_FILES.map((file) => runtimePath(projectRoot, "commands", file)),
     ...DEPRECATED_SKILL_FILES.map((segments) => runtimePath(projectRoot, "skills", ...segments)),
     ...DEPRECATED_STATE_FILES.map((file) => runtimePath(projectRoot, "state", file)),
@@ -1429,7 +1445,7 @@ export async function uninstallCclaw(projectRoot: string): Promise<void> {
   try {
     const entries = await fs.readdir(codexSkillsRoot);
     for (const entry of entries) {
-      if (/^(?:cclaw-)?cc(?:-(?:next|view|ops|ideate))?$/u.test(entry)) {
+      if (/^(?:cclaw-)?cc(?:-(?:next|view|ops|ideate|brainstorm|scope|design|spec|plan|tdd|review|ship))?$/u.test(entry)) {
         await fs.rm(path.join(codexSkillsRoot, entry), { recursive: true, force: true });
       }
     }
@@ -1438,6 +1454,19 @@ export async function uninstallCclaw(projectRoot: string): Promise<void> {
   }
   await removeIfEmpty(codexSkillsRoot);
   await removeIfEmpty(path.join(projectRoot, ".agents"));
+
+
+  const managedAgentNames = [
+    "planner",
+    "reviewer",
+    "security-reviewer",
+    "test-author",
+    "doc-updater"
+  ];
+  for (const agentName of managedAgentNames) {
+    await removeBestEffort(path.join(projectRoot, ".opencode/agents", `${agentName}.md`));
+    await removeBestEffort(path.join(projectRoot, ".codex/agents", `${agentName}.toml`));
+  }
 
   for (const pluginPath of [
     path.join(projectRoot, ".opencode/plugins/viby-plugin.mjs"),
@@ -1465,8 +1494,10 @@ export async function uninstallCclaw(projectRoot: string): Promise<void> {
     ".cursor/rules",
     ".cursor/commands",
     ".cursor",
+    ".codex/agents",
     ".codex/commands",
     ".codex",
+    ".opencode/agents",
     ".opencode/plugins",
     ".opencode/commands",
     ".opencode"

@@ -82,7 +82,7 @@ Do not invent alternate stores (no markdown mirror, no SQLite, no per-stage file
 
 Exactly one JSON object per line. Required fields must appear in the order:
 \`type, trigger, action, confidence, domain, stage, origin_stage, origin_run, frequency, universality, maturity, created, first_seen_ts, last_seen_ts, project\`.
-Optional fields \`source\` and \`severity\` may be appended after \`project\`.
+Optional fields \`source\`, \`severity\`, \`supersedes\`, and \`superseded_by\` may be appended after \`project\`.
 
 \`\`\`json
 {"type":"pattern","trigger":"when reviewing external payloads","action":"parse through zod before touching service layer","confidence":"high","domain":"api","stage":"review","origin_stage":"review","origin_run":"payload-hardening","frequency":1,"universality":"project","maturity":"raw","created":"2026-04-14T12:00:00Z","first_seen_ts":"2026-04-14T12:00:00Z","last_seen_ts":"2026-04-14T12:00:00Z","project":"cclaw"}
@@ -107,12 +107,15 @@ Optional fields \`source\` and \`severity\` may be appended after \`project\`.
 | \`project\` | string \\| null | yes | Repo or scope name. Use \`null\` when the entry crosses projects. |
 | \`source\` | \`"stage" \\| "retro" \\| "compound" \\| "ideate" \\| "manual" \\| null\` | no | Origin channel for the entry when known. |
 | \`severity\` | \`"critical" \\| "important" \\| "suggestion"\` | no | Priority signal for compound lifts; \`critical\` enables single-hit override in compound readiness analysis. |
+| \`supersedes\` | string[] | no | Non-empty IDs/slugs of older entries this entry refreshes. Use only for clear replacements discovered during compound closeout or curation. |
+| \`superseded_by\` | string | no | Non-empty ID/slug of the newer entry that refreshes this one. Use only when marking stale guidance as replaced. |
 
 Rules:
 - No other fields beyond the table above. Extra keys are forbidden and MUST be rejected by any writer.
 - Every required-null field must be emitted explicitly as \`null\` (not omitted). This keeps the file grep-friendly.
 - Append-only: never rewrite or delete a historical line. Corrections are new
-  entries whose \`trigger\` clearly supersedes the earlier one.
+  entries whose \`trigger\` clearly supersedes the earlier one; add \`supersedes\` /
+  \`superseded_by\` only when the replacement relationship is clear.
 - Keep each entry one line. No pretty-printing. No trailing commas.
 
 ## Curation policy (target: ≤ 50 active entries)

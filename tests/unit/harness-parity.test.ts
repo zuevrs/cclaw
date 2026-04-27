@@ -6,11 +6,9 @@ describe("harness parity model", () => {
     expect(harnessTier("claude")).toBe("tier1");
     expect(harnessTier("cursor")).toBe("tier2");
     expect(harnessTier("opencode")).toBe("tier2");
-    // Codex regained tier2 in v0.40.0: Codex CLI ≥ v0.114 (Mar 2026)
-    // exposes lifecycle hooks via `.codex/hooks.json` (gated behind the
-    // `codex_hooks` feature flag). PreToolUse/PostToolUse are Bash-only,
-    // hence `hookSurface: "limited"` rather than `"full"`. cclaw ships
-    // skill-kind shims under `.agents/skills/cc*/` for non-hook entry.
+    // OpenCode and Codex now have full native subagent dispatch, but remain
+    // tier2 overall because their hook surfaces are plugin/limited rather
+    // than full.
     expect(harnessTier("codex")).toBe("tier2");
   });
 
@@ -34,8 +32,15 @@ describe("harness parity model", () => {
   it("declares a sensible subagentFallback per harness", () => {
     expect(HARNESS_ADAPTERS.claude.capabilities.subagentFallback).toBe("native");
     expect(HARNESS_ADAPTERS.cursor.capabilities.subagentFallback).toBe("generic-dispatch");
-    expect(HARNESS_ADAPTERS.opencode.capabilities.subagentFallback).toBe("role-switch");
-    expect(HARNESS_ADAPTERS.codex.capabilities.subagentFallback).toBe("role-switch");
+    expect(HARNESS_ADAPTERS.opencode.capabilities.subagentFallback).toBe("native");
+    expect(HARNESS_ADAPTERS.codex.capabilities.subagentFallback).toBe("native");
+  });
+
+  it("does not collapse OpenCode or Codex native subagents to role-switch", () => {
+    expect(HARNESS_ADAPTERS.opencode.capabilities.nativeSubagentDispatch).toBe("full");
+    expect(HARNESS_ADAPTERS.codex.capabilities.nativeSubagentDispatch).toBe("full");
+    expect(HARNESS_ADAPTERS.opencode.capabilities.subagentFallback).not.toBe("role-switch");
+    expect(HARNESS_ADAPTERS.codex.capabilities.subagentFallback).not.toBe("role-switch");
   });
 
   it("maps every harness onto its real structured-ask primitive (v0.41.0)", () => {

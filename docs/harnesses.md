@@ -8,15 +8,27 @@ Generated from `src/harness-adapters.ts` capabilities and hook event mappings.
 |---|---|---|---|---|---|---|
 | Claude Code | `claude` | `tier1` (full native automation) | full | native | full | AskUserQuestion |
 | Cursor | `cursor` | `tier2` (supported with fallback paths) | generic | generic-dispatch | full | AskQuestion |
-| OpenCode | `opencode` | `tier2` (supported with fallback paths) | partial | role-switch | plugin | question |
-| OpenAI Codex | `codex` | `tier2` (supported with fallback paths) | none | role-switch | limited | request_user_input |
+| OpenCode | `opencode` | `tier1` (native subagents plus plugin hooks) | full | native | plugin | question |
+| OpenAI Codex | `codex` | `tier1` for dispatch / `tier2` hooks | full | native | limited | request_user_input |
 
 Fallback legend:
 
 - `native` — first-class named subagent dispatch (Claude).
 - `generic-dispatch` — generic Task dispatcher mapped to cclaw roles (Cursor).
-- `role-switch` — in-session role announce + delegation-log entry with evidenceRefs (OpenCode, Codex).
+- `role-switch` — degraded fallback for a runtime where declared native/generic dispatch is unavailable; explicit role headers, artifact outputs, and non-empty delegation-log evidenceRefs are required.
 - `waiver` — no parity path; reserved for harnesses that cannot role-switch (none shipped).
+
+## Stage-Aware Native Dispatch Workflow
+
+OpenCode and Codex receive generated native isolated subagents. Use them before considering role-switch fallback:
+
+1. Use the active stage skill's generated dispatch table as the source of truth.
+2. OpenCode: invoke `.opencode/agents/<agent>.md` via Task or `@<agent>`; Codex: ask Codex to spawn `.codex/agents/<agent>.toml` by name, in parallel when lanes are independent.
+3. Load `.cclaw/agents/<agent>.md`, execute only that role's stage task, and write outputs into the active stage artifact.
+4. Append `.cclaw/state/delegation-log.json` with `fulfillmentMode: "isolated"` for native OpenCode/Codex dispatch (`"role-switch"` plus non-empty `evidenceRefs` only for degraded fallback).
+5. Treat completed role-switch rows without `evidenceRefs` as unresolved; native isolated rows are not a role-switch substitute and should reflect a real dispatched worker.
+
+This is staged agent work backed by the harness-native subagent surfaces. Role-switch remains only a degraded fallback when that surface is unavailable in the active runtime.
 
 ## Parallel research dispatch semantics
 
@@ -25,9 +37,9 @@ Design-stage research fleet uses the same parity model:
 - **Claude / Cursor**: dispatch all four research lenses in one turn
   (stack, features, architecture, pitfalls) and synthesize into
   `.cclaw/artifacts/02a-research.md`.
-- **OpenCode / Codex**: execute the same four lenses via sequential
-  role-switch, each with explicit announce -> execute -> evidence trail.
-  This preserves auditability when native parallel dispatch is unavailable.
+- **OpenCode / Codex**: dispatch generated native subagents for the same
+  four lenses and run independent lanes in parallel where the active runtime
+  permits. Use role-switch with evidence only as a degraded fallback.
 
 ## Semantic hook event coverage
 
@@ -43,7 +55,7 @@ Design-stage research fleet uses the same parity model:
 
 ## Hook lifecycle aliases
 
-The generated Node dispatcher accepts a small compatibility alias set for lifecycle names: `stop` and `stop-checkpoint` route to `stop-handoff`, `precompact` routes to `pre-compact`, and `session-rehydrate` routes to `session-start`. Harness JSON should still emit the canonical handler names from `src/content/hook-manifest.ts`.
+The generated Node dispatcher accepts a small compatibility alias set for lifecycle names: `stop` and `stop-checkpoint` route to `stop-handoff`, `precompact` routes to `pre-compact`, and `session-rehydrate` routes to `session-start`. The `pre-compact` handler is intentionally a no-op compatibility marker; rehydration remains the `session-start` responsibility after compact events. Harness JSON should still emit the canonical handler names from `src/content/hook-manifest.ts`.
 
 ## Hook event casing
 
@@ -68,7 +80,7 @@ shared casing silently breaks generated wiring.
   at hook level, so the canonical path is
   `node .cclaw/hooks/stage-complete.mjs <stage>` plus the non-blocking
   `UserPromptSubmit` state nudge.
-- In `strict` mode, Codex additionally runs the generated Node/runtime `verify-current-state` path on `UserPromptSubmit` as a fail-closed check (advisory mode remains non-blocking). This strict-only coverage is represented explicitly by the `strict_state_verify` semantic row above.
+- In `strict` mode, Codex additionally runs the generated Node/runtime `verify-current-state` path on `UserPromptSubmit` as a fail-closed check. Advisory mode remains non-blocking, including when the generated local Node entrypoint is missing; doctor reports that install drift separately. This strict-only coverage is represented explicitly by the `strict_state_verify` semantic row above.
 
 ## Shared command contract
 
@@ -122,7 +134,7 @@ Harness-specific additions:
 
 - `claude`: `.claude/commands/cc*.md`, `.claude/hooks/hooks.json`
 - `cursor`: `.cursor/commands/cc*.md`, `.cursor/hooks.json`, `.cursor/rules/cclaw-workflow.mdc`
-- `opencode`: `.opencode/commands/cc*.md`, `.opencode/plugins/cclaw-plugin.mjs`, opencode plugin registration (`permission.question: "allow"` + `OPENCODE_ENABLE_QUESTION_TOOL=1` so structured asks can route through ACP question tooling)
+- `opencode`: `.opencode/commands/cc*.md`, `.opencode/plugins/cclaw-plugin.mjs`, opencode plugin registration with `permission.question: "allow"`; set `OPENCODE_ENABLE_QUESTION_TOOL=1` for ACP clients so structured asks can route through question tooling. Doctor validates the config permission and warns when the environment hint is absent.
 - `codex`: `.agents/skills/cc/SKILL.md`, `.agents/skills/cc-next/SKILL.md`, `.agents/skills/cc-ideate/SKILL.md`, `.agents/skills/cc-view/SKILL.md`, `.codex/hooks.json` (Codex CLI reads `.agents/skills/` for custom skills and consumes `.codex/hooks.json` on v0.114+ when `[features] codex_hooks = true` is set in `~/.codex/config.toml`. `.codex/commands/` and the legacy `.agents/skills/cclaw-cc*/` layout from v0.39.x are auto-cleaned on sync.)
 
 ## Runtime observability

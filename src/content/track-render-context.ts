@@ -48,8 +48,15 @@ export function renderTrackTerminology(value: string, context: TrackRenderContex
   }
   return value
     .replace(/\btask from the plan\b/giu, `${context.traceabilitySourceNoun} from the spec`)
+    .replace(/\bplan confirmation\b/giu, "spec approval")
+    .replace(/\bplan approval\b/giu, "spec approval")
+    .replace(/\bapproved plan slice\b/giu, `approved ${context.traceabilitySliceNoun}`)
+    .replace(/\bplanned slice\b/giu, context.traceabilitySliceNoun)
     .replace(/\bplan task ID\b/giu, context.traceabilityIdNoun)
     .replace(/\bplan task\b/giu, context.traceabilitySourceNoun)
+    .replace(/\bplan-task\b/giu, "acceptance-criterion")
+    .replace(/\btask coverage\b/giu, "source item coverage")
+    .replace(/\borphaned tasks\b/giu, "orphaned source items")
     .replace(/\bplan row\b/giu, "acceptance row")
     .replace(/\btraceable to plan slice\b/giu, `traceable to ${context.traceabilitySliceNoun}`)
     .replace(/\bplan slice\b/giu, context.traceabilitySliceNoun)

@@ -344,8 +344,9 @@ The `tdd` stage is not prose guidance. It requires:
 - optional **REFACTOR** pass with coverage preservation
 
 `/cc-next` will not advance past `tdd` until the delegation log shows the
-subagent as `completed` (or, on Codex / OpenCode, role-switched with
-`evidenceRefs` — see [Harness support](#harness-support)).
+subagent as `completed`. Codex and OpenCode use generated native subagents
+by default; a role-switch row is only a degraded fallback and must include
+`evidenceRefs` — see [Harness support](#harness-support).
 
 ---
 
@@ -391,25 +392,25 @@ closes every real gap with a documented fallback — not a silent waiver.
 |---|---|---|---|---|
 | Claude Code | full (named subagents) | `native` | full | `AskUserQuestion` |
 | Cursor | generic Task dispatcher | `generic-dispatch` | full | `AskQuestion` |
-| OpenCode | plugin / in-session | `role-switch` | plugin | `question` (permission-gated; `permission.question: "allow"`) |
-| OpenAI Codex | in-session only | `role-switch` (evidenceRefs required) | limited (Bash-only `PreToolUse`/`PostToolUse`; requires `codex_hooks` feature flag) | `request_user_input` (experimental; Plan / Collaboration mode) |
+| OpenCode | native subagents (`.opencode/agents`) | `native` | plugin | `question` (permission-gated; `permission.question: "allow"`) |
+| OpenAI Codex | native parallel subagents (`.codex/agents`) | `native` | limited (Bash-only `PreToolUse`/`PostToolUse`; requires `codex_hooks` feature flag) | `request_user_input` (experimental; Plan / Collaboration mode) |
 
 What the fallbacks mean:
 
-- `native` — Claude runs mandatory delegations in isolated subagent
-  workers; cclaw records them with `fulfillmentMode: "isolated"`.
+- `native` — Claude, OpenCode, and Codex run mandatory delegations in
+  isolated subagent workers; cclaw records them with `fulfillmentMode: "isolated"`.
 - `generic-dispatch` — Cursor has a real Task tool with a fixed
   vocabulary of `subagent_type`s (`explore`, `generalPurpose`, …).
   cclaw maps each named agent (planner / reviewer / test-author /
   security-reviewer / doc-updater) onto the generic dispatcher with a
   structured role prompt.
-- `role-switch` — OpenCode and Codex lack an isolated worker primitive.
-  The agent announces the role in-session, performs the work, and
-  records a delegation row with `fulfillmentMode: "role-switch"` and at
-  least one `evidenceRef` pointing at the artifact section that
-  captures the output. Under role-switch, a `completed` row **without**
-  evidenceRefs is classified as `missingEvidence` by `cclaw doctor` and
-  blocks stage completion.
+- `role-switch` — degraded fallback only when the active runtime cannot
+  expose its declared dispatch surface. The agent announces
+  `## cclaw role-switch: <stage>/<agent> (<mode>)`, loads
+  `.cclaw/agents/<agent>.md`, writes outputs to the stage artifact, and
+  records a delegation row with `fulfillmentMode: "role-switch"` plus at
+  least one `evidenceRef`. A role-switch `completed` row without
+  evidenceRefs is classified as `missingEvidence` by `cclaw doctor`.
 - `waiver` — reserved. Only fires auto-waivers if every installed
   harness declares it. Currently unused — v0.33 removed the old
   Codex-only auto-waiver path.
