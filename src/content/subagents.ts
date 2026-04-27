@@ -9,16 +9,28 @@ import { conversationLanguagePolicyBullets, conversationLanguagePolicyMarkdown }
  */
 
 const SUBAGENT_AGENT_NAMES = [
+  "researcher",
+  "architect",
+  "spec-validator",
+  "slice-implementer",
+  "performance-reviewer",
+  "compatibility-reviewer",
+  "observability-reviewer",
+  "release-reviewer",
   "planner",
   "product-manager",
   "critic",
   "reviewer",
   "security-reviewer",
   "test-author",
-  "doc-updater"
+  "doc-updater",
+  "implementer",
+  "fixer"
 ] as const;
 
 type SubagentCclawAgentName = (typeof SUBAGENT_AGENT_NAMES)[number];
+
+const MARKDOWN_CODE_FENCE = "```";
 
 function formatAgentList(agents: string[]): string {
   return agents.length > 0 ? agents.join(", ") : "none";
@@ -39,7 +51,7 @@ type StageAgentSummary = ReturnType<typeof stageDelegationSummary>[number];
 
 function stageSummary(stage: FlowStage): StageAgentSummary {
   return stageDelegationSummary("standard").find((row) => row.stage === stage)
-    ?? { stage, mandatoryAgents: [], proactiveAgents: [], primaryAgents: [], stackAwareRoutes: [] };
+    ?? { stage, mandatoryAgents: [], proactiveAgents: [], primaryAgents: [], dispatchRules: [], stackAwareRoutes: [] };
 }
 
 export function subagentDrivenDevSkill(): string {
@@ -52,11 +64,11 @@ description: "Orchestrate implementation via isolated subagents — one fresh ag
 
 ## Overview
 
-Use a **controller → implementer → reviewer** loop when building multi-step software work.
+Use a **controller -> coder -> overseer** loop when building multi-step software work.
 
 - **Controller (parent agent):** owns the plan, gating, sequencing, and dispatch decisions; never mixes deep implementation context with review evidence.
-- **Implementer (subagent):** receives a **single self-contained task** and edits code within that scope; exits with a structured status contract.
-- **Reviewer (subagent):** validates outputs against the specification **by reading code**, then hands findings back to the controller for the next dispatch.
+- **Coder / slice-implementer (subagent):** receives a **single self-contained task** and edits code only within that scope; exits with a structured status contract.
+- **Overseer / reviewer (subagent):** validates outputs against the specification **by reading code** and never edits during the overseer pass.
 
 This pattern is intentionally **Superpowers-style**: cheap parallelism where it doesn’t corrupt state, strict serialization where it would.
 
@@ -210,9 +222,43 @@ Borrow the good part of Team/Ruflo-style orchestration without adding a swarm ru
 | NEEDS_CONTEXT | Missing authoritative information only the parent/user can supply | Parent gathers context, then re-dispatch implementer with augmented prompt |
 | BLOCKED | Hard stop (permissions, tool failure, conflicting requirements, unsafe state) | Parent escalates to user; do not stack speculative guesses |
 
+## Strict Worker Return Schemas
+
+Every delegated worker must return one terminal status and the listed evidence fields. Prefer JSON fenced as \`json\`; prose may follow only after the object.
+
+### Implementer / fixer return
+
+${MARKDOWN_CODE_FENCE}json
+{
+  "status": "DONE|DONE_WITH_CONCERNS|NEEDS_CONTEXT|BLOCKED",
+  "filesChanged": ["path"],
+  "testsRun": [{ "command": "string", "result": "PASS|FAIL|NOT_RUN", "evidence": "short excerpt or reason" }],
+  "evidenceRefs": [".cclaw/artifacts/<file>#anchor"],
+  "concerns": ["string"],
+  "needsContext": ["string"],
+  "blockers": ["string"]
+}
+${MARKDOWN_CODE_FENCE}
+
+### Reviewer return
+
+${MARKDOWN_CODE_FENCE}json
+{
+  "status": "PASS|PASS_WITH_GAPS|FAIL|BLOCKED",
+  "findings": [{ "severity": "Critical|Important|Suggestion", "location": "file:line", "problem": "string", "recommendation": "string" }],
+  "criteria": [{ "id": "string", "verdict": "PASS|PARTIAL|FAIL", "evidence": "file:line" }],
+  "evidenceRefs": [".cclaw/artifacts/<file>#anchor"],
+  "blockers": ["string"]
+}
+${MARKDOWN_CODE_FENCE}
+
+### Lifecycle evidence
+
+Before dispatch, create or reserve a delegation span (\`status: "scheduled"\`, \`spanId\`, \`startTs\`, optional \`taskId\`). On return, append a terminal row for the same \`spanId\` with \`endTs\`, \`status\`, \`fulfillmentMode\`, and non-empty \`evidenceRefs\` whenever the worker was generic-dispatch or role-switch. A scheduled span without a terminal row in the current run is stale and must be resolved before claiming the stage is complete.
+
 ## Implementer Prompt Template (paste into Task tool)
 
-\`\`\`
+${MARKDOWN_CODE_FENCE}
 You are implementing a single task from a development plan.
 
 TASK: {paste full task text here}
@@ -221,15 +267,15 @@ CONSTRAINTS: {paste from spec — what NOT to do}
 
 After implementation:
 0. Write user-facing narrative in the parent/user language; keep status tokens unchanged.
-1. Run the full test suite
-2. Report your status: DONE / DONE_WITH_CONCERNS / NEEDS_CONTEXT / BLOCKED
-3. If DONE_WITH_CONCERNS, list each concern
-4. If NEEDS_CONTEXT, specify exactly what you need
-\`\`\`
+1. Run the relevant test suite or explain why it was not run.
+2. Return the strict implementer/fixer JSON schema first.
+3. If DONE_WITH_CONCERNS, list each concern in \`concerns\`.
+4. If NEEDS_CONTEXT, specify exactly what you need in \`needsContext\`.
+${MARKDOWN_CODE_FENCE}
 
 ## Spec-Reviewer Prompt Template (paste into Task tool)
 
-\`\`\`
+${MARKDOWN_CODE_FENCE}
 Review the implementation against the specification.
 
 SPEC CRITERIA: {paste acceptance criteria}
@@ -237,7 +283,7 @@ FILES CHANGED: {list files}
 
 For each criterion: PASS / FAIL / PARTIAL with evidence (file:line).
 Do NOT trust the implementer's self-report — read the actual code.
-\`\`\`
+${MARKDOWN_CODE_FENCE}
 
 ## Anti-patterns
 
@@ -285,7 +331,7 @@ Do NOT trust the implementer's self-report — read the actual code.
 
 ## Code-Quality Reviewer Prompt Template (paste into Task tool)
 
-\`\`\`
+${MARKDOWN_CODE_FENCE}
 You are a code-quality reviewer (subagent) after a single SDD task.
 
 SCOPE: {files touched by this task}
@@ -300,11 +346,11 @@ Review for maintainability and ship hygiene across:
 Output:
 - FINDINGS: severity, file:line, issue, recommendation
 - VERDICT: APPROVE | APPROVE_WITH_NITS | REWORK_REQUIRED
-\`\`\`
+${MARKDOWN_CODE_FENCE}
 
 ## Fixer Subagent Prompt Template (after spec review FAIL)
 
-\`\`\`
+${MARKDOWN_CODE_FENCE}
 You are a fixer subagent. You are NOT the original implementer.
 
 FAILING CRITERION (verbatim): {paste failed criterion}
@@ -317,11 +363,11 @@ Process:
 2) Implement the smallest fix that satisfies the criterion.
 3) Run the full test suite.
 4) Report STATUS: DONE / DONE_WITH_CONCERNS / NEEDS_CONTEXT / BLOCKED with evidence excerpts.
-\`\`\`
+${MARKDOWN_CODE_FENCE}
 
 ## Final Code Reviewer Prompt Template (post-queue sweep)
 
-\`\`\`
+${MARKDOWN_CODE_FENCE}
 You are the final code-quality reviewer after ALL SDD tasks completed.
 
 ENTIRE CHANGESET: {summary + primary entrypoints}
@@ -335,7 +381,7 @@ Deliver:
 - TOP_FINDINGS (merge blockers first)
 - CONSISTENCY_PASS/FAIL with rationale
 - SHIP_RECOMMENDATION: SHIP | SHIP_WITH_FOLLOWUPS | NO_SHIP
-\`\`\`
+${MARKDOWN_CODE_FENCE}
 
 ## Glossary
 
@@ -413,7 +459,7 @@ Implementation that touches shared source trees must remain **sequential** unles
 
 Write a structured reconciliation artifact at \`.cclaw/artifacts/07-review-army.json\` using this schema:
 
-\`\`\`json
+${MARKDOWN_CODE_FENCE}json
 {
   "version": 1,
   "generatedAt": "ISO timestamp",
@@ -437,7 +483,7 @@ Write a structured reconciliation artifact at \`.cclaw/artifacts/07-review-army.
     "shipBlockers": []
   }
 }
-\`\`\`
+${MARKDOWN_CODE_FENCE}
 
 Contract rules:
 - \`id\` and \`fingerprint\` must be stable between reruns if the finding is unchanged.
@@ -519,7 +565,7 @@ Contract rules:
 
 ## Parallel Review Task Template (paste into Task tool)
 
-\`\`\`
+${MARKDOWN_CODE_FENCE}
 You are an independent review/investigation subagent.
 
 LENS: {security|data|perf|api|ux|observability — pick one}
@@ -531,7 +577,7 @@ Rules:
 - Do not edit files unless explicitly authorized in this prompt.
 - Cite evidence as file:line for every finding.
 - If uncertain, emit CONFIDENCE <= 4 and label as hypothesis.
-\`\`\`
+${MARKDOWN_CODE_FENCE}
 
 ## Worked Example (narrative)
 
@@ -545,6 +591,146 @@ A large refactor touches **auth middleware** and **repository queries**. The con
 `;
 }
 
+
+function researcherEnhancedBody(): string {
+  return `
+
+## Task Tool Delegation
+
+Use this payload when a stage needs context-readiness or search-before-read evidence:
+
+${MARKDOWN_CODE_FENCE}
+You are a researcher subagent.
+
+QUESTION: {one falsifiable research question}
+SCOPE: {repo paths, docs, references, providers to inspect}
+CONTEXT READINESS: {graph/search/provider status if known}
+
+Required output:
+- SEARCH_SUMMARY: queries/patterns/providers tried before large reads
+- FACTS: evidence-backed findings with refs
+- STALE_OR_MISSING_CONTEXT: gaps and recommended recovery
+- DECISION_IMPACT: what stage decision this changes
+${MARKDOWN_CODE_FENCE}
+
+`;
+}
+
+function architectEnhancedBody(): string {
+  return `
+
+## Task Tool Delegation
+
+${MARKDOWN_CODE_FENCE}
+You are an architect subagent.
+
+DESIGN_DECISION: {architecture decision to validate}
+SCOPE_CONTRACT: {approved boundaries}
+BLAST_RADIUS: {paths/modules/interfaces}
+
+Required output:
+- BOUNDARIES: chosen ownership and interface contracts
+- ALTERNATIVES: rejected alternatives and revival signals
+- FAILURE_MODES: method/exception/rescue/user-visible impact
+- SPEC_HANDOFF: requirements and verification evidence downstream spec must carry
+${MARKDOWN_CODE_FENCE}
+
+`;
+}
+
+function specValidatorEnhancedBody(): string {
+  return `
+
+## Task Tool Delegation
+
+${MARKDOWN_CODE_FENCE}
+You are a spec-validator subagent.
+
+ACCEPTANCE_CRITERIA: {criteria to validate}
+UPSTREAM_DECISIONS: {design/scope refs}
+
+Required output:
+- CRITERIA_AUDIT: PASS/PARTIAL/FAIL per AC with reason
+- EDGE_CASE_GAPS: boundary/error cases missing
+- ASSUMPTION_GAPS: assumptions requiring approval or rewrite
+- TESTABILITY_MAP: concrete test level and command/manual evidence per AC
+${MARKDOWN_CODE_FENCE}
+
+`;
+}
+
+function sliceImplementerEnhancedBody(): string {
+  return `
+
+## Task Tool Delegation
+
+${MARKDOWN_CODE_FENCE}
+You are a slice-implementer subagent.
+
+SLICE: {single vertical slice}
+RED_EVIDENCE: {failing test and expected failure}
+ALLOWED_FILES: {explicit file boundaries}
+FORBIDDEN_CHANGES: {scope/compatibility limits}
+VERIFICATION: {commands expected}
+
+Rules:
+- Implement only the minimal GREEN change for the existing RED evidence.
+- Keep REFACTOR behavior-preserving.
+- Return the strict worker JSON schema first.
+${MARKDOWN_CODE_FENCE}
+
+`;
+}
+
+function performanceReviewerEnhancedBody(): string {
+  return `${codeReviewerEnhancedBody()}
+
+## Performance Lens
+
+Focus on hot paths, IO/network calls, repeated work, caching, data volume, rendering, and algorithmic complexity. Include measurement evidence or a concrete measurement plan for every non-trivial finding.
+`;
+}
+
+function compatibilityReviewerEnhancedBody(): string {
+  return `${codeReviewerEnhancedBody()}
+
+## Compatibility Lens
+
+Focus on public APIs, CLI/config shape, persisted data, migrations, generated clients, dependency/runtime versions, and backwards-compatibility obligations. Distinguish shipped behavior from in-branch churn.
+`;
+}
+
+function observabilityReviewerEnhancedBody(): string {
+  return `${codeReviewerEnhancedBody()}
+
+## Observability Lens
+
+Focus on logs, metrics, traces, alerts, debug paths, rollout visibility, and support handoff. Block only when missing visibility affects diagnosis, rollback, or user/data safety.
+`;
+}
+
+function releaseReviewerEnhancedBody(): string {
+  return `
+
+## Task Tool Delegation
+
+${MARKDOWN_CODE_FENCE}
+You are a release-reviewer subagent.
+
+SHIP_ARTIFACT: {ship/preflight evidence}
+REVIEW_VERDICT: {review status and blockers}
+FINALIZATION_MODE: {selected enum}
+
+Required output:
+- PREFLIGHT: commands and PASS/FAIL evidence freshness
+- VICTORY_DETECTOR: feature coverage, evaluator evidence, clean state, learnings, handoff
+- ROLLBACK: trigger, steps, owner, and no-VCS handoff if applicable
+- SHIP_VERDICT: SHIP | SHIP_WITH_CONCERNS | BLOCKED
+${MARKDOWN_CODE_FENCE}
+
+`;
+}
+
 function plannerEnhancedBody(): string {
   return `
 
@@ -554,7 +740,7 @@ When a planning problem is too broad for one message, delegate **planning subtas
 
 Paste the template below verbatim and fill \`{placeholders}\` in the parent before dispatching.
 
-\`\`\`
+${MARKDOWN_CODE_FENCE}
 You are a planning subagent for a larger Cclaw / engineering workflow.
 
 PLANNING GOAL: {one sentence outcome — e.g., sequencing, risk register, dependency graph}
@@ -567,7 +753,7 @@ Rules:
 - Every task must include acceptance criteria copy-paste ready for SDD implementers.
 - Flag UNKNOWN explicitly instead of guessing.
 - Close with: OPEN_QUESTIONS: ... and NEXT_TASK_TEXT: ... (verbatim extractable queue item)
-\`\`\`
+${MARKDOWN_CODE_FENCE}
 
 `;
 }
@@ -579,7 +765,7 @@ function specReviewerEnhancedBody(): string {
 
 For review audits, use the Task tool with the following **reviewer** payload (fill placeholders in the parent session).
 
-\`\`\`
+${MARKDOWN_CODE_FENCE}
 You are a specification compliance reviewer (subagent).
 
 SPEC CRITERIA (verbatim): {acceptance criteria / invariants / non-goals}
@@ -590,7 +776,7 @@ Instructions:
 - For EACH criterion emit PASS / PARTIAL / FAIL with evidence as file:line.
 - Read the code; ignore implementer claims unless backed by code citations.
 - Close with SPEC_VERDICT: PASS | PASS_WITH_GAPS | FAIL plus GAPS/FAIL list.
-\`\`\`
+${MARKDOWN_CODE_FENCE}
 
 `;
 }
@@ -602,7 +788,7 @@ function codeReviewerEnhancedBody(): string {
 
 Launch deep **code-quality** reviews using this five-axis template in the Task tool body:
 
-\`\`\`
+${MARKDOWN_CODE_FENCE}
 You are a code-quality reviewer (subagent). Review along ALL axes:
 
 1) Correctness — logic, data flow, error handling, boundary conditions
@@ -617,7 +803,7 @@ BASELINE CONTEXT: {tests, deployment constraints, compatibility promises}
 Output format (mandatory):
 - FINDING: [Critical|Important|Suggestion] file:line — problem — recommendation
 - Close with RISK_SUMMARY and SHIP_BLOCKERS (explicit list, possibly empty).
-\`\`\`
+${MARKDOWN_CODE_FENCE}
 
 `;
 }
@@ -630,7 +816,7 @@ function productManagerEnhancedBody(): string {
 
 Use this payload when product discovery needs an isolated lens:
 
-\`\`\`
+${MARKDOWN_CODE_FENCE}
 You are a product-manager subagent.
 
 DISCOVERY GOAL: {problem/value decision to clarify}
@@ -644,7 +830,7 @@ Required output:
 - WHY_NOW_AND_DO_NOTHING: why now plus consequence of no action
 - NON_GOALS: explicit exclusions
 - SCOPE_HANDOFF: one recommendation for hold/selective/expand/reduce
-\`\`\`
+${MARKDOWN_CODE_FENCE}
 
 `;
 }
@@ -656,7 +842,7 @@ function criticEnhancedBody(): string {
 
 Use this payload when a premise, scope mode, or engineering path needs adversarial pressure:
 
-\`\`\`
+${MARKDOWN_CODE_FENCE}
 You are a critic subagent.
 
 DECISION_UNDER_REVIEW: {direction/scope/design choice}
@@ -670,7 +856,7 @@ Required output:
 - SWITCH_TRIGGER: signal that should change the decision
 - FAILURE_RESCUE: likely failure and rescue/degraded behavior
 - VERIFICATION_EVIDENCE: evidence needed before locking
-\`\`\`
+${MARKDOWN_CODE_FENCE}
 
 `;
 }
@@ -686,7 +872,7 @@ function securityReviewerEnhancedBody(): string {
 
 Use a dedicated Task tool invocation for CWE-focused review with reproducible narratives:
 
-\`\`\`
+${MARKDOWN_CODE_FENCE}
 You are a security reviewer (subagent). Perform a CWE-oriented review of the scoped change.
 
 SCOPE: {files/commits/services touched}
@@ -698,7 +884,7 @@ Requirements:
 - Include a short proof-of-concept attack vector (conceptual, no weaponization).
 - Recommend concrete controls (validation, sandboxing, authz checks, safer APIs).
 - Close with SECURITY_VERDICT: SHIP | SHIP_WITH_HOTFIXES | NO_SHIP and cite top 3 drivers.
-\`\`\`
+${MARKDOWN_CODE_FENCE}
 
 `;
 }
@@ -713,7 +899,7 @@ This agent runs in two explicit stage modes to respect cclaw hard-gates:
 - \`TEST_RED_ONLY\` (only failing tests + evidence; no production edits)
 - \`BUILD_GREEN_REFACTOR\` (implementation + full-suite green + refactor notes)
 
-\`\`\`
+${MARKDOWN_CODE_FENCE}
 You are a TDD implementer subagent.
 
 STAGE_MODE: {TEST_RED_ONLY | BUILD_GREEN_REFACTOR}
@@ -730,6 +916,54 @@ Process (mandatory):
    - GREEN — minimal production code to satisfy existing RED tests, rerun full suite.
    - REFACTOR — only after full suite is green; preserve behavior.
    - Report: FILES_EDITED, GREEN_COMMAND_RUN, REFACTOR_NOTES, STATUS: DONE|BLOCKED.
+${MARKDOWN_CODE_FENCE}
+
+`;
+}
+
+function implementerEnhancedBody(): string {
+  return `
+
+## Task Tool Delegation
+
+You are the default sequential implementation worker for one scoped task. Do not expand scope silently.
+
+\`\`\`
+You are an implementer subagent.
+
+TASK: {single task with acceptance criteria pasted in full}
+ALLOWED FILES / MODULES: {explicit boundaries}
+FORBIDDEN CHANGES: {out-of-scope behavior, compatibility constraints}
+VERIFICATION: {commands expected, or explain if unavailable}
+
+Rules:
+- Implement the smallest code change that satisfies the task.
+- Do not spawn subagents.
+- Return the strict implementer JSON schema first.
+\`\`\`
+
+`;
+}
+
+function fixerEnhancedBody(): string {
+  return `
+
+## Task Tool Delegation
+
+Fixers are fresh workers dispatched only after a reviewer identifies a concrete failing criterion.
+
+\`\`\`
+You are a fixer subagent. You are NOT the original implementer.
+
+FAILING CRITERION: {verbatim criterion}
+REVIEW EVIDENCE: {file:line citations and short quotes}
+ALLOWED FILES: {explicit list}
+FORBIDDEN CHANGES: {scope and compatibility constraints}
+
+Rules:
+- Reproduce or reason from the cited failure before editing.
+- Apply the smallest fix that closes the cited gap.
+- Return the strict fixer JSON schema first.
 \`\`\`
 
 `;
@@ -742,7 +976,7 @@ function docUpdaterEnhancedBody(): string {
 
 For documentation parallelism, still avoid conflicting writes — partition by artifact:
 
-\`\`\`
+${MARKDOWN_CODE_FENCE}
 You are a documentation updater subagent.
 
 DOCS SCOPE: {README|API ref|runbook|changelog section}
@@ -752,7 +986,7 @@ Tasks:
 - Diff mental model vs reality; update only stale sections.
 - Preserve tone/structure; no doc rewrite for its own sake.
 - List FILES_UPDATED + SUMMARY + OPEN_DOC_QUESTIONS (if user input needed).
-\`\`\`
+${MARKDOWN_CODE_FENCE}
 
 `;
 }
@@ -763,6 +997,22 @@ Tasks:
  */
 export function enhancedAgentBody(agentName: string): string {
   switch (agentName as SubagentCclawAgentName) {
+    case "researcher":
+      return researcherEnhancedBody();
+    case "architect":
+      return architectEnhancedBody();
+    case "spec-validator":
+      return specValidatorEnhancedBody();
+    case "slice-implementer":
+      return sliceImplementerEnhancedBody();
+    case "performance-reviewer":
+      return performanceReviewerEnhancedBody();
+    case "compatibility-reviewer":
+      return compatibilityReviewerEnhancedBody();
+    case "observability-reviewer":
+      return observabilityReviewerEnhancedBody();
+    case "release-reviewer":
+      return releaseReviewerEnhancedBody();
     case "planner":
       return plannerEnhancedBody();
     case "product-manager":
@@ -777,6 +1027,10 @@ export function enhancedAgentBody(agentName: string): string {
       return testAuthorEnhancedBody();
     case "doc-updater":
       return docUpdaterEnhancedBody();
+    case "implementer":
+      return implementerEnhancedBody();
+    case "fixer":
+      return fixerEnhancedBody();
     default:
       return `
 
@@ -796,7 +1050,7 @@ Two patterns (skills under \`.cclaw/skills/\`):
 - **SDD** (subagent-driven-development): sequential implementer→reviewer loops. Paste self-contained task text; never point subagents at plan files.
 - **Parallel Agents** (dispatching-parallel-agents): parallel review/analysis lenses. Never parallelize implementers on same codebase.
 
-Status contract: DONE | DONE_WITH_CONCERNS | NEEDS_CONTEXT | BLOCKED.
+Status contract: DONE | DONE_WITH_CONCERNS | NEEDS_CONTEXT | BLOCKED. Worker returns must use the strict JSON schemas in \`subagent-driven-development\`.
 
 - Controller sequentially dispatches **implementer → reviewer** loops per task.
 - HARD-GATE: paste **self-contained task text**; never point subagents at plan files to “discover” scope.

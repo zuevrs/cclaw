@@ -520,7 +520,7 @@ const GOOD_BAD_EXAMPLES: Record<FlowStage, GoodBadSample[]> = {
     {
       label: "Scope change trace",
       good:
-        "Scope delta at 2026-04-15: user asked to add per-user mute preferences. Decision: moved from Out-of-scope → In-scope; acknowledged cost (≈1 day, +1 schema migration); risk: touches settings surface. Recorded in \`03-design.md#scope-trace\`. Requires re-running scope review before design lock.",
+        "Scope delta at 2026-04-15: user asked to add per-user mute preferences. Decision: moved from Out-of-scope → In-scope; acknowledged cost (≈1 day, +1 schema migration); risk: touches settings surface. Recorded in \`.cclaw/artifacts/03-design-<slug>.md#scope-trace\`. Requires re-running scope review before design lock.",
       bad:
         "Added mute preferences to scope.",
       lesson:
@@ -754,12 +754,13 @@ function exampleSummaryBullets(stage: FlowStage): string[] {
 const STAGE_EXAMPLE_SECTION_HEADINGS: Record<FlowStage, string[]> = {
   brainstorm: [
     "Problem Decision Record (product or technical-maintenance framing)",
-    "Candidate approaches with trade-offs",
+    "Reference Pattern Candidates and approaches with trade-offs",
     "Recommended direction + open questions",
     "Clarification log and decision record"
   ],
   scope: [
     "In-scope / out-of-scope / deferred lists with concrete capabilities",
+    "Reference Pattern Registry with accepted/rejected/deferred dispositions",
     "Requirements table with stable R# IDs",
     "Boundary stress-tests and non-negotiables",
     "Decision record for premise challenges"
@@ -767,6 +768,7 @@ const STAGE_EXAMPLE_SECTION_HEADINGS: Record<FlowStage, string[]> = {
   design: [
     "Blast-radius file list",
     "Mandatory architecture diagram (Mermaid)",
+    "Reference-Grade Contracts for mirrored patterns",
     "Failure-mode table with detection + mitigation",
     "Test strategy + performance budget",
     "Completion dashboard + unresolved decisions"
@@ -784,7 +786,7 @@ const STAGE_EXAMPLE_SECTION_HEADINGS: Record<FlowStage, string[]> = {
     "No-Placeholder scan row + WAIT_FOR_CONFIRM marker"
   ],
   tdd: [
-    "RED evidence per slice (failing test output)",
+    "RED evidence per vertical slice (failing test output)",
     "Acceptance mapping per slice",
     "GREEN evidence (full-suite pass)",
     "REFACTOR notes with behavior-preservation confirmation",
@@ -794,10 +796,11 @@ const STAGE_EXAMPLE_SECTION_HEADINGS: Record<FlowStage, string[]> = {
     "Spec-compliance findings (Layer 1)",
     "Code-quality findings (Layer 2)",
     "Severity, evidence, and status per finding",
-    "Go / no-go verdict"
+    "Victory Detector-backed go / no-go verdict"
   ],
   ship: [
     "Release checklist (version, changelog, tag, artifacts)",
+    "Victory Detector: valid review, fresh preflight, rollback, finalization enum",
     "Rollback plan with trigger, steps, verification",
     "Runbook (how to verify the release post-deploy)",
     "Sign-off block"
@@ -831,7 +834,7 @@ const DOMAIN_LABELS: Record<ExampleDomain, string> = {
 };
 
 export const RESEARCH_FLEET_USAGE_EXAMPLE = [
-  "Before drafting `03-design.md`, run `research/research-fleet.md` once and",
+  "Before drafting `.cclaw/artifacts/03-design-<slug>.md`, run `research/research-fleet.md` once and",
   "capture all four lenses in `.cclaw/artifacts/02a-research.md`.",
   "Dispatch semantics by harness: Claude/OpenCode/Codex = native subagents;",
   "Cursor = generic-dispatch Task mapping; role-switch only as degraded fallback.",

@@ -8,6 +8,17 @@ import { conversationLanguagePolicyBullets, conversationLanguagePolicyMarkdown }
  * playbooks and is executed in-thread by the primary agent.
  */
 
+export interface AgentReturnSchema {
+  /** Field carrying the terminal verdict/status token. */
+  statusField: string;
+  /** Exact allowed terminal values for this agent's first structured return. */
+  allowedStatuses: string[];
+  /** Fields the controller should expect in every completed response. */
+  requiredFields: string[];
+  /** Fields that must cite artifact anchors, commands, or code locations when applicable. */
+  evidenceFields: string[];
+}
+
 export interface AgentDefinition {
   /** Kebab-case identifier, e.g. `"reviewer"`. */
   name: string;
@@ -21,6 +32,8 @@ export interface AgentDefinition {
   activation: "proactive" | "on-demand" | "mandatory";
   /** cclaw flow stages this agent is designed to support. */
   relatedStages: string[];
+  /** Strict terminal return contract rendered into materialized agent files. */
+  returnSchema: AgentReturnSchema;
   /** Markdown body rendered below the YAML frontmatter. */
   body: string;
 }
@@ -32,6 +45,43 @@ function yamlScalarString(value: string): string {
 
 function yamlFlowSequence(values: string[]): string {
   return JSON.stringify(values);
+}
+
+const WORKER_RETURN_SCHEMA: AgentReturnSchema = {
+  statusField: "status",
+  allowedStatuses: ["DONE", "DONE_WITH_CONCERNS", "NEEDS_CONTEXT", "BLOCKED"],
+  requiredFields: ["status", "filesChanged", "testsRun", "evidenceRefs", "concerns", "needsContext", "blockers"],
+  evidenceFields: ["testsRun", "evidenceRefs"]
+};
+
+const REVIEW_RETURN_SCHEMA: AgentReturnSchema = {
+  statusField: "status",
+  allowedStatuses: ["PASS", "PASS_WITH_GAPS", "FAIL", "BLOCKED"],
+  requiredFields: ["status", "findings", "criteria", "evidenceRefs", "blockers"],
+  evidenceFields: ["findings.location", "criteria.evidence", "evidenceRefs"]
+};
+
+const ADVISORY_RETURN_SCHEMA: AgentReturnSchema = {
+  statusField: "status",
+  allowedStatuses: ["DONE", "DONE_WITH_CONCERNS", "NEEDS_CONTEXT", "BLOCKED"],
+  requiredFields: ["status", "summary", "recommendations", "evidenceRefs", "unknowns"],
+  evidenceFields: ["evidenceRefs", "recommendations"]
+};
+
+const DOC_RETURN_SCHEMA: AgentReturnSchema = {
+  statusField: "status",
+  allowedStatuses: ["DONE", "DONE_WITH_CONCERNS", "NEEDS_CONTEXT", "BLOCKED"],
+  requiredFields: ["status", "filesUpdated", "summary", "evidenceRefs", "openQuestions"],
+  evidenceFields: ["filesUpdated", "evidenceRefs"]
+};
+
+function formatReturnSchema(schema: AgentReturnSchema): string {
+  return [
+    `- Status field: \`${schema.statusField}\``,
+    `- Allowed statuses: ${schema.allowedStatuses.map((status) => `\`${status}\``).join(", ")}`,
+    `- Required fields: ${schema.requiredFields.map((field) => `\`${field}\``).join(", ")}`,
+    `- Evidence fields: ${schema.evidenceFields.map((field) => `\`${field}\``).join(", ")}`
+  ].join("\n");
 }
 
 function formattedAgentsForStages(stages: FlowStage[]): string {
@@ -81,6 +131,27 @@ function activationModeSummary(): {
  */
 export const CCLAW_AGENTS = [
   {
+    name: "researcher",
+    description:
+      "PROACTIVE when context readiness, repo search, reference patterns, or external docs could change a stage decision. MUST summarize search-before-read evidence before large reads.",
+    tools: ["Read", "Grep", "Glob", "WebSearch"],
+    model: "fast",
+    activation: "proactive",
+    relatedStages: ["brainstorm", "scope", "design", "plan"],
+    returnSchema: ADVISORY_RETURN_SCHEMA,
+    body: [
+      "You are a **context readiness and research specialist**.",
+      "",
+      "When invoked:",
+      "1. Start with search/query summaries before reading large files.",
+      "2. Name provider status when known: graph/search/docs/MCP/semantic index freshness.",
+      "3. Separate observed facts from assumptions and stale or missing context.",
+      "4. Return concise evidence refs the controller can paste into stage artifacts.",
+      "",
+      "**Role boundary:** research and context synthesis only. Do NOT edit files."
+    ].join("\n")
+  },
+  {
     name: "planner",
     description:
       "MANDATORY for scope/design/plan and PROACTIVE for high-ambiguity work. MUST BE USED when sequencing, dependency mapping, or risk trade-offs are required before coding.",
@@ -88,6 +159,7 @@ export const CCLAW_AGENTS = [
     model: "deep",
     activation: "mandatory",
     relatedStages: ["brainstorm", "scope", "design", "spec", "plan"],
+    returnSchema: ADVISORY_RETURN_SCHEMA,
     body: [
       "You are an **implementation planning specialist** (staff engineer mindset).",
       "",
@@ -109,6 +181,7 @@ export const CCLAW_AGENTS = [
     model: "balanced",
     activation: "proactive",
     relatedStages: ["brainstorm", "scope"],
+    returnSchema: ADVISORY_RETURN_SCHEMA,
     body: [
       "You are a **product discovery specialist**.",
       "",
@@ -132,6 +205,7 @@ export const CCLAW_AGENTS = [
     model: "balanced",
     activation: "proactive",
     relatedStages: ["brainstorm", "scope", "design"],
+    returnSchema: ADVISORY_RETURN_SCHEMA,
     body: [
       "You are an **adversarial critic** for product and engineering decisions.",
       "",
@@ -145,6 +219,42 @@ export const CCLAW_AGENTS = [
     ].join("\n")
   },
   {
+    name: "architect",
+    description:
+      "MANDATORY during design. MUST BE USED to validate architecture boundaries, alternatives, failure modes, rollout, and spec handoff before implementation.",
+    tools: ["Read", "Grep", "Glob", "WebSearch"],
+    model: "deep",
+    activation: "mandatory",
+    relatedStages: ["design"],
+    returnSchema: ADVISORY_RETURN_SCHEMA,
+    body: [
+      "You are an **architecture validation specialist**.",
+      "",
+      "Check architecture boundaries, existing-system fit, critical paths, data/state flow, alternatives, rescue paths, and verification hooks.",
+      "Return chosen path risks, rejected alternatives, switch triggers, and required evidence before spec handoff.",
+      "",
+      "**Role boundary:** design validation only. Do NOT write implementation code."
+    ].join("\n")
+  },
+  {
+    name: "spec-validator",
+    description:
+      "MANDATORY during standard/deep spec. MUST BE USED to validate measurable acceptance criteria, assumptions, edge cases, and testability mapping.",
+    tools: ["Read", "Grep", "Glob"],
+    model: "balanced",
+    activation: "mandatory",
+    relatedStages: ["spec"],
+    returnSchema: REVIEW_RETURN_SCHEMA,
+    body: [
+      "You are a **specification validation specialist**.",
+      "",
+      "For every acceptance criterion, verify it is observable, measurable, falsifiable, mapped to upstream decisions, and paired with concrete verification evidence.",
+      "Flag vague language, missing edge cases, hidden assumptions, and RED tests that cannot be expressed.",
+      "",
+      "**Role boundary:** validate the spec; do NOT write plan tasks or implementation."
+    ].join("\n")
+  },
+  {
     name: "reviewer",
     description:
       "MANDATORY during review. MUST BE USED to run a two-pass audit: spec compliance first, then correctness/maintainability/performance/architecture.",
@@ -152,6 +262,7 @@ export const CCLAW_AGENTS = [
     model: "balanced",
     activation: "mandatory",
     relatedStages: ["spec", "review", "ship"],
+    returnSchema: REVIEW_RETURN_SCHEMA,
     body: [
       "You are a **combined spec + code reviewer**.",
       "",
@@ -178,6 +289,54 @@ export const CCLAW_AGENTS = [
     ].join("\n")
   },
   {
+    name: "performance-reviewer",
+    description:
+      "PROACTIVE during review for hot paths, IO, data volume, caching, rendering, or algorithmic cost changes. Produces no-impact rationale when clean.",
+    tools: ["Read", "Grep", "Glob"],
+    model: "balanced",
+    activation: "proactive",
+    relatedStages: ["review"],
+    returnSchema: REVIEW_RETURN_SCHEMA,
+    body: [
+      "You are a **performance review specialist**.",
+      "",
+      "Check hot paths, algorithmic complexity, IO/network calls, caching behavior, bundle/runtime costs, and accidental N+1 or repeated work.",
+      "Every finding needs a concrete code citation and a measurement or measurement plan."
+    ].join("\n")
+  },
+  {
+    name: "compatibility-reviewer",
+    description:
+      "PROACTIVE during design/review when public APIs, config, persisted data, CLI behavior, generated clients, or dependency versions may change.",
+    tools: ["Read", "Grep", "Glob"],
+    model: "balanced",
+    activation: "proactive",
+    relatedStages: ["design", "review"],
+    returnSchema: REVIEW_RETURN_SCHEMA,
+    body: [
+      "You are a **compatibility review specialist**.",
+      "",
+      "Check API compatibility, config/schema stability, persisted data migrations, CLI/user-facing behavior, generated clients, and rollout fallback paths.",
+      "Distinguish shipped compatibility obligations from in-branch implementation churn."
+    ].join("\n")
+  },
+  {
+    name: "observability-reviewer",
+    description:
+      "PROACTIVE during design/review when diagnosis, telemetry, rollout visibility, or supportability could affect safe operation.",
+    tools: ["Read", "Grep", "Glob"],
+    model: "balanced",
+    activation: "proactive",
+    relatedStages: ["design", "review"],
+    returnSchema: REVIEW_RETURN_SCHEMA,
+    body: [
+      "You are an **observability review specialist**.",
+      "",
+      "Check logs, metrics, traces, alerts, debug handles, failure detection, and support handoff evidence for the changed paths.",
+      "Report missing visibility as a ship risk only when it affects diagnosis or rollback."
+    ].join("\n")
+  },
+  {
     name: "security-reviewer",
     description:
       "MANDATORY during review; PROACTIVE during design/ship for trust-boundary changes. Always produce an explicit no-change attestation when no security-relevant surface moved.",
@@ -185,6 +344,7 @@ export const CCLAW_AGENTS = [
     model: "balanced",
     activation: "mandatory",
     relatedStages: ["design", "review", "ship"],
+    returnSchema: REVIEW_RETURN_SCHEMA,
     body: [
       "You are a **security vulnerability specialist** focused on exploitability.",
       "",
@@ -211,6 +371,7 @@ export const CCLAW_AGENTS = [
     model: "balanced",
     activation: "mandatory",
     relatedStages: ["tdd"],
+    returnSchema: WORKER_RETURN_SCHEMA,
     body: [
       "You are a **test-driven development** specialist.",
       "",
@@ -225,6 +386,22 @@ export const CCLAW_AGENTS = [
     ].join("\n")
   },
   {
+    name: "release-reviewer",
+    description:
+      "MANDATORY during ship. MUST BE USED for release readiness, rollback, finalization mode, evidence freshness, and victory detector checks.",
+    tools: ["Read", "Grep", "Glob", "Bash"],
+    model: "balanced",
+    activation: "mandatory",
+    relatedStages: ["ship"],
+    returnSchema: REVIEW_RETURN_SCHEMA,
+    body: [
+      "You are a **release readiness reviewer**.",
+      "",
+      "Verify preflight evidence, review verdict freshness, rollback trigger and steps, finalization enum, no-VCS handoff when applicable, learnings capture, and handoff completeness.",
+      "Block ship on stale evidence, unresolved criticals, missing rollback, or ambiguous finalization."
+    ].join("\n")
+  },
+  {
     name: "doc-updater",
     description:
       "MANDATORY only at ship; PROACTIVE during tdd/review whenever behavior, config, or public API changes. Keep docs and runbooks in lockstep with shipped behavior.",
@@ -232,6 +409,7 @@ export const CCLAW_AGENTS = [
     model: "fast",
     activation: "mandatory",
     relatedStages: ["tdd", "ship"],
+    returnSchema: DOC_RETURN_SCHEMA,
     body: [
       "You are a **documentation maintenance specialist**.",
       "",
@@ -242,6 +420,69 @@ export const CCLAW_AGENTS = [
       "- public-surface change notes tied to actual changed files",
       "",
       "Preserve existing tone and structure; avoid rewrites for style alone."
+    ].join("\n")
+  },
+  {
+    name: "slice-implementer",
+    description:
+      "ON-DEMAND or PROACTIVE during TDD GREEN/REFACTOR for one bounded vertical slice after RED evidence exists and file ownership is non-overlapping.",
+    tools: ["Read", "Write", "Edit", "Grep", "Glob", "Bash"],
+    model: "balanced",
+    activation: "on-demand",
+    relatedStages: ["tdd"],
+    returnSchema: WORKER_RETURN_SCHEMA,
+    body: [
+      "You are a **vertical-slice implementation worker**.",
+      "",
+      "Rules:",
+      "1. Start only from the assigned RED failure and acceptance mapping.",
+      "2. Edit only the allowed files for the slice.",
+      "3. Implement the minimal GREEN change, then preserve behavior during REFACTOR.",
+      "4. Return files changed, tests run, evidence refs, concerns, and blockers.",
+      "",
+      "**Role boundary:** do not broaden scope, do not review your own work as final approval, and do not spawn subagents."
+    ].join("\n")
+  },
+  {
+    name: "implementer",
+    description:
+      "ON-DEMAND worker for one scoped implementation slice. Use only with self-contained task text, explicit file boundaries, and verification expectations.",
+    tools: ["Read", "Write", "Edit", "Grep", "Glob", "Bash"],
+    model: "balanced",
+    activation: "on-demand",
+    relatedStages: ["tdd"],
+    returnSchema: WORKER_RETURN_SCHEMA,
+    body: [
+      "You are an **implementation worker** for one bounded cclaw task.",
+      "",
+      "Rules:",
+      "1. Treat the parent prompt as the full task boundary; do not infer hidden scope from plan files.",
+      "2. Make the smallest coherent code change that satisfies the pasted acceptance criteria.",
+      "3. Run the requested verification commands when feasible and report representative evidence.",
+      "4. Return the strict worker JSON schema before prose.",
+      "",
+      "**Role boundary:** do not review your own work as final approval and do not spawn subagents."
+    ].join("\n")
+  },
+  {
+    name: "fixer",
+    description:
+      "ON-DEMAND fresh worker after review FAIL/PARTIAL evidence. Must fix only the cited criterion within explicit allowed files.",
+    tools: ["Read", "Write", "Edit", "Grep", "Glob", "Bash"],
+    model: "balanced",
+    activation: "on-demand",
+    relatedStages: ["review", "tdd"],
+    returnSchema: WORKER_RETURN_SCHEMA,
+    body: [
+      "You are a **fresh fixer worker** dispatched after a review found a concrete gap.",
+      "",
+      "Rules:",
+      "1. Start from the failing criterion and reviewer evidence, not from implementer claims.",
+      "2. Stay inside the allowed files and forbidden-change constraints.",
+      "3. Apply the smallest fix and rerun the relevant verification.",
+      "4. Return the strict fixer JSON schema before prose.",
+      "",
+      "**Role boundary:** fix only the cited gap; do not redesign the slice."
     ].join("\n")
   }
 ] as const satisfies readonly AgentDefinition[];
@@ -286,6 +527,12 @@ ${agent.body}
 - Mode: ${agent.activation}
 - Related stages: ${relatedStages}
 
+## Required Return Schema
+
+STRICT_RETURN_SCHEMA: return a structured object matching this contract before any narrative when delegated.
+
+${formatReturnSchema(agent.returnSchema)}
+
 ## Rules
 
 ## Conversation Language Policy
@@ -329,9 +576,19 @@ export function agentCostTierTable(): string {
   return `| Tier | Use for | Example agents |
 |---|---|---|
 | \`deep\` | one heavy planning pass per stage | planner |
-| \`balanced\` | discovery, criticism, review, and TDD specialists with stronger reasoning depth | product-manager, critic, reviewer, security-reviewer, test-author |
+| \`balanced\` | discovery, criticism, review, TDD, and bounded worker execution | product-manager, critic, reviewer, security-reviewer, test-author, implementer, fixer |
 | \`fast\` | bounded maintenance updates with limited blast radius | doc-updater |
 `;
+}
+
+export function agentRegistryMatrix(): string {
+  const rows = CCLAW_AGENTS.map((agent) => {
+    const stages = agent.relatedStages.length > 0 ? agent.relatedStages.join(", ") : "none";
+    return `| ${agent.name} | ${agent.activation} | ${agent.model} | ${stages} | ${agent.returnSchema.allowedStatuses.join(" / ")} |`;
+  }).join("\n");
+  return `| Agent | Activation | Model | Related stages | Terminal statuses |
+|---|---|---|---|---|
+${rows}`;
 }
 
 /**
@@ -340,9 +597,13 @@ export function agentCostTierTable(): string {
 export function agentsAgentsMdBlock(): string {
   return `### Agent Specialists
 
-cclaw materializes specialist agents under \`.cclaw/agents/\`, including planner, product-manager, critic, reviewer, security-reviewer, test-author, and doc-updater.
+cclaw materializes specialist agents under \`.cclaw/agents/\`: ${CCLAW_AGENTS.map((agent) => agent.name).join(", ")}.
 
 ${agentRoutingTable()}
+
+### Agent Registry Matrix
+
+${agentRegistryMatrix()}
 
 ### Research Playbooks (in-thread)
 
@@ -360,7 +621,7 @@ ${(() => {
   const mode = activationModeSummary();
   return `- **Mandatory:** ${mode.mandatory}.
 - **Proactive:** ${mode.proactive}.
-- **On-demand:** none in the specialist roster; research playbooks are in-thread procedures.`;
+- **On-demand:** slice-implementer, implementer, fixer. Research playbooks are in-thread procedures.`;
 })()}
 
 ### Cost-aware routing

@@ -18,7 +18,7 @@ import {
 import { policyChecks } from "./policy.js";
 import { CorruptFlowStateError, readFlowState } from "./runs.js";
 import { createInitialFlowState, skippedStagesForTrack } from "./flow-state.js";
-import { FLOW_STAGES, TRACK_STAGES } from "./types.js";
+import { FLOW_STAGES, TRACK_STAGES, type FlowStage } from "./types.js";
 import { checkMandatoryDelegations } from "./delegation.js";
 import { buildTraceMatrix } from "./trace-matrix.js";
 import {
@@ -171,6 +171,21 @@ async function generatedCliEntrypointsOk(projectRoot: string): Promise<{ ok: boo
       ? `local CLI entrypoints valid: ${checked.join("; ")}`
       : "local CLI entrypoint check skipped because generated hook scripts are absent"
   };
+}
+
+function expectedArtifactPrefix(stage: FlowStage): string {
+  const index = FLOW_STAGES.indexOf(stage);
+  return `${String(index + 1).padStart(2, "0")}-`;
+}
+
+function artifactStageFromFileName(fileName: string): FlowStage | null {
+  if (!fileName.endsWith(".md")) return null;
+  for (const stage of FLOW_STAGES) {
+    if (fileName.startsWith(expectedArtifactPrefix(stage))) {
+      return stage;
+    }
+  }
+  return null;
 }
 
 function extractUserPromptFromIdeaArtifact(markdown: string): string | null {
@@ -1740,12 +1755,20 @@ export async function doctorChecks(projectRoot: string, options: DoctorOptions =
   });
   const artifactsRoot = path.join(projectRoot, RUNTIME_ROOT, "artifacts");
   let artifactPlaceholderHits: string[] = [];
+  let duplicateArtifactGroups: string[] = [];
   if (await exists(artifactsRoot)) {
     try {
       const entries = await fs.readdir(artifactsRoot, { withFileTypes: true });
       const placeholderPattern = /\b(?:TODO|TBD|FIXME)\b|<fill-in>|<your-.*-here>/giu;
+      const stageArtifactFiles = new Map<FlowStage, string[]>();
       for (const entry of entries) {
         if (!entry.isFile() || !entry.name.endsWith(".md")) continue;
+        const stageForArtifact = artifactStageFromFileName(entry.name);
+        if (stageForArtifact) {
+          const files = stageArtifactFiles.get(stageForArtifact) ?? [];
+          files.push(entry.name);
+          stageArtifactFiles.set(stageForArtifact, files);
+        }
         const filePath = path.join(artifactsRoot, entry.name);
         const content = await fs.readFile(filePath, "utf8");
         const matchCount = (content.match(placeholderPattern) ?? []).length;
@@ -1753,8 +1776,12 @@ export async function doctorChecks(projectRoot: string, options: DoctorOptions =
           artifactPlaceholderHits.push(`${entry.name}:${matchCount}`);
         }
       }
+      duplicateArtifactGroups = [...stageArtifactFiles.entries()]
+        .filter(([, files]) => files.length > 1)
+        .map(([stageName, files]) => `${stageName}: ${files.sort().join(", ")}`);
     } catch {
       artifactPlaceholderHits = [];
+      duplicateArtifactGroups = [];
     }
   }
   checks.push({
@@ -1764,6 +1791,13 @@ export async function doctorChecks(projectRoot: string, options: DoctorOptions =
       ? "no TODO/TBD/FIXME placeholder markers found in active artifacts"
       : `warning: placeholder markers detected in active artifacts (${artifactPlaceholderHits.join(", ")}). Clear before marking completion.`
   });
+  checks.push({
+    name: "warning:artifacts:duplicate_stage_artifacts",
+    ok: duplicateArtifactGroups.length === 0,
+    details: duplicateArtifactGroups.length === 0
+      ? "no duplicate stage artifacts detected in active artifacts"
+      : `warning: duplicate stage artifacts detected (${duplicateArtifactGroups.join("; ")}). The resolver uses the newest matching file; archive or rename stale copies to avoid ambiguous operator handoff.`
+  });
   const staleStages = Object.keys(flowState.staleStages).filter((value) =>
     FLOW_STAGES.includes(value as (typeof FLOW_STAGES)[number])
   );
@@ -1772,7 +1806,7 @@ export async function doctorChecks(projectRoot: string, options: DoctorOptions =
     ok: staleStages.length === 0,
     details: staleStages.length === 0
       ? "no stale stages pending acknowledgement"
-      : `stale stages pending acknowledgement: ${staleStages.join(", ")}`
+      : `stale stages pending acknowledgement: ${staleStages.join(", ")}. Re-run the current stale stage, then clear it with cclaw internal rewind --ack ${flowState.currentStage}.`
   });
   const retroGateStatus = await evaluateRetroGate(projectRoot, flowState);
   checks.push({

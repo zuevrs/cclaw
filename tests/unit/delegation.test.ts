@@ -106,6 +106,104 @@ describe("delegation ledger run scoping", () => {
     expect(ledger.entries[0]?.spanId).toBe("span-fixed-1");
   });
 
+
+  it("records lifecycle timestamps for scheduled and terminal rows", async () => {
+    const root = await createTempProject("delegation-lifecycle-timestamps");
+    await seedFlowState(root, "run-lifecycle");
+
+    await appendDelegation(root, {
+      stage: "scope",
+      agent: "planner",
+      mode: "mandatory",
+      status: "scheduled",
+      spanId: "span-lifecycle",
+      ts: new Date().toISOString()
+    });
+    await appendDelegation(root, {
+      stage: "scope",
+      agent: "planner",
+      mode: "mandatory",
+      status: "completed",
+      spanId: "span-lifecycle-done",
+      ts: new Date().toISOString()
+    });
+
+    const ledger = await readDelegationLedger(root);
+    const scheduled = ledger.entries.find((entry) => entry.spanId === "span-lifecycle");
+    const completed = ledger.entries.find((entry) => entry.spanId === "span-lifecycle-done");
+    expect(scheduled?.startTs).toBeTruthy();
+    expect(scheduled?.endTs).toBeUndefined();
+    expect(completed?.startTs).toBeTruthy();
+    expect(completed?.endTs).toBeTruthy();
+  });
+
+  it("blocks mandatory checks when current-run scheduled workers have no terminal row", async () => {
+    const root = await createTempProject("delegation-stale-scheduled-worker");
+    await seedFlowState(root, "run-stale-worker");
+
+    await appendDelegation(root, {
+      stage: "scope",
+      agent: "planner",
+      mode: "mandatory",
+      status: "scheduled",
+      spanId: "span-stale",
+      ts: new Date().toISOString()
+    });
+    await appendDelegation(root, {
+      stage: "scope",
+      agent: "planner",
+      mode: "mandatory",
+      status: "completed",
+      spanId: "span-completed",
+      ts: new Date().toISOString()
+    });
+    await appendDelegation(root, {
+      stage: "scope",
+      agent: "critic",
+      mode: "mandatory",
+      status: "completed",
+      ts: new Date().toISOString()
+    });
+
+    const result = await checkMandatoryDelegations(root, "scope");
+    expect(result.satisfied).toBe(false);
+    expect(result.missing).toEqual([]);
+    expect(result.staleWorkers).toContain("planner(spanId=span-stale)");
+  });
+
+  it("accepts scheduled workers once a terminal row shares the same spanId", async () => {
+    const root = await createTempProject("delegation-scheduled-worker-closed");
+    await seedFlowState(root, "run-closed-worker");
+
+    await appendDelegation(root, {
+      stage: "scope",
+      agent: "planner",
+      mode: "mandatory",
+      status: "scheduled",
+      spanId: "span-closed",
+      ts: new Date().toISOString()
+    });
+    await appendDelegation(root, {
+      stage: "scope",
+      agent: "planner",
+      mode: "mandatory",
+      status: "completed",
+      spanId: "span-closed",
+      ts: new Date().toISOString()
+    });
+    await appendDelegation(root, {
+      stage: "scope",
+      agent: "critic",
+      mode: "mandatory",
+      status: "completed",
+      ts: new Date().toISOString()
+    });
+
+    const result = await checkMandatoryDelegations(root, "scope");
+    expect(result.satisfied).toBe(true);
+    expect(result.staleWorkers).toEqual([]);
+  });
+
   it("counts delegations recorded for the current run", async () => {
     const root = await createTempProject("delegation-current");
     await seedFlowState(root, "run-current");
@@ -118,7 +216,16 @@ describe("delegation ledger run scoping", () => {
       ts: new Date().toISOString()
     });
 
-    const result = await checkMandatoryDelegations(root, "scope");
+    
+    await appendDelegation(root, {
+      stage: "scope",
+      agent: "critic",
+      mode: "mandatory",
+      status: "completed",
+      ts: new Date().toISOString()
+    });
+
+const result = await checkMandatoryDelegations(root, "scope");
     expect(result.satisfied).toBe(true);
     expect(result.missing).toEqual([]);
     expect(result.staleIgnored).toEqual([]);
@@ -172,7 +279,16 @@ describe("delegation ledger run scoping", () => {
       ts: new Date().toISOString()
     });
 
-    const result = await checkMandatoryDelegations(root, "scope");
+    
+    await appendDelegation(root, {
+      stage: "scope",
+      agent: "critic",
+      mode: "mandatory",
+      status: "completed",
+      ts: new Date().toISOString()
+    });
+
+const result = await checkMandatoryDelegations(root, "scope");
     expect(result.satisfied).toBe(true);
     expect(result.missing).toEqual([]);
     expect(result.missingEvidence).toEqual([]);
@@ -193,7 +309,17 @@ describe("delegation ledger run scoping", () => {
       ts: new Date().toISOString()
     });
 
-    const result = await checkMandatoryDelegations(root, "scope");
+    
+    await appendDelegation(root, {
+      stage: "scope",
+      agent: "critic",
+      mode: "mandatory",
+      status: "completed",
+      fulfillmentMode: "isolated",
+      ts: new Date().toISOString()
+    });
+
+const result = await checkMandatoryDelegations(root, "scope");
     expect(result.satisfied).toBe(false);
     expect(result.missing).toEqual([]);
     expect(result.missingEvidence).toContain("planner");
@@ -216,7 +342,16 @@ describe("delegation ledger run scoping", () => {
     const ledger = await readDelegationLedger(root);
     expect(ledger.entries[0]?.fulfillmentMode).toBe("isolated");
 
-    const result = await checkMandatoryDelegations(root, "scope");
+    
+    await appendDelegation(root, {
+      stage: "scope",
+      agent: "critic",
+      mode: "mandatory",
+      status: "completed",
+      ts: new Date().toISOString()
+    });
+
+const result = await checkMandatoryDelegations(root, "scope");
     expect(result.satisfied).toBe(true);
     expect(result.missingEvidence).toEqual([]);
   });
@@ -263,7 +398,16 @@ describe("delegation ledger run scoping", () => {
 
     const ledger = await readDelegationLedger(root);
     expect(ledger.entries[0]?.fulfillmentMode).toBe("isolated");
-    const result = await checkMandatoryDelegations(root, "scope");
+    
+    await appendDelegation(root, {
+      stage: "scope",
+      agent: "critic",
+      mode: "mandatory",
+      status: "completed",
+      ts: new Date().toISOString()
+    });
+
+const result = await checkMandatoryDelegations(root, "scope");
     expect(result.satisfied).toBe(true);
     expect(result.missingEvidence).toEqual([]);
   });
@@ -305,7 +449,16 @@ describe("delegation ledger run scoping", () => {
       ts: new Date().toISOString()
     });
 
-    const result = await checkMandatoryDelegations(root, "scope");
+    
+    await appendDelegation(root, {
+      stage: "scope",
+      agent: "critic",
+      mode: "mandatory",
+      status: "completed",
+      ts: new Date().toISOString()
+    });
+
+const result = await checkMandatoryDelegations(root, "scope");
     expect(result.satisfied).toBe(true);
     expect(result.expectedMode).toBe("isolated");
   });
@@ -327,7 +480,16 @@ describe("delegation ledger run scoping", () => {
 
       const ledger = await readDelegationLedger(root);
       expect(ledger.entries[0]?.fulfillmentMode).toBe("isolated");
-      const result = await checkMandatoryDelegations(root, "scope");
+      
+    await appendDelegation(root, {
+      stage: "scope",
+      agent: "critic",
+      mode: "mandatory",
+      status: "completed",
+      ts: new Date().toISOString()
+    });
+
+const result = await checkMandatoryDelegations(root, "scope");
       expect(result.satisfied).toBe(true);
       expect(result.expectedMode).toBe("isolated");
       expect(result.missingEvidence).toEqual([]);
@@ -357,7 +519,16 @@ describe("delegation ledger run scoping", () => {
 
       const ledger = await readDelegationLedger(root);
       expect(ledger.entries[0]?.fulfillmentMode).toBe("isolated");
-      const result = await checkMandatoryDelegations(root, "scope");
+      
+    await appendDelegation(root, {
+      stage: "scope",
+      agent: "critic",
+      mode: "mandatory",
+      status: "completed",
+      ts: new Date().toISOString()
+    });
+
+const result = await checkMandatoryDelegations(root, "scope");
       expect(result.satisfied).toBe(true);
       expect(result.expectedMode).toBe("isolated");
       expect(result.missing).toEqual([]);

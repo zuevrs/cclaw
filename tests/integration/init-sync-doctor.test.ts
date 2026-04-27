@@ -39,7 +39,9 @@ describe("install lifecycle", { timeout: 30_000 }, () => {
     await initCclaw({ projectRoot: root, harnesses: ["claude"] });
 
     const checks = await doctorChecks(root);
-    expect(doctorSucceeded(checks)).toBe(true);
+    expect(doctorSucceeded(checks)).toBe(false);
+    const delegation = checks.find((c) => c.name === "delegation:mandatory:current_stage");
+    expect(delegation?.ok).toBe(false);
 
     await expect(
       fs.stat(path.join(root, ".cclaw/adapters"))
@@ -72,7 +74,9 @@ describe("install lifecycle", { timeout: 30_000 }, () => {
     await initCclaw({ projectRoot: root });
 
     const checks = await doctorChecks(root);
-    expect(doctorSucceeded(checks)).toBe(true);
+    expect(doctorSucceeded(checks)).toBe(false);
+    const delegation = checks.find((c) => c.name === "delegation:mandatory:current_stage");
+    expect(delegation?.ok).toBe(false);
     expect(checks.some((check) => check.name === "hook:script:run-hook.mjs" && check.ok)).toBe(true);
     expect(checks.some((check) => check.name === "hook:script:run-hook.mjs:executable" && check.ok)).toBe(true);
     expect(checks.some((check) => check.name === "hook:script:run-hook.cmd" && check.ok)).toBe(true);
@@ -194,12 +198,22 @@ describe("install lifecycle", { timeout: 30_000 }, () => {
       .filter((fileName) => fileName.endsWith(".md"))
       .sort();
     expect(generatedAgents).toEqual([
+      "architect.md",
+      "compatibility-reviewer.md",
       "critic.md",
       "doc-updater.md",
+      "fixer.md",
+      "implementer.md",
+      "observability-reviewer.md",
+      "performance-reviewer.md",
       "planner.md",
       "product-manager.md",
+      "release-reviewer.md",
+      "researcher.md",
       "reviewer.md",
       "security-reviewer.md",
+      "slice-implementer.md",
+      "spec-validator.md",
       "test-author.md"
     ]);
     const generatedOpenCodeAgents = (await fs.readdir(path.join(root, ".opencode/agents")))
@@ -210,17 +224,29 @@ describe("install lifecycle", { timeout: 30_000 }, () => {
       .filter((fileName) => fileName.endsWith(".toml"))
       .sort();
     expect(generatedCodexAgents).toEqual([
+      "architect.toml",
+      "compatibility-reviewer.toml",
       "critic.toml",
       "doc-updater.toml",
+      "fixer.toml",
+      "implementer.toml",
+      "observability-reviewer.toml",
+      "performance-reviewer.toml",
       "planner.toml",
       "product-manager.toml",
+      "release-reviewer.toml",
+      "researcher.toml",
       "reviewer.toml",
       "security-reviewer.toml",
+      "slice-implementer.toml",
+      "spec-validator.toml",
       "test-author.toml"
     ]);
     const codexPlanner = await fs.readFile(path.join(root, ".codex/agents/planner.toml"), "utf8");
     expect(codexPlanner).toContain('name = "planner"');
     expect(codexPlanner).toContain("developer_instructions");
+    const generatedImplementer = await fs.readFile(path.join(root, ".cclaw/agents/implementer.md"), "utf8");
+    expect(generatedImplementer).toContain("STRICT_RETURN_SCHEMA");
 
     const researchPlaybook = await fs.readFile(
       path.join(root, ".cclaw/skills/research/repo-scan.md"),
@@ -288,6 +314,20 @@ describe("install lifecycle", { timeout: 30_000 }, () => {
     expect(localCli).toBeDefined();
     expect(localCli?.ok).toBe(false);
     expect(localCli?.details).toContain("points to missing");
+    expect(doctorSucceeded(checks)).toBe(false);
+  });
+
+  it("doctor warns about duplicate active stage artifacts", async () => {
+    const root = await createTempProject("doctor-duplicate-artifacts");
+    await initCclaw({ projectRoot: root });
+    await fs.writeFile(path.join(root, ".cclaw/artifacts/03-design.md"), "# legacy design\n", "utf8");
+    await fs.writeFile(path.join(root, ".cclaw/artifacts/03-design-runtime-polish.md"), "# slugged design\n", "utf8");
+
+    const checks = await doctorChecks(root);
+    const duplicateArtifacts = checks.find((c) => c.name === "warning:artifacts:duplicate_stage_artifacts");
+    expect(duplicateArtifacts).toBeDefined();
+    expect(duplicateArtifacts?.ok).toBe(false);
+    expect(duplicateArtifacts?.details).toContain("design: 03-design-runtime-polish.md, 03-design.md");
     expect(doctorSucceeded(checks)).toBe(false);
   });
 
@@ -381,7 +421,7 @@ describe("install lifecycle", { timeout: 30_000 }, () => {
     expect(flag?.severity).toBe("warning");
     expect(flag?.summary).toContain("inactive");
     expect(flag?.details).toContain("inactive");
-    expect(doctorSucceeded(checks)).toBe(true);
+    expect(doctorSucceeded(checks)).toBe(false);
   });
 
   it("doctor treats legacy origin_feature as compatibility-only and warns canonical origin_run is missing", async () => {
@@ -697,7 +737,7 @@ describe("install lifecycle", { timeout: 30_000 }, () => {
     }
 
     const checks = await doctorChecks(root);
-    expect(doctorSucceeded(checks)).toBe(true);
+    expect(doctorSucceeded(checks)).toBe(false);
   });
 
   it("sync merges generated hooks with user hooks without duplication", async () => {
@@ -1176,7 +1216,7 @@ describe("install lifecycle", { timeout: 30_000 }, () => {
     expect(warning?.ok).toBe(false);
     expect(warning?.severity).toBe("warning");
     expect(warning?.details).toMatch(/type must be one of: rule, pattern, lesson, compound/);
-    expect(doctorSucceeded(checks)).toBe(true);
+    expect(doctorSucceeded(checks)).toBe(false);
   });
 
   it("warns when routing docs do not surface knowledge store usage", async () => {

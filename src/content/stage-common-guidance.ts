@@ -14,6 +14,11 @@ ${conversationLanguagePolicyMarkdown()}
   harvest learnings, then use \`/cc-next\` for progression.
 - Do not create separate protocol files.
 
+## Context readiness
+
+- Before drafting, know the upstream artifact freshness, required template shape, relevant code/reference patterns, and unresolved blockers.
+- If any item is missing, load it or stop with a blocker instead of inventing content.
+
 ## Shared decision protocol
 
 - Ask only decision-changing questions.
@@ -28,7 +33,7 @@ Use this same closeout menu for every stage:
 - **A) Advance** — run \`/cc-next\` and continue the critical path; after \`ship\`, the same command drives \`retro -> compound -> archive\`.
 - **B) Revise this stage** — stay on current stage and apply feedback.
 - **C) Pause / park** — run \`/cc-view status\`, then stop and resume later.
-- **D) Rewind** — run \`npx cclaw-cli internal rewind <target-stage> "<reason>"\` as a support/runtime repair action.
+- **D) Rewind** — run \`npx cclaw-cli internal rewind <target-stage> "<reason>"\` as the managed support/runtime repair action; after redoing the target stage, run \`npx cclaw-cli internal rewind --ack <target-stage>\` to clear the stale marker.
 - **E) Abandon** — only when the user explicitly wants to end a non-ship active run early, archive with \`npx cclaw-cli archive --skip-retro --retro-reason="<reason>"\`. Once in post-ship closeout, continue \`/cc-next\` through retro/compound/archive instead.
 
 Recommendation defaults:
@@ -36,6 +41,12 @@ Recommendation defaults:
 - Completion status \`DONE\` -> recommend **A**.
 - Completion status \`DONE_WITH_CONCERNS\` -> recommend **B**.
 - Completion status \`BLOCKED\` -> recommend **B** or **C**.
+
+## Iterate / Victory Detector
+
+- Iterate while a required gate, artifact section, or fresh evidence item is missing.
+- Stop only when the stage-specific Victory Detector passes or a named blocker is recorded.
+- Do not use vague closeout wording such as \`looks good\`, \`done enough\`, or \`all set\` without the detector evidence.
 
 ## Completion status vocabulary
 
@@ -63,9 +74,12 @@ Rollback / fallback: <if decision proves wrong>
 
 Before closeout, fill the artifact \`## Learnings\` section (do not write
 \`.cclaw/knowledge.jsonl\` by hand):
-- \`- None this stage.\` when nothing reusable emerged.
+- \`- None this stage.\` only when nothing reusable emerged.
 - Or 1-3 JSON bullets with required keys \`type\`, \`trigger\`, \`action\`,
   \`confidence\` (optional fields may mirror knowledge.jsonl schema keys).
+- For meaningful \`design\`, \`tdd\`, or \`review\` work, prefer a small JSON
+  learning over \`None\` when you made a reusable decision, found a testing
+  pattern, or caught a review/security issue.
 During \`node .cclaw/hooks/stage-complete.mjs <stage>\`, cclaw validates those
 bullets, appends unique entries to \`.cclaw/knowledge.jsonl\`, and stamps a
 harvest marker in the artifact.
@@ -78,7 +92,9 @@ Track policy:
 - \`quick\`: recommended only.
 
 \`- None this stage.\` is acceptable only when the stage produced no reusable
-insight (for example, purely mechanical edits with no new decisions).
+insight (for example, purely mechanical edits with no new decisions). If unsure,
+record a concise \`lesson\` with \`confidence":"medium"\` instead of dropping
+operator knowledge.
 
 ## Progressive disclosure baseline
 

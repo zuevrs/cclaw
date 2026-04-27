@@ -83,14 +83,36 @@ function validateFlowTransition(prev: FlowState, next: FlowState): void {
     );
   }
 
-  for (const completed of prev.completedStages) {
-    if (!next.completedStages.includes(completed)) {
+  const newRewind = next.rewinds.length === prev.rewinds.length + 1
+    ? next.rewinds[next.rewinds.length - 1]
+    : undefined;
+  const isManagedRewind = newRewind !== undefined
+    && newRewind.fromStage === prev.currentStage
+    && newRewind.toStage === next.currentStage
+    && newRewind.invalidatedStages.includes(next.currentStage);
+  const removedCompletedStages = prev.completedStages.filter((stage) => !next.completedStages.includes(stage));
+  if (removedCompletedStages.length > 0 && !isManagedRewind) {
+    throw new InvalidStageTransitionError(
+      prev.currentStage,
+      next.currentStage,
+      `completedStages must be monotonic: stage(s) ${removedCompletedStages.map((stage) => `"${stage}"`).join(", ")} were previously completed but are missing from the new state.`
+    );
+  }
+  if (isManagedRewind) {
+    const invalidated = new Set(newRewind.invalidatedStages);
+    const unexpectedRemoved = removedCompletedStages.filter((stage) => !invalidated.has(stage));
+    const missingMarkers = newRewind.invalidatedStages.filter((stage) => {
+      const marker = next.staleStages[stage];
+      return !marker || marker.rewindId !== newRewind.id;
+    });
+    if (unexpectedRemoved.length > 0 || missingMarkers.length > 0) {
       throw new InvalidStageTransitionError(
         prev.currentStage,
         next.currentStage,
-        `completedStages must be monotonic: stage "${completed}" was previously completed but is missing from the new state.`
+        `managed rewind state is inconsistent: unexpectedRemoved=${unexpectedRemoved.join(",") || "none"}; missingMarkers=${missingMarkers.join(",") || "none"}.`
       );
     }
+    return;
   }
 
   if (prev.currentStage === next.currentStage) {

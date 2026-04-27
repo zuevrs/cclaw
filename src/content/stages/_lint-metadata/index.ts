@@ -1,6 +1,7 @@
 import { SHIP_FINALIZATION_MODES } from "../../../constants.js";
 import type { FlowStage, FlowTrack } from "../../../types.js";
 import { renderTrackTerminology, trackRenderContext } from "../../track-render-context.js";
+import { referencePatternPolicyNeedles } from "../../reference-patterns.js";
 
 const STAGE_POLICY_NEEDLES: Record<FlowStage, string[]> = {
   brainstorm: [
@@ -67,11 +68,11 @@ const STAGE_POLICY_NEEDLES: Record<FlowStage, string[]> = {
 };
 
 export function stagePolicyNeedlesFromMetadata(stage: FlowStage, track: FlowTrack = "standard"): string[] {
-  const needles = STAGE_POLICY_NEEDLES[stage];
+  const needles = [...STAGE_POLICY_NEEDLES[stage], ...referencePatternPolicyNeedles(stage)];
   const renderContext = trackRenderContext(track);
   if (stage === "tdd" && !renderContext.usesPlanTerminology) {
     return needles.map((needle) => renderTrackTerminology(needle, renderContext));
   }
-  return [...needles];
+  return needles;
 }
 

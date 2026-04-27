@@ -672,4 +672,64 @@ optInAudits:
     expect(packs).toEqual([]);
   });
 
+  it("parses top-level vcs mode for no-VCS evidence", async () => {
+    const root = await createTempProject("config-vcs-none");
+    await fs.mkdir(path.join(root, ".cclaw"), { recursive: true });
+    await fs.writeFile(
+      configPath(root),
+      `harnesses:
+  - claude
+vcs: none
+`,
+      "utf8"
+    );
+    const config = await readConfig(root);
+    expect(config.vcs).toBe("none");
+  });
+
+  it("rejects malformed vcs mode", async () => {
+    const root = await createTempProject("config-vcs-bad");
+    await fs.mkdir(path.join(root, ".cclaw"), { recursive: true });
+    await fs.writeFile(
+      configPath(root),
+      `harnesses:
+  - claude
+vcs: svn
+`,
+      "utf8"
+    );
+    await expect(readConfig(root)).rejects.toThrow(/"vcs" must be one of/);
+  });
+
+  it("parses tdd verificationRef policy", async () => {
+    const root = await createTempProject("config-tdd-verification-ref");
+    await fs.mkdir(path.join(root, ".cclaw"), { recursive: true });
+    await fs.writeFile(
+      configPath(root),
+      `harnesses:
+  - claude
+tdd:
+  verificationRef: disabled
+`,
+      "utf8"
+    );
+    const config = await readConfig(root);
+    expect(config.tdd?.verificationRef).toBe("disabled");
+  });
+
+  it("rejects malformed tdd verificationRef policy", async () => {
+    const root = await createTempProject("config-tdd-verification-ref-bad");
+    await fs.mkdir(path.join(root, ".cclaw"), { recursive: true });
+    await fs.writeFile(
+      configPath(root),
+      `harnesses:
+  - claude
+tdd:
+  verificationRef: maybe
+`,
+      "utf8"
+    );
+    await expect(readConfig(root)).rejects.toThrow(/"tdd.verificationRef" must be one of/);
+  });
+
 });

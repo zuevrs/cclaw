@@ -7,6 +7,7 @@ import { CCLAW_AGENTS } from "../../src/content/core-agents.js";
 import { stageExamples, stageFullArtifactExampleMarkdown } from "../../src/content/examples.js";
 import { mandatoryDelegationsForStage, reviewStackAwareRoutingSummary, stageAutoSubagentDispatch, stageDelegationSummary, stagePolicyNeedles, stageSchema, stageTrackRenderContext } from "../../src/content/stage-schema.js";
 import { stageSkillMarkdown } from "../../src/content/skills.js";
+import { referencePatternContractsForStage, referencePatternPolicyNeedles, referencePatternsForStage } from "../../src/content/reference-patterns.js";
 import { nextCommandSkillMarkdown } from "../../src/content/next-command.js";
 import { enhancedAgentBody, subagentDrivenDevSkill } from "../../src/content/subagents.js";
 import { SUBAGENT_CONTEXT_SKILLS } from "../../src/content/subagent-context-skills.js";
@@ -42,9 +43,38 @@ describe("stage schema and subagent alignment", () => {
 
   it("supports complexity-tier gates for mandatory delegations", () => {
     expect(mandatoryDelegationsForStage("scope", "lightweight")).toEqual([]);
-    expect(mandatoryDelegationsForStage("scope", "standard")).toContain("planner");
+    expect(mandatoryDelegationsForStage("scope", "standard")).toEqual(["planner", "critic"]);
+    expect(mandatoryDelegationsForStage("brainstorm", "standard")).toEqual(["product-manager", "critic"]);
+    expect(mandatoryDelegationsForStage("design", "standard")).toEqual(["architect", "test-author"]);
+    expect(mandatoryDelegationsForStage("spec", "standard")).toEqual(["spec-validator"]);
     expect(mandatoryDelegationsForStage("review", "lightweight")).toContain("reviewer");
-    expect(mandatoryDelegationsForStage("ship", "lightweight")).toContain("doc-updater");
+    expect(mandatoryDelegationsForStage("ship", "lightweight")).toContain("release-reviewer");
+  });
+
+  it("keeps adopted reference families represented in the registry", () => {
+    const patternIds = new Set(referencePatternsForStage("plan").concat(
+      referencePatternsForStage("tdd"),
+      referencePatternsForStage("review"),
+      referencePatternsForStage("ship"),
+      referencePatternsForStage("design"),
+      referencePatternsForStage("scope"),
+      referencePatternsForStage("brainstorm"),
+      referencePatternsForStage("spec")
+    ).map((pattern) => pattern.id));
+
+    expect([...patternIds]).toEqual(expect.arrayContaining([
+      "socraticode_context_readiness",
+      "evanflow_coder_overseer",
+      "superpowers_executable_packet",
+      "gstack_question_tuning",
+      "superclaude_confidence_gates",
+      "addy_reference_grade_contracts",
+      "oh_my_worker_lifecycle",
+      "gsd_hard_stop_routing",
+      "everyinc_delegation_preflight",
+      "ecc_worktree_control_plane",
+      "walkinglabs_victory_detector"
+    ]));
   });
 
   it("exposes canonical delegation summaries per stage", () => {
@@ -233,6 +263,51 @@ describe("stage schema and subagent alignment", () => {
     expect(stagePolicyNeedles("review")).toContain("Review Findings");
   });
 
+  it("exposes content-only reference patterns through stage skills and policy needles", () => {
+    expect(referencePatternsForStage("scope").map((pattern) => pattern.id)).toEqual([
+      "socraticode_context_readiness",
+      "addy_reference_grade_contracts",
+      "gstack_question_tuning"
+    ]);
+    expect(referencePatternContractsForStage("design").map((contract) => contract.artifactSections).flat())
+      .toContain("Reference-Grade Contracts");
+    expect(referencePatternPolicyNeedles("review")).toContain("Victory Detector");
+
+    const scopeSkill = stageSkillMarkdown("scope");
+    const designSkill = stageSkillMarkdown("design");
+    const tddSkill = stageSkillMarkdown("tdd");
+    const reviewSkill = stageSkillMarkdown("review");
+
+    expect(scopeSkill).toContain("## Reference Patterns");
+    expect(scopeSkill).toContain("Reference Pattern Registry");
+    expect(designSkill).toContain("Reference-Grade Contracts");
+    expect(tddSkill).toContain("Vertical-Slice TDD");
+    expect(reviewSkill).toContain("Victory Detector");
+    expect(reviewSkill).toContain("Reference patterns are prompt guidance only");
+    expect(stagePolicyNeedles("scope")).toContain("Reference Pattern Registry");
+    expect(stagePolicyNeedles("tdd")).toContain("vertical slice");
+  });
+
+  it("renders context readiness and reference-grade artifact scaffolds", () => {
+    const brainstorm = ARTIFACT_TEMPLATES["01-brainstorm.md"];
+    const scope = ARTIFACT_TEMPLATES["02-scope.md"];
+    const design = ARTIFACT_TEMPLATES["03-design.md"];
+    const tdd = ARTIFACT_TEMPLATES["06-tdd.md"];
+    const review = ARTIFACT_TEMPLATES["07-review.md"];
+    const ship = ARTIFACT_TEMPLATES["08-ship.md"];
+
+    expect(stageSkillMarkdown("brainstorm")).toContain("Confirm context readiness");
+    expect(brainstorm).toContain("## Reference Pattern Candidates");
+    expect(brainstorm).toContain("Reuses / reference pattern");
+    expect(scope).toContain("## Reference Pattern Registry");
+    expect(scope).toContain("Invariant to preserve");
+    expect(design).toContain("## Reference-Grade Contracts");
+    expect(design).toContain("Reusable invariant");
+    expect(tdd).toContain("Vertical-slice RED/GREEN/REFACTOR checkpoint plan");
+    expect(review).toContain("Victory Detector: pass | fail");
+    expect(ship).toContain("Victory Detector: pass | fail");
+  });
+
   it("ship finalization enums are sourced from canonical constants", () => {
     const ship = stageSchema("ship");
     const template = ARTIFACT_TEMPLATES["08-ship.md"] ?? "";
@@ -313,18 +388,63 @@ describe("stage schema and subagent alignment", () => {
 
   it("agent registry uses the specialist roster", () => {
     expect(CCLAW_AGENTS.map((agent) => agent.name).sort()).toEqual([
+      "architect",
+      "compatibility-reviewer",
       "critic",
       "doc-updater",
+      "fixer",
+      "implementer",
+      "observability-reviewer",
+      "performance-reviewer",
       "planner",
       "product-manager",
+      "release-reviewer",
+      "researcher",
       "reviewer",
       "security-reviewer",
+      "slice-implementer",
+      "spec-validator",
       "test-author"
     ]);
   });
 
+  it("agent registry entries declare strict return schemas", () => {
+    for (const agent of CCLAW_AGENTS) {
+      expect(agent.returnSchema.statusField).toBe("status");
+      expect(agent.returnSchema.allowedStatuses.length).toBeGreaterThan(0);
+      expect(agent.returnSchema.requiredFields).toContain("status");
+      expect(agent.returnSchema.evidenceFields.length).toBeGreaterThan(0);
+      expect(enhancedAgentBody(agent.name)).toContain("Task Tool Delegation");
+    }
+    expect(CCLAW_AGENTS.find((agent) => agent.name === "implementer")?.activation).toBe("on-demand");
+    expect(CCLAW_AGENTS.find((agent) => agent.name === "slice-implementer")?.activation).toBe("on-demand");
+    expect(CCLAW_AGENTS.find((agent) => agent.name === "fixer")?.activation).toBe("on-demand");
+  });
+
+  it("stage dispatch summaries expose class and return schema metadata", () => {
+    const review = stageDelegationSummary("lightweight").find((row) => row.stage === "review");
+    expect(review?.dispatchRules.find((rule) => rule.agent === "reviewer")).toMatchObject({
+      dispatchClass: "review-lens",
+      returnSchema: "review-return"
+    });
+    expect(review?.dispatchRules.find((rule) => rule.agent === "performance-reviewer")).toMatchObject({
+      dispatchClass: "review-lens",
+      returnSchema: "performance-return"
+    });
+    const tdd = stageDelegationSummary("lightweight").find((row) => row.stage === "tdd");
+    expect(tdd?.dispatchRules.find((rule) => rule.agent === "test-author")).toMatchObject({
+      returnSchema: "tdd-return"
+    });
+    expect(tdd?.dispatchRules.find((rule) => rule.agent === "slice-implementer")).toMatchObject({
+      dispatchClass: "worker",
+      returnSchema: "worker-return"
+    });
+    expect(stageSkillMarkdown("review")).toContain("| Agent | Mode | Class | Return Schema | User Gate | Trigger | Purpose |");
+  });
+
   it("design skill renders research playbooks instead of research personas", () => {
     const design = stageSchema("design");
+    expect(stageAutoSubagentDispatch("design").map((row) => row.agent)).toEqual(expect.arrayContaining(["architect", "test-author", "researcher", "compatibility-reviewer", "observability-reviewer"]));
     expect(design.researchPlaybooks).toEqual([
       "research/research-fleet.md",
       "research/framework-docs-lookup.md",
@@ -544,7 +664,7 @@ describe("stage schema and subagent alignment", () => {
     expect(design.requiredGates.find((gate) => gate.id === "design_research_complete")?.description)
       .toContain("compact inline synthesis by default");
     expect(design.requiredEvidence).toEqual(expect.arrayContaining([
-      expect.stringContaining("Research Fleet Synthesis is filled in `03-design.md`")
+      expect.stringContaining("Research Fleet Synthesis is filled in `.cclaw/artifacts/03-design-<slug>.md`")
     ]));
     for (const section of [
       "Data-Flow Shadow Paths",

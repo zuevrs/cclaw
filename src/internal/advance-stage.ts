@@ -5,6 +5,7 @@ import process from "node:process";
 import type { Writable } from "node:stream";
 import { resolveArtifactPath } from "../artifact-paths.js";
 import { RUNTIME_ROOT, SHIP_FINALIZATION_MODES } from "../constants.js";
+import { ensureDir } from "../fs-utils.js";
 import { stageAutoSubagentDispatch, stageSchema } from "../content/stage-schema.js";
 import {
   appendDelegation,
@@ -33,6 +34,11 @@ import { runEnvelopeValidateCommand } from "./envelope-validate.js";
 import { runTddLoopStatusCommand } from "./tdd-loop-status.js";
 import { runTddRedEvidenceCommand } from "./tdd-red-evidence.js";
 import { extractReviewLoopEnvelopeFromArtifact } from "../content/review-loop.js";
+import {
+  PASS_STATUS_PATTERN,
+  TEST_COMMAND_HINT_PATTERN,
+  validateTddVerificationEvidence
+} from "../tdd-verification-evidence.js";
 
 interface InternalIo {
   stdout: Writable;
@@ -63,6 +69,14 @@ interface HookArgs {
   hookName: string;
 }
 
+interface RewindArgs {
+  mode: "rewind" | "ack";
+  targetStage: FlowStage;
+  reason?: string;
+  quiet: boolean;
+  json: boolean;
+}
+
 interface StartFlowArgs {
   track: FlowTrack;
   className?: string;
@@ -82,6 +96,7 @@ interface InternalValidationReport {
     missing: string[];
     waived: string[];
     missingEvidence: string[];
+    staleWorkers: string[];
     expectedMode: string;
   };
   gates: {
@@ -142,9 +157,6 @@ function resolveSuccessorTransition(
   return natural;
 }
 
-const TEST_COMMAND_HINT_PATTERN = /\b(?:npm test|pnpm test|yarn test|bun test|vitest|jest|pytest|go test|cargo test|mvn test|gradle test|dotnet test)\b/iu;
-const SHA_WITH_LABEL_PATTERN = /\b(?:sha|commit)(?:\s*[:=]|\s+)\s*[0-9a-f]{7,40}\b/iu;
-const PASS_STATUS_PATTERN = /\b(?:pass|passed|green|ok)\b/iu;
 const SHIP_FINALIZATION_MODE_PATTERN =
   new RegExp(`\\b(?:${SHIP_FINALIZATION_MODES.join("|")})\\b`, "u");
 const SHIP_FINALIZATION_MODE_HINT = SHIP_FINALIZATION_MODES.join(", ");
@@ -292,18 +304,6 @@ function validateUserApprovalEvidence(evidence: string): string | null {
 // guaranteed to carry the structural breadcrumbs downstream tooling
 // expects. Previously only `tdd:tdd_verified_before_complete` was checked.
 const GATE_EVIDENCE_VALIDATORS: Record<string, (evidence: string) => string | null> = {
-  "tdd:tdd_verified_before_complete": (evidence) => {
-    if (!TEST_COMMAND_HINT_PATTERN.test(evidence)) {
-      return "must include the fresh verification command that was run (for example `npm test`, `pytest`, `go test`, or equivalent).";
-    }
-    if (!SHA_WITH_LABEL_PATTERN.test(evidence)) {
-      return "must include a commit SHA token prefixed with `sha` or `commit` (for example `sha: abc1234`).";
-    }
-    if (!PASS_STATUS_PATTERN.test(evidence)) {
-      return "must include explicit success status (for example `PASS` or `GREEN`).";
-    }
-    return null;
-  },
   "review:review_trace_matrix_clean": (evidence) => {
     if (!TEST_COMMAND_HINT_PATTERN.test(evidence)) {
       return "must include the fresh verification command that was run before ship handoff (for example `npm test`, `pytest`, `go test`, or equivalent).";
@@ -325,10 +325,20 @@ const GATE_EVIDENCE_VALIDATORS: Record<string, (evidence: string) => string | nu
     validateReviewLoopGateEvidence("design", evidence)
 };
 
-function validateGateEvidenceShape(stage: FlowStage, gateId: string, evidence: string): string | null {
+async function validateGateEvidenceShape(
+  projectRoot: string,
+  stage: FlowStage,
+  gateId: string,
+  evidence: string
+): Promise<string | null> {
+  const normalized = evidence.trim();
+  if (stage === "tdd" && gateId === "tdd_verified_before_complete") {
+    const result = await validateTddVerificationEvidence(projectRoot, normalized);
+    return result.ok ? null : result.issues.join(" ");
+  }
   const validator = GATE_EVIDENCE_VALIDATORS[`${stage}:${gateId}`];
   if (!validator) return null;
-  return validator(evidence.trim());
+  return validator(normalized);
 }
 
 function reviewLoopArtifactFixHint(stage: FlowStage, gateId: string): string {
@@ -680,6 +690,53 @@ function parseVerifyCurrentStateArgs(tokens: string[]): VerifyCurrentStateArgs {
   return { quiet };
 }
 
+function parseRewindArgs(tokens: string[]): RewindArgs {
+  let quiet = false;
+  let json = false;
+  const positional: string[] = [];
+
+  for (let i = 0; i < tokens.length; i += 1) {
+    const token = tokens[i]!;
+    const nextToken = tokens[i + 1];
+    if (token === "--quiet") {
+      quiet = true;
+      continue;
+    }
+    if (token === "--json") {
+      json = true;
+      continue;
+    }
+    if (token === "--ack") {
+      if (!nextToken || nextToken.startsWith("--")) {
+        throw new Error("--ack requires a stage value.");
+      }
+      if (!isFlowStageValue(nextToken)) {
+        throw new Error(`--ack stage must be one of: ${FLOW_STAGES.join(", ")}.`);
+      }
+      i += 1;
+      return { mode: "ack", targetStage: nextToken, quiet, json };
+    }
+    if (token.startsWith("--ack=")) {
+      const stage = token.slice("--ack=".length);
+      if (!isFlowStageValue(stage)) {
+        throw new Error(`--ack stage must be one of: ${FLOW_STAGES.join(", ")}.`);
+      }
+      return { mode: "ack", targetStage: stage, quiet, json };
+    }
+    positional.push(token);
+  }
+
+  const [targetStage, ...reasonParts] = positional;
+  if (!isFlowStageValue(targetStage)) {
+    throw new Error(`internal rewind requires a target stage (${FLOW_STAGES.join(", ")}) or --ack <stage>.`);
+  }
+  const reason = reasonParts.join(" ").trim();
+  if (reason.length === 0) {
+    throw new Error('internal rewind requires a reason, for example: cclaw internal rewind tdd "review_blocked_by_critical".');
+  }
+  return { mode: "rewind", targetStage, reason, quiet, json };
+}
+
 function parseHookArgs(tokens: string[]): HookArgs {
   const [hookName, ...rest] = tokens;
   const normalizedHook = typeof hookName === "string" ? hookName.trim() : "";
@@ -781,6 +838,7 @@ async function buildValidationReport(
       missing: delegation.missing,
       waived: delegation.waived,
       missingEvidence: delegation.missingEvidence,
+      staleWorkers: delegation.staleWorkers,
       expectedMode: delegation.expectedMode
     },
     gates: {
@@ -971,9 +1029,13 @@ async function runAdvanceStage(
   }
 
   if (args.waiveDelegations.length > 0) {
-    const waiverReason = args.waiverReason && args.waiverReason.length > 0
-      ? args.waiverReason
-      : "manual_waiver";
+    const waiverReason = args.waiverReason?.trim();
+    if (!waiverReason) {
+      io.stderr.write(
+        "cclaw internal advance-stage: --waive-delegation requires an explicit non-empty --waiver-reason.\n"
+      );
+      return 1;
+    }
     for (const agent of args.waiveDelegations) {
       await appendDelegation(projectRoot, {
         stage: args.stage,
@@ -1024,7 +1086,8 @@ async function runAdvanceStage(
     );
     return 1;
   }
-  const malformedGateEvidence = nextPassed.flatMap((gateId) => {
+  const malformedGateEvidence: string[] = [];
+  for (const gateId of nextPassed) {
     const provided = args.evidenceByGate[gateId];
     const existing = flowState.guardEvidence[gateId];
     const effectiveEvidence =
@@ -1033,9 +1096,11 @@ async function runAdvanceStage(
         : typeof existing === "string" && existing.trim().length > 0
           ? existing
           : "";
-    const issue = validateGateEvidenceShape(args.stage, gateId, effectiveEvidence);
-    return issue ? [`${gateId}: ${issue}${reviewLoopArtifactFixHint(args.stage, gateId)}`] : [];
-  });
+    const issue = await validateGateEvidenceShape(projectRoot, args.stage, gateId, effectiveEvidence);
+    if (issue) {
+      malformedGateEvidence.push(`${gateId}: ${issue}${reviewLoopArtifactFixHint(args.stage, gateId)}`);
+    }
+  }
   if (malformedGateEvidence.length > 0) {
     io.stderr.write(
       `cclaw internal advance-stage: gate evidence format check failed: ${malformedGateEvidence.join(" | ")}.\n`
@@ -1088,6 +1153,9 @@ async function runAdvanceStage(
           ...(validation.delegation.missingEvidence.length > 0
             ? ["Add evidenceRefs for role-switch delegation completion or use an explicit waiver reason."]
             : []),
+          ...(validation.delegation.staleWorkers.length > 0
+            ? ["Resolve scheduled delegation span(s) without terminal lifecycle evidence before advancing."]
+            : []),
           ...(validation.gates.issues.length > 0
             ? ["Fix the artifact/gate issue shown in gates.issues, then rerun stage-complete."]
             : []),
@@ -1109,6 +1177,11 @@ async function runAdvanceStage(
     if (validation.delegation.missingEvidence.length > 0) {
       io.stderr.write(
         `- role-switch evidence missing: ${validation.delegation.missingEvidence.join(", ")}\n`
+      );
+    }
+    if (validation.delegation.staleWorkers.length > 0) {
+      io.stderr.write(
+        `- stale scheduled delegations: ${validation.delegation.staleWorkers.join(", ")}\n`
       );
     }
     if (validation.gates.issues.length > 0) {
@@ -1522,6 +1595,120 @@ async function runStartFlow(
   return 0;
 }
 
+function rewindLogPath(projectRoot: string): string {
+  return path.join(projectRoot, RUNTIME_ROOT, "state", "rewind-log.jsonl");
+}
+
+function rewindId(date = new Date()): string {
+  return `rewind-${date.getTime().toString(36)}-${Math.random().toString(36).slice(2, 8)}`;
+}
+
+function stagesInvalidatedByRewind(current: FlowState, targetStage: FlowStage): FlowStage[] {
+  const ordered = TRACK_STAGES[current.track];
+  const targetIndex = ordered.indexOf(targetStage);
+  const currentIndex = ordered.indexOf(current.currentStage);
+  if (targetIndex < 0 || currentIndex < 0 || targetIndex > currentIndex) {
+    return [];
+  }
+  return ordered.slice(targetIndex, currentIndex + 1) as FlowStage[];
+}
+
+async function appendRewindLog(projectRoot: string, payload: Record<string, unknown>): Promise<void> {
+  const logPath = rewindLogPath(projectRoot);
+  await ensureDir(path.dirname(logPath));
+  await fs.appendFile(logPath, `${JSON.stringify(payload)}\n`, "utf8");
+}
+
+async function runRewind(projectRoot: string, args: RewindArgs, io: InternalIo): Promise<number> {
+  const current = await readFlowState(projectRoot);
+  const now = new Date().toISOString();
+
+  if (args.mode === "ack") {
+    const marker = current.staleStages[args.targetStage];
+    if (!marker) {
+      io.stderr.write(`cclaw internal rewind: no stale marker exists for "${args.targetStage}".\n`);
+      return 1;
+    }
+    if (current.currentStage !== args.targetStage) {
+      io.stderr.write(
+        `cclaw internal rewind: cannot ack "${args.targetStage}" while currentStage is "${current.currentStage}". Re-run the stale stage before acknowledging it.\n`
+      );
+      return 1;
+    }
+    const staleStages = { ...current.staleStages };
+    delete staleStages[args.targetStage];
+    const nextState: FlowState = { ...current, staleStages };
+    await writeFlowState(projectRoot, nextState);
+    const payload = {
+      ok: true,
+      command: "rewind",
+      action: "ack",
+      stage: args.targetStage,
+      acknowledgedAt: now,
+      rewindId: marker.rewindId
+    };
+    await appendRewindLog(projectRoot, payload);
+    if (!args.quiet) {
+      io.stdout.write(`${JSON.stringify(payload, null, 2)}\n`);
+    }
+    return 0;
+  }
+
+  const invalidatedStages = stagesInvalidatedByRewind(current, args.targetStage);
+  if (invalidatedStages.length === 0) {
+    io.stderr.write(
+      `cclaw internal rewind: target "${args.targetStage}" is not an earlier or current stage on track "${current.track}" from "${current.currentStage}".\n`
+    );
+    return 1;
+  }
+
+  const id = rewindId();
+  const completedInvalidated = new Set(invalidatedStages);
+  const staleStages: FlowState["staleStages"] = { ...current.staleStages };
+  for (const stage of invalidatedStages) {
+    staleStages[stage] = {
+      rewindId: id,
+      reason: args.reason ?? "rewind",
+      markedAt: now
+    };
+  }
+  const record = {
+    id,
+    fromStage: current.currentStage,
+    toStage: args.targetStage,
+    reason: args.reason ?? "rewind",
+    timestamp: now,
+    invalidatedStages
+  };
+  const nextState: FlowState = {
+    ...current,
+    currentStage: args.targetStage,
+    completedStages: current.completedStages.filter((stage) => !completedInvalidated.has(stage)),
+    staleStages,
+    rewinds: [...current.rewinds, record]
+  };
+  await writeFlowState(projectRoot, nextState);
+  const payload = {
+    ok: true,
+    command: "rewind",
+    action: "rewind",
+    rewind: record,
+    currentStage: nextState.currentStage,
+    completedStages: nextState.completedStages,
+    staleStages: Object.keys(nextState.staleStages),
+    nextActions: [
+      `Re-run ${args.targetStage} stage work and update its artifact evidence.`,
+      `Then run cclaw internal rewind --ack ${args.targetStage}.`,
+      "Continue with /cc-next after the stale marker is acknowledged."
+    ]
+  };
+  await appendRewindLog(projectRoot, payload);
+  if (!args.quiet) {
+    io.stdout.write(`${JSON.stringify(payload, null, 2)}\n`);
+  }
+  return 0;
+}
+
 async function runHookCommand(
   projectRoot: string,
   args: HookArgs,
@@ -1574,7 +1761,7 @@ export async function runInternalCommand(
   const [subcommand, ...tokens] = argv;
   if (!subcommand) {
     io.stderr.write(
-      "cclaw internal requires a subcommand: advance-stage | start-flow | verify-flow-state-diff | verify-current-state | envelope-validate | tdd-red-evidence | tdd-loop-status | compound-readiness | hook-manifest | hook\n"
+      "cclaw internal requires a subcommand: advance-stage | start-flow | rewind | verify-flow-state-diff | verify-current-state | envelope-validate | tdd-red-evidence | tdd-loop-status | compound-readiness | hook-manifest | hook\n"
     );
     return 1;
   }
@@ -1585,6 +1772,9 @@ export async function runInternalCommand(
     }
     if (subcommand === "start-flow") {
       return await runStartFlow(projectRoot, parseStartFlowArgs(tokens), io);
+    }
+    if (subcommand === "rewind") {
+      return await runRewind(projectRoot, parseRewindArgs(tokens), io);
     }
     if (subcommand === "verify-flow-state-diff") {
       return await runVerifyFlowStateDiff(projectRoot, parseVerifyFlowStateDiffArgs(tokens), io);
@@ -1611,7 +1801,7 @@ export async function runInternalCommand(
       return await runHookCommand(projectRoot, parseHookArgs(tokens), io);
     }
     io.stderr.write(
-      `Unknown internal subcommand: ${subcommand}. Expected advance-stage | start-flow | verify-flow-state-diff | verify-current-state | envelope-validate | tdd-red-evidence | tdd-loop-status | compound-readiness | hook-manifest | hook\n`
+      `Unknown internal subcommand: ${subcommand}. Expected advance-stage | start-flow | rewind | verify-flow-state-diff | verify-current-state | envelope-validate | tdd-red-evidence | tdd-loop-status | compound-readiness | hook-manifest | hook\n`
     );
     return 1;
   } catch (err) {

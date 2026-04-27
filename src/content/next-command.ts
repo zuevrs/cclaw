@@ -88,7 +88,7 @@ ${conversationLanguagePolicyMarkdown()}
 
 1. Read **\`${flowPath}\`**. If missing → **BLOCKED** (state missing).
 2. Parse JSON. Capture \`currentStage\` and \`stageGateCatalog[currentStage]\`.
-3. If \`staleStages[currentStage]\` exists, do not advance automatically. Re-run the stage artifact work, then clear the marker with \`cclaw internal rewind --ack <currentStage>\`.
+3. If \`staleStages[currentStage]\` exists, do not advance automatically. Report the stale marker reason/rewindId, re-run the stage artifact work, then clear only the current stage marker with \`cclaw internal rewind --ack <currentStage>\`.
 4. Read **\`${reconciliationNoticesPath}\`** when present. If it contains entries for \`activeRunId + currentStage\` and the listed gate is still blocked in \`stageGateCatalog[currentStage].blocked\`, emit a structured warning before any stage-advance decision.
 5. Let \`G\` = \`requiredGates\` for **\`currentStage\`** from the stage schema.
 6. Let \`catalog\` = \`stageGateCatalog[currentStage]\` from flow state.
@@ -97,7 +97,7 @@ ${conversationLanguagePolicyMarkdown()}
 9. If \`M\` is non-empty, inspect **\`${delegationPath}\`**. Treat as satisfied only if each mandatory agent is **completed** or **waived**.
 10. For each satisfied mandatory delegation row, verify \`evidenceRefs\` is a non-empty array (unless status is \`waived\` with rationale). Missing evidenceRefs means delegation is unresolved.
 11. If any mandatory delegation is missing and no waiver exists: **STOP** and ask the user whether to dispatch now or waive with rationale. Do not mark gates passed while delegation is unresolved.
-12. If \`currentStage === "review"\` and \`catalog.blocked\` includes \`review_criticals_resolved\`, treat this as a hard remediation branch: recommend \`cclaw internal rewind tdd "review_blocked_by_critical"\` with the blocking finding IDs, and do not attempt to advance toward ship.
+12. If \`currentStage === "review"\` and \`catalog.blocked\` includes \`review_criticals_resolved\`, treat this as a hard remediation branch: recommend the managed command \`cclaw internal rewind tdd "review_blocked_by_critical <finding-ids>"\`, and do not attempt to advance toward ship. After TDD rework, require \`cclaw internal rewind --ack tdd\` before continuing.
 
 ### Path A: Current stage is NOT complete (any gate unmet or delegation missing)
 
@@ -230,7 +230,7 @@ Do **not** mark gates satisfied from memory alone. Cite **artifact evidence** (p
 
 1. Open **\`${flowPath}\`**.
 2. Record \`currentStage\` and \`stageGateCatalog[currentStage]\`.
-3. If \`staleStages[currentStage]\` exists, re-run the stage and clear marker via \`cclaw internal rewind --ack <currentStage>\` before advancing.
+3. If \`staleStages[currentStage]\` exists, show the marker reason/rewindId, re-run the stage, and clear only the current marker via \`cclaw internal rewind --ack <currentStage>\` before advancing.
 4. If the file is missing or invalid JSON → **BLOCKED** (report and stop).
 5. Read \`${reconciliationNoticesPath}\` when present. For entries matching \`activeRunId + currentStage\` whose gate is still in \`stageGateCatalog[currentStage].blocked\`, show a warning with gate id + reason before proceeding.
 
@@ -258,7 +258,7 @@ Execute the stage protocol. The stage skill handles interaction, STOP points, ga
 
 ${ralphLoopContractSnippet()}
 
-Special-case for review: if \`review_criticals_resolved\` is in \`blocked\`, route to rework instead of looping review forever — recommend \`cclaw internal rewind tdd "review_blocked_by_critical"\`.
+Special-case for review: if \`review_criticals_resolved\` is in \`blocked\`, route to rework instead of looping review forever — recommend \`cclaw internal rewind tdd "review_blocked_by_critical <finding-ids>"\`, then \`cclaw internal rewind --ack tdd\` after TDD rework.
 
 **Path B — stage IS complete (all gates met, all delegations done):**
 

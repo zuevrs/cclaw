@@ -533,7 +533,7 @@ describe("internal advance-stage commands", () => {
     const evidenceJson = requiredGateEvidenceJson("brainstorm");
     const code = await runInternalCommand(
       root,
-      ["advance-stage", "brainstorm", `--evidence-json=${evidenceJson}`, "--quiet"],
+      ["advance-stage", "brainstorm", `--evidence-json=${evidenceJson}`, "--waive-delegation=product-manager,critic", "--waiver-reason=unit_test", "--quiet"],
       captured.io
     );
 
@@ -553,11 +553,11 @@ describe("internal advance-stage commands", () => {
     }
 
     const ledger = await readDelegationLedger(root);
-    const proactivePlanner = ledger.entries.find(
-      (entry) => entry.stage === "brainstorm" && entry.agent === "planner" && entry.mode === "proactive"
+    const waivedProductManager = ledger.entries.find(
+      (entry) => entry.stage === "brainstorm" && entry.agent === "product-manager" && entry.mode === "mandatory"
     );
-    expect(proactivePlanner?.status).toBe("waived");
-    expect(proactivePlanner?.waiverReason).toContain("auto-recorded");
+    expect(waivedProductManager?.status).toBe("waived");
+    expect(waivedProductManager?.waiverReason).toContain("unit_test");
   });
 
   it("advance-stage rejects passed gates without evidence payload", async () => {
@@ -648,7 +648,7 @@ describe("internal advance-stage commands", () => {
         "advance-stage",
         "scope",
         `--evidence-json=${JSON.stringify(malformedEvidence)}`,
-        "--waive-delegation=planner",
+        "--waive-delegation=planner,critic",
         "--waiver-reason=unit_test",
         "--quiet"
       ],
@@ -695,7 +695,7 @@ describe("internal advance-stage commands", () => {
         "advance-stage",
         "scope",
         `--evidence-json=${JSON.stringify(evidence)}`,
-        "--waive-delegation=planner",
+        "--waive-delegation=planner,critic",
         "--waiver-reason=unit_test",
         "--quiet"
       ],
@@ -737,7 +737,7 @@ describe("internal advance-stage commands", () => {
         "advance-stage",
         "scope",
         `--evidence-json=${JSON.stringify(evidence)}`,
-        "--waive-delegation=planner",
+        "--waive-delegation=planner,critic",
         "--waiver-reason=unit_test",
         "--quiet"
       ],
@@ -833,7 +833,7 @@ describe("internal advance-stage commands", () => {
         "advance-stage",
         "design",
         `--evidence-json=${JSON.stringify(evidence)}`,
-        "--waive-delegation=planner",
+        "--waive-delegation=architect,test-author",
         "--waiver-reason=unit_test",
         "--quiet"
       ],
@@ -875,7 +875,7 @@ describe("internal advance-stage commands", () => {
         "advance-stage",
         "design",
         `--evidence-json=${JSON.stringify(evidence)}`,
-        "--waive-delegation=planner",
+        "--waive-delegation=architect,test-author",
         "--waiver-reason=unit_test",
         "--quiet"
       ],
@@ -1023,7 +1023,7 @@ describe("internal advance-stage commands", () => {
 
     expect(code).toBe(1);
     expect(captured.stderr()).toContain(
-      "cclaw: current stage has 1 unmet mandatory delegations and 1 gates without evidence."
+      "cclaw: current stage has 2 unmet mandatory delegations and 1 gates without evidence."
     );
   });
 
@@ -1191,7 +1191,9 @@ process.stdout.write(JSON.stringify({ hook: process.argv[2] }) + "\\n");
           brainstorm_direction_approved: "user approved Approach A",
           brainstorm_artifact_reviewed: "artifact reviewed by user"
         }),
-        "--passed=brainstorm_approaches_compared,brainstorm_direction_approved,brainstorm_artifact_reviewed"
+        "--passed=brainstorm_approaches_compared,brainstorm_direction_approved,brainstorm_artifact_reviewed",
+        "--waive-delegation=product-manager,critic",
+        "--waiver-reason=unit_test"
       ],
       io.io
     );
@@ -1250,7 +1252,9 @@ process.stdout.write(JSON.stringify({ hook: process.argv[2] }) + "\\n");
             note: "user approved the direction"
           },
           brainstorm_artifact_reviewed: "artifact reviewed in chat"
-        })
+        }),
+        "--waive-delegation=product-manager,critic",
+        "--waiver-reason=unit_test"
       ],
       io.io
     );
@@ -1276,7 +1280,7 @@ process.stdout.write(JSON.stringify({ hook: process.argv[2] }) + "\\n");
     const evidenceJson = requiredGateEvidenceJson("brainstorm");
     const code = await runInternalCommand(
       root,
-      ["advance-stage", "brainstorm", `--evidence-json=${evidenceJson}`, "--quiet"],
+      ["advance-stage", "brainstorm", `--evidence-json=${evidenceJson}`, "--waive-delegation=product-manager,critic", "--waiver-reason=unit_test", "--quiet"],
       captured.io
     );
 
@@ -1386,4 +1390,70 @@ process.stdout.write(JSON.stringify({ hook: process.argv[2] }) + "\\n");
     expect(payload.sources.tddCycleLog).toBe(false);
     expect(payload.sources.autoEvidence).toBe(true);
   });
+  it("rewind records stale markers and requires ack before continuing", async () => {
+    const root = await createTempProject("internal-rewind-managed");
+    await ensureRunSystem(root);
+    const initial = await readFlowState(root);
+    await writeFlowState(
+      root,
+      {
+        ...initial,
+        currentStage: "review",
+        completedStages: ["spec", "tdd"]
+      },
+      { allowReset: true }
+    );
+
+    const rewindIo = captureIo();
+    const rewindCode = await runInternalCommand(
+      root,
+      ["rewind", "tdd", "review_blocked_by_critical", "F-1"],
+      rewindIo.io
+    );
+    expect(rewindCode, rewindIo.stderr()).toBe(0);
+    const rewound = await readFlowState(root);
+    expect(rewound.currentStage).toBe("tdd");
+    expect(rewound.completedStages).not.toContain("tdd");
+    expect(rewound.rewinds).toHaveLength(1);
+    expect(rewound.rewinds[0]?.invalidatedStages).toEqual(["tdd", "review"]);
+    expect(rewound.staleStages.tdd?.rewindId).toBe(rewound.rewinds[0]?.id);
+    expect(rewound.staleStages.review?.rewindId).toBe(rewound.rewinds[0]?.id);
+
+    const ackIo = captureIo();
+    const ackCode = await runInternalCommand(root, ["rewind", "--ack", "tdd"], ackIo.io);
+    expect(ackCode, ackIo.stderr()).toBe(0);
+    const acked = await readFlowState(root);
+    expect(acked.staleStages.tdd).toBeUndefined();
+    expect(acked.staleStages.review).toBeDefined();
+    const log = await fs.readFile(path.join(root, ".cclaw/state/rewind-log.jsonl"), "utf8");
+    expect(log).toContain('"action":"rewind"');
+    expect(log).toContain('"action":"ack"');
+  });
+
+  it("rewind ack refuses non-current stale stages", async () => {
+    const root = await createTempProject("internal-rewind-ack-non-current");
+    await ensureRunSystem(root);
+    const initial = await readFlowState(root);
+    await writeFlowState(
+      root,
+      {
+        ...initial,
+        currentStage: "tdd",
+        staleStages: {
+          review: {
+            rewindId: "rewind-test",
+            reason: "review_blocked_by_critical",
+            markedAt: new Date().toISOString()
+          }
+        }
+      },
+      { allowReset: true }
+    );
+
+    const captured = captureIo();
+    const code = await runInternalCommand(root, ["rewind", "--ack=review"], captured.io);
+    expect(code).toBe(1);
+    expect(captured.stderr()).toContain('cannot ack "review" while currentStage is "tdd"');
+  });
+
 });

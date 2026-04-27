@@ -56,6 +56,7 @@ import {
 } from "./content/utility-skills.js";
 import { RESEARCH_PLAYBOOKS } from "./content/research-playbooks.js";
 import { SUBAGENT_CONTEXT_SKILLS } from "./content/subagent-context-skills.js";
+import { CCLAW_AGENTS } from "./content/core-agents.js";
 import { createInitialFlowState, type FlowState } from "./flow-state.js";
 import { ensureDir, exists, writeFileSafe } from "./fs-utils.js";
 import { ensureGitignore, removeGitignorePatterns } from "./gitignore.js";
@@ -1525,15 +1526,7 @@ export async function uninstallCclaw(projectRoot: string): Promise<void> {
   await removeIfEmpty(path.join(projectRoot, ".agents"));
 
 
-  const managedAgentNames = [
-    "planner",
-    "product-manager",
-    "critic",
-    "reviewer",
-    "security-reviewer",
-    "test-author",
-    "doc-updater"
-  ];
+  const managedAgentNames = CCLAW_AGENTS.map((agent) => agent.name);
   for (const agentName of managedAgentNames) {
     await removeBestEffort(path.join(projectRoot, ".opencode/agents", `${agentName}.md`));
     await removeBestEffort(path.join(projectRoot, ".codex/agents", `${agentName}.toml`));

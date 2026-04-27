@@ -52,8 +52,9 @@ export const REVIEW: StageSchemaInput = {
       "Structured Review reconciliation — normalize findings into `07-review-army.json`, dedup by fingerprint, and mark multi-specialist confirmations when multiple lenses agree.",
       "Meta-Review — Were tests/diagnostics actually run? Do test names match what they test? Are there real assertions? Is the dependency/version surface unchanged or audited?",
       "Classify findings — Critical (blocks ship), Important (should fix), Suggestion (optional improvement).",
+      "Victory Detector — before verdict, confirm Layer 1, Layer 2, security sweep, structured findings, trace evidence, and unresolved-critical status are complete; otherwise iterate findings or route back to TDD.",
       "Produce verdict — APPROVED, APPROVED_WITH_CONCERNS, or BLOCKED.",
-      "If verdict is BLOCKED, emit remediation route token `ROUTE_BACK_TO_TDD`, include `cclaw internal rewind tdd \"review_blocked_by_critical\"` with the blocking finding IDs, and satisfy the special transition guard `review_verdict_blocked` instead of `review_criticals_resolved`."
+      "If verdict is BLOCKED, emit remediation route token `ROUTE_BACK_TO_TDD`, include the managed command `cclaw internal rewind tdd \"review_blocked_by_critical <finding-ids>\"`, and satisfy the special transition guard `review_verdict_blocked` instead of `review_criticals_resolved`. After TDD rework, clear the stale marker with `cclaw internal rewind --ack tdd` before `/cc-next`."
     ],
     interactionProtocol: [
       "Run Layer 1 (spec compliance) completely before starting Layer 2.",
@@ -66,7 +67,7 @@ export const REVIEW: StageSchemaInput = {
         STRUCTURED_ASK_TOOL_LIST_REVIEW
       ),
       "Resolve all critical blockers before ship. If verdict is BLOCKED, do not pass `review_criticals_resolved`; pass only the remediation route gate `review_verdict_blocked` when routing back to TDD.",
-      "When verdict is BLOCKED, do not end with a passive stop: explicitly route remediation to TDD via `ROUTE_BACK_TO_TDD` and point to `cclaw internal rewind tdd` with the blocking IDs.",
+      "When verdict is BLOCKED, do not end with a passive stop: explicitly route remediation to TDD via `ROUTE_BACK_TO_TDD`, point to `cclaw internal rewind tdd` with the blocking IDs, and tell the operator to ack the stale TDD marker only after rework is complete.",
       structuredAskSingleChoiceInstruction(
         "final verdict",
         "verdict (APPROVED / APPROVED_WITH_CONCERNS / BLOCKED)"
@@ -80,7 +81,7 @@ export const REVIEW: StageSchemaInput = {
       "Reconcile structured findings into `.cclaw/artifacts/07-review-army.json` (dedup + confidence + conflict notes + source tags from spec/correctness/security/performance/architecture/external-safety passes).",
       "Classify and prioritize all findings.",
       "Write review report artifact with explicit verdict.",
-      "If verdict is BLOCKED, include the remediation route token `ROUTE_BACK_TO_TDD` and the rewind command payload."
+      "If verdict is BLOCKED, include the remediation route token `ROUTE_BACK_TO_TDD`, the managed rewind command payload, and the follow-up ack command after TDD rework."
     ],
     requiredGates: [
       { id: "review_layer1_spec_compliance", description: "Spec compliance check completed with per-criterion verdict." },
@@ -101,9 +102,10 @@ export const REVIEW: StageSchemaInput = {
       "No-finding attestation is explicit when no issues are found.",
       "Dependency/version audit is recorded when manifests, lockfiles, generated clients, CI, runtime config, or external APIs are relevant.",
       "Severity log includes critical/important/suggestion buckets.",
+      "Victory Detector recorded: Layer 1, Layer 2, security sweep, structured findings, trace evidence, and unresolved-critical status are complete, or BLOCKED route is explicit.",
       "Explicit final verdict: APPROVED, APPROVED_WITH_CONCERNS, or BLOCKED.",
       "Fresh verification command discovery recorded, and the command cited in `review_trace_matrix_clean` evidence before ship handoff.",
-      "If BLOCKED: include explicit remediation route (`ROUTE_BACK_TO_TDD`) with blocking finding IDs."
+      "If BLOCKED: include explicit remediation route (`ROUTE_BACK_TO_TDD`) with blocking finding IDs, managed rewind command, and post-rework ack instruction."
     ],
     inputs: ["implementation diff", "upstream artifacts", "test/build evidence"],
     requiredContext: ["spec criteria", "tdd artifact", "rulebook constraints"],
@@ -141,7 +143,7 @@ export const REVIEW: StageSchemaInput = {
       { section: "Security Sweep Attestation", required: false, validationRule: "Dedicated security-reviewer result: findings or `NO_CHANGE_ATTESTATION` / `NO_SECURITY_IMPACT` with inspected surfaces and rationale." },
       { section: "Dependency & Version Audit", required: false, validationRule: "Required when manifests, lockfiles, generated clients, CI, runtime config, or external APIs changed; otherwise record no-impact rationale." },
       { section: "Review Findings Contract", required: true, validationRule: "Structured findings in 07-review-army.json include id/severity/confidence/fingerprint/reportedBy/status and source tags from {spec, correctness, security, performance, architecture, external-safety} with dedup reconciliation summary." },
-      { section: "Review Readiness Snapshot", required: false, validationRule: "Optional compact summary: completed checks, delegation-log status, staleness signal, open critical blockers, and ship recommendation." },
+      { section: "Review Readiness Snapshot", required: false, validationRule: "Optional compact summary: completed checks, delegation-log status, staleness signal, open critical blockers, ship recommendation, and Victory Detector pass/fail." },
       { section: "Completeness Snapshot", required: false, validationRule: "Optional compact coverage summary for AC coverage, source item coverage, test-slice coverage, and adversarial-review status when triggered." },
       { section: "Incoming Feedback Queue", required: false, validationRule: "When external review feedback exists, include a queue summary with per-item disposition (resolved / accepted-risk / rejected-with-evidence) and evidence refs." },
       { section: "Trace Matrix Check", required: false, validationRule: "Records source-item/test orphan counts (all zero on enforced tracks) with command output reference." },

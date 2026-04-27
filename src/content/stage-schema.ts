@@ -96,11 +96,24 @@ export interface StageStackAwareReviewRoute {
   focus: string;
 }
 
+export interface StageDelegationDispatchRule {
+  agent: string;
+  mode: "mandatory" | "proactive";
+  when: string;
+  purpose: string;
+  requiresUserGate: boolean;
+  requiredAtTier?: StageComplexityTier;
+  dispatchClass: NonNullable<StageAutoSubagentDispatch["dispatchClass"]>;
+  returnSchema: NonNullable<StageAutoSubagentDispatch["returnSchema"]>;
+  skill?: string;
+}
+
 export interface StageDelegationSummary {
   stage: FlowStage;
   mandatoryAgents: string[];
   proactiveAgents: string[];
   primaryAgents: string[];
+  dispatchRules: StageDelegationDispatchRule[];
   stackAwareRoutes: StageStackAwareReviewRoute[];
 }
 
@@ -166,6 +179,71 @@ function dedupeAgentsInOrder(agents: string[]): string[] {
   return out;
 }
 
+function defaultReturnSchemaForAgent(
+  agent: StageAutoSubagentDispatch["agent"]
+): NonNullable<StageAutoSubagentDispatch["returnSchema"]> {
+  switch (agent) {
+    case "researcher":
+      return "research-return";
+    case "architect":
+      return "architecture-return";
+    case "spec-validator":
+      return "spec-validation-return";
+    case "slice-implementer":
+      return "worker-return";
+    case "performance-reviewer":
+      return "performance-return";
+    case "compatibility-reviewer":
+      return "compatibility-return";
+    case "observability-reviewer":
+      return "observability-return";
+    case "release-reviewer":
+      return "release-return";
+    case "planner":
+      return "planning-return";
+    case "product-manager":
+      return "product-return";
+    case "critic":
+      return "critic-return";
+    case "reviewer":
+      return "review-return";
+    case "security-reviewer":
+      return "security-return";
+    case "test-author":
+      return "tdd-return";
+    case "doc-updater":
+      return "docs-return";
+    case "fixer":
+      return "fixer-return";
+    case "implementer":
+      return "worker-return";
+  }
+}
+
+function dispatchClassForRow(
+  row: StageAutoSubagentDispatch
+): NonNullable<StageAutoSubagentDispatch["dispatchClass"]> {
+  if (row.dispatchClass) return row.dispatchClass;
+  if (row.agent === "implementer" || row.agent === "fixer" || row.agent === "slice-implementer") return "worker";
+  return row.skill?.includes("review") || row.agent === "reviewer" || row.agent === "security-reviewer" || row.agent.endsWith("-reviewer")
+    ? "review-lens"
+    : "stage-specialist";
+}
+
+function delegationDispatchRule(row: StageAutoSubagentDispatch): StageDelegationDispatchRule {
+  return {
+    agent: row.agent,
+    mode: row.mode,
+    when: row.when,
+    purpose: row.purpose,
+    requiresUserGate: row.requiresUserGate,
+    requiredAtTier: row.requiredAtTier,
+    dispatchClass: dispatchClassForRow(row),
+    returnSchema: row.returnSchema ?? defaultReturnSchemaForAgent(row.agent),
+    skill: row.skill
+  };
+}
+
 /**
  * Canonical delegation summary derived from STAGE_AUTO_SUBAGENT_DISPATCH.
  *
@@ -197,6 +275,7 @@ export function stageDelegationSummary(
       mandatoryAgents,
       proactiveAgents,
       primaryAgents,
+      dispatchRules: eligibleRows.map(delegationDispatchRule),
       stackAwareRoutes: stackAwareRoutesForStage(stage)
     };
   });
@@ -479,23 +558,25 @@ const STAGE_AUTO_SUBAGENT_DISPATCH: Record<FlowStage, StageAutoSubagentDispatch[
   brainstorm: [
     {
       agent: "product-manager",
-      mode: "proactive",
-      when: "When product value, persona/JTBD, success metric, or why-now framing is ambiguous.",
+      mode: "mandatory",
+      requiredAtTier: "standard",
+      when: "Always for standard/deep brainstorm to validate value, persona/JTBD, success metric, and why-now framing.",
       purpose: "Pressure-test problem/value fit and produce product-discovery evidence for the Problem Decision Record.",
       requiresUserGate: false
     },
     {
       agent: "critic",
-      mode: "proactive",
-      when: "When the premise may be wrong, cheaper alternatives exist, or the do-nothing path could be acceptable.",
+      mode: "mandatory",
+      requiredAtTier: "standard",
+      when: "Always for standard/deep brainstorm to challenge the premise, do-nothing path, and higher-upside alternatives.",
       purpose: "Attack assumptions and surface non-goals before direction approval.",
       requiresUserGate: false
     },
     {
-      agent: "planner",
+      agent: "researcher",
       mode: "proactive",
-      when: "When request is ambiguous, multi-surface, or staged feasibility is unclear.",
-      purpose: "Map scope and alternatives before direction lock.",
+      when: "When repository, market, docs, or prior-art context changes the approach set.",
+      purpose: "Provide search-before-read summaries and context-readiness evidence before large reads or decisions.",
       requiresUserGate: false
     }
   ],
@@ -510,9 +591,17 @@ const STAGE_AUTO_SUBAGENT_DISPATCH: Record<FlowStage, StageAutoSubagentDispatch[
     },
     {
       agent: "critic",
-      mode: "proactive",
-      when: "When selecting SELECTIVE EXPANSION, SCOPE EXPANSION, or SCOPE REDUCTION, or when boundaries feel soft.",
+      mode: "mandatory",
+      requiredAtTier: "standard",
+      when: "Always during scope shaping for standard/deep work.",
       purpose: "Test whether the selected scope mode is too timid, too broad, or hiding a smaller useful slice.",
+      requiresUserGate: false
+    },
+    {
+      agent: "researcher",
+      mode: "proactive",
+      when: "When churn, prior attempts, reference patterns, or external constraints may change scope boundaries.",
+      purpose: "Summarize search/context findings before the scope contract locks accepted/rejected/deferred ideas.",
       requiresUserGate: false
     },
     {
@@ -525,11 +614,19 @@ const STAGE_AUTO_SUBAGENT_DISPATCH: Record<FlowStage, StageAutoSubagentDispatch[
   ],
   design: [
     {
-      agent: "planner",
+      agent: "architect",
       mode: "mandatory",
       requiredAtTier: "standard",
       when: "Always during design lock.",
       purpose: "Stress architecture boundaries, dependency graph, critical path, and spec handoff.",
+      requiresUserGate: false
+    },
+    {
+      agent: "test-author",
+      mode: "mandatory",
+      requiredAtTier: "standard",
+      when: "Always during design lock.",
+      purpose: "Check test diagram mapping, RED expressibility, assertion quality, and verification routes before implementation.",
       requiresUserGate: false
     },
     {
@@ -540,6 +637,13 @@ const STAGE_AUTO_SUBAGENT_DISPATCH: Record<FlowStage, StageAutoSubagentDispatch[
       requiresUserGate: false
     },
     {
+      agent: "researcher",
+      mode: "proactive",
+      when: "When framework/library docs, repo graph context, or reference contracts may change the design.",
+      purpose: "Run search-before-read context synthesis before architecture locks.",
+      requiresUserGate: false
+    },
+    {
       agent: "security-reviewer",
       mode: "proactive",
       when: "When trust boundaries, auth, secrets, sensitive data, or external inputs are involved.",
@@ -547,26 +651,36 @@ const STAGE_AUTO_SUBAGENT_DISPATCH: Record<FlowStage, StageAutoSubagentDispatch[
       requiresUserGate: false
     },
     {
-      agent: "test-author",
+      agent: "compatibility-reviewer",
       mode: "proactive",
-      when: "When testability, failure/rescue behavior, or verification evidence is unclear.",
-      purpose: "Check that the design can produce concrete RED/GREEN/REFACTOR and rollout verification evidence.",
+      requiredAtTier: "lightweight",
+      when: "When public API, config, persisted data, CLI, generated clients, or cross-version behavior can change.",
+      purpose: "Identify backward-compatibility and migration hazards before spec/plan.",
+      requiresUserGate: false
+    },
+    {
+      agent: "observability-reviewer",
+      mode: "proactive",
+      requiredAtTier: "lightweight",
+      when: "When runtime/debuggability, rollout, failure detection, or supportability matters.",
+      purpose: "Validate logs/metrics/traces, alerting, and rescue-path visibility before implementation.",
       requiresUserGate: false
     }
   ],
   spec: [
     {
-      agent: "planner",
-      mode: "proactive",
-      when: "When acceptance criteria are unclear or constraints conflict.",
-      purpose: "Normalize measurable criteria and testability mapping.",
+      agent: "spec-validator",
+      mode: "mandatory",
+      requiredAtTier: "standard",
+      when: "Always for standard/deep specs before plan handoff.",
+      purpose: "Validate measurability, edge cases, assumptions, and AC-to-testability mapping.",
       requiresUserGate: false
     },
     {
-      agent: "reviewer",
+      agent: "test-author",
       mode: "proactive",
-      when: "When acceptance criteria and edge cases are drafted and need independent validation before plan stage.",
-      purpose: "Independent review of spec against measurability, testability, and completeness before locking the contract for plan.",
+      when: "When acceptance criteria need testability review or RED expressibility is uncertain.",
+      purpose: "Confirm likely test levels, commands/manual evidence, and assertion surfaces are concrete.",
       requiresUserGate: false
     }
   ],
@@ -576,7 +690,14 @@ const STAGE_AUTO_SUBAGENT_DISPATCH: Record<FlowStage, StageAutoSubagentDispatch[
       mode: "mandatory",
       requiredAtTier: "standard",
       when: "Always when producing execution slices.",
-      purpose: "Create dependency-aware task graph with verification steps.",
+      purpose: "Create dependency-aware executable packets with expected failing test, passing command, stop condition, and verification evidence.",
+      requiresUserGate: false
+    },
+    {
+      agent: "researcher",
+      mode: "proactive",
+      when: "When plan tasks touch unfamiliar areas or reference-pattern adoption needs source verification.",
+      purpose: "Confirm context/search evidence before plan packets rely on discovered patterns.",
       requiresUserGate: false
     }
   ],
@@ -586,9 +707,24 @@ const STAGE_AUTO_SUBAGENT_DISPATCH: Record<FlowStage, StageAutoSubagentDispatch[
       mode: "mandatory",
       requiredAtTier: "lightweight",
       when: "Always during the TDD cycle.",
-      purpose: "Own phase-specific RED/GREEN/REFACTOR evidence for each slice: failing tests before production writes, minimal GREEN implementation, then behavior-preserving refactor notes.",
+      purpose: "Own RED quality and per-slice RED/GREEN/REFACTOR evidence: failing tests before production writes, minimal GREEN implementation, then behavior-preserving refactor notes.",
       requiresUserGate: false,
       skill: "tdd-cycle-evidence"
+    },
+    {
+      agent: "slice-implementer",
+      mode: "proactive",
+      requiredAtTier: "lightweight",
+      when: "When a bounded GREEN/REFACTOR slice has non-overlapping file ownership and a clear RED failure.",
+      purpose: "Implement the minimal passing slice inside explicit file boundaries and return strict worker evidence.",
+      requiresUserGate: false
+    },
+    {
+      agent: "reviewer",
+      mode: "proactive",
+      when: "When per-slice review triggers fire or assertion quality needs an independent read-only overseer.",
+      purpose: "Read-only overseer pass for slice spec fit, assertion quality, and simpler alternatives.",
+      requiresUserGate: false
     },
     {
       agent: "doc-updater",
@@ -604,7 +740,7 @@ const STAGE_AUTO_SUBAGENT_DISPATCH: Record<FlowStage, StageAutoSubagentDispatch[
       mode: "mandatory",
       requiredAtTier: "lightweight",
       when: "Always in review stage.",
-      purpose: "Layer 1 spec compliance plus integrated Layer 2 review across correctness, performance, architecture, and external-safety tags with source-tagged findings.",
+      purpose: "Layer 1 spec compliance plus integrated Layer 2 review across correctness, architecture, and external-safety tags with source-tagged findings.",
       requiresUserGate: false,
       skill: "review-spec-pass"
     },
@@ -612,10 +748,34 @@ const STAGE_AUTO_SUBAGENT_DISPATCH: Record<FlowStage, StageAutoSubagentDispatch[
       agent: "security-reviewer",
       mode: "mandatory",
       requiredAtTier: "lightweight",
-      when: "Always in review stage. Even when no trust boundaries changed, produce an explicit 'no-change' security attestation.",
-      purpose: "Guarantee a dedicated security pass on every diff: auth, input validation, secrets, injection, privilege, and blast-radius review are never opt-in. MUST load the `security-audit` skill and run a pattern-based sweep across the diff scope and touched modules in addition to the per-diff Layer 2 security checklist.",
+      when: "Always in review stage. Even when no trust boundaries changed, produce an explicit no-change/no-impact security attestation.",
+      purpose: "Guarantee a dedicated security pass on every diff: auth, input validation, secrets, injection, privilege, and blast-radius review are never opt-in.",
       requiresUserGate: false,
       skill: "security-audit"
+    },
+    {
+      agent: "performance-reviewer",
+      mode: "proactive",
+      requiredAtTier: "lightweight",
+      when: "When hot paths, IO, data volume, rendering, caching, or algorithmic cost can move.",
+      purpose: "Run a focused performance lens and report evidence-backed regressions or no-impact rationale.",
+      requiresUserGate: false
+    },
+    {
+      agent: "compatibility-reviewer",
+      mode: "proactive",
+      requiredAtTier: "lightweight",
+      when: "When public API, CLI/config, persisted data, generated clients, or dependency versions change.",
+      purpose: "Check compatibility, migrations, and consumer-facing contract stability.",
+      requiresUserGate: false
+    },
+    {
+      agent: "observability-reviewer",
+      mode: "proactive",
+      requiredAtTier: "lightweight",
+      when: "When failure diagnosis, logging/metrics/traces, rollout, or operational support matters.",
+      purpose: "Check observability and supportability evidence against the design/review artifact.",
+      requiresUserGate: false
     },
     {
       agent: "reviewer",
@@ -629,7 +789,7 @@ const STAGE_AUTO_SUBAGENT_DISPATCH: Record<FlowStage, StageAutoSubagentDispatch[
       agent: "reviewer",
       mode: "proactive",
       when: "When external reviewer comments, bot findings, or CI annotations are present after the initial review pass.",
-      purpose: "Run the receiving-code-review workflow so every incoming feedback item gets an explicit disposition with evidence, and the queue is mirrored into review artifacts.",
+      purpose: "Run the receiving-code-review workflow so every incoming feedback item gets an explicit disposition with evidence.",
       requiresUserGate: false,
       skill: "receiving-code-review"
     },
@@ -644,10 +804,17 @@ const STAGE_AUTO_SUBAGENT_DISPATCH: Record<FlowStage, StageAutoSubagentDispatch[
   ],
   ship: [
     {
-      agent: "doc-updater",
+      agent: "release-reviewer",
       mode: "mandatory",
       requiredAtTier: "lightweight",
       when: "Always in ship stage.",
+      purpose: "Run release readiness, finalization mode, rollback, evidence freshness, and victory-detector checks before archive/ship.",
+      requiresUserGate: false
+    },
+    {
+      agent: "doc-updater",
+      mode: "proactive",
+      when: "When release notes, migrations, public behavior, CLI/config, or docs changed.",
       purpose: "Ensure release notes and docs reflect actual shipped behavior.",
       requiresUserGate: false
     },
@@ -790,5 +957,12 @@ export function stageTrackRenderContext(track: FlowTrack = "standard") {
 }
 
 export function stageAutoSubagentDispatch(stage: FlowStage): StageAutoSubagentDispatch[] {
-  return STAGE_AUTO_SUBAGENT_DISPATCH[stage];
+  return STAGE_AUTO_SUBAGENT_DISPATCH[stage].map((row) => {
+    const normalized = delegationDispatchRule(row);
+    return {
+      ...row,
+      dispatchClass: normalized.dispatchClass,
+      returnSchema: normalized.returnSchema
+    };
+  });
 }

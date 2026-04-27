@@ -290,6 +290,53 @@ describe("gate evidence verification", () => {
     expect(blocked.issues.join("\n")).toContain("npm test");
   });
 
+  it("requires content or artifact hash for configured no-VCS TDD evidence", async () => {
+    const root = await createTempProject("gate-evidence-tdd-no-vcs-hash");
+    await prepareRoot(root);
+    await fs.writeFile(path.join(root, ".cclaw/config.yaml"), `harnesses:
+  - claude
+vcs: none
+`, "utf8");
+    await fs.writeFile(path.join(root, ".cclaw/artifacts/06-tdd.md"), `# TDD Artifact
+
+## Test Discovery
+- Exact commands: npm test
+
+## System-Wide Impact Check
+- Public APIs/config/CLI: unchanged
+
+## RED Evidence
+| Slice | Test name | Command | Failure output summary |
+|---|---|---|---|
+| S-1 | sample | npm test | FAIL first |
+
+## GREEN Evidence
+- Full suite command: npm test
+- Full suite result: PASS
+
+## REFACTOR Notes
+- Behavior preserved: PASS
+
+## Traceability
+- T-1 -> AC-1
+
+## Verification Ladder
+- Evidence: npm test PASS no-vcs: sandbox has no git
+`, "utf8");
+
+    const state = createInitialFlowState("run-tdd-no-vcs-hash");
+    state.currentStage = "tdd";
+    state.stageGateCatalog.tdd.passed = ["tdd_verified_before_complete"];
+    state.guardEvidence.tdd_verified_before_complete = "npm test PASS no-vcs: sandbox has no git";
+
+    const blocked = await verifyCurrentStageGateEvidence(root, state);
+    expect(blocked.issues.join("\n")).toContain("content/artifact hash");
+
+    state.guardEvidence.tdd_verified_before_complete = "npm test PASS no-vcs: sandbox has no git artifact-hash: sha256:1234567890abcdef";
+    const cleared = await verifyCurrentStageGateEvidence(root, state);
+    expect(cleared.issues.join("\n")).not.toContain("content/artifact hash");
+  });
+
   it("fails review stage when Final Verdict is APPROVED but open Critical findings exist", async () => {
     const root = await createTempProject("review-verdict-mismatch");
     await prepareRoot(root);
@@ -629,6 +676,33 @@ describe("gate evidence verification", () => {
     const result = await verifyCurrentStageGateEvidence(root, state);
     expect(result.ok).toBe(false);
     expect(result.issues.join("\n")).toMatch(/empty or placeholder/);
+  });
+
+  it("accepts inline research from the resolved slugged design artifact", async () => {
+    const root = await createTempProject("gate-evidence-design-research-slugged");
+    await prepareRoot(root);
+    await fs.writeFile(
+      path.join(root, ".cclaw/artifacts/03-design-runtime-correctness.md"),
+      `# Design Artifact
+
+## Research Fleet Synthesis
+| Lens | Key findings | Design impact | Evidence |
+|---|---|---|---|
+| compact inline synthesis | Artifact resolver must read slugged design artifacts. | Gate evidence should not require legacy 03-design.md. | resolver regression |
+`,
+      "utf8"
+    );
+
+    const state = createInitialFlowState("run-design-research-slugged");
+    state.currentStage = "design";
+    const required = requiredGateIds("design");
+    state.stageGateCatalog.design.passed = [...required];
+    for (const gateId of required) {
+      state.guardEvidence[gateId] = `evidence:${gateId}`;
+    }
+
+    const result = await verifyCurrentStageGateEvidence(root, state);
+    expect(result.issues.join("\n")).not.toContain("design research gate blocked");
   });
 
   it("blocks design research gate when 02a-research artifact is missing", async () => {
@@ -998,4 +1072,66 @@ describe("gate evidence reconciliation", () => {
     expect(notices.notices.map((notice) => notice.id)).toEqual(["a-id", "b-id", "c-id"]);
     expect(notices.notices.every((notice) => notice.runId === "run-reconcile-sort")).toBe(true);
   });
+  it("accepts no-VCS attestation for tdd verification when no git repo exists", async () => {
+    const root = await createTempProject("gate-evidence-tdd-no-vcs");
+    await prepareRoot(root);
+    await fs.writeFile(path.join(root, "package.json"), JSON.stringify({
+      scripts: { test: "vitest run" }
+    }), "utf8");
+    await fs.writeFile(path.join(root, ".cclaw/artifacts/06-tdd.md"), `# TDD Artifact
+
+## Test Discovery
+- Exact commands: npm test
+
+## System-Wide Impact Check
+- Public APIs/config/CLI: unchanged
+
+## RED Evidence
+| Slice | Test name | Command | Failure output summary |
+|---|---|---|---|
+| S-1 | sample | npm test | FAIL first |
+
+## GREEN Evidence
+- Full suite command: npm test
+- Full suite result: PASS
+
+## REFACTOR Notes
+- Behavior preserved: PASS
+
+## Traceability
+- T-1 -> AC-1
+
+## Verification Ladder
+- Evidence: npm test PASS no-vcs: temp project has no .git directory
+`, "utf8");
+    const state = createInitialFlowState("run-tdd-no-vcs");
+    state.currentStage = "tdd";
+    state.stageGateCatalog.tdd.passed = ["tdd_verified_before_complete"];
+    state.guardEvidence.tdd_verified_before_complete = "npm test; no-vcs: temp project has no .git directory; PASS";
+
+    const result = await verifyCurrentStageGateEvidence(root, state);
+    expect(result.issues.join("\n")).not.toContain("commit SHA");
+    expect(result.issues.join("\n")).not.toContain("no-VCS attestation");
+  });
+
+  it("honors tdd.verificationRef=disabled for verification evidence", async () => {
+    const root = await createTempProject("gate-evidence-tdd-ref-disabled");
+    await prepareRoot(root);
+    await fs.writeFile(path.join(root, ".cclaw/config.yaml"), `harnesses:
+  - claude
+tdd:
+  verificationRef: disabled
+`, "utf8");
+    await fs.writeFile(path.join(root, "package.json"), JSON.stringify({
+      scripts: { test: "vitest run" }
+    }), "utf8");
+    const state = createInitialFlowState("run-tdd-ref-disabled");
+    state.currentStage = "tdd";
+    state.stageGateCatalog.tdd.passed = ["tdd_verified_before_complete"];
+    state.guardEvidence.tdd_verified_before_complete = "npm test PASS";
+
+    const result = await verifyCurrentStageGateEvidence(root, state);
+    expect(result.issues.join("\n")).not.toContain("commit SHA");
+  });
+
 });

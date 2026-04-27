@@ -5,7 +5,7 @@ import { CCLAW_VERSION, DEFAULT_HARNESSES, FLOW_VERSION, RUNTIME_ROOT } from "./
 import { isIronLawId, normalizeStrictLawIds } from "./content/iron-laws.js";
 import { exists, writeFileSafe } from "./fs-utils.js";
 import { FLOW_TRACKS, HARNESS_IDS, LANGUAGE_RULE_PACKS } from "./types.js";
-import type { CclawConfig, FlowTrack, HarnessId, LanguageRulePack } from "./types.js";
+import type { CclawConfig, FlowTrack, HarnessId, LanguageRulePack, VcsMode } from "./types.js";
 
 const CONFIG_PATH = `${RUNTIME_ROOT}/config.yaml`;
 const HARNESS_ID_SET = new Set<string>(HARNESS_IDS);
@@ -18,6 +18,7 @@ const ALLOWED_CONFIG_KEYS = new Set<string>([
   "version",
   "flowVersion",
   "harnesses",
+  "vcs",
   "strictness",
   "tddTestGlobs",
   "tdd",
@@ -55,6 +56,7 @@ const MINIMAL_CONFIG_KEYS = [
   "version",
   "flowVersion",
   "harnesses",
+  "vcs",
   "strictness",
   "gitHookGuards"
 ] as const;
@@ -178,11 +180,13 @@ export function createDefaultConfig(
     version: CCLAW_VERSION,
     flowVersion: FLOW_VERSION,
     harnesses,
+    vcs: "git-local-only",
     strictness: "advisory",
     tddTestGlobs: [...tddTestPathPatterns],
     tdd: {
       testPathPatterns: tddTestPathPatterns,
-      productionPathPatterns: tddProductionPathPatterns
+      productionPathPatterns: tddProductionPathPatterns,
+      verificationRef: "auto"
     },
     compound: {
       recurrenceThreshold: DEFAULT_COMPOUND_RECURRENCE_THRESHOLD
@@ -300,6 +304,20 @@ export async function readConfig(
     ? [...new Set(validatedHarnesses)]
     : DEFAULT_HARNESSES;
 
+  const vcsRaw = (parsed as { vcs?: unknown }).vcs;
+  if (
+    Object.prototype.hasOwnProperty.call(parsed, "vcs") &&
+    vcsRaw !== "git-with-remote" &&
+    vcsRaw !== "git-local-only" &&
+    vcsRaw !== "none"
+  ) {
+    throw configValidationError(fullPath, `"vcs" must be one of: git-with-remote, git-local-only, none`);
+  }
+  const vcs: VcsMode =
+    vcsRaw === "git-with-remote" || vcsRaw === "git-local-only" || vcsRaw === "none"
+      ? vcsRaw
+      : "git-local-only";
+
   const strictnessRaw = (parsed as { strictness?: unknown }).strictness;
   if (
     Object.prototype.hasOwnProperty.call(parsed, "strictness") &&
@@ -318,12 +336,13 @@ export async function readConfig(
   const tddRaw = (parsed as { tdd?: unknown }).tdd;
   let explicitTddTestPathPatterns: string[] | undefined;
   let explicitTddProductionPathPatterns: string[] | undefined;
+  let explicitTddVerificationRef: "auto" | "required" | "disabled" | undefined;
   if (hasTddField) {
     if (!isRecord(tddRaw)) {
       throw configValidationError(fullPath, `"tdd" must be an object`);
     }
     const unknownTddKeys = Object.keys(tddRaw).filter(
-      (key) => key !== "testPathPatterns" && key !== "productionPathPatterns"
+      (key) => key !== "testPathPatterns" && key !== "productionPathPatterns" && key !== "verificationRef"
     );
     if (unknownTddKeys.length > 0) {
       throw configValidationError(
@@ -341,6 +360,18 @@ export async function readConfig(
       "tdd.productionPathPatterns",
       fullPath
     );
+    if (
+      tddRaw.verificationRef !== undefined &&
+      tddRaw.verificationRef !== "auto" &&
+      tddRaw.verificationRef !== "required" &&
+      tddRaw.verificationRef !== "disabled"
+    ) {
+      throw configValidationError(
+        fullPath,
+        '"tdd.verificationRef" must be one of: auto, required, disabled'
+      );
+    }
+    explicitTddVerificationRef = tddRaw.verificationRef as typeof explicitTddVerificationRef;
   }
 
   if (
@@ -720,11 +751,13 @@ export async function readConfig(
     version: parsed.version ?? CCLAW_VERSION,
     flowVersion: parsed.flowVersion ?? FLOW_VERSION,
     harnesses,
+    vcs,
     strictness,
     tddTestGlobs,
     tdd: {
       testPathPatterns: resolvedTddTestPathPatterns,
-      productionPathPatterns: resolvedTddProductionPathPatterns
+      productionPathPatterns: resolvedTddProductionPathPatterns,
+      verificationRef: explicitTddVerificationRef ?? "auto"
     },
     compound: {
       recurrenceThreshold: compoundRecurrenceThreshold
@@ -748,6 +781,7 @@ export async function readConfig(
  * only knobs a new user would meaningfully flip show up.
  */
 type AdvancedConfigKey =
+  | "vcs"
   | "tddTestGlobs"
   | "tdd"
   | "compound"
@@ -795,6 +829,7 @@ function buildSerializableConfig(
     "version",
     "flowVersion",
     "harnesses",
+    "vcs",
     "strictness",
     "tddTestGlobs",
     "tdd",
