@@ -1878,19 +1878,29 @@ export async function doctorChecks(projectRoot: string, options: DoctorOptions =
     details: archiveIntegrity.details
   });
 
+  const currentGateState = flowState.stageGateCatalog[flowState.currentStage];
+  const currentStageUntouched =
+    flowState.completedStages.length === 0 &&
+    flowState.rewinds.length === 0 &&
+    Object.keys(flowState.guardEvidence).length === 0 &&
+    (currentGateState?.passed.length ?? 0) === 0 &&
+    (currentGateState?.blocked.length ?? 0) === 0;
   const delegation = await checkMandatoryDelegations(projectRoot, flowState.currentStage, {
     repairFeatureSystem: false
   });
+  const delegationSatisfiedForDoctor = currentStageUntouched || delegation.satisfied;
   const missingEvidenceNote =
     delegation.missingEvidence && delegation.missingEvidence.length > 0
       ? ` (role-switch rows without evidenceRefs: ${delegation.missingEvidence.join(", ")})`
       : "";
   checks.push({
     name: "delegation:mandatory:current_stage",
-    ok: delegation.satisfied,
-    details: delegation.satisfied
-      ? `All mandatory delegations satisfied for stage "${flowState.currentStage}" (mode: ${delegation.expectedMode})`
-      : `Missing mandatory delegations for stage "${flowState.currentStage}": ${delegation.missing.join(", ")}${missingEvidenceNote}`
+    ok: delegationSatisfiedForDoctor,
+    details: currentStageUntouched
+      ? `mandatory delegation check deferred for untouched stage "${flowState.currentStage}"; stage-complete enforces it when work begins`
+      : delegation.satisfied
+        ? `All mandatory delegations satisfied for stage "${flowState.currentStage}" (mode: ${delegation.expectedMode})`
+        : `Missing mandatory delegations for stage "${flowState.currentStage}": ${delegation.missing.join(", ")}${missingEvidenceNote}`
   });
   checks.push({
     name: "warning:delegation:waived",

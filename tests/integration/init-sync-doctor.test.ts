@@ -39,9 +39,10 @@ describe("install lifecycle", { timeout: 30_000 }, () => {
     await initCclaw({ projectRoot: root, harnesses: ["claude"] });
 
     const checks = await doctorChecks(root);
-    expect(doctorSucceeded(checks)).toBe(false);
+    expect(doctorSucceeded(checks)).toBe(true);
     const delegation = checks.find((c) => c.name === "delegation:mandatory:current_stage");
-    expect(delegation?.ok).toBe(false);
+    expect(delegation?.ok).toBe(true);
+    expect(delegation?.details).toContain("deferred for untouched stage");
 
     await expect(
       fs.stat(path.join(root, ".cclaw/adapters"))
@@ -74,9 +75,10 @@ describe("install lifecycle", { timeout: 30_000 }, () => {
     await initCclaw({ projectRoot: root });
 
     const checks = await doctorChecks(root);
-    expect(doctorSucceeded(checks)).toBe(false);
+    expect(doctorSucceeded(checks)).toBe(true);
     const delegation = checks.find((c) => c.name === "delegation:mandatory:current_stage");
-    expect(delegation?.ok).toBe(false);
+    expect(delegation?.ok).toBe(true);
+    expect(delegation?.details).toContain("deferred for untouched stage");
     expect(checks.some((check) => check.name === "hook:script:run-hook.mjs" && check.ok)).toBe(true);
     expect(checks.some((check) => check.name === "hook:script:run-hook.mjs:executable" && check.ok)).toBe(true);
     expect(checks.some((check) => check.name === "hook:script:run-hook.cmd" && check.ok)).toBe(true);
@@ -328,7 +330,8 @@ describe("install lifecycle", { timeout: 30_000 }, () => {
     expect(duplicateArtifacts).toBeDefined();
     expect(duplicateArtifacts?.ok).toBe(false);
     expect(duplicateArtifacts?.details).toContain("design: 03-design-runtime-polish.md, 03-design.md");
-    expect(doctorSucceeded(checks)).toBe(false);
+    expect(duplicateArtifacts?.severity).toBe("warning");
+    expect(doctorSucceeded(checks)).toBe(true);
   });
 
   it("doctor reports node and git binary/version checks", async () => {
@@ -421,7 +424,7 @@ describe("install lifecycle", { timeout: 30_000 }, () => {
     expect(flag?.severity).toBe("warning");
     expect(flag?.summary).toContain("inactive");
     expect(flag?.details).toContain("inactive");
-    expect(doctorSucceeded(checks)).toBe(false);
+    expect(doctorSucceeded(checks)).toBe(true);
   });
 
   it("doctor treats legacy origin_feature as compatibility-only and warns canonical origin_run is missing", async () => {
@@ -737,7 +740,7 @@ describe("install lifecycle", { timeout: 30_000 }, () => {
     }
 
     const checks = await doctorChecks(root);
-    expect(doctorSucceeded(checks)).toBe(false);
+    expect(doctorSucceeded(checks)).toBe(true);
   });
 
   it("sync merges generated hooks with user hooks without duplication", async () => {
@@ -1216,7 +1219,7 @@ describe("install lifecycle", { timeout: 30_000 }, () => {
     expect(warning?.ok).toBe(false);
     expect(warning?.severity).toBe("warning");
     expect(warning?.details).toMatch(/type must be one of: rule, pattern, lesson, compound/);
-    expect(doctorSucceeded(checks)).toBe(false);
+    expect(doctorSucceeded(checks)).toBe(true);
   });
 
   it("warns when routing docs do not surface knowledge store usage", async () => {
