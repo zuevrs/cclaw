@@ -14,6 +14,7 @@ const execFileAsync = promisify(execFile);
 
 export type DelegationMode = "mandatory" | "proactive";
 export type DelegationStatus = "scheduled" | "completed" | "failed" | "waived";
+const TERMINAL_DELEGATION_STATUSES = new Set<DelegationStatus>(["completed", "failed", "waived"]);
 
 /**
  * How a delegation was actually fulfilled. Advisory — mirrors the harness
@@ -230,6 +231,13 @@ function isDelegationEntry(value: unknown): value is DelegationEntry {
   const timestampOk =
     typeof o.ts === "string" ||
     typeof o.startTs === "string";
+  const terminalStatus = o.status === "completed" || o.status === "failed" || o.status === "waived";
+  const lifecycleOk =
+    o.status !== "scheduled" || o.endTs === undefined;
+  const terminalLifecycleOk =
+    !terminalStatus ||
+    o.endTs === undefined ||
+    typeof o.endTs === "string";
   const retryOk =
     o.retryCount === undefined ||
     (typeof o.retryCount === "number" &&
@@ -243,6 +251,8 @@ function isDelegationEntry(value: unknown): value is DelegationEntry {
     modeOk &&
     statusOk &&
     timestampOk &&
+    lifecycleOk &&
+    terminalLifecycleOk &&
     (o.spanId === undefined || typeof o.spanId === "string") &&
     (o.parentSpanId === undefined || typeof o.parentSpanId === "string") &&
     (o.startTs === undefined || typeof o.startTs === "string") &&
@@ -285,6 +295,7 @@ function parseLedger(raw: unknown, runId: string): DelegationLedger {
           ...item,
           spanId: item.spanId ?? createSpanId(),
           startTs: ts,
+          endTs: TERMINAL_DELEGATION_STATUSES.has(item.status) ? (item.endTs ?? ts) : undefined,
           ts,
           retryCount:
             typeof item.retryCount === "number" && Number.isInteger(item.retryCount) && item.retryCount >= 0
@@ -328,6 +339,12 @@ export async function appendDelegation(projectRoot: string, entry: DelegationEnt
     stamped.spanId = entry.spanId ?? createSpanId();
     stamped.startTs = startTs;
     stamped.ts = startTs;
+    if (TERMINAL_DELEGATION_STATUSES.has(stamped.status) && !stamped.endTs) {
+      stamped.endTs = new Date().toISOString();
+    }
+    if (stamped.status === "scheduled") {
+      delete stamped.endTs;
+    }
     stamped.schemaVersion = 1;
     if (
       stamped.retryCount === undefined ||
@@ -350,11 +367,12 @@ export async function appendDelegation(projectRoot: string, entry: DelegationEnt
         stamped.fulfillmentMode = expectedFulfillmentMode(fallbacks);
       }
     }
-    // Idempotency: if a caller (or a retried hook) tries to append a row
-    // with a spanId that already exists in the ledger, treat it as a no-op
-    // instead of growing the log with duplicate entries that subsequent
-    // delegation checks would mis-count.
-    if (prior.entries.some((existing) => existing.spanId === stamped.spanId)) {
+    // Idempotency: a retried hook may replay the same lifecycle row. Allow a
+    // terminal row to close an existing scheduled span, but drop exact same
+    // span/status duplicates so checks do not mis-count repeated writes.
+    if (prior.entries.some((existing) =>
+      existing.spanId === stamped.spanId && existing.status === stamped.status
+    )) {
       return;
     }
     const ledger: DelegationLedger = {
@@ -392,6 +410,8 @@ export async function checkMandatoryDelegations(
   staleIgnored: string[];
   /** Delegation rows missing required evidence under a role-switch fallback. */
   missingEvidence: string[];
+  /** Current-run scheduled rows with no terminal row sharing the same spanId. */
+  staleWorkers: string[];
   /** Expected fulfillment mode for the active harness set. */
   expectedMode: DelegationFulfillmentMode;
 }> {
@@ -410,6 +430,14 @@ export async function checkMandatoryDelegations(
   const missing: string[] = [];
   const waived: string[] = [];
   const missingEvidence: string[] = [];
+  const terminalSpanIds = new Set(
+    forRun
+      .filter((entry) => TERMINAL_DELEGATION_STATUSES.has(entry.status) && entry.spanId)
+      .map((entry) => entry.spanId as string)
+  );
+  const staleWorkers = forRun
+    .filter((entry) => entry.status === "scheduled" && entry.spanId && !terminalSpanIds.has(entry.spanId))
+    .map((entry) => `${entry.agent}(spanId=${entry.spanId})`);
   const config = await readConfig(projectRoot).catch(() => null);
   const harnesses = config?.harnesses ?? [];
   const configuredFallbacks = harnesses.map((h) => HARNESS_ADAPTERS[h].capabilities.subagentFallback);
@@ -451,11 +479,12 @@ export async function checkMandatoryDelegations(
   }
 
   return {
-    satisfied: missing.length === 0 && missingEvidence.length === 0,
+    satisfied: missing.length === 0 && missingEvidence.length === 0 && staleWorkers.length === 0,
     missing,
     waived,
     staleIgnored,
     missingEvidence,
+    staleWorkers,
     expectedMode
   };
 }

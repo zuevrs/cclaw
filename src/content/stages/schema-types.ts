@@ -25,15 +25,50 @@ export interface ArtifactValidation {
   validationRule: string;
 }
 
+export type StageSubagentName =
+  | "researcher"
+  | "architect"
+  | "spec-validator"
+  | "slice-implementer"
+  | "performance-reviewer"
+  | "compatibility-reviewer"
+  | "observability-reviewer"
+  | "release-reviewer"
+  | "planner"
+  | "product-manager"
+  | "critic"
+  | "reviewer"
+  | "security-reviewer"
+  | "test-author"
+  | "doc-updater"
+  | "implementer"
+  | "fixer";
+
+export type StageSubagentDispatchClass =
+  | "stage-specialist"
+  | "worker"
+  | "review-lens";
+
+export type StageSubagentReturnSchema =
+  | "planning-return"
+  | "product-return"
+  | "critic-return"
+  | "review-return"
+  | "security-return"
+  | "tdd-return"
+  | "docs-return"
+  | "worker-return"
+  | "fixer-return"
+  | "research-return"
+  | "architecture-return"
+  | "spec-validation-return"
+  | "performance-return"
+  | "compatibility-return"
+  | "observability-return"
+  | "release-return";
+
 export interface StageAutoSubagentDispatch {
-  agent:
-    | "planner"
-    | "product-manager"
-    | "critic"
-    | "reviewer"
-    | "security-reviewer"
-    | "test-author"
-    | "doc-updater";
+  agent: StageSubagentName;
   /**
    * - `mandatory` — must be dispatched (or explicitly waived) before stage transition.
    * - `proactive` — should be dispatched automatically when context matches `when`.
@@ -41,12 +76,16 @@ export interface StageAutoSubagentDispatch {
   mode: "mandatory" | "proactive";
   /**
    * Minimum complexity tier where this dispatch policy applies.
-   * Defaults to `standard` for mandatory dispatches when omitted.
+   * Defaults to `standard` for mandatory/proactive dispatches when omitted.
    */
   requiredAtTier?: StageComplexityTier;
   when: string;
   purpose: string;
   requiresUserGate: boolean;
+  /** Role category used by generated routing tables and lifecycle checks. */
+  dispatchClass?: StageSubagentDispatchClass;
+  /** Strict status/evidence contract the dispatched agent must return. */
+  returnSchema?: StageSubagentReturnSchema;
   /** Optional skill folder the dispatched agent should load as additional context. */
   skill?: string;
 }

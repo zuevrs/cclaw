@@ -4344,6 +4344,47 @@ describe("review army schema validation", () => {
     expect(result.errors).toEqual([]);
   });
 
+  it("passes review security attestation when NO_SECURITY_IMPACT is present", async () => {
+    const root = await createTempProject("review-security-no-impact-pass");
+    await writeRuntimeArtifact(
+      root,
+      "07-review.md",
+      `# Review Artifact
+
+## Layer 2 Findings
+| ID | Severity | Category | Description | Status |
+|---|---|---|---|---|
+| R-1 | Suggestion | correctness | naming cleanup | open |
+- NO_SECURITY_IMPACT: Inspected changed files and no auth/input/secrets surface moved.
+`
+    );
+
+    const result = await checkReviewSecurityNoChangeAttestation(root);
+    expect(result.ok).toBe(true);
+    expect(result.hasNoChangeAttestation).toBe(true);
+    expect(result.errors).toEqual([]);
+  });
+
+  it("warns when meaningful stages use the Learnings none sentinel", async () => {
+    const root = await createTempProject("artifact-lint-learnings-design-none-warning");
+    await writeRuntimeArtifact(root, "03-design.md", `${completeDesignArtifact(
+      `API_Gateway -->|sync: validated request| App_Service
+App_Service -.->|async: enqueue write| Storage_Adapter
+Storage_Adapter -->|timeout| Fallback_Cache
+Fallback_Cache -->|degraded response| API_Gateway`
+    )}
+
+## Learnings
+- None this stage.
+`);
+
+    const result = await lintArtifact(root, "design");
+    const learnings = result.findings.find((f) => f.section === "Learnings");
+    expect(result.passed).toBe(true);
+    expect(learnings?.found).toBe(true);
+    expect(learnings?.details).toContain("usually produce reusable decisions");
+  });
+
   it("fails review security attestation when security section has no findings and no attestation", async () => {
     const root = await createTempProject("review-security-attestation-fail");
     await writeRuntimeArtifact(

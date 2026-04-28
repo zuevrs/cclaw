@@ -40,6 +40,9 @@ describe("install lifecycle", { timeout: 30_000 }, () => {
 
     const checks = await doctorChecks(root);
     expect(doctorSucceeded(checks)).toBe(true);
+    const delegation = checks.find((c) => c.name === "delegation:mandatory:current_stage");
+    expect(delegation?.ok).toBe(true);
+    expect(delegation?.details).toContain("deferred for untouched stage");
 
     await expect(
       fs.stat(path.join(root, ".cclaw/adapters"))
@@ -73,6 +76,9 @@ describe("install lifecycle", { timeout: 30_000 }, () => {
 
     const checks = await doctorChecks(root);
     expect(doctorSucceeded(checks)).toBe(true);
+    const delegation = checks.find((c) => c.name === "delegation:mandatory:current_stage");
+    expect(delegation?.ok).toBe(true);
+    expect(delegation?.details).toContain("deferred for untouched stage");
     expect(checks.some((check) => check.name === "hook:script:run-hook.mjs" && check.ok)).toBe(true);
     expect(checks.some((check) => check.name === "hook:script:run-hook.mjs:executable" && check.ok)).toBe(true);
     expect(checks.some((check) => check.name === "hook:script:run-hook.cmd" && check.ok)).toBe(true);
@@ -194,12 +200,22 @@ describe("install lifecycle", { timeout: 30_000 }, () => {
       .filter((fileName) => fileName.endsWith(".md"))
       .sort();
     expect(generatedAgents).toEqual([
+      "architect.md",
+      "compatibility-reviewer.md",
       "critic.md",
       "doc-updater.md",
+      "fixer.md",
+      "implementer.md",
+      "observability-reviewer.md",
+      "performance-reviewer.md",
       "planner.md",
       "product-manager.md",
+      "release-reviewer.md",
+      "researcher.md",
       "reviewer.md",
       "security-reviewer.md",
+      "slice-implementer.md",
+      "spec-validator.md",
       "test-author.md"
     ]);
     const generatedOpenCodeAgents = (await fs.readdir(path.join(root, ".opencode/agents")))
@@ -210,17 +226,29 @@ describe("install lifecycle", { timeout: 30_000 }, () => {
       .filter((fileName) => fileName.endsWith(".toml"))
       .sort();
     expect(generatedCodexAgents).toEqual([
+      "architect.toml",
+      "compatibility-reviewer.toml",
       "critic.toml",
       "doc-updater.toml",
+      "fixer.toml",
+      "implementer.toml",
+      "observability-reviewer.toml",
+      "performance-reviewer.toml",
       "planner.toml",
       "product-manager.toml",
+      "release-reviewer.toml",
+      "researcher.toml",
       "reviewer.toml",
       "security-reviewer.toml",
+      "slice-implementer.toml",
+      "spec-validator.toml",
       "test-author.toml"
     ]);
     const codexPlanner = await fs.readFile(path.join(root, ".codex/agents/planner.toml"), "utf8");
     expect(codexPlanner).toContain('name = "planner"');
     expect(codexPlanner).toContain("developer_instructions");
+    const generatedImplementer = await fs.readFile(path.join(root, ".cclaw/agents/implementer.md"), "utf8");
+    expect(generatedImplementer).toContain("STRICT_RETURN_SCHEMA");
 
     const researchPlaybook = await fs.readFile(
       path.join(root, ".cclaw/skills/research/repo-scan.md"),
@@ -289,6 +317,21 @@ describe("install lifecycle", { timeout: 30_000 }, () => {
     expect(localCli?.ok).toBe(false);
     expect(localCli?.details).toContain("points to missing");
     expect(doctorSucceeded(checks)).toBe(false);
+  });
+
+  it("doctor warns about duplicate active stage artifacts", async () => {
+    const root = await createTempProject("doctor-duplicate-artifacts");
+    await initCclaw({ projectRoot: root });
+    await fs.writeFile(path.join(root, ".cclaw/artifacts/03-design.md"), "# legacy design\n", "utf8");
+    await fs.writeFile(path.join(root, ".cclaw/artifacts/03-design-runtime-polish.md"), "# slugged design\n", "utf8");
+
+    const checks = await doctorChecks(root);
+    const duplicateArtifacts = checks.find((c) => c.name === "warning:artifacts:duplicate_stage_artifacts");
+    expect(duplicateArtifacts).toBeDefined();
+    expect(duplicateArtifacts?.ok).toBe(false);
+    expect(duplicateArtifacts?.details).toContain("design: 03-design-runtime-polish.md, 03-design.md");
+    expect(duplicateArtifacts?.severity).toBe("warning");
+    expect(doctorSucceeded(checks)).toBe(true);
   });
 
   it("doctor reports node and git binary/version checks", async () => {

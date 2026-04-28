@@ -33,6 +33,11 @@ export const ARTIFACT_TEMPLATES: Record<string, string> = {
 ### Discovered context
 - (paths, prior artifacts, seeds, prompt fragments — referenced by downstream stages, or \`- None.\`)
 
+## Reference Pattern Candidates
+| Pattern / source | Reusable invariant | Disposition (accept/reject/defer) | Why |
+|---|---|---|---|
+|  |  |  |  |
+
 ## Problem Decision Record
 - **Depth:** lite | standard | deep
 - **Frame type:** product | technical-maintenance
@@ -64,6 +69,12 @@ export const ARTIFACT_TEMPLATES: Record<string, string> = {
 ## How Might We
 - *How might we …?* — one line naming the user, the desired outcome, and the binding constraint.
 
+## Clarity Gate
+- Ambiguity score (0.00-1.00):
+- Decision boundaries (what this stage will decide):
+- Reaffirmed non-goals:
+- Residual-risk handoff to scope:
+
 ## Sharpening Questions
 > Ask one decision-changing question at a time. For concrete early exits, record \`None - early exit\` with rationale.
 | # | Question | Answer / Assumption | Decision impact |
@@ -85,7 +96,7 @@ export const ARTIFACT_TEMPLATES: Record<string, string> = {
 - Scope handoff:
 
 ## Approaches
-| Approach | Role | Upside | Architecture | Trade-offs | Reuses | Recommendation |
+| Approach | Role | Upside | Architecture | Trade-offs | Reuses / reference pattern | Recommendation |
 |---|---|---|---|---|---|---|
 | A | baseline | modest |  |  |  |  |
 | B | challenger | high |  |  |  |  |
@@ -199,6 +210,20 @@ ${SEED_SHELF_SECTION}
 - **Success definition:**
 - **Design handoff:**
 
+## Decision Drivers
+| Driver | Weight (1-5) | Option A | Option B | Option C | Notes |
+|---|---|---|---|---|---|
+| Value impact |  |  |  |  |  |
+| Risk reduction |  |  |  |  |  |
+| Reversibility |  |  |  |  |  |
+| Delivery effort |  |  |  |  |  |
+| Timeline fit |  |  |  |  |  |
+
+## Scope Completeness Score
+- Score (0.00-1.00):
+- What is still uncertain:
+- Blockers requiring escalation:
+
 ## Scope Mode
 - [ ] SCOPE EXPANSION — explore ambitious alternatives; user explicitly opts into the larger product slice.
 - [ ] SELECTIVE EXPANSION — hold baseline scope and cherry-pick one high-leverage addition.
@@ -217,6 +242,11 @@ ${SEED_SHELF_SECTION}
 
 ## Taste Calibration
 - Optional quality-bar references from in-repo modules/files.
+
+## Reference Pattern Registry
+| Pattern / source | Invariant to preserve | Disposition (accepted/rejected/deferred) | Scope boundary impact |
+|---|---|---|---|
+|  |  |  |  |
 
 ## Reference Pull
 - Optional evidence from \`/Users/zuevrs/Downloads/references\`; list accepted/rejected ideas or \`Not needed - compact scope\`.
@@ -363,6 +393,11 @@ ${SEED_SHELF_SECTION}
 |---|---|---|---|---|---|---|
 |  |  |  |  |  |  |  |
 
+## Architecture Decision Record (ADR)
+| ADR ID | Context | Decision | Alternatives considered | Consequences | Reversal trigger |
+|---|---|---|---|---|---|
+| ADR-1 |  |  |  |  |  |
+
 ## Search Before Building
 | Layer | Label | What to reuse first |
 |---|---|---|
@@ -470,10 +505,20 @@ ${MARKDOWN_CODE_FENCE}
 |---|---|---|---|
 |  |  |  |  |
 
+## Pre-mortem
+| Scenario | Earliest warning signal | Mitigation owner | Containment action |
+|---|---|---|---|
+|  |  |  |  |
+
 ## Test Strategy
 - Unit:
 - Integration:
 - E2E:
+
+## Test-Diagram Mapping
+| Critical flow | Test coverage (ID/command) | Diagram anchor | Gap status |
+|---|---|---|---|
+|  |  |  | covered/gap |
 
 ## Performance Budget
 | Critical path | Metric | Target | Measurement method |
@@ -534,6 +579,11 @@ ${MARKDOWN_CODE_FENCE}
 |---|---|---|
 |  |  |  |
 
+## Reference-Grade Contracts
+| Pattern / source | Reusable invariant | Local adaptation | Rejection boundary | Verification signal |
+|---|---|---|---|---|
+|  |  |  |  |  |
+
 ## Interface Contracts
 - Standard/Deep add-on when module boundaries or APIs change; omit for compact local changes.
 | Module | Produces | Consumes |
@@ -561,6 +611,9 @@ ${SEED_SHELF_SECTION}
 | Deployment & Rollout Review |  |  |
 
 **Decisions made:** 0 | **Unresolved:** 0
+
+## Learning Capture Hint
+For meaningful design work, replace the Learnings sentinel with 1-3 JSON learning bullets, for example: \`- {"type":"lesson","trigger":"when design chooses a risky fallback path","action":"record the switch trigger and rollback signal in Spec Handoff","confidence":"medium","domain":"architecture","stage":"design"}\`
 
 ## Learnings
 - None this stage.
@@ -739,7 +792,7 @@ Execution rule: complete and verify each batch before starting the next batch.
 
 ## Execution Posture
 - Posture: sequential | dependency-batched | blocked
-- RED/GREEN/REFACTOR checkpoint plan:
+- Vertical-slice RED/GREEN/REFACTOR checkpoint plan:
 - Incremental commits: yes/no/deferred because
 
 ## RED Evidence
@@ -748,7 +801,7 @@ Execution rule: complete and verify each batch before starting the next batch.
 | S-1 |  |  |  |
 
 ## Acceptance Mapping
-| Slice | Source item ID | Spec criterion ID |
+| Vertical slice | Source item ID | Spec criterion ID |
 |---|---|---|
 | S-1 | SRC-1 | AC-1 |
 
@@ -796,6 +849,9 @@ Execution rule: complete and verify each batch before starting the next batch.
 | Slice | Reproduction test | RED-without-fix evidence | GREEN-with-fix evidence | Revert-guard note |
 |---|---|---|---|---|
 | S-1 |  |  |  |  |
+
+## Learning Capture Hint
+For meaningful TDD work, replace the Learnings sentinel with 1-3 JSON learning bullets, for example: \`- {"type":"pattern","trigger":"when a regression only fails after state rewind","action":"keep the RED fixture and add a cycle-log assertion before GREEN","confidence":"medium","domain":"testing","stage":"tdd"}\`
 
 ## Learnings
 - None this stage.
@@ -857,6 +913,7 @@ Execution rule: complete and verify each batch before starting the next batch.
 
 ## Review Readiness Snapshot
 
+- Victory Detector: pass | fail (Layer 1, Layer 2, security sweep, structured findings, trace evidence, unresolved-critical status)
 - Completed checks: Layer 1, Layer 2 tags, security sweep, schema validation
 - Delegation log: \`.cclaw/state/delegation-log.json\` required/completed/waived/pending
 - Staleness signal: commit at last review pass vs current commit
@@ -896,6 +953,9 @@ Execution rule: complete and verify each batch before starting the next batch.
 
 ## Final Verdict
 - APPROVED | APPROVED_WITH_CONCERNS | BLOCKED
+
+## Learning Capture Hint
+For meaningful review work, replace the Learnings sentinel with 1-3 JSON learning bullets, for example: \`- {"type":"lesson","trigger":"when security sweep finds no issues but touches trust boundaries","action":"record NO_SECURITY_IMPACT with inspected surfaces and rationale","confidence":"medium","domain":"security","stage":"review"}\`
 
 ## Learnings
 - None this stage.
@@ -965,6 +1025,7 @@ ${SHIP_FINALIZATION_ENUM_LINES}
 - NO_VCS handoff target + artifact path (if FINALIZE_NO_VCS):
 
 ## Completion Status
+- Victory Detector: pass | fail (review verdict valid, preflight fresh, rollback ready, one finalization enum selected, execution result present)
 - SHIPPED | SHIPPED_WITH_EXCEPTIONS | BLOCKED
 - Exceptions (if any):
 

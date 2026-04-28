@@ -246,7 +246,7 @@ describe("flow command contracts", () => {
       expect(content).toContain("Normal stage resume and advancement uses `/cc-next`");
     }
 
-    for (const agentName of ["product-manager", "critic", "planner", "reviewer", "security-reviewer", "test-author", "doc-updater"]) {
+    for (const agentName of ["researcher", "architect", "spec-validator", "slice-implementer", "performance-reviewer", "compatibility-reviewer", "observability-reviewer", "release-reviewer", "product-manager", "critic", "planner", "reviewer", "security-reviewer", "test-author", "doc-updater", "implementer", "fixer"]) {
       const opencodeAgent = await fs.readFile(path.join(root, ".opencode/agents", `${agentName}.md`), "utf8");
       const codexAgent = await fs.readFile(path.join(root, ".codex/agents", `${agentName}.toml`), "utf8");
       expect(opencodeAgent).toContain(`# ${agentName}`);
@@ -258,6 +258,8 @@ describe("flow command contracts", () => {
     const generatedCritic = await fs.readFile(path.join(root, ".cclaw/agents/critic.md"), "utf8");
     expect(generatedPm).toContain("VALUE_HYPOTHESIS");
     expect(generatedCritic).toContain("shadow alternative");
+    const generatedImplementer = await fs.readFile(path.join(root, ".cclaw/agents/implementer.md"), "utf8");
+    expect(generatedImplementer).toContain("STRICT_RETURN_SCHEMA");
 
     // Codex hooks are managed again since v0.40.0.
     const codexHooksPath = path.join(root, ".codex/hooks.json");
@@ -303,8 +305,9 @@ describe("flow command contracts", () => {
     expect(scopeSkill).toContain("--waive-delegation=planner");
     expect(scopeSkill).toContain("completion helper JSON diagnostics");
     expect(designSkill).toContain("`mandatory delegations`");
-    expect(designSkill).toContain("`planner`");
-    expect(brainstormSkill).toContain("`mandatory delegations`: none");
+    expect(designSkill).toContain("`architect`");
+    expect(designSkill).toContain("`test-author`");
+    expect(brainstormSkill).toContain("`mandatory delegations`: `product-manager`, `critic`");
   });
 
   it("routes meta skill to inline protocol behavior", async () => {

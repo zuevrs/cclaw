@@ -9,6 +9,7 @@ docs/*
 !docs/harnesses.md
 !docs/config.md
 !docs/agents-block.example.md
+!docs/scheme-of-work.md
 # cclaw generated artifacts
 .cclaw/
 .claude/commands/cc-*.md
@@ -29,3 +30,8 @@ docs/*
 # graphify knowledge graph outputs — generated locally, not committed
 graphify-out/
 graphify-out-full/
+
+# MemPalace local/project state (issue #185)
+mempalace.yaml
+entities.json
+.mempalace/

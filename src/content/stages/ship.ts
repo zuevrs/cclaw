@@ -54,6 +54,7 @@ export const SHIP: StageSchemaInput = {
       "Load utility skills — `verification-before-completion` for fresh evidence and `finishing-a-development-branch` for finalization workflow.",
       "Monitoring checklist — what should be watched after deploy? Error rates, latency, key business metrics. If no monitoring exists, flag it as a risk.",
       "Detect repository mode — if `.git/` is absent or inaccessible, lock finalization choices to FINALIZE_NO_VCS only and document manual handoff + rollback.",
+      "Victory Detector — valid review verdict, fresh preflight, rollback trigger/steps, exactly one finalization enum, and execution target are present; if any field is stale or missing, keep status BLOCKED and iterate.",
       "Select finalization mode — exactly ONE enum: (A) FINALIZE_MERGE_LOCAL, (B) FINALIZE_OPEN_PR, (C) FINALIZE_KEEP_BRANCH, (D) FINALIZE_DISCARD_BRANCH, (E) FINALIZE_NO_VCS. For discard: list what will be deleted, require typed confirmation.",
       "Execute finalization — perform the selected action. For merge: verify clean merge. For PR: include structured body (summary, test plan, rollback). For discard: verify deletion. For NO_VCS: record handoff target, artifact bundle path, and manual rollback owner.",
       "Branch cleanup — after merge/discard, remove only branches or temporary files the user explicitly approved. Skip for FINALIZE_NO_VCS."
@@ -88,7 +89,7 @@ export const SHIP: StageSchemaInput = {
       "Release notes section is complete.",
       "Rollback section includes trigger conditions, steps, and verification.",
       "Finalization section shows exactly one selected enum token.",
-      "Execution result documented."
+      "Victory Detector result documented: review verdict valid, preflight fresh, rollback ready, finalization enum selected, and execution result present."
     ],
     inputs: ["review verdict", "test/build outputs", "release context"],
     requiredContext: ["review artifact", "changelog scope", "deployment constraints"],
@@ -125,7 +126,7 @@ export const SHIP: StageSchemaInput = {
       { section: "Rollback Plan", required: true, validationRule: "Trigger conditions, rollback steps (exact commands), verification steps." },
       { section: "Monitoring", required: false, validationRule: "If applicable: what metrics/logs to watch post-deploy. Risk note if no monitoring." },
       { section: "Finalization", required: true, validationRule: "Exactly one finalization enum token selected (FINALIZE_MERGE_LOCAL | FINALIZE_OPEN_PR | FINALIZE_KEEP_BRANCH | FINALIZE_DISCARD_BRANCH | FINALIZE_NO_VCS). Execution result documented. Worktree cleaned if applicable." },
-      { section: "Completion Status", required: false, validationRule: "If present: exactly one of SHIPPED, SHIPPED_WITH_EXCEPTIONS, BLOCKED. Exceptions documented when applicable." },
+      { section: "Completion Status", required: false, validationRule: "If present: exactly one of SHIPPED, SHIPPED_WITH_EXCEPTIONS, BLOCKED. Exceptions documented when applicable. BLOCKED is required when the Victory Detector has stale or missing evidence." },
       { section: "Compound Step", required: false, validationRule: "Optional retrospective: include overlap assessment before appending duplicate knowledge; distinguish bug-track fixes/tests from knowledge-track process/project guidance; use supersedes/superseded_by only for clear refreshes; or include an explicit 'No compound insight this run.' line." }
     ]
   },

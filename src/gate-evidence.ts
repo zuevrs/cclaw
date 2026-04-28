@@ -16,6 +16,7 @@ import { ensureDir, exists, writeFileSafe } from "./fs-utils.js";
 import { detectPublicApiChanges } from "./internal/detect-public-api-changes.js";
 import { readFlowState, writeFlowState } from "./runs.js";
 import { parseTddCycleLog, validateTddCycleOrder } from "./tdd-cycle.js";
+import { validateTddVerificationEvidence } from "./tdd-verification-evidence.js";
 import { buildTraceMatrix } from "./trace-matrix.js";
 import { FLOW_STAGES, type FlowStage } from "./types.js";
 
@@ -46,6 +47,26 @@ async function readArtifactMarkdown(projectRoot: string, artifactFile: string): 
     }
   }
   return null;
+}
+
+async function readStageArtifactMarkdown(
+  projectRoot: string,
+  stage: FlowStage,
+  track: FlowState["track"]
+): Promise<string | null> {
+  const resolved = await resolveArtifactPath(stage, {
+    projectRoot,
+    track,
+    intent: "read"
+  });
+  if (!(await exists(resolved.absPath))) {
+    return null;
+  }
+  try {
+    return await fs.readFile(resolved.absPath, "utf8");
+  } catch {
+    return null;
+  }
 }
 
 export interface GateEvidenceCheckResult {
@@ -369,6 +390,14 @@ export async function verifyCurrentStageGateEvidence(
       issues.push(`passed gate "${gateId}" is missing guardEvidence entry.`);
       continue;
     }
+    if (stage === "tdd" && gateId === "tdd_verified_before_complete") {
+      const verification = await validateTddVerificationEvidence(projectRoot, evidence);
+      if (!verification.ok) {
+        issues.push(
+          `tdd verification gate blocked (${gateId}): ${verification.issues.join(" ")}`
+        );
+      }
+    }
     const discoveredCommandIssue = await verifyDiscoveredCommandEvidence(projectRoot, stage, gateId, flowState);
     if (discoveredCommandIssue) {
       issues.push(discoveredCommandIssue);
@@ -456,7 +485,7 @@ export async function verifyCurrentStageGateEvidence(
         (gate) => gate.id === "design_research_complete" && gate.tier === "required"
       );
       if (researchGateRequired) {
-        const designMarkdown = await readArtifactMarkdown(projectRoot, "03-design.md");
+        const designMarkdown = await readStageArtifactMarkdown(projectRoot, "design", flowState.track);
         const inlineResearchBody = designMarkdown
           ? extractMarkdownSectionBody(designMarkdown, "Research Fleet Synthesis")
           : null;
@@ -477,7 +506,7 @@ export async function verifyCurrentStageGateEvidence(
         const researchMarkdown = await readArtifactMarkdown(projectRoot, "02a-research.md");
         if (!inlineResearchComplete && !researchMarkdown) {
           issues.push(
-            "design research gate blocked (design_research_complete): fill `Research Fleet Synthesis` in `.cclaw/artifacts/03-design.md`, or write `.cclaw/artifacts/02a-research.md` for deep/high-risk research."
+            "design research gate blocked (design_research_complete): fill `Research Fleet Synthesis` in the active design artifact, or write `.cclaw/artifacts/02a-research.md` for deep/high-risk research."
           );
         } else if (researchMarkdown) {
           const missingSections: string[] = [];

@@ -5,6 +5,7 @@ import { stageExamples } from "./examples.js";
 import { reviewStackAwareRoutes, reviewStackAwareRoutingSummary, stageAutoSubagentDispatch, stageSchema, stageTrackRenderContext } from "./stage-schema.js";
 import type { StageSchema } from "./stage-schema.js";
 import { conversationLanguagePolicyMarkdown } from "./language-policy.js";
+import { referencePatternsForStage } from "./reference-patterns.js";
 import type {
   ArtifactValidation,
   CrossStageTrace,
@@ -55,24 +56,17 @@ Before execution:
 2. Load active artifacts from \`.cclaw/artifacts/\`.
 3. Load upstream artifacts required by this stage:
 ${readLines}
-4. Read the state contract for this stage from \`.cclaw/templates/state-contracts/<stage>.json\`.
-   Treat it as the machine-readable skeleton: required top-level fields,
-   closed taxonomies, and the derived markdown path. Do not validate natural-language
-   prose by regex; put semantic quality checks in the review prompts.
-5. Read the canonical artifact template at \`${artifactTemplatePath}\` and reuse its
-   exact section layout — per-row tables with stable column order, calibrated review block;
-   do not invent layouts for sections the template already defines.
-6. Extract upstream decisions, constraints, and open questions into the current
-   artifact's \`Upstream Handoff\` section when that section exists.
-7. Before doing stage work, give a compact user-facing drift preamble: "Carrying forward: <1-3 bullets>. Drift since upstream: None / <specific drift>. Recommendation: continue / re-scope."
-8. If you change an upstream decision, record an explicit drift reason in the
-   current artifact before continuing.
-9. Confirm stage inputs:
+4. Read the state contract from \`.cclaw/templates/state-contracts/<stage>.json\` for required fields, taxonomies, and derived markdown path.
+5. Read the canonical artifact template at \`${artifactTemplatePath}\` and reuse its exact section layout — per-row tables with stable column order, calibrated review block; do not invent layouts.
+6. Extract upstream decisions, constraints, and open questions into the current artifact's \`Upstream Handoff\` section when present.
+7. Confirm context readiness: upstream artifact freshness, required context, canonical template shape, relevant in-repo/reference patterns, and unresolved blockers are known. If any item is missing, load it or stop before drafting.
+8. Before doing stage work, give a compact user-facing drift preamble: "Carrying forward: <1-3 bullets>. Drift since upstream: None / <specific drift>. Recommendation: continue / re-scope."
+9. If you change an upstream decision, record an explicit drift reason in the current artifact before continuing.
+10. Confirm stage inputs:
 ${inputs}
-10. Confirm required context:
+11. Confirm required context:
 ${requiredContext}
-11. Use the injected knowledge digest from session-start; only fall back to full
-   \`.cclaw/knowledge.jsonl\` when the digest is insufficient.
+12. Use the injected knowledge digest; only fall back to full \`.cclaw/knowledge.jsonl\` when insufficient.
 `;
 }
 
@@ -84,7 +78,9 @@ function autoSubagentDispatchBlock(stage: FlowStage, track: FlowTrack): string {
   const rows = rules
     .map((rule) => {
       const userGate = rule.requiresUserGate ? "required" : "not required";
-      return `| ${rule.agent} | ${rule.mode} | ${userGate} | ${rule.when} | ${rule.purpose} |`;
+      const dispatchClass = rule.dispatchClass ?? "stage-specialist";
+      const returnSchema = rule.returnSchema ?? "agent-default";
+      return `| ${rule.agent} | ${rule.mode} | ${dispatchClass} | ${returnSchema} | ${userGate} | ${rule.when} | ${rule.purpose} |`;
     })
     .join("\n");
   const mandatory = schema.mandatoryDelegations;
@@ -92,29 +88,39 @@ function autoSubagentDispatchBlock(stage: FlowStage, track: FlowTrack): string {
   const delegationLogRel = `${RUNTIME_ROOT}/state/delegation-log.json`;
   const artifactRef = `${RUNTIME_ROOT}/artifacts/${schema.artifactRules.artifactFile}`;
   return `## Automatic Subagent Dispatch
-| Agent | Mode | User Gate | Trigger | Purpose |
-|---|---|---|---|---|
+| Agent | Mode | Class | Return Schema | User Gate | Trigger | Purpose |
+|---|---|---|---|---|---|---|
 ${rows}
-Mandatory: ${mandatoryList}. Record completion/waiver in \`${delegationLogRel}\` before completion.
+Mandatory: ${mandatoryList}. Record scheduled/completed/waived lifecycle rows in \`${delegationLogRel}\` before completion.
 ### Harness Dispatch Contract
-Use true harness dispatch: Claude native Task, Cursor generic dispatch, OpenCode \`.opencode/agents/<agent>.md\`, Codex \`.codex/agents/<agent>.toml\`. Run independent read-only/review agents in parallel where safe, write evidence into \`${artifactRef}\`, then append \`${delegationLogRel}\` rows with matching \`fulfillmentMode: "isolated"\` or \`"generic-dispatch"\`. Do not collapse OpenCode or Codex to role-switch by default; role-switch is degraded fallback and must carry non-empty \`evidenceRefs\`. Missing evidence blocks completion.
+Use true harness dispatch: Claude native Task, Cursor generic dispatch, OpenCode \`.opencode/agents/<agent>.md\`, Codex \`.codex/agents/<agent>.toml\`. Run independent read-only/review agents in parallel where safe, write evidence into \`${artifactRef}\`, then append \`${delegationLogRel}\` rows with matching \`fulfillmentMode: "isolated"\` or \`"generic-dispatch"\`. Each dispatched worker should have a scheduled row and a terminal row sharing \`spanId\`; stale scheduled spans block completion. Do not collapse OpenCode or Codex to role-switch by default; role-switch is degraded fallback and must carry non-empty \`evidenceRefs\`. Missing evidence blocks completion.
 `;
 }
 
 function researchPlaybooksBlock(playbooks: string[]): string {
   if (playbooks.length === 0) return "";
   const rows = playbooks
-    .map((playbook) => `- \`${RUNTIME_ROOT}/skills/${playbook}\``)
-    .join("\n");
+    .map((playbook) => `\`${RUNTIME_ROOT}/skills/${playbook}\``)
+    .join("; ");
   return `## Research Playbooks
-
-Use these in-thread research procedures before locking this stage. They are
-playbooks (not delegated personas), so execute them in the primary agent context
-and record outcomes in the stage artifact when relevant.
-
-${rows}
+Execute in primary agent context before locking the stage; record outcomes in the artifact when relevant: ${rows}.
 `;
 }
+function referencePatternsBlock(stage: FlowStage): string {
+  const patterns = referencePatternsForStage(stage);
+  if (patterns.length === 0) return "";
+  const summaries = patterns
+    .map((pattern) => {
+      const contract = pattern.contracts.find((item) => item.stage === stage);
+      const sections = contract ? contract.artifactSections.join(", ") : "n/a";
+      return `${pattern.title} (sections: ${sections})`;
+    })
+    .join("; ");
+  return `## Reference Patterns
+Prompt-only; no runtime/delegation changes. These compact pattern titles come from the internal registry; use the behavior and artifact sections, not the source project history. Use: ${summaries}.
+`;
+}
+
 
 function reviewSectionsBlock(sectionsInput: ReviewSection[]): string {
   if (sectionsInput.length === 0) return "";
@@ -429,9 +435,8 @@ ${conversationLanguagePolicyMarkdown()}
 ${philosophy.purpose}
 
 ## Complexity Tier
-- Active tier: \`${schema.complexityTier}\`
-- Scale-to-complexity rule: execute required gates and artifact sections, but keep optional/deep sections compact unless risk, novelty, or configuration triggers them. Do not mechanically expand lightweight work into a strategy workshop.
-- Mandatory delegations at this tier: ${mandatoryDelegationSummary}
+- Active tier: \`${schema.complexityTier}\`; mandatory delegations: ${mandatoryDelegationSummary}
+- Scale-to-complexity: execute required gates/sections; keep optional/deep sections compact unless risk, novelty, or config triggers them.
 - Track render context: \`${trackContext.track}\` (${trackContext.usesPlanTerminology ? "plan-first wording" : "acceptance-first wording"})
 
 ## When to Use
@@ -446,14 +451,14 @@ ${mergedAntiPatterns(philosophy, executionModel)}
 
 ## Process
 
-This is the stage **state machine** — the canonical ordered flow. For every detailed step, gate, and wording, follow the Checklist below; this diagram is the map, not the territory.
-
+Stage state machine (map only; Checklist is authoritative):
 ${processFlowMermaid.length > 0 ? processFlowMermaid : "```mermaid\nflowchart TD\n  S1[\"Execute Checklist\"] --> S2[\"Satisfy required gates\"] --> S3[\"Verify before closeout\"]\n```"}
 
 ${platformNotesBlock}${contextLoadingBlock(stage, artifactRules.crossStageTrace, executionModel)}
 ${autoSubagentDispatchBlock(stage, track)}
 ${stackAwareReviewRoutingBlock(stage)}
 ${researchPlaybooksBlock(executionModel.researchPlaybooks ?? [])}
+${referencePatternsBlock(stage)}
 
 ## Checklist
 

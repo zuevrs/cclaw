@@ -1999,12 +1999,16 @@ export async function lintArtifact(
     });
   } else {
     const learnings = parseLearningsSection(learningsBody);
+    const meaningfulStageNoneWarning =
+      learnings.ok && learnings.none && ["design", "tdd", "review"].includes(stage)
+        ? " Warning: design/tdd/review usually produce reusable decisions, test patterns, or review lessons; keep `None this stage` only for truly mechanical work."
+        : "";
     findings.push({
       section: "Learnings",
       required: requireLearnings,
       rule: "`## Learnings` must contain either a single `- None this stage.` bullet or JSON bullets compatible with knowledge.jsonl fields (type/trigger/action/confidence required).",
       found: learnings.ok,
-      details: learnings.details
+      details: `${learnings.details}${meaningfulStageNoneWarning}`
     });
   }
 
@@ -2795,15 +2799,16 @@ export async function checkReviewSecurityNoChangeAttestation(
   const hasSecurityFinding =
     securityTableRowPattern.test(securityBody) || securityBulletPattern.test(securityBody);
 
-  const attestationMatch = /NO_CHANGE_ATTESTATION\s*:\s*(.*)/iu.exec(securityBody);
-  const hasNoChangeAttestation = Boolean(attestationMatch && attestationMatch[1]?.trim().length > 0);
-  if (attestationMatch && attestationMatch[1]?.trim().length === 0) {
-    errors.push("NO_CHANGE_ATTESTATION must include a non-empty rationale.");
+  const attestationMatch = /\b(NO_CHANGE_ATTESTATION|NO_SECURITY_IMPACT)\b\s*:\s*(.*)/iu.exec(securityBody);
+  const attestationToken = attestationMatch?.[1] ?? "NO_CHANGE_ATTESTATION";
+  const hasNoChangeAttestation = Boolean(attestationMatch && attestationMatch[2]?.trim().length > 0);
+  if (attestationMatch && attestationMatch[2]?.trim().length === 0) {
+    errors.push(`${attestationToken} must include a non-empty rationale.`);
   }
 
   if (!hasSecurityFinding && !hasNoChangeAttestation) {
     errors.push(
-      "Layer 2 security evidence missing: include at least one security finding or `NO_CHANGE_ATTESTATION: <reason>`."
+      "Layer 2 security evidence missing: include at least one security finding or `NO_CHANGE_ATTESTATION: <reason>` / `NO_SECURITY_IMPACT: <reason>`."
     );
   }
 

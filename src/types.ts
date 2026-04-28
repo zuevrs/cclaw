@@ -121,6 +121,13 @@ export interface SliceReviewConfig {
 export interface TddPathConfig {
   testPathPatterns?: string[];
   productionPathPatterns?: string[];
+  /**
+   * Verification reference policy for tdd_verified_before_complete evidence.
+   * - auto: require commit SHA when .git exists; with vcs:none require no-VCS reason plus content/artifact hash.
+   * - required: always require a commit SHA except explicit vcs:none still uses no-VCS hash evidence.
+   * - disabled: command + pass status are enough.
+   */
+  verificationRef?: "auto" | "required" | "disabled";
 }
 
 /**
@@ -169,10 +176,14 @@ export interface ReviewLoopConfig {
   externalSecondOpinion?: ReviewLoopExternalSecondOpinionConfig;
 }
 
+export type VcsMode = "git-with-remote" | "git-local-only" | "none";
+
 export interface CclawConfig {
   version: string;
   flowVersion: string;
   harnesses: HarnessId[];
+  /** Repository evidence mode for stages that need durable verification refs. */
+  vcs?: VcsMode;
   /**
    * Single knob that controls enforcement behaviour of all hook-driven guards
    * (prompt guard, workflow guard, TDD enforcement, iron laws). Default:
