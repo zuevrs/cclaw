@@ -12,7 +12,7 @@ import { FLOW_STAGES, TRACK_STAGES } from "../../src/types.js";
 const repoRoot = process.cwd();
 
 async function readRepoFile(relativePath: string): Promise<string> {
-  return fs.readFile(path.join(repoRoot, relativePath), "utf8");
+  return (await fs.readFile(path.join(repoRoot, relativePath), "utf8")).replace(/\r\n/g, "\n");
 }
 
 function mermaidBlockCount(markdown: string): number {
