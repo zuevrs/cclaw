@@ -139,6 +139,26 @@ function sectionBodyByHeadingPrefix(sections: H2SectionMap, prefix: string): str
   return null;
 }
 
+/**
+ * Build a regex that matches `<field>: <value>` even when the field name
+ * and/or value are wrapped in markdown emphasis (`*`, `**`, `_`, `__`).
+ *
+ * The shipped templates render fields as `- **Field name:** value`, so any
+ * structural check that searches for `Field:\s*token` against the rendered
+ * artifact must tolerate the closing `**` between the colon and the value.
+ *
+ * `field` is treated as literal text (regex meta-characters are escaped).
+ * `value` is inserted verbatim so callers can pass alternation
+ * (`STARTUP|BUILDER|...`). `flags` defaults to case-insensitive Unicode.
+ */
+function markdownFieldRegex(field: string, value: string, flags = "iu"): RegExp {
+  const escapedField = field.replace(/[.*+?^${}()|[\]\\]/gu, "\\$&");
+  const emph = "[*_]{0,2}";
+  const source =
+    `(?:^|[\\s>])${emph}\\s*${escapedField}\\s*${emph}\\s*:\\s*${emph}\\s*(?:${value})\\b`;
+  return new RegExp(source, flags);
+}
+
 export function extractMarkdownSectionBody(markdown: string, section: string): string | null {
   return sectionBodyByName(extractH2Sections(markdown), section);
 }
@@ -253,7 +273,7 @@ const DESIGN_DIAGRAM_REQUIREMENTS: Record<DesignDiagramTier, DesignDiagramRequir
 function normalizeDesignDiagramTier(value: string | null): DesignDiagramTier | null {
   if (!value) return null;
   const normalized = value.trim().toLowerCase();
-  if (/^light(?:weight)?$/u.test(normalized)) return "lightweight";
+  if (/^(?:lite|light|lightweight)$/u.test(normalized)) return "lightweight";
   if (/^standard$/u.test(normalized)) return "standard";
   if (/^deep$/u.test(normalized)) return "deep";
   return null;
@@ -263,12 +283,21 @@ function parseApproachTierSection(sectionBody: string | null): DesignDiagramTier
   if (!sectionBody) return null;
   for (const line of sectionBody.split(/\r?\n/u)) {
     const cleaned = line.replace(/[*_`]/gu, "").trim();
-    const directMatch = /(?:^|\b)tier\s*:\s*(lightweight|light|standard|deep)\b/iu.exec(cleaned);
+    const directMatch = /(?:^|\b)tier\s*:\s*(lite|lightweight|light|standard|deep)\b/iu.exec(cleaned);
     if (directMatch) {
-      return normalizeDesignDiagramTier(directMatch[1] ?? null);
+      const captured = directMatch[1] ?? "";
+      const remainder = cleaned.slice(cleaned.toLowerCase().indexOf("tier") + 4);
+      const tierTokens = remainder.match(/\b(?:lite|lightweight|light|standard|deep)\b/giu) ?? [];
+      const distinct = new Set(tierTokens.map((token) => token.toLowerCase()));
+      if (distinct.size >= 2) {
+        // Multi-token line is the unfilled template placeholder
+        // (`Tier: lite | standard | deep`); treat as no decision.
+        continue;
+      }
+      return normalizeDesignDiagramTier(captured);
     }
   }
-  const token = /\b(lightweight|light|standard|deep)\b/iu.exec(sectionBody)?.[1] ?? null;
+  const token = /\b(lite|lightweight|light|standard|deep)\b/iu.exec(sectionBody)?.[1] ?? null;
   return normalizeDesignDiagramTier(token);
 }
 
@@ -2024,15 +2053,31 @@ export async function lintArtifact(
     // to a single row (defeating the "2-3 distinct approaches" gate).
     const tierBody = sectionBodyByName(sections, "Approach Tier");
     if (tierBody !== null) {
-      const hasTierToken = /\b(?:lightweight|standard|deep)\b/iu.test(tierBody);
+      // Token vocabulary covers `lite`, `Lightweight`, `Standard`, and
+      // `Deep` (case-insensitive). A line that lists ≥2 distinct tokens is
+      // the unfilled template placeholder (`Tier: lite | standard | deep`)
+      // and must not silently pass; we look for at least one decision line
+      // with exactly one token, while ignoring placeholder lines.
+      const cleanedLines = tierBody
+        .split("\n")
+        .map((line) => line.replace(/[*_`]/gu, ""));
+      const lineTokenCounts = cleanedLines.map((line) => {
+        const tokens = line.match(/\b(?:lite|lightweight|light|standard|deep)\b/giu) ?? [];
+        return new Set(tokens.map((token) => token.toLowerCase())).size;
+      });
+      const hasDecisionLine = lineTokenCounts.some((count) => count === 1);
+      const hasPlaceholderLine = lineTokenCounts.some((count) => count >= 2);
+      const ok = hasDecisionLine;
       findings.push({
         section: "Approach Tier Classification",
         required: true,
-        rule: "Approach Tier must explicitly classify depth as Lightweight, Standard, or Deep.",
-        found: hasTierToken,
-        details: hasTierToken
-          ? "Approach Tier includes a recognized depth token."
-          : "Approach Tier is missing a recognized depth token (Lightweight/Standard/Deep)."
+        rule: "Approach Tier must explicitly classify depth as one of `lite` (a.k.a. `Lightweight`), `Standard`, or `Deep`.",
+        found: ok,
+        details: ok
+          ? "Approach Tier includes a single recognized depth token."
+          : hasPlaceholderLine
+            ? "Approach Tier still lists multiple tier tokens (template placeholder); pick exactly one of `lite`/`Lightweight`, `Standard`, or `Deep`."
+            : "Approach Tier is missing a recognized depth token (`lite`/`Lightweight`, `Standard`, or `Deep`)."
       });
     }
 
@@ -2185,16 +2230,33 @@ export async function lintArtifact(
     // approach detail cards, anti-sycophancy stamp).
     const modeBody = sectionBodyByName(sections, "Mode Block");
     if (modeBody !== null) {
-      const modeRegex = /\bMode:\s*(STARTUP|BUILDER|ENGINEERING|OPS|RESEARCH)\b/u;
-      const ok = modeRegex.test(modeBody);
+      const modeTokens = ["STARTUP", "BUILDER", "ENGINEERING", "OPS", "RESEARCH"] as const;
+      const modeRegex = markdownFieldRegex(
+        "Mode",
+        modeTokens.join("|"),
+        "u"
+      );
+      const tokenMatches = new Set<string>();
+      const lineRegex = new RegExp(modeRegex.source, "gu");
+      for (const match of modeBody.matchAll(lineRegex)) {
+        const token = (match[0].match(/STARTUP|BUILDER|ENGINEERING|OPS|RESEARCH/u) ?? [""])[0];
+        if (token) tokenMatches.add(token);
+      }
+      const placeholderLine = modeBody
+        .split("\n")
+        .find((line) => /\bMode\b\s*[*_]{0,2}\s*:/iu.test(line) && (line.match(/STARTUP|BUILDER|ENGINEERING|OPS|RESEARCH/giu) ?? []).length >= 2);
+      const isPlaceholder = Boolean(placeholderLine);
+      const ok = tokenMatches.size === 1 && !isPlaceholder;
       findings.push({
         section: "Mode Block Token",
         required: true,
         rule: "Mode Block must declare exactly one mode token: STARTUP, BUILDER, ENGINEERING, OPS, or RESEARCH.",
         found: ok,
         details: ok
-          ? "Recognized mode token detected."
-          : "Mode Block is missing a recognized mode token (STARTUP/BUILDER/ENGINEERING/OPS/RESEARCH)."
+          ? `Recognized mode token detected: ${[...tokenMatches][0] ?? ""}.`
+          : isPlaceholder
+            ? "Mode Block still lists multiple mode tokens (template placeholder); pick exactly one of STARTUP/BUILDER/ENGINEERING/OPS/RESEARCH."
+            : "Mode Block is missing a recognized mode token (STARTUP/BUILDER/ENGINEERING/OPS/RESEARCH)."
       });
     }
 
@@ -2300,7 +2362,10 @@ export async function lintArtifact(
 
     const stampBody = sectionBodyByName(sections, "Anti-Sycophancy Stamp");
     if (stampBody !== null) {
-      const acknowledged = /forbidden response openers acknowledged:\s*(yes|true|y)\b/iu.test(stampBody);
+      const acknowledged = markdownFieldRegex(
+        "Forbidden response openers acknowledged",
+        "yes|true|y"
+      ).test(stampBody);
       findings.push({
         section: "Anti-Sycophancy Acknowledgement",
         required: true,
@@ -2410,7 +2475,7 @@ export async function lintArtifact(
 
     const regressionBody = sectionBodyByName(sections, "Regression Iron Rule");
     if (regressionBody !== null) {
-      const ack = /iron rule acknowledged:\s*(yes|true|y)\b/iu.test(regressionBody);
+      const ack = markdownFieldRegex("Iron rule acknowledged", "yes|true|y").test(regressionBody);
       findings.push({
         section: "Regression Iron Rule Acknowledgement",
         required: true,

@@ -23,7 +23,7 @@ const REQUIRED_TOP_LEVEL_FIELDS: Record<FlowStage, string[]> = {
 
 const STAGE_TAXONOMIES: Record<FlowStage, Record<string, string[]>> = {
   brainstorm: {
-    approachTier: ["Lightweight", "Standard", "Deep"],
+    approachTier: ["Lightweight", "Standard", "Deep", "lite", "standard", "deep"],
     approachRole: ["baseline", "challenger", "wild-card"],
     approachUpside: ["low", "modest", "high", "higher"]
   },
