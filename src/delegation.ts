@@ -22,14 +22,40 @@ export type DelegationStatus =
   | "waived"
   | "stale";
 const TERMINAL_DELEGATION_STATUSES = new Set<DelegationStatus>(["completed", "failed", "waived", "stale"]);
-export type DelegationDispatchSurface =
-  | "claude-task"
-  | "cursor-task"
-  | "opencode-agent"
-  | "codex-agent"
-  | "generic-task"
-  | "role-switch"
-  | "manual";
+export const DELEGATION_DISPATCH_SURFACES = [
+  "claude-task",
+  "cursor-task",
+  "opencode-agent",
+  "codex-agent",
+  "generic-task",
+  "role-switch",
+  "manual"
+] as const;
+export type DelegationDispatchSurface = typeof DELEGATION_DISPATCH_SURFACES[number];
+
+/**
+ * Per-surface allowed agent-definition path prefixes. Used by the generated
+ * `.cclaw/hooks/delegation-record.mjs` helper to reject mismatched
+ * `--agent-definition-path` values without inspecting any harness state.
+ *
+ * The list is intentionally structural: each surface maps to one or more
+ * repo-relative path prefixes that must be a parent of the supplied path.
+ * `role-switch` and `manual` accept any path because the agent-definition
+ * is intentionally not a generated artifact for those surfaces.
+ */
+export const DELEGATION_DISPATCH_SURFACE_PATH_PREFIXES: Record<
+  DelegationDispatchSurface,
+  string[]
+> = {
+  "claude-task": [".claude/agents/", ".cclaw/agents/"],
+  "cursor-task": [".cursor/agents/", ".cclaw/agents/"],
+  "opencode-agent": [".opencode/agents/", ".cclaw/agents/"],
+  "codex-agent": [".codex/agents/", ".cclaw/agents/"],
+  "generic-task": [".cclaw/agents/"],
+  "role-switch": [],
+  "manual": []
+};
+
 export type DelegationEventType = DelegationStatus;
 
 /**
@@ -40,12 +66,16 @@ export type DelegationEventType = DelegationStatus;
  * - `generic-dispatch` — generic Task/Subagent dispatch mapped to a named role.
  * - `role-switch`      — performed in-session with explicit role announce.
  * - `harness-waiver`   — auto-waived due to missing dispatch capability.
+ * - `legacy-inferred`  — pre-v3 entry: completed status without dispatch
+ *   surface/proof. Read-only; stage-complete reports it as a warning until
+ *   the entry is re-recorded via `delegation-record.mjs --rerecord`.
  */
 export type DelegationFulfillmentMode =
   | "isolated"
   | "generic-dispatch"
   | "role-switch"
-  | "harness-waiver";
+  | "harness-waiver"
+  | "legacy-inferred";
 
 export interface DelegationTokenUsage {
   input: number;
@@ -111,19 +141,32 @@ export type DelegationEntry = {
    * harness).
    */
   fulfillmentMode?: DelegationFulfillmentMode;
-  /** Schema version marker for span-compatible delegation logs. */
-  schemaVersion?: 1;
+  /**
+   * Schema version marker for span-compatible delegation rows.
+   *
+   * - `1` — legacy rows that predate the dispatch-surface lock
+   * - `2` — historical interim format that introduced ack/launched
+   *   timestamps but did not require dispatch-surface or ack-ts on
+   *   completed isolated/generic
+   * - `3` — current format: completed isolated/generic must carry
+   *   `dispatchSurface`, `agentDefinitionPath`, and ACK timestamp
+   */
+  schemaVersion?: 1 | 2 | 3;
 };
+
+export const DELEGATION_LEDGER_SCHEMA_VERSION = 3 as const;
 
 export type DelegationLedger = {
   runId: string;
   entries: DelegationEntry[];
+  /** Schema version of the ledger envelope. Current: `3`. */
+  schemaVersion?: 1 | 2 | 3;
 };
 
 export type DelegationEvent = DelegationEntry & {
   event: DelegationEventType;
   eventTs: string;
-  schemaVersion: 1;
+  schemaVersion: 1 | 2 | 3;
 };
 
 interface ReviewTriggerMetrics {
@@ -312,7 +355,8 @@ function isDelegationEntry(value: unknown): value is DelegationEntry {
       o.fulfillmentMode === "isolated" ||
       o.fulfillmentMode === "generic-dispatch" ||
       o.fulfillmentMode === "role-switch" ||
-      o.fulfillmentMode === "harness-waiver") &&
+      o.fulfillmentMode === "harness-waiver" ||
+      o.fulfillmentMode === "legacy-inferred") &&
     (o.conditionTrigger === undefined || typeof o.conditionTrigger === "string") &&
     (o.dispatchId === undefined || typeof o.dispatchId === "string") &&
     (o.workerRunId === undefined || typeof o.workerRunId === "string") &&
@@ -325,21 +369,13 @@ function isDelegationEntry(value: unknown): value is DelegationEntry {
     retryOk &&
     (o.evidenceRefs === undefined || (Array.isArray(o.evidenceRefs) && o.evidenceRefs.every((item) => typeof item === "string"))) &&
     (o.skill === undefined || typeof o.skill === "string") &&
-    (o.schemaVersion === undefined || o.schemaVersion === 1)
+    (o.schemaVersion === undefined || o.schemaVersion === 1 || o.schemaVersion === 2 || o.schemaVersion === 3)
   );
 }
 
 
 function isDelegationDispatchSurface(value: unknown): value is DelegationDispatchSurface {
-  return (
-    value === "claude-task" ||
-    value === "cursor-task" ||
-    value === "opencode-agent" ||
-    value === "codex-agent" ||
-    value === "generic-task" ||
-    value === "role-switch" ||
-    value === "manual"
-  );
+  return typeof value === "string" && (DELEGATION_DISPATCH_SURFACES as readonly string[]).includes(value);
 }
 
 function statusTimestampPatch(entry: DelegationEntry, ts: string): DelegationEntry {
@@ -356,32 +392,53 @@ function eventFromEntry(entry: DelegationEntry): DelegationEvent {
     ...entry,
     event: entry.status,
     eventTs,
-    schemaVersion: 1
+    schemaVersion: DELEGATION_LEDGER_SCHEMA_VERSION
   };
 }
 
 function isDelegationEvent(value: unknown): value is DelegationEvent {
   if (!isDelegationEntry(value)) return false;
   const o = value as Record<string, unknown>;
-  return o.event === o.status && typeof o.eventTs === "string";
+  if (o.event !== o.status || typeof o.eventTs !== "string") return false;
+  return true;
 }
 
 function parseLedger(raw: unknown, runId: string): DelegationLedger {
   if (!raw || typeof raw !== "object" || Array.isArray(raw)) {
-    return { runId, entries: [] };
+    return { runId, entries: [], schemaVersion: DELEGATION_LEDGER_SCHEMA_VERSION };
   }
   const o = raw as Record<string, unknown>;
+  const ledgerSchemaVersion = (
+    o.schemaVersion === 1 || o.schemaVersion === 2 || o.schemaVersion === 3
+      ? o.schemaVersion
+      : undefined
+  ) as DelegationLedger["schemaVersion"];
   const entriesRaw = o.entries;
   const entries: DelegationEntry[] = [];
   if (Array.isArray(entriesRaw)) {
     for (const item of entriesRaw) {
       if (isDelegationEntry(item)) {
         const ts = item.startTs ?? item.ts ?? new Date().toISOString();
-        const isLegacyCompletion =
+        // A row is "pre-v3 legacy" when the file format predates the
+        // dispatch-proof contract: schemaVersion is missing on both ledger
+        // and entry, the entry has no fulfillmentMode, and there is no
+        // dispatch-surface or dispatch-id evidence on the row. We honor
+        // that by tagging fulfillmentMode = "legacy-inferred" so callers
+        // (stage-complete, doctor) can require an explicit `--rerecord`
+        // before the row counts as proof-era.
+        const ledgerHasNoVersion = ledgerSchemaVersion === undefined || ledgerSchemaVersion === 1;
+        const entryHasNoVersion = item.schemaVersion === undefined || item.schemaVersion === 1;
+        const looksLegacy =
+          ledgerHasNoVersion &&
+          entryHasNoVersion &&
           item.fulfillmentMode === undefined &&
-          item.schemaVersion === undefined &&
+          item.dispatchSurface === undefined &&
+          item.dispatchId === undefined &&
+          item.workerRunId === undefined &&
+          item.agentDefinitionPath === undefined &&
           item.status === "completed";
-        const inferredFulfillmentMode = item.fulfillmentMode ?? (isLegacyCompletion ? "isolated" : undefined);
+        const inferredFulfillmentMode = item.fulfillmentMode
+          ?? (looksLegacy ? "legacy-inferred" : (item.status === "completed" && item.schemaVersion === undefined ? "isolated" : undefined));
         entries.push({
           ...item,
           spanId: item.spanId ?? createSpanId(),
@@ -397,12 +454,12 @@ function parseLedger(raw: unknown, runId: string): DelegationLedger {
               : 0,
           evidenceRefs: Array.isArray(item.evidenceRefs) ? item.evidenceRefs : [],
           fulfillmentMode: inferredFulfillmentMode,
-          schemaVersion: 1
+          schemaVersion: item.schemaVersion ?? DELEGATION_LEDGER_SCHEMA_VERSION
         });
       }
     }
   }
-  return { runId, entries };
+  return { runId, entries, schemaVersion: ledgerSchemaVersion ?? DELEGATION_LEDGER_SCHEMA_VERSION };
 }
 
 export async function readDelegationLedger(projectRoot: string): Promise<DelegationLedger> {
@@ -495,7 +552,7 @@ export async function appendDelegation(projectRoot: string, entry: DelegationEnt
     if (stamped.status === "scheduled") {
       delete stamped.endTs;
     }
-    stamped.schemaVersion = 1;
+    stamped.schemaVersion = DELEGATION_LEDGER_SCHEMA_VERSION;
     if (
       stamped.retryCount === undefined ||
       !Number.isInteger(stamped.retryCount) ||
@@ -528,7 +585,8 @@ export async function appendDelegation(projectRoot: string, entry: DelegationEnt
     await appendDelegationEvent(projectRoot, eventFromEntry(stamped));
     const ledger: DelegationLedger = {
       runId: activeRunId,
-      entries: [...prior.entries, stamped]
+      entries: [...prior.entries, stamped],
+      schemaVersion: DELEGATION_LEDGER_SCHEMA_VERSION
     };
     await writeFileSafe(filePath, `${JSON.stringify(ledger, null, 2)}\n`, { mode: 0o600 });
     await writeSubagentTracker(projectRoot, ledger.entries);
@@ -591,6 +649,7 @@ export async function checkMandatoryDelegations(
   const missingEvidence: string[] = [];
   const missingDispatchProof: string[] = [];
   const legacyInferredCompletions: string[] = [];
+  let legacyRequiresRerecord = false;
   const terminalSpanIds = new Set(
     forRun
       .filter((entry) => TERMINAL_DELEGATION_STATUSES.has(entry.status) && entry.spanId)
@@ -638,8 +697,20 @@ export async function checkMandatoryDelegations(
       missingEvidence.push(agent);
     }
 
+    // legacyInferredCompletions has two sources, split by `legacyTagged`:
+    //   - legacyTagged === true : the row was *parsed* as legacy-inferred
+    //     from a pre-v3 ledger file. Requires `delegation-record.mjs
+    //     --rerecord` and BLOCKS satisfied.
+    //   - legacyTagged === false: in-check inference for minimally-spec'd
+    //     isolated rows that lack proof-era signals. Advisory only —
+    //     preserves backward-compatible behavior for existing API callers.
     for (const row of completedRows) {
       const mode = row.fulfillmentMode ?? "isolated";
+      if (mode === "legacy-inferred") {
+        legacyInferredCompletions.push(`${agent}(spanId=${row.spanId ?? "unknown"})`);
+        legacyRequiresRerecord = true;
+        continue;
+      }
       if (mode === "isolated") {
         const spanEvents = events.events.filter((event) =>
           event.runId === activeRunId &&
@@ -668,7 +739,13 @@ export async function checkMandatoryDelegations(
   }
 
   return {
-    satisfied: missing.length === 0 && missingEvidence.length === 0 && missingDispatchProof.length === 0 && staleWorkers.length === 0 && events.corruptLines.length === 0,
+    satisfied:
+      missing.length === 0 &&
+      missingEvidence.length === 0 &&
+      missingDispatchProof.length === 0 &&
+      !legacyRequiresRerecord &&
+      staleWorkers.length === 0 &&
+      events.corruptLines.length === 0,
     missing,
     waived,
     staleIgnored,

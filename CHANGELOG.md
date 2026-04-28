@@ -1,5 +1,25 @@
 # Changelog
 
+## 0.51.27
+
+### Fixed
+
+- Hardened the delegation proof model with ledger schema v3 and a `legacy-inferred` fulfillment mode, so pre-v3 ledger rows are surfaced as `legacyRequiresRerecord` and explicitly upgraded via the `delegation-record.mjs --rerecord` helper instead of silently passing stage-complete.
+- Locked the `delegation-record.mjs` helper down: `--dispatch-surface` now strictly validates against the `DELEGATION_DISPATCH_SURFACES` enum (rejecting legacy `task`), `--agent-definition-path` is verified against the harness-specific directory layout, and `--ack-ts` is mandatory for `event=completed` with isolated/generic surfaces.
+- Split `stage-complete` diagnostics into granular categories (`missing`, `missingDispatchProof`, `legacyInferredCompletions`, `corruptEventLines`, `staleWorkers`, `waivedWithEvidence`) with per-failure `nextActions`, eliminating opaque "missing delegations" failures.
+- Generated per-harness lifecycle recipes (OpenCode / Codex / Cursor / Claude) with the correct dispatch surface, neutral placeholders, and dispatch-surface table dynamically rendered from the runtime enum, keeping `docs/harnesses.md` in sync with `src/delegation.ts`.
+
+### Changed
+
+- Upgraded all eight stage templates (brainstorm → ship) and skills with universal, domain-neutral quality gates: mode selection blocks, premise-challenge / forcing questions, mandatory alternatives with calibrated confidence (1–10), STOP-per-issue protocol, anti-sycophancy framing, NO-PLACEHOLDERS rule, watched-RED proof for TDD, ASCII coverage diagrams for design, vertical-slice TDD with per-cycle refactor, and a 4-option ship gate. No domain-specific terminology (web, CRUD, dashboard, framework names) leaks into agent instructions, templates, or linter rules.
+- Promoted reusable cross-cutting building blocks (`stopPerIssueBlock`, `confidenceCalibrationBlock`, `outsideVoiceSlotBlock`, `antiSycophancyBlock`, `noPlaceholdersBlock`, `watchedFailProofBlock`) in `src/content/skills.ts` so each stage skill composes the same mechanics consistently.
+- Expanded the artifact linter with structural-only checks for every stage (presence of mode block, alternatives table columns, confidence-finding format, watched-RED evidence, etc.), keeping checks domain-neutral and agnostic to task type.
+
+### Added
+
+- `docs/quality-gates.md` mapping every cclaw section to its source pattern in `gstack`, `superpowers`, and `evanflow`, with diverse non-web examples (CLI utility, library, infra/migration).
+- `tests/unit/quality-gate-fixtures.test.ts` with regression coverage for the helper (rejects `task`, validates path, requires `ack-ts`), the linter on diverse non-web task types across all 8 stages, and an end-to-end `--rerecord` flow that upgrades a legacy-inferred row to v3 and clears `legacyRequiresRerecord`.
+
 ## 0.51.25
 
 ### Fixed

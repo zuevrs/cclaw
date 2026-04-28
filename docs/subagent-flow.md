@@ -104,12 +104,43 @@ Subagent responsibilities:
 
 Parallel dispatch is allowed for independent read-only research lanes and non-overlapping implementation/review lanes. The controller must serialize work when workers may touch the same module, when one lane's result changes another lane's assumptions, or when a failed lane would invalidate hidden premises. Fast agents may fan out in small groups; deep/high-risk decisions stay narrow and are reconciled by the parent.
 
+## Ledger Schema v3
+
+Schema v3 introduces an explicit `legacy-inferred` `fulfillmentMode` for rows that predate the dispatch-proof contract. When `parseLedger` reads a v1 or v2 ledger that has completed entries lacking `dispatchSurface` proof, those rows are tagged `legacy-inferred` instead of being silently coerced to `isolated`. `stage-complete` then requires explicit re-recording before the stage can pass:
+
+```bash
+node .cclaw/hooks/delegation-record.mjs \
+  --rerecord \
+  --span-id=<span-id> \
+  --dispatch-id=<dispatch-id> \
+  --dispatch-surface=opencode-agent \
+  --agent-definition-path=.opencode/agents/<agent>.md \
+  --ack-ts=<iso-ts> \
+  --completed-ts=<iso-ts> \
+  --json
+```
+
+Rerecord rewrites the legacy row into the v3 shape (a real `isolated` completion with proof) and appends a corresponding event with `rerecord: true`.
+
+## Stage-complete Diagnostics
+
+`stage-complete` now reports each delegation failure category separately:
+
+- `missing` — required role never appeared in the ledger for the active run.
+- `missingDispatchProof` — a proof-era row exists but lacks ack/completion proof; the parent fixed up the helper call instead of re-running the lifecycle.
+- `legacyInferredCompletions` — pre-v3 rows that need `delegation-record.mjs --rerecord`.
+- `corruptEventLines` — `delegation-events.jsonl` rows that failed to parse; the report cites the first three line numbers and a short snippet.
+- `staleWorkers` — `scheduled` rows whose span never reached a terminal event in the active run.
+- `missingEvidence` — completed rows without `evidenceRef` for stages that require it.
+
+Each category carries its own `nextActions` line so the operator does not need to guess which subset of rows to fix.
+
 ## Current Gaps
 
 - Cursor has real generic dispatch but no project-local named cclaw agents, so role prompts and evidence refs carry more of the proof burden.
 - Codex hook coverage is limited for non-Bash tools; the generated skills and helper recipe provide the in-turn enforcement path.
 - OpenCode/Codex native dispatch is prompt-level from the parent perspective, so dispatch IDs and ACK events are required to distinguish real workers from prose claims.
-- Legacy ledgers remain readable, but rows that predate event-log proof are warnings rather than evidence for new isolated completions.
+- Legacy ledgers remain readable, but rows that predate event-log proof are tagged `legacy-inferred` and require explicit `--rerecord` before they count as evidence for new isolated completions.
 
 ## Roadmap
 

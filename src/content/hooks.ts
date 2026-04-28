@@ -2,6 +2,10 @@ import { existsSync } from "node:fs";
 import path from "node:path";
 import { fileURLToPath } from "node:url";
 import { RUNTIME_ROOT } from "../constants.js";
+import {
+  DELEGATION_DISPATCH_SURFACES,
+  DELEGATION_DISPATCH_SURFACE_PATH_PREFIXES
+} from "../delegation.js";
 
 function resolveCliEntrypointForGeneratedHook(): string | null {
   const here = fileURLToPath(import.meta.url);
@@ -281,6 +285,10 @@ import process from "node:process";
 const RUNTIME_ROOT = ${JSON.stringify(RUNTIME_ROOT)};
 const VALID_STATUSES = new Set(["scheduled", "launched", "acknowledged", "completed", "failed", "waived", "stale"]);
 const TERMINAL = new Set(["completed", "failed", "waived", "stale"]);
+const VALID_DISPATCH_SURFACES = ${JSON.stringify([...DELEGATION_DISPATCH_SURFACES])};
+const VALID_DISPATCH_SURFACES_SET = new Set(VALID_DISPATCH_SURFACES);
+const SURFACE_PATH_PREFIXES = ${JSON.stringify(DELEGATION_DISPATCH_SURFACE_PATH_PREFIXES)};
+const LEDGER_SCHEMA_VERSION = 3;
 
 function parseArgs(argv) {
   const args = {};
@@ -363,55 +371,58 @@ function hasPriorAck(events, args, runId) {
 }
 
 function usage() {
-  process.stderr.write("Usage: node .cclaw/hooks/delegation-record.mjs --stage=<stage> --agent=<agent> --mode=<mandatory|proactive> --status=<scheduled|launched|acknowledged|completed|failed|waived|stale> --span-id=<id> [--dispatch-id=<id>] [--worker-run-id=<id>] [--dispatch-surface=<surface>] [--agent-definition-path=<path>] [--ack-ts=<iso>] [--launched-ts=<iso>] [--completed-ts=<iso>] [--evidence-ref=<ref>] [--waiver-reason=<text>] [--json]\\n");
+  process.stderr.write([
+    "Usage:",
+    "  node .cclaw/hooks/delegation-record.mjs --stage=<stage> --agent=<agent> --mode=<mandatory|proactive> --status=<scheduled|launched|acknowledged|completed|failed|waived|stale> --span-id=<id> [--dispatch-id=<id>] [--worker-run-id=<id>] [--dispatch-surface=<surface>] [--agent-definition-path=<path>] [--ack-ts=<iso>] [--launched-ts=<iso>] [--completed-ts=<iso>] [--evidence-ref=<ref>] [--waiver-reason=<text>] [--json]",
+    "  node .cclaw/hooks/delegation-record.mjs --rerecord --span-id=<id> --dispatch-id=<id> --dispatch-surface=<surface> --agent-definition-path=<path> [--ack-ts=<iso>] [--completed-ts=<iso>] [--json]",
+    "",
+    "Allowed --dispatch-surface values:",
+    "  " + VALID_DISPATCH_SURFACES.join(", "),
+    "",
+    "Per-surface allowed --agent-definition-path prefixes:",
+    ...VALID_DISPATCH_SURFACES.map((surface) => "  " + surface + ": " + (SURFACE_PATH_PREFIXES[surface].length === 0 ? "(any)" : SURFACE_PATH_PREFIXES[surface].join(", "))),
+    ""
+  ].join("\\n") + "\\n");
 }
 
-async function main() {
-  const args = parseArgs(process.argv.slice(2));
-  const json = args.json !== undefined;
-  const problems = [];
-  if (!args.stage) problems.push("missing --stage");
-  if (!args.agent) problems.push("missing --agent");
-  if (args.mode !== "mandatory" && args.mode !== "proactive") problems.push("--mode must be mandatory or proactive");
-  if (!VALID_STATUSES.has(args.status)) problems.push("invalid --status");
-  if (!args["span-id"]) problems.push("missing --span-id");
-  if (args.status === "waived" && !args["waiver-reason"]) problems.push("waived status requires --waiver-reason");
-  if (args.status === "completed" && args["dispatch-surface"] !== "role-switch") {
-    for (const key of ["dispatch-id", "dispatch-surface", "agent-definition-path"]) {
-      if (!args[key]) problems.push("completed isolated/generic status requires --" + key);
-    }
+function emitProblems(problems, json, code) {
+  const exitCode = typeof code === "number" ? code : 1;
+  if (json) {
+    process.stdout.write(JSON.stringify({ ok: false, problems, allowedDispatchSurfaces: VALID_DISPATCH_SURFACES }, null, 2) + "\\n");
+  } else {
+    usage();
+    process.stderr.write("[cclaw] delegation-record: " + problems.join("; ") + "\\n");
   }
-  if (args.status === "completed" && args["dispatch-surface"] === "role-switch" && !args["evidence-ref"]) {
-    problems.push("completed role-switch status requires --evidence-ref");
-  }
-  if (problems.length > 0) {
-    if (json) process.stdout.write(JSON.stringify({ ok: false, problems }, null, 2) + "\\n");
-    else {
-      usage();
-      process.stderr.write("[cclaw] delegation-record: " + problems.join("; ") + "\\n");
-    }
-    process.exitCode = 1;
-    return;
-  }
+  process.exitCode = exitCode;
+}
 
-  const root = await detectRoot();
-  const now = new Date().toISOString();
-  const runId = await readRunId(root);
-  if (args.status === "completed" && args["dispatch-surface"] !== "role-switch" && !args["ack-ts"]) {
-    const priorEvents = await readDelegationEvents(root);
-    if (!hasPriorAck(priorEvents, args, runId)) {
-      const ackProblem = "completed isolated/generic status requires prior acknowledged event for same span or --ack-ts";
-      if (json) process.stdout.write(JSON.stringify({ ok: false, problems: [ackProblem] }, null, 2) + "\\n");
-      else {
-        usage();
-        process.stderr.write("[cclaw] delegation-record: " + ackProblem + "\\n");
-      }
-      process.exitCode = 1;
-      return;
-    }
+function normalizeRelPath(value) {
+  return String(value || "").replace(/\\\\/gu, "/").replace(/^\\.\\//u, "");
+}
+
+function dispatchSurfaceMatchesPath(surface, agentDefinitionPath) {
+  const allowed = SURFACE_PATH_PREFIXES[surface] || [];
+  if (allowed.length === 0) return true;
+  const normalized = normalizeRelPath(agentDefinitionPath);
+  return allowed.some((prefix) => normalized === prefix.replace(/\\/$/u, "") || normalized.startsWith(prefix));
+}
+
+async function pathExists(filePath) {
+  try {
+    const stat = await fs.stat(filePath);
+    return stat.isFile() || stat.isDirectory();
+  } catch {
+    return false;
   }
-  const status = args.status;
-  const row = {
+}
+
+function buildRow(args, status, runId, now) {
+  const fulfillmentMode = args["dispatch-surface"] === "role-switch"
+    ? "role-switch"
+    : args["dispatch-surface"] === "cursor-task" || args["dispatch-surface"] === "generic-task"
+      ? "generic-dispatch"
+      : "isolated";
+  return {
     stage: args.stage,
     agent: args.agent,
     mode: args.mode,
@@ -421,7 +432,7 @@ async function main() {
     workerRunId: args["worker-run-id"],
     dispatchSurface: args["dispatch-surface"],
     agentDefinitionPath: args["agent-definition-path"],
-    fulfillmentMode: args["dispatch-surface"] === "role-switch" ? "role-switch" : args["dispatch-surface"] === "cursor-task" || args["dispatch-surface"] === "generic-task" ? "generic-dispatch" : "isolated",
+    fulfillmentMode,
     waiverReason: args["waiver-reason"],
     evidenceRefs: args["evidence-ref"] ? [args["evidence-ref"]] : [],
     runId,
@@ -431,30 +442,202 @@ async function main() {
     ackTs: args["ack-ts"] || (status === "acknowledged" ? now : undefined),
     completedTs: args["completed-ts"] || (status === "completed" ? now : undefined),
     endTs: TERMINAL.has(status) ? now : undefined,
-    schemaVersion: 1
+    schemaVersion: LEDGER_SCHEMA_VERSION
   };
-  const clean = Object.fromEntries(Object.entries(row).filter(([, value]) => value !== undefined));
-  const event = { ...clean, event: status, eventTs: now };
+}
+
+async function persistEntry(root, runId, clean, event, options = {}) {
   const stateDir = path.join(root, RUNTIME_ROOT, "state");
   await fs.mkdir(stateDir, { recursive: true });
   await fs.appendFile(path.join(stateDir, "delegation-events.jsonl"), JSON.stringify(event) + "\\n", { encoding: "utf8", mode: 0o600 });
 
   const ledgerPath = path.join(stateDir, "delegation-log.json");
-  let ledger = { runId, entries: [] };
+  let ledger = { runId, entries: [], schemaVersion: LEDGER_SCHEMA_VERSION };
   try {
     ledger = JSON.parse(await fs.readFile(ledgerPath, "utf8"));
     if (!Array.isArray(ledger.entries)) ledger.entries = [];
   } catch {
-    ledger = { runId, entries: [] };
+    ledger = { runId, entries: [], schemaVersion: LEDGER_SCHEMA_VERSION };
   }
-  if (!ledger.entries.some((entry) => entry.spanId === clean.spanId && entry.status === clean.status)) {
+
+  // Rerecord semantics: replace any pre-existing row with the same spanId
+  // (regardless of its status) so the legacy v1/v2 row is upgraded to v3
+  // shape on disk. The append path keeps the historical dedup semantics:
+  // an exact (spanId, status) duplicate is dropped to keep retried hooks
+  // idempotent.
+  if (options.replaceBySpanId) {
+    ledger.entries = ledger.entries.filter((entry) => entry.spanId !== clean.spanId);
     ledger.entries.push(clean);
     ledger.runId = runId;
+    ledger.schemaVersion = LEDGER_SCHEMA_VERSION;
+    await fs.writeFile(ledgerPath, JSON.stringify(ledger, null, 2) + "\\n", { encoding: "utf8", mode: 0o600 });
+  } else if (!ledger.entries.some((entry) => entry.spanId === clean.spanId && entry.status === clean.status)) {
+    ledger.entries.push(clean);
+    ledger.runId = runId;
+    ledger.schemaVersion = LEDGER_SCHEMA_VERSION;
     await fs.writeFile(ledgerPath, JSON.stringify(ledger, null, 2) + "\\n", { encoding: "utf8", mode: 0o600 });
   }
 
   const active = ledger.entries.filter((entry) => ["scheduled", "launched", "acknowledged"].includes(entry.status));
-  await fs.writeFile(path.join(stateDir, "subagents.json"), JSON.stringify({ active, updatedAt: now }, null, 2) + "\\n", { encoding: "utf8", mode: 0o600 });
+  await fs.writeFile(path.join(stateDir, "subagents.json"), JSON.stringify({ active, updatedAt: event.eventTs }, null, 2) + "\\n", { encoding: "utf8", mode: 0o600 });
+}
+
+async function findLegacyEntry(root, spanId) {
+  const ledgerPath = path.join(root, RUNTIME_ROOT, "state", "delegation-log.json");
+  let ledger;
+  try {
+    ledger = JSON.parse(await fs.readFile(ledgerPath, "utf8"));
+  } catch {
+    return null;
+  }
+  if (!ledger || !Array.isArray(ledger.entries)) return null;
+  return ledger.entries.find((entry) => entry && entry.spanId === spanId) || null;
+}
+
+async function runRerecord(args, json) {
+  const problems = [];
+  for (const key of ["span-id", "dispatch-id", "dispatch-surface", "agent-definition-path"]) {
+    if (!args[key]) problems.push("missing --" + key);
+  }
+  if (args["dispatch-surface"] && !VALID_DISPATCH_SURFACES_SET.has(args["dispatch-surface"])) {
+    problems.push("invalid --dispatch-surface (allowed: " + VALID_DISPATCH_SURFACES.join(", ") + ")");
+  }
+  if (problems.length > 0) {
+    emitProblems(problems, json, 2);
+    return;
+  }
+  const root = await detectRoot();
+  const now = new Date().toISOString();
+  const runId = await readRunId(root);
+  const legacyEntry = await findLegacyEntry(root, args["span-id"]);
+  if (!legacyEntry) {
+    emitProblems(["no legacy ledger entry found for --span-id=" + args["span-id"]], json, 1);
+    return;
+  }
+  if (args["dispatch-surface"] !== "role-switch") {
+    if (!dispatchSurfaceMatchesPath(args["dispatch-surface"], args["agent-definition-path"])) {
+      const allowedPrefixes = SURFACE_PATH_PREFIXES[args["dispatch-surface"]];
+      emitProblems([
+        "--agent-definition-path does not lie under any allowed prefix for --dispatch-surface=" + args["dispatch-surface"] + " (expected one of: " + (allowedPrefixes.join(", ") || "(any)") + ")"
+      ], json, 2);
+      return;
+    }
+    const exists = await pathExists(path.join(root, args["agent-definition-path"]));
+    if (!exists) {
+      emitProblems(["--agent-definition-path does not exist on disk: " + args["agent-definition-path"]], json, 2);
+      return;
+    }
+  }
+  const merged = {
+    stage: legacyEntry.stage,
+    agent: legacyEntry.agent,
+    mode: legacyEntry.mode || "mandatory",
+    "span-id": args["span-id"],
+    "dispatch-id": args["dispatch-id"],
+    "worker-run-id": args["worker-run-id"] || legacyEntry.workerRunId,
+    "dispatch-surface": args["dispatch-surface"],
+    "agent-definition-path": args["agent-definition-path"],
+    "ack-ts": args["ack-ts"] || legacyEntry.ackTs || now,
+    "completed-ts": args["completed-ts"] || legacyEntry.completedTs || now,
+    "launched-ts": args["launched-ts"] || legacyEntry.launchedTs || now
+  };
+  const status = "completed";
+  const clean = Object.fromEntries(Object.entries(buildRow(merged, status, runId, now)).filter(([, value]) => value !== undefined));
+  clean.fulfillmentMode = clean.dispatchSurface === "role-switch" ? "role-switch" : (clean.dispatchSurface === "cursor-task" || clean.dispatchSurface === "generic-task" ? "generic-dispatch" : "isolated");
+  const event = { ...clean, event: status, eventTs: now, rerecord: true };
+  await persistEntry(root, runId, clean, event, { replaceBySpanId: true });
+  process.stdout.write(JSON.stringify({ ok: true, event, rerecord: true }, null, 2) + "\\n");
+}
+
+async function main() {
+  const args = parseArgs(process.argv.slice(2));
+  const json = args.json !== undefined;
+
+  if (args.rerecord) {
+    await runRerecord(args, json);
+    return;
+  }
+
+  const problems = [];
+  if (!args.stage) problems.push("missing --stage");
+  if (!args.agent) problems.push("missing --agent");
+  if (args.mode !== "mandatory" && args.mode !== "proactive") problems.push("--mode must be mandatory or proactive");
+  if (!VALID_STATUSES.has(args.status)) problems.push("invalid --status");
+  if (!args["span-id"]) problems.push("missing --span-id");
+  if (args.status === "waived" && !args["waiver-reason"]) problems.push("waived status requires --waiver-reason");
+
+  // Strict --dispatch-surface enum validation: any provided surface must be
+  // in the canonical allow-list. Do this BEFORE we use the value to gate
+  // completed/role-switch fields.
+  if (args["dispatch-surface"] !== undefined && !VALID_DISPATCH_SURFACES_SET.has(args["dispatch-surface"])) {
+    problems.push("invalid --dispatch-surface (allowed: " + VALID_DISPATCH_SURFACES.join(", ") + ")");
+    emitProblems(problems, json, 2);
+    return;
+  }
+
+  if (args.status === "completed" && args["dispatch-surface"] !== "role-switch") {
+    for (const key of ["dispatch-id", "dispatch-surface", "agent-definition-path"]) {
+      if (!args[key]) problems.push("completed isolated/generic status requires --" + key);
+    }
+  }
+  if (args.status === "completed" && args["dispatch-surface"] === "role-switch" && !args["evidence-ref"]) {
+    problems.push("completed role-switch status requires --evidence-ref");
+  }
+
+  // Validate --agent-definition-path against the surface and on-disk
+  // existence whenever both are provided.
+  if (args["dispatch-surface"] && args["agent-definition-path"] && args["dispatch-surface"] !== "role-switch" && args["dispatch-surface"] !== "manual") {
+    if (!dispatchSurfaceMatchesPath(args["dispatch-surface"], args["agent-definition-path"])) {
+      const allowedPrefixes = SURFACE_PATH_PREFIXES[args["dispatch-surface"]];
+      problems.push("--agent-definition-path does not lie under any allowed prefix for --dispatch-surface=" + args["dispatch-surface"] + " (expected one of: " + (allowedPrefixes.join(", ") || "(any)") + ")");
+    }
+  }
+
+  if (problems.length > 0) {
+    emitProblems(problems, json, 2);
+    return;
+  }
+
+  const root = await detectRoot();
+  const now = new Date().toISOString();
+  const runId = await readRunId(root);
+
+  // For completed isolated/generic rows, --agent-definition-path must
+  // resolve to an existing file or directory inside the project. This
+  // catches typos and stale generated agent paths before they enter the
+  // ledger. Skipped for role-switch (no agent file is generated) and
+  // manual (intentionally free-form).
+  if (
+    args.status === "completed" &&
+    args["dispatch-surface"] &&
+    args["dispatch-surface"] !== "role-switch" &&
+    args["dispatch-surface"] !== "manual" &&
+    args["agent-definition-path"]
+  ) {
+    const exists = await pathExists(path.join(root, args["agent-definition-path"]));
+    if (!exists) {
+      emitProblems(["--agent-definition-path does not exist on disk: " + args["agent-definition-path"]], json, 2);
+      return;
+    }
+  }
+
+  // Completed isolated/generic rows require explicit --ack-ts OR a prior
+  // acknowledged event for the same span. fulfillmentMode=isolated cannot
+  // be claimed without an ACK timestamp anchor.
+  if (args.status === "completed" && args["dispatch-surface"] !== "role-switch" && !args["ack-ts"]) {
+    const priorEvents = await readDelegationEvents(root);
+    if (!hasPriorAck(priorEvents, args, runId)) {
+      const ackProblem = "completed isolated/generic status requires prior acknowledged event for same span or --ack-ts";
+      emitProblems([ackProblem], json, 2);
+      return;
+    }
+  }
+
+  const status = args.status;
+  const row = buildRow(args, status, runId, now);
+  const clean = Object.fromEntries(Object.entries(row).filter(([, value]) => value !== undefined));
+  const event = { ...clean, event: status, eventTs: now };
+  await persistEntry(root, runId, clean, event);
   process.stdout.write(JSON.stringify({ ok: true, event }, null, 2) + "\\n");
 }
 

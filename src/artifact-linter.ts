@@ -6,6 +6,10 @@ import { readConfig } from "./config.js";
 import { RUNTIME_ROOT, SHIP_FINALIZATION_MODES } from "./constants.js";
 import { exists } from "./fs-utils.js";
 import { stageSchema } from "./content/stage-schema.js";
+import {
+  CONFIDENCE_FINDING_REGEX_SOURCE,
+  FORBIDDEN_PLACEHOLDER_TOKENS
+} from "./content/skills.js";
 import { FLOW_STAGES, type FlowStage, type FlowTrack } from "./types.js";
 
 export interface LintFinding {
@@ -2172,6 +2176,159 @@ export async function lintArtifact(
         details: selfReview.details
       });
     }
+
+    // Universal structural checks (Layer 2.1). Each fires only when the
+    // matching section is present so legacy fixtures keep their current
+    // shape, while artifacts emitted from the v3 template have to satisfy
+    // them. Content is never inspected — only the shape required by the
+    // reference patterns (gstack mode, forcing questions, premise list,
+    // approach detail cards, anti-sycophancy stamp).
+    const modeBody = sectionBodyByName(sections, "Mode Block");
+    if (modeBody !== null) {
+      const modeRegex = /\bMode:\s*(STARTUP|BUILDER|ENGINEERING|OPS|RESEARCH)\b/u;
+      const ok = modeRegex.test(modeBody);
+      findings.push({
+        section: "Mode Block Token",
+        required: true,
+        rule: "Mode Block must declare exactly one mode token: STARTUP, BUILDER, ENGINEERING, OPS, or RESEARCH.",
+        found: ok,
+        details: ok
+          ? "Recognized mode token detected."
+          : "Mode Block is missing a recognized mode token (STARTUP/BUILDER/ENGINEERING/OPS/RESEARCH)."
+      });
+    }
+
+    const forcingBody = sectionBodyByName(sections, "Forcing Questions");
+    if (forcingBody !== null) {
+      const tableRows = forcingBody
+        .split("\n")
+        .filter((line) => /^\|\s*\d+\s*\|/u.test(line));
+      const enoughRows = tableRows.length >= 3;
+      findings.push({
+        section: "Forcing Questions Count",
+        required: true,
+        rule: "Forcing Questions must include at least 3 numbered rows.",
+        found: enoughRows,
+        details: enoughRows
+          ? `Detected ${tableRows.length} forcing-question row(s).`
+          : `Detected ${tableRows.length} forcing-question row(s); at least 3 required.`
+      });
+      // A "specific" answer is signalled by at least one of: numeric token,
+      // backticked path/identifier, http(s) link, @mention/role, or quoted
+      // verbatim string. We check structural shape, not content.
+      const specificTokenRegex = /(\d|`[^`]+`|https?:\/\/|@[A-Za-z][\w-]*|"[^"]+"|'[^']+')/u;
+      const allRowsSpecific = tableRows.every((row) => {
+        const cells = row.split("|").map((cell) => cell.trim());
+        // cells: ["", "#", "Question", "Answer", "Decision impact", "Q<n> decision", ""]
+        const answer = cells[3] ?? "";
+        return answer.length > 0 && specificTokenRegex.test(answer);
+      });
+      findings.push({
+        section: "Forcing Questions Specific Answers",
+        required: true,
+        rule: "Each Forcing Questions row must include a specific token in the answer column (number, backticked path, link, @mention, or quoted string).",
+        found: tableRows.length === 0 ? false : allRowsSpecific,
+        details: tableRows.length === 0
+          ? "No rows to evaluate."
+          : allRowsSpecific
+            ? "All rows include a specific-answer token."
+            : "At least one row's answer is missing a specific-answer token (number, `path`, https link, @mention, or quoted string)."
+      });
+      const decisionRows = (forcingBody.match(/decision\s*:/giu) ?? []).length;
+      findings.push({
+        section: "Forcing Questions STOP-per-issue",
+        required: true,
+        rule: "Each forcing-question row must record a `decision:` marker (STOP-per-issue protocol).",
+        found: decisionRows >= tableRows.length && tableRows.length > 0,
+        details:
+          tableRows.length === 0
+            ? "No rows to evaluate."
+            : `Detected ${decisionRows} decision marker(s) for ${tableRows.length} forcing-question row(s).`
+      });
+    }
+
+    const premiseBody = sectionBodyByName(sections, "Premise List");
+    if (premiseBody !== null) {
+      const premiseRowRegex = /^[-*]\s*P\d+:\s+.+\s+—\s+(agreed|disagreed|revised)\b/imu;
+      const allRows = premiseBody
+        .split("\n")
+        .filter((line) => /^[-*]\s*P\d+:/u.test(line));
+      const validRows = allRows.filter((row) => premiseRowRegex.test(row.trim() + "\n"));
+      const enoughPremises = validRows.length >= 2;
+      findings.push({
+        section: "Premise List Shape",
+        required: true,
+        rule: "Premise List must contain at least 2 rows in the form `P<n>: <statement> — agreed|disagreed|revised`.",
+        found: enoughPremises,
+        details: enoughPremises
+          ? `Detected ${validRows.length} valid premise row(s).`
+          : `Detected ${validRows.length} valid premise row(s); at least 2 required (form: \`P<n>: ... — agreed|disagreed|revised\`).`
+      });
+    }
+
+    // Approach Detail Cards: structural sub-section under Approaches, one
+    // bullet block per approach with the canonical fields.
+    const approachCardsRegex =
+      /####\s+APPROACH\s+[A-Z]\b[\s\S]*?(?:^-\s*Summary:[\s\S]*?^-\s*Effort:[\s\S]*?^-\s*Risk:[\s\S]*?^-\s*Pros:[\s\S]*?^-\s*Cons:[\s\S]*?^-\s*Reuses:)/gimu;
+    const matches = raw.match(approachCardsRegex);
+    const cardCount = matches ? matches.length : 0;
+    if (
+      /####\s+APPROACH\s+[A-Z]\b/iu.test(raw) ||
+      /^RECOMMENDATION:/imu.test(raw)
+    ) {
+      findings.push({
+        section: "Approach Detail Cards",
+        required: true,
+        rule: "Approach Detail Cards must include ≥2 `#### APPROACH <letter>` blocks each with Summary/Effort/Risk/Pros/Cons/Reuses.",
+        found: cardCount >= 2,
+        details: cardCount >= 2
+          ? `Detected ${cardCount} valid approach detail card(s).`
+          : `Detected ${cardCount} valid approach detail card(s); at least 2 required with all fields present.`
+      });
+      const recommendationLine = raw.match(/^RECOMMENDATION:\s*(.+)$/imu);
+      const hasRecommendation = recommendationLine !== null && recommendationLine[1] !== undefined && recommendationLine[1].trim().length > 0;
+      findings.push({
+        section: "Approach Recommendation Marker",
+        required: true,
+        rule: "Approach Detail Cards must conclude with a single `RECOMMENDATION:` line citing the chosen letter and rationale.",
+        found: hasRecommendation,
+        details: hasRecommendation
+          ? "Recommendation marker present."
+          : "Missing or empty `RECOMMENDATION:` line after approach detail cards."
+      });
+    }
+
+    const stampBody = sectionBodyByName(sections, "Anti-Sycophancy Stamp");
+    if (stampBody !== null) {
+      const acknowledged = /forbidden response openers acknowledged:\s*(yes|true|y)\b/iu.test(stampBody);
+      findings.push({
+        section: "Anti-Sycophancy Acknowledgement",
+        required: true,
+        rule: "Anti-Sycophancy Stamp must affirm `Forbidden response openers acknowledged: yes`.",
+        found: acknowledged,
+        details: acknowledged
+          ? "Anti-sycophancy commitment is acknowledged."
+          : "Anti-Sycophancy Stamp is missing the explicit `Forbidden response openers acknowledged: yes` marker."
+      });
+    }
+
+    const outsideVoiceBody = sectionBodyByName(sections, "Outside Voice");
+    if (outsideVoiceBody !== null) {
+      const required = ["source:", "prompt:", "tension:", "resolution:"];
+      const missing = required.filter(
+        (key) => !new RegExp(`(?:^|\\n)\\s*-?\\s*${key.replace(":", "\\s*:")}`, "iu").test(outsideVoiceBody)
+      );
+      const optedOut = /\bnot used\b|\bn\/a\b|\bnone\b/iu.test(outsideVoiceBody);
+      findings.push({
+        section: "Outside Voice Slot Shape",
+        required: true,
+        rule: "Outside Voice section must either declare opt-out (`not used`/`none`) or include `source:`, `prompt:`, `tension:`, `resolution:`.",
+        found: optedOut || missing.length === 0,
+        details: optedOut || missing.length === 0
+          ? "Outside Voice slot is well-formed."
+          : `Outside Voice section is missing field(s): ${missing.join(", ")}.`
+      });
+    }
   }
 
   if (stage === "design") {
@@ -2231,6 +2388,61 @@ export async function lintArtifact(
         });
       }
     }
+
+    // Universal Layer 2.3 structural checks (gstack plan-eng-review). All
+    // present-only. Validates ASCII coverage diagram tokens, regression iron
+    // rule acknowledgment, and confidence-calibrated finding format.
+    const coverageBody = sectionBodyByName(sections, "ASCII Coverage Diagram");
+    if (coverageBody !== null) {
+      const tokens = ["[★★★]", "[★★]", "[★]", "[GAP]", "[→E2E]", "[→EVAL]"];
+      const presentTokens = tokens.filter((token) => coverageBody.includes(token));
+      const ok = presentTokens.length >= 3;
+      findings.push({
+        section: "ASCII Coverage Diagram Tokens",
+        required: true,
+        rule: "ASCII Coverage Diagram must use the canonical marker tokens (at least 3 of `[★★★]` / `[★★]` / `[★]` / `[GAP]` / `[→E2E]` / `[→EVAL]`).",
+        found: ok,
+        details: ok
+          ? `Detected ${presentTokens.length} canonical marker token(s).`
+          : `Detected ${presentTokens.length} canonical marker token(s); at least 3 required.`
+      });
+    }
+
+    const regressionBody = sectionBodyByName(sections, "Regression Iron Rule");
+    if (regressionBody !== null) {
+      const ack = /iron rule acknowledged:\s*(yes|true|y)\b/iu.test(regressionBody);
+      findings.push({
+        section: "Regression Iron Rule Acknowledgement",
+        required: true,
+        rule: "Regression Iron Rule section must affirm `Iron rule acknowledged: yes`.",
+        found: ack,
+        details: ack
+          ? "Regression iron rule acknowledged."
+          : "Regression Iron Rule is missing explicit `Iron rule acknowledged: yes`."
+      });
+    }
+
+    const findingsBody = sectionBodyByName(sections, "Calibrated Findings");
+    if (findingsBody !== null) {
+      const isEmpty = /(^|\n)\s*-\s*None this stage\b/iu.test(findingsBody);
+      const findingRegex = new RegExp(CONFIDENCE_FINDING_REGEX_SOURCE, "u");
+      const validRows = findingsBody
+        .split("\n")
+        .filter((line) => /^[-*]\s+\[/u.test(line.trim()))
+        .filter((line) => findingRegex.test(line));
+      const ok = isEmpty || validRows.length >= 1;
+      findings.push({
+        section: "Calibrated Finding Format",
+        required: true,
+        rule: "Calibrated Findings must either declare `None this stage` or contain at least one finding in the form `[P1|P2|P3] (confidence: <n>/10) <path>[:<line>] — <description>`.",
+        found: ok,
+        details: isEmpty
+          ? "No findings recorded for this stage."
+          : ok
+            ? `Detected ${validRows.length} calibrated finding(s).`
+            : "No calibrated findings detected. Use `[P1|P2|P3] (confidence: <n>/10) <repo-path>[:<line>] — <description>`."
+      });
+    }
   }
 
   if (stage === "plan") {
@@ -2288,6 +2500,92 @@ export async function lintArtifact(
             ? "No scope-reduction phrases detected in Task List."
             : `Detected scope-reduction phrase(s) in Task List: ${reductionHits.join(", ")}.`
     });
+
+    // Universal Layer 2.5 structural checks (superpowers writing-plans + ce-plan).
+    // Plan-wide placeholder scan (broader than Task List) using the
+    // FORBIDDEN_PLACEHOLDER_TOKENS list shared with the cross-cutting block.
+    const planHeaderBody = sectionBodyByName(sections, "Plan Header");
+    if (planHeaderBody !== null) {
+      const required = ["Goal:", "Architecture:", "Tech Stack:"];
+      const missing = required.filter(
+        (token) => !new RegExp(token.replace(":", "\\s*:"), "iu").test(planHeaderBody)
+      );
+      findings.push({
+        section: "Plan Header Coverage",
+        required: true,
+        rule: "Plan Header must include Goal, Architecture, and Tech Stack lines.",
+        found: missing.length === 0,
+        details: missing.length === 0
+          ? "Plan Header covers Goal/Architecture/Tech Stack."
+          : `Plan Header is missing field(s): ${missing.join(", ")}.`
+      });
+    }
+
+    const unitBlocks = raw.match(/###\s+Implementation Unit\s+U-\d+/giu) ?? [];
+    if (unitBlocks.length > 0) {
+      const requiredKeys = ["Goal:", "Files", "Approach:", "Test scenarios:", "Verification:"];
+      const blockBodies = raw.split(/(?=###\s+Implementation Unit\s+U-\d+)/iu).slice(1);
+      const validBlocks = blockBodies.filter((block) =>
+        requiredKeys.every((key) =>
+          new RegExp(key.replace(":", "\\s*:"), "iu").test(block)
+        )
+      );
+      findings.push({
+        section: "Implementation Unit Shape",
+        required: true,
+        rule: "Each `### Implementation Unit U-<n>` must include Goal, Files, Approach, Test scenarios, Verification.",
+        found: validBlocks.length === unitBlocks.length,
+        details: validBlocks.length === unitBlocks.length
+          ? `All ${unitBlocks.length} implementation unit(s) include the required fields.`
+          : `${unitBlocks.length - validBlocks.length} implementation unit(s) are missing required fields.`
+      });
+    }
+
+    const allPlaceholderTokens = FORBIDDEN_PLACEHOLDER_TOKENS.map((token) =>
+      token.toLowerCase()
+    );
+    const lowerRaw = raw.toLowerCase();
+    const planWidePlaceholderHits = allPlaceholderTokens.filter((token) =>
+      lowerRaw.includes(token)
+    );
+    // Strip the "## NO PLACEHOLDERS Rule" section (which lists tokens) and
+    // any acknowledgement text from the scan to avoid false positives where
+    // the plan deliberately references the rule by name.
+    const placeholderRuleSection = sectionBodyByName(sections, "NO PLACEHOLDERS Rule");
+    const ruleScanBody = (placeholderRuleSection ?? "").toLowerCase();
+    const ruleAcceptedHits = ruleScanBody.length > 0
+      ? allPlaceholderTokens.filter((token) => ruleScanBody.includes(token))
+      : [];
+    const filteredPlanHits = planWidePlaceholderHits.filter((token) => {
+      // If the only occurrence is in the rule section, ignore it.
+      if (!ruleAcceptedHits.includes(token)) return true;
+      const occurrencesElsewhere = lowerRaw.split(token).length - 1
+        - (ruleScanBody.split(token).length - 1);
+      return occurrencesElsewhere > 0;
+    });
+    findings.push({
+      section: "Plan-wide Placeholder Scan",
+      required: false,
+      rule: "Plan should not contain forbidden placeholder tokens outside the NO PLACEHOLDERS rule section.",
+      found: filteredPlanHits.length === 0,
+      details: filteredPlanHits.length === 0
+        ? "No forbidden placeholder tokens detected outside the rule section."
+        : `Detected forbidden token(s) elsewhere in plan: ${filteredPlanHits.join(", ")}.`
+    });
+
+    const handoffBody = sectionBodyByName(sections, "Execution Handoff");
+    if (handoffBody !== null) {
+      const ok = /(subagent-driven|inline executor)/iu.test(handoffBody);
+      findings.push({
+        section: "Execution Handoff Posture",
+        required: true,
+        rule: "Execution Handoff must declare a posture (Subagent-Driven or Inline executor).",
+        found: ok,
+        details: ok
+          ? "Execution Handoff posture declared."
+          : "Execution Handoff is missing a posture declaration (Subagent-Driven or Inline executor)."
+      });
+    }
   }
 
   if (stage === "scope") {
@@ -2367,6 +2665,344 @@ export async function lintArtifact(
           issues.length === 0
             ? `${rowDecisionIds.length} decision ID(s) recorded with no duplicates.`
             : issues.join("; ")
+      });
+    }
+
+    // Universal Layer 2.2 structural checks (gstack plan-ceo-review). All
+    // present-only — they validate shape when the section exists.
+    const altsBody = sectionBodyByName(sections, "Implementation Alternatives");
+    if (altsBody !== null) {
+      const recommendation = /^RECOMMENDATION:\s*(.+)$/imu.test(altsBody);
+      findings.push({
+        section: "Implementation Alternatives Recommendation",
+        required: true,
+        rule: "Implementation Alternatives must conclude with a `RECOMMENDATION:` line citing the chosen option and rationale.",
+        found: recommendation,
+        details: recommendation
+          ? "Recommendation marker present."
+          : "Missing or empty `RECOMMENDATION:` line under Implementation Alternatives."
+      });
+    }
+
+    const failureModesBody = sectionBodyByName(sections, "Failure Modes Registry");
+    if (failureModesBody !== null) {
+      const required = ["Codepath", "Failure mode", "Rescued?", "Test?", "User sees?", "Logged?"];
+      const headerOk = required.every((column) => failureModesBody.includes(column));
+      const rows = failureModesBody.split("\n").filter((line) => /^\|/u.test(line));
+      const hasDataRow = rows.length >= 3 && rows.slice(2).some((row) =>
+        row
+          .split("|")
+          .slice(1, -1)
+          .some((cell) => cell.trim().length > 0)
+      );
+      findings.push({
+        section: "Failure Modes Registry Shape",
+        required: true,
+        rule: "Failure Modes Registry must include columns Codepath / Failure mode / Rescued? / Test? / User sees? / Logged? and at least one populated data row.",
+        found: headerOk && hasDataRow,
+        details: !headerOk
+          ? "Failure Modes Registry header is missing one or more required columns."
+          : hasDataRow
+            ? "Failure Modes Registry header and at least one data row present."
+            : "Failure Modes Registry has the canonical header but no populated data row."
+      });
+      const decisionMarkers = (failureModesBody.match(/decision\s*:/giu) ?? []).length;
+      findings.push({
+        section: "Failure Modes STOP-per-issue",
+        required: true,
+        rule: "Each Failure Modes Registry data row must record a `decision:` marker (STOP-per-issue protocol).",
+        found: decisionMarkers >= 1,
+        details: decisionMarkers >= 1
+          ? `Detected ${decisionMarkers} decision marker(s).`
+          : "Failure Modes Registry has no `decision:` markers; STOP-per-issue requires at least one."
+      });
+    }
+
+    const reversibilityBody = sectionBodyByName(sections, "Reversibility Rating");
+    if (reversibilityBody !== null) {
+      const scoreMatch = reversibilityBody.match(/score\s*\(.*?\)\s*:\s*([1-5])\b/iu);
+      const ok = scoreMatch !== null;
+      findings.push({
+        section: "Reversibility Rating Score",
+        required: true,
+        rule: "Reversibility Rating must declare a score in the range 1-5.",
+        found: ok,
+        details: ok
+          ? `Reversibility score ${scoreMatch![1]} declared.`
+          : "Reversibility Rating is missing a numeric score 1-5."
+      });
+    }
+  }
+
+  if (stage === "spec") {
+    // Universal Layer 2.4 structural checks (evanflow-prd + superpowers).
+    // All checks fire only when the matching section is present so legacy
+    // fixtures keep working while v3-template artifacts are validated.
+    const synthesisBody = sectionBodyByName(sections, "Synthesis Sources");
+    if (synthesisBody !== null) {
+      const tableRows = synthesisBody
+        .split("\n")
+        .filter((line) => /^\|/u.test(line));
+      const dataRows = tableRows.length >= 3 ? tableRows.slice(2) : [];
+      const populatedRows = dataRows.filter((row) =>
+        row
+          .split("|")
+          .slice(1, -1)
+          .some((cell) => cell.trim().length > 0)
+      );
+      const hasRow = populatedRows.length >= 1;
+      findings.push({
+        section: "Synthesis Sources Coverage",
+        required: true,
+        rule: "Synthesis Sources must cite at least one source artifact (synthesize-not-interview).",
+        found: hasRow,
+        details: hasRow
+          ? `Detected ${populatedRows.length} populated source row(s).`
+          : "Synthesis Sources is empty; spec must cite at least one upstream artifact or context file."
+      });
+    }
+
+    const behaviorBody = sectionBodyByName(sections, "Behavior Contract");
+    if (behaviorBody !== null) {
+      const optedOut = /(^|\n)\s*-\s*None\b/iu.test(behaviorBody);
+      const userStoryRegex = /(^|\n)\s*-\s*as\s+a\b[\s\S]*?,\s*i\s+can\b[\s\S]*?,\s*so that\b/imu;
+      const givenWhenThenRegex = /(^|\n)\s*-\s*given\b[\s\S]*?,\s*when\b[\s\S]*?,\s*then\b/imu;
+      const matches = [
+        ...behaviorBody.matchAll(/(^|\n)\s*-\s*as\s+a\b[\s\S]*?,\s*i\s+can\b[\s\S]*?,\s*so that\b/gimu),
+        ...behaviorBody.matchAll(/(^|\n)\s*-\s*given\b[\s\S]*?,\s*when\b[\s\S]*?,\s*then\b/gimu)
+      ];
+      const ok = optedOut || matches.length >= 3;
+      findings.push({
+        section: "Behavior Contract Shape",
+        required: true,
+        rule: "Behavior Contract must list ≥3 behaviors in user-story (As a/I can/so that) or Given/When/Then form, or declare `- None.` for single-step specs.",
+        found: ok,
+        details: optedOut
+          ? "Single-step spec; behaviors opted out via `- None.`."
+          : ok
+            ? `Detected ${matches.length} behavior(s) in canonical form.`
+            : `Detected ${matches.length} behavior(s) in canonical form; need ≥3 (or `
+              + "`- None.`).",
+      });
+      // Bonus: detect if at least one user-story OR given/when/then form is present
+      // (mirrors existing helpers).
+      void userStoryRegex;
+      void givenWhenThenRegex;
+    }
+
+    const archModulesBody = sectionBodyByName(sections, "Architecture Modules");
+    if (archModulesBody !== null) {
+      const codeFenceCount = (archModulesBody.match(/```/gu) ?? []).length;
+      const fnSignatureRegex = /\b(function|class|def|fn|method)\b\s+[A-Za-z_]/u;
+      const noCode = codeFenceCount === 0 && !fnSignatureRegex.test(archModulesBody);
+      findings.push({
+        section: "Architecture Modules No-Code",
+        required: true,
+        rule: "Architecture Modules must not contain code blocks, function signatures, or class definitions — modules listed by responsibility only.",
+        found: noCode,
+        details: noCode
+          ? "Architecture Modules is free of code blocks and function/class signatures."
+          : "Architecture Modules contains a code fence or function/class signature; remove code-level details."
+      });
+    }
+
+    const selfReviewBody = sectionBodyByName(sections, "Spec Self-Review");
+    if (selfReviewBody !== null) {
+      const required = ["placeholder", "consistency", "scope", "ambiguity"];
+      const missing = required.filter(
+        (token) => !new RegExp(token, "iu").test(selfReviewBody)
+      );
+      findings.push({
+        section: "Spec Self-Review Coverage",
+        required: true,
+        rule: "Spec Self-Review must cover placeholder/consistency/scope/ambiguity checks.",
+        found: missing.length === 0,
+        details: missing.length === 0
+          ? "Spec Self-Review covers all required checks."
+          : `Spec Self-Review is missing check(s): ${missing.join(", ")}.`
+      });
+    }
+  }
+
+  if (stage === "tdd") {
+    // Universal Layer 2.6 structural checks (superpowers TDD + evanflow vertical slices).
+    const ironLawBody = sectionBodyByName(sections, "Iron Law Acknowledgement");
+    if (ironLawBody !== null) {
+      const ack = /acknowledged:\s*(yes|true|y)\b/iu.test(ironLawBody);
+      findings.push({
+        section: "TDD Iron Law Acknowledgement",
+        required: true,
+        rule: "Iron Law Acknowledgement must affirm `Acknowledged: yes`.",
+        found: ack,
+        details: ack
+          ? "TDD Iron Law acknowledged."
+          : "Iron Law Acknowledgement is missing explicit `Acknowledged: yes`."
+      });
+    }
+
+    const watchedRedBody = sectionBodyByName(sections, "Watched-RED Proof");
+    if (watchedRedBody !== null) {
+      const rows = watchedRedBody.split("\n").filter((line) => /^\|/u.test(line));
+      const dataRows = rows.length >= 3 ? rows.slice(2) : [];
+      const populatedRows = dataRows.filter((row) =>
+        row
+          .split("|")
+          .slice(1, -1)
+          .filter((_, idx) => idx !== 0) // skip slice column
+          .some((cell) => cell.trim().length > 0)
+      );
+      // Each populated row must include an ISO timestamp in column 3.
+      const isoRegex = /\d{4}-\d{2}-\d{2}T\d{2}:\d{2}/u;
+      const validProofRows = populatedRows.filter((row) => isoRegex.test(row));
+      findings.push({
+        section: "Watched-RED Proof Shape",
+        required: true,
+        rule: "Watched-RED Proof rows must include an ISO timestamp showing when the test was observed failing.",
+        found: populatedRows.length === 0 || validProofRows.length === populatedRows.length,
+        details: populatedRows.length === 0
+          ? "Watched-RED Proof has no populated rows."
+          : validProofRows.length === populatedRows.length
+            ? `All ${populatedRows.length} watched-RED proof row(s) include an ISO timestamp.`
+            : `${populatedRows.length - validProofRows.length} watched-RED proof row(s) lack an ISO timestamp.`
+      });
+    }
+
+    const sliceCycleBody = sectionBodyByName(sections, "Vertical Slice Cycle");
+    if (sliceCycleBody !== null) {
+      const required = ["RED", "GREEN", "REFACTOR"];
+      const missing = required.filter(
+        (token) => !new RegExp(token, "u").test(sliceCycleBody)
+      );
+      findings.push({
+        section: "Vertical Slice Cycle Coverage",
+        required: true,
+        rule: "Vertical Slice Cycle must include RED, GREEN, and REFACTOR per slice (refactor may be deferred with rationale).",
+        found: missing.length === 0,
+        details: missing.length === 0
+          ? "Vertical Slice Cycle references RED/GREEN/REFACTOR."
+          : `Vertical Slice Cycle is missing phase token(s): ${missing.join(", ")}.`
+      });
+    }
+
+    const assertionBody = sectionBodyByName(sections, "Assertion Correctness Notes");
+    if (assertionBody !== null) {
+      const tableRows = assertionBody.split("\n").filter((line) => /^\|/u.test(line));
+      const dataRows = tableRows.length >= 3 ? tableRows.slice(2) : [];
+      const ok = dataRows.length === 0 || dataRows.some((row) =>
+        row
+          .split("|")
+          .slice(1, -1)
+          .some((cell) => cell.trim().length > 0)
+      );
+      findings.push({
+        section: "Assertion Correctness Notes Shape",
+        required: true,
+        rule: "Assertion Correctness Notes must include at least one populated row when the slice has new assertions.",
+        found: ok,
+        details: ok
+          ? "Assertion Correctness Notes is populated or absent (single-step slice)."
+          : "Assertion Correctness Notes table has no populated rows."
+      });
+    }
+  }
+
+  if (stage === "review") {
+    // Universal Layer 2.7 structural checks (superpowers requesting + receiving).
+    const frameBody = sectionBodyByName(sections, "Frame the Review Request");
+    if (frameBody !== null) {
+      const required = ["Goal:", "Approach:", "Risk areas:", "Verification done:", "Open questions"];
+      const missing = required.filter(
+        (token) => !new RegExp(token.replace(":", "\\s*:"), "iu").test(frameBody)
+      );
+      findings.push({
+        section: "Review Frame Coverage",
+        required: true,
+        rule: "Frame the Review Request must include Goal, Approach, Risk areas, Verification done, Open questions.",
+        found: missing.length === 0,
+        details: missing.length === 0
+          ? "Review request frame covers all required fields."
+          : `Frame is missing field(s): ${missing.join(", ")}.`
+      });
+    }
+
+    const criticBody = sectionBodyByName(sections, "Critic Subagent Dispatch");
+    if (criticBody !== null) {
+      const required = [
+        "Critic agent definition path",
+        "Dispatch surface",
+        "Frame sent",
+        "Critic returned"
+      ];
+      const missing = required.filter((token) => !criticBody.includes(token));
+      findings.push({
+        section: "Critic Subagent Dispatch Shape",
+        required: true,
+        rule: "Critic Subagent Dispatch must declare agent definition path, dispatch surface, frame sent, and critic-returned summary.",
+        found: missing.length === 0,
+        details: missing.length === 0
+          ? "Critic dispatch metadata complete."
+          : `Critic Subagent Dispatch is missing field(s): ${missing.join(", ")}.`
+      });
+    }
+
+    const receivingBody = sectionBodyByName(sections, "Receiving Posture");
+    if (receivingBody !== null) {
+      const ack = /no performative agreement/iu.test(receivingBody);
+      findings.push({
+        section: "Receiving Posture Anti-Sycophancy",
+        required: true,
+        rule: "Receiving Posture must affirm `No performative agreement (forbidden openers acknowledged)`.",
+        found: ack,
+        details: ack
+          ? "Receiving posture acknowledged anti-sycophancy."
+          : "Receiving Posture is missing the anti-sycophancy acknowledgement line."
+      });
+    }
+  }
+
+  if (stage === "ship") {
+    // Universal Layer 2.8 structural checks (superpowers finishing-a-development-branch).
+    const optionsBody = sectionBodyByName(sections, "Finalization Options");
+    if (optionsBody !== null) {
+      const required = ["MERGE_LOCAL", "OPEN_PR", "KEEP_BRANCH", "DISCARD"];
+      const missing = required.filter((token) => !optionsBody.includes(token));
+      findings.push({
+        section: "Finalization Options Coverage",
+        required: true,
+        rule: "Finalization Options must surface all four canonical options (MERGE_LOCAL, OPEN_PR, KEEP_BRANCH, DISCARD).",
+        found: missing.length === 0,
+        details: missing.length === 0
+          ? "All four finalization options surfaced."
+          : `Finalization Options is missing token(s): ${missing.join(", ")}.`
+      });
+    }
+
+    const prBody = sectionBodyByName(sections, "Structured PR Body");
+    if (prBody !== null) {
+      const required = ["## Summary", "## Test Plan", "## Commits Included"];
+      const missing = required.filter((token) => !prBody.includes(token));
+      findings.push({
+        section: "Structured PR Body Shape",
+        required: true,
+        rule: "Structured PR Body must include `## Summary`, `## Test Plan`, and `## Commits Included` subsections.",
+        found: missing.length === 0,
+        details: missing.length === 0
+          ? "Structured PR Body covers all required subsections."
+          : `Structured PR Body is missing subsection(s): ${missing.join(", ")}.`
+      });
+    }
+
+    const verifyBody = sectionBodyByName(sections, "Verify Tests Gate");
+    if (verifyBody !== null) {
+      const ok = /\bResult:\s*(PASS|FAIL)\b/iu.test(verifyBody);
+      findings.push({
+        section: "Verify Tests Gate Result",
+        required: true,
+        rule: "Verify Tests Gate must declare a Result of PASS or FAIL.",
+        found: ok,
+        details: ok
+          ? "Verify Tests Gate result declared."
+          : "Verify Tests Gate is missing a `Result: PASS|FAIL` line."
       });
     }
   }
