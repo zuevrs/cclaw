@@ -430,6 +430,153 @@ RECOMMENDATION: B — shared package eliminates drift; perf budget already cover
   });
 });
 
+// ---------------------------------------------------------------------------
+// 0.51.28 regression — linter must tolerate the actual shipped template
+// shape, which renders structural fields with bold markdown emphasis and
+// uses the short `lite` Approach Tier label. Earlier fixtures wrote
+// `- Mode: ENGINEERING` and `- Tier: Standard` without bold, which let
+// regexes that only allowed `\s*` between `Field:` and the value silently
+// pass CI even though the runtime artifact (`- **Mode:** STARTUP`) failed.
+// ---------------------------------------------------------------------------
+
+describe("0.51.28 — bold-emphasis tolerance and tier vocabulary", () => {
+  it("passes Mode Block Token when the field uses the shipped bold form (CLI utility)", async () => {
+    const root = await createTempProject("brainstorm-mode-bold-cli");
+    await writeRuntimeArtifact(
+      root,
+      "01-brainstorm.md",
+      `# Brainstorm Artifact
+
+## Mode Block
+- **Mode:** ENGINEERING
+- **Why this mode:** maintenance work on a CLI utility
+
+## Approach Tier
+- Tier: Standard
+`
+    );
+
+    const result = await lintArtifact(root, "brainstorm");
+    const modeBlock = result.findings.find((f) => f.section === "Mode Block Token");
+    expect(modeBlock?.found).toBe(true);
+  });
+
+  it("rejects Mode Block when the bold-form placeholder lists every option (library)", async () => {
+    const root = await createTempProject("brainstorm-mode-placeholder-library");
+    await writeRuntimeArtifact(
+      root,
+      "01-brainstorm.md",
+      `# Brainstorm Artifact
+
+## Mode Block
+- **Mode:** STARTUP | BUILDER | ENGINEERING | OPS | RESEARCH (pick exactly one)
+- **Why this mode:** placeholder kept verbatim from template
+
+## Approach Tier
+- Tier: Standard
+`
+    );
+
+    const result = await lintArtifact(root, "brainstorm");
+    const modeBlock = result.findings.find((f) => f.section === "Mode Block Token");
+    expect(modeBlock?.found).toBe(false);
+    expect(modeBlock?.details ?? "").toMatch(/multiple|placeholder/i);
+  });
+
+  it("passes Anti-Sycophancy Acknowledgement with the shipped bold form (library)", async () => {
+    const root = await createTempProject("brainstorm-anti-sycophancy-bold-library");
+    await writeRuntimeArtifact(
+      root,
+      "01-brainstorm.md",
+      `# Brainstorm Artifact
+
+## Mode Block
+- **Mode:** ENGINEERING
+- **Why this mode:** library extraction
+
+## Anti-Sycophancy Stamp
+- **Forbidden response openers acknowledged:** yes (no "you're absolutely right", "great point", "absolutely!", etc.)
+- **Posture commitment:** push back with reasoning when premises feel weak.
+- **Evidence-that-would-change-the-recommendation:** benchmark showing vendored copy diverges within 30 days.
+
+## Approach Tier
+- Tier: Standard
+`
+    );
+
+    const result = await lintArtifact(root, "brainstorm");
+    const stamp = result.findings.find((f) => f.section === "Anti-Sycophancy Acknowledgement");
+    expect(stamp?.found).toBe(true);
+  });
+
+  it("passes Approach Tier Classification when the value is `lite` (CLI utility)", async () => {
+    const root = await createTempProject("brainstorm-tier-lite-cli");
+    await writeRuntimeArtifact(
+      root,
+      "01-brainstorm.md",
+      `# Brainstorm Artifact
+
+## Mode Block
+- **Mode:** ENGINEERING
+- **Why this mode:** small CLI tweak
+
+## Approach Tier
+- Tier: lite
+- Why this tier: low-risk one-shot
+`
+    );
+
+    const result = await lintArtifact(root, "brainstorm");
+    const tier = result.findings.find((f) => f.section === "Approach Tier Classification");
+    expect(tier?.found).toBe(true);
+  });
+
+  it("rejects Approach Tier when the placeholder still lists every option (infra/migration)", async () => {
+    const root = await createTempProject("brainstorm-tier-placeholder-infra");
+    await writeRuntimeArtifact(
+      root,
+      "01-brainstorm.md",
+      `# Brainstorm Artifact
+
+## Mode Block
+- **Mode:** OPS
+- **Why this mode:** rolling migration
+
+## Approach Tier
+- Tier: lite | standard | deep
+- Why this tier:
+`
+    );
+
+    const result = await lintArtifact(root, "brainstorm");
+    const tier = result.findings.find((f) => f.section === "Approach Tier Classification");
+    expect(tier?.found).toBe(false);
+    expect(tier?.details ?? "").toMatch(/multiple|placeholder/i);
+  });
+
+  it("passes Regression Iron Rule when acknowledgement uses the bold form (design)", async () => {
+    const root = await createTempProject("design-iron-rule-bold");
+    await writeRuntimeArtifact(
+      root,
+      "03-design.md",
+      `# Design Artifact
+
+## Approach Tier
+- Tier: Standard
+
+## Regression Iron Rule
+- **Iron rule acknowledged:** yes — every diff that changes existing behavior gets a regression test.
+`
+    );
+
+    const result = await lintArtifact(root, "design");
+    const ironRule = result.findings.find(
+      (f) => f.section === "Regression Iron Rule Acknowledgement"
+    );
+    expect(ironRule?.found).toBe(true);
+  });
+});
+
 describe("scope linter Failure Modes Registry + Reversibility (CLI utility)", () => {
   it("fails when Failure Modes Registry has the canonical header but no decision marker", async () => {
     const root = await createTempProject("scope-failure-modes-no-decision");

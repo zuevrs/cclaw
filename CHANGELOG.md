@@ -1,5 +1,17 @@
 # Changelog
 
+## 0.51.28
+
+### Fixed
+
+- Made the artifact linter tolerate the actual shipped template shape: structural-field regexes for `Mode Block Token`, `Anti-Sycophancy Acknowledgement`, and `Regression Iron Rule Acknowledgement` now accept optional markdown emphasis (`*`, `**`, `_`) around both the field name and the value. Previously `- **Mode:** STARTUP` (the form the template ships and the agent fills in) failed validation because the regex only allowed plain whitespace between `Mode:` and the token.
+- Extended `Approach Tier Classification` to recognize `lite` (alias for `Lightweight`) in addition to `Lightweight`, `Standard`, and `Deep`, so artifacts written verbatim from the `lite | standard | deep` template default are accepted. State-contract `approachTier` taxonomy now lists both spellings for downstream consumers.
+- Added explicit placeholder detection for both `Mode Block` and `Approach Tier`: a line that lists ≥2 distinct tokens (the unfilled template placeholder, e.g. `Tier: lite | standard | deep`) now fails with a targeted message instead of silently passing on incidental token presence.
+
+### Added
+
+- Regression fixtures in `tests/unit/quality-gate-fixtures.test.ts` for the actual shipped template shape: bold-form `Mode Block` / `Anti-Sycophancy Stamp` / `Regression Iron Rule` pass; bold-form Mode placeholder fails; `Tier: lite` passes; `Tier: lite | standard | deep` placeholder fails. Earlier fixtures used the unbolded form (`- Mode: ENGINEERING`) which never exercised the runtime template.
+
 ## 0.51.27
 
 ### Fixed
