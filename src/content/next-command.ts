@@ -202,11 +202,13 @@ ${conversationLanguagePolicyMarkdown()}
 Default output should be compact, like OMC/OMX operator surfaces:
 
 \`\`\`
-Stage: <currentStage> (<track>)
+Current: <currentStage or closeout.shipSubstate> (<track>)
+Stage: <currentStage>
 Gates: <passed>/<required> passed, <blocked> blocked
 Delegations: <done>/<mandatory> done
-Blockers: <none | gate/delegation/reconciliation ids>
+Blocked by: <none | gate/delegation/reconciliation/stale/TDD/review ids>
 Next: <exact next action, usually /cc-next or one named remediation>
+Evidence needed: <artifact/test/review/delegation evidence required to unblock>
 \`\`\`
 
 Only expand beyond this when blocked, when asking a structured question, or when
@@ -258,7 +260,9 @@ Execute the stage protocol. The stage skill handles interaction, STOP points, ga
 
 ${ralphLoopContractSnippet()}
 
-Special-case for review: if \`review_criticals_resolved\` is in \`blocked\`, route to rework instead of looping review forever — recommend \`cclaw internal rewind tdd "review_blocked_by_critical <finding-ids>"\`, then \`cclaw internal rewind --ack tdd\` after TDD rework.
+Special-case for review: if \`review_criticals_resolved\` is in \`blocked\`, route to rework instead of looping review forever - recommend \`cclaw internal rewind tdd "review_blocked_by_critical <finding-ids>"\`, then \`cclaw internal rewind --ack tdd\` after TDD rework.
+
+Special-case for TDD blockers: when \`06-tdd.md\` records \`NO_SOURCE_CONTEXT\`, \`NO_TEST_SURFACE\`, \`NO_IMPLEMENTABLE_SLICE\`, \`RED_NOT_EXPRESSIBLE\`, or \`NO_VCS_MODE\`, keep status BLOCKED and print \`Current\`, \`Blocked by\`, \`Next\`, and \`Evidence needed\` instead of retrying speculative RED/GREEN work.
 
 **Path B — stage IS complete (all gates met, all delegations done):**
 

@@ -117,7 +117,7 @@ function referencePatternsBlock(stage: FlowStage): string {
     })
     .join("; ");
   return `## Reference Patterns
-Prompt-only; no runtime/delegation changes. Reference patterns are prompt guidance only; they do not change runtime state transitions. Use: ${summaries}.
+Prompt-only; no runtime/delegation changes. These compact pattern titles come from the internal registry; use the behavior and artifact sections, not the source project history. Use: ${summaries}.
 `;
 }
 

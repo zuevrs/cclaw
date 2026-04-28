@@ -37,7 +37,8 @@ describe("/cc-view status content", () => {
     expect(skill).toContain("Stage");
     expect(skill).toContain("Gates");
     expect(skill).toContain("Delegations");
-    expect(skill).toContain("Blockers");
+    expect(skill).toContain("Blocked by");
+    expect(skill).toContain("Evidence needed");
     expect(skill).toContain("Next");
   });
 });

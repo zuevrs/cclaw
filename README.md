@@ -1,470 +1,191 @@
 # cclaw
 
-**Install once, ship every time.** cclaw is an installer-first workflow
-runtime that gives your AI coding agent one inspectable path from idea to
-shipped PR — **plus an automatic closeout chain** that turns every ship
-into reusable knowledge:
+**cclaw is a file-backed flow runtime for coding agents.** It turns Claude Code, Cursor, OpenCode, and Codex into one repeatable path from idea to shipped change: visible stages, hard gates, real subagent evidence, and resumable closeout in your repo.
 
-> **brainstorm → scope → design → spec → plan → tdd → review → ship**  
-> **↳ auto-closeout: retro → compound → archive** *(resumable, never manual)*
-
-Every stage has real gates the agent cannot skip, every decision leaves a
-file-backed audit trail, and the same slash commands work across Claude
-Code, Cursor, OpenCode, and OpenAI Codex.
-
-You install cclaw **once** from the terminal, then everything happens
-inside your harness — no hidden control plane, no background daemon, no
-operational knobs to memorise.
-
----
-
-## Who this is for
-
-- Solo builders who want **shipped outcomes** instead of endless chat.
-- Engineering teams that need a **single, repeatable path** for AI-assisted
-  changes across multiple harnesses and languages.
-- Staff engineers and tech leads who want **enforceable discipline**:
-  locked-in decisions, no placeholders, mandatory TDD, traceable plans.
-- Maintainers who want a compact, file-backed flow their harness agents can actually follow.
-
----
-
-## How it works
-
-```
-  ┌─────────┐   ┌──────┐   ┌────────┐   ┌──────┐   ┌──────┐
-  │  Idea   │ → │ /cc  │ → │Classify│ → │Track │ → │Stages│
-  └─────────┘   └──────┘   └────────┘   └──────┘   └──┬───┘
-                                                      │
-      ┌───────────────────────────────────────────────┘
-      ▼
-  brainstorm → scope → design → spec → plan → tdd → review → ship
-      │          │        │       │      │      │      │       │
-      ▼          ▼        ▼       ▼      ▼      ▼      ▼       ▼
-   01.md      02.md    03.md   04.md  05.md  06.md  07.md   08.md
-      │                                                      │
-      └──── gates + subagents + knowledge capture             │
-            happen at every step                              │
-                                                              ▼
-                                              ┌─────────────────────────┐
-                                              │  automatic closeout     │
-                                              │  (resumable state       │
-                                              │   machine, never manual)│
-                                              └────────────┬────────────┘
-                                                           ▼
-                                        retro ──► compound ──► archive
-                                        09.md     (knowledge  (runs/
-                                                   promoted)   <slug>/)
+```text
+        idea
+         |
+         v
+   +-------------+      +--------+      +--------+      +------+      +------+      +-----+
+   | brainstorm  | ---> | scope  | ---> | design | ---> | spec | ---> | plan | ---> | tdd |
+   +-------------+      +--------+      +--------+      +------+      +------+      +-----+
+                                                                                       |
+                                                                                       v
+                                                                                  +--------+      +------+
+                                                                                  | review | ---> | ship |
+                                                                                  +--------+      +------+
+                                                                                                      |
+                                                                                                      v
+                                                                                         retro -> compound -> archive
 ```
 
-Every stage reads and writes real files under `.cclaw/`. `flow-state.json`
-holds the single source of truth for "where are we" — including
-`closeout.shipSubstate` so a ship → retro → compound → archive chain
-resumes at the exact step after any interruption. `knowledge.jsonl`
-accumulates reusable lessons **throughout** the flow, not only at the
-end; stage artifacts live under `.cclaw/artifacts/` until archive rolls
-them into `.cclaw/runs/<date-slug>/`.
+The promise is simple: at any point you can ask **where are we, what is blocked, what evidence exists, and what should run next?**
 
-```
-You ──► /cc <idea>
-        │
-        ▼
-   harness loads stage contract + HARD-GATE
-        │
-        ▼
-   cclaw reads state + knowledge, guides execution
-        │
-        ▼
-   artifacts written, handoff captured
-        │
-        ▼
-   next stage is explicit in flow-state.json
-```
+## First 5 Minutes
 
----
-
-## 30-second install
-
-Requirements:
-
-- Node.js **20+** (matches the package `engines` field).
-- Run from the **git project root** you want cclaw to manage, not from `~`
-  or a nested package directory.
+Requirements: Node.js 20+ and a git project root.
 
 ```bash
 cd /path/to/your/repo
 npx cclaw-cli
 ```
 
-Interactive setup will pick which harnesses to install into. For CI or
-scripted installs:
+Then work from your coding harness:
+
+```text
+/cc <idea>          start a tracked flow
+/cc-next            resume or advance the current flow
+/cc-view status     inspect current state without changing it
+```
+
+For scripted setup:
 
 ```bash
 npx cclaw-cli init --harnesses=claude,cursor --no-interactive
 ```
 
-That's the entire required CLI interaction for the normal workflow.
-Everything day-to-day happens inside your harness (Claude Code, Cursor,
-OpenCode, or Codex); optional maintenance commands are listed in the
-CLI reference.
+If generated files or hooks look stale, run `cclaw doctor`. If they need to be regenerated, run `npx cclaw-cli sync`.
 
-If cclaw says it is not installed, either run `npx cclaw-cli init` in the
-repo root or `cd` to the project that already contains `.cclaw/`.
+## Why cclaw
 
-### What gets generated
+AI coding sessions fail when decisions live only in chat. cclaw puts the operating truth in files:
 
 ```text
 .cclaw/
-├── commands/           # four entrypoints: /cc, /cc-next, /cc-ideate, /cc-view
-├── skills/             # flow-critical skills loaded by the harness
-├── templates/          # artifact skeletons for each stage
-├── rules/              # opt-in language rule packs
-├── agents/             # subagent definitions
-├── hooks/              # harness-agnostic hook runtime
-├── artifacts/          # active run artifacts (00-idea.md -> 09-retro.md)
-├── runs/               # archived run snapshots: YYYY-MM-DD-slug/
-├── state/              # flow-state.json + stage activity log
-└── knowledge.jsonl     # append-only lessons + patterns
+  artifacts/              active stage docs: 00-idea.md through 09-retro.md
+  state/flow-state.json   current stage, gates, stale markers, closeout.shipSubstate
+  state/delegation-log.json
+                           subagent dispatches, waivers, evidence refs
+  knowledge.jsonl         reusable lessons harvested from stage artifacts
+  runs/                   archived run snapshots
 ```
 
-Plus harness-specific shims:
+That gives you:
 
-- `.claude/commands/cc*.md` + `.claude/hooks/hooks.json`
-- `.cursor/commands/cc*.md` + `.cursor/hooks.json` + `.cursor/rules/cclaw-workflow.mdc`
-- `.opencode/commands/cc*.md` + `.opencode/plugins/cclaw-plugin.mjs`
-- `.agents/skills/cc*/SKILL.md` + `.codex/hooks.json` (Codex; skills are
-  activated via `/use cc` or description-based auto-matching. Hooks
-  require Codex CLI ≥ v0.114 and `[features] codex_hooks = true` in
-  `~/.codex/config.toml`; `cclaw init --codex` offers to patch that flag
-  for you. `cclaw doctor` reports stale legacy Codex layouts.)
-- `AGENTS.md` with a managed routing block (includes a Codex-specific note)
-  — see [`docs/agents-block.example.md`](./docs/agents-block.example.md)
-  for a static example of what the harness reads.
+- **One path** from idea to ship, with `quick`, `medium`, and `standard` tracks.
+- **Real gates** for evidence, tests, review, delegation, stale-stage recovery, and closeout.
+- **Subagents with accountability**: controller owns state, workers do bounded tasks, overseers validate, evidence lands in `delegation-log.json`.
+- **Recovery instead of confusion**: `/cc-view status` tells you the blocker and the next command.
+- **Portable harness behavior** across Claude Code, Cursor, OpenCode, and Codex.
 
-### `.cclaw/config.yaml` — the minimal surface
-
-`cclaw init` writes five keys, on purpose:
-
-```yaml
-version: ${CCLAW_VERSION}
-flowVersion: 1.0.0
-harnesses:
-  - claude
-  - cursor
-  - opencode
-  - codex
-strictness: advisory     # advisory | strict — one knob for prompt-guard + TDD
-gitHookGuards: false     # opt in to managed .git/hooks/pre-commit + pre-push
-```
-
-If cclaw detects a Node / Python / Go project at init time, a sixth
-`languageRulePacks` line appears (auto-populated from `package.json`,
-`pyproject.toml` / `requirements.txt`, `go.mod`). That is the full
-default surface — a new user sees nothing they need to understand yet.
-
-Advanced knobs (`ironLaws.strictLaws` per-law escapes,
-`tdd.testPathPatterns` / `tdd.productionPathPatterns`,
-`compound.recurrenceThreshold`, `defaultTrack`, `trackHeuristics`,
-`sliceReview`) are **opt-in**: add them by hand when you need them.
-`cclaw upgrade` preserves exactly what you wrote — it never silently
-reintroduces defaults you removed.
-
-Full key-by-key reference: [`docs/config.md`](./docs/config.md).
-
----
-
-## The four commands you actually use
-
-All four appear as slash commands in every supported harness. This is the
-top-level user surface: `/cc`, `/cc-next`, `/cc-ideate`, and `/cc-view status`
-cover the happy path. Operator/support tools stay separate so the harness
-does not feel like a command framework.
-
-| Command | What it does |
-|---|---|
-| **`/cc <idea>`** | Classify the task, discover origin docs (`docs/prd/**`, ADRs, root `PRD.md`, …), sniff the stack, recommend a track, then start the first stage of that track. `/cc` without arguments resumes the current flow. |
-| **`/cc-next`** | The one progression primitive. Reads `flow-state.json`, checks gates + mandatory subagent delegations, and either resumes the current stage or advances to the next. `/cc-next` in a new session is how you **resume**. |
-| **`/cc-ideate`** | Repository improvement ideate mode. Scans for TODOs, flaky tests, oversized modules, docs drift, and recurring knowledge-store lessons, **persists the ranked backlog** to `.cclaw/artifacts/ideate-<date>-<slug>.md`, and ends with a concrete handoff: launch `/cc` on the selected candidate in the same session, save-and-close, or discard. Resume check on next run reuses any ideate artifact younger than 30 days. Never mutates `flow-state.json`. |
-| **`/cc-view`** | Read-only flow visibility. `/cc-view status` (default) shows stage progress, mandatory delegations with their fulfillment mode (isolated / generic-dispatch / role-switch), the ship closeout substate (retro → compound → archive), and the active harness parity row. `/cc-view tree` renders the same picture as a tree with a closeout sub-branch under ship and harness capability status from `cclaw doctor --explain`. `/cc-view diff` shows stage/gate/closeout/delegation changes from visible state and git evidence. Never mutates state. |
-
-Operational extras stay off the main surface: `/cc-next` handles progression
-and closeout, `cclaw archive` handles explicit archival/reset, and
-`cclaw doctor` verifies install/runtime wiring. Doctor is not a replacement
-for a real harness smoke test; it catches broken files, stale hooks, and
-schema drift before the user loses a run.
-
-### Example first-run
+## The Daily Loop
 
 ```text
-> /cc Add rate limiting to the public /api/v1/search endpoint
+1. Start or resume
+   /cc <idea>    or    /cc-next
 
-cclaw:  Classifying task…
-        Class: software-medium
-        Discovered context: docs/rfcs/rate-limit-strategy.md (rate-limit policy draft)
-        Stack: node 20.10.0 (pnpm), fastify 4.26, redis 7
-        Recommended track: medium (matched triggers: "add endpoint")
-        Override? (A) keep medium  (B) switch track  (C) cancel
-> A
-cclaw:  Persisting flow-state.json, seeding 00-idea.md, entering brainstorm…
+2. Work the current stage
+   The agent writes/updates .cclaw/artifacts/<stage>.md
+
+3. Prove the gate
+   stage-complete records evidence in flow-state.json
+
+4. Inspect when stuck
+   /cc-view status
+
+5. Close out after ship
+   /cc-next continues retro -> compound -> archive
 ```
 
-After this `flow-state.json` contains:
-
-```json
-{
-  "currentStage": "brainstorm",
-  "track": "medium",
-  "skippedStages": ["scope", "design"],
-  "stageGateCatalog": { "brainstorm": { "passed": [], "blocked": [] } },
-  "completedStages": []
-}
-```
-
-And `00-idea.md` starts with:
+Tracks keep the flow proportional:
 
 ```text
-Class: software-medium
-Track: medium (matched: "add endpoint")
-Stack: node 20.10.0, fastify 4.26, redis 7
-
-## Discovered context
-
-- docs/rfcs/rate-limit-strategy.md — rate-limit policy draft (Q2 2026)
-
-## User prompt
-
-Add rate limiting to the public /api/v1/search endpoint
+quick     spec -> tdd -> review -> ship
+medium    brainstorm -> spec -> plan -> tdd -> review -> ship
+standard  brainstorm -> scope -> design -> spec -> plan -> tdd -> review -> ship
 ```
 
-No magic. No ambiguity about where you are.
+Track selection is **model-guided and advisory** during `/cc`. Runtime enforcement begins after state is written: `/cc-next` follows the selected track, required gates, delegation rules, stale-stage markers, and `closeout.shipSubstate`.
 
----
+## When Blocked
 
-## The eight stages, the three tracks, and auto-closeout
+Start here:
 
-cclaw has eight **critical-path** stages plus an automatic three-step
-closeout chain (retro → compound → archive). A single prompt rarely needs
-all eight critical-path stages, so `/cc` picks a **track** up front so
-the flow matches the task.
-
-| Track | Critical path | Typical trigger |
-|---|---|---|
-| **quick** | `spec → tdd → review → ship` | `bug`, `hotfix`, `typo`, `rename`, `bump`, `docs only`, one-liners |
-| **medium** | `brainstorm → spec → plan → tdd → review → ship` | `add endpoint`, `add field`, `extend existing`, `wire integration` |
-| **standard** _(default)_ | all 8 stages (+ mandatory design-time parallel research fleet) | `new feature`, `refactor`, `migration`, `platform`, `schema`, `architecture` |
-
-**Every track ends with the same auto-closeout chain.** Once ship
-completes, `/cc-next` automatically drives
-`retro → compound → archive` — with `closeout.shipSubstate` carrying the
-exact step across sessions, so a crashed or backgrounded run resumes
-without re-drafting retros or re-asking structured questions. See
-[Ship and closeout](#ship-and-closeout--automatic-resumable).
-
-Each critical-path stage produces a dated artifact under
-`.cclaw/artifacts/`: `00-idea.md` (seed), `01-brainstorm.md`, `02-scope.md`,
-`02a-research.md` (design research fleet synthesis), `03-design.md` through
-`08-ship.md`. Closeout adds `09-retro.md`; archive then rolls the whole
-bundle into `.cclaw/runs/<YYYY-MM-DD-slug>/` and resets the active flow for
-the next run.
-
-### Track heuristics are configurable (advisory)
-
-Every team has its own vocabulary. Override the built-in trigger lists in
-`.cclaw/config.yaml`:
-
-```yaml
-trackHeuristics:
-  fallback: standard
-  tracks:
-    quick:
-      triggers: [hotfix, rollback, prod-incident]
-      veto: [schema, migration]   # never route quick even if a trigger hits
-    standard:
-      triggers: [epic, platform-team, core-infra]
+```text
+/cc-view status
 ```
 
-Honest caveat: this config is **advisory**. cclaw surfaces these lists in
-the `/cc` skill and contract prose so the LLM applies them during
-classification — there is no Node-level router that mechanically enforces
-the outcome. That is why the knobs are deliberately minimal: per-track
-`triggers` + `veto` on top of defaults, plus `fallback`. Evaluation order is
-fixed (`standard -> medium -> quick`, narrow-to-broad); regex `patterns`
-and a `priority` override were removed in v0.38.0 because nothing in
-runtime consumed them.
+A useful status should read like an operator note, not a raw dump:
 
-### Mid-flow reclassification
+```text
+Current: tdd (standard)
+Blocked by: NO_SOURCE_CONTEXT
+Next: cclaw internal rewind plan "add bootstrap slice", then /cc-next
+Evidence needed: fresh RED/GREEN/REFACTOR slice and verification output
+```
 
-If you seed a task as `quick` and evidence in spec shows it actually needs a
-schema migration, cclaw **stops and asks** before quietly advancing.
-Reclassification is append-only: the old decision stays in history.
+Common exits:
 
----
 
-## Guardrails that ship in the box
+| Situation                                         | Next action                                                                          |
+| ------------------------------------------------- | ------------------------------------------------------------------------------------ |
+| Missing gates                                     | Run `/cc-next`, finish the stage, then complete with evidence.                       |
+| Mandatory delegation missing evidence             | Dispatch the worker/overseer or waive explicitly with rationale.                     |
+| `NO_SOURCE_CONTEXT` or `NO_TEST_SURFACE`          | Rewind to `plan`/`spec`, define the source or test surface, then resume TDD.         |
+| `NO_IMPLEMENTABLE_SLICE` or `RED_NOT_EXPRESSIBLE` | Rework `design`/`spec`/`plan` until one vertical slice is testable.                  |
+| `NO_VCS_MODE`                                     | Restore git, set `vcs: none` with hash evidence, or configure `tdd.verificationRef`. |
+| Review blocked                                    | `cclaw internal rewind tdd "review_blocked_by_critical <finding-ids>"`.              |
+| Stale stage after rewind                          | Redo the marked stage, then `cclaw internal rewind --ack <stage>`.                   |
+| Broken hooks or generated files                   | `cclaw doctor`, then `npx cclaw-cli sync` if needed.                                 |
 
-These are the things that make cclaw "enterprise-strong" without turning
-it into ceremony:
 
-- **Locked decisions (D-XX IDs).** Scope decisions are numbered and must
-  reappear in plan + TDD artifacts. The artifact linter catches any
-  silent drift.
-- **No placeholders.** `TBD`, `TODO`, `similar to task`, and "static for
-  now"-style scope reduction are flagged before a stage completes.
-- **Stale-stage detection.** If an upstream artifact changes after a
-  downstream stage is already complete, cclaw marks the downstream stage
-  stale and refuses to advance until you re-run it (or explicitly
-  acknowledge via a manual override).
-- **Mandatory subagent delegation** at TDD, with per-harness waivers.
-- **Turn Announce Discipline.** Every stage entry/exit emits a visible
-  line so users can see what the agent is doing, not just what it says.
-- **Inline protocols.** Decision, Completion, and Ethos discipline is embedded in the active stage skill so users do not need to chase generated reference files.
-- **Knowledge capture throughout the flow.** Every stage completion
-  protocol emits typed entries (`rule` / `pattern` / `lesson`) to
-  `.cclaw/knowledge.jsonl` as the flow progresses — not only at retro.
-  Retro itself adds a `compound` entry, and the automatic compound pass
-  after ship promotes recurring entries into first-class
-  rules/protocols/skills (base threshold from
-  `compound.recurrenceThreshold`, temporarily lowered to 2 for repositories
-  with <5 archived runs, plus a critical-severity single-hit override) so
-  the **next** run is easier. Strict JSONL schema keeps the whole thing
-  machine-queryable.
-- **Automatic integrity checks.** Runtime health is verified on every
-  stage transition — no command you need to remember to run.
+## Subagents Without Theater
 
----
+```text
+user goal
+   |
+   v
+controller ---------------> worker: bounded implementation/test/doc task
+   |                         |
+   |                         v
+   +----------------------> overseer: read-only validation
+                             |
+                             v
+                     evidence refs + terminal status
+                             |
+                             v
+                 .cclaw/state/delegation-log.json
+```
 
-## TDD that actually runs
+The controller owns `flow-state.json`, sequencing, synthesis, and the final answer. Workers own scoped work. Overseers verify. A waiver means the work was **not** done by a real worker and must say why proceeding is acceptable.
 
-The `tdd` stage is not prose guidance. It requires:
+## What Is Enforced
 
-- an explicit **RED** test run (captured in `.cclaw/artifacts/06-tdd.md`)
-- a mandatory **`test-author`** subagent dispatch (logged to
-  `.cclaw/state/delegation-log.json`)
-- a **GREEN** full-suite run before exit
-- optional **REFACTOR** pass with coverage preservation
+Enforced by generated helpers and state checks:
 
-`/cc-next` will not advance past `tdd` until the delegation log shows the
-subagent as `completed`. Codex and OpenCode use generated native subagents
-by default; a role-switch row is only a degraded fallback and must include
-`evidenceRefs` — see [Harness support](#harness-support).
+- Stage completion goes through `node .cclaw/hooks/stage-complete.mjs <stage>`.
+- Required gates need evidence before advancement.
+- Mandatory delegations need terminal evidence or explicit waiver.
+- Stale stages block until redone and acknowledged.
+- Review criticals route back to TDD.
+- Ship continues through `retro -> compound -> archive` with `closeout.shipSubstate`.
 
----
+Advisory/model-guided:
 
-## Ship and closeout — automatic, resumable
+- Initial track heuristic wording.
+- Proactive subagents that are not mandatory for the active stage/tier.
+- Reference patterns that shape prompts but do not add runtime states.
 
-Shipping writes `08-ship.md`. `/cc-next` then automatically walks the
-run through a deterministic three-step closeout without extra
-commands from you:
+## The Deeper Contract
 
-1. **Retro (`09-retro.md`).** cclaw drafts a retrospective from your
-   stage artifacts, the delegation log, and the knowledge entries
-   recorded during the run. It then asks exactly **one** structured
-   question:
-   - **accept** *(default)* — keep the draft, record one `compound`
-     knowledge entry, advance.
-   - **edit** — you edit `09-retro.md` in place, then `/cc-next` again.
-   - **skip** — record a one-line reason, continue (archive will
-     surface the skip in the run manifest).
-2. **Compound pass.** If the knowledge store has clusters recurring 3+
-   times, cclaw proposes concrete lifts into rules/protocols/skills and
-   asks once: apply-all / apply-selected / skip. An empty pass advances
-   silently.
-3. **Archive.** Moves artifacts into `.cclaw/runs/YYYY-MM-DD-<slug>/`,
-   snapshots `state/`, writes a manifest, and resets `flow-state.json`
-   to the track's initial stage.
+The README is the front door. The full operating contract lives here:
 
-The chain is driven by `closeout.shipSubstate` inside `flow-state.json`
-(`retro_review` → `compound_review` → `ready_to_archive` → `archived`).
-If your session dies mid-closeout, a new `/cc-next` resumes at the
-exact step — retro drafts are not regenerated and no structured ask is
-repeated silently.
+- [Scheme of Work](./docs/scheme-of-work.md): stages, gates, recovery, closeout, state files.
+- [Configuration](./docs/config.md): strictness, tracks, TDD, compound, language packs, hooks.
+- [Harnesses](./docs/harnesses.md): Claude, Cursor, OpenCode, Codex capabilities and fallbacks.
+- [Generated Agent Block Example](./docs/agents-block.example.md): what gets injected into harness guidance.
 
-For the default path, `/cc-next` is the only command; explicit archival/reset remains available through `cclaw archive`.
-
----
-
-## Harness support
-
-cclaw is honest about what each harness can and cannot do, and it
-closes every real gap with a documented fallback — not a silent waiver.
-
-| Harness | Dispatch | Fallback | Hook surface | Structured ask |
-|---|---|---|---|---|
-| Claude Code | full (named subagents) | `native` | full | `AskUserQuestion` |
-| Cursor | generic Task dispatcher | `generic-dispatch` | full | `AskQuestion` |
-| OpenCode | native subagents (`.opencode/agents`) | `native` | plugin | `question` (permission-gated; `permission.question: "allow"`) |
-| OpenAI Codex | native parallel subagents (`.codex/agents`) | `native` | limited (Bash-only `PreToolUse`/`PostToolUse`; requires `codex_hooks` feature flag) | `request_user_input` (experimental; Plan / Collaboration mode) |
-
-What the fallbacks mean:
-
-- `native` — Claude, OpenCode, and Codex run mandatory delegations in
-  isolated subagent workers; cclaw records them with `fulfillmentMode: "isolated"`.
-- `generic-dispatch` — Cursor has a real Task tool with a fixed
-  vocabulary of `subagent_type`s (`explore`, `generalPurpose`, …).
-  cclaw maps each named agent (planner / reviewer / test-author /
-  security-reviewer / doc-updater) onto the generic dispatcher with a
-  structured role prompt.
-- `role-switch` — degraded fallback only when the active runtime cannot
-  expose its declared dispatch surface. The agent announces
-  `## cclaw role-switch: <stage>/<agent> (<mode>)`, loads
-  `.cclaw/agents/<agent>.md`, writes outputs to the stage artifact, and
-  records a delegation row with `fulfillmentMode: "role-switch"` plus at
-  least one `evidenceRef`. A role-switch `completed` row without
-  evidenceRefs is classified as `missingEvidence` by `cclaw doctor`.
-- `waiver` — reserved. Only fires auto-waivers if every installed
-  harness declares it. Currently unused — v0.33 removed the old
-  Codex-only auto-waiver path.
-
-> **Codex note (v0.40+).** Codex CLI deprecated custom prompts in v0.89
-> (Jan 2026), but Codex ≥ v0.114 (Mar 2026) grew an experimental
-> lifecycle hooks API. cclaw installs Codex entry points as native
-> **skills** under `.agents/skills/cc*/SKILL.md` (invoke with `/use cc`,
-> `/use cc-next`, `/use cc-view`, `/use cc-ideate`, or
-> by typing `/cc …` in plain text — Codex auto-matches from the skill
-> description) **and** writes `.codex/hooks.json` so session-start
-> rehydration, stop-handoff, prompt-guard, workflow-guard, and
-> context-monitor fire automatically — as long as you enable the
-> `codex_hooks` feature flag in `~/.codex/config.toml`. `cclaw init
-> --codex` asks for consent before patching that file. Codex's
-> `PreToolUse`/`PostToolUse` are Bash-only; the stage skills compensate
-> for `Write`/`Edit`/`MCP` tool calls with explicit in-turn checks. Run
-> `cclaw doctor` to see the current state of hooks, the feature flag,
-> and any legacy layout to clean up.
-
-The full capability matrix lives in
-[`docs/harnesses.md`](./docs/harnesses.md). Harness capability gaps are
-reported by `cclaw doctor` instead of generating reference files into the
-user project.
-
-Runtime state stays small: `flow-state.json` is the source of truth, while
-stage activity is an append-only trace for what happened during the run.
-Derived diagnostics are produced on demand by `cclaw doctor`.
-
----
-
-## CLI reference
-
-`cclaw-cli` is deliberately small: it installs, syncs, upgrades, diagnoses, and removes the generated harness runtime. Day-to-day flow work happens inside your harness via `/cc*` commands and Node hooks.
+## CLI Reference
 
 ```bash
-npx cclaw-cli                   # launches interactive setup (or prints
-                                # a one-line status hint if already installed)
-npx cclaw-cli sync              # re-materialize generated runtime from config.yaml
-npx cclaw-cli upgrade           # refresh generated files; preserves .cclaw/config.yaml
-npx cclaw-cli archive           # explicit/manual archive; normal post-ship closeout uses /cc-next
-npx cclaw-cli uninstall         # remove .cclaw + generated harness shims
+npx cclaw-cli                   # interactive setup or installed status hint
+npx cclaw-cli init --harnesses=<list> --no-interactive
+npx cclaw-cli sync              # regenerate managed runtime files
+npx cclaw-cli upgrade           # refresh generated files while preserving config
+npx cclaw-cli archive           # explicit archive/reset; normal closeout uses /cc-next
+npx cclaw-cli uninstall         # remove .cclaw and generated harness shims
 npx cclaw-cli --version
 ```
-
-The generated `node .cclaw/hooks/stage-complete.mjs <stage>` helper is the canonical stage-closeout path and must not require a runtime `cclaw` binary in `PATH`.
-
-For CI or scripted installs, `cclaw-cli init --harnesses=<list>
---no-interactive` is the non-interactive form. All other tunables
-(prompt-guard strictness, TDD enforcement, language rule packs, track
-heuristics) are set by editing `.cclaw/config.yaml` directly — see
-[`docs/config.md`](./docs/config.md) for the full key reference.
-
----
 
 ## License
 

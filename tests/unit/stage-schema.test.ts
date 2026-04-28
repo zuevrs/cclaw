@@ -283,7 +283,7 @@ describe("stage schema and subagent alignment", () => {
     expect(designSkill).toContain("Reference-Grade Contracts");
     expect(tddSkill).toContain("Vertical-Slice TDD");
     expect(reviewSkill).toContain("Victory Detector");
-    expect(reviewSkill).toContain("Reference patterns are prompt guidance only");
+    expect(reviewSkill).toContain("These compact pattern titles come from the internal registry");
     expect(stagePolicyNeedles("scope")).toContain("Reference Pattern Registry");
     expect(stagePolicyNeedles("tdd")).toContain("vertical slice");
   });

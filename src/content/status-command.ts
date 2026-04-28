@@ -76,15 +76,20 @@ a read-only command.
     - harness row
     - stale stage row
 11. Suggest the next action:
-    - If current stage has unmet gates → \`/cc-next\` to resume.
-    - If closeout substate is non-idle → \`/cc-next\` to continue the chain.
-    - If current stage is complete → \`/cc-next\` to advance (or report "Flow complete" if terminal).
+    - If current stage has unmet gates -> \`/cc-next\` to resume.
+    - If a mandatory delegation is missing evidence -> dispatch the worker/reviewer or waive with rationale; do not advance silently.
+    - If a TDD blocker taxonomy code is present (\`NO_SOURCE_CONTEXT\`, \`NO_TEST_SURFACE\`, \`NO_IMPLEMENTABLE_SLICE\`, \`RED_NOT_EXPRESSIBLE\`, \`NO_VCS_MODE\`) -> name the blocker and the rewind/config route.
+    - If review is blocked by critical findings -> show \`cclaw internal rewind tdd "review_blocked_by_critical <finding-ids>"\` plus the later \`cclaw internal rewind --ack tdd\`.
+    - If closeout substate is non-idle -> \`/cc-next\` to continue the chain.
+    - If current stage is complete -> \`/cc-next\` to advance (or report "Flow complete" if terminal).
 
 ## Output Guidelines
 
 - Keep output compact (≤ 40 lines) — status, not narrative.
 - Start with the same operator rows as \`/cc-next\` when possible:
-  \`Stage\`, \`Gates\`, \`Delegations\`, \`Blockers\`, \`Next\`.
+  \`Current\`, \`Stage\`, \`Gates\`, \`Delegations\`, \`Blocked by\`, \`Next\`, \`Evidence needed\`.
+- When blocked, include a plain-English action block:
+  \`Current: <stage or closeout substate>\`; \`Blocked by: <gate/delegation/blocker code>\`; \`Next: <exact command or managed remediation>\`; \`Evidence needed: <artifact/test/review/delegation evidence>\`.
 - Report counts, not full artifact contents.
 - If any data source is missing or corrupt, say so explicitly rather than guessing.
 - Include \`/cc-view tree\` for deep structure and \`/cc-view diff\` for before/after map in the final line.
