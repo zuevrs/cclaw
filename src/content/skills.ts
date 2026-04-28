@@ -86,14 +86,14 @@ function autoSubagentDispatchBlock(stage: FlowStage, track: FlowTrack): string {
   const mandatory = schema.mandatoryDelegations;
   const mandatoryList = mandatory.length > 0 ? mandatory.map((a) => `\`${a}\``).join(", ") : "none";
   const delegationLogRel = `${RUNTIME_ROOT}/state/delegation-log.json`;
+  const delegationEventsRel = `${RUNTIME_ROOT}/state/delegation-events.jsonl`;
   const artifactRef = `${RUNTIME_ROOT}/artifacts/${schema.artifactRules.artifactFile}`;
   return `## Automatic Subagent Dispatch
 | Agent | Mode | Class | Return Schema | User Gate | Trigger | Purpose |
 |---|---|---|---|---|---|---|
 ${rows}
-Mandatory: ${mandatoryList}. Record scheduled/completed/waived lifecycle rows in \`${delegationLogRel}\` before completion.
-### Harness Dispatch Contract
-Use true harness dispatch: Claude native Task, Cursor generic dispatch, OpenCode \`.opencode/agents/<agent>.md\`, Codex \`.codex/agents/<agent>.toml\`. Run independent read-only/review agents in parallel where safe, write evidence into \`${artifactRef}\`, then append \`${delegationLogRel}\` rows with matching \`fulfillmentMode: "isolated"\` or \`"generic-dispatch"\`. Each dispatched worker should have a scheduled row and a terminal row sharing \`spanId\`; stale scheduled spans block completion. Do not collapse OpenCode or Codex to role-switch by default; role-switch is degraded fallback and must carry non-empty \`evidenceRefs\`. Missing evidence blocks completion.
+Mandatory: ${mandatoryList}. Record lifecycle rows in \`${delegationLogRel}\` and append-only \`${delegationEventsRel}\` before completion.
+### Harness Dispatch Contract — use true harness dispatch: Claude Task, Cursor generic dispatch, OpenCode \`.opencode/agents/<agent>.md\` via Task/@agent, Codex \`.codex/agents/<agent>.toml\`. Do not collapse OpenCode or Codex to role-switch by default. Worker ACK Contract: ACK must include \`spanId\`, \`dispatchId\`, \`dispatchSurface\`, \`agentDefinitionPath\`, and \`ackTs\`; never claim \`fulfillmentMode: "isolated"\` without matching lifecycle proof. Helper: \`.cclaw/hooks/delegation-record.mjs --status=<status> --span-id=<spanId> --dispatch-id=<dispatchId> --dispatch-surface=<surface> --agent-definition-path=<path> --json\`. Exact recipe: scheduled -> launched -> acknowledged -> completed with the same span; completed isolated/generic rows require a prior ACK event for that span or \`--ack-ts=<iso>\`.
 `;
 }
 
@@ -273,8 +273,9 @@ function completionParametersBlock(schema: StageSchema, track: FlowTrack): strin
 - \`completion helper\`: \`node .cclaw/hooks/stage-complete.mjs ${schema.stage}\`
 - \`completion helper with evidence\`: \`node .cclaw/hooks/stage-complete.mjs ${schema.stage} --evidence-json '{"<gate_id>":"<evidence note>"}' --passed=<gate_id>[,<gate_id>]\`
 - \`completion helper JSON diagnostics\`: append \`--json\` to receive a machine-readable validation failure summary.
+- \`delegation record helper\`: \`node .cclaw/hooks/delegation-record.mjs --stage=${schema.stage} --agent=<agent> --mode=<mandatory|proactive> --status=<scheduled|launched|acknowledged|completed|failed|waived|stale> --span-id=<spanId> --dispatch-id=<dispatchId> --dispatch-surface=<surface> --agent-definition-path=<path> --json\`. \`delegation helper recipe\`: call \`--status=scheduled\`, then \`--status=launched\`, then \`--status=acknowledged\`, then \`--status=completed\` with the same \`--span-id\`, \`--dispatch-id\`, \`--dispatch-surface\`, and \`--agent-definition-path\`; completed isolated/generic rows fail unless that same span already has an acknowledged event or the completed call includes \`--ack-ts=<iso>\`. For role-switch fallback, use \`--dispatch-surface=role-switch --evidence-ref=<artifact#anchor>\` instead of pretending isolated completion.
 - Fill \`## Learnings\` before closeout: either \`- None this stage.\` or JSON bullets with required keys \`type\`, \`trigger\`, \`action\`, \`confidence\` (knowledge-schema compatible).
-- Record mandatory delegation completion/waiver in \`${RUNTIME_ROOT}/state/delegation-log.json\` with rationale as needed.${mandatoryAgents.length > 0 ? ` If a mandatory delegation cannot run in this harness, use \`--waive-delegation=${mandatoryAgents.join(",")} --waiver-reason="<why safe>"\` on the completion helper.` : ""}
+- Record mandatory delegation lifecycle in \`${RUNTIME_ROOT}/state/delegation-log.json\` and append proof events to \`${RUNTIME_ROOT}/state/delegation-events.jsonl\`; the ledger is current state, the event log is audit proof.${mandatoryAgents.length > 0 ? ` If a mandatory delegation cannot run in this harness, use \`--waive-delegation=${mandatoryAgents.join(",")} --waiver-reason="<why safe>"\` on the completion helper.` : ""}
 - Never edit raw \`flow-state.json\` to complete a stage, even in advisory mode; that bypasses validation, gate evidence, and Learnings harvest. If the helper fails, stop and report the exact command/output instead of applying a manual state workaround.
 - Completion protocol: verify required gates, update the artifact, then use the completion helper with \`--evidence-json\` and \`--passed\` for every satisfied gate.
 `;

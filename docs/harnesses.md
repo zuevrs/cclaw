@@ -1,15 +1,15 @@
 # Harness Integration Matrix
 
-Generated from `src/harness-adapters.ts` capabilities and hook event mappings.
+Generated from `src/harness-adapters.ts` capabilities and hook event mappings. For the end-to-end subagent dispatch model, proof sequence, controller/worker responsibilities, and future roadmap, see [`docs/subagent-flow.md`](./subagent-flow.md).
 
 ## Capability tiers
 
-| Harness | ID | Tier | Native dispatch | Fallback | Hook surface | Structured ask |
-|---|---|---|---|---|---|---|
-| Claude Code | `claude` | `tier1` (full native automation) | full | native | full | AskUserQuestion |
-| Cursor | `cursor` | `tier2` (supported with fallback paths) | generic | generic-dispatch | full | AskQuestion |
-| OpenCode | `opencode` | `tier1` (native subagents plus plugin hooks) | full | native | plugin | question |
-| OpenAI Codex | `codex` | `tier1` for dispatch / `tier2` hooks | full | native | limited | request_user_input |
+| Harness | ID | Tier | declaredSupport | runtimeLaunch | Fallback | proofRequired | proofSource | Hook surface | Structured ask |
+|---|---|---|---|---|---|---|---|---|---|
+| Claude Code | `claude` | `tier1` (full native automation) | full | native Task launch | native | spanId+dispatchId or workerRunId+ACK | `.cclaw/state/delegation-events.jsonl` + ledger | full | AskUserQuestion |
+| Cursor | `cursor` | `tier2` (supported with fallback paths) | generic | generic Task/Subagent role prompt | generic-dispatch | spanId+dispatchId/evidenceRefs | events + artifact evidenceRefs | full | AskQuestion |
+| OpenCode | `opencode` | `tier2` hooks, native dispatch declared | full | prompt-level launch via Task / `@agent` against `.opencode/agents` | native | spanId+dispatchId+ackTs+completedTs | `.opencode/agents/<agent>.md` + events | plugin | question |
+| OpenAI Codex | `codex` | `tier2` hooks, native dispatch declared | full | prompt-level request to spawn `.codex/agents` custom agents | native | spanId+dispatchId+ackTs+completedTs | `.codex/agents/<agent>.toml` + events | limited | request_user_input |
 
 Fallback legend:
 
@@ -25,8 +25,8 @@ OpenCode and Codex receive generated native isolated subagents. Use them before 
 1. Use the active stage skill's generated dispatch table as the source of truth.
 2. OpenCode: invoke `.opencode/agents/<agent>.md` via Task or `@<agent>`; Codex: ask Codex to spawn `.codex/agents/<agent>.toml` by name, in parallel when lanes are independent.
 3. Load `.cclaw/agents/<agent>.md`, execute only that role's stage task, and write outputs into the active stage artifact.
-4. Append `.cclaw/state/delegation-log.json` with `fulfillmentMode: "isolated"` for native OpenCode/Codex dispatch (`"role-switch"` plus non-empty `evidenceRefs` only for degraded fallback).
-5. Treat completed role-switch rows without `evidenceRefs` as unresolved; native isolated rows are not a role-switch substitute and should reflect a real dispatched worker.
+4. Append `.cclaw/state/delegation-events.jsonl` for scheduled/launched/acknowledged/completed/failed/waived/stale, then mirror current state in `.cclaw/state/delegation-log.json`. The ledger is current state; the event log is proof/audit.
+5. Treat completed role-switch rows without `evidenceRefs` as unresolved; treat native isolated completion without matching `spanId` + `dispatchId`/`workerRunId` + `ackTs` + `completedTs` as fake isolated completion. Native isolated rows are not a role-switch substitute and should reflect a real dispatched worker.
 
 This is staged agent work backed by the harness-native subagent surfaces. Role-switch remains only a degraded fallback when that surface is unavailable in the active runtime.
 
@@ -141,4 +141,32 @@ Harness-specific additions:
 
 - `npx cclaw-cli doctor` validates shim, hook, and lifecycle surfaces against this capability model.
 - `/cc-view status` and `/cc-view tree` surface the same harness tier/fallback facts from the generated runtime metadata.
+
+## Delegation Proof Model
+
+Runtime state is split deliberately:
+
+- `.cclaw/state/delegation-log.json` is the compact current ledger used by stage gates and `/cc-view` summaries.
+- `.cclaw/state/delegation-events.jsonl` is append-only audit proof for `scheduled`, `launched`, `acknowledged`, `completed`, `failed`, `waived`, and `stale` lifecycle transitions.
+- `.cclaw/state/subagents.json` is a lightweight active-worker tracker for status/tree/doctor surfaces.
+- `.cclaw/hooks/delegation-record.mjs` is the generated helper for lifecycle rows/events. It validates required fields and emits JSON diagnostics with `--json`.
+
+Isolated completion requires `spanId`, `dispatchId` or `workerRunId`, `dispatchSurface`, `agentDefinitionPath`, `ackTs`, `launchedTs`, and `completedTs`. Cursor/generic dispatch and role-switch also require evidence refs when artifact evidence is the proof source. Legacy inferred completions remain readable, but doctor reports them as warnings because they predate event-log proof.
+
+## Reference Audit Appendix
+
+Status meanings: `deep` = read for transferable implementation contract; `targeted` = inspected the relevant files only; `skimmed` = searched/read enough to classify; `not relevant` = intentionally excluded from implementation influence.
+
+| Reference path under `/Users/zuevrs/Downloads/references` | Status | Findings preserved |
+|---|---|---|
+| `evanklem-evanflow/skills/evanflow-coder-overseer/SKILL.md` | deep | Contract-first coder/overseer loop, reviewer reads code rather than worker narrative, and integration overseer pattern map cleanly onto cclaw subagent guidance. |
+| `evanklem-evanflow/agents/evanflow-coder.md` | targeted | Worker role is narrow: implement the pasted contract, avoid broad orchestration, and return evidence for overseer verification. |
+| `evanklem-evanflow/agents/evanflow-overseer.md` | targeted | Overseer validates actual code and acceptance evidence before controller marks work complete. |
+| `oh-my-codex/src/agents/native-config.ts` | deep | Native agent config shape supports explicit metadata/model/tool posture; cclaw should validate generated `.codex/agents/*.toml` shape instead of trusting file presence. |
+| `oh-my-codex/src/team/state/events.ts` and `src/team/state/workers.ts` | targeted | Append-only events plus worker state are useful as separate audit/current-state layers; cclaw mirrors that with `delegation-events.jsonl` and `subagents.json`. |
+| `oh-my-openagent/src/tools/delegate-task/tools.ts` | deep | Delegation should have an explicit dispatch surface and mode instead of relying on a prose claim that an agent was launched. |
+| `oh-my-openagent/src/tools/delegate-task/subagent-resolver.ts` | targeted | Agent discovery should be checked by doctor so missing/corrupt generated agent definitions are visible before dispatch. |
+| `oh-my-openagent/src/tools/delegate-task/prompt-builder.ts` | targeted | Prompt builders should include exact invocation/return contracts; cclaw generated worker prompts now carry ACK/result schemas. |
+| `giancarloerra-socraticode/**` | skimmed | Useful for workflow/e2e and graph-oriented contract testing, but not a subagent dispatch implementation reference; no runtime pattern imported. |
+| unrelated large reference trees not named above | not relevant | Searched/skipped because they did not contain flow/subagent/harness dispatch patterns relevant to this plan. |
 

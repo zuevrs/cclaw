@@ -1381,6 +1381,63 @@ Capture this later.
     expect(flowReadable?.details).toMatch(/Corrupt flow-state\.json detected/i);
   });
 
+
+  it("doctor detects missing generated agent shape and delegation proof gaps", async () => {
+    const root = await createTempProject("doctor-agent-proof-gaps");
+    await initCclaw({ projectRoot: root, harnesses: ["opencode"] });
+    await fs.writeFile(path.join(root, ".opencode/agents/planner.md"), "---\nmode: subagent\n---\n# planner\n", "utf8");
+    const stateRaw = await fs.readFile(path.join(root, ".cclaw/state/flow-state.json"), "utf8");
+    const state = JSON.parse(stateRaw) as { currentStage: string; guardEvidence: Record<string, string> };
+    state.currentStage = "scope";
+    state.guardEvidence = { scope_mode_selected: "test touched stage" };
+    await fs.writeFile(path.join(root, ".cclaw/state/flow-state.json"), `${JSON.stringify(state, null, 2)}\n`, "utf8");
+    await fs.writeFile(
+      path.join(root, ".cclaw/state/delegation-log.json"),
+      `${JSON.stringify({
+        runId: "unknown",
+        entries: [
+          {
+            stage: "scope",
+            agent: "planner",
+            mode: "mandatory",
+            status: "completed",
+            spanId: "span-fake",
+            fulfillmentMode: "isolated",
+            dispatchSurface: "opencode-agent",
+            runId: stateRaw.includes("activeRunId") ? JSON.parse(stateRaw).activeRunId : "unknown",
+            ts: new Date().toISOString(),
+            startTs: new Date().toISOString(),
+            completedTs: new Date().toISOString(),
+            schemaVersion: 1
+          }
+        ]
+      }, null, 2)}\n`,
+      "utf8"
+    );
+    await fs.writeFile(
+      path.join(root, ".cclaw/state/delegation-events.jsonl"),
+      `${JSON.stringify({
+        stage: "scope",
+        agent: "planner",
+        mode: "mandatory",
+        status: "completed",
+        event: "completed",
+        eventTs: new Date().toISOString(),
+        spanId: "span-fake",
+        dispatchSurface: "opencode-agent",
+        runId: JSON.parse(stateRaw).activeRunId,
+        ts: new Date().toISOString(),
+        startTs: new Date().toISOString(),
+        schemaVersion: 1
+      })}\n`,
+      "utf8"
+    );
+
+    const checks = await doctorChecks(root);
+    expect(checks.find((c) => c.name === "agent:opencode:planner:shape")?.ok).toBe(false);
+    expect(checks.find((c) => c.name === "delegation:proof:current_stage")?.ok).toBe(false);
+  });
+
   it("checks OpenCode structured-question prerequisites", async () => {
     const root = await createTempProject("doctor-opencode-question-prereqs");
     await initCclaw({ projectRoot: root });

@@ -13,8 +13,24 @@ import type { FlowStage } from "./types.js";
 const execFileAsync = promisify(execFile);
 
 export type DelegationMode = "mandatory" | "proactive";
-export type DelegationStatus = "scheduled" | "completed" | "failed" | "waived";
-const TERMINAL_DELEGATION_STATUSES = new Set<DelegationStatus>(["completed", "failed", "waived"]);
+export type DelegationStatus =
+  | "scheduled"
+  | "launched"
+  | "acknowledged"
+  | "completed"
+  | "failed"
+  | "waived"
+  | "stale";
+const TERMINAL_DELEGATION_STATUSES = new Set<DelegationStatus>(["completed", "failed", "waived", "stale"]);
+export type DelegationDispatchSurface =
+  | "claude-task"
+  | "cursor-task"
+  | "opencode-agent"
+  | "codex-agent"
+  | "generic-task"
+  | "role-switch"
+  | "manual";
+export type DelegationEventType = DelegationStatus;
 
 /**
  * How a delegation was actually fulfilled. Advisory — mirrors the harness
@@ -73,6 +89,20 @@ export type DelegationEntry = {
   retryCount?: number;
   /** Optional references to evidence anchors in artifacts. */
   evidenceRefs?: string[];
+  /** Dispatch proof id from the parent/controller side. */
+  dispatchId?: string;
+  /** Worker-reported run id or task id returned by the harness. */
+  workerRunId?: string;
+  /** Concrete runtime surface used to launch the worker. */
+  dispatchSurface?: DelegationDispatchSurface;
+  /** Path to the generated or canonical agent definition used for dispatch. */
+  agentDefinitionPath?: string;
+  /** ISO timestamp when the worker was acknowledged by the harness/worker. */
+  ackTs?: string;
+  /** ISO timestamp when the worker was launched. */
+  launchedTs?: string;
+  /** ISO timestamp when the worker completed. */
+  completedTs?: string;
   /** Optional skill marker used for role-specific mandatory checks. */
   skill?: string;
   /**
@@ -90,6 +120,12 @@ export type DelegationLedger = {
   entries: DelegationEntry[];
 };
 
+export type DelegationEvent = DelegationEntry & {
+  event: DelegationEventType;
+  eventTs: string;
+  schemaVersion: 1;
+};
+
 interface ReviewTriggerMetrics {
   changedFiles: number;
   changedLines: number;
@@ -102,6 +138,14 @@ function delegationLogPath(projectRoot: string): string {
 
 function delegationLockPath(projectRoot: string): string {
   return path.join(projectRoot, RUNTIME_ROOT, "state", ".delegation.lock");
+}
+
+function delegationEventsPath(projectRoot: string): string {
+  return path.join(projectRoot, RUNTIME_ROOT, "state", "delegation-events.jsonl");
+}
+
+function subagentsStatePath(projectRoot: string): string {
+  return path.join(projectRoot, RUNTIME_ROOT, "state", "subagents.json");
 }
 
 function createSpanId(): string {
@@ -225,15 +269,18 @@ function isDelegationEntry(value: unknown): value is DelegationEntry {
   const modeOk = o.mode === "mandatory" || o.mode === "proactive";
   const statusOk =
     o.status === "scheduled" ||
+    o.status === "launched" ||
+    o.status === "acknowledged" ||
     o.status === "completed" ||
     o.status === "failed" ||
-    o.status === "waived";
+    o.status === "waived" ||
+    o.status === "stale";
   const timestampOk =
     typeof o.ts === "string" ||
     typeof o.startTs === "string";
-  const terminalStatus = o.status === "completed" || o.status === "failed" || o.status === "waived";
+  const terminalStatus = o.status === "completed" || o.status === "failed" || o.status === "waived" || o.status === "stale";
   const lifecycleOk =
-    o.status !== "scheduled" || o.endTs === undefined;
+    (o.status !== "scheduled" && o.status !== "launched" && o.status !== "acknowledged") || o.endTs === undefined;
   const terminalLifecycleOk =
     !terminalStatus ||
     o.endTs === undefined ||
@@ -267,12 +314,56 @@ function isDelegationEntry(value: unknown): value is DelegationEntry {
       o.fulfillmentMode === "role-switch" ||
       o.fulfillmentMode === "harness-waiver") &&
     (o.conditionTrigger === undefined || typeof o.conditionTrigger === "string") &&
+    (o.dispatchId === undefined || typeof o.dispatchId === "string") &&
+    (o.workerRunId === undefined || typeof o.workerRunId === "string") &&
+    (o.dispatchSurface === undefined || isDelegationDispatchSurface(o.dispatchSurface)) &&
+    (o.agentDefinitionPath === undefined || typeof o.agentDefinitionPath === "string") &&
+    (o.ackTs === undefined || typeof o.ackTs === "string") &&
+    (o.launchedTs === undefined || typeof o.launchedTs === "string") &&
+    (o.completedTs === undefined || typeof o.completedTs === "string") &&
     (o.tokens === undefined || isDelegationTokenUsage(o.tokens)) &&
     retryOk &&
     (o.evidenceRefs === undefined || (Array.isArray(o.evidenceRefs) && o.evidenceRefs.every((item) => typeof item === "string"))) &&
     (o.skill === undefined || typeof o.skill === "string") &&
     (o.schemaVersion === undefined || o.schemaVersion === 1)
   );
+}
+
+
+function isDelegationDispatchSurface(value: unknown): value is DelegationDispatchSurface {
+  return (
+    value === "claude-task" ||
+    value === "cursor-task" ||
+    value === "opencode-agent" ||
+    value === "codex-agent" ||
+    value === "generic-task" ||
+    value === "role-switch" ||
+    value === "manual"
+  );
+}
+
+function statusTimestampPatch(entry: DelegationEntry, ts: string): DelegationEntry {
+  const patch: DelegationEntry = { ...entry };
+  if (patch.status === "launched") patch.launchedTs = patch.launchedTs ?? ts;
+  if (patch.status === "acknowledged") patch.ackTs = patch.ackTs ?? ts;
+  if (patch.status === "completed") patch.completedTs = patch.completedTs ?? patch.endTs ?? ts;
+  return patch;
+}
+
+function eventFromEntry(entry: DelegationEntry): DelegationEvent {
+  const eventTs = entry.completedTs ?? entry.ackTs ?? entry.launchedTs ?? entry.endTs ?? entry.startTs ?? entry.ts ?? new Date().toISOString();
+  return {
+    ...entry,
+    event: entry.status,
+    eventTs,
+    schemaVersion: 1
+  };
+}
+
+function isDelegationEvent(value: unknown): value is DelegationEvent {
+  if (!isDelegationEntry(value)) return false;
+  const o = value as Record<string, unknown>;
+  return o.event === o.status && typeof o.eventTs === "string";
 }
 
 function parseLedger(raw: unknown, runId: string): DelegationLedger {
@@ -297,6 +388,9 @@ function parseLedger(raw: unknown, runId: string): DelegationLedger {
           startTs: ts,
           endTs: TERMINAL_DELEGATION_STATUSES.has(item.status) ? (item.endTs ?? ts) : undefined,
           ts,
+          launchedTs: item.launchedTs ?? (item.status === "launched" ? ts : undefined),
+          ackTs: item.ackTs ?? (item.status === "acknowledged" ? ts : undefined),
+          completedTs: item.completedTs ?? (item.status === "completed" ? (item.endTs ?? ts) : undefined),
           retryCount:
             typeof item.retryCount === "number" && Number.isInteger(item.retryCount) && item.retryCount >= 0
               ? item.retryCount
@@ -326,6 +420,59 @@ export async function readDelegationLedger(projectRoot: string): Promise<Delegat
   }
 }
 
+
+
+export async function readDelegationEvents(projectRoot: string): Promise<{ events: DelegationEvent[]; corruptLines: number[] }> {
+  const filePath = delegationEventsPath(projectRoot);
+  if (!(await exists(filePath))) {
+    return { events: [], corruptLines: [] };
+  }
+  const events: DelegationEvent[] = [];
+  const corruptLines: number[] = [];
+  const text = await fs.readFile(filePath, "utf8").catch(() => "");
+  const lines = text.split(/\r?\n/gu);
+  for (let index = 0; index < lines.length; index += 1) {
+    const line = lines[index]?.trim() ?? "";
+    if (line.length === 0) continue;
+    try {
+      const parsed: unknown = JSON.parse(line);
+      if (isDelegationEvent(parsed)) {
+        events.push(parsed);
+      } else {
+        corruptLines.push(index + 1);
+      }
+    } catch {
+      corruptLines.push(index + 1);
+    }
+  }
+  return { events, corruptLines };
+}
+
+async function appendDelegationEvent(projectRoot: string, event: DelegationEvent): Promise<void> {
+  const filePath = delegationEventsPath(projectRoot);
+  await fs.mkdir(path.dirname(filePath), { recursive: true });
+  await fs.appendFile(filePath, `${JSON.stringify(event)}\n`, { encoding: "utf8", mode: 0o600 });
+}
+
+async function writeSubagentTracker(projectRoot: string, entries: DelegationEntry[]): Promise<void> {
+  const active = entries
+    .filter((entry) => entry.status === "scheduled" || entry.status === "launched" || entry.status === "acknowledged")
+    .map((entry) => ({
+      spanId: entry.spanId,
+      dispatchId: entry.dispatchId,
+      workerRunId: entry.workerRunId,
+      stage: entry.stage,
+      agent: entry.agent,
+      status: entry.status,
+      dispatchSurface: entry.dispatchSurface,
+      agentDefinitionPath: entry.agentDefinitionPath,
+      startedAt: entry.startTs,
+      launchedAt: entry.launchedTs,
+      acknowledgedAt: entry.ackTs
+    }));
+  await writeFileSafe(subagentsStatePath(projectRoot), `${JSON.stringify({ active, updatedAt: new Date().toISOString() }, null, 2)}\n`, { mode: 0o600 });
+}
+
 export async function appendDelegation(projectRoot: string, entry: DelegationEntry): Promise<void> {
   const { activeRunId } = await readFlowState(projectRoot);
   await withDirectoryLock(delegationLockPath(projectRoot), async () => {
@@ -335,12 +482,15 @@ export async function appendDelegation(projectRoot: string, entry: DelegationEnt
     if (entry.status === "waived" && !hasValidWaiverReason(entry.waiverReason)) {
       throw new Error("waived delegation entries require a non-empty waiverReason");
     }
-    const stamped: DelegationEntry = { ...entry, runId: entry.runId ?? activeRunId };
+    const stamped: DelegationEntry = statusTimestampPatch({ ...entry, runId: entry.runId ?? activeRunId }, startTs);
     stamped.spanId = entry.spanId ?? createSpanId();
     stamped.startTs = startTs;
     stamped.ts = startTs;
     if (TERMINAL_DELEGATION_STATUSES.has(stamped.status) && !stamped.endTs) {
       stamped.endTs = new Date().toISOString();
+    }
+    if (stamped.status === "completed") {
+      stamped.completedTs = stamped.completedTs ?? stamped.endTs ?? new Date().toISOString();
     }
     if (stamped.status === "scheduled") {
       delete stamped.endTs;
@@ -375,11 +525,13 @@ export async function appendDelegation(projectRoot: string, entry: DelegationEnt
     )) {
       return;
     }
+    await appendDelegationEvent(projectRoot, eventFromEntry(stamped));
     const ledger: DelegationLedger = {
       runId: activeRunId,
       entries: [...prior.entries, stamped]
     };
     await writeFileSafe(filePath, `${JSON.stringify(ledger, null, 2)}\n`, { mode: 0o600 });
+    await writeSubagentTracker(projectRoot, ledger.entries);
   });
 }
 
@@ -410,6 +562,12 @@ export async function checkMandatoryDelegations(
   staleIgnored: string[];
   /** Delegation rows missing required evidence under a role-switch fallback. */
   missingEvidence: string[];
+  /** Native isolated completion rows that lack dispatch proof. */
+  missingDispatchProof: string[];
+  /** Legacy inferred isolated completions accepted only as migration warnings. */
+  legacyInferredCompletions: string[];
+  /** Current-run event log lines that could not be parsed. */
+  corruptEventLines: number[];
   /** Current-run scheduled rows with no terminal row sharing the same spanId. */
   staleWorkers: string[];
   /** Expected fulfillment mode for the active harness set. */
@@ -421,6 +579,7 @@ export async function checkMandatoryDelegations(
   const mandatory = stageSchema(stage, flowState.track).mandatoryDelegations;
   const { activeRunId } = flowState;
   const ledger = await readDelegationLedger(projectRoot);
+  const events = await readDelegationEvents(projectRoot);
   const forStage = ledger.entries.filter((e) => e.stage === stage);
   const forRun = forStage.filter((e) => e.runId === activeRunId);
   const staleIgnored = forStage
@@ -430,6 +589,8 @@ export async function checkMandatoryDelegations(
   const missing: string[] = [];
   const waived: string[] = [];
   const missingEvidence: string[] = [];
+  const missingDispatchProof: string[] = [];
+  const legacyInferredCompletions: string[] = [];
   const terminalSpanIds = new Set(
     forRun
       .filter((entry) => TERMINAL_DELEGATION_STATUSES.has(entry.status) && entry.spanId)
@@ -476,14 +637,45 @@ export async function checkMandatoryDelegations(
     ) {
       missingEvidence.push(agent);
     }
+
+    for (const row of completedRows) {
+      const mode = row.fulfillmentMode ?? "isolated";
+      if (mode === "isolated") {
+        const spanEvents = events.events.filter((event) =>
+          event.runId === activeRunId &&
+          event.stage === stage &&
+          event.agent === agent &&
+          event.spanId === row.spanId
+        );
+        const dispatchId = row.dispatchId ?? row.workerRunId ?? spanEvents.find((event) => event.dispatchId || event.workerRunId)?.dispatchId ?? spanEvents.find((event) => event.workerRunId)?.workerRunId;
+        const dispatchSurface = row.dispatchSurface ?? spanEvents.find((event) => event.dispatchSurface)?.dispatchSurface;
+        const agentDefinitionPath = row.agentDefinitionPath ?? spanEvents.find((event) => event.agentDefinitionPath)?.agentDefinitionPath;
+        const hasAck = Boolean(row.ackTs || spanEvents.some((event) => event.event === "acknowledged" && event.ackTs));
+        const hasCompleted = Boolean(row.completedTs || spanEvents.some((event) => event.event === "completed" && event.completedTs));
+        const hasDispatchProof = Boolean(row.spanId && dispatchId && dispatchSurface && agentDefinitionPath && hasAck && hasCompleted);
+        if (!hasDispatchProof) {
+          const proofEraSignal = Boolean(row.dispatchId || row.workerRunId || row.dispatchSurface || row.agentDefinitionPath || spanEvents.some((event) =>
+            event.dispatchId || event.workerRunId || event.dispatchSurface || event.agentDefinitionPath || event.event === "acknowledged" || event.event === "launched"
+          ));
+          if (proofEraSignal) {
+            missingDispatchProof.push(agent);
+          } else {
+            legacyInferredCompletions.push(`${agent}(spanId=${row.spanId ?? "unknown"})`);
+          }
+        }
+      }
+    }
   }
 
   return {
-    satisfied: missing.length === 0 && missingEvidence.length === 0 && staleWorkers.length === 0,
+    satisfied: missing.length === 0 && missingEvidence.length === 0 && missingDispatchProof.length === 0 && staleWorkers.length === 0 && events.corruptLines.length === 0,
     missing,
     waived,
     staleIgnored,
     missingEvidence,
+    missingDispatchProof,
+    legacyInferredCompletions,
+    corruptEventLines: events.corruptLines,
     staleWorkers,
     expectedMode
   };

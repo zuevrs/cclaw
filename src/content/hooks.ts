@@ -272,6 +272,196 @@ void main();
 `;
 }
 
+export function delegationRecordScript(): string {
+  return `#!/usr/bin/env node
+import fs from "node:fs/promises";
+import path from "node:path";
+import process from "node:process";
+
+const RUNTIME_ROOT = ${JSON.stringify(RUNTIME_ROOT)};
+const VALID_STATUSES = new Set(["scheduled", "launched", "acknowledged", "completed", "failed", "waived", "stale"]);
+const TERMINAL = new Set(["completed", "failed", "waived", "stale"]);
+
+function parseArgs(argv) {
+  const args = {};
+  for (const raw of argv) {
+    const valueMatch = /^--([^=]+)=(.*)$/u.exec(raw);
+    if (valueMatch) {
+      args[valueMatch[1]] = valueMatch[2];
+      continue;
+    }
+    const flagMatch = /^--([^=]+)$/u.exec(raw);
+    if (flagMatch) args[flagMatch[1]] = true;
+  }
+  return args;
+}
+
+async function exists(filePath) {
+  try {
+    await fs.access(filePath);
+    return true;
+  } catch {
+    return false;
+  }
+}
+
+async function detectRoot() {
+  const candidates = [
+    process.env.CCLAW_PROJECT_ROOT,
+    process.env.CLAUDE_PROJECT_DIR,
+    process.env.CURSOR_PROJECT_DIR,
+    process.env.CURSOR_PROJECT_ROOT,
+    process.env.OPENCODE_PROJECT_DIR,
+    process.env.OPENCODE_PROJECT_ROOT,
+    process.cwd()
+  ].filter((value) => typeof value === "string" && value.length > 0);
+  for (const candidate of candidates) {
+    if (await exists(path.join(candidate, RUNTIME_ROOT))) return candidate;
+  }
+  return candidates[0] || process.cwd();
+}
+
+async function readRunId(root) {
+  try {
+    const raw = await fs.readFile(path.join(root, RUNTIME_ROOT, "state", "flow-state.json"), "utf8");
+    const parsed = JSON.parse(raw);
+    return typeof parsed.activeRunId === "string" ? parsed.activeRunId : "unknown-run";
+  } catch {
+    return "unknown-run";
+  }
+}
+
+async function readDelegationEvents(root) {
+  try {
+    const raw = await fs.readFile(path.join(root, RUNTIME_ROOT, "state", "delegation-events.jsonl"), "utf8");
+    return raw
+      .split(/\\r?\\n/u)
+      .filter((line) => line.trim().length > 0)
+      .map((line) => {
+        try {
+          return JSON.parse(line);
+        } catch {
+          return null;
+        }
+      })
+      .filter((event) => event && typeof event === "object");
+  } catch {
+    return [];
+  }
+}
+
+function hasPriorAck(events, args, runId) {
+  return events.some((event) =>
+    event.runId === runId &&
+    event.stage === args.stage &&
+    event.agent === args.agent &&
+    event.spanId === args["span-id"] &&
+    event.event === "acknowledged" &&
+    typeof event.ackTs === "string" &&
+    event.ackTs.length > 0
+  );
+}
+
+function usage() {
+  process.stderr.write("Usage: node .cclaw/hooks/delegation-record.mjs --stage=<stage> --agent=<agent> --mode=<mandatory|proactive> --status=<scheduled|launched|acknowledged|completed|failed|waived|stale> --span-id=<id> [--dispatch-id=<id>] [--worker-run-id=<id>] [--dispatch-surface=<surface>] [--agent-definition-path=<path>] [--ack-ts=<iso>] [--launched-ts=<iso>] [--completed-ts=<iso>] [--evidence-ref=<ref>] [--waiver-reason=<text>] [--json]\\n");
+}
+
+async function main() {
+  const args = parseArgs(process.argv.slice(2));
+  const json = args.json !== undefined;
+  const problems = [];
+  if (!args.stage) problems.push("missing --stage");
+  if (!args.agent) problems.push("missing --agent");
+  if (args.mode !== "mandatory" && args.mode !== "proactive") problems.push("--mode must be mandatory or proactive");
+  if (!VALID_STATUSES.has(args.status)) problems.push("invalid --status");
+  if (!args["span-id"]) problems.push("missing --span-id");
+  if (args.status === "waived" && !args["waiver-reason"]) problems.push("waived status requires --waiver-reason");
+  if (args.status === "completed" && args["dispatch-surface"] !== "role-switch") {
+    for (const key of ["dispatch-id", "dispatch-surface", "agent-definition-path"]) {
+      if (!args[key]) problems.push("completed isolated/generic status requires --" + key);
+    }
+  }
+  if (args.status === "completed" && args["dispatch-surface"] === "role-switch" && !args["evidence-ref"]) {
+    problems.push("completed role-switch status requires --evidence-ref");
+  }
+  if (problems.length > 0) {
+    if (json) process.stdout.write(JSON.stringify({ ok: false, problems }, null, 2) + "\\n");
+    else {
+      usage();
+      process.stderr.write("[cclaw] delegation-record: " + problems.join("; ") + "\\n");
+    }
+    process.exitCode = 1;
+    return;
+  }
+
+  const root = await detectRoot();
+  const now = new Date().toISOString();
+  const runId = await readRunId(root);
+  if (args.status === "completed" && args["dispatch-surface"] !== "role-switch" && !args["ack-ts"]) {
+    const priorEvents = await readDelegationEvents(root);
+    if (!hasPriorAck(priorEvents, args, runId)) {
+      const ackProblem = "completed isolated/generic status requires prior acknowledged event for same span or --ack-ts";
+      if (json) process.stdout.write(JSON.stringify({ ok: false, problems: [ackProblem] }, null, 2) + "\\n");
+      else {
+        usage();
+        process.stderr.write("[cclaw] delegation-record: " + ackProblem + "\\n");
+      }
+      process.exitCode = 1;
+      return;
+    }
+  }
+  const status = args.status;
+  const row = {
+    stage: args.stage,
+    agent: args.agent,
+    mode: args.mode,
+    status,
+    spanId: args["span-id"],
+    dispatchId: args["dispatch-id"],
+    workerRunId: args["worker-run-id"],
+    dispatchSurface: args["dispatch-surface"],
+    agentDefinitionPath: args["agent-definition-path"],
+    fulfillmentMode: args["dispatch-surface"] === "role-switch" ? "role-switch" : args["dispatch-surface"] === "cursor-task" || args["dispatch-surface"] === "generic-task" ? "generic-dispatch" : "isolated",
+    waiverReason: args["waiver-reason"],
+    evidenceRefs: args["evidence-ref"] ? [args["evidence-ref"]] : [],
+    runId,
+    startTs: now,
+    ts: now,
+    launchedTs: args["launched-ts"] || (status === "launched" ? now : undefined),
+    ackTs: args["ack-ts"] || (status === "acknowledged" ? now : undefined),
+    completedTs: args["completed-ts"] || (status === "completed" ? now : undefined),
+    endTs: TERMINAL.has(status) ? now : undefined,
+    schemaVersion: 1
+  };
+  const clean = Object.fromEntries(Object.entries(row).filter(([, value]) => value !== undefined));
+  const event = { ...clean, event: status, eventTs: now };
+  const stateDir = path.join(root, RUNTIME_ROOT, "state");
+  await fs.mkdir(stateDir, { recursive: true });
+  await fs.appendFile(path.join(stateDir, "delegation-events.jsonl"), JSON.stringify(event) + "\\n", { encoding: "utf8", mode: 0o600 });
+
+  const ledgerPath = path.join(stateDir, "delegation-log.json");
+  let ledger = { runId, entries: [] };
+  try {
+    ledger = JSON.parse(await fs.readFile(ledgerPath, "utf8"));
+    if (!Array.isArray(ledger.entries)) ledger.entries = [];
+  } catch {
+    ledger = { runId, entries: [] };
+  }
+  if (!ledger.entries.some((entry) => entry.spanId === clean.spanId && entry.status === clean.status)) {
+    ledger.entries.push(clean);
+    ledger.runId = runId;
+    await fs.writeFile(ledgerPath, JSON.stringify(ledger, null, 2) + "\\n", { encoding: "utf8", mode: 0o600 });
+  }
+
+  const active = ledger.entries.filter((entry) => ["scheduled", "launched", "acknowledged"].includes(entry.status));
+  await fs.writeFile(path.join(stateDir, "subagents.json"), JSON.stringify({ active, updatedAt: now }, null, 2) + "\\n", { encoding: "utf8", mode: 0o600 });
+  process.stdout.write(JSON.stringify({ ok: true, event }, null, 2) + "\\n");
+}
+
+void main();
+`;
+}
+
 export function runHookCmdScript(): string {
   return `: << 'CMDBLOCK'
 @echo off

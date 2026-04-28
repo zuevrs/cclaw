@@ -8,6 +8,14 @@ function delegationLogPath(): string {
   return `${RUNTIME_ROOT}/state/delegation-log.json`;
 }
 
+function delegationEventsPath(): string {
+  return `${RUNTIME_ROOT}/state/delegation-events.jsonl`;
+}
+
+function subagentsPath(): string {
+  return `${RUNTIME_ROOT}/state/subagents.json`;
+}
+
 function artifactsPath(): string {
   return `${RUNTIME_ROOT}/artifacts`;
 }
@@ -35,7 +43,7 @@ Do not modify state in this command. It is a pure read/render operation.
    - stage marker: passed/current/pending/skipped/stale,
    - gates summary,
    - artifact summary,
-   - delegation branch for current stage with fulfillmentMode labels,
+   - delegation branch for current stage with fulfillmentMode, dispatchSurface, proof status, and active tracker labels,
 6. When \`closeout.shipSubstate !== "idle"\` or \`currentStage === "ship"\`, add
    a closeout sub-tree:
    - \`retro:\` line derived from \`closeout.retroDraftedAt\` /
