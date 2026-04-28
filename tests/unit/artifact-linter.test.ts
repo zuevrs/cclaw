@@ -1567,6 +1567,8 @@ describe("artifact linter heuristics", () => {
 | A (minimum viable) | Polling-only | S | Low | Fast | Weaker UX | REST endpoint |
 | B (recommended) | SSE + REST fallback | M | Med | Better UX | Reconnect handling | Event publisher |
 
+RECOMMENDATION: B — SSE + REST fallback delivers durable feed UX without overcommitting infra.
+
 ## Scope Mode
 - [x] selective
 
@@ -2076,6 +2078,8 @@ ${premiseBody}
 |---|---|---|---|---|---|---|
 | A (minimum viable) | Polling-only | S | Low | Fast | Weaker UX | REST endpoint |
 | B (recommended) | SSE + REST fallback | M | Med | Better UX | Reconnect handling | Event publisher |
+
+RECOMMENDATION: B — SSE + REST fallback delivers durable feed UX without overcommitting infra.
 
 ## Scope Mode
 - [x] selective

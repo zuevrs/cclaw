@@ -11,6 +11,80 @@ Generated from `src/harness-adapters.ts` capabilities and hook event mappings. F
 | OpenCode | `opencode` | `tier2` hooks, native dispatch declared | full | prompt-level launch via Task / `@agent` against `.opencode/agents` | native | spanId+dispatchId+ackTs+completedTs | `.opencode/agents/<agent>.md` + events | plugin | question |
 | OpenAI Codex | `codex` | `tier2` hooks, native dispatch declared | full | prompt-level request to spawn `.codex/agents` custom agents | native | spanId+dispatchId+ackTs+completedTs | `.codex/agents/<agent>.toml` + events | limited | request_user_input |
 
+
+## Per-Harness Lifecycle Recipe
+
+| Harness | Surface | Agent definition path | fulfillmentMode | Lifecycle |
+|---|---|---|---|---|
+| `claude` | `claude-task` | `.claude/agents/<agent-name>.md` | isolated | scheduled -> launched -> acknowledged -> completed (reuse `<span-id>` + `<dispatch-id>`; `--ack-ts=<iso-ts>` for completed isolated/generic) |
+| `cursor` | `cursor-task` | `.cclaw/agents/<agent-name>.md` | generic-dispatch | scheduled -> launched -> acknowledged -> completed (reuse `<span-id>` + `<dispatch-id>`; `--ack-ts=<iso-ts>` for completed isolated/generic) |
+| `opencode` | `opencode-agent` | `.opencode/agents/<agent-name>.md` | isolated | scheduled -> launched -> acknowledged -> completed (reuse `<span-id>` + `<dispatch-id>`; `--ack-ts=<iso-ts>` for completed isolated/generic) |
+| `codex` | `codex-agent` | `.codex/agents/<agent-name>.toml` | isolated | scheduled -> launched -> acknowledged -> completed (reuse `<span-id>` + `<dispatch-id>`; `--ack-ts=<iso-ts>` for completed isolated/generic) |
+
+Neutral placeholder tokens only: `<agent-name>`, `<stage>`, `<run-id>`, `<span-id>`, `<dispatch-id>`, `<agent-def-path>`, `<iso-ts>`, `<artifact-anchor>`. See `docs/quality-gates.md` for stage-by-stage gate mapping.
+
+The four shipped harnesses (`claude`, `cursor`, `opencode`, `codex`) each ship with a canonical primary surface in the table above. The remaining enum values `generic-task`, `role-switch`, and `manual` are documented in the dispatch-surface table below and are available to any harness as fallback paths when the primary surface is unavailable.
+
+**claude**:
+
+    node .cclaw/hooks/delegation-record.mjs --stage=<stage> --agent=<agent-name> --mode=mandatory --span-id=<span-id> --dispatch-id=<dispatch-id> --status=scheduled --dispatch-surface=claude-task --agent-definition-path=.claude/agents/<agent-name>.md --json
+    node .cclaw/hooks/delegation-record.mjs --stage=<stage> --agent=<agent-name> --mode=mandatory --span-id=<span-id> --dispatch-id=<dispatch-id> --status=launched --dispatch-surface=claude-task --agent-definition-path=.claude/agents/<agent-name>.md --launched-ts=<iso-ts> --json
+    node .cclaw/hooks/delegation-record.mjs --stage=<stage> --agent=<agent-name> --mode=mandatory --span-id=<span-id> --dispatch-id=<dispatch-id> --status=acknowledged --dispatch-surface=claude-task --agent-definition-path=.claude/agents/<agent-name>.md --ack-ts=<iso-ts> --json
+    node .cclaw/hooks/delegation-record.mjs --stage=<stage> --agent=<agent-name> --mode=mandatory --span-id=<span-id> --dispatch-id=<dispatch-id> --status=completed --dispatch-surface=claude-task --agent-definition-path=.claude/agents/<agent-name>.md --completed-ts=<iso-ts> --json
+
+**cursor**:
+
+    node .cclaw/hooks/delegation-record.mjs --stage=<stage> --agent=<agent-name> --mode=mandatory --span-id=<span-id> --dispatch-id=<dispatch-id> --status=scheduled --dispatch-surface=cursor-task --agent-definition-path=.cclaw/agents/<agent-name>.md --json
+    node .cclaw/hooks/delegation-record.mjs --stage=<stage> --agent=<agent-name> --mode=mandatory --span-id=<span-id> --dispatch-id=<dispatch-id> --status=launched --dispatch-surface=cursor-task --agent-definition-path=.cclaw/agents/<agent-name>.md --launched-ts=<iso-ts> --json
+    node .cclaw/hooks/delegation-record.mjs --stage=<stage> --agent=<agent-name> --mode=mandatory --span-id=<span-id> --dispatch-id=<dispatch-id> --status=acknowledged --dispatch-surface=cursor-task --agent-definition-path=.cclaw/agents/<agent-name>.md --ack-ts=<iso-ts> --json
+    node .cclaw/hooks/delegation-record.mjs --stage=<stage> --agent=<agent-name> --mode=mandatory --span-id=<span-id> --dispatch-id=<dispatch-id> --status=completed --dispatch-surface=cursor-task --agent-definition-path=.cclaw/agents/<agent-name>.md --completed-ts=<iso-ts> --evidence-ref=<artifact-anchor> --json
+
+**opencode**:
+
+    node .cclaw/hooks/delegation-record.mjs --stage=<stage> --agent=<agent-name> --mode=mandatory --span-id=<span-id> --dispatch-id=<dispatch-id> --status=scheduled --dispatch-surface=opencode-agent --agent-definition-path=.opencode/agents/<agent-name>.md --json
+    node .cclaw/hooks/delegation-record.mjs --stage=<stage> --agent=<agent-name> --mode=mandatory --span-id=<span-id> --dispatch-id=<dispatch-id> --status=launched --dispatch-surface=opencode-agent --agent-definition-path=.opencode/agents/<agent-name>.md --launched-ts=<iso-ts> --json
+    node .cclaw/hooks/delegation-record.mjs --stage=<stage> --agent=<agent-name> --mode=mandatory --span-id=<span-id> --dispatch-id=<dispatch-id> --status=acknowledged --dispatch-surface=opencode-agent --agent-definition-path=.opencode/agents/<agent-name>.md --ack-ts=<iso-ts> --json
+    node .cclaw/hooks/delegation-record.mjs --stage=<stage> --agent=<agent-name> --mode=mandatory --span-id=<span-id> --dispatch-id=<dispatch-id> --status=completed --dispatch-surface=opencode-agent --agent-definition-path=.opencode/agents/<agent-name>.md --completed-ts=<iso-ts> --json
+
+**codex**:
+
+    node .cclaw/hooks/delegation-record.mjs --stage=<stage> --agent=<agent-name> --mode=mandatory --span-id=<span-id> --dispatch-id=<dispatch-id> --status=scheduled --dispatch-surface=codex-agent --agent-definition-path=.codex/agents/<agent-name>.toml --json
+    node .cclaw/hooks/delegation-record.mjs --stage=<stage> --agent=<agent-name> --mode=mandatory --span-id=<span-id> --dispatch-id=<dispatch-id> --status=launched --dispatch-surface=codex-agent --agent-definition-path=.codex/agents/<agent-name>.toml --launched-ts=<iso-ts> --json
+    node .cclaw/hooks/delegation-record.mjs --stage=<stage> --agent=<agent-name> --mode=mandatory --span-id=<span-id> --dispatch-id=<dispatch-id> --status=acknowledged --dispatch-surface=codex-agent --agent-definition-path=.codex/agents/<agent-name>.toml --ack-ts=<iso-ts> --json
+    node .cclaw/hooks/delegation-record.mjs --stage=<stage> --agent=<agent-name> --mode=mandatory --span-id=<span-id> --dispatch-id=<dispatch-id> --status=completed --dispatch-surface=codex-agent --agent-definition-path=.codex/agents/<agent-name>.toml --completed-ts=<iso-ts> --json
+
+### Dispatch surfaces (`--dispatch-surface` enum)
+
+Generated from `src/delegation.ts::DELEGATION_DISPATCH_SURFACES` and `DELEGATION_DISPATCH_SURFACE_PATH_PREFIXES`. Any surface not in this table is rejected by `.cclaw/hooks/delegation-record.mjs` with a non-zero exit. The deprecated `task` surface is **not** in this enum.
+
+| Surface | Purpose | Allowed agent-definition-path prefixes |
+|---|---|---|
+| `claude-task` | Claude Code native Task launch against `.claude/agents/<agent-name>.md`; fulfillmentMode: `isolated`. | `.claude/agents/`, `.cclaw/agents/` |
+| `cursor-task` | Cursor generic Task/Subagent dispatch against `.cclaw/agents/<agent-name>.md` with a role prompt; fulfillmentMode: `generic-dispatch`. Requires non-empty `evidenceRefs` on completion. | `.cursor/agents/`, `.cclaw/agents/` |
+| `opencode-agent` | OpenCode native subagent (`@<agent-name>` or Task) against `.opencode/agents/<agent-name>.md`; fulfillmentMode: `isolated`. | `.opencode/agents/`, `.cclaw/agents/` |
+| `codex-agent` | OpenAI Codex CLI native custom agent against `.codex/agents/<agent-name>.toml`; fulfillmentMode: `isolated`. | `.codex/agents/`, `.cclaw/agents/` |
+| `generic-task` | Generic Task dispatch against `.cclaw/agents/<agent-name>.md` for harnesses without a vendor-specific surface; fulfillmentMode: `generic-dispatch`. | `.cclaw/agents/` |
+| `role-switch` | In-session role-switch fallback when no isolated dispatch surface is available. No agent-definition-path prefix is enforced; completion requires non-empty `evidenceRefs`. fulfillmentMode: `role-switch`. | (any) |
+| `manual` | Out-of-band manual dispatch (e.g. operator hand-off, external ticketing system). The agent-definition-path is intentionally free-form; recorded for audit only. | (any) |
+
+
+### Legacy ledger upgrade
+
+Pre-v3 ledger entries that lack a recorded `dispatchSurface` are tagged `fulfillmentMode: "legacy-inferred"` on read. Stage-complete blocks completion until those rows are re-recorded with the v3 helper:
+
+    node .cclaw/hooks/delegation-record.mjs \
+      --rerecord \
+      --span-id=<span-id> \
+      --dispatch-id=<dispatch-id> \
+      --dispatch-surface=<surface> \
+      --agent-definition-path=<agent-def-path> \
+      --ack-ts=<iso-ts> \
+      --completed-ts=<iso-ts> \
+      --json
+
+`--dispatch-surface` must be one of the values listed in the dispatch-surface table above (the enum is generated verbatim from `src/delegation.ts::DELEGATION_DISPATCH_SURFACES`). Surfaces must align with the allowed agent-definition-path prefixes shown alongside each surface; `role-switch` and `manual` accept any path. The deprecated `task` surface is rejected.
+
+
 Fallback legend:
 
 - `native` — first-class named subagent dispatch (Claude).

@@ -314,6 +314,118 @@ export function harnessDispatchSurface(harnessId: HarnessId): string {
   }
 }
 
+export interface HarnessDelegationRecipe {
+  harnessId: HarnessId;
+  dispatchSurface: "claude-task" | "cursor-task" | "opencode-agent" | "codex-agent";
+  agentDefinitionDirectory: string;
+  agentDefinitionExample: string;
+  invocationLine: string;
+  fulfillmentMode: "isolated" | "generic-dispatch";
+  /**
+   * Step-by-step lifecycle commands rendered with structural placeholders only:
+   *  `<agent-name>`, `<stage>`, `<run-id>`, `<span-id>`, `<dispatch-id>`,
+   *  `<agent-def-path>`, `<iso-ts>`. No domain/example values.
+   */
+  lifecycleCommands: string[];
+}
+
+/**
+ * Per-harness lifecycle recipe used by skills and harness docs to render the
+ * canonical scheduled -> launched -> acknowledged -> completed sequence in
+ * structural form. The recipe never embeds task-specific or domain-specific
+ * placeholders — only neutral angle-bracket tokens (`<agent-name>`, `<stage>`,
+ * `<span-id>`, `<dispatch-id>`, `<agent-def-path>`, `<iso-ts>`).
+ *
+ * This function returns the **canonical primary recipe** for each shipped
+ * harness — the dispatch surface that maps 1:1 onto the harness's vendor-
+ * native subagent surface:
+ *
+ * - `claude` -> `claude-task` (isolated)
+ * - `cursor` -> `cursor-task` (generic-dispatch)
+ * - `opencode` -> `opencode-agent` (isolated)
+ * - `codex` -> `codex-agent` (isolated)
+ *
+ * The remaining `--dispatch-surface` enum values (`generic-task`,
+ * `role-switch`, `manual`) are universal fallback paths available to any
+ * harness when the canonical surface is unavailable; they are documented in
+ * the dispatch-surface table in `docs/harnesses.md` rather than per-harness
+ * here, because their lifecycle commands are structurally identical except
+ * for the surface token. No shipped harness has a non-canonical *primary*
+ * surface, so this function only needs to enumerate the four canonical
+ * recipes above.
+ */
+export function harnessDelegationRecipe(harnessId: HarnessId): HarnessDelegationRecipe {
+  const helper = "node .cclaw/hooks/delegation-record.mjs";
+  const common = "--stage=<stage> --agent=<agent-name> --mode=mandatory --span-id=<span-id> --dispatch-id=<dispatch-id>";
+  switch (harnessId) {
+    case "claude":
+      return {
+        harnessId,
+        dispatchSurface: "claude-task",
+        agentDefinitionDirectory: ".claude/agents/",
+        agentDefinitionExample: ".claude/agents/<agent-name>.md",
+        invocationLine: "Call Task with subagent_type=<agent-name> and prompt body that paraphrases the stage skill role.",
+        fulfillmentMode: "isolated",
+        lifecycleCommands: [
+          `${helper} ${common} --status=scheduled --dispatch-surface=claude-task --agent-definition-path=.claude/agents/<agent-name>.md --json`,
+          `${helper} ${common} --status=launched --dispatch-surface=claude-task --agent-definition-path=.claude/agents/<agent-name>.md --launched-ts=<iso-ts> --json`,
+          `${helper} ${common} --status=acknowledged --dispatch-surface=claude-task --agent-definition-path=.claude/agents/<agent-name>.md --ack-ts=<iso-ts> --json`,
+          `${helper} ${common} --status=completed --dispatch-surface=claude-task --agent-definition-path=.claude/agents/<agent-name>.md --completed-ts=<iso-ts> --json`
+        ]
+      };
+    case "cursor":
+      return {
+        harnessId,
+        dispatchSurface: "cursor-task",
+        agentDefinitionDirectory: ".cclaw/agents/",
+        agentDefinitionExample: ".cclaw/agents/<agent-name>.md",
+        invocationLine: "Call Task with a generic subagent_type and paste the cclaw role prompt; capture worker output as evidenceRefs in the artifact.",
+        fulfillmentMode: "generic-dispatch",
+        lifecycleCommands: [
+          `${helper} ${common} --status=scheduled --dispatch-surface=cursor-task --agent-definition-path=.cclaw/agents/<agent-name>.md --json`,
+          `${helper} ${common} --status=launched --dispatch-surface=cursor-task --agent-definition-path=.cclaw/agents/<agent-name>.md --launched-ts=<iso-ts> --json`,
+          `${helper} ${common} --status=acknowledged --dispatch-surface=cursor-task --agent-definition-path=.cclaw/agents/<agent-name>.md --ack-ts=<iso-ts> --json`,
+          `${helper} ${common} --status=completed --dispatch-surface=cursor-task --agent-definition-path=.cclaw/agents/<agent-name>.md --completed-ts=<iso-ts> --evidence-ref=<artifact-anchor> --json`
+        ]
+      };
+    case "opencode":
+      return {
+        harnessId,
+        dispatchSurface: "opencode-agent",
+        agentDefinitionDirectory: ".opencode/agents/",
+        agentDefinitionExample: ".opencode/agents/<agent-name>.md",
+        invocationLine: "Invoke the generated agent via Task or `@<agent-name>`; the agent body lives in `.opencode/agents/<agent-name>.md`.",
+        fulfillmentMode: "isolated",
+        lifecycleCommands: [
+          `${helper} ${common} --status=scheduled --dispatch-surface=opencode-agent --agent-definition-path=.opencode/agents/<agent-name>.md --json`,
+          `${helper} ${common} --status=launched --dispatch-surface=opencode-agent --agent-definition-path=.opencode/agents/<agent-name>.md --launched-ts=<iso-ts> --json`,
+          `${helper} ${common} --status=acknowledged --dispatch-surface=opencode-agent --agent-definition-path=.opencode/agents/<agent-name>.md --ack-ts=<iso-ts> --json`,
+          `${helper} ${common} --status=completed --dispatch-surface=opencode-agent --agent-definition-path=.opencode/agents/<agent-name>.md --completed-ts=<iso-ts> --json`
+        ]
+      };
+    case "codex":
+      return {
+        harnessId,
+        dispatchSurface: "codex-agent",
+        agentDefinitionDirectory: ".codex/agents/",
+        agentDefinitionExample: ".codex/agents/<agent-name>.toml",
+        invocationLine: "Ask Codex to spawn the named custom agent; the agent definition lives in `.codex/agents/<agent-name>.toml`.",
+        fulfillmentMode: "isolated",
+        lifecycleCommands: [
+          `${helper} ${common} --status=scheduled --dispatch-surface=codex-agent --agent-definition-path=.codex/agents/<agent-name>.toml --json`,
+          `${helper} ${common} --status=launched --dispatch-surface=codex-agent --agent-definition-path=.codex/agents/<agent-name>.toml --launched-ts=<iso-ts> --json`,
+          `${helper} ${common} --status=acknowledged --dispatch-surface=codex-agent --agent-definition-path=.codex/agents/<agent-name>.toml --ack-ts=<iso-ts> --json`,
+          `${helper} ${common} --status=completed --dispatch-surface=codex-agent --agent-definition-path=.codex/agents/<agent-name>.toml --completed-ts=<iso-ts> --json`
+        ]
+      };
+  }
+}
+
+/** All four harness recipes in tier-stable order. */
+export function harnessDelegationRecipes(): HarnessDelegationRecipe[] {
+  return harnessesByTier().map((id) => harnessDelegationRecipe(id));
+}
+
 export function harnessDispatchFallback(harnessId: HarnessId): string {
   const adapter = HARNESS_ADAPTERS[harnessId];
   if (adapter.capabilities.subagentFallback !== "role-switch") {

@@ -26,6 +26,10 @@ export const ARTIFACT_TEMPLATES: Record<string, string> = {
 
 # Brainstorm Artifact
 
+## Mode Block
+- **Mode:** STARTUP | BUILDER | ENGINEERING | OPS | RESEARCH (pick exactly one)
+- **Why this mode:** (one line; cite a concrete signal — repo state, user prompt, ownership, risk window)
+
 ## Context
 - **Project state:**
 - **Relevant existing code/patterns:**
@@ -40,31 +44,41 @@ export const ARTIFACT_TEMPLATES: Record<string, string> = {
 
 ## Problem Decision Record
 - **Depth:** lite | standard | deep
-- **Frame type:** product | technical-maintenance
+- **Frame type:** \`<free-form-label>\` (one short token that names how this work is framed; pick whatever fits — examples in commentary only: \`product\`, \`technical-maintenance\`, \`research-spike\`, \`ops-incident\`, \`infrastructure\`, \`library-extraction\`. Do NOT treat the examples as an enum.)
 
-### Product framing (use when applicable)
-- **Persona / user:**
-- **Job to be done:**
-- **Pain / trigger:**
-- **Value hypothesis:**
-- **Evidence / signal:**
-- **Success metric:**
-- **Why now:**
-- **Do-nothing consequence:**
-- **Non-goals:**
-
-### Technical-maintenance framing (use when product framing is not applicable)
-- **Affected operator/developer:**
-- **Current failure mode:**
-- **Expected operational improvement:**
-- **Verification signal:**
-- **Do-nothing cost:**
+### Framing fields (universal — keep field names; fill in whatever is meaningful for this work)
+- **Affected user / role / operator:** (who experiences the problem or carries the consequence)
+- **Current state / failure mode / opportunity:** (what is happening today)
+- **Desired outcome (observable):** (what changes when this work lands; phrase so a test or operator could verify)
+- **Evidence / signal supporting this framing:** (citation, metric, ticket, prior artifact, repo path, or \`- None.\`)
+- **Why now (urgency / cost of waiting):**
+- **Do-nothing consequence:** (concrete — not "nothing happens")
 - **Non-goals:**
 
 ## Premise Check
 - **Right problem?** (yes/no + one-line justification — take a position)
 - **Direct path?** (yes/no + one-line justification)
 - **What if we do nothing?** (concrete consequence, not "nothing happens")
+
+## Forcing Questions
+> Minimum 3 questions; each answer MUST contain at least one *specific* token: a concrete name, a role, a number, a repo-relative path, an external link, or a verbatim quote. Vague answers fail the linter.
+
+| # | Forcing question | Specific answer | Decision impact | Q\\<n\\> decision |
+|---|---|---|---|---|
+| 1 |  |  |  | decision: |
+| 2 |  |  |  | decision: |
+| 3 |  |  |  | decision: |
+
+## Premise List
+> ≥2 premises. Each premise must be in the form \`P<n>: <statement> — agreed | disagreed | revised\`. \`revised\` rows must include the revised statement on the next line.
+
+- P1: <statement> — agreed | disagreed | revised
+- P2: <statement> — agreed | disagreed | revised
+
+## Anti-Sycophancy Stamp
+- **Forbidden response openers acknowledged:** yes (no "you're absolutely right", "great point", "absolutely!", etc.)
+- **Posture commitment:** push back with reasoning when premises feel weak; do not perform agreement.
+- **Evidence-that-would-change-the-recommendation:** (one line per premise, or \`- None.\`)
 
 ## How Might We
 - *How might we …?* — one line naming the user, the desired outcome, and the binding constraint.
@@ -102,6 +116,33 @@ export const ARTIFACT_TEMPLATES: Record<string, string> = {
 | B | challenger | high |  |  |  |  |
 
 > Role values: \`baseline\` | \`challenger\` | \`wild-card\`. Upside values: \`low\` | \`modest\` | \`high\` | \`higher\`. Exactly one row must be a \`challenger\` with \`high\` or \`higher\` upside.
+
+### Approach Detail Cards
+> Required structural form per approach (≥2). One block per row above:
+
+#### APPROACH A
+- Summary:
+- Effort:
+- Risk:
+- Pros:
+- Cons:
+- Reuses:
+
+#### APPROACH B
+- Summary:
+- Effort:
+- Risk:
+- Pros:
+- Cons:
+- Reuses:
+
+RECOMMENDATION: <approach letter — one-line rationale, traced to forcing-question answers and premise list>
+
+## Outside Voice (optional)
+- source: <model id | critic agent | human reviewer> | (or \`- not used.\`)
+- prompt:
+- tension:
+- resolution:
 
 ## Approach Reaction
 - Closest option:
@@ -187,6 +228,20 @@ ${SEED_SHELF_SECTION}
 | A (minimum viable) |  |  |  |  |  |  |
 | B (ideal architecture) |  |  |  |  |  |  |
 | C (optional) |  |  |  |  |  |  |
+
+RECOMMENDATION: <option letter — one-line rationale tying back to premise challenge and existing-code leverage>
+
+## Failure Modes Registry
+> Universal failure-mode shape — applies to CLI, library, infra, web, batch jobs.
+
+| Codepath | Failure mode | Rescued? (yes/no) | Test? (unit/integration/e2e) | User sees? (message/silent/N/A) | Logged? (level/none) | Q\\<n\\> decision |
+|---|---|---|---|---|---|---|
+|  |  |  |  |  |  | decision: |
+
+## Reversibility Rating
+- Score (1-5, 1 = one-way door / unrecoverable, 5 = trivially reversible):
+- Justification (cite a specific artifact/file or migration step):
+- Rollback plan reference:
 
 ## Temporal Interrogation
 - Deep/optional only; omit for compact scope.
@@ -347,7 +402,7 @@ ${SEED_SHELF_SECTION}
 | Topic | Finding | Evidence |
 |---|---|---|
 | Domain conventions |  |  |
-| UX/product patterns |  |  |
+| User-facing or operator-facing patterns |  |  |
 
 ## Architecture Options
 | Option | Trade-offs | Recommendation | Evidence |
@@ -520,6 +575,32 @@ ${MARKDOWN_CODE_FENCE}
 |---|---|---|---|
 |  |  |  | covered/gap |
 
+## ASCII Coverage Diagram
+
+<!-- diagram: ascii-coverage -->
+
+${MARKDOWN_CODE_FENCE}
+entry-point
+  ├── happy path           [★★★]
+  ├── empty input          [★★]
+  ├── error path           [★]
+  ├── concurrency edge     [GAP]
+  ├── slow-network edge    [→E2E]
+  └── perf regression      [→EVAL]
+${MARKDOWN_CODE_FENCE}
+
+> Required marker tokens (at least one each present where applicable): \`[★★★]\` / \`[★★]\` / \`[★]\` / \`[GAP]\` / \`[→E2E]\` / \`[→EVAL]\`. The diagram is the single source of truth for coverage; gaps must be traced into Plan or Spec.
+
+## Regression Iron Rule
+- Iron rule acknowledged: yes — any diff that changes existing behavior gets a regression test added to the plan, no exceptions.
+- Detected behavior changes (or \`- None.\`):
+- Regression test handoff (Plan task ID or \`- None.\`):
+
+## Calibrated Findings
+> Format: \`[P1|P2|P3] (confidence: <n>/10) <repo-relative-path>[:<line>] — <one-line description>\`. Findings with confidence \`< 7\` are suppressed unless severity is \`P1\`.
+
+- (or \`- None this stage.\`)
+
 ## Performance Budget
 | Critical path | Metric | Target | Measurement method |
 |---|---|---|---|
@@ -677,6 +758,50 @@ For meaningful design work, replace the Learnings sentinel with 1-3 JSON learnin
 |---|---|---|
 |  |  |  |
 
+## Synthesis Sources
+> Spec is synthesized from existing context (CLAUDE.md / AGENTS.md / TODOS.md / git history / brainstorm + scope + design artifacts) — interview only when something genuinely cannot be derived. List the artifacts/files actually read and what each supplied.
+
+| Source | What it supplied | Confidence (1-10) |
+|---|---|---|
+|  |  |  |
+
+## Behavior Contract
+> List behaviors universally (works for CLI, library, infra, web, batch). Use either \`As a <role>, I can <action> so that <outcome>.\` or \`Given <state>, When <event>, Then <outcome>.\`. ≥3 behaviors required. The shape — not the topic — is what the linter checks.
+
+- (or write \`- None.\` if a single-step spec)
+
+## Architecture Modules
+> One line of responsibility per module — no file paths, no signatures, no method names. Modules must be derivable from the design artifact.
+
+| Module | Responsibility (one sentence) | Maps to design ref (DD-#) |
+|---|---|---|
+|  |  |  |
+
+## Testing Strategy
+- Behaviors covered (not implementation):
+- Integration vs. unit split (and why):
+- Real services vs. doubles (and why):
+- Coverage gaps with rationale (or \`- None.\`):
+
+## Spec Self-Review
+> Inline pass; fix in place. If a check fails, do not move on without recording the fix.
+
+- [ ] Placeholders scan (no \`TBD\`, \`TODO\`, \`FIXME\`, \`<placeholder>\`)
+- [ ] Internal consistency (sections do not contradict each other)
+- [ ] Scope check (focused enough for a single plan)
+- [ ] Ambiguity check (no requirement readable two ways)
+- Patches applied:
+  - None
+- Remaining concerns:
+  - None
+
+## Reviewer Concerns (convergence guard)
+> Populate ONLY if the spec review loop did not converge after 3 iterations. Each row links a concern to the unresolved review pass.
+
+| ID | Concern | Reviewer / source | Disposition (open/accept/defer) | Rationale |
+|---|---|---|---|---|
+|  |  |  |  |  |
+
 ## Approval
 - Approved by:
 - Date:
@@ -687,6 +812,11 @@ For meaningful design work, replace the Learnings sentinel with 1-3 JSON learnin
   "05-plan.md": `${artifactFrontmatter("plan")}
 
 # Plan Artifact
+
+## Plan Header
+- **Goal:** (one sentence — what this plan delivers)
+- **Architecture:** (2-3 sentences — approach + key boundaries)
+- **Tech Stack:** (key languages/runtimes/frameworks/libraries that the executor must know)
 
 ## Upstream Handoff
 - Source artifacts: \`03-design-<slug>.md\`, \`04-spec.md\`
@@ -753,6 +883,56 @@ Execution rule: complete and verify each batch before starting the next batch.
 | Task/Batch | Produces (exports) | Consumes (imports from) |
 |---|---|---|
 |  |  |  |
+
+## Implementation Units
+> Required structural form per implementation unit. Use ≥1 unit; bite-sized 2-5 minute steps inside each. The linter validates shape, not topic.
+
+### Implementation Unit U-1
+- **Goal:**
+- **Requirements (from Spec):**
+- **Dependencies (other units):**
+- **Files (repo-relative; never absolute):**
+  - Create:
+  - Modify:
+  - Test:
+- **Approach:** (1-3 sentences; cite design decision DD-# or LD#hash)
+- **Patterns to follow:** (link existing files/modules to mirror, or \`- None applicable.\`)
+- **Test scenarios:**
+  - Happy:
+  - Edge:
+  - Error:
+  - Integration:
+- **Verification:** (outcome to observe — not a shell script; e.g., "command exits 0 and prints \`<artifact-anchor>\`").
+- **Steps (each 2-5 min, checkbox):**
+  - [ ] Step 1: write failing test for <behavior>
+  - [ ] Step 2: run test, observe RED with reason
+  - [ ] Step 3: minimal implementation
+  - [ ] Step 4: run test, observe GREEN
+  - [ ] Step 5: refactor + commit
+
+## High-Level Technical Design
+> "Directional guidance, not implementation specification." Choose the form that fits the work: pseudo-code grammar, mermaid sequence/state, data-flow ASCII, decision matrix. Skip if the plan is a pure rename/move.
+
+\`\`\`
+(pseudo-code, mermaid, ASCII data flow, or decision matrix)
+\`\`\`
+
+## Plan Self-Review
+- [ ] Spec coverage: every spec behavior maps to a unit/task
+- [ ] Placeholder scan (regex on full artifact, not only Task List)
+- [ ] Type/name consistency across units (signatures referenced match definitions)
+- [ ] No silent scope reduction
+- [ ] Confidence per unit recorded (1-10)
+- Patches applied:
+  - None
+- Remaining concerns:
+  - None
+
+## Execution Handoff
+- **Posture chosen:** Subagent-Driven (recommended) | Inline executor
+- **Why this posture:** (one line tying choice to plan size, parallelism, novelty)
+- **Subagent recipe (if Subagent-Driven):** \`<harness>\` -> \`<dispatch surface>\` -> \`<agent-definition path>\` (substitute neutral placeholders; full recipes in \`docs/harnesses.md\`)
+- **Inline recipe (if Inline executor):** TDD loop unit-by-unit with batch checkpoints
 
 ## No-Placeholder Scan
 - Scanned tokens: \`TODO\`, \`TBD\`, \`FIXME\`, \`<fill-in>\`, \`<your-*-here>\`, \`xxx\`, bare ellipsis in task rows.
@@ -826,6 +1006,39 @@ Execution rule: complete and verify each batch before starting the next batch.
 - Spec criterion IDs:
 
 
+## Iron Law Acknowledgement
+- Iron Law: NO PRODUCTION CODE WITHOUT A FAILING TEST FIRST.
+- Acknowledged: yes — code that landed before its test will be deleted and rewritten from the test.
+- Exceptions invoked (or \`- None.\`):
+
+## Watched-RED Proof
+> Required for every new test in this stage. Each row proves the test was *observed* failing before any production code was written.
+
+| Slice | Test name | Observed at (ISO ts) | Failure reason snippet | Source command/log |
+|---|---|---|---|---|
+| S-1 |  |  |  |  |
+
+## Vertical Slice Cycle
+> Per slice: RED -> GREEN -> REFACTOR within the same cycle (refactor not deferred). The linter checks structural presence of all three phases.
+
+| Slice | RED ts | GREEN ts | REFACTOR ts (or \`deferred because <reason>\`) |
+|---|---|---|---|
+| S-1 |  |  |  |
+
+## Assertion Correctness Notes
+> For each new test assertion, name a *plausible subtle bug* that would still pass it (mental mutation test). If you cannot, the assertion is too coarse — strengthen it.
+
+| Slice | Assertion (one line) | Bug that would still pass | Strengthening action (or \`- Sufficient.\`) |
+|---|---|---|---|
+| S-1 |  |  |  |
+
+## Anti-Rationalization Checks
+- [ ] No "test passes immediately" — each new test was watched failing first
+- [ ] No "code before test" reuse from a prior session
+- [ ] No "tests after" backfill instead of RED-first
+- [ ] No "spirit not ritual" overrides
+- Notes (or \`- None this stage.\`):
+
 ## Verification Ladder
 | Slice | Tier reached | Evidence |
 |---|---|---|
@@ -866,6 +1079,44 @@ For meaningful TDD work, replace the Learnings sentinel with 1-3 JSON learning b
 - Constraints carried forward:
 - Open questions:
 - Drift from upstream (or \`None\`):
+
+## Self-Review First
+- [ ] Build/lint/type-check/tests passed locally
+- [ ] Diff matches spec/plan (no scope creep)
+- [ ] Leftover prints / commented code / unused imports removed
+- [ ] Deletion test: each new module justifies its existence
+- Evidence (commands + result):
+- Patches applied (or \`- None.\`):
+
+## Frame the Review Request
+- **Goal:**
+- **Approach:**
+- **Risk areas:**
+- **Verification done:**
+- **Open questions for the reviewer:**
+
+## Critic Subagent Dispatch
+> Dispatch a fresh-context critic (not the session history). Required even for self-driven review — the critic delegates back via \`delegation-record.mjs\` so the proof chain is preserved.
+
+| Field | Value |
+|---|---|
+| Critic agent definition path | \`<repo-relative path under harness directory>\` |
+| Dispatch surface | One of the \`--dispatch-surface\` enum values listed in \`docs/harnesses.md\` (\`claude-task\`, \`cursor-task\`, \`opencode-agent\`, \`codex-agent\`, \`generic-task\`, \`role-switch\`, \`manual\`) |
+| Frame sent | WHAT_WAS_IMPLEMENTED + PLAN_OR_REQUIREMENTS + BASE_SHA + HEAD_SHA |
+| Critic returned | Strengths / Critical / Important / Minor |
+| Span id | \`<span-id>\` |
+| Acknowledgement ts | \`<iso ts>\` |
+
+## Receiving Posture
+- [ ] No performative agreement (forbidden openers acknowledged)
+- [ ] READ -> UNDERSTAND -> VERIFY -> EVALUATE -> RESPOND -> IMPLEMENT one-at-a-time discipline followed
+- [ ] Push-back recorded with reasoning when the critic was wrong
+- Notes (or \`- None.\`):
+
+## Critic Convergence
+- Iterations run: <n>/3
+- Convergence reached: yes / no — \`Reviewer Concerns\` populated when no
+- Stop reason:
 
 ## Review Evidence Scope
 - Base/head:
@@ -996,6 +1247,12 @@ For meaningful review work, replace the Learnings sentinel with 1-3 JSON learnin
 - Open questions:
 - Drift from upstream (or \`None\`):
 
+## Verify Tests Gate
+- Discovered test command (cite repo config — package scripts / pyproject / go.mod / Cargo.toml / pom.xml / gradle):
+- Result: PASS | FAIL
+- Evidence (full output snippet or path):
+- Stop on FAIL: confirmed (no options surface unless PASS)
+
 ## Preflight Results
 - Review verdict:
 - Build:
@@ -1004,8 +1261,43 @@ For meaningful review work, replace the Learnings sentinel with 1-3 JSON learnin
 - Type-check:
 - Working tree clean:
 
+## Base Branch Determination
+- Command run: \`git merge-base HEAD main || git merge-base HEAD master\`
+- Base branch:
+- User confirmation (if ambiguous):
+
+## Finalization Options
+> Exactly four options must be surfaced when tests pass. Selecting any option requires a recorded user decision.
+
+1. **Merge back to base locally** — \`MERGE_LOCAL\`
+2. **Push and create PR** — \`OPEN_PR\`
+3. **Keep branch as-is** — \`KEEP_BRANCH\`
+4. **Discard this work** — \`DISCARD\` (typed-confirmation required)
+
+- Selected option:
+- Typed confirmation (DISCARD only):
+- User decision recorded at:
+
 ## Release Notes
 -
+
+## Structured PR Body
+> Required when selected option is \`OPEN_PR\`. The structure is universal — replace placeholder bullets with concrete content, do not introduce domain-specific subsections.
+
+### ## Summary
+- (2-3 bullets describing what changed and why)
+
+### ## Test Plan
+- [ ] (verification step — repo-relative command + expected outcome)
+- [ ] (additional verification step or \`Manual: <action>\`)
+
+### ## Commits Included
+- (auto-generated commit list; one bullet per commit hash + subject)
+
+## Worktree Cleanup
+- Cleanup applies to options \`MERGE_LOCAL\` and \`DISCARD\`; preserved for \`OPEN_PR\` and \`KEEP_BRANCH\`.
+- Worktree path:
+- Cleanup result:
 
 ## Rollback Plan
 - Trigger conditions:

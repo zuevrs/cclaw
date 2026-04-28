@@ -14,7 +14,7 @@ export const BRAINSTORM: StageSchemaInput = {
   philosophy: {
     hardGate: "Do NOT invoke implementation skills, write code, scaffold projects, or mutate product behavior until a concrete direction is approved by the user.",
     ironLaw: "NO ARTIFACT IS COMPLETE WITHOUT AN EXPLICITLY APPROVED DIRECTION — SILENCE IS NOT APPROVAL.",
-    purpose: "Turn an initial idea into an approved problem frame and direction, using product or technical-maintenance discovery before proposing solutions.",
+    purpose: "Turn an initial idea into an approved problem frame and direction, using domain-neutral problem discovery (product, technical-maintenance, research, ops, or infrastructure framing) before proposing solutions.",
     whenToUse: [
       "Starting a new feature or behavior change",
       "Requirements are ambiguous or trade-offs are unclear",
@@ -40,8 +40,8 @@ export const BRAINSTORM: StageSchemaInput = {
   executionModel: {
     checklist: [
       "**Explore project context** — inspect existing files/docs/recent activity before asking what to build; capture matching files/patterns/seeds in `Context > Discovered context` so downstream stages don't redo discovery.",
-      "**Classify stage depth** — choose `lite` for clear low-risk tasks, `standard` for normal product/engineering changes, or `deep` for ambiguity, architecture, external dependency, security/data risk, or explicit think-bigger requests.",
-      "**Write the Problem Decision Record** — product work captures persona/JTBD/pain/value/evidence/success/why-now/do-nothing/non-goals; technical-maintenance work captures affected operator/developer, failure mode, operational improvement, verification signal, do-nothing cost, and non-goals.",
+      "**Classify stage depth** — choose `lite` for clear low-risk tasks, `standard` for normal engineering/product changes, or `deep` for ambiguity, architecture, external dependency, security/data risk, or explicit think-bigger requests.",
+      "**Write the Problem Decision Record** — pick a free-form `Frame type` label that names how this work is framed (examples: product, technical-maintenance, research-spike, ops-incident, infrastructure), then fill the universal Framing fields: affected user/role/operator, current state/failure mode/opportunity, desired observable outcome, evidence/signal, why now, do-nothing consequence, and non-goals.",
       "**Premise check (one pass)** — answer the three gstack-style questions in the artifact body: *Right problem? Direct path? What if we do nothing?* Take a position; do not hedge.",
       "**Reframe with How Might We** — write a single `How Might We …?` line that names the user/operator, the desired outcome, and the constraint. This is the altitude check before approaches.",
       "**Run Clarity Gate** — record ambiguity score (0.00-1.00), decision boundaries, reaffirmed non-goals, and residual-risk handoff before locking recommendations. If ambiguity remains high (>0.40), ask one decision-changing question before recommending.",
@@ -84,7 +84,7 @@ export const BRAINSTORM: StageSchemaInput = {
     requiredEvidence: [
       "Artifact written to `.cclaw/artifacts/01-brainstorm-<slug>.md`.",
       "Project context was explored (files, docs, or recent activity referenced).",
-      "Problem Decision Record includes product framing or technical-maintenance framing.",
+      "Problem Decision Record includes a `Frame type` label and the universal Framing fields (affected user/role/operator, current state/failure mode/opportunity, desired observable outcome, evidence/signal, why now, do-nothing consequence, non-goals).",
       "Clarity Gate records ambiguity score, decision boundaries, reaffirmed non-goals, and residual-risk handoff.",
       "Clarifying questions are one-at-a-time and captured only when they change a decision or stop condition.",
       "2-3 approaches with trade-offs are recorded, including one higher-upside challenger option and reference-pattern source/disposition when applicable.",
@@ -133,7 +133,7 @@ export const BRAINSTORM: StageSchemaInput = {
     },
     artifactValidation: [
       { section: "Context", required: true, validationRule: "Must reference project state and relevant existing code or patterns. A `Discovered context` subsection (or list) is recommended for downstream traceability." },
-      { section: "Problem Decision Record", required: true, validationRule: "Must include either product framing fields (persona/JTBD/pain/value/evidence/success/why-now/do-nothing/non-goals) or technical-maintenance fields (operator/developer, failure mode, operational improvement, verification signal, do-nothing cost, non-goals)." },
+      { section: "Problem Decision Record", required: true, validationRule: "Must include a free-form `Frame type` label (examples only: product, technical-maintenance, research-spike, ops-incident, infrastructure) and the universal Framing fields: affected user/role/operator, current state/failure mode/opportunity, desired observable outcome, evidence/signal, why now, do-nothing consequence, non-goals. The linter checks that the section has meaningful content; the field labels themselves are the structural contract." },
       { section: "Premise Check", required: false, validationRule: "Recommended: explicit answers to `Right problem?`, `Direct path?`, `What if we do nothing?` — take a position, do not hedge." },
       { section: "How Might We", required: false, validationRule: "Recommended: a single `How Might We …?` line naming the user, the outcome, and the binding constraint." },
       { section: "Clarity Gate", required: false, validationRule: "Recommended before recommendation lock: include ambiguity score (0.00-1.00), decision boundaries, reaffirmed non-goals, and residual-risk handoff for scope." },

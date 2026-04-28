@@ -374,7 +374,7 @@ const result = await checkMandatoryDelegations(root, "scope");
     expect(result.missingEvidence).toContain("planner");
   });
 
-  it("reads legacy completed rows without fulfillmentMode as isolated", async () => {
+  it("tags pre-v3 completed rows without dispatchSurface as legacy-inferred and blocks satisfied until rerecord", async () => {
     const root = await createTempProject("delegation-legacy-fulfillment-mode");
     await seedFlowState(root, "run-legacy");
     await writeConfig(root, createDefaultConfig(["claude"]));
@@ -397,8 +397,8 @@ const result = await checkMandatoryDelegations(root, "scope");
     );
 
     const ledger = await readDelegationLedger(root);
-    expect(ledger.entries[0]?.fulfillmentMode).toBe("isolated");
-    
+    expect(ledger.entries[0]?.fulfillmentMode).toBe("legacy-inferred");
+
     await appendDelegation(root, {
       stage: "scope",
       agent: "critic",
@@ -407,9 +407,10 @@ const result = await checkMandatoryDelegations(root, "scope");
       ts: new Date().toISOString()
     });
 
-const result = await checkMandatoryDelegations(root, "scope");
-    expect(result.satisfied).toBe(true);
-    expect(result.missingEvidence).toEqual([]);
+    const result = await checkMandatoryDelegations(root, "scope");
+    expect(result.satisfied).toBe(false);
+    expect(result.legacyInferredCompletions.some((row) => row.startsWith("planner"))).toBe(true);
+    expect(result.missing).toEqual([]);
   });
 
   it("requires evidence for explicit role-switch rows even in mixed installs", async () => {

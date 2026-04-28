@@ -6,6 +6,7 @@ import { reviewStackAwareRoutes, reviewStackAwareRoutingSummary, stageAutoSubage
 import type { StageSchema } from "./stage-schema.js";
 import { conversationLanguagePolicyMarkdown } from "./language-policy.js";
 import { referencePatternsForStage } from "./reference-patterns.js";
+import { harnessDelegationRecipes } from "../harness-adapters.js";
 import type {
   ArtifactValidation,
   CrossStageTrace,
@@ -16,6 +17,130 @@ import type {
 } from "./stages/schema-types.js";
 
 const VERIFICATION_STAGES: FlowStage[] = ["tdd", "review", "ship"];
+
+// ---------- Cross-cutting universal mechanics (Layer 2 building blocks) ----------
+//
+// These are shared, structural blocks that get injected into every stage skill.
+// They check structural shape, not domain content. Each has a matching linter
+// rule in `src/artifact-linter.ts` so artifacts can fail when shape is missing.
+
+export const FORBIDDEN_SYCOPHANCY_PHRASES = [
+  "you're absolutely right",
+  "great point",
+  "absolutely!",
+  "thanks for catching",
+  "thanks for the great",
+  "good catch",
+  "love this",
+  "nailed it"
+];
+
+export const FORBIDDEN_PLACEHOLDER_TOKENS = [
+  "TBD",
+  "TODO",
+  "FIXME",
+  "implement later",
+  "similar to Task",
+  "add appropriate error handling",
+  "add proper logging",
+  "fill this in",
+  "<placeholder>"
+];
+
+export const CONFIDENCE_FINDING_REGEX_SOURCE =
+  "\\[P[123]\\]\\s*\\(confidence:\\s*\\d{1,2}/10\\)\\s+[^\\s]+(?::\\d+)?\\s+—";
+
+export function stopPerIssueBlock(): string {
+  return `## STOP-per-issue Protocol
+
+After each critical section (premise / alternatives / mode pick / each review finding), STOP and record one decision marker before continuing:
+
+- \`Q<n>:\` — issue or open question
+- \`decision:\` — \`accept\` / \`reject\` / \`defer\` / \`skip — no issues\`
+- \`rationale:\` — one line, evidence-backed
+
+Do not batch decisions. Do not silently move on. The artifact MUST contain at least one \`decision:\` marker per critical section.
+`;
+}
+
+export function confidenceCalibrationBlock(): string {
+  return `## Confidence Calibration
+
+Findings, recommendations, and review notes use the calibrated finding format:
+
+\`[P1|P2|P3] (confidence: <n>/10) <repo-relative-path>[:<line>] — <one-line description>\`
+
+- \`P1\` blocks merge; \`P2\` should be addressed; \`P3\` is nice-to-have.
+- Confidence \`< 7\` — suppress unless severity is \`P1\`.
+- "What evidence would change this?" — every finding must answer it inline or in the next bullet.
+- Never assert "this is fine" without confidence; never assert confidence above \`8\` without a cited artifact, line, or test.
+`;
+}
+
+export function outsideVoiceSlotBlock(): string {
+  return `## Outside Voice Slot (optional)
+
+Reserve a section titled \`## Outside Voice\` (or \`## Outside Voice — <model/critic>\`) for a second-model or fresh-context critic perspective when used. Required shape when present:
+
+- \`source:\` — model id, critic agent name, or human reviewer handle
+- \`prompt:\` — exact frame sent (or reference to \`docs/quality-gates.md\` recipe)
+- \`tension:\` — at least one disagreement with the main draft, or \`none — converged\`
+- \`resolution:\` — accepted / rejected / merged / deferred + one-line rationale
+
+Empty when not used; do not fabricate an outside voice.
+`;
+}
+
+export function antiSycophancyBlock(): string {
+  const phrases = FORBIDDEN_SYCOPHANCY_PHRASES.map((p) => `\`${p}\``).join(", ");
+  return `## Anti-sycophancy
+
+Forbidden response openers when receiving review, critic output, or user feedback: ${phrases}.
+
+Replace agreement theater with one of:
+
+- \`Verified — <evidence>\` (you actually checked)
+- \`Disagree — <reason>\` (you push back with substance)
+- \`Investigating — <next step>\` (you do not yet know)
+
+Never agree before reading the cited evidence. Never apologize for asking a clarifying question.
+`;
+}
+
+export function noPlaceholdersBlock(): string {
+  const tokens = FORBIDDEN_PLACEHOLDER_TOKENS.map((p) => `\`${p}\``).join(", ");
+  return `## NO PLACEHOLDERS Rule
+
+Plans, specs, designs, and review artifacts MUST NOT contain placeholder tokens: ${tokens}. Use repo-relative paths and concrete commands; if a value is genuinely unknown, write the open question explicitly with a \`Q<n>:\` marker and a \`decision: defer — <reason>\` row instead of inserting a placeholder token.
+`;
+}
+
+export function watchedFailProofBlock(): string {
+  return `## Watched-fail Proof
+
+Any "the failure is real" claim (failing test, broken build, regression catch, deployment fail) MUST include a watched-fail proof line in the artifact:
+
+\`proof: <iso-ts> | <observed snippet — first 200 chars> | source: <command or log path>\`
+
+For TDD specifically, this is the watched-RED proof and is required per new test before \`stage-complete\` accepts the stage.
+`;
+}
+
+function crossCuttingMechanicsBlock(stage: FlowStage): string {
+  // All stages share the universal mechanics, but each stage's matching
+  // linter rules decide what is mandatory vs. structural-only.
+  const blocks: string[] = [
+    stopPerIssueBlock(),
+    confidenceCalibrationBlock(),
+    outsideVoiceSlotBlock(),
+    antiSycophancyBlock(),
+    noPlaceholdersBlock()
+  ];
+  if (stage === "tdd" || stage === "review" || stage === "ship") {
+    blocks.push(watchedFailProofBlock());
+  }
+  return blocks.join("\n");
+}
 
 function whenNotToUseBlock(items: string[]): string {
   if (items.length === 0) {
@@ -87,13 +212,26 @@ function autoSubagentDispatchBlock(stage: FlowStage, track: FlowTrack): string {
   const mandatoryList = mandatory.length > 0 ? mandatory.map((a) => `\`${a}\``).join(", ") : "none";
   const delegationLogRel = `${RUNTIME_ROOT}/state/delegation-log.json`;
   const delegationEventsRel = `${RUNTIME_ROOT}/state/delegation-events.jsonl`;
-  const artifactRef = `${RUNTIME_ROOT}/artifacts/${schema.artifactRules.artifactFile}`;
   return `## Automatic Subagent Dispatch
 | Agent | Mode | Class | Return Schema | User Gate | Trigger | Purpose |
 |---|---|---|---|---|---|---|
 ${rows}
 Mandatory: ${mandatoryList}. Record lifecycle rows in \`${delegationLogRel}\` and append-only \`${delegationEventsRel}\` before completion.
 ### Harness Dispatch Contract — use true harness dispatch: Claude Task, Cursor generic dispatch, OpenCode \`.opencode/agents/<agent>.md\` via Task/@agent, Codex \`.codex/agents/<agent>.toml\`. Do not collapse OpenCode or Codex to role-switch by default. Worker ACK Contract: ACK must include \`spanId\`, \`dispatchId\`, \`dispatchSurface\`, \`agentDefinitionPath\`, and \`ackTs\`; never claim \`fulfillmentMode: "isolated"\` without matching lifecycle proof. Helper: \`.cclaw/hooks/delegation-record.mjs --status=<status> --span-id=<spanId> --dispatch-id=<dispatchId> --dispatch-surface=<surface> --agent-definition-path=<path> --json\`. Exact recipe: scheduled -> launched -> acknowledged -> completed with the same span; completed isolated/generic rows require a prior ACK event for that span or \`--ack-ts=<iso>\`.
+
+${perHarnessLifecycleRecipeBlock()}`;
+}
+
+function perHarnessLifecycleRecipeBlock(): string {
+  const recipes = harnessDelegationRecipes();
+  const rows = recipes
+    .map((recipe) => `| \`${recipe.harnessId}\` | \`${recipe.dispatchSurface}\` | \`${recipe.agentDefinitionExample}\` | \`${recipe.fulfillmentMode}\` |`)
+    .join("\n");
+  return `### Per-Harness Lifecycle Recipe — placeholders only
+Reuse the same \`<span-id>\` and \`<dispatch-id>\` across scheduled -> launched -> acknowledged -> completed; substitute neutral tokens \`<agent-name>\`, \`<stage>\`, \`<iso-ts>\`, \`<artifact-anchor>\`. Full command sequences live in \`docs/harnesses.md\`.
+| Harness | Dispatch surface | Agent definition path | fulfillmentMode |
+|---|---|---|---|
+${rows}
 `;
 }
 
@@ -478,6 +616,7 @@ ${interactionFocus.length > 0 ? interactionFocus.map((item, i) => `${i + 1}. ${i
 Decision protocol: ask only decision-changing questions, record the chosen option, rationale, risk, and rollback when the stage makes a non-trivial call.
 
 ${batchExecutionModeBlock(stage, track)}
+${crossCuttingMechanicsBlock(stage)}
 ## Required Gates
 ${gateList}
 

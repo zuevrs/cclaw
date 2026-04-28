@@ -9,15 +9,16 @@ const STAGE_EXAMPLES: Record<FlowStage, string> = {
 ## Problem Decision Record
 
 - **Depth:** standard
-- **Frame type:** technical-maintenance
+- **Frame type:** \`technical-maintenance\` (free-form label; pick whatever fits — see commentary in the template for example labels)
 
-### Technical-maintenance framing
+### Framing fields (universal — keep field names; fill in whatever is meaningful for this work)
 
-- **Affected operator/developer:** release operator and package maintainer.
-- **Current failure mode:** release checks are fragile and inconsistent between CI and local runs; invalid metadata sometimes reaches npm publish.
-- **Expected operational improvement:** invalid release preconditions are caught before publish with explicit operator feedback in CI and local workflows.
-- **Verification signal:** shared release validation tests and CI release-check command fail on invalid metadata.
-- **Do-nothing cost:** continued publish risk and duplicated local/CI fixes.
+- **Affected user / role / operator:** release operator and package maintainer.
+- **Current state / failure mode / opportunity:** release checks are fragile and inconsistent between CI and local runs; invalid metadata sometimes reaches npm publish.
+- **Desired outcome (observable):** invalid release preconditions are caught before publish; \`pnpm release:check\` exits non-zero with explicit operator feedback in CI and local workflows.
+- **Evidence / signal supporting this framing:** prior incident postmortems referencing release-metadata drift; \`scripts/pre-publish.sh\` already partially encodes the rules.
+- **Why now (urgency / cost of waiting):** every additional release reinforces the divergent CI/local behavior and burns operator trust.
+- **Do-nothing consequence:** continued publish risk and duplicated local/CI fixes.
 - **Non-goals:** no new runtime dependencies; no release-framework rewrite.
 
 ## Clarifying Questions
@@ -753,7 +754,7 @@ function exampleSummaryBullets(stage: FlowStage): string[] {
 // sample in STAGE_EXAMPLES gains or loses a top-level section.
 const STAGE_EXAMPLE_SECTION_HEADINGS: Record<FlowStage, string[]> = {
   brainstorm: [
-    "Problem Decision Record (product or technical-maintenance framing)",
+    "Problem Decision Record (free-form Frame type label + universal framing fields)",
     "Reference Pattern Candidates and approaches with trade-offs",
     "Recommended direction + open questions",
     "Clarification log and decision record"

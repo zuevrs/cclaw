@@ -5,15 +5,19 @@ import { FLOW_STAGES } from "../../src/types.js";
 
 describe("stage skill size budgets", () => {
   // Keep stage skills compact enough to scan while preserving the process map,
-  // gate/evidence lists, artifact validation, and closeout instructions.
-  it("keeps every stage skill under 360 lines", () => {
+  // gate/evidence lists, artifact validation, closeout instructions, the
+  // per-harness lifecycle recipe pointer, and the universal cross-cutting
+  // mechanics block. Budget is generous on purpose — the layered structural
+  // content (HARD-GATE, premise list, alternatives format, coverage diagram,
+  // confidence-calibrated finding format) grows the skill body deliberately.
+  it("keeps every stage skill under 480 lines", () => {
     for (const stage of FLOW_STAGES) {
       const markdown = stageSkillMarkdown(stage);
       const lines = markdown.split(/\r?\n/u).length;
       expect(
         lines,
-        `stage "${stage}" exceeded 360 lines (${lines})`
-      ).toBeLessThanOrEqual(360);
+        `stage "${stage}" exceeded 480 lines (${lines})`
+      ).toBeLessThanOrEqual(480);
     }
   });
 

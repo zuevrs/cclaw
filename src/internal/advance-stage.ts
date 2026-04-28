@@ -10,6 +10,7 @@ import { stageAutoSubagentDispatch, stageSchema } from "../content/stage-schema.
 import {
   appendDelegation,
   checkMandatoryDelegations,
+  readDelegationEvents,
   readDelegationLedger
 } from "../delegation.js";
 import {
@@ -96,6 +97,9 @@ interface InternalValidationReport {
     missing: string[];
     waived: string[];
     missingEvidence: string[];
+    missingDispatchProof: string[];
+    legacyInferredCompletions: string[];
+    corruptEventLines: number[];
     staleWorkers: string[];
     expectedMode: string;
   };
@@ -838,6 +842,9 @@ async function buildValidationReport(
       missing: delegation.missing,
       waived: delegation.waived,
       missingEvidence: delegation.missingEvidence,
+      missingDispatchProof: delegation.missingDispatchProof,
+      legacyInferredCompletions: delegation.legacyInferredCompletions,
+      corruptEventLines: delegation.corruptEventLines,
       staleWorkers: delegation.staleWorkers,
       expectedMode: delegation.expectedMode
     },
@@ -1137,6 +1144,59 @@ async function runAdvanceStage(
     allowBlockedReviewRoute: blockedReviewRoute
   });
   if (!validation.ok) {
+    const ledgerForDiag = await readDelegationLedger(projectRoot).catch(() => ({ entries: [] as Array<{ agent: string; spanId?: string; status: string; runId?: string }> }));
+    const eventsForDiag = await readDelegationEvents(projectRoot).catch(() => ({ events: [] as Array<{ agent: string; spanId?: string; status: string; runId?: string }>, corruptLines: [] as number[] }));
+    const ledgerEntriesText = await fs.readFile(path.join(projectRoot, ".cclaw/state/delegation-events.jsonl"), "utf8").catch(() => "");
+    const corruptSnippets = (() => {
+      if (validation.delegation.corruptEventLines.length === 0) return [] as string[];
+      const lines = ledgerEntriesText.split(/\r?\n/u);
+      return validation.delegation.corruptEventLines.slice(0, 3).map((lineNo) => {
+        const line = lines[lineNo - 1] ?? "";
+        const sample = line.length > 120 ? `${line.slice(0, 117)}...` : line;
+        return `line ${lineNo}: ${sample}`;
+      });
+    })();
+    const dispatchProofDetails = validation.delegation.missingDispatchProof.flatMap((agent) => {
+      const rows = ledgerForDiag.entries.filter((entry) => entry.agent === agent && entry.status === "completed");
+      return rows.map((row) => `${agent}(spanId=${row.spanId ?? "unknown"})`);
+    });
+    const nextActions: string[] = [];
+    if (validation.delegation.missing.length > 0) {
+      nextActions.push(
+        `Complete or waive mandatory delegation(s): ${validation.delegation.missing.join(", ")}. Helper: \`node .cclaw/hooks/stage-complete.mjs ${args.stage} --waive-delegation=${validation.delegation.missing.join(",")} --waiver-reason="<why safe>"\`.`
+      );
+    }
+    if (validation.delegation.missingEvidence.length > 0) {
+      nextActions.push(
+        `Role-switch fallback completion needs --evidence-ref or escalate to a real isolated dispatch surface.`
+      );
+    }
+    if (validation.delegation.missingDispatchProof.length > 0) {
+      nextActions.push(
+        `Isolated completion(s) ${dispatchProofDetails.join(", ") || validation.delegation.missingDispatchProof.join(", ")} lack matching dispatch proof; run the helper lifecycle scheduled -> launched -> acknowledged -> completed with --span-id, --dispatch-id, --dispatch-surface and --agent-definition-path before advancing.`
+      );
+    }
+    if (validation.delegation.legacyInferredCompletions.length > 0) {
+      nextActions.push(
+        `Pre-v3 ledger entries found: ${validation.delegation.legacyInferredCompletions.join(", ")}. Run \`node .cclaw/hooks/delegation-record.mjs --rerecord --span-id=<id> --dispatch-id=<id> --dispatch-surface=<surface> --agent-definition-path=<path>\` to upgrade the row to dispatch-proof shape.`
+      );
+    }
+    if (validation.delegation.corruptEventLines.length > 0) {
+      nextActions.push(
+        `delegation-events.jsonl has ${validation.delegation.corruptEventLines.length} corrupt line(s) at ${validation.delegation.corruptEventLines.slice(0, 3).join(", ")}${validation.delegation.corruptEventLines.length > 3 ? ", ..." : ""}; remove or fix them before advancing.`
+      );
+    }
+    if (validation.delegation.staleWorkers.length > 0) {
+      nextActions.push(
+        `Stale scheduled delegations ${validation.delegation.staleWorkers.join(", ")} have no terminal row sharing the same spanId; emit launched/acknowledged/completed (or failed/stale) before advancing.`
+      );
+    }
+    if (validation.gates.issues.length > 0) {
+      nextActions.push("Fix the artifact/gate issue shown in gates.issues, then rerun stage-complete.");
+    }
+    if (validation.completedStages.issues.length > 0) {
+      nextActions.push("Repair previously completed stage gate closure before advancing.");
+    }
     if (args.json) {
       io.stdout.write(`${JSON.stringify({
         ok: false,
@@ -1146,23 +1206,12 @@ async function runAdvanceStage(
         delegation: validation.delegation,
         gates: validation.gates,
         completedStages: validation.completedStages,
-        nextActions: [
-          ...(validation.delegation.missing.length > 0
-            ? [`Complete or waive mandatory delegation(s): ${validation.delegation.missing.join(", ")}.`]
-            : []),
-          ...(validation.delegation.missingEvidence.length > 0
-            ? ["Add evidenceRefs for role-switch delegation completion or use an explicit waiver reason."]
-            : []),
-          ...(validation.delegation.staleWorkers.length > 0
-            ? ["Resolve scheduled delegation span(s) without terminal lifecycle evidence before advancing."]
-            : []),
-          ...(validation.gates.issues.length > 0
-            ? ["Fix the artifact/gate issue shown in gates.issues, then rerun stage-complete."]
-            : []),
-          ...(validation.completedStages.issues.length > 0
-            ? ["Repair previously completed stage gate closure before advancing."]
-            : [])
-        ]
+        diagnostics: {
+          dispatchProofRows: dispatchProofDetails,
+          corruptEventSamples: corruptSnippets,
+          unawareEvents: eventsForDiag.corruptLines.length
+        },
+        nextActions
       })}\n`);
     }
     io.stderr.write(
@@ -1178,10 +1227,40 @@ async function runAdvanceStage(
       io.stderr.write(
         `- role-switch evidence missing: ${validation.delegation.missingEvidence.join(", ")}\n`
       );
+      io.stderr.write(
+        `  next action: include --evidence-ref=<artifact#anchor> when emitting the completed event, or escalate to a true isolated dispatch surface.\n`
+      );
+    }
+    if (validation.delegation.missingDispatchProof.length > 0) {
+      io.stderr.write(
+        `- isolated completion lacks dispatch proof: ${dispatchProofDetails.join(", ") || validation.delegation.missingDispatchProof.join(", ")}\n`
+      );
+      io.stderr.write(
+        `  next action: emit scheduled -> launched -> acknowledged -> completed with --span-id, --dispatch-id, --dispatch-surface, --agent-definition-path before advancing.\n`
+      );
+    }
+    if (validation.delegation.legacyInferredCompletions.length > 0) {
+      io.stderr.write(
+        `- legacy-inferred completions need rerecord: ${validation.delegation.legacyInferredCompletions.join(", ")}\n`
+      );
+      io.stderr.write(
+        `  next action: \`node .cclaw/hooks/delegation-record.mjs --rerecord --span-id=<id> --dispatch-id=<id> --dispatch-surface=<surface> --agent-definition-path=<path>\`.\n`
+      );
+    }
+    if (validation.delegation.corruptEventLines.length > 0) {
+      io.stderr.write(
+        `- corrupt delegation-events.jsonl line(s): ${validation.delegation.corruptEventLines.slice(0, 3).join(", ")}${validation.delegation.corruptEventLines.length > 3 ? `, ... (+${validation.delegation.corruptEventLines.length - 3})` : ""}\n`
+      );
+      for (const snippet of corruptSnippets) {
+        io.stderr.write(`    sample: ${snippet}\n`);
+      }
     }
     if (validation.delegation.staleWorkers.length > 0) {
       io.stderr.write(
         `- stale scheduled delegations: ${validation.delegation.staleWorkers.join(", ")}\n`
+      );
+      io.stderr.write(
+        `  next action: emit a terminal row (completed/failed/stale) for the same span before advancing.\n`
       );
     }
     if (validation.gates.issues.length > 0) {
