@@ -4,7 +4,7 @@ import { execFile } from "node:child_process";
 import { promisify } from "node:util";
 import { describe, expect, it } from "vitest";
 import { createDefaultConfig, writeConfig } from "../../src/config.js";
-import { appendDelegation, checkMandatoryDelegations, isTrustBoundaryPath, readDelegationLedger } from "../../src/delegation.js";
+import { appendDelegation, checkMandatoryDelegations, isTrustBoundaryPath, readDelegationEvents, readDelegationLedger } from "../../src/delegation.js";
 import { createInitialFlowState } from "../../src/flow-state.js";
 import type { FlowStage } from "../../src/types.js";
 import { createTempProject } from "../helpers/index.js";
@@ -639,5 +639,101 @@ const result = await checkMandatoryDelegations(root, "scope");
       expect(isTrustBoundaryPath("tests/e2e/input.test.ts")).toBe(false);
       expect(isTrustBoundaryPath("schemas/validate-payload.ts")).toBe(false);
     });
+  });
+});
+
+
+describe("delegation dispatch proof events", () => {
+  it("records scheduled -> launched -> acknowledged -> completed events and accepts proven isolated completion", async () => {
+    const root = await createTempProject("delegation-proof-happy-path");
+    await seedFlowState(root, "run-proof");
+    await writeConfig(root, createDefaultConfig(["opencode"]));
+    const base = {
+      stage: "scope",
+      agent: "planner",
+      mode: "mandatory" as const,
+      spanId: "span-proof",
+      dispatchId: "dispatch-proof",
+      dispatchSurface: "opencode-agent" as const,
+      agentDefinitionPath: ".opencode/agents/planner.md",
+      ts: new Date().toISOString()
+    };
+
+    await appendDelegation(root, { ...base, status: "scheduled" });
+    await appendDelegation(root, { ...base, status: "launched" });
+    await appendDelegation(root, { ...base, status: "acknowledged" });
+    await appendDelegation(root, { ...base, status: "completed", fulfillmentMode: "isolated" });
+    await appendDelegation(root, {
+      stage: "scope",
+      agent: "critic",
+      mode: "mandatory",
+      status: "completed",
+      spanId: "span-critic",
+      dispatchId: "dispatch-critic",
+      dispatchSurface: "opencode-agent",
+      agentDefinitionPath: ".opencode/agents/critic.md",
+      ackTs: new Date().toISOString(),
+      completedTs: new Date().toISOString(),
+      ts: new Date().toISOString(),
+      fulfillmentMode: "isolated"
+    });
+
+    const events = await readDelegationEvents(root);
+    expect(events.corruptLines).toEqual([]);
+    expect(events.events.map((event) => event.event)).toEqual([
+      "scheduled",
+      "launched",
+      "acknowledged",
+      "completed",
+      "completed"
+    ]);
+    const result = await checkMandatoryDelegations(root, "scope");
+    expect(result.satisfied).toBe(true);
+    expect(result.missingDispatchProof).toEqual([]);
+  });
+
+  it("blocks current isolated completions written without matching dispatch proof", async () => {
+    const root = await createTempProject("delegation-fake-isolated");
+    await seedFlowState(root, "run-fake");
+    await writeConfig(root, createDefaultConfig(["opencode"]));
+
+    await appendDelegation(root, {
+      stage: "scope",
+      agent: "planner",
+      mode: "mandatory",
+      status: "completed",
+      spanId: "span-fake",
+      dispatchSurface: "opencode-agent",
+      fulfillmentMode: "isolated",
+      ts: new Date().toISOString()
+    });
+    await appendDelegation(root, {
+      stage: "scope",
+      agent: "critic",
+      mode: "mandatory",
+      status: "completed",
+      spanId: "span-critic",
+      dispatchId: "dispatch-critic",
+      dispatchSurface: "opencode-agent",
+      agentDefinitionPath: ".opencode/agents/critic.md",
+      ackTs: new Date().toISOString(),
+      completedTs: new Date().toISOString(),
+      fulfillmentMode: "isolated",
+      ts: new Date().toISOString()
+    });
+
+    const result = await checkMandatoryDelegations(root, "scope");
+    expect(result.satisfied).toBe(false);
+    expect(result.missingDispatchProof).toContain("planner");
+  });
+
+  it("reports corrupt delegation event lines", async () => {
+    const root = await createTempProject("delegation-events-corrupt");
+    await seedFlowState(root, "run-corrupt");
+    await fs.mkdir(path.join(root, ".cclaw/state"), { recursive: true });
+    await fs.writeFile(path.join(root, ".cclaw/state/delegation-events.jsonl"), "{bad-json}\n", "utf8");
+
+    const events = await readDelegationEvents(root);
+    expect(events.corruptLines).toEqual([1]);
   });
 });

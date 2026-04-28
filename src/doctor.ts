@@ -19,7 +19,7 @@ import { policyChecks } from "./policy.js";
 import { CorruptFlowStateError, readFlowState } from "./runs.js";
 import { createInitialFlowState, skippedStagesForTrack } from "./flow-state.js";
 import { FLOW_STAGES, TRACK_STAGES, type FlowStage } from "./types.js";
-import { checkMandatoryDelegations } from "./delegation.js";
+import { checkMandatoryDelegations, readDelegationEvents } from "./delegation.js";
 import { buildTraceMatrix } from "./trace-matrix.js";
 import {
   classifyReconciliationNotices,
@@ -349,6 +349,22 @@ function normalizeOpenCodePluginEntry(entry: unknown): string | null {
     }
   }
   return null;
+}
+
+function generatedAgentShape(content: string, kind: "opencode" | "codex", agentName: string): boolean {
+  if (kind === "opencode") {
+    return content.includes("mode: subagent") && content.includes(`# ${agentName}`) && content.includes("STRICT_RETURN_SCHEMA");
+  }
+  return content.includes(`name = "${agentName}"`) && content.includes("developer_instructions") && content.includes("STRICT_RETURN_SCHEMA");
+}
+
+function harnessRealityLabel(harness: HarnessId): string {
+  const adapter = HARNESS_ADAPTERS[harness];
+  const declaredSupport = adapter.capabilities.nativeSubagentDispatch;
+  const runtimeLaunch = harness === "opencode" || harness === "codex" ? "prompt-level launch" : declaredSupport === "generic" ? "generic Task launch" : "native tool launch";
+  const proofRequired = adapter.capabilities.subagentFallback === "native" ? "dispatchId+spanId+ack" : "evidenceRefs";
+  const proofSource = harness === "opencode" ? ".opencode/agents + delegation-events.jsonl" : harness === "codex" ? ".codex/agents + delegation-events.jsonl" : ".cclaw/state/delegation-log.json";
+  return `declaredSupport=${declaredSupport}; runtimeLaunch=${runtimeLaunch}; proofRequired=${proofRequired}; proofSource=${proofSource}`;
 }
 
 const OPENCODE_PLUGIN_REL_PATH = ".opencode/plugins/cclaw-plugin.mjs";
@@ -857,6 +873,15 @@ export async function doctorChecks(projectRoot: string, options: DoctorOptions =
     }
   }
 
+  for (const harness of configuredHarnesses) {
+    checks.push({
+      name: `harness:reality:${harness}`,
+      ok: true,
+      severity: "info",
+      details: harnessRealityLabel(harness)
+    });
+  }
+
   const agentsFile = path.join(projectRoot, "AGENTS.md");
   let agentsBlockOk = false;
   if (await exists(agentsFile)) {
@@ -966,12 +991,40 @@ export async function doctorChecks(projectRoot: string, options: DoctorOptions =
     });
   }
 
+  for (const agent of CCLAW_AGENTS) {
+    if (configuredHarnesses.includes("opencode")) {
+      const agentPath = path.join(projectRoot, ".opencode", "agents", `${agent.name}.md`);
+      let ok = false;
+      if (await exists(agentPath)) {
+        ok = generatedAgentShape(await fs.readFile(agentPath, "utf8"), "opencode", agent.name);
+      }
+      checks.push({
+        name: `agent:opencode:${agent.name}:shape`,
+        ok,
+        details: `${agentPath} must be a generated OpenCode subagent with mode: subagent and strict return schema`
+      });
+    }
+    if (configuredHarnesses.includes("codex")) {
+      const agentPath = path.join(projectRoot, ".codex", "agents", `${agent.name}.toml`);
+      let ok = false;
+      if (await exists(agentPath)) {
+        ok = generatedAgentShape(await fs.readFile(agentPath, "utf8"), "codex", agent.name);
+      }
+      checks.push({
+        name: `agent:codex:${agent.name}:shape`,
+        ok,
+        details: `${agentPath} must be a generated Codex custom agent TOML with developer_instructions and strict return schema`
+      });
+    }
+  }
+
   // Hook scripts
   for (const script of [
     "run-hook.mjs",
     "run-hook.cmd",
     "stage-complete.mjs",
     "start-flow.mjs",
+    "delegation-record.mjs",
     "opencode-plugin.mjs"
   ]) {
     const scriptPath = path.join(projectRoot, RUNTIME_ROOT, "hooks", script);
@@ -1888,6 +1941,7 @@ export async function doctorChecks(projectRoot: string, options: DoctorOptions =
   const delegation = await checkMandatoryDelegations(projectRoot, flowState.currentStage, {
     repairFeatureSystem: false
   });
+  const delegationEvents = await readDelegationEvents(projectRoot);
   const delegationSatisfiedForDoctor = currentStageUntouched || delegation.satisfied;
   const missingEvidenceNote =
     delegation.missingEvidence && delegation.missingEvidence.length > 0
@@ -1900,8 +1954,33 @@ export async function doctorChecks(projectRoot: string, options: DoctorOptions =
       ? `mandatory delegation check deferred for untouched stage "${flowState.currentStage}"; stage-complete enforces it when work begins`
       : delegation.satisfied
         ? `All mandatory delegations satisfied for stage "${flowState.currentStage}" (mode: ${delegation.expectedMode})`
-        : `Missing mandatory delegations for stage "${flowState.currentStage}": ${delegation.missing.join(", ")}${missingEvidenceNote}`
+        : `Missing mandatory delegations for stage "${flowState.currentStage}": ${delegation.missing.join(", ")}${missingEvidenceNote}; missingDispatchProof=${delegation.missingDispatchProof.join(", ")}; staleWorkers=${delegation.staleWorkers.join(", ")}; corruptEventLines=${delegation.corruptEventLines.join(", ")}`
   });
+
+  checks.push({
+    name: "delegation:events:parse",
+    ok: delegationEvents.corruptLines.length === 0,
+    details: delegationEvents.corruptLines.length === 0
+      ? `${RUNTIME_ROOT}/state/delegation-events.jsonl parsed successfully (${delegationEvents.events.length} event(s))`
+      : `corrupt delegation event line(s): ${delegationEvents.corruptLines.join(", ")}`
+  });
+  checks.push({
+    name: "delegation:proof:current_stage",
+    ok: currentStageUntouched || delegation.missingDispatchProof.length === 0,
+    details: currentStageUntouched
+      ? `dispatch proof check deferred for untouched stage "${flowState.currentStage}"`
+      : delegation.missingDispatchProof.length === 0
+        ? `no dispatch proof gaps for current stage "${flowState.currentStage}"`
+        : `isolated completions missing dispatchId/dispatchSurface/agentDefinitionPath/ackTs/completedTs: ${delegation.missingDispatchProof.join(", ")}`
+  });
+  checks.push({
+    name: "warning:delegation:legacy_inferred_completions",
+    ok: true,
+    details: delegation.legacyInferredCompletions.length > 0
+      ? `warning: legacy inferred isolated completion rows lack event-log proof: ${delegation.legacyInferredCompletions.join(", ")}`
+      : "no legacy inferred isolated completions for current stage"
+  });
+
   checks.push({
     name: "warning:delegation:waived",
     ok: true,

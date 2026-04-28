@@ -188,6 +188,10 @@ Borrow the good part of Team/Ruflo-style orchestration without adding a swarm ru
 - **Checkpoint before synthesis.** Each agent returns status, files inspected/changed, evidence, and blockers before the parent acts.
 - **Consensus is for hard calls only.** Use two reviewers when severity or architecture is disputed; otherwise one evidence-backed reviewer is enough.
 
+## Parallelization Decision Gate
+
+Before parallel dispatch, answer yes to all gates: tasks are independent, write sets do not overlap, outputs can be reconciled by evidence, and failure in one lane will not invalidate hidden assumptions in another. If any answer is no, serialize. Coder/overseer work is contract-first: the coder implements only the pasted contract, the overseer reads code and verifies acceptance evidence before the controller marks work complete.
+
 ## When to Use
 
 - Mid/large plans with multiple discrete tasks, dependencies, or risky overlap.
@@ -1050,9 +1054,9 @@ Two patterns (skills under \`.cclaw/skills/\`):
 - **SDD** (subagent-driven-development): sequential implementer→reviewer loops. Paste self-contained task text; never point subagents at plan files.
 - **Parallel Agents** (dispatching-parallel-agents): parallel review/analysis lenses. Never parallelize implementers on same codebase.
 
-Status contract: DONE | DONE_WITH_CONCERNS | NEEDS_CONTEXT | BLOCKED. Worker returns must use the strict JSON schemas in \`subagent-driven-development\`.
+Status contract: ACK first, then DONE | DONE_WITH_CONCERNS | NEEDS_CONTEXT | BLOCKED. Worker returns must use the strict JSON schemas in \`subagent-driven-development\` and include matching spanId+dispatchId proof.
 
-- Controller sequentially dispatches **implementer → reviewer** loops per task.
+- Controller sequentially dispatches **implementer → reviewer** loops per task and records lifecycle events in \`.cclaw/state/delegation-events.jsonl\`.
 - HARD-GATE: paste **self-contained task text**; never point subagents at plan files to “discover” scope.
 - **Review fixers** are **fresh agents** after failed review passes — avoids parent-context pollution.
 - **Machine-only flow checks auto-dispatch** by stage (design/plan/tdd/review/ship) without asking the user to trigger each specialist manually.

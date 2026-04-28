@@ -8,6 +8,14 @@ function delegationLogPath(): string {
   return `${RUNTIME_ROOT}/state/delegation-log.json`;
 }
 
+function delegationEventsPath(): string {
+  return `${RUNTIME_ROOT}/state/delegation-events.jsonl`;
+}
+
+function subagentsPath(): string {
+  return `${RUNTIME_ROOT}/state/subagents.json`;
+}
+
 function knowledgePath(): string {
   return `${RUNTIME_ROOT}/knowledge.jsonl`;
 }
@@ -32,7 +40,7 @@ advancing or mutating anything. Safe to run at any point. The snapshot reflects:
 - progress across stages with per-stage markers,
 - gate coverage,
 - mandatory delegations with **fulfillmentMode** (isolated / generic-dispatch /
-  role-switch) plus explicit waived status and evidence gate,
+  role-switch), dispatch proof fields, explicit waived status, and evidence gate,
 - **closeout substate** after ship (retro → compound → archive),
 - **harness parity row** (tier + fallback) for the active harness set.
 
@@ -90,7 +98,7 @@ a read-only command.
   \`Current\`, \`Stage\`, \`Gates\`, \`Delegations\`, \`Blocked by\`, \`Next\`, \`Evidence needed\`.
 - When blocked, include a plain-English action block:
   \`Current: <stage or closeout substate>\`; \`Blocked by: <gate/delegation/blocker code>\`; \`Next: <exact command or managed remediation>\`; \`Evidence needed: <artifact/test/review/delegation evidence>\`.
-- Report counts, not full artifact contents.
+- Report counts, not full artifact contents. Include active subagent count from \`${subagentsPath()}\` and proof gaps from \`${delegationEventsPath()}\` when present.
 - If any data source is missing or corrupt, say so explicitly rather than guessing.
 - Include \`/cc-view tree\` for deep structure and \`/cc-view diff\` for before/after map in the final line.
 

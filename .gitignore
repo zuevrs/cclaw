@@ -7,6 +7,7 @@ coverage/
 release-artifacts/
 docs/*
 !docs/harnesses.md
+!docs/subagent-flow.md
 !docs/config.md
 !docs/agents-block.example.md
 !docs/scheme-of-work.md

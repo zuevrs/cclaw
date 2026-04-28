@@ -123,6 +123,15 @@ const RULES: DoctorRegistryRule[] = [
     }
   },
   {
+    test: /^harness:reality:/,
+    metadata: {
+      severity: "info",
+      summary: "Harness reality label for dispatch/proof support.",
+      fix: "No action required; use this label to interpret native/generic/role-switch proof requirements.",
+      docRef: ref("harnesses.md")
+    }
+  },
+  {
     test: /^delegation:/,
     metadata: {
       severity: "error",

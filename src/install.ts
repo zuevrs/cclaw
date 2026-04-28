@@ -29,6 +29,7 @@ import {
   stageCompleteScript,
   startFlowScript,
   runHookCmdScript,
+  delegationRecordScript,
   opencodePluginJs,
   claudeHooksJson,
   codexHooksJson,
@@ -1025,6 +1026,7 @@ async function writeHooks(projectRoot: string, config: CclawConfig): Promise<voi
     compoundRecurrenceThreshold: config.compound?.recurrenceThreshold
   }));
   await writeFileSafe(path.join(hooksDir, "run-hook.cmd"), runHookCmdScript());
+  await writeFileSafe(path.join(hooksDir, "delegation-record.mjs"), delegationRecordScript());
   const opencodePluginSource = opencodePluginJs();
   await writeFileSafe(path.join(hooksDir, "opencode-plugin.mjs"), opencodePluginSource);
 
@@ -1034,6 +1036,7 @@ async function writeHooks(projectRoot: string, config: CclawConfig): Promise<voi
       "start-flow.mjs",
       "run-hook.mjs",
       "run-hook.cmd",
+      "delegation-record.mjs",
       "opencode-plugin.mjs"
     ]) {
       await fs.chmod(path.join(hooksDir, script), 0o755);

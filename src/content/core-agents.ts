@@ -75,6 +75,25 @@ const DOC_RETURN_SCHEMA: AgentReturnSchema = {
   evidenceFields: ["filesUpdated", "evidenceRefs"]
 };
 
+function workerAckContract(): string {
+  return `## Worker ACK Contract
+
+Before doing substantive work, return an ACK object that the parent can record:
+
+\`\`\`json
+{
+  "status": "ACK",
+  "spanId": "<parent spanId>",
+  "dispatchId": "<parent dispatchId or workerRunId>",
+  "dispatchSurface": "claude-task|cursor-task|opencode-agent|codex-agent|generic-task|role-switch",
+  "agentDefinitionPath": ".cclaw/agents/<agent>.md or harness generated path",
+  "ackTs": "<ISO timestamp>"
+}
+\`\`\`
+
+Finish with the required return schema plus the same \`spanId\` and \`dispatchId\`. The parent must not claim isolated completion unless ACK/result proof matches the ledger/event span.`;
+}
+
 function formatReturnSchema(schema: AgentReturnSchema): string {
   return [
     `- Status field: \`${schema.statusField}\``,
@@ -527,9 +546,11 @@ ${agent.body}
 - Mode: ${agent.activation}
 - Related stages: ${relatedStages}
 
+${workerAckContract()}
+
 ## Required Return Schema
 
-STRICT_RETURN_SCHEMA: return a structured object matching this contract before any narrative when delegated.
+STRICT_RETURN_SCHEMA: return a structured object matching this contract before any narrative when delegated. Include \`spanId\`, \`dispatchId\` or \`workerRunId\`, \`dispatchSurface\`, \`agentDefinitionPath\`, and lifecycle timestamps when provided by the parent.
 
 ${formatReturnSchema(agent.returnSchema)}
 

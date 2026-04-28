@@ -52,5 +52,14 @@ describe("harness parity model", () => {
     expect(HARNESS_ADAPTERS.codex.capabilities.structuredAsk).toBe("request_user_input");
   });
 
+  it("labels dispatch reality separately from declared native support", () => {
+    expect(HARNESS_ADAPTERS.opencode.reality.declaredSupport).toBe("full");
+    expect(HARNESS_ADAPTERS.opencode.reality.runtimeLaunch).toContain("prompt-level");
+    expect(HARNESS_ADAPTERS.opencode.reality.proofRequired).toContain("dispatchId");
+    expect(HARNESS_ADAPTERS.codex.reality.declaredSupport).toBe("full");
+    expect(HARNESS_ADAPTERS.codex.reality.runtimeLaunch).toContain("prompt-level");
+    expect(HARNESS_ADAPTERS.codex.reality.proofSource).toContain("delegation-events.jsonl");
+  });
+
 });
 

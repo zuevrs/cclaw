@@ -57,6 +57,12 @@ export type ShimKind = "command" | "skill";
 
 export interface HarnessAdapter {
   id: HarnessId;
+  reality: {
+    declaredSupport: "full" | "generic" | "partial" | "none";
+    runtimeLaunch: string;
+    proofRequired: string;
+    proofSource: string;
+  };
   /**
    * Root directory where cclaw writes `/cc*` entry points.
    *
@@ -192,6 +198,12 @@ export function harnessShimSkillNames(): string[] {
 export const HARNESS_ADAPTERS: Record<HarnessId, HarnessAdapter> = {
   claude: {
     id: "claude",
+    reality: {
+      declaredSupport: "full",
+      runtimeLaunch: "native Task launch",
+      proofRequired: "spanId+dispatchId or workerRunId+ACK for isolated completion",
+      proofSource: ".cclaw/state/delegation-events.jsonl plus delegation-log.json"
+    },
     commandDir: ".claude/commands",
     shimKind: "command",
     capabilities: {
@@ -203,6 +215,12 @@ export const HARNESS_ADAPTERS: Record<HarnessId, HarnessAdapter> = {
   },
   cursor: {
     id: "cursor",
+    reality: {
+      declaredSupport: "generic",
+      runtimeLaunch: "generic Task/Subagent launch with cclaw role prompt",
+      proofRequired: "spanId+dispatchId/evidenceRefs for generic-dispatch completion",
+      proofSource: ".cclaw/state/delegation-events.jsonl plus artifact evidenceRefs"
+    },
     commandDir: ".cursor/commands",
     shimKind: "command",
     capabilities: {
@@ -218,6 +236,12 @@ export const HARNESS_ADAPTERS: Record<HarnessId, HarnessAdapter> = {
   },
   opencode: {
     id: "opencode",
+    reality: {
+      declaredSupport: "full",
+      runtimeLaunch: "prompt-level launch via Task or @agent against generated .opencode/agents",
+      proofRequired: "spanId+dispatchId+ackTs+completedTs before isolated completion",
+      proofSource: ".opencode/agents/<agent>.md and .cclaw/state/delegation-events.jsonl"
+    },
     commandDir: ".opencode/commands",
     shimKind: "command",
     capabilities: {
@@ -240,6 +264,12 @@ export const HARNESS_ADAPTERS: Record<HarnessId, HarnessAdapter> = {
   },
   codex: {
     id: "codex",
+    reality: {
+      declaredSupport: "full",
+      runtimeLaunch: "prompt-level launch by asking Codex to spawn generated custom agents",
+      proofRequired: "spanId+dispatchId+ackTs+completedTs before isolated completion",
+      proofSource: ".codex/agents/<agent>.toml and .cclaw/state/delegation-events.jsonl"
+    },
     // Codex CLI reads skills from the universal `.agents/skills/` path
     // (OpenAI Codex 0.89, Jan 2026). It does NOT have a native
     // `.codex/commands/*` slash-command discovery — cclaw installs
@@ -278,9 +308,9 @@ export function harnessDispatchSurface(harnessId: HarnessId): string {
     case "cursor":
       return "Use Cursor Subagent/Task with a generic subagent_type (explore for read-only mapping, generalPurpose for broader work, shell/browser-use when specifically needed) and paste the cclaw role prompt; record fulfillmentMode: \"generic-dispatch\" with evidenceRefs.";
     case "opencode":
-      return "Use OpenCode subagents: invoke the generated .opencode/agents/<agent>.md agent via Task or @<agent>, run independent agents in parallel when safe, then record fulfillmentMode: \"isolated\".";
+      return "Use OpenCode subagents: invoke the generated .opencode/agents/<agent>.md agent via Task or @<agent>; record scheduled/launched/acknowledged/completed events with spanId+dispatchId before claiming fulfillmentMode: \"isolated\".";
     case "codex":
-      return "Use Codex native subagents: ask Codex to spawn the generated .codex/agents/<agent>.toml agent(s) by name, wait for all results, then record fulfillmentMode: \"isolated\".";
+      return "Use Codex native subagents: ask Codex to spawn the generated .codex/agents/<agent>.toml agent(s) by name; record scheduled/launched/acknowledged/completed events with spanId+dispatchId before claiming fulfillmentMode: \"isolated\".";
   }
 }
 
@@ -762,7 +792,7 @@ async function cleanupLegacyCodexSurfaces(projectRoot: string): Promise<void> {
 }
 
 function codexAgentToml(agent: (typeof CCLAW_AGENTS)[number]): string {
-  const instructions = `${agent.body}\n\n${enhancedAgentInstruction(agent.name)}`.trim();
+  const instructions = `${agentMarkdown(agent)}\n\n${enhancedAgentInstruction(agent.name)}`.trim();
   const sandboxMode = agent.tools.some((tool) => ["Write", "Edit", "Bash"].includes(tool))
     ? "workspace-write"
     : "read-only";
@@ -792,7 +822,7 @@ ${agentMarkdown(agent)}`;
 }
 
 function enhancedAgentInstruction(agentName: string): string {
-  return `You are the cclaw ${agentName} subagent. Follow the parent prompt as the task boundary, produce evidence suitable for .cclaw/state/delegation-log.json, and do not recursively orchestrate other agents unless the parent explicitly asks.`;
+  return `## Worker ACK Contract\n\nYou are the cclaw ${agentName} subagent. Follow the parent prompt as the task boundary. ACK first with JSON containing spanId, dispatchId or workerRunId, dispatchSurface, agentDefinitionPath, ackTs, and status: "ACK". Finish with the strict return schema plus the same spanId+dispatchId proof so the parent can append .cclaw/state/delegation-events.jsonl and .cclaw/state/delegation-log.json. Do not let the parent claim isolated completion without matching ACK/result proof. Do not recursively orchestrate other agents unless the parent explicitly asks.`;
 }
 
 async function syncAgentFiles(projectRoot: string, harnesses: HarnessId[]): Promise<void> {
