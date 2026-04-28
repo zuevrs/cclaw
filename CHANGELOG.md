@@ -1,5 +1,13 @@
 # Changelog
 
+## 0.51.25
+
+### Fixed
+
+- Added reference-grade subagent execution contracts with expanded specialist routing, worker lifecycle evidence, stricter delegation waivers, vertical-slice TDD guidance, managed recovery paths, and no-VCS verification support.
+- Made the README a lighter operating front door with ASCII flow, recovery guidance, and subagent evidence framing, backed by a tracked `docs/scheme-of-work.md` flow contract.
+- Added docs/generated contract regressions and refreshed generated guidance so status, recovery, track routing, and reference-pattern expectations stay aligned with runtime behavior.
+
 ## 0.51.24
 
 ### Fixed
