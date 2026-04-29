@@ -797,7 +797,7 @@ vcs: none
     const result = await verifyCurrentStageGateEvidence(root, state);
     expect(result.ok).toBe(false);
     expect(result.issues.join("\n")).toContain("tdd cycle order gate blocked");
-    expect(result.issues.join("\n")).toContain("green logged before red");
+    expect(result.issues.join("\n")).toContain("GREEN repair needed");
   });
 
   it("lints artifact eagerly when file exists even before any gate is passed", async () => {

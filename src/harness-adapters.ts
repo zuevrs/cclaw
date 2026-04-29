@@ -308,9 +308,9 @@ export function harnessDispatchSurface(harnessId: HarnessId): string {
     case "cursor":
       return "Use Cursor Subagent/Task with a generic subagent_type (explore for read-only mapping, generalPurpose for broader work, shell/browser-use when specifically needed) and paste the cclaw role prompt; record fulfillmentMode: \"generic-dispatch\" with evidenceRefs.";
     case "opencode":
-      return "Use OpenCode subagents: invoke the generated .opencode/agents/<agent>.md agent via Task or @<agent>; record scheduled/launched/acknowledged/completed events with spanId+dispatchId before claiming fulfillmentMode: \"isolated\".";
+      return "Use OpenCode subagents: invoke the generated .opencode/agents/<agent>.md agent via Task or @<agent>; if agents or plugin registration are missing, run `cclaw sync` and check opencode.json(.c) plugin registration with `cclaw doctor --explain`; record scheduled/launched/acknowledged/completed events with spanId+dispatchId before claiming fulfillmentMode: \"isolated\".";
     case "codex":
-      return "Use Codex native subagents: ask Codex to spawn the generated .codex/agents/<agent>.toml agent(s) by name; record scheduled/launched/acknowledged/completed events with spanId+dispatchId before claiming fulfillmentMode: \"isolated\".";
+      return "Use Codex native subagents: ask Codex to spawn the generated .codex/agents/<agent>.toml agent(s) by name; if hooks are inert, set `[features] codex_hooks = true` in ~/.codex/config.toml or rerun init/sync repair, then `cclaw doctor --explain`; record scheduled/launched/acknowledged/completed events with spanId+dispatchId before claiming fulfillmentMode: \"isolated\".";
   }
 }
 

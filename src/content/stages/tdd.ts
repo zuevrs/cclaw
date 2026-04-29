@@ -122,7 +122,7 @@ export const TDD: StageSchemaV2Input = {
       "full suite not green",
       "behavior changed during refactor",
       "no evidence recorded",
-      "RED/GREEN blocked — classify with the managed taxonomy `NO_SOURCE_CONTEXT`, `NO_TEST_SURFACE`, `NO_IMPLEMENTABLE_SLICE`, `RED_NOT_EXPRESSIBLE`, or `NO_VCS_MODE` and capture blockedBecause, missingInputs, recommendedRoute, nextCommand, and resumeCriteria.",
+      "RED/GREEN blocked — classify with the managed taxonomy `NO_SOURCE_CONTEXT`, `NO_TEST_SURFACE`, `NO_IMPLEMENTABLE_SLICE`, `RED_NOT_EXPRESSIBLE`, or `NO_VCS_MODE` and capture blockedBecause, missingInputs, recommendedRoute, nextCommand, resumeCriteria, and the repair path: RED needs a failing test surface, GREEN needs full-suite pass evidence, REFACTOR needs behavior-preservation evidence.",
       "no-VCS workspace without explicit `vcs: none`, no-vcs reason, content/artifact hash, or `tdd.verificationRef: disabled`"
     ],
     exitCriteria: [

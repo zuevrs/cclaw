@@ -35,7 +35,8 @@ export function statusSubcommandMarkdown(): string {
 ## Overview
 
 \`/cc-view status\` is the quickest way to answer "where are we in the flow?" without
-advancing or mutating anything. Safe to run at any point. The snapshot reflects:
+advancing or mutating anything. Treat it as an operator note, not a JSON dump:
+progress, blockers, risks, next action, and human-readable gate/delegation/closeout labels. Safe to run at any point. The snapshot reflects:
 
 - progress across stages with per-stage markers,
 - gate coverage,
@@ -95,10 +96,10 @@ a read-only command.
 
 - Keep output compact (≤ 40 lines) — status, not narrative.
 - Start with the same operator rows as \`/cc-next\` when possible:
-  \`Current\`, \`Stage\`, \`Gates\`, \`Delegations\`, \`Blocked by\`, \`Next\`, \`Evidence needed\`.
+  \`Current\`, \`Stage\`, \`Progress\`, \`Gates\`, \`Delegations\`, \`Risks\`, \`Blocked by\`, \`Next\`, \`Evidence needed\`. Use labels like \`gate: tdd_green_full_suite\`, \`delegation proof: reviewer evidenceRefs\`, and \`closeout: compound_review\` instead of raw JSON tone.
 - When blocked, include a plain-English action block:
   \`Current: <stage or closeout substate>\`; \`Blocked by: <gate/delegation/blocker code>\`; \`Next: <exact command or managed remediation>\`; \`Evidence needed: <artifact/test/review/delegation evidence>\`.
-- Report counts, not full artifact contents. Include active subagent count from \`${subagentsPath()}\` and proof gaps from \`${delegationEventsPath()}\` when present.
+- Report counts, not full artifact contents. Include active subagent count from \`${subagentsPath()}\` and proof gaps from \`${delegationEventsPath()}\` when present. Convert gate/delegation state into human labels: \`passed\`, \`blocked\`, \`missing proof\`, \`waived with reason\`, \`stale\`, \`ready to advance\`, or the closeout substate label.
 - If any data source is missing or corrupt, say so explicitly rather than guessing.
 - Include \`/cc-view tree\` for deep structure and \`/cc-view diff\` for before/after map in the final line.
 

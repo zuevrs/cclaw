@@ -80,7 +80,7 @@ Commands:
                     --json              Emit machine-readable check results.
                     --quiet             Show only failing checks.
                     --only=<filter>     Limit displayed checks (error,warning,hook:,state:,...).
-                    --reconcile-gates   Refresh derived gate status before checking.
+                    --reconcile-gates   Refresh derived gate status before checking; does not repair missing artifacts/tests.
   upgrade    Refresh generated files in .cclaw. Preserves your config.yaml.
   archive    Archive the active run and reset flow state for the next run.
              Flags: --name=<slug>        Override archive folder suffix.
@@ -105,7 +105,7 @@ it verifies install/runtime wiring, but a real harness smoke test is
 still needed to prove provider auth and model execution.
 
 Docs:   https://github.com/zuevrs/cclaw
-Local:  docs/config.md and docs/harnesses.md
+Local:  README.md and generated .cclaw/skills/*.md
 Issues: https://github.com/zuevrs/cclaw/issues
 `;
 }
@@ -435,6 +435,19 @@ function doctorCountsBySeverity(checks: Awaited<ReturnType<typeof doctorChecks>>
   return result;
 }
 
+const DOCTOR_ACTION_GROUP_LABELS = {
+  sync: "Can fix with cclaw sync",
+  "user-action": "Requires user action",
+  "stage-work": "Requires stage work",
+  informational: "Informational warning"
+} as const;
+
+function doctorActionGroupOrder(
+  group: Awaited<ReturnType<typeof doctorChecks>>[number]["actionGroup"]
+): number {
+  return group === "sync" ? 0 : group === "user-action" ? 1 : group === "stage-work" ? 2 : 3;
+}
+
 function printDoctorText(
   ctx: CliContext,
   checks: Awaited<ReturnType<typeof doctorChecks>>,
@@ -442,21 +455,35 @@ function printDoctorText(
 ): void {
   const orderedSeverities: Array<"error" | "warning" | "info"> = ["error", "warning", "info"];
   const view = options.quiet ? checks.filter((check) => !check.ok) : checks;
+  const actionGroups = [...new Set(view.map((check) => check.actionGroup))]
+    .sort((left, right) => doctorActionGroupOrder(left) - doctorActionGroupOrder(right));
 
-  for (const severity of orderedSeverities) {
-    const inBucket = view.filter((check) => check.severity === severity);
-    if (inBucket.length === 0) continue;
-    ctx.stdout.write(`\n[${severity.toUpperCase()}]\n`);
-    for (const check of inBucket) {
-      const status = check.ok ? "PASS" : "FAIL";
-      ctx.stdout.write(`${status} ${check.name} :: ${check.summary}\n`);
-      if (!options.quiet) {
-        ctx.stdout.write(`  details: ${check.details}\n`);
-      }
-      if (!check.ok || options.explain) {
-        ctx.stdout.write(`  fix: ${check.fix}\n`);
-        if (check.docRef) {
-          ctx.stdout.write(`  docs: ${check.docRef}\n`);
+  for (const actionGroup of actionGroups) {
+    const groupChecks = view.filter((check) => check.actionGroup === actionGroup);
+    const failingInGroup = groupChecks.filter((check) => !check.ok).length;
+    ctx.stdout.write(`
+[${DOCTOR_ACTION_GROUP_LABELS[actionGroup]}] ${failingInGroup}/${groupChecks.length} failing
+`);
+    for (const severity of orderedSeverities) {
+      const inBucket = groupChecks.filter((check) => check.severity === severity);
+      if (inBucket.length === 0) continue;
+      ctx.stdout.write(`  ${severity.toUpperCase()}
+`);
+      for (const check of inBucket) {
+        const status = check.ok ? "PASS" : "FAIL";
+        ctx.stdout.write(`  ${status} ${check.name} :: ${check.summary}
+`);
+        if (!options.quiet) {
+          ctx.stdout.write(`    details: ${check.details}
+`);
+        }
+        if (!check.ok || options.explain) {
+          ctx.stdout.write(`    next action: ${check.fix}
+`);
+          if (check.docRef) {
+            ctx.stdout.write(`    reference: ${check.docRef}
+`);
+          }
         }
       }
     }

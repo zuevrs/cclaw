@@ -31,6 +31,10 @@ describe("ideate ranking and critique model", () => {
       impact: "high",
       effort: "m",
       confidence: "high",
+      whyNow: "visible operator friction",
+      expectedImpact: "faster recovery",
+      risk: "overfitting to one path",
+      nextCcPrompt: "/cc Harden gate-evidence diagnostics",
       rationaleStrength: 0.8,
       counterArgumentStrength: 0.4
     });
@@ -46,6 +50,8 @@ describe("ideate ranking and critique model", () => {
 
     expect(survivor.disposition).toBe("survivor");
     expect(survivor.rankingScore).toBeGreaterThan(0);
+    expect(survivor.whyNow).toBe("visible operator friction");
+    expect(survivor.nextCcPrompt).toContain("/cc");
     expect(dropped.disposition).toBe("critiqued-out");
   });
 

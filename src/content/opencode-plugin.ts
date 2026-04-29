@@ -132,7 +132,7 @@ export default function cclawPlugin(ctx) {
     if (stageSupport.length > 0) parts.push(...stageSupport);
 
     parts.push(
-      "If you discover a non-obvious rule or pattern during stage work, add it to the current artifact ## Learnings section; stage-complete harvests it into .cclaw/knowledge.jsonl. Direct JSONL append is only for explicit manual learnings operations."
+      "If you discover a non-obvious rule or pattern during stage work, add it to the current artifact ## Learnings section; stage-complete harvests it into .cclaw/knowledge.jsonl. If this plugin does not load, run \`cclaw sync\`, verify opencode.json(.c) includes the cclaw plugin registration, then run \`cclaw doctor --explain\`. Direct JSONL append is only for explicit manual learnings operations."
     );
 
     const meta = (await readFileText(metaSkillPath)).trim();

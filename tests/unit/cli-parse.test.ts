@@ -86,7 +86,7 @@ describe("cli parser", () => {
     expect(text).toContain("--no-interactive");
     expect(text).toContain("--json");
     expect(text).toContain("--only");
-    expect(text).toContain("docs/config.md");
+    expect(text).toContain("README.md and generated .cclaw/skills/*.md");
   });
 
   it("usage message keeps internal maintainer switches out of public help", () => {

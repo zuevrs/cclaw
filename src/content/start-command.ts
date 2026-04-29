@@ -77,18 +77,19 @@ ${conversationLanguagePolicyMarkdown()}
 6. If flow already has completed stages, warn the user that starting a new tracked flow will reset progress. Ask for confirmation before proceeding. A fresh init placeholder state with \`completedStages: []\`, no passed gates, and no \`00-idea.md\` is **not** an active flow; do not ask the user to resume it.
 7. **Track heuristic** — classify the idea text and **recommend** a track (the user can override before any state mutation):
    - First, load \`${RUNTIME_ROOT}/config.yaml\`. If \`trackHeuristics\` is defined, apply those per-track vocabulary hints (\`fallback\`, \`tracks.<id>.{triggers,veto}\`) on top of the built-in defaults. Evaluation order is always \`standard -> medium -> quick\` (narrow-to-broad).
-   - **quick** (\`spec → tdd → review → ship\`) — single-purpose work where the spec is essentially already known.
+   - **quick** (\`spec → tdd → review → ship\`) — single-purpose work where the spec is essentially already known. Quick skips ceremony, not safety: spec approval, TDD evidence, review, and ship gates remain mandatory.
      Triggers (case-insensitive substring or close variant): \`bug\`, \`bugfix\`, \`fix\`, \`hotfix\`, \`patch\`, \`typo\`, \`regression\`, \`copy change\`, \`rename\`, \`bump\`, \`upgrade dep\`, \`config tweak\`, \`docs only\`, \`comment\`, \`lint\`, \`format\`, \`small\`, \`tiny\`, \`one-liner\`, \`revert\`.
    - **medium** (\`brainstorm → spec → plan → tdd → review → ship\`) — additive work that fits existing architecture and still needs product framing.
      Triggers: \`add endpoint\`, \`add field\`, \`extend existing\`, \`wire integration\`, \`small migration\`, \`new screen following existing patterns\`.
    - **standard** (full 8 stages — default fallback) — anything that introduces a new capability with architecture uncertainty, touches many modules, or has unclear scope.
      Triggers: \`new feature\`, \`refactor\`, \`migration\`, \`platform\`, \`architecture\`, \`schema\`, \`integrate\`, \`workflow\`, \`onboarding\`, or any prompt that does not match quick/medium confidently.
    - When triggers conflict, prefer **standard** over **medium**, and **medium** over **quick**.
-   - Report **track selection confidence** as high/medium/low with the matched trigger or fallback reason. Be explicit that this recommendation is advisory until the user accepts and the managed helper writes state; after that, \`/cc-next\` follows the configured track.
+   - Report **track selection confidence** as high/medium/low with the matched trigger or fallback reason, plus one sentence explaining what the selected track skips and what safety gates remain. Be explicit that this recommendation is advisory until the user accepts and the managed helper writes state; after that, \`/cc-next\` follows the configured track.
 8. Present one compact **Start framing** summary: class, recommended track, track selection confidence, stack, origin docs, seed recalls, and the recommended next action. Ask a single confirmation question only when there is a destructive reset, a real contradiction, or ambiguous software/non-software classification.
 9. Present the recommendation as a single decision with explicit options:
    > \`Recommended track: <quick|medium|standard>\` because \`<one-line reason citing matched triggers>\`.
-   > Override? (A) keep \`<recommended>\`  (B) switch track  (C) cancel.
+   > \`Safety retained: <spec/TDD/review/ship gates that still apply>\`.
+   > Override? (A) keep \`<recommended>\`  (B) switch track with reason  (C) cancel.
    If the harness's native ask tool is available (\`AskUserQuestion\` / \`AskQuestion\` / \`question\` / \`request_user_input\`), send exactly ONE question; on schema error, fall back to a plain-text lettered list.
 10. Start the tracked flow only through the managed helper:
    \`node .cclaw/hooks/start-flow.mjs --track=<quick|medium|standard> --class=<class> --prompt=<prompt> --stack=<stack> --reason=<matched heuristic>\`
@@ -183,12 +184,12 @@ ${conversationLanguagePolicyMarkdown()}
 
    | Track | Triggers | Use when |
    |---|---|---|
-   | \`quick\` | \`bug\`, \`bugfix\`, \`fix\`, \`hotfix\`, \`patch\`, \`typo\`, \`regression\`, \`rename\`, \`bump\`, \`upgrade dep\`, \`docs only\`, \`comment\`, \`lint\`, \`format\`, \`small\`, \`tiny\`, \`one-liner\`, \`revert\`, \`copy change\` | Single-purpose, spec is essentially known, low blast radius |
+   | \`quick\` | \`bug\`, \`bugfix\`, \`fix\`, \`hotfix\`, \`patch\`, \`typo\`, \`regression\`, \`rename\`, \`bump\`, \`upgrade dep\`, \`docs only\`, \`comment\`, \`lint\`, \`format\`, \`small\`, \`tiny\`, \`one-liner\`, \`revert\`, \`copy change\` | Single-purpose, spec is essentially known, low blast radius; skips ceremony, not safety |
    | \`medium\` | \`add endpoint\`, \`add field\`, \`extend existing\`, \`wire integration\`, \`small migration\`, \`new screen following existing pattern\` | Additive work with existing architecture |
    | \`standard\` | \`new feature\`, \`refactor\`, \`migration\`, \`platform\`, \`architecture\`, \`schema\`, \`integrate\`, \`workflow\`, \`onboarding\` (or no confident quick/medium match) | New or uncertain multi-module work |
 
    - On conflict, prefer \`standard\` over \`medium\`, and \`medium\` over \`quick\`.
-   - Always state the recommendation as a one-line reason citing matched triggers and a high/medium/low track selection confidence. Clarify that the heuristic is advisory until the managed helper writes state; after that, \`/cc-next\` follows the selected track.
+   - Always state the recommendation as a one-line reason citing matched triggers and a high/medium/low track selection confidence. Clarify that the heuristic is advisory until the managed helper writes state; after that, \`/cc-next\` follows the selected track. Include override guidance: switch to standard when architecture, schema, migration, security, or unclear scope appears; switch to medium when product framing is needed but architecture is known.
 8. Run the managed start helper: \`node .cclaw/hooks/start-flow.mjs --track=<quick|medium|standard> --class=<class> --prompt=<prompt> --stack=<stack> --reason=<matched heuristic>\`. The helper writes \`${flowPath}\`, computes \`skippedStages\`, resets the gate catalog, and writes \`${RUNTIME_ROOT}/artifacts/00-idea.md\`. If it fails, STOP and report the exact command/output; do not manually edit flow state.
 9. Load and execute the **first stage skill of the chosen track** (\`brainstorming\` for medium/standard, \`specification-authoring\` for quick) plus its matching command file.
 

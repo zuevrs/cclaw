@@ -22,6 +22,10 @@ describe("ideate command surfaces", () => {
     expect(contract).toContain("Keep at least 4 distinct frame outputs");
     expect(skill).toContain("Require at least 4 distinct frames");
     expect(skill).toContain("repo-grounded scans require 4 distinct frames");
+    expect(skill).toContain("Why now");
+    expect(skill).toContain("Expected impact");
+    expect(skill).toContain("Risk");
+    expect(skill).toContain("Next /cc prompt");
   });
 
   it("supports frame overrides for narrower ideation passes", () => {

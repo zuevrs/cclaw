@@ -35,10 +35,10 @@ export async function validateTddVerificationEvidence(
   const issues: string[] = [];
 
   if (options.requireCommand !== false && !TEST_COMMAND_HINT_PATTERN.test(normalized)) {
-    issues.push("must include the fresh verification command that was run (for example `npm test`, `pytest`, `go test`, or equivalent).");
+    issues.push("GREEN repair needed: include the fresh verification command that was run (for example `npm test`, `pytest`, `go test`, or equivalent).");
   }
   if (options.requirePassStatus !== false && !PASS_STATUS_PATTERN.test(normalized)) {
-    issues.push("must include explicit success status (for example `PASS` or `GREEN`).");
+    issues.push("GREEN repair needed: include explicit success status (for example `PASS` or `GREEN`).");
   }
 
   const hasSha = SHA_WITH_LABEL_PATTERN.test(normalized);
@@ -46,10 +46,10 @@ export async function validateTddVerificationEvidence(
   const hasNoVcsHash = NO_VCS_HASH_PATTERN.test(normalized);
   if (mode !== "disabled" && configuredVcs === "none") {
     if (!hasNoVcs) {
-      issues.push("must include an explicit no-VCS reason because `vcs` is `none`.");
+      issues.push("NO_VCS_MODE repair needed: include an explicit no-VCS reason because `vcs` is `none`.");
     }
     if (!hasNoVcsHash) {
-      issues.push("must include a content/artifact hash for no-VCS TDD evidence (for example `artifact-hash: sha256:<hash>`).");
+      issues.push("NO_VCS_MODE repair needed: include a content/artifact hash for no-VCS TDD evidence (for example `artifact-hash: sha256:<hash>`).");
     }
   } else if (mode === "required" && !hasSha) {
     issues.push("must include a commit SHA token prefixed with `sha` or `commit` because `tdd.verificationRef` is `required`.");

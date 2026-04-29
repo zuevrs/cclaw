@@ -6,6 +6,7 @@ export interface TrackRenderContext {
   traceabilitySourceNoun: string;
   traceabilityIdNoun: string;
   traceabilitySliceNoun: string;
+  safetySummary: string;
   upstreamArtifactLabel: string;
   upstreamArtifactPath: string;
 }
@@ -22,6 +23,7 @@ export function trackRenderContext(track: FlowTrack): TrackRenderContext {
       traceabilitySourceNoun: "acceptance criterion",
       traceabilityIdNoun: "acceptance criterion ID",
       traceabilitySliceNoun: "acceptance slice",
+      safetySummary: "quick skips ceremony, not safety: spec approval, TDD, review, and ship gates remain mandatory",
       upstreamArtifactLabel: "spec artifact",
       upstreamArtifactPath: ".cclaw/artifacts/04-spec.md"
     };
@@ -32,6 +34,7 @@ export function trackRenderContext(track: FlowTrack): TrackRenderContext {
     traceabilitySourceNoun: "plan task",
     traceabilityIdNoun: "plan task ID",
     traceabilitySliceNoun: "plan slice",
+    safetySummary: "full upstream planning safety remains in the active track",
     upstreamArtifactLabel: "plan artifact",
     upstreamArtifactPath: ".cclaw/artifacts/05-plan.md"
   };

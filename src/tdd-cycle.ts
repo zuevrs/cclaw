@@ -149,7 +149,7 @@ export function validateTddCycleOrder(
   // cycles could appear to share a RED/GREEN pair.
   for (const slice of bySlice.keys()) {
     if (!SLICE_ID_PATTERN.test(slice)) {
-      issues.push(`slice "${slice}": id must match /^S-\\d+$/ (e.g. S-1)`);
+      issues.push(`slice "${slice}": id must match /^S-\\d+$/ (e.g. S-1); repair by re-logging RED/GREEN/REFACTOR with a stable slice id.`);
     }
   }
 
@@ -158,15 +158,15 @@ export function validateTddCycleOrder(
     for (const entry of sliceEntries) {
       if (entry.phase === "red") {
         if (entry.exitCode === undefined) {
-          issues.push(`slice ${slice}: red entry must record a non-zero exitCode`);
+          issues.push(`slice ${slice}: RED repair needed: red entry must record a non-zero exitCode from a failing test.`);
           continue;
         }
         if (entry.exitCode === 0) {
-          issues.push(`slice ${slice}: red entry exitCode must be non-zero`);
+          issues.push(`slice ${slice}: RED repair needed: red entry exitCode must be non-zero; passing output is not RED evidence.`);
           continue;
         }
         if (state === "red_open") {
-          issues.push(`slice ${slice}: duplicate red before green`);
+          issues.push(`slice ${slice}: RED/GREEN repair needed: duplicate RED before GREEN; record the GREEN pass that closes the prior RED or split into a new slice.`);
           continue;
         }
         state = "red_open";
@@ -174,15 +174,15 @@ export function validateTddCycleOrder(
       }
       if (entry.phase === "green") {
         if (entry.exitCode === undefined) {
-          issues.push(`slice ${slice}: green entry must record exitCode 0`);
+          issues.push(`slice ${slice}: GREEN repair needed: green entry must record exitCode 0 from the verification command.`);
           continue;
         }
         if (entry.exitCode !== 0) {
-          issues.push(`slice ${slice}: green entry exitCode must be 0`);
+          issues.push(`slice ${slice}: GREEN repair needed: green entry exitCode must be 0; fix regressions before advancing.`);
           continue;
         }
         if (state !== "red_open") {
-          issues.push(`slice ${slice}: green logged before red`);
+          issues.push(`slice ${slice}: GREEN repair needed: green logged before RED; add the failing RED test evidence first.`);
           continue;
         }
         state = "green_done";
@@ -190,15 +190,15 @@ export function validateTddCycleOrder(
       }
       // refactor — must preserve the passing state established by green.
       if (entry.exitCode === undefined) {
-        issues.push(`slice ${slice}: refactor entry must record exitCode 0`);
+        issues.push(`slice ${slice}: REFACTOR repair needed: refactor entry must record exitCode 0 proving behavior stayed green.`);
         continue;
       }
       if (entry.exitCode !== 0) {
-        issues.push(`slice ${slice}: refactor entry exitCode must be 0 (tests must stay green)`);
+        issues.push(`slice ${slice}: REFACTOR repair needed: tests must stay green after cleanup; rerun/fix before closing the slice.`);
         continue;
       }
       if (state !== "green_done") {
-        issues.push(`slice ${slice}: refactor logged before green`);
+        issues.push(`slice ${slice}: REFACTOR repair needed: refactor logged before GREEN; prove GREEN first, then cleanup.`);
         continue;
       }
     }

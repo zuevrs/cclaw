@@ -51,7 +51,7 @@ import { validateKnowledgeEntry } from "./knowledge-store.js";
 import { readSeedShelf } from "./content/seed-shelf.js";
 import { evaluateRetroGate } from "./retro-gate.js";
 import type { HarnessId } from "./types.js";
-import type { DoctorSeverity } from "./doctor-registry.js";
+import type { DoctorActionGroup, DoctorSeverity } from "./doctor-registry.js";
 
 const execFileAsync = promisify(execFile);
 
@@ -62,6 +62,7 @@ export interface DoctorCheck {
   severity: DoctorSeverity;
   summary: string;
   fix: string;
+  actionGroup: DoctorActionGroup;
   docRef?: string;
 }
 
@@ -70,8 +71,8 @@ export interface DoctorOptions {
   reconcileCurrentStageGates?: boolean;
 }
 
-type PendingDoctorCheck = Omit<DoctorCheck, "severity" | "summary" | "fix" | "docRef"> &
-  Partial<Pick<DoctorCheck, "severity" | "summary" | "fix" | "docRef">>;
+type PendingDoctorCheck = Omit<DoctorCheck, "severity" | "summary" | "fix" | "actionGroup" | "docRef"> &
+  Partial<Pick<DoctorCheck, "severity" | "summary" | "fix" | "actionGroup" | "docRef">>;
 
 async function isGitRepo(projectRoot: string): Promise<boolean> {
   try {
@@ -129,6 +130,20 @@ function extractGeneratedCliEntrypoints(scriptContent: string): string[] {
       const parsed = JSON.parse(raw) as unknown;
       if (typeof parsed === "string" && parsed.trim().length > 0) {
         paths.push(parsed);
+      }
+    } catch {
+      // malformed generated constant; treat below as missing/unusable
+    }
+  }
+  for (const match of scriptContent.matchAll(/const\s+CCLAW_CLI_ARGS_PREFIX\s*=\s*(\[(?:\\.|[^\]])*\]);/gu)) {
+    try {
+      const parsed = JSON.parse(match[1] ?? "[]") as unknown;
+      if (Array.isArray(parsed)) {
+        for (const item of parsed) {
+          if (typeof item === "string" && item.trim().length > 0 && !item.startsWith("-")) {
+            paths.push(item);
+          }
+        }
       }
     } catch {
       // malformed generated constant; treat below as missing/unusable
@@ -2151,6 +2166,7 @@ export async function doctorChecks(projectRoot: string, options: DoctorOptions =
       severity: check.severity ?? metadata.severity,
       summary: check.summary ?? metadata.summary,
       fix: check.fix ?? metadata.fix,
+      actionGroup: check.actionGroup ?? metadata.actionGroup,
       docRef: check.docRef ?? metadata.docRef
     };
   });

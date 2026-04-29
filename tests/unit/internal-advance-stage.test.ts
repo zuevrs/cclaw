@@ -795,7 +795,8 @@ describe("internal advance-stage commands", () => {
     expect(diagnostics.ok).toBe(false);
     expect(diagnostics.kind).toBe("validation-failed");
     expect(diagnostics.delegation.missing).toContain("planner");
-    expect(diagnostics.nextActions.join(" ")).toContain("Complete or waive");
+    expect(diagnostics.nextActions.join(" ")).toContain("Run mandatory delegation(s)");
+    expect(diagnostics.nextActions.join(" ")).toContain("waiver fallback");
     expect(captured.stderr()).toContain("--waive-delegation=planner");
   });
 
