@@ -12,6 +12,9 @@ ${conversationLanguagePolicyMarkdown()}
   matter for that stage.
 - Generic execution stays inline: verify required gates, update the artifact,
   harvest learnings, then use \`/cc\` for progression.
+- If \`stage-complete\` reports missing proactive delegations, either run those
+  proactive roles or rerun with \`--accept-proactive-waiver\` (optionally
+  \`--accept-proactive-waiver-reason="<why safe>"\`) only after explicit user approval.
 - Do not create separate protocol files.
 
 ## Context readiness

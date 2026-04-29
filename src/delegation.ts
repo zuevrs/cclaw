@@ -83,6 +83,8 @@ export interface DelegationTokenUsage {
   model: string;
 }
 
+export type DelegationWaiverAcceptedBy = "user-flag";
+
 export type DelegationEntry = {
   stage: string;
   agent: string;
@@ -105,6 +107,7 @@ export type DelegationEntry = {
    */
   taskId?: string;
   waiverReason?: string;
+  acceptedBy?: DelegationWaiverAcceptedBy;
   ts?: string;
   /**
    * Run id the entry belongs to. Older ledgers written before 0.5.17 may omit this;
@@ -349,6 +352,7 @@ function isDelegationEntry(value: unknown): value is DelegationEntry {
     (o.endTs === undefined || typeof o.endTs === "string") &&
     (o.taskId === undefined || typeof o.taskId === "string") &&
     (o.waiverReason === undefined || typeof o.waiverReason === "string") &&
+    (o.acceptedBy === undefined || o.acceptedBy === "user-flag") &&
     waiverOk &&
     (o.runId === undefined || typeof o.runId === "string") &&
     (o.fulfillmentMode === undefined ||

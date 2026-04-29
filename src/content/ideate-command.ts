@@ -62,10 +62,12 @@ ${conversationLanguagePolicyMarkdown()}
 - Ideate mode only. Never mutate \`.cclaw/state/flow-state.json\`.
 - Every recommendation cites evidence from the current repository
   (file path, command output, or knowledge-store entry id).
-- Always write a persisted artifact to
-  \`${IDEATE_ARTIFACT_PATTERN}\`. Chat-only output is not acceptable —
-  the next session must be able to resume.
-- Always end with a structured handoff prompt, not an open question.
+- Whenever you produce ideation output, persist it to
+  \`${IDEATE_ARTIFACT_PATTERN}\`. Chat-only output is not acceptable.
+  The only exception is an explicit user-cancel from the resume prompt —
+  in that case, write nothing and exit silently.
+- Always end with a structured handoff prompt, not an open question
+  (skipped on explicit cancel).
 
 ## Algorithm
 
@@ -146,9 +148,12 @@ ${conversationLanguagePolicyMarkdown()}
 - Do not start coding in ideate mode.
 - Do not mutate \`.cclaw/state/flow-state.json\` — ideate mode sits outside
   the critical-path flow.
-- Always produce the artifact file on disk before presenting the handoff.
+- Whenever ideation output is produced, persist the artifact file on disk
+  before presenting the handoff. The only exception is an explicit user-cancel
+  from the resume prompt — in that case, write nothing and exit silently.
 - Always end with a structured handoff that names the concrete follow-up
-  command for each option. No A/B/C letters without command context.
+  command for each option (skipped on explicit cancel). No A/B/C letters
+  without command context.
 
 ## Protocol
 

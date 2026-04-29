@@ -1526,6 +1526,27 @@ Capture this later.
     expect(cleared?.details).toMatch(/no active reconciliation notices/i);
   });
 
+  it("flags active closeout substate demotion notices as hand-edited flow-state risk", async () => {
+    const root = await createTempProject("doctor-closeout-substate-demotion");
+    await initCclaw({ projectRoot: root });
+    const statePath = path.join(root, ".cclaw/state/flow-state.json");
+    const state = JSON.parse(await fs.readFile(statePath, "utf8")) as Record<string, unknown>;
+    state.currentStage = "ship";
+    state.completedStages = [...FLOW_STAGES];
+    state.closeout = {
+      ...(typeof state.closeout === "object" && state.closeout ? state.closeout as Record<string, unknown> : {}),
+      shipSubstate: "ready_to_archive"
+    };
+    await fs.writeFile(statePath, `${JSON.stringify(state, null, 2)}\n`, "utf8");
+
+    const checks = await doctorChecks(root);
+    const warning = checks.find((c) => c.name === "warning:state:closeout_substate_demotion");
+    expect(warning).toBeDefined();
+    expect(warning?.ok).toBe(false);
+    expect(warning?.details).toMatch(/ready_to_archive -> retro_review/i);
+    expect(warning?.details).toMatch(/hand-edited flow-state/i);
+  });
+
   it("reports reconciliation notices parse errors explicitly", async () => {
     const root = await createTempProject("doctor-reconciliation-notices-parse");
     await initCclaw({ projectRoot: root });

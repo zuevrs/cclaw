@@ -220,7 +220,7 @@ function printUsage() {
   process.stderr.write(
     "Usage: node " +
       RUNTIME_ROOT +
-      "/hooks/stage-complete.mjs <stage> [--passed=...] [--evidence-json=...] [--waive-delegation=...] [--waiver-reason=...] [--json]\\n"
+      "/hooks/stage-complete.mjs <stage> [--passed=...] [--evidence-json=...] [--waive-delegation=...] [--waiver-reason=...] [--accept-proactive-waiver] [--accept-proactive-waiver-reason=...] [--json]\\n"
   );
 }
 

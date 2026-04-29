@@ -27,8 +27,10 @@ describe("docs flow contract", () => {
     expect(lead).toContain("file-backed flow runtime for coding agents");
     expect(lead).toContain("## First 5 Minutes");
     expect(lead).toContain("/cc <idea>");
-    expect(lead).toContain("/cc-next");
-    expect(lead).toContain("/cc-view status");
+    expect(lead).toContain("/cc-ideate");
+    expect(lead).toContain("/cc-cancel");
+    expect(lead).not.toContain("/cc-next");
+    expect(lead).not.toContain("/cc-view status");
     expect(readme).toContain("./docs/scheme-of-work.md");
     expect(readme).toContain("./docs/config.md");
     expect(readme).toContain("./docs/harnesses.md");
@@ -99,8 +101,8 @@ ${await readRepoFile("docs/scheme-of-work.md")}`;
       "cclaw internal rewind --ack",
       "cclaw doctor",
       "npx cclaw-cli sync",
-      "/cc-view status",
-      "/cc-next"
+      "npx cclaw-cli doctor --quiet --explain",
+      "/cc"
     ]) {
       expect(docs).toContain(required);
     }

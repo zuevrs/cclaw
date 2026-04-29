@@ -183,6 +183,14 @@ const DESIGN_RESEARCH_REQUIRED_SECTIONS = [
 
 export const RECONCILIATION_NOTICES_REL_PATH = `${RUNTIME_ROOT}/state/${RECONCILIATION_NOTICES_FILE}`;
 
+export type ReconciliationNoticeKind = "gate_demotion" | "closeout_substate_demotion";
+
+export interface CloseoutSubstateDemotionPayload {
+  previous: string;
+  next: string;
+  reason: string;
+}
+
 export interface ReconciliationNotice {
   id: string;
   runId: string;
@@ -190,6 +198,8 @@ export interface ReconciliationNotice {
   gateId: string;
   reason: string;
   demotedAt: string;
+  kind?: ReconciliationNoticeKind;
+  payload?: CloseoutSubstateDemotionPayload;
 }
 
 export interface ReconciliationNoticesPayload {
@@ -238,13 +248,33 @@ function sanitizeReconciliationNotice(raw: unknown): ReconciliationNotice | null
   ) {
     return null;
   }
+  const kind = typed.kind === "closeout_substate_demotion"
+    ? "closeout_substate_demotion"
+    : "gate_demotion";
+  let payload: CloseoutSubstateDemotionPayload | undefined;
+  if (kind === "closeout_substate_demotion" && typed.payload && typeof typed.payload === "object" && !Array.isArray(typed.payload)) {
+    const payloadTyped = typed.payload as Record<string, unknown>;
+    if (
+      typeof payloadTyped.previous === "string" &&
+      typeof payloadTyped.next === "string" &&
+      typeof payloadTyped.reason === "string"
+    ) {
+      payload = {
+        previous: payloadTyped.previous,
+        next: payloadTyped.next,
+        reason: payloadTyped.reason
+      };
+    }
+  }
   return {
     id: typed.id,
     runId: typed.runId,
     stage: typed.stage,
     gateId: typed.gateId,
     reason: typed.reason,
-    demotedAt: typed.demotedAt
+    demotedAt: typed.demotedAt,
+    kind,
+    payload
   };
 }
 
@@ -309,6 +339,9 @@ export function classifyReconciliationNotices(
   for (const notice of notices) {
     if (notice.runId !== flowState.activeRunId) {
       staleRun.push(notice);
+      continue;
+    }
+    if (notice.kind === "closeout_substate_demotion") {
       continue;
     }
     const stageCatalog = flowState.stageGateCatalog[notice.stage];
@@ -804,10 +837,10 @@ export async function reconcileAndWriteCurrentStageGateCatalog(
 
   if (reconciliation.demotedGateIds.length > 0) {
     const existing = new Set(
-      noticesPayload.notices.map((notice) => `${notice.runId}:${notice.stage}:${notice.gateId}`)
+      noticesPayload.notices.map((notice) => `${notice.runId}:${notice.stage}:${notice.gateId}:${notice.kind ?? "gate_demotion"}`)
     );
     for (const gateId of reconciliation.demotedGateIds) {
-      const dedupeKey = `${effectiveState.activeRunId}:${reconciliation.stage}:${gateId}`;
+      const dedupeKey = `${effectiveState.activeRunId}:${reconciliation.stage}:${gateId}:gate_demotion`;
       if (existing.has(dedupeKey)) {
         continue;
       }
@@ -818,7 +851,8 @@ export async function reconcileAndWriteCurrentStageGateCatalog(
         stage: reconciliation.stage,
         gateId,
         reason: "demoted from passed to blocked during gate reconciliation (missing evidence)",
-        demotedAt: ts
+        demotedAt: ts,
+        kind: "gate_demotion"
       });
       existing.add(dedupeKey);
       noticesChanged = true;

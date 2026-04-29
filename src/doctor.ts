@@ -1952,6 +1952,25 @@ export async function doctorChecks(projectRoot: string, options: DoctorOptions =
           ? `active reconciliation notices for run "${flowState.activeRunId}": ${formatNoticeList(noticeBuckets.activeBlocked)}`
           : `no active reconciliation notices in ${RECONCILIATION_NOTICES_REL_PATH}`
   });
+  const closeoutDemotions = reconciliationNotices.notices.filter((notice) =>
+    notice.runId === flowState.activeRunId && notice.kind === "closeout_substate_demotion"
+  );
+  const closeoutDemotionSummary = closeoutDemotions
+    .slice(0, 5)
+    .map((notice) => {
+      if (notice.payload) {
+        return `${notice.payload.previous} -> ${notice.payload.next} (${notice.payload.reason})`;
+      }
+      return notice.reason;
+    })
+    .join("; ");
+  checks.push({
+    name: "warning:state:closeout_substate_demotion",
+    ok: closeoutDemotions.length === 0,
+    details: closeoutDemotions.length === 0
+      ? "no closeout shipSubstate demotion notices for the active run"
+      : `warning: closeout shipSubstate was demoted for active run "${flowState.activeRunId}" (${closeoutDemotionSummary}). This usually indicates hand-edited flow-state; continue /cc closeout or repair the state intentionally.`
+  });
 
   const activeTrack = flowState.track ?? "standard";
   const trackStageList = TRACK_STAGES[activeTrack];

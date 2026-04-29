@@ -47,6 +47,11 @@ function requiredGateEvidenceJson(stage: Parameters<typeof stageSchema>[0]): str
   return JSON.stringify(evidence);
 }
 
+const PROACTIVE_WAIVER_FLAGS = [
+  "--accept-proactive-waiver",
+  "--accept-proactive-waiver-reason=unit_test_proactive"
+] as const;
+
 async function writeBrainstormArtifact(
   root: string,
   learningsSection = "- None this stage."
@@ -533,7 +538,15 @@ describe("internal advance-stage commands", () => {
     const evidenceJson = requiredGateEvidenceJson("brainstorm");
     const code = await runInternalCommand(
       root,
-      ["advance-stage", "brainstorm", `--evidence-json=${evidenceJson}`, "--waive-delegation=product-manager,critic", "--waiver-reason=unit_test", "--quiet"],
+      [
+        "advance-stage",
+        "brainstorm",
+        `--evidence-json=${evidenceJson}`,
+        "--waive-delegation=product-manager,critic",
+        "--waiver-reason=unit_test",
+        ...PROACTIVE_WAIVER_FLAGS,
+        "--quiet"
+      ],
       captured.io
     );
 
@@ -574,6 +587,58 @@ describe("internal advance-stage commands", () => {
 
     expect(code).toBe(1);
     expect(captured.stderr()).toContain("missing --evidence-json entries for passed gates");
+  });
+
+  it("advance-stage fails by default when proactive delegations are missing, then allows explicit user-flag waiver", async () => {
+    const root = await createTempProject("internal-advance-stage-proactive-waiver-required");
+    await ensureRunSystem(root);
+    await writeBrainstormArtifact(root);
+
+    const evidenceJson = requiredGateEvidenceJson("brainstorm");
+    const blocked = captureIo();
+    const blockedCode = await runInternalCommand(
+      root,
+      [
+        "advance-stage",
+        "brainstorm",
+        `--evidence-json=${evidenceJson}`,
+        "--waive-delegation=product-manager,critic",
+        "--waiver-reason=unit_test",
+        "--quiet"
+      ],
+      blocked.io
+    );
+    expect(blockedCode).toBe(1);
+    expect(blocked.stderr()).toContain("proactive delegation evidence is missing");
+    expect(blocked.stderr()).toContain("--accept-proactive-waiver");
+    expect(blocked.stderr()).toContain("researcher (when:");
+
+    const accepted = captureIo();
+    const acceptedCode = await runInternalCommand(
+      root,
+      [
+        "advance-stage",
+        "brainstorm",
+        `--evidence-json=${evidenceJson}`,
+        "--waive-delegation=product-manager,critic",
+        "--waiver-reason=unit_test",
+        "--accept-proactive-waiver",
+        "--accept-proactive-waiver-reason=unit_test_proactive",
+        "--quiet"
+      ],
+      accepted.io
+    );
+    expect(acceptedCode, accepted.stderr()).toBe(0);
+
+    const ledger = await readDelegationLedger(root);
+    const proactiveWaiver = ledger.entries.find((entry) =>
+      entry.stage === "brainstorm" &&
+      entry.agent === "researcher" &&
+      entry.mode === "proactive"
+    );
+    expect(proactiveWaiver?.status).toBe("waived");
+    expect(proactiveWaiver?.waiverReason).toBe("unit_test_proactive");
+    expect(proactiveWaiver?.acceptedBy).toBe("user-flag");
   });
 
   it("advance-stage enforces structured evidence for tdd_verified_before_complete", async () => {
@@ -650,6 +715,7 @@ describe("internal advance-stage commands", () => {
         `--evidence-json=${JSON.stringify(malformedEvidence)}`,
         "--waive-delegation=planner,critic",
         "--waiver-reason=unit_test",
+        ...PROACTIVE_WAIVER_FLAGS,
         "--quiet"
       ],
       captured.io
@@ -836,6 +902,7 @@ describe("internal advance-stage commands", () => {
         `--evidence-json=${JSON.stringify(evidence)}`,
         "--waive-delegation=architect,test-author",
         "--waiver-reason=unit_test",
+        ...PROACTIVE_WAIVER_FLAGS,
         "--quiet"
       ],
       captured.io
@@ -878,6 +945,7 @@ describe("internal advance-stage commands", () => {
         `--evidence-json=${JSON.stringify(evidence)}`,
         "--waive-delegation=architect,test-author",
         "--waiver-reason=unit_test",
+        ...PROACTIVE_WAIVER_FLAGS,
         "--quiet"
       ],
       captured.io
@@ -1104,6 +1172,7 @@ process.stdout.write(JSON.stringify({ hook: process.argv[2] }) + "\\n");
         `--evidence-json=${JSON.stringify(evidence)}`,
         "--waive-delegation=reviewer,security-reviewer",
         "--waiver-reason=unit_test",
+        ...PROACTIVE_WAIVER_FLAGS,
         "--quiet"
       ],
       captured.io
@@ -1194,7 +1263,8 @@ process.stdout.write(JSON.stringify({ hook: process.argv[2] }) + "\\n");
         }),
         "--passed=brainstorm_approaches_compared,brainstorm_direction_approved,brainstorm_artifact_reviewed",
         "--waive-delegation=product-manager,critic",
-        "--waiver-reason=unit_test"
+        "--waiver-reason=unit_test",
+        ...PROACTIVE_WAIVER_FLAGS
       ],
       io.io
     );
@@ -1255,7 +1325,8 @@ process.stdout.write(JSON.stringify({ hook: process.argv[2] }) + "\\n");
           brainstorm_artifact_reviewed: "artifact reviewed in chat"
         }),
         "--waive-delegation=product-manager,critic",
-        "--waiver-reason=unit_test"
+        "--waiver-reason=unit_test",
+        ...PROACTIVE_WAIVER_FLAGS
       ],
       io.io
     );
@@ -1281,7 +1352,15 @@ process.stdout.write(JSON.stringify({ hook: process.argv[2] }) + "\\n");
     const evidenceJson = requiredGateEvidenceJson("brainstorm");
     const code = await runInternalCommand(
       root,
-      ["advance-stage", "brainstorm", `--evidence-json=${evidenceJson}`, "--waive-delegation=product-manager,critic", "--waiver-reason=unit_test", "--quiet"],
+      [
+        "advance-stage",
+        "brainstorm",
+        `--evidence-json=${evidenceJson}`,
+        "--waive-delegation=product-manager,critic",
+        "--waiver-reason=unit_test",
+        ...PROACTIVE_WAIVER_FLAGS,
+        "--quiet"
+      ],
       captured.io
     );
 

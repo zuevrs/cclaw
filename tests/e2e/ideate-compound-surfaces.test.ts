@@ -26,7 +26,7 @@ describe("ideate utility surface", () => {
     // Persisted artifact is a hard-gate, not a suggestion.
     expect(ideateContract).toContain(".cclaw/artifacts/ideate-<YYYY-MM-DD-slug>.md");
     expect(ideateSkill).toContain(".cclaw/artifacts/ideate-<YYYY-MM-DD-slug>.md");
-    expect(ideateSkill).toMatch(/always produce the artifact file on disk/i);
+    expect(ideateSkill).toMatch(/whenever ideation output is produced, persist the artifact file on disk/i);
 
     // Must not mutate flow-state (utility skill, not a stage).
     expect(ideateSkill).toMatch(/do not mutate .*flow-state\.json/i);

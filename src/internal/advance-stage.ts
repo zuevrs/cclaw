@@ -6,7 +6,11 @@ import type { Writable } from "node:stream";
 import { resolveArtifactPath } from "../artifact-paths.js";
 import { RUNTIME_ROOT, SHIP_FINALIZATION_MODES } from "../constants.js";
 import { ensureDir } from "../fs-utils.js";
-import { stageAutoSubagentDispatch, stageSchema } from "../content/stage-schema.js";
+import {
+  stageAutoSubagentDispatch,
+  stageSchema,
+  type StageAutoSubagentDispatch
+} from "../content/stage-schema.js";
 import {
   appendDelegation,
   checkMandatoryDelegations,
@@ -53,6 +57,8 @@ interface AdvanceStageArgs {
   evidenceByGate: Record<string, string>;
   waiveDelegations: string[];
   waiverReason?: string;
+  acceptProactiveWaiver: boolean;
+  acceptProactiveWaiverReason?: string;
   quiet: boolean;
   json: boolean;
 }
@@ -122,6 +128,10 @@ interface InternalValidationReport {
     ok: boolean;
     issues: string[];
   };
+}
+
+interface ProactiveDelegationTraceResult {
+  missingRules: StageAutoSubagentDispatch[];
 }
 
 const AUTO_REVIEW_LOOP_GATE_BY_STAGE: Partial<Record<FlowStage, string>> = {
@@ -582,6 +592,8 @@ function parseAdvanceStageArgs(tokens: string[]): AdvanceStageArgs {
   let passed: string[] = [];
   let waiveDelegations: string[] = [];
   let waiverReason: string | undefined;
+  let acceptProactiveWaiver = false;
+  let acceptProactiveWaiverReason: string | undefined;
   let quiet = false;
   let json = false;
 
@@ -647,6 +659,22 @@ function parseAdvanceStageArgs(tokens: string[]): AdvanceStageArgs {
       waiverReason = token.slice("--waiver-reason=".length).trim();
       continue;
     }
+    if (token === "--accept-proactive-waiver") {
+      acceptProactiveWaiver = true;
+      continue;
+    }
+    if (token === "--accept-proactive-waiver-reason") {
+      if (!nextToken || nextToken.startsWith("--")) {
+        throw new Error("--accept-proactive-waiver-reason requires a text value.");
+      }
+      acceptProactiveWaiverReason = nextToken.trim();
+      i += 1;
+      continue;
+    }
+    if (token.startsWith("--accept-proactive-waiver-reason=")) {
+      acceptProactiveWaiverReason = token.slice("--accept-proactive-waiver-reason=".length).trim();
+      continue;
+    }
     throw new Error(`Unknown flag for internal advance-stage: ${token}`);
   }
 
@@ -656,6 +684,8 @@ function parseAdvanceStageArgs(tokens: string[]): AdvanceStageArgs {
     evidenceByGate: parseEvidenceByGate(evidenceJson),
     waiveDelegations: unique(waiveDelegations),
     waiverReason,
+    acceptProactiveWaiver,
+    acceptProactiveWaiverReason,
     quiet,
     json
   };
@@ -1174,8 +1204,6 @@ async function runAdvanceStage(
       nextGuardEvidence[gateId] = provided.trim();
     }
   }
-  await ensureProactiveDelegationTrace(projectRoot, args.stage);
-
   const nextStageCatalog: StageGateState = {
     required: [...catalog.required],
     recommended: [...catalog.recommended],
@@ -1324,6 +1352,39 @@ async function runAdvanceStage(
         `- completed-stage closure issues: ${validation.completedStages.issues.join(" | ")}\n`
       );
     }
+    return 1;
+  }
+
+  const proactiveTrace = await ensureProactiveDelegationTrace(projectRoot, args.stage, {
+    acceptWaiver: args.acceptProactiveWaiver,
+    waiverReason: args.acceptProactiveWaiverReason
+  });
+  if (proactiveTrace.missingRules.length > 0) {
+    const missingSummary = proactiveTrace.missingRules
+      .map((rule) => `${rule.agent} (when: ${rule.when})`)
+      .join(", ");
+    const nextAction =
+      "Run the proactive delegations listed above, or rerun stage-complete with " +
+      "--accept-proactive-waiver [--accept-proactive-waiver-reason=\"<why safe>\"] " +
+      "after explicit user approval.";
+    if (args.json) {
+      io.stdout.write(`${JSON.stringify({
+        ok: false,
+        command: "advance-stage",
+        stage: args.stage,
+        kind: "proactive-delegations-missing",
+        proactiveDelegations: proactiveTrace.missingRules.map((rule) => ({
+          agent: rule.agent,
+          when: rule.when,
+          skill: rule.skill ?? null
+        })),
+        nextActions: [nextAction]
+      })}\n`);
+    }
+    io.stderr.write(
+      `cclaw internal advance-stage: proactive delegation evidence is missing for stage "${args.stage}": ${missingSummary}.\n`
+    );
+    io.stderr.write(`  next action: ${nextAction}\n`);
     return 1;
   }
 
@@ -1504,28 +1565,39 @@ function completedStageClosureEvidenceIssues(flowState: FlowState): string[] {
   return issues;
 }
 
-async function ensureProactiveDelegationTrace(projectRoot: string, stage: FlowStage): Promise<void> {
+async function ensureProactiveDelegationTrace(
+  projectRoot: string,
+  stage: FlowStage,
+  options: {
+    acceptWaiver: boolean;
+    waiverReason?: string;
+  }
+): Promise<ProactiveDelegationTraceResult> {
   const proactiveRules = stageAutoSubagentDispatch(stage).filter((rule) => rule.mode === "proactive");
-  if (proactiveRules.length === 0) return;
+  if (proactiveRules.length === 0) return { missingRules: [] };
 
   const ledger = await readDelegationLedger(projectRoot);
   const currentRunEntries = ledger.entries.filter((entry) => entry.runId === ledger.runId);
-  for (const rule of proactiveRules) {
-    const alreadyRecorded = currentRunEntries.some(
-      (entry) => entry.stage === stage && entry.agent === rule.agent && entry.mode === "proactive"
-    );
-    if (alreadyRecorded) continue;
+  const missingRules = proactiveRules.filter((rule) => !currentRunEntries.some(
+    (entry) => entry.stage === stage && entry.agent === rule.agent && entry.mode === "proactive"
+  ));
+  if (missingRules.length === 0) return { missingRules: [] };
+  if (!options.acceptWaiver) return { missingRules };
+  const waiverReason = options.waiverReason?.trim() || "accepted via --accept-proactive-waiver";
+  for (const rule of missingRules) {
     await appendDelegation(projectRoot, {
       stage,
       agent: rule.agent,
       mode: "proactive",
       status: "waived",
-      waiverReason: "auto-recorded: proactive delegation was not explicitly triggered before stage completion",
+      waiverReason,
+      acceptedBy: "user-flag",
       conditionTrigger: rule.when,
       skill: rule.skill,
       ts: new Date().toISOString()
     });
   }
+  return { missingRules: [] };
 }
 
 async function pathExists(projectRoot: string, relPath: string): Promise<boolean> {

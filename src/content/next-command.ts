@@ -103,7 +103,7 @@ ${conversationLanguagePolicyMarkdown()}
 
 → Load **\`${RUNTIME_ROOT}/skills/<skillFolder>/SKILL.md\`** for the current stage.
 → Execute that stage's protocol. The stage skill handles the full interaction including STOP points and gate tracking.
-→ Stage completion must use \`node .cclaw/hooks/stage-complete.mjs <currentStage>\` (canonical), which validates delegations + gate evidence before mutating \`flow-state.json\`.
+→ Stage completion must use \`node .cclaw/hooks/stage-complete.mjs <currentStage>\` (canonical), which validates delegations + gate evidence before mutating \`flow-state.json\`. If proactive delegations are intentionally skipped, rerun with \`--accept-proactive-waiver\` (optionally \`--accept-proactive-waiver-reason="<why safe>"\`) only after explicit user approval.
 
 ${ralphLoopContractSnippet()}
 
@@ -260,7 +260,7 @@ If reconciliation warnings were emitted in Step 1, treat them as a pre-advance s
 Load the current stage skill:
 - \`${RUNTIME_ROOT}/skills/<skillFolder>/SKILL.md\`
 
-Execute the stage protocol. The stage skill handles interaction, STOP points, gate tracking, and stage completion via \`node .cclaw/hooks/stage-complete.mjs <stage>\` (canonical flow-state mutation path).
+Execute the stage protocol. The stage skill handles interaction, STOP points, gate tracking, and stage completion via \`node .cclaw/hooks/stage-complete.mjs <stage>\` (canonical flow-state mutation path). If proactive delegations are intentionally skipped, rerun with \`--accept-proactive-waiver\` (optionally \`--accept-proactive-waiver-reason="<why safe>"\`) only after explicit user approval.
 
 ${ralphLoopContractSnippet()}
 

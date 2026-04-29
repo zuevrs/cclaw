@@ -316,7 +316,15 @@ fs.appendFileSync(${JSON.stringify(callsPath)}, process.argv.slice(2).join(" ") 
       root,
       ".cclaw/hooks/stage-complete.mjs",
       scriptBody,
-      ["brainstorm", "--evidence-json", requiredGateEvidenceJson("brainstorm"), "--waive-delegation=product-manager,critic", "--waiver-reason=unit_test"],
+      [
+        "brainstorm",
+        "--evidence-json",
+        requiredGateEvidenceJson("brainstorm"),
+        "--waive-delegation=product-manager,critic",
+        "--waiver-reason=unit_test",
+        "--accept-proactive-waiver",
+        "--accept-proactive-waiver-reason=unit_test_proactive"
+      ],
       "",
       process.platform === "win32" ? { PATH: "", Path: "" } : { PATH: "" }
     );
@@ -354,7 +362,9 @@ fs.appendFileSync(${JSON.stringify(callsPath)}, process.argv.slice(2).join(" ") 
         `--evidence-json=${evidence}`,
         "--passed=brainstorm_approaches_compared,brainstorm_direction_approved,brainstorm_artifact_reviewed",
         "--waive-delegation=product-manager,critic",
-        "--waiver-reason=unit_test"
+        "--waiver-reason=unit_test",
+        "--accept-proactive-waiver",
+        "--accept-proactive-waiver-reason=unit_test_proactive"
       ],
       "",
       process.platform === "win32" ? { PATH: "", Path: "" } : { PATH: "" }

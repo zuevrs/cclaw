@@ -284,6 +284,24 @@ describe("runs system", () => {
 
     const read = await readFlowState(root);
     expect(read.closeout.shipSubstate).toBe("retro_review");
+    const notices = JSON.parse(
+      await fs.readFile(path.join(root, ".cclaw/state/reconciliation-notices.json"), "utf8")
+    ) as {
+      notices?: Array<{
+        runId?: string;
+        kind?: string;
+        gateId?: string;
+        payload?: { previous?: string; next?: string; reason?: string };
+      }>;
+    };
+    const demotionNotice = notices.notices?.find((notice) =>
+      notice.runId === read.activeRunId &&
+      notice.kind === "closeout_substate_demotion"
+    );
+    expect(demotionNotice?.gateId).toBe("closeout.shipSubstate");
+    expect(demotionNotice?.payload?.previous).toBe("ready_to_archive");
+    expect(demotionNotice?.payload?.next).toBe("retro_review");
+    expect(demotionNotice?.payload?.reason).toContain("retro closeout leg is incomplete");
     await expect(archiveRun(root, "Tampered Closeout")).rejects.toThrow(/ready_to_archive/i);
   });
 

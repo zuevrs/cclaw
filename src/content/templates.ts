@@ -304,7 +304,7 @@ RECOMMENDATION: <option letter — one-line rationale tying back to premise chal
 |  |  |  |  |
 
 ## Reference Pull
-- Optional evidence from \`/Users/zuevrs/Downloads/references\`; list accepted/rejected ideas or \`Not needed - compact scope\`.
+- Optional evidence from \`<repo-relative references dir>\`; list accepted/rejected ideas or \`Not needed - compact scope\`.
 
 ## Ambitious Alternatives
 - Optional for SCOPE EXPANSION/SELECTIVE; list larger alternatives and disposition.
