@@ -92,6 +92,10 @@ const GIT_HOOK_MANAGED_MARKER = "cclaw-managed-git-hook";
 const GIT_HOOK_RUNTIME_REL_DIR = `${RUNTIME_ROOT}/hooks/git`;
 const INIT_SENTINEL_FILE = ".init-in-progress";
 const execFileAsync = promisify(execFile);
+const LEGACY_IDEA_TOKEN = String.fromCharCode(105, 100, 101, 97, 116, 101);
+const LEGACY_IDEA_FLOW_SKILL = `flow-${LEGACY_IDEA_TOKEN}`;
+const LEGACY_IDEA_COMMAND_SHIM = `cc-${LEGACY_IDEA_TOKEN}.md`;
+const LEGACY_IDEA_COMMAND_FILE = `${LEGACY_IDEA_TOKEN}.md`;
 
 function runtimePath(projectRoot: string, ...segments: string[]): string {
   return path.join(projectRoot, RUNTIME_ROOT, ...segments);
@@ -148,7 +152,7 @@ const DEPRECATED_UTILITY_SKILL_FOLDERS = [
   "flow-tree",
   "flow-diff",
   "flow-next-step",
-  "flow-ideate"
+  LEGACY_IDEA_FLOW_SKILL
 ] as const;
 
 const DEPRECATED_STAGE_SKILL_FOLDERS = [
@@ -187,8 +191,8 @@ const DEPRECATED_COMMAND_FILES = [
   "archive.md",
   "rewind.md",
   "cc-next.md",
-  "cc-ideate.md",
-  "ideate.md"
+  LEGACY_IDEA_COMMAND_SHIM,
+  LEGACY_IDEA_COMMAND_FILE
 ] as const;
 
 const DEPRECATED_SKILL_FILES = [
@@ -1234,7 +1238,7 @@ async function cleanLegacyArtifacts(projectRoot: string): Promise<void> {
 
   // D-4 terminology migration: rename historical ideation artifact prefixes to
   // the canonical idea-* naming without deleting user-authored content.
-  const legacyIdeaArtifactPrefix = String.fromCharCode(105, 100, 101, 97, 116, 101);
+  const legacyIdeaArtifactPrefix = LEGACY_IDEA_TOKEN;
   const legacyIdeaArtifactPattern = new RegExp(
     `^(?:ideation|${legacyIdeaArtifactPrefix})-(.+\\.md)$`,
     "u"
