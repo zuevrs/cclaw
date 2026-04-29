@@ -179,6 +179,24 @@ ${SEED_SHELF_SECTION}
 - **Assumptions:**
 - **Open questions (or "None"):**
 
+## Victory Detector
+- Loop status file: \`.cclaw/state/early-loop.json\`
+- Iteration: <n>/<maxIterations>
+- Open concerns: <count>
+- Convergence guard: clear | tripped
+- Decision: iterate | ready_for_advance | escalate_for_human_override
+
+## Critic Pass
+After each producer iteration append one JSON line to \`.cclaw/state/early-loop-log.jsonl\`:
+
+${MARKDOWN_CODE_FENCE}json
+{"ts":"<ISO-8601>","runId":"<run-id>","stage":"brainstorm","iteration":1,"concerns":[{"id":"C-1","severity":"important","locator":"Approaches > Row 2","summary":"<specific concern>"}],"resolvedConcernIds":[]}
+${MARKDOWN_CODE_FENCE}
+
+- \`concerns\` lists unresolved concerns after this pass.
+- Keep concern IDs stable across iterations so convergence checks stay meaningful.
+- Include \`resolvedConcernIds\` when a previously open concern is explicitly closed.
+
 ## Learnings
 - None this stage.
 `,
@@ -384,6 +402,24 @@ ${SEED_SHELF_SECTION}
 - Deferred:
 - Explicitly excluded:
 - Next-stage handoff: identify whether the next stage is \`design\` (standard track) or \`spec\` (medium track), and list the exact artifacts/decisions it must carry forward.
+
+## Victory Detector
+- Loop status file: \`.cclaw/state/early-loop.json\`
+- Iteration: <n>/<maxIterations>
+- Open concerns: <count>
+- Convergence guard: clear | tripped
+- Decision: iterate | ready_for_advance | escalate_for_human_override
+
+## Critic Pass
+After each producer iteration append one JSON line to \`.cclaw/state/early-loop-log.jsonl\`:
+
+${MARKDOWN_CODE_FENCE}json
+{"ts":"<ISO-8601>","runId":"<run-id>","stage":"scope","iteration":1,"concerns":[{"id":"C-1","severity":"important","locator":"Scope Contract > In Scope","summary":"<specific concern>"}],"resolvedConcernIds":[]}
+${MARKDOWN_CODE_FENCE}
+
+- \`concerns\` lists unresolved concerns after this pass.
+- Keep concern IDs stable across iterations so convergence checks stay meaningful.
+- Include \`resolvedConcernIds\` when a previously open concern is explicitly closed.
 
 ## Learnings
 - None this stage.
@@ -695,6 +731,24 @@ ${SEED_SHELF_SECTION}
 
 ## Learning Capture Hint
 For meaningful design work, replace the Learnings sentinel with 1-3 JSON learning bullets, for example: \`- {"type":"lesson","trigger":"when design chooses a risky fallback path","action":"record the switch trigger and rollback signal in Spec Handoff","confidence":"medium","domain":"architecture","stage":"design"}\`
+
+## Victory Detector
+- Loop status file: \`.cclaw/state/early-loop.json\`
+- Iteration: <n>/<maxIterations>
+- Open concerns: <count>
+- Convergence guard: clear | tripped
+- Decision: iterate | ready_for_advance | escalate_for_human_override
+
+## Critic Pass
+After each producer iteration append one JSON line to \`.cclaw/state/early-loop-log.jsonl\`:
+
+${MARKDOWN_CODE_FENCE}json
+{"ts":"<ISO-8601>","runId":"<run-id>","stage":"design","iteration":1,"concerns":[{"id":"C-1","severity":"important","locator":"Engineering Lock > Row 1","summary":"<specific concern>"}],"resolvedConcernIds":[]}
+${MARKDOWN_CODE_FENCE}
+
+- \`concerns\` lists unresolved concerns after this pass.
+- Keep concern IDs stable across iterations so convergence checks stay meaningful.
+- Include \`resolvedConcernIds\` when a previously open concern is explicitly closed.
 
 ## Learnings
 - None this stage.

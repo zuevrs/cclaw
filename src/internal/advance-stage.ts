@@ -38,7 +38,9 @@ import { runCompoundReadinessCommand } from "./compound-readiness.js";
 import { runHookManifestCommand } from "./hook-manifest.js";
 import { runEnvelopeValidateCommand } from "./envelope-validate.js";
 import { runTddLoopStatusCommand } from "./tdd-loop-status.js";
+import { runEarlyLoopStatusCommand } from "./early-loop-status.js";
 import { runTddRedEvidenceCommand } from "./tdd-red-evidence.js";
+import { runRuntimeIntegrityCommand } from "./runtime-integrity.js";
 import { extractReviewLoopEnvelopeFromArtifact } from "../content/review-loop.js";
 import {
   PASS_STATUS_PATTERN,
@@ -1988,7 +1990,7 @@ export async function runInternalCommand(
   const [subcommand, ...tokens] = argv;
   if (!subcommand) {
     io.stderr.write(
-      "cclaw internal requires a subcommand: advance-stage | start-flow | cancel-run | rewind | verify-flow-state-diff | verify-current-state | envelope-validate | tdd-red-evidence | tdd-loop-status | compound-readiness | hook-manifest | hook\n"
+      "cclaw internal requires a subcommand: advance-stage | start-flow | cancel-run | rewind | verify-flow-state-diff | verify-current-state | envelope-validate | tdd-red-evidence | tdd-loop-status | early-loop-status | compound-readiness | runtime-integrity | hook-manifest | hook\n"
     );
     return 1;
   }
@@ -2021,8 +2023,14 @@ export async function runInternalCommand(
     if (subcommand === "tdd-loop-status") {
       return await runTddLoopStatusCommand(projectRoot, tokens, io);
     }
+    if (subcommand === "early-loop-status") {
+      return await runEarlyLoopStatusCommand(projectRoot, tokens, io);
+    }
     if (subcommand === "compound-readiness") {
       return await runCompoundReadinessCommand(projectRoot, tokens, io);
+    }
+    if (subcommand === "runtime-integrity") {
+      return await runRuntimeIntegrityCommand(projectRoot, tokens, io);
     }
     if (subcommand === "hook-manifest") {
       return await runHookManifestCommand(projectRoot, tokens, io);
@@ -2031,7 +2039,7 @@ export async function runInternalCommand(
       return await runHookCommand(projectRoot, parseHookArgs(tokens), io);
     }
     io.stderr.write(
-      `Unknown internal subcommand: ${subcommand}. Expected advance-stage | start-flow | cancel-run | rewind | verify-flow-state-diff | verify-current-state | envelope-validate | tdd-red-evidence | tdd-loop-status | compound-readiness | hook-manifest | hook\n`
+      `Unknown internal subcommand: ${subcommand}. Expected advance-stage | start-flow | cancel-run | rewind | verify-flow-state-diff | verify-current-state | envelope-validate | tdd-red-evidence | tdd-loop-status | early-loop-status | compound-readiness | runtime-integrity | hook-manifest | hook\n`
     );
     return 1;
   } catch (err) {

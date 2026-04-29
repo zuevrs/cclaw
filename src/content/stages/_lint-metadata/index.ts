@@ -8,6 +8,8 @@ const STAGE_POLICY_NEEDLES: Record<FlowStage, string[]> = {
     "Explore project context",
     "One question at a time",
     "2-3 architecturally distinct approaches",
+    "Victory Detector",
+    "Critic Pass",
     "State what is being approved",
     "Self-review before handoff",
     "Do NOT implement, scaffold, or modify behavior"
@@ -19,7 +21,9 @@ const STAGE_POLICY_NEEDLES: Record<FlowStage, string[]> = {
     "Discretion Areas",
     "NOT in scope",
     "Premise Challenge",
-    "Locked Decisions"
+    "Locked Decisions",
+    "Victory Detector",
+    "Critic Pass"
   ],
   design: [
     "Parallel Research Fleet",
@@ -27,6 +31,8 @@ const STAGE_POLICY_NEEDLES: Record<FlowStage, string[]> = {
     "Data Flow",
     "Failure Modes and Mitigation",
     "Performance Budget",
+    "Victory Detector",
+    "Critic Pass",
     "One issue at a time"
   ],
   spec: ["Acceptance Criteria", "Constraints", "Assumptions Before Finalization", "Testability", "approved spec", "Edge Cases"],

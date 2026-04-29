@@ -56,6 +56,7 @@ export const DESIGN: StageSchemaInput = {
       "Review core risk areas — existing system fit, data/state flow, critical path, security/trust boundaries, tests, performance budget, observability/debuggability, rollout/rollback, rejected alternatives, and spec handoff.",
       "**ADR + pre-mortem contract** — capture ADR-style decision rows (context, decision, alternatives, consequences), run a pre-mortem on likely failures, and map each critical flow to a validating test and diagram anchor before lock.",
       "Critic pass — run/reconcile adversarial second opinion on architecture, coupling, failure modes, and cheaper alternatives; record outcomes per the Design Outside Voice Loop policy.",
+      "**Run early Ralph loop discipline** — after each producer iteration, append a `Critic Pass` JSONL row to `.cclaw/state/early-loop-log.jsonl`, refresh `.cclaw/state/early-loop.json`, and iterate until open concerns clear or convergence guard escalates.",
       "Run optional stale-diagram audit only when configured.",
       "Capture leftovers — seed high-upside deferred ideas, list unresolved decisions with defaults, document distribution for new artifact types, and cross-reference deferred items to scope or unresolved decisions."
     ],
@@ -103,6 +104,7 @@ export const DESIGN: StageSchemaInput = {
       "Observability and deployment plans are explicit for critical flows.",
       "Outside-voice findings and dispositions are recorded (accept/reject/defer).",
       "Design outside-voice loop summary includes iteration count and quality-score trajectory with explicit stop reason and unresolved concerns.",
+      "Early-loop status is reflected via `Victory Detector` / `Critic Pass` sections and `.cclaw/state/early-loop.json` when concerns remain.",
       "When a second opinion is used, record source, critique frame, and disposition (accept/reject/defer) with rationale.",
       "Adversarial lock table includes chosen path, shadow alternative, switch trigger, failure/rescue/degraded behavior, and verification evidence, with reference-grade contracts for mirrored patterns when applicable.",
       "Architecture Decision Record (ADR) section captures context, decision, alternatives, consequences, and reversal trigger for major choices.",
@@ -185,6 +187,8 @@ export const DESIGN: StageSchemaInput = {
       { section: "Spec Handoff", required: true, validationRule: "Exact requirements, design decisions, risks, test/perf expectations, and unresolved questions that spec must carry forward." },
       { section: "Outside Voice Findings", required: false, validationRule: "Critic pass: list adversarial findings and disposition (accept/reject/defer) with rationale per material finding." },
       { section: "Design Outside Voice Loop", required: false, validationRule: `Record iteration table with quality score per iteration, stop reason, and unresolved concerns. Enforce ${reviewLoopPolicySummary("design")}` },
+      { section: "Victory Detector", required: false, validationRule: "Recommended early-loop checkpoint: cite `.cclaw/state/early-loop.json`, current iteration/maxIterations, open concern count, convergence status, and iterate/ready/escalate decision." },
+      { section: "Critic Pass", required: false, validationRule: "Recommended producer/critic log contract: each iteration appends one JSONL row to `.cclaw/state/early-loop-log.jsonl` with runId, stage, iteration, and open concerns." },
       { section: "NOT in scope", required: false, validationRule: "Work considered and explicitly deferred with one-line rationale." },
       { section: "Completion Dashboard", required: true, validationRule: "Lists every review section with status (clear / issues-found-resolved / issues-open), critical/open gap counts, decision count, and unresolved items (or 'None')." }
     ],

@@ -139,6 +139,18 @@ export interface CompoundConfig {
   recurrenceThreshold?: number;
 }
 
+/**
+ * Early-stage Ralph loop policy for brainstorm/scope/design.
+ *
+ * - enabled: when false, skip early-loop gate/diagnostics and hook writes.
+ * - maxIterations: capped producer/critic iterations before convergence
+ *   escalation. Defaults to 3.
+ */
+export interface EarlyLoopConfig {
+  enabled?: boolean;
+  maxIterations?: number;
+}
+
 export interface IronLawsConfig {
   /**
    * Per-law escape hatch: list the iron-law ids that must always be strict,
@@ -204,6 +216,8 @@ export interface CclawConfig {
   tdd?: TddPathConfig;
   /** Compound-stage recurrence policy overrides. */
   compound?: CompoundConfig;
+  /** Early-stage producer/critic loop policy overrides. */
+  earlyLoop?: EarlyLoopConfig;
   /** When true, cclaw installs managed git pre-commit/pre-push wrappers. */
   gitHookGuards?: boolean;
   /** Default flow track for new runs (quick = shortened path, standard = full pipeline). */

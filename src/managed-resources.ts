@@ -248,7 +248,16 @@ export class ManagedResourceSession {
     const manifestPath = path.join(options.projectRoot, MANAGED_RESOURCE_MANIFEST_REL_PATH);
     let previous: ManagedResourceManifest | null = null;
     if (await exists(manifestPath)) {
-      const raw = JSON.parse(await fs.readFile(manifestPath, "utf8")) as unknown;
+      let raw: unknown;
+      try {
+        raw = JSON.parse(await fs.readFile(manifestPath, "utf8")) as unknown;
+      } catch (error) {
+        throw new Error(
+          `[sync fail-fast] Managed resource manifest is corrupt JSON (${MANAGED_RESOURCE_MANIFEST_REL_PATH}): ${
+            error instanceof Error ? error.message : String(error)
+          }. Fix/remove the manifest and rerun \`npx cclaw-cli sync\`.`
+        );
+      }
       const issues = validateManagedResourceManifest(raw);
       if (issues.length > 0) {
         const detail = issues.slice(0, 12)

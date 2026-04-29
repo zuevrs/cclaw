@@ -44,8 +44,6 @@ export interface KnowledgeSeedEntry {
   stage?: FlowStage | null;
   origin_stage?: FlowStage | null;
   origin_run?: string | null;
-  /** @deprecated Use `origin_run`. Accepted only for legacy JSONL/backfill inputs. */
-  origin_feature?: string | null;
   frequency?: number;
   universality?: KnowledgeEntryUniversality;
   maturity?: KnowledgeEntryMaturity;
@@ -365,13 +363,8 @@ KNOWLEDGE_ALLOWED_KEYS.add("severity");
 KNOWLEDGE_ALLOWED_KEYS.add("supersedes");
 KNOWLEDGE_ALLOWED_KEYS.add("superseded_by");
 
-export interface ValidateKnowledgeEntryOptions {
-  allowLegacyOriginFeature?: boolean;
-  allowLegacyIdeaSource?: boolean;
-}
-
-function keyAllowedInKnowledgeEntry(key: string, options: ValidateKnowledgeEntryOptions): boolean {
-  return KNOWLEDGE_ALLOWED_KEYS.has(key) || (options.allowLegacyOriginFeature === true && key === "origin_feature");
+function keyAllowedInKnowledgeEntry(key: string): boolean {
+  return KNOWLEDGE_ALLOWED_KEYS.has(key);
 }
 
 function knowledgePath(projectRoot: string): string {
@@ -433,21 +426,6 @@ function emptyKnowledgeSnapshot(): KnowledgeSnapshot {
   };
 }
 
-const LEGACY_IDEA_SOURCE = String.fromCharCode(105, 100, 101, 97, 116, 101);
-
-function normalizeLegacyKnowledgeEntry(entry: Record<string, unknown>): KnowledgeEntry {
-  const { origin_feature: legacyOriginRun, ...rest } = entry;
-  const source =
-    typeof entry.source === "string" && entry.source === LEGACY_IDEA_SOURCE
-      ? "idea"
-      : entry.source;
-  return {
-    ...rest,
-    origin_run: entry.origin_run ?? legacyOriginRun ?? null,
-    ...(source !== undefined ? { source } : {})
-  } as KnowledgeEntry;
-}
-
 function parseKnowledgeSnapshot(raw: string): KnowledgeSnapshot {
   const lines = stripBom(raw).split(/\r?\n/u);
   const entries: KnowledgeEntry[] = [];
@@ -460,15 +438,12 @@ function parseKnowledgeSnapshot(raw: string): KnowledgeSnapshot {
     if (trimmed.length === 0) continue;
     try {
       const parsed = JSON.parse(trimmed) as unknown;
-      const validated = validateKnowledgeEntry(parsed, {
-        allowLegacyOriginFeature: true,
-        allowLegacyIdeaSource: true
-      });
+      const validated = validateKnowledgeEntry(parsed);
       if (!validated.ok) {
         malformedLines += 1;
         continue;
       }
-      const entry = normalizeLegacyKnowledgeEntry(parsed as Record<string, unknown>);
+      const entry = parsed as KnowledgeEntry;
       entries.push(entry);
       const key = dedupeKey(entry);
       if (!keyToIndex.has(key)) {
@@ -527,8 +502,7 @@ function isNullableStage(value: unknown): value is FlowStage | null {
 }
 
 export function validateKnowledgeEntry(
-  entry: unknown,
-  options: ValidateKnowledgeEntryOptions = {}
+  entry: unknown
 ): { ok: boolean; errors: string[] } {
   const errors: string[] = [];
   if (!entry || typeof entry !== "object" || Array.isArray(entry)) {
@@ -537,19 +511,13 @@ export function validateKnowledgeEntry(
   const obj = entry as Record<string, unknown>;
 
   for (const key of Object.keys(obj)) {
-    if (!keyAllowedInKnowledgeEntry(key, options)) {
+    if (!keyAllowedInKnowledgeEntry(key)) {
       errors.push(`Unknown key "${key}" in knowledge entry.`);
     }
   }
   for (const key of KNOWLEDGE_REQUIRED_KEYS) {
     if (!Object.prototype.hasOwnProperty.call(obj, key)) {
-      if (
-        key !== "origin_run" ||
-        options.allowLegacyOriginFeature !== true ||
-        !Object.prototype.hasOwnProperty.call(obj, "origin_feature")
-      ) {
-        errors.push(`Missing required key "${key}".`);
-      }
+      errors.push(`Missing required key "${key}".`);
     }
   }
 
@@ -580,11 +548,7 @@ export function validateKnowledgeEntry(
   if (!isNullableStage(obj.origin_stage)) {
     errors.push(`origin_stage must be one of ${FLOW_STAGES.join(", ")} or null.`);
   }
-  const originRun = Object.prototype.hasOwnProperty.call(obj, "origin_run")
-    ? obj.origin_run
-    : options.allowLegacyOriginFeature === true
-      ? obj.origin_feature
-      : undefined;
+  const originRun = obj.origin_run;
   if (!isNullableString(originRun)) {
     errors.push("origin_run must be string or null.");
   }
@@ -630,10 +594,7 @@ export function validateKnowledgeEntry(
     obj.source === null ||
     (
       typeof obj.source === "string" &&
-      (
-        KNOWLEDGE_SOURCE_SET.has(obj.source as KnowledgeEntrySource) ||
-        (options.allowLegacyIdeaSource === true && obj.source === LEGACY_IDEA_SOURCE)
-      )
+      KNOWLEDGE_SOURCE_SET.has(obj.source as KnowledgeEntrySource)
     );
   if (!sourceAllowed) {
     errors.push("source must be one of: stage, retro, compound, idea, manual, or null.");
@@ -649,7 +610,7 @@ export function materializeKnowledgeEntry(
   const now = normalizeUtcIso(defaults.nowIso ?? nowUtcIso());
   const stage = seed.stage ?? defaults.stage ?? null;
   const originStage = seed.origin_stage ?? defaults.originStage ?? stage ?? null;
-  const originRun = seed.origin_run ?? seed.origin_feature ?? defaults.originRun ?? null;
+  const originRun = seed.origin_run ?? defaults.originRun ?? null;
   const source = seed.source ?? defaults.source ?? null;
   const entry: KnowledgeEntry = {
     type: seed.type,

@@ -1310,8 +1310,6 @@ export interface LearningSeedEntry {
   stage?: FlowStage | null;
   origin_stage?: FlowStage | null;
   origin_run?: string | null;
-  /** @deprecated Use `origin_run`. Accepted only for legacy learning bullets. */
-  origin_feature?: string | null;
   frequency?: number;
   universality?: LearningUniversality;
   maturity?: LearningMaturity;
@@ -1355,7 +1353,6 @@ const LEARNING_ALLOWED_KEYS = new Set([
   "stage",
   "origin_stage",
   "origin_run",
-  "origin_feature",
   "frequency",
   "universality",
   "maturity",
@@ -1450,9 +1447,6 @@ function parseLearningSeedEntry(raw: unknown, index: number): { ok: boolean; ent
   }
   if (obj.origin_run !== undefined && !isNullableString(obj.origin_run)) {
     return { ok: false, error: `Learnings bullet #${index} field "origin_run" must be string or null.` };
-  }
-  if (obj.origin_feature !== undefined && !isNullableString(obj.origin_feature)) {
-    return { ok: false, error: `Learnings bullet #${index} field "origin_feature" must be string or null.` };
   }
   if (obj.project !== undefined && !isNullableString(obj.project)) {
     return { ok: false, error: `Learnings bullet #${index} field "project" must be string or null.` };

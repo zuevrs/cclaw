@@ -52,6 +52,7 @@ export const BRAINSTORM: StageSchemaInput = {
       "**Compare 2-3 distinct approaches with stable Role/Upside columns** — Role values are `baseline` | `challenger` | `wild-card`; Upside is `low` | `modest` | `high` | `higher`; include real trade-offs, reuse notes, and reference-pattern source/disposition when a known pattern influenced the option; include exactly one challenger with explicit `high` or `higher` upside.",
       "**Collect reaction before recommending** — ask which option feels closest and what concern remains, then recommend based on that reaction.",
       "**Write the `Not Doing` list** — name 3-5 things this brainstorm explicitly is not committing to (vs. deferred). This protects scope from silent enlargement and the next stage from rework.",
+      "**Run early Ralph loop discipline** — after each producer iteration, append a `Critic Pass` JSONL row to `.cclaw/state/early-loop-log.jsonl`, refresh `.cclaw/state/early-loop.json`, and iterate until open concerns clear or convergence guard escalates.",
       "**Self-review before user approval** — re-read the artifact and patch contradictions, weak trade-offs, placeholders, ambiguity, and weak handoff language. Record the result in `Self-Review Notes` using the calibrated review format: `- Status: Approved` (or `Issues Found`), `- Patches applied:` with inline note or sub-bullets, `- Remaining concerns:` with inline note or sub-bullets. Use `Patches applied: None` and `Remaining concerns: None` when there is nothing to record.",
       "**Request explicit approval** — state exactly what direction is being approved; do not advance without approval and artifact review.",
       "**Handoff packet** — only after approval, produce a scope handoff packet with selected direction, why rejected options were rejected, explicit non-goals, unresolved questions, risk hints, and explicit drift from the initial ask so scope starts from locked upstream decisions instead of rediscovering intent."
@@ -90,6 +91,7 @@ export const BRAINSTORM: StageSchemaInput = {
       "2-3 approaches with trade-offs are recorded, including one higher-upside challenger option and reference-pattern source/disposition when applicable.",
       "User reaction to approaches is captured before final recommendation.",
       "Final recommendation explicitly reflects user reaction.",
+      "Early-loop status is reflected via `Victory Detector` / `Critic Pass` sections and `.cclaw/state/early-loop.json` when concerns remain.",
       "Selected Direction includes the handoff to the track-aware next stage: scope on standard, spec on medium when scope/design are skipped.",
       "When a promising option is parked, a seed file is created under `.cclaw/seeds/` and referenced in the artifact.",
       "Approved direction and approval marker are present.",
@@ -148,6 +150,8 @@ export const BRAINSTORM: StageSchemaInput = {
       { section: "Not Doing", required: false, validationRule: "Recommended: 3-5 explicitly non-committed items (distinct from deferred). Protects scope from silent enlargement and the next stage from rework." },
       { section: "Design", required: false, validationRule: "Must cover architecture, key components, and data flow scaled to complexity." },
       { section: "Visual Companion", required: false, validationRule: "If architecture/data-flow complexity is medium+, include compact ASCII/Mermaid diagram or explicitly justify omission." },
+      { section: "Victory Detector", required: false, validationRule: "Recommended early-loop checkpoint: cite `.cclaw/state/early-loop.json`, current iteration/maxIterations, open concern count, convergence status, and iterate/ready/escalate decision." },
+      { section: "Critic Pass", required: false, validationRule: "Recommended producer/critic log contract: each iteration appends one JSONL row to `.cclaw/state/early-loop-log.jsonl` with runId, stage, iteration, and open concerns." },
       { section: "Self-Review Notes", required: false, validationRule: "Recommended: use the calibrated review format — `- Status: Approved` (or `Issues Found`), `- Patches applied:` (inline note or sub-bullets, use `None` if nothing changed), `- Remaining concerns:` (inline note or sub-bullets, use `None` if nothing remains). Done before requesting user approval." },
       { section: "Assumptions and Open Questions", required: false, validationRule: "Must capture unresolved assumptions/open questions, or explicitly state none." }
     ],

@@ -72,6 +72,11 @@ import {
 } from "./harness-adapters.js";
 import { validateHookDocument } from "./hook-schema.js";
 import { detectHarnesses } from "./init-detect.js";
+import {
+  classifyCodexHooksFlag,
+  codexConfigPath,
+  readCodexConfig
+} from "./codex-feature-flag.js";
 import { CorruptFlowStateError, ensureRunSystem } from "./runs.js";
 import { FLOW_STAGES } from "./types.js";
 import type { CclawConfig, FlowTrack, HarnessId } from "./types.js";
@@ -92,10 +97,6 @@ const GIT_HOOK_MANAGED_MARKER = "cclaw-managed-git-hook";
 const GIT_HOOK_RUNTIME_REL_DIR = `${RUNTIME_ROOT}/hooks/git`;
 const INIT_SENTINEL_FILE = ".init-in-progress";
 const execFileAsync = promisify(execFile);
-const LEGACY_IDEA_TOKEN = String.fromCharCode(105, 100, 101, 97, 116, 101);
-const LEGACY_IDEA_FLOW_SKILL = `flow-${LEGACY_IDEA_TOKEN}`;
-const LEGACY_IDEA_COMMAND_SHIM = `cc-${LEGACY_IDEA_TOKEN}.md`;
-const LEGACY_IDEA_COMMAND_FILE = `${LEGACY_IDEA_TOKEN}.md`;
 
 function runtimePath(projectRoot: string, ...segments: string[]): string {
   return path.join(projectRoot, RUNTIME_ROOT, ...segments);
@@ -109,6 +110,26 @@ async function writeInitSentinel(projectRoot: string, operation: string): Promis
     `${JSON.stringify({ operation, startedAt: new Date().toISOString() }, null, 2)}\n`
   );
   return sentinelPath;
+}
+
+async function warnStaleInitSentinel(projectRoot: string, operation: string): Promise<void> {
+  const sentinelPath = runtimePath(projectRoot, "state", INIT_SENTINEL_FILE);
+  if (!(await exists(sentinelPath))) return;
+
+  let startedAt = "unknown time";
+  try {
+    const raw = await fs.readFile(sentinelPath, "utf8");
+    const parsed = JSON.parse(raw) as { startedAt?: unknown } | null;
+    if (parsed && typeof parsed.startedAt === "string" && parsed.startedAt.trim().length > 0) {
+      startedAt = parsed.startedAt;
+    }
+  } catch {
+    // best-effort parse of stale sentinel metadata
+  }
+
+  process.stderr.write(
+    `[${operation}] Detected stale .init-in-progress sentinel from ${startedAt}; previous run may have crashed. Continuing.\n`
+  );
 }
 
 
@@ -150,9 +171,7 @@ const DEPRECATED_UTILITY_SKILL_FOLDERS = [
   "document-review",
   "flow-status",
   "flow-tree",
-  "flow-diff",
-  "flow-next-step",
-  LEGACY_IDEA_FLOW_SKILL
+  "flow-diff"
 ] as const;
 
 const DEPRECATED_STAGE_SKILL_FOLDERS = [
@@ -189,10 +208,7 @@ const DEPRECATED_COMMAND_FILES = [
   "retro.md",
   "compound.md",
   "archive.md",
-  "rewind.md",
-  "cc-next.md",
-  LEGACY_IDEA_COMMAND_SHIM,
-  LEGACY_IDEA_COMMAND_FILE
+  "rewind.md"
 ] as const;
 
 const DEPRECATED_SKILL_FILES = [
@@ -1054,7 +1070,9 @@ async function writeHooks(projectRoot: string, config: CclawConfig): Promise<voi
     strictness: effectiveStrictness,
     tddTestPathPatterns: config.tdd?.testPathPatterns ?? config.tddTestGlobs,
     tddProductionPathPatterns: config.tdd?.productionPathPatterns,
-    compoundRecurrenceThreshold: config.compound?.recurrenceThreshold
+    compoundRecurrenceThreshold: config.compound?.recurrenceThreshold,
+    earlyLoopEnabled: config.earlyLoop?.enabled,
+    earlyLoopMaxIterations: config.earlyLoop?.maxIterations
   }));
   await writeFileSafe(path.join(hooksDir, "run-hook.cmd"), runHookCmdScript());
   await writeFileSafe(path.join(hooksDir, "delegation-record.mjs"), delegationRecordScript());
@@ -1164,7 +1182,7 @@ async function syncDisabledHarnessArtifacts(projectRoot: string, harnesses: Harn
 
   for (const entry of managedHookFiles) {
     if (enabled.has(entry.harness)) continue;
-    await removeManagedHookEntries(entry.hookPath);
+    await removeManagedHookEntries(entry.hookPath, { failOnParseError: true });
   }
 
   if (!enabled.has("opencode")) {
@@ -1173,7 +1191,20 @@ async function syncDisabledHarnessArtifacts(projectRoot: string, harnesses: Harn
     } catch {
       // best-effort cleanup
     }
+    try {
+      await fs.rm(path.join(projectRoot, ".opencode/agents"), { recursive: true, force: true });
+    } catch {
+      // best-effort cleanup
+    }
     await removeManagedOpenCodePluginConfig(projectRoot, OPENCODE_PLUGIN_REL_PATH);
+  }
+
+  if (!enabled.has("codex")) {
+    try {
+      await fs.rm(path.join(projectRoot, ".codex/agents"), { recursive: true, force: true });
+    } catch {
+      // best-effort cleanup
+    }
   }
 }
 
@@ -1238,11 +1269,7 @@ async function cleanLegacyArtifacts(projectRoot: string): Promise<void> {
 
   // D-4 terminology migration: rename historical ideation artifact prefixes to
   // the canonical idea-* naming without deleting user-authored content.
-  const legacyIdeaArtifactPrefix = LEGACY_IDEA_TOKEN;
-  const legacyIdeaArtifactPattern = new RegExp(
-    `^(?:ideation|${legacyIdeaArtifactPrefix})-(.+\\.md)$`,
-    "u"
-  );
+  const legacyIdeaArtifactPattern = /^ideation-(.+\.md)$/u;
   const artifactsDir = runtimePath(projectRoot, "artifacts");
   try {
     const entries = await fs.readdir(artifactsDir);
@@ -1338,6 +1365,7 @@ async function materializeRuntime(
   forceStateReset: boolean,
   operation = "sync"
 ): Promise<void> {
+  await warnStaleInitSentinel(projectRoot, operation);
   const sentinelPath = await writeInitSentinel(projectRoot, operation);
   const managedSession = await ManagedResourceSession.create({ projectRoot, operation });
   setActiveManagedResourceSession(managedSession);
@@ -1380,6 +1408,27 @@ async function materializeRuntime(
   } finally {
     setActiveManagedResourceSession(null);
   }
+}
+
+async function warnCodexHooksFeatureFlagIfDisabled(harnesses: readonly HarnessId[]): Promise<void> {
+  if (!harnesses.includes("codex")) return;
+  const codexTomlPath = codexConfigPath();
+  let existing: string | null;
+  try {
+    existing = await readCodexConfig(codexTomlPath);
+  } catch (error) {
+    process.stderr.write(
+      `cclaw: could not read ${codexTomlPath} to validate codex_hooks flag: ${
+        error instanceof Error ? error.message : String(error)
+      }\n`
+    );
+    return;
+  }
+
+  if (classifyCodexHooksFlag(existing) === "enabled") return;
+  process.stderr.write(
+    `cclaw: Codex hooks file written, but [features] codex_hooks is not true in ${codexTomlPath} — hooks are inert until you enable it.\n`
+  );
 }
 
 export async function initCclaw(options: InitOptions): Promise<void> {
@@ -1430,6 +1479,7 @@ export async function syncCclaw(projectRoot: string, options: SyncOptions = {}):
     });
   }
   await materializeRuntime(projectRoot, config, false, "sync");
+  await warnCodexHooksFeatureFlagIfDisabled(config.harnesses);
 }
 
 /**
@@ -1543,18 +1593,36 @@ function isManagedRuntimeHookCommand(command: string): boolean {
   return /internal verify-current-state(?:\s|$)/u.test(normalized);
 }
 
-async function removeManagedHookEntries(hookFilePath: string): Promise<void> {
+async function removeManagedHookEntries(
+  hookFilePath: string,
+  options: { failOnParseError?: boolean } = {}
+): Promise<void> {
   if (!(await exists(hookFilePath))) return;
 
   let parsed: unknown = null;
   try {
     const raw = await fs.readFile(hookFilePath, "utf8");
     const recovered = tryParseHookDocument(raw);
-    parsed = recovered?.parsed ?? null;
-  } catch {
+    if (recovered === null) {
+      if (options.failOnParseError === true) {
+        throw new Error(
+          `[sync fail-fast] Cannot strip managed hook entries from ${hookFilePath} — JSON is unparseable. ` +
+          `Run \`rm ${hookFilePath}\` and rerun \`npx cclaw-cli sync\`.`
+        );
+      }
+      return;
+    }
+    parsed = recovered.parsed;
+  } catch (error) {
+    if (options.failOnParseError === true) {
+      throw new Error(
+        `[sync fail-fast] Cannot strip managed hook entries from ${hookFilePath} — ${
+          error instanceof Error ? error.message : String(error)
+        }. Run \`rm ${hookFilePath}\` and rerun \`npx cclaw-cli sync\`.`
+      );
+    }
     return;
   }
-  if (parsed === null) return;
 
   const { updated, changed } = stripManagedHookCommands(parsed);
   if (!changed) return;
