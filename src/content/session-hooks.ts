@@ -37,7 +37,7 @@ When a new session begins in any harness:
 \`\`\`
 Cclaw flow state: [current stage] ([N] of 8 stages completed)
 Knowledge highlights: [rule/pattern 1], [rule/pattern 2], [rule/pattern 3]
-Next action: /cc-next to continue, /cc to start new work, or describe what you'd like to do.
+Next action: /cc to continue or start work, /cc-cancel to cancel, or describe what you'd like to do.
 \`\`\`
 
 ## Session Stop Protocol

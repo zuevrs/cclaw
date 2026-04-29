@@ -23,7 +23,7 @@ function generatedHelperSkillList(): string {
 export function usingCclawSkillMarkdown(): string {
   return `---
 name: using-cclaw
-description: "Routing brain for cclaw. Decide whether to start/resume a stage, answer directly, or use visible commands like /cc, /cc-next, /cc-ideate, and /cc-view."
+description: "Routing brain for cclaw. Decide whether to start/resume a stage, answer directly, or use visible commands like /cc, /cc-ideate, and /cc-cancel."
 ---
 
 # Using Cclaw
@@ -75,11 +75,10 @@ Task arrives
   ├─ Pure question / non-software ask? -> answer directly (no stage)
   ├─ New software work? -> /cc <idea>
   ├─ Repo-improvement discovery? -> /cc-ideate
-  ├─ Resume existing flow? -> /cc or /cc-next
+  ├─ Resume existing flow? -> /cc
   ├─ Knowledge operation? -> load the learnings skill
-  ├─ Read-only workspace view? -> /cc-view [status|tree|diff]
-  ├─ Normal post-ship closeout? -> /cc-next drives ${closeoutChainInline()}
-  └─ Explicit early archival/reset? -> npx cclaw-cli archive [--name=<slug>]
+  ├─ Normal post-ship closeout? -> /cc drives ${closeoutChainInline()}
+  └─ Explicit early cancellation/abandonment? -> /cc-cancel
 \`\`\`
 
 ## Task classification
@@ -97,7 +96,7 @@ Task arrives
 Before stage work:
 
 1. Read \`.cclaw/state/flow-state.json\`.
-2. If active stage exists, continue with \`/cc\` or \`/cc-next\`.
+2. If active stage exists, continue with \`/cc\`.
 3. Do not jump directly to stage-specific commands.
 
 ## Platform reliability notes
@@ -108,13 +107,12 @@ Before stage work:
 
 ## Stage quick map
 
-Use \`/cc <idea>\` for new work, \`/cc-next\` for progression and closeout, \`/cc-view\` for read-only state, and \`/cc-ideate\` for backlog discovery.
+Use \`/cc <idea>\` for new work, \`/cc\` for progression and closeout, \`/cc-ideate\` for backlog discovery, and \`/cc-cancel\` for cancellation/abandonment.
 
 ## Main vs Operator Surfaces
 
-- **Main workflow:** \`/cc\`, \`/cc-next\`, \`/cc-ideate\`, \`/cc-view status\`, and \`node .cclaw/hooks/stage-complete.mjs <stage>\` inside the installed harness runtime.
+- **Main workflow:** \`/cc\`, \`/cc-ideate\`, and \`/cc-cancel\` inside the installed harness runtime.
 - **Installer/support surface:** \`npx cclaw-cli init\`, \`npx cclaw-cli sync\`, \`npx cclaw-cli upgrade\`, \`npx cclaw-cli doctor\`, and explicit support/archive actions. Do not ask users to install or run a \`cclaw\` binary during normal stage flow.
-- **Read-only support:** \`/cc-view tree\` and \`/cc-view diff\`.
 - Use operator/support surfaces only for install/runtime diagnosis, explicit archival, or deeper inspection. Do not make them part of the happy path.
 
 ## Whole flow map

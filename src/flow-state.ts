@@ -46,7 +46,7 @@ export interface RetroState {
  * Ship closeout substate machine.
  *
  * After ship completes, cclaw auto-chains retro → compound → archive.
- * Each step is interruptible: `/cc-next` reads `shipSubstate` and resumes
+ * Each step is interruptible: `/cc` reads `shipSubstate` and resumes
  * from the correct step even across sessions.
  *
  * - `idle` — ship not complete, or closeout not yet started.

@@ -12,7 +12,7 @@ Load and follow the authoritative stage skill:
 
 - \`${skillPath}\`
 
-Normal stage resume and advancement uses \`/cc-next\`. Use \`/cc-next\` to read
+Normal stage resume and advancement uses \`/cc\`. Use \`/cc\` to read
 \`.cclaw/state/flow-state.json\`, select the active stage, and advance only after
 that stage's gates pass. Do not duplicate the stage protocol here.
 `;

@@ -582,11 +582,11 @@ export function agentRoutingTable(): string {
   return `| Stage Entry | Primary Agent(s) | Supporting guidance |
 |---|---|---|
 | Brainstorm (start with \`/cc <idea>\`) | ${brainstormPrimary} | Run in-thread research playbooks: \`research/repo-scan.md\`, \`research/learnings-lookup.md\` |
-| Scope / Design / Plan (via \`/cc-next\`) | ${scopeDesignPlanPrimary} | Use \`research/git-history.md\` (scope) and \`research/framework-docs-lookup.md\` + \`research/best-practices-lookup.md\` (design) as needed |
-| Spec (via \`/cc-next\`) | ${specPrimary} | planner (if ambiguity or conflicts remain) |
-| TDD (via \`/cc-next\`) | ${tddPrimary} | doc-updater on public behavior/config changes |
-| Review (via \`/cc-next\`) | ${reviewPrimary} | conditional second reviewer for high blast-radius diffs |
-| Ship (via \`/cc-next\`) | ${shipPrimary} | security-reviewer when release risk is elevated |
+| Scope / Design / Plan (via \`/cc\`) | ${scopeDesignPlanPrimary} | Use \`research/git-history.md\` (scope) and \`research/framework-docs-lookup.md\` + \`research/best-practices-lookup.md\` (design) as needed |
+| Spec (via \`/cc\`) | ${specPrimary} | planner (if ambiguity or conflicts remain) |
+| TDD (via \`/cc\`) | ${tddPrimary} | doc-updater on public behavior/config changes |
+| Review (via \`/cc\`) | ${reviewPrimary} | conditional second reviewer for high blast-radius diffs |
+| Ship (via \`/cc\`) | ${shipPrimary} | security-reviewer when release risk is elevated |
 `;
 }
 

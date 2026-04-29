@@ -11,7 +11,7 @@ ${conversationLanguagePolicyMarkdown()}
 - Stage-specific skills expose **Completion Parameters** plus the gates that
   matter for that stage.
 - Generic execution stays inline: verify required gates, update the artifact,
-  harvest learnings, then use \`/cc-next\` for progression.
+  harvest learnings, then use \`/cc\` for progression.
 - Do not create separate protocol files.
 
 ## Context readiness
@@ -30,11 +30,11 @@ ${conversationLanguagePolicyMarkdown()}
 
 Use this same closeout menu for every stage:
 
-- **A) Advance** — run \`/cc-next\` and continue the critical path; after \`ship\`, the same command drives \`retro -> compound -> archive\`.
+- **A) Advance** — run \`/cc\` and continue the critical path; after \`ship\`, the same command drives \`retro -> compound -> archive\`.
 - **B) Revise this stage** — stay on current stage and apply feedback.
-- **C) Pause / park** — run \`/cc-view status\`, then stop and resume later.
+- **C) Pause / park** — stop after summarizing current stage, blockers, and next \`/cc\` action.
 - **D) Rewind** — run \`npx cclaw-cli internal rewind <target-stage> "<reason>"\` as the managed support/runtime repair action; after redoing the target stage, run \`npx cclaw-cli internal rewind --ack <target-stage>\` to clear the stale marker.
-- **E) Abandon** — only when the user explicitly wants to end a non-ship active run early, archive with \`npx cclaw-cli archive --skip-retro --retro-reason="<reason>"\`. Once in post-ship closeout, continue \`/cc-next\` through retro/compound/archive instead.
+- **E) Abandon** — only when the user explicitly wants to end a non-ship active run early, archive with \`npx cclaw-cli archive --skip-retro --retro-reason="<reason>"\`. Once in post-ship closeout, continue \`/cc\` through retro/compound/archive instead.
 
 Recommendation defaults:
 

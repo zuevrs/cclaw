@@ -10,8 +10,8 @@ function flowStatePath(): string {
 
 /**
  * Command contract for /cc — the unified entry point.
- * No args → reads existing flow state and behaves like /cc-next only when a
- * tracked flow already exists; missing state/fresh placeholder state blocks with
+ * No args → reads existing flow state and progresses it when a tracked flow
+ * already exists; missing state/fresh placeholder state blocks with
  * init/start guidance. With prompt → classifies the idea, selects a track, and
  * starts the first stage of that track (brainstorm for medium/standard, spec for quick).
  */
@@ -23,10 +23,10 @@ export function startCommandContract(): string {
 
 **The unified entry point for the cclaw flow.**
 
-- \`/cc\` (no arguments) → reads existing flow state and resumes/progresses it through \`/cc-next\`. If flow state is missing or still a fresh init placeholder, stop and guide the user to run \`/cc <prompt>\` or \`cclaw init\`; do not silently create a brainstorm run.
+- \`/cc\` (no arguments) → reads existing flow state and resumes/progresses the active flow. If flow state is missing or still a fresh init placeholder, stop and guide the user to run \`/cc <prompt>\` or \`cclaw init\`; do not silently create a brainstorm run.
 - \`/cc <prompt>\` (with an idea/description) → saves the prompt as idea context and starts the first stage of the resolved track.
 
-This is the **recommended way to start** working with cclaw. Use \`/cc-next\` for subsequent stage progression.
+This is the **recommended way to start, resume, and continue** working with cclaw.
 
 ## HARD-GATE
 
@@ -84,7 +84,7 @@ ${conversationLanguagePolicyMarkdown()}
    - **standard** (full 8 stages — default fallback) — anything that introduces a new capability with architecture uncertainty, touches many modules, or has unclear scope.
      Triggers: \`new feature\`, \`refactor\`, \`migration\`, \`platform\`, \`architecture\`, \`schema\`, \`integrate\`, \`workflow\`, \`onboarding\`, or any prompt that does not match quick/medium confidently.
    - When triggers conflict, prefer **standard** over **medium**, and **medium** over **quick**.
-   - Report **track selection confidence** as high/medium/low with the matched trigger or fallback reason, plus one sentence explaining what the selected track skips and what safety gates remain. Be explicit that this recommendation is advisory until the user accepts and the managed helper writes state; after that, \`/cc-next\` follows the configured track.
+   - Report **track selection confidence** as high/medium/low with the matched trigger or fallback reason, plus one sentence explaining what the selected track skips and what safety gates remain. Be explicit that this recommendation is advisory until the user accepts and the managed helper writes state; after that, \`/cc\` follows the configured track.
 8. Present one compact **Start framing** summary: class, recommended track, track selection confidence, stack, origin docs, seed recalls, and the recommended next action. Ask a single confirmation question only when there is a destructive reset, a real contradiction, or ambiguous software/non-software classification.
 9. Present the recommendation as a single decision with explicit options:
    > \`Recommended track: <quick|medium|standard>\` because \`<one-line reason citing matched triggers>\`.
@@ -115,7 +115,7 @@ If during any stage the agent discovers evidence that contradicts the initial Ph
 1. Read \`${flowPath}\`.
 2. If flow state is missing → guide the user to run \`cclaw init\` and stop.
 3. If flow state is only a fresh init placeholder (\`completedStages: []\`, all \`passed\` arrays empty, and no \`00-idea.md\`) → stop and ask for \`/cc <prompt>\` to start a tracked run. Do not create a brainstorm state implicitly.
-4. Otherwise behave exactly like \`/cc-next\`: check current stage gates, resume if incomplete, advance if complete.
+4. Otherwise check current stage gates, resume if incomplete, and advance if complete.
 
 ## Headless mode
 
@@ -155,7 +155,7 @@ description: "Unified entry point for the cclaw flow. No args = resume/next. Wit
 
 \`/cc\` is the **starting command** for cclaw. It intelligently routes:
 
-- **No arguments** → acts as \`/cc-next\` only for an existing tracked flow; missing/fresh placeholder state blocks with start guidance
+- **No arguments** → resumes or progresses an existing tracked flow; missing/fresh placeholder state blocks with start guidance
 - **With a prompt** → classifies the task, picks a track (quick/medium/standard), and starts the **first stage of that track** (not always brainstorm — e.g. the \`quick\` track starts at \`spec\`)
 
 ## HARD-GATE
@@ -189,7 +189,7 @@ ${conversationLanguagePolicyMarkdown()}
    | \`standard\` | \`new feature\`, \`refactor\`, \`migration\`, \`platform\`, \`architecture\`, \`schema\`, \`integrate\`, \`workflow\`, \`onboarding\` (or no confident quick/medium match) | New or uncertain multi-module work |
 
    - On conflict, prefer \`standard\` over \`medium\`, and \`medium\` over \`quick\`.
-   - Always state the recommendation as a one-line reason citing matched triggers and a high/medium/low track selection confidence. Clarify that the heuristic is advisory until the managed helper writes state; after that, \`/cc-next\` follows the selected track. Include override guidance: switch to standard when architecture, schema, migration, security, or unclear scope appears; switch to medium when product framing is needed but architecture is known.
+   - Always state the recommendation as a one-line reason citing matched triggers and a high/medium/low track selection confidence. Clarify that the heuristic is advisory until the managed helper writes state; after that, \`/cc\` follows the selected track. Include override guidance: switch to standard when architecture, schema, migration, security, or unclear scope appears; switch to medium when product framing is needed but architecture is known.
 8. Run the managed start helper: \`node .cclaw/hooks/start-flow.mjs --track=<quick|medium|standard> --class=<class> --prompt=<prompt> --stack=<stack> --reason=<matched heuristic>\`. The helper writes \`${flowPath}\`, computes \`skippedStages\`, resets the gate catalog, and writes \`${RUNTIME_ROOT}/artifacts/00-idea.md\`. If it fails, STOP and report the exact command/output; do not manually edit flow state.
 9. Load and execute the **first stage skill of the chosen track** (\`brainstorming\` for medium/standard, \`specification-authoring\` for quick) plus its matching command file.
 
@@ -199,7 +199,7 @@ If mid-stage evidence contradicts the initial Class/Track decision (the "trivial
 
 ### Path B: \`/cc\` (no arguments)
 
-Delegate to \`/cc-next\` behavior only when a tracked flow exists:
+Progress the tracked flow only when one exists:
 
 1. Read \`${flowPath}\`.
 2. If missing, guide the user to run \`cclaw init\` and stop.
@@ -209,15 +209,17 @@ Delegate to \`/cc-next\` behavior only when a tracked flow exists:
 6. If complete → advance to next stage and execute.
 7. If flow is done → report completion.
 
-## When to use \`/cc\` vs \`/cc-next\`
+## Public flow habit
+
+Use \`/cc\` for the happy path:
 
 | Scenario | Command |
 |---|---|
 | Starting work for the first time | \`/cc\` or \`/cc <idea>\` |
 | Resuming in a new session | \`/cc\` |
-| Progressing after completing a stage | \`/cc-next\` |
+| Progressing after completing a stage | \`/cc\` |
 | Starting with a specific idea | \`/cc <idea>\` |
 
-Both commands read the same \`flow-state.json\`. The difference is that \`/cc <prompt>\` resolves class + track and starts that track's first stage, while \`/cc\` and \`/cc-next\` follow the current state.
+\`/cc <prompt>\` resolves class + track and starts that track's first stage; \`/cc\` without a prompt follows the current \`flow-state.json\`.
 `;
 }

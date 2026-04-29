@@ -330,7 +330,7 @@ describe("node hook runtime", () => {
     expect(result.stdout).toContain("session ending (stage=ship");
     expect(result.stdout).toContain("closeout.shipSubstate=compound_review");
     expect(result.stdout).toContain("closeout chain=retro -> compound -> archive");
-    expect(result.stdout).toContain("continue closeout with /cc-next");
+    expect(result.stdout).toContain("continue closeout with /cc");
   });
 
   it("prompt-guard supports advisory and strict modes", async () => {

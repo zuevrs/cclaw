@@ -974,7 +974,7 @@ async function handleSessionStart(runtime) {
   );
   const knowledge = await buildKnowledgeDigest(runtime.root, state.currentStage, knowledgeRaw);
 
-  // Refresh Ralph Loop status each session-start so /cc-next and the model
+  // Refresh Ralph Loop status each session-start so /cc and the model
   // both read a consistent "iter=N, acClosed=[...]" snapshot. Runs only when
   // we are in tdd — other stages skip the write to keep the file stable.
   let ralphLoopLine = "";
@@ -1173,7 +1173,7 @@ async function handleStopHandoff(runtime) {
   const shipSubstate = typeof closeoutObj.shipSubstate === "string" ? closeoutObj.shipSubstate : "idle";
   const closeoutContext =
     state.currentStage === "ship" || shipSubstate !== "idle"
-      ? " closeout.shipSubstate=" + shipSubstate + "; closeout chain=retro -> compound -> archive; continue closeout with /cc-next."
+      ? " closeout.shipSubstate=" + shipSubstate + "; closeout chain=retro -> compound -> archive; continue closeout with /cc."
       : "";
 
   const message =

@@ -56,8 +56,8 @@ Ralph Loop fields never gate-check on their own.
 }
 
 /**
- * Command contract for /cc-next — the primary progression command.
- * Reads flow-state, starts the current stage if unfinished, or advances if all gates pass.
+ * Internal compatibility contract for /cc-next.
+ * /cc is the promoted public progression command; this remains as an internal/legacy alias.
  */
 export function nextCommandContract(): string {
   const flowPath = flowStatePath();
@@ -68,14 +68,14 @@ export function nextCommandContract(): string {
 
 ## Purpose
 
-**The primary progression command.** Read flow state, determine what to do:
+**Internal compatibility progression command.** \`/cc\` is the promoted public start/resume/continue command. This contract remains for legacy shims and internal references; read flow state, determine what to do:
 
 - **Current stage not started / in progress** → load its skill and execute it.
 - **Current stage complete (all gates passed)** → advance \`currentStage\` and load the next skill.
-- **Ship complete** → continue the resumable ${closeoutChainInline()} closeout via \`/cc-next\`.
+- **Ship complete** → continue the resumable ${closeoutChainInline()} closeout. Public habit: use \`/cc\`.
 - **Flow complete** → report done after closeout has archived the run.
 
-This is the only progression command the user needs to drive the entire flow. Stage command contracts are internal implementation details loaded by \`/cc-next\`.
+The public habit is \`/cc\`; this command is a compatibility/internal route for the same progression behavior. Stage command contracts are internal implementation details.
 
 ## HARD-GATE
 
@@ -128,13 +128,13 @@ ${ralphLoopContractSnippet()}
 
 ## Resume Semantics
 
-\`/cc-next\` in a **new session** = resume from where you left off:
+\`/cc\` in a **new session** resumes from where you left off; \`/cc-next\` is a compatibility alias:
 - Flow-state records \`currentStage\` and which gates have passed.
 - The stage skill reads upstream artifacts and picks up context.
 - ${closeoutSubstateInline()} carries the post-ship substate, so a crashed
   session during retro/compound/archive resumes at the exact step without
   regenerating the retro draft.
-- No special resume command needed — \`/cc-next\` IS the resume command.
+- No special resume command needed — \`/cc\` is the public resume/progression command.
 
 ## Headless mode
 
@@ -187,14 +187,14 @@ export function nextCommandSkillMarkdown(): string {
 
   return `---
 name: ${NEXT_SKILL_NAME}
-description: "The primary progression command. Reads flow state, starts/resumes the current stage or advances to the next one."
+description: "Internal compatibility progression command. Prefer /cc for start, resume, continue, and closeout."
 ---
 
-# /cc-next — Flow Progression
+# /cc-next — Flow Progression Compatibility
 
 ## Overview
 
-\`/cc-next\` is **the only command you need** to drive the entire cclaw flow.
+\`/cc\` is the public command to drive the cclaw flow. \`/cc-next\` remains as an internal/compatibility alias for progression.
 
 ## Operator Output Contract
 
@@ -208,7 +208,7 @@ Gates: <passed>/<required> passed, <blocked> blocked
 Delegations: <done>/<mandatory> done
 Blocked by: <none | gate/delegation/reconciliation/stale/TDD/review/closeout ids>
 Blocker category: <sync-recovery | user-decision | stage-work | delegation-proof | review-rework | closeout>
-Next: <exact next action, usually /cc-next or one named remediation>
+Next: <exact next action, usually /cc or one named remediation>
 Evidence needed: <artifact/test/review/delegation evidence required to unblock>
 \`\`\`
 
@@ -223,7 +223,7 @@ would unblock it. Do not dump full artifacts in progression output.
 3. If **not** → loads the stage skill and starts/resumes execution
 4. If **yes** → advances to the next stage and loads its skill
 
-**Resume:** \`/cc-next\` in a new session picks up from where \`flow-state.json\` says you are.
+**Resume:** \`/cc\` in a new session picks up from where \`flow-state.json\` says you are.
 
 ## HARD-GATE
 
@@ -283,7 +283,7 @@ by inspecting ${closeoutSubstateInline()}:
 | \`ready_to_archive\`    | Run \`npx cclaw-cli archive\`; reset flow-state on success |
 | \`archived\`            | Report "run archived"; stop                         |
 
-Each step owns its own state transition. \`/cc-next\` keeps retro and compound
+Each step owns its own state transition. \`/cc\` keeps retro and compound
 in-session, then uses the archive runtime only at \`ready_to_archive\`.
 
 Otherwise report **"Flow complete. All stages finished."** and stop.
@@ -292,7 +292,7 @@ Otherwise (non-terminal \`next\`): load the next stage skill and begin execution
 
 ## Stage order
 
-This table is the track-aware critical path. It must match \`flow-state.json.track\`; do not follow the natural schema edge when the active track skips a stage. Quick skips ceremony, not safety: spec approval, RED/GREEN/REFACTOR evidence, review, and ship gates still apply. After \`ship\`, \`/cc-next\` continues closeout via ${closeoutSubstateInline()}: ${closeoutChainInline()}.
+This table is the track-aware critical path. It must match \`flow-state.json.track\`; do not follow the natural schema edge when the active track skips a stage. Quick skips ceremony, not safety: spec approval, RED/GREEN/REFACTOR evidence, review, and ship gates still apply. After \`ship\`, \`/cc\` continues closeout via ${closeoutSubstateInline()}: ${closeoutChainInline()}.
 
 | Stage | Standard next | Medium next | Quick next | Skill path |
 |---|---|---|---|---|
@@ -309,6 +309,6 @@ ${naturalStageRows}
 - Advancing when \`blocked\` is non-empty for the current stage.
 - Treating \`passed\` as trusted when artifact evidence contradicts it.
 - Skipping **review** or **ship** because "the code looks fine".
-- Loading a stage skill directly instead of using \`/cc-next\` for progression.
+- Loading a stage skill directly instead of using \`/cc\` for progression.
 `;
 }

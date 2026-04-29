@@ -22,7 +22,6 @@ import { stageCommandShimMarkdown } from "./content/stage-command.js";
 import { ideateCommandContract, ideateCommandSkillMarkdown } from "./content/ideate-command.js";
 import { startCommandContract, startCommandSkillMarkdown } from "./content/start-command.js";
 import { viewCommandContract, viewCommandSkillMarkdown } from "./content/view-command.js";
-import { finishCommandContract, finishCommandSkillMarkdown } from "./content/finish-command.js";
 import { cancelCommandContract, cancelCommandSkillMarkdown } from "./content/cancel-command.js";
 import { subagentDrivenDevSkill, parallelAgentsSkill } from "./content/subagents.js";
 import { sessionHooksSkillMarkdown } from "./content/session-hooks.js";
@@ -67,7 +66,6 @@ import { ensureGitignore, removeGitignorePatterns } from "./gitignore.js";
 import {
   HARNESS_ADAPTERS,
   harnessShimFileNames,
-  harnessTier,
   syncHarnessShims,
   removeCclawFromAgentsMd
 } from "./harness-adapters.js";
@@ -163,6 +161,7 @@ const DEPRECATED_AGENT_FILES = [
 
 const DEPRECATED_COMMAND_FILES = [
   "learn.md",
+  "finish.md",
   "status.md",
   "tree.md",
   "diff.md",
@@ -176,6 +175,7 @@ const DEPRECATED_COMMAND_FILES = [
 ] as const;
 
 const DEPRECATED_SKILL_FILES = [
+  ["flow-finish", "SKILL.md"],
   ["flow-ops", "SKILL.md"],
   ["tdd-cycle-log", "SKILL.md"],
   ["flow-retro", "SKILL.md"],
@@ -543,10 +543,6 @@ async function writeSkills(projectRoot: string, config?: CclawConfig): Promise<v
     viewCommandSkillMarkdown()
   );
   await writeFileSafe(
-    runtimePath(projectRoot, "skills", "flow-finish", "SKILL.md"),
-    finishCommandSkillMarkdown()
-  );
-  await writeFileSafe(
     runtimePath(projectRoot, "skills", "flow-cancel", "SKILL.md"),
     cancelCommandSkillMarkdown()
   );
@@ -633,7 +629,6 @@ async function writeEntryCommands(projectRoot: string): Promise<void> {
   await writeFileSafe(runtimePath(projectRoot, "commands", "next.md"), nextCommandContract());
   await writeFileSafe(runtimePath(projectRoot, "commands", "ideate.md"), ideateCommandContract());
   await writeFileSafe(runtimePath(projectRoot, "commands", "view.md"), viewCommandContract());
-  await writeFileSafe(runtimePath(projectRoot, "commands", "finish.md"), finishCommandContract());
   await writeFileSafe(runtimePath(projectRoot, "commands", "cancel.md"), cancelCommandContract());
   for (const stage of FLOW_STAGES) {
     await writeFileSafe(
@@ -1228,14 +1223,9 @@ async function cleanLegacyArtifacts(projectRoot: string): Promise<void> {
 
 async function cleanStaleFiles(projectRoot: string): Promise<void> {
   const expectedShimFiles = new Set<string>(harnessShimFileNames());
+  const expectedShimSkills = new Set<string>(harnessShimFileNames().map((fileName) => fileName.replace(/\.md$/u, "")));
 
   for (const adapter of Object.values(HARNESS_ADAPTERS)) {
-    // Skill-kind shims (Codex) live in per-skill directories, not flat
-    // markdown files, so the regex-based stale sweep below would never
-    // match them anyway. The legacy `.codex/commands/` cleanup happens in
-    // `cleanupLegacyCodexSurfaces` inside syncHarnessShims().
-    if (adapter.shimKind === "skill") continue;
-
     const commandDir = path.join(projectRoot, adapter.commandDir);
     if (!(await exists(commandDir))) continue;
 
@@ -1244,6 +1234,15 @@ async function cleanStaleFiles(projectRoot: string): Promise<void> {
       entries = await fs.readdir(commandDir);
     } catch {
       entries = [];
+    }
+
+    if (adapter.shimKind === "skill") {
+      for (const entry of entries) {
+        if (!/^cc(?:-.*)?$/u.test(entry)) continue;
+        if (expectedShimSkills.has(entry)) continue;
+        await fs.rm(path.join(commandDir, entry), { recursive: true, force: true });
+      }
+      continue;
     }
 
     for (const entry of entries) {

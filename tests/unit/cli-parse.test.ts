@@ -1,5 +1,6 @@
 import { describe, expect, it } from "vitest";
 import { parseArchiveDisposition, parseArgs, parseHarnessSelectionAnswer, parseHarnesses, parseTrack, usage } from "../../src/cli.js";
+import { createHarnessChecklistState, updateHarnessChecklistState } from "../../src/harness-selection.js";
 
 describe("cli parser", () => {
   it("parses init with harness list", () => {
@@ -37,6 +38,39 @@ describe("cli parser", () => {
       kind: "invalid",
       message: "Invalid selection. Use numbers 1-4, comma-separated."
     });
+  });
+
+
+  it("updates native checklist state with movement, toggles, select-all, confirm, and cancel", () => {
+    let state = createHarnessChecklistState(["claude"], ["claude", "cursor", "codex"]);
+    expect(state.selected).toEqual(["claude"]);
+    expect(state.cursor).toBe(0);
+
+    state = updateHarnessChecklistState(state, "\u001b[B").state;
+    expect(state.cursor).toBe(1);
+
+    state = updateHarnessChecklistState(state, " ").state;
+    expect(state.selected).toEqual(["claude", "cursor"]);
+
+    state = updateHarnessChecklistState(state, "k").state;
+    expect(state.cursor).toBe(0);
+
+    state = updateHarnessChecklistState(state, " ").state;
+    expect(state.selected).toEqual(["cursor"]);
+
+    state = updateHarnessChecklistState(state, "j").state;
+    expect(state.cursor).toBe(1);
+    state = updateHarnessChecklistState(state, " ").state;
+    expect(state.selected).toEqual([]);
+    const emptyConfirm = updateHarnessChecklistState(state, "\r");
+    expect(emptyConfirm.outcome).toBeUndefined();
+    expect(emptyConfirm.state.message).toBe("Select at least one harness.");
+
+    const all = updateHarnessChecklistState(emptyConfirm.state, "a");
+    expect(all.state.selected).toEqual(["claude", "cursor", "codex"]);
+    expect(updateHarnessChecklistState(all.state, "\r").outcome).toBe("confirm");
+    expect(updateHarnessChecklistState(all.state, "\u001b").outcome).toBe("cancel");
+    expect(updateHarnessChecklistState(all.state, "\u0003").outcome).toBe("cancel");
   });
 
   it("parses init dry-run and interactive toggles", () => {

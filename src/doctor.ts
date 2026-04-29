@@ -1073,21 +1073,17 @@ export async function doctorChecks(projectRoot: string, options: DoctorOptions =
     const content = await fs.readFile(agentsFile, "utf8");
     const hasMarkers = content.includes(CCLAW_MARKER_START) && content.includes(CCLAW_MARKER_END);
     const hasCcCommand = content.includes("/cc");
-    const hasCcNext = content.includes("/cc-next");
     const hasCcIdeate = content.includes("/cc-ideate");
-    const hasCcView = content.includes("/cc-view");
-    const hasCcFinish = content.includes("/cc-finish");
     const hasCcCancel = content.includes("/cc-cancel");
+    const omitsFinish = !content.includes("/cc-finish");
     const hasVerification = content.includes("Verification Discipline");
     const hasMinimalMarker = content.includes("intentionally minimal for cross-project use");
     const hasMetaSkillPointer = content.includes(".cclaw/skills/using-cclaw/SKILL.md");
     agentsBlockOk = hasMarkers
       && hasCcCommand
-      && hasCcNext
       && hasCcIdeate
-      && hasCcView
-      && hasCcFinish
       && hasCcCancel
+      && omitsFinish
       && hasVerification
       && hasMinimalMarker
       && hasMetaSkillPointer;
@@ -1098,7 +1094,7 @@ export async function doctorChecks(projectRoot: string, options: DoctorOptions =
     details: `${agentsFile} must contain the managed cclaw marker block with routing, verification, and minimal detail pointer`
   });
 
-  for (const cmd of ["start", "next", "ideate", "view", "finish", "cancel"] as const) {
+  for (const cmd of ["start", "next", "ideate", "view", "cancel"] as const) {
     const cmdPath = path.join(projectRoot, RUNTIME_ROOT, "commands", `${cmd}.md`);
     checks.push({
       name: `utility_command:${cmd}`,
@@ -1116,7 +1112,7 @@ export async function doctorChecks(projectRoot: string, options: DoctorOptions =
     checks.push({
       name: `stage_command:${stage}`,
       ok: stageCommandOk,
-      details: `${cmdPath} must be a thin shim to ${RUNTIME_ROOT}/skills/${stageSkillFolder(stage)}/SKILL.md and /cc-next`
+      details: `${cmdPath} must be a thin shim to ${RUNTIME_ROOT}/skills/${stageSkillFolder(stage)}/SKILL.md and /cc`
     });
   }
 
@@ -1125,7 +1121,6 @@ export async function doctorChecks(projectRoot: string, options: DoctorOptions =
     ["learnings", "learnings"],
     ["flow-ideate", "flow-ideate"],
     ["flow-view", "flow-view"],
-    ["flow-finish", "flow-finish"],
     ["flow-cancel", "flow-cancel"],
     ["subagent-dev", "sdd"],
     ["parallel-dispatch", "parallel-agents"],
@@ -1378,7 +1373,7 @@ export async function doctorChecks(projectRoot: string, options: DoctorOptions =
       cursorRuleOk =
         content.includes("cclaw-managed-cursor-workflow-rule") &&
         content.includes(".cclaw/state/flow-state.json") &&
-        content.includes("/cc-next");
+        content.includes("/cc");
     }
     checks.push({
       name: "rules:cursor:workflow",

@@ -459,7 +459,7 @@ Implementation that touches shared source trees must remain **sequential** unles
   - **3–4:** appendix / “worth tracking” section (not merge-blocking alone)
   - **1–2:** suppress from primary narrative unless paired with stronger evidence
 
-### Review Army Artifact Contract (required in review stage via /cc-next)
+### Review Army Artifact Contract (required in review stage via /cc)
 
 Write a structured reconciliation artifact at \`.cclaw/artifacts/07-review-army.json\` using this schema:
 
