@@ -95,6 +95,17 @@ function normalizeFixtureArtifact(fileName: string, content: string): string {
 async function writeRuntimeArtifact(root: string, fileName: string, content: string): Promise<void> {
   await fs.mkdir(path.join(root, ".cclaw/state"), { recursive: true });
   await fs.mkdir(path.join(root, ".cclaw/artifacts"), { recursive: true });
+  if (fileName.startsWith("03-design")) {
+    const apiPath = path.join(root, "src/api.ts");
+    const storagePath = path.join(root, "src/storage.ts");
+    await fs.mkdir(path.dirname(apiPath), { recursive: true });
+    if (!(await fs.stat(apiPath).then(() => true).catch(() => false))) {
+      await fs.writeFile(apiPath, "export const api = 1;\n", "utf8");
+    }
+    if (!(await fs.stat(storagePath).then(() => true).catch(() => false))) {
+      await fs.writeFile(storagePath, "export const storage = 1;\n", "utf8");
+    }
+  }
   await fs.writeFile(path.join(root, ".cclaw/state/flow-state.json"), JSON.stringify({
     currentStage: "brainstorm",
     activeRunId: "active",
@@ -118,6 +129,19 @@ async function writeOptInAuditsConfig(
     `  staleDiagramAudit: ${flags.staleDiagramAudit === true ? "true" : "false"}`
   ];
   await fs.writeFile(path.join(root, ".cclaw/config.yaml"), `${lines.join("\n")}\n`, "utf8");
+}
+
+async function writeDelegationLog(
+  root: string,
+  entries: Array<Record<string, unknown>>,
+  runId = "active"
+): Promise<void> {
+  await fs.mkdir(path.join(root, ".cclaw/state"), { recursive: true });
+  await fs.writeFile(
+    path.join(root, ".cclaw/state/delegation-log.json"),
+    JSON.stringify({ runId, schemaVersion: 3, entries }, null, 2),
+    "utf8"
+  );
 }
 
 const PLAN_EXECUTION_POSTURE = `## Execution Posture
@@ -1570,7 +1594,7 @@ describe("artifact linter heuristics", () => {
 RECOMMENDATION: B — SSE + REST fallback delivers durable feed UX without overcommitting infra.
 
 ## Scope Mode
-- [x] selective
+- [x] hold
 
 ## In Scope / Out of Scope
 
@@ -1599,7 +1623,7 @@ RECOMMENDATION: B — SSE + REST fallback delivers durable feed UX without overc
 - Unresolved decisions: None
 
 ## Scope Summary
-- Selected mode: selective
+- Selected mode: HOLD SCOPE
 - Accepted scope: durable feed + SSE
 - Deferred: WebSocket channel
 - Explicitly excluded: outbound channels
@@ -1830,6 +1854,50 @@ ${summaryBody}
       const summary = result.findings.find((f) => f.section === "Scope Summary");
       expect(summary?.required).toBe(true);
       expect(summary?.found).toBe(true);
+    });
+
+    it("requires product-strategist delegation evidence for expansion modes", async () => {
+      const root = await createTempProject("scope-summary-expansion-needs-strategist");
+      await writeRuntimeArtifact(
+        root,
+        "02-scope.md",
+        baseScope(
+          `- Selected mode: SCOPE EXPANSION\n- Accepted scope: build a bigger slice\n- Next-stage handoff: design.`
+        )
+      );
+      const result = await lintArtifact(root, "scope");
+      const strategist = result.findings.find((f) => f.section === "Expansion Strategist Delegation");
+      expect(result.passed).toBe(false);
+      expect(strategist?.required).toBe(true);
+      expect(strategist?.found).toBe(false);
+      expect(strategist?.details ?? "").toMatch(/product-strategist delegation/iu);
+    });
+
+    it("accepts expansion mode when product-strategist delegation has evidence", async () => {
+      const root = await createTempProject("scope-summary-expansion-with-strategist");
+      await writeRuntimeArtifact(
+        root,
+        "02-scope.md",
+        baseScope(
+          `- Selected mode: SELECTIVE EXPANSION\n- Accepted scope: build a bigger slice\n- Next-stage handoff: design.`
+        )
+      );
+      await writeDelegationLog(root, [
+        {
+          stage: "scope",
+          agent: "product-strategist",
+          mode: "proactive",
+          status: "completed",
+          ts: new Date().toISOString(),
+          runId: "active",
+          evidenceRefs: [".cclaw/artifacts/02-scope.md#Scope Summary"],
+          fulfillmentMode: "role-switch"
+        }
+      ]);
+      const result = await lintArtifact(root, "scope");
+      const strategist = result.findings.find((f) => f.section === "Expansion Strategist Delegation");
+      expect(strategist?.required).toBe(true);
+      expect(strategist?.found).toBe(true);
     });
 
     it("rejects Scope Summary that uses a non-canonical mode word like `strict`", async () => {
@@ -2359,6 +2427,11 @@ API -> Service -> DB
     const root = await createTempProject("design-trivial");
     await writeRuntimeArtifact(root, "03-design.md", `# Design Artifact — Trivial Change / Escape Hatch
 
+## Codebase Investigation
+| File | Current responsibility | Patterns discovered |
+|---|---|---|
+| src/api.ts | parse config | lightweight parser path |
+
 ## Architecture Boundaries
 | Component | Responsibility | Owner |
 |---|---|---|
@@ -2594,6 +2667,30 @@ Fallback_Cache -->|degraded response| API_Gateway`;
     expect(staleAudit?.details).toContain("src/api.ts");
   });
 
+  it("runs stale diagram audit by default when optInAudits is omitted", async () => {
+    const root = await createTempProject("design-stale-diagram-default-on");
+    const apiPath = path.join(root, "src/api.ts");
+    const storagePath = path.join(root, "src/storage.ts");
+    await fs.mkdir(path.dirname(apiPath), { recursive: true });
+    await fs.writeFile(apiPath, "export const api = 1;\n", "utf8");
+    await fs.writeFile(storagePath, "export const storage = 1;\n", "utf8");
+
+    const diagram = `API_Gateway -->|sync: validated request| App_Service
+App_Service -.->|async: enqueue write| Storage_Adapter
+Storage_Adapter -->|timeout| Fallback_Cache
+Fallback_Cache -->|degraded response| API_Gateway`;
+    await writeRuntimeArtifact(root, "03-design.md", completeDesignArtifact(diagram));
+
+    const futureSeconds = Date.now() / 1000 + 2;
+    await fs.utimes(apiPath, futureSeconds, futureSeconds);
+
+    const result = await lintArtifact(root, "design");
+    const staleAudit = result.findings.find((f) => f.section === "Stale Diagram Drift Check");
+    expect(staleAudit?.required).toBe(true);
+    expect(staleAudit?.found).toBe(false);
+    expect(staleAudit?.details).toContain("src/api.ts");
+  });
+
   it("passes stale diagram audit when blast-radius files are not newer than design baseline", async () => {
     const root = await createTempProject("design-stale-diagram-audit-pass");
     await writeOptInAuditsConfig(root, { staleDiagramAudit: true });
@@ -2616,6 +2713,38 @@ Fallback_Cache -->|degraded response| API_Gateway`;
     const staleAudit = result.findings.find((f) => f.section === "Stale Diagram Drift Check");
     expect(staleAudit?.required).toBe(true);
     expect(staleAudit?.found).toBe(true);
+  });
+
+  it("gracefully skips stale diagram audit for trivial override without diagram markers", async () => {
+    const root = await createTempProject("design-stale-diagram-trivial-skip");
+    await writeRuntimeArtifact(root, "03-design.md", `# Design Artifact — Trivial Change / Escape Hatch
+
+## Architecture Boundaries
+| Component | Responsibility | Owner |
+|---|---|---|
+| config parser | reads YAML config | core team |
+
+## NOT in scope
+- Full config migration tool
+
+## Completion Dashboard
+| Review Section | Status | Issues |
+|---|---|---|
+| Architecture Review | clear | — |
+
+**Decisions made:** 1 | **Unresolved:** 0
+`);
+
+    const result = await lintArtifact(root, "design");
+    const staleAudit = result.findings.find((f) => f.section === "Stale Diagram Drift Check");
+    const diagramRequirement = result.findings.find(
+      (f) => f.section === "Diagram Requirement: Architecture Diagram"
+    );
+    expect(result.passed).toBe(true);
+    expect(staleAudit?.found).toBe(true);
+    expect(staleAudit?.details ?? "").toContain("skipped");
+    expect(diagramRequirement?.found).toBe(true);
+    expect(diagramRequirement?.details ?? "").toContain("trivial-override");
   });
 
   it("fails design artifact when Failure Mode Table uses legacy header shape", async () => {

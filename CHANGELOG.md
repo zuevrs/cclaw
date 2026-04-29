@@ -1,5 +1,16 @@
 # Changelog
 
+## 0.53.0
+
+### Added
+
+- Added a `product-strategist` specialist and scope-mode enforcement: when scope selects `SCOPE EXPANSION` or `SELECTIVE EXPANSION`, artifact validation now requires a completed active-run `product-strategist` delegation row with non-empty evidence refs.
+- Added wave-8 stage structure upgrades: brainstorm now includes a recommended `Embedded Grill` section, and design now includes a recommended compact `Long-Term Trajectory` section plus matching policy needles/templates.
+
+### Changed
+
+- Elevated design diagram freshness discipline: `optInAudits.staleDiagramAudit` is now default-on, design gates include `design_diagram_freshness`, and compact trivial-override slices without diagram markers are explicitly marked as a stale-audit skip instead of a hard failure.
+
 ## 0.52.0
 
 ### Breaking Changes

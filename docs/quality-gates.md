@@ -43,6 +43,7 @@ flowchart LR
 |---|---|---|---|
 | `## Mode Block` | Exactly one of `STARTUP / BUILDER / ENGINEERING / OPS / RESEARCH` | gstack `office-hours` Phase 1 | `gstack/office-hours/SKILL.md` |
 | `## Forcing Questions` | ≥3 numbered rows; each answer carries a "specific" token (number, backticked path, link, @mention, quoted string); each row records a `decision:` marker (STOP-per-issue) | gstack 6 forcing questions + evanflow Embedded Grill | `gstack/office-hours/SKILL.md`, `evanklem-evanflow/skills/evanflow-brainstorming/SKILL.md` |
+| `## Embedded Grill` | Recommended post-pick stress-check rows (question + recommended answer + disposition) for constraints/reversibility/boundaries/pattern-fit/domain-language | evanflow Embedded Grill | `evanklem-evanflow/skills/evanflow-brainstorming/SKILL.md` |
 | `## Premise List` | ≥2 numbered premises in form `P<n>: <statement> — agreed/disagreed/revised` | gstack `office-hours` Phase 3 | `gstack/office-hours/SKILL.md` |
 | `## Anti-Sycophancy Stamp` | `Forbidden response openers acknowledged: yes` line | gstack response posture + superpowers anti-sycophancy | `gstack/office-hours/SKILL.md`, `obra-superpowers/skills/brainstorming/SKILL.md` |
 | Approach Detail Cards (`#### APPROACH <letter>`) | ≥2 blocks with Summary/Effort/Risk/Pros/Cons/Reuses | superpowers + gstack Phase 4 | `obra-superpowers/skills/brainstorming/SKILL.md`, `gstack/office-hours/SKILL.md` |
@@ -57,6 +58,7 @@ flowchart LR
 | `## Failure Modes Registry` | Canonical columns `Codepath / Failure mode / Rescued? / Test? / User sees? / Logged?` and ≥1 populated row + ≥1 `decision:` marker | gstack failure modes registry | `gstack/plan-ceo-review/SKILL.md` |
 | `## Reversibility Rating` | Score 1-5 declared | gstack Section 10 | `gstack/plan-ceo-review/SKILL.md` |
 | `## Scope Mode` (existing) | One of `SCOPE_EXPANSION / SELECTIVE_EXPANSION / HOLD_SCOPE / SCOPE_REDUCTION` | gstack Step 0F | `gstack/plan-ceo-review/SKILL.md` |
+| Expansion strategist delegation | If Scope Summary mode is `SCOPE EXPANSION` or `SELECTIVE EXPANSION`, active-run delegation log must include completed `product-strategist` row with non-empty `evidenceRefs` | gstack expansion vision + opt-in ceremony | `gstack/plan-ceo-review/SKILL.md` |
 
 ### Design (`03-design.md`)
 
@@ -65,6 +67,8 @@ flowchart LR
 | `## ASCII Coverage Diagram` | ≥3 of `[★★★]` / `[★★]` / `[★]` / `[GAP]` / `[→E2E]` / `[→EVAL]` markers present | gstack Test Review Step 4 | `gstack/plan-eng-review/SKILL.md` |
 | `## Regression Iron Rule` | `Iron rule acknowledged: yes` line | gstack mandatory regression rule | `gstack/plan-eng-review/SKILL.md` |
 | `## Calibrated Findings` | At least one finding in `[P1\|P2\|P3] (confidence: <n>/10) <path>[:<line>] — <description>` form, or explicit `None this stage` | gstack confidence calibration | `gstack/plan-eng-review/SKILL.md` |
+| `design_diagram_freshness` gate (`Stale Diagram Drift Check`) | Default-on stale-diagram drift check; can be explicitly disabled via `optInAudits.staleDiagramAudit: false`; compact trivial-override slices without diagram markers get explicit skip status | gstack stale diagram audit discipline | `gstack/plan-eng-review/SKILL.md` |
+| `## Long-Term Trajectory` | Recommended 1-3 line section stating post-ship phase path and architecture fit for that trajectory | gstack Section 10 Long-Term Trajectory Review | `gstack/plan-ceo-review/SKILL.md` |
 
 ### Spec (`04-spec.md`)
 

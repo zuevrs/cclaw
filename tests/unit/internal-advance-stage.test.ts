@@ -121,7 +121,7 @@ async function writeScopeArtifact(root: string): Promise<void> {
 > Review Loop Quality: 0.830 | stop: quality_threshold_met | iterations: 2/3
 
 ## Scope Contract
-- Selected mode: SCOPE EXPANSION
+- Selected mode: HOLD SCOPE
 - In scope: lock down requirements and interfaces.
 - Out of scope: implementation and rollout.
 - Requirements: explicit interfaces, failure boundaries, and observability expectations.
@@ -160,7 +160,7 @@ async function writeScopeArtifact(root: string): Promise<void> {
 - User approval: pending
 
 ## Scope Summary
-- Selected mode: SCOPE EXPANSION
+- Selected mode: HOLD SCOPE
 - Strongest challenges: balancing reliability with delivery speed
 - Recommended path: lock interfaces and failure boundaries first
 - Accepted scope: scope contract and decision boundaries
@@ -175,6 +175,9 @@ async function writeScopeArtifact(root: string): Promise<void> {
 
 async function writeDesignArtifact(root: string): Promise<void> {
   await fs.mkdir(path.join(root, ".cclaw/artifacts"), { recursive: true });
+  await fs.mkdir(path.join(root, "src"), { recursive: true });
+  await fs.writeFile(path.join(root, "src/api.ts"), "export const api = 1;\n", "utf8");
+  await fs.writeFile(path.join(root, "src/storage.ts"), "export const storage = 1;\n", "utf8");
   await fs.writeFile(path.join(root, ".cclaw/artifacts/03-design.md"), `# Design Artifact
 
 > Review Loop Quality: 0.810 | stop: quality_threshold_met | iterations: 2/3
@@ -186,6 +189,12 @@ async function writeDesignArtifact(root: string): Promise<void> {
 | features-researcher | Retry + fallback needed | Explicit rescue paths in diagram | docs/features.md |
 | architecture-researcher | Service boundary should remain stable | Keep API + worker split | docs/architecture.md |
 | pitfalls-researcher | Silent failures were prior outage root cause | Add user-visible rescue output | docs/pitfalls.md |
+
+## Codebase Investigation
+| File | Current responsibility | Patterns discovered | Existing fit / reuse candidate |
+|---|---|---|---|
+| src/api.ts | request validation and orchestration | typed error envelopes | reuse existing route pipeline |
+| src/storage.ts | storage writes + retries | fallback cache path | reuse retry queue primitive |
 
 ## Engineering Lock
 - Chosen path: reuse existing queue primitives behind stable API and worker boundaries.

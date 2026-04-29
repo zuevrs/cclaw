@@ -532,6 +532,21 @@ optInAudits:
     expect(config.optInAudits?.staleDiagramAudit).toBe(false);
   });
 
+  it("defaults staleDiagramAudit to true when optInAudits is omitted", async () => {
+    const root = await createTempProject("config-opt-in-audits-defaults");
+    await fs.mkdir(path.join(root, ".cclaw"), { recursive: true });
+    await fs.writeFile(
+      configPath(root),
+      `harnesses:
+  - claude
+`,
+      "utf8"
+    );
+    const config = await readConfig(root);
+    expect(config.optInAudits?.scopePreAudit).toBe(false);
+    expect(config.optInAudits?.staleDiagramAudit).toBe(true);
+  });
+
   it("rejects malformed optInAudits config", async () => {
     const root = await createTempProject("config-opt-in-audits-malformed");
     await fs.mkdir(path.join(root, ".cclaw"), { recursive: true });

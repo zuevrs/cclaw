@@ -155,6 +155,11 @@ RECOMMENDATION: <approach letter — one-line rationale, traced to forcing-quest
 - **Approval:** pending
 - **Next-stage handoff:** On standard track, hand this to \`scope\`; on medium track, hand this directly to \`spec\`. Include upstream decisions used, drift, confidence, unresolved questions, risk hints, and non-goals.
 
+## Embedded Grill
+| Question | Recommended answer | Disposition (accept/refine/reject) |
+|---|---|---|
+|  |  |  |
+
 ## Not Doing
 - (3-5 things this brainstorm is *not* committing to — distinct from \`Deferred\`. These will not appear in scope unless the user explicitly opts in.)
 
@@ -668,6 +673,9 @@ ${MARKDOWN_CODE_FENCE}
 - Risks and rescue paths:
 - Test/performance expectations:
 - Unresolved questions (or \`None\`):
+
+## Long-Term Trajectory
+- (1-3 lines: what comes after this ships, and whether this architecture can absorb that path without major rework. For tactical changes use \`None - tactical change only\`.)
 
 ## Outside Voice Findings
 | ID | Dimension | Finding | Disposition | Rationale |

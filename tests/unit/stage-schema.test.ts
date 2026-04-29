@@ -81,10 +81,12 @@ describe("stage schema and subagent alignment", () => {
     const review = standard.find((row) => row.stage === "review");
     expect(review?.mandatoryAgents).toEqual(["reviewer", "security-reviewer"]);
     expect(review?.primaryAgents).toContain("reviewer");
+    const scope = standard.find((row) => row.stage === "scope");
+    expect(scope?.proactiveAgents).toContain("product-strategist");
 
     const lightweight = stageDelegationSummary("lightweight");
-    const scope = lightweight.find((row) => row.stage === "scope");
-    expect(scope?.mandatoryAgents).toEqual([]);
+    const lightweightScope = lightweight.find((row) => row.stage === "scope");
+    expect(lightweightScope?.mandatoryAgents).toEqual([]);
 
     const tdd = lightweight.find((row) => row.stage === "tdd");
     expect(tdd?.mandatoryAgents).toEqual(["test-author"]);
@@ -105,6 +107,8 @@ describe("stage schema and subagent alignment", () => {
     expect(stagePolicyNeedles("plan")).toContain("Dependency Batches");
     expect(stagePolicyNeedles("tdd", "quick")).toContain("acceptance criteria");
     expect(stagePolicyNeedles("tdd", "quick")).toContain("RED");
+    expect(stagePolicyNeedles("brainstorm")).toContain("Embedded Grill");
+    expect(stagePolicyNeedles("design")).toContain("Long-Term Trajectory");
   });
 
   it("exposes track render context for safe wording decisions", () => {
@@ -397,6 +401,7 @@ describe("stage schema and subagent alignment", () => {
       "performance-reviewer",
       "planner",
       "product-manager",
+      "product-strategist",
       "release-reviewer",
       "researcher",
       "reviewer",
@@ -648,6 +653,7 @@ describe("stage schema and subagent alignment", () => {
     expect(design.requiredGates.filter((gate) => gate.tier === "required").map((gate) => gate.id)).toEqual([
       "design_research_complete",
       "design_architecture_locked",
+      "design_diagram_freshness",
       "design_data_flow_mapped",
       "design_failure_modes_mapped",
       "design_test_and_perf_defined"
@@ -768,6 +774,13 @@ describe("stage schema and subagent alignment", () => {
     const design = ARTIFACT_TEMPLATES["03-design.md"];
     expect(design).toContain("## Stale Diagram Audit");
     expect(design).toContain("| Diagram marker baseline |");
+  });
+
+  it("brainstorm and design templates include wave-8 sections", () => {
+    const brainstorm = ARTIFACT_TEMPLATES["01-brainstorm.md"];
+    const design = ARTIFACT_TEMPLATES["03-design.md"];
+    expect(brainstorm).toContain("## Embedded Grill");
+    expect(design).toContain("## Long-Term Trajectory");
   });
 
   it("scope template includes pre-scope system audit section", () => {

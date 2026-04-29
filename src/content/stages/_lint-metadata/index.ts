@@ -8,6 +8,7 @@ const STAGE_POLICY_NEEDLES: Record<FlowStage, string[]> = {
     "Explore project context",
     "One question at a time",
     "2-3 architecturally distinct approaches",
+    "Embedded Grill",
     "Victory Detector",
     "Critic Pass",
     "State what is being approved",
@@ -31,6 +32,7 @@ const STAGE_POLICY_NEEDLES: Record<FlowStage, string[]> = {
     "Data Flow",
     "Failure Modes and Mitigation",
     "Performance Budget",
+    "Long-Term Trajectory",
     "Victory Detector",
     "Critic Pass",
     "One issue at a time"
