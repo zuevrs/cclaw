@@ -56,11 +56,11 @@ function stateDir(projectRoot: string): string {
 }
 
 function archiveRunsDir(projectRoot: string): string {
-  return path.join(projectRoot, RUNTIME_ROOT, "runs");
+  return path.join(projectRoot, RUNTIME_ROOT, "archive");
 }
 
 /**
- * Count archived runs as sub-directories under `.cclaw/runs/`. Missing
+ * Count archived runs as sub-directories under `.cclaw/archive/`. Missing
  * dir / ENOENT is interpreted as zero — callers should NOT conflate
  * that with "unknown" (undefined); we only return undefined on
  * unexpected errors so the caller can choose to skip the relaxation

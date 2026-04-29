@@ -10,11 +10,11 @@ describe("announce-at-start discipline and ethos principles", () => {
     await initCclaw({ projectRoot: root });
 
     const planSkill = await fs.readFile(
-      path.join(root, ".cclaw/skills/planning-and-task-breakdown/SKILL.md"),
+      path.join(root, ".cclaw/skills/plan/SKILL.md"),
       "utf8"
     );
     const reviewSkill = await fs.readFile(
-      path.join(root, ".cclaw/skills/two-layer-review/SKILL.md"),
+      path.join(root, ".cclaw/skills/review/SKILL.md"),
       "utf8"
     );
     const metaSkill = await fs.readFile(

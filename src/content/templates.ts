@@ -1444,7 +1444,7 @@ Track-specific skips are allowed only when \`flow-state.track\` + \`skippedStage
 
 - No completion claim without fresh command evidence in this turn.
 - Do not mark gates passed from memory.
-- Keep evidence in \`.cclaw/artifacts/\`; archive via \`npx cclaw-cli archive\`.
+- Keep evidence in \`.cclaw/artifacts/\`; archive through closeout via \`/cc\` or cancel early via \`node .cclaw/hooks/cancel-run.mjs\`.
 
 ## Delegation And Approvals
 

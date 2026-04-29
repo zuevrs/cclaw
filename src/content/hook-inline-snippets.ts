@@ -44,7 +44,7 @@
  *   timestamp so the hook-written `compound-readiness.json` is byte-equal
  *   to the CLI-written version for the same input.
  * - `countArchivedRunsInline` counts immediate subdirectories of
- *   `<root>/.cclaw/runs/` so both the hook and the CLI see the same
+ *   `<root>/.cclaw/archive/` so both the hook and the CLI see the same
  *   `archivedRunsCount` for the small-project relaxation.
  * - `formatCompoundReadinessLineInline` mirrors the one-line summary shape
  *   used by `src/internal/compound-readiness.ts::formatCompoundReadinessLine`
@@ -55,11 +55,11 @@ function normalizeCompoundLastUpdatedAt(date) {
   return date.toISOString().replace(/\\.\\d{3}Z$/u, "Z");
 }
 
-// Count archived runs as sub-directories under \`.cclaw/runs/\`. Missing
+// Count archived runs as sub-directories under \`.cclaw/archive/\`. Missing
 // dir returns 0; unexpected errors return undefined so the caller can
 // skip the small-project relaxation rather than guess.
 async function countArchivedRunsInline(root) {
-  const dir = path.join(root, RUNTIME_ROOT, "runs");
+  const dir = path.join(root, RUNTIME_ROOT, "archive");
   try {
     const entries = await fs.readdir(dir, { withFileTypes: true });
     return entries.filter((entry) => entry.isDirectory()).length;

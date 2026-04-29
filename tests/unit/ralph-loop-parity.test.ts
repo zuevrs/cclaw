@@ -129,9 +129,9 @@ describe("ralph-loop + compound-readiness parity (inline hook vs main)", () => {
     );
 
     // Seed archived runs so both sides see the same archivedRunsCount. The
-    // hook counts directories under `.cclaw/runs/`; without this seed the
+    // hook counts directories under `.cclaw/archive/`; without this seed the
     // small-project relaxation would fire on the hook side only.
-    const archiveDir = path.join(root, ".cclaw/runs");
+    const archiveDir = path.join(root, ".cclaw/archive");
     await fs.mkdir(archiveDir, { recursive: true });
     for (const name of ["run-a", "run-b", "run-c", "run-d", "run-e", "run-f"]) {
       await fs.mkdir(path.join(archiveDir, name), { recursive: true });
@@ -196,11 +196,11 @@ describe("ralph-loop + compound-readiness parity (inline hook vs main)", () => {
       rows.map((row) => JSON.stringify(row)).join("\n") + "\n",
       "utf8"
     );
-    await fs.mkdir(path.join(root, ".cclaw/runs/run-a"), { recursive: true });
-    await fs.mkdir(path.join(root, ".cclaw/runs/run-b"), { recursive: true });
-    await fs.mkdir(path.join(root, ".cclaw/runs/run-c"), { recursive: true });
-    await fs.mkdir(path.join(root, ".cclaw/runs/run-d"), { recursive: true });
-    await fs.mkdir(path.join(root, ".cclaw/runs/run-e"), { recursive: true });
+    await fs.mkdir(path.join(root, ".cclaw/archive/run-a"), { recursive: true });
+    await fs.mkdir(path.join(root, ".cclaw/archive/run-b"), { recursive: true });
+    await fs.mkdir(path.join(root, ".cclaw/archive/run-c"), { recursive: true });
+    await fs.mkdir(path.join(root, ".cclaw/archive/run-d"), { recursive: true });
+    await fs.mkdir(path.join(root, ".cclaw/archive/run-e"), { recursive: true });
 
     const result = await runHook(root, nodeHookRuntimeScript(), "session-start", {});
     expect(result.code).toBe(0);
@@ -260,8 +260,8 @@ describe("ralph-loop + compound-readiness parity (inline hook vs main)", () => {
       "utf8"
     );
     // Exactly 2 archived runs -> small-project relaxation fires.
-    await fs.mkdir(path.join(root, ".cclaw/runs/run-a"), { recursive: true });
-    await fs.mkdir(path.join(root, ".cclaw/runs/run-b"), { recursive: true });
+    await fs.mkdir(path.join(root, ".cclaw/archive/run-a"), { recursive: true });
+    await fs.mkdir(path.join(root, ".cclaw/archive/run-b"), { recursive: true });
 
     const result = await runHook(root, nodeHookRuntimeScript(), "session-start", {});
     expect(result.code).toBe(0);

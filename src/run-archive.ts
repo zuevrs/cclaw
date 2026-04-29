@@ -16,7 +16,7 @@ import type { FlowStage } from "./types.js";
 export const ARCHIVE_DISPOSITIONS = ["completed", "cancelled", "abandoned"] as const;
 export type ArchiveDisposition = (typeof ARCHIVE_DISPOSITIONS)[number];
 
-const RUNS_DIR_REL_PATH = `${RUNTIME_ROOT}/runs`;
+const ARCHIVE_DIR_REL_PATH = `${RUNTIME_ROOT}/archive`;
 const ACTIVE_ARTIFACTS_REL_PATH = `${RUNTIME_ROOT}/artifacts`;
 const STATE_DIR_REL_PATH = `${RUNTIME_ROOT}/state`;
 
@@ -87,8 +87,8 @@ export interface ArchiveRunOptions {
   dispositionReason?: string;
 }
 
-function runsRoot(projectRoot: string): string {
-  return path.join(projectRoot, RUNS_DIR_REL_PATH);
+function archiveRoot(projectRoot: string): string {
+  return path.join(projectRoot, ARCHIVE_DIR_REL_PATH);
 }
 
 function activeArtifactsPath(projectRoot: string): string {
@@ -231,7 +231,7 @@ async function inferRunNameFromArtifacts(projectRoot: string): Promise<string> {
 async function uniqueArchiveId(projectRoot: string, baseId: string): Promise<string> {
   let index = 1;
   let candidate = baseId;
-  while (await exists(path.join(runsRoot(projectRoot), candidate))) {
+  while (await exists(path.join(archiveRoot(projectRoot), candidate))) {
     index += 1;
     candidate = `${baseId}-${index}`;
   }
@@ -239,7 +239,7 @@ async function uniqueArchiveId(projectRoot: string, baseId: string): Promise<str
 }
 
 export async function listRuns(projectRoot: string): Promise<CclawRunMeta[]> {
-  const root = runsRoot(projectRoot);
+  const root = archiveRoot(projectRoot);
   if (!(await exists(root))) {
     return [];
   }
@@ -280,8 +280,8 @@ export async function archiveRun(
   return withDirectoryLock(archiveLockPath(projectRoot), async () => {
   return withDirectoryLock(flowStateLockPathFor(projectRoot), async () => {
   const artifactsDir = activeArtifactsPath(projectRoot);
-  const runsDir = runsRoot(projectRoot);
-  await ensureDir(runsDir);
+  const archiveDir = archiveRoot(projectRoot);
+  await ensureDir(archiveDir);
   await ensureDir(artifactsDir);
 
   const archiveRunName = (runName?.trim() && runName.trim().length > 0)
@@ -289,7 +289,7 @@ export async function archiveRun(
     : await inferRunNameFromArtifacts(projectRoot);
   const archiveBaseId = `${toArchiveDate()}-${slugifyRunName(archiveRunName)}`;
   const archiveId = await uniqueArchiveId(projectRoot, archiveBaseId);
-  const archivePath = path.join(runsDir, archiveId);
+  const archivePath = path.join(archiveDir, archiveId);
   const archiveArtifactsPath = path.join(archivePath, "artifacts");
 
   let sourceState = await readFlowState(projectRoot);

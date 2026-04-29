@@ -96,8 +96,8 @@ ${conversationLanguagePolicyMarkdown()}
    If this helper fails, STOP and report the exact command/output. Do **not** manually edit \`${flowPath}\`.
 11. The helper persists \`${flowPath}\`, computes \`skippedStages\`, sets the first stage for the track, resets the gate catalog, and writes \`.cclaw/artifacts/00-idea.md\`.
 12. Load the **first-stage skill for the chosen track** and its command file:
-    - quick → \`.cclaw/skills/specification-authoring/SKILL.md\`
-    - medium/standard → \`.cclaw/skills/brainstorming/SKILL.md\`
+    - quick → \`.cclaw/skills/spec/SKILL.md\`
+    - medium/standard → \`.cclaw/skills/brainstorm/SKILL.md\`
     - trivial fast-path → quick track spec skill per Phase 0 decision.
 13. Execute that stage with the prompt + Phase 1/Phase 2 + seed context as initial input.
 
@@ -191,7 +191,7 @@ ${conversationLanguagePolicyMarkdown()}
    - On conflict, prefer \`standard\` over \`medium\`, and \`medium\` over \`quick\`.
    - Always state the recommendation as a one-line reason citing matched triggers and a high/medium/low track selection confidence. Clarify that the heuristic is advisory until the managed helper writes state; after that, \`/cc\` follows the selected track. Include override guidance: switch to standard when architecture, schema, migration, security, or unclear scope appears; switch to medium when product framing is needed but architecture is known.
 8. Run the managed start helper: \`node .cclaw/hooks/start-flow.mjs --track=<quick|medium|standard> --class=<class> --prompt=<prompt> --stack=<stack> --reason=<matched heuristic>\`. The helper writes \`${flowPath}\`, computes \`skippedStages\`, resets the gate catalog, and writes \`${RUNTIME_ROOT}/artifacts/00-idea.md\`. If it fails, STOP and report the exact command/output; do not manually edit flow state.
-9. Load and execute the **first stage skill of the chosen track** (\`brainstorming\` for medium/standard, \`specification-authoring\` for quick) plus its matching command file.
+9. Load and execute the **first stage skill of the chosen track** (\`brainstorm\` for medium/standard, \`spec\` for quick) plus its matching command file.
 
 ### Reclassification on discovery
 

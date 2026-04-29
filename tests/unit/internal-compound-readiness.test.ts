@@ -44,7 +44,7 @@ async function seedKnowledge(root: string, rows: Record<string, unknown>[]): Pro
  * fire. Individual tests opt into the relaxation explicitly.
  */
 async function seedNonSmallProjectArchive(root: string): Promise<void> {
-  const dir = path.join(root, ".cclaw/runs");
+  const dir = path.join(root, ".cclaw/archive");
   await fs.mkdir(dir, { recursive: true });
   for (const name of ["run-a", "run-b", "run-c", "run-d", "run-e"]) {
     await fs.mkdir(path.join(dir, name), { recursive: true });
@@ -150,8 +150,8 @@ describe("cclaw internal compound-readiness", () => {
       { ...baseRow, trigger: "review gap", action: "regression", frequency: 1 },
       { ...baseRow, trigger: "review gap", action: "regression", frequency: 1 }
     ]);
-    await fs.mkdir(path.join(root, ".cclaw/runs/run-a"), { recursive: true });
-    await fs.mkdir(path.join(root, ".cclaw/runs/run-b"), { recursive: true });
+    await fs.mkdir(path.join(root, ".cclaw/archive/run-a"), { recursive: true });
+    await fs.mkdir(path.join(root, ".cclaw/archive/run-b"), { recursive: true });
 
     const captured = captureIo();
     const exit = await runInternalCommand(

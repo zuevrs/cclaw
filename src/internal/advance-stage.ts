@@ -27,7 +27,8 @@ import {
   type StageGateState
 } from "../flow-state.js";
 import { appendKnowledge } from "../knowledge-store.js";
-import { readFlowState, writeFlowState } from "../runs.js";
+import { archiveRun, readFlowState, writeFlowState } from "../runs.js";
+import type { ArchiveDisposition } from "../runs.js";
 import { FLOW_STAGES, TRACK_STAGES, type FlowStage, type FlowTrack } from "../types.js";
 import { runCompoundReadinessCommand } from "./compound-readiness.js";
 import { runHookManifestCommand } from "./hook-manifest.js";
@@ -86,6 +87,13 @@ interface StartFlowArgs {
   stack?: string;
   forceReset: boolean;
   reclassify: boolean;
+  quiet: boolean;
+}
+
+interface CancelRunArgs {
+  reason: string;
+  disposition: Extract<ArchiveDisposition, "cancelled" | "abandoned">;
+  name?: string;
   quiet: boolean;
 }
 
@@ -817,6 +825,51 @@ function parseStartFlowArgs(tokens: string[]): StartFlowArgs {
     throw new Error("internal start-flow requires --track=<standard|medium|quick>.");
   }
   return { track, className, prompt, reason, stack, forceReset, reclassify, quiet };
+}
+
+function parseCancelRunArgs(tokens: string[]): CancelRunArgs {
+  let reason: string | undefined;
+  let disposition: CancelRunArgs["disposition"] = "cancelled";
+  let name: string | undefined;
+  let quiet = false;
+  for (let i = 0; i < tokens.length; i += 1) {
+    const token = tokens[i]!;
+    const nextToken = tokens[i + 1];
+    const readValue = (flag: string): string => {
+      if (token.startsWith(`${flag}=`)) return token.slice(flag.length + 1);
+      if (token === flag && nextToken && !nextToken.startsWith("--")) {
+        i += 1;
+        return nextToken;
+      }
+      throw new Error(`${flag} requires a value.`);
+    };
+    if (token === "--quiet") {
+      quiet = true;
+      continue;
+    }
+    if (token === "--reason" || token.startsWith("--reason=")) {
+      reason = readValue("--reason").trim();
+      continue;
+    }
+    if (token === "--name" || token.startsWith("--name=")) {
+      const raw = readValue("--name").trim();
+      name = raw.length > 0 ? raw : undefined;
+      continue;
+    }
+    if (token === "--disposition" || token.startsWith("--disposition=")) {
+      const raw = readValue("--disposition").trim();
+      if (raw !== "cancelled" && raw !== "abandoned") {
+        throw new Error("--disposition must be cancelled or abandoned.");
+      }
+      disposition = raw;
+      continue;
+    }
+    throw new Error(`Unknown flag for internal cancel-run: ${token}`);
+  }
+  if (!reason || reason.length === 0) {
+    throw new Error("internal cancel-run requires --reason=<text>.");
+  }
+  return { reason, disposition, name, quiet };
 }
 
 async function buildValidationReport(
@@ -1674,6 +1727,29 @@ async function runStartFlow(
   return 0;
 }
 
+async function runCancelRun(
+  projectRoot: string,
+  args: CancelRunArgs,
+  io: InternalIo
+): Promise<number> {
+  const archived = await archiveRun(projectRoot, args.name, {
+    disposition: args.disposition,
+    dispositionReason: args.reason
+  });
+  if (!args.quiet) {
+    io.stdout.write(`${JSON.stringify({
+      ok: true,
+      command: "cancel-run",
+      disposition: archived.disposition,
+      reason: archived.dispositionReason ?? args.reason,
+      archiveId: archived.archiveId,
+      archivePath: archived.archivePath,
+      resetRunId: archived.resetState.activeRunId
+    }, null, 2)}\n`);
+  }
+  return 0;
+}
+
 function rewindLogPath(projectRoot: string): string {
   return path.join(projectRoot, RUNTIME_ROOT, "state", "rewind-log.jsonl");
 }
@@ -1840,7 +1916,7 @@ export async function runInternalCommand(
   const [subcommand, ...tokens] = argv;
   if (!subcommand) {
     io.stderr.write(
-      "cclaw internal requires a subcommand: advance-stage | start-flow | rewind | verify-flow-state-diff | verify-current-state | envelope-validate | tdd-red-evidence | tdd-loop-status | compound-readiness | hook-manifest | hook\n"
+      "cclaw internal requires a subcommand: advance-stage | start-flow | cancel-run | rewind | verify-flow-state-diff | verify-current-state | envelope-validate | tdd-red-evidence | tdd-loop-status | compound-readiness | hook-manifest | hook\n"
     );
     return 1;
   }
@@ -1851,6 +1927,9 @@ export async function runInternalCommand(
     }
     if (subcommand === "start-flow") {
       return await runStartFlow(projectRoot, parseStartFlowArgs(tokens), io);
+    }
+    if (subcommand === "cancel-run") {
+      return await runCancelRun(projectRoot, parseCancelRunArgs(tokens), io);
     }
     if (subcommand === "rewind") {
       return await runRewind(projectRoot, parseRewindArgs(tokens), io);
@@ -1880,7 +1959,7 @@ export async function runInternalCommand(
       return await runHookCommand(projectRoot, parseHookArgs(tokens), io);
     }
     io.stderr.write(
-      `Unknown internal subcommand: ${subcommand}. Expected advance-stage | start-flow | rewind | verify-flow-state-diff | verify-current-state | envelope-validate | tdd-red-evidence | tdd-loop-status | compound-readiness | hook-manifest | hook\n`
+      `Unknown internal subcommand: ${subcommand}. Expected advance-stage | start-flow | cancel-run | rewind | verify-flow-state-diff | verify-current-state | envelope-validate | tdd-red-evidence | tdd-loop-status | compound-readiness | hook-manifest | hook\n`
     );
     return 1;
   } catch (err) {

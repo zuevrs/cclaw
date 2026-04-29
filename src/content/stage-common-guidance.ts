@@ -34,7 +34,7 @@ Use this same closeout menu for every stage:
 - **B) Revise this stage** — stay on current stage and apply feedback.
 - **C) Pause / park** — stop after summarizing current stage, blockers, and next \`/cc\` action.
 - **D) Rewind** — run \`npx cclaw-cli internal rewind <target-stage> "<reason>"\` as the managed support/runtime repair action; after redoing the target stage, run \`npx cclaw-cli internal rewind --ack <target-stage>\` to clear the stale marker.
-- **E) Abandon** — only when the user explicitly wants to end a non-ship active run early, archive with \`npx cclaw-cli archive --skip-retro --retro-reason="<reason>"\`. Once in post-ship closeout, continue \`/cc\` through retro/compound/archive instead.
+- **E) Abandon** — only when the user explicitly wants to end a non-ship active run early, use \`/cc-cancel\` and run \`node .cclaw/hooks/cancel-run.mjs --reason="<reason>" [--disposition=abandoned]\`. Once in post-ship closeout, continue \`/cc\` through retro/compound/archive instead.
 
 Recommendation defaults:
 

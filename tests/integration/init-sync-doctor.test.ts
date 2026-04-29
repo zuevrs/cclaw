@@ -88,18 +88,20 @@ describe("install lifecycle", { timeout: 30_000 }, () => {
     expect(checks.some((check) => check.name === "hook:script:stage-complete.mjs:executable" && check.ok)).toBe(true);
     expect(checks.some((check) => check.name === "hook:script:start-flow.mjs" && check.ok)).toBe(true);
     expect(checks.some((check) => check.name === "hook:script:start-flow.mjs:executable" && check.ok)).toBe(true);
+    expect(checks.some((check) => check.name === "hook:script:cancel-run.mjs" && check.ok)).toBe(true);
+    expect(checks.some((check) => check.name === "hook:script:cancel-run.mjs:executable" && check.ok)).toBe(true);
     expect(checks.some((check) => check.name === "hook:wiring:codex" && check.ok)).toBe(true);
 
     const runtimeEntries = (await fs.readdir(path.join(root, ".cclaw"))).sort();
     expect(runtimeEntries).toEqual([
       "agents",
+      "archive",
       "artifacts",
       "commands",
       "config.yaml",
       "hooks",
       "knowledge.jsonl",
       "rules",
-      "runs",
       "skills",
       "state",
       "templates"
@@ -643,6 +645,7 @@ describe("install lifecycle", { timeout: 30_000 }, () => {
       "stage_skill:",
       "knowledge:",
       "artifacts:",
+      "archive:",
       "runs:",
       "flow_state:",
       "state:",
@@ -746,7 +749,7 @@ describe("install lifecycle", { timeout: 30_000 }, () => {
 
     const shim = path.join(root, ".claude/commands/cc.md");
     const stageContract = path.join(root, ".cclaw/commands/plan.md");
-    const skill = path.join(root, ".cclaw/skills/planning-and-task-breakdown/SKILL.md");
+    const skill = path.join(root, ".cclaw/skills/plan/SKILL.md");
     await fs.rm(shim);
     await fs.writeFile(stageContract, "# corrupted stage shim\n", "utf8");
     await fs.writeFile(skill, "# corrupted\n", "utf8");
@@ -756,7 +759,7 @@ describe("install lifecycle", { timeout: 30_000 }, () => {
     const restoredStageContract = await fs.readFile(stageContract, "utf8");
     const restoredSkill = await fs.readFile(skill, "utf8");
     expect(restored).toContain(".cclaw/skills/flow-start/SKILL.md");
-    expect(restoredStageContract).toContain(".cclaw/skills/planning-and-task-breakdown/SKILL.md");
+    expect(restoredStageContract).toContain(".cclaw/skills/plan/SKILL.md");
     expect(restoredStageContract).toContain("Normal stage resume and advancement uses `/cc`");
     expect(restoredSkill).toContain("## Required Gates");
   });
@@ -770,7 +773,7 @@ describe("install lifecycle", { timeout: 30_000 }, () => {
       defaultTrack: "quick"
     });
     await syncCclaw(root);
-    const quickTddSkill = await fs.readFile(path.join(root, ".cclaw/skills/test-driven-development/SKILL.md"), "utf8");
+    const quickTddSkill = await fs.readFile(path.join(root, ".cclaw/skills/tdd/SKILL.md"), "utf8");
     expect(quickTddSkill).not.toContain("tdd_traceable_to_plan");
 
     await writeConfig(root, {
@@ -778,8 +781,41 @@ describe("install lifecycle", { timeout: 30_000 }, () => {
       defaultTrack: "standard"
     });
     await syncCclaw(root);
-    const standardTddSkill = await fs.readFile(path.join(root, ".cclaw/skills/test-driven-development/SKILL.md"), "utf8");
+    const standardTddSkill = await fs.readFile(path.join(root, ".cclaw/skills/tdd/SKILL.md"), "utf8");
     expect(standardTddSkill).toContain("tdd_traceable_to_plan");
+  });
+
+  it("sync removes legacy descriptive stage skill folders", async () => {
+    const root = await createTempProject("sync-legacy-stage-skill-folders");
+    await initCclaw({ projectRoot: root });
+    const legacyFolders = [
+      "brainstorming",
+      "scope-shaping",
+      "engineering-design-lock",
+      "specification-authoring",
+      "planning-and-task-breakdown",
+      "test-driven-development",
+      "two-layer-review",
+      "shipping-and-handoff"
+    ];
+    for (const folder of legacyFolders) {
+      const legacyPath = path.join(root, ".cclaw/skills", folder);
+      await fs.mkdir(legacyPath, { recursive: true });
+      await fs.writeFile(path.join(legacyPath, "SKILL.md"), "# legacy\n", "utf8");
+    }
+
+    await syncCclaw(root);
+
+    for (const folder of legacyFolders) {
+      await expect(
+        fs.stat(path.join(root, ".cclaw/skills", folder))
+      ).rejects.toBeDefined();
+    }
+    for (const folder of ["brainstorm", "scope", "design", "spec", "plan", "tdd", "review", "ship"]) {
+      await expect(
+        fs.stat(path.join(root, ".cclaw/skills", folder, "SKILL.md"))
+      ).resolves.toBeDefined();
+    }
   });
 
   it("sync removes stale generated shims, persists config, and keeps user-owned assets", async () => {

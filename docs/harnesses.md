@@ -182,18 +182,17 @@ Every track then closes out through:
 
 | Stage | Skill folder |
 |---|---|
-| `brainstorm` | `brainstorming` |
-| `scope` | `scope-shaping` |
-| `design` | `engineering-design-lock` |
-| `spec` | `specification-authoring` |
-| `plan` | `planning-and-task-breakdown` |
-| `tdd` | `test-driven-development` |
-| `review` | `two-layer-review` |
-| `ship` | `shipping-and-handoff` |
+| `brainstorm` | `brainstorm` |
+| `scope` | `scope` |
+| `design` | `design` |
+| `spec` | `spec` |
+| `plan` | `plan` |
+| `tdd` | `tdd` |
+| `review` | `review` |
+| `ship` | `ship` |
 
 This map is generated from `src/constants.ts::STAGE_TO_SKILL_FOLDER` so
-skill-path naming stays explicit and stable even when stage ids differ from
-folder names.
+skill-path naming stays explicit and predictable (`skills/<stage>/SKILL.md`).
 
 ## Install surfaces
 

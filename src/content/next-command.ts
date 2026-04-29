@@ -280,7 +280,7 @@ by inspecting ${closeoutSubstateInline()}:
 | \`idle\` / missing      | Flip to \`retro_review\` and start retro protocol     |
 | \`retro_review\`        | Draft/update \`09-retro.md\`, ask accept/edit/skip  |
 | \`compound_review\`     | Compound closeout: overlap scan, refresh/supersede, ask approve/skip |
-| \`ready_to_archive\`    | Run \`npx cclaw-cli archive\`; reset flow-state on success |
+| \`ready_to_archive\`    | Run the archive runtime via \`/cc\`; reset flow-state on success |
 | \`archived\`            | Report "run archived"; stop                         |
 
 Each step owns its own state transition. \`/cc\` keeps retro and compound

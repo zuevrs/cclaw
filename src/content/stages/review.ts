@@ -13,8 +13,8 @@ export const REVIEW: StageSchemaInput = {
   schemaShape: "v2",
   stage: "review",
   complexityTier: "standard",
-  skillFolder: "two-layer-review",
-  skillName: "two-layer-review",
+  skillFolder: "review",
+  skillName: "review",
   skillDescription: "Two-layer review stage: spec compliance first, then code quality and production readiness. Section-by-section with severity discipline.",
   philosophy: {
     hardGate: "Do NOT ship, merge, or release until both review layers complete with an explicit verdict. No exceptions for urgency. Critical blockers MUST be resolved before handoff.",

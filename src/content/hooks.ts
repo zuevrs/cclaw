@@ -173,6 +173,14 @@ export function startFlowScript(): string {
   );
 }
 
+export function cancelRunScript(): string {
+  return internalHelperScript(
+    "cancel-run",
+    "cancel-run",
+    "Usage: node " + RUNTIME_ROOT + "/hooks/cancel-run.mjs --reason=<text> [--disposition=<cancelled|abandoned>] [--name=<slug>]"
+  );
+}
+
 export function stageCompleteScript(): string {
   const cliRuntime = resolveCliRuntimeForGeneratedHook();
   return `#!/usr/bin/env node

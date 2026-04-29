@@ -199,8 +199,8 @@ The registry in `src/content/reference-patterns.ts` names the adopted patterns. 
 | `.cclaw/artifacts/01-brainstorm.md` through `.cclaw/artifacts/08-ship.md` | Critical-path stage artifacts. |
 | `.cclaw/artifacts/09-retro.md` | Retro artifact created during closeout. |
 | `.cclaw/knowledge.jsonl` | Append-only lessons, patterns, rules, and compound entries. |
-| `.cclaw/runs/<YYYY-MM-DD-slug>/` | Archived snapshot of artifacts, state, and manifest. |
+| `.cclaw/archive/<YYYY-MM-DD-slug>/` | Archived snapshot of artifacts, state, and manifest. |
 
 ## Archive Lifecycle
 
-Archive is the last closeout substate. It moves active artifacts into `.cclaw/runs/<YYYY-MM-DD-slug>/`, snapshots state, writes a manifest, and resets active flow state for the next run. A run should not be archived while required gates, review blockers, delegation evidence, or closeout decisions are unresolved.
+Archive is the last closeout substate. It moves active artifacts into `.cclaw/archive/<YYYY-MM-DD-slug>/`, snapshots state, writes a manifest, and resets active flow state for the next run. A run should not be archived while required gates, review blockers, delegation evidence, or closeout decisions are unresolved.

@@ -26,7 +26,7 @@ describe("runs system", () => {
     await expect(fs.stat(path.join(root, ".cclaw/worktrees"))).rejects.toBeDefined();
     await expect(fs.stat(path.join(root, ".cclaw/state/active-feature.json"))).rejects.toBeDefined();
     await expect(fs.stat(path.join(root, ".cclaw/state/worktrees.json"))).rejects.toBeDefined();
-    await expect(fs.stat(path.join(root, ".cclaw/runs"))).resolves.toBeTruthy();
+    await expect(fs.stat(path.join(root, ".cclaw/archive"))).resolves.toBeTruthy();
   });
 
   it("archives active artifacts into dated run folder and resets flow", async () => {
@@ -48,6 +48,7 @@ describe("runs system", () => {
 
     expect(archived.archiveId).toMatch(/^\d{4}-\d{2}-\d{2}-payments-revamp/);
     expect(archived.runName).toBe("Payments Revamp");
+    expect(archived.archivePath.startsWith(path.join(root, ".cclaw", "archive"))).toBe(true);
     await expect(
       fs.readFile(path.join(archived.archivePath, "artifacts", "01-brainstorm.md"), "utf8")
     ).resolves.toContain("# draft");
@@ -79,11 +80,27 @@ describe("runs system", () => {
       dispositionReason: "deprioritized by product"
     });
     expect(archived.disposition).toBe("cancelled");
+    expect(archived.archivePath.startsWith(path.join(root, ".cclaw", "archive"))).toBe(true);
     expect(archived.dispositionReason).toBe("deprioritized by product");
     const manifest = JSON.parse(await fs.readFile(path.join(archived.archivePath, "archive-manifest.json"), "utf8"));
     expect(manifest.disposition).toBe("cancelled");
     expect(manifest.dispositionReason).toBe("deprioritized by product");
     expect((await readFlowState(root)).currentStage).toBe("brainstorm");
+  });
+
+  it("archives abandoned runs under .cclaw/archive with required reason", async () => {
+    const root = await createTempProject("runs-abandoned-disposition");
+    await ensureRunSystem(root);
+    await fs.writeFile(path.join(root, ".cclaw/artifacts/01-brainstorm.md"), "# draft\n", "utf8");
+    const archived = await archiveRun(root, "Abandoned Work", {
+      disposition: "abandoned",
+      dispositionReason: "no longer needed"
+    });
+    expect(archived.disposition).toBe("abandoned");
+    expect(archived.archivePath.startsWith(path.join(root, ".cclaw", "archive"))).toBe(true);
+    const manifest = JSON.parse(await fs.readFile(path.join(archived.archivePath, "archive-manifest.json"), "utf8"));
+    expect(manifest.disposition).toBe("abandoned");
+    expect(manifest.dispositionReason).toBe("no longer needed");
   });
 
   it("requires a reason for cancelled or abandoned archives", async () => {
@@ -110,7 +127,7 @@ describe("runs system", () => {
   it("surfaces partial archive sentinels through doctor", async () => {
     const root = await createTempProject("runs-partial-archive-doctor");
     await ensureRunSystem(root);
-    const archiveDir = path.join(root, ".cclaw/runs/2026-04-26-partial");
+    const archiveDir = path.join(root, ".cclaw/archive/2026-04-26-partial");
     await fs.mkdir(archiveDir, { recursive: true });
     await fs.writeFile(
       path.join(archiveDir, ".archive-in-progress"),
@@ -120,12 +137,26 @@ describe("runs system", () => {
     );
 
     const checks = await doctorChecks(root);
-    const archiveIntegrity = checks.find((check) => check.name === "runs:archive_integrity");
+    const archiveIntegrity = checks.find((check) => check.name === "archive:integrity");
     expect(archiveIntegrity).toBeDefined();
     expect(archiveIntegrity?.ok).toBe(false);
     expect(archiveIntegrity?.details).toContain(".archive-in-progress");
     expect(archiveIntegrity?.details).toContain("retry archive");
     expect(archiveIntegrity?.details).toContain("recover/rollback");
+  });
+
+  it("flags legacy .cclaw/runs storage with data as incompatible", async () => {
+    const root = await createTempProject("runs-legacy-storage");
+    await ensureRunSystem(root);
+    const legacyDir = path.join(root, ".cclaw/runs/legacy-run");
+    await fs.mkdir(legacyDir, { recursive: true });
+    await fs.writeFile(path.join(legacyDir, "archive-manifest.json"), "{}\n", "utf8");
+
+    const checks = await doctorChecks(root);
+    const legacy = checks.find((check) => check.name === "archive:legacy_runs_storage");
+    expect(legacy).toBeDefined();
+    expect(legacy?.ok).toBe(false);
+    expect(legacy?.details).toContain("legacy archive storage detected");
   });
 
   it("creates unique archive ids for same-day run names", async () => {

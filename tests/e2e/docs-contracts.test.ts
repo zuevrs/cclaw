@@ -76,7 +76,7 @@ describe("docs flow contract", () => {
       ".cclaw/state/delegation-log.json",
       ".cclaw/artifacts/",
       ".cclaw/knowledge.jsonl",
-      ".cclaw/runs/<YYYY-MM-DD-slug>/"
+      ".cclaw/archive/<YYYY-MM-DD-slug>/"
     ]) {
       expect(scheme).toContain(required);
     }

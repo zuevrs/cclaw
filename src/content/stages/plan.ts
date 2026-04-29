@@ -8,8 +8,8 @@ export const PLAN: StageSchemaInput = {
   schemaShape: "v2",
   stage: "plan",
   complexityTier: "standard",
-  skillFolder: "planning-and-task-breakdown",
-  skillName: "planning-and-task-breakdown",
+  skillFolder: "plan",
+  skillName: "plan",
   skillDescription: "Execution planning stage with strict confirmation gate before implementation.",
   philosophy: {
     hardGate: "Do NOT write code or tests. Planning only. This stage produces a task graph and execution order. WAIT_FOR_CONFIRM before any handoff to implementation.",

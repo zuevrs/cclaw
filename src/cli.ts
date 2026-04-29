@@ -191,7 +191,7 @@ function buildInitSurfacePreview(harnesses: HarnessId[]): string[] {
     ".cclaw/agents/*.md",
     ".cclaw/hooks/*",
     ".cclaw/rules/**",
-    ".cclaw/runs/**",
+    ".cclaw/archive/**",
     ".cclaw/artifacts/**",
     ".cclaw/knowledge.jsonl",
     ".cclaw/state/*.json|*.jsonl",

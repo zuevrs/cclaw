@@ -8,8 +8,8 @@ export const SPEC: StageSchemaInput = {
   schemaShape: "v2",
   stage: "spec",
   complexityTier: "standard",
-  skillFolder: "specification-authoring",
-  skillName: "specification-authoring",
+  skillFolder: "spec",
+  skillName: "spec",
   skillDescription: "Specification stage. Produce measurable, testable requirements without ambiguity.",
   philosophy: {
     hardGate: "Do NOT plan tasks or write implementation code. This stage produces a specification document only. Every requirement must be expressed in observable, testable terms.",

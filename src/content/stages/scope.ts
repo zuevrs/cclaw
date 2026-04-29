@@ -14,8 +14,8 @@ export const SCOPE: StageSchemaInput = {
   schemaShape: "v2",
   stage: "scope",
   complexityTier: "standard",
-  skillFolder: "scope-shaping",
-  skillName: "scope-shaping",
+  skillFolder: "scope",
+  skillName: "scope",
   skillDescription: "Strategic contract stage. Select HOLD/SELECTIVE/EXPAND/REDUCE mode, lock the slice and boundaries, and hand stable discretion zones to design.",
   philosophy: {
     hardGate: "Do NOT begin architecture, design, or code. This stage produces scope decisions only. Do not silently add or remove scope — every change is an explicit user opt-in.",
@@ -70,7 +70,7 @@ export const SCOPE: StageSchemaInput = {
         "recommend the option that best covers the prime-directive failure modes, four data-flow paths, observability, and deferred handling for the in-scope set with the smallest blast radius. Base your recommendation on default heuristics: greenfield -> expand, enhancement -> selective, bugfix/hotfix/refactor -> hold, broad blast radius -> reduce"
       ),
       "Do not walk the full checklist by default. Lead with a proposed scope contract, selected depth (`lite`/`standard`/`deep`), and the one decision that matters most; label the mode as recommended, not selected, until the user answers.",
-      "For simple web-app flows, default to HOLD SCOPE or SELECTIVE EXPANSION, show the exact in/out/deferred contract as a proposal, and STOP for one explicit approval before writing the final scope artifact or completing the stage.",
+      "For low-risk concrete asks, keep the proposal compact but still explicit: recommend (do not auto-select) one mode, show exact in/out/deferred boundaries, and STOP for one explicit approval before finalizing the artifact or completing the stage.",
       "Challenge premise first, take a firm position, and name one concrete condition that would change it.",
       "Push back on weak framing: vague scope needs a specific user/problem, platform vision needs a narrow wedge, social proof needs behavioral evidence.",
       "Resolve one structural scope issue at a time. Only non-critical preference/default assumptions may continue; STOP on uncertainty about scope boundary, architecture commitment, security, data loss, public API, migration, auth/pricing, or required user approval.",
@@ -114,7 +114,7 @@ export const SCOPE: StageSchemaInput = {
     ],
     inputs: ["brainstorm artifact", "timeline constraints", "product priorities"],
     requiredContext: [
-      "approved brainstorm direction",
+      "approved brainstorm direction with selected option and non-goals",
       "existing capabilities and reusable components",
       "delivery deadlines and risk tolerance"
     ],

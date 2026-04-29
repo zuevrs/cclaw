@@ -57,7 +57,7 @@ export interface ReadFlowStateOptions {
 }
 
 const FLOW_STATE_REL_PATH = `${RUNTIME_ROOT}/state/flow-state.json`;
-const RUNS_DIR_REL_PATH = `${RUNTIME_ROOT}/runs`;
+const ARCHIVE_DIR_REL_PATH = `${RUNTIME_ROOT}/archive`;
 const ACTIVE_ARTIFACTS_REL_PATH = `${RUNTIME_ROOT}/artifacts`;
 const FLOW_STAGE_SET = new Set<string>(FLOW_STAGES);
 
@@ -139,8 +139,8 @@ function flowStateLockPath(projectRoot: string): string {
   return path.join(projectRoot, RUNTIME_ROOT, "state", ".flow-state.lock");
 }
 
-function runsRoot(projectRoot: string): string {
-  return path.join(projectRoot, RUNS_DIR_REL_PATH);
+function archiveRoot(projectRoot: string): string {
+  return path.join(projectRoot, ARCHIVE_DIR_REL_PATH);
 }
 
 function activeArtifactsPath(projectRoot: string): string {
@@ -551,7 +551,7 @@ export async function ensureRunSystem(
   projectRoot: string,
   _options: EnsureRunSystemOptions = {}
 ): Promise<FlowState> {
-  await ensureDir(runsRoot(projectRoot));
+  await ensureDir(archiveRoot(projectRoot));
   await ensureDir(activeArtifactsPath(projectRoot));
   const statePath = flowStatePath(projectRoot);
   const state = await readFlowState(projectRoot);

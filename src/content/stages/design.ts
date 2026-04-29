@@ -14,8 +14,8 @@ export const DESIGN: StageSchemaInput = {
   schemaShape: "v2",
   stage: "design",
   complexityTier: "standard",
-  skillFolder: "engineering-design-lock",
-  skillName: "engineering-design-lock",
+  skillFolder: "design",
+  skillName: "design",
   skillDescription: "Engineering lock stage. Convert the approved scope contract into a buildable architecture with adversarial alternatives, failure/rescue paths, and spec handoff.",
   philosophy: {
     hardGate: "Do NOT write implementation code. This stage produces design decisions and architecture documents only. No code changes, no scaffolding, no test files.",

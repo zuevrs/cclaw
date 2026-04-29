@@ -159,7 +159,7 @@ export interface ComputeCompoundReadinessOptions {
   maxReady?: number;
   now?: Date;
   /**
-   * Count of archived runs under `.cclaw/runs/`. When supplied and
+   * Count of archived runs under `.cclaw/archive/`. When supplied and
    * `< SMALL_PROJECT_ARCHIVE_RUNS_THRESHOLD`, the effective threshold
    * is lowered to `min(threshold, SMALL_PROJECT_RECURRENCE_THRESHOLD)`.
    * Matches the rule documented in `docs/config.md`.

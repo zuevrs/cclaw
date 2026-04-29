@@ -112,8 +112,8 @@ Use \`/cc <idea>\` for new work, \`/cc\` for progression and closeout, \`/cc-ide
 ## Main vs Operator Surfaces
 
 - **Main workflow:** \`/cc\`, \`/cc-ideate\`, and \`/cc-cancel\` inside the installed harness runtime.
-- **Installer/support surface:** \`npx cclaw-cli init\`, \`npx cclaw-cli sync\`, \`npx cclaw-cli upgrade\`, \`npx cclaw-cli doctor\`, and explicit support/archive actions. Do not ask users to install or run a \`cclaw\` binary during normal stage flow.
-- Use operator/support surfaces only for install/runtime diagnosis, explicit archival, or deeper inspection. Do not make them part of the happy path.
+- **Installer/support surface:** \`npx cclaw-cli init\`, \`npx cclaw-cli sync\`, \`npx cclaw-cli upgrade\`, \`npx cclaw-cli doctor\`, and \`npx cclaw-cli uninstall\`.
+- Use operator/support surfaces only for install/runtime diagnosis or lifecycle maintenance. Do not make them part of the happy path.
 
 ## Whole flow map
 

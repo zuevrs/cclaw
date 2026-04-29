@@ -189,7 +189,7 @@ function formatManagedValidationIssue(issue: ReturnType<typeof validateManagedRe
 }
 
 async function generatedCliEntrypointsOk(projectRoot: string): Promise<{ ok: boolean; details: string }> {
-  const hookScripts = ["stage-complete.mjs", "start-flow.mjs", "run-hook.mjs"] as const;
+  const hookScripts = ["stage-complete.mjs", "start-flow.mjs", "cancel-run.mjs", "run-hook.mjs"] as const;
   const problems: string[] = [];
   const checked: string[] = [];
   for (const script of hookScripts) {
@@ -608,24 +608,24 @@ async function initRecoveryCheck(projectRoot: string): Promise<{ ok: boolean; de
 }
 
 async function archiveIntegrityCheck(projectRoot: string): Promise<{ ok: boolean; details: string }> {
-  const runsDir = path.join(projectRoot, RUNTIME_ROOT, "runs");
-  if (!(await exists(runsDir))) {
-    return { ok: true, details: `${RUNTIME_ROOT}/runs is absent; no archives to inspect yet` };
+  const archiveDir = path.join(projectRoot, RUNTIME_ROOT, "archive");
+  if (!(await exists(archiveDir))) {
+    return { ok: true, details: `${RUNTIME_ROOT}/archive is absent; no archives to inspect yet` };
   }
   let entries: Array<{ name: string; isDirectory: () => boolean }>;
   try {
-    entries = await fs.readdir(runsDir, { withFileTypes: true });
+    entries = await fs.readdir(archiveDir, { withFileTypes: true });
   } catch (error) {
     const reason = error instanceof Error ? error.message : String(error);
-    return { ok: false, details: `unable to inspect ${RUNTIME_ROOT}/runs (${reason})` };
+    return { ok: false, details: `unable to inspect ${RUNTIME_ROOT}/archive (${reason})` };
   }
 
   const problems: string[] = [];
   for (const entry of entries) {
     if (!entry.isDirectory()) continue;
     const runId = entry.name;
-    const runPath = path.join(runsDir, runId);
-    const relRunPath = `${RUNTIME_ROOT}/runs/${runId}`;
+    const runPath = path.join(archiveDir, runId);
+    const relRunPath = `${RUNTIME_ROOT}/archive/${runId}`;
     if (await exists(path.join(runPath, ".archive-in-progress"))) {
       problems.push(`${relRunPath}/.archive-in-progress sentinel present`);
     }
@@ -667,6 +667,31 @@ async function archiveIntegrityCheck(projectRoot: string): Promise<{ ok: boolean
   return {
     ok: false,
     details: `${problems.join("; ")}. Fix: inspect the archive directory, retry archive if the active run was restored, or recover/rollback artifacts and state from the snapshot before removing the sentinel.`
+  };
+}
+
+async function legacyRunsStorageCheck(projectRoot: string): Promise<{ ok: boolean; details: string }> {
+  const legacyRunsDir = path.join(projectRoot, RUNTIME_ROOT, "runs");
+  if (!(await exists(legacyRunsDir))) {
+    return { ok: true, details: `${RUNTIME_ROOT}/runs is absent (expected)` };
+  }
+  let entries: Array<{ name: string; isDirectory: () => boolean; isFile: () => boolean }>;
+  try {
+    entries = await fs.readdir(legacyRunsDir, { withFileTypes: true });
+  } catch (error) {
+    const reason = error instanceof Error ? error.message : String(error);
+    return { ok: false, details: `legacy ${RUNTIME_ROOT}/runs exists but is unreadable (${reason})` };
+  }
+  if (entries.length === 0) {
+    return {
+      ok: true,
+      details: `legacy ${RUNTIME_ROOT}/runs exists but is empty; run cclaw sync to remove it`
+    };
+  }
+  const sample = entries.slice(0, 5).map((entry) => entry.name).join(", ");
+  return {
+    ok: false,
+    details: `legacy archive storage detected under ${RUNTIME_ROOT}/runs (${sample}${entries.length > 5 ? ", ..." : ""}). This runtime only supports ${RUNTIME_ROOT}/archive; migrate or remove legacy data before continuing.`
   };
 }
 
@@ -1210,6 +1235,7 @@ export async function doctorChecks(projectRoot: string, options: DoctorOptions =
     "run-hook.cmd",
     "stage-complete.mjs",
     "start-flow.mjs",
+    "cancel-run.mjs",
     "delegation-record.mjs",
     "opencode-plugin.mjs"
   ]) {
@@ -2100,9 +2126,15 @@ export async function doctorChecks(projectRoot: string, options: DoctorOptions =
     });
   }
   checks.push({
-    name: "runs:archive_root",
-    ok: await exists(path.join(projectRoot, RUNTIME_ROOT, "runs")),
-    details: `${RUNTIME_ROOT}/runs must exist for archived run snapshots`
+    name: "archive:root",
+    ok: await exists(path.join(projectRoot, RUNTIME_ROOT, "archive")),
+    details: `${RUNTIME_ROOT}/archive is the canonical storage root for archived runs`
+  });
+  const legacyRunsStorage = await legacyRunsStorageCheck(projectRoot);
+  checks.push({
+    name: "archive:legacy_runs_storage",
+    ok: legacyRunsStorage.ok,
+    details: legacyRunsStorage.details
   });
   const initRecovery = await initRecoveryCheck(projectRoot);
   checks.push({
@@ -2112,7 +2144,7 @@ export async function doctorChecks(projectRoot: string, options: DoctorOptions =
   });
   const archiveIntegrity = await archiveIntegrityCheck(projectRoot);
   checks.push({
-    name: "runs:archive_integrity",
+    name: "archive:integrity",
     ok: archiveIntegrity.ok,
     details: archiveIntegrity.details
   });

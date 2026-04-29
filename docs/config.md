@@ -148,7 +148,7 @@ count for trigger/action clusters before lift candidates are proposed.
 
 Runtime tuning applied everywhere compound readiness is computed (`cclaw internal compound-readiness` and the session-start hook that writes derived readiness status when needed):
 
-- For repositories with `< 5` archived runs under `.cclaw/runs/`, the
+- For repositories with `< 5` archived runs under `.cclaw/archive/`, the
 effective threshold is temporarily lowered to
 `min(recurrenceThreshold, 2)` and `smallProjectRelaxationApplied` is
 set to `true` in the derived status.

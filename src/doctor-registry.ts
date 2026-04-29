@@ -111,7 +111,7 @@ const RULES: DoctorRegistryRule[] = [
     }
   },
   {
-    test: /^(knowledge:|artifacts:|runs:)/,
+    test: /^(knowledge:|artifacts:|archive:|runs:)/,
     metadata: {
       severity: "error",
       summary: "Knowledge and artifact runtime integrity check.",

@@ -10,8 +10,8 @@ export const TDD: StageSchemaV2Input = {
   schemaShape: "v2",
   stage: "tdd",
   complexityTier: "standard",
-  skillFolder: "test-driven-development",
-  skillName: "test-driven-development",
+  skillFolder: "tdd",
+  skillName: "tdd",
   skillDescription: "Full vertical-slice TDD cycle: discover existing tests and system impact, then RED (failing tests), GREEN (minimal implementation), REFACTOR (cleanup). One source item at a time with strict traceability.",
   philosophy: {
     hardGate: "Do NOT merge, ship, or skip review. Follow RED → GREEN → REFACTOR strictly for each plan slice. Do NOT write implementation code before RED tests exist. Do NOT write RED tests before discovering relevant existing tests and impacted contracts. Do NOT skip the REFACTOR step.",

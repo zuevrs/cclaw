@@ -523,7 +523,7 @@ describe("stage schema and subagent alignment", () => {
       .toContain("before Selected Direction");
     expect(skill).toContain("if using a structured question tool, send exactly one question object");
     expect(skill).toContain("rationale traceable to Approach Reaction");
-    expect(skill).toContain("scope handoff with decisions, drift, confidence");
+    expect(skill).toContain("scope handoff packet with selected direction, decisions, drift, confidence");
   });
 
   it("brainstorm skill teaches the calibrated Self-Review Notes format, not the legacy `- None.` shortcut", () => {
@@ -699,7 +699,7 @@ describe("stage schema and subagent alignment", () => {
     const scope = stageSchema("scope");
 
     expect(brainstorm.executionModel.checklist).toEqual(expect.arrayContaining([
-      expect.stringContaining("Use compact discovery for simple apps"),
+      expect.stringContaining("Use compact discovery for low-risk asks"),
       expect.stringContaining("Problem Decision Record plus short-circuit handoff")
     ]));
     expect(brainstorm.executionModel.interactionProtocol).toEqual(expect.arrayContaining([
@@ -710,7 +710,7 @@ describe("stage schema and subagent alignment", () => {
     ]));
     expect(scope.executionModel.interactionProtocol).toEqual(expect.arrayContaining([
       expect.stringContaining("Do not walk the full checklist by default"),
-      expect.stringContaining("STOP for one explicit approval before writing the final scope artifact")
+      expect.stringContaining("STOP for one explicit approval before finalizing the artifact")
     ]));
     expect(scope.executionModel.requiredEvidence).toEqual(expect.arrayContaining([
       expect.stringContaining("does not satisfy user approval")

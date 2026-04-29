@@ -29,6 +29,7 @@ import { ironLawRuntimeDocument, ironLawsSkillMarkdown } from "./content/iron-la
 import {
   stageCompleteScript,
   startFlowScript,
+  cancelRunScript,
   runHookCmdScript,
   delegationRecordScript,
   opencodePluginJs,
@@ -146,6 +147,17 @@ const DEPRECATED_UTILITY_SKILL_FOLDERS = [
   "flow-status",
   "flow-tree",
   "flow-diff"
+] as const;
+
+const DEPRECATED_STAGE_SKILL_FOLDERS = [
+  "brainstorming",
+  "scope-shaping",
+  "engineering-design-lock",
+  "specification-authoring",
+  "planning-and-task-breakdown",
+  "test-driven-development",
+  "two-layer-review",
+  "shipping-and-handoff"
 ] as const;
 
 const DEPRECATED_AGENT_FILES = [
@@ -1031,6 +1043,7 @@ async function writeHooks(projectRoot: string, config: CclawConfig): Promise<voi
 
   await writeFileSafe(path.join(hooksDir, "stage-complete.mjs"), stageCompleteScript());
   await writeFileSafe(path.join(hooksDir, "start-flow.mjs"), startFlowScript());
+  await writeFileSafe(path.join(hooksDir, "cancel-run.mjs"), cancelRunScript());
   await writeFileSafe(path.join(hooksDir, "run-hook.mjs"), nodeHookRuntimeScript({
     strictness: effectiveStrictness,
     tddTestPathPatterns: config.tdd?.testPathPatterns ?? config.tddTestGlobs,
@@ -1049,7 +1062,8 @@ async function writeHooks(projectRoot: string, config: CclawConfig): Promise<voi
       "run-hook.mjs",
       "run-hook.cmd",
       "delegation-record.mjs",
-      "opencode-plugin.mjs"
+      "opencode-plugin.mjs",
+      "cancel-run.mjs"
     ]) {
       await fs.chmod(path.join(hooksDir, script), 0o755);
     }
@@ -1171,6 +1185,9 @@ async function cleanLegacyArtifacts(projectRoot: string): Promise<void> {
   for (const legacyFolder of DEPRECATED_UTILITY_SKILL_FOLDERS) {
     await removeBestEffort(runtimePath(projectRoot, "skills", legacyFolder), true);
   }
+  for (const legacyFolder of DEPRECATED_STAGE_SKILL_FOLDERS) {
+    await removeBestEffort(runtimePath(projectRoot, "skills", legacyFolder), true);
+  }
 
   for (const legacyAgentFile of DEPRECATED_AGENT_FILES) {
     await removeBestEffort(runtimePath(projectRoot, "agents", legacyAgentFile));
@@ -1198,6 +1215,19 @@ async function cleanLegacyArtifacts(projectRoot: string): Promise<void> {
   // releases and are now intentionally removed from user projects.
   for (const legacyRuntimeDir of DEPRECATED_RUNTIME_DIRS) {
     await removeBestEffort(runtimePath(projectRoot, legacyRuntimeDir), true);
+  }
+
+  // Archive storage migration: `.cclaw/runs` is legacy and no longer a valid
+  // archive root. Remove only when empty; otherwise keep for explicit doctor
+  // diagnostics so users can manually migrate or inspect old data.
+  const legacyRunsDir = runtimePath(projectRoot, "runs");
+  try {
+    const entries = await fs.readdir(legacyRunsDir);
+    if (entries.length === 0) {
+      await fs.rm(legacyRunsDir, { recursive: true, force: true });
+    }
+  } catch {
+    // missing or unreadable legacy dir; leave doctor to report as needed
   }
 
   // D-4 terminology migration: rename historical ideation artifacts to the

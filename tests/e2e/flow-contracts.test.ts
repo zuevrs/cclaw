@@ -54,8 +54,22 @@ describe("flow command contracts", () => {
     }
     await expect(fs.stat(path.join(root, ".cclaw/commands/finish.md"))).rejects.toThrow(/ENOENT/);
     const cancelCommand = await fs.readFile(path.join(root, ".cclaw/commands/cancel.md"), "utf8");
-    expect(cancelCommand).toContain("--disposition=cancelled");
+    expect(cancelCommand).toContain("node .cclaw/hooks/cancel-run.mjs --reason");
     expect(cancelCommand).toContain("required reason");
+    expect(cancelCommand).not.toContain("cclaw archive");
+
+    for (const legacyFolder of [
+      "brainstorming",
+      "scope-shaping",
+      "engineering-design-lock",
+      "specification-authoring",
+      "planning-and-task-breakdown",
+      "test-driven-development",
+      "two-layer-review",
+      "shipping-and-handoff"
+    ]) {
+      await expect(fs.stat(path.join(root, ".cclaw/skills", legacyFolder))).rejects.toThrow(/ENOENT/);
+    }
 
     for (const stage of FLOW_STAGES) {
       const content = await fs.readFile(path.join(root, ".cclaw/commands", `${stage}.md`), "utf8");
@@ -78,7 +92,7 @@ describe("flow command contracts", () => {
       ".cclaw/commands/next.md",
       ".cclaw/commands/ideate.md",
       ".cclaw/commands/view.md",
-      ".cclaw/skills/brainstorming/SKILL.md",
+      ".cclaw/skills/brainstorm/SKILL.md",
       ".cclaw/skills/subagent-dev/SKILL.md",
       ".cclaw/agents/reviewer.md",
       "AGENTS.md"
@@ -168,10 +182,13 @@ describe("flow command contracts", () => {
     await initCclaw({ projectRoot: root });
 
     const metaSkill = await fs.readFile(path.join(root, ".cclaw/skills/using-cclaw/SKILL.md"), "utf8");
+    const nextCommand = await fs.readFile(path.join(root, ".cclaw/commands/next.md"), "utf8");
     expect(metaSkill).toContain("Installer/support surface");
     expect(metaSkill).toContain("npx cclaw-cli sync");
     expect(metaSkill).toContain("Main workflow");
     expect(metaSkill).toContain("`/cc-cancel`");
+    expect(metaSkill).not.toContain("npx cclaw-cli archive");
+    expect(nextCommand).not.toContain("npx cclaw-cli archive");
 
     const stageComplete = await fs.readFile(path.join(root, ".cclaw/hooks/stage-complete.mjs"), "utf8");
     expect(stageComplete).toContain("CCLAW_CLI_ENTRYPOINT");
@@ -185,15 +202,21 @@ describe("flow command contracts", () => {
     expect(startFlow).toContain("process.execPath");
     expect(startFlow).not.toContain("cclaw binary not found");
     expect(startFlow).not.toContain("cmd.exe");
+
+    const cancelRun = await fs.readFile(path.join(root, ".cclaw/hooks/cancel-run.mjs"), "utf8");
+    expect(cancelRun).toContain("CCLAW_CLI_ENTRYPOINT");
+    expect(cancelRun).toContain("cancel-run");
+    expect(cancelRun).toContain("process.execPath");
+    expect(cancelRun).not.toContain("cclaw binary not found");
   });
 
   it("enforces TDD and two-layer review semantics in skills", async () => {
     const root = await createTempProject("tdd");
     await initCclaw({ projectRoot: root });
 
-    const tddSkill = await fs.readFile(path.join(root, ".cclaw/skills/test-driven-development/SKILL.md"), "utf8");
-    const reviewSkill = await fs.readFile(path.join(root, ".cclaw/skills/two-layer-review/SKILL.md"), "utf8");
-    const shipSkill = await fs.readFile(path.join(root, ".cclaw/skills/shipping-and-handoff/SKILL.md"), "utf8");
+    const tddSkill = await fs.readFile(path.join(root, ".cclaw/skills/tdd/SKILL.md"), "utf8");
+    const reviewSkill = await fs.readFile(path.join(root, ".cclaw/skills/review/SKILL.md"), "utf8");
+    const shipSkill = await fs.readFile(path.join(root, ".cclaw/skills/ship/SKILL.md"), "utf8");
 
     expect(tddSkill).toContain("RED");
     expect(tddSkill).toContain("GREEN");
@@ -285,15 +308,15 @@ describe("flow command contracts", () => {
     await initCclaw({ projectRoot: root });
 
     const scopeSkill = await fs.readFile(
-      path.join(root, ".cclaw/skills/scope-shaping/SKILL.md"),
+      path.join(root, ".cclaw/skills/scope/SKILL.md"),
       "utf8"
     );
     const designSkill = await fs.readFile(
-      path.join(root, ".cclaw/skills/engineering-design-lock/SKILL.md"),
+      path.join(root, ".cclaw/skills/design/SKILL.md"),
       "utf8"
     );
     const brainstormSkill = await fs.readFile(
-      path.join(root, ".cclaw/skills/brainstorming/SKILL.md"),
+      path.join(root, ".cclaw/skills/brainstorm/SKILL.md"),
       "utf8"
     );
 
@@ -302,6 +325,9 @@ describe("flow command contracts", () => {
     expect(scopeSkill).toContain("`planner`");
     expect(scopeSkill).toContain("--waive-delegation=planner");
     expect(scopeSkill).toContain("completion helper JSON diagnostics");
+    expect(scopeSkill).toContain("read brainstorm handoff");
+    expect(scopeSkill).toContain("in-scope/out-of-scope/deferred/discretion contract");
+    expect(scopeSkill).not.toContain("For simple web-app flows, default to HOLD SCOPE");
     expect(designSkill).toContain("`mandatory delegations`");
     expect(designSkill).toContain("`architect`");
     expect(designSkill).toContain("`test-author`");
@@ -326,7 +352,7 @@ describe("flow command contracts", () => {
     await initCclaw({ projectRoot: root });
 
     const specSkill = await fs.readFile(
-      path.join(root, ".cclaw/skills/specification-authoring/SKILL.md"),
+      path.join(root, ".cclaw/skills/spec/SKILL.md"),
       "utf8"
     );
 
@@ -381,11 +407,11 @@ describe("flow command contracts", () => {
     await initCclaw({ projectRoot: root });
 
     const specSkill = await fs.readFile(
-      path.join(root, ".cclaw/skills/specification-authoring/SKILL.md"),
+      path.join(root, ".cclaw/skills/spec/SKILL.md"),
       "utf8"
     );
     const planSkill = await fs.readFile(
-      path.join(root, ".cclaw/skills/planning-and-task-breakdown/SKILL.md"),
+      path.join(root, ".cclaw/skills/plan/SKILL.md"),
       "utf8"
     );
     expect(specSkill).toContain("## Shared Stage Guidance");
@@ -399,11 +425,11 @@ describe("flow command contracts", () => {
     await initCclaw({ projectRoot: root });
 
     const specSkill = await fs.readFile(
-      path.join(root, ".cclaw/skills/specification-authoring/SKILL.md"),
+      path.join(root, ".cclaw/skills/spec/SKILL.md"),
       "utf8"
     );
     const planSkill = await fs.readFile(
-      path.join(root, ".cclaw/skills/planning-and-task-breakdown/SKILL.md"),
+      path.join(root, ".cclaw/skills/plan/SKILL.md"),
       "utf8"
     );
 
@@ -418,7 +444,7 @@ describe("flow command contracts", () => {
     await initCclaw({ projectRoot: root });
 
     const planSkill = await fs.readFile(
-      path.join(root, ".cclaw/skills/planning-and-task-breakdown/SKILL.md"),
+      path.join(root, ".cclaw/skills/plan/SKILL.md"),
       "utf8"
     );
     expect(planSkill).toContain("## Completion Parameters");
@@ -430,11 +456,11 @@ describe("flow command contracts", () => {
     await initCclaw({ projectRoot: root });
 
     const designSkill = await fs.readFile(
-      path.join(root, ".cclaw/skills/engineering-design-lock/SKILL.md"),
+      path.join(root, ".cclaw/skills/design/SKILL.md"),
       "utf8"
     );
     const specSkill = await fs.readFile(
-      path.join(root, ".cclaw/skills/specification-authoring/SKILL.md"),
+      path.join(root, ".cclaw/skills/spec/SKILL.md"),
       "utf8"
     );
     expect(designSkill).toContain("Decision protocol: ask only decision-changing questions");
@@ -446,15 +472,15 @@ describe("flow command contracts", () => {
     await initCclaw({ projectRoot: root });
 
     const brainstormSkill = await fs.readFile(
-      path.join(root, ".cclaw/skills/brainstorming/SKILL.md"),
+      path.join(root, ".cclaw/skills/brainstorm/SKILL.md"),
       "utf8"
     );
     const reviewSkill = await fs.readFile(
-      path.join(root, ".cclaw/skills/two-layer-review/SKILL.md"),
+      path.join(root, ".cclaw/skills/review/SKILL.md"),
       "utf8"
     );
     const shipSkill = await fs.readFile(
-      path.join(root, ".cclaw/skills/shipping-and-handoff/SKILL.md"),
+      path.join(root, ".cclaw/skills/ship/SKILL.md"),
       "utf8"
     );
 
@@ -473,11 +499,11 @@ describe("flow command contracts", () => {
     await initCclaw({ projectRoot: root });
 
     const planSkill = await fs.readFile(
-      path.join(root, ".cclaw/skills/planning-and-task-breakdown/SKILL.md"),
+      path.join(root, ".cclaw/skills/plan/SKILL.md"),
       "utf8"
     );
     const tddSkill = await fs.readFile(
-      path.join(root, ".cclaw/skills/test-driven-development/SKILL.md"),
+      path.join(root, ".cclaw/skills/tdd/SKILL.md"),
       "utf8"
     );
 
@@ -495,11 +521,11 @@ describe("flow command contracts", () => {
     await initCclaw({ projectRoot: root });
 
     const planSkill = await fs.readFile(
-      path.join(root, ".cclaw/skills/planning-and-task-breakdown/SKILL.md"),
+      path.join(root, ".cclaw/skills/plan/SKILL.md"),
       "utf8"
     );
     const tddSkill = await fs.readFile(
-      path.join(root, ".cclaw/skills/test-driven-development/SKILL.md"),
+      path.join(root, ".cclaw/skills/tdd/SKILL.md"),
       "utf8"
     );
 
@@ -514,7 +540,7 @@ describe("flow command contracts", () => {
     await initCclaw({ projectRoot: root });
 
     const reviewSkill = await fs.readFile(
-      path.join(root, ".cclaw/skills/two-layer-review/SKILL.md"),
+      path.join(root, ".cclaw/skills/review/SKILL.md"),
       "utf8"
     );
 
@@ -593,7 +619,7 @@ describe("flow command contracts", () => {
     await initCclaw({ projectRoot: root });
 
     const shipSkill = await fs.readFile(
-      path.join(root, ".cclaw/skills/shipping-and-handoff/SKILL.md"),
+      path.join(root, ".cclaw/skills/ship/SKILL.md"),
       "utf8"
     );
 
