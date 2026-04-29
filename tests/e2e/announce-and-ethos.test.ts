@@ -26,6 +26,6 @@ describe("announce-at-start discipline and ethos principles", () => {
     expect(reviewSkill).toContain("Announce at start:");
     expect(reviewSkill).toContain("Decision protocol: ask only decision-changing questions");
     expect(metaSkill).toContain("/cc-ideate");
-    expect(metaSkill).toContain("npx cclaw-cli archive [--name=<slug>]");
+    expect(metaSkill).toContain("/cc-cancel");
   });
 });

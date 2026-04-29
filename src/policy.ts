@@ -157,7 +157,7 @@ export async function policyChecks(projectRoot: string, options: PolicyOptions =
     });
     utilitySkillChecks.push({
       file: ".cursor/rules/cclaw-workflow.mdc",
-      needle: "/cc-next",
+      needle: "/cc",
       name: "rules:cursor:next_command_guidance"
     });
   }

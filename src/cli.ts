@@ -15,6 +15,8 @@ import { CCLAW_VERSION, RUNTIME_ROOT } from "./constants.js";
 import { createDefaultConfig, readConfig } from "./config.js";
 import { detectHarnesses } from "./init-detect.js";
 import { HARNESS_ADAPTERS } from "./harness-adapters.js";
+import { promptHarnessSelectionChecklist } from "./harness-selection.js";
+export { parseHarnessSelectionAnswer } from "./harness-selection.js";
 import {
   classifyCodexHooksFlag,
   codexConfigPath,
@@ -107,8 +109,8 @@ Examples:
   npx cclaw-cli archive --disposition=cancelled --reason="deprioritized"
   npx cclaw-cli upgrade
 
-Happy-path work happens inside your harness via /cc, /cc-next,
-/cc-ideate, /cc-view, /cc-finish, and /cc-cancel. Doctor is an operator/support surface:
+Happy-path work happens inside your harness via /cc, /cc-ideate,
+and /cc-cancel. Doctor is an operator/support surface:
 it verifies install/runtime wiring, but a real harness smoke test is
 still needed to prove provider auth and model execution.
 
@@ -223,109 +225,12 @@ function buildInitSurfacePreview(harnesses: HarnessId[]): string[] {
   return lines;
 }
 
-function harnessLabel(harness: HarnessId): string {
-  const adapter = HARNESS_ADAPTERS[harness];
-  const tier = adapter ? `${adapter.reality.declaredSupport}, ${adapter.capabilities.hookSurface} hooks` : "supported";
-  return `${harness} (${tier})`;
-}
-
-function selectedHarnessPreview(harnesses: HarnessId[]): string {
-  return harnesses.length > 0 ? harnesses.join(", ") : "none";
-}
-
-export type HarnessSelectionAnswer =
-  | { kind: "accept" }
-  | { kind: "all" }
-  | { kind: "toggle"; indexes: number[] }
-  | { kind: "invalid"; message: string };
-
-export function parseHarnessSelectionAnswer(raw: string): HarnessSelectionAnswer {
-  const answer = raw.trim().toLowerCase();
-  if (answer.length === 0) return { kind: "accept" };
-  if (answer === "all") return { kind: "all" };
-  if (answer === "none") {
-    return { kind: "invalid", message: "Zero harnesses is not supported. Select at least one harness." };
-  }
-  const parts = answer.split(",").map((part) => part.trim()).filter(Boolean);
-  const indexes = parts.map((part) => Number.parseInt(part, 10));
-  if (indexes.some((value) => !Number.isInteger(value) || value < 1 || value > HARNESS_IDS.length)) {
-    return { kind: "invalid", message: `Invalid selection. Use numbers 1-${HARNESS_IDS.length}, comma-separated.` };
-  }
-  return { kind: "toggle", indexes };
-}
-
-async function promptHarnessSelection(
-  defaults: { harnesses: HarnessId[]; detectedHarnesses?: HarnessId[]; currentHarnesses?: HarnessId[] },
-  ctx: CliContext,
-  label = "Harness selection"
-): Promise<HarnessId[]> {
-  const rl = createInterface({
-    input: process.stdin,
-    output: ctx.stdout
-  });
-
-  const defaultSet = new Set(defaults.harnesses);
-  const selected = new Set<HarnessId>(defaults.harnesses.length > 0 ? defaults.harnesses : HARNESS_IDS);
-  const detected = new Set(defaults.detectedHarnesses ?? []);
-  const current = new Set(defaults.currentHarnesses ?? []);
-
-  const printMenu = (): void => {
-    ctx.stdout.write(`\n${label}\n`);
-    ctx.stdout.write(`Detected: ${selectedHarnessPreview(defaults.detectedHarnesses ?? [])}\n`);
-    ctx.stdout.write(`Current: ${selectedHarnessPreview(defaults.currentHarnesses ?? [])}\n`);
-    ctx.stdout.write(`Supported harnesses and target paths:\n`);
-    HARNESS_IDS.forEach((harness, index) => {
-      const adapter = HARNESS_ADAPTERS[harness];
-      const markers = [
-        detected.has(harness) ? "detected" : "",
-        current.has(harness) ? "current" : "",
-        defaultSet.has(harness) ? "default" : ""
-      ].filter(Boolean).join(", ");
-      const checked = selected.has(harness) ? "x" : " ";
-      ctx.stdout.write(
-        `  ${index + 1}. [${checked}] ${harnessLabel(harness)} -> ${adapter.commandDir}${markers ? ` (${markers})` : ""}\n`
-      );
-    });
-    ctx.stdout.write("Enter numbers to toggle (for example 1,3), 'all', or press Enter to accept.\n");
-  };
-
-  try {
-    while (true) {
-      printMenu();
-      const answer = await rl.question(`Selected [${[...selected].join(",") || "select at least one"}]: `);
-      const parsedAnswer = parseHarnessSelectionAnswer(answer);
-      if (parsedAnswer.kind === "accept") {
-        if (selected.size === 0) {
-          ctx.stdout.write("Select at least one harness.\n");
-          continue;
-        }
-        return HARNESS_IDS.filter((harness) => selected.has(harness));
-      }
-      if (parsedAnswer.kind === "all") {
-        HARNESS_IDS.forEach((harness) => selected.add(harness));
-        continue;
-      }
-      if (parsedAnswer.kind === "invalid") {
-        ctx.stdout.write(`${parsedAnswer.message}\n`);
-        continue;
-      }
-      for (const index of parsedAnswer.indexes) {
-        const harness = HARNESS_IDS[index - 1];
-        if (!harness) continue;
-        if (selected.has(harness)) selected.delete(harness);
-        else selected.add(harness);
-      }
-    }
-  } finally {
-    rl.close();
-  }
-}
 
 async function promptInitConfig(
   defaults: { harnesses: HarnessId[]; detectedHarnesses?: HarnessId[] },
   ctx: CliContext
 ): Promise<{ harnesses: HarnessId[] }> {
-  const harnesses = await promptHarnessSelection(defaults, ctx, "Initial cclaw harnesses");
+  const harnesses = await promptHarnessSelectionChecklist(defaults, ctx, "Initial cclaw harnesses");
   return { harnesses };
 }
 
@@ -497,7 +402,7 @@ async function resolveSyncInputs(parsed: ParsedArgs, ctx: CliContext): Promise<{
   const detectedHarnesses = await detectHarnesses(ctx.cwd);
   const defaults = detectedHarnesses.length > 0 ? detectedHarnesses : currentHarnesses.length > 0 ? currentHarnesses : HARNESS_IDS.slice();
   return {
-    harnesses: await promptHarnessSelection({
+    harnesses: await promptHarnessSelectionChecklist({
       harnesses: defaults,
       detectedHarnesses,
       currentHarnesses

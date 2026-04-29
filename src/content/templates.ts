@@ -1416,7 +1416,7 @@ alwaysApply: true
 
 Before responding to coding work:
 1. Read \`.cclaw/state/flow-state.json\`.
-2. Start with \`/cc\` or continue with \`/cc-next\`.
+2. Start with \`/cc\` or continue with \`/cc\`.
 3. If no software-stage flow applies, respond normally.
 
 ## Stage Order
@@ -1437,7 +1437,7 @@ Track-specific skips are allowed only when \`flow-state.track\` + \`skippedStage
 ## Command Surface
 
 - \`/cc\` = entry and resume.
-- \`/cc-next\` = only progression path.
+- \`/cc\` = only progression path.
 - Knowledge capture and recall use the \`learnings\` skill when requested.
 
 ## Verification Discipline

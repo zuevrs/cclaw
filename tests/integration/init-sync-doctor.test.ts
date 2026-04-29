@@ -111,7 +111,7 @@ describe("install lifecycle", { timeout: 30_000 }, () => {
 
     const skillEntries = (await fs.readdir(path.join(root, ".cclaw/skills"))).sort();
     expect(skillEntries).toContain("flow-view");
-    expect(skillEntries).toContain("flow-finish");
+    expect(skillEntries).not.toContain("flow-finish");
     expect(skillEntries).toContain("flow-cancel");
     expect(skillEntries).not.toContain("flow-status");
     expect(skillEntries).not.toContain("flow-tree");
@@ -133,7 +133,6 @@ describe("install lifecycle", { timeout: 30_000 }, () => {
       "brainstorm.md",
       "cancel.md",
       "design.md",
-      "finish.md",
       "ideate.md",
       "next.md",
       "plan.md",
@@ -145,24 +144,13 @@ describe("install lifecycle", { timeout: 30_000 }, () => {
       "tdd.md",
       "view.md"
     ]);
-    await expect(fs.stat(path.join(root, ".claude/commands/cc-view.md"))).resolves.toBeDefined();
+    await expect(fs.stat(path.join(root, ".claude/commands/cc-view.md"))).rejects.toBeDefined();
     const claudeShims = (await fs.readdir(path.join(root, ".claude/commands")))
       .filter((name) => /^cc(?:-.*)?\.md$/u.test(name))
       .sort();
     expect(claudeShims).toEqual([
-      "cc-brainstorm.md",
       "cc-cancel.md",
-      "cc-design.md",
-      "cc-finish.md",
       "cc-ideate.md",
-      "cc-next.md",
-      "cc-plan.md",
-      "cc-review.md",
-      "cc-scope.md",
-      "cc-ship.md",
-      "cc-spec.md",
-      "cc-tdd.md",
-      "cc-view.md",
       "cc.md"
     ]);
     const codexAdapter = HARNESS_ADAPTERS.codex;
@@ -196,7 +184,7 @@ describe("install lifecycle", { timeout: 30_000 }, () => {
 
     const cursorRule = await fs.readFile(path.join(root, ".cursor/rules/cclaw-workflow.mdc"), "utf8");
     expect(cursorRule).toContain("cclaw-managed-cursor-workflow-rule");
-    expect(cursorRule).toContain("/cc-next");
+    expect(cursorRule).toContain("/cc");
 
     const agentsMd = await fs.readFile(path.join(root, "AGENTS.md"), "utf8");
     expect(agentsMd).toContain("## Cclaw — Workflow Adapter");
@@ -392,17 +380,16 @@ describe("install lifecycle", { timeout: 30_000 }, () => {
     expect(doctorSucceeded(checks)).toBe(false);
   });
 
-  it("doctor verifies flow finish and cancel utility skills", async () => {
-    const root = await createTempProject("doctor-finish-cancel-skills");
+  it("doctor verifies flow cancel utility skill", async () => {
+    const root = await createTempProject("doctor-cancel-skill");
     await initCclaw({ projectRoot: root, harnesses: ["claude"] });
 
-    await fs.rm(path.join(root, ".cclaw/skills/flow-finish/SKILL.md"));
     await fs.rm(path.join(root, ".cclaw/skills/flow-cancel/SKILL.md"));
 
     const checks = await doctorChecks(root);
     const finish = checks.find((check) => check.name === "utility_skill:flow-finish");
     const cancel = checks.find((check) => check.name === "utility_skill:flow-cancel");
-    expect(finish?.ok).toBe(false);
+    expect(finish).toBeUndefined();
     expect(cancel?.ok).toBe(false);
     expect(doctorSucceeded(checks)).toBe(false);
   });
@@ -770,7 +757,7 @@ describe("install lifecycle", { timeout: 30_000 }, () => {
     const restoredSkill = await fs.readFile(skill, "utf8");
     expect(restored).toContain(".cclaw/skills/flow-start/SKILL.md");
     expect(restoredStageContract).toContain(".cclaw/skills/planning-and-task-breakdown/SKILL.md");
-    expect(restoredStageContract).toContain("Normal stage resume and advancement uses `/cc-next`");
+    expect(restoredStageContract).toContain("Normal stage resume and advancement uses `/cc`");
     expect(restoredSkill).toContain("## Required Gates");
   });
 
@@ -1632,7 +1619,7 @@ Capture this later.
     const root = await createTempProject("codex-skills-fresh");
     await initCclaw({ projectRoot: root, harnesses: ["codex"] });
 
-    const expectedSkills = ["cc", "cc-next", "cc-view", "cc-ideate", "cc-finish", "cc-cancel"];
+    const expectedSkills = ["cc", "cc-ideate", "cc-cancel"];
     for (const slug of expectedSkills) {
       const skillPath = path.join(root, ".agents/skills", slug, "SKILL.md");
       const body = await fs.readFile(skillPath, "utf8");

@@ -1,11 +1,11 @@
 import fs from "node:fs/promises";
 import path from "node:path";
-import { RUNTIME_ROOT, STAGE_TO_SKILL_FOLDER } from "./constants.js";
+import { RUNTIME_ROOT } from "./constants.js";
 import { conversationLanguagePolicyMarkdown } from "./content/language-policy.js";
 import { CCLAW_AGENTS, agentMarkdown } from "./content/core-agents.js";
 import { ironLawsAgentsMdBlock } from "./content/iron-laws.js";
 import { ensureDir, exists, writeFileSafe } from "./fs-utils.js";
-import { FLOW_STAGES, type FlowStage, type HarnessId } from "./types.js";
+import { type HarnessId } from "./types.js";
 
 export const CCLAW_MARKER_START = "<!-- cclaw-start -->";
 export const CCLAW_MARKER_END = "<!-- cclaw-end -->";
@@ -51,7 +51,7 @@ export type SubagentFallback =
  *   directories under a skills root (Codex CLI ≥0.89, Jan 2026). cclaw
  *   writes `<commandDir>/<skillName>/SKILL.md` and the agent invokes it
  *   either via `/use <skillName>` or via automatic description matching
- *   when the user's text mentions `/cc`, `/cc-next`, etc.
+ *   when the user's text mentions `/cc`, `/cc-ideate`, or `/cc-cancel`.
  */
 export type ShimKind = "command" | "skill";
 
@@ -67,7 +67,7 @@ export interface HarnessAdapter {
    * Root directory where cclaw writes `/cc*` entry points.
    *
    * - For `shimKind: "command"` this is the directory containing flat
-   *   markdown files (`<commandDir>/cc.md`, `<commandDir>/cc-next.md`, …).
+   *   markdown files (`<commandDir>/cc.md`, `<commandDir>/cc-ideate.md`, …).
    * - For `shimKind: "skill"` this is the skills root that contains
    *   per-skill subdirectories (`<commandDir>/<skillName>/SKILL.md`).
    */
@@ -117,17 +117,17 @@ export interface HarnessAdapter {
 }
 
 interface UtilityShimSpec {
-  /** Filename used for command-kind harnesses (e.g. `cc-next.md`). */
+  /** Filename used for command-kind harnesses (e.g. `cc-ideate.md`). */
   fileName: string;
   /**
    * Skill directory name used for skill-kind harnesses. Codex invokes
    * skills via `/use <skillName>`, so we keep the token identical to
-   * the `cc-next` / `cc-view` / etc. slash-token users already know
-   * from other harnesses. Collisions with stock OpenAI skills are
+   * the public `cc-ideate` / `cc-cancel` slash-tokens users type.
+   * Collisions with stock OpenAI skills are
    * unlikely (they ship under unrelated names like `pdf-editor`).
    */
   skillName: string;
-  /** User-visible command token without the leading slash (`next`). */
+  /** User-visible command token without the leading slash (`ideate`). */
   command: string;
   skillFolder: string;
   commandFile: string;
@@ -135,32 +135,11 @@ interface UtilityShimSpec {
 
 const UTILITY_SHIMS: UtilityShimSpec[] = [
   {
-    fileName: "cc-next.md",
-    skillName: "cc-next",
-    command: "next",
-    skillFolder: "flow-next-step",
-    commandFile: "next.md"
-  },
-  {
     fileName: "cc-ideate.md",
     skillName: "cc-ideate",
     command: "ideate",
     skillFolder: "flow-ideate",
     commandFile: "ideate.md"
-  },
-  {
-    fileName: "cc-view.md",
-    skillName: "cc-view",
-    command: "view",
-    skillFolder: "flow-view",
-    commandFile: "view.md"
-  },
-  {
-    fileName: "cc-finish.md",
-    skillName: "cc-finish",
-    command: "finish",
-    skillFolder: "flow-finish",
-    commandFile: "finish.md"
   },
   {
     fileName: "cc-cancel.md",
@@ -184,19 +163,11 @@ const LEGACY_CODEX_SKILL_PREFIX = "cclaw-cc";
  */
 const LEGACY_HARNESS_SHIMS: readonly string[] = ["cc-learn.md"];
 
-function stageShimFileName(stage: FlowStage): string {
-  return `cc-${stage}.md`;
-}
-
-function stageShimSkillName(stage: FlowStage): string {
-  return `cc-${stage}`;
-}
 
 export function harnessShimFileNames(): string[] {
   return [
     "cc.md",
-    ...UTILITY_SHIMS.map((shim) => shim.fileName),
-    ...FLOW_STAGES.map((stage) => stageShimFileName(stage))
+    ...UTILITY_SHIMS.map((shim) => shim.fileName)
   ];
 }
 
@@ -204,8 +175,7 @@ export function harnessShimFileNames(): string[] {
 export function harnessShimSkillNames(): string[] {
   return [
     ENTRY_SHIM_SKILL_NAME,
-    ...UTILITY_SHIMS.map((shim) => shim.skillName),
-    ...FLOW_STAGES.map((stage) => stageShimSkillName(stage))
+    ...UTILITY_SHIMS.map((shim) => shim.skillName)
   ];
 }
 
@@ -497,7 +467,7 @@ Treat quality as a hard requirement, not style preference:
 
 Before responding to a coding request:
 1. Read \`.cclaw/state/flow-state.json\` for the current stage.
-2. Use \`/cc\` to start or \`/cc-next\` to continue the flow.
+2. Use \`/cc\` to start, resume, or continue the flow.
 3. If no stage applies, respond normally.
 
 ${ironLawsAgentsMdBlock()}
@@ -526,11 +496,8 @@ When in doubt, prefer **non-trivial** — the quick track is opt-in and only saf
 
 | Command | Purpose |
 |---|---|
-| \`/cc\` | **Entry point.** No args = resume current stage. With prompt = classify task and start the right flow. |
-| \`/cc-next\` | **Progression.** Advances to the next stage when current is complete. |
+| \`/cc\` | **Entry point.** No args = resume or progress current flow. With prompt = classify task and start the right flow. |
 | \`/cc-ideate\` | **Ideate mode.** Generates a ranked repo-improvement backlog before implementation. |
-| \`/cc-view\` | **Read-only router.** Unified entry for status/tree/diff views. |
-| \`/cc-finish\` | **Successful closeout.** Archives a completed run after strict ship closeout gates. |
 | \`/cc-cancel\` | **Non-completion closeout.** Archives a cancelled/abandoned run with a required reason. |
 
 Knowledge capture and curation run automatically as part of stage completion
@@ -538,8 +505,7 @@ protocols via the internal \`learnings\` skill — no user-facing command.
 Reusable entries land in \`.cclaw/knowledge.jsonl\` as strict JSONL with
 \`type\`, \`trigger\`, \`action\`, and \`origin_run\` metadata.
 
-**Stage order:** brainstorm > scope > design > spec > plan > tdd > review > ship, then closeout: retro > compound > archive. Use \`/cc-finish\` for completed runs and \`/cc-cancel\` for cancelled/abandoned runs.
-\`/cc-next\` loads the right stage skill automatically and also drives post-ship closeout. Gates must pass before handoff.
+**Stage order:** brainstorm > scope > design > spec > plan > tdd > review > ship, then closeout: retro > compound > archive. Use \`/cc\` to keep moving through normal work and post-ship closeout; use \`/cc-cancel\` for cancelled/abandoned runs. Gates must pass before handoff.
 
 ### Verification Discipline
 
@@ -560,12 +526,11 @@ If the same approach fails three times in a row (same command, same finding, sam
 ### Codex users
 
 OpenAI Codex CLI has **no native \`/cc\` slash command** (custom prompts
-were deprecated in v0.89, Jan 2026). The \`/cc\`, \`/cc-next\`,
-\`/cc-ideate\`, \`/cc-view\`, \`/cc-finish\`, and \`/cc-cancel\`
-tokens above describe intent — in Codex they map onto skills cclaw installs at
+were deprecated in v0.89, Jan 2026). The \`/cc\`, \`/cc-ideate\`, and
+\`/cc-cancel\` tokens above describe intent — in Codex they map onto skills cclaw installs at
 \`.agents/skills/cc*/SKILL.md\`. Activate one of two ways:
 
-- Type \`/use cc\` (or \`cc-next\`, etc.) at Codex's prompt.
+- Type \`/use cc\` (or \`cc-ideate\` / \`cc-cancel\`) at Codex's prompt.
 - Type \`/cc …\` as plain text — Codex matches the skill \`description\`
   frontmatter (which spells out the token verbatim) and loads the right
   skill body automatically.
@@ -646,14 +611,8 @@ function utilityShimBehavior(command: string): string {
   switch (command) {
     case "cc":
       return "This is the entry command, not a flow stage. It may initialize or resume flow state after confirmation.";
-    case "next":
-      return "This is the progression command, not a flow stage. It may advance stages and post-ship closeout through managed helpers.";
     case "ideate":
       return "This is an ideation command, not a flow stage. It may write ideation artifacts/seeds but does not advance flow state.";
-    case "view":
-      return "This is a read-only view command, not a flow stage. It never mutates flow state.";
-    case "finish":
-      return "This is a successful closeout utility, not a flow stage. It archives a completed run after ship closeout gates pass and records completed disposition semantics.";
     case "cancel":
       return "This is a non-completion closeout utility, not a flow stage. It requires a reason and archives cancelled or abandoned work without presenting it as completed.";
     default:
@@ -678,51 +637,6 @@ Load and execute:
 ${utilityShimBehavior(command)}
 `;
 }
-function stageShimContent(harness: HarnessId, stage: FlowStage): string {
-  const shimName = stageShimSkillName(stage);
-  const skillPath = `${RUNTIME_ROOT}/skills/${STAGE_TO_SKILL_FOLDER[stage]}/SKILL.md`;
-  return `---
-name: ${shimName}
-description: Generated shim for ${harness}. Flow stage pointer; normal advancement uses /cc-next.
-source: generated-by-cclaw
----
-
-# cclaw ${stage}
-
-This is a thin compatibility shim for the \`${stage}\` flow stage.
-
-Load and follow the authoritative stage skill:
-
-- \`${skillPath}\`
-
-Normal stage resume and advancement uses \`/cc-next\`. Use \`/cc-next\` to read
-\`.cclaw/state/flow-state.json\`, select the active stage, and advance only after
-that stage's gates pass. Do not duplicate the stage protocol here.
-`;
-}
-
-function codexStageSkillMarkdown(stage: FlowStage): string {
-  const skillName = stageShimSkillName(stage);
-  const skillPath = `${RUNTIME_ROOT}/skills/${STAGE_TO_SKILL_FOLDER[stage]}/SKILL.md`;
-  return `---
-name: ${skillName}
-description: Thin cclaw stage shim for /cc-${stage}. Load ${skillPath}; normal stage resume and advancement uses /cc-next.
-source: generated-by-cclaw
----
-
-# cclaw /cc-${stage} (Codex adapter)
-
-This is a thin compatibility shim for the \`${stage}\` flow stage.
-
-Load and follow the authoritative stage skill:
-
-- \`${skillPath}\`
-
-Normal stage resume and advancement uses \`/cc-next\`. Use \`/cc-next\` to read
-\`.cclaw/state/flow-state.json\`, select the active stage, and advance only after
-that stage's gates pass. Do not duplicate the stage protocol here.
-`;
-}
 
 
 /**
@@ -735,14 +649,8 @@ function codexSkillDescription(command: string): string {
   switch (command) {
     case "cc":
       return `Entry point for the cclaw track-aware workflow ending in ship plus auto-closeout (retro → compound → archive). Use whenever the user types \`/cc\`, \`/cclaw\`, or asks to "start the flow", "begin cclaw", "kick off the workflow", "classify this task", or wants to start/resume a non-trivial software change. No args = resume the active stage from \`.cclaw/state/flow-state.json\`. With a prompt = classify and pick a track (quick/medium/standard).`;
-    case "next":
-      return `Advance the cclaw flow to the next stage or post-ship closeout substate. Use when the user types \`/cc-next\` or asks to "move to the next stage", "continue the flow", "advance cclaw", "progress the workflow", or when the current stage skill reports completion and gates have passed.`;
     case "ideate":
       return `Read-only repo-improvement ideate mode for cclaw. Use when the user types \`/cc-ideate\` or asks to "ideate", "scan the repo for TODOs/tech debt", "generate a backlog", or wants a ranked list of candidate ideas before committing to a single flow. Does not mutate \`.cclaw/state/flow-state.json\`.`;
-    case "view":
-      return `Read-only router for cclaw flow views. Use when the user types \`/cc-view\`, \`/cc-view status\`, \`/cc-view tree\`, \`/cc-view diff\`, or asks to "show cclaw status", "show the flow tree", "diff flow state", or wants a snapshot without mutation.`;
-    case "finish":
-      return `Finish a completed cclaw run. Use when the user types \`/cc-finish\` or asks to finish, complete, close out, or archive a successful run. Runs cclaw archive with completed disposition after strict ship closeout gates.`;
     case "cancel":
       return `Cancel or abandon the active cclaw run. Use when the user types \`/cc-cancel\` or asks to cancel, abandon, stop, discard, or reset an unfinished run. Requires a reason and archives with cancelled/abandoned disposition.`;
     default:
@@ -836,12 +744,6 @@ async function writeCommandKindShims(commandDir: string, harness: HarnessId): Pr
       utilityShimContent(harness, shim.command, shim.skillFolder, shim.commandFile)
     );
   }
-  for (const stage of FLOW_STAGES) {
-    await writeFileSafe(
-      path.join(commandDir, stageShimFileName(stage)),
-      stageShimContent(harness, stage)
-    );
-  }
   for (const legacy of LEGACY_HARNESS_SHIMS) {
     const legacyPath = path.join(commandDir, legacy);
     try {
@@ -862,12 +764,6 @@ async function writeSkillKindShims(commandDir: string): Promise<void> {
     await writeFileSafe(
       path.join(commandDir, shim.skillName, "SKILL.md"),
       codexSkillMarkdown(shim.command, shim.skillName, shim.skillFolder, shim.commandFile)
-    );
-  }
-  for (const stage of FLOW_STAGES) {
-    await writeFileSafe(
-      path.join(commandDir, stageShimSkillName(stage), "SKILL.md"),
-      codexStageSkillMarkdown(stage)
     );
   }
 }

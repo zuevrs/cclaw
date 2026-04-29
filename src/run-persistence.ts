@@ -126,7 +126,7 @@ function validateFlowTransition(prev: FlowState, next: FlowState): void {
     throw new InvalidStageTransitionError(
       prev.currentStage,
       next.currentStage,
-      `no transition rule allows "${prev.currentStage}" -> "${next.currentStage}" for track "${prev.track}". Use /cc-next to advance stages or archive the run to reset.`
+      `no transition rule allows "${prev.currentStage}" -> "${next.currentStage}" for track "${prev.track}". Use /cc to advance stages or archive the run to reset.`
     );
   }
 }

@@ -27,7 +27,7 @@ describe("prompt-contract regression harness", () => {
     );
     expect(planSkill).toContain("Dependency Batches");
     expect(planSkill).toContain("WAIT_FOR_CONFIRM");
-    expect(planSkill).toContain("/cc-next");
+    expect(planSkill).toContain("/cc");
     expect(tddSkill).toContain("RED");
     expect(tddSkill).toContain("GREEN");
     expect(tddSkill).toContain("REFACTOR");

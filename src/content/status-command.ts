@@ -85,17 +85,17 @@ a read-only command.
     - harness row
     - stale stage row
 11. Suggest the next action:
-    - If current stage has unmet gates -> \`/cc-next\` to resume.
+    - If current stage has unmet gates -> \`/cc\` to resume.
     - If a mandatory delegation is missing evidence -> dispatch the worker/reviewer or waive with rationale; do not advance silently.
     - If a TDD blocker taxonomy code is present (\`NO_SOURCE_CONTEXT\`, \`NO_TEST_SURFACE\`, \`NO_IMPLEMENTABLE_SLICE\`, \`RED_NOT_EXPRESSIBLE\`, \`NO_VCS_MODE\`) -> name the blocker and the rewind/config route.
     - If review is blocked by critical findings -> show \`cclaw internal rewind tdd "review_blocked_by_critical <finding-ids>"\` plus the later \`cclaw internal rewind --ack tdd\`.
-    - If closeout substate is non-idle -> \`/cc-next\` to continue the chain.
-    - If current stage is complete -> \`/cc-next\` to advance (or report "Flow complete" if terminal).
+    - If closeout substate is non-idle -> \`/cc\` to continue the chain.
+    - If current stage is complete -> \`/cc\` to advance (or report "Flow complete" if terminal).
 
 ## Output Guidelines
 
 - Keep output compact (≤ 40 lines) — status, not narrative.
-- Start with the same operator rows as \`/cc-next\` when possible:
+- Start with the same operator rows as \`/cc\` when possible:
   \`Current\`, \`Stage\`, \`Progress\`, \`Gates\`, \`Delegations\`, \`Risks\`, \`Blocked by\`, \`Next\`, \`Evidence needed\`. Use labels like \`gate: tdd_green_full_suite\`, \`delegation proof: reviewer evidenceRefs\`, and \`closeout: compound_review\` instead of raw JSON tone.
 - When blocked, include a plain-English action block:
   \`Current: <stage or closeout substate>\`; \`Blocked by: <gate/delegation/blocker code>\`; \`Next: <exact command or managed remediation>\`; \`Evidence needed: <artifact/test/review/delegation evidence>\`.
@@ -110,7 +110,7 @@ a read-only command.
 - Collapsing \`◎ missing-evidence\` into \`✓ completed\` — role-switch gaps must stay
   visible so the stage cannot advance silently.
 - Omitting the closeout row when \`shipSubstate !== "idle"\`; it is the only signal
-  that tells the user why \`/cc-next\` is about to run retro/compound/archive.
+  that tells the user why \`/cc\` is about to run retro/compound/archive.
 - Mutating state to "clean up" during a status check.
 `;
 }

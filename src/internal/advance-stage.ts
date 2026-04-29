@@ -1778,7 +1778,7 @@ async function runRewind(projectRoot: string, args: RewindArgs, io: InternalIo):
     nextActions: [
       `Re-run ${args.targetStage} stage work and update its artifact evidence.`,
       `Then run cclaw internal rewind --ack ${args.targetStage}.`,
-      "Continue with /cc-next after the stale marker is acknowledged."
+      "Continue with /cc after the stale marker is acknowledged."
     ]
   };
   await appendRewindLog(projectRoot, payload);

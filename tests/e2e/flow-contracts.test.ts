@@ -35,7 +35,6 @@ describe("flow command contracts", () => {
       "brainstorm.md",
       "cancel.md",
       "design.md",
-      "finish.md",
       "ideate.md",
       "next.md",
       "plan.md",
@@ -53,16 +52,15 @@ describe("flow command contracts", () => {
       expect(content).toContain("## HARD-GATE");
       expect(content).toContain("SKILL.md");
     }
-    const finishCommand = await fs.readFile(path.join(root, ".cclaw/commands/finish.md"), "utf8");
+    await expect(fs.stat(path.join(root, ".cclaw/commands/finish.md"))).rejects.toThrow(/ENOENT/);
     const cancelCommand = await fs.readFile(path.join(root, ".cclaw/commands/cancel.md"), "utf8");
-    expect(finishCommand).toContain("--disposition=completed");
     expect(cancelCommand).toContain("--disposition=cancelled");
     expect(cancelCommand).toContain("required reason");
 
     for (const stage of FLOW_STAGES) {
       const content = await fs.readFile(path.join(root, ".cclaw/commands", `${stage}.md`), "utf8");
       expect(content).toContain(`.cclaw/skills/${stageSkillFolder(stage)}/SKILL.md`);
-      expect(content).toContain("Normal stage resume and advancement uses `/cc-next`");
+      expect(content).toContain("Normal stage resume and advancement uses `/cc`");
       expect(content).toContain("Do not duplicate the stage protocol here");
       expect(content).not.toContain("## Process");
       expect(content).not.toContain("## Required Gates");
@@ -172,7 +170,8 @@ describe("flow command contracts", () => {
     const metaSkill = await fs.readFile(path.join(root, ".cclaw/skills/using-cclaw/SKILL.md"), "utf8");
     expect(metaSkill).toContain("Installer/support surface");
     expect(metaSkill).toContain("npx cclaw-cli sync");
-    expect(metaSkill).toContain("node .cclaw/hooks/stage-complete.mjs <stage>");
+    expect(metaSkill).toContain("Main workflow");
+    expect(metaSkill).toContain("`/cc-cancel`");
 
     const stageComplete = await fs.readFile(path.join(root, ".cclaw/hooks/stage-complete.mjs"), "utf8");
     expect(stageComplete).toContain("CCLAW_CLI_ENTRYPOINT");
@@ -222,35 +221,27 @@ describe("flow command contracts", () => {
       ".cursor/commands",
       ".opencode/commands"
     ]) {
-      for (const shim of ["cc.md", "cc-next.md", "cc-ideate.md", "cc-view.md"]) {
+      for (const shim of ["cc.md", "cc-ideate.md", "cc-cancel.md"]) {
         const shimPath = path.join(root, harnessDir, shim);
         const content = await fs.readFile(shimPath, "utf8");
         expect(content).toContain(".cclaw/skills/");
       }
-      for (const stage of FLOW_STAGES) {
-        const shimPath = path.join(root, harnessDir, `cc-${stage}.md`);
-        const content = await fs.readFile(shimPath, "utf8");
-        expect(content).toContain(`.cclaw/skills/${stageSkillFolder(stage)}/SKILL.md`);
-        expect(content).toContain("Normal stage resume and advancement uses `/cc-next`");
+      for (const staleShim of ["cc-next.md", "cc-view.md", "cc-finish.md", ...FLOW_STAGES.map((stage) => `cc-${stage}.md`)]) {
+        await expect(fs.stat(path.join(root, harnessDir, staleShim))).rejects.toThrow(/ENOENT/);
       }
     }
 
     // Codex uses skill-kind shims under `.agents/skills/cc*/SKILL.md`
     // since v0.40.0 (renamed from `cclaw-cc*` in v0.39.x). Codex CLI
     // reads that path, not `.codex/commands/`.
-    for (const skillName of ["cc", "cc-next", "cc-ideate", "cc-view"]) {
+    for (const skillName of ["cc", "cc-ideate", "cc-cancel"]) {
       const skillPath = path.join(root, ".agents/skills", skillName, "SKILL.md");
       const content = await fs.readFile(skillPath, "utf8");
       expect(content).toContain(`name: ${skillName}`);
       expect(content).toContain(".cclaw/skills/");
     }
-    for (const stage of FLOW_STAGES) {
-      const skillName = `cc-${stage}`;
-      const skillPath = path.join(root, ".agents/skills", skillName, "SKILL.md");
-      const content = await fs.readFile(skillPath, "utf8");
-      expect(content).toContain(`name: ${skillName}`);
-      expect(content).toContain(`.cclaw/skills/${stageSkillFolder(stage)}/SKILL.md`);
-      expect(content).toContain("Normal stage resume and advancement uses `/cc-next`");
+    for (const staleSkill of ["cc-next", "cc-view", "cc-finish", ...FLOW_STAGES.map((stage) => `cc-${stage}`)]) {
+      await expect(fs.stat(path.join(root, ".agents/skills", staleSkill))).rejects.toThrow(/ENOENT/);
     }
 
     for (const agentName of ["researcher", "architect", "spec-validator", "slice-implementer", "performance-reviewer", "compatibility-reviewer", "observability-reviewer", "release-reviewer", "product-manager", "critic", "planner", "reviewer", "security-reviewer", "test-author", "doc-updater", "implementer", "fixer"]) {
@@ -347,7 +338,7 @@ describe("flow command contracts", () => {
     );
   });
 
-  it("keeps compact orientation pointers in meta-skill and /cc-next", async () => {
+  it("keeps compact orientation pointers in meta-skill and progression command", async () => {
     const root = await createTempProject("flow-map-ref");
     await initCclaw({ projectRoot: root });
 
@@ -357,6 +348,7 @@ describe("flow command contracts", () => {
     );
     expect(metaSkill).toContain(".cclaw/state/flow-state.json");
     expect(metaSkill).toContain("## Whole flow map");
+    expect(metaSkill).not.toContain("/cc-finish");
     for (const label of ["standard:", "medium:", "quick:"]) {
       expect(metaSkill).toContain(label);
     }

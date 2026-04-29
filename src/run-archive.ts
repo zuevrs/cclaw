@@ -324,26 +324,26 @@ export async function archiveRun(
   if (!nonCompletedDisposition && inShipCloseout && skipRetro) {
     throw new Error(
       "Archive blocked: --skip-retro is not allowed while current stage is ship. " +
-      "Complete closeout to ready_to_archive via /cc-next."
+      "Complete closeout to ready_to_archive via /cc."
     );
   }
   if (!nonCompletedDisposition && inShipCloseout && !readyForArchive) {
     throw new Error(
       "Archive blocked: closeout is not ready_to_archive. " +
-      "Resume /cc-next until closeout reaches ready_to_archive."
+      "Resume /cc until closeout reaches ready_to_archive."
     );
   }
   if (!nonCompletedDisposition && shipCompleted && !readyForArchive && !skipRetro) {
     throw new Error(
       "Archive blocked: closeout is not ready_to_archive. " +
-      "Resume /cc-next until closeout reaches ready_to_archive, " +
+      "Resume /cc until closeout reaches ready_to_archive, " +
       "or run `cclaw archive --skip-retro --retro-reason=<text>` for CLI-only flows."
     );
   }
   if (!nonCompletedDisposition && retroGate.required && !retroGate.completed && !skipRetro && !retroSkippedInCloseout) {
     throw new Error(
       "Archive blocked: retro gate is required after ship completion. " +
-      "Run /cc-next (auto-runs retro) or, for CLI-only flows, re-run `cclaw archive --skip-retro --retro-reason=<text>`."
+      "Run /cc (auto-runs retro) or, for CLI-only flows, re-run `cclaw archive --skip-retro --retro-reason=<text>`."
     );
   }
   if (retroGate.completed) {
