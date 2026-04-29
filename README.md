@@ -64,7 +64,7 @@ AI coding sessions fail when decisions live only in chat. cclaw puts the operati
   archive/                archived run snapshots (durable closeout proof)
 ```
 
-Legacy `.cclaw/runs/` directories are detected by `npx cclaw-cli sync` and should be migrated to `.cclaw/archive/`.
+Legacy `.cclaw/runs/` directories are only auto-removed when empty. If the directory still contains data, migrate it manually to `.cclaw/archive/`.
 
 That gives you:
 

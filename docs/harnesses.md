@@ -168,7 +168,7 @@ shared casing silently breaks generated wiring.
   at hook level, so the canonical path is
   `node .cclaw/hooks/stage-complete.mjs <stage>` plus the non-blocking
   `UserPromptSubmit` state nudge.
-- In `strict` mode, Codex additionally runs the generated Node/runtime `verify-current-state` path on `UserPromptSubmit` as a fail-closed check. Advisory mode remains non-blocking, including when the generated local Node entrypoint is missing; sync reports that install drift separately. This strict-only coverage is represented explicitly by the `strict_state_verify` semantic row above.
+- In `strict` mode, Codex additionally runs the generated Node/runtime `verify-current-state` path on `UserPromptSubmit` as a fail-closed check. Advisory mode remains non-blocking, including when the generated local Node entrypoint is missing. This strict-only coverage is represented explicitly by the `strict_state_verify` semantic row above.
 
 ## Shared command contract
 

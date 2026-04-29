@@ -1,5 +1,12 @@
 # Changelog
 
+## 0.52.0
+
+### Breaking Changes
+
+- Dropped legacy knowledge-entry compatibility aliases for the pre-cleanup idea source and old origin field. All knowledge rows must use canonical `source: "idea"` and `origin_run`.
+- Removed installer cleanup/migration handling for pre-cleanup command/skill aliases from the retired next/idea-era shim set. Projects still carrying those legacy surfaces must run a manual `npx cclaw-cli uninstall && npx cclaw-cli init`.
+
 ## 0.51.28
 
 ### Fixed
@@ -276,8 +283,8 @@ workflow tool.
   section for carried decisions, constraints, open questions, and drift
   reasons, so agents do not silently rewrite earlier stage choices.
 - Knowledge JSONL entries now use `origin_run` instead of feature wording for
-  new writes and generated guidance, while legacy `origin_feature` rows remain
-  readable as an input alias.
+  new writes and generated guidance, while older pre-cleanup rows remained
+  readable as an input alias at the time of this release.
 - Codex legacy skill cleanup now removes any old `cclaw-cc*` folder by prefix
   instead of carrying a hardcoded list of obsolete command names.
 - The generated meta-skill, shared stage guidance, `/cc`, and harness shims

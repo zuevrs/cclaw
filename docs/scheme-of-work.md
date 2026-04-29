@@ -194,6 +194,7 @@ The registry in `src/content/reference-patterns.ts` names the adopted patterns. 
 | `.cclaw/state/rewind-log.jsonl` | Managed rewind records and stale-stage recovery history. |
 | `.cclaw/state/reconciliation-notices.json` | Pre-advance warnings when runtime evidence disagrees with gate state. |
 | `.cclaw/state/ralph-loop.json` | TDD progress indicator only; not a hard gate. |
+| `.cclaw/state/early-loop.json` | Brainstorm/scope/design producer-critic status (open concerns, convergence guard, iteration cap). |
 | `.cclaw/state/compound-readiness.json` | Closeout readiness and compound promotion input. |
 | `.cclaw/artifacts/00-idea.md` | Prompt, classification, discovered context, stack, track reason, and reclassification history. |
 | `.cclaw/artifacts/01-brainstorm.md` through `.cclaw/artifacts/08-ship.md` | Critical-path stage artifacts. |
@@ -217,6 +218,8 @@ Archive is the last closeout substate. It moves active artifacts into `.cclaw/ar
 | Managed resource manifest | Validate manifest shape on session load and before commit; fail fast instead of silently writing corrupted metadata. |
 
 `sync` exits non-zero on fail-fast drift so runtime breakage is visible immediately. Recovery path: run `npx cclaw-cli sync`; if it still fails, follow the actionable message and repair the reported file.
+
+For machine-readable CI checks, use `cclaw internal runtime-integrity --json` to get structured error/warning findings without mutating runtime files.
 
 ## Quick-Track Gate Delta
 
@@ -244,4 +247,5 @@ Implementation note: quick-mode TDD removes only the plan-trace gate via stage-s
 | Mandatory delegation missing proof | `.cclaw/state/delegation-log.json` | required role lacks terminal evidence/waiver | dispatch role or waive with rationale in completion helper | completed/waived row with required proof fields |
 | Review criticals unresolved | `review_criticals_resolved` in blocked gate set | review found P1/P2 issues that require code/test rework | `cclaw internal rewind tdd "review_blocked_by_critical <finding-ids>"` then `--ack tdd` | new TDD + review evidence |
 | Ralph loop open slices (TDD) | `.cclaw/state/ralph-loop.json.redOpenSlices` | soft pre-advance nudge (not a hard gate) that indicates unfinished RED slices | close or explicitly defer open slices before review advance | `redOpenSlices` cleared or explicit defer rationale |
+| Early loop open concerns (brainstorm/scope/design) | `.cclaw/state/early-loop.json.openConcerns` | pre-advance soft block while producer/critic concerns remain unresolved (unless convergence guard escalates for human override) | iterate and append critic-pass rows, then refresh status via session-start or `cclaw internal early-loop-status --write` | `openConcerns` cleared, or convergence guard escalation explicitly acknowledged |
 | Ship closeout incomplete | `closeout.shipSubstate` not `archived` | run is still in retro/compound/archive lifecycle | continue `/cc` closeout routing | substate reaches `archived` |
