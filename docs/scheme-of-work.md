@@ -204,3 +204,52 @@ The registry in `src/content/reference-patterns.ts` names the adopted patterns. 
 ## Archive Lifecycle
 
 Archive is the last closeout substate. It moves active artifacts into `.cclaw/archive/<YYYY-MM-DD-slug>/`, snapshots state, writes a manifest, and resets active flow state for the next run. A run should not be archived while required gates, review blockers, delegation evidence, or closeout decisions are unresolved.
+
+## Doctor Contract
+
+`npx cclaw-cli doctor` is the runtime integrity checker for generated cclaw surfaces.
+
+| Surface | Contract |
+|---|---|
+| `--json` | Emit machine-readable checks payload (includes `ok`, `globalOk`, filters, counts, checks). |
+| `--only=<filter>` | Show only matching checks (for example: `error`, `warning`, `hook:`, `state:`). |
+| `--quiet` | Print failing checks only. |
+| `--explain` | Add docs-oriented explanations/fix guidance. |
+| `--reconcile-gates` | Refresh derived current-stage gate state before checks; does not fix missing artifacts/tests. |
+
+Exit behavior:
+- `0` — all displayed checks are ok.
+- `2` — at least one displayed check is not ok (warning or error).
+- `1` — CLI/runtime failure (parse/runtime exception).
+
+Write boundary:
+- Read-only by default.
+- Mutating path is limited to `--reconcile-gates` (derived gate reconciliation notices/state refresh only).
+
+## Quick-Track Gate Delta
+
+Quick track keeps safety gates while removing ceremony stages.
+
+| Category | Standard / Medium | Quick |
+|---|---|---|
+| Critical-path stages | includes planning artifacts (`plan`) before `tdd` | `spec -> tdd -> review -> ship` |
+| Skipped stage artifacts | none (`standard`) / fewer (`medium`) | skips `brainstorm`, `scope`, `design`, `plan` |
+| TDD traceability gate | `tdd_traceable_to_plan` required (plan task linkage) | `tdd_traceable_to_plan` removed; traceability points to spec acceptance item or bug reproduction slice |
+| TDD safety gates | required | unchanged (`tdd_test_discovery_complete`, `tdd_impact_check_complete`, `tdd_red_test_written`, `tdd_green_full_suite`, `tdd_refactor_completed`, `tdd_verified_before_complete`, `tdd_docs_drift_check`) |
+| Review / ship gates | required | unchanged |
+| Closeout chain | `retro -> compound -> archive` | unchanged |
+
+Implementation note: quick-mode TDD removes only the plan-trace gate via stage-schema filtering; safety gates remain blocking.
+
+## /cc-next Blocker Matrix
+
+`/cc-next` is the progression router. It always resolves blockers before stage advance.
+
+| Blocker | Detection source | Why blocked | Next action | Evidence to unblock |
+|---|---|---|---|---|
+| Stale stage marker | `flow-state.json.staleStages[currentStage]` | current stage was rewound and must be redone | redo stage work, then `cclaw internal rewind --ack <stage>` | refreshed artifact + ack |
+| Reconciliation notice | `.cclaw/state/reconciliation-notices.json` for active run + blocked gate | derived gate state disagrees with evidence | `cclaw doctor --reconcile-gates --explain` | gate no longer blocked |
+| Mandatory delegation missing proof | `.cclaw/state/delegation-log.json` | required role lacks terminal evidence/waiver | dispatch role or waive with rationale in completion helper | completed/waived row with required proof fields |
+| Review criticals unresolved | `review_criticals_resolved` in blocked gate set | review found P1/P2 issues that require code/test rework | `cclaw internal rewind tdd "review_blocked_by_critical <finding-ids>"` then `--ack tdd` | new TDD + review evidence |
+| Ralph loop open slices (TDD) | `.cclaw/state/ralph-loop.json.redOpenSlices` | soft pre-advance nudge (not a hard gate) that indicates unfinished RED slices | close or explicitly defer open slices before review advance | `redOpenSlices` cleared or explicit defer rationale |
+| Ship closeout incomplete | `closeout.shipSubstate` not `archived` | run is still in retro/compound/archive lifecycle | continue `/cc` closeout routing | substate reaches `archived` |

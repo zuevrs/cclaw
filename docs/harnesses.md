@@ -145,6 +145,23 @@ Hook keys are intentionally harness-native and must not be normalized:
 Use the exact event names from each harness schema. Treating all hooks as one
 shared casing silently breaks generated wiring.
 
+## Hook layering
+
+Hook behavior is intentionally split into three layers so docs, generation, and runtime checks stay in sync:
+
+| Layer | Source of truth | Responsibility |
+|---|---|---|
+| 1) Manifest projection | `src/content/hook-manifest.ts` | Canonical handler/event map per harness. This is the authoring surface for new handlers or reroutes. |
+| 2) JSON schema descriptors | `src/hook-schemas/*.json` + `src/hook-schema.ts` descriptor map | Declares required harness-native event arrays and schema version for each harness document. |
+| 3) Runtime TS validation | `src/hook-schema.ts::validateHookDocument` + doctor hook checks | Validates generated hook JSON shape/required events and reports actionable diagnostics. |
+
+Flow:
+1. Manifest defines handler bindings.
+2. Hook documents are generated from manifest projections.
+3. Schema descriptors + TS validators enforce structure at sync/doctor time.
+
+When adding a hook event, update the manifest first; schema/doctor parity is expected to follow.
+
 ## Interpretation
 
 - `tier1`: full native delegation + structured asks + full hook surface.

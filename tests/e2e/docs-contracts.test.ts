@@ -84,6 +84,50 @@ describe("docs flow contract", () => {
     }
   });
 
+  it("documents doctor, quick-track, blocker-matrix, hook layering, and lifecycle preservation contracts", async () => {
+    const scheme = await readRepoFile("docs/scheme-of-work.md");
+    const harnesses = await readRepoFile("docs/harnesses.md");
+    const config = await readRepoFile("docs/config.md");
+
+    for (const required of [
+      "## Doctor Contract",
+      "--json",
+      "--only=<filter>",
+      "--quiet",
+      "--explain",
+      "--reconcile-gates",
+      "## Quick-Track Gate Delta",
+      "tdd_traceable_to_plan",
+      "## /cc-next Blocker Matrix",
+      "Ralph loop open slices",
+      "Ship closeout incomplete"
+    ]) {
+      expect(scheme).toContain(required);
+    }
+
+    for (const required of [
+      "## Hook layering",
+      "src/content/hook-manifest.ts",
+      "src/hook-schemas/*.json",
+      "src/hook-schema.ts",
+      "validateHookDocument"
+    ]) {
+      expect(harnesses).toContain(required);
+    }
+
+    for (const required of [
+      "## Lifecycle preservation",
+      "npx cclaw-cli init",
+      "npx cclaw-cli sync",
+      "npx cclaw-cli upgrade",
+      "npx cclaw-cli uninstall",
+      ".cclaw/state/sync-backups/",
+      ".cclaw/state/upgrade-backups/"
+    ]) {
+      expect(config).toContain(required);
+    }
+  });
+
   it("covers recovery routes users need when blocked", async () => {
     const docs = `${await readRepoFile("README.md")}
 ${await readRepoFile("docs/scheme-of-work.md")}`;
