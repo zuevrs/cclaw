@@ -23,7 +23,7 @@ Generated from `src/harness-adapters.ts` capabilities and hook event mappings. F
 
 Neutral placeholder tokens only: `<agent-name>`, `<stage>`, `<run-id>`, `<span-id>`, `<dispatch-id>`, `<agent-def-path>`, `<iso-ts>`, `<artifact-anchor>`. See `docs/quality-gates.md` for stage-by-stage gate mapping.
 
-The four shipped harnesses (`claude`, `cursor`, `opencode`, `codex`) each ship with a canonical primary surface in the table above. The remaining enum values `generic-task`, `role-switch`, and `manual` are documented in the dispatch-surface table below and are available to any harness as fallback paths when the primary surface is unavailable.
+The four shipped harnesses (`claude`, `cursor`, `opencode`, `codex`) each ship with a canonical primary surface in the table above. Repair hints: `cclaw sync` safely regenerates shims/plugins/agents; Codex also needs `[features] codex_hooks = true`; OpenCode needs `opencode.json(.c)` plugin registration; role-switch completions require evidenceRefs. The remaining enum values `generic-task`, `role-switch`, and `manual` are documented in the dispatch-surface table below and are available to any harness as fallback paths when the primary surface is unavailable.
 
 **claude**:
 
@@ -192,7 +192,8 @@ Every track then closes out through:
 | `ship` | `ship` |
 
 This map is generated from `src/constants.ts::STAGE_TO_SKILL_FOLDER` so
-skill-path naming stays explicit and predictable (`skills/<stage>/SKILL.md`).
+skill-path naming stays explicit and stable even when stage ids differ from
+folder names.
 
 ## Install surfaces
 
@@ -230,7 +231,7 @@ Isolated completion requires `spanId`, `dispatchId` or `workerRunId`, `dispatchS
 
 Status meanings: `deep` = read for transferable implementation contract; `targeted` = inspected the relevant files only; `skimmed` = searched/read enough to classify; `not relevant` = intentionally excluded from implementation influence.
 
-| Reference path under `/Users/zuevrs/Downloads/references` | Status | Findings preserved |
+| Reference path under `<repo-relative references dir>` | Status | Findings preserved |
 |---|---|---|
 | `evanklem-evanflow/skills/evanflow-coder-overseer/SKILL.md` | deep | Contract-first coder/overseer loop, reviewer reads code rather than worker narrative, and integration overseer pattern map cleanly onto cclaw subagent guidance. |
 | `evanklem-evanflow/agents/evanflow-coder.md` | targeted | Worker role is narrow: implement the pasted contract, avoid broad orchestration, and return evidence for overseer verification. |
