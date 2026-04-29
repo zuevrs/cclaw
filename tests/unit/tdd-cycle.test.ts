@@ -69,7 +69,7 @@ describe("tdd cycle validation", () => {
     ].join("\n"));
     const validation = validateTddCycleOrder(entries, { runId: "active" });
     expect(validation.ok).toBe(false);
-    expect(validation.issues.join(" ")).toMatch(/refactor entry exitCode must be 0/i);
+    expect(validation.issues.join(" ")).toMatch(/REFACTOR repair needed/i);
   });
 
   it("flags refactor entries missing exitCode", () => {

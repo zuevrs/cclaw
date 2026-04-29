@@ -40,6 +40,10 @@ describe("/cc-view status content", () => {
     expect(skill).toContain("Blocked by");
     expect(skill).toContain("Evidence needed");
     expect(skill).toContain("Next");
+    expect(skill).toContain("operator note, not a JSON dump");
+    expect(skill).toContain("Progress");
+    expect(skill).toContain("Risks");
+    expect(skill).toContain("delegation proof: reviewer evidenceRefs");
   });
 });
 

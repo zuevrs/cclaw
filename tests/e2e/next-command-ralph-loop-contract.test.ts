@@ -83,8 +83,11 @@ describe("next-command Ralph Loop contract parity", () => {
     expect(skill).toContain("Stage: <currentStage>");
     expect(skill).toContain("Gates: <passed>/<required> passed");
     expect(skill).toContain("Delegations: <done>/<mandatory> done");
-    expect(skill).toContain("Blocked by: <none | gate/delegation/reconciliation/stale/TDD/review ids>");
+    expect(skill).toContain("Blocked by: <none | gate/delegation/reconciliation/stale/TDD/review/closeout ids>");
     expect(skill).toContain("Evidence needed: <artifact/test/review/delegation evidence required to unblock>");
+    expect(skill).toContain("Blocker category: <sync-recovery | user-decision | stage-work | delegation-proof | review-rework | closeout>");
+    expect(skill).toContain("Quick skips ceremony, not safety");
+    expect(skill).toContain("does not repair missing artifacts");
     expect(skill).toContain("Do not dump full artifacts");
   });
 

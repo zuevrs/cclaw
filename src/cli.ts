@@ -9,9 +9,10 @@ import { initCclaw, syncCclaw, uninstallCclaw, upgradeCclaw } from "./install.js
 import { error, info } from "./logger.js";
 import { FLOW_TRACKS, HARNESS_IDS } from "./types.js";
 import type { CliContext, FlowTrack, HarnessId } from "./types.js";
-import { archiveRun } from "./runs.js";
+import { ARCHIVE_DISPOSITIONS, archiveRun } from "./runs.js";
+import type { ArchiveDisposition } from "./runs.js";
 import { CCLAW_VERSION, RUNTIME_ROOT } from "./constants.js";
-import { createDefaultConfig } from "./config.js";
+import { createDefaultConfig, readConfig } from "./config.js";
 import { detectHarnesses } from "./init-detect.js";
 import { HARNESS_ADAPTERS } from "./harness-adapters.js";
 import {
@@ -55,6 +56,8 @@ interface ParsedArgs {
   archiveName?: string;
   archiveSkipRetro?: boolean;
   archiveSkipRetroReason?: string;
+  archiveDisposition?: ArchiveDisposition;
+  archiveDispositionReason?: string;
   /** Hidden plumbing command (`cclaw internal ...`) arguments. */
   internalArgs?: string[];
   showHelp?: boolean;
@@ -75,17 +78,21 @@ Commands:
              Flags: --harnesses=<list>  Comma list of harnesses (claude,cursor,opencode,codex).
                     --no-interactive    Skip interactive prompts even on TTY (for CI/scripts).
   sync       Reconcile generated runtime files with the current config.
+             Flags: --harnesses=<list>  Update configured harnesses before syncing.
+                    --interactive      Pick harnesses from a numbered TTY menu.
   doctor     Check install/runtime wiring and print concrete fixes for failures.
              Flags: --explain           Include docs pointers for every check.
                     --json              Emit machine-readable check results.
                     --quiet             Show only failing checks.
                     --only=<filter>     Limit displayed checks (error,warning,hook:,state:,...).
-                    --reconcile-gates   Refresh derived gate status before checking.
+                    --reconcile-gates   Refresh derived gate status before checking; does not repair missing artifacts/tests.
   upgrade    Refresh generated files in .cclaw. Preserves your config.yaml.
   archive    Archive the active run and reset flow state for the next run.
              Flags: --name=<slug>        Override archive folder suffix.
                     --skip-retro         Skip retro gate only when runtime allows it.
                     --retro-reason=<txt> Required rationale with --skip-retro.
+                    --disposition=<completed|cancelled|abandoned>
+                    --reason=<txt>      Required for cancelled/abandoned archives.
   uninstall  Remove .cclaw runtime and the generated harness shim files.
 
 Global flags:
@@ -95,17 +102,18 @@ Global flags:
 Examples:
   npx cclaw-cli
   npx cclaw-cli init --harnesses=claude,cursor --no-interactive
-  npx cclaw-cli sync
+  npx cclaw-cli sync --interactive
   npx cclaw-cli archive --name=my-run
+  npx cclaw-cli archive --disposition=cancelled --reason="deprioritized"
   npx cclaw-cli upgrade
 
 Happy-path work happens inside your harness via /cc, /cc-next,
-/cc-ideate, and /cc-view. Doctor is an operator/support surface:
+/cc-ideate, /cc-view, /cc-finish, and /cc-cancel. Doctor is an operator/support surface:
 it verifies install/runtime wiring, but a real harness smoke test is
 still needed to prove provider auth and model execution.
 
 Docs:   https://github.com/zuevrs/cclaw
-Local:  docs/config.md and docs/harnesses.md
+Local:  README.md and generated .cclaw/skills/*.md
 Issues: https://github.com/zuevrs/cclaw/issues
 `;
 }
@@ -115,6 +123,10 @@ function parseHarnesses(raw: string): HarnessId[] {
     .split(",")
     .map((item) => item.trim())
     .filter(Boolean);
+
+  if (requested.length === 0) {
+    throw new Error("Select at least one harness.");
+  }
 
   const invalid = requested.filter((item) => !HARNESS_IDS.includes(item as HarnessId));
   if (invalid.length > 0) {
@@ -130,6 +142,14 @@ function parseTrack(raw: string): FlowTrack {
     throw new Error(`Unknown track: ${trimmed}. Supported: ${FLOW_TRACKS.join(", ")}`);
   }
   return trimmed as FlowTrack;
+}
+
+function parseArchiveDisposition(raw: string): ArchiveDisposition {
+  const trimmed = raw.trim();
+  if (!(ARCHIVE_DISPOSITIONS as readonly string[]).includes(trimmed)) {
+    throw new Error(`Unknown archive disposition: ${trimmed}. Supported: ${ARCHIVE_DISPOSITIONS.join(", ")}`);
+  }
+  return trimmed as ArchiveDisposition;
 }
 
 function isInitPromptAllowed(ctx: CliContext): boolean {
@@ -203,43 +223,110 @@ function buildInitSurfacePreview(harnesses: HarnessId[]): string[] {
   return lines;
 }
 
-async function promptInitConfig(
-  defaults: { harnesses: HarnessId[] },
-  ctx: CliContext
-): Promise<{ harnesses: HarnessId[] }> {
+function harnessLabel(harness: HarnessId): string {
+  const adapter = HARNESS_ADAPTERS[harness];
+  const tier = adapter ? `${adapter.reality.declaredSupport}, ${adapter.capabilities.hookSurface} hooks` : "supported";
+  return `${harness} (${tier})`;
+}
+
+function selectedHarnessPreview(harnesses: HarnessId[]): string {
+  return harnesses.length > 0 ? harnesses.join(", ") : "none";
+}
+
+export type HarnessSelectionAnswer =
+  | { kind: "accept" }
+  | { kind: "all" }
+  | { kind: "toggle"; indexes: number[] }
+  | { kind: "invalid"; message: string };
+
+export function parseHarnessSelectionAnswer(raw: string): HarnessSelectionAnswer {
+  const answer = raw.trim().toLowerCase();
+  if (answer.length === 0) return { kind: "accept" };
+  if (answer === "all") return { kind: "all" };
+  if (answer === "none") {
+    return { kind: "invalid", message: "Zero harnesses is not supported. Select at least one harness." };
+  }
+  const parts = answer.split(",").map((part) => part.trim()).filter(Boolean);
+  const indexes = parts.map((part) => Number.parseInt(part, 10));
+  if (indexes.some((value) => !Number.isInteger(value) || value < 1 || value > HARNESS_IDS.length)) {
+    return { kind: "invalid", message: `Invalid selection. Use numbers 1-${HARNESS_IDS.length}, comma-separated.` };
+  }
+  return { kind: "toggle", indexes };
+}
+
+async function promptHarnessSelection(
+  defaults: { harnesses: HarnessId[]; detectedHarnesses?: HarnessId[]; currentHarnesses?: HarnessId[] },
+  ctx: CliContext,
+  label = "Harness selection"
+): Promise<HarnessId[]> {
   const rl = createInterface({
     input: process.stdin,
     output: ctx.stdout
   });
 
-  const pickHarnesses = async (fallback: HarnessId[]): Promise<HarnessId[]> => {
-    const fallbackText = fallback.join(",");
-    while (true) {
-      const answer = (await rl.question(
-        `\nHarnesses (comma list from ${HARNESS_IDS.join(", ")}) [${fallbackText}]: `
-      )).trim();
-      if (answer.length === 0) {
-        return fallback;
-      }
-      try {
-        const parsed = parseHarnesses(answer);
-        if (parsed.length === 0) {
-          ctx.stdout.write("Select at least one harness.\n");
-          continue;
-        }
-        return parsed;
-      } catch (err) {
-        ctx.stdout.write(`${err instanceof Error ? err.message : "Invalid harness list"}\n`);
-      }
-    }
+  const defaultSet = new Set(defaults.harnesses);
+  const selected = new Set<HarnessId>(defaults.harnesses.length > 0 ? defaults.harnesses : HARNESS_IDS);
+  const detected = new Set(defaults.detectedHarnesses ?? []);
+  const current = new Set(defaults.currentHarnesses ?? []);
+
+  const printMenu = (): void => {
+    ctx.stdout.write(`\n${label}\n`);
+    ctx.stdout.write(`Detected: ${selectedHarnessPreview(defaults.detectedHarnesses ?? [])}\n`);
+    ctx.stdout.write(`Current: ${selectedHarnessPreview(defaults.currentHarnesses ?? [])}\n`);
+    ctx.stdout.write(`Supported harnesses and target paths:\n`);
+    HARNESS_IDS.forEach((harness, index) => {
+      const adapter = HARNESS_ADAPTERS[harness];
+      const markers = [
+        detected.has(harness) ? "detected" : "",
+        current.has(harness) ? "current" : "",
+        defaultSet.has(harness) ? "default" : ""
+      ].filter(Boolean).join(", ");
+      const checked = selected.has(harness) ? "x" : " ";
+      ctx.stdout.write(
+        `  ${index + 1}. [${checked}] ${harnessLabel(harness)} -> ${adapter.commandDir}${markers ? ` (${markers})` : ""}\n`
+      );
+    });
+    ctx.stdout.write("Enter numbers to toggle (for example 1,3), 'all', or press Enter to accept.\n");
   };
 
   try {
-    const harnesses = await pickHarnesses(defaults.harnesses);
-    return { harnesses };
+    while (true) {
+      printMenu();
+      const answer = await rl.question(`Selected [${[...selected].join(",") || "select at least one"}]: `);
+      const parsedAnswer = parseHarnessSelectionAnswer(answer);
+      if (parsedAnswer.kind === "accept") {
+        if (selected.size === 0) {
+          ctx.stdout.write("Select at least one harness.\n");
+          continue;
+        }
+        return HARNESS_IDS.filter((harness) => selected.has(harness));
+      }
+      if (parsedAnswer.kind === "all") {
+        HARNESS_IDS.forEach((harness) => selected.add(harness));
+        continue;
+      }
+      if (parsedAnswer.kind === "invalid") {
+        ctx.stdout.write(`${parsedAnswer.message}\n`);
+        continue;
+      }
+      for (const index of parsedAnswer.indexes) {
+        const harness = HARNESS_IDS[index - 1];
+        if (!harness) continue;
+        if (selected.has(harness)) selected.delete(harness);
+        else selected.add(harness);
+      }
+    }
   } finally {
     rl.close();
   }
+}
+
+async function promptInitConfig(
+  defaults: { harnesses: HarnessId[]; detectedHarnesses?: HarnessId[] },
+  ctx: CliContext
+): Promise<{ harnesses: HarnessId[] }> {
+  const harnesses = await promptHarnessSelection(defaults, ctx, "Initial cclaw harnesses");
+  return { harnesses };
 }
 
 /**
@@ -382,11 +469,39 @@ async function resolveInitInputs(parsed: ParsedArgs, ctx: CliContext): Promise<{
   const defaults = {
     harnesses: autoHarnesses ?? HARNESS_IDS.slice()
   };
-  const prompted = await promptInitConfig(defaults, ctx);
+  const prompted = await promptInitConfig({ ...defaults, detectedHarnesses }, ctx);
   return {
     track: parsed.track,
     harnesses: prompted.harnesses,
     detectedHarnesses
+  };
+}
+
+async function resolveSyncInputs(parsed: ParsedArgs, ctx: CliContext): Promise<{ harnesses?: HarnessId[] }> {
+  const explicitHarnesses = parsed.harnesses;
+  if (explicitHarnesses && explicitHarnesses.length > 0) {
+    return { harnesses: explicitHarnesses };
+  }
+  if (parsed.interactive !== true) {
+    return {};
+  }
+  if (!isInitPromptAllowed(ctx)) {
+    throw new Error("Interactive sync requires a TTY. Remove --interactive or run in a terminal.");
+  }
+  let currentHarnesses: HarnessId[] = [];
+  try {
+    currentHarnesses = (await readConfig(ctx.cwd)).harnesses;
+  } catch {
+    currentHarnesses = [];
+  }
+  const detectedHarnesses = await detectHarnesses(ctx.cwd);
+  const defaults = detectedHarnesses.length > 0 ? detectedHarnesses : currentHarnesses.length > 0 ? currentHarnesses : HARNESS_IDS.slice();
+  return {
+    harnesses: await promptHarnessSelection({
+      harnesses: defaults,
+      detectedHarnesses,
+      currentHarnesses
+    }, ctx, "Sync harness reconfiguration")
   };
 }
 
@@ -435,6 +550,19 @@ function doctorCountsBySeverity(checks: Awaited<ReturnType<typeof doctorChecks>>
   return result;
 }
 
+const DOCTOR_ACTION_GROUP_LABELS = {
+  sync: "Can fix with cclaw sync",
+  "user-action": "Requires user action",
+  "stage-work": "Requires stage work",
+  informational: "Informational warning"
+} as const;
+
+function doctorActionGroupOrder(
+  group: Awaited<ReturnType<typeof doctorChecks>>[number]["actionGroup"]
+): number {
+  return group === "sync" ? 0 : group === "user-action" ? 1 : group === "stage-work" ? 2 : 3;
+}
+
 function printDoctorText(
   ctx: CliContext,
   checks: Awaited<ReturnType<typeof doctorChecks>>,
@@ -442,21 +570,35 @@ function printDoctorText(
 ): void {
   const orderedSeverities: Array<"error" | "warning" | "info"> = ["error", "warning", "info"];
   const view = options.quiet ? checks.filter((check) => !check.ok) : checks;
+  const actionGroups = [...new Set(view.map((check) => check.actionGroup))]
+    .sort((left, right) => doctorActionGroupOrder(left) - doctorActionGroupOrder(right));
 
-  for (const severity of orderedSeverities) {
-    const inBucket = view.filter((check) => check.severity === severity);
-    if (inBucket.length === 0) continue;
-    ctx.stdout.write(`\n[${severity.toUpperCase()}]\n`);
-    for (const check of inBucket) {
-      const status = check.ok ? "PASS" : "FAIL";
-      ctx.stdout.write(`${status} ${check.name} :: ${check.summary}\n`);
-      if (!options.quiet) {
-        ctx.stdout.write(`  details: ${check.details}\n`);
-      }
-      if (!check.ok || options.explain) {
-        ctx.stdout.write(`  fix: ${check.fix}\n`);
-        if (check.docRef) {
-          ctx.stdout.write(`  docs: ${check.docRef}\n`);
+  for (const actionGroup of actionGroups) {
+    const groupChecks = view.filter((check) => check.actionGroup === actionGroup);
+    const failingInGroup = groupChecks.filter((check) => !check.ok).length;
+    ctx.stdout.write(`
+[${DOCTOR_ACTION_GROUP_LABELS[actionGroup]}] ${failingInGroup}/${groupChecks.length} failing
+`);
+    for (const severity of orderedSeverities) {
+      const inBucket = groupChecks.filter((check) => check.severity === severity);
+      if (inBucket.length === 0) continue;
+      ctx.stdout.write(`  ${severity.toUpperCase()}
+`);
+      for (const check of inBucket) {
+        const status = check.ok ? "PASS" : "FAIL";
+        ctx.stdout.write(`  ${status} ${check.name} :: ${check.summary}
+`);
+        if (!options.quiet) {
+          ctx.stdout.write(`    details: ${check.details}
+`);
+        }
+        if (!check.ok || options.explain) {
+          ctx.stdout.write(`    next action: ${check.fix}
+`);
+          if (check.docRef) {
+            ctx.stdout.write(`    reference: ${check.docRef}
+`);
+          }
         }
       }
     }
@@ -505,13 +647,13 @@ function parseArgs(argv: string[]): ParsedArgs {
 
   const flags: string[] = rest;
   const isAllowedForCommand = (flag: string): boolean => {
-    if (parsed.command === "init") {
+    if (parsed.command === "init" || parsed.command === "sync") {
       return flag.startsWith("--harnesses=") ||
-        flag.startsWith("--track=") ||
-        flag.startsWith("--profile=") ||
+        (parsed.command === "init" && flag.startsWith("--track=")) ||
+        (parsed.command === "init" && flag.startsWith("--profile=")) ||
         flag === "--interactive" ||
         flag === "--no-interactive" ||
-        flag === "--dry-run";
+        (parsed.command === "init" && flag === "--dry-run");
     }
     if (parsed.command === "doctor") {
       return flag === "--reconcile-gates" ||
@@ -523,7 +665,9 @@ function parseArgs(argv: string[]): ParsedArgs {
     if (parsed.command === "archive") {
       return flag.startsWith("--name=") ||
         flag === "--skip-retro" ||
-        flag.startsWith("--retro-reason=");
+        flag.startsWith("--retro-reason=") ||
+        flag.startsWith("--disposition=") ||
+        flag.startsWith("--reason=");
     }
     return false;
   };
@@ -585,6 +729,14 @@ function parseArgs(argv: string[]): ParsedArgs {
     }
     if (flag.startsWith("--retro-reason=")) {
       parsed.archiveSkipRetroReason = flag.replace("--retro-reason=", "").trim();
+      continue;
+    }
+    if (flag.startsWith("--disposition=")) {
+      parsed.archiveDisposition = parseArchiveDisposition(flag.replace("--disposition=", ""));
+      continue;
+    }
+    if (flag.startsWith("--reason=")) {
+      parsed.archiveDispositionReason = flag.replace("--reason=", "").trim();
       continue;
     }
   }
@@ -660,8 +812,10 @@ async function runCommand(parsed: ParsedArgs, ctx: CliContext): Promise<number> 
   }
 
   if (command === "sync") {
-    await syncCclaw(ctx.cwd);
-    info(ctx, "Synchronized harness shims from current .cclaw config");
+    const resolved = await resolveSyncInputs(parsed, ctx);
+    await syncCclaw(ctx.cwd, { harnesses: resolved.harnesses });
+    const harnessNote = resolved.harnesses ? ` (${resolved.harnesses.join(", ")})` : "";
+    info(ctx, `Synchronized harness shims from current .cclaw config${harnessNote}`);
     return 0;
   }
 
@@ -703,14 +857,16 @@ async function runCommand(parsed: ParsedArgs, ctx: CliContext): Promise<number> 
   if (command === "archive") {
     const archived = await archiveRun(ctx.cwd, parsed.archiveName, {
       skipRetro: parsed.archiveSkipRetro === true,
-      skipRetroReason: parsed.archiveSkipRetroReason
+      skipRetroReason: parsed.archiveSkipRetroReason,
+      disposition: parsed.archiveDisposition,
+      dispositionReason: parsed.archiveDispositionReason
     });
     const snapshotSummary = archived.snapshottedStateFiles.length > 0
       ? ` Snapshotted ${archived.snapshottedStateFiles.length} state file(s) under ${archived.archivePath}/state and wrote archive-manifest.json.`
       : "";
     info(
       ctx,
-      `Archived active artifacts to ${archived.archivePath}. Flow state reset to brainstorm.${snapshotSummary}`
+      `Archived active artifacts to ${archived.archivePath} (${archived.disposition}). Flow state reset to brainstorm.${snapshotSummary}`
     );
     const k = archived.knowledge;
     if (k.overThreshold) {
@@ -769,4 +925,4 @@ if (isDirectExecution()) {
   void main();
 }
 
-export { parseArgs, parseHarnesses, parseTrack };
+export { parseArgs, parseArchiveDisposition, parseHarnesses, parseTrack };

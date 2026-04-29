@@ -86,17 +86,17 @@ ${conversationLanguagePolicyMarkdown()}
 
 ## Algorithm (mandatory)
 
-1. Read **\`${flowPath}\`**. If missing → **BLOCKED** (state missing).
+1. Read **\`${flowPath}\`**. If missing → **BLOCKED** (state missing). Next action: run \`cclaw sync\` to safely regenerate generated runtime files, then \`cclaw doctor --explain\`; do not hand-edit state unless doctor says user repair is required.
 2. Parse JSON. Capture \`currentStage\` and \`stageGateCatalog[currentStage]\`.
-3. If \`staleStages[currentStage]\` exists, do not advance automatically. Report the stale marker reason/rewindId, re-run the stage artifact work, then clear only the current stage marker with \`cclaw internal rewind --ack <currentStage>\`.
-4. Read **\`${reconciliationNoticesPath}\`** when present. If it contains entries for \`activeRunId + currentStage\` and the listed gate is still blocked in \`stageGateCatalog[currentStage].blocked\`, emit a structured warning before any stage-advance decision.
+3. If \`staleStages[currentStage]\` exists, do not advance automatically. Report \`Blocked by: stale stage\`, the marker reason/rewindId, the stage artifact work to re-run, and clear only the current stage marker with \`cclaw internal rewind --ack <currentStage>\` after rework.
+4. Read **\`${reconciliationNoticesPath}\`** when present. If it contains entries for \`activeRunId + currentStage\` and the listed gate is still blocked in \`stageGateCatalog[currentStage].blocked\`, emit \`Blocked by: reconciliation notice\` with gate id, reason, and next action \`cclaw doctor --reconcile-gates --explain\`. Clarify that reconciliation refreshes derived gate status only; it does not repair missing artifacts or tests.
 5. Let \`G\` = \`requiredGates\` for **\`currentStage\`** from the stage schema.
 6. Let \`catalog\` = \`stageGateCatalog[currentStage]\` from flow state.
 7. **Satisfied** for gate id \`g\`: \`g\` in \`catalog.passed\` and \`g\` not in \`catalog.blocked\`.
 8. Let \`M\` = \`mandatoryDelegations\` for \`currentStage\`.
 9. If \`M\` is non-empty, inspect **\`${delegationPath}\`**. Treat as satisfied only if each mandatory agent is **completed** or **waived**.
 10. For each satisfied mandatory delegation row, verify \`evidenceRefs\` is a non-empty array (unless status is \`waived\` with rationale). Missing evidenceRefs means delegation is unresolved.
-11. If any mandatory delegation is missing and no waiver exists: **STOP** and ask the user whether to dispatch now or waive with rationale. Do not mark gates passed while delegation is unresolved.
+11. If any mandatory delegation is missing and no waiver exists: **STOP** and ask the user whether to dispatch \`<agent>\` now or waive with rationale. State who must run, why the role is mandatory, whether the gap is ledger status, event-log dispatch proof, or artifact \`evidenceRefs\`, and do not mark gates passed while delegation is unresolved.
 12. If \`currentStage === "review"\` and \`catalog.blocked\` includes \`review_criticals_resolved\`, treat this as a hard remediation branch: recommend the managed command \`cclaw internal rewind tdd "review_blocked_by_critical <finding-ids>"\`, and do not attempt to advance toward ship. After TDD rework, require \`cclaw internal rewind --ack tdd\` before continuing.
 
 ### Path A: Current stage is NOT complete (any gate unmet or delegation missing)
@@ -121,7 +121,7 @@ ${ralphLoopContractSnippet()}
 
 \`flow-state.json\` carries a \`track\` field (\`"quick"\`, \`"medium"\`, or \`"standard"\`) and a \`skippedStages\` array.
 
-- If \`track === "quick"\`, the critical path is **spec → tdd → review → ship**. When advancing, skip any stage listed in \`skippedStages\` — i.e. after the current stage completes, pick the next stage that is NOT in \`skippedStages\`.
+- If \`track === "quick"\`, the critical path is **spec → tdd → review → ship**. Quick skips ceremony, not safety: spec approval, RED/GREEN/REFACTOR evidence, review, and ship gates still apply. When advancing, skip any stage listed in \`skippedStages\` — i.e. after the current stage completes, pick the next stage that is NOT in \`skippedStages\`.
 - If \`track === "medium"\`, the critical path is **brainstorm → spec → plan → tdd → review → ship**. Scope and design are intentionally skipped unless the run is reclassified to standard.
 - If \`track === "standard"\`, advance through all 8 stages in their natural order.
 - Never manually reintroduce a skipped stage mid-run. If evidence shows the track was wrong, stop and use the managed start-flow helper with \`--reclassify\`; only that managed reclassification may add upstream stages back into the active track.
@@ -206,13 +206,16 @@ Current: <currentStage or closeout.shipSubstate> (<track>)
 Stage: <currentStage>
 Gates: <passed>/<required> passed, <blocked> blocked
 Delegations: <done>/<mandatory> done
-Blocked by: <none | gate/delegation/reconciliation/stale/TDD/review ids>
+Blocked by: <none | gate/delegation/reconciliation/stale/TDD/review/closeout ids>
+Blocker category: <sync-recovery | user-decision | stage-work | delegation-proof | review-rework | closeout>
 Next: <exact next action, usually /cc-next or one named remediation>
 Evidence needed: <artifact/test/review/delegation evidence required to unblock>
 \`\`\`
 
 Only expand beyond this when blocked, when asking a structured question, or when
-the user explicitly requests detail. Do not dump full artifacts in progression output.
+the user explicitly requests detail. When blocked, name the blocker category,
+why it blocks progression, the one next command/action, and the exact proof that
+would unblock it. Do not dump full artifacts in progression output.
 
 **How it works:**
 1. Reads \`flow-state.json\` to find \`currentStage\`
@@ -232,9 +235,9 @@ Do **not** mark gates satisfied from memory alone. Cite **artifact evidence** (p
 
 1. Open **\`${flowPath}\`**.
 2. Record \`currentStage\` and \`stageGateCatalog[currentStage]\`.
-3. If \`staleStages[currentStage]\` exists, show the marker reason/rewindId, re-run the stage, and clear only the current marker via \`cclaw internal rewind --ack <currentStage>\` before advancing.
-4. If the file is missing or invalid JSON → **BLOCKED** (report and stop).
-5. Read \`${reconciliationNoticesPath}\` when present. For entries matching \`activeRunId + currentStage\` whose gate is still in \`stageGateCatalog[currentStage].blocked\`, show a warning with gate id + reason before proceeding.
+3. If \`staleStages[currentStage]\` exists, show \`Blocked by: stale stage\`, the marker reason/rewindId, re-run the stage, and clear only the current marker via \`cclaw internal rewind --ack <currentStage>\` before advancing.
+4. If the file is missing or invalid JSON → **BLOCKED** (state missing/corrupt). Next action: run \`cclaw sync\` for safe regeneration of generated runtime files, then \`cclaw doctor --explain\`; do not hand-edit flow state unless doctor says user repair is required.
+5. Read \`${reconciliationNoticesPath}\` when present. For entries matching \`activeRunId + currentStage\` whose gate is still in \`stageGateCatalog[currentStage].blocked\`, show \`Blocked by: reconciliation notice\` with gate id + reason before proceeding; \`cclaw doctor --reconcile-gates --explain\` refreshes derived gate-state only; it does not repair missing artifacts or tests.
 
 ### Step 2: Evaluate gates
 
@@ -245,7 +248,8 @@ For each gate id in \`requiredGates\` for \`currentStage\`:
 Check \`mandatoryDelegations\` via **\`${delegationPath}\`** — satisfied only if **completed** or **waived**.
 Also verify each completed mandatory delegation row has non-empty \`evidenceRefs\` (waived rows must include rationale).
 If a mandatory delegation is missing and no waiver exists, **STOP** and ask:
-(A) dispatch now, (B) waive with rationale, (C) cancel stage advance.
+(A) dispatch \`<agent>\` now, (B) waive with rationale, (C) cancel stage advance.
+Explain who must run, why that role is mandatory for this stage, and whether the missing proof is ledger status, event-log dispatch proof, or artifact \`evidenceRefs\`. Waivers must include a user-visible safety reason.
 
 If reconciliation warnings were emitted in Step 1, treat them as a pre-advance stop point: require explicit acknowledgement before continuing Path A or Path B.
 
@@ -262,7 +266,7 @@ ${ralphLoopContractSnippet()}
 
 Special-case for review: if \`review_criticals_resolved\` is in \`blocked\`, route to rework instead of looping review forever - recommend \`cclaw internal rewind tdd "review_blocked_by_critical <finding-ids>"\`, then \`cclaw internal rewind --ack tdd\` after TDD rework.
 
-Special-case for TDD blockers: when \`06-tdd.md\` records \`NO_SOURCE_CONTEXT\`, \`NO_TEST_SURFACE\`, \`NO_IMPLEMENTABLE_SLICE\`, \`RED_NOT_EXPRESSIBLE\`, or \`NO_VCS_MODE\`, keep status BLOCKED and print \`Current\`, \`Blocked by\`, \`Next\`, and \`Evidence needed\` instead of retrying speculative RED/GREEN work.
+Special-case for TDD blockers: when \`06-tdd.md\` records \`NO_SOURCE_CONTEXT\`, \`NO_TEST_SURFACE\`, \`NO_IMPLEMENTABLE_SLICE\`, \`RED_NOT_EXPRESSIBLE\`, or \`NO_VCS_MODE\`, keep status BLOCKED and print \`Current\`, \`Blocked by\`, \`Next\`, \`Repair path\`, and \`Evidence needed\` instead of retrying speculative RED/GREEN work. RED blockers need a runnable failing test surface, GREEN blockers need passing full-suite evidence, REFACTOR blockers need behavior-preservation evidence.
 
 **Path B — stage IS complete (all gates met, all delegations done):**
 
@@ -288,7 +292,7 @@ Otherwise (non-terminal \`next\`): load the next stage skill and begin execution
 
 ## Stage order
 
-This table is the track-aware critical path. It must match \`flow-state.json.track\`; do not follow the natural schema edge when the active track skips a stage. After \`ship\`, \`/cc-next\` continues closeout via ${closeoutSubstateInline()}: ${closeoutChainInline()}.
+This table is the track-aware critical path. It must match \`flow-state.json.track\`; do not follow the natural schema edge when the active track skips a stage. Quick skips ceremony, not safety: spec approval, RED/GREEN/REFACTOR evidence, review, and ship gates still apply. After \`ship\`, \`/cc-next\` continues closeout via ${closeoutSubstateInline()}: ${closeoutChainInline()}.
 
 | Stage | Standard next | Medium next | Quick next | Skill path |
 |---|---|---|---|---|

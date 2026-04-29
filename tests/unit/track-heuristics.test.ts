@@ -6,6 +6,8 @@ describe("track heuristics resolver", () => {
     const result = resolveTrackFromPrompt("hotfix login typo in auth flow", undefined);
     expect(result.track).toBe("quick");
     expect(result.matchedTokens.length).toBeGreaterThan(0);
+    expect(result.confidence).toMatch(/high|medium/);
+    expect(result.overrideGuidance).toContain("quick skips ceremony, not safety");
   });
 
   it("routes additive prompts to medium by default", () => {
@@ -17,6 +19,8 @@ describe("track heuristics resolver", () => {
     const result = resolveTrackFromPrompt("investigate something vague", undefined);
     expect(result.track).toBe("standard");
     expect(result.matchedTokens).toEqual([]);
+    expect(result.confidence).toBe("low");
+    expect(result.overrideGuidance).toContain("Confirm or override");
   });
 
   it("honors config fallback when no rule matches", () => {

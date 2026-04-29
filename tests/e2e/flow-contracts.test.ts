@@ -33,7 +33,9 @@ describe("flow command contracts", () => {
     const entries = (await fs.readdir(path.join(root, ".cclaw/commands"))).sort();
     expect(entries).toEqual([
       "brainstorm.md",
+      "cancel.md",
       "design.md",
+      "finish.md",
       "ideate.md",
       "next.md",
       "plan.md",
@@ -51,6 +53,11 @@ describe("flow command contracts", () => {
       expect(content).toContain("## HARD-GATE");
       expect(content).toContain("SKILL.md");
     }
+    const finishCommand = await fs.readFile(path.join(root, ".cclaw/commands/finish.md"), "utf8");
+    const cancelCommand = await fs.readFile(path.join(root, ".cclaw/commands/cancel.md"), "utf8");
+    expect(finishCommand).toContain("--disposition=completed");
+    expect(cancelCommand).toContain("--disposition=cancelled");
+    expect(cancelCommand).toContain("required reason");
 
     for (const stage of FLOW_STAGES) {
       const content = await fs.readFile(path.join(root, ".cclaw/commands", `${stage}.md`), "utf8");

@@ -91,7 +91,7 @@ ${frameBullets}
 5. **Adversarial critique pass.** For each candidate, write the strongest
    counter-argument, kill weak ideas, and keep survivors only.
 6. **Produce 5-10 survivors** with impact (High/Medium/Low),
-   effort (S/M/L), confidence (High/Medium/Low), and one evidence path per
+   effort (S/M/L), confidence (High/Medium/Low), **why now**, expected user impact, risk, and one evidence path per
    survivor.
 7. **Rank by impact/effort/confidence** using
    \`(impact points / effort cost) * confidence multiplier\` and recommend
@@ -224,8 +224,11 @@ Only survivors advance to ranking.
    - **Effort** — S / M / L
    - **Confidence** — High / Medium / Low
    - **Evidence** — path(s) or command output, inline if short
+   - **Why now** — timing signal from repo evidence, user friction, repeated knowledge, or blocked flow
+   - **Expected impact** — concrete user-facing benefit if this lands
+   - **Risk** — main implementation/product risk to manage
    - **Counter-argument** — strongest concern that survived
-   - **Proposed handoff** — exact \`/cc <phrase>\`
+   - **Next /cc prompt** — exact \`/cc <phrase>\` that starts the work
 3. Sort by score \`(impact points / effort cost) * confidence multiplier\`
    and break ties with rationale strength.
 4. Compute the artifact filename:
@@ -261,17 +264,19 @@ Only survivors advance to ranking.
 
    ## Ranked survivors
 
-   | ID | Improvement | Impact | Effort | Confidence | Evidence |
-   |---|---|---|---|---|---|
-| I-1 | Simplify a confusing generated prompt surface | High | S | High | <path-to-generated-surface> |
+   | ID | Improvement | Why now | Expected impact | Risk | Impact | Effort | Confidence | Evidence | Next /cc prompt |
+   |---|---|---|---|---|---|---|---|---|---|
+| I-1 | Simplify a confusing generated prompt surface | Repeated blocker in generated UX | Faster operator recovery | Might over-trim context | High | S | High | <path-to-generated-surface> | \`/cc Simplify the confusing generated prompt surface while preserving behavior\` |
    | …   | …                                  | …    | … | …    | …                                     |
 
    ## Candidate detail
 
 ### I-1 — Simplify a confusing generated prompt surface
 - **Evidence:** \`<path>\` contains repeated or stale guidance that a user would see.
-- **Counter-argument:** Trimming too hard can remove useful orientation for new users.
-- **Handoff:** \`/cc Simplify the confusing generated prompt surface while preserving behavior\`
+- **Why now:** The prompt is on the daily /cc path, so confusion compounds quickly.
+- **Expected impact:** Operators get a clearer next action without changing gates.
+- **Risk:** Trimming too hard can remove useful orientation for new users.
+- **Next /cc prompt:** \`/cc Simplify the confusing generated prompt surface while preserving behavior\`
 
    ### I-2 — …
    \`\`\`

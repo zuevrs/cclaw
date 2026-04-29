@@ -12,31 +12,33 @@ describe("doctor registry", () => {
   it("classifies hook wiring checks as error severity", () => {
     const meta = doctorCheckMetadata("hook:wiring:claude");
     expect(meta.severity).toBe("error");
-    expect(meta.docRef).toContain("harnesses.md");
+    expect(meta.docRef).toContain("README.md#harnesses");
   });
 
   it("classifies plural hooks-prefixed checks as error severity", () => {
     const meta = doctorCheckMetadata("hooks:workflow_guard:tdd_red_first");
     expect(meta.severity).toBe("error");
-    expect(meta.docRef).toContain("harnesses.md");
+    expect(meta.docRef).toContain("README.md#harnesses");
   });
 
   it("classifies protocol checks as error severity", () => {
     const meta = doctorCheckMetadata("protocol:completion");
     expect(meta.severity).toBe("error");
-    expect(meta.docRef).toContain("harnesses.md");
+    expect(meta.docRef).toContain("README.md#harnesses");
   });
 
   it("classifies stage command checks as generated runtime surface checks", () => {
     const meta = doctorCheckMetadata("stage_command:plan");
     expect(meta.severity).toBe("error");
     expect(meta.summary).toContain("Generated runtime surface");
+    expect(meta.actionGroup).toBe("sync");
   });
 
   it("falls back to warning metadata for unknown checks", () => {
     const meta = doctorCheckMetadata("custom:unknown");
     expect(meta.severity).toBe("warning");
     expect(meta.summary).toContain("Unclassified doctor check");
+    expect(meta.actionGroup).toBe("informational");
   });
 
   it("doctorSucceeded fails only on error-severity failures", () => {
@@ -46,7 +48,8 @@ describe("doctor registry", () => {
       details: "warning",
       severity: "warning",
       summary: "warning",
-      fix: "fix warning"
+      fix: "fix warning",
+      actionGroup: "informational"
     }]);
     const withError = doctorSucceeded([{
       name: "error:foo",
@@ -54,7 +57,8 @@ describe("doctor registry", () => {
       details: "error",
       severity: "error",
       summary: "error",
-      fix: "fix error"
+      fix: "fix error",
+      actionGroup: "stage-work"
     }]);
     expect(warningOnly).toBe(true);
     expect(withError).toBe(false);

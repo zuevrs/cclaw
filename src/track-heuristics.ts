@@ -5,6 +5,8 @@ export interface TrackResolution {
   track: FlowTrack;
   reason: string;
   matchedTokens: string[];
+  confidence: "high" | "medium" | "low";
+  overrideGuidance: string;
 }
 
 // Built-in vocabulary per track. Kept in one place so tests, docs, and the
@@ -131,8 +133,14 @@ export function resolveTrackFromPrompt(
     if (matched.length > 0) {
       return {
         track,
-        reason: `matched ${track} heuristic`,
-        matchedTokens: matched
+        reason: `matched ${track} heuristic (${matched.join(", ")})`,
+        matchedTokens: matched,
+        confidence: matched.length > 1 ? "high" : "medium",
+        overrideGuidance: track === "quick"
+          ? "Use medium/standard instead when product framing, architecture, schema, migration, security, or unclear scope appears; quick skips ceremony, not safety."
+          : track === "medium"
+            ? "Use standard if architecture, data model, security boundary, or migration risk is uncertain."
+            : "Use medium or quick only when the blast radius and architecture are already known."
       };
     }
   }
@@ -140,7 +148,9 @@ export function resolveTrackFromPrompt(
   return {
     track: fallback,
     reason: `no explicit match, fallback=${fallback}`,
-    matchedTokens: []
+    matchedTokens: [],
+    confidence: "low",
+    overrideGuidance: "Confirm or override before state is written; choose quick only for known low-blast-radius work, medium for known architecture with product framing, standard for uncertainty."
   };
 }
 

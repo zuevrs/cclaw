@@ -1163,17 +1163,17 @@ async function runAdvanceStage(
     const nextActions: string[] = [];
     if (validation.delegation.missing.length > 0) {
       nextActions.push(
-        `Complete or waive mandatory delegation(s): ${validation.delegation.missing.join(", ")}. Helper: \`node .cclaw/hooks/stage-complete.mjs ${args.stage} --waive-delegation=${validation.delegation.missing.join(",")} --waiver-reason="<why safe>"\`.`
+        `Run mandatory delegation(s) for stage "${args.stage}": ${validation.delegation.missing.join(", ")}. These roles are required by the stage schema before advance. If dispatch is impossible, use the waiver fallback only with a user-visible reason: \`node .cclaw/hooks/stage-complete.mjs ${args.stage} --waive-delegation=${validation.delegation.missing.join(",")} --waiver-reason="<why safe>"\`.`
       );
     }
     if (validation.delegation.missingEvidence.length > 0) {
       nextActions.push(
-        `Role-switch fallback completion needs --evidence-ref or escalate to a real isolated dispatch surface.`
+        `Role-switch fallback completion needs artifact evidenceRefs naming what the role proved; rerun completion with --evidence-ref=<artifact#anchor> or escalate to a real isolated dispatch surface.`
       );
     }
     if (validation.delegation.missingDispatchProof.length > 0) {
       nextActions.push(
-        `Isolated completion(s) ${dispatchProofDetails.join(", ") || validation.delegation.missingDispatchProof.join(", ")} lack matching dispatch proof; run the helper lifecycle scheduled -> launched -> acknowledged -> completed with --span-id, --dispatch-id, --dispatch-surface and --agent-definition-path before advancing.`
+        `Isolated completion(s) ${dispatchProofDetails.join(", ") || validation.delegation.missingDispatchProof.join(", ")} lack event-log dispatch proof. The ledger says completed, but .cclaw/state/delegation-events.jsonl must show scheduled -> launched -> acknowledged -> completed with --span-id, --dispatch-id, --dispatch-surface, --agent-definition-path, ackTs, and completedTs before advancing.`
       );
     }
     if (validation.delegation.legacyInferredCompletions.length > 0) {
@@ -1220,7 +1220,7 @@ async function runAdvanceStage(
     if (validation.delegation.missing.length > 0) {
       io.stderr.write(`- missing delegations: ${validation.delegation.missing.join(", ")}\n`);
       io.stderr.write(
-        `  next action: complete the delegation, or rerun with --waive-delegation=${validation.delegation.missing.join(",")} --waiver-reason="<why safe>".\n`
+        `  next action: run the named agent(s) for this stage, or rerun with --waive-delegation=${validation.delegation.missing.join(",")} --waiver-reason="<why safe>" only when the user accepts the safety trade-off.\n`
       );
     }
     if (validation.delegation.missingEvidence.length > 0) {
@@ -1228,7 +1228,7 @@ async function runAdvanceStage(
         `- role-switch evidence missing: ${validation.delegation.missingEvidence.join(", ")}\n`
       );
       io.stderr.write(
-        `  next action: include --evidence-ref=<artifact#anchor> when emitting the completed event, or escalate to a true isolated dispatch surface.\n`
+        `  next action: include --evidence-ref=<artifact#anchor> when emitting the completed event so the artifact shows what was reviewed/proved, or escalate to a true isolated dispatch surface.\n`
       );
     }
     if (validation.delegation.missingDispatchProof.length > 0) {
@@ -1236,7 +1236,7 @@ async function runAdvanceStage(
         `- isolated completion lacks dispatch proof: ${dispatchProofDetails.join(", ") || validation.delegation.missingDispatchProof.join(", ")}\n`
       );
       io.stderr.write(
-        `  next action: emit scheduled -> launched -> acknowledged -> completed with --span-id, --dispatch-id, --dispatch-surface, --agent-definition-path before advancing.\n`
+        `  next action: repair the event log proof by emitting scheduled -> launched -> acknowledged -> completed with --span-id, --dispatch-id, --dispatch-surface, --agent-definition-path, ackTs, and completedTs before advancing.\n`
       );
     }
     if (validation.delegation.legacyInferredCompletions.length > 0) {

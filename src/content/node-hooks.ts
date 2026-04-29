@@ -37,7 +37,12 @@ function normalizePatterns(patterns: string[] | undefined, fallback: string[]): 
   return patterns.map((value) => value.trim()).filter((value) => value.length > 0);
 }
 
-function resolveCliEntrypointForGeneratedHook(): string | null {
+interface GeneratedCliRuntime {
+  entrypoint: string | null;
+  argsPrefix: string[];
+}
+
+function resolveCliRuntimeForGeneratedHook(): GeneratedCliRuntime {
   const here = fileURLToPath(import.meta.url);
   const candidates = [
     path.resolve(path.dirname(here), "..", "cli.js"),
@@ -45,9 +50,20 @@ function resolveCliEntrypointForGeneratedHook(): string | null {
   ];
   for (const candidate of candidates) {
     // Synchronous probe runs only during cclaw-cli init/sync generation.
-    if (existsSync(candidate)) return candidate;
+    if (existsSync(candidate)) return { entrypoint: candidate, argsPrefix: [] };
   }
-  return null;
+
+  // Vitest exercises init/sync directly from src/ without a compiled dist/.
+  // Route that dev-only shape through vite-node so hooks still prove a local runtime.
+  if (process.env.VITEST === "true") {
+    const sourceCli = path.resolve(path.dirname(here), "..", "cli.ts");
+    const viteNode = path.resolve(path.dirname(here), "..", "..", "node_modules", "vite-node", "vite-node.mjs");
+    if (existsSync(sourceCli) && existsSync(viteNode)) {
+      return { entrypoint: viteNode, argsPrefix: ["--script", sourceCli] };
+    }
+  }
+
+  return { entrypoint: null, argsPrefix: [] };
 }
 
 /**
@@ -70,7 +86,7 @@ export function nodeHookRuntimeScript(options: NodeHookRuntimeOptions = {}): str
     options.compoundRecurrenceThreshold >= 1
       ? options.compoundRecurrenceThreshold
       : DEFAULT_COMPOUND_RECURRENCE_THRESHOLD;
-  const cliEntrypoint = resolveCliEntrypointForGeneratedHook();
+  const cliRuntime = resolveCliRuntimeForGeneratedHook();
 
   return `#!/usr/bin/env node
 import fs from "node:fs/promises";
@@ -93,7 +109,8 @@ const DEFAULT_TDD_PRODUCTION_PATH_PATTERNS = ${JSON.stringify(tddProductionPathP
 const COMPOUND_RECURRENCE_THRESHOLD = ${JSON.stringify(compoundRecurrenceThreshold)};
 const SMALL_PROJECT_ARCHIVE_RUNS_THRESHOLD = ${JSON.stringify(SMALL_PROJECT_ARCHIVE_RUNS_THRESHOLD)};
 const SMALL_PROJECT_RECURRENCE_THRESHOLD = ${JSON.stringify(SMALL_PROJECT_RECURRENCE_THRESHOLD)};
-const CCLAW_CLI_ENTRYPOINT = ${JSON.stringify(cliEntrypoint)};
+const CCLAW_CLI_ENTRYPOINT = ${JSON.stringify(cliRuntime.entrypoint)};
+const CCLAW_CLI_ARGS_PREFIX = ${JSON.stringify(cliRuntime.argsPrefix)};
 
 function resolveStrictness() {
   return process.env.CCLAW_STRICTNESS === "strict" ? "strict" : DEFAULT_STRICTNESS;
@@ -342,6 +359,7 @@ async function readStdin() {
 
 async function runCclawInternal(root, args, options = {}) {
   const cliEntrypoint = process.env.CCLAW_CLI_JS || CCLAW_CLI_ENTRYPOINT;
+  const cliArgsPrefix = process.env.CCLAW_CLI_JS ? [] : CCLAW_CLI_ARGS_PREFIX;
   if (!cliEntrypoint || String(cliEntrypoint).trim().length === 0) {
     return {
       code: 1,
@@ -353,6 +371,11 @@ async function runCclawInternal(root, args, options = {}) {
   try {
     const stat = await fs.stat(cliEntrypoint);
     if (!stat.isFile()) throw new Error("not-file");
+    for (const argPath of cliArgsPrefix) {
+      if (typeof argPath !== "string" || argPath.startsWith("-")) continue;
+      const argStat = await fs.stat(argPath);
+      if (!argStat.isFile()) throw new Error("arg-not-file");
+    }
   } catch {
     return {
       code: 1,
@@ -374,7 +397,7 @@ async function runCclawInternal(root, args, options = {}) {
     };
     let child;
     try {
-      child = spawn(process.execPath, [cliEntrypoint, "internal", ...args], {
+      child = spawn(process.execPath, [cliEntrypoint, ...cliArgsPrefix, "internal", ...args], {
         cwd: root,
         env: process.env,
         stdio: ["ignore", captureStdout ? "pipe" : "ignore", "pipe"]

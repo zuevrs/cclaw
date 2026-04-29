@@ -3,10 +3,17 @@ import path from "node:path";
 import { execFile } from "node:child_process";
 import { pathToFileURL } from "node:url";
 import { promisify } from "node:util";
-import { REQUIRED_DIRS, RUNTIME_ROOT } from "./constants.js";
+import { CCLAW_VERSION, REQUIRED_DIRS, RUNTIME_ROOT } from "./constants.js";
 import { CCLAW_AGENTS } from "./content/core-agents.js";
 import { detectAdvancedKeys, InvalidConfigError, readConfig } from "./config.js";
 import { exists } from "./fs-utils.js";
+import {
+  hashManagedResourceContent,
+  isManagedGeneratedPath,
+  MANAGED_RESOURCE_MANIFEST_REL_PATH,
+  readManagedResourceManifest,
+  validateManagedResourceManifest
+} from "./managed-resources.js";
 import { gitignoreHasRequiredPatterns } from "./gitignore.js";
 import {
   HARNESS_ADAPTERS,
@@ -34,6 +41,7 @@ import { stageSkillFolder } from "./content/skills.js";
 import { stageCommandShimMarkdown } from "./content/stage-command.js";
 import { doctorCheckMetadata } from "./doctor-registry.js";
 import { resolveTrackFromPrompt } from "./track-heuristics.js";
+import { detectHarnesses } from "./init-detect.js";
 import {
   classifyCodexHooksFlag,
   codexConfigPath,
@@ -51,7 +59,7 @@ import { validateKnowledgeEntry } from "./knowledge-store.js";
 import { readSeedShelf } from "./content/seed-shelf.js";
 import { evaluateRetroGate } from "./retro-gate.js";
 import type { HarnessId } from "./types.js";
-import type { DoctorSeverity } from "./doctor-registry.js";
+import type { DoctorActionGroup, DoctorSeverity } from "./doctor-registry.js";
 
 const execFileAsync = promisify(execFile);
 
@@ -62,6 +70,7 @@ export interface DoctorCheck {
   severity: DoctorSeverity;
   summary: string;
   fix: string;
+  actionGroup: DoctorActionGroup;
   docRef?: string;
 }
 
@@ -70,8 +79,8 @@ export interface DoctorOptions {
   reconcileCurrentStageGates?: boolean;
 }
 
-type PendingDoctorCheck = Omit<DoctorCheck, "severity" | "summary" | "fix" | "docRef"> &
-  Partial<Pick<DoctorCheck, "severity" | "summary" | "fix" | "docRef">>;
+type PendingDoctorCheck = Omit<DoctorCheck, "severity" | "summary" | "fix" | "actionGroup" | "docRef"> &
+  Partial<Pick<DoctorCheck, "severity" | "summary" | "fix" | "actionGroup" | "docRef">>;
 
 async function isGitRepo(projectRoot: string): Promise<boolean> {
   try {
@@ -134,7 +143,49 @@ function extractGeneratedCliEntrypoints(scriptContent: string): string[] {
       // malformed generated constant; treat below as missing/unusable
     }
   }
+  for (const match of scriptContent.matchAll(/const\s+CCLAW_CLI_ARGS_PREFIX\s*=\s*(\[(?:\\.|[^\]])*\]);/gu)) {
+    try {
+      const parsed = JSON.parse(match[1] ?? "[]") as unknown;
+      if (Array.isArray(parsed)) {
+        for (const item of parsed) {
+          if (typeof item === "string" && item.trim().length > 0 && !item.startsWith("-")) {
+            paths.push(item);
+          }
+        }
+      }
+    } catch {
+      // malformed generated constant; treat below as missing/unusable
+    }
+  }
   return paths;
+}
+
+async function walkGeneratedCandidates(
+  projectRoot: string,
+  relDir: string,
+  candidates: string[]
+): Promise<void> {
+  const fullDir = path.join(projectRoot, relDir);
+  if (!(await exists(fullDir))) return;
+  let entries: import("node:fs").Dirent[] = [];
+  try {
+    entries = await fs.readdir(fullDir, { withFileTypes: true });
+  } catch {
+    return;
+  }
+  for (const entry of entries) {
+    const rel = path.join(relDir, entry.name).replace(/\\/gu, "/");
+    if (entry.isDirectory()) {
+      await walkGeneratedCandidates(projectRoot, rel, candidates);
+    } else if (entry.isFile() && isManagedGeneratedPath(rel)) {
+      candidates.push(rel);
+    }
+  }
+}
+
+function formatManagedValidationIssue(issue: ReturnType<typeof validateManagedResourceManifest>[number]): string {
+  const subject = issue.path ?? (issue.index !== undefined ? `resources[${issue.index}]` : "manifest");
+  return `${subject} ${issue.field}: ${issue.message}`;
 }
 
 async function generatedCliEntrypointsOk(projectRoot: string): Promise<{ ok: boolean; details: string }> {
@@ -765,8 +816,142 @@ export async function doctorChecks(projectRoot: string, options: DoctorOptions =
     details: ".gitignore must include cclaw ignore block"
   });
 
+
+  const managedManifestPath = path.join(projectRoot, MANAGED_RESOURCE_MANIFEST_REL_PATH);
+  let rawManagedManifest: unknown = null;
+  let managedManifestParseError: string | null = null;
+  if (await exists(managedManifestPath)) {
+    try {
+      rawManagedManifest = JSON.parse(await fs.readFile(managedManifestPath, "utf8")) as unknown;
+    } catch (error) {
+      managedManifestParseError = error instanceof Error ? error.message : String(error);
+    }
+  }
+  const managedManifestValidationIssues = rawManagedManifest === null
+    ? []
+    : validateManagedResourceManifest(rawManagedManifest);
+  const managedManifest = await readManagedResourceManifest(projectRoot).catch(() => null);
+  checks.push({
+    name: "managed_resources:manifest_exists",
+    ok: managedManifest !== null,
+    details: managedManifest
+      ? `${MANAGED_RESOURCE_MANIFEST_REL_PATH} tracks ${managedManifest.resources.length} managed generated file(s)`
+      : `${MANAGED_RESOURCE_MANIFEST_REL_PATH} missing; run cclaw sync to establish generated file ownership`
+  });
+  checks.push({
+    name: "managed_resources:manifest_valid",
+    ok: managedManifestParseError === null && managedManifestValidationIssues.length === 0,
+    details: managedManifestParseError
+      ? `${MANAGED_RESOURCE_MANIFEST_REL_PATH} is unreadable JSON (${managedManifestParseError})`
+      : managedManifestValidationIssues.length === 0
+        ? `${MANAGED_RESOURCE_MANIFEST_REL_PATH} metadata is structurally valid`
+        : `malformed managed resource metadata: ${managedManifestValidationIssues.slice(0, 12).map(formatManagedValidationIssue).join("; ")}`
+  });
+  if (managedManifest) {
+    checks.push({
+      name: "managed_resources:manifest_package_version",
+      ok: managedManifest.packageVersion === CCLAW_VERSION,
+      details: managedManifest.packageVersion === CCLAW_VERSION
+        ? `${MANAGED_RESOURCE_MANIFEST_REL_PATH} packageVersion matches cclaw ${CCLAW_VERSION}`
+        : `${MANAGED_RESOURCE_MANIFEST_REL_PATH} packageVersion ${managedManifest.packageVersion} is stale; current cclaw is ${CCLAW_VERSION}. Run cclaw upgrade.`
+    });
+
+    const rawResources = toObject(rawManagedManifest)?.resources;
+    const stalePackageEntries: string[] = Array.isArray(rawResources)
+      ? rawResources.flatMap((entry, index) => {
+        const obj = toObject(entry);
+        if (!obj) return [];
+        const entryPath = typeof obj.path === "string" ? obj.path : `resources[${index}]`;
+        return typeof obj.packageVersion === "string" && obj.packageVersion !== CCLAW_VERSION
+          ? [`${entryPath} (${obj.packageVersion})`]
+          : [];
+      })
+      : [];
+    const stale: string[] = [];
+    const missing: string[] = [];
+    for (const entry of managedManifest.resources) {
+      const filePath = path.join(projectRoot, entry.path);
+      if (!(await exists(filePath))) {
+        missing.push(entry.path);
+        continue;
+      }
+      const currentHash = hashManagedResourceContent(await fs.readFile(filePath));
+      if (currentHash !== entry.sha256) {
+        stale.push(entry.path);
+      }
+    }
+    checks.push({
+      name: "managed_resources:entry_package_versions",
+      ok: stalePackageEntries.length === 0,
+      details: stalePackageEntries.length === 0
+        ? `all manifest entries match cclaw ${CCLAW_VERSION}`
+        : `manifest entries have stale packageVersion; run cclaw upgrade: ${stalePackageEntries.slice(0, 12).join(", ")}`
+    });
+    checks.push({
+      name: "managed_resources:user_modified",
+      ok: stale.length === 0,
+      details: stale.length === 0
+        ? "all manifest-tracked managed files match recorded hashes"
+        : `manifest-tracked managed files have user modifications: ${stale.slice(0, 12).join(", ")}`
+    });
+    checks.push({
+      name: "managed_resources:stale_entries",
+      ok: missing.length === 0,
+      details: missing.length === 0
+        ? "all manifest entries still exist"
+        : `manifest entries point to missing files: ${missing.slice(0, 12).join(", ")}`
+    });
+
+    const manifestPaths = new Set(managedManifest.resources.map((entry) => entry.path));
+    const candidates: string[] = [];
+    for (const relDir of [
+      `${RUNTIME_ROOT}/commands`,
+      `${RUNTIME_ROOT}/skills`,
+      `${RUNTIME_ROOT}/templates`,
+      `${RUNTIME_ROOT}/rules`,
+      `${RUNTIME_ROOT}/agents`,
+      `${RUNTIME_ROOT}/hooks`,
+      ".claude/commands",
+      ".cursor/commands",
+      ".opencode/commands",
+      ".opencode/agents",
+      ".codex/agents",
+      ".agents/skills",
+      ".claude/hooks",
+      ".cursor",
+      ".codex",
+      ".opencode/plugins"
+    ]) {
+      await walkGeneratedCandidates(projectRoot, relDir, candidates);
+    }
+    for (const rel of ["AGENTS.md", "CLAUDE.md"]) {
+      if ((await exists(path.join(projectRoot, rel))) && isManagedGeneratedPath(rel)) {
+        candidates.push(rel);
+      }
+    }
+    const orphaned = [...new Set(candidates)].filter((rel) => !manifestPaths.has(rel)).sort();
+    checks.push({
+      name: "managed_resources:orphaned_generated_files",
+      ok: orphaned.length === 0,
+      details: orphaned.length === 0
+        ? "no orphaned generated files detected across known cclaw surfaces"
+        : `warning: generated-looking files are not tracked in manifest: ${orphaned.slice(0, 12).join(", ")}`
+    });
+  }
+
   let configuredHarnesses: HarnessId[] = [];
   let parsedConfig: Awaited<ReturnType<typeof readConfig>> | null = null;
+  const configFileExists = await exists(path.join(projectRoot, RUNTIME_ROOT, "config.yaml"));
+  if (!configFileExists) {
+    const detectedHarnesses = await detectHarnesses(projectRoot).catch(() => []);
+    checks.push({
+      name: "config:present",
+      ok: detectedHarnesses.length === 0,
+      details: detectedHarnesses.length > 0
+        ? `${RUNTIME_ROOT}/config.yaml is missing but harness markers were detected (${detectedHarnesses.join(", ")}). Run cclaw sync --harnesses=${detectedHarnesses.join(",")} or cclaw sync --interactive.`
+        : `${RUNTIME_ROOT}/config.yaml missing and no harness markers were detected; run cclaw init or cclaw sync when ready.`
+    });
+  }
   try {
     const config = await readConfig(projectRoot);
     parsedConfig = config;
@@ -891,6 +1076,8 @@ export async function doctorChecks(projectRoot: string, options: DoctorOptions =
     const hasCcNext = content.includes("/cc-next");
     const hasCcIdeate = content.includes("/cc-ideate");
     const hasCcView = content.includes("/cc-view");
+    const hasCcFinish = content.includes("/cc-finish");
+    const hasCcCancel = content.includes("/cc-cancel");
     const hasVerification = content.includes("Verification Discipline");
     const hasMinimalMarker = content.includes("intentionally minimal for cross-project use");
     const hasMetaSkillPointer = content.includes(".cclaw/skills/using-cclaw/SKILL.md");
@@ -899,6 +1086,8 @@ export async function doctorChecks(projectRoot: string, options: DoctorOptions =
       && hasCcNext
       && hasCcIdeate
       && hasCcView
+      && hasCcFinish
+      && hasCcCancel
       && hasVerification
       && hasMinimalMarker
       && hasMetaSkillPointer;
@@ -909,7 +1098,7 @@ export async function doctorChecks(projectRoot: string, options: DoctorOptions =
     details: `${agentsFile} must contain the managed cclaw marker block with routing, verification, and minimal detail pointer`
   });
 
-  for (const cmd of ["start", "next", "ideate", "view"] as const) {
+  for (const cmd of ["start", "next", "ideate", "view", "finish", "cancel"] as const) {
     const cmdPath = path.join(projectRoot, RUNTIME_ROOT, "commands", `${cmd}.md`);
     checks.push({
       name: `utility_command:${cmd}`,
@@ -936,6 +1125,8 @@ export async function doctorChecks(projectRoot: string, options: DoctorOptions =
     ["learnings", "learnings"],
     ["flow-ideate", "flow-ideate"],
     ["flow-view", "flow-view"],
+    ["flow-finish", "flow-finish"],
+    ["flow-cancel", "flow-cancel"],
     ["subagent-dev", "sdd"],
     ["parallel-dispatch", "parallel-agents"],
     ["session", "session"],
@@ -2151,6 +2342,7 @@ export async function doctorChecks(projectRoot: string, options: DoctorOptions =
       severity: check.severity ?? metadata.severity,
       summary: check.summary ?? metadata.summary,
       fix: check.fix ?? metadata.fix,
+      actionGroup: check.actionGroup ?? metadata.actionGroup,
       docRef: check.docRef ?? metadata.docRef
     };
   });

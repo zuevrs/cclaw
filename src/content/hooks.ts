@@ -7,7 +7,12 @@ import {
   DELEGATION_DISPATCH_SURFACE_PATH_PREFIXES
 } from "../delegation.js";
 
-function resolveCliEntrypointForGeneratedHook(): string | null {
+interface GeneratedCliRuntime {
+  entrypoint: string | null;
+  argsPrefix: string[];
+}
+
+function resolveCliRuntimeForGeneratedHook(): GeneratedCliRuntime {
   const here = fileURLToPath(import.meta.url);
   const candidates = [
     path.resolve(path.dirname(here), "..", "cli.js"),
@@ -16,14 +21,25 @@ function resolveCliEntrypointForGeneratedHook(): string | null {
   for (const candidate of candidates) {
     // Synchronous probe runs only during cclaw-cli init/sync generation.
     // The generated hook receives a concrete path and does not need a global bin.
-    if (existsSync(candidate)) return candidate;
+    if (existsSync(candidate)) return { entrypoint: candidate, argsPrefix: [] };
   }
-  return null;
+
+  // Vitest exercises init/sync directly from src/ without a compiled dist/.
+  // Route that dev-only shape through vite-node so hooks still prove a local runtime.
+  if (process.env.VITEST === "true") {
+    const sourceCli = path.resolve(path.dirname(here), "..", "cli.ts");
+    const viteNode = path.resolve(path.dirname(here), "..", "..", "node_modules", "vite-node", "vite-node.mjs");
+    if (existsSync(sourceCli) && existsSync(viteNode)) {
+      return { entrypoint: viteNode, argsPrefix: ["--script", sourceCli] };
+    }
+  }
+
+  return { entrypoint: null, argsPrefix: [] };
 }
 
 
 function internalHelperScript(helperName: string, internalSubcommand: string, usage: string): string {
-  const cliEntrypoint = resolveCliEntrypointForGeneratedHook();
+  const cliRuntime = resolveCliRuntimeForGeneratedHook();
   return `#!/usr/bin/env node
 import fs from "node:fs/promises";
 import path from "node:path";
@@ -31,7 +47,8 @@ import process from "node:process";
 import { spawn } from "node:child_process";
 
 const RUNTIME_ROOT = ${JSON.stringify(RUNTIME_ROOT)};
-const CCLAW_CLI_ENTRYPOINT = ${JSON.stringify(cliEntrypoint)};
+const CCLAW_CLI_ENTRYPOINT = ${JSON.stringify(cliRuntime.entrypoint)};
+const CCLAW_CLI_ARGS_PREFIX = ${JSON.stringify(cliRuntime.argsPrefix)};
 const HELPER_NAME = ${JSON.stringify(helperName)};
 const INTERNAL_SUBCOMMAND = ${JSON.stringify(internalSubcommand)};
 const USAGE = ${JSON.stringify(usage)};
@@ -82,6 +99,7 @@ async function main() {
   }
 
   const cliEntrypoint = process.env.CCLAW_CLI_JS || CCLAW_CLI_ENTRYPOINT;
+  const cliArgsPrefix = process.env.CCLAW_CLI_JS ? [] : CCLAW_CLI_ARGS_PREFIX;
   if (!cliEntrypoint || cliEntrypoint.trim().length === 0) {
     process.stderr.write(
       "[cclaw] " + HELPER_NAME + ": local Node runtime entrypoint is missing. Re-run npx cclaw-cli sync, or set CCLAW_CLI_JS=/absolute/path/to/dist/cli.js for this session.\\n"
@@ -93,6 +111,11 @@ async function main() {
   try {
     const stat = await fs.stat(cliEntrypoint);
     if (!stat.isFile()) throw new Error("not-file");
+    for (const argPath of cliArgsPrefix) {
+      if (typeof argPath !== "string" || argPath.startsWith("-")) continue;
+      const argStat = await fs.stat(argPath);
+      if (!argStat.isFile()) throw new Error("arg-not-file");
+    }
   } catch {
     process.stderr.write(
       "[cclaw] " + HELPER_NAME + ": local Node runtime entrypoint not found at " + cliEntrypoint + ". Re-run npx cclaw-cli sync, or set CCLAW_CLI_JS=/absolute/path/to/dist/cli.js for this session.\\n"
@@ -101,7 +124,7 @@ async function main() {
     return;
   }
 
-  const child = spawn(process.execPath, [cliEntrypoint, "internal", INTERNAL_SUBCOMMAND, ...flags], {
+  const child = spawn(process.execPath, [cliEntrypoint, ...cliArgsPrefix, "internal", INTERNAL_SUBCOMMAND, ...flags], {
     cwd: root,
     env: process.env,
     stdio: "inherit"
@@ -151,7 +174,7 @@ export function startFlowScript(): string {
 }
 
 export function stageCompleteScript(): string {
-  const cliEntrypoint = resolveCliEntrypointForGeneratedHook();
+  const cliRuntime = resolveCliRuntimeForGeneratedHook();
   return `#!/usr/bin/env node
 import fs from "node:fs/promises";
 import path from "node:path";
@@ -159,7 +182,8 @@ import process from "node:process";
 import { spawn } from "node:child_process";
 
 const RUNTIME_ROOT = ${JSON.stringify(RUNTIME_ROOT)};
-const CCLAW_CLI_ENTRYPOINT = ${JSON.stringify(cliEntrypoint)};
+const CCLAW_CLI_ENTRYPOINT = ${JSON.stringify(cliRuntime.entrypoint)};
+const CCLAW_CLI_ARGS_PREFIX = ${JSON.stringify(cliRuntime.argsPrefix)};
 
 async function detectRoot() {
   const candidates = [
@@ -212,6 +236,7 @@ async function main() {
   }
 
   const cliEntrypoint = process.env.CCLAW_CLI_JS || CCLAW_CLI_ENTRYPOINT;
+  const cliArgsPrefix = process.env.CCLAW_CLI_JS ? [] : CCLAW_CLI_ARGS_PREFIX;
   if (!cliEntrypoint || cliEntrypoint.trim().length === 0) {
     process.stderr.write(
       "[cclaw] stage-complete: local Node runtime entrypoint is missing. Re-run npx cclaw-cli sync, or set CCLAW_CLI_JS=/absolute/path/to/dist/cli.js for this session.\\n"
@@ -223,6 +248,11 @@ async function main() {
   try {
     const stat = await fs.stat(cliEntrypoint);
     if (!stat.isFile()) throw new Error("not-file");
+    for (const argPath of cliArgsPrefix) {
+      if (typeof argPath !== "string" || argPath.startsWith("-")) continue;
+      const argStat = await fs.stat(argPath);
+      if (!argStat.isFile()) throw new Error("arg-not-file");
+    }
   } catch {
     process.stderr.write(
       "[cclaw] stage-complete: local Node runtime entrypoint not found at " + cliEntrypoint + ". Re-run npx cclaw-cli sync, or set CCLAW_CLI_JS=/absolute/path/to/dist/cli.js for this session.\\n"
@@ -233,7 +263,7 @@ async function main() {
 
   const child = spawn(
     process.execPath,
-    [cliEntrypoint, "internal", "advance-stage", stage, ...flags],
+    [cliEntrypoint, ...cliArgsPrefix, "internal", "advance-stage", stage, ...flags],
     {
     cwd: root,
     env: process.env,

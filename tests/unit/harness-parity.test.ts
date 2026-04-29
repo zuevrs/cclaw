@@ -61,5 +61,10 @@ describe("harness parity model", () => {
     expect(HARNESS_ADAPTERS.codex.reality.proofSource).toContain("delegation-events.jsonl");
   });
 
+  it("exposes repair hints for native harness routing", () => {
+    expect(HARNESS_ADAPTERS.opencode.reality.proofSource).toContain(".opencode/agents");
+    expect(HARNESS_ADAPTERS.codex.reality.proofSource).toContain(".codex/agents");
+  });
+
 });
 
