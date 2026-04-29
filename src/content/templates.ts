@@ -1180,7 +1180,7 @@ For meaningful TDD work, replace the Learnings sentinel with 1-3 JSON learning b
 - Overall: complete | concerns | blocked
 
 ## Trace Matrix Check
-- Command: \`cclaw internal trace-matrix\` when the active track enforces it; otherwise record direct AC/reproduction-slice coverage.
+- Command: \`npx cclaw-cli internal trace-matrix\` when the active track enforces it; otherwise record direct AC/reproduction-slice coverage.
 - Orphaned criteria: 0
 - Orphaned source items: 0 or \`N/A - direct spec/reproduction coverage\`
 - Orphaned tests: 0

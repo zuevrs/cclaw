@@ -87,10 +87,10 @@ ${conversationLanguagePolicyMarkdown()}
 
 ## Algorithm (mandatory)
 
-1. Read **\`${flowPath}\`**. If missing → **BLOCKED** (state missing). Next action: run \`cclaw sync\` to safely regenerate generated runtime files, then \`cclaw doctor --explain\`; do not hand-edit state unless doctor says user repair is required.
+1. Read **\`${flowPath}\`**. If missing → **BLOCKED** (state missing). Next action: run \`npx cclaw-cli sync\` to safely regenerate generated runtime files, then \`npx cclaw-cli doctor --explain\`; do not hand-edit state unless doctor says user repair is required.
 2. Parse JSON. Capture \`currentStage\` and \`stageGateCatalog[currentStage]\`.
-3. If \`staleStages[currentStage]\` exists, do not advance automatically. Report \`Blocked by: stale stage\`, the marker reason/rewindId, the stage artifact work to re-run, and clear only the current stage marker with \`cclaw internal rewind --ack <currentStage>\` after rework.
-4. Read **\`${reconciliationNoticesPath}\`** when present. If it contains entries for \`activeRunId + currentStage\` and the listed gate is still blocked in \`stageGateCatalog[currentStage].blocked\`, emit \`Blocked by: reconciliation notice\` with gate id, reason, and next action \`cclaw doctor --reconcile-gates --explain\`. Clarify that reconciliation refreshes derived gate status only; it does not repair missing artifacts or tests.
+3. If \`staleStages[currentStage]\` exists, do not advance automatically. Report \`Blocked by: stale stage\`, the marker reason/rewindId, the stage artifact work to re-run, and clear only the current stage marker with \`npx cclaw-cli internal rewind --ack <currentStage>\` after rework.
+4. Read **\`${reconciliationNoticesPath}\`** when present. If it contains entries for \`activeRunId + currentStage\` and the listed gate is still blocked in \`stageGateCatalog[currentStage].blocked\`, emit \`Blocked by: reconciliation notice\` with gate id, reason, and next action \`npx cclaw-cli doctor --reconcile-gates --explain\`. Clarify that reconciliation refreshes derived gate status only; it does not repair missing artifacts or tests.
 5. Let \`G\` = \`requiredGates\` for **\`currentStage\`** from the stage schema.
 6. Let \`catalog\` = \`stageGateCatalog[currentStage]\` from flow state.
 7. **Satisfied** for gate id \`g\`: \`g\` in \`catalog.passed\` and \`g\` not in \`catalog.blocked\`.
@@ -98,7 +98,7 @@ ${conversationLanguagePolicyMarkdown()}
 9. If \`M\` is non-empty, inspect **\`${delegationPath}\`**. Treat as satisfied only if each mandatory agent is **completed** or **waived**.
 10. For each satisfied mandatory delegation row, verify \`evidenceRefs\` is a non-empty array (unless status is \`waived\` with rationale). Missing evidenceRefs means delegation is unresolved.
 11. If any mandatory delegation is missing and no waiver exists: **STOP** and ask the user whether to dispatch \`<agent>\` now or waive with rationale. State who must run, why the role is mandatory, whether the gap is ledger status, event-log dispatch proof, or artifact \`evidenceRefs\`, and do not mark gates passed while delegation is unresolved.
-12. If \`currentStage === "review"\` and \`catalog.blocked\` includes \`review_criticals_resolved\`, treat this as a hard remediation branch: recommend the managed command \`cclaw internal rewind tdd "review_blocked_by_critical <finding-ids>"\`, and do not attempt to advance toward ship. After TDD rework, require \`cclaw internal rewind --ack tdd\` before continuing.
+12. If \`currentStage === "review"\` and \`catalog.blocked\` includes \`review_criticals_resolved\`, treat this as a hard remediation branch: recommend the managed command \`npx cclaw-cli internal rewind tdd "review_blocked_by_critical <finding-ids>"\`, and do not attempt to advance toward ship. After TDD rework, require \`npx cclaw-cli internal rewind --ack tdd\` before continuing.
 
 ### Path A: Current stage is NOT complete (any gate unmet or delegation missing)
 
@@ -116,7 +116,7 @@ the same soft-nudge semantics when \`currentStage === "tdd"\`.
 
   ${closeoutSubstateProtocolBullets()}
 
-  Otherwise report **"Flow complete. All stages finished."** and stop.
+  Otherwise report **"Flow complete. Closeout archived."** and stop.
 
 → Otherwise: load **\`${RUNTIME_ROOT}/skills/<skillFolder>/SKILL.md\`** for the successor stage. Execute that stage's protocol.
 
@@ -139,17 +139,18 @@ the same soft-nudge semantics when \`currentStage === "tdd"\`.
   regenerating the retro draft.
 - No special resume command needed — \`/cc\` is the public resume/progression command.
 
-## Headless mode
+## Headless mode (CI/automation only)
 
-When orchestrated by another skill/subagent, emit exactly one JSON envelope and
-no narrative text:
+Headless envelopes are a machine-mode exception for CI/automation orchestration.
+In normal interactive runs, respond in natural language instead of emitting an envelope.
+When orchestrated by another skill/subagent, emit exactly one JSON envelope and no narrative text:
 
 \`\`\`json
 {"version":"1","kind":"gate-result","stage":"<currentStage>","payload":{"command":"/cc-next","decision":"resume_or_advance","nextStage":"<nextStage>"},"emittedAt":"<ISO-8601>"}
 \`\`\`
 
 Validate envelopes with:
-\`cclaw internal envelope-validate --stdin\`
+\`npx cclaw-cli internal envelope-validate --stdin\`
 
 ## Primary skill
 
@@ -199,6 +200,8 @@ description: "Internal compatibility progression command. Prefer /cc for start, 
 
 \`/cc\` is the public command to drive the cclaw flow. \`/cc-next\` remains as an internal/compatibility alias for progression.
 
+> **Prefer \`/cc\`.** \`/cc-next\` is kept for internal/legacy compatibility naming.
+
 ## Operator Output Contract
 
 ${conversationLanguagePolicyMarkdown()}
@@ -238,9 +241,9 @@ Do **not** mark gates satisfied from memory alone. Cite **artifact evidence** (p
 
 1. Open **\`${flowPath}\`**.
 2. Record \`currentStage\` and \`stageGateCatalog[currentStage]\`.
-3. If \`staleStages[currentStage]\` exists, show \`Blocked by: stale stage\`, the marker reason/rewindId, re-run the stage, and clear only the current marker via \`cclaw internal rewind --ack <currentStage>\` before advancing.
-4. If the file is missing or invalid JSON → **BLOCKED** (state missing/corrupt). Next action: run \`cclaw sync\` for safe regeneration of generated runtime files, then \`cclaw doctor --explain\`; do not hand-edit flow state unless doctor says user repair is required.
-5. Read \`${reconciliationNoticesPath}\` when present. For entries matching \`activeRunId + currentStage\` whose gate is still in \`stageGateCatalog[currentStage].blocked\`, show \`Blocked by: reconciliation notice\` with gate id + reason before proceeding; \`cclaw doctor --reconcile-gates --explain\` refreshes derived gate-state only; it does not repair missing artifacts or tests.
+3. If \`staleStages[currentStage]\` exists, show \`Blocked by: stale stage\`, the marker reason/rewindId, re-run the stage, and clear only the current marker via \`npx cclaw-cli internal rewind --ack <currentStage>\` before advancing.
+4. If the file is missing or invalid JSON → **BLOCKED** (state missing/corrupt). Next action: run \`npx cclaw-cli sync\` for safe regeneration of generated runtime files, then \`npx cclaw-cli doctor --explain\`; do not hand-edit flow state unless doctor says user repair is required.
+5. Read \`${reconciliationNoticesPath}\` when present. For entries matching \`activeRunId + currentStage\` whose gate is still in \`stageGateCatalog[currentStage].blocked\`, show \`Blocked by: reconciliation notice\` with gate id + reason before proceeding; \`npx cclaw-cli doctor --reconcile-gates --explain\` refreshes derived gate-state only; it does not repair missing artifacts or tests.
 
 ### Step 2: Evaluate gates
 
@@ -267,7 +270,7 @@ Execute the stage protocol. The stage skill handles interaction, STOP points, ga
 
 ${ralphLoopContractSnippet()}
 
-Special-case for review: if \`review_criticals_resolved\` is in \`blocked\`, route to rework instead of looping review forever - recommend \`cclaw internal rewind tdd "review_blocked_by_critical <finding-ids>"\`, then \`cclaw internal rewind --ack tdd\` after TDD rework.
+Special-case for review: if \`review_criticals_resolved\` is in \`blocked\`, route to rework instead of looping review forever - recommend \`npx cclaw-cli internal rewind tdd "review_blocked_by_critical <finding-ids>"\`, then \`npx cclaw-cli internal rewind --ack tdd\` after TDD rework.
 
 Special-case for TDD blockers: when \`06-tdd.md\` records \`NO_SOURCE_CONTEXT\`, \`NO_TEST_SURFACE\`, \`NO_IMPLEMENTABLE_SLICE\`, \`RED_NOT_EXPRESSIBLE\`, or \`NO_VCS_MODE\`, keep status BLOCKED and print \`Current\`, \`Blocked by\`, \`Next\`, \`Repair path\`, and \`Evidence needed\` instead of retrying speculative RED/GREEN work. RED blockers need a runnable failing test surface, GREEN blockers need passing full-suite evidence, REFACTOR blockers need behavior-preservation evidence.
 
@@ -289,7 +292,7 @@ by inspecting ${closeoutSubstateInline()}:
 Each step owns its own state transition. \`/cc\` keeps retro and compound
 in-session, then uses the archive runtime only at \`ready_to_archive\`.
 
-Otherwise report **"Flow complete. All stages finished."** and stop.
+Otherwise report **"Flow complete. Closeout archived."** and stop.
 
 Otherwise (non-terminal \`next\`): load the next stage skill and begin execution.
 

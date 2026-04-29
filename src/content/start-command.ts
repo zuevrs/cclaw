@@ -23,7 +23,7 @@ export function startCommandContract(): string {
 
 **The unified entry point for the cclaw flow.**
 
-- \`/cc\` (no arguments) → reads existing flow state and resumes/progresses the active flow. If flow state is missing or still a fresh init placeholder, stop and guide the user to run \`/cc <prompt>\` or \`cclaw init\`; do not silently create a brainstorm run.
+- \`/cc\` (no arguments) → reads existing flow state and resumes/progresses the active flow. If flow state is missing or still a fresh init placeholder, stop and guide the user to run \`/cc <prompt>\` or \`npx cclaw-cli init\`; do not silently create a brainstorm run.
 - \`/cc <prompt>\` (with an idea/description) → saves the prompt as idea context and starts the first stage of the resolved track.
 
 This is the **recommended way to start, resume, and continue** working with cclaw.
@@ -113,21 +113,22 @@ If during any stage the agent discovers evidence that contradicts the initial Ph
 ### Without prompt (\`/cc\`)
 
 1. Read \`${flowPath}\`.
-2. If flow state is missing → guide the user to run \`cclaw init\` and stop.
+2. If flow state is missing → guide the user to run \`npx cclaw-cli init\` and stop.
 3. If flow state is only a fresh init placeholder (\`completedStages: []\`, all \`passed\` arrays empty, and no \`00-idea.md\`) → stop and ask for \`/cc <prompt>\` to start a tracked run. Do not create a brainstorm state implicitly.
 4. Otherwise check current stage gates, resume if incomplete, and advance if complete.
 
-## Headless mode
+## Headless mode (CI/automation only)
 
-When called by another skill or subagent in machine mode, emit exactly one
-JSON envelope (no prose) and stop:
+Headless envelopes are a machine-mode exception for CI/automation orchestration.
+In normal interactive runs, respond in natural language instead of emitting an envelope.
+When called by another skill or subagent in machine mode, emit exactly one JSON envelope (no prose) and stop:
 
 \`\`\`json
 {"version":"1","kind":"stage-output","stage":"<currentStage>","payload":{"command":"/cc","track":"<track>","action":"start_or_resume"},"emittedAt":"<ISO-8601>"}
 \`\`\`
 
 Validate envelopes with:
-\`cclaw internal envelope-validate --stdin\`
+\`npx cclaw-cli internal envelope-validate --stdin\`
 
 ## Primary skill
 
@@ -202,7 +203,7 @@ If mid-stage evidence contradicts the initial Class/Track decision (the "trivial
 Progress the tracked flow only when one exists:
 
 1. Read \`${flowPath}\`.
-2. If missing, guide the user to run \`cclaw init\` and stop.
+2. If missing, guide the user to run \`npx cclaw-cli init\` and stop.
 3. If it is only a fresh init placeholder (\`completedStages: []\`, no passed gates, and no \`${RUNTIME_ROOT}/artifacts/00-idea.md\`), stop and ask for \`/cc <prompt>\` to start a tracked run. Do not silently create a brainstorm run.
 4. Check gates for \`currentStage\`.
 5. If incomplete → load current stage skill and execute.

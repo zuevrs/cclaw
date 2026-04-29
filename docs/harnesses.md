@@ -23,7 +23,7 @@ Generated from `src/harness-adapters.ts` capabilities and hook event mappings. F
 
 Neutral placeholder tokens only: `<agent-name>`, `<stage>`, `<run-id>`, `<span-id>`, `<dispatch-id>`, `<agent-def-path>`, `<iso-ts>`, `<artifact-anchor>`. See `docs/quality-gates.md` for stage-by-stage gate mapping.
 
-The four shipped harnesses (`claude`, `cursor`, `opencode`, `codex`) each ship with a canonical primary surface in the table above. Repair hints: `cclaw sync` safely regenerates shims/plugins/agents; Codex also needs `[features] codex_hooks = true`; OpenCode needs `opencode.json(.c)` plugin registration; role-switch completions require evidenceRefs. The remaining enum values `generic-task`, `role-switch`, and `manual` are documented in the dispatch-surface table below and are available to any harness as fallback paths when the primary surface is unavailable.
+The four shipped harnesses (`claude`, `cursor`, `opencode`, `codex`) each ship with a canonical primary surface in the table above. Repair hints: `npx cclaw-cli sync` safely regenerates shims/plugins/agents; Codex also needs `[features] codex_hooks = true`; OpenCode needs `opencode.json(.c)` plugin registration; role-switch completions require evidenceRefs. The remaining enum values `generic-task`, `role-switch`, and `manual` are documented in the dispatch-surface table below and are available to any harness as fallback paths when the primary surface is unavailable.
 
 **claude**:
 
@@ -84,6 +84,20 @@ Pre-v3 ledger entries that lack a recorded `dispatchSurface` are tagged `fulfill
 
 `--dispatch-surface` must be one of the values listed in the dispatch-surface table above (the enum is generated verbatim from `src/delegation.ts::DELEGATION_DISPATCH_SURFACES`). Surfaces must align with the allowed agent-definition-path prefixes shown alongside each surface; `role-switch` and `manual` accept any path. The deprecated `task` surface is rejected.
 
+## Hook layering
+
+Hook behavior is intentionally split into three layers so docs, generation, and runtime checks stay in sync:
+
+| Layer | Source of truth | Responsibility |
+|---|---|---|
+| 1) Manifest projection | `src/content/hook-manifest.ts` | Canonical handler/event map per harness. This is the authoring surface for new handlers or reroutes. |
+| 2) JSON schema descriptors | `src/hook-schemas/*.json` + `src/hook-schema.ts` descriptor map | Declares required harness-native event arrays and schema version for each harness document. |
+| 3) Runtime TS validation | `src/hook-schema.ts::validateHookDocument` + doctor hook checks | Validates generated hook JSON shape/required events and reports actionable diagnostics. |
+
+Flow:
+1. Manifest defines handler bindings.
+2. Hook documents are generated from manifest projections.
+3. Schema descriptors + TS validators enforce structure at sync/doctor time.
 
 Fallback legend:
 
@@ -144,23 +158,6 @@ Hook keys are intentionally harness-native and must not be normalized:
 
 Use the exact event names from each harness schema. Treating all hooks as one
 shared casing silently breaks generated wiring.
-
-## Hook layering
-
-Hook behavior is intentionally split into three layers so docs, generation, and runtime checks stay in sync:
-
-| Layer | Source of truth | Responsibility |
-|---|---|---|
-| 1) Manifest projection | `src/content/hook-manifest.ts` | Canonical handler/event map per harness. This is the authoring surface for new handlers or reroutes. |
-| 2) JSON schema descriptors | `src/hook-schemas/*.json` + `src/hook-schema.ts` descriptor map | Declares required harness-native event arrays and schema version for each harness document. |
-| 3) Runtime TS validation | `src/hook-schema.ts::validateHookDocument` + doctor hook checks | Validates generated hook JSON shape/required events and reports actionable diagnostics. |
-
-Flow:
-1. Manifest defines handler bindings.
-2. Hook documents are generated from manifest projections.
-3. Schema descriptors + TS validators enforce structure at sync/doctor time.
-
-When adding a hook event, update the manifest first; schema/doctor parity is expected to follow.
 
 ## Interpretation
 

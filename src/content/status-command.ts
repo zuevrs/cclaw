@@ -52,7 +52,7 @@ a read-only command.
 
 ## Algorithm
 
-1. Read \`${flowPath}\`. If missing → report **BLOCKED: flow state absent** and suggest \`cclaw init\`.
+1. Read \`${flowPath}\`. If missing → report **BLOCKED: flow state absent** and suggest \`npx cclaw-cli init\`.
 2. Read \`${delegationPath}\`. Missing → treat all mandatory delegations as pending.
 3. Render **time in stage** as \`(unknown)\` unless visible conversation or
    artifact handoff context gives a timestamp.
@@ -88,7 +88,7 @@ a read-only command.
     - If current stage has unmet gates -> \`/cc\` to resume.
     - If a mandatory delegation is missing evidence -> dispatch the worker/reviewer or waive with rationale; do not advance silently.
     - If a TDD blocker taxonomy code is present (\`NO_SOURCE_CONTEXT\`, \`NO_TEST_SURFACE\`, \`NO_IMPLEMENTABLE_SLICE\`, \`RED_NOT_EXPRESSIBLE\`, \`NO_VCS_MODE\`) -> name the blocker and the rewind/config route.
-    - If review is blocked by critical findings -> show \`cclaw internal rewind tdd "review_blocked_by_critical <finding-ids>"\` plus the later \`cclaw internal rewind --ack tdd\`.
+    - If review is blocked by critical findings -> show \`npx cclaw-cli internal rewind tdd "review_blocked_by_critical <finding-ids>"\` plus the later \`npx cclaw-cli internal rewind --ack tdd\`.
     - If closeout substate is non-idle -> \`/cc\` to continue the chain.
     - If current stage is complete -> \`/cc\` to advance (or report "Flow complete" if terminal).
 

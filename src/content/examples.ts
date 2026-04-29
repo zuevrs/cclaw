@@ -853,7 +853,7 @@ const STAGE_DOMAIN_SAMPLES: Partial<Record<FlowStage, DomainSample[]>> = {
     {
       domain: "cli",
       label: "Direction",
-      body: "Problem: `cclaw archive` silently deletes 30+ day runs with no preview. Success: a `--dry-run` flag prints would-be-archived run IDs to stdout and exits 0; current behavior is unchanged without the flag. Anti-success: adding an interactive confirmation prompt that breaks CI scripts."
+      body: "Problem: `npx cclaw-cli archive` silently deletes 30+ day runs with no preview. Success: a `--dry-run` flag prints would-be-archived run IDs to stdout and exits 0; current behavior is unchanged without the flag. Anti-success: adding an interactive confirmation prompt that breaks CI scripts."
     },
     {
       domain: "library",
@@ -875,7 +875,7 @@ const STAGE_DOMAIN_SAMPLES: Partial<Record<FlowStage, DomainSample[]>> = {
     {
       domain: "cli",
       label: "Scope line",
-      body: "In: add `--dry-run` to `cclaw archive`; out: redesigning archive formats, adding retention flags, or changing the default. Discretion: exact wording of stdout lines. NOT in scope: touching `init` / `sync` / `doctor` subcommands."
+      body: "In: add `--dry-run` to `npx cclaw-cli archive`; out: redesigning archive formats, adding retention flags, or changing the default. Discretion: exact wording of stdout lines. NOT in scope: touching `init` / `sync` / `doctor` subcommands."
     },
     {
       domain: "library",
@@ -924,7 +924,7 @@ const STAGE_DOMAIN_SAMPLES: Partial<Record<FlowStage, DomainSample[]>> = {
     {
       domain: "cli",
       label: "AC",
-      body: "AC-C1: Given `cclaw init --claude` run in an empty directory, exit code is `0`, `.cclaw/config.yaml` is created with `harnesses: [claude]`, and stderr contains no warnings (asserted by `tests/integration/init-sync-doctor.test.ts`)."
+      body: "AC-C1: Given `npx cclaw-cli init --harnesses=claude` run in an empty directory, exit code is `0`, `.cclaw/config.yaml` is created with `harnesses: [claude]`, and stderr contains no warnings (asserted by `tests/integration/init-sync-doctor.test.ts`)."
     },
     {
       domain: "library",
@@ -946,7 +946,7 @@ const STAGE_DOMAIN_SAMPLES: Partial<Record<FlowStage, DomainSample[]>> = {
     {
       domain: "cli",
       label: "Task",
-      body: "T-C-2 `[~3m]`: Add `--dry-run` flag to `cclaw archive` that prints the would-be-archived run IDs to stdout and exits 0. AC-C3. Verify: `node dist/cli.js archive --dry-run` + `tests/unit/cli-parse.test.ts`."
+      body: "T-C-2 `[~3m]`: Add `--dry-run` flag to `npx cclaw-cli archive` that prints the would-be-archived run IDs to stdout and exits 0. AC-C3. Verify: `node dist/cli.js archive --dry-run` + `tests/unit/cli-parse.test.ts`."
     },
     {
       domain: "library",
@@ -990,7 +990,7 @@ const STAGE_DOMAIN_SAMPLES: Partial<Record<FlowStage, DomainSample[]>> = {
     {
       domain: "cli",
       label: "Finding",
-      body: "R-C-2 (Suggestion, UX): `cclaw archive --dry-run` prints run IDs without a trailing newline, breaking downstream `xargs` pipelines. Evidence: `echo '' | xargs -I{} printf '%s\\n' {}` contrast. Fix owner: CLI; non-blocking."
+      body: "R-C-2 (Suggestion, UX): `npx cclaw-cli archive --dry-run` prints run IDs without a trailing newline, breaking downstream `xargs` pipelines. Evidence: `echo '' | xargs -I{} printf '%s\\n' {}` contrast. Fix owner: CLI; non-blocking."
     },
     {
       domain: "library",
@@ -1012,7 +1012,7 @@ const STAGE_DOMAIN_SAMPLES: Partial<Record<FlowStage, DomainSample[]>> = {
     {
       domain: "cli",
       label: "Rollback",
-      body: "Trigger: `cclaw init --claude` exits non-zero on a fresh tmp dir, OR `cclaw doctor` regresses (FAIL count increases) on the smoke matrix. Steps: `npm unpublish cclaw-cli@<version>` (within the 72h window) or `npm deprecate cclaw-cli@<version> '<reason>'`; publish the previous patch. Verify: `npx cclaw-cli@latest --version` prints the previous version."
+      body: "Trigger: `npx cclaw-cli init --harnesses=claude` exits non-zero on a fresh tmp dir, OR `npx cclaw-cli doctor` regresses (FAIL count increases) on the smoke matrix. Steps: `npm unpublish cclaw-cli@<version>` (within the 72h window) or `npm deprecate cclaw-cli@<version> '<reason>'`; publish the previous patch. Verify: `npx cclaw-cli@latest --version` prints the previous version."
     },
     {
       domain: "library",

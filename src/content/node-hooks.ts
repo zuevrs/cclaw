@@ -1085,7 +1085,7 @@ async function handleSessionStart(runtime) {
     parts.push(
       "Stale stages pending acknowledgement: " +
         staleStageNames.join(", ") +
-        " (use cclaw internal rewind --ack <stage> after redo)."
+        " (use npx cclaw-cli internal rewind --ack <stage> after redo)."
     );
   }
   if (knowledge.digestLines.length > 0) {
@@ -1437,7 +1437,7 @@ async function handleWorkflowGuard(runtime) {
     /^(read|readfile|open|view|cat|shell|runcommand|run_command|execcommand|exec_command|terminal)$/u.test(
       toolLower
     ) &&
-    /(\\.cclaw\\/state\\/flow-state\\.json|cclaw doctor|cclaw sync)/u.test(payloadLower);
+    /(\\.cclaw\\/state\\/flow-state\\.json|npx cclaw-cli doctor|npx cclaw-cli sync|cclaw doctor|cclaw sync)/u.test(payloadLower);
   if (shouldRecordFlowRead) {
     await writeJsonFile(guardStateFile, {
       ...guardState,

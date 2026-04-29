@@ -313,7 +313,7 @@ workflow tool.
 
 - `retro -> compound -> archive` remains part of ship closeout through
   `/cc-next`.
-- `cclaw archive` still archives active runs into `.cclaw/runs/`.
+- `cclaw archive` still archives active runs into `.cclaw/archive/`.
 - Stage skills still keep decision, completion, verification, and
   closeout discipline, but now inline the needed guidance instead of
   making users chase generated reference files.

@@ -107,8 +107,10 @@ ${frameBullets}
 9. **Present the handoff prompt** with four concrete options — not A/B/C
    letters. Default = "Start /cc on the top recommendation".
 
-## Headless mode
+## Headless mode (CI/automation only)
 
+Headless envelopes are a machine-mode exception for CI/automation orchestration.
+In normal interactive ideation, respond with natural language plus the artifact path.
 For skill-to-skill invocation, emit exactly one JSON envelope:
 
 \`\`\`json
@@ -116,7 +118,7 @@ For skill-to-skill invocation, emit exactly one JSON envelope:
 \`\`\`
 
 Validate envelopes with:
-\`cclaw internal envelope-validate --stdin\`
+\`npx cclaw-cli internal envelope-validate --stdin\`
 
 ## Primary skill
 

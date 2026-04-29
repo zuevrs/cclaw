@@ -54,7 +54,7 @@ export const REVIEW: StageSchemaInput = {
       "Classify findings — Critical (blocks ship), Important (should fix), Suggestion (optional improvement).",
       "Victory Detector — before verdict, confirm Layer 1, Layer 2, security sweep, structured findings, trace evidence, and unresolved-critical status are complete; otherwise iterate findings or route back to TDD.",
       "Produce verdict — APPROVED, APPROVED_WITH_CONCERNS, or BLOCKED.",
-      "If verdict is BLOCKED, emit remediation route token `ROUTE_BACK_TO_TDD`, include the managed command `cclaw internal rewind tdd \"review_blocked_by_critical <finding-ids>\"`, list the critical finding IDs and required TDD evidence to repair, and satisfy the special transition guard `review_verdict_blocked` instead of `review_criticals_resolved`. After TDD rework, clear the stale marker with `cclaw internal rewind --ack tdd` before `/cc`."
+      "If verdict is BLOCKED, emit remediation route token `ROUTE_BACK_TO_TDD`, include the managed command `npx cclaw-cli internal rewind tdd \"review_blocked_by_critical <finding-ids>\"`, list the critical finding IDs and required TDD evidence to repair, and satisfy the special transition guard `review_verdict_blocked` instead of `review_criticals_resolved`. After TDD rework, clear the stale marker with `npx cclaw-cli internal rewind --ack tdd` before `/cc`."
     ],
     interactionProtocol: [
       "Run Layer 1 (spec compliance) completely before starting Layer 2.",
@@ -67,7 +67,7 @@ export const REVIEW: StageSchemaInput = {
         STRUCTURED_ASK_TOOL_LIST_REVIEW
       ),
       "Resolve all critical blockers before ship. If verdict is BLOCKED, do not pass `review_criticals_resolved`; pass only the remediation route gate `review_verdict_blocked` when routing back to TDD.",
-      "When verdict is BLOCKED, do not end with a passive stop: explicitly route remediation to TDD via `ROUTE_BACK_TO_TDD`, point to `cclaw internal rewind tdd` with the blocking IDs, and tell the operator to ack the stale TDD marker only after rework is complete.",
+      "When verdict is BLOCKED, do not end with a passive stop: explicitly route remediation to TDD via `ROUTE_BACK_TO_TDD`, point to `npx cclaw-cli internal rewind tdd` with the blocking IDs, and tell the operator to ack the stale TDD marker only after rework is complete.",
       structuredAskSingleChoiceInstruction(
         "final verdict",
         "verdict (APPROVED / APPROVED_WITH_CONCERNS / BLOCKED)"
