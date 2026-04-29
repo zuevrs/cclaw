@@ -7,6 +7,7 @@ import { readConfig, writeConfig } from "../../src/config.js";
 import { doctorChecks, doctorSucceeded } from "../../src/doctor.js";
 import { initCclaw, syncCclaw, uninstallCclaw, upgradeCclaw } from "../../src/install.js";
 import { HARNESS_ADAPTERS } from "../../src/harness-adapters.js";
+import { CCLAW_VERSION } from "../../src/constants.js";
 import { FLOW_STAGES } from "../../src/types.js";
 import { createTempProject } from "../helpers/index.js";
 
@@ -104,9 +105,14 @@ describe("install lifecycle", { timeout: 30_000 }, () => {
       "templates"
     ]);
     const stateEntries = (await fs.readdir(path.join(root, ".cclaw/state"))).sort();
-    expect(stateEntries).toEqual(["flow-state.json", "iron-laws.json"]);
+    expect(stateEntries).toEqual(["flow-state.json", "iron-laws.json", "managed-resources.json"]);
+    const manifest = JSON.parse(await fs.readFile(path.join(root, ".cclaw/state/managed-resources.json"), "utf8")) as { resources: Array<{ path: string; sha256: string }> };
+    expect(manifest.resources.some((entry) => entry.path === ".cclaw/commands/start.md" && entry.sha256.length === 64)).toBe(true);
+
     const skillEntries = (await fs.readdir(path.join(root, ".cclaw/skills"))).sort();
     expect(skillEntries).toContain("flow-view");
+    expect(skillEntries).toContain("flow-finish");
+    expect(skillEntries).toContain("flow-cancel");
     expect(skillEntries).not.toContain("flow-status");
     expect(skillEntries).not.toContain("flow-tree");
     expect(skillEntries).not.toContain("flow-diff");
@@ -125,7 +131,9 @@ describe("install lifecycle", { timeout: 30_000 }, () => {
     const commandFiles = (await fs.readdir(path.join(root, ".cclaw/commands"))).sort();
     expect(commandFiles).toEqual([
       "brainstorm.md",
+      "cancel.md",
       "design.md",
+      "finish.md",
       "ideate.md",
       "next.md",
       "plan.md",
@@ -143,7 +151,9 @@ describe("install lifecycle", { timeout: 30_000 }, () => {
       .sort();
     expect(claudeShims).toEqual([
       "cc-brainstorm.md",
+      "cc-cancel.md",
       "cc-design.md",
+      "cc-finish.md",
       "cc-ideate.md",
       "cc-next.md",
       "cc-plan.md",
@@ -256,6 +266,145 @@ describe("install lifecycle", { timeout: 30_000 }, () => {
     );
     expect(researchPlaybook).toContain("# Repo Scan Playbook");
     expect(researchPlaybook.startsWith("---")).toBe(false);
+  });
+
+  it("sync updates harnesses through options and upgrade backs up modified generated files", async () => {
+    const root = await createTempProject("managed-upgrade-backup");
+    await initCclaw({ projectRoot: root, harnesses: ["claude"] });
+
+    await syncCclaw(root, { harnesses: ["cursor"] });
+    const config = await readConfig(root);
+    expect(config.harnesses).toEqual(["cursor"]);
+    await expect(fs.stat(path.join(root, ".cursor/commands/cc.md"))).resolves.toBeDefined();
+
+    const shimPath = path.join(root, ".cursor/commands/cc.md");
+    await fs.appendFile(shimPath, "\n<!-- user local note -->\n", "utf8");
+    await upgradeCclaw(root);
+
+    const backupRoot = path.join(root, ".cclaw/state/upgrade-backups");
+    const backupBatches = await fs.readdir(backupRoot);
+    expect(backupBatches.length).toBeGreaterThan(0);
+    const latest = backupBatches.sort().at(-1);
+    expect(latest).toBeDefined();
+    const backup = await fs.readFile(path.join(backupRoot, latest!, ".cursor/commands/cc.md"), "utf8");
+    expect(backup).toContain("user local note");
+
+    const checks = await doctorChecks(root);
+    expect(checks.find((check) => check.name === "managed_resources:manifest_exists")?.ok).toBe(true);
+  });
+
+
+  it("sync rejects an explicit empty harness list", async () => {
+    const root = await createTempProject("sync-empty-harnesses");
+    await initCclaw({ projectRoot: root, harnesses: ["claude"] });
+
+    await expect(syncCclaw(root, { harnesses: [] })).rejects.toThrow(/Select at least one harness/);
+  });
+
+  it("doctor detects user-modified manifest-tracked files", async () => {
+    const root = await createTempProject("doctor-managed-user-modified");
+    await initCclaw({ projectRoot: root, harnesses: ["claude"] });
+
+    await fs.appendFile(path.join(root, ".cclaw/commands/start.md"), "\n<!-- local edit -->\n", "utf8");
+
+    const checks = await doctorChecks(root);
+    const modified = checks.find((check) => check.name === "managed_resources:user_modified");
+    expect(modified?.ok).toBe(false);
+    expect(modified?.details).toContain(".cclaw/commands/start.md");
+    expect(doctorSucceeded(checks)).toBe(false);
+  });
+
+  it("doctor detects deleted manifest-tracked files as stale entries", async () => {
+    const root = await createTempProject("doctor-managed-deleted");
+    await initCclaw({ projectRoot: root, harnesses: ["claude"] });
+
+    await fs.rm(path.join(root, ".cclaw/commands/start.md"));
+
+    const checks = await doctorChecks(root);
+    const stale = checks.find((check) => check.name === "managed_resources:stale_entries");
+    expect(stale?.ok).toBe(false);
+    expect(stale?.details).toContain(".cclaw/commands/start.md");
+    expect(doctorSucceeded(checks)).toBe(false);
+  });
+
+  it("doctor detects orphan generated surfaces beyond flat command dirs", async () => {
+    const root = await createTempProject("doctor-managed-orphan-generated");
+    await initCclaw({ projectRoot: root, harnesses: ["claude"] });
+
+    const orphan = path.join(root, ".cclaw/skills/flow-orphan/SKILL.md");
+    await fs.mkdir(path.dirname(orphan), { recursive: true });
+    await fs.writeFile(orphan, "# orphan\n", "utf8");
+
+    const checks = await doctorChecks(root);
+    const orphaned = checks.find((check) => check.name === "managed_resources:orphaned_generated_files");
+    expect(orphaned?.ok).toBe(false);
+    expect(orphaned?.details).toContain(".cclaw/skills/flow-orphan/SKILL.md");
+    expect(doctorSucceeded(checks)).toBe(false);
+  });
+
+  it("doctor detects malformed metadata and stale package versions", async () => {
+    const root = await createTempProject("doctor-managed-malformed-stale");
+    await initCclaw({ projectRoot: root, harnesses: ["claude"] });
+
+    const manifestPath = path.join(root, ".cclaw/state/managed-resources.json");
+    const manifest = JSON.parse(await fs.readFile(manifestPath, "utf8")) as {
+      packageVersion: string;
+      resources: Array<Record<string, unknown>>;
+    };
+    manifest.packageVersion = "0.0.1";
+    manifest.resources[0] = {
+      ...manifest.resources[0],
+      sha256: "not-a-sha",
+      owner: "someone-else",
+      harness: "unknown",
+      packageVersion: "0.0.1",
+      prunable: "yes",
+      safeToOverwrite: "yes",
+      updatedAt: 123
+    };
+    await fs.writeFile(manifestPath, `${JSON.stringify(manifest, null, 2)}\n`, "utf8");
+
+    const checks = await doctorChecks(root);
+    const valid = checks.find((check) => check.name === "managed_resources:manifest_valid");
+    const manifestVersion = checks.find((check) => check.name === "managed_resources:manifest_package_version");
+    const entryVersions = checks.find((check) => check.name === "managed_resources:entry_package_versions");
+    expect(valid?.ok).toBe(false);
+    expect(valid?.details).toContain("sha256");
+    expect(valid?.details).toContain("owner");
+    expect(manifestVersion?.ok).toBe(false);
+    expect(manifestVersion?.details).toContain(`current cclaw is ${CCLAW_VERSION}`);
+    expect(manifestVersion?.details).toContain("cclaw upgrade");
+    expect(entryVersions?.ok).toBe(false);
+    expect(entryVersions?.details).toContain("cclaw upgrade");
+    expect(doctorSucceeded(checks)).toBe(false);
+  });
+
+  it("doctor recommends sync when config is missing but harness markers exist", async () => {
+    const root = await createTempProject("doctor-missing-config-harness-markers");
+    await fs.mkdir(path.join(root, ".claude/commands"), { recursive: true });
+    await fs.writeFile(path.join(root, ".claude/commands/cc.md"), "# marker\n", "utf8");
+
+    const checks = await doctorChecks(root);
+    const present = checks.find((check) => check.name === "config:present");
+    expect(present?.ok).toBe(false);
+    expect(present?.details).toContain("cclaw sync --harnesses=claude");
+    expect(present?.details).toContain("cclaw sync --interactive");
+    expect(doctorSucceeded(checks)).toBe(false);
+  });
+
+  it("doctor verifies flow finish and cancel utility skills", async () => {
+    const root = await createTempProject("doctor-finish-cancel-skills");
+    await initCclaw({ projectRoot: root, harnesses: ["claude"] });
+
+    await fs.rm(path.join(root, ".cclaw/skills/flow-finish/SKILL.md"));
+    await fs.rm(path.join(root, ".cclaw/skills/flow-cancel/SKILL.md"));
+
+    const checks = await doctorChecks(root);
+    const finish = checks.find((check) => check.name === "utility_skill:flow-finish");
+    const cancel = checks.find((check) => check.name === "utility_skill:flow-cancel");
+    expect(finish?.ok).toBe(false);
+    expect(cancel?.ok).toBe(false);
+    expect(doctorSucceeded(checks)).toBe(false);
   });
 
   it("init removes crash-recovery sentinel after successful materialization and doctor flags leftovers", async () => {
@@ -523,7 +672,8 @@ describe("install lifecycle", { timeout: 30_000 }, () => {
       "harness_tool_ref:",
       "harness_ref:",
       "stage_examples_ref:",
-      "doctor_ref:"
+      "doctor_ref:",
+      "managed_resources:"
     ];
 
     const infoAllowlist = new Set(["gates:reconcile:writeback"]);
@@ -1482,7 +1632,7 @@ Capture this later.
     const root = await createTempProject("codex-skills-fresh");
     await initCclaw({ projectRoot: root, harnesses: ["codex"] });
 
-    const expectedSkills = ["cc", "cc-next", "cc-view", "cc-ideate"];
+    const expectedSkills = ["cc", "cc-next", "cc-view", "cc-ideate", "cc-finish", "cc-cancel"];
     for (const slug of expectedSkills) {
       const skillPath = path.join(root, ".agents/skills", slug, "SKILL.md");
       const body = await fs.readFile(skillPath, "utf8");

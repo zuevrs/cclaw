@@ -1,5 +1,6 @@
 import fs from "node:fs/promises";
 import path from "node:path";
+import { getActiveManagedResourceSession } from "./managed-resources.js";
 
 export async function ensureDir(dirPath: string): Promise<void> {
   await fs.mkdir(dirPath, { recursive: true });
@@ -113,6 +114,11 @@ export async function writeFileSafe(
   content: string,
   options: WriteFileSafeOptions = {}
 ): Promise<void> {
+  const managedSession = getActiveManagedResourceSession();
+  if (managedSession?.shouldManage(filePath)) {
+    await managedSession.writeFileSafe(filePath, content, options);
+    return;
+  }
   await ensureDir(path.dirname(filePath));
   const tempPath = path.join(
     path.dirname(filePath),

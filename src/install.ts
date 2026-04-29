@@ -22,6 +22,8 @@ import { stageCommandShimMarkdown } from "./content/stage-command.js";
 import { ideateCommandContract, ideateCommandSkillMarkdown } from "./content/ideate-command.js";
 import { startCommandContract, startCommandSkillMarkdown } from "./content/start-command.js";
 import { viewCommandContract, viewCommandSkillMarkdown } from "./content/view-command.js";
+import { finishCommandContract, finishCommandSkillMarkdown } from "./content/finish-command.js";
+import { cancelCommandContract, cancelCommandSkillMarkdown } from "./content/cancel-command.js";
 import { subagentDrivenDevSkill, parallelAgentsSkill } from "./content/subagents.js";
 import { sessionHooksSkillMarkdown } from "./content/session-hooks.js";
 import { ironLawRuntimeDocument, ironLawsSkillMarkdown } from "./content/iron-laws.js";
@@ -60,6 +62,7 @@ import { SUBAGENT_CONTEXT_SKILLS } from "./content/subagent-context-skills.js";
 import { CCLAW_AGENTS } from "./content/core-agents.js";
 import { createInitialFlowState, type FlowState } from "./flow-state.js";
 import { ensureDir, exists, writeFileSafe } from "./fs-utils.js";
+import { ManagedResourceSession, setActiveManagedResourceSession } from "./managed-resources.js";
 import { ensureGitignore, removeGitignorePatterns } from "./gitignore.js";
 import {
   HARNESS_ADAPTERS,
@@ -78,6 +81,10 @@ export interface InitOptions {
   projectRoot: string;
   harnesses?: HarnessId[];
   track?: FlowTrack;
+}
+
+export interface SyncOptions {
+  harnesses?: HarnessId[];
 }
 
 const OPENCODE_PLUGIN_REL_PATH = ".opencode/plugins/cclaw-plugin.mjs";
@@ -535,6 +542,14 @@ async function writeSkills(projectRoot: string, config?: CclawConfig): Promise<v
     runtimePath(projectRoot, "skills", "flow-view", "SKILL.md"),
     viewCommandSkillMarkdown()
   );
+  await writeFileSafe(
+    runtimePath(projectRoot, "skills", "flow-finish", "SKILL.md"),
+    finishCommandSkillMarkdown()
+  );
+  await writeFileSafe(
+    runtimePath(projectRoot, "skills", "flow-cancel", "SKILL.md"),
+    cancelCommandSkillMarkdown()
+  );
 
   await writeFileSafe(
     runtimePath(projectRoot, "skills", "subagent-dev", "SKILL.md"),
@@ -618,6 +633,8 @@ async function writeEntryCommands(projectRoot: string): Promise<void> {
   await writeFileSafe(runtimePath(projectRoot, "commands", "next.md"), nextCommandContract());
   await writeFileSafe(runtimePath(projectRoot, "commands", "ideate.md"), ideateCommandContract());
   await writeFileSafe(runtimePath(projectRoot, "commands", "view.md"), viewCommandContract());
+  await writeFileSafe(runtimePath(projectRoot, "commands", "finish.md"), finishCommandContract());
+  await writeFileSafe(runtimePath(projectRoot, "commands", "cancel.md"), cancelCommandContract());
   for (const stage of FLOW_STAGES) {
     await writeFileSafe(
       runtimePath(projectRoot, "commands", `${stage}.md`),
@@ -1246,6 +1263,8 @@ async function materializeRuntime(
   operation = "sync"
 ): Promise<void> {
   const sentinelPath = await writeInitSentinel(projectRoot, operation);
+  const managedSession = await ManagedResourceSession.create({ projectRoot, operation });
+  setActiveManagedResourceSession(managedSession);
   try {
     const harnesses = config.harnesses;
     await ensureStructure(projectRoot);
@@ -1266,14 +1285,20 @@ async function materializeRuntime(
     await syncHarnessShims(projectRoot, harnesses);
     await writeCursorWorkflowRule(projectRoot, harnesses);
     await ensureGitignore(projectRoot);
+    await managedSession.commit();
     await fs.unlink(sentinelPath).catch(() => undefined);
   } catch (error) {
     // Leave the sentinel in place so doctor can surface the interrupted run.
     throw error;
+  } finally {
+    setActiveManagedResourceSession(null);
   }
 }
 
 export async function initCclaw(options: InitOptions): Promise<void> {
+  if (options.harnesses !== undefined && options.harnesses.length === 0) {
+    throw new Error("Select at least one harness.");
+  }
   const baseConfig = createDefaultConfig(options.harnesses, options.track);
   // Best-effort auto-detect: a Node project gets `typescript`, a Go module
   // gets `go`, etc. Skipped entirely when the project root has no manifests.
@@ -1289,7 +1314,10 @@ export async function initCclaw(options: InitOptions): Promise<void> {
   await materializeRuntime(options.projectRoot, config, true, "init");
 }
 
-export async function syncCclaw(projectRoot: string): Promise<void> {
+export async function syncCclaw(projectRoot: string, options: SyncOptions = {}): Promise<void> {
+  if (options.harnesses !== undefined && options.harnesses.length === 0) {
+    throw new Error("Select at least one harness.");
+  }
   const configExists = await exists(configPath(projectRoot));
   let config = await readConfig(projectRoot);
   if (!configExists) {
@@ -1300,10 +1328,19 @@ export async function syncCclaw(projectRoot: string): Promise<void> {
     // Fall back to the previous default (config.harnesses) if no markers
     // are found so brand-new projects still bootstrap cleanly.
     const detected = await detectHarnesses(projectRoot);
-    const harnesses = detected.length > 0 ? detected : config.harnesses;
+    const harnesses = options.harnesses ?? (detected.length > 0 ? detected : config.harnesses);
     const defaultConfig = createDefaultConfig(harnesses);
     await writeConfig(projectRoot, defaultConfig);
     config = defaultConfig;
+  } else if (options.harnesses !== undefined) {
+    config = {
+      ...config,
+      harnesses: options.harnesses
+    };
+    await writeConfig(projectRoot, config, {
+      mode: "minimal",
+      advancedKeysPresent: await detectAdvancedKeys(projectRoot)
+    });
   }
   await materializeRuntime(projectRoot, config, false, "sync");
 }
@@ -1319,8 +1356,12 @@ export async function syncCclaw(projectRoot: string): Promise<void> {
  * minimal — advanced knobs are never silently added.
  */
 export async function upgradeCclaw(projectRoot: string): Promise<void> {
+  const configExists = await exists(configPath(projectRoot));
   const advancedKeysPresent = await detectAdvancedKeys(projectRoot);
-  const existing = await readConfig(projectRoot);
+  const detectedHarnesses = configExists ? [] : await detectHarnesses(projectRoot);
+  const existing = configExists
+    ? await readConfig(projectRoot)
+    : createDefaultConfig(detectedHarnesses.length > 0 ? detectedHarnesses : undefined);
   const upgraded: CclawConfig = {
     ...existing,
     version: CCLAW_VERSION,
@@ -1518,7 +1559,7 @@ export async function uninstallCclaw(projectRoot: string): Promise<void> {
   try {
     const entries = await fs.readdir(codexSkillsRoot);
     for (const entry of entries) {
-      if (/^(?:cclaw-)?cc(?:-(?:next|view|ops|ideate|brainstorm|scope|design|spec|plan|tdd|review|ship))?$/u.test(entry)) {
+      if (/^(?:cclaw-)?cc(?:-(?:next|view|finish|cancel|ops|ideate|brainstorm|scope|design|spec|plan|tdd|review|ship))?$/u.test(entry)) {
         await fs.rm(path.join(codexSkillsRoot, entry), { recursive: true, force: true });
       }
     }

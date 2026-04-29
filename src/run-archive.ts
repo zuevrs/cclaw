@@ -13,6 +13,9 @@ import {
 } from "./run-persistence.js";
 import type { FlowStage } from "./types.js";
 
+export const ARCHIVE_DISPOSITIONS = ["completed", "cancelled", "abandoned"] as const;
+export type ArchiveDisposition = (typeof ARCHIVE_DISPOSITIONS)[number];
+
 const RUNS_DIR_REL_PATH = `${RUNTIME_ROOT}/runs`;
 const ACTIVE_ARTIFACTS_REL_PATH = `${RUNTIME_ROOT}/artifacts`;
 const STATE_DIR_REL_PATH = `${RUNTIME_ROOT}/state`;
@@ -45,6 +48,8 @@ export interface ArchiveRunResult {
   runName: string;
   resetState: FlowState;
   snapshottedStateFiles: string[];
+  disposition: ArchiveDisposition;
+  dispositionReason?: string;
   /** Knowledge curation hint: total active entries + soft threshold (50). */
   knowledge: {
     activeEntryCount: number;
@@ -70,12 +75,16 @@ export interface ArchiveManifest {
   sourceCurrentStage: FlowStage;
   sourceCompletedStages: FlowStage[];
   snapshottedStateFiles: string[];
+  disposition: ArchiveDisposition;
+  dispositionReason?: string;
   retro: ArchiveRunResult["retro"];
 }
 
 export interface ArchiveRunOptions {
   skipRetro?: boolean;
   skipRetroReason?: string;
+  disposition?: ArchiveDisposition;
+  dispositionReason?: string;
 }
 
 function runsRoot(projectRoot: string): string {
@@ -285,11 +294,20 @@ export async function archiveRun(
 
   let sourceState = await readFlowState(projectRoot);
   const retroGate = await evaluateRetroGate(projectRoot, sourceState);
+  const disposition = options.disposition ?? "completed";
+  const dispositionReason = options.dispositionReason?.trim();
+  const nonCompletedDisposition = disposition !== "completed";
+  if (nonCompletedDisposition && (!dispositionReason || dispositionReason.length === 0)) {
+    throw new Error("archive --disposition=cancelled|abandoned requires --reason=<text>.");
+  }
   const shipCompleted = sourceState.completedStages.includes("ship");
   const skipRetro = options.skipRetro === true;
   const skipRetroReason = options.skipRetroReason?.trim();
   if (skipRetro && (!skipRetroReason || skipRetroReason.length === 0)) {
     throw new Error("archive --skip-retro requires --retro-reason=<text>.");
+  }
+  if (nonCompletedDisposition && skipRetro) {
+    throw new Error("archive --skip-retro is only valid for completed archives; use --reason with cancelled/abandoned.");
   }
   const retroSkippedInCloseout =
     sourceState.closeout.retroSkipped === true &&
@@ -297,32 +315,32 @@ export async function archiveRun(
     sourceState.closeout.retroSkipReason.trim().length > 0;
   const readyForArchive = sourceState.closeout.shipSubstate === "ready_to_archive";
   const inShipCloseout = sourceState.currentStage === "ship";
-  if (readyForArchive && !compoundCloseoutComplete(sourceState)) {
+  if (!nonCompletedDisposition && readyForArchive && !compoundCloseoutComplete(sourceState)) {
     throw new Error(
       "Archive blocked: compound closeout is incomplete. " +
       "Promote compound guidance or skip compound review with an explicit reason before archiving."
     );
   }
-  if (inShipCloseout && skipRetro) {
+  if (!nonCompletedDisposition && inShipCloseout && skipRetro) {
     throw new Error(
       "Archive blocked: --skip-retro is not allowed while current stage is ship. " +
       "Complete closeout to ready_to_archive via /cc-next."
     );
   }
-  if (inShipCloseout && !readyForArchive) {
+  if (!nonCompletedDisposition && inShipCloseout && !readyForArchive) {
     throw new Error(
       "Archive blocked: closeout is not ready_to_archive. " +
       "Resume /cc-next until closeout reaches ready_to_archive."
     );
   }
-  if (shipCompleted && !readyForArchive && !skipRetro) {
+  if (!nonCompletedDisposition && shipCompleted && !readyForArchive && !skipRetro) {
     throw new Error(
       "Archive blocked: closeout is not ready_to_archive. " +
       "Resume /cc-next until closeout reaches ready_to_archive, " +
       "or run `cclaw archive --skip-retro --retro-reason=<text>` for CLI-only flows."
     );
   }
-  if (retroGate.required && !retroGate.completed && !skipRetro && !retroSkippedInCloseout) {
+  if (!nonCompletedDisposition && retroGate.required && !retroGate.completed && !skipRetro && !retroSkippedInCloseout) {
     throw new Error(
       "Archive blocked: retro gate is required after ship completion. " +
       "Run /cc-next (auto-runs retro) or, for CLI-only flows, re-run `cclaw archive --skip-retro --retro-reason=<text>`."
@@ -391,6 +409,8 @@ export async function archiveRun(
       sourceCurrentStage: sourceState.currentStage,
       sourceCompletedStages: sourceState.completedStages,
       snapshottedStateFiles,
+      disposition,
+      ...(dispositionReason ? { dispositionReason } : {}),
       retro: retroSummary
     };
     await writeFileSafe(
@@ -408,6 +428,8 @@ export async function archiveRun(
       runName: archiveRunName,
       resetState,
       snapshottedStateFiles,
+      disposition,
+      ...(dispositionReason ? { dispositionReason } : {}),
       knowledge: knowledgeStats,
       retro: retroSummary
     };

@@ -71,6 +71,16 @@ const RULES: DoctorRegistryRule[] = [
     }
   },
   {
+    test: /^managed_resources:/,
+    metadata: {
+      severity: "error",
+      summary: "Managed generated resource manifest integrity check.",
+      fix: "Run `cclaw sync` to refresh managed generated files; inspect upgrade backup paths before discarding local edits.",
+      actionGroup: "sync",
+      docRef: ref("config.md")
+    }
+  },
+  {
     test: /^(hook:|hooks:|lifecycle:|git_hooks:)/,
     metadata: {
       severity: "error",

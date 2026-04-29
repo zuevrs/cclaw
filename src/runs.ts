@@ -8,9 +8,11 @@ export {
 } from "./run-persistence.js";
 
 export {
+  ARCHIVE_DISPOSITIONS,
   archiveRun,
   countActiveKnowledgeEntries,
   listRuns,
+  type ArchiveDisposition,
   type ArchiveManifest,
   type ArchiveRunOptions,
   type ArchiveRunResult,

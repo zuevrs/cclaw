@@ -1,11 +1,42 @@
 import { describe, expect, it } from "vitest";
-import { parseArgs, parseHarnesses, parseTrack, usage } from "../../src/cli.js";
+import { parseArchiveDisposition, parseArgs, parseHarnessSelectionAnswer, parseHarnesses, parseTrack, usage } from "../../src/cli.js";
 
 describe("cli parser", () => {
   it("parses init with harness list", () => {
     const parsed = parseArgs(["init", "--harnesses=claude,cursor"]);
     expect(parsed.command).toBe("init");
     expect(parsed.harnesses).toEqual(["claude", "cursor"]);
+  });
+
+  it("parses sync with harness list", () => {
+    const parsed = parseArgs(["sync", "--harnesses=claude,cursor"]);
+    expect(parsed.command).toBe("sync");
+    expect(parsed.harnesses).toEqual(["claude", "cursor"]);
+  });
+
+  it("parses sync interactive flag", () => {
+    const parsed = parseArgs(["sync", "--interactive"]);
+    expect(parsed.command).toBe("sync");
+    expect(parsed.interactive).toBe(true);
+  });
+
+  it("rejects empty harness lists", () => {
+    expect(() => parseHarnesses("")).toThrowError(/Select at least one harness/);
+    expect(() => parseArgs(["sync", "--harnesses="])).toThrowError(/Select at least one harness/);
+  });
+
+  it("parses guided harness selection answers without zero-harness option", () => {
+    expect(parseHarnessSelectionAnswer("")).toEqual({ kind: "accept" });
+    expect(parseHarnessSelectionAnswer("all")).toEqual({ kind: "all" });
+    expect(parseHarnessSelectionAnswer("1,3")).toEqual({ kind: "toggle", indexes: [1, 3] });
+    expect(parseHarnessSelectionAnswer("none")).toEqual({
+      kind: "invalid",
+      message: "Zero harnesses is not supported. Select at least one harness."
+    });
+    expect(parseHarnessSelectionAnswer("9")).toEqual({
+      kind: "invalid",
+      message: "Invalid selection. Use numbers 1-4, comma-separated."
+    });
   });
 
   it("parses init dry-run and interactive toggles", () => {
@@ -42,6 +73,15 @@ describe("cli parser", () => {
     expect(parsed.command).toBe("archive");
     expect(parsed.archiveSkipRetro).toBe(true);
     expect(parsed.archiveSkipRetroReason).toBe("manual override");
+  });
+
+  it("parses archive disposition flags", () => {
+    const parsed = parseArgs(["archive", "--disposition=cancelled", "--reason=deprioritized"]);
+    expect(parsed.command).toBe("archive");
+    expect(parsed.archiveDisposition).toBe("cancelled");
+    expect(parsed.archiveDispositionReason).toBe("deprioritized");
+    expect(parseArchiveDisposition("abandoned")).toBe("abandoned");
+    expect(() => parseArchiveDisposition("done")).toThrowError(/Unknown archive disposition/);
   });
 
   it("parses doctor reconcile gates flag", () => {
@@ -85,6 +125,8 @@ describe("cli parser", () => {
     expect(text).toContain("--harnesses");
     expect(text).toContain("--no-interactive");
     expect(text).toContain("--json");
+    expect(text).toContain("--disposition");
+    expect(text).toContain("--reason");
     expect(text).toContain("--only");
     expect(text).toContain("README.md and generated .cclaw/skills/*.md");
   });
@@ -93,8 +135,7 @@ describe("cli parser", () => {
     const text = usage();
     for (const hiddenFlag of [
       "--profile",
-      "--track",
-      "--interactive"
+      "--track"
     ]) {
       expect(text).not.toContain(hiddenFlag);
     }
@@ -103,6 +144,7 @@ describe("cli parser", () => {
   it("rejects command-specific flags on the wrong command", () => {
     expect(() => parseArgs(["archive", "--json"])).toThrowError(/not supported/);
     expect(() => parseArgs(["sync", "--dry-run"])).toThrowError(/not supported/);
+    expect(() => parseArgs(["sync", "--track=quick"])).toThrowError(/not supported/);
   });
 
   it("parses init with --track=quick", () => {

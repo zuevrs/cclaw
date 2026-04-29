@@ -59,6 +59,40 @@ describe("runs system", () => {
     expect(state.activeRunId).toMatch(/^run-/);
   });
 
+
+  it("archives cancelled runs from any stage with a required reason", async () => {
+    const root = await createTempProject("runs-cancelled-disposition");
+    await ensureRunSystem(root);
+    await fs.writeFile(path.join(root, ".cclaw/artifacts/01-brainstorm.md"), "# draft\n", "utf8");
+    await writeFlowState(
+      root,
+      {
+        ...createInitialFlowState("active"),
+        currentStage: "design",
+        completedStages: ["brainstorm", "scope"]
+      },
+      { allowReset: true }
+    );
+
+    const archived = await archiveRun(root, "Cancelled Work", {
+      disposition: "cancelled",
+      dispositionReason: "deprioritized by product"
+    });
+    expect(archived.disposition).toBe("cancelled");
+    expect(archived.dispositionReason).toBe("deprioritized by product");
+    const manifest = JSON.parse(await fs.readFile(path.join(archived.archivePath, "archive-manifest.json"), "utf8"));
+    expect(manifest.disposition).toBe("cancelled");
+    expect(manifest.dispositionReason).toBe("deprioritized by product");
+    expect((await readFlowState(root)).currentStage).toBe("brainstorm");
+  });
+
+  it("requires a reason for cancelled or abandoned archives", async () => {
+    const root = await createTempProject("runs-cancelled-no-reason");
+    await ensureRunSystem(root);
+
+    await expect(archiveRun(root, "No Reason", { disposition: "abandoned" })).rejects.toThrow(/requires --reason/);
+  });
+
   it("removes the .archive-in-progress sentinel on success", async () => {
     const root = await createTempProject("runs-archive-sentinel-clean");
     await ensureRunSystem(root);
@@ -721,6 +755,7 @@ describe("runs system", () => {
     expect(manifest.runName).toBe("Search Revamp");
     expect(manifest).not.toHaveProperty("featureName");
     expect(manifest).not.toHaveProperty("activeFeature");
+    expect(manifest.disposition).toBe("completed");
     expect(manifest.sourceCurrentStage).toBe("plan");
     expect(manifest.sourceCompletedStages).toEqual([
       "brainstorm",

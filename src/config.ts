@@ -300,6 +300,9 @@ export async function readConfig(
   }
 
   const validatedHarnesses = configuredHarnesses as HarnessId[];
+  if (hasHarnessesField && validatedHarnesses.length === 0) {
+    throw configValidationError(fullPath, `"harnesses" must include at least one harness`);
+  }
   const harnesses = hasHarnessesField
     ? [...new Set(validatedHarnesses)]
     : DEFAULT_HARNESSES;

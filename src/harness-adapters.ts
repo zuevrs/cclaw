@@ -154,6 +154,20 @@ const UTILITY_SHIMS: UtilityShimSpec[] = [
     command: "view",
     skillFolder: "flow-view",
     commandFile: "view.md"
+  },
+  {
+    fileName: "cc-finish.md",
+    skillName: "cc-finish",
+    command: "finish",
+    skillFolder: "flow-finish",
+    commandFile: "finish.md"
+  },
+  {
+    fileName: "cc-cancel.md",
+    skillName: "cc-cancel",
+    command: "cancel",
+    skillFolder: "flow-cancel",
+    commandFile: "cancel.md"
   }
 ];
 
@@ -516,13 +530,15 @@ When in doubt, prefer **non-trivial** — the quick track is opt-in and only saf
 | \`/cc-next\` | **Progression.** Advances to the next stage when current is complete. |
 | \`/cc-ideate\` | **Ideate mode.** Generates a ranked repo-improvement backlog before implementation. |
 | \`/cc-view\` | **Read-only router.** Unified entry for status/tree/diff views. |
+| \`/cc-finish\` | **Successful closeout.** Archives a completed run after strict ship closeout gates. |
+| \`/cc-cancel\` | **Non-completion closeout.** Archives a cancelled/abandoned run with a required reason. |
 
 Knowledge capture and curation run automatically as part of stage completion
 protocols via the internal \`learnings\` skill — no user-facing command.
 Reusable entries land in \`.cclaw/knowledge.jsonl\` as strict JSONL with
 \`type\`, \`trigger\`, \`action\`, and \`origin_run\` metadata.
 
-**Stage order:** brainstorm > scope > design > spec > plan > tdd > review > ship, then closeout: retro > compound > archive.
+**Stage order:** brainstorm > scope > design > spec > plan > tdd > review > ship, then closeout: retro > compound > archive. Use \`/cc-finish\` for completed runs and \`/cc-cancel\` for cancelled/abandoned runs.
 \`/cc-next\` loads the right stage skill automatically and also drives post-ship closeout. Gates must pass before handoff.
 
 ### Verification Discipline
@@ -545,8 +561,8 @@ If the same approach fails three times in a row (same command, same finding, sam
 
 OpenAI Codex CLI has **no native \`/cc\` slash command** (custom prompts
 were deprecated in v0.89, Jan 2026). The \`/cc\`, \`/cc-next\`,
-\`/cc-ideate\`, \`/cc-view\` tokens above describe intent — in
-Codex they map onto skills cclaw installs at
+\`/cc-ideate\`, \`/cc-view\`, \`/cc-finish\`, and \`/cc-cancel\`
+tokens above describe intent — in Codex they map onto skills cclaw installs at
 \`.agents/skills/cc*/SKILL.md\`. Activate one of two ways:
 
 - Type \`/use cc\` (or \`cc-next\`, etc.) at Codex's prompt.
@@ -636,6 +652,10 @@ function utilityShimBehavior(command: string): string {
       return "This is an ideation command, not a flow stage. It may write ideation artifacts/seeds but does not advance flow state.";
     case "view":
       return "This is a read-only view command, not a flow stage. It never mutates flow state.";
+    case "finish":
+      return "This is a successful closeout utility, not a flow stage. It archives a completed run after ship closeout gates pass and records completed disposition semantics.";
+    case "cancel":
+      return "This is a non-completion closeout utility, not a flow stage. It requires a reason and archives cancelled or abandoned work without presenting it as completed.";
     default:
       return "This is a utility command, not a flow stage.";
   }
@@ -721,6 +741,10 @@ function codexSkillDescription(command: string): string {
       return `Read-only repo-improvement ideate mode for cclaw. Use when the user types \`/cc-ideate\` or asks to "ideate", "scan the repo for TODOs/tech debt", "generate a backlog", or wants a ranked list of candidate ideas before committing to a single flow. Does not mutate \`.cclaw/state/flow-state.json\`.`;
     case "view":
       return `Read-only router for cclaw flow views. Use when the user types \`/cc-view\`, \`/cc-view status\`, \`/cc-view tree\`, \`/cc-view diff\`, or asks to "show cclaw status", "show the flow tree", "diff flow state", or wants a snapshot without mutation.`;
+    case "finish":
+      return `Finish a completed cclaw run. Use when the user types \`/cc-finish\` or asks to finish, complete, close out, or archive a successful run. Runs cclaw archive with completed disposition after strict ship closeout gates.`;
+    case "cancel":
+      return `Cancel or abandon the active cclaw run. Use when the user types \`/cc-cancel\` or asks to cancel, abandon, stop, discard, or reset an unfinished run. Requires a reason and archives with cancelled/abandoned disposition.`;
     default:
       return `Generated cclaw skill for ${command}.`;
   }

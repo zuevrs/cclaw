@@ -11,15 +11,14 @@ import {
 import { initCclaw } from "../../src/install.js";
 import { createTempProject } from "../helpers/index.js";
 describe("config", () => {
-  it("keeps explicit empty harness list", async () => {
+  it("rejects explicit empty harness list", async () => {
     const root = await createTempProject("config-empty");
     await writeConfig(root, {
       version: "0.1.0",
       flowVersion: "1.0.0",
       harnesses: []
     });
-    const config = await readConfig(root);
-    expect(config.harnesses).toEqual([]);
+    await expect(readConfig(root)).rejects.toThrow(/"harnesses" must include at least one harness/);
   });
   it("throws on malformed yaml instead of silently defaulting", async () => {
     const root = await createTempProject("config-malformed");
