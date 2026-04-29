@@ -172,7 +172,7 @@ jobs:
       - name: Install dependencies
         run: npm ci
 
-      - name: Smoke init/sync/doctor/uninstall
+      - name: Smoke init/sync/upgrade/uninstall
         run: npm run smoke:runtime
 
   release-bundle-check:
