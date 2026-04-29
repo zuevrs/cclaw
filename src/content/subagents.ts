@@ -19,6 +19,7 @@ const SUBAGENT_AGENT_NAMES = [
   "release-reviewer",
   "planner",
   "product-manager",
+  "product-strategist",
   "critic",
   "reviewer",
   "security-reviewer",
@@ -157,7 +158,7 @@ Concrete per-stage rules so the controller does not have to guess which tier fit
 | Stage | Deep slot | Balanced slot(s) | Fast fan-out | Trigger to escalate |
 |---|---|---|---|---|
 | brainstorm | planner (only if ambiguity spans >1 module) | product-manager / critic when product value or premise is uncertain | run in-thread research playbooks | promote to \`balanced\` critic if the do-nothing path may beat the idea |
-| scope | planner (always) | product-manager / critic when mode changes user value or boundaries are soft | run \`research/git-history.md\` in-thread when churn is high | promote to \`balanced\` critic if scope mode is disputed |
+| scope | planner (always) | product-manager / product-strategist / critic when mode changes value, trajectory, or boundaries | run \`research/git-history.md\` in-thread when churn is high | promote to \`balanced\` critic if scope mode is disputed |
 | design | planner (always) | critic, security-reviewer, test-author when alternatives/trust/testability apply | run \`research/framework-docs-lookup.md\` + \`research/best-practices-lookup.md\` in-thread | escalate one specialist to \`deep\` only if a failure mode is Critical-severity |
 | spec | — | reviewer (if spec > 200 lines or multiple ACs) | — | escalate to \`deep\` only for spec ↔ design contradictions |
 | plan | planner (solo, always) | — | — | never fan out at plan stage; one owner for dependency graph |
@@ -839,6 +840,31 @@ ${MARKDOWN_CODE_FENCE}
 `;
 }
 
+function productStrategistEnhancedBody(): string {
+  return `
+
+## Task Tool Delegation
+
+Use this payload for expansion-mode scope strategy checks:
+
+${MARKDOWN_CODE_FENCE}
+You are a product-strategist subagent.
+
+SCOPE_MODE: {SCOPE EXPANSION|SELECTIVE EXPANSION}
+DECISION_CONTEXT: {scope contract excerpt + constraints + approved brainstorm direction}
+DEPTH: {standard|deep}
+
+Required output:
+- VISION_DELTA: 10x trajectory vs hold-scope baseline
+- EXPANSION_PROPOSALS: 2-3 concrete proposals with add/defer/skip recommendation
+- UPSIDE_AND_RISK: strategic upside, reversibility, and principal downside per proposal
+- TRAJECTORY_FIT: whether current architecture trajectory can absorb accepted expansions
+- FINAL_RECOMMENDATION: smallest high-leverage expansion set to lock now
+${MARKDOWN_CODE_FENCE}
+
+`;
+}
+
 function criticEnhancedBody(): string {
   return `
 
@@ -1021,6 +1047,8 @@ export function enhancedAgentBody(agentName: string): string {
       return plannerEnhancedBody();
     case "product-manager":
       return productManagerEnhancedBody();
+    case "product-strategist":
+      return productStrategistEnhancedBody();
     case "critic":
       return criticEnhancedBody();
     case "reviewer":

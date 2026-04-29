@@ -202,6 +202,7 @@ function defaultReturnSchemaForAgent(
     case "planner":
       return "planning-return";
     case "product-manager":
+    case "product-strategist":
       return "product-return";
     case "critic":
       return "critic-return";
@@ -384,6 +385,7 @@ const REQUIRED_GATE_IDS: Record<FlowStage, RequiredGateSet> = {
   design: [
     "design_research_complete",
     "design_architecture_locked",
+    "design_diagram_freshness",
     "design_data_flow_mapped",
     "design_failure_modes_mapped",
     "design_test_and_perf_defined"
@@ -609,6 +611,14 @@ const STAGE_AUTO_SUBAGENT_DISPATCH: Record<FlowStage, StageAutoSubagentDispatch[
       mode: "proactive",
       when: "When scope choices change user value, success metrics, or product positioning.",
       purpose: "Keep accepted/deferred reference ideas tied to user value and measurable success.",
+      requiresUserGate: false
+    },
+    {
+      agent: "product-strategist",
+      mode: "proactive",
+      requiredAtTier: "standard",
+      when: "When scope mode resolves to SCOPE EXPANSION or SELECTIVE EXPANSION.",
+      purpose: "Drive 10x vision and concrete expansion proposals before locking the scope contract.",
       requiresUserGate: false
     }
   ],

@@ -99,6 +99,7 @@ export const SCOPE: StageSchemaInput = {
       "In-scope and out-of-scope lists are explicit.",
       "Discretion areas are explicit (or marked as `None`).",
       "Selected mode and rationale are documented using HOLD SCOPE, SELECTIVE EXPANSION, SCOPE EXPANSION, or SCOPE REDUCTION.",
+      "When selected mode is SCOPE EXPANSION or SELECTIVE EXPANSION, active-run delegation ledger includes a completed `product-strategist` row with non-empty `evidenceRefs`.",
       "Scope Contract captures requirements, locked decisions, discretion areas, accepted/rejected/deferred reference ideas from the Reference Pattern Registry, success definition, and design handoff.",
       "Decision Drivers section records weighted criteria and per-option scores used to choose mode and boundary moves.",
       "Scope Completeness Score is recorded (0.00-1.00) with the explicit blocker list for any remaining uncertainty.",
