@@ -105,7 +105,7 @@ a read-only command.
 
 ## Anti-patterns
 
-- Rebuilding trace-matrix or running doctor from \`/cc-view status\` — those belong to dedicated tools.
+- Rebuilding trace-matrix or running sync from \`/cc-view status\` — those belong to dedicated tools.
 - Treating absence of delegation log as "all delegations complete".
 - Collapsing \`◎ missing-evidence\` into \`✓ completed\` — role-switch gaps must stay
   visible so the stage cannot advance silently.

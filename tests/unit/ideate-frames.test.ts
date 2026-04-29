@@ -76,8 +76,8 @@ describe("ideate frame registry", () => {
         frameId: "assumption-break"
       },
       {
-        title: "Tighten doctor trace check output",
-        evidencePath: "src/doctor.ts",
+        title: "Tighten sync trace check output",
+        evidencePath: "src/sync.ts",
         summary: "Improve visibility of missing links.",
         frameId: "leverage"
       }

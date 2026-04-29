@@ -38,7 +38,7 @@ Do not modify state in this command. It is a pure read/render operation.
    \`fulfillmentMode\` / \`evidenceRefs\`.
 3. Inspect \`${artifactsPath()}\` for per-stage artifact presence and stale copies,
    and for the retro artifact \`09-retro.md\`.
-4. Use \`npx cclaw-cli doctor --explain\` for harness capability status when needed.
+4. Use \`npx cclaw-cli sync\` for harness capability status when needed.
 5. Render one compact tree:
    - stage marker: passed/current/pending/skipped/stale,
    - gates summary,
@@ -54,7 +54,7 @@ Do not modify state in this command. It is a pure read/render operation.
      then \`next\`; the transient \`archived\` substate surfaces only if the
      archive step failed mid-run.
 7. Append a \`harnesses:\` branch. For each installed harness derive the tier
-   and fallback from cclaw capability metadata; use \`npx cclaw-cli doctor --explain\`
+   and fallback from cclaw capability metadata; use \`npx cclaw-cli sync\`
    for remediation details when needed.
 8. If rewind records exist in \`${rewindLogPath()}\`, include latest rewind note in footer.
 

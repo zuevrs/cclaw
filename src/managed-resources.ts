@@ -245,7 +245,25 @@ export class ManagedResourceSession {
   }
 
   static async create(options: ManagedResourceSessionOptions): Promise<ManagedResourceSession> {
-    const previous = await readManagedResourceManifest(options.projectRoot).catch(() => null);
+    const manifestPath = path.join(options.projectRoot, MANAGED_RESOURCE_MANIFEST_REL_PATH);
+    let previous: ManagedResourceManifest | null = null;
+    if (await exists(manifestPath)) {
+      const raw = JSON.parse(await fs.readFile(manifestPath, "utf8")) as unknown;
+      const issues = validateManagedResourceManifest(raw);
+      if (issues.length > 0) {
+        const detail = issues.slice(0, 12)
+          .map((issue) => {
+            const scope = issue.path ?? (issue.index !== undefined ? `resources[${issue.index}]` : "manifest");
+            return `${scope}.${issue.field}: ${issue.message}`;
+          })
+          .join("; ");
+        throw new Error(
+          `[sync fail-fast] Managed resource manifest is malformed (${MANAGED_RESOURCE_MANIFEST_REL_PATH}): ${detail}. ` +
+          `Fix/remove the manifest and rerun \`npx cclaw-cli sync\`.`
+        );
+      }
+      previous = await readManagedResourceManifest(options.projectRoot).catch(() => null);
+    }
     return new ManagedResourceSession(options, previous);
   }
 

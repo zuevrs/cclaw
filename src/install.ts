@@ -17,7 +17,6 @@ import {
   detectAdvancedKeys
 } from "./config.js";
 import { learnSkillMarkdown } from "./content/learnings.js";
-import { nextCommandContract, nextCommandSkillMarkdown } from "./content/next-command.js";
 import { stageCommandShimMarkdown } from "./content/stage-command.js";
 import { ideateCommandContract, ideateCommandSkillMarkdown } from "./content/ideate-command.js";
 import { startCommandContract, startCommandSkillMarkdown } from "./content/start-command.js";
@@ -67,12 +66,13 @@ import { ensureGitignore, removeGitignorePatterns } from "./gitignore.js";
 import {
   HARNESS_ADAPTERS,
   harnessShimFileNames,
+  harnessShimSkillNames,
   syncHarnessShims,
   removeCclawFromAgentsMd
 } from "./harness-adapters.js";
 import { validateHookDocument } from "./hook-schema.js";
 import { detectHarnesses } from "./init-detect.js";
-import { CorruptFlowStateError, ensureRunSystem, readFlowState } from "./runs.js";
+import { CorruptFlowStateError, ensureRunSystem } from "./runs.js";
 import { FLOW_STAGES } from "./types.js";
 import type { CclawConfig, FlowTrack, HarnessId } from "./types.js";
 
@@ -146,7 +146,8 @@ const DEPRECATED_UTILITY_SKILL_FOLDERS = [
   "document-review",
   "flow-status",
   "flow-tree",
-  "flow-diff"
+  "flow-diff",
+  "flow-next-step"
 ] as const;
 
 const DEPRECATED_STAGE_SKILL_FOLDERS = [
@@ -183,7 +184,8 @@ const DEPRECATED_COMMAND_FILES = [
   "retro.md",
   "compound.md",
   "archive.md",
-  "rewind.md"
+  "rewind.md",
+  "cc-next.md"
 ] as const;
 
 const DEPRECATED_SKILL_FILES = [
@@ -539,10 +541,6 @@ async function writeSkills(projectRoot: string, config?: CclawConfig): Promise<v
     learnSkillMarkdown()
   );
   await writeFileSafe(
-    runtimePath(projectRoot, "skills", "flow-next-step", "SKILL.md"),
-    nextCommandSkillMarkdown()
-  );
-  await writeFileSafe(
     runtimePath(projectRoot, "skills", "flow-ideate", "SKILL.md"),
     ideateCommandSkillMarkdown()
   );
@@ -638,7 +636,6 @@ async function writeSkills(projectRoot: string, config?: CclawConfig): Promise<v
 
 async function writeEntryCommands(projectRoot: string): Promise<void> {
   await writeFileSafe(runtimePath(projectRoot, "commands", "start.md"), startCommandContract());
-  await writeFileSafe(runtimePath(projectRoot, "commands", "next.md"), nextCommandContract());
   await writeFileSafe(runtimePath(projectRoot, "commands", "ideate.md"), ideateCommandContract());
   await writeFileSafe(runtimePath(projectRoot, "commands", "view.md"), viewCommandContract());
   await writeFileSafe(runtimePath(projectRoot, "commands", "cancel.md"), cancelCommandContract());
@@ -1004,7 +1001,8 @@ async function writeMergedHookJson(
     const generatedSchema = validateHookDocument(harness, generatedDoc);
     if (!generatedSchema.ok) {
       throw new Error(
-        `Generated ${harness} hook document failed schema validation: ${generatedSchema.errors.join("; ")}`
+        `[sync fail-fast] Hook document drift detected for ${harness}: generated hook document is invalid (${generatedSchema.errors.join("; ")}). ` +
+        "Run `npx cclaw-cli sync` to regenerate managed hooks or repair the generated hook shape manually."
       );
     }
   }
@@ -1014,7 +1012,8 @@ async function writeMergedHookJson(
     const mergedSchema = validateHookDocument(harness, mergedDoc);
     if (!mergedSchema.ok) {
       throw new Error(
-        `Merged ${harness} hook document failed schema validation: ${mergedSchema.errors.join("; ")}`
+        `[sync fail-fast] Hook document drift detected for ${harness}: merged hook document is invalid (${mergedSchema.errors.join("; ")}). ` +
+        "Run `npx cclaw-cli sync` after fixing the custom hook entry or remove the malformed user-authored hook block."
       );
     }
   }
@@ -1099,8 +1098,8 @@ async function writeHooks(projectRoot: string, config: CclawConfig): Promise<voi
       // flag in `~/.codex/config.toml`. cclaw always writes the file so
       // the moment the flag flips on, the cclaw hooks start firing. See
       // `codexHooksJsonWithObservation` for the Bash-only caveat on
-      // PreToolUse/PostToolUse. `cclaw doctor` warns if the feature flag
-      // is not set.
+      // PreToolUse/PostToolUse. If the feature flag is off, hooks remain
+      // inert until the user enables codex_hooks in ~/.codex/config.toml.
       const codexDir = path.join(projectRoot, ".codex");
       await ensureDir(codexDir);
       await writeMergedHookJson(projectRoot, path.join(codexDir, "hooks.json"), codexHooksJson());
@@ -1218,8 +1217,8 @@ async function cleanLegacyArtifacts(projectRoot: string): Promise<void> {
   }
 
   // Archive storage migration: `.cclaw/runs` is legacy and no longer a valid
-  // archive root. Remove only when empty; otherwise keep for explicit doctor
-  // diagnostics so users can manually migrate or inspect old data.
+  // archive root. Remove only when empty; otherwise keep it so users can
+  // manually migrate or inspect old data.
   const legacyRunsDir = runtimePath(projectRoot, "runs");
   try {
     const entries = await fs.readdir(legacyRunsDir);
@@ -1227,7 +1226,7 @@ async function cleanLegacyArtifacts(projectRoot: string): Promise<void> {
       await fs.rm(legacyRunsDir, { recursive: true, force: true });
     }
   } catch {
-    // missing or unreadable legacy dir; leave doctor to report as needed
+    // missing or unreadable legacy dir; keep best-effort behavior
   }
 
   // D-4 terminology migration: rename historical ideation artifacts to the
@@ -1285,6 +1284,42 @@ async function cleanStaleFiles(projectRoot: string): Promise<void> {
   // Legacy managed removals happen in cleanLegacyArtifacts() with explicit paths.
 }
 
+
+
+async function assertExpectedHarnessShims(
+  projectRoot: string,
+  harnesses: readonly HarnessId[]
+): Promise<void> {
+  const expectedFiles = harnessShimFileNames();
+  const expectedSkillFolders = harnessShimSkillNames();
+  for (const harness of harnesses) {
+    const adapter = HARNESS_ADAPTERS[harness];
+    const base = path.join(projectRoot, adapter.commandDir);
+    for (const fileName of expectedFiles) {
+      const target = adapter.shimKind === "skill"
+        ? path.join(base, fileName.replace(/\.md$/u, ""), "SKILL.md")
+        : path.join(base, fileName);
+      if (!(await exists(target))) {
+        throw new Error(
+          `[sync fail-fast] Harness shim drift detected for ${harness}: missing ${target}. ` +
+          `Run \`npx cclaw-cli sync\` again; if the file is still missing, inspect harness permissions/paths.`
+        );
+      }
+    }
+    if (adapter.shimKind === "skill") {
+      for (const folder of expectedSkillFolders) {
+        const skillPath = path.join(base, folder, "SKILL.md");
+        if (!(await exists(skillPath))) {
+          throw new Error(
+            `[sync fail-fast] Harness skill shim drift detected for ${harness}: missing ${skillPath}. ` +
+            `Run \`npx cclaw-cli sync\` again; if the issue persists, inspect generated .agents/skills surfaces.`
+          );
+        }
+      }
+    }
+  }
+}
+
 async function materializeRuntime(
   projectRoot: string,
   config: CclawConfig,
@@ -1306,18 +1341,29 @@ async function materializeRuntime(
       writeRulebook(projectRoot)
     ]);
     await writeState(projectRoot, config, forceStateReset);
-    await ensureRunSystem(projectRoot, { createIfMissing: false });
+    try {
+      await ensureRunSystem(projectRoot, { createIfMissing: false });
+    } catch (error) {
+      if (error instanceof CorruptFlowStateError) {
+        throw new Error(
+          `[sync fail-fast] Corrupt flow state detected: ${error.message} ` +
+          `Resolve the quarantined flow-state file and re-run \`npx cclaw-cli sync\`.`
+        );
+      }
+      throw error;
+    }
     await ensureKnowledgeStore(projectRoot);
     await writeHooks(projectRoot, config);
     await syncDisabledHarnessArtifacts(projectRoot, harnesses);
     await syncManagedGitHooks(projectRoot, config);
     await syncHarnessShims(projectRoot, harnesses);
+    await assertExpectedHarnessShims(projectRoot, harnesses);
     await writeCursorWorkflowRule(projectRoot, harnesses);
     await ensureGitignore(projectRoot);
     await managedSession.commit();
     await fs.unlink(sentinelPath).catch(() => undefined);
   } catch (error) {
-    // Leave the sentinel in place so doctor can surface the interrupted run.
+    // Leave the sentinel in place so the interrupted run is visible.
     throw error;
   } finally {
     setActiveManagedResourceSession(null);
@@ -1353,7 +1399,7 @@ export async function syncCclaw(projectRoot: string, options: SyncOptions = {}):
     // Prefer detected harness markers over the hardcoded default list.
     // Without this, a user running `cclaw sync` in a `.claude`-only
     // project ends up with a config that also enables cursor/opencode/
-    // codex, which then fails doctor checks for missing shim folders.
+    // codex, which then creates invalid harness expectations.
     // Fall back to the previous default (config.harnesses) if no markers
     // are found so brand-new projects still bootstrap cleanly.
     const detected = await detectHarnesses(projectRoot);

@@ -875,7 +875,7 @@ const STAGE_DOMAIN_SAMPLES: Partial<Record<FlowStage, DomainSample[]>> = {
     {
       domain: "cli",
       label: "Scope line",
-      body: "In: add `--dry-run` to `npx cclaw-cli archive`; out: redesigning archive formats, adding retention flags, or changing the default. Discretion: exact wording of stdout lines. NOT in scope: touching `init` / `sync` / `doctor` subcommands."
+      body: "In: add `--dry-run` to `npx cclaw-cli archive`; out: redesigning archive formats, adding retention flags, or changing the default. Discretion: exact wording of stdout lines. NOT in scope: touching `init` / `sync` / `sync` subcommands."
     },
     {
       domain: "library",
@@ -924,7 +924,7 @@ const STAGE_DOMAIN_SAMPLES: Partial<Record<FlowStage, DomainSample[]>> = {
     {
       domain: "cli",
       label: "AC",
-      body: "AC-C1: Given `npx cclaw-cli init --harnesses=claude` run in an empty directory, exit code is `0`, `.cclaw/config.yaml` is created with `harnesses: [claude]`, and stderr contains no warnings (asserted by `tests/integration/init-sync-doctor.test.ts`)."
+      body: "AC-C1: Given `npx cclaw-cli init --harnesses=claude` run in an empty directory, exit code is `0`, `.cclaw/config.yaml` is created with `harnesses: [claude]`, and stderr contains no warnings (asserted by `tests/integration/init-sync-runtime.test.ts`)."
     },
     {
       domain: "library",
@@ -1012,7 +1012,7 @@ const STAGE_DOMAIN_SAMPLES: Partial<Record<FlowStage, DomainSample[]>> = {
     {
       domain: "cli",
       label: "Rollback",
-      body: "Trigger: `npx cclaw-cli init --harnesses=claude` exits non-zero on a fresh tmp dir, OR `npx cclaw-cli doctor` regresses (FAIL count increases) on the smoke matrix. Steps: `npm unpublish cclaw-cli@<version>` (within the 72h window) or `npm deprecate cclaw-cli@<version> '<reason>'`; publish the previous patch. Verify: `npx cclaw-cli@latest --version` prints the previous version."
+      body: "Trigger: `npx cclaw-cli init --harnesses=claude` exits non-zero on a fresh tmp dir, OR `npx cclaw-cli sync` regresses (FAIL count increases) on the smoke matrix. Steps: `npm unpublish cclaw-cli@<version>` (within the 72h window) or `npm deprecate cclaw-cli@<version> '<reason>'`; publish the previous patch. Verify: `npx cclaw-cli@latest --version` prints the previous version."
     },
     {
       domain: "library",

@@ -166,7 +166,7 @@ export const DEFAULT_COMPOUND_RECURRENCE_THRESHOLD = 3;
 
 /**
  * Populated runtime view of config values that downstream callers (install,
- * observe, doctor) consume. Always has the derived guard modes populated,
+ * observe, sync/runtime checks) consume. Always has the derived guard modes populated,
  * regardless of whether the user wrote `strictness`, the legacy keys, both,
  * or neither.
  */

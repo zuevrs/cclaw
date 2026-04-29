@@ -428,7 +428,7 @@ function parseLedger(raw: unknown, runId: string): DelegationLedger {
         // and entry, the entry has no fulfillmentMode, and there is no
         // dispatch-surface or dispatch-id evidence on the row. We honor
         // that by tagging fulfillmentMode = "legacy-inferred" so callers
-        // (stage-complete, doctor) can require an explicit `--rerecord`
+        // (stage-complete, sync/runtime checks) can require an explicit `--rerecord`
         // before the row counts as proof-era.
         const ledgerHasNoVersion = ledgerSchemaVersion === undefined || ledgerSchemaVersion === 1;
         const entryHasNoVersion = item.schemaVersion === undefined || item.schemaVersion === 1;

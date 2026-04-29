@@ -374,7 +374,7 @@ export async function archiveRun(
 
   // Drop an `.archive-in-progress` sentinel immediately so that a crash
   // between the artifact rename and the final manifest write leaves a
-  // recoverable marker (doctor surfaces these; re-running archive on an
+  // recoverable marker (sync reports these; re-running archive on an
   // orphan attempts to complete or roll back). The sentinel is removed
   // only after the manifest lands successfully.
   const sentinelPath = path.join(archivePath, ".archive-in-progress");
@@ -437,14 +437,14 @@ export async function archiveRun(
     // Best-effort rollback: if artifacts were moved but the subsequent
     // steps failed, put artifacts back so the user is not left without
     // a working run. The sentinel is intentionally left behind for
-    // inspection; doctor surfaces it.
+    // inspection; sync reports it.
     if (artifactsMoved) {
       try {
         await fs.rm(artifactsDir, { recursive: true, force: true });
         await fs.rename(archiveArtifactsPath, artifactsDir);
       } catch {
         // Rollback failed — sentinel + orphaned archive dir will be
-        // surfaced by doctor and can be reconciled manually.
+        // surfaced by sync and can be reconciled manually.
       }
     }
     if (stateReset) {
@@ -483,7 +483,7 @@ async function readKnowledgeStats(projectRoot: string): Promise<ArchiveRunResult
  * Counts entries in the canonical JSONL knowledge store. An "active" entry is one
  * non-empty line that parses as JSON with the required `type` field belonging to the
  * allowed set. Malformed lines are ignored (not counted) but do not throw so that a
- * hand-edited file cannot break doctor/archive flows.
+ * hand-edited file cannot break sync/archive flows.
  */
 export function countActiveKnowledgeEntries(text: string): number {
   const allowed = new Set(["rule", "pattern", "lesson", "compound"]);

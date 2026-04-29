@@ -8,7 +8,6 @@ import { stageExamples, stageFullArtifactExampleMarkdown } from "../../src/conte
 import { mandatoryDelegationsForStage, reviewStackAwareRoutingSummary, stageAutoSubagentDispatch, stageDelegationSummary, stagePolicyNeedles, stageSchema, stageTrackRenderContext } from "../../src/content/stage-schema.js";
 import { stageSkillMarkdown } from "../../src/content/skills.js";
 import { referencePatternContractsForStage, referencePatternPolicyNeedles, referencePatternsForStage } from "../../src/content/reference-patterns.js";
-import { nextCommandSkillMarkdown } from "../../src/content/next-command.js";
 import { enhancedAgentBody, subagentDrivenDevSkill } from "../../src/content/subagents.js";
 import { SUBAGENT_CONTEXT_SKILLS } from "../../src/content/subagent-context-skills.js";
 import { ARTIFACT_TEMPLATES } from "../../src/content/templates.js";
@@ -601,14 +600,6 @@ describe("stage schema and subagent alignment", () => {
         ).toContain(`## ${rule.section}`);
       }
     }
-  });
-
-  it("next command skill shows track-aware critical path", () => {
-    const skill = nextCommandSkillMarkdown();
-
-    expect(skill).toContain("| Stage | Standard next | Medium next | Quick next | Skill path |");
-    expect(skill).toContain("| `brainstorm` | `scope` | `spec` | `not in track` |");
-    expect(skill).toContain("Natural schema edge reference for diagnostics only");
   });
 
   it("brainstorm artifact requires tier and reaction sections", () => {

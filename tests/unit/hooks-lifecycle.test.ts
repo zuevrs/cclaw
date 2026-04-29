@@ -183,7 +183,7 @@ describe("hooks lifecycle wiring", () => {
   it("run-hook wrapper reports missing node instead of silently skipping", () => {
     const wrapper = runHookCmdScript();
     expect(wrapper).toContain("node not found; cclaw hook skipped");
-    expect(wrapper).toContain("Run npx cclaw-cli doctor");
+    expect(wrapper).toContain("Run npx cclaw-cli sync");
   });
 
   it("run-hook wrapper dispatches to node runtime on POSIX shells", async () => {
@@ -668,7 +668,7 @@ process.exit(0);
     ).rejects.toThrow(/workflow boundary failed: missing evidence/);
     await expect(
       plugin["tool.execute.before"]({ tool: "RunCommand", tool_input: { cmd: "echo test" } })
-    ).rejects.toThrow(/npx cclaw-cli doctor/);
+    ).rejects.toThrow(/npx cclaw-cli sync/);
     await expect(
       plugin["tool.execute.before"]({ tool: "RunCommand", tool_input: { cmd: "echo test" } })
     ).rejects.toThrow(/CCLAW_DISABLE=1/);

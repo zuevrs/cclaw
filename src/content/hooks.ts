@@ -136,7 +136,7 @@ async function main() {
     const code = error && typeof error === "object" && "code" in error ? String(error.code) : "";
     if (code === "ENOENT") {
       process.stderr.write(
-        "[cclaw] " + HELPER_NAME + ": node executable not found while invoking local runtime. Re-run npx cclaw-cli doctor.\\n"
+        "[cclaw] " + HELPER_NAME + ": node executable not found while invoking local runtime. Re-run npx cclaw-cli sync.\\n"
       );
     } else {
       process.stderr.write(
@@ -285,7 +285,7 @@ async function main() {
     const code = error && typeof error === "object" && "code" in error ? String(error.code) : "";
     if (code === "ENOENT") {
       process.stderr.write(
-        "[cclaw] stage-complete: node executable not found while invoking local runtime. Re-run npx cclaw-cli doctor.\\n"
+        "[cclaw] stage-complete: node executable not found while invoking local runtime. Re-run npx cclaw-cli sync.\\n"
       );
     } else {
       process.stderr.write(
@@ -697,7 +697,7 @@ set "RUNTIME=%HOOK_DIR%run-hook.mjs"
 where node >nul 2>nul
 if %ERRORLEVEL% neq 0 (
   REM Best-effort: missing node should not block harness execution loops.
-  echo [cclaw] run-hook.cmd: node not found; cclaw hook skipped. Run npx cclaw-cli doctor. >&2
+  echo [cclaw] run-hook.cmd: node not found; cclaw hook skipped. Run npx cclaw-cli sync. >&2
   exit /b 0
 )
 node "%RUNTIME%" %*
@@ -709,7 +709,7 @@ if [ "$#" -lt 1 ]; then
   exit 1
 fi
 if ! command -v node >/dev/null 2>&1; then
-  echo "[cclaw] run-hook.cmd: node not found; cclaw hook skipped. Run npx cclaw-cli doctor." >&2
+  echo "[cclaw] run-hook.cmd: node not found; cclaw hook skipped. Run npx cclaw-cli sync." >&2
   exit 0
 fi
 exec node "\${SCRIPT_DIR}/run-hook.mjs" "$@"

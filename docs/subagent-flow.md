@@ -144,11 +144,11 @@ Each category carries its own `nextActions` line so the operator does not need t
 
 ## Roadmap
 
-- Add richer worker-state diagnostics in `/cc-view status` and doctor output, including stale ACK/launch age.
+- Add richer worker-state diagnostics in `/cc-view status` and sync/runtime diagnostics, including stale ACK/launch age.
 - Support multiple `--evidence-ref` values in the helper while preserving the compact ledger shape.
 - Add optional harness-native task IDs when a runtime exposes them directly.
 - Expand docs around mixed-harness installs and active-harness inference.
-- Keep generated OpenCode/Codex agent schemas validated by doctor so missing or stale agent files are caught before dispatch.
+- Keep generated OpenCode/Codex agent schemas validated by sync so missing or stale agent files are caught before dispatch.
 
 ## Relation to `docs/harnesses.md`
 

@@ -2,7 +2,6 @@ import fs from "node:fs/promises";
 import path from "node:path";
 import { describe, expect, it } from "vitest";
 import { stageSkillFolder } from "../../src/content/skills.js";
-import { nextCommandContract } from "../../src/content/next-command.js";
 import { startCommandContract } from "../../src/content/start-command.js";
 import { SUBAGENT_CONTEXT_SKILLS } from "../../src/content/subagent-context-skills.js";
 import { initCclaw } from "../../src/install.js";
@@ -36,7 +35,6 @@ describe("flow command contracts", () => {
       "cancel.md",
       "design.md",
       "ideate.md",
-      "next.md",
       "plan.md",
       "review.md",
       "scope.md",
@@ -47,7 +45,7 @@ describe("flow command contracts", () => {
       "view.md"
     ]);
 
-    for (const fileName of ["ideate.md", "next.md", "start.md", "view.md"]) {
+    for (const fileName of ["ideate.md", "start.md", "view.md"]) {
       const content = await fs.readFile(path.join(root, ".cclaw/commands", fileName), "utf8");
       expect(content).toContain("## HARD-GATE");
       expect(content).toContain("SKILL.md");
@@ -89,7 +87,6 @@ describe("flow command contracts", () => {
     const fullPolicyPaths = [
       ".cclaw/skills/using-cclaw/SKILL.md",
       ".cclaw/commands/start.md",
-      ".cclaw/commands/next.md",
       ".cclaw/commands/ideate.md",
       ".cclaw/commands/view.md",
       ".cclaw/skills/subagent-dev/SKILL.md",
@@ -169,7 +166,6 @@ describe("flow command contracts", () => {
 
     const startCommand = await fs.readFile(path.join(root, ".cclaw/commands/start.md"), "utf8");
     const startSkill = await fs.readFile(path.join(root, ".cclaw/skills/flow-start/SKILL.md"), "utf8");
-    const nextCommand = await fs.readFile(path.join(root, ".cclaw/commands/next.md"), "utf8");
 
     for (const content of [startCommand, startSkill]) {
       expect(content).toMatch(/capture (?:a|the) reproduction contract first/);
@@ -179,10 +175,7 @@ describe("flow command contracts", () => {
 
     expect(startCommandContract()).toContain('"stage":"<currentStage>"');
     expect(startCommandContract()).toContain('"track":"<track>"');
-    expect(nextCommandContract()).toContain('"stage":"<currentStage>"');
-    expect(nextCommandContract()).toContain('"nextStage":"<nextStage>"');
     expect(startCommand).not.toContain('"stage":"spec","payload":{"command":"/cc","track":"quick"');
-    expect(nextCommand).not.toContain('"stage":"review","payload":{"command":"/cc-next","decision":"resume_or_advance","nextStage":"ship"');
   });
 
   it("documents cclaw-cli as installer/support and node hooks as runtime", async () => {
@@ -190,13 +183,11 @@ describe("flow command contracts", () => {
     await initCclaw({ projectRoot: root });
 
     const metaSkill = await fs.readFile(path.join(root, ".cclaw/skills/using-cclaw/SKILL.md"), "utf8");
-    const nextCommand = await fs.readFile(path.join(root, ".cclaw/commands/next.md"), "utf8");
     expect(metaSkill).toContain("Installer/support surface");
     expect(metaSkill).toContain("npx cclaw-cli sync");
     expect(metaSkill).toContain("Main workflow");
     expect(metaSkill).toContain("`/cc-cancel`");
     expect(metaSkill).not.toContain("npx cclaw-cli archive");
-    expect(nextCommand).not.toContain("npx cclaw-cli archive");
 
     const stageComplete = await fs.readFile(path.join(root, ".cclaw/hooks/stage-complete.mjs"), "utf8");
     expect(stageComplete).toContain("CCLAW_CLI_ENTRYPOINT");
@@ -257,7 +248,7 @@ describe("flow command contracts", () => {
         const content = await fs.readFile(shimPath, "utf8");
         expect(content).toContain(".cclaw/skills/");
       }
-      for (const staleShim of ["cc-next.md", "cc-view.md", "cc-finish.md", ...FLOW_STAGES.map((stage) => `cc-${stage}.md`)]) {
+      for (const staleShim of ["cc-view.md", "cc-finish.md", ...FLOW_STAGES.map((stage) => `cc-${stage}.md`)]) {
         await expect(fs.stat(path.join(root, harnessDir, staleShim))).rejects.toThrow(/ENOENT/);
       }
     }
@@ -271,7 +262,7 @@ describe("flow command contracts", () => {
       expect(content).toContain(`name: ${skillName}`);
       expect(content).toContain(".cclaw/skills/");
     }
-    for (const staleSkill of ["cc-next", "cc-view", "cc-finish", ...FLOW_STAGES.map((stage) => `cc-${stage}`)]) {
+    for (const staleSkill of ["cc-view", "cc-finish", ...FLOW_STAGES.map((stage) => `cc-${stage}`)]) {
       await expect(fs.stat(path.join(root, ".agents/skills", staleSkill))).rejects.toThrow(/ENOENT/);
     }
 
@@ -301,7 +292,7 @@ describe("flow command contracts", () => {
 
     // Legacy v0.39.x skill layout must be absent (fresh install writes
     // `cc*`, not `cclaw-cc*`).
-    for (const legacySkill of ["cclaw-cc", "cclaw-cc-next", "cclaw-cc-view"]) {
+    for (const legacySkill of ["cclaw-cc", "cclaw-cc-view"]) {
       await expect(
         fs.stat(path.join(root, ".agents/skills", legacySkill))
       ).rejects.toThrow(/ENOENT/);
@@ -343,7 +334,7 @@ describe("flow command contracts", () => {
   });
 
   it("routes meta skill to inline protocol behavior", async () => {
-    const root = await createTempProject("doctor-protocol");
+    const root = await createTempProject("sync-protocol");
     await initCclaw({ projectRoot: root });
 
     const metaSkill = await fs.readFile(
@@ -388,13 +379,6 @@ describe("flow command contracts", () => {
     }
     expect(metaSkill).toContain("retro -> compound -> archive");
 
-    const nextCommand = await fs.readFile(
-      path.join(root, ".cclaw/commands/next.md"),
-      "utf8"
-    );
-    expect(nextCommand).toContain(".cclaw/state/flow-state.json");
-    expect(nextCommand).toContain("closeout.shipSubstate");
-    expect(nextCommand).toContain("retro -> compound -> archive");
   });
 
   it("requires the meta-skill to declare a skill-before-response gate", async () => {

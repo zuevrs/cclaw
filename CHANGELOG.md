@@ -54,7 +54,7 @@
 
 - Materialized generated stage command shims so stage skills no longer point agents at missing `.cclaw/commands/<stage>.md` files.
 - Restored native subagent dispatch surfaces for OpenCode and Codex via generated `.opencode/agents/*.md` and `.codex/agents/*.toml` agent definitions, with role-switch retained only as a degraded fallback.
-- Tightened harness delegation, hook/doctor diagnostics, quick-track templates, and knowledge metadata regressions so installed runtime guidance matches validation behavior.
+- Tightened harness delegation, hook/sync diagnostics, quick-track templates, and knowledge metadata regressions so installed runtime guidance matches validation behavior.
 
 ## 0.51.22
 
@@ -175,20 +175,20 @@
 
 ### Fixed
 
-- Made `cclaw doctor` discoverable in CLI help, always print fixes for
+- Made `npx cclaw-cli sync` discoverable in CLI help, always print fixes for
   failing checks, and point recovery docs at existing local files.
 - Fixed non-flow headless envelopes for `/cc-ideate` and `/cc-view` so they no
   longer masquerade as brainstorm/review stage outputs.
-- Made `doctor --only` JSON and exit-code semantics scoped to the filtered
+- Made `sync --only` JSON and exit-code semantics scoped to the filtered
   checks while preserving `globalOk` for the full suite.
-- Replaced bash-based Node probing in doctor with platform-native command
+- Replaced bash-based Node probing in sync with platform-native command
   checks, and made hook wrappers loudly report skipped hooks when `node` is
   missing.
 
 ### Changed
 
 - Added digest-first knowledge wording to session/research guidance and
-  standardized resume wording on `/cc-next`.
+  standardized resume wording on `/cc`.
 - Centralized post-ship closeout substate guidance and strengthened
   verification-before-completion wording.
 - Added a flow-state schema version for future migrations.
@@ -207,10 +207,10 @@ workflow tool.
   runtime, generated worktree state, and the user-facing feature command
   surface.
 - Removed `/cc-ops` and its legacy subcommands. Flow progression and
-  closeout now stay on `/cc-next`; explicit archival/reset stays on
+  closeout now stay on `/cc`; explicit archival/reset stays on
   `cclaw archive`.
 - Shrank generated commands to the four real entrypoints: `/cc`,
-  `/cc-next`, `/cc-ideate`, and `/cc-view`.
+  `/cc`, `/cc-ideate`, and `/cc-view`.
 - Stopped scaffolding derived/cache state files on init. Runtime hooks now
   create optional diagnostics only when needed.
 - Removed broad default utility skills and kept the generated skill surface
@@ -233,7 +233,7 @@ workflow tool.
   record `runName` instead of `featureName` / `activeFeature`.
 - Removed the legacy `/cc-learn` command surface from generated guidance.
   Knowledge work remains available through the `learnings` skill, while
-  the visible slash-command surface stays at `/cc`, `/cc-next`,
+  the visible slash-command surface stays at `/cc`, `/cc`,
   `/cc-ideate`, and `/cc-view`.
 - Removed an unused TDD batch walkthrough export and the large stage-skill
   golden snapshot file; contract tests now assert behavioral anchors instead
@@ -268,7 +268,7 @@ workflow tool.
 - Centralized legacy cleanup lists in init/sync so removed surfaces are
   easier to audit without changing upgrade cleanup behavior.
 - Renamed pre-compact semantic coverage from digest wording to compatibility
-  wording and aligned harness/view docs with `cclaw doctor --explain`.
+  wording and aligned harness/view docs with `npx cclaw-cli sync`.
 - Compact stage skills now fold inputs and required context into the existing
   context-loading block, reducing repeated generated sections while preserving
   the process map, gates, evidence, and artifact validation.
@@ -280,9 +280,9 @@ workflow tool.
   readable as an input alias.
 - Codex legacy skill cleanup now removes any old `cclaw-cc*` folder by prefix
   instead of carrying a hardcoded list of obsolete command names.
-- The generated meta-skill, shared stage guidance, `/cc-next`, and harness shims
+- The generated meta-skill, shared stage guidance, `/cc`, and harness shims
   now show the whole flow explicitly: critical-path stages finish with
-  `retro -> compound -> archive` through `/cc-next`.
+  `retro -> compound -> archive` through `/cc`.
 - TDD dispatch guidance now presents one mandatory `test-author` evidence cycle
   for RED/GREEN/REFACTOR instead of implying three default subagents.
 - Stage guidance now starts with a compact drift preamble, treats seed recall as
@@ -303,7 +303,7 @@ workflow tool.
 - Scope/design outside-voice loop guidance now renders from compact policy helpers
   in `review-loop.ts` instead of repeated prose blocks.
 - Post-ship closeout wording is now sourced from shared closeout guidance
-  helpers so /cc-next and meta-skill stay aligned on retro/compound/archive.
+  helpers so /cc and meta-skill stay aligned on retro/compound/archive.
 - /cc-ideate knowledge scan guidance now matches the live knowledge schema
   (`rule|pattern|lesson|compound`, `origin_run`, trigger/action clustering).
 - Track-aware render context now drives quick-track wording transforms for TDD/lint metadata, replacing duplicated brittle string-rewrite chains.
@@ -312,7 +312,7 @@ workflow tool.
 ### Preserved
 
 - `retro -> compound -> archive` remains part of ship closeout through
-  `/cc-next`.
+  `/cc`.
 - `cclaw archive` still archives active runs into `.cclaw/archive/`.
 - Stage skills still keep decision, completion, verification, and
   closeout discipline, but now inline the needed guidance instead of
@@ -323,13 +323,13 @@ workflow tool.
 Dead-weight cut, pass 1. `.cclaw/` was shipping four scaffolded
 directories whose content no runtime code ever consumed, no user ever
 edited, and no test depended on beyond "file exists". Each added noise
-to `ls .cclaw`, `cclaw doctor`, and `cclaw sync` without moving any
+to `ls .cclaw`, `npx cclaw-cli sync`, and `cclaw sync` without moving any
 flow decision. This release removes them.
 
 ### Removed
 
 - `.cclaw/adapters/manifest.json` — the "harness adapter provenance"
-  file was never read outside of the three doctor gates that verified
+  file was never read outside of the three sync gates that verified
   its own existence. Dropped the file, its three
   `state:adapter_manifest_*` gates, and the init preview line.
 - `.cclaw/custom-skills/` — opt-in scaffold for user-authored skills
@@ -353,7 +353,7 @@ flow decision. This release removes them.
   already gracefully degrade when `contexts/<mode>.md` is missing
   (`existsSync` check), so users see no behavioral change beyond
   four fewer files per install and four fewer `contexts:mode:*`
-  gates in `doctor`.
+  gates in `sync`.
 
 ### Why
 
@@ -449,7 +449,7 @@ This release reshapes the plugin so users can actually use OpenCode.
   TUI artifact that made failing sessions unreadable.
 - Guard block errors now name the failing guard, include the last
   ~400 bytes of its stderr as `Reason`, and suggest
-  `cclaw doctor` + `CCLAW_DISABLE=1` recovery moves, replacing the
+  `npx cclaw-cli sync` + `CCLAW_DISABLE=1` recovery moves, replacing the
   uniform unactionable block message.
 
 ### Added
@@ -666,14 +666,14 @@ adversarial review loops, and richer design-review coverage.
 ## 0.48.24
 
 Roll-up of the lock-aware knowledge read + diagnostics (PR #131)
-and the `reference:*` doctor severity demotion (PR #132). Both
+and the `reference:*` sync severity demotion (PR #132). Both
 landed on `main` under `0.48.23` but needed a version bump to
 reach npm.
 
 
 ### Changed
 
-- Doctor severity for `reference:*` checks (currently the
+- Sync/runtime severity for `reference:*` checks (currently the
   `flow-map.md` section anchors, including
   `reference:flow_map:compound_readiness`) is demoted from
   `error` to `warning`. These docs document the surface rather
@@ -693,7 +693,7 @@ reach npm.
   no longer silently swallow exceptions — failures are now recorded
   as breadcrumbs in `.cclaw/state/hook-errors.jsonl` (still
   soft-fail so hooks never block on a malformed derived state, but
-  `cclaw doctor` can now surface chronic failures).
+  `npx cclaw-cli sync` can now surface chronic failures).
 - Directory locks (`withDirectoryLock` / the hook-inline variant)
   now fail fast with a clear "Lock path exists but is not a
   directory" error when the configured lock path is occupied by
@@ -769,7 +769,7 @@ reach npm.
   unless at least one slice has an OPEN RED. Previously a flat
   red/green tally could unlock writes for a new slice just because
   an older slice had balanced out.
-- Single Ralph Loop contract inside `src/content/next-command.ts`. The
+- Single Ralph Loop contract inside `/cc progression contract surfaces`. The
   command contract and the skill document previously carried two
   different paragraphs — one called Ralph Loop a "soft nudge, not a
   gate", the other said "Advance only when every planned slice is in
@@ -780,7 +780,7 @@ reach npm.
   pre-advance nudge; hard gate enforcement flows through
   `flow-state.json` gates via `stage-complete.mjs`. A new
   behavior-backed parity test in
-  `tests/e2e/next-command-ralph-loop-contract.test.ts` asserts the
+  `next-command parity regression tests` asserts the
   canonical paragraph appears byte-identical in both places, that no
   hard-gating wording is used against ralph-loop fields, and that the
   legacy wording is gone.
@@ -794,7 +794,7 @@ reach npm.
 - `readFlowState()` in the hook runtime now records a breadcrumb to
   `.cclaw/state/hook-errors.jsonl` when `flow-state.json` exists but
   fails JSON.parse, instead of silently falling back to `{}`. Makes
-  latent CLI↔hook drift surfaceable via `cclaw doctor`.
+  latent CLI↔hook drift surfaceable via `npx cclaw-cli sync`.
 - `archiveRun()` now holds both the archive lock and the flow-state
   lock for the entire archive window. Internal `writeFlowState`
   calls pass `skipLock: true` so no nested-lock deadlock occurs. This

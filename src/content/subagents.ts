@@ -107,10 +107,10 @@ can enforce phase-appropriate write boundaries. Use separate workers only when t
 
 | Harness | Fallback | Delegation tool | Structured ask | Capability source |
 |---|---|---|---|---|
-| Claude | \`native\` | Task (named subagent_type) | AskUserQuestion | \`npx cclaw-cli doctor\` |
-| Cursor | \`generic-dispatch\` | Task (generic subagent_type: explore/generalPurpose/…) | AskQuestion | \`npx cclaw-cli doctor\` |
-| OpenCode | \`native\` | generated \`.opencode/agents/<agent>.md\` subagents via Task / \`@agent\` mention | \`question\` (permission-gated; \`permission.question: "allow"\`) | \`npx cclaw-cli doctor\` |
-| Codex | \`native\` | generated \`.codex/agents/<agent>.toml\` custom agents via native parallel subagent spawning | \`request_user_input\` (experimental; Plan / Collaboration mode) | \`npx cclaw-cli doctor\` |
+| Claude | \`native\` | Task (named subagent_type) | AskUserQuestion | \`npx cclaw-cli sync\` |
+| Cursor | \`generic-dispatch\` | Task (generic subagent_type: explore/generalPurpose/…) | AskQuestion | \`npx cclaw-cli sync\` |
+| OpenCode | \`native\` | generated \`.opencode/agents/<agent>.md\` subagents via Task / \`@agent\` mention | \`question\` (permission-gated; \`permission.question: "allow"\`) | \`npx cclaw-cli sync\` |
+| Codex | \`native\` | generated \`.codex/agents/<agent>.toml\` custom agents via native parallel subagent spawning | \`request_user_input\` (experimental; Plan / Collaboration mode) | \`npx cclaw-cli sync\` |
 
 **Dispatch rules driven by \`subagentFallback\`:**
 

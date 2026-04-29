@@ -196,7 +196,7 @@ async function appendCloseoutSubstateDemotionNotice(
           }
         }
       } catch {
-        // Keep going with an empty payload; doctor can still report parse errors.
+        // Keep going with an empty payload; sync can still report parse errors.
       }
     }
 
@@ -646,7 +646,7 @@ export async function writeFlowState(
         throw new Error(
           `cannot validate flow-state transition because ${FLOW_STATE_REL_PATH} is unreadable or corrupt (${
             err instanceof Error ? err.message : String(err)
-          }). Run \`cclaw doctor\` and reconcile the state before retrying.`
+          }). Run \`npx cclaw-cli sync\` and reconcile the state before retrying.`
         );
       }
     }

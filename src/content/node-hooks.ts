@@ -289,7 +289,7 @@ async function readJsonFile(filePath, fallback = {}, options = {}) {
     } catch (parseErr) {
       // Emit a diagnostic breadcrumb instead of silently returning fallback.
       // The hook must still continue (soft-fail), but the corruption is
-      // now visible in \`state/hook-errors.jsonl\` and to \`cclaw doctor\`.
+      // now visible in \`state/hook-errors.jsonl\` and to \`npx cclaw-cli sync\`.
       if (options.root) {
         await recordHookError(
           options.root,
@@ -720,7 +720,6 @@ function detectTargetStage(payloadLower) {
 }
 
 function isFlowProgressionCommand(payloadLower) {
-  if (/(\\/cc-next|cc-next)([^a-z0-9_-]|$)/u.test(payloadLower)) return true;
   return /\\/cc([^a-z0-9_-]|$)/u.test(payloadLower);
 }
 
@@ -992,7 +991,7 @@ async function handleSessionStart(runtime) {
     } catch (err) {
       // Best-effort — a malformed cycle log should never break
       // session-start. But we DO leave a breadcrumb in
-      // hook-errors.jsonl so \`cclaw doctor\` can surface chronic
+      // hook-errors.jsonl so \`npx cclaw-cli sync\` can surface chronic
       // failures (previously this was a silent swallow).
       await recordHookError(
         runtime.root,
@@ -1038,7 +1037,7 @@ async function handleSessionStart(runtime) {
     // Best-effort — a malformed knowledge.jsonl must never break
     // session-start. But we DO leave a breadcrumb in
     // hook-errors.jsonl so config/IO problems become visible in
-    // \`cclaw doctor\` instead of silently degrading readiness output.
+    // \`npx cclaw-cli sync\` instead of silently degrading readiness output.
     await recordHookError(
       runtime.root,
       "session-start:compound-readiness",
@@ -1437,7 +1436,7 @@ async function handleWorkflowGuard(runtime) {
     /^(read|readfile|open|view|cat|shell|runcommand|run_command|execcommand|exec_command|terminal)$/u.test(
       toolLower
     ) &&
-    /(\\.cclaw\\/state\\/flow-state\\.json|npx cclaw-cli doctor|npx cclaw-cli sync|cclaw doctor|cclaw sync)/u.test(payloadLower);
+    /(\\.cclaw\\/state\\/flow-state\\.json|npx cclaw-cli sync|npx cclaw-cli sync|npx cclaw-cli sync|cclaw sync)/u.test(payloadLower);
   if (shouldRecordFlowRead) {
     await writeJsonFile(guardStateFile, {
       ...guardState,

@@ -292,9 +292,9 @@ export function harnessDispatchSurface(harnessId: HarnessId): string {
     case "cursor":
       return "Use Cursor Subagent/Task with a generic subagent_type (explore for read-only mapping, generalPurpose for broader work, shell/browser-use when specifically needed) and paste the cclaw role prompt; record fulfillmentMode: \"generic-dispatch\" with evidenceRefs.";
     case "opencode":
-      return "Use OpenCode subagents: invoke the generated .opencode/agents/<agent>.md agent via Task or @<agent>; if agents or plugin registration are missing, run `cclaw sync` and check opencode.json(.c) plugin registration with `cclaw doctor --explain`; record scheduled/launched/acknowledged/completed events with spanId+dispatchId before claiming fulfillmentMode: \"isolated\".";
+      return "Use OpenCode subagents: invoke the generated .opencode/agents/<agent>.md agent via Task or @<agent>; if agents or plugin registration are missing, run `cclaw sync` and check opencode.json(.c) plugin registration with `npx cclaw-cli sync`; record scheduled/launched/acknowledged/completed events with spanId+dispatchId before claiming fulfillmentMode: \"isolated\".";
     case "codex":
-      return "Use Codex native subagents: ask Codex to spawn the generated .codex/agents/<agent>.toml agent(s) by name; if hooks are inert, set `[features] codex_hooks = true` in ~/.codex/config.toml or rerun init/sync repair, then `cclaw doctor --explain`; record scheduled/launched/acknowledged/completed events with spanId+dispatchId before claiming fulfillmentMode: \"isolated\".";
+      return "Use Codex native subagents: ask Codex to spawn the generated .codex/agents/<agent>.toml agent(s) by name; if hooks are inert, set `[features] codex_hooks = true` in ~/.codex/config.toml or rerun init/sync repair, then `npx cclaw-cli sync`; record scheduled/launched/acknowledged/completed events with spanId+dispatchId before claiming fulfillmentMode: \"isolated\".";
   }
 }
 
@@ -539,9 +539,9 @@ Codex CLI v0.114+ (Mar 2026) **does** expose lifecycle hooks via
 \`.codex/hooks.json\`, gated by the \`[features] codex_hooks = true\` flag
 in \`~/.codex/config.toml\`. cclaw generates \`.codex/hooks.json\` on
 sync; if the feature flag is off, hooks are inert and cclaw's
-session-start rehydration simply does not fire. Run \`cclaw doctor\` to
+session-start rehydration simply does not fire. Run \`npx cclaw-cli sync\` to
 see if the flag is missing. \`.codex/commands/*\` is still unused by
-Codex CLI and is removed on every sync. Run \`cclaw doctor --explain\` for
+Codex CLI and is removed on every sync. Run \`npx cclaw-cli sync\` for
 hook coverage details (Bash-only \`PreToolUse\`/\`PostToolUse\`; other events are full).
 ${CCLAW_MARKER_END}`;
 }
@@ -685,7 +685,7 @@ under \`.agents/skills/${skillSlug}/\` so the user can either:
 
 Lifecycle hooks **are** available in Codex CLI v0.114+ (behind the
 \`[features] codex_hooks = true\` flag in \`~/.codex/config.toml\`) and
-cclaw installs a matching \`.codex/hooks.json\`; run \`cclaw doctor --explain\`
+cclaw installs a matching \`.codex/hooks.json\`; run \`npx cclaw-cli sync\`
 for the current hook surface and limitations.
 
 ## Protocol
@@ -709,7 +709,7 @@ for the current hook surface and limitations.
   unavailable or disabled, and then include non-empty \`evidenceRefs\`.
 - Codex's \`PreToolUse\` / \`PostToolUse\` hooks currently only intercept
   the \`Bash\` tool. \`Write\`, \`Edit\`, \`WebSearch\`, and MCP tool calls
-  are **not** gated by hooks — use \`cclaw doctor --explain\` for what cclaw
+  are **not** gated by hooks — use \`npx cclaw-cli sync\` for what cclaw
   substitutes with in-turn agent steps for those call classes.
 - Codex's \`SessionStart\` matcher only supports \`startup|resume\`. Claude
   and Cursor also fire on \`clear\` and \`compact\`, so mid-session

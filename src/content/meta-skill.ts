@@ -102,7 +102,7 @@ Before stage work:
 ## Platform reliability notes
 
 - Managed hook dispatch uses \`.cclaw/hooks/run-hook.cmd\` (cross-platform wrapper).
-- If hooks fail due missing runtime deps (for example \`node\` not on \`PATH\`), run \`npx cclaw-cli doctor\` before continuing.
+- If hooks fail due missing runtime deps (for example \`node\` not on \`PATH\`), run \`npx cclaw-cli sync\` before continuing.
 - Prefer cross-platform commands in artifacts/examples (\`npm test\`, \`pnpm test\`, \`python -m pytest\`, etc.) over shell-specific aliases whenever possible.
 
 ## Stage quick map
@@ -112,7 +112,7 @@ Use \`/cc <idea>\` for new work, \`/cc\` for progression and closeout, \`/cc-ide
 ## Main vs Operator Surfaces
 
 - **Main workflow:** \`/cc\`, \`/cc-ideate\`, and \`/cc-cancel\` inside the installed harness runtime.
-- **Installer/support surface:** \`npx cclaw-cli init\`, \`npx cclaw-cli sync\`, \`npx cclaw-cli upgrade\`, \`npx cclaw-cli doctor\`, and \`npx cclaw-cli uninstall\`.
+- **Installer/support surface:** \`npx cclaw-cli init\`, \`npx cclaw-cli sync\`, \`npx cclaw-cli upgrade\`, \`npx cclaw-cli sync\`, and \`npx cclaw-cli uninstall\`.
 - Use operator/support surfaces only for install/runtime diagnosis or lifecycle maintenance. Do not make them part of the happy path.
 
 ## Whole flow map

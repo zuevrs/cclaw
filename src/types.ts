@@ -92,8 +92,7 @@ export interface TrackHeuristicsConfig {
  * when the harness supports native dispatch, otherwise fulfilled via
  * an explicit in-session role switch with evidence).
  *
- * Track gating: `enforceOnTracks` lists the tracks where the doctor
- * check escalates to a warning. Tracks outside this list still see
+ * Track gating: `enforceOnTracks` lists the tracks where the sync/runtime check escalates to a warning. Tracks outside this list still see
  * the skill prose but leave the decision to the user.
  *
  * All fields optional; sensible defaults: disabled, threshold 5, no
@@ -106,7 +105,7 @@ export interface SliceReviewConfig {
   filesChangedThreshold?: number;
   /** Glob hints; any plan-task touchPath match triggers review. */
   touchTriggers?: string[];
-  /** Tracks on which missed reviews escalate to a doctor warning. */
+  /** Tracks on which missed reviews escalate to a sync/runtime warning. */
   enforceOnTracks?: FlowTrack[];
 }
 

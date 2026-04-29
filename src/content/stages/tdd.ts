@@ -74,7 +74,7 @@ export const TDD: StageSchemaV2Input = {
       "Use incremental RED/GREEN/REFACTOR commits when the repository workflow and working tree make that appropriate; otherwise record the checkpoint boundaries in the artifact.",
       "Stop if regressions appear and fix before proceeding.",
       "If a test passes unexpectedly, investigate: does the behavior already exist, or is the test wrong?",
-      "**Per-Slice Review point (conditional, opt-in).** When `.cclaw/config.yaml::sliceReview.enabled` is true, check every slice against the triggers before declaring it DONE. Triggers: `touchCount >= filesChangedThreshold`, any `touchPaths` match a `touchTriggers` glob, or the plan row declares `highRisk: true`. On a trigger, run two passes on the slice alone — (1) Spec-Compliance: trace RED/GREEN/REFACTOR evidence back to its plan task + spec criterion, noting edge cases the tests skip; (2) Quality: diff-scan for naming, error handling, dead code, simpler alternatives. Record both under `## Per-Slice Review` in `06-tdd.md`, naming the trigger that fired. Dispatch the `reviewer` subagent natively when available (log `fulfillmentMode: \"isolated\"`); otherwise fulfil via in-session role switch (`fulfillmentMode: \"role-switch\"`). Never fabricate an isolated pass from memory. Tracks outside `sliceReview.enforceOnTracks` still emit the section; doctor only escalates missed reviews on enforced tracks."
+      "**Per-Slice Review point (conditional, opt-in).** When `.cclaw/config.yaml::sliceReview.enabled` is true, check every slice against the triggers before declaring it DONE. Triggers: `touchCount >= filesChangedThreshold`, any `touchPaths` match a `touchTriggers` glob, or the plan row declares `highRisk: true`. On a trigger, run two passes on the slice alone — (1) Spec-Compliance: trace RED/GREEN/REFACTOR evidence back to its plan task + spec criterion, noting edge cases the tests skip; (2) Quality: diff-scan for naming, error handling, dead code, simpler alternatives. Record both under `## Per-Slice Review` in `06-tdd.md`, naming the trigger that fired. Dispatch the `reviewer` subagent natively when available (log `fulfillmentMode: \"isolated\"`); otherwise fulfil via in-session role switch (`fulfillmentMode: \"role-switch\"`). Never fabricate an isolated pass from memory. Tracks outside `sliceReview.enforceOnTracks` still emit the section; sync only escalates missed reviews on enforced tracks."
     ],
     process: [
       "Select one vertical slice and map it to acceptance criterion(s).",
@@ -220,7 +220,7 @@ export const TDD: StageSchemaV2Input = {
         evaluationPoints: [
           "When `.cclaw/config.yaml::sliceReview.enabled` is true: does every triggered slice (touchCount >= threshold, touchPaths match, or highRisk=true) carry a Per-Slice Review entry with BOTH a Spec-Compliance pass (plan task <-> spec criterion + edge-case notes) AND a Quality pass (diff-level naming/errors/dead code/simpler alternatives)?",
           "Is the delegation `fulfillmentMode` recorded (`isolated` for a dispatched reviewer subagent, `role-switch` for an in-session pass) and does it match an entry in `.cclaw/state/delegation-log.json`?",
-          "On tracks listed in `sliceReview.enforceOnTracks`, are there zero missed triggered slices (doctor also surfaces this as a warning)?"
+          "On tracks listed in `sliceReview.enforceOnTracks`, are there zero missed triggered slices (sync also surfaces this as a warning)?"
         ],
         stopGate: false
       },

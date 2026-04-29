@@ -11,7 +11,7 @@
  * ```
  *
  * in `$CODEX_HOME/config.toml` (default: `~/.codex/config.toml`).
- * cclaw init/sync can prompt the user to flip this flag for them; `cclaw doctor --explain` reports the concrete repair when it is missing;
+ * cclaw init/sync can prompt the user to flip this flag for them; sync/runtime diagnostics report the concrete repair when it is missing;
  * this module owns the detection / mutation code so the prompt logic in
  * `cli.ts` stays small and testable.
  *

@@ -89,8 +89,6 @@ export async function policyChecks(projectRoot: string, options: PolicyOptions =
     { file: runtimeFile("skills/learnings/SKILL.md"), needle: "## Manual Actions", name: "utility_skill:learnings:manual_actions" },
     { file: runtimeFile("skills/learnings/SKILL.md"), needle: "## HARD-GATE", name: "utility_skill:learnings:hard_gate" },
     { file: runtimeFile("commands/start.md"), needle: "## Algorithm", name: "utility_command:start:algorithm" },
-    { file: runtimeFile("commands/next.md"), needle: "## Algorithm", name: "utility_command:next:algorithm" },
-    { file: runtimeFile("commands/next.md"), needle: "closeout.shipSubstate", name: "utility_command:next:closeout_chain" },
     { file: runtimeFile("commands/ideate.md"), needle: "## Algorithm", name: "utility_command:ideate:algorithm" },
     { file: runtimeFile("skills/flow-ideate/SKILL.md"), needle: "## Protocol", name: "utility_skill:ideate:protocol" },
     { file: runtimeFile("skills/flow-ideate/SKILL.md"), needle: "## HARD-GATE", name: "utility_skill:ideate:hard_gate" },

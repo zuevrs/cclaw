@@ -11,7 +11,6 @@ import {
   readFlowState,
   writeFlowState
 } from "../../src/runs.js";
-import { doctorChecks } from "../../src/doctor.js";
 import { evaluateRetroGate } from "../../src/retro-gate.js";
 import { createTempProject } from "../helpers/index.js";
 
@@ -124,40 +123,7 @@ describe("runs system", () => {
     ).resolves.toBeTruthy();
   });
 
-  it("surfaces partial archive sentinels through doctor", async () => {
-    const root = await createTempProject("runs-partial-archive-doctor");
-    await ensureRunSystem(root);
-    const archiveDir = path.join(root, ".cclaw/archive/2026-04-26-partial");
-    await fs.mkdir(archiveDir, { recursive: true });
-    await fs.writeFile(
-      path.join(archiveDir, ".archive-in-progress"),
-      `${JSON.stringify({ archiveId: "2026-04-26-partial", startedAt: "2026-04-26T00:00:00Z" })}
-`,
-      "utf8"
-    );
 
-    const checks = await doctorChecks(root);
-    const archiveIntegrity = checks.find((check) => check.name === "archive:integrity");
-    expect(archiveIntegrity).toBeDefined();
-    expect(archiveIntegrity?.ok).toBe(false);
-    expect(archiveIntegrity?.details).toContain(".archive-in-progress");
-    expect(archiveIntegrity?.details).toContain("retry archive");
-    expect(archiveIntegrity?.details).toContain("recover/rollback");
-  });
-
-  it("flags legacy .cclaw/runs storage with data as incompatible", async () => {
-    const root = await createTempProject("runs-legacy-storage");
-    await ensureRunSystem(root);
-    const legacyDir = path.join(root, ".cclaw/runs/legacy-run");
-    await fs.mkdir(legacyDir, { recursive: true });
-    await fs.writeFile(path.join(legacyDir, "archive-manifest.json"), "{}\n", "utf8");
-
-    const checks = await doctorChecks(root);
-    const legacy = checks.find((check) => check.name === "archive:legacy_runs_storage");
-    expect(legacy).toBeDefined();
-    expect(legacy?.ok).toBe(false);
-    expect(legacy?.details).toContain("legacy archive storage detected");
-  });
 
   it("creates unique archive ids for same-day run names", async () => {
     const root = await createTempProject("runs-archive-unique");

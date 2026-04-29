@@ -44,7 +44,7 @@ For scripted setup:
 npx cclaw-cli init --harnesses=claude,cursor --no-interactive
 ```
 
-If generated files or hooks look stale, run `npx cclaw-cli doctor`. If they need to be regenerated, run `npx cclaw-cli sync`.
+If generated files or hooks look stale, run `npx cclaw-cli sync`. If they need to be regenerated, run `npx cclaw-cli sync`.
 
 ## Why cclaw
 
@@ -60,14 +60,14 @@ AI coding sessions fail when decisions live only in chat. cclaw puts the operati
   archive/                archived run snapshots (durable closeout proof)
 ```
 
-Legacy `.cclaw/runs/` directories are detected by `npx cclaw-cli doctor` and should be migrated to `.cclaw/archive/`.
+Legacy `.cclaw/runs/` directories are detected by `npx cclaw-cli sync` and should be migrated to `.cclaw/archive/`.
 
 That gives you:
 
 - **One path** from idea to ship, with `quick`, `medium`, and `standard` tracks.
 - **Real gates** for evidence, tests, review, delegation, stale-stage recovery, and closeout.
 - **Subagents with accountability**: controller owns state, workers do bounded tasks, overseers validate, evidence lands in `delegation-log.json`.
-- **Recovery instead of confusion**: `npx cclaw-cli doctor --quiet --explain` tells you blockers and next fixes.
+- **Recovery instead of confusion**: `npx cclaw-cli sync` tells you blockers and next fixes.
 - **Portable harness behavior** across Claude Code, Cursor, OpenCode, and Codex.
 
 ## The Daily Loop
@@ -83,7 +83,7 @@ That gives you:
    stage-complete records evidence in flow-state.json
 
 4. Inspect when stuck
-   npx cclaw-cli doctor --quiet --explain
+   npx cclaw-cli sync
 
 5. Close out after ship
    /cc continues retro -> compound -> archive
@@ -104,7 +104,7 @@ Track selection is **model-guided and advisory** during `/cc`. Runtime enforceme
 Start here:
 
 ```text
-npx cclaw-cli doctor --quiet --explain
+npx cclaw-cli sync
 ```
 
 A useful status should read like an operator note, not a raw dump:
@@ -128,7 +128,7 @@ Common exits:
 | `NO_VCS_MODE`                                     | Restore git, set `vcs: none` with hash evidence, or configure `tdd.verificationRef`. |
 | Review blocked                                    | `cclaw internal rewind tdd "review_blocked_by_critical <finding-ids>"`.              |
 | Stale stage after rewind                          | Redo the marked stage, then `cclaw internal rewind --ack <stage>`.                   |
-| Broken hooks or generated files                   | `npx cclaw-cli doctor`, then `npx cclaw-cli sync` if needed.                         |
+| Broken hooks or generated files                   | `npx cclaw-cli sync`, then `npx cclaw-cli sync` if needed.                         |
 
 
 ## Subagents Without Theater
