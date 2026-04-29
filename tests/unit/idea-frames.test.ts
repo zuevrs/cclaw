@@ -1,18 +1,18 @@
 import { describe, expect, it } from "vitest";
-import type { IdeateFrameId } from "../../src/content/ideate-frames.js";
+import type { IdeaFrameId } from "../../src/content/idea-frames.js";
 import {
-  DEFAULT_IDEATE_FRAME_IDS,
-  IDEATE_FRAMES,
-  buildIdeateFrameDispatchPlan,
-  dedupeIdeateCandidates,
-  resolveIdeateFrames
-} from "../../src/content/ideate-frames.js";
+  DEFAULT_IDEA_FRAME_IDS,
+  IDEA_FRAMES,
+  buildIdeaFrameDispatchPlan,
+  dedupeIdeaCandidates,
+  resolveIdeaFrames
+} from "../../src/content/idea-frames.js";
 
-describe("ideate frame registry", () => {
+describe("idea frame registry", () => {
   it("ships six default frames with prompt and example patterns", () => {
-    expect(DEFAULT_IDEATE_FRAME_IDS).toHaveLength(6);
-    expect(IDEATE_FRAMES).toHaveLength(6);
-    for (const frame of IDEATE_FRAMES) {
+    expect(DEFAULT_IDEA_FRAME_IDS).toHaveLength(6);
+    expect(IDEA_FRAMES).toHaveLength(6);
+    for (const frame of IDEA_FRAMES) {
       expect(frame.id.trim().length).toBeGreaterThan(0);
       expect(frame.label.trim().length).toBeGreaterThan(0);
       expect(frame.prompt.trim().length).toBeGreaterThan(20);
@@ -21,7 +21,7 @@ describe("ideate frame registry", () => {
   });
 
   it("resolves a deduped subset in caller order", () => {
-    const selected = resolveIdeateFrames([
+    const selected = resolveIdeaFrames([
       "leverage",
       "pain-friction",
       "leverage",
@@ -36,12 +36,12 @@ describe("ideate frame registry", () => {
 
   it("throws on unknown frame ids", () => {
     expect(() =>
-      resolveIdeateFrames(["not-a-frame" as IdeateFrameId])
-    ).toThrow(/unknown ideate frame id/i);
+      resolveIdeaFrames(["not-a-frame" as IdeaFrameId])
+    ).toThrow(/unknown idea frame id/i);
   });
 
   it("builds parallel dispatch prompts with frame context", () => {
-    const plan = buildIdeateFrameDispatchPlan(
+    const plan = buildIdeaFrameDispatchPlan(
       {
         focus: "reduce flaky tests in flow-state runtime",
         mode: "repo-grounded",
@@ -62,7 +62,7 @@ describe("ideate frame registry", () => {
   });
 
   it("dedupes equivalent candidates across multiple frames", () => {
-    const merged = dedupeIdeateCandidates([
+    const merged = dedupeIdeaCandidates([
       {
         title: "Stabilize flow-state reset cleanup",
         evidencePath: "tests/unit/runs.test.ts",

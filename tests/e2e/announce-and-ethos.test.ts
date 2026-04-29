@@ -25,7 +25,7 @@ describe("announce-at-start discipline and ethos principles", () => {
     expect(planSkill).toContain("Announce at start:");
     expect(reviewSkill).toContain("Announce at start:");
     expect(reviewSkill).toContain("Decision protocol: ask only decision-changing questions");
-    expect(metaSkill).toContain("/cc-ideate");
+    expect(metaSkill).toContain("/cc-idea");
     expect(metaSkill).toContain("/cc-cancel");
   });
 });

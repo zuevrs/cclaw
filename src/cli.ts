@@ -95,7 +95,7 @@ Examples:
   npx cclaw-cli archive --disposition=cancelled --reason="deprioritized"
   npx cclaw-cli upgrade
 
-Happy-path work happens inside your harness via /cc, /cc-ideate,
+Happy-path work happens inside your harness via /cc, /cc-idea,
 and /cc-cancel. Installer/support operations are init/sync/upgrade/uninstall
 plus explicit archive actions.
 

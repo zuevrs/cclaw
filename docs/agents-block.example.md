@@ -17,7 +17,7 @@ authoritative; this file exists so readers can see what the harness will read.
 | Command | Purpose |
 |---|---|
 | `/cc` | Entry point. No args resumes current stage; with a prompt it classifies the task and starts the right flow. |
-| `/cc-ideate` | Ideate mode. Produces a ranked repo-improvement backlog. |
+| `/cc-idea` | Idea mode. Produces a ranked repo-improvement backlog. |
 | `/cc-view` | Read-only status/tree/diff visibility. |
 
 Stage order is `brainstorm > scope > design > spec > plan > tdd > review > ship`,

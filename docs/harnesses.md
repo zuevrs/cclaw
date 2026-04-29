@@ -97,7 +97,7 @@ Hook behavior is intentionally split into three layers so docs, generation, and 
 Flow:
 1. Manifest defines handler bindings.
 2. Hook documents are generated from manifest projections.
-3. Schema descriptors + TS validators enforce structure at sync/sync time.
+3. Schema descriptors + TS validators enforce structure at sync time.
 
 Fallback legend:
 
@@ -176,7 +176,7 @@ All harnesses receive the same utility commands:
 
 - `/cc` - flow entry and resume
 - `/cc` - stage progression and post-ship closeout
-- `/cc-ideate` - ideate mode for ranked repo-improvement backlog
+- `/cc-idea` - idea mode for ranked repo-improvement backlog
 - `/cc-view` - read-only router for status/tree/diff
 
 Read-only subcommands:
@@ -184,7 +184,7 @@ Read-only subcommands:
 - `/cc-view tree` - deep flow tree (stages, artifacts, stale markers)
 - `/cc-view diff` - before/after flow-state diff map
 
-Operational work is handled by `/cc`, `/cc-ideate`, `/cc-view`, and `node .cclaw/hooks/stage-complete.mjs <stage>` inside the installed harness runtime. `npx cclaw-cli` is the installer/support surface for init, sync, upgrade, sync, and explicit/manual archive; the normal stage flow must not depend on a runtime `cclaw` binary in PATH.
+Operational work is handled by `/cc`, `/cc-idea`, `/cc-view`, and `node .cclaw/hooks/stage-complete.mjs <stage>` inside the installed harness runtime. `npx cclaw-cli` is the installer/support surface for init, sync, upgrade, and explicit/manual archive; the normal stage flow must not depend on a runtime `cclaw` binary in PATH.
 
 Critical-path stage order remains canonical:
 `brainstorm -> scope -> design -> spec -> plan -> tdd -> review -> ship`
@@ -223,7 +223,7 @@ Harness-specific additions:
 - `claude`: `.claude/commands/cc*.md`, `.claude/hooks/hooks.json`
 - `cursor`: `.cursor/commands/cc*.md`, `.cursor/hooks.json`, `.cursor/rules/cclaw-workflow.mdc`
 - `opencode`: `.opencode/commands/cc*.md`, `.opencode/plugins/cclaw-plugin.mjs`, opencode plugin registration with `permission.question: "allow"`; set `OPENCODE_ENABLE_QUESTION_TOOL=1` for ACP clients so structured asks can route through question tooling. Sync/runtime checks validate the config permission and warn when the environment hint is absent.
-- `codex`: `.agents/skills/cc/SKILL.md`, `.agents/skills/cc-ideate/SKILL.md`, `.agents/skills/cc-view/SKILL.md`, `.codex/hooks.json` (Codex CLI reads `.agents/skills/` for custom skills and consumes `.codex/hooks.json` on v0.114+ when `[features] codex_hooks = true` is set in `~/.codex/config.toml`. `.codex/commands/` and the legacy `.agents/skills/cclaw-cc*/` layout from v0.39.x are auto-cleaned on sync.)
+- `codex`: `.agents/skills/cc/SKILL.md`, `.agents/skills/cc-idea/SKILL.md`, `.agents/skills/cc-view/SKILL.md`, `.codex/hooks.json` (Codex CLI reads `.agents/skills/` for custom skills and consumes `.codex/hooks.json` on v0.114+ when `[features] codex_hooks = true` is set in `~/.codex/config.toml`. `.codex/commands/` and the legacy `.agents/skills/cclaw-cc*/` layout from v0.39.x are auto-cleaned on sync.)
 
 ## Runtime observability
 

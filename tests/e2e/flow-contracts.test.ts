@@ -34,7 +34,7 @@ describe("flow command contracts", () => {
       "brainstorm.md",
       "cancel.md",
       "design.md",
-      "ideate.md",
+      "idea.md",
       "plan.md",
       "review.md",
       "scope.md",
@@ -45,7 +45,7 @@ describe("flow command contracts", () => {
       "view.md"
     ]);
 
-    for (const fileName of ["ideate.md", "start.md", "view.md"]) {
+    for (const fileName of ["idea.md", "start.md", "view.md"]) {
       const content = await fs.readFile(path.join(root, ".cclaw/commands", fileName), "utf8");
       expect(content).toContain("## HARD-GATE");
       expect(content).toContain("SKILL.md");
@@ -87,7 +87,7 @@ describe("flow command contracts", () => {
     const fullPolicyPaths = [
       ".cclaw/skills/using-cclaw/SKILL.md",
       ".cclaw/commands/start.md",
-      ".cclaw/commands/ideate.md",
+      ".cclaw/commands/idea.md",
       ".cclaw/commands/view.md",
       ".cclaw/skills/subagent-dev/SKILL.md",
       ".cclaw/agents/reviewer.md",
@@ -243,7 +243,7 @@ describe("flow command contracts", () => {
       ".cursor/commands",
       ".opencode/commands"
     ]) {
-      for (const shim of ["cc.md", "cc-ideate.md", "cc-cancel.md"]) {
+      for (const shim of ["cc.md", "cc-idea.md", "cc-cancel.md"]) {
         const shimPath = path.join(root, harnessDir, shim);
         const content = await fs.readFile(shimPath, "utf8");
         expect(content).toContain(".cclaw/skills/");
@@ -256,7 +256,7 @@ describe("flow command contracts", () => {
     // Codex uses skill-kind shims under `.agents/skills/cc*/SKILL.md`
     // since v0.40.0 (renamed from `cclaw-cc*` in v0.39.x). Codex CLI
     // reads that path, not `.codex/commands/`.
-    for (const skillName of ["cc", "cc-ideate", "cc-cancel"]) {
+    for (const skillName of ["cc", "cc-idea", "cc-cancel"]) {
       const skillPath = path.join(root, ".agents/skills", skillName, "SKILL.md");
       const content = await fs.readFile(skillPath, "utf8");
       expect(content).toContain(`name: ${skillName}`);

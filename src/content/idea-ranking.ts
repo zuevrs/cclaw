@@ -1,41 +1,41 @@
-export type IdeateImpact = "high" | "medium" | "low";
-export type IdeateEffort = "s" | "m" | "l";
-export type IdeateConfidence = "high" | "medium" | "low";
+export type IdeaImpact = "high" | "medium" | "low";
+export type IdeaEffort = "s" | "m" | "l";
+export type IdeaConfidence = "high" | "medium" | "low";
 
-export interface IdeateCandidateEvaluationInput {
+export interface IdeaCandidateEvaluationInput {
   id: string;
   title: string;
-  impact: IdeateImpact;
-  effort: IdeateEffort;
-  confidence: IdeateConfidence;
+  impact: IdeaImpact;
+  effort: IdeaEffort;
+  confidence: IdeaConfidence;
   rationaleStrength: number;
   counterArgumentStrength: number;
 }
 
-export interface IdeateCandidateEvaluation extends IdeateCandidateEvaluationInput {
+export interface IdeaCandidateEvaluation extends IdeaCandidateEvaluationInput {
   disposition: "survivor" | "critiqued-out";
   rankingScore: number;
 }
 
-export interface IdeateRankingResult {
-  survivors: IdeateCandidateEvaluation[];
-  critiquedOut: IdeateCandidateEvaluation[];
+export interface IdeaRankingResult {
+  survivors: IdeaCandidateEvaluation[];
+  critiquedOut: IdeaCandidateEvaluation[];
   recommendationId: string | null;
 }
 
-const IMPACT_POINTS: Record<IdeateImpact, number> = {
+const IMPACT_POINTS: Record<IdeaImpact, number> = {
   high: 9,
   medium: 6,
   low: 3
 };
 
-const EFFORT_COST: Record<IdeateEffort, number> = {
+const EFFORT_COST: Record<IdeaEffort, number> = {
   s: 1,
   m: 2,
   l: 3
 };
 
-const CONFIDENCE_MULTIPLIER: Record<IdeateConfidence, number> = {
+const CONFIDENCE_MULTIPLIER: Record<IdeaConfidence, number> = {
   high: 1,
   medium: 0.75,
   low: 0.5
@@ -55,33 +55,33 @@ export function isCritiquedOut(
   return clampStrength(counterArgumentStrength) > clampStrength(rationaleStrength);
 }
 
-export function scoreIdeateCandidate(
-  impact: IdeateImpact,
-  effort: IdeateEffort,
-  confidence: IdeateConfidence
+export function scoreIdeaCandidate(
+  impact: IdeaImpact,
+  effort: IdeaEffort,
+  confidence: IdeaConfidence
 ): number {
   const raw = (IMPACT_POINTS[impact] / EFFORT_COST[effort]) * CONFIDENCE_MULTIPLIER[confidence];
   return Number(raw.toFixed(3));
 }
 
-export function evaluateIdeateCandidate(
-  input: IdeateCandidateEvaluationInput
-): IdeateCandidateEvaluation {
+export function evaluateIdeaCandidate(
+  input: IdeaCandidateEvaluationInput
+): IdeaCandidateEvaluation {
   const disposition = isCritiquedOut(input.rationaleStrength, input.counterArgumentStrength)
     ? "critiqued-out"
     : "survivor";
   return {
     ...input,
     disposition,
-    rankingScore: scoreIdeateCandidate(input.impact, input.effort, input.confidence)
+    rankingScore: scoreIdeaCandidate(input.impact, input.effort, input.confidence)
   };
 }
 
-export function rankIdeateCandidates(
-  inputs: readonly IdeateCandidateEvaluationInput[],
+export function rankIdeaCandidates(
+  inputs: readonly IdeaCandidateEvaluationInput[],
   maxSurvivors = 10
-): IdeateRankingResult {
-  const evaluated = inputs.map(evaluateIdeateCandidate);
+): IdeaRankingResult {
+  const evaluated = inputs.map(evaluateIdeaCandidate);
   const survivors = evaluated
     .filter((candidate) => candidate.disposition === "survivor")
     .sort((left, right) => {

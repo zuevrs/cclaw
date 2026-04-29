@@ -1,12 +1,12 @@
 import { describe, expect, it } from "vitest";
 import {
-  evaluateIdeateCandidate,
+  evaluateIdeaCandidate,
   isCritiquedOut,
-  rankIdeateCandidates,
-  scoreIdeateCandidate
-} from "../../src/content/ideate-ranking.js";
+  rankIdeaCandidates,
+  scoreIdeaCandidate
+} from "../../src/content/idea-ranking.js";
 
-describe("ideate ranking and critique model", () => {
+describe("idea ranking and critique model", () => {
   it("critiques out ideas where counter-argument is stronger", () => {
     expect(isCritiquedOut(0.6, 0.61)).toBe(true);
     expect(isCritiquedOut(0.6, 0.6)).toBe(false);
@@ -14,10 +14,10 @@ describe("ideate ranking and critique model", () => {
   });
 
   it("scores candidates by impact/effort/confidence", () => {
-    const highLeverage = scoreIdeateCandidate("high", "s", "high");
-    const mediumSameEffort = scoreIdeateCandidate("medium", "s", "high");
-    const highButExpensive = scoreIdeateCandidate("high", "l", "high");
-    const uncertain = scoreIdeateCandidate("high", "s", "low");
+    const highLeverage = scoreIdeaCandidate("high", "s", "high");
+    const mediumSameEffort = scoreIdeaCandidate("medium", "s", "high");
+    const highButExpensive = scoreIdeaCandidate("high", "l", "high");
+    const uncertain = scoreIdeaCandidate("high", "s", "low");
 
     expect(highLeverage).toBeGreaterThan(mediumSameEffort);
     expect(highLeverage).toBeGreaterThan(highButExpensive);
@@ -25,7 +25,7 @@ describe("ideate ranking and critique model", () => {
   });
 
   it("marks survivor disposition and ranking score on evaluation", () => {
-    const survivor = evaluateIdeateCandidate({
+    const survivor = evaluateIdeaCandidate({
       id: "I-1",
       title: "Harden gate-evidence diagnostics",
       impact: "high",
@@ -38,7 +38,7 @@ describe("ideate ranking and critique model", () => {
       rationaleStrength: 0.8,
       counterArgumentStrength: 0.4
     });
-    const dropped = evaluateIdeateCandidate({
+    const dropped = evaluateIdeaCandidate({
       id: "I-2",
       title: "Rewrite the entire workflow system",
       impact: "high",
@@ -56,7 +56,7 @@ describe("ideate ranking and critique model", () => {
   });
 
   it("returns ranked survivors, critiqued-out list, and recommendation", () => {
-    const result = rankIdeateCandidates([
+    const result = rankIdeaCandidates([
       {
         id: "I-1",
         title: "Strengthen trace diagnostics",
@@ -92,7 +92,7 @@ describe("ideate ranking and critique model", () => {
   });
 
   it("respects max survivor cap while preserving critiqued-out visibility", () => {
-    const result = rankIdeateCandidates(
+    const result = rankIdeaCandidates(
       [
         {
           id: "I-1",

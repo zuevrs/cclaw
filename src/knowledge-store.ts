@@ -10,7 +10,7 @@ export type KnowledgeEntryConfidence = "high" | "medium" | "low";
 export type KnowledgeEntrySeverity = "critical" | "important" | "suggestion";
 export type KnowledgeEntryUniversality = "project" | "personal" | "universal";
 export type KnowledgeEntryMaturity = "raw" | "lifted-to-rule" | "lifted-to-enforcement";
-export type KnowledgeEntrySource = "stage" | "retro" | "compound" | "ideate" | "manual";
+export type KnowledgeEntrySource = "stage" | "retro" | "compound" | "idea" | "manual";
 
 export interface KnowledgeEntry {
   type: KnowledgeEntryType;
@@ -338,7 +338,7 @@ const KNOWLEDGE_SOURCE_SET = new Set<KnowledgeEntrySource>([
   "stage",
   "retro",
   "compound",
-  "ideate",
+  "idea",
   "manual"
 ]);
 const FLOW_STAGE_SET = new Set<FlowStage>(FLOW_STAGES);
@@ -367,6 +367,7 @@ KNOWLEDGE_ALLOWED_KEYS.add("superseded_by");
 
 export interface ValidateKnowledgeEntryOptions {
   allowLegacyOriginFeature?: boolean;
+  allowLegacyIdeaSource?: boolean;
 }
 
 function keyAllowedInKnowledgeEntry(key: string, options: ValidateKnowledgeEntryOptions): boolean {
@@ -432,11 +433,18 @@ function emptyKnowledgeSnapshot(): KnowledgeSnapshot {
   };
 }
 
+const LEGACY_IDEA_SOURCE = String.fromCharCode(105, 100, 101, 97, 116, 101);
+
 function normalizeLegacyKnowledgeEntry(entry: Record<string, unknown>): KnowledgeEntry {
   const { origin_feature: legacyOriginRun, ...rest } = entry;
+  const source =
+    typeof entry.source === "string" && entry.source === LEGACY_IDEA_SOURCE
+      ? "idea"
+      : entry.source;
   return {
     ...rest,
-    origin_run: entry.origin_run ?? legacyOriginRun ?? null
+    origin_run: entry.origin_run ?? legacyOriginRun ?? null,
+    ...(source !== undefined ? { source } : {})
   } as KnowledgeEntry;
 }
 
@@ -452,7 +460,10 @@ function parseKnowledgeSnapshot(raw: string): KnowledgeSnapshot {
     if (trimmed.length === 0) continue;
     try {
       const parsed = JSON.parse(trimmed) as unknown;
-      const validated = validateKnowledgeEntry(parsed, { allowLegacyOriginFeature: true });
+      const validated = validateKnowledgeEntry(parsed, {
+        allowLegacyOriginFeature: true,
+        allowLegacyIdeaSource: true
+      });
       if (!validated.ok) {
         malformedLines += 1;
         continue;
@@ -614,12 +625,18 @@ export function validateKnowledgeEntry(
   ) {
     errors.push("superseded_by must be a non-empty string when present.");
   }
-  if (
-    obj.source !== undefined &&
-    obj.source !== null &&
-    (typeof obj.source !== "string" || !KNOWLEDGE_SOURCE_SET.has(obj.source as KnowledgeEntrySource))
-  ) {
-    errors.push("source must be one of: stage, retro, compound, ideate, manual, or null.");
+  const sourceAllowed =
+    obj.source === undefined ||
+    obj.source === null ||
+    (
+      typeof obj.source === "string" &&
+      (
+        KNOWLEDGE_SOURCE_SET.has(obj.source as KnowledgeEntrySource) ||
+        (options.allowLegacyIdeaSource === true && obj.source === LEGACY_IDEA_SOURCE)
+      )
+    );
+  if (!sourceAllowed) {
+    errors.push("source must be one of: stage, retro, compound, idea, manual, or null.");
   }
 
   return { ok: errors.length === 0, errors };

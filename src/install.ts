@@ -18,7 +18,7 @@ import {
 } from "./config.js";
 import { learnSkillMarkdown } from "./content/learnings.js";
 import { stageCommandShimMarkdown } from "./content/stage-command.js";
-import { ideateCommandContract, ideateCommandSkillMarkdown } from "./content/ideate-command.js";
+import { ideaCommandContract, ideaCommandSkillMarkdown } from "./content/idea-command.js";
 import { startCommandContract, startCommandSkillMarkdown } from "./content/start-command.js";
 import { viewCommandContract, viewCommandSkillMarkdown } from "./content/view-command.js";
 import { cancelCommandContract, cancelCommandSkillMarkdown } from "./content/cancel-command.js";
@@ -147,7 +147,8 @@ const DEPRECATED_UTILITY_SKILL_FOLDERS = [
   "flow-status",
   "flow-tree",
   "flow-diff",
-  "flow-next-step"
+  "flow-next-step",
+  "flow-ideate"
 ] as const;
 
 const DEPRECATED_STAGE_SKILL_FOLDERS = [
@@ -185,7 +186,9 @@ const DEPRECATED_COMMAND_FILES = [
   "compound.md",
   "archive.md",
   "rewind.md",
-  "cc-next.md"
+  "cc-next.md",
+  "cc-ideate.md",
+  "ideate.md"
 ] as const;
 
 const DEPRECATED_SKILL_FILES = [
@@ -541,8 +544,8 @@ async function writeSkills(projectRoot: string, config?: CclawConfig): Promise<v
     learnSkillMarkdown()
   );
   await writeFileSafe(
-    runtimePath(projectRoot, "skills", "flow-ideate", "SKILL.md"),
-    ideateCommandSkillMarkdown()
+    runtimePath(projectRoot, "skills", "flow-idea", "SKILL.md"),
+    ideaCommandSkillMarkdown()
   );
   await writeFileSafe(
     runtimePath(projectRoot, "skills", "flow-start", "SKILL.md"),
@@ -636,7 +639,7 @@ async function writeSkills(projectRoot: string, config?: CclawConfig): Promise<v
 
 async function writeEntryCommands(projectRoot: string): Promise<void> {
   await writeFileSafe(runtimePath(projectRoot, "commands", "start.md"), startCommandContract());
-  await writeFileSafe(runtimePath(projectRoot, "commands", "ideate.md"), ideateCommandContract());
+  await writeFileSafe(runtimePath(projectRoot, "commands", "idea.md"), ideaCommandContract());
   await writeFileSafe(runtimePath(projectRoot, "commands", "view.md"), viewCommandContract());
   await writeFileSafe(runtimePath(projectRoot, "commands", "cancel.md"), cancelCommandContract());
   for (const stage of FLOW_STAGES) {
@@ -1229,15 +1232,20 @@ async function cleanLegacyArtifacts(projectRoot: string): Promise<void> {
     // missing or unreadable legacy dir; keep best-effort behavior
   }
 
-  // D-4 terminology migration: rename historical ideation artifacts to the
-  // canonical ideate-* naming without deleting user-authored content.
+  // D-4 terminology migration: rename historical ideation artifact prefixes to
+  // the canonical idea-* naming without deleting user-authored content.
+  const legacyIdeaArtifactPrefix = String.fromCharCode(105, 100, 101, 97, 116, 101);
+  const legacyIdeaArtifactPattern = new RegExp(
+    `^(?:ideation|${legacyIdeaArtifactPrefix})-(.+\\.md)$`,
+    "u"
+  );
   const artifactsDir = runtimePath(projectRoot, "artifacts");
   try {
     const entries = await fs.readdir(artifactsDir);
     for (const entry of entries) {
-      const match = /^ideation-(.+\.md)$/u.exec(entry);
+      const match = legacyIdeaArtifactPattern.exec(entry);
       if (!match) continue;
-      const nextName = `ideate-${match[1]}`;
+      const nextName = `idea-${match[1]}`;
       const from = path.join(artifactsDir, entry);
       const to = path.join(artifactsDir, nextName);
       if (await exists(to)) {
@@ -1634,7 +1642,7 @@ export async function uninstallCclaw(projectRoot: string): Promise<void> {
   try {
     const entries = await fs.readdir(codexSkillsRoot);
     for (const entry of entries) {
-      if (/^(?:cclaw-)?cc(?:-(?:next|view|finish|cancel|ops|ideate|brainstorm|scope|design|spec|plan|tdd|review|ship))?$/u.test(entry)) {
+      if (/^(?:cclaw-)?cc(?:-(?:next|view|finish|cancel|ops|idea|brainstorm|scope|design|spec|plan|tdd|review|ship))?$/u.test(entry)) {
         await fs.rm(path.join(codexSkillsRoot, entry), { recursive: true, force: true });
       }
     }

@@ -26,7 +26,7 @@ describe("docs flow contract", () => {
     expect(lead).toContain("file-backed flow runtime for coding agents");
     expect(lead).toContain("## First 5 Minutes");
     expect(lead).toContain("/cc <idea>");
-    expect(lead).toContain("/cc-ideate");
+    expect(lead).toContain("/cc-idea");
     expect(lead).toContain("/cc-cancel");
     expect(lead).not.toMatch(/\bcc-next\b/u);
     expect(lead).not.toContain("/cc-view status");

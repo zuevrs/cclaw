@@ -1,4 +1,4 @@
-export type IdeateFrameId =
+export type IdeaFrameId =
   | "pain-friction"
   | "inversion"
   | "assumption-break"
@@ -6,37 +6,37 @@ export type IdeateFrameId =
   | "cross-domain-analogy"
   | "constraint-flip";
 
-export interface IdeateFrame {
-  id: IdeateFrameId;
+export interface IdeaFrame {
+  id: IdeaFrameId;
   label: string;
   prompt: string;
   examplePatterns: string[];
 }
 
-export interface IdeateFrameDispatchInput {
+export interface IdeaFrameDispatchInput {
   focus: string;
   mode: "repo-grounded" | "elsewhere-software" | "elsewhere-non-software";
   signalSummary: string[];
 }
 
-export interface IdeateFrameDispatchPlanEntry {
-  frameId: IdeateFrameId;
+export interface IdeaFrameDispatchPlanEntry {
+  frameId: IdeaFrameId;
   label: string;
   prompt: string;
 }
 
-export interface IdeateCandidateDraft {
+export interface IdeaCandidateDraft {
   title: string;
   evidencePath: string;
   summary: string;
-  frameId: IdeateFrameId;
+  frameId: IdeaFrameId;
 }
 
-export interface IdeateCandidateMerged extends Omit<IdeateCandidateDraft, "frameId"> {
-  frameIds: IdeateFrameId[];
+export interface IdeaCandidateMerged extends Omit<IdeaCandidateDraft, "frameId"> {
+  frameIds: IdeaFrameId[];
 }
 
-const FRAME_REGISTRY: Readonly<Record<IdeateFrameId, IdeateFrame>> = {
+const FRAME_REGISTRY: Readonly<Record<IdeaFrameId, IdeaFrame>> = {
   "pain-friction": {
     id: "pain-friction",
     label: "pain/friction",
@@ -105,7 +105,7 @@ const FRAME_REGISTRY: Readonly<Record<IdeateFrameId, IdeateFrame>> = {
   }
 };
 
-export const DEFAULT_IDEATE_FRAME_IDS: readonly IdeateFrameId[] = Object.freeze([
+export const DEFAULT_IDEA_FRAME_IDS: readonly IdeaFrameId[] = Object.freeze([
   "pain-friction",
   "inversion",
   "assumption-break",
@@ -114,19 +114,19 @@ export const DEFAULT_IDEATE_FRAME_IDS: readonly IdeateFrameId[] = Object.freeze(
   "constraint-flip"
 ]);
 
-export const IDEATE_FRAMES: readonly IdeateFrame[] = Object.freeze(
-  DEFAULT_IDEATE_FRAME_IDS.map((id) => FRAME_REGISTRY[id])
+export const IDEA_FRAMES: readonly IdeaFrame[] = Object.freeze(
+  DEFAULT_IDEA_FRAME_IDS.map((id) => FRAME_REGISTRY[id])
 );
 
-export function resolveIdeateFrames(frameIds?: readonly IdeateFrameId[]): IdeateFrame[] {
+export function resolveIdeaFrames(frameIds?: readonly IdeaFrameId[]): IdeaFrame[] {
   if (!frameIds || frameIds.length === 0) {
-    return [...IDEATE_FRAMES];
+    return [...IDEA_FRAMES];
   }
-  const seen = new Set<IdeateFrameId>();
-  const resolved: IdeateFrame[] = [];
+  const seen = new Set<IdeaFrameId>();
+  const resolved: IdeaFrame[] = [];
   for (const rawId of frameIds) {
-    if (!DEFAULT_IDEATE_FRAME_IDS.includes(rawId)) {
-      throw new Error(`Unknown ideate frame id: ${rawId}`);
+    if (!DEFAULT_IDEA_FRAME_IDS.includes(rawId)) {
+      throw new Error(`Unknown idea frame id: ${rawId}`);
     }
     if (seen.has(rawId)) continue;
     seen.add(rawId);
@@ -135,14 +135,14 @@ export function resolveIdeateFrames(frameIds?: readonly IdeateFrameId[]): Ideate
   return resolved;
 }
 
-export function buildIdeateFrameDispatchPlan(
-  input: IdeateFrameDispatchInput,
-  frameIds?: readonly IdeateFrameId[]
-): IdeateFrameDispatchPlanEntry[] {
+export function buildIdeaFrameDispatchPlan(
+  input: IdeaFrameDispatchInput,
+  frameIds?: readonly IdeaFrameId[]
+): IdeaFrameDispatchPlanEntry[] {
   const signalBlock = input.signalSummary.length > 0
     ? input.signalSummary.map((line) => `- ${line}`).join("\n")
     : "- no pre-scan signals captured yet";
-  return resolveIdeateFrames(frameIds).map((frame) => ({
+  return resolveIdeaFrames(frameIds).map((frame) => ({
     frameId: frame.id,
     label: frame.label,
     prompt: [
@@ -169,10 +169,10 @@ function normalizeCandidateKey(title: string, evidencePath: string): string {
   return `${normalizedTitle}::${normalizedEvidence}`;
 }
 
-export function dedupeIdeateCandidates(
-  drafts: readonly IdeateCandidateDraft[]
-): IdeateCandidateMerged[] {
-  const merged = new Map<string, IdeateCandidateMerged>();
+export function dedupeIdeaCandidates(
+  drafts: readonly IdeaCandidateDraft[]
+): IdeaCandidateMerged[] {
+  const merged = new Map<string, IdeaCandidateMerged>();
   for (const draft of drafts) {
     const key = normalizeCandidateKey(draft.title, draft.evidencePath);
     const existing = merged.get(key);

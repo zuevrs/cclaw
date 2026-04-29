@@ -177,7 +177,7 @@
 
 - Made `npx cclaw-cli sync` discoverable in CLI help, always print fixes for
   failing checks, and point recovery docs at existing local files.
-- Fixed non-flow headless envelopes for `/cc-ideate` and `/cc-view` so they no
+- Fixed non-flow headless envelopes for `/cc-idea` and `/cc-view` so they no
   longer masquerade as brainstorm/review stage outputs.
 - Made `sync --only` JSON and exit-code semantics scoped to the filtered
   checks while preserving `globalOk` for the full suite.
@@ -210,7 +210,7 @@ workflow tool.
   closeout now stay on `/cc`; explicit archival/reset stays on
   `cclaw archive`.
 - Shrank generated commands to the four real entrypoints: `/cc`,
-  `/cc`, `/cc-ideate`, and `/cc-view`.
+  `/cc`, `/cc-idea`, and `/cc-view`.
 - Stopped scaffolding derived/cache state files on init. Runtime hooks now
   create optional diagnostics only when needed.
 - Removed broad default utility skills and kept the generated skill surface
@@ -234,7 +234,7 @@ workflow tool.
 - Removed the legacy `/cc-learn` command surface from generated guidance.
   Knowledge work remains available through the `learnings` skill, while
   the visible slash-command surface stays at `/cc`, `/cc`,
-  `/cc-ideate`, and `/cc-view`.
+  `/cc-idea`, and `/cc-view`.
 - Removed an unused TDD batch walkthrough export and the large stage-skill
   golden snapshot file; contract tests now assert behavioral anchors instead
   of pinning generated prose.
@@ -294,17 +294,17 @@ workflow tool.
 - Review guidance now defaults to one reviewer plus mandatory security-reviewer,
   with adversarial review as a risk-triggered pass instead of ceremony for every
   large-ish diff.
-- Generated status/docs/ideate guidance now avoids stale waiver and legacy-layout
+- Generated status/docs/idea guidance now avoids stale waiver and legacy-layout
   wording in the primary user surface.
 - Prompt-surface tests now prefer durable behavioral anchors over exact generated
   prose where schema and validator tests already cover the contract.
 - Decision Protocol / structured-ask fallback wording is now shared across
-  scope/design/review/ship/ideate to reduce drift between stage prompts.
+  scope/design/review/ship/idea to reduce drift between stage prompts.
 - Scope/design outside-voice loop guidance now renders from compact policy helpers
   in `review-loop.ts` instead of repeated prose blocks.
 - Post-ship closeout wording is now sourced from shared closeout guidance
   helpers so /cc and meta-skill stay aligned on retro/compound/archive.
-- /cc-ideate knowledge scan guidance now matches the live knowledge schema
+- /cc-idea knowledge scan guidance now matches the live knowledge schema
   (`rule|pattern|lesson|compound`, `origin_run`, trigger/action clustering).
 - Track-aware render context now drives quick-track wording transforms for TDD/lint metadata, replacing duplicated brittle string-rewrite chains.
 - Hook runtime compound-readiness summary now uses a shared inline formatter helper, with added parity coverage to reduce drift against canonical CLI wording.
@@ -534,7 +534,7 @@ an optional second-opinion path for review loops.
   rendering for deferred high-upside ideas.
 - Extended `/cc` startup protocol with a dedicated seed-recall step so matching
   seeds are surfaced before routing when prompt triggers align.
-- Added “plant as seed” guidance + template sections across ideate, brainstorm,
+- Added “plant as seed” guidance + template sections across idea, brainstorm,
   scope, and design artifacts to preserve promising non-selected directions.
 - Extended review-loop internals with `createSecondOpinionDispatcher` and merged
   second-opinion scoring/findings behind
@@ -643,12 +643,12 @@ surface with grouped metadata views and tier-aware mandatory delegation policy.
 ## 0.48.26
 
 Stage-audit implementation release. This cut upgrades the upstream shaping
-surface (`/cc-ideate`, brainstorm, scope, design) with stronger divergence,
+surface (`/cc-idea`, brainstorm, scope, design) with stronger divergence,
 adversarial review loops, and richer design-review coverage.
 
 ### Changed
 
-- `/cc-ideate` now runs explicit mode classification, frame-based divergent
+- `/cc-idea` now runs explicit mode classification, frame-based divergent
   ideation, adversarial critique, and survivor-only ranking before handoff.
 - Brainstorm stage now supports depth tiering, a concrete-requirements
   short-circuit, and a strict propose -> react -> recommend flow with a

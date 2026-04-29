@@ -34,9 +34,13 @@ Then work from your coding harness:
 
 ```text
 /cc <idea>          start, resume, or continue a tracked flow
-/cc-ideate          generate or refresh an idea backlog
+/cc-idea          generate or refresh an idea backlog
 /cc-cancel          end the current run cleanly with a reason
 ```
+
+`/cc-idea` is a utility command for backlog discovery. It is distinct from
+`.cclaw/artifacts/00-idea.md`, which is the stage artifact created by
+`/cc <idea>`.
 
 For scripted setup:
 
@@ -44,7 +48,7 @@ For scripted setup:
 npx cclaw-cli init --harnesses=claude,cursor --no-interactive
 ```
 
-If generated files or hooks look stale, run `npx cclaw-cli sync`. If they need to be regenerated, run `npx cclaw-cli sync`.
+If generated files or hooks look stale, run `npx cclaw-cli sync`.
 
 ## Why cclaw
 
@@ -128,7 +132,7 @@ Common exits:
 | `NO_VCS_MODE`                                     | Restore git, set `vcs: none` with hash evidence, or configure `tdd.verificationRef`. |
 | Review blocked                                    | `cclaw internal rewind tdd "review_blocked_by_critical <finding-ids>"`.              |
 | Stale stage after rewind                          | Redo the marked stage, then `cclaw internal rewind --ack <stage>`.                   |
-| Broken hooks or generated files                   | `npx cclaw-cli sync`, then `npx cclaw-cli sync` if needed.                         |
+| Broken hooks or generated files                   | `npx cclaw-cli sync`, then follow the fail-fast error guidance if it still fails. |
 
 
 ## Subagents Without Theater

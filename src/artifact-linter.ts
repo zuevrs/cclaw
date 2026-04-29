@@ -1298,7 +1298,7 @@ export type LearningConfidence = "high" | "medium" | "low";
 export type LearningSeverity = "critical" | "important" | "suggestion";
 export type LearningUniversality = "project" | "personal" | "universal";
 export type LearningMaturity = "raw" | "lifted-to-rule" | "lifted-to-enforcement";
-export type LearningSource = "stage" | "retro" | "compound" | "ideate" | "manual";
+export type LearningSource = "stage" | "retro" | "compound" | "idea" | "manual";
 
 export interface LearningSeedEntry {
   type: LearningEntryType;
@@ -1341,7 +1341,7 @@ const LEARNING_SOURCE_SET = new Set<LearningSource>([
   "stage",
   "retro",
   "compound",
-  "ideate",
+  "idea",
   "manual"
 ]);
 const FLOW_STAGE_SET = new Set<FlowStage>(FLOW_STAGES);
@@ -1464,7 +1464,7 @@ function parseLearningSeedEntry(raw: unknown, index: number): { ok: boolean; ent
   ) {
     return {
       ok: false,
-      error: `Learnings bullet #${index} field "source" must be stage|retro|compound|ideate|manual or null.`
+      error: `Learnings bullet #${index} field "source" must be stage|retro|compound|idea|manual or null.`
     };
   }
   if (
