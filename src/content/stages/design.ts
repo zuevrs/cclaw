@@ -57,7 +57,7 @@ export const DESIGN: StageSchemaInput = {
       "**ADR + pre-mortem contract** — capture ADR-style decision rows (context, decision, alternatives, consequences), run a pre-mortem on likely failures, and map each critical flow to a validating test and diagram anchor before lock.",
       "Critic pass — run/reconcile adversarial second opinion on architecture, coupling, failure modes, and cheaper alternatives; record outcomes per the Design Outside Voice Loop policy.",
       "**Run early Ralph loop discipline** — after each producer iteration, append a `Critic Pass` JSONL row to `.cclaw/state/early-loop-log.jsonl`, refresh `.cclaw/state/early-loop.json`, and iterate until open concerns clear or convergence guard escalates.",
-      "Run optional stale-diagram audit only when configured.",
+      "Run stale-diagram audit as a design freshness gate (default-on; explicit config opt-out allowed).",
       "Capture leftovers — seed high-upside deferred ideas, list unresolved decisions with defaults, document distribution for new artifact types, and cross-reference deferred items to scope or unresolved decisions."
     ],
     interactionProtocol: [
@@ -82,7 +82,7 @@ export const DESIGN: StageSchemaInput = {
       "Run investigator pass plus scope challenge/search-before-building.",
       "Walk review sections interactively and lock boundaries, data flow, state transitions, edge cases, and failure modes.",
       "Cover security, observability, deployment, tests, and performance for Standard+ changes.",
-      "Run configured stale-diagram audit when enabled.",
+      "Run stale-diagram audit (enabled by default unless explicitly disabled).",
       "Produce required outputs: NOT-in-scope, What-already-exists, tier diagrams, failure table, completion dashboard.",
       "Plant high-upside deferred ideas when useful and reconcile critic/outside-voice findings.",
       "Write design lock artifact for downstream spec/plan with design decisions, rejected alternatives, verification evidence, and exact spec handoff."
@@ -90,6 +90,7 @@ export const DESIGN: StageSchemaInput = {
     requiredGates: [
       { id: "design_research_complete", description: "Research is complete: compact inline synthesis by default, or a separate research artifact for deep/high-risk work, and findings are mapped to design decisions." },
       { id: "design_architecture_locked", description: "Architecture boundaries are explicit and approved." },
+      { id: "design_diagram_freshness", description: "Stale Diagram Audit is clear, or explicitly skipped for compact trivial-override slices without diagram markers." },
       { id: "design_data_flow_mapped", description: "Data/state flow includes edge-case paths." },
       { id: "design_failure_modes_mapped", description: "Failure modes and mitigations are documented." },
       { id: "design_test_and_perf_defined", description: "Test strategy and performance budget are defined." }
@@ -99,7 +100,7 @@ export const DESIGN: StageSchemaInput = {
       "Artifact written to `.cclaw/artifacts/03-design-<slug>.md`.",
       "Failure-mode table exists in Method/Exception/Rescue/UserSees format.",
       "Tier-required diagram markers are present: architecture (all tiers). Standard/Deep add-ons (shadow/error) and Deep add-ons (state-machine/rollback/deployment-sequence) are included only when risk warrants them.",
-      "When `.cclaw/config.yaml::optInAudits.staleDiagramAudit` is true, stale diagram audit finding is clear (no blast-radius file newer than diagram markers without explicit update).",
+      "Stale diagram audit finding is clear by default (unless `.cclaw/config.yaml::optInAudits.staleDiagramAudit` is explicitly false): no blast-radius file newer than diagram markers without explicit update.",
       "Security & threat model findings are documented with mitigations.",
       "Observability and deployment plans are explicit for critical flows.",
       "Outside-voice findings and dispositions are recorded (accept/reject/defer).",
@@ -170,7 +171,7 @@ export const DESIGN: StageSchemaInput = {
       { section: "Data-Flow Shadow Paths", required: false, validationRule: "Standard/Deep add-on: include `<!-- diagram: data-flow-shadow-paths -->` marker plus a table for high-risk choices: chosen path, shadow alternative, switch trigger, failure/rescue/degraded behavior, and verification evidence." },
       { section: "Error Flow Diagram", required: false, validationRule: "Standard/Deep add-on: include `<!-- diagram: error-flow -->` marker and failure-detection -> rescue -> user-visible outcome flow." },
       { section: "Data Flow", required: false, validationRule: "Must include data/state flow, happy path, nil input, empty input, upstream error paths, plus Interaction Edge Case matrix rows for double-click, nav-away-mid-request, 10K-result dataset, background-job abandonment, zombie connection. Each row declares handled yes/no and deferred item when not handled." },
-      { section: "Stale Diagram Audit", required: false, validationRule: "When `.cclaw/config.yaml::optInAudits.staleDiagramAudit` is true: blast-radius files from Codebase Investigation must not be newer than the current design diagram-marker baseline unless explicitly refreshed." },
+      { section: "Stale Diagram Audit", required: false, validationRule: "Default-on audit (unless `.cclaw/config.yaml::optInAudits.staleDiagramAudit` is false): blast-radius files from Codebase Investigation must not be newer than the current design diagram-marker baseline unless explicitly refreshed." },
       { section: "Failure Mode Table", required: true, validationRule: "Use Method/Exception/Rescue/UserSees columns and treat silent user impact without rescue as critical." },
       { section: "Pre-mortem", required: false, validationRule: "Recommended: list top failure scenarios, early warning signal, mitigation owner, and containment action before implementation." },
       { section: "Security & Threat Model", required: true, validationRule: "Must list trust boundaries, abuse/failure scenarios, mitigations, and residual risks." },
@@ -185,6 +186,7 @@ export const DESIGN: StageSchemaInput = {
       { section: "Rejected Alternatives", required: false, validationRule: "List alternatives considered, why rejected, and what signal would revive them." },
       { section: "Design Decisions", required: false, validationRule: "Stable design decisions with requirement/locked-decision refs and downstream spec impact." },
       { section: "Spec Handoff", required: true, validationRule: "Exact requirements, design decisions, risks, test/perf expectations, and unresolved questions that spec must carry forward." },
+      { section: "Long-Term Trajectory", required: false, validationRule: "Recommended (1-3 lines, present-only): name what comes after this ships (Phase 2 / Phase 3 / platform promotion) and whether the locked architecture can absorb that path without major rework. Use `None - tactical change only` for compact slices." },
       { section: "Outside Voice Findings", required: false, validationRule: "Critic pass: list adversarial findings and disposition (accept/reject/defer) with rationale per material finding." },
       { section: "Design Outside Voice Loop", required: false, validationRule: `Record iteration table with quality score per iteration, stop reason, and unresolved concerns. Enforce ${reviewLoopPolicySummary("design")}` },
       { section: "Victory Detector", required: false, validationRule: "Recommended early-loop checkpoint: cite `.cclaw/state/early-loop.json`, current iteration/maxIterations, open concern count, convergence status, and iterate/ready/escalate decision." },

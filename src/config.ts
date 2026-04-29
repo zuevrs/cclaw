@@ -203,6 +203,10 @@ export function createDefaultConfig(
     languageRulePacks: [],
     ironLaws: {
       strictLaws: []
+    },
+    optInAudits: {
+      scopePreAudit: false,
+      staleDiagramAudit: true
     }
   };
 }
@@ -750,7 +754,13 @@ export async function readConfig(
       staleDiagramAudit:
         typeof optInAuditsRaw.staleDiagramAudit === "boolean"
           ? optInAuditsRaw.staleDiagramAudit
-          : false
+          : true
+    };
+  }
+  if (!optInAudits) {
+    optInAudits = {
+      scopePreAudit: false,
+      staleDiagramAudit: true
     };
   }
 

@@ -164,13 +164,13 @@ export interface IronLawsConfig {
 /**
  * Optional opt-in audit toggles for additional stage lint gates.
  *
- * Disabled by default so existing projects are not forced into stricter
- * checks until they explicitly enable them in config.
+ * `scopePreAudit` stays opt-in (disabled by default). `staleDiagramAudit` is
+ * default-on and can be explicitly disabled when teams intentionally skip it.
  */
 export interface OptInAuditsConfig {
   /** When true, scope lint requires a filled `Pre-Scope System Audit` section. */
   scopePreAudit?: boolean;
-  /** When true, design lint runs stale diagram drift checks against blast radius files. */
+  /** Default true; when enabled, design lint runs stale diagram drift checks against blast radius files. */
   staleDiagramAudit?: boolean;
 }
 

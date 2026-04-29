@@ -4,6 +4,7 @@ import path from "node:path";
 import { resolveArtifactPath as resolveStageArtifactPath } from "./artifact-paths.js";
 import { readConfig } from "./config.js";
 import { RUNTIME_ROOT, SHIP_FINALIZATION_MODES } from "./constants.js";
+import { readDelegationLedger } from "./delegation.js";
 import { exists } from "./fs-utils.js";
 import { stageSchema } from "./content/stage-schema.js";
 import {
@@ -552,15 +553,7 @@ const SCOPE_MODE_FULL_TOKENS: readonly string[] = [
   "HOLD SCOPE",
   "SCOPE REDUCTION"
 ];
-
-const SCOPE_MODE_FULL_REGEX = new RegExp(
-  "\\b(?:" +
-    SCOPE_MODE_FULL_TOKENS
-      .map((token) => token.replace(/[.*+?^${}()|[\]\\]/g, "\\$&").replace(/\s+/g, "[\\s_-]+"))
-      .join("|") +
-    ")\\b",
-  "iu"
-);
+type CanonicalScopeMode = (typeof SCOPE_MODE_FULL_TOKENS)[number];
 
 // Short-form synonyms accepted only when stamped on an explicit `Mode:` /
 // `Selected mode:` / `Scope mode:` line. Plain prose with the same word does
@@ -576,6 +569,44 @@ const SCOPE_MODE_SHORT_TOKEN_REGEX = /\b(?:hold(?:[\s_-]?scope)?|selective(?:[\s
 const NEXT_STAGE_HANDOFF_REGEX = /(?:`(?:design|spec)`|\bdesign\b|\bspec\b|next[-\s_]stage|next stage|handoff|hand[-\s]off)/iu;
 
 function hasCanonicalScopeMode(body: string): boolean {
+  return extractCanonicalScopeMode(body) !== null;
+}
+
+function canonicalModesInText(text: string): CanonicalScopeMode[] {
+  const normalized = text
+    .toUpperCase()
+    .replace(/[_-]+/gu, " ")
+    .replace(/\s+/gu, " ")
+    .trim();
+  const hits: CanonicalScopeMode[] = [];
+  if (/\bSCOPE EXPANSION\b/u.test(normalized)) hits.push("SCOPE EXPANSION");
+  if (/\bSELECTIVE EXPANSION\b/u.test(normalized)) hits.push("SELECTIVE EXPANSION");
+  if (/\bHOLD SCOPE\b/u.test(normalized)) hits.push("HOLD SCOPE");
+  if (/\bSCOPE REDUCTION\b/u.test(normalized)) hits.push("SCOPE REDUCTION");
+  return hits;
+}
+
+function shortModeToCanonical(text: string): CanonicalScopeMode | null {
+  if (!SCOPE_MODE_SHORT_TOKEN_REGEX.test(text)) return null;
+  const normalized = text
+    .toLowerCase()
+    .replace(/[_-]+/gu, " ")
+    .replace(/\s+/gu, " ");
+  if (/\bselective(?:\s+expansion)?\b/u.test(normalized)) return "SELECTIVE EXPANSION";
+  if (/\bhold(?:\s+scope)?\b/u.test(normalized)) return "HOLD SCOPE";
+  if (/\b(?:scope\s+reduction|reduction|reduce)\b/u.test(normalized)) return "SCOPE REDUCTION";
+  if (/\b(?:scope\s+expansion|expansion|expand)\b/u.test(normalized)) return "SCOPE EXPANSION";
+  return null;
+}
+
+function canonicalModeFromCandidate(candidate: string): CanonicalScopeMode | null {
+  const canonicalHits = canonicalModesInText(candidate);
+  if (canonicalHits.length === 1) return canonicalHits[0];
+  if (canonicalHits.length > 1) return null;
+  return shortModeToCanonical(candidate);
+}
+
+function extractCanonicalScopeMode(body: string): CanonicalScopeMode | null {
   // Strict: a Mode: / Selected mode: line that picks exactly ONE canonical mode
   // is the strongest signal. The template scaffolding contains all four mode
   // tokens inside an instructional `(one of ...)` placeholder; we ignore that
@@ -584,8 +615,8 @@ function hasCanonicalScopeMode(body: string): boolean {
     const raw = (match[1] ?? "").trim();
     const sanitized = raw.replace(/\(.*?\)/gu, "").trim();
     if (sanitized.length === 0) continue;
-    if (countCanonicalModeMentions(sanitized) === 1) return true;
-    if (countCanonicalModeMentions(sanitized) === 0 && SCOPE_MODE_SHORT_TOKEN_REGEX.test(sanitized)) return true;
+    const mode = canonicalModeFromCandidate(sanitized);
+    if (mode) return mode;
   }
   // Fallback: any line outside an instructional `(one of ...)` placeholder
   // names exactly one mode. Block lines that list multiple modes (the
@@ -595,14 +626,10 @@ function hasCanonicalScopeMode(body: string): boolean {
     if (line.length === 0) continue;
     if (/\(\s*one\s+of\b/iu.test(line)) continue;
     const sanitized = line.replace(/\(.*?\)/gu, "");
-    if (countCanonicalModeMentions(sanitized) === 1) return true;
+    const mode = canonicalModeFromCandidate(sanitized);
+    if (mode) return mode;
   }
-  return false;
-}
-
-function countCanonicalModeMentions(text: string): number {
-  const matches = text.match(new RegExp(SCOPE_MODE_FULL_REGEX, "giu"));
-  return matches ? matches.length : 0;
+  return null;
 }
 
 function validatePremiseChallenge(sectionBody: string): { ok: boolean; details: string } {
@@ -2398,53 +2425,75 @@ export async function lintArtifact(
     const tierSource = isTrivialOverride
       ? `${tierResolution.source}; trivial override forced lightweight`
       : tierResolution.source;
-    for (const requirement of DESIGN_DIAGRAM_REQUIREMENTS[diagramTier]) {
-      const sectionBody = sectionBodyByName(sections, requirement.section);
-      const hasSection = sectionBody !== null;
-      const escapedMarker = requirement.marker.replace(/[.*+?^${}()|[\]\\]/gu, "\\$&");
-      const markerRegex = new RegExp(`<!--\\s*diagram:\\s*${escapedMarker}\\s*-->`, "iu");
-      const hasMarker = sectionBody !== null && markerRegex.test(sectionBody);
-      const hasContent = sectionBody !== null && meaningfulLineCount(sectionBody) > 0;
-      const found = hasSection && hasMarker && hasContent;
+    const hasDiagramMarkers = /<!--\s*diagram:\s*[a-z0-9-]+\s*-->/iu.test(raw);
+    const skipDiagramRequirements = isTrivialOverride && !hasDiagramMarkers;
+    if (skipDiagramRequirements) {
       findings.push({
-        section: `Diagram Requirement: ${requirement.section}`,
+        section: "Diagram Requirement: Architecture Diagram",
         required: true,
-        rule: `Design tier "${diagramTier}" requires "${requirement.section}" with marker \`<!-- diagram: ${requirement.marker} -->\`. ${requirement.note}`,
-        found,
-        details: found
-          ? `Satisfied (${tierSource}).`
-          : !hasSection
-            ? `Missing section "${requirement.section}" (${tierSource}).`
-            : !hasMarker
-              ? `Missing marker \`<!-- diagram: ${requirement.marker} -->\` in section "${requirement.section}" (${tierSource}).`
-              : `Section "${requirement.section}" has marker but no meaningful content (${tierSource}).`
+        rule: "Compact trivial-override slices may omit architecture diagram markers when they intentionally skip diagram work.",
+        found: true,
+        details: "Diagram requirement skipped: compact trivial-override slice without diagram markers."
       });
+    } else {
+      for (const requirement of DESIGN_DIAGRAM_REQUIREMENTS[diagramTier]) {
+        const sectionBody = sectionBodyByName(sections, requirement.section);
+        const hasSection = sectionBody !== null;
+        const escapedMarker = requirement.marker.replace(/[.*+?^${}()|[\]\\]/gu, "\\$&");
+        const markerRegex = new RegExp(`<!--\\s*diagram:\\s*${escapedMarker}\\s*-->`, "iu");
+        const hasMarker = sectionBody !== null && markerRegex.test(sectionBody);
+        const hasContent = sectionBody !== null && meaningfulLineCount(sectionBody) > 0;
+        const found = hasSection && hasMarker && hasContent;
+        findings.push({
+          section: `Diagram Requirement: ${requirement.section}`,
+          required: true,
+          rule: `Design tier "${diagramTier}" requires "${requirement.section}" with marker \`<!-- diagram: ${requirement.marker} -->\`. ${requirement.note}`,
+          found,
+          details: found
+            ? `Satisfied (${tierSource}).`
+            : !hasSection
+              ? `Missing section "${requirement.section}" (${tierSource}).`
+              : !hasMarker
+                ? `Missing marker \`<!-- diagram: ${requirement.marker} -->\` in section "${requirement.section}" (${tierSource}).`
+                : `Section "${requirement.section}" has marker but no meaningful content (${tierSource}).`
+        });
+      }
     }
 
     if (staleDiagramAuditEnabled) {
-      const codebaseInvestigation = sectionBodyByName(sections, "Codebase Investigation");
-      if (codebaseInvestigation === null) {
+      if (isTrivialOverride && !hasDiagramMarkers) {
         findings.push({
           section: "Stale Diagram Drift Check",
           required: true,
-          rule: "When `.cclaw/config.yaml::optInAudits.staleDiagramAudit` is true, stale diagram audit requires Codebase Investigation blast-radius files.",
-          found: false,
-          details: "No ## heading matching required section \"Codebase Investigation\"."
+          rule: "When stale-diagram audit is enabled, compact trivial-override slices may skip the drift check only if no design diagram markers are present.",
+          found: true,
+          details: "Stale Diagram Audit skipped: artifact has no diagram markers (compact trivial-override slice)."
         });
       } else {
-        const staleAudit = await runStaleDiagramAudit(
-          projectRoot,
-          absFile,
-          raw,
-          codebaseInvestigation
-        );
-        findings.push({
-          section: "Stale Diagram Drift Check",
-          required: true,
-          rule: "When `.cclaw/config.yaml::optInAudits.staleDiagramAudit` is true, blast-radius files must not be newer than current design diagram baseline.",
-          found: staleAudit.ok,
-          details: staleAudit.details
-        });
+        const codebaseInvestigation = sectionBodyByName(sections, "Codebase Investigation");
+        if (codebaseInvestigation === null) {
+          findings.push({
+            section: "Stale Diagram Drift Check",
+            required: true,
+            rule: "When stale-diagram audit is enabled, stale diagram audit requires Codebase Investigation blast-radius files.",
+            found: false,
+            details: "No ## heading matching required section \"Codebase Investigation\"."
+          });
+        } else {
+          const staleAudit = await runStaleDiagramAudit(
+            projectRoot,
+            absFile,
+            raw,
+            codebaseInvestigation
+          );
+          findings.push({
+            section: "Stale Diagram Drift Check",
+            required: true,
+            rule: "When stale-diagram audit is enabled, blast-radius files must not be newer than current design diagram baseline.",
+            found: staleAudit.ok,
+            details: staleAudit.details
+          });
+        }
       }
     }
 
@@ -2649,6 +2698,8 @@ export async function lintArtifact(
 
   if (stage === "scope") {
     const lockedDecisionsBody = sectionBodyByHeadingPrefix(sections, "Locked Decisions") ?? "";
+    const scopeSummaryBody = sectionBodyByName(sections, "Scope Summary") ?? "";
+    const selectedScopeMode = extractCanonicalScopeMode(scopeSummaryBody);
     const strictScopeGuards =
       parsedFrontmatter.hasFrontmatter ||
       sectionBodyByHeadingPrefix(sections, "Locked Decisions") !== null;
@@ -2657,6 +2708,35 @@ export async function lintArtifact(
       sectionBodyByName(sections, "Scope Summary") ?? "",
       lockedDecisionsBody
     ].join("\n");
+
+    const strategistRequired =
+      selectedScopeMode === "SCOPE EXPANSION" || selectedScopeMode === "SELECTIVE EXPANSION";
+    if (strategistRequired) {
+      const delegationLedger = await readDelegationLedger(projectRoot);
+      const strategistRows = delegationLedger.entries.filter(
+        (entry) =>
+          entry.stage === "scope" &&
+          entry.agent === "product-strategist" &&
+          entry.runId === delegationLedger.runId &&
+          entry.status === "completed"
+      );
+      const hasCompleted = strategistRows.length > 0;
+      const hasEvidence = strategistRows.some(
+        (entry) => Array.isArray(entry.evidenceRefs) && entry.evidenceRefs.length > 0
+      );
+      findings.push({
+        section: "Expansion Strategist Delegation",
+        required: true,
+        rule: "When Scope Summary selects SCOPE EXPANSION or SELECTIVE EXPANSION, a completed `product-strategist` delegation for the active run with non-empty evidenceRefs is required.",
+        found: hasCompleted && hasEvidence,
+        details: !hasCompleted
+          ? `Scope mode ${selectedScopeMode} requires a completed product-strategist delegation row for active run ${delegationLedger.runId}.`
+          : hasEvidence
+            ? `product-strategist delegation satisfied for mode ${selectedScopeMode}.`
+            : "product-strategist delegation exists but evidenceRefs is empty; add at least one artifact/code evidence reference."
+      });
+    }
+
     const reductionHits = collectPatternHits(scopeSections, SCOPE_REDUCTION_PATTERNS);
     findings.push({
       section: "No Scope Reduction Language",
