@@ -30,8 +30,9 @@ function reconciliationNoticesPathLine(): string {
  *
  * IMPORTANT: Ralph Loop is a **progress indicator + soft pre-advance nudge**,
  * not a hard gate. Hard enforcement always flows through flow-state.json
- * gates via `stage-complete.mjs`. Both the command contract and the skill
- * document render this same paragraph to prevent drift — see
+ * gates via `stage-complete.mjs`. The skill renders this canonical paragraph
+ * once; the command contract references that section to avoid duplicated payload
+ * while keeping one source of truth — see
  * `tests/e2e/next-command-ralph-loop-contract.test.ts`.
  */
 export const RALPH_LOOP_CONTRACT_MARKER = "ralph-loop-contract:v1";
@@ -105,7 +106,9 @@ ${conversationLanguagePolicyMarkdown()}
 → Execute that stage's protocol. The stage skill handles the full interaction including STOP points and gate tracking.
 → Stage completion must use \`node .cclaw/hooks/stage-complete.mjs <currentStage>\` (canonical), which validates delegations + gate evidence before mutating \`flow-state.json\`. If proactive delegations are intentionally skipped, rerun with \`--accept-proactive-waiver\` (optionally \`--accept-proactive-waiver-reason="<why safe>"\`) only after explicit user approval.
 
-${ralphLoopContractSnippet()}
+Ralph Loop policy is canonical in the skill body below (Path A) and is
+not duplicated here to keep this compatibility contract compact. Apply
+the same soft-nudge semantics when \`currentStage === "tdd"\`.
 
 ### Path B: Current stage IS complete (all gates passed, all delegations satisfied)
 

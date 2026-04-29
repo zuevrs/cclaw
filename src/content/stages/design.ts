@@ -1,8 +1,7 @@
 import type { StageSchemaInput } from "./schema-types.js";
 import {
   REVIEW_LOOP_CHECKLISTS,
-  reviewLoopPolicySummary,
-  reviewLoopSecondOpinionSummary
+  reviewLoopPolicySummary
 } from "../review-loop.js";
 import { decisionProtocolInstruction } from "../decision-protocol.js";
 
@@ -56,7 +55,7 @@ export const DESIGN: StageSchemaInput = {
       "Architecture Review — lock boundaries, chosen path, shadow alternative, switch trigger, failure/rescue/degraded behavior, and verification evidence for every high-risk choice; include tier-required diagrams.",
       "Review core risk areas — existing system fit, data/state flow, critical path, security/trust boundaries, tests, performance budget, observability/debuggability, rollout/rollback, rejected alternatives, and spec handoff.",
       "**ADR + pre-mortem contract** — capture ADR-style decision rows (context, decision, alternatives, consequences), run a pre-mortem on likely failures, and map each critical flow to a validating test and diagram anchor before lock.",
-      `Critic pass — run/reconcile adversarial second opinion on architecture, coupling, failure modes, and cheaper alternatives. ${reviewLoopPolicySummary("design")} ${reviewLoopSecondOpinionSummary("design")}`,
+      "Critic pass — run/reconcile adversarial second opinion on architecture, coupling, failure modes, and cheaper alternatives; record outcomes per the Design Outside Voice Loop policy.",
       "Run optional stale-diagram audit only when configured.",
       "Capture leftovers — seed high-upside deferred ideas, list unresolved decisions with defaults, document distribution for new artifact types, and cross-reference deferred items to scope or unresolved decisions."
     ],
@@ -103,8 +102,8 @@ export const DESIGN: StageSchemaInput = {
       "Security & threat model findings are documented with mitigations.",
       "Observability and deployment plans are explicit for critical flows.",
       "Outside-voice findings and dispositions are recorded (accept/reject/defer).",
-      `Spec review loop summary includes iteration count and quality score trajectory per ${reviewLoopPolicySummary("design")}`,
-      reviewLoopSecondOpinionSummary("design"),
+      "Design outside-voice loop summary includes iteration count and quality-score trajectory with explicit stop reason and unresolved concerns.",
+      "When a second opinion is used, record source, critique frame, and disposition (accept/reject/defer) with rationale.",
       "Adversarial lock table includes chosen path, shadow alternative, switch trigger, failure/rescue/degraded behavior, and verification evidence, with reference-grade contracts for mirrored patterns when applicable.",
       "Architecture Decision Record (ADR) section captures context, decision, alternatives, consequences, and reversal trigger for major choices.",
       "Pre-mortem section lists top failure scenarios, early signals, mitigations, and owner before implementation begins.",

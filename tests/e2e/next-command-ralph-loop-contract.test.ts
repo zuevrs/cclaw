@@ -15,9 +15,8 @@ import {
  *
  * 1. There is EXACTLY ONE canonical Ralph Loop paragraph, rendered from
  *    `ralphLoopContractSnippet()` and tagged with a hidden marker.
- * 2. The paragraph appears in BOTH the command contract and the skill
- *    document, and in BOTH places the text is byte-identical (via marker
- *    count == 2).
+ * 2. The paragraph appears exactly once (in the skill document), while the
+ *    command contract references that section to avoid duplicate payload.
  * 3. The canonical paragraph encodes the resolved policy: Ralph Loop is
  *    a SOFT NUDGE and hard enforcement goes through `stage-complete.mjs`
  *    and `flow-state.json` gates. It must NOT contain any "hard" gating
@@ -33,13 +32,13 @@ describe("next-command Ralph Loop contract parity", () => {
     expect(snippet).toContain("ralph-loop.json");
   });
 
-  it("renders the canonical snippet in both the contract and the skill (byte-equal)", () => {
+  it("renders the canonical snippet once in the skill and references it from the contract", () => {
     const commandMarkerCount = command.split(RALPH_LOOP_CONTRACT_MARKER).length - 1;
     const skillMarkerCount = skill.split(RALPH_LOOP_CONTRACT_MARKER).length - 1;
-    expect(commandMarkerCount).toBe(1);
+    expect(commandMarkerCount).toBe(0);
     expect(skillMarkerCount).toBe(1);
-    expect(command).toContain(snippet);
     expect(skill).toContain(snippet);
+    expect(command).toContain("Ralph Loop policy is canonical in the skill body below");
   });
 
   it("encodes the resolved policy: Ralph Loop observes state, gates flow elsewhere", () => {

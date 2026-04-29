@@ -86,23 +86,31 @@ describe("flow command contracts", () => {
     const root = await createTempProject("language-policy");
     await initCclaw({ projectRoot: root });
 
-    const paths = [
+    const fullPolicyPaths = [
       ".cclaw/skills/using-cclaw/SKILL.md",
       ".cclaw/commands/start.md",
       ".cclaw/commands/next.md",
       ".cclaw/commands/ideate.md",
       ".cclaw/commands/view.md",
-      ".cclaw/skills/brainstorm/SKILL.md",
       ".cclaw/skills/subagent-dev/SKILL.md",
       ".cclaw/agents/reviewer.md",
       "AGENTS.md"
     ];
+    const pointerPolicyPaths = [
+      ".cclaw/skills/brainstorm/SKILL.md"
+    ];
 
-    for (const rel of paths) {
+    for (const rel of fullPolicyPaths) {
       const content = await fs.readFile(path.join(root, rel), "utf8");
       expect(content, rel).toContain("Conversation Language Policy");
       expect(content, rel).toContain("latest substantive user message");
       expect(content, rel).toContain("Do not translate");
+    }
+    for (const rel of pointerPolicyPaths) {
+      const content = await fs.readFile(path.join(root, rel), "utf8");
+      expect(content, rel).toContain("Conversation Language Policy");
+      expect(content, rel).toContain("using-cclaw");
+      expect(content, rel).not.toContain("latest substantive user message");
     }
 
     const codexCc = await fs.readFile(path.join(root, ".agents/skills/cc/SKILL.md"), "utf8");

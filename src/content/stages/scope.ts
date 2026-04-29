@@ -1,8 +1,7 @@
 import type { StageSchemaInput } from "./schema-types.js";
 import {
   REVIEW_LOOP_CHECKLISTS,
-  reviewLoopPolicySummary,
-  reviewLoopSecondOpinionSummary
+  reviewLoopPolicySummary
 } from "../review-loop.js";
 import { decisionProtocolInstruction } from "../decision-protocol.js";
 
@@ -75,7 +74,7 @@ export const SCOPE: StageSchemaInput = {
       "Push back on weak framing: vague scope needs a specific user/problem, platform vision needs a narrow wedge, social proof needs behavioral evidence.",
       "Resolve one structural scope issue at a time. Only non-critical preference/default assumptions may continue; STOP on uncertainty about scope boundary, architecture commitment, security, data loss, public API, migration, auth/pricing, or required user approval.",
       "If the user says no but cannot name the change, offer concrete moves: keep scope, add one obvious adjacent capability, reduce to wedge, or re-open stack/product direction.",
-      `Before final approval, record outside-voice findings and a \`## Scope Outside Voice Loop\` table using ${reviewLoopPolicySummary("scope")}`,
+      "Before final approval, record outside-voice findings and a `## Scope Outside Voice Loop` table per the Scope Outside Voice Loop policy above.",
       "**STOP.** Wait for explicit user approval of the scope mode and scope contract before writing final approval language or advancing.",
       "**STOP BEFORE ADVANCE.** Mandatory delegation `planner` must be completed or explicitly waived for a real blocker. If the active harness cannot isolate a planner, run a role-switch planner pass instead: announce `## cclaw role-switch: scope/planner (mandatory)`, write the planner output/evidence into the scope artifact, and append a completed delegation row with `fulfillmentMode: \"role-switch\"` plus non-empty `evidenceRefs`. Then close with `node .cclaw/hooks/stage-complete.mjs scope --passed=scope_mode_selected,scope_contract_written,scope_user_approved --evidence-json '{\"scope_mode_selected\":\"<user-approved mode + rationale>\",\"scope_contract_written\":\"<artifact path + sections>\",\"scope_user_approved\":\"<explicit user approval quote or summary>\"}'`. `scope_user_approved` must cite the user's approval; review-loop evidence alone is not approval."
     ],
@@ -105,8 +104,8 @@ export const SCOPE: StageSchemaInput = {
       "Locked Decisions section lists stable LD#hash anchors for non-negotiable boundaries.",
       "Premise challenge findings documented.",
       "Outside Voice findings and dispositions are recorded (accept/reject/defer with rationale) before final approval.",
-      `Scope outside-voice loop summary includes a table with columns Iteration, Quality Score, Findings, plus Stop reason, Target score, and Max iterations. This is outside-voice evidence only; it does not satisfy user approval. ${reviewLoopPolicySummary("scope")}`,
-      reviewLoopSecondOpinionSummary("scope"),
+      "Scope outside-voice loop summary includes a table with columns Iteration, Quality Score, Findings, plus Stop reason, Target score, Max iterations, and unresolved concerns. This is outside-voice evidence only; it does not satisfy user approval.",
+      "When a second opinion is used, record source, critique frame, and disposition (accept/reject/defer) with rationale.",
       "Deferred items list with one-line rationale for each.",
       "When an upside deferred idea is parked, a seed file is created under `.cclaw/seeds/` and referenced in the artifact.",
       "Completion dashboard lists per-section status, critical/open gaps, decision count, and unresolved items (or `None`).",
