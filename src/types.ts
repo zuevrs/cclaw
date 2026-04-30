@@ -251,11 +251,6 @@ export interface CclawConfig {
   reviewLoop?: ReviewLoopConfig;
 }
 
-/**
- * @deprecated Use `CclawConfig` instead.
- */
-export type VibyConfig = CclawConfig;
-
 export interface TransitionRule {
   from: FlowStage;
   to: FlowStage;
