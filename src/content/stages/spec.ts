@@ -125,7 +125,6 @@ export const SPEC: StageSchemaInput = {
       { section: "Constraints and Assumptions", required: false, validationRule: "All implicit assumptions surfaced. Constraints have sources." },
       { section: "Assumptions Before Finalization", required: true, validationRule: "Each assumption has source/confidence, validation path, and accepted/rejected/open disposition before the Approval section is finalized." },
       { section: "Acceptance Mapping", required: true, validationRule: "Each criterion maps to upstream design decision, observable evidence, verification method, likely test level (unit/integration/e2e/manual), and command or manual steps when known." },
-      { section: "Vague to Fixed", required: false, validationRule: "If present: table with original vague wording and rewritten observable/testable version for each ambiguous requirement." },
       { section: "Non-Functional Requirements", required: false, validationRule: "If present: performance thresholds, security constraints, scalability limits, reliability targets with measurable values." },
       { section: "Interface Contracts", required: false, validationRule: "If present: for each module boundary list produces (outputs) and consumes (inputs) with data types." },
       { section: "Synthesis Sources", required: false, validationRule: "If present: cite at least one upstream/context source with what it supplied and confidence." },

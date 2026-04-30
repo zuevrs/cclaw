@@ -208,7 +208,7 @@ type DesignDiagramTier = "lightweight" | "standard" | "deep";
 
 interface DesignDiagramRequirement {
   section: string;
-  marker: string;
+  markers: string[];
   note: string;
 }
 
@@ -216,57 +216,47 @@ const DESIGN_DIAGRAM_REQUIREMENTS: Record<DesignDiagramTier, DesignDiagramRequir
   lightweight: [
     {
       section: "Architecture Diagram",
-      marker: "architecture",
+      markers: ["architecture"],
       note: "Architecture diagram is required for all tiers."
     }
   ],
   standard: [
     {
       section: "Architecture Diagram",
-      marker: "architecture",
+      markers: ["architecture"],
       note: "Architecture diagram is required for all tiers."
     },
     {
       section: "Data-Flow Shadow Paths",
-      marker: "data-flow-shadow-paths",
+      markers: ["data-flow-shadow-paths"],
       note: "Standard+ requires data-flow shadow path coverage."
     },
     {
       section: "Error Flow Diagram",
-      marker: "error-flow",
+      markers: ["error-flow"],
       note: "Standard+ requires explicit error-flow rescue mapping."
     }
   ],
   deep: [
     {
       section: "Architecture Diagram",
-      marker: "architecture",
+      markers: ["architecture"],
       note: "Architecture diagram is required for all tiers."
     },
     {
       section: "Data-Flow Shadow Paths",
-      marker: "data-flow-shadow-paths",
+      markers: ["data-flow-shadow-paths"],
       note: "Standard+ requires data-flow shadow path coverage."
     },
     {
       section: "Error Flow Diagram",
-      marker: "error-flow",
+      markers: ["error-flow"],
       note: "Standard+ requires explicit error-flow rescue mapping."
     },
     {
-      section: "State Machine Diagram",
-      marker: "state-machine",
-      note: "Deep tier requires state-machine coverage for lifecycle transitions."
-    },
-    {
-      section: "Rollback Flowchart",
-      marker: "rollback-flowchart",
-      note: "Deep tier requires rollback flowchart coverage."
-    },
-    {
-      section: "Deployment Sequence Diagram",
-      marker: "deployment-sequence",
-      note: "Deep tier requires deployment sequence coverage."
+      section: "Deep Diagram Add-on",
+      markers: ["state-machine", "rollback-flowchart", "deployment-sequence"],
+      note: "Deep tier requires one add-on deep diagram (state machine, rollback flowchart, or deployment sequence)."
     }
   ]
 };
@@ -2282,74 +2272,6 @@ export async function lintArtifact(
       });
     }
 
-    const forcingBody = sectionBodyByName(sections, "Forcing Questions");
-    if (forcingBody !== null) {
-      const tableRows = forcingBody
-        .split("\n")
-        .filter((line) => /^\|\s*\d+\s*\|/u.test(line));
-      const enoughRows = tableRows.length >= 3;
-      findings.push({
-        section: "Forcing Questions Count",
-        required: true,
-        rule: "Forcing Questions must include at least 3 numbered rows.",
-        found: enoughRows,
-        details: enoughRows
-          ? `Detected ${tableRows.length} forcing-question row(s).`
-          : `Detected ${tableRows.length} forcing-question row(s); at least 3 required.`
-      });
-      // A "specific" answer is signalled by at least one of: numeric token,
-      // backticked path/identifier, http(s) link, @mention/role, or quoted
-      // verbatim string. We check structural shape, not content.
-      const specificTokenRegex = /(\d|`[^`]+`|https?:\/\/|@[A-Za-z][\w-]*|"[^"]+"|'[^']+')/u;
-      const allRowsSpecific = tableRows.every((row) => {
-        const cells = row.split("|").map((cell) => cell.trim());
-        // cells: ["", "#", "Question", "Answer", "Decision impact", "Q<n> decision", ""]
-        const answer = cells[3] ?? "";
-        return answer.length > 0 && specificTokenRegex.test(answer);
-      });
-      findings.push({
-        section: "Forcing Questions Specific Answers",
-        required: true,
-        rule: "Each Forcing Questions row must include a specific token in the answer column (number, backticked path, link, @mention, or quoted string).",
-        found: tableRows.length === 0 ? false : allRowsSpecific,
-        details: tableRows.length === 0
-          ? "No rows to evaluate."
-          : allRowsSpecific
-            ? "All rows include a specific-answer token."
-            : "At least one row's answer is missing a specific-answer token (number, `path`, https link, @mention, or quoted string)."
-      });
-      const decisionRows = (forcingBody.match(/decision\s*:/giu) ?? []).length;
-      findings.push({
-        section: "Forcing Questions STOP-per-issue",
-        required: true,
-        rule: "Each forcing-question row must record a `decision:` marker (STOP-per-issue protocol).",
-        found: decisionRows >= tableRows.length && tableRows.length > 0,
-        details:
-          tableRows.length === 0
-            ? "No rows to evaluate."
-            : `Detected ${decisionRows} decision marker(s) for ${tableRows.length} forcing-question row(s).`
-      });
-    }
-
-    const premiseBody = sectionBodyByName(sections, "Premise List");
-    if (premiseBody !== null) {
-      const premiseRowRegex = /^[-*]\s*P\d+:\s+.+\s+—\s+(agreed|disagreed|revised)\b/imu;
-      const allRows = premiseBody
-        .split("\n")
-        .filter((line) => /^[-*]\s*P\d+:/u.test(line));
-      const validRows = allRows.filter((row) => premiseRowRegex.test(row.trim() + "\n"));
-      const enoughPremises = validRows.length >= 2;
-      findings.push({
-        section: "Premise List Shape",
-        required: true,
-        rule: "Premise List must contain at least 2 rows in the form `P<n>: <statement> — agreed|disagreed|revised`.",
-        found: enoughPremises,
-        details: enoughPremises
-          ? `Detected ${validRows.length} valid premise row(s).`
-          : `Detected ${validRows.length} valid premise row(s); at least 2 required (form: \`P<n>: ... — agreed|disagreed|revised\`).`
-      });
-    }
-
     // Approach Detail Cards: structural sub-section under Approaches, one
     // bullet block per approach with the canonical fields.
     const approachCardsRegex =
@@ -2379,23 +2301,6 @@ export async function lintArtifact(
         details: hasRecommendation
           ? "Recommendation marker present."
           : "Missing or empty `RECOMMENDATION:` line after approach detail cards."
-      });
-    }
-
-    const stampBody = sectionBodyByName(sections, "Anti-Sycophancy Stamp");
-    if (stampBody !== null) {
-      const acknowledged = markdownFieldRegex(
-        "Forbidden response openers acknowledged",
-        "yes|true|y"
-      ).test(stampBody);
-      findings.push({
-        section: "Anti-Sycophancy Acknowledgement",
-        required: true,
-        rule: "Anti-Sycophancy Stamp must affirm `Forbidden response openers acknowledged: yes`.",
-        found: acknowledged,
-        details: acknowledged
-          ? "Anti-sycophancy commitment is acknowledged."
-          : "Anti-Sycophancy Stamp is missing the explicit `Forbidden response openers acknowledged: yes` marker."
       });
     }
 
@@ -2440,22 +2345,26 @@ export async function lintArtifact(
       for (const requirement of DESIGN_DIAGRAM_REQUIREMENTS[diagramTier]) {
         const sectionBody = sectionBodyByName(sections, requirement.section);
         const hasSection = sectionBody !== null;
-        const escapedMarker = requirement.marker.replace(/[.*+?^${}()|[\]\\]/gu, "\\$&");
-        const markerRegex = new RegExp(`<!--\\s*diagram:\\s*${escapedMarker}\\s*-->`, "iu");
-        const hasMarker = sectionBody !== null && markerRegex.test(sectionBody);
+        const matchedMarker = requirement.markers.find((marker) => {
+          const escapedMarker = marker.replace(/[.*+?^${}()|[\]\\]/gu, "\\$&");
+          const markerRegex = new RegExp(`<!--\\s*diagram:\\s*${escapedMarker}\\s*-->`, "iu");
+          return sectionBody !== null && markerRegex.test(sectionBody);
+        });
+        const hasMarker = matchedMarker !== undefined;
         const hasContent = sectionBody !== null && meaningfulLineCount(sectionBody) > 0;
         const found = hasSection && hasMarker && hasContent;
+        const markerList = requirement.markers.map((marker) => `<!-- diagram: ${marker} -->`).join(" or ");
         findings.push({
           section: `Diagram Requirement: ${requirement.section}`,
           required: true,
-          rule: `Design tier "${diagramTier}" requires "${requirement.section}" with marker \`<!-- diagram: ${requirement.marker} -->\`. ${requirement.note}`,
+          rule: `Design tier "${diagramTier}" requires "${requirement.section}" with marker ${markerList}. ${requirement.note}`,
           found,
           details: found
             ? `Satisfied (${tierSource}).`
             : !hasSection
               ? `Missing section "${requirement.section}" (${tierSource}).`
               : !hasMarker
-                ? `Missing marker \`<!-- diagram: ${requirement.marker} -->\` in section "${requirement.section}" (${tierSource}).`
+                ? `Missing marker (${markerList}) in section "${requirement.section}" (${tierSource}).`
                 : `Section "${requirement.section}" has marker but no meaningful content (${tierSource}).`
         });
       }
@@ -2499,23 +2408,8 @@ export async function lintArtifact(
     }
 
     // Universal Layer 2.3 structural checks (gstack plan-eng-review). All
-    // present-only. Validates ASCII coverage diagram tokens, regression iron
-    // rule acknowledgment, and confidence-calibrated finding format.
-    const coverageBody = sectionBodyByName(sections, "ASCII Coverage Diagram");
-    if (coverageBody !== null) {
-      const tokens = ["[★★★]", "[★★]", "[★]", "[GAP]", "[→E2E]", "[→EVAL]"];
-      const presentTokens = tokens.filter((token) => coverageBody.includes(token));
-      const ok = presentTokens.length >= 3;
-      findings.push({
-        section: "ASCII Coverage Diagram Tokens",
-        required: true,
-        rule: "ASCII Coverage Diagram must use the canonical marker tokens (at least 3 of `[★★★]` / `[★★]` / `[★]` / `[GAP]` / `[→E2E]` / `[→EVAL]`).",
-        found: ok,
-        details: ok
-          ? `Detected ${presentTokens.length} canonical marker token(s).`
-          : `Detected ${presentTokens.length} canonical marker token(s); at least 3 required.`
-      });
-    }
+    // present-only. Validates regression iron-rule acknowledgment and
+    // confidence-calibrated finding format.
 
     const regressionBody = sectionBodyByName(sections, "Regression Iron Rule");
     if (regressionBody !== null) {
@@ -2557,8 +2451,7 @@ export async function lintArtifact(
   if (stage === "plan") {
     const strictPlanGuards =
       parsedFrontmatter.hasFrontmatter ||
-      headingPresent(sections, "No-Placeholder Scan") ||
-      headingPresent(sections, "No Scope Reduction Language Scan") ||
+      headingPresent(sections, "Plan Quality Scan") ||
       headingPresent(sections, "Locked Decision Coverage");
     const taskListBody = sectionBodyByName(sections, "Task List") ?? raw;
     const placeholderHits = collectPatternHits(taskListBody, PLACEHOLDER_PATTERNS);
@@ -2860,54 +2753,6 @@ export async function lintArtifact(
       });
     }
 
-    const failureModesBody = sectionBodyByName(sections, "Failure Modes Registry");
-    if (failureModesBody !== null) {
-      const required = ["Codepath", "Failure mode", "Rescued?", "Test?", "User sees?", "Logged?"];
-      const headerOk = required.every((column) => failureModesBody.includes(column));
-      const rows = failureModesBody.split("\n").filter((line) => /^\|/u.test(line));
-      const hasDataRow = rows.length >= 3 && rows.slice(2).some((row) =>
-        row
-          .split("|")
-          .slice(1, -1)
-          .some((cell) => cell.trim().length > 0)
-      );
-      findings.push({
-        section: "Failure Modes Registry Shape",
-        required: true,
-        rule: "Failure Modes Registry must include columns Codepath / Failure mode / Rescued? / Test? / User sees? / Logged? and at least one populated data row.",
-        found: headerOk && hasDataRow,
-        details: !headerOk
-          ? "Failure Modes Registry header is missing one or more required columns."
-          : hasDataRow
-            ? "Failure Modes Registry header and at least one data row present."
-            : "Failure Modes Registry has the canonical header but no populated data row."
-      });
-      const decisionMarkers = (failureModesBody.match(/decision\s*:/giu) ?? []).length;
-      findings.push({
-        section: "Failure Modes STOP-per-issue",
-        required: true,
-        rule: "Each Failure Modes Registry data row must record a `decision:` marker (STOP-per-issue protocol).",
-        found: decisionMarkers >= 1,
-        details: decisionMarkers >= 1
-          ? `Detected ${decisionMarkers} decision marker(s).`
-          : "Failure Modes Registry has no `decision:` markers; STOP-per-issue requires at least one."
-      });
-    }
-
-    const reversibilityBody = sectionBodyByName(sections, "Reversibility Rating");
-    if (reversibilityBody !== null) {
-      const scoreMatch = reversibilityBody.match(/score\s*\(.*?\)\s*:\s*([1-5])\b/iu);
-      const ok = scoreMatch !== null;
-      findings.push({
-        section: "Reversibility Rating Score",
-        required: true,
-        rule: "Reversibility Rating must declare a score in the range 1-5.",
-        found: ok,
-        details: ok
-          ? `Reversibility score ${scoreMatch![1]} declared.`
-          : "Reversibility Rating is missing a numeric score 1-5."
-      });
-    }
   }
 
   if (stage === "spec") {
@@ -3158,20 +3003,29 @@ export async function lintArtifact(
 
   if (stage === "review") {
     // Universal Layer 2.7 structural checks (superpowers requesting + receiving).
-    const frameBody = sectionBodyByName(sections, "Frame the Review Request");
+    const frameBody = sectionBodyByName(sections, "Pre-Critic Self-Review");
     if (frameBody !== null) {
-      const required = ["Goal:", "Approach:", "Risk areas:", "Verification done:", "Open questions"];
+      const required = [
+        "Build/lint/type-check/tests passed locally",
+        "Diff matches spec/plan (no scope creep)",
+        "Evidence (commands + result):",
+        "Goal:",
+        "Approach:",
+        "Risk areas:",
+        "Verification done:",
+        "Open questions"
+      ];
       const missing = required.filter(
         (token) => !new RegExp(token.replace(":", "\\s*:"), "iu").test(frameBody)
       );
       findings.push({
-        section: "Review Frame Coverage",
+        section: "Pre-Critic Self-Review Coverage",
         required: true,
-        rule: "Frame the Review Request must include Goal, Approach, Risk areas, Verification done, Open questions.",
+        rule: "Pre-Critic Self-Review must include key self-check lines plus Goal, Approach, Risk areas, Verification done, and Open questions.",
         found: missing.length === 0,
         details: missing.length === 0
-          ? "Review request frame covers all required fields."
-          : `Frame is missing field(s): ${missing.join(", ")}.`
+          ? "Pre-Critic Self-Review covers all required fields."
+          : `Pre-Critic Self-Review is missing field(s): ${missing.join(", ")}.`
       });
     }
 

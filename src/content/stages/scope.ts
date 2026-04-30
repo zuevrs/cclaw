@@ -180,9 +180,7 @@ export const SCOPE: StageSchemaInput = {
       { section: "Victory Detector", required: false, validationRule: "Recommended early-loop checkpoint: cite `.cclaw/state/early-loop.json`, current iteration/maxIterations, open concern count, convergence status, and iterate/ready/escalate decision." },
       { section: "Critic Pass", required: false, validationRule: "Recommended producer/critic log contract: each iteration appends one JSONL row to `.cclaw/state/early-loop-log.jsonl` with runId, stage, iteration, and open concerns." },
       { section: "Completion Dashboard", required: true, validationRule: "Lists per-review-section status, count of critical/open gaps, resolved decisions, and unresolved decisions (or 'None')." },
-      { section: "Scope Summary", required: true, validationRule: "Compact recap of the locked scope. Must name the selected mode using one canonical token, confidence, explicit drift from brainstorm, unresolved questions, and the track-aware next-stage handoff (`design` for standard, `spec` for medium); the linter checks structure, not English wording." },
-      { section: "Dream State Mapping", required: false, validationRule: "Deep/optional only: CURRENT STATE, THIS PLAN, 12-MONTH IDEAL, and alignment verdict. Omit for compact scope." },
-      { section: "Temporal Interrogation", required: false, validationRule: "Deep/optional only: timeline simulation table with decision pressures and lock-now vs defer verdicts. Omit for compact scope." }
+      { section: "Scope Summary", required: true, validationRule: "Compact recap of the locked scope. Must name the selected mode using one canonical token, confidence, explicit drift from brainstorm, unresolved questions, and the track-aware next-stage handoff (`design` for standard, `spec` for medium); the linter checks structure, not English wording." }
     ]
   },
   reviewLens: {

@@ -2567,7 +2567,7 @@ Fallback_Cache -->|degraded response| API_Gateway`;
     expect(architectureRequirement?.found).toBe(true);
   });
 
-  it("requires deep-tier state/rollback/deployment diagrams", async () => {
+  it("requires deep-tier Deep Diagram Add-on marker", async () => {
     const root = await createTempProject("design-deep-diagrams-required");
     await writeBrainstormTierArtifact(root, "deep");
     const diagram = `API_Gateway -->|sync: validated request| App_Service
@@ -2577,11 +2577,11 @@ Fallback_Cache -->|degraded response| API_Gateway`;
     await writeRuntimeArtifact(root, "03-design.md", completeDesignArtifact(diagram));
 
     const result = await lintArtifact(root, "design");
-    const stateMachineRequirement = result.findings.find(
-      (f) => f.section === "Diagram Requirement: State Machine Diagram"
+    const deepAddonRequirement = result.findings.find(
+      (f) => f.section === "Diagram Requirement: Deep Diagram Add-on"
     );
-    expect(stateMachineRequirement?.found).toBe(false);
-    expect(stateMachineRequirement?.details).toContain("State Machine Diagram");
+    expect(deepAddonRequirement?.found).toBe(false);
+    expect(deepAddonRequirement?.details).toContain("Deep Diagram Add-on");
   });
 
   it("passes deep-tier design when all deep diagram markers are present", async () => {
@@ -2593,7 +2593,9 @@ Storage_Adapter -->|timeout| Fallback_Cache
 Fallback_Cache -->|degraded response| API_Gateway`;
     const artifact = `${completeDesignArtifact(diagram)}
 
-## State Machine Diagram
+## Deep Diagram Add-on
+- type: state-machine
+
 <!-- diagram: state-machine -->
 \`\`\`mermaid
 stateDiagram-v2
@@ -2601,27 +2603,6 @@ stateDiagram-v2
   Requested --> Persisted
   Requested --> Degraded
   Degraded --> Persisted
-\`\`\`
-
-## Rollback Flowchart
-<!-- diagram: rollback-flowchart -->
-\`\`\`mermaid
-flowchart TD
-  Trigger --> DisableFlag
-  DisableFlag --> RestorePreviousBuild
-  RestorePreviousBuild --> Verify
-\`\`\`
-
-## Deployment Sequence Diagram
-<!-- diagram: deployment-sequence -->
-\`\`\`mermaid
-sequenceDiagram
-  participant CI
-  participant API
-  participant Queue
-  CI->>API: deploy canary
-  API->>Queue: enable async write path
-  API->>CI: report health checks
 \`\`\`
 `;
     await writeRuntimeArtifact(root, "03-design.md", artifact);

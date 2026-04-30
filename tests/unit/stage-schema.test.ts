@@ -648,13 +648,12 @@ describe("stage schema and subagent alignment", () => {
       expect.stringContaining("draft the in-scope/out-of-scope/deferred/discretion contract"),
       expect.stringContaining("lite keeps the selected-mode row compact")
     ]));
-    expect(scope.artifactValidation.find((row) => row.section === "Dream State Mapping")?.validationRule)
-      .toContain("Omit for compact scope");
-    expect(scope.artifactValidation.find((row) => row.section === "Temporal Interrogation")?.validationRule)
-      .toContain("Omit for compact scope");
+    expect(scope.artifactValidation.find((row) => row.section === "Dream State Mapping")).toBeUndefined();
+    expect(scope.artifactValidation.find((row) => row.section === "Temporal Interrogation")).toBeUndefined();
     expect(scope.artifactValidation.find((row) => row.section === "Mode-Specific Analysis")?.validationRule)
       .toContain("one selected-mode row with rationale");
-    expect(scopeTemplate).toContain("Deep/optional only; omit for compact scope");
+    expect(scopeTemplate).not.toContain("## Dream State Mapping");
+    expect(scopeTemplate).not.toContain("## Temporal Interrogation");
     expect(scopeTemplate).toContain("| Selected mode | Rationale | Depth |");
   });
 

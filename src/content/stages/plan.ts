@@ -140,8 +140,7 @@ export const PLAN: StageSchemaInput = {
       { section: "Calibrated Findings", required: false, validationRule: "If present: either `None this stage` or one or more lines in `[P1|P2|P3] (confidence: <n>/10) <path>[:<line>] — <description>` format." },
       { section: "Regression Iron Rule", required: false, validationRule: "If present: includes `Iron rule acknowledged: yes`." },
       { section: "WAIT_FOR_CONFIRM", required: true, validationRule: "Explicit marker present. Status: pending until user approves." },
-      { section: "No-Placeholder Scan", required: false, validationRule: "Confirmation that a text scan for `TODO`, `TBD`, `FIXME`, `<fill-in>`, `<your-*-here>`, `xxx`, or bare ellipses has zero hits in the task list. A placeholder is a deferred decision masquerading as a plan." },
-      { section: "No Scope Reduction Language Scan", required: false, validationRule: "Confirmation that scope-reduction phrases (`v1`, `for now`, `later`, `temporary`, `placeholder`) are absent from task rows when locked decisions exist." }
+      { section: "Plan Quality Scan", required: false, validationRule: "If present: includes a placeholder scan (`TODO`/`TBD`/`FIXME`/`<fill-in>`/`<your-*-here>`/`xxx`/bare ellipsis) and a scope-reduction language scan (`v1`, `for now`, `later`, `temporary`, `placeholder`) with zero hits in task rows when locked decisions exist." }
     ]
   },
   reviewLens: {

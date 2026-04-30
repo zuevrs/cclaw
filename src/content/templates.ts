@@ -60,26 +60,6 @@ export const ARTIFACT_TEMPLATES: Record<string, string> = {
 - **Direct path?** (yes/no + one-line justification)
 - **What if we do nothing?** (concrete consequence, not "nothing happens")
 
-## Forcing Questions
-> Minimum 3 questions; each answer MUST contain at least one *specific* token: a concrete name, a role, a number, a repo-relative path, an external link, or a verbatim quote. Vague answers fail the linter.
-
-| # | Forcing question | Specific answer | Decision impact | Q\\<n\\> decision |
-|---|---|---|---|---|
-| 1 |  |  |  | decision: |
-| 2 |  |  |  | decision: |
-| 3 |  |  |  | decision: |
-
-## Premise List
-> ≥2 premises. Each premise must be in the form \`P<n>: <statement> — agreed | disagreed | revised\`. \`revised\` rows must include the revised statement on the next line.
-
-- P1: <statement> — agreed | disagreed | revised
-- P2: <statement> — agreed | disagreed | revised
-
-## Anti-Sycophancy Stamp
-- **Forbidden response openers acknowledged:** yes (no "you're absolutely right", "great point", "absolutely!", etc.)
-- **Posture commitment:** push back with reasoning when premises feel weak; do not perform agreement.
-- **Evidence-that-would-change-the-recommendation:** (one line per premise, or \`- None.\`)
-
 ## How Might We
 - *How might we …?* — one line naming the user, the desired outcome, and the binding constraint.
 
@@ -238,13 +218,6 @@ ${MARKDOWN_CODE_FENCE}
 | Existing-code leverage? |  |  |
 | Reversibility cost? |  |  |
 
-## Dream State Mapping
-- Deep/optional only; omit for compact scope.
-- CURRENT STATE:
-- THIS PLAN:
-- 12-MONTH IDEAL:
-- Alignment verdict:
-
 ## Implementation Alternatives
 | Option | Summary | Effort (S/M/L/XL) | Risk (Low/Med/High) | Pros | Cons | Reuses |
 |---|---|---|---|---|---|---|
@@ -253,27 +226,6 @@ ${MARKDOWN_CODE_FENCE}
 | C (optional) |  |  |  |  |  |  |
 
 RECOMMENDATION: <option letter — one-line rationale tying back to premise challenge and existing-code leverage>
-
-## Failure Modes Registry
-> Universal failure-mode shape — applies to CLI, library, infra, web, batch jobs.
-
-| Codepath | Failure mode | Rescued? (yes/no) | Test? (unit/integration/e2e) | User sees? (message/silent/N/A) | Logged? (level/none) | Q\\<n\\> decision |
-|---|---|---|---|---|---|---|
-|  |  |  |  |  |  | decision: |
-
-## Reversibility Rating
-- Score (1-5, 1 = one-way door / unrecoverable, 5 = trivially reversible):
-- Justification (cite a specific artifact/file or migration step):
-- Rollback plan reference:
-
-## Temporal Interrogation
-- Deep/optional only; omit for compact scope.
-| Time slice | Likely decision pressure | Lock now or defer? | Reason |
-|---|---|---|---|
-| HOUR 1 (foundations) |  |  |  |
-| HOUR 2-3 (core logic) |  |  |  |
-| HOUR 4-5 (integration) |  |  |  |
-| HOUR 6+ (polish/tests) |  |  |  |
 
 ## Scope Contract
 - **Selected mode:** HOLD SCOPE | SELECTIVE EXPANSION | SCOPE EXPANSION | SCOPE REDUCTION
@@ -537,31 +489,17 @@ ${MARKDOWN_CODE_FENCE}
 (failure detection -> rescue action -> user-visible outcome)
 ${MARKDOWN_CODE_FENCE}
 
-## State Machine Diagram
-- Deep add-on; omit for compact design.
+## Deep Diagram Add-on
+- Deep add-on only.
+- type: state-machine | rollback | deployment-sequence | none
+- Choose exactly one marker below when type is not \`none\`.
 
 <!-- diagram: state-machine -->
-
-${MARKDOWN_CODE_FENCE}
-(state transitions for the critical flow lifecycle)
-${MARKDOWN_CODE_FENCE}
-
-## Rollback Flowchart
-- Deep add-on; omit for compact design.
-
 <!-- diagram: rollback-flowchart -->
-
-${MARKDOWN_CODE_FENCE}
-(trigger -> rollback actions -> verification)
-${MARKDOWN_CODE_FENCE}
-
-## Deployment Sequence Diagram
-- Deep add-on; omit for compact design.
-
 <!-- diagram: deployment-sequence -->
 
 ${MARKDOWN_CODE_FENCE}
-(rollout order, guard checks, and verification sequence)
+(deep add-on diagram: state lifecycle OR rollback flow OR deployment sequence)
 ${MARKDOWN_CODE_FENCE}
 
 ## Stale Diagram Audit
@@ -615,32 +553,6 @@ ${MARKDOWN_CODE_FENCE}
 | Critical flow | Test coverage (ID/command) | Diagram anchor | Gap status |
 |---|---|---|---|
 |  |  |  | covered/gap |
-
-## ASCII Coverage Diagram
-
-<!-- diagram: ascii-coverage -->
-
-${MARKDOWN_CODE_FENCE}
-entry-point
-  ├── happy path           [★★★]
-  ├── empty input          [★★]
-  ├── error path           [★]
-  ├── concurrency edge     [GAP]
-  ├── slow-network edge    [→E2E]
-  └── perf regression      [→EVAL]
-${MARKDOWN_CODE_FENCE}
-
-> Required marker tokens (at least one each present where applicable): \`[★★★]\` / \`[★★]\` / \`[★]\` / \`[GAP]\` / \`[→E2E]\` / \`[→EVAL]\`. The diagram is the single source of truth for coverage; gaps must be traced into Plan or Spec.
-
-## Regression Iron Rule
-- Iron rule acknowledged: yes — any diff that changes existing behavior gets a regression test added to the plan, no exceptions.
-- Detected behavior changes (or \`- None.\`):
-- Regression test handoff (Plan task ID or \`- None.\`):
-
-## Calibrated Findings
-> Format: \`[P1|P2|P3] (confidence: <n>/10) <repo-relative-path>[:<line>] — <one-line description>\`. Findings with confidence \`< 7\` are suppressed unless severity is \`P1\`.
-
-- (or \`- None this stage.\`)
 
 ## Performance Budget
 | Critical path | Metric | Target | Measurement method |
@@ -736,9 +648,6 @@ ${SEED_SHELF_SECTION}
 | Deployment & Rollout Review |  |  |
 
 **Decisions made:** 0 | **Unresolved:** 0
-
-## Learning Capture Hint
-For meaningful design work, replace the Learnings sentinel with 1-3 JSON learning bullets, for example: \`- {"type":"lesson","trigger":"when design chooses a risky fallback path","action":"record the switch trigger and rollback signal in Spec Handoff","confidence":"medium","domain":"architecture","stage":"design"}\`
 
 ## Victory Detector
 - Loop status file: \`.cclaw/state/early-loop.json\`
@@ -976,13 +885,13 @@ Execution rule: complete and verify each batch before starting the next batch.
 - **Subagent recipe (if Subagent-Driven):** \`<harness>\` -> \`<dispatch surface>\` -> \`<agent-definition path>\` (substitute neutral placeholders; full recipes in \`docs/harnesses.md\`)
 - **Inline recipe (if Inline executor):** TDD loop unit-by-unit with batch checkpoints
 
-## No-Placeholder Scan
-- Scanned tokens: \`TODO\`, \`TBD\`, \`FIXME\`, \`<fill-in>\`, \`<your-*-here>\`, \`xxx\`, bare ellipsis in task rows.
-- Hits: 0 (required for WAIT_FOR_CONFIRM to resolve).
-
-## No Scope Reduction Language Scan
-- Scanned phrases: \`v1\`, \`for now\`, \`later\`, \`temporary\`, \`placeholder\`, \`mock for now\`, \`hardcoded for now\`, \`will improve later\`.
-- Hits: 0 (required when Locked Decisions section is non-empty; use LD#hash anchors).
+## Plan Quality Scan
+- Placeholder scan:
+  - Scanned tokens: \`TODO\`, \`TBD\`, \`FIXME\`, \`<fill-in>\`, \`<your-*-here>\`, \`xxx\`, bare ellipsis in task rows.
+  - Hits: 0 (required for WAIT_FOR_CONFIRM to resolve).
+- Scope reduction language scan:
+  - Scanned phrases: \`v1\`, \`for now\`, \`later\`, \`temporary\`, \`placeholder\`, \`mock for now\`, \`hardcoded for now\`, \`will improve later\`.
+  - Hits: 0 (required when Locked Decisions section is non-empty; use LD#hash anchors).
 
 ## WAIT_FOR_CONFIRM
 - Status: pending
@@ -1128,15 +1037,13 @@ Execution rule: complete and verify each batch before starting the next batch.
 - Open questions:
 - Drift from upstream (or \`None\`):
 
-## Self-Review First
+## Pre-Critic Self-Review
 - [ ] Build/lint/type-check/tests passed locally
 - [ ] Diff matches spec/plan (no scope creep)
 - [ ] Leftover prints / commented code / unused imports removed
 - [ ] Deletion test: each new module justifies its existence
 - Evidence (commands + result):
 - Patches applied (or \`- None.\`):
-
-## Frame the Review Request
 - **Goal:**
 - **Approach:**
 - **Risk areas:**
@@ -1252,9 +1159,6 @@ Execution rule: complete and verify each batch before starting the next batch.
 
 ## Final Verdict
 - APPROVED | APPROVED_WITH_CONCERNS | BLOCKED
-
-## Learning Capture Hint
-For meaningful review work, replace the Learnings sentinel with 1-3 JSON learning bullets, for example: \`- {"type":"lesson","trigger":"when security sweep finds no issues but touches trust boundaries","action":"record NO_SECURITY_IMPACT with inspected surfaces and rationale","confidence":"medium","domain":"security","stage":"review"}\`
 
 ## Learnings
 - None this stage.

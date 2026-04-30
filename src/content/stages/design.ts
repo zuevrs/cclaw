@@ -177,7 +177,6 @@ export const DESIGN: StageSchemaInput = {
       { section: "Security & Threat Model", required: true, validationRule: "Must list trust boundaries, abuse/failure scenarios, mitigations, and residual risks." },
       { section: "Test Strategy", required: false, validationRule: "Must define unit/integration/e2e expectations with coverage targets." },
       { section: "Test-Diagram Mapping", required: false, validationRule: "Recommended: map each critical flow to at least one validating test ID and one diagram marker/anchor." },
-      { section: "Test Strategy", required: false, validationRule: "Must define unit/integration/e2e expectations with coverage targets." },
       { section: "Performance Budget", required: false, validationRule: "For each critical path: metric name, target threshold, and measurement method." },
       { section: "Observability & Debuggability", required: true, validationRule: "Must define logs/metrics/traces plus alerting/debug path for critical failure modes." },
       { section: "Deployment & Rollout", required: true, validationRule: "Must define migration/flag strategy, rollout/rollback plan, switch trigger, and post-deploy verification steps." },

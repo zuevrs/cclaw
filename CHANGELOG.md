@@ -1,5 +1,21 @@
 # Changelog
 
+## 0.55.0
+
+### Changed
+
+- Simplified stage templates and validation contracts across brainstorm/scope/design/plan/review: merged plan scans into `Plan Quality Scan`, merged review pre-critic framing into `Pre-Critic Self-Review`, and replaced deep design triple-diagram sections with one `Deep Diagram Add-on` section that accepts `state-machine` or `rollback-flowchart` or `deployment-sequence` markers.
+- Updated design diagram requirement enforcement to support the merged deep add-on marker contract while preserving standard-tier architecture/data-flow/error-flow requirements.
+- Demoted `Vague to Fixed` (spec) and `Assertion Correctness Notes` (tdd) to template-only optional guidance (no schema-level artifact-validation row).
+
+### Removed
+
+- Removed duplicate `Test Strategy` artifact-validation row in design stage schema.
+- Removed retired brainstorm structural checks and template sections for `Forcing Questions`, `Premise List`, and `Anti-Sycophancy Stamp`.
+- Removed retired scope sections/checks for `Failure Modes Registry`, `Reversibility Rating`, `Dream State Mapping`, and `Temporal Interrogation`.
+- Removed retired design sections/checks for `ASCII Coverage Diagram`, plus orphaned design/review `Learning Capture Hint` blocks.
+- Removed orphaned design template sections `Regression Iron Rule` and `Calibrated Findings` (plan retains the canonical versions).
+
 ## 0.54.0
 
 ### Added

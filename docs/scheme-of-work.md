@@ -49,6 +49,14 @@ Tracks:
 
 Every stage has a generated skill, a stage artifact, required gates, artifact validation rules, and optional or mandatory subagent dispatch. `/cc` follows `flow-state.json.track` and `skippedStages`; it must not use the natural stage edge when the active track skips a stage.
 
+### Wave 10 Simplification Notes
+
+- Brainstorm keeps `Premise Check`, `Approaches`, `Embedded Grill`, and approval flow; legacy structural checks for `Forcing Questions`, `Premise List`, and `Anti-Sycophancy Stamp` were retired.
+- Scope removed deep workshop scaffolding sections (`Dream State Mapping`, `Temporal Interrogation`) and legacy registry/rating checks (`Failure Modes Registry`, `Reversibility Rating`) from active validation.
+- Design deep-tier diagram requirements now use one merged `Deep Diagram Add-on` section (`state-machine` or `rollback-flowchart` or `deployment-sequence`) instead of three separate headings.
+- Review merged `Self-Review First` + `Frame the Review Request` into one `Pre-Critic Self-Review` section.
+- Plan merged `No-Placeholder Scan` and `No Scope Reduction Language Scan` into `Plan Quality Scan`.
+
 ## Closeout Flow
 
 Ship is not the end of the run. When `ship` is complete, `/cc` continues the closeout chain using `closeout.shipSubstate` inside `.cclaw/state/flow-state.json`.
