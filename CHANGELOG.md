@@ -1,5 +1,30 @@
 # Changelog
 
+## 2.0.0
+
+### Breaking Changes
+
+- Fresh `cclaw init` no longer materializes `.cclaw/state/flow-state.json`; missing flow-state is now an expected fresh-init condition until a run is explicitly started.
+- Hook contract schema bumped to `2` and legacy `pre-compact` compatibility wiring removed from generated hook manifests/schemas.
+- Cursor/Codex hook routing now consolidates multiple guard calls into single in-process pipeline handlers (`pre-tool-pipeline`, `prompt-pipeline`).
+
+### Added
+
+- New shared `adaptive-elicitation` skill with harness-native one-question dialogue, stop-signal handling (RU/EN/UA), smart-skip, conditional grilling triggers, stage forcing-question sets, and irreversible override guardrails.
+- New `## Q&A Log` contract for brainstorm/scope/design templates, with append-only turn logging guidance.
+- New track/stage-aware `questionBudgetHint(track, stage)` guidance source for adaptive elicitation.
+- New advisory lint finding `qa_log_missing` for brainstorm/scope/design artifacts when the Q&A dialogue section is missing or empty.
+- New internal `--skip-questions` flag for `internal advance-stage`, persisted as successor-stage interaction hint and surfaced in session-start context.
+- New session-start digest cache (`.cclaw/state/session-digest.json`) with debounced background refresh flow for ralph/early-loop/compound-readiness status lines.
+
+### Changed
+
+- `start-flow` helper defaults to quiet mode (`CCLAW_START_FLOW_QUIET=1`) to reduce harness chat noise.
+- Stage skill guidance now explicitly preserves existing artifact structure (no wholesale template overwrites) and carries forward locked-decision traceability.
+- Brainstorm/scope/design stage schemas now reference adaptive elicitation explicitly and include stage-level forcing-question expectations.
+- `delegation-record --rerecord` now preserves/propagates `--evidence-ref` reliably across rerecord flows.
+- Artifact linting now emits advisory duplicate-H2 findings and expanded Wave-20 regression coverage across hooks, manifests, templates, and stage skill contracts.
+
 ## 1.0.0
 
 ### Breaking Changes
