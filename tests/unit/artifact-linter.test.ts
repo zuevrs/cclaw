@@ -5455,6 +5455,53 @@ describe("review army schema validation", () => {
     expect(body).toContain("second pass bullet");
   });
 
+  it("emits duplicate_h2_heading as advisory finding", async () => {
+    const root = await createTempProject("artifact-lint-duplicate-h2-advisory");
+    await writeRuntimeArtifact(
+      root,
+      "03-design.md",
+      `${completeDesignArtifact(
+        `API_Gateway -->|sync: validated request| App_Service
+App_Service -.->|async: enqueue write| Storage_Adapter
+Storage_Adapter -->|timeout| Fallback_Cache
+Fallback_Cache -->|degraded response| API_Gateway`
+      )}
+
+## Scratchpad
+- first pass note
+
+## Scratchpad
+- second pass note
+`
+    );
+
+    const result = await lintArtifact(root, "design");
+    const duplicateHeading = result.findings.find((finding) => finding.section === "duplicate_h2_heading");
+    expect(result.passed).toBe(true);
+    expect(duplicateHeading).toMatchObject({ required: false, found: false });
+    expect(duplicateHeading?.details).toContain("Scratchpad");
+  });
+
+  it("emits qa_log_missing as advisory when design Q&A log is absent", async () => {
+    const root = await createTempProject("artifact-lint-qa-log-advisory");
+    await writeRuntimeArtifact(
+      root,
+      "03-design.md",
+      completeDesignArtifact(
+        `API_Gateway -->|sync: validated request| App_Service
+App_Service -.->|async: enqueue write| Storage_Adapter
+Storage_Adapter -->|timeout| Fallback_Cache
+Fallback_Cache -->|degraded response| API_Gateway`
+      )
+    );
+
+    const result = await lintArtifact(root, "design");
+    const qaLogMissing = result.findings.find((finding) => finding.section === "qa_log_missing");
+    expect(result.passed).toBe(true);
+    expect(qaLogMissing).toMatchObject({ required: false, found: false });
+    expect(qaLogMissing?.details).toContain("Q&A Log");
+  });
+
   it("rejects APPROVED_WITH_CONCERNS when open Critical findings remain", async () => {
     const root = await createTempProject("review-verdict-concerns-open-critical");
     await writeRuntimeArtifact(

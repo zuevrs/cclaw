@@ -4,8 +4,9 @@ import { pathToFileURL } from "node:url";
 import { spawn } from "node:child_process";
 import { describe, expect, it } from "vitest";
 import { initCclaw } from "../../src/install.js";
-import { readFlowState } from "../../src/runs.js";
+import { ensureRunSystem, readFlowState } from "../../src/runs.js";
 import { stageSchema } from "../../src/content/stage-schema.js";
+import { appendDelegation } from "../../src/delegation.js";
 import { opencodePluginJs, runHookCmdScript, stageCompleteScript, startFlowScript } from "../../src/content/hooks.js";
 import {
   claudeHooksJsonWithObservation,
@@ -97,6 +98,23 @@ async function writeBrainstormArtifact(root: string): Promise<void> {
 `, "utf8");
 }
 
+async function seedMandatoryDelegationWaivers(root: string, stage: "brainstorm" = "brainstorm"): Promise<void> {
+  const state = await readFlowState(root);
+  const mandatoryAgents = stageSchema(stage, state.track).mandatoryDelegations;
+  for (const agent of mandatoryAgents) {
+    await appendDelegation(root, {
+      stage,
+      agent,
+      mode: "mandatory",
+      status: "waived",
+      waiverReason: "unit_test_seeded_waiver",
+      fulfillmentMode: "role-switch",
+      runId: state.activeRunId,
+      ts: new Date().toISOString()
+    });
+  }
+}
+
 async function runNodeScript(
   root: string,
   scriptName: string,
@@ -156,27 +174,33 @@ describe("hooks lifecycle wiring", () => {
     expect(claude).toContain(".cclaw/hooks/run-hook.cmd workflow-guard");
     expect(claude).toContain(".cclaw/hooks/run-hook.cmd context-monitor");
     expect(claude).toContain(".cclaw/hooks/run-hook.cmd stop-handoff");
-    expect(claude).toContain(".cclaw/hooks/run-hook.cmd pre-compact");
+    expect(claude).not.toContain(".cclaw/hooks/run-hook.cmd pre-compact");
     expect(claude).not.toContain(".sh");
 
     expect(cursor).toContain(".cclaw/hooks/run-hook.cmd session-start");
-    expect(cursor).toContain(".cclaw/hooks/run-hook.cmd prompt-guard");
-    expect(cursor).toContain(".cclaw/hooks/run-hook.cmd workflow-guard");
+    expect(cursor).toContain(".cclaw/hooks/run-hook.cmd pre-tool-pipeline");
+    expect(cursor).not.toContain(".cclaw/hooks/run-hook.cmd prompt-guard");
+    expect(cursor).not.toContain(".cclaw/hooks/run-hook.cmd workflow-guard");
     expect(cursor).toContain(".cclaw/hooks/run-hook.cmd context-monitor");
     expect(cursor).toContain(".cclaw/hooks/run-hook.cmd stop-handoff");
-    expect(cursor).toContain(".cclaw/hooks/run-hook.cmd pre-compact");
+    expect(cursor).not.toContain(".cclaw/hooks/run-hook.cmd pre-compact");
     expect(cursor).not.toContain(".sh");
 
     expect(codex).toContain(".cclaw/hooks/run-hook.cmd session-start");
-    expect(codex).toContain(".cclaw/hooks/run-hook.cmd prompt-guard");
-    expect(codex).toContain(".cclaw/hooks/run-hook.cmd workflow-guard");
+    expect(codex).toContain(".cclaw/hooks/run-hook.cmd prompt-pipeline");
+    expect(codex).not.toContain(".cclaw/hooks/run-hook.cmd prompt-guard");
+    expect(codex).toContain(".cclaw/hooks/run-hook.cmd pre-tool-pipeline");
+    expect(codex).not.toContain(".cclaw/hooks/run-hook.cmd workflow-guard");
     expect(codex).toContain(".cclaw/hooks/run-hook.cmd context-monitor");
     expect(codex).toContain(".cclaw/hooks/run-hook.cmd stop-handoff");
-    expect(codex).toContain(".cclaw/hooks/run-hook.cmd verify-current-state");
+    expect(codex).not.toContain(".cclaw/hooks/run-hook.cmd verify-current-state");
     const codexHooks = JSON.parse(codex) as {
       hooks: { UserPromptSubmit?: Array<{ hooks?: Array<{ command?: string }> }> };
     };
     expect(JSON.stringify(codexHooks.hooks.UserPromptSubmit)).not.toContain("workflow-guard");
+    expect(JSON.stringify(codexHooks.hooks.UserPromptSubmit)).toContain("prompt-pipeline");
+    expect(JSON.stringify(codexHooks.hooks.UserPromptSubmit)).not.toContain("prompt-guard");
+    expect(JSON.stringify(codexHooks.hooks.UserPromptSubmit)).not.toContain("verify-current-state");
     expect(codex).not.toContain(".sh");
   });
 
@@ -276,6 +300,36 @@ fs.appendFileSync(${JSON.stringify(callsPath)}, process.argv.slice(2).join(" ") 
     expect(result.code, result.stderr).toBe(0);
     const calls = await fs.readFile(callsPath, "utf8");
     expect(calls).toContain("internal start-flow --track=standard --class=software-standard --prompt=простое веб приложение");
+    expect(calls).toContain("--quiet");
+  });
+
+  it("start-flow helper allows disabling default quiet mode via env override", async () => {
+    const root = await createTempProject("start-flow-helper-quiet-disabled");
+    await fs.mkdir(path.join(root, ".cclaw/hooks"), { recursive: true });
+
+    const callsPath = path.join(root, "start-flow-calls.log");
+    const runtimeShimPath = path.join(root, "local-runtime.mjs");
+    await fs.writeFile(runtimeShimPath, `#!/usr/bin/env node
+import fs from "node:fs";
+fs.appendFileSync(${JSON.stringify(callsPath)}, process.argv.slice(2).join(" ") + "\\n");
+`, "utf8");
+    await fs.chmod(runtimeShimPath, 0o755);
+
+    const result = await runNodeScript(
+      root,
+      ".cclaw/hooks/start-flow.mjs",
+      startFlowScript(),
+      ["--track=standard", "--class=software-standard", "--prompt=quiet override test"],
+      "",
+      process.platform === "win32"
+        ? { PATH: "", Path: "", CCLAW_CLI_JS: runtimeShimPath, CCLAW_START_FLOW_QUIET: "0" }
+        : { PATH: "", CCLAW_CLI_JS: runtimeShimPath, CCLAW_START_FLOW_QUIET: "0" }
+    );
+
+    expect(result.code, result.stderr).toBe(0);
+    const calls = await fs.readFile(callsPath, "utf8");
+    expect(calls).toContain("internal start-flow --track=standard --class=software-standard --prompt=quiet override test");
+    expect(calls).not.toContain("--quiet");
   });
 
   it("stage-complete helper invokes a local Node runtime instead of a cclaw PATH binary", async () => {
@@ -309,7 +363,9 @@ fs.appendFileSync(${JSON.stringify(callsPath)}, process.argv.slice(2).join(" ") 
   it("stage-complete helper advances state and harvests learnings without cclaw on PATH", async () => {
     const root = await createTempProject("stage-complete-no-path-harvest");
     await initCclaw({ projectRoot: root });
+    await ensureRunSystem(root);
     await writeBrainstormArtifact(root);
+    await seedMandatoryDelegationWaivers(root);
 
     const scriptBody = await fs.readFile(path.join(root, ".cclaw/hooks/stage-complete.mjs"), "utf8");
     const result = await runNodeScript(
@@ -345,7 +401,9 @@ fs.appendFileSync(${JSON.stringify(callsPath)}, process.argv.slice(2).join(" ") 
   it("stage-complete helper accepts boolean evidence from copied shell commands", async () => {
     const root = await createTempProject("stage-complete-boolean-evidence");
     await initCclaw({ projectRoot: root });
+    await ensureRunSystem(root);
     await writeBrainstormArtifact(root);
+    await seedMandatoryDelegationWaivers(root);
 
     const scriptBody = await fs.readFile(path.join(root, ".cclaw/hooks/stage-complete.mjs"), "utf8");
     const evidence = JSON.stringify({
@@ -382,7 +440,7 @@ fs.appendFileSync(${JSON.stringify(callsPath)}, process.argv.slice(2).join(" ") 
     expect(plugin).toContain("resolveNodeExecutable()");
     expect(plugin).toContain('return "node";');
     expect(plugin).not.toContain("spawn(process.execPath, [hookRuntimePath");
-    expect(plugin).toContain('runHookScript("pre-compact"');
+    expect(plugin).not.toContain('runHookScript("pre-compact"');
     expect(plugin).toContain('runHookScript("prompt-guard"');
     expect(plugin).toContain('runHookScript("workflow-guard"');
     expect(plugin).toContain('runHookScript("context-monitor"');

@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { resolveTrackFromPrompt } from "../../src/track-heuristics.js";
+import { questionBudgetHint, resolveTrackFromPrompt } from "../../src/track-heuristics.js";
 
 describe("track heuristics resolver", () => {
   it("routes bugfix prompts to quick by default", () => {
@@ -40,5 +40,31 @@ describe("track heuristics resolver", () => {
       }
     });
     expect(result.track).toBe("standard");
+  });
+
+  it("returns stage-aware question budget hints for adaptive elicitation stages", () => {
+    expect(questionBudgetHint("quick", "brainstorm")).toEqual({
+      min: 2,
+      recommended: 3,
+      hardCapWarning: 4
+    });
+    expect(questionBudgetHint("medium", "scope")).toEqual({
+      min: 5,
+      recommended: 6,
+      hardCapWarning: 8
+    });
+    expect(questionBudgetHint("standard", "design")).toEqual({
+      min: 10,
+      recommended: 12,
+      hardCapWarning: 14
+    });
+  });
+
+  it("returns no budget for non-elicitation stages", () => {
+    expect(questionBudgetHint("standard", "tdd")).toEqual({
+      min: 0,
+      recommended: 0,
+      hardCapWarning: 0
+    });
   });
 });

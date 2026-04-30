@@ -23,17 +23,17 @@ describe("hook schema validation", () => {
     delete claude.cclawHookSchemaVersion;
     const result = validateHookDocument("claude", claude);
     expect(result.ok).toBe(false);
-    expect(result.errors.join("\n")).toContain("expected cclawHookSchemaVersion=1");
+    expect(result.errors.join("\n")).toContain("expected cclawHookSchemaVersion=2");
   });
 
-  it("rejects claude hook docs missing PreCompact wiring", () => {
+  it("rejects claude hook docs missing SessionStart wiring", () => {
     const claude = JSON.parse(claudeHooksJsonWithObservation()) as {
       hooks: Record<string, unknown>;
     };
-    delete claude.hooks.PreCompact;
+    delete claude.hooks.SessionStart;
     const result = validateHookDocument("claude", claude);
     expect(result.ok).toBe(false);
-    expect(result.errors.join("\n")).toContain('missing required event array "PreCompact"');
+    expect(result.errors.join("\n")).toContain('missing required event array "SessionStart"');
   });
 
   it("rejects malformed claude hook payload shapes", () => {

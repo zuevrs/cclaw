@@ -25,6 +25,15 @@ function expectStageSkillContract(content: string): void {
 }
 
 describe("flow command contracts", () => {
+  it("does not create flow-state placeholder during init", async () => {
+    const root = await createTempProject("flow-init-no-placeholder");
+    await initCclaw({ projectRoot: root });
+
+    await expect(
+      fs.stat(path.join(root, ".cclaw/state/flow-state.json"))
+    ).rejects.toThrow(/ENOENT/);
+  });
+
   it("creates user-facing command contracts and thin stage shims", async () => {
     const root = await createTempProject("flow");
     await initCclaw({ projectRoot: root });
@@ -198,6 +207,8 @@ describe("flow command contracts", () => {
     const startFlow = await fs.readFile(path.join(root, ".cclaw/hooks/start-flow.mjs"), "utf8");
     expect(startFlow).toContain("CCLAW_CLI_ENTRYPOINT");
     expect(startFlow).toContain("start-flow");
+    expect(startFlow).toContain("CCLAW_START_FLOW_QUIET");
+    expect(startFlow).toContain("--quiet");
     expect(startFlow).toContain("process.execPath");
     expect(startFlow).not.toContain("cclaw binary not found");
     expect(startFlow).not.toContain("cmd.exe");
@@ -506,8 +517,51 @@ describe("flow command contracts", () => {
     expect(brainstormSkill).toContain("Selected Direction");
     expect(brainstormSkill).toContain("Carrying forward: <1-3 bullets>");
     expect(brainstormSkill).toContain("Ask only decision-changing questions");
+    expect(brainstormSkill).toContain("never overwrite the artifact wholesale from the template");
     expect(reviewSkill).toContain("Review Findings");
     expect(shipSkill).toContain("finalization mode");
+  });
+
+  it("materializes adaptive elicitation skill and Q&A log contracts", async () => {
+    const root = await createTempProject("adaptive-elicitation-contracts");
+    await initCclaw({ projectRoot: root });
+
+    const adaptiveSkill = await fs.readFile(
+      path.join(root, ".cclaw/skills/adaptive-elicitation/SKILL.md"),
+      "utf8"
+    );
+    expect(adaptiveSkill).toContain("one-question-at-a-time");
+    expect(adaptiveSkill).toContain("AskUserQuestion");
+    expect(adaptiveSkill).toContain("request_user_input");
+    expect(adaptiveSkill).toContain("ask_user");
+    expect(adaptiveSkill).toContain("AskQuestion");
+    expect(adaptiveSkill).toContain("Stop Signals");
+    expect(adaptiveSkill).toContain("Q&A Log");
+    expect(adaptiveSkill).toContain("Don't tell it what to do, give it success criteria and watch it go.");
+    expect(adaptiveSkill).toContain("User does not run cclaw manually");
+    expect(adaptiveSkill).toContain("questionBudgetHint(track, stage)");
+
+    const brainstormSkill = await fs.readFile(path.join(root, ".cclaw/skills/brainstorm/SKILL.md"), "utf8");
+    const scopeSkill = await fs.readFile(path.join(root, ".cclaw/skills/scope/SKILL.md"), "utf8");
+    const designSkill = await fs.readFile(path.join(root, ".cclaw/skills/design/SKILL.md"), "utf8");
+    expect(brainstormSkill).toContain(".cclaw/skills/adaptive-elicitation/SKILL.md");
+    expect(scopeSkill).toContain(".cclaw/skills/adaptive-elicitation/SKILL.md");
+    expect(designSkill).toContain(".cclaw/skills/adaptive-elicitation/SKILL.md");
+    expect(brainstormSkill).toContain("If something is unclear, stop. Name what's confusing. Ask.");
+    expect(scopeSkill).toContain("Strong success criteria let you loop independently.");
+    expect(designSkill).toContain("Constrain, don't micromanage - enforce invariants, separate the doer from the checker.");
+    expect(brainstormSkill).toContain("what pain are we solving");
+    expect(scopeSkill).toContain("what is definitely in/out");
+    expect(designSkill).toContain("what is the end-to-end data flow");
+
+    const brainstormTemplate = await fs.readFile(path.join(root, ".cclaw/templates/01-brainstorm.md"), "utf8");
+    const scopeTemplate = await fs.readFile(path.join(root, ".cclaw/templates/02-scope.md"), "utf8");
+    const designTemplate = await fs.readFile(path.join(root, ".cclaw/templates/03-design.md"), "utf8");
+    for (const template of [brainstormTemplate, scopeTemplate, designTemplate]) {
+      expect(template).toContain("## Q&A Log");
+      expect(template).toContain("| Turn | Question | User answer (1-line) | Decision impact |");
+      expect(template).toContain("Append-only by turn");
+    }
   });
 
   it("emits conditional slice-review guidance in plan and tdd skills", async () => {
@@ -620,6 +674,8 @@ describe("flow command contracts", () => {
     expect(executingWavesSkill).toContain("## Process");
     expect(executingWavesSkill).toContain("## Status Markers");
     expect(executingWavesSkill).toContain("wave.drift_unaddressed");
+    expect(executingWavesSkill).toContain("scope LD# hash references still valid");
+    expect(executingWavesSkill).toContain("Never create a second `## Locked Decisions` heading in brainstorm");
 
     await expect(
       fs.stat(path.join(root, ".cclaw/wave-plans/.gitkeep"))

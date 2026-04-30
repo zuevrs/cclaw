@@ -833,7 +833,7 @@ describe("stage schema and subagent alignment", () => {
     ]));
     expect(scope.executionModel.interactionProtocol).toEqual(expect.arrayContaining([
       expect.stringContaining("Do not walk the full checklist by default"),
-      expect.stringContaining("STOP for one explicit approval before finalizing the artifact")
+      expect.stringContaining("request explicit approval before finalizing the artifact")
     ]));
     expect(scope.executionModel.requiredEvidence).toEqual(expect.arrayContaining([
       expect.stringContaining("does not satisfy user approval")
