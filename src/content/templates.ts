@@ -839,12 +839,6 @@ ${MARKDOWN_CODE_FENCE}
 |---|---|---|
 |  |  |  |
 
-## Testing Strategy
-- Behaviors covered (not implementation):
-- Integration vs. unit split (and why):
-- Real services vs. doubles (and why):
-- Coverage gaps with rationale (or \`- None.\`):
-
 ## Spec Self-Review
 > Inline pass; fix in place. If a check fails, do not move on without recording the fix.
 
@@ -856,13 +850,6 @@ ${MARKDOWN_CODE_FENCE}
   - None
 - Remaining concerns:
   - None
-
-## Reviewer Concerns (convergence guard)
-> Populate ONLY if the spec review loop did not converge after 3 iterations. Each row links a concern to the unresolved review pass.
-
-| ID | Concern | Reviewer / source | Disposition (open/accept/defer) | Rationale |
-|---|---|---|---|---|
-|  |  |  |  |  |
 
 ## Approval
 - Approved by:
@@ -972,23 +959,16 @@ Execution rule: complete and verify each batch before starting the next batch.
   - [ ] Step 4: run test, observe GREEN
   - [ ] Step 5: refactor + commit
 
-## High-Level Technical Design
-> "Directional guidance, not implementation specification." Choose the form that fits the work: pseudo-code grammar, mermaid sequence/state, data-flow ASCII, decision matrix. Skip if the plan is a pure rename/move.
+## Calibrated Findings
+> Recommended for high-risk or multi-batch plans. Use one line per finding, or \`None this stage\`.
+>
+> Canonical format:
+> \`- [P1|P2|P3] (confidence: <n>/10) <path>[:<line>] — <description>\`
 
-\`\`\`
-(pseudo-code, mermaid, ASCII data flow, or decision matrix)
-\`\`\`
-
-## Plan Self-Review
-- [ ] Spec coverage: every spec behavior maps to a unit/task
-- [ ] Placeholder scan (regex on full artifact, not only Task List)
-- [ ] Type/name consistency across units (signatures referenced match definitions)
-- [ ] No silent scope reduction
-- [ ] Confidence per unit recorded (1-10)
-- Patches applied:
-  - None
-- Remaining concerns:
-  - None
+## Regression Iron Rule
+- Iron rule acknowledged: yes
+- Critical regression guardrail:
+- Required pre-merge proof:
 
 ## Execution Handoff
 - **Posture chosen:** Subagent-Driven (recommended) | Inline executor
@@ -1094,17 +1074,26 @@ Execution rule: complete and verify each batch before starting the next batch.
 |---|---|---|---|
 | S-1 |  |  |  |
 
-## Anti-Rationalization Checks
-- [ ] No "test passes immediately" — each new test was watched failing first
-- [ ] No "code before test" reuse from a prior session
-- [ ] No "tests after" backfill instead of RED-first
-- [ ] No "spirit not ritual" overrides
-- Notes (or \`- None this stage.\`):
-
 ## Verification Ladder
 | Slice | Tier reached | Evidence |
 |---|---|---|
 | S-1 |  |  |
+
+## TDD Blocker Taxonomy
+> Fill only when blocked. Choose one canonical class and capture the resume contract.
+>
+> Allowed classes: \`NO_SOURCE_CONTEXT\`, \`NO_TEST_SURFACE\`, \`NO_IMPLEMENTABLE_SLICE\`, \`RED_NOT_EXPRESSIBLE\`, \`NO_VCS_MODE\`.
+
+| Slice | Class | blockedBecause | missingInputs | recommendedRoute | nextCommand | resumeCriteria |
+|---|---|---|---|---|---|---|
+| S-1 |  |  |  |  |  |  |
+
+## Per-Slice Review
+> Only required when \`.cclaw/config.yaml::sliceReview.enabled\` triggers this slice; otherwise record \`not triggered\`.
+
+| Slice | Trigger fired | Spec-Compliance pass | Quality pass | Fulfillment mode (isolated/role-switch/not triggered) |
+|---|---|---|---|---|
+| S-1 |  |  |  |  |
 
 ## Coverage Targets
 | Code type | Target | Current | Command |
@@ -1124,9 +1113,6 @@ Execution rule: complete and verify each batch before starting the next batch.
 | Slice | Reproduction test | RED-without-fix evidence | GREEN-with-fix evidence | Revert-guard note |
 |---|---|---|---|---|
 | S-1 |  |  |  |  |
-
-## Learning Capture Hint
-For meaningful TDD work, replace the Learnings sentinel with 1-3 JSON learning bullets, for example: \`- {"type":"pattern","trigger":"when a regression only fails after state rewind","action":"keep the RED fixture and add a cycle-log assertion before GREEN","confidence":"medium","domain":"testing","stage":"tdd"}\`
 
 ## Learnings
 - None this stage.

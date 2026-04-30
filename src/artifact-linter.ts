@@ -561,6 +561,7 @@ type CanonicalScopeMode = (typeof SCOPE_MODE_FULL_TOKENS)[number];
 // remain rejected.
 const SCOPE_MODE_LINE_REGEX = /(?:^|\n)\s*[-*]?\s*\**\s*(?:Selected\s+|Scope\s+)?Mode\**\s*:\s*\**\s*([^\n]+)/iu;
 const SCOPE_MODE_SHORT_TOKEN_REGEX = /\b(?:hold(?:[\s_-]?scope)?|selective(?:[\s_-]?expansion)?|scope[\s_-]?expansion|expansion|scope[\s_-]?reduction|reduction|expand|reduce)\b/iu;
+const SPEC_MAX_MODULES = 5;
 
 // Next-stage handoff token. We only enforce the canonical machine-surface stage
 // IDs (`design`, `spec`) plus stable handoff phrases. The surrounding prose may
@@ -2694,6 +2695,42 @@ export async function lintArtifact(
           : "Execution Handoff is missing a posture declaration (Subagent-Driven or Inline executor)."
       });
     }
+
+    const planCalibratedBody = sectionBodyByName(sections, "Calibrated Findings");
+    if (planCalibratedBody !== null) {
+      const isEmpty = /none this stage|none\b/iu.test(planCalibratedBody);
+      const findingRegex = new RegExp(CONFIDENCE_FINDING_REGEX_SOURCE, "iu");
+      const validRows = planCalibratedBody
+        .split("\n")
+        .filter((line) => /^[-*]\s+\[/u.test(line.trim()))
+        .filter((line) => findingRegex.test(line));
+      const ok = isEmpty || validRows.length >= 1;
+      findings.push({
+        section: "Plan Calibrated Finding Format",
+        required: false,
+        rule: "Calibrated Findings should either declare `None this stage` or include at least one line in `[P1|P2|P3] (confidence: <n>/10) <path>[:<line>] — <description>` format.",
+        found: ok,
+        details: isEmpty
+          ? "No calibrated findings recorded for this plan stage."
+          : ok
+            ? `Detected ${validRows.length} calibrated plan finding(s).`
+            : "No calibrated findings detected in canonical format."
+      });
+    }
+
+    const regressionIronBody = sectionBodyByName(sections, "Regression Iron Rule");
+    if (regressionIronBody !== null) {
+      const acknowledged = /iron\s+rule\s+acknowledged\s*:\s*yes\b/iu.test(regressionIronBody);
+      findings.push({
+        section: "Plan Regression Iron Rule Acknowledgement",
+        required: false,
+        rule: "Regression Iron Rule should include `Iron rule acknowledged: yes`.",
+        found: acknowledged,
+        details: acknowledged
+          ? "Regression Iron Rule is explicitly acknowledged."
+          : "Regression Iron Rule section is present but missing `Iron rule acknowledged: yes`."
+      });
+    }
   }
 
   if (stage === "scope") {
@@ -2943,10 +2980,34 @@ export async function lintArtifact(
           ? "Architecture Modules is free of code blocks and function/class signatures."
           : "Architecture Modules contains a code fence or function/class signature; remove code-level details."
       });
+
+      const tableRows = archModulesBody.split("\n").filter((line) => /^\|/u.test(line));
+      const dataRows = tableRows.length >= 3 ? tableRows.slice(2) : [];
+      const moduleNames = dataRows
+        .map((row) => row.split("|").slice(1, -1)[0]?.trim() ?? "")
+        .filter((name) => name.length > 0 && name !== "-" && !/^module$/iu.test(name));
+      const uniqueModuleCount = new Set(moduleNames).size;
+      findings.push({
+        section: "Single-Subsystem Scope",
+        required: false,
+        rule: `Architecture Modules should stay within one coherent subsystem boundary (<= ${SPEC_MAX_MODULES} named modules).`,
+        found: uniqueModuleCount <= SPEC_MAX_MODULES,
+        details: uniqueModuleCount <= SPEC_MAX_MODULES
+          ? `Module count (${uniqueModuleCount}) stays within single-subsystem guidance.`
+          : `Architecture Modules lists ${uniqueModuleCount} modules (> ${SPEC_MAX_MODULES}); split into sub-specs or narrow scope before plan handoff.`
+      });
     }
 
     const selfReviewBody = sectionBodyByName(sections, "Spec Self-Review");
-    if (selfReviewBody !== null) {
+    if (selfReviewBody === null) {
+      findings.push({
+        section: "Spec Self-Review Coverage",
+        required: true,
+        rule: "Spec Self-Review must cover placeholder/consistency/scope/ambiguity checks.",
+        found: false,
+        details: "No ## heading matching required section \"Spec Self-Review\"."
+      });
+    } else {
       const required = ["placeholder", "consistency", "scope", "ambiguity"];
       const missing = required.filter(
         (token) => !new RegExp(token, "iu").test(selfReviewBody)
@@ -2966,7 +3027,15 @@ export async function lintArtifact(
   if (stage === "tdd") {
     // Universal Layer 2.6 structural checks (superpowers TDD + evanflow vertical slices).
     const ironLawBody = sectionBodyByName(sections, "Iron Law Acknowledgement");
-    if (ironLawBody !== null) {
+    if (ironLawBody === null) {
+      findings.push({
+        section: "TDD Iron Law Acknowledgement",
+        required: true,
+        rule: "Iron Law Acknowledgement must affirm `Acknowledged: yes`.",
+        found: false,
+        details: "No ## heading matching required section \"Iron Law Acknowledgement\"."
+      });
+    } else {
       const ack = /acknowledged:\s*(yes|true|y)\b/iu.test(ironLawBody);
       findings.push({
         section: "TDD Iron Law Acknowledgement",
@@ -2980,7 +3049,15 @@ export async function lintArtifact(
     }
 
     const watchedRedBody = sectionBodyByName(sections, "Watched-RED Proof");
-    if (watchedRedBody !== null) {
+    if (watchedRedBody === null) {
+      findings.push({
+        section: "Watched-RED Proof Shape",
+        required: true,
+        rule: "Watched-RED Proof must include at least one populated row, and each row must include an ISO timestamp showing when the test was observed failing.",
+        found: false,
+        details: "No ## heading matching required section \"Watched-RED Proof\"."
+      });
+    } else {
       const rows = watchedRedBody.split("\n").filter((line) => /^\|/u.test(line));
       const dataRows = rows.length >= 3 ? rows.slice(2) : [];
       const populatedRows = dataRows.filter((row) =>
@@ -2993,21 +3070,31 @@ export async function lintArtifact(
       // Each populated row must include an ISO timestamp in column 3.
       const isoRegex = /\d{4}-\d{2}-\d{2}T\d{2}:\d{2}/u;
       const validProofRows = populatedRows.filter((row) => isoRegex.test(row));
+      const hasPopulatedRows = populatedRows.length > 0;
+      const allRowsHaveIso = validProofRows.length === populatedRows.length;
       findings.push({
         section: "Watched-RED Proof Shape",
         required: true,
-        rule: "Watched-RED Proof rows must include an ISO timestamp showing when the test was observed failing.",
-        found: populatedRows.length === 0 || validProofRows.length === populatedRows.length,
-        details: populatedRows.length === 0
-          ? "Watched-RED Proof has no populated rows."
-          : validProofRows.length === populatedRows.length
+        rule: "Watched-RED Proof must include at least one populated row, and each row must include an ISO timestamp showing when the test was observed failing.",
+        found: hasPopulatedRows && allRowsHaveIso,
+        details: !hasPopulatedRows
+          ? "Watched-RED Proof has no populated rows; add at least one slice row with observed RED evidence."
+          : allRowsHaveIso
             ? `All ${populatedRows.length} watched-RED proof row(s) include an ISO timestamp.`
             : `${populatedRows.length - validProofRows.length} watched-RED proof row(s) lack an ISO timestamp.`
       });
     }
 
     const sliceCycleBody = sectionBodyByName(sections, "Vertical Slice Cycle");
-    if (sliceCycleBody !== null) {
+    if (sliceCycleBody === null) {
+      findings.push({
+        section: "Vertical Slice Cycle Coverage",
+        required: true,
+        rule: "Vertical Slice Cycle must include RED, GREEN, and REFACTOR per slice (refactor may be deferred with rationale).",
+        found: false,
+        details: "No ## heading matching required section \"Vertical Slice Cycle\"."
+      });
+    } else {
       const required = ["RED", "GREEN", "REFACTOR"];
       const missing = required.filter(
         (token) => !new RegExp(token, "u").test(sliceCycleBody)
@@ -3041,6 +3128,30 @@ export async function lintArtifact(
         details: ok
           ? "Assertion Correctness Notes is populated or absent (single-step slice)."
           : "Assertion Correctness Notes table has no populated rows."
+      });
+    }
+
+    const testDiscoveryBody = sectionBodyByName(sections, "Test Discovery") ?? "";
+    const redEvidenceBody = sectionBodyByName(sections, "RED Evidence") ?? "";
+    const mockPreferenceScanBody = `${testDiscoveryBody}\n${redEvidenceBody}`;
+    const mockTokenRegex =
+      /\b(jest\.mock|vi\.mock|sinon\.stub|mock\.patch|unittest\.mock|magicmock|spyon|tohavebeencalled)\b/iu;
+    if (mockTokenRegex.test(mockPreferenceScanBody)) {
+      const boundaryJustificationRegex =
+        /\b(justified\s+by\s+boundary|boundary:\s*[A-Za-z0-9/_ -]*(network|fs|filesystem|time|clock|external)|network|filesystem|clock|external\s+service)\b/iu;
+      const hasBoundaryJustification = boundaryJustificationRegex.test(mockPreferenceScanBody);
+      const realPathRegex = /\b(?:src|lib|packages|apps)\/[A-Za-z0-9_./-]+\b/u;
+      const hasRealPathHint = realPathRegex.test(mockPreferenceScanBody);
+      findings.push({
+        section: "Mock Preference Heuristic",
+        required: false,
+        rule: "When mocks/spies appear in Test Discovery or RED Evidence, prefer Real > Fake > Stub > Mock. Mock-heavy slices need explicit boundary justification (network/fs/time/external).",
+        found: hasBoundaryJustification,
+        details: hasBoundaryJustification
+          ? "Mock usage is explicitly justified by boundary constraints."
+          : hasRealPathHint
+            ? "Mocks/spies detected while real implementation paths are listed; prefer Real > Fake > Stub > Mock unless a boundary justification is added."
+            : "Mocks/spies detected without boundary justification; add explicit trust-boundary rationale or replace with real/fake/stub coverage."
       });
     }
   }

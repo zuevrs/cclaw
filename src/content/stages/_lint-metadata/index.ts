@@ -37,7 +37,16 @@ const STAGE_POLICY_NEEDLES: Record<FlowStage, string[]> = {
     "Critic Pass",
     "One issue at a time"
   ],
-  spec: ["Acceptance Criteria", "Constraints", "Assumptions Before Finalization", "Testability", "approved spec", "Edge Cases"],
+  spec: [
+    "Acceptance Criteria",
+    "Constraints",
+    "Assumptions Before Finalization",
+    "Testability",
+    "Spec Self-Review",
+    "single subsystem",
+    "approved spec",
+    "Edge Cases"
+  ],
   plan: [
     "WAIT_FOR_CONFIRM",
     "Task Graph",
@@ -45,6 +54,8 @@ const STAGE_POLICY_NEEDLES: Record<FlowStage, string[]> = {
     "Acceptance Mapping",
     "verification steps",
     "Execution Posture",
+    "Calibrated Findings",
+    "Regression Iron Rule",
     "Locked Decision Coverage"
   ],
   tdd: [
@@ -52,8 +63,13 @@ const STAGE_POLICY_NEEDLES: Record<FlowStage, string[]> = {
     "GREEN",
     "REFACTOR",
     "failing test",
+    "Iron Law Acknowledgement",
+    "Watched-RED Proof",
+    "Vertical Slice Cycle",
     "Test Discovery",
     "System-Wide Impact Check",
+    "TDD Blocker Taxonomy",
+    "Per-Slice Review",
     "full test suite",
     "acceptance criteria",
     "traceable to plan slice"
