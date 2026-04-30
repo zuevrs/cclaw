@@ -6,6 +6,7 @@ import { CONFIDENCE_FINDING_REGEX_SOURCE } from "../content/skills.js";
 import type { FlowTrack } from "../types.js";
 import {
   type StageLintContext,
+  checkCriticPredictionsContract,
   extractMarkdownSectionBody,
   getMarkdownTableRows,
   meaningfulLineCount,
@@ -247,6 +248,16 @@ export async function lintDesignStage(ctx: StageLintContext): Promise<void> {
     staleDiagramAuditEnabled,
     isTrivialOverride
   } = ctx;
+    const criticPredictions = checkCriticPredictionsContract(sections);
+    if (criticPredictions !== null) {
+      findings.push({
+        section: "critic.predictions_missing",
+        required: true,
+        rule: "[P2] critic.predictions_missing — pre-commitment predictions block missing or empty",
+        found: criticPredictions.found,
+        details: criticPredictions.details
+      });
+    }
     const tierResolution = await resolveDesignDiagramTier(projectRoot, track, raw);
     const diagramTier = isTrivialOverride
       ? "lightweight"

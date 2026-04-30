@@ -486,6 +486,74 @@ describe("artifact linter heuristics", () => {
     expect(result.passed).toBe(true);
   });
 
+  it("fails brainstorm critic findings without pre-commitment prediction sections", async () => {
+    const root = await createTempProject("artifact-lint-critic-predictions-missing");
+    await writeRuntimeArtifact(root, "01-brainstorm.md", `# Brainstorm Artifact
+
+## Context
+- Project state: monorepo with CI pipeline and custom release scripts
+- Relevant existing code/patterns: scripts/pre-publish.sh does metadata checks
+
+## Problem
+- What we're solving: reduce release regressions
+- Success criteria: invalid metadata blocked before publish
+- Constraints: no new runtime dependencies
+
+## Clarifying Questions
+| # | Question | Answer | Decision impact |
+|---|---|---|---|
+| 1 | Block invalid metadata or warn? | Block | hard gate required |
+| 2 | Add runtime dependencies? | No | stay on existing runtime stack |
+
+## Approach Tier
+- Tier: Standard
+- Why this tier: multiple workflow touchpoints with bounded complexity.
+
+## Short-Circuit Decision
+- Status: bypassed
+- Why: trade-offs still required explicit comparison.
+- Scope handoff: continue full brainstorm flow before scope.
+
+## Approaches
+| Approach | Role | Upside | Architecture | Trade-offs | Recommendation |
+|---|---|---|---|---|---|
+| A | baseline | modest | script-only checks | faster but weaker reuse |  |
+| B | challenger | higher | reusable validation module | slightly more effort, better long-term reuse | recommended |
+
+## Approach Reaction
+- Closest option: B
+- Concerns: avoid overbuild while keeping long-term reuse.
+- What changed after reaction: selected reusable module with strict v1 scope boundaries.
+
+## Selected Direction
+- Approach: B — reusable validation module
+- Rationale: user reaction favored reusable module with bounded v1 scope, balancing reuse and delivery speed
+- Approval: approved by user
+- Next-stage handoff: scope — lock this decision.
+
+## Design
+- Architecture: shared TS module with typed validators imported by CI and local CLI
+- Key components: validateMetadata, validateChangelog, validateVersion, runAll
+- Data flow: package.json + CHANGELOG.md -> validator module -> structured result
+
+## Critic Findings
+### Top Concerns
+- Hidden assumption: changelog parser may miss malformed headings.
+
+## Assumptions and Open Questions
+- Assumptions: CI remains primary release path
+- Open questions (or "None"): None
+`);
+
+    const result = await lintArtifact(root, "brainstorm");
+    const criticContract = result.findings.find(
+      (finding) => finding.section === "critic.predictions_missing"
+    );
+    expect(result.passed).toBe(false);
+    expect(criticContract?.found).toBe(false);
+    expect(criticContract?.details ?? "").toContain("Pre-commitment predictions");
+  });
+
   it("fails brainstorm when Approaches collapses to a single row", async () => {
     const root = await createTempProject("artifact-lint-single-approach");
     await writeRuntimeArtifact(root, "01-brainstorm.md", `# Brainstorm Artifact

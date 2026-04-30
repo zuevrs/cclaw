@@ -17,6 +17,8 @@ export interface AgentReturnSchema {
   requiredFields: string[];
   /** Fields that must cite artifact anchors, commands, or code locations when applicable. */
   evidenceFields: string[];
+  /** Additional optional fields allowed for specific agent contracts. */
+  optionalFields?: string[];
 }
 
 export interface AgentDefinition {
@@ -68,6 +70,11 @@ const ADVISORY_RETURN_SCHEMA: AgentReturnSchema = {
   evidenceFields: ["evidenceRefs", "recommendations"]
 };
 
+const CRITIC_ADVISORY_RETURN_SCHEMA: AgentReturnSchema = {
+  ...ADVISORY_RETURN_SCHEMA,
+  optionalFields: ["predictions", "predictionsValidated", "openQuestions", "realistCheckResults"]
+};
+
 const DOC_RETURN_SCHEMA: AgentReturnSchema = {
   statusField: "status",
   allowedStatuses: ["DONE", "DONE_WITH_CONCERNS", "NEEDS_CONTEXT", "BLOCKED"],
@@ -95,12 +102,18 @@ Finish with the required return schema plus the same \`spanId\` and \`dispatchId
 }
 
 function formatReturnSchema(schema: AgentReturnSchema): string {
-  return [
+  const lines = [
     `- Status field: \`${schema.statusField}\``,
     `- Allowed statuses: ${schema.allowedStatuses.map((status) => `\`${status}\``).join(", ")}`,
     `- Required fields: ${schema.requiredFields.map((field) => `\`${field}\``).join(", ")}`,
     `- Evidence fields: ${schema.evidenceFields.map((field) => `\`${field}\``).join(", ")}`
-  ].join("\n");
+  ];
+  if (schema.optionalFields && schema.optionalFields.length > 0) {
+    lines.push(
+      `- Optional fields: ${schema.optionalFields.map((field) => `\`${field}\``).join(", ")}`
+    );
+  }
+  return lines.join("\n");
 }
 
 function formattedAgentsForStages(stages: FlowStage[]): string {
@@ -247,17 +260,36 @@ export const CCLAW_AGENTS = [
     model: "balanced",
     activation: "proactive",
     relatedStages: ["brainstorm", "scope", "design"],
-    returnSchema: ADVISORY_RETURN_SCHEMA,
+    returnSchema: CRITIC_ADVISORY_RETURN_SCHEMA,
     body: [
       "You are an **adversarial critic** for product and engineering decisions.",
       "",
-      "Your job:",
-      "1. Attack the premise and name what could make the current direction wrong.",
-      "2. Identify cheaper, smaller, or more reversible alternatives.",
-      "3. Surface hidden assumptions, do-nothing viability, and scope creep.",
-      "4. In design, require a shadow alternative, switch trigger, failure/rescue path, and verification evidence.",
+      "## Why this matters",
+      "False approval is expensive: a missed flaw early can cost 10-100x more to unwind after implementation.",
+      "Anchor every concern in evidence and avoid inventing hypothetical blockers without proof.",
       "",
-      "Return confirmed risks, disproven concerns, and the smallest decision-changing recommendation."
+      "## Pre-commitment predictions",
+      "Before deep investigation, list your hypotheses in `predictions[]` (what you expect to find and why).",
+      "",
+      "## Multi-perspective angles",
+      "Pick context-aware angles before analysis:",
+      "- plan/spec/scope: `executor`, `stakeholder`, `skeptic`",
+      "- design/code: `security`, `operator`, `new-hire`",
+      "",
+      "## Gap analysis",
+      "Name what is missing (evidence gaps, undefined contracts, absent safeguards), not just what looks wrong.",
+      "",
+      "## Self-audit",
+      "Low-confidence concerns (confidence <=4/10) must move into `openQuestions[]` and should not block stage transition by themselves.",
+      "",
+      "## Realist check",
+      "For each Critical/Major concern, test if it would realistically ship; downgrade or suppress concerns that are not plausible in this context.",
+      "Record the result in `realistCheckResults[]`.",
+      "",
+      "## ADVERSARIAL mode escalation",
+      "Escalate to ADVERSARIAL mode when reviewers disagree, your confidence is low, or trust/security boundaries are involved.",
+      "",
+      "Return validated risks, disproven predictions in `predictionsValidated[]`, and the smallest decision-changing recommendation."
     ].join("\n")
   },
   {

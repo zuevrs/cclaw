@@ -105,6 +105,34 @@ describe("stage schema and subagent alignment", () => {
     expect(mandatoryDelegationsForStage("tdd", "lightweight")).toEqual(["test-author"]);
   });
 
+  it("renders critic multi-perspective contract with prediction fields", () => {
+    const critic = CCLAW_AGENTS.find((agent) => agent.name === "critic");
+    expect(critic).toBeTruthy();
+    expect(critic?.returnSchema.optionalFields).toEqual([
+      "predictions",
+      "predictionsValidated",
+      "openQuestions",
+      "realistCheckResults"
+    ]);
+    expect(critic?.body).toContain("## Why this matters");
+    expect(critic?.body).toContain("## Pre-commitment predictions");
+    expect(critic?.body).toContain("## Multi-perspective angles");
+    expect(critic?.body).toContain("## Gap analysis");
+    expect(critic?.body).toContain("## Self-audit");
+    expect(critic?.body).toContain("## Realist check");
+    expect(critic?.body).toContain("## ADVERSARIAL mode escalation");
+  });
+
+  it("binds critic dispatch rows to critic-multi-perspective skill", () => {
+    const brainstormCritic = stageAutoSubagentDispatch("brainstorm").find((row) => row.agent === "critic");
+    const scopeCritic = stageAutoSubagentDispatch("scope").find((row) => row.agent === "critic");
+    const designCritic = stageAutoSubagentDispatch("design").find((row) => row.agent === "critic");
+    expect(brainstormCritic?.skill).toBe("critic-multi-perspective");
+    expect(scopeCritic?.skill).toBe("critic-multi-perspective");
+    expect(designCritic?.skill).toBe("critic-multi-perspective");
+    expect(designCritic?.when).toContain("auth/authz trust boundaries");
+  });
+
   it("derives policy needles from lint metadata with track transforms", () => {
     expect(stagePolicyNeedles("plan")).toContain("Dependency Batches");
     expect(stagePolicyNeedles("plan")).toContain("Calibrated Findings");

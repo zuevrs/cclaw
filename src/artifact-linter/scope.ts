@@ -1,5 +1,6 @@
 import {
   type StageLintContext,
+  checkCriticPredictionsContract,
   sectionBodyByHeadingPrefix,
   sectionBodyByName,
   extractCanonicalScopeMode,
@@ -63,6 +64,17 @@ export async function lintScopeStage(ctx: StageLintContext): Promise<void> {
           : hasEvidence
             ? `product-strategist delegation satisfied for mode ${selectedScopeMode}.`
             : "product-strategist delegation exists but evidenceRefs is empty; add at least one artifact/code evidence reference."
+      });
+    }
+
+    const criticPredictions = checkCriticPredictionsContract(sections);
+    if (criticPredictions !== null) {
+      findings.push({
+        section: "critic.predictions_missing",
+        required: true,
+        rule: "[P2] critic.predictions_missing — pre-commitment predictions block missing or empty",
+        found: criticPredictions.found,
+        details: criticPredictions.details
       });
     }
 

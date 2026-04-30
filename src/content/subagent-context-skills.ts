@@ -141,11 +141,39 @@ Use after the default reviewer/security-reviewer passes when repo signals identi
 `;
 }
 
+function criticMultiPerspectiveSkill(): string {
+  return `${skillFrontmatter(
+    "critic-multi-perspective",
+    "Multi-perspective critic protocol with pre-commitment predictions and realist checks."
+  )}# Critic Multi-Perspective Pass
+
+Use with the \`critic\` delegation in \`brainstorm\`, \`scope\`, and \`design\`.
+
+## Required Output
+
+- Before investigation, emit \`predictions[]\` with explicit hypotheses.
+- Analyze through context-aware angles:
+  - plan/spec/scope: executor, stakeholder, skeptic
+  - design/code: security, operator, new-hire
+- Include a dedicated gap analysis (what is missing, not only what is wrong).
+- Move low-confidence concerns (<=4/10) into \`openQuestions[]\`.
+- For every critical/major concern, include a \`realistCheckResults[]\` verdict.
+- End with \`predictionsValidated[]\` mapping each prediction to confirmed/disproven.
+
+## Guardrails
+
+- Do not block solely on low-confidence concerns.
+- Suppress or downgrade implausible critical findings during realist checks.
+- Escalate to adversarial mode when reviewers disagree, confidence is low, or trust boundaries are involved.
+`;
+}
+
 export const SUBAGENT_CONTEXT_SKILLS: Record<SubagentContextSkillId, string> = {
   "tdd-cycle-evidence": tddCycleEvidenceSkill(),
   "review-spec-pass": reviewSpecPassSkill(),
   "security-audit": securityAuditSkill(),
   "adversarial-review": adversarialReviewSkill(),
   "receiving-code-review": receivingCodeReviewSkill(),
-  "stack-aware-review": stackAwareReviewSkill()
+  "stack-aware-review": stackAwareReviewSkill(),
+  "critic-multi-perspective": criticMultiPerspectiveSkill()
 };

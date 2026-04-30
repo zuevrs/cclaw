@@ -594,8 +594,9 @@ const STAGE_AUTO_SUBAGENT_DISPATCH: Record<FlowStage, StageAutoSubagentDispatch[
       mode: "mandatory",
       requiredAtTier: "standard",
       when: "Always for standard/deep brainstorm to challenge the premise, do-nothing path, and higher-upside alternatives.",
-      purpose: "Attack assumptions and surface non-goals before direction approval.",
-      requiresUserGate: false
+      purpose: "Attack assumptions and surface non-goals before direction approval, with pre-commitment predictions validated against evidence.",
+      requiresUserGate: false,
+      skill: "critic-multi-perspective"
     },
     {
       agent: "researcher",
@@ -619,8 +620,9 @@ const STAGE_AUTO_SUBAGENT_DISPATCH: Record<FlowStage, StageAutoSubagentDispatch[
       mode: "mandatory",
       requiredAtTier: "standard",
       when: "Always during scope shaping for standard/deep work.",
-      purpose: "Test whether the selected scope mode is too timid, too broad, or hiding a smaller useful slice.",
-      requiresUserGate: false
+      purpose: "Test whether the selected scope mode is too timid, too broad, or hiding a smaller useful slice, using pre-commitment predictions and validation.",
+      requiresUserGate: false,
+      skill: "critic-multi-perspective"
     },
     {
       agent: "researcher",
@@ -665,9 +667,10 @@ const STAGE_AUTO_SUBAGENT_DISPATCH: Record<FlowStage, StageAutoSubagentDispatch[
     {
       agent: "critic",
       mode: "proactive",
-      when: "When architecture alternatives, coupling, cost, or rollback risk remain debatable.",
-      purpose: "Produce a shadow alternative, switch trigger, and cheaper-path challenge for the engineering lock.",
-      requiresUserGate: false
+      when: "When architecture alternatives, coupling, cost, or rollback risk remain debatable, or when security/auth/authz trust boundaries are involved.",
+      purpose: "Produce a shadow alternative, switch trigger, and cheaper-path challenge for the engineering lock with pre-commitment predictions and validation.",
+      requiresUserGate: false,
+      skill: "critic-multi-perspective"
     },
     {
       agent: "researcher",

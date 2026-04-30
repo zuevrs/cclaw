@@ -1,5 +1,6 @@
 import {
   type StageLintContext,
+  checkCriticPredictionsContract,
   sectionBodyByName,
   validateApproachesTaxonomy,
   headingLineIndex,
@@ -197,6 +198,17 @@ export async function lintBrainstormStage(ctx: StageLintContext): Promise<void> 
         rule: "When Self-Review Notes are present, they must use the calibrated review prompt output shape.",
         found: selfReview.ok,
         details: selfReview.details
+      });
+    }
+
+    const criticPredictions = checkCriticPredictionsContract(sections);
+    if (criticPredictions !== null) {
+      findings.push({
+        section: "critic.predictions_missing",
+        required: true,
+        rule: "[P2] critic.predictions_missing — pre-commitment predictions block missing or empty",
+        found: criticPredictions.found,
+        details: criticPredictions.details
       });
     }
 

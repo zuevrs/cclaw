@@ -118,6 +118,48 @@ export function sectionBodyByHeadingPrefix(sections: H2SectionMap, prefix: strin
   return null;
 }
 
+export interface CriticPredictionsContractCheck {
+  found: boolean;
+  details: string;
+}
+
+export function checkCriticPredictionsContract(
+  sections: H2SectionMap
+): CriticPredictionsContractCheck | null {
+  const criticFindingsBody = sectionBodyByName(sections, "Critic Findings");
+  const layeredReviewBody = sectionBodyByHeadingPrefix(sections, "Layered review");
+  const layeredReviewMentionsCritic =
+    layeredReviewBody !== null && /\bcritic\b/iu.test(layeredReviewBody);
+  const sourceBody = criticFindingsBody ?? (layeredReviewMentionsCritic ? layeredReviewBody : null);
+  if (sourceBody === null) return null;
+
+  const predictionsMatch =
+    /(?:^|\n)#{3,4}\s*Pre-commitment predictions\b([\s\S]*?)(?=\n#{2,4}\s+|$)/iu.exec(sourceBody);
+  const predictionsCount = predictionsMatch ? countListItems(predictionsMatch[1] ?? "") : 0;
+  const hasPredictions = predictionsCount >= 1;
+  const hasValidated = /(?:^|\n)#{3,4}\s*Validated\s*\/\s*Disproven\b/iu.test(sourceBody);
+  const hasOpenQuestions = /(?:^|\n)#{3,4}\s*Open Questions\b/iu.test(sourceBody);
+
+  const missing: string[] = [];
+  if (!hasPredictions) {
+    missing.push("`Pre-commitment predictions` subsection is missing or has no list items");
+  }
+  if (!hasValidated) {
+    missing.push("`Validated / Disproven` subsection is missing");
+  }
+  if (!hasOpenQuestions) {
+    missing.push("`Open Questions` subsection is missing");
+  }
+
+  return {
+    found: missing.length === 0,
+    details:
+      missing.length === 0
+        ? "Critic pre-commitment predictions contract is present (predictions, validated/disproven mapping, open questions)."
+        : missing.join("; ")
+  };
+}
+
 /**
  * Build a regex that matches `<field>: <value>` even when the field name
  * and/or value are wrapped in markdown emphasis (`*`, `**`, `_`, `__`).
