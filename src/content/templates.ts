@@ -1026,6 +1026,76 @@ Execution rule: complete and verify each batch before starting the next batch.
 ## Learnings
 - None this stage.
 `,
+  "cohesion-contract.md": `${artifactFrontmatter("tdd")}
+
+# Cohesion Contract — <wave / stage / topic>
+
+## Shared Types & Interfaces
+| Symbol | Path | Signature | Owner slice |
+|---|---|---|---|
+|  |  |  |  |
+
+## Naming Conventions
+- 
+
+## Invariants
+- 
+
+## Integration Touchpoints
+| From slice | To slice | Surface | Integration test name |
+|---|---|---|---|
+|  |  |  |  |
+
+## Behavior Specifications per Slice
+### Slice <n>: <description>
+- test: <name>
+  assert: <one-line assertion>
+  surface: <public interface>
+
+## Status
+| Slice | Implemented | Tests pass | Cohesion verified |
+|---|---|---|---|
+| S-1 | no | no | no |
+
+## Learnings
+- None this stage.
+`,
+  "cohesion-contract.json": `{
+  "version": 1,
+  "sharedTypes": [
+    {
+      "symbol": "",
+      "path": "",
+      "signature": "",
+      "ownerSlice": ""
+    }
+  ],
+  "touchpoints": [
+    {
+      "fromSlice": "",
+      "toSlice": "",
+      "surface": "",
+      "integrationTestName": ""
+    }
+  ],
+  "slices": [
+    {
+      "sliceId": "S-1",
+      "description": "",
+      "test": "",
+      "assert": "",
+      "surface": "",
+      "implemented": false,
+      "testsPass": false,
+      "cohesionVerified": false
+    }
+  ],
+  "status": {
+    "overall": "pending",
+    "notes": ""
+  }
+}
+`,
   "07-review.md": `${artifactFrontmatter("review")}
 
 # Review Artifact

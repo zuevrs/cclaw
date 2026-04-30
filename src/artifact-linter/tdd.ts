@@ -1,3 +1,6 @@
+import fs from "node:fs/promises";
+import path from "node:path";
+import { readDelegationLedger } from "../delegation.js";
 import {
   type StageLintContext,
   sectionBodyByName
@@ -145,6 +148,92 @@ export async function lintTddStage(ctx: StageLintContext): Promise<void> {
           : hasRealPathHint
             ? "Mocks/spies detected while real implementation paths are listed; prefer Real > Fake > Stub > Mock unless a boundary justification is added."
             : "Mocks/spies detected without boundary justification; add explicit trust-boundary rationale or replace with real/fake/stub coverage."
+      });
+    }
+
+    const delegationLedger = await readDelegationLedger(projectRoot);
+    const activeRunEntries = delegationLedger.entries.filter((entry) =>
+      entry.stage === "tdd" && entry.runId === delegationLedger.runId
+    );
+    const completedSliceImplementers = activeRunEntries.filter((entry) =>
+      entry.agent === "slice-implementer" && entry.status === "completed"
+    );
+    const fanOutDetected = completedSliceImplementers.length > 1;
+
+    if (fanOutDetected) {
+      const artifactsDir = path.dirname(absFile);
+      const cohesionContractMarkdownPath = path.join(artifactsDir, "cohesion-contract.md");
+      const cohesionContractJsonPath = path.join(artifactsDir, "cohesion-contract.json");
+
+      let cohesionContractFound = true;
+      const cohesionErrors: string[] = [];
+      try {
+        const markdown = await fs.readFile(cohesionContractMarkdownPath, "utf8");
+        if (!/#\s*Cohesion Contract\b/u.test(markdown)) {
+          cohesionContractFound = false;
+          cohesionErrors.push("cohesion-contract.md exists but missing `# Cohesion Contract` heading.");
+        }
+      } catch {
+        cohesionContractFound = false;
+        cohesionErrors.push("cohesion-contract.md is missing.");
+      }
+
+      try {
+        const jsonRaw = await fs.readFile(cohesionContractJsonPath, "utf8");
+        const parsed: unknown = JSON.parse(jsonRaw);
+        const objectLike = parsed !== null && typeof parsed === "object" && !Array.isArray(parsed);
+        const parsedRecord = objectLike ? parsed as Record<string, unknown> : null;
+        const hasRequiredShape =
+          parsedRecord !== null &&
+          Array.isArray(parsedRecord.sharedTypes) &&
+          Array.isArray(parsedRecord.touchpoints) &&
+          Array.isArray(parsedRecord.slices) &&
+          parsedRecord.status !== undefined &&
+          typeof parsedRecord.status === "object" &&
+          parsedRecord.status !== null;
+        if (!hasRequiredShape) {
+          cohesionContractFound = false;
+          cohesionErrors.push(
+            "cohesion-contract.json must parse and include `sharedTypes[]`, `touchpoints[]`, `slices[]`, and `status`."
+          );
+        }
+      } catch {
+        cohesionContractFound = false;
+        cohesionErrors.push("cohesion-contract.json is missing or invalid JSON.");
+      }
+
+      findings.push({
+        section: "tdd.cohesion_contract_missing",
+        required: true,
+        rule: "When delegation ledger has >1 completed slice-implementer rows for active TDD run, require `.cclaw/artifacts/cohesion-contract.md` and parseable `.cclaw/artifacts/cohesion-contract.json` sidecar.",
+        found: cohesionContractFound,
+        details: cohesionContractFound
+          ? `Fan-out detected (${completedSliceImplementers.length} completed slice-implementer rows); cohesion contract markdown+JSON sidecar are present and parseable.`
+          : cohesionErrors.join(" ")
+      });
+
+      const completedOverseerRows = activeRunEntries.filter((entry) =>
+        entry.agent === "integration-overseer" && entry.status === "completed"
+      );
+      const overseerStatusInEvidence = completedOverseerRows.some((entry) => {
+        const refs = Array.isArray(entry.evidenceRefs) ? entry.evidenceRefs.join(" ") : "";
+        return /\b(?:PASS_WITH_GAPS|PASS)\b/u.test(refs);
+      });
+      const overseerStatusInArtifact = /\bintegration-overseer\b[\s\S]{0,200}\b(?:PASS_WITH_GAPS|PASS)\b/iu.test(raw);
+      const integrationOverseerFound =
+        completedOverseerRows.length > 0 &&
+        (overseerStatusInEvidence || overseerStatusInArtifact);
+
+      findings.push({
+        section: "tdd.integration_overseer_missing",
+        required: true,
+        rule: "When fan-out is detected, require completed `integration-overseer` evidence with PASS or PASS_WITH_GAPS.",
+        found: integrationOverseerFound,
+        details: integrationOverseerFound
+          ? "integration-overseer completion recorded with PASS/PASS_WITH_GAPS evidence."
+          : completedOverseerRows.length === 0
+            ? "Fan-out detected but no completed integration-overseer delegation row exists for active run."
+            : "integration-overseer completion exists, but PASS/PASS_WITH_GAPS evidence is missing in delegation evidenceRefs and artifact text."
       });
     }
 }

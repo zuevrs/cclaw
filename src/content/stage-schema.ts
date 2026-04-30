@@ -205,6 +205,7 @@ function defaultReturnSchemaForAgent(
     case "critic":
       return "critic-return";
     case "reviewer":
+    case "integration-overseer":
       return "review-return";
     case "security-reviewer":
       return "security-return";
@@ -795,6 +796,13 @@ const STAGE_AUTO_SUBAGENT_DISPATCH: Record<FlowStage, StageAutoSubagentDispatch[
       requiredAtTier: "lightweight",
       when: "When a bounded GREEN/REFACTOR slice has non-overlapping file ownership and a clear RED failure.",
       purpose: "Implement the minimal passing slice inside explicit file boundaries and return strict worker evidence.",
+      requiresUserGate: false
+    },
+    {
+      agent: "integration-overseer",
+      mode: "proactive",
+      when: "When TDD fan-out used 2+ parallel slice-implementers, or when slices touch shared interfaces.",
+      purpose: "Verify cohesion-contract integrity across shared types, touchpoints, invariants, and integration test outcomes after fan-in.",
       requiresUserGate: false
     },
     {

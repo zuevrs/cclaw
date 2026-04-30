@@ -3658,6 +3658,212 @@ ${TDD_PREFLIGHT_SECTIONS}
     expect(result.passed).toBe(true);
   });
 
+  it("fails tdd fan-out when cohesion-contract artifacts are missing", async () => {
+    const root = await createTempProject("tdd-fanout-missing-cohesion-contract");
+    await writeRuntimeArtifact(root, "06-tdd.md", `# TDD Artifact
+
+${TDD_PREFLIGHT_SECTIONS}
+
+## RED Evidence
+| Slice | Test name | Command | Failure output summary |
+|---|---|---|---|
+| S-1 | counts unique keys | pnpm vitest run dedupe.test.ts | Cannot find module |
+
+## Acceptance Mapping
+| Slice | Plan task ID | Spec criterion ID |
+|---|---|---|
+| S-1 | T-1 | AC-1 |
+
+## Failure Analysis
+| Slice | Expected missing behavior | Actual failure reason |
+|---|---|---|
+| S-1 | Module not implemented | Module import fails — correct |
+
+## GREEN Evidence
+- Full suite command: pnpm vitest run
+- Full suite result: 12 passed, 0 failed
+
+## Verification Ladder
+- Highest tier reached: command
+- Evidence: pnpm vitest run dedupe.test.ts (pass)
+
+## REFACTOR Notes
+- What changed: Extracted helper function
+- Why: Reuse across tests
+- Behavior preserved: Full suite green after refactor
+
+## Traceability
+- Plan task IDs: T-1
+- Spec criterion IDs: AC-1
+`);
+    await writeDelegationLog(root, [
+      {
+        stage: "tdd",
+        agent: "slice-implementer",
+        mode: "proactive",
+        status: "completed",
+        ts: "2026-05-01T10:00:00Z",
+        runId: "active",
+        evidenceRefs: [".cclaw/artifacts/06-tdd.md#slice-s1"]
+      },
+      {
+        stage: "tdd",
+        agent: "slice-implementer",
+        mode: "proactive",
+        status: "completed",
+        ts: "2026-05-01T10:02:00Z",
+        runId: "active",
+        evidenceRefs: [".cclaw/artifacts/06-tdd.md#slice-s2"]
+      }
+    ]);
+
+    const result = await lintArtifact(root, "tdd");
+    const cohesion = result.findings.find((f) => f.section === "tdd.cohesion_contract_missing");
+    expect(result.passed).toBe(false);
+    expect(cohesion?.required).toBe(true);
+    expect(cohesion?.found).toBe(false);
+  });
+
+  it("fails tdd fan-out when integration-overseer PASS evidence is missing", async () => {
+    const root = await createTempProject("tdd-fanout-missing-integration-overseer");
+    await writeRuntimeArtifact(root, "06-tdd.md", `# TDD Artifact
+
+${TDD_PREFLIGHT_SECTIONS}
+
+## RED Evidence
+| Slice | Test name | Command | Failure output summary |
+|---|---|---|---|
+| S-1 | counts unique keys | pnpm vitest run dedupe.test.ts | Cannot find module |
+
+## Acceptance Mapping
+| Slice | Plan task ID | Spec criterion ID |
+|---|---|---|
+| S-1 | T-1 | AC-1 |
+
+## Failure Analysis
+| Slice | Expected missing behavior | Actual failure reason |
+|---|---|---|
+| S-1 | Module not implemented | Module import fails — correct |
+
+## GREEN Evidence
+- Full suite command: pnpm vitest run
+- Full suite result: 12 passed, 0 failed
+
+## Verification Ladder
+- Highest tier reached: command
+- Evidence: pnpm vitest run dedupe.test.ts (pass)
+
+## REFACTOR Notes
+- What changed: Extracted helper function
+- Why: Reuse across tests
+- Behavior preserved: Full suite green after refactor
+
+## Traceability
+- Plan task IDs: T-1
+- Spec criterion IDs: AC-1
+`);
+    await writeDelegationLog(root, [
+      {
+        stage: "tdd",
+        agent: "slice-implementer",
+        mode: "proactive",
+        status: "completed",
+        ts: "2026-05-01T10:00:00Z",
+        runId: "active",
+        evidenceRefs: [".cclaw/artifacts/06-tdd.md#slice-s1"]
+      },
+      {
+        stage: "tdd",
+        agent: "slice-implementer",
+        mode: "proactive",
+        status: "completed",
+        ts: "2026-05-01T10:02:00Z",
+        runId: "active",
+        evidenceRefs: [".cclaw/artifacts/06-tdd.md#slice-s2"]
+      }
+    ]);
+    await fs.writeFile(
+      path.join(root, ".cclaw/artifacts/cohesion-contract.md"),
+      `# Cohesion Contract — tdd fan-out
+
+## Shared Types & Interfaces
+| Symbol | Path | Signature | Owner slice |
+|---|---|---|---|
+| CohesionState | src/contracts.ts | type CohesionState = { ready: boolean } | S-1 |
+
+## Naming Conventions
+- shared symbols use Cohesion* prefix.
+
+## Invariants
+- each slice keeps cohesion state serializable.
+
+## Integration Touchpoints
+| From slice | To slice | Surface | Integration test name |
+|---|---|---|---|
+| S-1 | S-2 | buildContract() | integration:cohesion-touchpoints |
+
+## Behavior Specifications per Slice
+### Slice 1: Build cohesion contract
+- test: integration:cohesion-touchpoints
+  assert: contract shape is shared by both slices
+  surface: buildContract()
+
+## Status
+| Slice | Implemented | Tests pass | Cohesion verified |
+|---|---|---|---|
+| S-1 | yes | yes | no |
+`,
+      "utf8"
+    );
+    await fs.writeFile(
+      path.join(root, ".cclaw/artifacts/cohesion-contract.json"),
+      JSON.stringify({
+        version: 1,
+        sharedTypes: [
+          {
+            symbol: "CohesionState",
+            path: "src/contracts.ts",
+            signature: "type CohesionState = { ready: boolean }",
+            ownerSlice: "S-1"
+          }
+        ],
+        touchpoints: [
+          {
+            fromSlice: "S-1",
+            toSlice: "S-2",
+            surface: "buildContract()",
+            integrationTestName: "integration:cohesion-touchpoints"
+          }
+        ],
+        slices: [
+          {
+            sliceId: "S-1",
+            description: "Build cohesion contract",
+            test: "integration:cohesion-touchpoints",
+            assert: "contract shape is shared by both slices",
+            surface: "buildContract()",
+            implemented: true,
+            testsPass: true,
+            cohesionVerified: false
+          }
+        ],
+        status: {
+          overall: "partial",
+          notes: "integration overseer pending"
+        }
+      }, null, 2),
+      "utf8"
+    );
+
+    const result = await lintArtifact(root, "tdd");
+    const cohesion = result.findings.find((f) => f.section === "tdd.cohesion_contract_missing");
+    const overseer = result.findings.find((f) => f.section === "tdd.integration_overseer_missing");
+    expect(result.passed).toBe(false);
+    expect(cohesion?.found).toBe(true);
+    expect(overseer?.required).toBe(true);
+    expect(overseer?.found).toBe(false);
+  });
+
   it("fails tdd when Iron Law Acknowledgement section is missing", async () => {
     const root = await createTempProject("tdd-missing-iron-law-section");
     await writeRuntimeArtifact(root, "06-tdd.md", `# TDD Artifact

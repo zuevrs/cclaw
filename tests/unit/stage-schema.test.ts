@@ -103,13 +103,20 @@ describe("stage schema and subagent alignment", () => {
   });
 
   it("keeps tdd dispatch to one mandatory test-author evidence cycle", () => {
-    const testAuthorRows = stageAutoSubagentDispatch("tdd")
+    const tddDispatch = stageAutoSubagentDispatch("tdd");
+    const testAuthorRows = tddDispatch
       .filter((row) => row.agent === "test-author");
+    const integrationOverseerRows = tddDispatch
+      .filter((row) => row.agent === "integration-overseer");
 
     expect(testAuthorRows).toHaveLength(1);
     expect(testAuthorRows[0]?.mode).toBe("mandatory");
     expect(testAuthorRows[0]?.skill).toBe("tdd-cycle-evidence");
     expect(testAuthorRows[0]?.purpose).toContain("RED/GREEN/REFACTOR evidence");
+    expect(integrationOverseerRows).toHaveLength(1);
+    expect(integrationOverseerRows[0]?.mode).toBe("proactive");
+    expect(integrationOverseerRows[0]?.when).toContain("2+ parallel slice-implementers");
+    expect(integrationOverseerRows[0]?.returnSchema).toBe("review-return");
     expect(mandatoryDelegationsForStage("tdd", "lightweight")).toEqual(["test-author"]);
   });
 
@@ -358,6 +365,21 @@ describe("stage schema and subagent alignment", () => {
     expect(ship).toContain("Victory Detector: pass | fail");
   });
 
+  it("ships cohesion-contract markdown and JSON sidecar templates", () => {
+    const contractMarkdown = ARTIFACT_TEMPLATES["cohesion-contract.md"] ?? "";
+    const contractJsonRaw = ARTIFACT_TEMPLATES["cohesion-contract.json"] ?? "{}";
+    const contractJson = JSON.parse(contractJsonRaw) as Record<string, unknown>;
+
+    expect(contractMarkdown).toContain("# Cohesion Contract");
+    expect(contractMarkdown).toContain("## Shared Types & Interfaces");
+    expect(contractMarkdown).toContain("## Integration Touchpoints");
+    expect(contractMarkdown).toContain("## Status");
+    expect(Array.isArray(contractJson.sharedTypes)).toBe(true);
+    expect(Array.isArray(contractJson.touchpoints)).toBe(true);
+    expect(Array.isArray(contractJson.slices)).toBe(true);
+    expect(contractJson.status).toBeTypeOf("object");
+  });
+
   it("ship finalization enums are sourced from canonical constants", () => {
     const ship = stageSchema("ship");
     const template = ARTIFACT_TEMPLATES["08-ship.md"] ?? "";
@@ -444,6 +466,7 @@ describe("stage schema and subagent alignment", () => {
       "doc-updater",
       "feasibility-reviewer",
       "fixer",
+      "integration-overseer",
       "planner",
       "product-discovery",
       "release-reviewer",
@@ -467,6 +490,8 @@ describe("stage schema and subagent alignment", () => {
     }
     expect(CCLAW_AGENTS.find((agent) => agent.name === "slice-implementer")?.activation).toBe("on-demand");
     expect(CCLAW_AGENTS.find((agent) => agent.name === "fixer")?.activation).toBe("on-demand");
+    expect(CCLAW_AGENTS.find((agent) => agent.name === "integration-overseer")?.activation).toBe("on-demand");
+    expect(CCLAW_AGENTS.find((agent) => agent.name === "integration-overseer")?.relatedStages).toEqual(["tdd", "review"]);
   });
 
   it("registers document review agents with expected stage coverage", () => {

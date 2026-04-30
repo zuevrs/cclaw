@@ -396,6 +396,8 @@ ${conversationLanguagePolicyMarkdown()}
 
 Implementation that touches shared source trees must remain **sequential** unless you have proven disjoint filesystem ownership (rare) and an explicit merge protocol.
 
+When explicit bounded TDD fan-out is approved with parallel \`slice-implementer\` lanes, author \`.cclaw/artifacts/cohesion-contract.md\` + \`.json\` before launch and run \`integration-overseer\` after fan-in.
+
 ## When to Use
 
 - **Independent investigations** (perf vs correctness vs dependency hygiene) with separated code neighborhoods.
@@ -419,11 +421,13 @@ Implementation that touches shared source trees must remain **sequential** unles
 ## Dispatch Protocol
 
 1. **Identify independent problem domains** (no file overlap; no shared mutable working assumptions).
-2. **Craft one prompt per domain** with **full context pasted** — same HARD-GATE as SDD: no “go read X to learn why.”
-3. **Launch ALL agents in a single controller message** (multiple Task tool calls) so they start with comparable timelines.
-4. **Wait for all to return** before synthesis (avoid incremental confirmation bias).
-5. **Reconcile results:** deduplicate findings, merge overlaps, and **conflict-check** contradictions explicitly.
-6. **Run the full test suite after any code changes** — parallel analysis may propose edits; verification stays mandatory.
+2. **Author cohesion contract first** whenever fan-out touches shared interfaces or bounded parallel \`slice-implementer\` lanes.
+3. **Craft one prompt per domain** with **full context pasted** — same HARD-GATE as SDD: no “go read X to learn why.”
+4. **Launch ALL agents in a single controller message** (multiple Task tool calls) so they start with comparable timelines.
+5. **Wait for all to return** before synthesis (avoid incremental confirmation bias).
+6. **Run integration-overseer after fan-in** to verify touchpoints, boundary types, invariants, and integration-test outcomes.
+7. **Reconcile results:** deduplicate findings, merge overlaps, and **conflict-check** contradictions explicitly.
+8. **Run the full test suite after any code changes** — parallel analysis may propose edits; verification stays mandatory.
 
 ## Review Army Pattern (gstack)
 

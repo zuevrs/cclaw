@@ -40,6 +40,7 @@ export type StageSubagentName =
   | "critic"
   | "reviewer"
   | "security-reviewer"
+  | "integration-overseer"
   | "test-author"
   | "doc-updater"
   | "fixer";
