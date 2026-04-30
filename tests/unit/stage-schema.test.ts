@@ -294,7 +294,14 @@ describe("stage schema and subagent alignment", () => {
       }
     }
 
-    expect([...expectedSkillRefs].sort()).toEqual(Object.keys(SUBAGENT_CONTEXT_SKILLS).sort());
+    const materializedSkills = Object.keys(SUBAGENT_CONTEXT_SKILLS).sort();
+    expect(materializedSkills).toEqual(expect.arrayContaining([...expectedSkillRefs].sort()));
+    const optionalLensSkills = materializedSkills.filter((skill) => !expectedSkillRefs.has(skill)).sort();
+    expect(optionalLensSkills).toEqual([
+      "review-compat-lens",
+      "review-observability-lens",
+      "review-perf-lens"
+    ]);
     for (const [skillName, body] of Object.entries(SUBAGENT_CONTEXT_SKILLS)) {
       expect(body, `${skillName} frontmatter`).toContain(`name: ${skillName}`);
       expect(body, `${skillName} required output`).toContain("## Required Output");
@@ -435,14 +442,11 @@ describe("stage schema and subagent alignment", () => {
     expect(CCLAW_AGENTS.map((agent) => agent.name).sort()).toEqual([
       "architect",
       "coherence-reviewer",
-      "compatibility-reviewer",
       "critic",
       "doc-updater",
       "feasibility-reviewer",
       "fixer",
       "implementer",
-      "observability-reviewer",
-      "performance-reviewer",
       "planner",
       "product-manager",
       "product-strategist",
@@ -490,10 +494,6 @@ describe("stage schema and subagent alignment", () => {
       dispatchClass: "review-lens",
       returnSchema: "review-return"
     });
-    expect(review?.dispatchRules.find((rule) => rule.agent === "performance-reviewer")).toMatchObject({
-      dispatchClass: "review-lens",
-      returnSchema: "performance-return"
-    });
     const tdd = stageDelegationSummary("lightweight").find((row) => row.stage === "tdd");
     expect(tdd?.dispatchRules.find((rule) => rule.agent === "test-author")).toMatchObject({
       returnSchema: "tdd-return"
@@ -522,8 +522,7 @@ describe("stage schema and subagent alignment", () => {
       "researcher",
       "coherence-reviewer",
       "feasibility-reviewer",
-      "compatibility-reviewer",
-      "observability-reviewer"
+      "security-reviewer"
     ]));
     expect(design.researchPlaybooks).toEqual([
       "research/research-fleet.md",

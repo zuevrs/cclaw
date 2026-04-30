@@ -196,12 +196,6 @@ function defaultReturnSchemaForAgent(
       return "review-return";
     case "slice-implementer":
       return "worker-return";
-    case "performance-reviewer":
-      return "performance-return";
-    case "compatibility-reviewer":
-      return "compatibility-return";
-    case "observability-reviewer":
-      return "observability-return";
     case "release-reviewer":
       return "release-return";
     case "planner":
@@ -712,22 +706,6 @@ const STAGE_AUTO_SUBAGENT_DISPATCH: Record<FlowStage, StageAutoSubagentDispatch[
       purpose: "Validate that design assumptions remain feasible in real runtime and rollout constraints.",
       requiresUserGate: false,
       skill: "document-feasibility-pass"
-    },
-    {
-      agent: "compatibility-reviewer",
-      mode: "proactive",
-      requiredAtTier: "lightweight",
-      when: "When public API, config, persisted data, CLI, generated clients, or cross-version behavior can change.",
-      purpose: "Identify backward-compatibility and migration hazards before spec/plan.",
-      requiresUserGate: false
-    },
-    {
-      agent: "observability-reviewer",
-      mode: "proactive",
-      requiredAtTier: "lightweight",
-      when: "When runtime/debuggability, rollout, failure detection, or supportability matters.",
-      purpose: "Validate logs/metrics/traces, alerting, and rescue-path visibility before implementation.",
-      requiresUserGate: false
     }
   ],
   spec: [
@@ -843,7 +821,7 @@ const STAGE_AUTO_SUBAGENT_DISPATCH: Record<FlowStage, StageAutoSubagentDispatch[
       mode: "mandatory",
       requiredAtTier: "lightweight",
       when: "Always in review stage.",
-      purpose: "Layer 1 spec compliance plus integrated Layer 2 review across correctness, architecture, and external-safety tags with source-tagged findings.",
+      purpose: "Layer 1 spec compliance plus integrated Layer 2 review across correctness, architecture, and inline performance/compatibility/observability lens coverage with source-tagged findings. Escalate to optional dedicated lens skills only when diff scope/risk justifies a deeper pass.",
       requiresUserGate: false,
       skill: "review-spec-pass"
     },
@@ -855,30 +833,6 @@ const STAGE_AUTO_SUBAGENT_DISPATCH: Record<FlowStage, StageAutoSubagentDispatch[
       purpose: "Guarantee a dedicated security pass on every diff: auth, input validation, secrets, injection, privilege, and blast-radius review are never opt-in.",
       requiresUserGate: false,
       skill: "security-audit"
-    },
-    {
-      agent: "performance-reviewer",
-      mode: "proactive",
-      requiredAtTier: "lightweight",
-      when: "When hot paths, IO, data volume, rendering, caching, or algorithmic cost can move.",
-      purpose: "Run a focused performance lens and report evidence-backed regressions or no-impact rationale.",
-      requiresUserGate: false
-    },
-    {
-      agent: "compatibility-reviewer",
-      mode: "proactive",
-      requiredAtTier: "lightweight",
-      when: "When public API, CLI/config, persisted data, generated clients, or dependency versions change.",
-      purpose: "Check compatibility, migrations, and consumer-facing contract stability.",
-      requiresUserGate: false
-    },
-    {
-      agent: "observability-reviewer",
-      mode: "proactive",
-      requiredAtTier: "lightweight",
-      when: "When failure diagnosis, logging/metrics/traces, rollout, or operational support matters.",
-      purpose: "Check observability and supportability evidence against the design/review artifact.",
-      requiresUserGate: false
     },
     {
       agent: "reviewer",

@@ -423,7 +423,7 @@ export const CCLAW_AGENTS = [
   {
     name: "reviewer",
     description:
-      "MANDATORY during review. MUST BE USED to run a two-pass audit: spec compliance first, then correctness/maintainability/performance/architecture.",
+      "MANDATORY during review. MUST BE USED to run a two-pass audit with explicit inline lens coverage for performance, compatibility, and observability.",
     tools: ["Read", "Grep", "Glob"],
     model: "balanced",
     activation: "mandatory",
@@ -444,6 +444,13 @@ export const CCLAW_AGENTS = [
       "   - Performance: avoid obvious hot-path regressions.",
       "   - Architecture fit: layering and contract stability.",
       "",
+      "## Lens Coverage",
+      "Performance: NO_IMPACT / FOUND_<n>",
+      "Compatibility: NO_IMPACT / FOUND_<n>",
+      "Observability: NO_IMPACT / FOUND_<n>",
+      "Security: routed to security-reviewer (always separate)",
+      "For unusually large/high-risk diffs, optional deep-dive context skills may be loaded: `review-perf-lens`, `review-compat-lens`, `review-observability-lens`.",
+      "",
       "For each finding include:",
       "- Severity: `Critical` | `Important` | `Suggestion`",
       "- Location: `file:line`; if no line is possible, state the no-line reason",
@@ -452,54 +459,6 @@ export const CCLAW_AGENTS = [
       "Also report files inspected, changed-file coverage, diagnostics run, dependency/version audit when relevant, and a no-finding attestation when no issues are found.",
       "",
       "**Trust model:** never rely on implementer claims; verify by reading code."
-    ].join("\n")
-  },
-  {
-    name: "performance-reviewer",
-    description:
-      "PROACTIVE during review for hot paths, IO, data volume, caching, rendering, or algorithmic cost changes. Produces no-impact rationale when clean.",
-    tools: ["Read", "Grep", "Glob"],
-    model: "balanced",
-    activation: "proactive",
-    relatedStages: ["review"],
-    returnSchema: REVIEW_RETURN_SCHEMA,
-    body: [
-      "You are a **performance review specialist**.",
-      "",
-      "Check hot paths, algorithmic complexity, IO/network calls, caching behavior, bundle/runtime costs, and accidental N+1 or repeated work.",
-      "Every finding needs a concrete code citation and a measurement or measurement plan."
-    ].join("\n")
-  },
-  {
-    name: "compatibility-reviewer",
-    description:
-      "PROACTIVE during design/review when public APIs, config, persisted data, CLI behavior, generated clients, or dependency versions may change.",
-    tools: ["Read", "Grep", "Glob"],
-    model: "balanced",
-    activation: "proactive",
-    relatedStages: ["design", "review"],
-    returnSchema: REVIEW_RETURN_SCHEMA,
-    body: [
-      "You are a **compatibility review specialist**.",
-      "",
-      "Check API compatibility, config/schema stability, persisted data migrations, CLI/user-facing behavior, generated clients, and rollout fallback paths.",
-      "Distinguish shipped compatibility obligations from in-branch implementation churn."
-    ].join("\n")
-  },
-  {
-    name: "observability-reviewer",
-    description:
-      "PROACTIVE during design/review when diagnosis, telemetry, rollout visibility, or supportability could affect safe operation.",
-    tools: ["Read", "Grep", "Glob"],
-    model: "balanced",
-    activation: "proactive",
-    relatedStages: ["design", "review"],
-    returnSchema: REVIEW_RETURN_SCHEMA,
-    body: [
-      "You are an **observability review specialist**.",
-      "",
-      "Check logs, metrics, traces, alerts, debug handles, failure detection, and support handoff evidence for the changed paths.",
-      "Report missing visibility as a ship risk only when it affects diagnosis or rollback."
     ].join("\n")
   },
   {

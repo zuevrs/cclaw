@@ -14,9 +14,6 @@ const SUBAGENT_AGENT_NAMES = [
   "spec-validator",
   "spec-document-reviewer",
   "slice-implementer",
-  "performance-reviewer",
-  "compatibility-reviewer",
-  "observability-reviewer",
   "release-reviewer",
   "planner",
   "product-manager",
@@ -1063,12 +1060,6 @@ export function enhancedAgentBody(agentName: string): string {
       return specDocumentReviewerEnhancedBody();
     case "slice-implementer":
       return sliceImplementerEnhancedBody();
-    case "performance-reviewer":
-      return performanceReviewerEnhancedBody();
-    case "compatibility-reviewer":
-      return compatibilityReviewerEnhancedBody();
-    case "observability-reviewer":
-      return observabilityReviewerEnhancedBody();
     case "release-reviewer":
       return releaseReviewerEnhancedBody();
     case "planner":

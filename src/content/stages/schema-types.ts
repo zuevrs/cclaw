@@ -34,9 +34,6 @@ export type StageSubagentName =
   | "scope-guardian-reviewer"
   | "feasibility-reviewer"
   | "slice-implementer"
-  | "performance-reviewer"
-  | "compatibility-reviewer"
-  | "observability-reviewer"
   | "release-reviewer"
   | "planner"
   | "product-manager"
@@ -67,9 +64,6 @@ export type StageSubagentReturnSchema =
   | "research-return"
   | "architecture-return"
   | "spec-validation-return"
-  | "performance-return"
-  | "compatibility-return"
-  | "observability-return"
   | "release-return";
 
 export interface StageAutoSubagentDispatch {

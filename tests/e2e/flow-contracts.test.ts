@@ -266,7 +266,27 @@ describe("flow command contracts", () => {
       await expect(fs.stat(path.join(root, ".agents/skills", staleSkill))).rejects.toThrow(/ENOENT/);
     }
 
-    for (const agentName of ["researcher", "architect", "spec-validator", "slice-implementer", "performance-reviewer", "compatibility-reviewer", "observability-reviewer", "release-reviewer", "product-manager", "critic", "planner", "reviewer", "security-reviewer", "test-author", "doc-updater", "implementer", "fixer"]) {
+    for (const agentName of [
+      "researcher",
+      "architect",
+      "spec-validator",
+      "spec-document-reviewer",
+      "coherence-reviewer",
+      "scope-guardian-reviewer",
+      "feasibility-reviewer",
+      "slice-implementer",
+      "release-reviewer",
+      "product-manager",
+      "product-strategist",
+      "critic",
+      "planner",
+      "reviewer",
+      "security-reviewer",
+      "test-author",
+      "doc-updater",
+      "implementer",
+      "fixer"
+    ]) {
       const opencodeAgent = await fs.readFile(path.join(root, ".opencode/agents", `${agentName}.md`), "utf8");
       const codexAgent = await fs.readFile(path.join(root, ".codex/agents", `${agentName}.toml`), "utf8");
       expect(opencodeAgent).toContain(`# ${agentName}`);
@@ -277,7 +297,7 @@ describe("flow command contracts", () => {
     const generatedPm = await fs.readFile(path.join(root, ".cclaw/agents/product-manager.md"), "utf8");
     const generatedCritic = await fs.readFile(path.join(root, ".cclaw/agents/critic.md"), "utf8");
     expect(generatedPm).toContain("VALUE_HYPOTHESIS");
-    expect(generatedCritic).toContain("shadow alternative");
+    expect(generatedCritic).toContain("Pre-commitment predictions");
     const generatedImplementer = await fs.readFile(path.join(root, ".cclaw/agents/implementer.md"), "utf8");
     expect(generatedImplementer).toContain("STRICT_RETURN_SCHEMA");
 

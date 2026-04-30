@@ -234,6 +234,69 @@ Use with \`feasibility-reviewer\` on plan/design docs that rely on runtime or op
 `;
 }
 
+function reviewPerfLensSkill(): string {
+  return `${skillFrontmatter(
+    "review-perf-lens",
+    "Optional deep performance lens for large or high-risk review surfaces."
+  )}# Review Performance Lens
+
+Use as an optional follow-up lens when the default reviewer pass flags non-trivial performance risk.
+
+## Required Output
+
+- Hot-path or algorithmic-risk summary with touched files.
+- Potential regressions and estimated blast radius.
+- Clear NO_IMPACT or FOUND_<n> result with evidence.
+
+## Guardrails
+
+- Run only when justified by diff scope or explicit trigger.
+- Do not replace the mandatory reviewer pass; this lens is additive.
+`;
+}
+
+function reviewCompatLensSkill(): string {
+  return `${skillFrontmatter(
+    "review-compat-lens",
+    "Optional compatibility lens for high-risk API/config/schema changes."
+  )}# Review Compatibility Lens
+
+Use as an optional follow-up lens when contracts, config, persistence schema, or generated clients might break consumers.
+
+## Required Output
+
+- Surface inventory: APIs/config/schema/CLI/client contracts touched.
+- Compatibility risk assessment (backward, forward, migration path).
+- Clear NO_IMPACT or FOUND_<n> result with evidence.
+
+## Guardrails
+
+- Focus on externally observable contracts and migration safety.
+- Do not duplicate baseline reviewer findings verbatim.
+`;
+}
+
+function reviewObservabilityLensSkill(): string {
+  return `${skillFrontmatter(
+    "review-observability-lens",
+    "Optional observability lens for diagnosability and rollback safety."
+  )}# Review Observability Lens
+
+Use as an optional follow-up lens when failure diagnosis, telemetry, or operational rollback confidence is at risk.
+
+## Required Output
+
+- Signals checked: logs, metrics, traces, alerts, debug handles.
+- Gaps that could block diagnosis or rollback during incidents.
+- Clear NO_IMPACT or FOUND_<n> result with evidence.
+
+## Guardrails
+
+- Escalate only diagnosis-impacting gaps; avoid style-only telemetry suggestions.
+- Keep scope tied to touched code paths and rollout-critical behavior.
+`;
+}
+
 export const SUBAGENT_CONTEXT_SKILLS: Record<SubagentContextSkillId, string> = {
   "tdd-cycle-evidence": tddCycleEvidenceSkill(),
   "review-spec-pass": reviewSpecPassSkill(),
@@ -244,5 +307,8 @@ export const SUBAGENT_CONTEXT_SKILLS: Record<SubagentContextSkillId, string> = {
   "critic-multi-perspective": criticMultiPerspectiveSkill(),
   "document-coherence-pass": documentCoherencePassSkill(),
   "document-scope-guard": documentScopeGuardSkill(),
-  "document-feasibility-pass": documentFeasibilityPassSkill()
+  "document-feasibility-pass": documentFeasibilityPassSkill(),
+  "review-perf-lens": reviewPerfLensSkill(),
+  "review-compat-lens": reviewCompatLensSkill(),
+  "review-observability-lens": reviewObservabilityLensSkill()
 };

@@ -87,6 +87,16 @@ function normalizeFixtureArtifact(fileName: string, content: string): string {
 `;
       normalized = normalized.replace(/(## Layer 1 Verdict\n)/u, `${changedFileCoverage}$1`);
     }
+    if (!/^## Lens Coverage$/mu.test(normalized)) {
+      const lensCoverage = `## Lens Coverage
+- Performance: NO_IMPACT
+- Compatibility: NO_IMPACT
+- Observability: NO_IMPACT
+- Security: routed to security-reviewer (always separate)
+
+`;
+      normalized = normalized.replace(/(## Layer 1 Verdict\n)/u, `${lensCoverage}$1`);
+    }
   }
 
   return normalized;
@@ -4416,6 +4426,51 @@ ${TDD_PREFLIGHT_SECTIONS}
 
     const result = await lintArtifact(root, "review");
     expect(result.passed).toBe(true);
+  });
+
+  it("fails review when Lens Coverage section is missing", async () => {
+    const root = await createTempProject("review-no-lens-coverage");
+    await fs.mkdir(path.join(root, ".cclaw/state"), { recursive: true });
+    await fs.mkdir(path.join(root, ".cclaw/artifacts"), { recursive: true });
+    await fs.writeFile(
+      path.join(root, ".cclaw/state/flow-state.json"),
+      JSON.stringify({ currentStage: "review", activeRunId: "active", completedStages: [] }, null, 2),
+      "utf8"
+    );
+    await fs.writeFile(
+      path.join(root, ".cclaw/artifacts/07-review.md"),
+      `# Review Artifact
+
+## Layer 1 Verdict
+| Criterion | Verdict | Evidence |
+|---|---|---|
+| AC-1 | PASS | test.ts:10 |
+
+## Layer 2 Findings
+| ID | Severity | Category | Description | Status |
+|---|---|---|---|---|
+| R-1 | Suggestion | correctness | Naming cleanup | open |
+
+## Review Findings Contract
+- See \`07-review-army.json\`
+- Reconciliation summary: 0 conflicts
+
+## Severity Summary
+- Critical: 0
+- Important: 0
+- Suggestion: 1
+
+## Final Verdict
+- APPROVED
+`,
+      "utf8"
+    );
+
+    const result = await lintArtifact(root, "review");
+    const lens = result.findings.find((f) => f.section === "reviewer.lens_coverage_missing");
+    expect(result.passed).toBe(false);
+    expect(lens?.found).toBe(false);
+    expect(lens?.required).toBe(true);
   });
 
   it("fails review when Layer 1 Verdict is missing", async () => {

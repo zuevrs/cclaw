@@ -1098,6 +1098,12 @@ Execution rule: complete and verify each batch before starting the next batch.
 | R-1 | Critical/Important/Suggestion | correctness/security/performance/architecture/external-safety | path:line |  | open/resolved |
 - NO_FINDINGS_ATTESTATION: <required when no findings are reported; cite inspected coverage>
 
+## Lens Coverage
+- Performance: NO_IMPACT | FOUND_<n>
+- Compatibility: NO_IMPACT | FOUND_<n>
+- Observability: NO_IMPACT | FOUND_<n>
+- Security: routed to security-reviewer (always separate)
+
 ## Security Sweep Attestation
 - Result: findings | NO_CHANGE_ATTESTATION | NO_SECURITY_IMPACT
 - Inspected surfaces:
