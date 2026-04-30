@@ -8,27 +8,6 @@ import { conversationLanguagePolicyBullets, conversationLanguagePolicyMarkdown }
  * execute orchestration logic at install time beyond string assembly.
  */
 
-const SUBAGENT_AGENT_NAMES = [
-  "researcher",
-  "architect",
-  "spec-validator",
-  "spec-document-reviewer",
-  "slice-implementer",
-  "release-reviewer",
-  "planner",
-  "product-manager",
-  "product-strategist",
-  "critic",
-  "reviewer",
-  "security-reviewer",
-  "test-author",
-  "doc-updater",
-  "implementer",
-  "fixer"
-] as const;
-
-type SubagentCclawAgentName = (typeof SUBAGENT_AGENT_NAMES)[number];
-
 const MARKDOWN_CODE_FENCE = "```";
 
 function formatAgentList(agents: string[]): string {
@@ -155,8 +134,8 @@ Concrete per-stage rules so the controller does not have to guess which tier fit
 
 | Stage | Deep slot | Balanced slot(s) | Fast fan-out | Trigger to escalate |
 |---|---|---|---|---|
-| brainstorm | planner (only if ambiguity spans >1 module) | product-manager / critic when product value or premise is uncertain | run in-thread research playbooks | promote to \`balanced\` critic if the do-nothing path may beat the idea |
-| scope | planner (always) | product-manager / product-strategist / critic when mode changes value, trajectory, or boundaries | run \`research/git-history.md\` in-thread when churn is high | promote to \`balanced\` critic if scope mode is disputed |
+| brainstorm | planner (only if ambiguity spans >1 module) | product-discovery / critic when product value or premise is uncertain | run in-thread research playbooks | promote to \`balanced\` critic if the do-nothing path may beat the idea |
+| scope | planner (always) | product-discovery / critic when mode changes value, trajectory, or boundaries | run \`research/git-history.md\` in-thread when churn is high | promote to \`balanced\` critic if scope mode is disputed |
 | design | planner (always) | critic, security-reviewer, test-author when alternatives/trust/testability apply | run \`research/framework-docs-lookup.md\` + \`research/best-practices-lookup.md\` in-thread | escalate one specialist to \`deep\` only if a failure mode is Critical-severity |
 | spec | — | spec-validator / spec-document-reviewer / reviewer (for long or high-risk specs) | — | escalate to \`deep\` only for spec ↔ design contradictions |
 | plan | planner (solo, always) | — | — | never fan out at plan stage; one owner for dependency graph |
@@ -1042,55 +1021,6 @@ Tasks:
 ${MARKDOWN_CODE_FENCE}
 
 `;
-}
-
-/**
- * Returns markdown fragments augmenting each specialist persona with Task tool
- * delegation guidance. Combine with the existing `body` field from `core-agents.ts`.
- */
-export function enhancedAgentBody(agentName: string): string {
-  switch (agentName as SubagentCclawAgentName) {
-    case "researcher":
-      return researcherEnhancedBody();
-    case "architect":
-      return architectEnhancedBody();
-    case "spec-validator":
-      return specValidatorEnhancedBody();
-    case "spec-document-reviewer":
-      return specDocumentReviewerEnhancedBody();
-    case "slice-implementer":
-      return sliceImplementerEnhancedBody();
-    case "release-reviewer":
-      return releaseReviewerEnhancedBody();
-    case "planner":
-      return plannerEnhancedBody();
-    case "product-manager":
-      return productManagerEnhancedBody();
-    case "product-strategist":
-      return productStrategistEnhancedBody();
-    case "critic":
-      return criticEnhancedBody();
-    case "reviewer":
-      return reviewerEnhancedBody();
-    case "security-reviewer":
-      return securityReviewerEnhancedBody();
-    case "test-author":
-      return testAuthorEnhancedBody();
-    case "doc-updater":
-      return docUpdaterEnhancedBody();
-    case "implementer":
-      return implementerEnhancedBody();
-    case "fixer":
-      return fixerEnhancedBody();
-    default:
-      return `
-
-## Task Tool Delegation
-
-_No enhanced Task template is defined for agent \`${agentName}\`._
-
-`;
-  }
 }
 
 export function subagentsAgentsMdBlock(): string {

@@ -1952,8 +1952,8 @@ ${summaryBody}
       expect(summary?.found).toBe(true);
     });
 
-    it("requires product-strategist delegation evidence for expansion modes", async () => {
-      const root = await createTempProject("scope-summary-expansion-needs-strategist");
+    it("requires product-discovery delegation evidence for expansion modes", async () => {
+      const root = await createTempProject("scope-summary-expansion-needs-discovery");
       await writeRuntimeArtifact(
         root,
         "02-scope.md",
@@ -1966,11 +1966,11 @@ ${summaryBody}
       expect(result.passed).toBe(false);
       expect(strategist?.required).toBe(true);
       expect(strategist?.found).toBe(false);
-      expect(strategist?.details ?? "").toMatch(/product-strategist delegation/iu);
+      expect(strategist?.details ?? "").toMatch(/product-discovery delegation/iu);
     });
 
-    it("accepts expansion mode when product-strategist delegation has evidence", async () => {
-      const root = await createTempProject("scope-summary-expansion-with-strategist");
+    it("accepts expansion mode when product-discovery delegation has evidence", async () => {
+      const root = await createTempProject("scope-summary-expansion-with-discovery");
       await writeRuntimeArtifact(
         root,
         "02-scope.md",
@@ -1981,7 +1981,7 @@ ${summaryBody}
       await writeDelegationLog(root, [
         {
           stage: "scope",
-          agent: "product-strategist",
+          agent: "product-discovery",
           mode: "proactive",
           status: "completed",
           ts: new Date().toISOString(),

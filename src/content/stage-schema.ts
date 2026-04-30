@@ -200,8 +200,7 @@ function defaultReturnSchemaForAgent(
       return "release-return";
     case "planner":
       return "planning-return";
-    case "product-manager":
-    case "product-strategist":
+    case "product-discovery":
       return "product-return";
     case "critic":
       return "critic-return";
@@ -215,8 +214,6 @@ function defaultReturnSchemaForAgent(
       return "docs-return";
     case "fixer":
       return "fixer-return";
-    case "implementer":
-      return "worker-return";
   }
 }
 
@@ -224,7 +221,7 @@ function dispatchClassForRow(
   row: StageAutoSubagentDispatch
 ): NonNullable<StageAutoSubagentDispatch["dispatchClass"]> {
   if (row.dispatchClass) return row.dispatchClass;
-  if (row.agent === "implementer" || row.agent === "fixer" || row.agent === "slice-implementer") return "worker";
+  if (row.agent === "fixer" || row.agent === "slice-implementer") return "worker";
   return row.skill?.includes("review") || row.agent === "reviewer" || row.agent === "security-reviewer" || row.agent.endsWith("-reviewer")
     ? "review-lens"
     : "stage-specialist";
@@ -579,11 +576,11 @@ const STAGE_SCHEMA_MAP: Record<FlowStage, StageSchemaInput> = {
 const STAGE_AUTO_SUBAGENT_DISPATCH: Record<FlowStage, StageAutoSubagentDispatch[]> = {
   brainstorm: [
     {
-      agent: "product-manager",
+      agent: "product-discovery",
       mode: "mandatory",
       requiredAtTier: "standard",
       when: "Always for standard/deep brainstorm to validate value, persona/JTBD, success metric, and why-now framing.",
-      purpose: "Pressure-test problem/value fit and produce product-discovery evidence for the Problem Decision Record.",
+      purpose: "Run product-discovery mode to pressure-test problem/value fit and produce product evidence for the Problem Decision Record.",
       requiresUserGate: false
     },
     {
@@ -629,18 +626,18 @@ const STAGE_AUTO_SUBAGENT_DISPATCH: Record<FlowStage, StageAutoSubagentDispatch[
       requiresUserGate: false
     },
     {
-      agent: "product-manager",
+      agent: "product-discovery",
       mode: "proactive",
-      when: "When scope choices change user value, success metrics, or product positioning.",
-      purpose: "Keep accepted/deferred reference ideas tied to user value and measurable success.",
+      when: "When scope choices change user value, success metrics, or product positioning (Mode: discovery).",
+      purpose: "Keep accepted/deferred reference ideas tied to user value and measurable success under product-discovery mode.",
       requiresUserGate: false
     },
     {
-      agent: "product-strategist",
+      agent: "product-discovery",
       mode: "proactive",
       requiredAtTier: "standard",
-      when: "When scope mode resolves to SCOPE EXPANSION or SELECTIVE EXPANSION.",
-      purpose: "Drive 10x vision and concrete expansion proposals before locking the scope contract.",
+      when: "When scope mode resolves to SCOPE EXPANSION or SELECTIVE EXPANSION (Mode: strategist).",
+      purpose: "Drive 10x vision and concrete expansion proposals before locking the scope contract via product-discovery strategist mode.",
       requiresUserGate: false
     },
     {

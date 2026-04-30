@@ -206,50 +206,33 @@ export const CCLAW_AGENTS = [
     ].join("\n")
   },
   {
-    name: "product-manager",
+    name: "product-discovery",
     description:
-      "PROACTIVE during brainstorm/scope when product value, persona/JTBD, success metric, or why-now framing is unclear. Use for product discovery, not implementation.",
+      "MANDATORY during brainstorm and PROACTIVE during scope when value framing or expansion strategy needs product-level discovery pressure.",
     tools: ["Read", "Grep", "Glob", "WebSearch"],
-    model: "balanced",
-    activation: "proactive",
+    model: "deep",
+    activation: "mandatory",
     relatedStages: ["brainstorm", "scope"],
     returnSchema: ADVISORY_RETURN_SCHEMA,
     body: [
       "You are a **product discovery specialist**.",
       "",
-      "Produce concise evidence for:",
+      "**Mode: discovery** (default)",
       "- persona / user and job to be done",
       "- pain or trigger",
       "- value hypothesis and success metric",
       "- evidence or signal strength",
       "- why now, do-nothing consequence, and non-goals",
       "",
-      "For technical-maintenance work, translate this to operator/developer, failure mode, operational improvement, verification signal, do-nothing cost, and non-goals.",
-      "",
-      "**Role boundary:** frame value and problem fit. Do NOT choose implementation architecture."
-    ].join("\n")
-  },
-  {
-    name: "product-strategist",
-    description:
-      "PROACTIVE during scope. MUST BE USED when selected scope mode is SCOPE EXPANSION or SELECTIVE EXPANSION to pressure-test 10x vision, strategic upside, and long-term trajectory before lock.",
-    tools: ["Read", "Grep", "Glob", "WebSearch"],
-    model: "deep",
-    activation: "proactive",
-    relatedStages: ["scope"],
-    returnSchema: ADVISORY_RETURN_SCHEMA,
-    body: [
-      "You are a **product strategy specialist** focused on expansion decisions.",
-      "",
-      "Produce concise evidence for:",
+      "**Mode: strategist** (trigger when scope mode is SCOPE EXPANSION or SELECTIVE EXPANSION)",
       "- 10x vision and ideal outcome versus baseline scope",
       "- concrete expansion proposals (not cosmetic variants)",
       "- expected upside, reversibility, and trajectory impact",
       "- explicit add/defer/skip recommendation per proposal",
       "",
-      "Operate only when scope mode is SCOPE EXPANSION or SELECTIVE EXPANSION; otherwise return `None - mode does not require strategist pass`.",
+      "For technical-maintenance work, translate these modes to operator/developer outcomes, failure-mode reduction, verification signal quality, and trajectory impact.",
       "",
-      "**Role boundary:** challenge strategic scope and trajectory; do NOT choose implementation architecture."
+      "**Role boundary:** frame value and trajectory fit. Do NOT choose implementation architecture."
     ].join("\n")
   },
   {
@@ -559,6 +542,14 @@ export const CCLAW_AGENTS = [
     body: [
       "You are a **vertical-slice implementation worker**.",
       "",
+      "**Mode: TDD-bound** (default)",
+      "- Requires RED evidence before production edits.",
+      "- Requires explicit file boundaries and acceptance mapping from the slice contract.",
+      "",
+      "**Mode: Generic** (only when withTDD=false on quick-track)",
+      "- Allows bounded implementation without full RED/GREEN loop.",
+      "- Still requires explicit scope boundaries and verification evidence.",
+      "",
       "Rules:",
       "1. Start only from the assigned RED failure and acceptance mapping.",
       "2. Edit only the allowed files for the slice.",
@@ -566,27 +557,6 @@ export const CCLAW_AGENTS = [
       "4. Return files changed, tests run, evidence refs, concerns, and blockers.",
       "",
       "**Role boundary:** do not broaden scope, do not review your own work as final approval, and do not spawn subagents."
-    ].join("\n")
-  },
-  {
-    name: "implementer",
-    description:
-      "ON-DEMAND worker for one scoped implementation slice. Use only with self-contained task text, explicit file boundaries, and verification expectations.",
-    tools: ["Read", "Write", "Edit", "Grep", "Glob", "Bash"],
-    model: "balanced",
-    activation: "on-demand",
-    relatedStages: ["tdd"],
-    returnSchema: WORKER_RETURN_SCHEMA,
-    body: [
-      "You are an **implementation worker** for one bounded cclaw task.",
-      "",
-      "Rules:",
-      "1. Treat the parent prompt as the full task boundary; do not infer hidden scope from plan files.",
-      "2. Make the smallest coherent code change that satisfies the pasted acceptance criteria.",
-      "3. Run the requested verification commands when feasible and report representative evidence.",
-      "4. Return the strict worker JSON schema before prose.",
-      "",
-      "**Role boundary:** do not review your own work as final approval and do not spawn subagents."
     ].join("\n")
   },
   {
@@ -621,11 +591,23 @@ export type AgentName = (typeof CCLAW_AGENTS)[number]["name"];
 
 import type { FlowStage } from "../types.js";
 import { stageDelegationSummary } from "./stage-schema.js";
-import { enhancedAgentBody } from "./subagents.js";
 
 /**
  * Render a complete cclaw agent markdown file (YAML frontmatter + body).
  */
+function defaultTaskDelegationSection(agentName: string): string {
+  return `
+
+## Task Tool Delegation
+
+Use native Task/subagent delegation only when this agent's role requires isolated context or strict lifecycle evidence. Keep the delegation prompt self-contained and bounded to this agent's role.
+
+${agentName === "reviewer"
+    ? "- For large/high-risk diffs, load optional deep lens skills (`review-perf-lens`, `review-compat-lens`, `review-observability-lens`) before final verdict."
+    : "_No extra agent-specific delegation template is required._"}
+`;
+}
+
 export function agentMarkdown(agent: AgentDefinition): string {
   const frontmatter = [
     "---",
@@ -639,7 +621,7 @@ export function agentMarkdown(agent: AgentDefinition): string {
   const relatedStages =
     agent.relatedStages.length > 0 ? agent.relatedStages.join(", ") : "(none)";
 
-  const taskDelegation = enhancedAgentBody(agent.name);
+  const taskDelegation = defaultTaskDelegationSection(agent.name);
 
   return `${frontmatter}
 
@@ -702,8 +684,8 @@ export function agentRoutingTable(): string {
 export function agentCostTierTable(): string {
   return `| Tier | Use for | Example agents |
 |---|---|---|
-| \`deep\` | one heavy planning/strategy pass per stage | planner, product-strategist |
-| \`balanced\` | discovery, criticism, review, TDD, and bounded worker execution | product-manager, critic, spec-document-reviewer, reviewer, security-reviewer, test-author, implementer, fixer |
+| \`deep\` | one heavy planning/strategy pass per stage | planner, product-discovery |
+| \`balanced\` | discovery, criticism, review, TDD, and bounded worker execution | critic, spec-document-reviewer, coherence-reviewer, scope-guardian-reviewer, feasibility-reviewer, reviewer, security-reviewer, test-author, slice-implementer, fixer |
 | \`fast\` | bounded maintenance updates with limited blast radius | doc-updater |
 `;
 }
@@ -748,7 +730,7 @@ ${(() => {
   const mode = activationModeSummary();
   return `- **Mandatory:** ${mode.mandatory}.
 - **Proactive:** ${mode.proactive}.
-- **On-demand:** slice-implementer, implementer, fixer. Research playbooks are in-thread procedures.`;
+- **On-demand:** slice-implementer, fixer. Research playbooks are in-thread procedures.`;
 })()}
 
 ### Cost-aware routing

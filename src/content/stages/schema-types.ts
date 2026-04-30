@@ -36,14 +36,12 @@ export type StageSubagentName =
   | "slice-implementer"
   | "release-reviewer"
   | "planner"
-  | "product-manager"
-  | "product-strategist"
+  | "product-discovery"
   | "critic"
   | "reviewer"
   | "security-reviewer"
   | "test-author"
   | "doc-updater"
-  | "implementer"
   | "fixer";
 
 export type StageSubagentDispatchClass =

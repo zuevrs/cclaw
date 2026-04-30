@@ -8,7 +8,7 @@ import { stageExamples, stageFullArtifactExampleMarkdown } from "../../src/conte
 import { mandatoryDelegationsForStage, reviewStackAwareRoutingSummary, stageAutoSubagentDispatch, stageDelegationSummary, stagePolicyNeedles, stageSchema, stageTrackRenderContext } from "../../src/content/stage-schema.js";
 import { stageSkillMarkdown } from "../../src/content/skills.js";
 import { referencePatternContractsForStage, referencePatternPolicyNeedles, referencePatternsForStage } from "../../src/content/reference-patterns.js";
-import { enhancedAgentBody, subagentDrivenDevSkill } from "../../src/content/subagents.js";
+import { subagentDrivenDevSkill } from "../../src/content/subagents.js";
 import { SUBAGENT_CONTEXT_SKILLS } from "../../src/content/subagent-context-skills.js";
 import { ARTIFACT_TEMPLATES } from "../../src/content/templates.js";
 import { FLOW_STAGES, FLOW_TRACKS, TRACK_STAGES, type FlowStage, type FlowTrack } from "../../src/types.js";
@@ -43,7 +43,7 @@ describe("stage schema and subagent alignment", () => {
   it("supports complexity-tier gates for mandatory delegations", () => {
     expect(mandatoryDelegationsForStage("scope", "lightweight")).toEqual([]);
     expect(mandatoryDelegationsForStage("scope", "standard")).toEqual(["planner", "critic"]);
-    expect(mandatoryDelegationsForStage("brainstorm", "standard")).toEqual(["product-manager", "critic"]);
+    expect(mandatoryDelegationsForStage("brainstorm", "standard")).toEqual(["product-discovery", "critic"]);
     expect(mandatoryDelegationsForStage("design", "standard")).toEqual(["architect", "test-author"]);
     expect(mandatoryDelegationsForStage("spec", "standard")).toEqual(["spec-validator"]);
     expect(mandatoryDelegationsForStage("review", "lightweight")).toContain("reviewer");
@@ -82,7 +82,7 @@ describe("stage schema and subagent alignment", () => {
     expect(review?.mandatoryAgents).toEqual(["reviewer", "security-reviewer"]);
     expect(review?.primaryAgents).toContain("reviewer");
     const scope = standard.find((row) => row.stage === "scope");
-    expect(scope?.proactiveAgents).toContain("product-strategist");
+    expect(scope?.proactiveAgents).toContain("product-discovery");
     expect(scope?.proactiveAgents).toContain("scope-guardian-reviewer");
     const spec = standard.find((row) => row.stage === "spec");
     expect(spec?.proactiveAgents).toContain("spec-document-reviewer");
@@ -248,11 +248,9 @@ describe("stage schema and subagent alignment", () => {
     );
   });
 
-  it("test-author template distinguishes TEST and BUILD stage modes", () => {
-    const template = enhancedAgentBody("test-author");
-    expect(template).toContain("STAGE_MODE: {TEST_RED_ONLY | BUILD_GREEN_REFACTOR}");
-    expect(template).toContain("Do NOT edit production code.");
-    expect(template).toContain("GREEN — minimal production code");
+  it("subagents module no longer exports enhancedAgentBody", async () => {
+    const module = await import("../../src/content/subagents.js");
+    expect("enhancedAgentBody" in module).toBe(false);
   });
 
   it("subagent orchestration includes anti-drift team defaults", () => {
@@ -446,10 +444,8 @@ describe("stage schema and subagent alignment", () => {
       "doc-updater",
       "feasibility-reviewer",
       "fixer",
-      "implementer",
       "planner",
-      "product-manager",
-      "product-strategist",
+      "product-discovery",
       "release-reviewer",
       "researcher",
       "reviewer",
@@ -468,9 +464,7 @@ describe("stage schema and subagent alignment", () => {
       expect(agent.returnSchema.allowedStatuses.length).toBeGreaterThan(0);
       expect(agent.returnSchema.requiredFields).toContain("status");
       expect(agent.returnSchema.evidenceFields.length).toBeGreaterThan(0);
-      expect(enhancedAgentBody(agent.name)).toContain("Task Tool Delegation");
     }
-    expect(CCLAW_AGENTS.find((agent) => agent.name === "implementer")?.activation).toBe("on-demand");
     expect(CCLAW_AGENTS.find((agent) => agent.name === "slice-implementer")?.activation).toBe("on-demand");
     expect(CCLAW_AGENTS.find((agent) => agent.name === "fixer")?.activation).toBe("on-demand");
   });

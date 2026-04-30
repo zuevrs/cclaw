@@ -1,6 +1,12 @@
 # Changelog
 
-## Unreleased
+## 1.0.0
+
+### Breaking Changes
+
+- Removed legacy agent names with no compatibility aliases: `performance-reviewer`, `compatibility-reviewer`, `observability-reviewer`, `implementer`, `product-manager`, and `product-strategist`.
+- Brainstorm/scope product delegation now routes through unified `product-discovery` (`discovery` + `strategist` modes).
+- `enhancedAgentBody` overlap was removed; task-delegation guidance is now sourced directly from `core-agents` output.
 
 ### Added
 
@@ -15,6 +21,7 @@
 - Added layered-review enforcement for document reviewers in plan/spec/design artifacts: structured calibrated findings are required when these reviewers are cited, and FAIL/PARTIAL outcomes require explicit waiver.
 - Wave 16A reviewer-lens consolidation: `reviewer` now carries mandatory inline `Lens Coverage` output (Performance/Compatibility/Observability), and review lint enforces this via `[P1] reviewer.lens_coverage_missing`.
 - Removed proactive dispatch fan-out for dedicated performance/compatibility/observability reviewers; these lenses are now inline by default with optional deep-dive context skills (`review-perf-lens`, `review-compat-lens`, `review-observability-lens`).
+- Wave 16B worker/discovery consolidation: `slice-implementer` now supports `TDD-bound` and `Generic` modes, and product discovery/strategy responsibilities are unified under `product-discovery`.
 
 ## 0.56.0
 

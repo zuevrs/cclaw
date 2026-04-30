@@ -320,7 +320,7 @@ fs.appendFileSync(${JSON.stringify(callsPath)}, process.argv.slice(2).join(" ") 
         "brainstorm",
         "--evidence-json",
         requiredGateEvidenceJson("brainstorm"),
-        "--waive-delegation=product-manager,critic",
+        "--waive-delegation=product-discovery,critic",
         "--waiver-reason=unit_test",
         "--accept-proactive-waiver",
         "--accept-proactive-waiver-reason=unit_test_proactive"
@@ -361,7 +361,7 @@ fs.appendFileSync(${JSON.stringify(callsPath)}, process.argv.slice(2).join(" ") 
         "brainstorm",
         `--evidence-json=${evidence}`,
         "--passed=brainstorm_approaches_compared,brainstorm_direction_approved,brainstorm_artifact_reviewed",
-        "--waive-delegation=product-manager,critic",
+        "--waive-delegation=product-discovery,critic",
         "--waiver-reason=unit_test",
         "--accept-proactive-waiver",
         "--accept-proactive-waiver-reason=unit_test_proactive"

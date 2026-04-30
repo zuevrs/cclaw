@@ -276,15 +276,13 @@ describe("flow command contracts", () => {
       "feasibility-reviewer",
       "slice-implementer",
       "release-reviewer",
-      "product-manager",
-      "product-strategist",
+      "product-discovery",
       "critic",
       "planner",
       "reviewer",
       "security-reviewer",
       "test-author",
       "doc-updater",
-      "implementer",
       "fixer"
     ]) {
       const opencodeAgent = await fs.readFile(path.join(root, ".opencode/agents", `${agentName}.md`), "utf8");
@@ -294,12 +292,12 @@ describe("flow command contracts", () => {
       expect(codexAgent).toContain("developer_instructions");
     }
 
-    const generatedPm = await fs.readFile(path.join(root, ".cclaw/agents/product-manager.md"), "utf8");
+    const generatedDiscovery = await fs.readFile(path.join(root, ".cclaw/agents/product-discovery.md"), "utf8");
     const generatedCritic = await fs.readFile(path.join(root, ".cclaw/agents/critic.md"), "utf8");
-    expect(generatedPm).toContain("VALUE_HYPOTHESIS");
+    expect(generatedDiscovery).toContain("Mode: discovery");
     expect(generatedCritic).toContain("Pre-commitment predictions");
-    const generatedImplementer = await fs.readFile(path.join(root, ".cclaw/agents/implementer.md"), "utf8");
-    expect(generatedImplementer).toContain("STRICT_RETURN_SCHEMA");
+    const generatedSliceImplementer = await fs.readFile(path.join(root, ".cclaw/agents/slice-implementer.md"), "utf8");
+    expect(generatedSliceImplementer).toContain("STRICT_RETURN_SCHEMA");
 
     // Codex hooks are managed again since v0.40.0.
     const codexHooksPath = path.join(root, ".codex/hooks.json");
@@ -350,7 +348,7 @@ describe("flow command contracts", () => {
     expect(designSkill).toContain("`mandatory delegations`");
     expect(designSkill).toContain("`architect`");
     expect(designSkill).toContain("`test-author`");
-    expect(brainstormSkill).toContain("`mandatory delegations`: `product-manager`, `critic`");
+    expect(brainstormSkill).toContain("`mandatory delegations`: `product-discovery`, `critic`");
   });
 
   it("routes meta skill to inline protocol behavior", async () => {
