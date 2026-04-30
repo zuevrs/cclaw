@@ -266,7 +266,27 @@ describe("flow command contracts", () => {
       await expect(fs.stat(path.join(root, ".agents/skills", staleSkill))).rejects.toThrow(/ENOENT/);
     }
 
-    for (const agentName of ["researcher", "architect", "spec-validator", "slice-implementer", "performance-reviewer", "compatibility-reviewer", "observability-reviewer", "release-reviewer", "product-manager", "critic", "planner", "reviewer", "security-reviewer", "test-author", "doc-updater", "implementer", "fixer"]) {
+    for (const agentName of [
+      "researcher",
+      "architect",
+      "spec-validator",
+      "spec-document-reviewer",
+      "coherence-reviewer",
+      "scope-guardian-reviewer",
+      "feasibility-reviewer",
+      "slice-implementer",
+      "release-reviewer",
+      "product-discovery",
+      "critic",
+      "planner",
+      "reviewer",
+      "security-reviewer",
+      "test-author",
+      "doc-updater",
+      "divergent-thinker",
+      "fixer",
+      "integration-overseer"
+    ]) {
       const opencodeAgent = await fs.readFile(path.join(root, ".opencode/agents", `${agentName}.md`), "utf8");
       const codexAgent = await fs.readFile(path.join(root, ".codex/agents", `${agentName}.toml`), "utf8");
       expect(opencodeAgent).toContain(`# ${agentName}`);
@@ -274,12 +294,16 @@ describe("flow command contracts", () => {
       expect(codexAgent).toContain("developer_instructions");
     }
 
-    const generatedPm = await fs.readFile(path.join(root, ".cclaw/agents/product-manager.md"), "utf8");
+    const generatedDiscovery = await fs.readFile(path.join(root, ".cclaw/agents/product-discovery.md"), "utf8");
     const generatedCritic = await fs.readFile(path.join(root, ".cclaw/agents/critic.md"), "utf8");
-    expect(generatedPm).toContain("VALUE_HYPOTHESIS");
-    expect(generatedCritic).toContain("shadow alternative");
-    const generatedImplementer = await fs.readFile(path.join(root, ".cclaw/agents/implementer.md"), "utf8");
-    expect(generatedImplementer).toContain("STRICT_RETURN_SCHEMA");
+    const generatedDivergentThinker = await fs.readFile(path.join(root, ".cclaw/agents/divergent-thinker.md"), "utf8");
+    const generatedIntegrationOverseer = await fs.readFile(path.join(root, ".cclaw/agents/integration-overseer.md"), "utf8");
+    expect(generatedDiscovery).toContain("Mode: discovery");
+    expect(generatedCritic).toContain("Pre-commitment predictions");
+    expect(generatedDivergentThinker).toContain("Generate 3-5 alternative framings");
+    expect(generatedIntegrationOverseer).toContain("integration overseer");
+    const generatedSliceImplementer = await fs.readFile(path.join(root, ".cclaw/agents/slice-implementer.md"), "utf8");
+    expect(generatedSliceImplementer).toContain("STRICT_RETURN_SCHEMA");
 
     // Codex hooks are managed again since v0.40.0.
     const codexHooksPath = path.join(root, ".codex/hooks.json");
@@ -330,7 +354,7 @@ describe("flow command contracts", () => {
     expect(designSkill).toContain("`mandatory delegations`");
     expect(designSkill).toContain("`architect`");
     expect(designSkill).toContain("`test-author`");
-    expect(brainstormSkill).toContain("`mandatory delegations`: `product-manager`, `critic`");
+    expect(brainstormSkill).toContain("`mandatory delegations`: `product-discovery`, `critic`");
   });
 
   it("routes meta skill to inline protocol behavior", async () => {
@@ -377,7 +401,7 @@ describe("flow command contracts", () => {
     for (const label of ["standard:", "medium:", "quick:"]) {
       expect(metaSkill).toContain(label);
     }
-    expect(metaSkill).toContain("retro -> compound -> archive");
+    expect(metaSkill).toContain("post_ship_review -> archive");
 
   });
 
@@ -550,6 +574,11 @@ describe("flow command contracts", () => {
     const specTemplate = await fs.readFile(path.join(root, ".cclaw/templates/04-spec.md"), "utf8");
     const tddTemplate = await fs.readFile(path.join(root, ".cclaw/templates/06-tdd.md"), "utf8");
     const reviewTemplate = await fs.readFile(path.join(root, ".cclaw/templates/07-review.md"), "utf8");
+    const shipTemplate = await fs.readFile(path.join(root, ".cclaw/templates/08-ship.md"), "utf8");
+    const cohesionContractTemplate = await fs.readFile(path.join(root, ".cclaw/templates/cohesion-contract.md"), "utf8");
+    const cohesionContractJsonTemplate = JSON.parse(
+      await fs.readFile(path.join(root, ".cclaw/templates/cohesion-contract.json"), "utf8")
+    ) as Record<string, unknown>;
 
     expect(designTemplate).toContain("## Compact-First Scaffold");
     expect(designTemplate).toContain("Compact required spine");
@@ -566,11 +595,35 @@ describe("flow command contracts", () => {
 
     expect(reviewTemplate).toContain("active track's upstream source item");
     expect(reviewTemplate).toContain("N/A - direct spec/reproduction coverage");
-    expect(reviewTemplate).toContain("direct AC/reproduction-slice coverage");
+    expect(reviewTemplate).toContain("AC/source-item/slice coverage rationale");
+    expect(shipTemplate).toContain("## Architect Cross-Stage Verification");
+    expect(shipTemplate).toContain("architect-cross-stage-verification");
+    expect(cohesionContractTemplate).toContain("# Cohesion Contract");
+    expect(cohesionContractTemplate).toContain("## Integration Touchpoints");
+    expect(Array.isArray(cohesionContractJsonTemplate.sharedTypes)).toBe(true);
+    expect(Array.isArray(cohesionContractJsonTemplate.touchpoints)).toBe(true);
+    expect(Array.isArray(cohesionContractJsonTemplate.slices)).toBe(true);
     for (const phrase of ["05-plan.md", "Plan task IDs", "Task coverage", "orphaned tasks", "Do not invent a plan task"]) {
       expect(tddTemplate, `TDD template leaked ${phrase}`).not.toContain(phrase);
       expect(reviewTemplate, `review template leaked ${phrase}`).not.toContain(phrase);
     }
+  });
+
+  it("materializes executing-waves skill and wave-plan scaffold", async () => {
+    const root = await createTempProject("executing-waves-skill");
+    await initCclaw({ projectRoot: root });
+
+    const executingWavesSkill = await fs.readFile(
+      path.join(root, ".cclaw/skills/executing-waves/SKILL.md"),
+      "utf8"
+    );
+    expect(executingWavesSkill).toContain("## Process");
+    expect(executingWavesSkill).toContain("## Status Markers");
+    expect(executingWavesSkill).toContain("wave.drift_unaddressed");
+
+    await expect(
+      fs.stat(path.join(root, ".cclaw/wave-plans/.gitkeep"))
+    ).resolves.toBeTruthy();
   });
 
   it("keeps meta-skill utility routing limited to generated helper surfaces", async () => {

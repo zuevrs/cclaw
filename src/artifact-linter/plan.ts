@@ -1,5 +1,6 @@
 import {
   type StageLintContext,
+  evaluateLayeredDocumentReviewStatus,
   headingPresent,
   sectionBodyByName,
   collectPatternHits,
@@ -200,6 +201,31 @@ export async function lintPlanStage(ctx: StageLintContext): Promise<void> {
         details: acknowledged
           ? "Regression Iron Rule is explicitly acknowledged."
           : "Regression Iron Rule section is present but missing `Iron rule acknowledged: yes`."
+      });
+    }
+
+    const layeredDocumentReview = evaluateLayeredDocumentReviewStatus(
+      sections,
+      CONFIDENCE_FINDING_REGEX_SOURCE
+    );
+    if (layeredDocumentReview !== null) {
+      findings.push({
+        section: "Document Reviewer Structured Findings",
+        required: true,
+        rule: "When Layered review references coherence-reviewer/scope-guardian-reviewer/feasibility-reviewer, include explicit reviewer status plus calibrated finding lines.",
+        found: layeredDocumentReview.missingStructured.length === 0,
+        details: layeredDocumentReview.missingStructured.length === 0
+          ? `Structured findings present for reviewers: ${layeredDocumentReview.triggeredReviewers.join(", ")}.`
+          : `Missing status or calibrated findings for: ${layeredDocumentReview.missingStructured.join(", ")}.`
+      });
+      findings.push({
+        section: "document-review.fail_without_waiver",
+        required: true,
+        rule: "[P1] document-review.fail_without_waiver — reviewer FAIL/PARTIAL requires fix evidence or explicit waiver.",
+        found: layeredDocumentReview.failOrPartialWithoutWaiver.length === 0,
+        details: layeredDocumentReview.failOrPartialWithoutWaiver.length === 0
+          ? "No unwaived FAIL/PARTIAL reviewer statuses detected."
+          : `Unwaived FAIL/PARTIAL statuses: ${layeredDocumentReview.failOrPartialWithoutWaiver.join(", ")}.`
       });
     }
 }

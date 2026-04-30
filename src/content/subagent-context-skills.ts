@@ -141,11 +141,198 @@ Use after the default reviewer/security-reviewer passes when repo signals identi
 `;
 }
 
+function criticMultiPerspectiveSkill(): string {
+  return `${skillFrontmatter(
+    "critic-multi-perspective",
+    "Multi-perspective critic protocol with pre-commitment predictions and realist checks."
+  )}# Critic Multi-Perspective Pass
+
+Use with the \`critic\` delegation in \`brainstorm\`, \`scope\`, and \`design\`.
+
+## Required Output
+
+- Before investigation, emit \`predictions[]\` with explicit hypotheses.
+- Analyze through context-aware angles:
+  - plan/spec/scope: executor, stakeholder, skeptic
+  - design/code: security, operator, new-hire
+- Include a dedicated gap analysis (what is missing, not only what is wrong).
+- Move low-confidence concerns (<=4/10) into \`openQuestions[]\`.
+- For every critical/major concern, include a \`realistCheckResults[]\` verdict.
+- End with \`predictionsValidated[]\` mapping each prediction to confirmed/disproven.
+
+## Guardrails
+
+- Do not block solely on low-confidence concerns.
+- Suppress or downgrade implausible critical findings during realist checks.
+- Escalate to adversarial mode when reviewers disagree, confidence is low, or trust boundaries are involved.
+`;
+}
+
+function documentCoherencePassSkill(): string {
+  return `${skillFrontmatter(
+    "document-coherence-pass",
+    "Consistency-focused pass for cross-section coherence in spec/plan/design documents."
+  )}# Document Coherence Pass
+
+Use with \`coherence-reviewer\` on spec/plan/design artifacts.
+
+## Required Output
+
+- List contradictions between sections and where they occur.
+- Flag terminology drift where one concept is named inconsistently.
+- Flag broken internal references, forward references, and dependency narrative mismatches.
+- Return calibrated findings with concrete anchors and one-line corrections.
+
+## Guardrails
+
+- Do not score overall quality; focus on consistency and coherence only.
+- Do not invent contradictions without citation to concrete sections/lines.
+`;
+}
+
+function documentScopeGuardSkill(): string {
+  return `${skillFrontmatter(
+    "document-scope-guard",
+    "Complexity and minimum-change guardrail for scope/plan/design documents."
+  )}# Document Scope Guard
+
+Use with \`scope-guardian-reviewer\` when expansion pressure or abstraction creep is likely.
+
+## Required Output
+
+- Surface where existing solutions can be reused instead of adding new abstractions.
+- Identify minimum-change alternative when current proposal is broader than needed.
+- Call out complexity smells (speculative generic utilities, framework-ahead-of-need structures).
+- Return calibrated findings with explicit impact on scope boundaries.
+
+## Guardrails
+
+- Challenge unnecessary breadth, but do not silently shrink required user outcomes.
+- Tie every scope reduction recommendation to a concrete cost/risk rationale.
+`;
+}
+
+function documentFeasibilityPassSkill(): string {
+  return `${skillFrontmatter(
+    "document-feasibility-pass",
+    "Feasibility validation for runtime/resource/dependency assumptions in plan/design artifacts."
+  )}# Document Feasibility Pass
+
+Use with \`feasibility-reviewer\` on plan/design docs that rely on runtime or operational assumptions.
+
+## Required Output
+
+- Enumerate resource/time/runtime assumptions and whether they are validated.
+- Flag external dependency availability or reliability risks.
+- Flag rollout assumptions that are not backed by operational evidence.
+- Return PASS/PASS_WITH_GAPS/FAIL/BLOCKED rationale grounded in cited assumptions.
+
+## Guardrails
+
+- Focus on practical viability; do not redesign architecture unless feasibility is blocked.
+- Distinguish unknowns that need evidence from hard blockers that require rework.
+`;
+}
+
+function reviewPerfLensSkill(): string {
+  return `${skillFrontmatter(
+    "review-perf-lens",
+    "Optional deep performance lens for large or high-risk review surfaces."
+  )}# Review Performance Lens
+
+Use as an optional follow-up lens when the default reviewer pass flags non-trivial performance risk.
+
+## Required Output
+
+- Hot-path or algorithmic-risk summary with touched files.
+- Potential regressions and estimated blast radius.
+- Clear NO_IMPACT or FOUND_<n> result with evidence.
+
+## Guardrails
+
+- Run only when justified by diff scope or explicit trigger.
+- Do not replace the mandatory reviewer pass; this lens is additive.
+`;
+}
+
+function reviewCompatLensSkill(): string {
+  return `${skillFrontmatter(
+    "review-compat-lens",
+    "Optional compatibility lens for high-risk API/config/schema changes."
+  )}# Review Compatibility Lens
+
+Use as an optional follow-up lens when contracts, config, persistence schema, or generated clients might break consumers.
+
+## Required Output
+
+- Surface inventory: APIs/config/schema/CLI/client contracts touched.
+- Compatibility risk assessment (backward, forward, migration path).
+- Clear NO_IMPACT or FOUND_<n> result with evidence.
+
+## Guardrails
+
+- Focus on externally observable contracts and migration safety.
+- Do not duplicate baseline reviewer findings verbatim.
+`;
+}
+
+function reviewObservabilityLensSkill(): string {
+  return `${skillFrontmatter(
+    "review-observability-lens",
+    "Optional observability lens for diagnosability and rollback safety."
+  )}# Review Observability Lens
+
+Use as an optional follow-up lens when failure diagnosis, telemetry, or operational rollback confidence is at risk.
+
+## Required Output
+
+- Signals checked: logs, metrics, traces, alerts, debug handles.
+- Gaps that could block diagnosis or rollback during incidents.
+- Clear NO_IMPACT or FOUND_<n> result with evidence.
+
+## Guardrails
+
+- Escalate only diagnosis-impacting gaps; avoid style-only telemetry suggestions.
+- Keep scope tied to touched code paths and rollout-critical behavior.
+`;
+}
+
+function architectCrossStageVerificationSkill(): string {
+  return `${skillFrontmatter(
+    "architect-cross-stage-verification",
+    "Cross-stage cohesion verification before ship finalization."
+  )}# Architect Cross-Stage Verification
+
+Use with the \`architect\` delegation in the \`ship\` stage.
+
+## Required Output
+
+- Read scope/design/spec/plan/review artifacts plus shipped diff/code surfaces.
+- Validate that locked decisions and acceptance mappings still match shipped behavior.
+- Flag drift between intended architecture and implemented boundaries.
+- Return exactly one status token: \`CROSS_STAGE_VERIFIED\`, \`DRIFT_DETECTED\`, or \`BLOCKED\`.
+- Provide evidence refs for every drift claim and identify the smallest corrective route.
+
+## Guardrails
+
+- Do not defer unresolved drift to post-ship follow-up without explicit waiver.
+- If evidence is insufficient to verify cohesion, return \`BLOCKED\` with missing inputs.
+`;
+}
+
 export const SUBAGENT_CONTEXT_SKILLS: Record<SubagentContextSkillId, string> = {
   "tdd-cycle-evidence": tddCycleEvidenceSkill(),
   "review-spec-pass": reviewSpecPassSkill(),
   "security-audit": securityAuditSkill(),
   "adversarial-review": adversarialReviewSkill(),
   "receiving-code-review": receivingCodeReviewSkill(),
-  "stack-aware-review": stackAwareReviewSkill()
+  "stack-aware-review": stackAwareReviewSkill(),
+  "critic-multi-perspective": criticMultiPerspectiveSkill(),
+  "document-coherence-pass": documentCoherencePassSkill(),
+  "document-scope-guard": documentScopeGuardSkill(),
+  "document-feasibility-pass": documentFeasibilityPassSkill(),
+  "review-perf-lens": reviewPerfLensSkill(),
+  "review-compat-lens": reviewCompatLensSkill(),
+  "review-observability-lens": reviewObservabilityLensSkill(),
+  "architect-cross-stage-verification": architectCrossStageVerificationSkill()
 };

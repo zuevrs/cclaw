@@ -18,7 +18,7 @@ import {
 } from "./config.js";
 import { learnSkillMarkdown } from "./content/learnings.js";
 import { stageCommandShimMarkdown } from "./content/stage-command.js";
-import { ideaCommandContract, ideaCommandSkillMarkdown } from "./content/idea-command.js";
+import { ideaCommandContract, ideaCommandSkillMarkdown } from "./content/idea.js";
 import { startCommandContract, startCommandSkillMarkdown } from "./content/start-command.js";
 import { viewCommandContract, viewCommandSkillMarkdown } from "./content/view-command.js";
 import { cancelCommandContract, cancelCommandSkillMarkdown } from "./content/cancel-command.js";
@@ -36,7 +36,10 @@ import {
   codexHooksJson,
   cursorHooksJson
 } from "./content/hooks.js";
-import { nodeHookRuntimeScript } from "./content/node-hooks.js";
+import {
+  nodeHookRuntimeScript,
+  type NodeHookRuntimeOptions
+} from "./content/node-hooks.js";
 import { META_SKILL_NAME, usingCclawSkillMarkdown } from "./content/meta-skill.js";
 import {
   ARTIFACT_TEMPLATES,
@@ -48,7 +51,8 @@ import { STATE_CONTRACTS } from "./content/state-contracts.js";
 import { REVIEW_PROMPTS } from "./content/review-prompts.js";
 import {
   stageSkillFolder,
-  stageSkillMarkdown
+  stageSkillMarkdown,
+  executingWavesSkillMarkdown
 } from "./content/skills.js";
 import {
   LANGUAGE_RULE_PACK_DIR,
@@ -548,6 +552,10 @@ async function writeArtifactTemplates(projectRoot: string): Promise<void> {
   }));
 }
 
+async function writeWavePlansScaffold(projectRoot: string): Promise<void> {
+  await writeFileSafe(runtimePath(projectRoot, "wave-plans", ".gitkeep"), "");
+}
+
 async function writeSkills(projectRoot: string, config?: CclawConfig): Promise<void> {
   const skillTrack = config?.defaultTrack ?? "standard";
   for (const stage of FLOW_STAGES) {
@@ -595,6 +603,10 @@ async function writeSkills(projectRoot: string, config?: CclawConfig): Promise<v
   await writeFileSafe(
     runtimePath(projectRoot, "skills", "iron-laws", "SKILL.md"),
     ironLawsSkillMarkdown()
+  );
+  await writeFileSafe(
+    runtimePath(projectRoot, "skills", "executing-waves", "SKILL.md"),
+    executingWavesSkillMarkdown()
   );
   await writeFileSafe(
     runtimePath(projectRoot, "skills", META_SKILL_NAME, "SKILL.md"),
@@ -1043,6 +1055,38 @@ async function writeMergedHookJson(
   await writeFileSafe(hookFilePath, `${JSON.stringify(mergedDoc, null, 2)}\n`);
 }
 
+interface BundledRunHookModule {
+  buildRunHookRuntimeScript?: (options?: NodeHookRuntimeOptions) => string;
+  default?: (options?: NodeHookRuntimeOptions) => string;
+}
+
+async function readBundledRunHookRuntimeScript(
+  options: NodeHookRuntimeOptions
+): Promise<string | null> {
+  const bundleUrl = new URL("./runtime/run-hook.mjs", import.meta.url);
+  try {
+    await fs.stat(bundleUrl);
+  } catch {
+    return null;
+  }
+
+  try {
+    const moduleUrl = `${bundleUrl.href}?ts=${Date.now()}`;
+    const loaded = await import(moduleUrl) as BundledRunHookModule;
+    const factory = typeof loaded.buildRunHookRuntimeScript === "function"
+      ? loaded.buildRunHookRuntimeScript
+      : typeof loaded.default === "function"
+        ? loaded.default
+        : null;
+    if (!factory) return null;
+    const script = factory(options);
+    if (typeof script !== "string") return null;
+    return script.trim().length > 0 ? script : null;
+  } catch {
+    return null;
+  }
+}
+
 async function writeHooks(projectRoot: string, config: CclawConfig): Promise<void> {
   const harnesses = config.harnesses;
   const hooksDir = runtimePath(projectRoot, "hooks");
@@ -1066,14 +1110,19 @@ async function writeHooks(projectRoot: string, config: CclawConfig): Promise<voi
   await writeFileSafe(path.join(hooksDir, "stage-complete.mjs"), stageCompleteScript());
   await writeFileSafe(path.join(hooksDir, "start-flow.mjs"), startFlowScript());
   await writeFileSafe(path.join(hooksDir, "cancel-run.mjs"), cancelRunScript());
-  await writeFileSafe(path.join(hooksDir, "run-hook.mjs"), nodeHookRuntimeScript({
+  const hookRuntimeOptions: NodeHookRuntimeOptions = {
     strictness: effectiveStrictness,
     tddTestPathPatterns: config.tdd?.testPathPatterns ?? config.tddTestGlobs,
     tddProductionPathPatterns: config.tdd?.productionPathPatterns,
     compoundRecurrenceThreshold: config.compound?.recurrenceThreshold,
     earlyLoopEnabled: config.earlyLoop?.enabled,
     earlyLoopMaxIterations: config.earlyLoop?.maxIterations
-  }));
+  };
+  const bundledHookRuntime = await readBundledRunHookRuntimeScript(hookRuntimeOptions);
+  await writeFileSafe(
+    path.join(hooksDir, "run-hook.mjs"),
+    bundledHookRuntime ?? nodeHookRuntimeScript(hookRuntimeOptions)
+  );
   await writeFileSafe(path.join(hooksDir, "run-hook.cmd"), runHookCmdScript());
   await writeFileSafe(path.join(hooksDir, "delegation-record.mjs"), delegationRecordScript());
   const opencodePluginSource = opencodePluginJs();
@@ -1378,6 +1427,7 @@ async function materializeRuntime(
       writeEntryCommands(projectRoot),
       writeSkills(projectRoot, config),
       writeArtifactTemplates(projectRoot),
+      writeWavePlansScaffold(projectRoot),
       writeRulebook(projectRoot)
     ]);
     await writeState(projectRoot, config, forceStateReset);

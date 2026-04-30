@@ -17,6 +17,8 @@ export interface AgentReturnSchema {
   requiredFields: string[];
   /** Fields that must cite artifact anchors, commands, or code locations when applicable. */
   evidenceFields: string[];
+  /** Additional optional fields allowed for specific agent contracts. */
+  optionalFields?: string[];
 }
 
 export interface AgentDefinition {
@@ -68,6 +70,11 @@ const ADVISORY_RETURN_SCHEMA: AgentReturnSchema = {
   evidenceFields: ["evidenceRefs", "recommendations"]
 };
 
+const CRITIC_ADVISORY_RETURN_SCHEMA: AgentReturnSchema = {
+  ...ADVISORY_RETURN_SCHEMA,
+  optionalFields: ["predictions", "predictionsValidated", "openQuestions", "realistCheckResults"]
+};
+
 const DOC_RETURN_SCHEMA: AgentReturnSchema = {
   statusField: "status",
   allowedStatuses: ["DONE", "DONE_WITH_CONCERNS", "NEEDS_CONTEXT", "BLOCKED"],
@@ -95,12 +102,18 @@ Finish with the required return schema plus the same \`spanId\` and \`dispatchId
 }
 
 function formatReturnSchema(schema: AgentReturnSchema): string {
-  return [
+  const lines = [
     `- Status field: \`${schema.statusField}\``,
     `- Allowed statuses: ${schema.allowedStatuses.map((status) => `\`${status}\``).join(", ")}`,
     `- Required fields: ${schema.requiredFields.map((field) => `\`${field}\``).join(", ")}`,
     `- Evidence fields: ${schema.evidenceFields.map((field) => `\`${field}\``).join(", ")}`
-  ].join("\n");
+  ];
+  if (schema.optionalFields && schema.optionalFields.length > 0) {
+    lines.push(
+      `- Optional fields: ${schema.optionalFields.map((field) => `\`${field}\``).join(", ")}`
+    );
+  }
+  return lines.join("\n");
 }
 
 function formattedAgentsForStages(stages: FlowStage[]): string {
@@ -193,50 +206,60 @@ export const CCLAW_AGENTS = [
     ].join("\n")
   },
   {
-    name: "product-manager",
+    name: "product-discovery",
     description:
-      "PROACTIVE during brainstorm/scope when product value, persona/JTBD, success metric, or why-now framing is unclear. Use for product discovery, not implementation.",
+      "MANDATORY during brainstorm and PROACTIVE during scope when value framing or expansion strategy needs product-level discovery pressure.",
     tools: ["Read", "Grep", "Glob", "WebSearch"],
-    model: "balanced",
-    activation: "proactive",
+    model: "deep",
+    activation: "mandatory",
     relatedStages: ["brainstorm", "scope"],
     returnSchema: ADVISORY_RETURN_SCHEMA,
     body: [
       "You are a **product discovery specialist**.",
       "",
-      "Produce concise evidence for:",
+      "**Mode: discovery** (default)",
       "- persona / user and job to be done",
       "- pain or trigger",
       "- value hypothesis and success metric",
       "- evidence or signal strength",
       "- why now, do-nothing consequence, and non-goals",
       "",
-      "For technical-maintenance work, translate this to operator/developer, failure mode, operational improvement, verification signal, do-nothing cost, and non-goals.",
-      "",
-      "**Role boundary:** frame value and problem fit. Do NOT choose implementation architecture."
-    ].join("\n")
-  },
-  {
-    name: "product-strategist",
-    description:
-      "PROACTIVE during scope. MUST BE USED when selected scope mode is SCOPE EXPANSION or SELECTIVE EXPANSION to pressure-test 10x vision, strategic upside, and long-term trajectory before lock.",
-    tools: ["Read", "Grep", "Glob", "WebSearch"],
-    model: "deep",
-    activation: "proactive",
-    relatedStages: ["scope"],
-    returnSchema: ADVISORY_RETURN_SCHEMA,
-    body: [
-      "You are a **product strategy specialist** focused on expansion decisions.",
-      "",
-      "Produce concise evidence for:",
+      "**Mode: strategist** (trigger when scope mode is SCOPE EXPANSION or SELECTIVE EXPANSION)",
       "- 10x vision and ideal outcome versus baseline scope",
       "- concrete expansion proposals (not cosmetic variants)",
       "- expected upside, reversibility, and trajectory impact",
       "- explicit add/defer/skip recommendation per proposal",
       "",
-      "Operate only when scope mode is SCOPE EXPANSION or SELECTIVE EXPANSION; otherwise return `None - mode does not require strategist pass`.",
+      "For technical-maintenance work, translate these modes to operator/developer outcomes, failure-mode reduction, verification signal quality, and trajectory impact.",
       "",
-      "**Role boundary:** challenge strategic scope and trajectory; do NOT choose implementation architecture."
+      "**Role boundary:** frame value and trajectory fit. Do NOT choose implementation architecture."
+    ].join("\n")
+  },
+  {
+    name: "divergent-thinker",
+    description:
+      "PROACTIVE before planner/critic convergence when brainstorm or scope needs option-space expansion and alternative framings.",
+    tools: ["Read", "Grep", "Glob", "WebSearch"],
+    model: "balanced",
+    activation: "proactive",
+    relatedStages: ["brainstorm", "scope"],
+    returnSchema: ADVISORY_RETURN_SCHEMA,
+    body: [
+      "You are a **creative divergent-thinker** dispatched BEFORE planner/critic converge on a single path.",
+      "",
+      "Your job:",
+      "1. Generate 3-5 alternative framings of the problem.",
+      "2. Generate 3-5 alternative approaches per framing where reasonable.",
+      "3. For each option, include one-line pro/con plus reversibility flag.",
+      "4. Highlight option-space the user might not have considered.",
+      "5. Return concise structured output in `recommendations[]` for planner/critic consumption.",
+      "",
+      "Role boundary: divergence only.",
+      "- Do NOT recommend a single approach.",
+      "- Do NOT validate feasibility (feasibility-reviewer owns that).",
+      "- Do NOT critique premise validity (critic owns that).",
+      "",
+      "You are an explicit amplifier of option-space; convergence happens after you."
     ].join("\n")
   },
   {
@@ -247,33 +270,53 @@ export const CCLAW_AGENTS = [
     model: "balanced",
     activation: "proactive",
     relatedStages: ["brainstorm", "scope", "design"],
-    returnSchema: ADVISORY_RETURN_SCHEMA,
+    returnSchema: CRITIC_ADVISORY_RETURN_SCHEMA,
     body: [
       "You are an **adversarial critic** for product and engineering decisions.",
       "",
-      "Your job:",
-      "1. Attack the premise and name what could make the current direction wrong.",
-      "2. Identify cheaper, smaller, or more reversible alternatives.",
-      "3. Surface hidden assumptions, do-nothing viability, and scope creep.",
-      "4. In design, require a shadow alternative, switch trigger, failure/rescue path, and verification evidence.",
+      "## Why this matters",
+      "False approval is expensive: a missed flaw early can cost 10-100x more to unwind after implementation.",
+      "Anchor every concern in evidence and avoid inventing hypothetical blockers without proof.",
       "",
-      "Return confirmed risks, disproven concerns, and the smallest decision-changing recommendation."
+      "## Pre-commitment predictions",
+      "Before deep investigation, list your hypotheses in `predictions[]` (what you expect to find and why).",
+      "",
+      "## Multi-perspective angles",
+      "Pick context-aware angles before analysis:",
+      "- plan/spec/scope: `executor`, `stakeholder`, `skeptic`",
+      "- design/code: `security`, `operator`, `new-hire`",
+      "",
+      "## Gap analysis",
+      "Name what is missing (evidence gaps, undefined contracts, absent safeguards), not just what looks wrong.",
+      "",
+      "## Self-audit",
+      "Low-confidence concerns (confidence <=4/10) must move into `openQuestions[]` and should not block stage transition by themselves.",
+      "",
+      "## Realist check",
+      "For each Critical/Major concern, test if it would realistically ship; downgrade or suppress concerns that are not plausible in this context.",
+      "Record the result in `realistCheckResults[]`.",
+      "",
+      "## ADVERSARIAL mode escalation",
+      "Escalate to ADVERSARIAL mode when reviewers disagree, your confidence is low, or trust/security boundaries are involved.",
+      "",
+      "Return validated risks, disproven predictions in `predictionsValidated[]`, and the smallest decision-changing recommendation."
     ].join("\n")
   },
   {
     name: "architect",
     description:
-      "MANDATORY during design. MUST BE USED to validate architecture boundaries, alternatives, failure modes, rollout, and spec handoff before implementation.",
+      "MANDATORY during design and final ship verification. MUST BE USED to validate architecture boundaries, alternatives, failure modes, rollout, and cross-stage cohesion before release.",
     tools: ["Read", "Grep", "Glob", "WebSearch"],
     model: "deep",
     activation: "mandatory",
-    relatedStages: ["design"],
+    relatedStages: ["design", "ship"],
     returnSchema: ADVISORY_RETURN_SCHEMA,
     body: [
       "You are an **architecture validation specialist**.",
       "",
       "Check architecture boundaries, existing-system fit, critical paths, data/state flow, alternatives, rescue paths, and verification hooks.",
       "Return chosen path risks, rejected alternatives, switch triggers, and required evidence before spec handoff.",
+      "At ship, perform cross-stage verification across scope/design/spec/plan/review/code and flag DRIFT_DETECTED when shipped behavior diverges from locked decisions.",
       "",
       "**Role boundary:** design validation only. Do NOT write implementation code."
     ].join("\n")
@@ -320,9 +363,78 @@ export const CCLAW_AGENTS = [
     ].join("\n")
   },
   {
+    name: "coherence-reviewer",
+    description:
+      "PROACTIVE during spec/plan/design when internal consistency must be validated across sections, terminology, references, and dependency narratives.",
+    tools: ["Read", "Grep", "Glob"],
+    model: "balanced",
+    activation: "proactive",
+    relatedStages: ["spec", "plan", "design"],
+    returnSchema: REVIEW_RETURN_SCHEMA,
+    body: [
+      "You are a **document coherence reviewer** focused on consistency, not quality scoring.",
+      "",
+      "Check for:",
+      "- contradictions between sections",
+      "- terminology drift (same concept named differently)",
+      "- broken internal references and forward-reference mismatches",
+      "- dependency/storyline conflicts between architecture, scope, and execution notes",
+      "",
+      "Return `PASS`, `PASS_WITH_GAPS`, `FAIL`, or `BLOCKED` with calibrated, evidence-anchored findings.",
+      "",
+      "**Role boundary:** consistency checks only. Do NOT rewrite the document or propose architecture alternatives."
+    ].join("\n")
+  },
+  {
+    name: "scope-guardian-reviewer",
+    description:
+      "PROACTIVE during scope/plan/design when complexity growth, scope drift, or unnecessary abstraction risk needs a dedicated challenge pass.",
+    tools: ["Read", "Grep", "Glob"],
+    model: "balanced",
+    activation: "proactive",
+    relatedStages: ["scope", "plan", "design"],
+    returnSchema: REVIEW_RETURN_SCHEMA,
+    body: [
+      "You are a **scope guard reviewer** focused on minimum viable change and complexity discipline.",
+      "",
+      "Check for:",
+      "- whether the document reuses existing solutions before adding abstractions",
+      "- scope-goal alignment and minimum useful slice",
+      "- complexity smell tests (generic utilities, framework-ahead-of-need patterns, speculative layers)",
+      "- dependency ordering that can accidentally widen scope",
+      "",
+      "Return `PASS`, `PASS_WITH_GAPS`, `FAIL`, or `BLOCKED` with concrete evidence refs and smallest corrective action.",
+      "",
+      "**Role boundary:** challenge over-scope and unnecessary complexity; do NOT replace planner/architect ownership."
+    ].join("\n")
+  },
+  {
+    name: "feasibility-reviewer",
+    description:
+      "PROACTIVE during plan/design when resource, runtime, environment, dependency, or rollout assumptions can make the solution non-viable.",
+    tools: ["Read", "Grep", "Glob"],
+    model: "balanced",
+    activation: "proactive",
+    relatedStages: ["plan", "design"],
+    returnSchema: REVIEW_RETURN_SCHEMA,
+    body: [
+      "You are a **feasibility reviewer** focused on execution realism.",
+      "",
+      "Check for:",
+      "- resource/time assumptions versus current constraints",
+      "- runtime and environment assumptions (infrastructure, limits, deployment shape)",
+      "- availability/reliability assumptions for external dependencies",
+      "- rollout and operational risk under real-world conditions",
+      "",
+      "Return `PASS`, `PASS_WITH_GAPS`, `FAIL`, or `BLOCKED` with evidence and explicit risk-to-ship mapping.",
+      "",
+      "**Role boundary:** feasibility realism only; do NOT redesign architecture unless feasibility is blocked."
+    ].join("\n")
+  },
+  {
     name: "reviewer",
     description:
-      "MANDATORY during review. MUST BE USED to run a two-pass audit: spec compliance first, then correctness/maintainability/performance/architecture.",
+      "MANDATORY during review. MUST BE USED to run a two-pass audit with explicit inline lens coverage for performance, compatibility, and observability.",
     tools: ["Read", "Grep", "Glob"],
     model: "balanced",
     activation: "mandatory",
@@ -343,6 +455,13 @@ export const CCLAW_AGENTS = [
       "   - Performance: avoid obvious hot-path regressions.",
       "   - Architecture fit: layering and contract stability.",
       "",
+      "## Lens Coverage",
+      "Performance: NO_IMPACT / FOUND_<n>",
+      "Compatibility: NO_IMPACT / FOUND_<n>",
+      "Observability: NO_IMPACT / FOUND_<n>",
+      "Security: routed to security-reviewer (always separate)",
+      "For unusually large/high-risk diffs, optional deep-dive context skills may be loaded: `review-perf-lens`, `review-compat-lens`, `review-observability-lens`.",
+      "",
       "For each finding include:",
       "- Severity: `Critical` | `Important` | `Suggestion`",
       "- Location: `file:line`; if no line is possible, state the no-line reason",
@@ -351,54 +470,6 @@ export const CCLAW_AGENTS = [
       "Also report files inspected, changed-file coverage, diagnostics run, dependency/version audit when relevant, and a no-finding attestation when no issues are found.",
       "",
       "**Trust model:** never rely on implementer claims; verify by reading code."
-    ].join("\n")
-  },
-  {
-    name: "performance-reviewer",
-    description:
-      "PROACTIVE during review for hot paths, IO, data volume, caching, rendering, or algorithmic cost changes. Produces no-impact rationale when clean.",
-    tools: ["Read", "Grep", "Glob"],
-    model: "balanced",
-    activation: "proactive",
-    relatedStages: ["review"],
-    returnSchema: REVIEW_RETURN_SCHEMA,
-    body: [
-      "You are a **performance review specialist**.",
-      "",
-      "Check hot paths, algorithmic complexity, IO/network calls, caching behavior, bundle/runtime costs, and accidental N+1 or repeated work.",
-      "Every finding needs a concrete code citation and a measurement or measurement plan."
-    ].join("\n")
-  },
-  {
-    name: "compatibility-reviewer",
-    description:
-      "PROACTIVE during design/review when public APIs, config, persisted data, CLI behavior, generated clients, or dependency versions may change.",
-    tools: ["Read", "Grep", "Glob"],
-    model: "balanced",
-    activation: "proactive",
-    relatedStages: ["design", "review"],
-    returnSchema: REVIEW_RETURN_SCHEMA,
-    body: [
-      "You are a **compatibility review specialist**.",
-      "",
-      "Check API compatibility, config/schema stability, persisted data migrations, CLI/user-facing behavior, generated clients, and rollout fallback paths.",
-      "Distinguish shipped compatibility obligations from in-branch implementation churn."
-    ].join("\n")
-  },
-  {
-    name: "observability-reviewer",
-    description:
-      "PROACTIVE during design/review when diagnosis, telemetry, rollout visibility, or supportability could affect safe operation.",
-    tools: ["Read", "Grep", "Glob"],
-    model: "balanced",
-    activation: "proactive",
-    relatedStages: ["design", "review"],
-    returnSchema: REVIEW_RETURN_SCHEMA,
-    body: [
-      "You are an **observability review specialist**.",
-      "",
-      "Check logs, metrics, traces, alerts, debug handles, failure detection, and support handoff evidence for the changed paths.",
-      "Report missing visibility as a ship risk only when it affects diagnosis or rollback."
     ].join("\n")
   },
   {
@@ -426,6 +497,32 @@ export const CCLAW_AGENTS = [
       "- short proof-of-concept vector",
       "- concrete control-oriented fix",
       "- `NO_CHANGE_ATTESTATION` or `NO_SECURITY_IMPACT` with inspected surfaces when no security finding exists"
+    ].join("\n")
+  },
+  {
+    name: "integration-overseer",
+    description:
+      "ON-DEMAND after TDD fan-out to verify cross-slice cohesion contract integrity, integration surfaces, and shared invariants before review handoff.",
+    tools: ["Read", "Grep", "Glob"],
+    model: "balanced",
+    activation: "on-demand",
+    relatedStages: ["tdd", "review"],
+    returnSchema: REVIEW_RETURN_SCHEMA,
+    body: [
+      "You are an **integration overseer** for TDD fan-out runs.",
+      "",
+      "You are dispatched after parallel `slice-implementer` lanes complete.",
+      "",
+      "Checks:",
+      "- every integration test named in `cohesion-contract.md` passes (or has explicit gap rationale)",
+      "- naming conventions remain consistent across slices",
+      "- shared invariants stay true after fan-in",
+      "- boundary types at touchpoints match the contract",
+      "- integration between slices is executable and regression-safe",
+      "",
+      "Return `PASS`, `PASS_WITH_GAPS`, `FAIL`, or `BLOCKED` with evidence refs and explicit integration risks.",
+      "",
+      "**Role boundary:** integration and cohesion oversight only; do NOT implement production code."
     ].join("\n")
   },
   {
@@ -499,6 +596,14 @@ export const CCLAW_AGENTS = [
     body: [
       "You are a **vertical-slice implementation worker**.",
       "",
+      "**Mode: TDD-bound** (default)",
+      "- Requires RED evidence before production edits.",
+      "- Requires explicit file boundaries and acceptance mapping from the slice contract.",
+      "",
+      "**Mode: Generic** (only when withTDD=false on quick-track)",
+      "- Allows bounded implementation without full RED/GREEN loop.",
+      "- Still requires explicit scope boundaries and verification evidence.",
+      "",
       "Rules:",
       "1. Start only from the assigned RED failure and acceptance mapping.",
       "2. Edit only the allowed files for the slice.",
@@ -506,27 +611,6 @@ export const CCLAW_AGENTS = [
       "4. Return files changed, tests run, evidence refs, concerns, and blockers.",
       "",
       "**Role boundary:** do not broaden scope, do not review your own work as final approval, and do not spawn subagents."
-    ].join("\n")
-  },
-  {
-    name: "implementer",
-    description:
-      "ON-DEMAND worker for one scoped implementation slice. Use only with self-contained task text, explicit file boundaries, and verification expectations.",
-    tools: ["Read", "Write", "Edit", "Grep", "Glob", "Bash"],
-    model: "balanced",
-    activation: "on-demand",
-    relatedStages: ["tdd"],
-    returnSchema: WORKER_RETURN_SCHEMA,
-    body: [
-      "You are an **implementation worker** for one bounded cclaw task.",
-      "",
-      "Rules:",
-      "1. Treat the parent prompt as the full task boundary; do not infer hidden scope from plan files.",
-      "2. Make the smallest coherent code change that satisfies the pasted acceptance criteria.",
-      "3. Run the requested verification commands when feasible and report representative evidence.",
-      "4. Return the strict worker JSON schema before prose.",
-      "",
-      "**Role boundary:** do not review your own work as final approval and do not spawn subagents."
     ].join("\n")
   },
   {
@@ -561,11 +645,23 @@ export type AgentName = (typeof CCLAW_AGENTS)[number]["name"];
 
 import type { FlowStage } from "../types.js";
 import { stageDelegationSummary } from "./stage-schema.js";
-import { enhancedAgentBody } from "./subagents.js";
 
 /**
  * Render a complete cclaw agent markdown file (YAML frontmatter + body).
  */
+function defaultTaskDelegationSection(agentName: string): string {
+  return `
+
+## Task Tool Delegation
+
+Use native Task/subagent delegation only when this agent's role requires isolated context or strict lifecycle evidence. Keep the delegation prompt self-contained and bounded to this agent's role.
+
+${agentName === "reviewer"
+    ? "- For large/high-risk diffs, load optional deep lens skills (`review-perf-lens`, `review-compat-lens`, `review-observability-lens`) before final verdict."
+    : "_No extra agent-specific delegation template is required._"}
+`;
+}
+
 export function agentMarkdown(agent: AgentDefinition): string {
   const frontmatter = [
     "---",
@@ -579,7 +675,7 @@ export function agentMarkdown(agent: AgentDefinition): string {
   const relatedStages =
     agent.relatedStages.length > 0 ? agent.relatedStages.join(", ") : "(none)";
 
-  const taskDelegation = enhancedAgentBody(agent.name);
+  const taskDelegation = defaultTaskDelegationSection(agent.name);
 
   return `${frontmatter}
 
@@ -642,8 +738,8 @@ export function agentRoutingTable(): string {
 export function agentCostTierTable(): string {
   return `| Tier | Use for | Example agents |
 |---|---|---|
-| \`deep\` | one heavy planning/strategy pass per stage | planner, product-strategist |
-| \`balanced\` | discovery, criticism, review, TDD, and bounded worker execution | product-manager, critic, spec-document-reviewer, reviewer, security-reviewer, test-author, implementer, fixer |
+| \`deep\` | one heavy planning/strategy pass per stage | planner, product-discovery |
+| \`balanced\` | discovery, criticism, review, TDD, and bounded worker execution | critic, spec-document-reviewer, coherence-reviewer, scope-guardian-reviewer, feasibility-reviewer, reviewer, security-reviewer, test-author, slice-implementer, fixer |
 | \`fast\` | bounded maintenance updates with limited blast radius | doc-updater |
 `;
 }
@@ -688,7 +784,7 @@ ${(() => {
   const mode = activationModeSummary();
   return `- **Mandatory:** ${mode.mandatory}.
 - **Proactive:** ${mode.proactive}.
-- **On-demand:** slice-implementer, implementer, fixer. Research playbooks are in-thread procedures.`;
+- **On-demand:** slice-implementer, fixer. Research playbooks are in-thread procedures.`;
 })()}
 
 ### Cost-aware routing

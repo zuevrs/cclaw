@@ -8,30 +8,6 @@ import { conversationLanguagePolicyBullets, conversationLanguagePolicyMarkdown }
  * execute orchestration logic at install time beyond string assembly.
  */
 
-const SUBAGENT_AGENT_NAMES = [
-  "researcher",
-  "architect",
-  "spec-validator",
-  "spec-document-reviewer",
-  "slice-implementer",
-  "performance-reviewer",
-  "compatibility-reviewer",
-  "observability-reviewer",
-  "release-reviewer",
-  "planner",
-  "product-manager",
-  "product-strategist",
-  "critic",
-  "reviewer",
-  "security-reviewer",
-  "test-author",
-  "doc-updater",
-  "implementer",
-  "fixer"
-] as const;
-
-type SubagentCclawAgentName = (typeof SUBAGENT_AGENT_NAMES)[number];
-
 const MARKDOWN_CODE_FENCE = "```";
 
 function formatAgentList(agents: string[]): string {
@@ -158,8 +134,8 @@ Concrete per-stage rules so the controller does not have to guess which tier fit
 
 | Stage | Deep slot | Balanced slot(s) | Fast fan-out | Trigger to escalate |
 |---|---|---|---|---|
-| brainstorm | planner (only if ambiguity spans >1 module) | product-manager / critic when product value or premise is uncertain | run in-thread research playbooks | promote to \`balanced\` critic if the do-nothing path may beat the idea |
-| scope | planner (always) | product-manager / product-strategist / critic when mode changes value, trajectory, or boundaries | run \`research/git-history.md\` in-thread when churn is high | promote to \`balanced\` critic if scope mode is disputed |
+| brainstorm | planner (only if ambiguity spans >1 module) | product-discovery / critic when product value or premise is uncertain | run in-thread research playbooks | promote to \`balanced\` critic if the do-nothing path may beat the idea |
+| scope | planner (always) | product-discovery / critic when mode changes value, trajectory, or boundaries | run \`research/git-history.md\` in-thread when churn is high | promote to \`balanced\` critic if scope mode is disputed |
 | design | planner (always) | critic, security-reviewer, test-author when alternatives/trust/testability apply | run \`research/framework-docs-lookup.md\` + \`research/best-practices-lookup.md\` in-thread | escalate one specialist to \`deep\` only if a failure mode is Critical-severity |
 | spec | — | spec-validator / spec-document-reviewer / reviewer (for long or high-risk specs) | — | escalate to \`deep\` only for spec ↔ design contradictions |
 | plan | planner (solo, always) | — | — | never fan out at plan stage; one owner for dependency graph |
@@ -189,6 +165,7 @@ Borrow the good part of Team/Ruflo-style orchestration without adding a swarm ru
 - **No parallel writes to adjacent surfaces.** If tasks may touch the same module, serialize them.
 - **Checkpoint before synthesis.** Each agent returns status, files inspected/changed, evidence, and blockers before the parent acts.
 - **Consensus is for hard calls only.** Use two reviewers when severity or architecture is disputed; otherwise one evidence-backed reviewer is enough.
+- **Multi-wave persistence uses the executing-waves skill.** For 2+ wave efforts, maintain \`.cclaw/wave-plans/\` and run carry-forward drift audits in brainstorm.
 
 ## Parallelization Decision Gate
 
@@ -420,6 +397,8 @@ ${conversationLanguagePolicyMarkdown()}
 
 Implementation that touches shared source trees must remain **sequential** unless you have proven disjoint filesystem ownership (rare) and an explicit merge protocol.
 
+When explicit bounded TDD fan-out is approved with parallel \`slice-implementer\` lanes, author \`.cclaw/artifacts/cohesion-contract.md\` + \`.json\` before launch and run \`integration-overseer\` after fan-in.
+
 ## When to Use
 
 - **Independent investigations** (perf vs correctness vs dependency hygiene) with separated code neighborhoods.
@@ -443,11 +422,13 @@ Implementation that touches shared source trees must remain **sequential** unles
 ## Dispatch Protocol
 
 1. **Identify independent problem domains** (no file overlap; no shared mutable working assumptions).
-2. **Craft one prompt per domain** with **full context pasted** — same HARD-GATE as SDD: no “go read X to learn why.”
-3. **Launch ALL agents in a single controller message** (multiple Task tool calls) so they start with comparable timelines.
-4. **Wait for all to return** before synthesis (avoid incremental confirmation bias).
-5. **Reconcile results:** deduplicate findings, merge overlaps, and **conflict-check** contradictions explicitly.
-6. **Run the full test suite after any code changes** — parallel analysis may propose edits; verification stays mandatory.
+2. **Author cohesion contract first** whenever fan-out touches shared interfaces or bounded parallel \`slice-implementer\` lanes.
+3. **Craft one prompt per domain** with **full context pasted** — same HARD-GATE as SDD: no “go read X to learn why.”
+4. **Launch ALL agents in a single controller message** (multiple Task tool calls) so they start with comparable timelines.
+5. **Wait for all to return** before synthesis (avoid incremental confirmation bias).
+6. **Run integration-overseer after fan-in** to verify touchpoints, boundary types, invariants, and integration-test outcomes.
+7. **Reconcile results:** deduplicate findings, merge overlaps, and **conflict-check** contradictions explicitly.
+8. **Run the full test suite after any code changes** — parallel analysis may propose edits; verification stays mandatory.
 
 ## Review Army Pattern (gstack)
 
@@ -1045,61 +1026,6 @@ Tasks:
 ${MARKDOWN_CODE_FENCE}
 
 `;
-}
-
-/**
- * Returns markdown fragments augmenting each specialist persona with Task tool
- * delegation guidance. Combine with the existing `body` field from `core-agents.ts`.
- */
-export function enhancedAgentBody(agentName: string): string {
-  switch (agentName as SubagentCclawAgentName) {
-    case "researcher":
-      return researcherEnhancedBody();
-    case "architect":
-      return architectEnhancedBody();
-    case "spec-validator":
-      return specValidatorEnhancedBody();
-    case "spec-document-reviewer":
-      return specDocumentReviewerEnhancedBody();
-    case "slice-implementer":
-      return sliceImplementerEnhancedBody();
-    case "performance-reviewer":
-      return performanceReviewerEnhancedBody();
-    case "compatibility-reviewer":
-      return compatibilityReviewerEnhancedBody();
-    case "observability-reviewer":
-      return observabilityReviewerEnhancedBody();
-    case "release-reviewer":
-      return releaseReviewerEnhancedBody();
-    case "planner":
-      return plannerEnhancedBody();
-    case "product-manager":
-      return productManagerEnhancedBody();
-    case "product-strategist":
-      return productStrategistEnhancedBody();
-    case "critic":
-      return criticEnhancedBody();
-    case "reviewer":
-      return reviewerEnhancedBody();
-    case "security-reviewer":
-      return securityReviewerEnhancedBody();
-    case "test-author":
-      return testAuthorEnhancedBody();
-    case "doc-updater":
-      return docUpdaterEnhancedBody();
-    case "implementer":
-      return implementerEnhancedBody();
-    case "fixer":
-      return fixerEnhancedBody();
-    default:
-      return `
-
-## Task Tool Delegation
-
-_No enhanced Task template is defined for agent \`${agentName}\`._
-
-`;
-  }
 }
 
 export function subagentsAgentsMdBlock(): string {

@@ -1,17 +1,17 @@
 import { describe, expect, it } from "vitest";
-import type { IdeaFrameId } from "../../src/content/idea-frames.js";
+import type { IdeaFrameId } from "../../src/content/idea.js";
 import {
   DEFAULT_IDEA_FRAME_IDS,
   IDEA_FRAMES,
   buildIdeaFrameDispatchPlan,
   dedupeIdeaCandidates,
   resolveIdeaFrames
-} from "../../src/content/idea-frames.js";
+} from "../../src/content/idea.js";
 
 describe("idea frame registry", () => {
-  it("ships six default frames with prompt and example patterns", () => {
-    expect(DEFAULT_IDEA_FRAME_IDS).toHaveLength(6);
-    expect(IDEA_FRAMES).toHaveLength(6);
+  it("ships three default frames with prompt and example patterns", () => {
+    expect(DEFAULT_IDEA_FRAME_IDS).toHaveLength(3);
+    expect(IDEA_FRAMES).toHaveLength(3);
     for (const frame of IDEA_FRAMES) {
       expect(frame.id.trim().length).toBeGreaterThan(0);
       expect(frame.label.trim().length).toBeGreaterThan(0);
@@ -22,15 +22,15 @@ describe("idea frame registry", () => {
 
   it("resolves a deduped subset in caller order", () => {
     const selected = resolveIdeaFrames([
-      "leverage",
+      "assumption-break",
       "pain-friction",
-      "leverage",
-      "constraint-flip"
+      "assumption-break",
+      "cross-domain-analogy"
     ]);
     expect(selected.map((frame) => frame.id)).toEqual([
-      "leverage",
+      "assumption-break",
       "pain-friction",
-      "constraint-flip"
+      "cross-domain-analogy"
     ]);
   });
 
@@ -79,7 +79,7 @@ describe("idea frame registry", () => {
         title: "Tighten sync trace check output",
         evidencePath: "src/sync.ts",
         summary: "Improve visibility of missing links.",
-        frameId: "leverage"
+        frameId: "assumption-break"
       }
     ]);
 

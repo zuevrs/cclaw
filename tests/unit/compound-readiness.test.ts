@@ -106,13 +106,13 @@ describe("computeCompoundReadiness", () => {
     });
   });
 
-  it("excludes already lifted entries", () => {
+  it("keeps lifted entries in simplified readiness clustering", () => {
     const entries = [
       entry({ trigger: "x", action: "y", frequency: 5, maturity: "lifted-to-enforcement" })
     ];
     const status = computeCompoundReadiness(entries, { threshold: 3 });
-    expect(status.clusterCount).toBe(0);
-    expect(status.readyCount).toBe(0);
+    expect(status.clusterCount).toBe(1);
+    expect(status.readyCount).toBe(1);
   });
 
   it("promotes critical clusters via critical_override even when below threshold", () => {
@@ -173,7 +173,7 @@ describe("computeCompoundReadiness", () => {
     expect(status.ready).toHaveLength(5);
   });
 
-  it("excludes superseded entries from readiness", () => {
+  it("keeps superseded metadata rows in simplified readiness clustering", () => {
     const entries = [
       entry({
         trigger: "stale workaround",
@@ -189,9 +189,12 @@ describe("computeCompoundReadiness", () => {
       })
     ];
     const status = computeCompoundReadiness(entries, { threshold: 3 });
-    expect(status.clusterCount).toBe(1);
-    expect(status.readyCount).toBe(1);
-    expect(status.ready[0]?.trigger).toBe("fresh workaround");
+    expect(status.clusterCount).toBe(2);
+    expect(status.readyCount).toBe(2);
+    expect(status.ready.map((row) => row.trigger).sort()).toEqual([
+      "fresh workaround",
+      "stale workaround"
+    ]);
   });
 
 });

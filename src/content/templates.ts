@@ -1026,6 +1026,76 @@ Execution rule: complete and verify each batch before starting the next batch.
 ## Learnings
 - None this stage.
 `,
+  "cohesion-contract.md": `${artifactFrontmatter("tdd")}
+
+# Cohesion Contract — <wave / stage / topic>
+
+## Shared Types & Interfaces
+| Symbol | Path | Signature | Owner slice |
+|---|---|---|---|
+|  |  |  |  |
+
+## Naming Conventions
+- 
+
+## Invariants
+- 
+
+## Integration Touchpoints
+| From slice | To slice | Surface | Integration test name |
+|---|---|---|---|
+|  |  |  |  |
+
+## Behavior Specifications per Slice
+### Slice <n>: <description>
+- test: <name>
+  assert: <one-line assertion>
+  surface: <public interface>
+
+## Status
+| Slice | Implemented | Tests pass | Cohesion verified |
+|---|---|---|---|
+| S-1 | no | no | no |
+
+## Learnings
+- None this stage.
+`,
+  "cohesion-contract.json": `{
+  "version": 1,
+  "sharedTypes": [
+    {
+      "symbol": "",
+      "path": "",
+      "signature": "",
+      "ownerSlice": ""
+    }
+  ],
+  "touchpoints": [
+    {
+      "fromSlice": "",
+      "toSlice": "",
+      "surface": "",
+      "integrationTestName": ""
+    }
+  ],
+  "slices": [
+    {
+      "sliceId": "S-1",
+      "description": "",
+      "test": "",
+      "assert": "",
+      "surface": "",
+      "implemented": false,
+      "testsPass": false,
+      "cohesionVerified": false
+    }
+  ],
+  "status": {
+    "overall": "pending",
+    "notes": ""
+  }
+}
+`,
   "07-review.md": `${artifactFrontmatter("review")}
 
 # Review Artifact
@@ -1098,6 +1168,12 @@ Execution rule: complete and verify each batch before starting the next batch.
 | R-1 | Critical/Important/Suggestion | correctness/security/performance/architecture/external-safety | path:line |  | open/resolved |
 - NO_FINDINGS_ATTESTATION: <required when no findings are reported; cite inspected coverage>
 
+## Lens Coverage
+- Performance: NO_IMPACT | FOUND_<n>
+- Compatibility: NO_IMPACT | FOUND_<n>
+- Observability: NO_IMPACT | FOUND_<n>
+- Security: routed to security-reviewer (always separate)
+
 ## Security Sweep Attestation
 - Result: findings | NO_CHANGE_ATTESTATION | NO_SECURITY_IMPACT
 - Inspected surfaces:
@@ -1119,7 +1195,7 @@ Execution rule: complete and verify each batch before starting the next batch.
 
 ## Review Readiness Snapshot
 
-- Victory Detector: pass | fail (Layer 1, Layer 2, security sweep, structured findings, trace evidence, unresolved-critical status)
+- Victory Detector: pass | fail (Layer 1, Layer 2, security sweep, structured findings, acceptance/reproduction coverage evidence, unresolved-critical status)
 - Completed checks: Layer 1, Layer 2 tags, security sweep, schema validation
 - Delegation log: \`.cclaw/state/delegation-log.json\` required/completed/waived/pending
 - Staleness signal: commit at last review pass vs current commit
@@ -1134,11 +1210,10 @@ Execution rule: complete and verify each batch before starting the next batch.
 - Adversarial review: not triggered | pass | fail
 - Overall: complete | concerns | blocked
 
-## Trace Matrix Check
-- Command: \`npx cclaw-cli internal trace-matrix\` when the active track enforces it; otherwise record direct AC/reproduction-slice coverage.
-- Orphaned criteria: 0
-- Orphaned source items: 0 or \`N/A - direct spec/reproduction coverage\`
-- Orphaned tests: 0
+## Coverage Check
+- AC/source-item/slice coverage rationale:
+- Orphaned source items: none | explain gap
+- Orphaned tests: none | explain gap
 - Evidence ref:
 
 ## Verification Command Discovery
@@ -1212,6 +1287,12 @@ Execution rule: complete and verify each batch before starting the next batch.
 - Lint:
 - Type-check:
 - Working tree clean:
+
+## Architect Cross-Stage Verification
+- Skill: architect-cross-stage-verification
+- Result: CROSS_STAGE_VERIFIED | DRIFT_DETECTED | BLOCKED
+- Evidence refs:
+- Drift summary:
 
 ## Base Branch Determination
 - Command run: \`git merge-base HEAD main || git merge-base HEAD master\`

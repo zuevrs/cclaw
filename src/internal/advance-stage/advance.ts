@@ -274,7 +274,6 @@ export async function harvestStageLearnings(
   const appendResult = await appendKnowledge(projectRoot, parsed.entries, {
     stage,
     originStage: stage,
-    originRun: null,
     project: path.basename(projectRoot)
   });
   if (appendResult.invalid > 0) {

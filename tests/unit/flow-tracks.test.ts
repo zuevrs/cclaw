@@ -130,11 +130,8 @@ describe("flow tracks", () => {
       expect(standard.stageGateCatalog.tdd.required).toContain("tdd_traceable_to_plan");
       expect(quick.stageGateCatalog.tdd.required).not.toContain("tdd_traceable_to_plan");
       expect(quick.stageGateCatalog.tdd.recommended).not.toContain("tdd_traceable_to_plan");
-      expect(standard.stageGateCatalog.review.required).toContain("review_trace_matrix_clean");
       expect(standard.stageGateCatalog.review.required).toContain("review_layer_coverage_complete");
-      expect(quick.stageGateCatalog.review.required).not.toContain("review_trace_matrix_clean");
       expect(quick.stageGateCatalog.review.required).toContain("review_layer_coverage_complete");
-      expect(quick.stageGateCatalog.review.recommended).toContain("review_trace_matrix_clean");
     });
   });
 

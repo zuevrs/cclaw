@@ -26,7 +26,6 @@ describe("knowledge store append helper", () => {
       ],
       {
         stage: "review",
-        originRun: "queue-hardening",
         project: "cclaw",
         source: "stage",
         nowIso: "2026-04-19T11:00:00Z"
@@ -44,7 +43,6 @@ describe("knowledge store append helper", () => {
     expect(parsed.trigger).toBe("when dependency queue spikes");
     expect(parsed.stage).toBe("review");
     expect(parsed.origin_stage).toBe("review");
-    expect(parsed.origin_run).toBe("queue-hardening");
     expect(parsed.frequency).toBe(1);
     expect(parsed.source).toBe("stage");
     expect(parsed.severity).toBe("critical");
@@ -59,8 +57,7 @@ describe("knowledge store append helper", () => {
       type: "rule",
       trigger: "when stage closeout starts",
       action: "run stage-complete helper before mutating flow state",
-      confidence: "high",
-      domain: "workflow"
+      confidence: "high"
     };
 
     const first = await appendKnowledge(
@@ -139,14 +136,10 @@ describe("knowledge store append helper", () => {
       trigger: "bom sentinel",
       action: "preserve first entry",
       confidence: "medium",
-      domain: null,
       stage: "plan",
       origin_stage: "plan",
-      origin_run: null,
       project: "cclaw",
       frequency: 1,
-      universality: "project",
-      maturity: "raw",
       first_seen_ts: "2026-04-19T11:00:00Z",
       last_seen_ts: "2026-04-19T11:00:00Z",
       created: "2026-04-19T11:00:00Z"
@@ -205,13 +198,9 @@ describe("knowledge store append helper", () => {
       trigger: "stable trigger",
       action: "stable action",
       confidence: "medium",
-      domain: null,
       stage: "plan",
       origin_stage: "plan",
-      origin_run: null,
       frequency: 1,
-      universality: "project",
-      maturity: "raw",
       created: "2026-04-20T11:00:00Z",
       first_seen_ts: "2026-04-20T11:00:00Z",
       last_seen_ts: "2026-04-20T11:00:00Z",
@@ -233,56 +222,79 @@ describe("knowledge store append helper", () => {
     expect(parsed.entries[1]?.trigger).toBe("second trigger");
   });
 
-  it("documents supersession fields in the generated learnings skill", () => {
+  it("documents slim required schema without removed legacy fields", () => {
     const markdown = learnSkillMarkdown();
-    expect(markdown).toContain("Optional fields `source`, `severity`, `supersedes`, and `superseded_by`");
-    expect(markdown).toContain("| `supersedes` | string[] | no |");
-    expect(markdown).toContain("| `superseded_by` | string | no |");
+    expect(markdown).toContain(
+      "type, trigger, action, confidence, stage, origin_stage, frequency, created, first_seen_ts, last_seen_ts, project"
+    );
+    expect(markdown).toContain("Optional fields `source` and `severity`");
+    expect(markdown).not.toContain("Legacy optional fields");
   });
 
-  it("accepts optional supersession fields while reading existing schema rows", async () => {
-    const root = await createTempProject("knowledge-supersession-fields");
+  it("drops removed legacy metadata fields when appending new rows", async () => {
+    const root = await createTempProject("knowledge-drops-legacy-fields");
     const result = await appendKnowledge(
       root,
       [
         {
           type: "lesson",
-          trigger: "when compound refresh replaces stale guidance",
-          action: "append a focused replacement and mark the relationship",
+          trigger: "when refresh guidance changes",
+          action: "append only canonical metadata",
           confidence: "medium",
+          domain: "workflow",
+          origin_run: "run-legacy",
+          universality: "project",
+          maturity: "raw",
           supersedes: ["old-compound-guidance"],
           superseded_by: "new-compound-guidance"
-        }
+        } as unknown as KnowledgeSeedEntry
       ],
       { stage: "ship", project: "cclaw", source: "compound", nowIso: "2026-04-20T11:30:00Z" }
     );
 
     expect(result.appended).toBe(1);
     expect(result.invalid).toBe(0);
-    const parsed = await readKnowledgeSafely(root);
-    expect(parsed.entries[0]?.supersedes).toEqual(["old-compound-guidance"]);
-    expect(parsed.entries[0]?.superseded_by).toBe("new-compound-guidance");
+    const raw = await fs.readFile(path.join(root, ".cclaw/knowledge.jsonl"), "utf8");
+    const stored = JSON.parse(raw.trim()) as Record<string, unknown>;
+    expect(stored).not.toHaveProperty("domain");
+    expect(stored).not.toHaveProperty("origin_run");
+    expect(stored).not.toHaveProperty("universality");
+    expect(stored).not.toHaveProperty("maturity");
+    expect(stored).not.toHaveProperty("supersedes");
+    expect(stored).not.toHaveProperty("superseded_by");
   });
 
-  it("rejects malformed supersession fields", async () => {
-    const root = await createTempProject("knowledge-invalid-supersession");
-    const result = await appendKnowledge(
-      root,
-      [
-        {
-          type: "lesson",
-          trigger: "when supersession metadata is malformed",
-          action: "reject the learning",
-          confidence: "medium",
-          supersedes: []
-        }
-      ],
-      { stage: "ship", project: "cclaw", nowIso: "2026-04-20T11:31:00Z" }
+  it("accepts legacy rows on read while exposing canonical entry shape", async () => {
+    const root = await createTempProject("knowledge-read-legacy-row");
+    const storePath = path.join(root, ".cclaw/knowledge.jsonl");
+    await fs.mkdir(path.dirname(storePath), { recursive: true });
+    await fs.writeFile(
+      storePath,
+      `${JSON.stringify({
+        type: "lesson",
+        trigger: "legacy row trigger",
+        action: "legacy row action",
+        confidence: "medium",
+        stage: "ship",
+        origin_stage: "ship",
+        frequency: 1,
+        created: "2026-04-20T11:31:00Z",
+        first_seen_ts: "2026-04-20T11:31:00Z",
+        last_seen_ts: "2026-04-20T11:31:00Z",
+        project: "cclaw",
+        domain: "workflow",
+        supersedes: ["old"],
+        superseded_by: "new"
+      })}\n`,
+      "utf8"
     );
 
-    expect(result.appended).toBe(0);
-    expect(result.invalid).toBe(1);
-    expect(result.errors.join(" ")).toContain("supersedes");
+    const parsed = await readKnowledgeSafely(root);
+    expect(parsed.entries).toHaveLength(1);
+    expect(parsed.entries[0]?.trigger).toBe("legacy row trigger");
+    expect(parsed.entries[0]).not.toHaveProperty("domain");
+    expect(parsed.entries[0]).not.toHaveProperty("supersedes");
+    expect(parsed.entries[0]).not.toHaveProperty("superseded_by");
   });
 
 });

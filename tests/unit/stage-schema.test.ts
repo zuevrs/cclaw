@@ -8,7 +8,7 @@ import { stageExamples, stageFullArtifactExampleMarkdown } from "../../src/conte
 import { mandatoryDelegationsForStage, reviewStackAwareRoutingSummary, stageAutoSubagentDispatch, stageDelegationSummary, stagePolicyNeedles, stageSchema, stageTrackRenderContext } from "../../src/content/stage-schema.js";
 import { stageSkillMarkdown } from "../../src/content/skills.js";
 import { referencePatternContractsForStage, referencePatternPolicyNeedles, referencePatternsForStage } from "../../src/content/reference-patterns.js";
-import { enhancedAgentBody, subagentDrivenDevSkill } from "../../src/content/subagents.js";
+import { subagentDrivenDevSkill } from "../../src/content/subagents.js";
 import { SUBAGENT_CONTEXT_SKILLS } from "../../src/content/subagent-context-skills.js";
 import { ARTIFACT_TEMPLATES } from "../../src/content/templates.js";
 import { FLOW_STAGES, FLOW_TRACKS, TRACK_STAGES, type FlowStage, type FlowTrack } from "../../src/types.js";
@@ -43,11 +43,12 @@ describe("stage schema and subagent alignment", () => {
   it("supports complexity-tier gates for mandatory delegations", () => {
     expect(mandatoryDelegationsForStage("scope", "lightweight")).toEqual([]);
     expect(mandatoryDelegationsForStage("scope", "standard")).toEqual(["planner", "critic"]);
-    expect(mandatoryDelegationsForStage("brainstorm", "standard")).toEqual(["product-manager", "critic"]);
+    expect(mandatoryDelegationsForStage("brainstorm", "standard")).toEqual(["product-discovery", "critic"]);
     expect(mandatoryDelegationsForStage("design", "standard")).toEqual(["architect", "test-author"]);
     expect(mandatoryDelegationsForStage("spec", "standard")).toEqual(["spec-validator"]);
     expect(mandatoryDelegationsForStage("review", "lightweight")).toContain("reviewer");
     expect(mandatoryDelegationsForStage("ship", "lightweight")).toContain("release-reviewer");
+    expect(mandatoryDelegationsForStage("ship", "lightweight")).toContain("architect");
   });
 
   it("keeps adopted reference families represented in the registry", () => {
@@ -81,10 +82,21 @@ describe("stage schema and subagent alignment", () => {
     const review = standard.find((row) => row.stage === "review");
     expect(review?.mandatoryAgents).toEqual(["reviewer", "security-reviewer"]);
     expect(review?.primaryAgents).toContain("reviewer");
+    const brainstorm = standard.find((row) => row.stage === "brainstorm");
+    expect(brainstorm?.proactiveAgents).toContain("divergent-thinker");
     const scope = standard.find((row) => row.stage === "scope");
-    expect(scope?.proactiveAgents).toContain("product-strategist");
+    expect(scope?.proactiveAgents).toContain("product-discovery");
+    expect(scope?.proactiveAgents).toContain("scope-guardian-reviewer");
+    expect(scope?.proactiveAgents).toContain("divergent-thinker");
     const spec = standard.find((row) => row.stage === "spec");
     expect(spec?.proactiveAgents).toContain("spec-document-reviewer");
+    expect(spec?.proactiveAgents).toContain("coherence-reviewer");
+    const plan = standard.find((row) => row.stage === "plan");
+    expect(plan?.proactiveAgents).toEqual(expect.arrayContaining([
+      "coherence-reviewer",
+      "scope-guardian-reviewer",
+      "feasibility-reviewer"
+    ]));
 
     const lightweight = stageDelegationSummary("lightweight");
     const lightweightScope = lightweight.find((row) => row.stage === "scope");
@@ -95,14 +107,76 @@ describe("stage schema and subagent alignment", () => {
   });
 
   it("keeps tdd dispatch to one mandatory test-author evidence cycle", () => {
-    const testAuthorRows = stageAutoSubagentDispatch("tdd")
+    const tddDispatch = stageAutoSubagentDispatch("tdd");
+    const testAuthorRows = tddDispatch
       .filter((row) => row.agent === "test-author");
+    const integrationOverseerRows = tddDispatch
+      .filter((row) => row.agent === "integration-overseer");
 
     expect(testAuthorRows).toHaveLength(1);
     expect(testAuthorRows[0]?.mode).toBe("mandatory");
     expect(testAuthorRows[0]?.skill).toBe("tdd-cycle-evidence");
     expect(testAuthorRows[0]?.purpose).toContain("RED/GREEN/REFACTOR evidence");
+    expect(integrationOverseerRows).toHaveLength(1);
+    expect(integrationOverseerRows[0]?.mode).toBe("proactive");
+    expect(integrationOverseerRows[0]?.when).toContain("2+ parallel slice-implementers");
+    expect(integrationOverseerRows[0]?.returnSchema).toBe("review-return");
     expect(mandatoryDelegationsForStage("tdd", "lightweight")).toEqual(["test-author"]);
+  });
+
+  it("renders critic multi-perspective contract with prediction fields", () => {
+    const critic = CCLAW_AGENTS.find((agent) => agent.name === "critic");
+    expect(critic).toBeTruthy();
+    expect(critic?.returnSchema.optionalFields).toEqual([
+      "predictions",
+      "predictionsValidated",
+      "openQuestions",
+      "realistCheckResults"
+    ]);
+    expect(critic?.body).toContain("## Why this matters");
+    expect(critic?.body).toContain("## Pre-commitment predictions");
+    expect(critic?.body).toContain("## Multi-perspective angles");
+    expect(critic?.body).toContain("## Gap analysis");
+    expect(critic?.body).toContain("## Self-audit");
+    expect(critic?.body).toContain("## Realist check");
+    expect(critic?.body).toContain("## ADVERSARIAL mode escalation");
+  });
+
+  it("registers divergent-thinker as a divergence-only advisory specialist", () => {
+    const divergentThinker = CCLAW_AGENTS.find((agent) => agent.name === "divergent-thinker");
+    expect(divergentThinker).toBeTruthy();
+    expect(divergentThinker?.activation).toBe("proactive");
+    expect(divergentThinker?.relatedStages).toEqual(["brainstorm", "scope"]);
+    expect(divergentThinker?.returnSchema.requiredFields).toContain("recommendations");
+    expect(divergentThinker?.body).toContain("Role boundary: divergence only");
+    expect(divergentThinker?.body).toContain("Do NOT recommend a single approach");
+  });
+
+  it("binds critic dispatch rows to critic-multi-perspective skill", () => {
+    const brainstormCritic = stageAutoSubagentDispatch("brainstorm").find((row) => row.agent === "critic");
+    const scopeCritic = stageAutoSubagentDispatch("scope").find((row) => row.agent === "critic");
+    const designCritic = stageAutoSubagentDispatch("design").find((row) => row.agent === "critic");
+    expect(brainstormCritic?.skill).toBe("critic-multi-perspective");
+    expect(scopeCritic?.skill).toBe("critic-multi-perspective");
+    expect(designCritic?.skill).toBe("critic-multi-perspective");
+    expect(designCritic?.when).toContain("auth/authz trust boundaries");
+  });
+
+  it("routes divergent-thinker in brainstorm/scope and enforces ship architect cross-stage gate", () => {
+    const brainstormDivergent = stageAutoSubagentDispatch("brainstorm")
+      .find((row) => row.agent === "divergent-thinker");
+    const scopeDivergent = stageAutoSubagentDispatch("scope")
+      .find((row) => row.agent === "divergent-thinker");
+    const shipArchitect = stageAutoSubagentDispatch("ship")
+      .find((row) => row.agent === "architect");
+
+    expect(brainstormDivergent?.mode).toBe("proactive");
+    expect(brainstormDivergent?.when).toContain("candidate direction");
+    expect(scopeDivergent?.mode).toBe("proactive");
+    expect(scopeDivergent?.when).toContain("SCOPE EXPANSION");
+    expect(shipArchitect?.mode).toBe("mandatory");
+    expect(shipArchitect?.requiredAtTier).toBe("lightweight");
+    expect(shipArchitect?.skill).toBe("architect-cross-stage-verification");
   });
 
   it("derives policy needles from lint metadata with track transforms", () => {
@@ -212,11 +286,9 @@ describe("stage schema and subagent alignment", () => {
     );
   });
 
-  it("test-author template distinguishes TEST and BUILD stage modes", () => {
-    const template = enhancedAgentBody("test-author");
-    expect(template).toContain("STAGE_MODE: {TEST_RED_ONLY | BUILD_GREEN_REFACTOR}");
-    expect(template).toContain("Do NOT edit production code.");
-    expect(template).toContain("GREEN — minimal production code");
+  it("subagents module no longer exports enhancedAgentBody", async () => {
+    const module = await import("../../src/content/subagents.js");
+    expect("enhancedAgentBody" in module).toBe(false);
   });
 
   it("subagent orchestration includes anti-drift team defaults", () => {
@@ -226,6 +298,7 @@ describe("stage schema and subagent alignment", () => {
     expect(skill).toContain("at most 3-5 parallel agents");
     expect(skill).toContain("No parallel writes to adjacent surfaces");
     expect(skill).toContain("Consensus is for hard calls only");
+    expect(skill).toContain("executing-waves");
   });
 
   it("renders true harness dispatch workflow guidance", () => {
@@ -258,7 +331,14 @@ describe("stage schema and subagent alignment", () => {
       }
     }
 
-    expect([...expectedSkillRefs].sort()).toEqual(Object.keys(SUBAGENT_CONTEXT_SKILLS).sort());
+    const materializedSkills = Object.keys(SUBAGENT_CONTEXT_SKILLS).sort();
+    expect(materializedSkills).toEqual(expect.arrayContaining([...expectedSkillRefs].sort()));
+    const optionalLensSkills = materializedSkills.filter((skill) => !expectedSkillRefs.has(skill)).sort();
+    expect(optionalLensSkills).toEqual([
+      "review-compat-lens",
+      "review-observability-lens",
+      "review-perf-lens"
+    ]);
     for (const [skillName, body] of Object.entries(SUBAGENT_CONTEXT_SKILLS)) {
       expect(body, `${skillName} frontmatter`).toContain(`name: ${skillName}`);
       expect(body, `${skillName} required output`).toContain("## Required Output");
@@ -315,6 +395,21 @@ describe("stage schema and subagent alignment", () => {
     expect(tdd).toContain("Vertical-slice RED/GREEN/REFACTOR checkpoint plan");
     expect(review).toContain("Victory Detector: pass | fail");
     expect(ship).toContain("Victory Detector: pass | fail");
+  });
+
+  it("ships cohesion-contract markdown and JSON sidecar templates", () => {
+    const contractMarkdown = ARTIFACT_TEMPLATES["cohesion-contract.md"] ?? "";
+    const contractJsonRaw = ARTIFACT_TEMPLATES["cohesion-contract.json"] ?? "{}";
+    const contractJson = JSON.parse(contractJsonRaw) as Record<string, unknown>;
+
+    expect(contractMarkdown).toContain("# Cohesion Contract");
+    expect(contractMarkdown).toContain("## Shared Types & Interfaces");
+    expect(contractMarkdown).toContain("## Integration Touchpoints");
+    expect(contractMarkdown).toContain("## Status");
+    expect(Array.isArray(contractJson.sharedTypes)).toBe(true);
+    expect(Array.isArray(contractJson.touchpoints)).toBe(true);
+    expect(Array.isArray(contractJson.slices)).toBe(true);
+    expect(contractJson.status).toBeTypeOf("object");
   });
 
   it("ship finalization enums are sourced from canonical constants", () => {
@@ -398,19 +493,19 @@ describe("stage schema and subagent alignment", () => {
   it("agent registry uses the specialist roster", () => {
     expect(CCLAW_AGENTS.map((agent) => agent.name).sort()).toEqual([
       "architect",
-      "compatibility-reviewer",
+      "coherence-reviewer",
       "critic",
+      "divergent-thinker",
       "doc-updater",
+      "feasibility-reviewer",
       "fixer",
-      "implementer",
-      "observability-reviewer",
-      "performance-reviewer",
+      "integration-overseer",
       "planner",
-      "product-manager",
-      "product-strategist",
+      "product-discovery",
       "release-reviewer",
       "researcher",
       "reviewer",
+      "scope-guardian-reviewer",
       "security-reviewer",
       "slice-implementer",
       "spec-document-reviewer",
@@ -425,11 +520,24 @@ describe("stage schema and subagent alignment", () => {
       expect(agent.returnSchema.allowedStatuses.length).toBeGreaterThan(0);
       expect(agent.returnSchema.requiredFields).toContain("status");
       expect(agent.returnSchema.evidenceFields.length).toBeGreaterThan(0);
-      expect(enhancedAgentBody(agent.name)).toContain("Task Tool Delegation");
     }
-    expect(CCLAW_AGENTS.find((agent) => agent.name === "implementer")?.activation).toBe("on-demand");
     expect(CCLAW_AGENTS.find((agent) => agent.name === "slice-implementer")?.activation).toBe("on-demand");
     expect(CCLAW_AGENTS.find((agent) => agent.name === "fixer")?.activation).toBe("on-demand");
+    expect(CCLAW_AGENTS.find((agent) => agent.name === "integration-overseer")?.activation).toBe("on-demand");
+    expect(CCLAW_AGENTS.find((agent) => agent.name === "integration-overseer")?.relatedStages).toEqual(["tdd", "review"]);
+  });
+
+  it("registers document review agents with expected stage coverage", () => {
+    const coherence = CCLAW_AGENTS.find((agent) => agent.name === "coherence-reviewer");
+    const scopeGuardian = CCLAW_AGENTS.find((agent) => agent.name === "scope-guardian-reviewer");
+    const feasibility = CCLAW_AGENTS.find((agent) => agent.name === "feasibility-reviewer");
+
+    expect(coherence?.relatedStages).toEqual(["spec", "plan", "design"]);
+    expect(scopeGuardian?.relatedStages).toEqual(["scope", "plan", "design"]);
+    expect(feasibility?.relatedStages).toEqual(["plan", "design"]);
+    expect(coherence?.returnSchema.allowedStatuses).toEqual(["PASS", "PASS_WITH_GAPS", "FAIL", "BLOCKED"]);
+    expect(scopeGuardian?.body).toContain("minimum viable change");
+    expect(feasibility?.body).toContain("execution realism");
   });
 
   it("stage dispatch summaries expose class and return schema metadata", () => {
@@ -437,10 +545,6 @@ describe("stage schema and subagent alignment", () => {
     expect(review?.dispatchRules.find((rule) => rule.agent === "reviewer")).toMatchObject({
       dispatchClass: "review-lens",
       returnSchema: "review-return"
-    });
-    expect(review?.dispatchRules.find((rule) => rule.agent === "performance-reviewer")).toMatchObject({
-      dispatchClass: "review-lens",
-      returnSchema: "performance-return"
     });
     const tdd = stageDelegationSummary("lightweight").find((row) => row.stage === "tdd");
     expect(tdd?.dispatchRules.find((rule) => rule.agent === "test-author")).toMatchObject({
@@ -455,12 +559,23 @@ describe("stage schema and subagent alignment", () => {
       dispatchClass: "review-lens",
       returnSchema: "review-return"
     });
+    expect(spec?.dispatchRules.find((rule) => rule.agent === "coherence-reviewer")).toMatchObject({
+      dispatchClass: "review-lens",
+      returnSchema: "review-return"
+    });
     expect(stageSkillMarkdown("review")).toContain("| Agent | Mode | Class | Return Schema | User Gate | Trigger | Purpose |");
   });
 
   it("design skill renders research playbooks instead of research personas", () => {
     const design = stageSchema("design");
-    expect(stageAutoSubagentDispatch("design").map((row) => row.agent)).toEqual(expect.arrayContaining(["architect", "test-author", "researcher", "compatibility-reviewer", "observability-reviewer"]));
+    expect(stageAutoSubagentDispatch("design").map((row) => row.agent)).toEqual(expect.arrayContaining([
+      "architect",
+      "test-author",
+      "researcher",
+      "coherence-reviewer",
+      "feasibility-reviewer",
+      "security-reviewer"
+    ]));
     expect(design.researchPlaybooks).toEqual([
       "research/research-fleet.md",
       "research/framework-docs-lookup.md",
@@ -1053,18 +1168,6 @@ describe("stage schema and subagent alignment", () => {
       expect(drift, `tdd_docs_drift_check must exist on track=${track}`).toBeDefined();
       expect(drift?.tier, `tdd_docs_drift_check must be required on track=${track}`).toBe("required");
     }
-  });
-
-  it("review trace matrix gate is required on standard and recommended on quick", () => {
-    const reviewStandard = stageSchema("review", "standard");
-    const reviewQuick = stageSchema("review", "quick");
-    const standardGate = reviewStandard.requiredGates.find((gate) => gate.id === "review_trace_matrix_clean");
-    const quickGate = reviewQuick.requiredGates.find((gate) => gate.id === "review_trace_matrix_clean");
-
-    expect(standardGate).toBeDefined();
-    expect(standardGate?.tier).toBe("required");
-    expect(quickGate).toBeDefined();
-    expect(quickGate?.tier).toBe("recommended");
   });
 
   it("brainstorm example is a valid artifact when copy-pasted verbatim", async () => {

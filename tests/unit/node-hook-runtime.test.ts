@@ -261,7 +261,7 @@ describe("node hook runtime", () => {
     expect(elapsed).toBeGreaterThanOrEqual(holdMs - 80);
   });
 
-  it("session-start records a breadcrumb when ralph-loop / compound-readiness fail", async () => {
+  it("session-start records a breadcrumb when internal status commands fail", async () => {
     const root = await createTempProject("node-hook-breadcrumb");
     await fs.mkdir(path.join(root, ".cclaw/state"), { recursive: true });
     await fs.mkdir(path.join(root, ".cclaw/skills/using-cclaw"), { recursive: true });
@@ -273,14 +273,13 @@ describe("node hook runtime", () => {
     await fs.writeFile(path.join(root, ".cclaw/skills/using-cclaw/SKILL.md"), "# Using cclaw\n", "utf8");
     await fs.writeFile(path.join(root, ".cclaw/knowledge.jsonl"), "", "utf8");
 
-    // Pre-create a FILE at the ralph-loop.json lock directory path; this
-    // makes `fs.mkdir(lockPath)` fail repeatedly with ENOTDIR-adjacent
-    // errors, which surfaces as "failed to acquire lock". The session
-    // must still exit 0 but leave a breadcrumb.
-    const ralphPath = path.join(root, ".cclaw/state/ralph-loop.json");
-    await fs.writeFile(ralphPath + ".lock", "not-a-dir", "utf8");
-
-    const result = await runNodeHook(root, "session-start", nodeHookRuntimeScript());
+    const result = await runNodeHook(
+      root,
+      "session-start",
+      nodeHookRuntimeScript(),
+      {},
+      { CCLAW_CLI_JS: path.join(root, "missing-cli.js") }
+    );
     expect(result.code).toBe(0);
 
     const breadcrumbs = await fs
@@ -316,7 +315,7 @@ describe("node hook runtime", () => {
       currentStage: "ship",
       activeRunId: "run-ship",
       completedStages: ["brainstorm", "scope", "design", "spec", "plan", "tdd", "review"],
-      closeout: { shipSubstate: "compound_review" }
+      closeout: { shipSubstate: "post_ship_review" }
     }, null, 2), "utf8");
 
     const result = await runNodeHook(
@@ -328,8 +327,8 @@ describe("node hook runtime", () => {
 
     expect(result.code).toBe(0);
     expect(result.stdout).toContain("session ending (stage=ship");
-    expect(result.stdout).toContain("closeout.shipSubstate=compound_review");
-    expect(result.stdout).toContain("closeout chain=retro -> compound -> archive");
+    expect(result.stdout).toContain("closeout.shipSubstate=post_ship_review");
+    expect(result.stdout).toContain("closeout chain=post_ship_review -> archive");
     expect(result.stdout).toContain("continue closeout with /cc");
   });
 

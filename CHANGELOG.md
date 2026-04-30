@@ -1,5 +1,46 @@
 # Changelog
 
+## 1.0.0
+
+### Breaking Changes
+
+- Removed legacy agent names with no compatibility aliases: `performance-reviewer`, `compatibility-reviewer`, `observability-reviewer`, `implementer`, `product-manager`, and `product-strategist`.
+- Brainstorm/scope product delegation now routes through unified `product-discovery` (`discovery` + `strategist` modes).
+- `enhancedAgentBody` overlap was removed; task-delegation guidance is now sourced directly from `core-agents` output.
+
+### Added
+
+- Wave 14 critic uplift: `critic` now follows a multi-perspective protocol with pre-commitment predictions, gap analysis, low-confidence self-audit routing into `openQuestions[]`, realist checks for major findings, and optional adversarial escalation.
+- Added `critic-multi-perspective` subagent-context skill and bound critic dispatch rows in brainstorm/scope/design to this skill.
+- Wave 15 document review lens: added `coherence-reviewer`, `scope-guardian-reviewer`, and `feasibility-reviewer` specialists plus context skills (`document-coherence-pass`, `document-scope-guard`, `document-feasibility-pass`).
+- Extended dispatch matrix with proactive document-review routing across scope/spec/plan/design based on consistency, scope-drift, and feasibility triggers.
+- Wave 17 orchestration uplift: added optional `cohesion-contract.md` + `cohesion-contract.json` templates and introduced `integration-overseer` for TDD fan-out reconciliation.
+- Wave 18 orchestration uplift: added proactive `divergent-thinker` for brainstorm/scope option-space expansion and materialized the top-level `executing-waves` skill plus `.cclaw/wave-plans/.gitkeep` scaffold.
+
+### Changed
+
+- Added linter enforcement (`critic.predictions_missing`) for brainstorm/scope/design artifacts that include critic findings but omit required prediction validation blocks (`Pre-commitment predictions`, `Validated / Disproven`, `Open Questions`).
+- Added layered-review enforcement for document reviewers in plan/spec/design artifacts: structured calibrated findings are required when these reviewers are cited, and FAIL/PARTIAL outcomes require explicit waiver.
+- Wave 16A reviewer-lens consolidation: `reviewer` now carries mandatory inline `Lens Coverage` output (Performance/Compatibility/Observability), and review lint enforces this via `[P1] reviewer.lens_coverage_missing`.
+- Removed proactive dispatch fan-out for dedicated performance/compatibility/observability reviewers; these lenses are now inline by default with optional deep-dive context skills (`review-perf-lens`, `review-compat-lens`, `review-observability-lens`).
+- Wave 16B worker/discovery consolidation: `slice-implementer` now supports `TDD-bound` and `Generic` modes, and product discovery/strategy responsibilities are unified under `product-discovery`.
+- TDD lint now enforces fan-out cohesion hygiene: when >1 completed `slice-implementer` rows exist for the active run, `.cclaw/artifacts/cohesion-contract.md` + parseable `.json` sidecar and a PASS/PASS_WITH_GAPS `integration-overseer` evidence row are required (`tdd.cohesion_contract_missing`, `tdd.integration_overseer_missing`).
+- Ship-stage dispatch and lint now enforce architect cross-stage verification before finalization (`architect-cross-stage-verification`, `ship.cross_stage_cohesion_missing`, `ship.cross_stage_drift_detected`).
+- Brainstorm lint now enforces multi-wave carry-forward drift audits when `.cclaw/wave-plans/` contains 2+ plans (`wave.drift_unaddressed`).
+
+## 0.56.0
+
+### Breaking Changes
+
+- Slimmed the canonical knowledge schema to core fields only for new writes. New `appendKnowledge` / stage `## Learnings` harvest no longer persists legacy metadata keys (`domain`, `origin_run`, `universality`, `maturity`, `supersedes`, `superseded_by`).
+
+### Changed
+
+- Kept read compatibility for historical mixed-schema `.cclaw/knowledge.jsonl` rows while normalizing in-memory entries to the core schema shape.
+- Simplified `retro-gate` to closeout-state-driven completion (`(retroAccepted || retroSkipped) && (compoundReviewed || compoundSkipped)`), removing knowledge-window scanning from gate evaluation.
+- Expanded shared runtime snippets used by both generated Node hooks and OpenCode plugin (`flow summary`, `knowledge digest parsing`, `active artifacts path`) to reduce duplicated runtime logic.
+- Added hook bundle infrastructure: `src/runtime/run-hook.entry.ts`, `build:hook-bundle`, `esbuild` dev dependency, and installer support that prefers bundled `dist/runtime/run-hook.mjs` with safe fallback to generated runtime source.
+
 ## 0.55.2
 
 ### Changed

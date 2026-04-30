@@ -127,7 +127,7 @@ export const SHIP: StageSchemaInput = {
       { section: "Monitoring", required: false, validationRule: "If applicable: what metrics/logs to watch post-deploy. Risk note if no monitoring." },
       { section: "Finalization", required: true, validationRule: "Exactly one finalization enum token selected (FINALIZE_MERGE_LOCAL | FINALIZE_OPEN_PR | FINALIZE_KEEP_BRANCH | FINALIZE_DISCARD_BRANCH | FINALIZE_NO_VCS). Execution result documented. Worktree cleaned if applicable." },
       { section: "Completion Status", required: false, validationRule: "If present: exactly one of SHIPPED, SHIPPED_WITH_EXCEPTIONS, BLOCKED. Exceptions documented when applicable. BLOCKED is required when the Victory Detector has stale or missing evidence." },
-      { section: "Compound Step", required: false, validationRule: "Optional retrospective: include overlap assessment before appending duplicate knowledge; distinguish bug-track fixes/tests from knowledge-track process/project guidance; use supersedes/superseded_by only for clear refreshes; or include an explicit 'No compound insight this run.' line." }
+      { section: "Compound Step", required: false, validationRule: "Optional retrospective: include overlap assessment before appending duplicate knowledge; distinguish bug-track fixes/tests from knowledge-track process/project guidance; or include an explicit 'No compound insight this run.' line." }
     ]
   },
   reviewLens: {

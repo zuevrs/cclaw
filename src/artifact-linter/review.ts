@@ -1,5 +1,6 @@
 import {
   type StageLintContext,
+  markdownFieldRegex,
   sectionBodyByName
 } from "./shared.js";
 
@@ -81,6 +82,39 @@ export async function lintReviewStage(ctx: StageLintContext): Promise<void> {
         details: ack
           ? "Receiving posture acknowledged anti-sycophancy."
           : "Receiving Posture is missing the anti-sycophancy acknowledgement line."
+      });
+    }
+
+    const lensCoverageBody = sectionBodyByName(sections, "Lens Coverage");
+    if (lensCoverageBody === null) {
+      findings.push({
+        section: "reviewer.lens_coverage_missing",
+        required: true,
+        rule: "[P1] reviewer.lens_coverage_missing — review artifact must include `## Lens Coverage` with Performance/Compatibility/Observability/Security lines.",
+        found: false,
+        details: "No ## heading matching required section \"Lens Coverage\"."
+      });
+    } else {
+      const performance = markdownFieldRegex("Performance", "NO_IMPACT|FOUND_\\d+").test(lensCoverageBody);
+      const compatibility = markdownFieldRegex("Compatibility", "NO_IMPACT|FOUND_\\d+").test(lensCoverageBody);
+      const observability = markdownFieldRegex("Observability", "NO_IMPACT|FOUND_\\d+").test(lensCoverageBody);
+      const security = markdownFieldRegex(
+        "Security",
+        "routed\\s+to\\s+security-reviewer"
+      ).test(lensCoverageBody);
+      const missing: string[] = [];
+      if (!performance) missing.push("Performance");
+      if (!compatibility) missing.push("Compatibility");
+      if (!observability) missing.push("Observability");
+      if (!security) missing.push("Security");
+      findings.push({
+        section: "reviewer.lens_coverage_missing",
+        required: true,
+        rule: "[P1] reviewer.lens_coverage_missing — `Lens Coverage` must include Performance/Compatibility/Observability (`NO_IMPACT` or `FOUND_<n>`) and Security routing line.",
+        found: missing.length === 0,
+        details: missing.length === 0
+          ? "Lens Coverage includes all required reviewer lens lines."
+          : `Lens Coverage missing or malformed line(s): ${missing.join(", ")}.`
       });
     }
 }

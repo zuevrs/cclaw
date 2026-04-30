@@ -663,3 +663,54 @@ ${reviewSectionsBlock(reviewLens.reviewSections)}
 - Keep decisions explicit: context, options, chosen option, rationale, risk, and rollback.
 `;
 }
+
+export function executingWavesSkillMarkdown(): string {
+  return `---
+name: executing-waves
+description: "Execute multi-wave work using existing cclaw run resume + verify-current-state — no new CLI needed."
+---
+
+# Executing Waves (Persistent Multi-Wave Work)
+
+## Overview
+
+Long-form work (large refactors, multi-stage uplifts) often spans many waves.
+This skill documents how the controller persists work across waves WITHOUT new
+CLI commands, using existing \`cclaw run resume\` and \`internal verify-current-state\`.
+
+## When to Use
+
+- Work spans 2+ commits / waves with cohesion concerns between waves.
+- Each wave has its own stage cycle (brainstorm -> scope -> design -> spec -> plan -> tdd -> review -> ship).
+- User wants explicit per-wave verification before the next wave starts.
+- Risk of cross-wave drift exists.
+
+## Anti-Pattern
+
+- Running many waves linearly without verification between them, accumulating drift.
+- Treating a wave as only a commit boundary without re-verifying upstream decisions.
+
+## Process
+
+1. **Wave Start**: author wave plan as \`.cclaw/wave-plans/<wave-n>.md\` referencing previous wave's ship artifact.
+2. **Carry-forward Audit**: at brainstorm of the next wave, re-read previous wave ship artifact and explicitly record:
+   - Carrying forward: <locked decisions still valid>
+   - Drift detected: <decisions no longer valid + reason>
+   - Re-scope needed: <yes/no>
+3. **Resume Path**: if a wave was interrupted mid-stage, \`cclaw run resume\` restores state. Run \`internal verify-current-state\` before continuing.
+4. **Wave End**: at ship, architect cross-stage verification runs from dispatch matrix. If \`DRIFT_DETECTED\`, fix before ship.
+5. **Next Wave Trigger**: launch new \`/cc <topic>\` for next wave and reference previous wave ship artifact in upstream handoff.
+
+## Status Markers
+
+- \`wave-status: in-progress\` — current stage incomplete.
+- \`wave-status: blocked-by-prev\` — waiting on previous wave verification.
+- \`wave-status: shipped\` — wave shipped, next wave can start.
+- \`wave-status: rolled-back\` — previous wave invalidated, current wave needs rebase.
+
+## Linter Hooks
+
+- If multi-wave work is detected (>1 wave-plan files in \`.cclaw/wave-plans/\`), current brainstorm artifact MUST contain \`## Wave Carry-forward\` section with drift audit.
+- If carry-forward drift is missing in multi-wave context, emit \`[P1] wave.drift_unaddressed\`.
+`;
+}

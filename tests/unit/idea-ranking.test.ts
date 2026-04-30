@@ -1,18 +1,11 @@
 import { describe, expect, it } from "vitest";
 import {
   evaluateIdeaCandidate,
-  isCritiquedOut,
   rankIdeaCandidates,
   scoreIdeaCandidate
-} from "../../src/content/idea-ranking.js";
+} from "../../src/content/idea.js";
 
 describe("idea ranking and critique model", () => {
-  it("critiques out ideas where counter-argument is stronger", () => {
-    expect(isCritiquedOut(0.6, 0.61)).toBe(true);
-    expect(isCritiquedOut(0.6, 0.6)).toBe(false);
-    expect(isCritiquedOut(0.8, 0.3)).toBe(false);
-  });
-
   it("scores candidates by impact/effort/confidence", () => {
     const highLeverage = scoreIdeaCandidate("high", "s", "high");
     const mediumSameEffort = scoreIdeaCandidate("medium", "s", "high");
@@ -34,64 +27,54 @@ describe("idea ranking and critique model", () => {
       whyNow: "visible operator friction",
       expectedImpact: "faster recovery",
       risk: "overfitting to one path",
-      nextCcPrompt: "/cc Harden gate-evidence diagnostics",
-      rationaleStrength: 0.8,
-      counterArgumentStrength: 0.4
+      nextCcPrompt: "/cc Harden gate-evidence diagnostics"
     });
     const dropped = evaluateIdeaCandidate({
       id: "I-2",
       title: "Rewrite the entire workflow system",
       impact: "high",
       effort: "l",
-      confidence: "low",
-      rationaleStrength: 0.45,
-      counterArgumentStrength: 0.8
+      confidence: "low"
     });
 
     expect(survivor.disposition).toBe("survivor");
     expect(survivor.rankingScore).toBeGreaterThan(0);
     expect(survivor.whyNow).toBe("visible operator friction");
     expect(survivor.nextCcPrompt).toContain("/cc");
-    expect(dropped.disposition).toBe("critiqued-out");
+    expect(dropped.disposition).toBe("rejected");
   });
 
-  it("returns ranked survivors, critiqued-out list, and recommendation", () => {
+  it("returns ranked survivors, rejected list, and recommendation", () => {
     const result = rankIdeaCandidates([
       {
         id: "I-1",
         title: "Strengthen trace diagnostics",
         impact: "high",
         effort: "s",
-        confidence: "high",
-        rationaleStrength: 0.8,
-        counterArgumentStrength: 0.4
+        confidence: "high"
       },
       {
         id: "I-2",
         title: "Improve frame dispatch telemetry",
         impact: "medium",
         effort: "s",
-        confidence: "high",
-        rationaleStrength: 0.74,
-        counterArgumentStrength: 0.5
+        confidence: "high"
       },
       {
         id: "I-3",
         title: "Large risky rewrite",
         impact: "high",
         effort: "l",
-        confidence: "low",
-        rationaleStrength: 0.4,
-        counterArgumentStrength: 0.7
+        confidence: "low"
       }
     ]);
 
     expect(result.survivors.map((candidate) => candidate.id)).toEqual(["I-1", "I-2"]);
     expect(result.recommendationId).toBe("I-1");
-    expect(result.critiquedOut.map((candidate) => candidate.id)).toContain("I-3");
+    expect(result.rejected.map((candidate) => candidate.id)).toContain("I-3");
   });
 
-  it("respects max survivor cap while preserving critiqued-out visibility", () => {
+  it("respects max survivor cap while preserving rejected visibility", () => {
     const result = rankIdeaCandidates(
       [
         {
@@ -99,33 +82,27 @@ describe("idea ranking and critique model", () => {
           title: "A",
           impact: "high",
           effort: "s",
-          confidence: "high",
-          rationaleStrength: 0.8,
-          counterArgumentStrength: 0.3
+          confidence: "high"
         },
         {
           id: "I-2",
           title: "B",
           impact: "medium",
           effort: "s",
-          confidence: "high",
-          rationaleStrength: 0.8,
-          counterArgumentStrength: 0.3
+          confidence: "high"
         },
         {
           id: "I-3",
           title: "C",
           impact: "low",
-          effort: "s",
-          confidence: "high",
-          rationaleStrength: 0.8,
-          counterArgumentStrength: 0.3
+          effort: "l",
+          confidence: "low"
         }
       ],
       2
     );
 
     expect(result.survivors).toHaveLength(2);
-    expect(result.critiquedOut.map((candidate) => candidate.id)).toContain("I-3");
+    expect(result.rejected.map((candidate) => candidate.id)).toContain("I-3");
   });
 });

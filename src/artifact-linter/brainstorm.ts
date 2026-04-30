@@ -1,5 +1,8 @@
+import fs from "node:fs/promises";
+import path from "node:path";
 import {
   type StageLintContext,
+  checkCriticPredictionsContract,
   sectionBodyByName,
   validateApproachesTaxonomy,
   headingLineIndex,
@@ -200,6 +203,17 @@ export async function lintBrainstormStage(ctx: StageLintContext): Promise<void> 
       });
     }
 
+    const criticPredictions = checkCriticPredictionsContract(sections);
+    if (criticPredictions !== null) {
+      findings.push({
+        section: "critic.predictions_missing",
+        required: true,
+        rule: "[P2] critic.predictions_missing — pre-commitment predictions block missing or empty",
+        found: criticPredictions.found,
+        details: criticPredictions.details
+      });
+    }
+
     // Universal structural checks (Layer 2.1). Each fires only when the
     // matching section is present so legacy fixtures keep their current
     // shape, while artifacts emitted from the v3 template have to satisfy
@@ -285,6 +299,39 @@ export async function lintBrainstormStage(ctx: StageLintContext): Promise<void> 
         details: optedOut || missing.length === 0
           ? "Outside Voice slot is well-formed."
           : `Outside Voice section is missing field(s): ${missing.join(", ")}.`
+      });
+    }
+
+    const wavePlansDir = path.join(projectRoot, ".cclaw", "wave-plans");
+    let wavePlanEntries: string[] = [];
+    try {
+      wavePlanEntries = (await fs.readdir(wavePlansDir))
+        .filter((entry) => entry !== ".gitkeep" && !entry.startsWith("."));
+    } catch {
+      wavePlanEntries = [];
+    }
+    const multiWaveDetected = wavePlanEntries.length >= 2;
+    if (multiWaveDetected) {
+      const carryForwardBody = sectionBodyByName(sections, "Wave Carry-forward");
+      const hasCarryForwardSection = carryForwardBody !== null;
+      const hasCarryForwardContent = carryForwardBody !== null && meaningfulLineCount(carryForwardBody) > 0;
+      const hasDriftAuditMarkers = carryForwardBody !== null &&
+        /\bcarrying\s+forward\b/iu.test(carryForwardBody) &&
+        /\bdrift\s+detected\b/iu.test(carryForwardBody);
+      const waveDriftAddressed = hasCarryForwardSection && hasCarryForwardContent && hasDriftAuditMarkers;
+
+      findings.push({
+        section: "wave.drift_unaddressed",
+        required: true,
+        rule: "[P1] wave.drift_unaddressed — when `.cclaw/wave-plans/` has >=2 entries, brainstorm must include `## Wave Carry-forward` with carry-forward and drift audit markers.",
+        found: waveDriftAddressed,
+        details: waveDriftAddressed
+          ? `Multi-wave context detected (${wavePlanEntries.length} wave-plan entries); Wave Carry-forward audit is present.`
+          : !hasCarryForwardSection
+            ? "Multi-wave context detected but `## Wave Carry-forward` section is missing."
+            : !hasCarryForwardContent
+              ? "`## Wave Carry-forward` exists but has no meaningful content."
+              : "Wave Carry-forward section must include both `Carrying forward` and `Drift detected` markers."
       });
     }
 }

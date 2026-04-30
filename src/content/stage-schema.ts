@@ -190,25 +190,23 @@ function defaultReturnSchemaForAgent(
     case "spec-validator":
       return "spec-validation-return";
     case "spec-document-reviewer":
+    case "coherence-reviewer":
+    case "scope-guardian-reviewer":
+    case "feasibility-reviewer":
       return "review-return";
     case "slice-implementer":
       return "worker-return";
-    case "performance-reviewer":
-      return "performance-return";
-    case "compatibility-reviewer":
-      return "compatibility-return";
-    case "observability-reviewer":
-      return "observability-return";
     case "release-reviewer":
       return "release-return";
     case "planner":
       return "planning-return";
-    case "product-manager":
-    case "product-strategist":
+    case "product-discovery":
       return "product-return";
+    case "divergent-thinker":
     case "critic":
       return "critic-return";
     case "reviewer":
+    case "integration-overseer":
       return "review-return";
     case "security-reviewer":
       return "security-return";
@@ -218,8 +216,6 @@ function defaultReturnSchemaForAgent(
       return "docs-return";
     case "fixer":
       return "fixer-return";
-    case "implementer":
-      return "worker-return";
   }
 }
 
@@ -227,7 +223,7 @@ function dispatchClassForRow(
   row: StageAutoSubagentDispatch
 ): NonNullable<StageAutoSubagentDispatch["dispatchClass"]> {
   if (row.dispatchClass) return row.dispatchClass;
-  if (row.agent === "implementer" || row.agent === "fixer" || row.agent === "slice-implementer") return "worker";
+  if (row.agent === "fixer" || row.agent === "slice-implementer") return "worker";
   return row.skill?.includes("review") || row.agent === "reviewer" || row.agent === "security-reviewer" || row.agent.endsWith("-reviewer")
     ? "review-lens"
     : "stage-specialist";
@@ -424,8 +420,7 @@ const REQUIRED_GATE_IDS: Record<FlowStage, RequiredGateSet> = {
     "review_layer2_security",
     "review_layer_coverage_complete",
     "review_criticals_resolved",
-    "review_army_json_valid",
-    ...(track === "quick" ? [] : ["review_trace_matrix_clean"])
+    "review_army_json_valid"
   ],
   ship: [
     "ship_review_verdict_valid",
@@ -583,11 +578,18 @@ const STAGE_SCHEMA_MAP: Record<FlowStage, StageSchemaInput> = {
 const STAGE_AUTO_SUBAGENT_DISPATCH: Record<FlowStage, StageAutoSubagentDispatch[]> = {
   brainstorm: [
     {
-      agent: "product-manager",
+      agent: "product-discovery",
       mode: "mandatory",
       requiredAtTier: "standard",
       when: "Always for standard/deep brainstorm to validate value, persona/JTBD, success metric, and why-now framing.",
-      purpose: "Pressure-test problem/value fit and produce product-discovery evidence for the Problem Decision Record.",
+      purpose: "Run product-discovery mode to pressure-test problem/value fit and produce product evidence for the Problem Decision Record.",
+      requiresUserGate: false
+    },
+    {
+      agent: "divergent-thinker",
+      mode: "proactive",
+      when: "When brainstorm has >1 candidate direction or user signals openness to alternatives.",
+      purpose: "Expand option-space with alternative framings and approaches before planner/critic convergence.",
       requiresUserGate: false
     },
     {
@@ -595,8 +597,9 @@ const STAGE_AUTO_SUBAGENT_DISPATCH: Record<FlowStage, StageAutoSubagentDispatch[
       mode: "mandatory",
       requiredAtTier: "standard",
       when: "Always for standard/deep brainstorm to challenge the premise, do-nothing path, and higher-upside alternatives.",
-      purpose: "Attack assumptions and surface non-goals before direction approval.",
-      requiresUserGate: false
+      purpose: "Attack assumptions and surface non-goals before direction approval, with pre-commitment predictions validated against evidence.",
+      requiresUserGate: false,
+      skill: "critic-multi-perspective"
     },
     {
       agent: "researcher",
@@ -616,12 +619,20 @@ const STAGE_AUTO_SUBAGENT_DISPATCH: Record<FlowStage, StageAutoSubagentDispatch[
       requiresUserGate: false
     },
     {
+      agent: "divergent-thinker",
+      mode: "proactive",
+      when: "When scope mode is SCOPE EXPANSION or SELECTIVE EXPANSION, or scope contract has fewer than 3 alternatives considered.",
+      purpose: "Generate additional framings and approach variants before scope convergence hardens.",
+      requiresUserGate: false
+    },
+    {
       agent: "critic",
       mode: "mandatory",
       requiredAtTier: "standard",
       when: "Always during scope shaping for standard/deep work.",
-      purpose: "Test whether the selected scope mode is too timid, too broad, or hiding a smaller useful slice.",
-      requiresUserGate: false
+      purpose: "Test whether the selected scope mode is too timid, too broad, or hiding a smaller useful slice, using pre-commitment predictions and validation.",
+      requiresUserGate: false,
+      skill: "critic-multi-perspective"
     },
     {
       agent: "researcher",
@@ -631,19 +642,27 @@ const STAGE_AUTO_SUBAGENT_DISPATCH: Record<FlowStage, StageAutoSubagentDispatch[
       requiresUserGate: false
     },
     {
-      agent: "product-manager",
+      agent: "product-discovery",
       mode: "proactive",
-      when: "When scope choices change user value, success metrics, or product positioning.",
-      purpose: "Keep accepted/deferred reference ideas tied to user value and measurable success.",
+      when: "When scope choices change user value, success metrics, or product positioning (Mode: discovery).",
+      purpose: "Keep accepted/deferred reference ideas tied to user value and measurable success under product-discovery mode.",
       requiresUserGate: false
     },
     {
-      agent: "product-strategist",
+      agent: "product-discovery",
       mode: "proactive",
       requiredAtTier: "standard",
-      when: "When scope mode resolves to SCOPE EXPANSION or SELECTIVE EXPANSION.",
-      purpose: "Drive 10x vision and concrete expansion proposals before locking the scope contract.",
+      when: "When scope mode resolves to SCOPE EXPANSION or SELECTIVE EXPANSION (Mode: strategist).",
+      purpose: "Drive 10x vision and concrete expansion proposals before locking the scope contract via product-discovery strategist mode.",
       requiresUserGate: false
+    },
+    {
+      agent: "scope-guardian-reviewer",
+      mode: "proactive",
+      when: "When scope mode is SCOPE EXPANSION or SELECTIVE EXPANSION, or scope contract has many accepted ideas.",
+      purpose: "Challenge complexity growth and enforce minimum-change scope discipline before scope lock.",
+      requiresUserGate: false,
+      skill: "document-scope-guard"
     }
   ],
   design: [
@@ -666,9 +685,10 @@ const STAGE_AUTO_SUBAGENT_DISPATCH: Record<FlowStage, StageAutoSubagentDispatch[
     {
       agent: "critic",
       mode: "proactive",
-      when: "When architecture alternatives, coupling, cost, or rollback risk remain debatable.",
-      purpose: "Produce a shadow alternative, switch trigger, and cheaper-path challenge for the engineering lock.",
-      requiresUserGate: false
+      when: "When architecture alternatives, coupling, cost, or rollback risk remain debatable, or when security/auth/authz trust boundaries are involved.",
+      purpose: "Produce a shadow alternative, switch trigger, and cheaper-path challenge for the engineering lock with pre-commitment predictions and validation.",
+      requiresUserGate: false,
+      skill: "critic-multi-perspective"
     },
     {
       agent: "researcher",
@@ -685,20 +705,20 @@ const STAGE_AUTO_SUBAGENT_DISPATCH: Record<FlowStage, StageAutoSubagentDispatch[
       requiresUserGate: false
     },
     {
-      agent: "compatibility-reviewer",
+      agent: "coherence-reviewer",
       mode: "proactive",
-      requiredAtTier: "lightweight",
-      when: "When public API, config, persisted data, CLI, generated clients, or cross-version behavior can change.",
-      purpose: "Identify backward-compatibility and migration hazards before spec/plan.",
-      requiresUserGate: false
+      when: "When design touches multiple subsystems or includes multiple alternatives sections.",
+      purpose: "Detect internal contradictions, terminology drift, and broken cross-section references in design docs.",
+      requiresUserGate: false,
+      skill: "document-coherence-pass"
     },
     {
-      agent: "observability-reviewer",
+      agent: "feasibility-reviewer",
       mode: "proactive",
-      requiredAtTier: "lightweight",
-      when: "When runtime/debuggability, rollout, failure detection, or supportability matters.",
-      purpose: "Validate logs/metrics/traces, alerting, and rescue-path visibility before implementation.",
-      requiresUserGate: false
+      when: "When design assumes runtime conditions, scaling behavior, or external service availability.",
+      purpose: "Validate that design assumptions remain feasible in real runtime and rollout constraints.",
+      requiresUserGate: false,
+      skill: "document-feasibility-pass"
     }
   ],
   spec: [
@@ -724,6 +744,14 @@ const STAGE_AUTO_SUBAGENT_DISPATCH: Record<FlowStage, StageAutoSubagentDispatch[
       when: "When Spec Self-Review reports gaps (Status: Issues Found) or subsystem boundaries drift beyond one coherent plan slice.",
       purpose: "Run a final document-level quality pass for completeness, consistency, clarity, and scope fit before handoff to plan.",
       requiresUserGate: false
+    },
+    {
+      agent: "coherence-reviewer",
+      mode: "proactive",
+      when: "When spec has more than five acceptance criteria or multiple assumptions sections.",
+      purpose: "Check cross-section coherence, terminology consistency, and internal references before plan handoff.",
+      requiresUserGate: false,
+      skill: "document-coherence-pass"
     }
   ],
   plan: [
@@ -741,6 +769,30 @@ const STAGE_AUTO_SUBAGENT_DISPATCH: Record<FlowStage, StageAutoSubagentDispatch[
       when: "When plan tasks touch unfamiliar areas or reference-pattern adoption needs source verification.",
       purpose: "Confirm context/search evidence before plan packets rely on discovered patterns.",
       requiresUserGate: false
+    },
+    {
+      agent: "coherence-reviewer",
+      mode: "proactive",
+      when: "When plan packets touch more than one subsystem or map more than five dependency edges.",
+      purpose: "Verify internal consistency across batches, dependencies, and handoff narratives.",
+      requiresUserGate: false,
+      skill: "document-coherence-pass"
+    },
+    {
+      agent: "scope-guardian-reviewer",
+      mode: "proactive",
+      when: "When plan introduces new abstractions or generic utility layers.",
+      purpose: "Challenge unnecessary abstraction and enforce minimum viable implementation scope.",
+      requiresUserGate: false,
+      skill: "document-scope-guard"
+    },
+    {
+      agent: "feasibility-reviewer",
+      mode: "proactive",
+      when: "When plan carries runtime, environment, dependency, or resource assumptions.",
+      purpose: "Validate execution and rollout feasibility before implementation starts.",
+      requiresUserGate: false,
+      skill: "document-feasibility-pass"
     }
   ],
   tdd: [
@@ -759,6 +811,13 @@ const STAGE_AUTO_SUBAGENT_DISPATCH: Record<FlowStage, StageAutoSubagentDispatch[
       requiredAtTier: "lightweight",
       when: "When a bounded GREEN/REFACTOR slice has non-overlapping file ownership and a clear RED failure.",
       purpose: "Implement the minimal passing slice inside explicit file boundaries and return strict worker evidence.",
+      requiresUserGate: false
+    },
+    {
+      agent: "integration-overseer",
+      mode: "proactive",
+      when: "When TDD fan-out used 2+ parallel slice-implementers, or when slices touch shared interfaces.",
+      purpose: "Verify cohesion-contract integrity across shared types, touchpoints, invariants, and integration test outcomes after fan-in.",
       requiresUserGate: false
     },
     {
@@ -782,7 +841,7 @@ const STAGE_AUTO_SUBAGENT_DISPATCH: Record<FlowStage, StageAutoSubagentDispatch[
       mode: "mandatory",
       requiredAtTier: "lightweight",
       when: "Always in review stage.",
-      purpose: "Layer 1 spec compliance plus integrated Layer 2 review across correctness, architecture, and external-safety tags with source-tagged findings.",
+      purpose: "Layer 1 spec compliance plus integrated Layer 2 review across correctness, architecture, and inline performance/compatibility/observability lens coverage with source-tagged findings. Escalate to optional dedicated lens skills only when diff scope/risk justifies a deeper pass.",
       requiresUserGate: false,
       skill: "review-spec-pass"
     },
@@ -794,30 +853,6 @@ const STAGE_AUTO_SUBAGENT_DISPATCH: Record<FlowStage, StageAutoSubagentDispatch[
       purpose: "Guarantee a dedicated security pass on every diff: auth, input validation, secrets, injection, privilege, and blast-radius review are never opt-in.",
       requiresUserGate: false,
       skill: "security-audit"
-    },
-    {
-      agent: "performance-reviewer",
-      mode: "proactive",
-      requiredAtTier: "lightweight",
-      when: "When hot paths, IO, data volume, rendering, caching, or algorithmic cost can move.",
-      purpose: "Run a focused performance lens and report evidence-backed regressions or no-impact rationale.",
-      requiresUserGate: false
-    },
-    {
-      agent: "compatibility-reviewer",
-      mode: "proactive",
-      requiredAtTier: "lightweight",
-      when: "When public API, CLI/config, persisted data, generated clients, or dependency versions change.",
-      purpose: "Check compatibility, migrations, and consumer-facing contract stability.",
-      requiresUserGate: false
-    },
-    {
-      agent: "observability-reviewer",
-      mode: "proactive",
-      requiredAtTier: "lightweight",
-      when: "When failure diagnosis, logging/metrics/traces, rollout, or operational support matters.",
-      purpose: "Check observability and supportability evidence against the design/review artifact.",
-      requiresUserGate: false
     },
     {
       agent: "reviewer",
@@ -845,6 +880,15 @@ const STAGE_AUTO_SUBAGENT_DISPATCH: Record<FlowStage, StageAutoSubagentDispatch[
     }
   ],
   ship: [
+    {
+      agent: "architect",
+      mode: "mandatory",
+      requiredAtTier: "lightweight",
+      when: "Always before final ship — verify cross-stage cohesion across scope/design/spec/plan/code.",
+      purpose: "Final cross-stage cohesion gate before release finalization.",
+      requiresUserGate: false,
+      skill: "architect-cross-stage-verification"
+    },
     {
       agent: "release-reviewer",
       mode: "mandatory",

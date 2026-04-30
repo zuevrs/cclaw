@@ -87,6 +87,31 @@ function normalizeFixtureArtifact(fileName: string, content: string): string {
 `;
       normalized = normalized.replace(/(## Layer 1 Verdict\n)/u, `${changedFileCoverage}$1`);
     }
+    if (!/^## Lens Coverage$/mu.test(normalized)) {
+      const lensCoverage = `## Lens Coverage
+- Performance: NO_IMPACT
+- Compatibility: NO_IMPACT
+- Observability: NO_IMPACT
+- Security: routed to security-reviewer (always separate)
+
+`;
+      normalized = normalized.replace(/(## Layer 1 Verdict\n)/u, `${lensCoverage}$1`);
+    }
+  }
+
+  if (fileName.startsWith("08-ship") && !/^## Architect Cross-Stage Verification$/mu.test(normalized)) {
+    const architectVerification = `## Architect Cross-Stage Verification
+- Skill: architect-cross-stage-verification
+- Result: CROSS_STAGE_VERIFIED
+- Evidence refs: review verdict + ship preflight checks
+- Drift summary: none
+
+`;
+    if (/^## Finalization$/mu.test(normalized)) {
+      normalized = normalized.replace(/(^## Finalization$)/mu, `${architectVerification}$1`);
+    } else {
+      normalized = `${normalized.trimEnd()}\n\n${architectVerification}`;
+    }
   }
 
   return normalized;
@@ -484,6 +509,203 @@ describe("artifact linter heuristics", () => {
 
     const result = await lintArtifact(root, "brainstorm");
     expect(result.passed).toBe(true);
+  });
+
+  it("fails brainstorm in multi-wave mode when Wave Carry-forward section is missing", async () => {
+    const root = await createTempProject("artifact-lint-wave-carry-forward-missing");
+    await writeRuntimeArtifact(root, "01-brainstorm.md", `# Brainstorm Artifact
+
+## Context
+- Project state: monorepo with CI pipeline and custom release scripts
+- Relevant existing code/patterns: scripts/pre-publish.sh does metadata checks
+
+## Problem
+- What we're solving: reduce release regressions
+- Success criteria: invalid metadata blocked before publish
+- Constraints: no new runtime dependencies
+
+## Clarifying Questions
+| # | Question | Answer | Decision impact |
+|---|---|---|---|
+| 1 | Block invalid metadata or warn? | Block | hard gate required |
+| 2 | Add runtime dependencies? | No | stay on existing runtime stack |
+
+## Approach Tier
+- Tier: Standard
+- Why this tier: multiple workflow touchpoints with bounded complexity.
+
+## Short-Circuit Decision
+- Status: bypassed
+- Why: trade-offs still required explicit comparison.
+- Scope handoff: continue full brainstorm flow before scope.
+
+## Approaches
+| Approach | Role | Upside | Architecture | Trade-offs | Recommendation |
+|---|---|---|---|---|---|
+| A | baseline | modest | script-only checks | faster but weaker reuse |  |
+| B | challenger | higher | reusable validation module | slightly more effort, better long-term reuse | recommended |
+
+## Approach Reaction
+- Closest option: B
+- Concerns: avoid overbuild while keeping long-term reuse.
+- What changed after reaction: selected reusable module with strict v1 scope boundaries.
+
+## Selected Direction
+- Approach: B — reusable validation module
+- Rationale: user reaction favored reusable module with bounded v1 scope, balancing reuse and delivery speed
+- Approval: approved by user
+
+## Design
+- Architecture: shared TS module with typed validators imported by CI and local CLI
+- Key components: validateMetadata, validateChangelog, validateVersion, runAll
+- Data flow: package.json + CHANGELOG.md -> validator module -> structured result
+
+## Assumptions and Open Questions
+- Assumptions: CI remains primary release path
+- Open questions (or "None"): None
+`);
+    await fs.mkdir(path.join(root, ".cclaw/wave-plans"), { recursive: true });
+    await fs.writeFile(path.join(root, ".cclaw/wave-plans/14.md"), "# wave 14\n", "utf8");
+    await fs.writeFile(path.join(root, ".cclaw/wave-plans/15.md"), "# wave 15\n", "utf8");
+
+    const result = await lintArtifact(root, "brainstorm");
+    const waveCarryForward = result.findings.find((finding) => finding.section === "wave.drift_unaddressed");
+    expect(waveCarryForward?.found).toBe(false);
+    expect(waveCarryForward?.details).toContain("section is missing");
+  });
+
+  it("passes brainstorm multi-wave carry-forward audit when drift markers are present", async () => {
+    const root = await createTempProject("artifact-lint-wave-carry-forward-pass");
+    await writeRuntimeArtifact(root, "01-brainstorm.md", `# Brainstorm Artifact
+
+## Context
+- Project state: monorepo with CI pipeline and custom release scripts
+- Relevant existing code/patterns: scripts/pre-publish.sh does metadata checks
+
+## Problem
+- What we're solving: reduce release regressions
+- Success criteria: invalid metadata blocked before publish
+- Constraints: no new runtime dependencies
+
+## Clarifying Questions
+| # | Question | Answer | Decision impact |
+|---|---|---|---|
+| 1 | Block invalid metadata or warn? | Block | hard gate required |
+| 2 | Add runtime dependencies? | No | stay on existing runtime stack |
+
+## Approach Tier
+- Tier: Standard
+- Why this tier: multiple workflow touchpoints with bounded complexity.
+
+## Short-Circuit Decision
+- Status: bypassed
+- Why: trade-offs still required explicit comparison.
+- Scope handoff: continue full brainstorm flow before scope.
+
+## Approaches
+| Approach | Role | Upside | Architecture | Trade-offs | Recommendation |
+|---|---|---|---|---|---|
+| A | baseline | modest | script-only checks | faster but weaker reuse |  |
+| B | challenger | higher | reusable validation module | slightly more effort, better long-term reuse | recommended |
+
+## Approach Reaction
+- Closest option: B
+- Concerns: avoid overbuild while keeping long-term reuse.
+- What changed after reaction: selected reusable module with strict v1 scope boundaries.
+
+## Selected Direction
+- Approach: B — reusable validation module
+- Rationale: user reaction favored reusable module with bounded v1 scope, balancing reuse and delivery speed
+- Approval: approved by user
+
+## Wave Carry-forward
+- Carrying forward: Wave 14 critic contract and Wave 15 layered reviewers remain mandatory.
+- Drift detected: none.
+
+## Design
+- Architecture: shared TS module with typed validators imported by CI and local CLI
+- Key components: validateMetadata, validateChangelog, validateVersion, runAll
+- Data flow: package.json + CHANGELOG.md -> validator module -> structured result
+
+## Assumptions and Open Questions
+- Assumptions: CI remains primary release path
+- Open questions (or "None"): None
+`);
+    await fs.mkdir(path.join(root, ".cclaw/wave-plans"), { recursive: true });
+    await fs.writeFile(path.join(root, ".cclaw/wave-plans/14.md"), "# wave 14\n", "utf8");
+    await fs.writeFile(path.join(root, ".cclaw/wave-plans/15.md"), "# wave 15\n", "utf8");
+
+    const result = await lintArtifact(root, "brainstorm");
+    const waveCarryForward = result.findings.find((finding) => finding.section === "wave.drift_unaddressed");
+    expect(waveCarryForward?.found).toBe(true);
+  });
+
+  it("fails brainstorm critic findings without pre-commitment prediction sections", async () => {
+    const root = await createTempProject("artifact-lint-critic-predictions-missing");
+    await writeRuntimeArtifact(root, "01-brainstorm.md", `# Brainstorm Artifact
+
+## Context
+- Project state: monorepo with CI pipeline and custom release scripts
+- Relevant existing code/patterns: scripts/pre-publish.sh does metadata checks
+
+## Problem
+- What we're solving: reduce release regressions
+- Success criteria: invalid metadata blocked before publish
+- Constraints: no new runtime dependencies
+
+## Clarifying Questions
+| # | Question | Answer | Decision impact |
+|---|---|---|---|
+| 1 | Block invalid metadata or warn? | Block | hard gate required |
+| 2 | Add runtime dependencies? | No | stay on existing runtime stack |
+
+## Approach Tier
+- Tier: Standard
+- Why this tier: multiple workflow touchpoints with bounded complexity.
+
+## Short-Circuit Decision
+- Status: bypassed
+- Why: trade-offs still required explicit comparison.
+- Scope handoff: continue full brainstorm flow before scope.
+
+## Approaches
+| Approach | Role | Upside | Architecture | Trade-offs | Recommendation |
+|---|---|---|---|---|---|
+| A | baseline | modest | script-only checks | faster but weaker reuse |  |
+| B | challenger | higher | reusable validation module | slightly more effort, better long-term reuse | recommended |
+
+## Approach Reaction
+- Closest option: B
+- Concerns: avoid overbuild while keeping long-term reuse.
+- What changed after reaction: selected reusable module with strict v1 scope boundaries.
+
+## Selected Direction
+- Approach: B — reusable validation module
+- Rationale: user reaction favored reusable module with bounded v1 scope, balancing reuse and delivery speed
+- Approval: approved by user
+- Next-stage handoff: scope — lock this decision.
+
+## Design
+- Architecture: shared TS module with typed validators imported by CI and local CLI
+- Key components: validateMetadata, validateChangelog, validateVersion, runAll
+- Data flow: package.json + CHANGELOG.md -> validator module -> structured result
+
+## Critic Findings
+### Top Concerns
+- Hidden assumption: changelog parser may miss malformed headings.
+
+## Assumptions and Open Questions
+- Assumptions: CI remains primary release path
+- Open questions (or "None"): None
+`);
+
+    const result = await lintArtifact(root, "brainstorm");
+    const criticContract = result.findings.find(
+      (finding) => finding.section === "critic.predictions_missing"
+    );
+    expect(result.passed).toBe(false);
+    expect(criticContract?.found).toBe(false);
+    expect(criticContract?.details ?? "").toContain("Pre-commitment predictions");
   });
 
   it("fails brainstorm when Approaches collapses to a single row", async () => {
@@ -1321,7 +1543,7 @@ describe("artifact linter heuristics", () => {
       `${completePlanArtifact(validPlanFrontmatter())}
 
 ## Learnings
-- {"type":"pattern","trigger":"when dependency batch stalls","action":"split the batch and add an intermediate verification gate","confidence":"medium","domain":"delivery","universality":"project","maturity":"raw"}
+- {"type":"pattern","trigger":"when dependency batch stalls","action":"split the batch and add an intermediate verification gate","confidence":"medium","stage":"plan","origin_stage":"plan","source":"stage"}
 `
     );
 
@@ -1347,21 +1569,12 @@ describe("artifact linter heuristics", () => {
     expect(parsed.details).toContain("field \"severity\"");
   });
 
-  it("accepts optional Learnings supersession fields", () => {
+  it("rejects removed legacy Learnings fields", () => {
     const parsed = parseLearningsSection(
-      `- {"type":"lesson","trigger":"when old guidance overlaps","action":"append a focused replacement","confidence":"medium","supersedes":["old-guidance"],"superseded_by":"new-guidance"}`
-    );
-    expect(parsed.ok).toBe(true);
-    expect(parsed.entries[0]?.supersedes).toEqual(["old-guidance"]);
-    expect(parsed.entries[0]?.superseded_by).toBe("new-guidance");
-  });
-
-  it("rejects malformed Learnings supersession fields", () => {
-    const parsed = parseLearningsSection(
-      `- {"type":"lesson","trigger":"when old guidance overlaps","action":"append a focused replacement","confidence":"medium","supersedes":[]}`
+      `- {"type":"lesson","trigger":"when old guidance overlaps","action":"append a focused replacement","confidence":"medium","domain":"workflow"}`
     );
     expect(parsed.ok).toBe(false);
-    expect(parsed.details).toContain("field \"supersedes\"");
+    expect(parsed.details).toContain("unknown key");
   });
 
   it("rejects Learnings sections that contain non-bullet lines", () => {
@@ -1453,6 +1666,96 @@ describe("artifact linter heuristics", () => {
 
     const result = await lintArtifact(root, "ship");
     expect(result.passed).toBe(true);
+  });
+
+  it("fails ship when architect cross-stage verification reference is missing", async () => {
+    const root = await createTempProject("ship-cross-stage-reference-missing");
+    await fs.mkdir(path.join(root, ".cclaw/state"), { recursive: true });
+    await fs.mkdir(path.join(root, ".cclaw/artifacts"), { recursive: true });
+    await fs.writeFile(path.join(root, ".cclaw/state/flow-state.json"), JSON.stringify({
+      currentStage: "ship",
+      activeRunId: "active",
+      completedStages: ["brainstorm", "scope", "design", "spec", "plan", "tdd", "review"]
+    }, null, 2), "utf8");
+    await fs.writeFile(path.join(root, ".cclaw/artifacts/08-ship.md"), `# Ship Artifact
+
+## Preflight Results
+- Review verdict: APPROVED
+- Build: pass
+- Tests: pass (47 passed, 0 failed)
+- Lint: pass
+- Type-check: pass
+- Working tree clean: yes
+
+## Release Notes
+- Added: notification feed with SSE
+
+## Rollback Plan
+- Trigger conditions: error rate >5%
+- Rollback steps: git revert <sha> && git push
+- Verification steps: confirm error rate baseline
+
+## Monitoring
+- Metrics/logs to watch: error rate for 24h
+
+## Finalization
+- Selected enum: FINALIZE_OPEN_PR
+- Execution result: PR #42 merged
+`, "utf8");
+
+    const result = await lintArtifact(root, "ship");
+    const crossStage = result.findings.find((finding) => finding.section === "ship.cross_stage_cohesion_missing");
+    expect(crossStage?.found).toBe(false);
+    expect(crossStage?.details).toContain("missing architect cross-stage verification reference");
+  });
+
+  it("fails ship when architect cross-stage verification reports drift", async () => {
+    const root = await createTempProject("ship-cross-stage-drift-detected");
+    await fs.mkdir(path.join(root, ".cclaw/state"), { recursive: true });
+    await fs.mkdir(path.join(root, ".cclaw/artifacts"), { recursive: true });
+    await fs.writeFile(path.join(root, ".cclaw/state/flow-state.json"), JSON.stringify({
+      currentStage: "ship",
+      activeRunId: "active",
+      completedStages: ["brainstorm", "scope", "design", "spec", "plan", "tdd", "review"]
+    }, null, 2), "utf8");
+    await fs.writeFile(path.join(root, ".cclaw/artifacts/08-ship.md"), `# Ship Artifact
+
+## Preflight Results
+- Review verdict: APPROVED
+- Build: pass
+- Tests: pass (47 passed, 0 failed)
+- Lint: pass
+- Type-check: pass
+- Working tree clean: yes
+
+## Release Notes
+- Added: notification feed with SSE
+
+## Rollback Plan
+- Trigger conditions: error rate >5%
+- Rollback steps: git revert <sha> && git push
+- Verification steps: confirm error rate baseline
+
+## Monitoring
+- Metrics/logs to watch: error rate for 24h
+
+## Architect Cross-Stage Verification
+- Skill: architect-cross-stage-verification
+- Result: DRIFT_DETECTED
+- Evidence refs: review artifact showed unresolved contradiction in API behavior
+- Drift summary: spec and review diverged on request validation contract
+
+## Finalization
+- Selected enum: FINALIZE_OPEN_PR
+- Execution result: blocked pending drift resolution
+`, "utf8");
+
+    const result = await lintArtifact(root, "ship");
+    const crossStage = result.findings.find((finding) => finding.section === "ship.cross_stage_cohesion_missing");
+    const driftDetected = result.findings.find((finding) => finding.section === "ship.cross_stage_drift_detected");
+    expect(crossStage?.found).toBe(true);
+    expect(driftDetected?.found).toBe(false);
+    expect(driftDetected?.details).toContain("DRIFT_DETECTED");
   });
 
   it("accepts FINALIZE_NO_VCS as a valid ship finalization mode", async () => {
@@ -1883,8 +2186,8 @@ ${summaryBody}
       expect(summary?.found).toBe(true);
     });
 
-    it("requires product-strategist delegation evidence for expansion modes", async () => {
-      const root = await createTempProject("scope-summary-expansion-needs-strategist");
+    it("requires product-discovery delegation evidence for expansion modes", async () => {
+      const root = await createTempProject("scope-summary-expansion-needs-discovery");
       await writeRuntimeArtifact(
         root,
         "02-scope.md",
@@ -1897,11 +2200,11 @@ ${summaryBody}
       expect(result.passed).toBe(false);
       expect(strategist?.required).toBe(true);
       expect(strategist?.found).toBe(false);
-      expect(strategist?.details ?? "").toMatch(/product-strategist delegation/iu);
+      expect(strategist?.details ?? "").toMatch(/product-discovery delegation/iu);
     });
 
-    it("accepts expansion mode when product-strategist delegation has evidence", async () => {
-      const root = await createTempProject("scope-summary-expansion-with-strategist");
+    it("accepts expansion mode when product-discovery delegation has evidence", async () => {
+      const root = await createTempProject("scope-summary-expansion-with-discovery");
       await writeRuntimeArtifact(
         root,
         "02-scope.md",
@@ -1912,7 +2215,7 @@ ${summaryBody}
       await writeDelegationLog(root, [
         {
           stage: "scope",
-          agent: "product-strategist",
+          agent: "product-discovery",
           mode: "proactive",
           status: "completed",
           ts: new Date().toISOString(),
@@ -3499,6 +3802,53 @@ ${PLAN_EXECUTION_POSTURE}
     expect(wfc?.details).toContain("pending, approved");
   });
 
+  it("fails plan layered review when document reviewers lack structured calibrated findings", async () => {
+    const root = await createTempProject("plan-layered-review-missing-structure");
+    await writeRuntimeArtifact(
+      root,
+      "05-plan.md",
+      `${completePlanArtifact()}
+
+## Layered review
+### coherence-reviewer
+- Status: PASS
+- Summary: Terminology mostly consistent.
+`
+    );
+
+    const result = await lintArtifact(root, "plan");
+    const structured = result.findings.find(
+      (finding) => finding.section === "Document Reviewer Structured Findings"
+    );
+    expect(result.passed).toBe(false);
+    expect(structured?.found).toBe(false);
+    expect(structured?.details ?? "").toContain("coherence-reviewer");
+  });
+
+  it("fails plan layered review when document reviewer returns FAIL without explicit waiver", async () => {
+    const root = await createTempProject("plan-layered-review-fail-no-waiver");
+    await writeRuntimeArtifact(
+      root,
+      "05-plan.md",
+      `${completePlanArtifact()}
+
+## Layered review
+### feasibility-reviewer
+- Status: FAIL
+- Findings:
+  - [P1] (confidence: 8/10) src/runtime/deploy.ts:42 — rollout assumes a dependency that is unavailable in staging.
+`
+    );
+
+    const result = await lintArtifact(root, "plan");
+    const waiver = result.findings.find(
+      (finding) => finding.section === "document-review.fail_without_waiver"
+    );
+    expect(result.passed).toBe(false);
+    expect(waiver?.found).toBe(false);
+    expect(waiver?.details ?? "").toContain("feasibility-reviewer:FAIL");
+  });
+
   it("passes complete tdd artifact", async () => {
     const root = await createTempProject("tdd-full-pass");
     await writeRuntimeArtifact(root, "06-tdd.md", `# TDD Artifact
@@ -3540,6 +3890,212 @@ ${TDD_PREFLIGHT_SECTIONS}
 
     const result = await lintArtifact(root, "tdd");
     expect(result.passed).toBe(true);
+  });
+
+  it("fails tdd fan-out when cohesion-contract artifacts are missing", async () => {
+    const root = await createTempProject("tdd-fanout-missing-cohesion-contract");
+    await writeRuntimeArtifact(root, "06-tdd.md", `# TDD Artifact
+
+${TDD_PREFLIGHT_SECTIONS}
+
+## RED Evidence
+| Slice | Test name | Command | Failure output summary |
+|---|---|---|---|
+| S-1 | counts unique keys | pnpm vitest run dedupe.test.ts | Cannot find module |
+
+## Acceptance Mapping
+| Slice | Plan task ID | Spec criterion ID |
+|---|---|---|
+| S-1 | T-1 | AC-1 |
+
+## Failure Analysis
+| Slice | Expected missing behavior | Actual failure reason |
+|---|---|---|
+| S-1 | Module not implemented | Module import fails — correct |
+
+## GREEN Evidence
+- Full suite command: pnpm vitest run
+- Full suite result: 12 passed, 0 failed
+
+## Verification Ladder
+- Highest tier reached: command
+- Evidence: pnpm vitest run dedupe.test.ts (pass)
+
+## REFACTOR Notes
+- What changed: Extracted helper function
+- Why: Reuse across tests
+- Behavior preserved: Full suite green after refactor
+
+## Traceability
+- Plan task IDs: T-1
+- Spec criterion IDs: AC-1
+`);
+    await writeDelegationLog(root, [
+      {
+        stage: "tdd",
+        agent: "slice-implementer",
+        mode: "proactive",
+        status: "completed",
+        ts: "2026-05-01T10:00:00Z",
+        runId: "active",
+        evidenceRefs: [".cclaw/artifacts/06-tdd.md#slice-s1"]
+      },
+      {
+        stage: "tdd",
+        agent: "slice-implementer",
+        mode: "proactive",
+        status: "completed",
+        ts: "2026-05-01T10:02:00Z",
+        runId: "active",
+        evidenceRefs: [".cclaw/artifacts/06-tdd.md#slice-s2"]
+      }
+    ]);
+
+    const result = await lintArtifact(root, "tdd");
+    const cohesion = result.findings.find((f) => f.section === "tdd.cohesion_contract_missing");
+    expect(result.passed).toBe(false);
+    expect(cohesion?.required).toBe(true);
+    expect(cohesion?.found).toBe(false);
+  });
+
+  it("fails tdd fan-out when integration-overseer PASS evidence is missing", async () => {
+    const root = await createTempProject("tdd-fanout-missing-integration-overseer");
+    await writeRuntimeArtifact(root, "06-tdd.md", `# TDD Artifact
+
+${TDD_PREFLIGHT_SECTIONS}
+
+## RED Evidence
+| Slice | Test name | Command | Failure output summary |
+|---|---|---|---|
+| S-1 | counts unique keys | pnpm vitest run dedupe.test.ts | Cannot find module |
+
+## Acceptance Mapping
+| Slice | Plan task ID | Spec criterion ID |
+|---|---|---|
+| S-1 | T-1 | AC-1 |
+
+## Failure Analysis
+| Slice | Expected missing behavior | Actual failure reason |
+|---|---|---|
+| S-1 | Module not implemented | Module import fails — correct |
+
+## GREEN Evidence
+- Full suite command: pnpm vitest run
+- Full suite result: 12 passed, 0 failed
+
+## Verification Ladder
+- Highest tier reached: command
+- Evidence: pnpm vitest run dedupe.test.ts (pass)
+
+## REFACTOR Notes
+- What changed: Extracted helper function
+- Why: Reuse across tests
+- Behavior preserved: Full suite green after refactor
+
+## Traceability
+- Plan task IDs: T-1
+- Spec criterion IDs: AC-1
+`);
+    await writeDelegationLog(root, [
+      {
+        stage: "tdd",
+        agent: "slice-implementer",
+        mode: "proactive",
+        status: "completed",
+        ts: "2026-05-01T10:00:00Z",
+        runId: "active",
+        evidenceRefs: [".cclaw/artifacts/06-tdd.md#slice-s1"]
+      },
+      {
+        stage: "tdd",
+        agent: "slice-implementer",
+        mode: "proactive",
+        status: "completed",
+        ts: "2026-05-01T10:02:00Z",
+        runId: "active",
+        evidenceRefs: [".cclaw/artifacts/06-tdd.md#slice-s2"]
+      }
+    ]);
+    await fs.writeFile(
+      path.join(root, ".cclaw/artifacts/cohesion-contract.md"),
+      `# Cohesion Contract — tdd fan-out
+
+## Shared Types & Interfaces
+| Symbol | Path | Signature | Owner slice |
+|---|---|---|---|
+| CohesionState | src/contracts.ts | type CohesionState = { ready: boolean } | S-1 |
+
+## Naming Conventions
+- shared symbols use Cohesion* prefix.
+
+## Invariants
+- each slice keeps cohesion state serializable.
+
+## Integration Touchpoints
+| From slice | To slice | Surface | Integration test name |
+|---|---|---|---|
+| S-1 | S-2 | buildContract() | integration:cohesion-touchpoints |
+
+## Behavior Specifications per Slice
+### Slice 1: Build cohesion contract
+- test: integration:cohesion-touchpoints
+  assert: contract shape is shared by both slices
+  surface: buildContract()
+
+## Status
+| Slice | Implemented | Tests pass | Cohesion verified |
+|---|---|---|---|
+| S-1 | yes | yes | no |
+`,
+      "utf8"
+    );
+    await fs.writeFile(
+      path.join(root, ".cclaw/artifacts/cohesion-contract.json"),
+      JSON.stringify({
+        version: 1,
+        sharedTypes: [
+          {
+            symbol: "CohesionState",
+            path: "src/contracts.ts",
+            signature: "type CohesionState = { ready: boolean }",
+            ownerSlice: "S-1"
+          }
+        ],
+        touchpoints: [
+          {
+            fromSlice: "S-1",
+            toSlice: "S-2",
+            surface: "buildContract()",
+            integrationTestName: "integration:cohesion-touchpoints"
+          }
+        ],
+        slices: [
+          {
+            sliceId: "S-1",
+            description: "Build cohesion contract",
+            test: "integration:cohesion-touchpoints",
+            assert: "contract shape is shared by both slices",
+            surface: "buildContract()",
+            implemented: true,
+            testsPass: true,
+            cohesionVerified: false
+          }
+        ],
+        status: {
+          overall: "partial",
+          notes: "integration overseer pending"
+        }
+      }, null, 2),
+      "utf8"
+    );
+
+    const result = await lintArtifact(root, "tdd");
+    const cohesion = result.findings.find((f) => f.section === "tdd.cohesion_contract_missing");
+    const overseer = result.findings.find((f) => f.section === "tdd.integration_overseer_missing");
+    expect(result.passed).toBe(false);
+    expect(cohesion?.found).toBe(true);
+    expect(overseer?.required).toBe(true);
+    expect(overseer?.found).toBe(false);
   });
 
   it("fails tdd when Iron Law Acknowledgement section is missing", async () => {
@@ -4310,6 +4866,51 @@ ${TDD_PREFLIGHT_SECTIONS}
 
     const result = await lintArtifact(root, "review");
     expect(result.passed).toBe(true);
+  });
+
+  it("fails review when Lens Coverage section is missing", async () => {
+    const root = await createTempProject("review-no-lens-coverage");
+    await fs.mkdir(path.join(root, ".cclaw/state"), { recursive: true });
+    await fs.mkdir(path.join(root, ".cclaw/artifacts"), { recursive: true });
+    await fs.writeFile(
+      path.join(root, ".cclaw/state/flow-state.json"),
+      JSON.stringify({ currentStage: "review", activeRunId: "active", completedStages: [] }, null, 2),
+      "utf8"
+    );
+    await fs.writeFile(
+      path.join(root, ".cclaw/artifacts/07-review.md"),
+      `# Review Artifact
+
+## Layer 1 Verdict
+| Criterion | Verdict | Evidence |
+|---|---|---|
+| AC-1 | PASS | test.ts:10 |
+
+## Layer 2 Findings
+| ID | Severity | Category | Description | Status |
+|---|---|---|---|---|
+| R-1 | Suggestion | correctness | Naming cleanup | open |
+
+## Review Findings Contract
+- See \`07-review-army.json\`
+- Reconciliation summary: 0 conflicts
+
+## Severity Summary
+- Critical: 0
+- Important: 0
+- Suggestion: 1
+
+## Final Verdict
+- APPROVED
+`,
+      "utf8"
+    );
+
+    const result = await lintArtifact(root, "review");
+    const lens = result.findings.find((f) => f.section === "reviewer.lens_coverage_missing");
+    expect(result.passed).toBe(false);
+    expect(lens?.found).toBe(false);
+    expect(lens?.required).toBe(true);
   });
 
   it("fails review when Layer 1 Verdict is missing", async () => {

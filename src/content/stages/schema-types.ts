@@ -30,20 +30,20 @@ export type StageSubagentName =
   | "architect"
   | "spec-validator"
   | "spec-document-reviewer"
+  | "coherence-reviewer"
+  | "scope-guardian-reviewer"
+  | "feasibility-reviewer"
   | "slice-implementer"
-  | "performance-reviewer"
-  | "compatibility-reviewer"
-  | "observability-reviewer"
   | "release-reviewer"
   | "planner"
-  | "product-manager"
-  | "product-strategist"
+  | "product-discovery"
+  | "divergent-thinker"
   | "critic"
   | "reviewer"
   | "security-reviewer"
+  | "integration-overseer"
   | "test-author"
   | "doc-updater"
-  | "implementer"
   | "fixer";
 
 export type StageSubagentDispatchClass =
@@ -64,9 +64,6 @@ export type StageSubagentReturnSchema =
   | "research-return"
   | "architecture-return"
   | "spec-validation-return"
-  | "performance-return"
-  | "compatibility-return"
-  | "observability-return"
   | "release-return";
 
 export interface StageAutoSubagentDispatch {

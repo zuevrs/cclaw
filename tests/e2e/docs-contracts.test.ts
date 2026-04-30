@@ -53,11 +53,11 @@ describe("docs flow contract", () => {
       }
     }
 
-    expect(readme).toContain("retro -> compound -> archive");
-    expect(scheme).toContain("retro -> compound -> archive");
+    expect(readme).toContain("post_ship_review -> archive");
+    expect(scheme).toContain("post_ship_review -> archive");
     expect(readme).toContain(CLOSEOUT_SUBSTATE_KEY);
     expect(scheme).toContain(CLOSEOUT_SUBSTATE_KEY);
-    expect(closeoutChainInline()).toContain("retro -> compound -> archive");
+    expect(closeoutChainInline()).toContain("post_ship_review -> archive");
   });
 
   it("keeps scheme-of-work as the human-readable flow contract", async () => {
@@ -154,7 +154,7 @@ ${await readRepoFile("docs/scheme-of-work.md")}`;
     const scheme = await readRepoFile("docs/scheme-of-work.md");
 
     expect(readme).toContain("```text\n        idea");
-    expect(readme).toContain("retro -> compound -> archive");
+    expect(readme).toContain("post_ship_review -> archive");
     expect(readme).toContain("NO_SOURCE_CONTEXT");
     expect(readme).toContain("delegation-log.json");
     expect(readme).toContain("The README is the front door");

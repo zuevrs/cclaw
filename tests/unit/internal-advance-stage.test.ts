@@ -551,7 +551,7 @@ describe("internal advance-stage commands", () => {
         "advance-stage",
         "brainstorm",
         `--evidence-json=${evidenceJson}`,
-        "--waive-delegation=product-manager,critic",
+        "--waive-delegation=product-discovery,critic",
         "--waiver-reason=unit_test",
         ...PROACTIVE_WAIVER_FLAGS,
         "--quiet"
@@ -576,7 +576,7 @@ describe("internal advance-stage commands", () => {
 
     const ledger = await readDelegationLedger(root);
     const waivedProductManager = ledger.entries.find(
-      (entry) => entry.stage === "brainstorm" && entry.agent === "product-manager" && entry.mode === "mandatory"
+      (entry) => entry.stage === "brainstorm" && entry.agent === "product-discovery" && entry.mode === "mandatory"
     );
     expect(waivedProductManager?.status).toBe("waived");
     expect(waivedProductManager?.waiverReason).toContain("unit_test");
@@ -611,7 +611,7 @@ describe("internal advance-stage commands", () => {
         "advance-stage",
         "brainstorm",
         `--evidence-json=${evidenceJson}`,
-        "--waive-delegation=product-manager,critic",
+        "--waive-delegation=product-discovery,critic",
         "--waiver-reason=unit_test",
         "--quiet"
       ],
@@ -629,7 +629,7 @@ describe("internal advance-stage commands", () => {
         "advance-stage",
         "brainstorm",
         `--evidence-json=${evidenceJson}`,
-        "--waive-delegation=product-manager,critic",
+        "--waive-delegation=product-discovery,critic",
         "--waiver-reason=unit_test",
         "--accept-proactive-waiver",
         "--accept-proactive-waiver-reason=unit_test_proactive",
@@ -1165,9 +1165,7 @@ process.stdout.write(JSON.stringify({ hook: process.argv[2] }) + "\\n");
     const evidence = Object.fromEntries(
       passed.map((gateId) => [
         gateId,
-        gateId === "review_trace_matrix_clean"
-          ? "npm test PASS"
-          : `evidence for ${gateId}`
+        `evidence for ${gateId}`
       ])
     );
 
@@ -1271,7 +1269,7 @@ process.stdout.write(JSON.stringify({ hook: process.argv[2] }) + "\\n");
           brainstorm_artifact_reviewed: "artifact reviewed by user"
         }),
         "--passed=brainstorm_approaches_compared,brainstorm_direction_approved,brainstorm_artifact_reviewed",
-        "--waive-delegation=product-manager,critic",
+        "--waive-delegation=product-discovery,critic",
         "--waiver-reason=unit_test",
         ...PROACTIVE_WAIVER_FLAGS
       ],
@@ -1333,7 +1331,7 @@ process.stdout.write(JSON.stringify({ hook: process.argv[2] }) + "\\n");
           },
           brainstorm_artifact_reviewed: "artifact reviewed in chat"
         }),
-        "--waive-delegation=product-manager,critic",
+        "--waive-delegation=product-discovery,critic",
         "--waiver-reason=unit_test",
         ...PROACTIVE_WAIVER_FLAGS
       ],
@@ -1354,7 +1352,7 @@ process.stdout.write(JSON.stringify({ hook: process.argv[2] }) + "\\n");
     await ensureRunSystem(root);
     await writeBrainstormArtifact(
       root,
-      `- {"type":"pattern","trigger":"when gate evidence is missing","action":"run verify-current-state before trying to advance","confidence":"high","domain":"workflow","universality":"project","maturity":"raw"}`
+      `- {"type":"pattern","trigger":"when gate evidence is missing","action":"run verify-current-state before trying to advance","confidence":"high"}`
     );
 
     const captured = captureIo();
@@ -1365,7 +1363,7 @@ process.stdout.write(JSON.stringify({ hook: process.argv[2] }) + "\\n");
         "advance-stage",
         "brainstorm",
         `--evidence-json=${evidenceJson}`,
-        "--waive-delegation=product-manager,critic",
+        "--waive-delegation=product-discovery,critic",
         "--waiver-reason=unit_test",
         ...PROACTIVE_WAIVER_FLAGS,
         "--quiet"
