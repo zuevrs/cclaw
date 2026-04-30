@@ -160,6 +160,63 @@ export function checkCriticPredictionsContract(
   };
 }
 
+const DOCUMENT_REVIEWER_NAMES = [
+  "coherence-reviewer",
+  "scope-guardian-reviewer",
+  "feasibility-reviewer"
+] as const;
+
+export interface LayeredDocumentReviewStatus {
+  triggeredReviewers: string[];
+  missingStructured: string[];
+  failOrPartialWithoutWaiver: string[];
+}
+
+export function evaluateLayeredDocumentReviewStatus(
+  sections: H2SectionMap,
+  confidenceFindingRegexSource: string
+): LayeredDocumentReviewStatus | null {
+  const layeredReviewBody = sectionBodyByHeadingPrefix(sections, "Layered review");
+  if (layeredReviewBody === null) return null;
+
+  const triggeredReviewers = DOCUMENT_REVIEWER_NAMES.filter((reviewer) =>
+    new RegExp(`\\b${reviewer}\\b`, "iu").test(layeredReviewBody)
+  );
+  if (triggeredReviewers.length === 0) return null;
+
+  const findingRegex = new RegExp(confidenceFindingRegexSource, "iu");
+  const hasCalibratedFinding = findingRegex.test(layeredReviewBody);
+  const missingStructured: string[] = [];
+  const failOrPartialWithoutWaiver: string[] = [];
+  const waiverRegex = /(?:explicit\s+waiver|waiver\s*:|waived\s*:|accepted[-\s]?risk)/iu;
+
+  for (const reviewer of triggeredReviewers) {
+    const escaped = reviewer.replace(/[.*+?^${}()|[\]\\]/gu, "\\$&");
+    const subsectionMatch =
+      new RegExp(`(?:^|\\n)#{3,4}\\s*${escaped}\\b([\\s\\S]*?)(?=\\n#{2,4}\\s+|$)`, "iu")
+        .exec(layeredReviewBody);
+    const reviewerBlock = subsectionMatch?.[1] ?? layeredReviewBody;
+    const statusMatch = /\b(?:Status|Result|Verdict)\s*:\s*(PASS|PASS_WITH_GAPS|FAIL|PARTIAL|BLOCKED)\b/iu
+      .exec(reviewerBlock);
+    const inlineStatusMatch =
+      new RegExp(`${escaped}[\\s\\S]{0,120}\\b(PASS|PASS_WITH_GAPS|FAIL|PARTIAL|BLOCKED)\\b`, "iu")
+        .exec(layeredReviewBody);
+    const status = (statusMatch?.[1] ?? inlineStatusMatch?.[1] ?? "").toUpperCase();
+    if (!hasCalibratedFinding || status.length === 0) {
+      missingStructured.push(reviewer);
+    }
+    if ((status === "FAIL" || status === "PARTIAL") && !waiverRegex.test(reviewerBlock) && !waiverRegex.test(layeredReviewBody)) {
+      failOrPartialWithoutWaiver.push(`${reviewer}:${status}`);
+    }
+  }
+
+  return {
+    triggeredReviewers,
+    missingStructured,
+    failOrPartialWithoutWaiver
+  };
+}
+
 /**
  * Build a regex that matches `<field>: <value>` even when the field name
  * and/or value are wrapped in markdown emphasis (`*`, `**`, `_`, `__`).

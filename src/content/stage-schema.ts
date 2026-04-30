@@ -190,6 +190,9 @@ function defaultReturnSchemaForAgent(
     case "spec-validator":
       return "spec-validation-return";
     case "spec-document-reviewer":
+    case "coherence-reviewer":
+    case "scope-guardian-reviewer":
+    case "feasibility-reviewer":
       return "review-return";
     case "slice-implementer":
       return "worker-return";
@@ -645,6 +648,14 @@ const STAGE_AUTO_SUBAGENT_DISPATCH: Record<FlowStage, StageAutoSubagentDispatch[
       when: "When scope mode resolves to SCOPE EXPANSION or SELECTIVE EXPANSION.",
       purpose: "Drive 10x vision and concrete expansion proposals before locking the scope contract.",
       requiresUserGate: false
+    },
+    {
+      agent: "scope-guardian-reviewer",
+      mode: "proactive",
+      when: "When scope mode is SCOPE EXPANSION or SELECTIVE EXPANSION, or scope contract has many accepted ideas.",
+      purpose: "Challenge complexity growth and enforce minimum-change scope discipline before scope lock.",
+      requiresUserGate: false,
+      skill: "document-scope-guard"
     }
   ],
   design: [
@@ -687,6 +698,22 @@ const STAGE_AUTO_SUBAGENT_DISPATCH: Record<FlowStage, StageAutoSubagentDispatch[
       requiresUserGate: false
     },
     {
+      agent: "coherence-reviewer",
+      mode: "proactive",
+      when: "When design touches multiple subsystems or includes multiple alternatives sections.",
+      purpose: "Detect internal contradictions, terminology drift, and broken cross-section references in design docs.",
+      requiresUserGate: false,
+      skill: "document-coherence-pass"
+    },
+    {
+      agent: "feasibility-reviewer",
+      mode: "proactive",
+      when: "When design assumes runtime conditions, scaling behavior, or external service availability.",
+      purpose: "Validate that design assumptions remain feasible in real runtime and rollout constraints.",
+      requiresUserGate: false,
+      skill: "document-feasibility-pass"
+    },
+    {
       agent: "compatibility-reviewer",
       mode: "proactive",
       requiredAtTier: "lightweight",
@@ -726,6 +753,14 @@ const STAGE_AUTO_SUBAGENT_DISPATCH: Record<FlowStage, StageAutoSubagentDispatch[
       when: "When Spec Self-Review reports gaps (Status: Issues Found) or subsystem boundaries drift beyond one coherent plan slice.",
       purpose: "Run a final document-level quality pass for completeness, consistency, clarity, and scope fit before handoff to plan.",
       requiresUserGate: false
+    },
+    {
+      agent: "coherence-reviewer",
+      mode: "proactive",
+      when: "When spec has more than five acceptance criteria or multiple assumptions sections.",
+      purpose: "Check cross-section coherence, terminology consistency, and internal references before plan handoff.",
+      requiresUserGate: false,
+      skill: "document-coherence-pass"
     }
   ],
   plan: [
@@ -743,6 +778,30 @@ const STAGE_AUTO_SUBAGENT_DISPATCH: Record<FlowStage, StageAutoSubagentDispatch[
       when: "When plan tasks touch unfamiliar areas or reference-pattern adoption needs source verification.",
       purpose: "Confirm context/search evidence before plan packets rely on discovered patterns.",
       requiresUserGate: false
+    },
+    {
+      agent: "coherence-reviewer",
+      mode: "proactive",
+      when: "When plan packets touch more than one subsystem or map more than five dependency edges.",
+      purpose: "Verify internal consistency across batches, dependencies, and handoff narratives.",
+      requiresUserGate: false,
+      skill: "document-coherence-pass"
+    },
+    {
+      agent: "scope-guardian-reviewer",
+      mode: "proactive",
+      when: "When plan introduces new abstractions or generic utility layers.",
+      purpose: "Challenge unnecessary abstraction and enforce minimum viable implementation scope.",
+      requiresUserGate: false,
+      skill: "document-scope-guard"
+    },
+    {
+      agent: "feasibility-reviewer",
+      mode: "proactive",
+      when: "When plan carries runtime, environment, dependency, or resource assumptions.",
+      purpose: "Validate execution and rollout feasibility before implementation starts.",
+      requiresUserGate: false,
+      skill: "document-feasibility-pass"
     }
   ],
   tdd: [

@@ -1,8 +1,10 @@
 import {
   type StageLintContext,
+  evaluateLayeredDocumentReviewStatus,
   sectionBodyByName,
   SPEC_MAX_MODULES
 } from "./shared.js";
+import { CONFIDENCE_FINDING_REGEX_SOURCE } from "../content/skills.js";
 
 export async function lintSpecStage(ctx: StageLintContext): Promise<void> {
   const {
@@ -128,6 +130,31 @@ export async function lintSpecStage(ctx: StageLintContext): Promise<void> {
         details: missing.length === 0
           ? "Spec Self-Review covers all required checks."
           : `Spec Self-Review is missing check(s): ${missing.join(", ")}.`
+      });
+    }
+
+    const layeredDocumentReview = evaluateLayeredDocumentReviewStatus(
+      sections,
+      CONFIDENCE_FINDING_REGEX_SOURCE
+    );
+    if (layeredDocumentReview !== null) {
+      findings.push({
+        section: "Document Reviewer Structured Findings",
+        required: true,
+        rule: "When Layered review references coherence-reviewer/scope-guardian-reviewer/feasibility-reviewer, include explicit reviewer status plus calibrated finding lines.",
+        found: layeredDocumentReview.missingStructured.length === 0,
+        details: layeredDocumentReview.missingStructured.length === 0
+          ? `Structured findings present for reviewers: ${layeredDocumentReview.triggeredReviewers.join(", ")}.`
+          : `Missing status or calibrated findings for: ${layeredDocumentReview.missingStructured.join(", ")}.`
+      });
+      findings.push({
+        section: "document-review.fail_without_waiver",
+        required: true,
+        rule: "[P1] document-review.fail_without_waiver — reviewer FAIL/PARTIAL requires fix evidence or explicit waiver.",
+        found: layeredDocumentReview.failOrPartialWithoutWaiver.length === 0,
+        details: layeredDocumentReview.failOrPartialWithoutWaiver.length === 0
+          ? "No unwaived FAIL/PARTIAL reviewer statuses detected."
+          : `Unwaived FAIL/PARTIAL statuses: ${layeredDocumentReview.failOrPartialWithoutWaiver.join(", ")}.`
       });
     }
 }

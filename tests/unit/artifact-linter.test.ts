@@ -3558,6 +3558,53 @@ ${PLAN_EXECUTION_POSTURE}
     expect(wfc?.details).toContain("pending, approved");
   });
 
+  it("fails plan layered review when document reviewers lack structured calibrated findings", async () => {
+    const root = await createTempProject("plan-layered-review-missing-structure");
+    await writeRuntimeArtifact(
+      root,
+      "05-plan.md",
+      `${completePlanArtifact()}
+
+## Layered review
+### coherence-reviewer
+- Status: PASS
+- Summary: Terminology mostly consistent.
+`
+    );
+
+    const result = await lintArtifact(root, "plan");
+    const structured = result.findings.find(
+      (finding) => finding.section === "Document Reviewer Structured Findings"
+    );
+    expect(result.passed).toBe(false);
+    expect(structured?.found).toBe(false);
+    expect(structured?.details ?? "").toContain("coherence-reviewer");
+  });
+
+  it("fails plan layered review when document reviewer returns FAIL without explicit waiver", async () => {
+    const root = await createTempProject("plan-layered-review-fail-no-waiver");
+    await writeRuntimeArtifact(
+      root,
+      "05-plan.md",
+      `${completePlanArtifact()}
+
+## Layered review
+### feasibility-reviewer
+- Status: FAIL
+- Findings:
+  - [P1] (confidence: 8/10) src/runtime/deploy.ts:42 — rollout assumes a dependency that is unavailable in staging.
+`
+    );
+
+    const result = await lintArtifact(root, "plan");
+    const waiver = result.findings.find(
+      (finding) => finding.section === "document-review.fail_without_waiver"
+    );
+    expect(result.passed).toBe(false);
+    expect(waiver?.found).toBe(false);
+    expect(waiver?.details ?? "").toContain("feasibility-reviewer:FAIL");
+  });
+
   it("passes complete tdd artifact", async () => {
     const root = await createTempProject("tdd-full-pass");
     await writeRuntimeArtifact(root, "06-tdd.md", `# TDD Artifact

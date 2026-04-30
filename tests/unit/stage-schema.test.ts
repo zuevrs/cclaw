@@ -83,8 +83,16 @@ describe("stage schema and subagent alignment", () => {
     expect(review?.primaryAgents).toContain("reviewer");
     const scope = standard.find((row) => row.stage === "scope");
     expect(scope?.proactiveAgents).toContain("product-strategist");
+    expect(scope?.proactiveAgents).toContain("scope-guardian-reviewer");
     const spec = standard.find((row) => row.stage === "spec");
     expect(spec?.proactiveAgents).toContain("spec-document-reviewer");
+    expect(spec?.proactiveAgents).toContain("coherence-reviewer");
+    const plan = standard.find((row) => row.stage === "plan");
+    expect(plan?.proactiveAgents).toEqual(expect.arrayContaining([
+      "coherence-reviewer",
+      "scope-guardian-reviewer",
+      "feasibility-reviewer"
+    ]));
 
     const lightweight = stageDelegationSummary("lightweight");
     const lightweightScope = lightweight.find((row) => row.stage === "scope");
@@ -426,9 +434,11 @@ describe("stage schema and subagent alignment", () => {
   it("agent registry uses the specialist roster", () => {
     expect(CCLAW_AGENTS.map((agent) => agent.name).sort()).toEqual([
       "architect",
+      "coherence-reviewer",
       "compatibility-reviewer",
       "critic",
       "doc-updater",
+      "feasibility-reviewer",
       "fixer",
       "implementer",
       "observability-reviewer",
@@ -439,6 +449,7 @@ describe("stage schema and subagent alignment", () => {
       "release-reviewer",
       "researcher",
       "reviewer",
+      "scope-guardian-reviewer",
       "security-reviewer",
       "slice-implementer",
       "spec-document-reviewer",
@@ -458,6 +469,19 @@ describe("stage schema and subagent alignment", () => {
     expect(CCLAW_AGENTS.find((agent) => agent.name === "implementer")?.activation).toBe("on-demand");
     expect(CCLAW_AGENTS.find((agent) => agent.name === "slice-implementer")?.activation).toBe("on-demand");
     expect(CCLAW_AGENTS.find((agent) => agent.name === "fixer")?.activation).toBe("on-demand");
+  });
+
+  it("registers document review agents with expected stage coverage", () => {
+    const coherence = CCLAW_AGENTS.find((agent) => agent.name === "coherence-reviewer");
+    const scopeGuardian = CCLAW_AGENTS.find((agent) => agent.name === "scope-guardian-reviewer");
+    const feasibility = CCLAW_AGENTS.find((agent) => agent.name === "feasibility-reviewer");
+
+    expect(coherence?.relatedStages).toEqual(["spec", "plan", "design"]);
+    expect(scopeGuardian?.relatedStages).toEqual(["scope", "plan", "design"]);
+    expect(feasibility?.relatedStages).toEqual(["plan", "design"]);
+    expect(coherence?.returnSchema.allowedStatuses).toEqual(["PASS", "PASS_WITH_GAPS", "FAIL", "BLOCKED"]);
+    expect(scopeGuardian?.body).toContain("minimum viable change");
+    expect(feasibility?.body).toContain("execution realism");
   });
 
   it("stage dispatch summaries expose class and return schema metadata", () => {
@@ -483,12 +507,24 @@ describe("stage schema and subagent alignment", () => {
       dispatchClass: "review-lens",
       returnSchema: "review-return"
     });
+    expect(spec?.dispatchRules.find((rule) => rule.agent === "coherence-reviewer")).toMatchObject({
+      dispatchClass: "review-lens",
+      returnSchema: "review-return"
+    });
     expect(stageSkillMarkdown("review")).toContain("| Agent | Mode | Class | Return Schema | User Gate | Trigger | Purpose |");
   });
 
   it("design skill renders research playbooks instead of research personas", () => {
     const design = stageSchema("design");
-    expect(stageAutoSubagentDispatch("design").map((row) => row.agent)).toEqual(expect.arrayContaining(["architect", "test-author", "researcher", "compatibility-reviewer", "observability-reviewer"]));
+    expect(stageAutoSubagentDispatch("design").map((row) => row.agent)).toEqual(expect.arrayContaining([
+      "architect",
+      "test-author",
+      "researcher",
+      "coherence-reviewer",
+      "feasibility-reviewer",
+      "compatibility-reviewer",
+      "observability-reviewer"
+    ]));
     expect(design.researchPlaybooks).toEqual([
       "research/research-fleet.md",
       "research/framework-docs-lookup.md",

@@ -168,6 +168,72 @@ Use with the \`critic\` delegation in \`brainstorm\`, \`scope\`, and \`design\`.
 `;
 }
 
+function documentCoherencePassSkill(): string {
+  return `${skillFrontmatter(
+    "document-coherence-pass",
+    "Consistency-focused pass for cross-section coherence in spec/plan/design documents."
+  )}# Document Coherence Pass
+
+Use with \`coherence-reviewer\` on spec/plan/design artifacts.
+
+## Required Output
+
+- List contradictions between sections and where they occur.
+- Flag terminology drift where one concept is named inconsistently.
+- Flag broken internal references, forward references, and dependency narrative mismatches.
+- Return calibrated findings with concrete anchors and one-line corrections.
+
+## Guardrails
+
+- Do not score overall quality; focus on consistency and coherence only.
+- Do not invent contradictions without citation to concrete sections/lines.
+`;
+}
+
+function documentScopeGuardSkill(): string {
+  return `${skillFrontmatter(
+    "document-scope-guard",
+    "Complexity and minimum-change guardrail for scope/plan/design documents."
+  )}# Document Scope Guard
+
+Use with \`scope-guardian-reviewer\` when expansion pressure or abstraction creep is likely.
+
+## Required Output
+
+- Surface where existing solutions can be reused instead of adding new abstractions.
+- Identify minimum-change alternative when current proposal is broader than needed.
+- Call out complexity smells (speculative generic utilities, framework-ahead-of-need structures).
+- Return calibrated findings with explicit impact on scope boundaries.
+
+## Guardrails
+
+- Challenge unnecessary breadth, but do not silently shrink required user outcomes.
+- Tie every scope reduction recommendation to a concrete cost/risk rationale.
+`;
+}
+
+function documentFeasibilityPassSkill(): string {
+  return `${skillFrontmatter(
+    "document-feasibility-pass",
+    "Feasibility validation for runtime/resource/dependency assumptions in plan/design artifacts."
+  )}# Document Feasibility Pass
+
+Use with \`feasibility-reviewer\` on plan/design docs that rely on runtime or operational assumptions.
+
+## Required Output
+
+- Enumerate resource/time/runtime assumptions and whether they are validated.
+- Flag external dependency availability or reliability risks.
+- Flag rollout assumptions that are not backed by operational evidence.
+- Return PASS/PASS_WITH_GAPS/FAIL/BLOCKED rationale grounded in cited assumptions.
+
+## Guardrails
+
+- Focus on practical viability; do not redesign architecture unless feasibility is blocked.
+- Distinguish unknowns that need evidence from hard blockers that require rework.
+`;
+}
+
 export const SUBAGENT_CONTEXT_SKILLS: Record<SubagentContextSkillId, string> = {
   "tdd-cycle-evidence": tddCycleEvidenceSkill(),
   "review-spec-pass": reviewSpecPassSkill(),
@@ -175,5 +241,8 @@ export const SUBAGENT_CONTEXT_SKILLS: Record<SubagentContextSkillId, string> = {
   "adversarial-review": adversarialReviewSkill(),
   "receiving-code-review": receivingCodeReviewSkill(),
   "stack-aware-review": stackAwareReviewSkill(),
-  "critic-multi-perspective": criticMultiPerspectiveSkill()
+  "critic-multi-perspective": criticMultiPerspectiveSkill(),
+  "document-coherence-pass": documentCoherencePassSkill(),
+  "document-scope-guard": documentScopeGuardSkill(),
+  "document-feasibility-pass": documentFeasibilityPassSkill()
 };
