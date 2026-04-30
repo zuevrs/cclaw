@@ -20,6 +20,7 @@ export interface AdvanceStageArgs {
   waiverReason?: string;
   acceptProactiveWaiver: boolean;
   acceptProactiveWaiverReason?: string;
+  skipQuestions: boolean;
   quiet: boolean;
   json: boolean;
 }
@@ -77,6 +78,7 @@ export function parseAdvanceStageArgs(tokens: string[]): AdvanceStageArgs {
   let waiverReason: string | undefined;
   let acceptProactiveWaiver = false;
   let acceptProactiveWaiverReason: string | undefined;
+  let skipQuestions = false;
   let quiet = false;
   let json = false;
 
@@ -146,6 +148,10 @@ export function parseAdvanceStageArgs(tokens: string[]): AdvanceStageArgs {
       acceptProactiveWaiver = true;
       continue;
     }
+    if (token === "--skip-questions") {
+      skipQuestions = true;
+      continue;
+    }
     if (token === "--accept-proactive-waiver-reason") {
       if (!nextToken || nextToken.startsWith("--")) {
         throw new Error("--accept-proactive-waiver-reason requires a text value.");
@@ -169,6 +175,7 @@ export function parseAdvanceStageArgs(tokens: string[]): AdvanceStageArgs {
     waiverReason,
     acceptProactiveWaiver,
     acceptProactiveWaiverReason,
+    skipQuestions,
     quiet,
     json
   };

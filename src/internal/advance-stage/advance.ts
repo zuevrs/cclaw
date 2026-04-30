@@ -112,6 +112,27 @@ function resolveSuccessorTransition(
   return natural;
 }
 
+function nextInteractionHints(
+  flowState: FlowState,
+  args: AdvanceStageArgs,
+  successor: FlowStage | null
+): FlowState["interactionHints"] {
+  const hints: NonNullable<FlowState["interactionHints"]> = { ...(flowState.interactionHints ?? {}) };
+  delete hints[args.stage];
+  if (successor) {
+    if (args.skipQuestions) {
+      hints[successor] = {
+        skipQuestions: true,
+        sourceStage: args.stage,
+        recordedAt: new Date().toISOString()
+      };
+    } else {
+      delete hints[successor];
+    }
+  }
+  return hints;
+}
+
 export async function hydrateReviewLoopEvidenceFromArtifact(
   projectRoot: string,
   stage: FlowStage,
@@ -376,6 +397,7 @@ export async function runAdvanceStage(
         mode: "mandatory",
         status: "waived",
         waiverReason,
+        runId: flowState.activeRunId,
         fulfillmentMode: "role-switch",
         ts: new Date().toISOString()
       });
@@ -656,10 +678,12 @@ export async function runAdvanceStage(
     : flowState.completedStages.includes(args.stage)
       ? [...flowState.completedStages]
       : [...flowState.completedStages, args.stage];
+  const interactionHints = nextInteractionHints(flowState, args, successor);
   const finalState: FlowState = {
     ...candidateState,
     completedStages,
-    currentStage: successor ?? args.stage
+    currentStage: successor ?? args.stage,
+    interactionHints
   };
 
   await writeFlowState(projectRoot, finalState);
@@ -672,6 +696,7 @@ export async function runAdvanceStage(
       nextStage: successor,
       currentStage: finalState.currentStage,
       completedStages: finalState.completedStages,
+      skipQuestionsHint: args.skipQuestions,
       learnings: {
         parsed: learningsHarvest.parsedEntries,
         appended: learningsHarvest.appendedEntries,

@@ -28,6 +28,17 @@ describe("runs system", () => {
     await expect(fs.stat(path.join(root, ".cclaw/archive"))).resolves.toBeTruthy();
   });
 
+  it("does not materialize flow-state when createIfMissing is false", async () => {
+    const root = await createTempProject("runs-no-create-if-missing");
+    const state = await ensureRunSystem(root, { createIfMissing: false });
+
+    expect(state.activeRunId).toMatch(/^run-/);
+    expect(state.currentStage).toBe("brainstorm");
+    await expect(
+      fs.stat(path.join(root, ".cclaw/state/flow-state.json"))
+    ).rejects.toThrow(/ENOENT/);
+  });
+
   it("archives active artifacts into dated run folder and resets flow", async () => {
     const root = await createTempProject("runs-archive");
     await ensureRunSystem(root);

@@ -115,10 +115,18 @@ export interface FlowState {
   staleStages: Partial<Record<FlowStage, StaleStageMarker>>;
   /** Chronological rewind operations for the active run. */
   rewinds: RewindRecord[];
+  /** Optional per-stage interaction hints carried from prior stage transitions. */
+  interactionHints?: Partial<Record<FlowStage, StageInteractionHint>>;
   /** Mandatory retrospective gate status before archive. */
   retro: RetroState;
   /** Ship → post_ship_review → archive substate for resumable closeout. */
   closeout: CloseoutState;
+}
+
+export interface StageInteractionHint {
+  skipQuestions?: boolean;
+  sourceStage?: FlowStage;
+  recordedAt?: string;
 }
 
 export interface InitialFlowStateOptions {
@@ -184,6 +192,7 @@ export function createInitialFlowState(
     skippedStages,
     staleStages: {},
     rewinds: [],
+    interactionHints: {},
     retro: {
       required: false,
       completedAt: undefined,

@@ -2,7 +2,7 @@
   "$schema": "https://json-schema.org/draft/2020-12/schema",
   "$id": "cclaw://hooks/cursor/v1",
   "harness": "cursor",
-  "schemaVersion": 1,
+  "schemaVersion": 2,
   "requiredEvents": [
     "sessionStart",
     "sessionResume",

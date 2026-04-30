@@ -582,6 +582,37 @@ describe("internal advance-stage commands", () => {
     expect(waivedProductManager?.waiverReason).toContain("unit_test");
   });
 
+  it("advance-stage persists --skip-questions as successor-stage interaction hint", async () => {
+    const root = await createTempProject("internal-advance-stage-skip-questions");
+    await ensureRunSystem(root);
+    await writeBrainstormArtifact(root);
+
+    const captured = captureIo();
+    const evidenceJson = requiredGateEvidenceJson("brainstorm");
+    const code = await runInternalCommand(
+      root,
+      [
+        "advance-stage",
+        "brainstorm",
+        `--evidence-json=${evidenceJson}`,
+        "--waive-delegation=product-discovery,critic",
+        "--waiver-reason=unit_test",
+        ...PROACTIVE_WAIVER_FLAGS,
+        "--skip-questions",
+        "--quiet"
+      ],
+      captured.io
+    );
+
+    expect(code, captured.stderr()).toBe(0);
+    const state = await readFlowState(root);
+    expect(state.currentStage).toBe("scope");
+    expect(state.interactionHints?.scope).toMatchObject({
+      skipQuestions: true,
+      sourceStage: "brainstorm"
+    });
+  });
+
   it("advance-stage rejects passed gates without evidence payload", async () => {
     const root = await createTempProject("internal-advance-stage-missing-evidence");
     await ensureRunSystem(root);

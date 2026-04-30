@@ -29,9 +29,10 @@ export const HOOK_HANDLERS = [
   "session-start",
   "prompt-guard",
   "workflow-guard",
+  "pre-tool-pipeline",
+  "prompt-pipeline",
   "context-monitor",
   "stop-handoff",
-  "pre-compact",
   "verify-current-state"
 ] as const;
 export type HookHandlerId = (typeof HOOK_HANDLERS)[number];
@@ -48,8 +49,7 @@ export interface HookBinding {
    * Within a single (harness, event) group, entries are sorted by
    * `priority` ASC, ties broken by manifest-declaration order. Use
    * this to express "this handler must run BEFORE/AFTER that handler
-   * on the same event" (e.g. pre-compact must run before session-start
-   * on cursor `sessionCompact`). Default `0`.
+   * on the same event". Default `0`.
    */
   priority?: number;
 }
@@ -71,7 +71,6 @@ export const HOOK_SEMANTIC_EVENTS = [
   "pre_tool_workflow_guard",
   "post_tool_context_monitor",
   "stop_handoff",
-  "precompact_compat",
   "strict_state_verify"
 ] as const;
 export type HookSemanticEvent = (typeof HOOK_SEMANTIC_EVENTS)[number];
@@ -97,12 +96,7 @@ export const HOOK_MANIFEST: readonly HookHandlerSpec[] = [
     description: "Stage-aware prompt gate (iron-laws + strictness).",
     semantic: "pre_tool_prompt_guard",
     bindings: {
-      claude: [{ event: "PreToolUse", matcher: "*" }],
-      cursor: [{ event: "preToolUse", matcher: "*" }],
-      codex: [
-        { event: "UserPromptSubmit" },
-        { event: "PreToolUse", matcher: "Bash|bash" }
-      ]
+      claude: [{ event: "PreToolUse", matcher: "*" }]
     }
   },
   {
@@ -110,9 +104,24 @@ export const HOOK_MANIFEST: readonly HookHandlerSpec[] = [
     description: "TDD and workflow gate on Write/Edit/Bash style tool invocations.",
     semantic: "pre_tool_workflow_guard",
     bindings: {
-      claude: [{ event: "PreToolUse", matcher: "Write|Edit|MultiEdit|NotebookEdit|Bash" }],
+      claude: [{ event: "PreToolUse", matcher: "Write|Edit|MultiEdit|NotebookEdit|Bash" }]
+    }
+  },
+  {
+    handler: "pre-tool-pipeline",
+    description: "In-process pre-tool pipeline for harnesses that would otherwise spawn prompt/workflow guards separately.",
+    semantic: null,
+    bindings: {
       cursor: [{ event: "preToolUse", matcher: "*" }],
       codex: [{ event: "PreToolUse", matcher: "Bash|bash" }]
+    }
+  },
+  {
+    handler: "prompt-pipeline",
+    description: "In-process prompt pipeline for Codex UserPromptSubmit (prompt-guard + verify-current-state).",
+    semantic: "strict_state_verify",
+    bindings: {
+      codex: [{ event: "UserPromptSubmit" }]
     }
   },
   {
@@ -136,23 +145,10 @@ export const HOOK_MANIFEST: readonly HookHandlerSpec[] = [
     }
   },
   {
-    handler: "pre-compact",
-    description: "No-op compatibility hook for harness pre-compact events; session-start rehydrates from flow-state, artifacts, and knowledge.",
-    semantic: "precompact_compat",
-    bindings: {
-      claude: [{ event: "PreCompact", matcher: "manual|auto", timeout: 10 }],
-      // Keep this before session-start on cursor `sessionCompact` so the
-      // compatibility handler runs before rehydration.
-      cursor: [{ event: "sessionCompact", priority: -10 }]
-    }
-  },
-  {
     handler: "verify-current-state",
-    description: "Supplementary Codex strict-mode guard that runs on UserPromptSubmit to assert the live state matches the flow.",
-    semantic: "strict_state_verify",
-    bindings: {
-      codex: [{ event: "UserPromptSubmit" }]
-    }
+    description: "Supplementary strict-mode guard callable from in-process pipelines to assert live state matches flow.",
+    semantic: null,
+    bindings: {}
   }
 ] as const;
 

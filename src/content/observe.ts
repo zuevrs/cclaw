@@ -84,7 +84,7 @@ function buildCursorEvents(): Record<string, CursorCommandEntry[]> {
 export function claudeHooksJsonWithObservation(): string {
   return JSON.stringify(
     {
-      cclawHookSchemaVersion: 1,
+      cclawHookSchemaVersion: 2,
       hooks: buildClaudeLikeEvents("claude")
     },
     null,
@@ -95,7 +95,7 @@ export function claudeHooksJsonWithObservation(): string {
 export function cursorHooksJsonWithObservation(): string {
   return JSON.stringify(
     {
-      cclawHookSchemaVersion: 1,
+      cclawHookSchemaVersion: 2,
       version: 1,
       hooks: buildCursorEvents()
     },
@@ -107,7 +107,7 @@ export function cursorHooksJsonWithObservation(): string {
 export function codexHooksJsonWithObservation(): string {
   return JSON.stringify(
     {
-      cclawHookSchemaVersion: 1,
+      cclawHookSchemaVersion: 2,
       hooks: buildClaudeLikeEvents("codex")
     },
     null,

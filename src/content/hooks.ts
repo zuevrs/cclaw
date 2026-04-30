@@ -14,6 +14,16 @@ interface GeneratedCliRuntime {
 
 function resolveCliRuntimeForGeneratedHook(): GeneratedCliRuntime {
   const here = fileURLToPath(import.meta.url);
+  // Vitest runs init/sync from src/ and expects helpers to execute the same
+  // source runtime, even when a stale dist/ exists in the repository.
+  if (process.env.VITEST === "true") {
+    const sourceCli = path.resolve(path.dirname(here), "..", "cli.ts");
+    const viteNode = path.resolve(path.dirname(here), "..", "..", "node_modules", "vite-node", "vite-node.mjs");
+    if (existsSync(sourceCli) && existsSync(viteNode)) {
+      return { entrypoint: viteNode, argsPrefix: ["--script", sourceCli] };
+    }
+  }
+
   const candidates = [
     path.resolve(path.dirname(here), "..", "cli.js"),
     path.resolve(path.dirname(here), "..", "..", "dist", "cli.js")
@@ -24,16 +34,6 @@ function resolveCliRuntimeForGeneratedHook(): GeneratedCliRuntime {
     if (existsSync(candidate)) return { entrypoint: candidate, argsPrefix: [] };
   }
 
-  // Vitest exercises init/sync directly from src/ without a compiled dist/.
-  // Route that dev-only shape through vite-node so hooks still prove a local runtime.
-  if (process.env.VITEST === "true") {
-    const sourceCli = path.resolve(path.dirname(here), "..", "cli.ts");
-    const viteNode = path.resolve(path.dirname(here), "..", "..", "node_modules", "vite-node", "vite-node.mjs");
-    if (existsSync(sourceCli) && existsSync(viteNode)) {
-      return { entrypoint: viteNode, argsPrefix: ["--script", sourceCli] };
-    }
-  }
-
   return { entrypoint: null, argsPrefix: [] };
 }
 
@@ -41,6 +41,7 @@ function resolveCliRuntimeForGeneratedHook(): GeneratedCliRuntime {
 interface InternalHelperScriptOptions {
   positionalArgName?: string;
   positionalArgRequired?: boolean;
+  defaultQuietEnvVar?: string;
 }
 
 function internalHelperScript(
@@ -64,6 +65,7 @@ const INTERNAL_SUBCOMMAND = ${JSON.stringify(internalSubcommand)};
 const USAGE = ${JSON.stringify(usage)};
 const POSITIONAL_ARG_NAME = ${JSON.stringify(options?.positionalArgName ?? null)};
 const POSITIONAL_ARG_REQUIRED = ${JSON.stringify(options?.positionalArgRequired === true)};
+const DEFAULT_QUIET_ENV_VAR = ${JSON.stringify(options?.defaultQuietEnvVar ?? null)};
 
 async function detectRoot() {
   const candidates = [
@@ -107,6 +109,19 @@ async function main() {
       printUsage();
       process.exitCode = 1;
       return;
+    }
+  }
+
+  if (DEFAULT_QUIET_ENV_VAR !== null) {
+    const envRaw = process.env[DEFAULT_QUIET_ENV_VAR];
+    if (typeof envRaw !== "string" || envRaw.trim().length === 0) {
+      process.env[DEFAULT_QUIET_ENV_VAR] = "1";
+    }
+    const quietRaw = (process.env[DEFAULT_QUIET_ENV_VAR] ?? "").trim().toLowerCase();
+    const quietEnabled = !/^(0|false|no|off)$/u.test(quietRaw);
+    const alreadyQuiet = flags.includes("--quiet");
+    if (quietEnabled && !alreadyQuiet) {
+      flags = [...flags, "--quiet"];
     }
   }
 
@@ -197,7 +212,8 @@ export function startFlowScript(): string {
   return internalHelperScript(
     "start-flow",
     "start-flow",
-    "Usage: node " + RUNTIME_ROOT + "/hooks/start-flow.mjs --track=<standard|medium|quick> [--class=...] [--prompt=...] [--stack=...] [--reason=...] [--reclassify] [--force-reset]"
+    "Usage: node " + RUNTIME_ROOT + "/hooks/start-flow.mjs --track=<standard|medium|quick> [--class=...] [--prompt=...] [--stack=...] [--reason=...] [--reclassify] [--force-reset]",
+    { defaultQuietEnvVar: "CCLAW_START_FLOW_QUIET" }
   );
 }
 
@@ -213,7 +229,7 @@ export function stageCompleteScript(): string {
   return internalHelperScript(
     "stage-complete",
     "advance-stage",
-    "Usage: node " + RUNTIME_ROOT + "/hooks/stage-complete.mjs <stage> [--passed=...] [--evidence-json=...] [--waive-delegation=...] [--waiver-reason=...] [--accept-proactive-waiver] [--accept-proactive-waiver-reason=...] [--json]",
+    "Usage: node " + RUNTIME_ROOT + "/hooks/stage-complete.mjs <stage> [--passed=...] [--evidence-json=...] [--waive-delegation=...] [--waiver-reason=...] [--accept-proactive-waiver] [--accept-proactive-waiver-reason=...] [--skip-questions] [--json]",
     {
       positionalArgName: "stage",
       positionalArgRequired: true
@@ -319,7 +335,7 @@ function usage() {
   process.stderr.write([
     "Usage:",
     "  node .cclaw/hooks/delegation-record.mjs --stage=<stage> --agent=<agent> --mode=<mandatory|proactive> --status=<scheduled|launched|acknowledged|completed|failed|waived|stale> --span-id=<id> [--dispatch-id=<id>] [--worker-run-id=<id>] [--dispatch-surface=<surface>] [--agent-definition-path=<path>] [--ack-ts=<iso>] [--launched-ts=<iso>] [--completed-ts=<iso>] [--evidence-ref=<ref>] [--waiver-reason=<text>] [--json]",
-    "  node .cclaw/hooks/delegation-record.mjs --rerecord --span-id=<id> --dispatch-id=<id> --dispatch-surface=<surface> --agent-definition-path=<path> [--ack-ts=<iso>] [--completed-ts=<iso>] [--json]",
+    "  node .cclaw/hooks/delegation-record.mjs --rerecord --span-id=<id> --dispatch-id=<id> --dispatch-surface=<surface> --agent-definition-path=<path> [--ack-ts=<iso>] [--completed-ts=<iso>] [--evidence-ref=<ref>] [--json]",
     "",
     "Allowed --dispatch-surface values:",
     "  " + VALID_DISPATCH_SURFACES.join(", "),
@@ -361,6 +377,18 @@ async function pathExists(filePath) {
   }
 }
 
+function normalizeEvidenceRefs(args) {
+  if (Array.isArray(args["evidence-refs"])) {
+    return args["evidence-refs"]
+      .filter((ref) => typeof ref === "string" && ref.trim().length > 0)
+      .map((ref) => ref.trim());
+  }
+  if (typeof args["evidence-ref"] === "string" && args["evidence-ref"].trim().length > 0) {
+    return [args["evidence-ref"].trim()];
+  }
+  return [];
+}
+
 function buildRow(args, status, runId, now) {
   const fulfillmentMode = args["dispatch-surface"] === "role-switch"
     ? "role-switch"
@@ -379,7 +407,7 @@ function buildRow(args, status, runId, now) {
     agentDefinitionPath: args["agent-definition-path"],
     fulfillmentMode,
     waiverReason: args["waiver-reason"],
-    evidenceRefs: args["evidence-ref"] ? [args["evidence-ref"]] : [],
+    evidenceRefs: normalizeEvidenceRefs(args),
     runId,
     startTs: now,
     ts: now,
@@ -459,6 +487,18 @@ async function runRerecord(args, json) {
     emitProblems(["no legacy ledger entry found for --span-id=" + args["span-id"]], json, 1);
     return;
   }
+  const explicitEvidenceRef =
+    typeof args["evidence-ref"] === "string" && args["evidence-ref"].trim().length > 0
+      ? args["evidence-ref"].trim()
+      : "";
+  const legacyEvidenceRefs = Array.isArray(legacyEntry.evidenceRefs)
+    ? legacyEntry.evidenceRefs
+      .filter((ref) => typeof ref === "string" && ref.trim().length > 0)
+      .map((ref) => ref.trim())
+    : [];
+  const mergedEvidenceRefs = explicitEvidenceRef.length > 0
+    ? [explicitEvidenceRef]
+    : legacyEvidenceRefs;
   if (args["dispatch-surface"] !== "role-switch") {
     if (!dispatchSurfaceMatchesPath(args["dispatch-surface"], args["agent-definition-path"])) {
       const allowedPrefixes = SURFACE_PATH_PREFIXES[args["dispatch-surface"]];
@@ -484,7 +524,9 @@ async function runRerecord(args, json) {
     "agent-definition-path": args["agent-definition-path"],
     "ack-ts": args["ack-ts"] || legacyEntry.ackTs || now,
     "completed-ts": args["completed-ts"] || legacyEntry.completedTs || now,
-    "launched-ts": args["launched-ts"] || legacyEntry.launchedTs || now
+    "launched-ts": args["launched-ts"] || legacyEntry.launchedTs || now,
+    "evidence-ref": explicitEvidenceRef.length > 0 ? explicitEvidenceRef : undefined,
+    "evidence-refs": mergedEvidenceRefs
   };
   const status = "completed";
   const clean = Object.fromEntries(Object.entries(buildRow(merged, status, runId, now)).filter(([, value]) => value !== undefined));

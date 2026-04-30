@@ -264,6 +264,121 @@ describe("delegation-record helper enum + path validation", () => {
     // mandatory delegations (critic etc.) may still be missing — we only
     // assert that the *previously legacy* row is now clean.
   });
+
+  it("uses explicit --evidence-ref during --rerecord when provided", async () => {
+    const root = await createTempProject("delegation-helper-rerecord-explicit-evidence-ref");
+    await initCclaw({ projectRoot: root, harnesses: ["opencode"] });
+
+    const stateDir = path.join(root, ".cclaw/state");
+    await fs.mkdir(stateDir, { recursive: true });
+    await fs.writeFile(
+      path.join(stateDir, "flow-state.json"),
+      JSON.stringify(
+        { currentStage: "scope", activeRunId: "run-legacy-2", completedStages: [] },
+        null,
+        2
+      ),
+      "utf8"
+    );
+    await fs.writeFile(
+      path.join(stateDir, "delegation-log.json"),
+      JSON.stringify({
+        runId: "run-legacy-2",
+        entries: [{
+          stage: "scope",
+          agent: "planner",
+          mode: "mandatory",
+          status: "completed",
+          spanId: "legacy-span-2",
+          runId: "run-legacy-2",
+          evidenceRefs: [".cclaw/artifacts/old-proof.md#legacy"]
+        }]
+      }, null, 2),
+      "utf8"
+    );
+
+    const helper = path.join(root, ".cclaw/hooks/delegation-record.mjs");
+    await execFileAsync(
+      process.execPath,
+      [
+        helper,
+        "--rerecord",
+        "--span-id=legacy-span-2",
+        "--dispatch-id=dispatch-2",
+        "--dispatch-surface=opencode-agent",
+        "--agent-definition-path=.opencode/agents/planner.md",
+        "--evidence-ref=.cclaw/artifacts/02-scope.md#planner-proof",
+        "--json"
+      ],
+      { cwd: root, env: { ...process.env, CCLAW_PROJECT_ROOT: root } }
+    );
+
+    const ledger = JSON.parse(
+      await fs.readFile(path.join(stateDir, "delegation-log.json"), "utf8")
+    ) as { entries: Array<Record<string, unknown>> };
+    const planner = ledger.entries.find((entry) => entry.spanId === "legacy-span-2");
+    expect(planner?.evidenceRefs).toEqual([".cclaw/artifacts/02-scope.md#planner-proof"]);
+  });
+
+  it("inherits legacy evidenceRefs during --rerecord when --evidence-ref is omitted", async () => {
+    const root = await createTempProject("delegation-helper-rerecord-inherit-evidence-refs");
+    await initCclaw({ projectRoot: root, harnesses: ["opencode"] });
+
+    const stateDir = path.join(root, ".cclaw/state");
+    await fs.mkdir(stateDir, { recursive: true });
+    await fs.writeFile(
+      path.join(stateDir, "flow-state.json"),
+      JSON.stringify(
+        { currentStage: "scope", activeRunId: "run-legacy-3", completedStages: [] },
+        null,
+        2
+      ),
+      "utf8"
+    );
+    await fs.writeFile(
+      path.join(stateDir, "delegation-log.json"),
+      JSON.stringify({
+        runId: "run-legacy-3",
+        entries: [{
+          stage: "scope",
+          agent: "planner",
+          mode: "mandatory",
+          status: "completed",
+          spanId: "legacy-span-3",
+          runId: "run-legacy-3",
+          evidenceRefs: [
+            ".cclaw/artifacts/02-scope.md#planner-proof",
+            ".cclaw/artifacts/03-design.md#risk-proof"
+          ]
+        }]
+      }, null, 2),
+      "utf8"
+    );
+
+    const helper = path.join(root, ".cclaw/hooks/delegation-record.mjs");
+    await execFileAsync(
+      process.execPath,
+      [
+        helper,
+        "--rerecord",
+        "--span-id=legacy-span-3",
+        "--dispatch-id=dispatch-3",
+        "--dispatch-surface=opencode-agent",
+        "--agent-definition-path=.opencode/agents/planner.md",
+        "--json"
+      ],
+      { cwd: root, env: { ...process.env, CCLAW_PROJECT_ROOT: root } }
+    );
+
+    const ledger = JSON.parse(
+      await fs.readFile(path.join(stateDir, "delegation-log.json"), "utf8")
+    ) as { entries: Array<Record<string, unknown>> };
+    const planner = ledger.entries.find((entry) => entry.spanId === "legacy-span-3");
+    expect(planner?.evidenceRefs).toEqual([
+      ".cclaw/artifacts/02-scope.md#planner-proof",
+      ".cclaw/artifacts/03-design.md#risk-proof"
+    ]);
+  });
 });
 
 // ---------------------------------------------------------------------------

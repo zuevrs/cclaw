@@ -179,11 +179,12 @@ function contextLoadingBlock(
 
 Before execution:
 1. Read \`.cclaw/state/flow-state.json\`.
+   - If the file is missing, do **not** invent an active run — this is normal for fresh init. Route to \`/cc <idea>\` first.
 2. Load active artifacts from \`.cclaw/artifacts/\`.
 3. Load upstream artifacts required by this stage:
 ${readLines}
 4. Read the state contract from \`.cclaw/templates/state-contracts/<stage>.json\` for required fields, taxonomies, and derived markdown path.
-5. Read the canonical artifact template at \`${artifactTemplatePath}\` and reuse its exact section layout — per-row tables with stable column order, calibrated review block; do not invent layouts.
+5. Read the canonical artifact template at \`${artifactTemplatePath}\` to preserve heading/per-row tables contracts (stable section names and column order) plus calibrated review block scaffolding. Preserve existing substantive bullets/rows already in the artifact; never overwrite the artifact wholesale from the template — patch only sections you author this turn.
 6. Extract upstream decisions, constraints, and open questions into the current artifact's \`Upstream Handoff\` section when present.
 7. Confirm context readiness: upstream artifact freshness, required context, canonical template shape, relevant in-repo/reference patterns, and unresolved blockers are known. If any item is missing, load it or stop before drafting.
 8. Before doing stage work, give a compact user-facing drift preamble: "Carrying forward: <1-3 bullets>. Drift since upstream: None / <specific drift>. Recommendation: continue / re-scope."
@@ -415,7 +416,7 @@ function completionParametersBlock(schema: StageSchema, track: FlowTrack): strin
 - \`delegation lifecycle proof\`: use the delegation helper recipe in this section with explicit lifecycle rows: \`--status=scheduled\` -> \`--status=launched\` -> \`--status=acknowledged\` -> \`--status=completed\` (completed isolated/generic requires prior ACK for the same span or \`--ack-ts=<iso>\`).
 - Fill \`## Learnings\` before closeout: either \`- None this stage.\` or JSON bullets with required keys \`type\`, \`trigger\`, \`action\`, \`confidence\` (knowledge-schema compatible).
 - Record mandatory delegation lifecycle in \`${RUNTIME_ROOT}/state/delegation-log.json\` and append proof events to \`${RUNTIME_ROOT}/state/delegation-events.jsonl\`; the ledger is current state, the event log is audit proof.${mandatoryAgents.length > 0 ? ` If a mandatory delegation cannot run in this harness, use \`--waive-delegation=${mandatoryAgents.join(",")} --waiver-reason="<why safe>"\` on the completion helper.` : ""} If proactive delegations were intentionally skipped, rerun only with \`--accept-proactive-waiver\` (optionally \`--accept-proactive-waiver-reason="<why safe>"\`) after explicit user approval.
-- Never edit raw \`flow-state.json\` to complete a stage, even in advisory mode; that bypasses validation, gate evidence, and Learnings harvest. If the helper fails, stop and report the exact command/output instead of applying a manual state workaround.
+- Never edit raw \`flow-state.json\` to complete a stage, even in advisory mode; that bypasses validation, gate evidence, and Learnings harvest. If a helper fails, report a one-line human-readable failure plus fenced JSON diagnostics; never echo the invoking command line or apply a manual state workaround.
 - Completion protocol: verify required gates, update the artifact, then use the completion helper with \`--evidence-json\` and \`--passed\` for every satisfied gate.
 `;
 }
@@ -693,10 +694,11 @@ CLI commands, using existing \`cclaw run resume\` and \`internal verify-current-
 ## Process
 
 1. **Wave Start**: author wave plan as \`.cclaw/wave-plans/<wave-n>.md\` referencing previous wave's ship artifact.
-2. **Carry-forward Audit**: at brainstorm of the next wave, re-read previous wave ship artifact and explicitly record:
-   - Carrying forward: <locked decisions still valid>
+2. **Carry-forward Audit**: at brainstorm of the next wave, re-read previous wave ship artifact and explicitly record in the existing \`## Wave Carry-forward\` section:
+   - Carrying forward: <scope LD# hash references still valid>
    - Drift detected: <decisions no longer valid + reason>
    - Re-scope needed: <yes/no>
+   - Never create a second \`## Locked Decisions\` heading in brainstorm; reference prior LD# hashes inline.
 3. **Resume Path**: if a wave was interrupted mid-stage, \`cclaw run resume\` restores state. Run \`internal verify-current-state\` before continuing.
 4. **Wave End**: at ship, architect cross-stage verification runs from dispatch matrix. If \`DRIFT_DETECTED\`, fix before ship.
 5. **Next Wave Trigger**: launch new \`/cc <topic>\` for next wave and reference previous wave ship artifact in upstream handoff.

@@ -51,10 +51,12 @@ export const SCOPE: StageSchemaInput = {
   },
   executionModel: {
     checklist: [
+      "**Adaptive elicitation loop (shared skill)** — load `.cclaw/skills/adaptive-elicitation/SKILL.md` and run one decision-changing question per turn via harness-native tools. After each answer, append one row to `## Q&A Log` (`Turn | Question | User answer (1-line) | Decision impact`). Continue until scope clarity is sufficient or user signals to proceed.",
+      "**Scope forcing questions (must be covered or explicitly waived)** — what is definitely in/out, which upstream decisions are locked, and what rollback path protects users if scope assumptions fail.",
       "**Scope contract first** — read brainstorm handoff, name upstream decisions used, explicit drift, confidence, unresolved questions, and next-stage risk hints; draft the in-scope/out-of-scope/deferred/discretion contract before any design choice.",
       "**Premise and leverage check** — answer in the artifact: *Right problem? Direct path? What if nothing? Where can we leverage existing code? What is the reversibility cost?* Take a position; do not hedge.",
       "**Conditional 10-star boundary** — for deep/high-risk/product-strategy work, show what would make the product meaningfully better, then explicitly choose what ships now, what is deferred, and what is excluded without vague `later/for now` placeholders. Skip this for straightforward repair work and record `not needed: compact scope`.",
-      "**Pick one operational mode with the user** — HOLD SCOPE preserves focus; SELECTIVE EXPANSION cherry-picks high-leverage reference ideas; SCOPE EXPANSION explores ambitious alternatives; SCOPE REDUCTION cuts to the essential wedge. Recommend one, state why and what signal would change it, then STOP for approval.",
+      "**Pick one operational mode with the user** — HOLD SCOPE preserves focus; SELECTIVE EXPANSION cherry-picks high-leverage reference ideas; SCOPE EXPANSION explores ambitious alternatives; SCOPE REDUCTION cuts to the essential wedge. Recommend one, state why and what signal would change it, then keep elicitation focused until the user either approves or asks to proceed with draft boundaries.",
       "**Run mode-specific analysis only to needed depth** — lite keeps the selected-mode row compact; standard adds requirements/locked decisions/discretion; deep may add Landscape Check, Taste Calibration, Reference Pattern Registry, Reference Pull, Ambitious Alternatives, and Ruthless Minimum Slice evidence when mode/risk warrants it.",
       "**Decision-driver contract** — list weighted decision drivers (value, risk, reversibility, effort, timeline) and score candidate scope moves so the selected mode and boundaries are evidence-backed, not preference-led.",
       "**Compare implementation alternatives** — include minimum viable, product-grade, and ideal architecture options with effort (S/M/L/XL), risk (Low/Med/High), pros, cons, and reuses. Recommend one and tie it to mode.",
@@ -64,13 +66,15 @@ export const SCOPE: StageSchemaInput = {
       "**Write the scope contract after approval** — include selected mode, in scope, out of scope, requirements, locked decisions, discretion areas, deferred ideas, accepted/rejected reference ideas, success definition, design handoff, completion dashboard, and explicit approval evidence."
     ],
     interactionProtocol: [
+      "\"Strong success criteria let you loop independently. Weak criteria require constant clarification.\"",
       decisionProtocolInstruction(
         "scope mode selection",
         "present expand/selective/hold/reduce as labeled options with trade-offs and mark one as (recommended)",
         "recommend the option that best covers the prime-directive failure modes, four data-flow paths, observability, and deferred handling for the in-scope set with the smallest blast radius. Base your recommendation on default heuristics: greenfield -> expand, enhancement -> selective, bugfix/hotfix/refactor -> hold, broad blast radius -> reduce"
       ),
+      "Run the shared adaptive elicitation cycle from `.cclaw/skills/adaptive-elicitation/SKILL.md`, including stop-signal handling (RU/EN/UA), smart-skip, conditional grilling triggers, and append-only `## Q&A Log` updates.",
       "Do not walk the full checklist by default. Lead with a proposed scope contract, selected depth (`lite`/`standard`/`deep`), and the one decision that matters most; label the mode as recommended, not selected, until the user answers.",
-      "For low-risk concrete asks, keep the proposal compact but still explicit: recommend (do not auto-select) one mode, show exact in/out/deferred boundaries, and STOP for one explicit approval before finalizing the artifact or completing the stage.",
+      "For low-risk concrete asks, keep the proposal compact but still explicit: recommend (do not auto-select) one mode, show exact in/out/deferred boundaries, and request explicit approval before finalizing the artifact or completing the stage.",
       "Challenge premise first, take a firm position, and name one concrete condition that would change it.",
       "Push back on weak framing: vague scope needs a specific user/problem, platform vision needs a narrow wedge, social proof needs behavioral evidence.",
       "Resolve one structural scope issue at a time. Only non-critical preference/default assumptions may continue; STOP on uncertainty about scope boundary, architecture commitment, security, data loss, public API, migration, auth/pricing, or required user approval.",

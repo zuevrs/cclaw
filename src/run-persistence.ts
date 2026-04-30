@@ -327,6 +327,32 @@ function sanitizeRewinds(value: unknown): FlowState["rewinds"] {
   return out;
 }
 
+function sanitizeInteractionHints(
+  value: unknown
+): FlowState["interactionHints"] {
+  if (!value || typeof value !== "object" || Array.isArray(value)) {
+    return {};
+  }
+  const out: NonNullable<FlowState["interactionHints"]> = {};
+  for (const [stage, raw] of Object.entries(value as Record<string, unknown>)) {
+    if (!isFlowStage(stage)) continue;
+    if (!raw || typeof raw !== "object" || Array.isArray(raw)) continue;
+    const typed = raw as Record<string, unknown>;
+    const skipQuestions = typed.skipQuestions === true ? true : undefined;
+    const sourceStage = isFlowStage(typed.sourceStage) ? typed.sourceStage : undefined;
+    const recordedAt = typeof typed.recordedAt === "string" ? typed.recordedAt : undefined;
+    if (skipQuestions !== true && !sourceStage && !recordedAt) {
+      continue;
+    }
+    out[stage] = {
+      ...(skipQuestions ? { skipQuestions } : {}),
+      ...(sourceStage ? { sourceStage } : {}),
+      ...(recordedAt ? { recordedAt } : {})
+    };
+  }
+  return out;
+}
+
 function sanitizeRetroState(value: unknown): FlowState["retro"] {
   const fallback: FlowState["retro"] = {
     required: false,
@@ -433,6 +459,7 @@ function coerceFlowState(parsed: Record<string, unknown>): CoercedFlowStateResul
     skippedStages: sanitizeSkippedStages(parsed.skippedStages, track),
     staleStages: sanitizeStaleStages(parsed.staleStages),
     rewinds: sanitizeRewinds(parsed.rewinds),
+    interactionHints: sanitizeInteractionHints(parsed.interactionHints),
     retro: sanitizeRetroState(parsed.retro),
     closeout: sanitizeCloseoutState(parsed.closeout)
   };
@@ -560,13 +587,14 @@ interface EnsureRunSystemOptions {
 
 export async function ensureRunSystem(
   projectRoot: string,
-  _options: EnsureRunSystemOptions = {}
+  options: EnsureRunSystemOptions = {}
 ): Promise<FlowState> {
   await ensureDir(archiveRoot(projectRoot));
   await ensureDir(activeArtifactsPath(projectRoot));
   const statePath = flowStatePath(projectRoot);
   const state = await readFlowState(projectRoot);
-  if (!(await exists(statePath))) {
+  const createIfMissing = options.createIfMissing !== false;
+  if (createIfMissing && !(await exists(statePath))) {
     await writeFlowState(projectRoot, state, { allowReset: true });
   }
   return state;

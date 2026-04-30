@@ -80,6 +80,13 @@ export const ARTIFACT_TEMPLATES: Record<string, string> = {
 |---|---|---|---|
 | 1 |  |  |  |
 
+## Q&A Log
+| Turn | Question | User answer (1-line) | Decision impact |
+|---|---|---|---|
+| 1 |  |  |  |
+
+> Append-only by turn. Add one row after each user answer; do not rewrite prior rows.
+
 ## Approach Tier
 - Tier: lite | standard | deep
 - Why this tier:
@@ -195,6 +202,13 @@ ${MARKDOWN_CODE_FENCE}
 - Constraints carried forward:
 - Open questions:
 - Drift from upstream (or \`None\`):
+
+## Q&A Log
+| Turn | Question | User answer (1-line) | Decision impact |
+|---|---|---|---|
+| 1 |  |  |  |
+
+> Append-only by turn. Add one row after each user answer; do not rewrite prior rows.
 
 ## Pre-Scope System Audit
 | Check | Command | Findings |
@@ -430,6 +444,13 @@ ${MARKDOWN_CODE_FENCE}
 - Constraints carried forward:
 - Open questions:
 - Drift from upstream (or \`None\`):
+
+## Q&A Log
+| Turn | Question | User answer (1-line) | Decision impact |
+|---|---|---|---|
+| 1 |  |  |  |
+
+> Append-only by turn. Add one row after each user answer; do not rewrite prior rows.
 
 ## Codebase Investigation
 | File | Current responsibility | Patterns discovered | Existing fit / reuse candidate |

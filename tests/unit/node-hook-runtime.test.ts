@@ -113,6 +113,46 @@ describe("node hook runtime", () => {
     await expect(fs.stat(path.join(root, ".cclaw/state/knowledge-digest.md"))).rejects.toBeDefined();
   });
 
+  it("session-start surfaces skip-question interaction hints in additional context", async () => {
+    const root = await createTempProject("node-hook-skip-questions-hint");
+    await fs.mkdir(path.join(root, ".cclaw/state"), { recursive: true });
+    await fs.mkdir(path.join(root, ".cclaw/skills/using-cclaw"), { recursive: true });
+    await fs.writeFile(path.join(root, ".cclaw/state/flow-state.json"), JSON.stringify({
+      currentStage: "scope",
+      activeRunId: "run-hint",
+      completedStages: ["brainstorm"],
+      interactionHints: {
+        scope: {
+          skipQuestions: true,
+          sourceStage: "brainstorm",
+          recordedAt: "2026-04-29T12:00:00.000Z"
+        }
+      }
+    }, null, 2), "utf8");
+    await fs.writeFile(path.join(root, ".cclaw/skills/using-cclaw/SKILL.md"), "# Using cclaw\n", "utf8");
+    await fs.writeFile(path.join(root, ".cclaw/knowledge.jsonl"), "", "utf8");
+
+    const result = await runNodeHook(
+      root,
+      "session-start",
+      nodeHookRuntimeScript(),
+      {},
+      { VITEST: "", CCLAW_SESSION_START_BG_SYNC: "0" }
+    );
+    expect(result.code).toBe(0);
+    const payload = JSON.parse(result.stdout) as {
+      hookSpecificOutput?: { additionalContext?: string };
+      additional_context?: string;
+    };
+    const context =
+      payload.hookSpecificOutput?.additionalContext ??
+      payload.additional_context ??
+      "";
+    expect(context).toContain("Adaptive elicitation hint");
+    expect(context).toContain("from brainstorm");
+    expect(context).toContain("--skip-questions");
+  });
+
   it("session-start refreshes compound-readiness.json and surfaces a nudge during review", async () => {
     const root = await createTempProject("node-hook-compound-readiness");
     await fs.mkdir(path.join(root, ".cclaw/state"), { recursive: true });
@@ -226,6 +266,84 @@ describe("node hook runtime", () => {
       await fs.readFile(path.join(root, ".cclaw/state/compound-readiness.json"), "utf8")
     ) as { readyCount: number };
     expect(readiness.readyCount).toBe(1);
+  });
+
+  it("session-start reuses cached digest lines after session-start-refresh", async () => {
+    const root = await createTempProject("node-hook-session-digest-cache");
+    await fs.mkdir(path.join(root, ".cclaw/state"), { recursive: true });
+    await fs.mkdir(path.join(root, ".cclaw/skills/using-cclaw"), { recursive: true });
+    const flowStatePath = path.join(root, ".cclaw/state/flow-state.json");
+    await fs.writeFile(flowStatePath, JSON.stringify({
+      currentStage: "review",
+      activeRunId: "run-cache",
+      completedStages: ["brainstorm", "scope", "design", "spec", "plan", "tdd"]
+    }, null, 2), "utf8");
+    await fs.writeFile(path.join(root, ".cclaw/skills/using-cclaw/SKILL.md"), "# Using cclaw\n", "utf8");
+    await fs.writeFile(path.join(root, ".cclaw/knowledge.jsonl"), JSON.stringify({
+      type: "pattern",
+      confidence: "medium",
+      domain: null,
+      stage: "review",
+      origin_stage: "review",
+      origin_run: null,
+      project: "cclaw",
+      universality: "project",
+      maturity: "raw",
+      created: "2026-04-15T00:00:00Z",
+      first_seen_ts: "2026-04-15T00:00:00Z",
+      last_seen_ts: "2026-04-15T00:00:00Z",
+      trigger: "swallowed errors",
+      action: "rethrow with context",
+      frequency: 4
+    }), "utf8");
+    for (const name of ["run-a", "run-b", "run-c", "run-d", "run-e"]) {
+      await fs.mkdir(path.join(root, ".cclaw/archive", name), { recursive: true });
+    }
+
+    const flowStat = await fs.stat(flowStatePath);
+    await fs.writeFile(
+      path.join(root, ".cclaw/state/session-digest.refresh.json"),
+      JSON.stringify({
+        flowStateMtimeMs: Math.trunc(flowStat.mtimeMs),
+        startedAtMs: Date.now(),
+        currentStage: "review",
+        activeRunId: "run-cache"
+      }, null, 2),
+      "utf8"
+    );
+
+    const extraEnv = { VITEST: "", CCLAW_SESSION_START_BG_SYNC: "0" };
+    const first = await runNodeHook(root, "session-start", nodeHookRuntimeScript(), {}, extraEnv);
+    expect(first.code).toBe(0);
+    const firstPayload = JSON.parse(first.stdout) as {
+      hookSpecificOutput?: { additionalContext?: string };
+      additional_context?: string;
+    };
+    const firstContext =
+      firstPayload.hookSpecificOutput?.additionalContext ??
+      firstPayload.additional_context ??
+      "";
+    expect(firstContext).not.toContain("Compound readiness:");
+
+    const refresh = await runNodeHook(root, "session-start-refresh", nodeHookRuntimeScript(), {}, extraEnv);
+    expect(refresh.code).toBe(0);
+    const digest = JSON.parse(
+      await fs.readFile(path.join(root, ".cclaw/state/session-digest.json"), "utf8")
+    ) as { schemaVersion: number; compoundReadinessLine: string };
+    expect(digest.schemaVersion).toBe(1);
+    expect(digest.compoundReadinessLine).toContain("Compound readiness:");
+
+    const second = await runNodeHook(root, "session-start", nodeHookRuntimeScript(), {}, extraEnv);
+    expect(second.code).toBe(0);
+    const secondPayload = JSON.parse(second.stdout) as {
+      hookSpecificOutput?: { additionalContext?: string };
+      additional_context?: string;
+    };
+    const secondContext =
+      secondPayload.hookSpecificOutput?.additionalContext ??
+      secondPayload.additional_context ??
+      "";
+    expect(secondContext).toContain("Compound readiness: clusters=1, ready=1");
   });
 
   it("session-start acquires the CLI-compatible knowledge lock before reading knowledge.jsonl", async () => {
@@ -593,6 +711,86 @@ process.exit(0);
     );
     expect(strictMissingEntrypoint.code).toBe(1);
     expect(strictMissingEntrypoint.stderr).toContain("local Node runtime entrypoint not found");
+  });
+
+  it("prompt-pipeline returns compact success payload and runs verify-current-state once", async () => {
+    const root = await createTempProject("node-hook-prompt-pipeline-success");
+    await fs.mkdir(path.join(root, ".cclaw/state"), { recursive: true });
+    await fs.writeFile(path.join(root, ".cclaw/state/flow-state.json"), JSON.stringify({
+      currentStage: "scope",
+      activeRunId: "run-prompt-pipeline",
+      completedStages: ["brainstorm"]
+    }, null, 2), "utf8");
+    const callsPath = path.join(root, "prompt-pipeline-calls.log");
+    const cliPath = path.join(root, "local-cli.mjs");
+    await fs.writeFile(
+      cliPath,
+      `#!/usr/bin/env node
+import fs from "node:fs";
+fs.appendFileSync(${JSON.stringify(callsPath)}, process.argv.slice(2).join(" ") + "\\n");
+if (process.argv[2] === "internal" && process.argv[3] === "verify-current-state") {
+  process.exit(0);
+}
+process.exit(0);
+`,
+      "utf8"
+    );
+    await fs.chmod(cliPath, 0o755);
+    const emptyPathEnv = process.platform === "win32" ? { PATH: "", Path: "" } : { PATH: "" };
+
+    const result = await runNodeHook(
+      root,
+      "prompt-pipeline",
+      nodeHookRuntimeScript(),
+      {
+        event: { type: "UserPromptSubmit" },
+        prompt: "Continue with scope stage."
+      },
+      { ...emptyPathEnv, CCLAW_CLI_JS: cliPath, CCLAW_STRICTNESS: "advisory" }
+    );
+
+    expect(result.code, result.stderr).toBe(0);
+    expect(JSON.parse(result.stdout)).toMatchObject({ ok: true });
+    const calls = await fs.readFile(callsPath, "utf8");
+    expect(calls).toContain("internal verify-current-state --quiet");
+  });
+
+  it("prompt-pipeline short-circuits on strict prompt-guard block before verify", async () => {
+    const root = await createTempProject("node-hook-prompt-pipeline-strict-block");
+    await fs.mkdir(path.join(root, ".cclaw/state"), { recursive: true });
+    await fs.writeFile(path.join(root, ".cclaw/state/flow-state.json"), JSON.stringify({
+      currentStage: "scope",
+      activeRunId: "run-prompt-pipeline-block",
+      completedStages: ["brainstorm"]
+    }, null, 2), "utf8");
+    const callsPath = path.join(root, "prompt-pipeline-block-calls.log");
+    const cliPath = path.join(root, "local-cli.mjs");
+    await fs.writeFile(
+      cliPath,
+      `#!/usr/bin/env node
+import fs from "node:fs";
+fs.appendFileSync(${JSON.stringify(callsPath)}, process.argv.slice(2).join(" ") + "\\n");
+process.exit(0);
+`,
+      "utf8"
+    );
+    await fs.chmod(cliPath, 0o755);
+    const emptyPathEnv = process.platform === "win32" ? { PATH: "", Path: "" } : { PATH: "" };
+
+    const result = await runNodeHook(
+      root,
+      "prompt-pipeline",
+      nodeHookRuntimeScript(),
+      {
+        tool_name: "Write",
+        tool_input: { path: ".cclaw/state/flow-state.json", content: "{\"currentStage\":\"scope\"}" }
+      },
+      { ...emptyPathEnv, CCLAW_CLI_JS: cliPath, CCLAW_STRICTNESS: "strict" }
+    );
+
+    expect(result.code).toBe(1);
+    expect(result.stderr).toContain("potential risky write intent");
+    await expect(fs.readFile(callsPath, "utf8")).rejects.toThrow();
   });
 
   it("context-monitor debounces advisories and auto-captures failing tests", async () => {

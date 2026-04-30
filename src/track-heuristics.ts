@@ -1,5 +1,5 @@
 import { FLOW_TRACKS } from "./types.js";
-import type { FlowTrack, TrackHeuristicRule, TrackHeuristicsConfig } from "./types.js";
+import type { FlowStage, FlowTrack, TrackHeuristicRule, TrackHeuristicsConfig } from "./types.js";
 
 export interface TrackResolution {
   track: FlowTrack;
@@ -7,6 +7,12 @@ export interface TrackResolution {
   matchedTokens: string[];
   confidence: "high" | "medium" | "low";
   overrideGuidance: string;
+}
+
+export interface QuestionBudgetHint {
+  min: number;
+  recommended: number;
+  hardCapWarning: number;
 }
 
 // Built-in vocabulary per track. Kept in one place so tests, docs, and the
@@ -65,6 +71,12 @@ const DEFAULT_RULES: Record<FlowTrack, TrackHeuristicRule> = {
 // into runtime, so cclaw stopped offering the knob in v0.38.0.
 const EVALUATION_ORDER: readonly FlowTrack[] = ["standard", "medium", "quick"];
 const DEFAULT_FALLBACK: FlowTrack = "standard";
+const ADAPTIVE_ELICITATION_STAGES = new Set<FlowStage>(["brainstorm", "scope", "design"]);
+const QUESTION_BUDGET_HINTS_BY_TRACK: Record<FlowTrack, QuestionBudgetHint> = {
+  quick: { min: 2, recommended: 3, hardCapWarning: 4 },
+  medium: { min: 5, recommended: 6, hardCapWarning: 8 },
+  standard: { min: 10, recommended: 12, hardCapWarning: 14 }
+};
 
 function hasToken(promptLower: string, token: string): boolean {
   return promptLower.includes(token.toLowerCase());
@@ -152,6 +164,13 @@ export function resolveTrackFromPrompt(
     confidence: "low",
     overrideGuidance: "Confirm or override before state is written; choose quick only for known low-blast-radius work, medium for known architecture with product framing, standard for uncertainty."
   };
+}
+
+export function questionBudgetHint(track: FlowTrack, stage: FlowStage): QuestionBudgetHint {
+  if (!ADAPTIVE_ELICITATION_STAGES.has(stage)) {
+    return { min: 0, recommended: 0, hardCapWarning: 0 };
+  }
+  return QUESTION_BUDGET_HINTS_BY_TRACK[track];
 }
 
 export const TRACK_HEURISTICS_DEFAULTS = {
