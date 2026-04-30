@@ -1,5 +1,13 @@
-// @ts-nocheck
-import type { StageLintContext } from "./shared.js";
+import {
+  type StageLintContext,
+  sectionBodyByName,
+  validateApproachesTaxonomy,
+  headingLineIndex,
+  meaningfulLineCount,
+  parseShortCircuitStatus,
+  validateCalibratedSelfReview,
+  markdownFieldRegex
+} from "./shared.js";
 
 export async function lintBrainstormStage(ctx: StageLintContext): Promise<void> {
   const {
@@ -13,18 +21,8 @@ export async function lintBrainstormStage(ctx: StageLintContext): Promise<void> 
     brainstormShortCircuitBody,
     brainstormShortCircuitActivated,
     staleDiagramAuditEnabled,
-    isTrivialOverride,
-    shared
+    isTrivialOverride
   } = ctx;
-  const {
-    sectionBodyByName,
-    validateApproachesTaxonomy,
-    headingLineIndex,
-    meaningfulLineCount,
-    parseShortCircuitStatus,
-    validateCalibratedSelfReview,
-    markdownFieldRegex
-  } = shared as Record<string, any>;
 
     // Brainstorm Iron Law: "NO ARTIFACT IS COMPLETE WITHOUT AN EXPLICITLY
     // APPROVED DIRECTION — SILENCE IS NOT APPROVAL." Previously this was

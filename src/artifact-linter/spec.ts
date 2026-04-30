@@ -1,5 +1,8 @@
-// @ts-nocheck
-import type { StageLintContext } from "./shared.js";
+import {
+  type StageLintContext,
+  sectionBodyByName,
+  SPEC_MAX_MODULES
+} from "./shared.js";
 
 export async function lintSpecStage(ctx: StageLintContext): Promise<void> {
   const {
@@ -13,13 +16,8 @@ export async function lintSpecStage(ctx: StageLintContext): Promise<void> {
     brainstormShortCircuitBody,
     brainstormShortCircuitActivated,
     staleDiagramAuditEnabled,
-    isTrivialOverride,
-    shared
+    isTrivialOverride
   } = ctx;
-  const {
-    sectionBodyByName,
-    SPEC_MAX_MODULES
-  } = shared as Record<string, any>;
 
     // Universal Layer 2.4 structural checks (evanflow-prd + superpowers).
     // All checks fire only when the matching section is present so legacy

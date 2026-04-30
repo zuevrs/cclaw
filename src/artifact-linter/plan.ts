@@ -1,5 +1,16 @@
-// @ts-nocheck
-import type { StageLintContext } from "./shared.js";
+import {
+  type StageLintContext,
+  headingPresent,
+  sectionBodyByName,
+  collectPatternHits,
+  PLACEHOLDER_PATTERNS,
+  extractDecisionIds,
+  SCOPE_REDUCTION_PATTERNS
+} from "./shared.js";
+import { resolveArtifactPath as resolveStageArtifactPath } from "../artifact-paths.js";
+import { exists } from "../fs-utils.js";
+import { FORBIDDEN_PLACEHOLDER_TOKENS, CONFIDENCE_FINDING_REGEX_SOURCE } from "../content/skills.js";
+import fs from "node:fs/promises";
 
 export async function lintPlanStage(ctx: StageLintContext): Promise<void> {
   const {
@@ -13,22 +24,8 @@ export async function lintPlanStage(ctx: StageLintContext): Promise<void> {
     brainstormShortCircuitBody,
     brainstormShortCircuitActivated,
     staleDiagramAuditEnabled,
-    isTrivialOverride,
-    shared
+    isTrivialOverride
   } = ctx;
-  const {
-    headingPresent,
-    sectionBodyByName,
-    collectPatternHits,
-    PLACEHOLDER_PATTERNS,
-    resolveStageArtifactPath,
-    exists,
-    extractDecisionIds,
-    SCOPE_REDUCTION_PATTERNS,
-    FORBIDDEN_PLACEHOLDER_TOKENS,
-    CONFIDENCE_FINDING_REGEX_SOURCE,
-    fs
-  } = shared as Record<string, any>;
 
     const strictPlanGuards =
       parsedFrontmatter.hasFrontmatter ||

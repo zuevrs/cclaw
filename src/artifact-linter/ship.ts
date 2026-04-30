@@ -1,5 +1,7 @@
-// @ts-nocheck
-import type { StageLintContext } from "./shared.js";
+import {
+  type StageLintContext,
+  sectionBodyByName
+} from "./shared.js";
 
 export async function lintShipStage(ctx: StageLintContext): Promise<void> {
   const {
@@ -13,12 +15,8 @@ export async function lintShipStage(ctx: StageLintContext): Promise<void> {
     brainstormShortCircuitBody,
     brainstormShortCircuitActivated,
     staleDiagramAuditEnabled,
-    isTrivialOverride,
-    shared
+    isTrivialOverride
   } = ctx;
-  const {
-    sectionBodyByName
-  } = shared as Record<string, any>;
 
     // Universal Layer 2.8 structural checks (superpowers finishing-a-development-branch).
     const optionsBody = sectionBodyByName(sections, "Finalization Options");

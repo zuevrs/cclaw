@@ -2,6 +2,12 @@ import fs from "node:fs/promises";
 import path from "node:path";
 import { RUNTIME_ROOT } from "../constants.js";
 import { exists } from "../fs-utils.js";
+import {
+  extractH2Sections,
+  normalizeHeadingTitle,
+  sectionBodyByName,
+  type H2SectionMap
+} from "./shared.js";
 
 interface ResolvedArtifactPath {
   absPath: string;
@@ -12,78 +18,6 @@ async function resolveNamedArtifactPath(projectRoot: string, fileName: string): 
   const relPath = path.join(RUNTIME_ROOT, "artifacts", fileName);
   const absPath = path.join(projectRoot, relPath);
   return { absPath, relPath };
-}
-
-function normalizeHeadingTitle(title: string): string {
-  return title.trim().replace(/\s+/g, " ");
-}
-
-type H2SectionMap = Map<string, string>;
-
-/**
- * Collect H2 sections and body content (`## Section Name`).
- *
- * - Ignores lines that live inside fenced code blocks (``` / ~~~) so a
- *   commented `## Approaches` inside an example doesn't open a phantom
- *   section and swallow real content.
- * - When the same heading appears more than once at the top level we
- *   concatenate the bodies rather than silently overwriting the earlier
- *   occurrence. This keeps lint rules honest when authors split a section
- *   into multiple passes.
- */
-function extractH2Sections(markdown: string): H2SectionMap {
-  const sections = new Map<string, string>();
-  const lines = markdown.split(/\r?\n/);
-  let currentHeading: string | null = null;
-  let buffer: string[] = [];
-  let fenced: string | null = null;
-
-  const flush = (): void => {
-    if (currentHeading === null) return;
-    const existing = sections.get(currentHeading);
-    const body = buffer.join("\n");
-    sections.set(
-      currentHeading,
-      existing === undefined ? body : `${existing}\n${body}`
-    );
-  };
-
-  for (const line of lines) {
-    const fenceMatch = /^(```|~~~)/u.exec(line);
-    if (fenceMatch) {
-      if (fenced === null) {
-        fenced = fenceMatch[1] ?? null;
-      } else if (line.startsWith(fenced)) {
-        fenced = null;
-      }
-      if (currentHeading !== null) buffer.push(line);
-      continue;
-    }
-    if (fenced === null) {
-      const match = /^##\s+(.+)$/u.exec(line);
-      if (match) {
-        flush();
-        currentHeading = normalizeHeadingTitle(match[1] ?? "");
-        buffer = [];
-        continue;
-      }
-    }
-    if (currentHeading !== null) {
-      buffer.push(line);
-    }
-  }
-  flush();
-  return sections;
-}
-
-function sectionBodyByName(sections: H2SectionMap, section: string): string | null {
-  const want = normalizeHeadingTitle(section).toLowerCase();
-  for (const [heading, body] of sections.entries()) {
-    if (heading.toLowerCase() === want) {
-      return body;
-    }
-  }
-  return null;
 }
 
 function isNonEmptyString(v: unknown): v is string {

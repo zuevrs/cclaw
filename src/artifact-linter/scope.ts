@@ -1,5 +1,15 @@
-// @ts-nocheck
-import type { StageLintContext } from "./shared.js";
+import {
+  type StageLintContext,
+  sectionBodyByHeadingPrefix,
+  sectionBodyByName,
+  extractCanonicalScopeMode,
+  sectionBodyByAnyName,
+  collectPatternHits,
+  SCOPE_REDUCTION_PATTERNS,
+  validateLockedDecisionAnchors,
+  getMarkdownTableRows
+} from "./shared.js";
+import { readDelegationLedger } from "../delegation.js";
 
 export async function lintScopeStage(ctx: StageLintContext): Promise<void> {
   const {
@@ -13,20 +23,8 @@ export async function lintScopeStage(ctx: StageLintContext): Promise<void> {
     brainstormShortCircuitBody,
     brainstormShortCircuitActivated,
     staleDiagramAuditEnabled,
-    isTrivialOverride,
-    shared
+    isTrivialOverride
   } = ctx;
-  const {
-    sectionBodyByHeadingPrefix,
-    sectionBodyByName,
-    extractCanonicalScopeMode,
-    sectionBodyByAnyName,
-    readDelegationLedger,
-    collectPatternHits,
-    SCOPE_REDUCTION_PATTERNS,
-    validateLockedDecisionAnchors,
-    getMarkdownTableRows
-  } = shared as Record<string, any>;
 
     const lockedDecisionsBody = sectionBodyByHeadingPrefix(sections, "Locked Decisions") ?? "";
     const scopeSummaryBody = sectionBodyByName(sections, "Scope Summary") ?? "";
