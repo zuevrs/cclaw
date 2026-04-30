@@ -72,6 +72,7 @@ export const PLAN: StageSchemaInput = {
       "Define each task with acceptance mapping, verification command/manual step, and expected evidence/pass condition.",
       "Trace every locked decision (D-XX) to plan tasks or explicit defer rationale.",
       "Record validation points, blockers, and execution posture.",
+      "For high-risk/multi-batch plans, add a calibrated findings pass and explicit regression iron-rule acknowledgement.",
       "Write plan artifact and pause at WAIT_FOR_CONFIRM."
     ],
     requiredGates: [
@@ -135,6 +136,9 @@ export const PLAN: StageSchemaInput = {
       { section: "Locked Decision Coverage", required: false, validationRule: "Every locked decision ID (D-XX) from scope is listed with linked task IDs or explicit defer rationale." },
       { section: "Risk Assessment", required: false, validationRule: "If present: per-task or per-batch risk identification with likelihood, impact, and mitigation strategy." },
       { section: "Boundary Map", required: false, validationRule: "If present: per-batch or per-task interface contracts listing what each task produces (exports) and consumes (imports) from other tasks." },
+      { section: "Implementation Units", required: false, validationRule: "If present: each `### Implementation Unit U-<n>` includes Goal, Files, Approach, Test scenarios, and Verification fields." },
+      { section: "Calibrated Findings", required: false, validationRule: "If present: either `None this stage` or one or more lines in `[P1|P2|P3] (confidence: <n>/10) <path>[:<line>] — <description>` format." },
+      { section: "Regression Iron Rule", required: false, validationRule: "If present: includes `Iron rule acknowledged: yes`." },
       { section: "WAIT_FOR_CONFIRM", required: true, validationRule: "Explicit marker present. Status: pending until user approves." },
       { section: "No-Placeholder Scan", required: false, validationRule: "Confirmation that a text scan for `TODO`, `TBD`, `FIXME`, `<fill-in>`, `<your-*-here>`, `xxx`, or bare ellipses has zero hits in the task list. A placeholder is a deferred decision masquerading as a plan." },
       { section: "No Scope Reduction Language Scan", required: false, validationRule: "Confirmation that scope-reduction phrases (`v1`, `for now`, `later`, `temporary`, `placeholder`) are absent from task rows when locked decisions exist." }
