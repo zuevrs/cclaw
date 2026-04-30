@@ -1,5 +1,15 @@
 # Changelog
 
+## 0.55.1
+
+### Changed
+
+- Renamed plan-stage lint findings to `Plan Quality Scan: Placeholders` and `Plan Quality Scan: Scope Reduction` for consistency with the merged `Plan Quality Scan` template heading.
+
+### Removed
+
+- Removed the unused legacy `VibyConfig` type alias in favor of `CclawConfig`.
+
 ## 0.55.0
 
 ### Changed

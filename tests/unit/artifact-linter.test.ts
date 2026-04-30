@@ -3103,9 +3103,9 @@ inputs_hash: sha256:pending
     );
 
     const result = await lintArtifact(root, "plan");
-    const placeholder = result.findings.find((f) => f.section === "No Placeholder Enforcement");
+    const placeholder = result.findings.find((f) => f.section === "Plan Quality Scan: Placeholders");
     const trace = result.findings.find((f) => f.section === "Locked Decision Traceability");
-    const reduction = result.findings.find((f) => f.section === "No Scope Reduction Language");
+    const reduction = result.findings.find((f) => f.section === "Plan Quality Scan: Scope Reduction");
 
     expect(placeholder?.required).toBe(true);
     expect(placeholder?.found).toBe(false);
@@ -3184,9 +3184,9 @@ inputs_hash: sha256:pending
     );
 
     const result = await lintArtifact(root, "plan");
-    const placeholder = result.findings.find((f) => f.section === "No Placeholder Enforcement");
+    const placeholder = result.findings.find((f) => f.section === "Plan Quality Scan: Placeholders");
     const trace = result.findings.find((f) => f.section === "Locked Decision Traceability");
-    const reduction = result.findings.find((f) => f.section === "No Scope Reduction Language");
+    const reduction = result.findings.find((f) => f.section === "Plan Quality Scan: Scope Reduction");
 
     expect(result.passed).toBe(true);
     expect(placeholder?.required).toBe(false);

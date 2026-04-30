@@ -2456,7 +2456,7 @@ export async function lintArtifact(
     const taskListBody = sectionBodyByName(sections, "Task List") ?? raw;
     const placeholderHits = collectPatternHits(taskListBody, PLACEHOLDER_PATTERNS);
     findings.push({
-      section: "No Placeholder Enforcement",
+      section: "Plan Quality Scan: Placeholders",
       required: strictPlanGuards,
       rule: "Task List must not contain placeholders (TODO/TBD/FIXME/<fill-in>/<your-*-here>/xxx/ellipsis).",
       found: placeholderHits.length === 0,
@@ -2491,7 +2491,7 @@ export async function lintArtifact(
 
     const reductionHits = collectPatternHits(taskListBody, SCOPE_REDUCTION_PATTERNS);
     findings.push({
-      section: "No Scope Reduction Language",
+      section: "Plan Quality Scan: Scope Reduction",
       required: strictPlanGuards && scopeDecisionIds.length > 0,
       rule: "Task List must not include scope-reduction language when locked decisions exist.",
       found: reductionHits.length === 0,
