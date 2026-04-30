@@ -60,26 +60,6 @@ export const ARTIFACT_TEMPLATES: Record<string, string> = {
 - **Direct path?** (yes/no + one-line justification)
 - **What if we do nothing?** (concrete consequence, not "nothing happens")
 
-## Forcing Questions
-> Minimum 3 questions; each answer MUST contain at least one *specific* token: a concrete name, a role, a number, a repo-relative path, an external link, or a verbatim quote. Vague answers fail the linter.
-
-| # | Forcing question | Specific answer | Decision impact | Q\\<n\\> decision |
-|---|---|---|---|---|
-| 1 |  |  |  | decision: |
-| 2 |  |  |  | decision: |
-| 3 |  |  |  | decision: |
-
-## Premise List
-> ≥2 premises. Each premise must be in the form \`P<n>: <statement> — agreed | disagreed | revised\`. \`revised\` rows must include the revised statement on the next line.
-
-- P1: <statement> — agreed | disagreed | revised
-- P2: <statement> — agreed | disagreed | revised
-
-## Anti-Sycophancy Stamp
-- **Forbidden response openers acknowledged:** yes (no "you're absolutely right", "great point", "absolutely!", etc.)
-- **Posture commitment:** push back with reasoning when premises feel weak; do not perform agreement.
-- **Evidence-that-would-change-the-recommendation:** (one line per premise, or \`- None.\`)
-
 ## How Might We
 - *How might we …?* — one line naming the user, the desired outcome, and the binding constraint.
 
@@ -155,6 +135,11 @@ RECOMMENDATION: <approach letter — one-line rationale, traced to forcing-quest
 - **Approval:** pending
 - **Next-stage handoff:** On standard track, hand this to \`scope\`; on medium track, hand this directly to \`spec\`. Include upstream decisions used, drift, confidence, unresolved questions, risk hints, and non-goals.
 
+## Embedded Grill
+| Question | Recommended answer | Disposition (accept/refine/reject) |
+|---|---|---|
+|  |  |  |
+
 ## Not Doing
 - (3-5 things this brainstorm is *not* committing to — distinct from \`Deferred\`. These will not appear in scope unless the user explicitly opts in.)
 
@@ -178,6 +163,24 @@ ${SEED_SHELF_SECTION}
 ## Assumptions and Open Questions
 - **Assumptions:**
 - **Open questions (or "None"):**
+
+## Victory Detector
+- Loop status file: \`.cclaw/state/early-loop.json\`
+- Iteration: <n>/<maxIterations>
+- Open concerns: <count>
+- Convergence guard: clear | tripped
+- Decision: iterate | ready_for_advance | escalate_for_human_override
+
+## Critic Pass
+After each producer iteration append one JSON line to \`.cclaw/state/early-loop-log.jsonl\`:
+
+${MARKDOWN_CODE_FENCE}json
+{"ts":"<ISO-8601>","runId":"<run-id>","stage":"brainstorm","iteration":1,"concerns":[{"id":"C-1","severity":"important","locator":"Approaches > Row 2","summary":"<specific concern>"}],"resolvedConcernIds":[]}
+${MARKDOWN_CODE_FENCE}
+
+- \`concerns\` lists unresolved concerns after this pass.
+- Keep concern IDs stable across iterations so convergence checks stay meaningful.
+- Include \`resolvedConcernIds\` when a previously open concern is explicitly closed.
 
 ## Learnings
 - None this stage.
@@ -215,13 +218,6 @@ ${SEED_SHELF_SECTION}
 | Existing-code leverage? |  |  |
 | Reversibility cost? |  |  |
 
-## Dream State Mapping
-- Deep/optional only; omit for compact scope.
-- CURRENT STATE:
-- THIS PLAN:
-- 12-MONTH IDEAL:
-- Alignment verdict:
-
 ## Implementation Alternatives
 | Option | Summary | Effort (S/M/L/XL) | Risk (Low/Med/High) | Pros | Cons | Reuses |
 |---|---|---|---|---|---|---|
@@ -230,27 +226,6 @@ ${SEED_SHELF_SECTION}
 | C (optional) |  |  |  |  |  |  |
 
 RECOMMENDATION: <option letter — one-line rationale tying back to premise challenge and existing-code leverage>
-
-## Failure Modes Registry
-> Universal failure-mode shape — applies to CLI, library, infra, web, batch jobs.
-
-| Codepath | Failure mode | Rescued? (yes/no) | Test? (unit/integration/e2e) | User sees? (message/silent/N/A) | Logged? (level/none) | Q\\<n\\> decision |
-|---|---|---|---|---|---|---|
-|  |  |  |  |  |  | decision: |
-
-## Reversibility Rating
-- Score (1-5, 1 = one-way door / unrecoverable, 5 = trivially reversible):
-- Justification (cite a specific artifact/file or migration step):
-- Rollback plan reference:
-
-## Temporal Interrogation
-- Deep/optional only; omit for compact scope.
-| Time slice | Likely decision pressure | Lock now or defer? | Reason |
-|---|---|---|---|
-| HOUR 1 (foundations) |  |  |  |
-| HOUR 2-3 (core logic) |  |  |  |
-| HOUR 4-5 (integration) |  |  |  |
-| HOUR 6+ (polish/tests) |  |  |  |
 
 ## Scope Contract
 - **Selected mode:** HOLD SCOPE | SELECTIVE EXPANSION | SCOPE EXPANSION | SCOPE REDUCTION
@@ -304,7 +279,7 @@ RECOMMENDATION: <option letter — one-line rationale tying back to premise chal
 |  |  |  |  |
 
 ## Reference Pull
-- Optional evidence from \`/Users/zuevrs/Downloads/references\`; list accepted/rejected ideas or \`Not needed - compact scope\`.
+- Optional evidence from \`<repo-relative references dir>\`; list accepted/rejected ideas or \`Not needed - compact scope\`.
 
 ## Ambitious Alternatives
 - Optional for SCOPE EXPANSION/SELECTIVE; list larger alternatives and disposition.
@@ -384,6 +359,24 @@ ${SEED_SHELF_SECTION}
 - Deferred:
 - Explicitly excluded:
 - Next-stage handoff: identify whether the next stage is \`design\` (standard track) or \`spec\` (medium track), and list the exact artifacts/decisions it must carry forward.
+
+## Victory Detector
+- Loop status file: \`.cclaw/state/early-loop.json\`
+- Iteration: <n>/<maxIterations>
+- Open concerns: <count>
+- Convergence guard: clear | tripped
+- Decision: iterate | ready_for_advance | escalate_for_human_override
+
+## Critic Pass
+After each producer iteration append one JSON line to \`.cclaw/state/early-loop-log.jsonl\`:
+
+${MARKDOWN_CODE_FENCE}json
+{"ts":"<ISO-8601>","runId":"<run-id>","stage":"scope","iteration":1,"concerns":[{"id":"C-1","severity":"important","locator":"Scope Contract > In Scope","summary":"<specific concern>"}],"resolvedConcernIds":[]}
+${MARKDOWN_CODE_FENCE}
+
+- \`concerns\` lists unresolved concerns after this pass.
+- Keep concern IDs stable across iterations so convergence checks stay meaningful.
+- Include \`resolvedConcernIds\` when a previously open concern is explicitly closed.
 
 ## Learnings
 - None this stage.
@@ -496,31 +489,17 @@ ${MARKDOWN_CODE_FENCE}
 (failure detection -> rescue action -> user-visible outcome)
 ${MARKDOWN_CODE_FENCE}
 
-## State Machine Diagram
-- Deep add-on; omit for compact design.
+## Deep Diagram Add-on
+- Deep add-on only.
+- type: state-machine | rollback | deployment-sequence | none
+- Choose exactly one marker below when type is not \`none\`.
 
 <!-- diagram: state-machine -->
-
-${MARKDOWN_CODE_FENCE}
-(state transitions for the critical flow lifecycle)
-${MARKDOWN_CODE_FENCE}
-
-## Rollback Flowchart
-- Deep add-on; omit for compact design.
-
 <!-- diagram: rollback-flowchart -->
-
-${MARKDOWN_CODE_FENCE}
-(trigger -> rollback actions -> verification)
-${MARKDOWN_CODE_FENCE}
-
-## Deployment Sequence Diagram
-- Deep add-on; omit for compact design.
-
 <!-- diagram: deployment-sequence -->
 
 ${MARKDOWN_CODE_FENCE}
-(rollout order, guard checks, and verification sequence)
+(deep add-on diagram: state lifecycle OR rollback flow OR deployment sequence)
 ${MARKDOWN_CODE_FENCE}
 
 ## Stale Diagram Audit
@@ -575,32 +554,6 @@ ${MARKDOWN_CODE_FENCE}
 |---|---|---|---|
 |  |  |  | covered/gap |
 
-## ASCII Coverage Diagram
-
-<!-- diagram: ascii-coverage -->
-
-${MARKDOWN_CODE_FENCE}
-entry-point
-  ├── happy path           [★★★]
-  ├── empty input          [★★]
-  ├── error path           [★]
-  ├── concurrency edge     [GAP]
-  ├── slow-network edge    [→E2E]
-  └── perf regression      [→EVAL]
-${MARKDOWN_CODE_FENCE}
-
-> Required marker tokens (at least one each present where applicable): \`[★★★]\` / \`[★★]\` / \`[★]\` / \`[GAP]\` / \`[→E2E]\` / \`[→EVAL]\`. The diagram is the single source of truth for coverage; gaps must be traced into Plan or Spec.
-
-## Regression Iron Rule
-- Iron rule acknowledged: yes — any diff that changes existing behavior gets a regression test added to the plan, no exceptions.
-- Detected behavior changes (or \`- None.\`):
-- Regression test handoff (Plan task ID or \`- None.\`):
-
-## Calibrated Findings
-> Format: \`[P1|P2|P3] (confidence: <n>/10) <repo-relative-path>[:<line>] — <one-line description>\`. Findings with confidence \`< 7\` are suppressed unless severity is \`P1\`.
-
-- (or \`- None this stage.\`)
-
 ## Performance Budget
 | Critical path | Metric | Target | Measurement method |
 |---|---|---|---|
@@ -632,6 +585,9 @@ ${MARKDOWN_CODE_FENCE}
 - Risks and rescue paths:
 - Test/performance expectations:
 - Unresolved questions (or \`None\`):
+
+## Long-Term Trajectory
+- (1-3 lines: what comes after this ships, and whether this architecture can absorb that path without major rework. For tactical changes use \`None - tactical change only\`.)
 
 ## Outside Voice Findings
 | ID | Dimension | Finding | Disposition | Rationale |
@@ -693,8 +649,23 @@ ${SEED_SHELF_SECTION}
 
 **Decisions made:** 0 | **Unresolved:** 0
 
-## Learning Capture Hint
-For meaningful design work, replace the Learnings sentinel with 1-3 JSON learning bullets, for example: \`- {"type":"lesson","trigger":"when design chooses a risky fallback path","action":"record the switch trigger and rollback signal in Spec Handoff","confidence":"medium","domain":"architecture","stage":"design"}\`
+## Victory Detector
+- Loop status file: \`.cclaw/state/early-loop.json\`
+- Iteration: <n>/<maxIterations>
+- Open concerns: <count>
+- Convergence guard: clear | tripped
+- Decision: iterate | ready_for_advance | escalate_for_human_override
+
+## Critic Pass
+After each producer iteration append one JSON line to \`.cclaw/state/early-loop-log.jsonl\`:
+
+${MARKDOWN_CODE_FENCE}json
+{"ts":"<ISO-8601>","runId":"<run-id>","stage":"design","iteration":1,"concerns":[{"id":"C-1","severity":"important","locator":"Engineering Lock > Row 1","summary":"<specific concern>"}],"resolvedConcernIds":[]}
+${MARKDOWN_CODE_FENCE}
+
+- \`concerns\` lists unresolved concerns after this pass.
+- Keep concern IDs stable across iterations so convergence checks stay meaningful.
+- Include \`resolvedConcernIds\` when a previously open concern is explicitly closed.
 
 ## Learnings
 - None this stage.
@@ -777,12 +748,6 @@ For meaningful design work, replace the Learnings sentinel with 1-3 JSON learnin
 |---|---|---|
 |  |  |  |
 
-## Testing Strategy
-- Behaviors covered (not implementation):
-- Integration vs. unit split (and why):
-- Real services vs. doubles (and why):
-- Coverage gaps with rationale (or \`- None.\`):
-
 ## Spec Self-Review
 > Inline pass; fix in place. If a check fails, do not move on without recording the fix.
 
@@ -794,13 +759,6 @@ For meaningful design work, replace the Learnings sentinel with 1-3 JSON learnin
   - None
 - Remaining concerns:
   - None
-
-## Reviewer Concerns (convergence guard)
-> Populate ONLY if the spec review loop did not converge after 3 iterations. Each row links a concern to the unresolved review pass.
-
-| ID | Concern | Reviewer / source | Disposition (open/accept/defer) | Rationale |
-|---|---|---|---|---|
-|  |  |  |  |  |
 
 ## Approval
 - Approved by:
@@ -910,23 +868,16 @@ Execution rule: complete and verify each batch before starting the next batch.
   - [ ] Step 4: run test, observe GREEN
   - [ ] Step 5: refactor + commit
 
-## High-Level Technical Design
-> "Directional guidance, not implementation specification." Choose the form that fits the work: pseudo-code grammar, mermaid sequence/state, data-flow ASCII, decision matrix. Skip if the plan is a pure rename/move.
+## Calibrated Findings
+> Recommended for high-risk or multi-batch plans. Use one line per finding, or \`None this stage\`.
+>
+> Canonical format:
+> \`- [P1|P2|P3] (confidence: <n>/10) <path>[:<line>] — <description>\`
 
-\`\`\`
-(pseudo-code, mermaid, ASCII data flow, or decision matrix)
-\`\`\`
-
-## Plan Self-Review
-- [ ] Spec coverage: every spec behavior maps to a unit/task
-- [ ] Placeholder scan (regex on full artifact, not only Task List)
-- [ ] Type/name consistency across units (signatures referenced match definitions)
-- [ ] No silent scope reduction
-- [ ] Confidence per unit recorded (1-10)
-- Patches applied:
-  - None
-- Remaining concerns:
-  - None
+## Regression Iron Rule
+- Iron rule acknowledged: yes
+- Critical regression guardrail:
+- Required pre-merge proof:
 
 ## Execution Handoff
 - **Posture chosen:** Subagent-Driven (recommended) | Inline executor
@@ -934,13 +885,13 @@ Execution rule: complete and verify each batch before starting the next batch.
 - **Subagent recipe (if Subagent-Driven):** \`<harness>\` -> \`<dispatch surface>\` -> \`<agent-definition path>\` (substitute neutral placeholders; full recipes in \`docs/harnesses.md\`)
 - **Inline recipe (if Inline executor):** TDD loop unit-by-unit with batch checkpoints
 
-## No-Placeholder Scan
-- Scanned tokens: \`TODO\`, \`TBD\`, \`FIXME\`, \`<fill-in>\`, \`<your-*-here>\`, \`xxx\`, bare ellipsis in task rows.
-- Hits: 0 (required for WAIT_FOR_CONFIRM to resolve).
-
-## No Scope Reduction Language Scan
-- Scanned phrases: \`v1\`, \`for now\`, \`later\`, \`temporary\`, \`placeholder\`, \`mock for now\`, \`hardcoded for now\`, \`will improve later\`.
-- Hits: 0 (required when Locked Decisions section is non-empty; use LD#hash anchors).
+## Plan Quality Scan
+- Placeholder scan:
+  - Scanned tokens: \`TODO\`, \`TBD\`, \`FIXME\`, \`<fill-in>\`, \`<your-*-here>\`, \`xxx\`, bare ellipsis in task rows.
+  - Hits: 0 (required for WAIT_FOR_CONFIRM to resolve).
+- Scope reduction language scan:
+  - Scanned phrases: \`v1\`, \`for now\`, \`later\`, \`temporary\`, \`placeholder\`, \`mock for now\`, \`hardcoded for now\`, \`will improve later\`.
+  - Hits: 0 (required when Locked Decisions section is non-empty; use LD#hash anchors).
 
 ## WAIT_FOR_CONFIRM
 - Status: pending
@@ -1032,17 +983,26 @@ Execution rule: complete and verify each batch before starting the next batch.
 |---|---|---|---|
 | S-1 |  |  |  |
 
-## Anti-Rationalization Checks
-- [ ] No "test passes immediately" — each new test was watched failing first
-- [ ] No "code before test" reuse from a prior session
-- [ ] No "tests after" backfill instead of RED-first
-- [ ] No "spirit not ritual" overrides
-- Notes (or \`- None this stage.\`):
-
 ## Verification Ladder
 | Slice | Tier reached | Evidence |
 |---|---|---|
 | S-1 |  |  |
+
+## TDD Blocker Taxonomy
+> Fill only when blocked. Choose one canonical class and capture the resume contract.
+>
+> Allowed classes: \`NO_SOURCE_CONTEXT\`, \`NO_TEST_SURFACE\`, \`NO_IMPLEMENTABLE_SLICE\`, \`RED_NOT_EXPRESSIBLE\`, \`NO_VCS_MODE\`.
+
+| Slice | Class | blockedBecause | missingInputs | recommendedRoute | nextCommand | resumeCriteria |
+|---|---|---|---|---|---|---|
+| S-1 |  |  |  |  |  |  |
+
+## Per-Slice Review
+> Only required when \`.cclaw/config.yaml::sliceReview.enabled\` triggers this slice; otherwise record \`not triggered\`.
+
+| Slice | Trigger fired | Spec-Compliance pass | Quality pass | Fulfillment mode (isolated/role-switch/not triggered) |
+|---|---|---|---|---|
+| S-1 |  |  |  |  |
 
 ## Coverage Targets
 | Code type | Target | Current | Command |
@@ -1063,9 +1023,6 @@ Execution rule: complete and verify each batch before starting the next batch.
 |---|---|---|---|---|
 | S-1 |  |  |  |  |
 
-## Learning Capture Hint
-For meaningful TDD work, replace the Learnings sentinel with 1-3 JSON learning bullets, for example: \`- {"type":"pattern","trigger":"when a regression only fails after state rewind","action":"keep the RED fixture and add a cycle-log assertion before GREEN","confidence":"medium","domain":"testing","stage":"tdd"}\`
-
 ## Learnings
 - None this stage.
 `,
@@ -1080,15 +1037,13 @@ For meaningful TDD work, replace the Learnings sentinel with 1-3 JSON learning b
 - Open questions:
 - Drift from upstream (or \`None\`):
 
-## Self-Review First
+## Pre-Critic Self-Review
 - [ ] Build/lint/type-check/tests passed locally
 - [ ] Diff matches spec/plan (no scope creep)
 - [ ] Leftover prints / commented code / unused imports removed
 - [ ] Deletion test: each new module justifies its existence
 - Evidence (commands + result):
 - Patches applied (or \`- None.\`):
-
-## Frame the Review Request
 - **Goal:**
 - **Approach:**
 - **Risk areas:**
@@ -1180,7 +1135,7 @@ For meaningful TDD work, replace the Learnings sentinel with 1-3 JSON learning b
 - Overall: complete | concerns | blocked
 
 ## Trace Matrix Check
-- Command: \`cclaw internal trace-matrix\` when the active track enforces it; otherwise record direct AC/reproduction-slice coverage.
+- Command: \`npx cclaw-cli internal trace-matrix\` when the active track enforces it; otherwise record direct AC/reproduction-slice coverage.
 - Orphaned criteria: 0
 - Orphaned source items: 0 or \`N/A - direct spec/reproduction coverage\`
 - Orphaned tests: 0
@@ -1204,9 +1159,6 @@ For meaningful TDD work, replace the Learnings sentinel with 1-3 JSON learning b
 
 ## Final Verdict
 - APPROVED | APPROVED_WITH_CONCERNS | BLOCKED
-
-## Learning Capture Hint
-For meaningful review work, replace the Learnings sentinel with 1-3 JSON learning bullets, for example: \`- {"type":"lesson","trigger":"when security sweep finds no issues but touches trust boundaries","action":"record NO_SECURITY_IMPACT with inspected surfaces and rationale","confidence":"medium","domain":"security","stage":"review"}\`
 
 ## Learnings
 - None this stage.
@@ -1444,7 +1396,7 @@ Track-specific skips are allowed only when \`flow-state.track\` + \`skippedStage
 
 - No completion claim without fresh command evidence in this turn.
 - Do not mark gates passed from memory.
-- Keep evidence in \`.cclaw/artifacts/\`; archive via \`npx cclaw-cli archive\`.
+- Keep evidence in \`.cclaw/artifacts/\`; archive through closeout via \`/cc\` or cancel early via \`node .cclaw/hooks/cancel-run.mjs\`.
 
 ## Delegation And Approvals
 

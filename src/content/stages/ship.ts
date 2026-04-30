@@ -11,8 +11,8 @@ export const SHIP: StageSchemaInput = {
   schemaShape: "v2",
   stage: "ship",
   complexityTier: "standard",
-  skillFolder: "shipping-and-handoff",
-  skillName: "shipping-and-handoff",
+  skillFolder: "ship",
+  skillName: "ship",
   skillDescription: "Release handoff stage with preflight checks, rollback readiness, and explicit finalization mode for both git and non-git workflows.",
   philosophy: {
     hardGate: "Do NOT merge, push, or finalize without a passed preflight check, written rollback plan, and exactly one explicit finalization mode selected. No exceptions for urgency. If no VCS is available, use FINALIZE_NO_VCS explicitly instead of inventing git steps.",

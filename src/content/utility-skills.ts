@@ -216,7 +216,7 @@ export const LANGUAGE_RULE_PACK_FILES = {
 
 /**
  * Folder (relative to runtime root) that holds every enabled language rule
- * pack. A single folder keeps discovery trivial for hooks and for `doctor`.
+ * pack. A single folder keeps discovery trivial for hooks and for `sync`.
  */
 export const LANGUAGE_RULE_PACK_DIR = ["rules", "lang"] as const;
 
@@ -228,7 +228,7 @@ export const LANGUAGE_RULE_PACK_GENERATORS: Record<string, () => string> = {
 
 /**
  * Legacy per-language folders under `.cclaw/skills/` used in v0.7.0. Listed
- * here so `cclaw sync` and `doctor` can surface drift and the installer can
+ * here so `cclaw sync` and `sync` can surface drift and the installer can
  * clean them up after the move to `.cclaw/rules/lang/`.
  */
 export const LEGACY_LANGUAGE_RULE_PACK_FOLDERS = [

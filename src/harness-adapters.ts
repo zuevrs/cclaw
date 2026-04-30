@@ -3,7 +3,7 @@ import path from "node:path";
 import { RUNTIME_ROOT } from "./constants.js";
 import { conversationLanguagePolicyMarkdown } from "./content/language-policy.js";
 import { CCLAW_AGENTS, agentMarkdown } from "./content/core-agents.js";
-import { ironLawsAgentsMdBlock } from "./content/iron-laws.js";
+import { IRON_LAWS } from "./content/iron-laws.js";
 import { ensureDir, exists, writeFileSafe } from "./fs-utils.js";
 import { type HarnessId } from "./types.js";
 
@@ -51,7 +51,7 @@ export type SubagentFallback =
  *   directories under a skills root (Codex CLI ≥0.89, Jan 2026). cclaw
  *   writes `<commandDir>/<skillName>/SKILL.md` and the agent invokes it
  *   either via `/use <skillName>` or via automatic description matching
- *   when the user's text mentions `/cc`, `/cc-ideate`, or `/cc-cancel`.
+ *   when the user's text mentions `/cc`, `/cc-idea`, or `/cc-cancel`.
  */
 export type ShimKind = "command" | "skill";
 
@@ -67,7 +67,7 @@ export interface HarnessAdapter {
    * Root directory where cclaw writes `/cc*` entry points.
    *
    * - For `shimKind: "command"` this is the directory containing flat
-   *   markdown files (`<commandDir>/cc.md`, `<commandDir>/cc-ideate.md`, …).
+   *   markdown files (`<commandDir>/cc.md`, `<commandDir>/cc-idea.md`, …).
    * - For `shimKind: "skill"` this is the skills root that contains
    *   per-skill subdirectories (`<commandDir>/<skillName>/SKILL.md`).
    */
@@ -117,17 +117,17 @@ export interface HarnessAdapter {
 }
 
 interface UtilityShimSpec {
-  /** Filename used for command-kind harnesses (e.g. `cc-ideate.md`). */
+  /** Filename used for command-kind harnesses (e.g. `cc-idea.md`). */
   fileName: string;
   /**
    * Skill directory name used for skill-kind harnesses. Codex invokes
    * skills via `/use <skillName>`, so we keep the token identical to
-   * the public `cc-ideate` / `cc-cancel` slash-tokens users type.
+   * the public `cc-idea` / `cc-cancel` slash-tokens users type.
    * Collisions with stock OpenAI skills are
    * unlikely (they ship under unrelated names like `pdf-editor`).
    */
   skillName: string;
-  /** User-visible command token without the leading slash (`ideate`). */
+  /** User-visible command token without the leading slash (`idea`). */
   command: string;
   skillFolder: string;
   commandFile: string;
@@ -135,11 +135,11 @@ interface UtilityShimSpec {
 
 const UTILITY_SHIMS: UtilityShimSpec[] = [
   {
-    fileName: "cc-ideate.md",
-    skillName: "cc-ideate",
-    command: "ideate",
-    skillFolder: "flow-ideate",
-    commandFile: "ideate.md"
+    fileName: "cc-idea.md",
+    skillName: "cc-idea",
+    command: "idea",
+    skillFolder: "flow-idea",
+    commandFile: "idea.md"
   },
   {
     fileName: "cc-cancel.md",
@@ -292,9 +292,9 @@ export function harnessDispatchSurface(harnessId: HarnessId): string {
     case "cursor":
       return "Use Cursor Subagent/Task with a generic subagent_type (explore for read-only mapping, generalPurpose for broader work, shell/browser-use when specifically needed) and paste the cclaw role prompt; record fulfillmentMode: \"generic-dispatch\" with evidenceRefs.";
     case "opencode":
-      return "Use OpenCode subagents: invoke the generated .opencode/agents/<agent>.md agent via Task or @<agent>; if agents or plugin registration are missing, run `cclaw sync` and check opencode.json(.c) plugin registration with `cclaw doctor --explain`; record scheduled/launched/acknowledged/completed events with spanId+dispatchId before claiming fulfillmentMode: \"isolated\".";
+      return "Use OpenCode subagents: invoke the generated .opencode/agents/<agent>.md agent via Task or @<agent>; if agents or plugin registration are missing, run `cclaw sync` and check opencode.json(.c) plugin registration with `npx cclaw-cli sync`; record scheduled/launched/acknowledged/completed events with spanId+dispatchId before claiming fulfillmentMode: \"isolated\".";
     case "codex":
-      return "Use Codex native subagents: ask Codex to spawn the generated .codex/agents/<agent>.toml agent(s) by name; if hooks are inert, set `[features] codex_hooks = true` in ~/.codex/config.toml or rerun init/sync repair, then `cclaw doctor --explain`; record scheduled/launched/acknowledged/completed events with spanId+dispatchId before claiming fulfillmentMode: \"isolated\".";
+      return "Use Codex native subagents: ask Codex to spawn the generated .codex/agents/<agent>.toml agent(s) by name; if hooks are inert, set `[features] codex_hooks = true` in ~/.codex/config.toml or rerun init/sync repair, then `npx cclaw-cli sync`; record scheduled/launched/acknowledged/completed events with spanId+dispatchId before claiming fulfillmentMode: \"isolated\".";
   }
 }
 
@@ -446,6 +446,37 @@ export function harnessesByTier(): HarnessId[] {
   });
 }
 
+function ironLawsAgentsMdBlock(): string {
+  const enforcedLawIds = new Set([
+    "stop-clean-or-handoff",
+    "review-coverage-complete-before-ship"
+  ]);
+  const enforcedRows = IRON_LAWS
+    .filter((law) => enforcedLawIds.has(law.id))
+    .map((law) => `| \`${law.id}\` | ${law.rule} | ${law.enforcement} |`)
+    .join("\n");
+  const advisoryRows = IRON_LAWS
+    .filter((law) => !enforcedLawIds.has(law.id))
+    .map((law) => {
+      const appliesTo = law.appliesTo === "all" ? "all stages" : law.appliesTo.join(", ");
+      return `- \`${law.id}\` (applies to: ${appliesTo})`;
+    })
+    .join("\n");
+
+  return `### Iron Laws
+
+These rules are always-on. The hook-enforced runtime laws are:
+
+| ID | Rule | Enforced by |
+|---|---|---|
+${enforcedRows}
+
+Advisory laws are stage-owned through each stage's HARD-GATE block:
+
+${advisoryRows}
+`;
+}
+
 function agentsMdBlock(): string {
   return `${CCLAW_MARKER_START}
 ## Cclaw — Workflow Adapter
@@ -497,7 +528,7 @@ When in doubt, prefer **non-trivial** — the quick track is opt-in and only saf
 | Command | Purpose |
 |---|---|
 | \`/cc\` | **Entry point.** No args = resume or progress current flow. With prompt = classify task and start the right flow. |
-| \`/cc-ideate\` | **Ideate mode.** Generates a ranked repo-improvement backlog before implementation. |
+| \`/cc-idea\` | **Idea mode.** Generates a ranked repo-improvement backlog before implementation. |
 | \`/cc-cancel\` | **Non-completion closeout.** Archives a cancelled/abandoned run with a required reason. |
 
 Knowledge capture and curation run automatically as part of stage completion
@@ -526,11 +557,11 @@ If the same approach fails three times in a row (same command, same finding, sam
 ### Codex users
 
 OpenAI Codex CLI has **no native \`/cc\` slash command** (custom prompts
-were deprecated in v0.89, Jan 2026). The \`/cc\`, \`/cc-ideate\`, and
+were deprecated in v0.89, Jan 2026). The \`/cc\`, \`/cc-idea\`, and
 \`/cc-cancel\` tokens above describe intent — in Codex they map onto skills cclaw installs at
 \`.agents/skills/cc*/SKILL.md\`. Activate one of two ways:
 
-- Type \`/use cc\` (or \`cc-ideate\` / \`cc-cancel\`) at Codex's prompt.
+- Type \`/use cc\` (or \`cc-idea\` / \`cc-cancel\`) at Codex's prompt.
 - Type \`/cc …\` as plain text — Codex matches the skill \`description\`
   frontmatter (which spells out the token verbatim) and loads the right
   skill body automatically.
@@ -539,9 +570,9 @@ Codex CLI v0.114+ (Mar 2026) **does** expose lifecycle hooks via
 \`.codex/hooks.json\`, gated by the \`[features] codex_hooks = true\` flag
 in \`~/.codex/config.toml\`. cclaw generates \`.codex/hooks.json\` on
 sync; if the feature flag is off, hooks are inert and cclaw's
-session-start rehydration simply does not fire. Run \`cclaw doctor\` to
+session-start rehydration simply does not fire. Run \`npx cclaw-cli sync\` to
 see if the flag is missing. \`.codex/commands/*\` is still unused by
-Codex CLI and is removed on every sync. Run \`cclaw doctor --explain\` for
+Codex CLI and is removed on every sync. Run \`npx cclaw-cli sync\` for
 hook coverage details (Bash-only \`PreToolUse\`/\`PostToolUse\`; other events are full).
 ${CCLAW_MARKER_END}`;
 }
@@ -611,7 +642,7 @@ function utilityShimBehavior(command: string): string {
   switch (command) {
     case "cc":
       return "This is the entry command, not a flow stage. It may initialize or resume flow state after confirmation.";
-    case "ideate":
+    case "idea":
       return "This is an ideation command, not a flow stage. It may write ideation artifacts/seeds but does not advance flow state.";
     case "cancel":
       return "This is a non-completion closeout utility, not a flow stage. It requires a reason and archives cancelled or abandoned work without presenting it as completed.";
@@ -649,8 +680,8 @@ function codexSkillDescription(command: string): string {
   switch (command) {
     case "cc":
       return `Entry point for the cclaw track-aware workflow ending in ship plus auto-closeout (retro → compound → archive). Use whenever the user types \`/cc\`, \`/cclaw\`, or asks to "start the flow", "begin cclaw", "kick off the workflow", "classify this task", or wants to start/resume a non-trivial software change. No args = resume the active stage from \`.cclaw/state/flow-state.json\`. With a prompt = classify and pick a track (quick/medium/standard).`;
-    case "ideate":
-      return `Read-only repo-improvement ideate mode for cclaw. Use when the user types \`/cc-ideate\` or asks to "ideate", "scan the repo for TODOs/tech debt", "generate a backlog", or wants a ranked list of candidate ideas before committing to a single flow. Does not mutate \`.cclaw/state/flow-state.json\`.`;
+    case "idea":
+      return `Read-only repo-improvement idea mode for cclaw. Use when the user types \`/cc-idea\` or asks to "scan the repo for TODOs/tech debt", "generate a backlog", "brainstorm improvement ideas", or wants a ranked list of candidate ideas before committing to a single flow. Does not mutate \`.cclaw/state/flow-state.json\`.`;
     case "cancel":
       return `Cancel or abandon the active cclaw run. Use when the user types \`/cc-cancel\` or asks to cancel, abandon, stop, discard, or reset an unfinished run. Requires a reason and archives with cancelled/abandoned disposition.`;
     default:
@@ -685,7 +716,7 @@ under \`.agents/skills/${skillSlug}/\` so the user can either:
 
 Lifecycle hooks **are** available in Codex CLI v0.114+ (behind the
 \`[features] codex_hooks = true\` flag in \`~/.codex/config.toml\`) and
-cclaw installs a matching \`.codex/hooks.json\`; run \`cclaw doctor --explain\`
+cclaw installs a matching \`.codex/hooks.json\`; run \`npx cclaw-cli sync\`
 for the current hook surface and limitations.
 
 ## Protocol
@@ -709,7 +740,7 @@ for the current hook surface and limitations.
   unavailable or disabled, and then include non-empty \`evidenceRefs\`.
 - Codex's \`PreToolUse\` / \`PostToolUse\` hooks currently only intercept
   the \`Bash\` tool. \`Write\`, \`Edit\`, \`WebSearch\`, and MCP tool calls
-  are **not** gated by hooks — use \`cclaw doctor --explain\` for what cclaw
+  are **not** gated by hooks — use \`npx cclaw-cli sync\` for what cclaw
   substitutes with in-turn agent steps for those call classes.
 - Codex's \`SessionStart\` matcher only supports \`startup|resume\`. Claude
   and Cursor also fire on \`clear\` and \`compact\`, so mid-session

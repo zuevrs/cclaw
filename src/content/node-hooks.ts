@@ -1,7 +1,10 @@
 import { existsSync } from "node:fs";
 import path from "node:path";
 import { fileURLToPath } from "node:url";
-import { DEFAULT_COMPOUND_RECURRENCE_THRESHOLD } from "../config.js";
+import {
+  DEFAULT_COMPOUND_RECURRENCE_THRESHOLD,
+  DEFAULT_EARLY_LOOP_MAX_ITERATIONS
+} from "../config.js";
 import { RUNTIME_ROOT } from "../constants.js";
 import {
   SMALL_PROJECT_ARCHIVE_RUNS_THRESHOLD,
@@ -10,7 +13,8 @@ import {
 import {
   HOOK_INLINE_SHARED_HELPERS,
   COMPOUND_READINESS_INLINE_SOURCE,
-  RALPH_LOOP_INLINE_SOURCE
+  RALPH_LOOP_INLINE_SOURCE,
+  EARLY_LOOP_INLINE_SOURCE
 } from "./hook-inline-snippets.js";
 
 export interface NodeHookRuntimeOptions {
@@ -30,6 +34,16 @@ export interface NodeHookRuntimeOptions {
    * `cclaw sync` after changing the config value so hook and CLI agree.
    */
   compoundRecurrenceThreshold?: number;
+  /**
+   * Enables early-stage producer/critic loop diagnostics in session-start.
+   * Defaults to true.
+   */
+  earlyLoopEnabled?: boolean;
+  /**
+   * Baked-in max iterations for brainstorm/scope/design early-loop status.
+   * Derived from `config.earlyLoop.maxIterations`.
+   */
+  earlyLoopMaxIterations?: number;
 }
 
 function normalizePatterns(patterns: string[] | undefined, fallback: string[]): string[] {
@@ -86,6 +100,13 @@ export function nodeHookRuntimeScript(options: NodeHookRuntimeOptions = {}): str
     options.compoundRecurrenceThreshold >= 1
       ? options.compoundRecurrenceThreshold
       : DEFAULT_COMPOUND_RECURRENCE_THRESHOLD;
+  const earlyLoopEnabled = options.earlyLoopEnabled !== false;
+  const earlyLoopMaxIterations =
+    typeof options.earlyLoopMaxIterations === "number" &&
+    Number.isInteger(options.earlyLoopMaxIterations) &&
+    options.earlyLoopMaxIterations >= 1
+      ? options.earlyLoopMaxIterations
+      : DEFAULT_EARLY_LOOP_MAX_ITERATIONS;
   const cliRuntime = resolveCliRuntimeForGeneratedHook();
 
   return `#!/usr/bin/env node
@@ -109,6 +130,8 @@ const DEFAULT_TDD_PRODUCTION_PATH_PATTERNS = ${JSON.stringify(tddProductionPathP
 const COMPOUND_RECURRENCE_THRESHOLD = ${JSON.stringify(compoundRecurrenceThreshold)};
 const SMALL_PROJECT_ARCHIVE_RUNS_THRESHOLD = ${JSON.stringify(SMALL_PROJECT_ARCHIVE_RUNS_THRESHOLD)};
 const SMALL_PROJECT_RECURRENCE_THRESHOLD = ${JSON.stringify(SMALL_PROJECT_RECURRENCE_THRESHOLD)};
+const EARLY_LOOP_ENABLED = ${JSON.stringify(earlyLoopEnabled)};
+const EARLY_LOOP_MAX_ITERATIONS = ${JSON.stringify(earlyLoopMaxIterations)};
 const CCLAW_CLI_ENTRYPOINT = ${JSON.stringify(cliRuntime.entrypoint)};
 const CCLAW_CLI_ARGS_PREFIX = ${JSON.stringify(cliRuntime.argsPrefix)};
 
@@ -289,7 +312,7 @@ async function readJsonFile(filePath, fallback = {}, options = {}) {
     } catch (parseErr) {
       // Emit a diagnostic breadcrumb instead of silently returning fallback.
       // The hook must still continue (soft-fail), but the corruption is
-      // now visible in \`state/hook-errors.jsonl\` and to \`cclaw doctor\`.
+      // now visible in \`state/hook-errors.jsonl\` and to \`npx cclaw-cli sync\`.
       if (options.root) {
         await recordHookError(
           options.root,
@@ -720,7 +743,6 @@ function detectTargetStage(payloadLower) {
 }
 
 function isFlowProgressionCommand(payloadLower) {
-  if (/(\\/cc-next|cc-next)([^a-z0-9_-]|$)/u.test(payloadLower)) return true;
   return /\\/cc([^a-z0-9_-]|$)/u.test(payloadLower);
 }
 
@@ -978,6 +1000,7 @@ async function handleSessionStart(runtime) {
   // both read a consistent "iter=N, acClosed=[...]" snapshot. Runs only when
   // we are in tdd — other stages skip the write to keep the file stable.
   let ralphLoopLine = "";
+  let earlyLoopLine = "";
   if (state.currentStage === "tdd") {
     try {
       const ralphStatus = await computeRalphLoopStatusInline(stateDir, state.activeRunId);
@@ -992,11 +1015,32 @@ async function handleSessionStart(runtime) {
     } catch (err) {
       // Best-effort — a malformed cycle log should never break
       // session-start. But we DO leave a breadcrumb in
-      // hook-errors.jsonl so \`cclaw doctor\` can surface chronic
+      // hook-errors.jsonl so \`npx cclaw-cli sync\` can surface chronic
       // failures (previously this was a silent swallow).
       await recordHookError(
         runtime.root,
         "session-start:ralph-loop",
+        err instanceof Error ? err.message : String(err)
+      );
+    }
+  }
+  if (
+    EARLY_LOOP_ENABLED &&
+    (state.currentStage === "brainstorm" || state.currentStage === "scope" || state.currentStage === "design")
+  ) {
+    try {
+      const earlyLoopStatus = await computeEarlyLoopStatusInline(
+        stateDir,
+        state.currentStage,
+        state.activeRunId,
+        EARLY_LOOP_MAX_ITERATIONS
+      );
+      await writeJsonFile(path.join(stateDir, "early-loop.json"), earlyLoopStatus);
+      earlyLoopLine = formatEarlyLoopStatusLineInline(earlyLoopStatus);
+    } catch (err) {
+      await recordHookError(
+        runtime.root,
+        "session-start:early-loop",
         err instanceof Error ? err.message : String(err)
       );
     }
@@ -1038,7 +1082,7 @@ async function handleSessionStart(runtime) {
     // Best-effort — a malformed knowledge.jsonl must never break
     // session-start. But we DO leave a breadcrumb in
     // hook-errors.jsonl so config/IO problems become visible in
-    // \`cclaw doctor\` instead of silently degrading readiness output.
+    // \`npx cclaw-cli sync\` instead of silently degrading readiness output.
     await recordHookError(
       runtime.root,
       "session-start:compound-readiness",
@@ -1078,6 +1122,9 @@ async function handleSessionStart(runtime) {
   if (ralphLoopLine.length > 0) {
     parts.push(ralphLoopLine);
   }
+  if (earlyLoopLine.length > 0) {
+    parts.push(earlyLoopLine);
+  }
   if (compoundReadinessLine.length > 0) {
     parts.push(compoundReadinessLine);
   }
@@ -1085,7 +1132,7 @@ async function handleSessionStart(runtime) {
     parts.push(
       "Stale stages pending acknowledgement: " +
         staleStageNames.join(", ") +
-        " (use cclaw internal rewind --ack <stage> after redo)."
+        " (use npx cclaw-cli internal rewind --ack <stage> after redo)."
     );
   }
   if (knowledge.digestLines.length > 0) {
@@ -1251,13 +1298,15 @@ async function handlePromptGuard(runtime) {
 }
 
 // Inline mirrors of canonical CLI computations (compound-readiness,
-// ralph-loop) are factored into src/content/hook-inline-snippets.ts so
+// ralph-loop, early-loop) are factored into
+// src/content/hook-inline-snippets.ts so
 // this 2000+-line file no longer owns their bodies. Each snippet carries
 // an explicit "mirrors X, parity enforced by Y" comment in the snippets
 // module. Parity is enforced by tests/unit/ralph-loop-parity.test.ts.
 ${HOOK_INLINE_SHARED_HELPERS}
 ${COMPOUND_READINESS_INLINE_SOURCE}
 ${RALPH_LOOP_INLINE_SOURCE}
+${EARLY_LOOP_INLINE_SOURCE}
 
 async function hasFailingRedEvidenceForPath(stateDir, runId, rawPath) {
   const cycleRaw = await readTextFile(path.join(stateDir, "tdd-cycle-log.jsonl"), "");
@@ -1437,7 +1486,7 @@ async function handleWorkflowGuard(runtime) {
     /^(read|readfile|open|view|cat|shell|runcommand|run_command|execcommand|exec_command|terminal)$/u.test(
       toolLower
     ) &&
-    /(\\.cclaw\\/state\\/flow-state\\.json|cclaw doctor|cclaw sync)/u.test(payloadLower);
+    /(\\.cclaw\\/state\\/flow-state\\.json|npx cclaw-cli sync|npx cclaw-cli sync|npx cclaw-cli sync|cclaw sync)/u.test(payloadLower);
   if (shouldRecordFlowRead) {
     await writeJsonFile(guardStateFile, {
       ...guardState,

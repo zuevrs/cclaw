@@ -217,6 +217,29 @@ export const CCLAW_AGENTS = [
     ].join("\n")
   },
   {
+    name: "product-strategist",
+    description:
+      "PROACTIVE during scope. MUST BE USED when selected scope mode is SCOPE EXPANSION or SELECTIVE EXPANSION to pressure-test 10x vision, strategic upside, and long-term trajectory before lock.",
+    tools: ["Read", "Grep", "Glob", "WebSearch"],
+    model: "deep",
+    activation: "proactive",
+    relatedStages: ["scope"],
+    returnSchema: ADVISORY_RETURN_SCHEMA,
+    body: [
+      "You are a **product strategy specialist** focused on expansion decisions.",
+      "",
+      "Produce concise evidence for:",
+      "- 10x vision and ideal outcome versus baseline scope",
+      "- concrete expansion proposals (not cosmetic variants)",
+      "- expected upside, reversibility, and trajectory impact",
+      "- explicit add/defer/skip recommendation per proposal",
+      "",
+      "Operate only when scope mode is SCOPE EXPANSION or SELECTIVE EXPANSION; otherwise return `None - mode does not require strategist pass`.",
+      "",
+      "**Role boundary:** challenge strategic scope and trajectory; do NOT choose implementation architecture."
+    ].join("\n")
+  },
+  {
     name: "critic",
     description:
       "PROACTIVE during brainstorm/scope/design when premises, alternatives, cost, rollback, or hidden assumptions need adversarial pressure.",
@@ -271,6 +294,29 @@ export const CCLAW_AGENTS = [
       "Flag vague language, missing edge cases, hidden assumptions, and RED tests that cannot be expressed.",
       "",
       "**Role boundary:** validate the spec; do NOT write plan tasks or implementation."
+    ].join("\n")
+  },
+  {
+    name: "spec-document-reviewer",
+    description:
+      "PROACTIVE during spec when self-review surfaces issues, subsystem boundaries feel broad, or the artifact needs a final plan-readiness pass.",
+    tools: ["Read", "Grep", "Glob"],
+    model: "balanced",
+    activation: "proactive",
+    relatedStages: ["spec"],
+    returnSchema: REVIEW_RETURN_SCHEMA,
+    body: [
+      "You are a **spec document reviewer** focused on plan-readiness.",
+      "",
+      "Run a concise pass over:",
+      "- completeness of required spec sections",
+      "- consistency across acceptance criteria, assumptions, and mapping",
+      "- clarity / ambiguity / placeholder drift",
+      "- single-subsystem scope fit and YAGNI pressure",
+      "",
+      "Return `PASS`, `PASS_WITH_GAPS`, `FAIL`, or `BLOCKED` with concrete evidence refs and minimal corrective actions.",
+      "",
+      "**Role boundary:** review the spec artifact only; do NOT write plan tasks or implementation."
     ].join("\n")
   },
   {
@@ -596,8 +642,8 @@ export function agentRoutingTable(): string {
 export function agentCostTierTable(): string {
   return `| Tier | Use for | Example agents |
 |---|---|---|
-| \`deep\` | one heavy planning pass per stage | planner |
-| \`balanced\` | discovery, criticism, review, TDD, and bounded worker execution | product-manager, critic, reviewer, security-reviewer, test-author, implementer, fixer |
+| \`deep\` | one heavy planning/strategy pass per stage | planner, product-strategist |
+| \`balanced\` | discovery, criticism, review, TDD, and bounded worker execution | product-manager, critic, spec-document-reviewer, reviewer, security-reviewer, test-author, implementer, fixer |
 | \`fast\` | bounded maintenance updates with limited blast radius | doc-updater |
 `;
 }

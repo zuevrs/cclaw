@@ -316,6 +316,41 @@ compound:
     await expect(readConfig(root)).rejects.toThrow(/"compound" has unknown key\(s\): mode/);
   });
 
+  it("parses legacy early_loop max_iterations config", async () => {
+    const root = await createTempProject("config-early-loop-legacy");
+    await fs.mkdir(path.join(root, ".cclaw"), { recursive: true });
+    await fs.writeFile(
+      configPath(root),
+      `harnesses:
+  - claude
+early_loop:
+  enabled: false
+  max_iterations: 5
+`,
+      "utf8"
+    );
+    const config = await readConfig(root);
+    expect(config.earlyLoop?.enabled).toBe(false);
+    expect(config.earlyLoop?.maxIterations).toBe(5);
+  });
+
+  it("rejects malformed early_loop max_iterations", async () => {
+    const root = await createTempProject("config-early-loop-bad-max-iterations");
+    await fs.mkdir(path.join(root, ".cclaw"), { recursive: true });
+    await fs.writeFile(
+      configPath(root),
+      `harnesses:
+  - claude
+early_loop:
+  max_iterations: 0
+`,
+      "utf8"
+    );
+    await expect(readConfig(root)).rejects.toThrow(
+      /"early_loop.maxIterations" must be a positive integer/
+    );
+  });
+
   it("parses trackHeuristics overrides (triggers + veto + fallback)", async () => {
     const root = await createTempProject("config-track-heuristics");
     await fs.mkdir(path.join(root, ".cclaw"), { recursive: true });
@@ -497,6 +532,21 @@ optInAudits:
     expect(config.optInAudits?.staleDiagramAudit).toBe(false);
   });
 
+  it("defaults staleDiagramAudit to true when optInAudits is omitted", async () => {
+    const root = await createTempProject("config-opt-in-audits-defaults");
+    await fs.mkdir(path.join(root, ".cclaw"), { recursive: true });
+    await fs.writeFile(
+      configPath(root),
+      `harnesses:
+  - claude
+`,
+      "utf8"
+    );
+    const config = await readConfig(root);
+    expect(config.optInAudits?.scopePreAudit).toBe(false);
+    expect(config.optInAudits?.staleDiagramAudit).toBe(true);
+  });
+
   it("rejects malformed optInAudits config", async () => {
     const root = await createTempProject("config-opt-in-audits-malformed");
     await fs.mkdir(path.join(root, ".cclaw"), { recursive: true });
@@ -616,6 +666,7 @@ optInAudits:
       "tddTestGlobs",
       "tdd",
       "compound",
+      "earlyLoop",
       "defaultTrack",
       "trackHeuristics",
       "sliceReview",

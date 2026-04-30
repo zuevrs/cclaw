@@ -8,8 +8,8 @@ export const BRAINSTORM: StageSchemaInput = {
   schemaShape: "v2",
   stage: "brainstorm",
   complexityTier: "standard",
-  skillFolder: "brainstorming",
-  skillName: "brainstorming",
+  skillFolder: "brainstorm",
+  skillName: "brainstorm",
   skillDescription: "Problem-discovery stage. Build a concise Problem Decision Record, choose lite/standard/deep depth, compare distinct directions, and hand approved decisions to scope.",
   philosophy: {
     hardGate: "Do NOT invoke implementation skills, write code, scaffold projects, or mutate product behavior until a concrete direction is approved by the user.",
@@ -46,15 +46,17 @@ export const BRAINSTORM: StageSchemaInput = {
       "**Reframe with How Might We** — write a single `How Might We …?` line that names the user/operator, the desired outcome, and the constraint. This is the altitude check before approaches.",
       "**Run Clarity Gate** — record ambiguity score (0.00-1.00), decision boundaries, reaffirmed non-goals, and residual-risk handoff before locking recommendations. If ambiguity remains high (>0.40), ask one decision-changing question before recommending.",
       "**Sharpening question discipline** — ask one decision-changing question at a time. Do not default to 3-5 batched questions; record only questions that changed the direction or a critical stop decision.",
-      "**Use compact discovery for simple apps** — for concrete low-risk asks (todo app, landing page, local widget), do one context pass, compare one baseline and one challenger, then ask for one explicit approval; do not drag the user through a full workshop.",
+      "**Use compact discovery for low-risk asks** — for concrete bounded requests, do one context pass, compare one baseline and one challenger, then ask for one explicit approval; do not drag the user through a full workshop.",
       "**Early-exit concrete asks** — for unambiguous implementation-only requests, write a compact Problem Decision Record plus short-circuit handoff (context, approved intent, constraints, assumptions, next-stage risks) and ask for one explicit approval.",
       "**Ask only decision-changing questions** — one at a time; if answers would not change approach and are non-critical preference/default assumptions, state the assumption and continue; STOP on scope, architecture, security, data loss, public API, migration, auth/pricing, or user approval uncertainty.",
       "**Compare 2-3 distinct approaches with stable Role/Upside columns** — Role values are `baseline` | `challenger` | `wild-card`; Upside is `low` | `modest` | `high` | `higher`; include real trade-offs, reuse notes, and reference-pattern source/disposition when a known pattern influenced the option; include exactly one challenger with explicit `high` or `higher` upside.",
       "**Collect reaction before recommending** — ask which option feels closest and what concern remains, then recommend based on that reaction.",
       "**Write the `Not Doing` list** — name 3-5 things this brainstorm explicitly is not committing to (vs. deferred). This protects scope from silent enlargement and the next stage from rework.",
+      "**Run early Ralph loop discipline** — after each producer iteration, append a `Critic Pass` JSONL row to `.cclaw/state/early-loop-log.jsonl`, refresh `.cclaw/state/early-loop.json`, and iterate until open concerns clear or convergence guard escalates.",
+      "**Embedded Grill (post-pick)** — after `Selected Direction` is named, run 3-5 sharp checks on hidden constraints, reversibility/rollback, scope boundaries, existing-pattern conformance, and domain-language fit; record each question with recommended answer and disposition (accept/refine/reject).",
       "**Self-review before user approval** — re-read the artifact and patch contradictions, weak trade-offs, placeholders, ambiguity, and weak handoff language. Record the result in `Self-Review Notes` using the calibrated review format: `- Status: Approved` (or `Issues Found`), `- Patches applied:` with inline note or sub-bullets, `- Remaining concerns:` with inline note or sub-bullets. Use `Patches applied: None` and `Remaining concerns: None` when there is nothing to record.",
       "**Request explicit approval** — state exactly what direction is being approved; do not advance without approval and artifact review.",
-      "**Handoff** — only after approval, hand scope: upstream decisions used, explicit drift, confidence level, unresolved questions, next-stage risk hints, and non-goals."
+      "**Handoff packet** — only after approval, produce a scope handoff packet with selected direction, why rejected options were rejected, explicit non-goals, unresolved questions, risk hints, and explicit drift from the initial ask so scope starts from locked upstream decisions instead of rediscovering intent."
     ],
     interactionProtocol: [
       "Start from observed project context; if the idea is vague, first narrow the project type with **one** structured question, then keep going.",
@@ -62,7 +64,7 @@ export const BRAINSTORM: StageSchemaInput = {
       "Lead with the premise check (right problem / direct path / what if nothing) and the `How Might We` reframing before approaches; both go in the artifact, not just the chat.",
       "Ask at most one question per turn, only when decision-changing; if using a structured question tool, send exactly one question object, not a multi-question form.",
       "Only non-critical preference/default assumptions may continue inline. STOP and ask when uncertainty affects scope, architecture, security, data loss, public API, migration, auth/pricing, or user approval.",
-      "For simple greenfield web apps, present a compact A/B choice with one recommended path and one higher-upside challenger; keep the artifact concise but structurally complete (Context, Premise, How Might We, Sharpening Questions, Approaches, Reaction, Selected Direction, Not Doing).",
+      "For simple low-risk greenfield work, present a compact A/B choice with one recommended path and one higher-upside challenger; keep the artifact concise but structurally complete (Context, Premise, How Might We, Sharpening Questions, Approaches, Reaction, Selected Direction, Not Doing).",
       "Show approaches before the recommendation; include a higher-upside challenger and gather reaction first.",
       "Self-review before approval: re-read the artifact, fix contradictions/placeholders/weak trade-offs, then ask for approval. Do not ask for approval on a draft you have not re-read.",
       "State exactly what is being approved, then **STOP** until the user explicitly approves the artifact."
@@ -90,11 +92,12 @@ export const BRAINSTORM: StageSchemaInput = {
       "2-3 approaches with trade-offs are recorded, including one higher-upside challenger option and reference-pattern source/disposition when applicable.",
       "User reaction to approaches is captured before final recommendation.",
       "Final recommendation explicitly reflects user reaction.",
+      "Early-loop status is reflected via `Victory Detector` / `Critic Pass` sections and `.cclaw/state/early-loop.json` when concerns remain.",
       "Selected Direction includes the handoff to the track-aware next stage: scope on standard, spec on medium when scope/design are skipped.",
       "When a promising option is parked, a seed file is created under `.cclaw/seeds/` and referenced in the artifact.",
       "Approved direction and approval marker are present.",
       "Assumptions and open questions are captured (or explicitly marked as none).",
-      "Scope handoff includes upstream decisions used, explicit drift, confidence, unresolved questions, next-stage risk hints, and non-goals."
+      "Scope handoff packet includes selected direction, upstream decisions used, explicit drift, confidence, unresolved questions, next-stage risk hints, and non-goals."
     ],
     inputs: ["problem statement", "constraints", "success criteria"],
     requiredContext: [
@@ -144,10 +147,13 @@ export const BRAINSTORM: StageSchemaInput = {
       { section: "Reference Pattern Candidates", required: false, validationRule: "Recommended when examples influence direction: list pattern/source, reusable invariant, accept/reject/defer disposition, and reason before approaches are finalized." },
       { section: "Approaches", required: true, validationRule: "Must compare 2-3 distinct options with real trade-offs. Use the canonical `Role` column with `baseline` | `challenger` | `wild-card` and the `Upside` column with `low` | `modest` | `high` | `higher`; include exactly one challenger row with `high` or `higher` upside, and cite reference-pattern source/disposition when applicable." },
       { section: "Approach Reaction", required: true, validationRule: "Must appear before Selected Direction and summarize user reaction before recommendation, including `Closest option`, `Concerns`, and what changed after reaction." },
-      { section: "Selected Direction", required: true, validationRule: "Must include the selected approach, explicit approval marker, rationale traceable to Approach Reaction, and scope handoff with decisions, drift, confidence, unresolved questions, risk hints, and non-goals." },
+      { section: "Selected Direction", required: true, validationRule: "Must include the selected approach, explicit approval marker, rationale traceable to Approach Reaction, and a scope handoff packet with selected direction, decisions, drift, confidence, unresolved questions, risk hints, and non-goals." },
+      { section: "Embedded Grill", required: false, validationRule: "Recommended after Selected Direction: 3-5 rows covering hidden constraints, reversibility/rollback, scope boundaries, existing-pattern fit, and domain-language alignment. Each row records question, recommended answer, and disposition (accept/refine/reject)." },
       { section: "Not Doing", required: false, validationRule: "Recommended: 3-5 explicitly non-committed items (distinct from deferred). Protects scope from silent enlargement and the next stage from rework." },
       { section: "Design", required: false, validationRule: "Must cover architecture, key components, and data flow scaled to complexity." },
       { section: "Visual Companion", required: false, validationRule: "If architecture/data-flow complexity is medium+, include compact ASCII/Mermaid diagram or explicitly justify omission." },
+      { section: "Victory Detector", required: false, validationRule: "Recommended early-loop checkpoint: cite `.cclaw/state/early-loop.json`, current iteration/maxIterations, open concern count, convergence status, and iterate/ready/escalate decision." },
+      { section: "Critic Pass", required: false, validationRule: "Recommended producer/critic log contract: each iteration appends one JSONL row to `.cclaw/state/early-loop-log.jsonl` with runId, stage, iteration, and open concerns." },
       { section: "Self-Review Notes", required: false, validationRule: "Recommended: use the calibrated review format — `- Status: Approved` (or `Issues Found`), `- Patches applied:` (inline note or sub-bullets, use `None` if nothing changed), `- Remaining concerns:` (inline note or sub-bullets, use `None` if nothing remains). Done before requesting user approval." },
       { section: "Assumptions and Open Questions", required: false, validationRule: "Must capture unresolved assumptions/open questions, or explicitly state none." }
     ],

@@ -92,8 +92,7 @@ export interface TrackHeuristicsConfig {
  * when the harness supports native dispatch, otherwise fulfilled via
  * an explicit in-session role switch with evidence).
  *
- * Track gating: `enforceOnTracks` lists the tracks where the doctor
- * check escalates to a warning. Tracks outside this list still see
+ * Track gating: `enforceOnTracks` lists the tracks where the sync/runtime check escalates to a warning. Tracks outside this list still see
  * the skill prose but leave the decision to the user.
  *
  * All fields optional; sensible defaults: disabled, threshold 5, no
@@ -106,7 +105,7 @@ export interface SliceReviewConfig {
   filesChangedThreshold?: number;
   /** Glob hints; any plan-task touchPath match triggers review. */
   touchTriggers?: string[];
-  /** Tracks on which missed reviews escalate to a doctor warning. */
+  /** Tracks on which missed reviews escalate to a sync/runtime warning. */
   enforceOnTracks?: FlowTrack[];
 }
 
@@ -140,6 +139,18 @@ export interface CompoundConfig {
   recurrenceThreshold?: number;
 }
 
+/**
+ * Early-stage Ralph loop policy for brainstorm/scope/design.
+ *
+ * - enabled: when false, skip early-loop gate/diagnostics and hook writes.
+ * - maxIterations: capped producer/critic iterations before convergence
+ *   escalation. Defaults to 3.
+ */
+export interface EarlyLoopConfig {
+  enabled?: boolean;
+  maxIterations?: number;
+}
+
 export interface IronLawsConfig {
   /**
    * Per-law escape hatch: list the iron-law ids that must always be strict,
@@ -153,13 +164,13 @@ export interface IronLawsConfig {
 /**
  * Optional opt-in audit toggles for additional stage lint gates.
  *
- * Disabled by default so existing projects are not forced into stricter
- * checks until they explicitly enable them in config.
+ * `scopePreAudit` stays opt-in (disabled by default). `staleDiagramAudit` is
+ * default-on and can be explicitly disabled when teams intentionally skip it.
  */
 export interface OptInAuditsConfig {
   /** When true, scope lint requires a filled `Pre-Scope System Audit` section. */
   scopePreAudit?: boolean;
-  /** When true, design lint runs stale diagram drift checks against blast radius files. */
+  /** Default true; when enabled, design lint runs stale diagram drift checks against blast radius files. */
   staleDiagramAudit?: boolean;
 }
 
@@ -205,6 +216,8 @@ export interface CclawConfig {
   tdd?: TddPathConfig;
   /** Compound-stage recurrence policy overrides. */
   compound?: CompoundConfig;
+  /** Early-stage producer/critic loop policy overrides. */
+  earlyLoop?: EarlyLoopConfig;
   /** When true, cclaw installs managed git pre-commit/pre-push wrappers. */
   gitHookGuards?: boolean;
   /** Default flow track for new runs (quick = shortened path, standard = full pipeline). */
@@ -237,11 +250,6 @@ export interface CclawConfig {
   /** Optional runtime knobs for outside-voice review loops. */
   reviewLoop?: ReviewLoopConfig;
 }
-
-/**
- * @deprecated Use `CclawConfig` instead.
- */
-export type VibyConfig = CclawConfig;
 
 export interface TransitionRule {
   from: FlowStage;

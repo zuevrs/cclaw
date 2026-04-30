@@ -23,7 +23,7 @@ Generated from `src/harness-adapters.ts` capabilities and hook event mappings. F
 
 Neutral placeholder tokens only: `<agent-name>`, `<stage>`, `<run-id>`, `<span-id>`, `<dispatch-id>`, `<agent-def-path>`, `<iso-ts>`, `<artifact-anchor>`. See `docs/quality-gates.md` for stage-by-stage gate mapping.
 
-The four shipped harnesses (`claude`, `cursor`, `opencode`, `codex`) each ship with a canonical primary surface in the table above. The remaining enum values `generic-task`, `role-switch`, and `manual` are documented in the dispatch-surface table below and are available to any harness as fallback paths when the primary surface is unavailable.
+The four shipped harnesses (`claude`, `cursor`, `opencode`, `codex`) each ship with a canonical primary surface in the table above. Repair hints: `npx cclaw-cli sync` safely regenerates shims/plugins/agents; Codex also needs `[features] codex_hooks = true`; OpenCode needs `opencode.json(.c)` plugin registration; role-switch completions require evidenceRefs. The remaining enum values `generic-task`, `role-switch`, and `manual` are documented in the dispatch-surface table below and are available to any harness as fallback paths when the primary surface is unavailable.
 
 **claude**:
 
@@ -84,6 +84,20 @@ Pre-v3 ledger entries that lack a recorded `dispatchSurface` are tagged `fulfill
 
 `--dispatch-surface` must be one of the values listed in the dispatch-surface table above (the enum is generated verbatim from `src/delegation.ts::DELEGATION_DISPATCH_SURFACES`). Surfaces must align with the allowed agent-definition-path prefixes shown alongside each surface; `role-switch` and `manual` accept any path. The deprecated `task` surface is rejected.
 
+## Hook layering
+
+Hook behavior is intentionally split into three layers so docs, generation, and runtime checks stay in sync:
+
+| Layer | Source of truth | Responsibility |
+|---|---|---|
+| 1) Manifest projection | `src/content/hook-manifest.ts` | Canonical handler/event map per harness. This is the authoring surface for new handlers or reroutes. |
+| 2) JSON schema descriptors | `src/hook-schemas/*.json` + `src/hook-schema.ts` descriptor map | Declares required harness-native event arrays and schema version for each harness document. |
+| 3) Runtime TS validation | `src/hook-schema.ts::validateHookDocument` + sync hook checks | Validates generated hook JSON shape/required events and reports actionable diagnostics. |
+
+Flow:
+1. Manifest defines handler bindings.
+2. Hook documents are generated from manifest projections.
+3. Schema descriptors + TS validators enforce structure at sync time.
 
 Fallback legend:
 
@@ -154,15 +168,15 @@ shared casing silently breaks generated wiring.
   at hook level, so the canonical path is
   `node .cclaw/hooks/stage-complete.mjs <stage>` plus the non-blocking
   `UserPromptSubmit` state nudge.
-- In `strict` mode, Codex additionally runs the generated Node/runtime `verify-current-state` path on `UserPromptSubmit` as a fail-closed check. Advisory mode remains non-blocking, including when the generated local Node entrypoint is missing; doctor reports that install drift separately. This strict-only coverage is represented explicitly by the `strict_state_verify` semantic row above.
+- In `strict` mode, Codex additionally runs the generated Node/runtime `verify-current-state` path on `UserPromptSubmit` as a fail-closed check. Advisory mode remains non-blocking, including when the generated local Node entrypoint is missing. This strict-only coverage is represented explicitly by the `strict_state_verify` semantic row above.
 
 ## Shared command contract
 
 All harnesses receive the same utility commands:
 
 - `/cc` - flow entry and resume
-- `/cc-next` - stage progression and post-ship closeout
-- `/cc-ideate` - ideate mode for ranked repo-improvement backlog
+- `/cc` - stage progression and post-ship closeout
+- `/cc-idea` - idea mode for ranked repo-improvement backlog
 - `/cc-view` - read-only router for status/tree/diff
 
 Read-only subcommands:
@@ -170,7 +184,7 @@ Read-only subcommands:
 - `/cc-view tree` - deep flow tree (stages, artifacts, stale markers)
 - `/cc-view diff` - before/after flow-state diff map
 
-Operational work is handled by `/cc`, `/cc-next`, `/cc-ideate`, `/cc-view`, and `node .cclaw/hooks/stage-complete.mjs <stage>` inside the installed harness runtime. `npx cclaw-cli` is the installer/support surface for init, sync, upgrade, doctor, and explicit/manual archive; the normal stage flow must not depend on a runtime `cclaw` binary in PATH.
+Operational work is handled by `/cc`, `/cc-idea`, `/cc-view`, and `node .cclaw/hooks/stage-complete.mjs <stage>` inside the installed harness runtime. `npx cclaw-cli` is the installer/support surface for init, sync, upgrade, and explicit/manual archive; the normal stage flow must not depend on a runtime `cclaw` binary in PATH.
 
 Critical-path stage order remains canonical:
 `brainstorm -> scope -> design -> spec -> plan -> tdd -> review -> ship`
@@ -182,14 +196,14 @@ Every track then closes out through:
 
 | Stage | Skill folder |
 |---|---|
-| `brainstorm` | `brainstorming` |
-| `scope` | `scope-shaping` |
-| `design` | `engineering-design-lock` |
-| `spec` | `specification-authoring` |
-| `plan` | `planning-and-task-breakdown` |
-| `tdd` | `test-driven-development` |
-| `review` | `two-layer-review` |
-| `ship` | `shipping-and-handoff` |
+| `brainstorm` | `brainstorm` |
+| `scope` | `scope` |
+| `design` | `design` |
+| `spec` | `spec` |
+| `plan` | `plan` |
+| `tdd` | `tdd` |
+| `review` | `review` |
+| `ship` | `ship` |
 
 This map is generated from `src/constants.ts::STAGE_TO_SKILL_FOLDER` so
 skill-path naming stays explicit and stable even when stage ids differ from
@@ -208,12 +222,12 @@ Harness-specific additions:
 
 - `claude`: `.claude/commands/cc*.md`, `.claude/hooks/hooks.json`
 - `cursor`: `.cursor/commands/cc*.md`, `.cursor/hooks.json`, `.cursor/rules/cclaw-workflow.mdc`
-- `opencode`: `.opencode/commands/cc*.md`, `.opencode/plugins/cclaw-plugin.mjs`, opencode plugin registration with `permission.question: "allow"`; set `OPENCODE_ENABLE_QUESTION_TOOL=1` for ACP clients so structured asks can route through question tooling. Doctor validates the config permission and warns when the environment hint is absent.
-- `codex`: `.agents/skills/cc/SKILL.md`, `.agents/skills/cc-next/SKILL.md`, `.agents/skills/cc-ideate/SKILL.md`, `.agents/skills/cc-view/SKILL.md`, `.codex/hooks.json` (Codex CLI reads `.agents/skills/` for custom skills and consumes `.codex/hooks.json` on v0.114+ when `[features] codex_hooks = true` is set in `~/.codex/config.toml`. `.codex/commands/` and the legacy `.agents/skills/cclaw-cc*/` layout from v0.39.x are auto-cleaned on sync.)
+- `opencode`: `.opencode/commands/cc*.md`, `.opencode/plugins/cclaw-plugin.mjs`, opencode plugin registration with `permission.question: "allow"`; set `OPENCODE_ENABLE_QUESTION_TOOL=1` for ACP clients so structured asks can route through question tooling. Sync/runtime checks validate the config permission and warn when the environment hint is absent.
+- `codex`: `.agents/skills/cc/SKILL.md`, `.agents/skills/cc-idea/SKILL.md`, `.agents/skills/cc-view/SKILL.md`, `.codex/hooks.json` (Codex CLI reads `.agents/skills/` for custom skills and consumes `.codex/hooks.json` on v0.114+ when `[features] codex_hooks = true` is set in `~/.codex/config.toml`. `.codex/commands/` and the legacy `.agents/skills/cclaw-cc*/` layout from v0.39.x are auto-cleaned on sync.)
 
 ## Runtime observability
 
-- `npx cclaw-cli doctor` validates shim, hook, and lifecycle surfaces against this capability model.
+- `npx cclaw-cli sync` validates shim, hook, and lifecycle surfaces against this capability model.
 - `/cc-view status` and `/cc-view tree` surface the same harness tier/fallback facts from the generated runtime metadata.
 
 ## Delegation Proof Model
@@ -222,16 +236,16 @@ Runtime state is split deliberately:
 
 - `.cclaw/state/delegation-log.json` is the compact current ledger used by stage gates and `/cc-view` summaries.
 - `.cclaw/state/delegation-events.jsonl` is append-only audit proof for `scheduled`, `launched`, `acknowledged`, `completed`, `failed`, `waived`, and `stale` lifecycle transitions.
-- `.cclaw/state/subagents.json` is a lightweight active-worker tracker for status/tree/doctor surfaces.
+- `.cclaw/state/subagents.json` is a lightweight active-worker tracker for status/tree/sync reports.
 - `.cclaw/hooks/delegation-record.mjs` is the generated helper for lifecycle rows/events. It validates required fields and emits JSON diagnostics with `--json`.
 
-Isolated completion requires `spanId`, `dispatchId` or `workerRunId`, `dispatchSurface`, `agentDefinitionPath`, `ackTs`, `launchedTs`, and `completedTs`. Cursor/generic dispatch and role-switch also require evidence refs when artifact evidence is the proof source. Legacy inferred completions remain readable, but doctor reports them as warnings because they predate event-log proof.
+Isolated completion requires `spanId`, `dispatchId` or `workerRunId`, `dispatchSurface`, `agentDefinitionPath`, `ackTs`, `launchedTs`, and `completedTs`. Cursor/generic dispatch and role-switch also require evidence refs when artifact evidence is the proof source. Legacy inferred completions remain readable, but sync reports them as warnings because they predate event-log proof.
 
 ## Reference Audit Appendix
 
 Status meanings: `deep` = read for transferable implementation contract; `targeted` = inspected the relevant files only; `skimmed` = searched/read enough to classify; `not relevant` = intentionally excluded from implementation influence.
 
-| Reference path under `/Users/zuevrs/Downloads/references` | Status | Findings preserved |
+| Reference path under `<repo-relative references dir>` | Status | Findings preserved |
 |---|---|---|
 | `evanklem-evanflow/skills/evanflow-coder-overseer/SKILL.md` | deep | Contract-first coder/overseer loop, reviewer reads code rather than worker narrative, and integration overseer pattern map cleanly onto cclaw subagent guidance. |
 | `evanklem-evanflow/agents/evanflow-coder.md` | targeted | Worker role is narrow: implement the pasted contract, avoid broad orchestration, and return evidence for overseer verification. |
@@ -239,7 +253,7 @@ Status meanings: `deep` = read for transferable implementation contract; `target
 | `oh-my-codex/src/agents/native-config.ts` | deep | Native agent config shape supports explicit metadata/model/tool posture; cclaw should validate generated `.codex/agents/*.toml` shape instead of trusting file presence. |
 | `oh-my-codex/src/team/state/events.ts` and `src/team/state/workers.ts` | targeted | Append-only events plus worker state are useful as separate audit/current-state layers; cclaw mirrors that with `delegation-events.jsonl` and `subagents.json`. |
 | `oh-my-openagent/src/tools/delegate-task/tools.ts` | deep | Delegation should have an explicit dispatch surface and mode instead of relying on a prose claim that an agent was launched. |
-| `oh-my-openagent/src/tools/delegate-task/subagent-resolver.ts` | targeted | Agent discovery should be checked by doctor so missing/corrupt generated agent definitions are visible before dispatch. |
+| `oh-my-openagent/src/tools/delegate-task/subagent-resolver.ts` | targeted | Agent discovery should be checked by sync so missing/corrupt generated agent definitions are visible before dispatch. |
 | `oh-my-openagent/src/tools/delegate-task/prompt-builder.ts` | targeted | Prompt builders should include exact invocation/return contracts; cclaw generated worker prompts now carry ACK/result schemas. |
 | `giancarloerra-socraticode/**` | skimmed | Useful for workflow/e2e and graph-oriented contract testing, but not a subagent dispatch implementation reference; no runtime pattern imported. |
 | unrelated large reference trees not named above | not relevant | Searched/skipped because they did not contain flow/subagent/harness dispatch patterns relevant to this plan. |

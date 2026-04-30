@@ -89,11 +89,9 @@ export async function policyChecks(projectRoot: string, options: PolicyOptions =
     { file: runtimeFile("skills/learnings/SKILL.md"), needle: "## Manual Actions", name: "utility_skill:learnings:manual_actions" },
     { file: runtimeFile("skills/learnings/SKILL.md"), needle: "## HARD-GATE", name: "utility_skill:learnings:hard_gate" },
     { file: runtimeFile("commands/start.md"), needle: "## Algorithm", name: "utility_command:start:algorithm" },
-    { file: runtimeFile("commands/next.md"), needle: "## Algorithm", name: "utility_command:next:algorithm" },
-    { file: runtimeFile("commands/next.md"), needle: "closeout.shipSubstate", name: "utility_command:next:closeout_chain" },
-    { file: runtimeFile("commands/ideate.md"), needle: "## Algorithm", name: "utility_command:ideate:algorithm" },
-    { file: runtimeFile("skills/flow-ideate/SKILL.md"), needle: "## Protocol", name: "utility_skill:ideate:protocol" },
-    { file: runtimeFile("skills/flow-ideate/SKILL.md"), needle: "## HARD-GATE", name: "utility_skill:ideate:hard_gate" },
+    { file: runtimeFile("commands/idea.md"), needle: "## Algorithm", name: "utility_command:idea:algorithm" },
+    { file: runtimeFile("skills/flow-idea/SKILL.md"), needle: "## Protocol", name: "utility_skill:idea:protocol" },
+    { file: runtimeFile("skills/flow-idea/SKILL.md"), needle: "## HARD-GATE", name: "utility_skill:idea:hard_gate" },
     { file: runtimeFile("commands/view.md"), needle: "## Routing", name: "utility_command:view:routing" },
     { file: runtimeFile("skills/flow-view/SKILL.md"), needle: "## Status Subcommand", name: "utility_skill:view:status_section" },
     { file: runtimeFile("skills/flow-view/SKILL.md"), needle: "## Tree Subcommand", name: "utility_skill:view:tree_section" },
@@ -124,7 +122,7 @@ export async function policyChecks(projectRoot: string, options: PolicyOptions =
     { file: runtimeFile("skills/using-cclaw/SKILL.md"), needle: "## Protocol Behavior", name: "meta_skill:protocol_behavior" },
     { file: runtimeFile("skills/using-cclaw/SKILL.md"), needle: "## Failure guardrails", name: "meta_skill:failure_guardrails" },
     { file: runtimeFile("skills/session/SKILL.md"), needle: "## Session Resume Protocol", name: "utility_skill:session:resume" },
-    { file: runtimeFile("skills/brainstorming/SKILL.md"), needle: "## Shared Stage Guidance", name: "stage_skill:shared_guidance_inline" },
+    { file: runtimeFile("skills/brainstorm/SKILL.md"), needle: "## Shared Stage Guidance", name: "stage_skill:shared_guidance_inline" },
 
 
     { file: runtimeFile("hooks/run-hook.mjs"), needle: "activeRunId", name: "hooks:session_start:active_run" },

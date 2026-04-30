@@ -390,11 +390,11 @@ RECOMMENDATION: B — shared package eliminates drift; perf budget already cover
     const premiseShape = result.findings.find((f) => f.section === "Premise List Shape");
     const detailCards = result.findings.find((f) => f.section === "Approach Detail Cards");
     const stamp = result.findings.find((f) => f.section === "Anti-Sycophancy Acknowledgement");
-    expect(forcingCount?.found).toBe(true);
-    expect(forcingSpecific?.found).toBe(true);
-    expect(premiseShape?.found).toBe(true);
+    expect(forcingCount).toBeUndefined();
+    expect(forcingSpecific).toBeUndefined();
+    expect(premiseShape).toBeUndefined();
     expect(detailCards?.found).toBe(true);
-    expect(stamp?.found).toBe(true);
+    expect(stamp).toBeUndefined();
   });
 
   it("fails Approach Detail Cards when RECOMMENDATION line is missing (infra/migration)", async () => {
@@ -483,7 +483,7 @@ describe("0.51.28 — bold-emphasis tolerance and tier vocabulary", () => {
     expect(modeBlock?.details ?? "").toMatch(/multiple|placeholder/i);
   });
 
-  it("passes Anti-Sycophancy Acknowledgement with the shipped bold form (library)", async () => {
+  it("does not emit retired Anti-Sycophancy finding (library)", async () => {
     const root = await createTempProject("brainstorm-anti-sycophancy-bold-library");
     await writeRuntimeArtifact(
       root,
@@ -506,7 +506,7 @@ describe("0.51.28 — bold-emphasis tolerance and tier vocabulary", () => {
 
     const result = await lintArtifact(root, "brainstorm");
     const stamp = result.findings.find((f) => f.section === "Anti-Sycophancy Acknowledgement");
-    expect(stamp?.found).toBe(true);
+    expect(stamp).toBeUndefined();
   });
 
   it("passes Approach Tier Classification when the value is `lite` (CLI utility)", async () => {
@@ -577,8 +577,8 @@ describe("0.51.28 — bold-emphasis tolerance and tier vocabulary", () => {
   });
 });
 
-describe("scope linter Failure Modes Registry + Reversibility (CLI utility)", () => {
-  it("fails when Failure Modes Registry has the canonical header but no decision marker", async () => {
+describe("scope linter retired failure-modes/reversibility checks", () => {
+  it("does not emit retired Failure Modes Registry finding", async () => {
     const root = await createTempProject("scope-failure-modes-no-decision");
     await writeRuntimeArtifact(
       root,
@@ -609,10 +609,10 @@ RECOMMENDATION: A — streaming parser meets perf budget without raising memory 
     const decision = result.findings.find(
       (f) => f.section === "Failure Modes STOP-per-issue"
     );
-    expect(decision?.found).toBe(false);
+    expect(decision).toBeUndefined();
   });
 
-  it("passes Reversibility Rating with score 1-5 (library extraction)", async () => {
+  it("does not emit retired Reversibility Rating finding", async () => {
     const root = await createTempProject("scope-reversibility-library");
     await writeRuntimeArtifact(
       root,
@@ -630,12 +630,12 @@ RECOMMENDATION: A — streaming parser meets perf budget without raising memory 
     const reversibility = result.findings.find(
       (f) => f.section === "Reversibility Rating Score"
     );
-    expect(reversibility?.found).toBe(true);
+    expect(reversibility).toBeUndefined();
   });
 });
 
 describe("design linter coverage diagram + regression iron rule", () => {
-  it("fails ASCII Coverage Diagram tokens when fewer than 3 markers are present", async () => {
+  it("does not emit retired ASCII Coverage Diagram token finding", async () => {
     const root = await createTempProject("design-coverage-tokens-low");
     await writeRuntimeArtifact(
       root,
@@ -662,7 +662,7 @@ entry-point
     const coverage = result.findings.find(
       (f) => f.section === "ASCII Coverage Diagram Tokens"
     );
-    expect(coverage?.found).toBe(false);
+    expect(coverage).toBeUndefined();
   });
 
   it("passes Calibrated Findings when format is followed (infra/migration)", async () => {
@@ -816,21 +816,21 @@ describe("tdd linter watched-RED + iron law", () => {
 });
 
 describe("review linter request frame + critic dispatch", () => {
-  it("fails Review Frame Coverage when fields are missing (infra/migration)", async () => {
+  it("fails Pre-Critic Self-Review Coverage when fields are missing (infra/migration)", async () => {
     const root = await createTempProject("review-frame-missing");
     await writeRuntimeArtifact(
       root,
       "07-review.md",
       `# Review Artifact
 
-## Frame the Review Request
+## Pre-Critic Self-Review
 - Goal: rolling migration with rollback plan
 - Approach: blue/green with health-gated cutover
 `
     );
 
     const result = await lintArtifact(root, "review");
-    const frame = result.findings.find((f) => f.section === "Review Frame Coverage");
+    const frame = result.findings.find((f) => f.section === "Pre-Critic Self-Review Coverage");
     expect(frame?.found).toBe(false);
   });
 

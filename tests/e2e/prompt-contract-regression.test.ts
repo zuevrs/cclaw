@@ -14,15 +14,15 @@ describe("prompt-contract regression harness", () => {
     await initCclaw({ projectRoot: root });
 
     const planSkill = await fs.readFile(
-      path.join(root, ".cclaw/skills/planning-and-task-breakdown/SKILL.md"),
+      path.join(root, ".cclaw/skills/plan/SKILL.md"),
       "utf8"
     );
     const reviewSkill = await fs.readFile(
-      path.join(root, ".cclaw/skills/two-layer-review/SKILL.md"),
+      path.join(root, ".cclaw/skills/review/SKILL.md"),
       "utf8"
     );
     const tddSkill = await fs.readFile(
-      path.join(root, ".cclaw/skills/test-driven-development/SKILL.md"),
+      path.join(root, ".cclaw/skills/tdd/SKILL.md"),
       "utf8"
     );
     expect(planSkill).toContain("Dependency Batches");
@@ -67,7 +67,7 @@ describe("prompt-contract regression harness", () => {
     const codexPlanner = await fs.readFile(path.join(root, ".codex/agents/planner.toml"), "utf8");
     const helper = await fs.readFile(path.join(root, ".cclaw/hooks/delegation-record.mjs"), "utf8");
     const stageSkill = await fs.readFile(
-      path.join(root, ".cclaw/skills/planning-and-task-breakdown/SKILL.md"),
+      path.join(root, ".cclaw/skills/plan/SKILL.md"),
       "utf8"
     );
 

@@ -4,7 +4,6 @@ import { FLOW_STAGES, type FlowStage, type FlowTrack } from "../types.js";
 import { stageExamples } from "./examples.js";
 import { reviewStackAwareRoutes, reviewStackAwareRoutingSummary, stageAutoSubagentDispatch, stageSchema, stageTrackRenderContext } from "./stage-schema.js";
 import type { StageSchema } from "./stage-schema.js";
-import { conversationLanguagePolicyMarkdown } from "./language-policy.js";
 import { referencePatternsForStage } from "./reference-patterns.js";
 import { harnessDelegationRecipes } from "../harness-adapters.js";
 import type {
@@ -17,6 +16,8 @@ import type {
 } from "./stages/schema-types.js";
 
 const VERIFICATION_STAGES: FlowStage[] = ["tdd", "review", "ship"];
+const STAGE_LANGUAGE_POLICY_POINTER =
+  "> Language policy: see `using-cclaw` section `Conversation Language Policy`.";
 
 // ---------- Cross-cutting universal mechanics (Layer 2 building blocks) ----------
 //
@@ -401,7 +402,7 @@ function completionParametersBlock(schema: StageSchema, track: FlowTrack): strin
     ? "flow complete"
     : stageSchema(nextStage, track).skillDescription;
 
-  return `## Completion Parameters
+  return `### Completion Parameters
 
 - \`stage\`: \`${schema.stage}\`
 - \`next\`: \`${nextStage}\` (${nextDescription})
@@ -411,11 +412,26 @@ function completionParametersBlock(schema: StageSchema, track: FlowTrack): strin
 - \`completion helper\`: \`node .cclaw/hooks/stage-complete.mjs ${schema.stage}\`
 - \`completion helper with evidence\`: \`node .cclaw/hooks/stage-complete.mjs ${schema.stage} --evidence-json '{"<gate_id>":"<evidence note>"}' --passed=<gate_id>[,<gate_id>]\`
 - \`completion helper JSON diagnostics\`: append \`--json\` to receive a machine-readable validation failure summary.
-- \`delegation record helper\`: \`node .cclaw/hooks/delegation-record.mjs --stage=${schema.stage} --agent=<agent> --mode=<mandatory|proactive> --status=<scheduled|launched|acknowledged|completed|failed|waived|stale> --span-id=<spanId> --dispatch-id=<dispatchId> --dispatch-surface=<surface> --agent-definition-path=<path> --json\`. \`delegation helper recipe\`: call \`--status=scheduled\`, then \`--status=launched\`, then \`--status=acknowledged\`, then \`--status=completed\` with the same \`--span-id\`, \`--dispatch-id\`, \`--dispatch-surface\`, and \`--agent-definition-path\`; completed isolated/generic rows fail unless that same span already has an acknowledged event or the completed call includes \`--ack-ts=<iso>\`. For role-switch fallback, use \`--dispatch-surface=role-switch --evidence-ref=<artifact#anchor>\` instead of pretending isolated completion.
+- \`delegation lifecycle proof\`: use the delegation helper recipe in this section with explicit lifecycle rows: \`--status=scheduled\` -> \`--status=launched\` -> \`--status=acknowledged\` -> \`--status=completed\` (completed isolated/generic requires prior ACK for the same span or \`--ack-ts=<iso>\`).
 - Fill \`## Learnings\` before closeout: either \`- None this stage.\` or JSON bullets with required keys \`type\`, \`trigger\`, \`action\`, \`confidence\` (knowledge-schema compatible).
-- Record mandatory delegation lifecycle in \`${RUNTIME_ROOT}/state/delegation-log.json\` and append proof events to \`${RUNTIME_ROOT}/state/delegation-events.jsonl\`; the ledger is current state, the event log is audit proof.${mandatoryAgents.length > 0 ? ` If a mandatory delegation cannot run in this harness, use \`--waive-delegation=${mandatoryAgents.join(",")} --waiver-reason="<why safe>"\` on the completion helper.` : ""}
+- Record mandatory delegation lifecycle in \`${RUNTIME_ROOT}/state/delegation-log.json\` and append proof events to \`${RUNTIME_ROOT}/state/delegation-events.jsonl\`; the ledger is current state, the event log is audit proof.${mandatoryAgents.length > 0 ? ` If a mandatory delegation cannot run in this harness, use \`--waive-delegation=${mandatoryAgents.join(",")} --waiver-reason="<why safe>"\` on the completion helper.` : ""} If proactive delegations were intentionally skipped, rerun only with \`--accept-proactive-waiver\` (optionally \`--accept-proactive-waiver-reason="<why safe>"\`) after explicit user approval.
 - Never edit raw \`flow-state.json\` to complete a stage, even in advisory mode; that bypasses validation, gate evidence, and Learnings harvest. If the helper fails, stop and report the exact command/output instead of applying a manual state workaround.
 - Completion protocol: verify required gates, update the artifact, then use the completion helper with \`--evidence-json\` and \`--passed\` for every satisfied gate.
+`;
+}
+
+function delegationAndCompletionBlock(schema: StageSchema, track: FlowTrack): string {
+  const dispatchBlock = autoSubagentDispatchBlock(schema.stage, track).trim();
+  const completionBlock = completionParametersBlock(schema, track).trim();
+  const normalizedDispatch = dispatchBlock.length > 0
+    ? dispatchBlock.replace(/^## Automatic Subagent Dispatch/mu, "### Automatic Subagent Dispatch")
+    : "### Automatic Subagent Dispatch\nNo automatic subagent dispatch rules for this stage.";
+
+  return `## Delegation & Completion
+
+${normalizedDispatch}
+
+${completionBlock}
 `;
 }
 
@@ -569,7 +585,7 @@ If you are about to violate the Iron Law, STOP. No amount of urgency, partial pr
 
 ${quickStartBlock(stage, track)}
 
-${conversationLanguagePolicyMarkdown()}
+${STAGE_LANGUAGE_POLICY_POINTER}
 ## Philosophy
 ${philosophy.purpose}
 
@@ -594,7 +610,7 @@ Stage state machine (map only; Checklist is authoritative):
 ${processFlowMermaid.length > 0 ? processFlowMermaid : "```mermaid\nflowchart TD\n  S1[\"Execute Checklist\"] --> S2[\"Satisfy required gates\"] --> S3[\"Verify before closeout\"]\n```"}
 
 ${platformNotesBlock}${contextLoadingBlock(stage, artifactRules.crossStageTrace, executionModel)}
-${autoSubagentDispatchBlock(stage, track)}
+${delegationAndCompletionBlock(schema, track)}
 ${stackAwareReviewRoutingBlock(stage)}
 ${researchPlaybooksBlock(executionModel.researchPlaybooks ?? [])}
 ${referencePatternsBlock(stage)}
@@ -628,7 +644,6 @@ ${verificationBlock(stage)}
 ## Exit Criteria
 ${executionModel.exitCriteria.map((item) => `- [ ] ${item}`).join("\n")}
 
-${completionParametersBlock(schema, track)}
 ## Artifact Rules
 - Artifact target: \`${RUNTIME_ROOT}/artifacts/${artifactRules.artifactFile}\`
 

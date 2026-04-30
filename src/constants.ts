@@ -65,8 +65,8 @@ export const REQUIRED_DIRS = [
   `${RUNTIME_ROOT}/templates`,
   `${RUNTIME_ROOT}/templates/state-contracts`,
   `${RUNTIME_ROOT}/artifacts`,
+  `${RUNTIME_ROOT}/archive`,
   `${RUNTIME_ROOT}/state`,
-  `${RUNTIME_ROOT}/runs`,
   `${RUNTIME_ROOT}/rules`,
   `${RUNTIME_ROOT}/agents`,
   `${RUNTIME_ROOT}/hooks`,
@@ -97,22 +97,16 @@ export const REQUIRED_GITIGNORE_PATTERNS = [
 
 /**
  * Canonical stage -> skill folder mapping.
- *
- * Intentional divergence from stage ids:
- * - stage ids stay short and flow-oriented (`spec`, `tdd`, `ship`)
- * - skill folders stay descriptive and user-facing for `.cclaw/skills/*`.
- *
- * Keep this map as the single source of truth for generated skill paths.
  */
 export const STAGE_TO_SKILL_FOLDER: Record<FlowStage, string> = {
-  brainstorm: "brainstorming",
-  scope: "scope-shaping",
-  design: "engineering-design-lock",
-  spec: "specification-authoring",
-  plan: "planning-and-task-breakdown",
-  tdd: "test-driven-development",
-  review: "two-layer-review",
-  ship: "shipping-and-handoff"
+  brainstorm: "brainstorm",
+  scope: "scope",
+  design: "design",
+  spec: "spec",
+  plan: "plan",
+  tdd: "tdd",
+  review: "review",
+  ship: "ship"
 };
 
 export const SUBAGENT_SKILL_FOLDERS = [

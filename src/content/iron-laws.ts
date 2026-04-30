@@ -198,32 +198,40 @@ export function ironLawRuntimeDocument(options: {
   };
 }
 
-export function ironLawsAgentsMdBlock(): string {
-  const rows = IRON_LAWS.map((law) => {
-    return `| \`${law.id}\` | ${law.rule} | ${law.enforcement} | ${law.severity} |`;
-  }).join("\n");
-  return `### Iron Laws
+function appliesToLabel(law: IronLawDefinition): string {
+  return law.appliesTo === "all" ? "all stages" : law.appliesTo.join(", ");
+}
 
-These rules are always-on. Hook-enforced laws can block actions in strict mode.
-
-| ID | Rule | Enforced by | Level |
-|---|---|---|---|
-${rows}
-`;
+function hardGateReference(law: IronLawDefinition): string {
+  if (law.appliesTo === "all") {
+    return "the active stage `HARD-GATE` block in `.cclaw/skills/<stage>/SKILL.md`";
+  }
+  return law.appliesTo
+    .map((stage) => `\`${RUNTIME_ROOT}/skills/${stage}/SKILL.md\` (${stage} HARD-GATE)`)
+    .join(", ");
 }
 
 export function ironLawsSkillMarkdown(): string {
-  const list = IRON_LAWS.map((law, index) => {
-    const applies = law.appliesTo === "all" ? "all stages" : law.appliesTo.join(", ");
+  const enforcedLawIds = new Set([
+    "stop-clean-or-handoff",
+    "review-coverage-complete-before-ship"
+  ]);
+  const enforced = IRON_LAWS.filter((law) => enforcedLawIds.has(law.id));
+  const advisory = IRON_LAWS.filter((law) => !enforcedLawIds.has(law.id));
+
+  const enforcedSections = enforced.map((law, index) => {
     return `### ${index + 1}. ${law.title}
 
 - **ID:** \`${law.id}\`
 - **Rule:** ${law.rule}
 - **Why:** ${law.rationale}
-- **Applies to:** ${applies}
+- **Applies to:** ${appliesToLabel(law)}
 - **Enforced by:** ${law.enforcement} (${law.severity})
 `;
   }).join("\n");
+  const advisoryList = advisory
+    .map((law) => `- \`${law.id}\` — applies to ${appliesToLabel(law)}; see ${hardGateReference(law)}.`)
+    .join("\n");
 
   return `---
 name: iron-laws
@@ -235,7 +243,16 @@ description: "Non-negotiable workflow constraints enforced by cclaw hooks and ro
 These are cclaw's non-negotiable constraints for harness sessions.  
 Use them as the final arbitration layer when local instructions conflict.
 
-${list}
+## Hook-Enforced Runtime Laws
+
+${enforcedSections}
+
+## Advisory Laws (Stage-Owned)
+
+The following laws remain active guidance, but their canonical enforcement surface
+is each stage's \`HARD-GATE\` contract:
+
+${advisoryList}
 
 ## Practical rule
 

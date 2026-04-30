@@ -8,11 +8,17 @@ import {
   validateReviewArmy
 } from "./artifact-linter.js";
 import { resolveArtifactPath } from "./artifact-paths.js";
+import { readConfig } from "./config.js";
 import { RUNTIME_ROOT } from "./constants.js";
 import { stageSchema } from "./content/stage-schema.js";
 import { readDelegationLedger } from "./delegation.js";
 import type { FlowState, StageGateState } from "./flow-state.js";
 import { ensureDir, exists, writeFileSafe } from "./fs-utils.js";
+import {
+  computeEarlyLoopStatus,
+  isEarlyLoopStage,
+  normalizeEarlyLoopMaxIterations
+} from "./early-loop.js";
 import { detectPublicApiChanges } from "./internal/detect-public-api-changes.js";
 import { readFlowState, writeFlowState } from "./runs.js";
 import { parseTddCycleLog, validateTddCycleOrder } from "./tdd-cycle.js";
@@ -171,6 +177,117 @@ async function verifyDiscoveredCommandEvidence(
   return `${stage} verification gate blocked (${gateId}): guard evidence must cite one discovered real test command: ${commands.join(", ")}.`;
 }
 
+interface EarlyLoopGateSnapshot {
+  stage: string;
+  runId: string;
+  iteration: number;
+  maxIterations: number;
+  openConcernIds: string[];
+  openConcernCount: number;
+  convergenceTripped: boolean;
+  escalationReason?: string;
+}
+
+function toEarlyLoopGateSnapshot(value: unknown): EarlyLoopGateSnapshot | null {
+  if (!value || typeof value !== "object" || Array.isArray(value)) return null;
+  const typed = value as Record<string, unknown>;
+  const stage = typeof typed.stage === "string" ? typed.stage : "";
+  const runId = typeof typed.runId === "string" ? typed.runId : "active";
+  const iteration = typeof typed.iteration === "number" && Number.isInteger(typed.iteration) && typed.iteration >= 0
+    ? typed.iteration
+    : 0;
+  const maxIterations = normalizeEarlyLoopMaxIterations(
+    typeof typed.maxIterations === "number" ? typed.maxIterations : undefined
+  );
+  const openConcernIds = Array.isArray(typed.openConcerns)
+    ? typed.openConcerns
+        .flatMap((concern) => {
+          if (!concern || typeof concern !== "object" || Array.isArray(concern)) return [];
+          const id = (concern as Record<string, unknown>).id;
+          return typeof id === "string" && id.trim().length > 0 ? [id.trim()] : [];
+        })
+        .sort((a, b) => a.localeCompare(b, "en"))
+    : [];
+  if (stage.length === 0) return null;
+  return {
+    stage,
+    runId,
+    iteration,
+    maxIterations,
+    openConcernIds,
+    openConcernCount: openConcernIds.length,
+    convergenceTripped: typed.convergenceTripped === true,
+    escalationReason:
+      typeof typed.escalationReason === "string" && typed.escalationReason.trim().length > 0
+        ? typed.escalationReason.trim()
+        : undefined
+  };
+}
+
+async function readEarlyLoopGateSnapshot(
+  projectRoot: string,
+  flowState: FlowState
+): Promise<{ snapshot: EarlyLoopGateSnapshot | null; issue?: string }> {
+  if (!isEarlyLoopStage(flowState.currentStage)) {
+    return { snapshot: null };
+  }
+  const stateDir = path.join(projectRoot, RUNTIME_ROOT, "state");
+  const statusPath = path.join(stateDir, "early-loop.json");
+  let onDisk: EarlyLoopGateSnapshot | null = null;
+  if (await exists(statusPath)) {
+    try {
+      onDisk = toEarlyLoopGateSnapshot(JSON.parse(await fs.readFile(statusPath, "utf8")));
+    } catch (error) {
+      const reason = error instanceof Error ? error.message : String(error);
+      return {
+        snapshot: null,
+        issue:
+          `early loop gate blocked (early_loop_open_concerns): unable to parse ${statusPath} (${reason}). ` +
+          "Rebuild status with `cclaw internal early-loop-status --write`."
+      };
+    }
+  }
+
+  if (
+    onDisk &&
+    onDisk.stage === flowState.currentStage &&
+    onDisk.runId === flowState.activeRunId
+  ) {
+    return { snapshot: onDisk };
+  }
+
+  try {
+    const config = await readConfig(projectRoot);
+    const computed = await computeEarlyLoopStatus(
+      flowState.currentStage,
+      flowState.activeRunId,
+      path.join(stateDir, "early-loop-log.jsonl"),
+      {
+        maxIterations: config.earlyLoop?.maxIterations
+      }
+    );
+    return {
+      snapshot: {
+        stage: computed.stage,
+        runId: computed.runId,
+        iteration: computed.iteration,
+        maxIterations: computed.maxIterations,
+        openConcernIds: computed.openConcerns.map((concern) => concern.id),
+        openConcernCount: computed.openConcerns.length,
+        convergenceTripped: computed.convergenceTripped,
+        escalationReason: computed.escalationReason
+      }
+    };
+  } catch (error) {
+    const reason = error instanceof Error ? error.message : String(error);
+    return {
+      snapshot: null,
+      issue:
+        `early loop gate blocked (early_loop_open_concerns): unable to compute status from early-loop-log.jsonl (${reason}).`
+    };
+  }
+}
+
 const RECONCILIATION_NOTICES_FILE = "reconciliation-notices.json";
 const RECONCILIATION_NOTICES_SCHEMA_VERSION = 1;
 const DESIGN_RESEARCH_REQUIRED_SECTIONS = [
@@ -183,6 +300,14 @@ const DESIGN_RESEARCH_REQUIRED_SECTIONS = [
 
 export const RECONCILIATION_NOTICES_REL_PATH = `${RUNTIME_ROOT}/state/${RECONCILIATION_NOTICES_FILE}`;
 
+export type ReconciliationNoticeKind = "gate_demotion" | "closeout_substate_demotion";
+
+export interface CloseoutSubstateDemotionPayload {
+  previous: string;
+  next: string;
+  reason: string;
+}
+
 export interface ReconciliationNotice {
   id: string;
   runId: string;
@@ -190,6 +315,8 @@ export interface ReconciliationNotice {
   gateId: string;
   reason: string;
   demotedAt: string;
+  kind?: ReconciliationNoticeKind;
+  payload?: CloseoutSubstateDemotionPayload;
 }
 
 export interface ReconciliationNoticesPayload {
@@ -238,13 +365,33 @@ function sanitizeReconciliationNotice(raw: unknown): ReconciliationNotice | null
   ) {
     return null;
   }
+  const kind = typed.kind === "closeout_substate_demotion"
+    ? "closeout_substate_demotion"
+    : "gate_demotion";
+  let payload: CloseoutSubstateDemotionPayload | undefined;
+  if (kind === "closeout_substate_demotion" && typed.payload && typeof typed.payload === "object" && !Array.isArray(typed.payload)) {
+    const payloadTyped = typed.payload as Record<string, unknown>;
+    if (
+      typeof payloadTyped.previous === "string" &&
+      typeof payloadTyped.next === "string" &&
+      typeof payloadTyped.reason === "string"
+    ) {
+      payload = {
+        previous: payloadTyped.previous,
+        next: payloadTyped.next,
+        reason: payloadTyped.reason
+      };
+    }
+  }
   return {
     id: typed.id,
     runId: typed.runId,
     stage: typed.stage,
     gateId: typed.gateId,
     reason: typed.reason,
-    demotedAt: typed.demotedAt
+    demotedAt: typed.demotedAt,
+    kind,
+    payload
   };
 }
 
@@ -311,6 +458,9 @@ export function classifyReconciliationNotices(
       staleRun.push(notice);
       continue;
     }
+    if (notice.kind === "closeout_substate_demotion") {
+      continue;
+    }
     const stageCatalog = flowState.stageGateCatalog[notice.stage];
     const blocked = stageCatalog.blocked.includes(notice.gateId);
     if (!blocked) {
@@ -343,6 +493,7 @@ export async function verifyCurrentStageGateEvidence(
   const recommendedSet = new Set(recommended);
   const allowedSet = new Set([...required, ...recommended]);
   const issues: string[] = [];
+  const softNotices: string[] = [];
 
   const catalogRequired = unique(catalog.required);
   const catalogRecommended = unique(catalog.recommended ?? []);
@@ -577,8 +728,36 @@ export async function verifyCurrentStageGateEvidence(
     }
   }
 
+  if (isEarlyLoopStage(stage)) {
+    const { snapshot, issue } = await readEarlyLoopGateSnapshot(projectRoot, flowState);
+    if (issue) {
+      issues.push(issue);
+    } else if (snapshot && snapshot.openConcernCount > 0) {
+      const concernTail = snapshot.openConcernIds.length > 3
+        ? `, +${snapshot.openConcernIds.length - 3} more`
+        : "";
+      const concernSample = snapshot.openConcernIds.slice(0, 3).join(", ");
+      if (snapshot.convergenceTripped) {
+        const reason = snapshot.escalationReason ?? "convergence guard tripped";
+        softNotices.push(
+          `early loop escalation notice (early_loop_open_concerns): ${reason}; ` +
+            `open concerns remain (${concernSample}${concernTail}). Request explicit human override before advancing.`
+        );
+      } else {
+        issues.push(
+          `early loop gate blocked (early_loop_open_concerns): ` +
+            `${snapshot.openConcernCount} open concern(s) remain after iteration ` +
+            `${snapshot.iteration}/${snapshot.maxIterations} (${concernSample}${concernTail}).`
+        );
+      }
+    }
+  }
+
   const missingRequired = required.filter((gateId) => !passedSet.has(gateId));
-  const missingRecommended = recommended.filter((gateId) => !passedSet.has(gateId));
+  const missingRecommended = [
+    ...recommended.filter((gateId) => !passedSet.has(gateId)),
+    ...softNotices
+  ];
   const missingTriggeredConditional: string[] = [];
   const blockingBlocked = catalog.blocked.filter((gateId) => requiredSet.has(gateId));
   const complete = missingRequired.length === 0 && blockingBlocked.length === 0;
@@ -804,10 +983,10 @@ export async function reconcileAndWriteCurrentStageGateCatalog(
 
   if (reconciliation.demotedGateIds.length > 0) {
     const existing = new Set(
-      noticesPayload.notices.map((notice) => `${notice.runId}:${notice.stage}:${notice.gateId}`)
+      noticesPayload.notices.map((notice) => `${notice.runId}:${notice.stage}:${notice.gateId}:${notice.kind ?? "gate_demotion"}`)
     );
     for (const gateId of reconciliation.demotedGateIds) {
-      const dedupeKey = `${effectiveState.activeRunId}:${reconciliation.stage}:${gateId}`;
+      const dedupeKey = `${effectiveState.activeRunId}:${reconciliation.stage}:${gateId}:gate_demotion`;
       if (existing.has(dedupeKey)) {
         continue;
       }
@@ -818,7 +997,8 @@ export async function reconcileAndWriteCurrentStageGateCatalog(
         stage: reconciliation.stage,
         gateId,
         reason: "demoted from passed to blocked during gate reconciliation (missing evidence)",
-        demotedAt: ts
+        demotedAt: ts,
+        kind: "gate_demotion"
       });
       existing.add(dedupeKey);
       noticesChanged = true;

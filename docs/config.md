@@ -148,7 +148,7 @@ count for trigger/action clusters before lift candidates are proposed.
 
 Runtime tuning applied everywhere compound readiness is computed (`cclaw internal compound-readiness` and the session-start hook that writes derived readiness status when needed):
 
-- For repositories with `< 5` archived runs under `.cclaw/runs/`, the
+- For repositories with `< 5` archived runs under `.cclaw/archive/`, the
 effective threshold is temporarily lowered to
 `min(recurrenceThreshold, 2)` and `smallProjectRelaxationApplied` is
 set to `true` in the derived status.
@@ -306,6 +306,26 @@ strictness: advisory
 ironLaws:
   strictLaws: [tdd-red-before-write]
 ```
+
+## Lifecycle preservation
+
+`init`, `sync`, `upgrade`, and `uninstall` intentionally treat runtime data differently. This is the contract surface for what cclaw preserves versus regenerates.
+
+| Operation | Preserved | Regenerated / rewritten | Removed / cleaned |
+|---|---|---|---|
+| `npx cclaw-cli init` | user repo files outside managed cclaw surfaces; custom assets under `.cclaw/agents` and `.cclaw/skills` | minimal `.cclaw/config.yaml`, commands, skills, templates, hooks, state scaffolding, harness shims, managed-resources manifest | legacy runtime folders/files and stale generated shim files |
+| `npx cclaw-cli sync` | existing `flow-state`/artifacts/knowledge, existing config advanced keys | generated runtime files from current config, harness shims, hook wiring, managed-resources manifest | obsolete generated files from disabled harnesses + known legacy artifacts |
+| `npx cclaw-cli upgrade` | same as sync + existing config shape (advanced keys stay), active run state | rewrites `version` + `flowVersion` in config and refreshes generated runtime from installed CLI version | legacy generated surfaces; stale managed files |
+| `npx cclaw-cli uninstall` | user source code / git history / non-cclaw files | none | `.cclaw/` runtime + generated harness shims/hooks/rules/plugins and cclaw-managed skill aliases |
+
+Backup semantics for managed generated files:
+- On `sync`, changed managed files that diverged from prior manifest entries are backed up under `.cclaw/state/sync-backups/<timestamp>/...`.
+- On `upgrade`, equivalent backups go under `.cclaw/state/upgrade-backups/<timestamp>/...`.
+- Backups are best-effort protection for generated surfaces; they are not a replacement for git history.
+
+Write-boundary reminder:
+- Runtime state and artifacts are owned by the flow helpers.
+- Manual edits to generated files may be overwritten by the next `sync`/`upgrade` unless intentionally kept outside managed surfaces.
 
 ## Validation
 

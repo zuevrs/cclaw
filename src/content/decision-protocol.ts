@@ -36,6 +36,6 @@ export function structuredAskSingleChoiceInstruction(
   return `For ${subject}: use the native structured-ask tool (${toolList}) only if runtime schema is confirmed; otherwise collect ${choicesClause} with a plain-text single-choice prompt.`;
 }
 
-export function ideateStructuredAskToolsWithFallback(): string {
+export function ideaStructuredAskToolsWithFallback(): string {
   return `${STRUCTURED_ASK_TOOL_LIST_IDEATE}; fall back to a plain-text lettered list when the tool is hidden or errors`;
 }

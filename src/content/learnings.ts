@@ -105,7 +105,7 @@ Optional fields \`source\`, \`severity\`, \`supersedes\`, and \`superseded_by\` 
 | \`first_seen_ts\` | ISO 8601 UTC string | yes | First observed timestamp (usually equals \`created\`). |
 | \`last_seen_ts\` | ISO 8601 UTC string | yes | Last re-confirmed timestamp. |
 | \`project\` | string \\| null | yes | Repo or scope name. Use \`null\` when the entry crosses projects. |
-| \`source\` | \`"stage" \\| "retro" \\| "compound" \\| "ideate" \\| "manual" \\| null\` | no | Origin channel for the entry when known. |
+| \`source\` | \`"stage" \\| "retro" \\| "compound" \\| "idea" \\| "manual" \\| null\` | no | Origin channel for the entry when known. |
 | \`severity\` | \`"critical" \\| "important" \\| "suggestion"\` | no | Priority signal for compound lifts; \`critical\` enables single-hit override in compound readiness analysis. |
 | \`supersedes\` | string[] | no | Non-empty IDs/slugs of older entries this entry refreshes. Use only for clear replacements discovered during compound closeout or curation. |
 | \`superseded_by\` | string | no | Non-empty ID/slug of the newer entry that refreshes this one. Use only when marking stale guidance as replaced. |

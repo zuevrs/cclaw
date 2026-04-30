@@ -149,7 +149,7 @@ describe("node hook runtime", () => {
     // Seed enough archived runs so the small-project relaxation does
     // NOT fire — we want to assert the baked-in threshold here.
     for (const name of ["run-a", "run-b", "run-c", "run-d", "run-e"]) {
-      await fs.mkdir(path.join(root, ".cclaw/runs", name), { recursive: true });
+      await fs.mkdir(path.join(root, ".cclaw/archive", name), { recursive: true });
     }
 
     const result = await runNodeHook(root, "session-start", nodeHookRuntimeScript());

@@ -8,7 +8,6 @@ import { stageExamples, stageFullArtifactExampleMarkdown } from "../../src/conte
 import { mandatoryDelegationsForStage, reviewStackAwareRoutingSummary, stageAutoSubagentDispatch, stageDelegationSummary, stagePolicyNeedles, stageSchema, stageTrackRenderContext } from "../../src/content/stage-schema.js";
 import { stageSkillMarkdown } from "../../src/content/skills.js";
 import { referencePatternContractsForStage, referencePatternPolicyNeedles, referencePatternsForStage } from "../../src/content/reference-patterns.js";
-import { nextCommandSkillMarkdown } from "../../src/content/next-command.js";
 import { enhancedAgentBody, subagentDrivenDevSkill } from "../../src/content/subagents.js";
 import { SUBAGENT_CONTEXT_SKILLS } from "../../src/content/subagent-context-skills.js";
 import { ARTIFACT_TEMPLATES } from "../../src/content/templates.js";
@@ -82,10 +81,14 @@ describe("stage schema and subagent alignment", () => {
     const review = standard.find((row) => row.stage === "review");
     expect(review?.mandatoryAgents).toEqual(["reviewer", "security-reviewer"]);
     expect(review?.primaryAgents).toContain("reviewer");
+    const scope = standard.find((row) => row.stage === "scope");
+    expect(scope?.proactiveAgents).toContain("product-strategist");
+    const spec = standard.find((row) => row.stage === "spec");
+    expect(spec?.proactiveAgents).toContain("spec-document-reviewer");
 
     const lightweight = stageDelegationSummary("lightweight");
-    const scope = lightweight.find((row) => row.stage === "scope");
-    expect(scope?.mandatoryAgents).toEqual([]);
+    const lightweightScope = lightweight.find((row) => row.stage === "scope");
+    expect(lightweightScope?.mandatoryAgents).toEqual([]);
 
     const tdd = lightweight.find((row) => row.stage === "tdd");
     expect(tdd?.mandatoryAgents).toEqual(["test-author"]);
@@ -104,8 +107,14 @@ describe("stage schema and subagent alignment", () => {
 
   it("derives policy needles from lint metadata with track transforms", () => {
     expect(stagePolicyNeedles("plan")).toContain("Dependency Batches");
+    expect(stagePolicyNeedles("plan")).toContain("Calibrated Findings");
     expect(stagePolicyNeedles("tdd", "quick")).toContain("acceptance criteria");
     expect(stagePolicyNeedles("tdd", "quick")).toContain("RED");
+    expect(stagePolicyNeedles("tdd")).toContain("Watched-RED Proof");
+    expect(stagePolicyNeedles("tdd")).toContain("Per-Slice Review");
+    expect(stagePolicyNeedles("spec")).toContain("Spec Self-Review");
+    expect(stagePolicyNeedles("brainstorm")).toContain("Embedded Grill");
+    expect(stagePolicyNeedles("design")).toContain("Long-Term Trajectory");
   });
 
   it("exposes track render context for safe wording decisions", () => {
@@ -398,11 +407,13 @@ describe("stage schema and subagent alignment", () => {
       "performance-reviewer",
       "planner",
       "product-manager",
+      "product-strategist",
       "release-reviewer",
       "researcher",
       "reviewer",
       "security-reviewer",
       "slice-implementer",
+      "spec-document-reviewer",
       "spec-validator",
       "test-author"
     ]);
@@ -438,6 +449,11 @@ describe("stage schema and subagent alignment", () => {
     expect(tdd?.dispatchRules.find((rule) => rule.agent === "slice-implementer")).toMatchObject({
       dispatchClass: "worker",
       returnSchema: "worker-return"
+    });
+    const spec = stageDelegationSummary("standard").find((row) => row.stage === "spec");
+    expect(spec?.dispatchRules.find((rule) => rule.agent === "spec-document-reviewer")).toMatchObject({
+      dispatchClass: "review-lens",
+      returnSchema: "review-return"
     });
     expect(stageSkillMarkdown("review")).toContain("| Agent | Mode | Class | Return Schema | User Gate | Trigger | Purpose |");
   });
@@ -523,7 +539,7 @@ describe("stage schema and subagent alignment", () => {
       .toContain("before Selected Direction");
     expect(skill).toContain("if using a structured question tool, send exactly one question object");
     expect(skill).toContain("rationale traceable to Approach Reaction");
-    expect(skill).toContain("scope handoff with decisions, drift, confidence");
+    expect(skill).toContain("scope handoff packet with selected direction, decisions, drift, confidence");
   });
 
   it("brainstorm skill teaches the calibrated Self-Review Notes format, not the legacy `- None.` shortcut", () => {
@@ -603,14 +619,6 @@ describe("stage schema and subagent alignment", () => {
     }
   });
 
-  it("next command skill shows track-aware critical path", () => {
-    const skill = nextCommandSkillMarkdown();
-
-    expect(skill).toContain("| Stage | Standard next | Medium next | Quick next | Skill path |");
-    expect(skill).toContain("| `brainstorm` | `scope` | `spec` | `not in track` |");
-    expect(skill).toContain("Natural schema edge reference for diagnostics only");
-  });
-
   it("brainstorm artifact requires tier and reaction sections", () => {
     const brainstorm = stageSchema("brainstorm");
     for (const section of ["Approach Tier", "Approach Reaction"] as const) {
@@ -640,13 +648,12 @@ describe("stage schema and subagent alignment", () => {
       expect.stringContaining("draft the in-scope/out-of-scope/deferred/discretion contract"),
       expect.stringContaining("lite keeps the selected-mode row compact")
     ]));
-    expect(scope.artifactValidation.find((row) => row.section === "Dream State Mapping")?.validationRule)
-      .toContain("Omit for compact scope");
-    expect(scope.artifactValidation.find((row) => row.section === "Temporal Interrogation")?.validationRule)
-      .toContain("Omit for compact scope");
+    expect(scope.artifactValidation.find((row) => row.section === "Dream State Mapping")).toBeUndefined();
+    expect(scope.artifactValidation.find((row) => row.section === "Temporal Interrogation")).toBeUndefined();
     expect(scope.artifactValidation.find((row) => row.section === "Mode-Specific Analysis")?.validationRule)
       .toContain("one selected-mode row with rationale");
-    expect(scopeTemplate).toContain("Deep/optional only; omit for compact scope");
+    expect(scopeTemplate).not.toContain("## Dream State Mapping");
+    expect(scopeTemplate).not.toContain("## Temporal Interrogation");
     expect(scopeTemplate).toContain("| Selected mode | Rationale | Depth |");
   });
 
@@ -657,6 +664,7 @@ describe("stage schema and subagent alignment", () => {
     expect(design.requiredGates.filter((gate) => gate.tier === "required").map((gate) => gate.id)).toEqual([
       "design_research_complete",
       "design_architecture_locked",
+      "design_diagram_freshness",
       "design_data_flow_mapped",
       "design_failure_modes_mapped",
       "design_test_and_perf_defined"
@@ -699,7 +707,7 @@ describe("stage schema and subagent alignment", () => {
     const scope = stageSchema("scope");
 
     expect(brainstorm.executionModel.checklist).toEqual(expect.arrayContaining([
-      expect.stringContaining("Use compact discovery for simple apps"),
+      expect.stringContaining("Use compact discovery for low-risk asks"),
       expect.stringContaining("Problem Decision Record plus short-circuit handoff")
     ]));
     expect(brainstorm.executionModel.interactionProtocol).toEqual(expect.arrayContaining([
@@ -710,7 +718,7 @@ describe("stage schema and subagent alignment", () => {
     ]));
     expect(scope.executionModel.interactionProtocol).toEqual(expect.arrayContaining([
       expect.stringContaining("Do not walk the full checklist by default"),
-      expect.stringContaining("STOP for one explicit approval before writing the final scope artifact")
+      expect.stringContaining("STOP for one explicit approval before finalizing the artifact")
     ]));
     expect(scope.executionModel.requiredEvidence).toEqual(expect.arrayContaining([
       expect.stringContaining("does not satisfy user approval")
@@ -777,6 +785,13 @@ describe("stage schema and subagent alignment", () => {
     const design = ARTIFACT_TEMPLATES["03-design.md"];
     expect(design).toContain("## Stale Diagram Audit");
     expect(design).toContain("| Diagram marker baseline |");
+  });
+
+  it("brainstorm and design templates include wave-8 sections", () => {
+    const brainstorm = ARTIFACT_TEMPLATES["01-brainstorm.md"];
+    const design = ARTIFACT_TEMPLATES["03-design.md"];
+    expect(brainstorm).toContain("## Embedded Grill");
+    expect(design).toContain("## Long-Term Trajectory");
   });
 
   it("scope template includes pre-scope system audit section", () => {
@@ -928,32 +943,69 @@ describe("stage schema and subagent alignment", () => {
     const tdd = stageSchema("tdd");
 
     expect(spec.requiredGates.map((gate) => gate.id)).toContain("spec_assumptions_surfaced");
+    expect(spec.requiredGates.map((gate) => gate.id)).toContain("spec_self_review_complete");
     expect(spec.artifactValidation.find((row) => row.section === "Assumptions Before Finalization"))
       .toMatchObject({ required: true, tier: "required" });
+    expect(spec.artifactValidation.find((row) => row.section === "Spec Self-Review"))
+      .toMatchObject({ required: true, tier: "required" });
+    expect(spec.artifactValidation.find((row) => row.section === "Synthesis Sources"))
+      .toMatchObject({ required: false, tier: "recommended" });
+    expect(spec.artifactValidation.find((row) => row.section === "Behavior Contract"))
+      .toMatchObject({ required: false, tier: "recommended" });
+    expect(spec.artifactValidation.find((row) => row.section === "Architecture Modules"))
+      .toMatchObject({ required: false, tier: "recommended" });
     expect(stageSkillMarkdown("spec")).toContain("Before final spec approval, present the assumptions section");
     expect(ARTIFACT_TEMPLATES["04-spec.md"]).toContain("## Assumptions Before Finalization");
+    expect(ARTIFACT_TEMPLATES["04-spec.md"]).toContain("## Spec Self-Review");
+    expect(ARTIFACT_TEMPLATES["04-spec.md"]).not.toContain("## Testing Strategy");
+    expect(ARTIFACT_TEMPLATES["04-spec.md"]).not.toContain("## Reviewer Concerns");
     expect(ARTIFACT_TEMPLATES["04-spec.md"]).toContain("Source / confidence");
 
     expect(plan.requiredGates.find((gate) => gate.id === "plan_dependency_batches_defined")?.description)
       .toContain("execution posture");
     expect(plan.artifactValidation.find((row) => row.section === "Execution Posture"))
       .toMatchObject({ required: true, tier: "required" });
+    expect(plan.artifactValidation.find((row) => row.section === "Implementation Units"))
+      .toMatchObject({ required: false, tier: "recommended" });
+    expect(plan.artifactValidation.find((row) => row.section === "Calibrated Findings"))
+      .toMatchObject({ required: false, tier: "recommended" });
+    expect(plan.artifactValidation.find((row) => row.section === "Regression Iron Rule"))
+      .toMatchObject({ required: false, tier: "recommended" });
     expect(stageSkillMarkdown("plan")).toContain("Expose execution posture");
     expect(ARTIFACT_TEMPLATES["05-plan.md"]).toContain("## Execution Posture");
+    expect(ARTIFACT_TEMPLATES["05-plan.md"]).toContain("## Calibrated Findings");
+    expect(ARTIFACT_TEMPLATES["05-plan.md"]).toContain("## Regression Iron Rule");
+    expect(ARTIFACT_TEMPLATES["05-plan.md"]).not.toContain("## High-Level Technical Design");
+    expect(ARTIFACT_TEMPLATES["05-plan.md"]).not.toContain("## Plan Self-Review");
     expect(ARTIFACT_TEMPLATES["05-plan.md"]).toContain("RED commit/checkpoint -> GREEN commit/checkpoint -> REFACTOR commit/checkpoint");
 
     expect(tdd.requiredGates.map((gate) => gate.id)).toEqual(expect.arrayContaining([
       "tdd_test_discovery_complete",
-      "tdd_impact_check_complete"
+      "tdd_impact_check_complete",
+      "tdd_iron_law_acknowledged",
+      "tdd_watched_red_observed",
+      "tdd_slice_cycle_complete"
     ]));
     expect(tdd.artifactValidation.find((row) => row.section === "Test Discovery"))
       .toMatchObject({ required: true, tier: "required" });
     expect(tdd.artifactValidation.find((row) => row.section === "System-Wide Impact Check"))
       .toMatchObject({ required: true, tier: "required" });
+    expect(tdd.artifactValidation.find((row) => row.section === "Iron Law Acknowledgement"))
+      .toMatchObject({ required: true, tier: "required" });
+    expect(tdd.artifactValidation.find((row) => row.section === "Watched-RED Proof"))
+      .toMatchObject({ required: true, tier: "required" });
+    expect(tdd.artifactValidation.find((row) => row.section === "Vertical Slice Cycle"))
+      .toMatchObject({ required: true, tier: "required" });
+    expect(tdd.artifactValidation.find((row) => row.section === "Mock Preference Order"))
+      .toMatchObject({ required: false, tier: "recommended" });
     expect(stageSkillMarkdown("tdd")).toContain("Before writing RED tests, discover relevant existing tests");
     expect(stageSkillMarkdown("tdd")).toContain("system-wide impact check across callbacks, state, interfaces, schemas, and external contracts");
     expect(ARTIFACT_TEMPLATES["06-tdd.md"]).toContain("## Test Discovery");
     expect(ARTIFACT_TEMPLATES["06-tdd.md"]).toContain("## System-Wide Impact Check");
+    expect(ARTIFACT_TEMPLATES["06-tdd.md"]).toContain("## Per-Slice Review");
+    expect(ARTIFACT_TEMPLATES["06-tdd.md"]).toContain("## TDD Blocker Taxonomy");
+    expect(ARTIFACT_TEMPLATES["06-tdd.md"]).not.toContain("## Anti-Rationalization Checks");
+    expect(ARTIFACT_TEMPLATES["06-tdd.md"]).not.toContain("## Learning Capture Hint");
   });
 
   it("every declared gate is marked required on at least one track (single source of truth)", () => {

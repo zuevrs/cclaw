@@ -23,7 +23,7 @@ function generatedHelperSkillList(): string {
 export function usingCclawSkillMarkdown(): string {
   return `---
 name: using-cclaw
-description: "Routing brain for cclaw. Decide whether to start/resume a stage, answer directly, or use visible commands like /cc, /cc-ideate, and /cc-cancel."
+description: "Routing brain for cclaw. Decide whether to start/resume a stage, answer directly, or use visible commands like /cc, /cc-idea, and /cc-cancel."
 ---
 
 # Using Cclaw
@@ -74,7 +74,7 @@ Task arrives
   ├─ Running as spawned subagent? -> obey parent prompt only; do not run cclaw routing
   ├─ Pure question / non-software ask? -> answer directly (no stage)
   ├─ New software work? -> /cc <idea>
-  ├─ Repo-improvement discovery? -> /cc-ideate
+  ├─ Repo-improvement discovery? -> /cc-idea
   ├─ Resume existing flow? -> /cc
   ├─ Knowledge operation? -> load the learnings skill
   ├─ Normal post-ship closeout? -> /cc drives ${closeoutChainInline()}
@@ -102,18 +102,18 @@ Before stage work:
 ## Platform reliability notes
 
 - Managed hook dispatch uses \`.cclaw/hooks/run-hook.cmd\` (cross-platform wrapper).
-- If hooks fail due missing runtime deps (for example \`node\` not on \`PATH\`), run \`npx cclaw-cli doctor\` before continuing.
+- If hooks fail due missing runtime deps (for example \`node\` not on \`PATH\`), run \`npx cclaw-cli sync\` before continuing.
 - Prefer cross-platform commands in artifacts/examples (\`npm test\`, \`pnpm test\`, \`python -m pytest\`, etc.) over shell-specific aliases whenever possible.
 
 ## Stage quick map
 
-Use \`/cc <idea>\` for new work, \`/cc\` for progression and closeout, \`/cc-ideate\` for backlog discovery, and \`/cc-cancel\` for cancellation/abandonment.
+Use \`/cc <idea>\` for new work, \`/cc\` for progression and closeout, \`/cc-idea\` for backlog discovery, and \`/cc-cancel\` for cancellation/abandonment.
 
 ## Main vs Operator Surfaces
 
-- **Main workflow:** \`/cc\`, \`/cc-ideate\`, and \`/cc-cancel\` inside the installed harness runtime.
-- **Installer/support surface:** \`npx cclaw-cli init\`, \`npx cclaw-cli sync\`, \`npx cclaw-cli upgrade\`, \`npx cclaw-cli doctor\`, and explicit support/archive actions. Do not ask users to install or run a \`cclaw\` binary during normal stage flow.
-- Use operator/support surfaces only for install/runtime diagnosis, explicit archival, or deeper inspection. Do not make them part of the happy path.
+- **Main workflow:** \`/cc\`, \`/cc-idea\`, and \`/cc-cancel\` inside the installed harness runtime.
+- **Installer/support surface:** \`npx cclaw-cli init\`, \`npx cclaw-cli sync\`, \`npx cclaw-cli upgrade\`, \`npx cclaw-cli sync\`, and \`npx cclaw-cli uninstall\`.
+- Use operator/support surfaces only for install/runtime diagnosis or lifecycle maintenance. Do not make them part of the happy path.
 
 ## Whole flow map
 

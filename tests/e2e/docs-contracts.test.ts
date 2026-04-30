@@ -2,7 +2,6 @@ import fs from "node:fs/promises";
 import path from "node:path";
 import { describe, expect, it } from "vitest";
 import { closeoutChainInline, CLOSEOUT_SUBSTATE_KEY } from "../../src/content/closeout-guidance.js";
-import { nextCommandSkillMarkdown } from "../../src/content/next-command.js";
 import { REFERENCE_PATTERNS } from "../../src/content/reference-patterns.js";
 import { stageSkillMarkdown } from "../../src/content/skills.js";
 import { startCommandSkillMarkdown } from "../../src/content/start-command.js";
@@ -27,8 +26,10 @@ describe("docs flow contract", () => {
     expect(lead).toContain("file-backed flow runtime for coding agents");
     expect(lead).toContain("## First 5 Minutes");
     expect(lead).toContain("/cc <idea>");
-    expect(lead).toContain("/cc-next");
-    expect(lead).toContain("/cc-view status");
+    expect(lead).toContain("/cc-idea");
+    expect(lead).toContain("/cc-cancel");
+    expect(lead).not.toMatch(/\bcc-next\b/u);
+    expect(lead).not.toContain("/cc-view status");
     expect(readme).toContain("./docs/scheme-of-work.md");
     expect(readme).toContain("./docs/config.md");
     expect(readme).toContain("./docs/harnesses.md");
@@ -76,9 +77,53 @@ describe("docs flow contract", () => {
       ".cclaw/state/delegation-log.json",
       ".cclaw/artifacts/",
       ".cclaw/knowledge.jsonl",
-      ".cclaw/runs/<YYYY-MM-DD-slug>/"
+      ".cclaw/archive/<YYYY-MM-DD-slug>/"
     ]) {
       expect(scheme).toContain(required);
+    }
+  });
+
+  it("documents sync fail-fast, quick-track, blocker-matrix, hook layering, and lifecycle preservation contracts", async () => {
+    const scheme = await readRepoFile("docs/scheme-of-work.md");
+    const harnesses = await readRepoFile("docs/harnesses.md");
+    const config = await readRepoFile("docs/config.md");
+
+    for (const required of [
+      "## Sync Fail-Fast Contract",
+      "npx cclaw-cli sync",
+      "Hook document drift",
+      "Shim drift",
+      "Flow-state corruption",
+      "Managed resource manifest",
+      "## Quick-Track Gate Delta",
+      "tdd_traceable_to_plan",
+      "## /cc Blocker Matrix",
+      "Ralph loop open slices",
+      "Ship closeout incomplete"
+    ]) {
+      expect(scheme).toContain(required);
+    }
+
+    for (const required of [
+      "## Hook layering",
+      "src/content/hook-manifest.ts",
+      "src/hook-schemas/*.json",
+      "src/hook-schema.ts",
+      "validateHookDocument"
+    ]) {
+      expect(harnesses).toContain(required);
+    }
+
+    for (const required of [
+      "## Lifecycle preservation",
+      "npx cclaw-cli init",
+      "npx cclaw-cli sync",
+      "npx cclaw-cli upgrade",
+      "npx cclaw-cli uninstall",
+      ".cclaw/state/sync-backups/",
+      ".cclaw/state/upgrade-backups/"
+    ]) {
+      expect(config).toContain(required);
     }
   });
 
@@ -97,10 +142,8 @@ ${await readRepoFile("docs/scheme-of-work.md")}`;
       "review_blocked_by_critical",
       "staleStages",
       "cclaw internal rewind --ack",
-      "cclaw doctor",
       "npx cclaw-cli sync",
-      "/cc-view status",
-      "/cc-next"
+      "/cc"
     ]) {
       expect(docs).toContain(required);
     }
@@ -137,9 +180,7 @@ ${await readRepoFile("docs/scheme-of-work.md")}`;
 
   it("keeps status and next-action generated guidance plain-English", () => {
     const status = statusSubcommandMarkdown();
-    const next = nextCommandSkillMarkdown();
-
-    for (const content of [status, next]) {
+    for (const content of [status]) {
       expect(content).toContain("Current");
       expect(content).toContain("Blocked by");
       expect(content).toContain("Next");
@@ -148,8 +189,6 @@ ${await readRepoFile("docs/scheme-of-work.md")}`;
 
     expect(status).toContain("NO_SOURCE_CONTEXT");
     expect(status).toContain("review_blocked_by_critical");
-    expect(next).toContain("NO_VCS_MODE");
-    expect(next).toContain("review_blocked_by_critical");
   });
 
   it("surfaces reference pattern registry in docs without prompt bloat", async () => {

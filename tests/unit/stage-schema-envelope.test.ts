@@ -10,7 +10,7 @@ describe("skill envelope schema", () => {
       version: "1",
       kind: "stage-output",
       stage: "tdd",
-      payload: { command: "/cc-next" },
+      payload: { command: "/cc" },
       emittedAt: "2026-01-01T00:00:00Z",
       agent: "controller"
     };

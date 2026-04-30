@@ -16,7 +16,7 @@ import type { FlowStage } from "./types.js";
 export const ARCHIVE_DISPOSITIONS = ["completed", "cancelled", "abandoned"] as const;
 export type ArchiveDisposition = (typeof ARCHIVE_DISPOSITIONS)[number];
 
-const RUNS_DIR_REL_PATH = `${RUNTIME_ROOT}/runs`;
+const ARCHIVE_DIR_REL_PATH = `${RUNTIME_ROOT}/archive`;
 const ACTIVE_ARTIFACTS_REL_PATH = `${RUNTIME_ROOT}/artifacts`;
 const STATE_DIR_REL_PATH = `${RUNTIME_ROOT}/state`;
 
@@ -87,8 +87,8 @@ export interface ArchiveRunOptions {
   dispositionReason?: string;
 }
 
-function runsRoot(projectRoot: string): string {
-  return path.join(projectRoot, RUNS_DIR_REL_PATH);
+function archiveRoot(projectRoot: string): string {
+  return path.join(projectRoot, ARCHIVE_DIR_REL_PATH);
 }
 
 function activeArtifactsPath(projectRoot: string): string {
@@ -231,7 +231,7 @@ async function inferRunNameFromArtifacts(projectRoot: string): Promise<string> {
 async function uniqueArchiveId(projectRoot: string, baseId: string): Promise<string> {
   let index = 1;
   let candidate = baseId;
-  while (await exists(path.join(runsRoot(projectRoot), candidate))) {
+  while (await exists(path.join(archiveRoot(projectRoot), candidate))) {
     index += 1;
     candidate = `${baseId}-${index}`;
   }
@@ -239,7 +239,7 @@ async function uniqueArchiveId(projectRoot: string, baseId: string): Promise<str
 }
 
 export async function listRuns(projectRoot: string): Promise<CclawRunMeta[]> {
-  const root = runsRoot(projectRoot);
+  const root = archiveRoot(projectRoot);
   if (!(await exists(root))) {
     return [];
   }
@@ -280,8 +280,8 @@ export async function archiveRun(
   return withDirectoryLock(archiveLockPath(projectRoot), async () => {
   return withDirectoryLock(flowStateLockPathFor(projectRoot), async () => {
   const artifactsDir = activeArtifactsPath(projectRoot);
-  const runsDir = runsRoot(projectRoot);
-  await ensureDir(runsDir);
+  const archiveDir = archiveRoot(projectRoot);
+  await ensureDir(archiveDir);
   await ensureDir(artifactsDir);
 
   const archiveRunName = (runName?.trim() && runName.trim().length > 0)
@@ -289,7 +289,7 @@ export async function archiveRun(
     : await inferRunNameFromArtifacts(projectRoot);
   const archiveBaseId = `${toArchiveDate()}-${slugifyRunName(archiveRunName)}`;
   const archiveId = await uniqueArchiveId(projectRoot, archiveBaseId);
-  const archivePath = path.join(runsDir, archiveId);
+  const archivePath = path.join(archiveDir, archiveId);
   const archiveArtifactsPath = path.join(archivePath, "artifacts");
 
   let sourceState = await readFlowState(projectRoot);
@@ -374,7 +374,7 @@ export async function archiveRun(
 
   // Drop an `.archive-in-progress` sentinel immediately so that a crash
   // between the artifact rename and the final manifest write leaves a
-  // recoverable marker (doctor surfaces these; re-running archive on an
+  // recoverable marker (sync reports these; re-running archive on an
   // orphan attempts to complete or roll back). The sentinel is removed
   // only after the manifest lands successfully.
   const sentinelPath = path.join(archivePath, ".archive-in-progress");
@@ -437,14 +437,14 @@ export async function archiveRun(
     // Best-effort rollback: if artifacts were moved but the subsequent
     // steps failed, put artifacts back so the user is not left without
     // a working run. The sentinel is intentionally left behind for
-    // inspection; doctor surfaces it.
+    // inspection; sync reports it.
     if (artifactsMoved) {
       try {
         await fs.rm(artifactsDir, { recursive: true, force: true });
         await fs.rename(archiveArtifactsPath, artifactsDir);
       } catch {
         // Rollback failed — sentinel + orphaned archive dir will be
-        // surfaced by doctor and can be reconciled manually.
+        // surfaced by sync and can be reconciled manually.
       }
     }
     if (stateReset) {
@@ -483,7 +483,7 @@ async function readKnowledgeStats(projectRoot: string): Promise<ArchiveRunResult
  * Counts entries in the canonical JSONL knowledge store. An "active" entry is one
  * non-empty line that parses as JSON with the required `type` field belonging to the
  * allowed set. Malformed lines are ignored (not counted) but do not throw so that a
- * hand-edited file cannot break doctor/archive flows.
+ * hand-edited file cannot break sync/archive flows.
  */
 export function countActiveKnowledgeEntries(text: string): number {
   const allowed = new Set(["rule", "pattern", "lesson", "compound"]);

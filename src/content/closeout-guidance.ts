@@ -22,11 +22,13 @@ export function closeoutNextCommandGuidance(): string {
 
 export function closeoutSubstateProtocolBullets(): string {
   return `When \`currentStage === "ship"\`, route by **${closeoutSubstateInline()}**:
-  - \`"idle"\` or missing -> set ${closeoutSubstateInline()} = \`"retro_review"\`, then
-    execute the in-stage retro protocol (draft + one structured accept/edit/skip ask).
-  - \`"retro_review"\` -> continue the retro protocol (re-ask the structured
-    question; the draft already exists — do not regenerate it).
-  - \`"compound_review"\` -> execute the in-stage compound closeout scan (not \`ce:compound\`):
+  - \`"idle"\` or missing -> outcome: initialize closeout by setting
+    ${closeoutSubstateInline()} = \`"retro_review"\`, then continue \`/cc\`
+    into the in-stage retro protocol (draft + one structured accept/edit/skip ask).
+  - \`"retro_review"\` -> outcome: finish retro acceptance/edit/skip and advance
+    closeout; the draft already exists, so continue it and do not regenerate it.
+  - \`"compound_review"\` -> outcome: execute the in-stage compound closeout scan
+    (not \`ce:compound\`) and advance toward archive readiness:
     read \`.cclaw/state/compound-readiness.json\` plus the relevant tail of
     \`.cclaw/knowledge.jsonl\`, assess overlap before adding duplicate knowledge,
     separate bug-track learnings (turn into rules/tests/remediation) from
@@ -36,8 +38,9 @@ export function closeoutSubstateProtocolBullets(): string {
     session transcripts for matching historical learnings; only do it after opt-in.
     Ask **one** structured question (apply / skip) per candidate cluster or a
     single accept-all / skip choice, then advance substate.
-  - \`"ready_to_archive"\` -> run \`npx cclaw-cli archive\` (or \`npx cclaw-cli archive --name=<slug>\`) and reset state.
-  - \`"archived"\` (transient) -> report "run archived" and stop.`;
+  - \`"ready_to_archive"\` -> outcome: continue \`/cc\` so the runtime archive step
+    executes, snapshots, and resets active state.
+  - \`"archived"\` (transient) -> outcome: report "run archived" and stop (flow complete).`;
 }
 
 export function closeoutFlowMapSentence(): string {

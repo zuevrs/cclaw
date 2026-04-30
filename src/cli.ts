@@ -4,7 +4,6 @@ import path from "node:path";
 import { existsSync, realpathSync } from "node:fs";
 import { createInterface } from "node:readline/promises";
 import { fileURLToPath } from "node:url";
-import { doctorChecks, doctorSucceeded } from "./doctor.js";
 import { initCclaw, syncCclaw, uninstallCclaw, upgradeCclaw } from "./install.js";
 import { error, info } from "./logger.js";
 import { FLOW_TRACKS, HARNESS_IDS } from "./types.js";
@@ -29,7 +28,6 @@ import { runInternalCommand } from "./internal/advance-stage.js";
 type CommandName =
   | "init"
   | "sync"
-  | "doctor"
   | "upgrade"
   | "uninstall"
   | "archive"
@@ -37,7 +35,6 @@ type CommandName =
 const INSTALLER_COMMANDS: CommandName[] = [
   "init",
   "sync",
-  "doctor",
   "upgrade",
   "uninstall",
   "archive",
@@ -50,11 +47,6 @@ interface ParsedArgs {
   track?: FlowTrack;
   dryRun?: boolean;
   interactive?: boolean;
-  reconcileGates?: boolean;
-  doctorJson?: boolean;
-  doctorExplain?: boolean;
-  doctorQuiet?: boolean;
-  doctorOnly?: string[];
   archiveName?: string;
   archiveSkipRetro?: boolean;
   archiveSkipRetroReason?: string;
@@ -82,12 +74,6 @@ Commands:
   sync       Reconcile generated runtime files with the current config.
              Flags: --harnesses=<list>  Update configured harnesses before syncing.
                     --interactive      Pick harnesses from a numbered TTY menu.
-  doctor     Check install/runtime wiring and print concrete fixes for failures.
-             Flags: --explain           Include docs pointers for every check.
-                    --json              Emit machine-readable check results.
-                    --quiet             Show only failing checks.
-                    --only=<filter>     Limit displayed checks (error,warning,hook:,state:,...).
-                    --reconcile-gates   Refresh derived gate status before checking; does not repair missing artifacts/tests.
   upgrade    Refresh generated files in .cclaw. Preserves your config.yaml.
   archive    Archive the active run and reset flow state for the next run.
              Flags: --name=<slug>        Override archive folder suffix.
@@ -109,10 +95,9 @@ Examples:
   npx cclaw-cli archive --disposition=cancelled --reason="deprioritized"
   npx cclaw-cli upgrade
 
-Happy-path work happens inside your harness via /cc, /cc-ideate,
-and /cc-cancel. Doctor is an operator/support surface:
-it verifies install/runtime wiring, but a real harness smoke test is
-still needed to prove provider auth and model execution.
+Happy-path work happens inside your harness via /cc, /cc-idea,
+and /cc-cancel. Installer/support operations are init/sync/upgrade/uninstall
+plus explicit archive actions.
 
 Docs:   https://github.com/zuevrs/cclaw
 Local:  README.md and generated .cclaw/skills/*.md
@@ -191,7 +176,7 @@ function buildInitSurfacePreview(harnesses: HarnessId[]): string[] {
     ".cclaw/agents/*.md",
     ".cclaw/hooks/*",
     ".cclaw/rules/**",
-    ".cclaw/runs/**",
+    ".cclaw/archive/**",
     ".cclaw/artifacts/**",
     ".cclaw/knowledge.jsonl",
     ".cclaw/state/*.json|*.jsonl",
@@ -410,118 +395,6 @@ async function resolveSyncInputs(parsed: ParsedArgs, ctx: CliContext): Promise<{
   };
 }
 
-function parseDoctorOnly(raw: string): string[] {
-  return raw
-    .split(",")
-    .map((item) => item.trim().toLowerCase())
-    .filter((item) => item.length > 0);
-}
-
-function filterDoctorChecks(
-  checks: Awaited<ReturnType<typeof doctorChecks>>,
-  filters: string[] | undefined
-): Awaited<ReturnType<typeof doctorChecks>> {
-  if (!filters || filters.length === 0) {
-    return checks;
-  }
-  return checks.filter((check) => {
-    const name = check.name.toLowerCase();
-    return filters.some((filter) => {
-      if (filter === "error" || filter === "warning" || filter === "info") {
-        return check.severity === filter;
-      }
-      return name.includes(filter);
-    });
-  });
-}
-
-function doctorCountsBySeverity(checks: Awaited<ReturnType<typeof doctorChecks>>): {
-  error: { total: number; failing: number };
-  warning: { total: number; failing: number };
-  info: { total: number; failing: number };
-} {
-  const result = {
-    error: { total: 0, failing: 0 },
-    warning: { total: 0, failing: 0 },
-    info: { total: 0, failing: 0 }
-  };
-  for (const check of checks) {
-    const bucket = result[check.severity];
-    bucket.total += 1;
-    if (!check.ok) {
-      bucket.failing += 1;
-    }
-  }
-  return result;
-}
-
-const DOCTOR_ACTION_GROUP_LABELS = {
-  sync: "Can fix with cclaw sync",
-  "user-action": "Requires user action",
-  "stage-work": "Requires stage work",
-  informational: "Informational warning"
-} as const;
-
-function doctorActionGroupOrder(
-  group: Awaited<ReturnType<typeof doctorChecks>>[number]["actionGroup"]
-): number {
-  return group === "sync" ? 0 : group === "user-action" ? 1 : group === "stage-work" ? 2 : 3;
-}
-
-function printDoctorText(
-  ctx: CliContext,
-  checks: Awaited<ReturnType<typeof doctorChecks>>,
-  options: { explain: boolean; quiet: boolean }
-): void {
-  const orderedSeverities: Array<"error" | "warning" | "info"> = ["error", "warning", "info"];
-  const view = options.quiet ? checks.filter((check) => !check.ok) : checks;
-  const actionGroups = [...new Set(view.map((check) => check.actionGroup))]
-    .sort((left, right) => doctorActionGroupOrder(left) - doctorActionGroupOrder(right));
-
-  for (const actionGroup of actionGroups) {
-    const groupChecks = view.filter((check) => check.actionGroup === actionGroup);
-    const failingInGroup = groupChecks.filter((check) => !check.ok).length;
-    ctx.stdout.write(`
-[${DOCTOR_ACTION_GROUP_LABELS[actionGroup]}] ${failingInGroup}/${groupChecks.length} failing
-`);
-    for (const severity of orderedSeverities) {
-      const inBucket = groupChecks.filter((check) => check.severity === severity);
-      if (inBucket.length === 0) continue;
-      ctx.stdout.write(`  ${severity.toUpperCase()}
-`);
-      for (const check of inBucket) {
-        const status = check.ok ? "PASS" : "FAIL";
-        ctx.stdout.write(`  ${status} ${check.name} :: ${check.summary}
-`);
-        if (!options.quiet) {
-          ctx.stdout.write(`    details: ${check.details}
-`);
-        }
-        if (!check.ok || options.explain) {
-          ctx.stdout.write(`    next action: ${check.fix}
-`);
-          if (check.docRef) {
-            ctx.stdout.write(`    reference: ${check.docRef}
-`);
-          }
-        }
-      }
-    }
-  }
-
-  const counts = doctorCountsBySeverity(checks);
-  const failingErrors = checks.filter((check) => check.severity === "error" && !check.ok).length;
-  ctx.stdout.write(
-    `\nTotals: error ${counts.error.failing}/${counts.error.total} failing, ` +
-      `warning ${counts.warning.failing}/${counts.warning.total} failing, ` +
-      `info ${counts.info.failing}/${counts.info.total} failing\n`
-  );
-  if (failingErrors > 0) {
-    ctx.stdout.write(`Doctor status: BLOCKED (${failingErrors} failing error checks)\n`);
-  } else {
-    ctx.stdout.write("Doctor status: HEALTHY (no failing error checks)\n");
-  }
-}
 
 function parseArgs(argv: string[]): ParsedArgs {
   const parsed: ParsedArgs = {};
@@ -560,13 +433,6 @@ function parseArgs(argv: string[]): ParsedArgs {
         flag === "--no-interactive" ||
         (parsed.command === "init" && flag === "--dry-run");
     }
-    if (parsed.command === "doctor") {
-      return flag === "--reconcile-gates" ||
-        flag === "--json" ||
-        flag === "--explain" ||
-        flag === "--quiet" ||
-        flag.startsWith("--only=");
-    }
     if (parsed.command === "archive") {
       return flag.startsWith("--name=") ||
         flag === "--skip-retro" ||
@@ -602,26 +468,6 @@ function parseArgs(argv: string[]): ParsedArgs {
     }
     if (flag === "--dry-run") {
       parsed.dryRun = true;
-      continue;
-    }
-    if (flag === "--reconcile-gates") {
-      parsed.reconcileGates = true;
-      continue;
-    }
-    if (flag === "--json") {
-      parsed.doctorJson = true;
-      continue;
-    }
-    if (flag === "--explain") {
-      parsed.doctorExplain = true;
-      continue;
-    }
-    if (flag === "--quiet") {
-      parsed.doctorQuiet = true;
-      continue;
-    }
-    if (flag.startsWith("--only=")) {
-      parsed.doctorOnly = parseDoctorOnly(flag.replace("--only=", ""));
       continue;
     }
     if (flag.startsWith("--name=")) {
@@ -724,34 +570,6 @@ async function runCommand(parsed: ParsedArgs, ctx: CliContext): Promise<number> 
     return 0;
   }
 
-  if (command === "doctor") {
-    const checks = await doctorChecks(ctx.cwd, {
-      reconcileCurrentStageGates: parsed.reconcileGates === true
-    });
-    const filteredChecks = filterDoctorChecks(checks, parsed.doctorOnly);
-    const explain = parsed.doctorExplain === true;
-    const quiet = parsed.doctorQuiet === true;
-
-    if (parsed.doctorJson === true) {
-      const counts = doctorCountsBySeverity(filteredChecks);
-      ctx.stdout.write(
-        `${JSON.stringify({
-          ok: doctorSucceeded(filteredChecks),
-          globalOk: doctorSucceeded(checks),
-          filters: parsed.doctorOnly ?? [],
-          counts,
-          checks: filteredChecks
-        }, null, 2)}\n`
-      );
-    } else {
-      if (filteredChecks.length === 0) {
-        ctx.stdout.write("No checks matched the --only filter.\n");
-      } else {
-        printDoctorText(ctx, filteredChecks, { explain, quiet });
-      }
-    }
-    return doctorSucceeded(filteredChecks) ? 0 : 2;
-  }
 
   if (command === "upgrade") {
     await upgradeCclaw(ctx.cwd);

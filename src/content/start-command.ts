@@ -23,7 +23,7 @@ export function startCommandContract(): string {
 
 **The unified entry point for the cclaw flow.**
 
-- \`/cc\` (no arguments) → reads existing flow state and resumes/progresses the active flow. If flow state is missing or still a fresh init placeholder, stop and guide the user to run \`/cc <prompt>\` or \`cclaw init\`; do not silently create a brainstorm run.
+- \`/cc\` (no arguments) → reads existing flow state and resumes/progresses the active flow. If flow state is missing or still a fresh init placeholder, stop and guide the user to run \`/cc <prompt>\` or \`npx cclaw-cli init\`; do not silently create a brainstorm run.
 - \`/cc <prompt>\` (with an idea/description) → saves the prompt as idea context and starts the first stage of the resolved track.
 
 This is the **recommended way to start, resume, and continue** working with cclaw.
@@ -96,8 +96,8 @@ ${conversationLanguagePolicyMarkdown()}
    If this helper fails, STOP and report the exact command/output. Do **not** manually edit \`${flowPath}\`.
 11. The helper persists \`${flowPath}\`, computes \`skippedStages\`, sets the first stage for the track, resets the gate catalog, and writes \`.cclaw/artifacts/00-idea.md\`.
 12. Load the **first-stage skill for the chosen track** and its command file:
-    - quick → \`.cclaw/skills/specification-authoring/SKILL.md\`
-    - medium/standard → \`.cclaw/skills/brainstorming/SKILL.md\`
+    - quick → \`.cclaw/skills/spec/SKILL.md\`
+    - medium/standard → \`.cclaw/skills/brainstorm/SKILL.md\`
     - trivial fast-path → quick track spec skill per Phase 0 decision.
 13. Execute that stage with the prompt + Phase 1/Phase 2 + seed context as initial input.
 
@@ -113,21 +113,22 @@ If during any stage the agent discovers evidence that contradicts the initial Ph
 ### Without prompt (\`/cc\`)
 
 1. Read \`${flowPath}\`.
-2. If flow state is missing → guide the user to run \`cclaw init\` and stop.
+2. If flow state is missing → guide the user to run \`npx cclaw-cli init\` and stop.
 3. If flow state is only a fresh init placeholder (\`completedStages: []\`, all \`passed\` arrays empty, and no \`00-idea.md\`) → stop and ask for \`/cc <prompt>\` to start a tracked run. Do not create a brainstorm state implicitly.
 4. Otherwise check current stage gates, resume if incomplete, and advance if complete.
 
-## Headless mode
+## Headless mode (CI/automation only)
 
-When called by another skill or subagent in machine mode, emit exactly one
-JSON envelope (no prose) and stop:
+Headless envelopes are a machine-mode exception for CI/automation orchestration.
+In normal interactive runs, respond in natural language instead of emitting an envelope.
+When called by another skill or subagent in machine mode, emit exactly one JSON envelope (no prose) and stop:
 
 \`\`\`json
 {"version":"1","kind":"stage-output","stage":"<currentStage>","payload":{"command":"/cc","track":"<track>","action":"start_or_resume"},"emittedAt":"<ISO-8601>"}
 \`\`\`
 
 Validate envelopes with:
-\`cclaw internal envelope-validate --stdin\`
+\`npx cclaw-cli internal envelope-validate --stdin\`
 
 ## Primary skill
 
@@ -191,7 +192,7 @@ ${conversationLanguagePolicyMarkdown()}
    - On conflict, prefer \`standard\` over \`medium\`, and \`medium\` over \`quick\`.
    - Always state the recommendation as a one-line reason citing matched triggers and a high/medium/low track selection confidence. Clarify that the heuristic is advisory until the managed helper writes state; after that, \`/cc\` follows the selected track. Include override guidance: switch to standard when architecture, schema, migration, security, or unclear scope appears; switch to medium when product framing is needed but architecture is known.
 8. Run the managed start helper: \`node .cclaw/hooks/start-flow.mjs --track=<quick|medium|standard> --class=<class> --prompt=<prompt> --stack=<stack> --reason=<matched heuristic>\`. The helper writes \`${flowPath}\`, computes \`skippedStages\`, resets the gate catalog, and writes \`${RUNTIME_ROOT}/artifacts/00-idea.md\`. If it fails, STOP and report the exact command/output; do not manually edit flow state.
-9. Load and execute the **first stage skill of the chosen track** (\`brainstorming\` for medium/standard, \`specification-authoring\` for quick) plus its matching command file.
+9. Load and execute the **first stage skill of the chosen track** (\`brainstorm\` for medium/standard, \`spec\` for quick) plus its matching command file.
 
 ### Reclassification on discovery
 
@@ -202,7 +203,7 @@ If mid-stage evidence contradicts the initial Class/Track decision (the "trivial
 Progress the tracked flow only when one exists:
 
 1. Read \`${flowPath}\`.
-2. If missing, guide the user to run \`cclaw init\` and stop.
+2. If missing, guide the user to run \`npx cclaw-cli init\` and stop.
 3. If it is only a fresh init placeholder (\`completedStages: []\`, no passed gates, and no \`${RUNTIME_ROOT}/artifacts/00-idea.md\`), stop and ask for \`/cc <prompt>\` to start a tracked run. Do not silently create a brainstorm run.
 4. Check gates for \`currentStage\`.
 5. If incomplete → load current stage skill and execute.

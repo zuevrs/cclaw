@@ -95,6 +95,17 @@ function normalizeFixtureArtifact(fileName: string, content: string): string {
 async function writeRuntimeArtifact(root: string, fileName: string, content: string): Promise<void> {
   await fs.mkdir(path.join(root, ".cclaw/state"), { recursive: true });
   await fs.mkdir(path.join(root, ".cclaw/artifacts"), { recursive: true });
+  if (fileName.startsWith("03-design")) {
+    const apiPath = path.join(root, "src/api.ts");
+    const storagePath = path.join(root, "src/storage.ts");
+    await fs.mkdir(path.dirname(apiPath), { recursive: true });
+    if (!(await fs.stat(apiPath).then(() => true).catch(() => false))) {
+      await fs.writeFile(apiPath, "export const api = 1;\n", "utf8");
+    }
+    if (!(await fs.stat(storagePath).then(() => true).catch(() => false))) {
+      await fs.writeFile(storagePath, "export const storage = 1;\n", "utf8");
+    }
+  }
   await fs.writeFile(path.join(root, ".cclaw/state/flow-state.json"), JSON.stringify({
     currentStage: "brainstorm",
     activeRunId: "active",
@@ -120,6 +131,19 @@ async function writeOptInAuditsConfig(
   await fs.writeFile(path.join(root, ".cclaw/config.yaml"), `${lines.join("\n")}\n`, "utf8");
 }
 
+async function writeDelegationLog(
+  root: string,
+  entries: Array<Record<string, unknown>>,
+  runId = "active"
+): Promise<void> {
+  await fs.mkdir(path.join(root, ".cclaw/state"), { recursive: true });
+  await fs.writeFile(
+    path.join(root, ".cclaw/state/delegation-log.json"),
+    JSON.stringify({ runId, schemaVersion: 3, entries }, null, 2),
+    "utf8"
+  );
+}
+
 const PLAN_EXECUTION_POSTURE = `## Execution Posture
 - Posture: sequential dependency batches; parallel work blocked until batch gates pass.
 - Stop conditions: failing verification, unclear dependency, or unresolved risk trigger.
@@ -131,6 +155,17 @@ const SPEC_ASSUMPTIONS_BEFORE_FINALIZATION = `## Assumptions Before Finalization
 | Assumption | Source / confidence | Validation path | Disposition |
 |---|---|---|---|
 | Release automation runs on CI | design artifact / high | verify CI workflow before plan | accepted |
+`;
+
+const SPEC_SELF_REVIEW = `## Spec Self-Review
+- [x] Placeholders scan (no \`TBD\`, \`TODO\`, \`FIXME\`, \`<placeholder>\`)
+- [x] Internal consistency (sections do not contradict each other)
+- [x] Scope check (focused enough for a single plan)
+- [x] Ambiguity check (no requirement readable two ways)
+- Patches applied:
+  - None
+- Remaining concerns:
+  - None
 `;
 
 const TDD_PREFLIGHT_SECTIONS = `## Test Discovery
@@ -145,6 +180,22 @@ const TDD_PREFLIGHT_SECTIONS = `## Test Discovery
 - Interfaces/schemas: public dedupe function contract covered
 - Public APIs/config/CLI: no public CLI or config surface change
 - Persistence/event contracts: out of scope for this slice
+
+## Iron Law Acknowledgement
+- Iron Law: NO PRODUCTION CODE WITHOUT A FAILING TEST FIRST.
+- Acknowledged: yes
+- Exceptions invoked (or \`- None.\`):
+  - None.
+
+## Watched-RED Proof
+| Slice | Test name | Observed at (ISO ts) | Failure reason snippet | Source command/log |
+|---|---|---|---|---|
+| S-1 | dedupe fails on duplicate key | 2026-04-30T09:00:00Z | FAIL AssertionError expected unique list | \`pnpm vitest run dedupe.test.ts\` |
+
+## Vertical Slice Cycle
+| Slice | RED ts | GREEN ts | REFACTOR ts |
+|---|---|---|---|
+| S-1 | 2026-04-30T09:00:00Z | 2026-04-30T09:05:00Z | 2026-04-30T09:09:00Z |
 `;
 
 function completePlanArtifact(frontmatter = ""): string {
@@ -1570,7 +1621,7 @@ describe("artifact linter heuristics", () => {
 RECOMMENDATION: B — SSE + REST fallback delivers durable feed UX without overcommitting infra.
 
 ## Scope Mode
-- [x] selective
+- [x] hold
 
 ## In Scope / Out of Scope
 
@@ -1599,7 +1650,7 @@ RECOMMENDATION: B — SSE + REST fallback delivers durable feed UX without overc
 - Unresolved decisions: None
 
 ## Scope Summary
-- Selected mode: selective
+- Selected mode: HOLD SCOPE
 - Accepted scope: durable feed + SSE
 - Deferred: WebSocket channel
 - Explicitly excluded: outbound channels
@@ -1830,6 +1881,50 @@ ${summaryBody}
       const summary = result.findings.find((f) => f.section === "Scope Summary");
       expect(summary?.required).toBe(true);
       expect(summary?.found).toBe(true);
+    });
+
+    it("requires product-strategist delegation evidence for expansion modes", async () => {
+      const root = await createTempProject("scope-summary-expansion-needs-strategist");
+      await writeRuntimeArtifact(
+        root,
+        "02-scope.md",
+        baseScope(
+          `- Selected mode: SCOPE EXPANSION\n- Accepted scope: build a bigger slice\n- Next-stage handoff: design.`
+        )
+      );
+      const result = await lintArtifact(root, "scope");
+      const strategist = result.findings.find((f) => f.section === "Expansion Strategist Delegation");
+      expect(result.passed).toBe(false);
+      expect(strategist?.required).toBe(true);
+      expect(strategist?.found).toBe(false);
+      expect(strategist?.details ?? "").toMatch(/product-strategist delegation/iu);
+    });
+
+    it("accepts expansion mode when product-strategist delegation has evidence", async () => {
+      const root = await createTempProject("scope-summary-expansion-with-strategist");
+      await writeRuntimeArtifact(
+        root,
+        "02-scope.md",
+        baseScope(
+          `- Selected mode: SELECTIVE EXPANSION\n- Accepted scope: build a bigger slice\n- Next-stage handoff: design.`
+        )
+      );
+      await writeDelegationLog(root, [
+        {
+          stage: "scope",
+          agent: "product-strategist",
+          mode: "proactive",
+          status: "completed",
+          ts: new Date().toISOString(),
+          runId: "active",
+          evidenceRefs: [".cclaw/artifacts/02-scope.md#Scope Summary"],
+          fulfillmentMode: "role-switch"
+        }
+      ]);
+      const result = await lintArtifact(root, "scope");
+      const strategist = result.findings.find((f) => f.section === "Expansion Strategist Delegation");
+      expect(strategist?.required).toBe(true);
+      expect(strategist?.found).toBe(true);
     });
 
     it("rejects Scope Summary that uses a non-canonical mode word like `strict`", async () => {
@@ -2359,6 +2454,11 @@ API -> Service -> DB
     const root = await createTempProject("design-trivial");
     await writeRuntimeArtifact(root, "03-design.md", `# Design Artifact — Trivial Change / Escape Hatch
 
+## Codebase Investigation
+| File | Current responsibility | Patterns discovered |
+|---|---|---|
+| src/api.ts | parse config | lightweight parser path |
+
 ## Architecture Boundaries
 | Component | Responsibility | Owner |
 |---|---|---|
@@ -2467,7 +2567,7 @@ Fallback_Cache -->|degraded response| API_Gateway`;
     expect(architectureRequirement?.found).toBe(true);
   });
 
-  it("requires deep-tier state/rollback/deployment diagrams", async () => {
+  it("requires deep-tier Deep Diagram Add-on marker", async () => {
     const root = await createTempProject("design-deep-diagrams-required");
     await writeBrainstormTierArtifact(root, "deep");
     const diagram = `API_Gateway -->|sync: validated request| App_Service
@@ -2477,11 +2577,11 @@ Fallback_Cache -->|degraded response| API_Gateway`;
     await writeRuntimeArtifact(root, "03-design.md", completeDesignArtifact(diagram));
 
     const result = await lintArtifact(root, "design");
-    const stateMachineRequirement = result.findings.find(
-      (f) => f.section === "Diagram Requirement: State Machine Diagram"
+    const deepAddonRequirement = result.findings.find(
+      (f) => f.section === "Diagram Requirement: Deep Diagram Add-on"
     );
-    expect(stateMachineRequirement?.found).toBe(false);
-    expect(stateMachineRequirement?.details).toContain("State Machine Diagram");
+    expect(deepAddonRequirement?.found).toBe(false);
+    expect(deepAddonRequirement?.details).toContain("Deep Diagram Add-on");
   });
 
   it("passes deep-tier design when all deep diagram markers are present", async () => {
@@ -2493,7 +2593,9 @@ Storage_Adapter -->|timeout| Fallback_Cache
 Fallback_Cache -->|degraded response| API_Gateway`;
     const artifact = `${completeDesignArtifact(diagram)}
 
-## State Machine Diagram
+## Deep Diagram Add-on
+- type: state-machine
+
 <!-- diagram: state-machine -->
 \`\`\`mermaid
 stateDiagram-v2
@@ -2501,27 +2603,6 @@ stateDiagram-v2
   Requested --> Persisted
   Requested --> Degraded
   Degraded --> Persisted
-\`\`\`
-
-## Rollback Flowchart
-<!-- diagram: rollback-flowchart -->
-\`\`\`mermaid
-flowchart TD
-  Trigger --> DisableFlag
-  DisableFlag --> RestorePreviousBuild
-  RestorePreviousBuild --> Verify
-\`\`\`
-
-## Deployment Sequence Diagram
-<!-- diagram: deployment-sequence -->
-\`\`\`mermaid
-sequenceDiagram
-  participant CI
-  participant API
-  participant Queue
-  CI->>API: deploy canary
-  API->>Queue: enable async write path
-  API->>CI: report health checks
 \`\`\`
 `;
     await writeRuntimeArtifact(root, "03-design.md", artifact);
@@ -2594,6 +2675,30 @@ Fallback_Cache -->|degraded response| API_Gateway`;
     expect(staleAudit?.details).toContain("src/api.ts");
   });
 
+  it("runs stale diagram audit by default when optInAudits is omitted", async () => {
+    const root = await createTempProject("design-stale-diagram-default-on");
+    const apiPath = path.join(root, "src/api.ts");
+    const storagePath = path.join(root, "src/storage.ts");
+    await fs.mkdir(path.dirname(apiPath), { recursive: true });
+    await fs.writeFile(apiPath, "export const api = 1;\n", "utf8");
+    await fs.writeFile(storagePath, "export const storage = 1;\n", "utf8");
+
+    const diagram = `API_Gateway -->|sync: validated request| App_Service
+App_Service -.->|async: enqueue write| Storage_Adapter
+Storage_Adapter -->|timeout| Fallback_Cache
+Fallback_Cache -->|degraded response| API_Gateway`;
+    await writeRuntimeArtifact(root, "03-design.md", completeDesignArtifact(diagram));
+
+    const futureSeconds = Date.now() / 1000 + 2;
+    await fs.utimes(apiPath, futureSeconds, futureSeconds);
+
+    const result = await lintArtifact(root, "design");
+    const staleAudit = result.findings.find((f) => f.section === "Stale Diagram Drift Check");
+    expect(staleAudit?.required).toBe(true);
+    expect(staleAudit?.found).toBe(false);
+    expect(staleAudit?.details).toContain("src/api.ts");
+  });
+
   it("passes stale diagram audit when blast-radius files are not newer than design baseline", async () => {
     const root = await createTempProject("design-stale-diagram-audit-pass");
     await writeOptInAuditsConfig(root, { staleDiagramAudit: true });
@@ -2616,6 +2721,38 @@ Fallback_Cache -->|degraded response| API_Gateway`;
     const staleAudit = result.findings.find((f) => f.section === "Stale Diagram Drift Check");
     expect(staleAudit?.required).toBe(true);
     expect(staleAudit?.found).toBe(true);
+  });
+
+  it("gracefully skips stale diagram audit for trivial override without diagram markers", async () => {
+    const root = await createTempProject("design-stale-diagram-trivial-skip");
+    await writeRuntimeArtifact(root, "03-design.md", `# Design Artifact — Trivial Change / Escape Hatch
+
+## Architecture Boundaries
+| Component | Responsibility | Owner |
+|---|---|---|
+| config parser | reads YAML config | core team |
+
+## NOT in scope
+- Full config migration tool
+
+## Completion Dashboard
+| Review Section | Status | Issues |
+|---|---|---|
+| Architecture Review | clear | — |
+
+**Decisions made:** 1 | **Unresolved:** 0
+`);
+
+    const result = await lintArtifact(root, "design");
+    const staleAudit = result.findings.find((f) => f.section === "Stale Diagram Drift Check");
+    const diagramRequirement = result.findings.find(
+      (f) => f.section === "Diagram Requirement: Architecture Diagram"
+    );
+    expect(result.passed).toBe(true);
+    expect(staleAudit?.found).toBe(true);
+    expect(staleAudit?.details ?? "").toContain("skipped");
+    expect(diagramRequirement?.found).toBe(true);
+    expect(diagramRequirement?.details ?? "").toContain("trivial-override");
   });
 
   it("fails design artifact when Failure Mode Table uses legacy header shape", async () => {
@@ -2685,6 +2822,8 @@ Fallback_Cache -->|degraded response| API_Gateway`;
 |---|---|---|
 | AC-1 | manual | Check it works |
 
+${SPEC_SELF_REVIEW}
+
 ## Approval
 - Approved by: user
 - Date: 2026-04-14
@@ -2719,6 +2858,8 @@ Fallback_Cache -->|degraded response| API_Gateway`;
 | Criterion ID | Verification approach | Command/manual steps |
 |---|---|---|
 | AC-1 | unit | npm test |
+
+${SPEC_SELF_REVIEW}
 
 ## Approval
 - Approved by: user
@@ -2756,6 +2897,8 @@ ${SPEC_ASSUMPTIONS_BEFORE_FINALIZATION}
 |---|---|---|
 | AC-1 | unit | npm run test -- publish-guard |
 
+${SPEC_SELF_REVIEW}
+
 ## Approval
 - Approved by: user
 - Date: 2026-04-14
@@ -2763,6 +2906,86 @@ ${SPEC_ASSUMPTIONS_BEFORE_FINALIZATION}
 
     const result = await lintArtifact(root, "spec");
     expect(result.passed).toBe(true);
+  });
+
+  it("fails spec when Spec Self-Review section is missing", async () => {
+    const root = await createTempProject("spec-missing-self-review");
+    await writeRuntimeArtifact(root, "04-spec.md", `# Specification Artifact
+
+## Acceptance Criteria
+| ID | Criterion (observable/measurable/falsifiable) | Design Decision Ref |
+|---|---|---|
+| AC-1 | Publish blocks when package.json version differs from CHANGELOG heading | D-1 |
+
+## Edge Cases
+| Criterion ID | Boundary case | Error case |
+|---|---|---|
+| AC-1 | Empty changelog | Mismatched version |
+
+${SPEC_ASSUMPTIONS_BEFORE_FINALIZATION}
+
+## Acceptance Mapping
+| Criterion ID | Verification approach | Command/manual steps |
+|---|---|---|
+| AC-1 | unit | npm run test -- publish-guard |
+
+## Approval
+- Approved by: user
+- Date: 2026-04-14
+`);
+
+    const result = await lintArtifact(root, "spec");
+    const selfReview = result.findings.find((f) => f.section === "Spec Self-Review Coverage");
+    expect(result.passed).toBe(false);
+    expect(selfReview?.required).toBe(true);
+    expect(selfReview?.found).toBe(false);
+    expect(selfReview?.details ?? "").toContain("Spec Self-Review");
+  });
+
+  it("adds single-subsystem recommendation when Architecture Modules grows too broad", async () => {
+    const root = await createTempProject("spec-single-subsystem-signal");
+    await writeRuntimeArtifact(root, "04-spec.md", `# Specification Artifact
+
+## Acceptance Criteria
+| ID | Criterion (observable/measurable/falsifiable) | Design Decision Ref |
+|---|---|---|
+| AC-1 | Publish blocks when package.json version differs from CHANGELOG heading | D-1 |
+
+## Edge Cases
+| Criterion ID | Boundary case | Error case |
+|---|---|---|
+| AC-1 | Empty changelog | Mismatched version |
+
+${SPEC_ASSUMPTIONS_BEFORE_FINALIZATION}
+
+## Acceptance Mapping
+| Criterion ID | Verification approach | Command/manual steps |
+|---|---|---|
+| AC-1 | unit | npm run test -- publish-guard |
+
+## Architecture Modules
+| Module | Responsibility (one sentence) | Maps to design ref (DD-#) |
+|---|---|---|
+| release-parser | Parse release config | DD-1 |
+| changelog-reader | Read changelog heading | DD-2 |
+| version-guard | Compare versions | DD-3 |
+| policy-engine | Resolve blocking policy | DD-4 |
+| cli-renderer | Render user output | DD-5 |
+| telemetry-hook | Record release signal | DD-6 |
+
+${SPEC_SELF_REVIEW}
+
+## Approval
+- Approved by: user
+- Date: 2026-04-14
+`);
+
+    const result = await lintArtifact(root, "spec");
+    const subsystem = result.findings.find((f) => f.section === "Single-Subsystem Scope");
+    expect(result.passed).toBe(true);
+    expect(subsystem?.required).toBe(false);
+    expect(subsystem?.found).toBe(false);
+    expect(subsystem?.details ?? "").toContain("split into sub-specs");
   });
 
   it("passes complete plan artifact", async () => {
@@ -2806,6 +3029,52 @@ ${PLAN_EXECUTION_POSTURE}
     expect(result.passed).toBe(true);
   });
 
+  it("flags malformed plan calibrated findings when section is present", async () => {
+    const root = await createTempProject("plan-calibrated-findings-malformed");
+    await writeRuntimeArtifact(root, "05-plan.md", `${completePlanArtifact()}
+
+## Calibrated Findings
+- parser is risky and probably needs more tests
+`);
+
+    const result = await lintArtifact(root, "plan");
+    const calibrated = result.findings.find((f) => f.section === "Plan Calibrated Finding Format");
+    expect(result.passed).toBe(true);
+    expect(calibrated?.required).toBe(false);
+    expect(calibrated?.found).toBe(false);
+  });
+
+  it("accepts canonical plan calibrated findings format", async () => {
+    const root = await createTempProject("plan-calibrated-findings-canonical");
+    await writeRuntimeArtifact(root, "05-plan.md", `${completePlanArtifact()}
+
+## Calibrated Findings
+- [P2] (confidence: 7/10) src/planner.ts:88 — dependency batch gate misses schema migration rollback path
+`);
+
+    const result = await lintArtifact(root, "plan");
+    const calibrated = result.findings.find((f) => f.section === "Plan Calibrated Finding Format");
+    expect(result.passed).toBe(true);
+    expect(calibrated?.required).toBe(false);
+    expect(calibrated?.found).toBe(true);
+  });
+
+  it("flags plan regression iron rule when acknowledgement is missing", async () => {
+    const root = await createTempProject("plan-regression-iron-rule-missing-ack");
+    await writeRuntimeArtifact(root, "05-plan.md", `${completePlanArtifact()}
+
+## Regression Iron Rule
+- Iron rule acknowledged: no
+- Critical regression guardrail: preserve release guard behavior
+`);
+
+    const result = await lintArtifact(root, "plan");
+    const ironRule = result.findings.find((f) => f.section === "Plan Regression Iron Rule Acknowledgement");
+    expect(result.passed).toBe(true);
+    expect(ironRule?.required).toBe(false);
+    expect(ironRule?.found).toBe(false);
+  });
+
   it("enables strict plan guard checks when frontmatter is present", async () => {
     const root = await createTempProject("plan-strict-guards");
     const frontmatter = `---
@@ -2834,9 +3103,9 @@ inputs_hash: sha256:pending
     );
 
     const result = await lintArtifact(root, "plan");
-    const placeholder = result.findings.find((f) => f.section === "No Placeholder Enforcement");
+    const placeholder = result.findings.find((f) => f.section === "Plan Quality Scan: Placeholders");
     const trace = result.findings.find((f) => f.section === "Locked Decision Traceability");
-    const reduction = result.findings.find((f) => f.section === "No Scope Reduction Language");
+    const reduction = result.findings.find((f) => f.section === "Plan Quality Scan: Scope Reduction");
 
     expect(placeholder?.required).toBe(true);
     expect(placeholder?.found).toBe(false);
@@ -2915,9 +3184,9 @@ inputs_hash: sha256:pending
     );
 
     const result = await lintArtifact(root, "plan");
-    const placeholder = result.findings.find((f) => f.section === "No Placeholder Enforcement");
+    const placeholder = result.findings.find((f) => f.section === "Plan Quality Scan: Placeholders");
     const trace = result.findings.find((f) => f.section === "Locked Decision Traceability");
-    const reduction = result.findings.find((f) => f.section === "No Scope Reduction Language");
+    const reduction = result.findings.find((f) => f.section === "Plan Quality Scan: Scope Reduction");
 
     expect(result.passed).toBe(true);
     expect(placeholder?.required).toBe(false);
@@ -3271,6 +3540,312 @@ ${TDD_PREFLIGHT_SECTIONS}
 
     const result = await lintArtifact(root, "tdd");
     expect(result.passed).toBe(true);
+  });
+
+  it("fails tdd when Iron Law Acknowledgement section is missing", async () => {
+    const root = await createTempProject("tdd-missing-iron-law-section");
+    await writeRuntimeArtifact(root, "06-tdd.md", `# TDD Artifact
+
+## Test Discovery
+- Existing tests: tests/unit/dedupe.test.ts
+- Commands: pnpm vitest run dedupe.test.ts
+
+## System-Wide Impact Check
+- Interfaces/schemas: dedupe public contract covered
+
+## Watched-RED Proof
+| Slice | Test name | Observed at (ISO ts) | Failure reason snippet | Source command/log |
+|---|---|---|---|---|
+| S-1 | dedupe fails on duplicate key | 2026-04-30T09:00:00Z | FAIL AssertionError expected unique list | \`pnpm vitest run dedupe.test.ts\` |
+
+## Vertical Slice Cycle
+| Slice | RED ts | GREEN ts | REFACTOR ts |
+|---|---|---|---|
+| S-1 | 2026-04-30T09:00:00Z | 2026-04-30T09:05:00Z | 2026-04-30T09:09:00Z |
+
+## RED Evidence
+| Slice | Test name | Command | Failure output summary |
+|---|---|---|---|
+| S-1 | dedupe fails on duplicate key | pnpm vitest run dedupe.test.ts | FAIL AssertionError expected unique list |
+
+## Acceptance Mapping
+| Slice | Plan task ID | Spec criterion ID |
+|---|---|---|
+| S-1 | T-1 | AC-1 |
+
+## GREEN Evidence
+- Full suite command: pnpm vitest run
+- Full suite result: 12 passed, 0 failed
+
+## REFACTOR Notes
+- What changed: Extracted helper function
+- Why: Reuse across tests
+- Behavior preserved: Full suite green after refactor
+
+## Traceability
+- Plan task IDs: T-1
+- Spec criterion IDs: AC-1
+
+## Verification Ladder
+| Slice | Tier reached | Evidence |
+|---|---|---|
+| S-1 | command | pnpm vitest run dedupe.test.ts (pass)
+`);
+
+    const result = await lintArtifact(root, "tdd");
+    const ironLaw = result.findings.find((f) => f.section === "TDD Iron Law Acknowledgement");
+    expect(result.passed).toBe(false);
+    expect(ironLaw?.required).toBe(true);
+    expect(ironLaw?.found).toBe(false);
+    expect(ironLaw?.details ?? "").toContain("Iron Law Acknowledgement");
+  });
+
+  it("fails tdd when Watched-RED Proof has no populated rows", async () => {
+    const root = await createTempProject("tdd-empty-watched-red-proof");
+    await writeRuntimeArtifact(root, "06-tdd.md", `# TDD Artifact
+
+## Test Discovery
+- Existing tests: tests/unit/dedupe.test.ts
+- Commands: pnpm vitest run dedupe.test.ts
+
+## System-Wide Impact Check
+- Interfaces/schemas: dedupe public contract covered
+
+## Iron Law Acknowledgement
+- Iron Law: NO PRODUCTION CODE WITHOUT A FAILING TEST FIRST.
+- Acknowledged: yes
+
+## Watched-RED Proof
+| Slice | Test name | Observed at (ISO ts) | Failure reason snippet | Source command/log |
+|---|---|---|---|---|
+| S-1 |  |  |  |  |
+
+## Vertical Slice Cycle
+| Slice | RED ts | GREEN ts | REFACTOR ts |
+|---|---|---|---|
+| S-1 | 2026-04-30T09:00:00Z | 2026-04-30T09:05:00Z | 2026-04-30T09:09:00Z |
+
+## RED Evidence
+| Slice | Test name | Command | Failure output summary |
+|---|---|---|---|
+| S-1 | dedupe fails on duplicate key | pnpm vitest run dedupe.test.ts | FAIL AssertionError expected unique list |
+
+## Acceptance Mapping
+| Slice | Plan task ID | Spec criterion ID |
+|---|---|---|
+| S-1 | T-1 | AC-1 |
+
+## GREEN Evidence
+- Full suite command: pnpm vitest run
+- Full suite result: 12 passed, 0 failed
+
+## REFACTOR Notes
+- What changed: Extracted helper function
+- Why: Reuse across tests
+- Behavior preserved: Full suite green after refactor
+
+## Traceability
+- Plan task IDs: T-1
+- Spec criterion IDs: AC-1
+
+## Verification Ladder
+| Slice | Tier reached | Evidence |
+|---|---|---|
+| S-1 | command | pnpm vitest run dedupe.test.ts (pass)
+`);
+
+    const result = await lintArtifact(root, "tdd");
+    const proof = result.findings.find((f) => f.section === "Watched-RED Proof Shape");
+    expect(result.passed).toBe(false);
+    expect(proof?.required).toBe(true);
+    expect(proof?.found).toBe(false);
+    expect(proof?.details ?? "").toContain("no populated rows");
+  });
+
+  it("fails tdd when Vertical Slice Cycle section is missing", async () => {
+    const root = await createTempProject("tdd-missing-vertical-slice-cycle");
+    await writeRuntimeArtifact(root, "06-tdd.md", `# TDD Artifact
+
+${TDD_PREFLIGHT_SECTIONS}
+
+## RED Evidence
+| Slice | Test name | Command | Failure output summary |
+|---|---|---|---|
+| S-1 | counts unique keys | pnpm vitest run dedupe.test.ts | Cannot find module |
+
+## Acceptance Mapping
+| Slice | Plan task ID | Spec criterion ID |
+|---|---|---|
+| S-1 | T-1 | AC-1 |
+
+## Failure Analysis
+| Slice | Expected missing behavior | Actual failure reason |
+|---|---|---|
+| S-1 | Module not implemented | Module import fails — correct |
+
+## GREEN Evidence
+- Full suite command: pnpm vitest run
+- Full suite result: 12 passed, 0 failed
+
+## Verification Ladder
+- Highest tier reached: command
+- Evidence: pnpm vitest run dedupe.test.ts (pass)
+
+## REFACTOR Notes
+- What changed: Extracted helper function
+- Why: Reuse across tests
+- Behavior preserved: Full suite green after refactor
+
+## Traceability
+- Plan task IDs: T-1
+- Spec criterion IDs: AC-1
+`.replace(/## Vertical Slice Cycle[\s\S]*?\n\n## RED Evidence/u, "## RED Evidence"));
+
+    const result = await lintArtifact(root, "tdd");
+    const cycle = result.findings.find((f) => f.section === "Vertical Slice Cycle Coverage");
+    expect(result.passed).toBe(false);
+    expect(cycle?.required).toBe(true);
+    expect(cycle?.found).toBe(false);
+    expect(cycle?.details ?? "").toContain("Vertical Slice Cycle");
+  });
+
+  it("adds mock preference recommendation when mocks are used without boundary justification", async () => {
+    const root = await createTempProject("tdd-mock-preference-no-justification");
+    await writeRuntimeArtifact(root, "06-tdd.md", `# TDD Artifact
+
+${TDD_PREFLIGHT_SECTIONS}
+
+## RED Evidence
+| Slice | Test name | Command | Failure output summary |
+|---|---|---|---|
+| S-1 | counts unique keys | pnpm vitest run dedupe.test.ts | FAIL uses jest.mock('service-client') |
+
+## Acceptance Mapping
+| Slice | Plan task ID | Spec criterion ID |
+|---|---|---|
+| S-1 | T-1 | AC-1 |
+
+## Failure Analysis
+| Slice | Expected missing behavior | Actual failure reason |
+|---|---|---|
+| S-1 | Module not implemented | Module import fails — correct |
+
+## GREEN Evidence
+- Full suite command: pnpm vitest run
+- Full suite result: 12 passed, 0 failed
+
+## Verification Ladder
+- Highest tier reached: command
+- Evidence: pnpm vitest run dedupe.test.ts (pass)
+
+## REFACTOR Notes
+- What changed: Extracted helper function
+- Why: Reuse across tests
+- Behavior preserved: Full suite green after refactor
+
+## Traceability
+- Plan task IDs: T-1
+- Spec criterion IDs: AC-1
+`);
+
+    const result = await lintArtifact(root, "tdd");
+    const mockPreference = result.findings.find((f) => f.section === "Mock Preference Heuristic");
+    expect(result.passed).toBe(true);
+    expect(mockPreference).toBeDefined();
+    expect(mockPreference?.required).toBe(false);
+    expect(mockPreference?.found).toBe(false);
+  });
+
+  it("marks mock preference recommendation satisfied when boundary justification is explicit", async () => {
+    const root = await createTempProject("tdd-mock-preference-with-boundary");
+    await writeRuntimeArtifact(root, "06-tdd.md", `# TDD Artifact
+
+${TDD_PREFLIGHT_SECTIONS}
+
+## RED Evidence
+| Slice | Test name | Command | Failure output summary |
+|---|---|---|---|
+| S-1 | counts unique keys | pnpm vitest run dedupe.test.ts | FAIL uses vi.mock('src/network/client') justified by boundary: network/fs/time |
+
+## Acceptance Mapping
+| Slice | Plan task ID | Spec criterion ID |
+|---|---|---|
+| S-1 | T-1 | AC-1 |
+
+## Failure Analysis
+| Slice | Expected missing behavior | Actual failure reason |
+|---|---|---|
+| S-1 | Module not implemented | Module import fails — correct |
+
+## GREEN Evidence
+- Full suite command: pnpm vitest run
+- Full suite result: 12 passed, 0 failed
+
+## Verification Ladder
+- Highest tier reached: command
+- Evidence: pnpm vitest run dedupe.test.ts (pass)
+
+## REFACTOR Notes
+- What changed: Extracted helper function
+- Why: Reuse across tests
+- Behavior preserved: Full suite green after refactor
+
+## Traceability
+- Plan task IDs: T-1
+- Spec criterion IDs: AC-1
+`);
+
+    const result = await lintArtifact(root, "tdd");
+    const mockPreference = result.findings.find((f) => f.section === "Mock Preference Heuristic");
+    expect(result.passed).toBe(true);
+    expect(mockPreference).toBeDefined();
+    expect(mockPreference?.required).toBe(false);
+    expect(mockPreference?.found).toBe(true);
+  });
+
+  it("does not emit mock preference recommendation when no mock tokens are present", async () => {
+    const root = await createTempProject("tdd-mock-preference-not-applicable");
+    await writeRuntimeArtifact(root, "06-tdd.md", `# TDD Artifact
+
+${TDD_PREFLIGHT_SECTIONS}
+
+## RED Evidence
+| Slice | Test name | Command | Failure output summary |
+|---|---|---|---|
+| S-1 | counts unique keys | pnpm vitest run dedupe.test.ts | FAIL AssertionError expected unique list |
+
+## Acceptance Mapping
+| Slice | Plan task ID | Spec criterion ID |
+|---|---|---|
+| S-1 | T-1 | AC-1 |
+
+## Failure Analysis
+| Slice | Expected missing behavior | Actual failure reason |
+|---|---|---|
+| S-1 | Module not implemented | Module import fails — correct |
+
+## GREEN Evidence
+- Full suite command: pnpm vitest run
+- Full suite result: 12 passed, 0 failed
+
+## Verification Ladder
+- Highest tier reached: command
+- Evidence: pnpm vitest run dedupe.test.ts (pass)
+
+## REFACTOR Notes
+- What changed: Extracted helper function
+- Why: Reuse across tests
+- Behavior preserved: Full suite green after refactor
+
+## Traceability
+- Plan task IDs: T-1
+- Spec criterion IDs: AC-1
+`);
+
+    const result = await lintArtifact(root, "tdd");
+    const mockPreference = result.findings.find((f) => f.section === "Mock Preference Heuristic");
+    expect(result.passed).toBe(true);
+    expect(mockPreference).toBeUndefined();
   });
 
   it("accepts canonical Verification Ladder table form without 'Highest tier reached' phrase", async () => {

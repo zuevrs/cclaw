@@ -1,57 +1,57 @@
 import { RUNTIME_ROOT } from "../constants.js";
-import { resolveIdeateFrames, type IdeateFrameId } from "./ideate-frames.js";
-import { ideateStructuredAskToolsWithFallback } from "./decision-protocol.js";
+import { resolveIdeaFrames, type IdeaFrameId } from "./idea-frames.js";
+import { ideaStructuredAskToolsWithFallback } from "./decision-protocol.js";
 
 import { conversationLanguagePolicyMarkdown } from "./language-policy.js";
-const IDEATE_SKILL_FOLDER = "flow-ideate";
-const IDEATE_SKILL_NAME = "flow-ideate";
+const IDEA_SKILL_FOLDER = "flow-idea";
+const IDEA_SKILL_NAME = "flow-idea";
 
 /**
- * Directory + filename convention for ideate artifacts. These are separate
- * from stage artifacts (00-..08-*.md) because `/cc-ideate` runs outside the
+ * Directory + filename convention for idea artifacts. These are separate
+ * from stage artifacts (00-..08-*.md) because `/cc-idea` runs outside the
  * critical-path flow state machine and must not collide with stage numbering.
  */
-const IDEATE_ARTIFACT_GLOB = ".cclaw/artifacts/ideate-*.md";
-const IDEATE_ARTIFACT_PATTERN = ".cclaw/artifacts/ideate-<YYYY-MM-DD-slug>.md";
-const IDEATE_RESUME_WINDOW_DAYS = 30;
+const IDEA_ARTIFACT_GLOB = ".cclaw/artifacts/idea-*.md";
+const IDEA_ARTIFACT_PATTERN = ".cclaw/artifacts/idea-<YYYY-MM-DD-slug>.md";
+const IDEA_RESUME_WINDOW_DAYS = 30;
 
-const STRUCTURED_ASK_TOOLS = ideateStructuredAskToolsWithFallback();
+const STRUCTURED_ASK_TOOLS = ideaStructuredAskToolsWithFallback();
 
-export interface IdeateCommandOptions {
-  frameIds?: readonly IdeateFrameId[];
+export interface IdeaCommandOptions {
+  frameIds?: readonly IdeaFrameId[];
   mode?: "repo-grounded" | "elsewhere-software" | "elsewhere-non-software" | "narrow";
 }
 
-export function minimumDistinctIdeateFrames(
+export function minimumDistinctIdeaFrames(
   frameCount: number,
-  mode: IdeateCommandOptions["mode"] = "repo-grounded"
+  mode: IdeaCommandOptions["mode"] = "repo-grounded"
 ): number {
   if (frameCount <= 0) return 0;
   const cap = mode === "repo-grounded" ? 4 : 2;
   return Math.min(cap, frameCount);
 }
 
-function renderFrameBullets(frameIds?: readonly IdeateFrameId[]): string {
-  return resolveIdeateFrames(frameIds)
+function renderFrameBullets(frameIds?: readonly IdeaFrameId[]): string {
+  return resolveIdeaFrames(frameIds)
     .map((frame) => `   - ${frame.label} (\`${frame.id}\`)`)
     .join("\n");
 }
 
-function renderFrameNames(frameIds?: readonly IdeateFrameId[]): string {
-  return resolveIdeateFrames(frameIds)
+function renderFrameNames(frameIds?: readonly IdeaFrameId[]): string {
+  return resolveIdeaFrames(frameIds)
     .map((frame) => frame.label)
     .join(", ");
 }
 
-export function ideateCommandContract(options: IdeateCommandOptions = {}): string {
-  const frames = resolveIdeateFrames(options.frameIds);
+export function ideaCommandContract(options: IdeaCommandOptions = {}): string {
+  const frames = resolveIdeaFrames(options.frameIds);
   const frameBullets = renderFrameBullets(options.frameIds);
-  const minimumDistinctFrames = minimumDistinctIdeateFrames(frames.length, options.mode);
-  return `# /cc-ideate
+  const minimumDistinctFrames = minimumDistinctIdeaFrames(frames.length, options.mode);
+  return `# /cc-idea
 
 ## Purpose
 
-Repository-improvement ideate mode. Generate a ranked backlog of
+Repository-improvement idea mode. Generate a ranked backlog of
 high-value improvements, persist it as an artifact on disk, and end with
 an explicit handoff — either launch \`/cc\` on a chosen candidate in the
 same session, or save/discard the backlog.
@@ -59,18 +59,20 @@ same session, or save/discard the backlog.
 ## HARD-GATE
 
 ${conversationLanguagePolicyMarkdown()}
-- Ideate mode only. Never mutate \`.cclaw/state/flow-state.json\`.
+- Idea mode only. Never mutate \`.cclaw/state/flow-state.json\`.
 - Every recommendation cites evidence from the current repository
   (file path, command output, or knowledge-store entry id).
-- Always write a persisted artifact to
-  \`${IDEATE_ARTIFACT_PATTERN}\`. Chat-only output is not acceptable —
-  the next session must be able to resume.
-- Always end with a structured handoff prompt, not an open question.
+- Whenever you produce ideation output, persist it to
+  \`${IDEA_ARTIFACT_PATTERN}\`. Chat-only output is not acceptable.
+  The only exception is an explicit user-cancel from the resume prompt —
+  in that case, write nothing and exit silently.
+- Always end with a structured handoff prompt, not an open question
+  (skipped on explicit cancel).
 
 ## Algorithm
 
-1. **Resume check.** Glob \`${IDEATE_ARTIFACT_GLOB}\`. If any artifact
-   has been modified within the last ${IDEATE_RESUME_WINDOW_DAYS} days,
+1. **Resume check.** Glob \`${IDEA_ARTIFACT_GLOB}\`. If any artifact
+   has been modified within the last ${IDEA_RESUME_WINDOW_DAYS} days,
    offer the user: continue that backlog, start fresh, or cancel.
 2. **Mode classification.** Explicitly classify subject:
    \`repo-grounded\` / \`elsewhere-software\` / \`elsewhere-non-software\` / \`narrow\`.
@@ -97,7 +99,7 @@ ${frameBullets}
    \`(impact points / effort cost) * confidence multiplier\` and recommend
    the top survivor.
 8. **Write the artifact** at
-   \`${IDEATE_ARTIFACT_PATTERN}\` using the schema in the skill.
+   \`${IDEA_ARTIFACT_PATTERN}\` using the schema in the skill.
 8.5 **Seed shelf (optional).** For critiqued-out or deferred ideas that still
    show upside, write seed notes to
    \`${RUNTIME_ROOT}/seeds/SEED-<YYYY-MM-DD>-<slug>.md\` with
@@ -105,62 +107,67 @@ ${frameBullets}
 9. **Present the handoff prompt** with four concrete options — not A/B/C
    letters. Default = "Start /cc on the top recommendation".
 
-## Headless mode
+## Headless mode (CI/automation only)
 
+Headless envelopes are a machine-mode exception for CI/automation orchestration.
+In normal interactive ideation, respond with natural language plus the artifact path.
 For skill-to-skill invocation, emit exactly one JSON envelope:
 
 \`\`\`json
-{"version":"1","kind":"stage-output","stage":"non-flow","payload":{"command":"/cc-ideate","artifact":".cclaw/artifacts/ideate-<date>-<slug>.md","recommendation":"I-1"},"emittedAt":"<ISO-8601>"}
+{"version":"1","kind":"stage-output","stage":"non-flow","payload":{"command":"/cc-idea","artifact":".cclaw/artifacts/idea-<date>-<slug>.md","recommendation":"I-1"},"emittedAt":"<ISO-8601>"}
 \`\`\`
 
 Validate envelopes with:
-\`cclaw internal envelope-validate --stdin\`
+\`npx cclaw-cli internal envelope-validate --stdin\`
 
 ## Primary skill
 
-   **${RUNTIME_ROOT}/skills/${IDEATE_SKILL_FOLDER}/SKILL.md**
+   **${RUNTIME_ROOT}/skills/${IDEA_SKILL_FOLDER}/SKILL.md**
 `;
 }
 
-export function ideateCommandSkillMarkdown(options: IdeateCommandOptions = {}): string {
-  const frames = resolveIdeateFrames(options.frameIds);
+export function ideaCommandSkillMarkdown(options: IdeaCommandOptions = {}): string {
+  const frames = resolveIdeaFrames(options.frameIds);
   const frameBullets = renderFrameBullets(options.frameIds);
-  const minimumDistinctFrames = minimumDistinctIdeateFrames(frames.length, options.mode);
+  const minimumDistinctFrames = minimumDistinctIdeaFrames(frames.length, options.mode);
   const frameNames = renderFrameNames(options.frameIds);
   return `---
-name: ${IDEATE_SKILL_NAME}
-description: "Repository ideate mode: detect and rank high-leverage improvements, persist a backlog artifact, and hand off to /cc or save/discard."
+name: ${IDEA_SKILL_NAME}
+description: "Repository idea mode: detect and rank high-leverage improvements, persist a backlog artifact, and hand off to /cc or save/discard."
 ---
 
-# /cc-ideate
+# /cc-idea
 
 ## Announce at start
 
-"Using flow-ideate to identify highest-leverage improvements in this
+"Using flow-idea to identify highest-leverage improvements in this
 repository. Will persist a ranked backlog to
-\`${IDEATE_ARTIFACT_PATTERN}\` and end with an explicit handoff."
+\`${IDEA_ARTIFACT_PATTERN}\` and end with an explicit handoff."
 
 ## HARD-GATE
 
 ${conversationLanguagePolicyMarkdown()}
-- Do not start coding in ideate mode.
-- Do not mutate \`.cclaw/state/flow-state.json\` — ideate mode sits outside
+- Do not start coding in idea mode.
+- Do not mutate \`.cclaw/state/flow-state.json\` — idea mode sits outside
   the critical-path flow.
-- Always produce the artifact file on disk before presenting the handoff.
+- Whenever ideation output is produced, persist the artifact file on disk
+  before presenting the handoff. The only exception is an explicit user-cancel
+  from the resume prompt — in that case, write nothing and exit silently.
 - Always end with a structured handoff that names the concrete follow-up
-  command for each option. No A/B/C letters without command context.
+  command for each option (skipped on explicit cancel). No A/B/C letters
+  without command context.
 
 ## Protocol
 
 ### Phase 0 — Resume and classify
 
 1. Use the harness's file-glob tool (\`Glob\` pattern
-   \`${IDEATE_ARTIFACT_GLOB}\` or equivalent \`ls\`/\`find\`).
-2. Filter to files modified within the last ${IDEATE_RESUME_WINDOW_DAYS} days.
+   \`${IDEA_ARTIFACT_GLOB}\` or equivalent \`ls\`/\`find\`).
+2. Filter to files modified within the last ${IDEA_RESUME_WINDOW_DAYS} days.
 3. If one or more match, present **one** structured ask using the
    harness's native tool (${STRUCTURED_ASK_TOOLS}) with options:
    - **Continue the existing backlog** — read the most-recent
-     ideate-*.md and work from its candidate list; skip re-scanning.
+     idea-*.md and work from its candidate list; skip re-scanning.
    - **Start a fresh scan** — proceed to Phase 1; the old artifact stays
      on disk for history.
    - **Cancel** — stop; do not scan or write anything.
@@ -233,10 +240,10 @@ Only survivors advance to ranking.
    and break ties with rationale strength.
 4. Compute the artifact filename:
    - \`slug\` = first 3–5 words of the top recommendation, lowercase,
-     non-alphanumeric collapsed to \`-\`, trimmed. When ideate mode is
+     non-alphanumeric collapsed to \`-\`, trimmed. When idea mode is
      focus-hinted (user passed an argument), use the focus hint instead.
    - \`date\` = today in \`YYYY-MM-DD\` (local time).
-   - Path = \`.cclaw/artifacts/ideate-<date>-<slug>.md\`.
+   - Path = \`.cclaw/artifacts/idea-<date>-<slug>.md\`.
 5. Use the harness's write-file tool (\`Write\`, \`apply_patch\`, or shell
    \`cat <<EOF > path\`) to create the artifact with this schema:
 
@@ -284,7 +291,7 @@ Only survivors advance to ranking.
 6. Optional: for promising non-selected ideas, write
    \`${RUNTIME_ROOT}/seeds/SEED-<YYYY-MM-DD>-<slug>.md\` entries with:
    \`title\`, \`trigger_when\`, \`hypothesis\`, \`action\`, and
-   \`source_artifact\` = ideate artifact path.
+   \`source_artifact\` = idea artifact path.
 7. Confirm in chat: "Wrote <path>."
 
 ### Phase 5 — Handoff prompt
@@ -301,7 +308,7 @@ Required options, in this order:
 2. **Pick a different candidate** — the agent asks which ID (I-2, I-3, …)
    and then invokes \`/cc <that candidate's handoff phrase>\`.
 3. **Save and close** — leave the artifact on disk, do nothing else.
-   Next session: \`/cc-ideate\` will offer to resume it.
+   Next session: \`/cc-idea\` will offer to resume it.
 4. **Discard** — delete the just-written artifact. Use only when the
    scan produced nothing actionable.
 
@@ -313,7 +320,7 @@ lettered list with the same four labels. Do not invent extra options.
 - **Start /cc on I-1** or **different candidate:** announce
   "Handing off to /cc <phrase>" and load the \`using-cclaw\` router
   skill. From there, the normal \`/cc\` classification and stage flow
-  takes over. Do not produce a second artifact; the ideate file is
+  takes over. Do not produce a second artifact; the idea file is
   preserved as the origin document for this run.
 - **Save and close:** reply with the artifact path and stop.
 - **Discard:** delete the artifact file, confirm deletion, stop.

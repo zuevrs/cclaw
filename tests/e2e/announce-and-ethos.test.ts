@@ -10,11 +10,11 @@ describe("announce-at-start discipline and ethos principles", () => {
     await initCclaw({ projectRoot: root });
 
     const planSkill = await fs.readFile(
-      path.join(root, ".cclaw/skills/planning-and-task-breakdown/SKILL.md"),
+      path.join(root, ".cclaw/skills/plan/SKILL.md"),
       "utf8"
     );
     const reviewSkill = await fs.readFile(
-      path.join(root, ".cclaw/skills/two-layer-review/SKILL.md"),
+      path.join(root, ".cclaw/skills/review/SKILL.md"),
       "utf8"
     );
     const metaSkill = await fs.readFile(
@@ -25,7 +25,7 @@ describe("announce-at-start discipline and ethos principles", () => {
     expect(planSkill).toContain("Announce at start:");
     expect(reviewSkill).toContain("Announce at start:");
     expect(reviewSkill).toContain("Decision protocol: ask only decision-changing questions");
-    expect(metaSkill).toContain("/cc-ideate");
+    expect(metaSkill).toContain("/cc-idea");
     expect(metaSkill).toContain("/cc-cancel");
   });
 });

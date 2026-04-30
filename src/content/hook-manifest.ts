@@ -7,7 +7,7 @@ import type { HarnessId } from "../types.js";
  *
  *  - the per-harness JSON generators in `./observe.ts`
  *    (claude/cursor/codex hook documents),
- *  - the semantic coverage map in `./hook-events.ts` (docs + doctor),
+ *  - the semantic coverage map in `./hook-events.ts` (docs + sync/runtime checks),
  *  - the `requiredEvents` list embedded in `src/hook-schemas/*.v1.json`
  *    (enforced by a parity test).
  *
@@ -240,7 +240,7 @@ export function requiredEventsFor(harness: HookManifestHarness): string[] {
 }
 
 /**
- * Human-readable per-harness semantic coverage used by docs and doctor output.
+ * Human-readable per-harness semantic coverage used by docs and sync/runtime diagnostics.
  */
 export function semanticEventCoverage(
   harness: HookManifestHarness

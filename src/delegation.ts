@@ -83,6 +83,8 @@ export interface DelegationTokenUsage {
   model: string;
 }
 
+export type DelegationWaiverAcceptedBy = "user-flag";
+
 export type DelegationEntry = {
   stage: string;
   agent: string;
@@ -105,6 +107,7 @@ export type DelegationEntry = {
    */
   taskId?: string;
   waiverReason?: string;
+  acceptedBy?: DelegationWaiverAcceptedBy;
   ts?: string;
   /**
    * Run id the entry belongs to. Older ledgers written before 0.5.17 may omit this;
@@ -349,6 +352,7 @@ function isDelegationEntry(value: unknown): value is DelegationEntry {
     (o.endTs === undefined || typeof o.endTs === "string") &&
     (o.taskId === undefined || typeof o.taskId === "string") &&
     (o.waiverReason === undefined || typeof o.waiverReason === "string") &&
+    (o.acceptedBy === undefined || o.acceptedBy === "user-flag") &&
     waiverOk &&
     (o.runId === undefined || typeof o.runId === "string") &&
     (o.fulfillmentMode === undefined ||
@@ -424,7 +428,7 @@ function parseLedger(raw: unknown, runId: string): DelegationLedger {
         // and entry, the entry has no fulfillmentMode, and there is no
         // dispatch-surface or dispatch-id evidence on the row. We honor
         // that by tagging fulfillmentMode = "legacy-inferred" so callers
-        // (stage-complete, doctor) can require an explicit `--rerecord`
+        // (stage-complete, sync/runtime checks) can require an explicit `--rerecord`
         // before the row counts as proof-era.
         const ledgerHasNoVersion = ledgerSchemaVersion === undefined || ledgerSchemaVersion === 1;
         const entryHasNoVersion = item.schemaVersion === undefined || item.schemaVersion === 1;

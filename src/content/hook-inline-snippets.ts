@@ -10,6 +10,8 @@
  *    `src/knowledge-store.ts::computeCompoundReadiness`.
  * 2. `computeRalphLoopStatusInline` mirrors
  *    `src/tdd-cycle.ts::computeRalphLoopStatus`.
+ * 3. `computeEarlyLoopStatusInline` mirrors
+ *    `src/early-loop.ts::computeEarlyLoopStatus`.
  *
  * Previously those bodies lived inline in `src/content/node-hooks.ts` — a
  * ~2000-line file — next to unrelated hook-handler code. Any silent drift
@@ -25,11 +27,12 @@
  *   longer owns their source code.
  *
  * Parity with the TypeScript canonical implementations is enforced by
- * `tests/unit/ralph-loop-parity.test.ts`. Any structural change to the
+ * `tests/unit/ralph-loop-parity.test.ts` and
+ * `tests/unit/early-loop-parity.test.ts`. Any structural change to the
  * canonical TS code MUST:
  *
  * 1. Update the matching snippet below.
- * 2. Re-run `npm test tests/unit/ralph-loop-parity.test.ts`.
+ * 2. Re-run parity tests for the touched snippet.
  *
  * DO NOT inline tests here — keep the parity check in its dedicated test
  * file.
@@ -44,7 +47,7 @@
  *   timestamp so the hook-written `compound-readiness.json` is byte-equal
  *   to the CLI-written version for the same input.
  * - `countArchivedRunsInline` counts immediate subdirectories of
- *   `<root>/.cclaw/runs/` so both the hook and the CLI see the same
+ *   `<root>/.cclaw/archive/` so both the hook and the CLI see the same
  *   `archivedRunsCount` for the small-project relaxation.
  * - `formatCompoundReadinessLineInline` mirrors the one-line summary shape
  *   used by `src/internal/compound-readiness.ts::formatCompoundReadinessLine`
@@ -55,11 +58,11 @@ function normalizeCompoundLastUpdatedAt(date) {
   return date.toISOString().replace(/\\.\\d{3}Z$/u, "Z");
 }
 
-// Count archived runs as sub-directories under \`.cclaw/runs/\`. Missing
+// Count archived runs as sub-directories under \`.cclaw/archive/\`. Missing
 // dir returns 0; unexpected errors return undefined so the caller can
 // skip the small-project relaxation rather than guess.
 async function countArchivedRunsInline(root) {
-  const dir = path.join(root, RUNTIME_ROOT, "runs");
+  const dir = path.join(root, RUNTIME_ROOT, "archive");
   try {
     const entries = await fs.readdir(dir, { withFileTypes: true });
     return entries.filter((entry) => entry.isDirectory()).length;
@@ -299,6 +302,217 @@ async function computeRalphLoopStatusInline(stateDir, runId) {
     acClosed: Array.from(acClosed).sort(),
     sliceCount: slices.length,
     slices,
+    lastUpdatedAt: new Date().toISOString()
+  };
+}
+`;
+
+/**
+ * Inline mirror of `src/early-loop.ts::computeEarlyLoopStatus`.
+ *
+ * Parity enforced by
+ * `tests/unit/early-loop-parity.test.ts::early-loop parity`.
+ *
+ * Signature contract:
+ *   async function computeEarlyLoopStatusInline(stateDir, stageId, runId, maxIterations) -> EarlyLoopStatus
+ */
+export const EARLY_LOOP_INLINE_SOURCE = `
+function normalizeEarlyLoopSeverityInline(value) {
+  if (value === "critical" || value === "important" || value === "suggestion") {
+    return value;
+  }
+  return "important";
+}
+
+function normalizeEarlyLoopTextInline(value, fallback) {
+  if (typeof value !== "string") return fallback;
+  const trimmed = value.trim();
+  return trimmed.length > 0 ? trimmed : fallback;
+}
+
+function stableConcernFallbackIdInline(locator, summary) {
+  const seed = (String(locator) + "::" + String(summary)).trim().toLowerCase();
+  let hash = 0;
+  for (let index = 0; index < seed.length; index += 1) {
+    hash = (Math.imul(31, hash) + seed.charCodeAt(index)) >>> 0;
+  }
+  return "C-" + hash.toString(16).padStart(8, "0");
+}
+
+function normalizeEarlyLoopConcernInline(row) {
+  if (!row || typeof row !== "object" || Array.isArray(row)) return null;
+  const locator = normalizeEarlyLoopTextInline(row.locator, "unknown-location");
+  const summary = normalizeEarlyLoopTextInline(row.summary, "missing-summary");
+  const id = typeof row.id === "string" && row.id.trim().length > 0
+    ? row.id.trim()
+    : stableConcernFallbackIdInline(locator, summary);
+  return {
+    id,
+    severity: normalizeEarlyLoopSeverityInline(row.severity),
+    locator,
+    summary
+  };
+}
+
+function normalizeEarlyLoopMaxIterationsInline(value) {
+  return Number.isInteger(value) && value >= 1 ? value : 3;
+}
+
+function earlyLoopSeverityWeightInline(value) {
+  if (value === "critical") return 3;
+  if (value === "important") return 2;
+  return 1;
+}
+
+function sortEarlyLoopConcernsInline(a, b) {
+  const severityDiff = earlyLoopSeverityWeightInline(b.severity) - earlyLoopSeverityWeightInline(a.severity);
+  if (severityDiff !== 0) return severityDiff;
+  if (a.firstSeenIteration !== b.firstSeenIteration) {
+    return a.firstSeenIteration - b.firstSeenIteration;
+  }
+  if (a.lastSeenIteration !== b.lastSeenIteration) {
+    return a.lastSeenIteration - b.lastSeenIteration;
+  }
+  return String(a.id).localeCompare(String(b.id), "en");
+}
+
+function formatEarlyLoopStatusLineInline(status) {
+  if (!status || typeof status !== "object") return "";
+  const convergence = status.convergenceTripped ? "tripped" : "clear";
+  return "Early Loop: stage=" + String(status.stage) +
+    ", iter=" + String(status.iteration) + "/" + String(status.maxIterations) +
+    ", open=" + String(Array.isArray(status.openConcerns) ? status.openConcerns.length : 0) +
+    ", convergence=" + convergence;
+}
+
+async function computeEarlyLoopStatusInline(stateDir, stageId, runId, maxIterations) {
+  const filePath = path.join(stateDir, "early-loop-log.jsonl");
+  const raw = await readTextFile(filePath, "");
+  const maxIters = normalizeEarlyLoopMaxIterationsInline(maxIterations);
+  const concernsMap = new Map();
+  let previousSnapshotKey = "";
+  let sameConcernStreak = 0;
+  let convergenceTripped = false;
+  let escalationReason = undefined;
+  let currentIteration = 0;
+  let lastSeenConcernIds = [];
+
+  for (const rawLine of raw.split(/\\r?\\n/gu)) {
+    const line = rawLine.trim();
+    if (line.length === 0) continue;
+    let parsed;
+    try {
+      parsed = JSON.parse(line);
+    } catch {
+      continue;
+    }
+    if (!parsed || typeof parsed !== "object" || Array.isArray(parsed)) continue;
+    const rowRunId = typeof parsed.runId === "string" && parsed.runId.trim().length > 0
+      ? parsed.runId.trim()
+      : "active";
+    const rowStage = typeof parsed.stage === "string" && parsed.stage.trim().length > 0
+      ? parsed.stage.trim()
+      : "brainstorm";
+    if (rowRunId !== runId || rowStage !== stageId) continue;
+
+    currentIteration += 1;
+    const iteration = Number.isInteger(parsed.iteration) && parsed.iteration >= 1
+      ? parsed.iteration
+      : currentIteration;
+    const seenThisIteration = new Set();
+    const concerns = Array.isArray(parsed.concerns) ? parsed.concerns : [];
+    for (const rawConcern of concerns) {
+      const concern = normalizeEarlyLoopConcernInline(rawConcern);
+      if (!concern) continue;
+      seenThisIteration.add(concern.id);
+      const existing = concernsMap.get(concern.id);
+      if (!existing) {
+        concernsMap.set(concern.id, {
+          id: concern.id,
+          severity: concern.severity,
+          locator: concern.locator,
+          summary: concern.summary,
+          firstSeenIteration: iteration,
+          lastSeenIteration: iteration
+        });
+        continue;
+      }
+      existing.lastSeenIteration = iteration;
+      existing.locator = concern.locator;
+      existing.summary = concern.summary;
+      if (earlyLoopSeverityWeightInline(concern.severity) >= earlyLoopSeverityWeightInline(existing.severity)) {
+        existing.severity = concern.severity;
+      }
+      delete existing.resolvedAtIteration;
+    }
+
+    const resolvedConcernIds = Array.isArray(parsed.resolvedConcernIds)
+      ? parsed.resolvedConcernIds
+          .filter((entry) => typeof entry === "string" && entry.trim().length > 0)
+          .map((entry) => entry.trim())
+      : [];
+    for (const concernId of resolvedConcernIds) {
+      const existing = concernsMap.get(concernId);
+      if (!existing) continue;
+      if (seenThisIteration.has(concernId)) continue;
+      if (existing.resolvedAtIteration === undefined) {
+        existing.resolvedAtIteration = iteration;
+      }
+    }
+
+    for (const concern of concernsMap.values()) {
+      if (concern.resolvedAtIteration !== undefined) continue;
+      if (seenThisIteration.has(concern.id)) continue;
+      concern.resolvedAtIteration = iteration;
+    }
+
+    const openConcernIds = Array.from(concernsMap.values())
+      .filter((concern) => concern.resolvedAtIteration === undefined)
+      .map((concern) => concern.id)
+      .sort((a, b) => String(a).localeCompare(String(b), "en"));
+    lastSeenConcernIds = openConcernIds;
+    const snapshotKey = openConcernIds.join("|");
+    if (snapshotKey.length > 0 && snapshotKey === previousSnapshotKey) {
+      sameConcernStreak += 1;
+      if (!convergenceTripped && sameConcernStreak >= 2) {
+        convergenceTripped = true;
+        escalationReason = "same concerns " + String(sameConcernStreak) + " iterations in a row";
+      }
+    } else {
+      sameConcernStreak = snapshotKey.length > 0 ? 1 : 0;
+    }
+    previousSnapshotKey = snapshotKey;
+  }
+
+  const openConcerns = Array.from(concernsMap.values())
+    .filter((concern) => concern.resolvedAtIteration === undefined)
+    .sort(sortEarlyLoopConcernsInline);
+  const resolvedConcerns = Array.from(concernsMap.values())
+    .filter((concern) => concern.resolvedAtIteration !== undefined)
+    .sort((a, b) => {
+      if (a.resolvedAtIteration !== b.resolvedAtIteration) {
+        return a.resolvedAtIteration - b.resolvedAtIteration;
+      }
+      return sortEarlyLoopConcernsInline(a, b);
+    });
+
+  if (!convergenceTripped && openConcerns.length > 0 && currentIteration >= maxIters) {
+    convergenceTripped = true;
+    escalationReason = "max iterations " + String(maxIters) +
+      " reached with " + String(openConcerns.length) + " open concern(s)";
+  }
+
+  return {
+    schemaVersion: 1,
+    stage: stageId,
+    runId,
+    iteration: currentIteration,
+    maxIterations: maxIters,
+    openConcerns,
+    resolvedConcerns,
+    lastSeenConcernIds,
+    convergenceTripped,
+    ...(escalationReason ? { escalationReason } : {}),
     lastUpdatedAt: new Date().toISOString()
   };
 }

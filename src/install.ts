@@ -17,9 +17,8 @@ import {
   detectAdvancedKeys
 } from "./config.js";
 import { learnSkillMarkdown } from "./content/learnings.js";
-import { nextCommandContract, nextCommandSkillMarkdown } from "./content/next-command.js";
 import { stageCommandShimMarkdown } from "./content/stage-command.js";
-import { ideateCommandContract, ideateCommandSkillMarkdown } from "./content/ideate-command.js";
+import { ideaCommandContract, ideaCommandSkillMarkdown } from "./content/idea-command.js";
 import { startCommandContract, startCommandSkillMarkdown } from "./content/start-command.js";
 import { viewCommandContract, viewCommandSkillMarkdown } from "./content/view-command.js";
 import { cancelCommandContract, cancelCommandSkillMarkdown } from "./content/cancel-command.js";
@@ -29,6 +28,7 @@ import { ironLawRuntimeDocument, ironLawsSkillMarkdown } from "./content/iron-la
 import {
   stageCompleteScript,
   startFlowScript,
+  cancelRunScript,
   runHookCmdScript,
   delegationRecordScript,
   opencodePluginJs,
@@ -66,12 +66,18 @@ import { ensureGitignore, removeGitignorePatterns } from "./gitignore.js";
 import {
   HARNESS_ADAPTERS,
   harnessShimFileNames,
+  harnessShimSkillNames,
   syncHarnessShims,
   removeCclawFromAgentsMd
 } from "./harness-adapters.js";
 import { validateHookDocument } from "./hook-schema.js";
 import { detectHarnesses } from "./init-detect.js";
-import { CorruptFlowStateError, ensureRunSystem, readFlowState } from "./runs.js";
+import {
+  classifyCodexHooksFlag,
+  codexConfigPath,
+  readCodexConfig
+} from "./codex-feature-flag.js";
+import { CorruptFlowStateError, ensureRunSystem } from "./runs.js";
 import { FLOW_STAGES } from "./types.js";
 import type { CclawConfig, FlowTrack, HarnessId } from "./types.js";
 
@@ -104,6 +110,26 @@ async function writeInitSentinel(projectRoot: string, operation: string): Promis
     `${JSON.stringify({ operation, startedAt: new Date().toISOString() }, null, 2)}\n`
   );
   return sentinelPath;
+}
+
+async function warnStaleInitSentinel(projectRoot: string, operation: string): Promise<void> {
+  const sentinelPath = runtimePath(projectRoot, "state", INIT_SENTINEL_FILE);
+  if (!(await exists(sentinelPath))) return;
+
+  let startedAt = "unknown time";
+  try {
+    const raw = await fs.readFile(sentinelPath, "utf8");
+    const parsed = JSON.parse(raw) as { startedAt?: unknown } | null;
+    if (parsed && typeof parsed.startedAt === "string" && parsed.startedAt.trim().length > 0) {
+      startedAt = parsed.startedAt;
+    }
+  } catch {
+    // best-effort parse of stale sentinel metadata
+  }
+
+  process.stderr.write(
+    `[${operation}] Detected stale .init-in-progress sentinel from ${startedAt}; previous run may have crashed. Continuing.\n`
+  );
 }
 
 
@@ -146,6 +172,17 @@ const DEPRECATED_UTILITY_SKILL_FOLDERS = [
   "flow-status",
   "flow-tree",
   "flow-diff"
+] as const;
+
+const DEPRECATED_STAGE_SKILL_FOLDERS = [
+  "brainstorming",
+  "scope-shaping",
+  "engineering-design-lock",
+  "specification-authoring",
+  "planning-and-task-breakdown",
+  "test-driven-development",
+  "two-layer-review",
+  "shipping-and-handoff"
 ] as const;
 
 const DEPRECATED_AGENT_FILES = [
@@ -527,12 +564,8 @@ async function writeSkills(projectRoot: string, config?: CclawConfig): Promise<v
     learnSkillMarkdown()
   );
   await writeFileSafe(
-    runtimePath(projectRoot, "skills", "flow-next-step", "SKILL.md"),
-    nextCommandSkillMarkdown()
-  );
-  await writeFileSafe(
-    runtimePath(projectRoot, "skills", "flow-ideate", "SKILL.md"),
-    ideateCommandSkillMarkdown()
+    runtimePath(projectRoot, "skills", "flow-idea", "SKILL.md"),
+    ideaCommandSkillMarkdown()
   );
   await writeFileSafe(
     runtimePath(projectRoot, "skills", "flow-start", "SKILL.md"),
@@ -626,8 +659,7 @@ async function writeSkills(projectRoot: string, config?: CclawConfig): Promise<v
 
 async function writeEntryCommands(projectRoot: string): Promise<void> {
   await writeFileSafe(runtimePath(projectRoot, "commands", "start.md"), startCommandContract());
-  await writeFileSafe(runtimePath(projectRoot, "commands", "next.md"), nextCommandContract());
-  await writeFileSafe(runtimePath(projectRoot, "commands", "ideate.md"), ideateCommandContract());
+  await writeFileSafe(runtimePath(projectRoot, "commands", "idea.md"), ideaCommandContract());
   await writeFileSafe(runtimePath(projectRoot, "commands", "view.md"), viewCommandContract());
   await writeFileSafe(runtimePath(projectRoot, "commands", "cancel.md"), cancelCommandContract());
   for (const stage of FLOW_STAGES) {
@@ -992,7 +1024,8 @@ async function writeMergedHookJson(
     const generatedSchema = validateHookDocument(harness, generatedDoc);
     if (!generatedSchema.ok) {
       throw new Error(
-        `Generated ${harness} hook document failed schema validation: ${generatedSchema.errors.join("; ")}`
+        `[sync fail-fast] Hook document drift detected for ${harness}: generated hook document is invalid (${generatedSchema.errors.join("; ")}). ` +
+        "Run `npx cclaw-cli sync` to regenerate managed hooks or repair the generated hook shape manually."
       );
     }
   }
@@ -1002,7 +1035,8 @@ async function writeMergedHookJson(
     const mergedSchema = validateHookDocument(harness, mergedDoc);
     if (!mergedSchema.ok) {
       throw new Error(
-        `Merged ${harness} hook document failed schema validation: ${mergedSchema.errors.join("; ")}`
+        `[sync fail-fast] Hook document drift detected for ${harness}: merged hook document is invalid (${mergedSchema.errors.join("; ")}). ` +
+        "Run `npx cclaw-cli sync` after fixing the custom hook entry or remove the malformed user-authored hook block."
       );
     }
   }
@@ -1031,11 +1065,14 @@ async function writeHooks(projectRoot: string, config: CclawConfig): Promise<voi
 
   await writeFileSafe(path.join(hooksDir, "stage-complete.mjs"), stageCompleteScript());
   await writeFileSafe(path.join(hooksDir, "start-flow.mjs"), startFlowScript());
+  await writeFileSafe(path.join(hooksDir, "cancel-run.mjs"), cancelRunScript());
   await writeFileSafe(path.join(hooksDir, "run-hook.mjs"), nodeHookRuntimeScript({
     strictness: effectiveStrictness,
     tddTestPathPatterns: config.tdd?.testPathPatterns ?? config.tddTestGlobs,
     tddProductionPathPatterns: config.tdd?.productionPathPatterns,
-    compoundRecurrenceThreshold: config.compound?.recurrenceThreshold
+    compoundRecurrenceThreshold: config.compound?.recurrenceThreshold,
+    earlyLoopEnabled: config.earlyLoop?.enabled,
+    earlyLoopMaxIterations: config.earlyLoop?.maxIterations
   }));
   await writeFileSafe(path.join(hooksDir, "run-hook.cmd"), runHookCmdScript());
   await writeFileSafe(path.join(hooksDir, "delegation-record.mjs"), delegationRecordScript());
@@ -1049,7 +1086,8 @@ async function writeHooks(projectRoot: string, config: CclawConfig): Promise<voi
       "run-hook.mjs",
       "run-hook.cmd",
       "delegation-record.mjs",
-      "opencode-plugin.mjs"
+      "opencode-plugin.mjs",
+      "cancel-run.mjs"
     ]) {
       await fs.chmod(path.join(hooksDir, script), 0o755);
     }
@@ -1085,8 +1123,8 @@ async function writeHooks(projectRoot: string, config: CclawConfig): Promise<voi
       // flag in `~/.codex/config.toml`. cclaw always writes the file so
       // the moment the flag flips on, the cclaw hooks start firing. See
       // `codexHooksJsonWithObservation` for the Bash-only caveat on
-      // PreToolUse/PostToolUse. `cclaw doctor` warns if the feature flag
-      // is not set.
+      // PreToolUse/PostToolUse. If the feature flag is off, hooks remain
+      // inert until the user enables codex_hooks in ~/.codex/config.toml.
       const codexDir = path.join(projectRoot, ".codex");
       await ensureDir(codexDir);
       await writeMergedHookJson(projectRoot, path.join(codexDir, "hooks.json"), codexHooksJson());
@@ -1144,7 +1182,7 @@ async function syncDisabledHarnessArtifacts(projectRoot: string, harnesses: Harn
 
   for (const entry of managedHookFiles) {
     if (enabled.has(entry.harness)) continue;
-    await removeManagedHookEntries(entry.hookPath);
+    await removeManagedHookEntries(entry.hookPath, { failOnParseError: true });
   }
 
   if (!enabled.has("opencode")) {
@@ -1153,7 +1191,20 @@ async function syncDisabledHarnessArtifacts(projectRoot: string, harnesses: Harn
     } catch {
       // best-effort cleanup
     }
+    try {
+      await fs.rm(path.join(projectRoot, ".opencode/agents"), { recursive: true, force: true });
+    } catch {
+      // best-effort cleanup
+    }
     await removeManagedOpenCodePluginConfig(projectRoot, OPENCODE_PLUGIN_REL_PATH);
+  }
+
+  if (!enabled.has("codex")) {
+    try {
+      await fs.rm(path.join(projectRoot, ".codex/agents"), { recursive: true, force: true });
+    } catch {
+      // best-effort cleanup
+    }
   }
 }
 
@@ -1169,6 +1220,9 @@ async function writeState(projectRoot: string, config: CclawConfig, forceReset =
 
 async function cleanLegacyArtifacts(projectRoot: string): Promise<void> {
   for (const legacyFolder of DEPRECATED_UTILITY_SKILL_FOLDERS) {
+    await removeBestEffort(runtimePath(projectRoot, "skills", legacyFolder), true);
+  }
+  for (const legacyFolder of DEPRECATED_STAGE_SKILL_FOLDERS) {
     await removeBestEffort(runtimePath(projectRoot, "skills", legacyFolder), true);
   }
 
@@ -1200,15 +1254,29 @@ async function cleanLegacyArtifacts(projectRoot: string): Promise<void> {
     await removeBestEffort(runtimePath(projectRoot, legacyRuntimeDir), true);
   }
 
-  // D-4 terminology migration: rename historical ideation artifacts to the
-  // canonical ideate-* naming without deleting user-authored content.
+  // Archive storage migration: `.cclaw/runs` is legacy and no longer a valid
+  // archive root. Remove only when empty; otherwise keep it so users can
+  // manually migrate or inspect old data.
+  const legacyRunsDir = runtimePath(projectRoot, "runs");
+  try {
+    const entries = await fs.readdir(legacyRunsDir);
+    if (entries.length === 0) {
+      await fs.rm(legacyRunsDir, { recursive: true, force: true });
+    }
+  } catch {
+    // missing or unreadable legacy dir; keep best-effort behavior
+  }
+
+  // D-4 terminology migration: rename historical ideation artifact prefixes to
+  // the canonical idea-* naming without deleting user-authored content.
+  const legacyIdeaArtifactPattern = /^ideation-(.+\.md)$/u;
   const artifactsDir = runtimePath(projectRoot, "artifacts");
   try {
     const entries = await fs.readdir(artifactsDir);
     for (const entry of entries) {
-      const match = /^ideation-(.+\.md)$/u.exec(entry);
+      const match = legacyIdeaArtifactPattern.exec(entry);
       if (!match) continue;
-      const nextName = `ideate-${match[1]}`;
+      const nextName = `idea-${match[1]}`;
       const from = path.join(artifactsDir, entry);
       const to = path.join(artifactsDir, nextName);
       if (await exists(to)) {
@@ -1255,12 +1323,49 @@ async function cleanStaleFiles(projectRoot: string): Promise<void> {
   // Legacy managed removals happen in cleanLegacyArtifacts() with explicit paths.
 }
 
+
+
+async function assertExpectedHarnessShims(
+  projectRoot: string,
+  harnesses: readonly HarnessId[]
+): Promise<void> {
+  const expectedFiles = harnessShimFileNames();
+  const expectedSkillFolders = harnessShimSkillNames();
+  for (const harness of harnesses) {
+    const adapter = HARNESS_ADAPTERS[harness];
+    const base = path.join(projectRoot, adapter.commandDir);
+    for (const fileName of expectedFiles) {
+      const target = adapter.shimKind === "skill"
+        ? path.join(base, fileName.replace(/\.md$/u, ""), "SKILL.md")
+        : path.join(base, fileName);
+      if (!(await exists(target))) {
+        throw new Error(
+          `[sync fail-fast] Harness shim drift detected for ${harness}: missing ${target}. ` +
+          `Run \`npx cclaw-cli sync\` again; if the file is still missing, inspect harness permissions/paths.`
+        );
+      }
+    }
+    if (adapter.shimKind === "skill") {
+      for (const folder of expectedSkillFolders) {
+        const skillPath = path.join(base, folder, "SKILL.md");
+        if (!(await exists(skillPath))) {
+          throw new Error(
+            `[sync fail-fast] Harness skill shim drift detected for ${harness}: missing ${skillPath}. ` +
+            `Run \`npx cclaw-cli sync\` again; if the issue persists, inspect generated .agents/skills surfaces.`
+          );
+        }
+      }
+    }
+  }
+}
+
 async function materializeRuntime(
   projectRoot: string,
   config: CclawConfig,
   forceStateReset: boolean,
   operation = "sync"
 ): Promise<void> {
+  await warnStaleInitSentinel(projectRoot, operation);
   const sentinelPath = await writeInitSentinel(projectRoot, operation);
   const managedSession = await ManagedResourceSession.create({ projectRoot, operation });
   setActiveManagedResourceSession(managedSession);
@@ -1276,22 +1381,54 @@ async function materializeRuntime(
       writeRulebook(projectRoot)
     ]);
     await writeState(projectRoot, config, forceStateReset);
-    await ensureRunSystem(projectRoot, { createIfMissing: false });
+    try {
+      await ensureRunSystem(projectRoot, { createIfMissing: false });
+    } catch (error) {
+      if (error instanceof CorruptFlowStateError) {
+        throw new Error(
+          `[sync fail-fast] Corrupt flow state detected: ${error.message} ` +
+          `Resolve the quarantined flow-state file and re-run \`npx cclaw-cli sync\`.`
+        );
+      }
+      throw error;
+    }
     await ensureKnowledgeStore(projectRoot);
     await writeHooks(projectRoot, config);
     await syncDisabledHarnessArtifacts(projectRoot, harnesses);
     await syncManagedGitHooks(projectRoot, config);
     await syncHarnessShims(projectRoot, harnesses);
+    await assertExpectedHarnessShims(projectRoot, harnesses);
     await writeCursorWorkflowRule(projectRoot, harnesses);
     await ensureGitignore(projectRoot);
     await managedSession.commit();
     await fs.unlink(sentinelPath).catch(() => undefined);
   } catch (error) {
-    // Leave the sentinel in place so doctor can surface the interrupted run.
+    // Leave the sentinel in place so the interrupted run is visible.
     throw error;
   } finally {
     setActiveManagedResourceSession(null);
   }
+}
+
+async function warnCodexHooksFeatureFlagIfDisabled(harnesses: readonly HarnessId[]): Promise<void> {
+  if (!harnesses.includes("codex")) return;
+  const codexTomlPath = codexConfigPath();
+  let existing: string | null;
+  try {
+    existing = await readCodexConfig(codexTomlPath);
+  } catch (error) {
+    process.stderr.write(
+      `cclaw: could not read ${codexTomlPath} to validate codex_hooks flag: ${
+        error instanceof Error ? error.message : String(error)
+      }\n`
+    );
+    return;
+  }
+
+  if (classifyCodexHooksFlag(existing) === "enabled") return;
+  process.stderr.write(
+    `cclaw: Codex hooks file written, but [features] codex_hooks is not true in ${codexTomlPath} — hooks are inert until you enable it.\n`
+  );
 }
 
 export async function initCclaw(options: InitOptions): Promise<void> {
@@ -1323,7 +1460,7 @@ export async function syncCclaw(projectRoot: string, options: SyncOptions = {}):
     // Prefer detected harness markers over the hardcoded default list.
     // Without this, a user running `cclaw sync` in a `.claude`-only
     // project ends up with a config that also enables cursor/opencode/
-    // codex, which then fails doctor checks for missing shim folders.
+    // codex, which then creates invalid harness expectations.
     // Fall back to the previous default (config.harnesses) if no markers
     // are found so brand-new projects still bootstrap cleanly.
     const detected = await detectHarnesses(projectRoot);
@@ -1342,6 +1479,7 @@ export async function syncCclaw(projectRoot: string, options: SyncOptions = {}):
     });
   }
   await materializeRuntime(projectRoot, config, false, "sync");
+  await warnCodexHooksFeatureFlagIfDisabled(config.harnesses);
 }
 
 /**
@@ -1455,18 +1593,36 @@ function isManagedRuntimeHookCommand(command: string): boolean {
   return /internal verify-current-state(?:\s|$)/u.test(normalized);
 }
 
-async function removeManagedHookEntries(hookFilePath: string): Promise<void> {
+async function removeManagedHookEntries(
+  hookFilePath: string,
+  options: { failOnParseError?: boolean } = {}
+): Promise<void> {
   if (!(await exists(hookFilePath))) return;
 
   let parsed: unknown = null;
   try {
     const raw = await fs.readFile(hookFilePath, "utf8");
     const recovered = tryParseHookDocument(raw);
-    parsed = recovered?.parsed ?? null;
-  } catch {
+    if (recovered === null) {
+      if (options.failOnParseError === true) {
+        throw new Error(
+          `[sync fail-fast] Cannot strip managed hook entries from ${hookFilePath} — JSON is unparseable. ` +
+          `Run \`rm ${hookFilePath}\` and rerun \`npx cclaw-cli sync\`.`
+        );
+      }
+      return;
+    }
+    parsed = recovered.parsed;
+  } catch (error) {
+    if (options.failOnParseError === true) {
+      throw new Error(
+        `[sync fail-fast] Cannot strip managed hook entries from ${hookFilePath} — ${
+          error instanceof Error ? error.message : String(error)
+        }. Run \`rm ${hookFilePath}\` and rerun \`npx cclaw-cli sync\`.`
+      );
+    }
     return;
   }
-  if (parsed === null) return;
 
   const { updated, changed } = stripManagedHookCommands(parsed);
   if (!changed) return;
@@ -1558,7 +1714,7 @@ export async function uninstallCclaw(projectRoot: string): Promise<void> {
   try {
     const entries = await fs.readdir(codexSkillsRoot);
     for (const entry of entries) {
-      if (/^(?:cclaw-)?cc(?:-(?:next|view|finish|cancel|ops|ideate|brainstorm|scope|design|spec|plan|tdd|review|ship))?$/u.test(entry)) {
+      if (/^(?:cclaw-)?cc(?:-(?:next|view|finish|cancel|ops|idea|brainstorm|scope|design|spec|plan|tdd|review|ship))?$/u.test(entry)) {
         await fs.rm(path.join(codexSkillsRoot, entry), { recursive: true, force: true });
       }
     }

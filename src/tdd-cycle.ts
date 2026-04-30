@@ -34,13 +34,13 @@ export interface TddCycleParseIssue {
 export interface ParseTddCycleLogOptions {
   /**
    * Collect one issue per dropped/malformed line. Callers that care
-   * (doctor, red-evidence) can surface them; hooks keep soft-fail.
+   * (sync/runtime checks, red-evidence) can surface them; hooks keep soft-fail.
    */
   issues?: TddCycleParseIssue[];
   /**
    * When true, reject lines that omit required fields instead of
    * back-filling them with defaults. Used by validation paths
-   * (`validateTddCycleOrder`, `cclaw doctor`) to avoid silently
+   * (`validateTddCycleOrder`, `npx cclaw-cli sync` fail-fast) to avoid silently
    * bucketing unscoped rows into "runId=active, stage=tdd". Soft paths
    * (generated hooks) keep the legacy defaults so a half-written file
    * never takes the session down.
@@ -288,7 +288,7 @@ export interface RalphLoopStatus {
  * Derive a lightweight Ralph Loop summary from parsed tdd-cycle-log entries.
  * The goal is to give the model a single source of truth for "am I done
  * iterating?" — it collapses per-slice progress and distinct closed AC IDs
- * (from GREEN rows) into a single artifact the next-command contract reads.
+ * (from GREEN rows) into a single artifact the progression contract reads.
  */
 export function computeRalphLoopStatus(
   entries: TddCycleEntry[],

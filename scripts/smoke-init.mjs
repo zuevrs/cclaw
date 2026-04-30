@@ -19,7 +19,7 @@ try {
     cwd: tempDir,
     stdio: "pipe"
   });
-  execFileSync("node", [join(process.cwd(), "dist/cli.js"), "doctor"], {
+  execFileSync("node", [join(process.cwd(), "dist/cli.js"), "sync"], {
     cwd: tempDir,
     stdio: "pipe"
   });

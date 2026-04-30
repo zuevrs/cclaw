@@ -13,4 +13,12 @@ describe("policy checks", () => {
     const checks = await policyChecks(root);
     expect(checks.every((check) => check.ok)).toBe(true);
   });
+
+  it("reports missing contract files when runtime artifacts are absent", async () => {
+    const root = await createTempProject("policy-missing");
+
+    const checks = await policyChecks(root, { harnesses: ["cursor"] });
+    expect(checks.some((check) => check.ok === false)).toBe(true);
+    expect(checks.some((check) => check.details.includes("not found"))).toBe(true);
+  });
 });

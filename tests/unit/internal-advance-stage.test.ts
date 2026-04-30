@@ -47,6 +47,11 @@ function requiredGateEvidenceJson(stage: Parameters<typeof stageSchema>[0]): str
   return JSON.stringify(evidence);
 }
 
+const PROACTIVE_WAIVER_FLAGS = [
+  "--accept-proactive-waiver",
+  "--accept-proactive-waiver-reason=unit_test_proactive"
+] as const;
+
 async function writeBrainstormArtifact(
   root: string,
   learningsSection = "- None this stage."
@@ -116,7 +121,7 @@ async function writeScopeArtifact(root: string): Promise<void> {
 > Review Loop Quality: 0.830 | stop: quality_threshold_met | iterations: 2/3
 
 ## Scope Contract
-- Selected mode: SCOPE EXPANSION
+- Selected mode: HOLD SCOPE
 - In scope: lock down requirements and interfaces.
 - Out of scope: implementation and rollout.
 - Requirements: explicit interfaces, failure boundaries, and observability expectations.
@@ -155,7 +160,7 @@ async function writeScopeArtifact(root: string): Promise<void> {
 - User approval: pending
 
 ## Scope Summary
-- Selected mode: SCOPE EXPANSION
+- Selected mode: HOLD SCOPE
 - Strongest challenges: balancing reliability with delivery speed
 - Recommended path: lock interfaces and failure boundaries first
 - Accepted scope: scope contract and decision boundaries
@@ -170,6 +175,9 @@ async function writeScopeArtifact(root: string): Promise<void> {
 
 async function writeDesignArtifact(root: string): Promise<void> {
   await fs.mkdir(path.join(root, ".cclaw/artifacts"), { recursive: true });
+  await fs.mkdir(path.join(root, "src"), { recursive: true });
+  await fs.writeFile(path.join(root, "src/api.ts"), "export const api = 1;\n", "utf8");
+  await fs.writeFile(path.join(root, "src/storage.ts"), "export const storage = 1;\n", "utf8");
   await fs.writeFile(path.join(root, ".cclaw/artifacts/03-design.md"), `# Design Artifact
 
 > Review Loop Quality: 0.810 | stop: quality_threshold_met | iterations: 2/3
@@ -181,6 +189,12 @@ async function writeDesignArtifact(root: string): Promise<void> {
 | features-researcher | Retry + fallback needed | Explicit rescue paths in diagram | docs/features.md |
 | architecture-researcher | Service boundary should remain stable | Keep API + worker split | docs/architecture.md |
 | pitfalls-researcher | Silent failures were prior outage root cause | Add user-visible rescue output | docs/pitfalls.md |
+
+## Codebase Investigation
+| File | Current responsibility | Patterns discovered | Existing fit / reuse candidate |
+|---|---|---|---|
+| src/api.ts | request validation and orchestration | typed error envelopes | reuse existing route pipeline |
+| src/storage.ts | storage writes + retries | fallback cache path | reuse retry queue primitive |
 
 ## Engineering Lock
 - Chosen path: reuse existing queue primitives behind stable API and worker boundaries.
@@ -533,7 +547,15 @@ describe("internal advance-stage commands", () => {
     const evidenceJson = requiredGateEvidenceJson("brainstorm");
     const code = await runInternalCommand(
       root,
-      ["advance-stage", "brainstorm", `--evidence-json=${evidenceJson}`, "--waive-delegation=product-manager,critic", "--waiver-reason=unit_test", "--quiet"],
+      [
+        "advance-stage",
+        "brainstorm",
+        `--evidence-json=${evidenceJson}`,
+        "--waive-delegation=product-manager,critic",
+        "--waiver-reason=unit_test",
+        ...PROACTIVE_WAIVER_FLAGS,
+        "--quiet"
+      ],
       captured.io
     );
 
@@ -574,6 +596,58 @@ describe("internal advance-stage commands", () => {
 
     expect(code).toBe(1);
     expect(captured.stderr()).toContain("missing --evidence-json entries for passed gates");
+  });
+
+  it("advance-stage fails by default when proactive delegations are missing, then allows explicit user-flag waiver", async () => {
+    const root = await createTempProject("internal-advance-stage-proactive-waiver-required");
+    await ensureRunSystem(root);
+    await writeBrainstormArtifact(root);
+
+    const evidenceJson = requiredGateEvidenceJson("brainstorm");
+    const blocked = captureIo();
+    const blockedCode = await runInternalCommand(
+      root,
+      [
+        "advance-stage",
+        "brainstorm",
+        `--evidence-json=${evidenceJson}`,
+        "--waive-delegation=product-manager,critic",
+        "--waiver-reason=unit_test",
+        "--quiet"
+      ],
+      blocked.io
+    );
+    expect(blockedCode).toBe(1);
+    expect(blocked.stderr()).toContain("proactive delegation evidence is missing");
+    expect(blocked.stderr()).toContain("--accept-proactive-waiver");
+    expect(blocked.stderr()).toContain("researcher (when:");
+
+    const accepted = captureIo();
+    const acceptedCode = await runInternalCommand(
+      root,
+      [
+        "advance-stage",
+        "brainstorm",
+        `--evidence-json=${evidenceJson}`,
+        "--waive-delegation=product-manager,critic",
+        "--waiver-reason=unit_test",
+        "--accept-proactive-waiver",
+        "--accept-proactive-waiver-reason=unit_test_proactive",
+        "--quiet"
+      ],
+      accepted.io
+    );
+    expect(acceptedCode, accepted.stderr()).toBe(0);
+
+    const ledger = await readDelegationLedger(root);
+    const proactiveWaiver = ledger.entries.find((entry) =>
+      entry.stage === "brainstorm" &&
+      entry.agent === "researcher" &&
+      entry.mode === "proactive"
+    );
+    expect(proactiveWaiver?.status).toBe("waived");
+    expect(proactiveWaiver?.waiverReason).toBe("unit_test_proactive");
+    expect(proactiveWaiver?.acceptedBy).toBe("user-flag");
   });
 
   it("advance-stage enforces structured evidence for tdd_verified_before_complete", async () => {
@@ -650,6 +724,7 @@ describe("internal advance-stage commands", () => {
         `--evidence-json=${JSON.stringify(malformedEvidence)}`,
         "--waive-delegation=planner,critic",
         "--waiver-reason=unit_test",
+        ...PROACTIVE_WAIVER_FLAGS,
         "--quiet"
       ],
       captured.io
@@ -836,6 +911,7 @@ describe("internal advance-stage commands", () => {
         `--evidence-json=${JSON.stringify(evidence)}`,
         "--waive-delegation=architect,test-author",
         "--waiver-reason=unit_test",
+        ...PROACTIVE_WAIVER_FLAGS,
         "--quiet"
       ],
       captured.io
@@ -878,6 +954,7 @@ describe("internal advance-stage commands", () => {
         `--evidence-json=${JSON.stringify(evidence)}`,
         "--waive-delegation=architect,test-author",
         "--waiver-reason=unit_test",
+        ...PROACTIVE_WAIVER_FLAGS,
         "--quiet"
       ],
       captured.io
@@ -1104,6 +1181,7 @@ process.stdout.write(JSON.stringify({ hook: process.argv[2] }) + "\\n");
         `--evidence-json=${JSON.stringify(evidence)}`,
         "--waive-delegation=reviewer,security-reviewer",
         "--waiver-reason=unit_test",
+        ...PROACTIVE_WAIVER_FLAGS,
         "--quiet"
       ],
       captured.io
@@ -1194,7 +1272,8 @@ process.stdout.write(JSON.stringify({ hook: process.argv[2] }) + "\\n");
         }),
         "--passed=brainstorm_approaches_compared,brainstorm_direction_approved,brainstorm_artifact_reviewed",
         "--waive-delegation=product-manager,critic",
-        "--waiver-reason=unit_test"
+        "--waiver-reason=unit_test",
+        ...PROACTIVE_WAIVER_FLAGS
       ],
       io.io
     );
@@ -1255,7 +1334,8 @@ process.stdout.write(JSON.stringify({ hook: process.argv[2] }) + "\\n");
           brainstorm_artifact_reviewed: "artifact reviewed in chat"
         }),
         "--waive-delegation=product-manager,critic",
-        "--waiver-reason=unit_test"
+        "--waiver-reason=unit_test",
+        ...PROACTIVE_WAIVER_FLAGS
       ],
       io.io
     );
@@ -1281,7 +1361,15 @@ process.stdout.write(JSON.stringify({ hook: process.argv[2] }) + "\\n");
     const evidenceJson = requiredGateEvidenceJson("brainstorm");
     const code = await runInternalCommand(
       root,
-      ["advance-stage", "brainstorm", `--evidence-json=${evidenceJson}`, "--waive-delegation=product-manager,critic", "--waiver-reason=unit_test", "--quiet"],
+      [
+        "advance-stage",
+        "brainstorm",
+        `--evidence-json=${evidenceJson}`,
+        "--waive-delegation=product-manager,critic",
+        "--waiver-reason=unit_test",
+        ...PROACTIVE_WAIVER_FLAGS,
+        "--quiet"
+      ],
       captured.io
     );
 

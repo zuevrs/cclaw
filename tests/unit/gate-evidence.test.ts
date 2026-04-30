@@ -145,6 +145,22 @@ describe("gate evidence verification", () => {
 - Public APIs/config/CLI: public API docs drift checked
 - Persistence/event contracts: out of scope for this slice
 
+## Iron Law Acknowledgement
+- Iron Law: NO PRODUCTION CODE WITHOUT A FAILING TEST FIRST.
+- Acknowledged: yes
+- Exceptions invoked (or \`- None.\`):
+  - None.
+
+## Watched-RED Proof
+| Slice | Test name | Observed at (ISO ts) | Failure reason snippet | Source command/log |
+|---|---|---|---|---|
+| S-1 | exposes public api | 2026-04-30T08:00:00Z | FAIL: expected exported type | \`pnpm vitest run api.test.ts\` |
+
+## Vertical Slice Cycle
+| Slice | RED ts | GREEN ts | REFACTOR ts |
+|---|---|---|---|
+| S-1 | 2026-04-30T08:00:00Z | 2026-04-30T08:05:00Z | 2026-04-30T08:09:00Z |
+
 ## RED Evidence
 | Slice | Test name | Command | Failure output summary |
 |---|---|---|---|

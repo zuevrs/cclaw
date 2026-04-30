@@ -1,8 +1,7 @@
 import type { StageSchemaInput } from "./schema-types.js";
 import {
   REVIEW_LOOP_CHECKLISTS,
-  reviewLoopPolicySummary,
-  reviewLoopSecondOpinionSummary
+  reviewLoopPolicySummary
 } from "../review-loop.js";
 import { decisionProtocolInstruction } from "../decision-protocol.js";
 
@@ -14,8 +13,8 @@ export const SCOPE: StageSchemaInput = {
   schemaShape: "v2",
   stage: "scope",
   complexityTier: "standard",
-  skillFolder: "scope-shaping",
-  skillName: "scope-shaping",
+  skillFolder: "scope",
+  skillName: "scope",
   skillDescription: "Strategic contract stage. Select HOLD/SELECTIVE/EXPAND/REDUCE mode, lock the slice and boundaries, and hand stable discretion zones to design.",
   philosophy: {
     hardGate: "Do NOT begin architecture, design, or code. This stage produces scope decisions only. Do not silently add or remove scope — every change is an explicit user opt-in.",
@@ -60,6 +59,7 @@ export const SCOPE: StageSchemaInput = {
       "**Decision-driver contract** — list weighted decision drivers (value, risk, reversibility, effort, timeline) and score candidate scope moves so the selected mode and boundaries are evidence-backed, not preference-led.",
       "**Compare implementation alternatives** — include minimum viable, product-grade, and ideal architecture options with effort (S/M/L/XL), risk (Low/Med/High), pros, cons, and reuses. Recommend one and tie it to mode.",
       "**Run outside voice before final approval** — for simple/low-risk scope, record one concise adversarial self-check row; for complex/high-risk/configured scope, iterate until threshold. Record the loop summary in `## Scope Outside Voice Loop`, but do not treat it as user approval.",
+      "**Run early Ralph loop discipline** — after each producer iteration, append a `Critic Pass` JSONL row to `.cclaw/state/early-loop-log.jsonl`, refresh `.cclaw/state/early-loop.json`, and iterate until open concerns clear or convergence guard escalates.",
       "**Ask only one decision-changing question** — if the user rejects the contract but is unsure, offer 3-4 concrete scope moves instead of open-ended interrogation.",
       "**Write the scope contract after approval** — include selected mode, in scope, out of scope, requirements, locked decisions, discretion areas, deferred ideas, accepted/rejected reference ideas, success definition, design handoff, completion dashboard, and explicit approval evidence."
     ],
@@ -70,12 +70,12 @@ export const SCOPE: StageSchemaInput = {
         "recommend the option that best covers the prime-directive failure modes, four data-flow paths, observability, and deferred handling for the in-scope set with the smallest blast radius. Base your recommendation on default heuristics: greenfield -> expand, enhancement -> selective, bugfix/hotfix/refactor -> hold, broad blast radius -> reduce"
       ),
       "Do not walk the full checklist by default. Lead with a proposed scope contract, selected depth (`lite`/`standard`/`deep`), and the one decision that matters most; label the mode as recommended, not selected, until the user answers.",
-      "For simple web-app flows, default to HOLD SCOPE or SELECTIVE EXPANSION, show the exact in/out/deferred contract as a proposal, and STOP for one explicit approval before writing the final scope artifact or completing the stage.",
+      "For low-risk concrete asks, keep the proposal compact but still explicit: recommend (do not auto-select) one mode, show exact in/out/deferred boundaries, and STOP for one explicit approval before finalizing the artifact or completing the stage.",
       "Challenge premise first, take a firm position, and name one concrete condition that would change it.",
       "Push back on weak framing: vague scope needs a specific user/problem, platform vision needs a narrow wedge, social proof needs behavioral evidence.",
       "Resolve one structural scope issue at a time. Only non-critical preference/default assumptions may continue; STOP on uncertainty about scope boundary, architecture commitment, security, data loss, public API, migration, auth/pricing, or required user approval.",
       "If the user says no but cannot name the change, offer concrete moves: keep scope, add one obvious adjacent capability, reduce to wedge, or re-open stack/product direction.",
-      `Before final approval, record outside-voice findings and a \`## Scope Outside Voice Loop\` table using ${reviewLoopPolicySummary("scope")}`,
+      "Before final approval, record outside-voice findings and a `## Scope Outside Voice Loop` table per the Scope Outside Voice Loop policy above.",
       "**STOP.** Wait for explicit user approval of the scope mode and scope contract before writing final approval language or advancing.",
       "**STOP BEFORE ADVANCE.** Mandatory delegation `planner` must be completed or explicitly waived for a real blocker. If the active harness cannot isolate a planner, run a role-switch planner pass instead: announce `## cclaw role-switch: scope/planner (mandatory)`, write the planner output/evidence into the scope artifact, and append a completed delegation row with `fulfillmentMode: \"role-switch\"` plus non-empty `evidenceRefs`. Then close with `node .cclaw/hooks/stage-complete.mjs scope --passed=scope_mode_selected,scope_contract_written,scope_user_approved --evidence-json '{\"scope_mode_selected\":\"<user-approved mode + rationale>\",\"scope_contract_written\":\"<artifact path + sections>\",\"scope_user_approved\":\"<explicit user approval quote or summary>\"}'`. `scope_user_approved` must cite the user's approval; review-loop evidence alone is not approval."
     ],
@@ -99,14 +99,16 @@ export const SCOPE: StageSchemaInput = {
       "In-scope and out-of-scope lists are explicit.",
       "Discretion areas are explicit (or marked as `None`).",
       "Selected mode and rationale are documented using HOLD SCOPE, SELECTIVE EXPANSION, SCOPE EXPANSION, or SCOPE REDUCTION.",
+      "When selected mode is SCOPE EXPANSION or SELECTIVE EXPANSION, active-run delegation ledger includes a completed `product-strategist` row with non-empty `evidenceRefs`.",
       "Scope Contract captures requirements, locked decisions, discretion areas, accepted/rejected/deferred reference ideas from the Reference Pattern Registry, success definition, and design handoff.",
       "Decision Drivers section records weighted criteria and per-option scores used to choose mode and boundary moves.",
       "Scope Completeness Score is recorded (0.00-1.00) with the explicit blocker list for any remaining uncertainty.",
       "Locked Decisions section lists stable LD#hash anchors for non-negotiable boundaries.",
       "Premise challenge findings documented.",
       "Outside Voice findings and dispositions are recorded (accept/reject/defer with rationale) before final approval.",
-      `Scope outside-voice loop summary includes a table with columns Iteration, Quality Score, Findings, plus Stop reason, Target score, and Max iterations. This is outside-voice evidence only; it does not satisfy user approval. ${reviewLoopPolicySummary("scope")}`,
-      reviewLoopSecondOpinionSummary("scope"),
+      "Scope outside-voice loop summary includes a table with columns Iteration, Quality Score, Findings, plus Stop reason, Target score, Max iterations, and unresolved concerns. This is outside-voice evidence only; it does not satisfy user approval.",
+      "Early-loop status is reflected via `Victory Detector` / `Critic Pass` sections and `.cclaw/state/early-loop.json` when concerns remain.",
+      "When a second opinion is used, record source, critique frame, and disposition (accept/reject/defer) with rationale.",
       "Deferred items list with one-line rationale for each.",
       "When an upside deferred idea is parked, a seed file is created under `.cclaw/seeds/` and referenced in the artifact.",
       "Completion dashboard lists per-section status, critical/open gaps, decision count, and unresolved items (or `None`).",
@@ -114,7 +116,7 @@ export const SCOPE: StageSchemaInput = {
     ],
     inputs: ["brainstorm artifact", "timeline constraints", "product priorities"],
     requiredContext: [
-      "approved brainstorm direction",
+      "approved brainstorm direction with selected option and non-goals",
       "existing capabilities and reusable components",
       "delivery deadlines and risk tolerance"
     ],
@@ -161,7 +163,7 @@ export const SCOPE: StageSchemaInput = {
       { section: "Landscape Check", required: false, validationRule: "Optional evidence heading for EXPAND/SELECTIVE/deep modes: include reference insight and impact on scope, or omit for compact HOLD SCOPE." },
       { section: "Taste Calibration", required: false, validationRule: "Optional evidence heading: reference 2-3 strong in-repo modules/files that define the quality bar or justify omission." },
       { section: "Reference Pattern Registry", required: false, validationRule: "Recommended for SELECTIVE/EXPAND/deep scope: table of pattern/source, accepted/rejected/deferred disposition, invariant to preserve, and boundary impact. Compact HOLD SCOPE may state `Not needed - compact scope`." },
-      { section: "Reference Pull", required: false, validationRule: "Optional evidence heading: cite ideas pulled from `/Users/zuevrs/Downloads/references` or state no reference pull was needed for compact HOLD SCOPE." },
+      { section: "Reference Pull", required: false, validationRule: "Optional evidence heading: cite ideas pulled from `<repo-relative references dir>` or state no reference pull was needed for compact HOLD SCOPE." },
       { section: "Ambitious Alternatives", required: false, validationRule: "Optional evidence heading for SCOPE EXPANSION/SELECTIVE: list larger alternatives considered and their disposition." },
       { section: "Ruthless Minimum Slice", required: false, validationRule: "Optional evidence heading for SCOPE REDUCTION or high-risk scope: define the smallest useful wedge and what it proves." },
       { section: "Requirements", required: false, validationRule: "Table of stable requirement IDs (R1, R2, R3…) one per row with observable outcome, priority, and source. IDs are assigned once and never renumbered across scope/design/spec/plan/review; dropped requirements stay with Priority `DROPPED`." },
@@ -175,10 +177,10 @@ export const SCOPE: StageSchemaInput = {
       { section: "Error & Rescue Registry", required: false, validationRule: "Each scoped capability has: failure mode, detection method, fallback decision." },
       { section: "Outside Voice Findings", required: false, validationRule: "Must list external/adversarial findings and disposition (accept/reject/defer) with rationale." },
       { section: "Scope Outside Voice Loop", required: false, validationRule: `Must record iterations, quality score per iteration, stop reason, and unresolved concerns. Enforce ${reviewLoopPolicySummary("scope")}` },
+      { section: "Victory Detector", required: false, validationRule: "Recommended early-loop checkpoint: cite `.cclaw/state/early-loop.json`, current iteration/maxIterations, open concern count, convergence status, and iterate/ready/escalate decision." },
+      { section: "Critic Pass", required: false, validationRule: "Recommended producer/critic log contract: each iteration appends one JSONL row to `.cclaw/state/early-loop-log.jsonl` with runId, stage, iteration, and open concerns." },
       { section: "Completion Dashboard", required: true, validationRule: "Lists per-review-section status, count of critical/open gaps, resolved decisions, and unresolved decisions (or 'None')." },
-      { section: "Scope Summary", required: true, validationRule: "Compact recap of the locked scope. Must name the selected mode using one canonical token, confidence, explicit drift from brainstorm, unresolved questions, and the track-aware next-stage handoff (`design` for standard, `spec` for medium); the linter checks structure, not English wording." },
-      { section: "Dream State Mapping", required: false, validationRule: "Deep/optional only: CURRENT STATE, THIS PLAN, 12-MONTH IDEAL, and alignment verdict. Omit for compact scope." },
-      { section: "Temporal Interrogation", required: false, validationRule: "Deep/optional only: timeline simulation table with decision pressures and lock-now vs defer verdicts. Omit for compact scope." }
+      { section: "Scope Summary", required: true, validationRule: "Compact recap of the locked scope. Must name the selected mode using one canonical token, confidence, explicit drift from brainstorm, unresolved questions, and the track-aware next-stage handoff (`design` for standard, `spec` for medium); the linter checks structure, not English wording." }
     ]
   },
   reviewLens: {

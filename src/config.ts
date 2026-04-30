@@ -23,6 +23,8 @@ const ALLOWED_CONFIG_KEYS = new Set<string>([
   "tddTestGlobs",
   "tdd",
   "compound",
+  "earlyLoop",
+  "early_loop",
   "gitHookGuards",
   "defaultTrack",
   "languageRulePacks",
@@ -163,10 +165,11 @@ export const DEFAULT_TDD_TEST_GLOBS: readonly string[] = [...DEFAULT_TDD_TEST_PA
 
 export const DEFAULT_TDD_PRODUCTION_PATH_PATTERNS: readonly string[] = [];
 export const DEFAULT_COMPOUND_RECURRENCE_THRESHOLD = 3;
+export const DEFAULT_EARLY_LOOP_MAX_ITERATIONS = 3;
 
 /**
  * Populated runtime view of config values that downstream callers (install,
- * observe, doctor) consume. Always has the derived guard modes populated,
+ * observe, sync/runtime checks) consume. Always has the derived guard modes populated,
  * regardless of whether the user wrote `strictness`, the legacy keys, both,
  * or neither.
  */
@@ -191,11 +194,19 @@ export function createDefaultConfig(
     compound: {
       recurrenceThreshold: DEFAULT_COMPOUND_RECURRENCE_THRESHOLD
     },
+    earlyLoop: {
+      enabled: true,
+      maxIterations: DEFAULT_EARLY_LOOP_MAX_ITERATIONS
+    },
     gitHookGuards: false,
     defaultTrack,
     languageRulePacks: [],
     ironLaws: {
       strictLaws: []
+    },
+    optInAudits: {
+      scopePreAudit: false,
+      staleDiagramAudit: true
     }
   };
 }
@@ -428,6 +439,75 @@ export async function readConfig(
     }
     if (typeof compoundRaw.recurrenceThreshold === "number") {
       compoundRecurrenceThreshold = compoundRaw.recurrenceThreshold;
+    }
+  }
+
+  const hasEarlyLoopField = Object.prototype.hasOwnProperty.call(parsed, "earlyLoop");
+  const hasLegacyEarlyLoopField = Object.prototype.hasOwnProperty.call(parsed, "early_loop");
+  if (hasEarlyLoopField && hasLegacyEarlyLoopField) {
+    emitConfigWarningOnce(
+      warningState,
+      "CCLAW_CONFIG_EARLY_LOOP_ALIAS",
+      `[cclaw] Both "earlyLoop" and legacy "early_loop" are set in ${fullPath}. Using "earlyLoop".`
+    );
+  }
+  const earlyLoopRaw = hasEarlyLoopField
+    ? (parsed as { earlyLoop?: unknown }).earlyLoop
+    : (parsed as Record<string, unknown>).early_loop;
+  let earlyLoopEnabled = true;
+  let earlyLoopMaxIterations = DEFAULT_EARLY_LOOP_MAX_ITERATIONS;
+  if (hasEarlyLoopField || hasLegacyEarlyLoopField) {
+    if (!isRecord(earlyLoopRaw)) {
+      throw configValidationError(
+        fullPath,
+        `"${hasEarlyLoopField ? "earlyLoop" : "early_loop"}" must be an object`
+      );
+    }
+    const unknownEarlyLoopKeys = Object.keys(earlyLoopRaw).filter(
+      (key) => key !== "enabled" && key !== "maxIterations" && key !== "max_iterations"
+    );
+    if (unknownEarlyLoopKeys.length > 0) {
+      throw configValidationError(
+        fullPath,
+        `"${hasEarlyLoopField ? "earlyLoop" : "early_loop"}" has unknown key(s): ${unknownEarlyLoopKeys.join(", ")}`
+      );
+    }
+    if (earlyLoopRaw.enabled !== undefined && typeof earlyLoopRaw.enabled !== "boolean") {
+      throw configValidationError(
+        fullPath,
+        `"${hasEarlyLoopField ? "earlyLoop" : "early_loop"}.enabled" must be a boolean`
+      );
+    }
+    if (
+      earlyLoopRaw.maxIterations !== undefined &&
+      earlyLoopRaw.max_iterations !== undefined &&
+      earlyLoopRaw.maxIterations !== earlyLoopRaw.max_iterations
+    ) {
+      emitConfigWarningOnce(
+        warningState,
+        "CCLAW_CONFIG_EARLY_LOOP_MAX_ITERATIONS_ALIAS",
+        `[cclaw] Both "${hasEarlyLoopField ? "earlyLoop.maxIterations" : "early_loop.maxIterations"}" and "${hasEarlyLoopField ? "earlyLoop.max_iterations" : "early_loop.max_iterations"}" are set in ${fullPath}. Using "maxIterations".`
+      );
+    }
+    const rawMaxIterations = earlyLoopRaw.maxIterations ?? earlyLoopRaw.max_iterations;
+    if (
+      rawMaxIterations !== undefined &&
+      (
+        typeof rawMaxIterations !== "number" ||
+        !Number.isInteger(rawMaxIterations) ||
+        rawMaxIterations < 1
+      )
+    ) {
+      throw configValidationError(
+        fullPath,
+        `"${hasEarlyLoopField ? "earlyLoop" : "early_loop"}.maxIterations" must be a positive integer`
+      );
+    }
+    if (typeof earlyLoopRaw.enabled === "boolean") {
+      earlyLoopEnabled = earlyLoopRaw.enabled;
+    }
+    if (typeof rawMaxIterations === "number") {
+      earlyLoopMaxIterations = rawMaxIterations;
     }
   }
 
@@ -674,7 +754,13 @@ export async function readConfig(
       staleDiagramAudit:
         typeof optInAuditsRaw.staleDiagramAudit === "boolean"
           ? optInAuditsRaw.staleDiagramAudit
-          : false
+          : true
+    };
+  }
+  if (!optInAudits) {
+    optInAudits = {
+      scopePreAudit: false,
+      staleDiagramAudit: true
     };
   }
 
@@ -765,6 +851,10 @@ export async function readConfig(
     compound: {
       recurrenceThreshold: compoundRecurrenceThreshold
     },
+    earlyLoop: {
+      enabled: earlyLoopEnabled,
+      maxIterations: earlyLoopMaxIterations
+    },
     gitHookGuards,
     defaultTrack,
     languageRulePacks,
@@ -788,6 +878,7 @@ type AdvancedConfigKey =
   | "tddTestGlobs"
   | "tdd"
   | "compound"
+  | "earlyLoop"
   | "defaultTrack"
   | "languageRulePacks"
   | "trackHeuristics"
@@ -837,6 +928,7 @@ function buildSerializableConfig(
     "tddTestGlobs",
     "tdd",
     "compound",
+    "earlyLoop",
     "gitHookGuards",
     "defaultTrack",
     "languageRulePacks",
@@ -900,6 +992,7 @@ export async function detectAdvancedKeys(
       "tddTestGlobs",
       "tdd",
       "compound",
+      "earlyLoop",
       "defaultTrack",
       "languageRulePacks",
       "trackHeuristics",
@@ -910,7 +1003,10 @@ export async function detectAdvancedKeys(
     ];
     const present = new Set<AdvancedConfigKey>();
     for (const key of advancedCandidates) {
-      if (Object.prototype.hasOwnProperty.call(parsedUnknown, key)) {
+      if (
+        Object.prototype.hasOwnProperty.call(parsedUnknown, key) ||
+        (key === "earlyLoop" && Object.prototype.hasOwnProperty.call(parsedUnknown, "early_loop"))
+      ) {
         present.add(key);
       }
     }

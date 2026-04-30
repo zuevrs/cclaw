@@ -11,7 +11,6 @@ import {
   readFlowState,
   writeFlowState
 } from "../../src/runs.js";
-import { doctorChecks } from "../../src/doctor.js";
 import { evaluateRetroGate } from "../../src/retro-gate.js";
 import { createTempProject } from "../helpers/index.js";
 
@@ -26,7 +25,7 @@ describe("runs system", () => {
     await expect(fs.stat(path.join(root, ".cclaw/worktrees"))).rejects.toBeDefined();
     await expect(fs.stat(path.join(root, ".cclaw/state/active-feature.json"))).rejects.toBeDefined();
     await expect(fs.stat(path.join(root, ".cclaw/state/worktrees.json"))).rejects.toBeDefined();
-    await expect(fs.stat(path.join(root, ".cclaw/runs"))).resolves.toBeTruthy();
+    await expect(fs.stat(path.join(root, ".cclaw/archive"))).resolves.toBeTruthy();
   });
 
   it("archives active artifacts into dated run folder and resets flow", async () => {
@@ -48,6 +47,7 @@ describe("runs system", () => {
 
     expect(archived.archiveId).toMatch(/^\d{4}-\d{2}-\d{2}-payments-revamp/);
     expect(archived.runName).toBe("Payments Revamp");
+    expect(archived.archivePath.startsWith(path.join(root, ".cclaw", "archive"))).toBe(true);
     await expect(
       fs.readFile(path.join(archived.archivePath, "artifacts", "01-brainstorm.md"), "utf8")
     ).resolves.toContain("# draft");
@@ -79,11 +79,27 @@ describe("runs system", () => {
       dispositionReason: "deprioritized by product"
     });
     expect(archived.disposition).toBe("cancelled");
+    expect(archived.archivePath.startsWith(path.join(root, ".cclaw", "archive"))).toBe(true);
     expect(archived.dispositionReason).toBe("deprioritized by product");
     const manifest = JSON.parse(await fs.readFile(path.join(archived.archivePath, "archive-manifest.json"), "utf8"));
     expect(manifest.disposition).toBe("cancelled");
     expect(manifest.dispositionReason).toBe("deprioritized by product");
     expect((await readFlowState(root)).currentStage).toBe("brainstorm");
+  });
+
+  it("archives abandoned runs under .cclaw/archive with required reason", async () => {
+    const root = await createTempProject("runs-abandoned-disposition");
+    await ensureRunSystem(root);
+    await fs.writeFile(path.join(root, ".cclaw/artifacts/01-brainstorm.md"), "# draft\n", "utf8");
+    const archived = await archiveRun(root, "Abandoned Work", {
+      disposition: "abandoned",
+      dispositionReason: "no longer needed"
+    });
+    expect(archived.disposition).toBe("abandoned");
+    expect(archived.archivePath.startsWith(path.join(root, ".cclaw", "archive"))).toBe(true);
+    const manifest = JSON.parse(await fs.readFile(path.join(archived.archivePath, "archive-manifest.json"), "utf8"));
+    expect(manifest.disposition).toBe("abandoned");
+    expect(manifest.dispositionReason).toBe("no longer needed");
   });
 
   it("requires a reason for cancelled or abandoned archives", async () => {
@@ -107,26 +123,7 @@ describe("runs system", () => {
     ).resolves.toBeTruthy();
   });
 
-  it("surfaces partial archive sentinels through doctor", async () => {
-    const root = await createTempProject("runs-partial-archive-doctor");
-    await ensureRunSystem(root);
-    const archiveDir = path.join(root, ".cclaw/runs/2026-04-26-partial");
-    await fs.mkdir(archiveDir, { recursive: true });
-    await fs.writeFile(
-      path.join(archiveDir, ".archive-in-progress"),
-      `${JSON.stringify({ archiveId: "2026-04-26-partial", startedAt: "2026-04-26T00:00:00Z" })}
-`,
-      "utf8"
-    );
 
-    const checks = await doctorChecks(root);
-    const archiveIntegrity = checks.find((check) => check.name === "runs:archive_integrity");
-    expect(archiveIntegrity).toBeDefined();
-    expect(archiveIntegrity?.ok).toBe(false);
-    expect(archiveIntegrity?.details).toContain(".archive-in-progress");
-    expect(archiveIntegrity?.details).toContain("retry archive");
-    expect(archiveIntegrity?.details).toContain("recover/rollback");
-  });
 
   it("creates unique archive ids for same-day run names", async () => {
     const root = await createTempProject("runs-archive-unique");
@@ -253,6 +250,24 @@ describe("runs system", () => {
 
     const read = await readFlowState(root);
     expect(read.closeout.shipSubstate).toBe("retro_review");
+    const notices = JSON.parse(
+      await fs.readFile(path.join(root, ".cclaw/state/reconciliation-notices.json"), "utf8")
+    ) as {
+      notices?: Array<{
+        runId?: string;
+        kind?: string;
+        gateId?: string;
+        payload?: { previous?: string; next?: string; reason?: string };
+      }>;
+    };
+    const demotionNotice = notices.notices?.find((notice) =>
+      notice.runId === read.activeRunId &&
+      notice.kind === "closeout_substate_demotion"
+    );
+    expect(demotionNotice?.gateId).toBe("closeout.shipSubstate");
+    expect(demotionNotice?.payload?.previous).toBe("ready_to_archive");
+    expect(demotionNotice?.payload?.next).toBe("retro_review");
+    expect(demotionNotice?.payload?.reason).toContain("retro closeout leg is incomplete");
     await expect(archiveRun(root, "Tampered Closeout")).rejects.toThrow(/ready_to_archive/i);
   });
 

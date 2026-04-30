@@ -118,20 +118,7 @@ describe("cli parser", () => {
     expect(() => parseArchiveDisposition("done")).toThrowError(/Unknown archive disposition/);
   });
 
-  it("parses doctor reconcile gates flag", () => {
-    const parsed = parseArgs(["doctor", "--reconcile-gates"]);
-    expect(parsed.command).toBe("doctor");
-    expect(parsed.reconcileGates).toBe(true);
-  });
 
-  it("parses doctor output flags", () => {
-    const parsed = parseArgs(["doctor", "--json", "--explain", "--quiet", "--only=error,hook:"]);
-    expect(parsed.command).toBe("doctor");
-    expect(parsed.doctorJson).toBe(true);
-    expect(parsed.doctorExplain).toBe(true);
-    expect(parsed.doctorQuiet).toBe(true);
-    expect(parsed.doctorOnly).toEqual(["error", "hook:"]);
-  });
 
   it("recognizes --help and -h at any position", () => {
     expect(parseArgs(["--help"]).showHelp).toBe(true);
@@ -143,13 +130,11 @@ describe("cli parser", () => {
   it("recognizes --version and -v at any position", () => {
     expect(parseArgs(["--version"]).showVersion).toBe(true);
     expect(parseArgs(["-v"]).showVersion).toBe(true);
-    expect(parseArgs(["doctor", "-v"]).showVersion).toBe(true);
-    expect(parseArgs(["doctor"]).showVersion).toBeUndefined();
   });
 
   it("usage message documents the public user surface", () => {
     const text = usage();
-    for (const cmd of ["init", "sync", "doctor", "archive", "upgrade", "uninstall"]) {
+    for (const cmd of ["init", "sync", "archive", "upgrade", "uninstall"]) {
       expect(text).toContain(cmd);
     }
     expect(text).toContain("--help");
@@ -158,10 +143,8 @@ describe("cli parser", () => {
     expect(text).toContain("-v");
     expect(text).toContain("--harnesses");
     expect(text).toContain("--no-interactive");
-    expect(text).toContain("--json");
     expect(text).toContain("--disposition");
     expect(text).toContain("--reason");
-    expect(text).toContain("--only");
     expect(text).toContain("README.md and generated .cclaw/skills/*.md");
   });
 

@@ -34,8 +34,10 @@ ${conversationLanguagePolicyMarkdown()}
    - \`diff\` -> use the **Diff Subcommand** section in \`${RUNTIME_ROOT}/skills/${VIEW_SKILL_FOLDER}/SKILL.md\`
 3. Unknown subcommand -> print supported values and stop.
 
-## Headless mode
+## Headless mode (CI/automation only)
 
+Headless envelopes are a machine-mode exception for CI/automation orchestration.
+In normal interactive runs, respond with concise read-only prose instead.
 For machine orchestration, emit one JSON envelope:
 
 \`\`\`json
@@ -45,7 +47,7 @@ For machine orchestration, emit one JSON envelope:
 Use the parsed/defaulted subcommand in both \`payload.command\` and \`payload.subcommand\`; do not collapse \`tree\` or \`diff\` responses to \`status\`.
 
 Validate envelopes with:
-\`cclaw internal envelope-validate --stdin\`
+\`npx cclaw-cli internal envelope-validate --stdin\`
 
 ## Primary skill
 

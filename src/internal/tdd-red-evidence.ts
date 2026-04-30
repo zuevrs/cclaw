@@ -125,7 +125,7 @@ export async function runTddRedEvidenceCommand(
     const reason =
       "tdd-red-evidence: cannot scope check — no --runId provided and " +
       "flow-state.json has no activeRunId. Pass --runId=<id> explicitly " +
-      "or run `cclaw doctor` to reconcile state.";
+      "or run `npx cclaw-cli sync` to reconcile state.";
     if (!args.quiet) {
       io.stdout.write(`${JSON.stringify({
         ok: false,

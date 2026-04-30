@@ -38,7 +38,17 @@ function resolveCliRuntimeForGeneratedHook(): GeneratedCliRuntime {
 }
 
 
-function internalHelperScript(helperName: string, internalSubcommand: string, usage: string): string {
+interface InternalHelperScriptOptions {
+  positionalArgName?: string;
+  positionalArgRequired?: boolean;
+}
+
+function internalHelperScript(
+  helperName: string,
+  internalSubcommand: string,
+  usage: string,
+  options?: InternalHelperScriptOptions
+): string {
   const cliRuntime = resolveCliRuntimeForGeneratedHook();
   return `#!/usr/bin/env node
 import fs from "node:fs/promises";
@@ -52,6 +62,8 @@ const CCLAW_CLI_ARGS_PREFIX = ${JSON.stringify(cliRuntime.argsPrefix)};
 const HELPER_NAME = ${JSON.stringify(helperName)};
 const INTERNAL_SUBCOMMAND = ${JSON.stringify(internalSubcommand)};
 const USAGE = ${JSON.stringify(usage)};
+const POSITIONAL_ARG_NAME = ${JSON.stringify(options?.positionalArgName ?? null)};
+const POSITIONAL_ARG_REQUIRED = ${JSON.stringify(options?.positionalArgRequired === true)};
 
 async function detectRoot() {
   const candidates = [
@@ -81,10 +93,21 @@ function printUsage() {
 }
 
 async function main() {
-  const [, , ...flags] = process.argv;
-  if (flags.includes("--help") || flags.includes("-h")) {
+  const [, , ...argvTokens] = process.argv;
+  if (argvTokens.includes("--help") || argvTokens.includes("-h")) {
     printUsage();
     return;
+  }
+  let positionalArg = "";
+  let flags = argvTokens;
+  if (POSITIONAL_ARG_NAME !== null) {
+    positionalArg = (argvTokens[0] ?? "").trim();
+    flags = argvTokens.slice(1);
+    if (POSITIONAL_ARG_REQUIRED && positionalArg.length === 0) {
+      printUsage();
+      process.exitCode = 1;
+      return;
+    }
   }
 
   const root = await detectRoot();
@@ -124,7 +147,12 @@ async function main() {
     return;
   }
 
-  const child = spawn(process.execPath, [cliEntrypoint, ...cliArgsPrefix, "internal", INTERNAL_SUBCOMMAND, ...flags], {
+  const internalArgs =
+    POSITIONAL_ARG_NAME !== null
+      ? [INTERNAL_SUBCOMMAND, positionalArg, ...flags]
+      : [INTERNAL_SUBCOMMAND, ...flags];
+
+  const child = spawn(process.execPath, [cliEntrypoint, ...cliArgsPrefix, "internal", ...internalArgs], {
     cwd: root,
     env: process.env,
     stdio: "inherit"
@@ -136,7 +164,7 @@ async function main() {
     const code = error && typeof error === "object" && "code" in error ? String(error.code) : "";
     if (code === "ENOENT") {
       process.stderr.write(
-        "[cclaw] " + HELPER_NAME + ": node executable not found while invoking local runtime. Re-run npx cclaw-cli doctor.\\n"
+        "[cclaw] " + HELPER_NAME + ": node executable not found while invoking local runtime. Re-run npx cclaw-cli sync.\\n"
       );
     } else {
       process.stderr.write(
@@ -173,137 +201,24 @@ export function startFlowScript(): string {
   );
 }
 
+export function cancelRunScript(): string {
+  return internalHelperScript(
+    "cancel-run",
+    "cancel-run",
+    "Usage: node " + RUNTIME_ROOT + "/hooks/cancel-run.mjs --reason=<text> [--disposition=<cancelled|abandoned>] [--name=<slug>]"
+  );
+}
+
 export function stageCompleteScript(): string {
-  const cliRuntime = resolveCliRuntimeForGeneratedHook();
-  return `#!/usr/bin/env node
-import fs from "node:fs/promises";
-import path from "node:path";
-import process from "node:process";
-import { spawn } from "node:child_process";
-
-const RUNTIME_ROOT = ${JSON.stringify(RUNTIME_ROOT)};
-const CCLAW_CLI_ENTRYPOINT = ${JSON.stringify(cliRuntime.entrypoint)};
-const CCLAW_CLI_ARGS_PREFIX = ${JSON.stringify(cliRuntime.argsPrefix)};
-
-async function detectRoot() {
-  const candidates = [
-    process.env.CCLAW_PROJECT_ROOT,
-    process.env.CLAUDE_PROJECT_DIR,
-    process.env.CURSOR_PROJECT_DIR,
-    process.env.CURSOR_PROJECT_ROOT,
-    process.env.OPENCODE_PROJECT_DIR,
-    process.env.OPENCODE_PROJECT_ROOT,
-    process.cwd()
-  ].filter((value) => typeof value === "string" && value.length > 0);
-
-  for (const candidate of candidates) {
-    try {
-      const runtimePath = path.join(candidate, RUNTIME_ROOT);
-      const stat = await fs.stat(runtimePath);
-      if (stat.isDirectory()) return candidate;
-    } catch {
-      // continue
-    }
-  }
-  return candidates[0] || process.cwd();
-}
-
-function printUsage() {
-  process.stderr.write(
-    "Usage: node " +
-      RUNTIME_ROOT +
-      "/hooks/stage-complete.mjs <stage> [--passed=...] [--evidence-json=...] [--waive-delegation=...] [--waiver-reason=...] [--json]\\n"
-  );
-}
-
-async function main() {
-  const [, , stage, ...flags] = process.argv;
-  if (!stage || stage.trim().length === 0) {
-    printUsage();
-    process.exitCode = 1;
-    return;
-  }
-
-  const root = await detectRoot();
-  const runtimePath = path.join(root, RUNTIME_ROOT);
-  try {
-    const stat = await fs.stat(runtimePath);
-    if (!stat.isDirectory()) throw new Error("not-dir");
-  } catch {
-    process.stderr.write("[cclaw] stage-complete: runtime root not found at " + runtimePath + "\\n");
-    process.exitCode = 1;
-    return;
-  }
-
-  const cliEntrypoint = process.env.CCLAW_CLI_JS || CCLAW_CLI_ENTRYPOINT;
-  const cliArgsPrefix = process.env.CCLAW_CLI_JS ? [] : CCLAW_CLI_ARGS_PREFIX;
-  if (!cliEntrypoint || cliEntrypoint.trim().length === 0) {
-    process.stderr.write(
-      "[cclaw] stage-complete: local Node runtime entrypoint is missing. Re-run npx cclaw-cli sync, or set CCLAW_CLI_JS=/absolute/path/to/dist/cli.js for this session.\\n"
-    );
-    process.exitCode = 1;
-    return;
-  }
-
-  try {
-    const stat = await fs.stat(cliEntrypoint);
-    if (!stat.isFile()) throw new Error("not-file");
-    for (const argPath of cliArgsPrefix) {
-      if (typeof argPath !== "string" || argPath.startsWith("-")) continue;
-      const argStat = await fs.stat(argPath);
-      if (!argStat.isFile()) throw new Error("arg-not-file");
-    }
-  } catch {
-    process.stderr.write(
-      "[cclaw] stage-complete: local Node runtime entrypoint not found at " + cliEntrypoint + ". Re-run npx cclaw-cli sync, or set CCLAW_CLI_JS=/absolute/path/to/dist/cli.js for this session.\\n"
-    );
-    process.exitCode = 1;
-    return;
-  }
-
-  const child = spawn(
-    process.execPath,
-    [cliEntrypoint, ...cliArgsPrefix, "internal", "advance-stage", stage, ...flags],
+  return internalHelperScript(
+    "stage-complete",
+    "advance-stage",
+    "Usage: node " + RUNTIME_ROOT + "/hooks/stage-complete.mjs <stage> [--passed=...] [--evidence-json=...] [--waive-delegation=...] [--waiver-reason=...] [--accept-proactive-waiver] [--accept-proactive-waiver-reason=...] [--json]",
     {
-    cwd: root,
-    env: process.env,
-    stdio: "inherit"
-  }
+      positionalArgName: "stage",
+      positionalArgRequired: true
+    }
   );
-  let spawnErrored = false;
-
-  child.on("error", (error) => {
-    spawnErrored = true;
-    const code = error && typeof error === "object" && "code" in error ? String(error.code) : "";
-    if (code === "ENOENT") {
-      process.stderr.write(
-        "[cclaw] stage-complete: node executable not found while invoking local runtime. Re-run npx cclaw-cli doctor.\\n"
-      );
-    } else {
-      process.stderr.write(
-        "[cclaw] stage-complete: failed to invoke local Node advance-stage runtime (" +
-          (error instanceof Error ? error.message : String(error)) +
-          ").\\n"
-      );
-    }
-    process.exitCode = 1;
-  });
-
-  child.on("close", (code, signal) => {
-    if (spawnErrored) {
-      process.exitCode = 1;
-      return;
-    }
-    if (signal) {
-      process.exitCode = 1;
-      return;
-    }
-    process.exitCode = typeof code === "number" && code >= 0 ? code : 1;
-  });
-}
-
-void main();
-`;
 }
 
 export function delegationRecordScript(): string {
@@ -689,7 +604,7 @@ set "RUNTIME=%HOOK_DIR%run-hook.mjs"
 where node >nul 2>nul
 if %ERRORLEVEL% neq 0 (
   REM Best-effort: missing node should not block harness execution loops.
-  echo [cclaw] run-hook.cmd: node not found; cclaw hook skipped. Run npx cclaw-cli doctor. >&2
+  echo [cclaw] run-hook.cmd: node not found; cclaw hook skipped. Run npx cclaw-cli sync. >&2
   exit /b 0
 )
 node "%RUNTIME%" %*
@@ -701,7 +616,7 @@ if [ "$#" -lt 1 ]; then
   exit 1
 fi
 if ! command -v node >/dev/null 2>&1; then
-  echo "[cclaw] run-hook.cmd: node not found; cclaw hook skipped. Run npx cclaw-cli doctor." >&2
+  echo "[cclaw] run-hook.cmd: node not found; cclaw hook skipped. Run npx cclaw-cli sync." >&2
   exit 0
 fi
 exec node "\${SCRIPT_DIR}/run-hook.mjs" "$@"

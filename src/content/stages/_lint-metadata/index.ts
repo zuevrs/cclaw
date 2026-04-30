@@ -8,6 +8,9 @@ const STAGE_POLICY_NEEDLES: Record<FlowStage, string[]> = {
     "Explore project context",
     "One question at a time",
     "2-3 architecturally distinct approaches",
+    "Embedded Grill",
+    "Victory Detector",
+    "Critic Pass",
     "State what is being approved",
     "Self-review before handoff",
     "Do NOT implement, scaffold, or modify behavior"
@@ -19,7 +22,9 @@ const STAGE_POLICY_NEEDLES: Record<FlowStage, string[]> = {
     "Discretion Areas",
     "NOT in scope",
     "Premise Challenge",
-    "Locked Decisions"
+    "Locked Decisions",
+    "Victory Detector",
+    "Critic Pass"
   ],
   design: [
     "Parallel Research Fleet",
@@ -27,9 +32,21 @@ const STAGE_POLICY_NEEDLES: Record<FlowStage, string[]> = {
     "Data Flow",
     "Failure Modes and Mitigation",
     "Performance Budget",
+    "Long-Term Trajectory",
+    "Victory Detector",
+    "Critic Pass",
     "One issue at a time"
   ],
-  spec: ["Acceptance Criteria", "Constraints", "Assumptions Before Finalization", "Testability", "approved spec", "Edge Cases"],
+  spec: [
+    "Acceptance Criteria",
+    "Constraints",
+    "Assumptions Before Finalization",
+    "Testability",
+    "Spec Self-Review",
+    "single subsystem",
+    "approved spec",
+    "Edge Cases"
+  ],
   plan: [
     "WAIT_FOR_CONFIRM",
     "Task Graph",
@@ -37,6 +54,8 @@ const STAGE_POLICY_NEEDLES: Record<FlowStage, string[]> = {
     "Acceptance Mapping",
     "verification steps",
     "Execution Posture",
+    "Calibrated Findings",
+    "Regression Iron Rule",
     "Locked Decision Coverage"
   ],
   tdd: [
@@ -44,8 +63,13 @@ const STAGE_POLICY_NEEDLES: Record<FlowStage, string[]> = {
     "GREEN",
     "REFACTOR",
     "failing test",
+    "Iron Law Acknowledgement",
+    "Watched-RED Proof",
+    "Vertical Slice Cycle",
     "Test Discovery",
     "System-Wide Impact Check",
+    "TDD Blocker Taxonomy",
+    "Per-Slice Review",
     "full test suite",
     "acceptance criteria",
     "traceable to plan slice"

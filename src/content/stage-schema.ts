@@ -189,6 +189,8 @@ function defaultReturnSchemaForAgent(
       return "architecture-return";
     case "spec-validator":
       return "spec-validation-return";
+    case "spec-document-reviewer":
+      return "review-return";
     case "slice-implementer":
       return "worker-return";
     case "performance-reviewer":
@@ -202,6 +204,7 @@ function defaultReturnSchemaForAgent(
     case "planner":
       return "planning-return";
     case "product-manager":
+    case "product-strategist":
       return "product-return";
     case "critic":
       return "critic-return";
@@ -384,6 +387,7 @@ const REQUIRED_GATE_IDS: Record<FlowStage, RequiredGateSet> = {
   design: [
     "design_research_complete",
     "design_architecture_locked",
+    "design_diagram_freshness",
     "design_data_flow_mapped",
     "design_failure_modes_mapped",
     "design_test_and_perf_defined"
@@ -392,6 +396,7 @@ const REQUIRED_GATE_IDS: Record<FlowStage, RequiredGateSet> = {
     "spec_acceptance_measurable",
     "spec_testability_confirmed",
     "spec_assumptions_surfaced",
+    "spec_self_review_complete",
     "spec_user_approved"
   ],
   plan: [
@@ -408,6 +413,9 @@ const REQUIRED_GATE_IDS: Record<FlowStage, RequiredGateSet> = {
     "tdd_green_full_suite",
     "tdd_refactor_completed",
     "tdd_verified_before_complete",
+    "tdd_iron_law_acknowledged",
+    "tdd_watched_red_observed",
+    "tdd_slice_cycle_complete",
     "tdd_docs_drift_check",
     ...(track === "quick" ? [] : ["tdd_traceable_to_plan"])
   ],
@@ -449,9 +457,27 @@ const REQUIRED_ARTIFACT_SECTIONS: Record<FlowStage, string[]> = {
     "Spec Handoff",
     "Completion Dashboard"
   ],
-  spec: ["Acceptance Criteria", "Edge Cases", "Assumptions Before Finalization", "Acceptance Mapping", "Approval"],
+  spec: [
+    "Acceptance Criteria",
+    "Edge Cases",
+    "Assumptions Before Finalization",
+    "Acceptance Mapping",
+    "Spec Self-Review",
+    "Approval"
+  ],
   plan: ["Task List", "Dependency Batches", "Acceptance Mapping", "Execution Posture", "WAIT_FOR_CONFIRM"],
-  tdd: ["Test Discovery", "System-Wide Impact Check", "RED Evidence", "GREEN Evidence", "REFACTOR Notes", "Traceability", "Verification Ladder"],
+  tdd: [
+    "Test Discovery",
+    "System-Wide Impact Check",
+    "RED Evidence",
+    "GREEN Evidence",
+    "REFACTOR Notes",
+    "Traceability",
+    "Iron Law Acknowledgement",
+    "Watched-RED Proof",
+    "Vertical Slice Cycle",
+    "Verification Ladder"
+  ],
   review: ["Review Evidence Scope", "Changed-File Coverage", "Layer 1 Verdict", "Review Findings Contract", "Severity Summary", "Final Verdict"],
   ship: ["Preflight Results", "Release Notes", "Rollback Plan", "Finalization"]
 };
@@ -610,6 +636,14 @@ const STAGE_AUTO_SUBAGENT_DISPATCH: Record<FlowStage, StageAutoSubagentDispatch[
       when: "When scope choices change user value, success metrics, or product positioning.",
       purpose: "Keep accepted/deferred reference ideas tied to user value and measurable success.",
       requiresUserGate: false
+    },
+    {
+      agent: "product-strategist",
+      mode: "proactive",
+      requiredAtTier: "standard",
+      when: "When scope mode resolves to SCOPE EXPANSION or SELECTIVE EXPANSION.",
+      purpose: "Drive 10x vision and concrete expansion proposals before locking the scope contract.",
+      requiresUserGate: false
     }
   ],
   design: [
@@ -681,6 +715,14 @@ const STAGE_AUTO_SUBAGENT_DISPATCH: Record<FlowStage, StageAutoSubagentDispatch[
       mode: "proactive",
       when: "When acceptance criteria need testability review or RED expressibility is uncertain.",
       purpose: "Confirm likely test levels, commands/manual evidence, and assertion surfaces are concrete.",
+      requiresUserGate: false
+    },
+    {
+      agent: "spec-document-reviewer",
+      mode: "proactive",
+      requiredAtTier: "standard",
+      when: "When Spec Self-Review reports gaps (Status: Issues Found) or subsystem boundaries drift beyond one coherent plan slice.",
+      purpose: "Run a final document-level quality pass for completeness, consistency, clarity, and scope fit before handoff to plan.",
       requiresUserGate: false
     }
   ],

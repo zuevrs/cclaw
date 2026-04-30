@@ -1,10 +1,10 @@
 import { describe, expect, it } from "vitest";
-import { ideateCommandContract, ideateCommandSkillMarkdown, minimumDistinctIdeateFrames } from "../../src/content/ideate-command.js";
-import { resolveIdeateFrames } from "../../src/content/ideate-frames.js";
+import { ideaCommandContract, ideaCommandSkillMarkdown, minimumDistinctIdeaFrames } from "../../src/content/idea-command.js";
+import { resolveIdeaFrames } from "../../src/content/idea-frames.js";
 
-describe("ideate command surfaces", () => {
+describe("idea command surfaces", () => {
   it("uses current knowledge schema terms in repo-grounded guidance", () => {
-    const skill = ideateCommandSkillMarkdown();
+    const skill = ideaCommandSkillMarkdown();
     expect(skill).toContain("rule | pattern | lesson | compound");
     expect(skill).toContain("origin_run");
     expect(skill).toContain("trigger/action");
@@ -13,9 +13,9 @@ describe("ideate command surfaces", () => {
   });
 
   it("renders default frame registry in command contract and skill", () => {
-    const contract = ideateCommandContract();
-    const skill = ideateCommandSkillMarkdown();
-    for (const frame of resolveIdeateFrames()) {
+    const contract = ideaCommandContract();
+    const skill = ideaCommandSkillMarkdown();
+    for (const frame of resolveIdeaFrames()) {
       expect(contract).toContain(`${frame.label} (\`${frame.id}\`)`);
       expect(skill).toContain(`${frame.label} (\`${frame.id}\`)`);
     }
@@ -29,10 +29,10 @@ describe("ideate command surfaces", () => {
   });
 
   it("supports frame overrides for narrower ideation passes", () => {
-    const contract = ideateCommandContract({
+    const contract = ideaCommandContract({
       frameIds: ["pain-friction", "leverage", "pain-friction"]
     });
-    const skill = ideateCommandSkillMarkdown({
+    const skill = ideaCommandSkillMarkdown({
       frameIds: ["pain-friction", "leverage"]
     });
     expect(contract).toContain("configured frames (2 total)");
@@ -44,13 +44,13 @@ describe("ideate command surfaces", () => {
   });
 
   it("uses a deterministic smaller frame minimum for narrow and non-repo modes", () => {
-    expect(minimumDistinctIdeateFrames(6, "repo-grounded")).toBe(4);
-    expect(minimumDistinctIdeateFrames(6, "narrow")).toBe(2);
-    expect(minimumDistinctIdeateFrames(6, "elsewhere-software")).toBe(2);
-    expect(minimumDistinctIdeateFrames(1, "elsewhere-non-software")).toBe(1);
+    expect(minimumDistinctIdeaFrames(6, "repo-grounded")).toBe(4);
+    expect(minimumDistinctIdeaFrames(6, "narrow")).toBe(2);
+    expect(minimumDistinctIdeaFrames(6, "elsewhere-software")).toBe(2);
+    expect(minimumDistinctIdeaFrames(1, "elsewhere-non-software")).toBe(1);
 
-    const contract = ideateCommandContract({ mode: "narrow" });
-    const skill = ideateCommandSkillMarkdown({ mode: "elsewhere-software" });
+    const contract = ideaCommandContract({ mode: "narrow" });
+    const skill = ideaCommandSkillMarkdown({ mode: "elsewhere-software" });
     expect(contract).toContain("Keep at least 2 distinct frame outputs");
     expect(contract).toContain("narrow/non-repo = 2");
     expect(skill).toContain("Require at least 2 distinct frames");
