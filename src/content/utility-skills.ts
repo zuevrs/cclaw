@@ -6,129 +6,58 @@
 export function languageTypescriptSkill(): string {
   return `---
 name: language-typescript
-description: "TypeScript rule pack. Opt-in language lens. Use when reviewing or writing TypeScript/JavaScript diffs during tdd or review — enforces type-safety, runtime-boundary validation, and idiomatic patterns."
+description: "TypeScript rule pack. Compact opt-in lens for tdd/review when diffs touch TS/JS files."
 ---
 
 # TypeScript Rule Pack
 
-## Quick Start
+Use this only when a diff includes \`.ts\`, \`.tsx\`, \`.mts\`, \`.cts\`, or \`.js\`.
 
-> 1. Activate during tdd or review whenever the diff touches \`.ts\`, \`.tsx\`, \`.mts\`, \`.cts\`, or \`.js\` files.
-> 2. Walk the rule tiers in order. Tier-1 violations block merge. Tier-2 need a named follow-up.
-> 3. Cite each finding as \`file:line — <rule id> — <one-line remediation>\`.
+## Blocking rules
 
-## HARD-GATE
+1. **No silent \`any\` or blanket \`@ts-ignore\`.** Unknown input starts as \`unknown\` and gets narrowed.
+2. **Validate trust boundaries at runtime.** HTTP/env/file/IPC payloads require schema parse before typed use.
+3. **No floating promises.** Await promises or explicitly document fire-and-forget behavior.
+4. **Exhaustive union handling.** Discriminated-union switches must fail loudly on missing branches.
 
-Do not approve a TypeScript change that ships \`any\`, \`@ts-ignore\`, or
-\`@ts-expect-error\` *without* (a) a comment explaining why, (b) a linked issue,
-and (c) an assertion that the blast radius is bounded to the current file.
-No exceptions in production code paths.
+## Follow-up rules
 
-## Tier 1 — blocking rules
+- Prefer immutable/readonly data by default.
+- Keep types local and explicit at module boundaries.
+- Add/adjust tests when changing inferred public behavior.
 
-1. **No silent \`any\`.** Unknown inputs must be typed as \`unknown\` first, then narrowed.
-2. **Runtime validate trust boundaries.** HTTP bodies, env vars, file contents, and
-   IPC payloads must be parsed through a schema validator (zod, valibot, io-ts) before
-   being treated as typed data.
-3. **No \`as\` without a narrowing reason.** \`value as Foo\` is only acceptable when
-   preceded by a runtime check that proves the shape (e.g. \`if ("id" in value)\`).
-4. **Exhaustive switches on discriminated unions.** Every \`switch\` on a tagged
-   union must end with a \`default\` branch that assigns to \`never\` to surface
-   missing cases at compile time.
-5. **Promise hygiene.** No unawaited promises in \`async\` functions; no
-   \`void promise\` unless documented. Use \`@typescript-eslint/no-floating-promises\`.
-6. **Null-safety at the boundary.** Optional chaining (\`?.\`) and nullish
-   coalescing (\`??\`) must only be used when the null path is handled, not as a
-   silent default.
+## Output format
 
-## Tier 2 — follow-up rules
-
-7. Prefer \`readonly\` for arrays/object fields that are not mutated.
-8. Prefer \`type\` aliases for unions, \`interface\` for extendable object shapes.
-9. Name generic parameters descriptively once they carry semantic meaning (\`TEvent\`, \`TPayload\`).
-10. Avoid re-exporting entire namespaces; named re-exports keep bundle analysis tractable.
-11. Co-locate test fixtures with their types to keep drift visible.
-
-## Anti-patterns
-
-- "It compiles, ship it" — compilation is necessary, not sufficient. Runtime boundary validation is the gate.
-- Casting library return types to tighten them without reading the library's actual contract.
-- Wrapping every function in \`try/catch\` and swallowing the error — errors must either be rethrown typed or mapped to a Result/Either shape.
-- Using enums where a string-literal union would do (enums carry runtime cost and erase at tree-shaking time only when \`const\`).
-
-## Review output shape
-
-\`\`\`
-- **Rule:** T1-2 (runtime validate trust boundaries)
-- **File:line:** src/api/users.ts:42
-- **Finding:** POST body cast directly to \`UserCreateInput\`; no schema parse.
-- **Remediation:** Parse through \`userCreateSchema\` (zod) before passing to the service layer.
-\`\`\`
+\`file:line — rule id — concise remediation\`
 `;
 }
 
 export function languagePythonSkill(): string {
   return `---
 name: language-python
-description: "Python rule pack. Opt-in language lens. Use when reviewing or writing Python diffs during tdd or review — enforces typing, exception hygiene, and idiomatic patterns."
+description: "Python rule pack. Compact opt-in lens for tdd/review when diffs touch Python files."
 ---
 
 # Python Rule Pack
 
-## Quick Start
+Use this only when a diff includes \`.py\` / \`.pyi\`.
 
-> 1. Activate during tdd or review whenever the diff touches \`.py\` / \`.pyi\` files.
-> 2. Walk the rule tiers in order. Tier-1 violations block merge. Tier-2 need a named follow-up.
-> 3. Cite each finding as \`file:line — <rule id> — <one-line remediation>\`.
+## Blocking rules
 
-## HARD-GATE
+1. **No broad silent catches.** Avoid bare \`except\` / \`except Exception\` unless re-raised or justified.
+2. **No mutable defaults.** Use \`None\` + local initialization.
+3. **Type exported surfaces.** Public functions/classes include clear type hints.
+4. **Resource safety by default.** File/DB/network handles use context managers.
 
-Do not approve a Python change that catches bare \`except:\` or \`except Exception:\`
-in production code *without* (a) re-raising, (b) logging with \`logger.exception\`, or
-(c) a comment explaining the intentional swallow. Silent broad catches are the
-single biggest source of "works on my machine" bugs in Python services.
+## Follow-up rules
 
-## Tier 1 — blocking rules
+- Prefer explicit, narrow exceptions.
+- Keep async and sync I/O models separated.
+- Add/adjust tests with behavior changes.
 
-1. **Type hints on public APIs.** Every exported function, method, and dataclass
-   must have full type hints. Use \`from __future__ import annotations\` or PEP 604 union syntax.
-2. **No mutable default arguments.** \`def f(x=[])\` is a bug. Use \`None\` + inline default.
-3. **Exception specificity.** Catch the narrowest exception class you actually handle.
-4. **Context managers for resources.** Files, sockets, DB sessions, locks — always \`with\`.
-5. **No bare \`assert\` in production code.** \`assert\` is stripped under \`python -O\`.
-   For invariants, raise \`ValueError\`/\`RuntimeError\` explicitly.
-6. **Deterministic imports.** No conditional imports at module top level except for
-   platform branches; no import-time side effects.
+## Output format
 
-## Tier 2 — follow-up rules
-
-7. Prefer \`@dataclass(slots=True, frozen=True)\` for value objects.
-8. Prefer \`pathlib.Path\` over \`os.path\` for new code.
-9. Use f-strings for interpolation; reserve \`%\` and \`.format\` for logger messages (lazy eval).
-10. Use \`logging.getLogger(__name__)\` per module; never the root logger.
-11. Pin dependency ranges in \`pyproject.toml\`; lock with \`uv lock\` / \`pip-compile\`.
-
-## Async-specific
-
-- Do not mix \`requests\`/sync I/O inside \`async def\`. Use \`httpx.AsyncClient\` / \`aiofiles\`.
-- \`asyncio.gather\` with \`return_exceptions=False\` cancels siblings on first failure — be explicit.
-- Every task created with \`asyncio.create_task\` must have its reference kept and awaited.
-
-## Anti-patterns
-
-- Using \`**kwargs\` to avoid writing a real signature.
-- Monkey-patching modules from tests without a \`contextlib.contextmanager\` cleanup.
-- Treating \`__init__.py\` as a place to run logic (imports only).
-- Re-inventing \`itertools\`/\`functools\` instead of using stdlib.
-
-## Review output shape
-
-\`\`\`
-- **Rule:** P1-3 (exception specificity)
-- **File:line:** users/service.py:88
-- **Finding:** \`except Exception\` around DB call silently drops integrity errors.
-- **Remediation:** Catch \`IntegrityError\` explicitly; re-raise everything else.
-\`\`\`
+\`file:line — rule id — concise remediation\`
 `;
 }
 

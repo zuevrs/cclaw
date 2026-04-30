@@ -233,11 +233,13 @@ describe("knowledge store append helper", () => {
     expect(parsed.entries[1]?.trigger).toBe("second trigger");
   });
 
-  it("documents supersession fields in the generated learnings skill", () => {
+  it("documents slim required schema with legacy compatibility notes", () => {
     const markdown = learnSkillMarkdown();
-    expect(markdown).toContain("Optional fields `source`, `severity`, `supersedes`, and `superseded_by`");
-    expect(markdown).toContain("| `supersedes` | string[] | no |");
-    expect(markdown).toContain("| `superseded_by` | string | no |");
+    expect(markdown).toContain(
+      "type, trigger, action, confidence, stage, origin_stage, frequency, created, first_seen_ts, last_seen_ts, project"
+    );
+    expect(markdown).toContain("Optional fields `source` and `severity`");
+    expect(markdown).toContain("Legacy optional fields (accepted for backward compatibility");
   });
 
   it("accepts optional supersession fields while reading existing schema rows", async () => {

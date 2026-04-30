@@ -59,22 +59,10 @@ export interface ReadFlowStateOptions {
 const FLOW_STATE_REL_PATH = `${RUNTIME_ROOT}/state/flow-state.json`;
 const ARCHIVE_DIR_REL_PATH = `${RUNTIME_ROOT}/archive`;
 const ACTIVE_ARTIFACTS_REL_PATH = `${RUNTIME_ROOT}/artifacts`;
-const RECONCILIATION_NOTICES_REL_PATH = `${RUNTIME_ROOT}/state/reconciliation-notices.json`;
-const RECONCILIATION_NOTICES_LOCK_REL_PATH = `${RUNTIME_ROOT}/state/.reconciliation-notices.lock`;
-const RECONCILIATION_NOTICES_SCHEMA_VERSION = 1;
-const CLOSEOUT_SUBSTATE_DEMOTION_KIND = "closeout_substate_demotion" as const;
-const CLOSEOUT_SUBSTATE_GATE_ID = "closeout.shipSubstate";
 const FLOW_STAGE_SET = new Set<string>(FLOW_STAGES);
-
-interface CloseoutSubstateDemotion {
-  previous: ShipSubstate;
-  next: ShipSubstate;
-  reason: string;
-}
 
 interface CoercedFlowStateResult {
   state: FlowState;
-  closeoutDemotion?: CloseoutSubstateDemotion;
 }
 
 function validateFlowTransition(prev: FlowState, next: FlowState): void {
@@ -155,100 +143,12 @@ function flowStateLockPath(projectRoot: string): string {
   return path.join(projectRoot, RUNTIME_ROOT, "state", ".flow-state.lock");
 }
 
-function reconciliationNoticesPath(projectRoot: string): string {
-  return path.join(projectRoot, RECONCILIATION_NOTICES_REL_PATH);
-}
-
-function reconciliationNoticesLockPath(projectRoot: string): string {
-  return path.join(projectRoot, RECONCILIATION_NOTICES_LOCK_REL_PATH);
-}
-
 function archiveRoot(projectRoot: string): string {
   return path.join(projectRoot, ARCHIVE_DIR_REL_PATH);
 }
 
 function activeArtifactsPath(projectRoot: string): string {
   return path.join(projectRoot, ACTIVE_ARTIFACTS_REL_PATH);
-}
-
-function asObjectRecord(value: unknown): Record<string, unknown> | null {
-  if (!value || typeof value !== "object" || Array.isArray(value)) return null;
-  return value as Record<string, unknown>;
-}
-
-async function appendCloseoutSubstateDemotionNotice(
-  projectRoot: string,
-  state: FlowState,
-  demotion: CloseoutSubstateDemotion
-): Promise<void> {
-  await withDirectoryLock(reconciliationNoticesLockPath(projectRoot), async () => {
-    const filePath = reconciliationNoticesPath(projectRoot);
-    const existingNotices: Record<string, unknown>[] = [];
-    if (await exists(filePath)) {
-      try {
-        const raw = JSON.parse(await fs.readFile(filePath, "utf8"));
-        const parsed = asObjectRecord(raw);
-        const noticesRaw = parsed?.notices;
-        if (Array.isArray(noticesRaw)) {
-          for (const notice of noticesRaw) {
-            const typed = asObjectRecord(notice);
-            if (typed) existingNotices.push(typed);
-          }
-        }
-      } catch {
-        // Keep going with an empty payload; sync can still report parse errors.
-      }
-    }
-
-    const alreadyRecorded = existingNotices.some((notice) => {
-      if (notice.runId !== state.activeRunId) return false;
-      if (notice.kind !== CLOSEOUT_SUBSTATE_DEMOTION_KIND) return false;
-      const payload = asObjectRecord(notice.payload);
-      return payload?.previous === demotion.previous &&
-        payload?.next === demotion.next &&
-        payload?.reason === demotion.reason;
-    });
-    if (alreadyRecorded) return;
-
-    const ts = new Date().toISOString();
-    existingNotices.push({
-      id: `${state.activeRunId}:${state.currentStage}:${CLOSEOUT_SUBSTATE_GATE_ID}:${CLOSEOUT_SUBSTATE_DEMOTION_KIND}:${ts}`,
-      runId: state.activeRunId,
-      stage: state.currentStage,
-      gateId: CLOSEOUT_SUBSTATE_GATE_ID,
-      reason: demotion.reason,
-      demotedAt: ts,
-      kind: CLOSEOUT_SUBSTATE_DEMOTION_KIND,
-      payload: {
-        previous: demotion.previous,
-        next: demotion.next,
-        reason: demotion.reason
-      }
-    });
-    existingNotices.sort((left, right) => {
-      const leftTs = typeof left.demotedAt === "string" ? left.demotedAt : "";
-      const rightTs = typeof right.demotedAt === "string" ? right.demotedAt : "";
-      if (leftTs === rightTs) {
-        const leftId = typeof left.id === "string" ? left.id : "";
-        const rightId = typeof right.id === "string" ? right.id : "";
-        return leftId.localeCompare(rightId);
-      }
-      return leftTs.localeCompare(rightTs);
-    });
-    await ensureDir(path.dirname(filePath));
-    await writeFileSafe(
-      filePath,
-      `${JSON.stringify(
-        {
-          schemaVersion: RECONCILIATION_NOTICES_SCHEMA_VERSION,
-          notices: existingNotices
-        },
-        null,
-        2
-      )}\n`,
-      { mode: 0o600 }
-    );
-  });
 }
 
 function isFlowStage(value: unknown): value is FlowStage {
@@ -456,16 +356,20 @@ function isShipSubstate(value: unknown): value is ShipSubstate {
 }
 
 function sanitizeCloseoutState(
-  value: unknown,
-  onDemotion?: (demotion: CloseoutSubstateDemotion) => void
+  value: unknown
 ): CloseoutState {
   const fallback = createInitialCloseoutState();
   if (!value || typeof value !== "object" || Array.isArray(value)) {
     return fallback;
   }
   const typed = value as Record<string, unknown>;
-  let shipSubstate = isShipSubstate(typed.shipSubstate) ? typed.shipSubstate : fallback.shipSubstate;
-  const previousShipSubstate = shipSubstate;
+  const rawShipSubstate = typeof typed.shipSubstate === "string" ? typed.shipSubstate : undefined;
+  let shipSubstate: ShipSubstate;
+  if (rawShipSubstate === "retro_review" || rawShipSubstate === "compound_review") {
+    shipSubstate = "post_ship_review";
+  } else {
+    shipSubstate = isShipSubstate(rawShipSubstate) ? rawShipSubstate : fallback.shipSubstate;
+  }
   const retroDraftedAt = typeof typed.retroDraftedAt === "string" ? typed.retroDraftedAt : undefined;
   const retroAcceptedAt = typeof typed.retroAcceptedAt === "string" ? typed.retroAcceptedAt : undefined;
   const retroSkipReason = typeof typed.retroSkipReason === "string"
@@ -493,20 +397,8 @@ function sanitizeCloseoutState(
   const retroDone = retroAcceptedAt !== undefined || retroSkipped === true;
   const compoundDone =
     compoundCompletedAt !== undefined || compoundPromoted > 0 || compoundSkipped === true;
-  let demotionReason: string | undefined;
-  if (!retroDone && (shipSubstate === "ready_to_archive" || shipSubstate === "compound_review")) {
-    shipSubstate = "retro_review";
-    demotionReason = "retro closeout leg is incomplete (missing retroAcceptedAt or explicit retro skip).";
-  } else if (shipSubstate === "ready_to_archive" && !compoundDone) {
-    shipSubstate = "compound_review";
-    demotionReason = "compound closeout leg is incomplete (missing compound proof).";
-  }
-  if (demotionReason && previousShipSubstate !== shipSubstate) {
-    onDemotion?.({
-      previous: previousShipSubstate,
-      next: shipSubstate,
-      reason: demotionReason
-    });
+  if (shipSubstate === "ready_to_archive" && (!retroDone || !compoundDone)) {
+    shipSubstate = "post_ship_review";
   }
 
   return {
@@ -529,7 +421,6 @@ function coerceFlowState(parsed: Record<string, unknown>): CoercedFlowStateResul
   const activeRunId = typeof activeRunIdRaw === "string" && activeRunIdRaw.trim().length > 0
     ? activeRunIdRaw.trim()
     : next.activeRunId;
-  let closeoutDemotion: CloseoutSubstateDemotion | undefined;
 
   const state: FlowState = {
     schemaVersion: FLOW_STATE_SCHEMA_VERSION,
@@ -543,11 +434,9 @@ function coerceFlowState(parsed: Record<string, unknown>): CoercedFlowStateResul
     staleStages: sanitizeStaleStages(parsed.staleStages),
     rewinds: sanitizeRewinds(parsed.rewinds),
     retro: sanitizeRetroState(parsed.retro),
-    closeout: sanitizeCloseoutState(parsed.closeout, (demotion) => {
-      closeoutDemotion = demotion;
-    })
+    closeout: sanitizeCloseoutState(parsed.closeout)
   };
-  return { state, closeoutDemotion };
+  return { state };
 }
 
 export class CorruptFlowStateError extends Error {
@@ -617,11 +506,7 @@ export async function readFlowState(
       new Error("flow-state.json did not deserialize to a JSON object")
     );
   }
-  const coerced = coerceFlowState(parsed as Record<string, unknown>);
-  if (coerced.closeoutDemotion) {
-    await appendCloseoutSubstateDemotionNotice(projectRoot, coerced.state, coerced.closeoutDemotion);
-  }
-  return coerced.state;
+  return coerceFlowState(parsed as Record<string, unknown>).state;
 }
 
 export async function writeFlowState(

@@ -8,6 +8,8 @@ import { FLOW_STAGES, type FlowStage } from "./types.js";
 export type KnowledgeEntryType = "rule" | "pattern" | "lesson" | "compound";
 export type KnowledgeEntryConfidence = "high" | "medium" | "low";
 export type KnowledgeEntrySeverity = "critical" | "important" | "suggestion";
+// Legacy optional metadata values preserved for backward compatibility with
+// historical knowledge.jsonl rows.
 export type KnowledgeEntryUniversality = "project" | "personal" | "universal";
 export type KnowledgeEntryMaturity = "raw" | "lifted-to-rule" | "lifted-to-enforcement";
 export type KnowledgeEntrySource = "stage" | "retro" | "compound" | "idea" | "manual";
@@ -18,13 +20,13 @@ export interface KnowledgeEntry {
   action: string;
   confidence: KnowledgeEntryConfidence;
   severity?: KnowledgeEntrySeverity;
-  domain: string | null;
+  domain?: string | null;
   stage: FlowStage | null;
   origin_stage: FlowStage | null;
-  origin_run: string | null;
+  origin_run?: string | null;
   frequency: number;
-  universality: KnowledgeEntryUniversality;
-  maturity: KnowledgeEntryMaturity;
+  universality?: KnowledgeEntryUniversality;
+  maturity?: KnowledgeEntryMaturity;
   created: string;
   first_seen_ts: string;
   last_seen_ts: string;
@@ -112,8 +114,6 @@ export interface CompoundReadinessCluster {
   lastSeenTs: string;
   /** Entry types observed (rule/pattern/lesson/compound). */
   types: KnowledgeEntryType[];
-  /** Distinct maturity values observed across the cluster. */
-  maturity: KnowledgeEntryMaturity[];
 }
 
 export interface CompoundReadiness {
@@ -201,9 +201,8 @@ export function effectiveCompoundThreshold(
  *
  * Clustering key: `(type, normalizeText(trigger), normalizeText(action))`
  * which mirrors the compound readiness clustering in runtime state.
- * Entries with `maturity === "lifted-to-enforcement"` or `superseded_by`
- * are excluded — they were already promoted/replaced and should not re-appear
- * as ready.
+ * The readiness surface intentionally stays simple: no maturity/supersede
+ * suppression logic in this pass.
  */
 export function computeCompoundReadiness(
   entries: KnowledgeEntry[],
@@ -241,12 +240,10 @@ export function computeCompoundReadiness(
       severity?: KnowledgeEntrySeverity;
       lastSeenTs: string;
       types: Set<KnowledgeEntryType>;
-      maturity: Set<KnowledgeEntryMaturity>;
     }
   >();
 
   for (const entry of entries) {
-    if (entry.maturity === "lifted-to-enforcement" || entry.superseded_by !== undefined) continue;
     const key = [
       entry.type,
       normalizeText(entry.trigger),
@@ -262,15 +259,13 @@ export function computeCompoundReadiness(
         entryCount: 1,
         severity: entry.severity,
         lastSeenTs: entry.last_seen_ts,
-        types: new Set([entry.type]),
-        maturity: new Set([entry.maturity])
+        types: new Set([entry.type])
       });
       continue;
     }
     bucket.recurrence += frequency;
     bucket.entryCount += 1;
     bucket.types.add(entry.type);
-    bucket.maturity.add(entry.maturity);
     if (entry.severity === "critical") {
       bucket.severity = "critical";
     } else if (entry.severity === "important" && bucket.severity !== "critical") {
@@ -294,8 +289,7 @@ export function computeCompoundReadiness(
       qualification: criticalOverride && !meetsRecurrence ? "critical_override" : "recurrence",
       ...(bucket.severity ? { severity: bucket.severity } : {}),
       lastSeenTs: bucket.lastSeenTs,
-      types: Array.from(bucket.types).sort(),
-      maturity: Array.from(bucket.maturity).sort()
+      types: Array.from(bucket.types).sort()
     });
   }
 
@@ -345,19 +339,21 @@ const KNOWLEDGE_REQUIRED_KEYS = [
   "trigger",
   "action",
   "confidence",
-  "domain",
   "stage",
   "origin_stage",
-  "origin_run",
   "frequency",
-  "universality",
-  "maturity",
   "created",
   "first_seen_ts",
   "last_seen_ts",
   "project"
 ] as const;
 const KNOWLEDGE_ALLOWED_KEYS = new Set<string>(KNOWLEDGE_REQUIRED_KEYS);
+// Legacy keys are accepted for backwards compatibility when reading historical
+// knowledge entries, but no longer required for newly materialized rows.
+KNOWLEDGE_ALLOWED_KEYS.add("domain");
+KNOWLEDGE_ALLOWED_KEYS.add("origin_run");
+KNOWLEDGE_ALLOWED_KEYS.add("universality");
+KNOWLEDGE_ALLOWED_KEYS.add("maturity");
 KNOWLEDGE_ALLOWED_KEYS.add("source");
 KNOWLEDGE_ALLOWED_KEYS.add("severity");
 KNOWLEDGE_ALLOWED_KEYS.add("supersedes");
@@ -389,22 +385,17 @@ function normalizeText(value: string): string {
 
 function dedupeKey(entry: Pick<
   KnowledgeEntry,
-  "type" | "trigger" | "action" | "domain" | "stage" | "origin_stage" | "origin_run" | "universality" | "project" | "source" | "severity" | "supersedes" | "superseded_by"
+  "type" | "trigger" | "action" | "stage" | "origin_stage" | "project" | "source" | "severity"
 >): string {
   return [
     entry.type,
     normalizeText(entry.trigger),
     normalizeText(entry.action),
-    entry.domain === null ? "null" : normalizeText(entry.domain),
     entry.stage ?? "null",
     entry.origin_stage ?? "null",
-    entry.origin_run === null ? "null" : normalizeText(entry.origin_run),
-    entry.universality,
     entry.project === null ? "null" : normalizeText(entry.project),
     entry.source === undefined || entry.source === null ? "null" : entry.source,
-    entry.severity === undefined ? "none" : entry.severity,
-    Array.isArray(entry.supersedes) ? entry.supersedes.map(normalizeText).sort().join(",") : "none",
-    entry.superseded_by === undefined ? "none" : normalizeText(entry.superseded_by)
+    entry.severity === undefined ? "none" : entry.severity
   ].join("|");
 }
 
@@ -539,7 +530,7 @@ export function validateKnowledgeEntry(
   ) {
     errors.push("severity must be one of: critical, important, suggestion.");
   }
-  if (!isNullableString(obj.domain)) {
+  if (obj.domain !== undefined && !isNullableString(obj.domain)) {
     errors.push("domain must be string or null.");
   }
   if (!isNullableStage(obj.stage)) {
@@ -549,7 +540,7 @@ export function validateKnowledgeEntry(
     errors.push(`origin_stage must be one of ${FLOW_STAGES.join(", ")} or null.`);
   }
   const originRun = obj.origin_run;
-  if (!isNullableString(originRun)) {
+  if (originRun !== undefined && !isNullableString(originRun)) {
     errors.push("origin_run must be string or null.");
   }
   if (
@@ -559,10 +550,16 @@ export function validateKnowledgeEntry(
   ) {
     errors.push("frequency must be an integer >= 1.");
   }
-  if (!KNOWLEDGE_UNIVERSALITY_SET.has(obj.universality as KnowledgeEntryUniversality)) {
+  if (
+    obj.universality !== undefined &&
+    !KNOWLEDGE_UNIVERSALITY_SET.has(obj.universality as KnowledgeEntryUniversality)
+  ) {
     errors.push("universality must be one of: project, personal, universal.");
   }
-  if (!KNOWLEDGE_MATURITY_SET.has(obj.maturity as KnowledgeEntryMaturity)) {
+  if (
+    obj.maturity !== undefined &&
+    !KNOWLEDGE_MATURITY_SET.has(obj.maturity as KnowledgeEntryMaturity)
+  ) {
     errors.push("maturity must be one of: raw, lifted-to-rule, lifted-to-enforcement.");
   }
   for (const timestampField of ["created", "first_seen_ts", "last_seen_ts"] as const) {
@@ -610,25 +607,33 @@ export function materializeKnowledgeEntry(
   const now = normalizeUtcIso(defaults.nowIso ?? nowUtcIso());
   const stage = seed.stage ?? defaults.stage ?? null;
   const originStage = seed.origin_stage ?? defaults.originStage ?? stage ?? null;
-  const originRun = seed.origin_run ?? defaults.originRun ?? null;
   const source = seed.source ?? defaults.source ?? null;
   const entry: KnowledgeEntry = {
     type: seed.type,
     trigger: seed.trigger.trim(),
     action: seed.action.trim(),
     confidence: seed.confidence,
-    domain: seed.domain ?? null,
     stage,
     origin_stage: originStage,
-    origin_run: originRun,
     frequency: seed.frequency ?? 1,
-    universality: seed.universality ?? "project",
-    maturity: seed.maturity ?? "raw",
     created: normalizeUtcIso(seed.created ?? now),
     first_seen_ts: normalizeUtcIso(seed.first_seen_ts ?? now),
     last_seen_ts: normalizeUtcIso(seed.last_seen_ts ?? now),
     project: seed.project ?? defaults.project ?? null
   };
+  if (seed.domain !== undefined) {
+    entry.domain = seed.domain;
+  }
+  const originRun = seed.origin_run ?? defaults.originRun;
+  if (originRun !== undefined) {
+    entry.origin_run = originRun;
+  }
+  if (seed.universality !== undefined) {
+    entry.universality = seed.universality;
+  }
+  if (seed.maturity !== undefined) {
+    entry.maturity = seed.maturity;
+  }
   if (seed.severity !== undefined) {
     entry.severity = seed.severity;
   }
@@ -765,20 +770,6 @@ function uniqueTokens(values: string[]): string[] {
   return [...new Set(values)];
 }
 
-function supersededTriggerSet(entries: KnowledgeEntry[]): Set<string> {
-  const superseded = new Set<string>();
-  for (const entry of entries) {
-    for (const trigger of entry.supersedes ?? []) {
-      superseded.add(normalizeText(trigger));
-    }
-  }
-  return superseded;
-}
-
-function isSupersededLearning(entry: KnowledgeEntry, supersededTriggers: Set<string>): boolean {
-  return entry.superseded_by !== undefined || supersededTriggers.has(normalizeText(entry.trigger));
-}
-
 function pathTokens(paths: string[] | undefined): string[] {
   if (!Array.isArray(paths) || paths.length === 0) return [];
   const tokens: string[] = [];
@@ -806,10 +797,7 @@ export async function selectRelevantLearnings(
       ? Math.floor(options.limit)
       : 8;
 
-  const staleTriggers = supersededTriggerSet(entries);
-  const activeEntries = entries.filter((entry) => !isSupersededLearning(entry, staleTriggers));
-
-  const ranked = activeEntries.map((entry, index) => {
+  const ranked = entries.map((entry, index) => {
     let score = 0;
 
     let stageScore = 0;
@@ -825,13 +813,10 @@ export async function selectRelevantLearnings(
     if (entry.confidence === "high") score += 2;
     if (entry.confidence === "medium") score += 1;
     if (entry.frequency >= 3) score += 1;
-    if (entry.maturity === "lifted-to-enforcement") score -= 1;
 
     const searchable = [
-      ...tokenizeText(entry.domain),
       ...tokenizeText(entry.trigger),
       ...tokenizeText(entry.action),
-      ...tokenizeText(entry.origin_run),
       ...tokenizeText(entry.project)
     ];
     const searchSet = new Set(searchable);

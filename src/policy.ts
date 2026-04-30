@@ -85,7 +85,7 @@ export async function policyChecks(projectRoot: string, options: PolicyOptions =
   const utilitySkillChecks: Array<{ file: string; needle: string; name: string }> = [
     { file: runtimeFile("skills/learnings/SKILL.md"), needle: "strict JSONL schema", name: "utility_skill:learnings:jsonl_schema" },
     { file: runtimeFile("skills/learnings/SKILL.md"), needle: "knowledge.jsonl", name: "utility_skill:learnings:jsonl_store" },
-    { file: runtimeFile("skills/learnings/SKILL.md"), needle: "type, trigger, action, confidence, domain, stage, origin_stage, origin_run, frequency, universality, maturity, created, first_seen_ts, last_seen_ts, project", name: "utility_skill:learnings:field_order" },
+    { file: runtimeFile("skills/learnings/SKILL.md"), needle: "type, trigger, action, confidence, stage, origin_stage, frequency, created, first_seen_ts, last_seen_ts, project", name: "utility_skill:learnings:field_order" },
     { file: runtimeFile("skills/learnings/SKILL.md"), needle: "## Manual Actions", name: "utility_skill:learnings:manual_actions" },
     { file: runtimeFile("skills/learnings/SKILL.md"), needle: "## HARD-GATE", name: "utility_skill:learnings:hard_gate" },
     { file: runtimeFile("commands/start.md"), needle: "## Algorithm", name: "utility_command:start:algorithm" },
@@ -117,7 +117,7 @@ export async function policyChecks(projectRoot: string, options: PolicyOptions =
     { file: runtimeFile("skills/using-cclaw/SKILL.md"), needle: "## Task classification", name: "meta_skill:task_classification" },
     { file: runtimeFile("skills/using-cclaw/SKILL.md"), needle: "## Stage quick map", name: "meta_skill:stage_quick_map" },
     { file: runtimeFile("skills/using-cclaw/SKILL.md"), needle: "## Whole flow map", name: "meta_skill:whole_flow_map" },
-    { file: runtimeFile("skills/using-cclaw/SKILL.md"), needle: "retro -> compound -> archive", name: "meta_skill:closeout_chain" },
+    { file: runtimeFile("skills/using-cclaw/SKILL.md"), needle: "post_ship_review -> archive", name: "meta_skill:closeout_chain" },
     { file: runtimeFile("skills/using-cclaw/SKILL.md"), needle: "## Contextual Skill Activation", name: "meta_skill:contextual_skills" },
     { file: runtimeFile("skills/using-cclaw/SKILL.md"), needle: "## Protocol Behavior", name: "meta_skill:protocol_behavior" },
     { file: runtimeFile("skills/using-cclaw/SKILL.md"), needle: "## Failure guardrails", name: "meta_skill:failure_guardrails" },

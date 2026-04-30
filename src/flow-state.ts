@@ -45,14 +45,13 @@ export interface RetroState {
 /**
  * Ship closeout substate machine.
  *
- * After ship completes, cclaw auto-chains retro → compound → archive.
+ * After ship completes, cclaw auto-chains post-ship review → archive.
  * Each step is interruptible: `/cc` reads `shipSubstate` and resumes
  * from the correct step even across sessions.
  *
  * - `idle` — ship not complete, or closeout not yet started.
- * - `retro_review` — 09-retro.md draft exists; awaiting user edit/accept/skip.
- * - `compound_review` — retro accepted; compound pass awaiting execution
- *   (or user skip).
+ * - `post_ship_review` — unified closeout leg: retro acceptance/edit/skip
+ *   plus compound pass execution (or explicit skip).
  * - `ready_to_archive` — retro + compound done; archive is the next
  *   automatic step.
  * - `archived` — archive completed in this session (transient — archive
@@ -68,8 +67,7 @@ export interface RetroState {
  */
 export const SHIP_SUBSTATES = [
   "idle",
-  "retro_review",
-  "compound_review",
+  "post_ship_review",
   "ready_to_archive",
   "archived"
 ] as const;
@@ -119,7 +117,7 @@ export interface FlowState {
   rewinds: RewindRecord[];
   /** Mandatory retrospective gate status before archive. */
   retro: RetroState;
-  /** Ship → retro → compound → archive substate for resumable closeout. */
+  /** Ship → post_ship_review → archive substate for resumable closeout. */
   closeout: CloseoutState;
 }
 

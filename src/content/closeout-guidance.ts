@@ -5,7 +5,7 @@
  * contracts, skills, and stage/docs surfaces.
  */
 
-export const CLOSEOUT_CHAIN = "retro -> compound -> archive";
+export const CLOSEOUT_CHAIN = "post_ship_review -> archive";
 export const CLOSEOUT_SUBSTATE_KEY = "closeout.shipSubstate";
 
 export function closeoutChainInline(): string {
@@ -23,18 +23,17 @@ export function closeoutNextCommandGuidance(): string {
 export function closeoutSubstateProtocolBullets(): string {
   return `When \`currentStage === "ship"\`, route by **${closeoutSubstateInline()}**:
   - \`"idle"\` or missing -> outcome: initialize closeout by setting
-    ${closeoutSubstateInline()} = \`"retro_review"\`, then continue \`/cc\`
+    ${closeoutSubstateInline()} = \`"post_ship_review"\`, then continue \`/cc\`
     into the in-stage retro protocol (draft + one structured accept/edit/skip ask).
-  - \`"retro_review"\` -> outcome: finish retro acceptance/edit/skip and advance
-    closeout; the draft already exists, so continue it and do not regenerate it.
-  - \`"compound_review"\` -> outcome: execute the in-stage compound closeout scan
-    (not \`ce:compound\`) and advance toward archive readiness:
+  - \`"post_ship_review"\` -> outcome: execute the unified post-ship closeout leg
+    (retro acceptance/edit/skip + in-stage compound scan, not \`ce:compound\`)
+    and advance toward archive readiness:
     read \`.cclaw/state/compound-readiness.json\` plus the relevant tail of
     \`.cclaw/knowledge.jsonl\`, assess overlap before adding duplicate knowledge,
     separate bug-track learnings (turn into rules/tests/remediation) from
-    knowledge-track learnings (durable project/process guidance), and use
-    lightweight \`supersedes\` / \`superseded_by\` fields when refreshing stale or
-    partially replaced entries. Optionally ask whether to scan Cursor/Claude/Codex
+    knowledge-track learnings (durable project/process guidance), and refresh stale
+    guidance in place instead of introducing extra lineage metadata. Optionally ask
+    whether to scan Cursor/Claude/Codex
     session transcripts for matching historical learnings; only do it after opt-in.
     Ask **one** structured question (apply / skip) per candidate cluster or a
     single accept-all / skip choice, then advance substate.
@@ -44,9 +43,9 @@ export function closeoutSubstateProtocolBullets(): string {
 }
 
 export function closeoutFlowMapSentence(): string {
-  return `The first stage names are the critical path. \`retro\`, \`compound\`, and \`archive\` are post-ship closeout substates under ${closeoutSubstateInline()}, not separate stage schemas or commands. Continue them with \`/cc\`; do not route compound closeout through \`ce:compound\`.`;
+  return `The first stage names are the critical path. \`post_ship_review\` and \`archive\` are post-ship closeout substates under ${closeoutSubstateInline()}, not separate stage schemas or commands. Continue them with \`/cc\`; do not route compound closeout through \`ce:compound\`.`;
 }
 
 export function closeoutProtocolBehaviorSentence(): string {
-  return `Keep decision, completion, and preamble discipline inline: ask only decision-changing questions, verify gates before advancing, and keep context compact. After \`ship\`, keep using \`/cc\` through ${closeoutChainInline()}; do not route normal closeout through \`ce:compound\` or a separate operations command. In compound closeout, assess overlap before appending knowledge: refresh recurring bug-track learnings as actionable rules/tests, keep knowledge-track learnings as durable process/project guidance, and mark outdated entries with lightweight \`supersedes\` / \`superseded_by\` fields instead of building a new doc system.`;
+  return `Keep decision, completion, and preamble discipline inline: ask only decision-changing questions, verify gates before advancing, and keep context compact. After \`ship\`, keep using \`/cc\` through ${closeoutChainInline()}; do not route normal closeout through \`ce:compound\` or a separate operations command. Inside \`post_ship_review\`, assess overlap before appending knowledge: refresh recurring bug-track learnings as actionable rules/tests and keep knowledge-track learnings as durable process/project guidance without extra lineage metadata.`;
 }

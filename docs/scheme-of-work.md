@@ -4,7 +4,7 @@ This is cclaw's canonical human-readable flow contract. Generated prompts and co
 
 ## Contract Summary
 
-cclaw is a file-backed flow runtime for coding agents. The controller starts from `/cc <idea>`, writes state and artifacts under `.cclaw/`, advances with `/cc`, exposes recovery through `/cc-view status`, and closes every shipped run through `retro -> compound -> archive`.
+cclaw is a file-backed flow runtime for coding agents. The controller starts from `/cc <idea>`, writes state and artifacts under `.cclaw/`, advances with `/cc`, exposes recovery through `/cc-view status`, and closes every shipped run through `post_ship_review -> archive`.
 
 A run is healthy when the operator can see `Current`, `Blocked by`, `Next`, and `Evidence needed` in plain English.
 
@@ -36,7 +36,7 @@ flowchart TD
   complete -->|no| resume["Resume current stage skill"]
   complete -->|yes| advance["Advance to configured successor"]
   advance --> ship["ship"]
-  ship --> closeout["retro -> compound -> archive"]
+  ship --> closeout["post_ship_review -> archive"]
 ```
 
 Canonical critical-path stages are `brainstorm`, `scope`, `design`, `spec`, `plan`, `tdd`, `review`, and `ship`.
@@ -62,11 +62,10 @@ Every stage has a generated skill, a stage artifact, required gates, artifact va
 Ship is not the end of the run. When `ship` is complete, `/cc` continues the closeout chain using `closeout.shipSubstate` inside `.cclaw/state/flow-state.json`.
 
 ```text
-idle -> retro_review -> compound_review -> ready_to_archive -> archived
+idle -> post_ship_review -> ready_to_archive -> archived
 ```
 
-- `retro_review`: draft or continue `09-retro.md`, then ask accept/edit/skip once.
-- `compound_review`: scan `.cclaw/knowledge.jsonl` and readiness state for recurring learnings; promote, refresh, supersede, or skip.
+- `post_ship_review`: draft or continue `09-retro.md`, ask accept/edit/skip once, then run compound scan over `.cclaw/knowledge.jsonl` and readiness state (promote/refresh/supersede/skip).
 - `ready_to_archive`: run archive, snapshot state/artifacts, and reset active flow.
 - `archived`: report that the run is archived and stop.
 
@@ -200,7 +199,6 @@ The registry in `src/content/reference-patterns.ts` names the adopted patterns. 
 | `.cclaw/state/flow-state.json` | Single-writer state for current stage, track, gate catalog, stale markers, closeout substate, and active run id. |
 | `.cclaw/state/delegation-log.json` | Worker/overseer dispatch lifecycle, terminal statuses, fulfillment modes, waivers, and evidence refs. |
 | `.cclaw/state/rewind-log.jsonl` | Managed rewind records and stale-stage recovery history. |
-| `.cclaw/state/reconciliation-notices.json` | Pre-advance warnings when runtime evidence disagrees with gate state. |
 | `.cclaw/state/ralph-loop.json` | TDD progress indicator only; not a hard gate. |
 | `.cclaw/state/early-loop.json` | Brainstorm/scope/design producer-critic status (open concerns, convergence guard, iteration cap). |
 | `.cclaw/state/compound-readiness.json` | Closeout readiness and compound promotion input. |
@@ -240,7 +238,7 @@ Quick track keeps safety gates while removing ceremony stages.
 | TDD traceability gate | `tdd_traceable_to_plan` required (plan task linkage) | `tdd_traceable_to_plan` removed; traceability points to spec acceptance item or bug reproduction slice |
 | TDD safety gates | required | unchanged core + wave-9 evidence gates (`tdd_test_discovery_complete`, `tdd_impact_check_complete`, `tdd_red_test_written`, `tdd_green_full_suite`, `tdd_refactor_completed`, `tdd_verified_before_complete`, `tdd_iron_law_acknowledged`, `tdd_watched_red_observed`, `tdd_slice_cycle_complete`, `tdd_docs_drift_check`) |
 | Review / ship gates | required | unchanged |
-| Closeout chain | `retro -> compound -> archive` | unchanged |
+| Closeout chain | `post_ship_review -> archive` | unchanged |
 
 Implementation note: quick-mode TDD removes only the plan-trace gate via stage-schema filtering; safety gates remain blocking.
 
@@ -251,7 +249,6 @@ Implementation note: quick-mode TDD removes only the plan-trace gate via stage-s
 | Blocker | Detection source | Why blocked | Next action | Evidence to unblock |
 |---|---|---|---|---|
 | Stale stage marker | `flow-state.json.staleStages[currentStage]` | current stage was rewound and must be redone | redo stage work, then `cclaw internal rewind --ack <stage>` | refreshed artifact + ack |
-| Reconciliation notice | `.cclaw/state/reconciliation-notices.json` for active run + blocked gate | derived gate state disagrees with evidence | `npx cclaw-cli sync` | gate no longer blocked |
 | Mandatory delegation missing proof | `.cclaw/state/delegation-log.json` | required role lacks terminal evidence/waiver | dispatch role or waive with rationale in completion helper | completed/waived row with required proof fields |
 | Expansion strategist missing proof | scope artifact selects `SCOPE EXPANSION` / `SELECTIVE EXPANSION` but no completed `product-strategist` row for active run | expansion mode must include explicit strategic challenge evidence | run `product-strategist` pass and record delegation completion with evidence refs | `Expansion Strategist Delegation` finding passes |
 | Spec self-review missing | blocked gate `spec_self_review_complete` or `Spec Self-Review Coverage` finding fails | spec cannot hand off to plan without explicit placeholder/consistency/scope/ambiguity pass | fill `## Spec Self-Review`, apply fixes, rerun stage-complete | `spec_self_review_complete` passes |

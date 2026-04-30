@@ -27,12 +27,10 @@ const STATE_SNAPSHOT_EXCLUDE = new Set<string>([
 ]);
 const DELEGATION_LOG_FILE = "delegation-log.json";
 const TDD_CYCLE_LOG_FILE = "tdd-cycle-log.jsonl";
-const RECONCILIATION_NOTICES_FILE = "reconciliation-notices.json";
 const CRITICAL_STATE_SNAPSHOT_FILES = new Set<string>([
   "flow-state.json",
   DELEGATION_LOG_FILE,
-  TDD_CYCLE_LOG_FILE,
-  RECONCILIATION_NOTICES_FILE
+  TDD_CYCLE_LOG_FILE
 ]);
 
 export interface CclawRunMeta {
@@ -164,11 +162,6 @@ async function resetCarryoverStateFiles(projectRoot: string, activeRunId: string
     { mode: 0o600 }
   );
   await writeFileSafe(path.join(stateDir, TDD_CYCLE_LOG_FILE), "", { mode: 0o600 });
-  await writeFileSafe(
-    path.join(stateDir, RECONCILIATION_NOTICES_FILE),
-    `${JSON.stringify({ schemaVersion: 1, notices: [] }, null, 2)}\n`,
-    { mode: 0o600 }
-  );
 }
 
 async function restoreStateSnapshot(projectRoot: string, archiveStatePath: string): Promise<void> {

@@ -21,14 +21,6 @@ export interface RetroGateStatus {
   skipped: boolean;
 }
 
-// Fallback window for compound-entry scanning when `retroDraftedAt` /
-// `retroAcceptedAt` are not set (legacy runs or imports): use the retro
-// artifact's mtime ± 7 days. 24h was too narrow for long-running retros
-// that are edited over several days or runs imported from another
-// machine with slightly different clocks; 7 days is still tight enough
-// that entries from an unrelated future run are excluded.
-const RETRO_ARTIFACT_MTIME_FALLBACK_WINDOW_MS = 7 * 24 * 60 * 60 * 1000;
-
 function parseIsoTimestamp(value: string | undefined): number | null {
   if (!value || value.trim().length === 0) return null;
   const parsed = Date.parse(value);
@@ -64,22 +56,6 @@ export async function evaluateRetroGate(
   let windowStartMs = parseIsoTimestamp(state.closeout.retroDraftedAt);
   let windowEndMs =
     parseIsoTimestamp(state.closeout.retroAcceptedAt) ?? parseIsoTimestamp(state.retro.completedAt);
-  if (
-    hasRetroArtifact &&
-    windowStartMs === null &&
-    windowEndMs === null
-  ) {
-    try {
-      const stats = await fs.stat(artifactFile);
-      const anchor = stats.mtimeMs;
-      if (Number.isFinite(anchor) && anchor > 0) {
-        windowStartMs = anchor - RETRO_ARTIFACT_MTIME_FALLBACK_WINDOW_MS;
-        windowEndMs = anchor + RETRO_ARTIFACT_MTIME_FALLBACK_WINDOW_MS;
-      }
-    } catch {
-      // fallback scan remains disabled when mtime cannot be read
-    }
-  }
   const shouldScanCompoundEvidence = windowStartMs !== null || windowEndMs !== null;
   if (shouldScanCompoundEvidence) {
     const countIfEligible = (parsed: {
@@ -103,31 +79,9 @@ export async function evaluateRetroGate(
       return source === "retro" || legacyRetroStage ? 1 : 0;
     };
     try {
-      const knowledgeFile = path.join(projectRoot, RUNTIME_ROOT, "knowledge.jsonl");
       const { entries } = await readKnowledgeSafely(projectRoot);
       for (const parsed of entries) {
         compoundEntries += countIfEligible(parsed);
-      }
-
-      // Backward compatibility for historical/hand-edited rows that don't pass
-      // strict knowledge schema validation but still carry retro evidence.
-      if (compoundEntries === 0 && (await exists(knowledgeFile))) {
-        const raw = stripBom(await fs.readFile(knowledgeFile, "utf8"));
-        for (const line of raw.split(/\r?\n/)) {
-          const trimmed = line.trim();
-          if (!trimmed) continue;
-          try {
-            const parsed = JSON.parse(trimmed) as {
-              type?: unknown;
-              source?: unknown;
-              stage?: unknown;
-              created?: unknown;
-            };
-            compoundEntries += countIfEligible(parsed);
-          } catch {
-            // ignore malformed lines for retro gate calculation
-          }
-        }
       }
     } catch {
       compoundEntries = 0;

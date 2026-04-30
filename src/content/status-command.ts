@@ -96,7 +96,7 @@ a read-only command.
 
 - Keep output compact (≤ 40 lines) — status, not narrative.
 - Start with the same operator rows as \`/cc\` when possible:
-  \`Current\`, \`Stage\`, \`Progress\`, \`Gates\`, \`Delegations\`, \`Risks\`, \`Blocked by\`, \`Next\`, \`Evidence needed\`. Use labels like \`gate: tdd_green_full_suite\`, \`delegation proof: reviewer evidenceRefs\`, and \`closeout: compound_review\` instead of raw JSON tone.
+  \`Current\`, \`Stage\`, \`Progress\`, \`Gates\`, \`Delegations\`, \`Risks\`, \`Blocked by\`, \`Next\`, \`Evidence needed\`. Use labels like \`gate: tdd_green_full_suite\`, \`delegation proof: reviewer evidenceRefs\`, and \`closeout: post_ship_review\` instead of raw JSON tone.
 - When blocked, include a plain-English action block:
   \`Current: <stage or closeout substate>\`; \`Blocked by: <gate/delegation/blocker code>\`; \`Next: <exact command or managed remediation>\`; \`Evidence needed: <artifact/test/review/delegation evidence>\`.
 - Report counts, not full artifact contents. Include active subagent count from \`${subagentsPath()}\` and proof gaps from \`${delegationEventsPath()}\` when present. Convert gate/delegation state into human labels: \`passed\`, \`blocked\`, \`missing proof\`, \`waived with reason\`, \`stale\`, \`ready to advance\`, or the closeout substate label.
@@ -105,12 +105,12 @@ a read-only command.
 
 ## Anti-patterns
 
-- Rebuilding trace-matrix or running sync from \`/cc-view status\` — those belong to dedicated tools.
+- Re-running heavy artifact workflows from \`/cc-view status\` — status is read-only and should not trigger sync or mutation paths.
 - Treating absence of delegation log as "all delegations complete".
 - Collapsing \`◎ missing-evidence\` into \`✓ completed\` — role-switch gaps must stay
   visible so the stage cannot advance silently.
 - Omitting the closeout row when \`shipSubstate !== "idle"\`; it is the only signal
-  that tells the user why \`/cc\` is about to run retro/compound/archive.
+  that tells the user why \`/cc\` is about to run post-ship closeout/archive.
 - Mutating state to "clean up" during a status check.
 `;
 }

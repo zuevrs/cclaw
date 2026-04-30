@@ -197,7 +197,7 @@ ${JSON.stringify({
     expect(lowercaseSelected).toEqual([]);
   });
 
-  it("suppresses learnings superseded directly or by replacement entries", async () => {
+  it("keeps legacy supersession metadata rows during relevance scoring", async () => {
     const root = await createTempProject("knowledge-select-supersession");
     const knowledgeDir = path.join(root, ".cclaw");
     await fs.mkdir(knowledgeDir, { recursive: true });
@@ -246,7 +246,11 @@ ${JSON.stringify({
       diffFiles: ["src/auth/logging.ts"]
     });
 
-    expect(selected.map((entry) => entry.trigger)).toEqual(["new auth logging guidance"]);
+    expect(selected.map((entry) => entry.trigger)).toEqual([
+      "old auth logging workaround",
+      "new auth logging guidance",
+      "legacy auth redaction rule"
+    ]);
   });
 
 });

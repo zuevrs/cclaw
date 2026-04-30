@@ -219,7 +219,7 @@ export const REFERENCE_PATTERNS: ReferencePattern[] = [
           "Review source-item coverage by vertical slice, not by file count alone.",
           "A slice is review-ready only when RED, GREEN, REFACTOR, and verification evidence all line up."
         ],
-        artifactSections: ["Completeness Snapshot", "Trace Matrix Check"]
+        artifactSections: ["Completeness Snapshot", "Coverage Check"]
       }
     ]
   },
@@ -366,7 +366,7 @@ export const REFERENCE_PATTERNS: ReferencePattern[] = [
       {
         stage: "review",
         guidance: [
-          "Victory Detector: Layer 1, Layer 2, security sweep, structured findings, and trace evidence are complete with no unresolved criticals unless verdict is BLOCKED.",
+          "Victory Detector: Layer 1, Layer 2, security sweep, structured findings, and acceptance/reproduction coverage evidence are complete with no unresolved criticals unless verdict is BLOCKED.",
           "If the detector fails, iterate findings or route back to TDD; do not say LGTM."
         ],
         artifactSections: ["Review Readiness Snapshot", "Final Verdict"]

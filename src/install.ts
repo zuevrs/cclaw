@@ -18,7 +18,7 @@ import {
 } from "./config.js";
 import { learnSkillMarkdown } from "./content/learnings.js";
 import { stageCommandShimMarkdown } from "./content/stage-command.js";
-import { ideaCommandContract, ideaCommandSkillMarkdown } from "./content/idea-command.js";
+import { ideaCommandContract, ideaCommandSkillMarkdown } from "./content/idea.js";
 import { startCommandContract, startCommandSkillMarkdown } from "./content/start-command.js";
 import { viewCommandContract, viewCommandSkillMarkdown } from "./content/view-command.js";
 import { cancelCommandContract, cancelCommandSkillMarkdown } from "./content/cancel-command.js";

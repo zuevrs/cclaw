@@ -1165,9 +1165,7 @@ process.stdout.write(JSON.stringify({ hook: process.argv[2] }) + "\\n");
     const evidence = Object.fromEntries(
       passed.map((gateId) => [
         gateId,
-        gateId === "review_trace_matrix_clean"
-          ? "npm test PASS"
-          : `evidence for ${gateId}`
+        `evidence for ${gateId}`
       ])
     );
 

@@ -16,7 +16,7 @@
                                                                                   +--------+      +------+
                                                                                                       |
                                                                                                       v
-                                                                                         retro -> compound -> archive
+                                                                                         post_ship_review -> archive
 ```
 
 The promise is simple: at any point you can ask **where are we, what is blocked, what evidence exists, and what should run next?**
@@ -90,7 +90,7 @@ That gives you:
    npx cclaw-cli sync
 
 5. Close out after ship
-   /cc continues retro -> compound -> archive
+   /cc continues post_ship_review -> archive
 ```
 
 Tracks keep the flow proportional:
@@ -164,7 +164,7 @@ Enforced by generated helpers and state checks:
 - Mandatory delegations need terminal evidence or explicit waiver.
 - Stale stages block until redone and acknowledged.
 - Review criticals route back to TDD.
-- Ship continues through `retro -> compound -> archive` with `closeout.shipSubstate`.
+- Ship continues through `post_ship_review -> archive` with `closeout.shipSubstate`.
 
 Advisory/model-guided:
 

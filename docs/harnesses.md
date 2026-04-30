@@ -190,7 +190,7 @@ Critical-path stage order remains canonical:
 `brainstorm -> scope -> design -> spec -> plan -> tdd -> review -> ship`
 
 Every track then closes out through:
-`retro -> compound -> archive`
+`post_ship_review -> archive`
 
 ## Stage -> skill folder mapping
 

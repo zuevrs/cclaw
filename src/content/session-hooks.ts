@@ -67,7 +67,7 @@ When resuming work after a break:
 
 ### Optional session-history scan for compound
 
-During post-ship \`compound_review\`, ask before scanning external session history. If the user opts in, inspect only relevant Cursor/Claude/Codex transcripts for repeated failures or process lessons, summarize matches, and then apply the same overlap/refresh/supersede rules before touching \`.cclaw/knowledge.jsonl\`.
+During post-ship \`post_ship_review\`, ask before scanning external session history. If the user opts in, inspect only relevant Cursor/Claude/Codex transcripts for repeated failures or process lessons, summarize matches, and then apply the same overlap/refresh/supersede rules before touching \`.cclaw/knowledge.jsonl\`.
 
 ## Context Management
 

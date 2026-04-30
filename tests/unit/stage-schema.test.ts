@@ -1055,18 +1055,6 @@ describe("stage schema and subagent alignment", () => {
     }
   });
 
-  it("review trace matrix gate is required on standard and recommended on quick", () => {
-    const reviewStandard = stageSchema("review", "standard");
-    const reviewQuick = stageSchema("review", "quick");
-    const standardGate = reviewStandard.requiredGates.find((gate) => gate.id === "review_trace_matrix_clean");
-    const quickGate = reviewQuick.requiredGates.find((gate) => gate.id === "review_trace_matrix_clean");
-
-    expect(standardGate).toBeDefined();
-    expect(standardGate?.tier).toBe("required");
-    expect(quickGate).toBeDefined();
-    expect(quickGate?.tier).toBe("recommended");
-  });
-
   it("brainstorm example is a valid artifact when copy-pasted verbatim", async () => {
     const inlinePointer = stageExamples("brainstorm");
     expect(inlinePointer).toContain("Shape cues to follow");

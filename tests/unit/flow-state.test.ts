@@ -92,8 +92,7 @@ describe("flow state", () => {
   it("exposes the full shipSubstate machine", () => {
     expect(SHIP_SUBSTATES).toEqual([
       "idle",
-      "retro_review",
-      "compound_review",
+      "post_ship_review",
       "ready_to_archive",
       "archived"
     ]);

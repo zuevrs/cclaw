@@ -235,7 +235,7 @@ describe("runs system", () => {
     const base = createInitialFlowState("active");
     // Hand-crafted tampered flow-state: ready_to_archive without any
     // retroAcceptedAt / retroSkipped. The sanitizer must demote to
-    // retro_review on read so the archive gate blocks.
+    // post_ship_review on read so the archive gate blocks.
     const statePath = path.join(root, ".cclaw/state/flow-state.json");
     const tampered = {
       ...base,
@@ -249,25 +249,7 @@ describe("runs system", () => {
     await fs.writeFile(statePath, `${JSON.stringify(tampered, null, 2)}\n`, "utf8");
 
     const read = await readFlowState(root);
-    expect(read.closeout.shipSubstate).toBe("retro_review");
-    const notices = JSON.parse(
-      await fs.readFile(path.join(root, ".cclaw/state/reconciliation-notices.json"), "utf8")
-    ) as {
-      notices?: Array<{
-        runId?: string;
-        kind?: string;
-        gateId?: string;
-        payload?: { previous?: string; next?: string; reason?: string };
-      }>;
-    };
-    const demotionNotice = notices.notices?.find((notice) =>
-      notice.runId === read.activeRunId &&
-      notice.kind === "closeout_substate_demotion"
-    );
-    expect(demotionNotice?.gateId).toBe("closeout.shipSubstate");
-    expect(demotionNotice?.payload?.previous).toBe("ready_to_archive");
-    expect(demotionNotice?.payload?.next).toBe("retro_review");
-    expect(demotionNotice?.payload?.reason).toContain("retro closeout leg is incomplete");
+    expect(read.closeout.shipSubstate).toBe("post_ship_review");
     await expect(archiveRun(root, "Tampered Closeout")).rejects.toThrow(/ready_to_archive/i);
   });
 
@@ -289,7 +271,7 @@ describe("runs system", () => {
     await fs.writeFile(statePath, `${JSON.stringify(tampered, null, 2)}\n`, "utf8");
 
     const read = await readFlowState(root);
-    expect(read.closeout.shipSubstate).toBe("compound_review");
+    expect(read.closeout.shipSubstate).toBe("post_ship_review");
     await expect(archiveRun(root, "Compound Tampered")).rejects.toThrow(/ready_to_archive/i);
   });
 
@@ -337,7 +319,7 @@ describe("runs system", () => {
     );
 
     const read = await readFlowState(root);
-    expect(read.closeout.shipSubstate).toBe("compound_review");
+    expect(read.closeout.shipSubstate).toBe("post_ship_review");
     await expect(archiveRun(root, "Compound Blocked")).rejects.toThrow(/ready_to_archive/i);
   });
 
@@ -353,7 +335,7 @@ describe("runs system", () => {
         completedStages: ["brainstorm", "scope", "design", "spec", "plan", "tdd", "review", "ship"],
         closeout: {
           ...base.closeout,
-          shipSubstate: "compound_review",
+          shipSubstate: "post_ship_review",
           retroSkipped: true,
           retroSkipReason: "small release, no retro",
           retroAcceptedAt: "2026-01-01T00:00:00Z"
@@ -563,7 +545,7 @@ describe("runs system", () => {
     await expect(archiveRun(root, "Retro Window Scope")).rejects.toThrow(/retro gate/i);
   });
 
-  it("falls back to retro artifact mtime window when closeout timestamps are missing", async () => {
+  it("does not infer retro window from artifact mtime when closeout timestamps are missing", async () => {
     const root = await createTempProject("runs-retro-mtime-fallback");
     await ensureRunSystem(root);
     const base = createInitialFlowState("active");
@@ -611,8 +593,9 @@ describe("runs system", () => {
     const state = await readFlowState(root);
     const retroGate = await evaluateRetroGate(root, state);
     expect(retroGate.required).toBe(true);
-    expect(retroGate.completed).toBe(true);
-    expect(retroGate.compoundEntries).toBeGreaterThanOrEqual(1);
+    expect(retroGate.completed).toBe(false);
+    expect(retroGate.compoundEntries).toBe(0);
+    await expect(archiveRun(root, "Retro Mtime Fallback Removed")).rejects.toThrow(/ready_to_archive/i);
   });
 
   it("lists archived run folders", async () => {
@@ -720,30 +703,12 @@ describe("runs system", () => {
       `${JSON.stringify({ sliceId: "S-1", phase: "RED", ts: "2026-04-16T00:00:02.000Z" })}\n`,
       "utf8"
     );
-    await fs.writeFile(
-      path.join(root, ".cclaw/state/reconciliation-notices.json"),
-      JSON.stringify({
-        schemaVersion: 1,
-        notices: [
-          {
-            id: "active:brainstorm:brainstorm_context_explored:2026-04-16T00:00:03.000Z",
-            runId: "active",
-            stage: "brainstorm",
-            gateId: "brainstorm_context_explored",
-            reason: "demoted from passed to blocked during gate reconciliation (missing evidence)",
-            demotedAt: "2026-04-16T00:00:03.000Z"
-          }
-        ]
-      }, null, 2),
-      "utf8"
-    );
     const archived = await archiveRun(root, "Search Revamp");
 
     expect(archived.snapshottedStateFiles).toContain("flow-state.json");
     expect(archived.snapshottedStateFiles).toContain("delegation-log.json");
     expect(archived.snapshottedStateFiles).toContain("stage-activity.jsonl");
     expect(archived.snapshottedStateFiles).toContain("tdd-cycle-log.jsonl");
-    expect(archived.snapshottedStateFiles).toContain("reconciliation-notices.json");
     for (const name of archived.snapshottedStateFiles) {
       expect(name.startsWith(".flow-state.lock")).toBe(false);
       expect(name.startsWith(".delegation.lock")).toBe(false);
@@ -758,10 +723,6 @@ describe("runs system", () => {
       await fs.readFile(path.join(snapshotDir, "delegation-log.json"), "utf8")
     );
     expect(delegationSnap.entries[0].agent).toBe("planner");
-    const reconciliationSnap = JSON.parse(
-      await fs.readFile(path.join(snapshotDir, "reconciliation-notices.json"), "utf8")
-    ) as { notices: Array<{ gateId: string }> };
-    expect(reconciliationSnap.notices[0]?.gateId).toBe("brainstorm_context_explored");
 
     const manifestPath = path.join(archived.archivePath, "archive-manifest.json");
     const manifest = JSON.parse(await fs.readFile(manifestPath, "utf8"));
@@ -791,11 +752,6 @@ describe("runs system", () => {
 
     const resetTddLog = await fs.readFile(path.join(root, ".cclaw/state/tdd-cycle-log.jsonl"), "utf8");
     expect(resetTddLog).toBe("");
-    const resetReconciliation = JSON.parse(
-      await fs.readFile(path.join(root, ".cclaw/state/reconciliation-notices.json"), "utf8")
-    ) as { schemaVersion: number; notices: unknown[] };
-    expect(resetReconciliation.schemaVersion).toBe(1);
-    expect(resetReconciliation.notices).toEqual([]);
   });
 
   it("evaluateRetroGate reports retroSkipped=true as completed skipped retro", async () => {
@@ -838,7 +794,7 @@ describe("runs system", () => {
 
     const persisted = await readFlowState(root);
     expect(persisted.closeout.retroSkipped).toBeUndefined();
-    expect(persisted.closeout.shipSubstate).toBe("retro_review");
+    expect(persisted.closeout.shipSubstate).toBe("post_ship_review");
 
     const status = await evaluateRetroGate(root, state);
     expect(status.required).toBe(true);

@@ -377,7 +377,7 @@ describe("flow command contracts", () => {
     for (const label of ["standard:", "medium:", "quick:"]) {
       expect(metaSkill).toContain(label);
     }
-    expect(metaSkill).toContain("retro -> compound -> archive");
+    expect(metaSkill).toContain("post_ship_review -> archive");
 
   });
 
@@ -566,7 +566,7 @@ describe("flow command contracts", () => {
 
     expect(reviewTemplate).toContain("active track's upstream source item");
     expect(reviewTemplate).toContain("N/A - direct spec/reproduction coverage");
-    expect(reviewTemplate).toContain("direct AC/reproduction-slice coverage");
+    expect(reviewTemplate).toContain("AC/source-item/slice coverage rationale");
     for (const phrase of ["05-plan.md", "Plan task IDs", "Task coverage", "orphaned tasks", "Do not invent a plan task"]) {
       expect(tddTemplate, `TDD template leaked ${phrase}`).not.toContain(phrase);
       expect(reviewTemplate, `review template leaked ${phrase}`).not.toContain(phrase);

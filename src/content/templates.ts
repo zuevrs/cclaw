@@ -1119,7 +1119,7 @@ Execution rule: complete and verify each batch before starting the next batch.
 
 ## Review Readiness Snapshot
 
-- Victory Detector: pass | fail (Layer 1, Layer 2, security sweep, structured findings, trace evidence, unresolved-critical status)
+- Victory Detector: pass | fail (Layer 1, Layer 2, security sweep, structured findings, acceptance/reproduction coverage evidence, unresolved-critical status)
 - Completed checks: Layer 1, Layer 2 tags, security sweep, schema validation
 - Delegation log: \`.cclaw/state/delegation-log.json\` required/completed/waived/pending
 - Staleness signal: commit at last review pass vs current commit
@@ -1134,11 +1134,10 @@ Execution rule: complete and verify each batch before starting the next batch.
 - Adversarial review: not triggered | pass | fail
 - Overall: complete | concerns | blocked
 
-## Trace Matrix Check
-- Command: \`npx cclaw-cli internal trace-matrix\` when the active track enforces it; otherwise record direct AC/reproduction-slice coverage.
-- Orphaned criteria: 0
-- Orphaned source items: 0 or \`N/A - direct spec/reproduction coverage\`
-- Orphaned tests: 0
+## Coverage Check
+- AC/source-item/slice coverage rationale:
+- Orphaned source items: none | explain gap
+- Orphaned tests: none | explain gap
 - Evidence ref:
 
 ## Verification Command Discovery

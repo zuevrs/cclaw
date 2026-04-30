@@ -41,7 +41,7 @@ Never mutate state from \`/cc-view diff\`. It is a read-only inspection command.
 - The command must not create or update any \`.cclaw/state/*.snapshot*\` file.
 - Do not suppress removed values; removals are first-class evidence.
 - Closeout diff lines must use the same \`shipSubstate\` vocabulary as the
-  state machine (\`idle\` / \`retro_review\` / \`compound_review\` /
+  state machine (\`idle\` / \`post_ship_review\` /
   \`ready_to_archive\` / \`archived\`).
 `;
 }
