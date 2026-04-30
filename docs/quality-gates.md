@@ -77,6 +77,7 @@ flowchart LR
 | `## Synthesis Sources` | ≥1 populated source row (synthesize, don't interview) | evanflow PRD Step 1 | `evanklem-evanflow/skills/evanflow-prd/SKILL.md` |
 | `## Behavior Contract` | ≥3 behaviors in `As a/I can/so that` or `Given/When/Then` form, or `- None.` | evanflow PRD + universal behavior frame | `evanklem-evanflow/skills/evanflow-prd/SKILL.md` |
 | `## Architecture Modules` | No code fences, no function/class signatures (modules listed by responsibility only) | evanflow "no code in spec" rule | `evanklem-evanflow/skills/evanflow-prd/SKILL.md` |
+| Single-subsystem scope heuristic | Recommended warning when `Architecture Modules` lists >5 named modules (split into sub-specs / narrow scope before plan handoff) | superpowers spec-review focus (`single plan`) | `obra-superpowers/skills/brainstorming/spec-document-reviewer-prompt.md` |
 | `## Spec Self-Review` | All four checks present: placeholder / consistency / scope / ambiguity | superpowers Spec Self-Review | `obra-superpowers/skills/brainstorming/SKILL.md` |
 
 ### Plan (`05-plan.md`)
@@ -85,6 +86,8 @@ flowchart LR
 |---|---|---|---|
 | `## Plan Header` | `Goal:` / `Architecture:` / `Tech Stack:` lines present | superpowers `writing-plans` header | `obra-superpowers/skills/writing-plans/SKILL.md` |
 | `### Implementation Unit U-<n>` | Each unit includes Goal / Files / Approach / Test scenarios / Verification | ce-plan §3.5 + superpowers tasks | `everyinc-compound/.../ce-plan/SKILL.md`, `obra-superpowers/skills/writing-plans/SKILL.md` |
+| `## Calibrated Findings` | Recommended: `None this stage` or canonical lines `[P1\|P2\|P3] (confidence: <n>/10) <path>[:<line>] — <description>` | gstack calibrated findings discipline | `gstack/plan-eng-review/SKILL.md` |
+| `## Regression Iron Rule` | Recommended: `Iron rule acknowledged: yes` | gstack regression discipline | `gstack/plan-eng-review/SKILL.md` |
 | Plan-wide placeholder scan | Forbidden tokens (`TBD`, `TODO`, `FIXME`, etc.) outside the rule section | superpowers NO PLACEHOLDERS | `obra-superpowers/skills/writing-plans/SKILL.md` |
 | `## Execution Handoff` | Posture declared (Subagent-Driven or Inline executor) | superpowers Execution Handoff | `obra-superpowers/skills/writing-plans/SKILL.md` |
 
@@ -93,9 +96,12 @@ flowchart LR
 | Section | What the linter checks | Source pattern | Source reference |
 |---|---|---|---|
 | `## Iron Law Acknowledgement` | `Acknowledged: yes` line | superpowers Iron Law | `obra-superpowers/skills/test-driven-development/SKILL.md` |
-| `## Watched-RED Proof` | Each populated row includes an ISO timestamp | superpowers "watch it fail" | `obra-superpowers/skills/test-driven-development/SKILL.md` |
+| `## Watched-RED Proof` | At least one populated row; each populated row includes an ISO timestamp | superpowers "watch it fail" | `obra-superpowers/skills/test-driven-development/SKILL.md` |
 | `## Vertical Slice Cycle` | Each row references RED, GREEN, REFACTOR | evanflow vertical slices | `evanklem-evanflow/skills/evanflow-tdd/SKILL.md` |
 | `## Assertion Correctness Notes` | At least one populated row when new assertions exist | evanflow assertion-correctness warning | `evanklem-evanflow/skills/evanflow-tdd/SKILL.md` |
+| `## TDD Blocker Taxonomy` | Recommended blocked-state classification uses canonical classes (`NO_SOURCE_CONTEXT`, `NO_TEST_SURFACE`, `NO_IMPLEMENTABLE_SLICE`, `RED_NOT_EXPRESSIBLE`, `NO_VCS_MODE`) with resume contract fields | cclaw TDD blocker taxonomy | `src/content/stages/tdd.ts` |
+| `## Per-Slice Review` | Recommended when `sliceReview` triggers: Spec-Compliance + Quality passes with trigger and fulfillment mode | cclaw sliceReview contract | `src/content/stages/tdd.ts` |
+| Mock preference heuristic | Recommended warning when mock/spy tokens appear without explicit trust-boundary justification (prefer Real > Fake > Stub > Mock) | addyosmani + superpowers testing anti-patterns | `addyosmani-skills/skills/test-driven-development/SKILL.md`, `obra-superpowers/skills/test-driven-development/testing-anti-patterns.md` |
 
 ### Review (`07-review.md`)
 
@@ -136,8 +142,8 @@ flowchart TD
   S[Scope<br/>Implementation Alternatives + Failure Modes + Reversibility]
   D[Design<br/>ASCII Coverage Diagram + Regression Iron Rule + Calibrated Findings]
   SP[Spec<br/>Synthesis Sources + Behavior Contract + Architecture Modules]
-  P[Plan<br/>Plan Header + Implementation Units + Execution Handoff]
-  T[TDD<br/>Iron Law + Watched-RED Proof + Vertical Slice Cycle]
+  P[Plan<br/>Plan Header + ImplementationUnits + CalibratedFindings + RegressionIronRule]
+  T[TDD<br/>Iron Law + Watched-RED Proof + Vertical Slice Cycle + Per-Slice Review]
   R[Review<br/>Frame + Critic Subagent + Receiving Posture]
   SH[Ship<br/>Verify Tests Gate + 4 Options + Structured PR Body]
 

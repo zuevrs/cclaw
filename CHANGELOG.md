@@ -1,5 +1,24 @@
 # Changelog
 
+## 0.54.0
+
+### Added
+
+- Added wave-9 TDD evidence enforcement: `Iron Law Acknowledgement`, `Watched-RED Proof`, and `Vertical Slice Cycle` are now required stage gates/sections; template now includes `Per-Slice Review` and `TDD Blocker Taxonomy`; lint adds a `Mock Preference Heuristic` recommendation when mocks/spies appear without explicit trust-boundary justification.
+- Added wave-9 spec strengthening: `Spec Self-Review` is now a required gate/section, spec lint emits a `Single-Subsystem Scope` recommendation when `Architecture Modules` grows beyond one coherent subsystem boundary, and a proactive `spec-document-reviewer` specialist is available for plan-readiness review.
+- Added wave-9 plan review structure: plan schema/template now supports recommended `Calibrated Findings` and `Regression Iron Rule` sections, with dedicated lint findings for canonical format and acknowledgement.
+
+### Changed
+
+- Promoted `Synthesis Sources`, `Behavior Contract`, and `Architecture Modules` into explicit spec artifact-validation rows (recommended) so schema/docs align with existing lint checks.
+- Promoted `Implementation Units` into an explicit plan artifact-validation row (recommended) to match existing shape checks.
+
+### Removed
+
+- Removed spec template sections `Testing Strategy` and `Reviewer Concerns (convergence guard)` as orphaned/duplicative scaffolding.
+- Removed plan template sections `High-Level Technical Design` and `Plan Self-Review` in favor of upstream design ownership plus calibrated/iron-rule review sections.
+- Removed TDD template sections `Anti-Rationalization Checks` and `Learning Capture Hint` after promoting stronger required evidence sections.
+
 ## 0.53.0
 
 ### Added
