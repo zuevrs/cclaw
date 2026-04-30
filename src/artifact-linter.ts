@@ -3016,7 +3016,12 @@ export async function lintArtifact(
         "Open questions"
       ];
       const missing = required.filter(
-        (token) => !new RegExp(token.replace(":", "\\s*:"), "iu").test(frameBody)
+        (token) => {
+          const escaped = token
+            .replace(/[.*+?^${}()|[\]\\]/gu, "\\$&")
+            .replace(/\\:/gu, "\\s*:");
+          return !new RegExp(escaped, "iu").test(frameBody);
+        }
       );
       findings.push({
         section: "Pre-Critic Self-Review Coverage",

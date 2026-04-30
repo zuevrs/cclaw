@@ -7,6 +7,8 @@
 - Simplified stage templates and validation contracts across brainstorm/scope/design/plan/review: merged plan scans into `Plan Quality Scan`, merged review pre-critic framing into `Pre-Critic Self-Review`, and replaced deep design triple-diagram sections with one `Deep Diagram Add-on` section that accepts `state-machine` or `rollback-flowchart` or `deployment-sequence` markers.
 - Updated design diagram requirement enforcement to support the merged deep add-on marker contract while preserving standard-tier architecture/data-flow/error-flow requirements.
 - Demoted `Vague to Fixed` (spec) and `Assertion Correctness Notes` (tdd) to template-only optional guidance (no schema-level artifact-validation row).
+- Unified generated helper runtime bootstrapping: `stage-complete.mjs` now reuses the shared `internalHelperScript()` with a required positional `<stage>` argument.
+- Slimmed iron-law skill output to focus full detail on the two runtime hook-enforced laws (`stop-clean-or-handoff`, `review-coverage-complete-before-ship`), while listing remaining laws as stage-owned advisory items.
 
 ### Removed
 
@@ -15,6 +17,8 @@
 - Removed retired scope sections/checks for `Failure Modes Registry`, `Reversibility Rating`, `Dream State Mapping`, and `Temporal Interrogation`.
 - Removed retired design sections/checks for `ASCII Coverage Diagram`, plus orphaned design/review `Learning Capture Hint` blocks.
 - Removed orphaned design template sections `Regression Iron Rule` and `Calibrated Findings` (plan retains the canonical versions).
+- Removed unused seed-shelf runtime module/test pair (`src/content/seed-shelf.ts`, `tests/unit/seed-shelf.test.ts`) while preserving user-facing `.cclaw/seeds/` guidance in templates.
+- Removed diagnostic-only `cclaw internal hook-manifest` command and its unit test surface.
 
 ## 0.54.0
 

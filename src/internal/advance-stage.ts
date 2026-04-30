@@ -35,7 +35,6 @@ import { archiveRun, readFlowState, writeFlowState } from "../runs.js";
 import type { ArchiveDisposition } from "../runs.js";
 import { FLOW_STAGES, TRACK_STAGES, type FlowStage, type FlowTrack } from "../types.js";
 import { runCompoundReadinessCommand } from "./compound-readiness.js";
-import { runHookManifestCommand } from "./hook-manifest.js";
 import { runEnvelopeValidateCommand } from "./envelope-validate.js";
 import { runTddLoopStatusCommand } from "./tdd-loop-status.js";
 import { runEarlyLoopStatusCommand } from "./early-loop-status.js";
@@ -1990,7 +1989,7 @@ export async function runInternalCommand(
   const [subcommand, ...tokens] = argv;
   if (!subcommand) {
     io.stderr.write(
-      "cclaw internal requires a subcommand: advance-stage | start-flow | cancel-run | rewind | verify-flow-state-diff | verify-current-state | envelope-validate | tdd-red-evidence | tdd-loop-status | early-loop-status | compound-readiness | runtime-integrity | hook-manifest | hook\n"
+      "cclaw internal requires a subcommand: advance-stage | start-flow | cancel-run | rewind | verify-flow-state-diff | verify-current-state | envelope-validate | tdd-red-evidence | tdd-loop-status | early-loop-status | compound-readiness | runtime-integrity | hook\n"
     );
     return 1;
   }
@@ -2032,14 +2031,11 @@ export async function runInternalCommand(
     if (subcommand === "runtime-integrity") {
       return await runRuntimeIntegrityCommand(projectRoot, tokens, io);
     }
-    if (subcommand === "hook-manifest") {
-      return await runHookManifestCommand(projectRoot, tokens, io);
-    }
     if (subcommand === "hook") {
       return await runHookCommand(projectRoot, parseHookArgs(tokens), io);
     }
     io.stderr.write(
-      `Unknown internal subcommand: ${subcommand}. Expected advance-stage | start-flow | cancel-run | rewind | verify-flow-state-diff | verify-current-state | envelope-validate | tdd-red-evidence | tdd-loop-status | early-loop-status | compound-readiness | runtime-integrity | hook-manifest | hook\n`
+      `Unknown internal subcommand: ${subcommand}. Expected advance-stage | start-flow | cancel-run | rewind | verify-flow-state-diff | verify-current-state | envelope-validate | tdd-red-evidence | tdd-loop-status | early-loop-status | compound-readiness | runtime-integrity | hook\n`
     );
     return 1;
   } catch (err) {

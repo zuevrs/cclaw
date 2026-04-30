@@ -3,7 +3,7 @@ import path from "node:path";
 import { RUNTIME_ROOT } from "./constants.js";
 import { conversationLanguagePolicyMarkdown } from "./content/language-policy.js";
 import { CCLAW_AGENTS, agentMarkdown } from "./content/core-agents.js";
-import { ironLawsAgentsMdBlock } from "./content/iron-laws.js";
+import { IRON_LAWS } from "./content/iron-laws.js";
 import { ensureDir, exists, writeFileSafe } from "./fs-utils.js";
 import { type HarnessId } from "./types.js";
 
@@ -444,6 +444,37 @@ export function harnessesByTier(): HarnessId[] {
     const tierOrder = { tier1: 0, tier2: 1, tier3: 2 };
     return tierOrder[harnessTier(a)] - tierOrder[harnessTier(b)];
   });
+}
+
+function ironLawsAgentsMdBlock(): string {
+  const enforcedLawIds = new Set([
+    "stop-clean-or-handoff",
+    "review-coverage-complete-before-ship"
+  ]);
+  const enforcedRows = IRON_LAWS
+    .filter((law) => enforcedLawIds.has(law.id))
+    .map((law) => `| \`${law.id}\` | ${law.rule} | ${law.enforcement} |`)
+    .join("\n");
+  const advisoryRows = IRON_LAWS
+    .filter((law) => !enforcedLawIds.has(law.id))
+    .map((law) => {
+      const appliesTo = law.appliesTo === "all" ? "all stages" : law.appliesTo.join(", ");
+      return `- \`${law.id}\` (applies to: ${appliesTo})`;
+    })
+    .join("\n");
+
+  return `### Iron Laws
+
+These rules are always-on. The hook-enforced runtime laws are:
+
+| ID | Rule | Enforced by |
+|---|---|---|
+${enforcedRows}
+
+Advisory laws are stage-owned through each stage's HARD-GATE block:
+
+${advisoryRows}
+`;
 }
 
 function agentsMdBlock(): string {
