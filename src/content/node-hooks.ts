@@ -132,6 +132,10 @@ const EARLY_LOOP_ENABLED = ${JSON.stringify(earlyLoopEnabled)};
 const EARLY_LOOP_MAX_ITERATIONS = ${JSON.stringify(earlyLoopMaxIterations)};
 const CCLAW_CLI_ENTRYPOINT = ${JSON.stringify(cliRuntime.entrypoint)};
 const CCLAW_CLI_ARGS_PREFIX = ${JSON.stringify(cliRuntime.argsPrefix)};
+const SESSION_DIGEST_SCHEMA_VERSION = 1;
+const SESSION_DIGEST_CACHE_FILE = "session-digest.json";
+const SESSION_DIGEST_REFRESH_MARKER_FILE = "session-digest.refresh.json";
+const SESSION_DIGEST_REFRESH_STALE_MS = 30000;
 
 ${SHARED_FLOW_AND_KNOWLEDGE_SNIPPETS}
 ${SHARED_STAGE_SUPPORT_SNIPPETS}
@@ -557,9 +561,10 @@ function hookEventNameForOutput(hookName) {
   if (hookName === "session-start") return "SessionStart";
   if (hookName === "prompt-guard") return "PreToolUse";
   if (hookName === "workflow-guard") return "PreToolUse";
+  if (hookName === "pre-tool-pipeline") return "PreToolUse";
+  if (hookName === "prompt-pipeline") return "UserPromptSubmit";
   if (hookName === "context-monitor") return "PostToolUse";
   if (hookName === "stop-handoff") return "Stop";
-  if (hookName === "pre-compact") return "PreCompact";
   if (hookName === "verify-current-state") return "UserPromptSubmit";
   return "SessionStart";
 }
@@ -968,6 +973,205 @@ async function readFlowState(root) {
   };
 }
 
+async function readFileMtimeMs(filePath) {
+  try {
+    const stat = await fs.stat(filePath);
+    if (!stat.isFile()) return 0;
+    return Math.trunc(stat.mtimeMs);
+  } catch {
+    return 0;
+  }
+}
+
+function parseNumericMs(value) {
+  return typeof value === "number" && Number.isFinite(value)
+    ? Math.trunc(value)
+    : -1;
+}
+
+async function readSessionDigestLines(stateDir, state, flowStateMtimeMs) {
+  const cachePath = path.join(stateDir, SESSION_DIGEST_CACHE_FILE);
+  const cache = toObject(await readJsonFile(cachePath, {})) || {};
+  const cachedMtimeMs = parseNumericMs(cache.flowStateMtimeMs);
+  const sameStage = typeof cache.currentStage === "string" ? cache.currentStage === state.currentStage : true;
+  const sameRun = typeof cache.activeRunId === "string" ? cache.activeRunId === state.activeRunId : true;
+  const fresh = cachedMtimeMs === flowStateMtimeMs && sameStage && sameRun;
+  if (!fresh) {
+    return {
+      ralphLoopLine: "",
+      earlyLoopLine: "",
+      compoundReadinessLine: "",
+      fresh: false
+    };
+  }
+  return {
+    ralphLoopLine: typeof cache.ralphLoopLine === "string" ? cache.ralphLoopLine : "",
+    earlyLoopLine: typeof cache.earlyLoopLine === "string" ? cache.earlyLoopLine : "",
+    compoundReadinessLine: typeof cache.compoundReadinessLine === "string" ? cache.compoundReadinessLine : "",
+    fresh: true
+  };
+}
+
+async function refreshSessionDigestCache(root, state, flowStateMtimeMs) {
+  const stateDir = path.join(root, RUNTIME_ROOT, "state");
+  let ralphLoopLine = "";
+  let earlyLoopLine = "";
+  let compoundReadinessLine = "";
+
+  if (state.currentStage === "tdd") {
+    try {
+      const internalRalph = await runCclawInternal(
+        root,
+        ["tdd-loop-status", "--json", "--write"],
+        { captureStdout: true }
+      );
+      if (internalRalph.code !== 0) {
+        throw new Error(summarizeInternalFailure("tdd-loop-status", internalRalph));
+      }
+      const ralphStatus = parseJsonStdoutObject(internalRalph);
+      if (!ralphStatus) {
+        throw new Error("tdd-loop-status returned empty or malformed JSON");
+      }
+      ralphLoopLine = formatRalphLoopStatusLineFromJson(ralphStatus);
+    } catch (err) {
+      await recordHookError(
+        root,
+        "session-start:ralph-loop",
+        err instanceof Error ? err.message : String(err)
+      );
+    }
+  }
+  if (
+    EARLY_LOOP_ENABLED &&
+    (state.currentStage === "brainstorm" || state.currentStage === "scope" || state.currentStage === "design")
+  ) {
+    try {
+      const internalEarly = await runCclawInternal(
+        root,
+        [
+          "early-loop-status",
+          "--json",
+          "--write",
+          "--stage",
+          state.currentStage,
+          "--run-id",
+          state.activeRunId
+        ],
+        { captureStdout: true }
+      );
+      if (internalEarly.code !== 0) {
+        throw new Error(summarizeInternalFailure("early-loop-status", internalEarly));
+      }
+      const earlyLoopStatus = parseJsonStdoutObject(internalEarly);
+      if (!earlyLoopStatus) {
+        throw new Error("early-loop-status returned empty or malformed JSON");
+      }
+      earlyLoopLine = formatEarlyLoopStatusLineFromJson(earlyLoopStatus);
+    } catch (err) {
+      await recordHookError(
+        root,
+        "session-start:early-loop",
+        err instanceof Error ? err.message : String(err)
+      );
+    }
+  }
+
+  try {
+    const shouldShowReadiness = state.currentStage === "review" || state.currentStage === "ship";
+    const internalReadiness = await runCclawInternal(
+      root,
+      shouldShowReadiness ? ["compound-readiness"] : ["compound-readiness", "--quiet"],
+      { captureStdout: true }
+    );
+    if (internalReadiness.code !== 0) {
+      throw new Error(summarizeInternalFailure("compound-readiness", internalReadiness));
+    }
+    if (shouldShowReadiness) {
+      compoundReadinessLine = firstStdoutLine(internalReadiness.stdout);
+    }
+  } catch (err) {
+    await recordHookError(
+      root,
+      "session-start:compound-readiness",
+      err instanceof Error ? err.message : String(err)
+    );
+  }
+
+  const digestPath = path.join(stateDir, SESSION_DIGEST_CACHE_FILE);
+  await writeJsonFile(digestPath, {
+    schemaVersion: SESSION_DIGEST_SCHEMA_VERSION,
+    generatedAt: new Date().toISOString(),
+    flowStateMtimeMs,
+    currentStage: state.currentStage,
+    activeRunId: state.activeRunId,
+    ralphLoopLine,
+    earlyLoopLine,
+    compoundReadinessLine
+  });
+}
+
+async function scheduleSessionDigestRefresh(runtime, state, flowStateMtimeMs) {
+  if (flowStateMtimeMs <= 0) return;
+  const stateDir = path.join(runtime.root, RUNTIME_ROOT, "state");
+  const digestPath = path.join(stateDir, SESSION_DIGEST_CACHE_FILE);
+  const markerPath = path.join(stateDir, SESSION_DIGEST_REFRESH_MARKER_FILE);
+
+  const cache = toObject(await readJsonFile(digestPath, {})) || {};
+  const cachedMtimeMs = parseNumericMs(cache.flowStateMtimeMs);
+  if (cachedMtimeMs === flowStateMtimeMs) return;
+
+  const marker = toObject(await readJsonFile(markerPath, {})) || {};
+  const markerMtimeMs = parseNumericMs(marker.flowStateMtimeMs);
+  const markerStartedAtMs = parseNumericMs(marker.startedAtMs);
+  const markerFresh =
+    markerMtimeMs === flowStateMtimeMs &&
+    markerStartedAtMs > 0 &&
+    Date.now() - markerStartedAtMs < SESSION_DIGEST_REFRESH_STALE_MS;
+  if (markerFresh) return;
+
+  await writeJsonFile(markerPath, {
+    flowStateMtimeMs,
+    startedAtMs: Date.now(),
+    currentStage: state.currentStage,
+    activeRunId: state.activeRunId
+  });
+
+  try {
+    const child = spawn(process.execPath, [process.argv[1], "session-start-refresh"], {
+      cwd: runtime.root,
+      stdio: "ignore",
+      windowsHide: true,
+      detached: true,
+      env: {
+        ...process.env,
+        CCLAW_PROJECT_ROOT: runtime.root,
+        CCLAW_BG_WORKER: "1"
+      }
+    });
+    child.unref();
+  } catch (err) {
+    await fs.rm(markerPath, { force: true }).catch(() => undefined);
+    await recordHookError(
+      runtime.root,
+      "session-start:spawn-refresh",
+      err instanceof Error ? err.message : String(err)
+    );
+  }
+}
+
+async function handleSessionStartRefresh(runtime) {
+  const state = await readFlowState(runtime.root);
+  const stateDir = path.join(runtime.root, RUNTIME_ROOT, "state");
+  const markerPath = path.join(stateDir, SESSION_DIGEST_REFRESH_MARKER_FILE);
+  try {
+    const flowStateMtimeMs = await readFileMtimeMs(state.filePath);
+    await refreshSessionDigestCache(runtime.root, state, flowStateMtimeMs);
+  } finally {
+    await fs.rm(markerPath, { force: true }).catch(() => undefined);
+  }
+  return 0;
+}
+
 
 async function buildKnowledgeDigest(root, currentStage, prereadRaw) {
   const knowledgeFile = path.join(root, RUNTIME_ROOT, "knowledge.jsonl");
@@ -1031,101 +1235,23 @@ async function handleSessionStart(runtime) {
   );
   const knowledge = await buildKnowledgeDigest(runtime.root, state.currentStage, knowledgeRaw);
 
-  // Refresh Ralph Loop status each session-start so /cc and the model
-  // both read a consistent "iter=N, acClosed=[...]" snapshot. Runs only when
-  // we are in tdd — other stages skip the write to keep the file stable.
-  let ralphLoopLine = "";
-  let earlyLoopLine = "";
-  if (state.currentStage === "tdd") {
-    try {
-      const internalRalph = await runCclawInternal(
-        runtime.root,
-        ["tdd-loop-status", "--json", "--write"],
-        { captureStdout: true }
-      );
-      if (internalRalph.code !== 0) {
-        throw new Error(summarizeInternalFailure("tdd-loop-status", internalRalph));
-      }
-      const ralphStatus = parseJsonStdoutObject(internalRalph);
-      if (!ralphStatus) {
-        throw new Error("tdd-loop-status returned empty or malformed JSON");
-      }
-      ralphLoopLine = formatRalphLoopStatusLineFromJson(ralphStatus);
-    } catch (err) {
-      // Best-effort — a malformed cycle log should never break
-      // session-start. But we DO leave a breadcrumb in
-      // hook-errors.jsonl so \`npx cclaw-cli sync\` can surface chronic
-      // failures (previously this was a silent swallow).
-      await recordHookError(
-        runtime.root,
-        "session-start:ralph-loop",
-        err instanceof Error ? err.message : String(err)
-      );
-    }
+  // Fast path: read precomputed status lines from session-digest cache.
+  // If cache is stale, schedule a debounced background refresh so this hook
+  // returns quickly inside harness startup.
+  const flowStateMtimeMs = await readFileMtimeMs(state.filePath);
+  const forceSyncRefresh =
+    normalizeText(process.env.CCLAW_SESSION_START_BG_SYNC).toLowerCase() === "1" ||
+    ["1", "true", "yes"].includes(normalizeText(process.env.VITEST).toLowerCase());
+  let sessionDigest = await readSessionDigestLines(stateDir, state, flowStateMtimeMs);
+  if (forceSyncRefresh && flowStateMtimeMs > 0) {
+    await refreshSessionDigestCache(runtime.root, state, flowStateMtimeMs);
+    sessionDigest = await readSessionDigestLines(stateDir, state, flowStateMtimeMs);
+  } else if (!sessionDigest.fresh) {
+    await scheduleSessionDigestRefresh(runtime, state, flowStateMtimeMs);
   }
-  if (
-    EARLY_LOOP_ENABLED &&
-    (state.currentStage === "brainstorm" || state.currentStage === "scope" || state.currentStage === "design")
-  ) {
-    try {
-      const internalEarly = await runCclawInternal(
-        runtime.root,
-        [
-          "early-loop-status",
-          "--json",
-          "--write",
-          "--stage",
-          state.currentStage,
-          "--run-id",
-          state.activeRunId
-        ],
-        { captureStdout: true }
-      );
-      if (internalEarly.code !== 0) {
-        throw new Error(summarizeInternalFailure("early-loop-status", internalEarly));
-      }
-      const earlyLoopStatus = parseJsonStdoutObject(internalEarly);
-      if (!earlyLoopStatus) {
-        throw new Error("early-loop-status returned empty or malformed JSON");
-      }
-      earlyLoopLine = formatEarlyLoopStatusLineFromJson(earlyLoopStatus);
-    } catch (err) {
-      await recordHookError(
-        runtime.root,
-        "session-start:early-loop",
-        err instanceof Error ? err.message : String(err)
-      );
-    }
-  }
-
-  // Keep compound-readiness.json fresh on every session-start (cheap derived
-  // summary). Surface a one-line nudge only from review and ship stages
-  // where lifting becomes relevant; earlier stages update the file silently.
-  let compoundReadinessLine = "";
-  try {
-    const shouldShowReadiness = state.currentStage === "review" || state.currentStage === "ship";
-    const internalReadiness = await runCclawInternal(
-      runtime.root,
-      shouldShowReadiness ? ["compound-readiness"] : ["compound-readiness", "--quiet"],
-      { captureStdout: true }
-    );
-    if (internalReadiness.code !== 0) {
-      throw new Error(summarizeInternalFailure("compound-readiness", internalReadiness));
-    }
-    if (shouldShowReadiness) {
-      compoundReadinessLine = firstStdoutLine(internalReadiness.stdout);
-    }
-  } catch (err) {
-    // Best-effort — a malformed knowledge.jsonl must never break
-    // session-start. But we DO leave a breadcrumb in
-    // hook-errors.jsonl so config/IO problems become visible in
-    // \`npx cclaw-cli sync\` instead of silently degrading readiness output.
-    await recordHookError(
-      runtime.root,
-      "session-start:compound-readiness",
-      err instanceof Error ? err.message : String(err)
-    );
-  }
+  const ralphLoopLine = sessionDigest.ralphLoopLine;
+  const earlyLoopLine = sessionDigest.earlyLoopLine;
+  const compoundReadinessLine = sessionDigest.compoundReadinessLine;
 
   const ironLawsObj = toObject(await readJsonFile(ironLawsFile, {})) || {};
   const laws = Array.isArray(ironLawsObj.laws) ? ironLawsObj.laws : [];
@@ -1140,6 +1266,15 @@ async function handleSessionStart(runtime) {
     });
   const staleStages = toObject(state.raw.staleStages) || {};
   const staleStageNames = Object.keys(staleStages);
+  const interactionHints = toObject(state.raw.interactionHints) || {};
+  const stageInteractionHint = toObject(interactionHints[state.currentStage]);
+  const skipQuestionsHintActive = stageInteractionHint?.skipQuestions === true;
+  const skipQuestionsSource = typeof stageInteractionHint?.sourceStage === "string"
+    ? stageInteractionHint.sourceStage
+    : "";
+  const skipQuestionsRecordedAt = typeof stageInteractionHint?.recordedAt === "string"
+    ? stageInteractionHint.recordedAt
+    : "";
   const metaContent = (await readTextFile(metaSkillFile, "")).trim();
   const stageSupportContext = await readStageSupportContext(runtime.root, state.currentStage);
 
@@ -1170,6 +1305,14 @@ async function handleSessionStart(runtime) {
       "Stale stages pending acknowledgement: " +
         staleStageNames.join(", ") +
         " (use npx cclaw-cli internal rewind --ack <stage> after redo)."
+    );
+  }
+  if (skipQuestionsHintActive) {
+    parts.push(
+      "Adaptive elicitation hint: this stage inherits a prior user stop signal (--skip-questions" +
+        (skipQuestionsSource ? " from " + skipQuestionsSource : "") +
+        (skipQuestionsRecordedAt ? " at " + skipQuestionsRecordedAt : "") +
+        "). Draft with available context unless irreversible/security override checks still require explicit confirmation."
     );
   }
   if (knowledge.digestLines.length > 0) {
@@ -1281,10 +1424,6 @@ async function handleStopHandoff(runtime) {
   }
 
   runtime.writeJson({ systemMessage: message });
-  return 0;
-}
-
-async function handlePreCompact(_runtime) {
   return 0;
 }
 
@@ -1789,15 +1928,38 @@ async function handleVerifyCurrentState(runtime) {
   return 0;
 }
 
+async function handlePreToolPipeline(runtime) {
+  const promptExitCode = await handlePromptGuard(runtime);
+  if (promptExitCode !== 0) {
+    return promptExitCode;
+  }
+  return await handleWorkflowGuard(runtime);
+}
+
+async function handlePromptPipeline(runtime) {
+  const promptExitCode = await handlePromptGuard(runtime);
+  if (promptExitCode !== 0) {
+    return promptExitCode;
+  }
+  const verifyExitCode = await handleVerifyCurrentState(runtime);
+  if (verifyExitCode !== 0) {
+    return verifyExitCode;
+  }
+  runtime.writeJson({ ok: true });
+  return 0;
+}
+
 function normalizeHookName(rawName) {
   const value = normalizeText(rawName).toLowerCase();
   if (value === "session-start") return "session-start";
+  if (value === "session-start-refresh") return "session-start-refresh";
   if (value === "stop-handoff" || value === "stop") return "stop-handoff";
   if (value === "stop-checkpoint") return "stop-handoff";
-  if (value === "pre-compact" || value === "precompact") return "pre-compact";
   if (value === "session-rehydrate") return "session-start";
   if (value === "prompt-guard") return "prompt-guard";
   if (value === "workflow-guard") return "workflow-guard";
+  if (value === "pre-tool-pipeline" || value === "pretool-pipeline") return "pre-tool-pipeline";
+  if (value === "prompt-pipeline" || value === "promptpipeline") return "prompt-pipeline";
   if (value === "context-monitor") return "context-monitor";
   if (value === "verify-current-state") return "verify-current-state";
   return "";
@@ -1809,7 +1971,7 @@ async function main() {
     process.stderr.write(
       "[cclaw] run-hook: usage: node " +
         RUNTIME_ROOT +
-        "/hooks/run-hook.mjs <session-start|stop-handoff|pre-compact|prompt-guard|workflow-guard|context-monitor|verify-current-state>\\n"
+        "/hooks/run-hook.mjs <session-start|session-start-refresh|stop-handoff|prompt-guard|workflow-guard|pre-tool-pipeline|prompt-pipeline|context-monitor|verify-current-state>\\n"
     );
     process.exitCode = 1;
     return;
@@ -1841,12 +2003,12 @@ async function main() {
       process.exitCode = await handleSessionStart(runtime);
       return;
     }
-    if (hookName === "stop-handoff") {
-      process.exitCode = await handleStopHandoff(runtime);
+    if (hookName === "session-start-refresh") {
+      process.exitCode = await handleSessionStartRefresh(runtime);
       return;
     }
-    if (hookName === "pre-compact") {
-      process.exitCode = await handlePreCompact(runtime);
+    if (hookName === "stop-handoff") {
+      process.exitCode = await handleStopHandoff(runtime);
       return;
     }
     if (hookName === "prompt-guard") {
@@ -1855,6 +2017,14 @@ async function main() {
     }
     if (hookName === "workflow-guard") {
       process.exitCode = await handleWorkflowGuard(runtime);
+      return;
+    }
+    if (hookName === "pre-tool-pipeline") {
+      process.exitCode = await handlePreToolPipeline(runtime);
+      return;
+    }
+    if (hookName === "prompt-pipeline") {
+      process.exitCode = await handlePromptPipeline(runtime);
       return;
     }
     if (hookName === "context-monitor") {

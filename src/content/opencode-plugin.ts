@@ -611,12 +611,6 @@ export default function cclawPlugin(ctx) {
         eventType === "session.compacted" ||
         eventType === "session.cleared" ||
         eventType === "session.updated";
-      // session.compacted must run pre-compact BEFORE canonical rehydration,
-      // otherwise the injected system prompt can show the pre-compact
-      // digest/state until the next lifecycle event.
-      if (eventType === "session.compacted") {
-        await runHookScript("pre-compact", eventData ?? {});
-      }
       if (isSessionLifecycle) {
         // Keep OpenCode aligned with Claude/Cursor/Codex: session-start is
         // the canonical rehydrate path that refreshes derived state such as

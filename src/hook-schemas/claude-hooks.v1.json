@@ -2,12 +2,11 @@
   "$schema": "https://json-schema.org/draft/2020-12/schema",
   "$id": "cclaw://hooks/claude/v1",
   "harness": "claude",
-  "schemaVersion": 1,
+  "schemaVersion": 2,
   "requiredEvents": [
     "SessionStart",
     "PreToolUse",
     "PostToolUse",
-    "Stop",
-    "PreCompact"
+    "Stop"
   ]
 }
