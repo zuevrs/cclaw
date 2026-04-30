@@ -1,5 +1,13 @@
 # Changelog
 
+## 0.55.2
+
+### Changed
+
+- Finalized the artifact-linter split from Wave 12: moved shared helpers/validators into `src/artifact-linter/shared.ts`, moved design-only diagram drift/tier helpers into `src/artifact-linter/design.ts`, removed stage-module `// @ts-nocheck`, and slimmed `src/artifact-linter.ts` into a real orchestrator.
+- Finalized the internal advance-stage split from Wave 12: removed `src/internal/advance-stage/core.ts`, turned `src/internal/advance-stage.ts` into the real `runInternalCommand` dispatcher, and moved parser/helper/review-loop/flow-state/runners logic into dedicated modules under `src/internal/advance-stage/`.
+- Bumped package runtime version to `0.55.2` so package metadata matches the current changelog series.
+
 ## 0.55.1
 
 ### Changed
