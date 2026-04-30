@@ -11,11 +11,8 @@ import {
   SMALL_PROJECT_RECURRENCE_THRESHOLD
 } from "../knowledge-store.js";
 import {
-  HOOK_INLINE_SHARED_HELPERS,
-  COMPOUND_READINESS_INLINE_SOURCE,
-  RALPH_LOOP_INLINE_SOURCE,
-  EARLY_LOOP_INLINE_SOURCE
-} from "./hook-inline-snippets.js";
+  SHARED_STAGE_SUPPORT_SNIPPETS
+} from "./runtime-shared-snippets.js";
 
 export interface NodeHookRuntimeOptions {
   /**
@@ -134,6 +131,8 @@ const EARLY_LOOP_ENABLED = ${JSON.stringify(earlyLoopEnabled)};
 const EARLY_LOOP_MAX_ITERATIONS = ${JSON.stringify(earlyLoopMaxIterations)};
 const CCLAW_CLI_ENTRYPOINT = ${JSON.stringify(cliRuntime.entrypoint)};
 const CCLAW_CLI_ARGS_PREFIX = ${JSON.stringify(cliRuntime.argsPrefix)};
+
+${SHARED_STAGE_SUPPORT_SNIPPETS}
 
 function resolveStrictness() {
   return process.env.CCLAW_STRICTNESS === "strict" ? "strict" : DEFAULT_STRICTNESS;
@@ -476,6 +475,73 @@ async function runCclawInternal(root, args, options = {}) {
       });
     });
   });
+}
+
+function compactStderr(value) {
+  const raw = typeof value === "string" ? value : "";
+  return raw.replace(/\\s+/gu, " ").trim();
+}
+
+function summarizeInternalFailure(operation, result) {
+  const detail = compactStderr(result && typeof result === "object" ? result.stderr : "");
+  return detail.length > 0 ? operation + ": " + detail : operation + " failed";
+}
+
+function parseJsonStdoutObject(result) {
+  const raw = typeof (result && result.stdout) === "string" ? result.stdout.trim() : "";
+  if (raw.length === 0) return null;
+  try {
+    return toObject(JSON.parse(raw));
+  } catch {
+    return null;
+  }
+}
+
+function firstStdoutLine(value) {
+  const raw = typeof value === "string" ? value : "";
+  const lines = raw
+    .split(/\\r?\\n/gu)
+    .map((line) => line.trim())
+    .filter((line) => line.length > 0);
+  return lines[0] || "";
+}
+
+function formatRalphLoopStatusLineFromJson(status) {
+  const redOpenSlices = Array.isArray(status.redOpenSlices)
+    ? status.redOpenSlices.filter((value) => typeof value === "string")
+    : [];
+  const redOpen = redOpenSlices.length > 0 ? redOpenSlices.join(",") : "none";
+  const loopIteration =
+    typeof status.loopIteration === "number" && Number.isFinite(status.loopIteration)
+      ? Math.trunc(status.loopIteration)
+      : 0;
+  const sliceCount =
+    typeof status.sliceCount === "number" && Number.isFinite(status.sliceCount)
+      ? Math.trunc(status.sliceCount)
+      : 0;
+  const acClosed = Array.isArray(status.acClosed) ? status.acClosed.length : 0;
+  return "Ralph Loop: iter=" + String(loopIteration) +
+    ", slices=" + String(sliceCount) +
+    ", acClosed=" + String(acClosed) +
+    ", redOpen=" + redOpen;
+}
+
+function formatEarlyLoopStatusLineFromJson(status) {
+  const stage = typeof status.stage === "string" ? status.stage : "unknown";
+  const iteration =
+    typeof status.iteration === "number" && Number.isFinite(status.iteration)
+      ? Math.trunc(status.iteration)
+      : 0;
+  const maxIterations =
+    typeof status.maxIterations === "number" && Number.isFinite(status.maxIterations)
+      ? Math.trunc(status.maxIterations)
+      : EARLY_LOOP_MAX_ITERATIONS;
+  const openConcerns = Array.isArray(status.openConcerns) ? status.openConcerns.length : 0;
+  const convergence = status.convergenceTripped === true ? "tripped" : "clear";
+  return "Early Loop: stage=" + stage +
+    ", iter=" + String(iteration) + "/" + String(maxIterations) +
+    ", open=" + String(openConcerns) +
+    ", convergence=" + convergence;
 }
 
 function detectHarness(env) {
@@ -943,9 +1009,8 @@ async function buildKnowledgeDigest(root, currentStage, prereadRaw) {
 }
 
 async function readStageSupportContext(root, currentStage) {
-  const stage = typeof currentStage === "string" ? currentStage : "";
-  const validStages = new Set(["brainstorm", "scope", "design", "spec", "plan", "tdd", "review", "ship"]);
-  if (!validStages.has(stage)) return [];
+  if (!isKnownStageId(currentStage)) return [];
+  const stage = currentStage;
 
   const parts = [];
   const contractPath = path.join(root, RUNTIME_ROOT, "templates", "state-contracts", stage + ".json");
@@ -957,12 +1022,7 @@ async function readStageSupportContext(root, currentStage) {
     );
   }
 
-  const reviewPromptByStage = {
-    brainstorm: "brainstorm-self-review.md",
-    scope: "scope-ceo-review.md",
-    design: "design-eng-review.md"
-  };
-  const promptName = reviewPromptByStage[stage];
+  const promptName = reviewPromptFileName(stage);
   if (typeof promptName === "string") {
     const promptPath = path.join(root, RUNTIME_ROOT, "skills", "review-prompts", promptName);
     const prompt = (await readTextFile(promptPath, "")).trim();
@@ -1003,15 +1063,19 @@ async function handleSessionStart(runtime) {
   let earlyLoopLine = "";
   if (state.currentStage === "tdd") {
     try {
-      const ralphStatus = await computeRalphLoopStatusInline(stateDir, state.activeRunId);
-      await writeJsonFile(path.join(stateDir, "ralph-loop.json"), ralphStatus);
-      const redOpen = ralphStatus.redOpenSlices.length > 0
-        ? ralphStatus.redOpenSlices.join(",")
-        : "none";
-      ralphLoopLine = "Ralph Loop: iter=" + String(ralphStatus.loopIteration) +
-        ", slices=" + String(ralphStatus.sliceCount) +
-        ", acClosed=" + String(ralphStatus.acClosed.length) +
-        ", redOpen=" + redOpen;
+      const internalRalph = await runCclawInternal(
+        runtime.root,
+        ["tdd-loop-status", "--json", "--write"],
+        { captureStdout: true }
+      );
+      if (internalRalph.code !== 0) {
+        throw new Error(summarizeInternalFailure("tdd-loop-status", internalRalph));
+      }
+      const ralphStatus = parseJsonStdoutObject(internalRalph);
+      if (!ralphStatus) {
+        throw new Error("tdd-loop-status returned empty or malformed JSON");
+      }
+      ralphLoopLine = formatRalphLoopStatusLineFromJson(ralphStatus);
     } catch (err) {
       // Best-effort — a malformed cycle log should never break
       // session-start. But we DO leave a breadcrumb in
@@ -1029,14 +1093,27 @@ async function handleSessionStart(runtime) {
     (state.currentStage === "brainstorm" || state.currentStage === "scope" || state.currentStage === "design")
   ) {
     try {
-      const earlyLoopStatus = await computeEarlyLoopStatusInline(
-        stateDir,
-        state.currentStage,
-        state.activeRunId,
-        EARLY_LOOP_MAX_ITERATIONS
+      const internalEarly = await runCclawInternal(
+        runtime.root,
+        [
+          "early-loop-status",
+          "--json",
+          "--write",
+          "--stage",
+          state.currentStage,
+          "--run-id",
+          state.activeRunId
+        ],
+        { captureStdout: true }
       );
-      await writeJsonFile(path.join(stateDir, "early-loop.json"), earlyLoopStatus);
-      earlyLoopLine = formatEarlyLoopStatusLineInline(earlyLoopStatus);
+      if (internalEarly.code !== 0) {
+        throw new Error(summarizeInternalFailure("early-loop-status", internalEarly));
+      }
+      const earlyLoopStatus = parseJsonStdoutObject(internalEarly);
+      if (!earlyLoopStatus) {
+        throw new Error("early-loop-status returned empty or malformed JSON");
+      }
+      earlyLoopLine = formatEarlyLoopStatusLineFromJson(earlyLoopStatus);
     } catch (err) {
       await recordHookError(
         runtime.root,
@@ -1051,32 +1128,17 @@ async function handleSessionStart(runtime) {
   // where lifting becomes relevant; earlier stages update the file silently.
   let compoundReadinessLine = "";
   try {
-    let readiness = null;
+    const shouldShowReadiness = state.currentStage === "review" || state.currentStage === "ship";
     const internalReadiness = await runCclawInternal(
       runtime.root,
-      ["compound-readiness", "--json"],
+      shouldShowReadiness ? ["compound-readiness"] : ["compound-readiness", "--quiet"],
       { captureStdout: true }
     );
-    if (internalReadiness.code === 0 && internalReadiness.stdout.trim().length > 0) {
-      try {
-        const parsed = JSON.parse(internalReadiness.stdout);
-        if (parsed && typeof parsed === "object" && !Array.isArray(parsed)) {
-          readiness = parsed;
-        }
-      } catch {
-        readiness = null;
-      }
+    if (internalReadiness.code !== 0) {
+      throw new Error(summarizeInternalFailure("compound-readiness", internalReadiness));
     }
-    if (!readiness) {
-      const archivedRunsCount = await countArchivedRunsInline(runtime.root);
-      readiness = await computeCompoundReadinessInline(runtime.root, {
-        prereadRaw: knowledgeRaw,
-        ...(typeof archivedRunsCount === "number" ? { archivedRunsCount } : {})
-      });
-      await writeJsonFile(path.join(stateDir, "compound-readiness.json"), readiness);
-    }
-    if (state.currentStage === "review" || state.currentStage === "ship") {
-      compoundReadinessLine = formatCompoundReadinessLineInline(toObject(readiness) || {});
+    if (shouldShowReadiness) {
+      compoundReadinessLine = firstStdoutLine(internalReadiness.stdout);
     }
   } catch (err) {
     // Best-effort — a malformed knowledge.jsonl must never break
@@ -1220,7 +1282,7 @@ async function handleStopHandoff(runtime) {
   const shipSubstate = typeof closeoutObj.shipSubstate === "string" ? closeoutObj.shipSubstate : "idle";
   const closeoutContext =
     state.currentStage === "ship" || shipSubstate !== "idle"
-      ? " closeout.shipSubstate=" + shipSubstate + "; closeout chain=retro -> compound -> archive; continue closeout with /cc."
+      ? " closeout.shipSubstate=" + shipSubstate + "; closeout chain=post_ship_review -> archive; continue closeout with /cc."
       : "";
 
   const message =
@@ -1296,17 +1358,6 @@ async function handlePromptGuard(runtime) {
   }
   return 0;
 }
-
-// Inline mirrors of canonical CLI computations (compound-readiness,
-// ralph-loop, early-loop) are factored into
-// src/content/hook-inline-snippets.ts so
-// this 2000+-line file no longer owns their bodies. Each snippet carries
-// an explicit "mirrors X, parity enforced by Y" comment in the snippets
-// module. Parity is enforced by tests/unit/ralph-loop-parity.test.ts.
-${HOOK_INLINE_SHARED_HELPERS}
-${COMPOUND_READINESS_INLINE_SOURCE}
-${RALPH_LOOP_INLINE_SOURCE}
-${EARLY_LOOP_INLINE_SOURCE}
 
 async function hasFailingRedEvidenceForPath(stateDir, runId, rawPath) {
   const cycleRaw = await readTextFile(path.join(stateDir, "tdd-cycle-log.jsonl"), "");
@@ -1519,8 +1570,14 @@ async function handleWorkflowGuard(runtime) {
       // writes that actually belonged to a new, not-yet-red S-2. Now
       // we reuse the canonical Ralph Loop status: if NO slice has an
       // open RED, we block.
-      const ralphStatus = await computeRalphLoopStatusInline(stateDir, currentRun);
-      if (!ralphStatus.redOpen) {
+      const internalRalph = await runCclawInternal(
+        runtime.root,
+        ["tdd-loop-status", "--json", "--no-write"],
+        { captureStdout: true }
+      );
+      const ralphStatus = parseJsonStdoutObject(internalRalph);
+      const redOpen = internalRalph.code === 0 && ralphStatus?.redOpen === true;
+      if (!redOpen) {
         reasons.push("tdd_write_without_open_red");
       }
     }
