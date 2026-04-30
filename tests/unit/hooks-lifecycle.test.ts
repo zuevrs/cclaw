@@ -93,7 +93,7 @@ async function writeBrainstormArtifact(root: string): Promise<void> {
 - Open questions (or "None"): None
 
 ## Learnings
-- {"type":"pattern","trigger":"when stage completion runs without global cclaw","action":"invoke the generated Node stage-complete helper so learnings harvest still writes knowledge","confidence":"high","domain":"workflow","universality":"project","maturity":"raw"}
+- {"type":"pattern","trigger":"when stage completion runs without global cclaw","action":"invoke the generated Node stage-complete helper so learnings harvest still writes knowledge","confidence":"high"}
 `, "utf8");
 }
 

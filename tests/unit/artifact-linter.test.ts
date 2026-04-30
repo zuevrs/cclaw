@@ -1321,7 +1321,7 @@ describe("artifact linter heuristics", () => {
       `${completePlanArtifact(validPlanFrontmatter())}
 
 ## Learnings
-- {"type":"pattern","trigger":"when dependency batch stalls","action":"split the batch and add an intermediate verification gate","confidence":"medium","domain":"delivery","universality":"project","maturity":"raw"}
+- {"type":"pattern","trigger":"when dependency batch stalls","action":"split the batch and add an intermediate verification gate","confidence":"medium","stage":"plan","origin_stage":"plan","source":"stage"}
 `
     );
 
@@ -1347,21 +1347,12 @@ describe("artifact linter heuristics", () => {
     expect(parsed.details).toContain("field \"severity\"");
   });
 
-  it("accepts optional Learnings supersession fields", () => {
+  it("rejects removed legacy Learnings fields", () => {
     const parsed = parseLearningsSection(
-      `- {"type":"lesson","trigger":"when old guidance overlaps","action":"append a focused replacement","confidence":"medium","supersedes":["old-guidance"],"superseded_by":"new-guidance"}`
-    );
-    expect(parsed.ok).toBe(true);
-    expect(parsed.entries[0]?.supersedes).toEqual(["old-guidance"]);
-    expect(parsed.entries[0]?.superseded_by).toBe("new-guidance");
-  });
-
-  it("rejects malformed Learnings supersession fields", () => {
-    const parsed = parseLearningsSection(
-      `- {"type":"lesson","trigger":"when old guidance overlaps","action":"append a focused replacement","confidence":"medium","supersedes":[]}`
+      `- {"type":"lesson","trigger":"when old guidance overlaps","action":"append a focused replacement","confidence":"medium","domain":"workflow"}`
     );
     expect(parsed.ok).toBe(false);
-    expect(parsed.details).toContain("field \"supersedes\"");
+    expect(parsed.details).toContain("unknown key");
   });
 
   it("rejects Learnings sections that contain non-bullet lines", () => {

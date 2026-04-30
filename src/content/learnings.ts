@@ -14,9 +14,7 @@ const LEARN_SKILL_DESCRIPTION =
 
 /**
  * Canonical required JSONL field order (matches strict validator keys).
- * Optional keys (`source`, `severity`) may be appended after these required
- * fields. Legacy optional metadata keys remain accepted for backward
- * compatibility with historical rows.
+ * Optional keys (`source`, `severity`) may be appended after these required fields.
  */
 export const KNOWLEDGE_JSONL_FIELDS = [
   "type",
@@ -79,9 +77,6 @@ Do not invent alternate stores (no markdown mirror, no SQLite, no per-stage file
 Exactly one JSON object per line. Required fields must appear in the order:
 \`type, trigger, action, confidence, stage, origin_stage, frequency, created, first_seen_ts, last_seen_ts, project\`.
 Optional fields \`source\` and \`severity\` may be appended after \`project\`.
-
-Legacy optional fields (accepted for backward compatibility, not recommended for new rows):
-\`domain\`, \`origin_run\`, \`universality\`, \`maturity\`, \`supersedes\`, \`superseded_by\`.
 
 \`\`\`json
 {"type":"pattern","trigger":"when reviewing external payloads","action":"parse through zod before touching service layer","confidence":"high","stage":"review","origin_stage":"review","frequency":1,"created":"2026-04-14T12:00:00Z","first_seen_ts":"2026-04-14T12:00:00Z","last_seen_ts":"2026-04-14T12:00:00Z","project":"cclaw"}

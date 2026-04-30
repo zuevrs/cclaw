@@ -36,7 +36,10 @@ import {
   codexHooksJson,
   cursorHooksJson
 } from "./content/hooks.js";
-import { nodeHookRuntimeScript } from "./content/node-hooks.js";
+import {
+  nodeHookRuntimeScript,
+  type NodeHookRuntimeOptions
+} from "./content/node-hooks.js";
 import { META_SKILL_NAME, usingCclawSkillMarkdown } from "./content/meta-skill.js";
 import {
   ARTIFACT_TEMPLATES,
@@ -1043,6 +1046,38 @@ async function writeMergedHookJson(
   await writeFileSafe(hookFilePath, `${JSON.stringify(mergedDoc, null, 2)}\n`);
 }
 
+interface BundledRunHookModule {
+  buildRunHookRuntimeScript?: (options?: NodeHookRuntimeOptions) => string;
+  default?: (options?: NodeHookRuntimeOptions) => string;
+}
+
+async function readBundledRunHookRuntimeScript(
+  options: NodeHookRuntimeOptions
+): Promise<string | null> {
+  const bundleUrl = new URL("./runtime/run-hook.mjs", import.meta.url);
+  try {
+    await fs.stat(bundleUrl);
+  } catch {
+    return null;
+  }
+
+  try {
+    const moduleUrl = `${bundleUrl.href}?ts=${Date.now()}`;
+    const loaded = await import(moduleUrl) as BundledRunHookModule;
+    const factory = typeof loaded.buildRunHookRuntimeScript === "function"
+      ? loaded.buildRunHookRuntimeScript
+      : typeof loaded.default === "function"
+        ? loaded.default
+        : null;
+    if (!factory) return null;
+    const script = factory(options);
+    if (typeof script !== "string") return null;
+    return script.trim().length > 0 ? script : null;
+  } catch {
+    return null;
+  }
+}
+
 async function writeHooks(projectRoot: string, config: CclawConfig): Promise<void> {
   const harnesses = config.harnesses;
   const hooksDir = runtimePath(projectRoot, "hooks");
@@ -1066,14 +1101,19 @@ async function writeHooks(projectRoot: string, config: CclawConfig): Promise<voi
   await writeFileSafe(path.join(hooksDir, "stage-complete.mjs"), stageCompleteScript());
   await writeFileSafe(path.join(hooksDir, "start-flow.mjs"), startFlowScript());
   await writeFileSafe(path.join(hooksDir, "cancel-run.mjs"), cancelRunScript());
-  await writeFileSafe(path.join(hooksDir, "run-hook.mjs"), nodeHookRuntimeScript({
+  const hookRuntimeOptions: NodeHookRuntimeOptions = {
     strictness: effectiveStrictness,
     tddTestPathPatterns: config.tdd?.testPathPatterns ?? config.tddTestGlobs,
     tddProductionPathPatterns: config.tdd?.productionPathPatterns,
     compoundRecurrenceThreshold: config.compound?.recurrenceThreshold,
     earlyLoopEnabled: config.earlyLoop?.enabled,
     earlyLoopMaxIterations: config.earlyLoop?.maxIterations
-  }));
+  };
+  const bundledHookRuntime = await readBundledRunHookRuntimeScript(hookRuntimeOptions);
+  await writeFileSafe(
+    path.join(hooksDir, "run-hook.mjs"),
+    bundledHookRuntime ?? nodeHookRuntimeScript(hookRuntimeOptions)
+  );
   await writeFileSafe(path.join(hooksDir, "run-hook.cmd"), runHookCmdScript());
   await writeFileSafe(path.join(hooksDir, "delegation-record.mjs"), delegationRecordScript());
   const opencodePluginSource = opencodePluginJs();

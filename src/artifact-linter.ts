@@ -43,8 +43,6 @@ export {
   type LearningEntryType,
   type LearningConfidence,
   type LearningSeverity,
-  type LearningUniversality,
-  type LearningMaturity,
   type LearningSource,
   type LearningSeedEntry,
   type LearningsParseResult,

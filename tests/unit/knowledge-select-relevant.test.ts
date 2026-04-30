@@ -56,7 +56,7 @@ describe("selectRelevantLearnings", () => {
     });
 
     expect(selected).toHaveLength(1);
-    expect(selected[0]?.domain).toBe("auth");
+    expect(selected[0]?.trigger).toContain("auth handler");
     expect(selected[0]?.stage).toBe("review");
   });
 

@@ -1352,7 +1352,7 @@ process.stdout.write(JSON.stringify({ hook: process.argv[2] }) + "\\n");
     await ensureRunSystem(root);
     await writeBrainstormArtifact(
       root,
-      `- {"type":"pattern","trigger":"when gate evidence is missing","action":"run verify-current-state before trying to advance","confidence":"high","domain":"workflow","universality":"project","maturity":"raw"}`
+      `- {"type":"pattern","trigger":"when gate evidence is missing","action":"run verify-current-state before trying to advance","confidence":"high"}`
     );
 
     const captured = captureIo();

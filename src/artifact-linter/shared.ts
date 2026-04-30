@@ -1072,8 +1072,6 @@ export function hasVerificationLadderTableRow(sectionBody: string): boolean {
 export type LearningEntryType = "rule" | "pattern" | "lesson" | "compound";
 export type LearningConfidence = "high" | "medium" | "low";
 export type LearningSeverity = "critical" | "important" | "suggestion";
-export type LearningUniversality = "project" | "personal" | "universal";
-export type LearningMaturity = "raw" | "lifted-to-rule" | "lifted-to-enforcement";
 export type LearningSource = "stage" | "retro" | "compound" | "idea" | "manual";
 
 export interface LearningSeedEntry {
@@ -1082,20 +1080,14 @@ export interface LearningSeedEntry {
   action: string;
   confidence: LearningConfidence;
   severity?: LearningSeverity;
-  domain?: string | null;
   stage?: FlowStage | null;
   origin_stage?: FlowStage | null;
-  origin_run?: string | null;
   frequency?: number;
-  universality?: LearningUniversality;
-  maturity?: LearningMaturity;
   created?: string;
   first_seen_ts?: string;
   last_seen_ts?: string;
   project?: string | null;
   source?: LearningSource | null;
-  supersedes?: string[];
-  superseded_by?: string;
 }
 
 export interface LearningsParseResult {
@@ -1109,8 +1101,6 @@ export interface LearningsParseResult {
 export const LEARNING_TYPE_SET = new Set<LearningEntryType>(["rule", "pattern", "lesson", "compound"]);
 export const LEARNING_CONFIDENCE_SET = new Set<LearningConfidence>(["high", "medium", "low"]);
 export const LEARNING_SEVERITY_SET = new Set<LearningSeverity>(["critical", "important", "suggestion"]);
-export const LEARNING_UNIVERSALITY_SET = new Set<LearningUniversality>(["project", "personal", "universal"]);
-export const LEARNING_MATURITY_SET = new Set<LearningMaturity>(["raw", "lifted-to-rule", "lifted-to-enforcement"]);
 export const LEARNING_SOURCE_SET = new Set<LearningSource>([
   "stage",
   "retro",
@@ -1125,20 +1115,14 @@ export const LEARNING_ALLOWED_KEYS = new Set([
   "action",
   "confidence",
   "severity",
-  "domain",
   "stage",
   "origin_stage",
-  "origin_run",
   "frequency",
-  "universality",
-  "maturity",
   "created",
   "first_seen_ts",
   "last_seen_ts",
   "project",
-  "source",
-  "supersedes",
-  "superseded_by"
+  "source"
 ]);
 
 export function isIsoUtcTimestamp(value: string): boolean {
@@ -1206,9 +1190,6 @@ export function parseLearningSeedEntry(raw: unknown, index: number): { ok: boole
     };
   }
 
-  if (obj.domain !== undefined && !isNullableString(obj.domain)) {
-    return { ok: false, error: `Learnings bullet #${index} field "domain" must be string or null.` };
-  }
   if (obj.stage !== undefined && !isNullableStage(obj.stage)) {
     return {
       ok: false,
@@ -1220,9 +1201,6 @@ export function parseLearningSeedEntry(raw: unknown, index: number): { ok: boole
       ok: false,
       error: `Learnings bullet #${index} field "origin_stage" must be one of ${FLOW_STAGES.join(", ")} or null.`
     };
-  }
-  if (obj.origin_run !== undefined && !isNullableString(obj.origin_run)) {
-    return { ok: false, error: `Learnings bullet #${index} field "origin_run" must be string or null.` };
   }
   if (obj.project !== undefined && !isNullableString(obj.project)) {
     return { ok: false, error: `Learnings bullet #${index} field "project" must be string or null.` };
@@ -1243,25 +1221,6 @@ export function parseLearningSeedEntry(raw: unknown, index: number): { ok: boole
   ) {
     return { ok: false, error: `Learnings bullet #${index} field "frequency" must be an integer >= 1.` };
   }
-  if (
-    obj.universality !== undefined &&
-    (typeof obj.universality !== "string" ||
-      !LEARNING_UNIVERSALITY_SET.has(obj.universality as LearningUniversality))
-  ) {
-    return {
-      ok: false,
-      error: `Learnings bullet #${index} field "universality" must be project|personal|universal.`
-    };
-  }
-  if (
-    obj.maturity !== undefined &&
-    (typeof obj.maturity !== "string" || !LEARNING_MATURITY_SET.has(obj.maturity as LearningMaturity))
-  ) {
-    return {
-      ok: false,
-      error: `Learnings bullet #${index} field "maturity" must be raw|lifted-to-rule|lifted-to-enforcement.`
-    };
-  }
   for (const timestampField of ["created", "first_seen_ts", "last_seen_ts"] as const) {
     const value = obj[timestampField];
     if (value === undefined) continue;
@@ -1271,21 +1230,6 @@ export function parseLearningSeedEntry(raw: unknown, index: number): { ok: boole
         error: `Learnings bullet #${index} field "${timestampField}" must be ISO UTC (YYYY-MM-DDTHH:MM:SSZ).`
       };
     }
-  }
-  if (obj.supersedes !== undefined) {
-    if (
-      !Array.isArray(obj.supersedes) ||
-      obj.supersedes.length === 0 ||
-      obj.supersedes.some((value) => typeof value !== "string" || value.trim().length === 0)
-    ) {
-      return { ok: false, error: `Learnings bullet #${index} field "supersedes" must be a non-empty array of strings.` };
-    }
-  }
-  if (
-    obj.superseded_by !== undefined &&
-    (typeof obj.superseded_by !== "string" || obj.superseded_by.trim().length === 0)
-  ) {
-    return { ok: false, error: `Learnings bullet #${index} field "superseded_by" must be a non-empty string.` };
   }
 
   return {

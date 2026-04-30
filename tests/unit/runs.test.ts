@@ -484,7 +484,9 @@ describe("runs system", () => {
           ...base.closeout,
           shipSubstate: "ready_to_archive",
           retroSkipped: true,
-          retroSkipReason: "micro-fix, no insights worth retro-ing"
+          retroSkipReason: "micro-fix, no insights worth retro-ing",
+          compoundSkipped: true,
+          compoundSkipReason: "no compound candidates in post-ship review"
         }
       },
       { allowReset: true }
@@ -497,7 +499,7 @@ describe("runs system", () => {
     expect(retroGate.hasRetroArtifact).toBe(false);
   });
 
-  it("ignores retro knowledge entries outside the current retro closeout window", async () => {
+  it("ignores retro knowledge rows when closeout marks compound as skipped", async () => {
     const root = await createTempProject("runs-retro-window-scope");
     await ensureRunSystem(root);
     const base = createInitialFlowState("active");
@@ -512,8 +514,8 @@ describe("runs system", () => {
           shipSubstate: "ready_to_archive",
           retroDraftedAt: "2026-02-01T00:00:00Z",
           retroAcceptedAt: "2026-02-02T00:00:00Z",
-          compoundCompletedAt: "2026-02-02T00:30:00Z",
-          compoundPromoted: 1
+          compoundSkipped: true,
+          compoundSkipReason: "reviewed and found no reusable compound guidance"
         }
       },
       { allowReset: true }
@@ -542,7 +544,9 @@ describe("runs system", () => {
       "utf8"
     );
 
-    await expect(archiveRun(root, "Retro Window Scope")).rejects.toThrow(/retro gate/i);
+    const archived = await archiveRun(root, "Retro Window Scope");
+    expect(archived.retro.completed).toBe(true);
+    expect(archived.retro.compoundEntries).toBe(0);
   });
 
   it("does not infer retro window from artifact mtime when closeout timestamps are missing", async () => {
@@ -765,7 +769,9 @@ describe("runs system", () => {
         ...createInitialFlowState("active").closeout,
         shipSubstate: "ready_to_archive" as const,
         retroSkipped: true,
-        retroSkipReason: "operator skipped empty retro"
+        retroSkipReason: "operator skipped empty retro",
+        compoundSkipped: true,
+        compoundSkipReason: "nothing to promote"
       }
     };
     await writeFlowState(root, state, { allowReset: true });
@@ -803,7 +809,7 @@ describe("runs system", () => {
     await expect(archiveRun(root, "Skip Without Reason")).rejects.toThrow(/ready_to_archive/i);
   });
 
-  it("does not trust stale positive retro compoundEntries without evidence", async () => {
+  it("uses closeout compound evidence instead of stale retro.compoundEntries snapshot", async () => {
     const root = await createTempProject("runs-retro-stale-compound-count");
     await ensureRunSystem(root);
     const base = createInitialFlowState("active");
@@ -833,9 +839,10 @@ describe("runs system", () => {
 
     const state = await readFlowState(root);
     const status = await evaluateRetroGate(root, state);
-    expect(status.compoundEntries).toBe(0);
-    expect(status.completed).toBe(false);
-    await expect(archiveRun(root, "Stale Compound Count")).rejects.toThrow(/retro gate/i);
+    expect(status.compoundEntries).toBe(1);
+    expect(status.completed).toBe(true);
+    const archived = await archiveRun(root, "Stale Compound Count");
+    expect(archived.retro.completed).toBe(true);
   });
 
   it("quarantines flow-state.json when top-level value is not an object", async () => {

@@ -11,6 +11,7 @@ import {
   SMALL_PROJECT_RECURRENCE_THRESHOLD
 } from "../knowledge-store.js";
 import {
+  SHARED_FLOW_AND_KNOWLEDGE_SNIPPETS,
   SHARED_STAGE_SUPPORT_SNIPPETS
 } from "./runtime-shared-snippets.js";
 
@@ -132,6 +133,7 @@ const EARLY_LOOP_MAX_ITERATIONS = ${JSON.stringify(earlyLoopMaxIterations)};
 const CCLAW_CLI_ENTRYPOINT = ${JSON.stringify(cliRuntime.entrypoint)};
 const CCLAW_CLI_ARGS_PREFIX = ${JSON.stringify(cliRuntime.argsPrefix)};
 
+${SHARED_FLOW_AND_KNOWLEDGE_SNIPPETS}
 ${SHARED_STAGE_SUPPORT_SNIPPETS}
 
 function resolveStrictness() {
@@ -956,12 +958,12 @@ async function readFlowState(root) {
   // empty object. Silent fallbacks used to mask stale CLI+hook drift.
   const parsed = await readJsonFile(statePath, {}, { root, stage: "read-flow-state" });
   const obj = toObject(parsed) || {};
-  const completed = Array.isArray(obj.completedStages) ? obj.completedStages : [];
+  const summary = summarizeFlowState(obj);
   return {
     filePath: statePath,
-    currentStage: typeof obj.currentStage === "string" ? obj.currentStage : "none",
-    activeRunId: typeof obj.activeRunId === "string" ? obj.activeRunId : "active",
-    completedCount: completed.length,
+    currentStage: summary.stage,
+    activeRunId: summary.activeRunId === "none" ? "active" : summary.activeRunId,
+    completedCount: summary.completed,
     raw: obj
   };
 }
@@ -974,37 +976,10 @@ async function buildKnowledgeDigest(root, currentStage, prereadRaw) {
   const raw = typeof prereadRaw === "string"
     ? prereadRaw
     : await readTextFile(knowledgeFile, "");
-  const lines = raw.split(/\\r?\\n/gu).map((line) => line.trim()).filter((line) => line.length > 0);
-  let learningsCount = 0;
-  const parsedRows = [];
-  for (const line of lines) {
-    if (line.startsWith("{")) learningsCount += 1;
-    try {
-      const parsed = JSON.parse(line);
-      if (!parsed || typeof parsed !== "object" || Array.isArray(parsed)) continue;
-      parsedRows.push(parsed);
-    } catch {
-      // ignore malformed knowledge line in digest
-    }
-  }
-  const relevant = parsedRows
-    .filter((row) => {
-      const stage = typeof row.stage === "string" ? row.stage : null;
-      return stage === null || stage === currentStage;
-    })
-    .slice(-6)
-    .reverse()
-    .map((row) => {
-      const confidence = typeof row.confidence === "string" ? row.confidence : "unknown";
-      const stage = typeof row.stage === "string" ? row.stage : "global";
-      const domain = typeof row.domain === "string" ? row.domain : "general";
-      const trigger = typeof row.trigger === "string" ? row.trigger : "trigger";
-      const action = typeof row.action === "string" ? row.action : "action";
-      return "- [" + confidence + " • " + stage + " • " + domain + "] " + trigger + " -> " + action;
-    });
+  const digest = parseKnowledgeDigest(raw, currentStage, 6);
   return {
-    digestLines: relevant,
-    learningsCount
+    digestLines: digest.lines,
+    learningsCount: digest.learningsCount
   };
 }
 
@@ -1176,8 +1151,8 @@ async function handleSessionStart(runtime) {
       "/8 completed, run=" +
       state.activeRunId +
       "). Active artifacts: " +
-      RUNTIME_ROOT +
-      "/artifacts/. Learnings: " +
+      activeArtifactsPathLabel(RUNTIME_ROOT) +
+      " Learnings: " +
       String(knowledge.learningsCount) +
       " entries."
   ];

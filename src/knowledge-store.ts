@@ -8,10 +8,6 @@ import { FLOW_STAGES, type FlowStage } from "./types.js";
 export type KnowledgeEntryType = "rule" | "pattern" | "lesson" | "compound";
 export type KnowledgeEntryConfidence = "high" | "medium" | "low";
 export type KnowledgeEntrySeverity = "critical" | "important" | "suggestion";
-// Legacy optional metadata values preserved for backward compatibility with
-// historical knowledge.jsonl rows.
-export type KnowledgeEntryUniversality = "project" | "personal" | "universal";
-export type KnowledgeEntryMaturity = "raw" | "lifted-to-rule" | "lifted-to-enforcement";
 export type KnowledgeEntrySource = "stage" | "retro" | "compound" | "idea" | "manual";
 
 export interface KnowledgeEntry {
@@ -20,20 +16,14 @@ export interface KnowledgeEntry {
   action: string;
   confidence: KnowledgeEntryConfidence;
   severity?: KnowledgeEntrySeverity;
-  domain?: string | null;
   stage: FlowStage | null;
   origin_stage: FlowStage | null;
-  origin_run?: string | null;
   frequency: number;
-  universality?: KnowledgeEntryUniversality;
-  maturity?: KnowledgeEntryMaturity;
   created: string;
   first_seen_ts: string;
   last_seen_ts: string;
   project: string | null;
   source?: KnowledgeEntrySource | null;
-  supersedes?: string[];
-  superseded_by?: string;
 }
 
 export interface KnowledgeSeedEntry {
@@ -42,26 +32,19 @@ export interface KnowledgeSeedEntry {
   action: string;
   confidence: KnowledgeEntryConfidence;
   severity?: KnowledgeEntrySeverity;
-  domain?: string | null;
   stage?: FlowStage | null;
   origin_stage?: FlowStage | null;
-  origin_run?: string | null;
   frequency?: number;
-  universality?: KnowledgeEntryUniversality;
-  maturity?: KnowledgeEntryMaturity;
   created?: string;
   first_seen_ts?: string;
   last_seen_ts?: string;
   project?: string | null;
   source?: KnowledgeEntrySource | null;
-  supersedes?: string[];
-  superseded_by?: string;
 }
 
 export interface AppendKnowledgeDefaults {
   stage?: FlowStage | null;
   originStage?: FlowStage | null;
-  originRun?: string | null;
   project?: string | null;
   source?: KnowledgeEntrySource | null;
   nowIso?: string;
@@ -324,8 +307,8 @@ export function computeCompoundReadiness(
 const KNOWLEDGE_TYPE_SET = new Set<KnowledgeEntryType>(["rule", "pattern", "lesson", "compound"]);
 const KNOWLEDGE_CONFIDENCE_SET = new Set<KnowledgeEntryConfidence>(["high", "medium", "low"]);
 const KNOWLEDGE_SEVERITY_SET = new Set<KnowledgeEntrySeverity>(["critical", "important", "suggestion"]);
-const KNOWLEDGE_UNIVERSALITY_SET = new Set<KnowledgeEntryUniversality>(["project", "personal", "universal"]);
-const KNOWLEDGE_MATURITY_SET = new Set<KnowledgeEntryMaturity>(["raw", "lifted-to-rule", "lifted-to-enforcement"]);
+const LEGACY_KNOWLEDGE_UNIVERSALITY_SET = new Set(["project", "personal", "universal"]);
+const LEGACY_KNOWLEDGE_MATURITY_SET = new Set(["raw", "lifted-to-rule", "lifted-to-enforcement"]);
 const KNOWLEDGE_SOURCE_SET = new Set<KnowledgeEntrySource>([
   "stage",
   "retro",
@@ -361,6 +344,29 @@ KNOWLEDGE_ALLOWED_KEYS.add("superseded_by");
 
 function keyAllowedInKnowledgeEntry(key: string): boolean {
   return KNOWLEDGE_ALLOWED_KEYS.has(key);
+}
+
+function normalizeParsedKnowledgeEntry(obj: Record<string, unknown>): KnowledgeEntry {
+  const normalized: KnowledgeEntry = {
+    type: obj.type as KnowledgeEntryType,
+    trigger: obj.trigger as string,
+    action: obj.action as string,
+    confidence: obj.confidence as KnowledgeEntryConfidence,
+    stage: obj.stage as FlowStage | null,
+    origin_stage: obj.origin_stage as FlowStage | null,
+    frequency: obj.frequency as number,
+    created: obj.created as string,
+    first_seen_ts: obj.first_seen_ts as string,
+    last_seen_ts: obj.last_seen_ts as string,
+    project: obj.project as string | null
+  };
+  if (obj.severity !== undefined) {
+    normalized.severity = obj.severity as KnowledgeEntrySeverity;
+  }
+  if (obj.source !== undefined) {
+    normalized.source = obj.source as KnowledgeEntrySource | null;
+  }
+  return normalized;
 }
 
 function knowledgePath(projectRoot: string): string {
@@ -434,7 +440,7 @@ function parseKnowledgeSnapshot(raw: string): KnowledgeSnapshot {
         malformedLines += 1;
         continue;
       }
-      const entry = parsed as KnowledgeEntry;
+      const entry = normalizeParsedKnowledgeEntry(parsed as Record<string, unknown>);
       entries.push(entry);
       const key = dedupeKey(entry);
       if (!keyToIndex.has(key)) {
@@ -552,13 +558,13 @@ export function validateKnowledgeEntry(
   }
   if (
     obj.universality !== undefined &&
-    !KNOWLEDGE_UNIVERSALITY_SET.has(obj.universality as KnowledgeEntryUniversality)
+    (typeof obj.universality !== "string" || !LEGACY_KNOWLEDGE_UNIVERSALITY_SET.has(obj.universality))
   ) {
     errors.push("universality must be one of: project, personal, universal.");
   }
   if (
     obj.maturity !== undefined &&
-    !KNOWLEDGE_MATURITY_SET.has(obj.maturity as KnowledgeEntryMaturity)
+    (typeof obj.maturity !== "string" || !LEGACY_KNOWLEDGE_MATURITY_SET.has(obj.maturity))
   ) {
     errors.push("maturity must be one of: raw, lifted-to-rule, lifted-to-enforcement.");
   }
@@ -621,27 +627,8 @@ export function materializeKnowledgeEntry(
     last_seen_ts: normalizeUtcIso(seed.last_seen_ts ?? now),
     project: seed.project ?? defaults.project ?? null
   };
-  if (seed.domain !== undefined) {
-    entry.domain = seed.domain;
-  }
-  const originRun = seed.origin_run ?? defaults.originRun;
-  if (originRun !== undefined) {
-    entry.origin_run = originRun;
-  }
-  if (seed.universality !== undefined) {
-    entry.universality = seed.universality;
-  }
-  if (seed.maturity !== undefined) {
-    entry.maturity = seed.maturity;
-  }
   if (seed.severity !== undefined) {
     entry.severity = seed.severity;
-  }
-  if (seed.supersedes !== undefined) {
-    entry.supersedes = seed.supersedes.map((value) => value.trim());
-  }
-  if (seed.superseded_by !== undefined) {
-    entry.superseded_by = seed.superseded_by.trim();
   }
   if (source !== null) {
     entry.source = source;

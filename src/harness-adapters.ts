@@ -534,7 +534,7 @@ When in doubt, prefer **non-trivial** — the quick track is opt-in and only saf
 Knowledge capture and curation run automatically as part of stage completion
 protocols via the internal \`learnings\` skill — no user-facing command.
 Reusable entries land in \`.cclaw/knowledge.jsonl\` as strict JSONL with
-\`type\`, \`trigger\`, \`action\`, and \`origin_run\` metadata.
+\`type\`, \`trigger\`, \`action\`, \`confidence\`, \`stage\`, and \`origin_stage\` metadata.
 
 **Stage order:** brainstorm > scope > design > spec > plan > tdd > review > ship, then closeout: retro > compound > archive. Use \`/cc\` to keep moving through normal work and post-ship closeout; use \`/cc-cancel\` for cancelled/abandoned runs. Gates must pass before handoff.
 
