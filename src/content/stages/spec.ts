@@ -45,6 +45,7 @@ export const SPEC: StageSchemaInput = {
       "Document constraints and assumptions — regulatory, system, integration, and performance boundaries. Only non-critical preference/default assumptions may continue; STOP on uncertainty about scope, architecture, security, data loss, public API, migration, auth/pricing, or required user approval.",
       "Surface assumptions before finalization — list each assumption with source/confidence, validation path, and whether it is accepted, rejected, or still open.",
       "Build the Acceptance Mapping contract — for each AC, map upstream design decision, observable evidence, verification method, and likely test level. If any column is unclear, rewrite the criterion.",
+      "Run Spec Self-Review — explicitly verify placeholder/consistency/scope/ambiguity checks before approval.",
       "Present acceptance criteria to the user in 3-5-item batches, pausing for explicit ACK between batches (see Interaction Protocol).",
       "Write spec artifact and request user approval — wait for explicit confirmation before proceeding."
     ],
@@ -71,6 +72,7 @@ export const SPEC: StageSchemaInput = {
       { id: "spec_acceptance_measurable", description: "Acceptance criteria are measurable and observable." },
       { id: "spec_testability_confirmed", description: "Each criterion has a described test method." },
       { id: "spec_assumptions_surfaced", description: "Assumptions were explicitly reviewed with source/confidence, validation path, and disposition before approval." },
+      { id: "spec_self_review_complete", description: "Spec Self-Review covers placeholder, consistency, scope, and ambiguity checks before approval." },
       { id: "spec_user_approved", description: "User approved the final written spec." }
     ],
     requiredEvidence: [
@@ -78,6 +80,7 @@ export const SPEC: StageSchemaInput = {
       "Each acceptance criterion maps to upstream design decision, observable evidence, verification method, and likely test level.",
       "Edge cases documented per criterion.",
       "Assumptions Before Finalization section records source/confidence, validation path, and accepted/rejected/open disposition.",
+      "Spec Self-Review section covers placeholder, consistency, scope, and ambiguity checks with any patches noted.",
       "Approval marker captured in artifact.",
       "For quick bug-fix specs, reproduction contract records symptom, repro steps, expected RED test, and acceptance criterion."
     ],
@@ -125,6 +128,10 @@ export const SPEC: StageSchemaInput = {
       { section: "Vague to Fixed", required: false, validationRule: "If present: table with original vague wording and rewritten observable/testable version for each ambiguous requirement." },
       { section: "Non-Functional Requirements", required: false, validationRule: "If present: performance thresholds, security constraints, scalability limits, reliability targets with measurable values." },
       { section: "Interface Contracts", required: false, validationRule: "If present: for each module boundary list produces (outputs) and consumes (inputs) with data types." },
+      { section: "Synthesis Sources", required: false, validationRule: "If present: cite at least one upstream/context source with what it supplied and confidence." },
+      { section: "Behavior Contract", required: false, validationRule: "If present: list >=3 behaviors in user-story or Given/When/Then shape (or `- None.` for single-step specs)." },
+      { section: "Architecture Modules", required: false, validationRule: "If present: module responsibilities only (no code fences or function/class signatures); keep module count within a single coherent subsystem." },
+      { section: "Spec Self-Review", required: true, validationRule: "Must explicitly cover placeholder, consistency, scope, and ambiguity checks plus applied patches/remaining concerns." },
       { section: "Approval", required: true, validationRule: "Explicit user approval marker present." }
     ]
   },

@@ -12,6 +12,7 @@ const SUBAGENT_AGENT_NAMES = [
   "researcher",
   "architect",
   "spec-validator",
+  "spec-document-reviewer",
   "slice-implementer",
   "performance-reviewer",
   "compatibility-reviewer",
@@ -160,7 +161,7 @@ Concrete per-stage rules so the controller does not have to guess which tier fit
 | brainstorm | planner (only if ambiguity spans >1 module) | product-manager / critic when product value or premise is uncertain | run in-thread research playbooks | promote to \`balanced\` critic if the do-nothing path may beat the idea |
 | scope | planner (always) | product-manager / product-strategist / critic when mode changes value, trajectory, or boundaries | run \`research/git-history.md\` in-thread when churn is high | promote to \`balanced\` critic if scope mode is disputed |
 | design | planner (always) | critic, security-reviewer, test-author when alternatives/trust/testability apply | run \`research/framework-docs-lookup.md\` + \`research/best-practices-lookup.md\` in-thread | escalate one specialist to \`deep\` only if a failure mode is Critical-severity |
-| spec | — | reviewer (if spec > 200 lines or multiple ACs) | — | escalate to \`deep\` only for spec ↔ design contradictions |
+| spec | — | spec-validator / spec-document-reviewer / reviewer (for long or high-risk specs) | — | escalate to \`deep\` only for spec ↔ design contradictions |
 | plan | planner (solo, always) | — | — | never fan out at plan stage; one owner for dependency graph |
 | tdd | — | ${formatAgentList(stageSummary("tdd").primaryAgents)} (per slice, carrying RED/GREEN/REFACTOR evidence) · reviewer (slice-local only when sliceReview triggers) | doc-updater (API surface changes) | escalate to \`deep\` only when a RED test cannot be expressed (design leak) |
 | review | — | ${formatAgentList(stageSummary("review").mandatoryAgents)} (both mandatory) | doc-updater for release-note drift checks | escalate a \`balanced\` reviewer to \`deep\` only when two reviewers disagree on severity |
@@ -664,6 +665,31 @@ ${MARKDOWN_CODE_FENCE}
 `;
 }
 
+function specDocumentReviewerEnhancedBody(): string {
+  return `
+
+## Task Tool Delegation
+
+Use this payload for final spec-document quality checks before plan handoff:
+
+${MARKDOWN_CODE_FENCE}
+You are a spec-document-reviewer subagent.
+
+SPEC_ARTIFACT: {04-spec excerpt or full body}
+UPSTREAM_CONTEXT: {scope/design refs used by the spec}
+
+Required output:
+- DOCUMENT_VERDICT: PASS | PASS_WITH_GAPS | FAIL | BLOCKED
+- COMPLETENESS_CHECK: missing required sections or weakly populated rows
+- CONSISTENCY_CHECK: contradictions across ACs, assumptions, mapping, and approval
+- CLARITY_CHECK: ambiguity/placeholders/two-way wording to rewrite
+- SCOPE_FIT_CHECK: whether the artifact still maps to one coherent subsystem/plan slice
+- PATCH_RECOMMENDATIONS: minimal edits to make the spec plan-ready
+${MARKDOWN_CODE_FENCE}
+
+`;
+}
+
 function sliceImplementerEnhancedBody(): string {
   return `
 
@@ -1033,6 +1059,8 @@ export function enhancedAgentBody(agentName: string): string {
       return architectEnhancedBody();
     case "spec-validator":
       return specValidatorEnhancedBody();
+    case "spec-document-reviewer":
+      return specDocumentReviewerEnhancedBody();
     case "slice-implementer":
       return sliceImplementerEnhancedBody();
     case "performance-reviewer":

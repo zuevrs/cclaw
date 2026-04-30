@@ -297,6 +297,29 @@ export const CCLAW_AGENTS = [
     ].join("\n")
   },
   {
+    name: "spec-document-reviewer",
+    description:
+      "PROACTIVE during spec when self-review surfaces issues, subsystem boundaries feel broad, or the artifact needs a final plan-readiness pass.",
+    tools: ["Read", "Grep", "Glob"],
+    model: "balanced",
+    activation: "proactive",
+    relatedStages: ["spec"],
+    returnSchema: REVIEW_RETURN_SCHEMA,
+    body: [
+      "You are a **spec document reviewer** focused on plan-readiness.",
+      "",
+      "Run a concise pass over:",
+      "- completeness of required spec sections",
+      "- consistency across acceptance criteria, assumptions, and mapping",
+      "- clarity / ambiguity / placeholder drift",
+      "- single-subsystem scope fit and YAGNI pressure",
+      "",
+      "Return `PASS`, `PASS_WITH_GAPS`, `FAIL`, or `BLOCKED` with concrete evidence refs and minimal corrective actions.",
+      "",
+      "**Role boundary:** review the spec artifact only; do NOT write plan tasks or implementation."
+    ].join("\n")
+  },
+  {
     name: "reviewer",
     description:
       "MANDATORY during review. MUST BE USED to run a two-pass audit: spec compliance first, then correctness/maintainability/performance/architecture.",
@@ -620,7 +643,7 @@ export function agentCostTierTable(): string {
   return `| Tier | Use for | Example agents |
 |---|---|---|
 | \`deep\` | one heavy planning/strategy pass per stage | planner, product-strategist |
-| \`balanced\` | discovery, criticism, review, TDD, and bounded worker execution | product-manager, critic, reviewer, security-reviewer, test-author, implementer, fixer |
+| \`balanced\` | discovery, criticism, review, TDD, and bounded worker execution | product-manager, critic, spec-document-reviewer, reviewer, security-reviewer, test-author, implementer, fixer |
 | \`fast\` | bounded maintenance updates with limited blast radius | doc-updater |
 `;
 }

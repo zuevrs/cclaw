@@ -29,6 +29,7 @@ export type StageSubagentName =
   | "researcher"
   | "architect"
   | "spec-validator"
+  | "spec-document-reviewer"
   | "slice-implementer"
   | "performance-reviewer"
   | "compatibility-reviewer"
