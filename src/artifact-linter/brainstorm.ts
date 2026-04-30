@@ -7,6 +7,7 @@ import {
   validateApproachesTaxonomy,
   headingLineIndex,
   meaningfulLineCount,
+  getMarkdownTableRows,
   parseShortCircuitStatus,
   validateCalibratedSelfReview,
   markdownFieldRegex
@@ -26,6 +27,21 @@ export async function lintBrainstormStage(ctx: StageLintContext): Promise<void> 
     staleDiagramAuditEnabled,
     isTrivialOverride
   } = ctx;
+
+    const qaLogBody = sectionBodyByName(sections, "Q&A Log");
+    const qaLogRows = qaLogBody ? getMarkdownTableRows(qaLogBody) : [];
+    const qaLogOk = qaLogBody !== null && qaLogRows.length > 0;
+    findings.push({
+      section: "qa_log_missing",
+      required: false,
+      rule: "[P3] qa_log_missing — Q&A Log empty — confirm you actually had a dialogue with the user, not a draft from memory.",
+      found: qaLogOk,
+      details: qaLogOk
+        ? `Q&A Log contains ${qaLogRows.length} data row(s).`
+        : qaLogBody === null
+          ? "Missing `## Q&A Log` section."
+          : "Q&A Log is present but has zero data rows."
+    });
 
     // Brainstorm Iron Law: "NO ARTIFACT IS COMPLETE WITHOUT AN EXPLICITLY
     // APPROVED DIRECTION — SILENCE IS NOT APPROVAL." Previously this was

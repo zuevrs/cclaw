@@ -46,6 +46,8 @@ export const DESIGN: StageSchemaInput = {
   },
   executionModel: {
     checklist: [
+      "**Adaptive elicitation loop (shared skill)** — load `.cclaw/skills/adaptive-elicitation/SKILL.md` and run one decision-changing question per turn via harness-native tools. After each answer, append one row to `## Q&A Log` (`Turn | Question | User answer (1-line) | Decision impact`). Continue until architecture context is clear or user signals to proceed.",
+      "**Design forcing questions (must be covered or explicitly waived)** — what is the end-to-end data flow, where are seams/ownership boundaries, which invariants must hold, and what will explicitly NOT be refactored now.",
       "Compact design lock — design does not decide what to build; it decides how the approved scope works. For simple slices, produce a tight lock: upstream handoff, existing fit, architecture boundary, one labeled diagram, data/state flow, critical path, failure/rescue, trust boundaries, test/perf expectations, rollout/rollback, rejected alternative, and spec handoff.",
       "Trivial-Change Escape Hatch — for <=3 files, no new interfaces, and no cross-module data flow, produce a mini-design (rationale, changed files, one risk) and proceed to spec.",
       "Tiered Research — for simple/medium work, do compact inline codebase/research synthesis in `Research Fleet Synthesis`; write `.cclaw/artifacts/02a-research.md` and run the full fleet only for deep/high-risk work or when external framework/architecture uncertainty exists.",
@@ -61,8 +63,10 @@ export const DESIGN: StageSchemaInput = {
       "Capture leftovers — seed high-upside deferred ideas, list unresolved decisions with defaults, document distribution for new artifact types, and cross-reference deferred items to scope or unresolved decisions."
     ],
     interactionProtocol: [
+      "\"Constrain, don't micromanage - enforce invariants, separate the doer from the checker.\"",
       "Review section-by-section: investigator first, critic second, then reconcile. For simple apps, collapse this into one compact design lock with explicit risks and a single approval stop.",
       "Present each issue one at a time; do not batch issues or move sections until current issues are resolved.",
+      "Run the shared adaptive elicitation cycle from `.cclaw/skills/adaptive-elicitation/SKILL.md`, including stop-signal handling (RU/EN/UA), smart-skip, conditional grilling triggers, and append-only `## Q&A Log` updates.",
       decisionProtocolInstruction(
         "each issue",
         "describe concretely with file/line references, present labeled options (A/B/C) with trade-offs, effort estimate (S/M/L/XL), risk level (Low/Med/High), and mark one as (recommended)",

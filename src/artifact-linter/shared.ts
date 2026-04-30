@@ -79,6 +79,39 @@ export function extractH2Sections(markdown: string): H2SectionMap {
   return sections;
 }
 
+export function duplicateH2Headings(markdown: string): string[] {
+  const lines = markdown.split(/\r?\n/);
+  let fenced: string | null = null;
+  const counts = new Map<string, number>();
+  const displayHeading = new Map<string, string>();
+
+  for (const line of lines) {
+    const fenceMatch = /^(```|~~~)/u.exec(line);
+    if (fenceMatch) {
+      if (fenced === null) {
+        fenced = fenceMatch[1] ?? null;
+      } else if (line.startsWith(fenced)) {
+        fenced = null;
+      }
+      continue;
+    }
+    if (fenced !== null) continue;
+
+    const match = /^##\s+(.+)$/u.exec(line);
+    if (!match) continue;
+    const heading = normalizeHeadingTitle(match[1] ?? "");
+    const key = heading.toLowerCase();
+    counts.set(key, (counts.get(key) ?? 0) + 1);
+    if (!displayHeading.has(key)) {
+      displayHeading.set(key, heading);
+    }
+  }
+
+  return [...counts.entries()]
+    .filter(([, count]) => count > 1)
+    .map(([key]) => displayHeading.get(key) ?? key);
+}
+
 export function headingPresent(sections: H2SectionMap, section: string): boolean {
   const want = normalizeHeadingTitle(section).toLowerCase();
   for (const h of sections.keys()) {

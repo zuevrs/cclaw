@@ -5,6 +5,7 @@ import { exists } from "./fs-utils.js";
 import { stageSchema } from "./content/stage-schema.js";
 import type { FlowStage, FlowTrack } from "./types.js";
 import {
+  duplicateH2Headings,
   extractH2Sections,
   extractLockedDecisionAnchors,
   extractRequirementIdsFromMarkdown,
@@ -91,6 +92,16 @@ export async function lintArtifact(
 
   const raw = await fs.readFile(absFile, "utf8");
   const sections = extractH2Sections(raw);
+  const duplicateHeadings = duplicateH2Headings(raw);
+  if (duplicateHeadings.length > 0) {
+    findings.push({
+      section: "duplicate_h2_heading",
+      required: false,
+      rule: "[P3] keep each `##` heading unique within an artifact; append updates to the existing section instead of cloning headings.",
+      found: false,
+      details: `Duplicate H2 heading(s): ${duplicateHeadings.join(", ")}. Merge edits into the existing heading to avoid split contracts.`
+    });
+  }
   const projectConfig = await readConfig(projectRoot);
   const parsedFrontmatter = parseFrontmatter(raw);
   const frontmatterMissingKeys: string[] = FRONTMATTER_REQUIRED_KEYS.filter((key) => {

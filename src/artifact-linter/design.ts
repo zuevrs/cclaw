@@ -249,6 +249,20 @@ export async function lintDesignStage(ctx: StageLintContext): Promise<void> {
     staleDiagramAuditEnabled,
     isTrivialOverride
   } = ctx;
+    const qaLogBody = sectionBodyByName(sections, "Q&A Log");
+    const qaLogRows = qaLogBody ? getMarkdownTableRows(qaLogBody) : [];
+    const qaLogOk = qaLogBody !== null && qaLogRows.length > 0;
+    findings.push({
+      section: "qa_log_missing",
+      required: false,
+      rule: "[P3] qa_log_missing — Q&A Log empty — confirm you actually had a dialogue with the user, not a draft from memory.",
+      found: qaLogOk,
+      details: qaLogOk
+        ? `Q&A Log contains ${qaLogRows.length} data row(s).`
+        : qaLogBody === null
+          ? "Missing `## Q&A Log` section."
+          : "Q&A Log is present but has zero data rows."
+    });
     const criticPredictions = checkCriticPredictionsContract(sections);
     if (criticPredictions !== null) {
       findings.push({
