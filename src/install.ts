@@ -54,6 +54,7 @@ import {
   stageSkillMarkdown,
   executingWavesSkillMarkdown
 } from "./content/skills.js";
+import { adaptiveElicitationSkillMarkdown } from "./content/skills-elicitation.js";
 import {
   LANGUAGE_RULE_PACK_DIR,
   LANGUAGE_RULE_PACK_FILES,
@@ -607,6 +608,10 @@ async function writeSkills(projectRoot: string, config?: CclawConfig): Promise<v
   await writeFileSafe(
     runtimePath(projectRoot, "skills", "executing-waves", "SKILL.md"),
     executingWavesSkillMarkdown()
+  );
+  await writeFileSafe(
+    runtimePath(projectRoot, "skills", "adaptive-elicitation", "SKILL.md"),
+    adaptiveElicitationSkillMarkdown()
   );
   await writeFileSafe(
     runtimePath(projectRoot, "skills", META_SKILL_NAME, "SKILL.md"),
@@ -1258,8 +1263,13 @@ async function syncDisabledHarnessArtifacts(projectRoot: string, harnesses: Harn
 }
 
 async function writeState(projectRoot: string, config: CclawConfig, forceReset = false): Promise<void> {
+  // Fresh init no longer materializes flow-state.json. The first managed
+  // `/cc <idea>` start-flow call creates the state file.
+  if (!forceReset) {
+    return;
+  }
   const statePath = runtimePath(projectRoot, "state", "flow-state.json");
-  if (!forceReset && (await exists(statePath))) {
+  if (await exists(statePath)) {
     return;
   }
 
@@ -1497,7 +1507,9 @@ export async function initCclaw(options: InitOptions): Promise<void> {
   // and only appear in the on-disk file when the user sets them explicitly
   // or a non-default value was detected (e.g. languageRulePacks).
   await writeConfig(options.projectRoot, config, { mode: "minimal" });
-  await materializeRuntime(options.projectRoot, config, true, "init");
+  // Init should scaffold runtime surfaces but leave flow-state creation to the
+  // first managed start-flow invocation.
+  await materializeRuntime(options.projectRoot, config, false, "init");
 }
 
 export async function syncCclaw(projectRoot: string, options: SyncOptions = {}): Promise<void> {
@@ -1633,7 +1645,7 @@ function isManagedRuntimeHookCommand(command: string): boolean {
   // sync without being duplicated alongside freshly generated entries.
   const normalized = command.trim().replace(/\s+/gu, " ").replace(/\\/gu, "/");
   if (
-    /(^|\s)(?:node\s+)?(?:"|')?(?:\.\/)?\.cclaw\/hooks\/run-hook\.(?:mjs|cmd)(?:"|')?\s+(?:session-start|stop-handoff|stop-checkpoint|pre-compact|prompt-guard|workflow-guard|context-monitor|verify-current-state)(?:\s|$)/u.test(
+    /(^|\s)(?:node\s+)?(?:"|')?(?:\.\/)?\.cclaw\/hooks\/run-hook\.(?:mjs|cmd)(?:"|')?\s+(?:session-start|stop-handoff|stop-checkpoint|pre-compact|prompt-guard|workflow-guard|pre-tool-pipeline|prompt-pipeline|context-monitor|verify-current-state)(?:\s|$)/u.test(
       normalized
     )
   ) {

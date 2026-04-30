@@ -54,9 +54,10 @@ Substantive vs. non-substantive:
 - **Non-substantive** (skill load optional): one-line acknowledgement,
   clarifying a typo, confirming a prior answer, pure conversation.
 
-If the current stage is ambiguous because \`flow-state.json\` is missing
-or corrupt, stop and route through \`/cc\` before any substantive
-response.
+If \`.cclaw/state/flow-state.json\` is missing, treat it as a normal fresh-init
+state and route through \`/cc <idea>\` to start the first tracked run.
+If the file exists but is corrupt/unreadable, stop and route through \`/cc\`
+before any substantive response.
 
 ## Red Flags (stop and re-route)
 

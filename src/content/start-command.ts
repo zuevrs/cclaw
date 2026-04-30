@@ -93,7 +93,7 @@ ${conversationLanguagePolicyMarkdown()}
    If the harness's native ask tool is available (\`AskUserQuestion\` / \`AskQuestion\` / \`question\` / \`request_user_input\`), send exactly ONE question; on schema error, fall back to a plain-text lettered list.
 10. Start the tracked flow only through the managed helper:
    \`node .cclaw/hooks/start-flow.mjs --track=<quick|medium|standard> --class=<class> --prompt=<prompt> --stack=<stack> --reason=<matched heuristic>\`
-   If this helper fails, STOP and report the exact command/output. Do **not** manually edit \`${flowPath}\`.
+   If this helper fails, STOP. Report one human-readable failure line from the JSON \`error\` field, include the helper JSON payload in a fenced \`json\` block, and never echo the invoking command line. Do **not** manually edit \`${flowPath}\`.
 11. The helper persists \`${flowPath}\`, computes \`skippedStages\`, sets the first stage for the track, resets the gate catalog, and writes \`.cclaw/artifacts/00-idea.md\`.
 12. Load the **first-stage skill for the chosen track** and its command file:
     - quick → \`.cclaw/skills/spec/SKILL.md\`
@@ -108,7 +108,7 @@ If during any stage the agent discovers evidence that contradicts the initial Ph
 1. Surface the new evidence in plain text.
 2. Propose the updated \`Class\` + \`Track\` with a one-line reason.
 3. Use the Decision Protocol to let the user accept, override, or cancel.
-4. On acceptance: run \`node .cclaw/hooks/start-flow.mjs --reclassify --track=<new-track> --class=<new-class> --reason=<why>\`. The helper appends a \`Reclassification:\` entry to \`00-idea.md\` and updates flow state atomically. If it fails, STOP and report the exact output; do NOT manually edit \`flow-state.json\`.
+4. On acceptance: run \`node .cclaw/hooks/start-flow.mjs --reclassify --track=<new-track> --class=<new-class> --reason=<why>\`. The helper appends a \`Reclassification:\` entry to \`00-idea.md\` and updates flow state atomically. If it fails, STOP and report one human-readable line plus the helper JSON payload in a fenced \`json\` block; never echo the invoking command line. Do NOT manually edit \`flow-state.json\`.
 
 ### Without prompt (\`/cc\`)
 
@@ -191,12 +191,12 @@ ${conversationLanguagePolicyMarkdown()}
 
    - On conflict, prefer \`standard\` over \`medium\`, and \`medium\` over \`quick\`.
    - Always state the recommendation as a one-line reason citing matched triggers and a high/medium/low track selection confidence. Clarify that the heuristic is advisory until the managed helper writes state; after that, \`/cc\` follows the selected track. Include override guidance: switch to standard when architecture, schema, migration, security, or unclear scope appears; switch to medium when product framing is needed but architecture is known.
-8. Run the managed start helper: \`node .cclaw/hooks/start-flow.mjs --track=<quick|medium|standard> --class=<class> --prompt=<prompt> --stack=<stack> --reason=<matched heuristic>\`. The helper writes \`${flowPath}\`, computes \`skippedStages\`, resets the gate catalog, and writes \`${RUNTIME_ROOT}/artifacts/00-idea.md\`. If it fails, STOP and report the exact command/output; do not manually edit flow state.
+8. Run the managed start helper: \`node .cclaw/hooks/start-flow.mjs --track=<quick|medium|standard> --class=<class> --prompt=<prompt> --stack=<stack> --reason=<matched heuristic>\`. The helper writes \`${flowPath}\`, computes \`skippedStages\`, resets the gate catalog, and writes \`${RUNTIME_ROOT}/artifacts/00-idea.md\`. If it fails, STOP, report one human-readable failure line from the JSON \`error\` field, and include the helper JSON payload in a fenced \`json\` block; do not echo the invoking command line, and do not manually edit flow state.
 9. Load and execute the **first stage skill of the chosen track** (\`brainstorm\` for medium/standard, \`spec\` for quick) plus its matching command file.
 
 ### Reclassification on discovery
 
-If mid-stage evidence contradicts the initial Class/Track decision (the "trivial" change needs a migration, the "quick" bug fix needs architecture work, an origin doc multiplies scope), STOP and re-classify using the Decision Protocol. On acceptance, run \`node .cclaw/hooks/start-flow.mjs --reclassify --track=<new-track> --class=<new-class> --reason=<why>\`; the helper records \`Reclassification:\` in \`00-idea.md\` and updates state atomically. Do NOT rewrite prior artifacts or manually edit flow-state.
+If mid-stage evidence contradicts the initial Class/Track decision (the "trivial" change needs a migration, the "quick" bug fix needs architecture work, an origin doc multiplies scope), STOP and re-classify using the Decision Protocol. On acceptance, run \`node .cclaw/hooks/start-flow.mjs --reclassify --track=<new-track> --class=<new-class> --reason=<why>\`; the helper records \`Reclassification:\` in \`00-idea.md\` and updates state atomically. If it fails, report one human-readable line plus the helper JSON payload in a fenced \`json\` block, never echo the invoking command line, and do not rewrite prior artifacts or manually edit flow-state.
 
 ### Path B: \`/cc\` (no arguments)
 
