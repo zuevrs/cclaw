@@ -283,6 +283,7 @@ describe("flow command contracts", () => {
       "security-reviewer",
       "test-author",
       "doc-updater",
+      "divergent-thinker",
       "fixer",
       "integration-overseer"
     ]) {
@@ -295,9 +296,11 @@ describe("flow command contracts", () => {
 
     const generatedDiscovery = await fs.readFile(path.join(root, ".cclaw/agents/product-discovery.md"), "utf8");
     const generatedCritic = await fs.readFile(path.join(root, ".cclaw/agents/critic.md"), "utf8");
+    const generatedDivergentThinker = await fs.readFile(path.join(root, ".cclaw/agents/divergent-thinker.md"), "utf8");
     const generatedIntegrationOverseer = await fs.readFile(path.join(root, ".cclaw/agents/integration-overseer.md"), "utf8");
     expect(generatedDiscovery).toContain("Mode: discovery");
     expect(generatedCritic).toContain("Pre-commitment predictions");
+    expect(generatedDivergentThinker).toContain("Generate 3-5 alternative framings");
     expect(generatedIntegrationOverseer).toContain("integration overseer");
     const generatedSliceImplementer = await fs.readFile(path.join(root, ".cclaw/agents/slice-implementer.md"), "utf8");
     expect(generatedSliceImplementer).toContain("STRICT_RETURN_SCHEMA");
@@ -571,6 +574,7 @@ describe("flow command contracts", () => {
     const specTemplate = await fs.readFile(path.join(root, ".cclaw/templates/04-spec.md"), "utf8");
     const tddTemplate = await fs.readFile(path.join(root, ".cclaw/templates/06-tdd.md"), "utf8");
     const reviewTemplate = await fs.readFile(path.join(root, ".cclaw/templates/07-review.md"), "utf8");
+    const shipTemplate = await fs.readFile(path.join(root, ".cclaw/templates/08-ship.md"), "utf8");
     const cohesionContractTemplate = await fs.readFile(path.join(root, ".cclaw/templates/cohesion-contract.md"), "utf8");
     const cohesionContractJsonTemplate = JSON.parse(
       await fs.readFile(path.join(root, ".cclaw/templates/cohesion-contract.json"), "utf8")
@@ -592,6 +596,8 @@ describe("flow command contracts", () => {
     expect(reviewTemplate).toContain("active track's upstream source item");
     expect(reviewTemplate).toContain("N/A - direct spec/reproduction coverage");
     expect(reviewTemplate).toContain("AC/source-item/slice coverage rationale");
+    expect(shipTemplate).toContain("## Architect Cross-Stage Verification");
+    expect(shipTemplate).toContain("architect-cross-stage-verification");
     expect(cohesionContractTemplate).toContain("# Cohesion Contract");
     expect(cohesionContractTemplate).toContain("## Integration Touchpoints");
     expect(Array.isArray(cohesionContractJsonTemplate.sharedTypes)).toBe(true);
@@ -601,6 +607,23 @@ describe("flow command contracts", () => {
       expect(tddTemplate, `TDD template leaked ${phrase}`).not.toContain(phrase);
       expect(reviewTemplate, `review template leaked ${phrase}`).not.toContain(phrase);
     }
+  });
+
+  it("materializes executing-waves skill and wave-plan scaffold", async () => {
+    const root = await createTempProject("executing-waves-skill");
+    await initCclaw({ projectRoot: root });
+
+    const executingWavesSkill = await fs.readFile(
+      path.join(root, ".cclaw/skills/executing-waves/SKILL.md"),
+      "utf8"
+    );
+    expect(executingWavesSkill).toContain("## Process");
+    expect(executingWavesSkill).toContain("## Status Markers");
+    expect(executingWavesSkill).toContain("wave.drift_unaddressed");
+
+    await expect(
+      fs.stat(path.join(root, ".cclaw/wave-plans/.gitkeep"))
+    ).resolves.toBeTruthy();
   });
 
   it("keeps meta-skill utility routing limited to generated helper surfaces", async () => {

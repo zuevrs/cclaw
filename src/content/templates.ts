@@ -1288,6 +1288,12 @@ Execution rule: complete and verify each batch before starting the next batch.
 - Type-check:
 - Working tree clean:
 
+## Architect Cross-Stage Verification
+- Skill: architect-cross-stage-verification
+- Result: CROSS_STAGE_VERIFIED | DRIFT_DETECTED | BLOCKED
+- Evidence refs:
+- Drift summary:
+
 ## Base Branch Determination
 - Command run: \`git merge-base HEAD main || git merge-base HEAD master\`
 - Base branch:

@@ -165,6 +165,7 @@ Borrow the good part of Team/Ruflo-style orchestration without adding a swarm ru
 - **No parallel writes to adjacent surfaces.** If tasks may touch the same module, serialize them.
 - **Checkpoint before synthesis.** Each agent returns status, files inspected/changed, evidence, and blockers before the parent acts.
 - **Consensus is for hard calls only.** Use two reviewers when severity or architecture is disputed; otherwise one evidence-backed reviewer is enough.
+- **Multi-wave persistence uses the executing-waves skill.** For 2+ wave efforts, maintain \`.cclaw/wave-plans/\` and run carry-forward drift audits in brainstorm.
 
 ## Parallelization Decision Gate
 

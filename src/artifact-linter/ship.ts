@@ -1,3 +1,4 @@
+import { readDelegationLedger } from "../delegation.js";
 import {
   type StageLintContext,
   sectionBodyByName
@@ -62,4 +63,46 @@ export async function lintShipStage(ctx: StageLintContext): Promise<void> {
           : "Verify Tests Gate is missing a `Result: PASS|FAIL` line."
       });
     }
+
+    const delegationLedger = await readDelegationLedger(projectRoot);
+    const activeRunRows = delegationLedger.entries.filter((entry) =>
+      entry.stage === "ship" &&
+      entry.runId === delegationLedger.runId &&
+      entry.agent === "architect" &&
+      entry.status === "completed"
+    );
+    const hasCrossStageReferenceInArtifact =
+      /\barchitect-cross-stage-verification\b/iu.test(raw) ||
+      /\barchitect\b[\s\S]{0,180}\bcross[-\s]?stage\b/iu.test(raw) ||
+      /\bCROSS_STAGE_VERIFIED\b/u.test(raw) ||
+      /\bDRIFT_DETECTED\b/u.test(raw);
+
+    findings.push({
+      section: "ship.cross_stage_cohesion_missing",
+      required: true,
+      rule: "Ship artifact must include architect cross-stage verification reference (`architect-cross-stage-verification` / CROSS_STAGE_VERIFIED / DRIFT_DETECTED) before finalization.",
+      found: hasCrossStageReferenceInArtifact,
+      details: hasCrossStageReferenceInArtifact
+        ? "Architect cross-stage verification reference is present in ship artifact."
+        : activeRunRows.length > 0
+          ? "Completed architect delegation exists in ledger, but ship artifact is missing explicit cross-stage verification reference."
+          : "Ship artifact is missing architect cross-stage verification reference."
+    });
+
+    const driftDetectedInArtifact = /\bDRIFT_DETECTED\b/u.test(raw);
+    const driftDetectedInDelegation = activeRunRows.some((row) => {
+      const refs = Array.isArray(row.evidenceRefs) ? row.evidenceRefs.join(" ") : "";
+      return /\bDRIFT_DETECTED\b/u.test(refs);
+    });
+    const driftDetected = driftDetectedInArtifact || driftDetectedInDelegation;
+
+    findings.push({
+      section: "ship.cross_stage_drift_detected",
+      required: true,
+      rule: "If architect cross-stage verification reports DRIFT_DETECTED, ship must be blocked until drift is resolved or explicitly waived.",
+      found: !driftDetected,
+      details: driftDetected
+        ? "Architect cross-stage verification reported DRIFT_DETECTED; ship must not proceed."
+        : "No DRIFT_DETECTED signal found in ship artifact or architect delegation evidence."
+    });
 }

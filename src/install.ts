@@ -51,7 +51,8 @@ import { STATE_CONTRACTS } from "./content/state-contracts.js";
 import { REVIEW_PROMPTS } from "./content/review-prompts.js";
 import {
   stageSkillFolder,
-  stageSkillMarkdown
+  stageSkillMarkdown,
+  executingWavesSkillMarkdown
 } from "./content/skills.js";
 import {
   LANGUAGE_RULE_PACK_DIR,
@@ -551,6 +552,10 @@ async function writeArtifactTemplates(projectRoot: string): Promise<void> {
   }));
 }
 
+async function writeWavePlansScaffold(projectRoot: string): Promise<void> {
+  await writeFileSafe(runtimePath(projectRoot, "wave-plans", ".gitkeep"), "");
+}
+
 async function writeSkills(projectRoot: string, config?: CclawConfig): Promise<void> {
   const skillTrack = config?.defaultTrack ?? "standard";
   for (const stage of FLOW_STAGES) {
@@ -598,6 +603,10 @@ async function writeSkills(projectRoot: string, config?: CclawConfig): Promise<v
   await writeFileSafe(
     runtimePath(projectRoot, "skills", "iron-laws", "SKILL.md"),
     ironLawsSkillMarkdown()
+  );
+  await writeFileSafe(
+    runtimePath(projectRoot, "skills", "executing-waves", "SKILL.md"),
+    executingWavesSkillMarkdown()
   );
   await writeFileSafe(
     runtimePath(projectRoot, "skills", META_SKILL_NAME, "SKILL.md"),
@@ -1418,6 +1427,7 @@ async function materializeRuntime(
       writeEntryCommands(projectRoot),
       writeSkills(projectRoot, config),
       writeArtifactTemplates(projectRoot),
+      writeWavePlansScaffold(projectRoot),
       writeRulebook(projectRoot)
     ]);
     await writeState(projectRoot, config, forceStateReset);

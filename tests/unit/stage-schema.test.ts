@@ -48,6 +48,7 @@ describe("stage schema and subagent alignment", () => {
     expect(mandatoryDelegationsForStage("spec", "standard")).toEqual(["spec-validator"]);
     expect(mandatoryDelegationsForStage("review", "lightweight")).toContain("reviewer");
     expect(mandatoryDelegationsForStage("ship", "lightweight")).toContain("release-reviewer");
+    expect(mandatoryDelegationsForStage("ship", "lightweight")).toContain("architect");
   });
 
   it("keeps adopted reference families represented in the registry", () => {
@@ -81,9 +82,12 @@ describe("stage schema and subagent alignment", () => {
     const review = standard.find((row) => row.stage === "review");
     expect(review?.mandatoryAgents).toEqual(["reviewer", "security-reviewer"]);
     expect(review?.primaryAgents).toContain("reviewer");
+    const brainstorm = standard.find((row) => row.stage === "brainstorm");
+    expect(brainstorm?.proactiveAgents).toContain("divergent-thinker");
     const scope = standard.find((row) => row.stage === "scope");
     expect(scope?.proactiveAgents).toContain("product-discovery");
     expect(scope?.proactiveAgents).toContain("scope-guardian-reviewer");
+    expect(scope?.proactiveAgents).toContain("divergent-thinker");
     const spec = standard.find((row) => row.stage === "spec");
     expect(spec?.proactiveAgents).toContain("spec-document-reviewer");
     expect(spec?.proactiveAgents).toContain("coherence-reviewer");
@@ -138,6 +142,16 @@ describe("stage schema and subagent alignment", () => {
     expect(critic?.body).toContain("## ADVERSARIAL mode escalation");
   });
 
+  it("registers divergent-thinker as a divergence-only advisory specialist", () => {
+    const divergentThinker = CCLAW_AGENTS.find((agent) => agent.name === "divergent-thinker");
+    expect(divergentThinker).toBeTruthy();
+    expect(divergentThinker?.activation).toBe("proactive");
+    expect(divergentThinker?.relatedStages).toEqual(["brainstorm", "scope"]);
+    expect(divergentThinker?.returnSchema.requiredFields).toContain("recommendations");
+    expect(divergentThinker?.body).toContain("Role boundary: divergence only");
+    expect(divergentThinker?.body).toContain("Do NOT recommend a single approach");
+  });
+
   it("binds critic dispatch rows to critic-multi-perspective skill", () => {
     const brainstormCritic = stageAutoSubagentDispatch("brainstorm").find((row) => row.agent === "critic");
     const scopeCritic = stageAutoSubagentDispatch("scope").find((row) => row.agent === "critic");
@@ -146,6 +160,23 @@ describe("stage schema and subagent alignment", () => {
     expect(scopeCritic?.skill).toBe("critic-multi-perspective");
     expect(designCritic?.skill).toBe("critic-multi-perspective");
     expect(designCritic?.when).toContain("auth/authz trust boundaries");
+  });
+
+  it("routes divergent-thinker in brainstorm/scope and enforces ship architect cross-stage gate", () => {
+    const brainstormDivergent = stageAutoSubagentDispatch("brainstorm")
+      .find((row) => row.agent === "divergent-thinker");
+    const scopeDivergent = stageAutoSubagentDispatch("scope")
+      .find((row) => row.agent === "divergent-thinker");
+    const shipArchitect = stageAutoSubagentDispatch("ship")
+      .find((row) => row.agent === "architect");
+
+    expect(brainstormDivergent?.mode).toBe("proactive");
+    expect(brainstormDivergent?.when).toContain("candidate direction");
+    expect(scopeDivergent?.mode).toBe("proactive");
+    expect(scopeDivergent?.when).toContain("SCOPE EXPANSION");
+    expect(shipArchitect?.mode).toBe("mandatory");
+    expect(shipArchitect?.requiredAtTier).toBe("lightweight");
+    expect(shipArchitect?.skill).toBe("architect-cross-stage-verification");
   });
 
   it("derives policy needles from lint metadata with track transforms", () => {
@@ -267,6 +298,7 @@ describe("stage schema and subagent alignment", () => {
     expect(skill).toContain("at most 3-5 parallel agents");
     expect(skill).toContain("No parallel writes to adjacent surfaces");
     expect(skill).toContain("Consensus is for hard calls only");
+    expect(skill).toContain("executing-waves");
   });
 
   it("renders true harness dispatch workflow guidance", () => {
@@ -463,6 +495,7 @@ describe("stage schema and subagent alignment", () => {
       "architect",
       "coherence-reviewer",
       "critic",
+      "divergent-thinker",
       "doc-updater",
       "feasibility-reviewer",
       "fixer",

@@ -37,6 +37,7 @@ export type StageSubagentName =
   | "release-reviewer"
   | "planner"
   | "product-discovery"
+  | "divergent-thinker"
   | "critic"
   | "reviewer"
   | "security-reviewer"

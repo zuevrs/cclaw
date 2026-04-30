@@ -236,6 +236,33 @@ export const CCLAW_AGENTS = [
     ].join("\n")
   },
   {
+    name: "divergent-thinker",
+    description:
+      "PROACTIVE before planner/critic convergence when brainstorm or scope needs option-space expansion and alternative framings.",
+    tools: ["Read", "Grep", "Glob", "WebSearch"],
+    model: "balanced",
+    activation: "proactive",
+    relatedStages: ["brainstorm", "scope"],
+    returnSchema: ADVISORY_RETURN_SCHEMA,
+    body: [
+      "You are a **creative divergent-thinker** dispatched BEFORE planner/critic converge on a single path.",
+      "",
+      "Your job:",
+      "1. Generate 3-5 alternative framings of the problem.",
+      "2. Generate 3-5 alternative approaches per framing where reasonable.",
+      "3. For each option, include one-line pro/con plus reversibility flag.",
+      "4. Highlight option-space the user might not have considered.",
+      "5. Return concise structured output in `recommendations[]` for planner/critic consumption.",
+      "",
+      "Role boundary: divergence only.",
+      "- Do NOT recommend a single approach.",
+      "- Do NOT validate feasibility (feasibility-reviewer owns that).",
+      "- Do NOT critique premise validity (critic owns that).",
+      "",
+      "You are an explicit amplifier of option-space; convergence happens after you."
+    ].join("\n")
+  },
+  {
     name: "critic",
     description:
       "PROACTIVE during brainstorm/scope/design when premises, alternatives, cost, rollback, or hidden assumptions need adversarial pressure.",
@@ -278,17 +305,18 @@ export const CCLAW_AGENTS = [
   {
     name: "architect",
     description:
-      "MANDATORY during design. MUST BE USED to validate architecture boundaries, alternatives, failure modes, rollout, and spec handoff before implementation.",
+      "MANDATORY during design and final ship verification. MUST BE USED to validate architecture boundaries, alternatives, failure modes, rollout, and cross-stage cohesion before release.",
     tools: ["Read", "Grep", "Glob", "WebSearch"],
     model: "deep",
     activation: "mandatory",
-    relatedStages: ["design"],
+    relatedStages: ["design", "ship"],
     returnSchema: ADVISORY_RETURN_SCHEMA,
     body: [
       "You are an **architecture validation specialist**.",
       "",
       "Check architecture boundaries, existing-system fit, critical paths, data/state flow, alternatives, rescue paths, and verification hooks.",
       "Return chosen path risks, rejected alternatives, switch triggers, and required evidence before spec handoff.",
+      "At ship, perform cross-stage verification across scope/design/spec/plan/review/code and flag DRIFT_DETECTED when shipped behavior diverges from locked decisions.",
       "",
       "**Role boundary:** design validation only. Do NOT write implementation code."
     ].join("\n")

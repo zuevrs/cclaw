@@ -202,6 +202,7 @@ function defaultReturnSchemaForAgent(
       return "planning-return";
     case "product-discovery":
       return "product-return";
+    case "divergent-thinker":
     case "critic":
       return "critic-return";
     case "reviewer":
@@ -585,6 +586,13 @@ const STAGE_AUTO_SUBAGENT_DISPATCH: Record<FlowStage, StageAutoSubagentDispatch[
       requiresUserGate: false
     },
     {
+      agent: "divergent-thinker",
+      mode: "proactive",
+      when: "When brainstorm has >1 candidate direction or user signals openness to alternatives.",
+      purpose: "Expand option-space with alternative framings and approaches before planner/critic convergence.",
+      requiresUserGate: false
+    },
+    {
       agent: "critic",
       mode: "mandatory",
       requiredAtTier: "standard",
@@ -608,6 +616,13 @@ const STAGE_AUTO_SUBAGENT_DISPATCH: Record<FlowStage, StageAutoSubagentDispatch[
       requiredAtTier: "standard",
       when: "Always during scope shaping.",
       purpose: "Challenge premise, map alternatives, and produce explicit in/out contract.",
+      requiresUserGate: false
+    },
+    {
+      agent: "divergent-thinker",
+      mode: "proactive",
+      when: "When scope mode is SCOPE EXPANSION or SELECTIVE EXPANSION, or scope contract has fewer than 3 alternatives considered.",
+      purpose: "Generate additional framings and approach variants before scope convergence hardens.",
       requiresUserGate: false
     },
     {
@@ -865,6 +880,15 @@ const STAGE_AUTO_SUBAGENT_DISPATCH: Record<FlowStage, StageAutoSubagentDispatch[
     }
   ],
   ship: [
+    {
+      agent: "architect",
+      mode: "mandatory",
+      requiredAtTier: "lightweight",
+      when: "Always before final ship — verify cross-stage cohesion across scope/design/spec/plan/code.",
+      purpose: "Final cross-stage cohesion gate before release finalization.",
+      requiresUserGate: false,
+      skill: "architect-cross-stage-verification"
+    },
     {
       agent: "release-reviewer",
       mode: "mandatory",

@@ -99,6 +99,21 @@ function normalizeFixtureArtifact(fileName: string, content: string): string {
     }
   }
 
+  if (fileName.startsWith("08-ship") && !/^## Architect Cross-Stage Verification$/mu.test(normalized)) {
+    const architectVerification = `## Architect Cross-Stage Verification
+- Skill: architect-cross-stage-verification
+- Result: CROSS_STAGE_VERIFIED
+- Evidence refs: review verdict + ship preflight checks
+- Drift summary: none
+
+`;
+    if (/^## Finalization$/mu.test(normalized)) {
+      normalized = normalized.replace(/(^## Finalization$)/mu, `${architectVerification}$1`);
+    } else {
+      normalized = `${normalized.trimEnd()}\n\n${architectVerification}`;
+    }
+  }
+
   return normalized;
 }
 
@@ -494,6 +509,135 @@ describe("artifact linter heuristics", () => {
 
     const result = await lintArtifact(root, "brainstorm");
     expect(result.passed).toBe(true);
+  });
+
+  it("fails brainstorm in multi-wave mode when Wave Carry-forward section is missing", async () => {
+    const root = await createTempProject("artifact-lint-wave-carry-forward-missing");
+    await writeRuntimeArtifact(root, "01-brainstorm.md", `# Brainstorm Artifact
+
+## Context
+- Project state: monorepo with CI pipeline and custom release scripts
+- Relevant existing code/patterns: scripts/pre-publish.sh does metadata checks
+
+## Problem
+- What we're solving: reduce release regressions
+- Success criteria: invalid metadata blocked before publish
+- Constraints: no new runtime dependencies
+
+## Clarifying Questions
+| # | Question | Answer | Decision impact |
+|---|---|---|---|
+| 1 | Block invalid metadata or warn? | Block | hard gate required |
+| 2 | Add runtime dependencies? | No | stay on existing runtime stack |
+
+## Approach Tier
+- Tier: Standard
+- Why this tier: multiple workflow touchpoints with bounded complexity.
+
+## Short-Circuit Decision
+- Status: bypassed
+- Why: trade-offs still required explicit comparison.
+- Scope handoff: continue full brainstorm flow before scope.
+
+## Approaches
+| Approach | Role | Upside | Architecture | Trade-offs | Recommendation |
+|---|---|---|---|---|---|
+| A | baseline | modest | script-only checks | faster but weaker reuse |  |
+| B | challenger | higher | reusable validation module | slightly more effort, better long-term reuse | recommended |
+
+## Approach Reaction
+- Closest option: B
+- Concerns: avoid overbuild while keeping long-term reuse.
+- What changed after reaction: selected reusable module with strict v1 scope boundaries.
+
+## Selected Direction
+- Approach: B — reusable validation module
+- Rationale: user reaction favored reusable module with bounded v1 scope, balancing reuse and delivery speed
+- Approval: approved by user
+
+## Design
+- Architecture: shared TS module with typed validators imported by CI and local CLI
+- Key components: validateMetadata, validateChangelog, validateVersion, runAll
+- Data flow: package.json + CHANGELOG.md -> validator module -> structured result
+
+## Assumptions and Open Questions
+- Assumptions: CI remains primary release path
+- Open questions (or "None"): None
+`);
+    await fs.mkdir(path.join(root, ".cclaw/wave-plans"), { recursive: true });
+    await fs.writeFile(path.join(root, ".cclaw/wave-plans/14.md"), "# wave 14\n", "utf8");
+    await fs.writeFile(path.join(root, ".cclaw/wave-plans/15.md"), "# wave 15\n", "utf8");
+
+    const result = await lintArtifact(root, "brainstorm");
+    const waveCarryForward = result.findings.find((finding) => finding.section === "wave.drift_unaddressed");
+    expect(waveCarryForward?.found).toBe(false);
+    expect(waveCarryForward?.details).toContain("section is missing");
+  });
+
+  it("passes brainstorm multi-wave carry-forward audit when drift markers are present", async () => {
+    const root = await createTempProject("artifact-lint-wave-carry-forward-pass");
+    await writeRuntimeArtifact(root, "01-brainstorm.md", `# Brainstorm Artifact
+
+## Context
+- Project state: monorepo with CI pipeline and custom release scripts
+- Relevant existing code/patterns: scripts/pre-publish.sh does metadata checks
+
+## Problem
+- What we're solving: reduce release regressions
+- Success criteria: invalid metadata blocked before publish
+- Constraints: no new runtime dependencies
+
+## Clarifying Questions
+| # | Question | Answer | Decision impact |
+|---|---|---|---|
+| 1 | Block invalid metadata or warn? | Block | hard gate required |
+| 2 | Add runtime dependencies? | No | stay on existing runtime stack |
+
+## Approach Tier
+- Tier: Standard
+- Why this tier: multiple workflow touchpoints with bounded complexity.
+
+## Short-Circuit Decision
+- Status: bypassed
+- Why: trade-offs still required explicit comparison.
+- Scope handoff: continue full brainstorm flow before scope.
+
+## Approaches
+| Approach | Role | Upside | Architecture | Trade-offs | Recommendation |
+|---|---|---|---|---|---|
+| A | baseline | modest | script-only checks | faster but weaker reuse |  |
+| B | challenger | higher | reusable validation module | slightly more effort, better long-term reuse | recommended |
+
+## Approach Reaction
+- Closest option: B
+- Concerns: avoid overbuild while keeping long-term reuse.
+- What changed after reaction: selected reusable module with strict v1 scope boundaries.
+
+## Selected Direction
+- Approach: B — reusable validation module
+- Rationale: user reaction favored reusable module with bounded v1 scope, balancing reuse and delivery speed
+- Approval: approved by user
+
+## Wave Carry-forward
+- Carrying forward: Wave 14 critic contract and Wave 15 layered reviewers remain mandatory.
+- Drift detected: none.
+
+## Design
+- Architecture: shared TS module with typed validators imported by CI and local CLI
+- Key components: validateMetadata, validateChangelog, validateVersion, runAll
+- Data flow: package.json + CHANGELOG.md -> validator module -> structured result
+
+## Assumptions and Open Questions
+- Assumptions: CI remains primary release path
+- Open questions (or "None"): None
+`);
+    await fs.mkdir(path.join(root, ".cclaw/wave-plans"), { recursive: true });
+    await fs.writeFile(path.join(root, ".cclaw/wave-plans/14.md"), "# wave 14\n", "utf8");
+    await fs.writeFile(path.join(root, ".cclaw/wave-plans/15.md"), "# wave 15\n", "utf8");
+
+    const result = await lintArtifact(root, "brainstorm");
+    const waveCarryForward = result.findings.find((finding) => finding.section === "wave.drift_unaddressed");
+    expect(waveCarryForward?.found).toBe(true);
   });
 
   it("fails brainstorm critic findings without pre-commitment prediction sections", async () => {
@@ -1522,6 +1666,96 @@ describe("artifact linter heuristics", () => {
 
     const result = await lintArtifact(root, "ship");
     expect(result.passed).toBe(true);
+  });
+
+  it("fails ship when architect cross-stage verification reference is missing", async () => {
+    const root = await createTempProject("ship-cross-stage-reference-missing");
+    await fs.mkdir(path.join(root, ".cclaw/state"), { recursive: true });
+    await fs.mkdir(path.join(root, ".cclaw/artifacts"), { recursive: true });
+    await fs.writeFile(path.join(root, ".cclaw/state/flow-state.json"), JSON.stringify({
+      currentStage: "ship",
+      activeRunId: "active",
+      completedStages: ["brainstorm", "scope", "design", "spec", "plan", "tdd", "review"]
+    }, null, 2), "utf8");
+    await fs.writeFile(path.join(root, ".cclaw/artifacts/08-ship.md"), `# Ship Artifact
+
+## Preflight Results
+- Review verdict: APPROVED
+- Build: pass
+- Tests: pass (47 passed, 0 failed)
+- Lint: pass
+- Type-check: pass
+- Working tree clean: yes
+
+## Release Notes
+- Added: notification feed with SSE
+
+## Rollback Plan
+- Trigger conditions: error rate >5%
+- Rollback steps: git revert <sha> && git push
+- Verification steps: confirm error rate baseline
+
+## Monitoring
+- Metrics/logs to watch: error rate for 24h
+
+## Finalization
+- Selected enum: FINALIZE_OPEN_PR
+- Execution result: PR #42 merged
+`, "utf8");
+
+    const result = await lintArtifact(root, "ship");
+    const crossStage = result.findings.find((finding) => finding.section === "ship.cross_stage_cohesion_missing");
+    expect(crossStage?.found).toBe(false);
+    expect(crossStage?.details).toContain("missing architect cross-stage verification reference");
+  });
+
+  it("fails ship when architect cross-stage verification reports drift", async () => {
+    const root = await createTempProject("ship-cross-stage-drift-detected");
+    await fs.mkdir(path.join(root, ".cclaw/state"), { recursive: true });
+    await fs.mkdir(path.join(root, ".cclaw/artifacts"), { recursive: true });
+    await fs.writeFile(path.join(root, ".cclaw/state/flow-state.json"), JSON.stringify({
+      currentStage: "ship",
+      activeRunId: "active",
+      completedStages: ["brainstorm", "scope", "design", "spec", "plan", "tdd", "review"]
+    }, null, 2), "utf8");
+    await fs.writeFile(path.join(root, ".cclaw/artifacts/08-ship.md"), `# Ship Artifact
+
+## Preflight Results
+- Review verdict: APPROVED
+- Build: pass
+- Tests: pass (47 passed, 0 failed)
+- Lint: pass
+- Type-check: pass
+- Working tree clean: yes
+
+## Release Notes
+- Added: notification feed with SSE
+
+## Rollback Plan
+- Trigger conditions: error rate >5%
+- Rollback steps: git revert <sha> && git push
+- Verification steps: confirm error rate baseline
+
+## Monitoring
+- Metrics/logs to watch: error rate for 24h
+
+## Architect Cross-Stage Verification
+- Skill: architect-cross-stage-verification
+- Result: DRIFT_DETECTED
+- Evidence refs: review artifact showed unresolved contradiction in API behavior
+- Drift summary: spec and review diverged on request validation contract
+
+## Finalization
+- Selected enum: FINALIZE_OPEN_PR
+- Execution result: blocked pending drift resolution
+`, "utf8");
+
+    const result = await lintArtifact(root, "ship");
+    const crossStage = result.findings.find((finding) => finding.section === "ship.cross_stage_cohesion_missing");
+    const driftDetected = result.findings.find((finding) => finding.section === "ship.cross_stage_drift_detected");
+    expect(crossStage?.found).toBe(true);
+    expect(driftDetected?.found).toBe(false);
+    expect(driftDetected?.details).toContain("DRIFT_DETECTED");
   });
 
   it("accepts FINALIZE_NO_VCS as a valid ship finalization mode", async () => {

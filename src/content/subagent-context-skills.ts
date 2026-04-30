@@ -297,6 +297,29 @@ Use as an optional follow-up lens when failure diagnosis, telemetry, or operatio
 `;
 }
 
+function architectCrossStageVerificationSkill(): string {
+  return `${skillFrontmatter(
+    "architect-cross-stage-verification",
+    "Cross-stage cohesion verification before ship finalization."
+  )}# Architect Cross-Stage Verification
+
+Use with the \`architect\` delegation in the \`ship\` stage.
+
+## Required Output
+
+- Read scope/design/spec/plan/review artifacts plus shipped diff/code surfaces.
+- Validate that locked decisions and acceptance mappings still match shipped behavior.
+- Flag drift between intended architecture and implemented boundaries.
+- Return exactly one status token: \`CROSS_STAGE_VERIFIED\`, \`DRIFT_DETECTED\`, or \`BLOCKED\`.
+- Provide evidence refs for every drift claim and identify the smallest corrective route.
+
+## Guardrails
+
+- Do not defer unresolved drift to post-ship follow-up without explicit waiver.
+- If evidence is insufficient to verify cohesion, return \`BLOCKED\` with missing inputs.
+`;
+}
+
 export const SUBAGENT_CONTEXT_SKILLS: Record<SubagentContextSkillId, string> = {
   "tdd-cycle-evidence": tddCycleEvidenceSkill(),
   "review-spec-pass": reviewSpecPassSkill(),
@@ -310,5 +333,6 @@ export const SUBAGENT_CONTEXT_SKILLS: Record<SubagentContextSkillId, string> = {
   "document-feasibility-pass": documentFeasibilityPassSkill(),
   "review-perf-lens": reviewPerfLensSkill(),
   "review-compat-lens": reviewCompatLensSkill(),
-  "review-observability-lens": reviewObservabilityLensSkill()
+  "review-observability-lens": reviewObservabilityLensSkill(),
+  "architect-cross-stage-verification": architectCrossStageVerificationSkill()
 };

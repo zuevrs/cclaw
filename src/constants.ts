@@ -65,6 +65,7 @@ export const REQUIRED_DIRS = [
   `${RUNTIME_ROOT}/templates`,
   `${RUNTIME_ROOT}/templates/state-contracts`,
   `${RUNTIME_ROOT}/artifacts`,
+  `${RUNTIME_ROOT}/wave-plans`,
   `${RUNTIME_ROOT}/archive`,
   `${RUNTIME_ROOT}/state`,
   `${RUNTIME_ROOT}/rules`,
