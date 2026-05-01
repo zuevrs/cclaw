@@ -708,10 +708,10 @@ CLI commands, using existing \`cclaw run resume\` and \`internal verify-current-
 
 1. **Wave Start**: author wave plan as \`.cclaw/wave-plans/<wave-n>.md\` referencing previous wave's ship artifact.
 2. **Carry-forward Audit**: at brainstorm of the next wave, re-read previous wave ship artifact and explicitly record in the existing \`## Wave Carry-forward\` section:
-   - Carrying forward: <scope LD# hash references still valid>
+   - Carrying forward: <scope D-XX decision references still valid>
    - Drift detected: <decisions no longer valid + reason>
    - Re-scope needed: <yes/no>
-   - Never create a second \`## Locked Decisions\` heading in brainstorm; reference prior LD# hashes inline.
+   - Never create a second \`## Locked Decisions\` heading in brainstorm; reference prior D-XX IDs inline.
 3. **Resume Path**: if a wave was interrupted mid-stage, \`cclaw run resume\` restores state. Run \`internal verify-current-state\` before continuing.
 4. **Wave End**: at ship, architect cross-stage verification runs from dispatch matrix. If \`DRIFT_DETECTED\`, fix before ship.
 5. **Next Wave Trigger**: launch new \`/cc <topic>\` for next wave and reference previous wave ship artifact in upstream handoff.

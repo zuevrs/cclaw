@@ -170,10 +170,12 @@ export async function hydrateReviewLoopEvidenceFromArtifact(
 export async function buildValidationReport(
   projectRoot: string,
   flowState: FlowState,
-  options: { allowBlockedReviewRoute?: boolean } = {}
+  options: { allowBlockedReviewRoute?: boolean; extraStageFlags?: string[] } = {}
 ): Promise<InternalValidationReport> {
   const delegation = await checkMandatoryDelegations(projectRoot, flowState.currentStage);
-  const gates = await verifyCurrentStageGateEvidence(projectRoot, flowState);
+  const gates = await verifyCurrentStageGateEvidence(projectRoot, flowState, {
+    extraStageFlags: options.extraStageFlags
+  });
   const completedStages = verifyCompletedStagesGateClosure(flowState);
   const blockedReviewRouteComplete = options.allowBlockedReviewRoute === true
     && flowState.currentStage === "review"
@@ -487,7 +489,8 @@ export async function runAdvanceStage(
   };
 
   const validation = await buildValidationReport(projectRoot, candidateState, {
-    allowBlockedReviewRoute: blockedReviewRoute
+    allowBlockedReviewRoute: blockedReviewRoute,
+    extraStageFlags: args.skipQuestions ? ["--skip-questions"] : undefined
   });
   if (!validation.ok) {
     const ledgerForDiag = await readDelegationLedger(projectRoot).catch(() => ({ entries: [] as Array<{ agent: string; spanId?: string; status: string; runId?: string }> }));

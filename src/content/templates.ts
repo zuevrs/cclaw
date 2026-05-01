@@ -311,14 +311,18 @@ RECOMMENDATION: <option letter — one-line rationale tying back to premise chal
 > is later dropped, keep the row and mark Priority \`DROPPED\`; if a new one is
 > added mid-flow, append with the next free R-number — do NOT reuse numbers.
 
-## Locked Decisions (LD#hash)
-| Decision Anchor | Decision | Why locked now | Downstream impact |
+## Locked Decisions
+| ID | Decision | Why locked now | Downstream impact |
 |---|---|---|---|
-| LD#<sha8> |  |  |  |
+| D-1 |  |  |  |
 
-> Decision Anchor is \`LD#\` + the first 8 lowercase hex chars of SHA-256 over
-> the normalized \`Decision\` cell (trim, collapse whitespace, lowercase). Downstream
-> design/spec/plan/review artifacts reference these anchors verbatim.
+> Decision IDs are stable \`D-XX\` numbers. Assign once and never renumber across
+> scope/design/spec/plan/review/ship; downstream artifacts reference these IDs
+> verbatim. If a decision is later dropped, keep the row and mark it
+> \`(superseded by D-Y)\`; if a new one is added mid-flow, append with the next
+> free D-number. Wave 22 (v4.0.0) removed the legacy LD#<sha8> hash anchor —
+> existing artifacts with LD# anchors remain valid markdown but the linter only
+> tracks D-XX IDs.
 
 ## In Scope / Out of Scope
 
@@ -482,7 +486,7 @@ ${MARKDOWN_CODE_FENCE}
 > Default path: compact inline synthesis here. Deep/high-risk work may also write \`.cclaw/artifacts/02a-research.md\`.
 
 ## Architecture Boundaries
-| Component | Responsibility | Requirement Refs (R#) | Decision Refs (LD#hash) | Owner |
+| Component | Responsibility | Requirement Refs (R#) | Decision Refs (D-XX) | Owner |
 |---|---|---|---|---|
 |  |  |  |  |  |
 
@@ -544,11 +548,11 @@ ${MARKDOWN_CODE_FENCE}
 ### Interaction Edge Case Matrix
 | Edge case | Handled? | Design response | Deferred item (if not handled) |
 |---|---|---|---|
-| double-click | yes/no |  | None / LD#hash |
-| nav-away-mid-request | yes/no |  | None / LD#hash |
-| 10K-result dataset | yes/no |  | None / LD#hash |
-| background-job abandonment | yes/no |  | None / LD#hash |
-| zombie connection | yes/no |  | None / LD#hash |
+| double-click | yes/no |  | None / D-XX |
+| nav-away-mid-request | yes/no |  | None / D-XX |
+| 10K-result dataset | yes/no |  | None / D-XX |
+| background-job abandonment | yes/no |  | None / D-XX |
+| zombie connection | yes/no |  | None / D-XX |
 
 ## Security & Threat Model
 | Boundary | Threat | Mitigation | Owner |
@@ -703,7 +707,7 @@ ${MARKDOWN_CODE_FENCE}
 - Drift from upstream (or \`None\`):
 
 ## Acceptance Criteria
-| ID | Requirement Ref (R#) | Criterion (observable/measurable/falsifiable) | Design Decision Ref (LD#hash) |
+| ID | Requirement Ref (R#) | Criterion (observable/measurable/falsifiable) | Design Decision Ref (D-XX) |
 |---|---|---|---|
 | AC-1 | R1 |  |  |
 
@@ -849,9 +853,9 @@ Execution rule: complete and verify each batch before starting the next batch.
 - TDD checkpoint plan: RED commit/checkpoint -> GREEN commit/checkpoint -> REFACTOR commit/checkpoint (or deferred because: )
 
 ## Locked Decision Coverage
-| Decision Ref (LD#hash) | Source section | Plan tasks implementing decision | Status |
+| Decision Ref (D-XX) | Source section | Plan tasks implementing decision | Status |
 |---|---|---|---|
-| LD#<sha8> | 02-scope.md > Locked Decisions | T-1 | covered |
+| D-1 | 02-scope.md > Locked Decisions | T-1 | covered |
 
 ## Risk Assessment
 | Task/Batch | Risk | Likelihood | Impact | Mitigation |
@@ -874,7 +878,7 @@ Execution rule: complete and verify each batch before starting the next batch.
   - Create:
   - Modify:
   - Test:
-- **Approach:** (1-3 sentences; cite design decision DD-# or LD#hash)
+- **Approach:** (1-3 sentences; cite design decision DD-# or scope D-XX)
 - **Patterns to follow:** (link existing files/modules to mirror, or \`- None applicable.\`)
 - **Test scenarios:**
   - Happy:
@@ -912,7 +916,7 @@ Execution rule: complete and verify each batch before starting the next batch.
   - Hits: 0 (required for WAIT_FOR_CONFIRM to resolve).
 - Scope reduction language scan:
   - Scanned phrases: \`v1\`, \`for now\`, \`later\`, \`temporary\`, \`placeholder\`, \`mock for now\`, \`hardcoded for now\`, \`will improve later\`.
-  - Hits: 0 (required when Locked Decisions section is non-empty; use LD#hash anchors).
+  - Hits: 0 (required when Locked Decisions section is non-empty; reference D-XX IDs from scope).
 
 ## WAIT_FOR_CONFIRM
 - Status: pending

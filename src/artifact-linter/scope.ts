@@ -1,13 +1,10 @@
 import {
   type StageLintContext,
   checkCriticPredictionsContract,
+  evaluateQaLogFloor,
   sectionBodyByHeadingPrefix,
   sectionBodyByName,
   extractCanonicalScopeMode,
-  sectionBodyByAnyName,
-  collectPatternHits,
-  SCOPE_REDUCTION_PATTERNS,
-  validateLockedDecisionAnchors,
   getMarkdownTableRows
 } from "./shared.js";
 import { readDelegationLedger } from "../delegation.js";
@@ -24,27 +21,20 @@ export async function lintScopeStage(ctx: StageLintContext): Promise<void> {
     brainstormShortCircuitBody,
     brainstormShortCircuitActivated,
     staleDiagramAuditEnabled,
-    isTrivialOverride
+    isTrivialOverride,
+    activeStageFlags
   } = ctx;
 
     const lockedDecisionsBody = sectionBodyByHeadingPrefix(sections, "Locked Decisions") ?? "";
     const scopeSummaryBody = sectionBodyByName(sections, "Scope Summary") ?? "";
     const selectedScopeMode = extractCanonicalScopeMode(scopeSummaryBody);
-    const strictScopeGuards =
-      parsedFrontmatter.hasFrontmatter ||
-      sectionBodyByHeadingPrefix(sections, "Locked Decisions") !== null;
-    const scopeSections = [
-      sectionBodyByAnyName(sections, ["In Scope / Out of Scope", "In Scope", "Out of Scope"]) ?? "",
-      sectionBodyByName(sections, "Scope Summary") ?? "",
-      lockedDecisionsBody
-    ].join("\n");
     const qaLogBody = sectionBodyByName(sections, "Q&A Log");
     const qaLogRows = qaLogBody ? getMarkdownTableRows(qaLogBody) : [];
     const qaLogOk = qaLogBody !== null && qaLogRows.length > 0;
     findings.push({
       section: "qa_log_missing",
       required: false,
-      rule: "[P3] qa_log_missing — Q&A Log empty — confirm you actually had a dialogue with the user, not a draft from memory.",
+      rule: "[P2] qa_log_missing — Q&A Log empty — confirm you actually had a dialogue with the user, not a draft from memory.",
       found: qaLogOk,
       details: qaLogOk
         ? `Q&A Log contains ${qaLogRows.length} data row(s).`
@@ -52,6 +42,18 @@ export async function lintScopeStage(ctx: StageLintContext): Promise<void> {
           ? "Missing `## Q&A Log` section."
           : "Q&A Log is present but has zero data rows."
     });
+
+    {
+      const skipQuestions = activeStageFlags.includes("--skip-questions");
+      const floor = evaluateQaLogFloor(qaLogBody, track, "scope", { skipQuestions });
+      findings.push({
+        section: "qa_log_below_min",
+        required: !floor.skipQuestionsAdvisory,
+        rule: "[P1] qa_log_below_min — Q&A Log below the adaptive elicitation floor for this track. Continue the loop or record an explicit user stop-signal row.",
+        found: floor.ok,
+        details: floor.details
+      });
+    }
 
     const strategistRequired =
       selectedScopeMode === "SCOPE EXPANSION" || selectedScopeMode === "SELECTIVE EXPANSION";
@@ -92,31 +94,11 @@ export async function lintScopeStage(ctx: StageLintContext): Promise<void> {
       });
     }
 
-    const reductionHits = collectPatternHits(scopeSections, SCOPE_REDUCTION_PATTERNS);
-    findings.push({
-      section: "No Scope Reduction Language",
-      required: strictScopeGuards,
-      rule: "Scope boundary sections must not use reduction placeholders (`v1`, `for now`, `later`, `temporary`, `placeholder`).",
-      found: reductionHits.length === 0,
-      details:
-        reductionHits.length === 0
-          ? "No scope-reduction phrases detected in scope boundary sections."
-          : `Detected scope-reduction phrase(s): ${reductionHits.join(", ")}.`
-    });
-
     if (sectionBodyByHeadingPrefix(sections, "Locked Decisions") !== null) {
-      const anchorValidation = validateLockedDecisionAnchors(lockedDecisionsBody);
-      findings.push({
-        section: "Locked Decisions Hash Integrity",
-        required: true,
-        rule: "Locked Decisions section must list unique LD#<sha8> content-derived anchors.",
-        found: anchorValidation.ok,
-        details: anchorValidation.details
-      });
-
-      // Legacy D-XX rows remain advisory for older artifacts, but new templates
-      // use LD#hash anchors. This check keeps D-XX duplicates visible without
-      // making old artifacts the primary contract.
+      // D-XX IDs are the stable contract. The legacy LD#<sha8> hash anchor
+      // check was removed in Wave 22 (v4.0.0) — it caused agents to spam
+      // shell hash commands when shifting decision rows around, and provided
+      // no signal beyond the D-XX uniqueness check below.
       const listDecisionLines = lockedDecisionsBody
         .split(/\r?\n/u)
         .map((line) => line.trim())
@@ -152,8 +134,8 @@ export async function lintScopeStage(ctx: StageLintContext): Promise<void> {
       }
       findings.push({
         section: "Locked Decisions ID Integrity",
-        required: false,
-        rule: "Locked Decisions section must list each decision with a unique stable D-XX ID.",
+        required: true,
+        rule: "Locked Decisions section must list each decision with a unique stable D-XX ID. (D-XX IDs replaced the legacy LD#<sha8> hash anchors in Wave 22.)",
         found: issues.length === 0,
         details:
           issues.length === 0
