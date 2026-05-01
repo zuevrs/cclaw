@@ -649,7 +649,10 @@ export async function checkMandatoryDelegations(
      * Optional task class for the active run. When set to
      * `"software-bugfix"`, the mandatory delegation gate is skipped
      * entirely (Wave 24). Callers that don't classify the run leave
-     * this undefined and rely on the track-based skip.
+     * this undefined; the function then falls back to
+     * `flowState.taskClass` (persisted in `flow-state.json`) so the
+     * Wave 24 bugfix-skip remains active across the `cclaw advance-stage`
+     * code path even when no caller forwards an explicit override.
      */
     taskClass?: MandatoryDelegationTaskClass | null;
   } = {}
@@ -682,14 +685,23 @@ export async function checkMandatoryDelegations(
   const flowState = await readFlowState(projectRoot, {
     repairFeatureSystem: options.repairFeatureSystem
   });
-  const mandatory = mandatoryAgentsFor(stage, flowState.track, options.taskClass ?? null);
+  // Wave 24 follow-up (v6.1.1): read `flowState.taskClass` as a fallback
+  // when the caller doesn't pass an explicit override. The
+  // `cclaw advance-stage` path (`buildValidationReport` →
+  // `checkMandatoryDelegations`) never forwarded `taskClass`, which left
+  // the `software-bugfix` skip dead for users who classified their run
+  // via `flow-state.json`. Forward-typed `null` callers still suppress
+  // the lookup explicitly; only `undefined` triggers the fallback.
+  const resolvedTaskClass: MandatoryDelegationTaskClass | null =
+    options.taskClass !== undefined ? options.taskClass : flowState.taskClass ?? null;
+  const mandatory = mandatoryAgentsFor(stage, flowState.track, resolvedTaskClass);
   const skippedByTrack = mandatory.length === 0 &&
     stageSchema(stage, flowState.track).mandatoryDelegations.length > 0;
   if (skippedByTrack) {
     await recordMandatorySkippedByTrack(projectRoot, {
       stage,
       track: flowState.track,
-      taskClass: options.taskClass ?? null,
+      taskClass: resolvedTaskClass,
       runId: flowState.activeRunId
     });
   }
