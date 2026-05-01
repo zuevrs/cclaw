@@ -45,7 +45,7 @@ export const TDD: StageSchemaV2Input = {
       "Map to acceptance criterion — identify the specific spec criterion this test proves.",
       "Discover the test surface — inspect existing tests, fixtures, helpers, test commands, and nearby assertions before authoring RED. Reuse the local test style unless the slice genuinely needs a new pattern.",
       "Run a system-wide impact check — name callbacks, state transitions, interfaces, schemas, CLI/config/API contracts, persistence, or event boundaries that this slice can affect. Add RED coverage for each affected public contract or record why it is out of scope.",
-      "Source/test preflight — before production edits, classify planned paths using `.cclaw/config.yaml::tdd.testPathPatterns` and `tdd.productionPathPatterns` when present; verify the RED touches a test path and the GREEN touches only source paths needed for the failing behavior.",
+      "Source/test preflight — before production edits, classify planned paths using test-path patterns; verify the RED touches a test path and the GREEN touches only source paths needed for the failing behavior.",
       "Set execution posture — record whether this slice is sequential, batch-safe, or blocked; when the existing git workflow permits small commits, checkpoint after RED, GREEN, and REFACTOR (or record why commits are deferred).",
       "Use the mandatory `test-author` delegation for RED — after discovery and impact check, produce failing behavior tests and RED evidence only (no production edits). Set `CCLAW_ACTIVE_AGENT=tdd-red` when the harness supports phase labels.",
       "RED: Capture failure output — copy the exact failure output as RED evidence. Record in artifact.",
@@ -56,7 +56,7 @@ export const TDD: StageSchemaV2Input = {
       "REFACTOR: continue the `test-author` evidence cycle (or a dedicated refactor mode when available) to improve code quality without behavior changes. Set `CCLAW_ACTIVE_AGENT=tdd-refactor` when the harness supports phase labels.",
       "Record evidence — capture test discovery, system-wide impact check, RED failure, GREEN output, and REFACTOR notes in the TDD artifact. When logging a `green` row, attach the closed acceptance-criterion IDs in `acIds` so Ralph Loop status counts them.",
       "Annotate traceability — link to the active track's source: plan task ID + spec criterion on standard/medium, or spec acceptance item / bug reproduction slice on quick.",
-      "Per-Slice Review (conditional) — if `.cclaw/config.yaml::sliceReview.enabled` is true and the slice meets any trigger (touchCount >= filesChangedThreshold, touchPaths match touchTriggers, or highRisk=true), append a `## Per-Slice Review` entry for this slice before moving on (see the dedicated section below).",
+      "Per-Slice Review (conditional) — if the slice meets any trigger (touchCount >= filesChangedThreshold, touchPaths match touchTriggers, or highRisk=true), append a `## Per-Slice Review` entry for this slice before moving on (see the dedicated section below).",
       "Repeat for each slice — return to step 1 for the next plan slice."
     ],
     interactionProtocol: [
@@ -74,7 +74,7 @@ export const TDD: StageSchemaV2Input = {
       "Use incremental RED/GREEN/REFACTOR commits when the repository workflow and working tree make that appropriate; otherwise record the checkpoint boundaries in the artifact.",
       "Stop if regressions appear and fix before proceeding.",
       "If a test passes unexpectedly, investigate: does the behavior already exist, or is the test wrong?",
-      "**Per-Slice Review point (conditional, opt-in).** When `.cclaw/config.yaml::sliceReview.enabled` is true, check every slice against the triggers before declaring it DONE. Triggers: `touchCount >= filesChangedThreshold`, any `touchPaths` match a `touchTriggers` glob, or the plan row declares `highRisk: true`. On a trigger, run two passes on the slice alone — (1) Spec-Compliance: trace RED/GREEN/REFACTOR evidence back to its plan task + spec criterion, noting edge cases the tests skip; (2) Quality: diff-scan for naming, error handling, dead code, simpler alternatives. Record both under `## Per-Slice Review` in `06-tdd.md`, naming the trigger that fired. Dispatch the `reviewer` subagent natively when available (log `fulfillmentMode: \"isolated\"`); otherwise fulfil via in-session role switch (`fulfillmentMode: \"role-switch\"`). Never fabricate an isolated pass from memory. Tracks outside `sliceReview.enforceOnTracks` still emit the section; sync only escalates missed reviews on enforced tracks."
+      "**Per-Slice Review point (conditional).** Check every slice against the triggers before declaring it DONE. Triggers: `touchCount >= filesChangedThreshold`, any `touchPaths` match a `touchTriggers` glob, or the plan row declares `highRisk: true`. On a trigger, run two passes on the slice alone — (1) Spec-Compliance: trace RED/GREEN/REFACTOR evidence back to its plan task + spec criterion, noting edge cases the tests skip; (2) Quality: diff-scan for naming, error handling, dead code, simpler alternatives. Record both under `## Per-Slice Review` in `06-tdd.md`, naming the trigger that fired. Dispatch the `reviewer` subagent natively when available (log `fulfillmentMode: \"isolated\"`); otherwise fulfil via in-session role switch (`fulfillmentMode: \"role-switch\"`). Never fabricate an isolated pass from memory."
     ],
     process: [
       "Select one vertical slice and map it to acceptance criterion(s).",
@@ -85,10 +85,10 @@ export const TDD: StageSchemaV2Input = {
       "Run tests and capture failure output.",
       "Use `test-author` in GREEN intent and implement the smallest change needed for GREEN.",
       "Run full tests and build checks.",
-      "Run a fresh verification-before-completion check and capture command + PASS/FAIL plus a commit SHA when VCS is present; for `vcs: none`, record explicit no-vcs reason plus content/artifact hash unless `tdd.verificationRef: disabled` is configured.",
+      "Run a fresh verification-before-completion check and capture command + PASS/FAIL plus a commit SHA when `.git` is present; otherwise record explicit no-vcs reason plus content/artifact hash.",
       "Run the REFACTOR intent preserving behavior.",
       "Record RED, GREEN, and REFACTOR evidence in artifact.",
-      "Annotate traceability to plan task and spec criterion; on `sliceReview` triggers, append a Per-Slice Review entry before closing the slice."
+      "Annotate traceability to plan task and spec criterion; on per-slice triggers, append a Per-Slice Review entry before closing the slice."
     ],
     requiredGates: [
       { id: "tdd_test_discovery_complete", description: "Relevant existing tests, fixtures, helpers, and runnable commands were discovered before RED tests were written." },
@@ -96,7 +96,7 @@ export const TDD: StageSchemaV2Input = {
       { id: "tdd_red_test_written", description: "Failing tests exist before implementation changes." },
       { id: "tdd_green_full_suite", description: "Full relevant suite passes in GREEN state." },
       { id: "tdd_refactor_completed", description: "Refactor pass completed with behavior preservation verified." },
-      { id: "tdd_verified_before_complete", description: "Fresh verification evidence includes test command, explicit pass/fail status, and a config-aware ref: commit SHA when VCS is present/required or an explicit no-VCS attestation when allowed." },
+      { id: "tdd_verified_before_complete", description: "Fresh verification evidence includes test command, explicit pass/fail status, and a durable ref: commit SHA when `.git` is present or explicit no-VCS attestation + hash when not." },
       { id: "tdd_iron_law_acknowledged", description: "Iron Law acknowledgement is explicit (`Acknowledged: yes`) before implementation proceeds." },
       { id: "tdd_watched_red_observed", description: "Watched-RED Proof records at least one observed failing test with ISO timestamp evidence." },
       { id: "tdd_slice_cycle_complete", description: "Vertical Slice Cycle records RED, GREEN, and REFACTOR phases per active slice." },
@@ -110,7 +110,7 @@ export const TDD: StageSchemaV2Input = {
       "Execution posture and vertical-slice RED/GREEN/REFACTOR checkpoint plan recorded, including commit boundaries when the repo workflow supports them.",
       "Failing command output captured (RED).",
       "Full test/build output recorded (GREEN).",
-      "Fresh verification evidence recorded with command, PASS/FAIL status, and config-aware commit SHA or no-VCS reason plus content/artifact hash before completion.",
+      "Fresh verification evidence recorded with command, PASS/FAIL status, and commit SHA or no-VCS reason plus content/artifact hash before completion.",
       "Iron Law Acknowledgement section explicitly states `Acknowledged: yes`.",
       "Watched-RED Proof includes at least one populated row with an ISO timestamp.",
       "Vertical Slice Cycle records RED, GREEN, and REFACTOR per active slice.",
@@ -129,7 +129,7 @@ export const TDD: StageSchemaV2Input = {
       "behavior changed during refactor",
       "no evidence recorded",
       "RED/GREEN blocked — classify with the managed taxonomy `NO_SOURCE_CONTEXT`, `NO_TEST_SURFACE`, `NO_IMPLEMENTABLE_SLICE`, `RED_NOT_EXPRESSIBLE`, or `NO_VCS_MODE` and capture blockedBecause, missingInputs, recommendedRoute, nextCommand, resumeCriteria, and the repair path: RED needs a failing test surface, GREEN needs full-suite pass evidence, REFACTOR needs behavior-preservation evidence.",
-      "no-VCS workspace without explicit `vcs: none`, no-vcs reason, content/artifact hash, or `tdd.verificationRef: disabled`"
+      "no-VCS workspace without explicit no-vcs reason and content/artifact hash"
     ],
     exitCriteria: [
       "test discovery and system-wide impact check are recorded",
@@ -174,7 +174,7 @@ export const TDD: StageSchemaV2Input = {
       { section: "Test Pyramid Shape", required: false, validationRule: "If present: per-slice count of Small/Medium/Large tests added, to let reviewers verify the suite is not drifting top-heavy." },
       { section: "Mock Preference Order", required: false, validationRule: "When mocks/spies appear in Test Discovery or RED Evidence, prefer Real > Fake > Stub > Mock. Mock-heavy slices should include explicit boundary justification (for example network/fs/time/external trust boundaries)." },
       { section: "Prove-It Reproduction", required: false, validationRule: "Required for bug-fix slices: original failing reproduction test (RED without fix), passing output with fix (GREEN), and a note confirming the test fails again if the fix is reverted." },
-      { section: "Per-Slice Review", required: false, validationRule: "When `.cclaw/config.yaml::sliceReview.enabled` is true: per triggered slice, a two-part record — Spec-Compliance (slice <-> plan task <-> spec criterion trace plus edge-case notes) and Quality (diff-focused review of naming, error handling, dead code, simpler alternatives). Each entry names the trigger (touchCount, touchPaths glob, or highRisk) and the delegation fulfillmentMode (`isolated` when a reviewer subagent was dispatched natively; `role-switch` when fulfilled in-session). Slices that did not meet any trigger may list `not triggered` instead of a full pass." }
+      { section: "Per-Slice Review", required: false, validationRule: "Per triggered slice, a two-part record — Spec-Compliance (slice <-> plan task <-> spec criterion trace plus edge-case notes) and Quality (diff-focused review of naming, error handling, dead code, simpler alternatives). Each entry names the trigger (touchCount, touchPaths glob, or highRisk) and the delegation fulfillmentMode (`isolated` when a reviewer subagent was dispatched natively; `role-switch` when fulfilled in-session). Slices that did not meet any trigger may list `not triggered` instead of a full pass." }
     ]
   },
   reviewLens: {
@@ -228,9 +228,9 @@ export const TDD: StageSchemaV2Input = {
       {
         title: "Per-Slice Review Audit (conditional)",
         evaluationPoints: [
-          "When `.cclaw/config.yaml::sliceReview.enabled` is true: does every triggered slice (touchCount >= threshold, touchPaths match, or highRisk=true) carry a Per-Slice Review entry with BOTH a Spec-Compliance pass (plan task <-> spec criterion + edge-case notes) AND a Quality pass (diff-level naming/errors/dead code/simpler alternatives)?",
+          "Does every triggered slice (touchCount >= threshold, touchPaths match, or highRisk=true) carry a Per-Slice Review entry with BOTH a Spec-Compliance pass (plan task <-> spec criterion + edge-case notes) AND a Quality pass (diff-level naming/errors/dead code/simpler alternatives)?",
           "Is the delegation `fulfillmentMode` recorded (`isolated` for a dispatched reviewer subagent, `role-switch` for an in-session pass) and does it match an entry in `.cclaw/state/delegation-log.json`?",
-          "On tracks listed in `sliceReview.enforceOnTracks`, are there zero missed triggered slices (sync also surfaces this as a warning)?"
+          "Are there zero missed triggered slices when triggers fired?"
         ],
         stopGate: false
       },

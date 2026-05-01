@@ -84,7 +84,7 @@ export const SCOPE: StageSchemaInput = {
       "**STOP BEFORE ADVANCE.** Mandatory delegation `planner` must be completed or explicitly waived for a real blocker. If the active harness cannot isolate a planner, run a role-switch planner pass instead: announce `## cclaw role-switch: scope/planner (mandatory)`, write the planner output/evidence into the scope artifact, and append a completed delegation row with `fulfillmentMode: \"role-switch\"` plus non-empty `evidenceRefs`. Then close with `node .cclaw/hooks/stage-complete.mjs scope --passed=scope_mode_selected,scope_contract_written,scope_user_approved --evidence-json '{\"scope_mode_selected\":\"<user-approved mode + rationale>\",\"scope_contract_written\":\"<artifact path + sections>\",\"scope_user_approved\":\"<explicit user approval quote or summary>\"}'`. `scope_user_approved` must cite the user's approval; review-loop evidence alone is not approval."
     ],
     process: [
-      "Run configured pre-scope audit only when enabled.",
+      "Run pre-scope audit before premise challenge.",
       "Run the scope pass scaled to risk: default to job-to-be-done plus explicit scope contract; add premise challenge, 10-star upside, smallest useful wedge, and change conditions only for deep/high-risk scope.",
       "Compare minimum viable, product-grade, and ideal architecture scope alternatives with explicit reuse/effort/risk.",
       "Recommend a scope mode with explicit rationale, then ask for user opt-in before treating it as selected.",
@@ -99,7 +99,7 @@ export const SCOPE: StageSchemaInput = {
     ],
     requiredEvidence: [
       "Artifact written to `.cclaw/artifacts/02-scope-<slug>.md`.",
-      "When `.cclaw/config.yaml::optInAudits.scopePreAudit` is true, Pre-Scope System Audit findings are captured (git log/diff/stash/debt markers).",
+      "Pre-Scope System Audit findings are captured (git log/diff/stash/debt markers).",
       "In-scope and out-of-scope lists are explicit.",
       "Discretion areas are explicit (or marked as `None`).",
       "Selected mode and rationale are documented using HOLD SCOPE, SELECTIVE EXPANSION, SCOPE EXPANSION, or SCOPE REDUCTION.",
@@ -158,7 +158,7 @@ export const SCOPE: StageSchemaInput = {
     },
     artifactValidation: [
       { section: "Upstream Handoff", required: false, validationRule: "Summarizes brainstorm/idea decisions, constraints, open questions, and explicit drift before scope decisions." },
-      { section: "Pre-Scope System Audit", required: false, validationRule: "When `.cclaw/config.yaml::optInAudits.scopePreAudit` is true: must capture git log -30, git diff --stat, git stash list, and debt-marker scan (TODO/FIXME/XXX/HACK) before premise challenge." },
+      { section: "Pre-Scope System Audit", required: true, validationRule: "Must capture git log -30, git diff --stat, git stash list, and debt-marker scan (TODO/FIXME/XXX/HACK) before premise challenge." },
       { section: "Prime Directives", required: false, validationRule: "For each scoped capability: named failure modes, explicit error surface, four data-flow paths, interaction edge cases, observability expectations, and deferred-item handling." },
       { section: "Premise Challenge", required: false, validationRule: "Must list at least 3 question/answer rows in a markdown table or bullet list (gstack default trio: right problem? direct path? what if we do nothing? — extend with leverage and reversibility for richer scope). The linter enforces structure, not English wording — answers may be in any language." },
       { section: "Scope Contract", required: true, validationRule: "Canonical contract: selected mode, in scope, out of scope, requirements, locked decisions, discretion areas, deferred ideas, accepted/rejected reference ideas, success definition, and design handoff." },
