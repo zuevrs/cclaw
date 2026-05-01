@@ -151,7 +151,7 @@ async function resolveDesignDiagramTier(
 const STALE_DIAGRAM_NEW_FILE_SUFFIX_PATTERN = /\(\s*new(?:[\s-]?file)?\s*\)/iu;
 const STALE_DIAGRAM_SKIP_FILE_SUFFIX_PATTERN = /\(\s*(?:n\/a|skip|skipped|deleted|removed|stub|placeholder|tbd)\s*\)/iu;
 
-interface CodebaseInvestigationFileRef {
+export interface CodebaseInvestigationFileRef {
   /** Filename to stat (parenthetical suffix already stripped). */
   filename: string;
   /** Raw cell content, useful for diagnostic messages. */
@@ -166,7 +166,7 @@ interface CodebaseInvestigationFileRef {
   skip: boolean;
 }
 
-function normalizeCodebaseInvestigationFileRef(value: string, notesCell: string): CodebaseInvestigationFileRef | null {
+export function normalizeCodebaseInvestigationFileRef(value: string, notesCell: string): CodebaseInvestigationFileRef | null {
   const cleanedFull = value
     .replace(/`/gu, "")
     .replace(/^\s*[-*]\s*/u, "")
@@ -196,7 +196,7 @@ function normalizeCodebaseInvestigationFileRef(value: string, notesCell: string)
   return { filename: stripped, raw: cleanedFull, newFile, skip };
 }
 
-function collectCodebaseInvestigationFiles(sectionBody: string): CodebaseInvestigationFileRef[] {
+export function collectCodebaseInvestigationFiles(sectionBody: string): CodebaseInvestigationFileRef[] {
   const refs: CodebaseInvestigationFileRef[] = [];
   const seen = new Set<string>();
   for (const row of getMarkdownTableRows(sectionBody)) {
