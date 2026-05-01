@@ -7,6 +7,8 @@ preserves it.
 
 No CLI flag exists for most of these — that is intentional. `cclaw-cli` is an installer/sync/support surface, not the day-to-day flow runtime.
 
+For harness users: these knobs are typically managed by the agent on your behalf via natural-language requests (for example, "switch to minimal hooks"). Manual edits are still supported.
+
 ## What `cclaw init` writes
 
 ```yaml
@@ -71,6 +73,48 @@ Per-law escape: if you need **one specific iron law** to always block
 while the rest of the pipeline stays advisory, list its id under
 `ironLaws.strictLaws`. There is no longer a per-axis (prompt-vs-TDD)
 override — the single `strictness` knob drives all guard families.
+
+### `hookProfile` (`minimal` | `standard` | `strict`, default `standard`)
+
+Controls how much of the hook surface is active at runtime:
+
+- `minimal` — only `session-start` and `stop-handoff` handlers run (plus internal `session-start-refresh` worker calls).
+- `standard` — default full hook surface.
+- `strict` — full hook surface, and hook guards behave as strict even if `strictness` is advisory.
+
+Runtime override (CI / emergency toggles):
+
+- `CCLAW_HOOK_PROFILE=minimal|standard|strict`
+
+`CCLAW_HOOK_PROFILE` overrides `hookProfile` from config.
+
+### `disabledHooks` (list of hook handler ids)
+
+Optional per-hook denylist applied after profile selection. Supported ids:
+
+- `session-start`
+- `session-start-refresh`
+- `stop-handoff`
+- `prompt-guard`
+- `workflow-guard`
+- `pre-tool-pipeline`
+- `prompt-pipeline`
+- `context-monitor`
+- `verify-current-state`
+
+Example:
+
+```yaml
+hookProfile: standard
+disabledHooks:
+  - context-monitor
+```
+
+Runtime override:
+
+- `CCLAW_DISABLED_HOOKS=hook1,hook2,...`
+
+When set, `CCLAW_DISABLED_HOOKS` overrides `disabledHooks` from config.
 
 ### `gitHookGuards` (boolean, default `false`)
 

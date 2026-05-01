@@ -125,4 +125,29 @@ describe("cclaw internal runtime-integrity", () => {
     const finding = report.findings.find((item) => item.id === "flow_state");
     expect(finding?.ok).toBe(false);
   });
+
+  it("warns when minimal hook profile is combined with strict strictness", async () => {
+    const root = await createTempProject("internal-runtime-integrity-hook-profile-warning");
+    await initCclaw({ projectRoot: root, harnesses: ["claude"] });
+    await writeProjectFile(
+      root,
+      ".cclaw/config.yaml",
+      `version: 2.0.0
+flowVersion: 1.0.0
+harnesses:
+  - claude
+strictness: strict
+hookProfile: minimal
+gitHookGuards: false
+`
+    );
+    const captured = captureIo();
+    const exit = await runInternalCommand(root, ["runtime-integrity", "--json"], captured.io);
+    const report = parseReport(captured.stdout());
+
+    expect(exit).toBe(0);
+    const finding = report.findings.find((item) => item.id === "hook_profile_strictness_compat");
+    expect(finding?.ok).toBe(false);
+    expect(report.summary.warnings).toBeGreaterThanOrEqual(1);
+  });
 });

@@ -5,12 +5,31 @@ import { CCLAW_VERSION, DEFAULT_HARNESSES, FLOW_VERSION, RUNTIME_ROOT } from "./
 import { isIronLawId, normalizeStrictLawIds } from "./content/iron-laws.js";
 import { exists, writeFileSafe } from "./fs-utils.js";
 import { FLOW_TRACKS, HARNESS_IDS, LANGUAGE_RULE_PACKS } from "./types.js";
-import type { CclawConfig, FlowTrack, HarnessId, LanguageRulePack, VcsMode } from "./types.js";
+import type {
+  CclawConfig,
+  FlowTrack,
+  HarnessId,
+  HookProfile,
+  LanguageRulePack,
+  VcsMode
+} from "./types.js";
 
 const CONFIG_PATH = `${RUNTIME_ROOT}/config.yaml`;
 const HARNESS_ID_SET = new Set<string>(HARNESS_IDS);
 const FLOW_TRACK_SET = new Set<string>(FLOW_TRACKS);
 const LANGUAGE_RULE_PACK_SET = new Set<string>(LANGUAGE_RULE_PACKS);
+const HOOK_PROFILE_SET = new Set<string>(["minimal", "standard", "strict"]);
+const HOOK_HANDLER_SET = new Set<string>([
+  "session-start",
+  "session-start-refresh",
+  "stop-handoff",
+  "prompt-guard",
+  "workflow-guard",
+  "pre-tool-pipeline",
+  "prompt-pipeline",
+  "context-monitor",
+  "verify-current-state"
+]);
 const SUPPORTED_HARNESSES_TEXT = HARNESS_IDS.join(", ");
 const SUPPORTED_TRACKS_TEXT = FLOW_TRACKS.join(", ");
 const SUPPORTED_LANGUAGE_RULE_PACKS_TEXT = LANGUAGE_RULE_PACKS.join(", ");
@@ -20,6 +39,8 @@ const ALLOWED_CONFIG_KEYS = new Set<string>([
   "harnesses",
   "vcs",
   "strictness",
+  "hookProfile",
+  "disabledHooks",
   "tddTestGlobs",
   "tdd",
   "compound",
@@ -185,6 +206,8 @@ export function createDefaultConfig(
     harnesses,
     vcs: "git-local-only",
     strictness: "advisory",
+    hookProfile: "standard",
+    disabledHooks: [],
     tddTestGlobs: [...tddTestPathPatterns],
     tdd: {
       testPathPatterns: tddTestPathPatterns,
@@ -341,6 +364,34 @@ export async function readConfig(
     throw configValidationError(fullPath, `"strictness" must be "advisory" or "strict"`);
   }
   const strictness: "advisory" | "strict" = strictnessRaw === "strict" ? "strict" : "advisory";
+
+  const hookProfileRaw = (parsed as { hookProfile?: unknown }).hookProfile;
+  if (
+    Object.prototype.hasOwnProperty.call(parsed, "hookProfile") &&
+    (typeof hookProfileRaw !== "string" || !HOOK_PROFILE_SET.has(hookProfileRaw))
+  ) {
+    throw configValidationError(fullPath, '"hookProfile" must be one of: minimal, standard, strict');
+  }
+  const hookProfile: HookProfile =
+    typeof hookProfileRaw === "string" && HOOK_PROFILE_SET.has(hookProfileRaw)
+      ? (hookProfileRaw as HookProfile)
+      : "standard";
+
+  const disabledHooksRaw = (parsed as { disabledHooks?: unknown }).disabledHooks;
+  const disabledHooks = validateStringArray(disabledHooksRaw, "disabledHooks", fullPath) ?? [];
+  const normalizedDisabledHooks: string[] = [];
+  for (const hookName of disabledHooks) {
+    const normalized = hookName.trim().toLowerCase();
+    if (!HOOK_HANDLER_SET.has(normalized)) {
+      throw configValidationError(
+        fullPath,
+        `"disabledHooks" contains unknown hook "${hookName}".`
+      );
+    }
+    if (!normalizedDisabledHooks.includes(normalized)) {
+      normalizedDisabledHooks.push(normalized);
+    }
+  }
 
   const tddTestGlobsRaw = (parsed as { tddTestGlobs?: unknown }).tddTestGlobs;
   const tddTestGlobs = validateStringArray(tddTestGlobsRaw, "tddTestGlobs", fullPath)
@@ -842,6 +893,8 @@ export async function readConfig(
     harnesses,
     vcs,
     strictness,
+    hookProfile,
+    disabledHooks: normalizedDisabledHooks,
     tddTestGlobs,
     tdd: {
       testPathPatterns: resolvedTddTestPathPatterns,
@@ -875,6 +928,8 @@ export async function readConfig(
  */
 type AdvancedConfigKey =
   | "vcs"
+  | "hookProfile"
+  | "disabledHooks"
   | "tddTestGlobs"
   | "tdd"
   | "compound"
@@ -925,6 +980,8 @@ function buildSerializableConfig(
     "harnesses",
     "vcs",
     "strictness",
+    "hookProfile",
+    "disabledHooks",
     "tddTestGlobs",
     "tdd",
     "compound",
@@ -990,6 +1047,8 @@ export async function detectAdvancedKeys(
     if (!isRecord(parsedUnknown)) return new Set();
     const advancedCandidates: AdvancedConfigKey[] = [
       "tddTestGlobs",
+      "hookProfile",
+      "disabledHooks",
       "tdd",
       "compound",
       "earlyLoop",

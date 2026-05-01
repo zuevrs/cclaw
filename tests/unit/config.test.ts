@@ -111,6 +111,45 @@ describe("config", () => {
     expect(config.gitHookGuards).toBe(true);
   });
 
+  it("parses hook profile and disabled hooks", async () => {
+    const root = await createTempProject("config-hook-profile");
+    await fs.mkdir(path.join(root, ".cclaw"), { recursive: true });
+    await fs.writeFile(
+      configPath(root),
+      `harnesses:
+  - claude
+hookProfile: minimal
+disabledHooks:
+  - context-monitor
+  - prompt-pipeline
+`,
+      "utf8"
+    );
+    const config = await readConfig(root);
+    expect(config.hookProfile).toBe("minimal");
+    expect(config.disabledHooks).toEqual(["context-monitor", "prompt-pipeline"]);
+  });
+
+  it("rejects invalid hook profile", async () => {
+    const root = await createTempProject("config-hook-profile-invalid");
+    await fs.mkdir(path.join(root, ".cclaw"), { recursive: true });
+    await fs.writeFile(configPath(root), "hookProfile: turbo\n", "utf8");
+    await expect(readConfig(root)).rejects.toThrow(/"hookProfile" must be one of: minimal, standard, strict/);
+  });
+
+  it("rejects unknown disabled hook names", async () => {
+    const root = await createTempProject("config-disabled-hooks-invalid");
+    await fs.mkdir(path.join(root, ".cclaw"), { recursive: true });
+    await fs.writeFile(
+      configPath(root),
+      `disabledHooks:
+  - unknown-hook
+`,
+      "utf8"
+    );
+    await expect(readConfig(root)).rejects.toThrow(/"disabledHooks" contains unknown hook "unknown-hook"/);
+  });
+
   it("parses tdd test path settings under single strictness knob", async () => {
     const root = await createTempProject("config-tdd-paths");
     await fs.mkdir(path.join(root, ".cclaw"), { recursive: true });
@@ -663,6 +702,8 @@ optInAudits:
     const unexpectedAdvanced = [
       "promptGuardMode",
       "tddEnforcement",
+      "hookProfile",
+      "disabledHooks",
       "tddTestGlobs",
       "tdd",
       "compound",

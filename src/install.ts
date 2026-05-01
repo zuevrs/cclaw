@@ -1117,6 +1117,8 @@ async function writeHooks(projectRoot: string, config: CclawConfig): Promise<voi
   await writeFileSafe(path.join(hooksDir, "cancel-run.mjs"), cancelRunScript());
   const hookRuntimeOptions: NodeHookRuntimeOptions = {
     strictness: effectiveStrictness,
+    hookProfile: config.hookProfile,
+    disabledHooks: config.disabledHooks,
     tddTestPathPatterns: config.tdd?.testPathPatterns ?? config.tddTestGlobs,
     tddProductionPathPatterns: config.tdd?.productionPathPatterns,
     compoundRecurrenceThreshold: config.compound?.recurrenceThreshold,

@@ -194,13 +194,19 @@ describe("hooks lifecycle wiring", () => {
     expect(codex).toContain(".cclaw/hooks/run-hook.cmd context-monitor");
     expect(codex).toContain(".cclaw/hooks/run-hook.cmd stop-handoff");
     expect(codex).not.toContain(".cclaw/hooks/run-hook.cmd verify-current-state");
+    expect(codex).toContain("statusMessage");
+    expect(codex).toContain("Applying cclaw Bash preflight");
+    expect(codex).toContain("Checking cclaw stage state");
     const codexHooks = JSON.parse(codex) as {
-      hooks: { UserPromptSubmit?: Array<{ hooks?: Array<{ command?: string }> }> };
+      hooks: {
+        UserPromptSubmit?: Array<{ hooks?: Array<{ command?: string; statusMessage?: string }> }>;
+      };
     };
     expect(JSON.stringify(codexHooks.hooks.UserPromptSubmit)).not.toContain("workflow-guard");
     expect(JSON.stringify(codexHooks.hooks.UserPromptSubmit)).toContain("prompt-pipeline");
     expect(JSON.stringify(codexHooks.hooks.UserPromptSubmit)).not.toContain("prompt-guard");
     expect(JSON.stringify(codexHooks.hooks.UserPromptSubmit)).not.toContain("verify-current-state");
+    expect(JSON.stringify(codexHooks.hooks.UserPromptSubmit)).toContain("Checking cclaw stage state");
     expect(codex).not.toContain(".sh");
   });
 

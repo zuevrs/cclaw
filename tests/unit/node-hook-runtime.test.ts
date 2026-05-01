@@ -56,6 +56,26 @@ async function runNodeHook(
   });
 }
 
+async function runCommand(
+  command: string,
+  args: string[],
+  cwd: string
+): Promise<{ code: number | null; stdout: string; stderr: string }> {
+  return await new Promise((resolve, reject) => {
+    const child = spawn(command, args, { cwd, env: process.env });
+    let stdout = "";
+    let stderr = "";
+    child.stdout.on("data", (chunk) => {
+      stdout += String(chunk);
+    });
+    child.stderr.on("data", (chunk) => {
+      stderr += String(chunk);
+    });
+    child.on("error", reject);
+    child.on("close", (code) => resolve({ code, stdout, stderr }));
+  });
+}
+
 describe("node hook runtime", () => {
   it("session-start emits bootstrap payload with inline knowledge digest", async () => {
     const root = await createTempProject("node-hook-session-start");
@@ -450,6 +470,82 @@ describe("node hook runtime", () => {
     expect(result.stdout).toContain("continue closeout with /cc");
   });
 
+  it("stop-handoff bypasses strict blocking on context-limit safety signal", async () => {
+    const root = await createTempProject("node-hook-stop-safety-context-limit");
+    await fs.mkdir(path.join(root, ".cclaw/state"), { recursive: true });
+    await fs.writeFile(path.join(root, ".cclaw/state/flow-state.json"), JSON.stringify({
+      currentStage: "plan",
+      activeRunId: "run-safety",
+      completedStages: ["brainstorm", "scope"]
+    }, null, 2), "utf8");
+    await fs.writeFile(path.join(root, ".cclaw/state/iron-laws.json"), JSON.stringify({
+      mode: "strict",
+      laws: [{ id: "stop-clean-or-handoff", strict: true }]
+    }, null, 2), "utf8");
+    const gitInit = await runCommand("git", ["init"], root);
+    expect(gitInit.code).toBe(0);
+    await fs.writeFile(path.join(root, "dirty.txt"), "dirty\n", "utf8");
+
+    const result = await runNodeHook(
+      root,
+      "stop-handoff",
+      nodeHookRuntimeScript(),
+      {
+        loop_count: 0,
+        transcript_id: "ctx-limit",
+        reason: "context_limit"
+      }
+    );
+    expect(result.code).toBe(0);
+    expect(result.stderr).toContain("bypassing strict stop block due to safety rule");
+    expect(result.stdout).toContain("session ending (stage=plan");
+  });
+
+  it("stop-handoff blocks at most twice per transcript in strict dirty-tree mode", async () => {
+    const root = await createTempProject("node-hook-stop-block-cap");
+    await fs.mkdir(path.join(root, ".cclaw/state"), { recursive: true });
+    await fs.writeFile(path.join(root, ".cclaw/state/flow-state.json"), JSON.stringify({
+      currentStage: "plan",
+      activeRunId: "run-block-cap",
+      completedStages: ["brainstorm", "scope"]
+    }, null, 2), "utf8");
+    await fs.writeFile(path.join(root, ".cclaw/state/iron-laws.json"), JSON.stringify({
+      mode: "strict",
+      laws: [{ id: "stop-clean-or-handoff", strict: true }]
+    }, null, 2), "utf8");
+    const gitInit = await runCommand("git", ["init"], root);
+    expect(gitInit.code).toBe(0);
+    await fs.writeFile(path.join(root, "dirty.txt"), "dirty\n", "utf8");
+
+    const first = await runNodeHook(
+      root,
+      "stop-handoff",
+      nodeHookRuntimeScript(),
+      { loop_count: 0, transcript_id: "thread-42" }
+    );
+    const second = await runNodeHook(
+      root,
+      "stop-handoff",
+      nodeHookRuntimeScript(),
+      { loop_count: 0, transcript_id: "thread-42" }
+    );
+    const third = await runNodeHook(
+      root,
+      "stop-handoff",
+      nodeHookRuntimeScript(),
+      { loop_count: 0, transcript_id: "thread-42" }
+    );
+
+    expect(first.code).toBe(1);
+    expect(second.code).toBe(1);
+    expect(third.code).toBe(0);
+    expect(third.stderr).toContain("block limit reached for this transcript");
+    const blockState = JSON.parse(
+      await fs.readFile(path.join(root, ".cclaw/state/stop-blocks-thread-42.json"), "utf8")
+    ) as { blockCount?: number };
+    expect(blockState.blockCount).toBe(2);
+  });
+
   it("prompt-guard supports advisory and strict modes", async () => {
     const root = await createTempProject("node-hook-prompt-guard");
     await fs.mkdir(path.join(root, ".cclaw/state"), { recursive: true });
@@ -498,6 +594,108 @@ describe("node hook runtime", () => {
       strictPayload.additional_context ??
       "";
     expect(strictContext).toContain("Blocked by strict mode");
+  });
+
+  it("hook profile minimal disables pre-tool pipeline guards", async () => {
+    const root = await createTempProject("node-hook-profile-minimal");
+    await fs.mkdir(path.join(root, ".cclaw/state"), { recursive: true });
+    const payload = {
+      tool_name: "Write",
+      tool_input: {
+        path: ".cclaw/state/flow-state.json",
+        content: "x"
+      }
+    };
+    const result = await runNodeHook(
+      root,
+      "pre-tool-pipeline",
+      nodeHookRuntimeScript({ strictness: "strict" }),
+      payload,
+      { CCLAW_HOOK_PROFILE: "minimal" }
+    );
+    expect(result.code).toBe(0);
+    expect(result.stderr.trim()).toBe("");
+    await expect(fs.stat(path.join(root, ".cclaw/state/prompt-guard.jsonl"))).rejects.toBeDefined();
+  });
+
+  it("hook profile strict forces strict guard behavior", async () => {
+    const root = await createTempProject("node-hook-profile-strict");
+    await fs.mkdir(path.join(root, ".cclaw/state"), { recursive: true });
+    const payload = {
+      tool_name: "Write",
+      tool_input: {
+        path: ".cclaw/state/flow-state.json",
+        content: "x"
+      }
+    };
+    const result = await runNodeHook(
+      root,
+      "prompt-guard",
+      nodeHookRuntimeScript({ strictness: "advisory" }),
+      payload,
+      { CCLAW_HOOK_PROFILE: "strict" }
+    );
+    expect(result.code).toBe(1);
+    expect(result.stderr).toContain("blocked by strict mode");
+  });
+
+  it("disabled hooks env override skips specific handlers", async () => {
+    const root = await createTempProject("node-hook-disabled-hooks-env");
+    await fs.mkdir(path.join(root, ".cclaw/state"), { recursive: true });
+    const result = await runNodeHook(
+      root,
+      "context-monitor",
+      nodeHookRuntimeScript(),
+      {
+        metrics: {
+          context_window: { remaining_percentage: 10 }
+        }
+      },
+      { CCLAW_DISABLED_HOOKS: "context-monitor" }
+    );
+    expect(result.code).toBe(0);
+    expect(result.stderr.trim()).toBe("");
+    await expect(fs.stat(path.join(root, ".cclaw/state/context-monitor.json"))).rejects.toBeDefined();
+  });
+
+  it("config hook profile fallback applies when env is unset", async () => {
+    const root = await createTempProject("node-hook-profile-config-fallback");
+    await fs.mkdir(path.join(root, ".cclaw/state"), { recursive: true });
+    await fs.writeFile(
+      path.join(root, ".cclaw/config.yaml"),
+      `hookProfile: minimal
+disabledHooks:
+  - context-monitor
+`,
+      "utf8"
+    );
+    const payload = {
+      tool_name: "Write",
+      tool_input: {
+        path: ".cclaw/state/flow-state.json",
+        content: "x"
+      }
+    };
+    const preTool = await runNodeHook(
+      root,
+      "pre-tool-pipeline",
+      nodeHookRuntimeScript({ strictness: "strict" }),
+      payload
+    );
+    const monitor = await runNodeHook(
+      root,
+      "context-monitor",
+      nodeHookRuntimeScript(),
+      {
+        metrics: {
+          context_window: { remaining_percentage: 10 }
+        }
+      }
+    );
+    expect(preTool.code).toBe(0);
+    expect(preTool.stderr.trim()).toBe("");
+    expect(monitor.code).toBe(0);
+    expect(monitor.stderr.trim()).toBe("");
   });
 
   it("prompt-guard allows normal artifact writes", async () => {
