@@ -952,6 +952,49 @@ export function mandatoryDelegationsForStage(
   return summary ? summary.mandatoryAgents : [];
 }
 
+/**
+ * Wave 24 (v6.0.0) — track-aware mandatory delegation lookup.
+ *
+ * Returns `[]` (skip the gate entirely) when the run is on a small-fix
+ * track or classified as a software bugfix:
+ *
+ *   - `track === "quick"` — the quick track is for trivial single-purpose
+ *     fixes (landing-page copy, doc edits, config tweaks). Mandatory
+ *     subagent dispatch is theatre on that surface area.
+ *   - `taskClass === "software-bugfix"` — bugfixes carry a RED-first
+ *     repro contract; the test author + reviewer in the tdd/review
+ *     stages already cover the safety surface, so mandatory upstream
+ *     delegation only burns tokens.
+ *
+ * Otherwise returns the registered mandatory list for the stage at the
+ * given tier. Callers (gate-evidence, advance-stage validator,
+ * subagents.ts table generator) MUST go through this helper instead of
+ * `mandatoryDelegationsForStage` so the track-aware drop applies
+ * uniformly.
+ *
+ * NOTE: the user query also calls this `lite/quick`. There is no `lite`
+ * FlowTrack — the closest concept in cclaw is the `quick` track plus the
+ * brainstorm `lightweight` complexity tier. We key on the FlowTrack
+ * because the run-level decision is what matters at gate time;
+ * complexity tier is a per-stage knob that doesn't survive the dispatch
+ * boundary.
+ */
+export type MandatoryDelegationTaskClass =
+  | "software-standard"
+  | "software-trivial"
+  | "software-bugfix";
+
+export function mandatoryAgentsFor(
+  stage: FlowStage,
+  track: FlowTrack,
+  taskClass?: MandatoryDelegationTaskClass | null,
+  complexityTier: StageComplexityTier = "standard"
+): string[] {
+  if (track === "quick") return [];
+  if (taskClass === "software-bugfix") return [];
+  return mandatoryDelegationsForStage(stage, complexityTier);
+}
+
 export function stageSchema(stage: FlowStage, track: FlowTrack = "standard"): StageSchema {
   const rawInput = stage === "tdd" ? tddStageForTrack(track) : STAGE_SCHEMA_MAP[stage];
   const base = normalizeStageSchemaInput(rawInput);

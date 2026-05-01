@@ -580,7 +580,7 @@ const result = await checkMandatoryDelegations(root, "scope");
     expect(ledger.entries).toEqual([]);
   });
 
-  it("uses track-specific requiredAtTier behavior for current-run mandatory checks", async () => {
+  it("Wave 24: drops mandatory delegations entirely on the quick track (skippedByTrack)", async () => {
     const root = await createTempProject("delegation-track-required-at-tier");
     await seedFlowState(root, "run-quick-review", "review");
     const statePath = path.join(root, ".cclaw/state/flow-state.json");
@@ -592,8 +592,12 @@ const result = await checkMandatoryDelegations(root, "scope");
     await writeConfig(root, createDefaultConfig(["claude"], "quick"));
 
     const result = await checkMandatoryDelegations(root, "review");
-    expect(result.satisfied).toBe(false);
-    expect(result.missing).toEqual(["reviewer", "security-reviewer"]);
+    // Wave 24 (v6.0.0): mandatory delegations are dropped on track === "quick".
+    // The gate reports satisfied: true, missing: [], and flags the skip via
+    // skippedByTrack so audit tooling can see it happened.
+    expect(result.satisfied).toBe(true);
+    expect(result.missing).toEqual([]);
+    expect(result.skippedByTrack).toBe(true);
   });
 
 

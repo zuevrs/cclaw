@@ -398,10 +398,16 @@ function mergedAntiPatterns(philosophy: StagePhilosophy, execution: StageExecuti
 
 function completionParametersBlock(schema: StageSchema, track: FlowTrack): string {
   const gateList = schema.executionModel.requiredGates.map((g) => `\`${g.id}\``).join(", ");
-  const mandatoryAgents = schema.reviewLens.mandatoryDelegations;
-  const mandatory = schema.reviewLens.mandatoryDelegations.length > 0
-    ? schema.reviewLens.mandatoryDelegations.map((a) => `\`${a}\``).join(", ")
-    : "none";
+  // Wave 24 (v6.0.0): mandatory agents are dropped on `quick` track. Surface
+  // the empty list so the rendered SKILL.md doesn't tell quick-track runs to
+  // dispatch agents the linter is going to skip.
+  const trackAwareMandatoryAgents = track === "quick" ? [] : schema.reviewLens.mandatoryDelegations;
+  const mandatoryAgents = trackAwareMandatoryAgents;
+  const mandatory = trackAwareMandatoryAgents.length > 0
+    ? trackAwareMandatoryAgents.map((a) => `\`${a}\``).join(", ")
+    : track === "quick" && schema.reviewLens.mandatoryDelegations.length > 0
+      ? "none (skipped: quick track — Wave 24)"
+      : "none";
   const resolvedNextStage = nextStageForTrack(schema.stage, track);
   const nextStage = resolvedNextStage ?? "done";
   const nextDescription = nextStage === "done"
