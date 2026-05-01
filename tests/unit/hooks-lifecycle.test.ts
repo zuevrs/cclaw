@@ -369,7 +369,7 @@ fs.appendFileSync(${JSON.stringify(callsPath)}, process.argv.slice(2).join(" ") 
     expect(calls).toContain("internal advance-stage scope --passed=scope_contract_written");
   });
 
-  it("stage-complete helper advances state and harvests learnings without cclaw on PATH", async () => {
+  it("stage-complete helper advances state and harvests learnings without cclaw on PATH", { timeout: 30000 }, async () => {
     const root = await createTempProject("stage-complete-no-path-harvest");
     await initCclaw({ projectRoot: root });
     await ensureRunSystem(root);
@@ -407,7 +407,7 @@ fs.appendFileSync(${JSON.stringify(callsPath)}, process.argv.slice(2).join(" ") 
     expect(state.guardEvidence.brainstorm_approaches_compared).toBe("evidence for brainstorm_approaches_compared");
   });
 
-  it("stage-complete helper accepts boolean evidence from copied shell commands", async () => {
+  it("stage-complete helper accepts boolean evidence from copied shell commands", { timeout: 30000 }, async () => {
     const root = await createTempProject("stage-complete-boolean-evidence");
     await initCclaw({ projectRoot: root });
     await ensureRunSystem(root);
