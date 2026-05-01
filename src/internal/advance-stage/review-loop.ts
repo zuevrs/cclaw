@@ -18,6 +18,33 @@ const REVIEW_LOOP_STOP_REASONS = new Set([
   "user_opt_out"
 ]);
 
+/**
+ * Wave 25 (v6.1.0) — exact JSON shape that gate-evidence validators
+ * accept for a review-loop envelope. The error messages emitted by
+ * `validateReviewLoopGateEvidence` always include this example so the
+ * agent never has to guess where `stage` lives (top-level of the
+ * envelope, NOT inside `payload`). Keep `stage`/`targetScore`/etc. in
+ * the order shown so a copy-paste from the error survives.
+ */
+export function reviewLoopEnvelopeExample(stage: "scope" | "design"): string {
+  return JSON.stringify({
+    type: "review-loop",
+    stage,
+    targetScore: 0.8,
+    maxIterations: 3,
+    stopReason: "quality_threshold_met",
+    iterations: [{ iteration: 1, qualityScore: 0.8, findingsCount: 0 }]
+  });
+}
+
+function reviewLoopEnvelopeShapeHint(stage: "scope" | "design"): string {
+  return (
+    `Expected envelope: ${reviewLoopEnvelopeExample(stage)}` +
+    " (top-level keys: type, stage, targetScore, maxIterations, stopReason, iterations[]). " +
+    "Stage MUST be at the top level — not inside payload."
+  );
+}
+
 export function pickReviewLoopEnvelope(value: unknown): Record<string, unknown> | null {
   const direct = asRecord(value);
   if (!direct) return null;
@@ -34,14 +61,23 @@ export function validateReviewLoopGateEvidence(stage: "scope" | "design", eviden
   try {
     parsed = JSON.parse(evidence);
   } catch {
-    return "must be JSON containing a review-loop envelope (`type: \"review-loop\"`) in top-level, `payload`, or `reviewLoop`.";
+    return (
+      "must be JSON containing a review-loop envelope (`type: \"review-loop\"`) in top-level, `payload`, or `reviewLoop`. " +
+      reviewLoopEnvelopeShapeHint(stage)
+    );
   }
   const envelope = pickReviewLoopEnvelope(parsed);
   if (!envelope) {
-    return "must include a review-loop envelope (`type: \"review-loop\"`) in top-level, `payload`, or `reviewLoop`.";
+    return (
+      "must include a review-loop envelope (`type: \"review-loop\"`) in top-level, `payload`, or `reviewLoop`. " +
+      reviewLoopEnvelopeShapeHint(stage)
+    );
   }
   if (envelope.stage !== stage) {
-    return `review-loop envelope stage must be "${stage}".`;
+    return (
+      `review-loop envelope stage must be "${stage}" at the top level of the envelope, not inside payload. ` +
+      reviewLoopEnvelopeShapeHint(stage)
+    );
   }
   const targetScore = envelope.targetScore;
   if (typeof targetScore !== "number" || Number.isNaN(targetScore) || targetScore < 0 || targetScore > 1) {
@@ -179,5 +215,19 @@ export async function validateGateEvidenceShape(
 
 export function reviewLoopArtifactFixHint(stage: FlowStage, gateId: string): string {
   if (AUTO_REVIEW_LOOP_GATE_BY_STAGE[stage] !== gateId) return "";
-  return ` Add a \`## ${stage === "scope" ? "Scope Outside Voice Loop" : "Design Outside Voice Loop"}\` table to the artifact with rows like \`| 1 | 0.80 | 0 |\` plus \`- Stop reason: quality_threshold_met\`, \`- Target score: 0.80\`, and \`- Max iterations: 3\`; then omit this gate from manual evidence so stage-complete can auto-hydrate it.`;
+  // Wave 25 (v6.1.0): the consistent flow is "include the gate in
+  // --passed AND let stage-complete auto-hydrate evidence from the
+  // artifact". Wave 24's hint told agents to omit the gate from
+  // --evidence-json, but they then hit
+  // `missing --evidence-json entries for passed gates: <gateId>`
+  // because hydration only runs when --evidence-json is also present
+  // OR when an artifact section yields a parseable envelope. The new
+  // hint tells the agent to:
+  //   1. Add the artifact section (so hydration succeeds), AND
+  //   2. Include the gate in --passed.
+  // No --evidence-json entry is required in that case.
+  const stageReviewSection = stage === "scope" ? "Scope Outside Voice Loop" : "Design Outside Voice Loop";
+  return (
+    ` Fix in two steps: (1) Add a \`## ${stageReviewSection}\` table to the artifact with rows like \`| 1 | 0.80 | 0 |\` plus \`- Stop reason: quality_threshold_met\`, \`- Target score: 0.80\`, and \`- Max iterations: 3\`. (2) Re-run \`stage-complete ${stage} --passed=...,${gateId},...\` — stage-complete will auto-hydrate the envelope from the artifact, so you do NOT need to pass --evidence-json for ${gateId}.`
+  );
 }

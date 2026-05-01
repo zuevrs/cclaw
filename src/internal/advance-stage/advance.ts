@@ -31,6 +31,7 @@ import { unique } from "./helpers.js";
 import {
   AUTO_REVIEW_LOOP_GATE_BY_STAGE,
   reviewLoopArtifactFixHint,
+  reviewLoopEnvelopeExample,
   validateGateEvidenceShape
 } from "./review-loop.js";
 import type { AdvanceStageArgs } from "./parsers.js";
@@ -135,6 +136,21 @@ function nextInteractionHints(
   return hints;
 }
 
+/**
+ * Wave 24 entry point — auto-hydrate evidence for an auto-hydratable
+ * gate that the agent already included in --passed but for which they
+ * forgot to provide --evidence-json. Returns silently when no
+ * hydration is possible (no auto-hydratable gate, no artifact, no
+ * envelope, etc.).
+ *
+ * Wave 25 (v6.1.0) layered `tryAutoHydrateAndSelectReviewLoopGate` on
+ * top of this so the gate is also auto-included in selectedGateIds
+ * when the artifact yields a valid envelope. Together the two helpers
+ * remove the contradiction the user reported in Wave 24:
+ *   - "omit this gate from --evidence-json so stage-complete can
+ *      auto-hydrate it" → "missing --evidence-json entries for passed
+ *      gates: design_diagram_freshness".
+ */
 export async function hydrateReviewLoopEvidenceFromArtifact(
   projectRoot: string,
   stage: FlowStage,
@@ -167,6 +183,74 @@ export async function hydrateReviewLoopEvidenceFromArtifact(
   const envelope = extractReviewLoopEnvelopeFromArtifact(raw, reviewStage, resolved.relPath);
   if (!envelope) return;
   evidenceByGate[gateId] = JSON.stringify(envelope);
+}
+
+/**
+ * Wave 25 (v6.1.0) — auto-include an auto-hydratable review-loop gate
+ * in `selectedGateIds` when:
+ *   - The stage has an auto-hydratable gate registered via
+ *     `AUTO_REVIEW_LOOP_GATE_BY_STAGE` (currently `design`).
+ *   - The artifact yields a valid review-loop envelope via
+ *     `extractReviewLoopEnvelopeFromArtifact`.
+ *   - The gate is required for the active track.
+ *   - The agent has NOT passed the gate yet (so we don't double-add).
+ *
+ * Returns the (possibly extended) array of selected gate IDs and
+ * mutates `evidenceByGate` to include the hydrated envelope.
+ *
+ * Together with `hydrateReviewLoopEvidenceFromArtifact` this makes the
+ * flow consistent: if the artifact contains the envelope, the agent
+ * neither has to include the gate in --passed nor pass --evidence-json
+ * for it. If the artifact does NOT contain the envelope, the agent
+ * gets a clear error pointing at the artifact section to add (via
+ * `reviewLoopArtifactFixHint`).
+ */
+export async function tryAutoHydrateAndSelectReviewLoopGate(
+  projectRoot: string,
+  stage: FlowStage,
+  track: FlowState["track"],
+  requiredGateIds: string[],
+  selectedGateIds: string[],
+  evidenceByGate: Record<string, string>
+): Promise<string[]> {
+  const gateId = AUTO_REVIEW_LOOP_GATE_BY_STAGE[stage];
+  if (!gateId) return selectedGateIds;
+  const reviewStage = stage === "scope" || stage === "design" ? stage : null;
+  if (!reviewStage) return selectedGateIds;
+  if (!requiredGateIds.includes(gateId)) return selectedGateIds;
+  if (selectedGateIds.includes(gateId)) {
+    // Already selected — fall through to the existing hydration helper
+    // for the manual --evidence-json path.
+    await hydrateReviewLoopEvidenceFromArtifact(
+      projectRoot,
+      stage,
+      track,
+      selectedGateIds,
+      evidenceByGate
+    );
+    return selectedGateIds;
+  }
+
+  const existing = evidenceByGate[gateId];
+  if (typeof existing === "string" && existing.trim().length > 0) {
+    return [...selectedGateIds, gateId];
+  }
+
+  const resolved = await resolveArtifactPath(stage, {
+    projectRoot,
+    track,
+    intent: "read"
+  });
+  let raw = "";
+  try {
+    raw = await fs.readFile(resolved.absPath, "utf8");
+  } catch {
+    return selectedGateIds;
+  }
+  const envelope = extractReviewLoopEnvelopeFromArtifact(raw, reviewStage, resolved.relPath);
+  if (!envelope) return selectedGateIds;
+  evidenceByGate[gateId] = JSON.stringify(envelope);
+  return [...selectedGateIds, gateId];
 }
 
 export async function buildValidationReport(
@@ -359,10 +443,25 @@ export async function runAdvanceStage(
       .filter((guardId) => !allowedGateIds.has(guardId))
   );
   const selectableGateIds = new Set([...allowedGateIds, ...transitionGuardIds]);
-  const selectedGateIds =
+  let selectedGateIds =
     args.passedGateIds.length > 0
       ? args.passedGateIds.filter((gateId) => selectableGateIds.has(gateId))
       : requiredGateIds;
+  // Wave 25 (v6.1.0): if the active stage has an auto-hydratable
+  // review-loop gate (currently `design.design_architecture_locked`)
+  // and the artifact already contains a valid review-loop envelope,
+  // include the gate in selectedGateIds and hydrate evidence in one
+  // step. This removes the Wave 24 contradiction between "omit from
+  // --evidence-json so we can auto-hydrate" and "missing
+  // --evidence-json entries for passed gates".
+  selectedGateIds = await tryAutoHydrateAndSelectReviewLoopGate(
+    projectRoot,
+    args.stage,
+    flowState.track,
+    requiredGateIds,
+    selectedGateIds,
+    args.evidenceByGate
+  );
   const selectedGateIdSet = new Set(selectedGateIds);
   const selectedTransitionGuards = selectedGateIds.filter((gateId) => transitionGuardIds.has(gateId));
   const blockedReviewRoute = args.stage === "review" && selectedGateIdSet.has("review_verdict_blocked");
@@ -371,8 +470,13 @@ export async function runAdvanceStage(
     : requiredGateIds;
   const missingRequired = requiredForSelectedRoute.filter((gateId) => !selectedGateIdSet.has(gateId));
   if (missingRequired.length > 0) {
+    const autoHydrateGate = AUTO_REVIEW_LOOP_GATE_BY_STAGE[args.stage];
+    const autoHydrateHint =
+      autoHydrateGate && missingRequired.includes(autoHydrateGate) && (args.stage === "scope" || args.stage === "design")
+        ? ` Auto-hydratable gate "${autoHydrateGate}" was NOT auto-included because the design artifact is missing the review-loop envelope. Add a \`## ${args.stage === "scope" ? "Scope Outside Voice Loop" : "Design Outside Voice Loop"}\` table (example envelope: ${reviewLoopEnvelopeExample(args.stage)}), or pass --evidence-json='{"${autoHydrateGate}": "<envelope-json>"}' alongside --passed=...,${autoHydrateGate}.`
+        : "";
     io.stderr.write(
-      `cclaw internal advance-stage: required gates not selected as passed: ${missingRequired.join(", ")}.\n`
+      `cclaw internal advance-stage: required gates not selected as passed: ${missingRequired.join(", ")}.${autoHydrateHint}\n`
     );
     return 1;
   }
@@ -409,13 +513,10 @@ export async function runAdvanceStage(
     }
   }
 
-  await hydrateReviewLoopEvidenceFromArtifact(
-    projectRoot,
-    args.stage,
-    flowState.track,
-    selectedGateIds,
-    args.evidenceByGate
-  );
+  // Wave 25 (v6.1.0): hydration + auto-select happens earlier via
+  // `tryAutoHydrateAndSelectReviewLoopGate`. The previous explicit
+  // call here was redundant (helper already covered both the
+  // already-selected and not-yet-selected paths).
 
   const catalog = flowState.stageGateCatalog[args.stage];
   const nextPassed = unique([...catalog.passed, ...selectedGateIds]).filter((gateId) =>
