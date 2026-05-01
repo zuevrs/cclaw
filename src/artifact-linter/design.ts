@@ -8,6 +8,7 @@ import {
   type StageLintContext,
   checkCriticPredictionsContract,
   evaluateLayeredDocumentReviewStatus,
+  evaluateQaLogFloor,
   extractMarkdownSectionBody,
   getMarkdownTableRows,
   meaningfulLineCount,
@@ -247,7 +248,8 @@ export async function lintDesignStage(ctx: StageLintContext): Promise<void> {
     brainstormShortCircuitBody,
     brainstormShortCircuitActivated,
     staleDiagramAuditEnabled,
-    isTrivialOverride
+    isTrivialOverride,
+    activeStageFlags
   } = ctx;
     const qaLogBody = sectionBodyByName(sections, "Q&A Log");
     const qaLogRows = qaLogBody ? getMarkdownTableRows(qaLogBody) : [];
@@ -255,7 +257,7 @@ export async function lintDesignStage(ctx: StageLintContext): Promise<void> {
     findings.push({
       section: "qa_log_missing",
       required: false,
-      rule: "[P3] qa_log_missing — Q&A Log empty — confirm you actually had a dialogue with the user, not a draft from memory.",
+      rule: "[P2] qa_log_missing — Q&A Log empty — confirm you actually had a dialogue with the user, not a draft from memory.",
       found: qaLogOk,
       details: qaLogOk
         ? `Q&A Log contains ${qaLogRows.length} data row(s).`
@@ -263,6 +265,18 @@ export async function lintDesignStage(ctx: StageLintContext): Promise<void> {
           ? "Missing `## Q&A Log` section."
           : "Q&A Log is present but has zero data rows."
     });
+
+    {
+      const skipQuestions = activeStageFlags.includes("--skip-questions");
+      const floor = evaluateQaLogFloor(qaLogBody, track, "design", { skipQuestions });
+      findings.push({
+        section: "qa_log_below_min",
+        required: !floor.skipQuestionsAdvisory,
+        rule: "[P1] qa_log_below_min — Q&A Log below the adaptive elicitation floor for this track. Continue the loop or record an explicit user stop-signal row.",
+        found: floor.ok,
+        details: floor.details
+      });
+    }
     const criticPredictions = checkCriticPredictionsContract(sections);
     if (criticPredictions !== null) {
       findings.push({

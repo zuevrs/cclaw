@@ -7,6 +7,7 @@ import {
   lintArtifact,
   validateReviewArmy
 } from "./artifact-linter.js";
+import { ELICITATION_STAGES, evaluateQaLogFloor } from "./artifact-linter/shared.js";
 import { resolveArtifactPath } from "./artifact-paths.js";
 import { RUNTIME_ROOT } from "./constants.js";
 import { stageSchema } from "./content/stage-schema.js";
@@ -73,6 +74,25 @@ async function readStageArtifactMarkdown(
   }
 }
 
+/**
+ * Structured signal for the harness UI describing the adaptive
+ * elicitation Q&A floor for the current stage. Always present on
+ * brainstorm/scope/design verifications; null on other stages.
+ *
+ * Mirrors the `evaluateQaLogFloor` linter helper. Harness can render
+ * `count / min` progress, surface stop-signal/skip-questions hints, and
+ * differentiate between blocking and advisory.
+ */
+export interface QaLogFloorSignal {
+  ok: boolean;
+  count: number;
+  min: number;
+  hasStopSignal: boolean;
+  liteShortCircuit: boolean;
+  skipQuestionsAdvisory: boolean;
+  blocking: boolean;
+}
+
 export interface GateEvidenceCheckResult {
   ok: boolean;
   stage: FlowStage;
@@ -91,6 +111,8 @@ export interface GateEvidenceCheckResult {
   missingRecommended: string[];
   /** Triggered conditional gates that are not yet passed. */
   missingTriggeredConditional: string[];
+  /** Q&A floor signal for adaptive elicitation stages, null otherwise. */
+  qaLogFloor: QaLogFloorSignal | null;
 }
 
 export interface CompletedStagesClosureResult {
@@ -287,9 +309,15 @@ const DESIGN_RESEARCH_REQUIRED_SECTIONS = [
   "Synthesis"
 ] as const;
 
+export interface VerifyCurrentStageGateEvidenceOptions {
+  /** Extra stage flags propagated from the in-flight CLI args (e.g. `--skip-questions`). */
+  extraStageFlags?: string[];
+}
+
 export async function verifyCurrentStageGateEvidence(
   projectRoot: string,
-  flowState: FlowState
+  flowState: FlowState,
+  options: VerifyCurrentStageGateEvidenceOptions = {}
 ): Promise<GateEvidenceCheckResult> {
   const stage = flowState.currentStage;
   const schema = stageSchema(stage, flowState.track);
@@ -376,7 +404,9 @@ export async function verifyCurrentStageGateEvidence(
   const shouldValidateArtifact =
     artifactPresent || catalog.passed.length > 0 || flowState.completedStages.includes(stage);
   if (shouldValidateArtifact) {
-    const lint = await lintArtifact(projectRoot, stage, flowState.track);
+    const lint = await lintArtifact(projectRoot, stage, flowState.track, {
+      extraStageFlags: options.extraStageFlags
+    });
     if (!lint.passed) {
       const failedRequiredFindings = lint.findings
         .filter((finding) => finding.required && !finding.found);
@@ -566,6 +596,34 @@ export async function verifyCurrentStageGateEvidence(
     }
   }
 
+  let qaLogFloor: QaLogFloorSignal | null = null;
+  if (ELICITATION_STAGES.has(stage)) {
+    let qaLogBody: string | null = null;
+    try {
+      const stageMd = await readStageArtifactMarkdown(projectRoot, stage, flowState.track);
+      qaLogBody = stageMd
+        ? extractMarkdownSectionBody(stageMd, "Q&A Log")
+        : null;
+    } catch {
+      qaLogBody = null;
+    }
+    const skipQuestionsHint =
+      flowState.interactionHints?.[stage]?.skipQuestions === true ||
+      (options.extraStageFlags ?? []).includes("--skip-questions");
+    const floor = evaluateQaLogFloor(qaLogBody, flowState.track, stage, {
+      skipQuestions: skipQuestionsHint
+    });
+    qaLogFloor = {
+      ok: floor.ok,
+      count: floor.count,
+      min: floor.min,
+      hasStopSignal: floor.hasStopSignal,
+      liteShortCircuit: floor.liteShortCircuit,
+      skipQuestionsAdvisory: floor.skipQuestionsAdvisory,
+      blocking: !floor.ok && !floor.skipQuestionsAdvisory
+    };
+  }
+
   return {
     ok: issues.length === 0,
     stage,
@@ -579,7 +637,8 @@ export async function verifyCurrentStageGateEvidence(
     complete,
     missingRequired,
     missingRecommended,
-    missingTriggeredConditional
+    missingTriggeredConditional,
+    qaLogFloor
   };
 }
 

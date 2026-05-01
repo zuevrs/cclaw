@@ -53,7 +53,7 @@ value. Do not nitpick wording.
 | 10-star delta | Is there a better high-leverage scope move worth cherry-picking? |
 | Boundary | Are accepted, deferred, and excluded items unambiguous? |
 | Mode fit | Does the selected mode match the evidence: SCOPE EXPANSION, SELECTIVE EXPANSION, HOLD SCOPE, or SCOPE REDUCTION? |
-| Downstream refs | Are R-IDs and LD#hash anchors ready for design/spec/plan? |
+| Downstream refs | Are R-IDs and D-XX decision IDs ready for design/spec/plan? |
 
 ## Output
 
@@ -82,7 +82,7 @@ rework, missing failure behavior, or unverifiable acceptance criteria.
 | Architecture | Are component boundaries concrete and aligned with scope? |
 | Data flow | Are inputs, outputs, persistence, and async/sync edges explicit? |
 | Failure modes | Does every meaningful failure have detection, rescue, and user-visible behavior? |
-| Traceability | Do design decisions reference relevant R-IDs and LD#hash anchors? |
+| Traceability | Do design decisions reference relevant R-IDs and D-XX decision IDs? |
 | Verification | Is each risky choice testable by spec/plan/TDD? |
 | Overbuild | Is any architecture stronger than the locked scope actually needs? |
 
@@ -95,7 +95,7 @@ Record findings in the design artifact's review section:
 **Status:** Approved | Issues Found
 
 **Issues:**
-- [R#/LD#hash]: <specific issue> — <why it matters>
+- [R#/D-XX]: <specific issue> — <why it matters>
 
 **Recommendations:**
 - <advisory item or None>

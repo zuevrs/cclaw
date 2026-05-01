@@ -232,7 +232,8 @@ export function stageCompleteScript(): string {
     "Usage: node " + RUNTIME_ROOT + "/hooks/stage-complete.mjs <stage> [--passed=...] [--evidence-json=...] [--waive-delegation=...] [--waiver-reason=...] [--accept-proactive-waiver] [--accept-proactive-waiver-reason=...] [--skip-questions] [--json]",
     {
       positionalArgName: "stage",
-      positionalArgRequired: true
+      positionalArgRequired: true,
+      defaultQuietEnvVar: "CCLAW_STAGE_COMPLETE_QUIET"
     }
   );
 }

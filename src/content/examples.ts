@@ -6,6 +6,14 @@ const STAGE_EXAMPLES: Record<FlowStage, string> = {
 - Project state: release checks exist but CI/local behavior drifts.
 - Existing anchors: \`scripts/pre-publish.sh\`, \`src/release/\`, incident notes.
 
+## Q&A Log
+
+| Turn | Question | User answer (1-line) | Decision impact |
+| --- | --- | --- | --- |
+| 1 | Block invalid releases or only warn? | Block. | Validation is a hard gate. |
+| 2 | Shared module or script-only patch? | Shared module. | Reuse in CI/local. |
+| 3 | (stop-signal) | "достаточно, давай драфт" | stop-and-draft |
+
 ## Problem Decision Record
 
 - Depth: standard

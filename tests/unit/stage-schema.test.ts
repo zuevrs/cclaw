@@ -563,7 +563,7 @@ describe("stage schema and subagent alignment", () => {
       dispatchClass: "review-lens",
       returnSchema: "review-return"
     });
-    expect(stageSkillMarkdown("review")).toContain("| Agent | Mode | Class | Return Schema | User Gate | Trigger | Purpose |");
+    expect(stageSkillMarkdown("review")).toContain("| Agent | Mode | Run Phase | Class | Return Schema | User Gate | Trigger | Purpose |");
   });
 
   it("design skill renders research playbooks instead of research personas", () => {
@@ -832,7 +832,7 @@ describe("stage schema and subagent alignment", () => {
       expect.stringContaining("Scope contract first")
     ]));
     expect(scope.executionModel.interactionProtocol).toEqual(expect.arrayContaining([
-      expect.stringContaining("Do not walk the full checklist by default"),
+      expect.stringContaining("Lead with adaptive elicitation, not with a proposed contract"),
       expect.stringContaining("request explicit approval before finalizing the artifact")
     ]));
     expect(scope.executionModel.requiredEvidence).toEqual(expect.arrayContaining([
@@ -1180,6 +1180,8 @@ describe("stage schema and subagent alignment", () => {
     expect(fenceMatch, "example should be wrapped in a markdown fence").toBeTruthy();
     const body = fenceMatch![1]!;
     expect(body).toMatch(/^## Context/);
+    expect(body).toContain("## Q&A Log");
+    expect(body).toMatch(/stop-signal/i);
 
     const root = await createTempProject("examples-brainstorm");
     await fs.mkdir(path.join(root, ".cclaw/artifacts"), { recursive: true });

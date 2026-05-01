@@ -207,18 +207,23 @@ function autoSubagentDispatchBlock(stage: FlowStage, track: FlowTrack): string {
       const userGate = rule.requiresUserGate ? "required" : "not required";
       const dispatchClass = rule.dispatchClass ?? "stage-specialist";
       const returnSchema = rule.returnSchema ?? "agent-default";
-      return `| ${rule.agent} | ${rule.mode} | ${dispatchClass} | ${returnSchema} | ${userGate} | ${rule.when} | ${rule.purpose} |`;
+      const runPhase = rule.runPhase ?? "any";
+      return `| ${rule.agent} | ${rule.mode} | ${runPhase} | ${dispatchClass} | ${returnSchema} | ${userGate} | ${rule.when} | ${rule.purpose} |`;
     })
     .join("\n");
   const mandatory = schema.mandatoryDelegations;
   const mandatoryList = mandatory.length > 0 ? mandatory.map((a) => `\`${a}\``).join(", ") : "none";
   const delegationLogRel = `${RUNTIME_ROOT}/state/delegation-log.json`;
   const delegationEventsRel = `${RUNTIME_ROOT}/state/delegation-events.jsonl`;
+  const hasPostElicitation = rules.some((rule) => rule.runPhase === "post-elicitation");
+  const runPhaseLegend = hasPostElicitation
+    ? `\nRun Phase legend: \`post-elicitation\` = run only AFTER the adaptive elicitation Q&A loop converges (forcing questions answered/skipped/waived OR user stop-signal recorded). \`pre-elicitation\` = run before any user dialogue (rare). \`any\` = no ordering constraint.`
+    : "";
   return `## Automatic Subagent Dispatch
-| Agent | Mode | Class | Return Schema | User Gate | Trigger | Purpose |
-|---|---|---|---|---|---|---|
+| Agent | Mode | Run Phase | Class | Return Schema | User Gate | Trigger | Purpose |
+|---|---|---|---|---|---|---|---|
 ${rows}
-Mandatory: ${mandatoryList}. Record lifecycle rows in \`${delegationLogRel}\` and append-only \`${delegationEventsRel}\` before completion.
+Mandatory: ${mandatoryList}. Record lifecycle rows in \`${delegationLogRel}\` and append-only \`${delegationEventsRel}\` before completion.${runPhaseLegend}
 ### Harness Dispatch Contract — use true harness dispatch: Claude Task, Cursor generic dispatch, OpenCode \`.opencode/agents/<agent>.md\` via Task/@agent, Codex \`.codex/agents/<agent>.toml\`. Do not collapse OpenCode or Codex to role-switch by default. Worker ACK Contract: ACK must include \`spanId\`, \`dispatchId\`, \`dispatchSurface\`, \`agentDefinitionPath\`, and \`ackTs\`; never claim \`fulfillmentMode: "isolated"\` without matching lifecycle proof. Helper: \`.cclaw/hooks/delegation-record.mjs --status=<status> --span-id=<spanId> --dispatch-id=<dispatchId> --dispatch-surface=<surface> --agent-definition-path=<path> --json\`. Exact recipe: scheduled -> launched -> acknowledged -> completed with the same span; completed isolated/generic rows require a prior ACK event for that span or \`--ack-ts=<iso>\`.
 
 ${perHarnessLifecycleRecipeBlock()}`;
@@ -433,6 +438,14 @@ function delegationAndCompletionBlock(schema: StageSchema, track: FlowTrack): st
 ${normalizedDispatch}
 
 ${completionBlock}
+
+### Stage Closure (harness-only UX)
+
+- **NEVER paste the \`stage-complete.mjs\` command line into chat.** The user does not run cclaw manually; seeing \`node .cclaw/hooks/stage-complete.mjs ... --evidence-json '{...}' --waive-delegation=...\` is noise. Run the helper via the tool layer; report only the resulting summary.
+- **NEVER paste the \`--evidence-json\` payload into chat.** It is structured data for the helper, not for the user. The same evidence already lives in the artifact section.
+- On failure, report a compact human-readable summary based on the helper's JSON \`findings\` array — list failing section names only (one line each), include the full helper JSON in a single fenced \`json\` block. Do not echo the invoking command.
+- **NEVER run shell hash commands** (\`shasum\`, \`sha256sum\`, \`md5sum\`, \`Get-FileHash\`, \`certutil\`, etc.) for hash compute. If the linter ever asks for a hash, that is a linter bug — report failure and stop, do not auto-fix in bash.
+- The helper defaults to quiet success (\`CCLAW_STAGE_COMPLETE_QUIET=1\`); rely on the resulting JSON, not stdout chatter.
 `;
 }
 
@@ -695,10 +708,10 @@ CLI commands, using existing \`cclaw run resume\` and \`internal verify-current-
 
 1. **Wave Start**: author wave plan as \`.cclaw/wave-plans/<wave-n>.md\` referencing previous wave's ship artifact.
 2. **Carry-forward Audit**: at brainstorm of the next wave, re-read previous wave ship artifact and explicitly record in the existing \`## Wave Carry-forward\` section:
-   - Carrying forward: <scope LD# hash references still valid>
+   - Carrying forward: <scope D-XX decision references still valid>
    - Drift detected: <decisions no longer valid + reason>
    - Re-scope needed: <yes/no>
-   - Never create a second \`## Locked Decisions\` heading in brainstorm; reference prior LD# hashes inline.
+   - Never create a second \`## Locked Decisions\` heading in brainstorm; reference prior D-XX IDs inline.
 3. **Resume Path**: if a wave was interrupted mid-stage, \`cclaw run resume\` restores state. Run \`internal verify-current-state\` before continuing.
 4. **Wave End**: at ship, architect cross-stage verification runs from dispatch matrix. If \`DRIFT_DETECTED\`, fix before ship.
 5. **Next Wave Trigger**: launch new \`/cc <topic>\` for next wave and reference previous wave ship artifact in upstream handoff.

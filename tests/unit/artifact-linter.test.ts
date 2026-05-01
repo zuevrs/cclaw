@@ -11,8 +11,42 @@ import {
 } from "../../src/artifact-linter.js";
 import { createTempProject } from "../helpers/index.js";
 
+/**
+ * Generic Q&A Log block with a recognized stop-signal row, used to satisfy the
+ * Wave 22 `qa_log_below_min` floor for brainstorm/scope/design fixtures whose
+ * focus is on other linter rules. Tests that exercise the floor explicitly
+ * either define their own `## Q&A Log` section or pass `--skip-questions` via
+ * the gate-evidence flow.
+ */
+const FIXTURE_QA_LOG_STOP_SIGNAL_BLOCK = `## Q&A Log
+| Turn | Question | User answer (1-line) | Decision impact |
+|---|---|---|---|
+| 1 | (stop-signal) | "достаточно, давай драфт" | stop-and-draft |
+
+`;
+
+function injectStopSignalQaLog(content: string): string {
+  if (/^## Q&A Log\b/mu.test(content)) {
+    return content;
+  }
+  const titleMatch = content.match(/^# [^\n]*\n+/u);
+  if (titleMatch) {
+    const insertAt = titleMatch.index! + titleMatch[0].length;
+    return `${content.slice(0, insertAt)}${FIXTURE_QA_LOG_STOP_SIGNAL_BLOCK}${content.slice(insertAt)}`;
+  }
+  return `${FIXTURE_QA_LOG_STOP_SIGNAL_BLOCK}${content}`;
+}
+
 function normalizeFixtureArtifact(fileName: string, content: string): string {
   let normalized = content;
+
+  if (
+    fileName.startsWith("01-brainstorm") ||
+    fileName.startsWith("02-scope") ||
+    fileName.startsWith("03-design")
+  ) {
+    normalized = injectStopSignalQaLog(normalized);
+  }
 
   if (fileName.startsWith("01-brainstorm")) {
     normalized = normalized.replace(/^## Problem$/gmu, "## Problem Decision Record");
@@ -2470,97 +2504,28 @@ ${premiseBody}
     expect(boundaries?.found).toBe(true);
   });
 
-  it("enforces scope-reduction scan when locked decisions section is present", async () => {
-    const root = await createTempProject("scope-strict-reduction");
+  it("(Wave 22 regression-guard) does NOT emit a No Scope Reduction Language finding even when reduction phrases appear", async () => {
+    const root = await createTempProject("scope-no-reduction-rule");
     await writeRuntimeArtifact(root, "02-scope.md", `# Scope Artifact
 
-## Prime Directives
-- Zero silent failures: every delivery failure maps to a visible state.
-- Named error surfaces: stream disconnect, auth drift, and publisher timeout.
-- Four-path data flow: happy, nil payload, empty payload, upstream error.
-- Interaction edge cases: double-open panel, reconnect after sleep.
-- Observability expectations: stream error counter, publish-to-visible lag.
-- Deferred-item handling: WebSocket channel deferred with rationale.
-
-## Premise Challenge
-- Right problem? Yes, users miss follow-ups.
-- Direct path? Durable feed is the right path.
-- What if nothing? Users continue missing events.
-
-## Implementation Alternatives
-| Option | Summary | Effort (S/M/L/XL) | Risk | Pros | Cons | Reuses |
-|---|---|---|---|---|---|---|
-| A (minimum viable) | Polling-only | S | Low | Fast | Weaker UX | REST endpoint |
-| B (recommended) | SSE + REST fallback | M | Med | Better UX | Reconnect handling | Event publisher |
-
-RECOMMENDATION: B — SSE + REST fallback delivers durable feed UX without overcommitting infra.
-
-## Scope Mode
-- [x] selective
-
-## Mode-Specific Analysis
-- Selected mode: selective
-- Analysis: selective mode chosen to avoid unbounded scope.
-
-## In Scope / Out of Scope
-
-### In Scope
-- In-app notification feed for now
-
-### Out of Scope
-- Email/SMS providers
-
-## Discretion Areas
-- Badge rendering strategy
-
-## Deferred Items
-| Item | Rationale |
-|---|---|
-| WebSocket channel | Not justified for current load |
-
-## Error & Rescue Registry
-| Capability | Failure mode | Detection | Fallback |
+## Q&A Log
+| Turn | Question | User answer (1-line) | Decision impact |
 |---|---|---|---|
-| Event delivery | SSE drops | Heartbeat timeout | REST polling |
-
-## Locked Decisions (D-XX)
-| ID | Decision | Rationale |
-|---|---|---|
-| D-01 | Keep feed query in current API contract | Avoid breaking consumers for now |
-
-## Completion Dashboard
-- Checklist findings: 9/9 complete
-- Resolved decisions count: 5
-- Unresolved decisions: None
-
-## Scope Summary
-- Selected mode: selective
-- Accepted scope: durable feed + SSE
-- Deferred: WebSocket channel
-- Explicitly excluded: outbound channels
-- Next-stage handoff: design — lock data flow + failure paths.
-`);
-
-    const result = await lintArtifact(root, "scope");
-    const reduction = result.findings.find((f) => f.section === "No Scope Reduction Language");
-    expect(reduction?.required).toBe(true);
-    expect(reduction?.found).toBe(false);
-  });
-
-  it("flags Locked Decisions rows that are missing an LD#hash anchor", async () => {
-    const root = await createTempProject("scope-decision-ids-missing");
-    await writeRuntimeArtifact(root, "02-scope.md", `# Scope Artifact
+| 1 | (stop-signal) | "достаточно, давай драфт" | stop-and-draft |
 
 ## Scope Mode
-- Mode: hold
+- [x] hold
 
 ## In Scope / Out of Scope
-- In scope: audit log storage
-- Out of scope: archival
+### In Scope
+- Audit log storage for now
+### Out of Scope
+- Archival v1
 
-## Locked Decisions (LD#hash)
-- LD#9a950776 — JSONL format for audit trail (compliance)
-- freeform note without an ID
+## Locked Decisions
+| ID | Decision | Why locked now | Downstream impact |
+|---|---|---|---|
+| D-1 | JSONL audit-log format | Brainstorm approved | Defines write path |
 
 ## Completion Dashboard
 - Checklist findings: 1/1
@@ -2571,15 +2536,18 @@ RECOMMENDATION: B — SSE + REST fallback delivers durable feed UX without overc
 `);
 
     const result = await lintArtifact(root, "scope");
-    const integrity = result.findings.find((f) => f.section === "Locked Decisions Hash Integrity");
-    expect(integrity?.required).toBe(true);
-    expect(integrity?.found).toBe(false);
-    expect(integrity?.details).toContain("bullet 2 is missing an LD#<sha8> anchor");
+    const reduction = result.findings.find((f) => f.section === "No Scope Reduction Language");
+    expect(reduction).toBeUndefined();
   });
 
-  it("accepts Locked Decisions markdown table header without an LD#hash anchor", async () => {
-    const root = await createTempProject("scope-decision-table-header-ok");
+  it("(Wave 22 regression-guard) does NOT emit a Locked Decisions Hash Integrity finding for D-XX-only artifacts", async () => {
+    const root = await createTempProject("scope-no-ld-hash-rule");
     await writeRuntimeArtifact(root, "02-scope.md", `# Scope Artifact
+
+## Q&A Log
+| Turn | Question | User answer (1-line) | Decision impact |
+|---|---|---|---|
+| 1 | (stop-signal) | "достаточно" | stop-and-draft |
 
 ## Scope Mode
 - [x] hold
@@ -2590,11 +2558,11 @@ RECOMMENDATION: B — SSE + REST fallback delivers durable feed UX without overc
 ### Out of Scope
 - Backend API
 
-## Locked Decisions (LD#hash)
-| Decision Anchor | Decision | Why locked now | Downstream impact |
+## Locked Decisions
+| ID | Decision | Why locked now | Downstream impact |
 |---|---|---|---|
-| LD#4c91c2a8 | Next.js App Router + static export | Brainstorm approved | Defines build and deploy path |
-| LD#ced076be | Tailwind CSS for styling | Brainstorm approved | Defines styling approach |
+| D-1 | Next.js App Router + static export | Brainstorm approved | Defines build/deploy path |
+| D-2 | Tailwind CSS for styling | Brainstorm approved | Defines styling approach |
 
 ## Completion Dashboard
 - Checklist findings: 1/1
@@ -2608,10 +2576,10 @@ RECOMMENDATION: B — SSE + REST fallback delivers durable feed UX without overc
 `);
 
     const result = await lintArtifact(root, "scope");
-    const integrity = result.findings.find((f) => f.section === "Locked Decisions Hash Integrity");
-    expect(integrity?.required).toBe(true);
-    expect(integrity?.found).toBe(true);
-    expect(integrity?.details).toContain("2 LD#hash anchor(s) recorded with no duplicates");
+    const hashIntegrity = result.findings.find((f) => f.section === "Locked Decisions Hash Integrity");
+    expect(hashIntegrity).toBeUndefined();
+    const idIntegrity = result.findings.find((f) => f.section === "Locked Decisions ID Integrity");
+    expect(idIntegrity?.found).toBe(true);
   });
 
   it("flags duplicate Locked Decision IDs", async () => {
@@ -3494,10 +3462,8 @@ inputs_hash: sha256:pending
       path.join(root, ".cclaw/artifacts/02-scope.md"),
       `# Scope Artifact
 
-## Locked Decisions (D-XX)
-| ID | Decision | Rationale |
-|---|---|---|
-| D-01 | Keep audit trail in JSONL | compliance |
+## Locked Decisions
+- (no decisions; legacy fixture without strict markers)
 `,
       "utf8"
     );
@@ -3513,7 +3479,7 @@ inputs_hash: sha256:pending
     expect(reduction?.required).toBe(false);
   });
 
-  it("requires downstream artifacts to reference scope R-IDs and LD#hash anchors", async () => {
+  it("requires downstream artifacts to reference scope R-IDs and D-XX decision IDs", async () => {
     const root = await createTempProject("downstream-scope-xref-missing");
     await writeRuntimeArtifact(root, "02-scope.md", `# Scope Artifact
 
@@ -3523,32 +3489,32 @@ inputs_hash: sha256:pending
 | R1 | Render static landing page | P0 | prompt |
 | R2 | Preserve static export deployability | P1 | scope |
 
-## Locked Decisions (LD#hash)
-| Decision Anchor | Decision | Why locked now | Downstream impact |
+## Locked Decisions
+| ID | Decision | Why locked now | Downstream impact |
 |---|---|---|---|
-| LD#4677cc9d | Static export stays non-negotiable | deploy constraint | design/build path |
+| D-1 | Static export stays non-negotiable | deploy constraint | design/build path |
 `);
     await writeRuntimeArtifact(root, "03-design.md", `# Design Artifact
 
 ## Architecture Boundaries
-| Component | Responsibility | Requirement Refs (R#) | Decision Refs (LD#hash) | Owner |
+| Component | Responsibility | Requirement Refs (R#) | Decision Refs (D-XX) | Owner |
 |---|---|---|---|---|
 | Landing | Render hero | R1 |  | web |
 `);
 
     const result = await lintArtifact(root, "design");
     const rRefs = result.findings.find((f) => f.section === "Scope Requirement Reference Integrity");
-    const ldRefs = result.findings.find((f) => f.section === "Locked Decision Hash Reference Integrity");
+    const decisionRefs = result.findings.find((f) => f.section === "Locked Decision Reference Integrity");
 
     expect(rRefs?.required).toBe(true);
     expect(rRefs?.found).toBe(false);
     expect(rRefs?.details).toContain("R2");
-    expect(ldRefs?.required).toBe(true);
-    expect(ldRefs?.found).toBe(false);
-    expect(ldRefs?.details).toContain("ld#4677cc9d");
+    expect(decisionRefs?.required).toBe(true);
+    expect(decisionRefs?.found).toBe(false);
+    expect(decisionRefs?.details).toContain("D-1");
   });
 
-  it("accepts downstream artifacts that reference all scope R-IDs and LD#hash anchors", async () => {
+  it("accepts downstream artifacts that reference all scope R-IDs and D-XX decision IDs", async () => {
     const root = await createTempProject("downstream-scope-xref-covered");
     await writeRuntimeArtifact(root, "02-scope.md", `# Scope Artifact
 
@@ -3557,25 +3523,25 @@ inputs_hash: sha256:pending
 |---|---|---|---|
 | R1 | Render static landing page | P0 | prompt |
 
-## Locked Decisions (LD#hash)
-| Decision Anchor | Decision | Why locked now | Downstream impact |
+## Locked Decisions
+| ID | Decision | Why locked now | Downstream impact |
 |---|---|---|---|
-| LD#4677cc9d | Static export stays non-negotiable | deploy constraint | design/build path |
+| D-1 | Static export stays non-negotiable | deploy constraint | design/build path |
 `);
     await writeRuntimeArtifact(root, "03-design.md", `# Design Artifact
 
 ## Architecture Boundaries
-| Component | Responsibility | Requirement Refs (R#) | Decision Refs (LD#hash) | Owner |
+| Component | Responsibility | Requirement Refs (R#) | Decision Refs (D-XX) | Owner |
 |---|---|---|---|---|
-| Landing | Render hero | R1 | LD#4677cc9d | web |
+| Landing | Render hero | R1 | D-1 | web |
 `);
 
     const result = await lintArtifact(root, "design");
     const rRefs = result.findings.find((f) => f.section === "Scope Requirement Reference Integrity");
-    const ldRefs = result.findings.find((f) => f.section === "Locked Decision Hash Reference Integrity");
+    const decisionRefs = result.findings.find((f) => f.section === "Locked Decision Reference Integrity");
 
     expect(rRefs?.found).toBe(true);
-    expect(ldRefs?.found).toBe(true);
+    expect(decisionRefs?.found).toBe(true);
   });
 
   it("reports frontmatter validation errors for stage/schema/hash mismatches", async () => {
@@ -5498,24 +5464,52 @@ Fallback_Cache -->|degraded response| API_Gateway`
     expect(duplicateHeading?.details).toContain("Scratchpad");
   });
 
-  it("emits qa_log_missing as advisory when design Q&A log is absent", async () => {
+  it("emits qa_log_missing advisory + qa_log_below_min advisory under --skip-questions when design Q&A log is absent", async () => {
     const root = await createTempProject("artifact-lint-qa-log-advisory");
-    await writeRuntimeArtifact(
-      root,
-      "03-design.md",
-      completeDesignArtifact(
-        `API_Gateway -->|sync: validated request| App_Service
+    const designBody = completeDesignArtifact(
+      `API_Gateway -->|sync: validated request| App_Service
 App_Service -.->|async: enqueue write| Storage_Adapter
 Storage_Adapter -->|timeout| Fallback_Cache
 Fallback_Cache -->|degraded response| API_Gateway`
-      )
+    );
+    await fs.mkdir(path.join(root, ".cclaw/state"), { recursive: true });
+    await fs.mkdir(path.join(root, ".cclaw/artifacts"), { recursive: true });
+    const apiPath = path.join(root, "src/api.ts");
+    const storagePath = path.join(root, "src/storage.ts");
+    await fs.mkdir(path.dirname(apiPath), { recursive: true });
+    await fs.writeFile(apiPath, "export const api = 1;\n", "utf8");
+    await fs.writeFile(storagePath, "export const storage = 1;\n", "utf8");
+    await fs.writeFile(
+      path.join(root, ".cclaw/state/flow-state.json"),
+      JSON.stringify(
+        {
+          currentStage: "design",
+          activeRunId: "active",
+          completedStages: [],
+          interactionHints: { design: { skipQuestions: true } }
+        },
+        null,
+        2
+      ),
+      "utf8"
+    );
+    await fs.writeFile(
+      path.join(root, ".cclaw/artifacts/03-design.md"),
+      normalizeFixtureArtifact("03-design.md", designBody).replace(
+        FIXTURE_QA_LOG_STOP_SIGNAL_BLOCK,
+        ""
+      ),
+      "utf8"
     );
 
     const result = await lintArtifact(root, "design");
     const qaLogMissing = result.findings.find((finding) => finding.section === "qa_log_missing");
-    expect(result.passed).toBe(true);
+    const qaLogFloor = result.findings.find((finding) => finding.section === "qa_log_below_min");
     expect(qaLogMissing).toMatchObject({ required: false, found: false });
     expect(qaLogMissing?.details).toContain("Q&A Log");
+    expect(qaLogFloor?.required).toBe(false);
+    expect(qaLogFloor?.found).toBe(false);
+    expect(qaLogFloor?.details).toContain("--skip-questions");
   });
 
   it("rejects APPROVED_WITH_CONCERNS when open Critical findings remain", async () => {

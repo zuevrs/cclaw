@@ -2,11 +2,11 @@ import fs from "node:fs/promises";
 import { resolveArtifactPath as resolveStageArtifactPath } from "./artifact-paths.js";
 import { exists } from "./fs-utils.js";
 import { stageSchema } from "./content/stage-schema.js";
+import { readFlowState } from "./run-persistence.js";
 import type { FlowStage, FlowTrack } from "./types.js";
 import {
   duplicateH2Headings,
   extractH2Sections,
-  extractLockedDecisionAnchors,
   extractRequirementIdsFromMarkdown,
   isShortCircuitActivated,
   normalizeHeadingTitle,
@@ -58,10 +58,22 @@ const FRONTMATTER_REQUIRED_KEYS = [
   "inputs_hash"
 ] as const;
 
+export interface LintArtifactOptions {
+  /**
+   * Stage-level flags supplied by the caller (typically `advance-stage`)
+   * that augment whatever flow-state.json says. Used so the linter sees
+   * `--skip-questions` even before flow-state is updated for the current
+   * stage (advance-stage applies the hint to the successor stage only,
+   * but the linter must respect the current-call intent).
+   */
+  extraStageFlags?: string[];
+}
+
 export async function lintArtifact(
   projectRoot: string,
   stage: FlowStage,
-  track: FlowTrack = "standard"
+  track: FlowTrack = "standard",
+  options: LintArtifactOptions = {}
 ): Promise<LintResult> {
   const schema = stageSchema(stage, track);
   const { absPath: absFile, relPath: relFile } = await resolveStageArtifactPath(stage, {
@@ -216,6 +228,20 @@ export async function lintArtifact(
     });
   }
 
+  let activeStageFlags: string[] = [];
+  try {
+    const flowState = await readFlowState(projectRoot);
+    const hint = flowState.interactionHints?.[stage];
+    if (hint?.skipQuestions === true) activeStageFlags.push("--skip-questions");
+  } catch {
+    activeStageFlags = [];
+  }
+  for (const extra of options.extraStageFlags ?? []) {
+    if (typeof extra === "string" && extra.length > 0 && !activeStageFlags.includes(extra)) {
+      activeStageFlags.push(extra);
+    }
+  }
+
   const stageContext: StageLintContext = {
     projectRoot,
     stage,
@@ -230,7 +256,8 @@ export async function lintArtifact(
     scopePreAuditEnabled,
     staleDiagramAuditEnabled,
     isTrivialOverride,
-    overrideSet
+    overrideSet,
+    activeStageFlags
   };
 
   switch (stage) {
@@ -274,10 +301,11 @@ export async function lintArtifact(
       const requirementsBody = sectionBodyByHeadingPrefix(scopeSections, "Requirements") ?? "";
       const lockedDecisionsBody = sectionBodyByHeadingPrefix(scopeSections, "Locked Decisions") ?? "";
       const requirementIds = extractRequirementIdsFromMarkdown(requirementsBody);
-      const lockedDecisionAnchors = extractLockedDecisionAnchors(lockedDecisionsBody);
+      const decisionIds = Array.from(
+        new Set((lockedDecisionsBody.match(/\bD-\d+\b/giu) ?? []).map((id) => id.toUpperCase()))
+      );
       const missingRequirementRefs = requirementIds.filter((id) => !raw.includes(id));
-      const normalizedCurrentRaw = raw.toLowerCase();
-      const missingDecisionRefs = lockedDecisionAnchors.filter((id) => !normalizedCurrentRaw.includes(id));
+      const missingDecisionRefs = decisionIds.filter((id) => !raw.toUpperCase().includes(id));
 
       findings.push({
         section: "Scope Requirement Reference Integrity",
@@ -293,15 +321,15 @@ export async function lintArtifact(
       });
 
       findings.push({
-        section: "Locked Decision Hash Reference Integrity",
-        required: lockedDecisionAnchors.length > 0,
-        rule: "Every LD#hash locked decision anchor from scope must be referenced by downstream artifacts.",
+        section: "Locked Decision Reference Integrity",
+        required: decisionIds.length > 0,
+        rule: "Every D-XX locked decision ID from scope must be referenced by downstream artifacts.",
         found: missingDecisionRefs.length === 0,
         details:
-          lockedDecisionAnchors.length === 0
-            ? "No LD#hash anchors found in scope artifact; reference check skipped."
+          decisionIds.length === 0
+            ? "No D-XX decision IDs found in scope artifact; reference check skipped."
             : missingDecisionRefs.length === 0
-              ? `All ${lockedDecisionAnchors.length} locked decision anchor(s) are referenced.`
+              ? `All ${decisionIds.length} locked decision ID(s) are referenced.`
               : `Missing locked decision reference(s): ${missingDecisionRefs.join(", ")}.`
       });
     }

@@ -3,6 +3,7 @@ import path from "node:path";
 import {
   type StageLintContext,
   checkCriticPredictionsContract,
+  evaluateQaLogFloor,
   sectionBodyByName,
   validateApproachesTaxonomy,
   headingLineIndex,
@@ -34,7 +35,7 @@ export async function lintBrainstormStage(ctx: StageLintContext): Promise<void> 
     findings.push({
       section: "qa_log_missing",
       required: false,
-      rule: "[P3] qa_log_missing — Q&A Log empty — confirm you actually had a dialogue with the user, not a draft from memory.",
+      rule: "[P2] qa_log_missing — Q&A Log empty — confirm you actually had a dialogue with the user, not a draft from memory.",
       found: qaLogOk,
       details: qaLogOk
         ? `Q&A Log contains ${qaLogRows.length} data row(s).`
@@ -42,6 +43,18 @@ export async function lintBrainstormStage(ctx: StageLintContext): Promise<void> 
           ? "Missing `## Q&A Log` section."
           : "Q&A Log is present but has zero data rows."
     });
+
+    if (!brainstormShortCircuitActivated) {
+      const skipQuestions = ctx.activeStageFlags.includes("--skip-questions");
+      const floor = evaluateQaLogFloor(qaLogBody, track, "brainstorm", { skipQuestions });
+      findings.push({
+        section: "qa_log_below_min",
+        required: !floor.skipQuestionsAdvisory,
+        rule: "[P1] qa_log_below_min — Q&A Log below the adaptive elicitation floor for this track. Continue the loop or record an explicit user stop-signal row.",
+        found: floor.ok,
+        details: floor.details
+      });
+    }
 
     // Brainstorm Iron Law: "NO ARTIFACT IS COMPLETE WITHOUT AN EXPLICITLY
     // APPROVED DIRECTION — SILENCE IS NOT APPROVAL." Previously this was

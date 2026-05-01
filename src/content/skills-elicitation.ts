@@ -23,18 +23,38 @@ export function adaptiveElicitationSkillMarkdown(): string {
   const budgetTable = renderQuestionBudgetHintTable();
   return `---
 name: adaptive-elicitation
-description: "Harness-native one-question-at-a-time dialogue for brainstorm/scope/design with stop signals, smart-skip, and append-only Q&A logging."
+description: "Harness-native one-question-at-a-time dialogue for brainstorm/scope/design with stop signals, smart-skip, and append-only Q&A logging. Walking forcing questions in order is mandatory; the linter blocks stage-complete when Q&A Log is below floor."
 ---
 
 # Adaptive Elicitation
 
 Pinned anchor: "Don't tell it what to do, give it success criteria and watch it go."
 
-## HARD-GATE
+## Anti-pattern (BAD examples — never do these)
+
+These behaviors are the exact reason this skill exists. The linter will block your stage-complete if you do them.
+
+- **Bad**: User asks for a "simple web app" -> agent asks 1 question about stack -> 1 question about auth -> drafts the brainstorm artifact and asks for approval.
+- **Good**: User asks for a "simple web app" -> agent asks Q1 (what pain) -> Q2 (direct path) -> Q3 (do-nothing cost) -> Q4 (first operator/user) -> Q5 (no-go boundaries) -> self-eval: clear -> drafts the brainstorm artifact.
+
+- **Bad**: Agent immediately dispatches a subagent (\`product-discovery\`, \`critic\`, \`planner\`) at the start of brainstorm/scope/design to "gather context" before any user dialogue.
+- **Good**: Agent walks the Q&A loop with the user first; subagent dispatch happens only after the user approves the elicitation outcome.
+
+- **Bad**: Agent batches 3-5 grill questions into one large message and asks the user to answer them all at once.
+- **Good**: Agent asks one grill question, waits, logs the answer, asks the next.
+
+- **Bad**: Agent skips forcing questions because it "already has a good idea" of the answer.
+- **Good**: Agent asks the forcing question; if the user's reply confirms the assumption, log it as \`asked (confirmed assumption)\` and move on. Do not silently skip.
+
+## HARD-GATE (machine-enforced)
+
 - User does not run cclaw manually. Do not tell the user to run CLI commands for answers.
 - Ask exactly one question per turn and wait for the answer before asking the next one.
 - Use harness-native question tools first; prose fallback is allowed only when the tool is unavailable.
 - Keep a running Q&A trace in the active artifact under \`## Q&A Log\` in \`${RUNTIME_ROOT}/artifacts/\` as append-only rows.
+- **Hard floor**: do NOT advance the stage (do NOT call \`stage-complete.mjs\`) until \`## Q&A Log\` contains at least \`min(track, stage)\` substantive entries OR an explicit user stop-signal is recorded as a row. The linter rule \`qa_log_below_min\` enforces this; \`stage-complete\` will fail otherwise.
+- **NEVER run shell hash commands** (\`shasum\`, \`sha256sum\`, \`md5sum\`, \`Get-FileHash\`, \`certutil\`, etc.) to compute artifact hashes. If a linter ever asks you for a hash, that is a linter bug — report failure and stop, do not auto-fix in bash.
+- **NEVER paste cclaw command lines into chat** (e.g. \`node .cclaw/hooks/stage-complete.mjs ... --evidence-json '{...}'\`). Run them via the tool layer; report only the resulting summary. The user does not run cclaw manually and seeing the command line is noise.
 
 ## Harness Question Surface
 
@@ -48,67 +68,81 @@ If unavailable, ask one concise prose question and explicitly wait for chat answ
 
 ## Core Protocol
 
-1. Ask one decision-changing question.
+1. Ask one decision-changing question via the harness-native question tool.
 2. Wait for the answer.
 3. Append one row to \`## Q&A Log\`: \`Turn | Question | User answer (1-line) | Decision impact\`.
 4. Self-evaluate:
    - What did I learn?
    - Is context enough to draft now? (yes/no + reason)
-   - If no, what is the next most decision-changing question?
-5. Repeat until context is clear OR user asks to proceed.
+   - Have I covered all stage forcing questions in order? (yes/no + which remain)
+   - If forcing questions remain or context is incomplete, what is the next decision-changing question?
+5. Repeat until **all forcing questions are answered/skipped/waived AND self-evaluation says context is sufficient**, OR user records an explicit stop-signal row.
 
 ## Question Shape Rules
 
 - Prefer single-select multiple choice when one direction/priority/next step must be chosen.
 - Use multi-select only for compatible sets (goals, constraints, non-goals).
-- Smart-skip questions already answered earlier (directly or implicitly) and log "skipped (already covered)" when relevant.
+- Smart-skip: if a question is already answered earlier (directly or implicitly), log \`skipped (already covered: turn N)\` instead of skipping silently. The smart-skip row counts as a substantive Q&A Log entry for floor purposes.
 
 ## Stop Signals (Natural Language)
 
 Treat these as stop-and-draft signals:
-- RU: "достаточно", "хватит", "давай драфт"
-- EN: "enough", "skip", "just draft it", "stop asking", "move on"
+- RU: "достаточно", "хватит", "давай драфт", "хватит вопросов"
+- EN: "enough", "skip", "just draft it", "stop asking", "move on", "no more questions"
 - UA: "досить", "вистачить", "давай драфт", "рухаємось далі"
 
 When detected:
+- Append a Q&A Log row exactly like: \`Turn N | (stop-signal) | <user quote> | stop-and-draft\` — this row satisfies the linter floor escape hatch.
 - Do not ask another question in this stage loop.
 - Move to drafting with available context.
-- For internal agent calls only, pass \`--skip-questions\` on the next advance helper call.
+- For the next internal agent-only call to advance-stage, pass \`--skip-questions\`. **The user never sees or types this flag.**
 
 ## Conditional Grilling (Only On Risk Triggers)
 
-Ask an extra 3-5 sharp questions only when one of these triggers appears:
+When one of these triggers appears, continue the elicitation loop with sharper questions **one at a time** (do NOT batch them):
 - Irreversibility (data deletion, schema migration, breaking API/contract)
 - Security/auth boundary changes
 - Domain-model ambiguity with multiple plausible invariants
 
+Each grill question follows the same Core Protocol: ask one, wait, log, self-eval, ask next.
+
 Do not ask extra questions "for theater" on simple low-risk work.
 
-## Question Budget Hint (Soft Guidance)
+## Question Budget Hint (linter-enforced floor)
 
-Use as orientation, never as a hard stop. Source of truth is \`questionBudgetHint(track, stage)\`:
+Source of truth: \`questionBudgetHint(track, stage)\`. The \`Min\` column is enforced by \`qa_log_below_min\` linter rule — \`stage-complete\` fails when below.
 
 ${budgetTable}
 
 Track mapping note: \`quick\` ~= lightweight, \`medium\` ~= standard, \`standard\` ~= deep.
-Stop based on clarity/user signal, not raw count.
 
-## Stage Forcing Questions
+How to use the columns:
+- \`Min\` — hard floor. Below this, \`stage-complete\` is blocked unless escape hatch is recorded.
+- \`Recommended\` — target for normal flows.
+- \`Hard cap warning\` — point at which to stop or compress remaining forcing questions into one final batched ask. Not skip.
 
-Always keep at least one unresolved forcing question in play until answered or explicitly waived:
+## Stage Forcing Questions (walk in order, one per turn)
 
-- Brainstorm:
+**Walk the forcing questions list one-by-one in order, asking each as a separate turn.** Do NOT batch. Do NOT pick favorites — go in order. For each question record one of:
+- \`asked\` — question was asked and answered.
+- \`asked (confirmed assumption)\` — question was asked, user confirmed your prior reading.
+- \`skipped (already covered: turn N)\` — answered implicitly by an earlier reply; cite the turn.
+- \`waived (user override)\` — user explicitly waived this question.
+
+Stage forcing question lists:
+
+- **Brainstorm**:
   - What pain are we solving?
   - What is the most direct path?
   - What happens if we do nothing?
   - Who is the operator/user impacted first?
   - What are non-negotiable no-go boundaries?
-- Scope:
+- **Scope**:
   - What is definitely in and definitely out?
   - Which decisions are already locked upstream?
   - What is the rollback path if this fails?
   - What are the top failure modes we must design for?
-- Design:
+- **Design**:
   - What is the data flow end-to-end?
   - Where are the seams/interfaces and ownership boundaries?
   - Which invariants must always hold?
@@ -123,6 +157,10 @@ For irreversible moves (deletion, schema migration, breaking API):
 
 ## Completion Rule
 
-"Continue until clear OR user wants to proceed."
-Never force a fixed N-question script.`;
+Continue asking forcing questions in order until one of:
+- (a) all forcing questions for the stage are answered/skipped/waived AND self-evaluation says context is sufficient, OR
+- (b) user records an explicit stop-signal row in \`## Q&A Log\`, OR
+- (c) the \`hard cap warning\` count is reached and you compressed the remaining forcing questions into one final batched ask (not skip).
+
+Do NOT exit the loop after the first 1-2 questions just because you can draft something. The point of the loop is to surface the user's actual constraints, not to confirm your initial reading.`;
 }

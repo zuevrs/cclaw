@@ -1,6 +1,157 @@
 import { createHash } from "node:crypto";
 import { SHIP_FINALIZATION_MODES } from "../constants.js";
+import { questionBudgetHint } from "../track-heuristics.js";
 import { FLOW_STAGES, type FlowStage, type FlowTrack } from "../types.js";
+
+/**
+ * Recognized stop-signal phrases that satisfy the Q&A floor escape hatch
+ * when recorded as a Q&A Log row. Mirrors `Stop Signals (Natural Language)`
+ * in `adaptive-elicitation/SKILL.md`.
+ */
+/**
+ * Stop-signal phrases. ASCII tokens use `\b` word boundaries; non-ASCII
+ * (RU/UA) tokens use Unicode-aware boundaries built from `\p{L}` so cyrillic
+ * characters around the phrase prevent partial matches without breaking on
+ * `\b`'s ASCII-only boundary semantics.
+ */
+const QA_LOG_STOP_SIGNAL_PATTERNS: RegExp[] = [
+  /\bstop[-\s]?signal\b/iu,
+  /\bachieved\s+enough\b/iu,
+  /\benough\b/iu,
+  /\bskip\b/iu,
+  /\bjust\s+draft\s+it\b/iu,
+  /\bstop\s+asking\b/iu,
+  /\bmove\s+on\b/iu,
+  /\bno\s+more\s+questions\b/iu,
+  /(?<![\p{L}\p{N}_])достаточно(?![\p{L}\p{N}_])/iu,
+  /(?<![\p{L}\p{N}_])хватит(?![\p{L}\p{N}_])/iu,
+  /(?<![\p{L}\p{N}_])давай\s+драфт(?![\p{L}\p{N}_])/iu,
+  /(?<![\p{L}\p{N}_])досить(?![\p{L}\p{N}_])/iu,
+  /(?<![\p{L}\p{N}_])вистачить(?![\p{L}\p{N}_])/iu,
+  /(?<![\p{L}\p{N}_])рухаємось\s+далі(?![\p{L}\p{N}_])/iu
+];
+
+/**
+ * Stages that run adaptive elicitation. The `qa_log_below_min` rule only
+ * fires for these. Other stages may still record a Q&A Log but no floor is
+ * enforced.
+ */
+export const ELICITATION_STAGES: ReadonlySet<FlowStage> = new Set<FlowStage>([
+  "brainstorm",
+  "scope",
+  "design"
+]);
+
+export interface QaLogFloorOptions {
+  /**
+   * When true, downgrades a below-floor finding to advisory (`required: false`).
+   * Set when `--skip-questions` was persisted to the active stage flags.
+   */
+  skipQuestions?: boolean;
+}
+
+export interface QaLogFloorResult {
+  /** Whether the floor is satisfied (passes the gate). */
+  ok: boolean;
+  /** Substantive Q&A Log row count (excludes `skipped`/`waived` only rows). */
+  count: number;
+  /** Required minimum count from `questionBudgetHint(track, stage).min`. */
+  min: number;
+  /** Whether a stop-signal row was detected. */
+  hasStopSignal: boolean;
+  /** Whether the lite-tier short-circuit applies (lite track + count >= 1). */
+  liteShortCircuit: boolean;
+  /** Whether `--skip-questions` flag downgraded the finding to advisory. */
+  skipQuestionsAdvisory: boolean;
+  /** Human-readable details for the linter finding. */
+  details: string;
+}
+
+/**
+ * Decide whether a Q&A Log row counts as a "substantive" entry for the floor.
+ * Rows whose disposition column reads `skipped` / `waived` only do not
+ * count toward the minimum.
+ */
+function isSubstantiveQaRow(cells: string[]): boolean {
+  if (cells.length === 0) return false;
+  const last = cells[cells.length - 1] ?? "";
+  const normalized = last.toLowerCase();
+  if (/^\s*(?:skipped|waived)\b/u.test(normalized)) return false;
+  return true;
+}
+
+/**
+ * Detect a stop-signal row in the Q&A Log. Pattern is matched across all
+ * cells of any row so the user's quote can live in any column.
+ */
+function detectStopSignal(rows: string[][]): boolean {
+  for (const row of rows) {
+    const joined = row.join(" | ");
+    for (const pattern of QA_LOG_STOP_SIGNAL_PATTERNS) {
+      if (pattern.test(joined)) return true;
+    }
+  }
+  return false;
+}
+
+/**
+ * Evaluate the Q&A Log floor for a brainstorm / scope / design artifact.
+ * Returns ok=true when the floor is satisfied or any escape hatch fires.
+ *
+ * Escape hatches (any one is sufficient):
+ * - Q&A Log contains a stop-signal row.
+ * - `--skip-questions` flag was persisted to the active stage flags
+ *   (passed via `options.skipQuestions=true`); finding downgrades to advisory.
+ * - Track is `quick` (lite tier ~ lightweight complexity) AND substantive
+ *   count >= 1.
+ */
+export function evaluateQaLogFloor(
+  qaLogBody: string | null,
+  track: FlowTrack,
+  stage: FlowStage,
+  options: QaLogFloorOptions = {}
+): QaLogFloorResult {
+  const hint = questionBudgetHint(track, stage);
+  const min = hint.min;
+  const rows = qaLogBody !== null ? getMarkdownTableRows(qaLogBody) : [];
+  const substantiveRows = rows.filter(isSubstantiveQaRow);
+  const count = substantiveRows.length;
+  const hasStopSignal = detectStopSignal(rows);
+  const liteShortCircuit = track === "quick" && count >= 1;
+  // Emergency override (undocumented for users): set
+  // `CCLAW_ELICITATION_FLOOR=advisory` to downgrade qa_log_below_min from
+  // blocking to advisory globally. This is a safety net for incidents where
+  // the floor mis-fires across an org; treat as `--skip-questions` semantics.
+  const envOverride = (typeof process !== "undefined" ? process.env?.CCLAW_ELICITATION_FLOOR : undefined) === "advisory";
+  const skipQuestionsAdvisory = options.skipQuestions === true || envOverride;
+  const ok = count >= min || hasStopSignal || liteShortCircuit;
+  let details: string;
+  if (ok) {
+    if (count >= min) {
+      details = `Q&A Log has ${count} substantive entries (floor for ${track}/${stage}: ${min}).`;
+    } else if (hasStopSignal) {
+      details = `Q&A Log has ${count} substantive entries with an explicit user stop-signal row recorded (floor: ${min}).`;
+    } else {
+      details = `Q&A Log has ${count} substantive entry under lightweight track short-circuit (default floor: ${min}).`;
+    }
+  } else if (skipQuestionsAdvisory) {
+    const reason = options.skipQuestions === true
+      ? "--skip-questions flag was set"
+      : "CCLAW_ELICITATION_FLOOR=advisory env override is active";
+    details = `Q&A Log has ${count} substantive entries, minimum for ${track}/${stage} is ${min}; ${reason}, finding downgraded to advisory.`;
+  } else {
+    details = `Q&A Log has ${count} substantive entries, minimum for ${track}/${stage} is ${min}. Continue the elicitation loop or record an explicit user stop-signal row in Q&A Log.`;
+  }
+  return {
+    ok,
+    count,
+    min,
+    hasStopSignal,
+    liteShortCircuit,
+    skipQuestionsAdvisory,
+    details
+  };
+}
 
 export interface LintFinding {
   section: string;
@@ -871,56 +1022,12 @@ export function validateRequirementsTaxonomy(sectionBody: string): { ok: boolean
   };
 }
 
-export function validateLockedDecisionAnchors(sectionBody: string): { ok: boolean; anchors: string[]; details: string } {
-  const rows = getMarkdownTableRows(sectionBody);
-  const lines = sectionBody
-    .split(/\r?\n/u)
-    .map((line) => line.trim())
-    .filter((line) => /^[-*]\s+\S/u.test(line));
-  const anchors: string[] = [];
-  const issues: string[] = [];
-
-  for (const [index, row] of rows.entries()) {
-    const anchor = (row[0] ?? "").trim().toLowerCase();
-    const decisionText = (row[1] ?? "").trim();
-    if (!/^ld#[0-9a-f]{8}$/u.test(anchor)) {
-      issues.push(`row ${index + 1} has invalid anchor "${row[0] ?? ""}"`);
-      continue;
-    }
-    anchors.push(anchor);
-    if (decisionText.length > 0) {
-      const expected = lockedDecisionHash(decisionText).toLowerCase();
-      if (anchor !== expected) {
-        issues.push(`row ${index + 1} anchor should be ${expected} for its Decision text`);
-      }
-    }
-  }
-
-  for (const [index, line] of lines.entries()) {
-    const anchor = /\bLD#[0-9a-f]{8}\b/iu.exec(line)?.[0]?.toLowerCase();
-    if (!anchor) {
-      issues.push(`bullet ${index + 1} is missing an LD#<sha8> anchor`);
-      continue;
-    }
-    anchors.push(anchor);
-  }
-
-  const duplicateAnchors = [...new Set(anchors.filter((anchor, index) => anchors.indexOf(anchor) !== index))];
-  if (duplicateAnchors.length > 0) {
-    issues.push(`duplicate anchors: ${duplicateAnchors.join(", ")}`);
-  }
-  if (anchors.length === 0 && (rows.length > 0 || lines.length > 0)) {
-    issues.push("no LD#<sha8> anchors found");
-  }
-
-  return {
-    ok: issues.length === 0,
-    anchors: [...new Set(anchors)],
-    details: issues.length === 0
-      ? `${anchors.length} LD#hash anchor(s) recorded with no duplicates.`
-      : issues.join("; ")
-  };
-}
+// `validateLockedDecisionAnchors` and the LD#<sha8> hash contract were
+// removed in Wave 22 (v4.0.0). Decision identity is now anchored only by
+// stable D-XX IDs which the agent can edit safely without recomputing
+// content hashes. The deletion eliminated a class of agent-driven shell
+// hash spam (`shasum`, `sha256sum`, `Get-FileHash`) when rows were
+// reordered or rephrased.
 
 export interface InteractionEdgeCaseRequirement {
   label: string;
@@ -1531,15 +1638,14 @@ export function extractRequirementIdsFromMarkdown(text: string): string[] {
   return [...new Set(ids)];
 }
 
-export function extractLockedDecisionAnchors(text: string): string[] {
-  const ids = text.match(/\bLD#[0-9a-f]{8}\b/giu) ?? [];
-  return [...new Set(ids.map((id) => id.replace(/^LD#/iu, "LD#").toLowerCase()))];
-}
+// `extractLockedDecisionAnchors` was removed in Wave 22 (v4.0.0) along
+// with the LD#<sha8> contract. Cross-stage decision traceability now uses
+// stable D-XX IDs.
 
-export function lockedDecisionHash(value: string): string {
-  const normalized = value.replace(/\s+/gu, " ").trim().toLowerCase();
-  return `LD#${createHash("sha256").update(normalized).digest("hex").slice(0, 8)}`;
-}
+// `lockedDecisionHash` was removed in Wave 22 (v4.0.0) along with the
+// `Locked Decisions Hash Integrity` linter rule. Decision identity now
+// relies on stable D-XX IDs which the agent can edit safely without
+// recomputing content hashes.
 
 export function collectPatternHits(
   text: string,
@@ -1759,4 +1865,11 @@ export interface StageLintContext {
   staleDiagramAuditEnabled: boolean;
   isTrivialOverride: boolean;
   overrideSet: Set<string> | null;
+  /**
+   * Stage-level flags persisted to flow-state.json `activeRun.currentStage.flags`
+   * (or equivalent). Used as escape-hatch signal for the Q&A floor rule
+   * (e.g. `--skip-questions` downgrades `qa_log_below_min` to advisory).
+   * When orchestrator cannot read flow-state, defaults to an empty array.
+   */
+  activeStageFlags: string[];
 }

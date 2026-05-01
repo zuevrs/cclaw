@@ -311,14 +311,18 @@ RECOMMENDATION: <option letter — one-line rationale tying back to premise chal
 > is later dropped, keep the row and mark Priority \`DROPPED\`; if a new one is
 > added mid-flow, append with the next free R-number — do NOT reuse numbers.
 
-## Locked Decisions (LD#hash)
-| Decision Anchor | Decision | Why locked now | Downstream impact |
+## Locked Decisions
+| ID | Decision | Why locked now | Downstream impact |
 |---|---|---|---|
-| LD#<sha8> |  |  |  |
+| D-1 |  |  |  |
 
-> Decision Anchor is \`LD#\` + the first 8 lowercase hex chars of SHA-256 over
-> the normalized \`Decision\` cell (trim, collapse whitespace, lowercase). Downstream
-> design/spec/plan/review artifacts reference these anchors verbatim.
+> Decision IDs are stable \`D-XX\` numbers. Assign once and never renumber across
+> scope/design/spec/plan/review/ship; downstream artifacts reference these IDs
+> verbatim. If a decision is later dropped, keep the row and mark it
+> \`(superseded by D-Y)\`; if a new one is added mid-flow, append with the next
+> free D-number. Wave 22 (v4.0.0) removed the legacy LD#<sha8> hash anchor —
+> existing artifacts with LD# anchors remain valid markdown but the linter only
+> tracks D-XX IDs.
 
 ## In Scope / Out of Scope
 
@@ -482,7 +486,7 @@ ${MARKDOWN_CODE_FENCE}
 > Default path: compact inline synthesis here. Deep/high-risk work may also write \`.cclaw/artifacts/02a-research.md\`.
 
 ## Architecture Boundaries
-| Component | Responsibility | Requirement Refs (R#) | Decision Refs (LD#hash) | Owner |
+| Component | Responsibility | Requirement Refs (R#) | Decision Refs (D-XX) | Owner |
 |---|---|---|---|---|
 |  |  |  |  |  |
 
@@ -544,11 +548,11 @@ ${MARKDOWN_CODE_FENCE}
 ### Interaction Edge Case Matrix
 | Edge case | Handled? | Design response | Deferred item (if not handled) |
 |---|---|---|---|
-| double-click | yes/no |  | None / LD#hash |
-| nav-away-mid-request | yes/no |  | None / LD#hash |
-| 10K-result dataset | yes/no |  | None / LD#hash |
-| background-job abandonment | yes/no |  | None / LD#hash |
-| zombie connection | yes/no |  | None / LD#hash |
+| double-click | yes/no |  | None / D-XX |
+| nav-away-mid-request | yes/no |  | None / D-XX |
+| 10K-result dataset | yes/no |  | None / D-XX |
+| background-job abandonment | yes/no |  | None / D-XX |
+| zombie connection | yes/no |  | None / D-XX |
 
 ## Security & Threat Model
 | Boundary | Threat | Mitigation | Owner |
@@ -703,7 +707,7 @@ ${MARKDOWN_CODE_FENCE}
 - Drift from upstream (or \`None\`):
 
 ## Acceptance Criteria
-| ID | Requirement Ref (R#) | Criterion (observable/measurable/falsifiable) | Design Decision Ref (LD#hash) |
+| ID | Requirement Ref (R#) | Criterion (observable/measurable/falsifiable) | Design Decision Ref (D-XX) |
 |---|---|---|---|
 | AC-1 | R1 |  |  |
 
@@ -849,9 +853,9 @@ Execution rule: complete and verify each batch before starting the next batch.
 - TDD checkpoint plan: RED commit/checkpoint -> GREEN commit/checkpoint -> REFACTOR commit/checkpoint (or deferred because: )
 
 ## Locked Decision Coverage
-| Decision Ref (LD#hash) | Source section | Plan tasks implementing decision | Status |
+| Decision Ref (D-XX) | Source section | Plan tasks implementing decision | Status |
 |---|---|---|---|
-| LD#<sha8> | 02-scope.md > Locked Decisions | T-1 | covered |
+| D-1 | 02-scope.md > Locked Decisions | T-1 | covered |
 
 ## Risk Assessment
 | Task/Batch | Risk | Likelihood | Impact | Mitigation |
@@ -874,7 +878,7 @@ Execution rule: complete and verify each batch before starting the next batch.
   - Create:
   - Modify:
   - Test:
-- **Approach:** (1-3 sentences; cite design decision DD-# or LD#hash)
+- **Approach:** (1-3 sentences; cite design decision DD-# or scope D-XX)
 - **Patterns to follow:** (link existing files/modules to mirror, or \`- None applicable.\`)
 - **Test scenarios:**
   - Happy:
@@ -912,7 +916,7 @@ Execution rule: complete and verify each batch before starting the next batch.
   - Hits: 0 (required for WAIT_FOR_CONFIRM to resolve).
 - Scope reduction language scan:
   - Scanned phrases: \`v1\`, \`for now\`, \`later\`, \`temporary\`, \`placeholder\`, \`mock for now\`, \`hardcoded for now\`, \`will improve later\`.
-  - Hits: 0 (required when Locked Decisions section is non-empty; use LD#hash anchors).
+  - Hits: 0 (required when Locked Decisions section is non-empty; reference D-XX IDs from scope).
 
 ## WAIT_FOR_CONFIRM
 - Status: pending
@@ -1455,6 +1459,61 @@ delegate to a specialized agent or skill if the harness supports it. The primary
 3. Evaluate the specialist output before acting on it — do not blindly apply recommendations
 `;
 
+/**
+ * Always-on baseline rule materialized at `.cursor/rules/cclaw-guidelines.mdc`.
+ * Independent of skill activation — kicks in even when the agent skips
+ * loading skills. Three hard rules cover the most common Wave 22 regressions
+ * (premature draft, premature subagent dispatch, command-line echo to chat).
+ */
+export const CURSOR_GUIDELINES_RULE_MDC = `---
+description: cclaw zero-install behavior baseline (always-on)
+globs:
+  - "**/*"
+alwaysApply: true
+---
+
+<!-- cclaw-managed-cursor-guidelines-rule -->
+
+# Cclaw Baseline Guidelines
+
+These three rules apply to every Cursor agent session in this project,
+regardless of whether stage skills loaded.
+
+## 1. Q&A floor before drafting (brainstorm/scope/design)
+
+Before drafting any \`.cclaw/artifacts/01-brainstorm-*.md\`,
+\`02-scope-*.md\`, or \`03-design-*.md\`, verify that the artifact's
+\`## Q&A Log\` table contains at least the floor count for the active track
+(see \`questionBudgetHint(track, stage).min\`). Walk the stage forcing
+questions one at a time via the \`AskQuestion\` tool. If you find yourself
+proposing a draft after 1-2 questions, STOP and continue the loop.
+
+The \`qa_log_below_min\` linter rule will block \`stage-complete\` when below
+floor unless an explicit user stop-signal row is recorded.
+
+## 2. Mandatory subagents run after Q&A approval
+
+For brainstorm / scope / design, mandatory subagents (
+\`product-discovery\`, \`critic\`, \`planner\`, \`architect\`,
+\`test-author\`) run **only AFTER the user approves the elicitation
+outcome**, never before the Q&A loop converges. Dispatching them early
+preempts the user dialogue and violates the elicitation contract — the
+linter will block stage-complete.
+
+See each stage's "Run Phase: post-elicitation" rows in the materialized
+Automatic Subagent Dispatch table.
+
+## 3. Never echo cclaw command lines to chat
+
+The user does not run cclaw helpers (\`node .cclaw/hooks/...\`) manually.
+NEVER paste full command lines, \`--evidence-json '{...}'\` payloads,
+\`--waive-delegation=...\`, or shell hash commands (\`shasum\`,
+\`sha256sum\`, \`Get-FileHash\`, \`certutil\`, etc.) into chat. Run the
+helper via the tool layer and report only the resulting summary. On
+failure, report a compact human-readable summary plus the helper JSON in
+a single fenced \`json\` block.
+`;
+
 export const CURSOR_WORKFLOW_RULE_MDC = `---
 description: cclaw workflow guardrails for Cursor agent sessions
 globs:
@@ -1503,7 +1562,11 @@ Track-specific skips are allowed only when \`flow-state.track\` + \`skippedStage
 ## Delegation And Approvals
 
 - Machine-only checks in design/plan/tdd/review/ship should auto-dispatch when tooling supports it.
-- Ask for user input only at explicit approval gates (scope mode, plan approval, challenge resolution, ship finalization).
+- **For brainstorm / scope / design stages**: ask user input continuously via adaptive elicitation (one question per turn through the harness-native question tool — \`AskQuestion\` in Cursor). Walk the stage forcing-questions list one-by-one. Do NOT batch and do NOT defer to a single approval gate at the end. The \`qa_log_below_min\` linter rule will block \`stage-complete\` when below floor.
+- **For other stages** (spec/plan/tdd/build/review/ship): ask user input only at explicit approval gates (scope mode, plan approval, challenge resolution, ship finalization), not for routine progress updates.
+- If you find yourself proposing a draft after 1-2 questions in brainstorm/scope/design, STOP — go back to the forcing-questions list and continue.
+- Mandatory subagents in brainstorm/scope/design run only AFTER the user approves the elicitation outcome (see each stage's "Run Phase: post-elicitation" rows). Dispatching them before the Q&A loop converges violates the contract.
+- Never echo cclaw command lines (\`node .cclaw/hooks/...\`, \`--evidence-json '{...}'\`) to chat — the user does not run cclaw manually. Run helpers via the tool layer; report only the resulting summary.
 - If harness capabilities are partial, record waiver reasons in delegation logs.
 
 ## Routing Source Of Truth
