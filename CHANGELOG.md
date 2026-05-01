@@ -1,5 +1,18 @@
 # Changelog
 
+## 6.1.1 — Wave 24/25 Audit Follow-ups
+
+Hotfix release. Auditing Wave 24 (v6.0.0) and Wave 25 (v6.1.0) end-to-end surfaced one real defect that left two shipped features dead in practice. Standard-track runs were never affected — the bug only matters once a flow-state file actually carries a `taskClass` classification.
+
+### Fixed
+
+- **`flow-state.json#taskClass` was silently dropped on persistence.** `coerceFlowState` in `src/run-persistence.ts` (the single read/write coercer used by both `readFlowState` and `writeFlowState`) never copied the `taskClass` field through. Wave 24 declared the field on `FlowState` and wired it into `mandatoryAgentsFor` + `shouldDemoteArtifactValidationByTrack`, but every flow-state round-trip stripped the value, so `flowState.taskClass` was always `undefined` at runtime. Effect: the Wave 24 `software-bugfix` mandatory-delegation skip and the Wave 25 W25-A artifact-validation demotion both fired only in unit tests that called helpers directly. `coerceFlowState` now sanitizes `taskClass` against the `MandatoryDelegationTaskClass` union (plus `null`) and preserves it across reads and writes; unknown values are dropped instead of leaking through.
+- **`checkMandatoryDelegations` ignored `flowState.taskClass`.** The helper accepted `options.taskClass` but `buildValidationReport` in `src/internal/advance-stage/advance.ts` (the `cclaw advance-stage` entry point) never forwarded it. Even after the persistence fix above, the gate would have stayed broken. The helper now falls back to `flowState.taskClass` when the caller leaves `options.taskClass` undefined; explicit `null` still suppresses the lookup. `advance.ts` also threads `flowState.taskClass` through explicitly so the call site stays self-documenting.
+
+### Internal
+
+- Regression tests cover all three legs of the round-trip: `coerceFlowState` preserves valid task classes, drops unknown values, and survives both the `writeFlowState` path and a hand-edited `flow-state.json`. Two new `delegation.test.ts` cases verify that `checkMandatoryDelegations` respects `flowState.taskClass` when no override is passed and that an explicit `null` still wins. Total tests: 794 → 799.
+
 ## 6.1.0 — Lite-Tier Artifact Escape + Validator Ergonomics
 
 Wave 25. The user ran a real test of the design stage on a 3-file static landing page (lite/quick-tier work, `taskClass=software-standard`, empty repo) and hit ~10 sequential validation failures, each requiring artifact edits or evidence-format guesswork. Wave 24 dropped mandatory _delegation_ gates for lite/quick/bugfix; Wave 25 extends the same escape to mandatory _artifact-validation_ rules, fixes envelope error consistency, and broadens diagram + edge-case detection so trivial work stops paying ceremony cost.

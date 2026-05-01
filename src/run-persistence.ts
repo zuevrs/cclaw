@@ -249,6 +249,32 @@ function coerceTrack(value: unknown): FlowTrack {
   return isFlowTrack(value) ? value : "standard";
 }
 
+/**
+ * Wave 24 follow-up (v6.1.1) — preserve `flow-state.json#taskClass`
+ * across read/write round-trips. Before this audit fix the persistence
+ * layer silently dropped the field, which made the Wave 24 bugfix-skip
+ * (`mandatoryAgentsFor` short-circuit) and the Wave 25 artifact-validation
+ * demotion both dead in practice: the only entry point that classified
+ * a run was the unit-test harness passing `options.taskClass` directly
+ * to `checkMandatoryDelegations`. The accepted union mirrors
+ * `MandatoryDelegationTaskClass` plus `null` so callers can explicitly
+ * clear the classification without dropping the property.
+ */
+function coerceTaskClass(
+  value: unknown
+): FlowState["taskClass"] {
+  if (value === undefined) return undefined;
+  if (value === null) return null;
+  if (
+    value === "software-standard" ||
+    value === "software-trivial" ||
+    value === "software-bugfix"
+  ) {
+    return value;
+  }
+  return undefined;
+}
+
 function sanitizeSkippedStages(value: unknown, track: FlowTrack): FlowStage[] {
   const trackDefault = skippedStagesForTrack(track);
   if (!Array.isArray(value)) {
@@ -464,6 +490,7 @@ function coerceFlowState(parsed: Record<string, unknown>): CoercedFlowStateResul
     ? activeRunIdRaw.trim()
     : next.activeRunId;
 
+  const taskClass = coerceTaskClass(parsed.taskClass);
   const state: FlowState = {
     schemaVersion: FLOW_STATE_SCHEMA_VERSION,
     activeRunId,
@@ -472,6 +499,7 @@ function coerceFlowState(parsed: Record<string, unknown>): CoercedFlowStateResul
     guardEvidence: sanitizeGuardEvidence(parsed.guardEvidence),
     stageGateCatalog: sanitizeStageGateCatalog(parsed.stageGateCatalog, next.stageGateCatalog),
     track,
+    ...(taskClass !== undefined ? { taskClass } : {}),
     skippedStages: sanitizeSkippedStages(parsed.skippedStages, track),
     staleStages: sanitizeStaleStages(parsed.staleStages),
     rewinds: sanitizeRewinds(parsed.rewinds),

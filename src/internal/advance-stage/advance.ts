@@ -258,7 +258,15 @@ export async function buildValidationReport(
   flowState: FlowState,
   options: { allowBlockedReviewRoute?: boolean; extraStageFlags?: string[] } = {}
 ): Promise<InternalValidationReport> {
-  const delegation = await checkMandatoryDelegations(projectRoot, flowState.currentStage);
+  // Wave 24 follow-up (v6.1.1): forward `flowState.taskClass` so the
+  // bugfix-skip lights up via the `cclaw advance-stage` path. The
+  // delegation helper now has its own fallback (it reads `flowState`
+  // internally), but threading the value here keeps the call site
+  // self-documenting and survives any future refactor that drops the
+  // implicit fallback.
+  const delegation = await checkMandatoryDelegations(projectRoot, flowState.currentStage, {
+    taskClass: flowState.taskClass ?? undefined
+  });
   const gates = await verifyCurrentStageGateEvidence(projectRoot, flowState, {
     extraStageFlags: options.extraStageFlags
   });
