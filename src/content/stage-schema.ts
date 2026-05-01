@@ -575,6 +575,16 @@ const STAGE_SCHEMA_MAP: Record<FlowStage, StageSchemaInput> = {
   ship: SHIP
 };
 
+/**
+ * Stage-level subagent dispatch matrix.
+ *
+ * NOTE on `fixer`: the `fixer` agent is intentionally NOT listed in any stage
+ * row. It is dispatched on-demand by the SDD `subagent-dev` skill (and by
+ * reviewer flows) when a review surfaces a concrete failing criterion that
+ * needs a fresh worker. Adding `fixer` to the static matrix would create
+ * proactive-waiver theatre because it can only run after a specific review
+ * finding exists. See `core-agents.ts` `fixer` definition for the contract.
+ */
 const STAGE_AUTO_SUBAGENT_DISPATCH: Record<FlowStage, StageAutoSubagentDispatch[]> = {
   brainstorm: [
     {
