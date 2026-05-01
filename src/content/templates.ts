@@ -42,6 +42,13 @@ export const ARTIFACT_TEMPLATES: Record<string, string> = {
 |---|---|---|---|
 |  |  |  |  |
 
+## Idea Evidence Carry-forward
+> Required only when this brainstorm started from \`/cc-ideate\` (\`flow-state.interactionHints.brainstorm.fromIdeaArtifact\` is set). Skip the section entirely otherwise.
+- Source: \`<.cclaw/ideas/idea-YYYY-MM-DD-slug.md>\`
+- Candidate: \`I-#\`
+- Reused fields: Title, Why-now, Expected impact, Risk, Counter-argument
+- Newly generated: challenger row(s) only — the idea candidate becomes the \`baseline\` row of \`## Approaches\` and the seed of \`## Selected Direction\`; do NOT regenerate divergent + critique + rank work that \`/cc-ideate\` already produced.
+
 ## Problem Decision Record
 - **Depth:** lite | standard | deep
 - **Frame type:** \`<free-form-label>\` (one short token that names how this work is framed; pick whatever fits — examples in commentary only: \`product\`, \`technical-maintenance\`, \`research-spike\`, \`ops-incident\`, \`infrastructure\`, \`library-extraction\`. Do NOT treat the examples as an enum.)

@@ -341,13 +341,29 @@ function sanitizeInteractionHints(
     const skipQuestions = typed.skipQuestions === true ? true : undefined;
     const sourceStage = isFlowStage(typed.sourceStage) ? typed.sourceStage : undefined;
     const recordedAt = typeof typed.recordedAt === "string" ? typed.recordedAt : undefined;
-    if (skipQuestions !== true && !sourceStage && !recordedAt) {
+    const fromIdeaArtifact =
+      typeof typed.fromIdeaArtifact === "string" && typed.fromIdeaArtifact.trim().length > 0
+        ? typed.fromIdeaArtifact.trim()
+        : undefined;
+    const fromIdeaCandidateId =
+      typeof typed.fromIdeaCandidateId === "string" && typed.fromIdeaCandidateId.trim().length > 0
+        ? typed.fromIdeaCandidateId.trim()
+        : undefined;
+    if (
+      skipQuestions !== true &&
+      !sourceStage &&
+      !recordedAt &&
+      !fromIdeaArtifact &&
+      !fromIdeaCandidateId
+    ) {
       continue;
     }
     out[stage] = {
       ...(skipQuestions ? { skipQuestions } : {}),
       ...(sourceStage ? { sourceStage } : {}),
-      ...(recordedAt ? { recordedAt } : {})
+      ...(recordedAt ? { recordedAt } : {}),
+      ...(fromIdeaArtifact ? { fromIdeaArtifact } : {}),
+      ...(fromIdeaCandidateId ? { fromIdeaCandidateId } : {})
     };
   }
   return out;
