@@ -20,8 +20,7 @@ const STAGE_POLICY_NEEDLES: Record<FlowStage, string[]> = {
     "In Scope",
     "Out of Scope",
     "Discretion Areas",
-    "NOT in scope",
-    "Premise Challenge",
+    "Premise Drift",
     "Locked Decisions",
     "Victory Detector",
     "Critic Pass"

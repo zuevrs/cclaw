@@ -223,23 +223,14 @@ ${MARKDOWN_CODE_FENCE}
 - Every error has a name:
 - Four paths per data flow:
 
-## Premise Challenge
-| Question | Answer (take a position) | Evidence / leverage |
-|---|---|---|
-| Right problem? |  |  |
-| Direct path? |  |  |
-| What if we do nothing? |  |  |
-| Existing-code leverage? |  |  |
-| Reversibility cost? |  |  |
+## Premise Drift
+> Optional. Brainstorm OWNS the premise check. Record \`None\` unless scope-stage Q&A surfaced new evidence (constraint, user signal, regulatory change) that materially changes brainstorm's \`## Premise Check\` answer.
 
-## Implementation Alternatives
-| Option | Summary | Effort (S/M/L/XL) | Risk (Low/Med/High) | Pros | Cons | Reuses |
-|---|---|---|---|---|---|---|
-| A (minimum viable) |  |  |  |  |  |  |
-| B (ideal architecture) |  |  |  |  |  |  |
-| C (optional) |  |  |  |  |  |  |
+| Brainstorm question | New evidence (scope-stage) | Drift verdict (no-change / shift / reverse) | Action |
+|---|---|---|---|
+| (cite brainstorm Q) |  |  |  |
 
-RECOMMENDATION: <option letter — one-line rationale tying back to premise challenge and existing-code leverage>
+- Default: \`Drift: None — brainstorm Premise Check stands.\`
 
 ## Scope Contract
 - **Selected mode:** HOLD SCOPE | SELECTIVE EXPANSION | SCOPE EXPANSION | SCOPE REDUCTION
@@ -251,8 +242,9 @@ RECOMMENDATION: <option letter — one-line rationale tying back to premise chal
 - **Deferred ideas:**
 - **Accepted reference ideas:**
 - **Rejected reference ideas:**
+- **Constraints (external/regulatory/system/integration):** (spec carries these forward — do NOT restate as assumptions)
 - **Success definition:**
-- **Design handoff:**
+- **Design handoff:** (name what design must decide: architecture-tier, framework, data-model, etc. — design OWNS the architecture choice)
 
 ## Decision Drivers
 | Driver | Weight (1-5) | Option A | Option B | Option C | Notes |
@@ -532,8 +524,12 @@ ${MARKDOWN_CODE_FENCE}
 |---|---|---|---|---|
 |  |  |  | clear/stale |  |
 
-## What Already Exists
-| Sub-problem | Existing code/library | Layer | Reuse decision |
+## Blast-radius Diff
+> Diff since scope artifact baseline. Scope OWNS the full repo audit (\`## Pre-Scope System Audit\`); design only diffs touched paths.
+>
+> Suggested command: \`git diff <scope-artifact-head-sha>..HEAD -- <touched-paths>\`
+
+| File | Change since scope (\`git diff\` summary) | Current responsibility | Reuse candidate / existing pattern |
 |---|---|---|---|
 |  |  |  |  |
 
@@ -627,9 +623,6 @@ ${MARKDOWN_CODE_FENCE}
 - Target score: 0.800
 - Max iterations: 3
 - Unresolved concerns:
-
-## NOT in scope
-- 
 
 ## Parallelization Strategy
 - Standard/Deep add-on when multi-module; omit for compact sequential work.
@@ -726,8 +719,10 @@ ${MARKDOWN_CODE_FENCE}
 | AC-1 |  |  |
 
 ## Constraints and Assumptions
-- Constraints:
-- Assumptions:
+> Constraints are CARRIED FORWARD from scope's \`## Scope Contract > Constraints\`. Cite or copy with attribution; do NOT re-author. Spec OWNS testable assumptions in \`## Assumptions Before Finalization\` below.
+
+- **Constraints (carry-forward):** See scope: \`02-scope-<slug>.md#scope-contract\` (or list new spec-stage constraints with citation to the Q&A row that surfaced them).
+- **Assumptions:** See \`## Assumptions Before Finalization\` (spec-only owner).
 
 ## Assumptions Before Finalization
 | Assumption | Source / confidence | Validation path | Disposition |

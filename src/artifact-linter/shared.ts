@@ -766,60 +766,12 @@ export function extractCanonicalScopeMode(body: string): CanonicalScopeMode | nu
   return null;
 }
 
-export function validatePremiseChallenge(sectionBody: string): { ok: boolean; details: string } {
-  // gstack-style premise challenge requires a real Q/A structure (table or
-  // list), not free-form prose. The validation is *structural* only — we do
-  // NOT keyword-grep for English phrases like "right problem"; authors may
-  // write the questions in any language, and the answers carry the meaning.
-  // The template ships with canonical question labels as scaffolding, but
-  // the linter only enforces that the section actually compares premise
-  // questions to answers.
-  const tableRows = getMarkdownTableRows(sectionBody);
-  const bulletRows = sectionBody
-    .split(/\r?\n/u)
-    .map((line) => line.trim())
-    .filter((line) => /^(?:[-*]|\d+\.)\s+\S/u.test(line));
-  const rowCount = Math.max(tableRows.length, bulletRows.length);
-  if (rowCount < 3) {
-    return {
-      ok: false,
-      details: `Premise Challenge needs at least 3 substantive rows in a table or bullet list. Found ${rowCount}.`
-    };
-  }
-  // For tables, each data row must have at least 2 non-empty cells so the
-  // section is genuinely a premise/answer comparison, not a list of headlines.
-  // For bullet lists, each line must be substantive so we don't accept
-  // placeholders like `- a`; punctuation style and natural language do not
-  // matter.
-  if (tableRows.length >= 3) {
-    const sparseRows = tableRows.filter((row) => {
-      const filledCells = row.filter((cell) => cell.replace(/[\s|]/gu, "").length >= 2);
-      return filledCells.length < 2;
-    });
-    if (sparseRows.length > 0) {
-      return {
-        ok: false,
-        details: "Premise Challenge table rows must populate at least the question and answer columns (no empty answers)."
-      };
-    }
-  } else if (bulletRows.length >= 3) {
-    const sparseBullets = bulletRows.filter((line) => {
-      const cleaned = line.replace(/^[-*\d.\s]+/u, "").replace(/[`*_]/gu, "").trim();
-      const meaningful = cleaned.match(/[\p{L}\p{N}]/gu)?.length ?? 0;
-      return meaningful < 12;
-    });
-    if (sparseBullets.length > 0) {
-      return {
-        ok: false,
-        details: "Premise Challenge bullet list must include at least 3 substantive rows, not placeholders."
-      };
-    }
-  }
-  return {
-    ok: true,
-    details: `Premise Challenge structures ${rowCount} Q/A rows.`
-  };
-}
+// `validatePremiseChallenge` was removed in Wave 23 (v5.0.0). Premise
+// challenge is now owned solely by brainstorm (`## Premise Check`); scope
+// only records `## Premise Drift` when scope-stage Q&A surfaces new
+// evidence that materially changes the brainstorm answer. The drift
+// section is optional and structural-only via the default `validateSectionBody`
+// path (no specialized validator required).
 
 export function validateScopeSummary(sectionBody: string): { ok: boolean; details: string } {
   const meaningfulLines = sectionBody
@@ -1770,9 +1722,6 @@ export function validateSectionBody(
   }
   if (sectionNameNormalized === "scope summary") {
     return validateScopeSummary(sectionBody);
-  }
-  if (sectionNameNormalized === "premise challenge") {
-    return validatePremiseChallenge(sectionBody);
   }
   if (sectionNameNormalized.startsWith("requirements")) {
     return validateRequirementsTaxonomy(sectionBody);
