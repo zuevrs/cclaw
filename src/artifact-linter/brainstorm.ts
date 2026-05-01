@@ -13,6 +13,7 @@ import {
   validateCalibratedSelfReview,
   markdownFieldRegex
 } from "./shared.js";
+import { readFlowState } from "../run-persistence.js";
 
 export async function lintBrainstormStage(ctx: StageLintContext): Promise<void> {
   const {
@@ -48,9 +49,9 @@ export async function lintBrainstormStage(ctx: StageLintContext): Promise<void> 
       const skipQuestions = ctx.activeStageFlags.includes("--skip-questions");
       const floor = evaluateQaLogFloor(qaLogBody, track, "brainstorm", { skipQuestions });
       findings.push({
-        section: "qa_log_below_min",
+        section: "qa_log_unconverged",
         required: !floor.skipQuestionsAdvisory,
-        rule: "[P1] qa_log_below_min — Q&A Log below the adaptive elicitation floor for this track. Continue the loop or record an explicit user stop-signal row.",
+        rule: "[P1] qa_log_unconverged — Q&A Log has not converged for this stage. Continue elicitation until forcing-question topics are addressed, the last 2 rows produce no decision-changing impact (Ralph-Loop), or an explicit user stop-signal row is appended.",
         found: floor.ok,
         details: floor.details
       });
@@ -328,6 +329,43 @@ export async function lintBrainstormStage(ctx: StageLintContext): Promise<void> 
         details: optedOut || missing.length === 0
           ? "Outside Voice slot is well-formed."
           : `Outside Voice section is missing field(s): ${missing.join(", ")}.`
+      });
+    }
+
+    let ideaHint: { fromIdeaArtifact?: string; fromIdeaCandidateId?: string } = {};
+    try {
+      const flowState = await readFlowState(projectRoot);
+      const hint = flowState.interactionHints?.brainstorm;
+      if (hint) {
+        ideaHint = {
+          fromIdeaArtifact: hint.fromIdeaArtifact,
+          fromIdeaCandidateId: hint.fromIdeaCandidateId
+        };
+      }
+    } catch {
+      ideaHint = {};
+    }
+    if (ideaHint.fromIdeaArtifact) {
+      const carryBody = sectionBodyByName(sections, "Idea Evidence Carry-forward");
+      const hasSection = carryBody !== null && meaningfulLineCount(carryBody) > 0;
+      const sourceCited = hasSection &&
+        carryBody!.includes(ideaHint.fromIdeaArtifact);
+      const candidateCited = ideaHint.fromIdeaCandidateId
+        ? hasSection && carryBody!.toUpperCase().includes(ideaHint.fromIdeaCandidateId.toUpperCase())
+        : true;
+      const ok = hasSection && sourceCited && candidateCited;
+      findings.push({
+        section: "brainstorm.idea_evidence_carry_forward",
+        required: true,
+        rule: "[P1] brainstorm.idea_evidence_carry_forward — when `flow-state.interactionHints.brainstorm.fromIdeaArtifact` is set (Wave 23 / v5.0.0), the brainstorm artifact MUST include `## Idea Evidence Carry-forward` citing the idea artifact path and chosen `I-#`. Reuse divergent + critique + rank work from `/cc-ideate` as the `baseline` Approach; only newly generate the higher-upside challenger row(s).",
+        found: ok,
+        details: ok
+          ? `Idea Evidence Carry-forward cites ${ideaHint.fromIdeaArtifact}${ideaHint.fromIdeaCandidateId ? ` (${ideaHint.fromIdeaCandidateId})` : ""}.`
+          : !hasSection
+            ? `Brainstorm started from /cc-ideate (artifact ${ideaHint.fromIdeaArtifact}${ideaHint.fromIdeaCandidateId ? `, candidate ${ideaHint.fromIdeaCandidateId}` : ""}) but \`## Idea Evidence Carry-forward\` is missing or empty.`
+            : !sourceCited
+              ? `\`## Idea Evidence Carry-forward\` does not cite the source idea artifact path \`${ideaHint.fromIdeaArtifact}\`.`
+              : `\`## Idea Evidence Carry-forward\` does not cite the chosen candidate id \`${ideaHint.fromIdeaCandidateId ?? ""}\`.`
       });
     }
 

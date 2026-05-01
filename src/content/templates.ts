@@ -42,6 +42,13 @@ export const ARTIFACT_TEMPLATES: Record<string, string> = {
 |---|---|---|---|
 |  |  |  |  |
 
+## Idea Evidence Carry-forward
+> Required only when this brainstorm started from \`/cc-ideate\` (\`flow-state.interactionHints.brainstorm.fromIdeaArtifact\` is set). Skip the section entirely otherwise.
+- Source: \`<.cclaw/ideas/idea-YYYY-MM-DD-slug.md>\`
+- Candidate: \`I-#\`
+- Reused fields: Title, Why-now, Expected impact, Risk, Counter-argument
+- Newly generated: challenger row(s) only — the idea candidate becomes the \`baseline\` row of \`## Approaches\` and the seed of \`## Selected Direction\`; do NOT regenerate divergent + critique + rank work that \`/cc-ideate\` already produced.
+
 ## Problem Decision Record
 - **Depth:** lite | standard | deep
 - **Frame type:** \`<free-form-label>\` (one short token that names how this work is framed; pick whatever fits — examples in commentary only: \`product\`, \`technical-maintenance\`, \`research-spike\`, \`ops-incident\`, \`infrastructure\`, \`library-extraction\`. Do NOT treat the examples as an enum.)
@@ -223,23 +230,14 @@ ${MARKDOWN_CODE_FENCE}
 - Every error has a name:
 - Four paths per data flow:
 
-## Premise Challenge
-| Question | Answer (take a position) | Evidence / leverage |
-|---|---|---|
-| Right problem? |  |  |
-| Direct path? |  |  |
-| What if we do nothing? |  |  |
-| Existing-code leverage? |  |  |
-| Reversibility cost? |  |  |
+## Premise Drift
+> Optional. Brainstorm OWNS the premise check. Record \`None\` unless scope-stage Q&A surfaced new evidence (constraint, user signal, regulatory change) that materially changes brainstorm's \`## Premise Check\` answer.
 
-## Implementation Alternatives
-| Option | Summary | Effort (S/M/L/XL) | Risk (Low/Med/High) | Pros | Cons | Reuses |
-|---|---|---|---|---|---|---|
-| A (minimum viable) |  |  |  |  |  |  |
-| B (ideal architecture) |  |  |  |  |  |  |
-| C (optional) |  |  |  |  |  |  |
+| Brainstorm question | New evidence (scope-stage) | Drift verdict (no-change / shift / reverse) | Action |
+|---|---|---|---|
+| (cite brainstorm Q) |  |  |  |
 
-RECOMMENDATION: <option letter — one-line rationale tying back to premise challenge and existing-code leverage>
+- Default: \`Drift: None — brainstorm Premise Check stands.\`
 
 ## Scope Contract
 - **Selected mode:** HOLD SCOPE | SELECTIVE EXPANSION | SCOPE EXPANSION | SCOPE REDUCTION
@@ -251,8 +249,9 @@ RECOMMENDATION: <option letter — one-line rationale tying back to premise chal
 - **Deferred ideas:**
 - **Accepted reference ideas:**
 - **Rejected reference ideas:**
+- **Constraints (external/regulatory/system/integration):** (spec carries these forward — do NOT restate as assumptions)
 - **Success definition:**
-- **Design handoff:**
+- **Design handoff:** (name what design must decide: architecture-tier, framework, data-model, etc. — design OWNS the architecture choice)
 
 ## Decision Drivers
 | Driver | Weight (1-5) | Option A | Option B | Option C | Notes |
@@ -532,8 +531,12 @@ ${MARKDOWN_CODE_FENCE}
 |---|---|---|---|---|
 |  |  |  | clear/stale |  |
 
-## What Already Exists
-| Sub-problem | Existing code/library | Layer | Reuse decision |
+## Blast-radius Diff
+> Diff since scope artifact baseline. Scope OWNS the full repo audit (\`## Pre-Scope System Audit\`); design only diffs touched paths.
+>
+> Suggested command: \`git diff <scope-artifact-head-sha>..HEAD -- <touched-paths>\`
+
+| File | Change since scope (\`git diff\` summary) | Current responsibility | Reuse candidate / existing pattern |
 |---|---|---|---|
 |  |  |  |  |
 
@@ -627,9 +630,6 @@ ${MARKDOWN_CODE_FENCE}
 - Target score: 0.800
 - Max iterations: 3
 - Unresolved concerns:
-
-## NOT in scope
-- 
 
 ## Parallelization Strategy
 - Standard/Deep add-on when multi-module; omit for compact sequential work.
@@ -726,8 +726,10 @@ ${MARKDOWN_CODE_FENCE}
 | AC-1 |  |  |
 
 ## Constraints and Assumptions
-- Constraints:
-- Assumptions:
+> Constraints are CARRIED FORWARD from scope's \`## Scope Contract > Constraints\`. Cite or copy with attribution; do NOT re-author. Spec OWNS testable assumptions in \`## Assumptions Before Finalization\` below.
+
+- **Constraints (carry-forward):** See scope: \`02-scope-<slug>.md#scope-contract\` (or list new spec-stage constraints with citation to the Q&A row that surfaced them).
+- **Assumptions:** See \`## Assumptions Before Finalization\` (spec-only owner).
 
 ## Assumptions Before Finalization
 | Assumption | Source / confidence | Validation path | Disposition |
@@ -1188,9 +1190,14 @@ Execution rule: complete and verify each batch before starting the next batch.
 | AC-1 | PASS/FAIL |  |
 
 ## Layer 2 Findings
+> Wave 23 (v5.0.0): Layer 2 categories OWNED by review = cross-slice correctness, security, dependency/version, observability, external-safety. Performance + architecture findings are CARRY-FORWARD from \`03-design-<slug>.md\` (Performance Budget, ADR) — cite, do NOT re-derive. Single-slice findings stay in \`06-tdd.md > Per-Slice Review\`; review may cite their IDs (severity/disposition must match — cross-artifact-duplication linter blocks otherwise).
+
 | ID | Severity | Category | File:line / no-line reason | Description | Status |
 |---|---|---|---|---|---|
-| R-1 | Critical/Important/Suggestion | correctness/security/performance/architecture/external-safety | path:line |  | open/resolved |
+| R-1 | Critical/Important/Suggestion | cross-slice-correctness/security/dependency-version/observability/external-safety | path:line |  | open/resolved |
+| R-2 | from-design | performance | cite \`03-design-<slug>.md > Performance Budget\` |  | carry-forward |
+| R-3 | from-design | architecture | cite \`03-design-<slug>.md > ADR\` |  | carry-forward |
+| R-4 | from-tdd | from-tdd | cite \`06-tdd.md > Per-Slice Review > F-<n>\` |  | carry-forward |
 - NO_FINDINGS_ATTESTATION: <required when no findings are reported; cite inspected coverage>
 
 ## Lens Coverage
@@ -1483,13 +1490,16 @@ regardless of whether stage skills loaded.
 
 Before drafting any \`.cclaw/artifacts/01-brainstorm-*.md\`,
 \`02-scope-*.md\`, or \`03-design-*.md\`, verify that the artifact's
-\`## Q&A Log\` table contains at least the floor count for the active track
-(see \`questionBudgetHint(track, stage).min\`). Walk the stage forcing
-questions one at a time via the \`AskQuestion\` tool. If you find yourself
-proposing a draft after 1-2 questions, STOP and continue the loop.
+\`## Q&A Log\` table demonstrates Ralph-Loop convergence: forcing-question
+topics are addressed (see the stage's forcing-questions checklist row),
+the last 2 turns produce no new decision-changing impact, OR an explicit
+user stop-signal row is recorded. Walk the stage forcing questions one at
+a time via the \`AskQuestion\` tool. If you find yourself proposing a
+draft after 1-2 questions while forcing topics remain unaddressed, STOP
+and continue the loop.
 
-The \`qa_log_below_min\` linter rule will block \`stage-complete\` when below
-floor unless an explicit user stop-signal row is recorded.
+The \`qa_log_unconverged\` linter rule will block \`stage-complete\` when
+convergence has not been reached.
 
 ## 2. Mandatory subagents run after Q&A approval
 
@@ -1562,7 +1572,7 @@ Track-specific skips are allowed only when \`flow-state.track\` + \`skippedStage
 ## Delegation And Approvals
 
 - Machine-only checks in design/plan/tdd/review/ship should auto-dispatch when tooling supports it.
-- **For brainstorm / scope / design stages**: ask user input continuously via adaptive elicitation (one question per turn through the harness-native question tool — \`AskQuestion\` in Cursor). Walk the stage forcing-questions list one-by-one. Do NOT batch and do NOT defer to a single approval gate at the end. The \`qa_log_below_min\` linter rule will block \`stage-complete\` when below floor.
+- **For brainstorm / scope / design stages**: ask user input continuously via adaptive elicitation (one question per turn through the harness-native question tool — \`AskQuestion\` in Cursor). Walk the stage forcing-questions list one-by-one. Do NOT batch and do NOT defer to a single approval gate at the end. The \`qa_log_unconverged\` linter rule will block \`stage-complete\` when convergence is not reached (forcing topics unaddressed AND last 2 turns still produce decision-changing rows AND no stop-signal).
 - **For other stages** (spec/plan/tdd/build/review/ship): ask user input only at explicit approval gates (scope mode, plan approval, challenge resolution, ship finalization), not for routine progress updates.
 - If you find yourself proposing a draft after 1-2 questions in brainstorm/scope/design, STOP — go back to the forcing-questions list and continue.
 - Mandatory subagents in brainstorm/scope/design run only AFTER the user approves the elicitation outcome (see each stage's "Run Phase: post-elicitation" rows). Dispatching them before the Q&A loop converges violates the contract.

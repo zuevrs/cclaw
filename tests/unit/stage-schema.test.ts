@@ -595,7 +595,10 @@ describe("stage schema and subagent alignment", () => {
     const plan = stageSchema("plan");
 
     expect(design.executionModel.checklist).toEqual(expect.arrayContaining([
-      expect.stringContaining("Investigator pass"),
+      // Wave 23 (v5.0.0): "Investigator pass" was replaced by
+      // "Blast-radius diff (do NOT re-audit the whole repo)" — design only
+      // diffs since scope baseline; scope owns the full repo audit.
+      expect.stringContaining("Blast-radius diff"),
       expect.stringContaining("shadow alternative"),
       expect.stringContaining("Critic pass")
     ]));
@@ -802,7 +805,7 @@ describe("stage schema and subagent alignment", () => {
     expect(designTemplate).toContain("Standard/Deep add-on; omit");
   });
 
-  it("review contract aligns required layer coverage and blocked route gates", () => {
+  it("review contract aligns required layer coverage and blocked route gates (Wave 23 boundary)", () => {
     const review = stageSchema("review", "quick");
     const requiredGateIds = review.requiredGates
       .filter((gate) => gate.tier === "required")
@@ -811,10 +814,16 @@ describe("stage schema and subagent alignment", () => {
     expect(requiredGateIds).toContain("review_layer_coverage_complete");
     expect(review.requiredGates.find((gate) => gate.id === "review_criticals_resolved")?.description)
       .toContain("BLOCKED routes use review_verdict_blocked instead");
+    // Wave 23 (v5.0.0): Layer 2 owns cross-slice integration findings only.
+    // Performance + architecture come from design lens carry-forward; they
+    // are NOT re-derived in review. tdd Per-Slice Review owns single-slice
+    // findings; review cites tdd IDs (cross-artifact-duplication linter
+    // enforces severity/disposition match).
     expect(review.requiredEvidence).toEqual(expect.arrayContaining([
-      expect.stringContaining("correctness, security, performance, architecture, and external-safety")
+      expect.stringContaining("cross-slice correctness"),
+      expect.stringContaining("design lens carry-forward")
     ]));
-    expect(ARTIFACT_TEMPLATES["07-review.md"]).toContain("correctness/security/performance/architecture/external-safety");
+    expect(ARTIFACT_TEMPLATES["07-review.md"]).toMatch(/cross-slice|integration/iu);
   });
 
   it("brainstorm and scope default to compact user-facing flow", () => {

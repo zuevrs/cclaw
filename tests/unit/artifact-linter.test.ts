@@ -13,7 +13,7 @@ import { createTempProject } from "../helpers/index.js";
 
 /**
  * Generic Q&A Log block with a recognized stop-signal row, used to satisfy the
- * Wave 22 `qa_log_below_min` floor for brainstorm/scope/design fixtures whose
+ * Wave 23 `qa_log_unconverged` convergence floor for brainstorm/scope/design fixtures whose
  * focus is on other linter rules. Tests that exercise the floor explicitly
  * either define their own `## Q&A Log` section or pass `--skip-questions` via
  * the gate-evidence flow.
@@ -2305,116 +2305,10 @@ ${summaryBody}
     });
   });
 
-  describe("Premise Challenge structural validation", () => {
-    const baseScopeWithPremise = (premiseBody: string): string => `# Scope Artifact
-
-## Premise Challenge
-${premiseBody}
-
-## Scope Mode
-- [x] hold
-
-## In Scope / Out of Scope
-### In Scope
-- A
-### Out of Scope
-- B
-
-## Completion Dashboard
-- Checklist findings: 1/1
-- Resolved decisions count: 1
-- Unresolved decisions: None
-
-## Scope Summary
-- Selected mode: HOLD SCOPE
-- Next-stage handoff: design.
-`;
-
-    it("rejects a Premise Challenge that has fewer than 3 Q/A rows", async () => {
-      const root = await createTempProject("premise-thin");
-      await writeRuntimeArtifact(
-        root,
-        "02-scope.md",
-        baseScopeWithPremise(`- Right problem? Yes.\n- Direct path? Yes.`)
-      );
-      const result = await lintArtifact(root, "scope");
-      const premise = result.findings.find((f) => f.section === "Premise Challenge");
-      expect(premise?.found).toBe(false);
-      expect(premise?.details ?? "").toMatch(/at least 3/iu);
-    });
-
-    it("accepts a Premise Challenge as a 3-bullet list of question/answer pairs", async () => {
-      const root = await createTempProject("premise-list-3");
-      await writeRuntimeArtifact(
-        root,
-        "02-scope.md",
-        baseScopeWithPremise(
-          `- Right problem? Yes — users miss follow-ups.\n` +
-            `- Direct path? Yes — durable feed is the most direct fix.\n` +
-            `- What if nothing? Users keep missing important updates.`
-        )
-      );
-      const result = await lintArtifact(root, "scope");
-      const premise = result.findings.find((f) => f.section === "Premise Challenge");
-      expect(premise?.found).toBe(true);
-    });
-
-    it("accepts a Premise Challenge bullet list in non-Latin scripts without question marks", async () => {
-      const root = await createTempProject("premise-list-non-latin-no-question-mark");
-      await writeRuntimeArtifact(
-        root,
-        "02-scope.md",
-        baseScopeWithPremise(
-          `- Проблема верная — нужен публичный вход для клиентов.\n` +
-            `- 直接路径 — 静态页面先锁定信息架构。\n` +
-            `- بدون هذا العمل — يبقى المنتج بلا صفحة واضحة للزوار.`
-        )
-      );
-      const result = await lintArtifact(root, "scope");
-      const premise = result.findings.find((f) => f.section === "Premise Challenge");
-      expect(premise?.found).toBe(true);
-    });
-
-    it("accepts a Premise Challenge written as a markdown table with Q/A columns in any language", async () => {
-      const root = await createTempProject("premise-table-multilingual");
-      await writeRuntimeArtifact(
-        root,
-        "02-scope.md",
-        baseScopeWithPremise(
-          `| Question | Answer | Evidence |\n` +
-            `|---|---|---|\n` +
-            `| Правильная ли проблема? | Да — нужна веб-презентация. | brainstorm |\n` +
-            `| Прямой путь? | Да — статический сайт без бэкенда. | стек |\n` +
-            `| Что если ничего не делать? | Нет онлайн-присутствия. | контекст |\n` +
-            `| Где использовать существующий код? | Greenfield. | repo |\n` +
-            `| Стоимость отката? | Низкая, статический сайт. | risk |`
-        )
-      );
-      const result = await lintArtifact(root, "scope");
-      const premise = result.findings.find((f) => f.section === "Premise Challenge");
-      expect(premise?.found).toBe(true);
-      expect(premise?.details ?? "").not.toMatch(/Rule expects keywords/);
-    });
-
-    it("rejects a Premise Challenge table where answer cells are empty", async () => {
-      const root = await createTempProject("premise-table-empty");
-      await writeRuntimeArtifact(
-        root,
-        "02-scope.md",
-        baseScopeWithPremise(
-          `| Question | Answer | Evidence |\n` +
-            `|---|---|---|\n` +
-            `| Right problem? |  |  |\n` +
-            `| Direct path? |  |  |\n` +
-            `| What if nothing? |  |  |`
-        )
-      );
-      const result = await lintArtifact(root, "scope");
-      const premise = result.findings.find((f) => f.section === "Premise Challenge");
-      expect(premise?.found).toBe(false);
-      expect(premise?.details ?? "").toMatch(/no empty answers/iu);
-    });
-  });
+  // Wave 23 (v5.0.0): the "Premise Challenge structural validation" describe
+  // block was removed. `## Premise Challenge` is no longer a scope artifact
+  // section; brainstorm owns Premise Check, scope cites it via `Upstream
+  // Handoff`. See plan: phase A (dedupe pure overlaps).
 
   it("accepts a compact non-Latin-script Scope Summary that names the canonical mode + handoff", async () => {
     // Regression for the legacy contract: the linter used to extract
@@ -5464,7 +5358,7 @@ Fallback_Cache -->|degraded response| API_Gateway`
     expect(duplicateHeading?.details).toContain("Scratchpad");
   });
 
-  it("emits qa_log_missing advisory + qa_log_below_min advisory under --skip-questions when design Q&A log is absent", async () => {
+  it("emits qa_log_missing advisory + qa_log_unconverged advisory under --skip-questions when design Q&A log is absent", async () => {
     const root = await createTempProject("artifact-lint-qa-log-advisory");
     const designBody = completeDesignArtifact(
       `API_Gateway -->|sync: validated request| App_Service
@@ -5504,7 +5398,7 @@ Fallback_Cache -->|degraded response| API_Gateway`
 
     const result = await lintArtifact(root, "design");
     const qaLogMissing = result.findings.find((finding) => finding.section === "qa_log_missing");
-    const qaLogFloor = result.findings.find((finding) => finding.section === "qa_log_below_min");
+    const qaLogFloor = result.findings.find((finding) => finding.section === "qa_log_unconverged");
     expect(qaLogMissing).toMatchObject({ required: false, found: false });
     expect(qaLogMissing?.details).toContain("Q&A Log");
     expect(qaLogFloor?.required).toBe(false);

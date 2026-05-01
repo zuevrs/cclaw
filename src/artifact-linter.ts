@@ -33,8 +33,11 @@ export {
   validateReviewArmy,
   checkReviewVerdictConsistency,
   checkReviewSecurityNoChangeAttestation,
+  checkReviewTddNoCrossArtifactDuplication,
   type ReviewVerdictConsistencyResult,
-  type ReviewSecurityNoChangeAttestationResult
+  type ReviewSecurityNoChangeAttestationResult,
+  type ReviewTddDuplicationConflict,
+  type ReviewTddDuplicationResult
 } from "./artifact-linter/review-army.js";
 
 export {

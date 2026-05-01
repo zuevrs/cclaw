@@ -2,6 +2,7 @@ import { createHash } from "node:crypto";
 import { SHIP_FINALIZATION_MODES } from "../constants.js";
 import { questionBudgetHint } from "../track-heuristics.js";
 import { FLOW_STAGES, type FlowStage, type FlowTrack } from "../types.js";
+import { stageSchema } from "../content/stage-schema.js";
 
 /**
  * Recognized stop-signal phrases that satisfy the Q&A floor escape hatch
@@ -32,9 +33,9 @@ const QA_LOG_STOP_SIGNAL_PATTERNS: RegExp[] = [
 ];
 
 /**
- * Stages that run adaptive elicitation. The `qa_log_below_min` rule only
- * fires for these. Other stages may still record a Q&A Log but no floor is
- * enforced.
+ * Stages that run adaptive elicitation. The `qa_log_unconverged` rule
+ * only fires for these. Other stages may still record a Q&A Log but no
+ * convergence floor is enforced.
  */
 export const ELICITATION_STAGES: ReadonlySet<FlowStage> = new Set<FlowStage>([
   "brainstorm",
@@ -42,35 +43,78 @@ export const ELICITATION_STAGES: ReadonlySet<FlowStage> = new Set<FlowStage>([
   "design"
 ]);
 
+/**
+ * Phrases that mark a Q&A Log row as "no new decision" — used by the
+ * Ralph-Loop convergence detector. When the last 2 substantive rows have
+ * a Decision impact tagged with one of these phrases, convergence has
+ * been reached even if not every forcing question was explicitly
+ * addressed.
+ */
+const QA_LOG_NO_DECISION_TOKENS: RegExp[] = [
+  /\bskip(?:ped)?\b/iu,
+  /\bcontinue\b/iu,
+  /\bno[-\s]?change\b/iu,
+  /\bno[-\s]?decision\b/iu,
+  /\bno[-\s]?op\b/iu,
+  /\bnoop\b/iu,
+  /\bdone\b/iu,
+  /\bsame\b/iu,
+  /\bok\b/iu
+];
+
 export interface QaLogFloorOptions {
   /**
-   * When true, downgrades a below-floor finding to advisory (`required: false`).
+   * When true, downgrades the finding to advisory (`required: false`).
    * Set when `--skip-questions` was persisted to the active stage flags.
    */
   skipQuestions?: boolean;
+  /**
+   * Optional pre-extracted forcing-question topics. When omitted, the
+   * evaluator calls `extractForcingQuestions(stage)` which scans the
+   * stage's checklist row.
+   */
+  forcingQuestions?: string[];
 }
 
 export interface QaLogFloorResult {
-  /** Whether the floor is satisfied (passes the gate). */
+  /** Whether convergence is satisfied (passes the gate). */
   ok: boolean;
   /** Substantive Q&A Log row count (excludes `skipped`/`waived` only rows). */
   count: number;
-  /** Required minimum count from `questionBudgetHint(track, stage).min`. */
+  /**
+   * Legacy field, retained for harness UI compatibility. Always 0 in
+   * Wave 23 — the convergence floor no longer enforces a fixed count.
+   * Harness can still surface `questionBudgetHint(track, stage).recommended`
+   * as a soft hint, but it is NOT tied to gate blocking.
+   */
   min: number;
   /** Whether a stop-signal row was detected. */
   hasStopSignal: boolean;
-  /** Whether the lite-tier short-circuit applies (lite track + count >= 1). */
+  /**
+   * Legacy field, retained for harness UI compatibility. Always false in
+   * Wave 23 — convergence semantics replaced the lite-tier short-circuit.
+   */
   liteShortCircuit: boolean;
   /** Whether `--skip-questions` flag downgraded the finding to advisory. */
   skipQuestionsAdvisory: boolean;
+  /** Forcing-question topics deemed addressed (substring match in Q&A). */
+  forcingCovered: string[];
+  /** Forcing-question topics still pending (no matching Q&A row). */
+  forcingPending: string[];
+  /**
+   * True when the last 2 substantive rows have decision_impact marking
+   * `skip`/`continue`/`no-change`/`done`/etc. — i.e. Q&A is no longer
+   * surfacing decision-changing answers (Ralph-Loop convergence detector).
+   */
+  noNewDecisions: boolean;
   /** Human-readable details for the linter finding. */
   details: string;
 }
 
 /**
- * Decide whether a Q&A Log row counts as a "substantive" entry for the floor.
- * Rows whose disposition column reads `skipped` / `waived` only do not
- * count toward the minimum.
+ * Decide whether a Q&A Log row counts as a "substantive" entry. Rows
+ * whose decision_impact column reads `skipped` / `waived` only do not
+ * count.
  */
 function isSubstantiveQaRow(cells: string[]): boolean {
   if (cells.length === 0) return false;
@@ -81,8 +125,8 @@ function isSubstantiveQaRow(cells: string[]): boolean {
 }
 
 /**
- * Detect a stop-signal row in the Q&A Log. Pattern is matched across all
- * cells of any row so the user's quote can live in any column.
+ * Detect a stop-signal row in the Q&A Log. Pattern is matched across
+ * all cells of any row so the user's quote can live in any column.
  */
 function detectStopSignal(rows: string[][]): boolean {
   for (const row of rows) {
@@ -95,15 +139,125 @@ function detectStopSignal(rows: string[][]): boolean {
 }
 
 /**
- * Evaluate the Q&A Log floor for a brainstorm / scope / design artifact.
- * Returns ok=true when the floor is satisfied or any escape hatch fires.
+ * Extract forcing-question topics from a stage's checklist. Looks for
+ * the canonical `**<Stage> forcing questions (must be covered or
+ * explicitly waived)** — <topic1>, <topic2>, ...` row and tokenizes the
+ * comma-separated topic list. Returns trimmed topic strings stripped of
+ * leading question words (`what`/`who`/`where`/`which`/`how`/`is`/`do`/`does`).
  *
- * Escape hatches (any one is sufficient):
- * - Q&A Log contains a stop-signal row.
+ * Returns empty array when no forcing-questions row is present (caller
+ * should treat absence as "no forcing requirement" — convergence falls
+ * back to the no-new-decisions / stop-signal detectors).
+ */
+export function extractForcingQuestions(stage: FlowStage): string[] {
+  let checklist: readonly string[];
+  try {
+    checklist = stageSchema(stage).executionModel.checklist;
+  } catch {
+    return [];
+  }
+  for (const row of checklist) {
+    const headerMatch = /\*\*\s*[A-Za-z]+\s+forcing\s+questions\s*\([^)]*\)\s*\*\*\s*(?:[—\-–:]+)?\s*(.+)/iu.exec(
+      row
+    );
+    if (!headerMatch) continue;
+    const body = (headerMatch[1] ?? "")
+      .replace(/\.$/u, "")
+      .trim();
+    if (body.length === 0) return [];
+    return body
+      .split(/,\s*(?:and\s+)?|\s+and\s+/iu)
+      .map((topic) => topic.trim())
+      .filter((topic) => topic.length > 0)
+      .map((topic) =>
+        topic
+          .replace(/^[*_`]+|[*_`]+$/gu, "")
+          .replace(
+            /^(?:what|who|where|which|how|is|are|do|does|did|can|will|would|could|should|may|might)\s+/iu,
+            ""
+          )
+          .replace(/\?+$/u, "")
+          .trim()
+      )
+      .filter((topic) => topic.length > 0);
+  }
+  return [];
+}
+
+/**
+ * Build a salient-keyword set for a forcing-question topic. Splits on
+ * whitespace, drops short/stop words, lowercases. Used for fuzzy
+ * substring match against Q&A Log row content.
+ */
+function topicKeywords(topic: string): string[] {
+  const STOP_WORDS = new Set([
+    "the", "a", "an", "is", "are", "was", "were", "be", "to", "of", "in", "on", "at",
+    "for", "and", "or", "but", "if", "then", "else", "with", "without", "by", "as",
+    "we", "us", "our", "they", "them", "their", "you", "your", "i", "me", "my",
+    "this", "that", "these", "those", "it", "its", "do", "does", "did", "can",
+    "will", "would", "should", "could", "may", "might", "any", "some", "no", "not",
+    "from", "into", "onto", "upon", "than", "very", "much", "many", "more", "most",
+    "must", "have", "has", "had", "been", "being", "where", "when", "while",
+    "what", "which", "who", "whose", "whom", "why", "how", "non"
+  ]);
+  return topic
+    .toLowerCase()
+    .split(/[\s\-/.,;:()\[\]{}'"`*_]+/u)
+    .map((token) => token.replace(/[^\p{L}\p{N}-]/gu, ""))
+    .filter((token) => token.length >= 3 && !STOP_WORDS.has(token));
+}
+
+function isTopicAddressed(topic: string, rows: string[][]): boolean {
+  const keywords = topicKeywords(topic);
+  if (keywords.length === 0) return true;
+  const minHits = keywords.length === 1 ? 1 : Math.min(2, keywords.length);
+  for (const row of rows) {
+    const haystack = row.join(" | ").toLowerCase();
+    let hits = 0;
+    for (const keyword of keywords) {
+      if (haystack.includes(keyword)) hits += 1;
+      if (hits >= minHits) return true;
+    }
+  }
+  return false;
+}
+
+function lastTwoRowsAllNoDecision(substantiveRows: string[][]): boolean {
+  if (substantiveRows.length < 2) return false;
+  const tail = substantiveRows.slice(-2);
+  for (const row of tail) {
+    const decisionImpact = (row[row.length - 1] ?? "").trim();
+    if (decisionImpact.length === 0) return false;
+    const matched = QA_LOG_NO_DECISION_TOKENS.some((pattern) => pattern.test(decisionImpact));
+    if (!matched) return false;
+  }
+  return true;
+}
+
+/**
+ * Evaluate the Q&A Log convergence floor for a brainstorm / scope /
+ * design artifact. Returns ok=true when convergence is reached or any
+ * escape hatch fires.
+ *
+ * Convergence sources (any one is sufficient):
+ * - All forcing-question topics from the stage checklist appear addressed
+ *   in `## Q&A Log` (substring keyword match in question/answer columns).
+ * - The Ralph-Loop convergence detector reports the last 2 substantive
+ *   rows have decision_impact marking `skip`/`continue`/`no-change`/`done`
+ *   (i.e. the dialogue is no longer producing decision-changing rows).
+ * - Q&A Log contains a stop-signal row (existing
+ *   `QA_LOG_STOP_SIGNAL_PATTERNS` keep working).
  * - `--skip-questions` flag was persisted to the active stage flags
- *   (passed via `options.skipQuestions=true`); finding downgrades to advisory.
- * - Track is `quick` (lite tier ~ lightweight complexity) AND substantive
- *   count >= 1.
+ *   (`options.skipQuestions=true`); finding downgrades to advisory.
+ * - The stage checklist exposes no forcing-questions row (e.g. simple
+ *   refactor) AND the artifact has at least one substantive row — treat
+ *   as converged because there is nothing left to force.
+ *
+ * Wave 23 (v5.0.0) replaces the count-based `qa_log_below_min` rule with
+ * `qa_log_unconverged`. The fixed count constant (10 for standard) and
+ * the `CCLAW_ELICITATION_FLOOR=advisory` env override were removed. The
+ * `min` and `liteShortCircuit` fields on the result are retained for
+ * harness UI compatibility but are always 0/false.
  */
 export function evaluateQaLogFloor(
   qaLogBody: string | null,
@@ -111,45 +265,70 @@ export function evaluateQaLogFloor(
   stage: FlowStage,
   options: QaLogFloorOptions = {}
 ): QaLogFloorResult {
-  const hint = questionBudgetHint(track, stage);
-  const min = hint.min;
   const rows = qaLogBody !== null ? getMarkdownTableRows(qaLogBody) : [];
   const substantiveRows = rows.filter(isSubstantiveQaRow);
   const count = substantiveRows.length;
   const hasStopSignal = detectStopSignal(rows);
-  const liteShortCircuit = track === "quick" && count >= 1;
-  // Emergency override (undocumented for users): set
-  // `CCLAW_ELICITATION_FLOOR=advisory` to downgrade qa_log_below_min from
-  // blocking to advisory globally. This is a safety net for incidents where
-  // the floor mis-fires across an org; treat as `--skip-questions` semantics.
-  const envOverride = (typeof process !== "undefined" ? process.env?.CCLAW_ELICITATION_FLOOR : undefined) === "advisory";
-  const skipQuestionsAdvisory = options.skipQuestions === true || envOverride;
-  const ok = count >= min || hasStopSignal || liteShortCircuit;
+  const skipQuestionsAdvisory = options.skipQuestions === true;
+
+  const forcingTopics = options.forcingQuestions ?? extractForcingQuestions(stage);
+  const forcingCovered: string[] = [];
+  const forcingPending: string[] = [];
+  for (const topic of forcingTopics) {
+    if (isTopicAddressed(topic, rows)) forcingCovered.push(topic);
+    else forcingPending.push(topic);
+  }
+
+  const noNewDecisions = lastTwoRowsAllNoDecision(substantiveRows);
+  const allForcingCovered =
+    forcingTopics.length > 0 ? forcingPending.length === 0 : count >= 1;
+
+  const ok = allForcingCovered || noNewDecisions || hasStopSignal;
+
   let details: string;
   if (ok) {
-    if (count >= min) {
-      details = `Q&A Log has ${count} substantive entries (floor for ${track}/${stage}: ${min}).`;
-    } else if (hasStopSignal) {
-      details = `Q&A Log has ${count} substantive entries with an explicit user stop-signal row recorded (floor: ${min}).`;
+    if (allForcingCovered && forcingTopics.length > 0) {
+      details = `Q&A Log converged: all ${forcingTopics.length} forcing-question topic(s) addressed across ${count} substantive row(s).`;
+    } else if (allForcingCovered) {
+      details = `Q&A Log converged: stage exposes no forcing-questions row and ${count} substantive entry recorded.`;
+    } else if (noNewDecisions) {
+      const remaining = forcingPending.length > 0
+        ? ` ${forcingPending.length} forcing topic(s) still pending but last 2 rows produced no decision changes (Ralph-Loop convergence).`
+        : " Ralph-Loop convergence detector says no new decision-changing rows in the last 2 turns.";
+      details = `Q&A Log converged via no-new-decisions detector at ${count} row(s).${remaining}`;
     } else {
-      details = `Q&A Log has ${count} substantive entry under lightweight track short-circuit (default floor: ${min}).`;
+      details = `Q&A Log converged: explicit user stop-signal row recorded at ${count} row(s).`;
     }
   } else if (skipQuestionsAdvisory) {
-    const reason = options.skipQuestions === true
-      ? "--skip-questions flag was set"
-      : "CCLAW_ELICITATION_FLOOR=advisory env override is active";
-    details = `Q&A Log has ${count} substantive entries, minimum for ${track}/${stage} is ${min}; ${reason}, finding downgraded to advisory.`;
+    details = `Q&A Log unconverged at ${count} row(s); --skip-questions flag downgraded the finding to advisory. Pending forcing topic(s): ${
+      forcingPending.length > 0 ? forcingPending.join("; ") : "(none extracted)"
+    }.`;
   } else {
-    details = `Q&A Log has ${count} substantive entries, minimum for ${track}/${stage} is ${min}. Continue the elicitation loop or record an explicit user stop-signal row in Q&A Log.`;
+    details = `Q&A Log unconverged at ${count} row(s). Continue the elicitation loop until forcing-question topics are addressed (${
+      forcingPending.length > 0 ? forcingPending.join("; ") : "no forcing topics extracted"
+    }), the last 2 rows record no-decision impact, or an explicit user stop-signal row is appended.`;
   }
+
+  // Surface advisory budget hint for harness UI without re-introducing a
+  // blocking count. `recommended` is the soft budget per track/stage.
+  const advisoryBudget = questionBudgetHint(track, stage).recommended;
+
   return {
     ok,
     count,
-    min,
+    // Wave 23: floor no longer enforces a count. Surfacing 0 keeps the
+    // QaLogFloorSignal shape stable for harness consumers; harness UIs
+    // may show `recommended` from `questionBudgetHint` separately.
+    min: 0,
     hasStopSignal,
-    liteShortCircuit,
+    liteShortCircuit: false,
     skipQuestionsAdvisory,
-    details
+    forcingCovered,
+    forcingPending,
+    noNewDecisions,
+    details: advisoryBudget > 0
+      ? `${details} (advisory budget for ${track}/${stage}: ~${advisoryBudget} Q&A turns)`
+      : details
   };
 }
 
@@ -766,60 +945,12 @@ export function extractCanonicalScopeMode(body: string): CanonicalScopeMode | nu
   return null;
 }
 
-export function validatePremiseChallenge(sectionBody: string): { ok: boolean; details: string } {
-  // gstack-style premise challenge requires a real Q/A structure (table or
-  // list), not free-form prose. The validation is *structural* only — we do
-  // NOT keyword-grep for English phrases like "right problem"; authors may
-  // write the questions in any language, and the answers carry the meaning.
-  // The template ships with canonical question labels as scaffolding, but
-  // the linter only enforces that the section actually compares premise
-  // questions to answers.
-  const tableRows = getMarkdownTableRows(sectionBody);
-  const bulletRows = sectionBody
-    .split(/\r?\n/u)
-    .map((line) => line.trim())
-    .filter((line) => /^(?:[-*]|\d+\.)\s+\S/u.test(line));
-  const rowCount = Math.max(tableRows.length, bulletRows.length);
-  if (rowCount < 3) {
-    return {
-      ok: false,
-      details: `Premise Challenge needs at least 3 substantive rows in a table or bullet list. Found ${rowCount}.`
-    };
-  }
-  // For tables, each data row must have at least 2 non-empty cells so the
-  // section is genuinely a premise/answer comparison, not a list of headlines.
-  // For bullet lists, each line must be substantive so we don't accept
-  // placeholders like `- a`; punctuation style and natural language do not
-  // matter.
-  if (tableRows.length >= 3) {
-    const sparseRows = tableRows.filter((row) => {
-      const filledCells = row.filter((cell) => cell.replace(/[\s|]/gu, "").length >= 2);
-      return filledCells.length < 2;
-    });
-    if (sparseRows.length > 0) {
-      return {
-        ok: false,
-        details: "Premise Challenge table rows must populate at least the question and answer columns (no empty answers)."
-      };
-    }
-  } else if (bulletRows.length >= 3) {
-    const sparseBullets = bulletRows.filter((line) => {
-      const cleaned = line.replace(/^[-*\d.\s]+/u, "").replace(/[`*_]/gu, "").trim();
-      const meaningful = cleaned.match(/[\p{L}\p{N}]/gu)?.length ?? 0;
-      return meaningful < 12;
-    });
-    if (sparseBullets.length > 0) {
-      return {
-        ok: false,
-        details: "Premise Challenge bullet list must include at least 3 substantive rows, not placeholders."
-      };
-    }
-  }
-  return {
-    ok: true,
-    details: `Premise Challenge structures ${rowCount} Q/A rows.`
-  };
-}
+// `validatePremiseChallenge` was removed in Wave 23 (v5.0.0). Premise
+// challenge is now owned solely by brainstorm (`## Premise Check`); scope
+// only records `## Premise Drift` when scope-stage Q&A surfaces new
+// evidence that materially changes the brainstorm answer. The drift
+// section is optional and structural-only via the default `validateSectionBody`
+// path (no specialized validator required).
 
 export function validateScopeSummary(sectionBody: string): { ok: boolean; details: string } {
   const meaningfulLines = sectionBody
@@ -1771,9 +1902,6 @@ export function validateSectionBody(
   if (sectionNameNormalized === "scope summary") {
     return validateScopeSummary(sectionBody);
   }
-  if (sectionNameNormalized === "premise challenge") {
-    return validatePremiseChallenge(sectionBody);
-  }
   if (sectionNameNormalized.startsWith("requirements")) {
     return validateRequirementsTaxonomy(sectionBody);
   }
@@ -1868,7 +1996,7 @@ export interface StageLintContext {
   /**
    * Stage-level flags persisted to flow-state.json `activeRun.currentStage.flags`
    * (or equivalent). Used as escape-hatch signal for the Q&A floor rule
-   * (e.g. `--skip-questions` downgrades `qa_log_below_min` to advisory).
+   * (e.g. `--skip-questions` downgrades `qa_log_unconverged` to advisory).
    * When orchestrator cannot read flow-state, defaults to an empty array.
    */
   activeStageFlags: string[];

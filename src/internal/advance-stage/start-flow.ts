@@ -165,6 +165,20 @@ export async function runStartFlow(
     nextState = createInitialFlowState({ track: args.track });
   }
 
+  if (args.fromIdeaArtifact) {
+    const existingHints = nextState.interactionHints ?? {};
+    const existingBrainstorm = existingHints.brainstorm ?? {};
+    nextState.interactionHints = {
+      ...existingHints,
+      brainstorm: {
+        ...existingBrainstorm,
+        fromIdeaArtifact: args.fromIdeaArtifact,
+        ...(args.fromIdeaCandidateId ? { fromIdeaCandidateId: args.fromIdeaCandidateId } : {}),
+        recordedAt: new Date().toISOString()
+      }
+    };
+  }
+
   await writeFlowState(projectRoot, nextState, { allowReset: true });
   await appendIdeaArtifact(projectRoot, args, current);
   if (!args.quiet) {

@@ -56,6 +56,14 @@ export interface StartFlowArgs {
   forceReset: boolean;
   reclassify: boolean;
   quiet: boolean;
+  /**
+   * Wave 23 (v5.0.0) — `/cc-ideate` handoff carry-forward.
+   * Workspace-relative POSIX path to `.cclaw/ideas/idea-YYYY-MM-DD-<slug>.md`
+   * (or wherever `/cc-ideate` wrote its artifact).
+   */
+  fromIdeaArtifact?: string;
+  /** Optional `I-#` row id chosen from the idea artifact's ranked list. */
+  fromIdeaCandidateId?: string;
 }
 
 export interface CancelRunArgs {
@@ -290,6 +298,8 @@ export function parseStartFlowArgs(tokens: string[]): StartFlowArgs {
   let forceReset = false;
   let reclassify = false;
   let quiet = false;
+  let fromIdeaArtifact: string | undefined;
+  let fromIdeaCandidateId: string | undefined;
 
   for (let i = 0; i < tokens.length; i += 1) {
     const token = tokens[i]!;
@@ -338,13 +348,39 @@ export function parseStartFlowArgs(tokens: string[]): StartFlowArgs {
       stack = readValue("--stack").trim();
       continue;
     }
+    if (token === "--from-idea-artifact" || token.startsWith("--from-idea-artifact=")) {
+      const raw = readValue("--from-idea-artifact").trim();
+      fromIdeaArtifact = raw.length > 0 ? raw : undefined;
+      continue;
+    }
+    if (token === "--from-idea-candidate" || token.startsWith("--from-idea-candidate=")) {
+      const raw = readValue("--from-idea-candidate").trim();
+      fromIdeaCandidateId = raw.length > 0 ? raw : undefined;
+      continue;
+    }
     throw new Error(`Unknown flag for internal start-flow: ${token}`);
   }
 
   if (!track) {
     throw new Error("internal start-flow requires --track=<standard|medium|quick>.");
   }
-  return { track, className, prompt, reason, stack, forceReset, reclassify, quiet };
+  if (fromIdeaCandidateId && !fromIdeaArtifact) {
+    throw new Error(
+      "--from-idea-candidate requires --from-idea-artifact=<path> to be set as well."
+    );
+  }
+  return {
+    track,
+    className,
+    prompt,
+    reason,
+    stack,
+    forceReset,
+    reclassify,
+    quiet,
+    fromIdeaArtifact,
+    fromIdeaCandidateId
+  };
 }
 
 export function parseCancelRunArgs(tokens: string[]): CancelRunArgs {

@@ -127,6 +127,18 @@ export interface StageInteractionHint {
   skipQuestions?: boolean;
   sourceStage?: FlowStage;
   recordedAt?: string;
+  /**
+   * Wave 23 (v5.0.0) — `/cc-ideate` handoff carry-forward.
+   * When a brainstorm run is started from a `/cc-ideate` recommendation,
+   * `start-flow` records the originating idea artifact so brainstorm can
+   * reuse the divergent + critique + rank work instead of re-generating it.
+   *
+   * `fromIdeaArtifact` is a workspace-relative POSIX path to
+   * `.cclaw/ideas/idea-YYYY-MM-DD-<slug>.md` (or wherever `/cc-ideate`
+   * wrote its artifact). `fromIdeaCandidateId` is the chosen `I-#` row.
+   */
+  fromIdeaArtifact?: string;
+  fromIdeaCandidateId?: string;
 }
 
 export interface InitialFlowStateOptions {

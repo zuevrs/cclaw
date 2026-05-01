@@ -39,14 +39,15 @@ export const REVIEW: StageSchemaInput = {
   },
   executionModel: {
     checklist: [
+      "**Boundary with TDD (do NOT re-classify slice findings).** `tdd.Per-Slice Review` OWNS severity-classified findings WITHIN a single slice (correctness, edge cases, regression for that slice). `review` OWNS whole-diff Layer 1 (spec compliance) plus Layer 2 (cross-slice integration findings, security sweep, dependency/version audit, observability). When the same finding ID appears in both `06-tdd.md > Per-Slice Review` and `07-review.md` / `07-review-army.json`, the severity/disposition MUST match — the cross-artifact-duplication linter blocks otherwise.",
       "Diff Scope — Run `git diff` against base branch. If no diff, exit early with APPROVED (no changes to review). Scope the review to changed files unless blast-radius analysis requires wider inspection.",
       "Change-Size Check — ~100 lines = normal. ~300 lines = consider splitting. ~1000+ lines = strongly recommend stacked PRs. Flag large diffs to the user.",
       "Risk-Based Second Opinion — compute changed-line count, files-touched count, and trust-boundary movement. Dispatch an adversarial reviewer only when trust boundaries changed, Critical/Important ambiguity remains, or the diff is both large and high-risk; otherwise record `not triggered`.",
-      "Load upstream evidence — read TDD artifact (RED + GREEN + REFACTOR), spec, and the active track's upstream source items.",
+      "Load upstream evidence — read TDD artifact (RED + GREEN + REFACTOR + per-slice reviews), spec, design (architecture lens carry-forward), and the active track's upstream source items.",
       "Confirm spec acceptance criteria and reproduction slices are covered directly in the review artifact evidence.",
       "Layer 1: Spec Compliance — check every acceptance criterion against implementation. Verdict: pass/fail per criterion.",
       "Review Evidence Scope — record base/head, files inspected, changed-file coverage, diagnostics run, dependency/version audit when relevant, and any files intentionally not inspected with explicit reason.",
-      "Layer 2: Integrated findings — one structured pass tagged by category: correctness, security, performance, architecture, external-safety. Every finding uses file:line; if impossible, include an explicit no-line reason.",
+      "**Layer 2: Cross-slice integration findings — only findings that span >1 slice OR are not surfaced by per-slice tdd reviews.** Carry-forward: cite tdd per-slice review IDs already accepted; do not re-classify them. New categories owned by review Layer 2: cross-slice correctness, dependency/version audit, security sweep, observability gaps, external-safety. **Performance and architecture findings come from the design lens (cite `03-design-<slug>.md` Performance Budget / Architecture Decision Record); they are NOT re-derived in review.** Every finding uses file:line; if impossible, include an explicit no-line reason.",
       "Security sweep — mandatory dedicated security-reviewer pass across diff + touched modules. A zero-finding pass must include `NO_CHANGE_ATTESTATION` or `NO_SECURITY_IMPACT` with rationale and inspected surfaces.",
       "Incoming Feedback Intake — when human reviewer comments, bot findings, or CI annotations exist, keep a per-comment disposition queue and mirror outcomes into `07-review.md` + `07-review-army.json` before final verdict.",
       "Structured Review reconciliation — normalize findings into `07-review-army.json`, dedup by fingerprint, and mark multi-specialist confirmations when multiple lenses agree.",
@@ -96,7 +97,8 @@ export const REVIEW: StageSchemaInput = {
       "Acceptance/reproduction coverage evidence recorded in the review artifact (AC and source-item/slice coverage snapshot).",
       "Layer 1 verdict captured with per-criterion pass/fail.",
       "Review Evidence Scope lists files inspected, changed-file coverage, diagnostics run, and omitted files with explicit reason.",
-      "Layer 2 sections completed across correctness, security, performance, architecture, and external-safety findings.",
+      "Layer 2 cross-slice findings recorded for: cross-slice correctness, security sweep, dependency/version audit, observability, external-safety. Performance/architecture come from design lens carry-forward (`03-design-<slug>.md`) — do NOT re-derive them.",
+      "Per-slice tdd review findings cited (not re-classified): each `06-tdd.md > Per-Slice Review` ID accepted in review must keep matching severity/disposition (cross-artifact-duplication linter enforces this).",
       "Every finding cites `file:line`, or an explicit no-line reason is recorded.",
       "No-finding attestation is explicit when no issues are found.",
       "Dependency/version audit is recorded when manifests, lockfiles, generated clients, CI, runtime config, or external APIs are relevant.",
@@ -138,7 +140,7 @@ export const REVIEW: StageSchemaInput = {
       { section: "Review Evidence Scope", required: true, validationRule: "Base/head, files inspected, changed-file coverage, diagnostics run, omitted files with reason, and reviewer/security-reviewer delegation evidence." },
       { section: "Changed-File Coverage", required: true, validationRule: "Each changed file is covered, intentionally omitted with no-impact reason, or linked to a broader inspected module." },
       { section: "Layer 1 Verdict", required: true, validationRule: "Per-criterion pass/fail with references." },
-      { section: "Layer 2 Findings", required: false, validationRule: "Each finding has severity, category, file:line or explicit no-line reason, description, and resolution status across correctness/security/performance/architecture/external-safety. If there are no findings, include a no-finding attestation." },
+      { section: "Layer 2 Findings", required: false, validationRule: "Each finding has severity, category, file:line or explicit no-line reason, description, and resolution status. Wave 23 (v5.0.0): owned categories are cross-slice correctness, security, dependency/version, observability, and external-safety. Performance and architecture findings appear here only as carry-forward citations to `03-design-<slug>.md` (Performance Budget, ADR) — they are NOT re-derived. If there are no findings, include a no-finding attestation." },
       { section: "Lens Coverage", required: true, validationRule: "Reviewer must report inline lens outcomes: Performance/Compatibility/Observability as `NO_IMPACT` or `FOUND_<n>`, plus `Security: routed to security-reviewer`." },
       { section: "Security Sweep Attestation", required: false, validationRule: "Dedicated security-reviewer result: findings or `NO_CHANGE_ATTESTATION` / `NO_SECURITY_IMPACT` with inspected surfaces and rationale." },
       { section: "Dependency & Version Audit", required: false, validationRule: "Required when manifests, lockfiles, generated clients, CI, runtime config, or external APIs changed; otherwise record no-impact rationale." },
@@ -166,12 +168,12 @@ export const REVIEW: StageSchemaInput = {
         stopGate: true
       },
       {
-        title: "Layer 2: Integrated Correctness / Security / Performance / Architecture / External-Safety",
+        title: "Layer 2: Cross-slice Integration Findings",
         evaluationPoints: [
-          "Logic errors and boundary violations",
-          "Race conditions and concurrency issues",
-          "Null/undefined handling",
-          "Error propagation and recovery paths"
+          "Cross-slice correctness: logic errors and boundary violations that span >1 slice",
+          "Race conditions and concurrency issues across slice boundaries",
+          "Null/undefined handling in shared paths",
+          "Error propagation and recovery across module seams (single-slice findings stay in tdd Per-Slice Review)"
         ],
         stopGate: true
       },
@@ -186,24 +188,22 @@ export const REVIEW: StageSchemaInput = {
         stopGate: true
       },
       {
-        title: "Specialist Lens: Performance",
+        title: "Performance Lens: Carry-forward from Design",
         evaluationPoints: [
-          "N+1 query patterns",
-          "Memory leak potential",
-          "Missing caching opportunities",
-          "Hot path complexity analysis"
+          "Cite `03-design-<slug>.md > Performance Budget` per critical path",
+          "Surface DRIFT only when implementation diff measurably violates a budgeted threshold; do NOT re-derive performance findings from scratch",
+          "Hot path / N+1 / caching observations belong here only when they cross slice boundaries and were not flagged by tdd Per-Slice Review"
         ],
-        stopGate: true
+        stopGate: false
       },
       {
-        title: "Specialist Lens: Architecture Fit",
+        title: "Architecture Lens: Carry-forward from Design",
         evaluationPoints: [
-          "Does implementation match the locked design?",
-          "Coupling and cohesion assessment",
-          "Interface contract compliance",
-          "Unintended architectural drift"
+          "Cite `03-design-<slug>.md > Architecture Decision Record (ADR)` and `Engineering Lock`",
+          "Surface DRIFT only when the implementation departs from the locked architecture; do NOT re-derive boundary/coupling/interface analysis from scratch",
+          "Cross-slice architectural drift findings use `file:line` plus the violated ADR ID"
         ],
-        stopGate: true
+        stopGate: false
       },
       {
         title: "Specialist Lens: External Safety Checklist",

@@ -8,17 +8,20 @@ import { ensureRunSystem, readFlowState } from "../../src/runs.js";
 import { createTempProject } from "../helpers/index.js";
 
 /**
- * Wave 22 behavioural floor tests. These exercise the live `advance-stage`
- * command path so the linter, gate-evidence layer, and persisted
- * `interactionHints` flag all stay wired.
+ * Wave 23 (v5.0.0) behavioural floor tests. These exercise the live
+ * `advance-stage` command path so the linter, gate-evidence layer, and
+ * persisted `interactionHints` flag all stay wired with the new
+ * `qa_log_unconverged` rule.
  *
- * Scenarios covered:
- *   1. Empty Q&A Log -> stage-complete is BLOCKED with `qa_log_below_min`.
+ * Convergence sources covered:
+ *   1. Empty Q&A Log -> stage-complete is BLOCKED with `qa_log_unconverged`.
  *   2. Stop-signal row -> stage-complete is ALLOWED on the same artifact.
- *   3. `--skip-questions` flag -> stage-complete is ALLOWED with the floor
+ *   3. Forcing-question coverage -> stage-complete is ALLOWED via convergence.
+ *   4. `--skip-questions` flag -> stage-complete is ALLOWED with the floor
  *      finding downgraded to advisory.
- *   4. Lite-tier (`quick` track) + 1 substantive row -> short-circuit
- *      satisfies the floor without 10 entries.
+ *
+ * Wave 23 removed the count-based floor (no more "10 substantive entries"
+ * requirement) and the `CCLAW_ELICITATION_FLOOR=advisory` env override.
  */
 
 interface CapturedIo {
@@ -125,6 +128,17 @@ const QA_LOG_STOP_SIGNAL_BLOCK = `## Q&A Log
 
 `;
 
+const QA_LOG_FORCING_COVERAGE_BLOCK = `## Q&A Log
+| Turn | Question | User answer (1-line) | Decision impact |
+|---|---|---|---|
+| 1 | What pain are we solving for users today? | Manual release metadata audit. | locks-problem |
+| 2 | What is the direct path to fix it? | Reusable validator module. | locks-architecture |
+| 3 | What happens if we do nothing? | Unsafe publish risk grows. | urgency-shaping |
+| 4 | Who is the first operator/user affected? | Release manager on call. | persona-shaping |
+| 5 | What no-go boundaries are non-negotiable? | No new runtime deps in v1. | scope-shaping |
+
+`;
+
 async function writeBrainstormArtifact(root: string, qaLogBlock: string = ""): Promise<void> {
   await fs.mkdir(path.join(root, ".cclaw/artifacts"), { recursive: true });
   await fs.writeFile(
@@ -134,8 +148,8 @@ async function writeBrainstormArtifact(root: string, qaLogBlock: string = ""): P
   );
 }
 
-describe("Wave 22 elicitation floor (behavioural)", () => {
-  it("blocks brainstorm advance when Q&A Log is empty (qa_log_below_min)", async () => {
+describe("Wave 23 elicitation convergence floor (behavioural)", () => {
+  it("blocks brainstorm advance when Q&A Log is empty (qa_log_unconverged)", async () => {
     const root = await createTempProject("floor-empty-qa-blocks");
     await ensureRunSystem(root);
     await writeBrainstormArtifact(root, "");
@@ -155,9 +169,8 @@ describe("Wave 22 elicitation floor (behavioural)", () => {
     );
 
     expect(code).toBe(1);
-    expect(captured.stderr()).toContain("qa_log_below_min");
-    expect(captured.stderr()).toMatch(/0 substantive entries/);
-    expect(captured.stderr()).toMatch(/minimum for standard\/brainstorm is 10/);
+    expect(captured.stderr()).toContain("qa_log_unconverged");
+    expect(captured.stderr()).toMatch(/unconverged/iu);
 
     const state = await readFlowState(root);
     expect(state.completedStages).not.toContain("brainstorm");
@@ -190,6 +203,31 @@ describe("Wave 22 elicitation floor (behavioural)", () => {
     expect(state.currentStage).toBe("scope");
   });
 
+  it("unblocks brainstorm advance when forcing-question topics are covered", async () => {
+    const root = await createTempProject("floor-forcing-coverage-unblocks");
+    await ensureRunSystem(root);
+    await writeBrainstormArtifact(root, QA_LOG_FORCING_COVERAGE_BLOCK);
+
+    const captured = captureIo();
+    const code = await runInternalCommand(
+      root,
+      [
+        "advance-stage",
+        "brainstorm",
+        `--evidence-json=${requiredGateEvidenceJson("brainstorm")}`,
+        "--waive-delegation=product-discovery,critic",
+        "--waiver-reason=floor_test",
+        ...PROACTIVE_WAIVER_FLAGS
+      ],
+      captured.io
+    );
+
+    expect(code, captured.stderr()).toBe(0);
+    const state = await readFlowState(root);
+    expect(state.completedStages).toContain("brainstorm");
+    expect(state.currentStage).toBe("scope");
+  });
+
   it("allows brainstorm advance with --skip-questions even when Q&A Log is empty (advisory floor)", async () => {
     const root = await createTempProject("floor-skip-questions-advisory");
     await ensureRunSystem(root);
@@ -215,8 +253,6 @@ describe("Wave 22 elicitation floor (behavioural)", () => {
     const state = await readFlowState(root);
     expect(state.completedStages).toContain("brainstorm");
     expect(state.currentStage).toBe("scope");
-    // The flag carries forward to the successor stage so its linter run also
-    // treats the floor as advisory.
     expect(state.interactionHints?.scope?.skipQuestions).toBe(true);
   });
 });

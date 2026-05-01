@@ -40,19 +40,22 @@ export const DESIGN: StageSchemaInput = {
       "Skipping outside-voice review loop and treating first draft as final",
       "Batching multiple design issues into one question",
       "Agreeing with user's architecture choice without evaluating alternatives",
-      "No NOT-in-scope output section",
+      "Re-authoring scope's out-of-scope list instead of citing it via Upstream Handoff",
+      "Re-authoring scope's repo audit instead of diffing the blast radius since scope baseline",
       "Design decisions made without reading the actual code first"
     ]
   },
   executionModel: {
     checklist: [
-      "**ADAPTIVE ELICITATION COMES FIRST (no exceptions, no subagent dispatch before).** Load `.cclaw/skills/adaptive-elicitation/SKILL.md`. Walk the design forcing questions one-at-a-time via the harness-native question tool, append one row to `## Q&A Log` (`Turn | Question | User answer (1-line) | Decision impact`) after each user answer. Continue until all forcing questions are answered/skipped/waived OR user records an explicit stop-signal row. Only then proceed to research, investigator pass, architecture lock, or any delegations. The linter `qa_log_below_min` rule will block `stage-complete` if Q&A Log is below floor.",
+      "**ADAPTIVE ELICITATION COMES FIRST (no exceptions, no subagent dispatch before).** Load `.cclaw/skills/adaptive-elicitation/SKILL.md`. Walk the design forcing questions one-at-a-time via the harness-native question tool, append one row to `## Q&A Log` (`Turn | Question | User answer (1-line) | Decision impact`) after each user answer. Continue until forcing-questions converge (all answered/skipped/waived) OR Ralph-Loop convergence detector says no new decision-changing rows in last 2 iterations OR user records an explicit stop-signal row. Only then proceed to research, investigator pass, architecture lock, or any delegations. The linter `qa_log_unconverged` rule will block `stage-complete` if convergence is not reached.",
       "**Design forcing questions (must be covered or explicitly waived)** — what is the end-to-end data flow, where are seams/ownership boundaries, which invariants must hold, and what will explicitly NOT be refactored now.",
+      "**Out-of-scope carry-forward (do NOT re-author)** — scope OWNS the out-of-scope list. Cite scope's `## In Scope / Out of Scope > Out of Scope` via `## Upstream Handoff > Decisions carried forward`; do NOT add a separate `## NOT in scope` section in the design artifact. Add a row to `## Spec Handoff` only if a design-stage decision NEWLY excludes something not already in scope's out-of-scope.",
       "Compact design lock — design does not decide what to build; it decides how the approved scope works. For simple slices, produce a tight lock: upstream handoff, existing fit, architecture boundary, one labeled diagram, data/state flow, critical path, failure/rescue, trust boundaries, test/perf expectations, rollout/rollback, rejected alternative, and spec handoff.",
       "Trivial-Change Escape Hatch — for <=3 files, no new interfaces, and no cross-module data flow, produce a mini-design (rationale, changed files, one risk) and proceed to spec.",
+      "**Architecture choice (design OWNS the tier decision)** — pick the architecture tier (minimum-viable / product-grade / ideal) using scope's `## Scope Contract > Design handoff` as the input. Record the tier and rationale in `## Architecture Decision Record (ADR)` and `## Engineering Lock`. Scope only locked the SCOPE MODE; it did NOT enumerate Implementation Alternatives.",
       "Tiered Research — for simple/medium work, do compact inline codebase/research synthesis in `Research Fleet Synthesis`; write `.cclaw/artifacts/02a-research.md` and run the full fleet only for deep/high-risk work or when external framework/architecture uncertainty exists.",
       "Design Doc Check — read upstream artifacts and current design docs; latest superseding doc wins.",
-      "Investigator pass — before design decisions, read blast-radius code and record touched files, responsibilities, reuse candidates, and existing patterns.",
+      "**Blast-radius diff (do NOT re-audit the whole repo)** — scope OWNS the full repo audit (`## Pre-Scope System Audit`). Design only diffs the blast radius SINCE scope baseline: `git diff <scope-artifact-head-sha>..HEAD -- <touched-paths>`. Record touched files, current responsibilities, reuse candidates, and existing patterns in `## Codebase Investigation` and `## Blast-radius Diff`. Do NOT re-author scope's git log/diff/stash audit.",
       "Scope Challenge + Search Before Building — find existing solutions, minimum change set, reference-grade contracts to mirror, and complexity smells before custom architecture.",
       "Architecture Review — lock boundaries, chosen path, shadow alternative, switch trigger, failure/rescue/degraded behavior, and verification evidence for every high-risk choice; include tier-required diagrams.",
       "Review core risk areas — existing system fit, data/state flow, critical path, security/trust boundaries, tests, performance budget, observability/debuggability, rollout/rollback, rejected alternatives, and spec handoff.",
@@ -87,7 +90,7 @@ export const DESIGN: StageSchemaInput = {
       "Walk review sections interactively and lock boundaries, data flow, state transitions, edge cases, and failure modes.",
       "Cover security, observability, deployment, tests, and performance for Standard+ changes.",
       "Run stale-diagram audit (enabled by default unless explicitly disabled).",
-      "Produce required outputs: NOT-in-scope, What-already-exists, tier diagrams, failure table, completion dashboard.",
+      "Produce required outputs: blast-radius diff (scope owns full repo audit), tier diagrams, failure table, completion dashboard. Out-of-scope is carried from scope via Upstream Handoff — do NOT re-author it.",
       "Plant high-upside deferred ideas when useful and reconcile critic/outside-voice findings.",
       "Write design lock artifact for downstream spec/plan with design decisions, rejected alternatives, verification evidence, and exact spec handoff."
     ],
@@ -117,8 +120,8 @@ export const DESIGN: StageSchemaInput = {
       "Test-Diagram Mapping links critical flows to both validating tests and diagram anchors.",
       "Test strategy includes unit/integration/e2e expectations.",
       "When a high-upside idea is deferred, a seed file is created under `.cclaw/seeds/` and referenced in the artifact.",
-      "NOT-in-scope section produced.",
-      "What-already-exists section produced.",
+      "Out-of-scope is carried forward from scope's `## In Scope / Out of Scope > Out of Scope` via `## Upstream Handoff > Decisions carried forward`; design does NOT author its own NOT-in-scope section.",
+      "Blast-radius Diff section produced (git diff since scope artifact baseline) — scope owns the full repo audit; design only diffs touched paths.",
       "Completion dashboard lists review section status, critical/open gap counts, decision count, and unresolved items (or 'None')."
     ],
     inputs: ["scope agreement artifact", "system constraints", "non-functional requirements"],
@@ -184,7 +187,7 @@ export const DESIGN: StageSchemaInput = {
       { section: "Performance Budget", required: false, validationRule: "For each critical path: metric name, target threshold, and measurement method." },
       { section: "Observability & Debuggability", required: true, validationRule: "Must define logs/metrics/traces plus alerting/debug path for critical failure modes." },
       { section: "Deployment & Rollout", required: true, validationRule: "Must define migration/flag strategy, rollout/rollback plan, switch trigger, and post-deploy verification steps." },
-      { section: "What Already Exists", required: false, validationRule: "For each sub-problem: existing code/library found (Layer 1-3/EUREKA label), reuse decision, and adaptation needed." },
+      { section: "Blast-radius Diff", required: false, validationRule: "Diff since scope artifact baseline (`git diff <scope-sha>..HEAD -- <touched-paths>`): for each touched file, summarize change since scope, current responsibility, reuse candidate, and existing pattern. Scope OWNS the full repo audit; design only diffs the blast radius." },
       { section: "Reference-Grade Contracts", required: false, validationRule: "For every mirrored pattern: source, reusable invariant, local adaptation, rejection boundary, and verification signal. Omit with `None - no external or in-repo pattern mirrored` for compact local changes." },
       { section: "Rejected Alternatives", required: false, validationRule: "List alternatives considered, why rejected, and what signal would revive them." },
       { section: "Design Decisions", required: false, validationRule: "Stable design decisions with requirement/locked-decision refs and downstream spec impact." },
@@ -194,10 +197,9 @@ export const DESIGN: StageSchemaInput = {
       { section: "Design Outside Voice Loop", required: false, validationRule: `Record iteration table with quality score per iteration, stop reason, and unresolved concerns. Enforce ${reviewLoopPolicySummary("design")}` },
       { section: "Victory Detector", required: false, validationRule: "Recommended early-loop checkpoint: cite `.cclaw/state/early-loop.json`, current iteration/maxIterations, open concern count, convergence status, and iterate/ready/escalate decision." },
       { section: "Critic Pass", required: false, validationRule: "Recommended producer/critic log contract: each iteration appends one JSONL row to `.cclaw/state/early-loop-log.jsonl` with runId, stage, iteration, and open concerns." },
-      { section: "NOT in scope", required: false, validationRule: "Work considered and explicitly deferred with one-line rationale." },
       { section: "Completion Dashboard", required: true, validationRule: "Lists every review section with status (clear / issues-found-resolved / issues-open), critical/open gap counts, decision count, and unresolved items (or 'None')." }
     ],
-    trivialOverrideSections: ["Architecture Boundaries", "NOT in scope", "Completion Dashboard"]
+    trivialOverrideSections: ["Architecture Boundaries", "Completion Dashboard"]
   },
   reviewLens: {
     outputs: [
@@ -205,8 +207,7 @@ export const DESIGN: StageSchemaInput = {
       "architecture lock",
       "risk and failure map",
       "test and performance baseline",
-      "NOT-in-scope section",
-      "What-already-exists section",
+      "blast-radius diff since scope baseline",
       "design decisions and spec handoff",
       "design completion dashboard"
     ],

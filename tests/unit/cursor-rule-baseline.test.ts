@@ -42,7 +42,9 @@ describe("cclaw-guidelines.mdc baseline rule", () => {
 
     expect(content).toContain("## 1. Q&A floor before drafting");
     expect(content).toContain("brainstorm / scope / design");
-    expect(content).toContain("qa_log_below_min");
+    // Wave 23 (v5.0.0): linter rule renamed `qa_log_below_min` ->
+    // `qa_log_unconverged` (count floor replaced with Ralph-Loop convergence).
+    expect(content).toContain("qa_log_unconverged");
 
     expect(content).toContain("## 2. Mandatory subagents run after Q&A approval");
     expect(content).toContain("post-elicitation");
