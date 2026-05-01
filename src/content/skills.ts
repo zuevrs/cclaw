@@ -433,6 +433,14 @@ function delegationAndCompletionBlock(schema: StageSchema, track: FlowTrack): st
 ${normalizedDispatch}
 
 ${completionBlock}
+
+### Stage Closure (harness-only UX)
+
+- **NEVER paste the \`stage-complete.mjs\` command line into chat.** The user does not run cclaw manually; seeing \`node .cclaw/hooks/stage-complete.mjs ... --evidence-json '{...}' --waive-delegation=...\` is noise. Run the helper via the tool layer; report only the resulting summary.
+- **NEVER paste the \`--evidence-json\` payload into chat.** It is structured data for the helper, not for the user. The same evidence already lives in the artifact section.
+- On failure, report a compact human-readable summary based on the helper's JSON \`findings\` array — list failing section names only (one line each), include the full helper JSON in a single fenced \`json\` block. Do not echo the invoking command.
+- **NEVER run shell hash commands** (\`shasum\`, \`sha256sum\`, \`md5sum\`, \`Get-FileHash\`, \`certutil\`, etc.) for hash compute. If the linter ever asks for a hash, that is a linter bug — report failure and stop, do not auto-fix in bash.
+- The helper defaults to quiet success (\`CCLAW_STAGE_COMPLETE_QUIET=1\`); rely on the resulting JSON, not stdout chatter.
 `;
 }
 

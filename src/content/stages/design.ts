@@ -46,7 +46,7 @@ export const DESIGN: StageSchemaInput = {
   },
   executionModel: {
     checklist: [
-      "**Adaptive elicitation loop (shared skill)** — load `.cclaw/skills/adaptive-elicitation/SKILL.md` and run one decision-changing question per turn via harness-native tools. After each answer, append one row to `## Q&A Log` (`Turn | Question | User answer (1-line) | Decision impact`). Continue until architecture context is clear or user signals to proceed.",
+      "**ADAPTIVE ELICITATION COMES FIRST (no exceptions, no subagent dispatch before).** Load `.cclaw/skills/adaptive-elicitation/SKILL.md`. Walk the design forcing questions one-at-a-time via the harness-native question tool, append one row to `## Q&A Log` (`Turn | Question | User answer (1-line) | Decision impact`) after each user answer. Continue until all forcing questions are answered/skipped/waived OR user records an explicit stop-signal row. Only then proceed to research, investigator pass, architecture lock, or any delegations. The linter `qa_log_below_min` rule will block `stage-complete` if Q&A Log is below floor.",
       "**Design forcing questions (must be covered or explicitly waived)** — what is the end-to-end data flow, where are seams/ownership boundaries, which invariants must hold, and what will explicitly NOT be refactored now.",
       "Compact design lock — design does not decide what to build; it decides how the approved scope works. For simple slices, produce a tight lock: upstream handoff, existing fit, architecture boundary, one labeled diagram, data/state flow, critical path, failure/rescue, trust boundaries, test/perf expectations, rollout/rollback, rejected alternative, and spec handoff.",
       "Trivial-Change Escape Hatch — for <=3 files, no new interfaces, and no cross-module data flow, produce a mini-design (rationale, changed files, one risk) and proceed to spec.",
@@ -78,7 +78,7 @@ export const DESIGN: StageSchemaInput = {
       "Classify ambiguity before acting. Only non-critical preference/default assumptions may continue; STOP on uncertainty about scope, architecture, security, data loss, public API, migration, auth/pricing, or required user approval. Design hypotheses must name validation path, rollback trigger, and owner before they can be carried forward.",
       "Before final approval, run the critic pass, reconcile material findings, and bound retries with the review-loop policy.",
       "For baseline approval, present the full design plus exact spec handoff and **STOP** until explicit approval.",
-      "**STOP BEFORE ADVANCE.** Mandatory delegation `planner` must be completed or explicitly waived, then close via `node .cclaw/hooks/stage-complete.mjs design`."
+      "**STOP BEFORE ADVANCE.** Mandatory delegation `planner` runs **AFTER user approval of the design lock**, not before Q&A. Sequence is: Q&A loop -> draft design lock -> user approval -> `planner` delegation -> `stage-complete`. Three legal fulfillment modes for `planner`: (a) cclaw subagent helper if available; (b) harness-native Task tool — record via `cclaw internal record-delegation --stage=design --agent=planner --fulfillment-mode=task-tool --evidence-refs=<paths>`; (c) role-switch — write planner output into the design artifact and append a delegation row with `fulfillmentMode: \"role-switch\"` plus non-empty `evidenceRefs`. Run `node .cclaw/hooks/stage-complete.mjs design` from the tool layer (do not paste the command into chat); report only the resulting summary."
     ],
     process: [
       "Read upstream artifacts and current design docs.",
