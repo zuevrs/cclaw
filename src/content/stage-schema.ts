@@ -995,6 +995,37 @@ export function mandatoryAgentsFor(
   return mandatoryDelegationsForStage(stage, complexityTier);
 }
 
+/**
+ * Wave 25 (v6.1.0) — track-aware artifact validation demotion.
+ *
+ * Mirrors `mandatoryAgentsFor`'s skip logic for the small-fix lanes.
+ * Returns `true` when artifact-level "advanced" validation rules
+ * (architecture-diagram async/failure edges, interaction edge-case
+ * mandatory rows, stale-diagram drift check, expansion-strategist
+ * delegation) should be DEMOTED from required → advisory.
+ *
+ *   - `track === "quick"` — quick-tier runs (single-purpose
+ *     landing-page edits, doc tweaks, config nudges). The advanced
+ *     checks fire on architecture surfaces a quick-track artifact
+ *     usually doesn't have. Same trigger as Wave 24 Phase B.
+ *   - `taskClass === "software-bugfix"` — bugfixes carry RED-first
+ *     repro coverage; tdd/review own the safety surface.
+ *
+ * When this returns `true`, the linter still runs the rules and prints
+ * their findings (so authors see them as advisory info), but does NOT
+ * block stage advance. An audit event of type
+ * `artifact_validation_demoted_by_track` is appended to
+ * `delegation-events.jsonl` once per stage advance for traceability.
+ */
+export function shouldDemoteArtifactValidationByTrack(
+  track: FlowTrack,
+  taskClass?: MandatoryDelegationTaskClass | null
+): boolean {
+  if (track === "quick") return true;
+  if (taskClass === "software-bugfix") return true;
+  return false;
+}
+
 export function stageSchema(stage: FlowStage, track: FlowTrack = "standard"): StageSchema {
   const rawInput = stage === "tdd" ? tddStageForTrack(track) : STAGE_SCHEMA_MAP[stage];
   const base = normalizeStageSchemaInput(rawInput);

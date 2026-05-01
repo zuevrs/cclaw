@@ -109,6 +109,20 @@ export interface FlowState {
   stageGateCatalog: Record<FlowStage, StageGateState>;
   /** Active flow track (determines which stages are in the critical path for this run). */
   track: FlowTrack;
+  /**
+   * Wave 25 (v6.1.0) — optional task class for the active run.
+   *
+   * Mirrors the `MandatoryDelegationTaskClass` union used by Wave 24's
+   * `mandatoryAgentsFor` helper. When set to `"software-bugfix"`, the
+   * artifact-validation escape (`shouldDemoteArtifactValidationByTrack`)
+   * collapses lite-tier-only checks (Architecture Diagram async/failure
+   * edges, Interaction Edge Case mandatory rows, Stale Diagram Drift,
+   * Expansion Strategist) from required → advisory.
+   *
+   * Persistence is best-effort: existing flow-state.json files written
+   * before Wave 25 simply omit the field (treated as `null`).
+   */
+  taskClass?: "software-standard" | "software-trivial" | "software-bugfix" | null;
   /** Stages explicitly skipped for this track (empty for standard; populated for quick). */
   skippedStages: FlowStage[];
   /** Stages invalidated by rewind operations and awaiting explicit acknowledgement. */

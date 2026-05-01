@@ -2048,4 +2048,14 @@ export interface StageLintContext {
    * When orchestrator cannot read flow-state, defaults to an empty array.
    */
   activeStageFlags: string[];
+  /**
+   * Wave 25 (v6.1.0) — task class for the active run, mirrored from
+   * `flow-state.json::taskClass`. `null` when not classified. Stage
+   * linters read this together with `track` via
+   * `shouldDemoteArtifactValidationByTrack` to demote advanced
+   * artifact-level checks (architecture diagram async/failure edges,
+   * interaction edge-case mandatory rows, stale-diagram drift,
+   * expansion-strategist delegation) from required → advisory.
+   */
+  taskClass: "software-standard" | "software-trivial" | "software-bugfix" | null;
 }

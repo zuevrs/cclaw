@@ -20,6 +20,8 @@ import {
   type LintResult,
   type StageLintContext
 } from "./artifact-linter/shared.js";
+import { shouldDemoteArtifactValidationByTrack } from "./content/stage-schema.js";
+import { recordArtifactValidationDemotedByTrack } from "./delegation.js";
 import { lintBrainstormStage } from "./artifact-linter/brainstorm.js";
 import { lintDesignStage } from "./artifact-linter/design.js";
 import { lintPlanStage } from "./artifact-linter/plan.js";
@@ -232,12 +234,18 @@ export async function lintArtifact(
   }
 
   let activeStageFlags: string[] = [];
+  let taskClass: StageLintContext["taskClass"] = null;
+  let activeRunId: string | null = null;
   try {
     const flowState = await readFlowState(projectRoot);
     const hint = flowState.interactionHints?.[stage];
     if (hint?.skipQuestions === true) activeStageFlags.push("--skip-questions");
+    taskClass = flowState.taskClass ?? null;
+    activeRunId = flowState.activeRunId ?? null;
   } catch {
     activeStageFlags = [];
+    taskClass = null;
+    activeRunId = null;
   }
   for (const extra of options.extraStageFlags ?? []) {
     if (typeof extra === "string" && extra.length > 0 && !activeStageFlags.includes(extra)) {
@@ -260,7 +268,8 @@ export async function lintArtifact(
     staleDiagramAuditEnabled,
     isTrivialOverride,
     overrideSet,
-    activeStageFlags
+    activeStageFlags,
+    taskClass
   };
 
   switch (stage) {
@@ -338,6 +347,52 @@ export async function lintArtifact(
     }
   }
 
+  const demote = shouldDemoteArtifactValidationByTrack(track, taskClass);
+  const demotedSections: string[] = [];
+  if (demote) {
+    for (const finding of findings) {
+      if (!ARTIFACT_VALIDATION_LITE_DEMOTE_SECTIONS.has(finding.section)) continue;
+      if (finding.found) continue;
+      if (!finding.required) continue;
+      finding.required = false;
+      finding.details =
+        `${finding.details} (Wave 25: demoted to advisory by track="${track}"` +
+        (taskClass ? `, taskClass="${taskClass}"` : "") +
+        ").";
+      demotedSections.push(finding.section);
+    }
+    if (demotedSections.length > 0 && activeRunId) {
+      await recordArtifactValidationDemotedByTrack(projectRoot, {
+        stage,
+        track,
+        taskClass: taskClass ?? null,
+        runId: activeRunId,
+        sections: demotedSections
+      }).catch(() => {});
+    }
+  }
+
   const passed = findings.every((f) => !f.required || f.found);
   return { stage, file: relFile, passed, findings };
 }
+
+/**
+ * Wave 25 (v6.1.0) — section names whose required-finding outcome is
+ * demoted from blocking → advisory when
+ * `shouldDemoteArtifactValidationByTrack(track, taskClass)` returns
+ * `true`. Mirrors the user-reported quick-tier failure modes:
+ *
+ *  - `Architecture Diagram` — sync/async + failure-edge enforcement
+ *  - `Data Flow` — Interaction Edge Case mandatory rows
+ *  - `Stale Diagram Drift Check` — blast-radius file mtime audit
+ *  - `Expansion Strategist Delegation` — product-discovery delegation
+ *
+ * Findings remain in the result so the caller can surface them as
+ * advisory hints; only `required` flips to `false`.
+ */
+const ARTIFACT_VALIDATION_LITE_DEMOTE_SECTIONS = new Set<string>([
+  "Architecture Diagram",
+  "Data Flow",
+  "Stale Diagram Drift Check",
+  "Expansion Strategist Delegation"
+]);
