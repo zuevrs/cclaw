@@ -495,7 +495,9 @@ export async function readDelegationLedger(projectRoot: string): Promise<Delegat
  * don't show up as corrupt lines.
  */
 const NON_DELEGATION_AUDIT_EVENTS = new Set<string>([
-  "mandatory_delegations_skipped_by_track"
+  "mandatory_delegations_skipped_by_track",
+  "artifact_validation_demoted_by_track",
+  "expansion_strategist_skipped_by_track"
 ]);
 
 function isAuditEventLine(parsed: unknown): boolean {
@@ -843,6 +845,84 @@ async function recordMandatorySkippedByTrack(
     track: params.track,
     taskClass: params.taskClass,
     runId: params.runId,
+    ts: new Date().toISOString()
+  };
+  try {
+    await fs.mkdir(path.dirname(eventsPath), { recursive: true });
+    await fs.appendFile(eventsPath, `${JSON.stringify(payload)}\n`, "utf8");
+  } catch {
+    // best-effort audit; never block stage advance.
+  }
+}
+
+/**
+ * Wave 25 (v6.1.0) — append a non-delegation audit event recording
+ * that one or more required artifact-validation findings were
+ * demoted from blocking to advisory because the active run is on a
+ * small-fix lane (`track === "quick"` or `taskClass === "software-bugfix"`).
+ *
+ * The event mirrors the Wave 24 `mandatory_delegations_skipped_by_track`
+ * audit pattern: best-effort write to `delegation-events.jsonl`, no
+ * agent payload, recognized by `readDelegationEvents` so it does not
+ * corrupt downstream parsers. Failures are swallowed.
+ */
+export async function recordArtifactValidationDemotedByTrack(
+  projectRoot: string,
+  params: {
+    stage: FlowStage;
+    track: FlowState["track"];
+    taskClass: MandatoryDelegationTaskClass | null;
+    runId: string;
+    sections: string[];
+  }
+): Promise<void> {
+  if (params.sections.length === 0) return;
+  const eventsPath = delegationEventsPath(projectRoot);
+  const payload = {
+    event: "artifact_validation_demoted_by_track" as const,
+    stage: params.stage,
+    track: params.track,
+    taskClass: params.taskClass,
+    runId: params.runId,
+    sections: params.sections,
+    ts: new Date().toISOString()
+  };
+  try {
+    await fs.mkdir(path.dirname(eventsPath), { recursive: true });
+    await fs.appendFile(eventsPath, `${JSON.stringify(payload)}\n`, "utf8");
+  } catch {
+    // best-effort audit; never block stage advance.
+  }
+}
+
+/**
+ * Wave 25 (v6.1.0) — append a non-delegation audit event recording
+ * that the scope-stage Expansion Strategist (`product-discovery`)
+ * delegation requirement was skipped because the active run is on a
+ * small-fix lane (`track === "quick"` or `taskClass === "software-bugfix"`).
+ *
+ * Mirrors the Wave 24 `mandatory_delegations_skipped_by_track`
+ * audit pattern: best-effort write to `delegation-events.jsonl`, no
+ * agent payload, recognized by `readDelegationEvents` so it does not
+ * corrupt downstream parsers. Failures are swallowed.
+ */
+export async function recordExpansionStrategistSkippedByTrack(
+  projectRoot: string,
+  params: {
+    track: FlowState["track"];
+    taskClass: MandatoryDelegationTaskClass | null;
+    runId: string;
+    selectedScopeMode: string;
+  }
+): Promise<void> {
+  const eventsPath = delegationEventsPath(projectRoot);
+  const payload = {
+    event: "expansion_strategist_skipped_by_track" as const,
+    stage: "scope" as const,
+    track: params.track,
+    taskClass: params.taskClass,
+    runId: params.runId,
+    selectedScopeMode: params.selectedScopeMode,
     ts: new Date().toISOString()
   };
   try {

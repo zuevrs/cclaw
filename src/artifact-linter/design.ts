@@ -134,23 +134,81 @@ async function resolveDesignDiagramTier(
   return { tier: "standard", source: "default:standard" };
 }
 
-function normalizeCodebaseInvestigationFileRef(value: string): string | null {
-  const cleaned = value
+/**
+ * Wave 25 (v6.1.0) — parenthetical suffixes that the audit strips
+ * from a Codebase Investigation filename cell BEFORE attempting
+ * `fs.stat`. The user's quick-tier test wrote `index.html (new)` in
+ * the table, and the linter then tried to stat the literal string
+ * `index.html (new)` (with the suffix) and failed with "could not
+ * read blast-radius file(s): index.html (new)". Authors used these
+ * markers as informational labels, not as part of the filename.
+ *
+ * Stripping happens for ANY parenthetical suffix on the same line as
+ * the filename cell so we don't have to enumerate every author
+ * convention. For new files (suffix "new"), the audit records
+ * "new file, no stale diagrams to detect" instead of trying to stat.
+ */
+const STALE_DIAGRAM_NEW_FILE_SUFFIX_PATTERN = /\(\s*new(?:[\s-]?file)?\s*\)/iu;
+const STALE_DIAGRAM_SKIP_FILE_SUFFIX_PATTERN = /\(\s*(?:n\/a|skip|skipped|deleted|removed|stub|placeholder|tbd)\s*\)/iu;
+
+export interface CodebaseInvestigationFileRef {
+  /** Filename to stat (parenthetical suffix already stripped). */
+  filename: string;
+  /** Raw cell content, useful for diagnostic messages. */
+  raw: string;
+  /** When true, the audit treats this row as a "new file, no baseline". */
+  newFile: boolean;
+  /**
+   * When true, the audit skips this row entirely (suffix `(skip)`,
+   * `(deleted)`, `(stub)`, leading `#`, or a `skip:` token in the
+   * Notes column).
+   */
+  skip: boolean;
+}
+
+export function normalizeCodebaseInvestigationFileRef(value: string, notesCell: string): CodebaseInvestigationFileRef | null {
+  const cleanedFull = value
     .replace(/`/gu, "")
     .replace(/^\s*[-*]\s*/u, "")
     .trim();
-  if (!cleaned) return null;
-  if (/^(?:file|n\/a|none|\(none\)|tbd|\?)$/iu.test(cleaned)) return null;
-  return cleaned;
+  if (!cleanedFull) return null;
+  if (/^#/u.test(cleanedFull)) {
+    return { filename: cleanedFull.replace(/^#\s*/u, ""), raw: cleanedFull, newFile: false, skip: true };
+  }
+  // Strip ANY trailing parenthetical suffix(es) so the audit operates
+  // on the raw filename. We loop because authors sometimes stack
+  // multiple suffixes (`index.html (new) (stub)`).
+  let stripped = cleanedFull;
+  let newFile = false;
+  let skip = false;
+  for (let safety = 0; safety < 4; safety += 1) {
+    const trailingParen = /\s*\([^)]*\)\s*$/u.exec(stripped);
+    if (!trailingParen) break;
+    const parenText = trailingParen[0];
+    if (STALE_DIAGRAM_NEW_FILE_SUFFIX_PATTERN.test(parenText)) newFile = true;
+    if (STALE_DIAGRAM_SKIP_FILE_SUFFIX_PATTERN.test(parenText)) skip = true;
+    stripped = stripped.slice(0, trailingParen.index).trim();
+  }
+  if (!stripped) return null;
+  if (/^(?:file|n\/a|none|\(none\)|tbd|\?)$/iu.test(stripped)) return null;
+  // Notes column may carry an explicit `skip:` marker (Wave 25).
+  if (/(?:^|\s|\|)skip\s*:/iu.test(notesCell)) skip = true;
+  return { filename: stripped, raw: cleanedFull, newFile, skip };
 }
 
-function collectCodebaseInvestigationFiles(sectionBody: string): string[] {
-  const refs: string[] = [];
+export function collectCodebaseInvestigationFiles(sectionBody: string): CodebaseInvestigationFileRef[] {
+  const refs: CodebaseInvestigationFileRef[] = [];
+  const seen = new Set<string>();
   for (const row of getMarkdownTableRows(sectionBody)) {
-    const fileCell = normalizeCodebaseInvestigationFileRef(row[0] ?? "");
-    if (fileCell) refs.push(fileCell);
+    const notesCell = row[row.length - 1] ?? "";
+    const fileCell = normalizeCodebaseInvestigationFileRef(row[0] ?? "", notesCell);
+    if (!fileCell) continue;
+    const key = `${fileCell.filename}|${fileCell.skip}|${fileCell.newFile}`;
+    if (seen.has(key)) continue;
+    seen.add(key);
+    refs.push(fileCell);
   }
-  return [...new Set(refs)];
+  return refs;
 }
 
 interface StaleDiagramAuditResult {
@@ -191,34 +249,48 @@ async function runStaleDiagramAudit(
 
   const stale: string[] = [];
   const missing: string[] = [];
+  const newFiles: string[] = [];
+  const skipped: string[] = [];
   let scanned = 0;
   for (const ref of refs) {
-    const absPath = path.isAbsolute(ref) ? ref : path.join(projectRoot, ref);
+    if (ref.skip) {
+      skipped.push(ref.filename);
+      continue;
+    }
+    if (ref.newFile) {
+      newFiles.push(ref.filename);
+      continue;
+    }
+    const absPath = path.isAbsolute(ref.filename) ? ref.filename : path.join(projectRoot, ref.filename);
     if (!(await exists(absPath))) {
-      missing.push(ref);
+      missing.push(ref.filename);
       continue;
     }
     let fileStat: Awaited<ReturnType<typeof fs.stat>>;
     try {
       fileStat = await fs.stat(absPath);
     } catch {
-      missing.push(ref);
+      missing.push(ref.filename);
       continue;
     }
     if (!fileStat.isFile()) continue;
     scanned += 1;
     if (fileStat.mtimeMs > artifactStat.mtimeMs) {
-      stale.push(ref);
+      stale.push(ref.filename);
     }
   }
 
   if (missing.length > 0) {
     return {
       ok: false,
-      details: `Stale Diagram Audit could not read blast-radius file(s): ${missing.join(", ")}.`
+      details: `Stale Diagram Audit could not read blast-radius file(s): ${missing.join(", ")}. Strip parenthetical suffixes like \` (new)\`, \` (deleted)\`, \` (stub)\` from the filename column, mark new files as \`<path> (new)\`, or add a leading \`#\` to the filename to skip the row.`
     };
   }
-  if (scanned === 0) {
+  const noteParts: string[] = [];
+  if (skipped.length > 0) noteParts.push(`${skipped.length} skipped (${skipped.join(", ")})`);
+  if (newFiles.length > 0) noteParts.push(`${newFiles.length} new file(s) with no stale diagrams to detect (${newFiles.join(", ")})`);
+  const notes = noteParts.length > 0 ? `; ${noteParts.join("; ")}` : "";
+  if (scanned === 0 && newFiles.length === 0 && skipped.length === 0) {
     return {
       ok: false,
       details: "Stale Diagram Audit found no readable blast-radius files in Codebase Investigation."
@@ -227,12 +299,12 @@ async function runStaleDiagramAudit(
   if (stale.length > 0) {
     return {
       ok: false,
-      details: `Stale Diagram Audit flagged stale file(s) newer than diagram baseline: ${stale.join(", ")}.`
+      details: `Stale Diagram Audit flagged stale file(s) newer than diagram baseline: ${stale.join(", ")}${notes}.`
     };
   }
   return {
     ok: true,
-    details: `Stale Diagram Audit clear: ${scanned} blast-radius file(s) are not newer than diagram baseline.`
+    details: `Stale Diagram Audit clear: ${scanned} blast-radius file(s) are not newer than diagram baseline${notes}.`
   };
 }
 

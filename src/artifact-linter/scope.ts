@@ -7,7 +7,12 @@ import {
   extractCanonicalScopeMode,
   getMarkdownTableRows
 } from "./shared.js";
-import { readDelegationLedger } from "../delegation.js";
+import {
+  readDelegationLedger,
+  recordExpansionStrategistSkippedByTrack
+} from "../delegation.js";
+import { shouldDemoteArtifactValidationByTrack } from "../content/stage-schema.js";
+import { readFlowState } from "../run-persistence.js";
 
 export async function lintScopeStage(ctx: StageLintContext): Promise<void> {
   const {
@@ -22,7 +27,8 @@ export async function lintScopeStage(ctx: StageLintContext): Promise<void> {
     brainstormShortCircuitActivated,
     staleDiagramAuditEnabled,
     isTrivialOverride,
-    activeStageFlags
+    activeStageFlags,
+    taskClass
   } = ctx;
 
     const lockedDecisionsBody = sectionBodyByHeadingPrefix(sections, "Locked Decisions") ?? "";
@@ -58,29 +64,65 @@ export async function lintScopeStage(ctx: StageLintContext): Promise<void> {
     const strategistRequired =
       selectedScopeMode === "SCOPE EXPANSION" || selectedScopeMode === "SELECTIVE EXPANSION";
     if (strategistRequired) {
-      const delegationLedger = await readDelegationLedger(projectRoot);
-      const discoveryRows = delegationLedger.entries.filter(
-        (entry) =>
-          entry.stage === "scope" &&
-          entry.agent === "product-discovery" &&
-          entry.runId === delegationLedger.runId &&
-          entry.status === "completed"
-      );
-      const hasCompleted = discoveryRows.length > 0;
-      const hasEvidence = discoveryRows.some(
-        (entry) => Array.isArray(entry.evidenceRefs) && entry.evidenceRefs.length > 0
-      );
-      findings.push({
-        section: "Expansion Strategist Delegation",
-        required: true,
-        rule: "When Scope Summary selects SCOPE EXPANSION or SELECTIVE EXPANSION, a completed `product-discovery` delegation for the active run with non-empty evidenceRefs is required.",
-        found: hasCompleted && hasEvidence,
-        details: !hasCompleted
-          ? `Scope mode ${selectedScopeMode} requires a completed product-discovery delegation row for active run ${delegationLedger.runId}.`
-          : hasEvidence
-            ? `product-discovery delegation satisfied for mode ${selectedScopeMode}.`
-            : "product-discovery delegation exists but evidenceRefs is empty; add at least one artifact/code evidence reference."
-      });
+      // Wave 25 (v6.1.0) — for `track === "quick"` (lite-tier) or
+      // `taskClass === "software-bugfix"`, the Expansion Strategist
+      // delegation requirement is dropped entirely. The user's
+      // 3-file static landing page hit this gate without any
+      // discovery scope — pure ceremony for trivial work. Standard
+      // tracks remain unchanged.
+      const skipByTrack = shouldDemoteArtifactValidationByTrack(track, taskClass);
+      if (skipByTrack) {
+        findings.push({
+          section: "Expansion Strategist Delegation",
+          required: false,
+          rule: "When Scope Summary selects SCOPE EXPANSION or SELECTIVE EXPANSION, a completed `product-discovery` delegation for the active run with non-empty evidenceRefs is required.",
+          found: true,
+          details:
+            `Expansion Strategist delegation requirement skipped for track="${track}"` +
+            (taskClass ? `, taskClass="${taskClass}"` : "") +
+            ` (Wave 25: lite-tier escape; selectedMode=${selectedScopeMode}).`
+        });
+        // Best-effort audit; we read the flow-state runId here
+        // because StageLintContext does not surface it directly.
+        try {
+          const flowState = await readFlowState(projectRoot);
+          const runId = flowState.activeRunId ?? null;
+          if (runId) {
+            await recordExpansionStrategistSkippedByTrack(projectRoot, {
+              track,
+              taskClass: taskClass ?? null,
+              runId,
+              selectedScopeMode
+            }).catch(() => {});
+          }
+        } catch {
+          // Audit is best-effort; never block scope linting.
+        }
+      } else {
+        const delegationLedger = await readDelegationLedger(projectRoot);
+        const discoveryRows = delegationLedger.entries.filter(
+          (entry) =>
+            entry.stage === "scope" &&
+            entry.agent === "product-discovery" &&
+            entry.runId === delegationLedger.runId &&
+            entry.status === "completed"
+        );
+        const hasCompleted = discoveryRows.length > 0;
+        const hasEvidence = discoveryRows.some(
+          (entry) => Array.isArray(entry.evidenceRefs) && entry.evidenceRefs.length > 0
+        );
+        findings.push({
+          section: "Expansion Strategist Delegation",
+          required: true,
+          rule: "When Scope Summary selects SCOPE EXPANSION or SELECTIVE EXPANSION, a completed `product-discovery` delegation for the active run with non-empty evidenceRefs is required.",
+          found: hasCompleted && hasEvidence,
+          details: !hasCompleted
+            ? `Scope mode ${selectedScopeMode} requires a completed product-discovery delegation row for active run ${delegationLedger.runId}.`
+            : hasEvidence
+              ? `product-discovery delegation satisfied for mode ${selectedScopeMode}.`
+              : "product-discovery delegation exists but evidenceRefs is empty; add at least one artifact/code evidence reference."
+        });
+      }
     }
 
     const criticPredictions = checkCriticPredictionsContract(sections);

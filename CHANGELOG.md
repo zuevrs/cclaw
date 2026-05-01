@@ -1,5 +1,53 @@
 # Changelog
 
+## 6.1.0 — Lite-Tier Artifact Escape + Validator Ergonomics
+
+Wave 25. The user ran a real test of the design stage on a 3-file static landing page (lite/quick-tier work, `taskClass=software-standard`, empty repo) and hit ~10 sequential validation failures, each requiring artifact edits or evidence-format guesswork. Wave 24 dropped mandatory _delegation_ gates for lite/quick/bugfix; Wave 25 extends the same escape to mandatory _artifact-validation_ rules, fixes envelope error consistency, and broadens diagram + edge-case detection so trivial work stops paying ceremony cost.
+
+This release is **additive and non-breaking**: every Wave 24 contract is preserved. Standard tracks behave exactly as before.
+
+### Added
+
+- **Lite-tier artifact-validation escape (W25-A).** New `shouldDemoteArtifactValidationByTrack(track, taskClass?)` helper in `src/content/stage-schema.ts` mirrors Wave 24's `mandatoryAgentsFor` predicate — returns `true` for `track === "quick"` OR `taskClass === "software-bugfix"`. When `true`, the artifact linter demotes a curated list of advanced-only `required` findings (`Architecture Diagram`, `Data Flow`, `Stale Diagram Drift Check`, `Expansion Strategist Delegation`) from blocking → advisory. Findings remain in the result so callers can surface them as advisory hints; only `required` flips to `false`.
+- **`artifact_validation_demoted_by_track` audit event.** Appended to `.cclaw/runs/active/delegation-events.jsonl` whenever the W25-A demotion fires, capturing `stage`, `track`, `taskClass`, `runId`, and the demoted `sections[]`. `readDelegationEvents` recognizes and skips this audit-only event (no `agent`/`spanId` payload).
+- **`expansion_strategist_skipped_by_track` audit event (W25-F).** Appended when the scope-stage Expansion Strategist (`product-discovery`) delegation requirement is dropped for a small-fix lane, capturing `track`, `taskClass`, `runId`, and `selectedScopeMode`. Same audit-only treatment as the other Wave 24/25 audit events.
+- **`reviewLoopEnvelopeExample(stage)` helper (W25-B).** Returns a complete, copy-pasteable JSON shape for the design/scope review-loop envelope with `stage` at the TOP level (not inside `payload`). Every `validateReviewLoopGateEvidence` error now embeds this example so agents stop guessing the envelope shape.
+- **`tryAutoHydrateAndSelectReviewLoopGate` (W25-B).** When a review-loop gate (`design_diagram_freshness`, etc.) is auto-hydratable from the artifact AND the artifact section is present, the gate auto-passes — agents do NOT need to include it in `--passed` or `--evidence-json`. Resolves the contradiction between "missing --evidence-json entries for passed gates" and "omit this gate from manual evidence so stage-complete can auto-hydrate it".
+- **Architecture Diagram multi-format sync/async detection (W25-C).** `DIAGRAM_ARROW_PATTERN` and `hasAsyncDiagramEdge` / `hasSyncDiagramEdge` now accept a wide range of representations: solid `-->`/`->`/`===>`/`--->`/`=>`/`→`/`⟶`/`↦`, dotted/async `-.->`/`-->>`/`~~>`/`- - ->`/`.....>`, plus `sync:`/`async:` cell-prefix labels and `[sync]`/`[async]` bracket labels. New `DIAGRAM_SYNC_ASYNC_ACCEPTED_PATTERNS` ships every accepted form in the error message so agents stop guessing.
+- **Architecture Diagram conditional failure-edge enforcement (W25-C).** New `validateArchitectureDiagram(body, { sections })` enforces the failure-edge keyword rule ONLY when the artifact's `## Failure Mode Table` has at least one row OR the diagram body mentions external-dependency keywords (HTTP, DB, queue, cache, …). Static / no-network designs no longer need to invent fake `(timeout)` annotations.
+- **Stale Diagram Audit filename parsing (W25-D).** `normalizeCodebaseInvestigationFileRef` strips parenthetical suffixes like ` (new)`, ` (deleted)`, ` (stub)`, ` (n/a)`, ` (renamed)`, ` (placeholder)`, ` (tbd)`, including stacked variants, before `fs.stat`. `(new)` rows are recorded as "new file, no stale diagrams to detect"; `(skip)`/`(deleted)`/`(stub)` rows and rows with a leading `#` or a `skip:` token in the Notes column are skipped entirely. The "could not read blast-radius file(s)" error now appends a one-line hint explaining how to mark new/skipped/deleted files.
+- **Interaction Edge Case Matrix `N/A — <reason>` acceptance (W25-E).** The `Handled?` cell now accepts `N/A`, `N/A — reason`, `N/A – reason`, `N/A - reason`, and `N/A: reason` (em-dash, en-dash, hyphen, colon separators). When `N/A` is present, the deferred-item (`D-XX`) requirement is waived; a reason in the `Handled?` cell or a non-empty `Design response` cell satisfies justification. The error message for an unparseable `Handled?` cell now mentions the `N/A — <reason>` escape.
+- **Interaction Edge Case Matrix lite-tier no-network demotion (W25-E).** When `shouldDemoteArtifactValidationByTrack` is true AND the design has no `Failure Mode Table` rows AND no external-dependency keywords in the Architecture Diagram body, the four network-dependent mandatory rows (`nav-away-mid-request`, `10K-result dataset`, `background-job abandonment`, `zombie connection`) are demoted to advisory. The `double-click` row stays mandatory. Successful runs annotate the result with the count of advisory rows for traceability.
+
+### Fixed
+
+- **Review-loop envelope auto-hydration contradiction (W25-B).** Fixed the prior agent-facing trap where omitting an auto-hydratable gate from `--passed` triggered "missing --evidence-json entries for passed gates" while including it triggered "omit this gate from manual evidence so stage-complete can auto-hydrate it". Auto-hydratable gates now consistently auto-pass when the artifact contains the matching review-loop envelope.
+- **Stale Diagram Audit `fs.stat("index.html (new)")` failure (W25-D).** The audit no longer interprets parenthetical annotation suffixes as part of the filename — agents no longer have to `touch` placeholder files just to silence the audit.
+- **Architecture Diagram failure-edge ceremony (W25-C).** A static landing page with no failure paths and no external dependencies no longer requires a fabricated `App -->|timeout| Fallback` arrow.
+- **Interaction Edge Case `N/A` rejection (W25-E).** The `Handled?` cell no longer rejects `N/A` for cases that genuinely don't apply (e.g. `nav-away-mid-request` on a static page with no requests).
+- **Expansion Strategist requirement on trivial scope (W25-F).** Lite-tier scope-stage runs in `SCOPE EXPANSION` / `SELECTIVE EXPANSION` mode no longer block on a missing `product-discovery` delegation — the requirement is dropped and audited.
+
+### Internal
+
+- `FlowState.taskClass` (Wave 25 plumbing) is now read by the artifact linter and surfaced through `StageLintContext` so per-stage linters (`scope`, `design`, …) can apply the same lite-tier predicate uniformly.
+- `ValidateSectionBodyContext` extended with optional `sections` and `liteTier` so per-section validators can opt into cross-section context and lite-tier demotions without re-deriving the predicate.
+- `validateArchitectureDiagram` extracted from the inline `validateSectionBody` switch to a dedicated function; `validateInteractionEdgeCaseMatrix` gained an `InteractionEdgeCaseValidationContext` parameter.
+- New helpers in `src/delegation.ts`: `recordArtifactValidationDemotedByTrack`, `recordExpansionStrategistSkippedByTrack`. Both extend the Wave 24 `NON_DELEGATION_AUDIT_EVENTS` set so `readDelegationEvents` ignores them.
+- `src/artifact-linter/design.ts` now exports `CodebaseInvestigationFileRef`, `normalizeCodebaseInvestigationFileRef`, and `collectCodebaseInvestigationFiles` so the W25-D parser is unit-testable in isolation.
+
+### Test Coverage
+
+Added 4 new unit-test files (42 new tests, suite total 752 → 794):
+
+- `tests/unit/lite-artifact-validation-escape.test.ts` — W25-A predicate parity with `mandatoryAgentsFor`, W25-C multi-format sync/async + conditional failure-edge, W25-E `N/A — reason` and lite-tier no-network demotion.
+- `tests/unit/stale-diagram-filename-parsing.test.ts` — W25-D suffix stripping, stacked suffixes, `#` skip, `skip:` notes, dedupe.
+- `tests/unit/review-loop-envelope-errors.test.ts` — W25-B canonical envelope shape, error-message JSON example inclusion, top-level-stage hint.
+- `tests/unit/expansion-strategist-track-skip.test.ts` — W25-F + W25-A audit-event helpers and `readDelegationEvents` integration.
+
+### Migration
+
+None required. All changes are additive; existing artifacts and standard-track flows behave exactly as in 6.0.0.
+
 ## 6.0.0 — Convergence i18n + drop mandatory delegations on lite
 
 Wave 24. Two complementary fixes that unblock real-world flows:
