@@ -3,11 +3,6 @@ import path from "node:path";
 import type { Writable } from "node:stream";
 import { readConfig } from "../config.js";
 import { RUNTIME_ROOT } from "../constants.js";
-import {
-  classifyCodexHooksFlag,
-  codexConfigPath,
-  readCodexConfig
-} from "../codex-feature-flag.js";
 import { exists } from "../fs-utils.js";
 import { HARNESS_ADAPTERS, harnessShimFileNames, harnessShimSkillNames } from "../harness-adapters.js";
 import { validateHookDocument, type HookSchemaHarness } from "../hook-schema.js";
@@ -312,37 +307,6 @@ async function checkHarnessShims(
   return findings;
 }
 
-async function checkCodexHooksFlag(
-  harnesses: readonly HarnessId[]
-): Promise<RuntimeIntegrityFinding> {
-  if (!harnesses.includes("codex")) {
-    return warningFinding("codex_hooks_flag", true, "Codex harness is not enabled.");
-  }
-  const configTomlPath = codexConfigPath();
-  let existing: string | null;
-  try {
-    existing = await readCodexConfig(configTomlPath);
-  } catch (error) {
-    return warningFinding(
-      "codex_hooks_flag",
-      false,
-      "Could not read Codex config.toml to validate codex_hooks.",
-      [error instanceof Error ? error.message : String(error)]
-    );
-  }
-
-  const state = classifyCodexHooksFlag(existing);
-  if (state === "enabled") {
-    return warningFinding("codex_hooks_flag", true, "Codex hooks feature flag is enabled.");
-  }
-  return warningFinding(
-    "codex_hooks_flag",
-    false,
-    "Codex hooks file is present, but [features] codex_hooks is not true in Codex config.",
-    [`configPath: ${configTomlPath}`, `state: ${state}`]
-  );
-}
-
 function buildReport(findings: RuntimeIntegrityFinding[]): RuntimeIntegrityReport {
   const errors = findings.filter((finding) => !finding.ok && finding.severity === "error").length;
   const warnings = findings.filter((finding) => !finding.ok && finding.severity === "warning").length;
@@ -352,34 +316,6 @@ function buildReport(findings: RuntimeIntegrityFinding[]): RuntimeIntegrityRepor
     findings,
     summary: { errors, warnings }
   };
-}
-
-function checkHookProfileCompatibility(config: Awaited<ReturnType<typeof readConfig>>): RuntimeIntegrityFinding {
-  const profile = config.hookProfile ?? "standard";
-  const strictness = config.strictness ?? "advisory";
-  if (profile !== "minimal") {
-    return warningFinding(
-      "hook_profile_strictness_compat",
-      true,
-      "Hook profile/strictness combination is compatible."
-    );
-  }
-  if (strictness !== "strict") {
-    return warningFinding(
-      "hook_profile_strictness_compat",
-      true,
-      "Minimal hook profile enabled (advisory strictness)."
-    );
-  }
-  return warningFinding(
-    "hook_profile_strictness_compat",
-    false,
-    "Minimal hook profile with strict strictness may under-enforce stage guards.",
-    [
-      "hookProfile=minimal keeps only session-start + stop-handoff handlers.",
-      "strictness=strict expects prompt/workflow/verify guards to run."
-    ]
-  );
 }
 
 function writeTextReport(io: InternalIo, report: RuntimeIntegrityReport): void {
@@ -413,8 +349,6 @@ export async function runRuntimeIntegrityCommand(
       findings.push(await checkHookDocument(projectRoot, harness));
     }
   }
-  findings.push(await checkCodexHooksFlag(harnesses));
-  findings.push(checkHookProfileCompatibility(config));
 
   const report = buildReport(findings);
   if (!args.quiet) {

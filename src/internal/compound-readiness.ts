@@ -2,7 +2,6 @@ import fs from "node:fs/promises";
 import path from "node:path";
 import type { Writable } from "node:stream";
 import { RUNTIME_ROOT } from "../constants.js";
-import { readConfig } from "../config.js";
 import { writeFileSafe } from "../fs-utils.js";
 import {
   computeCompoundReadiness,
@@ -99,24 +98,7 @@ export async function runCompoundReadinessCommand(
   io: InternalIo
 ): Promise<number> {
   const args = parseArgs(argv);
-
-  // Reading config is best-effort — but DO surface a stderr warning so
-  // mis-wired / malformed config shows up in hook-errors / CI logs
-  // instead of silently degrading to default threshold.
-  let config: Awaited<ReturnType<typeof readConfig>> | null = null;
-  try {
-    config = await readConfig(projectRoot);
-  } catch (error) {
-    const detail = error instanceof Error ? error.message : String(error);
-    io.stderr.write(
-      `[cclaw] compound-readiness: failed to read config (${detail}); falling back to default threshold\n`
-    );
-  }
-  const threshold =
-    args.threshold ??
-    (typeof config?.compound?.recurrenceThreshold === "number"
-      ? config!.compound!.recurrenceThreshold!
-      : undefined);
+  const threshold = args.threshold;
 
   const archivedRunsCount = await countArchivedRunsSafely(projectRoot);
 

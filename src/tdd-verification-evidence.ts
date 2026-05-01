@@ -1,5 +1,4 @@
 import path from "node:path";
-import { readConfig } from "./config.js";
 import { exists } from "./fs-utils.js";
 
 export const TEST_COMMAND_HINT_PATTERN = /\b(?:npm test|npm run test(?::[\w:-]+)?|pnpm test|pnpm [\w:-]*test[\w:-]*|yarn test|yarn [\w:-]*test[\w:-]*|bun test|bun run test(?::[\w:-]+)?|vitest|jest|pytest|go test|cargo test|mvn test|gradle test|\.\/gradlew test|dotnet test)\b/iu;
@@ -28,10 +27,8 @@ export async function validateTddVerificationEvidence(
   options: TddVerificationEvidenceOptions = {}
 ): Promise<TddVerificationEvidenceResult> {
   const normalized = evidence.trim();
-  const config = await readConfig(projectRoot);
-  const mode: TddVerificationRefMode = config.tdd?.verificationRef ?? "auto";
-  const configuredVcs = config.vcs ?? "git-local-only";
-  const gitPresent = configuredVcs !== "none" && await exists(path.join(projectRoot, ".git"));
+  const mode: TddVerificationRefMode = "auto";
+  const gitPresent = await exists(path.join(projectRoot, ".git"));
   const issues: string[] = [];
 
   if (options.requireCommand !== false && !TEST_COMMAND_HINT_PATTERN.test(normalized)) {
@@ -43,20 +40,12 @@ export async function validateTddVerificationEvidence(
 
   const hasSha = SHA_WITH_LABEL_PATTERN.test(normalized);
   const hasNoVcs = NO_VCS_ATTESTATION_PATTERN.test(normalized);
-  const hasNoVcsHash = NO_VCS_HASH_PATTERN.test(normalized);
-  if (mode !== "disabled" && configuredVcs === "none") {
-    if (!hasNoVcs) {
-      issues.push("NO_VCS_MODE repair needed: include an explicit no-VCS reason because `vcs` is `none`.");
-    }
-    if (!hasNoVcsHash) {
-      issues.push("NO_VCS_MODE repair needed: include a content/artifact hash for no-VCS TDD evidence (for example `artifact-hash: sha256:<hash>`).");
-    }
-  } else if (mode === "required" && !hasSha) {
-    issues.push("must include a commit SHA token prefixed with `sha` or `commit` because `tdd.verificationRef` is `required`.");
-  } else if (mode === "auto" && gitPresent && !hasSha) {
+  if (mode === "auto" && gitPresent && !hasSha) {
     issues.push("must include a commit SHA token prefixed with `sha` or `commit` (for example `sha: abc1234`).");
   } else if (mode === "auto" && !gitPresent && !hasSha && !hasNoVcs) {
     issues.push("must include either a commit SHA or an explicit no-VCS attestation (for example `no-vcs: project has no .git directory`).");
+  } else if (mode === "auto" && !gitPresent && hasNoVcs && !NO_VCS_HASH_PATTERN.test(normalized)) {
+    issues.push("NO_VCS_MODE repair needed: include a content/artifact hash for no-VCS TDD evidence (for example `artifact-hash: sha256:<hash>`).");
   }
 
   return { ok: issues.length === 0, issues, mode, gitPresent };

@@ -27,13 +27,7 @@ export type HookManifestHarness = (typeof HOOK_MANIFEST_HARNESSES)[number];
 
 export const HOOK_HANDLERS = [
   "session-start",
-  "prompt-guard",
-  "workflow-guard",
-  "pre-tool-pipeline",
-  "prompt-pipeline",
-  "context-monitor",
-  "stop-handoff",
-  "verify-current-state"
+  "stop-handoff"
 ] as const;
 export type HookHandlerId = (typeof HOOK_HANDLERS)[number];
 
@@ -69,18 +63,14 @@ export interface HookHandlerSpec {
 
 export const HOOK_SEMANTIC_EVENTS = [
   "session_rehydrate",
-  "pre_tool_prompt_guard",
-  "pre_tool_workflow_guard",
-  "post_tool_context_monitor",
-  "stop_handoff",
-  "strict_state_verify"
+  "stop_handoff"
 ] as const;
 export type HookSemanticEvent = (typeof HOOK_SEMANTIC_EVENTS)[number];
 
 export const HOOK_MANIFEST: readonly HookHandlerSpec[] = [
   {
     handler: "session-start",
-    description: "Rehydrate flow state, refresh Ralph Loop + compound readiness, emit bootstrap digest.",
+    description: "Rehydrate flow state and emit bootstrap digest.",
     semantic: "session_rehydrate",
     bindings: {
       claude: [{ event: "SessionStart", matcher: "startup|resume|clear|compact" }],
@@ -100,66 +90,6 @@ export const HOOK_MANIFEST: readonly HookHandlerSpec[] = [
     }
   },
   {
-    handler: "prompt-guard",
-    description: "Stage-aware prompt gate (iron-laws + strictness).",
-    semantic: "pre_tool_prompt_guard",
-    bindings: {
-      claude: [{ event: "PreToolUse", matcher: "*" }]
-    }
-  },
-  {
-    handler: "workflow-guard",
-    description: "TDD and workflow gate on Write/Edit/Bash style tool invocations.",
-    semantic: "pre_tool_workflow_guard",
-    bindings: {
-      claude: [{ event: "PreToolUse", matcher: "Write|Edit|MultiEdit|NotebookEdit|Bash" }]
-    }
-  },
-  {
-    handler: "pre-tool-pipeline",
-    description: "In-process pre-tool pipeline for harnesses that would otherwise spawn prompt/workflow guards separately.",
-    semantic: null,
-    bindings: {
-      cursor: [{ event: "preToolUse", matcher: "*" }],
-      codex: [
-        {
-          event: "PreToolUse",
-          matcher: "Bash|bash",
-          statusMessage: "Applying cclaw Bash preflight"
-        }
-      ]
-    }
-  },
-  {
-    handler: "prompt-pipeline",
-    description: "In-process prompt pipeline for Codex UserPromptSubmit (prompt-guard + verify-current-state).",
-    semantic: "strict_state_verify",
-    bindings: {
-      codex: [
-        {
-          event: "UserPromptSubmit",
-          statusMessage: "Checking cclaw stage state"
-        }
-      ]
-    }
-  },
-  {
-    handler: "context-monitor",
-    description: "Post-tool context usage + stage signal monitor.",
-    semantic: "post_tool_context_monitor",
-    bindings: {
-      claude: [{ event: "PostToolUse", matcher: "*" }],
-      cursor: [{ event: "postToolUse", matcher: "*" }],
-      codex: [
-        {
-          event: "PostToolUse",
-          matcher: "Bash|bash",
-          statusMessage: "Recording cclaw post-tool context"
-        }
-      ]
-    }
-  },
-  {
     handler: "stop-handoff",
     description: "Remind about clean handoff with stage + run context on session stop.",
     semantic: "stop_handoff",
@@ -174,12 +104,6 @@ export const HOOK_MANIFEST: readonly HookHandlerSpec[] = [
         }
       ]
     }
-  },
-  {
-    handler: "verify-current-state",
-    description: "Supplementary strict-mode guard callable from in-process pipelines to assert live state matches flow.",
-    semantic: null,
-    bindings: {}
   }
 ] as const;
 

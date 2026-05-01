@@ -1,6 +1,5 @@
 import fs from "node:fs/promises";
 import { resolveArtifactPath as resolveStageArtifactPath } from "./artifact-paths.js";
-import { readConfig } from "./config.js";
 import { exists } from "./fs-utils.js";
 import { stageSchema } from "./content/stage-schema.js";
 import type { FlowStage, FlowTrack } from "./types.js";
@@ -102,7 +101,6 @@ export async function lintArtifact(
       details: `Duplicate H2 heading(s): ${duplicateHeadings.join(", ")}. Merge edits into the existing heading to avoid split contracts.`
     });
   }
-  const projectConfig = await readConfig(projectRoot);
   const parsedFrontmatter = parseFrontmatter(raw);
   const frontmatterMissingKeys: string[] = FRONTMATTER_REQUIRED_KEYS.filter((key) => {
     const value = parsedFrontmatter.values[key];
@@ -147,8 +145,8 @@ export async function lintArtifact(
     stage === "brainstorm" ? sectionBodyByName(sections, "Short-Circuit Decision") : null;
   const brainstormShortCircuitActivated =
     stage === "brainstorm" && isShortCircuitActivated(brainstormShortCircuitBody);
-  const scopePreAuditEnabled = projectConfig.optInAudits?.scopePreAudit === true;
-  const staleDiagramAuditEnabled = projectConfig.optInAudits?.staleDiagramAudit === true;
+  const scopePreAuditEnabled = true;
+  const staleDiagramAuditEnabled = true;
   const isTrivialOverride = Boolean(
     schema.trivialOverrideSections &&
     schema.trivialOverrideSections.length > 0 &&

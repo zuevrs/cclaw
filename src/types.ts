@@ -188,77 +188,10 @@ export interface ReviewLoopConfig {
 }
 
 export type VcsMode = "git-with-remote" | "git-local-only" | "none";
-export type HookProfile = "minimal" | "standard" | "strict";
-
 export interface CclawConfig {
   version: string;
   flowVersion: string;
   harnesses: HarnessId[];
-  /** Repository evidence mode for stages that need durable verification refs. */
-  vcs?: VcsMode;
-  /**
-   * Single knob that controls enforcement behaviour of all hook-driven guards
-   * (prompt guard, workflow guard, TDD enforcement, iron laws). Default:
-   * `"advisory"` — hooks append a stderr nudge and exit 0. `"strict"` flips
-   * the same hooks to fail-closed (non-zero exit) so the harness refuses the
-   * offending action.
-   *
-   * Per-law escapes live on `ironLaws.strictLaws` for teams that need to keep
-   * specific iron laws strict while the project-wide knob stays advisory.
-   */
-  strictness?: "advisory" | "strict";
-  /**
-   * Hook execution profile used by generated run-hook runtime:
-   * - minimal: keep only session-start + stop-handoff style safety hooks
-   * - standard: default full hook surface
-   * - strict: full hook surface with strict guard behavior
-   */
-  hookProfile?: HookProfile;
-  /** Optional per-hook disable list (canonical run-hook handler names). */
-  disabledHooks?: string[];
-  /**
-   * Legacy alias for test-side path detection in workflow-guard.
-   * Prefer `tdd.testPathPatterns` in new configs.
-   * @deprecated Use `tdd.testPathPatterns` instead.
-   */
-  tddTestGlobs?: string[];
-  /** Path-pattern routing for TDD test/production write classification. */
-  tdd?: TddPathConfig;
-  /** Compound-stage recurrence policy overrides. */
-  compound?: CompoundConfig;
-  /** Early-stage producer/critic loop policy overrides. */
-  earlyLoop?: EarlyLoopConfig;
-  /** When true, cclaw installs managed git pre-commit/pre-push wrappers. */
-  gitHookGuards?: boolean;
-  /** Default flow track for new runs (quick = shortened path, standard = full pipeline). */
-  defaultTrack?: FlowTrack;
-  /**
-   * Opt-in language rule packs. Each enabled pack materializes a matching rule
-   * file under `.cclaw/rules/lang/<id>.md` on the next `cclaw sync`. The
-   * meta-skill router loads the pack during review/tdd when the diff touches
-   * the language in question. Disabled packs have no on-disk footprint.
-   */
-  languageRulePacks?: LanguageRulePack[];
-  /**
-   * Optional prompt-to-track vocabulary overrides for /cc classification.
-   * Advisory (surfaced in the /cc skill prose), not machine-enforced.
-   * If omitted, cclaw uses built-in defaults.
-   */
-  trackHeuristics?: TrackHeuristicsConfig;
-  /**
-   * Opt-in per-slice review heuristic. When enabled, the TDD skill
-   * requires a `## Per-Slice Review` section in `06-tdd.md` for slices
-   * that exceed `filesChangedThreshold` or match `touchTriggers`.
-   * Keeps obra's "fresh subagent + spec-then-quality review per task"
-   * discipline tractable without forcing it on tiny quick-track fixes.
-   */
-  sliceReview?: SliceReviewConfig;
-  /** Optional per-law strictness controls for hook-enforced iron laws. */
-  ironLaws?: IronLawsConfig;
-  /** Optional opt-in audit gates for scope/design stages. */
-  optInAudits?: OptInAuditsConfig;
-  /** Optional runtime knobs for outside-voice review loops. */
-  reviewLoop?: ReviewLoopConfig;
 }
 
 export interface TransitionRule {

@@ -15,61 +15,7 @@ import {
   SHARED_STAGE_SUPPORT_SNIPPETS
 } from "./runtime-shared-snippets.js";
 
-export interface NodeHookRuntimeOptions {
-  /**
-   * Single enforcement knob derived from `config.strictness`. Generated hooks
-   * embed this value as the default for every guard (prompt, workflow, TDD,
-   * iron-laws-coupled blocks). `CCLAW_STRICTNESS` env var overrides at run
-   * time; per-law strictness still flows through `iron-laws.json`.
-   */
-  strictness?: "advisory" | "strict";
-  tddTestPathPatterns?: string[];
-  tddProductionPathPatterns?: string[];
-  /**
-   * Baked-in default recurrence threshold for compound-readiness computed
-   * by the session-start hook. Derived from
-   * `config.compound.recurrenceThreshold` at install time; re-run
-   * `cclaw sync` after changing the config value so hook and CLI agree.
-   */
-  compoundRecurrenceThreshold?: number;
-  /**
-   * Enables early-stage producer/critic loop diagnostics in session-start.
-   * Defaults to true.
-   */
-  earlyLoopEnabled?: boolean;
-  /**
-   * Baked-in max iterations for brainstorm/scope/design early-loop status.
-   * Derived from `config.earlyLoop.maxIterations`.
-   */
-  earlyLoopMaxIterations?: number;
-  /**
-   * Default hook profile baked at sync/install time (`minimal|standard|strict`).
-   * Runtime can override via env/config.
-   */
-  hookProfile?: "minimal" | "standard" | "strict";
-  /**
-   * Default disabled hook list baked at sync/install time.
-   * Runtime can override via env/config.
-   */
-  disabledHooks?: string[];
-}
-
-function normalizePatterns(patterns: string[] | undefined, fallback: string[]): string[] {
-  if (!patterns || patterns.length === 0) return [...fallback];
-  return patterns.map((value) => value.trim()).filter((value) => value.length > 0);
-}
-
-function normalizeDisabledHooks(hooks: string[] | undefined): string[] {
-  if (!Array.isArray(hooks)) return [];
-  const out: string[] = [];
-  for (const raw of hooks) {
-    if (typeof raw !== "string") continue;
-    const normalized = raw.trim().toLowerCase();
-    if (normalized.length === 0) continue;
-    if (!out.includes(normalized)) out.push(normalized);
-  }
-  return out;
-}
+export interface NodeHookRuntimeOptions {}
 
 interface GeneratedCliRuntime {
   entrypoint: string | null;
@@ -107,30 +53,19 @@ function resolveCliRuntimeForGeneratedHook(): GeneratedCliRuntime {
  * bash/python/jq runtime dependencies.
  */
 export function nodeHookRuntimeScript(options: NodeHookRuntimeOptions = {}): string {
-  const strictness = options.strictness === "strict" ? "strict" : "advisory";
-  const tddTestPathPatterns = normalizePatterns(options.tddTestPathPatterns, [
+  void options;
+  const strictness = "advisory";
+  const tddTestPathPatterns = [
     "**/*.test.*",
     "**/tests/**",
     "**/__tests__/**"
-  ]);
-  const tddProductionPathPatterns = normalizePatterns(options.tddProductionPathPatterns, []);
-  const compoundRecurrenceThreshold =
-    typeof options.compoundRecurrenceThreshold === "number" &&
-    Number.isInteger(options.compoundRecurrenceThreshold) &&
-    options.compoundRecurrenceThreshold >= 1
-      ? options.compoundRecurrenceThreshold
-      : DEFAULT_COMPOUND_RECURRENCE_THRESHOLD;
-  const earlyLoopEnabled = options.earlyLoopEnabled !== false;
-  const earlyLoopMaxIterations =
-    typeof options.earlyLoopMaxIterations === "number" &&
-    Number.isInteger(options.earlyLoopMaxIterations) &&
-    options.earlyLoopMaxIterations >= 1
-      ? options.earlyLoopMaxIterations
-      : DEFAULT_EARLY_LOOP_MAX_ITERATIONS;
-  const defaultHookProfile = options.hookProfile === "minimal" || options.hookProfile === "strict"
-    ? options.hookProfile
-    : "standard";
-  const defaultDisabledHooks = normalizeDisabledHooks(options.disabledHooks);
+  ];
+  const tddProductionPathPatterns: string[] = [];
+  const compoundRecurrenceThreshold = DEFAULT_COMPOUND_RECURRENCE_THRESHOLD;
+  const earlyLoopEnabled = true;
+  const earlyLoopMaxIterations = DEFAULT_EARLY_LOOP_MAX_ITERATIONS;
+  const defaultHookProfile = "standard";
+  const defaultDisabledHooks: string[] = [];
   const cliRuntime = resolveCliRuntimeForGeneratedHook();
 
   return `#!/usr/bin/env node
@@ -1364,8 +1299,6 @@ async function readStageSupportContext(root, currentStage) {
 
 async function handleSessionStart(runtime) {
   const state = await readFlowState(runtime.root);
-  const stateDir = path.join(runtime.root, RUNTIME_ROOT, "state");
-  const ironLawsFile = path.join(stateDir, "iron-laws.json");
   const metaSkillFile = path.join(runtime.root, RUNTIME_ROOT, "skills", "using-cclaw", "SKILL.md");
 
 
@@ -1381,35 +1314,11 @@ async function handleSessionStart(runtime) {
   );
   const knowledge = await buildKnowledgeDigest(runtime.root, state.currentStage, knowledgeRaw);
 
-  // Fast path: read precomputed status lines from session-digest cache.
-  // If cache is stale, schedule a debounced background refresh so this hook
-  // returns quickly inside harness startup.
-  const flowStateMtimeMs = await readFileMtimeMs(state.filePath);
-  const forceSyncRefresh =
-    normalizeText(process.env.CCLAW_SESSION_START_BG_SYNC).toLowerCase() === "1" ||
-    ["1", "true", "yes"].includes(normalizeText(process.env.VITEST).toLowerCase());
-  let sessionDigest = await readSessionDigestLines(stateDir, state, flowStateMtimeMs);
-  if (forceSyncRefresh && flowStateMtimeMs > 0) {
-    await refreshSessionDigestCache(runtime.root, state, flowStateMtimeMs);
-    sessionDigest = await readSessionDigestLines(stateDir, state, flowStateMtimeMs);
-  } else if (!sessionDigest.fresh) {
-    await scheduleSessionDigestRefresh(runtime, state, flowStateMtimeMs);
-  }
-  const ralphLoopLine = sessionDigest.ralphLoopLine;
-  const earlyLoopLine = sessionDigest.earlyLoopLine;
-  const compoundReadinessLine = sessionDigest.compoundReadinessLine;
-
-  const ironLawsObj = toObject(await readJsonFile(ironLawsFile, {})) || {};
-  const laws = Array.isArray(ironLawsObj.laws) ? ironLawsObj.laws : [];
-  const ironLawLines = laws
-    .filter((row) => row && typeof row === "object")
-    .slice(0, 6)
-    .map((row) => {
-      const strict = row.strict === true ? "strict" : "advisory";
-      const id = typeof row.id === "string" && row.id.length > 0 ? row.id : "law";
-      const rule = typeof row.rule === "string" ? row.rule : "";
-      return "- [" + strict + "] " + id + " -> " + rule;
-    });
+  // Wave 21 honest-core: session-start no longer runs background helper
+  // pipelines or digest caches. It rehydrates flow + knowledge only.
+  const ralphLoopLine = "";
+  const earlyLoopLine = "";
+  const compoundReadinessLine = "";
   const staleStages = toObject(state.raw.staleStages) || {};
   const staleStageNames = Object.keys(staleStages);
   const interactionHints = toObject(state.raw.interactionHints) || {};
@@ -1470,9 +1379,6 @@ async function handleSessionStart(runtime) {
   if (stageSupportContext.length > 0) {
     parts.push(...stageSupportContext);
   }
-  if (ironLawLines.length > 0) {
-    parts.push("Iron laws (enforced policy highlights):\\n" + ironLawLines.join("\\n"));
-  }
   if (metaContent.length > 0) {
     parts.push(metaContent);
   }
@@ -1509,18 +1415,6 @@ async function isGitDirty(root) {
       }
     });
   });
-}
-
-function stopLawIsStrict(ironLawsObj) {
-  if ((ironLawsObj.mode || "advisory") === "strict") return true;
-  const laws = Array.isArray(ironLawsObj.laws) ? ironLawsObj.laws : [];
-  return laws.some(
-    (row) =>
-      row &&
-      typeof row === "object" &&
-      (row.id === "stop-clean-or-handoff" || row.id === "stop-clean-or-checkpointed") &&
-      row.strict === true
-  );
 }
 
 const STOP_BLOCK_LIMIT_PER_TRANSCRIPT = 2;
@@ -1597,7 +1491,6 @@ function extractStopSignals(input, fallbackSessionKey) {
 async function handleStopHandoff(runtime) {
   const state = await readFlowState(runtime.root);
   const stateDir = path.join(runtime.root, RUNTIME_ROOT, "state");
-  const ironLawsFile = path.join(stateDir, "iron-laws.json");
   const input = toObject(runtime.inputData) || {};
   const loopCount =
     typeof input.loop_count === "number" && Number.isFinite(input.loop_count)
@@ -1605,10 +1498,9 @@ async function handleStopHandoff(runtime) {
       : 0;
 
   const dirtyState = await isGitDirty(runtime.root);
-  const strictStop = stopLawIsStrict(toObject(await readJsonFile(ironLawsFile, {})) || {});
   const stopSignals = extractStopSignals(input, "run-" + state.activeRunId);
   const safetyBypassActive = stopSignals.stopHookActive || stopSignals.userAbort || stopSignals.contextLimit;
-  if (dirtyState === "dirty" && strictStop && !safetyBypassActive) {
+  if (dirtyState === "dirty" && !safetyBypassActive) {
     const stopBlocksPath = path.join(stateDir, "stop-blocks-" + stopSignals.sessionKey + ".json");
     const prior = toObject(await readJsonFile(stopBlocksPath, {})) || {};
     const priorCount =
@@ -1631,7 +1523,7 @@ async function handleStopHandoff(runtime) {
     process.stderr.write(
       '[cclaw] Stop advisory: dirty working tree detected, but block limit reached for this transcript (max 2). Continuing with handoff reminder only.\\n'
     );
-  } else if (dirtyState === "dirty" && strictStop && safetyBypassActive) {
+  } else if (dirtyState === "dirty" && safetyBypassActive) {
     const reason = stopSignals.stopHookActive
       ? "stop_hook_active"
       : stopSignals.userAbort
@@ -2198,16 +2090,9 @@ async function handlePromptPipeline(runtime) {
 function normalizeHookName(rawName) {
   const value = normalizeText(rawName).toLowerCase();
   if (value === "session-start") return "session-start";
-  if (value === "session-start-refresh") return "session-start-refresh";
   if (value === "stop-handoff" || value === "stop") return "stop-handoff";
   if (value === "stop-checkpoint") return "stop-handoff";
   if (value === "session-rehydrate") return "session-start";
-  if (value === "prompt-guard") return "prompt-guard";
-  if (value === "workflow-guard") return "workflow-guard";
-  if (value === "pre-tool-pipeline" || value === "pretool-pipeline") return "pre-tool-pipeline";
-  if (value === "prompt-pipeline" || value === "promptpipeline") return "prompt-pipeline";
-  if (value === "context-monitor") return "context-monitor";
-  if (value === "verify-current-state") return "verify-current-state";
   return "";
 }
 
@@ -2217,7 +2102,7 @@ async function main() {
     process.stderr.write(
       "[cclaw] run-hook: usage: node " +
         RUNTIME_ROOT +
-        "/hooks/run-hook.mjs <session-start|session-start-refresh|stop-handoff|prompt-guard|workflow-guard|pre-tool-pipeline|prompt-pipeline|context-monitor|verify-current-state>\\n"
+        "/hooks/run-hook.mjs <session-start|stop-handoff>\\n"
     );
     process.exitCode = 1;
     return;
@@ -2229,15 +2114,6 @@ async function main() {
     // No .cclaw/ runtime in any candidate root — this directory is not
     // initialized for cclaw. Exit 0 silently so hooks never block harnesses
     // that run in unrelated repos; users initialize with \`cclaw init\`.
-    process.exitCode = 0;
-    return;
-  }
-  const hookPolicy = await resolveHookPolicy(root);
-  ACTIVE_HOOK_PROFILE = hookPolicy.profile;
-  if (isHookDisabled(hookPolicy, hookName)) {
-    if (hookName === "prompt-pipeline") {
-      process.stdout.write(JSON.stringify({ ok: true, skipped: true }) + "\\n");
-    }
     process.exitCode = 0;
     return;
   }
@@ -2258,36 +2134,8 @@ async function main() {
       process.exitCode = await handleSessionStart(runtime);
       return;
     }
-    if (hookName === "session-start-refresh") {
-      process.exitCode = await handleSessionStartRefresh(runtime);
-      return;
-    }
     if (hookName === "stop-handoff") {
       process.exitCode = await handleStopHandoff(runtime);
-      return;
-    }
-    if (hookName === "prompt-guard") {
-      process.exitCode = await handlePromptGuard(runtime);
-      return;
-    }
-    if (hookName === "workflow-guard") {
-      process.exitCode = await handleWorkflowGuard(runtime);
-      return;
-    }
-    if (hookName === "pre-tool-pipeline") {
-      process.exitCode = await handlePreToolPipeline(runtime);
-      return;
-    }
-    if (hookName === "prompt-pipeline") {
-      process.exitCode = await handlePromptPipeline(runtime);
-      return;
-    }
-    if (hookName === "context-monitor") {
-      process.exitCode = await handleContextMonitor(runtime);
-      return;
-    }
-    if (hookName === "verify-current-state") {
-      process.exitCode = await handleVerifyCurrentState(runtime);
       return;
     }
     process.stderr.write("[cclaw] run-hook: unsupported hook " + hookName + "\\n");

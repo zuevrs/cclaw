@@ -37,7 +37,7 @@ describe("prompt-contract regression harness", () => {
     expect(reviewSkill).toContain("07-review-army.json");
   });
 
-  it("keeps advisory hooks wired for guards, context monitor, and suggestion memory", async () => {
+  it("keeps only session-start + stop-handoff hooks wired", async () => {
     const root = await createTempProject("behavior-hooks");
     await initCclaw({ projectRoot: root });
 
@@ -45,19 +45,20 @@ describe("prompt-contract regression harness", () => {
     const cursorHooks = await fs.readFile(path.join(root, ".cursor/hooks.json"), "utf8");
     const hookRuntime = await fs.readFile(path.join(root, ".cclaw/hooks/run-hook.mjs"), "utf8");
 
-    expect(claudeHooks).toContain(".cclaw/hooks/run-hook.cmd prompt-guard");
-    expect(claudeHooks).toContain(".cclaw/hooks/run-hook.cmd workflow-guard");
-    expect(claudeHooks).toContain(".cclaw/hooks/run-hook.cmd context-monitor");
-    expect(cursorHooks).toContain(".cclaw/hooks/run-hook.cmd pre-tool-pipeline");
-    expect(cursorHooks).not.toContain(".cclaw/hooks/run-hook.cmd prompt-guard");
-    expect(cursorHooks).not.toContain(".cclaw/hooks/run-hook.cmd workflow-guard");
-    expect(cursorHooks).toContain(".cclaw/hooks/run-hook.cmd context-monitor");
-    expect(hookRuntime).not.toContain("suggestion-memory.json");
-    expect(hookRuntime).not.toContain("context-warnings.jsonl");
+    expect(claudeHooks).toContain(".cclaw/hooks/run-hook.cmd session-start");
+    expect(claudeHooks).toContain(".cclaw/hooks/run-hook.cmd stop-handoff");
+    expect(claudeHooks).not.toContain("prompt-guard");
+    expect(claudeHooks).not.toContain("workflow-guard");
+    expect(claudeHooks).not.toContain("context-monitor");
+    expect(cursorHooks).toContain(".cclaw/hooks/run-hook.cmd session-start");
+    expect(cursorHooks).toContain(".cclaw/hooks/run-hook.cmd stop-handoff");
+    expect(cursorHooks).not.toContain("pre-tool-pipeline");
+    expect(cursorHooks).not.toContain("prompt-guard");
+    expect(cursorHooks).not.toContain("workflow-guard");
+    expect(cursorHooks).not.toContain("context-monitor");
     expect(hookRuntime).toContain("knowledge.jsonl");
-    expect(hookRuntime).toContain("write_to_cclaw_runtime");
-    expect(hookRuntime).toContain("stage_invocation_without_recent_flow_read");
-    expect(hookRuntime).toContain("context remaining is");
+    expect(hookRuntime).toContain("stop-handoff");
+    expect(hookRuntime).toContain("<session-start|stop-handoff>");
   });
 
   it("generates native agent ACK contracts and delegation helper", async () => {

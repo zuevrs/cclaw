@@ -120,6 +120,14 @@ async function writeScopeArtifact(root: string): Promise<void> {
 
 > Review Loop Quality: 0.830 | stop: quality_threshold_met | iterations: 2/3
 
+## Pre-Scope System Audit
+| Check | Command | Findings |
+|---|---|---|
+| Recent commits | git log -30 --oneline | validator pipeline only |
+| Current diff | git diff --stat | scope draft only |
+| Stash state | git stash list | no pending stash entries |
+| Debt markers | rg -n "TODO|FIXME|XXX|HACK" | none |
+
 ## Scope Contract
 - Selected mode: HOLD SCOPE
 - In scope: lock down requirements and interfaces.

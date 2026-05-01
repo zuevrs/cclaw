@@ -527,11 +527,8 @@ async function runCommand(parsed: ParsedArgs, ctx: CliContext): Promise<number> 
         info(ctx, `Detected harnesses from repo: ${resolved.detectedHarnesses.join(", ")}`);
       }
       ctx.stdout.write(`${JSON.stringify({
-        track: previewConfig.defaultTrack ?? "standard",
+        track: effectiveTrack ?? "standard",
         harnesses: previewConfig.harnesses,
-        strictness: previewConfig.strictness ?? "advisory",
-        gitHookGuards: previewConfig.gitHookGuards,
-        languageRulePacks: previewConfig.languageRulePacks,
         generatedSurfaces: previewSurfaces
       }, null, 2)}\n`);
       return 0;
@@ -547,16 +544,9 @@ async function runCommand(parsed: ParsedArgs, ctx: CliContext): Promise<number> 
     }
     const trackNote = effectiveTrack ? ` (track=${effectiveTrack})` : "";
     info(ctx, `Initialized .cclaw runtime and generated harness shims${trackNote}`);
-    // Point new users at the one config surface they might actually flip —
-    // `strictness` and `gitHookGuards` — without overselling the other knobs
-    // (those live behind docs/config.md until someone needs them).
     info(
       ctx,
-      "Config: .cclaw/config.yaml (strictness=advisory, gitHookGuards=false)."
-    );
-    info(
-      ctx,
-      "Need stricter guards or language rule packs? See docs/config.md."
+      "Config: .cclaw/config.yaml (harnesses + auto-managed version stamps)."
     );
     await maybeEnableCodexHooksFlag(effectiveHarnesses, parsed, ctx);
     return 0;

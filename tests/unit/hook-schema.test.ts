@@ -40,37 +40,37 @@ describe("hook schema validation", () => {
     const claude = JSON.parse(claudeHooksJsonWithObservation()) as {
       hooks: Record<string, unknown>;
     };
-    claude.hooks.PreToolUse = [{ matcher: "*" }];
+    claude.hooks.SessionStart = [{ matcher: "*" }];
     const result = validateHookDocument("claude", claude);
     expect(result.ok).toBe(false);
-    expect(result.errors.join("\n")).toContain("hooks.PreToolUse[0].hooks must be a non-empty array");
+    expect(result.errors.join("\n")).toContain("hooks.SessionStart[0].hooks must be a non-empty array");
   });
 
   it("rejects malformed cursor hook payload shapes", () => {
     const cursor = JSON.parse(cursorHooksJsonWithObservation()) as {
       hooks: Record<string, unknown>;
     };
-    cursor.hooks.preToolUse = [{ matcher: "*" }];
+    cursor.hooks.sessionStart = [{ matcher: "*" }];
     const result = validateHookDocument("cursor", cursor);
     expect(result.ok).toBe(false);
-    expect(result.errors.join("\n")).toContain("hooks.preToolUse[0].command must be a non-empty string");
+    expect(result.errors.join("\n")).toContain("hooks.sessionStart[0].command must be a non-empty string");
   });
 
-  it("rejects codex hook docs missing UserPromptSubmit wiring", () => {
+  it("rejects codex hook docs missing Stop wiring", () => {
     const codex = JSON.parse(codexHooksJsonWithObservation()) as {
       hooks: Record<string, unknown>;
     };
-    delete codex.hooks.UserPromptSubmit;
+    delete codex.hooks.Stop;
     const result = validateHookDocument("codex", codex);
     expect(result.ok).toBe(false);
-    expect(result.errors.join("\n")).toContain('missing required event array "UserPromptSubmit"');
+    expect(result.errors.join("\n")).toContain('missing required event array "Stop"');
   });
 
   it("rejects malformed codex statusMessage shape", () => {
     const codex = JSON.parse(codexHooksJsonWithObservation()) as {
       hooks: Record<string, Array<{ hooks?: Array<Record<string, unknown>> }>>;
     };
-    const first = codex.hooks.PreToolUse?.[0];
+    const first = codex.hooks.SessionStart?.[0];
     if (first?.hooks?.[0]) {
       first.hooks[0].statusMessage = "";
     }
