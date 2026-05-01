@@ -363,6 +363,190 @@ export async function checkReviewVerdictConsistency(
   };
 }
 
+export interface ReviewTddDuplicationConflict {
+  findingId: string;
+  tddSeverity: string | null;
+  reviewSeverity: string | null;
+  tddDisposition: string | null;
+  reviewDisposition: string | null;
+}
+
+export interface ReviewTddDuplicationResult {
+  ok: boolean;
+  errors: string[];
+  conflicts: ReviewTddDuplicationConflict[];
+  tddArtifactExists: boolean;
+  reviewArtifactExists: boolean;
+}
+
+const FINDING_ID_PATTERN = /\bF-\d+\b/giu;
+const SEVERITY_TOKENS = ["Critical", "Important", "Suggestion"];
+const DISPOSITION_TOKENS = ["open", "accepted", "resolved", "deferred", "won't-fix", "wont-fix"];
+
+function findFirstToken(text: string, tokens: string[]): string | null {
+  for (const token of tokens) {
+    const escaped = token.replace(/[.*+?^${}()|[\]\\]/gu, "\\$&");
+    const regex = new RegExp(`\\b${escaped}\\b`, "iu");
+    if (regex.test(text)) return token;
+  }
+  return null;
+}
+
+function normalizeDisposition(value: string | null): string | null {
+  if (value === null) return null;
+  const lower = value.toLowerCase();
+  if (lower === "wont-fix" || lower === "won't-fix") return "won't-fix";
+  return lower;
+}
+
+interface TddFindingRow {
+  id: string;
+  severity: string | null;
+  disposition: string | null;
+}
+
+function extractTddPerSliceFindings(perSliceBody: string): Map<string, TddFindingRow> {
+  const rows = new Map<string, TddFindingRow>();
+  const lines = perSliceBody.split(/\r?\n/u);
+  for (const line of lines) {
+    const ids = line.match(FINDING_ID_PATTERN);
+    if (!ids || ids.length === 0) continue;
+    const severity = findFirstToken(line, SEVERITY_TOKENS);
+    const disposition = normalizeDisposition(findFirstToken(line, DISPOSITION_TOKENS));
+    for (const rawId of ids) {
+      const id = rawId.toUpperCase();
+      if (rows.has(id)) continue;
+      rows.set(id, { id, severity, disposition });
+    }
+  }
+  return rows;
+}
+
+/**
+ * Cross-artifact duplication guard (Wave 23 / v5.0.0).
+ *
+ * When the same finding ID (`F-NN`) appears in both
+ * `06-tdd.md > Per-Slice Review` and `07-review-army.json`, the
+ * severity and disposition MUST match. Per-slice tdd reviews own
+ * single-slice findings; review cites them, never re-classifies.
+ *
+ * If neither artifact uses `F-NN` IDs, the check is a no-op.
+ */
+export async function checkReviewTddNoCrossArtifactDuplication(
+  projectRoot: string
+): Promise<ReviewTddDuplicationResult> {
+  const tddPath = path.join(projectRoot, RUNTIME_ROOT, "artifacts", "06-tdd.md");
+  const armyPath = path.join(projectRoot, RUNTIME_ROOT, "artifacts", "07-review-army.json");
+
+  const tddArtifactExists = await exists(tddPath);
+  const reviewArtifactExists = await exists(armyPath);
+  if (!tddArtifactExists || !reviewArtifactExists) {
+    return {
+      ok: true,
+      errors: [],
+      conflicts: [],
+      tddArtifactExists,
+      reviewArtifactExists
+    };
+  }
+
+  const tddRaw = await fs.readFile(tddPath, "utf8");
+  const tddSections = extractH2Sections(tddRaw);
+  const perSliceBody = sectionBodyByName(tddSections, "Per-Slice Review");
+  if (!perSliceBody) {
+    return {
+      ok: true,
+      errors: [],
+      conflicts: [],
+      tddArtifactExists,
+      reviewArtifactExists
+    };
+  }
+
+  const tddFindings = extractTddPerSliceFindings(perSliceBody);
+  if (tddFindings.size === 0) {
+    return {
+      ok: true,
+      errors: [],
+      conflicts: [],
+      tddArtifactExists,
+      reviewArtifactExists
+    };
+  }
+
+  let parsed: unknown;
+  try {
+    parsed = JSON.parse(await fs.readFile(armyPath, "utf8"));
+  } catch {
+    return {
+      ok: true,
+      errors: [],
+      conflicts: [],
+      tddArtifactExists,
+      reviewArtifactExists
+    };
+  }
+  if (!parsed || typeof parsed !== "object" || Array.isArray(parsed)) {
+    return {
+      ok: true,
+      errors: [],
+      conflicts: [],
+      tddArtifactExists,
+      reviewArtifactExists
+    };
+  }
+  const root = parsed as Record<string, unknown>;
+  const findings = Array.isArray(root.findings) ? (root.findings as unknown[]) : [];
+
+  const conflicts: ReviewTddDuplicationConflict[] = [];
+  for (const f of findings) {
+    if (!f || typeof f !== "object" || Array.isArray(f)) continue;
+    const o = f as Record<string, unknown>;
+    if (typeof o.id !== "string") continue;
+    const id = o.id.toUpperCase();
+    const tddRow = tddFindings.get(id);
+    if (!tddRow) continue;
+    const reviewSeverity = typeof o.severity === "string" ? o.severity : null;
+    const reviewDisposition = normalizeDisposition(typeof o.status === "string" ? o.status : null);
+    const severityMismatch =
+      tddRow.severity !== null &&
+      reviewSeverity !== null &&
+      tddRow.severity.toLowerCase() !== reviewSeverity.toLowerCase();
+    const dispositionMismatch =
+      tddRow.disposition !== null &&
+      reviewDisposition !== null &&
+      tddRow.disposition !== reviewDisposition;
+    if (severityMismatch || dispositionMismatch) {
+      conflicts.push({
+        findingId: id,
+        tddSeverity: tddRow.severity,
+        reviewSeverity,
+        tddDisposition: tddRow.disposition,
+        reviewDisposition
+      });
+    }
+  }
+
+  const errors = conflicts.map((c) => {
+    const parts: string[] = [];
+    if (c.tddSeverity !== null && c.reviewSeverity !== null && c.tddSeverity.toLowerCase() !== c.reviewSeverity.toLowerCase()) {
+      parts.push(`severity tdd=${c.tddSeverity} vs review-army=${c.reviewSeverity}`);
+    }
+    if (c.tddDisposition !== null && c.reviewDisposition !== null && c.tddDisposition !== c.reviewDisposition) {
+      parts.push(`disposition tdd=${c.tddDisposition} vs review-army=${c.reviewDisposition}`);
+    }
+    return `Finding ${c.findingId} appears in both 06-tdd.md > Per-Slice Review and 07-review-army.json with mismatched ${parts.join(" and ")}. Review must cite, not re-classify.`;
+  });
+
+  return {
+    ok: errors.length === 0,
+    errors,
+    conflicts,
+    tddArtifactExists,
+    reviewArtifactExists
+  };
+}
+
 export async function checkReviewSecurityNoChangeAttestation(
   projectRoot: string
 ): Promise<ReviewSecurityNoChangeAttestationResult> {

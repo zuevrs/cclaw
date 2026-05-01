@@ -1183,9 +1183,14 @@ Execution rule: complete and verify each batch before starting the next batch.
 | AC-1 | PASS/FAIL |  |
 
 ## Layer 2 Findings
+> Wave 23 (v5.0.0): Layer 2 categories OWNED by review = cross-slice correctness, security, dependency/version, observability, external-safety. Performance + architecture findings are CARRY-FORWARD from \`03-design-<slug>.md\` (Performance Budget, ADR) — cite, do NOT re-derive. Single-slice findings stay in \`06-tdd.md > Per-Slice Review\`; review may cite their IDs (severity/disposition must match — cross-artifact-duplication linter blocks otherwise).
+
 | ID | Severity | Category | File:line / no-line reason | Description | Status |
 |---|---|---|---|---|---|
-| R-1 | Critical/Important/Suggestion | correctness/security/performance/architecture/external-safety | path:line |  | open/resolved |
+| R-1 | Critical/Important/Suggestion | cross-slice-correctness/security/dependency-version/observability/external-safety | path:line |  | open/resolved |
+| R-2 | from-design | performance | cite \`03-design-<slug>.md > Performance Budget\` |  | carry-forward |
+| R-3 | from-design | architecture | cite \`03-design-<slug>.md > ADR\` |  | carry-forward |
+| R-4 | from-tdd | from-tdd | cite \`06-tdd.md > Per-Slice Review > F-<n>\` |  | carry-forward |
 - NO_FINDINGS_ATTESTATION: <required when no findings are reported; cite inspected coverage>
 
 ## Lens Coverage
