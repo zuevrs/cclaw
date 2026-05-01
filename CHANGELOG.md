@@ -1,5 +1,32 @@
 # Changelog
 
+## 3.0.0 — Honest core
+
+### Breaking Changes
+
+- Reduced hook runtime surface from 9 handlers to 2 handlers only: `session-start` and `stop-handoff`.
+- Removed all strict/profile/disabled-hook switching: `strictness`, `hookProfile`, `disabledHooks`, `CCLAW_STRICTNESS`, and profile-gated runtime paths no longer exist.
+- Removed config knobs and parser support for: `gitHookGuards`, `vcs`, `tdd`, `tddTestGlobs`, `compound`, `earlyLoop`, `defaultTrack`, `languageRulePacks`, `trackHeuristics`, `sliceReview`, `ironLaws`, `optInAudits`, and `reviewLoop`.
+- Removed hook artifacts for retired handlers (`prompt-guard.jsonl`, `workflow-guard.jsonl`, `context-monitor.json`, `session-digest.json`, etc.); runtime no longer emits them.
+- Removed cclaw-managed git hook relays and language-pack materialization under `.cclaw/rules/lang/*`.
+
+### Changed
+
+- `.cclaw/config.yaml` is now harness-only: user-facing config contains only `harnesses`, while `version` and `flowVersion` are auto-managed stamps.
+- `cclaw init` now writes the minimal 3-key config shape and no longer auto-detects/expands advanced config sections.
+- Session-start runtime now rehydrates flow/knowledge context only and no longer runs background helper pipelines (`tdd-loop-status`, `early-loop-status`, `compound-readiness`).
+- `stop-handoff` keeps safety bypass + max-2 dirty-tree hard-block cap, but no longer depends on strictness/profile toggles.
+- Runtime integrity and downstream consumers now use hardened defaults instead of optional config branches for removed knobs.
+
+### Migration
+
+- Any removed key in `.cclaw/config.yaml` now fails fast with:
+  - `key X is no longer supported in cclaw 3.0.0; see CHANGELOG.md`
+- Remove retired keys and keep only:
+  - `version`
+  - `flowVersion`
+  - `harnesses`
+
 ## 2.0.0
 
 ### Breaking Changes
