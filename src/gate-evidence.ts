@@ -86,11 +86,23 @@ async function readStageArtifactMarkdown(
 export interface QaLogFloorSignal {
   ok: boolean;
   count: number;
+  /**
+   * Wave 23 (v5.0.0): always 0. The convergence floor no longer enforces
+   * a fixed count. Harness UIs may render `questionBudgetHint(track,
+   * stage).recommended` separately as a soft hint.
+   */
   min: number;
   hasStopSignal: boolean;
+  /** Wave 23: always false. See `min` note above. */
   liteShortCircuit: boolean;
   skipQuestionsAdvisory: boolean;
   blocking: boolean;
+  /** Forcing-question topics deemed addressed in `## Q&A Log`. */
+  forcingCovered: string[];
+  /** Forcing-question topics still pending (no Q&A row matched). */
+  forcingPending: string[];
+  /** Ralph-Loop convergence detector verdict for the last 2 rows. */
+  noNewDecisions: boolean;
 }
 
 export interface GateEvidenceCheckResult {
@@ -620,7 +632,10 @@ export async function verifyCurrentStageGateEvidence(
       hasStopSignal: floor.hasStopSignal,
       liteShortCircuit: floor.liteShortCircuit,
       skipQuestionsAdvisory: floor.skipQuestionsAdvisory,
-      blocking: !floor.ok && !floor.skipQuestionsAdvisory
+      blocking: !floor.ok && !floor.skipQuestionsAdvisory,
+      forcingCovered: floor.forcingCovered,
+      forcingPending: floor.forcingPending,
+      noNewDecisions: floor.noNewDecisions
     };
   }
 

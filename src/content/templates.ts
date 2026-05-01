@@ -1478,13 +1478,16 @@ regardless of whether stage skills loaded.
 
 Before drafting any \`.cclaw/artifacts/01-brainstorm-*.md\`,
 \`02-scope-*.md\`, or \`03-design-*.md\`, verify that the artifact's
-\`## Q&A Log\` table contains at least the floor count for the active track
-(see \`questionBudgetHint(track, stage).min\`). Walk the stage forcing
-questions one at a time via the \`AskQuestion\` tool. If you find yourself
-proposing a draft after 1-2 questions, STOP and continue the loop.
+\`## Q&A Log\` table demonstrates Ralph-Loop convergence: forcing-question
+topics are addressed (see the stage's forcing-questions checklist row),
+the last 2 turns produce no new decision-changing impact, OR an explicit
+user stop-signal row is recorded. Walk the stage forcing questions one at
+a time via the \`AskQuestion\` tool. If you find yourself proposing a
+draft after 1-2 questions while forcing topics remain unaddressed, STOP
+and continue the loop.
 
-The \`qa_log_below_min\` linter rule will block \`stage-complete\` when below
-floor unless an explicit user stop-signal row is recorded.
+The \`qa_log_unconverged\` linter rule will block \`stage-complete\` when
+convergence has not been reached.
 
 ## 2. Mandatory subagents run after Q&A approval
 
@@ -1557,7 +1560,7 @@ Track-specific skips are allowed only when \`flow-state.track\` + \`skippedStage
 ## Delegation And Approvals
 
 - Machine-only checks in design/plan/tdd/review/ship should auto-dispatch when tooling supports it.
-- **For brainstorm / scope / design stages**: ask user input continuously via adaptive elicitation (one question per turn through the harness-native question tool — \`AskQuestion\` in Cursor). Walk the stage forcing-questions list one-by-one. Do NOT batch and do NOT defer to a single approval gate at the end. The \`qa_log_below_min\` linter rule will block \`stage-complete\` when below floor.
+- **For brainstorm / scope / design stages**: ask user input continuously via adaptive elicitation (one question per turn through the harness-native question tool — \`AskQuestion\` in Cursor). Walk the stage forcing-questions list one-by-one. Do NOT batch and do NOT defer to a single approval gate at the end. The \`qa_log_unconverged\` linter rule will block \`stage-complete\` when convergence is not reached (forcing topics unaddressed AND last 2 turns still produce decision-changing rows AND no stop-signal).
 - **For other stages** (spec/plan/tdd/build/review/ship): ask user input only at explicit approval gates (scope mode, plan approval, challenge resolution, ship finalization), not for routine progress updates.
 - If you find yourself proposing a draft after 1-2 questions in brainstorm/scope/design, STOP — go back to the forcing-questions list and continue.
 - Mandatory subagents in brainstorm/scope/design run only AFTER the user approves the elicitation outcome (see each stage's "Run Phase: post-elicitation" rows). Dispatching them before the Q&A loop converges violates the contract.

@@ -52,7 +52,7 @@ These behaviors are the exact reason this skill exists. The linter will block yo
 - Ask exactly one question per turn and wait for the answer before asking the next one.
 - Use harness-native question tools first; prose fallback is allowed only when the tool is unavailable.
 - Keep a running Q&A trace in the active artifact under \`## Q&A Log\` in \`${RUNTIME_ROOT}/artifacts/\` as append-only rows.
-- **Hard floor**: do NOT advance the stage (do NOT call \`stage-complete.mjs\`) until \`## Q&A Log\` contains at least \`min(track, stage)\` substantive entries OR an explicit user stop-signal is recorded as a row. The linter rule \`qa_log_below_min\` enforces this; \`stage-complete\` will fail otherwise.
+- **Convergence floor**: do NOT advance the stage (do NOT call \`stage-complete.mjs\`) until Q&A converges. Convergence is reached when ANY of: (a) all forcing-question topics are addressed in \`## Q&A Log\`, (b) the last 2 substantive rows produce no decision-changing impact (\`skip\`/\`continue\`/\`no-change\`/\`done\`), or (c) an explicit user stop-signal row is recorded. The linter rule \`qa_log_unconverged\` enforces this; \`stage-complete\` will fail otherwise. Wave 23 (v5.0.0) replaced the fixed-count floor with this convergence detector.
 - **NEVER run shell hash commands** (\`shasum\`, \`sha256sum\`, \`md5sum\`, \`Get-FileHash\`, \`certutil\`, etc.) to compute artifact hashes. If a linter ever asks you for a hash, that is a linter bug — report failure and stop, do not auto-fix in bash.
 - **NEVER paste cclaw command lines into chat** (e.g. \`node .cclaw/hooks/stage-complete.mjs ... --evidence-json '{...}'\`). Run them via the tool layer; report only the resulting summary. The user does not run cclaw manually and seeing the command line is noise.
 
@@ -108,16 +108,19 @@ Each grill question follows the same Core Protocol: ask one, wait, log, self-eva
 
 Do not ask extra questions "for theater" on simple low-risk work.
 
-## Question Budget Hint (linter-enforced floor)
+## Question Budget Hint (advisory only — Wave 23 dropped the count floor)
 
-Source of truth: \`questionBudgetHint(track, stage)\`. The \`Min\` column is enforced by \`qa_log_below_min\` linter rule — \`stage-complete\` fails when below.
+Source of truth: \`questionBudgetHint(track, stage)\`. The numbers below are
+**soft hints** for harness UI and elicitation pacing; gate blocking is done
+by the \`qa_log_unconverged\` rule (Ralph-Loop convergence detector), NOT by
+a fixed count.
 
 ${budgetTable}
 
 Track mapping note: \`quick\` ~= lightweight, \`medium\` ~= standard, \`standard\` ~= deep.
 
 How to use the columns:
-- \`Min\` — hard floor. Below this, \`stage-complete\` is blocked unless escape hatch is recorded.
+- \`Min\` — soft minimum to surface forcing questions; not a blocking gate.
 - \`Recommended\` — target for normal flows.
 - \`Hard cap warning\` — point at which to stop or compress remaining forcing questions into one final batched ask. Not skip.
 
