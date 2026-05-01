@@ -8,8 +8,6 @@
     "sessionResume",
     "sessionClear",
     "sessionCompact",
-    "preToolUse",
-    "postToolUse",
     "stop"
   ]
 }

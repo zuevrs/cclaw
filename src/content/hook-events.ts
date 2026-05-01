@@ -14,9 +14,6 @@ export { HOOK_SEMANTIC_EVENTS, type HookSemanticEvent } from "./hook-manifest.js
  */
 const OPENCODE_SEMANTIC_COVERAGE: Partial<Record<HookSemanticEvent, string>> = {
   session_rehydrate: "plugin event handlers + transform rehydration",
-  pre_tool_prompt_guard: "plugin tool.execute.before -> prompt-guard",
-  pre_tool_workflow_guard: "plugin tool.execute.before -> workflow-guard",
-  post_tool_context_monitor: "plugin tool.execute.after -> context-monitor",
   stop_handoff: "plugin session.idle -> stop-handoff"
 };
 

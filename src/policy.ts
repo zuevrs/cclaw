@@ -126,11 +126,8 @@ export async function policyChecks(projectRoot: string, options: PolicyOptions =
 
 
     { file: runtimeFile("hooks/run-hook.mjs"), needle: "activeRunId", name: "hooks:session_start:active_run" },
-    { file: runtimeFile("hooks/run-hook.mjs"), needle: "write_to_cclaw_runtime", name: "hooks:guard:risky_write_advisory" },
-    { file: runtimeFile("hooks/run-hook.mjs"), needle: "stage_invocation_without_recent_flow_read", name: "hooks:workflow_guard:flow_read_reason" },
-    { file: runtimeFile("hooks/run-hook.mjs"), needle: "stage_jump_", name: "hooks:workflow_guard:stage_jump_reason" },
-    { file: runtimeFile("hooks/run-hook.mjs"), needle: "tdd_write_without_open_red", name: "hooks:workflow_guard:tdd_red_first" },
-    { file: runtimeFile("hooks/run-hook.mjs"), needle: "context remaining is", name: "hooks:context:threshold_warning" },
+    { file: runtimeFile("hooks/run-hook.mjs"), needle: "session-start", name: "hooks:session_start:wired" },
+    { file: runtimeFile("hooks/run-hook.mjs"), needle: "stop-handoff", name: "hooks:stop_handoff:wired" },
     { file: runtimeFile("hooks/opencode-plugin.mjs"), needle: "activeRunId", name: "hooks:opencode:active_run" },
     { file: runtimeFile("hooks/run-hook.mjs"), needle: "Knowledge digest", name: "hooks:session_start:knowledge_digest" },
     { file: runtimeFile("hooks/opencode-plugin.mjs"), needle: "Knowledge digest", name: "hooks:opencode:knowledge_digest" }
@@ -138,13 +135,13 @@ export async function policyChecks(projectRoot: string, options: PolicyOptions =
   if (activeHarnesses.has("opencode")) {
     utilitySkillChecks.push({
       file: ".opencode/plugins/cclaw-plugin.mjs",
-      needle: "\"tool.execute.before\"",
-      name: "hooks:opencode:deployed_tool_hook"
+      needle: "session-start",
+      name: "hooks:opencode:deployed_session_start_hook"
     });
     utilitySkillChecks.push({
       file: ".opencode/plugins/cclaw-plugin.mjs",
-      needle: "workflow-guard",
-      name: "hooks:opencode:deployed_workflow_guard"
+      needle: "stop-handoff",
+      name: "hooks:opencode:deployed_stop_handoff_hook"
     });
   }
   if (activeHarnesses.has("cursor")) {
