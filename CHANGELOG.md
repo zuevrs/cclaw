@@ -1,5 +1,40 @@
 # Changelog
 
+## 6.0.0 — Convergence i18n + drop mandatory delegations on lite
+
+Wave 24. Two complementary fixes that unblock real-world flows:
+
+1. **Topic-ID convergence** — Wave 23 extracted forcing-question topics as English keywords, so RU/UA/non-English Q&A logs were always reported "unconverged" even when the user had answered every forcing question. Wave 24 replaces the keyword fallback with mandatory `[topic:<id>]` tags. Convergence is now language-neutral.
+2. **Track-aware mandatory delegation drop** — mandatory subagent gates were firing on lite-tier landing-page work and bugfixes, requiring hand-crafted `--waive-delegation` reasons. Wave 24 collapses the mandatory list to `[]` for `track === "quick"` OR `taskClass === "software-bugfix"` and records an audit-trail event.
+
+### Breaking Changes
+
+- **`[topic:<id>]` tag is now MANDATORY in `## Q&A Log` rows that address forcing questions.** The English keyword fallback is gone. The linter scans only for the explicit `[topic:<id>]` tag (case-insensitive id, ASCII-only) — typically stamped in the `Decision impact` cell. Stage forcing-question checklist rows now declare topics as `id: topic; id: topic; ...`. Brainstorm IDs: `pain`, `direct-path`, `do-nothing`, `operator`, `no-go`. Scope IDs: `in-out`, `locked-upstream`, `rollback`, `failure-modes`. Design IDs: `data-flow`, `seams`, `invariants`, `not-refactor`.
+- **`extractForcingQuestions(stage)` return type changed.** Now returns `Array<{ id: string; topic: string }>` (`ForcingQuestionTopic[]`) instead of the old `string[]`. The function throws when a forcing-questions checklist row exists but its body does not match the new `id: topic; id: topic; ...` syntax — authors fix the stage definition rather than ship un-coverable topics.
+- **`QaLogFloorOptions.forcingQuestions` accepts `ReadonlyArray<ForcingQuestionTopic | string>`** instead of just `string[]`. String entries are treated as raw topic IDs (the topic label defaults to the id).
+- **`qa_log_unconverged` finding details now print pending topic IDs as a bracketed list** (e.g. `Forcing topic IDs pending: [pain, do-nothing, operator]`) plus a one-line tag instruction. The long prose explanation is gone.
+
+### Removed
+
+- `topicKeywords` helper, `isTopicAddressedByKeyword` helper, and the `STOP_WORDS` array in `src/artifact-linter/shared.ts`. The linter no longer tokenizes topic strings into English keywords.
+
+### Added
+
+- **`mandatoryAgentsFor(stage, track, taskClass?, complexityTier?)`** in `src/content/stage-schema.ts`. Returns `[]` when `track === "quick"` OR `taskClass === "software-bugfix"`, otherwise delegates to `mandatoryDelegationsForStage`. New `MandatoryDelegationTaskClass` union: `"software-standard" | "software-trivial" | "software-bugfix"`. Callers (`gate-evidence`, advance-stage validator, subagents.ts table generator, completion-parameters block) MUST go through this helper.
+- **`parseForcingQuestionsRow(row, context?)`** in `src/artifact-linter/shared.ts`. Pure parser exposed for unit tests; returns `null` when the row is not a forcing-questions header, throws on malformed `id: topic` syntax or invalid kebab-case IDs.
+- **`mandatory_delegations_skipped_by_track` audit event** appended to `.cclaw/runs/active/delegation-events.jsonl` when `mandatoryAgentsFor` collapses to `[]` despite the registered list being non-empty. Captures `stage`, `track`, `taskClass`, `runId`, `ts`. `readDelegationEvents` recognizes and skips this audit-only event (it is not a delegation lifecycle event).
+- **`checkMandatoryDelegations(...)` return shape gained `skippedByTrack: boolean`.** Callers can render an "auto-skipped (lite track)" badge instead of a missing-delegations finding.
+- **Adaptive-elicitation skill** gained a "Topic tagging (MANDATORY for forcing-question rows)" section with a Russian Q&A example demonstrating the `[topic:<id>]` convention.
+- **`## Q&A Log` templates** for `01-brainstorm.md`, `02-scope.md`, `03-design.md` show an example row with `[topic:<id>]` and a note that the tag is mandatory for forcing-question rows.
+- **Automatic stage delegation table** in `src/content/subagents.ts` now footnotes the track-aware skip: "Mandatory agents are skipped for `track === "quick"` OR `taskClass === "software-bugfix"`."
+
+### Migration
+
+- **Existing `## Q&A Log` artifacts that addressed forcing questions in prose only.** Stamp the matching `[topic:<id>]` tag in the `Decision impact` cell of the answering row, otherwise `qa_log_unconverged` will block `stage-complete`. Multiple tags allowed when one answer covers several topics. Stop-signal rows do NOT need a tag.
+- **External tooling that called `extractForcingQuestions(stage)`** and indexed by string. Read `.id` (or `.topic`) from each `ForcingQuestionTopic` instead.
+- **Custom callers of `mandatoryDelegationsForStage`.** Switch to `mandatoryAgentsFor(stage, track, taskClass?)` so the lite/bugfix skip is applied uniformly. Direct callers of the registry helper bypass the Wave 24 drop.
+- **Harness UI parsers that read `delegation-events.jsonl`.** Either upgrade to the bundled `readDelegationEvents` (which now ignores audit events) or add `mandatory_delegations_skipped_by_track` to your event allow-list. Lines of this type are not delegation lifecycle events and have no `agent` field.
+
 ## 5.0.0 — Dedupe stages, Ralph-Loop convergence Q&A, trim review, forward idea evidence
 
 ### Breaking Changes

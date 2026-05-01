@@ -7,8 +7,13 @@ import { readConfig } from "./config.js";
 import { exists, withDirectoryLock, writeFileSafe } from "./fs-utils.js";
 import { HARNESS_ADAPTERS, type SubagentFallback } from "./harness-adapters.js";
 import { readFlowState } from "./runs.js";
-import { stageSchema } from "./content/stage-schema.js";
+import {
+  mandatoryAgentsFor,
+  stageSchema,
+  type MandatoryDelegationTaskClass
+} from "./content/stage-schema.js";
 import type { FlowStage } from "./types.js";
+import type { FlowState } from "./flow-state.js";
 
 const execFileAsync = promisify(execFile);
 
@@ -483,6 +488,22 @@ export async function readDelegationLedger(projectRoot: string): Promise<Delegat
 
 
 
+/**
+ * Wave 24 (v6.0.0) audit-only event types that live in
+ * `delegation-events.jsonl` but do NOT carry a delegation lifecycle
+ * payload (no agent/spanId). The parser must accept them so they
+ * don't show up as corrupt lines.
+ */
+const NON_DELEGATION_AUDIT_EVENTS = new Set<string>([
+  "mandatory_delegations_skipped_by_track"
+]);
+
+function isAuditEventLine(parsed: unknown): boolean {
+  if (!parsed || typeof parsed !== "object" || Array.isArray(parsed)) return false;
+  const evt = (parsed as { event?: unknown }).event;
+  return typeof evt === "string" && NON_DELEGATION_AUDIT_EVENTS.has(evt);
+}
+
 export async function readDelegationEvents(projectRoot: string): Promise<{ events: DelegationEvent[]; corruptLines: number[] }> {
   const filePath = delegationEventsPath(projectRoot);
   if (!(await exists(filePath))) {
@@ -499,6 +520,10 @@ export async function readDelegationEvents(projectRoot: string): Promise<{ event
       const parsed: unknown = JSON.parse(line);
       if (isDelegationEvent(parsed)) {
         events.push(parsed);
+      } else if (isAuditEventLine(parsed)) {
+        // Wave 24 audit-only row (e.g. mandatory_delegations_skipped_by_track).
+        // Not a delegation lifecycle event but valid audit content.
+        continue;
       } else {
         corruptLines.push(index + 1);
       }
@@ -616,7 +641,16 @@ export function expectedFulfillmentMode(
 export async function checkMandatoryDelegations(
   projectRoot: string,
   stage: FlowStage,
-  options: { repairFeatureSystem?: boolean } = {}
+  options: {
+    repairFeatureSystem?: boolean;
+    /**
+     * Optional task class for the active run. When set to
+     * `"software-bugfix"`, the mandatory delegation gate is skipped
+     * entirely (Wave 24). Callers that don't classify the run leave
+     * this undefined and rely on the track-based skip.
+     */
+    taskClass?: MandatoryDelegationTaskClass | null;
+  } = {}
 ): Promise<{
   satisfied: boolean;
   missing: string[];
@@ -634,11 +668,29 @@ export async function checkMandatoryDelegations(
   staleWorkers: string[];
   /** Expected fulfillment mode for the active harness set. */
   expectedMode: DelegationFulfillmentMode;
+  /**
+   * Wave 24 (v6.0.0): true when `mandatoryAgentsFor` returned [] for
+   * this (track, taskClass) combination — i.e. the gate was skipped
+   * entirely on quick track or software-bugfix runs. The skip is also
+   * recorded as a `mandatory_delegations_skipped_by_track` event in
+   * `delegation-events.jsonl` for audit traceability.
+   */
+  skippedByTrack: boolean;
 }> {
   const flowState = await readFlowState(projectRoot, {
     repairFeatureSystem: options.repairFeatureSystem
   });
-  const mandatory = stageSchema(stage, flowState.track).mandatoryDelegations;
+  const mandatory = mandatoryAgentsFor(stage, flowState.track, options.taskClass ?? null);
+  const skippedByTrack = mandatory.length === 0 &&
+    stageSchema(stage, flowState.track).mandatoryDelegations.length > 0;
+  if (skippedByTrack) {
+    await recordMandatorySkippedByTrack(projectRoot, {
+      stage,
+      track: flowState.track,
+      taskClass: options.taskClass ?? null,
+      runId: flowState.activeRunId
+    });
+  }
   const { activeRunId } = flowState;
   const ledger = await readDelegationLedger(projectRoot);
   const events = await readDelegationEvents(projectRoot);
@@ -758,6 +810,45 @@ export async function checkMandatoryDelegations(
     legacyInferredCompletions,
     corruptEventLines: events.corruptLines,
     staleWorkers,
-    expectedMode
+    expectedMode,
+    skippedByTrack
   };
+}
+
+/**
+ * Wave 24 (v6.0.0) — append a non-delegation audit event to
+ * `delegation-events.jsonl` recording that the mandatory delegation
+ * gate was skipped because of the active track / task class. Plays the
+ * same audit role as a `waived` row but does NOT carry an agent —
+ * downstream tooling treats `event === "mandatory_delegations_skipped_by_track"`
+ * lines as informational.
+ *
+ * Failures are swallowed: the audit log is best-effort. Missing the
+ * event must never block stage advance because the gate skip itself is
+ * authoritative.
+ */
+async function recordMandatorySkippedByTrack(
+  projectRoot: string,
+  params: {
+    stage: FlowStage;
+    track: FlowState["track"];
+    taskClass: MandatoryDelegationTaskClass | null;
+    runId: string;
+  }
+): Promise<void> {
+  const eventsPath = delegationEventsPath(projectRoot);
+  const payload = {
+    event: "mandatory_delegations_skipped_by_track" as const,
+    stage: params.stage,
+    track: params.track,
+    taskClass: params.taskClass,
+    runId: params.runId,
+    ts: new Date().toISOString()
+  };
+  try {
+    await fs.mkdir(path.dirname(eventsPath), { recursive: true });
+    await fs.appendFile(eventsPath, `${JSON.stringify(payload)}\n`, "utf8");
+  } catch {
+    // best-effort audit; never block stage advance.
+  }
 }

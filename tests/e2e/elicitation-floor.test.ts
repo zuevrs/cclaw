@@ -131,11 +131,11 @@ const QA_LOG_STOP_SIGNAL_BLOCK = `## Q&A Log
 const QA_LOG_FORCING_COVERAGE_BLOCK = `## Q&A Log
 | Turn | Question | User answer (1-line) | Decision impact |
 |---|---|---|---|
-| 1 | What pain are we solving for users today? | Manual release metadata audit. | locks-problem |
-| 2 | What is the direct path to fix it? | Reusable validator module. | locks-architecture |
-| 3 | What happens if we do nothing? | Unsafe publish risk grows. | urgency-shaping |
-| 4 | Who is the first operator/user affected? | Release manager on call. | persona-shaping |
-| 5 | What no-go boundaries are non-negotiable? | No new runtime deps in v1. | scope-shaping |
+| 1 | What pain are we solving for users today? | Manual release metadata audit. | locks-problem [topic:pain] |
+| 2 | What is the direct path to fix it? | Reusable validator module. | locks-architecture [topic:direct-path] |
+| 3 | What happens if we do nothing? | Unsafe publish risk grows. | urgency-shaping [topic:do-nothing] |
+| 4 | Who is the first operator/user affected? | Release manager on call. | persona-shaping [topic:operator] |
+| 5 | What no-go boundaries are non-negotiable? | No new runtime deps in v1. | scope-shaping [topic:no-go] |
 
 `;
 

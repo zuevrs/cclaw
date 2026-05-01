@@ -51,7 +51,7 @@ export async function lintBrainstormStage(ctx: StageLintContext): Promise<void> 
       findings.push({
         section: "qa_log_unconverged",
         required: !floor.skipQuestionsAdvisory,
-        rule: "[P1] qa_log_unconverged — Q&A Log has not converged for this stage. Continue elicitation until forcing-question topics are addressed, the last 2 rows produce no decision-changing impact (Ralph-Loop), or an explicit user stop-signal row is appended.",
+        rule: "[P1] qa_log_unconverged — Q&A Log has not converged for this stage. Continue elicitation until every forcing-question topic id is tagged with `[topic:<id>]` on at least one row, the last 2 rows produce no decision-changing impact (Ralph-Loop), or an explicit user stop-signal row is appended.",
         found: floor.ok,
         details: floor.details
       });

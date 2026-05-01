@@ -56,6 +56,8 @@ interface InternalValidationReport {
     corruptEventLines: number[];
     staleWorkers: string[];
     expectedMode: string;
+    /** Wave 24: true when mandatoryAgentsFor returned [] for the run's track / taskClass. */
+    skippedByTrack: boolean;
   };
   gates: {
     ok: boolean;
@@ -196,7 +198,8 @@ export async function buildValidationReport(
       legacyInferredCompletions: delegation.legacyInferredCompletions,
       corruptEventLines: delegation.corruptEventLines,
       staleWorkers: delegation.staleWorkers,
-      expectedMode: delegation.expectedMode
+      expectedMode: delegation.expectedMode,
+      skippedByTrack: delegation.skippedByTrack
     },
     gates: {
       ok: gates.ok,
