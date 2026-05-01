@@ -581,14 +581,16 @@ const STAGE_AUTO_SUBAGENT_DISPATCH: Record<FlowStage, StageAutoSubagentDispatch[
       agent: "product-discovery",
       mode: "mandatory",
       requiredAtTier: "standard",
-      when: "Always for standard/deep brainstorm to validate value, persona/JTBD, success metric, and why-now framing.",
+      runPhase: "post-elicitation",
+      when: "Always for standard/deep brainstorm to validate value, persona/JTBD, success metric, and why-now framing. Runs only after the adaptive elicitation Q&A loop converges.",
       purpose: "Run product-discovery mode to pressure-test problem/value fit and produce product evidence for the Problem Decision Record.",
       requiresUserGate: false
     },
     {
       agent: "divergent-thinker",
       mode: "proactive",
-      when: "When brainstorm has >1 candidate direction or user signals openness to alternatives.",
+      runPhase: "post-elicitation",
+      when: "When brainstorm has >1 candidate direction or user signals openness to alternatives. Runs only after the adaptive elicitation Q&A loop converges.",
       purpose: "Expand option-space with alternative framings and approaches before planner/critic convergence.",
       requiresUserGate: false
     },
@@ -596,7 +598,8 @@ const STAGE_AUTO_SUBAGENT_DISPATCH: Record<FlowStage, StageAutoSubagentDispatch[
       agent: "critic",
       mode: "mandatory",
       requiredAtTier: "standard",
-      when: "Always for standard/deep brainstorm to challenge the premise, do-nothing path, and higher-upside alternatives.",
+      runPhase: "post-elicitation",
+      when: "Always for standard/deep brainstorm to challenge the premise, do-nothing path, and higher-upside alternatives. Runs only after the adaptive elicitation Q&A loop converges.",
       purpose: "Attack assumptions and surface non-goals before direction approval, with pre-commitment predictions validated against evidence.",
       requiresUserGate: false,
       skill: "critic-multi-perspective"
@@ -604,7 +607,8 @@ const STAGE_AUTO_SUBAGENT_DISPATCH: Record<FlowStage, StageAutoSubagentDispatch[
     {
       agent: "researcher",
       mode: "proactive",
-      when: "When repository, market, docs, or prior-art context changes the approach set.",
+      runPhase: "post-elicitation",
+      when: "When repository, market, docs, or prior-art context changes the approach set. Runs only after the adaptive elicitation Q&A loop converges.",
       purpose: "Provide search-before-read summaries and context-readiness evidence before large reads or decisions.",
       requiresUserGate: false
     }
@@ -614,14 +618,16 @@ const STAGE_AUTO_SUBAGENT_DISPATCH: Record<FlowStage, StageAutoSubagentDispatch[
       agent: "planner",
       mode: "mandatory",
       requiredAtTier: "standard",
-      when: "Always during scope shaping.",
+      runPhase: "post-elicitation",
+      when: "Always during scope shaping. Runs only after the adaptive elicitation Q&A loop converges and the user has approved the scope contract draft.",
       purpose: "Challenge premise, map alternatives, and produce explicit in/out contract.",
       requiresUserGate: false
     },
     {
       agent: "divergent-thinker",
       mode: "proactive",
-      when: "When scope mode is SCOPE EXPANSION or SELECTIVE EXPANSION, or scope contract has fewer than 3 alternatives considered.",
+      runPhase: "post-elicitation",
+      when: "When scope mode is SCOPE EXPANSION or SELECTIVE EXPANSION, or scope contract has fewer than 3 alternatives considered. Runs only after the adaptive elicitation Q&A loop converges.",
       purpose: "Generate additional framings and approach variants before scope convergence hardens.",
       requiresUserGate: false
     },
@@ -629,7 +635,8 @@ const STAGE_AUTO_SUBAGENT_DISPATCH: Record<FlowStage, StageAutoSubagentDispatch[
       agent: "critic",
       mode: "mandatory",
       requiredAtTier: "standard",
-      when: "Always during scope shaping for standard/deep work.",
+      runPhase: "post-elicitation",
+      when: "Always during scope shaping for standard/deep work. Runs only after the adaptive elicitation Q&A loop converges.",
       purpose: "Test whether the selected scope mode is too timid, too broad, or hiding a smaller useful slice, using pre-commitment predictions and validation.",
       requiresUserGate: false,
       skill: "critic-multi-perspective"
@@ -637,14 +644,16 @@ const STAGE_AUTO_SUBAGENT_DISPATCH: Record<FlowStage, StageAutoSubagentDispatch[
     {
       agent: "researcher",
       mode: "proactive",
-      when: "When churn, prior attempts, reference patterns, or external constraints may change scope boundaries.",
+      runPhase: "post-elicitation",
+      when: "When churn, prior attempts, reference patterns, or external constraints may change scope boundaries. Runs only after the adaptive elicitation Q&A loop converges.",
       purpose: "Summarize search/context findings before the scope contract locks accepted/rejected/deferred ideas.",
       requiresUserGate: false
     },
     {
       agent: "product-discovery",
       mode: "proactive",
-      when: "When scope choices change user value, success metrics, or product positioning (Mode: discovery).",
+      runPhase: "post-elicitation",
+      when: "When scope choices change user value, success metrics, or product positioning (Mode: discovery). Runs only after the adaptive elicitation Q&A loop converges.",
       purpose: "Keep accepted/deferred reference ideas tied to user value and measurable success under product-discovery mode.",
       requiresUserGate: false
     },
@@ -652,14 +661,16 @@ const STAGE_AUTO_SUBAGENT_DISPATCH: Record<FlowStage, StageAutoSubagentDispatch[
       agent: "product-discovery",
       mode: "proactive",
       requiredAtTier: "standard",
-      when: "When scope mode resolves to SCOPE EXPANSION or SELECTIVE EXPANSION (Mode: strategist).",
+      runPhase: "post-elicitation",
+      when: "When scope mode resolves to SCOPE EXPANSION or SELECTIVE EXPANSION (Mode: strategist). Runs only after the adaptive elicitation Q&A loop converges.",
       purpose: "Drive 10x vision and concrete expansion proposals before locking the scope contract via product-discovery strategist mode.",
       requiresUserGate: false
     },
     {
       agent: "scope-guardian-reviewer",
       mode: "proactive",
-      when: "When scope mode is SCOPE EXPANSION or SELECTIVE EXPANSION, or scope contract has many accepted ideas.",
+      runPhase: "post-elicitation",
+      when: "When scope mode is SCOPE EXPANSION or SELECTIVE EXPANSION, or scope contract has many accepted ideas. Runs only after the adaptive elicitation Q&A loop converges.",
       purpose: "Challenge complexity growth and enforce minimum-change scope discipline before scope lock.",
       requiresUserGate: false,
       skill: "document-scope-guard"
@@ -670,7 +681,8 @@ const STAGE_AUTO_SUBAGENT_DISPATCH: Record<FlowStage, StageAutoSubagentDispatch[
       agent: "architect",
       mode: "mandatory",
       requiredAtTier: "standard",
-      when: "Always during design lock.",
+      runPhase: "post-elicitation",
+      when: "Always during design lock. Runs only after the adaptive elicitation Q&A loop converges.",
       purpose: "Stress architecture boundaries, dependency graph, critical path, and spec handoff.",
       requiresUserGate: false
     },
@@ -678,14 +690,16 @@ const STAGE_AUTO_SUBAGENT_DISPATCH: Record<FlowStage, StageAutoSubagentDispatch[
       agent: "test-author",
       mode: "mandatory",
       requiredAtTier: "standard",
-      when: "Always during design lock.",
+      runPhase: "post-elicitation",
+      when: "Always during design lock. Runs only after the adaptive elicitation Q&A loop converges.",
       purpose: "Check test diagram mapping, RED expressibility, assertion quality, and verification routes before implementation.",
       requiresUserGate: false
     },
     {
       agent: "critic",
       mode: "proactive",
-      when: "When architecture alternatives, coupling, cost, or rollback risk remain debatable, or when security/auth/authz trust boundaries are involved.",
+      runPhase: "post-elicitation",
+      when: "When architecture alternatives, coupling, cost, or rollback risk remain debatable, or when security/auth/authz trust boundaries are involved. Runs only after the adaptive elicitation Q&A loop converges.",
       purpose: "Produce a shadow alternative, switch trigger, and cheaper-path challenge for the engineering lock with pre-commitment predictions and validation.",
       requiresUserGate: false,
       skill: "critic-multi-perspective"
@@ -693,21 +707,24 @@ const STAGE_AUTO_SUBAGENT_DISPATCH: Record<FlowStage, StageAutoSubagentDispatch[
     {
       agent: "researcher",
       mode: "proactive",
-      when: "When framework/library docs, repo graph context, or reference contracts may change the design.",
+      runPhase: "post-elicitation",
+      when: "When framework/library docs, repo graph context, or reference contracts may change the design. Runs only after the adaptive elicitation Q&A loop converges.",
       purpose: "Run search-before-read context synthesis before architecture locks.",
       requiresUserGate: false
     },
     {
       agent: "security-reviewer",
       mode: "proactive",
-      when: "When trust boundaries, auth, secrets, sensitive data, or external inputs are involved.",
+      runPhase: "post-elicitation",
+      when: "When trust boundaries, auth, secrets, sensitive data, or external inputs are involved. Runs only after the adaptive elicitation Q&A loop converges.",
       purpose: "Catch design-level security risks before implementation.",
       requiresUserGate: false
     },
     {
       agent: "coherence-reviewer",
       mode: "proactive",
-      when: "When design touches multiple subsystems or includes multiple alternatives sections.",
+      runPhase: "post-elicitation",
+      when: "When design touches multiple subsystems or includes multiple alternatives sections. Runs only after the adaptive elicitation Q&A loop converges.",
       purpose: "Detect internal contradictions, terminology drift, and broken cross-section references in design docs.",
       requiresUserGate: false,
       skill: "document-coherence-pass"
@@ -715,7 +732,8 @@ const STAGE_AUTO_SUBAGENT_DISPATCH: Record<FlowStage, StageAutoSubagentDispatch[
     {
       agent: "feasibility-reviewer",
       mode: "proactive",
-      when: "When design assumes runtime conditions, scaling behavior, or external service availability.",
+      runPhase: "post-elicitation",
+      when: "When design assumes runtime conditions, scaling behavior, or external service availability. Runs only after the adaptive elicitation Q&A loop converges.",
       purpose: "Validate that design assumptions remain feasible in real runtime and rollout constraints.",
       requiresUserGate: false,
       skill: "document-feasibility-pass"

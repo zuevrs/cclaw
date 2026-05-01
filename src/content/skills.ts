@@ -207,18 +207,23 @@ function autoSubagentDispatchBlock(stage: FlowStage, track: FlowTrack): string {
       const userGate = rule.requiresUserGate ? "required" : "not required";
       const dispatchClass = rule.dispatchClass ?? "stage-specialist";
       const returnSchema = rule.returnSchema ?? "agent-default";
-      return `| ${rule.agent} | ${rule.mode} | ${dispatchClass} | ${returnSchema} | ${userGate} | ${rule.when} | ${rule.purpose} |`;
+      const runPhase = rule.runPhase ?? "any";
+      return `| ${rule.agent} | ${rule.mode} | ${runPhase} | ${dispatchClass} | ${returnSchema} | ${userGate} | ${rule.when} | ${rule.purpose} |`;
     })
     .join("\n");
   const mandatory = schema.mandatoryDelegations;
   const mandatoryList = mandatory.length > 0 ? mandatory.map((a) => `\`${a}\``).join(", ") : "none";
   const delegationLogRel = `${RUNTIME_ROOT}/state/delegation-log.json`;
   const delegationEventsRel = `${RUNTIME_ROOT}/state/delegation-events.jsonl`;
+  const hasPostElicitation = rules.some((rule) => rule.runPhase === "post-elicitation");
+  const runPhaseLegend = hasPostElicitation
+    ? `\nRun Phase legend: \`post-elicitation\` = run only AFTER the adaptive elicitation Q&A loop converges (forcing questions answered/skipped/waived OR user stop-signal recorded). \`pre-elicitation\` = run before any user dialogue (rare). \`any\` = no ordering constraint.`
+    : "";
   return `## Automatic Subagent Dispatch
-| Agent | Mode | Class | Return Schema | User Gate | Trigger | Purpose |
-|---|---|---|---|---|---|---|
+| Agent | Mode | Run Phase | Class | Return Schema | User Gate | Trigger | Purpose |
+|---|---|---|---|---|---|---|---|
 ${rows}
-Mandatory: ${mandatoryList}. Record lifecycle rows in \`${delegationLogRel}\` and append-only \`${delegationEventsRel}\` before completion.
+Mandatory: ${mandatoryList}. Record lifecycle rows in \`${delegationLogRel}\` and append-only \`${delegationEventsRel}\` before completion.${runPhaseLegend}
 ### Harness Dispatch Contract — use true harness dispatch: Claude Task, Cursor generic dispatch, OpenCode \`.opencode/agents/<agent>.md\` via Task/@agent, Codex \`.codex/agents/<agent>.toml\`. Do not collapse OpenCode or Codex to role-switch by default. Worker ACK Contract: ACK must include \`spanId\`, \`dispatchId\`, \`dispatchSurface\`, \`agentDefinitionPath\`, and \`ackTs\`; never claim \`fulfillmentMode: "isolated"\` without matching lifecycle proof. Helper: \`.cclaw/hooks/delegation-record.mjs --status=<status> --span-id=<spanId> --dispatch-id=<dispatchId> --dispatch-surface=<surface> --agent-definition-path=<path> --json\`. Exact recipe: scheduled -> launched -> acknowledged -> completed with the same span; completed isolated/generic rows require a prior ACK event for that span or \`--ack-ts=<iso>\`.
 
 ${perHarnessLifecycleRecipeBlock()}`;

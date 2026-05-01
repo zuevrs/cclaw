@@ -81,6 +81,15 @@ export interface StageAutoSubagentDispatch {
   when: string;
   purpose: string;
   requiresUserGate: boolean;
+  /**
+   * When this delegation may run relative to the adaptive elicitation Q&A loop.
+   * - `pre-elicitation` — run before any user dialogue (rare; only for trivial info-gathering).
+   * - `post-elicitation` — run only after the Q&A loop converges (default for brainstorm/scope/design
+   *   so subagents do not preempt the user dialogue).
+   * - `any` — no ordering constraint (default for stages that do not run elicitation:
+   *   spec/plan/tdd/review/ship).
+   */
+  runPhase?: "pre-elicitation" | "post-elicitation" | "any";
   /** Role category used by generated routing tables and lifecycle checks. */
   dispatchClass?: StageSubagentDispatchClass;
   /** Strict status/evidence contract the dispatched agent must return. */
