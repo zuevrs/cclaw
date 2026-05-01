@@ -1320,9 +1320,23 @@ export function validatePreScopeSystemAudit(sectionBody: string): { ok: boolean;
   };
 }
 
-export const DIAGRAM_ARROW_PATTERN = /(?:<--?>|<?==?>|--?>|->>|=>|-\.->|→|⟶|↦)/u;
+export const DIAGRAM_ARROW_PATTERN = /(?:<--?>|<?==?>|--?>|->>|=>|-\.->|→|⟶|↦|={2,}>|-{3,}>|\.{3,}>|-(?:\s-){1,}\s?->)/u;
 export const DIAGRAM_FAILURE_EDGE_PATTERN = /\b(fail(?:ed|ure)?|error|timeout|fallback|degrad(?:e|ed|ation)|retry|backoff|circuit|unavailable|recover(?:y)?|rescue|mitigat(?:e|ion)|rollback|exception|abort|dead[\s-]?letter|dlq)\b/iu;
 export const DIAGRAM_GENERIC_NODE_PATTERN = /\b(service|component|module|system)\s*(?:[A-Z0-9])?\b/iu;
+/**
+ * Wave 25 (v6.1.0) — external-dependency keywords that trigger the
+ * failure-edge requirement. The architecture diagram is allowed to
+ * omit failure edges only when ALL of:
+ *   - Failure Mode Table has zero rows.
+ *   - The diagram body mentions no external-dependency keyword.
+ *
+ * Static landing pages (3 HTML/CSS/JS files, no network) match this:
+ * no failure modes to map, no external systems to fail. The previous
+ * blanket "must include at least one failure-edge" rule produced
+ * ceremony-only failures that the agent worked around with fake
+ * `(timeout)` annotations, defeating the spirit of the rule.
+ */
+export const DIAGRAM_EXTERNAL_DEPENDENCY_PATTERN = /\b(http|https|api|rest|grpc|graphql|websocket|socket|tcp|udp|rpc|fetch|request|database|db|sql|postgres|mysql|sqlite|mongo|redis|cache|queue|kafka|rabbitmq|sqs|sns|s3|cdn|external|upstream|downstream|third[\s-]?party|webhook|cloud|service[\s-]?bus|event[\s-]?bus|broker|stream|topic)\b/iu;
 export const TEST_COMMAND_MARKER_PATTERN = /\b(?:npm|pnpm|yarn|bun|vitest|jest|pytest|go test|cargo test|mvn test|gradle test|dotnet test)\b/iu;
 export const RED_FAILURE_MARKER_PATTERN = /\b(?:fail|failed|failing|assertionerror|cannot find|exception|error|exit code\s*[:=]?\s*[1-9])\b/iu;
 export const GREEN_SUCCESS_MARKER_PATTERN = /\b(?:pass|passed|green|ok|0 failed|exit code\s*[:=]?\s*0)\b/iu;
@@ -1351,16 +1365,161 @@ export function hasLabeledDiagramArrow(lines: string[]): boolean {
   return lines.some((line) => /\|[^|]+\|/u.test(line) || /:\s*[A-Za-z]/u.test(line));
 }
 
+/**
+ * Wave 25 (v6.1.0) — accepted async edge patterns. Returns true when
+ * a line carries any of:
+ *
+ *   - `-.->`, `-->>`, `~~>` (mermaid dotted/messaging arrows)
+ *   - `- - ->` (loose dotted ASCII arrow with optional spaces)
+ *   - `.....>` (3-or-more dots followed by `>`)
+ *   - `\basync\b` text token (label-based)
+ *   - `[async]` bracketed label, `async:` prefix, `async:` cell content
+ *
+ * The error message printed when this fails (see
+ * `validateArchitectureDiagram`) lists every accepted pattern
+ * verbatim so the agent does not have to guess.
+ */
 export function hasAsyncDiagramEdge(lines: string[]): boolean {
-  return lines.some((line) => /-\.->|-->>|~~>|\basync\b/iu.test(line));
+  return lines.some((line) => {
+    if (/-\.->|-->>|~~>/u.test(line)) return true;
+    if (/-(?:\s-){1,}\s?->/u.test(line)) return true;
+    if (/\.{3,}\s*>/u.test(line)) return true;
+    if (/\basync\b/iu.test(line)) return true;
+    if (/\[\s*async\s*\]/iu.test(line)) return true;
+    if (/(?:^|[\s|:])async\s*:/iu.test(line)) return true;
+    return false;
+  });
 }
 
+/**
+ * Wave 25 (v6.1.0) — accepted sync edge patterns. Returns true when a
+ * line carries any of:
+ *
+ *   - `\bsync\b` text token (label-based)
+ *   - `[sync]` bracketed label, `sync:` prefix, `sync:` cell content
+ *   - Solid `-->`, `->`, `=>`, `→`, `⟶`, `↦` arrow that is NOT a known
+ *     dotted/async variant (`-.->`, `-->>`, `~~>`)
+ *   - `===>` (3+ `=` then `>`) and `--->` (3+ `-` then `>`) heavy solid
+ *     arrows
+ */
 export function hasSyncDiagramEdge(lines: string[]): boolean {
   return lines.some((line) => {
-    if (/\bsync\b/iu.test(line)) return true;
+    if (/\bsync\b/iu.test(line) && !/\basync\b/iu.test(line)) return true;
+    if (/\[\s*sync\s*\]/iu.test(line)) return true;
+    if (/(?:^|[\s|:])sync\s*:/iu.test(line)) return true;
+    if (/={2,}>/u.test(line)) return true;
+    if (/-{3,}>/u.test(line)) return true;
     if (!/(-->|->|=>|→|⟶|↦)/u.test(line)) return false;
-    return !/-\.->|-->>|~~>/u.test(line);
+    if (/-\.->|-->>|~~>/u.test(line)) return false;
+    if (/-(?:\s-){1,}\s?->/u.test(line)) return false;
+    return true;
   });
+}
+
+/**
+ * Wave 25 (v6.1.0) — exact accepted-pattern list shown in the error
+ * message when sync/async distinction fails. Keep in sync with
+ * `hasAsyncDiagramEdge` / `hasSyncDiagramEdge` above.
+ */
+export const DIAGRAM_SYNC_ASYNC_ACCEPTED_PATTERNS = [
+  "Solid arrows: `-->`, `->`, `===>`, `--->`, `=>`, `→`, `⟶`, `↦`",
+  "Dotted/async arrows: `-.->`, `-->>`, `~~>`, `- - ->`, `.....>`",
+  "Text labels on the same line: `sync` / `async`",
+  "Bracket labels: `[sync]` / `[async]`",
+  "Cell-prefix labels: `sync:` / `async:` (e.g. `A -->|sync: persist| B`)"
+] as const;
+
+export interface ArchitectureDiagramValidationContext {
+  /** Optional H2 sections map for cross-section checks (e.g. Failure Mode Table presence). */
+  sections?: H2SectionMap | null;
+}
+
+export interface ArchitectureDiagramValidationResult {
+  ok: boolean;
+  details: string;
+}
+
+/**
+ * Wave 25 (v6.1.0) — Architecture Diagram structural check.
+ *
+ * Promoted out of `validateSectionBody` so it can take a `sections`
+ * map and conditionally enforce the failure-edge rule based on
+ * cross-section context (Failure Mode Table presence + diagram body
+ * mentioning external-dependency keywords).
+ */
+export function validateArchitectureDiagram(
+  sectionBody: string,
+  context: ArchitectureDiagramValidationContext = {}
+): ArchitectureDiagramValidationResult {
+  const edgeLines = diagramEdgeLines(sectionBody);
+  if (edgeLines.length === 0) {
+    return {
+      ok: false,
+      details: "Architecture Diagram must include at least one directional edge line (for example `A -->|action| B`)."
+    };
+  }
+  if (!hasLabeledDiagramArrow(edgeLines)) {
+    return {
+      ok: false,
+      details: "Architecture Diagram must label each edge with an action/message (for example `A -->|sync: persist| B`)."
+    };
+  }
+  const genericLine = edgeLines.find((line) => DIAGRAM_GENERIC_NODE_PATTERN.test(line));
+  if (genericLine) {
+    return {
+      ok: false,
+      details: `Architecture Diagram uses a generic node label in edge "${genericLine}". Use concrete component names instead of placeholders like Service/Component.`
+    };
+  }
+  if (!hasAsyncDiagramEdge(edgeLines) || !hasSyncDiagramEdge(edgeLines)) {
+    const acceptedList = DIAGRAM_SYNC_ASYNC_ACCEPTED_PATTERNS.map((line) => `  - ${line}`).join("\n");
+    return {
+      ok: false,
+      details: `Architecture Diagram must distinguish sync vs async edges. Accepted patterns:\n${acceptedList}\nExample line that satisfies both: \`Browser -->|sync: render| App\` plus \`App -.->|async: log| Telemetry\`.`
+    };
+  }
+  if (!shouldEnforceFailureEdge(sectionBody, context)) {
+    return {
+      ok: true,
+      details: "Architecture Diagram includes labeled directional edges with sync/async distinction; failure-edge enforcement skipped (no failure-mode rows and no external-dependency nodes detected)."
+    };
+  }
+  if (!hasFailureEdgeInDiagram(sectionBody)) {
+    return {
+      ok: false,
+      details: "Architecture Diagram must include at least one failure-edge arrow with a failure keyword (for example: timeout, error, fallback, degraded, retry). Mark a failure path in the diagram (e.g. `App -->|timeout| FallbackCache`)."
+    };
+  }
+  return {
+    ok: true,
+    details: "Architecture Diagram contains labeled edges, sync/async distinction, and a failure-edge."
+  };
+}
+
+/**
+ * Wave 25 (v6.1.0) — decide whether the failure-edge enforcement
+ * should fire for the given Architecture Diagram body. Returns
+ * `false` (skip the rule) when BOTH:
+ *   - The artifact's `## Failure Mode Table` (if present) has zero
+ *     data rows OR is absent entirely.
+ *   - The architecture diagram body mentions NO known external-
+ *     dependency keyword (network, db, queue, …).
+ *
+ * Static landing pages (no network, no failure modes) hit this
+ * path. Designs with even one Failure Mode row OR one external
+ * dependency keyword in the diagram fall through to the legacy
+ * blanket failure-edge requirement.
+ */
+function shouldEnforceFailureEdge(
+  diagramBody: string,
+  context: ArchitectureDiagramValidationContext
+): boolean {
+  const sections = context.sections ?? null;
+  const failureModeBody = sections ? sectionBodyByName(sections, "Failure Mode Table") : null;
+  const failureModeRowCount = failureModeBody !== null ? getMarkdownTableRows(failureModeBody).length : 0;
+  if (failureModeRowCount > 0) return true;
+  if (DIAGRAM_EXTERNAL_DEPENDENCY_PATTERN.test(diagramBody)) return true;
+  return false;
 }
 
 export function validateTddRedEvidence(sectionBody: string): { ok: boolean; details: string } {
@@ -1839,10 +1998,21 @@ export function collectPatternHits(
   return hits;
 }
 
+export interface ValidateSectionBodyContext {
+  /**
+   * Wave 25 (v6.1.0) — optional H2 sections map for cross-section
+   * checks (e.g. Architecture Diagram failure-edge enforcement gates
+   * on Failure Mode Table presence). When omitted, cross-section
+   * checks fall back to legacy blanket enforcement.
+   */
+  sections?: H2SectionMap | null;
+}
+
 export function validateSectionBody(
   sectionBody: string,
   rule: string,
-  sectionName: string
+  sectionName: string,
+  context: ValidateSectionBodyContext = {}
 ): { ok: boolean; details: string } {
   const bodyLines = sectionBody.split(/\r?\n/).map((line) => line.trim());
   const meaningful = meaningfulLineCount(sectionBody);
@@ -1957,38 +2127,7 @@ export function validateSectionBody(
     return validateInteractionEdgeCaseMatrix(sectionBody);
   }
   if (sectionNameNormalized === "architecture diagram") {
-    const edgeLines = diagramEdgeLines(sectionBody);
-    if (edgeLines.length === 0) {
-      return {
-        ok: false,
-        details: "Architecture Diagram must include at least one directional edge line (for example `A -->|action| B`)."
-      };
-    }
-    if (!hasLabeledDiagramArrow(edgeLines)) {
-      return {
-        ok: false,
-        details: "Architecture Diagram must label each edge with an action/message (for example `A -->|sync: persist| B`)."
-      };
-    }
-    const genericLine = edgeLines.find((line) => DIAGRAM_GENERIC_NODE_PATTERN.test(line));
-    if (genericLine) {
-      return {
-        ok: false,
-        details: `Architecture Diagram uses a generic node label in edge "${genericLine}". Use concrete component names instead of placeholders like Service/Component.`
-      };
-    }
-    if (!hasAsyncDiagramEdge(edgeLines) || !hasSyncDiagramEdge(edgeLines)) {
-      return {
-        ok: false,
-        details: "Architecture Diagram must distinguish sync vs async edges (for example solid + dotted arrows, or `sync:` and `async:` labels)."
-      };
-    }
-    if (!hasFailureEdgeInDiagram(sectionBody)) {
-      return {
-        ok: false,
-        details: "Architecture Diagram must include at least one failure-edge arrow with a failure keyword (for example: timeout, error, fallback, degraded, retry)."
-      };
-    }
+    return validateArchitectureDiagram(sectionBody, { sections: context.sections ?? null });
   }
 
   if (

@@ -195,7 +195,7 @@ export async function lintArtifact(
         : effectiveRequiredFromOverride;
     const validation = body === null
       ? { ok: false, details: `No ## heading matching required section "${v.section}".` }
-      : validateSectionBody(body, v.validationRule, v.section);
+      : validateSectionBody(body, v.validationRule, v.section, { sections });
     const found = hasHeading && validation.ok;
     findings.push({
       section: v.section,
