@@ -1,6 +1,5 @@
 import path from "node:path";
 import type { Writable } from "node:stream";
-import { readConfig } from "../config.js";
 import { RUNTIME_ROOT } from "../constants.js";
 import {
   computeEarlyLoopStatus,
@@ -92,7 +91,6 @@ export async function runEarlyLoopStatusCommand(
 ): Promise<number> {
   const args = parseArgs(argv);
   const flow = await readFlowState(projectRoot).catch(() => null);
-  const config = await readConfig(projectRoot).catch(() => null);
   const stage = args.stage ?? flow?.currentStage;
   if (!isEarlyLoopStage(stage)) {
     io.stderr.write(
@@ -105,8 +103,7 @@ export async function runEarlyLoopStatusCommand(
   const status = await computeEarlyLoopStatus(
     stage,
     runId,
-    path.join(stateDir(projectRoot), "early-loop-log.jsonl"),
-    { maxIterations: config?.earlyLoop?.maxIterations }
+    path.join(stateDir(projectRoot), "early-loop-log.jsonl")
   );
 
   if (args.write) {

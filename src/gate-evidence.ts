@@ -8,7 +8,6 @@ import {
   validateReviewArmy
 } from "./artifact-linter.js";
 import { resolveArtifactPath } from "./artifact-paths.js";
-import { readConfig } from "./config.js";
 import { RUNTIME_ROOT } from "./constants.js";
 import { stageSchema } from "./content/stage-schema.js";
 import { readDelegationLedger } from "./delegation.js";
@@ -253,14 +252,10 @@ async function readEarlyLoopGateSnapshot(
   }
 
   try {
-    const config = await readConfig(projectRoot);
     const computed = await computeEarlyLoopStatus(
       flowState.currentStage,
       flowState.activeRunId,
-      path.join(stateDir, "early-loop-log.jsonl"),
-      {
-        maxIterations: config.earlyLoop?.maxIterations
-      }
+      path.join(stateDir, "early-loop-log.jsonl")
     );
     return {
       snapshot: {

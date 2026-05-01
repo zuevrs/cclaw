@@ -613,84 +613,13 @@ export default function cclawPlugin(ctx) {
         eventType === "session.updated";
       if (isSessionLifecycle) {
         // Keep OpenCode aligned with Claude/Cursor/Codex: session-start is
-        // the canonical rehydrate path that refreshes derived state such as
-        // Ralph Loop, compound readiness, and hook-error breadcrumbs. The
-        // plugin refreshes its local bootstrap cache afterwards so the system
-        // transform sees the side effects from the hook runtime.
+        // the canonical rehydrate path.
         await runHookScript("session-start", eventData ?? {});
         await refreshBootstrapCache(true);
       }
       if (eventType === "session.idle") {
         await runHookScript("stop-handoff", { loop_count: 0 });
       }
-    },
-    "tool.execute.before": async (input, output) => {
-      const disabled = isCclawDisabled();
-      if (disabled.disabled) {
-        // Explicit user override (CCLAW_DISABLE=1 et al): stay fully out
-        // of the way. Any real problem with the guard chain should not
-        // prevent the user from unblocking themselves.
-        noteDisabled(disabled);
-        return;
-      }
-      const payload = normalizeToolPayload(input, output);
-      if (isSafeReadOnlyTool(payload)) {
-        // Read-only tools bypass guards — they cannot mutate state and
-        // blocking them gives users an unusable session when guards are
-        // misconfigured or cclaw isn't fully initialized.
-        return;
-      }
-      if (!isCclawInitialized()) {
-        // Project has no flow-state or hook runtime: cclaw isn't in use
-        // here. Never block the user's tools because of setup they didn't
-        // ask for. Surface a single advisory so they can notice.
-        noteNotInitialized();
-        return;
-      }
-      const [promptOk, workflowOk] = await Promise.all([
-        runHookScript("prompt-guard", payload),
-        runHookScript("workflow-guard", payload)
-      ]);
-      if (!promptOk || !workflowOk) {
-        const failed = !promptOk ? "prompt-guard" : "workflow-guard";
-        const rawDetail = lastHookStderr.get(failed) || "";
-        const detail = rawDetail.length > 0 ? rawDetail.slice(-400) : "(no stderr captured)";
-        if (looksLikeInfrastructureFailure(rawDetail)) {
-          // Never let a broken hook runtime or misrouted child-process
-          // stderr (yargs help, Node crash, ENOENT, timeout) masquerade
-          // as a policy block. Log the infra hit and let the user keep
-          // working regardless of strictness.
-          logToFile(
-            "infra: " + failed + " non-zero exit with non-guard stderr — treated as infrastructure failure, tool allowed. " +
-            "stderr=" + detail.replace(/\\s+/g, " ").slice(0, 300)
-          );
-          return;
-        }
-        const strictness = await resolveStrictness();
-        if (strictness !== "strict") {
-          // Advisory mode (the default) — every guard refusal is a hint,
-          // not a hard stop. Users report the "failure" as a log line
-          // and keep working. Only \`strictness: strict\` in config.yaml
-          // or CCLAW_STRICTNESS=strict upgrades this to a thrown block.
-          logToFile(
-            "advisory: " + failed + " flagged tool.execute.before (strictness=" +
-            strictness + "). detail=" + detail.replace(/\\s+/g, " ").slice(0, 300)
-          );
-          return;
-        }
-        throw new Error(
-          "cclaw " + failed + " blocked tool.execute.before.\\n" +
-          "Reason: " + detail + "\\n" +
-          "Diagnose: run \`npx cclaw-cli sync\` in project root.\\n" +
-          "Bypass (temporary): export CCLAW_DISABLE=1 before starting OpenCode,\\n" +
-          "or set \`strictness: advisory\` in .cclaw/config.yaml."
-        );
-      }
-    },
-    "tool.execute.after": async (input, output) => {
-      const payload = normalizeToolPayload(input, output);
-      await runHookScript("context-monitor", payload);
-      void refreshBootstrapCache(false);
     },
     "experimental.chat.system.transform": (payload) => {
       const bootstrap = getBootstrap();
