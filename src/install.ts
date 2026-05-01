@@ -42,6 +42,7 @@ import {
 import { META_SKILL_NAME, usingCclawSkillMarkdown } from "./content/meta-skill.js";
 import {
   ARTIFACT_TEMPLATES,
+  CURSOR_GUIDELINES_RULE_MDC,
   CURSOR_WORKFLOW_RULE_MDC,
   RULEBOOK_MARKDOWN,
   buildRulesJson
@@ -95,6 +96,7 @@ export interface SyncOptions {
 
 const OPENCODE_PLUGIN_REL_PATH = ".opencode/plugins/cclaw-plugin.mjs";
 const CURSOR_RULE_REL_PATH = ".cursor/rules/cclaw-workflow.mdc";
+const CURSOR_GUIDELINES_REL_PATH = ".cursor/rules/cclaw-guidelines.mdc";
 const GIT_HOOK_MANAGED_MARKER = "cclaw-managed-git-hook";
 const GIT_HOOK_RUNTIME_REL_DIR = `${RUNTIME_ROOT}/hooks/git`;
 const INIT_SENTINEL_FILE = ".init-in-progress";
@@ -1112,16 +1114,21 @@ async function writeRulebook(projectRoot: string): Promise<void> {
 
 async function writeCursorWorkflowRule(projectRoot: string, harnesses: HarnessId[]): Promise<void> {
   const rulePath = path.join(projectRoot, CURSOR_RULE_REL_PATH);
+  const guidelinesPath = path.join(projectRoot, CURSOR_GUIDELINES_REL_PATH);
   if (!harnesses.includes("cursor")) {
-    try {
-      await fs.rm(rulePath, { force: true });
-    } catch {
-      // best-effort cleanup
+    for (const target of [rulePath, guidelinesPath]) {
+      try {
+        await fs.rm(target, { force: true });
+      } catch {
+        // best-effort cleanup
+      }
     }
     return;
   }
   await ensureDir(path.dirname(rulePath));
   await writeFileSafe(rulePath, CURSOR_WORKFLOW_RULE_MDC);
+  await ensureDir(path.dirname(guidelinesPath));
+  await writeFileSafe(guidelinesPath, CURSOR_GUIDELINES_RULE_MDC);
 }
 
 async function syncDisabledHarnessArtifacts(projectRoot: string, harnesses: HarnessId[]): Promise<void> {
@@ -1695,10 +1702,15 @@ export async function uninstallCclaw(projectRoot: string): Promise<void> {
   }
 
   await removeManagedOpenCodePluginConfig(projectRoot, OPENCODE_PLUGIN_REL_PATH);
-  try {
-    await fs.rm(path.join(projectRoot, CURSOR_RULE_REL_PATH), { force: true });
-  } catch {
-    // best-effort cleanup
+  for (const target of [
+    path.join(projectRoot, CURSOR_RULE_REL_PATH),
+    path.join(projectRoot, CURSOR_GUIDELINES_REL_PATH)
+  ]) {
+    try {
+      await fs.rm(target, { force: true });
+    } catch {
+      // best-effort cleanup
+    }
   }
 
   const managedDirs = [

@@ -1455,6 +1455,61 @@ delegate to a specialized agent or skill if the harness supports it. The primary
 3. Evaluate the specialist output before acting on it — do not blindly apply recommendations
 `;
 
+/**
+ * Always-on baseline rule materialized at `.cursor/rules/cclaw-guidelines.mdc`.
+ * Independent of skill activation — kicks in even when the agent skips
+ * loading skills. Three hard rules cover the most common Wave 22 regressions
+ * (premature draft, premature subagent dispatch, command-line echo to chat).
+ */
+export const CURSOR_GUIDELINES_RULE_MDC = `---
+description: cclaw zero-install behavior baseline (always-on)
+globs:
+  - "**/*"
+alwaysApply: true
+---
+
+<!-- cclaw-managed-cursor-guidelines-rule -->
+
+# Cclaw Baseline Guidelines
+
+These three rules apply to every Cursor agent session in this project,
+regardless of whether stage skills loaded.
+
+## 1. Q&A floor before drafting (brainstorm/scope/design)
+
+Before drafting any \`.cclaw/artifacts/01-brainstorm-*.md\`,
+\`02-scope-*.md\`, or \`03-design-*.md\`, verify that the artifact's
+\`## Q&A Log\` table contains at least the floor count for the active track
+(see \`questionBudgetHint(track, stage).min\`). Walk the stage forcing
+questions one at a time via the \`AskQuestion\` tool. If you find yourself
+proposing a draft after 1-2 questions, STOP and continue the loop.
+
+The \`qa_log_below_min\` linter rule will block \`stage-complete\` when below
+floor unless an explicit user stop-signal row is recorded.
+
+## 2. Mandatory subagents run after Q&A approval
+
+For brainstorm / scope / design, mandatory subagents (
+\`product-discovery\`, \`critic\`, \`planner\`, \`architect\`,
+\`test-author\`) run **only AFTER the user approves the elicitation
+outcome**, never before the Q&A loop converges. Dispatching them early
+preempts the user dialogue and violates the elicitation contract — the
+linter will block stage-complete.
+
+See each stage's "Run Phase: post-elicitation" rows in the materialized
+Automatic Subagent Dispatch table.
+
+## 3. Never echo cclaw command lines to chat
+
+The user does not run cclaw helpers (\`node .cclaw/hooks/...\`) manually.
+NEVER paste full command lines, \`--evidence-json '{...}'\` payloads,
+\`--waive-delegation=...\`, or shell hash commands (\`shasum\`,
+\`sha256sum\`, \`Get-FileHash\`, \`certutil\`, etc.) into chat. Run the
+helper via the tool layer and report only the resulting summary. On
+failure, report a compact human-readable summary plus the helper JSON in
+a single fenced \`json\` block.
+`;
+
 export const CURSOR_WORKFLOW_RULE_MDC = `---
 description: cclaw workflow guardrails for Cursor agent sessions
 globs:
@@ -1503,7 +1558,11 @@ Track-specific skips are allowed only when \`flow-state.track\` + \`skippedStage
 ## Delegation And Approvals
 
 - Machine-only checks in design/plan/tdd/review/ship should auto-dispatch when tooling supports it.
-- Ask for user input only at explicit approval gates (scope mode, plan approval, challenge resolution, ship finalization).
+- **For brainstorm / scope / design stages**: ask user input continuously via adaptive elicitation (one question per turn through the harness-native question tool — \`AskQuestion\` in Cursor). Walk the stage forcing-questions list one-by-one. Do NOT batch and do NOT defer to a single approval gate at the end. The \`qa_log_below_min\` linter rule will block \`stage-complete\` when below floor.
+- **For other stages** (spec/plan/tdd/build/review/ship): ask user input only at explicit approval gates (scope mode, plan approval, challenge resolution, ship finalization), not for routine progress updates.
+- If you find yourself proposing a draft after 1-2 questions in brainstorm/scope/design, STOP — go back to the forcing-questions list and continue.
+- Mandatory subagents in brainstorm/scope/design run only AFTER the user approves the elicitation outcome (see each stage's "Run Phase: post-elicitation" rows). Dispatching them before the Q&A loop converges violates the contract.
+- Never echo cclaw command lines (\`node .cclaw/hooks/...\`, \`--evidence-json '{...}'\`) to chat — the user does not run cclaw manually. Run helpers via the tool layer; report only the resulting summary.
 - If harness capabilities are partial, record waiver reasons in delegation logs.
 
 ## Routing Source Of Truth

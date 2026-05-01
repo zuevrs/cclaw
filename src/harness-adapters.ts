@@ -501,6 +501,14 @@ Before responding to a coding request:
 2. Use \`/cc\` to start, resume, or continue the flow.
 3. If no stage applies, respond normally.
 
+### Cclaw Baseline (always-on)
+
+Three rules apply to every cclaw stage in this project, regardless of which skills loaded:
+
+1. **Q&A floor before drafting** — for brainstorm / scope / design, walk the stage forcing questions one at a time via the harness-native question tool (Claude \`AskUserQuestion\`, Cursor \`AskQuestion\`, Codex \`request_user_input\`, Gemini \`ask_user\`). The \`qa_log_below_min\` linter rule will block \`stage-complete\` when the artifact's \`## Q&A Log\` is below \`questionBudgetHint(track, stage).min\` unless an explicit user stop-signal row is recorded.
+2. **Subagents run after Q&A approval** — mandatory subagents in brainstorm / scope / design (\`product-discovery\`, \`critic\`, \`planner\`, \`architect\`, \`test-author\`) run only AFTER the user approves the elicitation outcome. See each stage's "Run Phase: post-elicitation" rows in the materialized Automatic Subagent Dispatch table.
+3. **No command-line echo to chat** — the user does not run cclaw helpers manually. Never paste \`node .cclaw/hooks/...\` invocations, \`--evidence-json '{...}'\` payloads, or shell hash commands (\`shasum\`, \`sha256sum\`, \`Get-FileHash\`, \`certutil\`, etc.) into chat. Run helpers via the tool layer; report only the resulting summary.
+
 ${ironLawsAgentsMdBlock()}
 
 ### Task Classification (before \`/cc\`)
