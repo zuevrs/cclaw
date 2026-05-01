@@ -62,6 +62,21 @@ const QA_LOG_NO_DECISION_TOKENS: RegExp[] = [
   /\bok\b/iu
 ];
 
+/**
+ * Wave 24 (v6.0.0) — language-neutral forcing-question topic descriptor.
+ *
+ * Each forcing-question row in a stage's checklist now declares topics as
+ * `id: human-readable label` pairs (e.g. `pain: what pain are we solving`).
+ * The `id` (kebab-case ASCII) is the machine-key authors stamp on Q&A Log
+ * rows via `[topic:<id>]` so the linter can verify coverage in ANY natural
+ * language (RU/EN/UA/etc.). Wave 23's English keyword fallback was removed
+ * because it silently mis-reported convergence on RU/UA Q&A.
+ */
+export interface ForcingQuestionTopic {
+  id: string;
+  topic: string;
+}
+
 export interface QaLogFloorOptions {
   /**
    * When true, downgrades the finding to advisory (`required: false`).
@@ -69,11 +84,12 @@ export interface QaLogFloorOptions {
    */
   skipQuestions?: boolean;
   /**
-   * Optional pre-extracted forcing-question topics. When omitted, the
-   * evaluator calls `extractForcingQuestions(stage)` which scans the
-   * stage's checklist row.
+   * Optional pre-extracted forcing-question topic descriptors. When
+   * omitted, the evaluator calls `extractForcingQuestions(stage)` which
+   * scans the stage's checklist row. Strings are accepted as topic IDs
+   * (label = id) for callers that build their own list.
    */
-  forcingQuestions?: string[];
+  forcingQuestions?: ReadonlyArray<ForcingQuestionTopic | string>;
 }
 
 export interface QaLogFloorResult {
@@ -139,17 +155,31 @@ function detectStopSignal(rows: string[][]): boolean {
 }
 
 /**
- * Extract forcing-question topics from a stage's checklist. Looks for
- * the canonical `**<Stage> forcing questions (must be covered or
- * explicitly waived)** — <topic1>, <topic2>, ...` row and tokenizes the
- * comma-separated topic list. Returns trimmed topic strings stripped of
- * leading question words (`what`/`who`/`where`/`which`/`how`/`is`/`do`/`does`).
+ * Validate the kebab-case ASCII shape of a forcing-question topic ID.
+ * Wave 24 enforces that IDs are short, language-neutral identifiers
+ * authors can paste into a `[topic:<id>]` tag without typos.
+ */
+const TOPIC_ID_PATTERN = /^[a-z0-9][a-z0-9-]*$/u;
+
+function isValidTopicId(id: string): boolean {
+  return TOPIC_ID_PATTERN.test(id);
+}
+
+/**
+ * Extract forcing-question topics from a stage's checklist.
+ *
+ * Wave 24 (v6.0.0): only the new `id: topic; id: topic; ...` syntax is
+ * accepted. Each segment must be `<kebab-id>: <human label>` separated
+ * by `;`. The optional surrounding emphasis (`` ` ``) on the id is
+ * tolerated. Throws when the syntax is malformed so authors fix the
+ * stage definition rather than silently shipping un-coverable topics.
  *
  * Returns empty array when no forcing-questions row is present (caller
- * should treat absence as "no forcing requirement" — convergence falls
- * back to the no-new-decisions / stop-signal detectors).
+ * treats absence as "no forcing requirement" — convergence falls back
+ * to the no-new-decisions / stop-signal detectors). Returning [] when
+ * the row exists but lists no segments is also legal.
  */
-export function extractForcingQuestions(stage: FlowStage): string[] {
+export function extractForcingQuestions(stage: FlowStage): ForcingQuestionTopic[] {
   let checklist: readonly string[];
   try {
     checklist = stageSchema(stage).executionModel.checklist;
@@ -161,62 +191,61 @@ export function extractForcingQuestions(stage: FlowStage): string[] {
       row
     );
     if (!headerMatch) continue;
-    const body = (headerMatch[1] ?? "")
-      .replace(/\.$/u, "")
-      .trim();
+    const body = (headerMatch[1] ?? "").trim();
     if (body.length === 0) return [];
-    return body
-      .split(/,\s*(?:and\s+)?|\s+and\s+/iu)
-      .map((topic) => topic.trim())
-      .filter((topic) => topic.length > 0)
-      .map((topic) =>
-        topic
-          .replace(/^[*_`]+|[*_`]+$/gu, "")
-          .replace(
-            /^(?:what|who|where|which|how|is|are|do|does|did|can|will|would|could|should|may|might)\s+/iu,
-            ""
-          )
-          .replace(/\?+$/u, "")
-          .trim()
-      )
-      .filter((topic) => topic.length > 0);
+    // Take everything up to the first sentence-ending `.` followed by a
+    // space + capital letter, OR the trailing instructional sentence
+    // marker. We split on `;` only; commas are part of human labels.
+    // Authors stop the list with `.` so the trailing prose ("Tag the
+    // matching ...") is excluded.
+    const listSection = body.split(/\.\s+(?=[A-Z])/u)[0] ?? body;
+    const segments = listSection
+      .split(/;\s*/u)
+      .map((segment) => segment.trim())
+      .filter((segment) => segment.length > 0);
+    const topics: ForcingQuestionTopic[] = [];
+    for (const segment of segments) {
+      const match = /^[`*_]?\s*([A-Za-z0-9][A-Za-z0-9-]*)\s*[`*_]?\s*:\s*(.+?)\s*$/u.exec(segment);
+      if (!match) {
+        throw new Error(
+          `extractForcingQuestions(${stage}): segment "${segment}" does not match required \`id: topic\` syntax. Wave 24 (v6.0.0) requires \`id: topic; id: topic; ...\` form. Update the checklist row in src/content/stages/${stage}.ts.`
+        );
+      }
+      const id = (match[1] ?? "").toLowerCase();
+      const topic = (match[2] ?? "").replace(/[`*_]+$/u, "").trim();
+      if (!isValidTopicId(id)) {
+        throw new Error(
+          `extractForcingQuestions(${stage}): invalid topic id "${id}" in segment "${segment}". IDs must match ${TOPIC_ID_PATTERN.source}.`
+        );
+      }
+      if (topic.length === 0) {
+        throw new Error(
+          `extractForcingQuestions(${stage}): empty topic label after id "${id}" in segment "${segment}".`
+        );
+      }
+      topics.push({ id, topic });
+    }
+    return topics;
   }
   return [];
 }
 
 /**
- * Build a salient-keyword set for a forcing-question topic. Splits on
- * whitespace, drops short/stop words, lowercases. Used for fuzzy
- * substring match against Q&A Log row content.
+ * Detect whether a Q&A Log row carries an explicit `[topic:<id>]` tag
+ * for the requested forcing-topic id. Matching is case-insensitive on
+ * the id, ASCII-only on the tag boundary. NO keyword fallback: the user
+ * must stamp the tag in any cell of the row.
  */
-function topicKeywords(topic: string): string[] {
-  const STOP_WORDS = new Set([
-    "the", "a", "an", "is", "are", "was", "were", "be", "to", "of", "in", "on", "at",
-    "for", "and", "or", "but", "if", "then", "else", "with", "without", "by", "as",
-    "we", "us", "our", "they", "them", "their", "you", "your", "i", "me", "my",
-    "this", "that", "these", "those", "it", "its", "do", "does", "did", "can",
-    "will", "would", "should", "could", "may", "might", "any", "some", "no", "not",
-    "from", "into", "onto", "upon", "than", "very", "much", "many", "more", "most",
-    "must", "have", "has", "had", "been", "being", "where", "when", "while",
-    "what", "which", "who", "whose", "whom", "why", "how", "non"
-  ]);
-  return topic
-    .toLowerCase()
-    .split(/[\s\-/.,;:()\[\]{}'"`*_]+/u)
-    .map((token) => token.replace(/[^\p{L}\p{N}-]/gu, ""))
-    .filter((token) => token.length >= 3 && !STOP_WORDS.has(token));
-}
-
-function isTopicAddressed(topic: string, rows: string[][]): boolean {
-  const keywords = topicKeywords(topic);
-  if (keywords.length === 0) return true;
-  const minHits = keywords.length === 1 ? 1 : Math.min(2, keywords.length);
+function isTopicAddressed(id: string, rows: string[][]): boolean {
+  const needle = id.toLowerCase();
+  const tagPattern = /\[topic:\s*([A-Za-z0-9][A-Za-z0-9-]*)\s*\]/giu;
   for (const row of rows) {
-    const haystack = row.join(" | ").toLowerCase();
-    let hits = 0;
-    for (const keyword of keywords) {
-      if (haystack.includes(keyword)) hits += 1;
-      if (hits >= minHits) return true;
+    const haystack = row.join(" | ");
+    tagPattern.lastIndex = 0;
+    let match: RegExpExecArray | null;
+    while ((match = tagPattern.exec(haystack)) !== null) {
+      const candidate = (match[1] ?? "").toLowerCase();
+      if (candidate === needle) return true;
     }
   }
   return false;
@@ -271,12 +300,14 @@ export function evaluateQaLogFloor(
   const hasStopSignal = detectStopSignal(rows);
   const skipQuestionsAdvisory = options.skipQuestions === true;
 
-  const forcingTopics = options.forcingQuestions ?? extractForcingQuestions(stage);
+  const forcingTopics: ForcingQuestionTopic[] = (options.forcingQuestions ?? extractForcingQuestions(stage)).map(
+    (entry) => (typeof entry === "string" ? { id: entry, topic: entry } : entry)
+  );
   const forcingCovered: string[] = [];
   const forcingPending: string[] = [];
   for (const topic of forcingTopics) {
-    if (isTopicAddressed(topic, rows)) forcingCovered.push(topic);
-    else forcingPending.push(topic);
+    if (isTopicAddressed(topic.id, rows)) forcingCovered.push(topic.id);
+    else forcingPending.push(topic.id);
   }
 
   const noNewDecisions = lastTwoRowsAllNoDecision(substantiveRows);
@@ -284,6 +315,10 @@ export function evaluateQaLogFloor(
     forcingTopics.length > 0 ? forcingPending.length === 0 : count >= 1;
 
   const ok = allForcingCovered || noNewDecisions || hasStopSignal;
+
+  const pendingIdsBracket = forcingPending.length > 0
+    ? `[${forcingPending.join(", ")}]`
+    : "[none]";
 
   let details: string;
   if (ok) {
@@ -293,20 +328,16 @@ export function evaluateQaLogFloor(
       details = `Q&A Log converged: stage exposes no forcing-questions row and ${count} substantive entry recorded.`;
     } else if (noNewDecisions) {
       const remaining = forcingPending.length > 0
-        ? ` ${forcingPending.length} forcing topic(s) still pending but last 2 rows produced no decision changes (Ralph-Loop convergence).`
+        ? ` ${forcingPending.length} forcing topic IDs still pending: ${pendingIdsBracket} (Ralph-Loop convergence overrode coverage).`
         : " Ralph-Loop convergence detector says no new decision-changing rows in the last 2 turns.";
       details = `Q&A Log converged via no-new-decisions detector at ${count} row(s).${remaining}`;
     } else {
       details = `Q&A Log converged: explicit user stop-signal row recorded at ${count} row(s).`;
     }
   } else if (skipQuestionsAdvisory) {
-    details = `Q&A Log unconverged at ${count} row(s); --skip-questions flag downgraded the finding to advisory. Pending forcing topic(s): ${
-      forcingPending.length > 0 ? forcingPending.join("; ") : "(none extracted)"
-    }.`;
+    details = `Q&A Log unconverged at ${count} row(s); --skip-questions flag downgraded the finding to advisory. Forcing topic IDs pending: ${pendingIdsBracket}.`;
   } else {
-    details = `Q&A Log unconverged at ${count} row(s). Continue the elicitation loop until forcing-question topics are addressed (${
-      forcingPending.length > 0 ? forcingPending.join("; ") : "no forcing topics extracted"
-    }), the last 2 rows record no-decision impact, or an explicit user stop-signal row is appended.`;
+    details = `Q&A Log unconverged at ${count} row(s). Forcing topic IDs pending: ${pendingIdsBracket}. Tag each Q&A row with \`[topic:<id>]\` to mark coverage, append a no-new-decisions pair, or record an explicit user stop-signal row.`;
   }
 
   // Surface advisory budget hint for harness UI without re-introducing a

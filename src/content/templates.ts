@@ -90,9 +90,10 @@ export const ARTIFACT_TEMPLATES: Record<string, string> = {
 ## Q&A Log
 | Turn | Question | User answer (1-line) | Decision impact |
 |---|---|---|---|
-| 1 |  |  |  |
+| 1 |  |  | scope-shaping [topic:pain] |
 
 > Append-only by turn. Add one row after each user answer; do not rewrite prior rows.
+> **Topic tag is MANDATORY for forcing-question rows.** Stamp \`[topic:<id>]\` in the \`Decision impact\` cell so the linter can verify coverage in any natural language (RU/EN/UA/etc.). Brainstorm IDs: \`pain\`, \`direct-path\`, \`do-nothing\`, \`operator\`, \`no-go\`. Multiple tags allowed when one answer covers several topics. Stop-signal rows do NOT need a tag. Wave 24 (v6.0.0) removed the English keyword fallback.
 
 ## Approach Tier
 - Tier: lite | standard | deep
@@ -213,9 +214,10 @@ ${MARKDOWN_CODE_FENCE}
 ## Q&A Log
 | Turn | Question | User answer (1-line) | Decision impact |
 |---|---|---|---|
-| 1 |  |  |  |
+| 1 |  |  | scope-shaping [topic:in-out] |
 
 > Append-only by turn. Add one row after each user answer; do not rewrite prior rows.
+> **Topic tag is MANDATORY for forcing-question rows.** Stamp \`[topic:<id>]\` in the \`Decision impact\` cell so the linter can verify coverage in any natural language (RU/EN/UA/etc.). Scope IDs: \`in-out\`, \`locked-upstream\`, \`rollback\`, \`failure-modes\`. Multiple tags allowed when one answer covers several topics. Stop-signal rows do NOT need a tag. Wave 24 (v6.0.0) removed the English keyword fallback.
 
 ## Pre-Scope System Audit
 | Check | Command | Findings |
@@ -451,9 +453,10 @@ ${MARKDOWN_CODE_FENCE}
 ## Q&A Log
 | Turn | Question | User answer (1-line) | Decision impact |
 |---|---|---|---|
-| 1 |  |  |  |
+| 1 |  |  | architecture-shaping [topic:data-flow] |
 
 > Append-only by turn. Add one row after each user answer; do not rewrite prior rows.
+> **Topic tag is MANDATORY for forcing-question rows.** Stamp \`[topic:<id>]\` in the \`Decision impact\` cell so the linter can verify coverage in any natural language (RU/EN/UA/etc.). Design IDs: \`data-flow\`, \`seams\`, \`invariants\`, \`not-refactor\`. Multiple tags allowed when one answer covers several topics. Stop-signal rows do NOT need a tag. Wave 24 (v6.0.0) removed the English keyword fallback.
 
 ## Codebase Investigation
 | File | Current responsibility | Patterns discovered | Existing fit / reuse candidate |
@@ -1490,16 +1493,19 @@ regardless of whether stage skills loaded.
 
 Before drafting any \`.cclaw/artifacts/01-brainstorm-*.md\`,
 \`02-scope-*.md\`, or \`03-design-*.md\`, verify that the artifact's
-\`## Q&A Log\` table demonstrates Ralph-Loop convergence: forcing-question
-topics are addressed (see the stage's forcing-questions checklist row),
-the last 2 turns produce no new decision-changing impact, OR an explicit
-user stop-signal row is recorded. Walk the stage forcing questions one at
-a time via the \`AskQuestion\` tool. If you find yourself proposing a
-draft after 1-2 questions while forcing topics remain unaddressed, STOP
+\`## Q&A Log\` table demonstrates Ralph-Loop convergence: every
+forcing-question topic id is tagged \`[topic:<id>]\` on at least one row
+(see the stage's forcing-questions checklist for the id list), the last
+2 turns produce no new decision-changing impact, OR an explicit user
+stop-signal row is recorded. Walk the stage forcing questions one at a
+time via the \`AskQuestion\` tool. If you find yourself proposing a
+draft after 1-2 questions while forcing topic ids remain untagged, STOP
 and continue the loop.
 
 The \`qa_log_unconverged\` linter rule will block \`stage-complete\` when
-convergence has not been reached.
+convergence has not been reached. Wave 24 (v6.0.0) made \`[topic:<id>]\`
+tagging mandatory; the English keyword fallback was removed because it
+mis-reported convergence on RU/UA Q&A logs.
 
 ## 2. Mandatory subagents run after Q&A approval
 
@@ -1572,7 +1578,7 @@ Track-specific skips are allowed only when \`flow-state.track\` + \`skippedStage
 ## Delegation And Approvals
 
 - Machine-only checks in design/plan/tdd/review/ship should auto-dispatch when tooling supports it.
-- **For brainstorm / scope / design stages**: ask user input continuously via adaptive elicitation (one question per turn through the harness-native question tool — \`AskQuestion\` in Cursor). Walk the stage forcing-questions list one-by-one. Do NOT batch and do NOT defer to a single approval gate at the end. The \`qa_log_unconverged\` linter rule will block \`stage-complete\` when convergence is not reached (forcing topics unaddressed AND last 2 turns still produce decision-changing rows AND no stop-signal).
+- **For brainstorm / scope / design stages**: ask user input continuously via adaptive elicitation (one question per turn through the harness-native question tool — \`AskQuestion\` in Cursor). Walk the stage forcing-questions list one-by-one. **Tag each Q&A Log row's \`Decision impact\` cell with \`[topic:<id>]\`** (the id is given in the stage's forcing-questions checklist) so the linter can verify coverage in any natural language. Do NOT batch and do NOT defer to a single approval gate at the end. The \`qa_log_unconverged\` linter rule will block \`stage-complete\` when convergence is not reached (forcing topic ids untagged AND last 2 turns still produce decision-changing rows AND no stop-signal).
 - **For other stages** (spec/plan/tdd/build/review/ship): ask user input only at explicit approval gates (scope mode, plan approval, challenge resolution, ship finalization), not for routine progress updates.
 - If you find yourself proposing a draft after 1-2 questions in brainstorm/scope/design, STOP — go back to the forcing-questions list and continue.
 - Mandatory subagents in brainstorm/scope/design run only AFTER the user approves the elicitation outcome (see each stage's "Run Phase: post-elicitation" rows). Dispatching them before the Q&A loop converges violates the contract.

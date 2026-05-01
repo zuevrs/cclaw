@@ -52,7 +52,7 @@ These behaviors are the exact reason this skill exists. The linter will block yo
 - Ask exactly one question per turn and wait for the answer before asking the next one.
 - Use harness-native question tools first; prose fallback is allowed only when the tool is unavailable.
 - Keep a running Q&A trace in the active artifact under \`## Q&A Log\` in \`${RUNTIME_ROOT}/artifacts/\` as append-only rows.
-- **Convergence floor**: do NOT advance the stage (do NOT call \`stage-complete.mjs\`) until Q&A converges. Convergence is reached when ANY of: (a) all forcing-question topics are addressed in \`## Q&A Log\`, (b) the last 2 substantive rows produce no decision-changing impact (\`skip\`/\`continue\`/\`no-change\`/\`done\`), or (c) an explicit user stop-signal row is recorded. The linter rule \`qa_log_unconverged\` enforces this; \`stage-complete\` will fail otherwise. Wave 23 (v5.0.0) replaced the fixed-count floor with this convergence detector.
+- **Convergence floor**: do NOT advance the stage (do NOT call \`stage-complete.mjs\`) until Q&A converges. Convergence is reached when ANY of: (a) every forcing-question topic id is tagged \`[topic:<id>]\` on at least one \`## Q&A Log\` row, (b) the last 2 substantive rows produce no decision-changing impact (\`skip\`/\`continue\`/\`no-change\`/\`done\`), or (c) an explicit user stop-signal row is recorded. The linter rule \`qa_log_unconverged\` enforces this; \`stage-complete\` will fail otherwise. Wave 24 (v6.0.0) made the topic tag MANDATORY (no English keyword fallback) so the gate works in any natural language.
 - **NEVER run shell hash commands** (\`shasum\`, \`sha256sum\`, \`md5sum\`, \`Get-FileHash\`, \`certutil\`, etc.) to compute artifact hashes. If a linter ever asks you for a hash, that is a linter bug — report failure and stop, do not auto-fix in bash.
 - **NEVER paste cclaw command lines into chat** (e.g. \`node .cclaw/hooks/stage-complete.mjs ... --evidence-json '{...}'\`). Run them via the tool layer; report only the resulting summary. The user does not run cclaw manually and seeing the command line is noise.
 
@@ -132,24 +132,38 @@ How to use the columns:
 - \`skipped (already covered: turn N)\` — answered implicitly by an earlier reply; cite the turn.
 - \`waived (user override)\` — user explicitly waived this question.
 
-Stage forcing question lists:
+### Topic tagging (MANDATORY for forcing-question rows)
+
+Each forcing question has a stable topic id (kebab-case ASCII, e.g. \`pain\`, \`do-nothing\`, \`data-flow\`). Tag the matching Q&A Log row's \`Decision impact\` cell with \`[topic:<id>]\` so the linter can verify coverage in any natural language. This is a **HARD requirement** in Wave 24 (v6.0.0): the linter no longer keyword-matches English question prose, so an un-tagged row does NOT count toward coverage even if the answer fully addresses the topic.
+
+RU example (after asking \`pain\` in Russian):
+
+\`\`\`
+| Turn | Question | User answer (1-line) | Decision impact |
+|---|---|---|---|
+| 1 | Какую боль мы решаем? | Регистрация занимает 30 минут. | scope-shaping [topic:pain] |
+\`\`\`
+
+Multiple tags in one row are allowed when one answer covers several topics: \`[topic:pain] [topic:do-nothing]\`. Stop-signal rows do NOT need a tag.
+
+Stage forcing question lists (id → topic):
 
 - **Brainstorm**:
-  - What pain are we solving?
-  - What is the most direct path?
-  - What happens if we do nothing?
-  - Who is the operator/user impacted first?
-  - What are non-negotiable no-go boundaries?
+  - \`pain\` — What pain are we solving?
+  - \`direct-path\` — What is the most direct path?
+  - \`do-nothing\` — What happens if we do nothing?
+  - \`operator\` — Who is the operator/user impacted first?
+  - \`no-go\` — What are non-negotiable no-go boundaries?
 - **Scope**:
-  - What is definitely in and definitely out?
-  - Which decisions are already locked upstream?
-  - What is the rollback path if this fails?
-  - What are the top failure modes we must design for?
+  - \`in-out\` — What is definitely in and definitely out?
+  - \`locked-upstream\` — Which decisions are already locked upstream?
+  - \`rollback\` — What is the rollback path if this fails?
+  - \`failure-modes\` — What are the top failure modes we must design for?
 - **Design**:
-  - What is the data flow end-to-end?
-  - Where are the seams/interfaces and ownership boundaries?
-  - Which invariants must always hold?
-  - What will we explicitly NOT refactor now?
+  - \`data-flow\` — What is the data flow end-to-end?
+  - \`seams\` — Where are the seams/interfaces and ownership boundaries?
+  - \`invariants\` — Which invariants must always hold?
+  - \`not-refactor\` — What will we explicitly NOT refactor now?
 
 ## One-Way Override (Irreversible Decisions)
 
