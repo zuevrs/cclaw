@@ -1,5 +1,61 @@
 # Changelog
 
+## 5.0.0 — Dedupe stages, Ralph-Loop convergence Q&A, trim review, forward idea evidence
+
+### Breaking Changes
+
+- **`qa_log_below_min` linter rule renamed to `qa_log_unconverged`.** The fixed-count Q&A floor (10 / 5 / 2 substantive rows for standard/medium/quick) is replaced with a Ralph-Loop convergence detector. Stage closes Q&A when ANY of the following hold:
+  - All forcing-question topics from the stage's checklist (the `**<Stage> forcing questions (must be covered or explicitly waived)**` row) appear addressed in `## Q&A Log` (substring keyword match in question/answer columns).
+  - The last 2 substantive rows have `decision_impact` tagged `skip` / `continue` / `no-change` / `done` (no new decision-changing rows — Ralph-Loop convergence).
+  - An explicit user stop-signal row is recorded (`QA_LOG_STOP_SIGNAL_PATTERNS` keep working: `достаточно`, `хватит`, `enough`, `stop-signal`, `move on`, `досить`, `вистачить`, `рухаємось далі`, etc.).
+  - `--skip-questions` flag was persisted (downgrades to advisory).
+  - The stage exposes no forcing-questions row AND the artifact has at least one substantive row.
+- **`CCLAW_ELICITATION_FLOOR=advisory` env override removed.** The Ralph-Loop convergence detector subsumes the use case; `--skip-questions` remains the documented escape hatch.
+- **Lite-tier short-circuit removed.** `quick` track no longer relies on a "1 substantive row passes" rule; convergence semantics handle it (no forcing-questions row + 1 row = converged).
+- **`min` and `liteShortCircuit` fields on `QaLogFloorResult` / `QaLogFloorSignal` are now legacy.** They always report `0` / `false` for harness UI compatibility. Harness UIs may render `questionBudgetHint(track, stage).recommended` separately as a soft hint.
+
+### Removed — pure stage duplications (variant A "dedupe only")
+
+The 8-stage structure (`brainstorm / scope / design / spec / plan / tdd / review / ship`) is unchanged. Pure duplications between stages are reassigned to a single owner; downstream stages cite via `Upstream Handoff`.
+
+- **Premise → brainstorm-only.** Scope `## Premise Challenge` removed (replaced with optional `## Premise Drift` for new evidence). Scope cites brainstorm's Premise Check via `Upstream Handoff`. The `Premise Challenge` validator and `validatePremiseChallenge` linter helper are gone.
+- **Architecture-tier choice → design-only.** Scope `## Implementation Alternatives` removed; scope only locks `## Scope Mode` (HOLD / SELECTIVE / EXPAND / REDUCE). Design owns the architecture tier in `## Architecture Decision Record (ADR)` + `## Engineering Lock`.
+- **Out-of-scope → scope-only.** Design `## NOT in scope` removed; design's `Upstream Handoff` cites scope's `## Out of Scope`. Brainstorm's `## Not Doing` (different altitude — product non-goals) stays.
+- **Repo audit → scope-only.** Design `## What Already Exists` replaced with `## Blast-radius Diff` (only `git diff` since the scope-artifact baseline SHA, not a full repo audit). Scope owns the full audit in `## Pre-Scope System Audit`.
+- **Constraints / Assumptions split.** Scope owns external/regulatory/system/integration constraints in `## Scope Contract`. Spec owns testable assumptions in `## Assumptions Before Finalization` (with validation path + disposition); spec's `## Constraints and Assumptions` is now carry-forward-only.
+
+### Trimmed — `review` / `tdd` overlap
+
+- `tdd.Per-Slice Review` OWNS severity-classified findings WITHIN one slice (correctness, edge cases, regression for that slice).
+- `review` OWNS whole-diff Layer 1 (spec compliance) plus Layer 2 cross-slice integration findings (cross-slice correctness, security sweep, dependency/version audit, observability, external-safety).
+- Performance + architecture findings are CARRY-FORWARD from `03-design-<slug>.md` (`Performance Budget`, `Architecture Decision Record`); they are NOT re-derived in review.
+- New `review.no_cross_artifact_duplication` linter rule (P1, required): when a finding ID (`F-NN`) appears in both `06-tdd.md > Per-Slice Review` and `07-review-army.json`, severity and disposition MUST match. Review may cite tdd findings; never re-classify them.
+- The Performance Lens and Architecture Lens entries in `review.reviewLens` become carry-forward summaries that cite design instead of independent specialist passes.
+
+### Added — `/cc-ideate` -> brainstorm evidence forwarding
+
+- `cclaw internal start-flow` accepts new `--from-idea-artifact=<path>` and `--from-idea-candidate=I-<n>` flags. They persist `interactionHints.brainstorm.{fromIdeaArtifact, fromIdeaCandidateId, recordedAt}` into atomic flow-state on session start. `--from-idea-candidate` requires `--from-idea-artifact`.
+- `StageInteractionHint` schema gained `fromIdeaArtifact?: string` and `fromIdeaCandidateId?: string`. Both round-trip through `sanitizeInteractionHints`.
+- New brainstorm checklist row: **"Idea-evidence carry-forward (when applicable)."** When the hint is set, brainstorm reuses the chosen `I-#` row's `Title / Why-now / Expected impact / Risk / Counter-argument` as the `baseline` Approach + the seed of `## Selected Direction`. Only the higher-upside `challenger` row(s) are newly generated; the divergent + critique + rank work from `/cc-ideate` is not redone.
+- New optional `## Idea Evidence Carry-forward` artifact section in `01-brainstorm-<slug>.md`. New brainstorm linter finding `brainstorm.idea_evidence_carry_forward` (P1, required) blocks `stage-complete` when the hint is set but the section is missing or fails to cite the artifact path / candidate id; suppressed entirely when the hint is absent.
+- `/cc-ideate` skill Phase 6 ("Start /cc on the top recommendation") and the contract Phase 9 handoff prose now explicitly call out the new start-flow flags so the harness shim cannot drop the candidate evidence on the floor.
+
+### Added — supporting infrastructure
+
+- `extractForcingQuestions(stage)` helper exported from `src/artifact-linter/shared.ts`. Scans the stage's `executionModel.checklist` for the canonical forcing-questions row and tokenizes the comma-separated topics.
+- `evaluateQaLogFloor` returns `forcingCovered: string[]`, `forcingPending: string[]`, and `noNewDecisions: boolean` for richer harness diagnostics.
+- New `checkReviewTddNoCrossArtifactDuplication` exported from `artifact-linter` for the cross-artifact-duplication guard.
+
+### Migration
+
+- **Linter rule rename.** Any external tooling that grepped for `qa_log_below_min` in `cclaw` output must be updated to match `qa_log_unconverged`.
+- **Removed env override.** Replace `CCLAW_ELICITATION_FLOOR=advisory` usages with the documented `--skip-questions` flag (or fold into the convergence path: append a stop-signal row).
+- **Scope artifacts.** If your `02-scope-<slug>.md` carries `## Premise Challenge`, `## Implementation Alternatives`, leave them in place — they are no longer linter-required and are simply ignored. New scope artifacts should rely on `## Scope Contract` (with explicit `Constraints` and `Design handoff` bullets) and the optional `## Premise Drift` for new evidence.
+- **Design artifacts.** `## NOT in scope` and `## What Already Exists` sections in legacy `03-design-<slug>.md` are no longer linter-required. New design artifacts use `## Blast-radius Diff` (cite the scope-artifact head SHA) and rely on scope for the out-of-scope contract.
+- **Spec artifacts.** Migrate constraint statements from `## Constraints and Assumptions` to scope's `## Scope Contract > Constraints`; keep only testable assumptions in spec's `## Assumptions Before Finalization`.
+- **Review artifacts.** Performance and architecture findings should now appear as carry-forward citations to `03-design-<slug>.md` rather than independent Layer 2 entries. If a finding ID is shared with tdd Per-Slice Review, severity and disposition MUST match (cross-artifact-duplication linter blocks otherwise).
+- **`/cc-ideate` handoff.** Harness shims that translate `/cc <phrase>` into `start-flow` should plumb the originating idea artifact path and candidate id via the new flags. Without the flags, brainstorm still works the old way (no carry-forward enforced).
+
 ## 4.0.0 — Enforce adaptive elicitation
 
 ### Breaking Changes
