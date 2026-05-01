@@ -42,11 +42,33 @@ export interface NodeHookRuntimeOptions {
    * Derived from `config.earlyLoop.maxIterations`.
    */
   earlyLoopMaxIterations?: number;
+  /**
+   * Default hook profile baked at sync/install time (`minimal|standard|strict`).
+   * Runtime can override via env/config.
+   */
+  hookProfile?: "minimal" | "standard" | "strict";
+  /**
+   * Default disabled hook list baked at sync/install time.
+   * Runtime can override via env/config.
+   */
+  disabledHooks?: string[];
 }
 
 function normalizePatterns(patterns: string[] | undefined, fallback: string[]): string[] {
   if (!patterns || patterns.length === 0) return [...fallback];
   return patterns.map((value) => value.trim()).filter((value) => value.length > 0);
+}
+
+function normalizeDisabledHooks(hooks: string[] | undefined): string[] {
+  if (!Array.isArray(hooks)) return [];
+  const out: string[] = [];
+  for (const raw of hooks) {
+    if (typeof raw !== "string") continue;
+    const normalized = raw.trim().toLowerCase();
+    if (normalized.length === 0) continue;
+    if (!out.includes(normalized)) out.push(normalized);
+  }
+  return out;
 }
 
 interface GeneratedCliRuntime {
@@ -105,6 +127,10 @@ export function nodeHookRuntimeScript(options: NodeHookRuntimeOptions = {}): str
     options.earlyLoopMaxIterations >= 1
       ? options.earlyLoopMaxIterations
       : DEFAULT_EARLY_LOOP_MAX_ITERATIONS;
+  const defaultHookProfile = options.hookProfile === "minimal" || options.hookProfile === "strict"
+    ? options.hookProfile
+    : "standard";
+  const defaultDisabledHooks = normalizeDisabledHooks(options.disabledHooks);
   const cliRuntime = resolveCliRuntimeForGeneratedHook();
 
   return `#!/usr/bin/env node
@@ -132,6 +158,14 @@ const EARLY_LOOP_ENABLED = ${JSON.stringify(earlyLoopEnabled)};
 const EARLY_LOOP_MAX_ITERATIONS = ${JSON.stringify(earlyLoopMaxIterations)};
 const CCLAW_CLI_ENTRYPOINT = ${JSON.stringify(cliRuntime.entrypoint)};
 const CCLAW_CLI_ARGS_PREFIX = ${JSON.stringify(cliRuntime.argsPrefix)};
+const DEFAULT_HOOK_PROFILE = ${JSON.stringify(defaultHookProfile)};
+const DEFAULT_DISABLED_HOOKS = ${JSON.stringify(defaultDisabledHooks)};
+const HOOK_PROFILE_VALUES = new Set(["minimal", "standard", "strict"]);
+const MINIMAL_PROFILE_ALLOWED_HOOKS = new Set([
+  "session-start",
+  "session-start-refresh",
+  "stop-handoff"
+]);
 const SESSION_DIGEST_SCHEMA_VERSION = 1;
 const SESSION_DIGEST_CACHE_FILE = "session-digest.json";
 const SESSION_DIGEST_REFRESH_MARKER_FILE = "session-digest.refresh.json";
@@ -140,7 +174,119 @@ const SESSION_DIGEST_REFRESH_STALE_MS = 30000;
 ${SHARED_FLOW_AND_KNOWLEDGE_SNIPPETS}
 ${SHARED_STAGE_SUPPORT_SNIPPETS}
 
+let ACTIVE_HOOK_PROFILE = DEFAULT_HOOK_PROFILE;
+
+function normalizeHookToken(value) {
+  return String(value == null ? "" : value).trim().toLowerCase();
+}
+
+function parseHookProfile(rawValue, fallback = "standard") {
+  const normalized = normalizeHookToken(rawValue);
+  if (HOOK_PROFILE_VALUES.has(normalized)) return normalized;
+  return fallback;
+}
+
+function parseDisabledHooksCsv(rawValue) {
+  const raw = typeof rawValue === "string" ? rawValue : "";
+  if (raw.trim().length === 0) return [];
+  const out = [];
+  for (const token of raw.split(",")) {
+    const normalized = normalizeHookToken(token);
+    if (normalized.length === 0) continue;
+    if (!out.includes(normalized)) out.push(normalized);
+  }
+  return out;
+}
+
+function parseInlineYamlList(rawValue) {
+  const raw = typeof rawValue === "string" ? rawValue.trim() : "";
+  if (!raw.startsWith("[") || !raw.endsWith("]")) return [];
+  const inside = raw.slice(1, -1).trim();
+  if (inside.length === 0) return [];
+  return inside.split(",").map((token) => normalizeHookToken(token.replace(/^['"]|['"]$/g, ""))).filter((token) => token.length > 0);
+}
+
+function parseConfigHookProfile(rawYaml) {
+  if (typeof rawYaml !== "string" || rawYaml.trim().length === 0) {
+    return "";
+  }
+  const match = rawYaml.match(/^\\s*hookProfile\\s*:\\s*([A-Za-z0-9_-]+)\\s*$/m);
+  if (!match || typeof match[1] !== "string") return "";
+  return parseHookProfile(match[1], "");
+}
+
+function parseConfigDisabledHooks(rawYaml) {
+  if (typeof rawYaml !== "string" || rawYaml.trim().length === 0) {
+    return [];
+  }
+  const lines = rawYaml.split(/\\r?\\n/u);
+  const out = [];
+  for (let i = 0; i < lines.length; i += 1) {
+    const line = lines[i];
+    const inlineMatch = line.match(/^\\s*disabledHooks\\s*:\\s*(\\[[^\\]]*\\])\\s*$/u);
+    if (inlineMatch) {
+      for (const value of parseInlineYamlList(inlineMatch[1])) {
+        if (!out.includes(value)) out.push(value);
+      }
+      continue;
+    }
+    const blockMatch = line.match(/^(\\s*)disabledHooks\\s*:\\s*$/u);
+    if (!blockMatch) continue;
+    const baseIndent = blockMatch[1] ? blockMatch[1].length : 0;
+    for (let j = i + 1; j < lines.length; j += 1) {
+      const nextLine = lines[j];
+      const indent = (nextLine.match(/^(\\s*)/u)?.[1].length ?? 0);
+      const trimmed = nextLine.trim();
+      if (trimmed.length === 0) continue;
+      if (indent <= baseIndent) break;
+      const itemMatch = nextLine.match(/^\\s*-\\s*(.+?)\\s*$/u);
+      if (!itemMatch) continue;
+      const normalized = normalizeHookToken(itemMatch[1].replace(/^['"]|['"]$/g, ""));
+      if (normalized.length === 0) continue;
+      if (!out.includes(normalized)) out.push(normalized);
+    }
+  }
+  return out;
+}
+
+async function readConfigHookPolicy(root) {
+  const configPath = path.join(root, RUNTIME_ROOT, "config.yaml");
+  const raw = await readTextFile(configPath, "");
+  const profile = parseConfigHookProfile(raw);
+  const disabledHooks = parseConfigDisabledHooks(raw);
+  return { profile, disabledHooks };
+}
+
+async function resolveHookPolicy(root) {
+  const fromConfig = await readConfigHookPolicy(root);
+  const configProfile = parseHookProfile(fromConfig.profile, DEFAULT_HOOK_PROFILE);
+  const configDisabledHooks = Array.isArray(fromConfig.disabledHooks) && fromConfig.disabledHooks.length > 0
+    ? fromConfig.disabledHooks
+    : DEFAULT_DISABLED_HOOKS;
+
+  const envProfileRaw = process.env.CCLAW_HOOK_PROFILE;
+  const envProfile = parseHookProfile(envProfileRaw, "");
+  const profile = envProfile.length > 0 ? envProfile : configProfile;
+
+  const envDisabledRaw = process.env.CCLAW_DISABLED_HOOKS;
+  const envDisabledHooks = parseDisabledHooksCsv(envDisabledRaw);
+  const disabledHooks = envDisabledHooks.length > 0 ? envDisabledHooks : configDisabledHooks;
+  const disabled = new Set(disabledHooks.map((value) => normalizeHookToken(value)));
+  return { profile, disabled };
+}
+
+function hookDisabledByProfile(profile, hookName) {
+  if (profile !== "minimal") return false;
+  return !MINIMAL_PROFILE_ALLOWED_HOOKS.has(hookName);
+}
+
+function isHookDisabled(policy, hookName) {
+  if (policy.disabled.has(hookName)) return true;
+  return hookDisabledByProfile(policy.profile, hookName);
+}
+
 function resolveStrictness() {
+  if (ACTIVE_HOOK_PROFILE === "strict") return "strict";
   return process.env.CCLAW_STRICTNESS === "strict" ? "strict" : DEFAULT_STRICTNESS;
 }
 
@@ -1377,6 +1523,77 @@ function stopLawIsStrict(ironLawsObj) {
   );
 }
 
+const STOP_BLOCK_LIMIT_PER_TRANSCRIPT = 2;
+
+function asBoolean(value) {
+  if (value === true || value === false) return value;
+  if (typeof value === "number") return Number.isFinite(value) && value !== 0;
+  if (typeof value !== "string") return false;
+  const normalized = value.trim().toLowerCase();
+  if (normalized.length === 0) return false;
+  return ["1", "true", "yes", "on"].includes(normalized);
+}
+
+function stringTokenHit(value, tokens) {
+  const normalized = normalizeText(value).toLowerCase();
+  if (normalized.length === 0) return false;
+  return tokens.some((token) => normalized.includes(token));
+}
+
+function sanitizeStopSessionKey(raw) {
+  const normalized = normalizeText(raw)
+    .toLowerCase()
+    .replace(/[^a-z0-9._-]+/gu, "-")
+    .replace(/^-+|-+$/gu, "");
+  return normalized.length > 0 ? normalized.slice(0, 96) : "global";
+}
+
+function extractStopSignals(input, fallbackSessionKey) {
+  const event = toObject(input.event) || {};
+  const session = toObject(input.session) || {};
+  const contextLimit =
+    asBoolean(input.context_limit) ||
+    asBoolean(input.contextLimit) ||
+    asBoolean(event.context_limit) ||
+    asBoolean(event.contextLimit) ||
+    stringTokenHit(input.reason, ["context_limit", "context limit"]) ||
+    stringTokenHit(event.reason, ["context_limit", "context limit"]) ||
+    stringTokenHit(input.stop_reason, ["context_limit", "context limit"]) ||
+    stringTokenHit(event.stop_reason, ["context_limit", "context limit"]);
+  const userAbort =
+    asBoolean(input.user_abort) ||
+    asBoolean(input.userAbort) ||
+    asBoolean(input.user_cancelled) ||
+    asBoolean(input.userCancelled) ||
+    asBoolean(event.user_abort) ||
+    asBoolean(event.userAbort) ||
+    stringTokenHit(input.reason, ["user_abort", "user abort", "cancelled by user", "stop button", "ctrl+c"]) ||
+    stringTokenHit(event.reason, ["user_abort", "user abort", "cancelled by user", "stop button", "ctrl+c"]) ||
+    stringTokenHit(input.stop_reason, ["user_abort", "user abort", "cancelled by user", "stop button", "ctrl+c"]) ||
+    stringTokenHit(event.stop_reason, ["user_abort", "user abort", "cancelled by user", "stop button", "ctrl+c"]);
+  const stopHookActive =
+    asBoolean(input.stop_hook_active) ||
+    asBoolean(input.stopHookActive) ||
+    asBoolean(event.stop_hook_active) ||
+    asBoolean(event.stopHookActive);
+
+  const sessionKeyCandidate =
+    (typeof input.transcript_id === "string" && input.transcript_id) ||
+    (typeof input.transcriptId === "string" && input.transcriptId) ||
+    (typeof input.session_id === "string" && input.session_id) ||
+    (typeof input.sessionId === "string" && input.sessionId) ||
+    (typeof session.id === "string" && session.id) ||
+    fallbackSessionKey;
+  const sessionKey = sanitizeStopSessionKey(sessionKeyCandidate);
+
+  return {
+    contextLimit,
+    userAbort,
+    stopHookActive,
+    sessionKey
+  };
+}
+
 async function handleStopHandoff(runtime) {
   const state = await readFlowState(runtime.root);
   const stateDir = path.join(runtime.root, RUNTIME_ROOT, "state");
@@ -1389,11 +1606,40 @@ async function handleStopHandoff(runtime) {
 
   const dirtyState = await isGitDirty(runtime.root);
   const strictStop = stopLawIsStrict(toObject(await readJsonFile(ironLawsFile, {})) || {});
-  if (dirtyState === "dirty" && strictStop) {
+  const stopSignals = extractStopSignals(input, "run-" + state.activeRunId);
+  const safetyBypassActive = stopSignals.stopHookActive || stopSignals.userAbort || stopSignals.contextLimit;
+  if (dirtyState === "dirty" && strictStop && !safetyBypassActive) {
+    const stopBlocksPath = path.join(stateDir, "stop-blocks-" + stopSignals.sessionKey + ".json");
+    const prior = toObject(await readJsonFile(stopBlocksPath, {})) || {};
+    const priorCount =
+      typeof prior.blockCount === "number" && Number.isFinite(prior.blockCount)
+        ? Math.max(0, Math.trunc(prior.blockCount))
+        : 0;
+    if (priorCount < STOP_BLOCK_LIMIT_PER_TRANSCRIPT) {
+      const nextCount = priorCount + 1;
+      await writeJsonFile(stopBlocksPath, {
+        schemaVersion: 1,
+        sessionKey: stopSignals.sessionKey,
+        blockCount: nextCount,
+        updatedAt: new Date().toISOString()
+      });
+      process.stderr.write(
+        '[cclaw] Stop blocked by iron law "stop-clean-or-handoff": working tree is dirty. Commit/revert changes or record blockers in the current artifact before ending the session.\\n'
+      );
+      return 1;
+    }
     process.stderr.write(
-      '[cclaw] Stop blocked by iron law "stop-clean-or-handoff": working tree is dirty. Commit/revert changes or record blockers in the current artifact before ending the session.\\n'
+      '[cclaw] Stop advisory: dirty working tree detected, but block limit reached for this transcript (max 2). Continuing with handoff reminder only.\\n'
     );
-    return 1;
+  } else if (dirtyState === "dirty" && strictStop && safetyBypassActive) {
+    const reason = stopSignals.stopHookActive
+      ? "stop_hook_active"
+      : stopSignals.userAbort
+        ? "user_abort"
+        : "context_limit";
+    process.stderr.write(
+      "[cclaw] Stop advisory: bypassing strict stop block due to safety rule (" + reason + ").\\n"
+    );
   }
 
   const closeoutObj = toObject(state.raw.closeout) || {};
@@ -1983,6 +2229,15 @@ async function main() {
     // No .cclaw/ runtime in any candidate root — this directory is not
     // initialized for cclaw. Exit 0 silently so hooks never block harnesses
     // that run in unrelated repos; users initialize with \`cclaw init\`.
+    process.exitCode = 0;
+    return;
+  }
+  const hookPolicy = await resolveHookPolicy(root);
+  ACTIVE_HOOK_PROFILE = hookPolicy.profile;
+  if (isHookDisabled(hookPolicy, hookName)) {
+    if (hookName === "prompt-pipeline") {
+      process.stdout.write(JSON.stringify({ ok: true, skipped: true }) + "\\n");
+    }
     process.exitCode = 0;
     return;
   }

@@ -45,6 +45,8 @@ export interface HookBinding {
   event: string;
   matcher?: string;
   timeout?: number;
+  /** Optional harness UI status line while this hook runs. */
+  statusMessage?: string;
   /**
    * Within a single (harness, event) group, entries are sorted by
    * `priority` ASC, ties broken by manifest-declaration order. Use
@@ -88,7 +90,13 @@ export const HOOK_MANIFEST: readonly HookHandlerSpec[] = [
         { event: "sessionClear" },
         { event: "sessionCompact" }
       ],
-      codex: [{ event: "SessionStart", matcher: "startup|resume" }]
+      codex: [
+        {
+          event: "SessionStart",
+          matcher: "startup|resume",
+          statusMessage: "Running cclaw session startup checks"
+        }
+      ]
     }
   },
   {
@@ -113,7 +121,13 @@ export const HOOK_MANIFEST: readonly HookHandlerSpec[] = [
     semantic: null,
     bindings: {
       cursor: [{ event: "preToolUse", matcher: "*" }],
-      codex: [{ event: "PreToolUse", matcher: "Bash|bash" }]
+      codex: [
+        {
+          event: "PreToolUse",
+          matcher: "Bash|bash",
+          statusMessage: "Applying cclaw Bash preflight"
+        }
+      ]
     }
   },
   {
@@ -121,7 +135,12 @@ export const HOOK_MANIFEST: readonly HookHandlerSpec[] = [
     description: "In-process prompt pipeline for Codex UserPromptSubmit (prompt-guard + verify-current-state).",
     semantic: "strict_state_verify",
     bindings: {
-      codex: [{ event: "UserPromptSubmit" }]
+      codex: [
+        {
+          event: "UserPromptSubmit",
+          statusMessage: "Checking cclaw stage state"
+        }
+      ]
     }
   },
   {
@@ -131,7 +150,13 @@ export const HOOK_MANIFEST: readonly HookHandlerSpec[] = [
     bindings: {
       claude: [{ event: "PostToolUse", matcher: "*" }],
       cursor: [{ event: "postToolUse", matcher: "*" }],
-      codex: [{ event: "PostToolUse", matcher: "Bash|bash" }]
+      codex: [
+        {
+          event: "PostToolUse",
+          matcher: "Bash|bash",
+          statusMessage: "Recording cclaw post-tool context"
+        }
+      ]
     }
   },
   {
@@ -141,7 +166,13 @@ export const HOOK_MANIFEST: readonly HookHandlerSpec[] = [
     bindings: {
       claude: [{ event: "Stop", timeout: 10 }],
       cursor: [{ event: "stop", timeout: 10 }],
-      codex: [{ event: "Stop", timeout: 10 }]
+      codex: [
+        {
+          event: "Stop",
+          timeout: 10,
+          statusMessage: "Preparing cclaw handoff checklist"
+        }
+      ]
     }
   },
   {
@@ -166,6 +197,7 @@ export interface EventGroup {
     handler: HookHandlerId;
     matcher?: string;
     timeout?: number;
+    statusMessage?: string;
   }>;
 }
 
@@ -175,6 +207,7 @@ interface InternalGroup {
     handler: HookHandlerId;
     matcher?: string;
     timeout?: number;
+    statusMessage?: string;
     priority: number;
     seq: number;
   }>;
@@ -203,6 +236,7 @@ export function groupBindingsByEvent(harness: HookManifestHarness): EventGroup[]
         handler: spec.handler,
         ...(binding.matcher !== undefined ? { matcher: binding.matcher } : {}),
         ...(binding.timeout !== undefined ? { timeout: binding.timeout } : {}),
+        ...(binding.statusMessage !== undefined ? { statusMessage: binding.statusMessage } : {}),
         priority: binding.priority ?? 0,
         seq: seq++
       });

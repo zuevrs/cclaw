@@ -15,6 +15,7 @@ interface ClaudeCommandEntry {
   type: "command";
   command: string;
   timeout?: number;
+  statusMessage?: string;
 }
 
 interface ClaudeLikeOuterEntry {
@@ -50,7 +51,8 @@ function buildClaudeLikeEvents(
       const hookEntry: ClaudeCommandEntry = {
         type: "command",
         command: hookDispatcherCommand(entry.handler),
-        ...(entry.timeout !== undefined ? { timeout: entry.timeout } : {})
+        ...(entry.timeout !== undefined ? { timeout: entry.timeout } : {}),
+        ...(entry.statusMessage !== undefined ? { statusMessage: entry.statusMessage } : {})
       };
       bucket.hooks.push(hookEntry);
     }

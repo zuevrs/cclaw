@@ -354,6 +354,34 @@ function buildReport(findings: RuntimeIntegrityFinding[]): RuntimeIntegrityRepor
   };
 }
 
+function checkHookProfileCompatibility(config: Awaited<ReturnType<typeof readConfig>>): RuntimeIntegrityFinding {
+  const profile = config.hookProfile ?? "standard";
+  const strictness = config.strictness ?? "advisory";
+  if (profile !== "minimal") {
+    return warningFinding(
+      "hook_profile_strictness_compat",
+      true,
+      "Hook profile/strictness combination is compatible."
+    );
+  }
+  if (strictness !== "strict") {
+    return warningFinding(
+      "hook_profile_strictness_compat",
+      true,
+      "Minimal hook profile enabled (advisory strictness)."
+    );
+  }
+  return warningFinding(
+    "hook_profile_strictness_compat",
+    false,
+    "Minimal hook profile with strict strictness may under-enforce stage guards.",
+    [
+      "hookProfile=minimal keeps only session-start + stop-handoff handlers.",
+      "strictness=strict expects prompt/workflow/verify guards to run."
+    ]
+  );
+}
+
 function writeTextReport(io: InternalIo, report: RuntimeIntegrityReport): void {
   io.stdout.write(`runtime-integrity: ${report.ok ? "ok" : "failed"}\n`);
   io.stdout.write(`errors=${report.summary.errors} warnings=${report.summary.warnings}\n`);
@@ -386,6 +414,7 @@ export async function runRuntimeIntegrityCommand(
     }
   }
   findings.push(await checkCodexHooksFlag(harnesses));
+  findings.push(checkHookProfileCompatibility(config));
 
   const report = buildReport(findings);
   if (!args.quiet) {

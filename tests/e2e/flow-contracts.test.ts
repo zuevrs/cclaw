@@ -324,6 +324,7 @@ describe("flow command contracts", () => {
     expect(codexHooks.hooks).toHaveProperty("PreToolUse");
     expect(codexHooks.hooks).toHaveProperty("PostToolUse");
     expect(codexHooks.hooks).toHaveProperty("Stop");
+    expect(codexHooksRaw).toContain("statusMessage");
 
     // Legacy v0.39.x skill layout must be absent (fresh install writes
     // `cc*`, not `cclaw-cc*`).

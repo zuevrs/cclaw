@@ -188,6 +188,7 @@ export interface ReviewLoopConfig {
 }
 
 export type VcsMode = "git-with-remote" | "git-local-only" | "none";
+export type HookProfile = "minimal" | "standard" | "strict";
 
 export interface CclawConfig {
   version: string;
@@ -206,6 +207,15 @@ export interface CclawConfig {
    * specific iron laws strict while the project-wide knob stays advisory.
    */
   strictness?: "advisory" | "strict";
+  /**
+   * Hook execution profile used by generated run-hook runtime:
+   * - minimal: keep only session-start + stop-handoff style safety hooks
+   * - standard: default full hook surface
+   * - strict: full hook surface with strict guard behavior
+   */
+  hookProfile?: HookProfile;
+  /** Optional per-hook disable list (canonical run-hook handler names). */
+  disabledHooks?: string[];
   /**
    * Legacy alias for test-side path detection in workflow-guard.
    * Prefer `tdd.testPathPatterns` in new configs.

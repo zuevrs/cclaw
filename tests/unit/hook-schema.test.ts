@@ -66,6 +66,19 @@ describe("hook schema validation", () => {
     expect(result.errors.join("\n")).toContain('missing required event array "UserPromptSubmit"');
   });
 
+  it("rejects malformed codex statusMessage shape", () => {
+    const codex = JSON.parse(codexHooksJsonWithObservation()) as {
+      hooks: Record<string, Array<{ hooks?: Array<Record<string, unknown>> }>>;
+    };
+    const first = codex.hooks.PreToolUse?.[0];
+    if (first?.hooks?.[0]) {
+      first.hooks[0].statusMessage = "";
+    }
+    const result = validateHookDocument("codex", codex);
+    expect(result.ok).toBe(false);
+    expect(result.errors.join("\n")).toContain("statusMessage must be a non-empty string");
+  });
+
   it("generated runtime hooks do not fallback to npx cclaw-cli", () => {
     const codex = codexHooksJsonWithObservation();
     expect(codex).not.toContain("npx -y cclaw-cli");

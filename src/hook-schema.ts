@@ -100,6 +100,11 @@ function validateClaudeLikeEvent(
           `hooks.${eventName}[${index}].hooks[${hookIndex}].timeout must be a positive number when present`
         );
       }
+      if (hook.statusMessage !== undefined && !isNonEmptyString(hook.statusMessage)) {
+        errors.push(
+          `hooks.${eventName}[${index}].hooks[${hookIndex}].statusMessage must be a non-empty string when present`
+        );
+      }
     }
   }
 }
