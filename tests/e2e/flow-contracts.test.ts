@@ -679,7 +679,7 @@ describe("flow command contracts", () => {
     expect(executingWavesSkill).toContain("## Process");
     expect(executingWavesSkill).toContain("## Status Markers");
     expect(executingWavesSkill).toContain("wave.drift_unaddressed");
-    expect(executingWavesSkill).toContain("scope LD# hash references still valid");
+    expect(executingWavesSkill).toContain("scope D-XX decision references still valid");
     expect(executingWavesSkill).toContain("Never create a second `## Locked Decisions` heading in brainstorm");
 
     await expect(

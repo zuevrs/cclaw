@@ -63,6 +63,11 @@ describe("gate evidence verification", () => {
     await prepareRoot(root);
     await fs.writeFile(path.join(root, ".cclaw/artifacts/01-brainstorm.md"), `# Brainstorm Artifact
 
+## Q&A Log
+| Turn | Question | User answer (1-line) | Decision impact |
+|---|---|---|---|
+| 1 | (stop-signal) | "достаточно, давай драфт" | stop-and-draft |
+
 ## Context
 - Project state: monorepo with CI pipeline
 - Relevant existing code/patterns: scripts/pre-publish.sh does metadata checks

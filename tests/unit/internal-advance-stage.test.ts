@@ -52,6 +52,18 @@ const PROACTIVE_WAIVER_FLAGS = [
   "--accept-proactive-waiver-reason=unit_test_proactive"
 ] as const;
 
+/**
+ * Wave 22: brainstorm/scope/design artifacts must satisfy `qa_log_below_min`
+ * floor; tests that focus on lifecycle behaviour use a stop-signal row
+ * instead of fully populating Q&A.
+ */
+const QA_LOG_STOP_SIGNAL_BLOCK = `## Q&A Log
+| Turn | Question | User answer (1-line) | Decision impact |
+|---|---|---|---|
+| 1 | (stop-signal) | "достаточно, давай драфт" | stop-and-draft |
+
+`;
+
 async function writeBrainstormArtifact(
   root: string,
   learningsSection = "- None this stage."
@@ -59,7 +71,7 @@ async function writeBrainstormArtifact(
   await fs.mkdir(path.join(root, ".cclaw/artifacts"), { recursive: true });
   await fs.writeFile(path.join(root, ".cclaw/artifacts/01-brainstorm.md"), `# Brainstorm Artifact
 
-## Context
+${QA_LOG_STOP_SIGNAL_BLOCK}## Context
 - Project state: monorepo with CI pipeline
 - Relevant existing code/patterns: scripts/pre-publish.sh does metadata checks
 
@@ -118,7 +130,7 @@ async function writeScopeArtifact(root: string): Promise<void> {
   await fs.mkdir(path.join(root, ".cclaw/artifacts"), { recursive: true });
   await fs.writeFile(path.join(root, ".cclaw/artifacts/02-scope.md"), `# Scope Artifact
 
-> Review Loop Quality: 0.830 | stop: quality_threshold_met | iterations: 2/3
+${QA_LOG_STOP_SIGNAL_BLOCK}> Review Loop Quality: 0.830 | stop: quality_threshold_met | iterations: 2/3
 
 ## Pre-Scope System Audit
 | Check | Command | Findings |
@@ -188,7 +200,7 @@ async function writeDesignArtifact(root: string): Promise<void> {
   await fs.writeFile(path.join(root, "src/storage.ts"), "export const storage = 1;\n", "utf8");
   await fs.writeFile(path.join(root, ".cclaw/artifacts/03-design.md"), `# Design Artifact
 
-> Review Loop Quality: 0.810 | stop: quality_threshold_met | iterations: 2/3
+${QA_LOG_STOP_SIGNAL_BLOCK}> Review Loop Quality: 0.810 | stop: quality_threshold_met | iterations: 2/3
 
 ## Research Fleet Synthesis
 | Lens | Key findings | Design impact | Evidence |
@@ -1239,7 +1251,7 @@ process.stdout.write(JSON.stringify({ hook: process.argv[2] }) + "\\n");
     await fs.mkdir(path.join(root, ".cclaw/artifacts"), { recursive: true });
     await fs.writeFile(path.join(root, ".cclaw/artifacts/01-brainstorm-dashboard-viz.md"), `# Brainstorm: Dashboard with Visualization
 
-## Context
+${QA_LOG_STOP_SIGNAL_BLOCK}## Context
 - Project state: empty greenfield project with no app code, no origin docs, and no seeds.
 - Relevant existing code/patterns: none.
 

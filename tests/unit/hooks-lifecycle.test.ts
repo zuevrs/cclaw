@@ -35,6 +35,11 @@ async function writeBrainstormArtifact(root: string): Promise<void> {
   await fs.mkdir(path.join(root, ".cclaw/artifacts"), { recursive: true });
   await fs.writeFile(path.join(root, ".cclaw/artifacts/01-brainstorm.md"), `# Brainstorm Artifact
 
+## Q&A Log
+| Turn | Question | User answer (1-line) | Decision impact |
+|---|---|---|---|
+| 1 | (stop-signal) | "достаточно, давай драфт" | stop-and-draft |
+
 ## Context
 - Project state: greenfield static landing page.
 - Relevant existing code/patterns: none; initial flow stage.
