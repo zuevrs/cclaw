@@ -1230,9 +1230,70 @@ export const INTERACTION_EDGE_CASE_REQUIREMENTS: readonly InteractionEdgeCaseReq
   { label: "zombie connection", pattern: /\bzombie[\s-]?connection\b/iu }
 ];
 
-export function validateInteractionEdgeCaseMatrix(sectionBody: string): { ok: boolean; details: string } {
+/**
+ * Wave 25 (v6.1.0) — context for `validateInteractionEdgeCaseMatrix`.
+ *
+ * The user's quick-tier test of a 3-file static landing page hit
+ * "Interaction Edge Case row \"nav-away-mid-request\" must mark
+ * Handled? as yes/no" because they wrote `N/A` (no network at all).
+ * Then `unhandled must reference a deferred item id (for example
+ * D-12)`. Wave 25 introduces:
+ *
+ *   1. `N/A — <reason>` (em-dash + free-text reason) is now an
+ *      accepted Handled? value. The reason replaces the D-XX
+ *      requirement.
+ *   2. When the caller signals lite-tier and the design has no
+ *      network/external dependencies (detected via the Architecture
+ *      Diagram body or a missing Failure Mode Table), the standard
+ *      mandatory rows (`nav-away-mid-request`, `10K-result dataset`,
+ *      `background-job abandonment`, `zombie connection`) are
+ *      treated as advisory rather than required. The `double-click`
+ *      row stays mandatory because UI duplicate-action handling is
+ *      relevant even for static pages.
+ */
+export interface InteractionEdgeCaseValidationContext {
+  /** Optional H2 sections map for cross-section "no network" detection. */
+  sections?: H2SectionMap | null;
+  /** When true, network-dependent mandatory rows become advisory. */
+  liteTier?: boolean;
+}
+
+const INTERACTION_EDGE_CASE_NA_PATTERN = /^\s*n\s*\/\s*a\b/iu;
+const INTERACTION_EDGE_CASE_NA_WITH_REASON_PATTERN = /^\s*n\s*\/\s*a\s*[—–\-:]\s*\S/iu;
+const INTERACTION_EDGE_CASE_NETWORK_DEPENDENT_LABELS: ReadonlySet<string> = new Set([
+  "nav-away-mid-request",
+  "10K-result dataset",
+  "background-job abandonment",
+  "zombie connection"
+]);
+
+function shouldRelaxNetworkDependentEdgeCases(
+  context: InteractionEdgeCaseValidationContext
+): boolean {
+  if (!context.liteTier) return false;
+  const sections = context.sections ?? null;
+  if (!sections) return true;
+  const diagramBody = sectionBodyByName(sections, "Architecture Diagram");
+  const failureModeBody = sectionBodyByName(sections, "Failure Mode Table");
+  const failureModeRowCount = failureModeBody !== null ? getMarkdownTableRows(failureModeBody).length : 0;
+  if (failureModeRowCount > 0) return false;
+  if (diagramBody && DIAGRAM_EXTERNAL_DEPENDENCY_PATTERN.test(diagramBody)) return false;
+  return true;
+}
+
+export function validateInteractionEdgeCaseMatrix(
+  sectionBody: string,
+  context: InteractionEdgeCaseValidationContext = {}
+): { ok: boolean; details: string } {
   const rows = getMarkdownTableRows(sectionBody);
+  const relaxNetworkRows = shouldRelaxNetworkDependentEdgeCases(context);
   if (rows.length === 0) {
+    if (relaxNetworkRows) {
+      return {
+        ok: true,
+        details: "Data Flow Interaction Edge Case matrix is advisory for lite-tier no-network designs (no Failure Mode Table rows and no external-dependency nodes detected)."
+      };
+    }
     return {
       ok: false,
       details: "Data Flow must include an Interaction Edge Case matrix table with required rows."
@@ -1240,7 +1301,7 @@ export function validateInteractionEdgeCaseMatrix(sectionBody: string): { ok: bo
   }
 
   const seen = new Map<string, true>();
-  for (const [index, row] of rows.entries()) {
+  for (const [, row] of rows.entries()) {
     const labelCell = (row[0] ?? "").trim();
     if (!labelCell) continue;
     const requirement = INTERACTION_EDGE_CASE_REQUIREMENTS.find((candidate) =>
@@ -1255,14 +1316,30 @@ export function validateInteractionEdgeCaseMatrix(sectionBody: string): { ok: bo
       };
     }
 
-    const handled = parseBinaryFlag((row[1] ?? "").trim());
+    const handledRaw = (row[1] ?? "").trim();
+    const handled = parseBinaryFlag(handledRaw);
     const response = (row[2] ?? "").trim();
     const deferred = (row[3] ?? "").trim();
-    if (handled === "unknown") {
+    const isNA = INTERACTION_EDGE_CASE_NA_PATTERN.test(handledRaw);
+    if (handled === "unknown" && !isNA) {
       return {
         ok: false,
-        details: `Interaction Edge Case row "${requirement.label}" must mark Handled? as yes/no.`
+        details: `Interaction Edge Case row "${requirement.label}" must mark Handled? as yes/no, or write \`N/A — <reason>\` (em-dash + free-text reason) when the case does not apply.`
       };
+    }
+    if (isNA) {
+      // Wave 25: `N/A — <reason>` short-circuits both the "must mark
+      // yes/no" rule and the "must reference a deferred item id"
+      // rule. The reason satisfies justification.
+      const hasReason = INTERACTION_EDGE_CASE_NA_WITH_REASON_PATTERN.test(handledRaw) || response.length > 0;
+      if (!hasReason) {
+        return {
+          ok: false,
+          details: `Interaction Edge Case row "${requirement.label}" marked N/A but missing reason. Use \`N/A — <reason>\` (em-dash + free-text reason) in the Handled? cell or fill the Design response cell.`
+        };
+      }
+      seen.set(requirement.label, true);
+      continue;
     }
     if (!response) {
       return {
@@ -1273,7 +1350,7 @@ export function validateInteractionEdgeCaseMatrix(sectionBody: string): { ok: bo
     if (handled === "no" && (!deferred || /\bnone\b/iu.test(deferred))) {
       return {
         ok: false,
-        details: `Interaction Edge Case row "${requirement.label}" is unhandled and must reference a deferred item id (for example D-12).`
+        details: `Interaction Edge Case row "${requirement.label}" is unhandled and must reference a deferred item id (for example D-12) or mark Handled? as \`N/A — <reason>\`.`
       };
     }
     seen.set(requirement.label, true);
@@ -1282,15 +1359,27 @@ export function validateInteractionEdgeCaseMatrix(sectionBody: string): { ok: bo
   const missing = INTERACTION_EDGE_CASE_REQUIREMENTS
     .map((requirement) => requirement.label)
     .filter((label) => !seen.has(label));
-  if (missing.length > 0) {
+  const stillMissing = relaxNetworkRows
+    ? missing.filter((label) => !INTERACTION_EDGE_CASE_NETWORK_DEPENDENT_LABELS.has(label))
+    : missing;
+  const advisoryMissing = relaxNetworkRows
+    ? missing.filter((label) => INTERACTION_EDGE_CASE_NETWORK_DEPENDENT_LABELS.has(label))
+    : [];
+  if (stillMissing.length > 0) {
+    const advisoryNote = advisoryMissing.length > 0
+      ? ` (${advisoryMissing.length} network-dependent row(s) demoted to advisory by lite-tier no-network detection: ${advisoryMissing.join(", ")})`
+      : "";
     return {
       ok: false,
-      details: `Interaction Edge Case matrix is missing required row(s): ${missing.join(", ")}.`
+      details: `Interaction Edge Case matrix is missing required row(s): ${stillMissing.join(", ")}${advisoryNote}.`
     };
   }
+  const advisoryNote = advisoryMissing.length > 0
+    ? ` (${advisoryMissing.length} network-dependent row(s) advisory under lite-tier no-network: ${advisoryMissing.join(", ")})`
+    : "";
   return {
     ok: true,
-    details: "Interaction Edge Case matrix contains all required rows with handled/deferred status."
+    details: `Interaction Edge Case matrix contains all required rows with handled/deferred status${advisoryNote}.`
   };
 }
 
@@ -2006,6 +2095,14 @@ export interface ValidateSectionBodyContext {
    * checks fall back to legacy blanket enforcement.
    */
   sections?: H2SectionMap | null;
+  /**
+   * Wave 25 (v6.1.0) — when true, lite-tier-only relaxations apply.
+   * Currently used by the Interaction Edge Case matrix to demote
+   * network-dependent mandatory rows to advisory when the design has
+   * no Failure Mode Table rows and no external-dependency keywords
+   * in the Architecture Diagram body.
+   */
+  liteTier?: boolean;
 }
 
 export function validateSectionBody(
@@ -2124,7 +2221,10 @@ export function validateSectionBody(
     return validateRequirementsTaxonomy(sectionBody);
   }
   if (sectionNameNormalized === "data flow") {
-    return validateInteractionEdgeCaseMatrix(sectionBody);
+    return validateInteractionEdgeCaseMatrix(sectionBody, {
+      sections: context.sections ?? null,
+      liteTier: context.liteTier ?? false
+    });
   }
   if (sectionNameNormalized === "architecture diagram") {
     return validateArchitectureDiagram(sectionBody, { sections: context.sections ?? null });

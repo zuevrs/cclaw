@@ -176,6 +176,33 @@ export async function lintArtifact(
     ? new Set(schema.trivialOverrideSections!.map((s) => normalizeHeadingTitle(s).toLowerCase()))
     : null;
 
+  // Wave 25: precompute the lite-tier signal so the per-section
+  // validators (Interaction Edge Case matrix today, others tomorrow)
+  // can relax network-dependent mandatory rows for lite/quick/bugfix
+  // runs without each validator having to re-derive the predicate.
+  // Same flow-state read powers the post-loop demotion + audit log
+  // below; we cache the result here to avoid two disk reads.
+  let activeStageFlags: string[] = [];
+  let taskClass: StageLintContext["taskClass"] = null;
+  let activeRunId: string | null = null;
+  try {
+    const flowState = await readFlowState(projectRoot);
+    const hint = flowState.interactionHints?.[stage];
+    if (hint?.skipQuestions === true) activeStageFlags.push("--skip-questions");
+    taskClass = flowState.taskClass ?? null;
+    activeRunId = flowState.activeRunId ?? null;
+  } catch {
+    activeStageFlags = [];
+    taskClass = null;
+    activeRunId = null;
+  }
+  for (const extra of options.extraStageFlags ?? []) {
+    if (typeof extra === "string" && extra.length > 0 && !activeStageFlags.includes(extra)) {
+      activeStageFlags.push(extra);
+    }
+  }
+  const liteTierForValidators = shouldDemoteArtifactValidationByTrack(track, taskClass);
+
   for (const v of schema.artifactValidation) {
     const sectionKey = normalizeHeadingTitle(v.section).toLowerCase();
     const scopeBoundaryAlias =
@@ -195,7 +222,10 @@ export async function lintArtifact(
         : effectiveRequiredFromOverride;
     const validation = body === null
       ? { ok: false, details: `No ## heading matching required section "${v.section}".` }
-      : validateSectionBody(body, v.validationRule, v.section, { sections });
+      : validateSectionBody(body, v.validationRule, v.section, {
+          sections,
+          liteTier: liteTierForValidators
+        });
     const found = hasHeading && validation.ok;
     findings.push({
       section: v.section,
@@ -231,26 +261,6 @@ export async function lintArtifact(
       found: learnings.ok,
       details: `${learnings.details}${meaningfulStageNoneWarning}`
     });
-  }
-
-  let activeStageFlags: string[] = [];
-  let taskClass: StageLintContext["taskClass"] = null;
-  let activeRunId: string | null = null;
-  try {
-    const flowState = await readFlowState(projectRoot);
-    const hint = flowState.interactionHints?.[stage];
-    if (hint?.skipQuestions === true) activeStageFlags.push("--skip-questions");
-    taskClass = flowState.taskClass ?? null;
-    activeRunId = flowState.activeRunId ?? null;
-  } catch {
-    activeStageFlags = [];
-    taskClass = null;
-    activeRunId = null;
-  }
-  for (const extra of options.extraStageFlags ?? []) {
-    if (typeof extra === "string" && extra.length > 0 && !activeStageFlags.includes(extra)) {
-      activeStageFlags.push(extra);
-    }
   }
 
   const stageContext: StageLintContext = {
