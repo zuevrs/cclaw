@@ -15,8 +15,8 @@ describe("adaptive-elicitation SKILL.md (Wave 22 hardening)", () => {
     expect(skill).toMatch(/##\s*HARD-GATE/u);
   });
 
-  it("contains an explicit Hard floor instruction", () => {
-    expect(skill).toMatch(/Hard floor/iu);
+  it("contains an explicit Convergence floor instruction (Wave 23 / v5.0.0 — replaces hard count floor)", () => {
+    expect(skill).toMatch(/Convergence floor|qa_log_unconverged/iu);
     expect(skill).toContain("stage-complete.mjs");
     expect(skill).toContain("Q&A Log");
   });
