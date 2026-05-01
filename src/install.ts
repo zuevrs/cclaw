@@ -13,7 +13,6 @@ import {
   createDefaultConfig,
   readConfig,
   configPath,
-  detectLanguageRulePacks,
   detectAdvancedKeys
 } from "./config.js";
 import { learnSkillMarkdown } from "./content/learnings.js";
@@ -24,7 +23,7 @@ import { viewCommandContract, viewCommandSkillMarkdown } from "./content/view-co
 import { cancelCommandContract, cancelCommandSkillMarkdown } from "./content/cancel-command.js";
 import { subagentDrivenDevSkill, parallelAgentsSkill } from "./content/subagents.js";
 import { sessionHooksSkillMarkdown } from "./content/session-hooks.js";
-import { ironLawRuntimeDocument, ironLawsSkillMarkdown } from "./content/iron-laws.js";
+import { ironLawsSkillMarkdown } from "./content/iron-laws.js";
 import {
   stageCompleteScript,
   startFlowScript,
@@ -57,8 +56,6 @@ import {
 import { adaptiveElicitationSkillMarkdown } from "./content/skills-elicitation.js";
 import {
   LANGUAGE_RULE_PACK_DIR,
-  LANGUAGE_RULE_PACK_FILES,
-  LANGUAGE_RULE_PACK_GENERATORS,
   LEGACY_LANGUAGE_RULE_PACK_FOLDERS
 } from "./content/utility-skills.js";
 import { RESEARCH_PLAYBOOKS } from "./content/research-playbooks.js";
@@ -487,54 +484,12 @@ async function removeManagedGitHookRelays(projectRoot: string): Promise<void> {
 }
 
 async function syncManagedGitHooks(projectRoot: string, config: CclawConfig): Promise<void> {
-  const hooksDir = await resolveGitHooksDir(projectRoot);
-  if (!hooksDir) {
-    return;
-  }
-
-  if (config.gitHookGuards !== true) {
-    await removeManagedGitHookRelays(projectRoot);
-    try {
-      await fs.rm(path.join(projectRoot, GIT_HOOK_RUNTIME_REL_DIR), { recursive: true, force: true });
-    } catch {
-      // best-effort cleanup
-    }
-    return;
-  }
-
-  const runtimeGitHooksDir = path.join(projectRoot, GIT_HOOK_RUNTIME_REL_DIR);
-  await ensureDir(runtimeGitHooksDir);
-  for (const hookName of ["pre-commit", "pre-push"] as const) {
-    const runtimePathForHook = path.join(runtimeGitHooksDir, `${hookName}.mjs`);
-    await writeFileSafe(runtimePathForHook, managedGitRuntimeScript(hookName));
-    try {
-      await fs.chmod(runtimePathForHook, 0o755);
-    } catch {
-      // best effort on constrained filesystems
-    }
-  }
-
-  await ensureDir(hooksDir);
-  for (const hookName of ["pre-commit", "pre-push"] as const) {
-    const hookPath = path.join(hooksDir, hookName);
-    let canWriteRelay = true;
-    if (await exists(hookPath)) {
-      try {
-        const existing = await fs.readFile(hookPath, "utf8");
-        canWriteRelay = existing.includes(GIT_HOOK_MANAGED_MARKER);
-      } catch {
-        canWriteRelay = false;
-      }
-    }
-    if (!canWriteRelay) {
-      continue;
-    }
-    await writeFileSafe(hookPath, managedGitRelayHook(hookName));
-    try {
-      await fs.chmod(hookPath, 0o755);
-    } catch {
-      // best effort on constrained filesystems
-    }
+  void config;
+  await removeManagedGitHookRelays(projectRoot);
+  try {
+    await fs.rm(path.join(projectRoot, GIT_HOOK_RUNTIME_REL_DIR), { recursive: true, force: true });
+  } catch {
+    // best-effort cleanup
   }
 }
 
@@ -558,7 +513,8 @@ async function writeWavePlansScaffold(projectRoot: string): Promise<void> {
 }
 
 async function writeSkills(projectRoot: string, config?: CclawConfig): Promise<void> {
-  const skillTrack = config?.defaultTrack ?? "standard";
+  void config;
+  const skillTrack = "standard";
   for (const stage of FLOW_STAGES) {
     const folder = stageSkillFolder(stage);
     await writeFileSafe(
@@ -628,42 +584,8 @@ async function writeSkills(projectRoot: string, config?: CclawConfig): Promise<v
     await writeFileSafe(runtimePath(projectRoot, "skills", folderName, "SKILL.md"), markdown);
   }
 
-  // Language rule packs live under .cclaw/rules/lang/<pack>.md. They are opt-in:
-  // only the packs listed in config.languageRulePacks are materialised. Any
-  // legacy per-language skill folders from v0.7.0 (.cclaw/skills/language-*)
-  // are cleaned up below so the new rules/lang layout is the only truth.
-  const enabledPacks = config?.languageRulePacks ?? [];
-  const enabledPackFileNames = new Set<string>();
-  for (const pack of enabledPacks) {
-    const fileName = LANGUAGE_RULE_PACK_FILES[pack];
-    const generator = LANGUAGE_RULE_PACK_GENERATORS[pack];
-    if (!fileName || !generator) continue;
-    enabledPackFileNames.add(fileName);
-    await writeFileSafe(
-      runtimePath(projectRoot, ...LANGUAGE_RULE_PACK_DIR, fileName),
-      generator()
-    );
-  }
-
-  // Strict idempotence: once a pack is removed from config, its generated
-  // file under .cclaw/rules/lang/ must disappear on the next sync. Without
-  // this loop the directory accumulates a superset of every pack ever
-  // enabled, which silently keeps stale guidance alive.
-  const langDir = runtimePath(projectRoot, ...LANGUAGE_RULE_PACK_DIR);
-  if (await exists(langDir)) {
-    const knownPackFileNames = new Set<string>(Object.values(LANGUAGE_RULE_PACK_FILES));
-    let entries: string[] = [];
-    try {
-      entries = await fs.readdir(langDir);
-    } catch {
-      entries = [];
-    }
-    for (const entry of entries) {
-      if (!knownPackFileNames.has(entry)) continue;
-      if (enabledPackFileNames.has(entry)) continue;
-      await fs.rm(path.join(langDir, entry), { force: true });
-    }
-  }
+  // Wave 21: language packs are no longer materialized from config.
+  await fs.rm(runtimePath(projectRoot, ...LANGUAGE_RULE_PACK_DIR), { recursive: true, force: true });
 
   for (const legacyFolder of LEGACY_LANGUAGE_RULE_PACK_FOLDERS) {
     const legacyPath = runtimePath(projectRoot, "skills", legacyFolder);
@@ -1099,32 +1021,10 @@ async function writeHooks(projectRoot: string, config: CclawConfig): Promise<voi
   await ensureDir(hooksDir);
   await ensureDir(stateDir);
 
-  const effectiveStrictness: "advisory" | "strict" = config.strictness ?? "advisory";
-  await writeFileSafe(
-    runtimePath(projectRoot, "state", "iron-laws.json"),
-    `${JSON.stringify(
-      ironLawRuntimeDocument({
-        mode: effectiveStrictness,
-        strictLaws: config.ironLaws?.strictLaws
-      }),
-      null,
-      2
-    )}\n`
-  );
-
   await writeFileSafe(path.join(hooksDir, "stage-complete.mjs"), stageCompleteScript());
   await writeFileSafe(path.join(hooksDir, "start-flow.mjs"), startFlowScript());
   await writeFileSafe(path.join(hooksDir, "cancel-run.mjs"), cancelRunScript());
-  const hookRuntimeOptions: NodeHookRuntimeOptions = {
-    strictness: effectiveStrictness,
-    hookProfile: config.hookProfile,
-    disabledHooks: config.disabledHooks,
-    tddTestPathPatterns: config.tdd?.testPathPatterns ?? config.tddTestGlobs,
-    tddProductionPathPatterns: config.tdd?.productionPathPatterns,
-    compoundRecurrenceThreshold: config.compound?.recurrenceThreshold,
-    earlyLoopEnabled: config.earlyLoop?.enabled,
-    earlyLoopMaxIterations: config.earlyLoop?.maxIterations
-  };
+  const hookRuntimeOptions: NodeHookRuntimeOptions = {};
   const bundledHookRuntime = await readBundledRunHookRuntimeScript(hookRuntimeOptions);
   await writeFileSafe(
     path.join(hooksDir, "run-hook.mjs"),
@@ -1265,6 +1165,7 @@ async function syncDisabledHarnessArtifacts(projectRoot: string, harnesses: Harn
 }
 
 async function writeState(projectRoot: string, config: CclawConfig, forceReset = false): Promise<void> {
+  void config;
   // Fresh init no longer materializes flow-state.json. The first managed
   // `/cc <idea>` start-flow call creates the state file.
   if (!forceReset) {
@@ -1275,7 +1176,7 @@ async function writeState(projectRoot: string, config: CclawConfig, forceReset =
     return;
   }
 
-  const state = createInitialFlowState({ track: config.defaultTrack ?? "standard" });
+  const state = createInitialFlowState({ track: "standard" });
   await writeFileSafe(statePath, `${JSON.stringify(state, null, 2)}\n`, { mode: 0o600 });
 }
 
@@ -1497,17 +1398,8 @@ export async function initCclaw(options: InitOptions): Promise<void> {
   if (options.harnesses !== undefined && options.harnesses.length === 0) {
     throw new Error("Select at least one harness.");
   }
-  const baseConfig = createDefaultConfig(options.harnesses, options.track);
-  // Best-effort auto-detect: a Node project gets `typescript`, a Go module
-  // gets `go`, etc. Skipped entirely when the project root has no manifests.
-  const detectedPacks = await detectLanguageRulePacks(options.projectRoot);
-  const config: CclawConfig = {
-    ...baseConfig,
-    languageRulePacks: detectedPacks
-  };
-  // Write a minimal `config.yaml` — advanced knobs live in docs/config.md
-  // and only appear in the on-disk file when the user sets them explicitly
-  // or a non-default value was detected (e.g. languageRulePacks).
+  const config = createDefaultConfig(options.harnesses, options.track);
+  // Wave 21: config is always minimal and harness-only.
   await writeConfig(options.projectRoot, config, { mode: "minimal" });
   // Init should scaffold runtime surfaces but leave flow-state creation to the
   // first managed start-flow invocation.
@@ -1548,13 +1440,8 @@ export async function syncCclaw(projectRoot: string, options: SyncOptions = {}):
 
 /**
  * Refresh generated files in `.cclaw/` without touching user-authored
- * artifacts, state, or custom config keys. Only the `version` + `flowVersion`
- * stamps are rewritten so the on-disk config reflects the installed CLI.
- *
- * Shape preservation: if the user previously hand-authored advanced keys
- * (e.g. `tdd`, `compound`, `trackHeuristics`, `sliceReview`), those stay in
- * the yaml. If their existing config is minimal, the upgrade keeps it
- * minimal — advanced knobs are never silently added.
+ * artifacts or state. Config remains harness-only with managed version
+ * stamps.
  */
 export async function upgradeCclaw(projectRoot: string): Promise<void> {
   const configExists = await exists(configPath(projectRoot));
