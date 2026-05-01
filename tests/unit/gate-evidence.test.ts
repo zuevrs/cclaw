@@ -905,24 +905,4 @@ describe("gate evidence reconciliation", () => {
     expect(result.issues.join("\n")).not.toContain("no-VCS attestation");
   });
 
-  it("honors tdd.verificationRef=disabled for verification evidence", async () => {
-    const root = await createTempProject("gate-evidence-tdd-ref-disabled");
-    await prepareRoot(root);
-    await fs.writeFile(path.join(root, ".cclaw/config.yaml"), `harnesses:
-  - claude
-tdd:
-  verificationRef: disabled
-`, "utf8");
-    await fs.writeFile(path.join(root, "package.json"), JSON.stringify({
-      scripts: { test: "vitest run" }
-    }), "utf8");
-    const state = createInitialFlowState("run-tdd-ref-disabled");
-    state.currentStage = "tdd";
-    state.stageGateCatalog.tdd.passed = ["tdd_verified_before_complete"];
-    state.guardEvidence.tdd_verified_before_complete = "npm test PASS";
-
-    const result = await verifyCurrentStageGateEvidence(root, state);
-    expect(result.issues.join("\n")).not.toContain("commit SHA");
-  });
-
 });

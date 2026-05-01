@@ -321,9 +321,10 @@ describe("flow command contracts", () => {
     const codexHooksRaw = await fs.readFile(codexHooksPath, "utf8");
     const codexHooks = JSON.parse(codexHooksRaw) as { hooks: Record<string, unknown> };
     expect(codexHooks.hooks).toHaveProperty("SessionStart");
-    expect(codexHooks.hooks).toHaveProperty("PreToolUse");
-    expect(codexHooks.hooks).toHaveProperty("PostToolUse");
     expect(codexHooks.hooks).toHaveProperty("Stop");
+    expect(codexHooks.hooks).not.toHaveProperty("PreToolUse");
+    expect(codexHooks.hooks).not.toHaveProperty("PostToolUse");
+    expect(codexHooks.hooks).not.toHaveProperty("UserPromptSubmit");
     expect(codexHooksRaw).toContain("statusMessage");
 
     // Legacy v0.39.x skill layout must be absent (fresh install writes
@@ -565,7 +566,7 @@ describe("flow command contracts", () => {
     }
   });
 
-  it("emits conditional slice-review guidance in plan and tdd skills", async () => {
+  it("emits per-slice review trigger guidance in plan and tdd skills", async () => {
     const root = await createTempProject("slice-review-guidance");
     await initCclaw({ projectRoot: root });
 
@@ -578,11 +579,14 @@ describe("flow command contracts", () => {
       "utf8"
     );
 
-    expect(planSkill).toContain("sliceReview.enabled");
+    expect(planSkill).toContain("Per-Slice Review");
+    expect(planSkill).toContain("touchCount");
+    expect(planSkill).toContain("touchPaths");
     expect(planSkill).toContain("highRisk");
 
     expect(tddSkill).toContain("Per-Slice Review");
-    expect(tddSkill).toContain("sliceReview.enabled");
+    expect(tddSkill).toContain("touchCount >= filesChangedThreshold");
+    expect(tddSkill).toContain("touchPaths");
     expect(tddSkill).toContain("reviewer");
     expect(tddSkill).toContain("Per-Slice Review Audit (conditional)");
   });

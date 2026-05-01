@@ -170,43 +170,41 @@ describe("hooks lifecycle wiring", () => {
     const codex = codexHooksJsonWithObservation();
 
     expect(claude).toContain(".cclaw/hooks/run-hook.cmd session-start");
-    expect(claude).toContain(".cclaw/hooks/run-hook.cmd prompt-guard");
-    expect(claude).toContain(".cclaw/hooks/run-hook.cmd workflow-guard");
-    expect(claude).toContain(".cclaw/hooks/run-hook.cmd context-monitor");
     expect(claude).toContain(".cclaw/hooks/run-hook.cmd stop-handoff");
-    expect(claude).not.toContain(".cclaw/hooks/run-hook.cmd pre-compact");
+    expect(claude).not.toContain("prompt-guard");
+    expect(claude).not.toContain("workflow-guard");
+    expect(claude).not.toContain("context-monitor");
     expect(claude).not.toContain(".sh");
 
     expect(cursor).toContain(".cclaw/hooks/run-hook.cmd session-start");
-    expect(cursor).toContain(".cclaw/hooks/run-hook.cmd pre-tool-pipeline");
-    expect(cursor).not.toContain(".cclaw/hooks/run-hook.cmd prompt-guard");
-    expect(cursor).not.toContain(".cclaw/hooks/run-hook.cmd workflow-guard");
-    expect(cursor).toContain(".cclaw/hooks/run-hook.cmd context-monitor");
     expect(cursor).toContain(".cclaw/hooks/run-hook.cmd stop-handoff");
-    expect(cursor).not.toContain(".cclaw/hooks/run-hook.cmd pre-compact");
+    expect(cursor).not.toContain("pre-tool-pipeline");
+    expect(cursor).not.toContain("prompt-guard");
+    expect(cursor).not.toContain("workflow-guard");
+    expect(cursor).not.toContain("context-monitor");
     expect(cursor).not.toContain(".sh");
 
     expect(codex).toContain(".cclaw/hooks/run-hook.cmd session-start");
-    expect(codex).toContain(".cclaw/hooks/run-hook.cmd prompt-pipeline");
-    expect(codex).not.toContain(".cclaw/hooks/run-hook.cmd prompt-guard");
-    expect(codex).toContain(".cclaw/hooks/run-hook.cmd pre-tool-pipeline");
-    expect(codex).not.toContain(".cclaw/hooks/run-hook.cmd workflow-guard");
-    expect(codex).toContain(".cclaw/hooks/run-hook.cmd context-monitor");
     expect(codex).toContain(".cclaw/hooks/run-hook.cmd stop-handoff");
-    expect(codex).not.toContain(".cclaw/hooks/run-hook.cmd verify-current-state");
+    expect(codex).not.toContain("prompt-pipeline");
+    expect(codex).not.toContain("prompt-guard");
+    expect(codex).not.toContain("pre-tool-pipeline");
+    expect(codex).not.toContain("workflow-guard");
+    expect(codex).not.toContain("context-monitor");
+    expect(codex).not.toContain("verify-current-state");
     expect(codex).toContain("statusMessage");
-    expect(codex).toContain("Applying cclaw Bash preflight");
-    expect(codex).toContain("Checking cclaw stage state");
+    expect(codex).toContain("Running cclaw session startup checks");
+    expect(codex).toContain("Preparing cclaw handoff checklist");
     const codexHooks = JSON.parse(codex) as {
       hooks: {
-        UserPromptSubmit?: Array<{ hooks?: Array<{ command?: string; statusMessage?: string }> }>;
+        SessionStart?: Array<{ hooks?: Array<{ command?: string; statusMessage?: string }> }>;
+        Stop?: Array<{ hooks?: Array<{ command?: string; statusMessage?: string }> }>;
       };
     };
-    expect(JSON.stringify(codexHooks.hooks.UserPromptSubmit)).not.toContain("workflow-guard");
-    expect(JSON.stringify(codexHooks.hooks.UserPromptSubmit)).toContain("prompt-pipeline");
-    expect(JSON.stringify(codexHooks.hooks.UserPromptSubmit)).not.toContain("prompt-guard");
-    expect(JSON.stringify(codexHooks.hooks.UserPromptSubmit)).not.toContain("verify-current-state");
-    expect(JSON.stringify(codexHooks.hooks.UserPromptSubmit)).toContain("Checking cclaw stage state");
+    expect(JSON.stringify(codexHooks.hooks.SessionStart)).toContain("session-start");
+    expect(JSON.stringify(codexHooks.hooks.Stop)).toContain("stop-handoff");
+    expect(JSON.stringify(codexHooks.hooks)).not.toContain("prompt-pipeline");
+    expect(JSON.stringify(codexHooks.hooks)).not.toContain("pre-tool-pipeline");
     expect(codex).not.toContain(".sh");
   });
 
@@ -440,22 +438,14 @@ fs.appendFileSync(${JSON.stringify(callsPath)}, process.argv.slice(2).join(" ") 
     expect(state.guardEvidence.brainstorm_approaches_compared).toBe("passed");
   });
 
-  it("opencode plugin source references node-only hook names", () => {
+  it("opencode plugin source references only session-start + stop-handoff", () => {
     const plugin = opencodePluginJs();
     expect(plugin).toContain("run-hook.mjs");
-    expect(plugin).toContain("resolveNodeExecutable()");
-    expect(plugin).toContain('return "node";');
-    expect(plugin).not.toContain("spawn(process.execPath, [hookRuntimePath");
-    expect(plugin).not.toContain('runHookScript("pre-compact"');
-    expect(plugin).toContain('runHookScript("prompt-guard"');
-    expect(plugin).toContain('runHookScript("workflow-guard"');
-    expect(plugin).toContain('runHookScript("context-monitor"');
+    expect(plugin).toContain('runHookScript("session-start"');
     expect(plugin).toContain('runHookScript("stop-handoff"');
-    expect(plugin).not.toContain("prompt-guard.sh");
-    expect(plugin).not.toContain("workflow-guard.sh");
-    expect(plugin).not.toContain("context-monitor.sh");
-    expect(plugin).not.toContain("pre-compact.sh");
-    expect(plugin).not.toContain("stop-handoff.sh");
+    expect(plugin).not.toContain('runHookScript("prompt-guard"');
+    expect(plugin).not.toContain('runHookScript("workflow-guard"');
+    expect(plugin).not.toContain('runHookScript("context-monitor"');
   });
 
   it("opencode plugin rehydrates and runs node hook runtime", async () => {
@@ -503,25 +493,15 @@ fs.appendFileSync(${JSON.stringify(callsPath)}, process.argv.slice(2).join(" ") 
     const imported = await import(`${pathToFileURL(pluginPath).href}?t=${Date.now()}`);
     const pluginFactory = imported.default as (ctx: { directory: string }) => {
       event: (payload: unknown) => Promise<void>;
-      "tool.execute.before": (input: unknown, output?: unknown) => Promise<void>;
-      "tool.execute.after": (input: unknown, output?: unknown) => Promise<void>;
       "experimental.chat.system.transform": (payload: unknown) => unknown;
     };
-    const plugin = pluginFactory({ directory: root });
+    const plugin = pluginFactory({ directory: root }) as {
+      event: (payload: unknown) => Promise<void>;
+      "experimental.chat.system.transform": (payload: unknown) => unknown;
+      "tool.execute.before"?: unknown;
+      "tool.execute.after"?: unknown;
+    };
 
-    await plugin["tool.execute.before"]({
-      tool: "Write",
-      tool_input: { path: ".cclaw/state/flow-state.json" }
-    });
-    await plugin["tool.execute.before"]({
-      tool: "RunCommand",
-      tool_input: { cmd: "/cc-review" }
-    });
-    await plugin["tool.execute.after"]({
-      tool: "RunCommand",
-      context: { remaining_percent: 15 },
-      output: "ok"
-    });
     await plugin.event({ event: { type: "session.compacted", data: {} } });
     await plugin.event({ event: { type: "session.idle", data: {} } });
 
@@ -535,383 +515,7 @@ fs.appendFileSync(${JSON.stringify(callsPath)}, process.argv.slice(2).join(" ") 
     expect(transformed.system).toContain('"stage": "design"');
     expect(transformed.system).toContain("Current stage calibrated review prompt");
     expect(transformed.system).toContain("Check architecture, data flow");
-
-    const guardLog = await fs.readFile(path.join(root, ".cclaw/state/prompt-guard.jsonl"), "utf8");
-    expect(guardLog).toContain("write_to_cclaw_runtime");
-    const workflowGuardLog = await fs.readFile(path.join(root, ".cclaw/state/workflow-guard.jsonl"), "utf8");
-    expect(workflowGuardLog).toContain("stage_invocation_without_recent_flow_read");
-    await expect(fs.stat(path.join(root, ".cclaw/state/context-warnings.jsonl"))).rejects.toBeDefined();
-    await expect(fs.stat(path.join(root, ".cclaw/state/session-digest.md"))).rejects.toBeDefined();
-    await expect(fs.stat(path.join(root, ".cclaw/state/checkpoint.json"))).rejects.toBeDefined();
-  });
-
-  it("opencode plugin blocks when workflow guard exits non-zero under strict config", async () => {
-    const root = await createTempProject("opencode-strict-block");
-    await fs.mkdir(path.join(root, ".cclaw/hooks"), { recursive: true });
-    await fs.mkdir(path.join(root, ".cclaw/state"), { recursive: true });
-    await fs.mkdir(path.join(root, ".cclaw/skills/using-cclaw"), { recursive: true });
-    await fs.writeFile(path.join(root, ".cclaw/state/flow-state.json"), JSON.stringify({
-      currentStage: "scope",
-      activeRunId: "active",
-      completedStages: ["brainstorm"]
-    }, null, 2), "utf8");
-    await fs.writeFile(path.join(root, ".cclaw/skills/using-cclaw/SKILL.md"), "# Using Cclaw\n", "utf8");
-    // Under the new advisory-by-default behavior, blocking only happens
-    // when the user opts into strict mode — mirror that in this test
-    // via the canonical config.yaml key.
-    await fs.writeFile(path.join(root, ".cclaw/config.yaml"), "strictness: strict\n", "utf8");
-
-    const pluginPath = path.join(root, ".cclaw/hooks/opencode-plugin.mjs");
-    await fs.writeFile(pluginPath, opencodePluginJs(), "utf8");
-    await fs.writeFile(
-      path.join(root, ".cclaw/hooks/run-hook.mjs"),
-      `#!/usr/bin/env node
-if ((process.argv[2] || "") === "workflow-guard") {
-  process.stderr.write("workflow guard refused: gate evidence missing");
-  process.exit(1);
-}
-process.exit(0);
-`,
-      "utf8"
-    );
-    await fs.chmod(path.join(root, ".cclaw/hooks/run-hook.mjs"), 0o755);
-
-    const imported = await import(`${pathToFileURL(pluginPath).href}?t=${Date.now()}`);
-    const pluginFactory = imported.default as (ctx: { directory: string }) => {
-      "tool.execute.before": (input: unknown, output?: unknown) => Promise<void>;
-    };
-    const plugin = pluginFactory({ directory: root });
-
-    await expect(
-      plugin["tool.execute.before"]({
-        tool: "RunCommand",
-        tool_input: { cmd: "echo test" }
-      })
-    ).rejects.toThrow(/blocked tool\.execute\.before/);
-  });
-
-  it("opencode plugin bypasses guards for read-only tools", async () => {
-    const root = await createTempProject("opencode-readonly-bypass");
-    await fs.mkdir(path.join(root, ".cclaw/hooks"), { recursive: true });
-    await fs.mkdir(path.join(root, ".cclaw/state"), { recursive: true });
-    await fs.writeFile(
-      path.join(root, ".cclaw/state/flow-state.json"),
-      JSON.stringify({ currentStage: "scope", activeRunId: "active", completedStages: ["brainstorm"] }, null, 2),
-      "utf8"
-    );
-    const pluginPath = path.join(root, ".cclaw/hooks/opencode-plugin.mjs");
-    await fs.writeFile(pluginPath, opencodePluginJs(), "utf8");
-    await fs.writeFile(
-      path.join(root, ".cclaw/hooks/run-hook.mjs"),
-      `#!/usr/bin/env node\nprocess.exit(1);\n`,
-      "utf8"
-    );
-    await fs.chmod(path.join(root, ".cclaw/hooks/run-hook.mjs"), 0o755);
-
-    const imported = await import(`${pathToFileURL(pluginPath).href}?t=${Date.now()}`);
-    const pluginFactory = imported.default as (ctx: { directory: string }) => {
-      "tool.execute.before": (input: unknown, output?: unknown) => Promise<void>;
-    };
-    const plugin = pluginFactory({ directory: root });
-
-    for (const tool of ["read", "Read", "glob", "Grep", "list", "webfetch", "WebSearch", "view"]) {
-      await expect(
-        plugin["tool.execute.before"]({ tool, tool_input: { path: "anything" } })
-      ).resolves.toBeUndefined();
-    }
-  });
-
-  it("opencode plugin skips guards when cclaw is not initialized", async () => {
-    const root = await createTempProject("opencode-not-initialized");
-    // Intentionally do not write flow-state.json or run-hook.mjs — this
-    // is the "user hasn't run cclaw init yet" scenario.
-    await fs.mkdir(path.join(root, ".cclaw"), { recursive: true });
-
-    const pluginPath = path.join(root, ".cclaw/hooks/opencode-plugin.mjs");
-    await fs.mkdir(path.dirname(pluginPath), { recursive: true });
-    await fs.writeFile(pluginPath, opencodePluginJs(), "utf8");
-
-    const imported = await import(`${pathToFileURL(pluginPath).href}?t=${Date.now()}`);
-    const pluginFactory = imported.default as (ctx: { directory: string }) => {
-      "tool.execute.before": (input: unknown, output?: unknown) => Promise<void>;
-    };
-    const plugin = pluginFactory({ directory: root });
-
-    // Even a mutating tool should pass through when cclaw is not initialized.
-    await expect(
-      plugin["tool.execute.before"]({ tool: "RunCommand", tool_input: { cmd: "echo test" } })
-    ).resolves.toBeUndefined();
-
-    // Advisory logged exactly once.
-    const logPath = path.join(root, ".cclaw/logs/opencode-plugin.log");
-    const log = await fs.readFile(logPath, "utf8");
-    expect(log).toMatch(/guards skipped: cclaw is not initialized/);
-  });
-
-  it("opencode plugin honors CCLAW_DISABLE env killswitch", async () => {
-    const root = await createTempProject("opencode-killswitch");
-    await fs.mkdir(path.join(root, ".cclaw/hooks"), { recursive: true });
-    await fs.mkdir(path.join(root, ".cclaw/state"), { recursive: true });
-    await fs.writeFile(
-      path.join(root, ".cclaw/state/flow-state.json"),
-      JSON.stringify({ currentStage: "scope", activeRunId: "active", completedStages: [] }, null, 2),
-      "utf8"
-    );
-    await fs.writeFile(
-      path.join(root, ".cclaw/hooks/run-hook.mjs"),
-      `#!/usr/bin/env node\nprocess.exit(1);\n`,
-      "utf8"
-    );
-    await fs.chmod(path.join(root, ".cclaw/hooks/run-hook.mjs"), 0o755);
-    const pluginPath = path.join(root, ".cclaw/hooks/opencode-plugin.mjs");
-    await fs.writeFile(pluginPath, opencodePluginJs(), "utf8");
-
-    const previous = process.env.CCLAW_DISABLE;
-    process.env.CCLAW_DISABLE = "1";
-    try {
-      const imported = await import(`${pathToFileURL(pluginPath).href}?t=${Date.now()}`);
-      const pluginFactory = imported.default as (ctx: { directory: string }) => {
-        "tool.execute.before": (input: unknown, output?: unknown) => Promise<void>;
-      };
-      const plugin = pluginFactory({ directory: root });
-
-      await expect(
-        plugin["tool.execute.before"]({ tool: "RunCommand", tool_input: { cmd: "echo test" } })
-      ).resolves.toBeUndefined();
-
-      const logPath = path.join(root, ".cclaw/logs/opencode-plugin.log");
-      const log = await fs.readFile(logPath, "utf8");
-      expect(log).toMatch(/guards disabled by env CCLAW_DISABLE=1/);
-    } finally {
-      if (previous === undefined) {
-        delete process.env.CCLAW_DISABLE;
-      } else {
-        process.env.CCLAW_DISABLE = previous;
-      }
-    }
-  });
-
-  it("opencode plugin names failing guard and includes stderr + recovery hint", async () => {
-    const root = await createTempProject("opencode-actionable-error");
-    await fs.mkdir(path.join(root, ".cclaw/hooks"), { recursive: true });
-    await fs.mkdir(path.join(root, ".cclaw/state"), { recursive: true });
-    await fs.writeFile(
-      path.join(root, ".cclaw/state/flow-state.json"),
-      JSON.stringify({ currentStage: "scope", activeRunId: "active", completedStages: ["brainstorm"] }, null, 2),
-      "utf8"
-    );
-    // Strict config is required for the thrown-error path; advisory
-    // mode logs and lets the tool through.
-    await fs.writeFile(path.join(root, ".cclaw/config.yaml"), "strictness: strict\n", "utf8");
-    await fs.writeFile(
-      path.join(root, ".cclaw/hooks/run-hook.mjs"),
-      `#!/usr/bin/env node
-if ((process.argv[2] || "") === "workflow-guard") {
-  process.stderr.write("workflow boundary failed: missing evidence for gate X");
-  process.exit(1);
-}
-process.exit(0);
-`,
-      "utf8"
-    );
-    await fs.chmod(path.join(root, ".cclaw/hooks/run-hook.mjs"), 0o755);
-    const pluginPath = path.join(root, ".cclaw/hooks/opencode-plugin.mjs");
-    await fs.writeFile(pluginPath, opencodePluginJs(), "utf8");
-
-    const imported = await import(`${pathToFileURL(pluginPath).href}?t=${Date.now()}`);
-    const pluginFactory = imported.default as (ctx: { directory: string }) => {
-      "tool.execute.before": (input: unknown, output?: unknown) => Promise<void>;
-    };
-    const plugin = pluginFactory({ directory: root });
-
-    await expect(
-      plugin["tool.execute.before"]({ tool: "RunCommand", tool_input: { cmd: "echo test" } })
-    ).rejects.toThrow(/cclaw workflow-guard blocked tool\.execute\.before/);
-    await expect(
-      plugin["tool.execute.before"]({ tool: "RunCommand", tool_input: { cmd: "echo test" } })
-    ).rejects.toThrow(/workflow boundary failed: missing evidence/);
-    await expect(
-      plugin["tool.execute.before"]({ tool: "RunCommand", tool_input: { cmd: "echo test" } })
-    ).rejects.toThrow(/npx cclaw-cli sync/);
-    await expect(
-      plugin["tool.execute.before"]({ tool: "RunCommand", tool_input: { cmd: "echo test" } })
-    ).rejects.toThrow(/CCLAW_DISABLE=1/);
-  });
-
-  it("opencode plugin defaults to advisory: logs without throwing when guard exits non-zero", async () => {
-    const root = await createTempProject("opencode-advisory-default");
-    await fs.mkdir(path.join(root, ".cclaw/hooks"), { recursive: true });
-    await fs.mkdir(path.join(root, ".cclaw/state"), { recursive: true });
-    await fs.writeFile(
-      path.join(root, ".cclaw/state/flow-state.json"),
-      JSON.stringify({ currentStage: "scope", activeRunId: "active", completedStages: ["brainstorm"] }, null, 2),
-      "utf8"
-    );
-    // NOTE: no config.yaml and no CCLAW_STRICTNESS — should default to advisory.
-    await fs.writeFile(
-      path.join(root, ".cclaw/hooks/run-hook.mjs"),
-      `#!/usr/bin/env node
-if ((process.argv[2] || "") === "workflow-guard") {
-  process.stderr.write("workflow guard refused: pretend a gate failed");
-  process.exit(1);
-}
-process.exit(0);
-`,
-      "utf8"
-    );
-    await fs.chmod(path.join(root, ".cclaw/hooks/run-hook.mjs"), 0o755);
-    const pluginPath = path.join(root, ".cclaw/hooks/opencode-plugin.mjs");
-    await fs.writeFile(pluginPath, opencodePluginJs(), "utf8");
-
-    const imported = await import(`${pathToFileURL(pluginPath).href}?t=${Date.now()}`);
-    const pluginFactory = imported.default as (ctx: { directory: string }) => {
-      "tool.execute.before": (input: unknown, output?: unknown) => Promise<void>;
-    };
-    const plugin = pluginFactory({ directory: root });
-
-    await expect(
-      plugin["tool.execute.before"]({ tool: "RunCommand", tool_input: { cmd: "echo test" } })
-    ).resolves.toBeUndefined();
-
-    const logPath = path.join(root, ".cclaw/logs/opencode-plugin.log");
-    const log = await fs.readFile(logPath, "utf8");
-    expect(log).toMatch(/advisory: workflow-guard flagged tool\.execute\.before/);
-  });
-
-
-  it("opencode plugin reads strictness from config.yaml when env override is absent", async () => {
-    const root = await createTempProject("opencode-strict-from-config-only");
-    await fs.mkdir(path.join(root, ".cclaw/hooks"), { recursive: true });
-    await fs.mkdir(path.join(root, ".cclaw/state"), { recursive: true });
-    await fs.writeFile(
-      path.join(root, ".cclaw/state/flow-state.json"),
-      JSON.stringify({ currentStage: "scope", activeRunId: "active", completedStages: ["brainstorm"] }, null, 2),
-      "utf8"
-    );
-    await fs.writeFile(path.join(root, ".cclaw/config.yaml"), "strictness: strict\n", "utf8");
-    await fs.writeFile(
-      path.join(root, ".cclaw/hooks/run-hook.mjs"),
-      `#!/usr/bin/env node
-if ((process.argv[2] || "") === "workflow-guard") {
-  process.stderr.write("workflow guard refused from strict config");
-  process.exit(1);
-}
-process.exit(0);
-`,
-      "utf8"
-    );
-    await fs.chmod(path.join(root, ".cclaw/hooks/run-hook.mjs"), 0o755);
-    const pluginPath = path.join(root, ".cclaw/hooks/opencode-plugin.mjs");
-    await fs.writeFile(pluginPath, opencodePluginJs(), "utf8");
-
-    const previousStrictness = process.env.CCLAW_STRICTNESS;
-    try {
-      delete process.env.CCLAW_STRICTNESS;
-      const imported = await import(`${pathToFileURL(pluginPath).href}?t=${Date.now()}`);
-      const pluginFactory = imported.default as (ctx: { directory: string }) => {
-        "tool.execute.before": (input: unknown, output?: unknown) => Promise<void>;
-      };
-      const plugin = pluginFactory({ directory: root });
-
-      await expect(
-        plugin["tool.execute.before"]({ tool: "RunCommand", tool_input: { cmd: "echo test" } })
-      ).rejects.toThrow(/cclaw workflow-guard blocked tool\.execute\.before/);
-      await expect(
-        plugin["tool.execute.before"]({ tool: "RunCommand", tool_input: { cmd: "echo test" } })
-      ).rejects.toThrow(/workflow guard refused from strict config/);
-    } finally {
-      if (previousStrictness === undefined) {
-        delete process.env.CCLAW_STRICTNESS;
-      } else {
-        process.env.CCLAW_STRICTNESS = previousStrictness;
-      }
-    }
-  });
-
-  it("opencode plugin bypasses guards for ask / question / todo / think tools", async () => {
-    const root = await createTempProject("opencode-readonly-bypass-extended");
-    await fs.mkdir(path.join(root, ".cclaw/hooks"), { recursive: true });
-    await fs.mkdir(path.join(root, ".cclaw/state"), { recursive: true });
-    await fs.writeFile(
-      path.join(root, ".cclaw/state/flow-state.json"),
-      JSON.stringify({ currentStage: "scope", activeRunId: "active", completedStages: [] }, null, 2),
-      "utf8"
-    );
-    await fs.writeFile(path.join(root, ".cclaw/config.yaml"), "strictness: strict\n", "utf8");
-    await fs.writeFile(
-      path.join(root, ".cclaw/hooks/run-hook.mjs"),
-      `#!/usr/bin/env node\nprocess.stderr.write("should not run");\nprocess.exit(1);\n`,
-      "utf8"
-    );
-    await fs.chmod(path.join(root, ".cclaw/hooks/run-hook.mjs"), 0o755);
-    const pluginPath = path.join(root, ".cclaw/hooks/opencode-plugin.mjs");
-    await fs.writeFile(pluginPath, opencodePluginJs(), "utf8");
-
-    const imported = await import(`${pathToFileURL(pluginPath).href}?t=${Date.now()}`);
-    const pluginFactory = imported.default as (ctx: { directory: string }) => {
-      "tool.execute.before": (input: unknown, output?: unknown) => Promise<void>;
-    };
-    const plugin = pluginFactory({ directory: root });
-
-    for (const tool of [
-      "question",
-      "Question",
-      "AskUserQuestion",
-      "ask_user_question",
-      "request_user_input",
-      "TodoWrite",
-      "todoread",
-      "think",
-      "prompt"
-    ]) {
-      await expect(
-        plugin["tool.execute.before"]({ tool, tool_input: {} })
-      ).resolves.toBeUndefined();
-    }
-  });
-
-  it("opencode plugin never blocks on infra-looking stderr under strict mode", async () => {
-    const root = await createTempProject("opencode-infra-noise");
-    await fs.mkdir(path.join(root, ".cclaw/hooks"), { recursive: true });
-    await fs.mkdir(path.join(root, ".cclaw/state"), { recursive: true });
-    await fs.writeFile(
-      path.join(root, ".cclaw/state/flow-state.json"),
-      JSON.stringify({ currentStage: "scope", activeRunId: "active", completedStages: ["brainstorm"] }, null, 2),
-      "utf8"
-    );
-    await fs.writeFile(path.join(root, ".cclaw/config.yaml"), "strictness: strict\n", "utf8");
-    // Emit yargs-style help to stderr (mimics the real-world regression
-    // where a misrouted child process printed CLI help instead of a
-    // guard refusal).
-    await fs.writeFile(
-      path.join(root, ".cclaw/hooks/run-hook.mjs"),
-      `#!/usr/bin/env node
-process.stderr.write([
-  "Options:",
-  "  -s, --session      session id to continue                              [string]",
-  "      --fork         fork the session when continuing                    [boolean]",
-  "      --prompt       prompt to use                                       [string]"
-].join("\\n"));
-process.exit(1);
-`,
-      "utf8"
-    );
-    await fs.chmod(path.join(root, ".cclaw/hooks/run-hook.mjs"), 0o755);
-    const pluginPath = path.join(root, ".cclaw/hooks/opencode-plugin.mjs");
-    await fs.writeFile(pluginPath, opencodePluginJs(), "utf8");
-
-    const imported = await import(`${pathToFileURL(pluginPath).href}?t=${Date.now()}`);
-    const pluginFactory = imported.default as (ctx: { directory: string }) => {
-      "tool.execute.before": (input: unknown, output?: unknown) => Promise<void>;
-    };
-    const plugin = pluginFactory({ directory: root });
-
-    await expect(
-      plugin["tool.execute.before"]({ tool: "RunCommand", tool_input: { cmd: "echo test" } })
-    ).resolves.toBeUndefined();
-
-    const logPath = path.join(root, ".cclaw/logs/opencode-plugin.log");
-    const log = await fs.readFile(logPath, "utf8");
-    expect(log).toMatch(/infra: (prompt|workflow)-guard non-zero exit with non-guard stderr/);
+    expect(plugin["tool.execute.before"]).toBeUndefined();
+    expect(plugin["tool.execute.after"]).toBeUndefined();
   });
 });

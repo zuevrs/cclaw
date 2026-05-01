@@ -115,13 +115,14 @@ describe("docs flow contract", () => {
     }
 
     for (const required of [
-      "## Lifecycle preservation",
-      "npx cclaw-cli init",
-      "npx cclaw-cli sync",
-      "npx cclaw-cli upgrade",
-      "npx cclaw-cli uninstall",
-      ".cclaw/state/sync-backups/",
-      ".cclaw/state/upgrade-backups/"
+      "## What users can set",
+      "`harnesses`",
+      "## What cclaw manages automatically",
+      "`version`",
+      "`flowVersion`",
+      "## Removed in 3.0.0",
+      "key X is no longer supported in cclaw 3.0.0; see CHANGELOG.md",
+      "npx cclaw-cli sync"
     ]) {
       expect(config).toContain(required);
     }

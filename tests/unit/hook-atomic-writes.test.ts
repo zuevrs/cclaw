@@ -32,55 +32,37 @@ function runHookOnce(
 }
 
 describe("hook atomic/locked state writes", () => {
-  it("parallel session-start invocations write a valid ralph-loop.json (no torn writes)", async () => {
+  it("parallel stop-handoff invocations write a valid stop-block counter (no torn writes)", async () => {
     const root = await createTempProject("atomic-hook");
     await fs.mkdir(path.join(root, ".cclaw/state"), { recursive: true });
     await fs.mkdir(path.join(root, ".cclaw/skills/using-cclaw"), { recursive: true });
     await fs.writeFile(path.join(root, ".cclaw/state/flow-state.json"), JSON.stringify({
-      currentStage: "tdd",
+      currentStage: "review",
       activeRunId: "run-concurrent",
-      completedStages: ["brainstorm", "scope", "design", "spec", "plan"]
+      completedStages: ["brainstorm", "scope", "design", "spec", "plan", "tdd"]
     }, null, 2), "utf8");
     await fs.writeFile(path.join(root, ".cclaw/skills/using-cclaw/SKILL.md"), "# using\n", "utf8");
-
-    const log = Array.from({ length: 20 }, (_, i) => ({
-      runId: "run-concurrent",
-      stage: "tdd",
-      ts: `2026-04-01T00:00:${String(i).padStart(2, "0")}Z`,
-      slice: `S-${(i % 3) + 1}`,
-      phase: i % 2 === 0 ? "red" : "green",
-      command: "vitest",
-      exitCode: i % 2 === 0 ? 1 : 0
-    }));
-    await fs.writeFile(
-      path.join(root, ".cclaw/state/tdd-cycle-log.jsonl"),
-      log.map((row) => JSON.stringify(row)).join("\n") + "\n",
-      "utf8"
-    );
+    await fs.writeFile(path.join(root, "dirty.txt"), "dirty\n", "utf8");
+    await new Promise<void>((resolve, reject) => {
+      const child = spawn("git", ["init"], { cwd: root, env: process.env });
+      child.on("error", reject);
+      child.on("close", (code) => (code === 0 ? resolve() : reject(new Error("git init failed"))));
+    });
 
     const scriptPath = await installHookScript(root);
-
-    // Fire 8 parallel session-start hooks. Without atomic+locked writes,
-    // we see torn JSON or EEXIST errors; with them, every run succeeds
-    // and the final file is parseable.
     const results = await Promise.all(
-      Array.from({ length: 8 }, () => runHookOnce(scriptPath, root, "session-start", {}))
+      Array.from({ length: 8 }, () =>
+        runHookOnce(scriptPath, root, "stop-handoff", { transcript_id: "parallel-stop" })
+      )
     );
-    for (const result of results) {
-      expect(result.code, result.stderr).toBe(0);
-    }
+    expect(results.some((result) => result.code === 1)).toBe(true);
 
-    const ralphRaw = await fs.readFile(
-      path.join(root, ".cclaw/state/ralph-loop.json"),
+    const stopBlocksRaw = await fs.readFile(
+      path.join(root, ".cclaw/state/stop-blocks-parallel-stop.json"),
       "utf8"
     );
-    expect(() => JSON.parse(ralphRaw)).not.toThrow();
-
-    const compoundRaw = await fs.readFile(
-      path.join(root, ".cclaw/state/compound-readiness.json"),
-      "utf8"
-    );
-    expect(() => JSON.parse(compoundRaw)).not.toThrow();
+    const parsed = JSON.parse(stopBlocksRaw) as { blockCount: number };
+    expect(parsed.blockCount).toBe(2);
   });
 
   it("records a breadcrumb when flow-state.json is corrupt instead of silently fallbacking", async () => {

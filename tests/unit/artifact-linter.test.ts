@@ -1902,6 +1902,14 @@ describe("artifact linter heuristics", () => {
     const root = await createTempProject("scope-missing-mode");
     await writeRuntimeArtifact(root, "02-scope.md", `# Scope Artifact
 
+## Pre-Scope System Audit
+| Check | Command | Findings |
+|---|---|---|
+| Recent commits | git log -30 --oneline | no prior implementation |
+| Current diff | git diff --stat | scope draft only |
+| Stash state | git stash list | no pending stash entries |
+| Debt markers | rg -n "TODO|FIXME|XXX|HACK" | none |
+
 ## Prime Directives
 - Zero silent failures: every delivery failure maps to a visible state.
 - Named error surfaces: stream disconnect, auth drift, and publisher timeout.
@@ -2419,6 +2427,14 @@ ${premiseBody}
   it("accepts split In Scope and Out of Scope headings for scope boundaries", async () => {
     const root = await createTempProject("scope-split-boundaries");
     await writeRuntimeArtifact(root, "02-scope.md", `# Scope Artifact
+
+## Pre-Scope System Audit
+| Check | Command | Findings |
+|---|---|---|
+| Recent commits | git log -30 --oneline | todo app only |
+| Current diff | git diff --stat | scope draft only |
+| Stash state | git stash list | no pending stash entries |
+| Debt markers | rg -n "TODO|FIXME|XXX|HACK" | none |
 
 ## Scope Mode
 - Mode: HOLD SCOPE
