@@ -166,12 +166,65 @@ function isValidTopicId(id: string): boolean {
 }
 
 /**
+ * Parse a single checklist row into the list of forcing-question topic
+ * descriptors it declares. Returns `null` when the row is not a
+ * forcing-questions header. Throws when the header is found but its
+ * body does not match the Wave 24 `id: topic; id: topic; ...` syntax
+ * — authors fix the stage definition rather than silently ship
+ * un-coverable topics.
+ *
+ * Exposed for unit tests that exercise the parser without depending on
+ * the live stage schema.
+ */
+export function parseForcingQuestionsRow(
+  row: string,
+  context: string = "row"
+): ForcingQuestionTopic[] | null {
+  const headerMatch = /\*\*\s*[A-Za-z]+\s+forcing\s+questions\s*\([^)]*\)\s*\*\*\s*(?:[—\-–:]+)?\s*(.+)/iu.exec(
+    row
+  );
+  if (!headerMatch) return null;
+  const body = (headerMatch[1] ?? "").trim();
+  if (body.length === 0) return [];
+  // Take everything up to the first sentence-ending `.` followed by a
+  // space + capital letter. We split on `;` only; commas are part of
+  // human labels. Authors stop the list with `.` so the trailing
+  // prose ("Tag the matching ...") is excluded.
+  const listSection = body.split(/\.\s+(?=[A-Z])/u)[0] ?? body;
+  const segments = listSection
+    .split(/;\s*/u)
+    .map((segment) => segment.trim())
+    .filter((segment) => segment.length > 0);
+  const topics: ForcingQuestionTopic[] = [];
+  for (const segment of segments) {
+    const match = /^[`*_]?\s*([A-Za-z0-9][A-Za-z0-9-]*)\s*[`*_]?\s*:\s*(.+?)\s*$/u.exec(segment);
+    if (!match) {
+      throw new Error(
+        `parseForcingQuestionsRow(${context}): segment "${segment}" does not match required \`id: topic\` syntax. Wave 24 (v6.0.0) requires \`id: topic; id: topic; ...\` form.`
+      );
+    }
+    const id = (match[1] ?? "").toLowerCase();
+    const topic = (match[2] ?? "").replace(/[`*_]+$/u, "").trim();
+    if (!isValidTopicId(id)) {
+      throw new Error(
+        `parseForcingQuestionsRow(${context}): invalid topic id "${id}" in segment "${segment}". IDs must match ${TOPIC_ID_PATTERN.source}.`
+      );
+    }
+    if (topic.length === 0) {
+      throw new Error(
+        `parseForcingQuestionsRow(${context}): empty topic label after id "${id}" in segment "${segment}".`
+      );
+    }
+    topics.push({ id, topic });
+  }
+  return topics;
+}
+
+/**
  * Extract forcing-question topics from a stage's checklist.
  *
  * Wave 24 (v6.0.0): only the new `id: topic; id: topic; ...` syntax is
- * accepted. Each segment must be `<kebab-id>: <human label>` separated
- * by `;`. The optional surrounding emphasis (`` ` ``) on the id is
- * tolerated. Throws when the syntax is malformed so authors fix the
+ * accepted. Throws when the syntax is malformed so authors fix the
  * stage definition rather than silently shipping un-coverable topics.
  *
  * Returns empty array when no forcing-questions row is present (caller
@@ -187,45 +240,9 @@ export function extractForcingQuestions(stage: FlowStage): ForcingQuestionTopic[
     return [];
   }
   for (const row of checklist) {
-    const headerMatch = /\*\*\s*[A-Za-z]+\s+forcing\s+questions\s*\([^)]*\)\s*\*\*\s*(?:[—\-–:]+)?\s*(.+)/iu.exec(
-      row
-    );
-    if (!headerMatch) continue;
-    const body = (headerMatch[1] ?? "").trim();
-    if (body.length === 0) return [];
-    // Take everything up to the first sentence-ending `.` followed by a
-    // space + capital letter, OR the trailing instructional sentence
-    // marker. We split on `;` only; commas are part of human labels.
-    // Authors stop the list with `.` so the trailing prose ("Tag the
-    // matching ...") is excluded.
-    const listSection = body.split(/\.\s+(?=[A-Z])/u)[0] ?? body;
-    const segments = listSection
-      .split(/;\s*/u)
-      .map((segment) => segment.trim())
-      .filter((segment) => segment.length > 0);
-    const topics: ForcingQuestionTopic[] = [];
-    for (const segment of segments) {
-      const match = /^[`*_]?\s*([A-Za-z0-9][A-Za-z0-9-]*)\s*[`*_]?\s*:\s*(.+?)\s*$/u.exec(segment);
-      if (!match) {
-        throw new Error(
-          `extractForcingQuestions(${stage}): segment "${segment}" does not match required \`id: topic\` syntax. Wave 24 (v6.0.0) requires \`id: topic; id: topic; ...\` form. Update the checklist row in src/content/stages/${stage}.ts.`
-        );
-      }
-      const id = (match[1] ?? "").toLowerCase();
-      const topic = (match[2] ?? "").replace(/[`*_]+$/u, "").trim();
-      if (!isValidTopicId(id)) {
-        throw new Error(
-          `extractForcingQuestions(${stage}): invalid topic id "${id}" in segment "${segment}". IDs must match ${TOPIC_ID_PATTERN.source}.`
-        );
-      }
-      if (topic.length === 0) {
-        throw new Error(
-          `extractForcingQuestions(${stage}): empty topic label after id "${id}" in segment "${segment}".`
-        );
-      }
-      topics.push({ id, topic });
-    }
-    return topics;
+    const parsed = parseForcingQuestionsRow(row, `stage=${stage}`);
+    if (parsed === null) continue;
+    return parsed;
   }
   return [];
 }

@@ -580,6 +580,23 @@ const result = await checkMandatoryDelegations(root, "scope");
     expect(ledger.entries).toEqual([]);
   });
 
+  it("Wave 24: drops mandatory delegations entirely when taskClass=software-bugfix (skippedByTrack)", async () => {
+    const root = await createTempProject("delegation-bugfix-skip");
+    await seedFlowState(root, "run-bugfix-review", "review");
+    // Note: track stays as the default (standard) — only taskClass forces the skip here.
+    await writeConfig(root, createDefaultConfig(["claude"]));
+
+    const result = await checkMandatoryDelegations(root, "review", {
+      taskClass: "software-bugfix"
+    });
+    // Wave 24 (v6.0.0): bugfix taskClass collapses mandatory delegations
+    // to [] regardless of track because tdd/review safety gates already
+    // cover the regression-risk surface.
+    expect(result.satisfied).toBe(true);
+    expect(result.missing).toEqual([]);
+    expect(result.skippedByTrack).toBe(true);
+  });
+
   it("Wave 24: drops mandatory delegations entirely on the quick track (skippedByTrack)", async () => {
     const root = await createTempProject("delegation-track-required-at-tier");
     await seedFlowState(root, "run-quick-review", "review");

@@ -2,37 +2,66 @@ import { describe, expect, it } from "vitest";
 import {
   ELICITATION_STAGES,
   evaluateQaLogFloor,
-  extractForcingQuestions
+  extractForcingQuestions,
+  parseForcingQuestionsRow,
+  type ForcingQuestionTopic
 } from "../../src/artifact-linter/shared.js";
 
 /**
- * Wave 23 (v5.0.0) unit fixtures for `evaluateQaLogFloor`. These pin the new
- * `qa_log_unconverged` linter contract that replaces the count-based
- * `qa_log_below_min` rule.
+ * Wave 24 (v6.0.0) unit fixtures for `evaluateQaLogFloor`. These pin the
+ * mandatory `[topic:<id>]` tag contract that replaces Wave 23's English
+ * keyword fallback. The user explicitly REJECTED a backward-compat
+ * fallback because keyword matching gave false-pass results on RU/UA
+ * Q&A logs.
  *
  * Convergence sources (any one is sufficient):
- *   - All forcing-question topics from the stage's checklist appear addressed
- *     in the Q&A Log (substring keyword match in question/answer columns).
- *   - The Ralph-Loop convergence detector reports the last 2 substantive rows
- *     have decision_impact marking `skip` / `continue` / `no-change` / `done`.
+ *   - Every forcing-question topic id is tagged `[topic:<id>]` on at
+ *     least one Q&A Log row (cells joined; tag may live in any column).
+ *   - The Ralph-Loop convergence detector reports the last 2 substantive
+ *     rows have decision_impact marking `skip` / `continue` / `no-change`
+ *     / `done`.
  *   - Q&A Log contains an explicit user stop-signal row.
  *   - `--skip-questions` flag was persisted (downgrades to advisory).
- *   - Stage exposes no forcing-questions row (e.g. spec/plan/tdd/review/ship)
- *     AND artifact has at least one substantive row.
+ *   - Stage exposes no forcing-questions row (e.g. spec/plan/tdd/review/
+ *     ship) AND artifact has at least one substantive row.
  *
- * Wave 23 removed:
- *   - The fixed `min` count constant (10 for standard, 5 for medium, 2 for quick).
- *   - The `CCLAW_ELICITATION_FLOOR=advisory` env override (replaced by
- *     `--skip-questions` advisory).
- *   - The lite-tier short-circuit (quick track no longer needs a special case;
- *     no-forcing convergence covers it).
- *   - `min` field always reports 0; `liteShortCircuit` always reports false.
+ * Wave 24 removed:
+ *   - The English keyword fallback (`topicKeywords` + `STOP_WORDS`).
+ *   - Multi-token substring scoring.
  */
 
-const FORCING_COVERAGE_QA_LOG = `## Q&A Log
+const FORCING_COVERAGE_QA_LOG_RU = `## Q&A Log
 | Turn | Question | User answer (1-line) | Decision impact |
 |---|---|---|---|
-| 1 | What pain are we solving for users today? | Onboarding takes 30 min. | scope-shaping |
+| 1 | Какую боль мы решаем для пользователей? | Регистрация занимает 30 минут. | scope-shaping [topic:pain] |
+| 2 | Какой самый прямой путь это починить? | Чек-лист самообслуживания. | architecture-shaping [topic:direct-path] |
+| 3 | Что будет, если ничего не делать? | Отток растёт ~3% в месяц. | urgency-shaping [topic:do-nothing] |
+| 4 | Кто первый оператор/пользователь? | Соло-фаундер во время онбординга. | persona-shaping [topic:operator] |
+| 5 | Какие no-go границы? | Нет нового инфра в v1. | scope-shaping [topic:no-go] |
+`;
+
+const FORCING_COVERAGE_QA_LOG_EN = `## Q&A Log
+| Turn | Question | User answer (1-line) | Decision impact |
+|---|---|---|---|
+| 1 | What pain are we solving for users today? | Onboarding takes 30 min. | scope-shaping [topic:pain] |
+| 2 | What is the direct path to fix it? | Self-serve checklist. | architecture-shaping [topic:direct-path] |
+| 3 | What happens if we do nothing? | Churn climbs ~3% MoM. | urgency-shaping [topic:do-nothing] |
+| 4 | Who is the first operator/user affected? | Solo founder onboarding alone. | persona-shaping [topic:operator] |
+| 5 | What no-go boundaries are non-negotiable? | No new infra in v1. | scope-shaping [topic:no-go] |
+`;
+
+const PARTIAL_TAG_QA_LOG = `## Q&A Log
+| Turn | Question | User answer (1-line) | Decision impact |
+|---|---|---|---|
+| 1 | What pain are we solving? | Onboarding takes 30 min. | scope-shaping [topic:pain] |
+| 2 | What is the direct path to fix it? | Self-serve checklist. | architecture-shaping |
+| 3 | What happens if we do nothing? | Churn climbs ~3% MoM. | urgency-shaping [topic:do-nothing] |
+`;
+
+const UNTAGGED_FULL_PROSE_QA_LOG = `## Q&A Log
+| Turn | Question | User answer (1-line) | Decision impact |
+|---|---|---|---|
+| 1 | What pain are we solving? | Onboarding takes 30 min. | scope-shaping |
 | 2 | What is the direct path to fix it? | Self-serve checklist. | architecture-shaping |
 | 3 | What happens if we do nothing? | Churn climbs ~3% MoM. | urgency-shaping |
 | 4 | Who is the first operator/user affected? | Solo founder onboarding alone. | persona-shaping |
@@ -67,7 +96,7 @@ const ALL_SKIPPED_QA_LOG = `## Q&A Log
 | 2 | Q2 | A2 | waived |
 `;
 
-describe("evaluateQaLogFloor (Wave 23 / v5.0.0 convergence contract)", () => {
+describe("evaluateQaLogFloor (Wave 24 / v6.0.0 mandatory [topic:<id>] contract)", () => {
   it("fails standard/brainstorm with empty Q&A Log (no convergence sources)", () => {
     const result = evaluateQaLogFloor(null, "standard", "brainstorm");
     expect(result.ok).toBe(false);
@@ -78,14 +107,44 @@ describe("evaluateQaLogFloor (Wave 23 / v5.0.0 convergence contract)", () => {
     expect(result.noNewDecisions).toBe(false);
     expect(result.skipQuestionsAdvisory).toBe(false);
     expect(result.details).toMatch(/unconverged/iu);
+    expect(result.details).toMatch(/\[pain, direct-path, do-nothing, operator, no-go\]/u);
   });
 
-  it("passes standard/brainstorm when all forcing-question topics are covered", () => {
-    const result = evaluateQaLogFloor(FORCING_COVERAGE_QA_LOG, "standard", "brainstorm");
+  it("passes RU Q&A when every forcing topic id is tagged [topic:<id>] (i18n fix)", () => {
+    const result = evaluateQaLogFloor(FORCING_COVERAGE_QA_LOG_RU, "standard", "brainstorm");
     expect(result.ok).toBe(true);
     expect(result.forcingPending).toEqual([]);
-    expect(result.forcingCovered.length).toBeGreaterThan(0);
+    expect(result.forcingCovered.sort()).toEqual(
+      ["direct-path", "do-nothing", "no-go", "operator", "pain"]
+    );
     expect(result.details).toMatch(/converged/iu);
+  });
+
+  it("passes EN Q&A with the same [topic:<id>] tags", () => {
+    const result = evaluateQaLogFloor(FORCING_COVERAGE_QA_LOG_EN, "standard", "brainstorm");
+    expect(result.ok).toBe(true);
+    expect(result.forcingPending).toEqual([]);
+  });
+
+  it("fails when forcing topics are answered in prose but NOT tagged (no keyword fallback)", () => {
+    // Wave 23 would have substring-matched these English answers. Wave 24
+    // requires the explicit [topic:<id>] tag — no fallback, no rescue.
+    const result = evaluateQaLogFloor(UNTAGGED_FULL_PROSE_QA_LOG, "standard", "brainstorm");
+    expect(result.ok).toBe(false);
+    expect(result.forcingCovered).toEqual([]);
+    expect(result.forcingPending.sort()).toEqual(
+      ["direct-path", "do-nothing", "no-go", "operator", "pain"]
+    );
+    expect(result.details).toMatch(/\[pain, direct-path, do-nothing, operator, no-go\]/u);
+    expect(result.details).toMatch(/\[topic:<id>\]/u);
+  });
+
+  it("partial tagging fails for the un-tagged topic ids only", () => {
+    const result = evaluateQaLogFloor(PARTIAL_TAG_QA_LOG, "standard", "brainstorm");
+    expect(result.ok).toBe(false);
+    expect(result.forcingCovered.sort()).toEqual(["do-nothing", "pain"]);
+    expect(result.forcingPending.sort()).toEqual(["direct-path", "no-go", "operator"]);
+    expect(result.details).toMatch(/\[direct-path, operator, no-go\]/u);
   });
 
   it("passes via Ralph-Loop convergence (last 2 rows produce no decision changes)", () => {
@@ -102,7 +161,7 @@ describe("evaluateQaLogFloor (Wave 23 / v5.0.0 convergence contract)", () => {
     expect(result.details).toMatch(/stop-signal/iu);
   });
 
-  it("downgrades unconverged Q&A to advisory under --skip-questions", () => {
+  it("downgrades unconverged Q&A to advisory under --skip-questions, surfacing pending IDs", () => {
     const result = evaluateQaLogFloor(UNCONVERGED_QA_LOG, "standard", "brainstorm", {
       skipQuestions: true
     });
@@ -110,6 +169,7 @@ describe("evaluateQaLogFloor (Wave 23 / v5.0.0 convergence contract)", () => {
     expect(result.skipQuestionsAdvisory).toBe(true);
     expect(result.details).toMatch(/--skip-questions/iu);
     expect(result.details).toMatch(/advisory/iu);
+    expect(result.details).toMatch(/\[pain, direct-path, do-nothing, operator, no-go\]/u);
   });
 
   it("excludes skipped/waived rows from the substantive count", () => {
@@ -119,11 +179,9 @@ describe("evaluateQaLogFloor (Wave 23 / v5.0.0 convergence contract)", () => {
     expect(result.hasStopSignal).toBe(false);
   });
 
-  it("returns trivially ok=true for non-elicitation stages (no forcing questions)", () => {
+  it("returns ok=false for non-elicitation stages with empty body (needs >= 1 substantive row)", () => {
     const result = evaluateQaLogFloor(null, "standard", "spec");
     expect(result.min).toBe(0);
-    // Spec exposes no forcing-questions row but artifact has 0 substantive
-    // rows — convergence requires at least 1 row when no forcing topics exist.
     expect(result.ok).toBe(false);
   });
 
@@ -159,41 +217,79 @@ describe("evaluateQaLogFloor (Wave 23 / v5.0.0 convergence contract)", () => {
     expect(result.hasStopSignal).toBe(true);
   });
 
-  it("CCLAW_ELICITATION_FLOOR env override is removed (env value has no effect)", () => {
-    const original = process.env.CCLAW_ELICITATION_FLOOR;
-    process.env.CCLAW_ELICITATION_FLOOR = "advisory";
-    try {
-      const result = evaluateQaLogFloor(null, "standard", "brainstorm");
-      expect(result.ok).toBe(false);
-      // Env override no longer downgrades to advisory; only --skip-questions does.
-      expect(result.skipQuestionsAdvisory).toBe(false);
-    } finally {
-      if (original === undefined) {
-        delete process.env.CCLAW_ELICITATION_FLOOR;
-      } else {
-        process.env.CCLAW_ELICITATION_FLOOR = original;
-      }
-    }
-  });
-
   it("ELICITATION_STAGES is exactly brainstorm/scope/design", () => {
     expect(Array.from(ELICITATION_STAGES).sort()).toEqual(["brainstorm", "design", "scope"]);
   });
+});
 
-  it("extractForcingQuestions(brainstorm) returns the brainstorm forcing topics", () => {
+describe("extractForcingQuestions (Wave 24 / v6.0.0 mandatory id: topic syntax)", () => {
+  it("brainstorm returns the canonical forcing-question topic descriptors", () => {
     const topics = extractForcingQuestions("brainstorm");
-    expect(topics.length).toBeGreaterThan(0);
-    // Brainstorm checklist row: "what pain are we solving, what is the direct
-    // path, what happens if we do nothing, who is the first operator/user
-    // affected, and what no-go boundaries are non-negotiable."
-    const all = topics.join(" ").toLowerCase();
-    expect(all).toMatch(/pain/u);
-    expect(all).toMatch(/direct path|path/u);
-    expect(all).toMatch(/operator|user/u);
+    expect(topics.length).toBeGreaterThanOrEqual(5);
+    const ids = topics.map((t: ForcingQuestionTopic) => t.id);
+    expect(ids).toEqual(["pain", "direct-path", "do-nothing", "operator", "no-go"]);
+    expect(topics[0]).toMatchObject({ id: "pain", topic: expect.stringMatching(/pain/iu) });
   });
 
-  it("extractForcingQuestions returns [] for stages without forcing-questions row", () => {
+  it("scope returns the canonical scope topic descriptors", () => {
+    const topics = extractForcingQuestions("scope");
+    const ids = topics.map((t) => t.id);
+    expect(ids).toEqual(["in-out", "locked-upstream", "rollback", "failure-modes"]);
+  });
+
+  it("design returns the canonical design topic descriptors", () => {
+    const topics = extractForcingQuestions("design");
+    const ids = topics.map((t) => t.id);
+    expect(ids).toEqual(["data-flow", "seams", "invariants", "not-refactor"]);
+  });
+
+  it("returns [] for stages without a forcing-questions row", () => {
     expect(extractForcingQuestions("plan")).toEqual([]);
     expect(extractForcingQuestions("ship")).toEqual([]);
+  });
+
+  it("parser accepts the new `id: topic; id: topic; ...` syntax", () => {
+    const row =
+      "**Brainstorm forcing questions (must be covered or explicitly waived)** — `pain: what pain are we solving`; `direct-path: what is the direct path`. Tag the matching row.";
+    const topics = parseForcingQuestionsRow(row, "test-row");
+    expect(topics).toEqual([
+      { id: "pain", topic: "what pain are we solving" },
+      { id: "direct-path", topic: "what is the direct path" }
+    ]);
+  });
+
+  it("parser throws on the legacy prose syntax (no `id:` prefixes)", () => {
+    const legacyRow =
+      "**Brainstorm forcing questions (must be covered or explicitly waived)** — what pain are we solving, what is the direct path, what happens if we do nothing.";
+    expect(() => parseForcingQuestionsRow(legacyRow, "legacy-row")).toThrow(
+      /id: topic/iu
+    );
+  });
+
+  it("parser throws on a malformed id (uppercase / spaces)", () => {
+    const badRow =
+      "**Scope forcing questions (must be covered or explicitly waived)** — `Bad Id: a topic`; `another: another topic`.";
+    expect(() => parseForcingQuestionsRow(badRow, "bad-row")).toThrow();
+  });
+
+  it("returns null for non-forcing-question checklist rows", () => {
+    expect(parseForcingQuestionsRow("**Some other rule** — body", "row")).toBeNull();
+  });
+
+  it("convergence helper accepts string ids supplied as forcingQuestions option", () => {
+    // Wave 24 contract: callers must pass ForcingQuestionTopic descriptors
+    // (or string ids). Old keyword arrays produce predictable failures.
+    const result = evaluateQaLogFloor(
+      `## Q&A Log
+| Turn | Question | User answer (1-line) | Decision impact |
+|---|---|---|---|
+| 1 | sample | yes | locks-x [topic:custom-id] |
+`,
+      "standard",
+      "brainstorm",
+      { forcingQuestions: ["custom-id"] }
+    );
+    expect(result.ok).toBe(true);
+    expect(result.forcingCovered).toEqual(["custom-id"]);
   });
 });
