@@ -2,6 +2,7 @@ import {
   type StageLintContext,
   evaluateInvestigationTrace,
   evaluateLayeredDocumentReviewStatus,
+  extractAuthoredBody,
   headingPresent,
   sectionBodyByName,
   collectPatternHits,
@@ -128,7 +129,8 @@ export async function lintPlanStage(ctx: StageLintContext): Promise<void> {
     const allPlaceholderTokens = FORBIDDEN_PLACEHOLDER_TOKENS.map((token) =>
       token.toLowerCase()
     );
-    const lowerRaw = raw.toLowerCase();
+    const authoredBody = extractAuthoredBody(raw);
+    const lowerRaw = authoredBody.toLowerCase();
     const planWidePlaceholderHits = allPlaceholderTokens.filter((token) =>
       lowerRaw.includes(token)
     );

@@ -23,7 +23,11 @@ import {
   type StageLintContext
 } from "./artifact-linter/shared.js";
 import { shouldDemoteArtifactValidationByTrack } from "./content/stage-schema.js";
-import { recordArtifactValidationDemotedByTrack } from "./delegation.js";
+import { readDelegationLedger, recordArtifactValidationDemotedByTrack } from "./delegation.js";
+import {
+  classifyAndPersistFindings,
+  type LintRunDedupResult
+} from "./artifact-linter/findings-dedup.js";
 import { lintBrainstormStage } from "./artifact-linter/brainstorm.js";
 import { lintDesignStage } from "./artifact-linter/design.js";
 import { lintPlanStage } from "./artifact-linter/plan.js";
@@ -53,6 +57,7 @@ export {
   type LearningSource,
   type LearningSeedEntry,
   type LearningsParseResult,
+  extractAuthoredBody,
   formatLearningsErrorsBullets,
   learningsParseFailureHumanSummary,
   extractMarkdownSectionBody,
@@ -411,6 +416,37 @@ export async function lintArtifact(
     }
   }
 
+  try {
+    const delegationLedger = await readDelegationLedger(projectRoot);
+    const legacyWaivers = delegationLedger.entries.filter(
+      (entry) =>
+        entry.status === "waived" &&
+        entry.mode === "proactive" &&
+        entry.stage === stage &&
+        (typeof entry.approvalToken !== "string" || entry.approvalToken.trim().length === 0)
+    );
+    if (legacyWaivers.length > 0) {
+      const descriptors = legacyWaivers
+        .map((entry) =>
+          [entry.agent, entry.spanId].filter((value): value is string => typeof value === "string").join("@")
+        )
+        .filter((value) => value.length > 0);
+      findings.push({
+        section: "waiver_legacy_provenance",
+        required: false,
+        rule:
+          "waiver_legacy_provenance — proactive waiver(s) without approvalToken. Issue new waivers via `cclaw-cli internal waiver-grant --stage <stage> --reason <slug>` so the provenance trail is signed. Legacy waivers remain valid (advisory).",
+        found: false,
+        details:
+          `Found ${legacyWaivers.length} proactive waiver(s) on stage="${stage}" without approvalToken` +
+          (descriptors.length > 0 ? ` (${descriptors.join(", ")})` : "") +
+          ". Next waiver should be issued with `cclaw-cli internal waiver-grant` and consumed via `--accept-proactive-waiver=<token>`."
+      });
+    }
+  } catch {
+    // Ledger absent or unreadable: no advisory to emit.
+  }
+
   const demote = shouldDemoteArtifactValidationByTrack(track, taskClass);
   const demotedSections: string[] = [];
   if (demote) {
@@ -437,7 +473,31 @@ export async function lintArtifact(
   }
 
   const passed = findings.every((f) => !f.required || f.found);
-  return { stage, file: relFile, passed, findings };
+
+  let dedup: LintResult["dedup"];
+  try {
+    const dedupResult: LintRunDedupResult = await classifyAndPersistFindings(
+      projectRoot,
+      stage,
+      findings
+    );
+    const statusByFingerprint = new Map(
+      dedupResult.classified.map(({ fingerprint, status }) => [fingerprint, status] as const)
+    );
+    const statuses = dedupResult.classified.map(({ status }) => status);
+    void statusByFingerprint;
+    dedup = {
+      newCount: dedupResult.summary.newCount,
+      repeatCount: dedupResult.summary.repeatCount,
+      resolvedCount: dedupResult.summary.resolvedCount,
+      header: dedupResult.header,
+      statuses
+    };
+  } catch {
+    dedup = undefined;
+  }
+
+  return { stage, file: relFile, passed, findings, ...(dedup ? { dedup } : {}) };
 }
 
 /**

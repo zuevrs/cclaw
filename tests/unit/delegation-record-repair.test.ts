@@ -3,16 +3,18 @@ import path from "node:path";
 import { spawn } from "node:child_process";
 import { describe, expect, it } from "vitest";
 import { delegationRecordScript } from "../../src/content/hooks.js";
-import { ensureRunSystem } from "../../src/runs.js";
+import { ensureRunSystem, readFlowState, writeFlowState } from "../../src/runs.js";
 import { createTempProject, writeProjectFile } from "../helpers/index.js";
 
 async function writeRepairFixture(root: string): Promise<void> {
   await ensureRunSystem(root);
   const runId = "run-repair-test";
-  const flowPath = path.join(root, ".cclaw/state/flow-state.json");
-  const raw = JSON.parse(await fs.readFile(flowPath, "utf8")) as { activeRunId?: string };
-  raw.activeRunId = runId;
-  await fs.writeFile(flowPath, `${JSON.stringify(raw, null, 2)}\n`, "utf8");
+  const current = await readFlowState(root);
+  await writeFlowState(
+    root,
+    { ...current, activeRunId: runId },
+    { allowReset: true, writerSubsystem: "delegation-repair-fixture" }
+  );
 
   const agentPath = ".cclaw/agents/researcher.md";
   await writeProjectFile(root, agentPath, "# stub\n");

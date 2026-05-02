@@ -60,7 +60,7 @@ export async function runRewind(projectRoot: string, args: RewindArgs, io: Inter
     const staleStages = { ...current.staleStages };
     delete staleStages[args.targetStage];
     const nextState: FlowState = { ...current, staleStages };
-    await writeFlowState(projectRoot, nextState);
+    await writeFlowState(projectRoot, nextState, { writerSubsystem: "rewind-ack" });
     const payload = {
       ok: true,
       command: "rewind",
@@ -109,7 +109,7 @@ export async function runRewind(projectRoot: string, args: RewindArgs, io: Inter
     staleStages,
     rewinds: [...current.rewinds, record]
   };
-  await writeFlowState(projectRoot, nextState);
+  await writeFlowState(projectRoot, nextState, { writerSubsystem: "rewind" });
   const payload = {
     ok: true,
     command: "rewind",

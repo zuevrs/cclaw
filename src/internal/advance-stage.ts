@@ -20,11 +20,38 @@ import {
   parseVerifyCurrentStateArgs,
   parseVerifyFlowStateDiffArgs
 } from "./advance-stage/parsers.js";
+import {
+  parseFlowStateRepairArgs,
+  runFlowStateRepair
+} from "./flow-state-repair.js";
+import {
+  parseWaiverGrantArgs,
+  runWaiverGrant
+} from "./waiver-grant.js";
+import {
+  FlowStateGuardMismatchError,
+  verifyFlowStateGuard
+} from "../run-persistence.js";
 
 interface InternalIo {
   stdout: Writable;
   stderr: Writable;
 }
+
+/**
+ * Subcommands that mutate or consult flow-state.json via the CLI runtime.
+ * They all require the sha256 sidecar to match before continuing so a
+ * manual edit hard-blocks with exit code 2 (same contract as the inline
+ * hook checks).
+ */
+const GUARD_ENFORCED_SUBCOMMANDS = new Set([
+  "advance-stage",
+  "start-flow",
+  "cancel-run",
+  "rewind",
+  "verify-flow-state-diff",
+  "verify-current-state"
+]);
 
 export async function runInternalCommand(
   projectRoot: string,
@@ -34,12 +61,15 @@ export async function runInternalCommand(
   const [subcommand, ...tokens] = argv;
   if (!subcommand) {
     io.stderr.write(
-      "cclaw internal requires a subcommand: advance-stage | start-flow | cancel-run | rewind | verify-flow-state-diff | verify-current-state | envelope-validate | tdd-red-evidence | tdd-loop-status | early-loop-status | compound-readiness | runtime-integrity | hook\n"
+      "cclaw internal requires a subcommand: advance-stage | start-flow | cancel-run | rewind | verify-flow-state-diff | verify-current-state | envelope-validate | tdd-red-evidence | tdd-loop-status | early-loop-status | compound-readiness | runtime-integrity | hook | flow-state-repair | waiver-grant\n"
     );
     return 1;
   }
 
   try {
+    if (GUARD_ENFORCED_SUBCOMMANDS.has(subcommand)) {
+      await verifyFlowStateGuard(projectRoot);
+    }
     if (subcommand === "advance-stage") {
       return await runAdvanceStage(projectRoot, parseAdvanceStageArgs(tokens), io);
     }
@@ -79,11 +109,21 @@ export async function runInternalCommand(
     if (subcommand === "hook") {
       return await runHookCommand(projectRoot, parseHookArgs(tokens), io);
     }
+    if (subcommand === "flow-state-repair") {
+      return await runFlowStateRepair(projectRoot, parseFlowStateRepairArgs(tokens), io);
+    }
+    if (subcommand === "waiver-grant") {
+      return await runWaiverGrant(projectRoot, parseWaiverGrantArgs(tokens), io);
+    }
     io.stderr.write(
-      `Unknown internal subcommand: ${subcommand}. Expected advance-stage | start-flow | cancel-run | rewind | verify-flow-state-diff | verify-current-state | envelope-validate | tdd-red-evidence | tdd-loop-status | early-loop-status | compound-readiness | runtime-integrity | hook\n`
+      `Unknown internal subcommand: ${subcommand}. Expected advance-stage | start-flow | cancel-run | rewind | verify-flow-state-diff | verify-current-state | envelope-validate | tdd-red-evidence | tdd-loop-status | early-loop-status | compound-readiness | runtime-integrity | hook | flow-state-repair | waiver-grant\n`
     );
     return 1;
   } catch (err) {
+    if (err instanceof FlowStateGuardMismatchError) {
+      io.stderr.write(`cclaw internal ${subcommand}: ${err.message}\n`);
+      return 2;
+    }
     io.stderr.write(
       `cclaw internal ${subcommand} failed: ${err instanceof Error ? err.message : String(err)}\n`
     );

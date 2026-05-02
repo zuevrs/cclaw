@@ -6,7 +6,9 @@ import { stageSchema } from "../../src/content/stage-schema.js";
 import { ARTIFACT_TEMPLATES } from "../../src/content/templates.js";
 import { readDelegationLedger } from "../../src/delegation.js";
 import { runInternalCommand } from "../../src/internal/advance-stage.js";
+import { issueWaiverToken } from "../../src/internal/waiver-grant.js";
 import { ensureRunSystem, readFlowState, writeFlowState } from "../../src/runs.js";
+import type { FlowStage } from "../../src/types.js";
 import { createTempProject } from "../helpers/index.js";
 
 interface CapturedIo {
@@ -47,10 +49,21 @@ function requiredGateEvidenceJson(stage: Parameters<typeof stageSchema>[0]): str
   return JSON.stringify(evidence);
 }
 
-const PROACTIVE_WAIVER_FLAGS = [
-  "--accept-proactive-waiver",
-  "--accept-proactive-waiver-reason=unit_test_proactive"
-] as const;
+async function proactiveWaiverFlags(
+  projectRoot: string,
+  stage: FlowStage,
+  reason: string = "unit_test_proactive"
+): Promise<string[]> {
+  const record = await issueWaiverToken(projectRoot, {
+    stage,
+    reason,
+    issuerSubsystem: "unit-test"
+  });
+  return [
+    `--accept-proactive-waiver=${record.token}`,
+    `--accept-proactive-waiver-reason=${reason}`
+  ];
+}
 
 /**
  * Wave 22: brainstorm/scope/design artifacts must satisfy `qa_log_below_min`
@@ -573,7 +586,7 @@ describe("internal advance-stage commands", () => {
         `--evidence-json=${evidenceJson}`,
         "--waive-delegation=product-discovery,critic",
         "--waiver-reason=unit_test",
-        ...PROACTIVE_WAIVER_FLAGS,
+        ...(await proactiveWaiverFlags(root, "brainstorm")),
         "--quiet"
       ],
       captured.io
@@ -617,7 +630,7 @@ describe("internal advance-stage commands", () => {
         `--evidence-json=${evidenceJson}`,
         "--waive-delegation=product-discovery,critic",
         "--waiver-reason=unit_test",
-        ...PROACTIVE_WAIVER_FLAGS,
+        ...(await proactiveWaiverFlags(root, "brainstorm")),
         "--skip-questions",
         "--quiet"
       ],
@@ -682,7 +695,7 @@ describe("internal advance-stage commands", () => {
         `--evidence-json=${evidenceJson}`,
         "--waive-delegation=product-discovery,critic",
         "--waiver-reason=unit_test",
-        ...PROACTIVE_WAIVER_FLAGS,
+        ...(await proactiveWaiverFlags(root, "brainstorm")),
         "--quiet"
       ],
       okIo.io
@@ -743,8 +756,7 @@ describe("internal advance-stage commands", () => {
         `--evidence-json=${evidenceJson}`,
         "--waive-delegation=product-discovery,critic",
         "--waiver-reason=unit_test",
-        "--accept-proactive-waiver",
-        "--accept-proactive-waiver-reason=unit_test_proactive",
+        ...(await proactiveWaiverFlags(root, "brainstorm")),
         "--quiet"
       ],
       accepted.io
@@ -760,6 +772,8 @@ describe("internal advance-stage commands", () => {
     expect(proactiveWaiver?.status).toBe("waived");
     expect(proactiveWaiver?.waiverReason).toBe("unit_test_proactive");
     expect(proactiveWaiver?.acceptedBy).toBe("user-flag");
+    expect(proactiveWaiver?.approvalToken).toMatch(/^WV-brainstorm-/u);
+    expect(proactiveWaiver?.approvalReason).toBe("unit_test_proactive");
   });
 
   it("advance-stage enforces structured evidence for tdd_verified_before_complete", async () => {
@@ -836,7 +850,7 @@ describe("internal advance-stage commands", () => {
         `--evidence-json=${JSON.stringify(malformedEvidence)}`,
         "--waive-delegation=planner,critic",
         "--waiver-reason=unit_test",
-        ...PROACTIVE_WAIVER_FLAGS,
+        ...(await proactiveWaiverFlags(root, "scope")),
         "--quiet"
       ],
       captured.io
@@ -1031,7 +1045,7 @@ describe("internal advance-stage commands", () => {
         `--evidence-json=${JSON.stringify(evidence)}`,
         "--waive-delegation=architect,test-author",
         "--waiver-reason=unit_test",
-        ...PROACTIVE_WAIVER_FLAGS,
+        ...(await proactiveWaiverFlags(root, "design")),
         "--quiet"
       ],
       captured.io
@@ -1074,7 +1088,7 @@ describe("internal advance-stage commands", () => {
         `--evidence-json=${JSON.stringify(evidence)}`,
         "--waive-delegation=architect,test-author",
         "--waiver-reason=unit_test",
-        ...PROACTIVE_WAIVER_FLAGS,
+        ...(await proactiveWaiverFlags(root, "design")),
         "--quiet"
       ],
       captured.io
@@ -1299,7 +1313,7 @@ process.stdout.write(JSON.stringify({ hook: process.argv[2] }) + "\\n");
         `--evidence-json=${JSON.stringify(evidence)}`,
         "--waive-delegation=reviewer,security-reviewer",
         "--waiver-reason=unit_test",
-        ...PROACTIVE_WAIVER_FLAGS,
+        ...(await proactiveWaiverFlags(root, "review")),
         "--quiet"
       ],
       captured.io
@@ -1391,7 +1405,7 @@ ${QA_LOG_STOP_SIGNAL_BLOCK}## Context
         "--passed=brainstorm_approaches_compared,brainstorm_direction_approved,brainstorm_artifact_reviewed",
         "--waive-delegation=product-discovery,critic",
         "--waiver-reason=unit_test",
-        ...PROACTIVE_WAIVER_FLAGS
+        ...(await proactiveWaiverFlags(root, "brainstorm"))
       ],
       io.io
     );
@@ -1426,7 +1440,7 @@ ${QA_LOG_STOP_SIGNAL_BLOCK}## Context
         `--evidence-json=${requiredGateEvidenceJson("brainstorm")}`,
         "--waive-delegation=product-discovery,critic",
         "--waiver-reason=unit_test",
-        ...PROACTIVE_WAIVER_FLAGS
+        ...(await proactiveWaiverFlags(root, "brainstorm"))
       ],
       io.io
     );
@@ -1460,7 +1474,7 @@ ${QA_LOG_STOP_SIGNAL_BLOCK}## Context
         }),
         "--waive-delegation=product-discovery,critic",
         "--waiver-reason=unit_test",
-        ...PROACTIVE_WAIVER_FLAGS
+        ...(await proactiveWaiverFlags(root, "brainstorm"))
       ],
       io.io
     );
@@ -1492,7 +1506,7 @@ ${QA_LOG_STOP_SIGNAL_BLOCK}## Context
         `--evidence-json=${evidenceJson}`,
         "--waive-delegation=product-discovery,critic",
         "--waiver-reason=unit_test",
-        ...PROACTIVE_WAIVER_FLAGS,
+        ...(await proactiveWaiverFlags(root, "brainstorm")),
         "--quiet"
       ],
       captured.io
@@ -1538,7 +1552,7 @@ ${QA_LOG_STOP_SIGNAL_BLOCK}## Context
         `--evidence-json=${evidenceJson}`,
         "--waive-delegation=product-discovery,critic",
         "--waiver-reason=unit_test",
-        ...PROACTIVE_WAIVER_FLAGS,
+        ...(await proactiveWaiverFlags(root, "brainstorm")),
         "--quiet"
       ],
       captured.io

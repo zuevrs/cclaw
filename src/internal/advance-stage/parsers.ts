@@ -21,6 +21,14 @@ export interface AdvanceStageArgs {
   waiverReason?: string;
   acceptProactiveWaiver: boolean;
   acceptProactiveWaiverReason?: string;
+  /**
+   * Approval token issued by `cclaw-cli internal waiver-grant`. Required
+   * (via `--accept-proactive-waiver=<token>`) whenever the caller asserts
+   * `acceptProactiveWaiver`. Legacy `--accept-proactive-waiver` without a
+   * token is still parsed but rejected downstream by the advance-stage
+   * handler so operators see the error at runtime.
+   */
+  acceptProactiveWaiverToken?: string;
   skipQuestions: boolean;
   quiet: boolean;
   json: boolean;
@@ -88,6 +96,7 @@ export function parseAdvanceStageArgs(tokens: string[]): AdvanceStageArgs {
   let waiverReason: string | undefined;
   let acceptProactiveWaiver = false;
   let acceptProactiveWaiverReason: string | undefined;
+  let acceptProactiveWaiverToken: string | undefined;
   let skipQuestions = false;
   let quiet = false;
   let json = false;
@@ -158,6 +167,11 @@ export function parseAdvanceStageArgs(tokens: string[]): AdvanceStageArgs {
       acceptProactiveWaiver = true;
       continue;
     }
+    if (token.startsWith("--accept-proactive-waiver=")) {
+      acceptProactiveWaiver = true;
+      acceptProactiveWaiverToken = token.slice("--accept-proactive-waiver=".length).trim();
+      continue;
+    }
     if (token === "--skip-questions") {
       skipQuestions = true;
       continue;
@@ -185,6 +199,7 @@ export function parseAdvanceStageArgs(tokens: string[]): AdvanceStageArgs {
     waiverReason,
     acceptProactiveWaiver,
     acceptProactiveWaiverReason,
+    acceptProactiveWaiverToken,
     skipQuestions,
     quiet,
     json

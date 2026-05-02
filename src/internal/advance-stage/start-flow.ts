@@ -260,7 +260,10 @@ export async function runStartFlow(
   const repoSignals = await collectRepoSignals(projectRoot);
   nextState = { ...nextState, repoSignals };
 
-  await writeFlowState(projectRoot, nextState, { allowReset: true });
+  await writeFlowState(projectRoot, nextState, {
+    allowReset: true,
+    writerSubsystem: "start-flow"
+  });
   await appendIdeaArtifact(projectRoot, args, current);
   const successPayload = {
     ok: true as const,

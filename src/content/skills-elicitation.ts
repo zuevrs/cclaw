@@ -34,7 +34,7 @@ Pinned anchor: "Don't tell it what to do, give it success criteria and watch it 
 These behaviors are the exact reason this skill exists. The linter will block your stage-complete if you do them.
 
 - **Bad**: User asks for a "simple web app" -> agent asks 1 question about stack -> 1 question about auth -> drafts the brainstorm artifact and asks for approval.
-- **Good**: User asks for a "simple web app" -> agent asks Q1 (what pain) -> Q2 (direct path) -> Q3 (do-nothing cost) -> Q4 (first operator/user) -> Q5 (no-go boundaries) -> self-eval: clear -> drafts the brainstorm artifact.
+- **Good**: User asks for a "simple web app" -> agent asks Q1 (what pain) -> Q2 (direct path) -> Q3 (first operator/user) -> Q4 (no-go boundaries) -> self-eval: clear -> drafts the brainstorm artifact.
 
 - **Bad**: Agent immediately dispatches a subagent (\`product-discovery\`, \`critic\`, \`planner\`) at the start of brainstorm/scope/design to "gather context" before any user dialogue.
 - **Good**: Agent walks the Q&A loop with the user first; subagent dispatch happens only after the user approves the elicitation outcome.
@@ -126,7 +126,7 @@ Default mapping note: \`lean\` maps to a lightweight specialist tier on early st
 
 ### Topic tagging (MANDATORY for forcing-question rows)
 
-Each forcing question has a stable topic id (kebab-case ASCII, e.g. \`pain\`, \`do-nothing\`, \`data-flow\`). Tag the matching Q&A Log row's \`Decision impact\` cell with \`[topic:<id>]\` so the linter can verify coverage in any natural language. This is a **HARD requirement** in Wave 24 (v6.0.0): the linter no longer keyword-matches English question prose, so an un-tagged row does NOT count toward coverage even if the answer fully addresses the topic.
+Each forcing question has a stable topic id (kebab-case ASCII, e.g. \`pain\`, \`direct-path\`, \`data-flow\`). Tag the matching Q&A Log row's \`Decision impact\` cell with \`[topic:<id>]\` so the linter can verify coverage in any natural language. This is a **HARD requirement** in Wave 24 (v6.0.0): the linter no longer keyword-matches English question prose, so an un-tagged row does NOT count toward coverage even if the answer fully addresses the topic.
 
 RU example (after asking \`pain\` in Russian):
 
@@ -136,21 +136,18 @@ RU example (after asking \`pain\` in Russian):
 | 1 | Какую боль мы решаем? | Регистрация занимает 30 минут. | scope-shaping [topic:pain] |
 \`\`\`
 
-Multiple tags in one row are allowed when one answer covers several topics: \`[topic:pain] [topic:do-nothing]\`. Stop-signal rows do NOT need a tag.
+Multiple tags in one row are allowed when one answer covers several topics: \`[topic:pain] [topic:direct-path]\`. Stop-signal rows do NOT need a tag.
 
 Stage forcing question lists (id → topic):
 
 - **Brainstorm**:
   - \`pain\` — What pain are we solving?
   - \`direct-path\` — What is the most direct path?
-  - \`do-nothing\` — What happens if we do nothing?
   - \`operator\` — Who is the operator/user impacted first?
   - \`no-go\` — What are non-negotiable no-go boundaries?
 - **Scope**:
   - \`in-out\` — What is definitely in and definitely out?
   - \`locked-upstream\` — Which decisions are already locked upstream?
-  - \`rollback\` — What is the rollback path if this fails?
-  - \`failure-modes\` — What are the top failure modes we must design for?
 - **Design**:
   - \`data-flow\` — What is the data flow end-to-end?
   - \`seams\` — Where are the seams/interfaces and ownership boundaries?

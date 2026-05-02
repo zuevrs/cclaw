@@ -113,6 +113,15 @@ export type DelegationEntry = {
   taskId?: string;
   waiverReason?: string;
   acceptedBy?: DelegationWaiverAcceptedBy;
+  /**
+   * Waiver approval token captured from `cclaw-cli internal waiver-grant`.
+   * Present on waiver rows written after v6.7.0. Legacy waiver rows omit
+   * these fields and are surfaced as the advisory linter finding
+   * `waiver_legacy_provenance`.
+   */
+  approvalToken?: string;
+  approvalReason?: string;
+  approvalIssuedAt?: string;
   ts?: string;
   /**
    * Run id the entry belongs to. Older ledgers written before 0.5.17 may omit this;
@@ -358,6 +367,9 @@ function isDelegationEntry(value: unknown): value is DelegationEntry {
     (o.taskId === undefined || typeof o.taskId === "string") &&
     (o.waiverReason === undefined || typeof o.waiverReason === "string") &&
     (o.acceptedBy === undefined || o.acceptedBy === "user-flag") &&
+    (o.approvalToken === undefined || typeof o.approvalToken === "string") &&
+    (o.approvalReason === undefined || typeof o.approvalReason === "string") &&
+    (o.approvalIssuedAt === undefined || typeof o.approvalIssuedAt === "string") &&
     waiverOk &&
     (o.runId === undefined || typeof o.runId === "string") &&
     (o.fulfillmentMode === undefined ||
