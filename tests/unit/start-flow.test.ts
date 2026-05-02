@@ -49,6 +49,30 @@ describe("start-flow repoSignals", () => {
     expect(state.repoSignals?.capturedAt).toMatch(/^\d{4}-/u);
   });
 
+  it("includes repoSignals in start-flow success JSON", async () => {
+    const root = await createTempProject("start-flow-stdout-repo-signals");
+    await ensureRunSystem(root);
+    await writeProjectFile(root, "README.md", "# hi\n");
+    const cap = captureIo();
+    const code = await runInternalCommand(
+      root,
+      ["start-flow", "--track=standard", "--discovery-mode=guided"],
+      cap.io
+    );
+    expect(code).toBe(0);
+    const stdout = cap.stdout().trim();
+    const payloadStart = stdout.indexOf("{");
+    expect(payloadStart).toBeGreaterThanOrEqual(0);
+    const payload = JSON.parse(stdout.slice(payloadStart)) as {
+      ok: boolean;
+      command: string;
+      repoSignals?: { fileCount: number; hasReadme: boolean };
+    };
+    expect(payload.ok).toBe(true);
+    expect(payload.repoSignals?.hasReadme).toBe(true);
+    expect(typeof payload.repoSignals?.fileCount).toBe("number");
+  });
+
   it("collectRepoSignals respects file cap and skips node_modules", async () => {
     const root = await createTempProject("collect-repo-signals");
     await writeProjectFile(root, "a.txt", "1");

@@ -2,11 +2,13 @@ import fs from "node:fs/promises";
 import path from "node:path";
 import { describe, expect, it } from "vitest";
 import {
+  clampEarlyLoopStatusForWrite,
   computeEarlyLoopStatus,
   deriveEarlyLoopStatus,
   normalizeEarlyLoopMaxIterations,
   parseEarlyLoopLog,
-  type EarlyLoopLogEntry
+  type EarlyLoopLogEntry,
+  type EarlyLoopStatus
 } from "../../src/early-loop.js";
 import { createTempProject } from "../helpers/index.js";
 
@@ -94,8 +96,46 @@ describe("early-loop core", () => {
       runId: "run-a",
       maxIterations: 2
     });
+    expect(status.iteration).toBe(2);
     expect(status.convergenceTripped).toBe(true);
     expect(status.escalationReason).toContain("max iterations 2 reached");
+  });
+
+  it("clamps derived iteration when structured entries exceed maxIterations", () => {
+    const entries: EarlyLoopLogEntry[] = [];
+    for (let i = 0; i < 4; i += 1) {
+      entries.push({
+        ts: `t${i}`,
+        runId: "run-clamp",
+        stage: "scope",
+        concerns: [{ id: `C-${i}`, severity: "suggestion", locator: "Contract", summary: `row ${i}` }],
+        resolvedConcernIds: []
+      });
+    }
+    const status = deriveEarlyLoopStatus(entries, {
+      stage: "scope",
+      runId: "run-clamp",
+      maxIterations: 3
+    });
+    expect(status.iteration).toBe(3);
+  });
+
+  it("repair-clamps status objects whose iteration exceeds maxIterations", () => {
+    const broken: EarlyLoopStatus = {
+      schemaVersion: 1,
+      stage: "brainstorm",
+      runId: "run",
+      iteration: 9,
+      maxIterations: 3,
+      openConcerns: [],
+      resolvedConcerns: [],
+      lastSeenConcernIds: [],
+      convergenceTripped: false,
+      lastUpdatedAt: "2026-05-02T15:00:00.000Z"
+    };
+    const repaired = clampEarlyLoopStatusForWrite(broken);
+    expect(repaired.clampedFrom).toBe(9);
+    expect(repaired.status.iteration).toBe(3);
   });
 
   it("reads file-backed log via computeEarlyLoopStatus and filters by stage/run", async () => {

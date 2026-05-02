@@ -29,4 +29,30 @@ describe("flow-state persistence (repoSignals)", () => {
     const state = await readFlowState(root);
     expect(state.repoSignals).toBeUndefined();
   });
+
+  it("round-trips completedStageMeta timestamps", async () => {
+    const root = await createTempProject("run-persistence-stage-meta");
+    await ensureRunSystem(root);
+    const base = createInitialFlowState({ track: "standard", discoveryMode: "guided" });
+    await writeFlowState(
+      root,
+      {
+        ...base,
+        completedStages: ["brainstorm"],
+        completedStageMeta: {
+          brainstorm: { completedAt: "2026-05-02T09:30:00.000Z" }
+        }
+      },
+      { allowReset: true }
+    );
+    const state = await readFlowState(root);
+    expect(state.completedStageMeta?.brainstorm?.completedAt).toBe("2026-05-02T09:30:00.000Z");
+  });
+
+  it("treats omitted completedStageMeta as undefined", async () => {
+    const root = await createTempProject("run-persistence-no-stage-meta-extra");
+    await ensureRunSystem(root);
+    await writeFlowState(root, createInitialFlowState({ track: "standard" }), { allowReset: true });
+    expect((await readFlowState(root)).completedStageMeta).toBeUndefined();
+  });
 });
