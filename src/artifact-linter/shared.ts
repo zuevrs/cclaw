@@ -1,7 +1,7 @@
 import { createHash } from "node:crypto";
 import { SHIP_FINALIZATION_MODES } from "../constants.js";
 import { questionBudgetHint } from "../track-heuristics.js";
-import { FLOW_STAGES, type FlowStage, type FlowTrack } from "../types.js";
+import { FLOW_STAGES, type DiscoveryMode, type FlowStage, type FlowTrack } from "../types.js";
 import { stageSchema } from "../content/stage-schema.js";
 
 /**
@@ -78,6 +78,7 @@ export interface ForcingQuestionTopic {
 }
 
 export interface QaLogFloorOptions {
+  discoveryMode?: DiscoveryMode;
   /**
    * When true, downgrades the finding to advisory (`required: false`).
    * Set when `--skip-questions` was persisted to the active stage flags.
@@ -285,25 +286,22 @@ function lastTwoRowsAllNoDecision(substantiveRows: string[][]): boolean {
  * design artifact. Returns ok=true when convergence is reached or any
  * escape hatch fires.
  *
- * Convergence sources (any one is sufficient):
- * - All forcing-question topics from the stage checklist appear addressed
- *   in `## Q&A Log` (substring keyword match in question/answer columns).
- * - The Ralph-Loop convergence detector reports the last 2 substantive
- *   rows have decision_impact marking `skip`/`continue`/`no-change`/`done`
- *   (i.e. the dialogue is no longer producing decision-changing rows).
- * - Q&A Log contains a stop-signal row (existing
- *   `QA_LOG_STOP_SIGNAL_PATTERNS` keep working).
- * - `--skip-questions` flag was persisted to the active stage flags
- *   (`options.skipQuestions=true`); finding downgrades to advisory.
- * - The stage checklist exposes no forcing-questions row (e.g. simple
- *   refactor) AND the artifact has at least one substantive row — treat
- *   as converged because there is nothing left to force.
+ * Convergence sources (any one can set ok=true — see also
+ * `adaptiveElicitationSkillMarkdown`):
+ * - Every forcing-question topic id from the stage checklist is tagged
+ *   `[topic:<id>]` on at least one `## Q&A Log` row.
+ * - Ralph-Loop path: last 2 substantive rows read as no-new-decisions,
+ *   substantive count ≥ max(2, questionBudgetHint(discoveryMode, stage).min),
+ *   and not (guided/deep discovery with pending forcing-topic ids).
+ * - Stop-signal row (`QA_LOG_STOP_SIGNAL_PATTERNS`).
+ * - `--skip-questions` (`options.skipQuestions`): ok remains false but
+ *   `skipQuestionsAdvisory` is true (linter treats as non-blocking).
+ * - No forcing-questions row in the checklist and ≥1 substantive row.
  *
- * Wave 23 (v5.0.0) replaces the count-based `qa_log_below_min` rule with
- * `qa_log_unconverged`. The fixed count constant (10 for standard) and
- * the `CCLAW_ELICITATION_FLOOR=advisory` env override were removed. The
- * `min` and `liteShortCircuit` fields on the result are retained for
- * harness UI compatibility but are always 0/false.
+ * Wave 23 retired the fixed English-only count floor; Wave 24 made
+ * `[topic:<id>]` mandatory for topic coverage. The `min` and
+ * `liteShortCircuit` fields stay for harness compatibility (min is always 0;
+ * liteShortCircuit false).
  */
 export function evaluateQaLogFloor(
   qaLogBody: string | null,
@@ -316,6 +314,7 @@ export function evaluateQaLogFloor(
   const count = substantiveRows.length;
   const hasStopSignal = detectStopSignal(rows);
   const skipQuestionsAdvisory = options.skipQuestions === true;
+  const discoveryMode = options.discoveryMode ?? (track === "quick" ? "lean" : "guided");
 
   const forcingTopics: ForcingQuestionTopic[] = (options.forcingQuestions ?? extractForcingQuestions(stage)).map(
     (entry) => (typeof entry === "string" ? { id: entry, topic: entry } : entry)
@@ -327,11 +326,15 @@ export function evaluateQaLogFloor(
     else forcingPending.push(topic.id);
   }
 
+  const budget = questionBudgetHint(discoveryMode, stage);
   const noNewDecisions = lastTwoRowsAllNoDecision(substantiveRows);
   const allForcingCovered =
     forcingTopics.length > 0 ? forcingPending.length === 0 : count >= 1;
+  const minimumRowsReached = count >= Math.max(2, budget.min);
+  const riskEscalationNeeded = forcingPending.length > 0 && /^(guided|deep)$/u.test(discoveryMode);
+  const noNewDecisionConverged = noNewDecisions && minimumRowsReached && !riskEscalationNeeded;
 
-  const ok = allForcingCovered || noNewDecisions || hasStopSignal;
+  const ok = allForcingCovered || noNewDecisionConverged || hasStopSignal;
 
   const pendingIdsBracket = forcingPending.length > 0
     ? `[${forcingPending.join(", ")}]`
@@ -343,39 +346,38 @@ export function evaluateQaLogFloor(
       details = `Q&A Log converged: all ${forcingTopics.length} forcing-question topic(s) addressed across ${count} substantive row(s).`;
     } else if (allForcingCovered) {
       details = `Q&A Log converged: stage exposes no forcing-questions row and ${count} substantive entry recorded.`;
-    } else if (noNewDecisions) {
+    } else if (noNewDecisionConverged) {
       const remaining = forcingPending.length > 0
-        ? ` ${forcingPending.length} forcing topic IDs still pending: ${pendingIdsBracket} (Ralph-Loop convergence overrode coverage).`
-        : " Ralph-Loop convergence detector says no new decision-changing rows in the last 2 turns.";
+        ? ` ${forcingPending.length} forcing topic IDs still pending: ${pendingIdsBracket} after the minimum ${budget.min}-row discovery pass.`
+        : ` Ralph-Loop convergence detector says no new decision-changing rows in the last 2 turns after the minimum ${budget.min}-row discovery pass.`;
       details = `Q&A Log converged via no-new-decisions detector at ${count} row(s).${remaining}`;
     } else {
       details = `Q&A Log converged: explicit user stop-signal row recorded at ${count} row(s).`;
     }
   } else if (skipQuestionsAdvisory) {
     details = `Q&A Log unconverged at ${count} row(s); --skip-questions flag downgraded the finding to advisory. Forcing topic IDs pending: ${pendingIdsBracket}.`;
+  } else if (noNewDecisions && !minimumRowsReached) {
+    details = `Q&A Log still below the minimum ${budget.min}-row ${discoveryMode} discovery pass (${count} substantive row(s)). Forcing topic IDs pending: ${pendingIdsBracket}. Continue asking decision-changing questions before drafting.`;
+  } else if (riskEscalationNeeded && noNewDecisions) {
+    details = `Q&A Log cannot converge via Ralph-Loop yet because ${discoveryMode} mode keeps pending forcing topic IDs blocking: ${pendingIdsBracket}. Cover the remaining topics or record an explicit stop-signal row.`;
   } else {
-    details = `Q&A Log unconverged at ${count} row(s). Forcing topic IDs pending: ${pendingIdsBracket}. Tag each Q&A row with \`[topic:<id>]\` to mark coverage, append a no-new-decisions pair, or record an explicit user stop-signal row.`;
+    details = `Q&A Log unconverged at ${count} row(s). Forcing topic IDs pending: ${pendingIdsBracket}. Tag each Q&A row with \`[topic:<id>]\` to mark coverage, complete the minimum ${budget.min}-row ${discoveryMode} discovery pass, or record an explicit user stop-signal row.`;
   }
 
-  // Surface advisory budget hint for harness UI without re-introducing a
-  // blocking count. `recommended` is the soft budget per track/stage.
-  const advisoryBudget = questionBudgetHint(track, stage).recommended;
+  const advisoryBudget = budget.recommended;
 
   return {
     ok,
     count,
-    // Wave 23: floor no longer enforces a count. Surfacing 0 keeps the
-    // QaLogFloorSignal shape stable for harness consumers; harness UIs
-    // may show `recommended` from `questionBudgetHint` separately.
     min: 0,
     hasStopSignal,
     liteShortCircuit: false,
     skipQuestionsAdvisory,
     forcingCovered,
     forcingPending,
-    noNewDecisions,
+    noNewDecisions: noNewDecisionConverged,
     details: advisoryBudget > 0
-      ? `${details} (advisory budget for ${track}/${stage}: ~${advisoryBudget} Q&A turns)`
+      ? `${details} (advisory budget for ${discoveryMode}/${stage}: ~${advisoryBudget} Q&A turns)`
       : details
   };
 }
@@ -2269,6 +2271,7 @@ export interface StageLintContext {
   projectRoot: string;
   stage: FlowStage;
   track: FlowTrack;
+  discoveryMode: DiscoveryMode;
   raw: string;
   absFile: string;
   sections: H2SectionMap;

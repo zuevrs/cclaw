@@ -332,7 +332,7 @@ export async function verifyCurrentStageGateEvidence(
   options: VerifyCurrentStageGateEvidenceOptions = {}
 ): Promise<GateEvidenceCheckResult> {
   const stage = flowState.currentStage;
-  const schema = stageSchema(stage, flowState.track);
+  const schema = stageSchema(stage, flowState.track, flowState.discoveryMode, flowState.taskClass ?? null);
   const catalog = flowState.stageGateCatalog[stage];
   const required = schema.requiredGates
     .filter((gate) => gate.tier === "required")
@@ -623,6 +623,7 @@ export async function verifyCurrentStageGateEvidence(
       flowState.interactionHints?.[stage]?.skipQuestions === true ||
       (options.extraStageFlags ?? []).includes("--skip-questions");
     const floor = evaluateQaLogFloor(qaLogBody, flowState.track, stage, {
+      discoveryMode: flowState.discoveryMode,
       skipQuestions: skipQuestionsHint
     });
     qaLogFloor = {
@@ -661,7 +662,7 @@ export function verifyCompletedStagesGateClosure(flowState: FlowState): Complete
   const issues: string[] = [];
   const openStages: CompletedStagesClosureResult["openStages"] = [];
   for (const stage of flowState.completedStages) {
-    const schema = stageSchema(stage, flowState.track);
+    const schema = stageSchema(stage, flowState.track, flowState.discoveryMode, flowState.taskClass ?? null);
     const catalog = flowState.stageGateCatalog[stage];
     const required = schema.requiredGates
       .filter((gate) => gate.tier === "required")
@@ -710,7 +711,7 @@ export function reconcileCurrentStageGateCatalog(flowState: FlowState): {
   reconciliation: GateReconciliationResult;
 } {
   const stage = flowState.currentStage;
-  const schema = stageSchema(stage, flowState.track);
+  const schema = stageSchema(stage, flowState.track, flowState.discoveryMode, flowState.taskClass ?? null);
   const required = schema.requiredGates
     .filter((gate) => gate.tier === "required")
     .map((gate) => gate.id);

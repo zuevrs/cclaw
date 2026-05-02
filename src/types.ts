@@ -14,6 +14,9 @@ export type FlowStage = (typeof FLOW_STAGES)[number];
 export const FLOW_TRACKS = ["quick", "medium", "standard"] as const;
 export type FlowTrack = (typeof FLOW_TRACKS)[number];
 
+export const DISCOVERY_MODES = ["lean", "guided", "deep"] as const;
+export type DiscoveryMode = (typeof DISCOVERY_MODES)[number];
+
 /**
  * Ordered stages that make up each flow track.
  *

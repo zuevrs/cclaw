@@ -24,7 +24,7 @@ function automaticStageDelegationTable(): string {
 |---|---|---|
 ${rows}
 
-> **Track-aware skip (Wave 24, v6.0.0):** mandatory agents are skipped entirely when \`track === "quick"\` OR \`taskClass === "software-bugfix"\`. Use \`mandatoryAgentsFor(stage, track, taskClass)\` from \`src/content/stage-schema.ts\` for the authoritative list at runtime. Proactive agents stay enforced because they fire only on triggers (high blast radius, security-sensitive paths, etc.), not on every run.`;
+> **Track-aware skip (Wave 24, v6.0.0):** mandatory agents are skipped entirely when \`track === "quick"\` OR \`taskClass === "software-bugfix"\`. Use \`mandatoryAgentsFor(stage, track, taskClass)\` from \`src/content/stage-schema.ts\` for the authoritative list at runtime. Proactive agents are trigger-driven opportunities, not a blanket completion gate, and lean/lightweight early-stage runs may intentionally record none.`;
 }
 
 type StageAgentSummary = ReturnType<typeof stageDelegationSummary>[number];

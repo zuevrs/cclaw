@@ -6,6 +6,7 @@ import {
   createInitialCloseoutState,
   createInitialFlowState,
   FLOW_STATE_SCHEMA_VERSION,
+  isDiscoveryMode,
   isFlowTrack,
   skippedStagesForTrack,
   SHIP_SUBSTATES,
@@ -20,7 +21,7 @@ import {
   writeFileSafe
 } from "./fs-utils.js";
 import { FLOW_STAGES } from "./types.js";
-import type { FlowStage, FlowTrack } from "./types.js";
+import type { DiscoveryMode, FlowStage, FlowTrack } from "./types.js";
 
 export class InvalidStageTransitionError extends Error {
   constructor(
@@ -84,6 +85,14 @@ function validateFlowTransition(prev: FlowState, next: FlowState): void {
       prev.currentStage,
       next.currentStage,
       `cannot change track from "${prev.track}" to "${next.track}" mid-run (activeRunId="${prev.activeRunId}"). Archive the run and start a new one to switch tracks.`
+    );
+  }
+
+  if (prev.discoveryMode !== next.discoveryMode) {
+    throw new InvalidStageTransitionError(
+      prev.currentStage,
+      next.currentStage,
+      `cannot change discoveryMode from "${prev.discoveryMode}" to "${next.discoveryMode}" mid-run (activeRunId="${prev.activeRunId}"). Reclassify through start-flow or start a new run.`
     );
   }
 
@@ -247,6 +256,10 @@ function sanitizeStageGateCatalog(
 
 function coerceTrack(value: unknown): FlowTrack {
   return isFlowTrack(value) ? value : "standard";
+}
+
+function coerceDiscoveryMode(value: unknown): DiscoveryMode {
+  return isDiscoveryMode(value) ? value : "guided";
 }
 
 /**
@@ -484,7 +497,8 @@ function sanitizeCloseoutState(
 
 function coerceFlowState(parsed: Record<string, unknown>): CoercedFlowStateResult {
   const track = coerceTrack(parsed.track);
-  const next = createInitialFlowState({ track });
+  const discoveryMode = coerceDiscoveryMode(parsed.discoveryMode);
+  const next = createInitialFlowState({ track, discoveryMode });
   const activeRunIdRaw = parsed.activeRunId;
   const activeRunId = typeof activeRunIdRaw === "string" && activeRunIdRaw.trim().length > 0
     ? activeRunIdRaw.trim()
@@ -499,6 +513,7 @@ function coerceFlowState(parsed: Record<string, unknown>): CoercedFlowStateResul
     guardEvidence: sanitizeGuardEvidence(parsed.guardEvidence),
     stageGateCatalog: sanitizeStageGateCatalog(parsed.stageGateCatalog, next.stageGateCatalog),
     track,
+    discoveryMode,
     ...(taskClass !== undefined ? { taskClass } : {}),
     skippedStages: sanitizeSkippedStages(parsed.skippedStages, track),
     staleStages: sanitizeStaleStages(parsed.staleStages),

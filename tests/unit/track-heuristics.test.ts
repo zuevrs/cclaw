@@ -42,22 +42,28 @@ describe("track heuristics resolver", () => {
     expect(result.track).toBe("standard");
   });
 
-  it("returns stage-aware question budget hints for adaptive elicitation stages", () => {
-    expect(questionBudgetHint("quick", "brainstorm")).toEqual({
-      min: 2,
-      recommended: 3,
-      hardCapWarning: 4
+  it("returns discovery-mode question budget hints for adaptive elicitation stages", () => {
+    expect(questionBudgetHint("lean", "brainstorm")).toEqual({
+      min: 3,
+      recommended: 4,
+      hardCapWarning: 6
     });
-    expect(questionBudgetHint("medium", "scope")).toEqual({
+    expect(questionBudgetHint("guided", "scope")).toEqual({
       min: 5,
-      recommended: 6,
-      hardCapWarning: 8
+      recommended: 7,
+      hardCapWarning: 10
     });
-    expect(questionBudgetHint("standard", "design")).toEqual({
-      min: 10,
-      recommended: 12,
+    expect(questionBudgetHint("deep", "design")).toEqual({
+      min: 7,
+      recommended: 10,
       hardCapWarning: 14
     });
+  });
+
+  it("keeps legacy track inputs mapped to lean/guided defaults", () => {
+    expect(questionBudgetHint("quick", "brainstorm")).toEqual(questionBudgetHint("lean", "brainstorm"));
+    expect(questionBudgetHint("medium", "scope")).toEqual(questionBudgetHint("guided", "scope"));
+    expect(questionBudgetHint("standard", "design")).toEqual(questionBudgetHint("guided", "design"));
   });
 
   it("returns no budget for non-elicitation stages", () => {

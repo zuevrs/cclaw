@@ -1,9 +1,10 @@
 import {
   FLOW_STAGES,
+  type DiscoveryMode,
   type FlowStage,
   type FlowTrack
 } from "../../types.js";
-import { isFlowTrack } from "../../flow-state.js";
+import { isDiscoveryMode, isFlowTrack } from "../../flow-state.js";
 import type { ArchiveDisposition } from "../../runs.js";
 import {
   isFlowStageValue,
@@ -49,6 +50,7 @@ export interface RewindArgs {
 
 export interface StartFlowArgs {
   track: FlowTrack;
+  discoveryMode: DiscoveryMode;
   className?: string;
   prompt?: string;
   reason?: string;
@@ -291,6 +293,7 @@ export function parseHookArgs(tokens: string[]): HookArgs {
 
 export function parseStartFlowArgs(tokens: string[]): StartFlowArgs {
   let track: FlowTrack | undefined;
+  let discoveryMode: DiscoveryMode = "guided";
   let className: string | undefined;
   let prompt: string | undefined;
   let reason: string | undefined;
@@ -332,6 +335,14 @@ export function parseStartFlowArgs(tokens: string[]): StartFlowArgs {
       track = raw;
       continue;
     }
+    if (token === "--discovery-mode" || token.startsWith("--discovery-mode=")) {
+      const raw = readValue("--discovery-mode").trim();
+      if (!isDiscoveryMode(raw)) {
+        throw new Error(`--discovery-mode must be one of: lean, guided, deep.`);
+      }
+      discoveryMode = raw;
+      continue;
+    }
     if (token === "--class" || token.startsWith("--class=")) {
       className = readValue("--class").trim();
       continue;
@@ -371,6 +382,7 @@ export function parseStartFlowArgs(tokens: string[]): StartFlowArgs {
   }
   return {
     track,
+    discoveryMode,
     className,
     prompt,
     reason,

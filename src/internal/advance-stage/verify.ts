@@ -1,9 +1,8 @@
 import path from "node:path";
 import { RUNTIME_ROOT } from "../../constants.js";
 import { resolveArtifactPath } from "../../artifact-paths.js";
-import { stageAutoSubagentDispatch, stageSchema, type StageAutoSubagentDispatch } from "../../content/stage-schema.js";
+import { stageSchema } from "../../content/stage-schema.js";
 import {
-  appendDelegation,
   checkMandatoryDelegations,
   readDelegationEvents,
   readDelegationLedger
@@ -31,11 +30,6 @@ interface InternalIo {
   stdout: Writable;
   stderr: Writable;
 }
-
-interface ProactiveDelegationTraceResult {
-  missingRules: StageAutoSubagentDispatch[];
-}
-
 
 export async function runVerifyFlowStateDiff(
   projectRoot: string,
@@ -145,7 +139,7 @@ export function carriedCompletedStageCatalog(
 export function completedStageClosureEvidenceIssues(flowState: FlowState): string[] {
   const issues: string[] = [];
   for (const stage of flowState.completedStages) {
-    const schema = stageSchema(stage, flowState.track);
+    const schema = stageSchema(stage, flowState.track, flowState.discoveryMode, flowState.taskClass ?? null);
     const catalog = flowState.stageGateCatalog[stage];
     const required = schema.requiredGates
       .filter((gate) => gate.tier === "required")
@@ -161,40 +155,6 @@ export function completedStageClosureEvidenceIssues(flowState: FlowState): strin
   return issues;
 }
 
-export async function ensureProactiveDelegationTrace(
-  projectRoot: string,
-  stage: FlowStage,
-  options: {
-    acceptWaiver: boolean;
-    waiverReason?: string;
-  }
-): Promise<ProactiveDelegationTraceResult> {
-  const proactiveRules = stageAutoSubagentDispatch(stage).filter((rule) => rule.mode === "proactive");
-  if (proactiveRules.length === 0) return { missingRules: [] };
-
-  const ledger = await readDelegationLedger(projectRoot);
-  const currentRunEntries = ledger.entries.filter((entry) => entry.runId === ledger.runId);
-  const missingRules = proactiveRules.filter((rule) => !currentRunEntries.some(
-    (entry) => entry.stage === stage && entry.agent === rule.agent && entry.mode === "proactive"
-  ));
-  if (missingRules.length === 0) return { missingRules: [] };
-  if (!options.acceptWaiver) return { missingRules };
-  const waiverReason = options.waiverReason?.trim() || "accepted via --accept-proactive-waiver";
-  for (const rule of missingRules) {
-    await appendDelegation(projectRoot, {
-      stage,
-      agent: rule.agent,
-      mode: "proactive",
-      status: "waived",
-      waiverReason,
-      acceptedBy: "user-flag",
-      conditionTrigger: rule.when,
-      skill: rule.skill,
-      ts: new Date().toISOString()
-    });
-  }
-  return { missingRules: [] };
-}
 
 export async function pathExists(projectRoot: string, relPath: string): Promise<boolean> {
   try {

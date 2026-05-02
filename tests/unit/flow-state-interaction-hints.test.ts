@@ -119,3 +119,35 @@ describe("taskClass round-trip (Wave 24 follow-up, v6.1.1)", () => {
     expect(reread.taskClass).toBeUndefined();
   });
 });
+
+
+describe("discoveryMode round-trip", () => {
+  it("persists discoveryMode through writeFlowState + readFlowState", async () => {
+    const root = await createTempProject("flow-state-discovery-mode-roundtrip");
+    await ensureRunSystem(root);
+
+    const before = await readFlowState(root);
+    expect(before.discoveryMode).toBe("guided");
+
+    await writeFlowState(root, {
+      ...before,
+      discoveryMode: "deep"
+    }, { allowReset: true });
+
+    const after = await readFlowState(root);
+    expect(after.discoveryMode).toBe("deep");
+  });
+
+  it("defaults unknown or missing discoveryMode to guided", async () => {
+    const root = await createTempProject("flow-state-discovery-mode-default");
+    await ensureRunSystem(root);
+
+    const statePath = path.join(root, ".cclaw/state/flow-state.json");
+    const persisted = JSON.parse(await fs.readFile(statePath, "utf8")) as Record<string, unknown>;
+    persisted.discoveryMode = "future-mode";
+    await fs.writeFile(statePath, `${JSON.stringify(persisted, null, 2)}\n`, "utf8");
+
+    const reread = await readFlowState(root);
+    expect(reread.discoveryMode).toBe("guided");
+  });
+});

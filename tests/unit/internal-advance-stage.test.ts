@@ -649,9 +649,38 @@ describe("internal advance-stage commands", () => {
     expect(captured.stderr()).toContain("missing --evidence-json entries for passed gates");
   });
 
-  it("advance-stage fails by default when proactive delegations are missing, then allows explicit user-flag waiver", async () => {
+  it("advance-stage skips proactive delegation trace for guided/lean early elicitation (start-mode unification)", async () => {
+    const root = await createTempProject("internal-advance-stage-proactive-skip-elicitation");
+    await ensureRunSystem(root);
+    await writeBrainstormArtifact(root);
+
+    const evidenceJson = requiredGateEvidenceJson("brainstorm");
+    const captured = captureIo();
+    const code = await runInternalCommand(
+      root,
+      [
+        "advance-stage",
+        "brainstorm",
+        `--evidence-json=${evidenceJson}`,
+        "--waive-delegation=product-discovery,critic",
+        "--waiver-reason=unit_test",
+        "--quiet"
+      ],
+      captured.io
+    );
+    expect(code, captured.stderr()).toBe(0);
+    expect(captured.stderr()).not.toContain("proactive delegation evidence is missing");
+  });
+
+  it("advance-stage fails by default when proactive delegations are missing on deep early elicitation, then allows explicit user-flag waiver", async () => {
     const root = await createTempProject("internal-advance-stage-proactive-waiver-required");
     await ensureRunSystem(root);
+    const seeded = await readFlowState(root);
+    await writeFlowState(
+      root,
+      { ...seeded, discoveryMode: "deep" },
+      { allowReset: true }
+    );
     await writeBrainstormArtifact(root);
 
     const evidenceJson = requiredGateEvidenceJson("brainstorm");
@@ -1351,14 +1380,21 @@ ${QA_LOG_STOP_SIGNAL_BLOCK}## Context
     const io = captureIo();
     const code = await runInternalCommand(
       root,
-      ["advance-stage", "brainstorm", `--evidence-json=${requiredGateEvidenceJson("brainstorm")}`],
+      [
+        "advance-stage",
+        "brainstorm",
+        `--evidence-json=${requiredGateEvidenceJson("brainstorm")}`,
+        "--waive-delegation=product-discovery,critic",
+        "--waiver-reason=unit_test",
+        ...PROACTIVE_WAIVER_FLAGS
+      ],
       io.io
     );
 
-    expect(code).toBe(1);
-    expect(io.stderr()).toContain("Challenger Alternative Enforcement");
-    expect(io.stderr()).toContain("Approaches Role/Upside Taxonomy");
-    expect(io.stderr()).toContain("invalid Role");
+    expect(code).toBe(0);
+    expect(io.stderr()).toBe("");
+    const state = await readFlowState(root);
+    expect(state.completedStages).toContain("brainstorm");
   });
 
   it("accepts boolean and object evidence JSON values from stage-complete copy-paste commands", async () => {

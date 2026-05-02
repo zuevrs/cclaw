@@ -1,5 +1,5 @@
 import { FLOW_STAGES, FLOW_TRACKS, TRACK_STAGES } from "../types.js";
-import type { FlowStage, FlowTrack, TransitionRule } from "../types.js";
+import type { DiscoveryMode, FlowStage, FlowTrack, TransitionRule } from "../types.js";
 import { STAGE_TO_SKILL_FOLDER } from "../constants.js";
 import {
   BRAINSTORM,
@@ -177,6 +177,23 @@ function dedupeAgentsInOrder(agents: string[]): string[] {
     out.push(agent);
   }
   return out;
+}
+
+function discoveryModeTier(mode: DiscoveryMode | undefined): StageComplexityTier {
+  if (mode === "lean") return "lightweight";
+  if (mode === "deep") return "deep";
+  return "standard";
+}
+
+function resolvedStageComplexityTier(params: {
+  stage: FlowStage;
+  defaultTier?: StageComplexityTier;
+  discoveryMode?: DiscoveryMode;
+}): StageComplexityTier {
+  const base = params.defaultTier ?? "standard";
+  const earlyStage = params.stage === "brainstorm" || params.stage === "scope" || params.stage === "design";
+  if (!earlyStage || params.discoveryMode === undefined) return base;
+  return discoveryModeTier(params.discoveryMode);
 }
 
 function defaultReturnSchemaForAgent(
@@ -988,11 +1005,17 @@ export function mandatoryAgentsFor(
   stage: FlowStage,
   track: FlowTrack,
   taskClass?: MandatoryDelegationTaskClass | null,
-  complexityTier: StageComplexityTier = "standard"
+  complexityTier: StageComplexityTier = "standard",
+  discoveryMode?: DiscoveryMode
 ): string[] {
   if (track === "quick") return [];
   if (taskClass === "software-bugfix") return [];
-  return mandatoryDelegationsForStage(stage, complexityTier);
+  const effectiveTier = resolvedStageComplexityTier({
+    stage,
+    defaultTier: complexityTier,
+    discoveryMode
+  });
+  return mandatoryDelegationsForStage(stage, effectiveTier);
 }
 
 /**
@@ -1026,7 +1049,7 @@ export function shouldDemoteArtifactValidationByTrack(
   return false;
 }
 
-export function stageSchema(stage: FlowStage, track: FlowTrack = "standard"): StageSchema {
+export function stageSchema(stage: FlowStage, track: FlowTrack = "standard", discoveryMode?: DiscoveryMode, taskClass?: MandatoryDelegationTaskClass | null): StageSchema {
   const rawInput = stage === "tdd" ? tddStageForTrack(track) : STAGE_SCHEMA_MAP[stage];
   const base = normalizeStageSchemaInput(rawInput);
   const tieredGates = tieredStageGates(stage, base.requiredGates, track);
@@ -1035,7 +1058,11 @@ export function stageSchema(stage: FlowStage, track: FlowTrack = "standard"): St
     ...base.crossStageTrace,
     readsFrom: readsFromForTrack(base.crossStageTrace.readsFrom, track)
   };
-  const complexityTier: StageComplexityTier = base.complexityTier ?? "standard";
+  const complexityTier: StageComplexityTier = resolvedStageComplexityTier({
+    stage,
+    defaultTier: base.complexityTier ?? "standard",
+    discoveryMode
+  });
   const mandatoryDelegations = mandatoryDelegationsForStage(stage, complexityTier);
   const philosophy: StagePhilosophy = {
     hardGate: base.hardGate,

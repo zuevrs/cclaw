@@ -4,8 +4,8 @@ import {
   stageGateIds,
   stageRecommendedGateIds
 } from "./content/stage-schema.js";
-import { FLOW_STAGES, FLOW_TRACKS, TRACK_STAGES } from "./types.js";
-import type { FlowStage, FlowTrack, TransitionRule } from "./types.js";
+import { DISCOVERY_MODES, FLOW_STAGES, FLOW_TRACKS, TRACK_STAGES } from "./types.js";
+import type { DiscoveryMode, FlowStage, FlowTrack, TransitionRule } from "./types.js";
 
 export const TRANSITION_RULES: TransitionRule[] = buildTransitionRules();
 export const FLOW_STATE_SCHEMA_VERSION = 1;
@@ -109,6 +109,8 @@ export interface FlowState {
   stageGateCatalog: Record<FlowStage, StageGateState>;
   /** Active flow track (determines which stages are in the critical path for this run). */
   track: FlowTrack;
+  /** Run-level upstream shaping mode chosen once at start (`lean` / `guided` / `deep`). */
+  discoveryMode: DiscoveryMode;
   /**
    * Wave 25 (v6.1.0) — optional task class for the active run.
    *
@@ -158,10 +160,15 @@ export interface StageInteractionHint {
 export interface InitialFlowStateOptions {
   activeRunId?: string;
   track?: FlowTrack;
+  discoveryMode?: DiscoveryMode;
 }
 
 export function isFlowTrack(value: unknown): value is FlowTrack {
   return typeof value === "string" && (FLOW_TRACKS as readonly string[]).includes(value);
+}
+
+export function isDiscoveryMode(value: unknown): value is DiscoveryMode {
+  return typeof value === "string" && (DISCOVERY_MODES as readonly string[]).includes(value);
 }
 
 export function trackStages(track: FlowTrack): FlowStage[] {
@@ -193,6 +200,7 @@ export function createInitialFlowState(
 
   const activeRunId = options.activeRunId ?? createRunId();
   const track: FlowTrack = options.track ?? "standard";
+  const discoveryMode: DiscoveryMode = options.discoveryMode ?? "guided";
   const skippedStages = skippedStagesForTrack(track);
 
   const stageGateCatalog = {} as Record<FlowStage, StageGateState>;
@@ -215,6 +223,7 @@ export function createInitialFlowState(
     guardEvidence: {},
     stageGateCatalog,
     track,
+    discoveryMode,
     skippedStages,
     staleStages: {},
     rewinds: [],

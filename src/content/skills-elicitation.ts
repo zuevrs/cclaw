@@ -1,20 +1,19 @@
 import { RUNTIME_ROOT } from "../constants.js";
 import { questionBudgetHint } from "../track-heuristics.js";
-import { FLOW_TRACKS } from "../types.js";
 
 const ELICITATION_STAGES = ["brainstorm", "scope", "design"] as const;
 
 function renderQuestionBudgetHintTable(): string {
   const rows: string[] = [];
-  for (const track of FLOW_TRACKS) {
+  for (const mode of ["lean", "guided", "deep"] as const) {
     for (const stage of ELICITATION_STAGES) {
-      const hint = questionBudgetHint(track, stage);
+      const hint = questionBudgetHint(mode, stage);
       rows.push(
-        `| \`${track}\` | \`${stage}\` | ${hint.min} | ${hint.recommended} | ${hint.hardCapWarning} |`
+        `| \`${mode}\` | \`${stage}\` | ${hint.min} | ${hint.recommended} | ${hint.hardCapWarning} |`
       );
     }
   }
-  return `| Track | Stage | Min | Recommended | Hard cap warning |
+  return `| Discovery mode | Stage | Min | Recommended | Hard cap warning |
 |---|---|---|---|---|
 ${rows.join("\n")}`;
 }
@@ -52,7 +51,7 @@ These behaviors are the exact reason this skill exists. The linter will block yo
 - Ask exactly one question per turn and wait for the answer before asking the next one.
 - Use harness-native question tools first; prose fallback is allowed only when the tool is unavailable.
 - Keep a running Q&A trace in the active artifact under \`## Q&A Log\` in \`${RUNTIME_ROOT}/artifacts/\` as append-only rows.
-- **Convergence floor**: do NOT advance the stage (do NOT call \`stage-complete.mjs\`) until Q&A converges. Convergence is reached when ANY of: (a) every forcing-question topic id is tagged \`[topic:<id>]\` on at least one \`## Q&A Log\` row, (b) the last 2 substantive rows produce no decision-changing impact (\`skip\`/\`continue\`/\`no-change\`/\`done\`), or (c) an explicit user stop-signal row is recorded. The linter rule \`qa_log_unconverged\` enforces this; \`stage-complete\` will fail otherwise. Wave 24 (v6.0.0) made the topic tag MANDATORY (no English keyword fallback) so the gate works in any natural language.
+- **Convergence floor**: do NOT advance the stage (do NOT call \`stage-complete.mjs\`) until Q&A converges. The machine contract matches \`evaluateQaLogFloor\` in \`src/artifact-linter/shared.ts\` (rule \`qa_log_unconverged\`). Pass when ANY holds: (a) every forcing-question topic id is tagged \`[topic:<id>]\` on at least one \`## Q&A Log\` row; (b) the Ralph-Loop detector fires (last 2 substantive rows are non-decision-changing: \`skip\`/\`continue\`/\`no-change\`/\`done\`/etc.) **and** the log has at least \`max(2, questionBudgetHint(discoveryMode, stage).min)\` substantive rows — **unless** \`discoveryMode\` is \`guided\` or \`deep\` with pending forcing-topic ids (then Ralph-Loop alone cannot pass until topics are tagged, a stop-signal is recorded, or \`--skip-questions\` downgrades the finding to advisory); (c) an explicit user stop-signal row; or (d) \`--skip-questions\` was persisted (unconverged is advisory only). Wave 24 (v6.0.0) made \`[topic:<id>]\` mandatory (no English keyword fallback).
 - **NEVER run shell hash commands** (\`shasum\`, \`sha256sum\`, \`md5sum\`, \`Get-FileHash\`, \`certutil\`, etc.) to compute artifact hashes. If a linter ever asks you for a hash, that is a linter bug — report failure and stop, do not auto-fix in bash.
 - **NEVER paste cclaw command lines into chat** (e.g. \`node .cclaw/hooks/stage-complete.mjs ... --evidence-json '{...}'\`). Run them via the tool layer; report only the resulting summary. The user does not run cclaw manually and seeing the command line is noise.
 
@@ -108,23 +107,13 @@ Each grill question follows the same Core Protocol: ask one, wait, log, self-eva
 
 Do not ask extra questions "for theater" on simple low-risk work.
 
-## Question Budget Hint (advisory only — Wave 23 dropped the count floor)
+## Question Budget Hint (\`questionBudgetHint\` — min rows feed the convergence floor)
 
-Source of truth: \`questionBudgetHint(track, stage)\`. The numbers below are
-**soft hints** for harness UI and elicitation pacing; gate blocking is done
-by the \`qa_log_unconverged\` rule (Ralph-Loop convergence detector), NOT by
-a fixed count.
+Source of truth: \`questionBudgetHint(discoveryMode, stage)\`. The \`Min\` column is **not advisory** for the Ralph-Loop exit: \`evaluateQaLogFloor\` requires at least \`max(2, Min)\` substantive rows before the no-new-decisions path can converge (other exits — full topic coverage, stop-signal, \`--skip-questions\` advisory — ignore that minimum). \`Recommended\` and \`Hard cap warning\` remain pacing hints for the harness.
 
 ${budgetTable}
 
-Track mapping note: \`quick\` ~= lightweight, \`medium\` ~= standard, \`standard\` ~= deep.
-
-How to use the columns:
-- \`Min\` — soft minimum to surface forcing questions; not a blocking gate.
-- \`Recommended\` — target for normal flows.
-- \`Hard cap warning\` — point at which to stop or compress remaining forcing questions into one final batched ask. Not skip.
-
-## Stage Forcing Questions (walk in order, one per turn)
+Default mapping note: \`lean\` maps to a lightweight specialist tier on early stages, \`guided\` to standard, \`deep\` to deep; risk signals can escalate further.
 
 **Walk the forcing questions list one-by-one in order, asking each as a separate turn.** Do NOT batch. Do NOT pick favorites — go in order. For each question record one of:
 - \`asked\` — question was asked and answered.

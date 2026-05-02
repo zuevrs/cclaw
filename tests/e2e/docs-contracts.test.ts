@@ -177,6 +177,8 @@ ${await readRepoFile("docs/scheme-of-work.md")}`;
     expect(docs).toContain("--reclassify");
     expect(startSkill).toContain("track selection confidence");
     expect(startSkill).toContain("heuristic is advisory");
+    expect(startSkill).toContain("Lean / Guided / Deep");
+    expect(docs).toContain("discovery mode");
   });
 
   it("keeps status and next-action generated guidance plain-English", () => {

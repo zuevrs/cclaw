@@ -30,6 +30,16 @@ interface InternalIo {
   stderr: Writable;
 }
 
+function resolveTaskClass(
+  className: string | undefined,
+  fallback?: FlowState["taskClass"]
+): FlowState["taskClass"] {
+  if (className === "software-standard" || className === "software-trivial" || className === "software-bugfix") {
+    return className;
+  }
+  return fallback;
+}
+
 export async function discoverStartFlowContext(projectRoot: string): Promise<string[]> {
   const lines: string[] = [];
 
@@ -92,6 +102,7 @@ export async function appendIdeaArtifact(projectRoot: string, args: StartFlowArg
       `- From: ${previous?.track ?? "unknown"}`,
       `- To: ${args.track}`,
       `- Class: ${args.className || "unspecified"}`,
+      `- Discovery mode: ${args.discoveryMode}`,
       `- Reason: ${args.reason || "unspecified"}`
     ].join("\n") + "\n";
     await fs.appendFile(artifactPath, entry, "utf8");
@@ -102,6 +113,7 @@ export async function appendIdeaArtifact(projectRoot: string, args: StartFlowArg
     "# Idea",
     `Class: ${args.className || "unspecified"}`,
     `Track: ${args.track}${args.reason ? ` (${args.reason})` : ""}`,
+    `Discovery mode: ${args.discoveryMode}`,
     `Stack: ${args.stack || "unknown"}`,
     "",
     "## User prompt",
@@ -127,12 +139,14 @@ export async function runStartFlow(
     return 1;
   }
 
+  const nextTaskClass = resolveTaskClass(args.className, current.taskClass);
+
   let nextState: FlowState;
   if (args.reclassify) {
     const completedInNewTrack = current.completedStages.filter((stage) =>
       TRACK_STAGES[args.track].includes(stage)
     );
-    const fresh = createInitialFlowState({ activeRunId: current.activeRunId, track: args.track });
+    const fresh = createInitialFlowState({ activeRunId: current.activeRunId, track: args.track, discoveryMode: args.discoveryMode });
     const stageGateCatalog = { ...fresh.stageGateCatalog };
     const guardEvidence: Record<string, string> = {};
     for (const stage of completedInNewTrack) {
@@ -142,6 +156,7 @@ export async function runStartFlow(
     }
     nextState = {
       ...fresh,
+      ...(nextTaskClass !== undefined ? { taskClass: nextTaskClass } : {}),
       completedStages: completedInNewTrack,
       currentStage: firstIncompleteStageForTrack(args.track, completedInNewTrack),
       guardEvidence,
@@ -162,7 +177,10 @@ export async function runStartFlow(
       return 1;
     }
   } else {
-    nextState = createInitialFlowState({ track: args.track });
+    nextState = createInitialFlowState({ track: args.track, discoveryMode: args.discoveryMode });
+    if (nextTaskClass !== undefined) {
+      nextState = { ...nextState, taskClass: nextTaskClass };
+    }
   }
 
   if (args.fromIdeaArtifact) {
@@ -187,6 +205,8 @@ export async function runStartFlow(
       command: "start-flow",
       reclassify: args.reclassify,
       track: nextState.track,
+      discoveryMode: nextState.discoveryMode,
+      taskClass: nextState.taskClass ?? null,
       currentStage: nextState.currentStage,
       skippedStages: nextState.skippedStages,
       activeRunId: nextState.activeRunId

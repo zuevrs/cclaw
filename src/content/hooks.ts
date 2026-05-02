@@ -212,7 +212,7 @@ export function startFlowScript(): string {
   return internalHelperScript(
     "start-flow",
     "start-flow",
-    "Usage: node " + RUNTIME_ROOT + "/hooks/start-flow.mjs --track=<standard|medium|quick> [--class=...] [--prompt=...] [--stack=...] [--reason=...] [--reclassify] [--force-reset]",
+    "Usage: node " + RUNTIME_ROOT + "/hooks/start-flow.mjs --track=<standard|medium|quick> [--discovery-mode=<lean|guided|deep>] [--class=...] [--prompt=...] [--stack=...] [--reason=...] [--reclassify] [--force-reset]",
     { defaultQuietEnvVar: "CCLAW_START_FLOW_QUIET" }
   );
 }
@@ -229,7 +229,7 @@ export function stageCompleteScript(): string {
   return internalHelperScript(
     "stage-complete",
     "advance-stage",
-    "Usage: node " + RUNTIME_ROOT + "/hooks/stage-complete.mjs <stage> [--passed=...] [--evidence-json=...] [--waive-delegation=...] [--waiver-reason=...] [--accept-proactive-waiver] [--accept-proactive-waiver-reason=...] [--skip-questions] [--json]",
+    "Usage: node " + RUNTIME_ROOT + "/hooks/stage-complete.mjs <stage> [--passed=...] [--evidence-json=...] [--waive-delegation=...] [--waiver-reason=...] [--skip-questions] [--json]",
     {
       positionalArgName: "stage",
       positionalArgRequired: true,

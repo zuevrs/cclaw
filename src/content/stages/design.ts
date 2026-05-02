@@ -88,7 +88,7 @@ export const DESIGN: StageSchemaInput = {
       "Run compact research by default; write `.cclaw/artifacts/02a-research.md` only when deep/high-risk uncertainty requires a separate research artifact.",
       "Run investigator pass plus scope challenge/search-before-building.",
       "Walk review sections interactively and lock boundaries, data flow, state transitions, edge cases, and failure modes.",
-      "Cover security, observability, deployment, tests, and performance for Standard+ changes.",
+      "Cover security, observability, deployment, tests, and performance for guided/deep-shaped design work; lean slices may omit heavy add-ons only when scope and risk justify the compact path.",
       "Run stale-diagram audit (enabled by default unless explicitly disabled).",
       "Produce required outputs: blast-radius diff (scope owns full repo audit), tier diagrams, failure table, completion dashboard. Out-of-scope is carried from scope via Upstream Handoff — do NOT re-author it.",
       "Plant high-upside deferred ideas when useful and reconcile critic/outside-voice findings.",

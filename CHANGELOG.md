@@ -1,5 +1,17 @@
 # Changelog
 
+## 6.2.0 — Start mode unification (`discoveryMode`)
+
+Behavioral redesign of the user-facing start axis around a single `discoveryMode`: **`lean` \| `guided` \| `deep`**. Track remains an internal concern (not exposed as a parallel “start mode” choice).
+
+### Changed
+
+- **Single `discoveryMode` start-mode axis** — one knob for how much discovery scaffolding to run at kickoff (`lean` / `guided` / `deep`).
+- **Track stays internal** — pacing/heuristics still use track under the hood; users align on `discoveryMode` only.
+- **Early-stage gate simplification** — fewer branching paths and clearer gating in early flow.
+- **Q&A convergence contract aligned with runtime** — linter and advance-stage behavior stay consistent on when Q&A is considered converged.
+- **Removed lite / standard / deep agent-facing wording in early stages** — replaced with tier-neutral or `discoveryMode`-aligned copy (incl. Approach Tier wording cleanup).
+
 ## 6.1.1 — Wave 24/25 Audit Follow-ups
 
 Hotfix release. Auditing Wave 24 (v6.0.0) and Wave 25 (v6.1.0) end-to-end surfaced one real defect that left two shipped features dead in practice. Standard-track runs were never affected — the bug only matters once a flow-state file actually carries a `taskClass` classification.

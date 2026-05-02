@@ -694,9 +694,9 @@ export async function checkMandatoryDelegations(
   // the lookup explicitly; only `undefined` triggers the fallback.
   const resolvedTaskClass: MandatoryDelegationTaskClass | null =
     options.taskClass !== undefined ? options.taskClass : flowState.taskClass ?? null;
-  const mandatory = mandatoryAgentsFor(stage, flowState.track, resolvedTaskClass);
+  const mandatory = mandatoryAgentsFor(stage, flowState.track, resolvedTaskClass, "standard", flowState.discoveryMode);
   const skippedByTrack = mandatory.length === 0 &&
-    stageSchema(stage, flowState.track).mandatoryDelegations.length > 0;
+    stageSchema(stage, flowState.track, flowState.discoveryMode, resolvedTaskClass).mandatoryDelegations.length > 0;
   if (skippedByTrack) {
     await recordMandatorySkippedByTrack(projectRoot, {
       stage,
