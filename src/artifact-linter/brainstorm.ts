@@ -47,7 +47,7 @@ export async function lintBrainstormStage(ctx: StageLintContext): Promise<void> 
 
     if (!brainstormShortCircuitActivated) {
       const skipQuestions = ctx.activeStageFlags.includes("--skip-questions");
-      const floor = evaluateQaLogFloor(qaLogBody, track, "brainstorm", { skipQuestions });
+      const floor = evaluateQaLogFloor(qaLogBody, track, "brainstorm", { discoveryMode: ctx.discoveryMode, skipQuestions });
       findings.push({
         section: "qa_log_unconverged",
         required: !floor.skipQuestionsAdvisory,
@@ -81,7 +81,7 @@ export async function lintBrainstormStage(ctx: StageLintContext): Promise<void> 
       const ok = hasDecisionLine;
       findings.push({
         section: "Approach Tier Classification",
-        required: true,
+        required: false,
         rule: "Approach Tier must explicitly classify depth as one of `lite` (a.k.a. `Lightweight`), `Standard`, or `Deep`.",
         found: ok,
         details: ok
@@ -107,14 +107,14 @@ export async function lintBrainstormStage(ctx: StageLintContext): Promise<void> 
       });
       findings.push({
         section: "Approaches Role/Upside Taxonomy",
-        required: true,
+        required: false,
         rule: "Approaches table must use canonical Role and Upside enum values.",
         found: approachesTaxonomy.roleUpsideOk,
         details: approachesTaxonomy.details
       });
       findings.push({
         section: "Challenger Alternative Enforcement",
-        required: true,
+        required: false,
         rule: "Approaches must include one challenger option with explicit high/higher upside.",
         found: approachesTaxonomy.challengerOk,
         details: approachesTaxonomy.details
@@ -127,7 +127,7 @@ export async function lintBrainstormStage(ctx: StageLintContext): Promise<void> 
       const orderOk = reactionIndex >= 0 && reactionIndex < directionIndex;
       findings.push({
         section: "Approach Reaction Ordering",
-        required: true,
+        required: false,
         rule: "Approach Reaction must appear before Selected Direction (propose -> react -> recommend).",
         found: orderOk,
         details: orderOk
@@ -189,7 +189,7 @@ export async function lintBrainstormStage(ctx: StageLintContext): Promise<void> 
       const hasStatus = statusValue.length > 0;
       findings.push({
         section: "Short-Circuit Status",
-        required: true,
+        required: false,
         rule: "Short-Circuit Decision must include a `Status:` line (`activated` or `bypassed`).",
         found: hasStatus,
         details: hasStatus
@@ -226,7 +226,7 @@ export async function lintBrainstormStage(ctx: StageLintContext): Promise<void> 
       const selfReview = validateCalibratedSelfReview(selfReviewBody);
       findings.push({
         section: "Calibrated Self-Review Format",
-        required: true,
+        required: false,
         rule: "When Self-Review Notes are present, they must use the calibrated review prompt output shape.",
         found: selfReview.ok,
         details: selfReview.details
@@ -237,7 +237,7 @@ export async function lintBrainstormStage(ctx: StageLintContext): Promise<void> 
     if (criticPredictions !== null) {
       findings.push({
         section: "critic.predictions_missing",
-        required: true,
+        required: false,
         rule: "[P2] critic.predictions_missing — pre-commitment predictions block missing or empty",
         found: criticPredictions.found,
         details: criticPredictions.details
@@ -271,7 +271,7 @@ export async function lintBrainstormStage(ctx: StageLintContext): Promise<void> 
       const ok = tokenMatches.size === 1 && !isPlaceholder;
       findings.push({
         section: "Mode Block Token",
-        required: true,
+        required: false,
         rule: "Mode Block must declare exactly one mode token: STARTUP, BUILDER, ENGINEERING, OPS, or RESEARCH.",
         found: ok,
         details: ok
@@ -294,7 +294,7 @@ export async function lintBrainstormStage(ctx: StageLintContext): Promise<void> 
     ) {
       findings.push({
         section: "Approach Detail Cards",
-        required: true,
+        required: false,
         rule: "Approach Detail Cards must include ≥2 `#### APPROACH <letter>` blocks each with Summary/Effort/Risk/Pros/Cons/Reuses.",
         found: cardCount >= 2,
         details: cardCount >= 2
@@ -305,7 +305,7 @@ export async function lintBrainstormStage(ctx: StageLintContext): Promise<void> 
       const hasRecommendation = recommendationLine !== null && recommendationLine[1] !== undefined && recommendationLine[1].trim().length > 0;
       findings.push({
         section: "Approach Recommendation Marker",
-        required: true,
+        required: false,
         rule: "Approach Detail Cards must conclude with a single `RECOMMENDATION:` line citing the chosen letter and rationale.",
         found: hasRecommendation,
         details: hasRecommendation
@@ -323,7 +323,7 @@ export async function lintBrainstormStage(ctx: StageLintContext): Promise<void> 
       const optedOut = /\bnot used\b|\bn\/a\b|\bnone\b/iu.test(outsideVoiceBody);
       findings.push({
         section: "Outside Voice Slot Shape",
-        required: true,
+        required: false,
         rule: "Outside Voice section must either declare opt-out (`not used`/`none`) or include `source:`, `prompt:`, `tension:`, `resolution:`.",
         found: optedOut || missing.length === 0,
         details: optedOut || missing.length === 0
@@ -356,7 +356,7 @@ export async function lintBrainstormStage(ctx: StageLintContext): Promise<void> 
       const ok = hasSection && sourceCited && candidateCited;
       findings.push({
         section: "brainstorm.idea_evidence_carry_forward",
-        required: true,
+        required: false,
         rule: "[P1] brainstorm.idea_evidence_carry_forward — when `flow-state.interactionHints.brainstorm.fromIdeaArtifact` is set (Wave 23 / v5.0.0), the brainstorm artifact MUST include `## Idea Evidence Carry-forward` citing the idea artifact path and chosen `I-#`. Reuse divergent + critique + rank work from `/cc-ideate` as the `baseline` Approach; only newly generate the higher-upside challenger row(s).",
         found: ok,
         details: ok
@@ -389,7 +389,7 @@ export async function lintBrainstormStage(ctx: StageLintContext): Promise<void> 
 
       findings.push({
         section: "wave.drift_unaddressed",
-        required: true,
+        required: false,
         rule: "[P1] wave.drift_unaddressed — when `.cclaw/wave-plans/` has >=2 entries, brainstorm must include `## Wave Carry-forward` with carry-forward and drift audit markers.",
         found: waveDriftAddressed,
         details: waveDriftAddressed

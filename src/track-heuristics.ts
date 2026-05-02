@@ -1,5 +1,5 @@
 import { FLOW_TRACKS } from "./types.js";
-import type { FlowStage, FlowTrack, TrackHeuristicRule, TrackHeuristicsConfig } from "./types.js";
+import type { DiscoveryMode, FlowStage, FlowTrack, TrackHeuristicRule, TrackHeuristicsConfig } from "./types.js";
 
 export interface TrackResolution {
   track: FlowTrack;
@@ -72,10 +72,10 @@ const DEFAULT_RULES: Record<FlowTrack, TrackHeuristicRule> = {
 const EVALUATION_ORDER: readonly FlowTrack[] = ["standard", "medium", "quick"];
 const DEFAULT_FALLBACK: FlowTrack = "standard";
 const ADAPTIVE_ELICITATION_STAGES = new Set<FlowStage>(["brainstorm", "scope", "design"]);
-const QUESTION_BUDGET_HINTS_BY_TRACK: Record<FlowTrack, QuestionBudgetHint> = {
-  quick: { min: 2, recommended: 3, hardCapWarning: 4 },
-  medium: { min: 5, recommended: 6, hardCapWarning: 8 },
-  standard: { min: 10, recommended: 12, hardCapWarning: 14 }
+const QUESTION_BUDGET_HINTS_BY_DISCOVERY_MODE: Record<DiscoveryMode, QuestionBudgetHint> = {
+  lean: { min: 3, recommended: 4, hardCapWarning: 6 },
+  guided: { min: 5, recommended: 7, hardCapWarning: 10 },
+  deep: { min: 7, recommended: 10, hardCapWarning: 14 }
 };
 
 function hasToken(promptLower: string, token: string): boolean {
@@ -166,11 +166,15 @@ export function resolveTrackFromPrompt(
   };
 }
 
-export function questionBudgetHint(track: FlowTrack, stage: FlowStage): QuestionBudgetHint {
+export function questionBudgetHint(modeOrTrack: DiscoveryMode | FlowTrack, stage: FlowStage): QuestionBudgetHint {
   if (!ADAPTIVE_ELICITATION_STAGES.has(stage)) {
     return { min: 0, recommended: 0, hardCapWarning: 0 };
   }
-  return QUESTION_BUDGET_HINTS_BY_TRACK[track];
+  if (modeOrTrack === "lean" || modeOrTrack === "guided" || modeOrTrack === "deep") {
+    return QUESTION_BUDGET_HINTS_BY_DISCOVERY_MODE[modeOrTrack];
+  }
+  if (modeOrTrack === "quick") return QUESTION_BUDGET_HINTS_BY_DISCOVERY_MODE.lean;
+  return QUESTION_BUDGET_HINTS_BY_DISCOVERY_MODE.guided;
 }
 
 export const TRACK_HEURISTICS_DEFAULTS = {

@@ -16,16 +16,18 @@ Startup sequence:
 
 1. Classify the prompt as software, bugfix/trivial, pure question, or non-software.
 2. Discover origin docs and stack signals before asking for more context.
-3. Recommend a track with a one-line confidence reason.
-4. Ask only when reset, contradiction, ambiguity, or user override requires it.
-5. Start or reclassify only through `node .cclaw/hooks/start-flow.mjs`.
+3. Recommend an internal track with a one-line confidence reason.
+4. Ask for one discovery mode (`lean`, `guided`, or `deep`) as the normal explicit start-of-run choice.
+5. Ask additional confirmation only when reset, contradiction, ambiguity, or override requires it.
+6. Start or reclassify only through `node .cclaw/hooks/start-flow.mjs`.
 
 ## Stage Flow
 
 ```mermaid
 flowchart TD
   start["/cc <idea>"] --> classify["Classify + discover context"]
-  classify --> track{Track}
+  classify --> mode["Ask discovery mode once"]
+  mode --> track{Internal track}
   track --> quick["quick: spec -> tdd -> review -> ship"]
   track --> medium["medium: brainstorm -> spec -> plan -> tdd -> review -> ship"]
   track --> standard["standard: brainstorm -> scope -> design -> spec -> plan -> tdd -> review -> ship"]
@@ -47,7 +49,7 @@ Tracks:
 - `medium`: `brainstorm -> spec -> plan -> tdd -> review -> ship`.
 - `standard`: `brainstorm -> scope -> design -> spec -> plan -> tdd -> review -> ship`.
 
-Every stage has a generated skill, a stage artifact, required gates, artifact validation rules, and optional or mandatory subagent dispatch. `/cc` follows `flow-state.json.track` and `skippedStages`; it must not use the natural stage edge when the active track skips a stage.
+Every stage has a generated skill, a stage artifact, required gates, artifact validation rules, and optional or mandatory subagent dispatch. `/cc` follows `flow-state.json.track`, `flow-state.json.discoveryMode`, and `skippedStages`; it must not use the natural stage edge when the active track skips a stage.
 
 ### Wave 10 Simplification Notes
 
@@ -138,10 +140,10 @@ flowchart TD
 
 ## Track Routing Authority
 
-Track routing has two phases:
+Run shaping and track routing have two phases:
 
-1. Advisory classification: `/cc` reads prompt/context/config vocabulary and recommends `quick`, `medium`, or `standard` with a confidence reason. `trackHeuristics` are model-facing hints, not a Node-level router.
-2. Runtime enforcement: after the managed helper writes state, `/cc` and `stage-complete.mjs` enforce the selected track, skipped stages, gates, delegations, stale markers, and closeout substate.
+1. User-visible discovery choice: `/cc` asks for one run-level discovery mode (`lean`, `guided`, `deep`) that controls early-stage questioning depth, specialist timing, and draft readiness.
+2. Internal track classification: `/cc` reads prompt/context/config vocabulary and recommends `quick`, `medium`, or `standard` with a confidence reason. `trackHeuristics` are model-facing hints, not a Node-level router. Runtime enforcement begins only after the managed helper writes state, at which point `/cc` and `stage-complete.mjs` enforce the selected internal track, persisted discovery mode, skipped stages, gates, delegations, stale markers, and closeout substate.
 
 If evidence changes the route, reclassify through `start-flow.mjs --reclassify`. Do not quietly add upstream stages or manually edit state.
 
@@ -196,7 +198,7 @@ The registry in `src/content/reference-patterns.ts` names the adopted patterns. 
 
 | Location | Contract |
 |---|---|
-| `.cclaw/state/flow-state.json` | Single-writer state for current stage, track, gate catalog, stale markers, closeout substate, and active run id. |
+| `.cclaw/state/flow-state.json` | Single-writer state for current stage, internal track, discovery mode, gate catalog, stale markers, closeout substate, and active run id. |
 | `.cclaw/state/delegation-log.json` | Worker/overseer dispatch lifecycle, terminal statuses, fulfillment modes, waivers, and evidence refs. |
 | `.cclaw/state/rewind-log.jsonl` | Managed rewind records and stale-stage recovery history. |
 | `.cclaw/state/ralph-loop.json` | TDD progress indicator only; not a hard gate. |

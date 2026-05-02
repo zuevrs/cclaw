@@ -68,7 +68,7 @@ Legacy `.cclaw/runs/` directories are only auto-removed when empty. If the direc
 
 That gives you:
 
-- **One path** from idea to ship, with `quick`, `medium`, and `standard` tracks.
+- **One path** from idea to ship, with one user-chosen discovery mode (`lean`, `guided`, `deep`) and internal `quick` / `medium` / `standard` tracks.
 - **Real gates** for evidence, tests, review, delegation, stale-stage recovery, and closeout.
 - **Subagents with accountability**: controller owns state, workers do bounded tasks, overseers validate, evidence lands in `delegation-log.json`.
 - **Recovery instead of confusion**: `npx cclaw-cli sync` tells you blockers and next fixes.
@@ -101,7 +101,7 @@ medium    brainstorm -> spec -> plan -> tdd -> review -> ship
 standard  brainstorm -> scope -> design -> spec -> plan -> tdd -> review -> ship
 ```
 
-Track selection is **model-guided and advisory** during `/cc`. Runtime enforcement begins after state is written: subsequent `/cc` turns follow the selected track, required gates, delegation rules, stale-stage markers, and `closeout.shipSubstate`.
+At `/cc <idea>`, the user picks **one discovery mode** (`lean`, `guided`, `deep`) for upstream shaping. Track selection remains **model-guided and advisory** during start-up; runtime enforcement begins after state is written: subsequent `/cc` turns follow the selected internal track, persisted `discoveryMode`, required gates, delegation rules, stale-stage markers, and `closeout.shipSubstate`.
 
 ## When Blocked
 

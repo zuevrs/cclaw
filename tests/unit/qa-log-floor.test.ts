@@ -14,12 +14,13 @@ import {
  * fallback because keyword matching gave false-pass results on RU/UA
  * Q&A logs.
  *
- * Convergence sources (any one is sufficient):
+ * Convergence sources (machine contract — align with
+ * `adaptiveElicitationSkillMarkdown` / `skills-elicitation.ts`):
  *   - Every forcing-question topic id is tagged `[topic:<id>]` on at
  *     least one Q&A Log row (cells joined; tag may live in any column).
- *   - The Ralph-Loop convergence detector reports the last 2 substantive
- *     rows have decision_impact marking `skip` / `continue` / `no-change`
- *     / `done`.
+ *   - Ralph-Loop path: last 2 substantive rows are no-new-decisions and
+ *     count ≥ max(2, questionBudgetHint.min), except guided/deep with
+ *     pending forcing topics blocks this shortcut.
  *   - Q&A Log contains an explicit user stop-signal row.
  *   - `--skip-questions` flag was persisted (downgrades to advisory).
  *   - Stage exposes no forcing-questions row (e.g. spec/plan/tdd/review/
@@ -147,8 +148,23 @@ describe("evaluateQaLogFloor (Wave 24 / v6.0.0 mandatory [topic:<id>] contract)"
     expect(result.details).toMatch(/\[direct-path, operator, no-go\]/u);
   });
 
-  it("passes via Ralph-Loop convergence (last 2 rows produce no decision changes)", () => {
-    const result = evaluateQaLogFloor(NO_NEW_DECISIONS_QA_LOG, "standard", "brainstorm");
+  it("does not let guided brainstorm converge via Ralph-Loop before the minimum discovery pass", () => {
+    const result = evaluateQaLogFloor(NO_NEW_DECISIONS_QA_LOG, "standard", "brainstorm", { discoveryMode: "guided" });
+    expect(result.noNewDecisions).toBe(false);
+    expect(result.ok).toBe(false);
+    expect(result.details).toMatch(/minimum 5-row guided discovery pass/iu);
+  });
+
+  it("allows lean brainstorm to converge via Ralph-Loop after the minimum discovery pass", () => {
+    const leanLog = `## Q&A Log
+| Turn | Question | User answer (1-line) | Decision impact |
+|---|---|---|---|
+| 1 | What pain are we solving? | Small paper-cut in release docs. | scope-shaping [topic:pain] |
+| 2 | What is the direct path? | Fix the existing docs page. | direct-path [topic:direct-path] |
+| 3 | Anything else? | no-change | continue |
+| 4 | Final concern? | none | continue |
+`;
+    const result = evaluateQaLogFloor(leanLog, "quick", "brainstorm", { discoveryMode: "lean" });
     expect(result.noNewDecisions).toBe(true);
     expect(result.ok).toBe(true);
     expect(result.details).toMatch(/no-new-decisions|Ralph/iu);

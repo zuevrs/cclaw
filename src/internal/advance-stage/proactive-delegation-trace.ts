@@ -1,0 +1,64 @@
+import { appendDelegation, readDelegationLedger } from "../../delegation.js";
+import { stageAutoSubagentDispatch, type StageAutoSubagentDispatch } from "../../content/stage-schema.js";
+import type { DiscoveryMode, FlowStage } from "../../types.js";
+
+export interface ProactiveDelegationTraceResult {
+  missingRules: StageAutoSubagentDispatch[];
+}
+
+function isEarlyElicitationStage(stage: FlowStage): boolean {
+  return stage === "brainstorm" || stage === "scope" || stage === "design";
+}
+
+/**
+ * Ensure every proactive dispatch rule for the stage has a ledger row for the
+ * active run, or an explicit user-flag waiver.
+ *
+ * Lean/guided discovery on early elicitation stages intentionally does not
+ * require a full proactive trace: specialists run only when triggers warrant
+ * them. Deep discovery keeps the blanket trace so mandatory + proactive
+ * coverage stays auditably complete before advance.
+ */
+export async function ensureProactiveDelegationTrace(
+  projectRoot: string,
+  stage: FlowStage,
+  options: {
+    acceptWaiver: boolean;
+    waiverReason?: string;
+    discoveryMode: DiscoveryMode;
+  }
+): Promise<ProactiveDelegationTraceResult> {
+  if (isEarlyElicitationStage(stage) && (options.discoveryMode === "lean" || options.discoveryMode === "guided")) {
+    return { missingRules: [] };
+  }
+
+  const proactiveRules = stageAutoSubagentDispatch(stage).filter((rule) => rule.mode === "proactive");
+  if (proactiveRules.length === 0) return { missingRules: [] };
+
+  const ledger = await readDelegationLedger(projectRoot);
+  const currentRunEntries = ledger.entries.filter((entry) => entry.runId === ledger.runId);
+  const missingRules = proactiveRules.filter(
+    (rule) =>
+      !currentRunEntries.some(
+        (entry) => entry.stage === stage && entry.agent === rule.agent && entry.mode === "proactive"
+      )
+  );
+  if (missingRules.length === 0) return { missingRules: [] };
+  if (!options.acceptWaiver) return { missingRules };
+
+  const waiverReason = options.waiverReason?.trim() || "accepted via --accept-proactive-waiver";
+  for (const rule of missingRules) {
+    await appendDelegation(projectRoot, {
+      stage,
+      agent: rule.agent,
+      mode: "proactive",
+      status: "waived",
+      waiverReason,
+      acceptedBy: "user-flag",
+      conditionTrigger: rule.when,
+      skill: rule.skill,
+      ts: new Date().toISOString()
+    });
+  }
+  return { missingRules: [] };
+}

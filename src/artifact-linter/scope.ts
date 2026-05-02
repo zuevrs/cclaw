@@ -51,7 +51,7 @@ export async function lintScopeStage(ctx: StageLintContext): Promise<void> {
 
     {
       const skipQuestions = activeStageFlags.includes("--skip-questions");
-      const floor = evaluateQaLogFloor(qaLogBody, track, "scope", { skipQuestions });
+      const floor = evaluateQaLogFloor(qaLogBody, track, "scope", { discoveryMode: ctx.discoveryMode, skipQuestions });
       findings.push({
         section: "qa_log_unconverged",
         required: !floor.skipQuestionsAdvisory,
@@ -129,7 +129,7 @@ export async function lintScopeStage(ctx: StageLintContext): Promise<void> {
     if (criticPredictions !== null) {
       findings.push({
         section: "critic.predictions_missing",
-        required: true,
+        required: false,
         rule: "[P2] critic.predictions_missing — pre-commitment predictions block missing or empty",
         found: criticPredictions.found,
         details: criticPredictions.details
@@ -176,7 +176,7 @@ export async function lintScopeStage(ctx: StageLintContext): Promise<void> {
       }
       findings.push({
         section: "Locked Decisions ID Integrity",
-        required: true,
+        required: false,
         rule: "Locked Decisions section must list each decision with a unique stable D-XX ID. (D-XX IDs replaced the legacy LD#<sha8> hash anchors in Wave 22.)",
         found: issues.length === 0,
         details:

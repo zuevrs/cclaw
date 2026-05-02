@@ -4,7 +4,7 @@ This document maps each cclaw stage to the **structural sections** the linter
 enforces and the upstream **reference patterns** they were derived from. Every
 section listed here is a *shape* check, not a content check: the linter never
 inspects domain words ("CRUD", "endpoint", "form", etc.), only that the canonical
-section is present and well-formed.
+section is present and well-formed. For early stages (`brainstorm`, `scope`, `design`), many ceremony-heavy shape checks are advisory only; convergence, approval, boundary/risk mapping, and handoff continuity remain the hard blockers.
 
 The reference paths refer to skill packages outside this repo. They are listed
 for traceability only — cclaw does not vendor them.

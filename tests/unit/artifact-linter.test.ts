@@ -737,7 +737,8 @@ describe("artifact linter heuristics", () => {
     const criticContract = result.findings.find(
       (finding) => finding.section === "critic.predictions_missing"
     );
-    expect(result.passed).toBe(false);
+    expect(result.passed).toBe(true);
+    expect(criticContract?.required).toBe(false);
     expect(criticContract?.found).toBe(false);
     expect(criticContract?.details ?? "").toContain("Pre-commitment predictions");
   });
@@ -2501,6 +2502,7 @@ ${summaryBody}
 
     const result = await lintArtifact(root, "scope");
     const integrity = result.findings.find((f) => f.section === "Locked Decisions ID Integrity");
+    expect(integrity?.required).toBe(false);
     expect(integrity?.found).toBe(false);
     expect(integrity?.details).toContain("duplicate IDs: D-01");
   });

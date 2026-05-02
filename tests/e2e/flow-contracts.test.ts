@@ -146,6 +146,7 @@ describe("flow command contracts", () => {
       expect(content, label).toContain("node .cclaw/hooks/start-flow.mjs");
       expect(content, label).not.toContain("cclaw internal start-flow");
       expect(content, label).toContain("--reclassify");
+      expect(content, label).toContain("--discovery-mode=<lean|guided|deep>");
       expect(content, label).toMatch(/do not manually edit/i);
       expect(content, label).toContain("fresh init placeholder");
       expect(content, label).toMatch(/do (?:\*\*)?not(?:\*\*)? ask/i);
@@ -154,6 +155,8 @@ describe("flow command contracts", () => {
     expect(startCommand).not.toContain("Persist the chosen track to `.cclaw/state/flow-state.json`");
     expect(startSkill).not.toContain("Persist the chosen track in `.cclaw/state/flow-state.json`");
     expect(startCommand).not.toContain("update `flow-state.json` accordingly");
+    expect(startCommand).toContain("Guided");
+    expect(startCommand).toContain("Lean / Guided / Deep");
     expect(startCommand).toContain("quick track");
     expect(startSkill).toContain("`quick` track starts at `spec`");
     expect(startCommand).toContain("\"stage\":\"<currentStage>\"");
@@ -541,7 +544,7 @@ describe("flow command contracts", () => {
     expect(adaptiveSkill).toContain("Q&A Log");
     expect(adaptiveSkill).toContain("Don't tell it what to do, give it success criteria and watch it go.");
     expect(adaptiveSkill).toContain("User does not run cclaw manually");
-    expect(adaptiveSkill).toContain("questionBudgetHint(track, stage)");
+    expect(adaptiveSkill).toContain("questionBudgetHint(discoveryMode, stage)");
 
     const brainstormSkill = await fs.readFile(path.join(root, ".cclaw/skills/brainstorm/SKILL.md"), "utf8");
     const scopeSkill = await fs.readFile(path.join(root, ".cclaw/skills/scope/SKILL.md"), "utf8");

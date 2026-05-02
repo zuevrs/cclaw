@@ -10,7 +10,7 @@ export const BRAINSTORM: StageSchemaInput = {
   complexityTier: "standard",
   skillFolder: "brainstorm",
   skillName: "brainstorm",
-  skillDescription: "Problem-discovery stage. Build a concise Problem Decision Record, choose lite/standard/deep depth, compare distinct directions, and hand approved decisions to scope.",
+  skillDescription: "Problem-discovery stage. Build a concise Problem Decision Record, compare distinct directions under the run's discovery mode (lean / guided / deep), and hand approved decisions to scope.",
   philosophy: {
     hardGate: "Do NOT invoke implementation skills, write code, scaffold projects, or mutate product behavior until a concrete direction is approved by the user.",
     ironLaw: "NO ARTIFACT IS COMPLETE WITHOUT AN EXPLICITLY APPROVED DIRECTION — SILENCE IS NOT APPROVAL.",
@@ -42,7 +42,7 @@ export const BRAINSTORM: StageSchemaInput = {
       "**ADAPTIVE ELICITATION COMES FIRST (no exceptions, no subagent dispatch before).** Load `.cclaw/skills/adaptive-elicitation/SKILL.md`. Walk the brainstorm forcing questions one-at-a-time via the harness-native question tool, append one row to `## Q&A Log` (`Turn | Question | User answer (1-line) | Decision impact`) after each user answer **and stamp the row's `Decision impact` cell with the matching `[topic:<id>]` tag** (e.g. `[topic:pain]`). Continue until every forcing-question topic id is tagged on a row OR Ralph-Loop convergence detector says no new decision-changing rows in last 2 iterations OR user records an explicit stop-signal row. Only then proceed to delegations, drafts, or analysis. The linter `qa_log_unconverged` rule will block `stage-complete` if convergence is not reached.",
       "**Explore project context** — after the elicitation loop converges, inspect existing files/docs/recent activity to refine the Discovered context section; capture matching files/patterns/seeds in `Context > Discovered context` so downstream stages don't redo discovery.",
       "**Brainstorm forcing questions (must be covered or explicitly waived)** — `pain: what pain are we solving`; `direct-path: what is the direct path`; `do-nothing: what happens if we do nothing`; `operator: who is the first operator/user affected`; `no-go: what no-go boundaries are non-negotiable`. Tag the matching `## Q&A Log` row's `Decision impact` cell with `[topic:<id>]` (e.g. `[topic:pain]`) so the linter can verify coverage in any natural language. Tags are MANDATORY for forcing-question rows; un-tagged rows do NOT count toward coverage.",
-      "**Classify stage depth** — choose `lite` for clear low-risk tasks, `standard` for normal engineering/product changes, or `deep` for ambiguity, architecture, external dependency, security/data risk, or explicit think-bigger requests.",
+      "**Discovery posture (flow-state `discoveryMode`)** — follow `lean` / `guided` / `deep` from the active run. Use lean for smallest safe discovery pass; guided as the default balanced pass; escalate to deep when ambiguity, architecture, external dependency, security/data risk, or explicit think-bigger requests warrant fuller option pressure and mandatory specialist coverage.",
       "**Write the Problem Decision Record** — pick a free-form `Frame type` label that names how this work is framed (examples: product, technical-maintenance, research-spike, ops-incident, infrastructure), then fill the universal Framing fields: affected user/role/operator, current state/failure mode/opportunity, desired observable outcome, evidence/signal, why now, do-nothing consequence, and non-goals.",
       "**Premise check (one pass)** — answer the three gstack-style questions in the artifact body: *Right problem? Direct path? What if we do nothing?* Take a position; do not hedge.",
       "**Reframe with How Might We** — write a single `How Might We …?` line that names the user/operator, the desired outcome, and the constraint. This is the altitude check before approaches.",
@@ -64,7 +64,7 @@ export const BRAINSTORM: StageSchemaInput = {
     interactionProtocol: [
       "\"If something is unclear, stop. Name what's confusing. Ask.\"",
       "Start from observed project context; if the idea is vague, first narrow the project type with **one** structured question, then keep going.",
-      "Select depth explicitly: `lite`, `standard`, or `deep`; keep lite concise, but escalate when risk/ambiguity changes decisions.",
+      "Honor the run's `discoveryMode` (`lean` | `guided` | `deep`) from flow-state: lean stays fastest, guided is the default breadth, deep pulls in fuller critique and mandatory delegations when the run is classified that way.",
       "Lead with the premise check (right problem / direct path / what if nothing) and the `How Might We` reframing before approaches; both go in the artifact, not just the chat.",
       "Ask at most one question per turn, only when decision-changing; if using a structured question tool, send exactly one question object, not a multi-question form.",
       "Run the shared adaptive elicitation cycle from `.cclaw/skills/adaptive-elicitation/SKILL.md`, including stop-signal handling (RU/EN/UA), smart-skip, conditional grilling triggers, and append-only `## Q&A Log` updates.",
@@ -75,7 +75,7 @@ export const BRAINSTORM: StageSchemaInput = {
       "State exactly what is being approved, then **STOP** until the user explicitly approves the artifact."
     ],
     process: [
-      "Explore project context and classify depth/scope.",
+      "Explore project context and align work to the run's discovery mode (lean / guided / deep).",
       "Use compact discovery for simple apps, short-circuit implementation-only asks, or ask one decision-changing question at a time.",
       "Compare 2-3 distinct approaches, including a higher-upside challenger.",
       "Collect reaction, then recommend with rationale tied to that reaction.",
@@ -148,7 +148,7 @@ export const BRAINSTORM: StageSchemaInput = {
       { section: "Clarity Gate", required: false, validationRule: "Recommended before recommendation lock: include ambiguity score (0.00-1.00), decision boundaries, reaffirmed non-goals, and residual-risk handoff for scope." },
       { section: "Sharpening Questions", required: false, validationRule: "Recommended only when needed: one decision-changing question per turn with explicit `Decision impact`; compact tasks may record `None - early exit` with rationale." },
       { section: "Clarifying Questions", required: false, validationRule: "Must capture question, answer, and decision impact for each clarifying question." },
-      { section: "Approach Tier", required: true, validationRule: "Must classify depth as lite/standard/deep and explain the risk/uncertainty signal." },
+      { section: "Approach Tier", required: true, validationRule: "Must record how much discovery/evidence breadth is warranted in discoveryMode terms (`lean`, `guided`, or `deep`) relative to flow-state—and explain what risk or uncertainty drives that calibration (not merely the label)." },
       { section: "Short-Circuit Decision", required: false, validationRule: "Must include Status/Why/Scope handoff lines when short-circuit is discussed; compact stubs are valid for concrete asks." },
       { section: "Reference Pattern Candidates", required: false, validationRule: "Recommended when examples influence direction: list pattern/source, reusable invariant, accept/reject/defer disposition, and reason before approaches are finalized." },
       { section: "Idea Evidence Carry-forward", required: false, validationRule: "Wave 23 (v5.0.0): when `flow-state.interactionHints.brainstorm.fromIdeaArtifact` is set, this section MUST cite the idea artifact path and the chosen `I-#`, list reused fields (Title, Why-now, Expected impact, Risk, Counter-argument), and explicitly state that only challenger row(s) were newly generated. Honors `/cc-ideate` handoff so divergent + critique + rank work is reused, not redone." },

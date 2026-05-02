@@ -21,11 +21,7 @@ import {
 import { appendKnowledge } from "../../knowledge-store.js";
 import { readFlowState, writeFlowState } from "../../runs.js";
 import { TRACK_STAGES, type FlowStage, type FlowTrack } from "../../types.js";
-import {
-  stageAutoSubagentDispatch,
-  stageSchema,
-  type StageAutoSubagentDispatch
-} from "../../content/stage-schema.js";
+import { stageSchema } from "../../content/stage-schema.js";
 import { extractReviewLoopEnvelopeFromArtifact } from "../../content/review-loop.js";
 import { unique } from "./helpers.js";
 import {
@@ -35,7 +31,7 @@ import {
   validateGateEvidenceShape
 } from "./review-loop.js";
 import type { AdvanceStageArgs } from "./parsers.js";
-import { ensureProactiveDelegationTrace } from "./verify.js";
+import { ensureProactiveDelegationTrace } from "./proactive-delegation-trace.js";
 import type { Writable } from "node:stream";
 
 interface InternalIo {
@@ -72,11 +68,6 @@ interface InternalValidationReport {
     issues: string[];
   };
 }
-
-interface ProactiveDelegationTraceResult {
-  missingRules: StageAutoSubagentDispatch[];
-}
-
 
 function resolveSuccessorTransition(
   stage: FlowStage,
@@ -437,7 +428,7 @@ export async function runAdvanceStage(
     return 1;
   }
 
-  const schema = stageSchema(args.stage, flowState.track);
+  const schema = stageSchema(args.stage, flowState.track, flowState.discoveryMode, flowState.taskClass ?? null);
   const requiredGateIds = schema.requiredGates
     .filter((gate) => gate.tier === "required")
     .map((gate) => gate.id);
@@ -737,7 +728,8 @@ export async function runAdvanceStage(
 
   const proactiveTrace = await ensureProactiveDelegationTrace(projectRoot, args.stage, {
     acceptWaiver: args.acceptProactiveWaiver,
-    waiverReason: args.acceptProactiveWaiverReason
+    waiverReason: args.acceptProactiveWaiverReason,
+    discoveryMode: flowState.discoveryMode
   });
   if (proactiveTrace.missingRules.length > 0) {
     const missingSummary = proactiveTrace.missingRules

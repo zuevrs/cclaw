@@ -764,7 +764,7 @@ describe("stage schema and subagent alignment", () => {
     ]);
     expect(scope.executionModel.checklist).toEqual(expect.arrayContaining([
       expect.stringContaining("draft the in-scope/out-of-scope/deferred/discretion contract"),
-      expect.stringContaining("lite keeps the selected-mode row compact")
+      expect.stringContaining("lean discovery keeps the selected-mode row compact")
     ]));
     expect(scope.artifactValidation.find((row) => row.section === "Dream State Mapping")).toBeUndefined();
     expect(scope.artifactValidation.find((row) => row.section === "Temporal Interrogation")).toBeUndefined();

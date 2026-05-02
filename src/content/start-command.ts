@@ -12,8 +12,8 @@ function flowStatePath(): string {
  * Command contract for /cc — the unified entry point.
  * No args → reads existing flow state and progresses it when a tracked flow
  * already exists; missing state/fresh placeholder state blocks with
- * init/start guidance. With prompt → classifies the idea, selects a track, and
- * starts the first stage of that track (brainstorm for medium/standard, spec for quick).
+ * init/start guidance. With prompt → classifies the idea, asks for one discovery mode,
+ * resolves the internal track, and starts the first stage of that track (brainstorm for medium/standard, spec for quick).
  */
 export function startCommandContract(): string {
   const flowPath = flowStatePath();
@@ -24,7 +24,7 @@ export function startCommandContract(): string {
 **The unified entry point for the cclaw flow.**
 
 - \`/cc\` (no arguments) → reads existing flow state and resumes/progresses the active flow. If flow state is missing or still a fresh init placeholder, stop and guide the user to run \`/cc <prompt>\` or \`npx cclaw-cli init\`; do not silently create a brainstorm run.
-- \`/cc <prompt>\` (with an idea/description) → saves the prompt as idea context and starts the first stage of the resolved track.
+- \`/cc <prompt>\` (with an idea/description) → saves the prompt as idea context, asks for one discovery mode, and starts the first stage of the resolved internal track.
 
 This is the **recommended way to start, resume, and continue** working with cclaw.
 
@@ -75,7 +75,7 @@ ${conversationLanguagePolicyMarkdown()}
 
 5. Read \`${flowPath}\`.
 6. If flow already has completed stages, warn the user that starting a new tracked flow will reset progress. Ask for confirmation before proceeding. A fresh init placeholder state with \`completedStages: []\`, no passed gates, and no \`00-idea.md\` is **not** an active flow; do not ask the user to resume it.
-7. **Track heuristic** — classify the idea text and **recommend** a track (the user can override before any state mutation):
+7. **Internal track heuristic** — classify the idea text and compute an internal track recommendation before any state mutation:
    - First, load \`${RUNTIME_ROOT}/config.yaml\`. If \`trackHeuristics\` is defined, apply those per-track vocabulary hints (\`fallback\`, \`tracks.<id>.{triggers,veto}\`) on top of the built-in defaults. Evaluation order is always \`standard -> medium -> quick\` (narrow-to-broad).
    - **quick** (\`spec → tdd → review → ship\`) — single-purpose work where the spec is essentially already known. Quick skips ceremony, not safety: spec approval, TDD evidence, review, and ship gates remain mandatory.
      Triggers (case-insensitive substring or close variant): \`bug\`, \`bugfix\`, \`fix\`, \`hotfix\`, \`patch\`, \`typo\`, \`regression\`, \`copy change\`, \`rename\`, \`bump\`, \`upgrade dep\`, \`config tweak\`, \`docs only\`, \`comment\`, \`lint\`, \`format\`, \`small\`, \`tiny\`, \`one-liner\`, \`revert\`.
@@ -85,14 +85,14 @@ ${conversationLanguagePolicyMarkdown()}
      Triggers: \`new feature\`, \`refactor\`, \`migration\`, \`platform\`, \`architecture\`, \`schema\`, \`integrate\`, \`workflow\`, \`onboarding\`, or any prompt that does not match quick/medium confidently.
    - When triggers conflict, prefer **standard** over **medium**, and **medium** over **quick**.
    - Report **track selection confidence** as high/medium/low with the matched trigger or fallback reason, plus one sentence explaining what the selected track skips and what safety gates remain. Be explicit that this recommendation is advisory until the user accepts and the managed helper writes state; after that, \`/cc\` follows the configured track.
-8. Present one compact **Start framing** summary: class, recommended track, track selection confidence, stack, origin docs, seed recalls, and the recommended next action. Ask a single confirmation question only when there is a destructive reset, a real contradiction, or ambiguous software/non-software classification.
-9. Present the recommendation as a single decision with explicit options:
-   > \`Recommended track: <quick|medium|standard>\` because \`<one-line reason citing matched triggers>\`.
-   > \`Safety retained: <spec/TDD/review/ship gates that still apply>\`.
-   > Override? (A) keep \`<recommended>\`  (B) switch track with reason  (C) cancel.
+8. Present one compact **Start framing** summary: class, internal track recommendation, track selection confidence, stack, origin docs, seed recalls, and the recommended next action. Ask a single confirmation question only when there is a destructive reset, a real contradiction, or ambiguous software/non-software classification.
+9. Ask one explicit **discovery mode** question and make it the only normal start-of-run user choice:
+   > \`Choose discovery mode: Lean / Guided / Deep\`.
+   > \`Lean\` = compact shaping, \`Guided\` = recommended default with enough questions and key specialists before drafting, \`Deep\` = stronger probing and broader specialist/research passes.
+   > Mention the internal track recommendation only as context, not as the primary decision. Offer track override only when reset, contradiction, or reclassification evidence makes the internal recommendation suspect.
    If the harness's native ask tool is available (\`AskUserQuestion\` / \`AskQuestion\` / \`question\` / \`request_user_input\`), send exactly ONE question; on schema error, fall back to a plain-text lettered list.
 10. Start the tracked flow only through the managed helper:
-   \`node .cclaw/hooks/start-flow.mjs --track=<quick|medium|standard> --class=<class> --prompt=<prompt> --stack=<stack> --reason=<matched heuristic>\`
+   \`node .cclaw/hooks/start-flow.mjs --track=<quick|medium|standard> --discovery-mode=<lean|guided|deep> --class=<class> --prompt=<prompt> --stack=<stack> --reason=<matched heuristic>\`
    If this helper fails, STOP. Report one human-readable failure line from the JSON \`error\` field, include the helper JSON payload in a fenced \`json\` block, and never echo the invoking command line. Do **not** manually edit \`${flowPath}\`.
 11. The helper persists \`${flowPath}\`, computes \`skippedStages\`, sets the first stage for the track, resets the gate catalog, and writes \`.cclaw/artifacts/00-idea.md\`.
 12. Load the **first-stage skill for the chosen track** and its command file:
@@ -106,9 +106,9 @@ ${conversationLanguagePolicyMarkdown()}
 If during any stage the agent discovers evidence that contradicts the initial Phase 0 / track decision (e.g. a supposedly \`trivial\` change turns out to require schema migration, a \`quick\` bug fix turns out to need design discussion, an origin doc reveals scope 3× larger than the prompt), STOP and re-classify:
 
 1. Surface the new evidence in plain text.
-2. Propose the updated \`Class\` + \`Track\` with a one-line reason.
+2. Propose the updated \`Class\`, internal \`Track\`, and (when discovery posture should change) \`Discovery mode\` with a one-line reason.
 3. Use the Decision Protocol to let the user accept, override, or cancel.
-4. On acceptance: run \`node .cclaw/hooks/start-flow.mjs --reclassify --track=<new-track> --class=<new-class> --reason=<why>\`. The helper appends a \`Reclassification:\` entry to \`00-idea.md\` and updates flow state atomically. If it fails, STOP and report one human-readable line plus the helper JSON payload in a fenced \`json\` block; never echo the invoking command line. Do NOT manually edit \`flow-state.json\`.
+4. On acceptance: run \`node .cclaw/hooks/start-flow.mjs --reclassify --track=<new-track> --discovery-mode=<lean|guided|deep> --class=<new-class> --reason=<why>\`. The helper appends a \`Reclassification:\` entry to \`00-idea.md\` and updates flow state atomically. If it fails, STOP and report one human-readable line plus the helper JSON payload in a fenced \`json\` block; never echo the invoking command line. Do NOT manually edit \`flow-state.json\`.
 
 ### Without prompt (\`/cc\`)
 
@@ -157,7 +157,7 @@ description: "Unified entry point for the cclaw flow. No args = resume/next. Wit
 \`/cc\` is the **starting command** for cclaw. It intelligently routes:
 
 - **No arguments** → resumes or progresses an existing tracked flow; missing/fresh placeholder state blocks with start guidance
-- **With a prompt** → classifies the task, picks a track (quick/medium/standard), and starts the **first stage of that track** (not always brainstorm — e.g. the \`quick\` track starts at \`spec\`)
+- **With a prompt** → classifies the task, asks for one discovery mode (lean/guided/deep), resolves an internal track (quick/medium/standard), and starts the **first stage of that track** (not always brainstorm — e.g. the \`quick\` track starts at \`spec\`)
 
 ## HARD-GATE
 
@@ -178,7 +178,7 @@ ${conversationLanguagePolicyMarkdown()}
    - Ask: "Continue with reset? (A) Yes, start fresh (B) No, resume current flow"
    - If (B) → switch to Path B behavior.
    If \`completedStages\` is empty, all gate \`passed\` arrays are empty, and \`${RUNTIME_ROOT}/artifacts/00-idea.md\` is missing, treat it as a fresh init placeholder — do **not** ask whether to continue the current flow.
-7. **Classify the idea** using the heuristic below and present one compact Start framing summary (class, track, stack, origin docs, seed recalls, next action). Wait for explicit confirmation or override before mutating any state only when reset/conflict/ambiguity makes it necessary.
+7. **Classify the idea** using the heuristic below and present one compact Start framing summary (class, internal track recommendation, stack, origin docs, seed recalls, next action). Wait for explicit confirmation or override before mutating any state only when reset/conflict/ambiguity makes it necessary.
    - If \`${RUNTIME_ROOT}/config.yaml\` defines \`trackHeuristics\`, apply those vocabulary hints (\`fallback\`, \`tracks.<id>.{triggers,veto}\`) on top of built-in defaults. Evaluation order is fixed: \`standard -> medium -> quick\`. (Honest note: this is advisory prose; the LLM applies it, not a Node-level router.)
 
    **Track heuristic** (lowercase substring match against the user prompt):
@@ -191,12 +191,13 @@ ${conversationLanguagePolicyMarkdown()}
 
    - On conflict, prefer \`standard\` over \`medium\`, and \`medium\` over \`quick\`.
    - Always state the recommendation as a one-line reason citing matched triggers and a high/medium/low track selection confidence. Clarify that the heuristic is advisory until the managed helper writes state; after that, \`/cc\` follows the selected track. Include override guidance: switch to standard when architecture, schema, migration, security, or unclear scope appears; switch to medium when product framing is needed but architecture is known.
-8. Run the managed start helper: \`node .cclaw/hooks/start-flow.mjs --track=<quick|medium|standard> --class=<class> --prompt=<prompt> --stack=<stack> --reason=<matched heuristic>\`. The helper writes \`${flowPath}\`, computes \`skippedStages\`, resets the gate catalog, and writes \`${RUNTIME_ROOT}/artifacts/00-idea.md\`. If it fails, STOP, report one human-readable failure line from the JSON \`error\` field, and include the helper JSON payload in a fenced \`json\` block; do not echo the invoking command line, and do not manually edit flow state.
+8. Ask for the single explicit start choice: \`Lean / Guided / Deep\`. Use \`Guided\` as the recommended default unless the user clearly wants compact shaping or unusually deep probing. Keep track internal unless contradiction/reset/reclassification requires surfacing an override.
+9. Run the managed start helper: \`node .cclaw/hooks/start-flow.mjs --track=<quick|medium|standard> --discovery-mode=<lean|guided|deep> --class=<class> --prompt=<prompt> --stack=<stack> --reason=<matched heuristic>\`. The helper writes \`${flowPath}\`, including \`discoveryMode\`, computes \`skippedStages\`, resets the gate catalog, and writes \`${RUNTIME_ROOT}/artifacts/00-idea.md\`. If it fails, STOP, report one human-readable failure line from the JSON \`error\` field, and include the helper JSON payload in a fenced \`json\` block; do not echo the invoking command line, and do not manually edit flow state.
 9. Load and execute the **first stage skill of the chosen track** (\`brainstorm\` for medium/standard, \`spec\` for quick) plus its matching command file.
 
 ### Reclassification on discovery
 
-If mid-stage evidence contradicts the initial Class/Track decision (the "trivial" change needs a migration, the "quick" bug fix needs architecture work, an origin doc multiplies scope), STOP and re-classify using the Decision Protocol. On acceptance, run \`node .cclaw/hooks/start-flow.mjs --reclassify --track=<new-track> --class=<new-class> --reason=<why>\`; the helper records \`Reclassification:\` in \`00-idea.md\` and updates state atomically. If it fails, report one human-readable line plus the helper JSON payload in a fenced \`json\` block, never echo the invoking command line, and do not rewrite prior artifacts or manually edit flow-state.
+If mid-stage evidence contradicts the initial Class/Track/Discovery decision (the "trivial" change needs a migration, the "quick" bug fix needs architecture work, an origin doc multiplies scope), STOP and re-classify using the Decision Protocol. On acceptance, run \`node .cclaw/hooks/start-flow.mjs --reclassify --track=<new-track> --discovery-mode=<lean|guided|deep> --class=<new-class> --reason=<why>\`; the helper records \`Reclassification:\` in \`00-idea.md\` and updates state atomically. If it fails, report one human-readable line plus the helper JSON payload in a fenced \`json\` block, never echo the invoking command line, and do not rewrite prior artifacts or manually edit flow-state.
 
 ### Path B: \`/cc\` (no arguments)
 
@@ -221,6 +222,6 @@ Use \`/cc\` for the happy path:
 | Progressing after completing a stage | \`/cc\` |
 | Starting with a specific idea | \`/cc <idea>\` |
 
-\`/cc <prompt>\` resolves class + track and starts that track's first stage; \`/cc\` without a prompt follows the current \`flow-state.json\`.
+\`/cc <prompt>\` resolves class + internal track, asks for one discovery mode, and starts the selected track's first stage; \`/cc\` without a prompt follows the current \`flow-state.json\`.
 `;
 }

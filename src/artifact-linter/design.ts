@@ -340,7 +340,7 @@ export async function lintDesignStage(ctx: StageLintContext): Promise<void> {
 
     {
       const skipQuestions = activeStageFlags.includes("--skip-questions");
-      const floor = evaluateQaLogFloor(qaLogBody, track, "design", { skipQuestions });
+      const floor = evaluateQaLogFloor(qaLogBody, track, "design", { discoveryMode: ctx.discoveryMode, skipQuestions });
       findings.push({
         section: "qa_log_unconverged",
         required: !floor.skipQuestionsAdvisory,
@@ -353,7 +353,7 @@ export async function lintDesignStage(ctx: StageLintContext): Promise<void> {
     if (criticPredictions !== null) {
       findings.push({
         section: "critic.predictions_missing",
-        required: true,
+        required: false,
         rule: "[P2] critic.predictions_missing — pre-commitment predictions block missing or empty",
         found: criticPredictions.found,
         details: criticPredictions.details
@@ -451,7 +451,7 @@ export async function lintDesignStage(ctx: StageLintContext): Promise<void> {
       const ack = markdownFieldRegex("Iron rule acknowledged", "yes|true|y").test(regressionBody);
       findings.push({
         section: "Regression Iron Rule Acknowledgement",
-        required: true,
+        required: false,
         rule: "Regression Iron Rule section must affirm `Iron rule acknowledged: yes`.",
         found: ack,
         details: ack
@@ -471,7 +471,7 @@ export async function lintDesignStage(ctx: StageLintContext): Promise<void> {
       const ok = isEmpty || validRows.length >= 1;
       findings.push({
         section: "Calibrated Finding Format",
-        required: true,
+        required: false,
         rule: "Calibrated Findings must either declare `None this stage` or contain at least one finding in the form `[P1|P2|P3] (confidence: <n>/10) <path>[:<line>] — <description>`.",
         found: ok,
         details: isEmpty
@@ -489,7 +489,7 @@ export async function lintDesignStage(ctx: StageLintContext): Promise<void> {
     if (layeredDocumentReview !== null) {
       findings.push({
         section: "Document Reviewer Structured Findings",
-        required: true,
+        required: false,
         rule: "When Layered review references coherence-reviewer/scope-guardian-reviewer/feasibility-reviewer, include explicit reviewer status plus calibrated finding lines.",
         found: layeredDocumentReview.missingStructured.length === 0,
         details: layeredDocumentReview.missingStructured.length === 0

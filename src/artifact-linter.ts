@@ -183,16 +183,19 @@ export async function lintArtifact(
   // Same flow-state read powers the post-loop demotion + audit log
   // below; we cache the result here to avoid two disk reads.
   let activeStageFlags: string[] = [];
+  let discoveryMode: StageLintContext["discoveryMode"] = "guided";
   let taskClass: StageLintContext["taskClass"] = null;
   let activeRunId: string | null = null;
   try {
     const flowState = await readFlowState(projectRoot);
     const hint = flowState.interactionHints?.[stage];
     if (hint?.skipQuestions === true) activeStageFlags.push("--skip-questions");
+    discoveryMode = flowState.discoveryMode ?? "guided";
     taskClass = flowState.taskClass ?? null;
     activeRunId = flowState.activeRunId ?? null;
   } catch {
     activeStageFlags = [];
+    discoveryMode = "guided";
     taskClass = null;
     activeRunId = null;
   }
@@ -267,6 +270,7 @@ export async function lintArtifact(
     projectRoot,
     stage,
     track,
+    discoveryMode,
     raw,
     absFile,
     sections,
