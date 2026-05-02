@@ -7,6 +7,7 @@ import type { FlowTrack } from "../types.js";
 import {
   type StageLintContext,
   checkCriticPredictionsContract,
+  evaluateInvestigationTrace,
   evaluateLayeredDocumentReviewStatus,
   evaluateQaLogFloor,
   extractMarkdownSectionBody,
@@ -323,6 +324,7 @@ export async function lintDesignStage(ctx: StageLintContext): Promise<void> {
     isTrivialOverride,
     activeStageFlags
   } = ctx;
+    evaluateInvestigationTrace(ctx, "Codebase Investigation");
     const qaLogBody = sectionBodyByName(sections, "Q&A Log");
     const qaLogRows = qaLogBody ? getMarkdownTableRows(qaLogBody) : [];
     const qaLogOk = qaLogBody !== null && qaLogRows.length > 0;

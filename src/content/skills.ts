@@ -1,7 +1,8 @@
 import { RUNTIME_ROOT, STAGE_TO_SKILL_FOLDER } from "../constants.js";
 import { nextStage as nextStageForTrack } from "../flow-state.js";
 import { FLOW_STAGES, type FlowStage, type FlowTrack } from "../types.js";
-import { stageExamples } from "./examples.js";
+import { behaviorAnchorFor, stageExamples } from "./examples.js";
+import { INVESTIGATION_DISCIPLINE_BLOCK } from "./templates.js";
 import { reviewStackAwareRoutes, reviewStackAwareRoutingSummary, stageAutoSubagentDispatch, stageSchema, stageTrackRenderContext } from "./stage-schema.js";
 import type { StageSchema } from "./stage-schema.js";
 import { referencePatternsForStage } from "./reference-patterns.js";
@@ -127,6 +128,42 @@ For TDD specifically, this is the watched-RED proof and is required per new test
 `;
 }
 
+/**
+ * Stages that perform real investigation work. The shared
+ * `INVESTIGATION_DISCIPLINE_BLOCK` is rendered once per stage skill in this
+ * set so the search → graph → narrow-read → draft ladder appears verbatim
+ * across the elicitation/spec/plan/tdd/review pipeline. `ship` is excluded:
+ * it consumes the upstream trace rather than producing one.
+ */
+export const INVESTIGATION_DISCIPLINE_STAGES: ReadonlySet<FlowStage> = new Set<FlowStage>([
+  "brainstorm",
+  "scope",
+  "design",
+  "spec",
+  "plan",
+  "tdd",
+  "review"
+]);
+
+export function investigationDisciplineBlock(): string {
+  return INVESTIGATION_DISCIPLINE_BLOCK;
+}
+
+export function behaviorAnchorBlock(stage: FlowStage): string {
+  const anchor = behaviorAnchorFor(stage);
+  if (!anchor) return "";
+  const ruleHint = anchor.ruleHint && anchor.ruleHint.trim().length > 0
+    ? `\n\nRule hint: ${anchor.ruleHint.trim()}`
+    : "";
+  return `## Behavior anchor
+
+Anchored to artifact section: \`${anchor.section}\`.
+
+- Bad: ${anchor.bad}
+- Good: ${anchor.good}${ruleHint}
+`;
+}
+
 function crossCuttingMechanicsBlock(stage: FlowStage): string {
   // All stages share the universal mechanics, but each stage's matching
   // linter rules decide what is mandatory vs. structural-only.
@@ -139,6 +176,13 @@ function crossCuttingMechanicsBlock(stage: FlowStage): string {
   ];
   if (stage === "tdd" || stage === "review" || stage === "ship") {
     blocks.push(watchedFailProofBlock());
+  }
+  if (INVESTIGATION_DISCIPLINE_STAGES.has(stage)) {
+    blocks.push(investigationDisciplineBlock());
+  }
+  const anchor = behaviorAnchorBlock(stage);
+  if (anchor.length > 0) {
+    blocks.push(anchor);
   }
   return blocks.join("\n");
 }

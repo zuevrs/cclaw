@@ -3,6 +3,7 @@ import path from "node:path";
 import {
   type StageLintContext,
   checkCriticPredictionsContract,
+  evaluateInvestigationTrace,
   evaluateQaLogFloor,
   sectionBodyByName,
   validateApproachesTaxonomy,
@@ -30,6 +31,7 @@ export async function lintBrainstormStage(ctx: StageLintContext): Promise<void> 
     isTrivialOverride
   } = ctx;
 
+    evaluateInvestigationTrace(ctx, "Q&A Log");
     const qaLogBody = sectionBodyByName(sections, "Q&A Log");
     const qaLogRows = qaLogBody ? getMarkdownTableRows(qaLogBody) : [];
     const qaLogOk = qaLogBody !== null && qaLogRows.length > 0;

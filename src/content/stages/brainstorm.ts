@@ -72,7 +72,9 @@ export const BRAINSTORM: StageSchemaInput = {
       "For simple low-risk greenfield work, present a compact A/B choice with one recommended path and one higher-upside challenger; keep the artifact concise but structurally complete (Context, Premise, How Might We, Sharpening Questions, Approaches, Reaction, Selected Direction, Not Doing).",
       "Show approaches before the recommendation; include a higher-upside challenger and gather reaction first.",
       "Self-review before approval: re-read the artifact, fix contradictions/placeholders/weak trade-offs, then ask for approval. Do not ask for approval on a draft you have not re-read.",
-      "State exactly what is being approved, then **STOP** until the user explicitly approves the artifact."
+      "State exactly what is being approved, then **STOP** until the user explicitly approves the artifact.",
+      "Investigation discipline: follow the shared `## Investigation Discipline` block (search -> graph/impact -> narrow read of 1-3 files -> draft) before any drafting or delegation; pass repo-relative paths and refs (never file bodies) in delegations.",
+      "Behavior anchor: see the shared `## Behavior anchor` block in this skill — the bad/good pair anchors how this stage's `Problem Decision Record` must be filled."
     ],
     process: [
       "Explore project context and align work to the run's discovery mode (lean / guided / deep).",

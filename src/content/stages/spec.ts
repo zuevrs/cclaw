@@ -57,7 +57,9 @@ export const SPEC: StageSchemaInput = {
       "**Chunk acceptance criteria for review.** When presenting the spec to the user for sign-off, deliver acceptance criteria in batches of 3-5 and **pause for explicit ACK** (via Decision Protocol) before sending the next batch. Do not dump the full criteria wall in one message — small batches surface objections earlier and keep the sign-off meaningful. Full spec writeup still lands in `04-spec.md`, but the conversation itself must be digestible.",
       "Require user confirmation on the written spec. **STOP.** Do NOT proceed to plan until user approves.",
       "For each criterion, ask: what exact evidence proves this passed? If the evidence or verification command/manual step is vague, rewrite.",
-      "When encountering ambiguity, classify it before acting: (A) ask user for missing info, (B) enumerate non-critical interpretations and pick one with justification, (C) propose hypothesis with validation path. Do NOT silently resolve ambiguity. STOP on scope, architecture, security, data loss, public API, migration, auth/pricing, or user-approval uncertainty."
+      "When encountering ambiguity, classify it before acting: (A) ask user for missing info, (B) enumerate non-critical interpretations and pick one with justification, (C) propose hypothesis with validation path. Do NOT silently resolve ambiguity. STOP on scope, architecture, security, data loss, public API, migration, auth/pricing, or user-approval uncertainty.",
+      "Investigation discipline: follow the shared `## Investigation Discipline` block — derive ACs from cited upstream paths/refs (`02-scope.md#R-2`, `03-design.md#DD-1`) instead of pasting their bodies into delegation prompts.",
+      "Behavior anchor: see the shared `## Behavior anchor` block in this skill — the bad/good pair anchors how each `Acceptance Criteria` row must carry an observable predicate plus the evidence path."
     ],
     process: [
       "Define measurable acceptance criteria.",

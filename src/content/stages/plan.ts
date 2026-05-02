@@ -64,7 +64,9 @@ export const PLAN: StageSchemaInput = {
       "Preserve locked scope boundaries: no silent scope reduction language in task rows.",
       "Enforce WAIT_FOR_CONFIRM: present the plan summary with options (A) Approve / (B) Revise / (C) Reject.",
       "**STOP.** Do NOT proceed until user explicitly approves.",
-      "**STOP BEFORE ADVANCE.** Mandatory delegation `planner` must be marked completed or explicitly waived in `.cclaw/state/delegation-log.json`. Then close the stage via `node .cclaw/hooks/stage-complete.mjs plan` and tell the user to run `/cc`."
+      "**STOP BEFORE ADVANCE.** Mandatory delegation `planner` must be marked completed or explicitly waived in `.cclaw/state/delegation-log.json`. Then close the stage via `node .cclaw/hooks/stage-complete.mjs plan` and tell the user to run `/cc`.",
+      "Investigation discipline: follow the shared `## Investigation Discipline` block — when defining `Implementation Units`, list cited paths in the `Files` and `Patterns to follow` rows instead of pasting code into chat or delegations.",
+      "Behavior anchor: see the shared `## Behavior anchor` block in this skill — the bad/good pair anchors how `Execution Posture` may only claim parallel-safe with disjoint units and a cited interface contract."
     ],
     process: [
       "Build dependency graph and ordered slices.",

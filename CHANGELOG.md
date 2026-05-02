@@ -1,5 +1,32 @@
 # Changelog
 
+## 6.6.0 — Agent Efficiency Round 5
+
+Two coupled, content-only workstreams that bound investigation cost and anchor each stage to a concrete bad → good behavior. Pure prompt + advisory linter — no `FlowState` fields, no CLI flags, no schema fields, no harness changes. Standard / quick / medium tracks behave identically; the new linter rule is `required: false` and never blocks `stage-complete`.
+
+### Skill Content
+
+- **Investigation Discipline ladder** — every elicitation/spec/plan/tdd/review skill now embeds the same four-step ladder (`search → graph/impact → narrow read of 1-3 files → draft`) plus an explicit path-passing rule for delegations and three stop triggers (`> 3 files in one pass`, `loading file content into a delegation prompt instead of paths`, `starting a draft before any trace exists`). Rendered exactly once per of the seven `INVESTIGATION_DISCIPLINE_STAGES`. `ship` is excluded — it consumes the upstream trace, it does not produce one.
+- **Behavior anchor block** — every stage skill now carries a single `## Behavior anchor` block with one bad-vs-good pair tied to a real artifact section in that stage's schema. Themes: brainstorm = silent scope creep in framing; scope = invented contract without user-signal trace; design = premature architecture without a codebase trace; spec = claim-without-evidence in acceptance criteria; plan = parallelization claim without disjoint units + interface contract; tdd = tautological assertion; review = drive-by refactor disguised as findings; ship = victory-by-confidence without runnable evidence.
+
+### Templates
+
+- **`INVESTIGATION_DISCIPLINE_BLOCK`** — new shared markdown constant in `src/content/templates.ts` (~25 lines, four ladder steps + path-passing rule + three stop triggers). Wired into `crossCuttingMechanicsBlock` in `src/content/skills.ts` once — the seven stage files reference it through one line in `interactionProtocol`, no prose duplication.
+- **`BEHAVIOR_ANCHORS`** — new typed array in `src/content/examples.ts` (one entry per `FlowStage`, 8 total). Each artifact template (`01-brainstorm.md` … `08-ship.md`) now opens with one `> Behavior anchor (bad -> good) — <section>: ...` line rendered via `renderBehaviorAnchorTemplateLine(stage)`, so authors see the calibration the moment they open the template.
+- **`behaviorAnchorFor(stage)`** + **`behaviorAnchorBlock(stage)`** — exported helpers used by the shared skill renderer and the unit tests; the rendered `## Behavior anchor` block contains the section anchor, the bad / good pair, and an optional rule hint.
+
+### Linter Coverage
+
+- **`evaluateInvestigationTrace(ctx, sectionName)`** — new advisory rule in `src/artifact-linter/shared.ts` exporting both the linter wrapper and the underlying `checkInvestigationTrace` detector. Empty / placeholder-only sections (template stubs, separator rows, `- None.`, lone ID-only data rows, table headers) are silent. Sections with substantive content but no recognizable file path / ref / `path:` marker / cclaw ID in the first non-empty rows emit a single advisory finding `[P3] investigation_path_first_missing` ("pass paths and refs, not pasted file contents"). The detector accepts typical TS/JS/MD/JSON paths, slash-bearing repo-root prefixes (`src/`, `tests/`, `docs/`, `.cclaw/`, …), `path:line` ranges, GitHub-style refs (`org/repo#123`, `org/repo@sha`), explicit `path:` / `ref:` markers, stable cclaw IDs (`R1`, `D-12`, `AC-3`, `T-4`, `S-2`, `DD-5`, `ADR-1`, `F-1`, …), and backticked path-like tokens.
+- **Six stage linters wired** — `evaluateInvestigationTrace` now runs in `src/artifact-linter/{brainstorm,scope}.ts` against `Q&A Log`, `design.ts` against `Codebase Investigation`, `tdd.ts` against `Watched-RED Proof`, `plan.ts` against `Implementation Units`, and `review.ts` against `Changed-File Coverage`. All six calls are advisory only (`required: false`) and never block `stage-complete` or alter existing failure semantics.
+
+### Tests
+
+- **`tests/unit/investigation-discipline-block.test.ts`** — verifies the constant exists, contains exactly four numbered ladder steps, exactly three stop triggers, mentions path-passing, is not duplicated verbatim in any `src/content/stages/*.ts`, renders exactly once in each of the seven investigation-stage skills, and is absent from the `ship` skill.
+- **`tests/unit/investigation-trace-evaluator.test.ts`** — exercises both `checkInvestigationTrace` and `evaluateInvestigationTrace` against missing sections, empty sections, placeholder-only template stubs, sections with TS/MD paths, `path:` markers, stable cclaw IDs, GitHub refs, `path:line` ranges, and prose-only content; confirms exactly one advisory `investigation_path_first_missing` finding fires only on the prose-only case.
+- **`tests/unit/behavior-anchors.test.ts`** — verifies exactly one anchor per `FlowStage`, ≤ 40 words on each `bad` / `good` side, uniqueness across stages, that each anchor's `section` resolves to a real entry in `stageSchema(stage).artifactRules.artifactValidation`, that every rendered stage skill markdown contains `## Behavior anchor` exactly once with `- Bad:` / `- Good:` markers, and that every artifact template carries the matching one-line anchor pointer exactly once.
+- **`tests/e2e/docs-contracts.test.ts`** — extended with two new contract checks: the Investigation Discipline ladder snippet ("Use this ladder before drafting or delegating") plus the path-passing rule render exactly once per of the seven investigation stages and never in `ship`; the `## Behavior anchor` block renders once per of the eight stage skills with both `Bad:` and `Good:` markers.
+
 ## 6.5.0 — Flow correctness round 3 (delegation-log lock, quiet success JSON, scope PD clarity)
 
 ### Reliability
