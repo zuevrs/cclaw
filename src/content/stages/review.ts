@@ -73,7 +73,9 @@ export const REVIEW: StageSchemaInput = {
         "final verdict",
         "verdict (APPROVED / APPROVED_WITH_CONCERNS / BLOCKED)"
       ),
-      "**STOP.** Do NOT proceed to ship until the user provides an explicit verdict."
+      "**STOP.** Do NOT proceed to ship until the user provides an explicit verdict.",
+      "Investigation discipline: follow the shared `## Investigation Discipline` block — `Changed-File Coverage` and Layer 2 findings cite `path:line`; delegate `reviewer`/`security-reviewer` with paths and refs, never with pasted file contents.",
+      "Behavior anchor: see the shared `## Behavior anchor` block in this skill — the bad/good pair anchors that `Layer 2 Findings` surface defects, not drive-by refactors."
     ],
     process: [
       "Layer 1: check acceptance criteria and requirement coverage.",

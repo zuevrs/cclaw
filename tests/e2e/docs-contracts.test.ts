@@ -248,4 +248,39 @@ ${await readRepoFile("docs/scheme-of-work.md")}`;
       expect(skillMd, `stage ${stage}`).toContain("single-line success JSON");
     }
   });
+
+  it("renders the Round 5 Investigation Discipline block exactly once per investigation-stage skill", () => {
+    const investigationStages: Array<typeof FLOW_STAGES[number]> = [
+      "brainstorm",
+      "scope",
+      "design",
+      "spec",
+      "plan",
+      "tdd",
+      "review"
+    ];
+    const ladderSnippet = "Use this ladder before drafting or delegating";
+    for (const stage of investigationStages) {
+      const skillMd = stageSkillMarkdown(stage);
+      const occurrences = skillMd.split(ladderSnippet).length - 1;
+      expect(occurrences, `${stage} skill should render the investigation block exactly once`).toBe(
+        1
+      );
+      expect(skillMd, `${stage} skill should declare the path-passing rule`).toContain(
+        "Path-passing in delegations"
+      );
+    }
+    const shipMd = stageSkillMarkdown("ship");
+    expect(shipMd.includes(ladderSnippet)).toBe(false);
+  });
+
+  it("renders the Round 5 Behavior anchor block exactly once per stage skill with Bad/Good markers", () => {
+    for (const stage of FLOW_STAGES) {
+      const skillMd = stageSkillMarkdown(stage);
+      const headerOccurrences = skillMd.split("## Behavior anchor").length - 1;
+      expect(headerOccurrences, `${stage} skill should render '## Behavior anchor' once`).toBe(1);
+      expect(skillMd, `${stage} skill should mark Bad`).toMatch(/- Bad:/u);
+      expect(skillMd, `${stage} skill should mark Good`).toMatch(/- Good:/u);
+    }
+  });
 });

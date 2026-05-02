@@ -2006,6 +2006,160 @@ export function parseLearningsSection(sectionBody: string): LearningsParseResult
   };
 }
 
+/**
+ * Round 5 (v6.6.0) — file-path / reference detector for the
+ * `investigation_path_first_missing` advisory rule.
+ *
+ * The detector is intentionally permissive: it only needs to recognize
+ * "the author wrote down a path or ref" — the linter does NOT validate
+ * the path resolves on disk. Patterns matched (any one is enough):
+ *   - TS/JS/MD/JSON/YAML path with extension
+ *     (`src/foo/bar.ts`, `tests/spec.test.ts`, `docs/quality-gates.md`).
+ *   - Slash-bearing path under a known repo root prefix
+ *     (`src/...`, `tests/...`, `docs/...`, `scripts/...`,
+ *     `.cclaw/...`, `.cursor/...`, `node_modules/...`,
+ *     `examples/...`, `e2e/...`).
+ *   - GitHub-style ref (`owner/repo#123`, `org/repo@sha`,
+ *     `path:line`, `path:line-line`).
+ *   - Explicit `path:` / `paths:` / `ref:` / `refs:` marker.
+ *   - Stable cclaw IDs (`R1`, `D-12`, `AC-3`, `T-4`, `S-2`, `DD-5`,
+ *     `ADR-1`, `R-1`, `F-1`, `CR-1`, `I-1`, `QS-1`).
+ *   - Backticked path-like token containing a slash.
+ *
+ * Exposed for unit tests (`tests/unit/investigation-trace-evaluator.test.ts`).
+ */
+export const INVESTIGATION_TRACE_PATH_PATTERNS: readonly RegExp[] = [
+  /(?:^|[\s`(\[])(?:[A-Za-z0-9_.-]+\/)+[A-Za-z0-9_.-]+\.(?:ts|tsx|js|jsx|mjs|cjs|md|mdx|json|yaml|yml|toml|sh|py|rs|go|java|kt|swift|rb|css|scss|html)\b/iu,
+  /(?:^|[\s`(\[])(?:src|tests?|docs?|scripts?|e2e|examples?|packages?|apps?|cmd|internal|pkg|lib|app|server|client|backend|frontend|\.cclaw|\.cursor|\.github|node_modules)\/[A-Za-z0-9_./-]+/iu,
+  /\b[A-Za-z0-9_./-]+(?:\.[A-Za-z0-9]+)?:\d+(?:[-:]\d+)?\b/u,
+  /\b[A-Za-z0-9_.-]+\/[A-Za-z0-9_.-]+(?:#\d+|@[0-9a-f]{6,40})\b/iu,
+  /(?:^|\s)(?:paths?|refs?|file|files|cite|citation)\s*:\s*\S/iu,
+  /\b(?:R|D|AC|T|S|DD|ADR|F|CR|I|QS)-?\d+\b/u,
+  /`[^`]*\/[^`]+`/u
+];
+
+export interface InvestigationTraceFinding {
+  ok: boolean;
+  details: string;
+}
+
+const INVESTIGATION_TRACE_PLACEHOLDER_PATTERN = /^(?:none|none\.|n\/a|tbd|todo|fixme|placeholder|optional|fill[\s-]?in)\b/u;
+
+const INVESTIGATION_TRACE_ID_ONLY_CELL = /^[A-Z]{1,4}-?\d+$/u;
+
+function isInvestigationTracePlaceholderCell(cell: string): boolean {
+  const stripped = cell.replace(/[`*_>#]/gu, "").trim();
+  if (stripped.length === 0) return true;
+  if (INVESTIGATION_TRACE_PLACEHOLDER_PATTERN.test(stripped.toLowerCase())) return true;
+  return false;
+}
+
+function isInvestigationTracePlaceholderProseLine(line: string): boolean {
+  const stripped = line.replace(/[`*_>#-]/gu, "").trim();
+  if (stripped.length === 0) return true;
+  const lower = stripped.toLowerCase();
+  if (INVESTIGATION_TRACE_PLACEHOLDER_PATTERN.test(lower)) return true;
+  if (/^\(\s*(?:none|n\/a|tbd|todo|fixme|placeholder|optional|fill[\s-]?in)\b/u.test(lower)) {
+    return true;
+  }
+  return false;
+}
+
+/**
+ * Internal core that does NOT depend on `StageLintContext`. Returned
+ * shape is consumed by `evaluateInvestigationTrace` (which pushes a
+ * finding into the context) and by unit tests that exercise the
+ * detector directly.
+ *
+ * Returns `null` for sections that are missing, empty, or contain only
+ * template scaffolding (table headers, separators, placeholder rows
+ * with empty cells, lone `- None.` lines). Callers treat `null` as
+ * silent — no finding is emitted.
+ */
+export function checkInvestigationTrace(
+  sectionBody: string | null
+): InvestigationTraceFinding | null {
+  if (sectionBody === null) return null;
+  const lines = sectionBody.split(/\r?\n/u);
+  const candidates: string[] = [];
+
+  for (let index = 0; index < lines.length; index += 1) {
+    const raw = lines[index] ?? "";
+    const trimmed = raw.trim();
+    if (trimmed.length === 0) continue;
+    if (trimmed.startsWith("<!--")) continue;
+
+    const isTableLine = /^\|.*\|$/u.test(trimmed);
+    if (isTableLine) {
+      if (/^\|[-:| ]+\|$/u.test(trimmed)) continue; // separator row
+      const next = (lines[index + 1] ?? "").trim();
+      if (/^\|[-:| ]+\|$/u.test(next)) continue; // header row (followed by separator)
+      const cells = trimmed
+        .split("|")
+        .slice(1, -1)
+        .map((cell) => cell.trim());
+      const substantive = cells.filter((cell) => !isInvestigationTracePlaceholderCell(cell));
+      if (substantive.length === 0) continue;
+      if (substantive.length === 1 && INVESTIGATION_TRACE_ID_ONLY_CELL.test(substantive[0]!)) {
+        continue;
+      }
+      candidates.push(substantive.join(" "));
+      continue;
+    }
+
+    if (isInvestigationTracePlaceholderProseLine(trimmed)) continue;
+    candidates.push(trimmed);
+  }
+
+  if (candidates.length === 0) return null;
+
+  const sample = candidates.slice(0, Math.min(5, candidates.length));
+  const detectorMatched = sample.some((line) =>
+    INVESTIGATION_TRACE_PATH_PATTERNS.some((pattern) => pattern.test(line))
+  );
+  if (detectorMatched) {
+    return {
+      ok: true,
+      details: "Investigation trace cites file paths or refs in the first non-empty row(s)."
+    };
+  }
+  return {
+    ok: false,
+    details:
+      "Investigation trace has prose-only content in its first row(s). Pass paths and refs, not pasted file contents (e.g. `src/foo/bar.ts:42`, `D-12`, `AC-3`)."
+  };
+}
+
+/**
+ * Round 5 (v6.6.0) — advisory rule wired into the brainstorm / scope /
+ * design / tdd / plan / review linters.
+ *
+ * Behavior contract:
+ * - Section missing or empty / placeholder-only: silent (no finding).
+ * - Section has substantive content with a recognizable file path /
+ *   ref / explicit `path:`-style marker in the first non-empty rows:
+ *   advisory pass (no finding).
+ * - Section has substantive content but no path/ref signal: advisory
+ *   FAIL finding with ruleId `investigation_path_first_missing`.
+ *
+ * The rule is `required: false` so it never blocks `stage-complete`.
+ */
+export function evaluateInvestigationTrace(
+  ctx: StageLintContext,
+  sectionName: string
+): void {
+  const body = sectionBodyByName(ctx.sections, sectionName);
+  const result = checkInvestigationTrace(body);
+  if (result === null) return;
+  ctx.findings.push({
+    section: "investigation_path_first_missing",
+    required: false,
+    rule: `[P3] investigation_path_first_missing — \`## ${sectionName}\` should cite paths and refs in the first non-empty row(s); pass paths and refs, not content.`,
+    found: result.ok,
+    details: result.details
+  });
+}
+
 export function lineContainsVagueAdjective(text: string): string | null {
   const lower = text.toLowerCase();
   for (const adjective of VAGUE_AC_ADJECTIVES) {

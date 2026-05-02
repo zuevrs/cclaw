@@ -1,5 +1,6 @@
 import {
   type StageLintContext,
+  evaluateInvestigationTrace,
   evaluateLayeredDocumentReviewStatus,
   headingPresent,
   sectionBodyByName,
@@ -27,6 +28,8 @@ export async function lintPlanStage(ctx: StageLintContext): Promise<void> {
     staleDiagramAuditEnabled,
     isTrivialOverride
   } = ctx;
+
+    evaluateInvestigationTrace(ctx, "Implementation Units");
 
     const strictPlanGuards =
       parsedFrontmatter.hasFrontmatter ||

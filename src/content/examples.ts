@@ -1,5 +1,108 @@
 import type { FlowStage } from "../types.js";
 
+/**
+ * Round 5 (v6.6.0) — short bad → good behavior anchor per stage.
+ *
+ * Each entry is rendered exactly once in the corresponding stage skill md
+ * (via `behaviorAnchorBlock` in `skills.ts`) and exactly once in the stage's
+ * artifact template (via `renderBehaviorAnchorTemplateLine`). Anchors are
+ * deliberately attached to a real artifact section name so the cross-check
+ * test in `tests/unit/behavior-anchors.test.ts` can verify the section
+ * exists in the stage's schema.
+ *
+ * Constraints enforced by the unit test:
+ * - Exactly one entry per FlowStage (8 total).
+ * - `bad` and `good` must be distinct across stages and ≤ 40 words each.
+ * - `section` must match a section name present in
+ *   `stageSchema(stage).artifactRules.artifactValidation`.
+ */
+export interface BehaviorAnchor {
+  stage: FlowStage;
+  section: string;
+  bad: string;
+  good: string;
+  ruleHint?: string;
+}
+
+export const BEHAVIOR_ANCHORS: ReadonlyArray<BehaviorAnchor> = [
+  {
+    stage: "brainstorm",
+    section: "Problem Decision Record",
+    bad: "Frame the problem broadly and quietly add a second outcome (\"and while we're at it, refresh the dashboard\") that no Q&A row sanctioned.",
+    good: "Name one affected user, one current failure mode, and one observable outcome; record any extra outcome as a separate row in `## Not Doing`.",
+    ruleHint: "Scope creep starts in framing — keep the Problem Decision Record single-target."
+  },
+  {
+    stage: "scope",
+    section: "Scope Contract",
+    bad: "Invent a contract from a hunch: \"I'll let the user choose 3 templates\" with no Q&A row, no user feedback citation, no upstream decision.",
+    good: "Cite the Q&A row or upstream decision (`brainstorm > Selected Direction`) that produced each in/out boundary; refuse to lock without that citation.",
+    ruleHint: "Every scope contract row must trace to a recorded user signal or carried-forward decision."
+  },
+  {
+    stage: "design",
+    section: "Codebase Investigation",
+    bad: "Open with \"Use a queue + worker pool\" before reading any file; the architecture choice precedes the trace and the diagram has no concrete node.",
+    good: "List 1-3 blast-radius files in `Codebase Investigation` with current responsibility and reuse candidate first; only then propose architecture in `ADR`.",
+    ruleHint: "Trace before lock — no architecture decision lands without a codebase citation."
+  },
+  {
+    stage: "spec",
+    section: "Acceptance Criteria",
+    bad: "AC: \"System should be fast and reliable\" — no measurable predicate, no verification approach, no design-decision ref.",
+    good: "AC: \"GET /feed returns ≤ 50 items in < 200 ms p95; verified via integration test `tests/feed.spec.ts` against scope `R-2`.\"",
+    ruleHint: "Every AC carries an observable predicate plus the exact evidence command or path that proves it."
+  },
+  {
+    stage: "plan",
+    section: "Execution Posture",
+    bad: "Posture: \"parallel-safe\" with three units that all edit the same `src/api/router.ts`; no shared interface contract, no boundary map.",
+    good: "Posture: \"parallel-safe\" only when each Implementation Unit owns disjoint files and the shared types live in one cited interface contract entry.",
+    ruleHint: "Parallelization needs disjoint units AND a single shared interface contract — claim otherwise and the next batch deadlocks."
+  },
+  {
+    stage: "tdd",
+    section: "RED Evidence",
+    bad: "RED: `expect(true).toBe(true)` then \"failing test observed\" — the assertion can never have caught the bug it claims to prove.",
+    good: "RED: `expect(api.fetchFeed()).rejects.toThrow(AuthError)`; the failure output names the missing guard and ties to AC-3.",
+    ruleHint: "Mental mutation test: name a plausible bug that would still pass the assertion. If you can, the assertion is too coarse."
+  },
+  {
+    stage: "review",
+    section: "Layer 2 Findings",
+    bad: "Slip in a rename of `userSvc` → `userService` and a folder reorg under \"Layer 2: cleanup\"; no acceptance criterion or finding ID demanded the change.",
+    good: "Findings name observed defects with `file:line`; refactors land as a separate slice with their own RED/GREEN, not bundled into the review pass.",
+    ruleHint: "Review surfaces findings; it does not refactor. Drive-by edits go back through TDD."
+  },
+  {
+    stage: "ship",
+    section: "Preflight Results",
+    bad: "Preflight: \"Looks good, tests passed last night\"; no fresh command output, no commit SHA, no exit code.",
+    good: "Preflight: paste the command, the exit code, and the commit SHA from this turn; if the suite was not re-run after the last edit, mark BLOCKED.",
+    ruleHint: "Victory-by-confidence is not a preflight. Re-run, capture, cite SHA — or stay BLOCKED."
+  }
+];
+
+const BEHAVIOR_ANCHOR_BY_STAGE: ReadonlyMap<FlowStage, BehaviorAnchor> = new Map(
+  BEHAVIOR_ANCHORS.map((entry) => [entry.stage, entry])
+);
+
+export function behaviorAnchorFor(stage: FlowStage): BehaviorAnchor | null {
+  return BEHAVIOR_ANCHOR_BY_STAGE.get(stage) ?? null;
+}
+
+/**
+ * Render the one-line "Behavior anchor (bad → good)" pointer used at the top
+ * of each artifact template (01..08). Templates carry the anchor inline so
+ * agents see it before they start filling sections; the prose itself lives
+ * only in `BEHAVIOR_ANCHORS` to avoid duplication.
+ */
+export function renderBehaviorAnchorTemplateLine(stage: FlowStage): string {
+  const anchor = behaviorAnchorFor(stage);
+  if (!anchor) return "";
+  return `> Behavior anchor (bad -> good) — ${anchor.section}: bad: ${anchor.bad} good: ${anchor.good}`;
+}
+
 const STAGE_EXAMPLES: Record<FlowStage, string> = {
   brainstorm: `## Context
 

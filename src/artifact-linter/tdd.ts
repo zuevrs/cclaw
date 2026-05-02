@@ -3,6 +3,7 @@ import path from "node:path";
 import { readDelegationLedger } from "../delegation.js";
 import {
   type StageLintContext,
+  evaluateInvestigationTrace,
   sectionBodyByName
 } from "./shared.js";
 
@@ -20,6 +21,8 @@ export async function lintTddStage(ctx: StageLintContext): Promise<void> {
     staleDiagramAuditEnabled,
     isTrivialOverride
   } = ctx;
+
+    evaluateInvestigationTrace(ctx, "Watched-RED Proof");
 
     // Universal Layer 2.6 structural checks (superpowers TDD + evanflow vertical slices).
     const ironLawBody = sectionBodyByName(sections, "Iron Law Acknowledgement");

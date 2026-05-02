@@ -1,6 +1,7 @@
 import {
   type StageLintContext,
   checkCriticPredictionsContract,
+  evaluateInvestigationTrace,
   evaluateQaLogFloor,
   sectionBodyByHeadingPrefix,
   sectionBodyByName,
@@ -31,6 +32,7 @@ export async function lintScopeStage(ctx: StageLintContext): Promise<void> {
     taskClass
   } = ctx;
 
+    evaluateInvestigationTrace(ctx, "Q&A Log");
     const lockedDecisionsBody = sectionBodyByHeadingPrefix(sections, "Locked Decisions") ?? "";
     const scopeSummaryBody = sectionBodyByName(sections, "Scope Summary") ?? "";
     const selectedScopeMode = extractCanonicalScopeMode(scopeSummaryBody);

@@ -1,5 +1,6 @@
 import {
   type StageLintContext,
+  evaluateInvestigationTrace,
   markdownFieldRegex,
   sectionBodyByName
 } from "./shared.js";
@@ -19,6 +20,8 @@ export async function lintReviewStage(ctx: StageLintContext): Promise<void> {
     staleDiagramAuditEnabled,
     isTrivialOverride
   } = ctx;
+
+    evaluateInvestigationTrace(ctx, "Changed-File Coverage");
 
     // Universal Layer 2.7 structural checks (superpowers requesting + receiving).
     const frameBody = sectionBodyByName(sections, "Pre-Critic Self-Review");

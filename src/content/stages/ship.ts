@@ -68,7 +68,8 @@ export const SHIP: StageSchemaInput = {
         "recommend the mode that best addresses release blast-radius, rollback readiness, observability, and stakeholder communication — ties go to the most reversible option"
       ),
       "Do not proceed if critical blockers remain from review.",
-      "**STOP.** Present finalization options and wait for user selection before executing any finalization action."
+      "**STOP.** Present finalization options and wait for user selection before executing any finalization action.",
+      "Behavior anchor: see the shared `## Behavior anchor` block in this skill — the bad/good pair anchors that `Preflight Results` cite fresh command output, exit codes, and the commit SHA from this turn."
     ],
     process: [
       "Validate review and test gates.",

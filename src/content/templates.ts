@@ -1,4 +1,5 @@
 import { CCLAW_VERSION, SHIP_FINALIZATION_MODES } from "../constants.js";
+import { renderBehaviorAnchorTemplateLine } from "./examples.js";
 import { orderedStageSchemas } from "./stage-schema.js";
 import { FLOW_STAGES } from "../types.js";
 
@@ -21,10 +22,38 @@ const SEED_SHELF_SECTION = `## Seed Shelf Candidates (optional)
 |---|---|---|---|
 | .cclaw/seeds/SEED-YYYY-MM-DD-<slug>.md |  |  |  |`;
 
+/**
+ * Shared investigation discipline block (Round 5 / v6.6.0). Rendered once per
+ * elicitation/spec stage skill (brainstorm, scope, design, spec, plan, tdd,
+ * review). The block enforces a four-step ladder before drafting and a
+ * path-passing rule for delegations so token cost and "jumped into code"
+ * regressions stay bounded. Stop-trigger count and ladder-step count are
+ * verified by `tests/unit/investigation-discipline-block.test.ts`.
+ */
+export const INVESTIGATION_DISCIPLINE_BLOCK = `## Investigation Discipline
+
+Use this ladder before drafting or delegating; do not jump straight to the editor.
+
+1. **Search** — locate the surface (file path, symbol, ref) before reading. Use \`rg\` / glob / graph; record the query, not the chunk.
+2. **Graph / impact** — name what the change touches (callers, callees, tests, configs) and its blast radius before opening a file.
+3. **Narrow read** — read at most 1-3 files, only the sections needed; cite paths with \`:line\` ranges instead of pasting bodies.
+4. **Draft** — only after the trace exists; the trace is the authority, not chat history or memory.
+
+**Path-passing in delegations.** When delegating, pass repo-relative paths and refs (e.g. \`src/foo/bar.ts:42\`, \`D-12\`, \`AC-3\`) — never the file body. The subagent re-reads from path; pasting content fragments breaks freshness and inflates tokens.
+
+**Stop triggers** (any one means halt and re-enter the ladder):
+
+- You are about to read more than 3 files in one pass.
+- You are about to load file content into a delegation prompt instead of paths or refs.
+- You are about to start a draft before any trace (search log, graph note, narrow-read citation) exists.
+`;
+
 export const ARTIFACT_TEMPLATES: Record<string, string> = {
   "01-brainstorm.md": `${artifactFrontmatter("brainstorm")}
 
 # Brainstorm Artifact
+
+${renderBehaviorAnchorTemplateLine("brainstorm")}
 
 ## Mode Block
 - **Mode:** STARTUP | BUILDER | ENGINEERING | OPS | RESEARCH (pick exactly one)
@@ -203,6 +232,8 @@ ${MARKDOWN_CODE_FENCE}
   "02-scope.md": `${artifactFrontmatter("scope")}
 
 # Scope Artifact
+
+${renderBehaviorAnchorTemplateLine("scope")}
 
 ## Upstream Handoff
 - Source artifacts: \`00-idea.md\`, \`01-brainstorm-<slug>.md\`
@@ -437,6 +468,8 @@ ${MARKDOWN_CODE_FENCE}
   "03-design.md": `${artifactFrontmatter("design")}
 
 # Design Artifact
+
+${renderBehaviorAnchorTemplateLine("design")}
 
 ## Compact-First Scaffold
 - Default to the compact design spine unless risk requires Standard/Deep add-ons.
@@ -702,6 +735,8 @@ ${MARKDOWN_CODE_FENCE}
 
 # Specification Artifact
 
+${renderBehaviorAnchorTemplateLine("spec")}
+
 ## Upstream Handoff
 - Source artifacts: standard uses \`02-scope-<slug>.md\` + \`03-design-<slug>.md\`; medium uses \`01-brainstorm-<slug>.md\` when present; quick uses \`00-idea.md\` plus reproduction context.
 - Decisions carried forward:
@@ -800,6 +835,8 @@ ${MARKDOWN_CODE_FENCE}
   "05-plan.md": `${artifactFrontmatter("plan")}
 
 # Plan Artifact
+
+${renderBehaviorAnchorTemplateLine("plan")}
 
 ## Plan Header
 - **Goal:** (one sentence — what this plan delivers)
@@ -933,6 +970,8 @@ Execution rule: complete and verify each batch before starting the next batch.
   "06-tdd.md": `${artifactFrontmatter("tdd")}
 
 # TDD Artifact
+
+${renderBehaviorAnchorTemplateLine("tdd")}
 
 ## Upstream Handoff
 - Source artifacts: \`04-spec.md\` plus the active track's upstream source item (plan slice on standard/medium, spec acceptance item or bug reproduction slice on quick).
@@ -1130,6 +1169,8 @@ Execution rule: complete and verify each batch before starting the next batch.
 
 # Review Artifact
 
+${renderBehaviorAnchorTemplateLine("review")}
+
 ## Upstream Handoff
 - Source artifacts: \`04-spec.md\`, \`06-tdd.md\`, plus the active track's upstream source item when available.
 - Decisions carried forward:
@@ -1301,6 +1342,8 @@ Execution rule: complete and verify each batch before starting the next batch.
   "08-ship.md": `${artifactFrontmatter("ship")}
 
 # Ship Artifact
+
+${renderBehaviorAnchorTemplateLine("ship")}
 
 ## Upstream Handoff
 - Source artifacts: \`06-tdd.md\`, \`07-review.md\`
