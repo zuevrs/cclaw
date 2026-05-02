@@ -10,6 +10,14 @@ import type { DiscoveryMode, FlowStage, FlowTrack, TransitionRule } from "./type
 export const TRANSITION_RULES: TransitionRule[] = buildTransitionRules();
 export const FLOW_STATE_SCHEMA_VERSION = 1;
 
+/** Snapshot from `collectRepoSignals` at last successful `start-flow` (optional on older states). */
+export interface RepoSignals {
+  fileCount: number;
+  hasReadme: boolean;
+  hasPackageManifest: boolean;
+  capturedAt: string;
+}
+
 export interface StageGateState {
   required: string[];
   recommended: string[];
@@ -137,6 +145,8 @@ export interface FlowState {
   retro: RetroState;
   /** Ship → post_ship_review → archive substate for resumable closeout. */
   closeout: CloseoutState;
+  /** Repo shape signals captured at last successful start-flow (omit on legacy files). */
+  repoSignals?: RepoSignals;
 }
 
 export interface StageInteractionHint {

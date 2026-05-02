@@ -637,7 +637,8 @@ const STAGE_AUTO_SUBAGENT_DISPATCH: Record<FlowStage, StageAutoSubagentDispatch[
       runPhase: "post-elicitation",
       when: "When repository, market, docs, or prior-art context changes the approach set. Runs only after the adaptive elicitation Q&A loop converges.",
       purpose: "Provide search-before-read summaries and context-readiness evidence before large reads or decisions.",
-      requiresUserGate: false
+      requiresUserGate: false,
+      dependsOnInternalRepoSignals: true
     }
   ],
   scope: [
@@ -674,7 +675,8 @@ const STAGE_AUTO_SUBAGENT_DISPATCH: Record<FlowStage, StageAutoSubagentDispatch[
       runPhase: "post-elicitation",
       when: "When churn, prior attempts, reference patterns, or external constraints may change scope boundaries. Runs only after the adaptive elicitation Q&A loop converges.",
       purpose: "Summarize search/context findings before the scope contract locks accepted/rejected/deferred ideas.",
-      requiresUserGate: false
+      requiresUserGate: false,
+      dependsOnInternalRepoSignals: true
     },
     {
       agent: "product-discovery",

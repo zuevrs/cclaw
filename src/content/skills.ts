@@ -428,6 +428,7 @@ function completionParametersBlock(schema: StageSchema, track: FlowTrack): strin
 - Fill \`## Learnings\` before closeout: either \`- None this stage.\` or JSON bullets with required keys \`type\`, \`trigger\`, \`action\`, \`confidence\` (knowledge-schema compatible).
 - Record mandatory delegation lifecycle in \`${RUNTIME_ROOT}/state/delegation-log.json\` and append proof events to \`${RUNTIME_ROOT}/state/delegation-events.jsonl\`; the ledger is current state, the event log is audit proof.${mandatoryAgents.length > 0 ? ` If a mandatory delegation cannot run in this harness, use \`--waive-delegation=${mandatoryAgents.join(",")} --waiver-reason="<why safe>"\` on the completion helper.` : ""} If proactive delegations were intentionally skipped, rerun only with \`--accept-proactive-waiver\` (optionally \`--accept-proactive-waiver-reason="<why safe>"\`) after explicit user approval.
 - Never edit raw \`flow-state.json\` to complete a stage, even in advisory mode; that bypasses validation, gate evidence, and Learnings harvest. If a helper fails, report a one-line human-readable failure plus fenced JSON diagnostics; never echo the invoking command line or apply a manual state workaround.
+- Stage completion claim requires \`stage-complete\` exit 0 in the current turn. Quote the success line; do not paraphrase, do not infer success from skipped retries.
 - Completion protocol: verify required gates, update the artifact, then use the completion helper with \`--evidence-json\` and \`--passed\` for every satisfied gate.
 `;
 }

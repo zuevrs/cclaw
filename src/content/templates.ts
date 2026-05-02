@@ -1572,6 +1572,7 @@ Track-specific skips are allowed only when \`flow-state.track\` + \`skippedStage
 ## Verification Discipline
 
 - No completion claim without fresh command evidence in this turn.
+- Stage completion claim requires \`stage-complete\` exit 0 in the current turn. Quote the success line; do not paraphrase, do not infer success from skipped retries.
 - Do not mark gates passed from memory.
 - Keep evidence in \`.cclaw/artifacts/\`; archive through closeout via \`/cc\` or cancel early via \`node .cclaw/hooks/cancel-run.mjs\`.
 

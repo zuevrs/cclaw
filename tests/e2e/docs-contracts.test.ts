@@ -208,4 +208,17 @@ ${await readRepoFile("docs/scheme-of-work.md")}`;
       expect(tddSkill, `prompt should not inline intent for ${pattern.id}`).not.toContain(pattern.intent);
     }
   });
+
+  it("requires stage-complete exit 0 before completion claims in templates and every stage skill", async () => {
+    const templates = await readRepoFile("src/content/templates.ts");
+    const headline = "Stage completion claim requires";
+    expect(templates).toContain(headline);
+    expect(templates).toContain("do not infer success from skipped retries");
+
+    for (const stage of FLOW_STAGES) {
+      const skillMd = stageSkillMarkdown(stage);
+      expect(skillMd, `stage ${stage}`).toContain(headline);
+      expect(skillMd, `stage ${stage}`).toContain("exit 0");
+    }
+  });
 });

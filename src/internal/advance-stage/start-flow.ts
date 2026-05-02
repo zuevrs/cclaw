@@ -5,7 +5,8 @@ import { RUNTIME_ROOT } from "../../constants.js";
 import { ensureDir } from "../../fs-utils.js";
 import {
   createInitialFlowState,
-  type FlowState
+  type FlowState,
+  type RepoSignals
 } from "../../flow-state.js";
 import { archiveRun, readFlowState, writeFlowState } from "../../runs.js";
 import type { ArchiveDisposition } from "../../runs.js";
@@ -38,6 +39,65 @@ function resolveTaskClass(
     return className;
   }
   return fallback;
+}
+
+const REPO_SIGNAL_SKIP_DIRS = new Set(["node_modules", ".git"]);
+
+/** One-pass repo snapshot (max ~200 files, skips `node_modules`/`.git`). */
+export async function collectRepoSignals(projectRoot: string): Promise<RepoSignals> {
+  const capturedAt = new Date().toISOString();
+  const cap = 200;
+  let fileCount = 0;
+
+  async function visit(absDir: string, depth: number): Promise<void> {
+    if (fileCount >= cap) return;
+    let entries: import("node:fs").Dirent[];
+    try {
+      entries = await fs.readdir(absDir, { withFileTypes: true });
+    } catch {
+      return;
+    }
+    for (const ent of entries) {
+      if (fileCount >= cap) return;
+      const name = ent.name;
+      if (REPO_SIGNAL_SKIP_DIRS.has(name)) continue;
+      const abs = path.join(absDir, name);
+      if (ent.isFile()) {
+        fileCount += 1;
+        continue;
+      }
+      if (ent.isDirectory() && depth < 1) {
+        await visit(abs, depth + 1);
+      }
+    }
+  }
+
+  let hasReadme = false;
+  let hasPackageManifest = false;
+  for (const fname of ["README.md", "readme.md", "Readme.md"]) {
+    try {
+      const st = await fs.stat(path.join(projectRoot, fname));
+      if (st.isFile()) hasReadme = true;
+    } catch {
+      // ignore
+    }
+  }
+  for (const manifest of ["package.json", "pyproject.toml", "Cargo.toml"]) {
+    try {
+      const st = await fs.stat(path.join(projectRoot, manifest));
+      if (st.isFile()) hasPackageManifest = true;
+    } catch {
+      // ignore
+    }
+  }
+
+  try {
+    await visit(projectRoot, 0);
+  } catch {
+    fileCount = Math.min(fileCount, cap);
+  }
+
+  return { fileCount, hasReadme, hasPackageManifest, capturedAt };
 }
 
 export async function discoverStartFlowContext(projectRoot: string): Promise<string[]> {
@@ -196,6 +256,9 @@ export async function runStartFlow(
       }
     };
   }
+
+  const repoSignals = await collectRepoSignals(projectRoot);
+  nextState = { ...nextState, repoSignals };
 
   await writeFlowState(projectRoot, nextState, { allowReset: true });
   await appendIdeaArtifact(projectRoot, args, current);

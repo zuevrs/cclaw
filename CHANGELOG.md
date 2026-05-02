@@ -1,5 +1,25 @@
 # Changelog
 
+## 6.3.0 — Flow UX (start mode, validation summary, repo-aware proactive, repair-span)
+
+### UX
+
+- **`start-flow` + `/cc` contract** — discovery-mode answers are normalized (`trim`, lower-case) with invalid values re-asked; vague one-line prompts on empty repos must confirm `guided` before defaulting to `deep`.
+- **`stage-complete` hook USAGE** — documents `--accept-proactive-waiver` and `--accept-proactive-waiver-reason` alongside existing waiver flags.
+- **Validation failure banner** — human-readable `advance-stage` validation errors open with `(delegation=N, gates=M, closure=K)` counts; JSON diagnostics include matching `failureCounts`.
+- **`delegation-record --repair`** — idempotent append of missing lifecycle phases for an existing `span-id` when audit lines are incomplete (`--repair-reason` required).
+
+### Reliability
+
+- **Repo signals** — `start-flow` records optional `repoSignals` in `flow-state.json` (shallow file scan, cap 200 files, skips `node_modules`/`.git`).
+- **Deep-mode proactive `researcher`** — on sparse/empty repos (`fileCount < 5` and no README or package manifest), brainstorm/scope no longer demand a proactive researcher trace; substantive repos unchanged.
+- **`--discovery-mode` parsing** — CLI and `coerceDiscoveryMode` accept `Lean`/`Deep`/etc. without falling back to `guided`.
+
+### Contracts
+
+- **Completion honesty** — templates and every stage skill state that a stage completion claim requires `stage-complete` exit 0 in the current turn (quote the success line; no inference from retries).
+- **Stage schema** — `researcher` rows for brainstorm/scope carry `dependsOnInternalRepoSignals` for the trace gate logic above.
+
 ## 6.2.0 — Start mode unification (`discoveryMode`)
 
 Behavioral redesign of the user-facing start axis around a single `discoveryMode`: **`lean` \| `guided` \| `deep`**. Track remains an internal concern (not exposed as a parallel “start mode” choice).

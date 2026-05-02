@@ -949,6 +949,14 @@ describe("internal advance-stage commands", () => {
     };
     expect(diagnostics.ok).toBe(false);
     expect(diagnostics.kind).toBe("validation-failed");
+    expect(diagnostics).toMatchObject({
+      failureCounts: { delegation: expect.any(Number), gates: expect.any(Number), closure: expect.any(Number) }
+    });
+    const fc = diagnostics as { failureCounts: { delegation: number; gates: number; closure: number } };
+    expect(fc.failureCounts.delegation).toBeGreaterThan(0);
+    expect(captured.stderr()).toMatch(
+      /validation failed for stage "scope" \(delegation=\d+, gates=\d+, closure=\d+\)/
+    );
     expect(diagnostics.delegation.missing).toContain("planner");
     expect(diagnostics.nextActions.join(" ")).toContain("Run mandatory delegation(s)");
     expect(diagnostics.nextActions.join(" ")).toContain("waiver fallback");
