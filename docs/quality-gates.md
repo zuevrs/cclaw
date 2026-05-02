@@ -53,7 +53,7 @@ flowchart LR
 |---|---|---|---|
 | `## Implementation Alternatives` | `RECOMMENDATION:` line referencing chosen option | gstack `plan-ceo-review` Step 0C-bis | `gstack/plan-ceo-review/SKILL.md` |
 | `## Scope Mode` (existing) | One of `SCOPE_EXPANSION / SELECTIVE_EXPANSION / HOLD_SCOPE / SCOPE_REDUCTION` | gstack Step 0F | `gstack/plan-ceo-review/SKILL.md` |
-| Expansion strategist delegation | If Scope Summary mode is `SCOPE EXPANSION` or `SELECTIVE EXPANSION`, active-run delegation log must include completed `product-strategist` row with non-empty `evidenceRefs` | gstack expansion vision + opt-in ceremony | `gstack/plan-ceo-review/SKILL.md` |
+| Product discovery delegation (strategist mode) | If Scope Summary mode is `SCOPE EXPANSION` or `SELECTIVE EXPANSION`, active-run delegation log must include completed `product-discovery` row with non-empty `evidenceRefs` | gstack expansion vision + opt-in ceremony | `gstack/plan-ceo-review/SKILL.md` |
 
 ### Design (`03-design.md`)
 

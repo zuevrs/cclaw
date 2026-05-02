@@ -2254,7 +2254,7 @@ ${summaryBody}
         )
       );
       const result = await lintArtifact(root, "scope");
-      const strategist = result.findings.find((f) => f.section === "Expansion Strategist Delegation");
+      const strategist = result.findings.find((f) => f.section === "Product Discovery Delegation (Strategist Mode)");
       expect(result.passed).toBe(false);
       expect(strategist?.required).toBe(true);
       expect(strategist?.found).toBe(false);
@@ -2283,7 +2283,7 @@ ${summaryBody}
         }
       ]);
       const result = await lintArtifact(root, "scope");
-      const strategist = result.findings.find((f) => f.section === "Expansion Strategist Delegation");
+      const strategist = result.findings.find((f) => f.section === "Product Discovery Delegation (Strategist Mode)");
       expect(strategist?.required).toBe(true);
       expect(strategist?.found).toBe(true);
     });

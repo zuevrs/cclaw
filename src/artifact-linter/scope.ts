@@ -73,12 +73,12 @@ export async function lintScopeStage(ctx: StageLintContext): Promise<void> {
       const skipByTrack = shouldDemoteArtifactValidationByTrack(track, taskClass);
       if (skipByTrack) {
         findings.push({
-          section: "Expansion Strategist Delegation",
+          section: "Product Discovery Delegation (Strategist Mode)",
           required: false,
           rule: "When Scope Summary selects SCOPE EXPANSION or SELECTIVE EXPANSION, a completed `product-discovery` delegation for the active run with non-empty evidenceRefs is required.",
           found: true,
           details:
-            `Expansion Strategist delegation requirement skipped for track="${track}"` +
+            `Product-discovery delegation requirement skipped for track="${track}"` +
             (taskClass ? `, taskClass="${taskClass}"` : "") +
             ` (Wave 25: lite-tier escape; selectedMode=${selectedScopeMode}).`
         });
@@ -112,12 +112,12 @@ export async function lintScopeStage(ctx: StageLintContext): Promise<void> {
           (entry) => Array.isArray(entry.evidenceRefs) && entry.evidenceRefs.length > 0
         );
         findings.push({
-          section: "Expansion Strategist Delegation",
+          section: "Product Discovery Delegation (Strategist Mode)",
           required: true,
           rule: "When Scope Summary selects SCOPE EXPANSION or SELECTIVE EXPANSION, a completed `product-discovery` delegation for the active run with non-empty evidenceRefs is required.",
           found: hasCompleted && hasEvidence,
           details: !hasCompleted
-            ? `Scope mode ${selectedScopeMode} requires a completed product-discovery delegation row for active run ${delegationLedger.runId}.`
+            ? `Scope mode ${selectedScopeMode} requires a completed product-discovery delegation row for active run ${delegationLedger.runId}. In SELECTIVE EXPANSION / SCOPE EXPANSION, run product-discovery (mode=proactive) BEFORE stage-complete.`
             : hasEvidence
               ? `product-discovery delegation satisfied for mode ${selectedScopeMode}.`
               : "product-discovery delegation exists but evidenceRefs is empty; add at least one artifact/code evidence reference."

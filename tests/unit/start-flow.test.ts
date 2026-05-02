@@ -47,6 +47,19 @@ describe("start-flow repoSignals", () => {
     expect(state.repoSignals).toBeDefined();
     expect(state.repoSignals?.hasReadme).toBe(true);
     expect(state.repoSignals?.capturedAt).toMatch(/^\d{4}-/u);
+
+    const out = cap.stdout().trim();
+    expect(out.split("\n").length).toBe(1);
+    const quietPayload = JSON.parse(out) as {
+      ok: boolean;
+      command: string;
+      discoveryMode: string;
+      repoSignals?: { hasReadme?: boolean };
+    };
+    expect(quietPayload.ok).toBe(true);
+    expect(quietPayload.command).toBe("start-flow");
+    expect(quietPayload.discoveryMode).toBe("guided");
+    expect(quietPayload.repoSignals?.hasReadme).toBe(true);
   });
 
   it("includes repoSignals in start-flow success JSON", async () => {

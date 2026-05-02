@@ -221,16 +221,31 @@ ${await readRepoFile("docs/scheme-of-work.md")}`;
     expect(elicit.toLowerCase()).toContain("no changes");
   });
 
+  it("documents canonical delegation-record CLI flags in the shared Harness Dispatch Contract", () => {
+    const skillMd = stageSkillMarkdown("scope");
+    expect(skillMd).toContain("### Harness Dispatch Contract");
+    expect(skillMd).toContain("--stage=<stage>");
+    expect(skillMd).toContain("--agent=<agent>");
+    expect(skillMd).toContain("--mode=<mandatory|proactive>");
+    expect(skillMd).toContain("--dispatch-id=<id>");
+    expect(skillMd).toContain("--dispatch-surface=<surface>");
+    expect(skillMd).toContain("--agent-definition-path=<path>");
+    expect(skillMd).toContain("scheduled → launched → acknowledged → completed");
+    expect(skillMd).not.toContain("delegation-record.mjs --status=<status> --span-id=<spanId>");
+  });
+
   it("requires stage-complete exit 0 before completion claims in templates and every stage skill", async () => {
     const templates = await readRepoFile("src/content/templates.ts");
     const headline = "Stage completion claim requires";
     expect(templates).toContain(headline);
-    expect(templates).toContain("do not infer success from skipped retries");
+    expect(templates).toContain("single-line success JSON");
+    expect(templates).toContain("do not infer success from empty stdout");
 
     for (const stage of FLOW_STAGES) {
       const skillMd = stageSkillMarkdown(stage);
       expect(skillMd, `stage ${stage}`).toContain(headline);
       expect(skillMd, `stage ${stage}`).toContain("exit 0");
+      expect(skillMd, `stage ${stage}`).toContain("single-line success JSON");
     }
   });
 });

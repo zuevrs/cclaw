@@ -1,5 +1,24 @@
 # Changelog
 
+## 6.5.0 — Flow correctness round 3 (delegation-log lock, quiet success JSON, scope PD clarity)
+
+### Reliability
+
+- **delegation-log.json** — Generated `delegation-record.mjs` now acquires `delegation-log.json.lock` (atomic `mkdir`) with retry/backoff (~3s max), writes via temp file + `rename`, and releases the lock in `finally`. Lock timeout exits `2` with a clear stderr line. `delegation-events.jsonl` stays append-only without locking.
+
+### Contracts
+
+- **Harness Dispatch** — Shared skill text documents the canonical `delegation-record.mjs` flags (`--stage`, `--agent`, `--mode`, `--status`, `--span-id`, dispatch proof fields, optional `ack-ts` / `evidence-ref`, `--json`) plus lifecycle order and `--repair`.
+- **Quiet helpers** — With `CCLAW_START_FLOW_QUIET=1` / `CCLAW_STAGE_COMPLETE_QUIET=1`, successful `start-flow` and `stage-complete` still print exactly **one line** of compact JSON on stdout (parseable); pretty-printed output remains when quiet is off.
+- **Anti-false-completion** — Stage skills and templates require quoting that single-line success JSON shape; empty stdout is not a success signal for current tooling.
+- **Scope expansion** — Linter finding title is `Product Discovery Delegation (Strategist Mode)` with explicit BEFORE `stage-complete` guidance; `docs/quality-gates.md` uses product-discovery (strategist mode) naming.
+
+### Behavior
+
+- **start-flow (quiet)** — Success line includes `ok`, `command`, `track`, `discoveryMode`, `currentStage`, `activeRunId`, `repoSignals` (no pretty-print).
+- **stage-complete / advance-stage (quiet)** — Success line uses `command: "stage-complete"` with `stage`, `completedStages`, `currentStage`, and `runId`.
+- **Scope stage skill** — Hard checklist gate: SELECTIVE / SCOPE EXPANSION requires completed `product-discovery` with evidence before completion.
+
 ## 6.4.0 — Flow UX round 2 (researcher everywhere, post-closure drift, ergonomics)
 
 ### Behavior

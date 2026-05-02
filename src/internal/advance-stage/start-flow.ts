@@ -262,19 +262,30 @@ export async function runStartFlow(
 
   await writeFlowState(projectRoot, nextState, { allowReset: true });
   await appendIdeaArtifact(projectRoot, args, current);
-  if (!args.quiet) {
+  const successPayload = {
+    ok: true as const,
+    command: "start-flow" as const,
+    reclassify: args.reclassify,
+    track: nextState.track,
+    discoveryMode: nextState.discoveryMode,
+    taskClass: nextState.taskClass ?? null,
+    currentStage: nextState.currentStage,
+    skippedStages: nextState.skippedStages,
+    activeRunId: nextState.activeRunId,
+    repoSignals
+  };
+  if (args.quiet) {
     io.stdout.write(`${JSON.stringify({
       ok: true,
       command: "start-flow",
-      reclassify: args.reclassify,
-      track: nextState.track,
-      discoveryMode: nextState.discoveryMode,
-      taskClass: nextState.taskClass ?? null,
-      currentStage: nextState.currentStage,
-      skippedStages: nextState.skippedStages,
-      activeRunId: nextState.activeRunId,
-      repoSignals
-    }, null, 2)}\n`);
+      track: successPayload.track,
+      discoveryMode: successPayload.discoveryMode,
+      currentStage: successPayload.currentStage,
+      activeRunId: successPayload.activeRunId,
+      repoSignals: successPayload.repoSignals
+    })}\n`);
+  } else {
+    io.stdout.write(`${JSON.stringify(successPayload, null, 2)}\n`);
   }
   return 0;
 }
