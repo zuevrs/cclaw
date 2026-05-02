@@ -421,6 +421,47 @@ function buildRow(args, status, runId, now) {
   };
 }
 
+async function acquireDelegationLogLock(stateDir) {
+  const lockDir = path.join(stateDir, "delegation-log.json.lock");
+  const maxWaitMs = 3000;
+  const startMs = Date.now();
+  let delayMs = 25;
+  while (true) {
+    try {
+      await fs.mkdir(lockDir, { recursive: false });
+      return lockDir;
+    } catch (err) {
+      const code = err && typeof err === "object" && "code" in err ? err.code : "";
+      if (code !== "EEXIST") throw err;
+      if (Date.now() - startMs >= maxWaitMs) {
+        process.stderr.write(
+          "[cclaw] delegation-record: timeout waiting for delegation-log.json.lock (max " + maxWaitMs + "ms)\\n"
+        );
+        process.exit(2);
+      }
+      const jitter = Math.floor(Math.random() * 25);
+      await new Promise((resolve) => setTimeout(resolve, delayMs + jitter));
+      delayMs = Math.min(delayMs * 2, 200);
+    }
+  }
+}
+
+async function releaseDelegationLogLock(lockDir) {
+  try {
+    await fs.rm(lockDir, { recursive: true, force: true });
+  } catch {
+    // best-effort release
+  }
+}
+
+async function writeDelegationLedgerAtomic(ledgerPath, ledger) {
+  const dir = path.dirname(ledgerPath);
+  const tmp =
+    path.join(dir, ".delegation-log.json." + process.pid + "." + Date.now() + "." + Math.random().toString(16).slice(2) + ".tmp");
+  await fs.writeFile(tmp, JSON.stringify(ledger, null, 2) + "\\n", { encoding: "utf8", mode: 0o600 });
+  await fs.rename(tmp, ledgerPath);
+}
+
 async function persistEntry(root, runId, clean, event, options = {}) {
   const stateDir = path.join(root, RUNTIME_ROOT, "state");
   await fs.mkdir(stateDir, { recursive: true });
@@ -428,29 +469,34 @@ async function persistEntry(root, runId, clean, event, options = {}) {
 
   const ledgerPath = path.join(stateDir, "delegation-log.json");
   let ledger = { runId, entries: [], schemaVersion: LEDGER_SCHEMA_VERSION };
+  const lockDir = await acquireDelegationLogLock(stateDir);
   try {
-    ledger = JSON.parse(await fs.readFile(ledgerPath, "utf8"));
-    if (!Array.isArray(ledger.entries)) ledger.entries = [];
-  } catch {
-    ledger = { runId, entries: [], schemaVersion: LEDGER_SCHEMA_VERSION };
-  }
+    try {
+      ledger = JSON.parse(await fs.readFile(ledgerPath, "utf8"));
+      if (!Array.isArray(ledger.entries)) ledger.entries = [];
+    } catch {
+      ledger = { runId, entries: [], schemaVersion: LEDGER_SCHEMA_VERSION };
+    }
 
-  // Rerecord semantics: replace any pre-existing row with the same spanId
-  // (regardless of its status) so the legacy v1/v2 row is upgraded to v3
-  // shape on disk. The append path keeps the historical dedup semantics:
-  // an exact (spanId, status) duplicate is dropped to keep retried hooks
-  // idempotent.
-  if (options.replaceBySpanId) {
-    ledger.entries = ledger.entries.filter((entry) => entry.spanId !== clean.spanId);
-    ledger.entries.push(clean);
-    ledger.runId = runId;
-    ledger.schemaVersion = LEDGER_SCHEMA_VERSION;
-    await fs.writeFile(ledgerPath, JSON.stringify(ledger, null, 2) + "\\n", { encoding: "utf8", mode: 0o600 });
-  } else if (!ledger.entries.some((entry) => entry.spanId === clean.spanId && entry.status === clean.status)) {
-    ledger.entries.push(clean);
-    ledger.runId = runId;
-    ledger.schemaVersion = LEDGER_SCHEMA_VERSION;
-    await fs.writeFile(ledgerPath, JSON.stringify(ledger, null, 2) + "\\n", { encoding: "utf8", mode: 0o600 });
+    // Rerecord semantics: replace any pre-existing row with the same spanId
+    // (regardless of its status) so the legacy v1/v2 row is upgraded to v3
+    // shape on disk. The append path keeps the historical dedup semantics:
+    // an exact (spanId, status) duplicate is dropped to keep retried hooks
+    // idempotent.
+    if (options.replaceBySpanId) {
+      ledger.entries = ledger.entries.filter((entry) => entry.spanId !== clean.spanId);
+      ledger.entries.push(clean);
+      ledger.runId = runId;
+      ledger.schemaVersion = LEDGER_SCHEMA_VERSION;
+      await writeDelegationLedgerAtomic(ledgerPath, ledger);
+    } else if (!ledger.entries.some((entry) => entry.spanId === clean.spanId && entry.status === clean.status)) {
+      ledger.entries.push(clean);
+      ledger.runId = runId;
+      ledger.schemaVersion = LEDGER_SCHEMA_VERSION;
+      await writeDelegationLedgerAtomic(ledgerPath, ledger);
+    }
+  } finally {
+    await releaseDelegationLogLock(lockDir);
   }
 
   const active = ledger.entries.filter((entry) => ["scheduled", "launched", "acknowledged"].includes(entry.status));

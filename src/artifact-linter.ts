@@ -449,7 +449,7 @@ export async function lintArtifact(
  *  - `Architecture Diagram` — sync/async + failure-edge enforcement
  *  - `Data Flow` — Interaction Edge Case mandatory rows
  *  - `Stale Diagram Drift Check` — blast-radius file mtime audit
- *  - `Expansion Strategist Delegation` — product-discovery delegation
+ *  - `Product Discovery Delegation (Strategist Mode)` — product-discovery delegation
  *
  * Findings remain in the result so the caller can surface them as
  * advisory hints; only `required` flips to `false`.
@@ -458,5 +458,5 @@ const ARTIFACT_VALIDATION_LITE_DEMOTE_SECTIONS = new Set<string>([
   "Architecture Diagram",
   "Data Flow",
   "Stale Diagram Drift Check",
-  "Expansion Strategist Delegation"
+  "Product Discovery Delegation (Strategist Mode)"
 ]);

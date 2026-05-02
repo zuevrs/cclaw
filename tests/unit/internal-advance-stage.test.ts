@@ -688,6 +688,20 @@ describe("internal advance-stage commands", () => {
       okIo.io
     );
     expect(okCode).toBe(0);
+    const out = okIo.stdout().trim();
+    expect(out.split("\n").length).toBe(1);
+    const payload = JSON.parse(out) as {
+      ok: boolean;
+      command: string;
+      stage: string;
+      completedStages: string[];
+      currentStage: string;
+      runId?: string;
+    };
+    expect(payload.ok).toBe(true);
+    expect(payload.command).toBe("stage-complete");
+    expect(payload.stage).toBe("brainstorm");
+    expect(payload.completedStages).toContain("brainstorm");
   });
 
   it("advance-stage fails by default when proactive delegations are missing on deep early elicitation, then allows explicit user-flag waiver", async () => {

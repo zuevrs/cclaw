@@ -1572,7 +1572,7 @@ Track-specific skips are allowed only when \`flow-state.track\` + \`skippedStage
 ## Verification Discipline
 
 - No completion claim without fresh command evidence in this turn.
-- Stage completion claim requires \`stage-complete\` exit 0 in the current turn. Quote the success line; do not paraphrase, do not infer success from skipped retries.
+- Stage completion claim requires \`stage-complete\` exit 0 in the current turn. Quote the single-line success JSON printed to stdout (e.g. \`{"ok":true,"command":"stage-complete",...}\`); do not paraphrase, do not infer success from empty stdout or from skipped retries.
 
 ## Protocol label hygiene
 

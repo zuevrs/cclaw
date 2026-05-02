@@ -817,7 +817,16 @@ export async function runAdvanceStage(
 
   await writeFlowState(projectRoot, finalState);
 
-  if (!args.quiet) {
+  if (args.quiet) {
+    io.stdout.write(`${JSON.stringify({
+      ok: true,
+      command: "stage-complete",
+      stage: args.stage,
+      completedStages: finalState.completedStages,
+      currentStage: finalState.currentStage,
+      runId: finalState.activeRunId
+    })}\n`);
+  } else {
     io.stdout.write(`${JSON.stringify({
       ok: true,
       command: "advance-stage",
