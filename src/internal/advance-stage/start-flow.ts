@@ -272,7 +272,8 @@ export async function runStartFlow(
       taskClass: nextState.taskClass ?? null,
       currentStage: nextState.currentStage,
       skippedStages: nextState.skippedStages,
-      activeRunId: nextState.activeRunId
+      activeRunId: nextState.activeRunId,
+      repoSignals
     }, null, 2)}\n`);
   }
   return 0;

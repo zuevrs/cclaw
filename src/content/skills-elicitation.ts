@@ -51,6 +51,7 @@ These behaviors are the exact reason this skill exists. The linter will block yo
 - Ask exactly one question per turn and wait for the answer before asking the next one.
 - Use harness-native question tools first; prose fallback is allowed only when the tool is unavailable.
 - Keep a running Q&A trace in the active artifact under \`## Q&A Log\` in \`${RUNTIME_ROOT}/artifacts/\` as append-only rows.
+- **Early-loop ledger discipline**: Never append \`.cclaw/state/early-loop-log.jsonl\` rows whose \`iteration\` exceeds the active \`maxIterations\`. If the cap fired, escalate or accept convergence outcomes—do not bump the iteration counter afterward. \`deriveEarlyLoopStatus\` clamps persistence, but the log source should stay honest too.
 - **Convergence floor**: do NOT advance the stage (do NOT call \`stage-complete.mjs\`) until Q&A converges. The machine contract matches \`evaluateQaLogFloor\` in \`src/artifact-linter/shared.ts\` (rule \`qa_log_unconverged\`). Pass when ANY holds: (a) every forcing-question topic id is tagged \`[topic:<id>]\` on at least one \`## Q&A Log\` row; (b) the Ralph-Loop detector fires (last 2 substantive rows are non-decision-changing: \`skip\`/\`continue\`/\`no-change\`/\`done\`/etc.) **and** the log has at least \`max(2, questionBudgetHint(discoveryMode, stage).min)\` substantive rows — **unless** \`discoveryMode\` is \`guided\` or \`deep\` with pending forcing-topic ids (then Ralph-Loop alone cannot pass until topics are tagged, a stop-signal is recorded, or \`--skip-questions\` downgrades the finding to advisory); (c) an explicit user stop-signal row; or (d) \`--skip-questions\` was persisted (unconverged is advisory only). Wave 24 (v6.0.0) made \`[topic:<id>]\` mandatory (no English keyword fallback).
 - **NEVER run shell hash commands** (\`shasum\`, \`sha256sum\`, \`md5sum\`, \`Get-FileHash\`, \`certutil\`, etc.) to compute artifact hashes. If a linter ever asks you for a hash, that is a linter bug — report failure and stop, do not auto-fix in bash.
 - **NEVER paste cclaw command lines into chat** (e.g. \`node .cclaw/hooks/stage-complete.mjs ... --evidence-json '{...}'\`). Run them via the tool layer; report only the resulting summary. The user does not run cclaw manually and seeing the command line is noise.
@@ -89,6 +90,8 @@ Treat these as stop-and-draft signals:
 - RU: "достаточно", "хватит", "давай драфт", "хватит вопросов"
 - EN: "enough", "skip", "just draft it", "stop asking", "move on", "no more questions"
 - UA: "досить", "вистачить", "давай драфт", "рухаємось далі"
+
+Label disambiguation: The word **skip** is a valid stop phrase during brainstorm/scope/design Q&A. In ship closeout retros, compound clustering, or any structured retro ask, expose **no changes** / **accept as-is** for the passive option instead of wording it as "skip" so agents do not mix elicitation stop-signals with closeout choreography.
 
 When detected:
 - Append a Q&A Log row exactly like: \`Turn N | (stop-signal) | <user quote> | stop-and-draft\` — this row satisfies the linter floor escape hatch.

@@ -24,9 +24,9 @@ export function closeoutSubstateProtocolBullets(): string {
   return `When \`currentStage === "ship"\`, route by **${closeoutSubstateInline()}**:
   - \`"idle"\` or missing -> outcome: initialize closeout by setting
     ${closeoutSubstateInline()} = \`"post_ship_review"\`, then continue \`/cc\`
-    into the in-stage retro protocol (draft + one structured accept/edit/skip ask).
+    into the in-stage retro protocol (draft + one structured accept/edit/no changes ask).
   - \`"post_ship_review"\` -> outcome: execute the unified post-ship closeout leg
-    (retro acceptance/edit/skip + in-stage compound scan, not \`ce:compound\`)
+    (retro acceptance/edit/no changes + in-stage compound scan, not \`ce:compound\`)
     and advance toward archive readiness:
     read \`.cclaw/state/compound-readiness.json\` plus the relevant tail of
     \`.cclaw/knowledge.jsonl\`, assess overlap before adding duplicate knowledge,
@@ -35,8 +35,8 @@ export function closeoutSubstateProtocolBullets(): string {
     guidance in place instead of introducing extra lineage metadata. Optionally ask
     whether to scan Cursor/Claude/Codex
     session transcripts for matching historical learnings; only do it after opt-in.
-    Ask **one** structured question (apply / skip) per candidate cluster or a
-    single accept-all / skip choice, then advance substate.
+    Ask **one** structured question (apply / no changes) per candidate cluster or a
+    single accept-all / no-changes choice, then advance substate.
   - \`"ready_to_archive"\` -> outcome: continue \`/cc\` so the runtime archive step
     executes, snapshots, and resets active state.
   - \`"archived"\` (transient) -> outcome: report "run archived" and stop (flow complete).`;

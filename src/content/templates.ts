@@ -1573,6 +1573,10 @@ Track-specific skips are allowed only when \`flow-state.track\` + \`skippedStage
 
 - No completion claim without fresh command evidence in this turn.
 - Stage completion claim requires \`stage-complete\` exit 0 in the current turn. Quote the success line; do not paraphrase, do not infer success from skipped retries.
+
+## Protocol label hygiene
+
+\`skip\` wording means different things depending on phase: brainstorm/scope/design Q&A stop-signals may still literal **skip**/enough/move-on wording; structured ship closeout retros and compound clustering prompts should expose **no changes** (or accept-as-is language) rather than labeling the passive path as skip. Keep the verbs aligned with the harness question copy you present to the human.
 - Do not mark gates passed from memory.
 - Keep evidence in \`.cclaw/artifacts/\`; archive through closeout via \`/cc\` or cancel early via \`node .cclaw/hooks/cancel-run.mjs\`.
 

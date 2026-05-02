@@ -58,8 +58,8 @@ export interface RetroState {
  * from the correct step even across sessions.
  *
  * - `idle` — ship not complete, or closeout not yet started.
- * - `post_ship_review` — unified closeout leg: retro acceptance/edit/skip
- *   plus compound pass execution (or explicit skip).
+ * - `post_ship_review` — unified closeout leg: retro acceptance/edit/no changes
+ *   plus compound pass execution (or explicit no-additional-changes path).
  * - `ready_to_archive` — retro + compound done; archive is the next
  *   automatic step.
  * - `archived` — archive completed in this session (transient — archive
@@ -147,6 +147,12 @@ export interface FlowState {
   closeout: CloseoutState;
   /** Repo shape signals captured at last successful start-flow (omit on legacy files). */
   repoSignals?: RepoSignals;
+  /**
+   * Best-effort stage completion timestamps (ISO strings) captured as stages
+   * enter `completedStages`. Missing keys behave like legacy flows with no audit
+   * clock for post-closure mutation hints.
+   */
+  completedStageMeta?: Partial<Record<FlowStage, { completedAt: string }>>;
 }
 
 export interface StageInteractionHint {

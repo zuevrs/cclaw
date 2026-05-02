@@ -30,6 +30,22 @@ export interface EarlyLoopStatus {
   lastUpdatedAt: string;
 }
 
+export function clampEarlyLoopStatusForWrite(status: EarlyLoopStatus): {
+  status: EarlyLoopStatus;
+  clampedFrom: number | null;
+} {
+  if (status.iteration <= status.maxIterations) {
+    return { status, clampedFrom: null };
+  }
+  return {
+    status: {
+      ...status,
+      iteration: status.maxIterations
+    },
+    clampedFrom: status.iteration
+  };
+}
+
 export interface EarlyLoopLogConcern {
   id: string;
   severity: EarlyLoopConcernSeverity;
@@ -324,11 +340,13 @@ export function deriveEarlyLoopStatus(
     escalationReason = `max iterations ${maxIterations} reached with ${openConcerns.length} open concern(s)`;
   }
 
+  const iteration = Math.min(currentIteration, maxIterations);
+
   return {
     schemaVersion: 1,
     stage: options.stage,
     runId: options.runId,
-    iteration: currentIteration,
+    iteration,
     maxIterations,
     openConcerns,
     resolvedConcerns,

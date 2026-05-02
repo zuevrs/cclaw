@@ -1,5 +1,6 @@
 import fs from "node:fs/promises";
 import { resolveArtifactPath as resolveStageArtifactPath } from "./artifact-paths.js";
+import type { FlowState } from "./flow-state.js";
 import { exists } from "./fs-utils.js";
 import { stageSchema } from "./content/stage-schema.js";
 import { readFlowState } from "./run-persistence.js";
@@ -16,6 +17,7 @@ import {
   sectionBodyByHeadingPrefix,
   sectionBodyByName,
   validateSectionBody,
+  formatLearningsErrorsBullets,
   type LintFinding,
   type LintResult,
   type StageLintContext
@@ -51,6 +53,8 @@ export {
   type LearningSource,
   type LearningSeedEntry,
   type LearningsParseResult,
+  formatLearningsErrorsBullets,
+  learningsParseFailureHumanSummary,
   extractMarkdownSectionBody,
   parseLearningsSection
 } from "./artifact-linter/shared.js";
@@ -186,6 +190,8 @@ export async function lintArtifact(
   let discoveryMode: StageLintContext["discoveryMode"] = "guided";
   let taskClass: StageLintContext["taskClass"] = null;
   let activeRunId: string | null = null;
+  let completedStagesForAudit: FlowStage[] = [];
+  let completedStageMetaForAudit: FlowState["completedStageMeta"];
   try {
     const flowState = await readFlowState(projectRoot);
     const hint = flowState.interactionHints?.[stage];
@@ -193,11 +199,15 @@ export async function lintArtifact(
     discoveryMode = flowState.discoveryMode ?? "guided";
     taskClass = flowState.taskClass ?? null;
     activeRunId = flowState.activeRunId ?? null;
+    completedStagesForAudit = flowState.completedStages;
+    completedStageMetaForAudit = flowState.completedStageMeta;
   } catch {
     activeStageFlags = [];
     discoveryMode = "guided";
     taskClass = null;
     activeRunId = null;
+    completedStagesForAudit = [];
+    completedStageMetaForAudit = undefined;
   }
   for (const extra of options.extraStageFlags ?? []) {
     if (typeof extra === "string" && extra.length > 0 && !activeStageFlags.includes(extra)) {
@@ -257,13 +267,53 @@ export async function lintArtifact(
       learnings.ok && learnings.none && ["design", "tdd", "review"].includes(stage)
         ? " Warning: design/tdd/review usually produce reusable decisions, test patterns, or review lessons; keep `None this stage` only for truly mechanical work."
         : "";
+    const learningsErrorBlock =
+      !learnings.ok && learnings.errors.length > 0
+        ? `\n${formatLearningsErrorsBullets(learnings.errors)}`
+        : "";
     findings.push({
       section: "Learnings",
       required: requireLearnings,
       rule: "`## Learnings` must contain either a single `- None this stage.` bullet or JSON bullets compatible with knowledge.jsonl fields (type/trigger/action/confidence required).",
       found: learnings.ok,
-      details: `${learnings.details}${meaningfulStageNoneWarning}`
+      details: `${learnings.details}${learningsErrorBlock}${meaningfulStageNoneWarning}`
     });
+  }
+
+  for (const doneStage of completedStagesForAudit) {
+    const completionIso = completedStageMetaForAudit?.[doneStage]?.completedAt;
+    if (!completionIso) continue;
+    const completedMs = Date.parse(completionIso);
+    if (!Number.isFinite(completedMs)) continue;
+    try {
+      const resolvedDone = await resolveStageArtifactPath(doneStage, {
+        projectRoot,
+        track,
+        intent: "read"
+      });
+      if (!(await exists(resolvedDone.absPath))) continue;
+      const artifactStat = await fs.stat(resolvedDone.absPath);
+      if (artifactStat.mtimeMs <= completedMs) continue;
+      const priorRaw = await fs.readFile(resolvedDone.absPath, "utf8");
+      const priorSections = extractH2Sections(priorRaw);
+      const amendBody = sectionBodyByName(priorSections, "Amendments");
+      const trimmedAmend =
+        amendBody === null
+          ? ""
+          : amendBody.replace(/<!--[\s\S]*?-->/gu, "").replace(/\s+/gu, " ").trim();
+      if (trimmedAmend.length > 0) continue;
+      findings.push({
+        section: "stage_artifact_post_closure_mutation",
+        required: false,
+        rule: "stage_artifact_post_closure_mutation — substantive post-closure edit without `## Amendments` (advisory)",
+        found: false,
+        details:
+          `Completed stage "${doneStage}" snapshot closed at ${completionIso}, but ${resolvedDone.relPath} has a newer mtime without nonempty \`## Amendments\`. ` +
+          "Append dated bullets describing each drift fix, or restore the archived copy."
+      });
+    } catch {
+      continue;
+    }
   }
 
   const stageContext: StageLintContext = {

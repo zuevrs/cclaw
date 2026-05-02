@@ -649,14 +649,15 @@ describe("internal advance-stage commands", () => {
     expect(captured.stderr()).toContain("missing --evidence-json entries for passed gates");
   });
 
-  it("advance-stage skips proactive delegation trace for guided/lean early elicitation (start-mode unification)", async () => {
-    const root = await createTempProject("internal-advance-stage-proactive-skip-elicitation");
+  it("advance-stage requires proactive researcher delegation for guided brainstorm (unless waived)", async () => {
+    const root = await createTempProject("internal-advance-stage-proactive-guided-researcher");
     await ensureRunSystem(root);
     await writeBrainstormArtifact(root);
 
     const evidenceJson = requiredGateEvidenceJson("brainstorm");
-    const captured = captureIo();
-    const code = await runInternalCommand(
+
+    const blocked = captureIo();
+    const blockedCode = await runInternalCommand(
       root,
       [
         "advance-stage",
@@ -666,10 +667,27 @@ describe("internal advance-stage commands", () => {
         "--waiver-reason=unit_test",
         "--quiet"
       ],
-      captured.io
+      blocked.io
     );
-    expect(code, captured.stderr()).toBe(0);
-    expect(captured.stderr()).not.toContain("proactive delegation evidence is missing");
+    expect(blockedCode).toBe(1);
+    expect(blocked.stderr()).toContain("proactive delegation evidence is missing");
+    expect(blocked.stderr()).toContain("researcher");
+
+    const okIo = captureIo();
+    const okCode = await runInternalCommand(
+      root,
+      [
+        "advance-stage",
+        "brainstorm",
+        `--evidence-json=${evidenceJson}`,
+        "--waive-delegation=product-discovery,critic",
+        "--waiver-reason=unit_test",
+        ...PROACTIVE_WAIVER_FLAGS,
+        "--quiet"
+      ],
+      okIo.io
+    );
+    expect(okCode).toBe(0);
   });
 
   it("advance-stage fails by default when proactive delegations are missing on deep early elicitation, then allows explicit user-flag waiver", async () => {
@@ -1489,6 +1507,34 @@ ${QA_LOG_STOP_SIGNAL_BLOCK}## Context
 
     const artifact = await fs.readFile(path.join(root, ".cclaw/artifacts/01-brainstorm.md"), "utf8");
     expect(artifact).toContain("<!-- cclaw:learnings-harvested:");
+  });
+
+  it("prints stacked learnings harvest errors line-by-line", async () => {
+    const root = await createTempProject("internal-harvest-learnings-malformed");
+    await ensureRunSystem(root);
+    await writeBrainstormArtifact(root, `- {"type":"oops",`);
+
+    const captured = captureIo();
+    const evidenceJson = requiredGateEvidenceJson("brainstorm");
+    const code = await runInternalCommand(
+      root,
+      [
+        "advance-stage",
+        "brainstorm",
+        `--evidence-json=${evidenceJson}`,
+        "--waive-delegation=product-discovery,critic",
+        "--waiver-reason=unit_test",
+        ...PROACTIVE_WAIVER_FLAGS,
+        "--quiet"
+      ],
+      captured.io
+    );
+    expect(code).toBe(1);
+    const err = captured.stderr();
+    expect(err.startsWith("cclaw internal advance-stage:")).toBe(true);
+    expect(err).toContain("learnings harvest failed");
+    expect(err).toContain("Errors:");
+    expect(err).toMatch(/\n\s+-\s+/u);
   });
 
   it("tdd-red-evidence exits 2 when no failing RED evidence exists for path", async () => {

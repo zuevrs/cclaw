@@ -1766,6 +1766,18 @@ export interface LearningsParseResult {
   details: string;
 }
 
+/** Multiline block used by linter + learnings harvest stderr (identical text). */
+export function formatLearningsErrorsBullets(errors: string[]): string {
+  if (errors.length === 0) {
+    return "Errors:\n  - Learnings section could not be parsed.";
+  }
+  return `Errors:\n${errors.map((error) => `  - ${error}`).join("\n")}`;
+}
+
+export function learningsParseFailureHumanSummary(artifactRelPath: string, errors: string[]): string {
+  return `learnings harvest failed for \`${artifactRelPath}\`.\n${formatLearningsErrorsBullets(errors)}`;
+}
+
 export const LEARNING_TYPE_SET = new Set<LearningEntryType>(["rule", "pattern", "lesson", "compound"]);
 export const LEARNING_CONFIDENCE_SET = new Set<LearningConfidence>(["high", "medium", "low"]);
 export const LEARNING_SEVERITY_SET = new Set<LearningSeverity>(["critical", "important", "suggestion"]);

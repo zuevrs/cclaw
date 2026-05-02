@@ -5,6 +5,7 @@ import {
   checkReviewSecurityNoChangeAttestation,
   checkReviewVerdictConsistency,
   extractMarkdownSectionBody,
+  formatLearningsErrorsBullets,
   lintArtifact,
   parseLearningsSection,
   validateReviewArmy
@@ -1616,6 +1617,20 @@ describe("artifact linter heuristics", () => {
     const parsed = parseLearningsSection(`summary line\n- None this stage.`);
     expect(parsed.ok).toBe(false);
     expect(parsed.details).toContain("only contain bullet lines");
+  });
+
+  it("formats learnings error arrays as indented bullets", () => {
+    const block = formatLearningsErrorsBullets(["alpha issue", "beta issue"]);
+    expect(block.startsWith("Errors:\n")).toBe(true);
+    expect(block.includes("  - alpha issue")).toBe(true);
+    expect(block.includes("  - beta issue")).toBe(true);
+  });
+
+  it("surfaces discrete Learnings bullet errors separately from stitched details", () => {
+    const parsed = parseLearningsSection(`- {"type":"bad",`);
+    expect(parsed.ok).toBe(false);
+    expect(parsed.errors.length).toBeGreaterThan(0);
+    expect(parsed.details).toContain(parsed.errors[0]!);
   });
 
   it("rejects Learnings bullets with malformed JSON payload", () => {
