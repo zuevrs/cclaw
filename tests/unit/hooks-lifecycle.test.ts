@@ -4,9 +4,11 @@ import { pathToFileURL } from "node:url";
 import { spawn } from "node:child_process";
 import { describe, expect, it } from "vitest";
 import { initCclaw } from "../../src/install.js";
+import { issueWaiverToken } from "../../src/internal/waiver-grant.js";
 import { ensureRunSystem, readFlowState } from "../../src/runs.js";
 import { stageSchema } from "../../src/content/stage-schema.js";
 import { appendDelegation } from "../../src/delegation.js";
+import type { FlowStage } from "../../src/types.js";
 import { opencodePluginJs, runHookCmdScript, stageCompleteScript, startFlowScript } from "../../src/content/hooks.js";
 import {
   claudeHooksJsonWithObservation,
@@ -29,6 +31,22 @@ function requiredGateEvidenceJson(stage: Parameters<typeof stageSchema>[0]): str
   return JSON.stringify(Object.fromEntries(
     requiredGateIds.map((gateId) => [gateId, `evidence for ${gateId}`])
   ));
+}
+
+async function proactiveWaiverFlags(
+  projectRoot: string,
+  stage: FlowStage,
+  reason: string = "unit_test_proactive"
+): Promise<string[]> {
+  const record = await issueWaiverToken(projectRoot, {
+    stage,
+    reason,
+    issuerSubsystem: "hooks-lifecycle-test"
+  });
+  return [
+    `--accept-proactive-waiver=${record.token}`,
+    `--accept-proactive-waiver-reason=${reason}`
+  ];
 }
 
 async function writeBrainstormArtifact(root: string): Promise<void> {
@@ -387,8 +405,7 @@ fs.appendFileSync(${JSON.stringify(callsPath)}, process.argv.slice(2).join(" ") 
         requiredGateEvidenceJson("brainstorm"),
         "--waive-delegation=product-discovery,critic",
         "--waiver-reason=unit_test",
-        "--accept-proactive-waiver",
-        "--accept-proactive-waiver-reason=unit_test_proactive"
+        ...(await proactiveWaiverFlags(root, "brainstorm"))
       ],
       "",
       process.platform === "win32" ? { PATH: "", Path: "" } : { PATH: "" }
@@ -430,8 +447,7 @@ fs.appendFileSync(${JSON.stringify(callsPath)}, process.argv.slice(2).join(" ") 
         "--passed=brainstorm_approaches_compared,brainstorm_direction_approved,brainstorm_artifact_reviewed",
         "--waive-delegation=product-discovery,critic",
         "--waiver-reason=unit_test",
-        "--accept-proactive-waiver",
-        "--accept-proactive-waiver-reason=unit_test_proactive"
+        ...(await proactiveWaiverFlags(root, "brainstorm"))
       ],
       "",
       process.platform === "win32" ? { PATH: "", Path: "" } : { PATH: "" }

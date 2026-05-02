@@ -1,5 +1,47 @@
 # Changelog
 
+## 6.7.0 — Flow Trust And Linter Precision
+
+Round 6 locks down the three sources of silent trust loss in the v6.x runtime: manual `flow-state.json` edits, proactive delegation waivers with no paper trail, and linter noise that either cannibalized templated meta-phrases or re-asked counterfactual forcing questions on simple work. The runtime hard-blocks on flow-state tampering and on waivers without an approval token; the linter now strips its own meta-phrases before scanning and tags each finding as `new`/`repeat:N`/`resolved` across runs.
+
+### Runtime Honesty
+
+- **Flow-state write-guard (`src/run-persistence.ts`)** — every `writeFlowState` / `writeFlowStateGuarded` call now pairs `.cclaw/state/flow-state.json` with a sha256 sidecar at `.cclaw/.flow-state.guard.json` (fields: `sha256`, `writtenAt`, `writerSubsystem`, `runId`). Guarded reads (`readFlowStateGuarded`) and the `verifyFlowStateGuard(projectRoot)` entry point throw `FlowStateGuardMismatchError` when the sidecar disagrees with the on-disk payload; raw `readFlowState` stays unguarded so the existing sanitizer/quarantine paths keep working. Every writer in `src/internal/advance-stage/*` now records its subsystem (`advance-stage`, `start-flow`, `rewind`, …) so mismatch messages surface the last legitimate writer.
+- **Hook-level hard-block** — the generated `delegation-record.mjs` and the `node-hooks.ts` runtime (`session-start`, `stop-handoff`) now verify the sha256 sidecar inline before they act; `runInternalCommand` verifies it for `advance-stage`, `start-flow`, `cancel-run`, `rewind`, and the two `verify-*` subcommands. A hand-edited `flow-state.json` fails with exit code `2` and a clear stderr pointing at the repair command.
+- **`cclaw-cli internal flow-state-repair --reason=<slug>`** — recomputes the sidecar from the current payload, appends an audit line to `.cclaw/.flow-state-repair.log`, and refuses bare or malformed reasons. Intended only after an intentional manual edit.
+
+### Waiver Provenance
+
+- **`cclaw-cli internal waiver-grant --stage=<stage> --reason=<slug>`** — issues a short-lived `WV-<stage>-<sha8>-<expSlug>` token (default TTL 30 minutes, max 120) persisted to `.cclaw/.waivers.json`. Prints both the token and the canonical `--accept-proactive-waiver=<token>` consumption command. Reasons must be short kebab-case slugs (`architect_unavailable`, `critic_offline`, …).
+- **`--accept-proactive-waiver` now requires `=<token>`** — `src/internal/advance-stage/advance.ts` validates the token against `.cclaw/.waivers.json` (matching stage, not expired, not already consumed), moves the record to `consumed[]`, and writes `approvalToken` / `approvalReason` / `approvalIssuedAt` onto the proactive `DelegationEntry`. Bare `--accept-proactive-waiver` exits with code `2` and a human-readable error.
+- **Advisory linter finding `waiver_legacy_provenance`** — fires when a stage's proactive waiver has no `approvalToken` (e.g. issued by a pre-6.7 runtime). Never hard-blocks; guides authors toward `waiver-grant` on the next proactive delegation.
+
+### Linter Precision
+
+- **`extractAuthoredBody(rawArtifact)`** — new helper in `src/artifact-linter/shared.ts` that strips `<!-- linter-meta --> ... <!-- /linter-meta -->` paired blocks, remaining HTML comments, and fenced code blocks tagged `` ```linter-rule ``` ``. Surviving line offsets are preserved so regex-based scanners stay stable. The `Plan-wide Placeholder Scan` now calls `extractAuthoredBody` before scanning so the template's own "Scanned tokens: `TODO`, `TBD`, `FIXME`..." phrase no longer self-triggers the rule.
+- **Linter-meta markers in templates** — `src/content/templates.ts` wraps the `## Plan Quality Scan` meta-phrase block in `<!-- linter-meta -->` / `<!-- /linter-meta -->` so `extractAuthoredBody` can skip it cleanly. The `tests/e2e/docs-contracts.test.ts` contract now asserts that wrapping is in place.
+- **Findings-dedup cache** — new `src/artifact-linter/findings-dedup.ts` fingerprints each finding as `sha8(stage | rule | normalizedDetail)` and persists the per-stage set to `.cclaw/.linter-findings.json`. `lintArtifact` classifies every finding as `{kind: "new"}`, `{kind: "repeat", count}`, or `{kind: "resolved"}` and emits a short header summary (`linter findings (stage=…): N new, N repeat, N resolved.`) on the `LintResult.dedup` field. Normalization stabilizes the digest by masking run-ids, timestamps, hex hashes, and numeric counts.
+
+### Forcing Question Pruning
+
+- **Brainstorm** no longer requires `[topic:do-nothing]`. The forcing-question list is now `pain`, `direct-path`, `operator`, `no-go`; the `What if we do nothing?` premise-check bullet is retired; `Do-nothing consequence` continues to live in the Problem Decision Record.
+- **Scope** no longer requires `[topic:rollback]` or `[topic:failure-modes]`. The forcing-question list is now `in-out`, `locked-upstream`. Design's Failure Mode Table remains mandatory and is untouched.
+- `src/content/skills-elicitation.ts` and `src/content/templates.ts` are synced; the retired topic IDs are removed from every example row, Q&A log placeholder, and topic-tag catalog.
+
+### Tests
+
+- **`tests/unit/run-persistence-guard.test.ts`**, **`tests/unit/flow-state-repair.test.ts`**, **`tests/e2e/hook-guard.test.ts`** — pin the sidecar write, guard mismatch error shape, repair log format, and hook-level hard-block for `session-start`, `stop-handoff`, `delegation-record`, and `stage-complete`.
+- **`tests/unit/waiver-grant.test.ts`** — covers `issueWaiverToken` / `consumeWaiverToken` happy path, wrong-stage refusal, expired refusal, single-use semantics, CLI parser, and the `cclaw-cli internal waiver-grant` dispatcher.
+- **`tests/unit/waiver-legacy-provenance.test.ts`** — verifies the advisory finding fires for token-less proactive waivers and stays silent when the waiver carries an `approvalToken`.
+- **`tests/unit/extract-authored-body.test.ts`**, **`tests/unit/findings-dedup.test.ts`** — pin stripping semantics for linter-meta blocks, HTML comments, fenced `linter-rule` blocks, fingerprint stability, `new`/`repeat:N`/`resolved` classification, per-stage segregation, and header rendering.
+- **`tests/unit/no-counterfactual-forcing.test.ts`** — regression test that asserts `extractForcingQuestions("brainstorm")` no longer contains `do-nothing`, `extractForcingQuestions("scope")` no longer contains `rollback` or `failure-modes`, the generated brainstorm / scope skills never emit `[topic:do-nothing|rollback|failure-modes]`, and the brainstorm skill drops the `What if we do nothing?` premise line.
+- **Existing test updates** — `tests/unit/internal-advance-stage.test.ts`, `tests/unit/hooks-lifecycle.test.ts`, `tests/e2e/elicitation-floor.test.ts`, `tests/unit/delegation-record-repair.test.ts`, `tests/unit/qa-log-floor.test.ts` migrated to the new waiver-token contract, the loose `readFlowState`/guarded `readFlowStateGuarded` split, and the pruned brainstorm/scope topic lists.
+
+### Migration
+
+- Legacy waivers without `approvalToken` remain valid and are surfaced as advisory via `waiver_legacy_provenance`. The next successful proactive delegation should use `cclaw-cli internal waiver-grant` + `--accept-proactive-waiver=<token>`.
+- Existing projects continue without manual repair. The first legitimate `stage-complete` (or any `writeFlowState`) after upgrade writes the `.cclaw/.flow-state.guard.json` sidecar. Projects without a sidecar are read in "legacy mode" — the first mismatch only fires after the sidecar exists.
+
 ## 6.6.0 — Agent Efficiency Round 5
 
 Two coupled, content-only workstreams that bound investigation cost and anchor each stage to a concrete bad → good behavior. Pure prompt + advisory linter — no `FlowState` fields, no CLI flags, no schema fields, no harness changes. Standard / quick / medium tracks behave identically; the new linter rule is `required: false` and never blocks `stage-complete`.

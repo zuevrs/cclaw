@@ -94,7 +94,6 @@ ${renderBehaviorAnchorTemplateLine("brainstorm")}
 ## Premise Check
 - **Right problem?** (yes/no + one-line justification — take a position)
 - **Direct path?** (yes/no + one-line justification)
-- **What if we do nothing?** (concrete consequence, not "nothing happens")
 
 ## How Might We
 - *How might we …?* — one line naming the user, the desired outcome, and the binding constraint.
@@ -122,7 +121,7 @@ ${renderBehaviorAnchorTemplateLine("brainstorm")}
 | 1 |  |  | scope-shaping [topic:pain] |
 
 > Append-only by turn. Add one row after each user answer; do not rewrite prior rows.
-> **Topic tag is MANDATORY for forcing-question rows.** Stamp \`[topic:<id>]\` in the \`Decision impact\` cell so the linter can verify coverage in any natural language (RU/EN/UA/etc.). Brainstorm IDs: \`pain\`, \`direct-path\`, \`do-nothing\`, \`operator\`, \`no-go\`. Multiple tags allowed when one answer covers several topics. Stop-signal rows do NOT need a tag. Wave 24 (v6.0.0) removed the English keyword fallback.
+> **Topic tag is MANDATORY for forcing-question rows.** Stamp \`[topic:<id>]\` in the \`Decision impact\` cell so the linter can verify coverage in any natural language (RU/EN/UA/etc.). Brainstorm IDs: \`pain\`, \`direct-path\`, \`operator\`, \`no-go\`. Multiple tags allowed when one answer covers several topics. Stop-signal rows do NOT need a tag. Wave 24 (v6.0.0) removed the English keyword fallback; Round 6 (v6.7.0) retired the counterfactual \`do-nothing\` topic (Do-nothing consequence stays in the Problem Decision Record).
 
 ## Approach Tier
 - Tier: lite | standard | deep
@@ -953,12 +952,14 @@ Execution rule: complete and verify each batch before starting the next batch.
 - **Inline recipe (if Inline executor):** TDD loop unit-by-unit with batch checkpoints
 
 ## Plan Quality Scan
+<!-- linter-meta -->
 - Placeholder scan:
   - Scanned tokens: \`TODO\`, \`TBD\`, \`FIXME\`, \`<fill-in>\`, \`<your-*-here>\`, \`xxx\`, bare ellipsis in task rows.
   - Hits: 0 (required for WAIT_FOR_CONFIRM to resolve).
 - Scope reduction language scan:
   - Scanned phrases: \`v1\`, \`for now\`, \`later\`, \`temporary\`, \`placeholder\`, \`mock for now\`, \`hardcoded for now\`, \`will improve later\`.
   - Hits: 0 (required when Locked Decisions section is non-empty; reference D-XX IDs from scope).
+<!-- /linter-meta -->
 
 ## WAIT_FOR_CONFIRM
 - Status: pending

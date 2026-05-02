@@ -229,7 +229,7 @@ export function stageCompleteScript(): string {
   return internalHelperScript(
     "stage-complete",
     "advance-stage",
-    "Usage: node " + RUNTIME_ROOT + "/hooks/stage-complete.mjs <stage> [--passed=...] [--evidence-json=...] [--waive-delegation=...] [--waiver-reason=...] [--accept-proactive-waiver] [--accept-proactive-waiver-reason=\"<why safe>\"] [--skip-questions] [--json]",
+    "Usage: node " + RUNTIME_ROOT + "/hooks/stage-complete.mjs <stage> [--passed=...] [--evidence-json=...] [--waive-delegation=...] [--waiver-reason=...] [--accept-proactive-waiver=<token>] [--accept-proactive-waiver-reason=\"<why safe>\"] [--skip-questions] [--json]",
     {
       positionalArgName: "stage",
       positionalArgRequired: true,
@@ -240,6 +240,7 @@ export function stageCompleteScript(): string {
 
 export function delegationRecordScript(): string {
   return `#!/usr/bin/env node
+import { createHash } from "node:crypto";
 import fs from "node:fs/promises";
 import path from "node:path";
 import process from "node:process";
@@ -251,6 +252,37 @@ const VALID_DISPATCH_SURFACES = ${JSON.stringify([...DELEGATION_DISPATCH_SURFACE
 const VALID_DISPATCH_SURFACES_SET = new Set(VALID_DISPATCH_SURFACES);
 const SURFACE_PATH_PREFIXES = ${JSON.stringify(DELEGATION_DISPATCH_SURFACE_PATH_PREFIXES)};
 const LEDGER_SCHEMA_VERSION = 3;
+const FLOW_STATE_GUARD_REL_PATH = RUNTIME_ROOT + "/.flow-state.guard.json";
+
+async function verifyFlowStateGuardInline(root) {
+  const statePath = path.join(root, RUNTIME_ROOT, "state", "flow-state.json");
+  const guardPath = path.join(root, FLOW_STATE_GUARD_REL_PATH);
+  let raw;
+  try {
+    raw = await fs.readFile(statePath, "utf8");
+  } catch {
+    return;
+  }
+  let guard;
+  try {
+    const guardRaw = await fs.readFile(guardPath, "utf8");
+    guard = JSON.parse(guardRaw);
+  } catch {
+    return;
+  }
+  if (!guard || typeof guard !== "object" || typeof guard.sha256 !== "string") return;
+  const actual = createHash("sha256").update(raw, "utf8").digest("hex");
+  if (actual === guard.sha256) return;
+  process.stderr.write(
+    "[cclaw] delegation-record: flow-state guard mismatch: " + (guard.runId || "unknown-run") + "\\n" +
+      "expected sha: " + guard.sha256 + "\\n" +
+      "actual sha:   " + actual + "\\n" +
+      "last writer:  " + (guard.writerSubsystem || "unknown") + "@" + (guard.writtenAt || "unknown") + "\\n" +
+      "do not edit flow-state.json by hand. To recover, run:\\n" +
+      "  cclaw-cli internal flow-state-repair --reason \\"manual_edit_recovery\\"\\n"
+  );
+  process.exit(2);
+}
 
 function parseArgs(argv) {
   const args = {};
@@ -733,6 +765,9 @@ async function runRepair(args, json) {
 async function main() {
   const args = parseArgs(process.argv.slice(2));
   const json = args.json !== undefined;
+
+  const guardRoot = await detectRoot();
+  await verifyFlowStateGuardInline(guardRoot);
 
   if (args.repair) {
     await runRepair(args, json);

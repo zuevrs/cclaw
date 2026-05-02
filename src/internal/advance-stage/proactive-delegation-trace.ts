@@ -37,6 +37,9 @@ export async function ensureProactiveDelegationTrace(
   options: {
     acceptWaiver: boolean;
     waiverReason?: string;
+    approvalToken?: string;
+    approvalReason?: string;
+    approvalIssuedAt?: string;
     discoveryMode: DiscoveryMode;
     repoSignals?: RepoSignals;
   }
@@ -56,7 +59,12 @@ export async function ensureProactiveDelegationTrace(
   if (missingRules.length === 0) return { missingRules: [] };
   if (!options.acceptWaiver) return { missingRules };
 
-  const waiverReason = options.waiverReason?.trim() || "accepted via --accept-proactive-waiver";
+  const approvalToken = options.approvalToken?.trim();
+  const approvalReason = options.approvalReason?.trim();
+  const waiverReason =
+    options.waiverReason?.trim() ||
+    approvalReason ||
+    "accepted via --accept-proactive-waiver";
   for (const rule of missingRules) {
     await appendDelegation(projectRoot, {
       stage,
@@ -67,6 +75,9 @@ export async function ensureProactiveDelegationTrace(
       acceptedBy: "user-flag",
       conditionTrigger: rule.when,
       skill: rule.skill,
+      ...(approvalToken ? { approvalToken } : {}),
+      ...(approvalReason ? { approvalReason } : {}),
+      ...(options.approvalIssuedAt ? { approvalIssuedAt: options.approvalIssuedAt } : {}),
       ts: new Date().toISOString()
     });
   }

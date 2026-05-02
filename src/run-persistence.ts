@@ -1,3 +1,4 @@
+import { createHash } from "node:crypto";
 import fs from "node:fs/promises";
 import path from "node:path";
 import { RUNTIME_ROOT } from "./constants.js";
@@ -47,6 +48,13 @@ export interface WriteFlowStateOptions {
    * flow-state reset inside one atomic lock window.
    */
   skipLock?: boolean;
+  /**
+   * Free-form writer identifier persisted in the `.flow-state.guard.json`
+   * sidecar. Helps operators trace which subsystem wrote a given state
+   * (e.g. `advance-stage`, `start-flow`, `run-archive`). Defaults to
+   * `cclaw-cli` when omitted.
+   */
+  writerSubsystem?: string;
 }
 
 export interface ReadFlowStateOptions {
@@ -58,9 +66,73 @@ export interface ReadFlowStateOptions {
 }
 
 const FLOW_STATE_REL_PATH = `${RUNTIME_ROOT}/state/flow-state.json`;
+const FLOW_STATE_GUARD_REL_PATH = `${RUNTIME_ROOT}/.flow-state.guard.json`;
+const FLOW_STATE_REPAIR_LOG_REL_PATH = `${RUNTIME_ROOT}/.flow-state-repair.log`;
 const ARCHIVE_DIR_REL_PATH = `${RUNTIME_ROOT}/archive`;
 const ACTIVE_ARTIFACTS_REL_PATH = `${RUNTIME_ROOT}/artifacts`;
 const FLOW_STAGE_SET = new Set<string>(FLOW_STAGES);
+const DEFAULT_WRITER_SUBSYSTEM = "cclaw-cli";
+const DEFAULT_REPAIR_REASON_PATTERN = /^[a-z][a-z0-9_-]{2,}$/u;
+
+export interface FlowStateGuardSidecar {
+  sha256: string;
+  writtenAt: string;
+  writerSubsystem: string;
+  runId: string;
+}
+
+export interface FlowStateGuardMismatchDetails {
+  expectedSha: string;
+  actualSha: string;
+  lastWriter: string;
+  writtenAt: string;
+  runId: string;
+  statePath: string;
+  guardPath: string;
+  repairCommand: string;
+}
+
+export class FlowStateGuardMismatchError extends Error {
+  readonly expectedSha: string;
+  readonly actualSha: string;
+  readonly lastWriter: string;
+  readonly writtenAt: string;
+  readonly runId: string;
+  readonly statePath: string;
+  readonly guardPath: string;
+  readonly repairCommand: string;
+  constructor(details: FlowStateGuardMismatchDetails) {
+    super(
+      `flow-state guard mismatch: ${details.runId}\n` +
+        `expected sha: ${details.expectedSha}\n` +
+        `actual sha:   ${details.actualSha}\n` +
+        `last writer:  ${details.lastWriter}@${details.writtenAt}\n` +
+        `do not edit flow-state.json by hand. To recover, run:\n` +
+        `  ${details.repairCommand}`
+    );
+    this.name = "FlowStateGuardMismatchError";
+    this.expectedSha = details.expectedSha;
+    this.actualSha = details.actualSha;
+    this.lastWriter = details.lastWriter;
+    this.writtenAt = details.writtenAt;
+    this.runId = details.runId;
+    this.statePath = details.statePath;
+    this.guardPath = details.guardPath;
+    this.repairCommand = details.repairCommand;
+  }
+}
+
+function canonicalFlowStateShaFromRaw(raw: string): string {
+  return createHash("sha256").update(raw, "utf8").digest("hex");
+}
+
+function guardSidecarPath(projectRoot: string): string {
+  return path.join(projectRoot, FLOW_STATE_GUARD_REL_PATH);
+}
+
+function repairLogPath(projectRoot: string): string {
+  return path.join(projectRoot, FLOW_STATE_REPAIR_LOG_REL_PATH);
+}
 
 interface CoercedFlowStateResult {
   state: FlowState;
@@ -612,6 +684,81 @@ async function quarantineCorruptState(statePath: string, cause: unknown): Promis
   throw new CorruptFlowStateError(statePath, quarantinedPath, cause);
 }
 
+function buildRepairCommand(reason = "<manual_edit_recovery>"): string {
+  return `cclaw-cli internal flow-state-repair --reason "${reason}"`;
+}
+
+async function readGuardSidecar(
+  projectRoot: string
+): Promise<FlowStateGuardSidecar | null> {
+  const guardPath = guardSidecarPath(projectRoot);
+  try {
+    const raw = await fs.readFile(guardPath, "utf8");
+    const parsed = JSON.parse(raw) as Record<string, unknown>;
+    if (!parsed || typeof parsed !== "object" || Array.isArray(parsed)) {
+      return null;
+    }
+    const sha256 = typeof parsed.sha256 === "string" ? parsed.sha256 : "";
+    const writtenAt = typeof parsed.writtenAt === "string" ? parsed.writtenAt : "";
+    const writerSubsystem = typeof parsed.writerSubsystem === "string" ? parsed.writerSubsystem : "";
+    const runId = typeof parsed.runId === "string" ? parsed.runId : "";
+    if (!sha256 || !writtenAt || !writerSubsystem || !runId) {
+      return null;
+    }
+    return { sha256, writtenAt, writerSubsystem, runId };
+  } catch {
+    return null;
+  }
+}
+
+async function verifyFlowStateGuardFromRaw(
+  projectRoot: string,
+  statePath: string,
+  rawContents: string
+): Promise<void> {
+  const sidecar = await readGuardSidecar(projectRoot);
+  if (!sidecar) {
+    // Legacy: flow-state.json was written by a pre-guard runtime, or sidecar
+    // was intentionally reset. Permit the read so existing projects keep
+    // working; the next legitimate stage-complete writes a fresh sidecar.
+    return;
+  }
+  const actualSha = canonicalFlowStateShaFromRaw(rawContents);
+  if (actualSha === sidecar.sha256) {
+    return;
+  }
+  throw new FlowStateGuardMismatchError({
+    expectedSha: sidecar.sha256,
+    actualSha,
+    lastWriter: sidecar.writerSubsystem,
+    writtenAt: sidecar.writtenAt,
+    runId: sidecar.runId,
+    statePath,
+    guardPath: guardSidecarPath(projectRoot),
+    repairCommand: buildRepairCommand("manual_edit_recovery")
+  });
+}
+
+/**
+ * Verify the on-disk flow-state against the sha256 sidecar. Throws
+ * `FlowStateGuardMismatchError` when manual editing is detected. Safe to
+ * call on projects that have never written a sidecar: a missing sidecar is
+ * treated as "legacy runtime" and the check silently succeeds.
+ */
+export async function verifyFlowStateGuard(
+  projectRoot: string
+): Promise<void> {
+  const statePath = flowStatePath(projectRoot);
+  if (!(await exists(statePath))) return;
+  let raw: string;
+  try {
+    raw = await fs.readFile(statePath, "utf8");
+  } catch {
+    return;
+  }
+  await verifyFlowStateGuardFromRaw(projectRoot, statePath, raw);
+}
+
 export async function readFlowState(
   projectRoot: string,
   options: ReadFlowStateOptions = {}
@@ -642,17 +789,55 @@ export async function readFlowState(
   return coerceFlowState(parsed as Record<string, unknown>).state;
 }
 
+/**
+ * Guarded read wrapper used by runtime hook scripts and the repair CLI.
+ * Unlike `readFlowState`, it enforces the sha256 sidecar before returning:
+ * a manual edit to flow-state.json fails fast with
+ * `FlowStateGuardMismatchError`.
+ */
+export async function readFlowStateGuarded(
+  projectRoot: string,
+  options: ReadFlowStateOptions = {}
+): Promise<FlowState> {
+  void options;
+  const statePath = flowStatePath(projectRoot);
+  if (!(await exists(statePath))) {
+    return createInitialFlowState();
+  }
+  let raw: string;
+  try {
+    raw = await fs.readFile(statePath, "utf8");
+  } catch (readErr) {
+    throw new CorruptFlowStateError(statePath, statePath, readErr);
+  }
+  await verifyFlowStateGuardFromRaw(projectRoot, statePath, raw);
+  let parsed: unknown;
+  try {
+    parsed = JSON.parse(raw);
+  } catch (parseErr) {
+    await quarantineCorruptState(statePath, parseErr);
+  }
+  if (!parsed || typeof parsed !== "object" || Array.isArray(parsed)) {
+    await quarantineCorruptState(
+      statePath,
+      new Error("flow-state.json did not deserialize to a JSON object")
+    );
+  }
+  return coerceFlowState(parsed as Record<string, unknown>).state;
+}
+
 export async function writeFlowState(
   projectRoot: string,
   state: FlowState,
   options: WriteFlowStateOptions = {}
 ): Promise<void> {
+  const writerSubsystem = options.writerSubsystem?.trim() || DEFAULT_WRITER_SUBSYSTEM;
   const doWrite = async (): Promise<void> => {
     const statePath = flowStatePath(projectRoot);
     if (!options.allowReset && (await exists(statePath))) {
       try {
-        const raw = await fs.readFile(statePath, "utf8");
-        const parsed = JSON.parse(raw) as Record<string, unknown>;
+        const rawExisting = await fs.readFile(statePath, "utf8");
+        const parsed = JSON.parse(rawExisting) as Record<string, unknown>;
         if (parsed && typeof parsed === "object" && !Array.isArray(parsed)) {
           const prev = coerceFlowState(parsed).state;
           validateFlowTransition(prev, state);
@@ -669,13 +854,115 @@ export async function writeFlowState(
       }
     }
     const safe = coerceFlowState({ ...(state as unknown as Record<string, unknown>) }).state;
-    await writeFileSafe(statePath, `${JSON.stringify(safe, null, 2)}\n`, { mode: 0o600 });
+    const canonicalPayload = `${JSON.stringify(safe, null, 2)}\n`;
+    const sha256 = canonicalFlowStateShaFromRaw(canonicalPayload);
+    await writeFileSafe(statePath, canonicalPayload, { mode: 0o600 });
+    const sidecar: FlowStateGuardSidecar = {
+      sha256,
+      writtenAt: new Date().toISOString(),
+      writerSubsystem,
+      runId: safe.activeRunId
+    };
+    await writeFileSafe(
+      guardSidecarPath(projectRoot),
+      `${JSON.stringify(sidecar, null, 2)}\n`,
+      { mode: 0o600 }
+    );
   };
   if (options.skipLock) {
     await doWrite();
   } else {
     await withDirectoryLock(flowStateLockPath(projectRoot), doWrite);
   }
+}
+
+/**
+ * Named entry point for the write-guard workstream. Equivalent to
+ * `writeFlowState`: the write always produces the sha256 sidecar via
+ * the internal implementation so every existing writer inherits the
+ * guard without rewriting callsites.
+ */
+export async function writeFlowStateGuarded(
+  projectRoot: string,
+  state: FlowState,
+  options: WriteFlowStateOptions = {}
+): Promise<void> {
+  await writeFlowState(projectRoot, state, options);
+}
+
+export interface FlowStateRepairResult {
+  sidecar: FlowStateGuardSidecar;
+  repairLogPath: string;
+  guardPath: string;
+}
+
+/**
+ * Recompute the write-guard sidecar from the current on-disk flow-state
+ * contents and append an audit entry to `.cclaw/.flow-state-repair.log`.
+ * The reason is required so no repair happens without an operator-visible
+ * rationale. Intended to be called only from the explicit
+ * `cclaw-cli internal flow-state-repair` subcommand.
+ */
+export async function repairFlowStateGuard(
+  projectRoot: string,
+  reason: string
+): Promise<FlowStateRepairResult> {
+  const trimmed = reason.trim();
+  if (trimmed.length === 0) {
+    throw new Error(
+      "flow-state-repair requires --reason=<slug> (e.g. --reason=\"manual_edit_recovery\")."
+    );
+  }
+  if (!DEFAULT_REPAIR_REASON_PATTERN.test(trimmed)) {
+    throw new Error(
+      "flow-state-repair --reason must match /^[a-z][a-z0-9_-]{2,}$/ (short lowercase slug)."
+    );
+  }
+  const statePath = flowStatePath(projectRoot);
+  if (!(await exists(statePath))) {
+    throw new Error(
+      `flow-state-repair: ${FLOW_STATE_REL_PATH} does not exist; nothing to repair.`
+    );
+  }
+  return withDirectoryLock(flowStateLockPath(projectRoot), async () => {
+    const raw = await fs.readFile(statePath, "utf8");
+    let runId = "unknown-run";
+    try {
+      const parsed = JSON.parse(raw) as Record<string, unknown>;
+      const coerced = coerceFlowState(parsed).state;
+      runId = coerced.activeRunId;
+    } catch {
+      // parsing failure falls back to "unknown-run"; repair intentionally
+      // accepts the contents as-is so operators can recover even from
+      // borderline JSON after manual edits.
+    }
+    const sha256 = canonicalFlowStateShaFromRaw(raw);
+    const sidecar: FlowStateGuardSidecar = {
+      sha256,
+      writtenAt: new Date().toISOString(),
+      writerSubsystem: "flow-state-repair",
+      runId
+    };
+    const guardPath = guardSidecarPath(projectRoot);
+    await writeFileSafe(
+      guardPath,
+      `${JSON.stringify(sidecar, null, 2)}\n`,
+      { mode: 0o600 }
+    );
+    const logPath = repairLogPath(projectRoot);
+    await ensureDir(path.dirname(logPath));
+    const logLine = `${sidecar.writtenAt} reason=${trimmed} runId=${sidecar.runId} sha256=${sidecar.sha256}\n`;
+    await fs.appendFile(logPath, logLine, "utf8");
+    return { sidecar, repairLogPath: logPath, guardPath };
+  });
+}
+
+export function flowStateGuardSidecarPathFor(projectRoot: string): string {
+  return guardSidecarPath(projectRoot);
+}
+
+export function flowStateRepairLogPathFor(projectRoot: string): string {
+  return repairLogPath(projectRoot);
 }
 
 /**

@@ -36,9 +36,8 @@ const FORCING_COVERAGE_QA_LOG_RU = `## Q&A Log
 |---|---|---|---|
 | 1 | Какую боль мы решаем для пользователей? | Регистрация занимает 30 минут. | scope-shaping [topic:pain] |
 | 2 | Какой самый прямой путь это починить? | Чек-лист самообслуживания. | architecture-shaping [topic:direct-path] |
-| 3 | Что будет, если ничего не делать? | Отток растёт ~3% в месяц. | urgency-shaping [topic:do-nothing] |
-| 4 | Кто первый оператор/пользователь? | Соло-фаундер во время онбординга. | persona-shaping [topic:operator] |
-| 5 | Какие no-go границы? | Нет нового инфра в v1. | scope-shaping [topic:no-go] |
+| 3 | Кто первый оператор/пользователь? | Соло-фаундер во время онбординга. | persona-shaping [topic:operator] |
+| 4 | Какие no-go границы? | Нет нового инфра в v1. | scope-shaping [topic:no-go] |
 `;
 
 const FORCING_COVERAGE_QA_LOG_EN = `## Q&A Log
@@ -46,9 +45,8 @@ const FORCING_COVERAGE_QA_LOG_EN = `## Q&A Log
 |---|---|---|---|
 | 1 | What pain are we solving for users today? | Onboarding takes 30 min. | scope-shaping [topic:pain] |
 | 2 | What is the direct path to fix it? | Self-serve checklist. | architecture-shaping [topic:direct-path] |
-| 3 | What happens if we do nothing? | Churn climbs ~3% MoM. | urgency-shaping [topic:do-nothing] |
-| 4 | Who is the first operator/user affected? | Solo founder onboarding alone. | persona-shaping [topic:operator] |
-| 5 | What no-go boundaries are non-negotiable? | No new infra in v1. | scope-shaping [topic:no-go] |
+| 3 | Who is the first operator/user affected? | Solo founder onboarding alone. | persona-shaping [topic:operator] |
+| 4 | What no-go boundaries are non-negotiable? | No new infra in v1. | scope-shaping [topic:no-go] |
 `;
 
 const PARTIAL_TAG_QA_LOG = `## Q&A Log
@@ -56,7 +54,7 @@ const PARTIAL_TAG_QA_LOG = `## Q&A Log
 |---|---|---|---|
 | 1 | What pain are we solving? | Onboarding takes 30 min. | scope-shaping [topic:pain] |
 | 2 | What is the direct path to fix it? | Self-serve checklist. | architecture-shaping |
-| 3 | What happens if we do nothing? | Churn climbs ~3% MoM. | urgency-shaping [topic:do-nothing] |
+| 3 | Who is the first operator/user affected? | Solo founder onboarding alone. | persona-shaping [topic:operator] |
 `;
 
 const UNTAGGED_FULL_PROSE_QA_LOG = `## Q&A Log
@@ -64,9 +62,8 @@ const UNTAGGED_FULL_PROSE_QA_LOG = `## Q&A Log
 |---|---|---|---|
 | 1 | What pain are we solving? | Onboarding takes 30 min. | scope-shaping |
 | 2 | What is the direct path to fix it? | Self-serve checklist. | architecture-shaping |
-| 3 | What happens if we do nothing? | Churn climbs ~3% MoM. | urgency-shaping |
-| 4 | Who is the first operator/user affected? | Solo founder onboarding alone. | persona-shaping |
-| 5 | What no-go boundaries are non-negotiable? | No new infra in v1. | scope-shaping |
+| 3 | Who is the first operator/user affected? | Solo founder onboarding alone. | persona-shaping |
+| 4 | What no-go boundaries are non-negotiable? | No new infra in v1. | scope-shaping |
 `;
 
 const NO_NEW_DECISIONS_QA_LOG = `## Q&A Log
@@ -108,7 +105,7 @@ describe("evaluateQaLogFloor (Wave 24 / v6.0.0 mandatory [topic:<id>] contract)"
     expect(result.noNewDecisions).toBe(false);
     expect(result.skipQuestionsAdvisory).toBe(false);
     expect(result.details).toMatch(/unconverged/iu);
-    expect(result.details).toMatch(/\[pain, direct-path, do-nothing, operator, no-go\]/u);
+    expect(result.details).toMatch(/\[pain, direct-path, operator, no-go\]/u);
   });
 
   it("passes RU Q&A when every forcing topic id is tagged [topic:<id>] (i18n fix)", () => {
@@ -116,7 +113,7 @@ describe("evaluateQaLogFloor (Wave 24 / v6.0.0 mandatory [topic:<id>] contract)"
     expect(result.ok).toBe(true);
     expect(result.forcingPending).toEqual([]);
     expect(result.forcingCovered.sort()).toEqual(
-      ["direct-path", "do-nothing", "no-go", "operator", "pain"]
+      ["direct-path", "no-go", "operator", "pain"]
     );
     expect(result.details).toMatch(/converged/iu);
   });
@@ -134,18 +131,18 @@ describe("evaluateQaLogFloor (Wave 24 / v6.0.0 mandatory [topic:<id>] contract)"
     expect(result.ok).toBe(false);
     expect(result.forcingCovered).toEqual([]);
     expect(result.forcingPending.sort()).toEqual(
-      ["direct-path", "do-nothing", "no-go", "operator", "pain"]
+      ["direct-path", "no-go", "operator", "pain"]
     );
-    expect(result.details).toMatch(/\[pain, direct-path, do-nothing, operator, no-go\]/u);
+    expect(result.details).toMatch(/\[pain, direct-path, operator, no-go\]/u);
     expect(result.details).toMatch(/\[topic:<id>\]/u);
   });
 
   it("partial tagging fails for the un-tagged topic ids only", () => {
     const result = evaluateQaLogFloor(PARTIAL_TAG_QA_LOG, "standard", "brainstorm");
     expect(result.ok).toBe(false);
-    expect(result.forcingCovered.sort()).toEqual(["do-nothing", "pain"]);
-    expect(result.forcingPending.sort()).toEqual(["direct-path", "no-go", "operator"]);
-    expect(result.details).toMatch(/\[direct-path, operator, no-go\]/u);
+    expect(result.forcingCovered.sort()).toEqual(["operator", "pain"]);
+    expect(result.forcingPending.sort()).toEqual(["direct-path", "no-go"]);
+    expect(result.details).toMatch(/\[direct-path, no-go\]/u);
   });
 
   it("does not let guided brainstorm converge via Ralph-Loop before the minimum discovery pass", () => {
@@ -185,7 +182,7 @@ describe("evaluateQaLogFloor (Wave 24 / v6.0.0 mandatory [topic:<id>] contract)"
     expect(result.skipQuestionsAdvisory).toBe(true);
     expect(result.details).toMatch(/--skip-questions/iu);
     expect(result.details).toMatch(/advisory/iu);
-    expect(result.details).toMatch(/\[pain, direct-path, do-nothing, operator, no-go\]/u);
+    expect(result.details).toMatch(/\[pain, direct-path, operator, no-go\]/u);
   });
 
   it("excludes skipped/waived rows from the substantive count", () => {
@@ -241,16 +238,16 @@ describe("evaluateQaLogFloor (Wave 24 / v6.0.0 mandatory [topic:<id>] contract)"
 describe("extractForcingQuestions (Wave 24 / v6.0.0 mandatory id: topic syntax)", () => {
   it("brainstorm returns the canonical forcing-question topic descriptors", () => {
     const topics = extractForcingQuestions("brainstorm");
-    expect(topics.length).toBeGreaterThanOrEqual(5);
+    expect(topics.length).toBeGreaterThanOrEqual(4);
     const ids = topics.map((t: ForcingQuestionTopic) => t.id);
-    expect(ids).toEqual(["pain", "direct-path", "do-nothing", "operator", "no-go"]);
+    expect(ids).toEqual(["pain", "direct-path", "operator", "no-go"]);
     expect(topics[0]).toMatchObject({ id: "pain", topic: expect.stringMatching(/pain/iu) });
   });
 
   it("scope returns the canonical scope topic descriptors", () => {
     const topics = extractForcingQuestions("scope");
     const ids = topics.map((t) => t.id);
-    expect(ids).toEqual(["in-out", "locked-upstream", "rollback", "failure-modes"]);
+    expect(ids).toEqual(["in-out", "locked-upstream"]);
   });
 
   it("design returns the canonical design topic descriptors", () => {

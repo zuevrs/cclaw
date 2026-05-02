@@ -1,10 +1,19 @@
 export {
   CorruptFlowStateError,
+  FlowStateGuardMismatchError,
   InvalidStageTransitionError,
+  type FlowStateGuardSidecar,
+  type FlowStateRepairResult,
   type WriteFlowStateOptions,
   ensureRunSystem,
+  flowStateGuardSidecarPathFor,
+  flowStateRepairLogPathFor,
   readFlowState,
-  writeFlowState
+  readFlowStateGuarded,
+  repairFlowStateGuard,
+  verifyFlowStateGuard,
+  writeFlowState,
+  writeFlowStateGuarded
 } from "./run-persistence.js";
 
 export {

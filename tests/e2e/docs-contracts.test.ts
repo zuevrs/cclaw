@@ -283,4 +283,19 @@ ${await readRepoFile("docs/scheme-of-work.md")}`;
       expect(skillMd, `${stage} skill should mark Good`).toMatch(/- Good:/u);
     }
   });
+
+  it("wraps templated linter meta-phrases inside <!-- linter-meta --> ... <!-- /linter-meta --> markers", async () => {
+    const templates = await readRepoFile("src/content/templates.ts");
+    const planScanIdx = templates.indexOf("## Plan Quality Scan");
+    expect(planScanIdx).toBeGreaterThanOrEqual(0);
+    const planScanSlice = templates.slice(planScanIdx, planScanIdx + 1200);
+    expect(planScanSlice).toContain("<!-- linter-meta -->");
+    expect(planScanSlice).toContain("<!-- /linter-meta -->");
+    const openIdx = planScanSlice.indexOf("<!-- linter-meta -->");
+    const closeIdx = planScanSlice.indexOf("<!-- /linter-meta -->");
+    expect(openIdx).toBeGreaterThanOrEqual(0);
+    expect(closeIdx).toBeGreaterThan(openIdx);
+    const wrapped = planScanSlice.slice(openIdx, closeIdx);
+    expect(wrapped).toMatch(/TODO|TBD|FIXME/u);
+  });
 });

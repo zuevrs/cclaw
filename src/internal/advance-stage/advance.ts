@@ -32,6 +32,7 @@ import {
 } from "./review-loop.js";
 import type { AdvanceStageArgs } from "./parsers.js";
 import { ensureProactiveDelegationTrace } from "./proactive-delegation-trace.js";
+import { consumeWaiverToken, type WaiverRecord } from "../waiver-grant.js";
 import type { Writable } from "node:stream";
 
 interface InternalIo {
@@ -741,9 +742,35 @@ export async function runAdvanceStage(
     return 1;
   }
 
+  let approvalRecord: WaiverRecord | null = null;
+  if (args.acceptProactiveWaiver) {
+    const tokenRaw = args.acceptProactiveWaiverToken?.trim() ?? "";
+    if (tokenRaw.length === 0) {
+      io.stderr.write(
+        `cclaw internal advance-stage: --accept-proactive-waiver now requires =<token>. Run \`cclaw-cli internal waiver-grant --stage ${args.stage} --reason "<why safe>"\` to issue one, then rerun with --accept-proactive-waiver=<token>.\n`
+      );
+      return 2;
+    }
+    const consumed = await consumeWaiverToken(projectRoot, {
+      stage: args.stage,
+      token: tokenRaw,
+      consumedBy: "advance-stage"
+    });
+    if (!consumed.ok) {
+      io.stderr.write(
+        `cclaw internal advance-stage: waiver token rejected (${consumed.reason}): ${consumed.detail}. Issue a fresh token via \`cclaw-cli internal waiver-grant --stage ${args.stage} --reason "<why safe>"\`.\n`
+      );
+      return 2;
+    }
+    approvalRecord = consumed.record;
+  }
+
   const proactiveTrace = await ensureProactiveDelegationTrace(projectRoot, args.stage, {
     acceptWaiver: args.acceptProactiveWaiver,
     waiverReason: args.acceptProactiveWaiverReason,
+    approvalToken: approvalRecord?.token,
+    approvalReason: approvalRecord?.reason,
+    approvalIssuedAt: approvalRecord?.issuedAt,
     discoveryMode: flowState.discoveryMode,
     repoSignals: flowState.repoSignals
   });
@@ -815,7 +842,7 @@ export async function runAdvanceStage(
     interactionHints
   };
 
-  await writeFlowState(projectRoot, finalState);
+  await writeFlowState(projectRoot, finalState, { writerSubsystem: "advance-stage" });
 
   if (args.quiet) {
     io.stdout.write(`${JSON.stringify({

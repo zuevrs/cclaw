@@ -4,7 +4,9 @@ import { Writable } from "node:stream";
 import { describe, expect, it } from "vitest";
 import { stageSchema } from "../../src/content/stage-schema.js";
 import { runInternalCommand } from "../../src/internal/advance-stage.js";
+import { issueWaiverToken } from "../../src/internal/waiver-grant.js";
 import { ensureRunSystem, readFlowState } from "../../src/runs.js";
+import type { FlowStage } from "../../src/types.js";
 import { createTempProject } from "../helpers/index.js";
 
 /**
@@ -62,10 +64,21 @@ function requiredGateEvidenceJson(stage: Parameters<typeof stageSchema>[0]): str
   return JSON.stringify(evidence);
 }
 
-const PROACTIVE_WAIVER_FLAGS = [
-  "--accept-proactive-waiver",
-  "--accept-proactive-waiver-reason=floor_behavioural_test"
-] as const;
+async function proactiveWaiverFlags(
+  projectRoot: string,
+  stage: FlowStage,
+  reason: string = "floor_behavioural_test"
+): Promise<string[]> {
+  const record = await issueWaiverToken(projectRoot, {
+    stage,
+    reason,
+    issuerSubsystem: "e2e-test"
+  });
+  return [
+    `--accept-proactive-waiver=${record.token}`,
+    `--accept-proactive-waiver-reason=${reason}`
+  ];
+}
 
 const BRAINSTORM_BODY_NO_QA = `## Context
 - Project state: monorepo with CI pipeline
@@ -133,9 +146,8 @@ const QA_LOG_FORCING_COVERAGE_BLOCK = `## Q&A Log
 |---|---|---|---|
 | 1 | What pain are we solving for users today? | Manual release metadata audit. | locks-problem [topic:pain] |
 | 2 | What is the direct path to fix it? | Reusable validator module. | locks-architecture [topic:direct-path] |
-| 3 | What happens if we do nothing? | Unsafe publish risk grows. | urgency-shaping [topic:do-nothing] |
-| 4 | Who is the first operator/user affected? | Release manager on call. | persona-shaping [topic:operator] |
-| 5 | What no-go boundaries are non-negotiable? | No new runtime deps in v1. | scope-shaping [topic:no-go] |
+| 3 | Who is the first operator/user affected? | Release manager on call. | persona-shaping [topic:operator] |
+| 4 | What no-go boundaries are non-negotiable? | No new runtime deps in v1. | scope-shaping [topic:no-go] |
 
 `;
 
@@ -163,7 +175,7 @@ describe("Wave 23 elicitation convergence floor (behavioural)", () => {
         `--evidence-json=${requiredGateEvidenceJson("brainstorm")}`,
         "--waive-delegation=product-discovery,critic",
         "--waiver-reason=floor_test",
-        ...PROACTIVE_WAIVER_FLAGS
+        ...(await proactiveWaiverFlags(root, "brainstorm"))
       ],
       captured.io
     );
@@ -191,7 +203,7 @@ describe("Wave 23 elicitation convergence floor (behavioural)", () => {
         `--evidence-json=${requiredGateEvidenceJson("brainstorm")}`,
         "--waive-delegation=product-discovery,critic",
         "--waiver-reason=floor_test",
-        ...PROACTIVE_WAIVER_FLAGS
+        ...(await proactiveWaiverFlags(root, "brainstorm"))
       ],
       captured.io
     );
@@ -217,7 +229,7 @@ describe("Wave 23 elicitation convergence floor (behavioural)", () => {
         `--evidence-json=${requiredGateEvidenceJson("brainstorm")}`,
         "--waive-delegation=product-discovery,critic",
         "--waiver-reason=floor_test",
-        ...PROACTIVE_WAIVER_FLAGS
+        ...(await proactiveWaiverFlags(root, "brainstorm"))
       ],
       captured.io
     );
@@ -243,7 +255,7 @@ describe("Wave 23 elicitation convergence floor (behavioural)", () => {
         "--waive-delegation=product-discovery,critic",
         "--waiver-reason=floor_test",
         "--skip-questions",
-        ...PROACTIVE_WAIVER_FLAGS
+        ...(await proactiveWaiverFlags(root, "brainstorm"))
       ],
       captured.io
     );

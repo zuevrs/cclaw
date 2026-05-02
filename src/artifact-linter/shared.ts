@@ -390,11 +390,35 @@ export interface LintFinding {
   details: string;
 }
 
+export interface LintFindingDedupSummary {
+  newCount: number;
+  repeatCount: number;
+  resolvedCount: number;
+  /**
+   * Short single-line human-facing summary of the dedup outcome. Empty
+   * string when there is nothing to report.
+   */
+  header: string;
+  /**
+   * Parallel to the `findings` array on `LintResult`; each status tags
+   * the finding at the same index as `new`, `repeat`, or `resolved`.
+   * `null` slots correspond to findings that weren't classified (for
+   * example, when the dedup cache is unreadable).
+   */
+  statuses: Array<
+    | { kind: "new" }
+    | { kind: "repeat"; count: number }
+    | { kind: "resolved" }
+    | null
+  >;
+}
+
 export interface LintResult {
   stage: string;
   file: string;
   passed: boolean;
   findings: LintFinding[];
+  dedup?: LintFindingDedupSummary;
 }
 
 export function normalizeHeadingTitle(title: string): string {
@@ -490,6 +514,44 @@ export function duplicateH2Headings(markdown: string): string[] {
   return [...counts.entries()]
     .filter(([, count]) => count > 1)
     .map(([key]) => displayHeading.get(key) ?? key);
+}
+
+/**
+ * Return the author-authored prose of an artifact, stripping linter meta
+ * regions so free-text scans (placeholder tokens, scope-reduction phrases,
+ * investigation trigger words) don't self-cannibalize by matching the
+ * linter's own templated meta-phrases.
+ *
+ * Stripping rules (in order):
+ *   1. `<!-- linter-meta --> ... <!-- /linter-meta -->` paired blocks.
+ *      Both markers must appear on their own line; unterminated openings
+ *      are left as-is so a malformed artifact cannot hide arbitrary
+ *      content by omitting the closing marker.
+ *   2. Every other HTML comment (`<!-- ... -->`, possibly multi-line).
+ *   3. Fenced code blocks that are tagged `linter-rule` (e.g.
+ *      ```` ```linter-rule ````). Plain fenced code blocks are preserved
+ *      because many stages quote code samples that the linter should
+ *      still see.
+ *
+ * The function guarantees the returned string is a strict subset of the
+ * original: no characters are synthesized, and line offsets are
+ * preserved for any surviving line (blank lines stand in for stripped
+ * regions). This keeps regex-based linter checks stable when authors
+ * add or remove linter-meta blocks between runs.
+ */
+export function extractAuthoredBody(rawArtifact: string): string {
+  if (typeof rawArtifact !== "string" || rawArtifact.length === 0) {
+    return "";
+  }
+  const linterMetaBlock = /^[ \t]*<!--\s*linter-meta\s*-->[\s\S]*?^[ \t]*<!--\s*\/linter-meta\s*-->[ \t]*$/gmu;
+  let body = rawArtifact.replace(linterMetaBlock, (match) =>
+    match.replace(/[^\n]/gu, "")
+  );
+  const htmlComment = /<!--[\s\S]*?-->/gu;
+  body = body.replace(htmlComment, (match) => match.replace(/[^\n]/gu, ""));
+  const linterRuleFence = /^([ \t]*)(`{3,}|~{3,})\s*linter-rule\b[^\n]*\n[\s\S]*?\n\1\2[ \t]*$/gmu;
+  body = body.replace(linterRuleFence, (match) => match.replace(/[^\n]/gu, ""));
+  return body;
 }
 
 export function headingPresent(sections: H2SectionMap, section: string): boolean {

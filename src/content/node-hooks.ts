@@ -69,12 +69,14 @@ export function nodeHookRuntimeScript(options: NodeHookRuntimeOptions = {}): str
   const cliRuntime = resolveCliRuntimeForGeneratedHook();
 
   return `#!/usr/bin/env node
+import { createHash } from "node:crypto";
 import fs from "node:fs/promises";
 import path from "node:path";
 import process from "node:process";
 import { spawn } from "node:child_process";
 
 const RUNTIME_ROOT = ${JSON.stringify(RUNTIME_ROOT)};
+const FLOW_STATE_GUARD_REL_PATH = RUNTIME_ROOT + "/.flow-state.guard.json";
 // Single strictness default, derived from config.strictness at install time.
 // \`CCLAW_STRICTNESS\` env var overrides for the current process. All guards
 // (prompt, workflow, TDD, iron-laws) route through \`resolveStrictness()\`.
@@ -1035,6 +1037,40 @@ function extractCodePathsFromText(value) {
     if (out.length >= 20) break;
   }
   return out;
+}
+
+async function verifyFlowStateGuardInline(root, hookName) {
+  const statePath = path.join(root, RUNTIME_ROOT, "state", "flow-state.json");
+  const guardPath = path.join(root, FLOW_STATE_GUARD_REL_PATH);
+  let raw;
+  try {
+    raw = await fs.readFile(statePath, "utf8");
+  } catch {
+    return true;
+  }
+  let guard;
+  try {
+    const guardRaw = await fs.readFile(guardPath, "utf8");
+    guard = JSON.parse(guardRaw);
+  } catch {
+    return true;
+  }
+  if (!guard || typeof guard !== "object" || typeof guard.sha256 !== "string") {
+    return true;
+  }
+  const actual = createHash("sha256").update(raw, "utf8").digest("hex");
+  if (actual === guard.sha256) return true;
+  const hookLabel = typeof hookName === "string" && hookName.length > 0 ? hookName : "hook";
+  process.stderr.write(
+    "[cclaw] " + hookLabel + ": flow-state guard mismatch: " + (guard.runId || "unknown-run") + "\\n" +
+      "expected sha: " + guard.sha256 + "\\n" +
+      "actual sha:   " + actual + "\\n" +
+      "last writer:  " + (guard.writerSubsystem || "unknown") + "@" + (guard.writtenAt || "unknown") + "\\n" +
+      "do not edit flow-state.json by hand. To recover, run:\\n" +
+      "  cclaw-cli internal flow-state-repair --reason \\"manual_edit_recovery\\"\\n"
+  );
+  await recordHookError(root, hookLabel, "flow-state guard mismatch actual=" + actual + " expected=" + guard.sha256).catch(() => undefined);
+  return false;
 }
 
 async function readFlowState(root) {
@@ -2130,6 +2166,13 @@ async function main() {
   };
 
   try {
+    if (hookName === "session-start" || hookName === "stop-handoff") {
+      const guardOk = await verifyFlowStateGuardInline(runtime.root, hookName);
+      if (!guardOk) {
+        process.exitCode = 2;
+        return;
+      }
+    }
     if (hookName === "session-start") {
       process.exitCode = await handleSessionStart(runtime);
       return;
