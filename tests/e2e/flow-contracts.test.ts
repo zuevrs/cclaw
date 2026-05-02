@@ -483,9 +483,7 @@ describe("flow command contracts", () => {
     expect(planSkill).toContain("`mandatory delegations`");
   });
 
-  it(
-    "inlines decision protocol in design and spec skills",
-    async () => {
+  it("inlines decision protocol in design and spec skills", async () => {
     const root = await createTempProject("ambiguity");
     await initCclaw({ projectRoot: root });
 
@@ -499,9 +497,7 @@ describe("flow command contracts", () => {
     );
     expect(designSkill).toContain("Decision protocol: ask only decision-changing questions");
     expect(specSkill).toContain("Decision protocol: ask only decision-changing questions");
-    },
-    20_000
-  );
+  });
 
   it("keeps contract anchors for strict-stage content", async () => {
     const root = await createTempProject("strict-stage-anchors");
