@@ -96,6 +96,12 @@ export interface StageAutoSubagentDispatch {
   returnSchema?: StageSubagentReturnSchema;
   /** Optional skill folder the dispatched agent should load as additional context. */
   skill?: string;
+  /**
+   * When true, proactive trace requirements for this row may be skipped on an
+   * empty/sparse repo (see `ensureProactiveDelegationTrace`). Used for
+   * `researcher` on early elicitation stages in deep discovery mode.
+   */
+  dependsOnInternalRepoSignals?: boolean;
 }
 
 export type StageComplexityTier = "lightweight" | "standard" | "deep";

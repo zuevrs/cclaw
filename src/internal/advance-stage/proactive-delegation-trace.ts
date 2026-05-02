@@ -1,6 +1,7 @@
 import { appendDelegation, readDelegationLedger } from "../../delegation.js";
 import { stageAutoSubagentDispatch, type StageAutoSubagentDispatch } from "../../content/stage-schema.js";
 import type { DiscoveryMode, FlowStage } from "../../types.js";
+import type { RepoSignals } from "../../flow-state.js";
 
 export interface ProactiveDelegationTraceResult {
   missingRules: StageAutoSubagentDispatch[];
@@ -8,6 +9,23 @@ export interface ProactiveDelegationTraceResult {
 
 function isEarlyElicitationStage(stage: FlowStage): boolean {
   return stage === "brainstorm" || stage === "scope" || stage === "design";
+}
+
+function isSparseRepoForResearcherSkip(repoSignals: RepoSignals | undefined): boolean {
+  if (!repoSignals) return false;
+  return repoSignals.fileCount < 5 && !repoSignals.hasReadme && !repoSignals.hasPackageManifest;
+}
+
+function skipRepoDependentProactiveRule(
+  rule: StageAutoSubagentDispatch,
+  stage: FlowStage,
+  discoveryMode: DiscoveryMode,
+  repoSignals: RepoSignals | undefined
+): boolean {
+  if (discoveryMode !== "deep") return false;
+  if (stage !== "brainstorm" && stage !== "scope") return false;
+  if (!rule.dependsOnInternalRepoSignals) return false;
+  return isSparseRepoForResearcherSkip(repoSignals);
 }
 
 /**
@@ -26,13 +44,16 @@ export async function ensureProactiveDelegationTrace(
     acceptWaiver: boolean;
     waiverReason?: string;
     discoveryMode: DiscoveryMode;
+    repoSignals?: RepoSignals;
   }
 ): Promise<ProactiveDelegationTraceResult> {
   if (isEarlyElicitationStage(stage) && (options.discoveryMode === "lean" || options.discoveryMode === "guided")) {
     return { missingRules: [] };
   }
 
-  const proactiveRules = stageAutoSubagentDispatch(stage).filter((rule) => rule.mode === "proactive");
+  const proactiveRules = stageAutoSubagentDispatch(stage)
+    .filter((rule) => rule.mode === "proactive")
+    .filter((rule) => !skipRepoDependentProactiveRule(rule, stage, options.discoveryMode, options.repoSignals));
   if (proactiveRules.length === 0) return { missingRules: [] };
 
   const ledger = await readDelegationLedger(projectRoot);

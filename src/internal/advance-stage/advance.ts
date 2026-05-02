@@ -596,6 +596,20 @@ export async function runAdvanceStage(
     extraStageFlags: args.skipQuestions ? ["--skip-questions"] : undefined
   });
   if (!validation.ok) {
+    const delegationFailureCount =
+      validation.delegation.missing.length +
+      validation.delegation.missingEvidence.length +
+      validation.delegation.missingDispatchProof.length +
+      validation.delegation.legacyInferredCompletions.length +
+      validation.delegation.corruptEventLines.length +
+      validation.delegation.staleWorkers.length;
+    const gatesFailureCount = validation.gates.issues.length;
+    const closureFailureCount = validation.completedStages.issues.length;
+    const failureCounts = {
+      delegation: delegationFailureCount,
+      gates: gatesFailureCount,
+      closure: closureFailureCount
+    };
     const ledgerForDiag = await readDelegationLedger(projectRoot).catch(() => ({ entries: [] as Array<{ agent: string; spanId?: string; status: string; runId?: string }> }));
     const eventsForDiag = await readDelegationEvents(projectRoot).catch(() => ({ events: [] as Array<{ agent: string; spanId?: string; status: string; runId?: string }>, corruptLines: [] as number[] }));
     const ledgerEntriesText = await fs.readFile(path.join(projectRoot, ".cclaw/state/delegation-events.jsonl"), "utf8").catch(() => "");
@@ -655,6 +669,7 @@ export async function runAdvanceStage(
         command: "advance-stage",
         stage: args.stage,
         kind: "validation-failed",
+        failureCounts,
         delegation: validation.delegation,
         gates: validation.gates,
         completedStages: validation.completedStages,
@@ -667,7 +682,7 @@ export async function runAdvanceStage(
       })}\n`);
     }
     io.stderr.write(
-      `cclaw internal advance-stage: validation failed for stage "${args.stage}".\n`
+      `cclaw internal advance-stage: validation failed for stage "${args.stage}" (delegation=${failureCounts.delegation}, gates=${failureCounts.gates}, closure=${failureCounts.closure}).\n`
     );
     if (validation.delegation.missing.length > 0) {
       io.stderr.write(`- missing delegations: ${validation.delegation.missing.join(", ")}\n`);
@@ -729,7 +744,8 @@ export async function runAdvanceStage(
   const proactiveTrace = await ensureProactiveDelegationTrace(projectRoot, args.stage, {
     acceptWaiver: args.acceptProactiveWaiver,
     waiverReason: args.acceptProactiveWaiverReason,
-    discoveryMode: flowState.discoveryMode
+    discoveryMode: flowState.discoveryMode,
+    repoSignals: flowState.repoSignals
   });
   if (proactiveTrace.missingRules.length > 0) {
     const missingSummary = proactiveTrace.missingRules

@@ -229,7 +229,7 @@ export function stageCompleteScript(): string {
   return internalHelperScript(
     "stage-complete",
     "advance-stage",
-    "Usage: node " + RUNTIME_ROOT + "/hooks/stage-complete.mjs <stage> [--passed=...] [--evidence-json=...] [--waive-delegation=...] [--waiver-reason=...] [--skip-questions] [--json]",
+    "Usage: node " + RUNTIME_ROOT + "/hooks/stage-complete.mjs <stage> [--passed=...] [--evidence-json=...] [--waive-delegation=...] [--waiver-reason=...] [--accept-proactive-waiver] [--accept-proactive-waiver-reason=\"<why safe>\"] [--skip-questions] [--json]",
     {
       positionalArgName: "stage",
       positionalArgRequired: true,
@@ -337,6 +337,7 @@ function usage() {
     "Usage:",
     "  node .cclaw/hooks/delegation-record.mjs --stage=<stage> --agent=<agent> --mode=<mandatory|proactive> --status=<scheduled|launched|acknowledged|completed|failed|waived|stale> --span-id=<id> [--dispatch-id=<id>] [--worker-run-id=<id>] [--dispatch-surface=<surface>] [--agent-definition-path=<path>] [--ack-ts=<iso>] [--launched-ts=<iso>] [--completed-ts=<iso>] [--evidence-ref=<ref>] [--waiver-reason=<text>] [--json]",
     "  node .cclaw/hooks/delegation-record.mjs --rerecord --span-id=<id> --dispatch-id=<id> --dispatch-surface=<surface> --agent-definition-path=<path> [--ack-ts=<iso>] [--completed-ts=<iso>] [--evidence-ref=<ref>] [--json]",
+    "  node .cclaw/hooks/delegation-record.mjs --repair --span-id=<id> --repair-reason=\"<why>\" [--json]",
     "",
     "Allowed --dispatch-surface values:",
     "  " + VALID_DISPATCH_SURFACES.join(", "),
@@ -537,9 +538,160 @@ async function runRerecord(args, json) {
   process.stdout.write(JSON.stringify({ ok: true, event, rerecord: true }, null, 2) + "\\n");
 }
 
+const LIFECYCLE_PHASES = ["scheduled", "launched", "acknowledged", "completed"];
+
+function mergeSpanTemplate(spanEvents) {
+  const base = {};
+  const keys = [
+    "stage",
+    "agent",
+    "mode",
+    "runId",
+    "dispatchId",
+    "dispatchSurface",
+    "agentDefinitionPath",
+    "workerRunId",
+    "fulfillmentMode",
+    "schemaVersion",
+    "parentSpanId",
+    "evidenceRefs",
+    "waiverReason"
+  ];
+  for (const e of spanEvents) {
+    if (!e || typeof e !== "object") continue;
+    for (const k of keys) {
+      if (base[k] === undefined && e[k] !== undefined) {
+        base[k] = e[k];
+      }
+    }
+  }
+  return base;
+}
+
+function repairFulfillmentMode(base) {
+  if (base.fulfillmentMode) return base.fulfillmentMode;
+  if (base.dispatchSurface === "role-switch") return "role-switch";
+  if (base.dispatchSurface === "cursor-task" || base.dispatchSurface === "generic-task") {
+    return "generic-dispatch";
+  }
+  return "isolated";
+}
+
+async function runRepair(args, json) {
+  const problems = [];
+  if (!args["span-id"]) problems.push("repair mode requires --span-id");
+  if (!args["repair-reason"] || String(args["repair-reason"]).trim().length === 0) {
+    problems.push("repair mode requires --repair-reason=<text>");
+  }
+  if (problems.length > 0) {
+    emitProblems(problems, json, 2);
+    return;
+  }
+  const spanId = args["span-id"];
+  const repairedReason = String(args["repair-reason"]).trim();
+  const root = await detectRoot();
+  const events = await readDelegationEvents(root);
+  const spanEvents = events.filter(
+    (e) => e && e.spanId === spanId && typeof e.event === "string" && LIFECYCLE_PHASES.includes(e.event)
+  );
+  if (spanEvents.length === 0) {
+    emitProblems(
+      ["repair refused: no lifecycle delegation-events.jsonl rows found for --span-id=" + spanId],
+      json,
+      2
+    );
+    return;
+  }
+  const present = new Set(spanEvents.map((e) => e.event));
+  const base = mergeSpanTemplate(spanEvents);
+  if (!base.stage || !base.agent || !base.mode) {
+    emitProblems(["repair refused: span events missing stage/agent/mode to clone"], json, 2);
+    return;
+  }
+  const runId =
+    typeof base.runId === "string" && base.runId.length > 0 ? base.runId : await readRunId(root);
+  const fulfillmentMode = repairFulfillmentMode(base);
+  const schemaVersion =
+    typeof base.schemaVersion === "number" && base.schemaVersion > 0
+      ? base.schemaVersion
+      : LEDGER_SCHEMA_VERSION;
+  const evidenceRefs = Array.isArray(base.evidenceRefs)
+    ? base.evidenceRefs.filter((r) => typeof r === "string" && r.trim().length > 0)
+    : [];
+  const now = new Date().toISOString();
+  const appended = [];
+
+  for (const status of LIFECYCLE_PHASES) {
+    if (present.has(status)) continue;
+    if (status === "completed" && base.dispatchSurface !== "role-switch") {
+      if (!base.dispatchId || !base.dispatchSurface || !base.agentDefinitionPath) {
+        emitProblems(
+          [
+            "repair refused: cannot synthesize completed row without dispatchId, dispatchSurface, and agentDefinitionPath on span " +
+              spanId
+          ],
+          json,
+          2
+        );
+        return;
+      }
+    }
+    if (status === "completed" && base.dispatchSurface === "role-switch" && evidenceRefs.length === 0) {
+      emitProblems(
+        ["repair refused: role-switch completed synthesis requires evidenceRefs on span " + spanId],
+        json,
+        2
+      );
+      return;
+    }
+    const launchedTs =
+      status === "launched" || status === "acknowledged" || status === "completed" ? now : undefined;
+    const ackTs = status === "acknowledged" || status === "completed" ? now : undefined;
+    const completedTs = status === "completed" ? now : undefined;
+    const endTs = status === "completed" ? now : undefined;
+    const row = {
+      stage: base.stage,
+      agent: base.agent,
+      mode: base.mode,
+      status,
+      spanId,
+      dispatchId: base.dispatchId,
+      workerRunId: base.workerRunId,
+      dispatchSurface: base.dispatchSurface,
+      agentDefinitionPath: base.agentDefinitionPath,
+      fulfillmentMode,
+      evidenceRefs,
+      runId,
+      startTs: now,
+      ts: now,
+      launchedTs,
+      ackTs,
+      completedTs,
+      endTs,
+      schemaVersion
+    };
+    const clean = Object.fromEntries(Object.entries(row).filter(([, value]) => value !== undefined));
+    const event = { ...clean, event: status, eventTs: now, repairedAt: now, repairedReason };
+    await persistEntry(root, runId, clean, event);
+    present.add(status);
+    appended.push(status);
+  }
+
+  if (json) {
+    process.stdout.write(
+      JSON.stringify({ ok: true, repair: true, spanId, appended, repairedAt: now, repairedReason }, null, 2) + "\\n"
+    );
+  }
+}
+
 async function main() {
   const args = parseArgs(process.argv.slice(2));
   const json = args.json !== undefined;
+
+  if (args.repair) {
+    await runRepair(args, json);
+    return;
+  }
 
   if (args.rerecord) {
     await runRerecord(args, json);

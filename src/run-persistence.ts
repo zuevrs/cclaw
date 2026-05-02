@@ -259,7 +259,33 @@ function coerceTrack(value: unknown): FlowTrack {
 }
 
 function coerceDiscoveryMode(value: unknown): DiscoveryMode {
-  return isDiscoveryMode(value) ? value : "guided";
+  if (typeof value === "string") {
+    const normalized = value.trim().toLowerCase();
+    if (isDiscoveryMode(normalized)) return normalized;
+  }
+  return "guided";
+}
+
+function coerceRepoSignals(value: unknown): FlowState["repoSignals"] {
+  if (!value || typeof value !== "object" || Array.isArray(value)) {
+    return undefined;
+  }
+  const typed = value as Record<string, unknown>;
+  const fileCountRaw = typed.fileCount;
+  const fileCount =
+    typeof fileCountRaw === "number" && Number.isFinite(fileCountRaw) && fileCountRaw >= 0
+      ? Math.min(Math.floor(fileCountRaw), 1_000_000)
+      : undefined;
+  const capturedAt = typeof typed.capturedAt === "string" ? typed.capturedAt.trim() : "";
+  if (fileCount === undefined || !capturedAt) {
+    return undefined;
+  }
+  return {
+    fileCount,
+    hasReadme: typed.hasReadme === true,
+    hasPackageManifest: typed.hasPackageManifest === true,
+    capturedAt
+  };
 }
 
 /**
@@ -505,6 +531,7 @@ function coerceFlowState(parsed: Record<string, unknown>): CoercedFlowStateResul
     : next.activeRunId;
 
   const taskClass = coerceTaskClass(parsed.taskClass);
+  const repoSignals = coerceRepoSignals(parsed.repoSignals);
   const state: FlowState = {
     schemaVersion: FLOW_STATE_SCHEMA_VERSION,
     activeRunId,
@@ -515,6 +542,7 @@ function coerceFlowState(parsed: Record<string, unknown>): CoercedFlowStateResul
     track,
     discoveryMode,
     ...(taskClass !== undefined ? { taskClass } : {}),
+    ...(repoSignals ? { repoSignals } : {}),
     skippedStages: sanitizeSkippedStages(parsed.skippedStages, track),
     staleStages: sanitizeStaleStages(parsed.staleStages),
     rewinds: sanitizeRewinds(parsed.rewinds),

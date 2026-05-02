@@ -337,10 +337,11 @@ export function parseStartFlowArgs(tokens: string[]): StartFlowArgs {
     }
     if (token === "--discovery-mode" || token.startsWith("--discovery-mode=")) {
       const raw = readValue("--discovery-mode").trim();
-      if (!isDiscoveryMode(raw)) {
+      const normalized = raw.toLowerCase();
+      if (!isDiscoveryMode(normalized)) {
         throw new Error(`--discovery-mode must be one of: lean, guided, deep.`);
       }
-      discoveryMode = raw;
+      discoveryMode = normalized;
       continue;
     }
     if (token === "--class" || token.startsWith("--class=")) {

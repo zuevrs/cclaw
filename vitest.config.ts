@@ -1,8 +1,11 @@
 import { defineConfig } from "vitest/config";
 
+const isWindows = process.platform === "win32";
+
 export default defineConfig({
   test: {
     environment: "node",
+    ...(isWindows ? { testTimeout: 30_000 } : {}),
     include: ["tests/**/*.test.ts"],
     coverage: {
       provider: "v8",
