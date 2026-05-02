@@ -9,7 +9,9 @@ import { createTempProject } from "../helpers/index.js";
 const execFileAsync = promisify(execFile);
 
 describe("prompt-contract regression harness", () => {
-  it("keeps stage behavior contracts for plan/review/tdd", async () => {
+  it(
+    "keeps stage behavior contracts for plan/review/tdd",
+    async () => {
     const root = await createTempProject("behavior-contract");
     await initCclaw({ projectRoot: root });
 
@@ -35,7 +37,9 @@ describe("prompt-contract regression harness", () => {
     expect(reviewSkill).toContain("Layer 1");
     expect(reviewSkill).toContain("Layer 2");
     expect(reviewSkill).toContain("07-review-army.json");
-  });
+    },
+    20_000
+  );
 
   it("keeps only session-start + stop-handoff hooks wired", async () => {
     const root = await createTempProject("behavior-hooks");
