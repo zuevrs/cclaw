@@ -11,31 +11,25 @@ function isEarlyElicitationStage(stage: FlowStage): boolean {
   return stage === "brainstorm" || stage === "scope" || stage === "design";
 }
 
-function isSparseRepoForResearcherSkip(repoSignals: RepoSignals | undefined): boolean {
-  if (!repoSignals) return false;
-  return repoSignals.fileCount < 5 && !repoSignals.hasReadme && !repoSignals.hasPackageManifest;
-}
-
-function skipRepoDependentProactiveRule(
-  rule: StageAutoSubagentDispatch,
+function proactiveRulesForDiscoveryMode(
   stage: FlowStage,
-  discoveryMode: DiscoveryMode,
-  repoSignals: RepoSignals | undefined
-): boolean {
-  if (discoveryMode !== "deep") return false;
-  if (stage !== "brainstorm" && stage !== "scope") return false;
-  if (!rule.dependsOnInternalRepoSignals) return false;
-  return isSparseRepoForResearcherSkip(repoSignals);
+  discoveryMode: DiscoveryMode
+): StageAutoSubagentDispatch[] {
+  const proactiveRules = stageAutoSubagentDispatch(stage).filter((rule) => rule.mode === "proactive");
+  if (isEarlyElicitationStage(stage) && (discoveryMode === "lean" || discoveryMode === "guided")) {
+    return proactiveRules.filter((rule) => rule.essentialAcrossModes === true);
+  }
+  return proactiveRules;
 }
 
 /**
  * Ensure every proactive dispatch rule for the stage has a ledger row for the
  * active run, or an explicit user-flag waiver.
  *
- * Lean/guided discovery on early elicitation stages intentionally does not
- * require a full proactive trace: specialists run only when triggers warrant
- * them. Deep discovery keeps the blanket trace so mandatory + proactive
- * coverage stays auditably complete before advance.
+ * Lean/guided discovery on brainstorm/scope/design keeps only proactive rules
+ * marked `essentialAcrossModes` (researcher today) so external research stays
+ * auditable without requiring every discretionary proactive lens. Deep
+ * discovery evaluates the full proactive matrix.
  */
 export async function ensureProactiveDelegationTrace(
   projectRoot: string,
@@ -47,13 +41,8 @@ export async function ensureProactiveDelegationTrace(
     repoSignals?: RepoSignals;
   }
 ): Promise<ProactiveDelegationTraceResult> {
-  if (isEarlyElicitationStage(stage) && (options.discoveryMode === "lean" || options.discoveryMode === "guided")) {
-    return { missingRules: [] };
-  }
-
-  const proactiveRules = stageAutoSubagentDispatch(stage)
-    .filter((rule) => rule.mode === "proactive")
-    .filter((rule) => !skipRepoDependentProactiveRule(rule, stage, options.discoveryMode, options.repoSignals));
+  void options.repoSignals;
+  const proactiveRules = proactiveRulesForDiscoveryMode(stage, options.discoveryMode);
   if (proactiveRules.length === 0) return { missingRules: [] };
 
   const ledger = await readDelegationLedger(projectRoot);

@@ -57,6 +57,15 @@ export type {
 // and drift. Stage skills cite the meta-skill by path instead.
 // ---------------------------------------------------------------------------
 
+// ---------------------------------------------------------------------------
+// Optional artifact appendix (documentation-only — not a tiered gate)
+//
+// `## Amendments` — after a stage is closed, substantive edits SHOULD append dated
+// bullets (ISO timestamp + reason) here instead of silently rewriting history. The
+// linter surfaces advisory `stage_artifact_post_closure_mutation` findings when mtimes
+// move without this trail (`completedStageMeta` must exist).
+// ---------------------------------------------------------------------------
+
 export const SKILL_ENVELOPE_KINDS = [
   "stage-output",
   "gate-result",
@@ -638,7 +647,7 @@ const STAGE_AUTO_SUBAGENT_DISPATCH: Record<FlowStage, StageAutoSubagentDispatch[
       when: "When repository, market, docs, or prior-art context changes the approach set. Runs only after the adaptive elicitation Q&A loop converges.",
       purpose: "Provide search-before-read summaries and context-readiness evidence before large reads or decisions.",
       requiresUserGate: false,
-      dependsOnInternalRepoSignals: true
+      essentialAcrossModes: true
     }
   ],
   scope: [
@@ -676,7 +685,7 @@ const STAGE_AUTO_SUBAGENT_DISPATCH: Record<FlowStage, StageAutoSubagentDispatch[
       when: "When churn, prior attempts, reference patterns, or external constraints may change scope boundaries. Runs only after the adaptive elicitation Q&A loop converges.",
       purpose: "Summarize search/context findings before the scope contract locks accepted/rejected/deferred ideas.",
       requiresUserGate: false,
-      dependsOnInternalRepoSignals: true
+      essentialAcrossModes: true
     },
     {
       agent: "product-discovery",
@@ -739,7 +748,8 @@ const STAGE_AUTO_SUBAGENT_DISPATCH: Record<FlowStage, StageAutoSubagentDispatch[
       runPhase: "post-elicitation",
       when: "When framework/library docs, repo graph context, or reference contracts may change the design. Runs only after the adaptive elicitation Q&A loop converges.",
       purpose: "Run search-before-read context synthesis before architecture locks.",
-      requiresUserGate: false
+      requiresUserGate: false,
+      essentialAcrossModes: true
     },
     {
       agent: "security-reviewer",

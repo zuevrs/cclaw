@@ -1,11 +1,13 @@
 import fs from "node:fs/promises";
 import path from "node:path";
 import { describe, expect, it } from "vitest";
-import { closeoutChainInline, CLOSEOUT_SUBSTATE_KEY } from "../../src/content/closeout-guidance.js";
+import { closeoutChainInline, closeoutSubstateProtocolBullets, CLOSEOUT_SUBSTATE_KEY } from "../../src/content/closeout-guidance.js";
 import { REFERENCE_PATTERNS } from "../../src/content/reference-patterns.js";
 import { stageSkillMarkdown } from "../../src/content/skills.js";
+import { adaptiveElicitationSkillMarkdown } from "../../src/content/skills-elicitation.js";
 import { startCommandSkillMarkdown } from "../../src/content/start-command.js";
 import { statusSubcommandMarkdown } from "../../src/content/status-command.js";
+import { CURSOR_WORKFLOW_RULE_MDC } from "../../src/content/templates.js";
 import { FLOW_STAGES, TRACK_STAGES } from "../../src/types.js";
 
 const repoRoot = process.cwd();
@@ -207,6 +209,16 @@ ${await readRepoFile("docs/scheme-of-work.md")}`;
     for (const pattern of REFERENCE_PATTERNS) {
       expect(tddSkill, `prompt should not inline intent for ${pattern.id}`).not.toContain(pattern.intent);
     }
+  });
+
+  it("disambiguates elicitation skip vs closeout no-changes labels", () => {
+    const closeoutBullets = closeoutSubstateProtocolBullets();
+    expect(closeoutBullets.toLowerCase()).toContain("no changes");
+    expect(closeoutBullets).not.toContain("accept/edit/skip");
+    expect(CURSOR_WORKFLOW_RULE_MDC).toContain("Protocol label hygiene");
+    const elicit = adaptiveElicitationSkillMarkdown();
+    expect(elicit).toContain("Label disambiguation");
+    expect(elicit.toLowerCase()).toContain("no changes");
   });
 
   it("requires stage-complete exit 0 before completion claims in templates and every stage skill", async () => {

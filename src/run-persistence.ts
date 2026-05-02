@@ -358,6 +358,23 @@ function sanitizeStaleStages(
   return out;
 }
 
+function sanitizeCompletedStageMeta(value: unknown): FlowState["completedStageMeta"] {
+  if (!value || typeof value !== "object" || Array.isArray(value)) {
+    return undefined;
+  }
+  const out: Partial<Record<FlowStage, { completedAt: string }>> = {};
+  for (const [key, raw] of Object.entries(value as Record<string, unknown>)) {
+    if (!isFlowStage(key)) continue;
+    if (!raw || typeof raw !== "object" || Array.isArray(raw)) continue;
+    const record = raw as Record<string, unknown>;
+    const ca = typeof record.completedAt === "string" ? record.completedAt.trim() : "";
+    if (ca.length > 0) {
+      out[key] = { completedAt: ca };
+    }
+  }
+  return Object.keys(out).length > 0 ? out : undefined;
+}
+
 function sanitizeRewinds(value: unknown): FlowState["rewinds"] {
   if (!Array.isArray(value)) {
     return [];
@@ -532,6 +549,7 @@ function coerceFlowState(parsed: Record<string, unknown>): CoercedFlowStateResul
 
   const taskClass = coerceTaskClass(parsed.taskClass);
   const repoSignals = coerceRepoSignals(parsed.repoSignals);
+  const completedStageMeta = sanitizeCompletedStageMeta(parsed.completedStageMeta);
   const state: FlowState = {
     schemaVersion: FLOW_STATE_SCHEMA_VERSION,
     activeRunId,
@@ -543,6 +561,7 @@ function coerceFlowState(parsed: Record<string, unknown>): CoercedFlowStateResul
     discoveryMode,
     ...(taskClass !== undefined ? { taskClass } : {}),
     ...(repoSignals ? { repoSignals } : {}),
+    ...(completedStageMeta ? { completedStageMeta } : {}),
     skippedStages: sanitizeSkippedStages(parsed.skippedStages, track),
     staleStages: sanitizeStaleStages(parsed.staleStages),
     rewinds: sanitizeRewinds(parsed.rewinds),

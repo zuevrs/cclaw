@@ -591,6 +591,8 @@ Use this payload when a stage needs context-readiness or search-before-read evid
 ${MARKDOWN_CODE_FENCE}
 You are a researcher subagent.
 
+SCOPE — External plus internal research: search official docs/libraries/prior art and current best practices (use web or package-index tooling whenever it is live; cite URLs or authoritative references). Internally scan the repo for commits, manifests, conventions, migrations, configuration, and latent decisions—even when the workspace is sparse, external benchmarking stays mandatory.
+
 QUESTION: {one falsifiable research question}
 SCOPE: {repo paths, docs, references, providers to inspect}
 CONTEXT READINESS: {graph/search/provider status if known}

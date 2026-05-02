@@ -11,7 +11,7 @@ import {
   verifyCompletedStagesGateClosure,
   verifyCurrentStageGateEvidence
 } from "../../gate-evidence.js";
-import { extractMarkdownSectionBody, parseLearningsSection } from "../../artifact-linter.js";
+import { extractMarkdownSectionBody, learningsParseFailureHumanSummary, parseLearningsSection } from "../../artifact-linter.js";
 import {
   getAvailableTransitions,
   getTransitionGuards,
@@ -376,7 +376,7 @@ export async function harvestStageLearnings(
       parsedEntries: 0,
       appendedEntries: 0,
       skippedDuplicates: 0,
-      details: parsed.details
+      details: learningsParseFailureHumanSummary(resolvedArtifact.relPath, parsed.errors)
     };
   }
 
@@ -782,9 +782,7 @@ export async function runAdvanceStage(
     flowState.track
   );
   if (!learningsHarvest.ok) {
-    io.stderr.write(
-      `cclaw internal advance-stage: learnings harvest failed for "${schema.artifactFile}". ${learningsHarvest.details}\n`
-    );
+    io.stderr.write(`cclaw internal advance-stage: ${learningsHarvest.details}\n`);
     return 1;
   }
 
@@ -797,14 +795,22 @@ export async function runAdvanceStage(
     new Set(selectedTransitionGuards)
   );
   const completedStages = blockedReviewRoute
-    ? flowState.completedStages.filter((stage) => stage !== args.stage)
+    ? flowState.completedStages.filter((finished) => finished !== args.stage)
     : flowState.completedStages.includes(args.stage)
       ? [...flowState.completedStages]
       : [...flowState.completedStages, args.stage];
+  let completedStageMeta = flowState.completedStageMeta ?? {};
+  if (!blockedReviewRoute && !flowState.completedStages.includes(args.stage)) {
+    completedStageMeta = {
+      ...completedStageMeta,
+      [args.stage]: { completedAt: new Date().toISOString() }
+    };
+  }
   const interactionHints = nextInteractionHints(flowState, args, successor);
   const finalState: FlowState = {
     ...candidateState,
     completedStages,
+    completedStageMeta,
     currentStage: successor ?? args.stage,
     interactionHints
   };

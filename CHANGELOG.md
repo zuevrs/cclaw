@@ -1,5 +1,24 @@
 # Changelog
 
+## 6.4.0 — Flow UX round 2 (researcher everywhere, post-closure drift, ergonomics)
+
+### Behavior
+
+- **Proactive researcher gate** — brainstorm/scope/design now require a researcher proactive delegation record (or waiver) in **all** `discoveryMode`s (`lean`, `guided`, `deep`). Discretionary proactive lenses still drop off in `lean`/`guided` except rows marked `essentialAcrossModes` (researcher only today). Sparse or empty repos no longer skip this rule.
+- **`start-flow` JSON** — successful stdout now echoes `repoSignals` alongside track/discovery metadata.
+- **`early-loop` iteration cap** — derived `iteration` is clamped to `maxIterations`; `early-loop-status` applies a final write-time clamp with stderr notice if a corrupted status object slips through.
+
+### Contracts
+
+- **Stage schema typing** — `dependsOnInternalRepoSignals` removed; proactive rows support `essentialAcrossModes` instead. Researcher prompts document external plus internal search scope explicitly.
+- **Label vocabulary** — closeout/substate protocol copy uses **no changes** wording for passive retro/compound options; adaptive elicitation documents that **skip** remains a stop-signal phrase in Q&A only.
+- **Optional `## Amendments`** — documented convention for dated post-closure edits; linter advisory `stage_artifact_post_closure_mutation` compares artifact `mtime` to `completedStageMeta.completedAt`.
+
+### Reliability
+
+- **Learnings parse errors** — `parseLearningsSection` exposes `errors[]`; stage-complete.stderr and linter Learnings findings present the same multiline bullet list (`Errors:` + indented rows).
+- **Flow persistence** — `completedStageMeta` is optional legacy-safe metadata recorded on stage advance; coercion round-trips through `run-persistence.ts`.
+
 ## 6.3.0 — Flow UX (start mode, validation summary, repo-aware proactive, repair-span)
 
 ### UX

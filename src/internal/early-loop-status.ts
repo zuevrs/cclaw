@@ -2,6 +2,7 @@ import path from "node:path";
 import type { Writable } from "node:stream";
 import { RUNTIME_ROOT } from "../constants.js";
 import {
+  clampEarlyLoopStatusForWrite,
   computeEarlyLoopStatus,
   formatEarlyLoopStatusLine,
   isEarlyLoopStage,
@@ -100,11 +101,19 @@ export async function runEarlyLoopStatusCommand(
   }
 
   const runId = (args.runId ?? flow?.activeRunId ?? "active").trim() || "active";
-  const status = await computeEarlyLoopStatus(
+  let status = await computeEarlyLoopStatus(
     stage,
     runId,
     path.join(stateDir(projectRoot), "early-loop-log.jsonl")
   );
+
+  const persisted = clampEarlyLoopStatusForWrite(status);
+  if (persisted.clampedFrom !== null) {
+    io.stderr.write(
+      `cclaw internal early-loop-status: early-loop iteration ${persisted.clampedFrom} exceeds maxIterations ${status.maxIterations}; clamping before write.\n`
+    );
+    status = persisted.status;
+  }
 
   if (args.write) {
     const target = path.join(stateDir(projectRoot), "early-loop.json");
