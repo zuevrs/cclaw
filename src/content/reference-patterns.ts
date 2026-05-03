@@ -53,7 +53,7 @@ export const REFERENCE_PATTERNS: ReferencePattern[] = [
           "Discover tests and affected contracts before opening a RED vertical slice.",
           "Map the slice to the active source item before editing production code."
         ],
-        artifactSections: ["Test Discovery", "System-Wide Impact Check", "Acceptance Mapping"]
+        artifactSections: ["Test Discovery", "System-Wide Impact Check", "Acceptance & Failure Map"]
       },
       {
         stage: "review",
@@ -161,7 +161,7 @@ export const REFERENCE_PATTERNS: ReferencePattern[] = [
           "Open one packet as one vertical slice; do not mix unrelated packet evidence.",
           "Close packet only when RED, GREEN, REFACTOR, and verification evidence align."
         ],
-        artifactSections: ["Acceptance Mapping", "RED Evidence", "GREEN Evidence", "REFACTOR Notes"]
+        artifactSections: ["Acceptance & Failure Map", "RED Evidence", "GREEN Evidence", "REFACTOR Notes"]
       }
     ]
   },

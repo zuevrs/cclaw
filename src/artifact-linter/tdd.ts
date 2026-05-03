@@ -2,6 +2,11 @@ import fs from "node:fs/promises";
 import path from "node:path";
 import { readDelegationLedger } from "../delegation.js";
 import {
+  foldTddSliceLedger,
+  readTddSliceLedger,
+  type TddSliceLedgerEntry
+} from "../tdd-slices.js";
+import {
   type StageLintContext,
   evaluateInvestigationTrace,
   sectionBodyByName
@@ -21,6 +26,9 @@ export async function lintTddStage(ctx: StageLintContext): Promise<void> {
     staleDiagramAuditEnabled,
     isTrivialOverride
   } = ctx;
+
+  const sliceLedger = await readTddSliceLedger(projectRoot);
+  const sidecarActive = sliceLedger.entries.length > 0;
 
     evaluateInvestigationTrace(ctx, "Watched-RED Proof");
 
@@ -48,7 +56,20 @@ export async function lintTddStage(ctx: StageLintContext): Promise<void> {
     }
 
     const watchedRedBody = sectionBodyByName(sections, "Watched-RED Proof");
-    if (watchedRedBody === null) {
+    if (sidecarActive) {
+      // v6.10.0 (T2): when 06-tdd-slices.jsonl carries rows, the sidecar is
+      // the source of truth for RED observation evidence; the markdown
+      // table is auto-derived (or left as a template stub) and must not
+      // block stage advance.
+      const sidecarResult = evaluateSidecarWatchedRed(sliceLedger.entries);
+      findings.push({
+        section: "Watched-RED Proof Shape",
+        required: true,
+        rule: "Watched-RED Proof: when 06-tdd-slices.jsonl is present, every slice row with status >= red must include redObservedAt, testFile, testCommand, and claimedPaths.",
+        found: sidecarResult.ok,
+        details: sidecarResult.details
+      });
+    } else if (watchedRedBody === null) {
       findings.push({
         section: "Watched-RED Proof Shape",
         required: true,
@@ -84,24 +105,56 @@ export async function lintTddStage(ctx: StageLintContext): Promise<void> {
       });
     }
 
-    const sliceCycleBody = sectionBodyByName(sections, "Vertical Slice Cycle");
-    if (sliceCycleBody === null) {
+    if (sidecarActive) {
+      const cycleResult = evaluateSidecarSliceCycle(sliceLedger.entries);
       findings.push({
         section: "Vertical Slice Cycle Coverage",
         required: true,
-        rule: "Vertical Slice Cycle must include RED, GREEN, and REFACTOR per slice (refactor may be deferred with rationale).",
-        found: false,
-        details: "No ## heading matching required section \"Vertical Slice Cycle\"."
-      });
-    } else {
-      const cycleResult = parseVerticalSliceCycle(sliceCycleBody);
-      findings.push({
-        section: "Vertical Slice Cycle Coverage",
-        required: true,
-        rule: "Vertical Slice Cycle must show RED -> GREEN -> REFACTOR monotonic progression per slice (refactor may be deferred with one-line rationale, e.g. `deferred because <reason>`).",
+        rule: "Vertical Slice Cycle: 06-tdd-slices.jsonl rows must show RED -> GREEN monotonic progression per slice; REFACTOR is satisfied by `refactor-done` (with refactorAt > greenAt) or `refactor-deferred` (with non-empty refactorRationale).",
         found: cycleResult.ok,
         details: cycleResult.details
       });
+    } else {
+      const sliceCycleBody = sectionBodyByName(sections, "Vertical Slice Cycle");
+      if (sliceCycleBody === null) {
+        findings.push({
+          section: "Vertical Slice Cycle Coverage",
+          required: true,
+          rule: "Vertical Slice Cycle must include RED, GREEN, and REFACTOR per slice (refactor may be deferred with rationale).",
+          found: false,
+          details: "No ## heading matching required section \"Vertical Slice Cycle\"."
+        });
+      } else {
+        const cycleResult = parseVerticalSliceCycle(sliceCycleBody);
+        findings.push({
+          section: "Vertical Slice Cycle Coverage",
+          required: true,
+          rule: "Vertical Slice Cycle must show RED -> GREEN -> REFACTOR monotonic progression per slice (refactor may be deferred with one-line rationale, e.g. `deferred because <reason>`).",
+          found: cycleResult.ok,
+          details: cycleResult.details
+        });
+      }
+    }
+
+    if (!sidecarActive) {
+      // Advisory nudge: stage finished without ever migrating to the sidecar.
+      // Detect "filled markdown" by checking whether the Watched-RED Proof
+      // table or Vertical Slice Cycle has any populated rows.
+      const sliceCycleBodyAdvisory = sectionBodyByName(sections, "Vertical Slice Cycle");
+      const watchedRedBodyAdvisory = sectionBodyByName(sections, "Watched-RED Proof");
+      const markdownIsAuthored =
+        hasPopulatedTableRows(watchedRedBodyAdvisory) ||
+        hasPopulatedTableRows(sliceCycleBodyAdvisory);
+      if (markdownIsAuthored) {
+        findings.push({
+          section: "tdd_slice_ledger_missing",
+          required: false,
+          rule: "When markdown TDD tables are filled, prefer recording slice events via `cclaw-cli internal tdd-slice-record` so 06-tdd-slices.jsonl becomes the source of truth.",
+          found: false,
+          details:
+            "06-tdd-slices.jsonl is empty even though the markdown tables are populated. Migrate this stage's slices to the sidecar with `cclaw-cli internal tdd-slice-record --slice <id> --status <red|green|refactor-done|refactor-deferred> ...`."
+        });
+      }
     }
 
     const assertionBody = sectionBodyByName(sections, "Assertion Correctness Notes");
@@ -254,6 +307,141 @@ export async function lintTddStage(ctx: StageLintContext): Promise<void> {
 interface ParsedSliceCycleResult {
   ok: boolean;
   details: string;
+}
+
+/**
+ * v6.10.0 (T2) — sidecar-aware Watched-RED check. Validates that every
+ * slice currently recorded in `06-tdd-slices.jsonl` (folded latest-row
+ * per `sliceId`) has the structural evidence the markdown table would
+ * have required: RED observation timestamp, test file, test command,
+ * and at least one claimed path.
+ */
+export function evaluateSidecarWatchedRed(
+  rawEntries: TddSliceLedgerEntry[]
+): ParsedSliceCycleResult {
+  if (rawEntries.length === 0) {
+    return {
+      ok: false,
+      details: "Sidecar 06-tdd-slices.jsonl is empty; record at least one slice via `cclaw-cli internal tdd-slice-record`."
+    };
+  }
+  const folded = foldTddSliceLedger(rawEntries);
+  const errors: string[] = [];
+  for (const entry of folded) {
+    const issues: string[] = [];
+    if (!entry.redObservedAt || entry.redObservedAt.trim().length === 0) {
+      issues.push("missing redObservedAt");
+    } else if (!/^\d{4}-\d{2}-\d{2}T\d{2}:\d{2}/u.test(entry.redObservedAt)) {
+      issues.push("redObservedAt is not an ISO timestamp");
+    }
+    if (!entry.testFile || entry.testFile.length === 0) {
+      issues.push("missing testFile");
+    }
+    if (!entry.testCommand || entry.testCommand.length === 0) {
+      issues.push("missing testCommand");
+    }
+    if (!Array.isArray(entry.claimedPaths) || entry.claimedPaths.length === 0) {
+      issues.push("missing claimedPaths");
+    }
+    if (issues.length > 0) {
+      errors.push(`${entry.sliceId}: ${issues.join(", ")}`);
+    }
+  }
+  if (errors.length > 0) {
+    return {
+      ok: false,
+      details: `Sidecar slice rows missing RED evidence fields: ${errors.join(" | ")}.`
+    };
+  }
+  return {
+    ok: true,
+    details: `Sidecar 06-tdd-slices.jsonl has ${folded.length} slice row(s) with required RED evidence fields.`
+  };
+}
+
+/**
+ * v6.10.0 (T2) — sidecar-aware Vertical Slice Cycle check. Each slice
+ * must have a row whose effective status (latest by sliceId) implies a
+ * monotonic progression. Once a slice carries `greenAt`, the linter
+ * requires `greenAt >= redObservedAt`. `refactor-deferred` requires a
+ * non-empty `refactorRationale`. `refactor-done` requires a `refactorAt`
+ * that is `>= greenAt`. Slices stuck at `red` are tolerated only when
+ * the run is still in TDD; the linter surfaces them as advisory through
+ * the watched-RED check above.
+ */
+export function evaluateSidecarSliceCycle(
+  rawEntries: TddSliceLedgerEntry[]
+): ParsedSliceCycleResult {
+  if (rawEntries.length === 0) {
+    return {
+      ok: false,
+      details: "Sidecar 06-tdd-slices.jsonl is empty; the vertical slice cycle has no rows."
+    };
+  }
+  const folded = foldTddSliceLedger(rawEntries);
+  const errors: string[] = [];
+  for (const entry of folded) {
+    if (entry.greenAt) {
+      const redIso = parseTimestampCell(entry.redObservedAt ?? "");
+      const greenIso = parseTimestampCell(entry.greenAt);
+      if (greenIso === null) {
+        errors.push(`${entry.sliceId}: greenAt is not an ISO timestamp.`);
+        continue;
+      }
+      if (redIso !== null && greenIso < redIso) {
+        errors.push(
+          `${entry.sliceId}: greenAt (${entry.greenAt}) precedes redObservedAt (${entry.redObservedAt}) — order must be monotonic.`
+        );
+        continue;
+      }
+    }
+    if (entry.status === "refactor-deferred") {
+      if (!entry.refactorRationale || entry.refactorRationale.trim().length === 0) {
+        errors.push(
+          `${entry.sliceId}: status=refactor-deferred requires a non-empty refactorRationale.`
+        );
+        continue;
+      }
+    }
+    if (entry.status === "refactor-done") {
+      const greenIso = parseTimestampCell(entry.greenAt ?? "");
+      const refactorIso = parseTimestampCell(entry.refactorAt ?? "");
+      if (refactorIso === null) {
+        errors.push(`${entry.sliceId}: status=refactor-done requires a refactorAt ISO timestamp.`);
+        continue;
+      }
+      if (greenIso !== null && refactorIso < greenIso) {
+        errors.push(
+          `${entry.sliceId}: refactorAt (${entry.refactorAt}) precedes greenAt (${entry.greenAt}) — order must be monotonic.`
+        );
+        continue;
+      }
+    }
+  }
+  if (errors.length > 0) {
+    return { ok: false, details: errors.join(" ") };
+  }
+  return {
+    ok: true,
+    details: `${folded.length} sidecar slice row(s) show monotonic RED -> GREEN -> REFACTOR (deferred-with-rationale accepted).`
+  };
+}
+
+function hasPopulatedTableRows(body: string | null): boolean {
+  if (body === null) return false;
+  const tableLines = body.split("\n").filter((line) => /^\|/u.test(line));
+  if (tableLines.length < 3) return false;
+  const dataRows = tableLines.slice(2);
+  for (const row of dataRows) {
+    const cells = row
+      .split("|")
+      .slice(1, -1)
+      .map((cell) => cell.trim());
+    // Skip cells that are entirely placeholder slice IDs (S-1 default).
+    const meaningful = cells.filter((cell, idx) => idx !== 0 && cell.length > 0);
+    if (meaningful.length > 0) return true;
+  }
+  return false;
 }
 
 export function parseVerticalSliceCycle(body: string): ParsedSliceCycleResult {

@@ -14,6 +14,11 @@ import { resolveArtifactPath as resolveStageArtifactPath } from "../artifact-pat
 import { exists } from "../fs-utils.js";
 import { FORBIDDEN_PLACEHOLDER_TOKENS, CONFIDENCE_FINDING_REGEX_SOURCE } from "../content/skills.js";
 import fs from "node:fs/promises";
+import path from "node:path";
+import {
+  PLAN_SPLIT_SMALL_PLAN_THRESHOLD,
+  parseImplementationUnits
+} from "../internal/plan-split-waves.js";
 
 export async function lintPlanStage(ctx: StageLintContext): Promise<void> {
   const {
@@ -158,6 +163,41 @@ export async function lintPlanStage(ctx: StageLintContext): Promise<void> {
         ? "No forbidden placeholder tokens detected outside the rule section."
         : `Detected forbidden token(s) elsewhere in plan: ${filteredPlanHits.join(", ")}.`
     });
+
+    // v6.10.0 (P4) — advisory `plan_too_large_no_waves`. Fires when a
+    // standard-track plan has more than the wave-split threshold of
+    // implementation units AND the wave-plans/ directory is empty.
+    // Linter advisories never block stage-complete (`required: false`),
+    // so the agent gets a nudge to run `cclaw-cli internal plan-split-waves`
+    // without the plan stage failing.
+    try {
+      const planUnits = parseImplementationUnits(raw);
+      if (planUnits.length > PLAN_SPLIT_SMALL_PLAN_THRESHOLD) {
+        const artifactsDir = path.dirname(absFile);
+        const wavePlansDir = path.join(artifactsDir, "wave-plans");
+        let wavePlansHasContent = false;
+        try {
+          const dirEntries = await fs.readdir(wavePlansDir);
+          wavePlansHasContent = dirEntries.some((name) => /^wave-\d+\.md$/u.test(name));
+        } catch {
+          wavePlansHasContent = false;
+        }
+        if (!wavePlansHasContent) {
+          findings.push({
+            section: "plan_too_large_no_waves",
+            required: false,
+            rule: "Plans with > 50 implementation units benefit from being split into manageable waves via `cclaw-cli internal plan-split-waves`.",
+            found: false,
+            details:
+              `Plan has ${planUnits.length} implementation unit(s) (threshold ${PLAN_SPLIT_SMALL_PLAN_THRESHOLD}) and no wave-plans/ directory yet. ` +
+              "Run `cclaw-cli internal plan-split-waves` to break this plan into manageable waves; the linter is advisory only and will not block stage-complete."
+          });
+        }
+      }
+    } catch {
+      // Parser errors should never block the linter — the advisory is
+      // purely a nudge.
+    }
 
     const handoffBody = sectionBodyByName(sections, "Execution Handoff");
     if (handoffBody !== null) {
