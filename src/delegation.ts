@@ -797,7 +797,20 @@ export async function appendDelegation(projectRoot: string, entry: DelegationEnt
   await withDirectoryLock(delegationLockPath(projectRoot), async () => {
     const filePath = delegationLogPath(projectRoot);
     const prior = await readDelegationLedger(projectRoot);
-    const startTs = entry.startTs ?? entry.ts ?? new Date().toISOString();
+    // Span start anchor: prefer explicit `startTs`; otherwise fall back to
+    // the earliest provided lifecycle marker so the monotonic validator
+    // never sees a synthetic `now` overshoot a real event timestamp.
+    const lifecycleCandidates = [
+      entry.startTs,
+      entry.launchedTs,
+      entry.ackTs,
+      entry.completedTs,
+      entry.ts
+    ].filter((value): value is string => typeof value === "string" && value.length > 0);
+    const earliestLifecycle = lifecycleCandidates.length > 0
+      ? lifecycleCandidates.reduce((min, candidate) => (candidate < min ? candidate : min))
+      : undefined;
+    const startTs = entry.startTs ?? earliestLifecycle ?? new Date().toISOString();
     if (entry.status === "waived" && !hasValidWaiverReason(entry.waiverReason)) {
       throw new Error("waived delegation entries require a non-empty waiverReason");
     }

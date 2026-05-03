@@ -1008,7 +1008,19 @@ async function main() {
     .map((e) => e.startTs)
     .filter((ts) => typeof ts === "string" && ts.length > 0)
     .sort()[0];
-  const row = buildRow(args, status, runId, now, { spanStartTs: inheritedStartTs });
+  // When no prior row exists, fall back to the earliest user-supplied
+  // event timestamp so the monotonic validator never sees the row write
+  // time overshoot the real event timestamps.
+  const lifecycleCandidates = [
+    inheritedStartTs,
+    args["launched-ts"],
+    args["ack-ts"],
+    args["completed-ts"],
+    now
+  ].filter((value) => typeof value === "string" && value.length > 0);
+  const spanStartTs = inheritedStartTs ||
+    lifecycleCandidates.reduce((min, candidate) => (candidate < min ? candidate : min), now);
+  const row = buildRow(args, status, runId, now, { spanStartTs });
   const clean = Object.fromEntries(Object.entries(row).filter(([, value]) => value !== undefined));
   const event = { ...clean, event: status, eventTs: now };
 
