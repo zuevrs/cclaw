@@ -193,4 +193,20 @@ high-level direction.
     expect(matched[0]!.rule).toMatch(/investigation_path_first_missing/u);
     expect(matched[0]!.details).toMatch(/pass paths and refs/iu);
   });
+
+  it("strips linter-meta blocks before evaluating, avoiding template-echo false positives", () => {
+    const ctx = buildContext(`# Design
+
+## Codebase Investigation
+<!-- linter-meta -->
+This is a linter-meta scaffold paragraph that mentions src/example/path.ts as part of the rule template, not actual evidence the author authored.
+<!-- /linter-meta -->
+We had a long discussion about the notification flow but no specific paths or references were cited; needs follow-up.
+`);
+    evaluateInvestigationTrace(ctx, "Codebase Investigation");
+    const matched = findingsByRule(ctx.findings, RULE_ID);
+    expect(matched).toHaveLength(1);
+    expect(matched[0]!.found).toBe(false);
+    expect(matched[0]!.details).toMatch(/pass paths and refs/iu);
+  });
 });

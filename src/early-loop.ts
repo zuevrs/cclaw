@@ -219,9 +219,24 @@ export function parseEarlyLoopLog(
       }
     }
 
+    // v6.9.0 schema repair: legacy logs may carry rows with no runId
+    // (the prior parser silently coerced them to "active", which then
+    // collided across runs). Surface a structured warning on read but
+    // skip the row so derived status doesn't fold cross-run state.
+    // Writers must always provide a runId (enforced upstream in the
+    // CLI/hook surface).
+    if (runId.length === 0) {
+      issues?.push({
+        lineNumber,
+        reason: "missing-runId: legacy entry skipped to avoid cross-run pollution",
+        rawLine: raw
+      });
+      continue;
+    }
+
     entries.push({
       ts: normalizeText(parsed.ts, ""),
-      runId: runId.length > 0 ? runId : "active",
+      runId,
       stage: stage.length > 0 ? stage : "brainstorm",
       iteration,
       concerns,

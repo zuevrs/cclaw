@@ -447,9 +447,11 @@ export function harnessesByTier(): HarnessId[] {
 }
 
 function ironLawsAgentsMdBlock(): string {
+  // v6.9.0: keep this set in sync with `ironLawsSkillMarkdown()` —
+  // post-Phase A, only `stop-clean-or-handoff` is still hook-enforced
+  // (Stop hook). All other iron laws live in stage HARD-GATE blocks.
   const enforcedLawIds = new Set([
-    "stop-clean-or-handoff",
-    "review-coverage-complete-before-ship"
+    "stop-clean-or-handoff"
   ]);
   const enforcedRows = IRON_LAWS
     .filter((law) => enforcedLawIds.has(law.id))

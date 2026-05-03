@@ -2211,7 +2211,8 @@ export function evaluateInvestigationTrace(
   sectionName: string
 ): void {
   const body = sectionBodyByName(ctx.sections, sectionName);
-  const result = checkInvestigationTrace(body);
+  const authoredBody = body === null ? null : extractAuthoredBody(body);
+  const result = checkInvestigationTrace(authoredBody);
   if (result === null) return;
   ctx.findings.push({
     section: "investigation_path_first_missing",

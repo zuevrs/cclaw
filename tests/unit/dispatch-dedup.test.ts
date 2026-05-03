@@ -159,6 +159,137 @@ describe("dispatch dedup on (stage, agent)", () => {
     );
   });
 
+  it("findActiveSpanForPair ignores entries from a different runId (strict run-scope)", () => {
+    const ledger: DelegationLedger = {
+      runId: "run-2",
+      entries: [
+        {
+          stage: "tdd",
+          agent: "slice-implementer",
+          mode: "mandatory",
+          status: "scheduled",
+          spanId: "span-S5-run1",
+          runId: "run-1",
+          ts: "2026-04-10T10:00:00.000Z",
+          startTs: "2026-04-10T10:00:00.000Z"
+        },
+        {
+          stage: "tdd",
+          agent: "slice-implementer",
+          mode: "mandatory",
+          status: "completed",
+          spanId: "span-S5-run1",
+          runId: "run-1",
+          ts: "2026-04-10T10:05:00.000Z",
+          startTs: "2026-04-10T10:00:00.000Z",
+          completedTs: "2026-04-10T10:05:00.000Z"
+        }
+      ]
+    };
+    expect(findActiveSpanForPair("tdd", "slice-implementer", "run-2", ledger)).toBeNull();
+  });
+
+  it("findActiveSpanForPair ignores legacy entries with empty/missing runId (strict run-scope)", () => {
+    const ledger: DelegationLedger = {
+      runId: "run-2",
+      entries: [
+        {
+          stage: "tdd",
+          agent: "slice-implementer",
+          mode: "mandatory",
+          status: "scheduled",
+          spanId: "span-legacy",
+          runId: "",
+          ts: "2026-04-10T09:00:00.000Z",
+          startTs: "2026-04-10T09:00:00.000Z"
+        }
+      ]
+    };
+    expect(findActiveSpanForPair("tdd", "slice-implementer", "run-2", ledger)).toBeNull();
+  });
+
+  it("R7 hox scenario: legacy run-1 entries do not block a fresh run-2 dispatch", async () => {
+    const root = await createTempProject("dispatch-dedup-r7-hox");
+    await seedFlowState(root, "run-1");
+
+    // run-1: full lifecycle for slice-implementer S-5
+    await appendDelegation(root, {
+      stage: "tdd",
+      agent: "slice-implementer",
+      mode: "mandatory",
+      status: "scheduled",
+      spanId: "span-S5-run1",
+      ts: "2026-04-11T10:00:00.000Z"
+    });
+    await appendDelegation(root, {
+      stage: "tdd",
+      agent: "slice-implementer",
+      mode: "mandatory",
+      status: "completed",
+      spanId: "span-S5-run1",
+      ts: "2026-04-11T10:05:00.000Z",
+      completedTs: "2026-04-11T10:05:00.000Z"
+    });
+
+    // Roll the active run forward to run-2 (simulates a re-entry into TDD).
+    const flowStatePath = path.join(root, ".cclaw/state/flow-state.json");
+    const stateJson = JSON.parse(await fs.readFile(flowStatePath, "utf8")) as {
+      activeRunId: string;
+    };
+    stateJson.activeRunId = "run-2";
+    await fs.writeFile(flowStatePath, `${JSON.stringify(stateJson, null, 2)}\n`, "utf8");
+
+    // run-2: a fresh slice-implementer dispatch must NOT trip dispatch_duplicate
+    // even though run-1's spans live in the same ledger file.
+    await expect(
+      appendDelegation(root, {
+        stage: "tdd",
+        agent: "slice-implementer",
+        mode: "mandatory",
+        status: "scheduled",
+        spanId: "span-S5-run2",
+        ts: "2026-04-11T11:00:00.000Z"
+      })
+    ).resolves.toBeUndefined();
+  });
+
+  it("subagents.json reaches empty active after scheduled→launched→completed lifecycle", async () => {
+    const root = await createTempProject("dispatch-dedup-tracker-empty");
+    await seedFlowState(root, "run-1");
+    await appendDelegation(root, {
+      stage: "tdd",
+      agent: "slice-implementer",
+      mode: "mandatory",
+      status: "scheduled",
+      spanId: "span-cycle",
+      ts: "2026-04-12T10:00:00.000Z"
+    });
+    await appendDelegation(root, {
+      stage: "tdd",
+      agent: "slice-implementer",
+      mode: "mandatory",
+      status: "launched",
+      spanId: "span-cycle",
+      ts: "2026-04-12T10:00:01.000Z",
+      launchedTs: "2026-04-12T10:00:01.000Z"
+    });
+    await appendDelegation(root, {
+      stage: "tdd",
+      agent: "slice-implementer",
+      mode: "mandatory",
+      status: "completed",
+      spanId: "span-cycle",
+      ts: "2026-04-12T10:00:05.000Z",
+      completedTs: "2026-04-12T10:00:05.000Z"
+    });
+
+    const tracker = JSON.parse(
+      await fs.readFile(path.join(root, ".cclaw/state/subagents.json"), "utf8")
+    ) as { active: Array<{ spanId: string }>; updatedAt: string };
+    expect(tracker.active).toEqual([]);
+    expect(typeof tracker.updatedAt).toBe("string");
+  });
+
   it("appendDelegation supersede flow: stale row plus new scheduled, only new in active", async () => {
     const root = await createTempProject("dispatch-dedup-supersede");
     await seedFlowState(root, "run-1");
