@@ -367,7 +367,7 @@ function hasPriorAck(events, args, runId) {
 function usage() {
   process.stderr.write([
     "Usage:",
-    "  node .cclaw/hooks/delegation-record.mjs --stage=<stage> --agent=<agent> --mode=<mandatory|proactive> --status=<scheduled|launched|acknowledged|completed|failed|waived|stale> --span-id=<id> [--dispatch-id=<id>] [--worker-run-id=<id>] [--dispatch-surface=<surface>] [--agent-definition-path=<path>] [--ack-ts=<iso>] [--launched-ts=<iso>] [--completed-ts=<iso>] [--evidence-ref=<ref>] [--waiver-reason=<text>] [--json]",
+    "  node .cclaw/hooks/delegation-record.mjs --stage=<stage> --agent=<agent> --mode=<mandatory|proactive> --status=<scheduled|launched|acknowledged|completed|failed|waived|stale> --span-id=<id> [--dispatch-id=<id>] [--worker-run-id=<id>] [--dispatch-surface=<surface>] [--agent-definition-path=<path>] [--ack-ts=<iso>] [--launched-ts=<iso>] [--completed-ts=<iso>] [--evidence-ref=<ref>] [--waiver-reason=<text>] [--supersede=<prevSpanId>] [--allow-parallel] [--json]",
     "  node .cclaw/hooks/delegation-record.mjs --rerecord --span-id=<id> --dispatch-id=<id> --dispatch-surface=<surface> --agent-definition-path=<path> [--ack-ts=<iso>] [--completed-ts=<iso>] [--evidence-ref=<ref>] [--json]",
     "  node .cclaw/hooks/delegation-record.mjs --repair --span-id=<id> --repair-reason=\"<why>\" [--json]",
     "",
@@ -376,6 +376,10 @@ function usage() {
     "",
     "Per-surface allowed --agent-definition-path prefixes:",
     ...VALID_DISPATCH_SURFACES.map((surface) => "  " + surface + ": " + (SURFACE_PATH_PREFIXES[surface].length === 0 ? "(any)" : SURFACE_PATH_PREFIXES[surface].join(", "))),
+    "",
+    "Dispatch dedup (v6.8.0):",
+    "  --supersede=<prevSpanId>  close the previous active span on this (stage, agent) as 'stale' before recording the new scheduled row",
+    "  --allow-parallel          record both spans as concurrent; new row is tagged allowParallel: true",
     ""
   ].join("\\n") + "\\n");
 }
@@ -389,6 +393,51 @@ function emitProblems(problems, json, code) {
     process.stderr.write("[cclaw] delegation-record: " + problems.join("; ") + "\\n");
   }
   process.exitCode = exitCode;
+}
+
+function emitErrorJson(error, details, json) {
+  if (json) {
+    process.stdout.write(JSON.stringify({ ok: false, error, details }, null, 2) + "\\n");
+  } else {
+    process.stderr.write("[cclaw] delegation-record: error: " + error + " — " + JSON.stringify(details) + "\\n");
+  }
+  process.exit(2);
+}
+
+// keep in sync with validateMonotonicTimestamps in src/delegation.ts
+function validateMonotonicTimestampsInline(stamped, prior) {
+  const startTs = stamped.startTs;
+  if (stamped.launchedTs && startTs && stamped.launchedTs < startTs) {
+    return { field: "launchedTs", actual: stamped.launchedTs, bound: startTs };
+  }
+  if (stamped.ackTs) {
+    const ackBound = stamped.launchedTs || startTs;
+    if (ackBound && stamped.ackTs < ackBound) {
+      return { field: "ackTs", actual: stamped.ackTs, bound: ackBound };
+    }
+  }
+  if (stamped.completedTs) {
+    const completedBound = stamped.ackTs || stamped.launchedTs || startTs;
+    if (completedBound && stamped.completedTs < completedBound) {
+      return { field: "completedTs", actual: stamped.completedTs, bound: completedBound };
+    }
+  }
+  if (!stamped.spanId) return null;
+  const priorForSpan = (prior || []).filter((entry) => entry && entry.spanId === stamped.spanId);
+  if (priorForSpan.length === 0) return null;
+  const tsValues = priorForSpan
+    .map((entry) => entry.ts || entry.startTs || "")
+    .filter((ts) => ts.length > 0);
+  if (tsValues.length === 0) return null;
+  let latest = tsValues[0];
+  for (let i = 1; i < tsValues.length; i += 1) {
+    if (tsValues[i] > latest) latest = tsValues[i];
+  }
+  const stampedTs = stamped.ts || stamped.startTs || "";
+  if (stampedTs && stampedTs < latest) {
+    return { field: "ts", actual: stampedTs, bound: latest };
+  }
+  return null;
 }
 
 function normalizeRelPath(value) {
@@ -423,12 +472,15 @@ function normalizeEvidenceRefs(args) {
   return [];
 }
 
-function buildRow(args, status, runId, now) {
+function buildRow(args, status, runId, now, options) {
   const fulfillmentMode = args["dispatch-surface"] === "role-switch"
     ? "role-switch"
     : args["dispatch-surface"] === "cursor-task" || args["dispatch-surface"] === "generic-task"
       ? "generic-dispatch"
       : "isolated";
+  // Inherit the span's startTs from prior rows so monotonic validation
+  // can compare against the original schedule, not the row write time.
+  const startTs = (options && options.spanStartTs) || now;
   return {
     stage: args.stage,
     agent: args.agent,
@@ -443,13 +495,83 @@ function buildRow(args, status, runId, now) {
     waiverReason: args["waiver-reason"],
     evidenceRefs: normalizeEvidenceRefs(args),
     runId,
-    startTs: now,
+    startTs,
     ts: now,
     launchedTs: args["launched-ts"] || (status === "launched" ? now : undefined),
     ackTs: args["ack-ts"] || (status === "acknowledged" ? now : undefined),
     completedTs: args["completed-ts"] || (status === "completed" ? now : undefined),
     endTs: TERMINAL.has(status) ? now : undefined,
-    schemaVersion: LEDGER_SCHEMA_VERSION
+    schemaVersion: LEDGER_SCHEMA_VERSION,
+    allowParallel: args["allow-parallel"] === true ? true : undefined
+  };
+}
+
+async function readDelegationLedgerEntries(root) {
+  try {
+    const raw = await fs.readFile(path.join(root, RUNTIME_ROOT, "state", "delegation-log.json"), "utf8");
+    const parsed = JSON.parse(raw);
+    if (parsed && Array.isArray(parsed.entries)) return parsed.entries;
+  } catch {
+    // empty / missing ledger is fine for dedup + monotonicity checks
+  }
+  return [];
+}
+
+// keep in sync with findActiveSpanForPair / DispatchDuplicateError in src/delegation.ts
+function findActiveSpanForPairInline(stage, agent, runId, entries) {
+  const ACTIVE_STATUSES = new Set(["scheduled", "launched", "acknowledged"]);
+  const effectiveTs = (entry) =>
+    entry.completedTs || entry.ackTs || entry.launchedTs || entry.endTs || entry.startTs || entry.ts || "";
+  const latestBySpan = new Map();
+  for (const entry of entries) {
+    if (!entry || typeof entry !== "object") continue;
+    if (typeof entry.spanId !== "string" || entry.spanId.length === 0) continue;
+    if (entry.runId && entry.runId !== runId) continue;
+    if (entry.stage !== stage || entry.agent !== agent) continue;
+    const existing = latestBySpan.get(entry.spanId);
+    if (!existing || effectiveTs(entry) >= effectiveTs(existing)) {
+      latestBySpan.set(entry.spanId, entry);
+    }
+  }
+  for (const entry of latestBySpan.values()) {
+    if (ACTIVE_STATUSES.has(entry.status)) return entry;
+  }
+  return null;
+}
+
+function enforceDispatchDedupInline(stamped, priorEntries, args) {
+  if (stamped.status !== "scheduled") return null;
+  if (args["allow-parallel"] === true) return null;
+  const existing = findActiveSpanForPairInline(
+    stamped.stage,
+    stamped.agent,
+    stamped.runId,
+    priorEntries
+  );
+  if (!existing || existing.spanId === stamped.spanId) return null;
+  if (typeof args.supersede === "string" && args.supersede.length > 0) {
+    if (args.supersede !== existing.spanId) {
+      return {
+        kind: "supersede-mismatch",
+        details: {
+          requested: args.supersede,
+          actualActiveSpanId: existing.spanId,
+          stage: stamped.stage,
+          agent: stamped.agent
+        }
+      };
+    }
+    return { kind: "supersede", existing };
+  }
+  return {
+    kind: "error",
+    details: {
+      existingSpanId: existing.spanId,
+      existingStatus: existing.status,
+      newSpanId: stamped.spanId,
+      pair: { stage: stamped.stage, agent: stamped.agent },
+      hint: "pass --supersede=" + existing.spanId + " to close the previous span as stale, or --allow-parallel to record both as concurrent"
+    }
   };
 }
 
@@ -531,7 +653,32 @@ async function persistEntry(root, runId, clean, event, options = {}) {
     await releaseDelegationLogLock(lockDir);
   }
 
-  const active = ledger.entries.filter((entry) => ["scheduled", "launched", "acknowledged"].includes(entry.status));
+  // keep in sync with computeActiveSubagents in src/delegation.ts
+  const ACTIVE_STATUSES = new Set(["scheduled", "launched", "acknowledged"]);
+  const effectiveTs = (entry) =>
+    entry.completedTs || entry.ackTs || entry.launchedTs || entry.endTs || entry.startTs || entry.ts || "";
+  const latestBySpan = new Map();
+  for (const entry of ledger.entries) {
+    if (!entry || typeof entry !== "object" || typeof entry.spanId !== "string" || entry.spanId.length === 0) continue;
+    const existing = latestBySpan.get(entry.spanId);
+    if (!existing) {
+      latestBySpan.set(entry.spanId, entry);
+      continue;
+    }
+    if (effectiveTs(entry) >= effectiveTs(existing)) {
+      latestBySpan.set(entry.spanId, entry);
+    }
+  }
+  const active = [];
+  for (const entry of latestBySpan.values()) {
+    if (ACTIVE_STATUSES.has(entry.status)) active.push(entry);
+  }
+  active.sort((a, b) => {
+    const aKey = a.startTs || a.ts || "";
+    const bKey = b.startTs || b.ts || "";
+    if (aKey === bKey) return 0;
+    return aKey < bKey ? -1 : 1;
+  });
   await fs.writeFile(path.join(stateDir, "subagents.json"), JSON.stringify({ active, updatedAt: event.eventTs }, null, 2) + "\\n", { encoding: "utf8", mode: 0o600 });
 }
 
@@ -855,9 +1002,61 @@ async function main() {
   }
 
   const status = args.status;
-  const row = buildRow(args, status, runId, now);
+  const priorLedger = await readDelegationLedgerEntries(root);
+  const priorForSpan = priorLedger.filter((e) => e && e.spanId === args["span-id"]);
+  const inheritedStartTs = priorForSpan
+    .map((e) => e.startTs)
+    .filter((ts) => typeof ts === "string" && ts.length > 0)
+    .sort()[0];
+  // When no prior row exists, fall back to the earliest user-supplied
+  // event timestamp so the monotonic validator never sees the row write
+  // time overshoot the real event timestamps.
+  const lifecycleCandidates = [
+    inheritedStartTs,
+    args["launched-ts"],
+    args["ack-ts"],
+    args["completed-ts"],
+    now
+  ].filter((value) => typeof value === "string" && value.length > 0);
+  const spanStartTs = inheritedStartTs ||
+    lifecycleCandidates.reduce((min, candidate) => (candidate < min ? candidate : min), now);
+  const row = buildRow(args, status, runId, now, { spanStartTs });
   const clean = Object.fromEntries(Object.entries(row).filter(([, value]) => value !== undefined));
   const event = { ...clean, event: status, eventTs: now };
+
+  const violation = validateMonotonicTimestampsInline(clean, priorLedger);
+  if (violation) {
+    emitErrorJson("delegation_timestamp_non_monotonic", violation, json);
+    return;
+  }
+  const dedupViolation = enforceDispatchDedupInline(clean, priorLedger, args);
+  if (dedupViolation) {
+    if (dedupViolation.kind === "supersede") {
+      const stalenessTs = new Date(new Date(now).getTime() - 1).toISOString();
+      const staleRow = {
+        stage: dedupViolation.existing.stage,
+        agent: dedupViolation.existing.agent,
+        mode: dedupViolation.existing.mode,
+        status: "stale",
+        spanId: dedupViolation.existing.spanId,
+        runId,
+        startTs: dedupViolation.existing.startTs || stalenessTs,
+        ts: stalenessTs,
+        endTs: stalenessTs,
+        supersededBy: clean.spanId,
+        schemaVersion: LEDGER_SCHEMA_VERSION
+      };
+      const staleEvent = { ...staleRow, event: "stale", eventTs: stalenessTs };
+      await persistEntry(root, runId, staleRow, staleEvent);
+    } else if (dedupViolation.kind === "error") {
+      emitErrorJson("dispatch_duplicate", dedupViolation.details, json);
+      return;
+    } else if (dedupViolation.kind === "supersede-mismatch") {
+      emitErrorJson("dispatch_supersede_mismatch", dedupViolation.details, json);
+      return;
+    }
+  }
+
   await persistEntry(root, runId, clean, event);
   process.stdout.write(JSON.stringify({ ok: true, event }, null, 2) + "\\n");
 }

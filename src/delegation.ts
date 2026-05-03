@@ -169,6 +169,19 @@ export type DelegationEntry = {
    *   `dispatchSurface`, `agentDefinitionPath`, and ACK timestamp
    */
   schemaVersion?: 1 | 2 | 3;
+  /**
+   * v6.8.0 — when set, the operator explicitly opted into running this
+   * scheduled span concurrently with another active span on the same
+   * `(stage, agent)` pair. Bypasses the dispatch-dedup check.
+   */
+  allowParallel?: boolean;
+  /**
+   * v6.8.0 — set on synthetic terminal `stale` rows written via
+   * `--supersede=<prevSpanId>`. References the new spanId that
+   * superseded this span. Helps `/cc tree` and the linter report a
+   * coherent successor chain.
+   */
+  supersededBy?: string;
 };
 
 export const DELEGATION_LEDGER_SCHEMA_VERSION = 3 as const;
@@ -390,7 +403,9 @@ function isDelegationEntry(value: unknown): value is DelegationEntry {
     retryOk &&
     (o.evidenceRefs === undefined || (Array.isArray(o.evidenceRefs) && o.evidenceRefs.every((item) => typeof item === "string"))) &&
     (o.skill === undefined || typeof o.skill === "string") &&
-    (o.schemaVersion === undefined || o.schemaVersion === 1 || o.schemaVersion === 2 || o.schemaVersion === 3)
+    (o.schemaVersion === undefined || o.schemaVersion === 1 || o.schemaVersion === 2 || o.schemaVersion === 3) &&
+    (o.allowParallel === undefined || typeof o.allowParallel === "boolean") &&
+    (o.supersededBy === undefined || typeof o.supersededBy === "string")
   );
 }
 
@@ -554,22 +569,226 @@ async function appendDelegationEvent(projectRoot: string, event: DelegationEvent
   await fs.appendFile(filePath, `${JSON.stringify(event)}\n`, { encoding: "utf8", mode: 0o600 });
 }
 
+/**
+ * Effective timestamp used to order rows that share a `spanId`. Newest
+ * lifecycle column wins. Returns the empty string when nothing is set
+ * so the caller still has a stable lexicographic compare key.
+ *
+ * keep in sync with the inline copy in
+ * `src/content/hooks.ts::delegationRecordScript`.
+ */
+function effectiveSpanTs(entry: DelegationEntry): string {
+  return entry.completedTs ?? entry.ackTs ?? entry.launchedTs ?? entry.endTs ?? entry.startTs ?? entry.ts ?? "";
+}
+
+const ACTIVE_DELEGATION_STATUSES = new Set<DelegationStatus>([
+  "scheduled",
+  "launched",
+  "acknowledged"
+]);
+
+/**
+ * Fold ledger entries to the latest row per `spanId` and keep only spans
+ * whose latest status is still active (`scheduled | launched |
+ * acknowledged`). Used by the `state/subagents.json` writer so the
+ * tracker never reports a span that already has a terminal row.
+ *
+ * Output is ordered by ascending `startTs ?? ts` so existing UI
+ * consumers see a stable presentation order.
+ *
+ * Rows without a `spanId` are skipped — they are not addressable by
+ * the tracker contract and would collide on the empty key.
+ *
+ * Callers are expected to pass entries already filtered to the active
+ * `runId`; cross-run rows are therefore not re-filtered here.
+ *
+ * keep in sync with the inline copy in
+ * `src/content/hooks.ts::delegationRecordScript`.
+ */
+export function computeActiveSubagents(entries: DelegationEntry[]): DelegationEntry[] {
+  const latestBySpan = new Map<string, DelegationEntry>();
+  for (const entry of entries) {
+    if (!entry.spanId) continue;
+    const existing = latestBySpan.get(entry.spanId);
+    if (!existing) {
+      latestBySpan.set(entry.spanId, entry);
+      continue;
+    }
+    const existingTs = effectiveSpanTs(existing);
+    const incomingTs = effectiveSpanTs(entry);
+    if (incomingTs >= existingTs) {
+      latestBySpan.set(entry.spanId, entry);
+    }
+  }
+  const folded: DelegationEntry[] = [];
+  for (const entry of latestBySpan.values()) {
+    if (ACTIVE_DELEGATION_STATUSES.has(entry.status)) {
+      folded.push(entry);
+    }
+  }
+  folded.sort((a, b) => {
+    const aKey = a.startTs ?? a.ts ?? "";
+    const bKey = b.startTs ?? b.ts ?? "";
+    if (aKey === bKey) return 0;
+    return aKey < bKey ? -1 : 1;
+  });
+  return folded;
+}
+
+/**
+ * v6.8.0 — thrown by `validateMonotonicTimestamps` when an incoming row
+ * would push a span's timeline backwards. Carries enough context that
+ * the CLI / hook surface can format a `delegation_timestamp_non_monotonic`
+ * JSON payload without re-deriving the offending field.
+ *
+ * keep in sync with the inline copy in
+ * `src/content/hooks.ts::delegationRecordScript`.
+ */
+export class DelegationTimestampError extends Error {
+  readonly field: string;
+  readonly actual: string;
+  readonly priorBound: string;
+  constructor(field: string, actual: string, priorBound: string) {
+    super(`delegation_timestamp_non_monotonic — ${field}: ${actual} < ${priorBound}`);
+    this.name = "DelegationTimestampError";
+    this.field = field;
+    this.actual = actual;
+    this.priorBound = priorBound;
+  }
+}
+
+/**
+ * v6.8.0 — enforce that lifecycle timestamps on a delegation span move
+ * forward (or stay equal). Validates both per-row invariants
+ * (`startTs ≤ launchedTs ≤ ackTs ≤ completedTs`) and a cross-row
+ * invariant: the union of prior rows for this `spanId` plus the
+ * incoming row must have non-decreasing `ts`.
+ *
+ * Equality is allowed because fast-completing dispatches legitimately
+ * collapse multiple lifecycle markers onto the same instant.
+ *
+ * keep in sync with the inline copy in
+ * `src/content/hooks.ts::delegationRecordScript`.
+ */
+export function validateMonotonicTimestamps(
+  stamped: DelegationEntry,
+  prior: DelegationEntry[]
+): void {
+  const startTs = stamped.startTs;
+  if (stamped.launchedTs && startTs && stamped.launchedTs < startTs) {
+    throw new DelegationTimestampError("launchedTs", stamped.launchedTs, startTs);
+  }
+  if (stamped.ackTs) {
+    const ackBound = stamped.launchedTs ?? startTs;
+    if (ackBound && stamped.ackTs < ackBound) {
+      throw new DelegationTimestampError("ackTs", stamped.ackTs, ackBound);
+    }
+  }
+  if (stamped.completedTs) {
+    const completedBound = stamped.ackTs ?? stamped.launchedTs ?? startTs;
+    if (completedBound && stamped.completedTs < completedBound) {
+      throw new DelegationTimestampError("completedTs", stamped.completedTs, completedBound);
+    }
+  }
+  if (!stamped.spanId) return;
+  const priorForSpan = prior.filter((entry) => entry.spanId === stamped.spanId);
+  if (priorForSpan.length === 0) return;
+  const timeline = [...priorForSpan, stamped]
+    .map((entry) => ({ entry, ts: entry.ts ?? entry.startTs ?? "" }))
+    .filter((row) => row.ts.length > 0)
+    .sort((a, b) => (a.ts === b.ts ? 0 : a.ts < b.ts ? -1 : 1));
+  for (let i = 1; i < timeline.length; i += 1) {
+    const previous = timeline[i - 1]!;
+    const current = timeline[i]!;
+    if (current.ts < previous.ts) {
+      throw new DelegationTimestampError("ts", current.ts, previous.ts);
+    }
+  }
+  // Find the latest existing row by `ts` for the same spanId; if the
+  // new row's `ts` is older than that latest, the timeline regressed.
+  const latestPrior = priorForSpan
+    .map((entry) => entry.ts ?? entry.startTs ?? "")
+    .filter((ts) => ts.length > 0)
+    .sort()
+    .at(-1);
+  const stampedTs = stamped.ts ?? stamped.startTs ?? "";
+  if (latestPrior && stampedTs && stampedTs < latestPrior) {
+    throw new DelegationTimestampError("ts", stampedTs, latestPrior);
+  }
+}
+
+/**
+ * v6.8.0 — thrown by `appendDelegation` when the operator opens a
+ * second `scheduled` span on the same `(stage, agent)` pair while an
+ * earlier span on the same pair is still active. Callers can catch and
+ * either pass the existing span id via `--supersede=<id>` (which
+ * pre-writes a synthetic `stale` row) or `--allow-parallel` to record
+ * concurrent spans intentionally.
+ */
+export class DispatchDuplicateError extends Error {
+  readonly existingSpanId: string;
+  readonly existingStatus: DelegationStatus;
+  readonly newSpanId: string;
+  readonly pair: { stage: string; agent: string };
+  constructor(params: {
+    existingSpanId: string;
+    existingStatus: DelegationStatus;
+    newSpanId: string;
+    pair: { stage: string; agent: string };
+  }) {
+    super(
+      `dispatch_duplicate — already-active spanId=${params.existingSpanId} (status=${params.existingStatus}) on stage=${params.pair.stage}, agent=${params.pair.agent}. ` +
+        `pass --supersede=${params.existingSpanId} to close the previous span as stale, or --allow-parallel to record both as concurrent.`
+    );
+    this.name = "DispatchDuplicateError";
+    this.existingSpanId = params.existingSpanId;
+    this.existingStatus = params.existingStatus;
+    this.newSpanId = params.newSpanId;
+    this.pair = params.pair;
+  }
+}
+
+/**
+ * v6.8.0 — find the latest active span for a given `(stage, agent)`
+ * pair in the supplied ledger entries. Returns the row whose latest
+ * status (after the latest-by-spanId fold) is still in the active set
+ * (`scheduled | launched | acknowledged`). Caller is responsible for
+ * filtering to the current run.
+ *
+ * keep in sync with the inline copy in
+ * `src/content/hooks.ts::delegationRecordScript`.
+ */
+export function findActiveSpanForPair(
+  stage: string,
+  agent: string,
+  runId: string,
+  ledger: DelegationLedger
+): DelegationEntry | null {
+  const sameRun = ledger.entries.filter((entry) => {
+    if (entry.runId && entry.runId !== runId) return false;
+    return entry.stage === stage && entry.agent === agent;
+  });
+  for (const entry of computeActiveSubagents(sameRun)) {
+    return entry;
+  }
+  return null;
+}
+
 async function writeSubagentTracker(projectRoot: string, entries: DelegationEntry[]): Promise<void> {
-  const active = entries
-    .filter((entry) => entry.status === "scheduled" || entry.status === "launched" || entry.status === "acknowledged")
-    .map((entry) => ({
-      spanId: entry.spanId,
-      dispatchId: entry.dispatchId,
-      workerRunId: entry.workerRunId,
-      stage: entry.stage,
-      agent: entry.agent,
-      status: entry.status,
-      dispatchSurface: entry.dispatchSurface,
-      agentDefinitionPath: entry.agentDefinitionPath,
-      startedAt: entry.startTs,
-      launchedAt: entry.launchedTs,
-      acknowledgedAt: entry.ackTs
-    }));
+  const active = computeActiveSubagents(entries).map((entry) => ({
+    spanId: entry.spanId,
+    dispatchId: entry.dispatchId,
+    workerRunId: entry.workerRunId,
+    stage: entry.stage,
+    agent: entry.agent,
+    status: entry.status,
+    dispatchSurface: entry.dispatchSurface,
+    agentDefinitionPath: entry.agentDefinitionPath,
+    startedAt: entry.startTs,
+    launchedAt: entry.launchedTs,
+    acknowledgedAt: entry.ackTs,
+    allowParallel: entry.allowParallel
+  }));
   await writeFileSafe(subagentsStatePath(projectRoot), `${JSON.stringify({ active, updatedAt: new Date().toISOString() }, null, 2)}\n`, { mode: 0o600 });
 }
 
@@ -578,7 +797,20 @@ export async function appendDelegation(projectRoot: string, entry: DelegationEnt
   await withDirectoryLock(delegationLockPath(projectRoot), async () => {
     const filePath = delegationLogPath(projectRoot);
     const prior = await readDelegationLedger(projectRoot);
-    const startTs = entry.startTs ?? entry.ts ?? new Date().toISOString();
+    // Span start anchor: prefer explicit `startTs`; otherwise fall back to
+    // the earliest provided lifecycle marker so the monotonic validator
+    // never sees a synthetic `now` overshoot a real event timestamp.
+    const lifecycleCandidates = [
+      entry.startTs,
+      entry.launchedTs,
+      entry.ackTs,
+      entry.completedTs,
+      entry.ts
+    ].filter((value): value is string => typeof value === "string" && value.length > 0);
+    const earliestLifecycle = lifecycleCandidates.length > 0
+      ? lifecycleCandidates.reduce((min, candidate) => (candidate < min ? candidate : min))
+      : undefined;
+    const startTs = entry.startTs ?? earliestLifecycle ?? new Date().toISOString();
     if (entry.status === "waived" && !hasValidWaiverReason(entry.waiverReason)) {
       throw new Error("waived delegation entries require a non-empty waiverReason");
     }
@@ -624,6 +856,23 @@ export async function appendDelegation(projectRoot: string, entry: DelegationEnt
       existing.spanId === stamped.spanId && existing.status === stamped.status
     )) {
       return;
+    }
+    validateMonotonicTimestamps(stamped, prior.entries);
+    if (stamped.status === "scheduled" && stamped.allowParallel !== true) {
+      const existing = findActiveSpanForPair(
+        stamped.stage,
+        stamped.agent,
+        activeRunId,
+        prior
+      );
+      if (existing && existing.spanId && existing.spanId !== stamped.spanId) {
+        throw new DispatchDuplicateError({
+          existingSpanId: existing.spanId,
+          existingStatus: existing.status,
+          newSpanId: stamped.spanId,
+          pair: { stage: stamped.stage, agent: stamped.agent }
+        });
+      }
     }
     await appendDelegationEvent(projectRoot, eventFromEntry(stamped));
     const ledger: DelegationLedger = {

@@ -1,5 +1,36 @@
 # Changelog
 
+## 6.8.0 — Ledger Truth
+
+Round 7 closes three pinpoint trust bugs in the v6.7.0 runtime that were reproducible on a clean install: stale `state/subagents.json` (active filter without per-`spanId` fold), no monotonic-timestamp validation on delegation-record writes, and silent acceptance of duplicate `scheduled` spans for the same `(stage, agent)` pair without a terminal row on the previous span.
+
+### Subagents Fold
+
+- **`computeActiveSubagents(entries)` in `src/delegation.ts`** — new exported helper that folds delegation entries to the latest row per `spanId` (newest of `completedTs ?? ackTs ?? launchedTs ?? endTs ?? startTs ?? ts`) and returns only spans whose latest status is still in `{scheduled, launched, acknowledged}`. Output is ordered by ascending `startTs ?? ts` so existing UI consumers see a stable presentation. `writeSubagentTracker` now calls `computeActiveSubagents` instead of the prior raw-status filter, so `state/subagents.json::active` no longer reports a span that already has a terminal row.
+- **Inline-hook mirror** — the `delegation-record.mjs` hook generated from `src/content/hooks.ts` now applies the same fold inline (with a `// keep in sync with computeActiveSubagents in src/delegation.ts` marker) so node-side and inline writers stay coherent.
+
+### Timestamp Validation
+
+- **`validateMonotonicTimestamps(stamped, prior)` + `DelegationTimestampError`** — `appendDelegation` now validates per-row invariants (`startTs ≤ launchedTs ≤ ackTs ≤ completedTs`, equality allowed) and a cross-row invariant that per-span `ts` is non-decreasing. On violation the helper throws `DelegationTimestampError` with `field`, `actual`, `priorBound`. `runInternalCommand` translates the error into `exit 2` and a stderr line prefixed `error: delegation_timestamp_non_monotonic — <field>: <actual> < <bound>`.
+- **Inline-hook mirror** — the inline `delegation-record.mjs` runs the same checks against rows already in the on-disk ledger and emits `{ ok: false, error: "delegation_timestamp_non_monotonic", details: { field, actual, bound } }` with `exit 2` when `--json` is set; bare error mode prints the same payload to stderr. Span `startTs` is now inherited from the first row for that `spanId` so user-supplied `--launched-ts`/`--ack-ts`/`--completed-ts` past timestamps remain coherent against the original schedule.
+
+### Dispatch Dedup
+
+- **`findActiveSpanForPair(stage, agent, runId, ledger)` + `DispatchDuplicateError`** — when `appendDelegation` writes a `scheduled` row, it folds prior entries to find any span on the same `(stage, agent)` whose latest status is still active. If one exists with a different `spanId`, the call throws `DispatchDuplicateError` carrying `existingSpanId`, `existingStatus`, `newSpanId`, and `pair`. `runInternalCommand` translates to `exit 2` + `error: dispatch_duplicate`.
+- **`--supersede=<prevSpanId>` and `--allow-parallel` flags** — the `delegation-record.mjs` hook now accepts both flags. `--supersede=<prevSpanId>` first writes a synthetic `stale` terminal row for `<prevSpanId>` with `supersededBy=<newSpanId>` (and a matching event-log row) before recording the new scheduled span; passing the wrong id exits 2 with `dispatch_supersede_mismatch`. `--allow-parallel` skips the dedup check and tags the new row with `allowParallel: true`. New optional fields `allowParallel` and `supersededBy` were added to `DelegationEntry`.
+- **Skill update** — the harness dispatch contract section in `src/content/skills.ts` now documents the supersede / allow-parallel choice and the two new error codes (`dispatch_duplicate`, `delegation_timestamp_non_monotonic`).
+
+### Tests
+
+- **`tests/unit/delegation-active-fold.test.ts`** — 7 cases covering scheduled→launched→completed (empty active), scheduled→launched (active is the launched row), two independent active spans, scheduled→completed (empty active), `startTs`-ascending stable order, missing `spanId` ignored, and `stale` treated as terminal.
+- **`tests/unit/delegation-monotonic.test.ts`** — 6 cases covering `ackTs < launchedTs` rejection, `completedTs == launchedTs` accepted, `completedTs < launchedTs` rejected, all-equal timeline accepted, cross-row regression rejected, coherent multi-row timeline accepted.
+- **`tests/unit/dispatch-dedup.test.ts`** — 6 cases covering `findActiveSpanForPair` happy path, terminal-only pair returns null, duplicate `scheduled` throws `DispatchDuplicateError`, `allowParallel` accepted, different-stage same-agent allowed, and the supersede flow leaves only the new span in the tracker.
+- **`tests/e2e/hooks-lifecycle.test.ts`** — new e2e suite that spawns the inline `delegation-record.mjs` and asserts: full lifecycle ends with empty `active`, `--ack-ts` earlier than `--launched-ts` produces `delegation_timestamp_non_monotonic`, second scheduled write produces `dispatch_duplicate`, `--supersede=<prev>` rewrites the previous span as `stale` and lists only the new span in `active`, `--allow-parallel` lists both spans with `allowParallel: true`, and `--supersede=<wrongId>` emits `dispatch_supersede_mismatch`.
+
+### Migration
+
+- Legacy `state/subagents.json` files with stuck `scheduled`/`launched` rows for already-terminal spans self-heal on the next `delegation-record` write — the writer rebuilds the tracker via `computeActiveSubagents` over the entire current-run ledger. No manual intervention is required.
+
 ## 6.7.0 — Flow Trust And Linter Precision
 
 Round 6 locks down the three sources of silent trust loss in the v6.x runtime: manual `flow-state.json` edits, proactive delegation waivers with no paper trail, and linter noise that either cannibalized templated meta-phrases or re-asked counterfactual forcing questions on simple work. The runtime hard-blocks on flow-state tampering and on waivers without an approval token; the linter now strips its own meta-phrases before scanning and tags each finding as `new`/`repeat:N`/`resolved` across runs.
