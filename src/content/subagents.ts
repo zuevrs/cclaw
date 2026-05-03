@@ -695,7 +695,7 @@ You are a slice-implementer subagent.
 
 SLICE: {single vertical slice}
 RED_EVIDENCE: {failing test and expected failure}
-ALLOWED_FILES: {explicit file boundaries}
+ALLOWED_FILES: {explicit file boundaries — surfaced to scheduler as Files: <paths>}
 FORBIDDEN_CHANGES: {scope/compatibility limits}
 VERIFICATION: {commands expected}
 
@@ -703,6 +703,12 @@ Rules:
 - Implement only the minimal GREEN change for the existing RED evidence.
 - Keep REFACTOR behavior-preserving.
 - Return the strict worker JSON schema first.
+
+Slice ledger contract (v6.10.0):
+- After observing the failing test, run \`cclaw-cli internal tdd-slice-record --slice <id> --status red --test-file <path> --command <cmd> --paths <comma-separated> [--ac <id>] [--plan-unit <id>]\`. The command appends to \`.cclaw/artifacts/06-tdd-slices.jsonl\`.
+- After the same test passes, run \`cclaw-cli internal tdd-slice-record --slice <id> --status green [--green-output-ref <path|spanId:...>]\`.
+- After REFACTOR, run \`cclaw-cli internal tdd-slice-record --slice <id> --status refactor-done\` or \`--status refactor-deferred --refactor-rationale "<why>"\`.
+- Do NOT hand-edit the Watched-RED Proof or Vertical Slice Cycle markdown tables; the linter reads the JSONL sidecar when present and the markdown becomes an auto-derived view.
 ${MARKDOWN_CODE_FENCE}
 
 `;
@@ -962,10 +968,12 @@ Process (mandatory):
 1) If STAGE_MODE=TEST_RED_ONLY:
    - RED only — add failing tests proving the gap (show failing output excerpt).
    - Do NOT edit production code.
+   - Append the slice to the sidecar via \`cclaw-cli internal tdd-slice-record --slice <id> --status red --test-file <path> --command <cmd> --paths <comma-separated>\` instead of editing the Watched-RED Proof markdown table.
    - Report: TESTS_ADDED, RED_COMMAND_RUN, RED_EVIDENCE, STATUS: DONE|BLOCKED.
 2) If STAGE_MODE=BUILD_GREEN_REFACTOR:
    - GREEN — minimal production code to satisfy existing RED tests, rerun full suite.
    - REFACTOR — only after full suite is green; preserve behavior.
+   - Append \`--status green\` (and \`--status refactor-done\` or \`--status refactor-deferred --refactor-rationale "<why>"\` after refactor) via \`cclaw-cli internal tdd-slice-record\`. The Vertical Slice Cycle markdown stays auto-derived from this sidecar.
    - Report: FILES_EDITED, GREEN_COMMAND_RUN, REFACTOR_NOTES, STATUS: DONE|BLOCKED.
 ${MARKDOWN_CODE_FENCE}
 

@@ -367,7 +367,7 @@ function hasPriorAck(events, args, runId) {
 function usage() {
   process.stderr.write([
     "Usage:",
-    "  node .cclaw/hooks/delegation-record.mjs --stage=<stage> --agent=<agent> --mode=<mandatory|proactive> --status=<scheduled|launched|acknowledged|completed|failed|waived|stale> --span-id=<id> [--dispatch-id=<id>] [--worker-run-id=<id>] [--dispatch-surface=<surface>] [--agent-definition-path=<path>] [--ack-ts=<iso>] [--launched-ts=<iso>] [--completed-ts=<iso>] [--evidence-ref=<ref>] [--waiver-reason=<text>] [--supersede=<prevSpanId>] [--allow-parallel] [--json]",
+    "  node .cclaw/hooks/delegation-record.mjs --stage=<stage> --agent=<agent> --mode=<mandatory|proactive> --status=<scheduled|launched|acknowledged|completed|failed|waived|stale> --span-id=<id> [--dispatch-id=<id>] [--worker-run-id=<id>] [--dispatch-surface=<surface>] [--agent-definition-path=<path>] [--ack-ts=<iso>] [--launched-ts=<iso>] [--completed-ts=<iso>] [--evidence-ref=<ref>] [--waiver-reason=<text>] [--supersede=<prevSpanId>] [--allow-parallel] [--paths=<comma-separated>] [--override-cap=<int>] [--json]",
     "  node .cclaw/hooks/delegation-record.mjs --rerecord --span-id=<id> --dispatch-id=<id> --dispatch-surface=<surface> --agent-definition-path=<path> [--ack-ts=<iso>] [--completed-ts=<iso>] [--evidence-ref=<ref>] [--json]",
     "  node .cclaw/hooks/delegation-record.mjs --repair --span-id=<id> --repair-reason=\"<why>\" [--json]",
     "",
@@ -380,6 +380,10 @@ function usage() {
     "Dispatch dedup (v6.8.0):",
     "  --supersede=<prevSpanId>  close the previous active span on this (stage, agent) as 'stale' before recording the new scheduled row",
     "  --allow-parallel          record both spans as concurrent; new row is tagged allowParallel: true",
+    "",
+    "TDD parallel scheduler (v6.10.0):",
+    "  --paths=<a,b,c>           repo-relative paths the slice-implementer will edit; disjoint sets auto-promote to allowParallel, overlap throws DispatchOverlapError",
+    "  --override-cap=<int>      raise the slice-implementer fan-out cap once for this dispatch (default cap " + String(5) + ", env CCLAW_MAX_PARALLEL_SLICE_IMPLEMENTERS overrides globally)",
     ""
   ].join("\\n") + "\\n");
 }
@@ -481,6 +485,13 @@ function buildRow(args, status, runId, now, options) {
   // Inherit the span's startTs from prior rows so monotonic validation
   // can compare against the original schedule, not the row write time.
   const startTs = (options && options.spanStartTs) || now;
+  // v6.10.0 (P1): claimedPaths from --paths=<comma-separated>. Empty
+  // arrays are dropped so the row stays compatible with v6.9 readers.
+  const claimedPathsRaw = typeof args.paths === "string" ? args.paths : "";
+  const claimedPaths = claimedPathsRaw
+    .split(",")
+    .map((value) => value.trim())
+    .filter((value) => value.length > 0);
   return {
     stage: args.stage,
     agent: args.agent,
@@ -502,7 +513,8 @@ function buildRow(args, status, runId, now, options) {
     completedTs: args["completed-ts"] || (status === "completed" ? now : undefined),
     endTs: TERMINAL.has(status) ? now : undefined,
     schemaVersion: LEDGER_SCHEMA_VERSION,
-    allowParallel: args["allow-parallel"] === true ? true : undefined
+    allowParallel: args["allow-parallel"] === true ? true : undefined,
+    claimedPaths: claimedPaths.length > 0 ? claimedPaths : undefined
   };
 }
 
@@ -539,6 +551,102 @@ function findActiveSpanForPairInline(stage, agent, runId, entries) {
   }
   for (const entry of latestBySpan.values()) {
     if (ACTIVE_STATUSES.has(entry.status)) return entry;
+  }
+  return null;
+}
+
+// keep in sync with computeActiveSubagents in src/delegation.ts
+function computeActiveSubagentsInline(entries) {
+  const ACTIVE_STATUSES = new Set(["scheduled", "launched", "acknowledged"]);
+  const effectiveTs = (entry) =>
+    entry.completedTs || entry.ackTs || entry.launchedTs || entry.endTs || entry.startTs || entry.ts || "";
+  const latestBySpan = new Map();
+  for (const entry of entries) {
+    if (!entry || typeof entry !== "object") continue;
+    if (typeof entry.spanId !== "string" || entry.spanId.length === 0) continue;
+    const existing = latestBySpan.get(entry.spanId);
+    if (!existing || effectiveTs(entry) >= effectiveTs(existing)) {
+      latestBySpan.set(entry.spanId, entry);
+    }
+  }
+  const active = [];
+  for (const entry of latestBySpan.values()) {
+    if (ACTIVE_STATUSES.has(entry.status)) active.push(entry);
+  }
+  return active;
+}
+
+// keep in sync with validateFileOverlap in src/delegation.ts
+function validateFileOverlapInline(stamped, activeEntries) {
+  if (stamped.agent !== "slice-implementer" || stamped.stage !== "tdd") {
+    return { autoParallel: false, conflict: null };
+  }
+  const newPaths = Array.isArray(stamped.claimedPaths) ? stamped.claimedPaths : [];
+  if (newPaths.length === 0) {
+    return { autoParallel: false, conflict: null };
+  }
+  const sameLane = activeEntries.filter(
+    (entry) =>
+      entry.stage === stamped.stage &&
+      entry.agent === stamped.agent &&
+      entry.spanId !== stamped.spanId
+  );
+  if (sameLane.length === 0) {
+    return { autoParallel: true, conflict: null };
+  }
+  for (const existing of sameLane) {
+    const existingPaths = Array.isArray(existing.claimedPaths) ? existing.claimedPaths : [];
+    if (existingPaths.length === 0) {
+      return { autoParallel: false, conflict: null };
+    }
+    const overlap = newPaths.filter((p) => existingPaths.includes(p));
+    if (overlap.length > 0) {
+      return {
+        autoParallel: false,
+        conflict: {
+          existingSpanId: existing.spanId || "unknown",
+          newSpanId: stamped.spanId || "unknown",
+          pair: { stage: stamped.stage, agent: stamped.agent },
+          conflictingPaths: overlap
+        }
+      };
+    }
+  }
+  return { autoParallel: true, conflict: null };
+}
+
+const MAX_PARALLEL_SLICE_IMPLEMENTERS_INLINE = 5;
+
+function readMaxParallelOverrideFromEnvInline() {
+  const raw = process.env.CCLAW_MAX_PARALLEL_SLICE_IMPLEMENTERS;
+  if (typeof raw !== "string" || raw.trim().length === 0) return null;
+  const parsed = Number(raw);
+  if (!Number.isFinite(parsed) || !Number.isInteger(parsed) || parsed < 1) return null;
+  return parsed;
+}
+
+// keep in sync with validateFanOutCap in src/delegation.ts
+function validateFanOutCapInline(stamped, activeEntries, override) {
+  if (stamped.agent !== "slice-implementer" || stamped.stage !== "tdd") return null;
+  if (stamped.status !== "scheduled") return null;
+  let cap;
+  if (override !== null && override !== undefined && Number.isInteger(override) && override >= 1) {
+    cap = override;
+  } else {
+    cap = readMaxParallelOverrideFromEnvInline() || MAX_PARALLEL_SLICE_IMPLEMENTERS_INLINE;
+  }
+  const sameLaneActive = activeEntries.filter(
+    (entry) =>
+      entry.stage === stamped.stage &&
+      entry.agent === stamped.agent &&
+      entry.spanId !== stamped.spanId
+  );
+  if (sameLaneActive.length + 1 > cap) {
+    return {
+      cap,
+      active: sameLaneActive.length,
+      pair: { stage: stamped.stage, agent: stamped.agent }
+    };
   }
   return null;
 }
@@ -1032,6 +1140,31 @@ async function main() {
   if (violation) {
     emitErrorJson("delegation_timestamp_non_monotonic", violation, json);
     return;
+  }
+
+  // v6.10.0 (P1+P2): file-overlap scheduler + fan-out cap. Run before
+  // the legacy dispatch dedup so disjoint claimedPaths can auto-promote
+  // to allowParallel and bypass the duplicate guard.
+  if (status === "scheduled") {
+    const sameRunPrior = priorLedger.filter((entry) => entry.runId === runId);
+    const activeForRun = computeActiveSubagentsInline(sameRunPrior);
+    const overlap = validateFileOverlapInline(clean, activeForRun);
+    if (overlap.conflict) {
+      emitErrorJson("dispatch_overlap", overlap.conflict, json);
+      return;
+    }
+    if (overlap.autoParallel && clean.allowParallel !== true) {
+      clean.allowParallel = true;
+      args["allow-parallel"] = true;
+      event.allowParallel = true;
+    }
+    const overrideRaw = typeof args["override-cap"] === "string" ? args["override-cap"] : null;
+    const override = overrideRaw !== null ? Number(overrideRaw) : null;
+    const capViolation = validateFanOutCapInline(clean, activeForRun, override);
+    if (capViolation) {
+      emitErrorJson("dispatch_cap", capViolation, json);
+      return;
+    }
   }
   const dedupViolation = enforceDispatchDedupInline(clean, priorLedger, args);
   if (dedupViolation) {

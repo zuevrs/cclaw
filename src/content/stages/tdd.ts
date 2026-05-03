@@ -46,14 +46,14 @@ export const TDD: StageSchemaV2Input = {
       "Discover the test surface — inspect existing tests, fixtures, helpers, test commands, and nearby assertions before authoring RED. Reuse the local test style unless the slice genuinely needs a new pattern.",
       "Run a system-wide impact check — name callbacks, state transitions, interfaces, schemas, CLI/config/API contracts, persistence, or event boundaries that this slice can affect. Add RED coverage for each affected public contract or record why it is out of scope.",
       "Source/test preflight — before production edits, classify planned paths using test-path patterns; verify the RED touches a test path and the GREEN touches only source paths needed for the failing behavior.",
-      "Set execution posture — record whether this slice is sequential, batch-safe, or blocked; when the existing git workflow permits small commits, checkpoint after RED, GREEN, and REFACTOR (or record why commits are deferred).",
       "Use the mandatory `test-author` delegation for RED — after discovery and impact check, produce failing behavior tests and RED evidence only (no production edits). Set `CCLAW_ACTIVE_AGENT=tdd-red` when the harness supports phase labels.",
-      "RED: Capture failure output — copy the exact failure output as RED evidence. Record in artifact.",
+      "RED: Capture failure output — copy the exact failure output as RED evidence. Record the slice in `.cclaw/artifacts/06-tdd-slices.jsonl` via `cclaw-cli internal tdd-slice-record --slice <id> --status red --test-file <path> --command <cmd> --paths <comma-separated>` (the markdown `Watched-RED Proof` table is now auto-derived from this sidecar).",
       "Continue the same `test-author` delegation intent for GREEN — minimal implementation plus full-suite GREEN evidence. Set `CCLAW_ACTIVE_AGENT=tdd-green` when the harness supports phase labels.",
       "GREEN: Run full suite — execute ALL tests, not just the ones you wrote. The full suite must be GREEN.",
       "GREEN: Verify no regressions — if any existing test breaks, fix the regression before proceeding.",
       "Run verification-before-completion discipline for the slice — capture a fresh test command, explicit PASS/FAIL status, and a config-aware ref (commit SHA when VCS is present/required, or no-vcs attestation when allowed).",
-      "REFACTOR: continue the `test-author` evidence cycle (or a dedicated refactor mode when available) to improve code quality without behavior changes. Set `CCLAW_ACTIVE_AGENT=tdd-refactor` when the harness supports phase labels.",
+      "GREEN: append a `green` row to `.cclaw/artifacts/06-tdd-slices.jsonl` via `cclaw-cli internal tdd-slice-record --slice <id> --status green [--green-output-ref <path|spanId:...>]` so the Vertical Slice Cycle linter validates the sidecar instead of a hand-edited table.",
+      "REFACTOR: continue the `test-author` evidence cycle (or a dedicated refactor mode when available) to improve code quality without behavior changes, then record `--status refactor-done` (or `--status refactor-deferred --refactor-rationale \"<why>\"`) via the same `tdd-slice-record` CLI. Set `CCLAW_ACTIVE_AGENT=tdd-refactor` when the harness supports phase labels.",
       "Record evidence — capture test discovery, system-wide impact check, RED failure, GREEN output, and REFACTOR notes in the TDD artifact. When logging a `green` row, attach the closed acceptance-criterion IDs in `acIds` so Ralph Loop status counts them.",
       "Annotate traceability — link to the active track's source: plan task ID + spec criterion on standard/medium, or spec acceptance item / bug reproduction slice on quick.",
       "**Boundary with review (do NOT escalate single-slice findings to whole-diff review).** `tdd.Per-Slice Review` OWNS severity-classified findings WITHIN one slice (correctness, edge cases, regression). `review` OWNS whole-diff Layer 1 (spec compliance) plus Layer 2 (cross-slice integration, security sweep, dependency/version audit, observability). When a single-slice finding genuinely needs whole-diff escalation, surface it in `06-tdd.md > Per-Slice Review` first; review will cite it (not re-classify) and the cross-artifact-duplication linter requires matching severity/disposition.",
@@ -162,10 +162,8 @@ export const TDD: StageSchemaV2Input = {
       { section: "Upstream Handoff", required: false, validationRule: "Summarizes plan/spec/design decisions, constraints, open questions, and explicit drift before RED work." },
       { section: "Test Discovery", required: true, validationRule: "Before RED: lists existing tests, fixtures/helpers, exact commands, and the chosen local pattern to extend." },
       { section: "System-Wide Impact Check", required: true, validationRule: "Before implementation: names affected callbacks, state transitions, interfaces, schemas, public APIs/config/CLI, persistence, or event contracts, with coverage or explicit out-of-scope notes." },
-      { section: "Execution Posture", required: false, validationRule: "Records sequential/batch/blocked posture and vertical-slice RED/GREEN/REFACTOR checkpoint plan, including incremental commit boundaries when consistent with the repository git workflow." },
       { section: "RED Evidence", required: true, validationRule: "Failing test output captured per slice." },
-      { section: "Acceptance Mapping", required: false, validationRule: "Each RED test links to a plan task and spec criterion." },
-      { section: "Failure Analysis", required: false, validationRule: "Failure reason matches expected missing behavior." },
+      { section: "Acceptance & Failure Map", required: false, validationRule: "Each slice row carries Source ID, AC ID, expected behavior, and a RED-link (delegation spanId, evidence path, or sidecar redOutputRef)." },
       { section: "GREEN Evidence", required: true, validationRule: "Full suite pass output captured." },
       { section: "REFACTOR Notes", required: true, validationRule: "What changed, why, behavior preservation confirmed." },
       { section: "Traceability", required: true, validationRule: "Plan task ID and spec criterion linked." },
@@ -309,11 +307,11 @@ function tddStageVariantForTrack(track: FlowTrack): StageSchemaV2Input {
           "Every RED test traces to an acceptance criterion. Every GREEN change traces to a RED test. Evidence chain must be unbroken."
       },
       artifactValidation: TDD.artifactRules.artifactValidation.map((row) => {
-        if (row.section === "Acceptance Mapping") {
+        if (row.section === "Acceptance & Failure Map") {
           return {
             ...row,
             required: true,
-            validationRule: "Each RED test links to a spec acceptance criterion ID (for example AC-1)."
+            validationRule: "Each slice row carries Source ID, AC ID (spec acceptance criterion ID, for example AC-1), expected behavior, and a RED-link (delegation spanId, evidence path, or sidecar redOutputRef)."
           };
         }
         if (row.section === "Traceability") {

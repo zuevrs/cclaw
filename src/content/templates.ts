@@ -991,27 +991,17 @@ ${renderBehaviorAnchorTemplateLine("tdd")}
 |---|---|---|
 | S-1 |  | covered/out-of-scope because  |
 
-## Execution Posture
-- Posture: sequential | dependency-batched | blocked
-- Vertical-slice RED/GREEN/REFACTOR checkpoint plan:
-- Incremental commits: yes/no/deferred because
-
 ## RED Evidence
 | Slice | Test name | Command | Failure output summary |
 |---|---|---|---|
 | S-1 |  |  |  |
 
-## Acceptance Mapping
-| Vertical slice | Source item ID | Spec criterion ID |
-|---|---|---|
-| S-1 | SRC-1 | AC-1 |
+## Acceptance & Failure Map
+| Slice | Source ID | AC ID | Expected behavior | RED-link |
+|---|---|---|---|---|
+| S-1 | SRC-1 | AC-1 |  |  |
 
-> Map each slice to the active track's source item: plan slice on standard/medium, or the \`Quick Reproduction Contract\` bug slice / spec acceptance item on quick.
-
-## Failure Analysis
-| Slice | Expected missing behavior | Actual failure reason |
-|---|---|---|
-| S-1 |  |  |
+> Each slice maps to the active track's source item (plan slice on standard/medium, or the \`Quick Reproduction Contract\` bug slice / spec acceptance item on quick) and to a spec criterion. The RED-link column is satisfied by either a \`spanId:<id>\` from the delegation ledger, an \`<artifacts-dir>/<file>\` evidence pointer, or a \`redOutputRef\` recorded via \`cclaw-cli internal tdd-slice-record\` in the sidecar ledger.
 
 ## GREEN Evidence
 - Full suite command:

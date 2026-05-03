@@ -1675,7 +1675,70 @@ function shouldEnforceFailureEdge(
   return false;
 }
 
-export function validateTddRedEvidence(sectionBody: string): { ok: boolean; details: string } {
+/**
+ * v6.10.0 (T3) — pointer-mode evidence acceptance. RED/GREEN sections may
+ * substitute pasted stdout with a single line of the form
+ * `Evidence: <relative-or-abs-path>` or `Evidence: spanId:<id>`. The
+ * validator alone cannot reach the filesystem or delegation ledger
+ * synchronously, so the lint pipeline pre-resolves pointers and then
+ * passes booleans through these option flags.
+ */
+export interface TddEvidencePointerOptions {
+  /**
+   * True when the section body has at least one `Evidence:` pointer line
+   * AND the pointer resolved to either an existing file or a known
+   * delegation spanId. The validator then short-circuits without
+   * requiring pasted stdout markers.
+   */
+  pointerSatisfied?: boolean;
+  /**
+   * True when `06-tdd-slices.jsonl` contains a slice with the matching
+   * output ref (`redOutputRef`/`greenOutputRef`); the markdown evidence
+   * block is auto-satisfied because the sidecar is the source of truth.
+   */
+  sidecarAutoSatisfy?: boolean;
+}
+
+/**
+ * Sync helper that scans for `Evidence:` lines in a section body and
+ * returns the trimmed value of each. Used by the lint pipeline to
+ * pre-resolve pointers (filesystem path-existence or delegation ledger
+ * spanId match) before invoking the validators.
+ *
+ * Recognised forms:
+ *   Evidence: <path>
+ *   Evidence: spanId:<id>
+ *   - Evidence: <path>
+ */
+export function extractEvidencePointers(sectionBody: string): string[] {
+  const pointers: string[] = [];
+  const pattern = /^\s*-?\s*evidence\s*:\s*(.+?)\s*$/imu;
+  for (const line of sectionBody.split(/\r?\n/u)) {
+    const match = pattern.exec(line);
+    if (match && match[1] !== undefined) {
+      const value = match[1].trim();
+      if (value.length > 0) pointers.push(value);
+    }
+  }
+  return pointers;
+}
+
+export function validateTddRedEvidence(
+  sectionBody: string,
+  opts: TddEvidencePointerOptions = {}
+): { ok: boolean; details: string } {
+  if (opts.sidecarAutoSatisfy) {
+    return {
+      ok: true,
+      details: "RED Evidence auto-satisfied: 06-tdd-slices.jsonl carries a redOutputRef for the matching slice."
+    };
+  }
+  if (opts.pointerSatisfied) {
+    return {
+      ok: true,
+      details: "RED Evidence satisfied via `Evidence: <path|spanId:...>` pointer (resolved to an existing artifact or delegation span)."
+    };
+  }
   const meaningful = meaningfulLineCount(sectionBody);
   if (meaningful < 2) {
     return {
@@ -1701,7 +1764,22 @@ export function validateTddRedEvidence(sectionBody: string): { ok: boolean; deta
   };
 }
 
-export function validateTddGreenEvidence(sectionBody: string): { ok: boolean; details: string } {
+export function validateTddGreenEvidence(
+  sectionBody: string,
+  opts: TddEvidencePointerOptions = {}
+): { ok: boolean; details: string } {
+  if (opts.sidecarAutoSatisfy) {
+    return {
+      ok: true,
+      details: "GREEN Evidence auto-satisfied: 06-tdd-slices.jsonl carries a greenOutputRef for the matching slice."
+    };
+  }
+  if (opts.pointerSatisfied) {
+    return {
+      ok: true,
+      details: "GREEN Evidence satisfied via `Evidence: <path|spanId:...>` pointer (resolved to an existing artifact or delegation span)."
+    };
+  }
   const meaningful = meaningfulLineCount(sectionBody);
   if (meaningful < 2) {
     return {
@@ -2334,6 +2412,17 @@ export interface ValidateSectionBodyContext {
    * in the Architecture Diagram body.
    */
   liteTier?: boolean;
+  /**
+   * v6.10.0 (T3) — pre-resolved RED/GREEN Evidence pointer state. The
+   * artifact linter resolves `Evidence: <path|spanId:...>` lines and
+   * inspects the TDD slice sidecar before invoking
+   * `validateSectionBody`; the resulting booleans here let the
+   * validator short-circuit without re-doing async work.
+   */
+  tddEvidence?: {
+    red?: TddEvidencePointerOptions;
+    green?: TddEvidencePointerOptions;
+  };
 }
 
 export function validateSectionBody(
@@ -2431,10 +2520,10 @@ export function validateSectionBody(
 
   const sectionNameNormalized = normalizeHeadingTitle(sectionName).toLowerCase();
   if (sectionNameNormalized === "red evidence") {
-    return validateTddRedEvidence(sectionBody);
+    return validateTddRedEvidence(sectionBody, context.tddEvidence?.red ?? {});
   }
   if (sectionNameNormalized === "green evidence") {
-    return validateTddGreenEvidence(sectionBody);
+    return validateTddGreenEvidence(sectionBody, context.tddEvidence?.green ?? {});
   }
   if (sectionNameNormalized === "verification ladder") {
     return validateVerificationLadder(sectionBody);

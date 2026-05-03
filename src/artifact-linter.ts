@@ -1,4 +1,5 @@
 import fs from "node:fs/promises";
+import path from "node:path";
 import { resolveArtifactPath as resolveStageArtifactPath } from "./artifact-paths.js";
 import type { FlowState } from "./flow-state.js";
 import { exists } from "./fs-utils.js";
@@ -7,6 +8,7 @@ import { readFlowState } from "./run-persistence.js";
 import type { FlowStage, FlowTrack } from "./types.js";
 import {
   duplicateH2Headings,
+  extractEvidencePointers,
   extractH2Sections,
   extractRequirementIdsFromMarkdown,
   isShortCircuitActivated,
@@ -18,10 +20,13 @@ import {
   sectionBodyByName,
   validateSectionBody,
   formatLearningsErrorsBullets,
+  type H2SectionMap,
   type LintFinding,
   type LintResult,
-  type StageLintContext
+  type StageLintContext,
+  type TddEvidencePointerOptions
 } from "./artifact-linter/shared.js";
+import { foldTddSliceLedger, readTddSliceLedger } from "./tdd-slices.js";
 import { shouldDemoteArtifactValidationByTrack } from "./content/stage-schema.js";
 import { readDelegationLedger, recordArtifactValidationDemotedByTrack } from "./delegation.js";
 import {
@@ -221,6 +226,18 @@ export async function lintArtifact(
   }
   const liteTierForValidators = shouldDemoteArtifactValidationByTrack(track, taskClass);
 
+  // v6.10.0 (T3) — pre-resolve RED/GREEN Evidence pointers and sidecar
+  // auto-satisfy state once for the whole TDD loop, then thread the
+  // booleans through `validateSectionBody`. We do the async resolution
+  // here (path existence + delegation spanId match) so the validators
+  // themselves stay sync.
+  const tddEvidenceContext = stage === "tdd"
+    ? await resolveTddEvidencePointerContext({
+        projectRoot,
+        sections
+      })
+    : { red: {}, green: {} };
+
   for (const v of schema.artifactValidation) {
     const sectionKey = normalizeHeadingTitle(v.section).toLowerCase();
     const scopeBoundaryAlias =
@@ -242,7 +259,8 @@ export async function lintArtifact(
       ? { ok: false, details: `No ## heading matching required section "${v.section}".` }
       : validateSectionBody(body, v.validationRule, v.section, {
           sections,
-          liteTier: liteTierForValidators
+          liteTier: liteTierForValidators,
+          tddEvidence: stage === "tdd" ? tddEvidenceContext : undefined
         });
     const found = hasHeading && validation.ok;
     findings.push({
@@ -520,3 +538,85 @@ const ARTIFACT_VALIDATION_LITE_DEMOTE_SECTIONS = new Set<string>([
   "Stale Diagram Drift Check",
   "Product Discovery Delegation (Strategist Mode)"
 ]);
+
+/**
+ * v6.10.0 (T3) — pre-resolve `Evidence:` pointers and sidecar
+ * auto-satisfy state for the TDD stage's RED/GREEN Evidence rows so
+ * `validateSectionBody` (sync) can short-circuit. A pointer of the form
+ * `<path>` is satisfied when the path exists on disk relative to the
+ * project root; `spanId:<id>` is satisfied when any delegation ledger
+ * row carries that span id. Sidecar auto-satisfy fires when
+ * `06-tdd-slices.jsonl` carries at least one slice with a non-empty
+ * `redOutputRef` / `greenOutputRef`.
+ */
+async function resolveTddEvidencePointerContext(input: {
+  projectRoot: string;
+  sections: H2SectionMap;
+}): Promise<{ red: TddEvidencePointerOptions; green: TddEvidencePointerOptions }> {
+  const { projectRoot, sections } = input;
+  const redSection = sectionBodyByName(sections, "RED Evidence") ?? "";
+  const greenSection = sectionBodyByName(sections, "GREEN Evidence") ?? "";
+  const redPointers = extractEvidencePointers(redSection);
+  const greenPointers = extractEvidencePointers(greenSection);
+
+  let knownSpanIds = new Set<string>();
+  if (redPointers.length > 0 || greenPointers.length > 0) {
+    try {
+      const ledger = await readDelegationLedger(projectRoot);
+      knownSpanIds = new Set(
+        ledger.entries
+          .map((entry) => entry.spanId)
+          .filter((id): id is string => typeof id === "string" && id.length > 0)
+      );
+    } catch {
+      knownSpanIds = new Set();
+    }
+  }
+
+  async function pointerResolves(value: string): Promise<boolean> {
+    const trimmed = value.replace(/[`*_]/gu, "").trim();
+    if (trimmed.length === 0) return false;
+    if (/^spanid\s*:/iu.test(trimmed)) {
+      const id = trimmed.replace(/^spanid\s*:\s*/iu, "").trim();
+      return id.length > 0 && knownSpanIds.has(id);
+    }
+    const candidate = path.isAbsolute(trimmed) ? trimmed : path.join(projectRoot, trimmed);
+    return exists(candidate);
+  }
+
+  async function anyResolved(values: string[]): Promise<boolean> {
+    for (const value of values) {
+      if (await pointerResolves(value)) return true;
+    }
+    return false;
+  }
+
+  let redSidecarAutoSatisfy = false;
+  let greenSidecarAutoSatisfy = false;
+  try {
+    const sidecar = await readTddSliceLedger(projectRoot);
+    if (sidecar.entries.length > 0) {
+      const folded = foldTddSliceLedger(sidecar.entries);
+      redSidecarAutoSatisfy = folded.some(
+        (entry) => typeof entry.redOutputRef === "string" && entry.redOutputRef.length > 0
+      );
+      greenSidecarAutoSatisfy = folded.some(
+        (entry) => typeof entry.greenOutputRef === "string" && entry.greenOutputRef.length > 0
+      );
+    }
+  } catch {
+    redSidecarAutoSatisfy = false;
+    greenSidecarAutoSatisfy = false;
+  }
+
+  return {
+    red: {
+      pointerSatisfied: await anyResolved(redPointers),
+      sidecarAutoSatisfy: redSidecarAutoSatisfy
+    },
+    green: {
+      pointerSatisfied: await anyResolved(greenPointers),
+      sidecarAutoSatisfy: greenSidecarAutoSatisfy
+    }
+  };
+}

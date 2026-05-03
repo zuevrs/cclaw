@@ -124,7 +124,7 @@ Any "the failure is real" claim (failing test, broken build, regression catch, d
 
 \`proof: <iso-ts> | <observed snippet — first 200 chars> | source: <command or log path>\`
 
-For TDD specifically, this is the watched-RED proof and is required per new test before \`stage-complete\` accepts the stage.
+For TDD specifically, this is the watched-RED proof and is required per new test before \`stage-complete\` accepts the stage. From v6.10.0 onward, record TDD slice transitions through the sidecar CLI \`cclaw-cli internal tdd-slice-record --slice <id> --status red|green|refactor-done|refactor-deferred ...\` rather than hand-editing the \`Watched-RED Proof\` or \`Vertical Slice Cycle\` markdown tables; the linter reads \`.cclaw/artifacts/06-tdd-slices.jsonl\` when present and treats the markdown as an auto-derived view.
 `;
 }
 

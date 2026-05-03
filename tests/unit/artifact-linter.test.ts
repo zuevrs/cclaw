@@ -4557,8 +4557,13 @@ ${TDD_PREFLIGHT_SECTIONS}
     expect(green?.found).toBe(false);
   });
 
-  it("fails tdd when Acceptance Mapping is missing", async () => {
-    const root = await createTempProject("tdd-no-am");
+  // v6.10.0 (T5): merged "Acceptance Mapping" + "Failure Analysis" into a
+  // single optional "Acceptance & Failure Map" section. The two legacy
+  // tests below (one each for "Acceptance Mapping is missing" and
+  // "Failure Analysis is missing") collapse into a single advisory
+  // check on the new merged heading.
+  it("treats Acceptance & Failure Map as optional in tdd", async () => {
+    const root = await createTempProject("tdd-no-acceptance-failure-map");
     await writeRuntimeArtifact(root, "06-tdd.md", `# TDD Artifact
 
 ${TDD_PREFLIGHT_SECTIONS}
@@ -4567,11 +4572,6 @@ ${TDD_PREFLIGHT_SECTIONS}
 | Slice | Test name | Command | Failure output summary |
 |---|---|---|---|
 | S-1 | test name | vitest | Cannot find module |
-
-## Failure Analysis
-| Slice | Expected missing behavior | Actual failure reason |
-|---|---|---|
-| S-1 | Not implemented | Import fails |
 
 ## GREEN Evidence
 - Full suite command: vitest run
@@ -4593,50 +4593,12 @@ ${TDD_PREFLIGHT_SECTIONS}
 
     const result = await lintArtifact(root, "tdd");
     expect(result.passed).toBe(true);
-    const am = result.findings.find((f) => f.section === "Acceptance Mapping");
+    const am = result.findings.find((f) => f.section === "Acceptance & Failure Map");
     expect(am?.found).toBe(false);
     expect(am?.required).toBe(false);
-  });
-
-  it("fails tdd when Failure Analysis is missing", async () => {
-    const root = await createTempProject("tdd-no-fa");
-    await writeRuntimeArtifact(root, "06-tdd.md", `# TDD Artifact
-
-${TDD_PREFLIGHT_SECTIONS}
-
-## RED Evidence
-| Slice | Test name | Command | Failure output summary |
-|---|---|---|---|
-| S-1 | test name | vitest | Cannot find module |
-
-## Acceptance Mapping
-| Slice | Plan task ID | Spec criterion ID |
-|---|---|---|
-| S-1 | T-1 | AC-1 |
-
-## GREEN Evidence
-- Full suite command: vitest run
-- Full suite result: 12 passed
-
-## Verification Ladder
-- Highest tier reached: command
-- Evidence: vitest run (pass)
-
-## REFACTOR Notes
-- What changed: Extracted helper
-- Why: Reuse
-- Behavior preserved: Yes
-
-## Traceability
-- Plan task IDs: T-1
-- Spec criterion IDs: AC-1
-`);
-
-    const result = await lintArtifact(root, "tdd");
-    expect(result.passed).toBe(true);
-    const fa = result.findings.find((f) => f.section === "Failure Analysis");
-    expect(fa?.found).toBe(false);
-    expect(fa?.required).toBe(false);
+    // legacy heading names are no longer schema entries
+    expect(result.findings.find((f) => f.section === "Acceptance Mapping")).toBeUndefined();
+    expect(result.findings.find((f) => f.section === "Failure Analysis")).toBeUndefined();
   });
 
   it("fails tdd when REFACTOR Notes is missing", async () => {

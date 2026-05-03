@@ -182,6 +182,17 @@ export type DelegationEntry = {
    * coherent successor chain.
    */
   supersededBy?: string;
+  /**
+   * v6.10.0 (P1) — repo-relative paths the delegated unit will edit.
+   * Used by the slice-implementer file-overlap scheduler to either
+   * auto-allow parallel dispatch (disjoint paths) or block the row
+   * with `DispatchOverlapError` (overlapping paths). For agents
+   * other than slice-implementer the field is advisory.
+   *
+   * keep in sync with the inline copy in
+   * `src/content/hooks.ts::delegationRecordScript`.
+   */
+  claimedPaths?: string[];
 };
 
 export const DELEGATION_LEDGER_SCHEMA_VERSION = 3 as const;
@@ -405,7 +416,9 @@ function isDelegationEntry(value: unknown): value is DelegationEntry {
     (o.skill === undefined || typeof o.skill === "string") &&
     (o.schemaVersion === undefined || o.schemaVersion === 1 || o.schemaVersion === 2 || o.schemaVersion === 3) &&
     (o.allowParallel === undefined || typeof o.allowParallel === "boolean") &&
-    (o.supersededBy === undefined || typeof o.supersededBy === "string")
+    (o.supersededBy === undefined || typeof o.supersededBy === "string") &&
+    (o.claimedPaths === undefined ||
+      (Array.isArray(o.claimedPaths) && o.claimedPaths.every((item) => typeof item === "string")))
   );
 }
 
@@ -749,6 +762,162 @@ export class DispatchDuplicateError extends Error {
 }
 
 /**
+ * v6.10.0 (P1) — thrown by `validateFileOverlap` when a new
+ * `slice-implementer` is scheduled on a TDD stage with at least one
+ * `claimedPaths` entry that overlaps an active span. The cclaw scheduler
+ * auto-allows parallel dispatch when paths are disjoint, so an explicit
+ * overlap is treated as a serialization signal: the operator must wait
+ * for the existing span to terminate or pass `--allow-parallel`
+ * deliberately to acknowledge the conflict.
+ */
+export class DispatchOverlapError extends Error {
+  readonly existingSpanId: string;
+  readonly newSpanId: string;
+  readonly pair: { stage: string; agent: string };
+  readonly conflictingPaths: string[];
+  constructor(params: {
+    existingSpanId: string;
+    newSpanId: string;
+    pair: { stage: string; agent: string };
+    conflictingPaths: string[];
+  }) {
+    super(
+      `dispatch_overlap — slice-implementer span ${params.newSpanId} claims path(s) ${params.conflictingPaths.join(", ")} already held by active spanId=${params.existingSpanId} on stage=${params.pair.stage}. ` +
+        `Wait for ${params.existingSpanId} to finish, dispatch a non-overlapping slice, or pass --allow-parallel to acknowledge the conflict.`
+    );
+    this.name = "DispatchOverlapError";
+    this.existingSpanId = params.existingSpanId;
+    this.newSpanId = params.newSpanId;
+    this.pair = params.pair;
+    this.conflictingPaths = params.conflictingPaths;
+  }
+}
+
+/**
+ * v6.10.0 (P2) — thrown when the count of active `slice-implementer`
+ * spans (after fold) reaches `MAX_PARALLEL_SLICE_IMPLEMENTERS` and a new
+ * scheduled row would push it past the cap. Cap can be overridden once
+ * via `--override-cap=N` on the hook flag or globally via
+ * `CCLAW_MAX_PARALLEL_SLICE_IMPLEMENTERS=<N>` env.
+ */
+export class DispatchCapError extends Error {
+  readonly cap: number;
+  readonly active: number;
+  readonly pair: { stage: string; agent: string };
+  constructor(params: { cap: number; active: number; pair: { stage: string; agent: string } }) {
+    super(
+      `dispatch_cap — ${params.active} active ${params.pair.agent}(s) at the cap of ${params.cap}. ` +
+        `Complete one before scheduling another, or pass --override-cap=N (or CCLAW_MAX_PARALLEL_SLICE_IMPLEMENTERS=N) to lift the cap for this run.`
+    );
+    this.name = "DispatchCapError";
+    this.cap = params.cap;
+    this.active = params.active;
+    this.pair = params.pair;
+  }
+}
+
+/**
+ * v6.10.0 (P2) — default cap on active `slice-implementer` spans in a
+ * single TDD run. Aligned with evanflow's parallel cap. Override via
+ * `CCLAW_MAX_PARALLEL_SLICE_IMPLEMENTERS=<int>` (validated `>=1`).
+ */
+export const MAX_PARALLEL_SLICE_IMPLEMENTERS = 5 as const;
+
+function readMaxParallelOverrideFromEnv(): number | null {
+  const raw = process.env.CCLAW_MAX_PARALLEL_SLICE_IMPLEMENTERS;
+  if (typeof raw !== "string" || raw.trim().length === 0) return null;
+  const parsed = Number(raw);
+  if (!Number.isFinite(parsed) || !Number.isInteger(parsed) || parsed < 1) return null;
+  return parsed;
+}
+
+/**
+ * v6.10.0 (P1) — when scheduling a `slice-implementer` on a TDD stage,
+ * compare `claimedPaths` against every currently active span on the
+ * same `(stage, agent)` pair. Overlap → throw `DispatchOverlapError`;
+ * disjoint paths → return `{ autoParallel: true }` so the caller can
+ * mark the new entry `allowParallel = true` without explicit operator
+ * intent. When the agent is not a slice-implementer or no
+ * `claimedPaths` are supplied, the function returns
+ * `{ autoParallel: false }` and the legacy dedup path takes over.
+ */
+export function validateFileOverlap(
+  stamped: DelegationEntry,
+  activeEntries: DelegationEntry[]
+): { autoParallel: boolean } {
+  if (stamped.agent !== "slice-implementer" || stamped.stage !== "tdd") {
+    return { autoParallel: false };
+  }
+  const newPaths = Array.isArray(stamped.claimedPaths) ? stamped.claimedPaths : [];
+  if (newPaths.length === 0) {
+    return { autoParallel: false };
+  }
+  const sameLane = activeEntries.filter(
+    (entry) =>
+      entry.stage === stamped.stage &&
+      entry.agent === stamped.agent &&
+      entry.spanId !== stamped.spanId
+  );
+  if (sameLane.length === 0) {
+    return { autoParallel: true };
+  }
+  for (const existing of sameLane) {
+    const existingPaths = Array.isArray(existing.claimedPaths) ? existing.claimedPaths : [];
+    if (existingPaths.length === 0) {
+      // We can't prove disjoint without the other side declaring paths;
+      // be conservative and let the legacy dedup error path fire.
+      return { autoParallel: false };
+    }
+    const overlap = newPaths.filter((p) => existingPaths.includes(p));
+    if (overlap.length > 0) {
+      throw new DispatchOverlapError({
+        existingSpanId: existing.spanId ?? "unknown",
+        newSpanId: stamped.spanId ?? "unknown",
+        pair: { stage: stamped.stage, agent: stamped.agent },
+        conflictingPaths: overlap
+      });
+    }
+  }
+  return { autoParallel: true };
+}
+
+/**
+ * v6.10.0 (P2) — enforce the slice-implementer fan-out cap. The new
+ * scheduled row pushes the active count from N to N+1; if that would
+ * exceed the cap (default 5, env-overridable), throw `DispatchCapError`.
+ *
+ * Caller passes the already-folded list of active entries (latest row
+ * per spanId, ACTIVE statuses only). The function counts entries that
+ * match the agent on the same `stage`. The new row's own spanId is
+ * excluded so re-recording a `scheduled` doesn't trip the cap on a
+ * span that's already counted.
+ */
+export function validateFanOutCap(
+  stamped: DelegationEntry,
+  activeEntries: DelegationEntry[],
+  override?: number | null
+): void {
+  if (stamped.agent !== "slice-implementer" || stamped.stage !== "tdd") return;
+  if (stamped.status !== "scheduled") return;
+  const cap = (override !== null && override !== undefined && Number.isInteger(override) && override >= 1)
+    ? override
+    : (readMaxParallelOverrideFromEnv() ?? MAX_PARALLEL_SLICE_IMPLEMENTERS);
+  const sameLaneActive = activeEntries.filter(
+    (entry) =>
+      entry.stage === stamped.stage &&
+      entry.agent === stamped.agent &&
+      entry.spanId !== stamped.spanId
+  );
+  if (sameLaneActive.length + 1 > cap) {
+    throw new DispatchCapError({
+      cap,
+      active: sameLaneActive.length,
+      pair: { stage: stamped.stage, agent: stamped.agent }
+    });
+  }
+}
+
+/**
  * v6.9.0 — find the latest active span for a given `(stage, agent)`
  * pair in the supplied ledger entries. Returns the row whose latest
  * status (after the latest-by-spanId fold) is still in the active set
@@ -866,20 +1035,35 @@ export async function appendDelegation(projectRoot: string, entry: DelegationEnt
       return;
     }
     validateMonotonicTimestamps(stamped, prior.entries);
-    if (stamped.status === "scheduled" && stamped.allowParallel !== true) {
-      const existing = findActiveSpanForPair(
-        stamped.stage,
-        stamped.agent,
-        activeRunId,
-        prior
-      );
-      if (existing && existing.spanId && existing.spanId !== stamped.spanId) {
-        throw new DispatchDuplicateError({
-          existingSpanId: existing.spanId,
-          existingStatus: existing.status,
-          newSpanId: stamped.spanId,
-          pair: { stage: stamped.stage, agent: stamped.agent }
-        });
+    if (stamped.status === "scheduled") {
+      // v6.10.0 (P1+P2): for slice-implementer rows with declared
+      // claimedPaths, the file-overlap scheduler runs first. Disjoint
+      // paths auto-promote the row to allowParallel so the legacy
+      // dispatch_duplicate guard does not fire. Overlapping paths
+      // throw DispatchOverlapError. The fan-out cap then runs against
+      // the active set (excluding the new row's spanId).
+      const sameRunPrior = prior.entries.filter((entry) => entry.runId === activeRunId);
+      const activeForRun = computeActiveSubagents(sameRunPrior);
+      const overlap = validateFileOverlap(stamped, activeForRun);
+      if (overlap.autoParallel && stamped.allowParallel !== true) {
+        stamped.allowParallel = true;
+      }
+      validateFanOutCap(stamped, activeForRun);
+      if (stamped.allowParallel !== true) {
+        const existing = findActiveSpanForPair(
+          stamped.stage,
+          stamped.agent,
+          activeRunId,
+          prior
+        );
+        if (existing && existing.spanId && existing.spanId !== stamped.spanId) {
+          throw new DispatchDuplicateError({
+            existingSpanId: existing.spanId,
+            existingStatus: existing.status,
+            newSpanId: stamped.spanId,
+            pair: { stage: stamped.stage, agent: stamped.agent }
+          });
+        }
       }
     }
     await appendDelegationEvent(projectRoot, eventFromEntry(stamped));

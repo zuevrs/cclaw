@@ -62,10 +62,10 @@ export const BEHAVIOR_ANCHORS: ReadonlyArray<BehaviorAnchor> = [
   },
   {
     stage: "tdd",
-    section: "RED Evidence",
-    bad: "RED: `expect(true).toBe(true)` then \"failing test observed\" — the assertion can never have caught the bug it claims to prove.",
-    good: "RED: `expect(api.fetchFeed()).rejects.toThrow(AuthError)`; the failure output names the missing guard and ties to AC-3.",
-    ruleHint: "Mental mutation test: name a plausible bug that would still pass the assertion. If you can, the assertion is too coarse."
+    section: "Watched-RED Proof",
+    bad: "Hand-edit `S-1 | 2026-04-15T10:00 | observed RED` into the markdown table; nothing lands in the JSONL sidecar, so retries silently overwrite the row.",
+    good: "Run `cclaw-cli internal tdd-slice-record --slice S-1 --status red --test-file tests/feed.spec.ts --command \"npm test\" --paths src/api/feed.ts --ac AC-3`; the linter reads the sidecar.",
+    ruleHint: "RED/GREEN/REFACTOR transitions are recorded by `cclaw-cli internal tdd-slice-record`; the markdown tables are an auto-derived view from v6.10.0 onward."
   },
   {
     stage: "review",
@@ -283,12 +283,12 @@ Plan is ready to execute after user confirmation.
 | S-1 feed window | expected 30d window, got 7d |
 | S-2 degraded banner | banner absent after forced disconnect |
 
-## Acceptance Mapping
+## Acceptance & Failure Map
 
-| Slice | AC IDs |
-| --- | --- |
-| S-1 | AC-1 |
-| S-2 | AC-3 |
+| Slice | Source ID | AC ID | Expected behavior | RED-link |
+| --- | --- | --- | --- | --- |
+| S-1 | SRC-1 | AC-1 | feed window honors 30d cap | spanId:tdd-feed-window-red |
+| S-2 | SRC-2 | AC-3 | degraded banner appears on disconnect | .cclaw/artifacts/06-tdd-slices.jsonl |
 
 ## GREEN
 

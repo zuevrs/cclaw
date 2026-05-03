@@ -392,7 +392,13 @@ describe("stage schema and subagent alignment", () => {
     expect(scope).toContain("Invariant to preserve");
     expect(design).toContain("## Reference-Grade Contracts");
     expect(design).toContain("Reusable invariant");
-    expect(tdd).toContain("Vertical-slice RED/GREEN/REFACTOR checkpoint plan");
+    // v6.10.0 (T4): per-slice Execution Posture block was removed from
+    // the TDD template. The slice ledger sidecar 06-tdd-slices.jsonl is
+    // now the source of truth for per-slice RED/GREEN/REFACTOR
+    // progression; the overall stage strategy lives in 05-plan.md's
+    // Execution Posture.
+    expect(tdd).not.toContain("Vertical-slice RED/GREEN/REFACTOR checkpoint plan");
+    expect(tdd).toContain("## Vertical Slice Cycle");
     expect(review).toContain("Victory Detector: pass | fail");
     expect(ship).toContain("Victory Detector: pass | fail");
   });
