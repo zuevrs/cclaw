@@ -32,6 +32,10 @@ import {
   FlowStateGuardMismatchError,
   verifyFlowStateGuard
 } from "../run-persistence.js";
+import {
+  DelegationTimestampError,
+  DispatchDuplicateError
+} from "../delegation.js";
 
 interface InternalIo {
   stdout: Writable;
@@ -122,6 +126,16 @@ export async function runInternalCommand(
   } catch (err) {
     if (err instanceof FlowStateGuardMismatchError) {
       io.stderr.write(`cclaw internal ${subcommand}: ${err.message}\n`);
+      return 2;
+    }
+    if (err instanceof DelegationTimestampError) {
+      io.stderr.write(
+        `error: delegation_timestamp_non_monotonic — ${err.field}: ${err.actual} < ${err.priorBound}\n`
+      );
+      return 2;
+    }
+    if (err instanceof DispatchDuplicateError) {
+      io.stderr.write(`error: dispatch_duplicate — ${err.message}\n`);
       return 2;
     }
     io.stderr.write(
