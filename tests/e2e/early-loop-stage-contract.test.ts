@@ -62,6 +62,17 @@ describe("early-loop stage contract", () => {
     const state = createInitialFlowState("run-early");
     state.currentStage = "design";
     state.activeRunId = "run-early";
+    // v6.9.0: silence the elicitation-stage qa-log floor so we can isolate
+    // the early-loop convergence behavior. The skip-questions hint is the
+    // documented escape hatch for stages where the operator already
+    // accepted the stop signal.
+    state.interactionHints = {
+      design: {
+        skipQuestions: true,
+        sourceStage: "design",
+        recordedAt: "2026-04-29T12:00:00.000Z"
+      }
+    };
 
     await fs.writeFile(
       path.join(root, ".cclaw/state/early-loop.json"),

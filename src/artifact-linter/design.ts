@@ -491,7 +491,7 @@ export async function lintDesignStage(ctx: StageLintContext): Promise<void> {
     if (layeredDocumentReview !== null) {
       findings.push({
         section: "Document Reviewer Structured Findings",
-        required: false,
+        required: true,
         rule: "When Layered review references coherence-reviewer/scope-guardian-reviewer/feasibility-reviewer, include explicit reviewer status plus calibrated finding lines.",
         found: layeredDocumentReview.missingStructured.length === 0,
         details: layeredDocumentReview.missingStructured.length === 0

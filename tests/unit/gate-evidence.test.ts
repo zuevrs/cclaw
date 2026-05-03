@@ -635,85 +635,6 @@ vcs: none
     expect(result.issues.join("\n")).toContain("design research gate blocked");
   });
 
-  it("blocks tdd stage when tdd-cycle order is invalid for the active run", async () => {
-    const root = await createTempProject("gate-evidence-tdd-order");
-    await prepareRoot(root);
-    await fs.writeFile(
-      path.join(root, ".cclaw/artifacts/06-tdd.md"),
-      `# TDD Artifact
-
-## RED Evidence
-| Slice | Test name | Command | Failure output summary |
-|---|---|---|---|
-| S-1 | should enforce guard | npm test -- guard.test.ts | FAIL: expected unauthorized to be blocked |
-
-## Acceptance Mapping
-| Slice | Plan task ID | Spec criterion ID |
-|---|---|---|
-| S-1 | T-1 | AC-1 |
-
-## Failure Analysis
-| Slice | Expected missing behavior | Actual failure reason |
-|---|---|---|
-| S-1 | Missing auth check | Guard path bypassed |
-
-## GREEN Evidence
-- Full suite command: npm test
-- Full suite result: PASS
-
-## REFACTOR Notes
-- What changed: removed duplicate guard setup
-- Why: reduce coupling
-- Behavior preserved: npm test remains green
-
-## Traceability
-- T-1 -> AC-1
-
-## Verification Ladder
-- Highest tier reached: command
-- Evidence: npm test (pass)
-`,
-      "utf8"
-    );
-    await fs.writeFile(
-      path.join(root, ".cclaw/state/tdd-cycle-log.jsonl"),
-      `${JSON.stringify({
-        ts: "2026-04-21T10:00:00.000Z",
-        runId: "run-tdd-order",
-        stage: "tdd",
-        slice: "S-1",
-        phase: "green",
-        command: "npm test -- guard.test.ts",
-        exitCode: 0
-      })}\n${JSON.stringify({
-        ts: "2026-04-21T10:00:05.000Z",
-        runId: "run-tdd-order",
-        stage: "tdd",
-        slice: "S-1",
-        phase: "red",
-        command: "npm test -- guard.test.ts",
-        exitCode: 1
-      })}\n`,
-      "utf8"
-    );
-
-    const state = createInitialFlowState("run-tdd-order");
-    state.currentStage = "tdd";
-    const required = requiredGateIds("tdd");
-    state.stageGateCatalog.tdd.passed = [...required];
-    for (const gateId of required) {
-      state.guardEvidence[gateId] =
-        gateId === "tdd_verified_before_complete"
-          ? "npm test -- guard.test.ts; sha: abc1234; PASS"
-          : `evidence:${gateId}`;
-    }
-
-    const result = await verifyCurrentStageGateEvidence(root, state);
-    expect(result.ok).toBe(false);
-    expect(result.issues.join("\n")).toContain("tdd cycle order gate blocked");
-    expect(result.issues.join("\n")).toContain("GREEN repair needed");
-  });
-
   it("lints artifact eagerly when file exists even before any gate is passed", async () => {
     const root = await createTempProject("gate-evidence-artifact-eager");
     await prepareRoot(root);
@@ -733,6 +654,15 @@ vcs: none
     const root = await createTempProject("gate-evidence-missing");
     await prepareRoot(root);
     const state = createInitialFlowState("run-active");
+    // v6.9.0: surface the qa-log convergence advisory so the underlying
+    // gate-catalog signal isn't muted by the brainstorm Q&A Log floor.
+    state.interactionHints = {
+      [state.currentStage]: {
+        skipQuestions: true,
+        sourceStage: state.currentStage,
+        recordedAt: "2026-04-29T12:00:00.000Z"
+      }
+    };
     const required = requiredGateIds(state.currentStage);
 
     const result = await verifyCurrentStageGateEvidence(root, state);

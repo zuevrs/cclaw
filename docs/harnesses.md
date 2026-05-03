@@ -131,19 +131,21 @@ Design-stage research fleet uses the same parity model:
 
 ## Semantic hook event coverage
 
+Runtime Honesty 6.9.0 reduced the runtime to two dispatched handlers:
+`session-start` (rehydrate) and `stop-handoff` (clean handoff). Earlier
+releases also generated `prompt-guard`, `workflow-guard`,
+`context-monitor`, `pre-compact`, and `verify-current-state` handlers, but
+those entry points were unreachable via the dispatch table they shipped
+with and have been removed.
+
 | Event | Claude | Cursor | OpenCode | Codex |
 |---|---|---|---|---|
 | `session_rehydrate` | SessionStart matcher startup|resume|clear|compact | sessionStart/sessionResume/sessionClear/sessionCompact | plugin event handlers + transform rehydration | SessionStart matcher startup|resume |
-| `pre_tool_prompt_guard` | PreToolUse -> prompt-guard | preToolUse -> prompt-guard | plugin tool.execute.before -> prompt-guard | PreToolUse matcher Bash -> prompt-guard (plus UserPromptSubmit for non-Bash prompts) |
-| `pre_tool_workflow_guard` | PreToolUse -> workflow-guard | preToolUse -> workflow-guard | plugin tool.execute.before -> workflow-guard | PreToolUse matcher Bash -> workflow-guard (Bash-only) |
-| `post_tool_context_monitor` | PostToolUse -> context-monitor | postToolUse -> context-monitor | plugin tool.execute.after -> context-monitor | PostToolUse matcher Bash -> context-monitor (Bash-only) |
 | `stop_handoff` | Stop -> stop-handoff | stop -> stop-handoff | plugin session.idle -> stop-handoff | Stop -> stop-handoff |
-| `precompact_compat` | PreCompact -> pre-compact | sessionCompact -> pre-compact | plugin session.compacted -> pre-compact | missing |
-| `strict_state_verify` | missing | missing | missing | UserPromptSubmit -> verify-current-state (blocks only in strict mode) |
 
 ## Hook lifecycle aliases
 
-The generated Node dispatcher accepts a small compatibility alias set for lifecycle names: `stop` and `stop-checkpoint` route to `stop-handoff`, `precompact` routes to `pre-compact`, and `session-rehydrate` routes to `session-start`. The `pre-compact` handler is intentionally a no-op compatibility marker; rehydration remains the `session-start` responsibility after compact events. Harness JSON should still emit the canonical handler names from `src/content/hook-manifest.ts`.
+The generated Node dispatcher accepts a small compatibility alias set for lifecycle names: `stop` and `stop-checkpoint` route to `stop-handoff`, and `session-rehydrate` routes to `session-start`. Rehydration remains the `session-start` responsibility after compact events. Harness JSON should still emit the canonical handler names from `src/content/hook-manifest.ts`.
 
 ## Hook event casing
 
@@ -151,10 +153,10 @@ Hook keys are intentionally harness-native and must not be normalized:
 
 | Harness | ID | Event key casing |
 |---|---|---|
-| Claude Code | `claude` | PascalCase (`SessionStart`, `PreToolUse`) |
-| Cursor | `cursor` | camelCase (`sessionStart`, `preToolUse`) |
-| OpenCode | `opencode` | camelCase (`sessionStart`, `preToolUse`) |
-| OpenAI Codex | `codex` | PascalCase (`SessionStart`, `PreToolUse`) |
+| Claude Code | `claude` | PascalCase (`SessionStart`, `Stop`) |
+| Cursor | `cursor` | camelCase (`sessionStart`, `stop`) |
+| OpenCode | `opencode` | camelCase (`sessionStart`, `stop`) |
+| OpenAI Codex | `codex` | PascalCase (`SessionStart`, `Stop`) |
 
 Use the exact event names from each harness schema. Treating all hooks as one
 shared casing silently breaks generated wiring.
@@ -163,12 +165,11 @@ shared casing silently breaks generated wiring.
 
 - `tier1`: full native delegation + structured asks + full hook surface.
 - `tier2`: usable flow with capability gaps; mandatory delegation can require waivers.
-- Codex-specific ceiling: `PreToolUse` can only intercept `Bash`. Direct
-  `Write`/`Edit` to `.cclaw/state/flow-state.json` cannot be hard-blocked
-  at hook level, so the canonical path is
-  `node .cclaw/hooks/stage-complete.mjs <stage>` plus the non-blocking
-  `UserPromptSubmit` state nudge.
-- In `strict` mode, Codex additionally runs the generated Node/runtime `verify-current-state` path on `UserPromptSubmit` as a fail-closed check. Advisory mode remains non-blocking, including when the generated local Node entrypoint is missing. This strict-only coverage is represented explicitly by the `strict_state_verify` semantic row above.
+- Hook-level pre-tool blocking (prompt-guard / workflow-guard) was removed
+  in 6.9.0. Stage transitions are owned by the canonical CLI path
+  `node .cclaw/hooks/stage-complete.mjs <stage>`; harness sessions enforce
+  workflow discipline via the iron-laws block surfaced at session-start
+  rather than via per-tool hook interception.
 
 ## Shared command contract
 

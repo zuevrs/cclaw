@@ -1,5 +1,70 @@
 # Changelog
 
+## 6.9.0 — Runtime Honesty (Purge + R7 Fix + Schema + Skill Align + TDD Hardening)
+
+Five-phase release tightening the gap between what the runtime promises in skills/docs and what it actually does at execution time. Phase A removes large blocks of orphaned code so the runtime can no longer crash through unreachable paths. Phase B fixes the R7 regressions where stale ledger rows blocked fresh dispatches and `subagents.json` showed terminal spans as still active. Phase C repairs schema drift in `flow-state.json` and `early-loop.json`. Phase D re-aligns skill copy with the new runtime behavior (iron laws actually loaded, parallel-implementer rules stated explicitly, "Ralph-Loop" terminology disambiguated). Phase E hardens the TDD linter so claims about RED→GREEN→REFACTOR ordering, investigation evidence, layered review structure, supply-chain drift, and verification status are all checked rather than implied.
+
+### Phase A — Dead-code Purge
+
+- **`src/content/node-hooks.ts`** — `main()` only ever dispatches `session-start` and `stop-handoff` after Wave 22; all other handlers (`handlePromptGuard`, `handleWorkflowGuard`, `handlePreToolPipeline`, `handlePromptPipeline`, `handleContextMonitor`, `handleVerifyCurrentState`, `handlePreCompact`) and their helpers (`hasFailingRedEvidenceForPath`, `reviewCoverageComplete`, `strictLawSet`, `lawIsStrict`, `isTestPayload`, `isProductionPath`, path-matching utilities, and the orphaned `appendJsonLine`) have been removed. `mapHookNameToCodexEvent` and `parseHookKind` are trimmed to the surviving names. The hook-name array near the top of the file is reduced to `["session-start", "stop-handoff"]`.
+- **`scheduleSessionDigestRefresh` removed** — the forked-child digest-refresh path was crashing on usage and is no longer invoked from `handleSessionStart`. The associated `session-start-refresh` hook event was unreachable; both the implementation and the dispatch entry are gone.
+- **`src/install.ts`** — `managedGitRuntimeScript`, `managedGitRelayHook`, `syncManagedGitHooks`, and the `MANAGED_GIT_*` constants are removed. `init`/`sync`/`uninstall` no longer install `.cclaw/git-hooks/*`. A new `cleanupLegacyManagedGitHookRelays` helper purges the legacy directory on existing installs so they self-heal on the next `cclaw-cli sync`.
+- **`src/gate-evidence.ts` `tdd-cycle-log.jsonl` block removed** — the substring-based JSONL order check is gone. The corresponding `parseTddCycleLog` / `validateTddCycleOrder` imports are dropped. The `tdd-cycle-log.jsonl` file (and the `tdd-cycle-log` skill folder) are added to `DEPRECATED_STATE_FILES` / `DEPRECATED_SKILL_FOLDERS_FULL` so existing installs purge them on sync.
+- **Hook profile honored at `main()`** — `isHookDisabled` / `CCLAW_HOOK_PROFILE` / `CCLAW_DISABLED_HOOKS` are now consulted before dispatching `session-start` / `stop-handoff`. Disabled hooks exit `0` quietly. `tests/unit/node-hook-runtime.test.ts` exercises env-disable, profile-minimal, and config-disabled paths.
+
+#### Phase A — Migration notes
+
+- **Removed runtime hooks**: `prompt-guard`, `workflow-guard`, `pre-tool-pipeline`, `prompt-pipeline`, `context-monitor`, `verify-current-state`, `pre-compact`, and `session-start-refresh` are no longer dispatched. Harness configs (Codex / Claude / Cursor) that referenced these events should be regenerated; the runtime now only emits `SessionStart` and `Stop`. `docs/harnesses.md` reflects the trimmed event coverage.
+- **Removed managed git hooks**: `.cclaw/git-hooks/*` is no longer installed. Existing checkouts will have these files removed on the next `cclaw-cli sync` via `cleanupLegacyManagedGitHookRelays`.
+
+### Phase B — R7 Regression Fixes
+
+- **`findActiveSpanForPair` strict `runId` matching** — `src/delegation.ts` no longer treats entries with empty/missing `runId` as belonging to the current run. The previous `entry.runId && entry.runId !== runId` filter let pre-runId legacy rows pollute the per-run fold, producing spurious `dispatch_duplicate` errors when starting a fresh `slice-implementer` cycle. The inline copy in `src/content/hooks.ts::delegationRecordScript` is updated in lockstep (the "keep in sync" comment still applies).
+- **`writeSubagentTracker` runs under the `appendDelegation` lock for every status** — terminal events (`completed`, `stale`) now re-fold the tracker inside the same directory lock, so `subagents.json::active` cannot lag the ledger after a `scheduled → launched → completed` lifecycle.
+- **New e2e: `tests/e2e/flow-tdd-cycles.test.ts`** — runs five sequential `slice-implementer` cycles for the same agent without `--supersede` or `--allow-parallel`. Every cycle covers `scheduled → launched → acknowledged → completed`, and the test asserts the ledger ends with 20 rows and `subagents.json::active` empty between cycles.
+- **New unit cases in `tests/unit/dispatch-dedup.test.ts`** — synthetic ledger reproduces the R7 hox: a `run-1` `slice-implementer` lifecycle with empty/missing `runId` does NOT block a fresh `run-2` dispatch. A second case asserts `subagents.json` shows an empty `active` array after the full lifecycle for the same span.
+
+#### Phase B — Migration notes
+
+- Legacy ledgers with empty `runId` rows continue to read fine (treated as not-belonging-to-current-run on dispatch dedup); no rewrite is required. Operators who hit `dispatch_duplicate` on a fresh run after a 6.8.x install can now retry without manual ledger surgery.
+
+### Phase C — Schema Repair
+
+- **Hard-error on writing `early-loop` rows without `runId`** — `src/early-loop.ts` no longer falls back to `"active"` for missing `runId`; the CLI/hook surface now refuses to write a row without a real run identifier. Reads of legacy `.cclaw/state/early-loop-log.jsonl` files emit a structured warning and skip the row instead of bricking the read path.
+- **`cclaw-cli internal flow-state-repair --early-loop`** — re-derives `state/early-loop.json` from `early-loop-log.jsonl` rather than trusting the on-disk file, normalizing it to the canonical `EarlyLoopStatus` shape. Unit-test coverage feeds it a hand-written legacy file from the R7 hox scenario and asserts the canonical fields are restored.
+- **`completedStageMeta` retro-migration** — `repairFlowStateGuard` now invokes `backfillCompletedStageMeta` so any stage in `completedStages` that's missing from `completedStageMeta` is populated with `{ completedAt: <artifact mtime or now> }`. Brainstorm specifically gets a `completedStageMeta` entry on advancement going forward; the repair path is the safety net for runs created on older builds.
+- **`qaLogFloor.blocking` pushes a structured `gates.issues` entry** — `src/gate-evidence.ts` no longer relies on the `qa_log_unconverged` linter rule alone to block; when the floor itself is blocking it emits a dedicated entry into `gates.issues`, making the harness signal source-of-truth. The linter rule remains as detail/fallback.
+
+#### Phase C — Migration notes
+
+- **`runId` fallback removed** — older runs that wrote `early-loop-log.jsonl` rows without `runId` are still readable (with structured warnings) but cannot be appended to until repaired. Run `cclaw-cli internal flow-state-repair --early-loop` to re-derive the canonical status file. New writes always require `runId`.
+- **Backfill is idempotent** — calling `flow-state-repair` on a healthy install is a no-op; only stages missing from `completedStageMeta` are populated.
+
+### Phase D — Skill / Code Align
+
+- **Iron laws actually loaded into `session-start`** — `handleSessionStart` now appends `ironLawsSkillMarkdown()` from `src/content/iron-laws.ts` to the bootstrap digest, fulfilling the long-standing skill promise that iron laws are visible at session start.
+- **`subagents.ts` parallel-implementer rule rewritten** — replaces the old "NEVER parallel implementation subagents" hard rule with the explicit conjunction: parallel implementers are allowed only when (a) lanes touch non-overlapping files, (b) the controller passes `--allow-parallel` on each ledger row, and (c) an `integration-overseer` is dispatched after the parallel lanes and writes cohesion-evidence into the artifact before the gate is marked passed. `src/content/stages/tdd.ts` mirrors the rule into the TDD interaction protocol.
+- **"Ralph-Loop" terminology disambiguated** — `src/content/skills-elicitation.ts`, `src/content/stages/brainstorm.ts`, `src/content/stages/scope.ts`, and `src/content/stages/design.ts` now distinguish the **Q&A Ralph Loop** / Elicitation Convergence (used during questioning) from the **Early-Loop / Concern Ledger** (producer-critic concern fold during stage execution). The two were previously conflated in skill copy, leading to confusion when one of them was disabled.
+- **Docs sweep** — `docs/harnesses.md` no longer references `PreToolUse` / `PostToolUse` / `UserPromptSubmit` / `PreCompact` event coverage or the removed handlers (`prompt guard`, `workflow guard`, `context monitor`, `verify-current-state`); the hook-event-casing table only lists `SessionStart` and `Stop`; the interpretation section explains that workflow discipline is now enforced via iron-laws at session-start rather than pre-tool blocking.
+
+#### Phase D — Migration notes
+
+- Cohesion contract and `--allow-parallel` ledger flag are now load-bearing. Implementer dispatchers that previously serialized "because the rule said no parallel" can now opt into parallel lanes if and only if all three conditions hold; the TDD linter (`tdd.cohesion_contract_missing` + `tdd.integration_overseer_missing`) already enforces the cohesion-contract side.
+
+### Phase E — TDD Hardening
+
+- **`parseVerticalSliceCycle` table parser** — `src/artifact-linter/tdd.ts` replaces the substring `RED`/`GREEN`/`REFACTOR` check with a real Markdown-table parser that validates monotonic `RED ts ≤ GREEN ts ≤ REFACTOR ts` per slice row. REFACTOR may be marked `deferred because <reason>` / `not needed because <reason>` / `n/a <reason>` / `skipped <reason>`; deferral without a rationale fails. Unit tests cover monotonic-OK, GREEN-before-RED rejection, deferred-with-rationale acceptance, and deferred-without-rationale rejection.
+- **`extractAuthoredBody` applied inside `evaluateInvestigationTrace`** — the investigation-trace detector strips `<!-- linter-meta --> … <!-- /linter-meta -->` blocks, raw HTML comments, and `linter-rule` fenced blocks before scanning, so template-echoed example paths no longer produce false positives. Regression unit test injects a linter-meta paragraph that mentions `src/example/path.ts` and asserts the rule still fires `found=false` for prose-only authored content.
+- **`Document Reviewer Structured Findings` raised to `required: true` in design** — `src/artifact-linter/design.ts` matches `plan.ts:217-225` and `spec.ts:141-148`. When the design Layered review references coherence/scope-guardian/feasibility reviewers, structured status + calibrated finding lines are now mandatory, not advisory.
+- **`tdd_docs_drift_check` extended for supply-chain manifests** — `src/internal/detect-supply-chain-changes.ts` is added, scoped to `package.json` `dependencies`/`devDependencies`/`peerDependencies`/`optionalDependencies`, anything under `.github/workflows/**`, and anything under `.cursor/**`. `gate-evidence.ts` calls it alongside `detectPublicApiChanges`; if either trigger fires for the active TDD run and `doc-updater` was not dispatched, the gate is blocked with structured `gates.issues` entries. Unit tests cover deps-add, package.json non-deps edits ignored, workflow edits, `.cursor/**` edits, and a clean-no-change baseline.
+- **`tdd_verification_pending` linter rule** — new `required: true` rule in `src/artifact-linter/tdd.ts` scans `## Verification Ladder` (or `Verification Status` / `Verification`) for any row whose cells contain literal `pending`. Rows must be promoted to `passed`, `n/a`, `failed`, `skipped`, or `deferred` (with rationale) before stage-complete. Unit tests cover `pending → block` and `passed → pass`.
+
+#### Phase E — Migration notes
+
+- **`Document Reviewer Structured Findings` raised from `required: false → true` in design** — design artifacts that mention layered-review reviewers but omit calibrated finding lines will now block stage-complete instead of producing an advisory finding. Fix by adding the structured reviewer-status block under `## Layered review` with explicit reviewer status + calibrated findings.
+- **New blocking rule `tdd_verification_pending`** — TDD artifacts that leave `pending` cells in the Verification Ladder section will block stage-complete. Promote rows or mark them `n/a`/`deferred` with a one-line rationale.
+- **Supply-chain manifest changes now require `doc-updater`** — TDD stages that touch `package.json` dependency keys, GitHub workflows, or `.cursor/**` configs without dispatching a completed `doc-updater` delegation will block stage-complete with `tdd_docs_drift_check`.
+
 ## 6.8.0 — Ledger Truth
 
 Round 7 closes three pinpoint trust bugs in the v6.7.0 runtime that were reproducible on a clean install: stale `state/subagents.json` (active filter without per-`spanId` fold), no monotonic-timestamp validation on delegation-record writes, and silent acceptance of duplicate `scheduled` spans for the same `(stage, agent)` pair without a terminal row on the previous span.

@@ -20,8 +20,8 @@ import {
   normalizeEarlyLoopMaxIterations
 } from "./early-loop.js";
 import { detectPublicApiChanges } from "./internal/detect-public-api-changes.js";
+import { detectSupplyChainChanges } from "./internal/detect-supply-chain-changes.js";
 import { readFlowState, writeFlowState } from "./runs.js";
-import { parseTddCycleLog, validateTddCycleOrder } from "./tdd-cycle.js";
 import { validateTddVerificationEvidence } from "./tdd-verification-evidence.js";
 import { FLOW_STAGES, type FlowStage } from "./types.js";
 
@@ -524,7 +524,8 @@ export async function verifyCurrentStageGateEvidence(
     }
     if (stage === "tdd") {
       const docsDriftDetection = await detectPublicApiChanges(projectRoot);
-      if (docsDriftDetection.triggered) {
+      const supplyChainDetection = await detectSupplyChainChanges(projectRoot);
+      if (docsDriftDetection.triggered || supplyChainDetection.triggered) {
         const ledger = await readDelegationLedger(projectRoot);
         const hasDocUpdaterCompletion = ledger.entries.some((entry) =>
           entry.runId === flowState.activeRunId &&
@@ -533,29 +534,16 @@ export async function verifyCurrentStageGateEvidence(
           entry.status === "completed"
         );
         if (!hasDocUpdaterCompletion) {
-          issues.push(
-            `tdd docs drift gate blocked (tdd_docs_drift_check): public surface changes detected (${docsDriftDetection.changedFiles.join(", ")}) but no completed doc-updater delegation exists for the active run.`
-          );
-        }
-      }
-      const tddLogPath = path.join(projectRoot, RUNTIME_ROOT, "state", "tdd-cycle-log.jsonl");
-      if (await exists(tddLogPath)) {
-        try {
-          const tddLogRaw = await fs.readFile(tddLogPath, "utf8");
-          const parsedCycles = parseTddCycleLog(tddLogRaw);
-          const tddOrderValidation = validateTddCycleOrder(parsedCycles, {
-            runId: flowState.activeRunId
-          });
-          if (!tddOrderValidation.ok) {
-            const details: string[] = [...tddOrderValidation.issues];
-            if (tddOrderValidation.openRedSlices.length > 0) {
-              details.push(`open red slices: ${tddOrderValidation.openRedSlices.join(", ")}`);
-            }
-            issues.push(`tdd cycle order gate blocked: ${details.join("; ")}`);
+          if (docsDriftDetection.triggered) {
+            issues.push(
+              `tdd docs drift gate blocked (tdd_docs_drift_check): public surface changes detected (${docsDriftDetection.changedFiles.join(", ")}) but no completed doc-updater delegation exists for the active run.`
+            );
           }
-        } catch (err) {
-          const reason = err instanceof Error ? err.message : String(err);
-          issues.push(`tdd cycle order gate blocked: unable to read tdd-cycle-log.jsonl (${reason}).`);
+          if (supplyChainDetection.triggered) {
+            issues.push(
+              `tdd docs drift gate blocked (tdd_docs_drift_check): supply-chain changes detected (${supplyChainDetection.changedFiles.join(", ")}) but no completed doc-updater delegation exists for the active run.`
+            );
+          }
         }
       }
     }
@@ -638,6 +626,15 @@ export async function verifyCurrentStageGateEvidence(
       forcingPending: floor.forcingPending,
       noNewDecisions: floor.noNewDecisions
     };
+    // v6.9.0 — when the QA log floor is blocking, mirror that decision into
+    // `gates.issues` so the harness has a single structured source of truth
+    // for "this stage is blocked". The `qa_log_unconverged` linter rule
+    // remains the verbose detail/fallback channel.
+    if (qaLogFloor.blocking) {
+      issues.push(
+        `qa log floor blocked (qa_log_unconverged): ${qaLogFloor.count}/${qaLogFloor.min} entries on stage "${stage}" (track=${flowState.track}, discoveryMode=${flowState.discoveryMode ?? "default"}). Continue elicitation or pass --skip-questions to record the stop.`
+      );
+    }
   }
 
   return {

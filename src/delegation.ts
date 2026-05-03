@@ -749,11 +749,18 @@ export class DispatchDuplicateError extends Error {
 }
 
 /**
- * v6.8.0 — find the latest active span for a given `(stage, agent)`
+ * v6.9.0 — find the latest active span for a given `(stage, agent)`
  * pair in the supplied ledger entries. Returns the row whose latest
  * status (after the latest-by-spanId fold) is still in the active set
- * (`scheduled | launched | acknowledged`). Caller is responsible for
- * filtering to the current run.
+ * (`scheduled | launched | acknowledged`).
+ *
+ * Run-scope is **strict**: only entries whose `runId` matches the
+ * supplied `runId` are folded. Entries with empty/missing `runId`
+ * (legacy ledgers from v6.8 and earlier) are treated as NOT belonging
+ * to the current run, so they cannot keep an old span "active" across
+ * a fresh dispatch and trip a spurious `dispatch_duplicate`. This
+ * fixes R7: a slice-implementer that ran in run-1 must not block a
+ * slice-implementer scheduled in run-2.
  *
  * keep in sync with the inline copy in
  * `src/content/hooks.ts::delegationRecordScript`.
@@ -765,7 +772,8 @@ export function findActiveSpanForPair(
   ledger: DelegationLedger
 ): DelegationEntry | null {
   const sameRun = ledger.entries.filter((entry) => {
-    if (entry.runId && entry.runId !== runId) return false;
+    if (typeof entry.runId !== "string" || entry.runId.length === 0) return false;
+    if (entry.runId !== runId) return false;
     return entry.stage === stage && entry.agent === agent;
   });
   for (const entry of computeActiveSubagents(sameRun)) {

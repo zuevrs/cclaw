@@ -41,6 +41,42 @@ describe("cclaw internal flow-state-repair", () => {
     expect(stderr).toMatch(/requires --reason/u);
   });
 
+  it("backfills missing completedStageMeta entries from completedStages on repair (v6.9.0)", async () => {
+    const root = await createTempProject("flow-state-repair-backfill-meta");
+    await ensureRunSystem(root);
+    const initial = createInitialFlowState({ track: "standard", discoveryMode: "guided" });
+    initial.completedStages = ["brainstorm", "scope"];
+    initial.completedStageMeta = {};
+    initial.currentStage = "design";
+    await writeFlowState(root, initial, { allowReset: true });
+
+    // Seed brainstorm artifact so the backfill picks up an mtime instead of "now".
+    await fs.mkdir(path.join(root, ".cclaw/artifacts"), { recursive: true });
+    const brainstormPath = path.join(root, ".cclaw/artifacts/01-brainstorm.md");
+    await fs.writeFile(brainstormPath, "# Brainstorm\n", "utf8");
+    const stat = await fs.stat(brainstormPath);
+
+    const { code, stdout } = await runCli(root, [
+      "flow-state-repair",
+      "--reason=meta_backfill",
+      "--json"
+    ]);
+    expect(code).toBe(0);
+    const payload = JSON.parse(stdout) as {
+      ok: boolean;
+      completedStageMetaBackfilled: string[];
+    };
+    expect(payload.completedStageMetaBackfilled.sort()).toEqual(["brainstorm", "scope"]);
+    const reloaded = await readFlowState(root);
+    expect(reloaded.completedStageMeta?.brainstorm?.completedAt).toBeDefined();
+    expect(reloaded.completedStageMeta?.scope?.completedAt).toBeDefined();
+    // Brainstorm meta should match artifact mtime (within ms rounding).
+    const brainstormCompletedAtMs = Date.parse(
+      reloaded.completedStageMeta!.brainstorm!.completedAt
+    );
+    expect(Math.abs(brainstormCompletedAtMs - stat.mtimeMs)).toBeLessThan(1000);
+  });
+
   it("recomputes sidecar and appends repair log with a valid reason", async () => {
     const root = await createTempProject("flow-state-repair-happy");
     await ensureRunSystem(root);
@@ -68,5 +104,70 @@ describe("cclaw internal flow-state-repair", () => {
     expect(logRaw).toContain("reason=manual_edit_recovery");
     const loaded = await readFlowState(root);
     expect(loaded.currentStage).toBe("plan");
+  });
+
+  it("--early-loop normalizes early-loop.json from early-loop-log.jsonl (v6.9.0 hox repair)", async () => {
+    const root = await createTempProject("flow-state-repair-early-loop");
+    await ensureRunSystem(root);
+    const initial = createInitialFlowState({ track: "standard", discoveryMode: "guided" });
+    initial.currentStage = "scope";
+    initial.activeRunId = "run-fix";
+    await writeFlowState(root, initial, { allowReset: true });
+
+    const stateDir = path.join(root, ".cclaw/state");
+    await fs.mkdir(stateDir, { recursive: true });
+    // Hand-written early-loop.json that does NOT match the canonical shape.
+    await fs.writeFile(
+      path.join(stateDir, "early-loop.json"),
+      JSON.stringify({ legacy: true, iteration: "broken" }, null, 2),
+      "utf8"
+    );
+    // Truthful early-loop log with one open concern.
+    const logRow = {
+      ts: "2026-04-29T10:00:00.000Z",
+      runId: "run-fix",
+      stage: "scope",
+      iteration: 1,
+      concerns: [
+        {
+          id: "C-1",
+          severity: "critical",
+          locator: "Scope > Out of Scope",
+          summary: "Boundary missing"
+        }
+      ]
+    };
+    await fs.writeFile(
+      path.join(stateDir, "early-loop-log.jsonl"),
+      `${JSON.stringify(logRow)}\n`,
+      "utf8"
+    );
+
+    const { code, stdout } = await runCli(root, [
+      "flow-state-repair",
+      "--reason=early_loop_normalize",
+      "--early-loop",
+      "--json"
+    ]);
+    expect(code).toBe(0);
+    const payload = JSON.parse(stdout) as {
+      earlyLoop: {
+        performed: boolean;
+        stage?: string;
+        runId?: string;
+        iteration?: number;
+        openConcernCount?: number;
+      } | null;
+    };
+    expect(payload.earlyLoop?.performed).toBe(true);
+    expect(payload.earlyLoop?.stage).toBe("scope");
+    expect(payload.earlyLoop?.runId).toBe("run-fix");
+    expect(payload.earlyLoop?.openConcernCount).toBe(1);
+
+    const normalized = JSON.parse(
+      await fs.readFile(path.join(stateDir, "early-loop.json"), "utf8")
+    ) as { iteration: number; openConcerns: Array<{ id: string }> };
+    expect(normalized.iteration).toBe(1);
+    expect(normalized.openConcerns.map((c) => c.id)).toEqual(["C-1"]);
   });
 });

@@ -15,7 +15,8 @@ async function runNodeHook(
   root: string,
   hookName: string,
   scriptBody: string,
-  input: unknown = {}
+  input: unknown = {},
+  extraEnv: Record<string, string> = {}
 ): Promise<RuntimeResult> {
   const scriptPath = path.join(root, "run-hook.mjs");
   await fs.writeFile(scriptPath, scriptBody, "utf8");
@@ -27,7 +28,8 @@ async function runNodeHook(
       cwd: root,
       env: {
         ...process.env,
-        CCLAW_PROJECT_ROOT: root
+        CCLAW_PROJECT_ROOT: root,
+        ...extraEnv
       }
     });
     let stdout = "";
@@ -104,6 +106,27 @@ describe("node hook runtime", () => {
     const context = payload.hookSpecificOutput?.additionalContext ?? payload.additional_context ?? "";
     expect(context).toContain("cclaw loaded. Flow: stage=scope");
     expect(context).toContain("run=run-node");
+  });
+
+  it("session-start loads iron-laws into the bootstrap digest (v6.9.0)", async () => {
+    const root = await createTempProject("node-hook-session-start-iron-laws");
+    await seedFlowState(root, "scope");
+    await fs.mkdir(path.join(root, ".cclaw/skills/iron-laws"), { recursive: true });
+    await fs.writeFile(
+      path.join(root, ".cclaw/skills/iron-laws/SKILL.md"),
+      "# Iron Laws\n\n- stop-clean-or-handoff\n",
+      "utf8"
+    );
+
+    const result = await runNodeHook(root, "session-start", nodeHookRuntimeScript());
+    expect(result.code).toBe(0);
+    const payload = JSON.parse(result.stdout) as {
+      hookSpecificOutput?: { additionalContext?: string };
+      additional_context?: string;
+    };
+    const context = payload.hookSpecificOutput?.additionalContext ?? payload.additional_context ?? "";
+    expect(context).toContain("Iron Laws");
+    expect(context).toContain("stop-clean-or-handoff");
   });
 
   it("session-start surfaces adaptive skip-questions hints", async () => {
@@ -192,5 +215,57 @@ describe("node hook runtime", () => {
     const result = await runNodeHook(root, "workflow-guard", nodeHookRuntimeScript(), {});
     expect(result.code).toBe(1);
     expect(result.stderr).toContain("<session-start|stop-handoff>");
+  });
+
+  it("CCLAW_DISABLED_HOOKS exits 0 quietly without dispatching", async () => {
+    const root = await createTempProject("node-hook-disabled-env");
+    await seedFlowState(root);
+    const result = await runNodeHook(
+      root,
+      "session-start",
+      nodeHookRuntimeScript(),
+      {},
+      { CCLAW_DISABLED_HOOKS: "session-start" }
+    );
+    expect(result.code).toBe(0);
+    expect(result.stdout.trim()).toBe("");
+    expect(result.stderr.trim()).toBe("");
+  });
+
+  it("CCLAW_HOOK_PROFILE=minimal still allows session-start", async () => {
+    const root = await createTempProject("node-hook-minimal-profile");
+    await seedFlowState(root, "scope");
+    const result = await runNodeHook(
+      root,
+      "session-start",
+      nodeHookRuntimeScript(),
+      {},
+      { CCLAW_HOOK_PROFILE: "minimal" }
+    );
+    expect(result.code).toBe(0);
+    const payload = JSON.parse(result.stdout) as {
+      hookSpecificOutput?: { additionalContext?: string };
+      additional_context?: string;
+    };
+    const context = payload.hookSpecificOutput?.additionalContext ?? payload.additional_context ?? "";
+    expect(context).toContain("cclaw loaded.");
+  });
+
+  it("config disabledHooks list disables session-start without env override", async () => {
+    const root = await createTempProject("node-hook-config-disabled");
+    await seedFlowState(root);
+    await fs.writeFile(
+      path.join(root, ".cclaw/config.yaml"),
+      "disabledHooks:\n  - session-start\n",
+      "utf8"
+    );
+    const result = await runNodeHook(
+      root,
+      "session-start",
+      nodeHookRuntimeScript(),
+      {}
+    );
+    expect(result.code).toBe(0);
+    expect(result.stdout.trim()).toBe("");
   });
 });

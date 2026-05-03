@@ -97,8 +97,6 @@ export interface SyncOptions {
 const OPENCODE_PLUGIN_REL_PATH = ".opencode/plugins/cclaw-plugin.mjs";
 const CURSOR_RULE_REL_PATH = ".cursor/rules/cclaw-workflow.mdc";
 const CURSOR_GUIDELINES_REL_PATH = ".cursor/rules/cclaw-guidelines.mdc";
-const GIT_HOOK_MANAGED_MARKER = "cclaw-managed-git-hook";
-const GIT_HOOK_RUNTIME_REL_DIR = `${RUNTIME_ROOT}/hooks/git`;
 const INIT_SENTINEL_FILE = ".init-in-progress";
 const execFileAsync = promisify(execFile);
 
@@ -218,12 +216,17 @@ const DEPRECATED_COMMAND_FILES = [
 const DEPRECATED_SKILL_FILES = [
   ["flow-finish", "SKILL.md"],
   ["flow-ops", "SKILL.md"],
-  ["tdd-cycle-log", "SKILL.md"],
   ["flow-retro", "SKILL.md"],
   ["flow-compound", "SKILL.md"],
   ["flow-archive", "SKILL.md"],
   ["flow-rewind", "SKILL.md"],
   ["using-git-worktrees", "SKILL.md"]
+] as const;
+
+// Skill folders whose entire directory should be removed on sync so the
+// abandoned tree doesn't linger in user projects.
+const DEPRECATED_SKILL_FOLDERS_FULL = [
+  "tdd-cycle-log"
 ] as const;
 
 const DEPRECATED_STATE_FILES = [
@@ -235,7 +238,10 @@ const DEPRECATED_STATE_FILES = [
   "harness-gaps.json",
   "context-mode.json",
   "session-digest.md",
-  "context-warnings.jsonl"
+  "context-warnings.jsonl",
+  // Runtime Honesty 6.9.0 removed the per-run TDD cycle JSONL: gate evidence
+  // now reads cycle phase progression directly from the artifact table.
+  "tdd-cycle-log.jsonl"
 ] as const;
 
 const DEPRECATED_HOOK_FILES = [
@@ -270,226 +276,32 @@ async function resolveGitHooksDir(projectRoot: string): Promise<string | null> {
   }
 }
 
-function managedGitRuntimeScript(hookName: "pre-commit" | "pre-push"): string {
-  return `#!/usr/bin/env node
-// ${GIT_HOOK_MANAGED_MARKER}: runtime ${hookName}
-import fs from "node:fs";
-import path from "node:path";
-import process from "node:process";
-import { spawnSync } from "node:child_process";
 
-const HOOK_NAME = ${JSON.stringify(hookName)};
-const RUNTIME_ROOT = ${JSON.stringify(RUNTIME_ROOT)};
+// Legacy cleanup: prior versions installed Node-based git pre-commit/pre-push relays
+// under .git/hooks/* and a runtime tree at .cclaw/hooks/git/. Runtime Honesty 6.9.0
+// removed managed git hooks entirely; the cleanup below stays so existing installs
+// shed the leftover files on next sync/uninstall.
+const LEGACY_GIT_HOOK_MANAGED_MARKER = "cclaw-managed-git-hook";
+const LEGACY_GIT_HOOK_RUNTIME_REL_DIR = `${RUNTIME_ROOT}/hooks/git`;
 
-function runGit(args, cwd) {
-  const result = spawnSync("git", args, {
-    cwd,
-    encoding: "utf8",
-    stdio: ["ignore", "pipe", "ignore"]
-  });
-  return {
-    status: typeof result.status === "number" ? result.status : 1,
-    stdout: typeof result.stdout === "string" ? result.stdout : ""
-  };
-}
-
-function resolveRepoRoot() {
-  const result = runGit(["rev-parse", "--show-toplevel"], process.cwd());
-  if (result.status === 0) {
-    const root = result.stdout.trim();
-    if (root.length > 0) return root;
-  }
-  return process.cwd();
-}
-
-function isZeroSha(value) {
-  return /^0{40,64}$/u.test(value);
-}
-
-function readStdin() {
-  try {
-    return fs.readFileSync(0, "utf8");
-  } catch {
-    return "";
-  }
-}
-
-function uniqueLines(chunks) {
-  return [...new Set(chunks
-    .join("\n")
-    .split(/\r?\n/gu)
-    .map((line) => line.trim())
-    .filter((line) => line.length > 0))].join("\n");
-}
-
-function diffNames(root, range) {
-  const result = runGit(["diff", "--name-only", range], root);
-  return result.status === 0 ? result.stdout : "";
-}
-
-function changedFilesFromUnpushedCommits(root, localSha = "HEAD") {
-  const revList = runGit(["rev-list", "--reverse", localSha, "--not", "--remotes"], root);
-  if (revList.status !== 0 || revList.stdout.trim().length === 0) {
-    return "";
-  }
-  const chunks = [];
-  for (const commit of revList.stdout.split(/\r?\n/gu).map((line) => line.trim()).filter(Boolean)) {
-    const diffTree = runGit(["diff-tree", "--no-commit-id", "--name-only", "-r", "--root", commit], root);
-    if (diffTree.status === 0) chunks.push(diffTree.stdout);
-  }
-  return uniqueLines(chunks);
-}
-
-function changedFilesFromPrePushStdin(root, stdin) {
-  const chunks = [];
-  for (const rawLine of stdin.split(/\r?\n/gu)) {
-    const parts = rawLine.trim().split(/\s+/u);
-    if (parts.length < 4) continue;
-    const [localRef, localSha, remoteRef, remoteSha] = parts;
-    void localRef;
-    void remoteRef;
-    if (!localSha || isZeroSha(localSha)) continue;
-    if (remoteSha && !isZeroSha(remoteSha)) {
-      chunks.push(diffNames(root, remoteSha + ".." + localSha));
-      continue;
-    }
-    const upstream = runGit(["rev-parse", "--verify", "--quiet", "@{upstream}"], root);
-    if (upstream.status === 0 && upstream.stdout.trim().length > 0) {
-      chunks.push(diffNames(root, upstream.stdout.trim() + ".." + localSha));
-      continue;
-    }
-    chunks.push(changedFilesFromUnpushedCommits(root, localSha));
-  }
-  return uniqueLines(chunks);
-}
-
-function resolveChangedFiles(root) {
-  if (HOOK_NAME === "pre-commit") {
-    const result = runGit(["diff", "--cached", "--name-only"], root);
-    return result.status === 0 ? result.stdout : "";
-  }
-  const stdinChanged = changedFilesFromPrePushStdin(root, readStdin());
-  if (stdinChanged.length > 0) {
-    return stdinChanged;
-  }
-  const upstreamResult = runGit(["diff", "--name-only", "@{upstream}..HEAD"], root);
-  if (upstreamResult.status === 0) {
-    return upstreamResult.stdout;
-  }
-  const unpushed = changedFilesFromUnpushedCommits(root);
-  if (unpushed.length > 0) {
-    return unpushed;
-  }
-  const fallback = runGit(["diff", "--name-only", "HEAD~1...HEAD"], root);
-  return fallback.status === 0 ? fallback.stdout : "";
-}
-
-const root = resolveRepoRoot();
-const runtimeHook = path.join(root, RUNTIME_ROOT, "hooks", "run-hook.mjs");
-if (!fs.existsSync(runtimeHook)) {
-  // cclaw git relay is installed but the runtime entrypoint is missing —
-  // warn visibly (without blocking the commit) so the drift is noticed.
-  process.stderr.write(
-    "[cclaw] " + HOOK_NAME + ": " + runtimeHook + " not found; run \`cclaw sync\` to reinstall\\n"
-  );
-  process.exit(0);
-}
-
-const changedFiles = resolveChangedFiles(root)
-  .split(/\\r?\\n/gu)
-  .map((line) => line.trim())
-  .filter((line) => line.length > 0);
-if (changedFiles.length === 0) {
-  process.exit(0);
-}
-
-const payload = JSON.stringify({
-  tool_name: "Write",
-  tool_input: {
-    path: changedFiles.join("\\n"),
-    paths: changedFiles
-  }
-});
-
-  const result = spawnSync(process.execPath, [runtimeHook, "prompt-guard"], {
-  cwd: root,
-  env: process.env,
-  input: payload,
-  encoding: "utf8",
-  stdio: ["pipe", "ignore", "inherit"]
-});
-process.exit(typeof result.status === "number" ? result.status : 1);
-`;
-}
-
-function managedGitRelayHook(hookName: "pre-commit" | "pre-push"): string {
-  return `#!/usr/bin/env node
-// ${GIT_HOOK_MANAGED_MARKER}: relay ${hookName}
-import fs from "node:fs";
-import path from "node:path";
-import process from "node:process";
-import { spawn, spawnSync } from "node:child_process";
-
-const RUNTIME_REL_DIR = ${JSON.stringify(GIT_HOOK_RUNTIME_REL_DIR)};
-const HOOK_NAME = ${JSON.stringify(hookName)};
-
-function resolveRepoRoot() {
-  const result = spawnSync("git", ["rev-parse", "--show-toplevel"], {
-    cwd: process.cwd(),
-    encoding: "utf8",
-    stdio: ["ignore", "pipe", "ignore"]
-  });
-  if (typeof result.status === "number" && result.status === 0) {
-    const root = (result.stdout || "").trim();
-    if (root.length > 0) return root;
-  }
-  return process.cwd();
-}
-
-const root = resolveRepoRoot();
-const runtimeHook = path.join(root, RUNTIME_REL_DIR, HOOK_NAME + ".mjs");
-if (!fs.existsSync(runtimeHook)) {
-  process.exit(0);
-}
-
-const child = spawn(process.execPath, [runtimeHook, ...process.argv.slice(2)], {
-  cwd: root,
-  env: process.env,
-  stdio: "inherit"
-});
-child.on("error", () => process.exit(1));
-child.on("close", (code, signal) => {
-  process.exit(signal ? 1 : typeof code === "number" ? code : 1);
-});
-`;
-}
-
-async function removeManagedGitHookRelays(projectRoot: string): Promise<void> {
+async function cleanupLegacyManagedGitHookRelays(projectRoot: string): Promise<void> {
   const hooksDir = await resolveGitHooksDir(projectRoot);
-  if (!hooksDir) {
-    return;
-  }
-  for (const hookName of ["pre-commit", "pre-push"] as const) {
-    const hookPath = path.join(hooksDir, hookName);
-    if (!(await exists(hookPath))) continue;
-    let content = "";
-    try {
-      content = await fs.readFile(hookPath, "utf8");
-    } catch {
-      content = "";
+  if (hooksDir) {
+    for (const hookName of ["pre-commit", "pre-push"] as const) {
+      const hookPath = path.join(hooksDir, hookName);
+      if (!(await exists(hookPath))) continue;
+      let content = "";
+      try {
+        content = await fs.readFile(hookPath, "utf8");
+      } catch {
+        content = "";
+      }
+      if (!content.includes(LEGACY_GIT_HOOK_MANAGED_MARKER)) continue;
+      await fs.rm(hookPath, { force: true });
     }
-    if (!content.includes(GIT_HOOK_MANAGED_MARKER)) {
-      continue;
-    }
-    await fs.rm(hookPath, { force: true });
   }
-}
-
-async function syncManagedGitHooks(projectRoot: string, config: CclawConfig): Promise<void> {
-  void config;
-  await removeManagedGitHookRelays(projectRoot);
   try {
-    await fs.rm(path.join(projectRoot, GIT_HOOK_RUNTIME_REL_DIR), { recursive: true, force: true });
+    await fs.rm(path.join(projectRoot, LEGACY_GIT_HOOK_RUNTIME_REL_DIR), { recursive: true, force: true });
   } catch {
     // best-effort cleanup
   }
@@ -1194,6 +1006,9 @@ async function cleanLegacyArtifacts(projectRoot: string): Promise<void> {
   for (const legacyFolder of DEPRECATED_STAGE_SKILL_FOLDERS) {
     await removeBestEffort(runtimePath(projectRoot, "skills", legacyFolder), true);
   }
+  for (const legacyFolder of DEPRECATED_SKILL_FOLDERS_FULL) {
+    await removeBestEffort(runtimePath(projectRoot, "skills", legacyFolder), true);
+  }
 
   for (const legacyAgentFile of DEPRECATED_AGENT_FILES) {
     await removeBestEffort(runtimePath(projectRoot, "agents", legacyAgentFile));
@@ -1365,7 +1180,7 @@ async function materializeRuntime(
     await ensureKnowledgeStore(projectRoot);
     await writeHooks(projectRoot, config);
     await syncDisabledHarnessArtifacts(projectRoot, harnesses);
-    await syncManagedGitHooks(projectRoot, config);
+    await cleanupLegacyManagedGitHookRelays(projectRoot);
     await syncHarnessShims(projectRoot, harnesses);
     await assertExpectedHarnessShims(projectRoot, harnesses);
     await writeCursorWorkflowRule(projectRoot, harnesses);
@@ -1628,7 +1443,7 @@ export async function uninstallCclaw(projectRoot: string): Promise<void> {
 
   await removeCclawFromAgentsMd(projectRoot);
   await removeGitignorePatterns(projectRoot);
-  await removeManagedGitHookRelays(projectRoot);
+  await cleanupLegacyManagedGitHookRelays(projectRoot);
 
   const hookFiles = [
     ".claude/hooks/hooks.json",

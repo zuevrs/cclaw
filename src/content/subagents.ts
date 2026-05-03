@@ -186,7 +186,17 @@ Before parallel dispatch, answer yes to all gates: tasks are independent, write 
    - Copy each task verbatim into a working queue (checklist is fine).
    - Normalize each task so it includes: goal, acceptance criteria, constraints, and explicit “out of scope.”
 
-2. **For each task sequentially (NEVER parallel implementation subagents — file conflicts):**
+2. **For each task — sequential by default; parallel only with cohesion controls:**
+   - Implementation subagents are sequential by default. Parallel implementers
+     are allowed only when ALL three conditions hold:
+     - (a) the lanes touch non-overlapping files (verify via the plan's task
+       file-set list before dispatch),
+     - (b) the controller passes \`--allow-parallel\` on each ledger row, and
+     - (c) an \`integration-overseer\` is dispatched after the parallel lanes
+       complete and writes cohesion-evidence (cross-file integration tests,
+       contract checks, or merge-conflict scan) into the artifact before any
+       gate is marked passed.
+     If any of the three conditions are unmet, serialize.
    1. **Dispatch implementer subagent** with the **full task text pasted in** (not a file reference).
    2. **Check return status:** \`DONE\` / \`DONE_WITH_CONCERNS\` / \`NEEDS_CONTEXT\` / \`BLOCKED\`
    3. If \`DONE\`: dispatch **reviewer** subagent to verify actual code matches spec and quality expectations.

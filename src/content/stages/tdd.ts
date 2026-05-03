@@ -62,6 +62,7 @@ export const TDD: StageSchemaV2Input = {
     ],
     interactionProtocol: [
       "Pick one vertical slice at a time: source item, RED test, GREEN implementation, REFACTOR, and verification evidence move together.",
+      "Slice implementers are sequential by default. Parallel implementers are allowed only when (a) lanes touch non-overlapping files, (b) the controller passes `--allow-parallel` on each ledger row, and (c) an `integration-overseer` is dispatched after the parallel lanes and writes cohesion-evidence into the artifact before the gate is marked passed.",
       "Controller owns orchestration; one mandatory `test-author` delegation carries phase-specific RED -> GREEN -> REFACTOR evidence instead of spawning separate workers by default.",
       "Before writing RED tests, discover relevant existing tests and commands so the new test extends the suite instead of fighting it.",
       "Before implementation, perform a system-wide impact check across callbacks, state, interfaces, schemas, and external contracts touched by the slice.",

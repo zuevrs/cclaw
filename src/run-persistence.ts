@@ -894,6 +894,50 @@ export interface FlowStateRepairResult {
   sidecar: FlowStateGuardSidecar;
   repairLogPath: string;
   guardPath: string;
+  /** Stages that were retro-backfilled into completedStageMeta during repair. */
+  completedStageMetaBackfilled: FlowStage[];
+}
+
+/**
+ * v6.9.0 — backfill missing `completedStageMeta` rows for any stage that
+ * already lives in `completedStages` but has no audit timestamp. Uses the
+ * stage's artifact mtime when available, otherwise the current time. This
+ * runs as part of `flow-state-repair` so legacy v6.8 flow-state.json files
+ * get their meta carried forward without a destructive rewrite.
+ */
+async function backfillCompletedStageMeta(
+  projectRoot: string,
+  state: FlowState
+): Promise<{ state: FlowState; backfilled: FlowStage[] }> {
+  const meta = { ...(state.completedStageMeta ?? {}) } as Partial<
+    Record<FlowStage, { completedAt: string }>
+  >;
+  const backfilled: FlowStage[] = [];
+  for (const stage of state.completedStages) {
+    if (meta[stage] && typeof meta[stage]!.completedAt === "string" && meta[stage]!.completedAt.length > 0) {
+      continue;
+    }
+    let completedAt = new Date().toISOString();
+    try {
+      const { resolveArtifactPath } = await import("./artifact-paths.js");
+      const resolved = await resolveArtifactPath(stage, {
+        projectRoot,
+        track: state.track,
+        intent: "read"
+      });
+      const stat = await fs.stat(resolved.absPath);
+      completedAt = new Date(stat.mtimeMs).toISOString();
+    } catch {
+      // artifact missing or unreadable — fall back to "now" so the meta row
+      // is at least consistently populated; operators can re-edit if needed.
+    }
+    meta[stage] = { completedAt };
+    backfilled.push(stage);
+  }
+  if (backfilled.length === 0) {
+    return { state, backfilled };
+  }
+  return { state: { ...state, completedStageMeta: meta }, backfilled };
 }
 
 /**
@@ -925,12 +969,29 @@ export async function repairFlowStateGuard(
     );
   }
   return withDirectoryLock(flowStateLockPath(projectRoot), async () => {
-    const raw = await fs.readFile(statePath, "utf8");
+    let raw = await fs.readFile(statePath, "utf8");
     let runId = "unknown-run";
+    let backfilledStages: FlowStage[] = [];
     try {
       const parsed = JSON.parse(raw) as Record<string, unknown>;
       const coerced = coerceFlowState(parsed).state;
       runId = coerced.activeRunId;
+      const { state: nextState, backfilled } = await backfillCompletedStageMeta(
+        projectRoot,
+        coerced
+      );
+      backfilledStages = backfilled;
+      if (backfilled.length > 0) {
+        // Persist the migrated state inside the same lock window so the
+        // sha sidecar below covers the post-migration bytes, not the
+        // pre-migration ones.
+        await writeFlowState(projectRoot, nextState, {
+          allowReset: true,
+          skipLock: true,
+          writerSubsystem: "flow-state-repair-backfill"
+        });
+        raw = await fs.readFile(statePath, "utf8");
+      }
     } catch {
       // parsing failure falls back to "unknown-run"; repair intentionally
       // accepts the contents as-is so operators can recover even from
@@ -951,9 +1012,18 @@ export async function repairFlowStateGuard(
     );
     const logPath = repairLogPath(projectRoot);
     await ensureDir(path.dirname(logPath));
-    const logLine = `${sidecar.writtenAt} reason=${trimmed} runId=${sidecar.runId} sha256=${sidecar.sha256}\n`;
+    const backfillNote =
+      backfilledStages.length > 0
+        ? ` backfilledCompletedStageMeta=${backfilledStages.join(",")}`
+        : "";
+    const logLine = `${sidecar.writtenAt} reason=${trimmed} runId=${sidecar.runId} sha256=${sidecar.sha256}${backfillNote}\n`;
     await fs.appendFile(logPath, logLine, "utf8");
-    return { sidecar, repairLogPath: logPath, guardPath };
+    return {
+      sidecar,
+      repairLogPath: logPath,
+      guardPath,
+      completedStageMetaBackfilled: backfilledStages
+    };
   });
 }
 

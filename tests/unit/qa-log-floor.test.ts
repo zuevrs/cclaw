@@ -1,3 +1,5 @@
+import fs from "node:fs/promises";
+import path from "node:path";
 import { describe, expect, it } from "vitest";
 import {
   ELICITATION_STAGES,
@@ -6,6 +8,9 @@ import {
   parseForcingQuestionsRow,
   type ForcingQuestionTopic
 } from "../../src/artifact-linter/shared.js";
+import { createInitialFlowState } from "../../src/flow-state.js";
+import { verifyCurrentStageGateEvidence } from "../../src/gate-evidence.js";
+import { createTempProject } from "../helpers/index.js";
 
 /**
  * Wave 24 (v6.0.0) unit fixtures for `evaluateQaLogFloor`. These pin the
@@ -304,5 +309,49 @@ describe("extractForcingQuestions (Wave 24 / v6.0.0 mandatory id: topic syntax)"
     );
     expect(result.ok).toBe(true);
     expect(result.forcingCovered).toEqual(["custom-id"]);
+  });
+});
+
+describe("qa log floor blocking surfaces in gate evidence (v6.9.0)", () => {
+  it("pushes a structured qa_log_unconverged issue into gates.issues when blocking", async () => {
+    const root = await createTempProject("qa-log-blocking-issue");
+    await fs.mkdir(path.join(root, ".cclaw/state"), { recursive: true });
+    await fs.mkdir(path.join(root, ".cclaw/artifacts"), { recursive: true });
+    // Brainstorm artifact with NO Q&A Log section -> floor evaluation must
+    // block (no entries, no skip-questions hint, no stop signal).
+    await fs.writeFile(
+      path.join(root, ".cclaw/artifacts/01-brainstorm.md"),
+      "# Brainstorm\n\n## Context\n- placeholder\n",
+      "utf8"
+    );
+    const state = createInitialFlowState("run-qa-block");
+    state.currentStage = "brainstorm";
+    const result = await verifyCurrentStageGateEvidence(root, state);
+    expect(result.qaLogFloor?.blocking).toBe(true);
+    expect(result.issues.join("\n")).toContain("qa_log_unconverged");
+    expect(result.issues.join("\n")).toContain("qa log floor blocked");
+  });
+
+  it("does not push a qa_log_unconverged issue when --skip-questions converts it to advisory", async () => {
+    const root = await createTempProject("qa-log-skip-questions");
+    await fs.mkdir(path.join(root, ".cclaw/state"), { recursive: true });
+    await fs.mkdir(path.join(root, ".cclaw/artifacts"), { recursive: true });
+    await fs.writeFile(
+      path.join(root, ".cclaw/artifacts/01-brainstorm.md"),
+      "# Brainstorm\n\n## Context\n- placeholder\n",
+      "utf8"
+    );
+    const state = createInitialFlowState("run-qa-skip");
+    state.currentStage = "brainstorm";
+    state.interactionHints = {
+      brainstorm: {
+        skipQuestions: true,
+        sourceStage: "brainstorm",
+        recordedAt: "2026-04-29T12:00:00.000Z"
+      }
+    };
+    const result = await verifyCurrentStageGateEvidence(root, state);
+    expect(result.qaLogFloor?.blocking).toBe(false);
+    expect(result.issues.join("\n")).not.toContain("qa log floor blocked");
   });
 });

@@ -5056,6 +5056,245 @@ ${TDD_PREFLIGHT_SECTIONS}
     expect(primeDirectives?.found).toBe(true);
     expect(primeDirectives?.details ?? "").not.toMatch(/Rule expects keywords/);
   });
+
+  it("flags Vertical Slice Cycle when GREEN ts precedes RED ts (non-monotonic order)", async () => {
+    const root = await createTempProject("tdd-slice-cycle-bad-order");
+    const preflight = TDD_PREFLIGHT_SECTIONS.replace(
+      /## Vertical Slice Cycle[\s\S]*$/u,
+      `## Vertical Slice Cycle\n| Slice | RED ts | GREEN ts | REFACTOR ts |\n|---|---|---|---|\n| S-1 | 2026-04-30T09:30:00Z | 2026-04-30T09:00:00Z | 2026-04-30T09:45:00Z |\n`
+    );
+    await writeRuntimeArtifact(root, "06-tdd.md", `# TDD Artifact
+
+${preflight}
+
+## RED Evidence
+| Slice | Test name | Command | Failure output summary |
+|---|---|---|---|
+| S-1 | counts unique keys | pnpm vitest run dedupe.test.ts | Cannot find module |
+
+## Acceptance Mapping
+| Slice | Plan task ID | Spec criterion ID |
+|---|---|---|
+| S-1 | T-1 | AC-1 |
+
+## Failure Analysis
+| Slice | Expected missing behavior | Actual failure reason |
+|---|---|---|
+| S-1 | Module not implemented | Module import fails — correct |
+
+## GREEN Evidence
+- Full suite command: pnpm vitest run
+- Full suite result: 12 passed, 0 failed
+
+## Verification Ladder
+| Slice | Tier reached | Evidence |
+|---|---|---|
+| S-1 | command | pnpm vitest run dedupe.test.ts (pass) |
+
+## REFACTOR Notes
+- What changed: Extracted helper function
+- Why: Reuse across tests
+- Behavior preserved: Full suite green after refactor
+
+## Traceability
+- Plan task IDs: T-1
+- Spec criterion IDs: AC-1
+`);
+
+    const result = await lintArtifact(root, "tdd");
+    const cycle = result.findings.find((f) => f.section === "Vertical Slice Cycle Coverage");
+    expect(cycle?.found).toBe(false);
+    expect(cycle?.details ?? "").toMatch(/precedes RED|order must be monotonic/u);
+  });
+
+  it("accepts Vertical Slice Cycle with deferred REFACTOR + rationale", async () => {
+    const root = await createTempProject("tdd-slice-cycle-deferred");
+    const preflight = TDD_PREFLIGHT_SECTIONS.replace(
+      /## Vertical Slice Cycle[\s\S]*$/u,
+      `## Vertical Slice Cycle\n| Slice | RED ts | GREEN ts | REFACTOR ts |\n|---|---|---|---|\n| S-1 | 2026-04-30T09:00:00Z | 2026-04-30T09:05:00Z | deferred because cohesion contract pending overseer review |\n`
+    );
+    await writeRuntimeArtifact(root, "06-tdd.md", `# TDD Artifact
+
+${preflight}
+
+## RED Evidence
+| Slice | Test name | Command | Failure output summary |
+|---|---|---|---|
+| S-1 | counts unique keys | pnpm vitest run dedupe.test.ts | Cannot find module |
+
+## Acceptance Mapping
+| Slice | Plan task ID | Spec criterion ID |
+|---|---|---|
+| S-1 | T-1 | AC-1 |
+
+## Failure Analysis
+| Slice | Expected missing behavior | Actual failure reason |
+|---|---|---|
+| S-1 | Module not implemented | Module import fails — correct |
+
+## GREEN Evidence
+- Full suite command: pnpm vitest run
+- Full suite result: 12 passed, 0 failed
+
+## Verification Ladder
+| Slice | Tier reached | Evidence |
+|---|---|---|
+| S-1 | command | pnpm vitest run dedupe.test.ts (pass) |
+
+## REFACTOR Notes
+- What changed: deferred — see slice cycle rationale
+- Why: cohesion contract pending overseer review
+
+## Traceability
+- Plan task IDs: T-1
+- Spec criterion IDs: AC-1
+`);
+
+    const result = await lintArtifact(root, "tdd");
+    const cycle = result.findings.find((f) => f.section === "Vertical Slice Cycle Coverage");
+    expect(cycle?.found).toBe(true);
+  });
+
+  it("flags Vertical Slice Cycle when REFACTOR is marked deferred without rationale", async () => {
+    const root = await createTempProject("tdd-slice-cycle-deferred-no-rationale");
+    const preflight = TDD_PREFLIGHT_SECTIONS.replace(
+      /## Vertical Slice Cycle[\s\S]*$/u,
+      `## Vertical Slice Cycle\n| Slice | RED ts | GREEN ts | REFACTOR ts |\n|---|---|---|---|\n| S-1 | 2026-04-30T09:00:00Z | 2026-04-30T09:05:00Z | deferred |\n`
+    );
+    await writeRuntimeArtifact(root, "06-tdd.md", `# TDD Artifact
+
+${preflight}
+
+## RED Evidence
+| Slice | Test name | Command | Failure output summary |
+|---|---|---|---|
+| S-1 | counts unique keys | pnpm vitest run dedupe.test.ts | Cannot find module |
+
+## Acceptance Mapping
+| Slice | Plan task ID | Spec criterion ID |
+|---|---|---|
+| S-1 | T-1 | AC-1 |
+
+## Failure Analysis
+| Slice | Expected missing behavior | Actual failure reason |
+|---|---|---|
+| S-1 | Module not implemented | Module import fails — correct |
+
+## GREEN Evidence
+- Full suite command: pnpm vitest run
+- Full suite result: 12 passed, 0 failed
+
+## Verification Ladder
+| Slice | Tier reached | Evidence |
+|---|---|---|
+| S-1 | command | pnpm vitest run dedupe.test.ts (pass) |
+
+## REFACTOR Notes
+- What changed: nothing
+- Why: deferred
+
+## Traceability
+- Plan task IDs: T-1
+- Spec criterion IDs: AC-1
+`);
+
+    const result = await lintArtifact(root, "tdd");
+    const cycle = result.findings.find((f) => f.section === "Vertical Slice Cycle Coverage");
+    expect(cycle?.found).toBe(false);
+    expect(cycle?.details ?? "").toMatch(/rationale is missing/u);
+  });
+
+  it("flags pending Verification Ladder rows via tdd_verification_pending", async () => {
+    const root = await createTempProject("tdd-verification-pending");
+    await writeRuntimeArtifact(root, "06-tdd.md", `# TDD Artifact
+
+${TDD_PREFLIGHT_SECTIONS}
+
+## RED Evidence
+| Slice | Test name | Command | Failure output summary |
+|---|---|---|---|
+| S-1 | counts unique keys | pnpm vitest run dedupe.test.ts | Cannot find module |
+
+## Acceptance Mapping
+| Slice | Plan task ID | Spec criterion ID |
+|---|---|---|
+| S-1 | T-1 | AC-1 |
+
+## Failure Analysis
+| Slice | Expected missing behavior | Actual failure reason |
+|---|---|---|
+| S-1 | Module not implemented | Module import fails — correct |
+
+## GREEN Evidence
+- Full suite command: pnpm vitest run
+- Full suite result: 12 passed, 0 failed
+
+## Verification Ladder
+| Slice | Tier reached | Status | Evidence |
+|---|---|---|---|
+| S-1 | command | pending | pnpm vitest run dedupe.test.ts (pending) |
+
+## REFACTOR Notes
+- What changed: Extracted helper
+- Why: Reuse
+- Behavior preserved: Full suite green after refactor
+
+## Traceability
+- Plan task IDs: T-1
+- Spec criterion IDs: AC-1
+`);
+
+    const result = await lintArtifact(root, "tdd");
+    const pending = result.findings.find((f) => f.section === "tdd_verification_pending");
+    expect(pending?.required).toBe(true);
+    expect(pending?.found).toBe(false);
+    expect(pending?.details ?? "").toMatch(/pending/iu);
+  });
+
+  it("passes tdd_verification_pending when ladder rows are promoted to passed/n-a", async () => {
+    const root = await createTempProject("tdd-verification-promoted");
+    await writeRuntimeArtifact(root, "06-tdd.md", `# TDD Artifact
+
+${TDD_PREFLIGHT_SECTIONS}
+
+## RED Evidence
+| Slice | Test name | Command | Failure output summary |
+|---|---|---|---|
+| S-1 | counts unique keys | pnpm vitest run dedupe.test.ts | Cannot find module |
+
+## Acceptance Mapping
+| Slice | Plan task ID | Spec criterion ID |
+|---|---|---|
+| S-1 | T-1 | AC-1 |
+
+## Failure Analysis
+| Slice | Expected missing behavior | Actual failure reason |
+|---|---|---|
+| S-1 | Module not implemented | Module import fails — correct |
+
+## GREEN Evidence
+- Full suite command: pnpm vitest run
+- Full suite result: 12 passed, 0 failed
+
+## Verification Ladder
+| Slice | Tier reached | Status | Evidence |
+|---|---|---|---|
+| S-1 | command | passed | pnpm vitest run dedupe.test.ts (pass) |
+
+## REFACTOR Notes
+- What changed: Extracted helper
+- Why: Reuse
+- Behavior preserved: Full suite green after refactor
+
+## Traceability
+- Plan task IDs: T-1
+- Spec criterion IDs: AC-1
+`);
+
+    const result = await lintArtifact(root, "tdd");
+    const pending = result.findings.find((f) => f.section === "tdd_verification_pending");
+    expect(pending?.found).toBe(true);
+  });
 });
 
 describe("review army schema validation", () => {

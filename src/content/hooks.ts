@@ -526,7 +526,11 @@ function findActiveSpanForPairInline(stage, agent, runId, entries) {
   for (const entry of entries) {
     if (!entry || typeof entry !== "object") continue;
     if (typeof entry.spanId !== "string" || entry.spanId.length === 0) continue;
-    if (entry.runId && entry.runId !== runId) continue;
+    // Strict run-scope (v6.9.0 R7 fix): legacy entries without a runId
+    // are treated as foreign so they cannot keep an old span "active"
+    // across runs and trip dispatch_duplicate on a fresh dispatch.
+    if (typeof entry.runId !== "string" || entry.runId.length === 0) continue;
+    if (entry.runId !== runId) continue;
     if (entry.stage !== stage || entry.agent !== agent) continue;
     const existing = latestBySpan.get(entry.spanId);
     if (!existing || effectiveTs(entry) >= effectiveTs(existing)) {
