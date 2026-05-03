@@ -212,9 +212,13 @@ function hardGateReference(law: IronLawDefinition): string {
 }
 
 export function ironLawsSkillMarkdown(): string {
+  // v6.9.0: Phase A purged the `PreToolUse` / `PostToolUse` / pre-tool
+  // pipeline handlers, so `review-coverage-complete-before-ship` is no
+  // longer hook-enforced — it now lives in the ship stage HARD-GATE.
+  // Only `stop-clean-or-handoff` (Stop hook) is still hook-enforced;
+  // everything else is stage-owned advisory.
   const enforcedLawIds = new Set([
-    "stop-clean-or-handoff",
-    "review-coverage-complete-before-ship"
+    "stop-clean-or-handoff"
   ]);
   const enforced = IRON_LAWS.filter((law) => enforcedLawIds.has(law.id));
   const advisory = IRON_LAWS.filter((law) => !enforcedLawIds.has(law.id));
