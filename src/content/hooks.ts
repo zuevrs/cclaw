@@ -386,6 +386,7 @@ function usage() {
     "  node .cclaw/hooks/delegation-record.mjs --stage=<stage> --agent=<agent> --mode=<mandatory|proactive> --status=<scheduled|launched|acknowledged|completed|failed|waived|stale> --span-id=<id> [--dispatch-id=<id>] [--worker-run-id=<id>] [--dispatch-surface=<surface>] [--agent-definition-path=<path>] [--ack-ts=<iso>] [--launched-ts=<iso>] [--completed-ts=<iso>] [--evidence-ref=<ref>] [--waiver-reason=<text>] [--supersede=<prevSpanId>] [--allow-parallel] [--paths=<comma-separated>] [--override-cap=<int>] [--json]",
     "  node .cclaw/hooks/delegation-record.mjs --rerecord --span-id=<id> --dispatch-id=<id> --dispatch-surface=<surface> --agent-definition-path=<path> [--ack-ts=<iso>] [--completed-ts=<iso>] [--evidence-ref=<ref>] [--json]",
     "  node .cclaw/hooks/delegation-record.mjs --repair --span-id=<id> --repair-reason=\\\"<why>\\\" [--json]",
+    "  node .cclaw/hooks/delegation-record.mjs --audit-kind=cclaw_integration_overseer_skipped [--audit-reason=\\\"<comma-separated reasons>\\\"] [--slice-ids=\\\"S-1,S-2\\\"] [--json]    # v6.14.1: emit non-delegation audit row only",
     "",
     "Allowed --dispatch-surface values:",
     "  " + VALID_DISPATCH_SURFACES.join(", "),
@@ -940,6 +941,74 @@ async function findLegacyEntry(root, spanId) {
   return ledger.entries.find((entry) => entry && entry.spanId === spanId) || null;
 }
 
+// v6.14.1 — allow-list of non-delegation audit events the controller
+// can emit via the helper. Keep in sync with NON_DELEGATION_AUDIT_EVENTS
+// in src/delegation.ts.
+const VALID_AUDIT_KINDS = new Set([
+  "cclaw_integration_overseer_skipped"
+]);
+
+async function runAuditEmit(args, json) {
+  const kind = String(args["audit-kind"]).trim();
+  if (!VALID_AUDIT_KINDS.has(kind)) {
+    emitProblems([
+      "invalid --audit-kind: " + kind +
+        " (allowed: " + [...VALID_AUDIT_KINDS].join(", ") + ")"
+    ], json, 2);
+    return;
+  }
+  const root = await detectRoot();
+  const runId = await readRunId(root);
+  const reason = typeof args["audit-reason"] === "string"
+    ? args["audit-reason"].trim()
+    : "";
+  const sliceIdsRaw = typeof args["slice-ids"] === "string"
+    ? args["slice-ids"].trim()
+    : "";
+  const sliceIds = sliceIdsRaw.length > 0
+    ? sliceIdsRaw
+      .split(",")
+      .map((value) => value.trim())
+      .filter((value) => value.length > 0)
+    : [];
+  const ts = new Date().toISOString();
+  const payload = {
+    event: kind,
+    runId,
+    ts,
+    eventTs: ts,
+    ...(reason.length > 0 ? { reasons: reason.split(",").map((r) => r.trim()).filter((r) => r.length > 0) } : {}),
+    ...(sliceIds.length > 0 ? { sliceIds } : {})
+  };
+  const stateDir = path.join(root, RUNTIME_ROOT, "state");
+  try {
+    await fs.mkdir(stateDir, { recursive: true });
+    await fs.appendFile(
+      path.join(stateDir, "delegation-events.jsonl"),
+      JSON.stringify(payload) + "\\n",
+      { encoding: "utf8", mode: 0o600 }
+    );
+  } catch (error) {
+    const message = error && typeof error === "object" && "message" in error
+      ? String(error.message)
+      : String(error);
+    emitErrorJson("audit_emit_failed", { kind, message }, json);
+    return;
+  }
+  if (json) {
+    process.stdout.write(JSON.stringify({
+      ok: true,
+      command: "audit-emit",
+      auditKind: kind,
+      runId,
+      sliceIds,
+      ts
+    }, null, 2) + "\\n");
+  } else {
+    process.stdout.write("[cclaw] audit emitted: " + kind + " (run=" + runId + ", ts=" + ts + ")\\n");
+  }
+}
+
 async function runRerecord(args, json) {
   const problems = [];
   for (const key of ["span-id", "dispatch-id", "dispatch-surface", "agent-definition-path"]) {
@@ -1169,6 +1238,18 @@ async function main() {
 
   if (args.rerecord) {
     await runRerecord(args, json);
+    return;
+  }
+
+  // v6.14.1 — audit-only emit path. When the controller wants to record
+  // a non-delegation audit row (e.g. \`cclaw_integration_overseer_skipped\`
+  // when the wave heuristic chose to skip the overseer dispatch), pass
+  // --audit-kind=<event-name> [--audit-reason=<text>] [--slice-ids=<csv>]
+  // and the helper appends a single line to delegation-events.jsonl
+  // without touching the lifecycle ledger. The kind must be in the
+  // canonical allow-list so a typo cannot inject an unrecognized event.
+  if (typeof args["audit-kind"] === "string" && args["audit-kind"].trim().length > 0) {
+    await runAuditEmit(args, json);
     return;
   }
 
